@@ -310,10 +310,12 @@ public final class CpFailoverJobExecutor {
         String tableStatus=tables?"PASS":vsId==null && CpFailoverChecks.twoTableMembers(ta)
             && CpFailoverChecks.twoTableMembers(tb)?"FAIL":"UNKNOWN";
         shapes.logTables(tableStatus,ta,tb);
-        String difference=!tables && vsId!=null && !ta.equals(tb)
-            ?"{\"reason\":\"tables differ\",\"a\":"+ta.size()+",\"b\":"+tb.size()+"}":null;
-        record(phase,first,2,tableStatus,difference!=null?difference:"{\"entries\":"+ta.size()+"}");
-        record(phase,second,2,tableStatus,difference!=null?difference:"{\"entries\":"+tb.size()+"}");
+        var difference=new java.util.HashMap<>(CpFailoverChecks.tableDifference(ta,tb));
+        if(!tables) difference.put("reason",ta.isEmpty() || tb.isEmpty() || ta.equals(tb)?"TABLE_UNRECOGNIZED":"tables differ");
+        difference.put("entries",ta.size());
+        record(phase,first,2,tableStatus,json(difference));
+        difference.put("entries",tb.size());
+        record(phase,second,2,tableStatus,json(difference));
         if(!tables) checkFailed("CLUSTER_IP_TABLE_MISMATCH",2,tableStatus);
         var ia=CpFailoverChecks.interfaces(command(first,IF));
         var ib=CpFailoverChecks.interfaces(command(second,IF));
@@ -338,12 +340,15 @@ public final class CpFailoverJobExecutor {
         long baseConn=ca==null || cb==null?-1:before==null?(active==first?ca.count():cb.count())
             :(oldActive==first?before.a().connections().count():before.b().connections().count());
         long currentConn=ca==null || cb==null?-1:active==first?ca.count():cb.count();
-        boolean conn=ca!=null && cb!=null && (before==null
-            ?CpFailoverChecks.ratio(active==first?cb.count():ca.count(),baseConn,CpFailoverChecks.CONNECTION_MIN_RATIO)
-            :CpFailoverChecks.ratio(currentConn,baseConn,CpFailoverChecks.CONNECTION_MIN_RATIO));
-        String connStatus=before==null && !states?"UNKNOWN":conn?"PASS":ca==null || cb==null?"UNKNOWN":"FAIL";
-        record(phase,first,6,connStatus,ca==null?"{}":"{\"count\":"+ca.count()+",\"peak\":"+ca.peak()+"}");
-        record(phase,second,6,connStatus,cb==null?"{}":"{\"count\":"+cb.count()+",\"peak\":"+cb.peak()+"}");
+        long comparedConn=before==null?(ca==null || cb==null?-1:active==first?cb.count():ca.count()):currentConn;
+        var connection=CpFailoverChecks.connectionParity(baseConn,comparedConn,before!=null);
+        String connStatus=before==null && !states?"UNKNOWN":connection.status();
+        for(Member member:List.of(first,second)) {
+            var counts=member==first?ca:cb;
+            var derived=new java.util.HashMap<>(connection.derived());
+            if(counts!=null) { derived.put("count",counts.count()); derived.put("peak",counts.peak()); }
+            record(phase,member,6,connStatus,json(derived));
+        }
         if(!"PASS".equals(connStatus)) checkFailed("CONNECTIONS_BELOW_TOLERANCE",6,connStatus);
         var preA=CpFailoverChecks.bytesByInterface(command(first,TRAFFIC));
         var preB=CpFailoverChecks.bytesByInterface(command(second,TRAFFIC));
@@ -369,12 +374,11 @@ public final class CpFailoverJobExecutor {
             checkFailed("STATE_SYNC_NOT_READY",9,"FAIL".equals(syncA) || "FAIL".equals(syncB)?"FAIL":"UNKNOWN");
         var policyA=CpFailoverChecks.policy(command(first,POLICY));
         var policyB=CpFailoverChecks.policy(command(second,POLICY));
-        String policyStatus="FAIL".equals(policyA.status()) || "FAIL".equals(policyB.status())?"FAIL"
-            :"UNKNOWN".equals(policyA.status()) || "UNKNOWN".equals(policyB.status())?"UNKNOWN"
-            :!policyA.name().equals(policyB.name()) || !policyA.installedAt().equals(policyB.installedAt()) || before!=null &&
-                (!policyA.name().equals(before.a().policyName()) || !policyB.name().equals(before.b().policyName()))?"FAIL":"PASS";
-        record(phase,first,10,policyStatus,policyA.installedAt()==null?"{}":"{\"installedAt\":\""+policyA.installedAt()+"\"}");
-        record(phase,second,10,policyStatus,policyB.installedAt()==null?"{}":"{\"installedAt\":\""+policyB.installedAt()+"\"}");
+        var parity=CpFailoverChecks.policyParity(policyA,policyB,
+            before==null?null:before.a().policyName(),before==null?null:before.b().policyName());
+        String policyStatus=parity.status();
+        record(phase,first,10,policyStatus,json(parity.derived()));
+        record(phase,second,10,policyStatus,json(parity.derived()));
         if(!"PASS".equals(policyStatus)) checkFailed("POLICY_NOT_MATCHED",10,policyStatus);
         for(Member member:List.of(first,second)) {
             // The intentionally down former active reports ADMIN_DOWN after the switch.
