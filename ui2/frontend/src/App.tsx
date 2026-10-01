@@ -6,6 +6,8 @@ import { TopAppBar } from "./shell/TopAppBar";
 import { PreviewBanner } from "./preview/PreviewBanner";
 const OverviewScreen = lazy(() => import("./screens/OverviewScreen").then((m) => ({ default: m.OverviewScreen })));
 const InventoryScreen = lazy(() => import("./screens/InventoryScreen").then((m) => ({ default: m.InventoryScreen })));
+const PolicyScreen = lazy(() => import("./screens/PolicyScreen").then(m => ({ default: m.PolicyScreen })));
+const PolicyPreview = lazy(() => import("./screens/PolicyScreen").then(m => ({ default: m.PolicyPreview })));
 const ConfigurationScreen = lazy(() => import("./screens/ConfigurationScreen").then((m) => ({ default: m.ConfigurationScreen })));
 const ComplianceScreen = lazy(() => import("./screens/ComplianceScreen").then((m) => ({ default: m.ComplianceScreen })));
 const BackupScreen = lazy(() => import("./screens/BackupScreen").then((m) => ({ default: m.BackupScreen })));
@@ -39,16 +41,18 @@ const PRODUCT_SCREENS: Record<ScreenId, ComponentType> = {
   overview: OverviewScreen,
   inventory: InventoryScreen,
   configuration: ConfigurationScreen,
+  policy: PolicyScreen,
   compliance: ComplianceScreen,
   backups: BackupScreen,
   operations: OperationsScreen,
   administration: AdministrationScreen,
 };
 
-const PREVIEW_SCREENS: Record<ScreenId, () => JSX.Element> = {
+const PREVIEW_SCREENS: Record<ScreenId, ComponentType> = {
   overview: OverviewPreview,
   inventory: InventoryPreview,
   configuration: ConfigurationPreview,
+  policy: PolicyPreview,
   compliance: CompliancePreview,
   backups: BackupPreview,
   operations: OperationsPreview,

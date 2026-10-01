@@ -59,6 +59,12 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
         }
         HttpServletRequest httpRequest = servletRequest.getServletRequest();
         Boolean isReplayViewer = (Boolean) httpRequest.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE);
+        if (body instanceof com.securityexpert.nexus.ui2.service.policy.PolicyResponse policy) {
+            if (!Boolean.TRUE.equals(isReplayViewer)) return policy.body();
+            if (response != null) response.getHeaders().set(MASKED_HEADER, "true");
+            return com.securityexpert.nexus.ui2.service.policy.PolicyPrivacy.mask(
+                    policy.body(), "", topologyPseudonymizer, ipMasker);
+        }
         if (!Boolean.TRUE.equals(isReplayViewer)) {
             return body;
         }

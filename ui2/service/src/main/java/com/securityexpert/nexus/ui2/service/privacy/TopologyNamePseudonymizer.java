@@ -149,6 +149,13 @@ public class TopologyNamePseudonymizer {
      * Replaces known raw hostnames, cluster names, and VS names in free-form text.
      */
     /** A serial number as a stable, keyed pseudonym ({@code SN-} + 10 hex) -- comparable across screens, never the value. */
+    /** Exact, case-sensitive policy labels; native identity formatting is never normalized. */
+    public String maskPolicyName(String namespace, String value) {
+        if (value == null || value.isEmpty()) return value;
+        byte[] hash = hmacSha256("POLICY:" + namespace.length() + ":" + namespace + value);
+        return "OBJ-" + java.util.HexFormat.of().formatHex(hash, 0, 16);
+    }
+
     public String maskSerial(String rawSerial) {
         if (rawSerial == null || rawSerial.isBlank()) {
             return rawSerial;

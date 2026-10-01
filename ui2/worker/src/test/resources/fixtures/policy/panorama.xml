@@ -1,0 +1,37 @@
+<config>
+  <shared>
+    <address><entry name="Synthetic address"><ip-netmask>192.0.2.8/32</ip-netmask></entry></address>
+    <address-group>
+      <entry name="Synthetic group"><static><member>Synthetic address</member><member>Synthetic nested</member></static></entry>
+      <entry name="Synthetic nested"><static><member>Synthetic group</member></static></entry>
+      <entry name="Synthetic dynamic"><dynamic><filter>'Synthetic tag'</filter></dynamic></entry>
+    </address-group>
+    <service><entry name="Synthetic HTTPS"><protocol><tcp><port>443</port></tcp></protocol></entry></service>
+    <service-group><entry name="Synthetic services"><members><member>Synthetic HTTPS</member></members></entry></service-group>
+    <application-group><entry name="Synthetic applications"><members><member>ssl</member></members></entry></application-group>
+    <tag><entry name="Synthetic tag"><color>color1</color></entry></tag>
+    <pre-rulebase><security><rules><entry name="Synthetic shared pre" uuid="uuid-01">
+      <source><member>Synthetic group</member></source><destination><member>any</member></destination>
+      <service><member>Synthetic services</member></service><application><member>Synthetic applications</member></application>
+      <negate-source>yes</negate-source><disabled>yes</disabled><action>allow</action><log-end>yes</log-end><description>Synthetic comment</description>
+    </entry></rules></security></pre-rulebase>
+    <post-rulebase><security><rules><entry name="Synthetic shared post" uuid="uuid-06"><action>deny</action></entry></rules></security></post-rulebase>
+  </shared>
+  <devices><entry name="localhost.localdomain">
+    <device-group>
+      <entry name="Synthetic parent">
+        <pre-rulebase><security><rules><entry name="Synthetic parent pre" uuid="uuid-02"><action>allow</action></entry></rules></security></pre-rulebase>
+        <post-rulebase><security><rules><entry name="Synthetic parent post" uuid="uuid-05"><action>drop</action></entry></rules></security></post-rulebase>
+      </entry>
+      <entry name="Synthetic child">
+        <address><entry name="Synthetic address"><ip-netmask>198.51.100.8/32</ip-netmask></entry></address>
+        <pre-rulebase><security><rules><entry name="Synthetic child pre" uuid="uuid-03"><action>allow</action></entry></rules></security></pre-rulebase>
+        <post-rulebase><security><rules><entry name="Synthetic child post" uuid="uuid-04"><action>deny</action></entry></rules></security></post-rulebase>
+      </entry>
+    </device-group>
+    <vsys>
+      <entry name="vsys1"><rulebase><security><rules><entry name="Synthetic local one"><action>allow</action></entry></rules></security></rulebase></entry>
+      <entry name="vsys2"><rulebase><security><rules><entry name="Synthetic local two"><action>allow</action></entry></rules></security></rulebase></entry>
+    </vsys>
+  </entry></devices>
+</config>

@@ -153,6 +153,9 @@ public final class SessionStatusController {
 
     private void collectPlanes(List<String> roleTokens, java.util.Set<String> planes) {
         for (String token : roleTokens) {
+            if (java.util.Set.of(com.securityexpert.nexus.ui2.platform.RoleToken.SECURITY_ADMIN,
+                    com.securityexpert.nexus.ui2.platform.RoleToken.ONBOARDING_ADMIN,
+                    com.securityexpert.nexus.ui2.platform.RoleToken.REPLAY_VIEWER).contains(token)) planes.add("Policy");
             if (rbacRoleRepository != null) {
                 var role = rbacRoleRepository.findByTokenString(token);
                 if (role.isPresent() && role.get().permissions() != null && !role.get().permissions().isEmpty()) {

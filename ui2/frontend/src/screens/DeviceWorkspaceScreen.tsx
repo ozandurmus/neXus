@@ -85,7 +85,7 @@ export function DeviceWorkspaceScreen({ deviceId }: { readonly deviceId: string 
       <ScreenHeader
         title="Device Workspace"
         subtitle={device ? device.device_id : "Loading..."}
-        actions={<><M3Button emphasis="outlined" onClick={onDelete}>Delete Device</M3Button><M3Button emphasis="outlined" href="?screen=inventory">Back to Inventory</M3Button></>}
+        actions={<><M3Button emphasis="outlined" href={`/?screen=policy&device_id=${encodeURIComponent(deviceId)}`}>Open assigned policy</M3Button><M3Button emphasis="outlined" onClick={onDelete}>Delete Device</M3Button><M3Button emphasis="outlined" href="?screen=inventory">Back to Inventory</M3Button></>}
       />
       <Box sx={{ p: 3, display: "flex", flexDirection: "column", gap: 3, maxWidth: 800 }}>
         {error && (

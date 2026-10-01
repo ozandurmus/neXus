@@ -13,6 +13,9 @@ async function screenHasData(page: Page, screen: ScreenId) {
     case "configuration":
       await expect(page.getByRole("button").filter({ has: page.getByText(/^(?:FW|CLS|MGR|DEV|GRID)-[A-Z]+-\d+(?:-M\d+)?$/) }).first()).toBeVisible();
       break;
+    case "policy":
+      await expect(page.getByRole("table", { name: "Policy rulebase" }).or(page.getByText("No policy snapshot", { exact: true }))).toBeVisible();
+      break;
     case "compliance": {
       const table = page.getByRole("table").filter({ has: page.getByRole("columnheader", { name: "Control · code & title" }) });
       // Six cells distinguish a real control from the one-cell loading/empty placeholder.
