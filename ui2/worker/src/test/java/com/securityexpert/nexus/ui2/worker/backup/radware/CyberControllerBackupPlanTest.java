@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.Optional;
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
@@ -21,6 +22,18 @@ class CyberControllerBackupPlanTest {
         assertEquals(Optional.of(36136L), CyberControllerBackupPlan.listedSizeKb(LISTING, "nexus-0123456789abcdef"));
         assertEquals(Optional.empty(), CyberControllerBackupPlan.listedSizeKb(LISTING, "nexus-0123456789abcde"));
         assertEquals(Optional.empty(), CyberControllerBackupPlan.listedSizeKb(LISTING, "_0620"));
+    }
+
+    @Test
+    void leftoverNamesMustBeWholeTokensAndNeverTheCurrentRun() {
+        String own = "nexus-fedcba9876543210";
+        String valid = "nexus-0123456789abcdef";
+        String listing = LISTING + own + " 1234 date\n" + valid + " 1234 duplicate\n"
+                + "nexus-XYZ 1 date\nmynexus-0123456789abcdef 1 date\n"
+                + valid + "0 1 date\n" + valid + ".tgz 1 date\n"
+                + valid + "-extra 1 date\nother 1 " + valid + "\n";
+        assertEquals(List.of(valid), CyberControllerBackupPlan.leftovers(listing, own));
+        assertEquals(List.of(), CyberControllerBackupPlan.leftovers(null, own));
     }
 
     @Test
