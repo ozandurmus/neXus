@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Optional;
 
 import com.securityexpert.nexus.ui2.platform.CredentialStorePort.CredentialKind;
+import com.securityexpert.nexus.ui2.platform.CredentialStorePort.SnmpSettings;
 
 /**
  * {@code credentials} persistence port (CS-1). Every mutation implicitly
@@ -25,9 +26,16 @@ public interface CredentialRepository {
      * value, backend_pointer = this credential's own id). Returns the new
      * credential's opaque id.
      */
+    default String create(String credentialId, String credentialReferenceId, String displayName, CredentialKind kind,
+            String username, byte[] encryptedSecret, byte[] encryptedPassphrase, String envelopeKeyId,
+            boolean allowsCheckPoint, boolean allowsPaloAlto, String createdByActorFingerprint) {
+        return create(credentialId, credentialReferenceId, displayName, kind, username, encryptedSecret,
+                encryptedPassphrase, envelopeKeyId, allowsCheckPoint, allowsPaloAlto, createdByActorFingerprint, null);
+    }
+
     String create(String credentialId, String credentialReferenceId, String displayName, CredentialKind kind,
             String username, byte[] encryptedSecret, byte[] encryptedPassphrase, String envelopeKeyId,
-            boolean allowsCheckPoint, boolean allowsPaloAlto, String createdByActorFingerprint);
+            boolean allowsCheckPoint, boolean allowsPaloAlto, String createdByActorFingerprint, SnmpSettings snmp);
 
     Optional<CredentialRecord> findById(String credentialId);
 
@@ -36,8 +44,14 @@ public interface CredentialRepository {
     /** The {@code credential_references} row created alongside this credential (CS-1) -- never a second row. */
     Optional<String> findCredentialReferenceId(String credentialId);
 
+    default void replaceSecret(String credentialId, byte[] encryptedSecret, byte[] encryptedPassphrase, String envelopeKeyId,
+            String actingAdminActorFingerprint) {
+        replaceSecret(credentialId, encryptedSecret, encryptedPassphrase, envelopeKeyId, actingAdminActorFingerprint,
+                null, null);
+    }
+
     void replaceSecret(String credentialId, byte[] encryptedSecret, byte[] encryptedPassphrase, String envelopeKeyId,
-            String actingAdminActorFingerprint);
+            String actingAdminActorFingerprint, String username, SnmpSettings snmp);
 
     /**
      * CS-4: true when some other row (a device, through its own

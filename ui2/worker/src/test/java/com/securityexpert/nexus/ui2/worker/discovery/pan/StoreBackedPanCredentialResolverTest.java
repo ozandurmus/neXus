@@ -18,6 +18,7 @@ import com.securityexpert.nexus.ui2.persistence.device.CredentialReferenceRecord
 import com.securityexpert.nexus.ui2.persistence.device.CredentialReferenceRepository;
 import com.securityexpert.nexus.ui2.platform.CredentialStoreCipher;
 import com.securityexpert.nexus.ui2.platform.CredentialStorePort.CredentialKind;
+import com.securityexpert.nexus.ui2.platform.CredentialStorePort.SnmpSettings;
 import com.securityexpert.nexus.ui2.worker.transport.xmlapi.PanCredentialMaterial;
 
 /** 2026-09-14 PO decision record CS-1..CS-5, SB-14/SB-16: the store-backed Panorama XML API resolver. */
@@ -52,7 +53,7 @@ class StoreBackedPanCredentialResolverTest {
         public String create(String credentialId, String credentialReferenceId, String displayName,
                 CredentialKind kind, String username, byte[] encryptedSecret, byte[] encryptedPassphrase,
                 String envelopeKeyId, boolean allowsCheckPoint, boolean allowsPaloAlto,
-                String createdByActorFingerprint) {
+                String createdByActorFingerprint, SnmpSettings snmp) {
             throw new UnsupportedOperationException("not used by this test");
         }
 
@@ -73,7 +74,8 @@ class StoreBackedPanCredentialResolverTest {
 
         @Override
         public void replaceSecret(String credentialId, byte[] encryptedSecret, byte[] encryptedPassphrase,
-                String envelopeKeyId, String actingAdminActorFingerprint) {
+                String envelopeKeyId, String actingAdminActorFingerprint, String username,
+                SnmpSettings snmp) {
             throw new UnsupportedOperationException("not used by this test");
         }
 
@@ -151,5 +153,22 @@ class StoreBackedPanCredentialResolverTest {
         IllegalStateException thrown = assertThrows(IllegalStateException.class, () -> resolver.resolve("no-such-ref"));
 
         assertEquals("pan credential reference not resolvable: no-such-ref", thrown.getMessage());
+    }
+
+    @Test
+    void snmpKindsCannotBeUsedAsPanCredentials() {
+        var references = org.mockito.Mockito.mock(CredentialReferenceRepository.class);
+        var credentials = org.mockito.Mockito.mock(CredentialRepository.class);
+        var encryption = org.mockito.Mockito.mock(CredentialStoreCipher.class);
+        org.mockito.Mockito.when(references.find("fixture-ref")).thenReturn(Optional.of(
+                new CredentialReferenceRecord("fixture-ref", "snmp_v3", "fixture-id", Instant.now())));
+        for (CredentialKind kind : List.of(CredentialKind.SNMP_V1_V2C, CredentialKind.SNMP_V3)) {
+            org.mockito.Mockito.when(credentials.findById("fixture-id")).thenReturn(Optional.of(
+                    new CredentialRecord("fixture-id", "Synthetic SNMP", kind, "synthetic-user",
+                            null, null, "fixture-key", false, false, "fixture-actor", Instant.now(), Instant.now())));
+            org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
+                    () -> new StoreBackedPanCredentialResolver(references, credentials, encryption).resolve("fixture-ref"));
+        }
+        org.mockito.Mockito.verifyNoInteractions(encryption);
     }
 }

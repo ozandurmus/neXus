@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import com.securityexpert.nexus.ui2.platform.CredentialStorePort;
+import com.securityexpert.nexus.ui2.platform.CredentialStorePort.SnmpSettings;
 import com.securityexpert.nexus.ui2.platform.CredentialStorePort.CredentialKind;
 import com.securityexpert.nexus.ui2.platform.CredentialStorePort.CredentialView;
 import com.securityexpert.nexus.ui2.service.security.GateChainInterceptor;
@@ -46,13 +47,23 @@ public final class CredentialAdministrationController {
             @JsonProperty("allows_check_point") boolean allowsCheckPoint,
             @JsonProperty("allows_palo_alto") boolean allowsPaloAlto,
             @JsonProperty("secret") char[] secret,
-            @JsonProperty("passphrase") char[] passphrase) {
+            @JsonProperty("passphrase") char[] passphrase,
+            @JsonProperty("snmp") SnmpSettings snmp) {
+        public CreateRequest(String displayName, String kind, String username, boolean allowsCheckPoint,
+                boolean allowsPaloAlto, char[] secret, char[] passphrase) {
+            this(displayName, kind, username, allowsCheckPoint, allowsPaloAlto, secret, passphrase, null);
+        }
     }
 
     public record ReplaceSecretRequest(
             @JsonProperty("credential_id") String credentialId,
             @JsonProperty("secret") char[] secret,
-            @JsonProperty("passphrase") char[] passphrase) {
+            @JsonProperty("passphrase") char[] passphrase,
+            @JsonProperty("username") String username,
+            @JsonProperty("snmp") SnmpSettings snmp) {
+        public ReplaceSecretRequest(String credentialId, char[] secret, char[] passphrase) {
+            this(credentialId, secret, passphrase, null, null);
+        }
     }
 
     public record CredentialRequest(@JsonProperty("credential_id") String credentialId) {
@@ -79,8 +90,10 @@ public final class CredentialAdministrationController {
             }
             CredentialView view = credentialStore.create(actorFingerprint, request.displayName(), kind,
                     request.username(), request.allowsCheckPoint(), request.allowsPaloAlto(), secret,
-                    optionalOf(passphrase));
+                    optionalOf(passphrase), request.snmp());
             return ResponseEntity.ok(toBody(view));
+        } catch (IllegalArgumentException e) {
+            return badRequest("INVALID_CREDENTIAL_FIELDS");
         } finally {
             zero(secret);
             zero(passphrase);
@@ -104,7 +117,7 @@ public final class CredentialAdministrationController {
         char[] passphrase = request.passphrase();
         try {
             CredentialStorePort.ReplaceSecretResult result = credentialStore.replaceSecret(actorFingerprint,
-                    request.credentialId(), secret, optionalOf(passphrase));
+                    request.credentialId(), secret, optionalOf(passphrase), request.username(), request.snmp());
             if (result instanceof CredentialStorePort.ReplaceSecretResult.NotFound) {
                 return notFound();
             }
@@ -113,6 +126,8 @@ public final class CredentialAdministrationController {
             }
             CredentialStorePort.ReplaceSecretResult.Ok ok = (CredentialStorePort.ReplaceSecretResult.Ok) result;
             return ResponseEntity.ok(toBody(ok.view()));
+        } catch (IllegalArgumentException e) {
+            return badRequest("INVALID_CREDENTIAL_FIELDS");
         } finally {
             zero(secret);
             zero(passphrase);
@@ -177,6 +192,13 @@ public final class CredentialAdministrationController {
         body.put("allows_palo_alto", view.allowsPaloAlto());
         body.put("created_at", view.createdAt().toString());
         body.put("secret_set_at", view.secretSetAt().toString());
+        if (view.kind() == CredentialKind.SNMP_V1_V2C) {
+            body.put("community", "set");
+        } else if (view.kind() == CredentialKind.SNMP_V3) {
+            body.put("snmp", view.snmp());
+            body.put("auth_secret", view.snmp().securityLevel().equals("noAuthNoPriv") ? "not set" : "set");
+            body.put("priv_secret", view.snmp().securityLevel().equals("authPriv") ? "set" : "not set");
+        }
         return body;
     }
 }
