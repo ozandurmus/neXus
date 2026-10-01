@@ -17,7 +17,8 @@ Rules it enforces:
   prompt). Review, merge, deploy and live validation stay with the engineering session.
 
 Usage:
-  standalone_orchestrate.py start  --task <slug> --model gpt-6-luna|gpt-6-sol [--effort medium] [--network] --brief FILE|-
+  standalone_orchestrate.py start  --task <slug> [--model gpt-6.1-sol|gpt-6-luna|gpt-6-sol|gpt-6-astra] [--effort medium] [--network] --brief FILE|-
+                                 (default model: gpt-6.1-sol)
   standalone_orchestrate.py status [--task <slug>]
   standalone_orchestrate.py wait   --task <slug> [--timeout 540]
   standalone_orchestrate.py result --task <slug>
@@ -47,7 +48,7 @@ from orchestrator_providers import CodexAdapter  # noqa: E402
 REPO_ROOT = Path(__file__).resolve().parent.parent
 HOME = REPO_ROOT.parent / f"{REPO_ROOT.name}-standalone"
 STATE_DIR = HOME / ".state"
-MODELS = ("gpt-6-luna", "gpt-6-sol", "gpt-6-astra")
+MODELS = ("gpt-6.1-sol", "gpt-6-luna", "gpt-6-sol", "gpt-6-astra")
 SLUG = re.compile(r"^[a-z0-9][a-z0-9-]{1,48}$")
 
 PREAMBLE = """You are a neXus engineer working on one small, well-defined change. Read AGENTS.md first (the project
@@ -491,7 +492,7 @@ def main(argv: list[str] | None = None) -> int:
     sub = p.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("start")
     s.add_argument("--task", required=True)
-    s.add_argument("--model", required=True)
+    s.add_argument("--model", choices=MODELS, default="gpt-6.1-sol", help="worker model (default: %(default)s)")
     s.add_argument("--effort", default="medium", choices=["minimal", "low", "medium", "high"])
     s.add_argument("--brief", required=True, help="brief file, or - for stdin")
     s.add_argument("--max-parallel", type=int, choices=range(1, 7), default=4)

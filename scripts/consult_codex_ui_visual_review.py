@@ -2,7 +2,7 @@
 """Astra (Codex) reviews the whole neXus UI from aiview screenshots, independently of Fable (PO request 2026-09-23).
 
 Per AGENTS.md "External model and second-opinion consultation law" the review is written by the external reviewer
-through its own CLI (`codex exec`, model gpt-6-astra: the architect reviewer; workers use gpt-6-sol) and saved unaltered to docs/design/.
+through its own CLI (`codex exec`, model gpt-6-astra: the architect reviewer; standalone workers default to gpt-6.1-sol) and saved unaltered to docs/design/.
 Astra does NOT see Fable's review: the two answers must be independent; Fable compares them afterwards
 (scripts/consult_fable_resume_on_astra_review.py).
 

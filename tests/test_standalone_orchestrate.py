@@ -45,6 +45,18 @@ def test_cli_parallel_default(monkeypatch):
     assert sa.main(["start", "--task", "small-fix", "--model", "gpt-6-luna", "--brief", "-"]) == 4
 
 
+def test_cli_model_default(monkeypatch):
+    monkeypatch.setattr(sa, "cmd_start", lambda args: args.model)
+    assert sa.main(["start", "--task", "small-fix", "--brief", "-"]) == "gpt-6.1-sol"
+    assert "gpt-6.1-sol" in sa.MODELS
+
+
+@pytest.mark.parametrize("model", ["gpt-6.1-sol", "gpt-6-luna", "gpt-6-sol", "gpt-6-astra"])
+def test_cli_model_selection(monkeypatch, model):
+    monkeypatch.setattr(sa, "cmd_start", lambda args: args.model)
+    assert sa.main(["start", "--task", "small-fix", "--model", model, "--brief", "-"]) == model
+
+
 @pytest.mark.parametrize("kw,msg", [({"task": "Bad Slug"}, "slug"), ({"model": "gpt-5-unknown"}, "model")])
 def test_rejects_bad_task_or_model(tmp_path, monkeypatch, kw, msg):
     monkeypatch.setattr(sa, "STATE_DIR", tmp_path / ".state")
