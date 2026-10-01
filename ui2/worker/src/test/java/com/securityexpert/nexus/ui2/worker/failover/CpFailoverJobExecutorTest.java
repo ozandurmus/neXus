@@ -57,7 +57,9 @@ class CpFailoverJobExecutorTest {
         boolean down,up,stuck,badPre,badPost,badSync,badPolicy,changedPolicyPost;
         boolean readyMember,badPnotes,badBonds,badRoutes,missingDefault,recentFailover;
         String unknownCommand, failedCommand;
-        boolean extraTableRows,reverseActive,policyTimeMismatch;
+        boolean extraTableRows,reverseActive;
+        String peerPolicyTime;
+        long[] connectionCounts;
         String prefix="";
         Map<String,String> measured=Map.of();
         int downCount,upCount,connectCount;
@@ -78,13 +80,18 @@ class CpFailoverJobExecutorTest {
                     }
                     if(measured.containsKey("cphaprob -a if") && !measured.containsKey("cat /proc/net/dev")
                             && literal.endsWith("cat /proc/net/dev'")) output=output.replace("eth0:","bond1.3843:");
-                    if(policyTimeMismatch && literal.endsWith("fw stat'") && !((TransportSession)args[0]).sessionId().endsWith("11"))
-                        output=output.replace("14:01:25","14:01:26");
+                    if(peerPolicyTime!=null && literal.endsWith("fw stat'") && !((TransportSession)args[0]).sessionId().endsWith("11"))
+                        output=output.replace("14:01:25",peerPolicyTime);
                     if(reverseActive && literal.endsWith("cphaprob stat'")) output=output
                         .replace("Active","TEMP").replace("Standby","Active").replace("TEMP","Standby");
                     if(reverseActive && literal.endsWith("fw tab -t connections -s'")) {
                         boolean first=((TransportSession)args[0]).sessionId().endsWith("11");
                         output=output.replace("8158 100 150",first?"8158 1168 1500":"8158 47 1500");
+                    }
+                    if(connectionCounts!=null && literal.endsWith("fw tab -t connections -s'")) {
+                        boolean first=((TransportSession)args[0]).sessionId().endsWith("11");
+                        long count=connectionCounts[first?0:1];
+                        output="HOST NAME ID #VALS #PEAK #SLINKS\nlocalhost connections 8158 "+count+" 60000 0\n";
                     }
                     return new ExecResult.Completed(prefix+output,c.exitStatus());
                 });
@@ -225,11 +232,36 @@ class CpFailoverJobExecutorTest {
         check(store.checks.contains("pre:6:PASS"));
         check("READY".equals(store.outcome));
     }
-    @Test void policyInstallTimeMismatchFailsParity() {
+    @Test void oneSecondPolicySkewPassesParity() {
         Store store=new Store(); store.kind="READINESS";
-        Script script=new Script(); script.policyTimeMismatch=true;
+        Script script=new Script(); script.peerPolicyTime="14:01:26";
+        run(store,script);
+        check(store.checks.contains("pre:10:PASS") && "READY".equals(store.outcome));
+        check(store.derivedValues.stream().anyMatch(d -> d.contains("\"installSkewSeconds\":1")
+            && d.contains("firstInstalledAt") && d.contains("secondInstalledAt")));
+    }
+    @Test void policySkewOverTenMinutesFailsWithReason() {
+        Store store=new Store(); store.kind="READINESS";
+        Script script=new Script(); script.peerPolicyTime="14:11:26";
         run(store,script);
         check(store.checks.contains("pre:10:FAIL") && "NOT_READY".equals(store.outcome));
+        check(store.derivedValues.stream().filter(d -> d.contains("INSTALL_TIMES_DIFFER")
+            && d.contains("\"installSkewSeconds\":601")).count()==2);
+        check(script.downCount==0 && script.upCount==0);
+    }
+    @Test void connectionRuleUsesActualActiveMemberAndPersistsBothCounts() {
+        for(boolean reverse:List.of(false,true)) for(boolean high:List.of(false,true)) {
+            Store store=new Store(); store.kind="READINESS";
+            Script script=new Script(); script.reverseActive=reverse;
+            long active=high?10000:3127,standby=high?7999:2285;
+            script.connectionCounts=reverse?new long[]{standby,active}:new long[]{active,standby};
+            run(store,script);
+            check(store.checks.contains(high?"pre:6:FAIL":"pre:6:PASS"));
+            check(store.derivedValues.stream().filter(d -> d.contains("\"activeCount\":"+active)
+                && d.contains("\"comparedCount\":"+standby) && d.contains("\"ratio\":")
+                && d.contains(high?"RATIO_80":"LOW_VOLUME_ABSOLUTE_OR_RATIO")).count()==2);
+            check(script.downCount==0 && script.upCount==0);
+        }
     }
     @Test void readinessUsesStoredCounterBaselineAndRecordsIncrease() {
         Store store=new Store(); store.kind="READINESS";
@@ -272,8 +304,10 @@ class CpFailoverJobExecutorTest {
             run(store,script);
             check("UNKNOWN".equals(store.outcome));
             check(store.checks.contains("pre:2:UNKNOWN"));
-            check(store.derivedValues.stream().filter(d -> d.equals(
-                "{\"reason\":\"tables differ\",\"a\":"+(extra?4:2)+",\"b\":2}")).count()==2);
+            check(store.derivedValues.stream().filter(d -> d.contains("\"reason\":\"tables differ\"")
+                && d.contains("\"firstEntries\":"+(extra?4:2)) && d.contains("\"secondEntries\":2")
+                && d.contains(extra?"MISSING_ON_SECOND":"ADDRESS_MISMATCH")).count()==2);
+            check(store.derivedValues.stream().noneMatch(d -> d.contains("192.0.2.") || d.contains("198.51.100.")));
             check(script.downCount==0 && script.upCount==0);
         }
     }

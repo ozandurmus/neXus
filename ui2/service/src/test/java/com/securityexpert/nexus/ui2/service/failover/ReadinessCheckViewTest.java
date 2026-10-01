@@ -65,6 +65,34 @@ class ReadinessCheckViewTest {
             "{\"syncStatus\":\"OK\",\"lostUpdates\":853747,\"lostUpdatesIncrease\":2,"
             +"\"baselineAt\":\"2026-09-30T12:00:00Z\"}").get("summary"));
     }
+    @Test void tunedRulesExplainFailuresAndMaskTableAddresses() throws Exception {
+        assertEquals("Same policy, installed 2 h apart (limit 10 min)",row(false,10,"FAIL",
+            "{\"reason\":\"INSTALL_TIMES_DIFFER\",\"installSkewSeconds\":7200}").get("summary"));
+        assertEquals("Same policy, installed 601 s apart (limit 10 min)",row(false,10,"FAIL",
+            "{\"reason\":\"INSTALL_TIMES_DIFFER\",\"installSkewSeconds\":601}").get("summary"));
+        assertEquals("Policy names differ between members",row(false,10,"FAIL",
+            "{\"reason\":\"POLICY_NAMES_DIFFER\"}").get("summary"));
+        assertEquals("Policy install time missing or invalid",row(false,10,"UNKNOWN",
+            "{\"reason\":\"INSTALL_TIME_UNRECOGNIZED\"}").get("summary"));
+        String counts="{\"count\":2285,\"peak\":56528,\"activeCount\":3127,\"comparedCount\":2285,"
+            +"\"ratio\":0.7307,\"rule\":\"LOW_VOLUME_ABSOLUTE_OR_RATIO\"}";
+        String connections=row(false,6,"PASS",counts).get("summary").toString();
+        assertTrue(connections.contains("73.1%") && connections.contains("difference < 2000 or ratio >= 50%"));
+        for(String rule:new String[]{"RATIO_80","POST_RATIO_80"})
+            assertTrue(row(false,6,"FAIL",counts.replace("LOW_VOLUME_ABSOLUTE_OR_RATIO",rule))
+                .get("summary").toString().contains(">= 80%"));
+        String differences="{\"entries\":5,\"reason\":\"tables differ\",\"differences\":["
+            +"{\"member\":\"01\",\"interface\":\"006\",\"reason\":\"ADDRESS_MISMATCH\",\"firstAddress\":1,\"secondAddress\":2},"
+            +"{\"member\":\"1\",\"interface\":\"28\",\"reason\":\"MISSING_ON_SECOND\"}]}";
+        for(String status:new String[]{"FAIL","UNKNOWN"}) {
+            String table=row(false,2,status,differences).get("summary").toString();
+            assertTrue(table.contains("interface 006: address differs (masked address 1 / masked address 2)"));
+            assertTrue(table.contains("interface 28: missing on second observer"));
+        }
+        String malicious=differences.replace("\"firstAddress\":1","\"firstAddress\":\"192.0.2.1\"")
+            .replace("\"interface\":\"28\"","\"interface\":\"192.0.2.2\"");
+        assertFalse(row(false,2,"FAIL",malicious).get("summary").toString().contains("192.0.2."));
+    }
     @Test void sensitiveDerivedStringsNeverEnterSummaries() throws Exception {
         String derived="{\"role\":\"SYNTHETIC-PRIVATE-NAME\",\"reason\":\"SYNTHETIC-PRIVATE-NAME\","
             +"\"policy\":\"SYNTHETIC-PRIVATE-NAME\",\"up\":\"SYNTHETIC-PRIVATE-NAME\"}";

@@ -22,6 +22,10 @@ import com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointHaStateParser;
 public final class CpFailoverChecks {
     public static final double ARP_MIN_RATIO = 0.80;
     public static final double CONNECTION_MIN_RATIO = 0.80;
+    public static final long CONNECTION_LOW_VOLUME = 10_000;
+    public static final long CONNECTION_ABSOLUTE_TOLERANCE = 2_000;
+    public static final double CONNECTION_LOW_MIN_RATIO = 0.50;
+    public static final long POLICY_MAX_SKEW_SECONDS = 600;
     public static final double TRAFFIC_MIN_RATIO = 0.50;
     private static final Pattern LOCAL = Pattern.compile("(?i)\\(local\\)");
     private static final Pattern IP_ROW = Pattern.compile("(?m)^\\s*([^\\s()]+)\\s+(\\d+)\\s+([0-9a-fA-F:.]+)(?:[ \\t]+[0-9a-fA-F:]+)?[ \\t]*$");
@@ -82,6 +86,71 @@ public final class CpFailoverChecks {
     public static boolean twoTableMembers(Set<String> rows) {
         return rows.stream().map(row -> row.substring(0,row.indexOf('|'))).distinct().count()==2;
     }
+    /** Compare the same opaque member/interface key across observations, not local versus peer IPs. */
+    public static Map<String,Object> tableDifference(Set<String> a,Set<String> b) {
+        Map<String,String> left=new java.util.TreeMap<>(),right=new java.util.TreeMap<>();
+        for(String row:a) left.put(row.substring(0,row.lastIndexOf('|')),row.substring(row.lastIndexOf('|')+1));
+        for(String row:b) right.put(row.substring(0,row.lastIndexOf('|')),row.substring(row.lastIndexOf('|')+1));
+        var keys=new java.util.TreeSet<>(left.keySet()); keys.addAll(right.keySet());
+        // Comparison-local aliases preserve address equality without retaining raw addresses.
+        var addresses=new HashMap<String,Integer>();
+        var differences=new ArrayList<Map<String,Object>>();
+        for(String key:keys) {
+            String x=left.get(key),y=right.get(key);
+            for(String address:new String[]{x,y}) if(address!=null) addresses.computeIfAbsent(address,ignored -> addresses.size()+1);
+            if(java.util.Objects.equals(x,y)) continue;
+            String[] coordinate=key.split("\\|",2);
+            differences.add(Map.of("member",coordinate[0],"interface",coordinate[1],
+                "reason",x==null?"MISSING_ON_FIRST":y==null?"MISSING_ON_SECOND":"ADDRESS_MISMATCH",
+                "firstAddress",x==null?0:addresses.get(x),
+                "secondAddress",y==null?0:addresses.get(y)));
+        }
+        return Map.of("firstEntries",a.size(),"secondEntries",b.size(),"differences",differences);
+    }
+
+    public record Assessment(String status,Map<String,Object> derived) {}
+    public static Assessment connectionParity(long active,long compared,boolean post) {
+        boolean low=!post && active<CONNECTION_LOW_VOLUME;
+        var d=new HashMap<String,Object>();
+        d.put("activeCount",active); d.put("comparedCount",compared);
+        d.put("rule",post?"POST_RATIO_80":low?"LOW_VOLUME_ABSOLUTE_OR_RATIO":"RATIO_80");
+        if(active<0 || compared<0) return new Assessment("UNKNOWN",Map.copyOf(d));
+        if(active>0) d.put("ratio",(double)compared/active);
+        d.put("difference",Math.abs(active-compared));
+        boolean pass=low ? Math.abs(active-compared)<CONNECTION_ABSOLUTE_TOLERANCE
+            || ratio(compared,active,CONNECTION_LOW_MIN_RATIO) : ratio(compared,active,CONNECTION_MIN_RATIO);
+        return new Assessment(pass?"PASS":"FAIL",Map.copyOf(d));
+    }
+
+    public static Assessment policyParity(Policy a,Policy b,String previousA,String previousB) {
+        var d=new HashMap<String,Object>();
+        if(a.installedAt()!=null) d.put("firstInstalledAt",a.installedAt());
+        if(b.installedAt()!=null) d.put("secondInstalledAt",b.installedAt());
+        String reason,status;
+        if("FAIL".equals(a.status()) || "FAIL".equals(b.status())) { status="FAIL"; reason="POLICY_MISSING"; }
+        else if(!"PASS".equals(a.status()) || !"PASS".equals(b.status())) { status="UNKNOWN"; reason="POLICY_UNRECOGNIZED"; }
+        else {
+            boolean same=a.name().equals(b.name());
+            d.put("policyNamesMatch",same);
+            if(!same) { status="FAIL"; reason="POLICY_NAMES_DIFFER"; }
+            else if(previousA!=null && !previousA.equals(a.name()) || previousB!=null && !previousB.equals(b.name())) {
+                status="FAIL"; reason="POLICY_CHANGED";
+            } else if(a.installedAt()==null || b.installedAt()==null) {
+                status="UNKNOWN"; reason="INSTALL_TIME_UNRECOGNIZED";
+            } else try {
+                var format=DateTimeFormatter.ofPattern("dMMMuuuu H:mm:ss",Locale.ENGLISH)
+                    .withResolverStyle(java.time.format.ResolverStyle.STRICT);
+                long seconds=Duration.between(LocalDateTime.parse(a.installedAt(),format),
+                    LocalDateTime.parse(b.installedAt(),format)).abs().getSeconds();
+                d.put("installSkewSeconds",seconds);
+                status=seconds<=POLICY_MAX_SKEW_SECONDS?"PASS":"FAIL";
+                reason=seconds<=POLICY_MAX_SKEW_SECONDS?"POLICY_MATCH":"INSTALL_TIMES_DIFFER";
+            } catch(DateTimeParseException invalid) { status="UNKNOWN"; reason="INSTALL_TIME_UNRECOGNIZED"; }
+        }
+        d.put("reason",reason);
+        return new Assessment(status,Map.copyOf(d));
+    }
+
     public record Interfaces(Set<String> names, Set<String> trafficNames, int required,
             boolean ccpPresent, boolean healthy) {}
     public static Interfaces interfaces(String output) {

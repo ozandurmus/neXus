@@ -150,3 +150,24 @@ ARP table is naturally smaller; comparing it with the active member's is meaning
 **informational in the pre-check** (both counts recorded, never FAIL/blocking). In the post-check the useful comparison
 stays: the new active's ARP count against the pre-failover active's count (§3) -- also informational unless the PO
 promotes it.
+
+## 16. Amendment 2026-10-01 -- readiness rule tuning (Product Owner lane brief)
+- Check 10 supersedes §12's time rule: equal policy names and installation timestamps no more than 600 seconds
+  apart pass, including exactly 10 minutes. Different names, a missing policy, or greater skew fail; invalid or
+  unavailable times remain UNKNOWN. Compare parsed local calendar times (same member clock basis; no timezone
+  conversion inferred). Store both installation times, name-equality boolean, skew seconds and a reason enum;
+  do not persist policy names. Post-check policy-name continuity remains required.
+- Check 6 pre-check: when the active count is below 10,000, PASS if the absolute count difference is strictly
+  less than 2,000 OR standby/active is at least 50%. At 10,000 and above, retain standby/active >= 80%.
+  Zero active count passes for nonnegative standby counts; the ratio is undefined and omitted. Missing counts
+  or unverified active role remain UNKNOWN. Store member count/peak, active and compared counts, difference,
+  ratio when defined, and the applied rule. Post-check remains new-active/pre-switch-active >= 80% (§3).
+- Check 2 compares each opaque member/interface coordinate across the two observations. Ordering, `(Local)`
+  markers and MAC differences do not affect equality. Member-specific addresses are not compared to the other
+  member's addresses. The measured fixtures do not establish that any member-local row can safely be discarded;
+  keep those rows and the existing VS UNKNOWN behavior on unequal tables. Record mismatching coordinates,
+  missing observer side, and address mismatch enums with comparison-local numbered address aliases only.
+  These aliases preserve equality within the comparison, not identity between runs. No raw address is retained
+  in derived data or rendered in ReadinessCheckView. The measured table reports interface IDs, not names;
+  display the ID verbatim without numeric normalization or an invented name lookup.
+- All changes reuse existing reads, sessions and command gates. No new command or gate row.

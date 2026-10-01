@@ -236,7 +236,72 @@ class CpFailoverChecksTest {
             String peer="---- Unique IP's Table ----\n"+String.join("\n",rows)+"\n(Local)\n";
             check(CpFailoverChecks.twoTableMembers(CpFailoverChecks.ipTable(table)));
             check(CpFailoverChecks.ipTable(table).equals(CpFailoverChecks.ipTable(peer)));
+            check(CpFailoverChecks.tableDifference(CpFailoverChecks.ipTable(table),CpFailoverChecks.ipTable(peer))
+                .get("differences").equals(java.util.List.of()));
         }
+    }
+    @Test void policySkewBoundariesAndFailureReasons() {
+        var a=new CpFailoverChecks.Policy("PASS","Sample_Policy","30Sep2026 23:55:00");
+        for(int seconds:new int[]{0,1,599,600,601,7200}) {
+            String time=java.time.LocalDateTime.of(2026,9,30,23,55).plusSeconds(seconds)
+                .format(java.time.format.DateTimeFormatter.ofPattern("dMMMuuuu H:mm:ss",java.util.Locale.ENGLISH));
+            var b=new CpFailoverChecks.Policy("PASS","Sample_Policy",time);
+            for(var pair:java.util.List.of(java.util.List.of(a,b),java.util.List.of(b,a))) {
+                var result=CpFailoverChecks.policyParity(pair.get(0),pair.get(1),null,null);
+                check(result.status().equals(seconds<=600?"PASS":"FAIL"));
+                check(result.derived().get("installSkewSeconds").equals((long)seconds));
+                check(result.derived().get("firstInstalledAt").equals(pair.get(0).installedAt()));
+                check(result.derived().get("secondInstalledAt").equals(pair.get(1).installedAt()));
+                check(!result.derived().toString().contains("Sample_Policy"));
+            }
+        }
+        check(CpFailoverChecks.policyParity(a,new CpFailoverChecks.Policy("PASS","Other_Policy",a.installedAt()),null,null)
+            .derived().get("reason").equals("POLICY_NAMES_DIFFER"));
+        check(CpFailoverChecks.policyParity(a,a,"Other_Policy",a.name()).derived().get("reason").equals("POLICY_CHANGED"));
+        check(CpFailoverChecks.policyParity(a,new CpFailoverChecks.Policy("FAIL",null,null),null,null).status().equals("FAIL"));
+        check(CpFailoverChecks.policyParity(a,new CpFailoverChecks.Policy("UNKNOWN",null,null),null,null).status().equals("UNKNOWN"));
+        for(String invalid:new String[]{null,"31Sep2026 12:00:00","01Oct2026 24:00:00","bad"})
+            check(CpFailoverChecks.policyParity(a,new CpFailoverChecks.Policy("PASS",a.name(),invalid),null,null)
+                .status().equals("UNKNOWN"));
+        var singleHour=new CpFailoverChecks.Policy("PASS",a.name(),"1Oct2026 0:01:00");
+        check(CpFailoverChecks.policyParity(a,singleHour,null,null).status().equals("PASS"));
+    }
+    @Test void connectionVolumeAndToleranceBoundaries() {
+        long[][] cases={{3127,2285,1},{3000,1001,1},{3000,1000,0},{3000,999,0},
+            {9999,4999,0},{9998,4999,1},{9999,5000,1},{10000,7999,0},{10000,8000,1},
+            {10001,8000,0},{10001,8001,1},{0,0,1},{0,3000,1},{100,0,1},
+            {2000,0,0},{4000,1999,0},{4000,2000,1},{9999,12000,1}};
+        for(long[] c:cases) {
+            var result=CpFailoverChecks.connectionParity(c[0],c[1],false);
+            check(result.status().equals(c[2]==1?"PASS":"FAIL"));
+            check(result.derived().get("rule").equals(c[0]<10000?"LOW_VOLUME_ABSOLUTE_OR_RATIO":"RATIO_80"));
+            check(result.derived().get("activeCount").equals(c[0]));
+            check(result.derived().get("comparedCount").equals(c[1]));
+            check(result.derived().containsKey("ratio")== (c[0]>0));
+        }
+        check(CpFailoverChecks.connectionParity(-1,10,false).status().equals("UNKNOWN"));
+        check(CpFailoverChecks.connectionParity(10,-1,false).status().equals("UNKNOWN"));
+        check(CpFailoverChecks.connectionParity(100,79,true).status().equals("FAIL"));
+        check(CpFailoverChecks.connectionParity(100,80,true).status().equals("PASS"));
+        check(CpFailoverChecks.connectionParity(100,80,true).derived().get("rule").equals("POST_RATIO_80"));
+    }
+    @Test void tableDifferencesExplainCoordinatesWithoutRawAddresses() {
+        var a=CpFailoverChecks.ipTable(TABLE);
+        var b=CpFailoverChecks.ipTable(TABLE.replace("192.0.2.22","192.0.2.99"));
+        var diff=CpFailoverChecks.tableDifference(a,b);
+        check(diff.toString().contains("ADDRESS_MISMATCH"));
+        check(diff.toString().contains("member=1") && diff.toString().contains("interface=1"));
+        check(!diff.toString().contains("192.0.2."));
+        var missing=CpFailoverChecks.ipTable(TABLE.replace("1 1 192.0.2.22", "1 2 192.0.2.22"));
+        String details=CpFailoverChecks.tableDifference(a,missing).toString();
+        check(details.contains("MISSING_ON_FIRST") && details.contains("MISSING_ON_SECOND"));
+        check(CpFailoverChecks.tableDifference(a,a).get("differences").equals(java.util.List.of()));
+        // Each member keeps its own address. Only matching coordinates across observations are compared.
+        check(CpFailoverChecks.tableDifference(a,CpFailoverChecks.ipTable(TABLE.replace("(Local)","(local)")))
+            .get("differences").equals(java.util.List.of()));
+        check(CpFailoverChecks.tableDifference(a,Set.of()).toString().contains("MISSING_ON_SECOND"));
+        var opaque=Set.of("01|001|192.0.2.1");
+        check(CpFailoverChecks.tableDifference(opaque,Set.of()).toString().contains("interface=001"));
     }
     public static void main(String[] args) {
         var t=new CpFailoverChecksTest(); t.approvedChecksAndVsContext(); t.unrecognisedMeansUnknown(); t.syncAndPolicyPassFailUnknown();

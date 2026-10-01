@@ -50,13 +50,13 @@ public final class ReadinessCheckView {
             return switch(no) {
                 case 1 -> "Cluster state not recognised";
                 case 2 -> "tables differ".equals(d.path("reason").asText())
-                    ? "Cluster IP tables differ; equivalence could not be verified" : "Cluster IP table not recognised";
+                    ? tableSummary(false,d)+"; equivalence could not be verified" : "Cluster IP table not recognised";
                 case 3 -> "Interface table not recognised";
                 case 5 -> "ARP table or active member not recognised";
                 case 6 -> "Connection table or active member not recognised";
                 case 8 -> "Traffic counters or monitored interfaces unavailable";
                 case 9 -> "Sync state or counters not recognised";
-                case 10 -> "Installed policy could not be verified";
+                case 10 -> policySummary(status,d);
                 case 11 -> "Pnotes output not recognised";
                 case 12 -> "Bond table not recognised";
                 case 13 -> "Last failover time unavailable or invalid";
@@ -76,12 +76,12 @@ public final class ReadinessCheckView {
         };
         return switch(no) {
             case 1 -> role(d)+(pass ? "" : "; cluster roles not ready");
-            case 2 -> count(d,"entries"," cluster IP entries")+(pass ? ", same on both members" : ", tables differ");
+            case 2 -> tableSummary(pass,d);
             case 3 -> d.path("up").isIntegralNumber() && d.path("required").isIntegralNumber()
                 ? d.path("up").asLong()+" of "+d.path("required").asLong()+" required interfaces up"
                 : "Interface counts unavailable";
             case 5 -> count(d,"count"," ARP entries");
-            case 6 -> count(d,"count"," connections")+", "+count(d,"peak"," peak")+(pass ? "" : ", below tolerance");
+            case 6 -> connectionSummary(pass,d);
             case 8 -> count(d,"bytesPerSecond"," bytes/s")+(pass ? "" : ", below tolerance");
             case 9 -> (pass ? d.path("baselineRecorded").asBoolean(false) ? "Sync OK, baseline recorded"
                 : d.has("baselineAt") ? "Sync OK, no lost-counter increase"
@@ -89,7 +89,7 @@ public final class ReadinessCheckView {
                 : "Sync OK, 0 lost updates" : syncFailure(d))
                 +(d.path("sentRejectNotifications").isIntegralNumber()
                     ? " ("+d.path("sentRejectNotifications").asLong()+" sent rejects)" : "");
-            case 10 -> pass ? "Same policy on both members" : "Policy missing, changed or different between members";
+            case 10 -> policySummary(status,d);
             case 11 -> pass ? "No pnotes in problem state" : "Pnotes in problem state";
             case 12 -> pass ? d.path("noneConfigured").asBoolean(false) ? "No bonds configured" : "Required bond links up" : "Bond links not ready";
             case 13 -> lastFailover(d,observedAt);
@@ -98,6 +98,60 @@ public final class ReadinessCheckView {
                 +", "+count(d,"routeCount"," routes")+(pass ? "" : "; routing not ready");
             default -> "Check result unavailable";
         };
+    }
+
+    private static String tableSummary(boolean pass,JsonNode d) {
+        String summary=count(d,"entries"," cluster IP entries")+(pass?", same on both members":", tables differ");
+        if(pass) return summary;
+        var details=new java.util.ArrayList<String>();
+        for(JsonNode row:d.path("differences")) {
+            // Table coordinates are opaque strings; never render arbitrary derived text or raw addresses.
+            String member=row.path("member").asText(),iface=row.path("interface").asText();
+            if(!member.matches("[0-9]+") || !iface.matches("[0-9]+")) continue;
+            String reason=switch(row.path("reason").asText()) {
+                case "ADDRESS_MISMATCH" -> "address differs ("+addressAlias(row,"firstAddress")
+                    +" / "+addressAlias(row,"secondAddress")+")";
+                case "MISSING_ON_FIRST" -> "missing on first observer";
+                case "MISSING_ON_SECOND" -> "missing on second observer";
+                default -> "difference unrecognised";
+            };
+            details.add("table member "+member+", interface "+iface+": "+reason);
+        }
+        return summary+(details.isEmpty()?"":"; "+String.join("; ",details));
+    }
+    private static String addressAlias(JsonNode d,String key) {
+        return d.path(key).isIntegralNumber() && d.path(key).asLong()>0
+            ? "masked address "+d.path(key).asLong():"address unavailable";
+    }
+    private static String connectionSummary(boolean pass,JsonNode d) {
+        String summary=count(d,"count"," connections")+", "+count(d,"peak"," peak")+(pass?"":", below tolerance");
+        String rule=switch(d.path("rule").asText()) {
+            case "LOW_VOLUME_ABSOLUTE_OR_RATIO" -> "difference < 2000 or ratio >= 50% (active < 10000)";
+            case "RATIO_80" -> "standby/active >= 80% (active >= 10000)";
+            case "POST_RATIO_80" -> "new active/pre-switch active >= 80%";
+            default -> "";
+        };
+        if(rule.isEmpty()) return summary;
+        return summary+"; active baseline "+count(d,"activeCount","")+", compared "+count(d,"comparedCount","")
+            +", ratio "+(d.path("ratio").isNumber()?String.format(Locale.ROOT,"%.1f%%",d.path("ratio").asDouble()*100)
+                :"not applicable (zero baseline)")+"; rule: "+rule;
+    }
+    private static String policySummary(String status,JsonNode d) {
+        return switch(d.path("reason").asText()) {
+            case "POLICY_MATCH" -> "Same policy on both members; installed within 10 min";
+            case "POLICY_NAMES_DIFFER" -> "Policy names differ between members";
+            case "POLICY_MISSING" -> "Policy missing on a member";
+            case "POLICY_CHANGED" -> "Policy changed since the pre-check";
+            case "INSTALL_TIMES_DIFFER" -> "Same policy, installed "+installGap(d)+" apart (limit 10 min)";
+            case "INSTALL_TIME_UNRECOGNIZED" -> "Policy install time missing or invalid";
+            default -> "UNKNOWN".equals(status)?"Installed policy could not be verified"
+                :"PASS".equals(status)?"Same policy on both members":"Policy missing, changed or different between members";
+        };
+    }
+    private static String installGap(JsonNode d) {
+        if(!d.path("installSkewSeconds").isIntegralNumber()) return "an unknown interval";
+        long seconds=d.path("installSkewSeconds").asLong();
+        return seconds%3600==0?seconds/3600+" h":seconds%60==0?seconds/60+" min":seconds+" s";
     }
 
     private static String syncFailure(JsonNode d) {
