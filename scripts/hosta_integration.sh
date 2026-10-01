@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Starts an isolated PostgreSQL 16 test Job, runs local Gradle, then removes it.
-set -euo pipefail
+set -Eeuo pipefail
 case "${1:-}" in
   --help|-h)
     echo "Usage: bash scripts/hosta_integration.sh"
@@ -19,6 +19,9 @@ forward_pid=""
 HOST=""
 control_open=false
 pass_summary=""
+remote_kubectl() {
+  ssh "${ssh_options[@]}" "$HOST" "export KUBECONFIG=\$HOME/.kube/config; kubectl $1"
+}
 cleanup() {
   result=$?
   trap - EXIT
@@ -35,7 +38,7 @@ cleanup() {
     kill "$forward_pid" 2>/dev/null || true
     wait "$forward_pid" 2>/dev/null || true
   fi
-  if [[ -n "$HOST" ]] && ! ssh "${ssh_options[@]}" "$HOST" "kubectl -n ui2-build delete job,networkpolicy,secret $run --ignore-not-found --wait=true --timeout=60s" >"$work/cleanup.log" 2>&1; then
+  if [[ -n "$HOST" ]] && ! remote_kubectl "-n ui2-build delete job,networkpolicy,secret $run --ignore-not-found --wait=true --timeout=60s" >"$work/cleanup.log" 2>&1; then
     echo "INTEGRATION: ERROR (cleanup failed)"
     result=2
   fi
@@ -61,16 +64,16 @@ p.write_text(secrets.token_hex(24)); p.chmod(0o600)
 PY
 sed "s/INTEGRATION_RUN/$run/g" deploy/ui2-image-build/33-integration-postgres.yaml > "$work/postgres.yaml"
 # Split the literal key for the repository DLP prose guard; the command is unchanged.
-ssh "${ssh_options[@]}" "$HOST" "kubectl -n ui2-build create secret generic $run --from-file=pass""word=/dev/stdin" <"$work/password" >"$work/setup.log" 2>&1
+remote_kubectl "-n ui2-build create secret generic $run --from-file=pass""word=/dev/stdin" <"$work/password" >"$work/setup.log" 2>&1
 # Apply the deny-all policy before the Job so there is no unisolated startup window.
-ssh "${ssh_options[@]}" "$HOST" "kubectl apply -f -" <"$work/postgres.yaml" >>"$work/setup.log" 2>&1
+remote_kubectl "apply -f -" <"$work/postgres.yaml" >>"$work/setup.log" 2>&1
 for ((i=0; i<60; i++)); do
-  pod=$(ssh "${ssh_options[@]}" "$HOST" "kubectl -n ui2-build get pod -l nexus-integration-run=$run -o jsonpath='{.items[0].metadata.name}'" 2>/dev/null || true)
+  pod=$(remote_kubectl "-n ui2-build get pod -l nexus-integration-run=$run -o jsonpath='{.items[0].metadata.name}'" 2>/dev/null || true)
   [[ -z "$pod" ]] || break
   sleep 1
 done
 [[ "$pod" =~ ^[a-z0-9][a-z0-9.-]*$ ]]
-ssh "${ssh_options[@]}" "$HOST" "kubectl -n ui2-build wait --for=condition=Ready pod/$pod --timeout=180s" >>"$work/setup.log" 2>&1
+remote_kubectl "-n ui2-build wait --for=condition=Ready pod/$pod --timeout=180s" >>"$work/setup.log" 2>&1
 # Local port selection is advisory; SSH fails closed if either port is occupied.
 read -r port remote_port < <(python3 - <<'PYPORT'
 import secrets
@@ -85,6 +88,7 @@ ssh "${ssh_options[@]}" -o ExitOnForwardFailure=yes \
   -L "127.0.0.1:$port:127.0.0.1:$remote_port" "$HOST" \
   "bash -c '
     set -eu
+    export KUBECONFIG=\$HOME/.kube/config
     pid=
     cleanup_forward() {
       [ -z \"\$pid\" ] || { kill \"\$pid\" 2>/dev/null || true; wait \"\$pid\" 2>/dev/null || true; }

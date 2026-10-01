@@ -68,7 +68,7 @@ if '-L' in args:
     assert 'ExitOnForwardFailure=yes' in args
     Path(os.environ['TEST_PORT']).write_text(binding[1])
     if os.environ['TEST_FAILURE']=='tunnel': sys.exit(1)
-os.execve('/bin/sh', ['sh', '-c', command], {**os.environ, 'TEST_REMOTE': '1'})
+os.execve('/bin/sh', ['sh', '-c', command], {**os.environ, 'TEST_REMOTE': '1', 'HOME': os.environ['TEST_REMOTE_HOME'], 'KUBECONFIG': '/synthetic/inherited-config'})
 ''')
     ssh.chmod(0o755)
     kubectl = checkout / "bin/kubectl"
@@ -76,6 +76,7 @@ os.execve('/bin/sh', ['sh', '-c', command], {**os.environ, 'TEST_REMOTE': '1'})
 import os,sys,time,signal
 from pathlib import Path
 assert os.environ['TEST_REMOTE']=='1'
+assert os.environ.get('KUBECONFIG') == str(Path(os.environ['HOME']) / '.kube/config')
 args=sys.argv[1:]
 with open(os.environ['TEST_CALLS'], 'a') as f: f.write(' '.join(args)+'\\n')
 if 'create' in args:
@@ -123,6 +124,7 @@ skipped=int(os.environ['TEST_FAILURE']=='skipped')
 ''')
     gradle.chmod(0o755)
     env = {**os.environ, "PATH": f"{checkout / 'bin'}:{os.environ['PATH']}",
+           "TEST_REMOTE_HOME": str(tmp_path / "remote home"),
            "TEST_CALLS": str(calls), "TEST_FAILURE": failure, "HOME": str(tmp_path / "home"),
            "TEST_PORT": str(tmp_path / "port"), "TEST_PASSWORD_PATH": str(tmp_path / "password_path")}
     result = subprocess.run(["bash", str(checkout / "scripts/hosta_integration.sh")],
@@ -144,3 +146,12 @@ def test_integration_runner_has_cleanup_and_no_remote_build_mode():
     assert "trap cleanup_forward EXIT" in source
     assert "--on-host" not in source
     assert "git archive" not in source
+
+
+def test_integration_remote_kubectl_exports_kubeconfig():
+    source = (ROOT / "scripts/hosta_integration.sh").read_text()
+    kubectl_lines = [line.strip() for line in source.splitlines() if " kubectl " in line]
+    assert len(kubectl_lines) == 2  # Shared SSH helper and the tunnel shell.
+    assert 'export KUBECONFIG=\\$HOME/.kube/config; kubectl $1' in kubectl_lines[0]
+    tunnel = source.split('"bash -c', 1)[1]
+    assert tunnel.index('export KUBECONFIG=\\$HOME/.kube/config') < tunnel.index('kubectl ')
