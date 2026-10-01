@@ -53,6 +53,27 @@ class BackupJobExecutorEndToEndTest {
                 });
     }
 
+    @Test
+    void sparkRoutingAndUnresolvedRevisionNeverReachGaiaPrecheck(@TempDir Path dir) throws Exception {
+        for (String model : java.util.List.of("1590", "V1")) {
+            var transport = new ScriptedBackupTransport();
+            var harness = new Harness(transport, newArtefactStore(dir.resolve(model)),
+                    Duration.ofMillis(5), Duration.ofSeconds(5), dir);
+            harness.deviceRepo.deviceRecord = Optional.of(new com.securityexpert.nexus.ui2.persistence.device.DeviceRecord(
+                    DEVICE_ID, "gateway", "check_point", "synthetic", Instant.EPOCH, true,
+                    com.securityexpert.nexus.ui2.platform.DeviceEnrollmentState.ENROLLED, false, "credential-1"));
+            harness.deviceRepo.confirmFacts = Optional.of(new com.securityexpert.nexus.ui2.persistence.device.DeviceConfirmFacts(
+                    Optional.empty(), Optional.of(model), Optional.of("R81.10.10"), Optional.empty(), Optional.empty(),
+                    Optional.empty(), "NONE", Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
+                    "NONE", Optional.empty()));
+            var failed = org.junit.jupiter.api.Assertions.assertInstanceOf(JobOutcome.Failed.class,
+                    harness.executor.execute(JOB_ID, LEASE_EPOCH, DEVICE_ID, request()));
+            assertTrue(failed.terminalReason().contains(model.equals("V1")
+                    ? "Spark model unresolved" : "Spark backup executor is not configured"));
+            assertTrue(transport.commandsIssued.isEmpty());
+        }
+    }
+
     @Test void storesTranscriptRefAndPreservesOutcomeOnStoreFailure(@TempDir Path tempDir) throws Exception {
         ScriptedBackupTransport transport = happyPathTransportUpTo("succeeded");
         transport.fetchedContent = "archive-bytes-content";

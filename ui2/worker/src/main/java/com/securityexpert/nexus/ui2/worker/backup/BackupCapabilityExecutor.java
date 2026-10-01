@@ -180,7 +180,8 @@ public final class BackupCapabilityExecutor {
         Optional<String> archivePath = parseArchiveName(submit.output());
 
         // Entry 3 (BK-5): poll until terminal or the run's own deadline.
-        Poll poll = pollUntilTerminalOrDeadline(commands, now.get());
+        Poll poll = pollUntilTerminalOrDeadline(commands, now.get(),
+                submit.output().lines().anyMatch(line -> line.startsWith("Creating backup package")));
         BackupStatus status = poll.status();
         if (status == BackupStatus.NOT_STARTED) {
             return new BackupResult.SubmitRefused("the device did not start a backup; add backup local said: "
@@ -321,7 +322,7 @@ public final class BackupCapabilityExecutor {
     private record Poll(BackupStatus status, String lastOutput) {
     }
 
-    private Poll pollUntilTerminalOrDeadline(RunCommands commands, Instant submittedAt) {
+    private Poll pollUntilTerminalOrDeadline(RunCommands commands, Instant submittedAt, boolean startAcknowledged) {
         Instant deadline = submittedAt.plus(runDeadline);
         Instant noStartDeadline = submittedAt.plus(Duration.ofMinutes(3));
         boolean alwaysEmpty = true;
@@ -332,7 +333,7 @@ public final class BackupCapabilityExecutor {
                 return new Poll(status, statusOutcome.output());
             }
             alwaysEmpty &= statusOutcome.succeeded() && statusOutcome.output().isEmpty();
-            if (alwaysEmpty && !now.get().isBefore(noStartDeadline)) {
+            if (!startAcknowledged && alwaysEmpty && !now.get().isBefore(noStartDeadline)) {
                 return new Poll(BackupStatus.NOT_STARTED, "");
             }
             if (!now.get().plus(pollInterval).isBefore(deadline)) {

@@ -47,6 +47,15 @@ import com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope;
  */
 public final class BackupJobExecutor {
 
+    private com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFactsRepository platformFacts =
+            com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFactsRepository.NONE;
+
+    public BackupJobExecutor withPlatformFacts(
+            com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFactsRepository repository) {
+        platformFacts = Objects.requireNonNull(repository);
+        return this;
+    }
+
     private static final java.util.logging.Logger LOG = java.util.logging.Logger.getLogger(BackupJobExecutor.class.getName());
     private static final String ACTOR = WorkerActor.RESERVED_ACTOR_FINGERPRINT;
     private static final String ACTION_CLAIM_TO_EXECUTING = "job_backup_claim_to_executing";
@@ -222,6 +231,14 @@ public final class BackupJobExecutor {
         Optional<com.securityexpert.nexus.ui2.persistence.device.DeviceRecord> deviceRecord = deviceRepository.find(targetDeviceId);
         String vendor = deviceRecord.map(com.securityexpert.nexus.ui2.persistence.device.DeviceRecord::vendorHint).orElse(VENDOR);
 
+        boolean cpGateway = "check_point".equals(vendor)
+                && deviceRecord.map(r -> "gateway".equals(r.role())).orElse(false);
+        Optional<String> model = cpGateway ? deviceRepository.findSummary(targetDeviceId).flatMap(
+                com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord::observedModel)
+                .or(() -> confirmFacts.flatMap(DeviceConfirmFacts::observedModel)) : Optional.empty();
+        boolean spark = cpGateway && (platformFacts.find(targetDeviceId).flatMap(f -> f.platformFamily())
+                .filter("gaia_embedded"::equals).isPresent()
+                || com.securityexpert.nexus.ui2.jobs.admission.CheckPointSparkModelHint.isKnownSparkModel(model));
         BackupResult result;
         Optional<BackupResult> viaCyberController = Optional.empty();
         if (com.securityexpert.nexus.ui2.jobs.admission.BackupCapabilityIds.HTTPS_VENDOR_BACKUP.equals(capabilityId)
@@ -255,7 +272,11 @@ public final class BackupJobExecutor {
                 }
             }
         }
-        if (com.securityexpert.nexus.ui2.jobs.admission.BackupCapabilityIds.CP_SPARK_SFTP_BACKUP.equals(capabilityId)) {
+        if (!spark && cpGateway && model.filter(value -> value.matches("[VH][0-9]+")).isPresent()
+                && !com.securityexpert.nexus.ui2.jobs.admission.BackupCapabilityIds.CP_SPARK_SFTP_BACKUP.equals(capabilityId)) {
+            result = new BackupResult.SubmitRefused("Spark model unresolved");
+        } else if (com.securityexpert.nexus.ui2.jobs.admission.BackupCapabilityIds.CP_SPARK_SFTP_BACKUP.equals(capabilityId)
+                || (spark && com.securityexpert.nexus.ui2.jobs.admission.BackupCapabilityIds.CP_GAIA_BACKUP_LOCAL.equals(capabilityId))) {
             result = sparkBackup(request, targetDeviceId, jobId);
         } else if (com.securityexpert.nexus.ui2.jobs.admission.BackupCapabilityIds.RDW_CC_CONFIG_BACKUP.equals(capabilityId)) {
             result = cyberControllerBackupExecutor == null

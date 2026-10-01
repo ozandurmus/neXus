@@ -38,6 +38,32 @@ class BackupEmptyStatusTest {
     }
 
     @Test
+    void startAcknowledgementRequiresCaseSensitiveLineAnchor(@TempDir Path dir) {
+        for (String text : java.util.List.of("creating backup package", "Refused: Creating backup package")) {
+            var transport = new ScriptedBackupTransport();
+            transport.execOutputs.put(BackupReadPlan.CP_SHOW_DISKSPACE, "1000000\n");
+            transport.execOutputs.put(BackupReadPlan.CP_ADD_BACKUP_LOCAL, text);
+            var clock = new AtomicReference<>(Instant.parse("2026-01-01T00:00:00Z"));
+            assertInstanceOf(BackupResult.SubmitRefused.class,
+                    executor(transport, dir, clock).collect(request(), "device-1", "job-1"));
+        }
+    }
+
+    @Test
+    void acknowledgedStartWithEmptyStatusWaitsUntilRunDeadline(@TempDir Path dir) {
+        var transport = new ScriptedBackupTransport();
+        transport.execOutputs.put(BackupReadPlan.CP_SHOW_DISKSPACE, "1000000\n");
+        transport.execOutputs.put(BackupReadPlan.CP_ADD_BACKUP_LOCAL,
+                "Creating backup package. Use the command 'show backup status' to monitor creation progress.");
+        var clock = new AtomicReference<>(Instant.parse("2026-01-01T00:00:00Z"));
+        assertInstanceOf(BackupResult.OutcomeUnknown.class,
+                executor(transport, dir, clock).collect(request(), "device-1", "job-1"));
+        assertTrue(Duration.between(Instant.parse("2026-01-01T00:00:00Z"), clock.get()).toMinutes() > 3);
+        assertFalse(transport.commandsIssued.stream().anyMatch(c -> c.contains("delete backup")));
+        assertEquals(1, transport.commandsIssued.stream().filter(BackupReadPlan.CP_ADD_BACKUP_LOCAL::equals).count());
+    }
+
+    @Test
     void continuousEmptyStatusRefusesAfterThreeMinutesWithoutDelete(@TempDir Path dir) {
         var transport = new ScriptedBackupTransport();
         transport.execOutputs.put(BackupReadPlan.CP_SHOW_DISKSPACE, "1000000\n");

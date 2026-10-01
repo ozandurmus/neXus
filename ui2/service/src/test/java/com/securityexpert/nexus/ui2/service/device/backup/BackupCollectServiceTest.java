@@ -192,6 +192,32 @@ class BackupCollectServiceTest {
     }
 
     @Test
+    void internalRevisionNeedsIndependentSparkPlatformEvidence() {
+        var jobs = new InMemoryAdmissionRepository();
+        var service = new BackupCollectService(
+                new StubDeviceRepository().put(PILOT_DEVICE, "check_point").withModel("V1"),
+                admissionService(jobs), Set.of(PILOT_DEVICE), true);
+        var refused = (BackupCollectService.Outcome.AdmissionRefused)
+                service.requestCollect(PILOT_DEVICE, "actor", VALID_REASON, Optional.empty());
+        assertEquals("Spark model unresolved", refused.reason());
+        assertEquals(null, jobs.lastCapabilityId);
+        service.withPlatformFacts(new com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFactsRepository() {
+            public void record(com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFacts facts) { }
+            public Optional<com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFacts> find(String id) {
+                return Optional.of(new com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFacts(id,
+                        Optional.empty(), Optional.empty(), Optional.of("gaia_embedded"), Map.of(), Optional.empty(),
+                        "cp_spark_show_diag_software_version", Optional.empty()));
+            }
+            public Map<String, com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFacts> findAll() {
+                return Map.of();
+            }
+        });
+        assertTrue(service.requestCollect(PILOT_DEVICE, "actor", VALID_REASON, Optional.empty())
+                instanceof BackupCollectService.Outcome.Admitted);
+        assertEquals(BackupCapabilityIds.CP_SPARK_SFTP_BACKUP, jobs.lastCapabilityId);
+    }
+
+    @Test
     void knownSparkModelRoutesToSparkAndOrdinaryGatewayStaysOnGaia() {
         InMemoryAdmissionRepository jobs = new InMemoryAdmissionRepository();
         BackupCollectService spark = new BackupCollectService(
