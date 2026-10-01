@@ -15,6 +15,6 @@ export const TAB_COVERAGE: readonly { screen: ScreenId; tabList: string; labels:
 ];
 export const BACKUP_SECTIONS = ["All enrolled", "Targets", "Targets without archive"] as const;
 export const SCREEN_HEADINGS: Record<ScreenId, string> = {
-  overview: "Overview", inventory: "Devices", configuration: "Devices", compliance: "Compliance",
+  policy: "Policy", overview: "Overview", inventory: "Devices", configuration: "Devices", compliance: "Compliance",
   backups: "Backups", operations: "Operations", administration: "Administration",
 };

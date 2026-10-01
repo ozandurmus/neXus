@@ -1668,3 +1668,23 @@ export function acceptHttpsCertificate(deviceId: string, trustEntryId: string): 
 export function setHttpsCertificateStrict(deviceId: string, strict: boolean): Promise<unknown> {
   return call(`/devices/${encodeURIComponent(deviceId)}/https-certificate/strict`, "PUT", { strict });
 }
+
+export interface PolicyTarget { deviceId: string; name: string; context: string; syncStatus: string }
+export interface PolicyMetadata {
+  id: string; sourceId: string; sourceName: string; vendor: string; containerId: string;
+  containerName: string; name: string; collectedAt: string; artefactRef: string; targets: PolicyTarget[];
+}
+export interface PolicyObject {
+  id: string; name: string; type: string; status: string; members?: string[]; values?: string[]; children?: PolicyObject[];
+}
+export interface PolicyCell { refs: string[]; negated: boolean }
+export interface PolicyRule {
+  id: string; uuid: string; number: number; name: string; enabled: boolean | null;
+  source: PolicyCell; destination: PolicyCell; service: PolicyCell; application: PolicyCell;
+  action: string; log: string; comment: string; extras: Record<string, string[]>;
+}
+export interface PolicySection { id: string; name: string; source: string; parentRuleId: string | null; rules: PolicyRule[]; total: number }
+export interface PolicyPage { metadata: PolicyMetadata; sections: PolicySection[]; objects: PolicyObject[]; page: number; pageSize: number; total: number }
+export const listPolicies = () => call<{ policies: PolicyMetadata[]; devices: PolicyTarget[] }>("/api/v2/policy/devices", "GET");
+export const getPolicy = (id: string, page: number, q: string) => call<PolicyPage>(`/api/v2/policy/policies/${encodeURIComponent(id)}?page=${page}&q=${encodeURIComponent(q)}`, "GET");
+export const getPolicyObject = (id: string, policy: string) => call<{ object: PolicyObject }>(`/api/v2/policy/objects/${encodeURIComponent(id)}?policy=${encodeURIComponent(policy)}`, "GET");

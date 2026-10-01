@@ -1,0 +1,21 @@
+[
+  {"uid":"layer-01","name":"Synthetic access","from":1,"to":2,"total":2,
+   "objects-dictionary":[
+     {"uid":"any-01","type":"CpmiAnyObject","name":"Any"},
+     {"uid":"address-01","type":"host","name":"Synthetic address","ipv4-address":"192.0.2.8"},
+     {"uid":"group-01","type":"group","name":"Synthetic group","members":["address-01","group-02"]},
+     {"uid":"group-02","type":"group","name":"Synthetic nested group","members":["group-01"]},
+     {"uid":"service-01","type":"service-tcp","name":"Synthetic HTTPS","port":"443"},
+     {"uid":"accept-01","type":"RulebaseAction","name":"Accept"},
+     {"uid":"log-01","type":"Track","name":"Log"}],
+   "rulebase":[
+     {"uid":"section-01","type":"access-section","name":"Synthetic section","from":1,"to":2,"rulebase":[
+       {"uid":"rule-001","type":"access-rule","rule-number":1,"name":"Synthetic allow","enabled":false,"comments":"Synthetic comment",
+        "source":["group-01"],"source-negate":true,"destination":["any-01"],"service":["service-01"],"action":"accept-01",
+        "track":{"type":"log-01"},"install-on":["target-01"],"inline-layer":"layer-02"},
+       {"uid":"rule-002","type":"access-rule","rule-number":2,"name":"Synthetic unknown","source":[],"destination":["missing-01"],"service":["any-01"]}
+     ]}]},
+  {"uid":"layer-02","name":"Synthetic inline","objects-dictionary":[],"from":1,"to":1,"total":1,"rulebase":[
+    {"uid":"rule-003","type":"access-rule","rule-number":1,"name":"Synthetic inline rule","enabled":true,"source":["any-01"],"destination":["any-01"],"service":["any-01"],"action":"accept-01","track":{"type":"log-01"}}
+  ]}
+]

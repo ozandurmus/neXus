@@ -1206,6 +1206,7 @@ export function InventoryScreen() {
                     }}
                   />
                 )}
+                <Box component="a" href={`?screen=policy&device_id=${encodeURIComponent(selectedDevice.device_id)}`} sx={{ color: m3.primary }}>Open assigned policy</Box>
                 <HttpsCertificatePanel key={`certificate-${selectedDevice.device_id}`} deviceId={selectedDevice.device_id} />
                 <DeviceInventoryPanels
                   key={selectedDevice.device_id}
