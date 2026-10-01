@@ -14,16 +14,14 @@ esac
 if [[ $# -gt 1 || ! "$MODE" =~ ^(quick|full)$ ]]; then echo "Invalid E2E mode or arguments" >&2; exit 2; fi
 cd "$(dirname "$0")/.."
 HOST=$(head -1 ~/.config/nexus/hosta)
-scp -q deploy/ui2-image-build/32-e2e-build-job.yaml deploy/ui2/70-e2e-job.yaml "$HOST":/tmp/ || exit 2
+scp -q deploy/ui2/70-e2e-job.yaml "$HOST":/tmp/ || exit 2
 ssh "$HOST" "bash -s -- $MODE" <<'REMOTE' 2>&1 | grep -vE "Authorized|Yalnizca|^\*{10}"
 set -euo pipefail
 MODE=$1
 export KUBECONFIG=$HOME/.kube/config
-kubectl -n ui2-build delete job ui2-e2e-image-build --ignore-not-found >/dev/null
-kubectl apply -f /tmp/32-e2e-build-job.yaml >/dev/null
-for i in $(seq 1 180); do s=$(kubectl -n ui2-build get job ui2-e2e-image-build -o jsonpath='{.status.succeeded}{.status.failed}'); [ -n "$s" ] && break; sleep 10; done
-digest=$(kubectl -n ui2-build logs job/ui2-e2e-image-build --tail=1 2>/dev/null | grep -oE 'sha256:[0-9a-f]{64}' | tail -1)
-if [ -z "$digest" ]; then echo "E2E: runner image build failed"; exit 2; fi
+build_start=$SECONDS
+digest=$(python3 "$HOME/nexus/scripts/hosta_e2e_image.py" ensure) || exit 2
+printf 'TIMING e2e_image_wait %s\n' "$((SECONDS - build_start))"
 python3 - "$digest" "$MODE" <<'PY'
 import re,sys
 s=open('/tmp/70-e2e-job.yaml').read()
@@ -36,11 +34,13 @@ cron=[d for d in s.split('\n---\n') if re.search(r'^kind: CronJob$',d,re.M)][0]
 cron=cron.replace('nexus-ui2-e2e:SET_AT_DEPLOY','nexus-ui2-e2e@'+sys.argv[1]).replace('  suspend: true\n','  suspend: false\n',1)
 open('/tmp/70-e2e-cron.run.yaml','w').write(cron)
 PY
+run_start=$SECONDS
 kubectl -n ui2 delete job ui2-e2e --ignore-not-found >/dev/null
 kubectl apply -f /tmp/70-e2e-job.run.yaml >/dev/null
 kubectl apply -f /tmp/70-e2e-cron.run.yaml >/dev/null
-rm -f /tmp/32-e2e-build-job.yaml /tmp/70-e2e-job.yaml /tmp/70-e2e-job.run.yaml /tmp/70-e2e-cron.run.yaml
+rm -f /tmp/70-e2e-job.yaml /tmp/70-e2e-job.run.yaml /tmp/70-e2e-cron.run.yaml
 for i in $(seq 1 360); do s=$(kubectl -n ui2 get job ui2-e2e -o jsonpath='{.status.succeeded}{.status.failed}'); [ -n "$s" ] && break; sleep 10; done
 kubectl -n ui2 logs job/ui2-e2e --tail=300 2>&1 | sed -E 's/[0-9]{1,3}(\.[0-9]{1,3}){3}/<ip>/g' | grep -E '✘|[0-9]+ passed|[0-9]+ failed|flaky|^\s+Error:' | cut -c1-170 | head -40
+printf 'TIMING e2e_run %s\n' "$((SECONDS - run_start))"
 if [ "$(kubectl -n ui2 get job ui2-e2e -o jsonpath='{.status.succeeded}')" = "1" ]; then echo "E2E: PASS"; else echo "E2E: FAIL"; exit 1; fi
 REMOTE

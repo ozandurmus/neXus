@@ -126,25 +126,61 @@ def wait_gate(get_job, get_summary, timeout=3600, sleep=time.sleep, monotonic=ti
     raise RuntimeError("security gate timed out; rollout refused")
 
 
-def gate(config, image, commit):
-    manifest = job(config, "gate", image, commit)
-    # A fresh name prevents a stale successful Job from approving a later build.
+def start_gate(config, commit):
     import uuid
     name = "security-gate-" + uuid.uuid4().hex[:12]
-    manifest["metadata"]["name"] = name
-    kubectl("create", "-f", "-", input=json.dumps(manifest).encode())
+    manifest = job(config, "gate", commit=commit, gate_name=name)
+    manifest["metadata"].update(name=name, annotations={"nexus/commit": commit})
+    kubectl("create", "-f", "-", input=json.dumps(dict(apiVersion="v1", kind="ConfigMap",
+            metadata=dict(name=name, namespace="ui2-security"), data={})).encode())
+    try:
+        kubectl("create", "-f", "-", input=json.dumps(manifest).encode())
+        created = json.loads(kubectl("get", "job", name, "-o", "json"))
+        # The request disappears with its Job under the existing retention policy.
+        owner = dict(apiVersion="batch/v1", kind="Job", name=name, uid=created["metadata"]["uid"])
+        kubectl("patch", "configmap", name, "--type=merge", "-p",
+                json.dumps({"metadata": {"ownerReferences": [owner]}}))
+    except Exception:
+        kubectl("delete", "configmap", name, "--ignore-not-found")
+        raise
+    return name
+
+
+def gate(config, image, commit, name=None):
+    split = name is not None
+    # Validate both inputs before publishing a digest or creating a Job.
+    manifest = job(config, "gate", image, commit)
+    if name:
+        if not re.fullmatch(r"security-gate-[a-f0-9]{12}", name):
+            raise ValueError("invalid gate name")
+        existing = json.loads(kubectl("get", "job", name, "-o", "json"))
+        if existing["metadata"].get("annotations", {}).get("nexus/commit") != commit:
+            raise ValueError("source/build mismatch")
+        kubectl("patch", "configmap", name, "--type=merge", "-p",
+                json.dumps({"immutable": True, "data": {"request": json.dumps(dict(image=image, commit=commit))}}))
+    else:
+        import uuid
+        name = "security-gate-" + uuid.uuid4().hex[:12]
+        manifest["metadata"]["name"] = name
+        kubectl("create", "-f", "-", input=json.dumps(manifest).encode())
     wait_gate(lambda: json.loads(kubectl("get", "job", name, "-o", "json")),
               lambda: kubectl("logs", "job/" + name, "-c", "summary", text=True))
+    if split:
+        for stage in ("await-image", "trivy-image"):
+            for line in kubectl("logs", "job/" + name, "-c", stage, text=True).splitlines():
+                if re.fullmatch(r"TIMING security_(source|image) [0-9]+", line):
+                    print(line)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("snapshot", "gate"))
+    parser.add_argument("action", choices=("snapshot", "start", "gate"))
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--repo", type=Path, default=Path.cwd())
     parser.add_argument("--rules", type=Path)
     parser.add_argument("--image")
     parser.add_argument("--commit")
+    parser.add_argument("--job-name")
     args = parser.parse_args()
     try:
         config = settings(json.loads(args.config.read_text()))
@@ -155,7 +191,9 @@ if __name__ == "__main__":
             with args.config.with_suffix(".lock").open("w") as lock:
                 fcntl.flock(lock, fcntl.LOCK_EX)
                 snapshot(config, args.repo, args.rules)
+        elif args.action == "start":
+            print(start_gate(config, args.commit))
         else:
-            gate(config, args.image, args.commit)
-    except (OSError, ValueError, RuntimeError, subprocess.SubprocessError):
+            gate(config, args.image, args.commit, args.job_name)
+    except (OSError, ValueError, KeyError, TypeError, RuntimeError, subprocess.SubprocessError):
         raise SystemExit("SECURITY GATE FAILED: incomplete scan or unaccepted findings; rollout refused")

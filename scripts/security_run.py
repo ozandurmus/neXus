@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 import shutil
 import sys
+import time
 import uuid
 
 from security_summary import main as summarize
@@ -28,10 +29,12 @@ def prepare():
     age = datetime.now(timezone.utc) - datetime.fromisoformat(inventory["generated_at"])
     if age.total_seconds() < 0 or age > timedelta(hours=2):
         raise ValueError("stale deployment inventory")
-    images = [os.environ["GATE_IMAGE"]] if mode == "gate" else inventory["images"]
-    if not images or not all(re.fullmatch(r"registry\.kube-system\.svc\.cluster\.local/[a-z0-9/_-]+@sha256:[a-f0-9]{64}", i) for i in images):
+    waiting = mode == "gate" and os.environ.get("WAIT_FOR_IMAGE") == "1"
+    images = [] if waiting else [os.environ["GATE_IMAGE"]] if mode == "gate" else inventory["images"]
+    if (not images and not waiting) or not all(re.fullmatch(r"registry\.kube-system\.svc\.cluster\.local/[a-z0-9/_-]+@sha256:[a-f0-9]{64}", i) for i in images):
         raise ValueError("images must be local and digest pinned")
     WORK.mkdir(exist_ok=True)
+    (WORK / "source-start").write_text(str(int(time.time())))
     (WORK / "source-commit").write_text(source.name)
     (WORK / "images").write_text("\n".join(sorted(set(images))) + "\n")
     manifest = ([dict(tool="zap", file="zap.json")] if mode == "dast" else [
@@ -47,6 +50,26 @@ def prepare():
     output = ROOT / day / (mode + "-" + uuid.uuid4().hex)
     output.mkdir(parents=True)
     (WORK / "output").write_text(str(output))
+
+
+def await_image(timeout=3000, sleep=time.sleep, monotonic=time.monotonic, image_file=Path("/gate-image/request")):
+    """Keep one isolated work directory and one unchanged final gate decision."""
+    print("TIMING security_source", max(0, int(time.time()) - int((WORK / "source-start").read_text())))
+    deadline = monotonic() + timeout
+    while monotonic() < deadline:
+        if image_file.is_file():
+            request = json.loads(image_file.read_text())
+            image = request["image"]
+            if request["commit"] != (WORK / "source-commit").read_text() or not re.fullmatch(
+                    r"registry\.kube-system\.svc\.cluster\.local/[a-z0-9/_-]+@sha256:[a-f0-9]{64}", image):
+                raise ValueError("source/build mismatch or invalid digest")
+            manifest = json.loads((WORK / "manifest.json").read_text())
+            manifest.append(dict(tool="trivy", file="trivy-image-0.json", target=image.split("@", 1)[0]))
+            (WORK / "manifest.json").write_text(json.dumps(manifest))
+            (WORK / "images").write_text(image + "\n")
+            return
+        sleep(2)
+    raise ValueError("image build timed out")
 
 
 def finish():
@@ -110,7 +133,7 @@ def finish():
 
 if __name__ == "__main__":
     try:
-        raise SystemExit(prepare() if sys.argv[1] == "prepare" else finish())
+        raise SystemExit({"prepare": prepare, "await-image": await_image, "finish": finish}[sys.argv[1]]())
     except (OSError, ValueError, KeyError, TypeError):
         print(json.dumps({"passed": False, "scan_errors": 1, "error": "SECURITY_SCAN_INCOMPLETE", "cause": type(sys.exc_info()[1]).__name__}))
         raise SystemExit(2)
