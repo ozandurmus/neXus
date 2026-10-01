@@ -32,7 +32,7 @@ spec:
       terminationGracePeriodSeconds: 15
       containers:
         - name: compliance
-          image: registry.kube-system.svc.cluster.local/nexus-ui2-service:latest
+          image: registry.kube-system.svc.cluster.local/nexus-ui2-service@sha256:966cf85b73bc107cc4331f9967f98dfad864e0035d96ea97aa4848fd7deeb136
           args: ["worker", "compliance"]
           env:
             - name: NEXUS_COMPLIANCE_PORT

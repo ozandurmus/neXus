@@ -21,7 +21,10 @@ spec:
             readOnlyRootFilesystem: true
             capabilities:
               drop: ["ALL"]
-          image: flyway/flyway:10.17.0
+          image: flyway/flyway:10.17.0@sha256:354e5d5aec18d8d9d57ede196f02fdc66f6ee86a50e3bddfe1b001265817eadb
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { cpu: "1", memory: 512Mi }
           args: ["-connectRetries=10", "migrate"]
           env:
             - name: HOME
