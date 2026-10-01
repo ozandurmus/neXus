@@ -16,16 +16,27 @@ import com.securityexpert.nexus.ui2.persistence.artefact.ArtefactStore;
 import com.securityexpert.nexus.ui2.platform.DeviceEnrollmentState;
 import com.securityexpert.nexus.ui2.capability.GateRegistryFixtureLoader;
 class DiagnosticJobExecutorTest {
-    @Test void checkPointGateScopeChoosesShell() {
-        assertShell(null,"cp_configuration_show_version_all","clish -c 'show version all'",true,"bash -lc 'clish -c '\"'\"'show version all'\"'\"''");
-        assertShell(null,"cp_failover_syncstat","cphaprob syncstat",true,"bash -lc 'cphaprob syncstat'");
-        assertShell(null,"cp_failover_syncstat_vsid","bash -lc 'vsenv 001 && cphaprob syncstat'",true,
-            "bash -lc 'vsenv 001 && cphaprob syncstat'");
-        assertShell(null,"cp_spark_backup_log","show backup-settings-log",false,"show backup-settings-log");
-        assertShell("1550","cp_spark_backup_log","show backup-settings-log",false,"show backup-settings-log");
+    @Test void gatewayPlainCommandsAreWrapped() {
+        assertShell("gateway",null,"cp_configuration_show_version_all","clish -c 'show version all'",true,"bash -lc 'clish -c '\"'\"'show version all'\"'\"''");
+        assertShell("gateway",null,"cp_failover_syncstat","cphaprob syncstat",true,"bash -lc 'cphaprob syncstat'");
     }
 
-    private void assertShell(String model,String gateId,String command,boolean expert,String expectedCommand) {
+    @Test void alreadyWrappedGatewayCommandIsUntouched() {
+        assertShell("gateway",null,"cp_failover_syncstat_vsid","bash -lc 'vsenv 001 && cphaprob syncstat'",true,
+            "bash -lc 'vsenv 001 && cphaprob syncstat'");
+    }
+
+    @Test void managementScopeCommandIsNotWrapped() {
+        assertShell("management_server",null,"mds_show_version_all","clish -c 'show version all'",true,
+            "clish -c 'show version all'");
+    }
+
+    @Test void gaiaEmbeddedStaysInteractive() {
+        assertShell("gateway",null,"cp_spark_backup_log","show backup-settings-log",false,"show backup-settings-log");
+        assertShell("gateway","1550","cp_spark_backup_log","show backup-settings-log",false,"show backup-settings-log");
+    }
+
+    private void assertShell(String role,String model,String gateId,String command,boolean expert,String expectedCommand) {
         var leases=stub(JobLeaseRepository.class,(method,args)->true);
         var attempts=stub(JobStepAttemptRepository.class,(method,args)->switch(method) {
             case "findByJobAndStep" -> List.of();
@@ -33,7 +44,7 @@ class DiagnosticJobExecutorTest {
             case "markBoundaryCrossed" -> true;
             default -> null;
         });
-        var device=new DeviceRecord("device-1","gateway","check_point","manual",Instant.now(),false,
+        var device=new DeviceRecord("device-1",role,"check_point","manual",Instant.now(),false,
             DeviceEnrollmentState.ENROLLED,false,"credential-ref");
         var summary=mock(DeviceSummaryRecord.class);
         when(summary.observedModel()).thenReturn(Optional.ofNullable(model));
