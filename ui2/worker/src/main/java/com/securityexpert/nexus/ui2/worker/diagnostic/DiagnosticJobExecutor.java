@@ -66,7 +66,8 @@ public final class DiagnosticJobExecutor {
             boolean interactive=!"check_point".equals(device.get().vendorHint())
                 || "gaia_embedded".equals(read.get().platformRoleScope());
             String command=read.get().command();
-            if (!interactive && !command.startsWith("bash -lc "))
+            if (!interactive && "cp_gaia_gateway".equals(read.get().platformRoleScope())
+                    && !command.startsWith("bash -lc "))
                 command="bash -lc '"+command.replace("'", "'\"'\"'")+"'";
             var spec=new ExecSpec(command,true);
             var result=interactive ? ssh.execInteractive(session,spec,Duration.ofSeconds(read.get().timeoutSeconds()))
