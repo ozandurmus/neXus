@@ -152,11 +152,11 @@ final class CpPolicyParallelCollection {
 
     private void closeSession() {
         TransportSession owned = session.get(); session.remove();
-        if (owned != null) release(owned);
+        release(owned);
     }
 
     private void release(TransportSession owned) {
-        if (!sessions.remove(owned)) return;
+        if (owned == null || !sessions.remove(owned)) return;
         JobTranscriptScope.withoutRecording(() -> {
             try { collector.transport.disconnect(owned); }
             catch (RuntimeException failed) {
