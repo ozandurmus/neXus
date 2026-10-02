@@ -76,6 +76,13 @@ public final class SessionStatusController {
         this.rbacRoleRepository = rbacRoleRepository;
     }
 
+    private com.securityexpert.nexus.ui2.service.security.RbacEvaluator rbacEvaluator;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setRbacEvaluator(com.securityexpert.nexus.ui2.service.security.RbacEvaluator evaluator) {
+        this.rbacEvaluator = evaluator;
+    }
+
     @GetMapping("/session/status")
     public ResponseEntity<Map<String, Object>> status(HttpServletRequest request) {
         Optional<String> rawCookie = findSessionCookie(request);
@@ -145,6 +152,9 @@ public final class SessionStatusController {
                 collectPlanes(roleTokens, planes);
             }
         }
+        body.put("can_read_administration", rbacEvaluator != null && rbacEvaluator.evaluate(
+                session.get().actorFingerprint(), Optional.of(com.securityexpert.nexus.ui2.platform.RoleToken.SECURITY_ADMIN),
+                Instant.now()).outcome() == com.securityexpert.nexus.ui2.platform.AuthzOutcome.PERMITTED);
         body.put("permissions", new java.util.ArrayList<>(planes));
         return ResponseEntity.ok()
                 .cacheControl(org.springframework.http.CacheControl.noStore())

@@ -89,6 +89,26 @@ class JooqDeviceInventoryRepositoryTest {
     }
 
     @Test
+    void contextPickerBatchesDevicesAndPreservesOpaqueContextIds() {
+        var result = DSL.using(SQLDialect.POSTGRES).fetchFromStringData(
+                new String[]{"device_id","context"},new String[]{"device-1","001"},
+                new String[]{"device-2","physical"});
+        var queries = new ArrayList<String>();
+        var repository = new JooqDeviceInventoryRepository(new JooqTransactionBoundary(
+                DSL.using(new MockConnection(query -> {
+                    queries.add(query.sql());
+                    return new MockResult[]{new MockResult(2,result)};
+                }),SQLDialect.POSTGRES)));
+        assertEquals(java.util.Map.of("device-1",List.of("001"),"device-2",List.of("physical")),
+                repository.findLatestContextIdsByDevice());
+        assertEquals(1,queries.size());
+        assertTrue(queries.get(0).contains("distinct on (device_id)"));
+        assertTrue(queries.get(0).contains("collected_at desc"));
+        assertTrue(queries.get(0).contains("join device_interface"));
+        assertTrue(queries.get(0).contains("join device_route"));
+    }
+
+    @Test
     void contextPickerReadsOnlyStoredIdentifiersWithoutExpandingInventory() {
         var create = DSL.using(SQLDialect.POSTGRES);
         var result = create.fetchFromStringData(new String[] { "context" }, new String[] { "001" });

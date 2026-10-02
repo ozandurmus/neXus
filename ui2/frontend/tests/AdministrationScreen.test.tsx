@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
 import { AdministrationScreen } from "../src/screens/AdministrationScreen";
+import { SessionContext } from "../src/auth/SessionContext";
 import { CredentialsPanel } from "../src/screens/CredentialsPanel";
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -472,5 +473,33 @@ describe("AdministrationScreen Sessions tab", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "Revoke" })[0]);
     await waitFor(() => expect(revokeBodies).toEqual([{ sessionId: "session-1" }]));
     await waitFor(() => expect(listCalls).toBe(2));
+  });
+});
+
+
+describe("restricted Administration reads", () => {
+  afterEach(() => vi.unstubAllGlobals());
+  it.each(["credentials", "local-identities", "sessions", "roles-permissions", "ldap-settings", "notifications", "audit-logs"])(
+    "does not mount the restricted %s panel for aiview", async slug => {
+      window.history.replaceState(null, "", `/?screen=administration&tab=${slug}`);
+      const fetch = vi.fn();
+      vi.stubGlobal("fetch", fetch);
+      render(withTheme(<SessionContext.Provider value={{ displayName: "Synthetic viewer", roleTokens: [],
+        permissions: [], canReadAdministration: false, onSignOut: () => {} }}>
+        <AdministrationScreen />
+      </SessionContext.Provider>));
+      expect(screen.getByText("Available to administrators")).toBeInTheDocument();
+      await waitFor(() => expect(fetch).not.toHaveBeenCalled());
+    });
+  it("mounts Credentials when the server permits its read", async () => {
+    const fetch = routedFetch({ "/credentials": { body: { credentials: [] } } });
+    vi.stubGlobal("fetch", fetch);
+    window.history.replaceState(null, "", "/?screen=administration&tab=credentials");
+    render(withTheme(<SessionContext.Provider value={{ displayName: "Synthetic administrator", roleTokens: [],
+      permissions: [], canReadAdministration: true, onSignOut: () => {} }}>
+      <AdministrationScreen />
+    </SessionContext.Provider>));
+    expect(await screen.findByText("No credential stored")).toBeInTheDocument();
+    expect(fetch).toHaveBeenCalled();
   });
 });

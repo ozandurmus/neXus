@@ -25,6 +25,22 @@ import org.junit.jupiter.api.Test;
 import com.securityexpert.nexus.ui2.persistence.JooqTransactionBoundary;
 
 class JooqDeviceRepositoryTest {
+    @Test
+    void diagnosticTargetsUseOneReadWithEnrollmentDisabledAndTransportFilters() {
+        var count = new java.util.concurrent.atomic.AtomicInteger();
+        var repository = new JooqDeviceRepository(new JooqTransactionBoundary(DSL.using(
+                new MockConnection(query -> {
+                    count.incrementAndGet();
+                    assertTrue(query.sql().contains("where not d.disabled and d.enrollment_state in ('ENROLLED','DEGRADED')"));
+                    assertTrue(query.sql().contains("order by e.created_at limit 1)=?"));
+                    assertEquals("ssh_exec",query.bindings()[0]);
+                    return new MockResult[]{new MockResult(0,DSL.using(SQLDialect.POSTGRES)
+                        .newResult(DSL.field("device_id",String.class)))};
+                }),SQLDialect.POSTGRES)));
+        assertTrue(repository.listReadCollectionTargets("ssh_exec").isEmpty());
+        assertEquals(1,count.get());
+    }
+
 
     private static final class PairState {
         String claim;

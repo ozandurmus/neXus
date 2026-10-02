@@ -105,13 +105,23 @@ public class JooqCpFailoverRepository {
     }
 
     public List<ReadinessStatus> readinessStatuses() {
-        return boundary.inTransaction(dsl -> dsl.fetch("select r.cluster_ref,r.vs_id,r.vendor,r.outcome,"
-            + "r.finished_at,r.failed_check,coalesce((select jsonb_agg(jsonb_build_object("
-            + "'memberRef',c.member_ref,'observedAt',c.observed_at,'checkNo',c.check_no,'status',c.status,'derived',c.derived) order by c.check_no,c.member_ref) "
-            + "from failover_check_result c where c.run_id=r.run_id and c.phase='pre'),'[]'::jsonb) checks "
-            + "from failover_run r where r.run_kind='READINESS' and r.run_id in (select distinct on "
-            + "(vendor,cluster_ref,coalesce(vs_id,'')) run_id from failover_run where run_kind='READINESS' "
-            + "and state in ('DONE','STOPPED') order by vendor,cluster_ref,coalesce(vs_id,''),finished_at desc)")
+        return boundary.inTransaction(dsl -> dsl.fetch("""
+            with latest as (
+                select distinct on (vendor,cluster_ref,coalesce(vs_id,''))
+                    run_id,cluster_ref,vs_id,vendor,outcome,finished_at,failed_check
+                from failover_run where run_kind='READINESS' and state in ('DONE','STOPPED')
+                order by vendor,cluster_ref,coalesce(vs_id,''),finished_at desc
+            ), checks as (
+                select c.run_id,jsonb_agg(jsonb_build_object(
+                    'memberRef',c.member_ref,'observedAt',c.observed_at,'checkNo',c.check_no,
+                    'status',c.status,'derived',c.derived) order by c.check_no,c.member_ref) as checks
+                from failover_check_result c join latest l on l.run_id=c.run_id
+                where c.phase='pre' group by c.run_id
+            )
+            select r.cluster_ref,r.vs_id,r.vendor,r.outcome,r.finished_at,r.failed_check,
+                coalesce(c.checks,'[]'::jsonb) as checks
+            from latest r left join checks c on c.run_id=r.run_id
+            """)
             .map(r -> new ReadinessStatus(r.get("cluster_ref", String.class), r.get("vs_id", String.class),
                 r.get("vendor", String.class), r.get("outcome", String.class),
                 Optional.ofNullable(r.get("finished_at", java.time.OffsetDateTime.class))

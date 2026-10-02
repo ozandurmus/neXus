@@ -35,6 +35,11 @@ public interface DeviceInventoryRepository {
                 .map(InventoryContext::context).distinct().sorted().toList();
     }
 
+    /** Latest stored context identifiers for all devices, without expanding inventory children. */
+    default java.util.Map<String, List<String>> findLatestContextIdsByDevice() {
+        throw new UnsupportedOperationException("batched inventory contexts");
+    }
+
     /** The newest run per device, for every device id in {@code deviceIds} that has at least one recorded run. */
     List<InventoryRun> findLatestRuns(List<String> deviceIds);
 }

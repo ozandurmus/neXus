@@ -28,6 +28,11 @@ const PREVIEW_MARKERS: Record<string, string> = {
 };
 
 describe("the UI 2.0 shell navigation", () => {
+  it.each(["", "/devices/synthetic-device"])("exposes exactly one content landmark at %s", pathname => {
+    render(<App pathname={pathname} />);
+    expect(screen.getAllByRole("main")).toHaveLength(1);
+    expect(within(screen.getByRole("main")).queryByRole("navigation", { name: "Primary" })).toBeNull();
+  });
   it("does not present non-interactive search text in the app bar", () => {
     render(<App />);
     expect(screen.queryByText(/Search devices, settings, evidence/)).toBeNull();

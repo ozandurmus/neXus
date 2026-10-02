@@ -126,6 +126,12 @@ public interface DeviceRepository {
     /** GET /devices (DeviceSummary rows), newest first -- every device, its vendor and its observed facts. */
     List<DeviceSummaryRecord> listAll();
 
+    /** Read-eligible devices whose first endpoint uses the requested transport. */
+    default List<DeviceSummaryRecord> listReadCollectionTargets(String transport) {
+        return listAll().stream().filter(d -> find(d.deviceId()).filter(DeviceRecord::permitsReadCollection).isPresent()
+                && findEndpointByDeviceId(d.deviceId()).filter(e -> transport.equals(e.transportKind())).isPresent()).toList();
+    }
+
     /** Backups > Backup targets: an audited devices UPDATE; false when the row is absent or already in that state. */
     /** The device's login credential, replaced (PO, 2026-09-24); true when a row changed. */
     default boolean setCredentialReference(String deviceId, String credentialReferenceId, String actorFingerprint, String actionId) {

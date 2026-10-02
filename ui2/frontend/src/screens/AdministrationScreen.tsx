@@ -1,3 +1,4 @@
+import { useSession } from "../auth/SessionContext";
 import { useState } from "react";
 import type { ReactNode } from "react";
 import Box from "@mui/material/Box";
@@ -25,6 +26,7 @@ interface AdminTabDef {
   readonly slug: string;
   readonly label: string;
   readonly panel: ReactNode;
+  readonly administratorOnly?: boolean;
 }
 
 interface AdminGroupDef {
@@ -46,17 +48,17 @@ const GROUPS: readonly AdminGroupDef[] = [
     tabs: [
       { slug: "device-management", label: "Device management", panel: <DeviceManagementPane /> },
       { slug: "inventory-exclusions", label: "Inventory exclusions", panel: <InventoryExclusionsPanel /> },
-      { slug: "credentials", label: "Credentials", panel: <CredentialsPanel /> },
+      { slug: "credentials", administratorOnly: true, label: "Credentials", panel: <CredentialsPanel /> },
     ],
   },
   {
     id: "access",
     label: "Access",
     tabs: [
-      { slug: "local-identities", label: "Local identities", panel: <LocalIdentitiesPanel /> },
-      { slug: "sessions", label: "Sessions", panel: <SessionsPanel /> },
-      { slug: "roles-permissions", label: "Roles & Permissions", panel: <CustomRolesPanel /> },
-      { slug: "ldap-settings", label: "LDAP Settings", panel: <DirectorySettingsPanel /> },
+      { slug: "local-identities", administratorOnly: true, label: "Local identities", panel: <LocalIdentitiesPanel /> },
+      { slug: "sessions", administratorOnly: true, label: "Sessions", panel: <SessionsPanel /> },
+      { slug: "roles-permissions", administratorOnly: true, label: "Roles & Permissions", panel: <CustomRolesPanel /> },
+      { slug: "ldap-settings", administratorOnly: true, label: "LDAP Settings", panel: <DirectorySettingsPanel /> },
     ],
   },
   {
@@ -64,7 +66,7 @@ const GROUPS: readonly AdminGroupDef[] = [
     label: "Platform",
     tabs: [
       { slug: "system", label: "System", panel: <SystemStatusPanel /> },
-      { slug: "notifications", label: "Notifications", panel: <NotificationSettingsPanel /> },
+      { slug: "notifications", administratorOnly: true, label: "Notifications", panel: <NotificationSettingsPanel /> },
       { slug: "delivery-plan", label: "Delivery plan", panel: <ProjectPlanPanel /> },
     ],
   },
@@ -72,7 +74,7 @@ const GROUPS: readonly AdminGroupDef[] = [
     id: "records",
     label: "Records",
     tabs: [
-      { slug: "audit-logs", label: "Audit Logs", panel: <AuditLogsPanel /> },
+      { slug: "audit-logs", administratorOnly: true, label: "Audit Logs", panel: <AuditLogsPanel /> },
       { slug: "job-logs", label: "Job Logs", panel: <JobLogsPanel /> },
     ],
   },
@@ -101,6 +103,7 @@ function writeTabToUrl(slug: string) {
 
 /** M3Administration with an empty registry. Enrollment is the one place a device enters the product. */
 export function AdministrationScreen() {
+  const session = useSession();
   const initial = findBySlug(urlParam("tab")) ?? { group: GROUPS[0], tab: GROUPS[0].tabs[0] };
   const [activeGroupId, setActiveGroupId] = useState(initial.group.id);
   const [activeSlug, setActiveSlug] = useState(initial.tab.slug);
@@ -170,7 +173,8 @@ export function AdministrationScreen() {
           ))}
         </Box>
         <Box role="tabpanel" aria-label={activeTab.label} sx={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
-          {activeTab.panel}
+          {activeTab.administratorOnly && session && !session.canReadAdministration
+            ? <Typography>Available to administrators</Typography> : activeTab.panel}
         </Box>
       </Box>
     </ScreenRoot>

@@ -48,7 +48,19 @@ class SessionStatusControllerTest {
                 "synthetic-id", "aiview-e2e", null, null, null, 0, 0, 0, 0,
                 Optional.empty(), now, now, true, "synthetic-actor", now, true)));
         when(roles.resolve("synthetic-id")).thenReturn(List.of(RoleToken.VIEWER, RoleToken.REPLAY_VIEWER));
-        var response = new SessionStatusController(sessions, identities, roles, true).status(request);
+        var controller = new SessionStatusController(sessions, identities, roles, true);
+        var rbac = mock(com.securityexpert.nexus.ui2.service.security.RbacEvaluator.class);
+        controller.setRbacEvaluator(rbac);
+        when(rbac.evaluate(org.mockito.ArgumentMatchers.eq("synthetic-actor"),
+                org.mockito.ArgumentMatchers.eq(Optional.of(RoleToken.SECURITY_ADMIN)),org.mockito.ArgumentMatchers.any()))
+            .thenReturn(new com.securityexpert.nexus.ui2.service.security.RbacEvaluator.Decision(
+                com.securityexpert.nexus.ui2.platform.AuthzOutcome.DENIED,Optional.empty(),Optional.empty(),Optional.empty()));
+        var response = controller.status(request);
+        assertFalse((Boolean)response.getBody().get("can_read_administration"));
+        when(rbac.evaluate(org.mockito.ArgumentMatchers.anyString(),org.mockito.ArgumentMatchers.any(),org.mockito.ArgumentMatchers.any()))
+            .thenReturn(new com.securityexpert.nexus.ui2.service.security.RbacEvaluator.Decision(
+                com.securityexpert.nexus.ui2.platform.AuthzOutcome.PERMITTED,Optional.empty(),Optional.empty(),Optional.empty()));
+        assertTrue((Boolean)controller.status(request).getBody().get("can_read_administration"));
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertFalse((Boolean) response.getBody().get("must_change_password"));
     }

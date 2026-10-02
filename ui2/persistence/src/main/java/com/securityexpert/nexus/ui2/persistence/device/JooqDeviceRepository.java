@@ -385,6 +385,15 @@ public final class JooqDeviceRepository implements DeviceRepository {
     }
 
     @Override
+    public List<DeviceSummaryRecord> listReadCollectionTargets(String transport) {
+        return transactionBoundary.inTransaction(dsl -> dsl.fetch(DEVICE_SUMMARY_SELECT
+                + "where not d.disabled and d.enrollment_state in ('ENROLLED','DEGRADED') "
+                + "and (select e.transport_kind from endpoints e where e.device_id=d.device_id "
+                + "order by e.created_at limit 1)={0} order by d.created_at desc,d.device_id", transport)
+                .stream().map(JooqDeviceRepository::toSummaryRecord).toList());
+    }
+
+    @Override
     public Optional<DeviceSummaryRecord> findSummary(String deviceId) {
         return transactionBoundary.inTransaction(dsl -> dsl.fetch(
                 DEVICE_SUMMARY_SELECT + "where d.device_id = {0}", deviceId)
