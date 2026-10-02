@@ -24,15 +24,31 @@ def template(path, kind=None):
     return next(d for d in docs if kind is None or d["kind"] == kind)
 
 
+def container_image(deployment):
+    return deployment["spec"]["template"]["spec"]["containers"][0]["image"]
+
+
 def test_runtime_manifests_are_ephemeral_and_use_only_the_preview_database():
     db_source = template("deploy/ui2/40-database-statefulset.yaml")
     service_source = template("deploy/ui2/50-service-deployment.yaml")
     db = preview.database_manifest(db_source)
-    service = preview.service_manifest(service_source, IMAGE, "192.0.2.10")
+    service = preview.service_manifest(service_source, IMAGE, "192.0.2.10", "192.0.2.30")
     e2e = preview.e2e_manifest(template("deploy/ui2/70-e2e-job.yaml", "Job"), IMAGE, "192.0.2.20")
     assert db["spec"]["containers"][0]["image"] == db_source["spec"]["template"]["spec"]["containers"][0]["image"]
     assert service_source["spec"]["template"]["spec"]["containers"][0]["image"] != IMAGE
-    for obj in (db, service, e2e):
+    compliance_source = template("deploy/ui2/55-compliance-deployment.yaml", "Deployment")
+    before = copy.deepcopy(compliance_source)
+    compliance = preview.compliance_manifest(compliance_source, IMAGE, "192.0.2.10")
+    assert compliance_source == before
+    assert compliance["spec"]["selector"]["matchLabels"] == compliance["spec"]["template"]["metadata"]["labels"]
+    worker = compliance["spec"]["template"]["spec"]["containers"][0]
+    assert worker["image"] == container_image(service) == IMAGE
+    assert worker["args"] == ["worker", "compliance"]
+    worker_env = {e["name"]: e["value"] for e in worker["env"]}
+    assert worker_env["UI2_DB_URL"] == "jdbc:postgresql://192.0.2.10:5432/ui2"
+    assert worker_env["UI2_SCHEDULING_ENABLED"] == "false"
+    assert worker_env["NEXUS_COMPLIANCE_PORT"] == "8085"
+    for obj in (db, service, compliance, e2e):
         assert obj["metadata"]["namespace"] == preview.NS
         spec = obj["spec"] if obj["kind"] == "Pod" else obj["spec"]["template"]["spec"]
         assert spec["automountServiceAccountToken"] is False
@@ -52,6 +68,7 @@ def test_runtime_manifests_are_ephemeral_and_use_only_the_preview_database():
     assert container["args"] == ["service"]
     assert env["UI2_DB_URL"]["value"] == "jdbc:postgresql://192.0.2.10:5432/ui2"
     assert env["UI2_SCHEDULING_ENABLED"]["value"] == "false"
+    assert env["UI2_COMPLIANCE_SERVICE_URL"]["value"] == "http://192.0.2.30:8085"
     assert "UI2_CP_BACKUP_CREDENTIAL_REF" not in env
     assert all("configMapKeyRef" not in e.get("valueFrom", {}) for e in env.values())
     runner = {e["name"]: e for e in e2e["spec"]["template"]["spec"]["containers"][0]["env"]}
@@ -61,12 +78,16 @@ def test_runtime_manifests_are_ephemeral_and_use_only_the_preview_database():
 
 
 def test_network_policies_have_no_dns_internet_or_cross_namespace_exception():
-    db, service, e2e = preview.policies()
+    db, service, compliance, e2e = preview.policies()
     assert db["spec"]["egress"] == []
-    assert service["spec"]["egress"] == [preview.peer("database", [5432], "to")]
-    assert db["spec"]["ingress"] == [preview.peer("service", [5432], "from")]
+    assert service["spec"]["egress"] == [preview.peer("database", [5432], "to"),
+                                          preview.peer("compliance", [8085], "to")]
+    assert compliance["spec"]["egress"] == [preview.peer("database", [5432], "to")]
+    assert compliance["spec"]["ingress"] == [preview.peer("service", [8085], "from")]
+    assert db["spec"]["ingress"] == [preview.peer("service", [5432], "from"),
+                                       preview.peer("compliance", [5432], "from")]
     assert e2e["spec"]["egress"] == [preview.peer("service", [8080, 8086], "to")]
-    for obj in (db, service, e2e):
+    for obj in (db, service, compliance, e2e):
         assert obj["spec"]["policyTypes"] == ["Ingress", "Egress"]
         assert "namespaceSelector" not in json.dumps(obj) and "ipBlock" not in json.dumps(obj)
 
@@ -90,7 +111,7 @@ def test_build_uses_pinned_kaniko_new_tag_emptydir_and_corporate_ca():
     assert original == before
 
 
-@pytest.mark.parametrize("failed", ["namespace", "policy", "build", "database", "service", "job", "wait", None])
+@pytest.mark.parametrize("failed", ["namespace", "policy", "build", "database", "compliance", "service", "job", "wait", None])
 def test_every_orchestration_failure_tears_down(monkeypatch, failed, capsys):
     calls = []
     def phase(name, result=None):
@@ -103,7 +124,14 @@ def test_every_orchestration_failure_tears_down(monkeypatch, failed, capsys):
         "namespace" if obj["kind"] == "Namespace" else "policy" if obj["kind"] == "NetworkPolicy" else "job"))
     monkeypatch.setattr(preview, "build_images", lambda *a: phase("build", [IMAGE, IMAGE]))
     monkeypatch.setattr(preview, "setup_database", lambda *a: phase("database", "192.0.2.10"))
-    monkeypatch.setattr(preview, "setup_service", lambda *a: phase("service", "192.0.2.20"))
+    def compliance(repo, image, db_ip):
+        assert image == IMAGE and db_ip == "192.0.2.10"
+        return phase("compliance", "192.0.2.30")
+    def service(repo, image, db_ip, compliance_ip):
+        assert image == IMAGE and db_ip == "192.0.2.10" and compliance_ip == "192.0.2.30"
+        return phase("service", "192.0.2.20")
+    monkeypatch.setattr(preview, "setup_compliance", compliance)
+    monkeypatch.setattr(preview, "setup_service", service)
     monkeypatch.setattr(preview, "load", lambda *a: {"items": [template("deploy/ui2/70-e2e-job.yaml", "Job")]})
     monkeypatch.setattr(preview, "wait_job", lambda *a, **kw: phase("wait"))
     monkeypatch.setattr(preview, "cleanup", lambda owner: calls.append("cleanup"))
@@ -115,6 +143,8 @@ def test_every_orchestration_failure_tears_down(monkeypatch, failed, capsys):
         preview.run(ROOT, COMMIT)
         assert "PREVIEW E2E: PASS" in capsys.readouterr().out
     assert calls[-1] == "cleanup" and calls.count("cleanup") == 1
+    if failed is None:
+        assert calls.index("database") < calls.index("compliance") < calls.index("service") < calls.index("job")
 
 
 @pytest.mark.parametrize("failure", ["build-delete", "namespace-delete", "build-remains", "namespace-remains", "other-owner", None])
@@ -273,7 +303,7 @@ for line in sys.stdin:
     assert holders[0].poll() == 0
 
 
-def test_database_bootstrap_uses_new_secret_and_refuses_image_drift(monkeypatch):
+def test_database_bootstrap_uses_new_secret_and_refuses_image_drift(monkeypatch, capsys):
     db = template("deploy/ui2/40-database-statefulset.yaml")
     pinned = db["spec"]["template"]["spec"]["containers"][0]["image"]
     objects = []
@@ -286,7 +316,10 @@ def test_database_bootstrap_uses_new_secret_and_refuses_image_drift(monkeypatch)
             return json.dumps(dict(spec=dict(containers=[dict(image=pinned)])))
         return json.dumps(dict(status=dict(podIP="192.0.2.10"))) if args[0] == "get" else ""
     monkeypatch.setattr(preview, "k", fake)
+    ticks = iter([10.0, 12.5])
+    monkeypatch.setattr(preview.time, "monotonic", lambda: next(ticks))
     assert preview.setup_database(ROOT) == "192.0.2.10"
+    assert "TIMING preview_db_copy 2.500" in capsys.readouterr().out
     secret = next(o for o in objects if o["kind"] == "Secret")
     assert set(secret["data"]) == {"app-user", "app-password", "migrate-user", "migrate-password"}
     assert all(o["metadata"]["namespace"] == preview.NS for o in objects)
@@ -297,13 +330,44 @@ def test_database_bootstrap_uses_new_secret_and_refuses_image_drift(monkeypatch)
     assert not objects
 
 
+@pytest.mark.parametrize("failed_rollout", [False, True])
+def test_compliance_setup_uses_candidate_preview_service_and_waits_for_readiness(monkeypatch, failed_rollout):
+    objects, calls = [], []
+    monkeypatch.setattr(preview, "load", lambda repo, path: {"items": list(
+        yaml.safe_load_all((repo / path).read_text()))})
+    monkeypatch.setattr(preview, "create", lambda ns, obj: objects.append(obj))
+    monkeypatch.setattr(preview, "copy_secret", lambda *a: pytest.fail("Compliance needs no credentials"))
+    def fake(ns, *args, **kwargs):
+        assert ns == preview.NS
+        calls.append(args)
+        if args[0] == "rollout" and failed_rollout:
+            raise RuntimeError("synthetic readiness failure")
+        return json.dumps(dict(spec=dict(clusterIP="192.0.2.30")))
+    monkeypatch.setattr(preview, "k", fake)
+    if failed_rollout:
+        with pytest.raises(RuntimeError, match="readiness failure"):
+            preview.setup_compliance(ROOT, IMAGE, "192.0.2.10")
+        assert len(calls) == 1
+    else:
+        assert preview.setup_compliance(ROOT, IMAGE, "192.0.2.10") == "192.0.2.30"
+        assert calls[-1] == ("get", "service", "ui2-preview-compliance", "-o", "json")
+    deployment, service = objects
+    assert calls[0][:3] == ("rollout", "status", "deployment/ui2-preview-compliance")
+    assert container_image(deployment) == IMAGE
+    assert all(o["metadata"]["namespace"] == preview.NS for o in objects)
+    assert service["metadata"]["name"] == "ui2-preview-compliance"
+    assert service["spec"]["type"] == "ClusterIP"
+    assert service["spec"]["selector"] == deployment["spec"]["template"]["metadata"]["labels"]
+    assert service["spec"]["ports"] == [dict(name="http", port=8085, targetPort=8085, protocol="TCP")]
+
+
 def test_service_copies_only_required_keys_and_has_namespace_only_service(monkeypatch):
     objects, copied = [], []
     monkeypatch.setattr(preview, "load", lambda repo, path: template(path))
     monkeypatch.setattr(preview, "copy_secret", copied.append)
     monkeypatch.setattr(preview, "create", lambda ns, obj: objects.append(obj))
     monkeypatch.setattr(preview, "k", lambda *a, **kw: json.dumps(dict(spec=dict(clusterIP="192.0.2.20"))))
-    assert preview.setup_service(ROOT, IMAGE, "192.0.2.10") == "192.0.2.20"
+    assert preview.setup_service(ROOT, IMAGE, "192.0.2.10", "192.0.2.30") == "192.0.2.20"
     assert "ui2-db" not in copied and "ui2-e2e-machine-token" in copied
     service = next(o for o in objects if o["kind"] == "Service")
     assert service["spec"]["type"] == "ClusterIP"
