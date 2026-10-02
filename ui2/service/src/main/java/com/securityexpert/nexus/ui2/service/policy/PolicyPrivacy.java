@@ -18,8 +18,8 @@ public final class PolicyPrivacy {
             String field = String.valueOf(row.get("field"));
             if (!Set.of("name", "number", "enabled", "source", "destination", "service", "application", "action", "log", "comment", "extras", "container", "section", "parentRuleId").contains(field)) return Map.of();
             Map<String, Object> out = new LinkedHashMap<>(); out.put("field", field);
-            out.put("before", mask(row.get("before"), field, names, ips));
-            out.put("after", mask(row.get("after"), field, names, ips));
+            out.put("before", mask(row.get("before"), field.equals("name") ? "rule" : field, names, ips));
+            out.put("after", mask(row.get("after"), field.equals("name") ? "rule" : field, names, ips));
             return out;
         }).toList();
         if (key.equals("extras") && value instanceof Map<?, ?> extras) {
@@ -49,6 +49,9 @@ public final class PolicyPrivacy {
                 if (field.equals("name") && "any".equals(map.get("type"))) out.put(field, "ANY");
                 else if (field.equals("name") && map.containsKey("rules") && Set.of("Pre rules", "Post rules", "Local rules", "Inline layer unavailable").contains(v)) out.put(field, mask(v, "refs", names, ips));
                 else if (field.equals("name") && map.containsKey("deviceId")) out.put(field, names.maskDeviceName((String) v, null));
+                else if (field.equals("name") && v instanceof String text) out.put(field, names.maskPolicyName(
+                    map.containsKey("sourceId") ? "policy" : map.containsKey("number") ? "rule"
+                        : map.containsKey("type") ? String.valueOf(map.get("type")) : "name", text));
                 else out.put(field, mask(v, field, names, ips));
             });
             return out;

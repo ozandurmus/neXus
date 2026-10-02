@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { afterEach, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
-import { PolicyScreen, collectionOutcome, progress, csvCell } from "../src/screens/PolicyScreen";
+import { PolicyScreen, collectionOutcome, progress, csvCell, collectedLabel, sourceStatusLabel } from "../src/screens/PolicyScreen";
 import { VirtualPolicyCards } from "../src/screens/PolicyRuleViewer";
 import { loadErrorText } from "../e2e/safety";
 import type { PolicyMetadata, PolicyPage, PolicyRule } from "../src/auth/adminApi";
@@ -48,7 +48,9 @@ it("renders masked management navigation, assignments, section collapse, negatio
   mockFetch(); mount(); await navigate();
   const table = await screen.findByRole("region", { name: "Policy rulebase" });
   expect(screen.getAllByText("MGR-BRAVO-01").length).toBeGreaterThan(0);
-  expect(screen.getByText(/FW-TANGO-04.*VS-ROMEO-01/)).toBeInTheDocument();
+  expect(screen.getAllByText("FW-TANGO-04").length).toBeGreaterThan(0);
+  expect(screen.getByLabelText("UNKNOWN")).toBeInTheDocument();
+  expect(screen.queryByText(/FW-TANGO-04.*VS-ROMEO-01/)).toBeNull();
   expect(within(table).getByText("NOT")).toBeInTheDocument();
   expect(within(table).getByText("Disabled")).toBeInTheDocument();
   expect(within(table).getAllByText("ANY")).toHaveLength(2);
@@ -273,8 +275,8 @@ it("displays each latest collection outcome without treating a partial completio
   vi.stubGlobal("fetch", fetch); mount();
   await screen.findByRole("button", { name: "MGR-BRAVO-01" });
   expect(screen.getByText("Last collection failed at collection step 2 of 8 — access was refused")).toBeInTheDocument();
-  expect(screen.getByText("Last collection was incomplete at collection step 4 of 8 — the time limit was reached")).toBeInTheDocument();
-  expect(screen.getByText("Collected · 8/8 collection steps")).toBeInTheDocument();
+  expect(screen.getByText(/Partial · UNKNOWN · Last collection was incomplete at collection step 4 of 8/)).toBeInTheDocument();
+  expect(screen.getByText("Collected · UNKNOWN")).toBeInTheDocument();
   expect(screen.queryByText("Loading policies…")).toBeNull();
   expect(fetch.mock.calls).toHaveLength(2);
   expect(fetch.mock.calls[0][0]).toBe("/api/v2/policy/sources");
@@ -290,7 +292,7 @@ it("reports catalog read failure explicitly without inventing zero containers", 
 it("preserves masked policy dates and numeric counts in the rendered view", async () => {
   mockFetch({ ...page, metadata: { ...metadata, collectedAt: "2026-10-02T03:50:21Z" }, total: 122 });
   mount(); await navigate();
-  expect(await screen.findByText("From configuration collected 2026-10-02T03:50:21Z")).toBeInTheDocument();
+  expect(await screen.findByText(/^Collected 2 Oct 2026, 06:50/)).toBeInTheDocument();
   expect(screen.getByText("Page 1 of 1 · 122 rules")).toBeInTheDocument();
 });
 it("ends an empty rule response with an explicit failure", async () => {
@@ -460,7 +462,7 @@ it("shows the latest source job after refresh without leaking previous totals", 
   expect(await screen.findByText(/failed at collection step 60 of 60/)).toBeInTheDocument();
   latest = { jobId: "job-new", state: "COMPLETED", reason: "COLLECTION_FAILED", step: 4, total: 0 };
   fireEvent.click(screen.getByRole("button", { name: "Refresh snapshots" }));
-  expect(await screen.findByText("Collected · 4 steps")).toBeInTheDocument();
+  expect(await screen.findByText("Collected · UNKNOWN")).toBeInTheDocument();
   expect(screen.queryByText(/failed at collection/)).toBeNull();
   latest = { jobId: "job-next", state: "EXECUTING", reason: "", step: 1, total: 0 };
   fireEvent.click(screen.getByRole("button", { name: "Refresh snapshots" }));
@@ -538,7 +540,7 @@ it("collects selected CP domains sequentially and refreshes after each completio
   await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
   expect(posts).toEqual([metadata.containerId, second.containerId]);
   await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
-  expect(screen.getByText("Collected · 1 steps")).toBeInTheDocument();
+  expect(screen.getByText("Collected · UNKNOWN")).toBeInTheDocument();
   expect(screen.queryByText(/collection scopes waiting/)).toBeNull();
   expect(fetch.mock.calls.filter(([url]) => url.endsWith("/devices"))).toHaveLength(3);
 });
@@ -557,4 +559,15 @@ it("selects all matching rules across API pages and clears the active query chip
   expect(await screen.findByText("action='accept'")).toBeInTheDocument(); expect(screen.getByText("enabled=true")).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Clear" }));
   await waitFor(() => expect(screen.getByLabelText("Rule query")).toHaveValue(""));
+});
+
+it("maps each source job and formats collection time in the display timezone", () => {
+  const now = new Date("2026-10-02T08:06:00Z");
+  const job = { jobId: "job-latest", state: "COMPLETED", reason: "", step: 8, total: 8, collectedAt: "2026-10-02T06:06:00Z" };
+  expect(collectedLabel(job.collectedAt, now)).toBe("Collected 2 Oct 2026, 09:06 · 2 h ago");
+  expect(sourceStatusLabel(job, now)).toBe("Collected · 2 h ago");
+  expect(collectionOutcome({ ...job, state: "RUNNING" })).toBe("RUNNING");
+  expect(sourceStatusLabel({ ...job, outcome: "PARTIAL", reason: "PARTIAL_SNAPSHOT access: TIMEOUT" }, now)).toMatch(/^Partial · 2 h ago/);
+  expect(sourceStatusLabel({ ...job, state: "CANCELLED", reason: "Collection cancelled" }, now)).toBe("Cancelled · Collection cancelled");
+  expect(sourceStatusLabel({ ...job, state: "FAILED", reason: "TIMEOUT" }, now)).toContain("time limit was reached");
 });

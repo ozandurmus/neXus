@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import useMediaQuery from "@mui/material/useMediaQuery";
 import { Box, Button, Checkbox, Chip, Stack, Table, TableBody, TableCell, TableHead, TableRow, Tooltip, Typography } from "@mui/material";
 import { VendorBadge } from "../shell/States";
 import { m3 } from "../theme/m3Theme";
@@ -22,13 +23,17 @@ export function containerLabel(metadata: PolicyMetadata, section: PolicySection,
     : `${section.source === "Shared" ? "Shared" : `Device group: ${section.source}`} (${section.name === "Post rules" ? "Post" : "Pre"})`;
   return section.source;
 }
+export function sectionLabel(metadata: PolicyMetadata, section: PolicySection) {
+  if (metadata.vendor !== "PAN" || !["Pre rules", "Post rules"].includes(section.name)) return section.name;
+  return `${section.source === "Shared" ? "Shared" : "Device-group"} ${section.name === "Pre rules" ? "pre" : "post"}-rules`;
+}
 function CellEntries({ cell, objects, openObject }: { cell: PolicyCell; objects: Map<string, PolicyObject>; openObject: (id: string) => void }) {
   const [expanded, setExpanded] = useState(false);
   return <Box>
     {cell.negated && <Chip size="small" label="NOT" color="warning" />}
     {!cell.refs.length && <Typography variant="caption">—</Typography>}
     {(expanded ? cell.refs : cell.refs.slice(0, 4)).map((id, index) => <Button key={`${id}-${index}`} size="small" onClick={() => openObject(id)}
-      title={objects.get(id)?.type ?? "unresolved"} sx={{ display: "block", textAlign: "left", textTransform: "none", p: 0, maxWidth: "100%", overflowWrap: "anywhere", fontSize: 12 }}>
+      title={objects.get(id)?.name ?? "Unresolved object"} sx={{ display: "block", textAlign: "left", textTransform: "none", p: 0, minWidth: 0, maxWidth: "100%", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontSize: 12 }}>
       {objects.get(id)?.name ?? "Unresolved object"}</Button>)}
     {cell.refs.length > 4 && <Button size="small" aria-expanded={expanded} onClick={() => setExpanded(v => !v)} sx={{ p: 0 }}>
       {expanded ? "▴ Less" : `+${cell.refs.length - 4} ▾`}</Button>}
@@ -52,7 +57,7 @@ export function RuleMetrics({ rule }: { rule: PolicyRule }) {
     ["Permissiveness", rule.permissiveness?.level === "Unknown" ? "—" : rule.permissiveness?.level ?? "—", rule.permissiveness?.reasons.join("; ") || "requires analysis"],
     ["Shadowed", "—", "requires analysis"], ["Violations", "—", "requires analysis"],
   ];
-  return <Box aria-label="Rule metrics" sx={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 1 }}>
+  return <Box className="policy-rule-metrics" aria-label="Rule metrics" sx={{ width: 220, maxWidth: "100%", display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 1 }}>
     {tiles.map(([name, value, tip]) => <Tooltip key={name} title={tip}><Box sx={{ borderBottom: `1px solid ${m3.outlineVar}`, pb: 1, minWidth: 0 }}>
       <Typography variant="caption" color="text.secondary">{name}</Typography>
       <Typography variant="body2" sx={{ fontWeight: 700, overflowWrap: "anywhere", color: value === "High" || value === "expired" ? m3.error : value === "Medium" ? m3.warning : value === "Low" ? m3.success : undefined }}>{value}</Typography>
@@ -70,8 +75,12 @@ export function RuleFields({ rule, objects, openObject, compact = false }: { rul
       {Object.entries(rule.extras).filter(([key]) => !["source-user", "category", "layer-name"].includes(key)).map(([key, values]) => <Extra key={key} name={key} values={values} objects={objects} openObject={openObject} />)}
       {(rule.schedules ?? []).map((s, i) => <Typography key={i} variant="caption" display="block">{scheduleLabel(s)}</Typography>)}</>],
   ];
-  return <Box sx={{ display: "grid", gridTemplateColumns: compact ? "1.1fr 1.1fr 1.1fr 0.6fr 1fr 1.3fr" : "repeat(2, minmax(0, 1fr))", gap: 1.5 }}>
-    {fields.map(([name, content]) => <Box key={name as string} sx={{ minWidth: 0, overflowWrap: "anywhere" }}><Typography variant="caption" sx={{ fontWeight: 700 }}>{name}</Typography>{content}</Box>)}
+  return <Box className={compact ? "policy-rule-fields compact" : "policy-rule-fields"} sx={{ display: "grid", gridTemplateColumns: compact ? "repeat(3, minmax(90px, 1fr)) 60px minmax(90px, 1fr)" : "repeat(2, minmax(0, 1fr))", gap: 1.5,
+    '@media (max-width: 1399px)': compact ? { gridTemplateColumns: "repeat(3, minmax(90px, 1fr)) 60px", '& > .policy-rule-misc': { gridColumn: "1 / -1" } } : {},
+    '@media (max-width: 700px)': { gridTemplateColumns: "repeat(2, minmax(0, 1fr))" } }}>
+    {(compact ? fields.slice(0, 4) : fields).map(([name, content]) => <Box key={name as string} sx={{ minWidth: 0, overflowWrap: "anywhere" }}><Typography variant="caption" display="block" sx={{ fontWeight: 700 }}>{name}</Typography>{content}</Box>)}
+    {compact && <Box className="policy-rule-misc" sx={{ minWidth: 0, overflowWrap: "anywhere" }}>{fields.slice(4).map(([name, content]) =>
+      <Box component="details" key={name as string}><Box component="summary" sx={{ cursor: "pointer", fontSize: 12, fontWeight: 700 }}>{name}</Box>{content}</Box>)}</Box>}
   </Box>;
 }
 export function VirtualPolicyCards({ sections, collapsed, scrollTop, toggle, objects, metadata, openObject, openRule, selected, onSelect }: {
@@ -79,7 +88,8 @@ export function VirtualPolicyCards({ sections, collapsed, scrollTop, toggle, obj
   objects: Map<string, PolicyObject>; metadata: PolicyMetadata; openObject: (id: string) => void; openRule: (rule: PolicyRule) => void;
   selected: Set<string>; onSelect: (id: string) => void;
 }) {
-  const headerHeight = 44, cardHeight = 280, start = Math.max(0, scrollTop - cardHeight * 2), end = start + 1800;
+  const narrow = useMediaQuery("(max-width: 1399px)");
+  const headerHeight = 44, cardHeight = narrow ? 430 : 280, start = Math.max(0, scrollTop - cardHeight * 2), end = start + 1800;
   let offset = 0, top = 0, bottom = 0;
   const rows: React.ReactNode[] = [];
   const append = (render: () => React.ReactNode, size: number) => {
@@ -88,26 +98,29 @@ export function VirtualPolicyCards({ sections, collapsed, scrollTop, toggle, obj
     else rows.push(render());
     offset += size;
   };
-  for (const section of sections) {
+  const emptySections = sections.filter(section => section.total === 0).length;
+  if (emptySections) append(() => <Typography key="empty-sections" variant="caption" sx={{ height: headerHeight, display: "flex", alignItems: "center", color: m3.onSurfaceVar }}>{emptySections} empty sections</Typography>, headerHeight);
+  for (const section of sections.filter(section => section.total !== 0)) {
     append(() => <Stack key={section.id} direction="row" alignItems="center" sx={{ height: headerHeight }}>
-      <Button size="small" aria-expanded={!collapsed.has(section.id)} onClick={() => toggle(section.id)}>{collapsed.has(section.id) ? "▸" : "▾"} {section.name} · {section.total}</Button>
+      <Button size="small" aria-expanded={!collapsed.has(section.id)} onClick={() => toggle(section.id)}>{collapsed.has(section.id) ? "▸" : "▾"} {sectionLabel(metadata, section)} · {section.total}</Button>
       {section.parentRuleId && <Typography variant="caption">Inline layer · conditional on parent rule</Typography>}
     </Stack>, headerHeight);
     if (collapsed.has(section.id)) continue;
     for (const rule of section.rules) append(() => <Box component="article" key={`${section.id}:${rule.id}`} data-policy-rule aria-label={`Rule ${rule.number}: ${rule.name || "Unnamed rule"}`}
       sx={{ height: cardHeight, boxSizing: "border-box", py: 0.5 }}>
-      <Box sx={{ height: "100%", boxSizing: "border-box", display: "grid", gridTemplateColumns: "44px minmax(0, 1fr) 230px", gap: 1.5, p: 1.5, border: `1px solid ${m3.outlineVar}`, borderLeft: `3px solid ${rule.timeStatus === "expired" ? m3.error : m3.primary}`, borderRadius: 2, bgcolor: m3.scLowest, opacity: rule.enabled === false ? 0.5 : 1 }}>
+      <Box className={`policy-rule-card ${narrow ? "stacked" : "wide"}`} sx={{ height: "100%", boxSizing: "border-box", display: "grid", gridTemplateColumns: narrow ? "36px minmax(0, 1fr)" : "36px minmax(0, 1fr) 220px", gap: 1.5, p: 1.5, border: `1px solid ${m3.outlineVar}`, borderLeft: `3px solid ${rule.timeStatus === "expired" ? m3.error : m3.primary}`, borderRadius: 2, bgcolor: m3.scLowest, opacity: rule.enabled === false ? 0.5 : 1,
+        '& > .policy-rule-metrics': { gridColumn: narrow ? "2" : undefined }, overflowY: "auto", overflowX: "hidden" }}>
         <Stack alignItems="center"><Checkbox size="small" checked={selected.has(rule.id)} inputProps={{ "aria-label": `Select rule ${rule.number}` }} onChange={() => onSelect(rule.id)} /><Typography>{rule.number || "—"}</Typography></Stack>
         <Box sx={{ minWidth: 0 }}><Stack direction="row" gap={1} alignItems="center" sx={{ pb: 0.5, borderBottom: `1px solid ${m3.outlineVar}`, flexWrap: "wrap", maxHeight: 62, overflow: "auto" }}>
           <Button size="small" onClick={() => openRule(rule)} sx={{ textTransform: "none", p: 0, fontWeight: 700 }}>{rule.name || rule.uuid.slice(0, 8) || "Unnamed rule"}</Button>
           <VendorBadge vendor={metadata.vendor === "PAN" ? "palo_alto" : metadata.vendor === "CP" ? "check_point" : metadata.vendor} />
-          <Typography variant="caption">{metadata.sourceName}</Typography><Typography variant="caption">{containerLabel(metadata, section, rule)}</Typography><Typography variant="caption">Section: {section.name}</Typography>
+          <Typography variant="caption">{metadata.sourceName}</Typography><Typography variant="caption">{containerLabel(metadata, section, rule)}</Typography><Typography variant="caption">Section: {sectionLabel(metadata, section)}</Typography>
           {rule.extras.tag && <Typography variant="caption">Tags: {rule.extras.tag.join(", ")}</Typography>}
           {rule.identityFallback && <Chip size="small" color="warning" label="Name identity fallback" />}
           {rule.enabled === false && <Chip size="small" label="Disabled" />}
           {rule.timeStatus === "expired" && <Chip size="small" color="error" label="Expired" />}
           {rule.expiring && <Chip size="small" color="warning" label="Expiring within 14 days" />}
-        </Stack><Box sx={{ pt: 1, height: 186, overflow: "auto" }}><RuleFields compact rule={rule} objects={objects} openObject={openObject} /></Box></Box>
+        </Stack><Box sx={{ pt: 1, minWidth: 0 }}><RuleFields compact rule={rule} objects={objects} openObject={openObject} /></Box></Box>
         <RuleMetrics rule={rule} />
       </Box>
     </Box>, cardHeight);

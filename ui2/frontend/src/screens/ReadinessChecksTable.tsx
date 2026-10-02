@@ -9,6 +9,8 @@ import TableContainer from "@mui/material/TableContainer";
 import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import Typography from "@mui/material/Typography";
+import Button from "@mui/material/Button";
+import { useEffect, useRef, useState } from "react";
 import { Icon } from "../shell/Icon";
 import type { ReadinessCheck, ReadinessMember } from "../auth/adminApi";
 import { M3Button } from "../shell/M3Widgets";
@@ -26,29 +28,51 @@ function checkRows(checks: ReadinessCheck[], labels: ReadinessMember[] = []) {
 }
 
 export function ReadinessChecksTable({ checks, members = [], compact = false }: { checks: ReadinessCheck[]; members?: ReadinessMember[]; compact?: boolean }) {
-  return <Table size="small" aria-label="Readiness results">
+  // Order presentation by observed role; retain opaque device IDs for check matching.
+  const ordered = [...members].sort((a, b) => Number(a.ha_role?.toLowerCase() !== "active") - Number(b.ha_role?.toLowerCase() !== "active"));
+  const memberOrder = [0, 1].map(index => members.length ? members.indexOf(ordered[index]) : index);
+  return <Table size="small" aria-label="Readiness results" sx={{ width: "100%", tableLayout: "fixed" }}>
     <TableHead><TableRow>
-      <TableCell>Check</TableCell>
+      <TableCell sx={{ width: "24%" }}>Check</TableCell>
       {[0, 1].map(index => <TableCell key={index}>
-        {members[index]?.hostname ?? `Member ${index + 1}`}
-        <Typography component="span" variant="caption" sx={{ color: m3.onSurfaceVar }}> · {members[index]?.ha_role?.toLowerCase() ?? "role unknown"}</Typography>
+        {ordered[index]?.hostname ?? `Member ${index + 1}`}
+        <Typography component="span" variant="caption" sx={{ color: m3.onSurfaceVar }}> · {ordered[index]?.ha_role?.toLowerCase() ?? "role unknown"}</Typography>
       </TableCell>)}
     </TableRow></TableHead>
     <TableBody>{checkRows(checks, members).map(row => {
       const icon = row.failed ? "x-circle" : row.passed ? "check-circle" : "info";
       const result = row.failed ? "Blocking" : row.passed ? "Passed" : !row.blocking ? "Info" : "Unknown";
       return <TableRow key={row.no} sx={{ bgcolor: row.failed ? m3.errorContainer : undefined }}>
-        <TableCell component="th" scope="row" sx={{ py: compact ? 0.5 : 1.5, width: "32%" }}>
+        <TableCell component="th" scope="row" sx={{ py: compact ? 0.5 : 1.5, overflowWrap: "anywhere" }}>
           <Stack direction="row" spacing={1} alignItems="center">
             <Box component="span" role="img" aria-label={result} sx={{ display: "flex", color: row.failed ? m3.onErrorContainer : row.passed ? m3.goodInk : m3.onSurfaceVar }}><Icon name={icon} /></Box>
             <Typography variant="body2">{row.title}</Typography>
             {!row.blocking && <Chip size="small" label="info" sx={{ height: 20, bgcolor: m3.sc, color: m3.onSurfaceVar }} />}
           </Stack>
         </TableCell>
-        {row.members.map((check, index) => <TableCell key={index} sx={{ py: compact ? 0.5 : 1.5, whiteSpace: compact ? "nowrap" : "normal" }}>{check?.summary ?? "Not collected"}</TableCell>)}
+        {memberOrder.map((memberIndex, index) => <TableCell key={index} sx={{ py: compact ? 0.5 : 1.5, whiteSpace: "normal", overflowWrap: "anywhere" }}><CheckMessage text={row.members[memberIndex]?.summary ?? "Not collected"} /></TableCell>)}
       </TableRow>;
     })}</TableBody>
   </Table>;
+}
+
+function CheckMessage({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const [overflow, setOverflow] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const node = ref.current;
+    if (!node || expanded) return;
+    const measure = () => setOverflow(node.scrollHeight > node.clientHeight);
+    measure();
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
+    observer?.observe(node);
+    return () => observer?.disconnect();
+  }, [text, expanded]);
+  return <Box><Box ref={ref}
+    className="readiness-message" sx={{ whiteSpace: "normal", overflowWrap: "anywhere", display: expanded ? "block" : "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: expanded ? undefined : 2, overflow: "hidden" }}>{text}</Box>
+    {(overflow || expanded) && <Button size="small" aria-expanded={expanded} onClick={() => setExpanded(value => !value)} sx={{ p: 0 }}>{expanded ? "Less" : "More"}</Button>}
+  </Box>;
 }
 
 export function ReadinessCard({ checks, members, status, cluster, vendor, observedAt, masked = false, running = false, disabled = false, canRun, onRun, error }: {

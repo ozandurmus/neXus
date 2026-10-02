@@ -2,7 +2,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
-import { VirtualPolicyCards, RuleDetailPanel, RuleHistory, containerLabel, scheduleLabel } from "../src/screens/PolicyRuleViewer";
+import { VirtualPolicyCards, RuleDetailPanel, RuleHistory, containerLabel, scheduleLabel, sectionLabel } from "../src/screens/PolicyRuleViewer";
 import type { PolicyMetadata, PolicyRule, PolicySchedule, PolicySection } from "../src/auth/adminApi";
 
 const metadata: PolicyMetadata = { id: "policy-1", name: "OBJ-POLICY-01", sourceId: "source-1", sourceName: "MGR-BRAVO-01", vendor: "CP", containerId: "domain-1", containerName: "DOM-TANGO-01", collectedAt: "2026-10-02T00:00:00Z", artefactRef: "artifact-1", targets: [] };
@@ -55,4 +55,19 @@ it("uses vendor container terminology and labels timezone uncertainty", () => {
   expect(containerLabel({ ...metadata, vendor: "PAN" }, { ...section, source: "DOM-TANGO-01", name: "Post rules" }, rule)).toBe("Device group: DOM-TANGO-01 (Post)");
   expect(scheduleLabel(schedule)).toContain("Until 1 Oct 2026 23:59"); expect(scheduleLabel(schedule)).toContain("device timezone unknown");
   expect(scheduleLabel({ ...schedule, kind: "recurring", end: null, windows: [{ days: [1,2,3,4,5], monthDays: [], start: "08:00", end: "18:00" }] })).toContain("Weekdays 08:00–18:00");
+});
+
+it("labels PAN sections precisely, collapses empty sections and uses responsive masked cards", () => {
+  const meta = { ...metadata, vendor: "PAN", name: "POL-ALPHA-01" };
+  const sections = ["Pre rules", "Post rules"].flatMap(name => ["Shared", "DOM-TANGO-01"].map(source => ({ ...section, id: `${source}-${name}`, name, source })));
+  expect(sections.map(s => sectionLabel(meta, s))).toEqual(["Shared pre-rules", "Device-group pre-rules", "Shared post-rules", "Device-group post-rules"]);
+  expect(sectionLabel(metadata, section)).toBe("OBJ-SECTION-01");
+  const { container } = mount(<VirtualPolicyCards sections={sections.map((s, i) => ({ ...s, total: i ? 0 : 1, rules: i ? [] : [{ ...rule, name: "RULE-BRAVO-12", uuid: "RULE-TANGO-01" }] }))} collapsed={new Set()} scrollTop={0} toggle={vi.fn()} objects={new Map([...objects].map(([id, object]) => [id, { ...object, name: `ADDR-ALPHA-0${id}` }]))} metadata={meta} openObject={vi.fn()} openRule={vi.fn()} selected={new Set()} onSelect={vi.fn()} />);
+  expect(screen.getByText("3 empty sections")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /Shared pre-rules/ })).toBeInTheDocument();
+  expect(container.querySelector(".policy-rule-card.wide")).toBeInTheDocument();
+  expect(container.querySelector(".policy-rule-fields.compact")).toBeInTheDocument();
+  expect(container.querySelector(".policy-rule-misc details")).toBeInTheDocument();
+  expect(container.querySelector(".policy-rule-metrics")).toHaveStyle({ width: "220px", gridTemplateColumns: "repeat(2, minmax(0, 1fr))" });
+  expect(container.textContent).not.toMatch(/[a-f0-9]{32}/i);
 });
