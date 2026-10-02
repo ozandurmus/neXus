@@ -1,3 +1,4 @@
+import { BackupAttempts } from "./BackupAttempts";
 import { urlParam } from "../shell/urlParams";
 import { useCallback, useEffect, useState } from "react";
 import Box from "@mui/material/Box";
@@ -186,6 +187,7 @@ export function BackupScreen() {
       setFleetOpen(false);
       setFleetReason("");
       void loadFleet();
+      setTargetsVersion((v) => v + 1);
     } catch (error) {
       setFleetError(error instanceof Error ? error.message : "Fleet backup could not be requested.");
     } finally {
@@ -249,6 +251,7 @@ export function BackupScreen() {
       await collectDeviceBackup(device.deviceId, `Operator manual trigger for ${type} via console`, type === "standard" ? "backup" : type);
       setSuccessMessage(`${label} requested for ${device.name}. Validation level will appear once the run is recorded.`);
       await loadFleet();
+      setTargetsVersion((v) => v + 1);
     } catch (error) {
       setListError(`${label} request for ${device.name} was refused: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
@@ -816,6 +819,9 @@ export function BackupScreen() {
         <Dialog open={true} onClose={() => setHistoryFor(null)} maxWidth="md" fullWidth>
           <DialogTitle sx={{ fontWeight: 700 }}>Backup history: {historyFor.name}</DialogTitle>
           <DialogContent dividers>
+            <Typography variant="subtitle2" sx={{ mb: 1 }}>Backup attempts</Typography>
+            <BackupAttempts deviceId={historyFor.deviceId} />
+            <Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>Retained archives</Typography>
             {historyError && <Alert severity="error" sx={{ mb: 1 }}>{historyError}</Alert>}
             {!history && !historyError && <CircularProgress size={20} />}
             {history && history.length === 0 && <Alert severity="info">No backup of this device is on record.</Alert>}
@@ -1139,6 +1145,7 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
                     <TableCell>{item ? <ValidationChip level={item.validationLevel} /> : null}</TableCell>
                     <TableCell>{item ? <DeviationChip state={item.deviationState} /> : null}</TableCell>
                     <TableCell align="right">
+                      <BackupAttempts deviceId={id} latestOnly version={version} />
                       {/* Compact actions: all six stay visible in the row (the full-size buttons clipped Compare and Download). */}
                       <Stack direction="row" spacing={0} justifyContent="flex-end" alignItems="center" sx={{ whiteSpace: "nowrap",
                         "& .MuiButton-root": { minWidth: 0, px: 0.9, py: 0.25, fontSize: 12.5, textTransform: "none", borderRadius: "6px" } }}>
@@ -1156,7 +1163,7 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
                         {vendor === "check_point" && item ? (
                           <Tooltip title="Check Point only: a full Gaia OS snapshot, in addition to the configuration backup. Palo Alto has no equivalent here."><span><Button size="small" disabled={busy} onClick={() => onBackupNow(item, "snapshot")}>Snapshot</Button></span></Tooltip>
                         ) : null}
-                        <Tooltip title={baselines[id] ? "Every backup of this device; ★ = a baseline archive is set for comparison" : "Every backup of this device"}><span><Button size="small" disabled={!item} onClick={() => item && onHistory(item)}>History{baselines[id] ? " ★" : ""}</Button></span></Tooltip>
+                        <Tooltip title={baselines[id] ? "Every backup of this device; ★ = a baseline archive is set for comparison" : "Every backup of this device"}><span><Button size="small" onClick={() => onHistory(item ?? { deviceId: id, name, ip: "", vendor: vendor ?? "unknown", role: "", lastBackupTime: "", backupType: "standard", validationLevel: "UNKNOWN", deviationState: "NOT EVALUATED", sizeBytes: 0, artefactId: "" })}>History{baselines[id] ? " ★" : ""}</Button></span></Tooltip>
                         <Button size="small" disabled={!item?.artefactId} onClick={() => item && onContents(item)}>Contents</Button>
                         <Button size="small" disabled={!item?.artefactId} onClick={() => item && onCompare(item)}>Compare</Button>
                         <Button size="small" disabled={!item?.artefactId} onClick={() => item && onDownload(item)}>Download</Button>

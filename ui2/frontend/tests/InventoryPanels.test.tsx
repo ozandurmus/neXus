@@ -432,6 +432,9 @@ describe("BackupPanel", () => {
           ]
         }));
       }
+      if (String(input).startsWith("/api/v2/jobs")) {
+        return Promise.resolve(jsonResponse(200, { items: [], total: 0, page: 1, page_size: 25 }));
+      }
       return Promise.resolve(jsonResponse(404, { error: "NOT_FOUND" }));
     });
     vi.stubGlobal("fetch", fetchMock);
