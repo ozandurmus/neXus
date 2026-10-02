@@ -122,6 +122,11 @@ public final class PolicyCollectionJobExecutor {
             if (!attempts.writeOutcome(attempt, epoch, reason.isEmpty() ? "MATCHED" : "EXPECTATION_UNMET", null, reason.isEmpty(), null, null, null))
                 return new JobOutcome.ZombieStopped();
             if (!reason.isEmpty()) {
+                if ("palo_alto".equals(run.get().vendor())) {
+                    if (!repository.publishWithWarnings(jobId, epoch, stored, ACTOR, "PARTIAL_SNAPSHOT " + reason)) return new JobOutcome.ZombieStopped();
+                    com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.add("job", "note", "PARTIAL_SNAPSHOT " + reason);
+                    return new JobOutcome.Completed();
+                }
                 if (!repository.publish(jobId, epoch, stored, ACTOR, "PARTIAL_SNAPSHOT " + reason)) return new JobOutcome.ZombieStopped();
                 return new JobOutcome.Failed("PARTIAL_SNAPSHOT " + reason);
             }

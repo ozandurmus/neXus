@@ -115,13 +115,20 @@ public class PolicyCollectionRepository {
         return publish(jobId, epoch, snapshots, actor, "");
     }
     public boolean publish(String jobId, long epoch, List<PolicySnapshotRepository.Stored> snapshots, String actor, String failure) {
+        return publish(jobId, epoch, snapshots, actor, failure, false);
+    }
+    public boolean publishWithWarnings(String jobId, long epoch, List<PolicySnapshotRepository.Stored> snapshots, String actor, String warning) {
+        if (snapshots.isEmpty()) throw new IllegalArgumentException("POLICY_PARTIAL_SNAPSHOT_REQUIRED");
+        return publish(jobId, epoch, snapshots, actor, warning, true);
+    }
+    private boolean publish(String jobId, long epoch, List<PolicySnapshotRepository.Stored> snapshots, String actor, String failure, boolean completedWithWarnings) {
         return new AuditedTransactionBoundary(tx).inTransaction(actor, "policy_collect_publish", db -> {
             if (db.fetch("select job_id from jobs where job_id = {0} and lease_epoch = {1} and state = 'EXECUTING' "
                     + "and lease_expires_at > now() for update", jobId, epoch).isEmpty()) return false;
             var repository = new PolicySnapshotRepository(scoped(db));
             for (var snapshot : snapshots) repository.save(snapshot, actor, "policy_collect_publish");
             if (!new com.securityexpert.nexus.ui2.persistence.jobrecords.JooqJobLeaseDao(scoped(db)).transitionState(
-                    jobId, epoch, "EXECUTING", failure.isEmpty() ? "COMPLETED" : "FAILED", actor, "policy_collect_publish", failure.isEmpty() ? null : failure))
+                    jobId, epoch, "EXECUTING", failure.isEmpty() || completedWithWarnings ? "COMPLETED" : "FAILED", actor, "policy_collect_publish", failure.isEmpty() ? null : failure))
                 throw new IllegalStateException("POLICY_LEASE_LOST");
             return true;
         });

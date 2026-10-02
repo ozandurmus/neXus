@@ -69,9 +69,7 @@ class PanoramaPolicyCollectorTest {
         assertEquals("/config/shared", sent.get(3).formParams().get("xpath"));
         assertTrue(Arrays.equals(new char[password.length], password));
     }
-    @Test void failsClosedOnPartialResponseHierarchyMismatchDtdAndGroupLimit() throws Exception {
-        var partial = responses(); partial.set(5, "<response status='error'><msg>synthetic failure</msg></response>");
-        assertThrows(RuntimeException.class, () -> collector(partial, new ArrayList<>(), new char[0]).collect(run, scope, () -> true));
+    @Test void failsClosedOnHierarchyMismatchDtdAndGroupLimit() throws Exception {
         var hierarchy = responses(); hierarchy.set(2, success("<dg-hierarchy><dg name='Synthetic child'/></dg-hierarchy>"));
         assertThrows(RuntimeException.class, () -> collector(hierarchy, new ArrayList<>(), new char[0]).collect(run, scope, () -> true));
         var excessive = responses();
@@ -79,6 +77,69 @@ class PanoramaPolicyCollectorTest {
         assertThrows(RuntimeException.class, () -> collector(excessive, new ArrayList<>(), new char[0]).collect(run, scope, () -> true));
         assertThrows(RuntimeException.class, () -> PolicyXml.parse("<!DOCTYPE x [<!ENTITY x SYSTEM 'file:///never-read'>]><config>&x;</config>"));
         assertThrows(RuntimeException.class, () -> collector(responses(), new ArrayList<>(), new char[0]).collect(run, scope, () -> false));
+    }
+
+    @Test void acceptsEmptyDeviceGroupShapesAndResultAttributes() throws Exception {
+        for (String result : List.of("<result/>", "<result count='0'/>", "<result total-count='0'/>", "<result total-count='0' count='0'/>",
+                "<result total-count='1' count='1'><entry name='Synthetic child'/></result>",
+                "<result><entry name='Synthetic child' admin='synthetic-user' dirtyId='9'/></result>")) {
+            var replies = responses();
+            replies.set(5, "<response status='success'>" + result + "</response>");
+            var snapshots = collector(replies, new ArrayList<>(), new char[0]).collect(run, scope, () -> true);
+            assertEquals(2, snapshots.size());
+            assertTrue(snapshots.stream().allMatch(snapshot -> snapshot.failures().isEmpty()));
+            var child = snapshots.get(1);
+            assertFalse(child.sections().stream().anyMatch(section -> section.source().equals("Synthetic child") && !section.rules().isEmpty()));
+        }
+    }
+
+    @Test void partialCollectionRecordsAllFailedGroupsAndMaskedResponseShapes() throws Exception {
+        for (String invalid : List.of("<response status='error' code='7'><msg>SyntheticPrivate42</msg></response>",
+                "<response status='success' code='19'><result><SyntheticPrivate42>",
+                success("<unexpected>SyntheticPrivate42</unexpected>"), success("<entry name='Wrong synthetic group'/>"),
+                "<response status='success'><result total-count='1'/></response>")) {
+            var replies = responses(); replies.set(5, invalid);
+            var transcript = new com.securityexpert.nexus.ui2.worker.transcript.JobTranscript();
+            List<PolicySnapshot> snapshots;
+            try (var recording = com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.open(transcript);
+                 var trace = new PolicyCollectionTrace("manager-1", (step, total) -> {})) {
+                snapshots = collector(replies, new ArrayList<>(), new char[0]).collect(run, scope, () -> true);
+            }
+            assertEquals(1, snapshots.size());
+            assertEquals(1, snapshots.get(0).failures().size());
+            var failure = snapshots.get(0).failures().get(0);
+            assertEquals(PolicySnapshot.ref("manager-1", "device-group", "Synthetic child"), failure.layerRef());
+            assertTrue(failure.reason().startsWith("device group "));
+            var output = new ByteArrayOutputStream(); transcript.writeTo(output);
+            String text = output.toString(StandardCharsets.UTF_8);
+            assertTrue(text.contains("PAN_POLICY_SHAPE bytes=" + invalid.getBytes(StandardCharsets.UTF_8).length));
+            assertTrue(text.contains("httpStatus=200"));
+            assertFalse(text.contains("SyntheticPrivate42"));
+            assertFalse(text.contains("Wrong synthetic group"));
+        }
+    }
+
+    @Test void missingAncestorIsNotPublishedAsCompleteAndAllFailedGroupsFailClosed() throws Exception {
+        var replies = responses(); replies.set(4, success("<unexpected/>"));
+        assertThrows(IllegalStateException.class, () -> collector(replies, new ArrayList<>(), new char[0]).collect(run, scope, () -> true));
+        replies.set(5, success("<unexpected/>"));
+        assertThrows(IllegalStateException.class, () -> collector(replies, new ArrayList<>(), new char[0]).collect(run, scope, () -> true));
+        replies.set(2, success("<dg-hierarchy><dg name='Synthetic parent'/><dg name='Synthetic child'/></dg-hierarchy>"));
+        replies.set(5, success("<entry name='Synthetic child'/>"));
+        var snapshots = collector(replies, new ArrayList<>(), new char[0]).collect(run, scope, () -> true);
+        assertEquals(1, snapshots.size());
+        assertEquals("Synthetic child", snapshots.get(0).metadata().containerName());
+        assertEquals(1, snapshots.get(0).failures().size());
+    }
+
+    @Test void responseShapeMasksUnicodeBoundsOutputAndAllowListsApiAttributes() {
+        String diagnostic = PanoramaPolicyCollector.responseShape("<response status='error' code='7'>SyntheticPrivate42</response>", 75, 403);
+        assertTrue(diagnostic.contains("httpStatus=403 status=error code=7"));
+        assertTrue(diagnostic.contains("shape=<aaaaaaaa aaaaaa='aaaaa' aaaa='9'>aaaaaaaaaaaaaaaa99</aaaaaaaa>"));
+        assertFalse(diagnostic.contains("SyntheticPrivate"));
+        assertTrue(PanoramaPolicyCollector.responseShape("<response status='private' code='secret'>", 0, null)
+                .contains("httpStatus=UNKNOWN status=UNKNOWN code=UNKNOWN"));
+        assertTrue(PanoramaPolicyCollector.responseShape("é９".repeat(3000), 12000, 200).endsWith("a9".repeat(1024)));
     }
 
     @SuppressWarnings("unchecked")
