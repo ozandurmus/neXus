@@ -87,6 +87,18 @@ public final class PaloAltoBackupExecutor {
 
     private PanBackupResult executeBackup(ApiTarget target, String credentialRef, String deviceId, String jobId, String previousConfigXml,
             boolean panorama) {
+        com.securityexpert.nexus.ui2.worker.backup.BackupTranscript.note("PAN backup: precheck started");
+        PanBackupResult result = executeRecorded(target, credentialRef, deviceId, jobId, previousConfigXml, panorama);
+        if (result.metadata() != null)
+            com.securityexpert.nexus.ui2.worker.backup.BackupTranscript.stored("pan-backup.tgz", result.metadata());
+        com.securityexpert.nexus.ui2.worker.backup.BackupTranscript.note("PAN backup: "
+                + (result.success() ? "stored" : "failed: " + result.errorMessage())
+                + (result.missing() == null ? "" : "; missing: " + result.missing()));
+        return result;
+    }
+
+    private PanBackupResult executeRecorded(ApiTarget target, String credentialRef, String deviceId, String jobId, String previousConfigXml,
+            boolean panorama) {
         SemanticDeviationEngine.DeviationOutcome noDeviation = deviationEngine.evaluate("palo_alto", previousConfigXml, "");
         if (credentialResolver == null) {
             return new PanBackupResult(false, null, null, noDeviation, "PAN credential resolver not configured; refusing (fail-closed)");
@@ -115,6 +127,7 @@ public final class PaloAltoBackupExecutor {
             return new PanBackupResult(false, null, null, noDeviation, "palo alto key generation failed: " + why);
         }
 
+        com.securityexpert.nexus.ui2.worker.backup.BackupTranscript.note("PAN authentication succeeded; reading companion configuration");
         // 1. Fetch companion running-config XML for semantic AST deviation diffing
         XmlApiSpec configSpec = new XmlApiSpec(
                 "POST",

@@ -21,6 +21,8 @@ export function JobTranscriptDrawer({ jobId, hasTranscript }: { readonly jobId: 
   useEffect(() => {
     if (!open) return;
     let active = true;
+    setEntries(null);
+    setError("");
     getJobTranscript(jobId).then((value) => { if (active) setEntries(value); })
       .catch(() => { if (active) setError("Transcript could not be loaded."); });
     return () => { active = false; };
@@ -45,7 +47,7 @@ export function JobTranscriptDrawer({ jobId, hasTranscript }: { readonly jobId: 
           <Button onClick={() => setOpen(false)}>Close</Button>
         </Stack>
         <Box sx={{ overflow: "auto", flex: 1, fontFamily: "monospace", fontSize: 13, whiteSpace: "pre-wrap" }}>
-          {error || (entries === null ? "Loading transcript…" : visible.map((entry) => <Box key={entry.seq} sx={{ borderBottom: "1px solid #30363d", py: 1 }}>
+          {error || (entries === null ? "Loading transcript…" : entries.length === 0 ? "No steps were recorded (bug)" : visible.length === 0 ? "No matching steps." : visible.map((entry) => <Box key={entry.seq} sx={{ borderBottom: "1px solid #30363d", py: 1 }}>
             <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
               <span>{entry.at} (+{entry.elapsedMs} ms)</span><Chip size="small" label={entry.channel.toUpperCase()} />
               <strong style={{ color: entry.kind === "command" || entry.kind === "request" ? "#79c0ff" : "inherit" }}>{entry.kind}</strong>

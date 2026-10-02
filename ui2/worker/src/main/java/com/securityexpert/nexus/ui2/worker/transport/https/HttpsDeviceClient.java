@@ -275,12 +275,15 @@ public final class HttpsDeviceClient implements HttpsDeviceCalls {
     @Override
     public DownloadResult download(Target target, String method, String path, Map<String, String> form, Credentials creds,
             String requestContentType, OutputStream sink, long maxBytes, Duration timeout) {
+        long started = System.nanoTime();
+        long total = 0;
+        MessageDigest digest = JobTranscriptScope.current() == null ? null : sha256();
+        JobTranscriptScope.add("https", "transfer", "download requested file=" + JobTranscript.safePath(path));
         try {
             String body = form == null ? null : formEncode(form);
             String contentType = body != null ? "application/x-www-form-urlencoded" : requestContentType;
             HttpResponse<InputStream> r = send(target, method, path, contentType, body,
                     creds, timeout, HttpResponse.BodyHandlers.ofInputStream());
-            MessageDigest digest = JobTranscriptScope.current() == null ? null : sha256();
             try (InputStream in = r.body()) {
                 if (r.statusCode() < 200 || r.statusCode() >= 300) {
                     if (JobTranscriptScope.current() != null) {
@@ -294,7 +297,6 @@ public final class HttpsDeviceClient implements HttpsDeviceCalls {
                     return new DownloadResult.Refused(r.statusCode(), "HTTP " + r.statusCode());
                 }
                 byte[] buf = new byte[65536];
-                long total = 0;
                 int n;
                 while ((n = in.read(buf)) >= 0) {
                     total += n;
@@ -306,11 +308,15 @@ public final class HttpsDeviceClient implements HttpsDeviceCalls {
                     }
                     sink.write(buf, 0, n);
                 }
-                recordResponse(r, "size=" + total + " sha256=" + (digest == null ? "" : HexFormat.of().formatHex(digest.digest())));
+                recordResponse(r, "file=" + JobTranscript.safePath(path) + " size=" + total + " sha256="
+                        + (digest == null ? "" : HexFormat.of().formatHex(digest.digest()))
+                        + " status=completed durationMs=" + (System.nanoTime() - started) / 1_000_000);
                 return new DownloadResult.Downloaded(r.statusCode(), total, r.headers().firstValue("Content-Type"));
             }
         } catch (IOException e) {
-            JobTranscriptScope.add("https", "note", "download failed: " + e.getClass().getSimpleName());
+            JobTranscriptScope.add("https", "transfer", "download failed file=" + JobTranscript.safePath(path) + " size=" + total
+                    + " sha256=" + (digest == null ? "" : HexFormat.of().formatHex(digest.digest()))
+                    + " reason=" + e.getClass().getSimpleName() + " durationMs=" + (System.nanoTime() - started) / 1_000_000);
             return new DownloadResult.Failed(e.getClass().getSimpleName() + ": " + e.getMessage());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();

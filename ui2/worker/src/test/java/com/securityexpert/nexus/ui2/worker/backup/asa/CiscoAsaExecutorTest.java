@@ -81,7 +81,9 @@ class CiscoAsaExecutorTest {
             return 3;
         });
 
-        BackupResult result = executor.backup(new Target("192.0.2.10", 22), "credential-1", "device-1", "job-1");
+        BackupResult result = com.securityexpert.nexus.ui2.worker.transcript.TranscriptAssertions.capture(
+                () -> executor.backup(new Target("192.0.2.10", 22), "credential-1", "device-1", "job-1"),
+                "opening separate SCP-only session", "sha256=", transferFails ? "synthetic transfer failure" : "Completed");
 
         if (transferFails) assertInstanceOf(BackupResult.Partial.class, result);
         else assertInstanceOf(BackupResult.Completed.class, result);

@@ -215,8 +215,12 @@ public final class SshExecTransport implements DeviceTransport {
 
     @Override
     public ExecResult exec(TransportSession session, ExecSpec spec, Duration timeout) {
+        long started = System.nanoTime();
         ExecResult result = execRaw(session, spec, timeout);
-        if (!derivedOnly) recordAnswer(result);
+        if (!derivedOnly) {
+            recordAnswer(result);
+            recordStatus(result, started);
+        }
         return result;
     }
 
@@ -237,7 +241,7 @@ public final class SshExecTransport implements DeviceTransport {
             InputStream in = channel.getInputStream();
             InputStream err = channel.getErrStream();
             channel.connect((int) timeout.toMillis());
-            if (!derivedOnly) JobTranscriptScope.add("ssh", "command", spec.command());
+            if (!derivedOnly) JobTranscriptScope.add("ssh", "command", com.securityexpert.nexus.ui2.worker.transcript.JobTranscript.safeSshCommand(spec.command()));
 
             ByteArrayOutputStream buffer = new ByteArrayOutputStream();
             ByteArrayOutputStream errors = new ByteArrayOutputStream();
@@ -315,11 +319,13 @@ public final class SshExecTransport implements DeviceTransport {
      */
     @Override
     public ExecResult execInteractive(TransportSession session, ExecSpec spec, Duration timeout) {
+        long started = System.nanoTime();
         ExecResult result = execInteractiveRaw(session, spec, timeout);
         if (result instanceof ExecResult.Completed completed)
             JobTranscriptScope.add("ssh", "answer", com.securityexpert.nexus.ui2.worker.transcript.JobTranscript
                     .safeSshAnswer(spec.command(), completed.output()));
         else recordAnswer(result);
+        recordStatus(result, started);
         return result;
     }
 
@@ -397,8 +403,10 @@ public final class SshExecTransport implements DeviceTransport {
     @Override
     public ExecResult execInteractiveAnswering(TransportSession session, ExecSpec spec,
             java.util.List<com.securityexpert.nexus.ui2.jobs.transport.PromptAnswer> answers, Duration timeout) {
+        long started = System.nanoTime();
         ExecResult result = execInteractiveAnsweringRaw(session, spec, answers, timeout);
         recordAnswer(result, answers);
+        recordStatus(result, started);
         return result;
     }
 
@@ -456,13 +464,23 @@ public final class SshExecTransport implements DeviceTransport {
     public FetchStreamResult fetchStreaming(TransportSession session, FetchSpec spec, Duration timeout,
             OutputStream sink) {
         if (JobTranscriptScope.current() == null) return fetchStreamingRaw(session, spec, timeout, sink);
+        long started = System.nanoTime();
         MessageDigest digest = sha256();
-        FetchStreamResult result = fetchStreamingRaw(session, spec, timeout, new DigestOutputStream(sink, digest));
-        if (result instanceof FetchStreamResult.Fetched fetched)
-            JobTranscriptScope.add("ssh", "answer", "path=" + spec.remotePath() + " size=" + fetched.bytesTransferred()
-                    + " sha256=" + HexFormat.of().formatHex(digest.digest()));
-        else JobTranscriptScope.add("ssh", "note", result.getClass().getSimpleName());
-        return result;
+        BoundedCountingOutputStream captured = new BoundedCountingOutputStream(new DigestOutputStream(sink, digest), Long.MAX_VALUE);
+        JobTranscriptScope.add("sftp", "transfer", "fetch requested file=" + spec.remotePath());
+        try {
+            FetchStreamResult result = fetchStreamingRaw(session, spec, timeout, captured);
+            String status = result instanceof FetchStreamResult.Fetched ? "completed"
+                    : "failed: " + ((FetchStreamResult.Failed) result).reason();
+            JobTranscriptScope.add("sftp", "transfer", "file=" + spec.remotePath() + " size=" + captured.count()
+                    + " sha256=" + HexFormat.of().formatHex(digest.digest()) + " status=" + status
+                    + " durationMs=" + (System.nanoTime() - started) / 1_000_000);
+            return result;
+        } catch (RuntimeException e) {
+            JobTranscriptScope.add("sftp", "transfer", "failed file=" + spec.remotePath() + " size=" + captured.count()
+                    + " reason=" + e.getClass().getSimpleName());
+            throw e;
+        }
     }
 
     private FetchStreamResult fetchStreamingRaw(TransportSession session, FetchSpec spec, Duration timeout,
@@ -537,15 +555,24 @@ public final class SshExecTransport implements DeviceTransport {
      */
     public long scpFetch(TransportSession session, String remotePath, ScpSink sink, long maxBytes, Duration timeout)
             throws IOException {
+        long started = System.nanoTime();
+        JobTranscriptScope.add("scp", "transfer", "fetch requested file=" + remotePath);
         MessageDigest digest = JobTranscriptScope.current() == null ? null : sha256();
-        ScpSink captured = digest == null ? sink : size -> new DigestOutputStream(sink.open(size), digest);
+        BoundedCountingOutputStream[] received = {null};
+        ScpSink captured = digest == null ? sink : size -> {
+            received[0] = new BoundedCountingOutputStream(new DigestOutputStream(sink.open(size), digest), Long.MAX_VALUE);
+            return received[0];
+        };
         try {
             long bytes = scpFetchRaw(session, remotePath, captured, maxBytes, timeout);
-            if (digest != null) JobTranscriptScope.add("ssh", "answer", "path=" + remotePath + " size=" + bytes
-                    + " sha256=" + HexFormat.of().formatHex(digest.digest()));
+            if (digest != null) JobTranscriptScope.add("scp", "transfer", "file=" + remotePath + " size=" + bytes
+                    + " sha256=" + HexFormat.of().formatHex(digest.digest()) + " status=completed durationMs="
+                    + (System.nanoTime() - started) / 1_000_000);
             return bytes;
         } catch (IOException e) {
-            JobTranscriptScope.add("ssh", "note", "scp fetch failed: " + e.getMessage());
+            JobTranscriptScope.add("scp", "transfer", "failed file=" + remotePath + " size=" + (received[0] == null ? 0 : received[0].count())
+                    + " sha256=" + (digest == null ? "" : HexFormat.of().formatHex(digest.digest())) + " reason=" + e.getMessage()
+                    + " durationMs=" + (System.nanoTime() - started) / 1_000_000);
             throw e;
         }
     }
@@ -627,10 +654,17 @@ public final class SshExecTransport implements DeviceTransport {
         return sb.toString();
     }
 
+    static void recordStatus(ExecResult result, long started) {
+        String status = result instanceof ExecResult.Completed completed ? "exit=" + completed.exitStatus()
+                : result instanceof ExecResult.ChannelFailed failed ? "channel failed: " + failed.reason() : "timed out";
+        JobTranscriptScope.add("ssh", "note", status + " durationMs=" + (System.nanoTime() - started) / 1_000_000);
+    }
+
     static void recordAnswer(ExecResult result) {
         if (result instanceof ExecResult.Completed completed)
             JobTranscriptScope.add("ssh", "answer", completed.output());
-        else JobTranscriptScope.add("ssh", "note", result.getClass().getSimpleName());
+        else JobTranscriptScope.add("ssh", "note", result instanceof ExecResult.ChannelFailed failed
+                ? "channel failed: " + failed.reason() : "timed out");
     }
 
     private static MessageDigest sha256() {

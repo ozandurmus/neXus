@@ -120,6 +120,10 @@ class BackupJobExecutorEndToEndTest {
             String transcript = new String(in.readAllBytes(), StandardCharsets.UTF_8);
             assertTrue(transcript.contains("\"channel\":\"ssh\""));
             assertTrue(transcript.contains("\"kind\":\"command\""));
+            assertTrue(transcript.contains("free-space precheck"));
+            assertTrue(transcript.contains("poll iteration="));
+            assertTrue(transcript.contains("sha256="));
+            assertTrue(transcript.contains("COMPLETED"));
         }
 
         ScriptedBackupTransport next = happyPathTransportUpTo("succeeded");
@@ -138,6 +142,53 @@ class BackupJobExecutorEndToEndTest {
         };
         failedStore.executor.withTranscript(broken, transcriptJobs(new AtomicReference<>(), new AtomicReference<>()));
         assertTrue(failedStore.executor.execute(JOB_ID, LEASE_EPOCH, DEVICE_ID, request()) instanceof JobOutcome.Completed);
+    }
+
+    @Test void failedGaiaPollStoresTheCommandOutputAndFinalReason(@TempDir Path tempDir) throws Exception {
+        var transport = happyPathTransportUpTo("failed: synthetic archive error");
+        var store = newArtefactStore(tempDir);
+        var harness = new Harness(transport, store, Duration.ofMillis(1), Duration.ofMillis(50), tempDir);
+        AtomicReference<String> ref = new AtomicReference<>();
+        AtomicReference<byte[]> key = new AtomicReference<>();
+        harness.executor.withTranscript(store, transcriptJobs(ref, key));
+        assertTrue(harness.executor.execute(JOB_ID, LEASE_EPOCH, DEVICE_ID, request()) instanceof JobOutcome.Failed);
+        try (var in = store.retrieve(new ArtefactRef(ref.get()), key.get(), true)) {
+            String text = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+            assertTrue(text.contains("show backup status"));
+            assertTrue(text.contains("synthetic archive error"));
+            assertTrue(text.contains("status=FAILED"));
+            assertTrue(text.contains("FAILED: submit_refused:"));
+        }
+    }
+
+    @Test void everyBackupCapabilityStoresAFailureTranscriptBeforeTransport(@TempDir Path tempDir) throws Exception {
+        for (String capability : java.util.List.of(
+                com.securityexpert.nexus.ui2.jobs.admission.BackupCapabilityIds.CP_GAIA_BACKUP_LOCAL,
+                com.securityexpert.nexus.ui2.jobs.admission.BackupCapabilityIds.CP_MDS_EXPORT,
+                com.securityexpert.nexus.ui2.jobs.admission.BackupCapabilityIds.CP_SPARK_SFTP_BACKUP,
+                com.securityexpert.nexus.ui2.jobs.admission.BackupCapabilityIds.ASA_CONFIG_BACKUP,
+                com.securityexpert.nexus.ui2.jobs.admission.BackupCapabilityIds.FGT_CONFIG_BACKUP,
+                com.securityexpert.nexus.ui2.jobs.admission.BackupCapabilityIds.HTTPS_VENDOR_BACKUP,
+                com.securityexpert.nexus.ui2.jobs.admission.BackupCapabilityIds.PAN_DEVICE_STATE_BACKUP,
+                com.securityexpert.nexus.ui2.jobs.admission.BackupCapabilityIds.RDW_CC_CONFIG_BACKUP)) {
+            var transport = new ScriptedBackupTransport();
+            var store = newArtefactStore(tempDir);
+            var harness = new Harness(transport, store, Duration.ofMillis(1), Duration.ofMillis(5), tempDir);
+            AtomicReference<String> ref = new AtomicReference<>();
+            AtomicReference<byte[]> key = new AtomicReference<>();
+            harness.executor.withTranscript(store, transcriptJobs(ref, key));
+            var missingCredential = new BackupRequest(request().connectionTarget(), Optional.empty(), request().trustRuleRef());
+            assertTrue(harness.executor.execute(JOB_ID, LEASE_EPOCH, DEVICE_ID, missingCredential, capability) instanceof JobOutcome.Failed);
+            assertNotNull(ref.get());
+            try (var in = store.retrieve(new ArtefactRef(ref.get()), key.get(), true)) {
+                String text = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+                assertTrue(text.contains("backup started: " + capability));
+                assertTrue(text.contains("FAILED:"));
+                assertTrue(text.contains("\"kind\":\"verdict\""));
+            }
+            assertTrue(transport.commandsIssued.isEmpty());
+            assertEquals(null, com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.current());
+        }
     }
 
     private static final String JOB_ID = "job-backup-1";

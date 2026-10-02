@@ -20,6 +20,7 @@ import com.securityexpert.nexus.ui2.jobs.transport.TransportSession;
 import com.securityexpert.nexus.ui2.persistence.artefact.ArtefactStore;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryContext;
 import com.securityexpert.nexus.ui2.worker.backup.BackupResult;
+import com.securityexpert.nexus.ui2.worker.backup.BackupTranscript;
 import com.securityexpert.nexus.ui2.worker.backup.https.HttpsVendorExecutor;
 import com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceClient.Target;
 import com.securityexpert.nexus.ui2.worker.transport.ssh.PersistedManagementEndpointTrustResolver;
@@ -210,6 +211,10 @@ public final class CiscoAsaExecutor {
      * pull, delete). The text is required; a failed archive stores the text and names the archive as missing.
      */
     public BackupResult backup(Target target, String credentialRef, String deviceId, String jobId) {
+        return BackupTranscript.record("ASA backup", () -> backupRecorded(target, credentialRef, deviceId, jobId));
+    }
+
+    private BackupResult backupRecorded(Target target, String credentialRef, String deviceId, String jobId) {
         if (artefactStore == null) {
             return new BackupResult.ArtefactStoreFailed("no artefact store in this worker");
         }
@@ -253,6 +258,7 @@ public final class CiscoAsaExecutor {
             ssh.disconnect(shell.session());
         }
 
+        BackupTranscript.note("ASA configuration read; archive ready=" + archiveProblem.isEmpty());
         // 2. pull the archive over SCP into a temporary file (a torn transfer never reaches the bundle)
         java.nio.file.Path temp = null;
         long archiveBytes = -1;
@@ -261,6 +267,7 @@ public final class CiscoAsaExecutor {
                 temp = java.nio.file.Files.createTempFile("asa-archive-", ".part");
                 java.nio.file.Path tempFile = temp;
                 // ASA permits one channel per session: this connection must never open a shell.
+                BackupTranscript.note("opening separate SCP-only session");
                 ConnectResult pull = connect(target, credentialRef);
                 if (!(pull instanceof ConnectResult.Authenticated authenticated)) {
                     archiveProblem = Optional.of("ASA archive (SCP connection: " + pull.getClass().getSimpleName() + ")");
@@ -278,6 +285,7 @@ public final class CiscoAsaExecutor {
                 // The whole message: "scp channel" alone hid the cause, and the configuration already had scopy (2026-09-27).
                 LOG.log(System.Logger.Level.WARNING, "[ASA] archive SCP failed: " + e.getMessage());
                 archiveProblem = Optional.of("ASA archive (SCP: " + e.getMessage() + ")");
+                BackupTranscript.note("SCP transfer failed: " + e.getMessage());
                 archiveBytes = -1;
             }
         }

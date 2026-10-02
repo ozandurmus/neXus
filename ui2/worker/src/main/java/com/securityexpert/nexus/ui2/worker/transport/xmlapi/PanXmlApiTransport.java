@@ -214,7 +214,7 @@ public final class PanXmlApiTransport implements DeviceTransport {
                                 && !text.stripLeading().startsWith("<"));
                         JobTranscriptScope.add("https", "response", "HTTP " + response.statusCode()
                                 + "\nContent-Type: " + type + "\n" + JobTranscript.safeHeaders(response.headers().map())
-                                + "\n" + (binary ? "size=" + received[0] + " sha256="
+                                + "\n" + (binary ? "file=" + ("device-state".equals(spec.category()) ? "device-state.tgz" : "export") + " size=" + received[0] + " sha256="
                                         + java.util.HexFormat.of().formatHex(digest.digest()) : safeBody(spec, text)));
                     }
                 }
@@ -222,6 +222,7 @@ public final class PanXmlApiTransport implements DeviceTransport {
         } catch (IllegalArgumentException e) {
             return new XmlApiStreamOutcome.Failed<>("invalid api target URI: " + e.getMessage());
         } catch (IOException e) {
+            JobTranscriptScope.add("https", "note", "XML API stream failed: " + e.getClass().getSimpleName());
             return new XmlApiStreamOutcome.Failed<>("xml api streaming call did not complete: " + e.getMessage());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();

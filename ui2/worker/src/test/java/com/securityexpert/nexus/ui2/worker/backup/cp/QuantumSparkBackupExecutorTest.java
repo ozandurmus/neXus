@@ -67,6 +67,9 @@ class QuantumSparkBackupExecutorTest {
         transcript.writeTo(transcriptBytes);
         String text = transcriptBytes.toString(StandardCharsets.UTF_8);
         assertTrue(text.contains("[credential]"));
+        assertTrue(text.contains("received file="));
+        assertTrue(text.contains("sha256="));
+        assertTrue(text.contains("Completed"));
         assertFalse(text.contains(RECEIVER_SECRET));
         assertFalse(text.contains(transport.encryptionPassword));
         assertFalse(text.contains("192.0.2.20"));
@@ -87,7 +90,9 @@ class QuantumSparkBackupExecutorTest {
         FakeTransport transport = new FakeTransport(inbox, false);
         QuantumSparkBackupExecutor executor = new QuantumSparkBackupExecutor(transport, store(), inbox, "192.0.2.20",
                 ref -> RECEIVER_SECRET.toCharArray(), Duration.ZERO);
-        BackupResult result = executor.collect(request, Optional.of("receiver-credential"), "device", "job");
+        BackupResult result = com.securityexpert.nexus.ui2.worker.transcript.TranscriptAssertions.capture(
+                () -> executor.collect(request, Optional.of("receiver-credential"), "device", "job"),
+                "waiting for upload", "upload present=false", "did not upload");
         assertTrue(result instanceof BackupResult.SubmitRefused, String.valueOf(result));
         assertTrue(((BackupResult.SubmitRefused) result).reason().startsWith("the appliance did not upload the backup"));
         assertFalse(((BackupResult.SubmitRefused) result).reason().contains(RECEIVER_SECRET));

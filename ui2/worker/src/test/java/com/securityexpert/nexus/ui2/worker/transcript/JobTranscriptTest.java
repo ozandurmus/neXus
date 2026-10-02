@@ -32,6 +32,24 @@ class JobTranscriptTest {
         assertNull(JobTranscriptScope.current());
     }
 
+    @Test void configSecretLinesAndPrivateKeysAreRedactedWithoutDroppingOtherOutput() throws Exception {
+        JobTranscript transcript = new JobTranscript();
+        transcript.add("ssh", "answer", "show synthetic\nset password SyntheticValue42\n"
+                + "username invented password SyntheticValue43\n"
+                + "-----BEGIN PRIVATE KEY-----\nSyntheticKeyMaterial\n-----END PRIVATE KEY-----\n"
+                + "<key>SyntheticApiKey</key>\nexit=1");
+        String text = contents(transcript);
+        assertTrue(text.contains("show synthetic"));
+        assertTrue(text.contains("exit=1"));
+        assertFalse(text.contains("SyntheticValue"));
+        assertFalse(text.contains("SyntheticKeyMaterial"));
+        assertFalse(text.contains("SyntheticApiKey"));
+        assertFalse(JobTranscript.redactText("-----BEGIN PRIVATE KEY-----\nSyntheticIncompleteKey")
+                .contains("SyntheticIncompleteKey"));
+        assertFalse(JobTranscript.safeResponseBody("application/json", "{\"config\":{\"password\":\"SyntheticJsonSecret\"}}")
+                .contains("SyntheticJsonSecret"));
+    }
+
     @Test void capsAt64MbWithOneNote() throws Exception {
         JobTranscript transcript = new JobTranscript();
         transcript.add("ssh", "answer", "x".repeat(64 * 1024 * 1024));

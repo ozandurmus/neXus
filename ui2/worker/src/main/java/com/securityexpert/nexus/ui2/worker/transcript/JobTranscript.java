@@ -30,7 +30,7 @@ public final class JobTranscript {
         if (truncated) return;
         try {
             byte[] line = line(new Entry(lines.size() + 1L, Instant.now().toString(),
-                    (System.nanoTime() - started) / 1_000_000, channel, kind, text));
+                    (System.nanoTime() - started) / 1_000_000, channel, kind, redactText(text)));
             if (bytes + line.length + 256 > LIMIT) {
                 truncated = true;
                 byte[] note = line(new Entry(lines.size() + 1L, Instant.now().toString(),
@@ -54,6 +54,16 @@ public final class JobTranscript {
 
     private static byte[] line(Entry entry) throws IOException {
         return (JSON.writeValueAsString(entry) + "\n").getBytes(StandardCharsets.UTF_8);
+    }
+
+    /** Config exports and device errors can carry credentials beyond the ones sent in this exchange. */
+    static String redactText(String text) {
+        if (text == null) return "";
+        return text.replaceAll("(?s)-----BEGIN [^-]*PRIVATE KEY-----.*?(?:-----END [^-]*PRIVATE KEY-----|\\z)", CREDENTIAL)
+                .replaceAll("(?im)(\\b(?:password|passwd|passphrase|secret|psksecret|private-key|encrypted-password|community|api-key|api_key|token|key-string|pre-shared-key|authentication-key|encryption-key)\\b[\\t ]+(?!\\[credential\\])[^\\r\\n]+)",
+                        CREDENTIAL)
+                .replaceAll("(?is)(<(?:password|passwd|passphrase|secret|private-key|api-key|key|token)(?:\\s[^>]*)?>).*?(</(?:password|passwd|passphrase|secret|private-key|api-key|key|token)>)",
+                        "$1" + CREDENTIAL + "$2");
     }
 
     public static boolean secret(String name) {
@@ -173,7 +183,7 @@ public final class JobTranscript {
         if (contentType != null && contentType.toLowerCase(Locale.ROOT).contains("json")) {
             try {
                 JsonNode node = JSON.readTree(body);
-                redactResponseTokens(node);
+                redact(node);
                 return JSON.writeValueAsString(node);
             } catch (IOException ignored) {
                 return CREDENTIAL;
@@ -241,17 +251,4 @@ public final class JobTranscript {
         } else if (node.isArray()) node.forEach(child -> collectSentSecrets(child, values));
     }
 
-    private static void redactResponseTokens(JsonNode node) {
-        if (node.isObject()) {
-            ObjectNode object = (ObjectNode) node;
-            List<String> names = new ArrayList<>();
-            object.fieldNames().forEachRemaining(names::add);
-            for (String name : names) {
-                String lower = name.toLowerCase(Locale.ROOT);
-                if (lower.equals("session") || lower.equals("token") || lower.equals("xsauth")
-                        || lower.equals("api_key") || lower.equals("apikey")) object.put(name, CREDENTIAL);
-                else redactResponseTokens(object.get(name));
-            }
-        } else if (node.isArray()) node.forEach(JobTranscript::redactResponseTokens);
-    }
 }

@@ -41,6 +41,26 @@ describe("backup job transcript access", () => {
     expect(screen.getByText("synthetic answer")).toBeInTheDocument();
   });
 
+  it("shows an explicit bug message for an empty transcript", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("[]")));
+    render(<JobTranscriptDrawer jobId="job-empty" hasTranscript />);
+    fireEvent.click(screen.getByRole("button", { name: "Transcript" }));
+    expect(await screen.findByText("No steps were recorded (bug)")).toBeInTheDocument();
+  });
+
+  it("renders transfer, decision, and verdict steps", async () => {
+    const steps = ["transfer", "note", "verdict"].map((kind, i) => ({
+      seq: i + 1, at: "2026-10-02T10:00:00Z", elapsedMs: i, channel: "backup" as const, kind, text: `synthetic ${kind}`,
+    }));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify(steps))));
+    render(<JobTranscriptDrawer jobId="job-steps" hasTranscript />);
+    fireEvent.click(screen.getByRole("button", { name: "Transcript" }));
+    for (const step of steps) expect(await screen.findByText(step.text)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Search transcript"), { target: { value: "no-match" } });
+    expect(await screen.findByText("No matching steps.")).toBeInTheDocument();
+    expect(screen.queryByText("No steps were recorded (bug)")).toBeNull();
+  });
+
   it("builds a downloadable text representation", () => {
     expect(transcriptAsText(entries)).toContain("2026-09-27T10:00:00Z (+4 ms) [SSH] command\nshow synthetic");
   });

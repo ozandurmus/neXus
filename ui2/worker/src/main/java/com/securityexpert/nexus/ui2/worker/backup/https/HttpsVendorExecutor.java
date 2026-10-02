@@ -23,6 +23,7 @@ import com.securityexpert.nexus.ui2.persistence.device.inventory.GridMember;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.InfobloxGridSummary;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryContext;
 import com.securityexpert.nexus.ui2.worker.backup.BackupResult;
+import com.securityexpert.nexus.ui2.worker.backup.BackupTranscript;
 import com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceClient;
 import com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceClient.Credentials;
 import com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceClient.DownloadResult;
@@ -1015,6 +1016,12 @@ public final class HttpsVendorExecutor {
 
     /** @param passphraseRef Radware only: the credential whose password encrypts the private keys in the export */
     public BackupResult backup(String vendor, Target target, String credentialRef, Optional<String> passphraseRef,
+            String deviceId, String jobId) {
+        return BackupTranscript.record("HTTPS vendor backup", () -> backupRecorded(vendor, target, credentialRef,
+                passphraseRef, deviceId, jobId));
+    }
+
+    private BackupResult backupRecorded(String vendor, Target target, String credentialRef, Optional<String> passphraseRef,
             String deviceId, String jobId) {
         if (CISCO.equals(vendor)) {
             return ciscoAsa == null ? new BackupResult.ConnectFailed("no Cisco ASA executor in this worker")

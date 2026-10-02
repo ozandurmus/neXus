@@ -64,7 +64,8 @@ class HttpsVendorExecutorTest {
 
     @Test
     void infobloxBackupReadsTheVersionFetchesSameHostAndAlwaysSignalsDownloadComplete() {
-        BackupResult r = executor.backup("infoblox", T, "cred", Optional.empty(), "dev", "job-1");
+        BackupResult r = com.securityexpert.nexus.ui2.worker.transcript.TranscriptAssertions.capture(
+                () -> executor.backup("infoblox", T, "cred", Optional.empty(), "dev", "job-1"), "precheck started", "sha256=", "Completed");
         assertTrue(r instanceof BackupResult.Completed, String.valueOf(r));
         assertTrue(calls.log.stream().noneMatch(l -> l.contains("/member?")), "PO 2026-09-25: a backup only backs up: " + calls.log);
         assertTrue(calls.log.contains("POST /wapi/v2.13.5/fileop?_function=getgriddata {\"type\": \"BACKUP\"}"));
@@ -77,7 +78,8 @@ class HttpsVendorExecutorTest {
     @Test
     void infobloxRefusesAnOffHostDownloadUrlAndStillCleansUp() {
         calls.downloadHost = "198.51.100.9";
-        BackupResult r = executor.backup("infoblox", T, "cred", Optional.empty(), "dev", "job-1");
+        BackupResult r = com.securityexpert.nexus.ui2.worker.transcript.TranscriptAssertions.capture(
+                () -> executor.backup("infoblox", T, "cred", Optional.empty(), "dev", "job-1"), "SubmitRefused", "not on the same appliance");
         assertTrue(r instanceof BackupResult.SubmitRefused, String.valueOf(r));
         assertFalse(calls.log.stream().anyMatch(l -> l.startsWith("GET-DL")));
         assertTrue(calls.log.stream().anyMatch(l -> l.contains("downloadcomplete")));

@@ -189,7 +189,22 @@ public final class BackupJobExecutor {
     public JobOutcome execute(String jobId, long leaseEpoch, String targetDeviceId, BackupRequest request, String capabilityId) {
         JobTranscript transcript = new JobTranscript();
         try (JobTranscriptScope ignored = JobTranscriptScope.open(transcript)) {
-            return executeScoped(jobId, leaseEpoch, targetDeviceId, request, capabilityId);
+            JobTranscriptScope.add("job", "note", "backup started: " + capabilityId);
+            try {
+                JobOutcome outcome = executeScoped(jobId, leaseEpoch, targetDeviceId, request, capabilityId);
+                String verdict = switch (outcome) {
+                    case JobOutcome.Completed ignoredOutcome -> "COMPLETED";
+                    case JobOutcome.Failed failed -> "FAILED: " + failed.terminalReason();
+                    case JobOutcome.Rejected rejected -> "REJECTED: " + rejected.reason();
+                    case JobOutcome.OutcomeUnknown unknown -> "OUTCOME_UNKNOWN: " + unknown.reason();
+                    case JobOutcome.ZombieStopped stopped -> "STOPPED: lease ownership lost";
+                };
+                JobTranscriptScope.add("job", "verdict", verdict);
+                return outcome;
+            } catch (RuntimeException e) {
+                JobTranscriptScope.add("job", "verdict", "FAILED: unexpected " + e.getClass().getSimpleName());
+                throw e;
+            }
         } finally {
             if (transcriptStore != null && transcriptJobs != null) {
                 ArtefactStore.ArtefactMetadata stored = null;
