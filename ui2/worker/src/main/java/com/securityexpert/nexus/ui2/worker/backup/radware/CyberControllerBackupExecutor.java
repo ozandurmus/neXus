@@ -22,6 +22,7 @@ import com.securityexpert.nexus.ui2.jobs.transport.TransportSession;
 import com.securityexpert.nexus.ui2.persistence.artefact.ArtefactStore;
 import com.securityexpert.nexus.ui2.worker.backup.BackupRequest;
 import com.securityexpert.nexus.ui2.worker.backup.BackupResult;
+import com.securityexpert.nexus.ui2.worker.backup.BackupTranscript;
 
 /**
  * A Radware Cyber Controller's own configuration backup (RADWARE_CYBER_CONTROLLER_OWN_BACKUP_RECEIVER.md, V69; PO
@@ -60,6 +61,10 @@ public final class CyberControllerBackupExecutor {
     }
 
     public BackupResult collect(BackupRequest request, Optional<String> receiverCredentialRef, String deviceId, String jobId) {
+        return BackupTranscript.record("Cyber Controller backup", () -> collectRecorded(request, receiverCredentialRef, deviceId, jobId));
+    }
+
+    private BackupResult collectRecorded(BackupRequest request, Optional<String> receiverCredentialRef, String deviceId, String jobId) {
         if (inbox == null || receiverHost == null || receiverHost.isBlank() || !Files.isDirectory(inbox)) {
             return new BackupResult.CredentialUnresolvable("the SFTP receiver is not configured in this worker (inbox or "
                     + "receiver address missing) -- refused before any device contact");
@@ -108,18 +113,21 @@ public final class CyberControllerBackupExecutor {
         Optional<Long> listedKb = CyberControllerBackupPlan.listedSizeKb(listing, name);
         LOG.log(System.Logger.Level.INFO, "[CC_BACKUP] create ended {0}; listed={1} sizeK={2}", created.getClass().getSimpleName(),
                 listedKb.isPresent(), listedKb.map(String::valueOf).orElse("-"));
+        BackupTranscript.note("create result=" + created.getClass().getSimpleName() + " backup-listed=" + listedKb.isPresent());
         if (listedKb.isEmpty()) {
             // nothing of ours is listed: nothing to delete on the Cyber Controller
             return new BackupResult.SubmitRefused("the Cyber Controller did not create the backup (" + created.getClass().getSimpleName() + ")");
         }
 
         String target = CyberControllerBackupPlan.exportTarget(RECEIVER_USER, receiverHost, token);
+        com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.add("sftp", "transfer", "export requested file=" + upload.getFileName());
         ExecResult exported = transport.execInteractiveAnswering(session,
                 new ExecSpec(CyberControllerBackupPlan.with(CyberControllerBackupPlan.EXPORT, name, target)),
                 List.of(new PromptAnswer(CyberControllerBackupPlan.PASSWORD_PROMPT, receiverPassword)), LONG);
         boolean exportDone = text(exported).contains(CyberControllerBackupPlan.EXPORT_DONE);
         LOG.log(System.Logger.Level.INFO, "[CC_BACKUP] export ended {0}; completed={1}; upload present={2}",
                 exported.getClass().getSimpleName(), exportDone, Files.exists(upload));
+        BackupTranscript.note("export acknowledged=" + exportDone + " upload-present=" + Files.isRegularFile(upload));
         if (!exportDone || !Files.isRegularFile(upload)) {
             deleteQuietly(upload);
             String cleanup = deleteOnController(session, name) ? "" : "; removing nexus backup from the Cyber Controller also failed";
@@ -155,6 +163,8 @@ public final class CyberControllerBackupExecutor {
         LOG.log(System.Logger.Level.INFO, "[CC_BACKUP] stored {0} bytes (Cyber Controller listed {1} K)", bytes,
                 listedKb.get());
 
+        com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.add("sftp", "transfer", "received file=" + upload.getFileName()
+                + " size=" + bytes + " sha256=" + metadata.plaintextSha256());
         boolean uploadRemoved = deleteQuietly(upload);
         boolean controllerRemoved = deleteOnController(session, name);
         String archive = "cyber-controller-config-" + token + ".tgz" + CyberControllerBackupPlan.EXPORT_SUFFIX;

@@ -24,6 +24,7 @@ import com.securityexpert.nexus.ui2.persistence.artefact.ArtefactStore;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryContext;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryInterface;
 import com.securityexpert.nexus.ui2.worker.backup.BackupResult;
+import com.securityexpert.nexus.ui2.worker.backup.BackupTranscript;
 import com.securityexpert.nexus.ui2.worker.backup.https.HttpsVendorExecutor;
 import com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceClient.Target;
 import com.securityexpert.nexus.ui2.worker.transport.ssh.PersistedManagementEndpointTrustResolver;
@@ -292,6 +293,10 @@ public final class FortiGateExecutor {
 
     /** The whole configuration ("show" at the top level: every VDOM, non-default values) and the system status. */
     public BackupResult backup(Target target, String credentialRef, String deviceId, String jobId) {
+        return BackupTranscript.record("FortiGate backup", () -> backupRecorded(target, credentialRef, deviceId, jobId));
+    }
+
+    private BackupResult backupRecorded(Target target, String credentialRef, String deviceId, String jobId) {
         if (artefactStore == null) {
             return new BackupResult.ArtefactStoreFailed("no artefact store in this worker");
         }
@@ -307,6 +312,7 @@ public final class FortiGateExecutor {
             if (config.isEmpty() || !FortiGatePlan.isConfiguration(config.get())) {
                 return new BackupResult.SubmitOutputUnparseable("show gave no FortiOS configuration (no #config-version header)");
             }
+            BackupTranscript.note("FortiOS configuration header verified");
             members.put("fortigate.conf", config.get().getBytes(StandardCharsets.UTF_8));
         } finally {
             ssh.disconnect(shell.session());

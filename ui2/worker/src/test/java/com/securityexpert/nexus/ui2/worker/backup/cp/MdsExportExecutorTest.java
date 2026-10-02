@@ -67,7 +67,8 @@ class MdsExportExecutorTest {
 
     @Test
     void aCompletedExportFetchesVerifiesAndRemovesTheWorkDirectory() {
-        BackupResult r = executor.collect(request, "dev", JOB);
+        BackupResult r = com.securityexpert.nexus.ui2.worker.transcript.TranscriptAssertions.capture(
+                () -> executor.collect(request, "dev", JOB), "free-space precheck", "start command completed", "MDS poll iteration", "sha256=", "Completed");
         assertTrue(r instanceof BackupResult.Completed, String.valueOf(r));
         assertTrue(transport.issued.contains(String.format(MdsExportPlan.MDS_BACKUP_START, DIR)));
         assertTrue(transport.issued.contains("rm -rf " + DIR + " " + DIR + ".tgz"));
@@ -77,7 +78,8 @@ class MdsExportExecutorTest {
     @Test
     void aNonZeroExitCodeIsARefusalAndCleansUp() {
         transport.rc = "1";
-        BackupResult r = executor.collect(request, "dev", JOB);
+        BackupResult r = com.securityexpert.nexus.ui2.worker.transcript.TranscriptAssertions.capture(
+                () -> executor.collect(request, "dev", JOB), "MDS poll iteration", "mds_backup exited with code 1");
         assertTrue(r instanceof BackupResult.SubmitRefused, String.valueOf(r));
         assertTrue(transport.issued.stream().anyMatch(c -> c.startsWith("rm -rf " + DIR)));
     }

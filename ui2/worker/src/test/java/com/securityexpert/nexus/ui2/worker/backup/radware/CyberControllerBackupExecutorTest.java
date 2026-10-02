@@ -36,7 +36,8 @@ class CyberControllerBackupExecutorTest {
 
     @Test void completedRunDeletesOnlyThreeExactLeftovers() {
         var transport = new FakeTransport(3);
-        assertInstanceOf(BackupResult.Completed.class, run(transport));
+        assertInstanceOf(BackupResult.Completed.class, com.securityexpert.nexus.ui2.worker.transcript.TranscriptAssertions.capture(
+                () -> run(transport), "backup-listed=true", "export acknowledged=true", "received file=", "sha256=", "Completed"));
         assertEquals(transport.leftovers, transport.deleted.subList(1, transport.deleted.size()));
         assertEquals(transport.own, transport.deleted.get(0));
         assertEquals(1, transport.listReads);
@@ -65,7 +66,8 @@ class CyberControllerBackupExecutorTest {
     @Test void failedExportNeverCleansLeftovers() {
         var transport = new FakeTransport(3);
         transport.export = false;
-        assertInstanceOf(BackupResult.SubmitRefused.class, run(transport));
+        assertInstanceOf(BackupResult.SubmitRefused.class, com.securityexpert.nexus.ui2.worker.transcript.TranscriptAssertions.capture(
+                () -> run(transport), "export acknowledged=false", "SubmitRefused", "export did not complete"));
         assertEquals(List.of(transport.own), transport.deleted);
     }
 

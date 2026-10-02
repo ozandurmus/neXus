@@ -121,7 +121,9 @@ class PaloAltoBackupExecutorTest {
         FakeTransport transport = new FakeTransport();
         MemoryStore store = new MemoryStore();
 
-        var result = executor(transport, store).executeBackup(new ApiTarget("ep-1", "https://fw"), "cred-ref-1", "dev-1", "job-1", "");
+        var result = com.securityexpert.nexus.ui2.worker.transcript.TranscriptAssertions.capture(
+                () -> executor(transport, store).executeBackup(new ApiTarget("ep-1", "https://fw"), "cred-ref-1", "dev-1", "job-1", ""),
+                "authentication succeeded", "sha256=", "PAN backup: stored");
 
         assertTrue(result.success(), String.valueOf(result.errorMessage()));
         assertTrue(store.finished);
@@ -144,7 +146,9 @@ class PaloAltoBackupExecutorTest {
                 .getBytes(StandardCharsets.UTF_8);
         MemoryStore store = new MemoryStore();
 
-        var result = executor(transport, store).executeBackup(new ApiTarget("ep-1", "https://fw"), "cred-ref-1", "dev-1", "job-1", "");
+        var result = com.securityexpert.nexus.ui2.worker.transcript.TranscriptAssertions.capture(
+                () -> executor(transport, store).executeBackup(new ApiTarget("ep-1", "https://fw"), "cred-ref-1", "dev-1", "job-1", ""),
+                "PAN backup: failed", "refused by the device");
 
         assertFalse(result.success());
         assertFalse(store.finished, "nothing is finished into the store");

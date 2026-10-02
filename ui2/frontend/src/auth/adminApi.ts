@@ -1268,7 +1268,7 @@ export interface JobTranscriptEntry {
   readonly seq: number;
   readonly at: string;
   readonly elapsedMs: number;
-  readonly channel: "ssh" | "https";
+  readonly channel: "ssh" | "https" | "scp" | "sftp" | "backup" | "job";
   readonly kind: string;
   readonly text: string;
 }

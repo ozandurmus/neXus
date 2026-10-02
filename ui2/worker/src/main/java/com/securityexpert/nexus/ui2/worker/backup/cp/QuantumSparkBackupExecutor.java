@@ -26,6 +26,7 @@ import com.securityexpert.nexus.ui2.persistence.artefact.ArtefactStore;
 import com.securityexpert.nexus.ui2.persistence.artefact.content.TarWriter;
 import com.securityexpert.nexus.ui2.worker.backup.BackupRequest;
 import com.securityexpert.nexus.ui2.worker.backup.BackupResult;
+import com.securityexpert.nexus.ui2.worker.backup.BackupTranscript;
 import com.securityexpert.nexus.ui2.worker.transcript.JobTranscript;
 import com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope;
 
@@ -62,6 +63,10 @@ public final class QuantumSparkBackupExecutor {
     }
 
     public BackupResult collect(BackupRequest request, Optional<String> receiverCredentialRef, String deviceId, String jobId) {
+        return BackupTranscript.record("Spark backup", () -> collectRecorded(request, receiverCredentialRef, deviceId, jobId));
+    }
+
+    private BackupResult collectRecorded(BackupRequest request, Optional<String> receiverCredentialRef, String deviceId, String jobId) {
         if (inbox == null || !Files.isDirectory(inbox) || receiverHost == null || receiverHost.isBlank())
             return new BackupResult.CredentialUnresolvable("Spark SFTP receiver is not configured");
         if (receiverCredentialRef.isEmpty() || request.credentialRef().isEmpty())
@@ -109,7 +114,9 @@ public final class QuantumSparkBackupExecutor {
             LOG.log(System.Logger.Level.INFO, "[SPARK_BACKUP] push outcome={0} first_line_shape={1}",
                     pushed.getClass().getSimpleName(), firstOutput);
             JobTranscriptScope.add("ssh", "note", "Spark push first_line_shape=" + firstOutput);
+            JobTranscriptScope.add("sftp", "transfer", "waiting for upload file=" + token + ".zip");
             boolean present = waitForUpload(upload);
+            BackupTranscript.note("Spark upload present=" + present);
             String afterShape = logShape("after", transport.execInteractive(session, new ExecSpec(QuantumSparkBackupPlan.LOG), READ));
             LOG.log(System.Logger.Level.INFO, "[SPARK_BACKUP] log leading_line_shape_changed={0}",
                     !beforeShape.equals(afterShape));
@@ -121,7 +128,12 @@ public final class QuantumSparkBackupExecutor {
             try {
                 try (TarWriter tar = new TarWriter(new GZIPOutputStream(handle.sink()))) {
                     try (OutputStream member = tar.begin("spark-settings.zip", bytes); InputStream source = Files.newInputStream(upload)) {
-                        source.transferTo(member);
+                        var digest = java.security.MessageDigest.getInstance("SHA-256");
+                        source.transferTo(new java.security.DigestOutputStream(member, digest));
+                        JobTranscriptScope.add("sftp", "transfer", "received file=" + token + ".zip size=" + bytes
+                                + " sha256=" + HexFormat.of().formatHex(digest.digest()));
+                    } catch (java.security.NoSuchAlgorithmException impossible) {
+                        throw new IllegalStateException(impossible);
                     }
                     tar.file("manifest.txt", ("Quantum Spark settings backup\nspark-settings.zip\nrestore-password.txt\n")
                             .getBytes(StandardCharsets.UTF_8));

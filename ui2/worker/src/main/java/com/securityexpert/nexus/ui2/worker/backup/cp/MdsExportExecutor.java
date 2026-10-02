@@ -17,6 +17,7 @@ import com.securityexpert.nexus.ui2.jobs.transport.TransportSession;
 import com.securityexpert.nexus.ui2.persistence.artefact.ArtefactStore;
 import com.securityexpert.nexus.ui2.worker.backup.BackupRequest;
 import com.securityexpert.nexus.ui2.worker.backup.BackupResult;
+import com.securityexpert.nexus.ui2.worker.backup.BackupTranscript;
 
 /**
  * Check Point Multi-Domain Server export (V61; PO, 2026-09-23): one {@code mds_backup -b -l} of the whole server and
@@ -56,6 +57,10 @@ public final class MdsExportExecutor {
     }
 
     public BackupResult collect(BackupRequest request, String deviceId, String jobId) {
+        return BackupTranscript.record("MDS export", () -> collectRecorded(request, deviceId, jobId));
+    }
+
+    private BackupResult collectRecorded(BackupRequest request, String deviceId, String jobId) {
         if (request.credentialRef().isEmpty() || request.credentialRef().get().isBlank()) {
             return new BackupResult.CredentialUnresolvable("no backup credential configured for check_point (BK-11) -- refused before any device contact");
         }
@@ -87,6 +92,7 @@ public final class MdsExportExecutor {
         if (free.isEmpty()) {
             return new BackupResult.InsufficientFreeSpace("df -P /var/log could not be parsed for a free-space value; refusing (fail-closed)");
         }
+        BackupTranscript.note("free-space precheck: available=" + free.get() + " required=" + minFreeBytes + " bytes");
         if (free.get() < minFreeBytes) {
             return new BackupResult.InsufficientFreeSpace("free space in /var/log is " + free.get() + " bytes, below the "
                     + minFreeBytes + "-byte heuristic for an MDS export (a local heuristic, not a vendor requirement)");
@@ -111,12 +117,15 @@ public final class MdsExportExecutor {
         }
         // A timed-out start may well have started mds_backup (2026-09-24): never remove the directory under it --
         // poll for its exit code like any other run.
+        BackupTranscript.note(start.timedOut() ? "start timed out; polling exit code; work directory retained" : "start command completed; polling exit code");
         Instant started = Instant.now();
         Optional<Integer> rc = Optional.empty();
         Instant deadline = started.plus(runDeadline);
+        int iterations = 0;
         while (Instant.now().isBefore(deadline)) {
             sleep(pollInterval);
             ExecOutcome poll = exec(session, MdsExportPlan.with(MdsExportPlan.MDS_BACKUP_POLL, dir), SHORT);
+            BackupTranscript.note("MDS poll iteration=" + (++iterations) + " exit-code-present=" + parseExitCode(poll.output()).isPresent());
             if (poll.succeeded()) {
                 rc = parseExitCode(poll.output());
                 if (rc.isPresent()) {
@@ -189,7 +198,9 @@ public final class MdsExportExecutor {
 
     private boolean remove(TransportSession session, String dir) {
         String cmd = MdsExportPlan.with(MdsExportPlan.REMOVE, dir);
-        return exec(session, cmd, SHORT).succeeded() || exec(session, cmd, SHORT).succeeded();
+        if (exec(session, cmd, SHORT).succeeded()) return true;
+        BackupTranscript.note("MDS cleanup failed; retry 1 of 1");
+        return exec(session, cmd, SHORT).succeeded();
     }
 
     static Optional<Integer> parseExitCode(String output) {

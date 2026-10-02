@@ -100,6 +100,10 @@ public final class BackupCapabilityExecutor {
     }
 
     public BackupResult collect(BackupRequest request, String deviceId, String jobId) {
+        return BackupTranscript.record("Gaia backup", () -> collectRecorded(request, deviceId, jobId));
+    }
+
+    private BackupResult collectRecorded(BackupRequest request, String deviceId, String jobId) {
         if (request.credentialRef().isEmpty() || request.credentialRef().get().isBlank()) {
             // BK-11: fails closed, before any device contact.
             return new BackupResult.CredentialUnresolvable(
@@ -141,9 +145,11 @@ public final class BackupCapabilityExecutor {
         // first real run (2026-09-22): the Clish form answered a one-line CLI error with exit 0, and
         // the first integer of that error code was read as "329 KB free" -- so a CLI error is now
         // "the Clish form failed", never a number, and df -P /var/log is read instead.
+        BackupTranscript.note("free-space precheck started");
         ExecOutcome diskspace = commands.exec(BackupReadPlan.CP_SHOW_DISKSPACE, DISKSPACE_TIMEOUT);
         Optional<Long> freeBytes = parseFreeSpaceBytes(diskspace.output());
         if (freeBytes.isEmpty()) {
+            BackupTranscript.note("Clish free-space answer unavailable; using approved Expert fallback");
             ExecOutcome df = commands.exec(BackupReadPlan.CP_DF_VAR_LOG, DISKSPACE_TIMEOUT);
             freeBytes = parseDfAvailableBytes(df.output());
             if (freeBytes.isEmpty()) {
@@ -159,6 +165,7 @@ public final class BackupCapabilityExecutor {
                         "neither show diskspace nor df -P /var/log could be parsed for a free-space value; refusing (fail-closed)");
             }
         }
+        BackupTranscript.note("free-space precheck: available=" + freeBytes.get() + " required=" + freeSpaceThresholdBytes + " bytes");
         if (freeBytes.get() < freeSpaceThresholdBytes) {
             return new BackupResult.InsufficientFreeSpace("free space " + freeBytes.get() + " bytes is below the "
                     + "configured heuristic threshold " + freeSpaceThresholdBytes + " bytes (BK-6: a local "
@@ -177,12 +184,14 @@ public final class BackupCapabilityExecutor {
         // "add backup local" only announces that the package is being created -- the archive is
         // named by "show backup status" ("Backup file location: /var/log/CPbackup/backups/<name>")
         // once it succeeds. The submit's own output is still honoured when it does name one.
+        boolean startAcknowledged = submit.output().lines().anyMatch(line -> line.startsWith("Creating backup package"));
+        BackupTranscript.note("submit completed; start-acknowledged=" + startAcknowledged + "; polling backup status");
         Optional<String> archivePath = parseArchiveName(submit.output());
 
         // Entry 3 (BK-5): poll until terminal or the run's own deadline.
-        Poll poll = pollUntilTerminalOrDeadline(commands, now.get(),
-                submit.output().lines().anyMatch(line -> line.startsWith("Creating backup package")));
+        Poll poll = pollUntilTerminalOrDeadline(commands, now.get(), startAcknowledged);
         BackupStatus status = poll.status();
+        BackupTranscript.note("backup polling finished: " + status);
         if (status == BackupStatus.NOT_STARTED) {
             return new BackupResult.SubmitRefused("the device did not start a backup; add backup local said: "
                     + submitShape);
@@ -253,6 +262,7 @@ public final class BackupCapabilityExecutor {
         // Entry 6 (BK-3): the digest computed on the device is compared with
         // the digest of the bytes actually received -- nothing is deleted
         // until they match.
+        BackupTranscript.note("archive received; verifying device digest before cleanup");
         ExecOutcome digest = commands.exec(BackupReadPlan.archiveDigestCommand(name), digestTimeout(metadata.plaintextBytes()));
         Optional<String> deviceDigest = parseSha256sumOutput(digest.output());
         if (deviceDigest.isEmpty()) {
@@ -266,6 +276,7 @@ public final class BackupCapabilityExecutor {
         // may be retried once, never a pattern, never a listing.
         ExecOutcome delete = commands.exec(BackupReadPlan.deleteBackupCommand(archiveBaseName(name)), DELETE_TIMEOUT);
         if (!delete.succeeded()) {
+            BackupTranscript.note("cleanup failed; retry 1 of 1");
             delete = commands.exec(BackupReadPlan.deleteBackupCommand(archiveBaseName(name)), DELETE_TIMEOUT);
         }
         if (!delete.succeeded()) {
@@ -326,9 +337,11 @@ public final class BackupCapabilityExecutor {
         Instant deadline = submittedAt.plus(runDeadline);
         Instant noStartDeadline = submittedAt.plus(Duration.ofMinutes(3));
         boolean alwaysEmpty = true;
+        int iterations = 0;
         while (true) {
             ExecOutcome statusOutcome = commands.exec(BackupReadPlan.CP_SHOW_BACKUP_STATUS, POLL_TIMEOUT);
             BackupStatus status = classifyStatus(statusOutcome.output());
+            BackupTranscript.note("poll iteration=" + (++iterations) + " status=" + status);
             if (status == BackupStatus.SUCCEEDED || status == BackupStatus.FAILED) {
                 return new Poll(status, statusOutcome.output());
             }
@@ -376,6 +389,7 @@ public final class BackupCapabilityExecutor {
             ExecOutcome result = BackupCapabilityExecutor.this.exec(session,
                     wrapped ? loginCommand(command) : command, timeout);
             if (eligible && !wrapped && result.succeeded() && result.output().isEmpty()) {
+                BackupTranscript.note("empty Clish answer; retry with login shell");
                 loginShell = true;
                 LOG.log(System.Logger.Level.INFO, "[BACKUP] empty Clish result; using login shell for this run");
                 return BackupCapabilityExecutor.this.exec(session, loginCommand(command), timeout);
