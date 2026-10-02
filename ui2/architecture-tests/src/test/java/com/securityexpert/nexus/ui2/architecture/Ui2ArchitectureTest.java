@@ -45,6 +45,10 @@ class Ui2ArchitectureTest {
 
     private static JavaClasses classes;
 
+    private static final String PYTHON_RPM_REMOVAL =
+            "RUN rpm -e --nodeps $(rpm -qa --qf '%{NAME}\\n' 'python3*') \\\n"
+            + " && test -z \"$(rpm -qa 'python3*')\"";
+
     private static final String PLATFORM = "..platform..";
     private static final String PERSISTENCE = "..persistence..";
     private static final String CAPABILITY = "..capability..";
@@ -200,6 +204,30 @@ class Ui2ArchitectureTest {
         return Paths.get(System.getProperty("user.dir")).getParent();
     }
 
+    private static String contentForTokenScan(Path path, String content) {
+        if (path.equals(ui2Root().resolve("Containerfile"))) {
+            // Only the exact offline removal and verification statement is exempt.
+            return Pattern.compile("^" + Pattern.quote(PYTHON_RPM_REMOVAL) + "$", Pattern.MULTILINE)
+                    .matcher(content).replaceAll("").toLowerCase(java.util.Locale.ROOT);
+        }
+        return content;
+    }
+
+    @Test
+    void dir10_allows_only_the_exact_containerfile_runtime_removal() {
+        Path containerfile = ui2Root().resolve("Containerfile");
+        assertFalse(contentForTokenScan(containerfile, PYTHON_RPM_REMOVAL).contains("python"));
+        for (String extra : List.of("RUN python3 app.py", "ENV PYTHONPATH=/app", "# Python runtime")) {
+            assertTrue(contentForTokenScan(containerfile, PYTHON_RPM_REMOVAL + "\n" + extra).contains("python"));
+        }
+        for (String altered : List.of(PYTHON_RPM_REMOVAL + " && true",
+                "# " + PYTHON_RPM_REMOVAL, PYTHON_RPM_REMOVAL.replace(" && test -z", " && test -n"))) {
+            assertTrue(contentForTokenScan(containerfile, altered).contains("python"));
+        }
+        assertTrue(contentForTokenScan(ui2Root().resolve("other/Containerfile"), PYTHON_RPM_REMOVAL)
+                .contains("python"));
+    }
+
     private static List<String> scanForForbiddenTokens(Path root, List<String> forbiddenTokens,
             List<String> excludeDirNames) {
         return scanForForbiddenTokens(root, forbiddenTokens, excludeDirNames, path -> true);
@@ -217,7 +245,7 @@ class Ui2ArchitectureTest {
                     .filter(p -> excludeDirNames.stream().noneMatch(dir -> p.toString().contains("/" + dir + "/")))
                     .forEach(p -> {
                         try {
-                            String content = Files.readString(p);
+                            String content = contentForTokenScan(p, Files.readString(p));
                             for (String token : forbiddenTokens) {
                                 if (content.contains(token)) {
                                     violations.add(p + " contains \"" + token + "\"");

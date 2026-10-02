@@ -669,7 +669,7 @@ def test_integration_job_uses_native_sidecar_and_build_jdk():
     path = REPO_ROOT / "deploy/ui2-image-build/33-integration-postgres.yaml"
     job = yaml.safe_load(path.read_text())
     assert job["kind"] == "Job" and job["metadata"]["namespace"] == "ui2-build"
-    assert job["spec"]["activeDeadlineSeconds"] == 1800
+    assert job["spec"]["activeDeadlineSeconds"] == 3600
     assert job["spec"]["ttlSecondsAfterFinished"] == 300
     assert job["spec"]["backoffLimit"] == 0
     spec = job["spec"]["template"]["spec"]

@@ -105,9 +105,19 @@ def test_pr_job_retains_the_cheap_safety_gates():
 def test_regression_scope_uses_the_closed_fail_closed_selector():
     scope_block = _job_block(_read_workflow(), "regression-scope")
     assert "if: github.event_name == 'pull_request'" in scope_block
-    assert "git fetch origin +${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }}" in scope_block
-    assert "scripts/ci_regression_scope.py --github-output" in scope_block
-    assert 'echo "classification=blocked" >> "$GITHUB_OUTPUT"' in scope_block
+    steps = yaml.safe_load(scope_block)["steps"]
+    fetch = next(step for step in steps if step.get("name") == "Fetch PR base for changed-path scope")
+    selector = next(step for step in steps if step.get("id") == "scope")
+    for step in (fetch, selector):
+        assert step["env"]["BASE_REF"] == "${{ github.base_ref }}"
+        assert "${{ github." not in step["run"]
+    assert fetch["run"] == 'git fetch origin "+${BASE_REF}:refs/remotes/origin/${BASE_REF}"'
+    assert selector["run"] == (
+        'if ! git diff --name-only "origin/${BASE_REF}"...HEAD | '
+        'python3 scripts/ci_regression_scope.py --github-output "$GITHUB_OUTPUT"; then\n'
+        '  echo "classification=blocked" >> "$GITHUB_OUTPUT"\n'
+        'fi\n'
+    )
 
 
 def test_targeted_and_unmapped_paths_have_truthful_jobs():
