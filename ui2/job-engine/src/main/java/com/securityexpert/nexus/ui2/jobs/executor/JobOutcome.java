@@ -3,6 +3,8 @@ package com.securityexpert.nexus.ui2.jobs.executor;
 /** {@link StepExecutor#execute}'s own result -- the terminal (or "stopped, not terminal") state a run reached. */
 public sealed interface JobOutcome {
 
+    record Cancelled() implements JobOutcome {}
+
     record Completed() implements JobOutcome {
     }
 

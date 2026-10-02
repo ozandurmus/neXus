@@ -54,7 +54,9 @@ public final class PolicyCollectionJobExecutor {
     public JobOutcome execute(String jobId, long epoch, String runId) {
         var transcript = new com.securityexpert.nexus.ui2.worker.transcript.JobTranscript();
         String[] pending = {null};
-        try (var scope = com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.open(transcript);
+        try (var cancellation = new com.securityexpert.nexus.ui2.worker.JobCancellationScope(
+                () -> leases.cancellationRequested(jobId, epoch));
+             var scope = com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.open(transcript);
              var trace = new PolicyCollectionTrace(runId, (step, total) -> {
                  if (pending[0] != null) {
                      if (!attempts.writeOutcome(pending[0], epoch, "MATCHED", null, true, null, null, null))
@@ -144,6 +146,11 @@ public final class PolicyCollectionJobExecutor {
             String reason, boolean fatal) {
         if (!attempts.writeOutcome(attempt, epoch, reason.isEmpty() ? "MATCHED" : "EXPECTATION_UNMET", null,
                 reason.isEmpty(), null, null, null)) return new JobOutcome.ZombieStopped();
+        if (leases.cancellationRequested(jobId, epoch)) {
+            if (!leases.transitionState(jobId, epoch, JobState.EXECUTING, JobState.CANCELLED, ACTOR, "job_cancel_finish", "CANCELLED"))
+                return new JobOutcome.ZombieStopped();
+            return new JobOutcome.Cancelled();
+        }
         if (!reason.isEmpty() && latest != null) reason = "PARTIAL_SNAPSHOT " + reason;
         if (!reason.isEmpty() && (fatal || latest == null)) {
             if (!repository.publish(jobId, epoch, List.of(), ACTOR, reason)) return new JobOutcome.ZombieStopped();

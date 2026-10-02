@@ -34,8 +34,17 @@ public final class JobReconciler {
 
     /** @return how many jobs each branch actually transitioned (a fenced write can legitimately affect zero, see class javadoc). */
     public ReconciliationSummary reconcileOnce() {
+        for (ClaimedJob job : leaseRepository.findExpiredCancellationRequests()) {
+            leaseRepository.transitionState(job.jobId(), job.leaseEpoch(), JobState.EXECUTING, JobState.CANCELLED,
+                    RECONCILER_ACTOR, "job_reconcile_cancel", "CANCELLED");
+        }
         int requeuedNoAttempt = 0;
         for (ClaimedJob job : leaseRepository.findExpiredWithNoAttempt()) {
+            if (leaseRepository.cancellationRequested(job.jobId(), job.leaseEpoch())) {
+                leaseRepository.transitionState(job.jobId(), job.leaseEpoch(), JobState.CLAIMED, JobState.CANCELLED,
+                        RECONCILER_ACTOR, "job_reconcile_cancel", "CANCELLED");
+                continue;
+            }
             if (leaseRepository.transitionState(job.jobId(), job.leaseEpoch(), JobState.CLAIMED, JobState.REQUESTED,
                     RECONCILER_ACTOR, ACTION_RECONCILE_REQUEUE)) {
                 requeuedNoAttempt++;
@@ -44,6 +53,11 @@ public final class JobReconciler {
 
         int requeuedAllBoundaryNo = 0;
         for (ClaimedJob job : leaseRepository.findExpiredAllBoundaryNo()) {
+            if (leaseRepository.cancellationRequested(job.jobId(), job.leaseEpoch())) {
+                leaseRepository.transitionState(job.jobId(), job.leaseEpoch(), JobState.EXECUTING, JobState.CANCELLED,
+                        RECONCILER_ACTOR, "job_reconcile_cancel", "CANCELLED");
+                continue;
+            }
             if (job.leaseEpoch() >= 5) {
                 leaseRepository.transitionState(job.jobId(), job.leaseEpoch(), JobState.EXECUTING, JobState.FAILED,
                         RECONCILER_ACTOR, "job_reconcile_max_attempts", "lease expired repeatedly (" + job.leaseEpoch() + " attempts)");

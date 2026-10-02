@@ -19,6 +19,10 @@ public interface JobLeaseDao {
     /** C2 §4.1's single atomic claim statement, verbatim (see {@code ClaimStatementText} in job-engine). */
     Optional<ClaimedJobRow> claimNext(String workerId, List<String> eligibleCapabilityIds, Duration leaseDuration);
 
+    default boolean cancellationRequested(String jobId, long leaseEpoch) { return false; }
+
+    default List<ClaimedJobRow> findExpiredCancellationRequests() { return List.of(); }
+
     boolean heartbeat(String jobId, long leaseEpoch, Duration leaseDuration);
 
     /** {@code expectedFromState}/{@code toState} are the plain {@code JobState} enum names. */

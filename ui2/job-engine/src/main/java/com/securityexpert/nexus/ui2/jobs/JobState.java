@@ -35,7 +35,7 @@ public enum JobState {
     private static final Map<JobState, Set<JobState>> LEGAL_TRANSITIONS = Map.of(
             REQUESTED, Set.of(CLAIMED, CANCELLED),
             CLAIMED, Set.of(REQUESTED, REJECTED, CANCELLED, EXECUTING),
-            EXECUTING, Set.of(COMPLETED, FAILED, OUTCOME_UNKNOWN, EXECUTING),
+            EXECUTING, Set.of(COMPLETED, FAILED, CANCELLED, OUTCOME_UNKNOWN, EXECUTING),
             COMPLETED, Set.of(),
             FAILED, Set.of(),
             REJECTED, Set.of(),

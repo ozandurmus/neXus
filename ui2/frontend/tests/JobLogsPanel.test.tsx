@@ -124,3 +124,30 @@ it("turns a local datetime input into an ISO instant and leaves an empty one emp
   expect(localInputToIso("")).toBeUndefined();
   expect(localInputToIso("2026-09-22T14:00")).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
 });
+
+it("offers cancellation only for permitted active jobs and submits the opaque job id", async () => {
+  const fetch = vi.fn(async (input: string, init?: RequestInit) => {
+    const body = input === "/session/status" ? { csrf_token: "synthetic-csrf" }
+      : input.endsWith("/cancel") ? { jobId: "job-1", state: "EXECUTING", cancelRequested: true }
+      : input.startsWith("/api/v2/jobs/facets") ? { states: [], job_types: [] }
+      : input.startsWith("/api/v2/jobs") ? { can_cancel: true, total: 2, items: [
+        { job_id: "job-1", state: "EXECUTING", target_device_id: "opaque-001", job_type: "inventory" },
+        { job_id: "job-2", state: "COMPLETED", target_device_id: "opaque-001", job_type: "inventory" },
+      ] } : { devices: [] };
+    return new Response(JSON.stringify(body), { status: init?.method === "POST" ? 202 : 200 });
+  });
+  vi.stubGlobal("fetch", fetch);
+  render(<JobLogsPanel />);
+  const button = await screen.findByRole("button", { name: "Cancel" });
+  expect(screen.getAllByRole("button", { name: "Cancel" })).toHaveLength(1);
+  fireEvent.click(button);
+  await waitFor(() => expect(fetch.mock.calls.some(([url, init]) => url === "/api/v2/jobs/job-1/cancel" && init?.method === "POST")).toBe(true));
+  expect(await screen.findByRole("button", { name: "Cancel requested" })).toBeDisabled();
+});
+
+it("hides cancellation when the server has not granted it", async () => {
+  stubApi({ items: [{ job_id: "job-1", state: "EXECUTING", job_type: "inventory", target_device_id: "opaque-001" }], total: 1 });
+  render(<JobLogsPanel />);
+  await screen.findByText("EXECUTING");
+  expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
+});

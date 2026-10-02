@@ -194,6 +194,7 @@ public final class BackupJobExecutor {
                 JobOutcome outcome = executeScoped(jobId, leaseEpoch, targetDeviceId, request, capabilityId);
                 String verdict = switch (outcome) {
                     case JobOutcome.Completed ignoredOutcome -> "COMPLETED";
+                    case JobOutcome.Cancelled cancelled -> "CANCELLED";
                     case JobOutcome.Failed failed -> "FAILED: " + failed.terminalReason();
                     case JobOutcome.Rejected rejected -> "REJECTED: " + rejected.reason();
                     case JobOutcome.OutcomeUnknown unknown -> "OUTCOME_UNKNOWN: " + unknown.reason();

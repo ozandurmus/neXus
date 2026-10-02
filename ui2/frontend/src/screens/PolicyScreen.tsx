@@ -7,7 +7,7 @@ import { Icon } from "../shell/Icon";
 import { relativeAge } from "../shell/time";
 import { JobTranscriptDrawer } from "./JobTranscriptDrawer";
 import { m3 } from "../theme/m3Theme";
-import { getPolicyTree, getPolicyCollectionStatus, type PolicyContainer, type PolicyCollectionStatus, listPolicySources, collectPolicies, type PolicyCollectionSource, getPolicy, getPolicyObject, type PolicyTarget, type PolicyMetadata, type PolicyObject, type PolicyRule, type PolicyCell, type PolicyPage } from "../auth/adminApi";
+import { cancelJob, getPolicyTree, getPolicyCollectionStatus, type PolicyContainer, type PolicyCollectionStatus, listPolicySources, collectPolicies, type PolicyCollectionSource, getPolicy, getPolicyObject, type PolicyTarget, type PolicyMetadata, type PolicyObject, type PolicyRule, type PolicyCell, type PolicyPage } from "../auth/adminApi";
 
 const runningStates = ["REQUESTED", "CLAIMED", "EXECUTING", "RECONCILING"];
 const isRunning = (job: PolicyCollectionStatus) => runningStates.includes(job.state);
@@ -42,6 +42,8 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
   const [targets, setTargets] = useState<PolicyTarget[]>([]);
   const [scrollTop, setScrollTop] = useState(0);
   const [canCollect, setCanCollect] = useState(false);
+  const [canCancel, setCanCancel] = useState(false);
+  const [cancelling, setCancelling] = useState<string[]>([]);
   const [collecting, setCollecting] = useState(false);
   const [collectionStatus, setCollectionStatus] = useState("");
   const [selected, setSelected] = useState("");
@@ -68,6 +70,7 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
     listPolicySources().then(admission => {
       if (!active) return;
       setSources(admission.sources ?? []);
+      setCanCancel(admission.canCancel === true);
       setCanCollect(admission.canCollect === true);
       setJobs(current => {
         const latest = (admission.sources ?? []).flatMap(source => source.collection ? [{ ...source.collection, sourceId: source.sourceId }] : []);
@@ -196,6 +199,16 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
     } catch { setCollectionStatus("Policy collection could not be queued. The source may be busy or unavailable."); }
     finally { setCollecting(false); }
   };
+  const cancel = async (id: string) => {
+    setCancelling(current => [...current, id]);
+    try {
+      const status = await cancelJob(id);
+      setJobs(current => current.map(job => job.jobId === id ? { ...job, ...status } : job));
+    } catch {
+      setCancelling(current => current.filter(job => job !== id));
+      setCollectionStatus("Job cancellation could not be requested.");
+    }
+  };
   const collectButton = (source: string, domain = "") => canCollect && sources.some(s => s.sourceId === source)
     ? <Button size="small" variant="outlined" disabled={collecting || activeJobs.length > 0} onClick={() => void collect(source, domain)}>Collect policies</Button> : null;
   const close = () => { drawerRequest.current++; setDrawer(null); };
@@ -229,6 +242,10 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
                   {job.collectedAt && ` · ${relativeAge(job.collectedAt, now)}`}</Typography>}
               {job.reason && <FailureDetails reason={job.reason} allowed={canCollect} job={job} />}
             </Box>}
+            {running && job && canCancel && <Button size="small"
+              disabled={job.cancelRequested || cancelling.includes(job.jobId)} onClick={() => void cancel(job.jobId)}>
+              {job.cancelRequested || cancelling.includes(job.jobId) ? "Cancel requested" : "Cancel"}
+            </Button>}
             {collectButton(source.sourceId)}
             {expandedSources.has(source.sourceId) && containers[source.sourceId]?.length === 0
               && <Typography variant="caption" display="block">No policy containers in this snapshot.</Typography>}

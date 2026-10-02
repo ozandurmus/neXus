@@ -47,12 +47,13 @@ final class PolicyCollectionTrace implements AutoCloseable {
         return new Failure(message);
     }
     static String reason(Exception error) {
-        return error instanceof Failure ? error.getMessage() : failure(error instanceof IllegalStateException && "POLICY_GATE_UNAVAILABLE".equals(error.getMessage())
+        return error instanceof com.securityexpert.nexus.ui2.worker.JobCancellationScope.Cancelled ? failure("CANCELLED").getMessage()
+            : error instanceof Failure ? error.getMessage() : failure(error instanceof IllegalStateException && "POLICY_GATE_UNAVAILABLE".equals(error.getMessage())
                 ? "POLICY_GATE_UNAVAILABLE" : "FAILED_" + error.getClass().getSimpleName()).getMessage();
     }
     static boolean fatal(Exception error) {
         String reason = reason(error);
-        return java.util.Set.of("LEASE_LOST", "JOB_DEADLINE", "POLICY_GATE_UNAVAILABLE", "INTERRUPTED",
+        return java.util.Set.of("CANCELLED", "LEASE_LOST", "JOB_DEADLINE", "POLICY_GATE_UNAVAILABLE", "INTERRUPTED",
                 "AUTHENTICATION_FAILURE", "AuthenticationFailed", "HTTP_401", "HTTP_403", "API_ERROR_16", "API_ERROR_403")
             .stream().anyMatch(code -> reason.endsWith(": " + code));
     }

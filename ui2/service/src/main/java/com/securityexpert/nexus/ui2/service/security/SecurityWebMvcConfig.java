@@ -113,6 +113,7 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("GET /api/v2/search", ActionRegistry.GLOBAL_SEARCH_READ),
             Map.entry("GET /api/v2/system/storage", ActionRegistry.SYSTEM_STATUS_READ),
             Map.entry("GET /audit-logs", ActionRegistry.AUDIT_LOG_READ),
+            Map.entry("POST /api/v2/jobs/*/cancel", ActionRegistry.JOB_CANCEL),
             Map.entry("GET /api/v2/jobs", ActionRegistry.JOB_LOG_READ),
             Map.entry("GET /api/v2/jobs/facets", ActionRegistry.JOB_LOG_READ),
             Map.entry("GET /api/v2/jobs/stats", ActionRegistry.JOB_LOG_READ),

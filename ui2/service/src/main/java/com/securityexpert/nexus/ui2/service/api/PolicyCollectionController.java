@@ -23,7 +23,9 @@ public final class PolicyCollectionController {
         boolean canCollect = !PrivacyMaskingResponseBodyAdvice.isReplayViewer(request)
             && rbac.evaluateAny(actor(request), Set.of(RoleToken.SECURITY_ADMIN, RoleToken.ONBOARDING_ADMIN), Instant.now()).outcome() == AuthzOutcome.PERMITTED;
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(new PolicyResponse(Map.of(
-                "sources", collections.sources(), "canCollect", canCollect)));
+                "sources", collections.sources(), "canCollect", canCollect, "canCancel",
+                !PrivacyMaskingResponseBodyAdvice.isReplayViewer(request)
+                    && rbac.evaluateAny(actor(request), Set.of(RoleToken.SECURITY_ADMIN), Instant.now()).outcome() == AuthzOutcome.PERMITTED)));
     }
     @GetMapping("/api/v2/policy/collections/{id}")
     public ResponseEntity<?> status(@PathVariable String id) {

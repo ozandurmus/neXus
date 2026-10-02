@@ -52,6 +52,42 @@ class CheckPointPolicyCollectorTest {
             "{\"uid\":\"translated\",\"name\":\"OBJ-ADDRESS-02\",\"type\":\"host\",\"ipv4-address\":\"198.51.100.8\"}"));
         throw new AssertionError("Unexpected command");
     }
+    @Test void cancelBetweenPagesKeepsOnlyCompleteLayersAndDisconnects() {
+        var cancelled = new java.util.concurrent.atomic.AtomicBoolean();
+        var collector = setup(command -> {
+            var result = answer(command);
+            if (command.equals(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Layer", 1))) cancelled.set(true);
+            return result;
+        });
+        List<PolicySnapshot> checkpoints = new ArrayList<>();
+        try (var scope = new com.securityexpert.nexus.ui2.worker.JobCancellationScope(cancelled::get)) {
+            assertThrows(PolicyCollectionTrace.Failure.class,
+                () -> collector.collect(run, request, () -> true, checkpoints::add));
+        }
+        assertEquals(1, checkpoints.size());
+        assertEquals(List.of("r1", "r2"), checkpoints.get(0).sections().stream().flatMap(s -> s.rules().stream())
+            .map(PolicySnapshot.Rule::uuid).toList());
+        verify(transport, never()).execInteractive(eq(session), eq(new ExecSpec(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Inline", 0))), any());
+        verify(transport).disconnect(session);
+    }
+
+    @Test void cancelledIncompleteLayerRestartsFromPageZero() {
+        var cancelled = new java.util.concurrent.atomic.AtomicBoolean();
+        var collector = setup(command -> {
+            var result = answer(command);
+            if (command.equals(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Layer", 0))) cancelled.set(true);
+            return result;
+        });
+        List<PolicySnapshot> checkpoints = new ArrayList<>();
+        try (var scope = new com.securityexpert.nexus.ui2.worker.JobCancellationScope(cancelled::get)) {
+            assertThrows(PolicyCollectionTrace.Failure.class, () -> collector.collect(run, request, () -> true, checkpoints::add));
+        }
+        assertTrue(checkpoints.isEmpty());
+        cancelled.set(false);
+        setup(this::answer).collect(run, request, () -> true);
+        verify(transport, times(2)).execInteractive(eq(session), eq(new ExecSpec(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Layer", 0))), any());
+    }
+
     @Test void commandsAreExactlyApprovedAndQuoted() {
         assertEquals("mgmt_cli -r true -d 'DOM' -f json show-packages limit 500 details-level full", MgmtCliCommands.showPackages("DOM"));
         assertEquals("mgmt_cli -r true -d 'DOM' -f json show-access-rulebase name 'LAYER' limit 100 offset '500' details-level full use-object-dictionary true", MgmtCliCommands.showAccessRulebase("DOM", "LAYER", 500));

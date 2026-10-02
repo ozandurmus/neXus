@@ -67,12 +67,19 @@ public final class JobLogQueryService {
             @JsonProperty("items") List<JobEvent> items,
             @JsonProperty("page") int page,
             @JsonProperty("page_size") int pageSize,
-            @JsonProperty("total") long total) {
+            @JsonProperty("total") long total,
+            @JsonProperty("can_cancel") boolean canCancel) {
+        public JobPage(List<JobEvent> items, int page, int pageSize, long total) {
+            this(items, page, pageSize, total, false);
+        }
+        public JobPage withCancellationAccess(boolean allowed) {
+            return new JobPage(items, page, pageSize, total, allowed);
+        }
         public JobPage withTranscriptAccess(boolean allowed) {
             if (allowed) return this;
             return new JobPage(items.stream().map(event -> new JobEvent(event.jobId(), event.jobType(),
                     event.targetDeviceId(), event.deviceName(), event.state(), event.outcome(), event.terminalReason(),
-                    event.submittedAt(), event.finishedAt(), event.durationMs(), false)).toList(), page, pageSize, total);
+                    event.submittedAt(), event.finishedAt(), event.durationMs(), false)).toList(), page, pageSize, total, canCancel);
         }
     }
 

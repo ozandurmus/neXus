@@ -75,6 +75,7 @@ public final class SshExecTransport implements DeviceTransport {
 
     @Override
     public ConnectResult connect(ConnectionTarget target, ConnectSpec spec, Duration timeout) {
+        com.securityexpert.nexus.ui2.worker.JobCancellationScope.check();
         try {
             ConnectResult result = connectRaw(target, spec, timeout);
             JobTranscriptScope.add("ssh", "note", "connect outcome: " + result.getClass().getSimpleName());
@@ -215,6 +216,7 @@ public final class SshExecTransport implements DeviceTransport {
 
     @Override
     public ExecResult exec(TransportSession session, ExecSpec spec, Duration timeout) {
+        com.securityexpert.nexus.ui2.worker.JobCancellationScope.check();
         long started = System.nanoTime();
         ExecResult result = execRaw(session, spec, timeout);
         if (!derivedOnly) {
@@ -319,6 +321,7 @@ public final class SshExecTransport implements DeviceTransport {
      */
     @Override
     public ExecResult execInteractive(TransportSession session, ExecSpec spec, Duration timeout) {
+        com.securityexpert.nexus.ui2.worker.JobCancellationScope.check();
         long started = System.nanoTime();
         ExecResult result = execInteractiveRaw(session, spec, timeout);
         if (result instanceof ExecResult.Completed completed)
@@ -403,6 +406,7 @@ public final class SshExecTransport implements DeviceTransport {
     @Override
     public ExecResult execInteractiveAnswering(TransportSession session, ExecSpec spec,
             java.util.List<com.securityexpert.nexus.ui2.jobs.transport.PromptAnswer> answers, Duration timeout) {
+        com.securityexpert.nexus.ui2.worker.JobCancellationScope.check();
         long started = System.nanoTime();
         ExecResult result = execInteractiveAnsweringRaw(session, spec, answers, timeout);
         recordAnswer(result, answers);
@@ -463,6 +467,7 @@ public final class SshExecTransport implements DeviceTransport {
     @Override
     public FetchStreamResult fetchStreaming(TransportSession session, FetchSpec spec, Duration timeout,
             OutputStream sink) {
+        com.securityexpert.nexus.ui2.worker.JobCancellationScope.check();
         if (JobTranscriptScope.current() == null) return fetchStreamingRaw(session, spec, timeout, sink);
         long started = System.nanoTime();
         MessageDigest digest = sha256();
@@ -555,6 +560,7 @@ public final class SshExecTransport implements DeviceTransport {
      */
     public long scpFetch(TransportSession session, String remotePath, ScpSink sink, long maxBytes, Duration timeout)
             throws IOException {
+        com.securityexpert.nexus.ui2.worker.JobCancellationScope.check();
         long started = System.nanoTime();
         JobTranscriptScope.add("scp", "transfer", "fetch requested file=" + remotePath);
         MessageDigest digest = JobTranscriptScope.current() == null ? null : sha256();

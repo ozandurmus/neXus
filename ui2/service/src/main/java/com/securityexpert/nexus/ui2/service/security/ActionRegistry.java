@@ -121,6 +121,7 @@ public final class ActionRegistry {
     /** Administration › System: pods and storage use, read-only, 2026-09-22. */
     public static final String SYSTEM_STATUS_READ = "system_status_read";
     public static final String AUDIT_LOG_READ = "audit_log_read";
+    public static final String JOB_CANCEL = "job_cancel";
     public static final String JOB_LOG_READ = "job_log_read";
     public static final String JOB_TRANSCRIPT_READ = "job_transcript_read";
     /** Search includes setting values, so it has the same gate as the configuration text read. */
@@ -212,6 +213,7 @@ public final class ActionRegistry {
         register(new ActionDescriptor(NOTIFICATION_CONFIG_WRITE, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(SYSTEM_STATUS_READ, true, Optional.empty()));
         register(new ActionDescriptor(AUDIT_LOG_READ, true, Optional.of(RoleToken.SECURITY_ADMIN)));
+        register(new ActionDescriptor(JOB_CANCEL, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(JOB_LOG_READ, true, Optional.empty()));
         register(new ActionDescriptor(JOB_TRANSCRIPT_READ, true, Optional.of(RoleToken.SECURITY_ADMIN),
                 java.util.Set.of(RoleToken.BACKUP_ADMIN)));
