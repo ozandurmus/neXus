@@ -39,7 +39,7 @@ class PolicyApiTest {
         when(query.find("policy-1")).thenReturn(Optional.of(snapshot));
         when(query.history("policy-1", "", 0)).thenReturn(new PolicyResponse(Map.of("revisions", List.of(), "page", 0)));
         var body = new LinkedHashMap<String, Object>();
-        body.put("id", "policy-1"); body.put("name", "Synthetic policy"); body.put("uuid", "native-synthetic-uuid");
+        body.put("id", "policy-1"); body.put("sourceId", "manager-1"); body.put("name", "Synthetic policy"); body.put("uuid", "native-synthetic-uuid");
         body.put("comment", "Unregistered synthetic hostname"); body.put("values", List.of("192.0.2.8", "host.example.invalid"));
         body.put("extras", Map.of("unknown-secret-field", List.of("synthetic-withheld-value")));
         when(query.page(eq(snapshot), eq(0), eq(""), anyBoolean())).thenReturn(new PolicyResponse(body));
@@ -92,7 +92,7 @@ class PolicyApiTest {
             if (role.equals(RoleToken.REPLAY_VIEWER)) {
                 response.andExpect(header().string("X-Nexus-Masked", "true"));
                 for (String raw : List.of("Synthetic policy", "native-synthetic-uuid", "Unregistered synthetic hostname", "192.0.2.8", "host.example.invalid", "synthetic-withheld-value")) assertFalse(text.contains(raw));
-                assertTrue(text.contains(names.maskPolicyName("name", "Synthetic policy")));
+                assertTrue(text.contains(names.maskPolicyName("policy", "Synthetic policy")));
             } else assertTrue(text.contains("Synthetic policy"));
         }
     }

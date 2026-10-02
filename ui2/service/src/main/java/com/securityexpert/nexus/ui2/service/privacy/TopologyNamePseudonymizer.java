@@ -157,8 +157,32 @@ public class TopologyNamePseudonymizer {
     public String maskPolicyName(String namespace, String value) {
         if (value == null || value.isEmpty()) return value;
         byte[] hash = hmacSha256("POLICY:" + namespace.length() + ":" + namespace + value);
-        return "OBJ-" + java.util.HexFormat.of().formatHex(hash, 0, 16);
+        String rawKey = "policy:" + java.util.HexFormat.of().formatHex(hash, 0, 16);
+        return policyCache.computeIfAbsent(rawKey, ignored -> {
+            String prefix = switch (namespace) {
+                case "policy" -> "POL";
+                case "rule", "uuid" -> "RULE";
+                case "address" -> "ADDR";
+                case "group", "address-group", "service-group", "application-group", "time-group" -> "GRP";
+                case "service" -> "SVC";
+                case "application" -> "APP";
+                case "tag" -> "TAG";
+                default -> namespace.startsWith("profile-setting") ? "PROF" : "OBJ";
+            };
+            int word = (hash[0] & 0xff) % DICTIONARY.size();
+            int number = (((hash[1] & 0xff) << 8) | (hash[2] & 0xff)) % 9999 + 1;
+            List<String> choices = new java.util.ArrayList<>();
+            for (int i = 0; i < 64; i++) choices.add(String.format("%s-%s-%02d", prefix,
+                    DICTIONARY.get(word), (number + i - 1) % 9999 + 1));
+            // Keyed fallback retains the original identity space if all short candidates are occupied.
+            choices.add(prefix + "-" + java.util.HexFormat.of().formatHex(hash, 0, 8)
+                    + "-" + java.util.HexFormat.of().formatHex(hash, 8, 16));
+            // Existing domain registry permits arbitrary presentation labels; the keyed namespace separates claims.
+            return registry.claim("domain", rawKey, choices);
+        });
     }
+
+    private final Map<String, String> policyCache = new ConcurrentHashMap<>();
 
     public String maskSerial(String rawSerial) {
         if (rawSerial == null || rawSerial.isBlank()) {

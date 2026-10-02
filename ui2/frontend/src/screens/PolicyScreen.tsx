@@ -3,14 +3,14 @@ import { Box, Button, Checkbox, Chip, Drawer, IconButton, Tooltip, FormControl, 
 import { ScreenRoot, ScreenHeader, EmptyPanel } from "../shell/ScreenLayout";
 import { VendorBadge } from "../shell/States";
 import { Icon } from "../shell/Icon";
-import { relativeAge } from "../shell/time";
+import { relativeAge, DISPLAY_TZ } from "../shell/time";
 import { JobTranscriptDrawer } from "./JobTranscriptDrawer";
 import { m3 } from "../theme/m3Theme";
 import { cancelJob, listPolicies, getPolicyCollectionStatus, type PolicyCollectionStatus, listPolicySources, collectPolicies, type PolicyCollectionSource, getPolicy, getPolicyObject, type PolicyTarget, type PolicyMetadata, type PolicyObject, type PolicyRule, type PolicyCell, type PolicyPage } from "../auth/adminApi";
 
-import { VirtualPolicyCards, RuleDetailPanel, RuleHistory, scheduleLabel } from "./PolicyRuleViewer";
+import { VirtualPolicyCards, RuleDetailPanel, RuleHistory, scheduleLabel, sectionLabel } from "./PolicyRuleViewer";
 
-const runningStates = ["REQUESTED", "CLAIMED", "EXECUTING", "RECONCILING"];
+const runningStates = ["REQUESTED", "CLAIMED", "EXECUTING", "RECONCILING", "RUNNING"];
 const isRunning = (job: PolicyCollectionStatus) => runningStates.includes(job.state);
 // Labels are presentation only; identifiers remain unchanged as request keys.
 const displayName = (name: string | undefined, fallback: string) =>
@@ -22,10 +22,27 @@ export function progress(step: number, total: number, sentence = true) {
 }
 export function collectionOutcome(job: PolicyCollectionStatus) {
   if (isRunning(job)) return "RUNNING";
+  if (job.state === "CANCELLED") return "CANCELLED";
   if (["FAILED", "REJECTED", "OUTCOME_UNKNOWN"].includes(job.state)) return "FAILED";
   if (job.outcome === "PARTIAL" || job.reason?.startsWith("PARTIAL_SNAPSHOT")) return "PARTIAL";
   if (job.state === "COMPLETED") return "COMPLETED";
   return "UNKNOWN";
+}
+export function collectedLabel(at: string, now: Date) {
+  const date = new Date(at);
+  if (!Number.isFinite(date.getTime())) return "Collection time unknown";
+  const day = new Intl.DateTimeFormat("en-GB", { timeZone: DISPLAY_TZ, day: "numeric", month: "short", year: "numeric" }).format(date);
+  const time = new Intl.DateTimeFormat("en-GB", { timeZone: DISPLAY_TZ, hour: "2-digit", minute: "2-digit", hour12: false }).format(date);
+  return `Collected ${day}, ${time} · ${relativeAge(at, now)}`;
+}
+export function sourceStatusLabel(job: PolicyCollectionStatus, now: Date) {
+  const age = relativeAge(job.collectedAt, now);
+  const outcome = collectionOutcome(job);
+  if (outcome === "COMPLETED") return `Collected · ${age}`;
+  if (outcome === "PARTIAL") return `Partial · ${age} · ${failureSentence(`PARTIAL_SNAPSHOT ${job.reason}`, job.step, job.total)}`;
+  if (outcome === "CANCELLED") return `Cancelled · ${job.reason || "Collection cancelled"}`;
+  if (outcome === "FAILED") return failureSentence(job.reason, job.step, job.total) + (job.collectedAt ? ` · ${age}` : "");
+  return "Collection status unknown";
 }
 // Spreadsheet formula characters must remain text, including after leading whitespace.
 export function csvCell(value: unknown) {
@@ -197,7 +214,7 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
           const names = new Map(snapshot.objects.map(object => [object.id, object.name]));
           const text = (value: PolicyCell) => `${value.negated ? "NOT " : ""}${value.refs.map(id => names.get(id) ?? "Unresolved object").join("; ")}`;
           snapshot.sections.forEach(section => section.rules.forEach(rule => rows.push([
-            snapshot.metadata.name, snapshot.metadata.collectedAt, section.name, rule.number, rule.name, rule.uuid, rule.enabled ?? "UNKNOWN",
+            snapshot.metadata.name, snapshot.metadata.collectedAt, sectionLabel(snapshot.metadata, section), rule.number, rule.name, rule.uuid, rule.enabled ?? "UNKNOWN",
             text(rule.source), text(rule.destination), text(rule.service), text(rule.application), rule.action, rule.log, rule.comment, JSON.stringify(rule.extras),
           ])));
           index++;
@@ -275,10 +292,10 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
   };
   const close = () => { drawerRequest.current++; setDrawer(null); };
   return <ScreenRoot>
-    <Box sx={{ width: "100%", flex: 1, minHeight: 0 }}>
+    <Box sx={{ width: "100%", height: "calc(100dvh - 116px)", minHeight: 0, display: "flex", flexDirection: "column" }}>
     <ScreenHeader title="Policy" subtitle="Management policy · configured intent" actions={!preview &&
       <Tooltip title="Refresh snapshots"><IconButton aria-label="Refresh snapshots" onClick={() => setRevision(n => n + 1)}><Box component="span" aria-hidden="true" sx={{ fontSize: 26, lineHeight: 1 }}>↻</Box></IconButton></Tooltip>} />
-    <Box sx={{ mt: 2, display: "grid", gridTemplateColumns: { xs: "minmax(0, 1fr)", md: "300px minmax(0, 1fr)" }, gap: 2, alignItems: "stretch", minHeight: "calc(100vh - 210px)" }}>
+    <Box sx={{ mt: 2, flex: 1, minHeight: 0, display: "grid", gridTemplateColumns: { xs: "minmax(0, 1fr)", md: "270px minmax(0, 1fr)" }, gap: 2, alignItems: "stretch" }}>
       <Box component="nav" aria-label="Management policies" sx={{ bgcolor: m3.scLow, borderRadius: 3, p: 2, minWidth: 0, overflowWrap: "anywhere", border: `1px solid ${m3.outlineVar}` }}>
         <Typography variant="subtitle2">Sources · {sources.length}</Typography>
         <TextField label="Search sources, containers and policies" size="small" fullWidth value={treeSearch} onChange={e => setTreeSearch(e.target.value)} sx={{ my: 1 }} />
@@ -316,10 +333,9 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
             </Typography>
             {job && <Box sx={{ my: 0.5 }}>
               {running ? <Chip role="status" size="small" color="primary" label={job.layer ? `Collecting · unit ${bounded(job.layer, job.layers ?? 0)}${job.layers ? `/${job.layers}` : ""}, rules fetched ${job.rulesFetched ?? 0}` : `Collecting · ${progress(job.step, job.total, false)}`} />
-                : <Typography role="status" variant="caption">{outcome === "FAILED" || outcome === "PARTIAL" ? failureSentence(outcome === "PARTIAL" ? `PARTIAL_SNAPSHOT ${job.reason}` : job.reason.replace(/^PARTIAL_SNAPSHOT\s*/, ""), job.step, job.total)
-                  : outcome === "COMPLETED" ? `Collected · ${progress(job.step, job.total, false)}${job.total > 0 ? " collection steps" : ""}` : "Collection stopped"}
+                : <Typography role="status" variant="caption">{sourceStatusLabel(job, now)}
                   {outcome === "FAILED" && (job.outcome === "PARTIAL" || job.reason.startsWith("PARTIAL_SNAPSHOT")) && " · partial snapshot available"}
-                  {job.collectedAt && ` · ${relativeAge(job.collectedAt, now)}`}</Typography>}
+                  </Typography>}
               {(outcome === "FAILED" || outcome === "PARTIAL") && job.reason && <FailureDetails reason={job.reason} allowed={canCollect} job={job} />}
             </Box>}
             {running && job && canCancel && <Button size="small"
@@ -346,8 +362,8 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
                 {(expandedContainers.has(key) || !!term) && children.filter(p => !term || sourceMatches || matches(container.containerName) || matches(p.name)).map(policy =>
                   <Box key={policy.id} sx={{ pl: 1 }}><Stack direction="row" alignItems="center">
                     {selection([policy], displayName(policy.name, "Policy"))}
-                    <Button fullWidth aria-label={displayName(policy.name, "Policy")} variant={selected === policy.id ? "contained" : "text"}
-                      aria-pressed={selected === policy.id} aria-current={selected === policy.id ? "page" : undefined} sx={{ justifyContent: "flex-start", textTransform: "none" }}
+                    <Button fullWidth aria-label={displayName(policy.name, "Policy")} variant="text"
+                      aria-pressed={selected === policy.id} aria-current={selected === policy.id ? "page" : undefined} sx={{ justifyContent: "flex-start", textTransform: "none", bgcolor: selected === policy.id ? m3.scHigh : undefined, boxShadow: "none", minWidth: 0 }}
                       onClick={() => { setSelected(policy.id); setPage(0); setCollapsed(new Set()); }}>
                       <Box component="span" aria-label="Stored snapshot" sx={{ width: 6, height: 6, borderRadius: "50%", bgcolor: m3.success, mr: 1, flexShrink: 0 }} />{displayName(policy.name, "Policy")}</Button>
                   </Stack><Typography variant="caption" sx={{ pl: 4 }}>{policy.ruleCount ?? (data?.metadata.id === policy.id ? data.total : "UNKNOWN")} rules</Typography></Box>)}
@@ -357,7 +373,7 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
         })}
         </Box>
       </Box>
-      <Box component="section" aria-label="Policy content" sx={{ minWidth: 0, bgcolor: m3.scLowest, borderRadius: 3, p: 2, border: `1px solid ${m3.outlineVar}` }}>
+      <Box component="section" aria-label="Policy content" sx={{ minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", overflowY: "auto", overflowX: "hidden", bgcolor: m3.scLowest, borderRadius: 3, p: 2, border: `1px solid ${m3.outlineVar}`, '& > :not([role="region"])': { flexShrink: 0 } }}>
         <Stack direction="row" justifyContent="space-between" flexWrap="wrap" gap={2} sx={{ mb: 2 }}>
           <Typography variant="h6">{data ? displayName(data.metadata.name, "Policy") : "Stored policies"}</Typography>
           <FormControl size="small" sx={{ minWidth: 240 }}>
@@ -385,9 +401,9 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
               {!!data.failures?.length && <Box><Chip color="warning" label="Partial snapshot · incomplete" />
                 {data.failures.map(f => <Box key={f.layerRef} role="alert"><Typography variant="body2">{f.layerName || f.layerRef}{f.offset !== undefined ? ` · offset ${f.offset}` : ""}: {failureSentence(f.reason)}</Typography><FailureDetails reason={f.reason} allowed={canCollect} /></Box>)}</Box>}
               {data.policyKind === "LOCAL_FIREWALL" && <Chip size="small" label="local firewall policy" />}
-              <Chip size="small" label={`From configuration collected ${data.metadata.collectedAt}`} sx={{ my: 1 }} />
+              <Chip size="small" title={data.metadata.collectedAt} label={collectedLabel(data.metadata.collectedAt, now)} sx={{ my: 1, alignSelf: "flex-start" }} />
               <Stack direction="row" flexWrap="wrap" gap={1} alignItems="center" sx={{ my: 1 }}><Typography variant="body2">Assigned to:</Typography>
-                {data.metadata.targets.length === 0 ? <Chip size="small" label="Unassigned" /> : data.metadata.targets.map(t => <Chip key={t.deviceId} size="small" variant="outlined" label={`${displayName(t.name, "Device")}${t.context ? ` (${t.context})` : ""} · ${t.syncStatus}`} />)}</Stack>
+                {data.metadata.targets.length === 0 ? <Chip size="small" label="Unassigned" /> : data.metadata.targets.map(t => <Tooltip key={t.deviceId} title={`${t.context ? `${t.context} · ` : ""}${t.syncStatus}`}><Chip size="small" variant="outlined" label={<Stack direction="row" gap={0.75} alignItems="center"><span>{displayName(t.name, "Device")}</span><Box component="span" aria-label={t.syncStatus} sx={{ width: 6, height: 6, borderRadius: "50%", bgcolor: t.syncStatus === "IN_SYNC" ? m3.success : t.syncStatus === "OUT_OF_SYNC" ? m3.warning : m3.outline }} /></Stack>} /></Tooltip>)}</Stack>
               <Typography variant="caption">{data.policyKind === "LOCAL_FIREWALL" ? "Stored local configuration; runtime enforcement is not inferred." : "Management intent; installation and runtime enforcement are not inferred."}</Typography>
             </>}
             {selected && <TextField label="Rule query" size="small" fullWidth value={search}
@@ -405,8 +421,8 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
                 <Button size="small" onClick={() => { drawerRequest.current++; setDrawer({ history: true }); }}>Policy history</Button>
               </Stack>
               <Box role="region" aria-label="Policy rulebase" onScroll={event => setScrollTop(event.currentTarget.scrollTop)}
-                sx={{ height: "65vh", overflow: "auto", border: `1px solid ${m3.outlineVar}`, borderRadius: 2 }}>
-                <Box sx={{ minWidth: 1200, p: 1 }}><VirtualPolicyCards sections={data.sections} collapsed={collapsed} scrollTop={scrollTop}
+                sx={{ flex: "1 1 180px", minHeight: 140, overflowY: "auto", overflowX: "hidden", border: `1px solid ${m3.outlineVar}`, borderRadius: 2 }}>
+                <Box sx={{ minWidth: 0, p: 1 }}><VirtualPolicyCards sections={data.sections} collapsed={collapsed} scrollTop={scrollTop}
                   metadata={data.metadata} objects={objects} openObject={openObject} openRule={openRule}
                   selected={selectedRules} onSelect={id => setSelectedRules(previous => toggle(previous, id))}
                   toggle={id => setCollapsed(previous => toggle(previous, id))} /></Box>

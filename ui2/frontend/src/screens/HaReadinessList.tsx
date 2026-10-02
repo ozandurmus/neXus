@@ -83,6 +83,7 @@ export function HaReadinessList({ clusters, rows, running, busy, progress, error
   const supported = visible.filter(item => item.status !== "UNSUPPORTED");
   const unsupported = visible.filter(item => item.status === "UNSUPPORTED");
   const selectable = items.filter(item => item.status !== "UNSUPPORTED").flatMap(item => item.units).filter(canRunReadiness);
+  const hasActions = selectable.length > 0;
   const selectedRows = selectable.filter(row => selected.has(row.unitId));
   const visibleSelectable = supported.flatMap(item => item.units.filter(row => row.unitId === row.clusterId || openVs.has(item.cluster.ref))).filter(canRunReadiness);
   const allVisibleSelected = visibleSelectable.length > 0 && visibleSelectable.every(row => selected.has(row.unitId));
@@ -114,7 +115,7 @@ export function HaReadinessList({ clusters, rows, running, busy, progress, error
           if (event.key === "Enter") { event.preventDefault(); setExpanded(current => toggle(current, key)); }
           if (event.key === " ") { event.preventDefault(); toggleSelection(row); }
         }}
-        sx={{ height: 48, cursor: "pointer", bgcolor: nested ? m3.scLow : m3.scLowest, '&:hover': { bgcolor: m3.sc }, '&:focus-visible': { outline: `2px solid ${m3.primary}`, outlineOffset: -2 }, '& > td, & > th': { py: 0.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" } }}>
+        sx={{ height: 48, cursor: "pointer", bgcolor: nested ? m3.scLow : m3.scLowest, '&:hover': { bgcolor: m3.sc }, '&:focus-visible': { outline: `2px solid ${m3.primary}`, outlineOffset: -2 }, '& > td, & > th': { py: 0.5, whiteSpace: "normal", overflowWrap: "anywhere" } }}>
         <TableCell padding="checkbox" onClick={event => event.stopPropagation()}>
           <Checkbox size="small" inputProps={{ "aria-label": `Select ${title}` }} checked={Boolean(row && selected.has(row.unitId) && canRunReadiness(row))}
             disabled={!canRunReadiness(row) || busy} onChange={() => toggleSelection(row)} />
@@ -130,17 +131,17 @@ export function HaReadinessList({ clusters, rows, running, busy, progress, error
         </TableCell>
         <TableCell title={primaryReason(row)}>{primaryReason(row)}</TableCell>
         <TableCell>{at ? <Box component="time" dateTime={at} title={`${formatTime(at)} ${DISPLAY_TZ_LABEL} · ${at}`}>{relativeAge(at, now)}</Box> : "Not evaluated"}</TableCell>
-        <TableCell onClick={event => event.stopPropagation()}>
+        {hasActions && <TableCell onClick={event => event.stopPropagation()}>
           {row && canRunReadiness(row) && <Tooltip title="Run pre-checks"><span><IconButton size="small" aria-label="Run pre-checks" aria-busy={running === row.unitId} disabled={busy}
             onClick={() => onRun(row)} sx={{ color: m3.primary }}>
             {running === row.unitId ? <CircularProgress size={18} aria-label="Running pre-checks" /> : <Icon name="operations" size={18} />}
           </IconButton></span></Tooltip>}
           {row && progress[row.unitId] && <Typography component="span" role="status" variant="caption">{progress[row.unitId]}</Typography>}
-        </TableCell>
+        </TableCell>}
       </TableRow>
-      {isExpanded && <TableRow><TableCell colSpan={7} sx={{ bgcolor: m3.scLow, p: 1.5 }}>
+      {isExpanded && <TableRow><TableCell colSpan={hasActions ? 7 : 6} sx={{ bgcolor: m3.scLow, p: 1.5 }}>
         <Box id={`checks-${encodeURIComponent(key)}`} role="region" aria-label={`Checks for ${title}`}>
-          {row?.readiness?.checks.length ? <ReadinessChecksTable checks={row.readiness.checks} members={row.members} compact />
+          {row?.readiness?.checks.length ? <ReadinessChecksTable checks={row.readiness.checks} members={row.members?.length ? row.members : cluster.members} compact />
             : <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>No observations yet</Typography>}
           <Button size="small" onClick={() => onOpen(cluster.ref, row?.unitId ?? null)}>Open full detail</Button>
         </Box>
@@ -178,7 +179,7 @@ export function HaReadinessList({ clusters, rows, running, busy, progress, error
     </Box>}
     {error && <Box sx={{ mb: 1 }}><StatePanel variant="error" title={error} /></Box>}
     <TableContainer sx={{ border: `1px solid ${m3.outlineVar}`, borderRadius: 2 }}>
-      <Table size="small" aria-label="HA clusters" sx={{ width: "100%", minWidth: 1100, tableLayout: "fixed" }}>
+      <Table size="small" aria-label="HA clusters" sx={{ width: "100%", tableLayout: "fixed" }}>
         <TableHead><TableRow>
           <TableCell padding="checkbox"><Checkbox size="small" inputProps={{ "aria-label": "Select all visible" }} checked={allVisibleSelected}
             indeterminate={!allVisibleSelected && visibleSelectable.some(row => selected.has(row.unitId))} disabled={busy || visibleSelectable.length === 0}
@@ -188,8 +189,8 @@ export function HaReadinessList({ clusters, rows, running, busy, progress, error
               return next;
             })} /></TableCell>
           <TableCell sx={{ width: 140 }}>Status</TableCell><TableCell sx={{ width: "22%" }}>Cluster</TableCell>
-          <TableCell sx={{ width: "28%" }}>Active ↔ Standby members</TableCell><TableCell>Primary reason</TableCell>
-          <TableCell sx={{ width: 105 }}>Last evaluated</TableCell><TableCell sx={{ width: 105 }}>Actions</TableCell>
+          <TableCell sx={{ width: "24%" }}>Active ↔ Standby members</TableCell><TableCell>Primary reason</TableCell>
+          <TableCell sx={{ width: 145 }}>Last evaluated</TableCell>{hasActions && <TableCell sx={{ width: 105 }}>Actions</TableCell>}
         </TableRow></TableHead>
         <TableBody>{supported.map(item => renderRow(item, item.base))}</TableBody>
       </Table>

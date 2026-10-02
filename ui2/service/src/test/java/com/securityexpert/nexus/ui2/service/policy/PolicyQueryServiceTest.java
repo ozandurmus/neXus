@@ -39,7 +39,7 @@ class PolicyQueryServiceTest {
         assertEquals(0, query.page(snapshot, 0, "Sensitive synthetic", true).body().get("total"));
         assertEquals(0, query.page(snapshot, 0, "Synthetic rule", true).body().get("total"));
         assertEquals(5000, query.page(snapshot, 0, "Sensitive synthetic", false).body().get("total"));
-        assertEquals(1, query.page(snapshot, 0, names.maskPolicyName("name", "Synthetic rule 42"), true).body().get("total"));
+        assertEquals(1, query.page(snapshot, 0, names.maskPolicyName("rule", "Synthetic rule 42"), true).body().get("total"));
     }
     @Test void expandsSharedDagNodesButStopsCyclesAndMissingObjects() {
         var body = mapper.valueToTree(query.object(snapshot(), "a").body()).path("object");

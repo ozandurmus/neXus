@@ -137,9 +137,27 @@ it("hides bulk and run actions for aiview and reacts to permission removal", () 
   rerender(<HaReadinessList clusters={clusters} rows={readonlyRows} running={null} busy={false} progress={{}} error={null} onOpen={vi.fn()} onRun={vi.fn()} onBulkRun={vi.fn()} />);
   expect(screen.queryByRole("toolbar", { name: "Bulk readiness actions" })).toBeNull();
   expect(screen.queryByRole("button", { name: "Run pre-checks" })).toBeNull();
+  expect(within(table()).queryByRole("columnheader", { name: "Actions" })).toBeNull();
+  expect(within(table()).getAllByRole("columnheader")).toHaveLength(6);
   expect(screen.getByRole("checkbox", { name: "Select all visible" })).toBeDisabled();
   fireEvent.keyDown(row("CLS-ALPHA-01"), { key: " " });
   expect(screen.queryByRole("toolbar", { name: "Bulk readiness actions" })).toBeNull();
+});
+it("shows both observed members in inline details and wraps long messages", () => {
+  const cluster = clusters[0];
+  const checks = cluster.members.map((member, index) => ({ checkNo: 2, title: "Cluster IP table", device_id: member.device_id,
+    member: `Member ${index + 1}`, result: "FAIL" as const, status: "FAIL" as const, blocking: true, derived: {}, summary: "Tables differ; " + "missing entry on observer; ".repeat(30) }));
+  setup({ rows: { [cluster.ref]: [{ ...summary(cluster.ref, "NOT_READY"), masked: true, members: [...cluster.members].reverse(), readiness: { status: "NOT_READY", observedAt: at, failedCheck: "Cluster IP table", checks } }] } });
+  fireEvent.click(row(cluster.title));
+  const detail = screen.getByRole("region", { name: `Checks for ${cluster.title}` });
+  expect(within(detail).getAllByRole("columnheader").map(cell => cell.textContent)).toEqual(["Check", "FW-CLS-ALPHA-01-M1 · active", "FW-CLS-ALPHA-01-M2 · standby"]);
+  expect(detail.querySelectorAll(".readiness-message")).toHaveLength(2);
+  for (const message of detail.querySelectorAll(".readiness-message")) {
+    expect(message.parentElement?.parentElement).toHaveStyle({ whiteSpace: "normal", overflowWrap: "anywhere" });
+    expect(message).toHaveStyle({ WebkitLineClamp: "2" });
+  }
+  expect(table()).not.toHaveStyle({ minWidth: "1100px" });
+  expect(within(table()).getByRole("columnheader", { name: "Last evaluated" })).toHaveStyle({ width: "145px" });
 });
 it("shows per-row progress and disables actions during a batch", () => {
   setup({ running: "CLS-ALPHA-01", busy: true, progress: { "CLS-ALPHA-01": "Running", "CLS-BRAVO-02": "Queued" } });

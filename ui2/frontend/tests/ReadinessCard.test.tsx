@@ -60,4 +60,20 @@ describe("Readiness card", () => {
     rerender(<ReadinessCard {...props} checks={[]} masked={false} />);
     expect(screen.queryByText("AIView Pseudonymized")).toBeNull();
   });
+
+  it("caps long messages to two lines and allows expansion", () => {
+    vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockReturnValue(80);
+    vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(32);
+    try {
+      render(<ReadinessCard {...props} checks={[{ ...checks[0], summary: "Cluster IP tables differ; " + "missing entry; ".repeat(20) }]} />);
+      const message = screen.getByText(/^Cluster IP tables differ/);
+      expect(message).toHaveStyle({ whiteSpace: "normal", WebkitLineClamp: "2" });
+      const more = within(message.parentElement!).getByRole("button", { name: "More" });
+      fireEvent.click(more);
+      expect(more).toHaveAttribute("aria-expanded", "true");
+      expect(message).toHaveStyle({ display: "block" });
+      fireEvent.click(more);
+      expect(message).toHaveStyle({ WebkitLineClamp: "2" });
+    } finally { vi.restoreAllMocks(); }
+  });
 });
