@@ -78,6 +78,7 @@ public final class CpFailoverService {
         return summaries(actor);
     }
     private List<Summary> summaries(String actor) {
+        boolean canRunReadiness = mayStart(actor);
         Map<String, List<JooqCpFailoverRepository.SummaryMember>> facts = store.summaryMembers().stream()
             .collect(Collectors.groupingBy(JooqCpFailoverRepository.SummaryMember::deviceId));
         Map<StatusKey, JooqCpFailoverRepository.SummaryStatus> statuses = store.summaryStatuses().stream()
@@ -117,7 +118,7 @@ public final class CpFailoverService {
                     return new Summary(u, vendor, status != null && status.activeWindow(),
                         status == null ? null : status.state(), status == null ? null : status.outcome(),
                         status == null ? null : status.scheduledFor(),
-                        readiness.get(new StatusKey(e.getKey(), u.vsId(), vendor)), mayStart(actor));
+                        readiness.get(new StatusKey(e.getKey(), u.vsId(), vendor)), canRunReadiness);
                 });
             }).toList();
     }

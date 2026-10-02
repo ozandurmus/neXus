@@ -13,6 +13,26 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class JooqCpFailoverRepositoryTest {
     @org.junit.jupiter.api.Test
+    void readinessAggregatesChecksForLatestRunsInOneQuery() {
+        var count = new java.util.concurrent.atomic.AtomicInteger();
+        var dsl = DSL.using(new MockConnection(query -> {
+            count.incrementAndGet();
+            String sql = query.sql();
+            assertTrue(sql.contains("distinct on (vendor,cluster_ref,coalesce(vs_id,''))"));
+            assertTrue(sql.contains("join latest l on l.run_id=c.run_id"));
+            assertTrue(sql.contains("where c.phase='pre' group by c.run_id"));
+            assertTrue(sql.contains("coalesce(c.checks,'[]'::jsonb)"));
+            return new MockResult[]{new MockResult(0,DSL.using(SQLDialect.POSTGRES)
+                .newResult(DSL.field("cluster_ref",String.class)))};
+        }),SQLDialect.POSTGRES);
+        var repository = new JooqCpFailoverRepository(new TransactionBoundary() {
+            @Override public <T> T inTransaction(Function<DSLContext,T> work) { return work.apply(dsl); }
+        });
+        assertTrue(repository.readinessStatuses().isEmpty());
+        assertEquals(1,count.get());
+    }
+
+    @org.junit.jupiter.api.Test
     void syncBaselineIsScopedToPreviousReadinessUnitMemberAndOpaqueVs() {
         var dsl=DSL.using(new MockConnection(query -> {
             String sql=query.sql();

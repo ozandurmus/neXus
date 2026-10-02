@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { useSession } from "../src/auth/SessionContext";
 import { AuthGate } from "../src/auth/AuthGate";
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -12,6 +13,16 @@ afterEach(() => {
 });
 
 describe("AuthGate", () => {
+  it.each([true, false, undefined])("carries the server Administration read affordance %s", async permitted => {
+    vi.stubGlobal("fetch",vi.fn().mockResolvedValue(jsonResponse(200,{
+      authenticated: true, can_read_administration: permitted,
+    })));
+    function ReadAffordance() {
+      return <div>{useSession()?.canReadAdministration ? "Read allowed" : "Read unavailable"}</div>;
+    }
+    render(<AuthGate><ReadAffordance /></AuthGate>);
+    expect(await screen.findByText(permitted === true ? "Read allowed" : "Read unavailable")).toBeInTheDocument();
+  });
   it("never renders its children until the session check resolves as authenticated", async () => {
     let resolveStatus: (response: Response) => void = () => {};
     const statusPromise = new Promise<Response>((resolve) => {

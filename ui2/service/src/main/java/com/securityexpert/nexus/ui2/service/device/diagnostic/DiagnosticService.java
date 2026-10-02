@@ -252,17 +252,20 @@ public final class DiagnosticService {
         com.securityexpert.nexus.ui2.capability.GateRegistryPort cachedGates =
                 key -> rowsByKey.computeIfAbsent(key, gates::findByCanonicalKey);
         java.util.Map<String, List<java.util.Map<String, Object>>> commandsByProfile = new java.util.HashMap<>();
-        return devices.listAll().stream()
-                .filter(d -> sshTarget(d.deviceId()))
+        var contextsByDevice = inventory.findLatestContextIdsByDevice();
+        var platformsByDevice = platformFacts.findAll();
+        return devices.listReadCollectionTargets("ssh_exec").stream()
                 .map(d -> {
-                    String model = modelOrPlatform(d.deviceId(), d.observedModel().orElse(null));
+                    String model = Optional.ofNullable(platformsByDevice.get(d.deviceId()))
+                            .flatMap(f -> f.platformFamily()).filter("gaia_embedded"::equals)
+                            .orElse(d.observedModel().orElse(null));
                     String profile = d.vendorHint() + "|" + d.role() + "|" + model;
                     List<java.util.Map<String, Object>> commands = commandsByProfile.computeIfAbsent(profile, k ->
                             com.securityexpert.nexus.ui2.jobs.diagnostic.DiagnosticRead.commands(d.vendorHint(), d.role(),
                                     model, cachedGates).stream().map(c -> java.util.Map.<String, Object>of(
                                     "gate_id", c.gateId(), "command_template", c.commandTemplate(), "description", description(c.gateId(), c.commandTemplate()), "timeout_s", c.timeoutS()))
                                     .toList());
-                    List<String> virtualSystems = virtualSystems(d.deviceId());
+                    List<String> virtualSystems = virtualSystems(contextsByDevice.getOrDefault(d.deviceId(), List.of()));
                     if (virtualSystems.isEmpty()) commands = commands.stream()
                             .filter(c -> !((String) c.get("command_template")).contains("<VSID>")).toList();
                     return new TargetOption(d.deviceId(), d.observedHostname()
@@ -273,8 +276,8 @@ public final class DiagnosticService {
                 }).toList();
     }
 
-    private List<String> virtualSystems(String deviceId) {
-        return inventory.findLatestContextIds(deviceId).stream()
+    private List<String> virtualSystems(List<String> contexts) {
+        return contexts.stream()
                 .filter(context -> !InventoryContext.PHYSICAL.equals(context))
                 .filter(context -> PORT.matcher(context).matches()).distinct().sorted().toList();
     }

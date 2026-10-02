@@ -43,24 +43,27 @@ class DiagnosticServiceTest {
                 return rows.stream().filter(r -> r.key().equals(key)).toList();
             },new com.securityexpert.nexus.ui2.service.boot.DeviceCompositionConfiguration.ArtefactStoreAccess(null),null,null);
         var summaries=new java.util.ArrayList<DeviceSummaryRecord>();
-        for(String id:List.of("plain-first","vs-middle","plain-last")) {
+        var ids = new java.util.ArrayList<>(List.of("plain-first","vs-middle","plain-last"));
+        for (int i=3;i<81;i++) ids.add("plain-"+i);
+        for (String id:ids) {
             summaries.add(new DeviceSummaryRecord(id,"gateway","check_point",DeviceEnrollmentState.ENROLLED,
                 Optional.of("FW-TANGO-04"),Optional.of("synthetic-gaia"),Optional.empty(),Optional.empty(),Optional.empty()));
-            when(devices.find(id)).thenReturn(Optional.of(new DeviceRecord(id,"gateway","check_point","manual",
-                Instant.now(),false,DeviceEnrollmentState.ENROLLED,false,"credential-ref")));
-            when(devices.findEndpointByDeviceId(id)).thenReturn(Optional.of(
-                new EndpointRecord("endpoint-"+id,id,"ssh_exec","192.0.2.10",Instant.now())));
-            when(inventory.findLatestContextIds(id)).thenReturn(id.equals("vs-middle")
-                ?List.of("physical","001"):List.of("physical"));
         }
-        when(devices.listAll()).thenReturn(summaries);
+        when(devices.listReadCollectionTargets("ssh_exec")).thenReturn(summaries);
+        when(inventory.findLatestContextIdsByDevice()).thenReturn(java.util.Map.of(
+            "plain-first",List.of("physical"),"vs-middle",List.of("physical","001"),"plain-last",List.of("physical")));
         var targets=service.targets(true);
+        assertEquals(81,targets.size());
         for(var target:targets) {
             assertTrue(target.commands().stream().anyMatch(c -> "cp_failover_syncstat".equals(c.get("gate_id"))));
             assertEquals(target.deviceId().equals("vs-middle"),target.commands().stream()
                 .anyMatch(c -> ((String)c.get("command_template")).contains("<VSID>")));
         }
         assertEquals(List.of("001"),targets.get(1).virtualSystems());
+        org.mockito.Mockito.verify(inventory).findLatestContextIdsByDevice();
+        org.mockito.Mockito.verify(inventory,org.mockito.Mockito.never()).findLatestContextIds(org.mockito.ArgumentMatchers.anyString());
+        org.mockito.Mockito.verify(devices,org.mockito.Mockito.never()).find(org.mockito.ArgumentMatchers.anyString());
+        org.mockito.Mockito.verify(devices,org.mockito.Mockito.never()).findEndpointByDeviceId(org.mockito.ArgumentMatchers.anyString());
         assertFalse(lookups.isEmpty());
         assertTrue(lookups.values().stream().allMatch(count -> count==1));
     }
@@ -72,7 +75,7 @@ class DiagnosticServiceTest {
         var rows = GateRegistryFixtureLoader.loadFromStream(getClass().getClassLoader()
                 .getResourceAsStream("capabilities/gate_registry_fixture.yaml"));
         var inventory = mock(DeviceInventoryRepository.class);
-        when(inventory.findLatestContextIds("device-1")).thenReturn(List.of("physical", "001"));
+        when(inventory.findLatestContextIdsByDevice()).thenReturn(java.util.Map.of("device-1",List.of("physical", "001")));
         var service = new DiagnosticService(devices, inventory, null,
                 mock(JobRecordDao.class), new TopologyNamePseudonymizer("synthetic-test-key".getBytes()),
                 key -> rows.stream().filter(row -> row.key().equals(key)).toList(),
@@ -81,11 +84,12 @@ class DiagnosticServiceTest {
         var summary = new DeviceSummaryRecord("device-1", "gateway", "check_point", DeviceEnrollmentState.ENROLLED,
                 Optional.of("FW-TANGO-04"), Optional.of("V0"), Optional.empty(), Optional.empty(), Optional.of("synthetic-cluster"));
         when(devices.listAll()).thenReturn(List.of(summary));
+        when(devices.listReadCollectionTargets("ssh_exec")).thenReturn(List.of(summary));
         when(devices.find("device-1")).thenReturn(Optional.of(new DeviceRecord("device-1", "gateway", "check_point",
                 "manual", Instant.now(), false, DeviceEnrollmentState.ENROLLED, false, "credential-ref")));
         when(devices.findEndpointByDeviceId("device-1")).thenReturn(Optional.of(
                 new EndpointRecord("endpoint-1", "device-1", "ssh_exec", "192.0.2.10", Instant.now())));
-        when(platform.find("device-1")).thenReturn(Optional.of(new com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFacts(
+        when(platform.findAll()).thenReturn(java.util.Map.of("device-1",new com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFacts(
                 "device-1", Optional.empty(), Optional.empty(), Optional.of("gaia_embedded"),
                 java.util.Map.of(), Optional.empty(), "cp_spark_show_diag_software_version", Optional.empty())));
 
@@ -188,6 +192,7 @@ class DiagnosticServiceTest {
         when(summary.observedHostname()).thenReturn(Optional.of("synthetic-device-name"));
         when(summary.observedModel()).thenReturn(Optional.empty());
         when(devices.listAll()).thenReturn(List.of(summary));
+        when(devices.listReadCollectionTargets("ssh_exec")).thenReturn(List.of(summary));
         when(devices.findEndpointByDeviceId("device-1")).thenReturn(Optional.of(
             new EndpointRecord("endpoint-1","device-1","ssh_exec","192.0.2.10",Instant.now())));
         String projected = service.targets(true).get(0).target();
@@ -224,6 +229,7 @@ class DiagnosticServiceTest {
         when(summary.observedHostname()).thenReturn(Optional.of("synthetic-device-name"));
         when(summary.observedModel()).thenReturn(Optional.empty());
         when(devices.listAll()).thenReturn(List.of(summary));
+        when(devices.listReadCollectionTargets("ssh_exec")).thenReturn(List.of(summary));
         when(devices.findSummary("device-1")).thenReturn(Optional.of(summary));
         var commands=service.targets(true).get(0).commands();
         assertTrue(commands.stream().anyMatch(c -> "fgt_get_system_status".equals(c.get("gate_id"))));

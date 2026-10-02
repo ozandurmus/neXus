@@ -88,7 +88,9 @@ export function App({ search = typeof window === "undefined" ? "" : window.locat
             <NavigationRail active="inventory" />
             <Box sx={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
               <TopAppBar />
-              <DeviceWorkspaceScreen deviceId={deviceId} />
+              <Box component="main" sx={{ flex: 1, display: "flex", flexDirection: "column" }}>
+                <DeviceWorkspaceScreen deviceId={deviceId} />
+              </Box>
             </Box>
           </Box>
         </DisplayModeProvider>
@@ -112,7 +114,9 @@ export function App({ search = typeof window === "undefined" ? "" : window.locat
         <Box sx={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
           <TopAppBar />
           {preview && <PreviewBanner />}
-          <Suspense fallback={null}>{preview ? <Preview /> : <Product />}</Suspense>
+          <Box component="main" sx={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+            <Suspense fallback={null}>{preview ? <Preview /> : <Product />}</Suspense>
+          </Box>
         </Box>
       </Box>
     </DisplayModeProvider>

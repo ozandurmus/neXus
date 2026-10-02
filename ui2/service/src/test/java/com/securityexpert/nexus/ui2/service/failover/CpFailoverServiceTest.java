@@ -273,11 +273,35 @@ class CpFailoverServiceTest {
             && "VS-TEST-APP (VSID 13)".equals(r.unit().label()) && "PASS".equals(r.lastRunOutcome())));
         assertTrue(rows.stream().anyMatch(r -> "palo_alto".equals(r.vendor()) && !r.activeWindow()
             && "STOPPED".equals(r.lastRunState()) && runAt.equals(r.lastRunAt())));
+        verify(rbac,org.mockito.Mockito.times(2)).evaluate(anyString(),any(),any());
+        verify(store).readinessStatuses();
         verify(store).summaryMembers();
         verify(store).summaryStatuses();
         verify(devices).listAll();
         verifyNoInteractions(inventory, trust);
     }
+    @Test void summaryKeepsBulkReadsAndAuthorizationConstantFor45Clusters() {
+        when(rbac.evaluate(anyString(),any(),any())).thenReturn(new RbacEvaluator.Decision(
+            AuthzOutcome.PERMITTED,Optional.empty(),Optional.empty(),Optional.empty()));
+        var members = new java.util.ArrayList<DeviceSummaryRecord>();
+        var facts = new java.util.ArrayList<JooqCpFailoverRepository.SummaryMember>();
+        for (int i=0;i<45;i++) for (int member=0;member<2;member++) {
+            String id="synthetic-device-"+i+"-"+member;
+            members.add(new DeviceSummaryRecord(id,"gateway","check_point",DeviceEnrollmentState.ENROLLED,
+                Optional.empty(),Optional.empty(),Optional.empty(),Optional.empty(),Optional.of("synthetic-cluster-"+i)));
+            facts.add(new JooqCpFailoverRepository.SummaryMember(id,true,"ssh_exec",true,"physical",false));
+        }
+        when(devices.listAll()).thenReturn(members);
+        when(store.summaryMembers()).thenReturn(facts);
+        assertEquals(45,service.summary("actor-1").size());
+        verify(rbac,org.mockito.Mockito.times(2)).evaluate(anyString(),any(),any());
+        verify(store).summaryMembers();
+        verify(store).summaryStatuses();
+        verify(store).readinessStatuses();
+        verify(devices).listAll();
+        verifyNoInteractions(inventory,trust);
+    }
+
     @Test void summaryRequiresReaderBeforeBulkReads() {
         when(rbac.evaluate(anyString(),any(),any())).thenReturn(new RbacEvaluator.Decision(
             AuthzOutcome.DENIED,Optional.empty(),Optional.empty(),Optional.empty()));
