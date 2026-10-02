@@ -13,6 +13,45 @@ import com.securityexpert.nexus.ui2.persistence.discovery.*;
 import com.securityexpert.nexus.ui2.persistence.policy.*;
 
 class PolicyCollectionJobExecutorTest {
+    @Test @org.junit.jupiter.api.Timeout(15)
+    void concurrentPagesCloseTheirOwnLedgerAttempts() {
+        var leases = mock(JobLeaseRepository.class);
+        var attempts = mock(JobStepAttemptRepository.class);
+        var runs = mock(DiscoveryRunRepository.class);
+        var repository = mock(PolicyCollectionRepository.class);
+        var collector = mock(CheckPointPolicyCollector.class);
+        var run = new DiscoveryRun("run-1", "check_point", "192.0.2.10", "synthetic-ref", "synthetic-actor",
+            DiscoveryRunState.FINISHED, Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
+        when(runs.findRun("run-1")).thenReturn(Optional.of(run));
+        when(repository.request("job-1")).thenReturn(Optional.of(new PolicyCollectionRepository.Request("mds-1", "", false)));
+        when(repository.eligible("mds-1", "run-1")).thenReturn(true);
+        when(leases.transitionState(anyString(), anyLong(), any(), any(), anyString(), anyString())).thenReturn(true);
+        when(attempts.insertPreContact(anyString(), anyLong(), anyInt(), anyString(), anyString(), anyInt()))
+            .thenAnswer(call -> "attempt-" + call.getArgument(2));
+        when(attempts.writeOutcome(anyString(), anyLong(), anyString(), isNull(), anyBoolean(), any(), isNull(), isNull())).thenReturn(true);
+        when(repository.publish(anyString(), anyLong(), anyList(), anyString())).thenReturn(true);
+        doAnswer(call -> {
+            var pool = java.util.concurrent.Executors.newFixedThreadPool(2);
+            var ready = new java.util.concurrent.CountDownLatch(2);
+            try {
+                var futures = new ArrayList<java.util.concurrent.Future<Void>>();
+                for (int i = 0; i < 2; i++) futures.add(pool.submit(PolicyCollectionTrace.worker(() -> {
+                    PolicyCollectionTrace.step("synthetic-page", "opaque-ref");
+                    ready.countDown();
+                    assertTrue(ready.await(5, java.util.concurrent.TimeUnit.SECONDS));
+                    PolicyCollectionTrace.result(System.nanoTime(), 1, "Completed");
+                    return null;
+                })));
+                for (var future : futures) future.get(5, java.util.concurrent.TimeUnit.SECONDS);
+            } finally { pool.shutdownNow(); }
+            return List.of();
+        }).when(collector).collect(any(), any(), any(), any());
+        var executor = new PolicyCollectionJobExecutor(leases, attempts, runs, repository, collector, key -> List.of());
+        assertInstanceOf(JobOutcome.Completed.class, executor.execute("job-1", 1, "run-1"));
+        for (int step = 1; step <= 2; step++) verify(attempts).writeOutcome("attempt-" + step, 1,
+            "MATCHED", null, true, 1L, null, null);
+    }
+
     @Test void cancellationFinishesCancelledAndKeepsAlreadyPublishedUnits() {
         var leases = mock(JobLeaseRepository.class);
         var attempts = mock(JobStepAttemptRepository.class);
