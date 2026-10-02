@@ -5,6 +5,18 @@ import { VendorBadge } from "../shell/States";
 import { m3 } from "../theme/m3Theme";
 import { getPolicyHistory, type PolicyCell, type PolicyMetadata, type PolicyObject, type PolicyPage, type PolicyRevision, type PolicyRule, type PolicySchedule, type PolicySection } from "../auth/adminApi";
 
+export function reportPolicyLoadError(scope: "snapshots" | "rules" | "object" | "history", error: unknown) {
+  // Record categories only: error messages and API bodies may contain sensitive identities.
+  const failure = error as { status?: unknown; body?: { error?: unknown } } | null;
+  const code = failure?.body?.error === "TIMEOUT" ? "TIMEOUT"
+    : typeof failure?.status === "number" && Number.isInteger(failure.status) && failure.status >= 100 && failure.status <= 599 ? `HTTP_${failure.status}`
+    : error instanceof SyntaxError ? "INVALID_JSON"
+    : error instanceof Error && ["Empty policy response", "Invalid history response", "Invalid object response"].includes(error.message) ? "INVALID_RESPONSE_SHAPE"
+    : error instanceof TypeError ? "NETWORK_OR_TYPE_ERROR" : "CLIENT_ERROR";
+  console.debug("policy-load", scope, code);
+  return code;
+}
+
 export function scheduleLabel(s: PolicySchedule) {
   const zone = `${s.timezone}${s.timezoneKnown ? "" : " (device timezone unknown)"}`;
   if (s.kind === "unknown") return `Unknown schedule · ${zone}`;
@@ -139,16 +151,17 @@ function valueText(value: unknown): string {
 }
 export function RuleHistory({ policy, rule = "" }: { policy: string; rule?: string }) {
   const [revisions, setRevisions] = useState<PolicyRevision[]>([]), [page, setPage] = useState(0), [status, setStatus] = useState("Loading history…");
+  const [errorCode, setErrorCode] = useState("");
   useEffect(() => {
-    let active = true; setStatus("Loading history…");
+    let active = true; setStatus("Loading history…"); setErrorCode("");
     getPolicyHistory(policy, rule, page).then(result => {
       if (!Array.isArray(result.revisions)) throw new Error("Invalid history response");
       if (active) { setRevisions(result.revisions); setStatus(result.revisions.length ? "" : "No recorded changes."); }
-    }).catch(() => { if (active) setStatus("Rule history could not be loaded."); });
+    }).catch(error => { if (active) { setErrorCode(reportPolicyLoadError("history", error)); setStatus("Rule history could not be loaded."); } });
     return () => { active = false; };
   }, [policy, rule, page]);
   return <Box><Typography variant="caption">History starts with stored collections. Incomplete collections and ambiguous repeated identities are excluded.</Typography>
-    {status && <Typography role="status">{status}</Typography>}
+    {status && <Typography role="status" data-error-code={errorCode || undefined}>{status}</Typography>}
     <Table size="small" aria-label="Rule revisions"><TableHead><TableRow>{["Revision", "Changed on", "Collected on", "Changed by"].map(s => <TableCell key={s}>{s}</TableCell>)}</TableRow></TableHead>
       <TableBody>{revisions.map(r => <TableRow key={r.revision}><TableCell><Box component="details"><Box component="summary" sx={{ cursor: "pointer" }}>#{r.revision} · {r.changeType}{r.identityFallback ? " · name fallback" : ""}</Box>
         <Box component="dl">{r.changes.map((change, i) => <Box key={i}><Typography component="dt" variant="caption" fontWeight={700}>{change.field === "number" ? "Moved position" : change.field}</Typography>

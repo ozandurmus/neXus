@@ -8,7 +8,7 @@ import { JobTranscriptDrawer } from "./JobTranscriptDrawer";
 import { m3 } from "../theme/m3Theme";
 import { cancelJob, listPolicies, getPolicyCollectionStatus, type PolicyCollectionStatus, listPolicySources, collectPolicies, type PolicyCollectionSource, getPolicy, getPolicyObject, type PolicyTarget, type PolicyMetadata, type PolicyObject, type PolicyRule, type PolicyCell, type PolicyPage } from "../auth/adminApi";
 
-import { VirtualPolicyCards, RuleDetailPanel, RuleHistory, scheduleLabel, sectionLabel } from "./PolicyRuleViewer";
+import { VirtualPolicyCards, RuleDetailPanel, RuleHistory, scheduleLabel, sectionLabel, reportPolicyLoadError } from "./PolicyRuleViewer";
 
 const runningStates = ["REQUESTED", "CLAIMED", "EXECUTING", "RECONCILING", "RUNNING"];
 const isRunning = (job: PolicyCollectionStatus) => runningStates.includes(job.state);
@@ -93,6 +93,7 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
   const [query, setQuery] = useState("");
   const [data, setData] = useState<PolicyPage | null>(null);
   const [error, setError] = useState("");
+  const [errorCode, setErrorCode] = useState("");
   const [revision, setRevision] = useState(0);
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
@@ -100,13 +101,14 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
     return () => window.clearInterval(timer);
   }, []);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
-  const [drawer, setDrawer] = useState<{ rule?: PolicyRule; object?: PolicyObject; loading?: boolean; error?: string; history?: boolean } | null>(null);
+  const [drawer, setDrawer] = useState<{ rule?: PolicyRule; object?: PolicyObject; loading?: boolean; error?: string; errorCode?: string; history?: boolean } | null>(null);
   const drawerRequest = useRef(0);
   const policyRequest = useRef(0);
   useEffect(() => {
     if (preview) return;
     let active = true;
     setError("");
+    setErrorCode("");
     setLoadingTree(true);
     Promise.all([listPolicySources(), listPolicies()]).then(([admission, stored]) => {
       if (!active) return;
@@ -132,7 +134,7 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
         // Preserve a terminal poll over a stale projection of the SAME job only.
         return [{ ...(previous?.jobId === job.jobId && !isRunning(previous) && isRunning(job) ? previous : job), sourceId: source.sourceId }];
       }));
-    }).catch(() => { if (active) setError("Policy snapshots could not be loaded."); })
+    }).catch(error => { if (active) { setErrorCode(reportPolicyLoadError("snapshots", error)); setError("Policy snapshots could not be loaded."); } })
       .finally(() => { if (active) setLoadingTree(false); });
     return () => { active = false; };
   }, [preview, revision]);
@@ -144,12 +146,12 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
   useEffect(() => {
     let active = true;
     policyRequest.current++;
-    setScrollTop(0); setData(null); setDrawer(null); drawerRequest.current++; setError("");
+    setScrollTop(0); setData(null); setDrawer(null); drawerRequest.current++; setError(""); setErrorCode("");
     if (selected) getPolicy(selected, page, query).then(result => {
       if (!result?.metadata || !Array.isArray(result.sections)) throw new Error("Empty policy response");
       if (active) setData(result);
     })
-      .catch(() => { if (active) setError("Policy rules could not be loaded."); });
+      .catch(error => { if (active) { setErrorCode(reportPolicyLoadError("rules", error)); setError("Policy rules could not be loaded."); } });
     return () => { active = false; };
   }, [selected, page, query, revision]);
   useEffect(() => () => { drawerRequest.current++; }, []);
@@ -184,8 +186,12 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
   const openObject = async (id: string) => {
     const request = ++drawerRequest.current;
     setDrawer({ loading: true });
-    try { const result = await getPolicyObject(id, selected); if (request === drawerRequest.current) setDrawer({ object: result.object }); }
-    catch { if (request === drawerRequest.current) setDrawer({ error: "Object details could not be loaded." }); }
+    try {
+      const result = await getPolicyObject(id, selected);
+      if (!result?.object) throw new Error("Invalid object response");
+      if (request === drawerRequest.current) setDrawer({ object: result.object });
+    }
+    catch (error) { if (request === drawerRequest.current) setDrawer({ error: "Object details could not be loaded.", errorCode: reportPolicyLoadError("object", error) }); }
   };
   const openRule = (rule: PolicyRule) => { drawerRequest.current++; setDrawer({ rule }); };
   const toggle = (set: Set<string>, id: string) => {
@@ -389,7 +395,7 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
           </FormControl>
         </Stack>
         {collectionStatus && <Typography role="status" sx={{ mb: 1 }}>{collectionStatus}</Typography>}
-        {error && <EmptyPanel title="Policy unavailable" body={error}><Button onClick={() => setRevision(n => n + 1)}>Retry</Button></EmptyPanel>}
+        {error && <Box data-error-code={errorCode}><EmptyPanel title="Policy unavailable" body={error}><Button onClick={() => setRevision(n => n + 1)}>Retry</Button></EmptyPanel></Box>}
         {loadingTree && !error && <Typography role="status">Loading policies…</Typography>}
         {!selected && !loadingTree && !error && <Box role="status" aria-label={sources.length ? "No collected policy" : "No policy snapshot"} sx={{ textAlign: "center", py: 3, color: m3.onSurfaceVar }}>
           <Icon name="rows" size={32} />
@@ -441,7 +447,7 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
       <Box role="dialog" aria-modal="true" aria-label={drawer?.rule ? "Rule details" : drawer?.history ? "Policy history" : "Object details"} sx={{ width: { xs: "90vw", sm: drawer?.rule || drawer?.history ? 960 : 520 }, p: 3, overflowWrap: "anywhere" }}>
         <Button onClick={close}>Close</Button>
         {drawer?.loading && <Typography role="status">Loading object…</Typography>}
-        {drawer?.error && <Typography role="alert">{drawer.error}</Typography>}
+        {drawer?.error && <Typography role="alert" data-error-code={drawer.errorCode}>{drawer.error}</Typography>}
         {drawer?.object && <ObjectDetail object={drawer.object} />}
         {drawer?.history && <RuleHistory policy={selected} />}
         {drawer?.rule && data && <RuleDetailPanel key={drawer.rule.id} rule={drawer.rule} metadata={data.metadata}
