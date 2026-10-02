@@ -17,7 +17,7 @@ class PolicyGateContractTest(unittest.TestCase):
     def test_migration_and_fixture_have_exact_signed_off_management_reads(self):
         fixture = (ROOT / "ui2/capability-registry/src/main/resources/capabilities/gate_registry_fixture.yaml").read_text()
         sql = (ROOT / "ui2/service/src/main/resources/db/migration/V117__pan_policy_reads.sql").read_text()
-        rows = [row for row in fixture.split("  - gate_id: ") if row.startswith('"pan_policy_')]
+        rows = [row for row in fixture.split("  - gate_id: ") if row.startswith('"pan_policy_') and 'sign_off_state: "SIGNED_OFF"' in row]
         self.assertEqual(len(rows), 4)
         for row in rows:
             key = json.loads(row.splitlines()[0])

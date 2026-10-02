@@ -17,7 +17,7 @@ class PolicyGateContractTest(unittest.TestCase):
         fixture = (ROOT / "ui2/capability-registry/src/main/resources/capabilities/gate_registry_fixture.yaml").read_text()
         sql = (ROOT / "ui2/service/src/main/resources/db/migration/V116__cp_policy_reads.sql").read_text()
         amendment = (ROOT / "ui2/service/src/main/resources/db/migration/V118__cp_policy_page_budget.sql").read_text()
-        rows = [row for row in fixture.split("  - gate_id: ") if row.startswith('"cp_policy_')]
+        rows = [row for row in fixture.split("  - gate_id: ") if row.startswith('"cp_policy_') and 'sign_off_state: "SIGNED_OFF"' in row]
         self.assertEqual(len(rows), 3)
         for row in rows:
             key = json.loads(row.splitlines()[0])

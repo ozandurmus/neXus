@@ -9,6 +9,7 @@ import java.util.function.Consumer;
 import org.w3c.dom.Element;
 import com.securityexpert.nexus.ui2.capability.GateRegistryPort;
 import com.securityexpert.nexus.ui2.jobs.policy.PanPolicyGates;
+import com.securityexpert.nexus.ui2.jobs.policy.PolicyHitGates;
 import com.securityexpert.nexus.ui2.jobs.transport.*;
 import com.securityexpert.nexus.ui2.persistence.discovery.DiscoveryRun;
 import com.securityexpert.nexus.ui2.persistence.policy.PolicyCollectionRepository;
@@ -126,6 +127,7 @@ public final class PanoramaPolicyCollector {
             // Parent-first order allows inheritance without retaining unrelated DG responses.
             List<String> order = new ArrayList<>(parents.keySet());
             String collectedAt = Instant.now().toString();
+            Map<String, Map<String, FirewallHits>> hitCache = new HashMap<>();
             int published = 0, rulesFetched = 0;
             for (int i = 0; i < order.size(); i++) {
                 String name = order.get(i);
@@ -150,6 +152,7 @@ public final class PanoramaPolicyCollector {
                                 "DG_SIZE bytes=" + (bytes[0] - before) + " rules=" + rules + " objects=" + objects);
                         throw PolicyCollectionTrace.failure("SIZE_LIMIT");
                     }
+                    snapshot = collectHits(snapshot, timer, deadline, bytes, lease, hitCache, scope.automatic());
                     if (!lease.getAsBoolean()) throw PolicyCollectionTrace.failure("LEASE_LOST");
                     if (clock.getAsLong() >= deadline) throw PolicyCollectionTrace.failure("JOB_DEADLINE");
                     if (Thread.currentThread().isInterrupted()) throw PolicyCollectionTrace.failure("INTERRUPTED");
@@ -186,6 +189,62 @@ public final class PanoramaPolicyCollector {
             Arrays.fill(credential.password(), '\0');
         }
     }
+    static XmlApiSpec hitRequest(String context, char[] key) {
+        if (context == null || context.isBlank() || context.length() > 255 || context.chars().anyMatch(c -> c < 32)) throw failure();
+        String escaped = context.replace("&", "&amp;").replace("'", "&apos;").replace("\"", "&quot;")
+                .replace("<", "&lt;").replace(">", "&gt;");
+        return new XmlApiSpec("POST", "op", "not_applicable", "no_target",
+                Map.of("cmd", PolicyHitGates.PAN_COMMAND.substring("type=op&cmd=".length()).replace("<VSYS>", escaped)),
+                Map.of(PanoramaApiRoutes.KEY_HEADER_NAME, new String(key)));
+    }
+    private PolicySnapshot collectHits(PolicySnapshot snapshot, ScheduledExecutorService timer, long deadline,
+            long[] bytes, BooleanSupplier lease, Map<String, Map<String, FirewallHits>> cache, boolean automatic) {
+        if (!PolicyHitGates.enabled(gates, false)) return snapshot;
+        List<Map<String, FirewallHits>> members = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        for (Target member : snapshot.metadata().targets()) {
+            String memberRef = ref(member.deviceId(), member.context());
+            if (!seen.add(memberRef)) continue;
+            if (cache.containsKey(memberRef)) { members.add(cache.get(memberRef)); continue; }
+            cache.put(memberRef, Map.of()); // Failed members are not retried for sibling DGs.
+            char[] key = null;
+            com.securityexpert.nexus.ui2.worker.transport.xmlapi.PanCredentialMaterial credential = null;
+            try {
+                // No implicit default VSYS, address/name joins, or manager credential fallback.
+                hitRequest(member.context(), new char[0]);
+                var endpoint = repository.panFirewall(member.deviceId());
+                if (endpoint.isEmpty()) continue;
+                checkHitRead(lease);
+                if (!repository.beginDomain(member.deviceId(), ref("rule-hit-count", member.context()), automatic)) continue;
+                credential = credentials.resolve(endpoint.get().credentialReferenceId());
+                if (credential == null || credential.username() == null || credential.username().isBlank() || credential.password() == null)
+                    continue;
+                var target = new ApiTarget(member.deviceId(), endpoint.get().address());
+                checkHitRead(lease);
+                var auth = read(target, PanoramaApiRoutes.keyGeneration(credential.username(), credential.password()), timer, deadline, bytes);
+                key = PolicyXml.firstRelativeText(auth, "result/key").filter(k -> !k.isBlank()).orElseThrow(PanoramaPolicyCollector::failure).toCharArray();
+                checkHitRead(lease);
+                var response = read(target, hitRequest(member.context(), key), timer, deadline, bytes);
+                var parsed = PolicyHitCounts.pan(response, member, Instant.now().toString());
+                cache.put(memberRef, parsed);
+                members.add(parsed);
+            } catch (RuntimeException unavailable) {
+                String reason = PolicyCollectionTrace.reason(unavailable);
+                if (Set.of("CANCELLED", "LEASE_LOST", "JOB_DEADLINE", "POLICY_GATE_UNAVAILABLE", "INTERRUPTED")
+                        .stream().anyMatch(code -> reason.endsWith(": " + code))) throw unavailable;
+                com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.add("job", "note", "POLICY_HITS_UNAVAILABLE");
+            } finally {
+                if (key != null) Arrays.fill(key, '\0');
+                if (credential != null && credential.password() != null) Arrays.fill(credential.password(), '\0');
+            }
+        }
+        return PolicyHitCounts.aggregate(snapshot, members);
+    }
+    private void checkHitRead(BooleanSupplier lease) {
+        com.securityexpert.nexus.ui2.worker.JobCancellationScope.check();
+        if (!lease.getAsBoolean()) throw PolicyCollectionTrace.failure("LEASE_LOST");
+        PolicyHitGates.require(gates, false);
+    }
     private XmlApiSpec checked(int index, String group, char[] key, BooleanSupplier lease) {
         com.securityexpert.nexus.ui2.worker.JobCancellationScope.check();
         if (!lease.getAsBoolean()) throw PolicyCollectionTrace.failure("LEASE_LOST");
@@ -196,10 +255,11 @@ public final class PanoramaPolicyCollector {
         return read(target, spec, timer, deadline, bytes, null);
     }
     private Element read(ApiTarget target, XmlApiSpec spec, ScheduledExecutorService timer, long deadline, long[] bytes, String group) {
-        String step = "keygen".equals(spec.type()) ? "authentication" : spec.formParams().containsKey("xpath")
+        boolean hits = spec.formParams().getOrDefault("cmd", "").startsWith("<show><rule-hit-count>");
+        String step = hits ? "rule hit counts" : "keygen".equals(spec.type()) ? "authentication" : spec.formParams().containsKey("xpath")
             ? ("/config/shared".equals(spec.formParams().get("xpath")) ? "shared" : "device group " + ref(spec.formParams().get("xpath")))
             : "<show><devicegroups/></show>".equals(spec.formParams().get("cmd")) ? "show devicegroups" : "show dg-hierarchy";
-        String template = "keygen".equals(spec.type()) ? "type=keygen" : spec.formParams().containsKey("xpath")
+        String template = hits ? PolicyHitGates.PAN_COMMAND : "keygen".equals(spec.type()) ? "type=keygen" : spec.formParams().containsKey("xpath")
             ? PanPolicyGates.COMMANDS.get("/config/shared".equals(spec.formParams().get("xpath")) ? 0 : 1)
             : PanPolicyGates.COMMANDS.get("<show><devicegroups/></show>".equals(spec.formParams().get("cmd")) ? 2 : 3);
         PolicyCollectionTrace.step(step + " " + template, target.endpointId());
@@ -247,6 +307,7 @@ public final class PanoramaPolicyCollector {
             if (group != null) return deviceGroup(completed.handled(), group);
             return completed.handled();
         } catch (PolicyCollectionTrace.Failure invalid) {
+            if (hits) throw invalid;
             String diagnostic = responseShape(prefix.toString(java.nio.charset.StandardCharsets.UTF_8), bytes[0] - before,
                     outcome instanceof XmlApiStreamOutcome.Completed<Element> response ? response.httpStatus() : null);
             com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.add("job", "note", diagnostic);

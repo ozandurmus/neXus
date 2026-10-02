@@ -30,9 +30,24 @@ public record PolicySnapshot(Metadata metadata, List<Section> sections, Map<Stri
     }
     public record Rule(String id, String uuid, int number, String name, Boolean enabled,
             Cell source, Cell destination, Cell service, Cell application, String action,
-            String log, String comment, Map<String, List<String>> extras) {
+            String log, String comment, Map<String, List<String>> extras, HitCounts hitCounts) {
+        public Rule(String id, String uuid, int number, String name, Boolean enabled,
+                Cell source, Cell destination, Cell service, Cell application, String action,
+                String log, String comment, Map<String, List<String>> extras) {
+            this(id, uuid, number, name, enabled, source, destination, service, application, action, log, comment, extras, null);
+        }
         public Rule { extras = Map.copyOf(extras); }
+        public Rule withHitCounts(HitCounts counts) {
+            return new Rule(id, uuid, number, name, enabled, source, destination, service, application, action, log, comment, extras, counts);
+        }
     }
+    /** Null counters mean insufficient evidence, never zero. Breakdown uses opaque enrolled references. */
+    public record HitCounts(Long hits, String firstHit, String lastHit, String source, String collectedAt,
+            String level, List<FirewallHits> firewalls) {
+        public HitCounts { firewalls = firewalls == null ? List.of() : List.copyOf(firewalls); }
+    }
+    public record FirewallHits(String deviceId, String context, Long hits, String firstHit, String lastHit,
+            String createdAt, String modifiedAt, String collectedAt) {}
     public record Cell(List<String> refs, boolean negated) {
         public Cell { refs = List.copyOf(refs); }
     }

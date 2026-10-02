@@ -7,6 +7,15 @@ import com.securityexpert.nexus.ui2.service.privacy.TopologyNamePseudonymizer;
 import com.securityexpert.nexus.ui2.service.privacy.SubnetPreservingIpMasker;
 
 class PolicyPrivacyTest {
+    @Test void hitProjectionPreservesCountersDatesProvenanceAndMasksMemberContext() {
+        var body = Map.of("hitCounts", Map.of("hits", 12, "source", "device", "lastHit", "2026-07-01T00:00:00Z", "level", "high",
+                "firewalls", List.of(Map.of("deviceId", "device-1", "context", "Synthetic context", "createdAt", "2026-01-01T00:00:00Z"))));
+        var masked = new com.fasterxml.jackson.databind.ObjectMapper().valueToTree(PolicyPrivacy.mask(body, "", names, ips)).path("hitCounts");
+        assertEquals(12, masked.path("hits").asInt()); assertEquals("device", masked.path("source").asText());
+        assertEquals("2026-07-01T00:00:00Z", masked.path("lastHit").asText());
+        assertEquals("device-1", masked.path("firewalls").get(0).path("deviceId").asText());
+        assertFalse(masked.toString().contains("Synthetic context"));
+    }
     private final TopologyNamePseudonymizer names = new TopologyNamePseudonymizer(new byte[32]);
     private final SubnetPreservingIpMasker ips = new SubnetPreservingIpMasker(new byte[32]);
 

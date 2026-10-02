@@ -8,6 +8,17 @@ import java.time.Instant;
 import java.util.*;
 
 class PolicyRuleQueryTest {
+    @Test void hitFiltersAreNumericComposableAndUnknownSafe() {
+        var uncollected = rule(empty);
+        var never = uncollected.withHitCounts(new HitCounts(0L, null, null, "mds", now.toString(), "zero", List.of()));
+        var old = uncollected.withHitCounts(new HitCounts(12L, "2026-01-01T00:00:00Z", "2026-06-01T12:00:00Z", "device", now.toString(), null, List.of()));
+        assertTrue(match("hits=0", never)); assertFalse(match("lasthit.days>90", never));
+        assertTrue(match("lasthit.days>90 AND NOT hits=0", old));
+        assertFalse(match("hits=0", uncollected)); assertFalse(match("NOT hits=0", uncollected));
+        assertFalse(match("NOT lasthit.days>90", uncollected));
+        assertThrows(IllegalArgumentException.class, () -> match("hits=-1", old));
+        assertThrows(IllegalArgumentException.class, () -> match("lasthit.days>99999999999999999999", old));
+    }
     private final Instant now = Instant.parse("2026-10-02T12:00:00Z");
     private final Cell empty = new Cell(List.of(), false);
     private Map<String, PolicyObject> objects() {

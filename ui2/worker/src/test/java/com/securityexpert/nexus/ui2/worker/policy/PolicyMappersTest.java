@@ -10,6 +10,15 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 class PolicyMappersTest {
+    @Test void checkpointAttachesHitCountsToTheExactRule() throws Exception {
+        var json = new ObjectMapper().readTree(fixture("check-point.json"));
+        var first = (com.fasterxml.jackson.databind.node.ObjectNode) json.get(0).path("rulebase").get(0).path("rulebase").get(0);
+        first.putObject("hits").put("value", 7).put("last-date", "2026-07-01T00:00:00Z");
+        var rules = new CheckPointPolicyMapper().map(metadata("CP"), List.of(json.get(0), json.get(1)))
+                .sections().stream().flatMap(s -> s.rules().stream()).toList();
+        assertEquals(7L, rules.get(0).hitCounts().hits()); assertEquals("mds", rules.get(0).hitCounts().source());
+        assertNull(rules.get(1).hitCounts());
+    }
     private Metadata metadata(String vendor) { return new Metadata("policy-1", "manager-1", "Synthetic manager", vendor,
             "container-1", "Synthetic container", "Synthetic policy", "2026-10-01T12:00:00Z", "artifact-1",
             List.of(new Target("device-1", "FW-TANGO-04", "vsys1", "UNKNOWN"), new Target("device-1", "FW-TANGO-04", "vsys2", "UNKNOWN"))); }

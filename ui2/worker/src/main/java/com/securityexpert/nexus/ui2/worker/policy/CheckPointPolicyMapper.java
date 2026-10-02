@@ -131,7 +131,7 @@ public final class CheckPointPolicyMapper {
                     node.path("enabled").isBoolean() ? node.path("enabled").asBoolean() : null,
                     cell(meta, node, "source", dict, objects), cell(meta, node, "destination", dict, objects),
                     cell(meta, node, "service", dict, objects), new Cell(List.of(), false),
-                    resolve(node.path("action"), dict), resolve(node.path("track").path("type"), dict), node.path("comments").asText(""), extras));
+                    resolve(node.path("action"), dict), resolve(node.path("track").path("type"), dict), node.path("comments").asText(""), extras, PolicyHitCounts.checkPoint(node.path("hits"), meta.collectedAt())));
             if (node.has("inline-layer")) {
                 flush(sections, section, name, parent, pending);
                 layer(meta, node.path("inline-layer").asText(), ruleId, layers, dict, objects, sections, path);

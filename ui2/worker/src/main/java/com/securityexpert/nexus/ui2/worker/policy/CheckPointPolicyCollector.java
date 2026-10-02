@@ -6,6 +6,7 @@ import java.util.function.*;
 import com.fasterxml.jackson.databind.*;
 import com.securityexpert.nexus.ui2.capability.GateRegistryPort;
 import com.securityexpert.nexus.ui2.jobs.policy.CpPolicyGates;
+import com.securityexpert.nexus.ui2.jobs.policy.PolicyHitGates;
 import com.securityexpert.nexus.ui2.jobs.transport.*;
 import com.securityexpert.nexus.ui2.persistence.discovery.DiscoveryRun;
 import com.securityexpert.nexus.ui2.persistence.policy.PolicyCollectionRepository;
@@ -197,7 +198,9 @@ public final class CheckPointPolicyCollector {
             try {
                 if (fetched.size() > MAX_PAGES) throw failure();
                 final int previousRules = rules[0];
-                layer = pages(session, offset -> MgmtCliCommands.showAccessRulebase(domain, name, offset), 1, deadline, lease,
+                boolean hits = PolicyHitGates.enabled(gates, true);
+                layer = pages(session, offset -> MgmtCliCommands.showAccessRulebase(domain, name, offset)
+                        + (hits ? " show-hits true" : ""), hits ? 3 : 1, deadline, lease,
                     count -> {
                         rules[0] = previousRules + count;
                         PolicyCollectionTrace.layer(fetched.size(), fetched.size() + pending.size(), rules[0]);
@@ -289,7 +292,7 @@ public final class CheckPointPolicyCollector {
         if (!page.path("from").isIntegralNumber() || !page.path("to").isIntegralNumber()
                 || !page.path("to").canConvertToInt() || page.path("from").asLong() != offset + 1L) throw failure();
         int to = page.path("to").intValue();
-        if (to <= offset || to > total || to - offset > (gate == 1 ? 100 : 500) || page.path("rulebase").isEmpty()) throw failure();
+        if (to <= offset || to > total || to - offset > (gate == 1 || gate == 3 ? 100 : 500) || page.path("rulebase").isEmpty()) throw failure();
         return total;
     }
     private static final class PageFailure extends PolicyCollectionTrace.Failure {
@@ -309,13 +312,14 @@ public final class CheckPointPolicyCollector {
     }
 
     JsonNode read(TransportSession session, String command, int gate, long deadline, BooleanSupplier lease) {
-        String step = gate < 0 ? MgmtCliCommands.domainList() : com.securityexpert.nexus.ui2.jobs.policy.CpPolicyGates.COMMANDS.get(gate);
+        String step = gate == 3 ? PolicyHitGates.CP_COMMAND : gate < 0 ? MgmtCliCommands.domainList() : com.securityexpert.nexus.ui2.jobs.policy.CpPolicyGates.COMMANDS.get(gate);
         String target = ref("cp-policy-read", command.replaceAll(" limit (100|50) offset ", " limit PAGE offset "));
         var offset = java.util.regex.Pattern.compile(" offset '([0-9]+)' ").matcher(command);
-        String page = offset.find() ? " offset=" + offset.group(1) + " limit=" + (gate == 1 ? command.contains(" limit 50 ") ? 50 : 100 : 500) : "";
+        String page = offset.find() ? " offset=" + offset.group(1) + " limit=" + (gate == 1 || gate == 3 ? command.contains(" limit 50 ") ? 50 : 100 : 500) : "";
         PolicyCollectionTrace.step(step + page, target);
         checkActive(deadline, lease);
-        if (gate >= 0) CpPolicyGates.require(gates, gate);
+        if (gate == 3) PolicyHitGates.require(gates, true);
+        else if (gate >= 0) CpPolicyGates.require(gates, gate);
         long remaining = deadline - nanoTime.getAsLong();
         if (remaining <= 0) throw PolicyCollectionTrace.failure("JOB_DEADLINE");
         long started = System.nanoTime();

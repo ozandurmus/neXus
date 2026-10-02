@@ -414,7 +414,7 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
             </>}
             {selected && <TextField label="Rule query" size="small" fullWidth value={search}
               placeholder="source.ip='192.0.2.10' AND service='tcp/443'"
-              helperText="Fields: source.ip, destination.ip, service, application, action, name, comment, user, zone.from, zone.to, enabled, expired, time. AND / OR / NOT, parentheses; plain text searches names and comments."
+              helperText="Fields: source.ip, destination.ip, service, application, action, name, comment, user, zone.from, zone.to, enabled, expired, time. Hit filters: lasthit.days>90, hits=0. AND / OR / NOT, parentheses; plain text searches names and comments."
               inputProps={{ maxLength: 1000 }} onChange={e => setSearch(e.target.value)} sx={{ my: 2 }} />}
             {data && <>
               <Stack direction="row" flexWrap="wrap" gap={1} alignItems="center" sx={{ mb: 1 }}>

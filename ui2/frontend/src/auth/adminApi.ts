@@ -1693,10 +1693,17 @@ export interface PolicyObject {
   id: string; name: string; type: string; status: string; members?: string[]; values?: string[]; children?: PolicyObject[]; schedule?: PolicySchedule | null;
 }
 export interface PolicyCell { refs: string[]; negated: boolean }
+export interface PolicyHitCounts {
+  hits: number | null; firstHit: string | null; lastHit: string | null; source: "device" | "mds";
+  collectedAt: string; level?: string | null;
+  firewalls: { deviceId: string; context: string; hits: number | null; firstHit: string | null; lastHit: string | null;
+    createdAt: string | null; modifiedAt: string | null; collectedAt: string }[];
+}
 export interface PolicyRule {
   id: string; uuid: string; number: number; name: string; enabled: boolean | null;
   source: PolicyCell; destination: PolicyCell; service: PolicyCell; application: PolicyCell;
   action: string; log: string; comment: string; extras: Record<string, string[]>;
+  hitCounts?: PolicyHitCounts | null;
   identityFallback?: boolean; timeStatus?: string; schedules?: PolicySchedule[]; expiring?: boolean;
   permissiveness?: { level: "Low" | "Medium" | "High" | "Unknown"; reasons: string[] };
 }
