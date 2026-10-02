@@ -10,6 +10,10 @@ dependencies {
     // api(project(":capability-registry")), used directly here for
     // TransportKind/CapabilityRegistry (worker composition/startup wiring).
 
+    // Reuse the service JDBC starter artifacts for the bounded worker pool.
+    implementation(libs.hikari)
+    implementation(libs.slf4j.api)
+
     // ssh_exec transport adapter (contract section 5, module-placement
     // table row "ssh_exec adapter... worker"). No test in this environment
     // exercises this against a real network endpoint or a real device

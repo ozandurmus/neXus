@@ -34,6 +34,7 @@ dependencies {
 
     testImplementation(libs.flyway.core)
     testImplementation(libs.postgresql)
+    testImplementation(libs.hikari)
     testImplementation(libs.jooq)
     // UnboundID SDK: already a repository dependency (ldap-adapter/build.gradle.kts),
     // named directly here because this module's tests construct an

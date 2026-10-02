@@ -126,10 +126,12 @@ public final class Ui2WorkerMain {
         String paloAltoTrustRuleRef =
                 System.getenv().getOrDefault("UI2_PAN_TRUST_RULE_REF", "utils.pan_xml_api_trust");
 
-        TransactionBoundary transactionBoundary = TransactionBoundaryFactory.fromJdbc(jdbcUrl, dbUser, dbPassword);
+        var databasePool = WorkerDatabasePool.create(
+                TransactionBoundaryFactory.jdbcDataSource(jdbcUrl, dbUser, dbPassword), System.getProperties());
+        TransactionBoundary transactionBoundary = TransactionBoundaryFactory.fromDataSource(databasePool);
 
         CredentialStoreComposition.ResolverComponents resolverComponents =
-                CredentialStoreComposition.resolverComponents(jdbcUrl, dbUser, dbPassword, credentialStoreKeyBase64);
+                CredentialStoreComposition.resolverComponents(transactionBoundary, credentialStoreKeyBase64);
 
         JobLeaseRepository leaseRepository = new PersistenceJobLeaseRepository(new JooqJobLeaseDao(transactionBoundary));
         JobStepAttemptRepository attemptRepository =
@@ -366,6 +368,8 @@ public final class Ui2WorkerMain {
                         : "drain window elapsed with jobs still running; the reconciler will requeue them"));
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
+            } finally {
+                databasePool.close();
             }
         }, "worker-drain"));
 

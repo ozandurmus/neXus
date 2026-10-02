@@ -35,7 +35,11 @@ public final class CredentialStoreComposition {
     /** SB-16: read-only components for worker-side SSH, API and SNMP credential resolution. */
     public static ResolverComponents resolverComponents(String jdbcUrl, String user, String password,
             String credentialStoreKeyBase64) {
-        TransactionBoundary transactionBoundary = transactionBoundary(jdbcUrl, user, password);
+        return resolverComponents(transactionBoundary(jdbcUrl, user, password), credentialStoreKeyBase64);
+    }
+
+    public static ResolverComponents resolverComponents(TransactionBoundary transactionBoundary,
+            String credentialStoreKeyBase64) {
         CredentialReferenceRepository credentialReferenceRepository =
                 new JooqCredentialReferenceRepository(transactionBoundary);
         CredentialRepository credentialRepository = new JooqCredentialRepository(transactionBoundary);
