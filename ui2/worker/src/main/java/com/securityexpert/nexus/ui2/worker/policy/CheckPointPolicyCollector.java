@@ -327,7 +327,8 @@ public final class CheckPointPolicyCollector {
                 result.getClass().getSimpleName());
         if (Thread.currentThread().isInterrupted()) throw PolicyCollectionTrace.failure("INTERRUPTED");
         if (nanoTime.getAsLong() >= deadline) throw PolicyCollectionTrace.failure("JOB_DEADLINE");
-        if (result instanceof ExecResult.TimedOut) throw PolicyCollectionTrace.failure("TIMEOUT");
+        if (result instanceof ExecResult.TimedOut timedOut)
+            throw PolicyCollectionTrace.failure(timedOut.streaming() ? "STREAMING_TIMEOUT" : "TIMEOUT");
         if (!(result instanceof ExecResult.Completed completed)) throw PolicyCollectionTrace.failure(result.getClass().getSimpleName());
         try {
             JsonNode root = json.readTree(completed.output());

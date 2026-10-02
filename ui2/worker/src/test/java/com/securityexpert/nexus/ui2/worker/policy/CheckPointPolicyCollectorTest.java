@@ -239,6 +239,15 @@ class CheckPointPolicyCollectorTest {
         verify(transport).execInteractive(eq(session), eq(policySpec(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Inline", 0, 50))), eq(Duration.ofSeconds(300)));
         verify(transport).disconnect(session);
     }
+    @Test void streamingTimeoutDoesNotReissuePageAtEitherLimit() {
+        var collector = setup(command -> command.contains("name 'Inline'")
+            ? new ExecResult.TimedOut(true) : answer(command));
+        var snapshot = collector.collect(run, request, () -> true).get(0);
+        assertEquals(1, snapshot.failures().size());
+        assertTrue(snapshot.failures().get(0).reason().endsWith(": STREAMING_TIMEOUT"));
+        verify(transport).execInteractive(eq(session), eq(policySpec(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Inline", 0))), any());
+        verify(transport, never()).execInteractive(eq(session), argThat(spec -> spec.command().contains(" limit 50 offset ")), any());
+    }
     @Test void malformedMappedInlineLayerDoesNotPreventNatOrSiblingPublication() {
         var collector = setup(command -> command.contains("name 'Inline'")
             ? ok(page("child", 1, 1, 1, "{\"uid\":\"r3\",\"type\":\"unsupported-entry\"}", "")) : answer(command));
@@ -307,7 +316,10 @@ class CheckPointPolicyCollectorTest {
         setup(this::answer);
         var collector = new CheckPointPolicyCollector(transport, gates, repository, Duration.ofSeconds(120), () -> 0L);
         collector.collect(run, request, () -> true);
-        verify(transport, times(3)).execInteractive(eq(session), any(), eq(Duration.ofSeconds(120)));
+        var commands = org.mockito.ArgumentCaptor.forClass(ExecSpec.class);
+        verify(transport, times(6)).execInteractive(eq(session), commands.capture(), eq(Duration.ofSeconds(120)));
+        assertEquals(6, commands.getAllValues().stream().map(ExecSpec::command).distinct().count());
+        assertTrue(commands.getAllValues().stream().allMatch(spec -> spec.streamingExtensionMs() == 0));
         assertThrows(IllegalArgumentException.class, () -> new CheckPointPolicyCollector(transport, gates, repository, Duration.ZERO));
     }
 

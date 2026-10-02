@@ -12,7 +12,9 @@ public sealed interface ExecResult {
     record Completed(String output, int exitStatus) implements ExecResult {
     }
 
-    record TimedOut() implements ExecResult {
+    /** Streaming at the deadline, or an already-used streaming extension, forbids page retry. */
+    record TimedOut(boolean streaming) implements ExecResult {
+        public TimedOut() { this(false); }
     }
 
     record ChannelFailed(String reason) implements ExecResult {

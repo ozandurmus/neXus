@@ -174,6 +174,13 @@ class CpPolicyParallelCollectionTest {
         assertTrue(snapshot.failures().get(0).reason().endsWith(": TIMEOUT"));
         assertEquals(2, reads.stream().filter(c -> c.contains("show-access-rulebase")).count()); cleanup();
     }
+    @Test void streamingTimeoutDoesNotRetryAndCleansAllSessions() {
+        var collector = setup(4, command -> command.contains("show-access-rulebase") ? new ExecResult.TimedOut(true) : answer(command));
+        var snapshot = collector.collect(run, request, () -> true).get(0);
+        assertEquals(1, snapshot.failures().size());
+        assertTrue(snapshot.failures().get(0).reason().endsWith(": STREAMING_TIMEOUT"));
+        assertEquals(1, reads.stream().filter(c -> c.contains("show-access-rulebase")).count()); cleanup();
+    }
 
     @Test void failedDisconnectStopsInsteadOfOpeningARetrySession() {
         var collector = setup(2, command -> command.contains("show-access-rulebase") ? new ExecResult.TimedOut() : answer(command));
