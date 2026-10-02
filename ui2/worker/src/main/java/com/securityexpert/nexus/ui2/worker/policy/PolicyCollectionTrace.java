@@ -12,25 +12,48 @@ final class PolicyCollectionTrace implements AutoCloseable {
     private final BiConsumer<Integer, Integer> progress;
     private final java.util.function.Consumer<Measurement> measured;
     private String step = "preflight", target;
-    private int count, total;
+    private final java.util.concurrent.atomic.AtomicInteger count;
+    private int total;
     PolicyCollectionTrace(String target, BiConsumer<Integer, Integer> progress) {
         this(target, progress, measurement -> {});
     }
     PolicyCollectionTrace(String target, BiConsumer<Integer, Integer> progress, java.util.function.Consumer<Measurement> measured) {
-        this.target = target; this.progress = progress; this.measured = measured; ACTIVE.set(this);
+        this.target = target; this.progress = progress; this.measured = measured;
+        this.count = new java.util.concurrent.atomic.AtomicInteger(); ACTIVE.set(this);
     }
     PolicyCollectionTrace(String target, BiConsumer<Integer, Integer> progress, java.util.function.Consumer<Measurement> measured,
             java.util.function.Consumer<LayerProgress> layers) {
         this(target, progress, measured); this.layerProgress = layers;
     }
+    private PolicyCollectionTrace(PolicyCollectionTrace parent) {
+        target = parent.target; progress = parent.progress; measured = parent.measured;
+        layerProgress = parent.layerProgress; count = parent.count; total = parent.total; ACTIVE.set(this);
+    }
+    static <T> java.util.concurrent.Callable<T> worker(java.util.concurrent.Callable<T> operation) {
+        var parent = ACTIVE.get();
+        var transcript = JobTranscriptScope.current();
+        var cancelled = com.securityexpert.nexus.ui2.worker.JobCancellationScope.requested();
+        return () -> {
+            try (var cancellation = new com.securityexpert.nexus.ui2.worker.JobCancellationScope(cancelled);
+                 var scope = transcript == null ? null : JobTranscriptScope.open(transcript);
+                 var trace = parent == null ? null : new PolicyCollectionTrace(parent)) {
+                return operation.call();
+            }
+        };
+    }
+    static void concurrency(int previous, int current) {
+        String counts = "policy concurrency=" + current + " previous=" + previous;
+        JobTranscriptScope.add("job", "note", counts);
+        System.getLogger(PolicyCollectionTrace.class.getName()).log(System.Logger.Level.INFO, counts);
+    }
     static void layer(int layer, int layers, int rules) {
         var trace = ACTIVE.get();
-        if (trace != null) trace.layerProgress.accept(new LayerProgress(++trace.count, layer, layers, rules));
+        if (trace != null) trace.layerProgress.accept(new LayerProgress(trace.count.incrementAndGet(), layer, layers, rules));
     }
     static void plan(int total) { var trace = ACTIVE.get(); if (trace != null) trace.total = total; }
     static void step(String step, String target) {
         var trace = ACTIVE.get();
-        if (trace != null) { trace.step = step; trace.target = target; trace.progress.accept(++trace.count, trace.total); }
+        if (trace != null) { trace.step = step; trace.target = target; trace.progress.accept(trace.count.incrementAndGet(), trace.total); }
         String request = step + " target=" + target;
         JobTranscriptScope.add("job", "request", request);
         System.getLogger(PolicyCollectionTrace.class.getName()).log(System.Logger.Level.INFO, request);

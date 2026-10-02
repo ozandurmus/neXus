@@ -14,10 +14,11 @@ import static com.securityexpert.nexus.ui2.policy.PolicySnapshot.*;
 import com.securityexpert.nexus.ui2.worker.discovery.cp.MgmtCliCommands;
 import com.securityexpert.nexus.ui2.worker.transport.ssh.PersistedManagementEndpointTrustResolver;
 
-/** One serial, trusted MDS session; complete sibling layers survive a failed layer. */
+/** Trusted MDS sessions; complete sibling layers survive a failed layer. */
 public final class CheckPointPolicyCollector {
     static final int MAX_PAGES = 200;
-    private final DeviceTransport transport;
+    final DeviceTransport transport;
+    private final int maxSessions;
     private final GateRegistryPort gates;
     private final PolicyCollectionRepository repository;
     private final Duration jobTimeout;
@@ -29,12 +30,25 @@ public final class CheckPointPolicyCollector {
             System.getenv().getOrDefault("UI2_POLICY_RUN_DEADLINE_SECONDS", "7200"))));
     }
     public CheckPointPolicyCollector(DeviceTransport transport, GateRegistryPort gates, PolicyCollectionRepository repository, Duration jobTimeout) {
-        this(transport, gates, repository, jobTimeout, System::nanoTime);
+        this(transport, gates, repository, jobTimeout, configuredMaxSessions(), System::nanoTime);
     }
     CheckPointPolicyCollector(DeviceTransport transport, GateRegistryPort gates, PolicyCollectionRepository repository, Duration jobTimeout, LongSupplier nanoTime) {
+        this(transport, gates, repository, jobTimeout, 1, nanoTime);
+    }
+    public CheckPointPolicyCollector(DeviceTransport transport, GateRegistryPort gates, PolicyCollectionRepository repository, Duration jobTimeout, int maxSessions) {
+        this(transport, gates, repository, jobTimeout, maxSessions, System::nanoTime);
+    }
+    CheckPointPolicyCollector(DeviceTransport transport, GateRegistryPort gates, PolicyCollectionRepository repository, Duration jobTimeout, int maxSessions, LongSupplier nanoTime) {
+        if (maxSessions < 1 || maxSessions > 4) throw new IllegalArgumentException("POLICY_MAX_SESSIONS_MUST_BE_1_TO_4");
+        this.maxSessions = maxSessions;
         if (jobTimeout.isZero() || jobTimeout.isNegative()) throw new IllegalArgumentException("POLICY_DEADLINE_MUST_BE_POSITIVE");
         this.transport = transport; this.gates = gates; this.repository = repository;
         this.jobTimeout = jobTimeout; this.nanoTime = nanoTime;
+    }
+
+    static int configuredMaxSessions() {
+        return Integer.parseInt(System.getProperty("ui2.policy.cp.max-sessions",
+            System.getenv().getOrDefault("UI2_POLICY_CP_MAX_SESSIONS", "4")));
     }
 
     public List<PolicySnapshot> collect(DiscoveryRun run, PolicyCollectionRepository.Request request, BooleanSupplier lease) {
@@ -46,6 +60,8 @@ public final class CheckPointPolicyCollector {
         CpPolicyGates.requireAll(gates);
         if (!lease.getAsBoolean()) throw PolicyCollectionTrace.failure("LEASE_LOST");
         long deadline = nanoTime.getAsLong() + jobTimeout.toNanos();
+        if (maxSessions > 1) return new CpPolicyParallelCollection(this, gates, repository, maxSessions, nanoTime,
+            run, request, deadline, lease, publish).collect();
         checkActive(deadline, lease);
         PolicyCollectionTrace.step("connect", request.sourceId());
         var result = com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.withoutRecording(() -> transport.connect(new ConnectionTarget(run.managementAddress(), run.managementAddress(), 22),
@@ -119,7 +135,7 @@ public final class CheckPointPolicyCollector {
         }
     }
 
-    private static PolicySnapshot snapshot(Metadata metadata, List<JsonNode> access, List<JsonNode> nat, List<CollectionFailure> failures) {
+    static PolicySnapshot snapshot(Metadata metadata, List<JsonNode> access, List<JsonNode> nat, List<CollectionFailure> failures) {
         // Refresh the publication timestamp so each completed layer can replace its earlier checkpoint.
         var updated = new Metadata(metadata.id(), metadata.sourceId(), metadata.sourceName(), metadata.vendor(), metadata.containerId(),
             metadata.containerName(), metadata.name(), Instant.now().toString(), metadata.artefactRef(), metadata.targets());
@@ -184,7 +200,7 @@ public final class CheckPointPolicyCollector {
         return all;
     }
 
-    private static int ruleCount(JsonNode rules) { return ruleCount(rules, 0); }
+    static int ruleCount(JsonNode rules) { return ruleCount(rules, 0); }
     private static int ruleCount(JsonNode rules, int depth) {
         if (depth > 32) throw failure();
         int count = 0;
@@ -192,7 +208,7 @@ public final class CheckPointPolicyCollector {
         return count;
     }
 
-    private static void inline(JsonNode rules, Set<String> ids, int depth) {
+    static void inline(JsonNode rules, Set<String> ids, int depth) {
         if (depth > 32) throw failure();
         for (JsonNode rule : rules) {
             if (rule.has("inline-layer")) ids.add(required(rule, "inline-layer"));
@@ -242,18 +258,18 @@ public final class CheckPointPolicyCollector {
         PageFailure(String reason, int offset) { super(reason); this.offset = offset; }
     }
 
-    private void checkActive(long deadline, BooleanSupplier lease) {
+    void checkActive(long deadline, BooleanSupplier lease) {
         com.securityexpert.nexus.ui2.worker.JobCancellationScope.check();
         checkPublication(deadline, lease);
     }
 
-    private void checkPublication(long deadline, BooleanSupplier lease) {
+    void checkPublication(long deadline, BooleanSupplier lease) {
         if (Thread.currentThread().isInterrupted()) throw PolicyCollectionTrace.failure("INTERRUPTED");
         if (nanoTime.getAsLong() >= deadline) throw PolicyCollectionTrace.failure("JOB_DEADLINE");
         if (!lease.getAsBoolean()) throw PolicyCollectionTrace.failure("LEASE_LOST");
     }
 
-    private JsonNode read(TransportSession session, String command, int gate, long deadline, BooleanSupplier lease) {
+    JsonNode read(TransportSession session, String command, int gate, long deadline, BooleanSupplier lease) {
         String step = gate < 0 ? MgmtCliCommands.domainList() : com.securityexpert.nexus.ui2.jobs.policy.CpPolicyGates.COMMANDS.get(gate);
         String target = ref("cp-policy-read", command.replaceAll(" limit (100|50) offset ", " limit PAGE offset "));
         var offset = java.util.regex.Pattern.compile(" offset '([0-9]+)' ").matcher(command);
@@ -275,19 +291,25 @@ public final class CheckPointPolicyCollector {
         if (completed.exitStatus() != 0) throw PolicyCollectionTrace.failure("EXIT_" + completed.exitStatus());
         try {
             JsonNode root = json.readTree(completed.output());
-            if (root == null || !root.isObject() || root.has("code") || root.has("message")) throw failure();
+            if (root != null && root.isObject() && (root.has("code") || root.has("message"))) {
+                String message = root.path("message").asText("").toLowerCase(Locale.ROOT);
+                if (message.contains("session") || message.contains("lock") || message.contains("too many"))
+                    throw PolicyCollectionTrace.failure("API_SESSION_PRESSURE");
+                throw failure();
+            }
+            if (root == null || !root.isObject()) throw failure();
             return root;
         } catch (java.io.IOException invalid) { throw failure(); }
     }
 
-    private static void completeList(JsonNode root, String field) {
+    static void completeList(JsonNode root, String field) {
         if (!root.path(field).isArray() || !root.path("total").isIntegralNumber()
                 || root.path("total").asLong() != root.path(field).size() || root.path(field).size() > 500) throw failure();
     }
-    private static String required(JsonNode object, String field) {
+    static String required(JsonNode object, String field) {
         JsonNode value = object.path(field);
         if (!value.isTextual() || value.textValue().isBlank()) throw failure();
         return value.textValue();
     }
-    private static PolicyCollectionTrace.Failure failure() { return PolicyCollectionTrace.failure("INVALID_OR_INCOMPLETE_RESPONSE"); }
+    static PolicyCollectionTrace.Failure failure() { return PolicyCollectionTrace.failure("INVALID_OR_INCOMPLETE_RESPONSE"); }
 }
