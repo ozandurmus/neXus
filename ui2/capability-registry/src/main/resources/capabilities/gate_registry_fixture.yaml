@@ -3035,3 +3035,37 @@ gates:
     safe_telemetry_fields: ["outcome", "deviceGroupCount", "ruleCount"]
     source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_01_PAN_POLICY_READS.md"
     canonical_command_key: "type=op&cmd=<show><dg-hierarchy></dg-hierarchy></show>"
+
+  - gate_id: "cp_policy_access_rulebase_hits"
+    vendor: "check_point"
+    platform_role_scope: "cp_multi_domain_server"
+    shell_context: "expert"
+    transport_kind: "SSH_EXEC"
+    canonical_command_key: "mgmt_cli -r true -d '<DOMAIN>' -f json show-access-rulebase name '<LAYER>' limit 100 offset '<N>' details-level full use-object-dictionary true show-hits true"
+    action_class: "read"
+    sign_off_state: "DRAFTED"
+    timeout_s: 300
+    retry_rule: "none"
+    max_frequency: "manual policy request; automatic at most once per domain per 6 hours"
+    session_reuse_rule: "existing policy SSH session; serial"
+    unsupported_behavior_ref: "UNKNOWN; retain policy without hit metrics"
+    secret_output_risk: "sensitive rule identities; parse in memory; no raw retention"
+    safe_telemetry_fields: ["outcome", "ruleCount"]
+    source_document_pointer: "PO brief rule-hit-counts; proposed reads awaiting explicit approval"
+
+  - gate_id: "pan_policy_rule_hit_count"
+    vendor: "palo_alto"
+    platform_role_scope: "pan_firewall"
+    shell_context: "not_applicable"
+    transport_kind: "PAN_XML_API"
+    canonical_command_key: "type=op&cmd=<show><rule-hit-count><vsys><vsys-name><entry name='<VSYS>'><rule-base><entry name='security'><rules><all/></rules></entry></rule-base></entry></vsys-name></vsys></rule-hit-count></show>"
+    action_class: "read"
+    sign_off_state: "DRAFTED"
+    timeout_s: 60
+    retry_rule: "none"
+    max_frequency: "manual policy request; automatic at most once per firewall and VSYS per 6 hours"
+    session_reuse_rule: "existing authenticated transport and member credential; serial"
+    unsupported_behavior_ref: "UNKNOWN; retain policy without hit metrics"
+    secret_output_risk: "sensitive rule identities; parse in memory; no raw retention"
+    safe_telemetry_fields: ["outcome", "ruleCount"]
+    source_document_pointer: "PO brief rule-hit-counts; proposed reads awaiting explicit approval"

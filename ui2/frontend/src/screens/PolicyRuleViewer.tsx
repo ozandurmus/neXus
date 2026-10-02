@@ -63,7 +63,7 @@ function Extra({ name, values, objects, openObject }: { name: string; values: st
 export function RuleMetrics({ rule }: { rule: PolicyRule }) {
   const status = rule.timeStatus ?? "unknown";
   const tiles = [
-    ["Last hit", "—", "hit counts not collected yet"],
+    ["Last hit", rule.hitCounts?.lastHit ?? "—", rule.hitCounts ? `Hits: ${rule.hitCounts.hits ?? "UNKNOWN"} · ${rule.hitCounts.source} · Collected: ${rule.hitCounts.collectedAt}` : "hit counts not collected (awaiting approval)"],
     ["Last modified", rule.extras["last-modified"]?.[0] ?? "—", "vendor modification time, when collected"],
     ["Time/Schedule status", status === "unknown" ? "—" : status, (rule.schedules ?? []).map(scheduleLabel).join("; ") || (status === "always" ? "Unbounded schedule" : "schedule not collected")],
     ["Permissiveness", rule.permissiveness?.level === "Unknown" ? "—" : rule.permissiveness?.level ?? "—", rule.permissiveness?.reasons.join("; ") || "requires analysis"],
@@ -179,6 +179,15 @@ export function RuleDetailPanel({ rule, section, metadata, objects, openObject }
         {["Shadowing", "Violations"].map(label => <Tooltip key={label} title="coming later"><span><Button disabled>{label}</Button></span></Tooltip>)}
       </Stack><Box sx={{ minWidth: 0 }}>
         {tab === "Overview" && <><RuleMetrics rule={rule} /><Typography variant="body2" sx={{ my: 2 }}>{metadata.sourceName} · {containerLabel(metadata, section, rule)} · Domain: {metadata.containerName} · Tags: {rule.extras.tag?.join(", ") || "—"}</Typography>
+          {rule.hitCounts && <Box sx={{ my: 2, overflowX: "auto" }}><Typography variant="body2">Hits: {rule.hitCounts.hits ?? "UNKNOWN"} · First hit: {rule.hitCounts.firstHit ?? "—"} · Source: {rule.hitCounts.source} · Collected: {rule.hitCounts.collectedAt}</Typography>
+            {!!rule.hitCounts.firewalls.length && <Table size="small" aria-label="Per-firewall hit counts"><TableHead><TableRow>
+              {["Firewall", "Context", "Hits", "First hit", "Last hit", "Created", "Modified", "Collected"].map(label => <TableCell key={label}>{label}</TableCell>)}
+            </TableRow></TableHead><TableBody>{rule.hitCounts.firewalls.map(member => <TableRow key={`${member.deviceId}:${member.context}`}>
+              <TableCell>{metadata.targets.find(target => target.deviceId === member.deviceId)?.name ?? "Unmatched firewall"}</TableCell><TableCell>{member.context}</TableCell>
+              <TableCell>{member.hits ?? "UNKNOWN"}</TableCell><TableCell>{member.firstHit ?? "—"}</TableCell><TableCell>{member.lastHit ?? "—"}</TableCell>
+              <TableCell>{member.createdAt ?? "—"}</TableCell><TableCell>{member.modifiedAt ?? "—"}</TableCell><TableCell>{member.collectedAt}</TableCell>
+            </TableRow>)}</TableBody></Table>}
+          </Box>}
           <Typography variant="caption" display="block">UUID: {rule.uuid || "—"}</Typography><Typography variant="caption" display="block">Enabled: {rule.enabled === null ? "UNKNOWN" : String(rule.enabled)}</Typography>
           <RuleFields rule={rule} objects={objects} openObject={openObject} /></>}
         {tab === "Rule history" && <RuleHistory policy={metadata.id} rule={rule.id} />}

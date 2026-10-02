@@ -11,6 +11,7 @@ public class PolicyCollectionRepository {
         public Source(String sourceId, String runId) { this(sourceId, runId, "check_point"); }
     }
     public record Request(String sourceId, String domainRef, boolean automatic) {}
+    public record FirewallEndpoint(String address, String credentialReferenceId) {}
     private final TransactionBoundary tx;
     public PolicyCollectionRepository(TransactionBoundary tx) { this.tx = tx; }
 
@@ -93,6 +94,15 @@ public class PolicyCollectionRepository {
         if (matched.size() > 1) throw new IllegalStateException("POLICY_MEMBER_AMBIGUOUS");
         return matched.isEmpty() ? List.of(new Target(com.securityexpert.nexus.ui2.policy.PolicySnapshot.ref(sourceId, "member", serial),
                 "Unmatched firewall", context, syncStatus)) : matched;
+    }
+
+    /** Only an enrolled physical member's own endpoint and credential; never route through Panorama. */
+    public Optional<FirewallEndpoint> panFirewall(String deviceId) {
+        return tx.inTransaction(db -> db.fetch("select e.address_ref, d.credential_reference_id from devices d "
+            + "join endpoints e on e.device_id = d.device_id where d.device_id = {0} and d.vendor_hint = 'palo_alto' "
+            + "and d.role = 'gateway' and not d.disabled and d.enrollment_state in ('ENROLLED','DEGRADED') "
+            + "order by e.created_at asc limit 1", deviceId).stream().findFirst().map(r ->
+                new FirewallEndpoint(r.get("address_ref", String.class), r.get("credential_reference_id", String.class))));
     }
 
     public Optional<Map<String, Object>> latestStatus(String sourceId) {

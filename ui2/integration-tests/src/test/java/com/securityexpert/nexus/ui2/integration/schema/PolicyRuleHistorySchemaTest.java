@@ -41,6 +41,9 @@ class PolicyRuleHistorySchemaTest {
                 save(db, 4, rule("r1", 2, "s2", false), false); assertEquals(4, count(db));
                 save(db, 3, "", false); assertEquals(4, count(db));
                 save(db, 5, rule("r1", 2, "s2", false), false); assertEquals(4, count(db));
+                String counted = rule("r1", 2, "s2", false);
+                counted = counted.substring(0, counted.length() - 1) + ",\"hitCounts\":{\"hits\":5,\"lastHit\":\"2026-07-01T00:00:00Z\"}}";
+                save(db, 6, counted, false); assertEquals(4, count(db));
                 try (var query = db.createStatement(); var rows = query.executeQuery("select changed_on, changed_by from policy_rule_history where change_type='removed'")) {
                     assertTrue(rows.next()); assertNull(rows.getString(1)); assertNull(rows.getString(2));
                 }

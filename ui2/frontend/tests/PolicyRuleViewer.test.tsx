@@ -2,7 +2,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
-import { VirtualPolicyCards, RuleDetailPanel, RuleHistory, containerLabel, scheduleLabel, sectionLabel } from "../src/screens/PolicyRuleViewer";
+import { VirtualPolicyCards, RuleDetailPanel, RuleHistory, RuleMetrics, containerLabel, scheduleLabel, sectionLabel } from "../src/screens/PolicyRuleViewer";
 import type { PolicyMetadata, PolicyRule, PolicySchedule, PolicySection } from "../src/auth/adminApi";
 
 const metadata: PolicyMetadata = { id: "policy-1", name: "OBJ-POLICY-01", sourceId: "source-1", sourceName: "MGR-BRAVO-01", vendor: "CP", containerId: "domain-1", containerName: "DOM-TANGO-01", collectedAt: "2026-10-02T00:00:00Z", artefactRef: "artifact-1", targets: [] };
@@ -13,6 +13,31 @@ const rule: PolicyRule = { id: "rule-1", uuid: "uuid-1", name: "OBJ-RULE-01", nu
 const section: PolicySection = { id: "section-1", name: "OBJ-SECTION-01", source: "CP access layer", parentRuleId: null, rules: [rule], total: 1 };
 function mount(element: React.ReactNode) { return render(<ThemeProvider theme={m3Theme}>{element}</ThemeProvider>); }
 afterEach(() => { vi.unstubAllGlobals(); });
+it("explains disabled hit collection without showing a zero", async () => {
+  mount(<RuleMetrics rule={rule} />);
+  const tile = screen.getByText("Last hit").parentElement!;
+  expect(tile).toHaveTextContent("—");
+  fireEvent.mouseOver(tile);
+  expect(await screen.findByRole("tooltip")).toHaveTextContent("hit counts not collected (awaiting approval)");
+});
+it("shows collected last hit in cards and per-firewall counters and timestamps in the drawer", () => {
+  const collectedAt = "2026-10-02T12:00:00Z", lastHit = "2026-07-01T12:00:00Z";
+  const counted: PolicyRule = { ...rule, hitCounts: { hits: 5, firstHit: null, lastHit, source: "device", collectedAt,
+    firewalls: [{ deviceId: "device-1", context: "CTX-TANGO-01", hits: 2, firstHit: null, lastHit, createdAt: "2026-01-01T00:00:00Z", modifiedAt: null, collectedAt },
+      { deviceId: "device-2", context: "CTX-TANGO-01", hits: 3, firstHit: null, lastHit: null, createdAt: null, modifiedAt: null, collectedAt }] } };
+  const { unmount } = mount(<VirtualPolicyCards sections={[{ ...section, rules: [counted] }]} collapsed={new Set()} scrollTop={0} toggle={vi.fn()} objects={objects} metadata={metadata} openObject={vi.fn()} openRule={vi.fn()} selected={new Set()} onSelect={vi.fn()} />);
+  expect(screen.getByText("Last hit").parentElement).toHaveTextContent(lastHit);
+  unmount();
+  mount(<RuleDetailPanel rule={counted} section={section} metadata={{ ...metadata, vendor: "PAN", targets: [
+    { deviceId: "device-1", name: "FW-TANGO-04", context: "CTX-TANGO-01", syncStatus: "UNKNOWN" },
+    { deviceId: "device-2", name: "FW-BRAVO-02", context: "CTX-TANGO-01", syncStatus: "UNKNOWN" }] }} objects={objects} openObject={vi.fn()} />);
+  const table = screen.getByRole("table", { name: "Per-firewall hit counts" });
+  expect(within(table).getByText("FW-TANGO-04")).toBeInTheDocument();
+  expect(within(table).getByText("FW-BRAVO-02")).toBeInTheDocument();
+  expect(within(table).getByText("2")).toBeInTheDocument(); expect(within(table).getByText("3")).toBeInTheDocument();
+  expect(within(table).getByText("2026-01-01T00:00:00Z")).toBeInTheDocument();
+  expect(screen.getByText(/Hits: 5/)).toHaveTextContent("Source: device");
+});
 it("renders dense cards with expansion, negation, disabled, expired and unavailable metrics", () => {
   const openObject = vi.fn(), onSelect = vi.fn(), openRule = vi.fn();
   mount(<VirtualPolicyCards sections={[section]} collapsed={new Set()} scrollTop={0} toggle={vi.fn()} objects={objects} metadata={metadata} openObject={openObject} openRule={openRule} selected={new Set()} onSelect={onSelect} />);

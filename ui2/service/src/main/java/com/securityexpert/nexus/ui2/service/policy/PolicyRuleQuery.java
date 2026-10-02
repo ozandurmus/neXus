@@ -14,8 +14,8 @@ final class PolicyRuleQuery {
         Truth or(Truth b) { return this == YES || b == YES ? YES : this == NO && b == NO ? NO : UNKNOWN; }
     }
     interface Match { Truth test(Rule rule); }
-    private static final Set<String> FIELDS = Set.of("source.ip", "destination.ip", "service", "application", "action", "name", "comment", "user", "zone.from", "zone.to", "enabled", "expired", "time");
-    private static final Pattern TOKEN = Pattern.compile("\\G\\s*(AND\\b|OR\\b|NOT\\b|[()=]|[a-zA-Z][a-zA-Z.]*|true\\b|false\\b|'(?:[^'\\\\]|\\\\.)*')", Pattern.CASE_INSENSITIVE);
+    private static final Set<String> FIELDS = Set.of("source.ip", "destination.ip", "service", "application", "action", "name", "comment", "user", "zone.from", "zone.to", "enabled", "expired", "time", "hits", "lasthit.days");
+    private static final Pattern TOKEN = Pattern.compile("\\G\\s*(AND\\b|OR\\b|NOT\\b|[()=<>]|[0-9]+|[a-zA-Z][a-zA-Z.]*|true\\b|false\\b|'(?:[^'\\\\]|\\\\.)*')", Pattern.CASE_INSENSITIVE);
     private final List<String> tokens = new ArrayList<>();
     private final Map<String, PolicyObject> objects;
     private final java.time.Instant now;
@@ -30,7 +30,7 @@ final class PolicyRuleQuery {
     }
     static Predicate<Rule> compile(String query, Map<String, PolicyObject> objects, java.time.Instant now) { return compile(query, objects, now, ""); }
     static Predicate<Rule> compile(String query, Map<String, PolicyObject> objects, java.time.Instant now, String vendor) {
-        if (!query.contains("=") && !query.matches("(?is).*\\b(AND|OR|NOT)\\b.*") && !query.contains("(") && !query.contains(")")) {
+        if (!query.contains("=") && !query.contains(">") && !query.contains("<") && !query.matches("(?is).*\\b(AND|OR|NOT)\\b.*") && !query.contains("(") && !query.contains(")")) {
             String term = query.toLowerCase(Locale.ROOT);
             return r -> (r.name() + " " + r.comment()).toLowerCase(Locale.ROOT).contains(term);
         }
@@ -55,6 +55,28 @@ final class PolicyRuleQuery {
         if (take("(")) { Match child = or(depth + 1); require(")"); return child; }
         String field = next().toLowerCase(Locale.ROOT);
         if (!FIELDS.contains(field)) throw invalid();
+        if (field.equals("hits") || field.equals("lasthit.days")) {
+            String operator = next();
+            if (!Set.of("=", ">", "<").contains(operator)) throw invalid();
+            String number = next();
+            if (!number.matches("[0-9]{1,19}")) throw invalid();
+            final long expected;
+            try { expected = Long.parseLong(number); } catch (NumberFormatException invalid) { throw invalid(); }
+            return r -> {
+                if (r.hitCounts() == null) return Truth.UNKNOWN;
+                Long actual = r.hitCounts().hits();
+                if (field.equals("lasthit.days")) {
+                    if (r.hitCounts().lastHit() == null) return Truth.UNKNOWN;
+                    try {
+                        var last = java.time.Instant.parse(r.hitCounts().lastHit());
+                        if (last.isAfter(now)) return Truth.UNKNOWN;
+                        actual = java.time.Duration.between(last, now).toDays();
+                    } catch (RuntimeException invalid) { return Truth.UNKNOWN; }
+                }
+                if (actual == null) return Truth.UNKNOWN;
+                return truth(operator.equals("=") ? actual == expected : operator.equals(">") ? actual > expected : actual < expected);
+            };
+        }
         require("="); String value = next();
         if (value.startsWith("'")) value = value.substring(1, value.length() - 1).replace("\\'", "'").replace("\\\\", "\\");
         else if (!Set.of("true", "false").contains(value.toLowerCase(Locale.ROOT))) throw invalid();

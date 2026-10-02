@@ -63,6 +63,9 @@ public final class PolicyPrivacy {
         if (key.equals("state")) return Set.of("REQUESTED", "CLAIMED", "EXECUTING", "RECONCILING", "COMPLETED", "FAILED", "REJECTED", "CANCELLED", "OUTCOME_UNKNOWN", "RECONCILED").contains(text) ? text : "UNKNOWN";
         if (key.equals("outcome")) return Set.of("COMPLETED", "PARTIAL", "FAILED", "UNKNOWN").contains(text) ? text : "UNKNOWN";
         if (key.equals("reason")) return safeReason(text);
+        if (Set.of("firstHit", "lastHit", "createdAt", "modifiedAt").contains(key)) {
+            try { return java.time.Instant.parse(text).toString(); } catch (RuntimeException invalid) { return null; }
+        }
         if (Set.of("start", "end", "changedOn").contains(key)) {
             try {
                 if (text.matches("[0-9]{2}:[0-9]{2}(?::[0-9]{2})?")) return java.time.LocalTime.parse(text).toString();
@@ -81,7 +84,8 @@ public final class PolicyPrivacy {
         if (key.equals("comment")) return "Withheld in AIView";
         if (key.equals("sourceName")) return names.maskDeviceName(text, null);
         if (key.equals("containerName")) return names.maskDomainName(text);
-        if (key.equals("source")) return Set.of("Shared", "CP access layer", "CP NAT rulebase").contains(text) ? text : names.maskDomainName(text);
+        if (key.equals("level")) return Set.of("zero", "low", "medium", "high").contains(text) ? text : "UNKNOWN";
+        if (key.equals("source")) return Set.of("device", "mds", "Shared", "CP access layer", "CP NAT rulebase").contains(text) ? text : names.maskDomainName(text);
         if (key.equals("type") || key.equals("status") || key.equals("vendor") || key.equals("action") || key.equals("syncStatus") || key.equals("policyKind"))
             return ENUMS.contains(text) ? text : "UNKNOWN";
         if (key.equals("log")) return ENUMS.contains(text) || text.matches("start=(yes|no|UNKNOWN), end=(yes|no|UNKNOWN)") ? text : "UNKNOWN";
