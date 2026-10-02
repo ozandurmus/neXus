@@ -350,7 +350,7 @@ public final class SshExecTransport implements DeviceTransport {
                     sshSession.closeInteractiveShell();
                     LOG.log(System.Logger.Level.WARNING, "[SSH_EXEC_INTERACTIVE] cmd=\"{0}\" TIMED OUT after {1}ms",
                             com.securityexpert.nexus.ui2.worker.transcript.JobTranscript.safeSshCommand(spec.command()), elapsedMs);
-                    return new ExecResult.TimedOut();
+                    return new ExecResult.TimedOut(result.streaming());
                 }
                 case EMPTY -> {
                     // prompt came back with no text: a completed setting, not a timeout

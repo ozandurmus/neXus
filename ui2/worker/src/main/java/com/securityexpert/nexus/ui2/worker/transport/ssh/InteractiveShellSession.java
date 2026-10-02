@@ -88,7 +88,8 @@ final class InteractiveShellSession implements AutoCloseable {
     }
 
     /** How one command on the shell ended: only {@link Kind#TIMED_OUT} means the prompt never came back. */
-    record Result(Kind kind, String text) {
+    record Result(Kind kind, String text, boolean streaming) {
+        Result(Kind kind, String text) { this(kind, text, false); }
         enum Kind { OUTPUT, EMPTY, CLI_ERROR, TIMED_OUT, NOT_SENT }
     }
 
@@ -127,6 +128,7 @@ final class InteractiveShellSession implements AutoCloseable {
         boolean sawData = false;
         boolean completed = false;
         boolean extended = false;
+        boolean streamingTimedOut = false;
         // A prompt counts as "this command finished" only after the shell echoed the command -- a late second repaint
         // of the previous prompt (PAN-OS, measured 2026-09-27) otherwise ended the next command at once with no output,
         // shifting every answer by one command. No echo within ECHO_GRACE_MS: the old rule applies.
@@ -140,7 +142,10 @@ final class InteractiveShellSession implements AutoCloseable {
                     extended = true;
                     System.getLogger(InteractiveShellSession.class.getName()).log(System.Logger.Level.INFO,
                             "[SHELL] streaming read timeout extended once by {0}ms", streamingExtensionMs);
-                } else break;
+                } else {
+                    streamingTimedOut = extended || (sawData && now - lastData < 1000);
+                    break;
+                }
             }
             if (Thread.currentThread().isInterrupted()) break;
             boolean got = false;
@@ -215,7 +220,7 @@ final class InteractiveShellSession implements AutoCloseable {
             System.getLogger(InteractiveShellSession.class.getName()).log(System.Logger.Level.INFO,
                     "[SHELL] timed out: prompt shape \"{0}\"; sawData {1}; tail shape \"{2}\"",
                     shapeOf(prompt), sawData, shapeOf(tail));
-            return new Result(Result.Kind.TIMED_OUT, null);
+            return new Result(Result.Kind.TIMED_OUT, null, streamingTimedOut);
         }
 
         if (bytes > 512 * 1024) {

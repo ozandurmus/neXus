@@ -29,7 +29,7 @@ class InteractiveShellSessionReadTest {
 
     @Test
     void streamingWaitKeepsReadingWithoutResendingAndStopsAfterOneExtension() {
-        for (boolean finish : List.of(true, false)) {
+        for (long extensionMs : List.of(0L, 300L)) for (boolean finish : List.of(true, false)) {
             long[] started = {0}, next = {0};
             int[] sends = {0};
             var in = new InputStream() {
@@ -57,8 +57,10 @@ class InteractiveShellSessionReadTest {
                 }
             };
             assertTimeout(Duration.ofSeconds(3), () -> {
-                var result = new InteractiveShellSession(in, out, PROMPT).runForResult("show", 1000, 300);
-                assertEquals(finish ? InteractiveShellSession.Result.Kind.OUTPUT : InteractiveShellSession.Result.Kind.TIMED_OUT, result.kind());
+                var result = new InteractiveShellSession(in, out, PROMPT).runForResult("show", 1000, extensionMs);
+                boolean completed = finish && extensionMs > 0;
+                assertEquals(completed ? InteractiveShellSession.Result.Kind.OUTPUT : InteractiveShellSession.Result.Kind.TIMED_OUT, result.kind());
+                assertEquals(!completed, result.streaming());
             });
             assertEquals(1, sends[0]);
         }
