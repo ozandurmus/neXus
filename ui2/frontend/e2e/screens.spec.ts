@@ -29,6 +29,9 @@ async function screenHasData(page: Page, screen: ScreenId, settleReads: () => Pr
         await source.getByRole("button", { expanded: false }).first().click();
         await settleReads();
         const containers = source.getByRole("group", { name: "Policy container", exact: true });
+        if (await containers.count() === 0) {
+          await expect(source.getByText("No policy containers in this snapshot.", { exact: true })).toBeVisible();
+        }
         for (let c = 0; c < await containers.count() && !selected; c++) {
           const container = containers.nth(c);
           await container.getByRole("button", { expanded: false }).click();
@@ -41,6 +44,8 @@ async function screenHasData(page: Page, screen: ScreenId, settleReads: () => Pr
               .or(page.getByText("No matching rules.", { exact: true }))
               .or(page.getByText("Partial snapshot · incomplete", { exact: true })).first()).toBeVisible();
             selected = true;
+          } else {
+            await expect(container.getByText("No policies in this snapshot.", { exact: true })).toBeVisible();
           }
         }
       }

@@ -76,6 +76,10 @@ public class TopologyNamePseudonymizer {
     private final Map<String, String> reverseClusterCache = new ConcurrentHashMap<>();
     private final Map<String, String> rawNameToPseudonym = new ConcurrentHashMap<>();
 
+    private void registerTextName(String raw, String masked) {
+        if (raw.length() >= 3 && !raw.matches("\\p{N}+")) rawNameToPseudonym.put(raw, masked);
+    }
+
     public String maskClusterName(String rawClusterName) {
         if (rawClusterName == null || rawClusterName.isBlank()) {
             return rawClusterName;
@@ -86,7 +90,7 @@ public class TopologyNamePseudonymizer {
         }
         String masked = clusterCache.computeIfAbsent(trimmed, this::computeClusterName);
         reverseClusterCache.put(masked, trimmed);
-        rawNameToPseudonym.put(trimmed, masked);
+        registerTextName(trimmed, masked);
         return masked;
     }
 
@@ -117,7 +121,7 @@ public class TopologyNamePseudonymizer {
         }
         String key = trimmed + "::" + (clusterMemberRef != null ? clusterMemberRef.trim() : "");
         String masked = deviceCache.computeIfAbsent(key, k -> computeDeviceName(trimmed, clusterMemberRef));
-        rawNameToPseudonym.put(trimmed, masked);
+        registerTextName(trimmed, masked);
         return masked;
     }
 
@@ -131,7 +135,7 @@ public class TopologyNamePseudonymizer {
         int dictIndex = (hash[0] & 0xFF) % DICTIONARY.size();
         int suffixNum = ((hash[1] & 0xFF) % 9) + 1;
         String masked = registry.claim("domain", rawKey("domain", trimmed), candidates("DOM", dictIndex, suffixNum));
-        rawNameToPseudonym.put(trimmed, masked);
+        registerTextName(trimmed, masked);
         return masked;
     }
 
@@ -141,7 +145,7 @@ public class TopologyNamePseudonymizer {
         }
         String key = rawVsName.trim() + "::" + (parentRef != null ? parentRef.trim() : "");
         String masked = vsCache.computeIfAbsent(key, k -> computeVsName(rawVsName.trim(), parentRef));
-        rawNameToPseudonym.put(rawVsName.trim(), masked);
+        registerTextName(rawVsName.trim(), masked);
         return masked;
     }
 
@@ -169,9 +173,8 @@ public class TopologyNamePseudonymizer {
     }
 
     /**
-     * One compiled alternation of every known raw name (longest first, so a VS name wins over its host's
-     * prefix), rebuilt only when the dictionary grew. Measured 2026-09-22: copying and sorting the whole
-     * dictionary and replacing name by name for every string field made an aiview /devices response
+     * One compiled alternation of whole name tokens (never short or numeric names), longest first,
+     * rebuilt only when the dictionary grew. Measured 2026-09-22: copying and sorting the whole dictionary and replacing name by name for every string field made an aiview /devices response
      * ~4x slower than the same response unmasked.
      */
     private volatile java.util.regex.Pattern knownNames;
@@ -187,12 +190,14 @@ public class TopologyNamePseudonymizer {
             if (knownNames != null && rawNameToPseudonym.size() == knownNamesSize) {
                 return knownNames;
             }
-            java.util.List<String> names = rawNameToPseudonym.keySet().stream().filter(k -> !k.isBlank())
+            java.util.List<String> names = rawNameToPseudonym.keySet().stream()
                     .sorted((a, b) -> Integer.compare(b.length(), a.length())).toList();
             knownNamesSize = rawNameToPseudonym.size();
             knownNames = names.isEmpty() ? null
-                    : java.util.regex.Pattern.compile(names.stream().map(java.util.regex.Pattern::quote)
-                            .collect(java.util.stream.Collectors.joining("|")));
+                    : java.util.regex.Pattern.compile("(?<![\\p{L}\\p{N}_.-])(?:"
+                            + names.stream().map(java.util.regex.Pattern::quote)
+                                    .collect(java.util.stream.Collectors.joining("|"))
+                            + ")(?![\\p{L}\\p{N}_.-])");
             return knownNames;
         }
     }

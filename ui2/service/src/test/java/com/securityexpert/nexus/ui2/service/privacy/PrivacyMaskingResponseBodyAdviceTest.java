@@ -370,4 +370,23 @@ class PrivacyMaskingResponseBodyAdviceTest {
         Map<String, Object> vs = ((List<Map<String, Object>>) domain.get("nodes")).get(0);
         assertThat((String) vs.get("virtual_system")).doesNotContain("payments");
     }
+    @Test
+    void numericVsMasksOnlyItsIdentityFieldAndNeverPoisonsLaterResponses() {
+        when(httpRequest.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE)).thenReturn(true);
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("virtual_system", "2");
+        body.put("generated_at", "2026-10-02T03:50:21Z");
+        body.put("date", "2026-10-02");
+        body.put("build_id", "build-20261002-123");
+        body.put("count", 122);
+        body.put("count_text", "2");
+        var masked = (Map<?, ?>) advice.beforeBodyWrite(body, null, null, null, serverRequest, null);
+        assertThat((String) masked.get("virtual_system")).startsWith("VS-");
+        for (String field : List.of("generated_at", "date", "build_id", "count", "count_text")) {
+            assertThat(masked.get(field)).isEqualTo(body.get(field));
+        }
+        var later = Map.of("message", "Estate assurance · 122 devices · as of 2026-10-02 06:50:21 GMT+3");
+        assertThat(advice.beforeBodyWrite(later, null, null, null, serverRequest, null)).isEqualTo(later);
+    }
+
 }

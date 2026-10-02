@@ -76,4 +76,27 @@ class TopologyNamePseudonymizerTest {
         String call2 = pseudonymizer.maskClusterName("DCITSERVICESCLS");
         assertThat(call2).isEqualTo(call1);
     }
+    @Test
+    void shortAndNumericIdentitiesNeverBecomeTextReplacements() {
+        for (String name : java.util.List.of("0", "1", "2", "123", "2026", "ab")) {
+            pseudonymizer.maskVirtualSystem(name, null);
+            pseudonymizer.maskDeviceName(name, null);
+            pseudonymizer.maskDomainName(name);
+            pseudonymizer.maskClusterName(name);
+        }
+        String facts = "2026-10-02T03:50:21Z · 122 devices · build-20261002-123 · 02/10/2026 GMT+3 · 2 ab";
+        assertThat(pseudonymizer.maskText(facts)).isEqualTo(facts);
+        assertThat(pseudonymizer.maskVirtualSystem("2", null)).startsWith("VS-");
+    }
+
+    @Test
+    void masksWholeTokensWithoutTouchingLongerNamesOrBuildIds() {
+        String masked = pseudonymizer.maskDeviceName("synthetic-edge", null);
+        String text = "synthetic-edge-long build-synthetic-edge synthetic-edge.example.invalid Xsynthetic-edge";
+        assertThat(pseudonymizer.maskText(text)).isEqualTo(text);
+        assertThat(pseudonymizer.maskText("(synthetic-edge), synthetic-edge: failed"))
+                .isEqualTo("(" + masked + "), " + masked + ": failed");
+        assertThat(pseudonymizer.maskText(masked)).isEqualTo(masked);
+    }
+
 }

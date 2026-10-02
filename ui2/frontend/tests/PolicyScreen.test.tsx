@@ -23,7 +23,7 @@ function treeBody(input: string, vendor = metadata.vendor) {
 }
 function mockFetch(result: PolicyPage = page) {
   const fetch = vi.fn(async (input: string) => {
-    const body = treeBody(input) ?? (input === "/api/v2/policy/sources" ? { sources: [], canCollect: false }
+    const body = treeBody(input) ?? (input === "/api/v2/policy/sources" ? { sources: [{ sourceId: metadata.sourceId, sourceName: metadata.sourceName, vendor: metadata.vendor }], canCollect: false }
       : input.includes("/objects/") ? { object: { ...page.objects[0], children: [
         { id: "leaf-1", name: "OBJ-ADDRESS-01", type: "address", status: "RESOLVED", values: ["192.0.2.8"] },
         { id: "cycle-1", name: "OBJ-GROUP-01", type: "address-group", status: "CYCLE" },
@@ -85,7 +85,9 @@ it("sends only the name/comment search and resets pagination", async () => {
 it("keeps an unassigned policy navigable and a device jump scoped to its assignments", async () => {
   window.history.replaceState(null, "", "?screen=policy&device_id=missing-device");
   mockFetch(); mount();
-  expect(await screen.findByText("No policy snapshot")).toBeInTheDocument();
+  await screen.findByRole("button", { name: metadata.sourceName });
+  fireEvent.click(screen.getByRole("button", { name: metadata.sourceName }));
+  expect(await screen.findByText("No policy containers in this snapshot.")).toBeInTheDocument();
   expect(screen.queryByRole("table")).toBeNull();
 });
 it("shows empty and failed reads distinctly", async () => {
@@ -163,7 +165,7 @@ it("fetches only sources until each navigation level is expanded", async () => {
   const fetch = mockFetch(); mount();
   const tree = await screen.findByRole("navigation", { name: "Management policies" });
   expect(within(tree).getByRole("group", { name: "Policy source" })).toBeInTheDocument();
-  expect(fetch.mock.calls).toHaveLength(2);
+  expect(fetch.mock.calls).toHaveLength(1);
   expect(screen.queryByText(metadata.containerName)).toBeNull();
   expect(screen.queryByRole("table")).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: metadata.sourceName }));
@@ -249,9 +251,55 @@ it("keeps an uncollected source navigable with an accessible empty state without
   vi.stubGlobal("fetch", fetch); mount();
   const tree = await screen.findByRole("navigation", { name: "Management policies" });
   fireEvent.click(within(tree).getByRole("button", { expanded: false }));
-  await waitFor(() => expect(fetch.mock.calls).toHaveLength(3));
+  await waitFor(() => expect(fetch.mock.calls).toHaveLength(2));
   expect(screen.getByRole("status", { name: "No collected policy" })).toHaveTextContent("No policy may have been collected");
   expect(within(tree).queryByRole("button", { pressed: false })).toBeNull();
   expect(screen.queryByRole("table")).toBeNull();
   expect(fetch.mock.calls.some(([url]) => url.endsWith("/collect"))).toBe(false);
+});
+
+it("builds the root exclusively from sources and displays each last collection outcome", async () => {
+  const fetch = vi.fn(async (_input: string) => new Response(JSON.stringify({ canCollect: false, sources: [
+    { sourceId: "pan-1", sourceName: "MGR-BRAVO-01", vendor: "PAN", collection: { jobId: "job-1", state: "FAILED", reason: "COLLECTION_FAILED: HTTP_403", step: 2, total: 8 } },
+    { sourceId: "pan-partial", sourceName: "MGR-TANGO-02", vendor: "PAN", collection: { jobId: "job-2", state: "COMPLETED", reason: "PARTIAL_SNAPSHOT access target=layer-1: TIMEOUT", step: 4, total: 8 } },
+    { sourceId: "pan-2", sourceName: "MGR-ROMEO-03", vendor: "PAN", collection: { jobId: "job-3", state: "COMPLETED", reason: "", step: 8, total: 8 } },
+  ] }), { status: 200 }));
+  vi.stubGlobal("fetch", fetch); mount();
+  await screen.findByRole("button", { name: "MGR-BRAVO-01" });
+  expect(screen.getByText("FAILED · COLLECTION_FAILED: HTTP_403")).toBeInTheDocument();
+  expect(screen.getByText(/Partial snapshot · incomplete · PARTIAL_SNAPSHOT/)).toBeInTheDocument();
+  expect(screen.getByText("OK · 8/8 collection steps")).toBeInTheDocument();
+  expect(screen.queryByText("Loading policies…")).toBeNull();
+  expect(fetch.mock.calls).toHaveLength(1);
+  expect(fetch.mock.calls[0][0]).toBe("/api/v2/policy/sources");
+});
+it("ends empty child reads and failed child reads with explicit messages", async () => {
+  const fetch = mockFetch();
+  fetch.mockImplementation(async (input: string) => input.includes(`container=${metadata.containerId}`)
+    ? new Response(JSON.stringify({ policies: [] }), { status: 200 })
+    : new Response(JSON.stringify(treeBody(input) ?? { sources: [{ sourceId: metadata.sourceId, sourceName: metadata.sourceName, vendor: "PAN" }], canCollect: false }), { status: 200 }));
+  const view = mount();
+  fireEvent.click(await screen.findByRole("button", { name: metadata.sourceName }));
+  fireEvent.click(await screen.findByRole("button", { name: metadata.containerName }));
+  expect(await screen.findByText("No policies in this snapshot.")).toBeInTheDocument();
+  view.unmount();
+  fetch.mockImplementation(async (input: string) => input.includes("/tree") ? new Response("{}", { status: 500 })
+    : new Response(JSON.stringify({ sources: [{ sourceId: metadata.sourceId, sourceName: metadata.sourceName, vendor: "PAN" }] }), { status: 200 }));
+  mount(); fireEvent.click(await screen.findByRole("button", { name: metadata.sourceName }));
+  expect(await screen.findByText("Policy containers could not be loaded.")).toBeInTheDocument();
+  expect(screen.queryByText("Loading policies…")).toBeNull();
+});
+it("preserves masked policy dates and numeric counts in the rendered view", async () => {
+  mockFetch({ ...page, metadata: { ...metadata, collectedAt: "2026-10-02T03:50:21Z" }, total: 122 });
+  mount(); await navigate();
+  expect(await screen.findByText("From configuration collected 2026-10-02T03:50:21Z")).toBeInTheDocument();
+  expect(screen.getByText("Page 1 of 1 · 122 rules")).toBeInTheDocument();
+});
+it("ends an empty rule response with an explicit failure", async () => {
+  const fetch = mockFetch();
+  fetch.mockImplementation(async (input: string) => new Response(JSON.stringify(treeBody(input)
+    ?? (input === "/api/v2/policy/sources" ? { sources: [{ sourceId: metadata.sourceId, sourceName: metadata.sourceName, vendor: "PAN" }] } : {})), { status: 200 }));
+  mount(); await navigate();
+  expect(await screen.findByText("Policy rules could not be loaded.")).toBeInTheDocument();
+  expect(screen.queryByText("Loading rules…")).toBeNull();
 });

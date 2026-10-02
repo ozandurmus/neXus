@@ -35,11 +35,11 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
     let active = true;
     setError("");
     setLoadingTree(true);
-    Promise.all([listPolicySources(), getPolicyTree("", "", device)]).then(([admission, tree]) => {
+    listPolicySources().then(admission => {
       if (!active) return;
-      setSources([...new Map([...(tree.sources ?? []), ...(admission.sources ?? [])].map(s => [s.sourceId, s])).values()]);
+      setSources(admission.sources ?? []);
       setCanCollect(admission.canCollect === true);
-      setTargets(tree.devices ?? []);
+      setTargets([]);
       setJobs(current => {
         const latest = (admission.sources ?? []).flatMap(source => source.collection ? [source.collection] : []);
         return latest.length ? latest : current.filter(job => !["REQUESTED", "CLAIMED", "EXECUTING", "RECONCILING"].includes(job.state));
@@ -58,7 +58,10 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
   useEffect(() => {
     let active = true;
     setScrollTop(0); setData(null); setDrawer(null); drawerRequest.current++; setError("");
-    if (selected) getPolicy(selected, page, query).then(result => { if (active) setData(result); })
+    if (selected) getPolicy(selected, page, query).then(result => {
+      if (!result?.metadata || !Array.isArray(result.sections)) throw new Error("Empty policy response");
+      if (active) setData(result);
+    })
       .catch(() => { if (active) setError("Policy rules could not be loaded."); });
     return () => { active = false; };
   }, [selected, page, query, revision]);
@@ -99,6 +102,7 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
     try {
       const tree = await getPolicyTree(source, container, device);
       setCatalog(current => [...current.filter(p => p.containerId !== container), ...(tree.policies ?? [])]);
+      setTargets(current => [...new Map([...current, ...(tree.policies ?? []).flatMap(p => p.targets)].map(t => [t.deviceId, t])).values()]);
       setLoadedContainers(current => new Set(current).add(container));
     } catch { setError("Policies could not be loaded."); }
   };
@@ -166,10 +170,21 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
           <Box component="nav" aria-label="Management policies" sx={{ bgcolor: m3.scLow, borderRadius: 2, p: 1.5 }}>
             {sources.map(source => <Box key={source.sourceId} role="group" aria-label="Policy source">
               <Button aria-expanded={expandedSources.has(source.sourceId)} onClick={() => void expandSource(source.sourceId)}>{source.sourceName}</Button>
+              {source.collection && <Typography role="status" variant="caption" display="block">
+                {source.collection.reason.startsWith("PARTIAL_SNAPSHOT") ? "Partial snapshot · incomplete"
+                  : source.collection.state === "COMPLETED" ? `OK · ${source.collection.step}/${source.collection.total} collection steps`
+                  : source.collection.state}
+                {source.collection.reason && ` · ${source.collection.reason}`}
+              </Typography>}
               {collectButton(source.sourceId)}
+              {expandedSources.has(source.sourceId) && containers[source.sourceId]?.length === 0
+                && <Typography variant="caption">No policy containers in this snapshot.</Typography>}
               {expandedSources.has(source.sourceId) && (containers[source.sourceId] ?? []).map(container => <Box key={container.containerId} role="group" aria-label="Policy container" sx={{ pl: 1 }}>
                 <Button aria-expanded={expandedContainers.has(container.containerId)} onClick={() => void expandContainer(source.sourceId, container.containerId)}>{container.containerName}</Button>
                 {source.vendor === "CP" && collectButton(source.sourceId, container.containerId)}
+                {expandedContainers.has(container.containerId) && loadedContainers.has(container.containerId)
+                  && !visible.some(p => p.containerId === container.containerId)
+                  && <Typography variant="caption">No policies in this snapshot.</Typography>}
                 {expandedContainers.has(container.containerId) && visible.filter(p => p.containerId === container.containerId).map(policy =>
                   <Button key={policy.id} fullWidth variant={selected === policy.id ? "contained" : "text"}
                     aria-pressed={selected === policy.id} aria-current={selected === policy.id ? "page" : undefined} sx={{ justifyContent: "flex-start", textTransform: "none" }}
@@ -178,6 +193,7 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
             </Box>)}
           </Box>
           <Box sx={{ minWidth: 0 }}>
+            {!selected && !loadingTree && !error && <Typography>Select a source to browse stored policies.</Typography>}
             {selected && !data && !error && <Typography role="status">Loading rules…</Typography>}
             {data && <>
               <Typography variant="h6">{data.metadata.name}</Typography>
