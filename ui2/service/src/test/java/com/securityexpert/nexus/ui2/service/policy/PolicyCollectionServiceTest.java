@@ -38,10 +38,10 @@ class PolicyCollectionServiceTest {
         when(device.get("device_id", String.class)).thenReturn("manager-1");
         when(device.get("enrollment_state", String.class)).thenReturn("ENROLLED");
         when(device.get("observed_hostname", String.class)).thenReturn("MGR-BRAVO-01");
+        when(db.fetch(startsWith("select d.device_id, r.run_id"))).thenReturn(result(source));
         when(db.fetch(anyString(), any(Object[].class))).thenAnswer(call -> {
             String sql = call.getArgument(0);
-            return result(sql.startsWith("select d.device_id, r.run_id") ? source
-                : sql.startsWith("select d.device_id, d.role") ? device : null);
+            return result(sql.startsWith("select d.device_id, d.role") ? device : null);
         });
         var service = new PolicyCollectionService(tx);
         var view = service.sources().get(0);
