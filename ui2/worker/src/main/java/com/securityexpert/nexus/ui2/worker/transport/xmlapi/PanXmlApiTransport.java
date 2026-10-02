@@ -100,6 +100,7 @@ public final class PanXmlApiTransport implements DeviceTransport {
     /** T-1/T-2/T-4: one POST to {@code target.baseUrl() + "/api/"}, never any other path or host. */
     @Override
     public XmlApiResult xmlApiCall(ApiTarget target, XmlApiSpec spec, Duration timeout) {
+        com.securityexpert.nexus.ui2.worker.JobCancellationScope.check();
         HttpClient client;
         URI uri;
         try {
@@ -148,6 +149,7 @@ public final class PanXmlApiTransport implements DeviceTransport {
     @Override
     public <T> XmlApiStreamOutcome<T> xmlApiCallStreaming(ApiTarget target, XmlApiSpec spec, Duration timeout,
             XmlApiStreamHandler<T> handler) {
+        com.securityexpert.nexus.ui2.worker.JobCancellationScope.check();
         HttpClient client;
         URI uri;
         try {

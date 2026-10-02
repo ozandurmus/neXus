@@ -57,7 +57,10 @@ public final class JobLogController {
         boolean allowed = actor != null && !PrivacyMaskingResponseBodyAdvice.isReplayViewer(request)
                 && rbacEvaluator.evaluateAny(actor, actionRegistry.find(ActionRegistry.JOB_TRANSCRIPT_READ)
                         .orElseThrow().requiredRoleTokens(), Instant.now()).outcome().proceeds();
-        return ResponseEntity.ok(jobLogQueryService.query(query.get()).withTranscriptAccess(allowed));
+        boolean canCancel = actor != null && !PrivacyMaskingResponseBodyAdvice.isReplayViewer(request)
+                && rbacEvaluator.evaluateAny(actor, actionRegistry.find(ActionRegistry.JOB_CANCEL)
+                        .orElseThrow().requiredRoleTokens(), Instant.now()).outcome() == com.securityexpert.nexus.ui2.platform.AuthzOutcome.PERMITTED;
+        return ResponseEntity.ok(jobLogQueryService.query(query.get()).withTranscriptAccess(allowed).withCancellationAccess(canCancel));
     }
 
     @GetMapping("/api/v2/jobs/stats")

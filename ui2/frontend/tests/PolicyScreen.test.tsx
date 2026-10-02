@@ -385,3 +385,24 @@ it("jumps to a loaded assigned policy from the content header", async () => {
   expect(screen.getByRole("button", { name: metadata.name, pressed: true })).toBeInTheDocument();
   expect(screen.queryByText("No assigned policy snapshot")).toBeNull();
 });
+
+it.each([true, false])("gates source progress cancellation with canCancel=%s", async canCancel => {
+  const fetch = vi.fn(async (input: string, init?: RequestInit) => {
+    const body = input === "/session/status" ? { csrf_token: "synthetic-csrf" }
+      : input === "/api/v2/policy/sources" ? { canCollect: true, canCancel, sources: [{
+        sourceId: "mds-1", sourceName: "MGR-BRAVO-01", vendor: "CP", collection: {
+          jobId: "job-1", state: "EXECUTING", reason: "", step: 2, total: 5,
+        },
+      }] }
+      : input.endsWith("/cancel") ? { jobId: "job-1", state: "EXECUTING", cancelRequested: true }
+      : input.includes("/collections/") ? { jobId: "job-1", state: "EXECUTING", reason: "", step: 2, total: 5 }
+      : { sources: [] };
+    return new Response(JSON.stringify(body), { status: init?.method === "POST" ? 202 : 200 });
+  });
+  vi.stubGlobal("fetch", fetch); mount();
+  await screen.findByText("Collecting · 2/5");
+  if (!canCancel) { expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull(); return; }
+  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  expect(await screen.findByRole("button", { name: "Cancel requested" })).toBeDisabled();
+  expect(fetch.mock.calls.some(([url, init]) => url === "/api/v2/jobs/job-1/cancel" && init?.method === "POST")).toBe(true);
+});

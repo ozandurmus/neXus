@@ -88,7 +88,7 @@ public final class CheckPointPolicyCollector {
                     List<JsonNode> access = access(session, domainName, policy.path("access-layers"), deadline, lease, failures,
                         completed -> {
                             var checkpoint = snapshot(metadata, completed, List.of(), failures);
-                            checkActive(deadline, lease);
+                            checkPublication(deadline, lease);
                             publish.accept(checkpoint);
                         });
                     List<JsonNode> nat = List.of();
@@ -106,7 +106,7 @@ public final class CheckPointPolicyCollector {
                         failures.add(new CollectionFailure(natRef, PolicyCollectionTrace.reason(invalid), "NAT", 0));
                         snapshot = snapshot(metadata, access, List.of(), failures);
                     }
-                    checkActive(deadline, lease);
+                    checkPublication(deadline, lease);
                     publish.accept(snapshot);
                     snapshots.add(snapshot);
                 }
@@ -243,6 +243,11 @@ public final class CheckPointPolicyCollector {
     }
 
     private void checkActive(long deadline, BooleanSupplier lease) {
+        com.securityexpert.nexus.ui2.worker.JobCancellationScope.check();
+        checkPublication(deadline, lease);
+    }
+
+    private void checkPublication(long deadline, BooleanSupplier lease) {
         if (Thread.currentThread().isInterrupted()) throw PolicyCollectionTrace.failure("INTERRUPTED");
         if (nanoTime.getAsLong() >= deadline) throw PolicyCollectionTrace.failure("JOB_DEADLINE");
         if (!lease.getAsBoolean()) throw PolicyCollectionTrace.failure("LEASE_LOST");

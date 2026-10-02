@@ -109,10 +109,11 @@ class PolicyCollectionRepositoryTest {
         var repository = new PolicyCollectionRepository(new JooqTransactionBoundary(DSL.using(new MockConnection(context -> {
             sql.add(context.sql());
             return new MockResult[] { new MockResult(1, create.fetchFromStringData(
-                new String[] { "state", "reason", "step", "total", "layer", "layers", "rules" },
-                new String[] { "EXECUTING", "", "12", "0", "2", "5", "4000" })) };
+                new String[] { "state", "cancel_requested", "reason", "step", "total", "layer", "layers", "rules" },
+                new String[] { "EXECUTING", "true", "", "12", "0", "2", "5", "4000" })) };
         }), SQLDialect.POSTGRES)));
         var status = repository.status("job-1").orElseThrow();
+        assertEquals(true, status.get("cancelRequested"));
         assertEquals(2, status.get("layer"));
         assertEquals(5, status.get("layers"));
         assertEquals(4000, status.get("rulesFetched"));

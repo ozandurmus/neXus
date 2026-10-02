@@ -33,6 +33,16 @@ public final class PersistenceJobLeaseRepository implements JobLeaseRepository {
     }
 
     @Override
+    public boolean cancellationRequested(String jobId, long leaseEpoch) {
+        return dao.cancellationRequested(jobId, leaseEpoch);
+    }
+
+    @Override
+    public List<ClaimedJob> findExpiredCancellationRequests() {
+        return dao.findExpiredCancellationRequests().stream().map(r -> new ClaimedJob(r.jobId(), r.leaseEpoch())).toList();
+    }
+
+    @Override
     public boolean heartbeat(String jobId, long leaseEpoch, Duration leaseDuration) {
         return dao.heartbeat(jobId, leaseEpoch, leaseDuration);
     }

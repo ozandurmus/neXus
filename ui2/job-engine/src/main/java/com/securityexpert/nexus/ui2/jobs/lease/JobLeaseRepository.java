@@ -40,6 +40,10 @@ public interface JobLeaseRepository {
      * A missed heartbeat never itself changes job state (only lease expiry
      * does) -- this method never transitions {@code state}.
      */
+    default boolean cancellationRequested(String jobId, long leaseEpoch) { return false; }
+
+    default List<ClaimedJob> findExpiredCancellationRequests() { return List.of(); }
+
     boolean heartbeat(String jobId, long leaseEpoch, Duration leaseDuration);
 
     /**

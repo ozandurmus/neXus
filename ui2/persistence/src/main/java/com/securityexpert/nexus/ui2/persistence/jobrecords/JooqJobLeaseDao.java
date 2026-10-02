@@ -83,6 +83,20 @@ public final class JooqJobLeaseDao implements JobLeaseDao {
     }
 
     @Override
+    public boolean cancellationRequested(String jobId, long leaseEpoch) {
+        return transactionBoundary.inTransaction(db -> !db.fetch(
+            "select job_id from jobs where job_id = {0} and lease_epoch = {1} and cancel_requested and state = 'EXECUTING'",
+            jobId, leaseEpoch).isEmpty());
+    }
+
+    @Override
+    public List<ClaimedJobRow> findExpiredCancellationRequests() {
+        return transactionBoundary.inTransaction(db -> db.fetch(
+            "select job_id, lease_epoch from jobs where state = 'EXECUTING' and cancel_requested and lease_expires_at < now()")
+            .stream().map(JooqJobLeaseDao::toClaimedJobRow).toList());
+    }
+
+    @Override
     public boolean heartbeat(String jobId, long leaseEpoch, Duration leaseDuration) {
         int updated = auditedTransactionBoundary.inTransaction("system:worker", "job_heartbeat", dsl -> dsl.execute(
                 "update jobs set lease_expires_at = now() + ({0} || ' seconds')::interval, "
@@ -108,7 +122,8 @@ public final class JooqJobLeaseDao implements JobLeaseDao {
                         + "'OUTCOME_UNKNOWN', 'RECONCILED') then {4} else terminal_reason end, "
                         + "finished_at = case when {0} in ('COMPLETED', 'FAILED', 'REJECTED', 'CANCELLED', "
                         + "'OUTCOME_UNKNOWN', 'RECONCILED') then now() else finished_at end "
-                        + "where job_id = {1} and lease_epoch = {2} and state = {3}",
+                        + "where job_id = {1} and lease_epoch = {2} and state = {3} "
+                        + "and (not cancel_requested or {0} = 'CANCELLED')",
                 toState, jobId, leaseEpoch, expectedFromState, com.securityexpert.nexus.ui2.persistence.https.HttpsCertificateWarnings.appendTo(
                         terminalReason == null ? toState : terminalReason)));
         return updated == 1;
@@ -117,7 +132,7 @@ public final class JooqJobLeaseDao implements JobLeaseDao {
     @Override
     public List<ClaimedJobRow> findExpiredWithNoAttempt() {
         return transactionBoundary.inTransaction(dsl -> dsl.fetch(
-                "select j.job_id, j.lease_epoch from jobs j where j.state = 'CLAIMED' and j.lease_expires_at < now() "
+                "select j.job_id, j.lease_epoch from jobs j where j.state = 'CLAIMED' and j.lease_expires_at < now() and not j.cancel_requested "
                         + "and not exists (select 1 from job_step_attempt a "
                         + "where a.job_id = j.job_id and a.lease_epoch = j.lease_epoch)")
                 .stream().map(JooqJobLeaseDao::toClaimedJobRow).toList());
@@ -126,7 +141,7 @@ public final class JooqJobLeaseDao implements JobLeaseDao {
     @Override
     public List<ClaimedJobRow> findExpiredAllBoundaryNo() {
         return transactionBoundary.inTransaction(dsl -> dsl.fetch(
-                "select j.job_id, j.lease_epoch from jobs j where j.state = 'EXECUTING' and j.lease_expires_at < now() "
+                "select j.job_id, j.lease_epoch from jobs j where j.state = 'EXECUTING' and j.lease_expires_at < now() and not j.cancel_requested "
                         + "and exists (select 1 from job_step_attempt a "
                         + "where a.job_id = j.job_id and a.lease_epoch = j.lease_epoch) "
                         + "and not exists (select 1 from job_step_attempt a "
@@ -138,7 +153,7 @@ public final class JooqJobLeaseDao implements JobLeaseDao {
     @Override
     public List<ClaimedJobRow> findExpiredUnconfirmedYes() {
         return transactionBoundary.inTransaction(dsl -> dsl.fetch(
-                "select j.job_id, j.lease_epoch from jobs j where j.state = 'EXECUTING' and j.lease_expires_at < now() "
+                "select j.job_id, j.lease_epoch from jobs j where j.state = 'EXECUTING' and j.lease_expires_at < now() and not j.cancel_requested "
                         + "and exists (select 1 from job_step_attempt a "
                         + "where a.job_id = j.job_id and a.lease_epoch = j.lease_epoch "
                         + "and a.mutation_boundary_crossed = true and a.outcome is null)")

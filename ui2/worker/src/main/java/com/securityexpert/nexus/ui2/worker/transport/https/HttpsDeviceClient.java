@@ -178,6 +178,7 @@ public final class HttpsDeviceClient implements HttpsDeviceCalls {
     @Override
     public FormReply formRequest(Target target, String path, Map<String, String> form, String cookies, Duration timeout, int maxBytes)
             throws IOException, InterruptedException {
+        com.securityexpert.nexus.ui2.worker.JobCancellationScope.check();
         if (JobTranscriptScope.current() != null) JobTranscriptScope.add("https", "request",
                 (form == null ? "GET " : "POST ") + JobTranscript.safePath(path)
                 + (form == null ? "" : "\n" + JobTranscript.safeForm(form)));
@@ -215,6 +216,7 @@ public final class HttpsDeviceClient implements HttpsDeviceCalls {
 
     @Override
     public SessionLogin login(Target target, String path, String json, Duration timeout) throws IOException, InterruptedException {
+        com.securityexpert.nexus.ui2.worker.JobCancellationScope.check();
         if (JobTranscriptScope.current() != null) JobTranscriptScope.add("https", "request",
                 "POST " + JobTranscript.safePath(path) + "\n" + JobTranscript.safeJson(json));
         HttpRequest request = HttpRequest.newBuilder(target.uri(path)).timeout(timeout).header("Content-Type", "application/json")
@@ -360,6 +362,7 @@ public final class HttpsDeviceClient implements HttpsDeviceCalls {
 
     private <T> HttpResponse<T> send(Target target, String method, String path, String contentType, String body, Credentials creds,
             Duration timeout, HttpResponse.BodyHandler<T> handler) throws IOException, InterruptedException {
+        com.securityexpert.nexus.ui2.worker.JobCancellationScope.check();
         // A fresh TLS context prevents connection/session reuse from skipping a changed pin or strict policy.
         HttpClient client = client(target);
         String current = path;

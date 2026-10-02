@@ -27,6 +27,21 @@ import com.securityexpert.nexus.ui2.jobs.lease.JobLeaseRepository;
  * worker that wakes up late can never undo the reconciler's decision.
  */
 class JobReconcilerTest {
+    @Test void expiredCancellationAndScanRaceNeverRequeue() {
+        var lease = org.mockito.Mockito.mock(JobLeaseRepository.class);
+        var expired = new ClaimedJob("job-1", 2);
+        var racing = new ClaimedJob("job-2", 3);
+        org.mockito.Mockito.when(lease.findExpiredCancellationRequests()).thenReturn(List.of(expired));
+        org.mockito.Mockito.when(lease.findExpiredAllBoundaryNo()).thenReturn(List.of(racing));
+        org.mockito.Mockito.when(lease.cancellationRequested("job-2", 3)).thenReturn(true);
+        new JobReconciler(lease).reconcileOnce();
+        for (var job : List.of(expired, racing)) org.mockito.Mockito.verify(lease).transitionState(job.jobId(), job.leaseEpoch(),
+            JobState.EXECUTING, JobState.CANCELLED, "system:worker", "job_reconcile_cancel", "CANCELLED");
+        org.mockito.Mockito.verify(lease, org.mockito.Mockito.never()).transitionState(org.mockito.Mockito.anyString(),
+            org.mockito.Mockito.anyLong(), org.mockito.Mockito.any(), org.mockito.Mockito.eq(JobState.REQUESTED),
+            org.mockito.Mockito.anyString(), org.mockito.Mockito.anyString());
+    }
+
 
     private static final class FakeLeaseRepository implements JobLeaseRepository {
         List<ClaimedJob> noAttempt = List.of();

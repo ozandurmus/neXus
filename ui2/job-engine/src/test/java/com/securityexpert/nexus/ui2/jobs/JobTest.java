@@ -22,6 +22,10 @@ class JobTest {
         assertEquals(JobState.CLAIMED, claimed.state());
     }
 
+    @Test void executingCanFinishCancelled() {
+        assertEquals(true, JobState.EXECUTING.canTransitionTo(JobState.CANCELLED));
+    }
+
     @Test
     void illegalTransitionThrows() {
         Job job = Job.requested(OpaqueId.random(), "cp_gaia_inventory_show_version_ha_state", "device-1",

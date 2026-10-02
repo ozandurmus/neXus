@@ -80,6 +80,7 @@ public final class PanoramaPolicyCollector {
         if (!"palo_alto".equals(run.vendor()) || run.managementAddress() == null || run.managementAddress().isBlank())
             throw PolicyCollectionTrace.failure("PANORAMA_TARGET_NOT_FOUND");
         PanPolicyGates.requireAll(gates);
+        com.securityexpert.nexus.ui2.worker.JobCancellationScope.check();
         if (!lease.getAsBoolean()) throw PolicyCollectionTrace.failure("LEASE_LOST");
         PolicyCollectionTrace.step("credential resolution", scope.sourceId());
         com.securityexpert.nexus.ui2.worker.transport.xmlapi.PanCredentialMaterial credential;
@@ -135,6 +136,7 @@ public final class PanoramaPolicyCollector {
                     Element group = read(target, checked(1, name, key, lease), timer, deadline, bytes, name);
                     deviceGroups.appendChild(document.importNode(group, true));
                     if (!scope.domainRef().isEmpty() && !scope.domainRef().equals(container)) continue;
+                    com.securityexpert.nexus.ui2.worker.JobCancellationScope.check();
                     if (!lease.getAsBoolean()) throw PolicyCollectionTrace.failure("LEASE_LOST");
                     if (clock.getAsLong() >= deadline) throw PolicyCollectionTrace.failure("JOB_DEADLINE");
                     PolicyCollectionTrace.step("device group " + container + " mapping", scope.sourceId());
@@ -172,6 +174,7 @@ public final class PanoramaPolicyCollector {
                         if (!needed.contains(retained.getAttribute("name"))) deviceGroups.removeChild(retained);
                 }
             }
+            com.securityexpert.nexus.ui2.worker.JobCancellationScope.check();
             if (!lease.getAsBoolean()) throw PolicyCollectionTrace.failure("LEASE_LOST");
             if (clock.getAsLong() >= deadline) throw PolicyCollectionTrace.failure("JOB_DEADLINE");
             if (Thread.currentThread().isInterrupted()) throw PolicyCollectionTrace.failure("INTERRUPTED");
@@ -184,6 +187,7 @@ public final class PanoramaPolicyCollector {
         }
     }
     private XmlApiSpec checked(int index, String group, char[] key, BooleanSupplier lease) {
+        com.securityexpert.nexus.ui2.worker.JobCancellationScope.check();
         if (!lease.getAsBoolean()) throw PolicyCollectionTrace.failure("LEASE_LOST");
         PanPolicyGates.require(gates, index);
         return request(index, group, key);

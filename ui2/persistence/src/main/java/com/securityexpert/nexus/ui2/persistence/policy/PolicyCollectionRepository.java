@@ -101,7 +101,7 @@ public class PolicyCollectionRepository {
             .flatMap(r -> new PolicyCollectionRepository(scoped(db)).status(r.get("job_id", String.class))));
     }
     public Optional<Map<String, Object>> status(String jobId) {
-        return tx.inTransaction(db -> db.fetch("select j.state, coalesce(j.terminal_reason, '') as reason, "
+        return tx.inTransaction(db -> db.fetch("select j.state, j.cancel_requested, coalesce(j.terminal_reason, '') as reason, "
             + "coalesce(max(a.step_index), 0) as step, coalesce(max(substring(a.step_kind from 'POLICY_PROGRESS_([0-9]+)')::int), 0) as total, "
             + "coalesce(split_part(l.step_kind, '_', 3)::int, 0) as layer, "
             + "coalesce(split_part(l.step_kind, '_', 4)::int, 0) as layers, "
@@ -111,7 +111,7 @@ public class PolicyCollectionRepository {
             + "left join lateral (select step_kind from job_step_attempt where job_id = j.job_id and lease_epoch = j.lease_epoch "
             + "and step_kind like 'POLICY_LAYER_%' order by step_index desc limit 1) l on true "
             + "where j.job_id = {0} group by j.job_id, l.step_kind", jobId).stream().findFirst().map(r -> Map.<String, Object>of(
-                "jobId", jobId, "state", r.get("state", String.class), "reason", r.get("reason", String.class),
+                "jobId", jobId, "cancelRequested", Boolean.TRUE.equals(r.get("cancel_requested", Boolean.class)), "state", r.get("state", String.class), "reason", r.get("reason", String.class),
                 "step", r.get("step", Integer.class), "total", r.get("total", Integer.class),
                 "layer", r.get("layer", Integer.class), "layers", r.get("layers", Integer.class), "rulesFetched", r.get("rules", Integer.class))));
     }

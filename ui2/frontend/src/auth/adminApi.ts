@@ -1289,7 +1289,10 @@ export interface JobQueryParams {
   readonly page_size?: number;
 }
 
+export const cancelJob = (id: string) => call<{ jobId: string; state: string; cancelRequested: boolean }>(`/api/v2/jobs/${encodeURIComponent(id)}/cancel`, "POST");
+
 export interface JobPageView {
+  readonly can_cancel?: boolean;
   readonly items: readonly JobEventView[];
   readonly page: number;
   readonly page_size: number;
@@ -1690,7 +1693,7 @@ export const getPolicy = (id: string, page: number, q: string) => call<PolicyPag
 export const getPolicyObject = (id: string, policy: string) => call<{ object: PolicyObject }>(`/api/v2/policy/objects/${encodeURIComponent(id)}?policy=${encodeURIComponent(policy)}`, "GET");
 
 export type PolicyCollectionSource = { sourceId: string; sourceName: string; vendor: string; collection?: PolicyCollectionStatus };
-export const listPolicySources = () => call<{ sources: PolicyCollectionSource[]; canCollect: boolean }>("/api/v2/policy/sources", "GET");
+export const listPolicySources = () => call<{ sources: PolicyCollectionSource[]; canCollect: boolean; canCancel?: boolean }>("/api/v2/policy/sources", "GET");
 export const collectPolicies = (sourceId: string, domainRef = "") => call<{ jobId: string }>(
   `/api/v2/policy/sources/${encodeURIComponent(sourceId)}/collect`, "POST", { domainRef });
 
@@ -1698,5 +1701,5 @@ export type PolicyContainer = { containerId: string; containerName: string };
 export const getPolicyTree = (source = "", container = "", device = "") => call<{
   sources?: PolicyCollectionSource[]; devices?: PolicyTarget[]; containers?: PolicyContainer[]; policies?: PolicyMetadata[];
 }>(`/api/v2/policy/tree?source=${encodeURIComponent(source)}&container=${encodeURIComponent(container)}&device=${encodeURIComponent(device)}`, "GET");
-export type PolicyCollectionStatus = { jobId: string; state: string; reason: string; step: number; total: number; layer?: number; layers?: number; rulesFetched?: number; collectedAt?: string; hasTranscript?: boolean };
+export type PolicyCollectionStatus = { cancelRequested?: boolean; jobId: string; state: string; reason: string; step: number; total: number; layer?: number; layers?: number; rulesFetched?: number; collectedAt?: string; hasTranscript?: boolean };
 export const getPolicyCollectionStatus = (id: string) => call<PolicyCollectionStatus>(`/api/v2/policy/collections/${encodeURIComponent(id)}`, "GET");

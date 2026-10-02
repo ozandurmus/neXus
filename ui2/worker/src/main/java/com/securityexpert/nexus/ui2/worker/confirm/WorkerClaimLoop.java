@@ -243,10 +243,19 @@ public final class WorkerClaimLoop {
         // it while it was still running, a second thread started the same backup on the same device,
         // and the pair looped until the fifth epoch failed it.
         java.util.concurrent.ScheduledFuture<?> heartbeat = scheduleHeartbeat(claimed);
-        try {
+        try (var cancellation = new com.securityexpert.nexus.ui2.worker.JobCancellationScope(
+                () -> leaseRepository.cancellationRequested(claimed.jobId(), claimed.leaseEpoch()))) {
+            com.securityexpert.nexus.ui2.worker.JobCancellationScope.check();
             return executeClaimed(claimed);
+        } catch (com.securityexpert.nexus.ui2.worker.JobCancellationScope.Cancelled cancelled) {
+            return true;
         } finally {
             heartbeat.cancel(false);
+            if (leaseRepository.cancellationRequested(claimed.jobId(), claimed.leaseEpoch())) {
+                leaseRepository.transitionState(claimed.jobId(), claimed.leaseEpoch(),
+                    com.securityexpert.nexus.ui2.jobs.JobState.EXECUTING, com.securityexpert.nexus.ui2.jobs.JobState.CANCELLED,
+                    "system:worker", "job_cancel_finish", "CANCELLED");
+            }
         }
     }
 

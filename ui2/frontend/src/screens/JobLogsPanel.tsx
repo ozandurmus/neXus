@@ -20,6 +20,7 @@ import { MONO, m3 } from "../theme/m3Theme";
 import { jobTypeLabel } from "../jobs/jobTypeLabel";
 import { JobTranscriptDrawer } from "./JobTranscriptDrawer";
 import {
+  cancelJob,
   downloadJobsCsv,
   jobFacets,
   listDevices,
@@ -88,12 +89,13 @@ export function JobLogsPanel({
   readonly emptyTitle?: string;
   readonly emptyBody?: string;
 } = {}) {
-  const [page, setPage] = useState<{ items: readonly JobEventView[]; total: number } | null>(null);
+  const [page, setPage] = useState<{ items: readonly JobEventView[]; total: number; canCancel: boolean } | null>(null);
   const [devices, setDevices] = useState<Record<string, { name: string; vendor: string }>>({});
   const [facets, setFacets] = useState<JobFacetsView>({ states: [], job_types: [] });
   const [error, setError] = useState<ApiError | string | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState<string[]>([]);
   const [exportBusy, setExportBusy] = useState(false);
 
   const [state, setState] = useState(initialState);
@@ -121,7 +123,7 @@ export function JobLogsPanel({
     const current = JSON.parse(paramsKey) as JobQueryParams;
     listJobs(current)
       .then((data) => {
-        setPage({ items: data.items ?? [], total: data.total ?? 0 });
+        setPage({ items: data.items ?? [], total: data.total ?? 0, canCancel: data.can_cancel === true });
         setError(null);
       })
       .catch((err: ApiError) => setError(err));
@@ -173,6 +175,17 @@ export function JobLogsPanel({
       setError(err as ApiError);
     } finally {
       setExportBusy(false);
+    }
+  };
+
+  const handleCancel = async (id: string) => {
+    setCancelling(current => [...current, id]);
+    try {
+      await cancelJob(id);
+      fetchJobs();
+    } catch (err) {
+      setCancelling(current => current.filter(job => job !== id));
+      setError(err as ApiError);
     }
   };
 
@@ -309,6 +322,7 @@ export function JobLogsPanel({
                   <TableCell sx={{ fontWeight: 600 }}>Result</TableCell>
                   <TableCell sx={{ fontWeight: 600 }}>Submitted At</TableCell>
                   <TableCell sx={{ fontWeight: 600 }}>Transcript</TableCell>
+                  {page.canCancel && <TableCell sx={{ fontWeight: 600 }}>Actions</TableCell>}
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -356,9 +370,15 @@ export function JobLogsPanel({
                         <Ts at={job.submitted_at} />
                       </TableCell>
                       <TableCell><JobTranscriptDrawer jobId={job.job_id} hasTranscript={isBackupJob && job.has_transcript} /></TableCell>
+                      {page.canCancel && <TableCell>
+                        {["REQUESTED", "CLAIMED", "EXECUTING"].includes(job.state) && <Button size="small"
+                          disabled={cancelling.includes(job.job_id)} onClick={event => {
+                            event.stopPropagation(); void handleCancel(job.job_id);
+                          }}>{cancelling.includes(job.job_id) ? "Cancel requested" : "Cancel"}</Button>}
+                      </TableCell>}
                     </TableRow>
                     {isExpanded && <TableRow key={`${job.job_id}-details`}>
-                      <TableCell colSpan={7}>
+                      <TableCell colSpan={page.canCancel ? 8 : 7}>
                         <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap>
                           {([["Job ID", job.job_id], ["Device ID", job.target_device_id]] as const).map(([label, value]) => (
                             <Stack key={label} direction="row" spacing={0.5} alignItems="center">
