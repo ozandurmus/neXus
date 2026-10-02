@@ -69,8 +69,6 @@ public class FailoverScheduleController {
             return ResponseEntity.badRequest().body(Map.of("error", "INVALID_REQUEST", "message", ex.getMessage()));
         } catch (IllegalStateException ex) {
             return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", "ADMISSION_REFUSED", "message", ex.getMessage()));
-        } catch (Exception ex) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", "SERVER_ERROR", "message", ex.getMessage()));
         }
     }
 

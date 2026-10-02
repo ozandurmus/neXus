@@ -1,5 +1,7 @@
 package com.securityexpert.nexus.ui2.persistence;
 
+import javax.sql.DataSource;
+
 import org.jooq.SQLDialect;
 import org.jooq.impl.DSL;
 import org.postgresql.ds.PGSimpleDataSource;
@@ -19,10 +21,18 @@ public final class TransactionBoundaryFactory {
     }
 
     public static TransactionBoundary fromJdbc(String jdbcUrl, String user, String password) {
+        return fromDataSource(jdbcDataSource(jdbcUrl, user, password));
+    }
+
+    public static DataSource jdbcDataSource(String jdbcUrl, String user, String password) {
         PGSimpleDataSource dataSource = new PGSimpleDataSource();
         dataSource.setUrl(jdbcUrl);
         dataSource.setUser(user);
         dataSource.setPassword(password);
+        return dataSource;
+    }
+
+    public static TransactionBoundary fromDataSource(DataSource dataSource) {
         return new JooqTransactionBoundary(DSL.using(dataSource, SQLDialect.POSTGRES));
     }
 }

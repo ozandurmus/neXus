@@ -5,7 +5,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Objects;
 
-import javax.sql.DataSource;
+import com.zaxxer.hikari.HikariDataSource;
+
+import org.springframework.core.env.Environment;
 
 import org.postgresql.ds.PGSimpleDataSource;
 import org.springframework.beans.factory.annotation.Value;
@@ -57,12 +59,20 @@ public class DatabaseConfiguration {
         return value;
     }
 
-    @Bean
-    public DataSource dataSource() {
+    @Bean(destroyMethod = "close")
+    public HikariDataSource dataSource(Environment environment) {
         PGSimpleDataSource source = new PGSimpleDataSource();
         source.setUrl(jdbcUrl);
         source.setUser(readSecretFile(userFile, "db_app_user"));
         source.setPassword(readSecretFile(passwordFile, "db_app_password"));
-        return source;
+        HikariDataSource pool = new HikariDataSource();
+        pool.setDataSource(source);
+        pool.setPoolName("service-database");
+        pool.setMaximumPoolSize(environment.getProperty("ui2.db.pool.maximum-pool-size", Integer.class, 20));
+        pool.setMinimumIdle(environment.getProperty("ui2.db.pool.minimum-idle", Integer.class, 2));
+        pool.setConnectionTimeout(environment.getProperty("ui2.db.pool.connection-timeout", Long.class, 10_000L));
+        pool.setMaxLifetime(environment.getProperty("ui2.db.pool.max-lifetime", Long.class, 1_800_000L));
+        pool.setLeakDetectionThreshold(environment.getProperty("ui2.db.pool.leak-detection-threshold", Long.class, 60_000L));
+        return pool;
     }
 }
