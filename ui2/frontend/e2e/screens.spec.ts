@@ -26,7 +26,8 @@ async function screenHasData(page: Page, screen: ScreenId) {
       await expect(page.getByRole("checkbox", { name: /^Backup target / }).first()).toBeVisible();
       break;
     case "operations":
-      await expect(page.getByRole("table").getByRole("row").nth(1)).toBeVisible();
+      await expect(page.getByLabel("Readiness summary").getByRole("button")).toHaveCount(4);
+      await expect(page.getByRole("list", { name: "HA clusters", exact: true }).getByRole("listitem").first()).toBeVisible();
       break;
     case "administration":
       await expect(page.getByRole("tabpanel", { name: "Device management" }).getByRole("checkbox", { name: /^Select / }).nth(1)).toBeVisible();
