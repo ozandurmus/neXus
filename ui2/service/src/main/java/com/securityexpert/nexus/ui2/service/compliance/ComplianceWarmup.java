@@ -12,6 +12,8 @@ import org.springframework.stereotype.Component;
  * devices whose configuration (or the compliance rule set) changed are re-evaluated, so a screen open never waits.
  */
 @Component
+@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
+        name = "ui2.scheduling.enabled", havingValue = "true", matchIfMissing = true)
 public class ComplianceWarmup {
 
     private static final System.Logger LOG = System.getLogger(ComplianceWarmup.class.getName());
