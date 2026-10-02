@@ -1,5 +1,6 @@
+import { HaReadinessList } from "./HaReadinessList";
 import { ReadinessCard } from "./ReadinessChecksTable";
-import { Fragment, useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import Box from "@mui/material/Box";
 import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
@@ -21,7 +22,7 @@ import TextField from "@mui/material/TextField";
 
 import { ScreenHeader, MetricGrid, MetricCard, ScreenRoot } from "../shell/ScreenLayout";
 import { M3Button, M3Tabs, StatusChip } from "../shell/M3Widgets";
-import { StatePanel, Ts, RoleChip, VendorBadge, Unknown } from "../shell/States";
+import { StatePanel, Ts } from "../shell/States";
 import { m3 } from "../theme/m3Theme";
 import { JobLogsPanel } from "./JobLogsPanel";
 import { DiagnosticPanel } from "./DiagnosticPanel";
@@ -160,15 +161,6 @@ export function OperationsScreen() {
       setIsRunning(null);
     }
   };
-
-  const readinessLabel = (row?: CpFailoverSummary) => {
-    if (!row?.readiness) return "Unknown";
-    const age = Math.max(0, Math.floor((Date.now() - Date.parse(row.readiness.observedAt)) / 60000));
-    const ago = age < 60 ? `${age} min ago` : `${Math.floor(age / 60)} h ago`;
-    return row.readiness.status === "READY" ? `Ready · ${ago}`
-      : row.readiness.status === "NOT_READY" ? `Not ready · ${row.readiness.failedCheck} · ${ago}` : `Unknown · ${ago}`;
-  };
-
 
   const handleAuthorizeAndDryRun = async () => {
     if (!selectedCluster) return;
@@ -345,72 +337,9 @@ export function OperationsScreen() {
           />
         );
       }
-      const roleOfMembers = (members: DeviceSummary[], role: string) =>
-        members.filter((m) => (m.ha_role ?? "").toLowerCase() === role).map((m) => m.hostname ?? m.device_id).join(", ") || null;
-      return (
-        <Box>
-          <Typography variant="h4" sx={{ mb: 0.5 }}>{count} clusters enrolled</Typography>
-          <Typography variant="body2" sx={{ color: m3.onSurfaceVar, mb: 2 }}>
-            Readiness is collected directly from each enrolled unit. Failover runs always perform fresh pre-checks.
-          </Typography>
-          <TableContainer component={Paper} sx={{ borderRadius: "10px", border: `1px solid ${m3.outlineVar}`, boxShadow: "none" }}>
-            <Table size="small">
-              <TableHead sx={{ bgcolor: m3.scLow }}>
-                <TableRow>
-                  <TableCell sx={{ fontWeight: 600, fontSize: 11, letterSpacing: "0.04em", textTransform: "uppercase" }}>Cluster</TableCell>
-                  <TableCell sx={{ fontWeight: 600, fontSize: 11, letterSpacing: "0.04em", textTransform: "uppercase" }}>Vendor</TableCell>
-                  <TableCell sx={{ fontWeight: 600, fontSize: 11, letterSpacing: "0.04em", textTransform: "uppercase" }}>Active member</TableCell>
-                  <TableCell sx={{ fontWeight: 600, fontSize: 11, letterSpacing: "0.04em", textTransform: "uppercase" }}>Standby member</TableCell>
-                  <TableCell sx={{ fontWeight: 600, fontSize: 11, letterSpacing: "0.04em", textTransform: "uppercase" }}>Roles observed</TableCell>
-                  <TableCell sx={{ fontWeight: 600, fontSize: 11, letterSpacing: "0.04em", textTransform: "uppercase" }}>Last evaluated</TableCell>
-                  <TableCell sx={{ fontWeight: 600, fontSize: 11, letterSpacing: "0.04em", textTransform: "uppercase" }}>Readiness</TableCell>
-                  <TableCell>Pre-checks</TableCell>
-                  <TableCell>Last run / window</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {clusters!.map((c) => {
-                  const active = roleOfMembers(c.members, "active");
-                  const standby = roleOfMembers(c.members, "standby") ?? roleOfMembers(c.members, "passive");
-                  const cp = cpRows[c.ref] ?? [];
-                  const last = [...cp].filter(row => row.lastRunAt).sort((a, b) => (b.lastRunAt ?? "").localeCompare(a.lastRunAt ?? ""))[0];
-                  const baseUnit = cp.find(row => row.unitId === row.clusterId);
-                  const context = c.members[0]?.vendor_hint === "palo_alto" ? c.members.flatMap(m => (m.virtual_systems ?? "").split(",").map(v => v.trim()).filter(Boolean)) : [];
-                  return (<Fragment key={c.ref}>
-                    <TableRow hover onClick={() => { setSelectedCluster(c.ref); setExpandedUnit(baseUnit?.unitId ?? null); }} sx={{ cursor: "pointer" }}>
-                      <TableCell sx={{ fontWeight: 500 }}>{c.title}{context.length > 0 && <Typography variant="caption" display="block">VSYS: {[...new Set(context)].join(", ")}</Typography>}</TableCell>
-                      <TableCell><VendorBadge vendor={c.members[0]?.vendor_hint} /></TableCell>
-                      <TableCell sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                        {active ? <Box component="span" sx={{ fontFamily: "inherit" }}>{active}</Box> : <Unknown />}
-                        {active ? <RoleChip role="ACTIVE" dense /> : null}
-                      </TableCell>
-                      <TableCell>
-                        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                          {standby ? <Box component="span">{standby}</Box> : <Unknown />}
-                          {standby ? <RoleChip role="STANDBY" dense /> : null}
-                        </Box>
-                      </TableCell>
-                      {/* When the roles were read (newest member inventory), separate from readiness evaluation. */}
-                      <TableCell><Ts at={c.members.map((m) => m.inventory_collected_at ?? null).filter((t): t is string => Boolean(t)).sort().slice(-1)[0] ?? null} seconds={false} /></TableCell>
-                      <TableCell><Ts at={baseUnit?.readiness?.observedAt ?? null} /></TableCell>
-                      <TableCell>{readinessLabel(baseUnit)}</TableCell>
-                      <TableCell>{baseUnit?.canRunReadiness && <M3Button emphasis="tonal" disabled={isRunning === baseUnit.unitId} onClick={() => { void handleRunReadiness(baseUnit); }}>{isRunning === baseUnit.unitId ? "Running…" : "Run pre-checks"}</M3Button>}</TableCell>
-                      <TableCell>{cp.length > 0 && <>{last?.lastRunOutcome ?? last?.lastRunState ?? "No run"} {cp.some(row => row.activeWindow) && <StatusChip label="Active window" tone="ok" dense />}</>}</TableCell>
-                    </TableRow>
-                    {cp.filter(row => row.unitId !== row.clusterId).map(row => <TableRow key={row.unitId} onClick={() => { setSelectedCluster(c.ref); setExpandedUnit(row.unitId); }} sx={{ cursor: "pointer" }}>
-                      <TableCell sx={{ pl: 4 }}><Typography variant="caption">Virtual System</Typography> {row.virtual_system ?? row.cluster_member_ref}</TableCell>
-                      <TableCell colSpan={5} />
-                      <TableCell>{readinessLabel(row)}</TableCell>
-                      <TableCell>{row.canRunReadiness && <M3Button emphasis="tonal" disabled={isRunning === row.unitId} onClick={() => { void handleRunReadiness(row); }}>{isRunning === row.unitId ? "Running…" : "Run pre-checks"}</M3Button>}</TableCell>
-                      <TableCell>{row.lastRunOutcome ?? row.lastRunState ?? "No run"} {row.activeWindow && <StatusChip label="Active window" tone="ok" dense />}</TableCell>
-                    </TableRow>)}
-                  </Fragment>);
-                })}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </Box>
-      );
+      return <HaReadinessList clusters={clusters} rows={cpRows} running={isRunning} error={readinessError}
+        onOpen={(ref, unitId) => { setSelectedCluster(ref); setExpandedUnit(unitId); }}
+        onRun={row => { void handleRunReadiness(row); }} />;
     }
 
     const isPan = selected?.members[0]?.vendor_hint === "palo_alto";
