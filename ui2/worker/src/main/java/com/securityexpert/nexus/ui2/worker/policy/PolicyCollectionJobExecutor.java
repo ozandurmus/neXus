@@ -53,26 +53,26 @@ public final class PolicyCollectionJobExecutor {
 
     public JobOutcome execute(String jobId, long epoch, String runId) {
         var transcript = new com.securityexpert.nexus.ui2.worker.transcript.JobTranscript();
-        String[] pending = {null};
+        var pending = new java.util.concurrent.ConcurrentHashMap<Long, String>();
         try (var cancellation = new com.securityexpert.nexus.ui2.worker.JobCancellationScope(
                 () -> leases.cancellationRequested(jobId, epoch));
              var scope = com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.open(transcript);
              var trace = new PolicyCollectionTrace(runId, (step, total) -> {
-                 if (pending[0] != null) {
-                     if (!attempts.writeOutcome(pending[0], epoch, "MATCHED", null, true, null, null, null))
+                 if (pending.containsKey(Thread.currentThread().getId())) {
+                     if (!attempts.writeOutcome(pending.get(Thread.currentThread().getId()), epoch, "MATCHED", null, true, null, null, null))
                          throw PolicyCollectionTrace.failure("LEASE_LOST");
-                     pending[0] = null;
+                     pending.remove(Thread.currentThread().getId());
                  }
                  String id = attempts.insertPreContact(jobId, epoch, step, "POLICY_PROGRESS_" + total, "read", 1);
                  if (id == null) throw PolicyCollectionTrace.failure("LEASE_LOST");
-                 pending[0] = id;
+                 pending.put(Thread.currentThread().getId(), id);
              }, measurement -> {
-                 if (pending[0] == null) return;
+                 if (!pending.containsKey(Thread.currentThread().getId())) return;
                  boolean completed = measurement.outcome().equals("Completed");
-                 if (!attempts.writeOutcome(pending[0], epoch, completed ? "MATCHED" : "EXPECTATION_UNMET", null,
+                 if (!attempts.writeOutcome(pending.get(Thread.currentThread().getId()), epoch, completed ? "MATCHED" : "EXPECTATION_UNMET", null,
                          completed, measurement.bytes() < 0 ? null : measurement.bytes(), null, null))
                      throw PolicyCollectionTrace.failure("LEASE_LOST");
-                 pending[0] = null;
+                 pending.remove(Thread.currentThread().getId());
              }, progress -> {
                  String id = attempts.insertPreContact(jobId, epoch, progress.step(),
                      "POLICY_LAYER_" + progress.layer() + "_" + progress.layers() + "_" + progress.rules(), "read", 1);
@@ -80,7 +80,7 @@ public final class PolicyCollectionJobExecutor {
                      throw PolicyCollectionTrace.failure("LEASE_LOST");
              })) {
             JobOutcome outcome = executeScoped(jobId, epoch, runId);
-            if (pending[0] != null) attempts.writeOutcome(pending[0], epoch,
+            for (String id : pending.values()) attempts.writeOutcome(id, epoch,
                 outcome instanceof JobOutcome.Completed ? "MATCHED" : "EXPECTATION_UNMET", null,
                 outcome instanceof JobOutcome.Completed, null, null, null);
             com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.add("job", "verdict",

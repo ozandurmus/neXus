@@ -10,6 +10,10 @@ public final class JobCancellationScope implements AutoCloseable {
         previous = ACTIVE.get();
         ACTIVE.set(requested);
     }
+    public static BooleanSupplier requested() {
+        var requested = ACTIVE.get();
+        return requested == null ? () -> false : requested;
+    }
     public static void check() {
         var requested = ACTIVE.get();
         if (requested != null && requested.getAsBoolean()) throw new Cancelled();

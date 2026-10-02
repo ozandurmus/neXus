@@ -29,7 +29,7 @@ class CheckPointPolicyCollectorTest {
         when(transport.execInteractive(eq(session), any(), any())).thenAnswer(call -> answers.apply(((ExecSpec) call.getArgument(1)).command()));
         when(repository.beginDomain(anyString(), anyString(), anyBoolean())).thenReturn(true);
         when(repository.targets(anyString(), anyString(), anyString())).thenReturn(List.of(new PolicySnapshot.Target("device-1", "FW-TANGO-04", "", "UNKNOWN")));
-        return new CheckPointPolicyCollector(transport, gates, repository);
+        return new CheckPointPolicyCollector(transport, gates, repository, Duration.ofHours(2), 1);
     }
     private static ExecResult ok(String json) { return new ExecResult.Completed(json, 0); }
     private static String page(String uid, int from, int to, int total, String rules, String objects) {
