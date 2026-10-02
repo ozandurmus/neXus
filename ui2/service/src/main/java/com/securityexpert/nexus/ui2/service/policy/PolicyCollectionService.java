@@ -36,6 +36,11 @@ public class PolicyCollectionService {
     public Optional<Map<String, Object>> status(String jobId) { return repository.status(jobId).map(this::presentation); }
     private Map<String, Object> presentation(Map<String, Object> status) {
         Map<String, Object> view = new LinkedHashMap<>(status);
+        String state = String.valueOf(status.get("state"));
+        String reason = String.valueOf(status.get("reason"));
+        view.put("outcome", reason.startsWith("PARTIAL_SNAPSHOT") ? "PARTIAL"
+            : state.equals("COMPLETED") ? "COMPLETED"
+            : Set.of("FAILED", "REJECTED", "OUTCOME_UNKNOWN").contains(state) ? "FAILED" : "UNKNOWN");
         tx.inTransaction(db -> db.fetch("select finished_at, transcript_artefact_ref is not null as has_transcript from jobs where job_id = {0}", status.get("jobId"))
             .stream().findFirst()).ifPresent(row -> {
                 var at = row.get("finished_at", OffsetDateTime.class);

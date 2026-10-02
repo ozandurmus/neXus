@@ -7,19 +7,47 @@ import com.securityexpert.nexus.ui2.service.privacy.SubnetPreservingIpMasker;
 /** Fail-closed policy projection: unfamiliar fields and free-form extensions never pass through AIView. */
 public final class PolicyPrivacy {
     private PolicyPrivacy() {}
-    private static final Set<String> OPAQUE = Set.of("id", "sourceId", "containerId", "deviceId", "artefactRef", "parentRuleId", "layerRef", "jobId");
+    private static final Set<String> OPAQUE = Set.of("id", "sourceId", "containerId", "deviceId", "artefactRef", "parentRuleId", "layerRef", "jobId", "ruleId");
     private static final Set<String> ENUMS = Set.of("CP", "PAN", "static", "hide", "any", "address", "group", "service", "service-group", "address-group",
-            "LOCAL_FIREWALL", "MANAGEMENT", "application-group", "tag", "unresolved", "UNRESOLVED", "UNSUPPORTED", "RESOLVED", "DYNAMIC", "CYCLE", "LIMIT", "UNKNOWN",
+            "LOCAL_FIREWALL", "MANAGEMENT", "application-group", "tag", "time", "time-group", "schedule", "unresolved", "UNRESOLVED", "UNSUPPORTED", "RESOLVED", "DYNAMIC", "CYCLE", "LIMIT", "UNKNOWN",
             "MATCH", "MISMATCH", "IN_SYNC", "OUT_OF_SYNC", "PENDING", "Accept", "Drop", "Reject", "allow", "deny", "drop", "reject", "reset-client", "reset-server", "reset-both", "Apply Layer", "Log", "None", "Alert");
     public static Object mask(Object value, String key, TopologyNamePseudonymizer names, SubnetPreservingIpMasker ips) {
         if (value == null || value instanceof Boolean || value instanceof Number) return value;
-        if (key.equals("extras")) return Map.of("withheld", List.of("Withheld in AIView"));
+        if (key.equals("changes") && value instanceof List<?> changes) return changes.stream().map(change -> {
+            if (!(change instanceof Map<?, ?> row)) return Map.of();
+            String field = String.valueOf(row.get("field"));
+            if (!Set.of("name", "number", "enabled", "source", "destination", "service", "application", "action", "log", "comment", "extras", "container", "section", "parentRuleId").contains(field)) return Map.of();
+            Map<String, Object> out = new LinkedHashMap<>(); out.put("field", field);
+            out.put("before", mask(row.get("before"), field, names, ips));
+            out.put("after", mask(row.get("after"), field, names, ips));
+            return out;
+        }).toList();
+        if (key.equals("extras") && value instanceof Map<?, ?> extras) {
+            Map<String, Object> out = new LinkedHashMap<>();
+            extras.forEach((k, v) -> {
+                String field = String.valueOf(k);
+                if (Set.of("time", "schedule", "install-on", "vpn", "content", "inline-layer").contains(field)) out.put(field, mask(v, "refs", names, ips));
+                else if (field.equals("last-modified")) out.put(field, mask(v, "changedOn", names, ips));
+                else if (Set.of("from", "to", "source-user", "category", "tag", "last-modifier", "layer-name", "target-selectors", "log-setting", "profile-setting/group", "profile-setting/profiles/virus", "profile-setting/profiles/spyware", "profile-setting/profiles/vulnerability", "profile-setting/profiles/url-filtering", "profile-setting/profiles/file-blocking", "profile-setting/profiles/wildfire-analysis").contains(field))
+                    out.put(field, mask(v, field, names, ips));
+                else if (field.equals("rule-type")) out.put(field, mask(v, "ruleType", names, ips));
+                else out.put(field, List.of("Withheld in AIView"));
+            });
+            return out;
+        }
+        if (key.equals("permissiveness") && value instanceof Map<?, ?> metric) {
+            String level = String.valueOf(metric.get("level"));
+            List<?> reasons = metric.get("reasons") instanceof List<?> list ? list : List.of();
+            return Map.of("level", Set.of("Low", "Medium", "High", "Unknown").contains(level) ? level : "Unknown",
+                    "reasons", reasons.stream().filter(r -> r instanceof String s && (s.matches("(?:Any |Large CIDR in |Negated )(source|destination|service|application)(?: needs analysis)?")
+                            || s.equals("Broad service range") || s.equals("No broad selectors in resolved objects") || s.equals("Incomplete objects; assessment requires analysis"))).toList());
+        }
         if (value instanceof Map<?, ?> map) {
             Map<String, Object> out = new LinkedHashMap<>();
             map.forEach((k, v) -> {
                 String field = String.valueOf(k);
                 if (field.equals("name") && "any".equals(map.get("type"))) out.put(field, "ANY");
-                else if (field.equals("name") && map.containsKey("rules") && Set.of("Pre rules", "Post rules", "Local rules", "Inline layer unavailable").contains(v)) out.put(field, v);
+                else if (field.equals("name") && map.containsKey("rules") && Set.of("Pre rules", "Post rules", "Local rules", "Inline layer unavailable").contains(v)) out.put(field, mask(v, "refs", names, ips));
                 else if (field.equals("name") && map.containsKey("deviceId")) out.put(field, names.maskDeviceName((String) v, null));
                 else out.put(field, mask(v, field, names, ips));
             });
@@ -30,7 +58,23 @@ public final class PolicyPrivacy {
         if (text.isEmpty()) return text;
         if (OPAQUE.contains(key) || key.equals("refs") || key.equals("members") || key.equals("collectedAt")) return text;
         if (key.equals("state")) return Set.of("REQUESTED", "CLAIMED", "EXECUTING", "RECONCILING", "COMPLETED", "FAILED", "REJECTED", "CANCELLED", "OUTCOME_UNKNOWN", "RECONCILED").contains(text) ? text : "UNKNOWN";
+        if (key.equals("outcome")) return Set.of("COMPLETED", "PARTIAL", "FAILED", "UNKNOWN").contains(text) ? text : "UNKNOWN";
         if (key.equals("reason")) return safeReason(text);
+        if (Set.of("start", "end", "changedOn").contains(key)) {
+            try {
+                if (text.matches("[0-9]{2}:[0-9]{2}(?::[0-9]{2})?")) return java.time.LocalTime.parse(text).toString();
+                return com.securityexpert.nexus.ui2.policy.PolicySchedule.date(text);
+            } catch (RuntimeException invalid) { return null; }
+        }
+        if (key.equals("timezone")) {
+            try { return java.time.ZoneId.of(text).getId(); } catch (RuntimeException invalid) { return "UTC"; }
+        }
+        if (key.equals("kind")) return Set.of("one-time", "recurring", "unknown").contains(text) ? text : "unknown";
+        if (key.equals("timeStatus")) return Set.of("always", "active", "expired", "upcoming", "unknown").contains(text) ? text : "unknown";
+        if (key.equals("changeType")) return Set.of("added", "removed", "modified").contains(text) ? text : "UNKNOWN";
+        if (key.equals("ruleType")) return Set.of("universal", "interzone", "intrazone").contains(text) ? text : "UNKNOWN";
+        if (Set.of("from", "to", "source-user", "category").contains(key) && text.equals("any")) return text;
+        if (key.equals("changedBy")) return names.maskPolicyName("last-modifier", text);
         if (key.equals("comment")) return "Withheld in AIView";
         if (key.equals("sourceName")) return names.maskDeviceName(text, null);
         if (key.equals("containerName")) return names.maskDomainName(text);

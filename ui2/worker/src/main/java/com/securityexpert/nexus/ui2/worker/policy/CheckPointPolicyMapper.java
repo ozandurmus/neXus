@@ -90,11 +90,11 @@ public final class CheckPointPolicyMapper {
             sections.add(new Section(ref(meta.id(), uid, parent == null ? "" : parent), "Inline layer unavailable", "CP access layer", parent, List.of()));
         } else for (JsonNode page : layers.get(uid)) {
             walk(meta, page.path("rulebase"), ref(meta.id(), uid, parent == null ? "" : parent),
-                    page.path("name").asText("Access layer"), parent, layers, dict, objects, sections, path, 0);
+                    page.path("name").asText("Access layer"), page.path("name").asText("Access layer"), parent, layers, dict, objects, sections, path, 0);
         }
         path.remove(uid);
     }
-    private void walk(Metadata meta, JsonNode nodes, String section, String name, String parent,
+    private void walk(Metadata meta, JsonNode nodes, String section, String name, String layerName, String parent,
             Map<String, List<JsonNode>> layers, Map<String, JsonNode> dict, Map<String, PolicyObject> objects,
             List<Section> sections, Set<String> path, int depth) {
         if (depth > 32) throw new IllegalArgumentException("Policy nesting limit exceeded");
@@ -103,13 +103,14 @@ public final class CheckPointPolicyMapper {
             if (node.path("type").asText().equals("access-section")) {
                 flush(sections, section, name, parent, pending);
                 walk(meta, node.path("rulebase"), ref(section, node.path("uid").asText()), node.path("name").asText("Section"),
-                        parent, layers, dict, objects, sections, path, depth + 1);
+                        layerName, parent, layers, dict, objects, sections, path, depth + 1);
                 continue;
             }
             if (!node.path("type").asText().equals("access-rule")) throw new IllegalArgumentException("Unsupported access rule entry");
             String uuid = node.path("uid").asText();
-            if (uuid.isEmpty()) throw new IllegalArgumentException("Missing rule identity");
-            String ruleId = ref(section, uuid);
+            String ruleName = node.path("name").asText("");
+            if (uuid.isEmpty() && ruleName.isEmpty()) throw new IllegalArgumentException("Missing rule identity");
+            String ruleId = ref(section, uuid.isEmpty() ? ruleName : uuid);
             Map<String, List<String>> extras = new LinkedHashMap<>();
             for (String field : List.of("install-on", "vpn", "time", "content", "inline-layer")) {
                 List<String> values = texts(node.path(field));
@@ -117,6 +118,15 @@ public final class CheckPointPolicyMapper {
             }
             for (String field : List.of("accounting", "alert", "per-connection", "per-session"))
                 if (node.path("track").has(field)) extras.put("track-" + field, List.of(node.path("track").path(field).asText()));
+            extras.put("layer-name", List.of(layerName));
+            if (!node.has("time")) extras.put("time-uncollected", List.of("true"));
+            JsonNode modified = node.path("meta-info").path("last-modify-time");
+            if (!modified.isMissingNode()) {
+                String date = modified.isObject() ? modified.path("iso-8601").asText() : modified.asText();
+                try { extras.put("last-modified", List.of(com.securityexpert.nexus.ui2.policy.PolicySchedule.date(date))); }
+                catch (RuntimeException invalid) { /* Unsupported metadata remains absent. */ }
+            }
+            if (node.path("meta-info").has("last-modifier")) extras.put("last-modifier", List.of(node.path("meta-info").path("last-modifier").asText()));
             pending.add(new Rule(ruleId, uuid, node.path("rule-number").asInt(0), node.path("name").asText(""),
                     node.path("enabled").isBoolean() ? node.path("enabled").asBoolean() : null,
                     cell(meta, node, "source", dict, objects), cell(meta, node, "destination", dict, objects),
@@ -132,7 +142,7 @@ public final class CheckPointPolicyMapper {
     }
     private static void flush(List<Section> sections, String id, String name, String parent, List<Rule> pending) {
         if (pending.isEmpty()) return;
-        sections.add(new Section(ref(id, pending.get(0).uuid()), name, "CP access layer", parent, pending));
+        sections.add(new Section(ref(id, pending.get(0).uuid().isEmpty() ? pending.get(0).id() : pending.get(0).uuid()), name, "CP access layer", parent, pending));
         pending.clear();
     }
     private Cell cell(Metadata meta, JsonNode rule, String field, Map<String, JsonNode> dict, Map<String, PolicyObject> objects) {
@@ -158,6 +168,7 @@ public final class CheckPointPolicyMapper {
             case "group", "group-with-exclusion" -> "group";
             case "service-tcp", "service-udp", "service-icmp" -> "service";
             case "service-group" -> "service-group";
+            case "time", "time-group" -> nativeType;
             default -> "unresolved";
         };
         String name = type.equals("any") ? "ANY" : node.path("name").asText(uid);
@@ -169,7 +180,7 @@ public final class CheckPointPolicyMapper {
         for (String field : List.of("ipv4-address", "ipv6-address", "subnet4", "mask-length4", "subnet6", "mask-length6", "port", "icmp-type", "icmp-code", "ip-address-first", "ip-address-last"))
             if (node.has(field)) values.add(field + ": " + node.path(field).asText());
         String status = type.equals("unresolved") || nativeType.equals("group-with-exclusion") ? "UNSUPPORTED" : "RESOLVED";
-        objects.put(id, new PolicyObject(id, name, type, members, values, status));
+        objects.put(id, new PolicyObject(id, name, type, members, values, status, nativeType.equals("time") ? CheckPointSchedule.parse(node) : null));
         return id;
     }
     private static String resolve(JsonNode node, Map<String, JsonNode> dict) {

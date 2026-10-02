@@ -76,4 +76,17 @@ class PolicyMappersTest {
         assertThrows(IllegalArgumentException.class, () -> parser.map(metadata("PAN"), xml, "Synthetic child", Map.of("Synthetic child", "missing"), false));
         assertThrows(IllegalArgumentException.class, () -> parser.map(metadata("PAN"), xml, "Synthetic child", Map.of("Synthetic child", "Synthetic child"), false));
     }
+    @Test void panoramaScheduleReferencesResolveInSharedAndDeviceGroupScopes() {
+        String xml = "<config><shared><schedule><entry name='OBJ-TIME-01'><schedule-type><recurring><daily><member>08:00-18:00</member></daily></recurring></schedule-type></entry></schedule>"
+                + "<pre-rulebase><security><rules><entry name='OBJ-RULE-01' uuid='uuid-1'><schedule>OBJ-TIME-01</schedule></entry></rules></security></pre-rulebase></shared>"
+                + "<devices><entry><device-group><entry name='DOM-TANGO-01'><schedule><entry name='OBJ-TIME-02'><schedule-type><non-recurring><member>2026/10/01@00:00-2026/10/31@23:59</member></non-recurring></schedule-type></entry></schedule>"
+                + "<post-rulebase><security><rules><entry name='OBJ-RULE-02' uuid='uuid-2'><schedule>OBJ-TIME-02</schedule></entry></rules></security></post-rulebase></entry></device-group></entry></devices></config>";
+        var snapshot = new PanoramaPolicyMapper().map(metadata("PAN"), xml, "DOM-TANGO-01", Map.of(), false);
+        var rules = snapshot.sections().stream().flatMap(s -> s.rules().stream()).toList();
+        assertEquals(2, rules.size());
+        for (var rule : rules) assertNotNull(snapshot.objects().get(rule.extras().get("schedule").get(0)).schedule());
+        assertEquals("recurring", snapshot.objects().get(rules.get(0).extras().get("schedule").get(0)).schedule().kind());
+        assertEquals("one-time", snapshot.objects().get(rules.get(1).extras().get("schedule").get(0)).schedule().kind());
+    }
+
 }

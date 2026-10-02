@@ -15,12 +15,18 @@ public final class PolicyQueryService {
     private final ObjectMapper mapper;
     private final TopologyNamePseudonymizer names;
     private final LocalFirewallPolicyService local;
+    private final com.securityexpert.nexus.ui2.service.privacy.SubnetPreservingIpMasker ips;
     public PolicyQueryService(TransactionBoundary transactions, ObjectMapper mapper, TopologyNamePseudonymizer names) {
-        this(transactions, mapper, names, null);
+        this(transactions, mapper, names, null, new com.securityexpert.nexus.ui2.service.privacy.SubnetPreservingIpMasker(new byte[32]));
+    }
+    public PolicyQueryService(TransactionBoundary transactions, ObjectMapper mapper, TopologyNamePseudonymizer names,
+            LocalFirewallPolicyService local) {
+        this(transactions, mapper, names, local, new com.securityexpert.nexus.ui2.service.privacy.SubnetPreservingIpMasker(new byte[32]));
     }
     @org.springframework.beans.factory.annotation.Autowired
     public PolicyQueryService(TransactionBoundary transactions, ObjectMapper mapper, TopologyNamePseudonymizer names,
-            LocalFirewallPolicyService local) {
+            LocalFirewallPolicyService local, com.securityexpert.nexus.ui2.service.privacy.SubnetPreservingIpMasker ips) {
+        this.ips = ips;
         this.local = local;
         this.repository = new PolicySnapshotRepository(transactions);
         this.mapper = mapper;
@@ -30,6 +36,19 @@ public final class PolicyQueryService {
         var catalog = new ArrayList<>(repository.catalog().stream().map(json -> read(json, Metadata.class)).toList());
         if (local != null) local.snapshots().forEach(snapshot -> catalog.add(snapshot.metadata()));
         return catalog;
+    }
+    public List<Map<String, Object>> catalogViews() {
+        var views = new ArrayList<>(repository.catalogEntries().stream().map(entry -> {
+            var view = metadata(read(entry.metadataJson(), Metadata.class));
+            view.put("ruleCount", entry.ruleCount());
+            return view;
+        }).toList());
+        if (local != null) local.snapshots().forEach(snapshot -> {
+            var view = metadata(snapshot.metadata());
+            view.put("ruleCount", snapshot.sections().stream().mapToInt(s -> s.rules().size()).sum());
+            views.add(view);
+        });
+        return views;
     }
     public PolicyResponse tree(String source, String container, String device) {
         var selected = catalog().stream().filter(p -> device.isEmpty() || p.targets().stream().anyMatch(t -> t.deviceId().equals(device)))
@@ -65,12 +84,13 @@ public final class PolicyQueryService {
     private Map<String, Object> map(Object value) { return mapper.convertValue(value, Map.class); }
 
     public PolicyResponse page(PolicySnapshot snapshot, int page, String query, boolean masked) {
-        String term = query.toLowerCase(Locale.ROOT);
-        List<Rule> matching = snapshot.sections().stream().flatMap(s -> s.rules().stream()).filter(r -> {
-            String name = masked ? names.maskPolicyName("name", r.name()) : r.name();
-            String comment = masked ? "" : r.comment();
-            return (name + " " + comment).toLowerCase(Locale.ROOT).contains(term);
-        }).toList();
+        PolicySnapshot searchable = snapshot;
+        if (masked) searchable = mapper.convertValue(PolicyPrivacy.mask(map(snapshot), "", names,
+                ips), PolicySnapshot.class);
+        var predicate = PolicyRuleQuery.compile(query, searchable.objects(), java.time.Instant.now(), snapshot.metadata().vendor());
+        Set<String> matches = searchable.sections().stream().flatMap(s -> s.rules().stream()).filter(predicate)
+                .map(Rule::id).collect(java.util.stream.Collectors.toSet());
+        List<Rule> matching = snapshot.sections().stream().flatMap(s -> s.rules().stream()).filter(r -> matches.contains(r.id())).toList();
         Set<String> ids = new HashSet<>();
         matching.stream().skip((long) page * 200).limit(200).forEach(r -> ids.add(r.id()));
         List<Map<String, Object>> sections = new ArrayList<>();
@@ -79,13 +99,22 @@ public final class PolicyQueryService {
             List<Rule> rules = section.rules().stream().filter(r -> ids.contains(r.id())).toList();
             for (Rule rule : rules) for (Cell cell : List.of(rule.source(), rule.destination(), rule.service(), rule.application()))
                 objectIds.addAll(cell.refs());
+            for (Rule rule : rules) for (String key : List.of("time", "schedule", "install-on", "vpn", "content"))
+                objectIds.addAll(rule.extras().getOrDefault(key, List.of()));
             Map<String, Object> view = map(new Section(section.id(), section.name(), section.source(), section.parentRuleId(), rules));
+            view.put("rules", rules.stream().map(r -> {
+                var rule = map(r); rule.put("identityFallback", r.uuid().isEmpty());
+                var time = PolicyRuleMetrics.time(r, snapshot.objects(), java.time.Instant.now(), snapshot.metadata().vendor());
+                rule.put("timeStatus", time.status()); rule.put("schedules", time.schedules().stream().map(this::map).toList()); rule.put("expiring", time.expiring());
+                rule.put("permissiveness", PolicyRuleMetrics.permissiveness(r, snapshot.objects()));
+                return rule;
+            }).toList());
             view.put("total", section.rules().size());
             sections.add(view);
         }
         List<Map<String, Object>> objects = objectIds.stream().filter(snapshot.objects()::containsKey)
                 .map(id -> { var object = snapshot.objects().get(id);
-                    return map(new PolicyObject(object.id(), object.name(), object.type(), List.of(), List.of(), object.status())); }).toList();
+                    return map(new PolicyObject(object.id(), object.name(), object.type(), List.of(), List.of(), object.status(), object.schedule())); }).toList();
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("metadata", metadata(snapshot.metadata()));
         body.put("policyKind", snapshot.sections().stream().anyMatch(s -> s.name().equals("Local rules")) ? "LOCAL_FIREWALL" : "MANAGEMENT");
@@ -93,6 +122,10 @@ public final class PolicyQueryService {
         body.put("sections", sections); body.put("objects", objects);
         body.put("page", page); body.put("pageSize", 200); body.put("total", matching.size());
         return new PolicyResponse(body);
+    }
+    public PolicyResponse history(String policy, String rule, int page) {
+        return new PolicyResponse(Map.of("revisions", repository.history(policy, rule, page).stream()
+                .map(json -> read(json, Map.class)).toList(), "page", page));
     }
     public PolicyResponse object(PolicySnapshot snapshot, String id) {
         return new PolicyResponse(Map.of("object", expand(snapshot, id, new HashSet<>(), new int[]{500}, 0)));

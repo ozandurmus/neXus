@@ -13,5 +13,5 @@
     "resolveJsonModule": true,
     "isolatedModules": true
   },
-  "include": ["src", "tests", "vite.config.ts", "playwright.config.ts", "e2e"]
+  "include": ["src", "tests", "vite.config.ts", "playwright.config.ts", "playwright.policy-local.config.ts", "browser-tests", "e2e"]
 }

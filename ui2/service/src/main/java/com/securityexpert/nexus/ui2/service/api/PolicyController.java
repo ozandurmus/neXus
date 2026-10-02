@@ -23,7 +23,7 @@ public final class PolicyController {
     public ResponseEntity<?> catalog() {
         var catalog = policies.catalog();
         var devices = catalog.stream().flatMap(p -> p.targets().stream()).distinct().toList();
-        return ok(new PolicyResponse(Map.of("policies", catalog.stream().map(policies::metadata).toList(),
+        return ok(new PolicyResponse(Map.of("policies", policies.catalogViews(),
                 "devices", devices.stream().map(t -> Map.of("deviceId", t.deviceId(), "name", t.name(), "context", t.context(), "syncStatus", t.syncStatus())).toList())));
     }
     @GetMapping("/api/v2/policy/devices/{id}")
@@ -45,9 +45,18 @@ public final class PolicyController {
     @GetMapping("/api/v2/policy/policies/{id}")
     public ResponseEntity<?> page(@PathVariable String id, @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "") String q, HttpServletRequest request) {
-        if (page < 0 || q.length() > 200) return error(HttpStatus.BAD_REQUEST);
-        return policies.find(id).<ResponseEntity<?>>map(snapshot -> ok(policies.page(snapshot, page, q,
-                PrivacyMaskingResponseBodyAdvice.isReplayViewer(request)))).orElseGet(() -> error(HttpStatus.NOT_FOUND));
+        if (page < 0 || q.length() > 1000) return error(HttpStatus.BAD_REQUEST);
+        try {
+            return policies.find(id).<ResponseEntity<?>>map(snapshot -> ok(policies.page(snapshot, page, q,
+                    PrivacyMaskingResponseBodyAdvice.isReplayViewer(request)))).orElseGet(() -> error(HttpStatus.NOT_FOUND));
+        } catch (IllegalArgumentException invalid) { return error(HttpStatus.BAD_REQUEST); }
+    }
+    @GetMapping("/api/v2/policy/policies/{id}/history")
+    public ResponseEntity<?> history(@PathVariable String id, @RequestParam(defaultValue = "") String rule,
+            @RequestParam(defaultValue = "0") int page) {
+        if (page < 0) return error(HttpStatus.BAD_REQUEST);
+        if (policies.find(id).isEmpty()) return error(HttpStatus.NOT_FOUND);
+        return ok(policies.history(id, rule, page));
     }
     @GetMapping("/api/v2/policy/objects/{id}")
     public ResponseEntity<?> object(@PathVariable String id, @RequestParam(defaultValue = "") String device,

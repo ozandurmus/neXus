@@ -1675,16 +1675,30 @@ export function setHttpsCertificateStrict(deviceId: string, strict: boolean): Pr
 export interface PolicyTarget { deviceId: string; name: string; context: string; syncStatus: string }
 export interface PolicyMetadata {
   id: string; sourceId: string; sourceName: string; vendor: string; containerId: string;
-  containerName: string; name: string; collectedAt: string; artefactRef: string; targets: PolicyTarget[];
+  containerName: string; name: string; collectedAt: string; artefactRef: string; targets: PolicyTarget[]; ruleCount?: number;
 }
+export interface PolicySchedule {
+  kind: "one-time" | "recurring" | "unknown"; start: string | null; end: string | null;
+  windows: { days: number[]; monthDays: number[]; months?: number[]; start: string; end: string }[];
+  timezone: string; timezoneKnown: boolean;
+}
+export interface PolicyRevision {
+  revision: number; ruleId: string; identityFallback: boolean; changeType: "added" | "removed" | "modified";
+  collectedAt: string; changedOn: string | null; changedBy: string | null;
+  changes: { field: string; before: unknown; after: unknown }[];
+}
+export const getPolicyHistory = (id: string, rule = "", page = 0) => call<{ revisions: PolicyRevision[]; page: number }>(
+  `/api/v2/policy/policies/${encodeURIComponent(id)}/history?rule=${encodeURIComponent(rule)}&page=${page}`, "GET");
 export interface PolicyObject {
-  id: string; name: string; type: string; status: string; members?: string[]; values?: string[]; children?: PolicyObject[];
+  id: string; name: string; type: string; status: string; members?: string[]; values?: string[]; children?: PolicyObject[]; schedule?: PolicySchedule | null;
 }
 export interface PolicyCell { refs: string[]; negated: boolean }
 export interface PolicyRule {
   id: string; uuid: string; number: number; name: string; enabled: boolean | null;
   source: PolicyCell; destination: PolicyCell; service: PolicyCell; application: PolicyCell;
   action: string; log: string; comment: string; extras: Record<string, string[]>;
+  identityFallback?: boolean; timeStatus?: string; schedules?: PolicySchedule[]; expiring?: boolean;
+  permissiveness?: { level: "Low" | "Medium" | "High" | "Unknown"; reasons: string[] };
 }
 export interface PolicySection { id: string; name: string; source: string; parentRuleId: string | null; rules: PolicyRule[]; total: number }
 export interface PolicyPage { failures?: { layerRef: string; reason: string; layerName?: string; offset?: number }[]; policyKind?: "LOCAL_FIREWALL" | "MANAGEMENT"; metadata: PolicyMetadata; sections: PolicySection[]; objects: PolicyObject[]; page: number; pageSize: number; total: number }
@@ -1701,5 +1715,5 @@ export type PolicyContainer = { containerId: string; containerName: string };
 export const getPolicyTree = (source = "", container = "", device = "") => call<{
   sources?: PolicyCollectionSource[]; devices?: PolicyTarget[]; containers?: PolicyContainer[]; policies?: PolicyMetadata[];
 }>(`/api/v2/policy/tree?source=${encodeURIComponent(source)}&container=${encodeURIComponent(container)}&device=${encodeURIComponent(device)}`, "GET");
-export type PolicyCollectionStatus = { cancelRequested?: boolean; jobId: string; state: string; reason: string; step: number; total: number; layer?: number; layers?: number; rulesFetched?: number; collectedAt?: string; hasTranscript?: boolean };
+export type PolicyCollectionStatus = { cancelRequested?: boolean; jobId: string; state: string; outcome?: string; reason: string; step: number; total: number; layer?: number; layers?: number; rulesFetched?: number; collectedAt?: string; hasTranscript?: boolean };
 export const getPolicyCollectionStatus = (id: string) => call<PolicyCollectionStatus>(`/api/v2/policy/collections/${encodeURIComponent(id)}`, "GET");

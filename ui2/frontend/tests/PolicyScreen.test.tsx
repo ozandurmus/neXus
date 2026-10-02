@@ -2,11 +2,13 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { afterEach, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
-import { PolicyScreen, VirtualPolicyRows } from "../src/screens/PolicyScreen";
+import { PolicyScreen, collectionOutcome, progress, csvCell } from "../src/screens/PolicyScreen";
+import { VirtualPolicyCards } from "../src/screens/PolicyRuleViewer";
+import { loadErrorText } from "../e2e/safety";
 import type { PolicyMetadata, PolicyPage, PolicyRule } from "../src/auth/adminApi";
 
 const metadata: PolicyMetadata = { id: "policy-1", sourceId: "source-1", sourceName: "MGR-BRAVO-01", vendor: "PAN", containerId: "container-1",
-  containerName: "DOM-TANGO-01", name: "OBJ-POLICY-01", collectedAt: "2026-10-01T12:00:00Z", artefactRef: "artifact-1",
+  containerName: "DOM-TANGO-01", name: "OBJ-POLICY-01", collectedAt: "2026-10-01T12:00:00Z", artefactRef: "artifact-1", ruleCount: 1,
   targets: [{ deviceId: "device-1", name: "FW-TANGO-04", context: "VS-ROMEO-01", syncStatus: "UNKNOWN" }] };
 const rule: PolicyRule = { id: "rule-1", uuid: "uuid-1", number: 1, name: "OBJ-RULE-01", enabled: false,
   source: { refs: ["object-1"], negated: true }, destination: { refs: ["any-1"], negated: false }, service: { refs: ["any-1"], negated: false },
@@ -14,6 +16,7 @@ const rule: PolicyRule = { id: "rule-1", uuid: "uuid-1", number: 1, name: "OBJ-R
 const page: PolicyPage = { metadata, sections: [{ id: "section-1", name: "OBJ-SECTION-01", source: "Shared", parentRuleId: null, rules: [rule], total: 1 }],
   objects: [{ id: "object-1", name: "OBJ-GROUP-01", type: "address-group", status: "RESOLVED" }, { id: "any-1", name: "ANY", type: "any", status: "RESOLVED" }], page: 0, pageSize: 200, total: 1 };
 function treeBody(input: string, vendor = metadata.vendor) {
+  if (input === "/api/v2/policy/devices") return { policies: [{ ...metadata, vendor }], devices: metadata.targets };
   if (!input.startsWith("/api/v2/policy/tree")) return undefined;
   const params = new URL(input, "https://example.invalid").searchParams;
   if (params.get("device") === "missing-device") return { sources: [] };
@@ -43,8 +46,8 @@ afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(
 
 it("renders masked management navigation, assignments, section collapse, negation and disabled rules", async () => {
   mockFetch(); mount(); await navigate();
-  const table = await screen.findByRole("table", { name: "Policy rulebase" });
-  expect(screen.getByText("MGR-BRAVO-01")).toBeInTheDocument();
+  const table = await screen.findByRole("region", { name: "Policy rulebase" });
+  expect(screen.getAllByText("MGR-BRAVO-01").length).toBeGreaterThan(0);
   expect(screen.getByText(/FW-TANGO-04.*VS-ROMEO-01/)).toBeInTheDocument();
   expect(within(table).getByText("NOT")).toBeInTheDocument();
   expect(within(table).getByText("Disabled")).toBeInTheDocument();
@@ -62,7 +65,7 @@ it("opens recursive object members with cycle status and complete rule details",
   await within(drawer).findByText("192.0.2.8");
   expect(within(drawer).getAllByText(/CYCLE/).length).toBeGreaterThan(0);
   fireEvent.click(within(drawer).getByText("Close"));
-  fireEvent.click(screen.getByText("OBJ-RULE-01"));
+  fireEvent.click(screen.getByRole("button", { name: "OBJ-RULE-01" }));
   drawer = screen.getByRole("dialog", { name: "Rule details" });
   expect(within(drawer).getByText("UUID: uuid-1")).toBeInTheDocument();
   expect(within(drawer).getByText("Enabled: false")).toBeInTheDocument();
@@ -71,7 +74,7 @@ it("renders only a 200-rule page from a 5000-rule policy and requests the next p
   const large = { ...page, total: 5000, sections: [{ ...page.sections[0], total: 5000,
     rules: Array.from({ length: 200 }, (_, i) => ({ ...rule, id: `rule-${i}`, number: i + 1, name: `OBJ-RULE-${i}` })) }] };
   const fetch = mockFetch(large); mount(); await navigate();
-  const table = await screen.findByRole("table");
+  const table = await screen.findByRole("region", { name: "Policy rulebase" });
   expect(table.querySelectorAll("[data-policy-rule]").length).toBeLessThanOrEqual(24);
   expect(screen.getByText("Page 1 of 25 · 5000 rules")).toBeInTheDocument();
   fireEvent.click(screen.getByText("Next"));
@@ -79,7 +82,7 @@ it("renders only a 200-rule page from a 5000-rule policy and requests the next p
 });
 it("sends only the name/comment search and resets pagination", async () => {
   const fetch = mockFetch(); mount(); await navigate();
-  fireEvent.change(await screen.findByLabelText("Search rule names and comments"), { target: { value: "OBJ-RULE" } });
+  fireEvent.change(await screen.findByLabelText("Rule query"), { target: { value: "OBJ-RULE" } });
   await waitFor(() => expect(fetch.mock.calls.some(([url]) => url.includes("page=0&q=OBJ-RULE"))).toBe(true));
 });
 it("keeps an unassigned policy navigable and a device jump scoped to its assignments", async () => {
@@ -88,7 +91,7 @@ it("keeps an unassigned policy navigable and a device jump scoped to its assignm
   await screen.findByRole("button", { name: metadata.sourceName });
   fireEvent.click(screen.getByRole("button", { name: metadata.sourceName }));
   expect(await screen.findByText("No policy containers in this snapshot.")).toBeInTheDocument();
-  expect(screen.queryByRole("table")).toBeNull();
+  expect(screen.queryByRole("region", { name: "Policy rulebase" })).toBeNull();
 });
 it("shows empty and failed reads distinctly", async () => {
   vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ policies: [], devices: [] }), { status: 200 })));
@@ -108,7 +111,7 @@ it("offers first collection on an empty MDS and sends only opaque scope with CSR
   });
   vi.stubGlobal("fetch", fetch); mount();
   fireEvent.click(await screen.findByRole("button", { name: "Collect policies" }));
-  await screen.findByText("Collecting · 0/?");
+  await screen.findByText("Collecting · 0 steps");
   const call = fetch.mock.calls.find(([url]) => url.endsWith("/collect"));
   expect(call?.[0]).toBe("/api/v2/policy/sources/mds-1/collect");
   expect(JSON.parse(call?.[1]?.body as string)).toEqual({ domainRef: "" });
@@ -117,7 +120,7 @@ it("offers first collection on an empty MDS and sends only opaque scope with CSR
 });
 it("uses server authorization and exposes no collection action to AIView", async () => {
   mockFetch(); mount(); await navigate();
-  await screen.findByRole("table");
+  await screen.findByRole("region", { name: "Policy rulebase" });
   expect(screen.queryByRole("button", { name: "Collect policies" })).toBeNull();
 });
 it("offers domain collection with its opaque reference and reports queue refusal", async () => {
@@ -128,11 +131,11 @@ it("offers domain collection with its opaque reference and reports queue refusal
     return new Response(JSON.stringify(body), { status: 200 });
   }));
   mount(); await navigate();
-  await screen.findByRole("table");
+  await screen.findByRole("region", { name: "Policy rulebase" });
   const actions = screen.getAllByRole("button", { name: "Collect policies" });
   expect(actions).toHaveLength(2);
   fireEvent.click(actions[1]);
-  await screen.findByText(/could not be queued/);
+  await screen.findByText(/collection is temporarily unavailable/);
   const fetch = vi.mocked(window.fetch);
   expect(fetch.mock.calls.some(([url, init]) => String(url).endsWith("/collect") && JSON.parse(init?.body as string).domainRef === metadata.containerId)).toBe(true);
 });
@@ -141,16 +144,16 @@ it("queues Panorama node collection with opaque intent and hides DG-specific act
   const fetch = vi.fn(async (input: string, init?: RequestInit) => {
     const body = input === "/api/v2/policy/sources"
       ? { sources: [{ sourceId: metadata.sourceId, sourceName: "MGR-BRAVO-01", vendor: "PAN" }], canCollect: true }
-      : input.startsWith("/api/v2/policy/tree") ? treeBody(input)
+      : (input.startsWith("/api/v2/policy/tree") || input === "/api/v2/policy/devices") ? treeBody(input)
       : input === "/session/status" ? { csrf_token: "synthetic-csrf" }
       : input.endsWith("/collect") ? { jobId: "job-pan" } : page;
     return new Response(JSON.stringify(body), { status: init?.method === "POST" ? 202 : 200 });
   });
   vi.stubGlobal("fetch", fetch); mount(); await navigate();
-  await screen.findByRole("table");
+  await screen.findByRole("region", { name: "Policy rulebase" });
   const actions = screen.getAllByRole("button", { name: "Collect policies" });
   expect(actions).toHaveLength(1); fireEvent.click(actions[0]);
-  await screen.findByText("Collecting · 0/?");
+  await screen.findByText("Collecting · 0 steps");
   const call = fetch.mock.calls.find(([url]) => url.endsWith("/collect"));
   expect(call?.[0]).toBe(`/api/v2/policy/sources/${metadata.sourceId}/collect`);
   expect(JSON.parse(call?.[1]?.body as string)).toEqual({ domainRef: "" });
@@ -161,13 +164,13 @@ it("badges the stored local firewall policy under AIView", async () => {
   expect(screen.getByText(/Stored local configuration/)).toBeInTheDocument();
 });
 
-it("fetches only sources until each navigation level is expanded", async () => {
+it("loads catalog counts before expanding each navigation level", async () => {
   const fetch = mockFetch(); mount();
   const tree = await screen.findByRole("navigation", { name: "Management policies" });
   expect(within(tree).getByRole("group", { name: "Policy source" })).toBeInTheDocument();
-  expect(fetch.mock.calls).toHaveLength(1);
+  expect(fetch.mock.calls).toHaveLength(2);
   expect(screen.queryByText(metadata.containerName)).toBeNull();
-  expect(screen.queryByRole("table")).toBeNull();
+  expect(screen.queryByRole("region", { name: "Policy rulebase" })).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: metadata.sourceName }));
   await screen.findByRole("button", { name: metadata.containerName });
   expect(screen.queryByText(metadata.name)).toBeNull();
@@ -177,16 +180,16 @@ it("fetches only sources until each navigation level is expanded", async () => {
   expect(policy).toHaveTextContent(metadata.name);
   expect(fetch.mock.calls.some(([url]) => url.includes("/policies/"))).toBe(false);
   fireEvent.click(policy);
-  await screen.findByRole("table", { name: "Policy rulebase" });
+  await screen.findByRole("region", { name: "Policy rulebase" });
   expect(within(container).getByRole("button", { pressed: true })).toHaveTextContent(metadata.name);
 });
 it("virtualizes a 5000-rule response and reaches the final row on scroll", async () => {
   const rules = Array.from({ length: 5000 }, (_, i) => ({ ...rule, id: `rule-${i}`, name: `OBJ-RULE-${i}`, number: i + 1 }));
-  const props = { sections: [{ ...page.sections[0], rules, total: 5000 }], collapsed: new Set<string>(), toggle: vi.fn(), cell: () => null, openRule: vi.fn() };
-  const view = render(<ThemeProvider theme={m3Theme}><table><tbody><VirtualPolicyRows {...props} scrollTop={0} /></tbody></table></ThemeProvider>);
+  const props = { sections: [{ ...page.sections[0], rules, total: 5000 }], collapsed: new Set<string>(), toggle: vi.fn(), objects: new Map(page.objects.map(o => [o.id, o])), metadata, openObject: vi.fn(), openRule: vi.fn(), selected: new Set<string>(), onSelect: vi.fn() };
+  const view = render(<ThemeProvider theme={m3Theme}><VirtualPolicyCards {...props} scrollTop={0} /></ThemeProvider>);
   expect(view.container.querySelectorAll("[data-policy-rule]").length).toBeLessThanOrEqual(24);
   expect(screen.queryByText("OBJ-RULE-4999")).toBeNull();
-  view.rerender(<ThemeProvider theme={m3Theme}><table><tbody><VirtualPolicyRows {...props} scrollTop={4990 * 64} /></tbody></table></ThemeProvider>);
+  view.rerender(<ThemeProvider theme={m3Theme}><VirtualPolicyCards {...props} scrollTop={4995 * 280} /></ThemeProvider>);
   expect(screen.getByText("OBJ-RULE-4999")).toBeInTheDocument();
   expect(view.container.querySelectorAll("[data-policy-rule]").length).toBeLessThanOrEqual(24);
 });
@@ -257,11 +260,11 @@ it("keeps an uncollected source navigable with an accessible empty state without
   await waitFor(() => expect(fetch.mock.calls).toHaveLength(2));
   expect(screen.getByRole("status", { name: "No collected policy" })).toHaveTextContent("Select a source and container");
   expect(within(tree).queryByRole("button", { pressed: false })).toBeNull();
-  expect(screen.queryByRole("table")).toBeNull();
+  expect(screen.queryByRole("region", { name: "Policy rulebase" })).toBeNull();
   expect(fetch.mock.calls.some(([url]) => url.endsWith("/collect"))).toBe(false);
 });
 
-it("builds the root exclusively from sources and displays each last collection outcome", async () => {
+it("displays each latest collection outcome without treating a partial completion as failure", async () => {
   const fetch = vi.fn(async (_input: string) => new Response(JSON.stringify({ canCollect: false, sources: [
     { sourceId: "pan-1", sourceName: "MGR-BRAVO-01", vendor: "PAN", collection: { jobId: "job-1", state: "FAILED", reason: "COLLECTION_FAILED: HTTP_403", step: 2, total: 8 } },
     { sourceId: "pan-partial", sourceName: "MGR-TANGO-02", vendor: "PAN", collection: { jobId: "job-2", state: "COMPLETED", reason: "PARTIAL_SNAPSHOT access target=layer-1: TIMEOUT", step: 4, total: 8 } },
@@ -273,24 +276,16 @@ it("builds the root exclusively from sources and displays each last collection o
   expect(screen.getByText("Last collection was incomplete at collection step 4 of 8 — the time limit was reached")).toBeInTheDocument();
   expect(screen.getByText("Collected · 8/8 collection steps")).toBeInTheDocument();
   expect(screen.queryByText("Loading policies…")).toBeNull();
-  expect(fetch.mock.calls).toHaveLength(1);
+  expect(fetch.mock.calls).toHaveLength(2);
   expect(fetch.mock.calls[0][0]).toBe("/api/v2/policy/sources");
 });
-it("ends empty child reads and failed child reads with explicit messages", async () => {
+it("reports catalog read failure explicitly without inventing zero containers", async () => {
   const fetch = mockFetch();
-  fetch.mockImplementation(async (input: string) => input.includes(`container=${metadata.containerId}`)
-    ? new Response(JSON.stringify({ policies: [] }), { status: 200 })
-    : new Response(JSON.stringify(treeBody(input) ?? { sources: [{ sourceId: metadata.sourceId, sourceName: metadata.sourceName, vendor: "PAN" }], canCollect: false }), { status: 200 }));
-  const view = mount();
-  fireEvent.click(await screen.findByRole("button", { name: metadata.sourceName }));
-  fireEvent.click(await screen.findByRole("button", { name: metadata.containerName }));
-  expect(await screen.findByText("No policies in this snapshot.")).toBeInTheDocument();
-  view.unmount();
-  fetch.mockImplementation(async (input: string) => input.includes("/tree") ? new Response("{}", { status: 500 })
+  fetch.mockImplementation(async (input: string) => input === "/api/v2/policy/devices" ? new Response("{}", { status: 500 })
     : new Response(JSON.stringify({ sources: [{ sourceId: metadata.sourceId, sourceName: metadata.sourceName, vendor: "PAN" }] }), { status: 200 }));
-  mount(); fireEvent.click(await screen.findByRole("button", { name: metadata.sourceName }));
-  expect(await screen.findByText("Policy containers could not be loaded.")).toBeInTheDocument();
-  expect(screen.queryByText("Loading policies…")).toBeNull();
+  mount();
+  expect(await screen.findByText("Policy snapshots could not be loaded.")).toBeInTheDocument();
+  expect(screen.queryByText("No policy containers in this snapshot.")).toBeNull();
 });
 it("preserves masked policy dates and numeric counts in the rendered view", async () => {
   mockFetch({ ...page, metadata: { ...metadata, collectedAt: "2026-10-02T03:50:21Z" }, total: 122 });
@@ -304,6 +299,7 @@ it("ends an empty rule response with an explicit failure", async () => {
     ?? (input === "/api/v2/policy/sources" ? { sources: [{ sourceId: metadata.sourceId, sourceName: metadata.sourceName, vendor: "PAN" }] } : {})), { status: 200 }));
   mount(); await navigate();
   expect(await screen.findByText("Policy rules could not be loaded.")).toBeInTheDocument();
+  expect(screen.getByText("Policy rules could not be loaded.").textContent).toMatch(loadErrorText);
   expect(screen.queryByText("Loading rules…")).toBeNull();
 });
 
@@ -331,6 +327,21 @@ it("keeps UUIDs out of primary names and the empty state inside content only", a
   expect(within(screen.getByRole("navigation")).queryByText("No assigned policy snapshot")).toBeNull();
   expect(within(content).getByLabelText("Jump to device's policy")).toBeInTheDocument();
 });
+it("keeps every collection failure sentence clear of the screen load-error guard", async () => {
+  const reasons = ["TIMEOUT", "TimedOut", "JOB_DEADLINE", "HTTP_403", "AuthenticationFailed", "HostKeyRejected",
+    "PARSE", "INVALID", "RESPONSE", "XML", "COLLECTION_FAILED", ""];
+  const sources = reasons.flatMap(reason => [reason, `PARTIAL_SNAPSHOT ${reason}`]).map((reason, index) => ({
+    sourceId: `source-${index}`, sourceName: `MGR-SYNTHETIC-${index}`, vendor: "CP",
+    collection: { jobId: `job-${index}`, state: "FAILED", reason, step: 2, total: index % 2 ? 0 : 8 },
+  }));
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ canCollect: false, sources }), { status: 200 })));
+  mount();
+  await screen.findByRole("button", { name: "MGR-SYNTHETIC-0" });
+  const sentences = screen.getAllByText(/^Last collection/);
+  expect(sentences).toHaveLength(sources.length);
+  for (const sentence of sentences) expect(sentence.textContent).not.toMatch(loadErrorText);
+});
+
 it("shows a human failure and relative time once with admin-only details and transcript", async () => {
   const reason = "mgmt_cli show-access-rulebase target=layer-1: INVALID_OR_INCOMPLETE_RESPONSE";
   const at = new Date(Date.now() - 8 * 60000).toISOString();
@@ -339,7 +350,7 @@ it("shows a human failure and relative time once with admin-only details and tra
       collection: { jobId: "job-1", state: "FAILED", reason, step: 12, total: 55, collectedAt: at, hasTranscript: true } }] }), { status: 200 })));
   respond(true);
   const view = mount();
-  const sentence = await screen.findByText(/Last collection failed.*the reply could not be read/);
+  const sentence = await screen.findByText(/Last collection failed.*the reply was incomplete/);
   expect(sentence).toHaveTextContent("8 min ago");
   expect(screen.getAllByText(/Last collection failed/)).toHaveLength(1);
   const disclosure = screen.getByText("Details").closest("details")!;
@@ -363,7 +374,7 @@ it("refreshes opened navigation and the selected rulebase automatically after po
     return new Response(JSON.stringify(body), { status: 200 });
   });
   vi.stubGlobal("fetch", fetch); mount(); await navigate();
-  await screen.findByRole("table", { name: "Policy rulebase" });
+  await screen.findByRole("region", { name: "Policy rulebase" });
   const source = screen.getByRole("group", { name: "Policy source" });
   expect(within(source).getByText("Collecting · 6/8")).toBeInTheDocument();
   const before = fetch.mock.calls.filter(([url]) => url.includes("/policies/")).length;
@@ -374,12 +385,12 @@ it("refreshes opened navigation and the selected rulebase automatically after po
   expect(completed).toBe(true);
   expect(screen.queryByText("Collecting · 6/8")).toBeNull();
   expect(screen.getByRole("button", { name: metadata.name, pressed: true })).toBeInTheDocument();
-  expect(screen.getByRole("table", { name: "Policy rulebase" })).toBeInTheDocument();
+  expect(screen.getByRole("region", { name: "Policy rulebase" })).toBeInTheDocument();
   expect(fetch.mock.calls.filter(([url]) => url.includes("/policies/")).length).toBeGreaterThan(before);
 });
 it("jumps to a loaded assigned policy from the content header", async () => {
   mockFetch(); mount(); await navigate();
-  await screen.findByRole("table");
+  await screen.findByRole("region", { name: "Policy rulebase" });
   fireEvent.mouseDown(screen.getByLabelText("Jump to device's policy"));
   fireEvent.click(await screen.findByRole("option", { name: "FW-TANGO-04" }));
   expect(screen.getByRole("button", { name: metadata.name, pressed: true })).toBeInTheDocument();
@@ -405,4 +416,145 @@ it.each([true, false])("gates source progress cancellation with canCancel=%s", a
   fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
   expect(await screen.findByRole("button", { name: "Cancel requested" })).toBeDisabled();
   expect(fetch.mock.calls.some(([url, init]) => url === "/api/v2/jobs/job-1/cancel" && init?.method === "POST")).toBe(true);
+});
+
+it("maps outcomes independently of generic reasons and bounds every progress form", () => {
+  const base = { jobId: "job-latest", state: "COMPLETED", reason: "COLLECTION_FAILED", step: 221, total: 60 };
+  expect(collectionOutcome(base)).toBe("COMPLETED");
+  expect(collectionOutcome({ ...base, outcome: "PARTIAL" })).toBe("PARTIAL");
+  expect(collectionOutcome({ ...base, reason: "PARTIAL_SNAPSHOT layer-1: TIMEOUT" })).toBe("PARTIAL");
+  expect(collectionOutcome({ ...base, state: "FAILED" })).toBe("FAILED");
+  expect(collectionOutcome({ ...base, state: "FAILED", outcome: "PARTIAL" })).toBe("FAILED");
+  expect(collectionOutcome({ ...base, state: "EXECUTING", outcome: "PARTIAL" })).toBe("RUNNING");
+  expect(progress(221, 60)).toBe("step 60 of 60");
+  expect(progress(221, 60, false)).toBe("60/60");
+  expect(progress(221, 0)).toBe("221 steps");
+  expect(progress(-1, 60)).toBe("step 0 of 60");
+  expect(progress(NaN, 0)).toBe("0 steps");
+  expect(csvCell(' ="synthetic"')).toBe('"\' =""synthetic"""');
+});
+
+it("reaches all 54 catalog containers even when the collection source is ineligible and searches descendants", async () => {
+  const policies = Array.from({ length: 54 }, (_, i) => ({ ...metadata, id: `policy-${i}`, containerId: `container-${i}`,
+    containerName: `DOM-TANGO-${i}`, name: `OBJ-POLICY-${i}`, ruleCount: i + 1 }));
+  vi.stubGlobal("fetch", vi.fn(async (input: string) => new Response(JSON.stringify(input.endsWith("/sources")
+    ? { sources: [], canCollect: false } : { policies, devices: metadata.targets }), { status: 200 })));
+  mount();
+  await screen.findByText("Panorama · 54 containers");
+  fireEvent.click(screen.getByRole("button", { name: metadata.sourceName }));
+  expect(screen.getAllByRole("group", { name: "Policy container" })).toHaveLength(54);
+  expect(screen.getByText("1 policies · 54 rules")).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText("Search sources, containers and policies"), { target: { value: "OBJ-POLICY-53" } });
+  expect(screen.getAllByRole("group", { name: "Policy container" })).toHaveLength(1);
+  expect(screen.getByRole("button", { name: "OBJ-POLICY-53" })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Collect selected" })).toBeNull();
+});
+
+it("shows the latest source job after refresh without leaking previous totals", async () => {
+  let latest = { jobId: "job-old", state: "FAILED", reason: "TIMEOUT", step: 221, total: 60 };
+  const fetch = mockFetch();
+  fetch.mockImplementation(async (input: string) => new Response(JSON.stringify(input.endsWith("/sources")
+    ? { sources: [{ sourceId: metadata.sourceId, sourceName: metadata.sourceName, vendor: "PAN", collection: latest }], canCollect: false }
+    : treeBody(input) ?? page), { status: 200 }));
+  mount();
+  expect(await screen.findByText(/failed at collection step 60 of 60/)).toBeInTheDocument();
+  latest = { jobId: "job-new", state: "COMPLETED", reason: "COLLECTION_FAILED", step: 4, total: 0 };
+  fireEvent.click(screen.getByRole("button", { name: "Refresh snapshots" }));
+  expect(await screen.findByText("Collected · 4 steps")).toBeInTheDocument();
+  expect(screen.queryByText(/failed at collection/)).toBeNull();
+  latest = { jobId: "job-next", state: "EXECUTING", reason: "", step: 1, total: 0 };
+  fireEvent.click(screen.getByRole("button", { name: "Refresh snapshots" }));
+  expect(await screen.findByText("Collecting · 1 steps")).toBeInTheDocument();
+  expect(screen.queryByText(/60 of 60/)).toBeNull();
+});
+
+it("selects containers and policies and exports all masked pages without collection permission", async () => {
+  const fetch = mockFetch({ ...page, total: 201 });
+  const blob = vi.fn((_blob: Blob) => "blob:synthetic-export");
+  Object.defineProperty(URL, "createObjectURL", { configurable: true, value: blob });
+  Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: vi.fn() });
+  const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+  mount(); await navigate();
+  await screen.findByRole("region", { name: "Policy rulebase" });
+  const action = screen.getByRole("button", { name: "Export selected rules (CSV)" });
+  expect(action).toBeDisabled();
+  fireEvent.click(screen.getByRole("checkbox", { name: `Select ${metadata.containerName}` }));
+  expect(screen.getByRole("checkbox", { name: `Select ${metadata.name}` })).toBeChecked();
+  expect(action).toBeEnabled();
+  fireEvent.click(action);
+  await screen.findByText("Exported 2 rules.");
+  expect(fetch.mock.calls.some(([url]) => url.includes("page=1&q="))).toBe(true);
+  expect(blob).toHaveBeenCalledOnce();
+  const text = await new Promise<string>(resolve => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.readAsText(blob.mock.calls[0][0]); });
+  expect(text).toContain("Withheld in AIView");
+  expect(text).toContain("OBJ-POLICY-01");
+  expect(click).toHaveBeenCalledOnce();
+  expect(fetch.mock.calls.some(([url]) => url.endsWith("/collect"))).toBe(false);
+  fireEvent.click(screen.getByRole("checkbox", { name: `Select ${metadata.name}` }));
+  expect(action).toBeDisabled();
+});
+
+it("deduplicates selected PAN policies into one authorized source collection", async () => {
+  const fetch = vi.fn(async (input: string, init?: RequestInit) => new Response(JSON.stringify(
+    input.endsWith("/sources") ? { sources: [{ sourceId: metadata.sourceId, sourceName: metadata.sourceName, vendor: "PAN" }], canCollect: true }
+    : input.endsWith("/devices") ? { policies: [metadata, { ...metadata, id: "policy-2", name: "OBJ-POLICY-02" }], devices: metadata.targets }
+    : input === "/session/status" ? { csrf_token: "synthetic-csrf" }
+    : init?.method === "POST" ? { jobId: "job-selected" } : page), { status: init?.method === "POST" ? 202 : 200 }));
+  vi.stubGlobal("fetch", fetch); mount();
+  fireEvent.click(await screen.findByRole("button", { name: metadata.sourceName }));
+  const action = screen.getByRole("button", { name: "Collect selected" });
+  expect(action).toBeDisabled();
+  fireEvent.click(screen.getByRole("checkbox", { name: `Select ${metadata.containerName}` }));
+  fireEvent.click(action);
+  await screen.findByText("Collecting · 0 steps");
+  const posts = fetch.mock.calls.filter(([, init]) => init?.method === "POST");
+  expect(posts).toHaveLength(1);
+  expect(JSON.parse(posts[0][1]?.body as string)).toEqual({ domainRef: "" });
+});
+
+it("collects selected CP domains sequentially and refreshes after each completion", async () => {
+  const second = { ...metadata, id: "policy-2", vendor: "CP", containerId: "container-2", containerName: "DOM-ROMEO-02", name: "OBJ-POLICY-02" };
+  const posts: string[] = [];
+  let latest: { jobId: string; state: string; reason: string; step: number; total: number } | undefined;
+  const fetch = vi.fn(async (input: string, init?: RequestInit) => {
+    let body: unknown;
+    if (init?.method === "POST") {
+      posts.push(JSON.parse(init.body as string).domainRef);
+      latest = { jobId: `job-${posts.length}`, state: "EXECUTING", reason: "", step: 1, total: 0 };
+      body = { jobId: latest.jobId };
+    } else if (input.endsWith("/sources")) body = { sources: [{ sourceId: metadata.sourceId, sourceName: metadata.sourceName, vendor: "CP", collection: latest }], canCollect: true };
+    else if (input.endsWith("/devices")) body = { policies: [{ ...metadata, vendor: "CP" }, second], devices: metadata.targets };
+    else if (input.includes("/collections/")) { latest = { ...latest!, state: "COMPLETED" }; body = latest; }
+    else body = { csrf_token: "synthetic-csrf" };
+    return new Response(JSON.stringify(body), { status: init?.method === "POST" ? 202 : 200 });
+  });
+  vi.stubGlobal("fetch", fetch); mount();
+  fireEvent.click(await screen.findByRole("button", { name: metadata.sourceName }));
+  fireEvent.click(screen.getByRole("checkbox", { name: `Select ${metadata.containerName}` }));
+  fireEvent.click(screen.getByRole("checkbox", { name: "Select DOM-ROMEO-02" }));
+  vi.useFakeTimers();
+  await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Collect selected" })); });
+  expect(posts).toEqual([metadata.containerId]);
+  await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+  expect(posts).toEqual([metadata.containerId, second.containerId]);
+  await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+  expect(screen.getByText("Collected · 1 steps")).toBeInTheDocument();
+  expect(screen.queryByText(/collection scopes waiting/)).toBeNull();
+  expect(fetch.mock.calls.filter(([url]) => url.endsWith("/devices"))).toHaveLength(3);
+});
+
+it("selects all matching rules across API pages and clears the active query chips", async () => {
+  const fetch = vi.fn(async (input: string) => {
+    const body = treeBody(input) ?? (input === "/api/v2/policy/sources" ? { sources: [{ sourceId: metadata.sourceId, sourceName: metadata.sourceName, vendor: metadata.vendor }], canCollect: false }
+      : { ...page, page: input.includes("page=1") ? 1 : 0, total: 201, sections: [{ ...page.sections[0], rules: input.includes("page=1") ? [{ ...rule, id: "last-rule", number: 201 }] : Array.from({ length: 200 }, (_, i) => ({ ...rule, id: `rule-${i}`, number: i + 1 })) }] });
+    return new Response(JSON.stringify(body), { status: 200 });
+  });
+  vi.stubGlobal("fetch", fetch); mount(); await navigate();
+  const all = await screen.findByRole("checkbox", { name: "Select all" }); fireEvent.click(all);
+  expect(await screen.findByText("201 selected")).toBeInTheDocument();
+  expect(fetch.mock.calls.some(([url]) => url.includes("page=1"))).toBe(true);
+  fireEvent.change(screen.getByLabelText("Rule query"), { target: { value: "action='accept' AND enabled=true" } });
+  expect(await screen.findByText("action='accept'")).toBeInTheDocument(); expect(screen.getByText("enabled=true")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Clear" }));
+  await waitFor(() => expect(screen.getByLabelText("Rule query")).toHaveValue(""));
 });
