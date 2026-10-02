@@ -29,6 +29,8 @@ import com.securityexpert.nexus.ui2.service.device.configuration.ConfigurationQu
  * counts are stored.
  */
 @Service
+@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
+        name = "ui2.scheduling.enabled", havingValue = "true", matchIfMissing = true)
 public class ClusterDiffTask {
 
     private static final System.Logger LOG = System.getLogger(ClusterDiffTask.class.getName());

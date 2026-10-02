@@ -378,6 +378,24 @@ def _pr_body(branch: str, commits: str, notes: str) -> str:
               "deploy and the in-cluster e2e result follow as a PR comment.\n")
 
 
+def _preview_e2e(repo: Path, commit: str) -> None:
+    start = time.monotonic()
+    try:
+        # The gate also works before its first merge: main may not contain the wrapper yet.
+        wrapper = _git("show", commit + ":scripts/hosta_preview_e2e.sh", cwd=repo)
+        result = subprocess.run(["bash", "-s", "--", "--repo", str(repo), "--commit", commit],
+                                input=wrapper, capture_output=True, text=True, timeout=7200)
+        # The wrapper only returns timings and a derived verdict, never raw pod logs.
+        for line in result.stdout.splitlines():
+            if re.fullmatch(r"TIMING preview_[a-z_]+ [0-9.]+", line):
+                print(line, flush=True)
+        if result.returncode != 0 or "PREVIEW E2E: PASS" not in result.stdout.splitlines():
+            raise SystemExit("preview e2e failed; stopped before PR creation/merge")
+        print("PREVIEW E2E: PASS", flush=True)
+    finally:
+        print(f"TIMING preview_total {time.monotonic() - start:.3f}", flush=True)
+
+
 def cmd_ship(args: argparse.Namespace) -> int:
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     with (STATE_DIR / "ship.lock").open("a+") as lock:
@@ -404,6 +422,11 @@ def cmd_ship(args: argparse.Namespace) -> int:
 def _ship(args: argparse.Namespace) -> int:
     """Ship through a pull request (PO 2026-09-30): push the lane branch, open a PR, merge it, deploy from main."""
     skip_security = getattr(args, "skip_security", None)
+    skip_preview = getattr(args, "no_preview_e2e", None)
+    if skip_preview is not None:
+        if not skip_preview.strip() or len(skip_preview) > 200 or any(ord(c) < 32 for c in skip_preview):
+            raise SystemExit("--no-preview-e2e requires a nonempty, single-line reason (maximum 200 characters)")
+        print("PREVIEW E2E SKIPPED: " + skip_preview, flush=True)
     if skip_security is not None:
         if not skip_security.strip() or len(skip_security) > 200 or any(ord(c) < 32 for c in skip_security):
             raise SystemExit("--skip-security requires a nonempty, single-line reason (maximum 200 characters)")
@@ -439,6 +462,11 @@ def _ship(args: argparse.Namespace) -> int:
                           capture_output=True, text=True)
     if gate.returncode != 0 or "Gate:                 PASS" not in gate.stdout:
         raise SystemExit("privacy gate did not pass; nothing pushed")
+    touched = _git("diff", "--name-only", "origin/main..." + branch).splitlines()
+    needs_preview = getattr(args, "preview_e2e", False) or any(
+        p.startswith(("ui2/frontend/", "ui2/service/")) for p in touched)
+    if needs_preview and skip_preview is None:
+        _preview_e2e(wt if args.task else REPO_ROOT, _git("rev-parse", branch))
     _git("push", "-q", "--force-with-lease", "origin", branch + ":" + branch)
     commits = _git("log", "--format=- %s", "origin/main.." + branch)
     title = args.title or _git("log", "-1", "--format=%s", branch)
@@ -514,6 +542,10 @@ def main(argv: list[str] | None = None) -> int:
     sh.add_argument("--full", action="store_true", help="run every-tab/latency E2E and real PostgreSQL integration tests")
     sh.add_argument("--notes", help="extra lines for the PR body (live validation, measurements)")
     sh.add_argument("--skip-security", metavar="REASON", help="emergency bypass; a reason is mandatory and printed")
+    preview = sh.add_mutually_exclusive_group()
+    preview.add_argument("--preview-e2e", action="store_true",
+                         help="isolated pre-merge quick e2e (automatic for frontend/service changes)")
+    preview.add_argument("--no-preview-e2e", metavar="REASON", help="skip preview e2e with a recorded reason")
     c = sub.add_parser("clean")
     c.add_argument("--task", required=True)
     c.add_argument("--force", action="store_true")

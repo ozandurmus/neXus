@@ -28,6 +28,8 @@ spring:
       static-locations: classpath:/static/
 
 ui2:
+  scheduling:
+    enabled: ${UI2_SCHEDULING_ENABLED:true}
   db:
     url: ${UI2_DB_URL:jdbc:postgresql://localhost:5432/ui2}
     user-file: ${UI2_DB_APP_USER_FILE:/run/secrets/ui2_db_app_user}
