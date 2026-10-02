@@ -25,7 +25,7 @@ function checkRows(checks: ReadinessCheck[], labels: ReadinessMember[] = []) {
   });
 }
 
-export function ReadinessChecksTable({ checks, members = [] }: { checks: ReadinessCheck[]; members?: ReadinessMember[] }) {
+export function ReadinessChecksTable({ checks, members = [], compact = false }: { checks: ReadinessCheck[]; members?: ReadinessMember[]; compact?: boolean }) {
   return <Table size="small" aria-label="Readiness results">
     <TableHead><TableRow>
       <TableCell>Check</TableCell>
@@ -38,14 +38,14 @@ export function ReadinessChecksTable({ checks, members = [] }: { checks: Readine
       const icon = row.failed ? "x-circle" : row.passed ? "check-circle" : "info";
       const result = row.failed ? "Blocking" : row.passed ? "Passed" : !row.blocking ? "Info" : "Unknown";
       return <TableRow key={row.no} sx={{ bgcolor: row.failed ? m3.errorContainer : undefined }}>
-        <TableCell component="th" scope="row" sx={{ py: 1.5, width: "32%" }}>
+        <TableCell component="th" scope="row" sx={{ py: compact ? 0.5 : 1.5, width: "32%" }}>
           <Stack direction="row" spacing={1} alignItems="center">
             <Box component="span" role="img" aria-label={result} sx={{ display: "flex", color: row.failed ? m3.onErrorContainer : row.passed ? m3.goodInk : m3.onSurfaceVar }}><Icon name={icon} /></Box>
             <Typography variant="body2">{row.title}</Typography>
             {!row.blocking && <Chip size="small" label="info" sx={{ height: 20, bgcolor: m3.sc, color: m3.onSurfaceVar }} />}
           </Stack>
         </TableCell>
-        {row.members.map((check, index) => <TableCell key={index} sx={{ py: 1.5 }}>{check?.summary ?? "Not collected"}</TableCell>)}
+        {row.members.map((check, index) => <TableCell key={index} sx={{ py: compact ? 0.5 : 1.5, whiteSpace: compact ? "nowrap" : "normal" }}>{check?.summary ?? "Not collected"}</TableCell>)}
       </TableRow>;
     })}</TableBody>
   </Table>;

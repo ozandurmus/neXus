@@ -57,7 +57,7 @@ for (const { screen, tabList, labels } of TAB_COVERAGE.filter(row => row.screen 
       await nestedTabs(page, panel, safety.checkpoint);
       if (screen === "operations" && label === "HA & readiness") {
         await expect(panel.getByLabel("Readiness summary").getByRole("button")).toHaveCount(4);
-        await expect(panel.getByRole("list", { name: "HA clusters", exact: true }).getByRole("listitem").first()).toBeVisible();
+        await expect(panel.getByRole("table", { name: "HA clusters", exact: true }).getByRole("row").nth(1)).toBeVisible();
       }
       if (label === "Diagnostics") {
         expect(await panel.getByRole("textbox", { name: "Search devices" }).count() > 0, "Diagnostics form is empty").toBe(true);

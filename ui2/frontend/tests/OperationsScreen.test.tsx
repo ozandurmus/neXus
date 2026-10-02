@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
@@ -13,7 +13,7 @@ const MEMBERS = [
   { device_id: "d2", vendor_hint: "check_point", enrollment_state: "ENROLLED", hostname: "FW-ROMEO-01-M2", model: null, software_version: null, ha_role: "standby", cluster_member_ref: "CLS-ROMEO-01" },
 ];
 
-const READY_SUMMARY = [{ clusterId: "opaque-cluster", unitId: "opaque-cluster", cluster_member_ref: "CLS-ROMEO-01", vendor: "check_point", members: MEMBERS, masked: true, activeWindow: false, lastRunState: null, lastRunOutcome: null, lastRunAt: null, canRunReadiness: true,
+const READY_SUMMARY = [{ clusterId: "opaque-cluster", unitId: "opaque-cluster", cluster_member_ref: "CLS-ROMEO-01", vendor: "check_point", members: MEMBERS, masked: false, activeWindow: false, lastRunState: null, lastRunOutcome: null, lastRunAt: null, canRunReadiness: true,
   readiness: { status: "READY", observedAt: new Date(Date.now() - 2 * 3600_000).toISOString(), failedCheck: "", checks: [
     { checkNo: 1, title: "Cluster state", member: "Member 1", status: "PASS", result: "PASS", summary: "Active", blocking: true, derived: { role: "ACTIVE" } },
     { checkNo: 1, title: "Cluster state", member: "Member 2", status: "PASS", result: "PASS", summary: "Standby", blocking: true, derived: { role: "STANDBY" } },
@@ -77,7 +77,7 @@ describe("OperationsScreen tabs", () => {
     stubFetch(MEMBERS, READY_SUMMARY);
     render(withTheme(<OperationsScreen />));
     fireEvent.click(await screen.findByText("CLS-ROMEO-01"));
-    expect(await screen.findByText("Ready")).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "Checks for CLS-ROMEO-01" })).toBeInTheDocument();
     const table = screen.getByRole("table", { name: "Readiness results" });
     expect(within(table).getByText("Active")).toBeInTheDocument();
     expect(within(table).getByText("Standby")).toBeInTheDocument();
@@ -85,7 +85,9 @@ describe("OperationsScreen tabs", () => {
     expect(within(table).getByText("FW-ROMEO-01-M2")).toBeInTheDocument();
     expect(table.textContent).not.toMatch(/[{}]/);
     expect(vi.mocked(fetch).mock.calls.some(([input]) => String(input).includes("/preflight"))).toBe(false);
-    fireEvent.click(screen.getByText("All clusters"));
+    fireEvent.click(screen.getByRole("button", { name: "Open full detail" }));
+    expect(screen.getByRole("dialog", { name: "HA readiness detail" })).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Close detail"));
     expect(await screen.findByText("1 clusters enrolled")).toBeInTheDocument();
   });
 
@@ -93,7 +95,7 @@ describe("OperationsScreen tabs", () => {
     stubFetch(MEMBERS, READY_SUMMARY.map(row => ({ ...row, masked })));
     render(withTheme(<OperationsScreen />));
     fireEvent.click(await screen.findByText("CLS-ROMEO-01"));
-    await screen.findByText("Ready");
+    fireEvent.click(screen.getByRole("button", { name: "Open full detail" }));
     expect(screen.queryByText("AIView Pseudonymized") !== null).toBe(masked);
   });
 
@@ -109,19 +111,17 @@ describe("OperationsScreen tabs", () => {
     stubFetch(MEMBERS, READY_SUMMARY);
     render(withTheme(<OperationsScreen />));
     fireEvent.click(await screen.findByText("CLS-ROMEO-01"));
-    await screen.findByText("Ready");
+    fireEvent.click(screen.getByRole("button", { name: "Open full detail" }));
     fireEvent.click(screen.getByRole("button", { name: "Authorize Failover (4-Eyes)" }));
     expect(screen.getByText(/Phase B & C: 4-Eyes Controlled Failover Gate/i)).toBeInTheDocument();
   });
 
-  it("lists the enrolled cluster in a card with vendor, members and readiness", async () => {
+  it("lists the enrolled cluster in a dense table with vendor, members and readiness", async () => {
     stubFetch(MEMBERS, null);
     render(withTheme(<OperationsScreen />));
     await screen.findByText("1 clusters enrolled");
-    expect(screen.queryByRole("table")).toBeNull();
-    expect(screen.getByRole("list", { name: "HA clusters" })).toBeInTheDocument();
-    expect(screen.getByText("FW-ROMEO-01-M1")).toBeInTheDocument();
-    expect(screen.getByText("FW-ROMEO-01-M2")).toBeInTheDocument();
+    expect(screen.getByRole("table", { name: "HA clusters" })).toBeInTheDocument();
+    expect(screen.getByText(/Active: FW-ROMEO-01-M1/)).toHaveTextContent("Standby: FW-ROMEO-01-M2");
     expect(screen.getAllByText("Unknown").length).toBeGreaterThan(0);
   });
 
@@ -131,7 +131,7 @@ describe("OperationsScreen tabs", () => {
     try {
       stubFetch(MEMBERS, READY_SUMMARY);
       render(withTheme(<OperationsScreen />));
-      expect(await screen.findByText("Ready")).toBeInTheDocument();
+      expect(await screen.findByRole("dialog", { name: "HA readiness detail" })).toBeInTheDocument();
     } finally {
       window.history.pushState({}, "", originalLocation);
     }
@@ -140,7 +140,8 @@ describe("OperationsScreen tabs", () => {
   it("shows readiness-record count without claiming unobserved states", async () => {
     stubFetch(MEMBERS, null);
     render(withTheme(<OperationsScreen />));
-    await screen.findByText("1 clusters enrolled · 0 readiness records");
+    await screen.findByText("1 clusters enrolled · 0 readiness records · 0 not supported");
+    expect(screen.getByText("0 ready · 0 not ready · 1 unknown")).toBeInTheDocument();
     expect(screen.getAllByText("Unknown").length).toBeGreaterThan(0);
   });
 
@@ -175,17 +176,117 @@ it("nests a VSX unit inside its cluster with a separate readiness action", async
   vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
     const url = String(input);
     const body = url === "/devices" ? { devices: MEMBERS }
-      : url.endsWith("/cp-failover/summary") ? [{ clusterId: "opaque-cluster", unitId: "opaque-vs", cluster_member_ref: "CLS-ROMEO-01", virtual_system: "VS-ROMEO-01-07", vendor: "check_point", members: MEMBERS, masked: true, activeWindow: true, lastRunState: "DONE", lastRunOutcome: "PASS", lastRunAt: from, canRunReadiness: true, readiness: null }]
+      : url.endsWith("/cp-failover/summary") ? [{ clusterId: "opaque-cluster", unitId: "opaque-vs", cluster_member_ref: "CLS-ROMEO-01", virtual_system: "VS-ROMEO-01-07", vendor: "check_point", members: MEMBERS, masked: false, activeWindow: true, lastRunState: "DONE", lastRunOutcome: "PASS", lastRunAt: from, canRunReadiness: true, readiness: null }]
       : {};
     return Promise.resolve(new Response(JSON.stringify(body), { status: 200 }));
   }));
   render(withTheme(<OperationsScreen />));
-  expect(await screen.findByText("VS-ROMEO-01-07")).toBeInTheDocument();
-  const parent = screen.getByRole("listitem", { name: "CLS-ROMEO-01" });
-  const row = within(parent).getByRole("list", { name: "Virtual systems in CLS-ROMEO-01" });
+  const toggle = await screen.findByRole("button", { name: "Virtual systems in CLS-ROMEO-01" });
+  expect(toggle).toHaveAttribute("aria-expanded", "false");
+  fireEvent.click(toggle);
+  const row = screen.getByRole("row", { name: "Virtual System VS-ROMEO-01-07" });
   expect(within(row).getByRole("button", { name: "Run pre-checks" })).toBeInTheDocument();
-  fireEvent.click(within(row).getByRole("button", { name: "Open Virtual System VS-ROMEO-01-07" }));
+  fireEvent.click(row);
+  expect(screen.getByRole("region", { name: "Checks for Virtual System VS-ROMEO-01-07" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Open full detail" }));
   expect(await screen.findByLabelText("Readiness checks")).toBeInTheDocument();
   await waitFor(() => expect(vi.mocked(fetch).mock.calls.filter(([input]) => String(input).includes("cp-failover"))).toHaveLength(1));
   expect(String(vi.mocked(fetch).mock.calls.find(([input]) => String(input).includes("cp-failover"))?.[0])).toBe("/api/v2/cp-failover/summary");
+});
+
+it("opens full detail in a right drawer, keeps the list and does not change the URL", async () => {
+  stubFetch(MEMBERS, READY_SUMMARY);
+  render(withTheme(<OperationsScreen />));
+  const url = window.location.href;
+  fireEvent.keyDown(await screen.findByRole("row", { name: "CLS-ROMEO-01" }), { key: "Enter" });
+  fireEvent.click(screen.getByRole("button", { name: "Open full detail" }));
+  const drawer = screen.getByRole("dialog", { name: "HA readiness detail" });
+  expect(drawer).toHaveClass("MuiDrawer-paperAnchorRight");
+  expect(within(drawer).getByRole("table", { name: "Readiness results" })).toBeInTheDocument();
+  expect(screen.getByRole("table", { name: "HA clusters", hidden: true })).toBeInTheDocument();
+  expect(window.location.href).toBe(url);
+  fireEvent.click(within(drawer).getByRole("button", { name: "Close detail" }));
+  await waitFor(() => expect(screen.queryByRole("dialog", { name: "HA readiness detail" })).toBeNull());
+  expect(screen.getByRole("table", { name: "HA clusters" })).toBeInTheDocument();
+});
+
+const BULK_MEMBERS = [...MEMBERS, ...MEMBERS.map((member, index) => ({ ...member, device_id: `pan-member-${index}`, hostname: `FW-TANGO-02-M${index + 1}`, vendor_hint: "palo_alto", cluster_member_ref: "CLS-TANGO-02" }))];
+const BULK_SUMMARY = [...READY_SUMMARY, { ...READY_SUMMARY[0], clusterId: "opaque-pan", unitId: "opaque-pan", cluster_member_ref: "CLS-TANGO-02", vendor: "palo_alto", members: BULK_MEMBERS.slice(2) }];
+
+it("calls each selected unit's vendor readiness API sequentially and reports per-row progress", async () => {
+  stubFetch(BULK_MEMBERS, BULK_SUMMARY);
+  const original = vi.mocked(fetch).getMockImplementation()!;
+  let finishFirst!: (response: Response) => void;
+  let finishSecond!: (response: Response) => void;
+  const first = new Promise<Response>(resolve => { finishFirst = resolve; });
+  const second = new Promise<Response>(resolve => { finishSecond = resolve; });
+  vi.mocked(fetch).mockImplementation((input, init) => {
+    const url = String(input);
+    if (url.endsWith("/readiness")) return Promise.resolve(new Response(JSON.stringify({ runId: url.includes("pan-failover") ? "run-second" : "run-first" })));
+    if (url.endsWith("/runs/run-first")) return first;
+    if (url.endsWith("/runs/run-second")) return second;
+    return original(input, init);
+  });
+  render(withTheme(<OperationsScreen />));
+  await screen.findByText("2 clusters enrolled");
+  await waitFor(() => expect(screen.getByRole("checkbox", { name: "Select all visible" })).toBeEnabled());
+  fireEvent.click(screen.getByRole("checkbox", { name: "Select all visible" }));
+  fireEvent.click(screen.getByRole("button", { name: "Run pre-checks (2)" }));
+  const postCalls = () => vi.mocked(fetch).mock.calls.filter(([input]) => String(input).endsWith("/readiness"));
+  await waitFor(() => expect(postCalls()).toHaveLength(1));
+  expect(String(postCalls()[0][0])).toBe("/api/v2/cp-failover/units/opaque-cluster/readiness");
+  expect(postCalls()[0][1]).toMatchObject({ method: "POST", body: JSON.stringify({ clusterId: "opaque-cluster", unitId: "opaque-cluster" }) });
+  expect(within(screen.getByRole("row", { name: "CLS-ROMEO-01" })).getByRole("status")).toHaveTextContent("Running");
+  expect(within(screen.getByRole("row", { name: "CLS-TANGO-02" })).getByRole("status")).toHaveTextContent("Queued");
+  expect(screen.getByRole("button", { name: "Run pre-checks (2)" })).toBeDisabled();
+  await act(async () => finishFirst(new Response(JSON.stringify({ state: "DONE" }))));
+  await waitFor(() => expect(postCalls()).toHaveLength(2));
+  expect(String(postCalls()[1][0])).toBe("/api/v2/pan-failover/units/opaque-pan/readiness");
+  expect(within(screen.getByRole("row", { name: "CLS-ROMEO-01" })).getByRole("status")).toHaveTextContent("Completed");
+  expect(within(screen.getByRole("row", { name: "CLS-TANGO-02" })).getByRole("status")).toHaveTextContent("Running");
+  await act(async () => finishSecond(new Response(JSON.stringify({ state: "DONE" }))));
+  await waitFor(() => expect(screen.getAllByRole("status").filter(element => element.textContent === "Completed")).toHaveLength(2));
+  expect(screen.getByRole("button", { name: "Run pre-checks (2)" })).toBeEnabled();
+});
+
+it("stops bulk after a failed API call, reports the failed and unstarted rows, and unlocks selection", async () => {
+  stubFetch(BULK_MEMBERS, BULK_SUMMARY);
+  const original = vi.mocked(fetch).getMockImplementation()!;
+  vi.mocked(fetch).mockImplementation((input, init) => String(input).endsWith("/readiness")
+    ? Promise.resolve(new Response("{}", { status: 503 })) : original(input, init));
+  render(withTheme(<OperationsScreen />));
+  await screen.findByText("2 clusters enrolled");
+  await waitFor(() => expect(screen.getByRole("checkbox", { name: "Select all visible" })).toBeEnabled());
+  fireEvent.click(screen.getByRole("checkbox", { name: "Select all visible" }));
+  fireEvent.click(screen.getByRole("button", { name: "Run pre-checks (2)" }));
+  await waitFor(() => expect(within(screen.getByRole("row", { name: "CLS-TANGO-02" })).getByRole("status")).toHaveTextContent("Not run"));
+  expect(within(screen.getByRole("row", { name: "CLS-ROMEO-01" })).getByRole("status")).toHaveTextContent("Failed");
+  expect(vi.mocked(fetch).mock.calls.filter(([input]) => String(input).endsWith("/readiness"))).toHaveLength(1);
+  expect(screen.getByText("Could not start or refresh the readiness run.")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Clear selection" })).toBeEnabled();
+});
+
+it("summarizes the same cluster readiness counts in the KPI and chips without double counting VS or unsupported vendors", async () => {
+  const extra = ["CLS-BRAVO-03", "CLS-CHARLIE-04"].flatMap((ref, index) => MEMBERS.map((member, m) => ({ ...member, device_id: `extra-${index}-${m}`, hostname: `FW-${ref}-M${m + 1}`, cluster_member_ref: ref, vendor_hint: index ? "cisco_asa" : "check_point" })));
+  stubFetch([...BULK_MEMBERS, ...extra], [READY_SUMMARY[0], { ...BULK_SUMMARY[1], readiness: { ...BULK_SUMMARY[1].readiness, status: "NOT_READY" } },
+    { ...READY_SUMMARY[0], unitId: "opaque-vs", virtual_system: "VS-ROMEO-07" },
+    { ...READY_SUMMARY[0], clusterId: "unsupported", unitId: "unsupported", cluster_member_ref: "CLS-CHARLIE-04" }]);
+  render(withTheme(<OperationsScreen />));
+  expect(await screen.findByText("1 ready · 1 not ready · 1 unknown")).toBeInTheDocument();
+  for (const name of ["Ready", "Not ready", "Unknown", "Not supported"]) expect(screen.getByRole("button", { name: `${name}: 1 clusters` })).toBeInTheDocument();
+  expect(screen.queryByText("NOT EVALUATED")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Ready: 1 clusters" }));
+  expect(screen.getByText("1 ready · 1 not ready · 1 unknown")).toBeInTheDocument();
+});
+
+it("offers aiview inspection with no readiness or bulk actions", async () => {
+  stubFetch(MEMBERS, READY_SUMMARY.map(unit => ({ ...unit, masked: true, canRunReadiness: true })));
+  render(withTheme(<OperationsScreen />));
+  fireEvent.click(await screen.findByRole("row", { name: "CLS-ROMEO-01" }));
+  expect(screen.getByRole("region", { name: "Checks for CLS-ROMEO-01" })).toBeInTheDocument();
+  expect(screen.getByRole("checkbox", { name: "Select all visible" })).toBeDisabled();
+  expect(screen.queryByRole("toolbar", { name: "Bulk readiness actions" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Run pre-checks" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Open full detail" }));
+  expect(screen.queryByRole("button", { name: "Run pre-checks" })).toBeNull();
 });
