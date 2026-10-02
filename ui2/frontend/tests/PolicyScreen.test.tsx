@@ -91,7 +91,7 @@ it("keeps an unassigned policy navigable and a device jump scoped to its assignm
 it("shows empty and failed reads distinctly", async () => {
   vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ policies: [], devices: [] }), { status: 200 })));
   const view = mount();
-  expect(await screen.findByText("No policy snapshot")).toBeInTheDocument(); view.unmount();
+  expect(await screen.findByRole("status", { name: "No policy snapshot" })).toHaveTextContent("No management policy has been collected yet."); view.unmount();
   vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 500 })));
   mount(); expect(await screen.findByText("Policy unavailable")).toBeInTheDocument();
   expect(screen.queryByText("No policy snapshot")).toBeNull();
@@ -161,7 +161,8 @@ it("badges the stored local firewall policy under AIView", async () => {
 
 it("fetches only sources until each navigation level is expanded", async () => {
   const fetch = mockFetch(); mount();
-  await screen.findByRole("button", { name: metadata.sourceName });
+  const tree = await screen.findByRole("navigation", { name: "Management policies" });
+  expect(within(tree).getByRole("group", { name: "Policy source" })).toBeInTheDocument();
   expect(fetch.mock.calls).toHaveLength(2);
   expect(screen.queryByText(metadata.containerName)).toBeNull();
   expect(screen.queryByRole("table")).toBeNull();
@@ -169,8 +170,13 @@ it("fetches only sources until each navigation level is expanded", async () => {
   await screen.findByRole("button", { name: metadata.containerName });
   expect(screen.queryByText(metadata.name)).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: metadata.containerName }));
-  await screen.findByRole("button", { name: metadata.name });
+  const container = await screen.findByRole("group", { name: "Policy container" });
+  const policy = await within(container).findByRole("button", { pressed: false });
+  expect(policy).toHaveTextContent(metadata.name);
   expect(fetch.mock.calls.some(([url]) => url.includes("/policies/"))).toBe(false);
+  fireEvent.click(policy);
+  await screen.findByRole("table", { name: "Policy rulebase" });
+  expect(within(container).getByRole("button", { pressed: true })).toHaveTextContent(metadata.name);
 });
 it("virtualizes a 5000-rule response and reaches the final row on scroll", async () => {
   const rules = Array.from({ length: 5000 }, (_, i) => ({ ...rule, id: `rule-${i}`, name: `OBJ-RULE-${i}`, number: i + 1 }));
@@ -234,4 +240,18 @@ it("discovers automatic collections and stops all pending polling on unmount", a
   view!.unmount();
   await act(async () => { await vi.advanceTimersByTimeAsync(60000); });
   expect(fetch.mock.calls.some(([url]) => url.includes("/collections/"))).toBe(false);
+});
+
+it("keeps an uncollected source navigable with an accessible empty state without collecting", async () => {
+  const fetch = vi.fn(async (input: string) => new Response(JSON.stringify(input === "/api/v2/policy/sources"
+    ? { sources: [{ sourceId: metadata.sourceId, sourceName: metadata.sourceName, vendor: "PAN" }], canCollect: true }
+    : { sources: [], containers: [] }), { status: 200 }));
+  vi.stubGlobal("fetch", fetch); mount();
+  const tree = await screen.findByRole("navigation", { name: "Management policies" });
+  fireEvent.click(within(tree).getByRole("button", { expanded: false }));
+  await waitFor(() => expect(fetch.mock.calls).toHaveLength(3));
+  expect(screen.getByRole("status", { name: "No collected policy" })).toHaveTextContent("No policy may have been collected");
+  expect(within(tree).queryByRole("button", { pressed: false })).toBeNull();
+  expect(screen.queryByRole("table")).toBeNull();
+  expect(fetch.mock.calls.some(([url]) => url.endsWith("/collect"))).toBe(false);
 });

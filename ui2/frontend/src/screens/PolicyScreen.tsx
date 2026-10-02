@@ -151,7 +151,7 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
       {jobs.filter(job => job.reason).map(job => <Typography key={job.jobId} role="status">{job.reason}</Typography>)}
       {error && <EmptyPanel title="Policy unavailable" body={error}><Button onClick={() => setRevision(n => n + 1)}>Retry</Button></EmptyPanel>}
       {loadingTree && !error && <Typography role="status">Loading policies…</Typography>}
-      {!loadingTree && !error && sources.length === 0 && <EmptyPanel title="No policy snapshot" body="No management policy has been collected yet." />}
+      {!loadingTree && !error && sources.length === 0 && <Box role="status" aria-label="No policy snapshot"><EmptyPanel title="No policy snapshot" body="No management policy has been collected yet." /></Box>}
       {sources.length > 0 && <>
         <FormControl size="small" sx={{ minWidth: 240, mb: 2 }}>
           <InputLabel id="policy-device-label">Assigned device</InputLabel>
@@ -161,18 +161,18 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
             {device && !targets.some(t => t.deviceId === device) && <MenuItem value={device}>Requested device</MenuItem>}
           </Select>
         </FormControl>
-        {visible.length === 0 && <EmptyPanel title="No assigned policy snapshot" body="No collected policy is assigned to this device." />}
+        {visible.length === 0 && <Box role="status" aria-label="No collected policy"><EmptyPanel title="No assigned policy snapshot" body="Expand a source and container to find collected policies. No policy may have been collected for this scope yet." /></Box>}
         <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "260px minmax(0, 1fr)" }, gap: 2 }}>
           <Box component="nav" aria-label="Management policies" sx={{ bgcolor: m3.scLow, borderRadius: 2, p: 1.5 }}>
-            {sources.map(source => <Box key={source.sourceId}>
+            {sources.map(source => <Box key={source.sourceId} role="group" aria-label="Policy source">
               <Button aria-expanded={expandedSources.has(source.sourceId)} onClick={() => void expandSource(source.sourceId)}>{source.sourceName}</Button>
               {collectButton(source.sourceId)}
-              {expandedSources.has(source.sourceId) && (containers[source.sourceId] ?? []).map(container => <Box key={container.containerId} sx={{ pl: 1 }}>
+              {expandedSources.has(source.sourceId) && (containers[source.sourceId] ?? []).map(container => <Box key={container.containerId} role="group" aria-label="Policy container" sx={{ pl: 1 }}>
                 <Button aria-expanded={expandedContainers.has(container.containerId)} onClick={() => void expandContainer(source.sourceId, container.containerId)}>{container.containerName}</Button>
                 {source.vendor === "CP" && collectButton(source.sourceId, container.containerId)}
                 {expandedContainers.has(container.containerId) && visible.filter(p => p.containerId === container.containerId).map(policy =>
                   <Button key={policy.id} fullWidth variant={selected === policy.id ? "contained" : "text"}
-                    aria-current={selected === policy.id ? "page" : undefined} sx={{ justifyContent: "flex-start", textTransform: "none" }}
+                    aria-pressed={selected === policy.id} aria-current={selected === policy.id ? "page" : undefined} sx={{ justifyContent: "flex-start", textTransform: "none" }}
                     onClick={() => { setSelected(policy.id); setPage(0); setCollapsed(new Set()); }}>{policy.name}</Button>)}
               </Box>)}
             </Box>)}
