@@ -32,7 +32,7 @@ class PolicyApiTest {
         var audit = mock(AuthzDecisionRepository.class);
         var query = mock(PolicyQueryService.class);
         var collections = mock(PolicyCollectionService.class);
-        when(collections.collect(eq("mds-1"), eq(""), anyString())).thenReturn(Optional.of("job-1"));
+        when(collections.collect(eq("pan-1"), eq(""), anyString())).thenReturn(Optional.of("job-1"));
         var meta = new PolicySnapshot.Metadata("policy-1", "manager-1", "Synthetic manager", "PAN", "domain-1", "Synthetic domain",
                 "Synthetic policy", "2026-10-01T12:00:00Z", "artifact-1", List.of());
         var snapshot = new PolicySnapshot(meta, List.of(), Map.of());
@@ -64,7 +64,7 @@ class PolicyApiTest {
             boolean admin = role.equals(RoleToken.SECURITY_ADMIN) || role.equals(RoleToken.ONBOARDING_ADMIN);
             when(rbac.evaluateAny(eq(actor), eq(new ActionRegistry().find(ActionRegistry.POLICY_COLLECT).orElseThrow().requiredRoleTokens()), any())).thenReturn(
                     new RbacEvaluator.Decision(admin ? AuthzOutcome.PERMITTED : AuthzOutcome.DENIED, Optional.of("test"), Optional.empty(), Optional.empty()));
-            String collectPath = "/api/v2/policy/sources/mds-1/collect";
+            String collectPath = "/api/v2/policy/sources/pan-1/collect";
             mvc.perform(post(collectPath).servletPath(collectPath).cookie(new Cookie("ui2_session", cookie))
                     .contentType("application/json").content("{\"domainRef\":\"\"}"))
                     .andExpect(status().isUnauthorized());

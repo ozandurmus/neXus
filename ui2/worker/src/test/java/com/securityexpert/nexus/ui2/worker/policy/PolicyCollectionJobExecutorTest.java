@@ -51,5 +51,30 @@ class PolicyCollectionJobExecutorTest {
         verify(repository, never()).enqueue(eq("mds-2"), anyString(), anyBoolean(), anyString());
         new PolicyCollectionJobExecutor(null, null, null, repository, null, key -> List.of()).afterDiscovery(run);
         verify(repository, times(1)).enqueue(anyString(), anyString(), anyBoolean(), anyString());
+    }    @Test void panoramaFailureDoesNotPublishAndDiscoveryUsesOnlyApprovedGates() {
+        var leases = mock(JobLeaseRepository.class);
+        var attempts = mock(JobStepAttemptRepository.class);
+        var runs = mock(DiscoveryRunRepository.class);
+        var repository = mock(PolicyCollectionRepository.class);
+        var collector = mock(PanoramaPolicyCollector.class);
+        var run = new DiscoveryRun("run-pan", "palo_alto", "192.0.2.10", "synthetic-ref", "synthetic-actor",
+            DiscoveryRunState.FINISHED, Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
+        when(runs.findRun("run-pan")).thenReturn(Optional.of(run));
+        when(repository.request("job-pan")).thenReturn(Optional.of(new PolicyCollectionRepository.Request("pan-1", "", false)));
+        when(repository.eligible("pan-1", "run-pan")).thenReturn(true);
+        when(repository.sources()).thenReturn(List.of(new PolicyCollectionRepository.Source("pan-1", "run-pan", "palo_alto")));
+        when(leases.transitionState(anyString(), anyLong(), any(), any(), anyString(), anyString())).thenReturn(true);
+        when(attempts.insertPreContact(anyString(), anyLong(), anyInt(), anyString(), anyString(), anyInt())).thenReturn("attempt-pan");
+        when(attempts.writeOutcome(anyString(), anyLong(), anyString(), isNull(), anyBoolean(), isNull(), isNull(), isNull())).thenReturn(true);
+        when(collector.collect(any(), any(), any())).thenThrow(new IllegalStateException("synthetic incomplete page"));
+        GateRegistryPort gates = key -> GateRegistryFixtureLoader.loadFromStream(getClass().getResourceAsStream("/capabilities/gate_registry_fixture.yaml"))
+            .stream().filter(row -> row.key().equals(key)).toList();
+        var executor = new PolicyCollectionJobExecutor(leases, attempts, runs, repository, null, gates).withPanorama(collector);
+        executor.afterDiscovery(run);
+        verify(repository).enqueue(eq("pan-1"), eq(""), eq(true), anyString());
+        assertInstanceOf(JobOutcome.Failed.class, executor.execute("job-pan", 1, "run-pan"));
+        verify(repository, never()).publish(anyString(), anyLong(), anyList(), anyString());
+        verify(attempts).insertPreContact(eq("job-pan"), eq(1L), eq(0), eq("PAN_POLICY_READ"), eq("read"), eq(1));
     }
+
 }

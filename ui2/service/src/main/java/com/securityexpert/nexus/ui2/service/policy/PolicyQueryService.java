@@ -14,15 +14,27 @@ public final class PolicyQueryService {
     private final PolicySnapshotRepository repository;
     private final ObjectMapper mapper;
     private final TopologyNamePseudonymizer names;
+    private final LocalFirewallPolicyService local;
     public PolicyQueryService(TransactionBoundary transactions, ObjectMapper mapper, TopologyNamePseudonymizer names) {
+        this(transactions, mapper, names, null);
+    }
+    @org.springframework.beans.factory.annotation.Autowired
+    public PolicyQueryService(TransactionBoundary transactions, ObjectMapper mapper, TopologyNamePseudonymizer names,
+            LocalFirewallPolicyService local) {
+        this.local = local;
         this.repository = new PolicySnapshotRepository(transactions);
         this.mapper = mapper;
         this.names = names;
     }
     public List<Metadata> catalog() {
-        return repository.catalog().stream().map(json -> read(json, Metadata.class)).toList();
+        var catalog = new ArrayList<>(repository.catalog().stream().map(json -> read(json, Metadata.class)).toList());
+        if (local != null) local.snapshots().forEach(snapshot -> catalog.add(snapshot.metadata()));
+        return catalog;
     }
-    public Optional<PolicySnapshot> find(String id) { return repository.find(id).map(json -> read(json, PolicySnapshot.class)); }
+    public Optional<PolicySnapshot> find(String id) {
+        var stored = repository.find(id).map(json -> read(json, PolicySnapshot.class));
+        return stored.isPresent() || local == null ? stored : local.snapshots().stream().filter(s -> s.metadata().id().equals(id)).findFirst();
+    }
     private <T> T read(String json, Class<T> type) {
         try { return mapper.readValue(json, type); }
         catch (Exception e) { throw new IllegalStateException("Stored policy is invalid"); }
@@ -54,7 +66,9 @@ public final class PolicyQueryService {
                 .map(id -> { var object = snapshot.objects().get(id);
                     return map(new PolicyObject(object.id(), object.name(), object.type(), List.of(), List.of(), object.status())); }).toList();
         Map<String, Object> body = new LinkedHashMap<>();
-        body.put("metadata", metadata(snapshot.metadata())); body.put("sections", sections); body.put("objects", objects);
+        body.put("metadata", metadata(snapshot.metadata()));
+        body.put("policyKind", snapshot.sections().stream().anyMatch(s -> s.name().equals("Local rules")) ? "LOCAL_FIREWALL" : "MANAGEMENT");
+        body.put("sections", sections); body.put("objects", objects);
         body.put("page", page); body.put("pageSize", 200); body.put("total", matching.size());
         return new PolicyResponse(body);
     }

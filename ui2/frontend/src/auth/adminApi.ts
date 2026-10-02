@@ -1684,7 +1684,7 @@ export interface PolicyRule {
   action: string; log: string; comment: string; extras: Record<string, string[]>;
 }
 export interface PolicySection { id: string; name: string; source: string; parentRuleId: string | null; rules: PolicyRule[]; total: number }
-export interface PolicyPage { metadata: PolicyMetadata; sections: PolicySection[]; objects: PolicyObject[]; page: number; pageSize: number; total: number }
+export interface PolicyPage { policyKind?: "LOCAL_FIREWALL" | "MANAGEMENT"; metadata: PolicyMetadata; sections: PolicySection[]; objects: PolicyObject[]; page: number; pageSize: number; total: number }
 export const listPolicies = () => call<{ policies: PolicyMetadata[]; devices: PolicyTarget[] }>("/api/v2/policy/devices", "GET");
 export const getPolicy = (id: string, page: number, q: string) => call<PolicyPage>(`/api/v2/policy/policies/${encodeURIComponent(id)}?page=${page}&q=${encodeURIComponent(q)}`, "GET");
 export const getPolicyObject = (id: string, policy: string) => call<{ object: PolicyObject }>(`/api/v2/policy/objects/${encodeURIComponent(id)}?policy=${encodeURIComponent(policy)}`, "GET");

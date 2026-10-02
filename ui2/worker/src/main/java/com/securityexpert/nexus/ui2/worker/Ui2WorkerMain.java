@@ -298,7 +298,9 @@ public final class Ui2WorkerMain {
         var policyCollectionRepository = new com.securityexpert.nexus.ui2.persistence.policy.PolicyCollectionRepository(transactionBoundary);
         var policyCollector = new com.securityexpert.nexus.ui2.worker.policy.CheckPointPolicyCollector(compositeTransport, gateRegistry, policyCollectionRepository);
         var policyCollectionExecutor = new com.securityexpert.nexus.ui2.worker.policy.PolicyCollectionJobExecutor(
-                leaseRepository, attemptRepository, discoveryRunRepository, policyCollectionRepository, policyCollector, gateRegistry);
+                leaseRepository, attemptRepository, discoveryRunRepository, policyCollectionRepository, policyCollector, gateRegistry)
+                .withPanorama(new com.securityexpert.nexus.ui2.worker.policy.PanoramaPolicyCollector(
+                        compositeTransport, gateRegistry, panCredentialResolver, policyCollectionRepository));
         MgmtCliEnumerationAdapter checkPointDiscoveryAdapter =
                 new MgmtCliEnumerationAdapter(compositeTransport, sshCredentialResolver);
         PanoramaEnumerationAdapter paloAltoDiscoveryAdapter =

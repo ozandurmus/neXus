@@ -2967,3 +2967,71 @@ gates:
     secret_output_risk: "sensitive policy data; parse in memory"
     safe_telemetry_fields: ["outcome", "packageCount", "ruleCount"]
     source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_01_CP_POLICY_READS.md"
+
+  - gate_id: "pan_policy_shared"
+    vendor: "palo_alto"
+    platform_role_scope: "panorama"
+    shell_context: "not_applicable"
+    transport_kind: "PAN_XML_API"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 60
+    retry_rule: "none"
+    max_frequency: "manual admin request; automatic at most once per Panorama per 6 hours"
+    session_reuse_rule: "one existing-authentication API key per job; serial"
+    unsupported_behavior_ref: "fail closed; preserve previous snapshots"
+    secret_output_risk: "sensitive configuration; parse bounded XML in memory; no raw retention"
+    safe_telemetry_fields: ["outcome", "deviceGroupCount", "ruleCount"]
+    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_01_PAN_POLICY_READS.md"
+    canonical_command_key: "type=config&action=show&xpath=/config/shared"
+
+  - gate_id: "pan_policy_device_group"
+    vendor: "palo_alto"
+    platform_role_scope: "panorama"
+    shell_context: "not_applicable"
+    transport_kind: "PAN_XML_API"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 60
+    retry_rule: "none"
+    max_frequency: "manual admin request; automatic at most once per Panorama per 6 hours"
+    session_reuse_rule: "one existing-authentication API key per job; serial"
+    unsupported_behavior_ref: "fail closed; preserve previous snapshots"
+    secret_output_risk: "sensitive configuration; parse bounded XML in memory; no raw retention"
+    safe_telemetry_fields: ["outcome", "deviceGroupCount", "ruleCount"]
+    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_01_PAN_POLICY_READS.md"
+    canonical_command_key: "type=config&action=show&xpath=/config/devices/entry[@name='localhost.localdomain']/device-group/entry[@name='<DG>']"
+
+  - gate_id: "pan_policy_devicegroups"
+    vendor: "palo_alto"
+    platform_role_scope: "panorama"
+    shell_context: "not_applicable"
+    transport_kind: "PAN_XML_API"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 60
+    retry_rule: "none"
+    max_frequency: "manual admin request; automatic at most once per Panorama per 6 hours"
+    session_reuse_rule: "one existing-authentication API key per job; serial"
+    unsupported_behavior_ref: "fail closed; preserve previous snapshots"
+    secret_output_risk: "sensitive configuration; parse bounded XML in memory; no raw retention"
+    safe_telemetry_fields: ["outcome", "deviceGroupCount", "ruleCount"]
+    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_01_PAN_POLICY_READS.md"
+    canonical_command_key: "type=op&cmd=<show><devicegroups/></show>"
+
+  - gate_id: "pan_policy_hierarchy"
+    vendor: "palo_alto"
+    platform_role_scope: "panorama"
+    shell_context: "not_applicable"
+    transport_kind: "PAN_XML_API"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 60
+    retry_rule: "none"
+    max_frequency: "manual admin request; automatic at most once per Panorama per 6 hours"
+    session_reuse_rule: "one existing-authentication API key per job; serial"
+    unsupported_behavior_ref: "fail closed; preserve previous snapshots"
+    secret_output_risk: "sensitive configuration; parse bounded XML in memory; no raw retention"
+    safe_telemetry_fields: ["outcome", "deviceGroupCount", "ruleCount"]
+    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_01_PAN_POLICY_READS.md"
+    canonical_command_key: "type=op&cmd=<show><dg-hierarchy></dg-hierarchy></show>"

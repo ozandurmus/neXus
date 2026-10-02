@@ -7,7 +7,9 @@ import com.securityexpert.nexus.ui2.policy.PolicySnapshot.Target;
 
 /** Management-only admission and durable throttling; no raw response retention. */
 public class PolicyCollectionRepository {
-    public record Source(String sourceId, String runId) {}
+    public record Source(String sourceId, String runId, String vendor) {
+        public Source(String sourceId, String runId) { this(sourceId, runId, "check_point"); }
+    }
     public record Request(String sourceId, String domainRef, boolean automatic) {}
     private final TransactionBoundary tx;
     public PolicyCollectionRepository(TransactionBoundary tx) { this.tx = tx; }
@@ -19,20 +21,20 @@ public class PolicyCollectionRepository {
     }
 
     public List<Source> sources() {
-        return tx.inTransaction(db -> db.fetch("select d.device_id, r.run_id from devices d join endpoints e on e.device_id = d.device_id "
+        return tx.inTransaction(db -> db.fetch("select d.device_id, r.run_id, d.vendor_hint from devices d join endpoints e on e.device_id = d.device_id "
             + "join lateral (select run_id from discovery_run where management_address = e.address_ref "
-            + "and vendor = 'check_point' and state = 'FINISHED' order by finished_at desc limit 1) r on true "
-            + "where d.vendor_hint = 'check_point' and d.role = 'management_server' and not d.disabled "
+            + "and vendor = d.vendor_hint and state = 'FINISHED' order by finished_at desc limit 1) r on true "
+            + "where d.vendor_hint in ('check_point', 'palo_alto') and d.role = 'management_server' and not d.disabled "
             + "and d.enrollment_state in ('ENROLLED', 'DEGRADED')")
-            .map(r -> new Source(r.get("device_id", String.class), r.get("run_id", String.class))));
+            .map(r -> new Source(r.get("device_id", String.class), r.get("run_id", String.class), r.get("vendor_hint", String.class))));
     }
 
     /** A newer discovery must not invalidate an already queued, still-eligible MDS read. */
     public boolean eligible(String sourceId, String runId) {
         return tx.inTransaction(db -> !db.fetch("select 1 from devices d join endpoints e on e.device_id = d.device_id "
             + "join discovery_run r on r.management_address = e.address_ref where d.device_id = {0} and r.run_id = {1} "
-            + "and d.vendor_hint = 'check_point' and d.role = 'management_server' and not d.disabled "
-            + "and d.enrollment_state in ('ENROLLED', 'DEGRADED') and r.vendor = 'check_point' and r.state = 'FINISHED'",
+            + "and d.vendor_hint in ('check_point', 'palo_alto') and d.role = 'management_server' and not d.disabled "
+            + "and d.enrollment_state in ('ENROLLED', 'DEGRADED') and r.vendor = d.vendor_hint and r.state = 'FINISHED'",
             sourceId, runId).isEmpty());
     }
 
@@ -44,7 +46,7 @@ public class PolicyCollectionRepository {
     /** Serialize admission per MDS, including requests against different discovery runs. */
     public Optional<String> enqueue(String sourceId, String domainRef, boolean automatic, String actor) {
         return new AuditedTransactionBoundary(tx).inTransaction(actor, "policy_collect", db -> {
-            db.execute("select pg_advisory_xact_lock(hashtextextended({0}, 0))", "cp-policy:" + sourceId);
+            db.execute("select pg_advisory_xact_lock(hashtextextended({0}, 0))", "policy:" + sourceId);
             var source = new PolicyCollectionRepository(scoped(db)).sources().stream().filter(s -> s.sourceId().equals(sourceId)).findFirst();
             if (source.isEmpty()) return Optional.empty();
             if (!domainRef.isEmpty() && db.fetch("select 1 from policy_snapshot where metadata->>'sourceId' = {0} "
@@ -53,9 +55,12 @@ public class PolicyCollectionRepository {
                 + "where p.source_id = {0} and j.state in ('REQUESTED','CLAIMED','EXECUTING','RECONCILING') limit 1", sourceId);
             // A domain-only request cannot silently satisfy a different scope.
             if (!active.isEmpty()) return Optional.empty();
+            if ("palo_alto".equals(source.get().vendor()) && !new PolicyCollectionRepository(scoped(db)).beginDomain(sourceId, "", automatic))
+                return Optional.empty();
+            String capability = "palo_alto".equals(source.get().vendor()) ? "pan_policy_collect" : "cp_policy_collect";
             String id = UUID.randomUUID().toString();
-            new JooqJobRecordDao(scoped(db)).insertRequestedIfAbsentForRun(id, id, "cp_policy_collect", source.get().runId(),
-                    "read", "cp_policy_collect", actor, "policy_collect").orElseThrow();
+            new JooqJobRecordDao(scoped(db)).insertRequestedIfAbsentForRun(id, id, capability, source.get().runId(),
+                    "read", capability, actor, "policy_collect").orElseThrow();
             db.execute("insert into policy_collection_request(job_id, source_id, domain_ref, automatic) values ({0},{1},{2},{3})",
                     id, sourceId, domainRef, automatic);
             return Optional.of(id);
@@ -76,6 +81,18 @@ public class PolicyCollectionRepository {
             + "where c.run_id = {0} and c.owning_domain = {1} and (c.stable_identifier = {2} or c.cluster_reference = {2})",
                 runId, domainName, targetUid).map(r -> new Target(r.get("device_id", String.class),
                     Objects.requireNonNullElse(r.get("display_name", String.class), ""), Objects.requireNonNullElse(r.get("virtual_system_ref", String.class), ""), "UNKNOWN")));
+    }
+
+    /** Exact serial relation established by discovery; unmatched members remain scoped opaque references. */
+    public List<Target> panTargets(String runId, String sourceId, String serial, String context, String syncStatus) {
+        var matched = tx.inTransaction(db -> db.fetch("select distinct d.device_id, c.display_name from discovery_candidate c "
+            + "join devices d on d.discovery_match_key = 'palo_alto|' || c.stable_identifier "
+            + "where c.run_id = {0} and c.vendor = 'palo_alto' and c.stable_identifier = {1} and c.parent_candidate_id is null",
+            runId, serial).map(r -> new Target(r.get("device_id", String.class),
+                Objects.requireNonNullElse(r.get("display_name", String.class), ""), context, syncStatus)));
+        if (matched.size() > 1) throw new IllegalStateException("POLICY_MEMBER_AMBIGUOUS");
+        return matched.isEmpty() ? List.of(new Target(com.securityexpert.nexus.ui2.policy.PolicySnapshot.ref(sourceId, "member", serial),
+                "Unmatched firewall", context, syncStatus)) : matched;
     }
 
     /** Publication and the terminal transition share a row lock and transaction. */
