@@ -45,6 +45,10 @@ test("policy local: 54 containers, rule drawer, recursive drawer and masked CSV"
   await expect(page.getByText("Collected · 2 h ago")).toBeVisible();
   await page.getByRole("button", { name: "MGR-BRAVO-01" }).click();
   await expect(page.getByRole("group", { name: "Policy container", exact: true })).toHaveCount(54);
+  await page.getByRole("button", { name: "DOM-TANGO-53", exact: true }).click();
+  await page.getByRole("button", { name: "POL-ALPHA-53", exact: true }).click();
+  await expect(page.getByRole("region", { name: "Policy content", exact: true })
+    .getByRole("region", { name: "Policy rulebase", exact: true })).toBeVisible();
   await page.getByRole("textbox", { name: "Search sources, containers and policies" }).fill("POL-ALPHA-53");
   await expect(page.getByRole("group", { name: "Policy container", exact: true })).toHaveCount(1);
   await page.getByRole("button", { name: "POL-ALPHA-53", exact: true }).click();
