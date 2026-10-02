@@ -1,6 +1,6 @@
-import { HaReadinessList } from "./HaReadinessList";
+import { canRunReadiness, haReadinessItems, HaReadinessList, type ReadinessProgress } from "./HaReadinessList";
 import { ReadinessCard } from "./ReadinessChecksTable";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Box from "@mui/material/Box";
 import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
@@ -13,6 +13,7 @@ import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import Paper from "@mui/material/Paper";
 import Chip from "@mui/material/Chip";
+import Drawer from "@mui/material/Drawer";
 import Dialog from "@mui/material/Dialog";
 import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
@@ -76,6 +77,18 @@ export function OperationsScreen() {
   const [isRunning, setIsRunning] = useState<string | null>(null);
   const [expandedUnit, setExpandedUnit] = useState<string | null>(null);
   const [readinessError, setReadinessError] = useState<string | null>(null);
+  const [bulkRunning, setBulkRunning] = useState(false);
+  const [readinessProgress, setReadinessProgress] = useState<ReadinessProgress>({});
+  const runLock = useRef(false);
+  const batchLock = useRef(false);
+  const readinessItems = haReadinessItems(clusters ?? [], cpRows);
+  const readinessCounts = { ready: 0, notReady: 0, unknown: 0, unsupported: 0 };
+  for (const item of readinessItems) {
+    if (item.status === "READY") readinessCounts.ready++;
+    else if (item.status === "NOT_READY") readinessCounts.notReady++;
+    else if (item.status === "UNSUPPORTED") readinessCounts.unsupported++;
+    else readinessCounts.unknown++;
+  }
   const evaluatedCount = Object.values(cpRows).flat().filter((row) => row.readiness).length;
 
   const [tab, setTab] = useState(urlParam("tab") === "diagnostics" ? 4 : urlParam("tab") === "jobs" ? 1 : 0);
@@ -88,7 +101,7 @@ export function OperationsScreen() {
       setSelectedCluster(ref);
       setTab(0);
     }
-  }, [clusters, selectedCluster]);
+  }, [clusters]);
 
   // Phase B / C 4-Eyes Failover and Execution states
   const [showFailoverModal, setShowFailoverModal] = useState(false);
@@ -140,7 +153,9 @@ export function OperationsScreen() {
     };
   }, [selectedCluster]);
 
-  const handleRunReadiness = async (row: CpFailoverSummary) => {
+  const handleRunReadiness = async (row: CpFailoverSummary): Promise<boolean> => {
+    if (!canRunReadiness(row) || runLock.current) return false;
+    runLock.current = true;
     setIsRunning(row.unitId);
     setReadinessError(null);
     try {
@@ -155,10 +170,37 @@ export function OperationsScreen() {
       const byRef: Record<string, CpFailoverSummary[]> = {};
       for (const item of rows) (byRef[item.cluster_member_ref] ??= []).push(item);
       setCpRows(byRef);
+      return state === "DONE";
     } catch {
       setReadinessError("Could not start or refresh the readiness run.");
+      return false;
     } finally {
+      runLock.current = false;
       setIsRunning(null);
+    }
+  };
+
+  const handleBulkReadiness = async (units: CpFailoverSummary[]) => {
+    if (batchLock.current || runLock.current) return;
+    const allowed = units.filter(canRunReadiness);
+    batchLock.current = true;
+    setBulkRunning(true);
+    setReadinessProgress(Object.fromEntries(allowed.map(row => [row.unitId, "Queued"])));
+    try {
+      for (let index = 0; index < allowed.length; index++) {
+        const row = allowed[index];
+        setReadinessProgress(current => ({ ...current, [row.unitId]: "Running" }));
+        const completed = await handleRunReadiness(row);
+        setReadinessProgress(current => ({ ...current, [row.unitId]: completed ? "Completed" : "Failed" }));
+        if (!completed) {
+          // A timeout may leave a run active; do not submit another unit with uncertain completion.
+          setReadinessProgress(current => ({ ...current, ...Object.fromEntries(allowed.slice(index + 1).map(unit => [unit.unitId, "Not run"])) }));
+          break;
+        }
+      }
+    } finally {
+      batchLock.current = false;
+      setBulkRunning(false);
     }
   };
 
@@ -322,31 +364,13 @@ export function OperationsScreen() {
     }
   };
 
-  const renderHaPanel = () => {
-    if (!selectedCluster) {
-      const count = clusters?.length ?? 0;
-      if (clusters === null) {
-        return <StatePanel variant="empty" title="Reading the enrolled clusters…" />;
-      }
-      if (count === 0) {
-        return (
-          <StatePanel
-            variant="empty"
-            title="No HA pair or cluster enrolled"
-            body="Readiness needs enrolled cluster members and a current health read from each one; none is enrolled, so no cluster can be assessed."
-          />
-        );
-      }
-      return <HaReadinessList clusters={clusters} rows={cpRows} running={isRunning} error={readinessError}
-        onOpen={(ref, unitId) => { setSelectedCluster(ref); setExpandedUnit(unitId); }}
-        onRun={row => { void handleRunReadiness(row); }} />;
-    }
-
+  const renderHaDetail = () => {
+    if (!selectedCluster) return null;
     const isPan = selected?.members[0]?.vendor_hint === "palo_alto";
     const clusterName = selected?.title ?? selectedCluster;
     const vendorLabel = isPan ? "Palo Alto Networks (Active/Passive)" : "Check Point (ClusterXL HA)";
     const readinessRows = cpRows[selectedCluster] ?? [];
-    const detailRow = readinessRows.find((row) => row.unitId === expandedUnit) ?? readinessRows[0];
+    const detailRow = readinessRows.find((row) => row.unitId === expandedUnit) ?? readinessRows.find(row => row.unitId === row.clusterId);
     const checks = detailRow?.readiness?.checks ?? [];
     const overallVerdict = detailRow?.readiness?.status === "READY" ? "NO_BLOCKING_CONDITIONS_OBSERVED"
       : detailRow?.readiness?.status === "NOT_READY" ? "BLOCKING_CONDITIONS_PRESENT" : "NOT_EVALUATED";
@@ -370,7 +394,7 @@ export function OperationsScreen() {
             </Box>
             <Box sx={{ display: "flex", gap: 1 }}>
               <M3Button emphasis="text" onClick={() => setSelectedCluster(null)}>
-                All clusters
+                Close detail
               </M3Button>
             </Box>
           </Box>
@@ -403,7 +427,7 @@ export function OperationsScreen() {
         <ReadinessCard checks={checks} members={detailRow?.members} status={detailRow?.readiness?.status}
           cluster={detailRow?.virtual_system ?? detailRow?.cluster_member_ref ?? clusterName ?? "Unknown cluster"}
           vendor={detailRow?.vendor} observedAt={detailRow?.readiness?.observedAt} masked={detailRow?.masked === true}
-          running={Boolean(detailRow && isRunning === detailRow.unitId)} canRun={detailRow?.canRunReadiness ?? false}
+          running={Boolean(detailRow && isRunning === detailRow.unitId)} disabled={bulkRunning || isRunning !== null} canRun={canRunReadiness(detailRow)}
           onRun={() => { if (detailRow) void handleRunReadiness(detailRow); }} error={readinessError} />
 
         {/* Action Controls & Gate Disclosure */}
@@ -777,6 +801,21 @@ export function OperationsScreen() {
     );
   };
 
+  const renderHaPanel = () => <>
+    {clusters === null ? <StatePanel variant="empty" title="Reading the enrolled clusters…" />
+      : clusters.length === 0 ? <StatePanel variant="empty" title="No HA pair or cluster enrolled"
+        body="Readiness needs enrolled cluster members and a current health read from each one; none is enrolled, so no cluster can be assessed." />
+      : <HaReadinessList clusters={clusters} rows={cpRows} running={isRunning} busy={bulkRunning || isRunning !== null}
+        progress={readinessProgress} error={readinessError}
+        onOpen={(ref, unitId) => { setSelectedCluster(ref); setExpandedUnit(unitId); }}
+        onRun={row => { if (!batchLock.current) void handleRunReadiness(row); }}
+        onBulkRun={units => { void handleBulkReadiness(units); }} />}
+    <Drawer anchor="right" open={selectedCluster !== null} onClose={() => setSelectedCluster(null)}
+      PaperProps={{ role: "dialog", "aria-modal": true, "aria-label": "HA readiness detail", sx: { width: "min(100vw, 1000px)", p: 2, bgcolor: m3.scLowest } }}>
+      {selectedCluster && renderHaDetail()}
+    </Drawer>
+  </>;
+
   return (
     <ScreenRoot>
       <ScreenHeader
@@ -801,9 +840,8 @@ export function OperationsScreen() {
         />
         <MetricCard
           title="Readiness checks"
-          value={null}
-          state="not_evaluated"
-          note={clusters ? `${clusters.length} clusters enrolled · ${evaluatedCount} readiness records` : "reading enrolled clusters"}
+          value={clusters ? `${readinessCounts.ready} ready · ${readinessCounts.notReady} not ready · ${readinessCounts.unknown} unknown` : null}
+          note={clusters ? `${clusters.length} clusters enrolled · ${evaluatedCount} readiness records · ${readinessCounts.unsupported} not supported` : "reading enrolled clusters"}
         />
         <Card sx={{ bgcolor: m3.scLowest, boxShadow: "none", border: `1px solid ${m3.outlineVar}`, borderRadius: "10px", p: 2.25,
                     display: "flex", flexDirection: "column", gap: 1 }}>

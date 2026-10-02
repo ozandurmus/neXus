@@ -61,10 +61,25 @@ async function screenHasData(page: Page, screen: ScreenId, settleReads: () => Pr
     case "backups":
       await expect(page.getByRole("checkbox", { name: /^Backup target / }).first()).toBeVisible();
       break;
-    case "operations":
+    case "operations": {
       await expect(page.getByLabel("Readiness summary").getByRole("button")).toHaveCount(4);
-      await expect(page.getByRole("list", { name: "HA clusters", exact: true }).getByRole("listitem").first()).toBeVisible();
+      const table = page.getByRole("table", { name: "HA clusters", exact: true });
+      await expect(table.getByRole("columnheader")).toHaveCount(7);
+      const row = table.getByRole("row").nth(1);
+      await expect(row).toBeVisible();
+      await expect(page.getByRole("checkbox", { name: "Select all visible" })).toBeDisabled();
+      await expect(page.getByRole("toolbar", { name: "Bulk readiness actions" })).toHaveCount(0);
+      const before = page.url();
+      await row.press("Enter");
+      await expect(row).toHaveAttribute("aria-expanded", "true");
+      await page.getByRole("region", { name: /^Checks for / }).getByRole("button", { name: "Open full detail" }).click();
+      const drawer = page.getByRole("dialog", { name: "HA readiness detail" });
+      await expect(drawer.getByRole("table", { name: "Readiness results" })).toBeVisible();
+      expect(page.url()).toBe(before);
+      await drawer.getByRole("button", { name: "Close detail" }).click();
+      await expect(table).toBeVisible();
       break;
+    }
     case "administration":
       await expect(page.getByRole("tabpanel", { name: "Device management" }).getByRole("checkbox", { name: /^Select / }).nth(1)).toBeVisible();
       break;
