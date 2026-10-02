@@ -109,7 +109,7 @@ it("offers domain collection with its opaque reference and reports queue refusal
   vi.stubGlobal("fetch", vi.fn(async (input: string, init?: RequestInit) => {
     if (init?.method === "POST") return new Response("{}", { status: 409 });
     const body = input === "/api/v2/policy/sources" ? { sources: [{ sourceId: metadata.sourceId, sourceName: metadata.sourceName, vendor: "CP" }], canCollect: true }
-      : input === "/api/v2/policy/devices" ? { policies: [metadata], devices: metadata.targets } : page;
+      : input === "/api/v2/policy/devices" ? { policies: [{ ...metadata, vendor: "CP" }], devices: metadata.targets } : page;
     return new Response(JSON.stringify(body), { status: 200 });
   }));
   mount();
@@ -120,4 +120,28 @@ it("offers domain collection with its opaque reference and reports queue refusal
   await screen.findByText(/could not be queued/);
   const fetch = vi.mocked(window.fetch);
   expect(fetch.mock.calls.some(([url, init]) => String(url).endsWith("/collect") && JSON.parse(init?.body as string).domainRef === metadata.containerId)).toBe(true);
+});
+
+it("queues Panorama node collection with opaque intent and hides DG-specific actions", async () => {
+  const fetch = vi.fn(async (input: string, init?: RequestInit) => {
+    const body = input === "/api/v2/policy/sources"
+      ? { sources: [{ sourceId: metadata.sourceId, sourceName: "MGR-BRAVO-01", vendor: "PAN" }], canCollect: true }
+      : input === "/api/v2/policy/devices" ? { policies: [metadata], devices: metadata.targets }
+      : input === "/session/status" ? { csrf_token: "synthetic-csrf" }
+      : input.endsWith("/collect") ? { jobId: "job-pan" } : page;
+    return new Response(JSON.stringify(body), { status: init?.method === "POST" ? 202 : 200 });
+  });
+  vi.stubGlobal("fetch", fetch); mount();
+  await screen.findByRole("table");
+  const actions = screen.getAllByRole("button", { name: "Collect policies" });
+  expect(actions).toHaveLength(1); fireEvent.click(actions[0]);
+  await screen.findByText(/Policy collection queued/);
+  const call = fetch.mock.calls.find(([url]) => url.endsWith("/collect"));
+  expect(call?.[0]).toBe(`/api/v2/policy/sources/${metadata.sourceId}/collect`);
+  expect(JSON.parse(call?.[1]?.body as string)).toEqual({ domainRef: "" });
+});
+it("badges the stored local firewall policy under AIView", async () => {
+  mockFetch({ ...page, policyKind: "LOCAL_FIREWALL" }); mount();
+  expect(await screen.findByText("local firewall policy")).toBeInTheDocument();
+  expect(screen.getByText(/Stored local configuration/)).toBeInTheDocument();
 });

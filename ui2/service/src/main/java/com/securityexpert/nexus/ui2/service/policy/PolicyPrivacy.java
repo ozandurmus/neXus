@@ -9,7 +9,7 @@ public final class PolicyPrivacy {
     private PolicyPrivacy() {}
     private static final Set<String> OPAQUE = Set.of("id", "sourceId", "containerId", "deviceId", "artefactRef", "parentRuleId");
     private static final Set<String> ENUMS = Set.of("CP", "PAN", "static", "hide", "any", "address", "group", "service", "service-group", "address-group",
-            "application-group", "tag", "unresolved", "UNRESOLVED", "UNSUPPORTED", "RESOLVED", "DYNAMIC", "CYCLE", "LIMIT", "UNKNOWN",
+            "LOCAL_FIREWALL", "MANAGEMENT", "application-group", "tag", "unresolved", "UNRESOLVED", "UNSUPPORTED", "RESOLVED", "DYNAMIC", "CYCLE", "LIMIT", "UNKNOWN",
             "MATCH", "MISMATCH", "IN_SYNC", "OUT_OF_SYNC", "PENDING", "Accept", "Drop", "Reject", "allow", "deny", "drop", "reject", "reset-client", "reset-server", "reset-both", "Apply Layer", "Log", "None", "Alert");
     public static Object mask(Object value, String key, TopologyNamePseudonymizer names, SubnetPreservingIpMasker ips) {
         if (value == null || value instanceof Boolean || value instanceof Number) return value;
@@ -19,7 +19,7 @@ public final class PolicyPrivacy {
             map.forEach((k, v) -> {
                 String field = String.valueOf(k);
                 if (field.equals("name") && "any".equals(map.get("type"))) out.put(field, "ANY");
-                else if (field.equals("name") && map.containsKey("rules") && Set.of("Pre rules", "Post rules", "Inline layer unavailable").contains(v)) out.put(field, v);
+                else if (field.equals("name") && map.containsKey("rules") && Set.of("Pre rules", "Post rules", "Local rules", "Inline layer unavailable").contains(v)) out.put(field, v);
                 else if (field.equals("name") && map.containsKey("deviceId")) out.put(field, names.maskDeviceName((String) v, null));
                 else out.put(field, mask(v, field, names, ips));
             });
@@ -33,7 +33,7 @@ public final class PolicyPrivacy {
         if (key.equals("sourceName")) return names.maskDeviceName(text, null);
         if (key.equals("containerName")) return names.maskDomainName(text);
         if (key.equals("source")) return Set.of("Shared", "CP access layer", "CP NAT rulebase").contains(text) ? text : names.maskDomainName(text);
-        if (key.equals("type") || key.equals("status") || key.equals("vendor") || key.equals("action") || key.equals("syncStatus"))
+        if (key.equals("type") || key.equals("status") || key.equals("vendor") || key.equals("action") || key.equals("syncStatus") || key.equals("policyKind"))
             return ENUMS.contains(text) ? text : "UNKNOWN";
         if (key.equals("log")) return ENUMS.contains(text) || text.matches("start=(yes|no|UNKNOWN), end=(yes|no|UNKNOWN)") ? text : "UNKNOWN";
         if (key.equals("values") && (text.matches("(?:port|icmp-type|icmp-code|protocol/(?:tcp|udp)/(?:port|source-port)): [0-9,<>*:/ -]+")

@@ -9,6 +9,7 @@ import com.securityexpert.nexus.ui2.jobs.executor.JobOutcome;
 import com.securityexpert.nexus.ui2.jobs.lease.JobLeaseRepository;
 import com.securityexpert.nexus.ui2.jobs.stepattempt.JobStepAttemptRepository;
 import com.securityexpert.nexus.ui2.jobs.policy.CpPolicyGates;
+import com.securityexpert.nexus.ui2.jobs.policy.PanPolicyGates;
 import com.securityexpert.nexus.ui2.persistence.discovery.*;
 import com.securityexpert.nexus.ui2.persistence.policy.*;
 import com.securityexpert.nexus.ui2.platform.WorkerActor;
@@ -21,6 +22,8 @@ public final class PolicyCollectionJobExecutor {
     private final PolicyCollectionRepository repository;
     private final CheckPointPolicyCollector collector;
     private final GateRegistryPort gates;
+    private PanoramaPolicyCollector panorama;
+    public PolicyCollectionJobExecutor withPanorama(PanoramaPolicyCollector collector) { this.panorama = collector; return this; }
     private final ObjectMapper json = new ObjectMapper();
 
     public PolicyCollectionJobExecutor(JobLeaseRepository leases, JobStepAttemptRepository attempts,
@@ -31,9 +34,10 @@ public final class PolicyCollectionJobExecutor {
 
     /** Discovery has already closed its session; this only queues a separate ledgered job. */
     public void afterDiscovery(DiscoveryRun run) {
-        if (!"check_point".equals(run.vendor())) return;
+        if (!Set.of("check_point", "palo_alto").contains(run.vendor())) return;
         try {
-            CpPolicyGates.requireAll(gates);
+            if ("palo_alto".equals(run.vendor())) PanPolicyGates.requireAll(gates);
+            else CpPolicyGates.requireAll(gates);
             for (var source : repository.sources()) if (source.runId().equals(run.runId()))
                 repository.enqueue(source.sourceId(), "", true, ACTOR);
         } catch (RuntimeException unavailable) {
@@ -45,17 +49,20 @@ public final class PolicyCollectionJobExecutor {
         var request = repository.request(jobId);
         var run = runs.findRun(runId);
         if (request.isEmpty() || run.isEmpty() || run.get().state() != DiscoveryRunState.FINISHED
-                || !"check_point".equals(run.get().vendor())
+                || !Set.of("check_point", "palo_alto").contains(run.get().vendor())
+                || ("palo_alto".equals(run.get().vendor()) && panorama == null)
                 || !repository.eligible(request.get().sourceId(), runId)) {
             leases.transitionState(jobId, epoch, JobState.CLAIMED, JobState.REJECTED, ACTOR, "policy_collect_rejected");
             return new JobOutcome.Rejected("POLICY_SOURCE_NOT_ELIGIBLE");
         }
         if (!leases.transitionState(jobId, epoch, JobState.CLAIMED, JobState.EXECUTING, ACTOR, "policy_collect_running"))
             return new JobOutcome.ZombieStopped();
-        String attempt = attempts.insertPreContact(jobId, epoch, 0, "CP_POLICY_READ", "read", 1);
+        String attempt = attempts.insertPreContact(jobId, epoch, 0, "palo_alto".equals(run.get().vendor()) ? "PAN_POLICY_READ" : "CP_POLICY_READ", "read", 1);
         if (attempt == null) return new JobOutcome.ZombieStopped();
         try {
-            var snapshots = collector.collect(run.get(), request.get(), () -> leases.heartbeat(jobId, epoch, Duration.ofMinutes(10)));
+            var snapshots = "palo_alto".equals(run.get().vendor())
+                ? panorama.collect(run.get(), request.get(), () -> leases.heartbeat(jobId, epoch, Duration.ofMinutes(10)))
+                : collector.collect(run.get(), request.get(), () -> leases.heartbeat(jobId, epoch, Duration.ofMinutes(10)));
             List<PolicySnapshotRepository.Stored> stored = new ArrayList<>();
             for (var snapshot : snapshots) stored.add(new PolicySnapshotRepository.Stored(snapshot.metadata().id(),
                     snapshot.metadata().collectedAt(), json.writeValueAsString(snapshot.metadata()), json.writeValueAsString(snapshot)));

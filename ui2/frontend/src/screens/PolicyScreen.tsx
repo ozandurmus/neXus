@@ -92,7 +92,7 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
     <Box sx={{ px: 3, pb: 3 }}>
       {collectionStatus && <Typography role="status" sx={{ mb: 1 }}>{collectionStatus}</Typography>}
       {!preview && <Button onClick={() => setRevision(n => n + 1)}>Refresh snapshots</Button>}
-      {sources.filter(s => !tree.has(s.sourceId)).map(source => <Box key={source.sourceId} component="nav" aria-label="MDS policy source" sx={{ my: 1 }}>
+      {sources.filter(s => !tree.has(s.sourceId)).map(source => <Box key={source.sourceId} component="nav" aria-label={source.vendor === "PAN" ? "Panorama policy source" : "MDS policy source"} sx={{ my: 1 }}>
         <Typography variant="subtitle2">{source.sourceName}</Typography>{collectButton(source.sourceId)}
       </Box>)}
       {error && <EmptyPanel title="Policy unavailable" body={error}><Button onClick={() => setRevision(n => n + 1)}>Retry</Button></EmptyPanel>}
@@ -115,7 +115,7 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
               {collectButton(source)}
               {[...containers.entries()].map(([container, policies]) => <Box key={container} sx={{ pl: 1 }}>
                 <Typography variant="caption">{policies[0].containerName}</Typography>
-                {collectButton(source, container)}
+                {policies[0].vendor === "CP" && collectButton(source, container)}
                 {policies.map(policy => <Button key={policy.id} fullWidth variant={selected === policy.id ? "contained" : "text"}
                   aria-current={selected === policy.id ? "page" : undefined} sx={{ justifyContent: "flex-start", textTransform: "none" }}
                   onClick={() => { setSelected(policy.id); setPage(0); setCollapsed(new Set()); }}>{policy.name}</Button>)}
@@ -126,9 +126,10 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
             {selected && !data && !error && <Typography role="status">Loading rules…</Typography>}
             {data && <>
               <Typography variant="h6">{data.metadata.name}</Typography>
+              {data.policyKind === "LOCAL_FIREWALL" && <Chip size="small" label="local firewall policy" />}
               <Chip size="small" label={`From configuration collected ${data.metadata.collectedAt}`} sx={{ my: 1 }} />
               <Typography variant="body2">Assigned to: {data.metadata.targets.length === 0 ? "Unassigned" : data.metadata.targets.map(t => `${t.name}${t.context ? ` (${t.context})` : ""} · ${t.syncStatus}`).join(", ")}</Typography>
-              <Typography variant="caption">Management intent; installation and runtime enforcement are not inferred.</Typography>
+              <Typography variant="caption">{data.policyKind === "LOCAL_FIREWALL" ? "Stored local configuration; runtime enforcement is not inferred." : "Management intent; installation and runtime enforcement are not inferred."}</Typography>
             </>}
             {selected && <TextField label="Search rule names and comments" size="small" fullWidth value={search}
               inputProps={{ maxLength: 200 }} onChange={e => setSearch(e.target.value)} sx={{ my: 2 }} />}

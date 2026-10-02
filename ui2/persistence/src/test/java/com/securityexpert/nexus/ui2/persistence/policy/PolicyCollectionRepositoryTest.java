@@ -36,5 +36,21 @@ class PolicyCollectionRepositoryTest {
         assertFalse(repository.publish("job-1", 7, List.of(snapshot), "synthetic-actor"));
         assertTrue(sql.stream().anyMatch(s -> s.contains("lease_epoch = ?") && s.contains("lease_expires_at > now() for update")));
         assertFalse(sql.stream().anyMatch(s -> s.startsWith("insert into policy_snapshot")));
+    }    @Test void unmatchedPanMemberUsesOpaqueReferenceAndExactDiscoveryIdentity() {
+        List<String> sql = new ArrayList<>();
+        List<Object> bindings = new ArrayList<>();
+        var create = DSL.using(SQLDialect.POSTGRES);
+        var repository = new PolicyCollectionRepository(new JooqTransactionBoundary(DSL.using(new MockConnection(context -> {
+            sql.add(context.sql()); bindings.addAll(Arrays.asList(context.bindings()));
+            return new MockResult[] { new MockResult(0, create.fetchFromStringData(new String[] { "device_id", "display_name" })) };
+        }), SQLDialect.POSTGRES)));
+        var target = repository.panTargets("run-1", "manager-1", "synthetic-0001", "vsys1", "UNKNOWN").get(0);
+        assertEquals(com.securityexpert.nexus.ui2.policy.PolicySnapshot.ref("manager-1", "member", "synthetic-0001"), target.deviceId());
+        assertNotEquals(com.securityexpert.nexus.ui2.policy.PolicySnapshot.ref("manager-1", "member", "synthetic-1"), target.deviceId());
+        assertTrue(bindings.contains("synthetic-0001"));
+        assertTrue(sql.get(0).contains("d.discovery_match_key = 'palo_alto|' || c.stable_identifier"));
+        assertFalse(sql.get(0).contains("lower("));
+        assertEquals("UNKNOWN", target.syncStatus());
     }
+
 }

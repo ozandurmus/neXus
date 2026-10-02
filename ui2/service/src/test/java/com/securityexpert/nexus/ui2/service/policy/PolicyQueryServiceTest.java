@@ -47,5 +47,13 @@ class PolicyQueryServiceTest {
         assertEquals("RESOLVED", body.path("children").get(0).path("children").get(1).path("status").asText());
         assertEquals("RESOLVED", body.path("children").get(1).path("status").asText());
         assertEquals("UNRESOLVED", mapper.valueToTree(query.object(snapshot(), "missing").body()).path("object").path("status").asText());
+    }    @Test void localPolicyBadgeSurvivesAIViewProjection() {
+        var base = snapshot();
+        var local = new PolicySnapshot(base.metadata(), List.of(new Section("local-1", "Local rules", "vsys1", null, List.of())), Map.of());
+        var page = query.page(local, 0, "", true).body();
+        assertEquals("LOCAL_FIREWALL", page.get("policyKind"));
+        var masked = (Map<?, ?>) PolicyPrivacy.mask(page, "", names, new com.securityexpert.nexus.ui2.service.privacy.SubnetPreservingIpMasker(new byte[32]));
+        assertEquals("LOCAL_FIREWALL", masked.get("policyKind"));
     }
+
 }
