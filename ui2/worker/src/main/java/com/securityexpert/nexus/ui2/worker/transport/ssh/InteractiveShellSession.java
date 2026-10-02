@@ -98,6 +98,10 @@ final class InteractiveShellSession implements AutoCloseable {
      * were {@code null} and reported as a timeout, which failed every Palo Alto set-format config read.
      */
     Result runForResult(String command, int timeoutMs) {
+        return runForResult(command, timeoutMs, 0);
+    }
+
+    Result runForResult(String command, int timeoutMs, long streamingExtensionMs) {
         String normalized = command == null ? "" : command.strip();
         if (normalized.isEmpty() || normalized.contains("\n") || normalized.contains("\r")) {
             return new Result(Result.Kind.NOT_SENT, null);
@@ -122,15 +126,26 @@ final class InteractiveShellSession implements AutoCloseable {
         int idlePolls = 0;
         boolean sawData = false;
         boolean completed = false;
+        boolean extended = false;
         // A prompt counts as "this command finished" only after the shell echoed the command -- a late second repaint
         // of the previous prompt (PAN-OS, measured 2026-09-27) otherwise ended the next command at once with no output,
         // shifting every answer by one command. No echo within ECHO_GRACE_MS: the old rule applies.
         boolean echoSeen = false;
         byte[] buf = new byte[4096];
-        while (System.currentTimeMillis() < deadline) {
+        while (true) {
+            long now = System.currentTimeMillis();
+            if (now >= deadline) {
+                if (canExtendStreaming(now, lastData, sawData, extended, streamingExtensionMs)) {
+                    deadline += streamingExtensionMs;
+                    extended = true;
+                    System.getLogger(InteractiveShellSession.class.getName()).log(System.Logger.Level.INFO,
+                            "[SHELL] streaming read timeout extended once by {0}ms", streamingExtensionMs);
+                } else break;
+            }
+            if (Thread.currentThread().isInterrupted()) break;
             boolean got = false;
             try {
-                while (in.available() > 0) {
+                while (System.currentTimeMillis() < deadline && !Thread.currentThread().isInterrupted() && in.available() > 0) {
                     int n = in.read(buf);
                     if (n < 0) {
                         break;
@@ -230,6 +245,10 @@ final class InteractiveShellSession implements AutoCloseable {
             return new Result(Result.Kind.CLI_ERROR, stdout);
         }
         return new Result(Result.Kind.OUTPUT, stdout);
+    }
+
+    static boolean canExtendStreaming(long now, long lastData, boolean sawData, boolean extended, long extensionMs) {
+        return extensionMs > 0 && !extended && sawData && now - lastData < 1000;
     }
 
     /**

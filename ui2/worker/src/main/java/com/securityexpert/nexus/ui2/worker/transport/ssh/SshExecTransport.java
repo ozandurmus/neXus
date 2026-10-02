@@ -339,7 +339,7 @@ public final class SshExecTransport implements DeviceTransport {
         long startMs = System.currentTimeMillis();
         try {
             InteractiveShellSession shell = sshSession.interactiveShell();
-            InteractiveShellSession.Result result = shell.runForResult(spec.command(), (int) timeout.toMillis());
+            InteractiveShellSession.Result result = shell.runForResult(spec.command(), (int) timeout.toMillis(), spec.streamingExtensionMs());
             String output = result.text();
             if (result.kind() != InteractiveShellSession.Result.Kind.OUTPUT && output != null && !output.isEmpty())
                 JobTranscriptScope.add("ssh", "answer", com.securityexpert.nexus.ui2.worker.transcript.JobTranscript

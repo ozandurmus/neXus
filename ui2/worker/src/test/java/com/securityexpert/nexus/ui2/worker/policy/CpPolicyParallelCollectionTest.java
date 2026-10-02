@@ -54,6 +54,26 @@ class CpPolicyParallelCollectionTest {
         return new CheckPointPolicyCollector(transport, gates, repository, Duration.ofHours(2), maximum);
     }
 
+    @Test void packageTimeoutPreservesFailureAndOtherDomainsContinue() {
+        var collector = setup(4, command -> {
+            if (command.contains("show-domains")) return ok("{\"total\":2,\"objects\":[" + domain("broken", "DOM-BRAVO-02") + "," + domain("domain-01", "DOM-TANGO-01") + "]}");
+            if (command.equals(MgmtCliCommands.showPackages("DOM-BRAVO-02"))) return new ExecResult.TimedOut();
+            return answer(command);
+        });
+        List<PolicySnapshot> published = new ArrayList<>();
+        List<PolicySnapshot.CollectionFailure> failures = new ArrayList<>();
+        var snapshots = collector.collect(run, request, () -> true, published::add, failures::add);
+        assertEquals(1, snapshots.size());
+        assertEquals(1, failures.size());
+        assertTrue(failures.get(0).reason().endsWith(": TIMEOUT"));
+        assertEquals("Packages", failures.get(0).layerName());
+        assertEquals(PolicySnapshot.ref("mds-1", "broken"), failures.get(0).layerRef());
+        assertFalse(snapshots.get(0).sections().isEmpty());
+        assertTrue(published.contains(snapshots.get(0)));
+        assertEquals(1, reads.stream().filter(c -> c.equals(MgmtCliCommands.showPackages("DOM-BRAVO-02"))).count());
+        cleanup();
+    }
+
     private static ExecResult ok(String json) { return new ExecResult.Completed(json, 0); }
     private static String domain(String uid, String name) { return "{\"uid\":\"" + uid + "\",\"name\":\"" + name + "\"}"; }
     private static String packages(String layers) {

@@ -22,6 +22,7 @@ public final class CheckPointPolicyCollector {
     private final GateRegistryPort gates;
     private final PolicyCollectionRepository repository;
     private final Duration jobTimeout;
+    private final Duration readTimeout;
     private final LongSupplier nanoTime;
     private final ObjectMapper json = new ObjectMapper();
 
@@ -41,10 +42,33 @@ public final class CheckPointPolicyCollector {
     CheckPointPolicyCollector(DeviceTransport transport, GateRegistryPort gates, PolicyCollectionRepository repository, Duration jobTimeout, int maxSessions, LongSupplier nanoTime) {
         if (maxSessions < 1 || maxSessions > 4) throw new IllegalArgumentException("POLICY_MAX_SESSIONS_MUST_BE_1_TO_4");
         this.maxSessions = maxSessions;
+        this.readTimeout = configuredReadTimeout();
         if (jobTimeout.isZero() || jobTimeout.isNegative()) throw new IllegalArgumentException("POLICY_DEADLINE_MUST_BE_POSITIVE");
         this.transport = transport; this.gates = gates; this.repository = repository;
         this.jobTimeout = jobTimeout; this.nanoTime = nanoTime;
     }
+
+    /** Per-command policy read budget, in seconds. */
+    static Duration configuredReadTimeout() {
+        Duration timeout = Duration.ofSeconds(Long.parseLong(System.getProperty("ui2.policy.cp.read-timeout",
+            System.getenv().getOrDefault("UI2_POLICY_CP_READ_TIMEOUT", "300"))));
+        if (timeout.isZero() || timeout.isNegative() || timeout.toMillis() > Integer.MAX_VALUE)
+            throw new IllegalArgumentException("POLICY_READ_TIMEOUT_OUT_OF_RANGE");
+        return timeout;
+    }
+
+    private TransportSession connect(DiscoveryRun run, long deadline, BooleanSupplier lease) {
+        checkActive(deadline, lease);
+        PolicyCollectionTrace.step("connect", "cp-policy-source");
+        var result = com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.withoutRecording(() -> transport.connect(
+            new ConnectionTarget(run.managementAddress(), run.managementAddress(), 22),
+            new ConnectSpec(run.credentialReferenceId(), PersistedManagementEndpointTrustResolver.scopeRef(run.managementAddress(), 22), Optional.empty()),
+            Duration.ofNanos(Math.min(Duration.ofSeconds(30).toNanos(), deadline - nanoTime.getAsLong()))));
+        if (!(result instanceof ConnectResult.Authenticated connected)) throw PolicyCollectionTrace.failure(result.getClass().getSimpleName());
+        return connected.session();
+    }
+
+    long cleanupTimeoutSeconds() { return readTimeout.toSeconds() + 150; }
 
     static int configuredMaxSessions() {
         return Integer.parseInt(System.getProperty("ui2.policy.cp.max-sessions",
@@ -56,18 +80,18 @@ public final class CheckPointPolicyCollector {
     }
 
     public List<PolicySnapshot> collect(DiscoveryRun run, PolicyCollectionRepository.Request request, BooleanSupplier lease, Consumer<PolicySnapshot> publish) {
+        return collect(run, request, lease, publish, failure -> { throw new PolicyCollectionTrace.Failure(failure.reason()); });
+    }
+
+    public List<PolicySnapshot> collect(DiscoveryRun run, PolicyCollectionRepository.Request request, BooleanSupplier lease,
+            Consumer<PolicySnapshot> publish, Consumer<CollectionFailure> domainFailure) {
         if (!"check_point".equals(run.vendor())) throw failure();
         CpPolicyGates.requireAll(gates);
         if (!lease.getAsBoolean()) throw PolicyCollectionTrace.failure("LEASE_LOST");
         long deadline = nanoTime.getAsLong() + jobTimeout.toNanos();
         if (maxSessions > 1) return new CpPolicyParallelCollection(this, repository, maxSessions, nanoTime,
-            run, request, deadline, lease, publish).collect();
-        checkActive(deadline, lease);
-        PolicyCollectionTrace.step("connect", request.sourceId());
-        var result = com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.withoutRecording(() -> transport.connect(new ConnectionTarget(run.managementAddress(), run.managementAddress(), 22),
-            new ConnectSpec(run.credentialReferenceId(), PersistedManagementEndpointTrustResolver.scopeRef(run.managementAddress(), 22), Optional.empty()), Duration.ofSeconds(30)));
-        if (!(result instanceof ConnectResult.Authenticated connected)) throw PolicyCollectionTrace.failure(result.getClass().getSimpleName());
-        TransportSession session = connected.session();
+            run, request, deadline, lease, publish, domainFailure).collect();
+        TransportSession session = connect(run, deadline, lease);
         try {
             var domains = read(session, MgmtCliCommands.domainList(), -1, deadline, lease);
             completeList(domains, "objects");
@@ -79,8 +103,18 @@ public final class CheckPointPolicyCollector {
                 if (!request.domainRef().isEmpty() && !container.equals(request.domainRef())) continue;
                 found = true;
                 if (!repository.beginDomain(request.sourceId(), container, request.automatic())) continue;
-                JsonNode packages = read(session, MgmtCliCommands.showPackages(domainName), 0, deadline, lease);
-                completeList(packages, "packages");
+                if (session == null) session = connect(run, deadline, lease);
+                JsonNode packages;
+                try {
+                    packages = read(session, MgmtCliCommands.showPackages(domainName), 0, deadline, lease);
+                    completeList(packages, "packages");
+                } catch (RuntimeException incomplete) {
+                    if (PolicyCollectionTrace.fatal(incomplete)) throw incomplete;
+                    checkPublication(deadline, lease);
+                    domainFailure.accept(new CollectionFailure(container, PolicyCollectionTrace.reason(incomplete), "Packages", 0));
+                    transport.disconnect(session); session = null;
+                    continue;
+                }
                 Set<String> seen = new HashSet<>();
                 for (JsonNode policy : packages.path("packages")) {
                     String uid = required(policy, "uid"), name = required(policy, "name");
@@ -131,7 +165,7 @@ public final class CheckPointPolicyCollector {
             checkActive(deadline, lease);
             return List.copyOf(snapshots);
         } finally {
-            transport.disconnect(session);
+            if (session != null) transport.disconnect(session);
         }
     }
 
@@ -285,8 +319,10 @@ public final class CheckPointPolicyCollector {
         long remaining = deadline - nanoTime.getAsLong();
         if (remaining <= 0) throw PolicyCollectionTrace.failure("JOB_DEADLINE");
         long started = System.nanoTime();
+        long timeoutNanos = Math.min(readTimeout.toNanos(), remaining);
+        long extensionMs = Math.min(120_000, Duration.ofNanos(remaining - timeoutNanos).toMillis());
         var result = com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.withoutRecording(() -> transport.execInteractive(session,
-                new ExecSpec(command), Duration.ofNanos(Math.min(Duration.ofSeconds(gate == 1 ? 300 : 60).toNanos(), remaining))));
+                new ExecSpec(command, false, extensionMs), Duration.ofNanos(timeoutNanos)));
         PolicyCollectionTrace.result(started, result instanceof ExecResult.Completed c ? c.output().getBytes(java.nio.charset.StandardCharsets.UTF_8).length : -1,
                 result.getClass().getSimpleName());
         if (Thread.currentThread().isInterrupted()) throw PolicyCollectionTrace.failure("INTERRUPTED");

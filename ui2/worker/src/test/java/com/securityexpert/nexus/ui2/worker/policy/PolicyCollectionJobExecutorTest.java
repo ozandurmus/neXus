@@ -45,7 +45,7 @@ class PolicyCollectionJobExecutorTest {
                 for (var future : futures) future.get(5, java.util.concurrent.TimeUnit.SECONDS);
             } finally { pool.shutdownNow(); }
             return List.of();
-        }).when(collector).collect(any(), any(), any(), any());
+        }).when(collector).collect(any(), any(), any(), any(), any());
         var executor = new PolicyCollectionJobExecutor(leases, attempts, runs, repository, collector, key -> List.of());
         assertInstanceOf(JobOutcome.Completed.class, executor.execute("job-1", 1, "run-1"));
         for (int step = 1; step <= 2; step++) verify(attempts).writeOutcome("attempt-" + step, 1,
@@ -78,7 +78,7 @@ class PolicyCollectionJobExecutorTest {
             publish.accept(snapshot);
             cancelled.set(true);
             throw PolicyCollectionTrace.failure("CANCELLED");
-        }).when(collector).collect(any(), any(), any(), any());
+        }).when(collector).collect(any(), any(), any(), any(), any());
         var executor = new PolicyCollectionJobExecutor(leases, attempts, runs, repository, collector, key -> List.of());
         assertInstanceOf(JobOutcome.Cancelled.class, executor.execute("job-1", 1, "run-1"));
         verify(repository).checkpoint(eq("job-1"), eq(1L), any(), anyString());
@@ -102,7 +102,7 @@ class PolicyCollectionJobExecutorTest {
         when(attempts.insertPreContact(anyString(), anyLong(), anyInt(), anyString(), anyString(), anyInt())).thenReturn("attempt-1");
         when(attempts.writeOutcome(anyString(), anyLong(), anyString(), isNull(), anyBoolean(), isNull(), isNull(), isNull())).thenReturn(true);
         when(repository.publish(anyString(), anyLong(), anyList(), anyString(), anyString())).thenReturn(true);
-        when(collector.collect(any(), any(), any(), any())).thenThrow(new IllegalStateException("synthetic private detail"));
+        when(collector.collect(any(), any(), any(), any(), any())).thenThrow(new IllegalStateException("synthetic private detail"));
         var executor = new PolicyCollectionJobExecutor(leases, attempts, runs, repository, collector, key -> List.of());
         assertInstanceOf(JobOutcome.Failed.class, executor.execute("job-1", 1, "run-1"));
         verify(repository, never()).publish(anyString(), anyLong(), anyList(), anyString());
@@ -110,7 +110,7 @@ class PolicyCollectionJobExecutorTest {
                 eq("preflight target=run-1: FAILED_IllegalStateException"));
         when(repository.eligible("mds-1", "run-1")).thenReturn(false);
         assertInstanceOf(JobOutcome.Rejected.class, executor.execute("job-1", 1, "run-1"));
-        verify(collector, times(1)).collect(any(), any(), any(), any());
+        verify(collector, times(1)).collect(any(), any(), any(), any(), any());
     }
     @Test void successfulDiscoveryQueuesOnlyMatchingMdsAndMissingGatesBlockIt() {
         var repository = mock(PolicyCollectionRepository.class);
@@ -178,14 +178,19 @@ class PolicyCollectionJobExecutorTest {
                     vendor.equals("check_point") ? "CP" : "PAN", "unit-1", "OBJ-UNIT-01", "OBJ-POLICY-01", "2026-10-02T03:39:00Z", "", List.of());
                 var failures = failure[0].isEmpty() ? List.<com.securityexpert.nexus.ui2.policy.PolicySnapshot.CollectionFailure>of()
                     : List.of(new com.securityexpert.nexus.ui2.policy.PolicySnapshot.CollectionFailure("unit-2", "policy: " + failure[0]));
-                var snapshot = new com.securityexpert.nexus.ui2.policy.PolicySnapshot(metadata, List.of(), Map.of(), failures);
+                if (vendor.equals("check_point")) {
+                    java.util.function.Consumer<com.securityexpert.nexus.ui2.policy.PolicySnapshot.CollectionFailure> domainFailure = call.getArgument(4);
+                    failures.forEach(domainFailure);
+                }
+                var snapshot = new com.securityexpert.nexus.ui2.policy.PolicySnapshot(metadata, List.of(), Map.of(),
+                    vendor.equals("check_point") ? List.of() : failures);
                 java.util.function.Consumer<com.securityexpert.nexus.ui2.policy.PolicySnapshot> publish = call.getArgument(3);
                 publish.accept(snapshot);
                 if (PolicyCollectionTrace.fatal(new PolicyCollectionTrace.Failure("policy: " + failure[0])))
                     throw PolicyCollectionTrace.failure(failure[0]);
                 return vendor.equals("check_point") ? List.of(snapshot) : failures;
             };
-            doAnswer(collect).when(cp).collect(any(), any(), any(), any());
+            doAnswer(collect).when(cp).collect(any(), any(), any(), any(), any());
             doAnswer(collect).when(pan).collect(any(), any(), any(), any());
             var executor = new PolicyCollectionJobExecutor(leases, attempts, runs, repository, cp, key -> List.of()).withPanorama(pan);
             assertInstanceOf(JobOutcome.Completed.class, executor.execute("job-1", 1, "run-1"));

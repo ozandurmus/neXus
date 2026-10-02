@@ -18,6 +18,53 @@ class InteractiveShellSessionReadTest {
     private static final String PROMPT = "FGT-TANGO-04 #";
 
     @Test
+    void streamingTimeoutExtendsOnceOnlyWhileDataIsStillArriving() {
+        org.junit.jupiter.api.Assertions.assertTrue(InteractiveShellSession.canExtendStreaming(300_000, 299_999, true, false, 120_000));
+        org.junit.jupiter.api.Assertions.assertFalse(InteractiveShellSession.canExtendStreaming(420_000, 419_999, true, true, 120_000));
+        org.junit.jupiter.api.Assertions.assertFalse(InteractiveShellSession.canExtendStreaming(300_000, 299_000, true, false, 120_000));
+        org.junit.jupiter.api.Assertions.assertFalse(InteractiveShellSession.canExtendStreaming(300_000, 299_999, false, false, 120_000));
+        org.junit.jupiter.api.Assertions.assertFalse(InteractiveShellSession.canExtendStreaming(300_000, 299_999, true, false, 0));
+        assertEquals(0, new com.securityexpert.nexus.ui2.jobs.transport.ExecSpec("show").streamingExtensionMs());
+    }
+
+    @Test
+    void streamingWaitKeepsReadingWithoutResendingAndStopsAfterOneExtension() {
+        for (boolean finish : List.of(true, false)) {
+            long[] started = {0}, next = {0};
+            int[] sends = {0};
+            var in = new InputStream() {
+                boolean echoed, prompted;
+                @Override public int available() {
+                    if (started[0] == 0 || prompted || System.nanoTime() < next[0]) return 0;
+                    return 1;
+                }
+                @Override public int read() { throw new UnsupportedOperationException(); }
+                @Override public int read(byte[] buffer, int offset, int length) {
+                    String text;
+                    if (!echoed) { echoed = true; text = "show\n"; }
+                    else if (finish && System.nanoTime() - started[0] >= Duration.ofMillis(1100).toNanos()) {
+                        prompted = true; text = "\n" + PROMPT;
+                    } else text = "x";
+                    byte[] chunk = text.getBytes(StandardCharsets.UTF_8);
+                    System.arraycopy(chunk, 0, buffer, offset, chunk.length);
+                    next[0] = System.nanoTime() + Duration.ofMillis(10).toNanos();
+                    return chunk.length;
+                }
+            };
+            var out = new OutputStream() {
+                @Override public void write(int value) {
+                    if (value == '\n') { sends[0]++; started[0] = System.nanoTime(); }
+                }
+            };
+            assertTimeout(Duration.ofSeconds(3), () -> {
+                var result = new InteractiveShellSession(in, out, PROMPT).runForResult("show", 1000, 300);
+                assertEquals(finish ? InteractiveShellSession.Result.Kind.OUTPUT : InteractiveShellSession.Result.Kind.TIMED_OUT, result.kind());
+            });
+            assertEquals(1, sends[0]);
+        }
+    }
+
+    @Test
     void readsThreeMegabytesWithoutChangingOutput() {
         String body = "    set x \"value 192.0.2.1\"\n".repeat(110_000);
         ScriptedInput in = new ScriptedInput(false, body + PROMPT);
