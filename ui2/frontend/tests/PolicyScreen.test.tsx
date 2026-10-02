@@ -303,3 +303,16 @@ it("ends an empty rule response with an explicit failure", async () => {
   expect(await screen.findByText("Policy rules could not be loaded.")).toBeInTheDocument();
   expect(screen.queryByText("Loading rules…")).toBeNull();
 });
+
+it("shows layer and rule progress and labels incomplete layers with reached offsets", async () => {
+  vi.stubGlobal("fetch", vi.fn(async (input: string) => {
+    const body = input === "/api/v2/policy/sources" ? { sources: [{ sourceId: metadata.sourceId, sourceName: metadata.sourceName,
+      vendor: "CP", collection: { jobId: "job-auto", state: "EXECUTING", reason: "", step: 12, total: 0, layer: 2, layers: 5, rulesFetched: 4000 } }], canCollect: false }
+      : treeBody(input) ?? { ...page, failures: [{ layerRef: "layer-2", layerName: "OBJ-LAYER-02", offset: 4000, reason: "COLLECTION_FAILED: JOB_DEADLINE" }] };
+    return new Response(JSON.stringify(body), { status: 200, headers: { "X-Nexus-Masked": "true" } });
+  }));
+  mount();
+  expect(await screen.findByText("Collecting… layer 2/5, rules fetched 4000")).toBeInTheDocument();
+  await navigate();
+  expect(await screen.findByText("OBJ-LAYER-02 · offset 4000: COLLECTION_FAILED: JOB_DEADLINE")).toBeInTheDocument();
+});

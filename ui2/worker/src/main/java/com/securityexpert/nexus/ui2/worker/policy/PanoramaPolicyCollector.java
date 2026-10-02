@@ -20,6 +20,7 @@ import com.securityexpert.nexus.ui2.worker.transport.xmlapi.PanCredentialResolve
 public final class PanoramaPolicyCollector {
     static final int MAX_GROUPS = 200;
     private static final Duration TIMEOUT = Duration.ofSeconds(60);
+    private final Duration jobTimeout;
     private final DeviceTransport transport;
     private final GateRegistryPort gates;
     private final PanCredentialResolver credentials;
@@ -27,6 +28,12 @@ public final class PanoramaPolicyCollector {
 
     public PanoramaPolicyCollector(DeviceTransport transport, GateRegistryPort gates,
             PanCredentialResolver credentials, PolicyCollectionRepository repository) {
+        this(transport, gates, credentials, repository, Duration.ofHours(2));
+    }
+    public PanoramaPolicyCollector(DeviceTransport transport, GateRegistryPort gates,
+            PanCredentialResolver credentials, PolicyCollectionRepository repository, Duration jobTimeout) {
+        if (jobTimeout.isZero() || jobTimeout.isNegative()) throw new IllegalArgumentException("POLICY_DEADLINE_MUST_BE_POSITIVE");
+        this.jobTimeout = jobTimeout;
         this.transport = transport; this.gates = gates; this.credentials = credentials; this.repository = repository;
     }
 
@@ -66,7 +73,7 @@ public final class PanoramaPolicyCollector {
         }
         char[] key = null;
         var timer = Executors.newSingleThreadScheduledExecutor();
-        long deadline = System.nanoTime() + Duration.ofMinutes(30).toNanos();
+        long deadline = System.nanoTime() + jobTimeout.toNanos();
         long[] bytes = {0};
         ApiTarget target = new ApiTarget(scope.sourceId(), run.managementAddress());
         try {

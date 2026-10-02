@@ -7,6 +7,8 @@ import com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope;
 final class PolicyCollectionTrace implements AutoCloseable {
     private static final ThreadLocal<PolicyCollectionTrace> ACTIVE = new ThreadLocal<>();
     record Measurement(long bytes, String outcome) {}
+    record LayerProgress(int step, int layer, int layers, int rules) {}
+    private java.util.function.Consumer<LayerProgress> layerProgress = progress -> {};
     private final BiConsumer<Integer, Integer> progress;
     private final java.util.function.Consumer<Measurement> measured;
     private String step = "preflight", target;
@@ -16,6 +18,14 @@ final class PolicyCollectionTrace implements AutoCloseable {
     }
     PolicyCollectionTrace(String target, BiConsumer<Integer, Integer> progress, java.util.function.Consumer<Measurement> measured) {
         this.target = target; this.progress = progress; this.measured = measured; ACTIVE.set(this);
+    }
+    PolicyCollectionTrace(String target, BiConsumer<Integer, Integer> progress, java.util.function.Consumer<Measurement> measured,
+            java.util.function.Consumer<LayerProgress> layers) {
+        this(target, progress, measured); this.layerProgress = layers;
+    }
+    static void layer(int layer, int layers, int rules) {
+        var trace = ACTIVE.get();
+        if (trace != null) trace.layerProgress.accept(new LayerProgress(++trace.count, layer, layers, rules));
     }
     static void plan(int total) { var trace = ACTIVE.get(); if (trace != null) trace.total = total; }
     static void step(String step, String target) {
@@ -40,6 +50,6 @@ final class PolicyCollectionTrace implements AutoCloseable {
         return error instanceof Failure ? error.getMessage() : failure(error instanceof IllegalStateException && "POLICY_GATE_UNAVAILABLE".equals(error.getMessage())
                 ? "POLICY_GATE_UNAVAILABLE" : "FAILED_" + error.getClass().getSimpleName()).getMessage();
     }
-    static final class Failure extends IllegalStateException { Failure(String reason) { super(reason); } }
+    static class Failure extends IllegalStateException { Failure(String reason) { super(reason); } }
     @Override public void close() { ACTIVE.remove(); }
 }

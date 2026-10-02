@@ -90,9 +90,11 @@ class CheckPointPolicyCollectorTest {
         assertEquals(PolicySnapshot.ref("cp-install-target", "mds-1", "domain-01", "target-01"), target.deviceId());
         assertEquals("UNKNOWN", target.syncStatus());
     }
-    @Test void timeoutPartialNatAndUnknownInlineNeverReturnPartialSnapshot() {
+    @Test void timedOutNatKeepsCompletedAccessLayers() {
         var collector = setup(c -> c.contains("show-nat-rulebase") ? new ExecResult.TimedOut() : answer(c));
-        assertThrows(IllegalStateException.class, () -> collector.collect(run, request, () -> true));
+        var snapshot = collector.collect(run, request, () -> true).get(0);
+        assertEquals("NAT", snapshot.failures().get(0).layerName());
+        assertEquals(List.of("r1", "r3", "r2"), snapshot.sections().stream().flatMap(section -> section.rules().stream()).map(PolicySnapshot.Rule::uuid).toList());
         verify(transport).disconnect(session);
         verify(repository, never()).publish(anyString(), anyLong(), anyList(), anyString());
     }
@@ -158,6 +160,81 @@ class CheckPointPolicyCollectorTest {
         assertThrows(IllegalStateException.class, () -> collector.pages(session,
             offset -> MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Layer", offset), 1, System.nanoTime() - 1, () -> true));
         verify(transport, never()).execInteractive(any(), any(), any());
+    }
+
+    @Test void deadlineMidInlineLayerPublishesParentImmediatelyAndFlagsOffset() {
+        var clock = new java.util.concurrent.atomic.AtomicLong();
+        List<PolicySnapshot> checkpoints = new ArrayList<>();
+        setup(command -> {
+            if (command.contains("name 'Inline'")) {
+                clock.set(Duration.ofHours(2).toNanos());
+                return ok(page("child", 1, 1, 2, "{\"uid\":\"r3\",\"type\":\"access-rule\"}", ""));
+            }
+            return answer(command);
+        });
+        var collector = new CheckPointPolicyCollector(transport, gates, repository, Duration.ofHours(2), clock::get);
+        var progress = new ArrayList<PolicyCollectionTrace.LayerProgress>();
+        List<PolicySnapshot> collected;
+        try (var trace = new PolicyCollectionTrace("run-1", (step, total) -> {}, measurement -> {}, progress::add)) {
+            collected = collector.collect(run, request, () -> true, checkpoint -> {
+                checkpoints.add(checkpoint);
+                if (checkpoints.size() == 1) verify(transport, never()).execInteractive(eq(session),
+                    eq(new ExecSpec(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Inline", 0))), any());
+            });
+        }
+        assertEquals(2, checkpoints.size());
+        assertEquals("COLLECTION_PENDING", checkpoints.get(0).failures().stream().filter(f -> f.layerName().equals("Inline")).findFirst().orElseThrow().reason());
+        var snapshot = collected.get(0);
+        var incomplete = snapshot.failures().stream().filter(f -> f.layerName().equals("Inline")).findFirst().orElseThrow();
+        assertEquals(1, incomplete.offset());
+        assertTrue(incomplete.reason().endsWith(": JOB_DEADLINE"));
+        assertEquals(List.of("r1", "r2"), snapshot.sections().stream().flatMap(section -> section.rules().stream()).map(PolicySnapshot.Rule::uuid).toList());
+        assertEquals(2, progress.get(progress.size() - 1).layer());
+        assertEquals(2, progress.get(progress.size() - 1).layers());
+        assertEquals(3, progress.get(progress.size() - 1).rules());
+        verify(transport, never()).execInteractive(eq(session), eq(new ExecSpec(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Inline", 1))), any());
+        verify(transport, never()).execInteractive(eq(session), eq(new ExecSpec(MgmtCliCommands.showNatRulebase("DOM-TANGO-01", "Package", 0))), any());
+    }
+    @Test void noCompletedLayerDoesNotPublishOnDeadline() {
+        var clock = new java.util.concurrent.atomic.AtomicLong();
+        setup(command -> {
+            if (command.contains("show-access-rulebase")) {
+                clock.set(Duration.ofHours(2).toNanos());
+                return ok(page("layer", 1, 1, 2, RULE, DICTIONARY));
+            }
+            return answer(command);
+        });
+        var collector = new CheckPointPolicyCollector(transport, gates, repository, Duration.ofHours(2), clock::get);
+        List<PolicySnapshot> checkpoints = new ArrayList<>();
+        assertThrows(IllegalStateException.class, () -> collector.collect(run, request, () -> true, checkpoints::add));
+        assertTrue(checkpoints.isEmpty());
+    }
+    @Test void configurableDeadlineClipsPageTimeoutAndRejectsNonpositiveBudget() {
+        setup(this::answer);
+        var collector = new CheckPointPolicyCollector(transport, gates, repository, Duration.ofSeconds(120), () -> 0L);
+        collector.collect(run, request, () -> true);
+        verify(transport, times(3)).execInteractive(eq(session), any(), eq(Duration.ofSeconds(120)));
+        assertThrows(IllegalArgumentException.class, () -> new CheckPointPolicyCollector(transport, gates, repository, Duration.ZERO));
+    }
+
+    @Test void laterFailedPackageKeepsPriorPackageAndReportsItsIncompleteLayers() {
+        var collector = setup(command -> {
+            if (command.contains("show-packages")) return ok("""
+                {"total":2,"packages":[
+                  {"uid":"pkg-01","name":"Package","access-layers":[{"uid":"layer","name":"Layer"}],"installation-targets":[]},
+                  {"uid":"pkg-02","name":"Unfinished","access-layers":[{"uid":"other","name":"Unfinished"}],"installation-targets":[]}]}
+                """);
+            if (command.contains("'Unfinished'")) return new ExecResult.TimedOut();
+            return answer(command);
+        });
+        List<PolicySnapshot> checkpoints = new ArrayList<>();
+        var collected = collector.collect(run, request, () -> true, checkpoints::add);
+        assertEquals(2, collected.size());
+        assertTrue(collected.get(0).failures().isEmpty());
+        assertEquals(2, collected.get(1).failures().size());
+        assertEquals("Unfinished", collected.get(1).failures().get(0).layerName());
+        assertTrue(collected.get(1).failures().stream().allMatch(f -> f.reason().endsWith(": TIMEOUT")));
+        assertEquals(4, checkpoints.size());
     }
 
 }

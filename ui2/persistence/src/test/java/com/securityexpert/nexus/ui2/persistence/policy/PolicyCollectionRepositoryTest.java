@@ -84,4 +84,38 @@ class PolicyCollectionRepositoryTest {
                 "synthetic-actor", "PARTIAL_SNAPSHOT layer-1: TIMEOUT"));
     }
 
+    @Test void checkpointCommitsUnderLeaseLockWithoutTerminalTransition() {
+        for (boolean live : List.of(true, false)) {
+            List<String> sql = new ArrayList<>();
+            var create = DSL.using(SQLDialect.POSTGRES);
+            var repository = new PolicyCollectionRepository(new JooqTransactionBoundary(DSL.using(new MockConnection(context -> {
+                sql.add(context.sql());
+                return new MockResult[] { new MockResult(live ? 1 : 0, context.sql().startsWith("select job_id")
+                    ? live ? create.fetchFromStringData(new String[] { "job_id" }, new String[] { "job-1" })
+                           : create.fetchFromStringData(new String[] { "job_id" }) : null) };
+            }), SQLDialect.POSTGRES)));
+            assertEquals(live, repository.checkpoint("job-1", 7,
+                new PolicySnapshotRepository.Stored("policy-1", "2026-10-02T03:39:00Z", "{}", "{}"), "synthetic-actor"));
+            assertTrue(sql.stream().anyMatch(q -> q.contains("lease_expires_at > now() for update")));
+            assertEquals(live, sql.stream().anyMatch(q -> q.startsWith("insert into policy_snapshot")));
+            assertFalse(sql.stream().anyMatch(q -> q.startsWith("update jobs")));
+        }
+    }
+    @Test void statusReadsLatestLayerCountersInCurrentLeaseEpoch() {
+        List<String> sql = new ArrayList<>();
+        var create = DSL.using(SQLDialect.POSTGRES);
+        var repository = new PolicyCollectionRepository(new JooqTransactionBoundary(DSL.using(new MockConnection(context -> {
+            sql.add(context.sql());
+            return new MockResult[] { new MockResult(1, create.fetchFromStringData(
+                new String[] { "state", "reason", "step", "total", "layer", "layers", "rules" },
+                new String[] { "EXECUTING", "", "12", "0", "2", "5", "4000" })) };
+        }), SQLDialect.POSTGRES)));
+        var status = repository.status("job-1").orElseThrow();
+        assertEquals(2, status.get("layer"));
+        assertEquals(5, status.get("layers"));
+        assertEquals(4000, status.get("rulesFetched"));
+        assertTrue(sql.get(0).contains("order by step_index desc limit 1"));
+        assertTrue(sql.get(0).contains("lease_epoch = j.lease_epoch"));
+    }
+
 }

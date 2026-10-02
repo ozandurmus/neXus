@@ -151,7 +151,7 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
     <Box sx={{ px: 3, pb: 3 }}>
       {collectionStatus && <Typography role="status" sx={{ mb: 1 }}>{collectionStatus}</Typography>}
       {!preview && <Button onClick={() => setRevision(n => n + 1)}>Refresh snapshots</Button>}
-      {activeJobs.map(job => <Chip key={job.jobId} role="status" title={job.jobId} label={`Collecting… step ${job.step}/${job.total || "?"}`} size="small" />)}
+      {activeJobs.map(job => <Chip key={job.jobId} role="status" title={job.jobId} label={job.layer ? `Collecting… layer ${job.layer}/${job.layers || "?"}, rules fetched ${job.rulesFetched ?? 0}` : `Collecting… step ${job.step}/${job.total || "?"}`} size="small" />)}
       {jobs.filter(job => job.reason).map(job => <Typography key={job.jobId} role="status">{job.reason}</Typography>)}
       {error && <EmptyPanel title="Policy unavailable" body={error}><Button onClick={() => setRevision(n => n + 1)}>Retry</Button></EmptyPanel>}
       {loadingTree && !error && <Typography role="status">Loading policies…</Typography>}
@@ -198,7 +198,7 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
             {data && <>
               <Typography variant="h6">{data.metadata.name}</Typography>
               {!!data.failures?.length && <Box><Chip color="warning" label="Partial snapshot · incomplete" />
-                {data.failures.map(f => <Typography key={f.layerRef} role="alert" variant="caption">{f.layerRef}: {f.reason}</Typography>)}</Box>}
+                {data.failures.map(f => <Typography key={f.layerRef} role="alert" variant="caption">{f.layerName || f.layerRef}{f.offset !== undefined ? ` · offset ${f.offset}` : ""}: {f.reason}</Typography>)}</Box>}
               {data.policyKind === "LOCAL_FIREWALL" && <Chip size="small" label="local firewall policy" />}
               <Chip size="small" label={`From configuration collected ${data.metadata.collectedAt}`} sx={{ my: 1 }} />
               <Typography variant="body2">Assigned to: {data.metadata.targets.length === 0 ? "Unassigned" : data.metadata.targets.map(t => `${t.name}${t.context ? ` (${t.context})` : ""} · ${t.syncStatus}`).join(", ")}</Typography>
