@@ -67,4 +67,14 @@ class PolicyQueryServiceTest {
         assertEquals("access target=layer-1: TIMEOUT", masked.path("failures").get(0).path("reason").asText());
     }
 
+    @Test void numericPolicyLabelsAreMaskedAsWholeValuesOnly() {
+        names.maskVirtualSystem("2", null);
+        var body = Map.of("name", "2", "collectedAt", "2026-10-02T03:50:21Z",
+                "id", "build-20261002-123", "total", 122);
+        var masked = (Map<?, ?>) PolicyPrivacy.mask(body, "", names,
+                new com.securityexpert.nexus.ui2.service.privacy.SubnetPreservingIpMasker(new byte[32]));
+        assertEquals(names.maskPolicyName("name", "2"), masked.get("name"));
+        for (String field : List.of("collectedAt", "id", "total")) assertEquals(body.get(field), masked.get(field));
+    }
+
 }
