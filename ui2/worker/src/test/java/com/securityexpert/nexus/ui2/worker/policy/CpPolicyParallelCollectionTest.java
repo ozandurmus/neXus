@@ -34,12 +34,12 @@ class CpPolicyParallelCollectionTest {
     private final List<String> reads = new CopyOnWriteArrayList<>();
 
     private CheckPointPolicyCollector setup(int maximum, Function<String, ExecResult> answer) {
-        when(transport.connect(any(), any(), any())).thenAnswer(call -> {
+        doAnswer(call -> {
             String id = "synthetic-session-" + sequence.incrementAndGet();
             TransportSession session = () -> id; opened.add(session);
             assertTrue(opened.size() - closed.size() <= maximum);
             return new ConnectResult.Authenticated(session);
-        });
+        }).when(transport).connect(any(), any(), any());
         doAnswer(call -> { closed.add(call.getArgument(0)); return null; }).when(transport).disconnect(any());
         when(transport.execInteractive(any(), any(), any())).thenAnswer(call -> {
             TransportSession session = call.getArgument(0);
@@ -140,9 +140,10 @@ class CpPolicyParallelCollectionTest {
             var collector = setup(4, command -> command.contains("show-access-rulebase") && offset(command) == 0 && attempts.getAndIncrement() == 0
                 ? failure : answer(command));
             var snapshot = collector.collect(run, request, () -> true).get(0);
-            assertTrue(snapshot.failures().isEmpty());
+            assertTrue(snapshot.failures().isEmpty(), () -> failure.getClass().getSimpleName() + ": " + snapshot.failures());
+            assertEquals(2, attempts.get());
             assertEquals(2, Collections.frequency(reads, MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Layer", 0)));
-            assertTrue(reads.stream().noneMatch(c -> c.contains("limit 50"))); cleanup();
+            assertTrue(reads.stream().noneMatch(c -> c.contains(" limit 50 offset "))); cleanup();
         }
     }
 
@@ -247,7 +248,7 @@ class CpPolicyParallelCollectionTest {
     @Test void trustAuthenticationLeaseAndMalformedMetadataStopAndCleanup() {
         for (ConnectResult failure : List.of(new ConnectResult.HostKeyRejected("synthetic-failure"), new ConnectResult.AuthenticationFailed("synthetic-failure"))) {
             var collector = setup(4, this::answer);
-            when(transport.connect(any(), any(), any())).thenReturn(failure);
+            doReturn(failure).when(transport).connect(any(), any(), any());
             assertThrows(PolicyCollectionTrace.Failure.class, () -> collector.collect(run, request, () -> true));
             verify(transport, never()).execInteractive(any(), any(), any()); cleanup();
         }
@@ -257,6 +258,16 @@ class CpPolicyParallelCollectionTest {
         int before = opened.size();
         assertThrows(PolicyCollectionTrace.Failure.class, () -> collector.collect(run, request, () -> false));
         assertEquals(before, opened.size());
+    }
+
+    @Test void authenticatedSessionClosesOnFatalReadFailure() {
+        for (String reason : List.of("HostKeyRejected", "AuthenticationFailed")) {
+            reset(transport, repository); opened.clear(); closed.clear(); reads.clear();
+            var collector = setup(4, command -> { throw PolicyCollectionTrace.failure(reason); });
+            assertThrows(PolicyCollectionTrace.Failure.class, () -> collector.collect(run, request, () -> true));
+            assertEquals(1, opened.size()); assertEquals(1, reads.size()); cleanup();
+            verify(transport, times(1)).disconnect(opened.iterator().next());
+        }
     }
 
     @Test void inlineDiscoveryShortPagesAndDictionariesMatchSerial() {

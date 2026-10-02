@@ -144,7 +144,7 @@ final class CpPolicyParallelCollection {
             return new Result(work, collector.read(session.get(), work.command, work.gate, deadline, lease), null, clock.getAsLong() - started);
         } catch (RuntimeException error) {
             // An unhealthy shell must not carry the retried page or any sibling read.
-            if (retryable(error)) closeSession();
+            closeSession();
             if (closeFailed.get()) error = PolicyCollectionTrace.failure("SESSION_CLEANUP_FAILED");
             return new Result(work, null, error, clock.getAsLong() - started);
         }

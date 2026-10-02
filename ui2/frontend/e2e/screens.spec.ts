@@ -36,13 +36,14 @@ async function screenHasData(page: Page, screen: ScreenId, settleReads: () => Pr
           const container = containers.nth(c);
           await container.getByRole("button", { expanded: false }).click();
           await settleReads();
-          const policy = container.getByRole("button", { pressed: false }).first();
+          const policy = container.getByRole("button", { pressed: false })
+            .or(container.getByRole("button", { pressed: true })).first();
           if (await policy.count() > 0) {
             await policy.click();
             await settleReads();
-            await expect(page.getByRole("region", { name: "Policy rulebase" })
-              .or(page.getByText("No matching rules.", { exact: true }))
-              .or(page.getByText("Partial snapshot · incomplete", { exact: true })).first()).toBeVisible();
+            await expect(policy).toHaveAttribute("aria-pressed", "true");
+            await expect(page.getByRole("region", { name: "Policy content", exact: true })
+              .getByRole("region", { name: "Policy rulebase", exact: true })).toBeVisible();
             selected = true;
           } else {
             await expect(container.getByText("No policies in this snapshot.", { exact: true })).toBeVisible();
