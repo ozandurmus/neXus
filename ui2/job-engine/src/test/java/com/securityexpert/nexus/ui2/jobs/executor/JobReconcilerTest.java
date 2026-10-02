@@ -28,27 +28,44 @@ import com.securityexpert.nexus.ui2.jobs.lease.JobLeaseRepository;
  */
 class JobReconcilerTest {
     @Test void expiredCancellationAndScanRaceNeverRequeue() {
-        var lease = org.mockito.Mockito.mock(JobLeaseRepository.class);
+        var lease = new FakeLeaseRepository();
         var expired = new ClaimedJob("job-1", 2);
         var racing = new ClaimedJob("job-2", 3);
-        org.mockito.Mockito.when(lease.findExpiredCancellationRequests()).thenReturn(List.of(expired));
-        org.mockito.Mockito.when(lease.findExpiredAllBoundaryNo()).thenReturn(List.of(racing));
-        org.mockito.Mockito.when(lease.cancellationRequested("job-2", 3)).thenReturn(true);
+        lease.expiredCancellations = List.of(expired);
+        lease.allBoundaryNo = List.of(racing);
+        lease.cancellationRequests = List.of(racing);
         new JobReconciler(lease).reconcileOnce();
-        for (var job : List.of(expired, racing)) org.mockito.Mockito.verify(lease).transitionState(job.jobId(), job.leaseEpoch(),
-            JobState.EXECUTING, JobState.CANCELLED, "system:worker", "job_reconcile_cancel", "CANCELLED");
-        org.mockito.Mockito.verify(lease, org.mockito.Mockito.never()).transitionState(org.mockito.Mockito.anyString(),
-            org.mockito.Mockito.anyLong(), org.mockito.Mockito.any(), org.mockito.Mockito.eq(JobState.REQUESTED),
-            org.mockito.Mockito.anyString(), org.mockito.Mockito.anyString());
+        assertEquals(List.of(
+                new TerminalTransition(expired, JobState.EXECUTING, JobState.CANCELLED,
+                        "system:worker", "job_reconcile_cancel", "CANCELLED"),
+                new TerminalTransition(racing, JobState.EXECUTING, JobState.CANCELLED,
+                        "system:worker", "job_reconcile_cancel", "CANCELLED")), lease.terminalTransitions);
+        assertTrue(lease.transitions.stream().noneMatch(t -> t.contains("REQUESTED")));
     }
 
+    private record TerminalTransition(ClaimedJob job, JobState from, JobState to,
+            String actor, String action, String reason) {
+    }
 
     private static final class FakeLeaseRepository implements JobLeaseRepository {
+        List<ClaimedJob> expiredCancellations = List.of();
+        List<ClaimedJob> cancellationRequests = List.of();
         List<ClaimedJob> noAttempt = List.of();
         List<ClaimedJob> allBoundaryNo = List.of();
         List<ClaimedJob> unconfirmedYes = List.of();
         final List<String> transitions = new ArrayList<>();
+        final List<TerminalTransition> terminalTransitions = new ArrayList<>();
         boolean rejectAllTransitions = false;
+
+        @Override
+        public List<ClaimedJob> findExpiredCancellationRequests() {
+            return expiredCancellations;
+        }
+
+        @Override
+        public boolean cancellationRequested(String jobId, long leaseEpoch) {
+            return cancellationRequests.contains(new ClaimedJob(jobId, leaseEpoch));
+        }
 
         @Override
         public Optional<ClaimedJob> claimNext(String workerId, List<String> eligibleCapabilityIds,
@@ -66,6 +83,14 @@ class JobReconcilerTest {
                 String actorFingerprint, String actionId) {
             transitions.add(jobId + ":" + expectedFrom + "->" + to);
             return !rejectAllTransitions;
+        }
+
+        @Override
+        public boolean transitionState(String jobId, long leaseEpoch, JobState expectedFrom, JobState to,
+                String actorFingerprint, String actionId, String terminalReason) {
+            terminalTransitions.add(new TerminalTransition(new ClaimedJob(jobId, leaseEpoch), expectedFrom, to,
+                    actorFingerprint, actionId, terminalReason));
+            return transitionState(jobId, leaseEpoch, expectedFrom, to, actorFingerprint, actionId);
         }
 
         @Override

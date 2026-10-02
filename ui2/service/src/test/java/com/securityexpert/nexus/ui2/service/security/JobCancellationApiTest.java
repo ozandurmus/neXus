@@ -35,7 +35,7 @@ class JobCancellationApiTest {
                 now, now, now.plusSeconds(3600), now.plusSeconds(7200), Optional.empty(), Optional.empty(), Optional.empty());
             when(sessions.findBySessionId(eq(session.sessionId()), any())).thenReturn(Optional.of(session));
             boolean admin = role.equals(RoleToken.SECURITY_ADMIN);
-            when(rbac.evaluateAny(eq(actor), eq(Set.of(RoleToken.SECURITY_ADMIN)), any())).thenReturn(
+            when(rbac.evaluate(eq(actor), eq(Optional.of(RoleToken.SECURITY_ADMIN)), any())).thenReturn(
                 new RbacEvaluator.Decision(admin ? AuthzOutcome.PERMITTED : AuthzOutcome.DENIED,
                     Optional.of("test"), Optional.empty(), Optional.empty()));
             when(rbac.evaluate(eq(actor), eq(Optional.of(RoleToken.REPLAY_VIEWER)), any())).thenReturn(
