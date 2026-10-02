@@ -129,9 +129,10 @@ public final class PolicyCollectionJobExecutor {
                 failures = panorama.collect(run.get(), request.get(),
                     () -> leases.heartbeat(jobId, epoch, Duration.ofMinutes(10)), publish);
             } else {
+                failures = new java.util.ArrayList<>();
                 var snapshots = collector.collect(run.get(), request.get(),
-                    () -> leases.heartbeat(jobId, epoch, Duration.ofMinutes(10)), publish);
-                failures = snapshots.stream().flatMap(snapshot -> snapshot.failures().stream()).toList();
+                    () -> leases.heartbeat(jobId, epoch, Duration.ofMinutes(10)), publish, failures::add);
+                failures.addAll(snapshots.stream().flatMap(snapshot -> snapshot.failures().stream()).toList());
             }
             String reason = failures.stream().map(f -> f.layerRef() + ": " + f.reason()).findFirst().orElse("");
             return finish(jobId, epoch, attempt, latest[0], reason, false);

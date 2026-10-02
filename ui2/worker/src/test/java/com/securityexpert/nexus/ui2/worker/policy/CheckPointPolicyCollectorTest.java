@@ -31,6 +31,55 @@ class CheckPointPolicyCollectorTest {
         when(repository.targets(anyString(), anyString(), anyString())).thenReturn(List.of(new PolicySnapshot.Target("device-1", "FW-TANGO-04", "", "UNKNOWN")));
         return new CheckPointPolicyCollector(transport, gates, repository, Duration.ofHours(2), 1);
     }
+    private static ExecSpec policySpec(String command) { return new ExecSpec(command, false, 120_000); }
+
+    @Test void configuredTimeoutAppliesToEveryPolicyReadAndExtensionRespectsJobDeadline() {
+        String previous = System.getProperty("ui2.policy.cp.read-timeout");
+        try {
+            System.setProperty("ui2.policy.cp.read-timeout", "420");
+            var collector = setup(this::answer);
+            collector.collect(run, request, () -> true);
+            verify(transport, times(6)).execInteractive(any(), argThat(spec -> spec.streamingExtensionMs() == 120_000), eq(Duration.ofSeconds(420)));
+            reset(transport);
+            when(transport.execInteractive(any(), any(), any())).thenReturn(ok("{}"));
+            long now = 10;
+            var bounded = new CheckPointPolicyCollector(transport, gates, repository, Duration.ofHours(2), () -> now);
+            bounded.read(session, MgmtCliCommands.domainList(), -1, now + Duration.ofSeconds(450).toNanos(), () -> true);
+            verify(transport).execInteractive(any(), argThat(spec -> spec.streamingExtensionMs() == 30_000), eq(Duration.ofSeconds(420)));
+            reset(transport);
+            when(transport.execInteractive(any(), any(), any())).thenReturn(ok("{}"));
+            bounded.read(session, MgmtCliCommands.domainList(), -1, now + Duration.ofSeconds(30).toNanos(), () -> true);
+            verify(transport).execInteractive(any(), argThat(spec -> spec.streamingExtensionMs() == 0), eq(Duration.ofSeconds(30)));
+            for (String invalid : List.of("0", "-1", "2147484")) {
+                System.setProperty("ui2.policy.cp.read-timeout", invalid);
+                assertThrows(IllegalArgumentException.class, CheckPointPolicyCollector::configuredReadTimeout);
+            }
+        } finally {
+            if (previous == null) System.clearProperty("ui2.policy.cp.read-timeout");
+            else System.setProperty("ui2.policy.cp.read-timeout", previous);
+        }
+    }
+
+    @Test void failedPackageReadMarksDomainIncompleteAndContinuesOnFreshSession() {
+        var collector = setup(command -> {
+            if (command.equals(MgmtCliCommands.domainList())) return ok("{\"total\":2,\"objects\":[{\"uid\":\"broken\",\"name\":\"DOM-BRAVO-02\"},{\"uid\":\"domain-01\",\"name\":\"DOM-TANGO-01\"}]}");
+            if (command.equals(MgmtCliCommands.showPackages("DOM-BRAVO-02"))) return new ExecResult.TimedOut();
+            return answer(command);
+        });
+        List<PolicySnapshot> published = new ArrayList<>();
+        List<PolicySnapshot.CollectionFailure> failures = new ArrayList<>();
+        var snapshots = collector.collect(run, request, () -> true, published::add, failures::add);
+        assertEquals(1, snapshots.size());
+        assertEquals(1, failures.size());
+        assertTrue(failures.get(0).reason().endsWith(": TIMEOUT"));
+        assertEquals("Packages", failures.get(0).layerName());
+        assertEquals(PolicySnapshot.ref("mds-1", "broken"), failures.get(0).layerRef());
+        assertFalse(snapshots.get(0).sections().isEmpty());
+        assertTrue(published.contains(snapshots.get(0)));
+        verify(transport, times(2)).connect(any(), any(), any());
+        verify(transport, times(2)).disconnect(session);
+    }
+
     private static ExecResult ok(String json) { return new ExecResult.Completed(json, 0); }
     private static String page(String uid, int from, int to, int total, String rules, String objects) {
         return "{\"uid\":\"" + uid + "\",\"name\":\"Layer\",\"from\":" + from + ",\"to\":" + to + ",\"total\":" + total
@@ -67,7 +116,7 @@ class CheckPointPolicyCollectorTest {
         assertEquals(1, checkpoints.size());
         assertEquals(List.of("r1", "r2"), checkpoints.get(0).sections().stream().flatMap(s -> s.rules().stream())
             .map(PolicySnapshot.Rule::uuid).toList());
-        verify(transport, never()).execInteractive(eq(session), eq(new ExecSpec(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Inline", 0))), any());
+        verify(transport, never()).execInteractive(eq(session), eq(policySpec(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Inline", 0))), any());
         verify(transport).disconnect(session);
     }
 
@@ -85,7 +134,7 @@ class CheckPointPolicyCollectorTest {
         assertTrue(checkpoints.isEmpty());
         cancelled.set(false);
         setup(this::answer).collect(run, request, () -> true);
-        verify(transport, times(2)).execInteractive(eq(session), eq(new ExecSpec(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Layer", 0))), any());
+        verify(transport, times(2)).execInteractive(eq(session), eq(policySpec(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Layer", 0))), any());
     }
 
     @Test void commandsAreExactlyApprovedAndQuoted() {
@@ -114,8 +163,7 @@ class CheckPointPolicyCollectorTest {
         assertEquals("OBJ-ADDRESS-02", snapshot.objects().get(rules.get(3).extras().get("translated-source").get(0)).name());
         assertEquals("device-1", snapshot.metadata().targets().get(0).deviceId());
         verify(transport, times(1)).connect(any(), any(), eq(Duration.ofSeconds(30)));
-        verify(transport, times(3)).execInteractive(eq(session), any(), eq(Duration.ofSeconds(60)));
-        verify(transport, times(3)).execInteractive(eq(session), any(), eq(Duration.ofSeconds(300)));
+        verify(transport, times(6)).execInteractive(eq(session), any(), eq(Duration.ofSeconds(300)));
         verify(transport).disconnect(session);
         verify(transport, never()).exec(any(), any(), any());
     }
@@ -179,7 +227,7 @@ class CheckPointPolicyCollectorTest {
         });
         var snapshot = collector.collect(run, request, () -> true).get(0);
         assertTrue(snapshot.failures().isEmpty());
-        verify(transport).execInteractive(eq(session), eq(new ExecSpec(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Layer", 0, 50))), eq(Duration.ofSeconds(300)));
+        verify(transport).execInteractive(eq(session), eq(policySpec(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Layer", 0, 50))), eq(Duration.ofSeconds(300)));
         assertEquals(1, firstPage.get());
     }
     @Test void twiceTimedOutInlineLayerKeepsParentAndNatAndBadgesIncomplete() {
@@ -188,7 +236,7 @@ class CheckPointPolicyCollectorTest {
         assertEquals(1, snapshot.failures().size());
         assertTrue(snapshot.failures().get(0).reason().endsWith(": TIMEOUT"));
         assertEquals(List.of("r1", "r2", "n1"), snapshot.sections().stream().flatMap(section -> section.rules().stream()).map(PolicySnapshot.Rule::uuid).toList());
-        verify(transport).execInteractive(eq(session), eq(new ExecSpec(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Inline", 0, 50))), eq(Duration.ofSeconds(300)));
+        verify(transport).execInteractive(eq(session), eq(policySpec(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Inline", 0, 50))), eq(Duration.ofSeconds(300)));
         verify(transport).disconnect(session);
     }
     @Test void malformedMappedInlineLayerDoesNotPreventNatOrSiblingPublication() {
@@ -201,7 +249,7 @@ class CheckPointPolicyCollectorTest {
         assertEquals(1, snapshot.failures().size());
         assertEquals("Inline", snapshot.failures().get(0).layerName());
         assertEquals(2, checkpoints.size());
-        verify(transport).execInteractive(eq(session), eq(new ExecSpec(MgmtCliCommands.showNatRulebase("DOM-TANGO-01", "Package", 0))), any());
+        verify(transport).execInteractive(eq(session), eq(policySpec(MgmtCliCommands.showNatRulebase("DOM-TANGO-01", "Package", 0))), any());
     }
 
     @Test void expiredJobBudgetCannotSendOrRetryAnyPage() {
@@ -227,7 +275,7 @@ class CheckPointPolicyCollectorTest {
             var failure = assertThrows(PolicyCollectionTrace.Failure.class, () -> collector.collect(run, request, () -> true, checkpoint -> {
                 checkpoints.add(checkpoint);
                 if (checkpoints.size() == 1) verify(transport, never()).execInteractive(eq(session),
-                    eq(new ExecSpec(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Inline", 0))), any());
+                    eq(policySpec(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Inline", 0))), any());
             }));
             assertTrue(failure.getMessage().endsWith(": JOB_DEADLINE"));
         }
@@ -238,8 +286,8 @@ class CheckPointPolicyCollectorTest {
         assertEquals(2, progress.get(progress.size() - 1).layer());
         assertEquals(2, progress.get(progress.size() - 1).layers());
         assertEquals(2, progress.get(progress.size() - 1).rules());
-        verify(transport, never()).execInteractive(eq(session), eq(new ExecSpec(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Inline", 1))), any());
-        verify(transport, never()).execInteractive(eq(session), eq(new ExecSpec(MgmtCliCommands.showNatRulebase("DOM-TANGO-01", "Package", 0))), any());
+        verify(transport, never()).execInteractive(eq(session), eq(policySpec(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Inline", 1))), any());
+        verify(transport, never()).execInteractive(eq(session), eq(policySpec(MgmtCliCommands.showNatRulebase("DOM-TANGO-01", "Package", 0))), any());
     }
     @Test void noCompletedLayerDoesNotPublishOnDeadline() {
         var clock = new java.util.concurrent.atomic.AtomicLong();

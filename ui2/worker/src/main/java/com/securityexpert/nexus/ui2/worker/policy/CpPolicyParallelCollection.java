@@ -26,6 +26,7 @@ final class CpPolicyParallelCollection {
     private final LongSupplier clock;
     private final BooleanSupplier lease, cancelled = JobCancellationScope.requested();
     private final Consumer<PolicySnapshot> publish;
+    private final Consumer<CollectionFailure> domainFailure;
     private final ThreadLocal<TransportSession> session = new ThreadLocal<>();
     private final Set<TransportSession> sessions = ConcurrentHashMap.newKeySet();
     private final java.util.concurrent.atomic.AtomicBoolean closeFailed = new java.util.concurrent.atomic.AtomicBoolean();
@@ -38,9 +39,9 @@ final class CpPolicyParallelCollection {
 
     CpPolicyParallelCollection(CheckPointPolicyCollector collector, PolicyCollectionRepository repository,
             int maximum, LongSupplier clock, DiscoveryRun run, PolicyCollectionRepository.Request request,
-            long deadline, BooleanSupplier lease, Consumer<PolicySnapshot> publish) {
+            long deadline, BooleanSupplier lease, Consumer<PolicySnapshot> publish, Consumer<CollectionFailure> domainFailure) {
         this.collector = collector; this.repository = repository; this.clock = clock; this.run = run;
-        this.request = request; this.deadline = deadline; this.lease = lease; this.publish = publish;
+        this.request = request; this.deadline = deadline; this.lease = lease; this.publish = publish; this.domainFailure = domainFailure;
         safety = new Safety(maximum);
         pool = Executors.newFixedThreadPool(maximum, worker -> new Thread(worker, "cp-policy-page"));
         completions = new ExecutorCompletionService<>(pool);
@@ -83,7 +84,8 @@ final class CpPolicyParallelCollection {
                         pending.addFirst(new Work(work.command, work.gate, work.layer, work.offset, work.end, 1, work.accept));
                     } else if (work.layer != null) {
                         fail(work.layer, result.error, work.offset);
-                    } else throw result.error;
+                    } else if (work.failed != null) work.failed.accept(result.error);
+                    else throw result.error;
                 } else {
                     if (work.layer == null || work.layer.failure == null) {
                         try {
@@ -91,9 +93,14 @@ final class CpPolicyParallelCollection {
                             if (work.layer != null && work.layer.failure == null) safety.success(result.elapsed);
                         }
                         catch (RuntimeException invalid) {
-                            if (work.layer == null || PolicyCollectionTrace.fatal(invalid)) throw invalid;
-                            safety.streak = 0;
-                            fail(work.layer, invalid, work.offset);
+                            if (PolicyCollectionTrace.fatal(invalid)) throw invalid;
+                            if (work.layer == null) {
+                                if (work.failed == null) throw invalid;
+                                work.failed.accept(invalid);
+                            } else {
+                                safety.streak = 0;
+                                fail(work.layer, invalid, work.offset);
+                            }
                         }
                     }
                 }
@@ -112,7 +119,7 @@ final class CpPolicyParallelCollection {
             pool.shutdownNow();
             boolean interrupted = Thread.interrupted();
             try {
-                if (!pool.awaitTermination(330, TimeUnit.SECONDS)) throw PolicyCollectionTrace.failure("SESSION_CLEANUP_TIMEOUT");
+                if (!pool.awaitTermination(collector.cleanupTimeoutSeconds(), TimeUnit.SECONDS)) throw PolicyCollectionTrace.failure("SESSION_CLEANUP_TIMEOUT");
             } catch (InterruptedException interruptedCleanup) {
                 interrupted = true;
                 throw PolicyCollectionTrace.failure("INTERRUPTED");
@@ -177,7 +184,11 @@ final class CpPolicyParallelCollection {
             found = true;
             domainOrder.putIfAbsent(container, domainOrder.size());
             if (repository.beginDomain(request.sourceId(), container, request.automatic()))
-                pending.add(new Work(MgmtCliCommands.showPackages(name), 0, null, 0, 0, 0, packages -> packages(uid, name, container, packages)));
+                pending.add(new Work(MgmtCliCommands.showPackages(name), 0, null, 0, 0, 0, packages -> packages(uid, name, container, packages),
+                    error -> {
+                        collector.checkPublication(deadline, lease);
+                        domainFailure.accept(new CollectionFailure(container, PolicyCollectionTrace.reason(error), "Packages", 0));
+                    }));
         }
         if (!found) throw failure();
     }
@@ -315,7 +326,12 @@ final class CpPolicyParallelCollection {
         }
     }
 
-    private record Work(String command, int gate, Layer layer, int offset, int end, int attempt, Consumer<JsonNode> accept) {}
+    private record Work(String command, int gate, Layer layer, int offset, int end, int attempt,
+            Consumer<JsonNode> accept, Consumer<RuntimeException> failed) {
+        Work(String command, int gate, Layer layer, int offset, int end, int attempt, Consumer<JsonNode> accept) {
+            this(command, gate, layer, offset, end, attempt, accept, null);
+        }
+    }
     private record Result(Work work, JsonNode page, RuntimeException error, long elapsed) {}
     private static final class Policy {
         final Metadata metadata;
