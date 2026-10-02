@@ -60,7 +60,7 @@ public final class CheckPointPolicyCollector {
         CpPolicyGates.requireAll(gates);
         if (!lease.getAsBoolean()) throw PolicyCollectionTrace.failure("LEASE_LOST");
         long deadline = nanoTime.getAsLong() + jobTimeout.toNanos();
-        if (maxSessions > 1) return new CpPolicyParallelCollection(this, gates, repository, maxSessions, nanoTime,
+        if (maxSessions > 1) return new CpPolicyParallelCollection(this, repository, maxSessions, nanoTime,
             run, request, deadline, lease, publish).collect();
         checkActive(deadline, lease);
         PolicyCollectionTrace.step("connect", request.sourceId());
@@ -230,19 +230,9 @@ public final class CheckPointPolicyCollector {
                     if (gate != 1 || !timedOut.getMessage().endsWith(": TIMEOUT")) throw timedOut;
                     page = read(session, command.apply(offset).replace(" limit 100 offset ", " limit 50 offset "), gate, deadline, lease);
                 }
-                if (!page.path("rulebase").isArray() || !page.path("objects-dictionary").isArray()
-                        || !page.path("total").canConvertToInt() || !page.path("total").isIntegralNumber()) throw failure();
-                int count = page.path("total").intValue();
-                if (count < 0 || (total != -1 && total != count)) throw failure();
-                total = count;
-                if (total == 0) {
-                    if (offset != 0 || !page.path("rulebase").isEmpty()) throw failure();
-                    pages.add(page); return pages;
-                }
-                if (!page.path("from").isIntegralNumber() || !page.path("to").isIntegralNumber()
-                        || !page.path("to").canConvertToInt() || page.path("from").asLong() != offset + 1L) throw failure();
+                total = pageTotal(page, offset, total, gate);
+                if (total == 0) { pages.add(page); return pages; }
                 int to = page.path("to").intValue();
-                if (to <= offset || to > total || to - offset > (gate == 1 ? 100 : 500) || page.path("rulebase").isEmpty()) throw failure();
                 pages.add(page); offset = to;
                 rules += ruleCount(page.path("rulebase"));
                 progress.accept(rules);
@@ -252,6 +242,21 @@ public final class CheckPointPolicyCollector {
         } catch (RuntimeException incomplete) {
             throw new PageFailure(PolicyCollectionTrace.reason(incomplete), offset);
         }
+    }
+    static int pageTotal(JsonNode page, int offset, int expectedTotal, int gate) {
+        if (!page.path("rulebase").isArray() || !page.path("objects-dictionary").isArray()
+                || !page.path("total").canConvertToInt() || !page.path("total").isIntegralNumber()) throw failure();
+        int total = page.path("total").intValue();
+        if (total < 0 || (expectedTotal != -1 && expectedTotal != total)) throw failure();
+        if (total == 0) {
+            if (offset != 0 || !page.path("rulebase").isEmpty()) throw failure();
+            return total;
+        }
+        if (!page.path("from").isIntegralNumber() || !page.path("to").isIntegralNumber()
+                || !page.path("to").canConvertToInt() || page.path("from").asLong() != offset + 1L) throw failure();
+        int to = page.path("to").intValue();
+        if (to <= offset || to > total || to - offset > (gate == 1 ? 100 : 500) || page.path("rulebase").isEmpty()) throw failure();
+        return total;
     }
     private static final class PageFailure extends PolicyCollectionTrace.Failure {
         final int offset;
@@ -288,18 +293,21 @@ public final class CheckPointPolicyCollector {
         if (nanoTime.getAsLong() >= deadline) throw PolicyCollectionTrace.failure("JOB_DEADLINE");
         if (result instanceof ExecResult.TimedOut) throw PolicyCollectionTrace.failure("TIMEOUT");
         if (!(result instanceof ExecResult.Completed completed)) throw PolicyCollectionTrace.failure(result.getClass().getSimpleName());
-        if (completed.exitStatus() != 0) throw PolicyCollectionTrace.failure("EXIT_" + completed.exitStatus());
         try {
             JsonNode root = json.readTree(completed.output());
             if (root != null && root.isObject() && (root.has("code") || root.has("message"))) {
-                String message = root.path("message").asText("").toLowerCase(Locale.ROOT);
+                String message = (root.path("code").asText("") + " " + root.path("message").asText("")).toLowerCase(Locale.ROOT);
                 if (message.contains("session") || message.contains("lock") || message.contains("too many"))
                     throw PolicyCollectionTrace.failure("API_SESSION_PRESSURE");
                 throw failure();
             }
+            if (completed.exitStatus() != 0) throw PolicyCollectionTrace.failure("EXIT_" + completed.exitStatus());
             if (root == null || !root.isObject()) throw failure();
             return root;
-        } catch (java.io.IOException invalid) { throw failure(); }
+        } catch (java.io.IOException invalid) {
+            if (completed.exitStatus() != 0) throw PolicyCollectionTrace.failure("EXIT_" + completed.exitStatus());
+            throw failure();
+        }
     }
 
     static void completeList(JsonNode root, String field) {
