@@ -155,6 +155,19 @@ class CheckPointPolicyCollectorTest {
         verify(transport).execInteractive(eq(session), eq(new ExecSpec(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Inline", 0, 50))), eq(Duration.ofSeconds(300)));
         verify(transport).disconnect(session);
     }
+    @Test void malformedMappedInlineLayerDoesNotPreventNatOrSiblingPublication() {
+        var collector = setup(command -> command.contains("name 'Inline'")
+            ? ok(page("child", 1, 1, 1, "{\"uid\":\"r3\",\"type\":\"unsupported-entry\"}", "")) : answer(command));
+        List<PolicySnapshot> checkpoints = new ArrayList<>();
+        var snapshot = collector.collect(run, request, () -> true, checkpoints::add).get(0);
+        assertEquals(List.of("r1", "r2", "n1"), snapshot.sections().stream()
+            .flatMap(section -> section.rules().stream()).map(PolicySnapshot.Rule::uuid).toList());
+        assertEquals(1, snapshot.failures().size());
+        assertEquals("Inline", snapshot.failures().get(0).layerName());
+        assertEquals(2, checkpoints.size());
+        verify(transport).execInteractive(eq(session), eq(new ExecSpec(MgmtCliCommands.showNatRulebase("DOM-TANGO-01", "Package", 0))), any());
+    }
+
     @Test void expiredJobBudgetCannotSendOrRetryAnyPage() {
         var collector = setup(this::answer);
         assertThrows(IllegalStateException.class, () -> collector.pages(session,
@@ -162,7 +175,7 @@ class CheckPointPolicyCollectorTest {
         verify(transport, never()).execInteractive(any(), any(), any());
     }
 
-    @Test void deadlineMidInlineLayerPublishesParentImmediatelyAndFlagsOffset() {
+    @Test void deadlineMidInlineLayerRetainsParentAndStopsBeforeSiblingContact() {
         var clock = new java.util.concurrent.atomic.AtomicLong();
         List<PolicySnapshot> checkpoints = new ArrayList<>();
         setup(command -> {
@@ -174,24 +187,21 @@ class CheckPointPolicyCollectorTest {
         });
         var collector = new CheckPointPolicyCollector(transport, gates, repository, Duration.ofHours(2), clock::get);
         var progress = new ArrayList<PolicyCollectionTrace.LayerProgress>();
-        List<PolicySnapshot> collected;
         try (var trace = new PolicyCollectionTrace("run-1", (step, total) -> {}, measurement -> {}, progress::add)) {
-            collected = collector.collect(run, request, () -> true, checkpoint -> {
+            var failure = assertThrows(PolicyCollectionTrace.Failure.class, () -> collector.collect(run, request, () -> true, checkpoint -> {
                 checkpoints.add(checkpoint);
                 if (checkpoints.size() == 1) verify(transport, never()).execInteractive(eq(session),
                     eq(new ExecSpec(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Inline", 0))), any());
-            });
+            }));
+            assertTrue(failure.getMessage().endsWith(": JOB_DEADLINE"));
         }
-        assertEquals(2, checkpoints.size());
-        assertEquals("COLLECTION_PENDING", checkpoints.get(0).failures().stream().filter(f -> f.layerName().equals("Inline")).findFirst().orElseThrow().reason());
-        var snapshot = collected.get(0);
-        var incomplete = snapshot.failures().stream().filter(f -> f.layerName().equals("Inline")).findFirst().orElseThrow();
-        assertEquals(1, incomplete.offset());
-        assertTrue(incomplete.reason().endsWith(": JOB_DEADLINE"));
+        assertEquals(1, checkpoints.size());
+        var snapshot = checkpoints.get(0);
+        assertEquals("COLLECTION_PENDING", snapshot.failures().stream().filter(f -> f.layerName().equals("Inline")).findFirst().orElseThrow().reason());
         assertEquals(List.of("r1", "r2"), snapshot.sections().stream().flatMap(section -> section.rules().stream()).map(PolicySnapshot.Rule::uuid).toList());
         assertEquals(2, progress.get(progress.size() - 1).layer());
         assertEquals(2, progress.get(progress.size() - 1).layers());
-        assertEquals(3, progress.get(progress.size() - 1).rules());
+        assertEquals(2, progress.get(progress.size() - 1).rules());
         verify(transport, never()).execInteractive(eq(session), eq(new ExecSpec(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Inline", 1))), any());
         verify(transport, never()).execInteractive(eq(session), eq(new ExecSpec(MgmtCliCommands.showNatRulebase("DOM-TANGO-01", "Package", 0))), any());
     }

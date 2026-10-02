@@ -142,6 +142,115 @@ class PanoramaPolicyCollectorTest {
         assertTrue(PanoramaPolicyCollector.responseShape("é９".repeat(3000), 12000, 200).endsWith("a9".repeat(1024)));
     }
 
+    @Test void publishesDeviceGroupRuleProgressThroughTheSharedTrace() throws Exception {
+        var progress = new ArrayList<PolicyCollectionTrace.LayerProgress>();
+        try (var trace = new PolicyCollectionTrace("manager-1", (step, total) -> {}, measurement -> {}, progress::add)) {
+            collector(responses(), new ArrayList<>(), new char[0]).collect(run, scope, () -> true, snapshot -> {});
+        }
+        assertEquals(4, progress.size());
+        assertEquals(2, progress.get(3).layer());
+        assertEquals(2, progress.get(3).layers());
+        assertEquals(10, progress.get(3).rules());
+    }
+
+    @Test void cumulativeResponsesAbove64MbPublishBeforeReadingTheNextGroup() throws Exception {
+        var replies = responses();
+        List<PolicySnapshot> published = new ArrayList<>();
+        var collector = paddedCollector(replies, 35L * 1024 * 1024, 35L * 1024 * 1024, published);
+        assertTrue(collector.collect(run, scope, () -> true, published::add).isEmpty());
+        assertEquals(2, published.size());
+    }
+
+    @Test void oversizedIndependentGroupIsSkippedWithMeasuredBytes() throws Exception {
+        var replies = responses();
+        replies.set(2, success("<dg-hierarchy><dg name='Synthetic parent'/><dg name='Synthetic child'/></dg-hierarchy>"));
+        List<PolicySnapshot> published = new ArrayList<>();
+        var collector = paddedCollector(replies, PanoramaPolicyCollector.MAX_RESPONSE_BYTES + 1024, 0, null);
+        var failures = collector.collect(run, scope, () -> true, published::add);
+        assertEquals(1, published.size());
+        assertEquals("Synthetic child", published.get(0).metadata().containerName());
+        assertEquals(1, failures.size());
+        assertTrue(failures.get(0).reason().startsWith("bytes="));
+        assertTrue(failures.get(0).reason().endsWith(": SIZE_LIMIT"));
+        assertEquals(PolicySnapshot.ref("manager-1", "device-group", "Synthetic parent"), failures.get(0).layerRef());
+    }
+
+    @Test void perGroupRuleLimitSkipsOnlyTheOversizedIndependentGroup() throws Exception {
+        var replies = responses();
+        replies.set(2, success("<dg-hierarchy><dg name='Synthetic parent'/><dg name='Synthetic child'/></dg-hierarchy>"));
+        replies.set(4, success("<entry name='Synthetic parent'><pre-rulebase><security><rules>"
+                + "<entry name='Synthetic rule'><action>allow</action></entry>".repeat(50_001)
+                + "</rules></security></pre-rulebase></entry>"));
+        List<PolicySnapshot> published = new ArrayList<>();
+        var failures = collector(replies, new ArrayList<>(), new char[0]).collect(run, scope, () -> true, published::add);
+        assertEquals(1, published.size());
+        assertEquals("Synthetic child", published.get(0).metadata().containerName());
+        assertEquals(1, failures.size());
+        assertTrue(failures.get(0).reason().endsWith(": SIZE_LIMIT"));
+    }
+
+    @Test void deadlineStopsFurtherReadsAfterCompletedGroupPublication() throws Exception {
+        var replies = responses();
+        var transport = mock(DeviceTransport.class);
+        var clock = new java.util.concurrent.atomic.AtomicLong();
+        var next = new AtomicInteger();
+        doAnswer(call -> {
+            @SuppressWarnings("unchecked") var handler = (XmlApiStreamHandler<Element>) call.getArgument(3);
+            return new XmlApiStreamOutcome.Completed<>(200, handler.handle(new ByteArrayInputStream(
+                    replies.get(next.getAndIncrement()).getBytes(StandardCharsets.UTF_8))));
+        }).when(transport).xmlApiCallStreaming(any(), any(), any(), any());
+        var collector = new PanoramaPolicyCollector(transport, gates,
+                ref -> new PanCredentialMaterial("synthetic-user", new char[0]), repository,
+                java.time.Duration.ofHours(2), clock::get);
+        List<PolicySnapshot> published = new ArrayList<>();
+        var failure = assertThrows(IllegalStateException.class, () -> collector.collect(run, scope, () -> true, snapshot -> {
+            published.add(snapshot);
+            clock.set(java.time.Duration.ofHours(2).toNanos());
+        }));
+        assertTrue(failure.getMessage().endsWith(": JOB_DEADLINE"));
+        assertEquals(1, published.size());
+        assertEquals(5, next.get());
+    }
+
+    private PanoramaPolicyCollector paddedCollector(List<String> replies, long first, long second, List<PolicySnapshot> published) {
+        var transport = mock(DeviceTransport.class);
+        var next = new AtomicInteger();
+        doAnswer(call -> {
+            int index = next.getAndIncrement();
+            if (index == 5 && published != null) assertEquals(1, published.size());
+            @SuppressWarnings("unchecked") var handler = (XmlApiStreamHandler<Element>) call.getArgument(3);
+            String response = replies.get(index);
+            int split = response.indexOf("<result>");
+            long padding = index == 4 ? first : index == 5 ? second : 0;
+            try (var input = new SequenceInputStream(Collections.enumeration(List.of(
+                    new ByteArrayInputStream(response.substring(0, split).getBytes(StandardCharsets.UTF_8)),
+                    comments(padding), new ByteArrayInputStream(response.substring(split).getBytes(StandardCharsets.UTF_8)))))) {
+                return new XmlApiStreamOutcome.Completed<>(200, handler.handle(input));
+            }
+        }).when(transport).xmlApiCallStreaming(any(), any(), any(), any());
+        return new PanoramaPolicyCollector(transport, gates,
+                ref -> new PanCredentialMaterial("synthetic-user", new char[0]), repository);
+    }
+
+    private static InputStream comments(long size) {
+        byte[] chunk = ("<!--" + "x".repeat(1017) + "-->").getBytes(StandardCharsets.UTF_8);
+        return new InputStream() {
+            long remaining = (size + chunk.length - 1) / chunk.length * chunk.length;
+            int offset;
+            @Override public int read() {
+                if (remaining == 0) return -1;
+                remaining--; int value = chunk[offset++]; offset %= chunk.length; return value;
+            }
+            @Override public int read(byte[] bytes, int start, int length) {
+                if (length == 0) return 0;
+                if (remaining == 0) return -1;
+                int count = (int) Math.min(Math.min(length, chunk.length - offset), remaining);
+                System.arraycopy(chunk, offset, bytes, start, count);
+                remaining -= count; offset = (offset + count) % chunk.length; return count;
+            }
+        };
+    }
+
     @SuppressWarnings("unchecked")
     private PanoramaPolicyCollector collector(List<String> responses, List<XmlApiSpec> sent, char[] password) {
         var transport = mock(DeviceTransport.class);

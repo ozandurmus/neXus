@@ -6,13 +6,14 @@ import Drawer from "@mui/material/Drawer";
 import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
+import { m3 } from "../theme/m3Theme";
 import { getJobTranscript, type JobTranscriptEntry } from "../auth/adminApi";
 
 export function transcriptAsText(entries: readonly JobTranscriptEntry[]): string {
   return entries.map((entry) => `${entry.at} (+${entry.elapsedMs} ms) [${entry.channel.toUpperCase()}] ${entry.kind}\n${entry.text}`).join("\n\n");
 }
 
-export function JobTranscriptDrawer({ jobId, hasTranscript }: { readonly jobId: string; readonly hasTranscript: boolean }) {
+export function JobTranscriptDrawer({ jobId, hasTranscript, title = "Backup transcript" }: { readonly jobId: string; readonly hasTranscript: boolean; readonly title?: string }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [entries, setEntries] = useState<JobTranscriptEntry[] | null>(null);
@@ -34,10 +35,10 @@ export function JobTranscriptDrawer({ jobId, hasTranscript }: { readonly jobId: 
 
   return <>
     <Button size="small" onClick={(event) => { event.stopPropagation(); setOpen(true); }}>Transcript</Button>
-    <Drawer anchor="right" open={open} onClose={() => setOpen(false)} PaperProps={{ sx: { width: "min(100vw, 900px)", height: "100vh", bgcolor: "#101418", color: "#e6edf3" } }}>
+    <Drawer anchor="right" open={open} onClose={() => setOpen(false)} PaperProps={{ sx: { width: "min(100vw, 900px)", height: "100vh", bgcolor: m3.scLowest, color: m3.onSurface } }}>
       <Stack sx={{ height: "100%", p: 2, gap: 1.5 }}>
         <Stack direction="row" alignItems="center" spacing={1}>
-          <Typography variant="h6" sx={{ flexGrow: 1 }}>Backup transcript</Typography>
+          <Typography variant="h6" sx={{ flexGrow: 1 }}>{title}</Typography>
           <TextField size="small" label="Search transcript" value={query} onChange={(e) => setQuery(e.target.value)} />
           <Button disabled={!entries} onClick={() => {
             const link = document.createElement("a");
@@ -47,10 +48,10 @@ export function JobTranscriptDrawer({ jobId, hasTranscript }: { readonly jobId: 
           <Button onClick={() => setOpen(false)}>Close</Button>
         </Stack>
         <Box sx={{ overflow: "auto", flex: 1, fontFamily: "monospace", fontSize: 13, whiteSpace: "pre-wrap" }}>
-          {error || (entries === null ? "Loading transcript…" : entries.length === 0 ? "No steps were recorded (bug)" : visible.length === 0 ? "No matching steps." : visible.map((entry) => <Box key={entry.seq} sx={{ borderBottom: "1px solid #30363d", py: 1 }}>
+          {error || (entries === null ? "Loading transcript…" : entries.length === 0 ? "No steps were recorded (bug)" : visible.length === 0 ? "No matching steps." : visible.map((entry) => <Box key={entry.seq} sx={{ borderBottom: `1px solid ${m3.outlineVar}`, py: 1 }}>
             <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 0.5 }}>
               <span>{entry.at} (+{entry.elapsedMs} ms)</span><Chip size="small" label={entry.channel.toUpperCase()} />
-              <strong style={{ color: entry.kind === "command" || entry.kind === "request" ? "#79c0ff" : "inherit" }}>{entry.kind}</strong>
+              <strong style={{ color: entry.kind === "command" || entry.kind === "request" ? m3.primary : "inherit" }}>{entry.kind}</strong>
             </Stack>
             {entry.text}
           </Box>))}

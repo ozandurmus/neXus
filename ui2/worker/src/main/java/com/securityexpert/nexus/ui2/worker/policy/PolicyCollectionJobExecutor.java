@@ -115,41 +115,48 @@ public final class PolicyCollectionJobExecutor {
             return new JobOutcome.ZombieStopped();
         String attempt = attempts.insertPreContact(jobId, epoch, 0, "palo_alto".equals(run.get().vendor()) ? "PAN_POLICY_READ" : "CP_POLICY_READ", "read", 1);
         if (attempt == null) return new JobOutcome.ZombieStopped();
-        Map<String, PolicySnapshotRepository.Stored> checkpoints = new LinkedHashMap<>();
+        PolicySnapshotRepository.Stored[] latest = {null};
+        java.util.function.Consumer<com.securityexpert.nexus.ui2.policy.PolicySnapshot> publish = snapshot -> {
+            var stored = stored(snapshot);
+            if (!repository.checkpoint(jobId, epoch, stored, ACTOR)) throw PolicyCollectionTrace.failure("LEASE_LOST");
+            latest[0] = stored;
+        };
         try {
-            var snapshots = "palo_alto".equals(run.get().vendor())
-                ? panorama.collect(run.get(), request.get(), () -> leases.heartbeat(jobId, epoch, Duration.ofMinutes(10)))
-                : collector.collect(run.get(), request.get(), () -> leases.heartbeat(jobId, epoch, Duration.ofMinutes(10)), snapshot -> {
-                    var stored = stored(snapshot);
-                    if (!repository.checkpoint(jobId, epoch, stored, ACTOR)) throw PolicyCollectionTrace.failure("LEASE_LOST");
-                    checkpoints.put(stored.id(), stored);
-                });
-            List<PolicySnapshotRepository.Stored> stored = new ArrayList<>();
-            for (var snapshot : snapshots) stored.add(stored(snapshot));
-            String reason = snapshots.stream().flatMap(s -> s.failures().stream()).map(f -> f.layerRef() + ": " + f.reason())
-                .findFirst().orElse("");
-            if (!attempts.writeOutcome(attempt, epoch, reason.isEmpty() ? "MATCHED" : "EXPECTATION_UNMET", null, reason.isEmpty(), null, null, null))
-                return new JobOutcome.ZombieStopped();
-            if (!reason.isEmpty()) {
-                if (!repository.publishWithWarnings(jobId, epoch, stored, ACTOR, "PARTIAL_SNAPSHOT " + reason)) return new JobOutcome.ZombieStopped();
-                com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.add("job", "note", "PARTIAL_SNAPSHOT " + reason);
-                return new JobOutcome.Completed();
+            List<com.securityexpert.nexus.ui2.policy.PolicySnapshot.CollectionFailure> failures;
+            if ("palo_alto".equals(run.get().vendor())) {
+                failures = panorama.collect(run.get(), request.get(),
+                    () -> leases.heartbeat(jobId, epoch, Duration.ofMinutes(10)), publish);
+            } else {
+                var snapshots = collector.collect(run.get(), request.get(),
+                    () -> leases.heartbeat(jobId, epoch, Duration.ofMinutes(10)), publish);
+                failures = snapshots.stream().flatMap(snapshot -> snapshot.failures().stream()).toList();
             }
-            if (!repository.publish(jobId, epoch, stored, ACTOR)) return new JobOutcome.ZombieStopped();
-            return new JobOutcome.Completed();
+            String reason = failures.stream().map(f -> f.layerRef() + ": " + f.reason()).findFirst().orElse("");
+            return finish(jobId, epoch, attempt, latest[0], reason, false);
         } catch (Exception incomplete) {
-            if (!attempts.writeOutcome(attempt, epoch, "EXPECTATION_UNMET", null, false, null, null, null)) return new JobOutcome.ZombieStopped();
             String reason = PolicyCollectionTrace.reason(incomplete);
             if (reason.endsWith(": LEASE_LOST")) return new JobOutcome.ZombieStopped();
-            if (!checkpoints.isEmpty()) {
-                if (!repository.publishWithWarnings(jobId, epoch, List.copyOf(checkpoints.values()), ACTOR, "PARTIAL_SNAPSHOT " + reason))
-                    return new JobOutcome.ZombieStopped();
-                return new JobOutcome.Completed();
-            }
-            leases.transitionState(jobId, epoch, JobState.EXECUTING, JobState.FAILED, ACTOR, "policy_collect_failed", reason);
-            return new JobOutcome.Failed(reason);
+            return finish(jobId, epoch, attempt, latest[0], reason, PolicyCollectionTrace.fatal(incomplete));
         }
     }
+
+    private JobOutcome finish(String jobId, long epoch, String attempt, PolicySnapshotRepository.Stored latest,
+            String reason, boolean fatal) {
+        if (!attempts.writeOutcome(attempt, epoch, reason.isEmpty() ? "MATCHED" : "EXPECTATION_UNMET", null,
+                reason.isEmpty(), null, null, null)) return new JobOutcome.ZombieStopped();
+        if (!reason.isEmpty() && latest != null) reason = "PARTIAL_SNAPSHOT " + reason;
+        if (!reason.isEmpty() && (fatal || latest == null)) {
+            if (!repository.publish(jobId, epoch, List.of(), ACTOR, reason)) return new JobOutcome.ZombieStopped();
+            return new JobOutcome.Failed(reason);
+        }
+        // All earlier units are already durable; retain only the latest snapshot in memory.
+        if (!reason.isEmpty()) {
+            if (!repository.publishWithWarnings(jobId, epoch, List.of(latest), ACTOR, reason)) return new JobOutcome.ZombieStopped();
+            com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.add("job", "note", reason);
+        } else if (!repository.publish(jobId, epoch, List.of(), ACTOR)) return new JobOutcome.ZombieStopped();
+        return new JobOutcome.Completed();
+    }
+
     private PolicySnapshotRepository.Stored stored(com.securityexpert.nexus.ui2.policy.PolicySnapshot snapshot) {
         try {
             return new PolicySnapshotRepository.Stored(snapshot.metadata().id(), snapshot.metadata().collectedAt(),

@@ -50,6 +50,12 @@ final class PolicyCollectionTrace implements AutoCloseable {
         return error instanceof Failure ? error.getMessage() : failure(error instanceof IllegalStateException && "POLICY_GATE_UNAVAILABLE".equals(error.getMessage())
                 ? "POLICY_GATE_UNAVAILABLE" : "FAILED_" + error.getClass().getSimpleName()).getMessage();
     }
+    static boolean fatal(Exception error) {
+        String reason = reason(error);
+        return java.util.Set.of("LEASE_LOST", "JOB_DEADLINE", "POLICY_GATE_UNAVAILABLE", "INTERRUPTED",
+                "AUTHENTICATION_FAILURE", "AuthenticationFailed", "HTTP_401", "HTTP_403", "API_ERROR_16", "API_ERROR_403")
+            .stream().anyMatch(code -> reason.endsWith(": " + code));
+    }
     static class Failure extends IllegalStateException { Failure(String reason) { super(reason); } }
     @Override public void close() { ACTIVE.remove(); }
 }

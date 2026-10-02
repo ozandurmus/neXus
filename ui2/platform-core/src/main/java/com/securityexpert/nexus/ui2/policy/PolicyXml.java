@@ -16,6 +16,9 @@ public final class PolicyXml {
     }
     public static Document parse(InputStream input) { return parse(input, false); }
     public static Document parse(InputStream input, boolean policyOnly) {
+        return parse(input, policyOnly, MAX_BYTES, 500_000);
+    }
+    public static Document parse(InputStream input, boolean policyOnly, long maxBytes, int maxElements) {
         try {
             var factory = XMLInputFactory.newFactory();
             factory.setProperty(XMLInputFactory.SUPPORT_DTD, false);
@@ -23,7 +26,7 @@ public final class PolicyXml {
             var bounded = new FilterInputStream(input) {
                 private long count;
                 private void count(int n) throws IOException {
-                    if (n > 0 && (count += n) > MAX_BYTES) throw new IOException("POLICY_RESPONSE_LIMIT");
+                    if (n > 0 && (count += n) > maxBytes) throw new IOException("POLICY_RESPONSE_LIMIT");
                 }
                 @Override public int read() throws IOException { int n = in.read(); count(n < 0 ? 0 : 1); return n; }
                 @Override public int read(byte[] b, int off, int len) throws IOException {
@@ -42,7 +45,7 @@ public final class PolicyXml {
                     if (event == XMLStreamConstants.DTD || event == XMLStreamConstants.ENTITY_REFERENCE)
                         throw new IllegalArgumentException("POLICY_XML_ENTITY_REFUSED");
                     if (event == XMLStreamConstants.START_ELEMENT) {
-                        if (++elements > 500_000 || path.size() >= 64) throw new IllegalArgumentException("POLICY_XML_LIMIT");
+                        if (++elements > maxElements || path.size() >= 64) throw new IllegalArgumentException("POLICY_XML_LIMIT");
                         path.add(reader.getLocalName());
                         if (skippedDepth > 0 || (policyOnly && !policyPath(path))) { skippedDepth++; continue; }
                         Element element = document.createElement(reader.getLocalName());
