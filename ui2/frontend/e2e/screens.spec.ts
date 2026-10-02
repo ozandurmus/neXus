@@ -36,8 +36,7 @@ async function screenHasData(page: Page, screen: ScreenId, settleReads: () => Pr
           const container = containers.nth(c);
           await container.getByRole("button", { expanded: false }).click();
           await settleReads();
-          const policy = container.getByRole("button", { pressed: false })
-            .or(container.getByRole("button", { pressed: true })).first();
+          const policy = container.getByRole("button", { name: /^Policy / }).first();
           if (await policy.count() > 0) {
             await policy.click();
             await settleReads();
@@ -65,7 +64,9 @@ async function screenHasData(page: Page, screen: ScreenId, settleReads: () => Pr
     case "operations": {
       await expect(page.getByLabel("Readiness summary").getByRole("button")).toHaveCount(4);
       const table = page.getByRole("table", { name: "HA clusters", exact: true });
-      await expect(table.getByRole("columnheader")).toHaveCount(7);
+      for (const name of ["Status", "Cluster", "Active ↔ Standby members", "Primary reason", "Last evaluated"]) {
+        await expect(table.getByRole("columnheader", { name, exact: true })).toBeVisible();
+      }
       const row = table.locator("tbody tr[aria-expanded]").first();
       await expect(row).toBeVisible();
       await expect(page.getByRole("checkbox", { name: "Select all visible" })).toBeDisabled();

@@ -40,7 +40,7 @@ function mount() { return render(<ThemeProvider theme={m3Theme}><PolicyScreen />
 async function navigate() {
   fireEvent.click(await screen.findByRole("button", { name: metadata.sourceName }));
   fireEvent.click(await screen.findByRole("button", { name: metadata.containerName }));
-  fireEvent.click(await screen.findByRole("button", { name: metadata.name }));
+  fireEvent.click(await screen.findByRole("button", { name: `Policy ${metadata.name}` }));
 }
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); window.history.replaceState(null, "", "/"); });
 
@@ -178,12 +178,17 @@ it("loads catalog counts before expanding each navigation level", async () => {
   expect(screen.queryByText(metadata.name)).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: metadata.containerName }));
   const container = await screen.findByRole("group", { name: "Policy container" });
-  const policy = await within(container).findByRole("button", { pressed: false });
+  const toggle = within(container).getByRole("button", { name: metadata.containerName });
+  const policy = await within(container).findByRole("button", { name: /^Policy / });
+  expect(policy).not.toBe(toggle);
+  expect(policy).toHaveAttribute("aria-pressed", "false");
   expect(policy).toHaveTextContent(metadata.name);
   expect(fetch.mock.calls.some(([url]) => url.includes("/policies/"))).toBe(false);
   fireEvent.click(policy);
   await screen.findByRole("region", { name: "Policy rulebase" });
-  expect(within(container).getByRole("button", { pressed: true })).toHaveTextContent(metadata.name);
+  expect(policy).toHaveAttribute("aria-pressed", "true");
+  expect(toggle).toHaveAttribute("aria-expanded", "true");
+  expect(toggle).not.toHaveAttribute("aria-pressed");
 });
 it("virtualizes a 5000-rule response and reaches the final row on scroll", async () => {
   const rules = Array.from({ length: 5000 }, (_, i) => ({ ...rule, id: `rule-${i}`, name: `OBJ-RULE-${i}`, number: i + 1 }));
@@ -386,7 +391,7 @@ it("refreshes opened navigation and the selected rulebase automatically after po
   await act(async () => { await Promise.resolve(); });
   expect(completed).toBe(true);
   expect(screen.queryByText("Collecting · 6/8")).toBeNull();
-  expect(screen.getByRole("button", { name: metadata.name, pressed: true })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: `Policy ${metadata.name}`, pressed: true })).toBeInTheDocument();
   expect(screen.getByRole("region", { name: "Policy rulebase" })).toBeInTheDocument();
   expect(fetch.mock.calls.filter(([url]) => url.includes("/policies/")).length).toBeGreaterThan(before);
 });
@@ -395,7 +400,7 @@ it("jumps to a loaded assigned policy from the content header", async () => {
   await screen.findByRole("region", { name: "Policy rulebase" });
   fireEvent.mouseDown(screen.getByLabelText("Jump to device's policy"));
   fireEvent.click(await screen.findByRole("option", { name: "FW-TANGO-04" }));
-  expect(screen.getByRole("button", { name: metadata.name, pressed: true })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: `Policy ${metadata.name}`, pressed: true })).toBeInTheDocument();
   expect(screen.queryByText("No assigned policy snapshot")).toBeNull();
 });
 
@@ -448,7 +453,7 @@ it("reaches all 54 catalog containers even when the collection source is ineligi
   expect(screen.getByText("1 policies · 54 rules")).toBeInTheDocument();
   fireEvent.change(screen.getByLabelText("Search sources, containers and policies"), { target: { value: "OBJ-POLICY-53" } });
   expect(screen.getAllByRole("group", { name: "Policy container" })).toHaveLength(1);
-  expect(screen.getByRole("button", { name: "OBJ-POLICY-53" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Policy OBJ-POLICY-53" })).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Collect selected" })).toBeNull();
 });
 
