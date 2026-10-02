@@ -41,14 +41,14 @@ class CpPolicyParallelCollectionTest {
             return new ConnectResult.Authenticated(session);
         }).when(transport).connect(any(), any(), any());
         doAnswer(call -> { closed.add(call.getArgument(0)); return null; }).when(transport).disconnect(any());
-        when(transport.execInteractive(any(), any(), any())).thenAnswer(call -> {
+        doAnswer(call -> {
             TransportSession session = call.getArgument(0);
             assertTrue(busy.add(session.sessionId()), "A session cannot carry concurrent reads");
             int count = active.incrementAndGet(); peak.accumulateAndGet(count, Math::max);
             String command = ((ExecSpec) call.getArgument(1)).command(); reads.add(command);
             try { return answer.apply(command); }
             finally { active.decrementAndGet(); busy.remove(session.sessionId()); }
-        });
+        }).when(transport).execInteractive(any(), any(), any());
         when(repository.beginDomain(anyString(), anyString(), anyBoolean())).thenReturn(true);
         when(repository.targets(anyString(), anyString(), anyString())).thenReturn(List.of());
         return new CheckPointPolicyCollector(transport, gates, repository, Duration.ofHours(2), maximum);
@@ -251,6 +251,8 @@ class CpPolicyParallelCollectionTest {
             doReturn(failure).when(transport).connect(any(), any(), any());
             assertThrows(PolicyCollectionTrace.Failure.class, () -> collector.collect(run, request, () -> true));
             verify(transport, never()).execInteractive(any(), any(), any()); cleanup();
+            verify(transport, never()).disconnect(any());
+            assertTrue(opened.isEmpty());
         }
         reset(transport);
         var collector = setup(4, command -> command.contains("show-packages") ? ok("{\"total\":1,\"packages\":[]}") : answer(command));
