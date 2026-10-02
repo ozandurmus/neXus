@@ -75,6 +75,10 @@ FROM registry.access.redhat.com/ubi9/openjdk-21-runtime@sha256:45af2087488812260
 # directory) and /app/home (the declared HOME). Nothing else in this image is
 # writable, and both are supplied as emptyDir mounts at runtime (FS-4).
 USER 0
+# The JVM entrypoint bypasses the base's run-java.sh; Python is not needed.
+# Erase every Python RPM offline and fail the build if any remain.
+RUN rpm -e --nodeps $(rpm -qa --qf '%{NAME}\n' 'python3*') \
+ && test -z "$(rpm -qa 'python3*')"
 RUN mkdir -p /app /app/tmp /app/home
 
 # Install the same optional corporate anchors into the runtime system trust

@@ -528,6 +528,18 @@ def test_the_containerfile_is_two_stages_pinned_by_digest():
         assert "@sha256:" in line, f"§3.1: base image is not pinned by digest: {line}"
 
 
+def test_the_runtime_removes_all_python_rpms_offline_and_verifies_in_the_same_run():
+    text = CONTAINERFILE.read_text(encoding="utf-8")
+    runtime = text.rsplit("\nFROM ", 1)[1]
+    removal = "RUN rpm -e --nodeps $(rpm -qa --qf '%{NAME}\\n' 'python3*')"
+    verification = ' && test -z "$(rpm -qa \'python3*\')"'
+    assert removal + " \\\n" + verification in runtime
+    assert runtime.index("USER 0\n") < runtime.index(removal) < runtime.index("USER 185\n")
+    assert not re.search(r"\b(?:dnf|microdnf|yum)\b", runtime)
+    entries = yaml.safe_load((REPO_ROOT / "security/baseline.yaml").read_text())["accepted"]
+    assert not {"CVE-2026-19553", "CVE-2026-57585"} & {entry["rule"] for entry in entries}
+
+
 def test_the_containerfile_final_account_is_numeric():
     """§11 check 2 (FS-6)."""
     text = CONTAINERFILE.read_text(encoding="utf-8")
