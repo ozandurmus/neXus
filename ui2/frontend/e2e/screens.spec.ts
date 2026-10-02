@@ -40,7 +40,7 @@ async function screenHasData(page: Page, screen: ScreenId, settleReads: () => Pr
           if (await policy.count() > 0) {
             await policy.click();
             await settleReads();
-            await expect(page.getByRole("table", { name: "Policy rulebase" })
+            await expect(page.getByRole("region", { name: "Policy rulebase" })
               .or(page.getByText("No matching rules.", { exact: true }))
               .or(page.getByText("Partial snapshot · incomplete", { exact: true })).first()).toBeVisible();
             selected = true;
@@ -65,12 +65,14 @@ async function screenHasData(page: Page, screen: ScreenId, settleReads: () => Pr
       await expect(page.getByLabel("Readiness summary").getByRole("button")).toHaveCount(4);
       const table = page.getByRole("table", { name: "HA clusters", exact: true });
       await expect(table.getByRole("columnheader")).toHaveCount(7);
-      const row = table.getByRole("row").nth(1);
+      const row = table.locator("tbody tr[aria-expanded]").first();
       await expect(row).toBeVisible();
       await expect(page.getByRole("checkbox", { name: "Select all visible" })).toBeDisabled();
       await expect(page.getByRole("toolbar", { name: "Bulk readiness actions" })).toHaveCount(0);
       const before = page.url();
-      await row.press("Enter");
+      await expect(row.getByRole("checkbox")).toBeDisabled();
+      await expect(row).toHaveAttribute("aria-expanded", "false");
+      await row.click();
       await expect(row).toHaveAttribute("aria-expanded", "true");
       await page.getByRole("region", { name: /^Checks for / }).getByRole("button", { name: "Open full detail" }).click();
       const drawer = page.getByRole("dialog", { name: "HA readiness detail" });

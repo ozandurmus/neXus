@@ -33,6 +33,13 @@ it("uses full width, compact rows and cluster counts, sorting not ready, unknown
   expect(within(table()).getAllByRole("columnheader")).toHaveLength(7);
   expect(screen.queryByText("NOT_READY")).toBeNull();
 });
+it("keeps the complete status label visible", () => {
+  setup();
+  const label = within(row("CLS-BRAVO-02")).getByText("Not ready");
+  expect(label).toHaveTextContent("Not ready");
+  expect(within(table()).getByRole("columnheader", { name: "Status" })).toHaveStyle({ width: "140px" });
+  expect(label.parentElement).toHaveStyle({ minWidth: "min-content" });
+});
 it("combines summary filters with cluster/member search and vendor filter", () => {
   setup();
   for (const [label, name] of [["Ready", "CLS-ALPHA-01"], ["Not ready", "CLS-BRAVO-02"], ["Unknown", "CLS-CHARLIE-03"]]) {

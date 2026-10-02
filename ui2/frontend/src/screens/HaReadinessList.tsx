@@ -119,7 +119,7 @@ export function HaReadinessList({ clusters, rows, running, busy, progress, error
           <Checkbox size="small" inputProps={{ "aria-label": `Select ${title}` }} checked={Boolean(row && selected.has(row.unitId) && canRunReadiness(row))}
             disabled={!canRunReadiness(row) || busy} onChange={() => toggleSelection(row)} />
         </TableCell>
-        <TableCell><Chip size="small" icon={<Icon name={s.icon} size={16} />} label={s.label} sx={{ bgcolor: s.bg, color: s.ink, '& .MuiChip-icon': { color: "inherit" } }} /></TableCell>
+        <TableCell><Chip size="small" icon={<Icon name={s.icon} size={16} />} label={s.label} sx={{ minWidth: "min-content", bgcolor: s.bg, color: s.ink, '& .MuiChip-label': { overflow: "visible", textOverflow: "clip" }, '& .MuiChip-icon': { color: "inherit" } }} /></TableCell>
         <TableCell component="th" scope="row" sx={{ pl: nested ? 4 : 2 }}>
           {!nested && children.length > 0 && <IconButton size="small" aria-label={`Virtual systems in ${cluster.title}`} aria-expanded={openVs.has(cluster.ref)}
             onClick={event => { event.stopPropagation(); setOpenVs(current => toggle(current, cluster.ref)); }}><span aria-hidden>{openVs.has(cluster.ref) ? "▾" : "▸"}</span></IconButton>}
@@ -187,7 +187,7 @@ export function HaReadinessList({ clusters, rows, running, busy, progress, error
               visibleSelectable.forEach(row => { if (allVisibleSelected) next.delete(row.unitId); else next.add(row.unitId); });
               return next;
             })} /></TableCell>
-          <TableCell sx={{ width: 105 }}>Status</TableCell><TableCell sx={{ width: "22%" }}>Cluster</TableCell>
+          <TableCell sx={{ width: 140 }}>Status</TableCell><TableCell sx={{ width: "22%" }}>Cluster</TableCell>
           <TableCell sx={{ width: "28%" }}>Active ↔ Standby members</TableCell><TableCell>Primary reason</TableCell>
           <TableCell sx={{ width: 105 }}>Last evaluated</TableCell><TableCell sx={{ width: 105 }}>Actions</TableCell>
         </TableRow></TableHead>

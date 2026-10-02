@@ -91,6 +91,11 @@ export function OperationsScreen() {
   }
   const evaluatedCount = Object.values(cpRows).flat().filter((row) => row.readiness).length;
 
+  const selectedReadinessRows = selectedCluster ? cpRows[selectedCluster] ?? [] : [];
+  const selectedReadinessRow = selectedReadinessRows.find(row => row.unitId === expandedUnit)
+    ?? selectedReadinessRows.find(row => row.unitId === row.clusterId);
+  const canReadSchedules = canRunReadiness(selectedReadinessRow);
+
   const [tab, setTab] = useState(urlParam("tab") === "diagnostics" ? 4 : urlParam("tab") === "jobs" ? 1 : 0);
 
   // A cluster header elsewhere in the product links here as ?screen=operations&cluster_ref=<ref>; preselect it.
@@ -135,7 +140,7 @@ export function OperationsScreen() {
   const [scheduleError, setScheduleError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!selectedCluster) {
+    if (!selectedCluster || !canReadSchedules) {
       setSchedulesList([]);
       return;
     }
@@ -151,7 +156,7 @@ export function OperationsScreen() {
     return () => {
       isMounted = false;
     };
-  }, [selectedCluster]);
+  }, [selectedCluster, canReadSchedules]);
 
   const handleRunReadiness = async (row: CpFailoverSummary): Promise<boolean> => {
     if (!canRunReadiness(row) || runLock.current) return false;
@@ -462,13 +467,13 @@ export function OperationsScreen() {
                 </M3Button>
               </span>
             </Tooltip>
-            <M3Button
+            {canReadSchedules ? <M3Button
               emphasis="outlined"
               disabled={overallVerdict !== "NO_BLOCKING_CONDITIONS_OBSERVED" || quarantined}
               onClick={() => setShowScheduleModal(true)}
             >
               Schedule Maintenance Window
-            </M3Button>
+            </M3Button> : <Typography variant="body2">Available to operators</Typography>}
           </Box>
         </Box>
 
