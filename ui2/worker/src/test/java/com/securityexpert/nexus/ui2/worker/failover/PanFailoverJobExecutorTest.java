@@ -54,9 +54,9 @@ class PanFailoverJobExecutorTest {
                         return new XmlApiResult.Completed(200,"<response status=\"success\"><result><session-sync>"
                             +(badSync&&!first?"disabled":"in-sync")+"</session-sync></result></response>");
                     if (command.contains("<session><info/>"))
-                        return new XmlApiResult.Completed(200,"<response status=\"success\"><result><active-sessions>"
+                        return new XmlApiResult.Completed(200,"<response status=\"success\"><result><num-active>"
                             +(badSessions&&!first?"invalid":lowPostSessions&&suspended&&!first?"79":"100")
-                            +"</active-sessions></result></response>");
+                            +"</num-active></result></response>");
                     if (command.contains("<system><info/>"))
                         return new XmlApiResult.Completed(200,"<response status=\"success\"><result><system>"
                             +"<sw-version>1</sw-version><app-version>2</app-version><threat-version>"

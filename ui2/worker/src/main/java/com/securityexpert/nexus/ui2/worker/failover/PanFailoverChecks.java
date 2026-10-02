@@ -26,6 +26,7 @@ public final class PanFailoverChecks {
     }
 
     static boolean fieldFound(int check,String xml) {
+        if(check==6) return child(result(xml),"num-active")!=null || child(result(xml),"active-sessions")!=null;
         String path=fieldPath(check);
         if (path==null) return false;
         Element element=result(xml);
@@ -38,7 +39,7 @@ public final class PanFailoverChecks {
         return switch(check) {
             case 4 -> "/response/result/group/running-sync";
             case 5 -> "/response/result/session-sync";
-            case 6 -> "/response/result/active-sessions";
+            case 6 -> "/response/result/num-active or active-sessions";
             default -> null;
         };
     }
@@ -90,9 +91,15 @@ public final class PanFailoverChecks {
             "failed".equals(state) || "disabled".equals(state));
     }
     public static Long sessions(String xml) {
-        String count=text(result(xml),"active-sessions");
-        try { return count.matches("[0-9]+")?Long.parseLong(count):null; }
-        catch (NumberFormatException invalid) { return null; }
+        Element r=result(xml);
+        Long current=count(text(r,"num-active")),legacy=count(text(r,"active-sessions"));
+        if(child(r,"num-active")!=null && child(r,"active-sessions")!=null)
+            return current!=null && current.equals(legacy)?current:null;
+        return child(r,"num-active")!=null?current:legacy;
+    }
+    private static Long count(String value) {
+        try { return value.matches("[0-9]+")?Long.parseLong(value):null; }
+        catch(NumberFormatException invalid) { return null; }
     }
     public static String carried(Long before,Long after) {
         if (before==null || after==null) return "UNKNOWN";

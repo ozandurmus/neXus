@@ -56,7 +56,7 @@ class PanFailoverChecksTest {
         assertEquals("UNKNOWN",PanFailoverChecks.versions(version,result("<system/>")));
     }
     @Test void unknownReasonsNameExistingLookupPathsWithoutGuessingFields() {
-        String[] paths={"group/running-sync","session-sync","active-sessions"};
+        String[] paths={"group/running-sync","session-sync","num-active or active-sessions"};
         for (int check=4;check<=6;check++) {
             assertEquals(false,PanFailoverChecks.fieldFound(check,result("<other/>")));
             assertEquals("{\"reason\":\"field not found\",\"looked_for\":\"/response/result/"+paths[check-4]+"\"}",
@@ -67,8 +67,18 @@ class PanFailoverChecksTest {
         assertEquals(true,PanFailoverChecks.fieldFound(4,result("<group><running-sync>other</running-sync></group>")));
         assertEquals(true,PanFailoverChecks.fieldFound(5,result("<session-sync/>")));
         assertEquals(true,PanFailoverChecks.fieldFound(6,result("<active-sessions>invalid</active-sessions>")));
-        assertEquals("{\"reason\":\"unrecognised field value\",\"looked_for\":\"/response/result/active-sessions\"}",
+        assertEquals("{\"reason\":\"unrecognised field value\",\"looked_for\":\"/response/result/num-active or active-sessions\"}",
             PanFailoverChecks.unknownDerived(6,"UNKNOWN",true));
+    }
+    @Test void sessionsUseTheExistingSessionInfoCountsAndFailClosed() {
+        assertEquals(100L,PanFailoverChecks.sessions(result("<num-active>100</num-active>")));
+        assertEquals(0L,PanFailoverChecks.sessions(result("<num-active>0</num-active>")));
+        for(String invalid:new String[]{"-1","bad","9223372036854775808",""})
+            assertEquals(null,PanFailoverChecks.sessions(result("<num-active>"+invalid+"</num-active>")));
+        assertEquals(null,PanFailoverChecks.sessions(result("<num-active>1</num-active><active-sessions>2</active-sessions>")));
+        assertEquals(1L,PanFailoverChecks.sessions(result("<num-active>1</num-active><active-sessions>1</active-sessions>")));
+        assertEquals(true,PanFailoverChecks.fieldFound(6,result("<num-active/>")));
+        assertEquals(null,PanFailoverChecks.sessions(result("<messages/>")));
     }
     @Test void measuredActivePassiveCliDoesNotProveXmlFieldMapping() {
         String cli=com.securityexpert.nexus.ui2.worker.inventory.Fixtures.read("pan/readiness_state_sync_cli.txt");

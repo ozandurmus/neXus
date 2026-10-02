@@ -43,7 +43,7 @@ public final class ReadinessCheckView {
                 case 3 -> "HA link state not recognised";
                 case 4 -> "Configuration sync field missing or not recognised";
                 case 5 -> "Session sync field missing or not recognised: /response/result/session-sync; Complete status XML mapping unverified";
-                case 6 -> "Session count missing or not recognised: /response/result/active-sessions";
+                case 6 -> "Session count missing or not recognised: /response/result/num-active or active-sessions";
                 case 7 -> "Version fields missing or not recognised";
                 default -> "Check evidence unavailable";
             };

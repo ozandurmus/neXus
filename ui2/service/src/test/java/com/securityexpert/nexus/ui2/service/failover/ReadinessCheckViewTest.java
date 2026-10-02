@@ -93,6 +93,10 @@ class ReadinessCheckViewTest {
             .replace("\"interface\":\"28\"","\"interface\":\"192.0.2.2\"");
         assertFalse(row(false,2,"FAIL",malicious).get("summary").toString().contains("192.0.2."));
     }
+    @Test void missingPanSessionCountNamesTheCurrentAndLegacyFields() throws Exception {
+        assertEquals("Session count missing or not recognised: /response/result/num-active or active-sessions",
+            row(true,6,"UNKNOWN","{}").get("summary"));
+    }
     @Test void sensitiveDerivedStringsNeverEnterSummaries() throws Exception {
         String derived="{\"role\":\"SYNTHETIC-PRIVATE-NAME\",\"reason\":\"SYNTHETIC-PRIVATE-NAME\","
             +"\"policy\":\"SYNTHETIC-PRIVATE-NAME\",\"up\":\"SYNTHETIC-PRIVATE-NAME\"}";
