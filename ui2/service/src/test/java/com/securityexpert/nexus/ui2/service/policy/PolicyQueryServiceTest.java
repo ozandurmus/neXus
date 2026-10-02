@@ -56,4 +56,15 @@ class PolicyQueryServiceTest {
         assertEquals("LOCAL_FIREWALL", masked.get("policyKind"));
     }
 
+    @Test void partialSnapshotFailureSurvivesPagingAndAIView() {
+        var base = snapshot();
+        var partial = new PolicySnapshot(base.metadata(), base.sections(), base.objects(),
+            List.of(new CollectionFailure("layer-1", "access target=layer-1: TIMEOUT")));
+        var body = query.page(partial, 0, "", true).body();
+        var masked = mapper.valueToTree(PolicyPrivacy.mask(body, "", names,
+            new com.securityexpert.nexus.ui2.service.privacy.SubnetPreservingIpMasker(new byte[32])));
+        assertEquals("layer-1", masked.path("failures").get(0).path("layerRef").asText());
+        assertEquals("access target=layer-1: TIMEOUT", masked.path("failures").get(0).path("reason").asText());
+    }
+
 }

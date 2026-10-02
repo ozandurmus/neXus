@@ -21,7 +21,7 @@ not_applicable / PAN_XML_API / read. Configuration action=show reads committed
 running configuration; candidate/get, commit and push are excluded. DG names are
 XPath literals, transported as form values with existing transport encoding.
 
-Reuse PanXmlApiTransport, existing credential resolution and existing key generation,
+Reuse PanXmlApiTransport URI normalization, existing credential resolution and existing key generation,
 with one in-memory API key per job, disposed on every exit. TLS policy remains the
 ratified PO_DECISION_RECORD_2026_09_21_PAN_TLS_VERIFICATION_DISABLED.md decision.
 Only registered Panorama management-server nodes with successful discovery are eligible.
@@ -36,8 +36,7 @@ objects per job, 500,000 XML elements per response, depth 64, hierarchy
 depth below 32, per-request deadline 60 seconds, job deadline 30 minutes. Hardened
 StAX parsing rejects DTD/entities. Unsupported, malformed, partial, oversized or
 timed-out output fails closed. All requested DG snapshots are mapped before atomic,
-lease-fenced publication; previous snapshots survive failure. No raw response or
-transcript is retained. Telemetry carries outcome classes and counts only.
+lease-fenced publication; previous snapshots survive failure. No raw response is retained. PO 2026-10-02 policy-collect-fixes authorizes sanitized request transcripts with approved read templates, opaque target/DG references, byte counts, timings and failure steps; no keys, raw configuration or production identities are retained.
 
 One snapshot per DG carries its direct member firewall targets. Exact stored PAN
 discovery identities provide enrolled-device references; unmatched members retain

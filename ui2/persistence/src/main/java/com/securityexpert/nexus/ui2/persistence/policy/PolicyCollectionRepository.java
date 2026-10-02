@@ -95,15 +95,33 @@ public class PolicyCollectionRepository {
                 "Unmatched firewall", context, syncStatus)) : matched;
     }
 
+    public Optional<Map<String, Object>> latestStatus(String sourceId) {
+        return tx.inTransaction(db -> db.fetch("select p.job_id from policy_collection_request p join jobs j on j.job_id = p.job_id "
+            + "where p.source_id = {0} order by j.submitted_at desc limit 1", sourceId).stream().findFirst()
+            .flatMap(r -> new PolicyCollectionRepository(scoped(db)).status(r.get("job_id", String.class))));
+    }
+    public Optional<Map<String, Object>> status(String jobId) {
+        return tx.inTransaction(db -> db.fetch("select j.state, coalesce(j.terminal_reason, '') as reason, "
+            + "coalesce(max(a.step_index), 0) as step, coalesce(max(substring(a.step_kind from 'POLICY_PROGRESS_([0-9]+)')::int), 0) as total "
+            + "from jobs j join policy_collection_request p on p.job_id = j.job_id "
+            + "left join job_step_attempt a on a.job_id = j.job_id and a.lease_epoch = j.lease_epoch and a.step_kind like 'POLICY_PROGRESS_%' "
+            + "where j.job_id = {0} group by j.job_id", jobId).stream().findFirst().map(r -> Map.<String, Object>of(
+                "jobId", jobId, "state", r.get("state", String.class), "reason", r.get("reason", String.class),
+                "step", r.get("step", Integer.class), "total", r.get("total", Integer.class))));
+    }
+
     /** Publication and the terminal transition share a row lock and transaction. */
     public boolean publish(String jobId, long epoch, List<PolicySnapshotRepository.Stored> snapshots, String actor) {
+        return publish(jobId, epoch, snapshots, actor, "");
+    }
+    public boolean publish(String jobId, long epoch, List<PolicySnapshotRepository.Stored> snapshots, String actor, String failure) {
         return new AuditedTransactionBoundary(tx).inTransaction(actor, "policy_collect_publish", db -> {
             if (db.fetch("select job_id from jobs where job_id = {0} and lease_epoch = {1} and state = 'EXECUTING' "
                     + "and lease_expires_at > now() for update", jobId, epoch).isEmpty()) return false;
             var repository = new PolicySnapshotRepository(scoped(db));
             for (var snapshot : snapshots) repository.save(snapshot, actor, "policy_collect_publish");
             if (!new com.securityexpert.nexus.ui2.persistence.jobrecords.JooqJobLeaseDao(scoped(db)).transitionState(
-                    jobId, epoch, "EXECUTING", "COMPLETED", actor, "policy_collect_publish"))
+                    jobId, epoch, "EXECUTING", failure.isEmpty() ? "COMPLETED" : "FAILED", actor, "policy_collect_publish", failure.isEmpty() ? null : failure))
                 throw new IllegalStateException("POLICY_LEASE_LOST");
             return true;
         });

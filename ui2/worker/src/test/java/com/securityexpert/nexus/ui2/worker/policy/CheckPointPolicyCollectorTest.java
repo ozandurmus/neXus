@@ -54,7 +54,7 @@ class CheckPointPolicyCollectorTest {
     }
     @Test void commandsAreExactlyApprovedAndQuoted() {
         assertEquals("mgmt_cli -r true -d 'DOM' -f json show-packages limit 500 details-level full", MgmtCliCommands.showPackages("DOM"));
-        assertEquals("mgmt_cli -r true -d 'DOM' -f json show-access-rulebase name 'LAYER' limit 500 offset '500' details-level full use-object-dictionary true", MgmtCliCommands.showAccessRulebase("DOM", "LAYER", 500));
+        assertEquals("mgmt_cli -r true -d 'DOM' -f json show-access-rulebase name 'LAYER' limit 100 offset '500' details-level full use-object-dictionary true", MgmtCliCommands.showAccessRulebase("DOM", "LAYER", 500));
         assertEquals("mgmt_cli -r true -d 'DOM' -f json show-nat-rulebase package 'PKG' limit 500 offset '0' details-level standard use-object-dictionary true", MgmtCliCommands.showNatRulebase("DOM", "PKG", 0));
         assertTrue(MgmtCliCommands.showPackages("O'Brien; $(false)").contains("'O'\\''Brien; $(false)'"));
         assertThrows(IllegalArgumentException.class, () -> MgmtCliCommands.showAccessRulebase("DOM", "Layer", -1));
@@ -78,7 +78,8 @@ class CheckPointPolicyCollectorTest {
         assertEquals("OBJ-ADDRESS-02", snapshot.objects().get(rules.get(3).extras().get("translated-source").get(0)).name());
         assertEquals("device-1", snapshot.metadata().targets().get(0).deviceId());
         verify(transport, times(1)).connect(any(), any(), eq(Duration.ofSeconds(30)));
-        verify(transport, times(6)).execInteractive(eq(session), any(), eq(Duration.ofSeconds(60)));
+        verify(transport, times(3)).execInteractive(eq(session), any(), eq(Duration.ofSeconds(60)));
+        verify(transport, times(3)).execInteractive(eq(session), any(), eq(Duration.ofSeconds(300)));
         verify(transport).disconnect(session);
         verify(transport, never()).exec(any(), any(), any());
     }
@@ -102,7 +103,8 @@ class CheckPointPolicyCollectorTest {
                 if (broken.equals("inline") && command.contains("show-access-rulebase")) return ok(page("layer", 1, 1, 1, RULE, ""));
                 return answer(command);
             });
-            assertThrows(IllegalStateException.class, () -> collector.collect(run, request, () -> true));
+            if (broken.equals("truncated")) assertThrows(IllegalStateException.class, () -> collector.collect(run, request, () -> true));
+            else assertFalse(collector.collect(run, request, () -> true).get(0).failures().isEmpty());
         }
     }
     @Test void sixHourSkipAndDomainScopeDoNotIssuePackageReads() {
@@ -130,4 +132,32 @@ class CheckPointPolicyCollectorTest {
         assertThrows(IllegalStateException.class, () -> collector.pages(session, n -> "synthetic-page", 1, 0, () -> true));
         assertThrows(IllegalStateException.class, () -> collector.collect(run, request, () -> false));
     }
+    @Test void timedOutAccessPageRetriesSameOffsetOnceAtFiftyWithFullDictionary() {
+        AtomicInteger firstPage = new AtomicInteger();
+        var collector = setup(command -> {
+            if (command.equals(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Layer", 0)) && firstPage.getAndIncrement() == 0)
+                return new ExecResult.TimedOut();
+            return answer(command.replace(" limit 50 offset ", " limit 100 offset "));
+        });
+        var snapshot = collector.collect(run, request, () -> true).get(0);
+        assertTrue(snapshot.failures().isEmpty());
+        verify(transport).execInteractive(eq(session), eq(new ExecSpec(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Layer", 0, 50))), eq(Duration.ofSeconds(300)));
+        assertEquals(1, firstPage.get());
+    }
+    @Test void twiceTimedOutInlineLayerKeepsParentAndNatAndBadgesIncomplete() {
+        var collector = setup(command -> command.contains("name 'Inline'") ? new ExecResult.TimedOut() : answer(command));
+        var snapshot = collector.collect(run, request, () -> true).get(0);
+        assertEquals(1, snapshot.failures().size());
+        assertTrue(snapshot.failures().get(0).reason().endsWith(": TIMEOUT"));
+        assertEquals(List.of("r1", "r2", "n1"), snapshot.sections().stream().flatMap(section -> section.rules().stream()).map(PolicySnapshot.Rule::uuid).toList());
+        verify(transport).execInteractive(eq(session), eq(new ExecSpec(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Inline", 0, 50))), eq(Duration.ofSeconds(300)));
+        verify(transport).disconnect(session);
+    }
+    @Test void expiredJobBudgetCannotSendOrRetryAnyPage() {
+        var collector = setup(this::answer);
+        assertThrows(IllegalStateException.class, () -> collector.pages(session,
+            offset -> MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Layer", offset), 1, System.nanoTime() - 1, () -> true));
+        verify(transport, never()).execInteractive(any(), any(), any());
+    }
+
 }

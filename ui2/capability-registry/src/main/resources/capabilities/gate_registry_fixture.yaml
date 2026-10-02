@@ -2940,11 +2940,11 @@ gates:
     platform_role_scope: "cp_multi_domain_server"
     shell_context: "expert"
     transport_kind: "SSH_EXEC"
-    canonical_command_key: "mgmt_cli -r true -d '<DOMAIN>' -f json show-access-rulebase name '<LAYER>' limit 500 offset '<N>' details-level full use-object-dictionary true"
+    canonical_command_key: "mgmt_cli -r true -d '<DOMAIN>' -f json show-access-rulebase name '<LAYER>' limit 100 offset '<N>' details-level full use-object-dictionary true"
     action_class: "read"
     sign_off_state: "SIGNED_OFF"
-    timeout_s: 60
-    retry_rule: "none"
+    timeout_s: 300
+    retry_rule: "once on timeout with limit 50"
     max_frequency: "manual admin request; automatic at most once per domain per 6 hours"
     session_reuse_rule: "one interactive SSH session per job; serial"
     unsupported_behavior_ref: "UNKNOWN"

@@ -25,6 +25,11 @@ public final class PolicyCollectionController {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(new PolicyResponse(Map.of(
                 "sources", collections.sources(), "canCollect", canCollect)));
     }
+    @GetMapping("/api/v2/policy/collections/{id}")
+    public ResponseEntity<?> status(@PathVariable String id) {
+        return collections.status(id).<ResponseEntity<?>>map(body -> ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(new PolicyResponse(body)))
+            .orElseGet(() -> ResponseEntity.notFound().build());
+    }
     @PostMapping("/api/v2/policy/sources/{id}/collect")
     public ResponseEntity<?> collect(@PathVariable String id, @RequestBody CollectRequest body, HttpServletRequest request) {
         try {

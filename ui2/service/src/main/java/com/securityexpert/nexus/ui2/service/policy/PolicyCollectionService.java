@@ -18,10 +18,15 @@ public class PolicyCollectionService {
         gates = new PersistenceGateRegistryPort(new JooqGateRegistryDao(tx));
     }
     public List<Map<String, Object>> sources() {
-        return repository.sources().stream().map(s -> Map.<String, Object>of("sourceId", s.sourceId(),
+        return repository.sources().stream().map(s -> {
+            Map<String, Object> view = new LinkedHashMap<>(Map.of("sourceId", s.sourceId(),
                 "sourceName", ("palo_alto".equals(s.vendor()) ? "Panorama " : "MDS ") + s.sourceId(),
-                "vendor", "palo_alto".equals(s.vendor()) ? "PAN" : "CP")).toList();
+                "vendor", "palo_alto".equals(s.vendor()) ? "PAN" : "CP"));
+            repository.latestStatus(s.sourceId()).ifPresent(status -> view.put("collection", status));
+            return view;
+        }).toList();
     }
+    public Optional<Map<String, Object>> status(String jobId) { return repository.status(jobId); }
     public Optional<String> collect(String source, String domain, String actor) {
         if (source == null || source.isBlank() || domain == null || domain.length() > 100) return Optional.empty();
         var eligible = repository.sources().stream().filter(s -> s.sourceId().equals(source)).findFirst();

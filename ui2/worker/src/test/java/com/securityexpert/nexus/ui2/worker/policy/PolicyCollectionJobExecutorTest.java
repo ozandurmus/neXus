@@ -32,7 +32,7 @@ class PolicyCollectionJobExecutorTest {
         assertInstanceOf(JobOutcome.Failed.class, executor.execute("job-1", 1, "run-1"));
         verify(repository, never()).publish(anyString(), anyLong(), anyList(), anyString());
         verify(leases).transitionState(eq("job-1"), eq(1L), eq(JobState.EXECUTING), eq(JobState.FAILED), anyString(),
-                eq("policy_collect_failed"), eq("POLICY_COLLECTION_INCOMPLETE"));
+                eq("policy_collect_failed"), eq("preflight target=run-1: FAILED_IllegalStateException"));
         when(repository.eligible("mds-1", "run-1")).thenReturn(false);
         assertInstanceOf(JobOutcome.Rejected.class, executor.execute("job-1", 1, "run-1"));
         verify(collector, times(1)).collect(any(), any(), any());

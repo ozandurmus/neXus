@@ -75,6 +75,8 @@ public final class JobTranscript {
 
     /** The Spark CLI carries two passwords inline; neither the command nor an echoed answer is reportable. */
     public static String safeSshCommand(String command) {
+        if (command != null && command.startsWith("mgmt_cli "))
+            return command.replaceAll("'(?:[^']|'\\\\'')*'", "'[argument]'");
         return command != null && command.startsWith(SPARK_BACKUP)
                 ? "backup settings to sftp server [receiver] filename [token] file-encryption on password [credential] "
                         + "backup-policy on username [receiver] password [credential]"

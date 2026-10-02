@@ -95,4 +95,13 @@ class JobTranscriptTest {
         assertFalse(answer.contains("SyntheticZipSecret123456"));
         assertFalse(answer.contains("SyntheticReceiverSecret42"));
     }
+    @Test void policyCommandArgumentsAreNeverWrittenToTransportLogs() {
+        String command = com.securityexpert.nexus.ui2.worker.discovery.cp.MgmtCliCommands.showAccessRulebase("Synthetic domain", "Synthetic layer", 0);
+        String safe = JobTranscript.safeSshCommand(command);
+        assertTrue(safe.contains("show-access-rulebase"));
+        assertTrue(safe.contains("limit 100"));
+        assertFalse(safe.contains("Synthetic domain"));
+        assertFalse(safe.contains("Synthetic layer"));
+    }
+
 }

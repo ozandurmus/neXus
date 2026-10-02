@@ -20,7 +20,7 @@ class PolicyApiTest {
     @Test void policyRoutesKeepReadsSeparateFromAdminCollection() {
         var action = new ActionRegistry().find(ActionRegistry.POLICY_READ).orElseThrow();
         assertEquals(Set.of(RoleToken.SECURITY_ADMIN, RoleToken.ONBOARDING_ADMIN, RoleToken.REPLAY_VIEWER), action.requiredRoleTokens());
-        for (String route : List.of("GET /api/v2/policy/devices", "GET /api/v2/policy/devices/*", "GET /api/v2/policy/policies/*", "GET /api/v2/policy/objects/*"))
+        for (String route : List.of("GET /api/v2/policy/tree", "GET /api/v2/policy/collections/*", "GET /api/v2/policy/devices", "GET /api/v2/policy/devices/*", "GET /api/v2/policy/policies/*", "GET /api/v2/policy/objects/*"))
             assertEquals(ActionRegistry.POLICY_READ, SecurityWebMvcConfig.ACTION_ID_BY_ROUTE.get(route));
         assertEquals(Set.of(RoleToken.SECURITY_ADMIN, RoleToken.ONBOARDING_ADMIN),
                 new ActionRegistry().find(ActionRegistry.POLICY_COLLECT).orElseThrow().requiredRoleTokens());
@@ -42,6 +42,9 @@ class PolicyApiTest {
         body.put("comment", "Unregistered synthetic hostname"); body.put("values", List.of("192.0.2.8", "host.example.invalid"));
         body.put("extras", Map.of("unknown-secret-field", List.of("synthetic-withheld-value")));
         when(query.page(eq(snapshot), eq(0), eq(""), anyBoolean())).thenReturn(new PolicyResponse(body));
+        when(query.tree("", "", "")).thenReturn(new PolicyResponse(Map.of("sources", List.of(Map.of("sourceId", "manager-1", "sourceName", "Synthetic manager", "vendor", "PAN")))));
+        when(collections.status("job-1")).thenReturn(Optional.of(Map.of("jobId", "job-1", "state", "FAILED", "step", 2, "total", 6,
+            "reason", "show devicegroups target=manager-1: HTTP_403")));
         var names = new TopologyNamePseudonymizer(new byte[32]);
         var advice = new PrivacyMaskingResponseBodyAdvice(new SubnetPreservingIpMasker(new byte[32]), names);
         var gate = new GateChain(sessions, new ActionRegistry(), rbac, audit);
@@ -73,6 +76,16 @@ class PolicyApiTest {
                     .andExpect(status().is(admin ? 202 : 403));
             // Use the repository's session-cookie name, the same boundary used by every controller.
             var response = mvc.perform(get("/api/v2/policy/policies/policy-1").servletPath("/api/v2/policy/policies/policy-1").cookie(new Cookie("ui2_session", cookie)));
+            for (String path : List.of("/api/v2/policy/tree", "/api/v2/policy/collections/job-1")) {
+                var read = mvc.perform(get(path).servletPath(path).cookie(new Cookie("ui2_session", cookie)));
+                read.andExpect(status().is(allowed ? 200 : 403));
+                if (allowed) read.andExpect(header().string("Cache-Control", "no-store"));
+                if (role.equals(RoleToken.REPLAY_VIEWER)) {
+                    String safe = read.andExpect(header().string("X-Nexus-Masked", "true")).andReturn().getResponse().getContentAsString();
+                    assertFalse(safe.contains("Synthetic manager"));
+                    if (path.contains("collections")) assertTrue(safe.contains("show devicegroups target=manager-1: HTTP_403"));
+                }
+            }
             if (!allowed) { response.andExpect(status().isForbidden()); continue; }
             String text = response.andExpect(status().isOk()).andExpect(header().string("Cache-Control", "no-store")).andReturn().getResponse().getContentAsString();
             if (role.equals(RoleToken.REPLAY_VIEWER)) {
