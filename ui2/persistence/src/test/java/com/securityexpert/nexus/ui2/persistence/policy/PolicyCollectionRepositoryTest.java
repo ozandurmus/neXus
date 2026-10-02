@@ -34,6 +34,7 @@ class PolicyCollectionRepositoryTest {
         }), SQLDialect.POSTGRES)));
         var snapshot = new PolicySnapshotRepository.Stored("policy-1", "2026-10-01T12:00:00Z", "{}", "{}");
         assertFalse(repository.publish("job-1", 7, List.of(snapshot), "synthetic-actor"));
+        assertFalse(repository.checkpoint("job-1", 7, snapshot, "synthetic-actor"));
         assertFalse(repository.publishWithWarnings("job-1", 7, List.of(snapshot), "synthetic-actor", "PARTIAL_SNAPSHOT layer-1: TIMEOUT"));
         assertTrue(sql.stream().anyMatch(s -> s.contains("lease_epoch = ?") && s.contains("lease_expires_at > now() for update")));
         assertFalse(sql.stream().anyMatch(s -> s.startsWith("insert into policy_snapshot")));
@@ -78,6 +79,7 @@ class PolicyCollectionRepositoryTest {
             assertTrue(bindings.contains("PARTIAL_SNAPSHOT layer-1: TIMEOUT"));
         }
     }
+
     @Test void warningPublicationRequiresAtLeastOneSnapshot() {
         var repository = new PolicyCollectionRepository(null);
         assertThrows(IllegalArgumentException.class, () -> repository.publishWithWarnings("job-1", 7, List.of(),

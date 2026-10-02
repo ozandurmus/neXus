@@ -45,7 +45,7 @@ it("renders masked management navigation, assignments, section collapse, negatio
   mockFetch(); mount(); await navigate();
   const table = await screen.findByRole("table", { name: "Policy rulebase" });
   expect(screen.getByText("MGR-BRAVO-01")).toBeInTheDocument();
-  expect(screen.getByText(/Assigned to: FW-TANGO-04/)).toBeInTheDocument();
+  expect(screen.getByText(/FW-TANGO-04.*VS-ROMEO-01/)).toBeInTheDocument();
   expect(within(table).getByText("NOT")).toBeInTheDocument();
   expect(within(table).getByText("Disabled")).toBeInTheDocument();
   expect(within(table).getAllByText("ANY")).toHaveLength(2);
@@ -108,7 +108,7 @@ it("offers first collection on an empty MDS and sends only opaque scope with CSR
   });
   vi.stubGlobal("fetch", fetch); mount();
   fireEvent.click(await screen.findByRole("button", { name: "Collect policies" }));
-  await screen.findByText(/Policy collection queued/);
+  await screen.findByText("Collecting · 0/?");
   const call = fetch.mock.calls.find(([url]) => url.endsWith("/collect"));
   expect(call?.[0]).toBe("/api/v2/policy/sources/mds-1/collect");
   expect(JSON.parse(call?.[1]?.body as string)).toEqual({ domainRef: "" });
@@ -150,7 +150,7 @@ it("queues Panorama node collection with opaque intent and hides DG-specific act
   await screen.findByRole("table");
   const actions = screen.getAllByRole("button", { name: "Collect policies" });
   expect(actions).toHaveLength(1); fireEvent.click(actions[0]);
-  await screen.findByText(/Policy collection queued/);
+  await screen.findByText("Collecting · 0/?");
   const call = fetch.mock.calls.find(([url]) => url.endsWith("/collect"));
   expect(call?.[0]).toBe(`/api/v2/policy/sources/${metadata.sourceId}/collect`);
   expect(JSON.parse(call?.[1]?.body as string)).toEqual({ domainRef: "" });
@@ -209,21 +209,24 @@ it("backs off polling, suspends while hidden and stops on the precise terminal r
   const advance = async (ms: number) => { await act(async () => { await vi.advanceTimersByTimeAsync(ms); }); };
   await advance(4999); expect(polls).toBe(0);
   await advance(1); expect(polls).toBe(1);
-  expect(screen.getByText("Collecting… step 2/8")).toBeInTheDocument();
+  expect(screen.getByText("Collecting · 2/8")).toBeInTheDocument();
   await advance(9999); expect(polls).toBe(1);
   await advance(1); expect(polls).toBe(2);
   hidden = true; fireEvent(document, new Event("visibilitychange"));
   await advance(60000); expect(polls).toBe(2);
   hidden = false; fireEvent(document, new Event("visibilitychange"));
   await advance(20000); expect(polls).toBe(3);
-  expect(screen.getByText("show devicegroups target=source-1: HTTP_403")).toBeInTheDocument();
+  expect(screen.getByText(/Last collection failed at collection step 3 of 8 — access was refused/)).toBeInTheDocument();
+  expect(screen.getByText("show devicegroups target=source-1: HTTP_403").closest("details")).not.toHaveAttribute("open");
+  expect(screen.queryByText(/Collecting ·/)).toBeNull();
   await advance(60000); expect(polls).toBe(3);
   view.unmount(); vi.useRealTimers(); vi.restoreAllMocks();
 });
 it("clearly badges a partial snapshot and its safe layer failure", async () => {
   mockFetch({ ...page, failures: [{ layerRef: "layer-1", reason: "access target=layer-1: TIMEOUT" }] }); mount(); await navigate();
   expect(await screen.findByText("Partial snapshot · incomplete")).toBeInTheDocument();
-  expect(screen.getByRole("alert")).toHaveTextContent("TIMEOUT");
+  expect(screen.getByRole("alert")).toHaveTextContent("the time limit was reached");
+  expect(screen.queryByText(/access target=/)).toBeNull();
 });
 
 it("discovers automatic collections and stops all pending polling on unmount", async () => {
@@ -237,7 +240,7 @@ it("discovers automatic collections and stops all pending polling on unmount", a
   vi.useFakeTimers();
   let view: ReturnType<typeof mount> | undefined;
   await act(async () => { view = mount(); });
-  expect(screen.getByText("Collecting… step 4/8")).toBeInTheDocument();
+  expect(screen.getByText("Collecting · 4/8")).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Collect policies" })).toBeNull();
   view!.unmount();
   await act(async () => { await vi.advanceTimersByTimeAsync(60000); });
@@ -252,7 +255,7 @@ it("keeps an uncollected source navigable with an accessible empty state without
   const tree = await screen.findByRole("navigation", { name: "Management policies" });
   fireEvent.click(within(tree).getByRole("button", { expanded: false }));
   await waitFor(() => expect(fetch.mock.calls).toHaveLength(2));
-  expect(screen.getByRole("status", { name: "No collected policy" })).toHaveTextContent("No policy may have been collected");
+  expect(screen.getByRole("status", { name: "No collected policy" })).toHaveTextContent("Select a source and container");
   expect(within(tree).queryByRole("button", { pressed: false })).toBeNull();
   expect(screen.queryByRole("table")).toBeNull();
   expect(fetch.mock.calls.some(([url]) => url.endsWith("/collect"))).toBe(false);
@@ -266,9 +269,9 @@ it("builds the root exclusively from sources and displays each last collection o
   ] }), { status: 200 }));
   vi.stubGlobal("fetch", fetch); mount();
   await screen.findByRole("button", { name: "MGR-BRAVO-01" });
-  expect(screen.getByText("FAILED · COLLECTION_FAILED: HTTP_403")).toBeInTheDocument();
-  expect(screen.getByText(/Partial snapshot · incomplete · PARTIAL_SNAPSHOT/)).toBeInTheDocument();
-  expect(screen.getByText("OK · 8/8 collection steps")).toBeInTheDocument();
+  expect(screen.getByText("Last collection failed at collection step 2 of 8 — access was refused")).toBeInTheDocument();
+  expect(screen.getByText("Last collection was incomplete at collection step 4 of 8 — the time limit was reached")).toBeInTheDocument();
+  expect(screen.getByText("Collected · 8/8 collection steps")).toBeInTheDocument();
   expect(screen.queryByText("Loading policies…")).toBeNull();
   expect(fetch.mock.calls).toHaveLength(1);
   expect(fetch.mock.calls[0][0]).toBe("/api/v2/policy/sources");
@@ -312,7 +315,73 @@ it("shows layer and rule progress and labels incomplete layers with reached offs
     return new Response(JSON.stringify(body), { status: 200, headers: { "X-Nexus-Masked": "true" } });
   }));
   mount();
-  expect(await screen.findByText("Collecting… layer 2/5, rules fetched 4000")).toBeInTheDocument();
+  expect(await screen.findByText("Collecting · unit 2/5, rules fetched 4000")).toBeInTheDocument();
   await navigate();
-  expect(await screen.findByText("OBJ-LAYER-02 · offset 4000: COLLECTION_FAILED: JOB_DEADLINE")).toBeInTheDocument();
+  expect(await screen.findByText("OBJ-LAYER-02 · offset 4000: Last collection failed — the time limit was reached")).toBeInTheDocument();
+});
+it("keeps UUIDs out of primary names and the empty state inside content only", async () => {
+  const id = "00000000-0000-4000-8000-000000000001";
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ canCollect: false,
+    sources: [{ sourceId: id, sourceName: `Panorama ${id}`, vendor: "PAN" }] }), { status: 200 })));
+  mount();
+  await screen.findByRole("button", { name: "Management server" });
+  expect(screen.queryByText(new RegExp(id))).toBeNull();
+  const content = screen.getByRole("region", { name: "Policy content" });
+  expect(within(content).getByRole("status", { name: "No collected policy" })).toBeInTheDocument();
+  expect(within(screen.getByRole("navigation")).queryByText("No assigned policy snapshot")).toBeNull();
+  expect(within(content).getByLabelText("Jump to device's policy")).toBeInTheDocument();
+});
+it("shows a human failure and relative time once with admin-only details and transcript", async () => {
+  const reason = "mgmt_cli show-access-rulebase target=layer-1: INVALID_OR_INCOMPLETE_RESPONSE";
+  const at = new Date(Date.now() - 8 * 60000).toISOString();
+  const respond = (allowed: boolean) => vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ canCollect: allowed,
+    sources: [{ sourceId: "source-1", sourceName: "MGR-BRAVO-01", vendor: "CP",
+      collection: { jobId: "job-1", state: "FAILED", reason, step: 12, total: 55, collectedAt: at, hasTranscript: true } }] }), { status: 200 })));
+  respond(true);
+  const view = mount();
+  const sentence = await screen.findByText(/Last collection failed.*the reply could not be read/);
+  expect(sentence).toHaveTextContent("8 min ago");
+  expect(screen.getAllByText(/Last collection failed/)).toHaveLength(1);
+  const disclosure = screen.getByText("Details").closest("details")!;
+  expect(disclosure.open).toBe(false);
+  fireEvent.click(screen.getByText("Details"));
+  expect(within(disclosure).getByText(reason)).toBeInTheDocument();
+  expect(within(disclosure).getByRole("button", { name: "Transcript" })).toBeInTheDocument();
+  view.unmount(); respond(false); mount();
+  await screen.findByText(/Last collection failed/);
+  expect(screen.queryByText("Details")).toBeNull();
+  expect(screen.queryByText(reason)).toBeNull();
+  expect(screen.queryByRole("button", { name: "Transcript" })).toBeNull();
+});
+it("refreshes opened navigation and the selected rulebase automatically after polling ends", async () => {
+  let completed = false;
+  const fetch = vi.fn(async (input: string) => {
+    const body = input === "/api/v2/policy/sources" ? { canCollect: false, sources: [{ sourceId: metadata.sourceId, sourceName: metadata.sourceName, vendor: "PAN",
+      collection: { jobId: "job-auto", state: completed ? "COMPLETED" : "EXECUTING", reason: "", step: completed ? 8 : 6, total: 8 } }] }
+      : input.includes("/collections/") ? (completed = true, { jobId: "job-auto", state: "COMPLETED", reason: "", step: 8, total: 8 })
+      : treeBody(input) ?? page;
+    return new Response(JSON.stringify(body), { status: 200 });
+  });
+  vi.stubGlobal("fetch", fetch); mount(); await navigate();
+  await screen.findByRole("table", { name: "Policy rulebase" });
+  const source = screen.getByRole("group", { name: "Policy source" });
+  expect(within(source).getByText("Collecting · 6/8")).toBeInTheDocument();
+  const before = fetch.mock.calls.filter(([url]) => url.includes("/policies/")).length;
+  vi.useFakeTimers();
+  fireEvent(document, new Event("visibilitychange"));
+  await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+  await act(async () => { await Promise.resolve(); });
+  expect(completed).toBe(true);
+  expect(screen.queryByText("Collecting · 6/8")).toBeNull();
+  expect(screen.getByRole("button", { name: metadata.name, pressed: true })).toBeInTheDocument();
+  expect(screen.getByRole("table", { name: "Policy rulebase" })).toBeInTheDocument();
+  expect(fetch.mock.calls.filter(([url]) => url.includes("/policies/")).length).toBeGreaterThan(before);
+});
+it("jumps to a loaded assigned policy from the content header", async () => {
+  mockFetch(); mount(); await navigate();
+  await screen.findByRole("table");
+  fireEvent.mouseDown(screen.getByLabelText("Jump to device's policy"));
+  fireEvent.click(await screen.findByRole("option", { name: "FW-TANGO-04" }));
+  expect(screen.getByRole("button", { name: metadata.name, pressed: true })).toBeInTheDocument();
+  expect(screen.queryByText("No assigned policy snapshot")).toBeNull();
 });

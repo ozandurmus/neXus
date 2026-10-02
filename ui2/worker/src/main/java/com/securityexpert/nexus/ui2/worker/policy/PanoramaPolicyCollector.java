@@ -5,6 +5,7 @@ import java.time.*;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 import org.w3c.dom.Element;
 import com.securityexpert.nexus.ui2.capability.GateRegistryPort;
 import com.securityexpert.nexus.ui2.jobs.policy.PanPolicyGates;
@@ -20,7 +21,9 @@ import com.securityexpert.nexus.ui2.worker.transport.xmlapi.PanCredentialResolve
 public final class PanoramaPolicyCollector {
     static final int MAX_GROUPS = 200;
     private static final Duration TIMEOUT = Duration.ofSeconds(60);
+    static final long MAX_RESPONSE_BYTES = 128L * 1024 * 1024;
     private final Duration jobTimeout;
+    private final java.util.function.LongSupplier clock;
     private final DeviceTransport transport;
     private final GateRegistryPort gates;
     private final PanCredentialResolver credentials;
@@ -28,10 +31,18 @@ public final class PanoramaPolicyCollector {
 
     public PanoramaPolicyCollector(DeviceTransport transport, GateRegistryPort gates,
             PanCredentialResolver credentials, PolicyCollectionRepository repository) {
-        this(transport, gates, credentials, repository, Duration.ofHours(2));
+        this(transport, gates, credentials, repository, Duration.ofSeconds(Long.parseLong(
+                System.getenv().getOrDefault("UI2_POLICY_RUN_DEADLINE_SECONDS", "7200"))));
     }
-    public PanoramaPolicyCollector(DeviceTransport transport, GateRegistryPort gates,
-            PanCredentialResolver credentials, PolicyCollectionRepository repository, Duration jobTimeout) {
+
+    public PanoramaPolicyCollector(DeviceTransport transport, GateRegistryPort gates, PanCredentialResolver credentials,
+            PolicyCollectionRepository repository, Duration jobTimeout) {
+        this(transport, gates, credentials, repository, jobTimeout, System::nanoTime);
+    }
+
+    PanoramaPolicyCollector(DeviceTransport transport, GateRegistryPort gates, PanCredentialResolver credentials,
+            PolicyCollectionRepository repository, Duration jobTimeout, java.util.function.LongSupplier clock) {
+        this.clock = clock;
         if (jobTimeout.isZero() || jobTimeout.isNegative()) throw new IllegalArgumentException("POLICY_DEADLINE_MUST_BE_POSITIVE");
         this.jobTimeout = jobTimeout;
         this.transport = transport; this.gates = gates; this.credentials = credentials; this.repository = repository;
@@ -57,11 +68,19 @@ public final class PanoramaPolicyCollector {
     }
 
     public List<PolicySnapshot> collect(DiscoveryRun run, PolicyCollectionRepository.Request scope, BooleanSupplier lease) {
+        List<PolicySnapshot> snapshots = new ArrayList<>();
+        var failures = collect(run, scope, lease, snapshots::add);
+        return snapshots.stream().map(s -> new PolicySnapshot(s.metadata(), s.sections(), s.objects(), failures)).toList();
+    }
+
+    /** Production path publishes immediately; only lineage XML is retained, never sibling snapshots. */
+    public List<CollectionFailure> collect(DiscoveryRun run, PolicyCollectionRepository.Request scope,
+            BooleanSupplier lease, Consumer<PolicySnapshot> publish) {
         PolicyCollectionTrace.step("PANORAMA_TARGET", scope.sourceId());
         if (!"palo_alto".equals(run.vendor()) || run.managementAddress() == null || run.managementAddress().isBlank())
             throw PolicyCollectionTrace.failure("PANORAMA_TARGET_NOT_FOUND");
         PanPolicyGates.requireAll(gates);
-        if (!lease.getAsBoolean()) throw failure();
+        if (!lease.getAsBoolean()) throw PolicyCollectionTrace.failure("LEASE_LOST");
         PolicyCollectionTrace.step("credential resolution", scope.sourceId());
         com.securityexpert.nexus.ui2.worker.transport.xmlapi.PanCredentialMaterial credential;
         try { credential = credentials.resolve(run.credentialReferenceId()); }
@@ -73,13 +92,13 @@ public final class PanoramaPolicyCollector {
         }
         char[] key = null;
         var timer = Executors.newSingleThreadScheduledExecutor();
-        long deadline = System.nanoTime() + jobTimeout.toNanos();
+        long deadline = clock.getAsLong() + jobTimeout.toNanos();
         long[] bytes = {0};
         ApiTarget target = new ApiTarget(scope.sourceId(), run.managementAddress());
         try {
             Element auth = read(target, PanoramaApiRoutes.keyGeneration(credential.username(), credential.password()), timer, deadline, bytes);
-            String token = PolicyXml.firstRelativeText(auth, "result/key").orElseThrow(PanoramaPolicyCollector::failure);
-            if (token.isBlank()) throw failure();
+            String token = PolicyXml.firstRelativeText(auth, "result/key").orElseThrow(() -> PolicyCollectionTrace.failure("AUTHENTICATION_FAILURE"));
+            if (token.isBlank()) throw PolicyCollectionTrace.failure("AUTHENTICATION_FAILURE");
             key = token.toCharArray();
             Element groups = result(read(target, checked(2, "", key, lease), timer, deadline, bytes), "devicegroups");
             var entries = PolicyXml.selectRelative(groups, "entry");
@@ -103,43 +122,61 @@ public final class PanoramaPolicyCollector {
             Element local = document.createElement("entry"); local.setAttribute("name", "localhost.localdomain"); devices.appendChild(local);
             Element deviceGroups = document.createElement("device-group"); local.appendChild(deviceGroups);
             List<CollectionFailure> failures = new ArrayList<>();
-            Set<String> parsed = new HashSet<>();
-            for (String name : members.keySet()) {
-                var spec = checked(1, name, key, lease);
-                try {
-                    Element group = read(target, spec, timer, deadline, bytes, name);
-                    deviceGroups.appendChild(document.importNode(group, true));
-                    parsed.add(name);
-                } catch (PolicyCollectionTrace.Failure invalid) {
-                    if (fatal(invalid)) throw invalid;
-                    failures.add(new CollectionFailure(ref(scope.sourceId(), "device-group", name), invalid.getMessage()));
-                }
-            }
-            List<PolicySnapshot> snapshots = new ArrayList<>();
+            // Parent-first order allows inheritance without retaining unrelated DG responses.
+            List<String> order = new ArrayList<>(parents.keySet());
             String collectedAt = Instant.now().toString();
-            long rules = 0, objects = 0;
-            for (var group : members.entrySet()) {
-                if (!lease.getAsBoolean() || System.nanoTime() >= deadline) throw failure();
-                String container = ref(scope.sourceId(), "device-group", group.getKey());
-                if (!scope.domainRef().isEmpty() && !scope.domainRef().equals(container)) continue;
-                if (!parsed.contains(group.getKey())) continue;
-                PolicyCollectionTrace.step("device group " + container + " mapping", scope.sourceId());
+            int published = 0, rulesFetched = 0;
+            for (int i = 0; i < order.size(); i++) {
+                String name = order.get(i);
+                String container = ref(scope.sourceId(), "device-group", name);
+                long before = bytes[0];
+                PolicyCollectionTrace.layer(i + 1, order.size(), rulesFetched);
                 try {
-                    var targets = targets(run, scope.sourceId(), group.getValue());
+                    Element group = read(target, checked(1, name, key, lease), timer, deadline, bytes, name);
+                    deviceGroups.appendChild(document.importNode(group, true));
+                    if (!scope.domainRef().isEmpty() && !scope.domainRef().equals(container)) continue;
+                    if (!lease.getAsBoolean()) throw PolicyCollectionTrace.failure("LEASE_LOST");
+                    if (clock.getAsLong() >= deadline) throw PolicyCollectionTrace.failure("JOB_DEADLINE");
+                    PolicyCollectionTrace.step("device group " + container + " mapping", scope.sourceId());
                     var metadata = new Metadata(ref(container, "policy"), scope.sourceId(), "Panorama " + scope.sourceId(), "PAN", container,
-                            group.getKey(), group.getKey(), collectedAt, "", targets);
-                    var snapshot = new PanoramaPolicyMapper().mapUnverifiedPrecedence(metadata, config, group.getKey(), parents);
-                    rules += snapshot.sections().stream().mapToLong(section -> section.rules().size()).sum();
-                    objects += snapshot.objects().size();
-                    if (rules > 100_000 || objects > 200_000) throw PolicyCollectionTrace.failure("SIZE_LIMIT");
-                    snapshots.add(snapshot);
+                            name, name, collectedAt, "", targets(run, scope.sourceId(), members.get(name)));
+                    var snapshot = new PanoramaPolicyMapper().mapUnverifiedPrecedence(metadata, config, name, parents);
+                    long rules = snapshot.sections().stream().mapToLong(section -> section.rules().size()).sum();
+                    long objects = snapshot.objects().size();
+                    if (rules > 50_000 || objects > 200_000) {
+                        com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.add("job", "note",
+                                "DG_SIZE bytes=" + (bytes[0] - before) + " rules=" + rules + " objects=" + objects);
+                        throw PolicyCollectionTrace.failure("SIZE_LIMIT");
+                    }
+                    if (!lease.getAsBoolean()) throw PolicyCollectionTrace.failure("LEASE_LOST");
+                    if (clock.getAsLong() >= deadline) throw PolicyCollectionTrace.failure("JOB_DEADLINE");
+                    if (Thread.currentThread().isInterrupted()) throw PolicyCollectionTrace.failure("INTERRUPTED");
+                    publish.accept(snapshot);
+                    published++;
+                    rulesFetched += (int) rules;
+                    PolicyCollectionTrace.layer(i + 1, order.size(), rulesFetched);
                 } catch (IllegalArgumentException | PolicyCollectionTrace.Failure invalid) {
-                    if (invalid instanceof PolicyCollectionTrace.Failure traced && fatal(traced)) throw traced;
-                    failures.add(new CollectionFailure(container, PolicyCollectionTrace.reason(invalid)));
+                    if (invalid instanceof PolicyCollectionTrace.Failure traced && PolicyCollectionTrace.fatal(traced)) throw traced;
+                    String reason = PolicyCollectionTrace.reason(invalid);
+                    if (reason.endsWith(": SIZE_LIMIT")) reason = "bytes=" + (bytes[0] - before) + " " + reason;
+                    failures.add(new CollectionFailure(container, reason));
+                    com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.add("job", "note",
+                            "INCOMPLETE_DG " + container + " " + reason);
+                } finally {
+                    Set<String> needed = new HashSet<>();
+                    for (String future : order.subList(i + 1, order.size())) {
+                        String parent = parents.get(future);
+                        while (parent != null && !parent.isEmpty() && needed.add(parent)) parent = parents.get(parent);
+                    }
+                    for (Element retained : PolicyXml.selectRelative(deviceGroups, "entry"))
+                        if (!needed.contains(retained.getAttribute("name"))) deviceGroups.removeChild(retained);
                 }
             }
-            if ((!scope.domainRef().isEmpty() || !members.isEmpty()) && snapshots.isEmpty()) throw failure();
-            return snapshots.stream().map(s -> new PolicySnapshot(s.metadata(), s.sections(), s.objects(), failures)).toList();
+            if (!lease.getAsBoolean()) throw PolicyCollectionTrace.failure("LEASE_LOST");
+            if (clock.getAsLong() >= deadline) throw PolicyCollectionTrace.failure("JOB_DEADLINE");
+            if (Thread.currentThread().isInterrupted()) throw PolicyCollectionTrace.failure("INTERRUPTED");
+            if ((!scope.domainRef().isEmpty() || !members.isEmpty()) && published == 0) throw failure();
+            return List.copyOf(failures);
         } finally {
             timer.shutdownNow();
             if (key != null) Arrays.fill(key, '\0');
@@ -147,7 +184,7 @@ public final class PanoramaPolicyCollector {
         }
     }
     private XmlApiSpec checked(int index, String group, char[] key, BooleanSupplier lease) {
-        if (!lease.getAsBoolean()) throw failure();
+        if (!lease.getAsBoolean()) throw PolicyCollectionTrace.failure("LEASE_LOST");
         PanPolicyGates.require(gates, index);
         return request(index, group, key);
     }
@@ -162,14 +199,15 @@ public final class PanoramaPolicyCollector {
             ? PanPolicyGates.COMMANDS.get("/config/shared".equals(spec.formParams().get("xpath")) ? 0 : 1)
             : PanPolicyGates.COMMANDS.get("<show><devicegroups/></show>".equals(spec.formParams().get("cmd")) ? 2 : 3);
         PolicyCollectionTrace.step(step + " " + template, target.endpointId());
-        if (System.nanoTime() >= deadline) throw PolicyCollectionTrace.failure("JOB_DEADLINE");
+        if (Thread.currentThread().isInterrupted()) throw PolicyCollectionTrace.failure("INTERRUPTED");
+        if (clock.getAsLong() >= deadline) throw PolicyCollectionTrace.failure("JOB_DEADLINE");
         long started = System.nanoTime(), before = bytes[0];
         String[] parseFailure = {""};
         var prefix = new ByteArrayOutputStream(2048);
-        long remaining = deadline - System.nanoTime();
+        long remaining = deadline - clock.getAsLong();
         if (remaining <= 0) throw PolicyCollectionTrace.failure("JOB_DEADLINE");
         Duration requestTimeout = Duration.ofNanos(Math.min(remaining, TIMEOUT.toNanos()));
-        long readDeadline = Math.min(deadline, System.nanoTime() + requestTimeout.toNanos());
+        long readDeadline = System.nanoTime() + requestTimeout.toNanos();
         var outcome = com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.withoutRecording(() -> transport.xmlApiCallStreaming(target, spec, requestTimeout, input -> {
             var expiry = timer.schedule(() -> { try { input.close(); } catch (IOException ignored) {} },
                     Math.max(0, readDeadline - System.nanoTime()), TimeUnit.NANOSECONDS);
@@ -178,21 +216,23 @@ public final class PanoramaPolicyCollector {
                     private long received;
                     private void count(int n) throws IOException {
                         if (n > 0) { received += n; bytes[0] += n; }
-                        if (received > 16L * 1024 * 1024 || bytes[0] > 64L * 1024 * 1024) {
+                        if (received > MAX_RESPONSE_BYTES) {
                             parseFailure[0] = "SIZE_LIMIT";
                             throw new IOException("POLICY_SIZE_LIMIT");
                         }
-                        if (System.nanoTime() >= deadline) throw new IOException("POLICY_JOB_TIMEOUT");
+                        if (Thread.currentThread().isInterrupted()) { parseFailure[0] = "INTERRUPTED"; throw new IOException("POLICY_INTERRUPTED"); }
+                        if (clock.getAsLong() >= deadline) { parseFailure[0] = "JOB_DEADLINE"; throw new IOException("POLICY_JOB_TIMEOUT"); }
                     }
                     @Override public int read() throws IOException { int n = in.read(); if (n >= 0 && prefix.size() < 2048) prefix.write(n); count(n < 0 ? 0 : 1); return n; }
                     @Override public int read(byte[] b, int off, int len) throws IOException { int n = in.read(b, off, len); if (n > 0) prefix.write(b, off, Math.min(n, 2048 - prefix.size())); count(n); return n; }
                 };
-                try { return PolicyXml.parse(counted).getDocumentElement(); }
+                try { return PolicyXml.parse(counted, false, MAX_RESPONSE_BYTES, 5_000_000).getDocumentElement(); }
                 catch (IllegalArgumentException invalid) { return null; }
             } finally { expiry.cancel(false); }
         }));
         PolicyCollectionTrace.result(started, bytes[0] - before, outcome.getClass().getSimpleName());
         try {
+            if (clock.getAsLong() >= deadline) throw PolicyCollectionTrace.failure("JOB_DEADLINE");
             if (outcome instanceof XmlApiStreamOutcome.Completed<Element> response && response.httpStatus() != 200)
                 throw PolicyCollectionTrace.failure("HTTP_" + response.httpStatus());
             if (!parseFailure[0].isEmpty()) throw PolicyCollectionTrace.failure(parseFailure[0]);
@@ -228,10 +268,7 @@ public final class PanoramaPolicyCollector {
         return "PAN_POLICY_SHAPE bytes=" + bytes + " httpStatus=" + (httpStatus == null ? "UNKNOWN" : httpStatus)
                 + " status=" + status + " code=" + code + " shape=" + shape;
     }
-    private static boolean fatal(PolicyCollectionTrace.Failure error) {
-        return Set.of("LEASE_LOST", "JOB_DEADLINE", "SIZE_LIMIT", "POLICY_GATE_UNAVAILABLE", "INTERRUPTED")
-                .stream().anyMatch(reason -> error.getMessage().endsWith(": " + reason));
-    }
+
     private static Element deviceGroup(Element response, String name) {
         var results = PolicyXml.selectRelative(response, "result");
         if (results.size() != 1) throw failure();

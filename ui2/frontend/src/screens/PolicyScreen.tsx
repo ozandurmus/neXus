@@ -1,9 +1,34 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Box, Button, Chip, Drawer, FormControl, InputLabel, MenuItem, Select, Stack, Table, TableBody, TableCell,
+import { Box, Button, Chip, Drawer, IconButton, Tooltip, FormControl, InputLabel, MenuItem, Select, Stack, Table, TableBody, TableCell,
   TableContainer, TableHead, TableRow, TextField, Typography } from "@mui/material";
 import { ScreenRoot, ScreenHeader, EmptyPanel } from "../shell/ScreenLayout";
+import { VendorBadge } from "../shell/States";
+import { Icon } from "../shell/Icon";
+import { relativeAge } from "../shell/time";
+import { JobTranscriptDrawer } from "./JobTranscriptDrawer";
 import { m3 } from "../theme/m3Theme";
 import { getPolicyTree, getPolicyCollectionStatus, type PolicyContainer, type PolicyCollectionStatus, listPolicySources, collectPolicies, type PolicyCollectionSource, getPolicy, getPolicyObject, type PolicyTarget, type PolicyMetadata, type PolicyObject, type PolicyRule, type PolicyCell, type PolicyPage } from "../auth/adminApi";
+
+const runningStates = ["REQUESTED", "CLAIMED", "EXECUTING", "RECONCILING"];
+const isRunning = (job: PolicyCollectionStatus) => runningStates.includes(job.state);
+// Labels are presentation only; identifiers remain unchanged as request keys.
+const displayName = (name: string | undefined, fallback: string) =>
+  !name || /[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/i.test(name) ? fallback : name;
+function failureSentence(reason: string, step?: number, total?: number) {
+  const scope = total ? ` at collection step ${step ?? 0} of ${total}` : "";
+  const problem = /TIMEOUT|TimedOut|JOB_DEADLINE/.test(reason) ? "the time limit was reached"
+    : /HTTP_403|AuthenticationFailed|HostKeyRejected/.test(reason) ? "access was refused"
+    : /PARSE|INVALID|RESPONSE|XML/.test(reason) ? "the reply could not be read" : "the source could not be read";
+  return `Last collection ${reason.startsWith("PARTIAL_SNAPSHOT") ? "was incomplete" : "failed"}${scope} — ${problem}`;
+}
+function FailureDetails({ reason, allowed, job }: { reason: string; allowed: boolean; job?: PolicyCollectionStatus }) {
+  return allowed ? <Box component="details" sx={{ mt: 0.5, overflowWrap: "anywhere" }}>
+    <Box component="summary" sx={{ cursor: "pointer", color: m3.primary, fontSize: 12 }}>Details</Box>
+    {job && <Typography variant="caption" display="block">Collection step: {job.step}/{job.total || "?"}</Typography>}
+    <Typography component="pre" variant="caption" sx={{ whiteSpace: "pre-wrap", m: 0 }}>{reason}</Typography>
+    {job && <JobTranscriptDrawer jobId={job.jobId} hasTranscript={job.hasTranscript === true} title="Policy collection transcript" />}
+  </Box> : null;
+}
 
 export function PolicyScreen({ preview = false }: { preview?: boolean }) {
   const [catalog, setCatalog] = useState<PolicyMetadata[]>([]);
@@ -13,7 +38,7 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
   const [expandedContainers, setExpandedContainers] = useState<Set<string>>(new Set());
   const [loadedContainers, setLoadedContainers] = useState<Set<string>>(new Set());
   const [loadingTree, setLoadingTree] = useState(false);
-  const [jobs, setJobs] = useState<PolicyCollectionStatus[]>([]);
+  const [jobs, setJobs] = useState<(PolicyCollectionStatus & { sourceId: string })[]>([]);
   const [targets, setTargets] = useState<PolicyTarget[]>([]);
   const [scrollTop, setScrollTop] = useState(0);
   const [canCollect, setCanCollect] = useState(false);
@@ -27,6 +52,11 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
   const [data, setData] = useState<PolicyPage | null>(null);
   const [error, setError] = useState("");
   const [revision, setRevision] = useState(0);
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 60000);
+    return () => window.clearInterval(timer);
+  }, []);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [drawer, setDrawer] = useState<{ rule?: PolicyRule; object?: PolicyObject; loading?: boolean; error?: string } | null>(null);
   const drawerRequest = useRef(0);
@@ -39,17 +69,41 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
       if (!active) return;
       setSources(admission.sources ?? []);
       setCanCollect(admission.canCollect === true);
-      setTargets([]);
       setJobs(current => {
-        const latest = (admission.sources ?? []).flatMap(source => source.collection ? [source.collection] : []);
-        return latest.length ? latest : current.filter(job => !["REQUESTED", "CLAIMED", "EXECUTING", "RECONCILING"].includes(job.state));
+        const latest = (admission.sources ?? []).flatMap(source => source.collection ? [{ ...source.collection, sourceId: source.sourceId }] : []);
+        return latest.map(job => {
+          const previous = current.find(item => item.jobId === job.jobId);
+          return previous && !isRunning(previous) && isRunning(job) ? previous : job;
+        }).concat(current.filter(job => (admission.sources ?? []).some(source => source.sourceId === job.sourceId)
+          && !latest.some(item => item.sourceId === job.sourceId)));
       });
-      setCatalog([]); setContainers({}); setExpandedSources(new Set()); setExpandedContainers(new Set()); setLoadedContainers(new Set());
-      setSelected("");
     }).catch(() => { if (active) setError("Policy snapshots could not be loaded."); })
       .finally(() => { if (active) setLoadingTree(false); });
     return () => { active = false; };
-  }, [preview, revision, device]);
+  }, [preview, revision]);
+  useEffect(() => {
+    if (!revision) return;
+    let active = true;
+    const refresh = async () => {
+      try {
+        const trees = await Promise.all([...expandedSources].map(async source => {
+          const tree = await getPolicyTree(source, "", device);
+          return [source, tree.containers ?? []] as const;
+        }));
+        const policies = await Promise.all([...loadedContainers].map(async container => {
+          const source = trees.find(([, nodes]) => nodes.some(node => node.containerId === container))?.[0];
+          return source ? (await getPolicyTree(source, container, device)).policies ?? [] : [];
+        }));
+        if (active) {
+          setContainers(Object.fromEntries(trees)); setCatalog(policies.flat());
+          setTargets([...new Map(policies.flat().flatMap(p => p.targets).map(t => [t.deviceId, t])).values()]);
+        }
+      } catch { if (active) setError("Policy snapshots could not be refreshed."); }
+    };
+    void refresh();
+    return () => { active = false; };
+    // Refresh the navigation already opened by the user when collection ends.
+  }, [revision]);
   useEffect(() => {
     const timer = window.setTimeout(() => { setQuery(search); setPage(0); }, 250);
     return () => window.clearTimeout(timer);
@@ -106,7 +160,7 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
       setLoadedContainers(current => new Set(current).add(container));
     } catch { setError("Policies could not be loaded."); }
   };
-  const activeJobs = jobs.filter(job => ["REQUESTED", "CLAIMED", "EXECUTING", "RECONCILING"].includes(job.state));
+  const activeJobs = jobs.filter(isRunning);
   const activeJobIds = activeJobs.map(job => job.jobId).join(",");
   useEffect(() => {
     if (!activeJobIds) return;
@@ -117,8 +171,8 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
       try {
         const statuses = await Promise.all(ids.map(id => getPolicyCollectionStatus(id)));
         if (!active) return;
-        setJobs(current => current.map(job => statuses.find(status => status.jobId === job.jobId) ?? job));
-        if (statuses.some(status => !["REQUESTED", "CLAIMED", "EXECUTING", "RECONCILING"].includes(status.state))) {
+        setJobs(current => current.map(job => ({ ...job, ...(statuses.find(status => status.jobId === job.jobId) ?? {}) })));
+        if (statuses.some(status => !isRunning(status))) {
           setRevision(n => n + 1);
           return;
         }
@@ -138,70 +192,96 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
     setCollecting(true); setCollectionStatus("");
     try {
       const queued = await collectPolicies(source, domain);
-      setJobs(current => [...current, { jobId: queued.jobId, state: "REQUESTED", reason: "", step: 0, total: 0 }]);
-      setCollectionStatus("Policy collection queued. Refresh snapshots after the job completes.");
+      setJobs(current => [...current, { sourceId: source, jobId: queued.jobId, state: "REQUESTED", reason: "", step: 0, total: 0 }]);
     } catch { setCollectionStatus("Policy collection could not be queued. The source may be busy or unavailable."); }
     finally { setCollecting(false); }
   };
   const collectButton = (source: string, domain = "") => canCollect && sources.some(s => s.sourceId === source)
-    ? <Button size="small" disabled={collecting || activeJobs.length > 0} onClick={() => void collect(source, domain)}>Collect policies</Button> : null;
+    ? <Button size="small" variant="outlined" disabled={collecting || activeJobs.length > 0} onClick={() => void collect(source, domain)}>Collect policies</Button> : null;
   const close = () => { drawerRequest.current++; setDrawer(null); };
   return <ScreenRoot>
-    <ScreenHeader title="Policy" subtitle="Management policy · configured intent" />
-    <Box sx={{ px: 3, pb: 3 }}>
-      {collectionStatus && <Typography role="status" sx={{ mb: 1 }}>{collectionStatus}</Typography>}
-      {!preview && <Button onClick={() => setRevision(n => n + 1)}>Refresh snapshots</Button>}
-      {activeJobs.map(job => <Chip key={job.jobId} role="status" title={job.jobId} label={job.layer ? `Collecting… layer ${job.layer}/${job.layers || "?"}, rules fetched ${job.rulesFetched ?? 0}` : `Collecting… step ${job.step}/${job.total || "?"}`} size="small" />)}
-      {jobs.filter(job => job.reason).map(job => <Typography key={job.jobId} role="status">{job.reason}</Typography>)}
-      {error && <EmptyPanel title="Policy unavailable" body={error}><Button onClick={() => setRevision(n => n + 1)}>Retry</Button></EmptyPanel>}
-      {loadingTree && !error && <Typography role="status">Loading policies…</Typography>}
-      {!loadingTree && !error && sources.length === 0 && <Box role="status" aria-label="No policy snapshot"><EmptyPanel title="No policy snapshot" body="No management policy has been collected yet." /></Box>}
-      {sources.length > 0 && <>
-        <FormControl size="small" sx={{ minWidth: 240, mb: 2 }}>
-          <InputLabel id="policy-device-label">Assigned device</InputLabel>
-          <Select labelId="policy-device-label" label="Assigned device" value={device} onChange={e => { setDevice(e.target.value); setPage(0); }}>
-            <MenuItem value="">All management policies</MenuItem>
-            {targets.map(t => <MenuItem key={t.deviceId} value={t.deviceId}>{t.name}</MenuItem>)}
-            {device && !targets.some(t => t.deviceId === device) && <MenuItem value={device}>Requested device</MenuItem>}
-          </Select>
-        </FormControl>
-        {visible.length === 0 && <Box role="status" aria-label="No collected policy"><EmptyPanel title="No assigned policy snapshot" body="Expand a source and container to find collected policies. No policy may have been collected for this scope yet." /></Box>}
-        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", lg: "260px minmax(0, 1fr)" }, gap: 2 }}>
-          <Box component="nav" aria-label="Management policies" sx={{ bgcolor: m3.scLow, borderRadius: 2, p: 1.5 }}>
-            {sources.map(source => <Box key={source.sourceId} role="group" aria-label="Policy source">
-              <Button aria-expanded={expandedSources.has(source.sourceId)} onClick={() => void expandSource(source.sourceId)}>{source.sourceName}</Button>
-              {source.collection && <Typography role="status" variant="caption" display="block">
-                {source.collection.reason.startsWith("PARTIAL_SNAPSHOT") ? "Partial snapshot · incomplete"
-                  : source.collection.state === "COMPLETED" ? `OK · ${source.collection.step}/${source.collection.total} collection steps`
-                  : source.collection.state}
-                {source.collection.reason && ` · ${source.collection.reason}`}
-              </Typography>}
-              {collectButton(source.sourceId)}
-              {expandedSources.has(source.sourceId) && containers[source.sourceId]?.length === 0
-                && <Typography variant="caption">No policy containers in this snapshot.</Typography>}
-              {expandedSources.has(source.sourceId) && (containers[source.sourceId] ?? []).map(container => <Box key={container.containerId} role="group" aria-label="Policy container" sx={{ pl: 1 }}>
-                <Button aria-expanded={expandedContainers.has(container.containerId)} onClick={() => void expandContainer(source.sourceId, container.containerId)}>{container.containerName}</Button>
-                {source.vendor === "CP" && collectButton(source.sourceId, container.containerId)}
-                {expandedContainers.has(container.containerId) && loadedContainers.has(container.containerId)
-                  && !visible.some(p => p.containerId === container.containerId)
-                  && <Typography variant="caption">No policies in this snapshot.</Typography>}
-                {expandedContainers.has(container.containerId) && visible.filter(p => p.containerId === container.containerId).map(policy =>
-                  <Button key={policy.id} fullWidth variant={selected === policy.id ? "contained" : "text"}
-                    aria-pressed={selected === policy.id} aria-current={selected === policy.id ? "page" : undefined} sx={{ justifyContent: "flex-start", textTransform: "none" }}
-                    onClick={() => { setSelected(policy.id); setPage(0); setCollapsed(new Set()); }}>{policy.name}</Button>)}
-              </Box>)}
+    <Box sx={{ maxWidth: 1440, mx: "auto", width: "100%" }}>
+    <ScreenHeader title="Policy" subtitle="Management policy · configured intent" actions={!preview &&
+      <Tooltip title="Refresh snapshots"><IconButton aria-label="Refresh snapshots" onClick={() => setRevision(n => n + 1)}><Box component="span" aria-hidden="true" sx={{ fontSize: 26, lineHeight: 1 }}>↻</Box></IconButton></Tooltip>} />
+    <Box sx={{ mt: 3, display: "grid", gridTemplateColumns: { xs: "minmax(0, 1fr)", md: "320px minmax(0, 1fr)" }, gap: 3, alignItems: "start" }}>
+      <Box component="nav" aria-label="Management policies" sx={{ bgcolor: m3.scLow, borderRadius: 3, p: 2, minWidth: 0, overflowWrap: "anywhere", border: `1px solid ${m3.outlineVar}` }}>
+        <Typography variant="subtitle2" sx={{ mb: 2 }}>Sources · {sources.length}</Typography>
+        {sources.map(source => {
+          const job = [...jobs].reverse().find(item => item.sourceId === source.sourceId) ?? source.collection;
+          const running = job && isRunning(job);
+          const failed = job && (!!job.reason || ["FAILED", "REJECTED", "OUTCOME_UNKNOWN"].includes(job.state));
+          return <Box key={source.sourceId} role="group" aria-label="Policy source" sx={{ mb: 2 }}>
+            <Stack direction="row" spacing={1} alignItems="center">
+              <VendorBadge vendor={source.vendor === "PAN" ? "palo_alto" : source.vendor === "CP" ? "check_point" : null} />
+              <Box component="span" aria-label={running ? "Collecting" : failed ? "Collection needs attention" : job?.state === "COMPLETED" ? "Collected" : "Not collected"}
+                sx={{ width: 8, height: 8, flexShrink: 0, borderRadius: "50%", bgcolor: running ? m3.primary : failed ? m3.error : job?.state === "COMPLETED" ? m3.success : m3.outline }} />
+              <Button aria-expanded={expandedSources.has(source.sourceId)} onClick={() => void expandSource(source.sourceId)} sx={{ minWidth: 0, textAlign: "left", textTransform: "none" }}>
+                {displayName(source.sourceName, "Management server")}
+              </Button>
+            </Stack>
+            <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>
+              {source.vendor === "PAN" ? "Panorama" : source.vendor === "CP" ? "MDS" : "Management server"} · {containers[source.sourceId]?.length ?? "?"} containers
+            </Typography>
+            {job && <Box sx={{ my: 1 }}>
+              {running ? <Chip role="status" size="small" color="primary" label={job.layer ? `Collecting · unit ${job.layer}/${job.layers || "?"}, rules fetched ${job.rulesFetched ?? 0}` : `Collecting · ${job.step}/${job.total || "?"}`} />
+                : <Typography role="status" variant="body2">{failed ? failureSentence(job.reason, job.step, job.total)
+                  : job.state === "COMPLETED" ? `Collected · ${job.step}/${job.total} collection steps` : "Collection stopped"}
+                  {job.collectedAt && ` · ${relativeAge(job.collectedAt, now)}`}</Typography>}
+              {job.reason && <FailureDetails reason={job.reason} allowed={canCollect} job={job} />}
+            </Box>}
+            {collectButton(source.sourceId)}
+            {expandedSources.has(source.sourceId) && containers[source.sourceId]?.length === 0
+              && <Typography variant="caption" display="block">No policy containers in this snapshot.</Typography>}
+            {expandedSources.has(source.sourceId) && (containers[source.sourceId] ?? []).map(container => <Box key={container.containerId} role="group" aria-label="Policy container" sx={{ pl: 1, mt: 1, borderLeft: `1px solid ${m3.outlineVar}` }}>
+              <Button aria-expanded={expandedContainers.has(container.containerId)} onClick={() => void expandContainer(source.sourceId, container.containerId)} sx={{ textTransform: "none", textAlign: "left" }}>
+                <Box component="span" aria-hidden="true" sx={{ width: 6, height: 6, borderRadius: "50%", bgcolor: m3.outline, mr: 1, flexShrink: 0 }} />
+                {displayName(container.containerName, "Policy container")}
+              </Button>
+              <Typography variant="caption" display="block">{loadedContainers.has(container.containerId) ? visible.filter(p => p.containerId === container.containerId).length : "?"} policies</Typography>
+              {source.vendor === "CP" && collectButton(source.sourceId, container.containerId)}
+              {expandedContainers.has(container.containerId) && loadedContainers.has(container.containerId)
+                && !visible.some(p => p.containerId === container.containerId)
+                && <Typography variant="caption">No policies in this snapshot.</Typography>}
+              {expandedContainers.has(container.containerId) && visible.filter(p => p.containerId === container.containerId).map(policy =>
+                <Box key={policy.id} sx={{ pl: 1 }}><Button fullWidth variant={selected === policy.id ? "contained" : "text"}
+                  aria-pressed={selected === policy.id} aria-current={selected === policy.id ? "page" : undefined} sx={{ justifyContent: "flex-start", textTransform: "none" }}
+                  onClick={() => { setSelected(policy.id); setPage(0); setCollapsed(new Set()); }}><Box component="span" aria-hidden="true" sx={{ width: 6, height: 6, borderRadius: "50%", bgcolor: m3.outline, mr: 1, flexShrink: 0 }} />{displayName(policy.name, "Policy")}</Button>
+                  <Typography variant="caption" sx={{ pl: 1 }}>{data?.metadata.id === policy.id ? data.total : "?"} rules</Typography></Box>)}
             </Box>)}
-          </Box>
-          <Box sx={{ minWidth: 0 }}>
-            {!selected && !loadingTree && !error && <Typography>Select a source to browse stored policies.</Typography>}
+          </Box>;
+        })}
+      </Box>
+      <Box component="section" aria-label="Policy content" sx={{ minWidth: 0, bgcolor: m3.scLowest, borderRadius: 3, p: 3, border: `1px solid ${m3.outlineVar}` }}>
+        <Stack direction="row" justifyContent="space-between" flexWrap="wrap" gap={2} sx={{ mb: 2 }}>
+          <Typography variant="h6">{data ? displayName(data.metadata.name, "Policy") : "Stored policies"}</Typography>
+          <FormControl size="small" sx={{ minWidth: 240 }}>
+            <InputLabel id="policy-device-label">Jump to device's policy</InputLabel>
+            <Select labelId="policy-device-label" label="Jump to device's policy" value={device} onChange={e => {
+              const next = e.target.value; setDevice(next); setPage(0);
+              setSelected(catalog.find(p => !next || p.targets.some(t => t.deviceId === next))?.id ?? "");
+            }}>
+              <MenuItem value="">All management policies</MenuItem>
+              {targets.map(t => <MenuItem key={t.deviceId} value={t.deviceId}>{displayName(t.name, "Device")}</MenuItem>)}
+              {device && !targets.some(t => t.deviceId === device) && <MenuItem value={device}>Requested device</MenuItem>}
+            </Select>
+          </FormControl>
+        </Stack>
+        {collectionStatus && <Typography role="status" sx={{ mb: 1 }}>{collectionStatus}</Typography>}
+        {error && <EmptyPanel title="Policy unavailable" body={error}><Button onClick={() => setRevision(n => n + 1)}>Retry</Button></EmptyPanel>}
+        {loadingTree && !error && <Typography role="status">Loading policies…</Typography>}
+        {!selected && !loadingTree && !error && <Box role="status" aria-label={sources.length ? "No collected policy" : "No policy snapshot"} sx={{ textAlign: "center", py: 6, color: m3.onSurfaceVar }}>
+          <Icon name="rows" size={64} />
+          <Typography variant="h6" sx={{ mt: 2 }}>{sources.length ? "No assigned policy snapshot" : "No policy snapshot"}</Typography>
+          <Typography variant="body2">{sources.length ? "Select a source and container to browse stored policies." : "No management policy has been collected yet."}</Typography>
+        </Box>}
             {selected && !data && !error && <Typography role="status">Loading rules…</Typography>}
             {data && <>
-              <Typography variant="h6">{data.metadata.name}</Typography>
               {!!data.failures?.length && <Box><Chip color="warning" label="Partial snapshot · incomplete" />
-                {data.failures.map(f => <Typography key={f.layerRef} role="alert" variant="caption">{f.layerName || f.layerRef}{f.offset !== undefined ? ` · offset ${f.offset}` : ""}: {f.reason}</Typography>)}</Box>}
+                {data.failures.map(f => <Box key={f.layerRef} role="alert"><Typography variant="body2">{f.layerName || f.layerRef}{f.offset !== undefined ? ` · offset ${f.offset}` : ""}: {failureSentence(f.reason)}</Typography><FailureDetails reason={f.reason} allowed={canCollect} /></Box>)}</Box>}
               {data.policyKind === "LOCAL_FIREWALL" && <Chip size="small" label="local firewall policy" />}
               <Chip size="small" label={`From configuration collected ${data.metadata.collectedAt}`} sx={{ my: 1 }} />
-              <Typography variant="body2">Assigned to: {data.metadata.targets.length === 0 ? "Unassigned" : data.metadata.targets.map(t => `${t.name}${t.context ? ` (${t.context})` : ""} · ${t.syncStatus}`).join(", ")}</Typography>
+              <Stack direction="row" flexWrap="wrap" gap={1} alignItems="center" sx={{ my: 1 }}><Typography variant="body2">Assigned to:</Typography>
+                {data.metadata.targets.length === 0 ? <Chip size="small" label="Unassigned" /> : data.metadata.targets.map(t => <Chip key={t.deviceId} size="small" variant="outlined" label={`${displayName(t.name, "Device")}${t.context ? ` (${t.context})` : ""} · ${t.syncStatus}`} />)}</Stack>
               <Typography variant="caption">{data.policyKind === "LOCAL_FIREWALL" ? "Stored local configuration; runtime enforcement is not inferred." : "Management intent; installation and runtime enforcement are not inferred."}</Typography>
             </>}
             {selected && <TextField label="Search rule names and comments" size="small" fullWidth value={search}
@@ -224,7 +304,6 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
             </>}
           </Box>
         </Box>
-      </>}
     </Box>
     <Drawer anchor="right" open={drawer !== null} onClose={close}>
       <Box role="dialog" aria-modal="true" aria-label={drawer?.rule ? "Rule details" : "Object details"} sx={{ width: { xs: "90vw", sm: 520 }, p: 3, overflowWrap: "anywhere" }}>
@@ -238,7 +317,7 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
           <Typography>Enabled: {drawer.rule.enabled === null ? "UNKNOWN" : String(drawer.rule.enabled)}</Typography>
           {(["source", "destination", "service", "application"] as const).map(key => <Box key={key} sx={{ my: 1 }}>
             <Typography variant="subtitle2">{key}{drawer.rule![key].negated ? " (NOT)" : ""}</Typography>
-            {drawer.rule![key].refs.slice(0, 200).map((id, index) => <Button key={`${id}-${index}`} size="small" onClick={() => void openObject(id)}>{objects.get(id)?.name ?? id}</Button>)}
+            {drawer.rule![key].refs.slice(0, 200).map((id, index) => <Button key={`${id}-${index}`} size="small" onClick={() => void openObject(id)}>{objects.get(id)?.name ?? "Unresolved object"}</Button>)}
           </Box>)}
           <Typography variant="body2">Action: {drawer.rule.action} · Log: {drawer.rule.log}</Typography>
           <Typography variant="body2">{drawer.rule.comment}</Typography>
