@@ -99,6 +99,22 @@ describe("OperationsScreen tabs", () => {
     expect(screen.queryByText("AIView Pseudonymized") !== null).toBe(masked);
   });
 
+  it.each([
+    { masked: true, canRun: true, allowed: false },
+    { masked: false, canRun: false, allowed: false },
+    { masked: false, canRun: true, allowed: true },
+  ])("gates schedule reads on the row affordance (%j)", async ({ masked, canRun, allowed }) => {
+    stubFetch(MEMBERS, READY_SUMMARY.map(row => ({ ...row, masked, canRunReadiness: canRun })));
+    render(withTheme(<OperationsScreen />));
+    fireEvent.click(await screen.findByText("CLS-ROMEO-01"));
+    fireEvent.click(screen.getByRole("button", { name: "Open full detail" }));
+    await screen.findByRole("dialog", { name: "HA readiness detail" });
+    await act(async () => {});
+    expect(vi.mocked(fetch).mock.calls.some(([input]) => String(input).endsWith("/schedules"))).toBe(allowed);
+    expect(screen.queryByText("Available to operators") !== null).toBe(!allowed);
+    expect(screen.queryByRole("button", { name: "Schedule Maintenance Window" }) !== null).toBe(allowed);
+  });
+
   it("submits read-only readiness from the unit row", async () => {
     stubFetch(MEMBERS, READY_SUMMARY);
     render(withTheme(<OperationsScreen />));
