@@ -8,6 +8,7 @@ import com.securityexpert.nexus.ui2.persistence.AuditedTransactionBoundary;
 /** One latest parsed snapshot per management policy; no raw vendor response or HTTP write surface. */
 public final class PolicySnapshotRepository {
     public record Stored(String id, String collectedAt, String metadataJson, String snapshotJson) {}
+    public record CatalogEntry(String metadataJson, int ruleCount) {}
     private final TransactionBoundary transactions;
     public PolicySnapshotRepository(TransactionBoundary transactions) { this.transactions = transactions; }
 
@@ -15,9 +16,24 @@ public final class PolicySnapshotRepository {
         return transactions.inTransaction(db -> db.fetch("select metadata::text as metadata from policy_snapshot order by policy_id")
                 .map(row -> row.get("metadata", String.class)));
     }
+    public List<CatalogEntry> catalogEntries() {
+        return transactions.inTransaction(db -> db.fetch("select metadata::text as metadata, "
+                + "(select coalesce(sum(jsonb_array_length(s->'rules')), 0)::int from jsonb_array_elements(snapshot->'sections') s) as rule_count "
+                + "from policy_snapshot order by policy_id")
+                .map(row -> new CatalogEntry(row.get("metadata", String.class), row.get("rule_count", Integer.class))));
+    }
     public Optional<String> find(String id) {
         return transactions.inTransaction(db -> db.fetch("select snapshot::text as snapshot from policy_snapshot where policy_id = {0}", id)
                 .stream().findFirst().map(row -> row.get("snapshot", String.class)));
+    }
+    public List<String> history(String policyId, String ruleId, int page) {
+        return transactions.inTransaction(db -> db.fetch("select jsonb_build_object('revision', revision_id, 'ruleId', rule_id, "
+                + "'identityFallback', identity_fallback, 'changeType', change_type, 'collectedAt', collected_at, "
+                + "'changedOn', changed_on, 'changedBy', changed_by, 'changes', changes)::text as revision "
+                + "from policy_rule_history where policy_id = {0} and ({1} = '' or rule_key in "
+                + "(select rule_key from policy_rule_history where policy_id = {0} and rule_id = {1})) "
+                + "order by collected_at desc, revision_id desc limit 200 offset {2}", policyId, ruleId, (long) page * 200)
+                .map(row -> row.get("revision", String.class)));
     }
     /** Future approved collectors publish a complete parse atomically; older runs cannot replace newer ones. */
     public void save(Stored stored, String actorFingerprint, String actionId) {

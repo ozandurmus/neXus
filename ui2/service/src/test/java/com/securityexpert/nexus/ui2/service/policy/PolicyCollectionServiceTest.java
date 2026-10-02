@@ -61,6 +61,7 @@ class PolicyCollectionServiceTest {
         when(tx.inTransaction(any())).thenAnswer(call -> ((Function<DSLContext, ?>) call.getArgument(0)).apply(db));
         var progress = mock(Record.class);
         when(progress.get("state", String.class)).thenReturn("FAILED");
+        when(progress.get("cancel_requested", Boolean.class)).thenReturn(true);
         when(progress.get("reason", String.class)).thenReturn("TIMEOUT");
         when(progress.get("step", Integer.class)).thenReturn(6);
         when(progress.get("total", Integer.class)).thenReturn(60);
@@ -75,13 +76,25 @@ class PolicyCollectionServiceTest {
         var view = new PolicyCollectionService(tx).status("job-1").orElseThrow();
         assertEquals("2026-10-02T04:00:00Z", view.get("collectedAt"));
         assertEquals(true, view.get("hasTranscript"));
+        assertEquals(true, view.get("cancelRequested"));
         assertEquals(6, view.get("step"));
         assertEquals(60, view.get("total"));
         assertEquals(2, view.get("layer"));
         assertEquals(5, view.get("layers"));
         assertEquals(4000, view.get("rulesFetched"));
         var masked = (Map<?, ?>) PolicyPrivacy.mask(view, "", new TopologyNamePseudonymizer(new byte[32]), new SubnetPreservingIpMasker(new byte[32]));
+        assertEquals(true, masked.get("cancelRequested"));
         assertEquals(view.get("collectedAt"), masked.get("collectedAt"));
         assertEquals(true, masked.get("hasTranscript"));
+        for (var sample : List.of(new String[]{"COMPLETED", "COLLECTION_PENDING", "COMPLETED"},
+                new String[]{"COMPLETED", "PARTIAL_SNAPSHOT undisclosed step", "PARTIAL"},
+                new String[]{"FAILED", "TIMEOUT", "FAILED"})) {
+            when(progress.get("state", String.class)).thenReturn(sample[0]);
+            when(progress.get("reason", String.class)).thenReturn(sample[1]);
+            var outcome = new PolicyCollectionService(tx).status("job-1").orElseThrow();
+            assertEquals(sample[2], outcome.get("outcome"));
+            var safe = (Map<?, ?>) PolicyPrivacy.mask(outcome, "", new TopologyNamePseudonymizer(new byte[32]), new SubnetPreservingIpMasker(new byte[32]));
+            assertEquals(sample[2], safe.get("outcome"));
+        }
     }
 }

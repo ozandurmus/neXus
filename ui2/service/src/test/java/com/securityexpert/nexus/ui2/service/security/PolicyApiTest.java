@@ -20,7 +20,7 @@ class PolicyApiTest {
     @Test void policyRoutesKeepReadsSeparateFromAdminCollection() {
         var action = new ActionRegistry().find(ActionRegistry.POLICY_READ).orElseThrow();
         assertEquals(Set.of(RoleToken.SECURITY_ADMIN, RoleToken.ONBOARDING_ADMIN, RoleToken.REPLAY_VIEWER), action.requiredRoleTokens());
-        for (String route : List.of("GET /api/v2/policy/tree", "GET /api/v2/policy/collections/*", "GET /api/v2/policy/devices", "GET /api/v2/policy/devices/*", "GET /api/v2/policy/policies/*", "GET /api/v2/policy/objects/*"))
+        for (String route : List.of("GET /api/v2/policy/tree", "GET /api/v2/policy/collections/*", "GET /api/v2/policy/devices", "GET /api/v2/policy/devices/*", "GET /api/v2/policy/policies/*", "GET /api/v2/policy/policies/*/history", "GET /api/v2/policy/objects/*"))
             assertEquals(ActionRegistry.POLICY_READ, SecurityWebMvcConfig.ACTION_ID_BY_ROUTE.get(route));
         assertEquals(Set.of(RoleToken.SECURITY_ADMIN, RoleToken.ONBOARDING_ADMIN),
                 new ActionRegistry().find(ActionRegistry.POLICY_COLLECT).orElseThrow().requiredRoleTokens());
@@ -37,6 +37,7 @@ class PolicyApiTest {
                 "Synthetic policy", "2026-10-01T12:00:00Z", "artifact-1", List.of());
         var snapshot = new PolicySnapshot(meta, List.of(), Map.of());
         when(query.find("policy-1")).thenReturn(Optional.of(snapshot));
+        when(query.history("policy-1", "", 0)).thenReturn(new PolicyResponse(Map.of("revisions", List.of(), "page", 0)));
         var body = new LinkedHashMap<String, Object>();
         body.put("id", "policy-1"); body.put("name", "Synthetic policy"); body.put("uuid", "native-synthetic-uuid");
         body.put("comment", "Unregistered synthetic hostname"); body.put("values", List.of("192.0.2.8", "host.example.invalid"));
@@ -76,7 +77,7 @@ class PolicyApiTest {
                     .andExpect(status().is(admin ? 202 : 403));
             // Use the repository's session-cookie name, the same boundary used by every controller.
             var response = mvc.perform(get("/api/v2/policy/policies/policy-1").servletPath("/api/v2/policy/policies/policy-1").cookie(new Cookie("ui2_session", cookie)));
-            for (String path : List.of("/api/v2/policy/tree", "/api/v2/policy/collections/job-1")) {
+            for (String path : List.of("/api/v2/policy/tree", "/api/v2/policy/collections/job-1", "/api/v2/policy/policies/policy-1/history")) {
                 var read = mvc.perform(get(path).servletPath(path).cookie(new Cookie("ui2_session", cookie)));
                 read.andExpect(status().is(allowed ? 200 : 403));
                 if (allowed) read.andExpect(header().string("Cache-Control", "no-store"));
@@ -98,7 +99,7 @@ class PolicyApiTest {
     @Test void controllerBoundsPagingAndScopesObjectsToPolicyAssignments() {
         var query = mock(PolicyQueryService.class); var controller = new PolicyController(query);
         assertEquals(400, controller.page("policy-1", -1, "", new org.springframework.mock.web.MockHttpServletRequest()).getStatusCode().value());
-        assertEquals(400, controller.page("policy-1", 0, "x".repeat(201), new org.springframework.mock.web.MockHttpServletRequest()).getStatusCode().value());
+        assertEquals(400, controller.page("policy-1", 0, "x".repeat(1001), new org.springframework.mock.web.MockHttpServletRequest()).getStatusCode().value());
         assertEquals(400, controller.object("object-1", "", "").getStatusCode().value());
         when(query.catalog()).thenReturn(List.of());
         assertEquals(200, controller.device("missing", "", 0, "", new org.springframework.mock.web.MockHttpServletRequest()).getStatusCode().value());

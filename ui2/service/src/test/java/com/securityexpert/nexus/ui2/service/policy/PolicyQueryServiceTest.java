@@ -90,4 +90,53 @@ class PolicyQueryServiceTest {
         assertNotEquals("Synthetic layer", masked.path("layerName").asText());
     }
 
+    @Test void catalogRuleCountsComeFromStoredSectionsAndSurviveAIView() throws Exception {
+        var create = org.jooq.impl.DSL.using(org.jooq.SQLDialect.POSTGRES);
+        String metadata = mapper.writeValueAsString(snapshot().metadata());
+        List<String> sql = new ArrayList<>();
+        var tx = new com.securityexpert.nexus.ui2.persistence.JooqTransactionBoundary(org.jooq.impl.DSL.using(
+            new org.jooq.tools.jdbc.MockConnection(context -> {
+                sql.add(context.sql());
+                return new org.jooq.tools.jdbc.MockResult[]{new org.jooq.tools.jdbc.MockResult(1,
+                    create.fetchFromStringData(new String[]{"metadata", "rule_count"}, new String[]{metadata, "5000"}))};
+            }), org.jooq.SQLDialect.POSTGRES));
+        var catalog = new PolicyQueryService(tx, mapper, names).catalogViews();
+        assertEquals("policy-1", catalog.get(0).get("id"));
+        assertEquals(5000, catalog.get(0).get("ruleCount"));
+        var masked = mapper.valueToTree(PolicyPrivacy.mask(Map.of("policies", catalog), "", names,
+            new com.securityexpert.nexus.ui2.service.privacy.SubnetPreservingIpMasker(new byte[32])));
+        assertEquals(5000, masked.path("policies").get(0).path("ruleCount").asInt());
+        assertEquals("domain-1", masked.path("policies").get(0).path("containerId").asText());
+        assertTrue(sql.get(0).contains("jsonb_array_elements(snapshot->'sections')"));
+        assertTrue(sql.get(0).contains("jsonb_array_length(s->'rules')"));
+    }
+
+    @Test void structuredAIViewQueryCannotProbeRawNamesIpsUsersOrZones() {
+        var ips = new com.securityexpert.nexus.ui2.service.privacy.SubnetPreservingIpMasker(new byte[32]);
+        var query = new PolicyQueryService(mock(TransactionBoundary.class), mapper, names, null, ips);
+        var base = snapshot(); var cell = new Cell(List.of("leaf"), false);
+        var rule = new Rule("r1", "uuid-1", 1, "Synthetic rule", true, cell, cell, cell, cell, "Accept", "Log", "Synthetic comment",
+                Map.of("from", List.of("Synthetic zone"), "source-user", List.of("Synthetic user")));
+        var snapshot = new PolicySnapshot(base.metadata(), List.of(new Section("s1", "Pre rules", "Shared", null, List.of(rule))),
+                Map.of("leaf", new PolicyObject("leaf", "Synthetic object", "address", List.of(), List.of("ipv4-address: 192.0.2.8"), "RESOLVED")));
+        for (String q : List.of("source.ip='192.0.2.8'", "name='Synthetic rule'", "zone.from='Synthetic zone'", "user='Synthetic user'"))
+            assertEquals(0, query.page(snapshot, 0, q, true).body().get("total"));
+        assertEquals(1, query.page(snapshot, 0, "source.ip='" + ips.mask("192.0.2.8") + "' AND action='accept'", true).body().get("total"));
+    }
+    @Test void schedulesHistoryAndMetricsRetainSafeSemanticsAndMaskIdentityValues() {
+        var schedule = Map.of("kind", "recurring", "timezone", "UTC", "timezoneKnown", false,
+                "windows", List.of(Map.of("days", List.of(1,2,3,4,5), "monthDays", List.of(), "start", "08:00", "end", "18:00")));
+        var revision = Map.of("changeType", "modified", "changedBy", "Synthetic editor", "changedOn", "2026-10-01T12:00:00Z",
+                "changes", List.of(Map.of("field", "source", "before", Map.of("refs", List.of(Map.of("id", "object-1", "name", "Synthetic object"))),
+                        "after", Map.of("refs", List.of())), Map.of("field", "action", "before", "Accept", "after", "Drop")));
+        var masked = mapper.valueToTree(PolicyPrivacy.mask(Map.of("schedule", schedule, "revisions", List.of(revision),
+                "permissiveness", Map.of("level", "High", "reasons", List.of("Any source", "Any service"))), "", names,
+                new com.securityexpert.nexus.ui2.service.privacy.SubnetPreservingIpMasker(new byte[32])));
+        assertFalse(masked.toString().contains("Synthetic"));
+        assertEquals("08:00", masked.path("schedule").path("windows").get(0).path("start").asText());
+        assertEquals("High", masked.path("permissiveness").path("level").asText());
+        assertEquals("modified", masked.path("revisions").get(0).path("changeType").asText());
+        assertEquals("Drop", masked.path("revisions").get(0).path("changes").get(1).path("after").asText());
+    }
+
 }

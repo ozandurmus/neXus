@@ -102,15 +102,16 @@ public class PolicyCollectionRepository {
     }
     public Optional<Map<String, Object>> status(String jobId) {
         return tx.inTransaction(db -> db.fetch("select j.state, j.cancel_requested, coalesce(j.terminal_reason, '') as reason, "
-            + "coalesce(max(a.step_index), 0) as step, coalesce(max(substring(a.step_kind from 'POLICY_PROGRESS_([0-9]+)')::int), 0) as total, "
+            + "coalesce(a.step_index, 0) as step, coalesce(substring(a.step_kind from 'POLICY_PROGRESS_([0-9]+)')::int, 0) as total, "
             + "coalesce(split_part(l.step_kind, '_', 3)::int, 0) as layer, "
             + "coalesce(split_part(l.step_kind, '_', 4)::int, 0) as layers, "
             + "coalesce(split_part(l.step_kind, '_', 5)::int, 0) as rules "
             + "from jobs j join policy_collection_request p on p.job_id = j.job_id "
-            + "left join job_step_attempt a on a.job_id = j.job_id and a.lease_epoch = j.lease_epoch and a.step_kind like 'POLICY_PROGRESS_%' "
+            + "left join lateral (select step_index, step_kind from job_step_attempt where job_id = j.job_id and lease_epoch = j.lease_epoch "
+            + "and step_kind like 'POLICY_PROGRESS_%' order by step_index desc limit 1) a on true "
             + "left join lateral (select step_kind from job_step_attempt where job_id = j.job_id and lease_epoch = j.lease_epoch "
             + "and step_kind like 'POLICY_LAYER_%' order by step_index desc limit 1) l on true "
-            + "where j.job_id = {0} group by j.job_id, l.step_kind", jobId).stream().findFirst().map(r -> Map.<String, Object>of(
+            + "where j.job_id = {0}", jobId).stream().findFirst().map(r -> Map.<String, Object>of(
                 "jobId", jobId, "cancelRequested", Boolean.TRUE.equals(r.get("cancel_requested", Boolean.class)), "state", r.get("state", String.class), "reason", r.get("reason", String.class),
                 "step", r.get("step", Integer.class), "total", r.get("total", Integer.class),
                 "layer", r.get("layer", Integer.class), "layers", r.get("layers", Integer.class), "rulesFetched", r.get("rules", Integer.class))));

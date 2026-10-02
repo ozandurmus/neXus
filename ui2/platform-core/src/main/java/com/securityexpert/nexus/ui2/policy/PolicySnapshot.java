@@ -37,7 +37,10 @@ public record PolicySnapshot(Metadata metadata, List<Section> sections, Map<Stri
         public Cell { refs = List.copyOf(refs); }
     }
     public record PolicyObject(String id, String name, String type, List<String> members,
-            List<String> values, String status) {
+            List<String> values, String status, PolicySchedule schedule) {
+        public PolicyObject(String id, String name, String type, List<String> members, List<String> values, String status) {
+            this(id, name, type, members, values, status, null);
+        }
         public PolicyObject { members = List.copyOf(members); values = List.copyOf(values); }
     }
     /** Length-prefix each identity component; no case/numeric normalization or ambiguous concatenation. */

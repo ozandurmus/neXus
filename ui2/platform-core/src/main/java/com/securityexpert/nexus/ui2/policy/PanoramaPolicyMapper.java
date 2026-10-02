@@ -41,7 +41,7 @@ public final class PanoramaPolicyMapper {
         if (scopes.isEmpty()) throw new IllegalArgumentException("No management policy scope");
         Map<String, Definition> definitions = new LinkedHashMap<>();
         for (Element scope : scopes) {
-            for (String type : List.of("address", "address-group", "service", "service-group", "application-group", "tag")) {
+            for (String type : List.of("address", "address-group", "service", "service-group", "application-group", "tag", "schedule")) {
                 for (Element entry : PolicyXml.selectRelative(scope, type + "/entry")) {
                     String key = family(type) + ":" + entry.getAttribute("name");
                     var definition = new Definition(entry, type, scopeName(scope));
@@ -94,7 +94,7 @@ public final class PanoramaPolicyMapper {
             Map<String, Definition> definitions = new LinkedHashMap<>();
             var scopes = new ArrayList<>(PolicyXml.selectRelative(root, "shared"));
             scopes.add(vsys);
-            for (Element scope : scopes) for (String type : List.of("address", "address-group", "service", "service-group", "application-group", "tag"))
+            for (Element scope : scopes) for (String type : List.of("address", "address-group", "service", "service-group", "application-group", "tag", "schedule"))
                 for (Element entry : PolicyXml.selectRelative(scope, type + "/entry"))
                     definitions.put(family(type) + ":" + entry.getAttribute("name"), new Definition(entry, type, scopeName(scope)));
             Element localScope = (Element) vsys.cloneNode(true);
@@ -120,10 +120,12 @@ public final class PanoramaPolicyMapper {
         List<Rule> rules = new ArrayList<>();
         for (Element entry : PolicyXml.selectRelative(scope, phase + "/security/rules/entry")) {
             Map<String, List<String>> extras = new LinkedHashMap<>();
-            for (String key : List.of("from", "to", "source-user", "category", "tag", "schedule", "rule-type", "log-setting", "target/negate", "profile-setting/group")) {
+            for (String key : List.of("from", "to", "source-user", "category", "tag", "schedule", "rule-type", "log-setting", "target/negate", "profile-setting/group", "profile-setting/profiles/virus", "profile-setting/profiles/spyware", "profile-setting/profiles/vulnerability", "profile-setting/profiles/url-filtering", "profile-setting/profiles/file-blocking", "profile-setting/profiles/wildfire-analysis")) {
                 List<String> values = members(entry, key);
                 if (!values.isEmpty()) extras.put(key, values);
             }
+            if (extras.containsKey("schedule")) extras.put("schedule", extras.get("schedule").stream()
+                    .map(name -> object(meta, "schedule", name, definitions, objects, 0)).toList());
             // Device serials in target selectors are evidence values, never used as enrolled-device identifiers.
             List<String> targetSelectors = PolicyXml.selectRelative(entry, "target/devices/entry").stream()
                     .map(e -> e.getAttribute("name")).toList();
@@ -173,7 +175,7 @@ public final class PanoramaPolicyMapper {
                 if (!value.isEmpty()) values.add(field + ": " + value);
             }
             String status = !text(entry, "dynamic/filter").isEmpty() ? "DYNAMIC" : "RESOLVED";
-            objects.put(id, new PolicyObject(id, name, type, refs, values, status));
+            objects.put(id, new PolicyObject(id, name, type, refs, values, status, type.equals("schedule") ? PolicySchedule.panorama(entry) : null));
         }
         return id;
     }

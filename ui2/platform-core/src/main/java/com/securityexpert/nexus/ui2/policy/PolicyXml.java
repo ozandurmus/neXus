@@ -76,7 +76,7 @@ public final class PolicyXml {
         if (scope < 0 && path.size() >= 4 && path.get(0).equals("devices") && path.get(1).equals("entry")
                 && Set.of("vsys", "device-group").contains(path.get(2)) && path.get(3).equals("entry")) scope = 3;
         if (scope >= 0) return path.size() <= scope + 1 || Set.of("address", "address-group", "service", "service-group",
-                "application-group", "tag", "rulebase", "pre-rulebase", "post-rulebase").contains(path.get(scope + 1));
+                "application-group", "tag", "schedule", "rulebase", "pre-rulebase", "post-rulebase").contains(path.get(scope + 1));
         return path.get(0).equals("devices") && (path.size() == 1 || path.get(1).equals("entry"))
                 && (path.size() <= 2 || Set.of("vsys", "device-group").contains(path.get(2)));
     }

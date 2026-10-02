@@ -114,11 +114,34 @@ class PolicyCollectionRepositoryTest {
         }), SQLDialect.POSTGRES)));
         var status = repository.status("job-1").orElseThrow();
         assertEquals(true, status.get("cancelRequested"));
+        assertEquals(12, status.get("step"));
+        assertEquals(0, status.get("total"));
         assertEquals(2, status.get("layer"));
         assertEquals(5, status.get("layers"));
         assertEquals(4000, status.get("rulesFetched"));
         assertTrue(sql.get(0).contains("order by step_index desc limit 1"));
         assertTrue(sql.get(0).contains("lease_epoch = j.lease_epoch"));
+        assertTrue(sql.get(0).contains("select step_index, step_kind"));
+        assertFalse(sql.get(0).contains("max(")); // An earlier total must not replace the latest progress total.
+    }
+
+    @Test void latestStatusUsesSubmittedTimeAndOnlyTheSelectedJob() {
+        List<String> sql = new ArrayList<>(); List<Object> bindings = new ArrayList<>();
+        var create = DSL.using(SQLDialect.POSTGRES);
+        var repository = new PolicyCollectionRepository(new JooqTransactionBoundary(DSL.using(new MockConnection(context -> {
+            sql.add(context.sql()); bindings.addAll(Arrays.asList(context.bindings()));
+            return new MockResult[] { new MockResult(1, context.sql().startsWith("select p.job_id")
+                ? create.fetchFromStringData(new String[]{"job_id"}, new String[]{"job-latest"})
+                : create.fetchFromStringData(new String[]{"state", "cancel_requested", "reason", "step", "total", "layer", "layers", "rules"},
+                    new String[]{"COMPLETED", "false", "", "4", "0", "0", "0", "0"})) };
+        }), SQLDialect.POSTGRES)));
+        var status = repository.latestStatus("source-1").orElseThrow();
+        assertEquals("job-latest", status.get("jobId"));
+        assertEquals("COMPLETED", status.get("state"));
+        assertEquals(false, status.get("cancelRequested"));
+        assertEquals(0, status.get("total"));
+        assertTrue(sql.get(0).contains("order by j.submitted_at desc limit 1"));
+        assertEquals(List.of("source-1", "job-latest"), bindings);
     }
 
 }
