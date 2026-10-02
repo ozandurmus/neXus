@@ -34,6 +34,7 @@ class PolicyCollectionRepositoryTest {
         }), SQLDialect.POSTGRES)));
         var snapshot = new PolicySnapshotRepository.Stored("policy-1", "2026-10-01T12:00:00Z", "{}", "{}");
         assertFalse(repository.publish("job-1", 7, List.of(snapshot), "synthetic-actor"));
+        assertFalse(repository.publishWithWarnings("job-1", 7, List.of(snapshot), "synthetic-actor", "PARTIAL_SNAPSHOT layer-1: TIMEOUT"));
         assertTrue(sql.stream().anyMatch(s -> s.contains("lease_epoch = ?") && s.contains("lease_expires_at > now() for update")));
         assertFalse(sql.stream().anyMatch(s -> s.startsWith("insert into policy_snapshot")));
     }    @Test void unmatchedPanMemberUsesOpaqueReferenceAndExactDiscoveryIdentity() {
@@ -53,25 +54,34 @@ class PolicyCollectionRepositoryTest {
         assertEquals("UNKNOWN", target.syncStatus());
     }
 
-    @Test void partialPublicationStoresParsedSnapshotsAndFailedReasonUnderTheLeaseLock() {
-        List<String> sql = new ArrayList<>(); List<Object> bindings = new ArrayList<>();
-        var create = DSL.using(SQLDialect.POSTGRES);
-        var repository = new PolicyCollectionRepository(new JooqTransactionBoundary(DSL.using(new MockConnection(context -> {
-            sql.add(context.sql()); bindings.addAll(Arrays.asList(context.bindings()));
-            return new MockResult[] { new MockResult(1, context.sql().startsWith("select job_id")
-                ? create.fetchFromStringData(new String[] { "job_id" }, new String[] { "job-1" }) : null) };
-        }), SQLDialect.POSTGRES)));
-        assertTrue(repository.publish("job-1", 7, List.of(new PolicySnapshotRepository.Stored("policy-1", "2026-10-01T12:00:00Z", "{}", "{}")),
-            "synthetic-actor", "PARTIAL_SNAPSHOT layer-1: TIMEOUT"));
-        int locked = -1, saved = -1, failed = -1;
-        for (int i = 0; i < sql.size(); i++) {
-            if (sql.get(i).contains("for update")) locked = i;
-            if (sql.get(i).startsWith("insert into policy_snapshot")) saved = i;
-            if (sql.get(i).startsWith("update jobs set state")) failed = i;
+    @Test void partialPublicationStoresSnapshotsUnderTheLeaseLockAndPreservesCpOutcome() {
+        for (boolean completedWithWarnings : List.of(false, true)) {
+            List<String> sql = new ArrayList<>(); List<Object> bindings = new ArrayList<>();
+            var create = DSL.using(SQLDialect.POSTGRES);
+            var repository = new PolicyCollectionRepository(new JooqTransactionBoundary(DSL.using(new MockConnection(context -> {
+                sql.add(context.sql()); bindings.addAll(Arrays.asList(context.bindings()));
+                return new MockResult[] { new MockResult(1, context.sql().startsWith("select job_id")
+                    ? create.fetchFromStringData(new String[] { "job_id" }, new String[] { "job-1" }) : null) };
+            }), SQLDialect.POSTGRES)));
+            var snapshots = List.of(new PolicySnapshotRepository.Stored("policy-1", "2026-10-01T12:00:00Z", "{}", "{}"));
+            String warning = "PARTIAL_SNAPSHOT layer-1: TIMEOUT";
+            assertTrue(completedWithWarnings ? repository.publishWithWarnings("job-1", 7, snapshots, "synthetic-actor", warning)
+                    : repository.publish("job-1", 7, snapshots, "synthetic-actor", warning));
+            int locked = -1, saved = -1, completed = -1;
+            for (int i = 0; i < sql.size(); i++) {
+                if (sql.get(i).contains("for update")) locked = i;
+                if (sql.get(i).startsWith("insert into policy_snapshot")) saved = i;
+                if (sql.get(i).startsWith("update jobs set state")) completed = i;
+            }
+            assertTrue(locked >= 0 && saved > locked && completed > saved);
+            assertTrue(bindings.contains(completedWithWarnings ? "COMPLETED" : "FAILED"));
+            assertTrue(bindings.contains("PARTIAL_SNAPSHOT layer-1: TIMEOUT"));
         }
-        assertTrue(locked >= 0 && saved > locked && failed > saved);
-        assertTrue(bindings.contains("FAILED"));
-        assertTrue(bindings.contains("PARTIAL_SNAPSHOT layer-1: TIMEOUT"));
+    }
+    @Test void warningPublicationRequiresAtLeastOneSnapshot() {
+        var repository = new PolicyCollectionRepository(null);
+        assertThrows(IllegalArgumentException.class, () -> repository.publishWithWarnings("job-1", 7, List.of(),
+                "synthetic-actor", "PARTIAL_SNAPSHOT layer-1: TIMEOUT"));
     }
 
 }

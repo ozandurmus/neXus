@@ -76,5 +76,37 @@ class PolicyCollectionJobExecutorTest {
         verify(repository, never()).publish(anyString(), anyLong(), anyList(), anyString());
         verify(attempts).insertPreContact(eq("job-pan"), eq(1L), eq(0), eq("PAN_POLICY_READ"), eq("read"), eq(1));
     }
+    @Test void panoramaPartialPublicationCompletesWithWarningsAndPreservesEveryFailure() throws Exception {
+        var leases = mock(JobLeaseRepository.class);
+        var attempts = mock(JobStepAttemptRepository.class);
+        var runs = mock(DiscoveryRunRepository.class);
+        var repository = mock(PolicyCollectionRepository.class);
+        var collector = mock(PanoramaPolicyCollector.class);
+        var run = new DiscoveryRun("run-pan", "palo_alto", "192.0.2.10", "synthetic-ref", "synthetic-actor",
+            DiscoveryRunState.FINISHED, Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
+        when(runs.findRun("run-pan")).thenReturn(Optional.of(run));
+        when(repository.request("job-pan")).thenReturn(Optional.of(new PolicyCollectionRepository.Request("pan-1", "", false)));
+        when(repository.eligible("pan-1", "run-pan")).thenReturn(true);
+        when(leases.transitionState(anyString(), anyLong(), any(), any(), anyString(), anyString())).thenReturn(true);
+        when(attempts.insertPreContact(anyString(), anyLong(), anyInt(), anyString(), anyString(), anyInt())).thenReturn("attempt-pan");
+        when(attempts.writeOutcome(anyString(), anyLong(), anyString(), isNull(), anyBoolean(), isNull(), isNull(), isNull())).thenReturn(true);
+        var metadata = new com.securityexpert.nexus.ui2.policy.PolicySnapshot.Metadata("policy-1", "pan-1", "Synthetic source", "PAN", "group-1",
+                "Synthetic group", "Synthetic policy", "2026-10-02T03:39:00Z", "", List.of());
+        var snapshot = new com.securityexpert.nexus.ui2.policy.PolicySnapshot(metadata, List.of(), Map.of(), List.of(
+            new com.securityexpert.nexus.ui2.policy.PolicySnapshot.CollectionFailure("group-2", "device group target=pan-1: XML_PARSE_OR_SIZE_FAILED"),
+            new com.securityexpert.nexus.ui2.policy.PolicySnapshot.CollectionFailure("group-3", "device group target=pan-1: API_ERROR_7")));
+        when(collector.collect(any(), any(), any())).thenReturn(List.of(snapshot));
+        when(repository.publishWithWarnings(anyString(), anyLong(), anyList(), anyString(), anyString())).thenReturn(true);
+        var executor = new PolicyCollectionJobExecutor(leases, attempts, runs, repository, null, key -> List.of()).withPanorama(collector);
+        assertInstanceOf(JobOutcome.Completed.class, executor.execute("job-pan", 1, "run-pan"));
+        var stored = org.mockito.ArgumentCaptor.forClass(List.class);
+        verify(repository).publishWithWarnings(eq("job-pan"), eq(1L), stored.capture(), anyString(), startsWith("PARTIAL_SNAPSHOT "));
+        var published = (PolicySnapshotRepository.Stored) stored.getValue().get(0);
+        assertTrue(published.snapshotJson().contains("group-2"));
+        assertTrue(published.snapshotJson().contains("group-3"));
+        when(repository.publishWithWarnings(anyString(), anyLong(), anyList(), anyString(), anyString())).thenReturn(false);
+        assertInstanceOf(JobOutcome.ZombieStopped.class, executor.execute("job-pan", 1, "run-pan"));
+        verify(leases, never()).transitionState(anyString(), anyLong(), any(), eq(JobState.FAILED), anyString(), anyString(), anyString());
+    }
 
 }

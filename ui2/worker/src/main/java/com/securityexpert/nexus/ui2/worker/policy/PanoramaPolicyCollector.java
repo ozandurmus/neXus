@@ -16,7 +16,7 @@ import static com.securityexpert.nexus.ui2.policy.PolicySnapshot.*;
 import com.securityexpert.nexus.ui2.worker.discovery.pan.PanoramaApiRoutes;
 import com.securityexpert.nexus.ui2.worker.transport.xmlapi.PanCredentialResolver;
 
-/** Serial Panorama intent reads; all DGs parse before the executor publishes any snapshot. */
+/** Serial Panorama intent reads; complete independent DGs survive a failed sibling. */
 public final class PanoramaPolicyCollector {
     static final int MAX_GROUPS = 200;
     private static final Duration TIMEOUT = Duration.ofSeconds(60);
@@ -95,10 +95,18 @@ public final class PanoramaPolicyCollector {
             Element devices = document.createElement("devices"); config.appendChild(devices);
             Element local = document.createElement("entry"); local.setAttribute("name", "localhost.localdomain"); devices.appendChild(local);
             Element deviceGroups = document.createElement("device-group"); local.appendChild(deviceGroups);
+            List<CollectionFailure> failures = new ArrayList<>();
+            Set<String> parsed = new HashSet<>();
             for (String name : members.keySet()) {
-                Element group = result(read(target, checked(1, name, key, lease), timer, deadline, bytes), "entry");
-                if (!name.equals(group.getAttribute("name"))) throw failure();
-                deviceGroups.appendChild(document.importNode(group, true));
+                var spec = checked(1, name, key, lease);
+                try {
+                    Element group = read(target, spec, timer, deadline, bytes, name);
+                    deviceGroups.appendChild(document.importNode(group, true));
+                    parsed.add(name);
+                } catch (PolicyCollectionTrace.Failure invalid) {
+                    if (fatal(invalid)) throw invalid;
+                    failures.add(new CollectionFailure(ref(scope.sourceId(), "device-group", name), invalid.getMessage()));
+                }
             }
             List<PolicySnapshot> snapshots = new ArrayList<>();
             String collectedAt = Instant.now().toString();
@@ -107,17 +115,24 @@ public final class PanoramaPolicyCollector {
                 if (!lease.getAsBoolean() || System.nanoTime() >= deadline) throw failure();
                 String container = ref(scope.sourceId(), "device-group", group.getKey());
                 if (!scope.domainRef().isEmpty() && !scope.domainRef().equals(container)) continue;
-                var targets = targets(run, scope.sourceId(), group.getValue());
-                var metadata = new Metadata(ref(container, "policy"), scope.sourceId(), "Panorama " + scope.sourceId(), "PAN", container,
-                        group.getKey(), group.getKey(), collectedAt, "", targets);
-                var snapshot = new PanoramaPolicyMapper().mapUnverifiedPrecedence(metadata, config, group.getKey(), parents);
-                rules += snapshot.sections().stream().mapToLong(section -> section.rules().size()).sum();
-                objects += snapshot.objects().size();
-                if (rules > 100_000 || objects > 200_000) throw failure();
-                snapshots.add(snapshot);
+                if (!parsed.contains(group.getKey())) continue;
+                PolicyCollectionTrace.step("device group " + container + " mapping", scope.sourceId());
+                try {
+                    var targets = targets(run, scope.sourceId(), group.getValue());
+                    var metadata = new Metadata(ref(container, "policy"), scope.sourceId(), "Panorama " + scope.sourceId(), "PAN", container,
+                            group.getKey(), group.getKey(), collectedAt, "", targets);
+                    var snapshot = new PanoramaPolicyMapper().mapUnverifiedPrecedence(metadata, config, group.getKey(), parents);
+                    rules += snapshot.sections().stream().mapToLong(section -> section.rules().size()).sum();
+                    objects += snapshot.objects().size();
+                    if (rules > 100_000 || objects > 200_000) throw PolicyCollectionTrace.failure("SIZE_LIMIT");
+                    snapshots.add(snapshot);
+                } catch (IllegalArgumentException | PolicyCollectionTrace.Failure invalid) {
+                    if (invalid instanceof PolicyCollectionTrace.Failure traced && fatal(traced)) throw traced;
+                    failures.add(new CollectionFailure(container, PolicyCollectionTrace.reason(invalid)));
+                }
             }
-            if (!scope.domainRef().isEmpty() && snapshots.isEmpty()) throw failure();
-            return snapshots;
+            if ((!scope.domainRef().isEmpty() || !members.isEmpty()) && snapshots.isEmpty()) throw failure();
+            return snapshots.stream().map(s -> new PolicySnapshot(s.metadata(), s.sections(), s.objects(), failures)).toList();
         } finally {
             timer.shutdownNow();
             if (key != null) Arrays.fill(key, '\0');
@@ -130,6 +145,9 @@ public final class PanoramaPolicyCollector {
         return request(index, group, key);
     }
     private Element read(ApiTarget target, XmlApiSpec spec, ScheduledExecutorService timer, long deadline, long[] bytes) {
+        return read(target, spec, timer, deadline, bytes, null);
+    }
+    private Element read(ApiTarget target, XmlApiSpec spec, ScheduledExecutorService timer, long deadline, long[] bytes, String group) {
         String step = "keygen".equals(spec.type()) ? "authentication" : spec.formParams().containsKey("xpath")
             ? ("/config/shared".equals(spec.formParams().get("xpath")) ? "shared" : "device group " + ref(spec.formParams().get("xpath")))
             : "<show><devicegroups/></show>".equals(spec.formParams().get("cmd")) ? "show devicegroups" : "show dg-hierarchy";
@@ -140,6 +158,7 @@ public final class PanoramaPolicyCollector {
         if (System.nanoTime() >= deadline) throw PolicyCollectionTrace.failure("JOB_DEADLINE");
         long started = System.nanoTime(), before = bytes[0];
         String[] parseFailure = {""};
+        var prefix = new ByteArrayOutputStream(2048);
         long remaining = deadline - System.nanoTime();
         if (remaining <= 0) throw PolicyCollectionTrace.failure("JOB_DEADLINE");
         Duration requestTimeout = Duration.ofNanos(Math.min(remaining, TIMEOUT.toNanos()));
@@ -158,22 +177,71 @@ public final class PanoramaPolicyCollector {
                         }
                         if (System.nanoTime() >= deadline) throw new IOException("POLICY_JOB_TIMEOUT");
                     }
-                    @Override public int read() throws IOException { int n = in.read(); count(n < 0 ? 0 : 1); return n; }
-                    @Override public int read(byte[] b, int off, int len) throws IOException { int n = in.read(b, off, len); count(n); return n; }
+                    @Override public int read() throws IOException { int n = in.read(); if (n >= 0 && prefix.size() < 2048) prefix.write(n); count(n < 0 ? 0 : 1); return n; }
+                    @Override public int read(byte[] b, int off, int len) throws IOException { int n = in.read(b, off, len); if (n > 0) prefix.write(b, off, Math.min(n, 2048 - prefix.size())); count(n); return n; }
                 };
                 try { return PolicyXml.parse(counted).getDocumentElement(); }
                 catch (IllegalArgumentException invalid) { return null; }
             } finally { expiry.cancel(false); }
         }));
         PolicyCollectionTrace.result(started, bytes[0] - before, outcome.getClass().getSimpleName());
-        if (outcome instanceof XmlApiStreamOutcome.Completed<Element> response && response.httpStatus() != 200)
-            throw PolicyCollectionTrace.failure("HTTP_" + response.httpStatus());
-        if (!parseFailure[0].isEmpty()) throw PolicyCollectionTrace.failure(parseFailure[0]);
-        if (!(outcome instanceof XmlApiStreamOutcome.Completed<Element> completed) || completed.httpStatus() != 200
-                || completed.handled() == null || !completed.handled().getTagName().equals("response") || !"success".equals(completed.handled().getAttribute("status")) || System.nanoTime() >= readDeadline)
-            throw PolicyCollectionTrace.failure(System.nanoTime() >= readDeadline ? "TIMEOUT" : outcome instanceof XmlApiStreamOutcome.Failed<?> failed ? transportFailure(failed.reason())
-                : completedReason(outcome));
-        return completed.handled();
+        try {
+            if (outcome instanceof XmlApiStreamOutcome.Completed<Element> response && response.httpStatus() != 200)
+                throw PolicyCollectionTrace.failure("HTTP_" + response.httpStatus());
+            if (!parseFailure[0].isEmpty()) throw PolicyCollectionTrace.failure(parseFailure[0]);
+            if (!(outcome instanceof XmlApiStreamOutcome.Completed<Element> completed) || completed.httpStatus() != 200
+                    || completed.handled() == null || !completed.handled().getTagName().equals("response") || !"success".equals(completed.handled().getAttribute("status")) || System.nanoTime() >= readDeadline)
+                throw PolicyCollectionTrace.failure(System.nanoTime() >= readDeadline ? "TIMEOUT" : outcome instanceof XmlApiStreamOutcome.Failed<?> failed ? transportFailure(failed.reason())
+                    : completedReason(outcome));
+            if (group != null) return deviceGroup(completed.handled(), group);
+            return completed.handled();
+        } catch (PolicyCollectionTrace.Failure invalid) {
+            String diagnostic = responseShape(prefix.toString(java.nio.charset.StandardCharsets.UTF_8), bytes[0] - before,
+                    outcome instanceof XmlApiStreamOutcome.Completed<Element> response ? response.httpStatus() : null);
+            com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.add("job", "note", diagnostic);
+            System.getLogger(getClass().getName()).log(System.Logger.Level.WARNING, diagnostic);
+            throw invalid;
+        }
+    }
+    static String responseShape(String prefix, long bytes, Integer httpStatus) {
+        StringBuilder shape = new StringBuilder();
+        prefix.codePoints().limit(2048).forEach(c -> shape.appendCodePoint(Character.isLetter(c) ? 'a' : Character.isDigit(c) ? '9'
+                : Character.isISOControl(c) || Character.getType(c) == Character.FORMAT ? '?' : c));
+        // Only known status enums and numeric API codes may survive masking, including on malformed XML.
+        var root = java.util.regex.Pattern.compile("^\\s*(?:<\\?xml[^>]*>\\s*)?<response\\s+([^>]*)>").matcher(prefix);
+        String status = "UNKNOWN", code = "UNKNOWN";
+        if (root.find()) {
+            var attributes = java.util.regex.Pattern.compile("(?:^|\\s)(status|code)\\s*=\\s*(['\"])(.*?)\\2").matcher(root.group(1));
+            while (attributes.find()) {
+                String value = attributes.group(3);
+                if (attributes.group(1).equals("status") && Set.of("success", "error").contains(value)) status = value;
+                if (attributes.group(1).equals("code") && value.matches("[0-9]{1,6}")) code = value;
+            }
+        }
+        return "PAN_POLICY_SHAPE bytes=" + bytes + " httpStatus=" + (httpStatus == null ? "UNKNOWN" : httpStatus)
+                + " status=" + status + " code=" + code + " shape=" + shape;
+    }
+    private static boolean fatal(PolicyCollectionTrace.Failure error) {
+        return Set.of("LEASE_LOST", "JOB_DEADLINE", "SIZE_LIMIT", "POLICY_GATE_UNAVAILABLE", "INTERRUPTED")
+                .stream().anyMatch(reason -> error.getMessage().endsWith(": " + reason));
+    }
+    private static Element deviceGroup(Element response, String name) {
+        var results = PolicyXml.selectRelative(response, "result");
+        if (results.size() != 1) throw failure();
+        Element result = results.get(0);
+        var entries = PolicyXml.selectRelative(result, "entry");
+        if (entries.size() == 1 && name.equals(entries.get(0).getAttribute("name"))) return entries.get(0);
+        boolean hasElements = false;
+        for (var child = result.getFirstChild(); child != null; child = child.getNextSibling())
+            if (child instanceof Element) hasElements = true;
+        if (!hasElements && result.getTextContent().isBlank()
+                && (!result.hasAttribute("total-count") || "0".equals(result.getAttribute("total-count")))
+                && (!result.hasAttribute("count") || "0".equals(result.getAttribute("count")))) {
+            Element empty = result.getOwnerDocument().createElement("entry");
+            empty.setAttribute("name", name);
+            return empty;
+        }
+        throw failure();
     }
     private static String transportFailure(String reason) {
         if (reason == null) return "TRANSPORT_FAILED";
