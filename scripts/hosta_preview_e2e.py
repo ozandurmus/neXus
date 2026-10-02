@@ -3,6 +3,8 @@
 
 Database bytes go only through exec pipes; command errors and pod logs are withheld.
 Build Jobs use the existing Kaniko/proxy/CA setup with their own emptyDir contexts.
+The 60 s database-copy target is UNKNOWN until the reviewer's live run;
+TIMING preview_db_copy measures the complete snapshot/dump/filtered-copy phase.
 """
 import argparse
 import base64
@@ -72,8 +74,11 @@ def peer(component, ports, direction):
 
 
 def policies():
-    return [policy("database-only", "database", [peer("service", [5432], "from")], []),
+    return [policy("database-only", "database", [peer("service", [5432], "from"),
+                                               peer("compliance", [5432], "from")], []),
             policy("service-only", "service", [peer("e2e", [8080, 8086], "from")],
+                   [peer("database", [5432], "to"), peer("compliance", [8085], "to")]),
+            policy("compliance-only", "compliance", [peer("service", [8085], "from")],
                    [peer("database", [5432], "to")]),
             policy("e2e-only", "e2e", [], [peer("service", [8080, 8086], "to")])]
 
@@ -100,7 +105,23 @@ def database_manifest(template):
         "app.kubernetes.io/component": "database"}), spec=spec)
 
 
-def service_manifest(template, image, db_ip):
+def compliance_manifest(template, image, db_ip):
+    result = copy.deepcopy(template)
+    labels = {"app.kubernetes.io/component": "compliance"}
+    result["metadata"] = metadata("ui2-preview-compliance")
+    result["spec"]["selector"] = dict(matchLabels=labels)
+    result["spec"]["template"] = dict(metadata=dict(labels=labels), spec=pod_spec(template))
+    container = result["spec"]["template"]["spec"]["containers"][0]
+    container["image"] = image
+    replacements = {"UI2_DB_HOST": db_ip, "UI2_DB_PORT": "5432", "UI2_DB_NAME": "ui2",
+                    "UI2_DB_URL": f"jdbc:postgresql://{db_ip}:5432/ui2",
+                    "UI2_SCHEDULING_ENABLED": "false", "LOGGING_LEVEL_ROOT": "ERROR"}
+    container["env"] = [e for e in container["env"] if e["name"] not in replacements] + [
+        dict(name=name, value=value) for name, value in replacements.items()]
+    return result
+
+
+def service_manifest(template, image, db_ip, compliance_ip):
     result = copy.deepcopy(template)
     labels = {"app.kubernetes.io/component": "service"}
     result["metadata"] = metadata("ui2-preview-service")
@@ -112,7 +133,8 @@ def service_manifest(template, image, db_ip):
     replacements = {"UI2_DB_HOST": db_ip, "UI2_DB_PORT": "5432", "UI2_DB_NAME": "ui2",
                     "UI2_DB_URL": f"jdbc:postgresql://{db_ip}:5432/ui2",
                     "UI2_SCHEDULING_ENABLED": "false", "UI2_SESSION_COOKIE_SECURE": "false",
-                    "LOGGING_LEVEL_ROOT": "ERROR"}
+                    "LOGGING_LEVEL_ROOT": "ERROR",
+                    "UI2_COMPLIANCE_SERVICE_URL": f"http://{compliance_ip}:8085"}
     removed = set(replacements) | {"UI2_CONFIG_SERVICE_URL", "UI2_COMPLIANCE_SERVICE_URL",
                                   "UI2_CP_BACKUP_CREDENTIAL_REF"}
     container["env"] = [e for e in container["env"] if e["name"] not in removed] + [
@@ -315,8 +337,21 @@ def setup_database(repo):
     return json.loads(k(NS, "get", "pod", "ui2-preview-db", "-o", "json"))["status"]["podIP"]
 
 
-def setup_service(repo, image, db_ip):
-    service = service_manifest(load(repo, "deploy/ui2/50-service-deployment.yaml"), image, db_ip)
+def setup_compliance(repo, image, db_ip):
+    templates = load(repo, "deploy/ui2/55-compliance-deployment.yaml")["items"]
+    deployment = next(t for t in templates if t["kind"] == "Deployment")
+    service = copy.deepcopy(next(t for t in templates if t["kind"] == "Service"))
+    service["metadata"] = metadata("ui2-preview-compliance")
+    service["spec"]["selector"] = {"app.kubernetes.io/component": "compliance"}
+    create(NS, compliance_manifest(deployment, image, db_ip))
+    create(NS, service)
+    k(NS, "rollout", "status", "deployment/ui2-preview-compliance", "--timeout=300s", timeout=310)
+    # Resolve the preview Service once through Kubernetes; runtime DNS egress stays denied.
+    return json.loads(k(NS, "get", "service", "ui2-preview-compliance", "-o", "json"))["spec"]["clusterIP"]
+
+
+def setup_service(repo, image, db_ip, compliance_ip):
+    service = service_manifest(load(repo, "deploy/ui2/50-service-deployment.yaml"), image, db_ip, compliance_ip)
     # Only the keys required by the existing authenticated service path, never production DB credentials.
     spec = service["spec"]["template"]["spec"]
     names = {v["secret"]["secretName"] for v in spec["volumes"] if "secret" in v} - {"ui2-db"}
@@ -371,8 +406,10 @@ def run(repo, commit):
         images = build_images(repo, commit, owner)
         with timing("preview_database"):
             db_ip = setup_database(repo)
+        with timing("preview_compliance"):
+            compliance_ip = setup_compliance(repo, images[0], db_ip)
         with timing("preview_service"):
-            service_ip = setup_service(repo, images[0], db_ip)
+            service_ip = setup_service(repo, images[0], db_ip, compliance_ip)
         with timing("preview_e2e"):
             templates = load(repo, "deploy/ui2/70-e2e-job.yaml")
             job = next(t for t in templates["items"] if t["kind"] == "Job")
