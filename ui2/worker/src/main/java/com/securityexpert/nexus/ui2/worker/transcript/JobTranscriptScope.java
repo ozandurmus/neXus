@@ -20,5 +20,13 @@ public final class JobTranscriptScope implements AutoCloseable {
         }
     }
 
+    /** Policy collectors record derived measurements themselves; transports must not retain raw bodies. */
+    public static <T> T withoutRecording(java.util.function.Supplier<T> operation) {
+        JobTranscript saved = ACTIVE.get();
+        ACTIVE.remove();
+        try { return operation.get(); }
+        finally { if (saved != null) ACTIVE.set(saved); }
+    }
+
     @Override public void close() { ACTIVE.remove(); }
 }

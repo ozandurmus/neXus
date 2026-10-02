@@ -13,6 +13,12 @@ public final class PolicyController {
     private final PolicyQueryService policies;
     public PolicyController(PolicyQueryService policies) { this.policies = policies; }
 
+    @GetMapping("/api/v2/policy/tree")
+    public ResponseEntity<?> tree(@RequestParam(defaultValue = "") String source,
+            @RequestParam(defaultValue = "") String container, @RequestParam(defaultValue = "") String device) {
+        if (!container.isEmpty() && source.isEmpty()) return error(HttpStatus.BAD_REQUEST);
+        return ok(policies.tree(source, container, device));
+    }
     @GetMapping("/api/v2/policy/devices")
     public ResponseEntity<?> catalog() {
         var catalog = policies.catalog();

@@ -50,16 +50,25 @@ public final class PanoramaPolicyCollector {
     }
 
     public List<PolicySnapshot> collect(DiscoveryRun run, PolicyCollectionRepository.Request scope, BooleanSupplier lease) {
-        if (!"palo_alto".equals(run.vendor()) || com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.current() != null)
-            throw failure();
+        PolicyCollectionTrace.step("PANORAMA_TARGET", scope.sourceId());
+        if (!"palo_alto".equals(run.vendor()) || run.managementAddress() == null || run.managementAddress().isBlank())
+            throw PolicyCollectionTrace.failure("PANORAMA_TARGET_NOT_FOUND");
         PanPolicyGates.requireAll(gates);
         if (!lease.getAsBoolean()) throw failure();
-        var credential = credentials.resolve(run.credentialReferenceId());
+        PolicyCollectionTrace.step("credential resolution", scope.sourceId());
+        com.securityexpert.nexus.ui2.worker.transport.xmlapi.PanCredentialMaterial credential;
+        try { credential = credentials.resolve(run.credentialReferenceId()); }
+        catch (RuntimeException unavailable) { throw PolicyCollectionTrace.failure("CREDENTIAL_UNRESOLVABLE"); }
+        if (credential == null) throw PolicyCollectionTrace.failure("CREDENTIAL_UNUSABLE");
+        if (credential.username() == null || credential.username().isBlank() || credential.password() == null) {
+            if (credential.password() != null) Arrays.fill(credential.password(), '\0');
+            throw PolicyCollectionTrace.failure("CREDENTIAL_UNUSABLE");
+        }
         char[] key = null;
         var timer = Executors.newSingleThreadScheduledExecutor();
         long deadline = System.nanoTime() + Duration.ofMinutes(30).toNanos();
         long[] bytes = {0};
-        ApiTarget target = new ApiTarget(scope.sourceId(), "https://" + run.managementAddress() + ":443");
+        ApiTarget target = new ApiTarget(scope.sourceId(), run.managementAddress());
         try {
             Element auth = read(target, PanoramaApiRoutes.keyGeneration(credential.username(), credential.password()), timer, deadline, bytes);
             String token = PolicyXml.firstRelativeText(auth, "result/key").orElseThrow(PanoramaPolicyCollector::failure);
@@ -74,6 +83,7 @@ public final class PanoramaPolicyCollector {
                 xpathLiteral(name);
                 if (members.putIfAbsent(name, entry) != null) throw failure();
             }
+            PolicyCollectionTrace.plan(entries.size() + 6);
             Element hierarchy = result(read(target, checked(3, "", key, lease), timer, deadline, bytes), "dg-hierarchy");
             Map<String, String> parents = new LinkedHashMap<>();
             hierarchy(hierarchy, "", parents, 0);
@@ -120,29 +130,66 @@ public final class PanoramaPolicyCollector {
         return request(index, group, key);
     }
     private Element read(ApiTarget target, XmlApiSpec spec, ScheduledExecutorService timer, long deadline, long[] bytes) {
-        if (System.nanoTime() >= deadline) throw failure();
-        long readDeadline = Math.min(deadline, System.nanoTime() + TIMEOUT.toNanos());
-        var outcome = transport.xmlApiCallStreaming(target, spec, TIMEOUT, input -> {
+        String step = "keygen".equals(spec.type()) ? "authentication" : spec.formParams().containsKey("xpath")
+            ? ("/config/shared".equals(spec.formParams().get("xpath")) ? "shared" : "device group " + ref(spec.formParams().get("xpath")))
+            : "<show><devicegroups/></show>".equals(spec.formParams().get("cmd")) ? "show devicegroups" : "show dg-hierarchy";
+        String template = "keygen".equals(spec.type()) ? "type=keygen" : spec.formParams().containsKey("xpath")
+            ? PanPolicyGates.COMMANDS.get("/config/shared".equals(spec.formParams().get("xpath")) ? 0 : 1)
+            : PanPolicyGates.COMMANDS.get("<show><devicegroups/></show>".equals(spec.formParams().get("cmd")) ? 2 : 3);
+        PolicyCollectionTrace.step(step + " " + template, target.endpointId());
+        if (System.nanoTime() >= deadline) throw PolicyCollectionTrace.failure("JOB_DEADLINE");
+        long started = System.nanoTime(), before = bytes[0];
+        String[] parseFailure = {""};
+        long remaining = deadline - System.nanoTime();
+        if (remaining <= 0) throw PolicyCollectionTrace.failure("JOB_DEADLINE");
+        Duration requestTimeout = Duration.ofNanos(Math.min(remaining, TIMEOUT.toNanos()));
+        long readDeadline = Math.min(deadline, System.nanoTime() + requestTimeout.toNanos());
+        var outcome = com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.withoutRecording(() -> transport.xmlApiCallStreaming(target, spec, requestTimeout, input -> {
             var expiry = timer.schedule(() -> { try { input.close(); } catch (IOException ignored) {} },
                     Math.max(0, readDeadline - System.nanoTime()), TimeUnit.NANOSECONDS);
             try {
                 var counted = new FilterInputStream(input) {
                     private long received;
                     private void count(int n) throws IOException {
-                        if (n > 0 && ((received += n) > 16L * 1024 * 1024 || (bytes[0] += n) > 64L * 1024 * 1024))
+                        if (n > 0) { received += n; bytes[0] += n; }
+                        if (received > 16L * 1024 * 1024 || bytes[0] > 64L * 1024 * 1024) {
+                            parseFailure[0] = "SIZE_LIMIT";
                             throw new IOException("POLICY_SIZE_LIMIT");
+                        }
                         if (System.nanoTime() >= deadline) throw new IOException("POLICY_JOB_TIMEOUT");
                     }
                     @Override public int read() throws IOException { int n = in.read(); count(n < 0 ? 0 : 1); return n; }
                     @Override public int read(byte[] b, int off, int len) throws IOException { int n = in.read(b, off, len); count(n); return n; }
                 };
-                return PolicyXml.parse(counted).getDocumentElement();
+                try { return PolicyXml.parse(counted).getDocumentElement(); }
+                catch (IllegalArgumentException invalid) { return null; }
             } finally { expiry.cancel(false); }
-        });
+        }));
+        PolicyCollectionTrace.result(started, bytes[0] - before, outcome.getClass().getSimpleName());
+        if (outcome instanceof XmlApiStreamOutcome.Completed<Element> response && response.httpStatus() != 200)
+            throw PolicyCollectionTrace.failure("HTTP_" + response.httpStatus());
+        if (!parseFailure[0].isEmpty()) throw PolicyCollectionTrace.failure(parseFailure[0]);
         if (!(outcome instanceof XmlApiStreamOutcome.Completed<Element> completed) || completed.httpStatus() != 200
-                || !completed.handled().getTagName().equals("response") || !"success".equals(completed.handled().getAttribute("status")) || System.nanoTime() >= readDeadline)
-            throw failure();
+                || completed.handled() == null || !completed.handled().getTagName().equals("response") || !"success".equals(completed.handled().getAttribute("status")) || System.nanoTime() >= readDeadline)
+            throw PolicyCollectionTrace.failure(System.nanoTime() >= readDeadline ? "TIMEOUT" : outcome instanceof XmlApiStreamOutcome.Failed<?> failed ? transportFailure(failed.reason())
+                : completedReason(outcome));
         return completed.handled();
+    }
+    private static String transportFailure(String reason) {
+        if (reason == null) return "TRANSPORT_FAILED";
+        if (reason.contains("transport adapter")) return "TRANSPORT_NOT_REGISTERED";
+        if (reason.contains("TLS") || reason.contains("trust")) return "TLS_TARGET_UNRESOLVABLE";
+        if (reason.toLowerCase(Locale.ROOT).contains("timeout") || reason.toLowerCase(Locale.ROOT).contains("timed out")) return "TIMEOUT";
+        if (reason.contains("interrupted")) return "INTERRUPTED";
+        return "TRANSPORT_FAILED";
+    }
+    private static String completedReason(XmlApiStreamOutcome<Element> outcome) {
+        if (outcome instanceof XmlApiStreamOutcome.Completed<Element> response) {
+            if (response.handled() == null) return "XML_PARSE_OR_SIZE_FAILED";
+            String code = response.handled().getAttribute("code");
+            if (code.matches("[0-9]{1,6}")) return "API_ERROR_" + code;
+        }
+        return "API_RESPONSE_ERROR";
     }
     private static Element result(Element response, String name) {
         var entries = PolicyXml.selectRelative(response, "result/" + name);
@@ -182,5 +229,5 @@ public final class PanoramaPolicyCollector {
             default -> "UNKNOWN";
         };
     }
-    private static IllegalStateException failure() { return new IllegalStateException("POLICY_COLLECTION_INCOMPLETE"); }
+    private static IllegalStateException failure() { return PolicyCollectionTrace.failure("INVALID_OR_INCOMPLETE_RESPONSE"); }
 }

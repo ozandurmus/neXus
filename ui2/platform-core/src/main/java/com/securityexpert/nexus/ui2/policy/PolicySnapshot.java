@@ -6,8 +6,13 @@ import java.util.UUID;
 import java.nio.charset.StandardCharsets;
 
 /** Parsed management intent, never evidence that a target installed this policy. */
-public record PolicySnapshot(Metadata metadata, List<Section> sections, Map<String, PolicyObject> objects) {
+public record PolicySnapshot(Metadata metadata, List<Section> sections, Map<String, PolicyObject> objects, List<CollectionFailure> failures) {
+    public PolicySnapshot(Metadata metadata, List<Section> sections, Map<String, PolicyObject> objects) {
+        this(metadata, sections, objects, List.of());
+    }
+    public record CollectionFailure(String layerRef, String reason) {}
     public PolicySnapshot {
+        failures = failures == null ? List.of() : List.copyOf(failures);
         sections = List.copyOf(sections);
         objects = Map.copyOf(objects);
     }

@@ -31,6 +31,27 @@ public final class PolicyQueryService {
         if (local != null) local.snapshots().forEach(snapshot -> catalog.add(snapshot.metadata()));
         return catalog;
     }
+    public PolicyResponse tree(String source, String container, String device) {
+        var selected = catalog().stream().filter(p -> device.isEmpty() || p.targets().stream().anyMatch(t -> t.deviceId().equals(device)))
+            .filter(p -> source.isEmpty() || p.sourceId().equals(source)).toList();
+        if (!container.isEmpty()) return new PolicyResponse(Map.of("policies", selected.stream().filter(p -> p.containerId().equals(container)).map(this::metadata).toList()));
+        Map<String, Map<String, Object>> nodes = new LinkedHashMap<>();
+        for (var p : selected) {
+            String id = source.isEmpty() ? p.sourceId() : p.containerId();
+            nodes.putIfAbsent(id, source.isEmpty()
+                ? Map.of("sourceId", id, "sourceName", p.sourceName(), "vendor", p.vendor())
+                : Map.of("containerId", id, "containerName", p.containerName()));
+        }
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put(source.isEmpty() ? "sources" : "containers", List.copyOf(nodes.values()));
+        if (source.isEmpty()) {
+            Map<String, Target> devices = new LinkedHashMap<>();
+            selected.forEach(p -> p.targets().forEach(target -> devices.putIfAbsent(target.deviceId(), target)));
+            body.put("devices", devices.values().stream().map(this::map).toList());
+        }
+        return new PolicyResponse(body);
+    }
+
     public Optional<PolicySnapshot> find(String id) {
         var stored = repository.find(id).map(json -> read(json, PolicySnapshot.class));
         return stored.isPresent() || local == null ? stored : local.snapshots().stream().filter(s -> s.metadata().id().equals(id)).findFirst();
@@ -68,6 +89,7 @@ public final class PolicyQueryService {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("metadata", metadata(snapshot.metadata()));
         body.put("policyKind", snapshot.sections().stream().anyMatch(s -> s.name().equals("Local rules")) ? "LOCAL_FIREWALL" : "MANAGEMENT");
+        body.put("failures", snapshot.failures().stream().map(this::map).toList());
         body.put("sections", sections); body.put("objects", objects);
         body.put("page", page); body.put("pageSize", 200); body.put("total", matching.size());
         return new PolicyResponse(body);

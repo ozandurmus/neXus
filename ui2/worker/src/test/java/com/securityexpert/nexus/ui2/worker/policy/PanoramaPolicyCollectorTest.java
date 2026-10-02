@@ -116,4 +116,66 @@ class PanoramaPolicyCollectorTest {
         transformer.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes");
         var output = new StringWriter(); transformer.transform(new DOMSource(element), new StreamResult(output)); return output.toString();
     }
+    @Test void activeTranscriptDoesNotRejectPanoramaAndRetainsOnlyDerivedMeasurements() throws Exception {
+        var transcript = new com.securityexpert.nexus.ui2.worker.transcript.JobTranscript();
+        var sent = new ArrayList<XmlApiSpec>();
+        try (var recording = com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.open(transcript);
+             var trace = new PolicyCollectionTrace("manager-1", (step, total) -> {})) {
+            assertEquals(2, collector(responses(), sent, new char[0]).collect(run, scope, () -> true).size());
+        }
+        var bytes = new java.io.ByteArrayOutputStream(); transcript.writeTo(bytes);
+        String text = bytes.toString(StandardCharsets.UTF_8);
+        assertEquals(6, sent.size());
+        assertTrue(text.contains("show devicegroups"));
+        assertTrue(text.contains("bytes="));
+        assertTrue(text.contains("durationMs="));
+        assertFalse(text.contains("synthetic-key"));
+        assertFalse(text.contains("Synthetic child"));
+        assertFalse(text.contains("192.0.2.10"));
+    }
+    @Test void httpFailureNamesStepAndOpaqueTargetWithoutVendorErrorText() throws Exception {
+        var transport = mock(DeviceTransport.class);
+        var responses = responses();
+        AtomicInteger index = new AtomicInteger();
+        doAnswer(call -> {
+            @SuppressWarnings("unchecked") var handler = (XmlApiStreamHandler<Element>) call.getArgument(3);
+            int i = index.getAndIncrement();
+            return i == 0 ? new XmlApiStreamOutcome.Completed<>(200, handler.handle(new ByteArrayInputStream(responses.get(0).getBytes(StandardCharsets.UTF_8))))
+                : new XmlApiStreamOutcome.Completed<Element>(403, null);
+        }).when(transport).xmlApiCallStreaming(any(), any(), any(), any());
+        try (var trace = new PolicyCollectionTrace("manager-1", (step, total) -> {})) {
+            var error = assertThrows(IllegalStateException.class, () -> new PanoramaPolicyCollector(transport, gates,
+                ref -> new PanCredentialMaterial("synthetic-user", new char[0]), repository).collect(run, scope, () -> true));
+            assertTrue(error.getMessage().contains("show devicegroups"));
+            assertTrue(error.getMessage().contains("target=manager-1"));
+            assertTrue(error.getMessage().endsWith("HTTP_403"));
+        }
+        verify(transport, times(2)).xmlApiCallStreaming(any(), any(), any(), any());
+    }
+    @Test void missingCredentialsFailAtNamedPreflightBeforeAnyApiContact() {
+        var transport = mock(DeviceTransport.class);
+        try (var trace = new PolicyCollectionTrace("manager-1", (step, total) -> {})) {
+            var error = assertThrows(IllegalStateException.class, () -> new PanoramaPolicyCollector(transport, gates,
+                ref -> { throw new IllegalStateException("private synthetic detail"); }, repository).collect(run, scope, () -> true));
+            assertTrue(error.getMessage().contains("credential resolution target=manager-1"));
+            assertTrue(error.getMessage().endsWith("CREDENTIAL_UNRESOLVABLE"));
+            assertFalse(error.getMessage().contains("private synthetic detail"));
+        }
+        verifyNoInteractions(transport);
+    }
+
+    @Test void normalizedManagementUrlUsesExistingTransportUriResolution() throws Exception {
+        var transport = mock(DeviceTransport.class);
+        AtomicInteger index = new AtomicInteger(); var responses = responses();
+        doAnswer(call -> {
+            assertEquals("https://192.0.2.10:443", ((ApiTarget) call.getArgument(0)).baseUrl());
+            @SuppressWarnings("unchecked") var handler = (XmlApiStreamHandler<Element>) call.getArgument(3);
+            return new XmlApiStreamOutcome.Completed<>(200, handler.handle(new ByteArrayInputStream(responses.get(index.getAndIncrement()).getBytes(StandardCharsets.UTF_8))));
+        }).when(transport).xmlApiCallStreaming(any(), any(), any(), any());
+        var normalized = new DiscoveryRun("run-1", "palo_alto", "https://192.0.2.10:443", "synthetic-ref", "synthetic-actor",
+            DiscoveryRunState.FINISHED, Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
+        assertEquals(2, new PanoramaPolicyCollector(transport, gates,
+            ref -> new PanCredentialMaterial("synthetic-user", new char[0]), repository).collect(normalized, scope, () -> true).size());
+    }
+
 }

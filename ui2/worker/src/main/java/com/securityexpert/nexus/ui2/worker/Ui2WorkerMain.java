@@ -298,7 +298,7 @@ public final class Ui2WorkerMain {
 
         DiscoveryRunRepository discoveryRunRepository = new JooqDiscoveryRunRepository(transactionBoundary);
         var policyCollectionRepository = new com.securityexpert.nexus.ui2.persistence.policy.PolicyCollectionRepository(transactionBoundary);
-        var policyCollector = new com.securityexpert.nexus.ui2.worker.policy.CheckPointPolicyCollector(compositeTransport, gateRegistry, policyCollectionRepository);
+        var policyCollector = new com.securityexpert.nexus.ui2.worker.policy.CheckPointPolicyCollector(strictFailoverSsh, gateRegistry, policyCollectionRepository);
         var policyCollectionExecutor = new com.securityexpert.nexus.ui2.worker.policy.PolicyCollectionJobExecutor(
                 leaseRepository, attemptRepository, discoveryRunRepository, policyCollectionRepository, policyCollector, gateRegistry)
                 .withPanorama(new com.securityexpert.nexus.ui2.worker.policy.PanoramaPolicyCollector(
@@ -315,6 +315,7 @@ public final class Ui2WorkerMain {
 
         JobRecordDao jobRecordDao = new JooqJobRecordDao(transactionBoundary);
         backupJobExecutor.withTranscript(artefactStore, jobRecordDao);
+        policyCollectionExecutor.withTranscript(artefactStore, jobRecordDao);
         var diagnosticJobExecutor = new com.securityexpert.nexus.ui2.worker.backup.fortinet.FortiManagerDiagnosticJobExecutor(
                 leaseRepository, attemptRepository, deviceEnrollmentReadPort, deviceInventoryRepository,
                 jobRecordDao, fortiManagerExecutor, gateRegistry);

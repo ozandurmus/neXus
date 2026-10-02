@@ -14,7 +14,7 @@ import static com.securityexpert.nexus.ui2.policy.PolicySnapshot.*;
 import com.securityexpert.nexus.ui2.worker.discovery.cp.MgmtCliCommands;
 import com.securityexpert.nexus.ui2.worker.transport.ssh.PersistedManagementEndpointTrustResolver;
 
-/** One serial, trusted MDS interactive session. All pages stay in memory until the whole job succeeds. */
+/** One serial, trusted MDS session; complete sibling layers survive a failed layer. */
 public final class CheckPointPolicyCollector {
     static final int MAX_PAGES = 200;
     private final DeviceTransport transport;
@@ -30,11 +30,12 @@ public final class CheckPointPolicyCollector {
         if (!"check_point".equals(run.vendor())) throw failure();
         CpPolicyGates.requireAll(gates);
         if (!lease.getAsBoolean()) throw failure();
-        var result = transport.connect(new ConnectionTarget(run.managementAddress(), run.managementAddress(), 22),
-            new ConnectSpec(run.credentialReferenceId(), PersistedManagementEndpointTrustResolver.scopeRef(run.managementAddress(), 22), Optional.empty()), Duration.ofSeconds(30));
-        if (!(result instanceof ConnectResult.Authenticated connected)) throw failure();
-        TransportSession session = connected.session();
         long deadline = System.nanoTime() + Duration.ofMinutes(30).toNanos();
+        PolicyCollectionTrace.step("connect", request.sourceId());
+        var result = com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.withoutRecording(() -> transport.connect(new ConnectionTarget(run.managementAddress(), run.managementAddress(), 22),
+            new ConnectSpec(run.credentialReferenceId(), PersistedManagementEndpointTrustResolver.scopeRef(run.managementAddress(), 22), Optional.empty()), Duration.ofSeconds(30)));
+        if (!(result instanceof ConnectResult.Authenticated connected)) throw PolicyCollectionTrace.failure(result.getClass().getSimpleName());
+        TransportSession session = connected.session();
         try {
             var domains = read(session, MgmtCliCommands.domainList(), -1, deadline, lease);
             completeList(domains, "objects");
@@ -52,7 +53,8 @@ public final class CheckPointPolicyCollector {
                 for (JsonNode policy : packages.path("packages")) {
                     String uid = required(policy, "uid"), name = required(policy, "name");
                     if (!seen.add(uid) || !policy.path("access-layers").isArray()) throw failure();
-                    List<JsonNode> access = access(session, domainName, policy.path("access-layers"), deadline, lease);
+                    List<CollectionFailure> failures = new ArrayList<>();
+                    List<JsonNode> access = access(session, domainName, policy.path("access-layers"), deadline, lease, failures);
                     List<JsonNode> nat = pages(session, offset -> MgmtCliCommands.showNatRulebase(domainName, name, offset), 2, deadline, lease);
                     List<Target> targets = new ArrayList<>();
                     if (!policy.path("installation-targets").isArray()) throw failure();
@@ -67,7 +69,8 @@ public final class CheckPointPolicyCollector {
                     }
                     Metadata metadata = new Metadata(ref(request.sourceId(), domainUid, uid), request.sourceId(),
                         "MDS " + request.sourceId(), "CP", container, domainName, name, Instant.now().toString(), "", targets.stream().distinct().toList());
-                    snapshots.add(new CheckPointPolicyMapper().map(metadata, access, nat));
+                    var snapshot = new CheckPointPolicyMapper().map(metadata, access, nat);
+                    snapshots.add(new PolicySnapshot(metadata, snapshot.sections(), snapshot.objects(), failures));
                 }
             }
             if (!found) throw failure();
@@ -77,7 +80,7 @@ public final class CheckPointPolicyCollector {
         }
     }
 
-    private List<JsonNode> access(TransportSession session, String domain, JsonNode roots, long deadline, BooleanSupplier lease) {
+    private List<JsonNode> access(TransportSession session, String domain, JsonNode roots, long deadline, BooleanSupplier lease, List<CollectionFailure> failures) {
         Map<String, String> pending = new LinkedHashMap<>();
         for (JsonNode root : roots) pending.put(required(root, "uid"), required(root, "name"));
         Set<String> fetched = new HashSet<>();
@@ -88,7 +91,17 @@ public final class CheckPointPolicyCollector {
             String uid = entry.getKey(), name = entry.getValue(); pending.remove(uid);
             if (!fetched.add(uid)) continue;
             if (fetched.size() > MAX_PAGES) throw failure();
-            List<JsonNode> layer = pages(session, offset -> MgmtCliCommands.showAccessRulebase(domain, name, offset), 1, deadline, lease);
+            List<JsonNode> layer;
+            try {
+                layer = pages(session, offset -> MgmtCliCommands.showAccessRulebase(domain, name, offset), 1, deadline, lease);
+                for (JsonNode page : layer) if (!uid.equals(required(page, "uid"))) throw failure();
+            } catch (PolicyCollectionTrace.Failure incomplete) {
+                if (System.nanoTime() >= deadline || !lease.getAsBoolean()) throw incomplete;
+                String reason = incomplete.getMessage();
+                failures.add(new CollectionFailure(ref("cp-layer", domain, uid), reason));
+                com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.add("job", "note", reason);
+                continue;
+            }
             for (JsonNode page : layer) {
                 if (!uid.equals(required(page, "uid"))) throw failure();
                 for (JsonNode object : page.path("objects-dictionary")) dictionary.put(required(object, "uid"), object);
@@ -98,7 +111,10 @@ public final class CheckPointPolicyCollector {
             for (JsonNode page : layer) inline(page.path("rulebase"), inline, 0);
             for (String child : inline) if (!fetched.contains(child) && !pending.containsKey(child)) {
                 JsonNode object = dictionary.get(child);
-                if (object == null) throw failure();
+                if (object == null) {
+                    failures.add(new CollectionFailure(ref("cp-layer", domain, child), "INLINE_LAYER_NAME_MISSING"));
+                    continue;
+                }
                 pending.put(child, required(object, "name"));
             }
         }
@@ -117,7 +133,12 @@ public final class CheckPointPolicyCollector {
         List<JsonNode> pages = new ArrayList<>();
         int offset = 0, total = -1;
         for (int pageNo = 0; pageNo < MAX_PAGES; pageNo++) {
-            JsonNode page = read(session, command.apply(offset), gate, deadline, lease);
+            JsonNode page;
+            try { page = read(session, command.apply(offset), gate, deadline, lease); }
+            catch (PolicyCollectionTrace.Failure timedOut) {
+                if (gate != 1 || !timedOut.getMessage().endsWith(": TIMEOUT")) throw timedOut;
+                page = read(session, command.apply(offset).replace(" limit 100 offset ", " limit 50 offset "), gate, deadline, lease);
+            }
             if (!page.path("rulebase").isArray() || !page.path("objects-dictionary").isArray()
                     || !page.path("total").canConvertToInt() || !page.path("total").isIntegralNumber()) throw failure();
             int count = page.path("total").intValue();
@@ -130,7 +151,7 @@ public final class CheckPointPolicyCollector {
             if (!page.path("from").isIntegralNumber() || !page.path("to").isIntegralNumber()
                     || !page.path("to").canConvertToInt() || page.path("from").asLong() != offset + 1L) throw failure();
             int to = page.path("to").intValue();
-            if (to <= offset || to > total || to - offset > 500 || page.path("rulebase").isEmpty()) throw failure();
+            if (to <= offset || to > total || to - offset > (gate == 1 ? 100 : 500) || page.path("rulebase").isEmpty()) throw failure();
             pages.add(page); offset = to;
             if (offset == total) return pages;
         }
@@ -138,12 +159,24 @@ public final class CheckPointPolicyCollector {
     }
 
     private JsonNode read(TransportSession session, String command, int gate, long deadline, BooleanSupplier lease) {
-        if (System.nanoTime() >= deadline || !lease.getAsBoolean()) throw failure();
+        String step = gate < 0 ? MgmtCliCommands.domainList() : com.securityexpert.nexus.ui2.jobs.policy.CpPolicyGates.COMMANDS.get(gate);
+        String target = ref("cp-policy-read", command.replaceAll(" limit (100|50) offset ", " limit PAGE offset "));
+        var offset = java.util.regex.Pattern.compile(" offset '([0-9]+)' ").matcher(command);
+        String page = offset.find() ? " offset=" + offset.group(1) + " limit=" + (gate == 1 ? command.contains(" limit 50 ") ? 50 : 100 : 500) : "";
+        PolicyCollectionTrace.step(step + page, target);
+        if (System.nanoTime() >= deadline) throw PolicyCollectionTrace.failure("JOB_DEADLINE");
+        if (!lease.getAsBoolean()) throw PolicyCollectionTrace.failure("LEASE_LOST");
         if (gate >= 0) CpPolicyGates.require(gates, gate);
         long remaining = deadline - System.nanoTime();
         if (remaining <= 0) throw failure();
-        var result = transport.execInteractive(session, new ExecSpec(command), Duration.ofNanos(Math.min(Duration.ofSeconds(60).toNanos(), remaining)));
-        if (!(result instanceof ExecResult.Completed completed) || completed.exitStatus() != 0) throw failure();
+        long started = System.nanoTime();
+        var result = com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.withoutRecording(() -> transport.execInteractive(session,
+                new ExecSpec(command), Duration.ofNanos(Math.min(Duration.ofSeconds(gate == 1 ? 300 : 60).toNanos(), remaining))));
+        PolicyCollectionTrace.result(started, result instanceof ExecResult.Completed c ? c.output().getBytes(java.nio.charset.StandardCharsets.UTF_8).length : -1,
+                result.getClass().getSimpleName());
+        if (result instanceof ExecResult.TimedOut) throw PolicyCollectionTrace.failure("TIMEOUT");
+        if (!(result instanceof ExecResult.Completed completed)) throw PolicyCollectionTrace.failure(result.getClass().getSimpleName());
+        if (completed.exitStatus() != 0) throw PolicyCollectionTrace.failure("EXIT_" + completed.exitStatus());
         try {
             JsonNode root = json.readTree(completed.output());
             if (root == null || !root.isObject() || root.has("code") || root.has("message")) throw failure();
@@ -160,5 +193,5 @@ public final class CheckPointPolicyCollector {
         if (!value.isTextual() || value.textValue().isBlank()) throw failure();
         return value.textValue();
     }
-    private static IllegalStateException failure() { return new IllegalStateException("POLICY_COLLECTION_INCOMPLETE"); }
+    private static PolicyCollectionTrace.Failure failure() { return PolicyCollectionTrace.failure("INVALID_OR_INCOMPLETE_RESPONSE"); }
 }

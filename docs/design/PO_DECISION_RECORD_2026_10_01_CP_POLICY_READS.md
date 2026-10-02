@@ -1,12 +1,12 @@
 # Check Point management policy reads
 
-Status: RATIFIED — Product Owner approved, 2026-10-01.
+Status: RATIFIED — Product Owner approved, 2026-10-01; pagination amendment approved 2026-10-02 02:41 UTC.
 
 The Product Owner approved exactly the following three read forms with "ok abi":
 
 ```text
 mgmt_cli -r true -d <DOMAIN> -f json show-packages limit 500 details-level full
-mgmt_cli -r true -d <DOMAIN> -f json show-access-rulebase name <LAYER> limit 500 offset <N> details-level full use-object-dictionary true
+mgmt_cli -r true -d <DOMAIN> -f json show-access-rulebase name <LAYER> limit 100 offset <N> details-level full use-object-dictionary true
 mgmt_cli -r true -d <DOMAIN> -f json show-nat-rulebase package <PKG> limit 500 offset <N> details-level standard use-object-dictionary true
 ```
 
@@ -17,8 +17,9 @@ The three gate rows use check_point / cp_multi_domain_server / expert / SSH_EXEC
 Arguments use MgmtCliCommands.quote, including numeric offsets. No other new command is authorized.
 The existing show-domains read is reused. No gateway execution, bash login shell, extra object lookup, login, publish or policy installation is introduced.
 
-Connect timeout: 30 seconds. Each read: 60 seconds, no retry. Job deadline: 30 minutes; at most 200 pages per rulebase and 200 distinct access layers per package, serially.
-One trusted interactive SSH session per job, closed on success or failure. Unsupported, malformed, truncated, inconsistent or timed-out responses fail closed; previous snapshots remain.
+Connect timeout: 30 seconds. Package/domain/NAT reads: 60 seconds, no retry. Access pages: limit 100, 300 seconds per page (bounded by the job deadline); retry a timed-out page exactly once at the same offset with limit 50. The retry retains details-level full and use-object-dictionary true. V118 amends the existing access gate; no new verb is authorized. Job deadline: 30 minutes; at most 200 pages per rulebase and 200 distinct access layers per package, serially.
+One trusted SSH connection per job, closed on success or failure. The existing transport closes and recreates a timed-out interactive shell before the one approved retry, so a late response cannot be mistaken for the next page. Unsupported, malformed, truncated or inconsistent pages fail closed. A failed access layer is omitted and recorded by opaque layer reference and safe reason; completed sibling layers survive in an explicitly incomplete snapshot. Partial publication and the FAILED terminal transition remain atomic and lease-fenced. Fatal preflight/package/NAT failures preserve previous snapshots.
+Sanitized transcripts record each request template, opaque target reference, byte count, elapsed time and failure step; raw responses and real command arguments are never retained.
 Only completed, registered Check Point management-server discovery targets are eligible. Administration can request a collection; successful MDS discovery queues automatic collection, limited to one attempt per domain in six hours (including failed attempts).
 Raw responses remain in memory. Only normalized policy data is persisted; telemetry contains outcome classes and counts. Existing Policy AIView masking applies.
 The job ledger records read attempts; snapshot publication is atomic and lease-fenced. Local synthetic validation does not prove real-environment semantics.

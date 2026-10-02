@@ -20,9 +20,13 @@ public final class MgmtCliCommands {
     }
 
     public static String showAccessRulebase(String domain, String layer, int offset) {
-        if (offset < 0) throw new IllegalArgumentException("Invalid policy offset");
+        return showAccessRulebase(domain, layer, offset, 100);
+    }
+
+    public static String showAccessRulebase(String domain, String layer, int offset, int limit) {
+        if (offset < 0 || (limit != 100 && limit != 50)) throw new IllegalArgumentException("Invalid policy page");
         return "mgmt_cli -r true -d " + quote(domain) + " -f json show-access-rulebase name " + quote(layer)
-                + " limit 500 offset " + quote(Integer.toString(offset)) + " details-level full use-object-dictionary true";
+                + " limit " + limit + " offset " + quote(Integer.toString(offset)) + " details-level full use-object-dictionary true";
     }
 
     public static String showNatRulebase(String domain, String policy, int offset) {
