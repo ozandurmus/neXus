@@ -102,12 +102,28 @@ public class PolicyCollectionRepository {
     }
     public Optional<Map<String, Object>> status(String jobId) {
         return tx.inTransaction(db -> db.fetch("select j.state, coalesce(j.terminal_reason, '') as reason, "
-            + "coalesce(max(a.step_index), 0) as step, coalesce(max(substring(a.step_kind from 'POLICY_PROGRESS_([0-9]+)')::int), 0) as total "
+            + "coalesce(max(a.step_index), 0) as step, coalesce(max(substring(a.step_kind from 'POLICY_PROGRESS_([0-9]+)')::int), 0) as total, "
+            + "coalesce(split_part(l.step_kind, '_', 3)::int, 0) as layer, "
+            + "coalesce(split_part(l.step_kind, '_', 4)::int, 0) as layers, "
+            + "coalesce(split_part(l.step_kind, '_', 5)::int, 0) as rules "
             + "from jobs j join policy_collection_request p on p.job_id = j.job_id "
             + "left join job_step_attempt a on a.job_id = j.job_id and a.lease_epoch = j.lease_epoch and a.step_kind like 'POLICY_PROGRESS_%' "
-            + "where j.job_id = {0} group by j.job_id", jobId).stream().findFirst().map(r -> Map.<String, Object>of(
+            + "left join lateral (select step_kind from job_step_attempt where job_id = j.job_id and lease_epoch = j.lease_epoch "
+            + "and step_kind like 'POLICY_LAYER_%' order by step_index desc limit 1) l on true "
+            + "where j.job_id = {0} group by j.job_id, l.step_kind", jobId).stream().findFirst().map(r -> Map.<String, Object>of(
                 "jobId", jobId, "state", r.get("state", String.class), "reason", r.get("reason", String.class),
-                "step", r.get("step", Integer.class), "total", r.get("total", Integer.class))));
+                "step", r.get("step", Integer.class), "total", r.get("total", Integer.class),
+                "layer", r.get("layer", Integer.class), "layers", r.get("layers", Integer.class), "rulesFetched", r.get("rules", Integer.class))));
+    }
+
+    /** Each completed-layer checkpoint commits independently, without terminating the collection. */
+    public boolean checkpoint(String jobId, long epoch, PolicySnapshotRepository.Stored snapshot, String actor) {
+        return new AuditedTransactionBoundary(tx).inTransaction(actor, "policy_collect_checkpoint", db -> {
+            if (db.fetch("select job_id from jobs where job_id = {0} and lease_epoch = {1} and state = 'EXECUTING' "
+                    + "and lease_expires_at > now() for update", jobId, epoch).isEmpty()) return false;
+            new PolicySnapshotRepository(scoped(db)).save(snapshot, actor, "policy_collect_checkpoint");
+            return true;
+        });
     }
 
     /** Publication and the terminal transition share a row lock and transaction. */

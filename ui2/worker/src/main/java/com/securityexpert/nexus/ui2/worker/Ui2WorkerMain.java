@@ -298,11 +298,12 @@ public final class Ui2WorkerMain {
 
         DiscoveryRunRepository discoveryRunRepository = new JooqDiscoveryRunRepository(transactionBoundary);
         var policyCollectionRepository = new com.securityexpert.nexus.ui2.persistence.policy.PolicyCollectionRepository(transactionBoundary);
-        var policyCollector = new com.securityexpert.nexus.ui2.worker.policy.CheckPointPolicyCollector(strictFailoverSsh, gateRegistry, policyCollectionRepository);
+        var policyDeadline = Duration.ofSeconds(Long.parseLong(System.getenv().getOrDefault("UI2_POLICY_RUN_DEADLINE_SECONDS", "7200")));
+        var policyCollector = new com.securityexpert.nexus.ui2.worker.policy.CheckPointPolicyCollector(strictFailoverSsh, gateRegistry, policyCollectionRepository, policyDeadline);
         var policyCollectionExecutor = new com.securityexpert.nexus.ui2.worker.policy.PolicyCollectionJobExecutor(
                 leaseRepository, attemptRepository, discoveryRunRepository, policyCollectionRepository, policyCollector, gateRegistry)
                 .withPanorama(new com.securityexpert.nexus.ui2.worker.policy.PanoramaPolicyCollector(
-                        compositeTransport, gateRegistry, panCredentialResolver, policyCollectionRepository));
+                        compositeTransport, gateRegistry, panCredentialResolver, policyCollectionRepository, policyDeadline));
         MgmtCliEnumerationAdapter checkPointDiscoveryAdapter =
                 new MgmtCliEnumerationAdapter(compositeTransport, sshCredentialResolver);
         PanoramaEnumerationAdapter paloAltoDiscoveryAdapter =

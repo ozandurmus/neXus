@@ -10,7 +10,9 @@ public record PolicySnapshot(Metadata metadata, List<Section> sections, Map<Stri
     public PolicySnapshot(Metadata metadata, List<Section> sections, Map<String, PolicyObject> objects) {
         this(metadata, sections, objects, List.of());
     }
-    public record CollectionFailure(String layerRef, String reason) {}
+    public record CollectionFailure(String layerRef, String reason, String layerName, int offset) {
+        public CollectionFailure(String layerRef, String reason) { this(layerRef, reason, "", 0); }
+    }
     public PolicySnapshot {
         failures = failures == null ? List.of() : List.copyOf(failures);
         sections = List.copyOf(sections);

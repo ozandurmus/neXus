@@ -59,11 +59,13 @@ class PolicyQueryServiceTest {
     @Test void partialSnapshotFailureSurvivesPagingAndAIView() {
         var base = snapshot();
         var partial = new PolicySnapshot(base.metadata(), base.sections(), base.objects(),
-            List.of(new CollectionFailure("layer-1", "access target=layer-1: TIMEOUT")));
+            List.of(new CollectionFailure("layer-1", "access target=layer-1: TIMEOUT", "Synthetic layer", 4000)));
         var body = query.page(partial, 0, "", true).body();
         var masked = mapper.valueToTree(PolicyPrivacy.mask(body, "", names,
             new com.securityexpert.nexus.ui2.service.privacy.SubnetPreservingIpMasker(new byte[32])));
         assertEquals("layer-1", masked.path("failures").get(0).path("layerRef").asText());
+        assertEquals(4000, masked.path("failures").get(0).path("offset").asInt());
+        assertEquals(names.maskPolicyName("layerName", "Synthetic layer"), masked.path("failures").get(0).path("layerName").asText());
         assertEquals("access target=layer-1: TIMEOUT", masked.path("failures").get(0).path("reason").asText());
     }
 
@@ -75,6 +77,17 @@ class PolicyQueryServiceTest {
                 new com.securityexpert.nexus.ui2.service.privacy.SubnetPreservingIpMasker(new byte[32]));
         assertEquals(names.maskPolicyName("name", "2"), masked.get("name"));
         for (String field : List.of("collectedAt", "id", "total")) assertEquals(body.get(field), masked.get(field));
+    }
+
+    @Test void incrementalStatusAndPendingReasonPassThroughAIViewWithoutLayerNames() {
+        var masked = mapper.valueToTree(PolicyPrivacy.mask(Map.of("layer", 2, "layers", 5, "rulesFetched", 4000,
+            "reason", "COLLECTION_PENDING", "layerName", "Synthetic layer"), "", names,
+            new com.securityexpert.nexus.ui2.service.privacy.SubnetPreservingIpMasker(new byte[32])));
+        assertEquals(2, masked.path("layer").asInt());
+        assertEquals(5, masked.path("layers").asInt());
+        assertEquals(4000, masked.path("rulesFetched").asInt());
+        assertEquals("COLLECTION_PENDING", masked.path("reason").asText());
+        assertNotEquals("Synthetic layer", masked.path("layerName").asText());
     }
 
 }

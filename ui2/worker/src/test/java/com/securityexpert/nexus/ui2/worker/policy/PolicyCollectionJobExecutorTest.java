@@ -27,7 +27,7 @@ class PolicyCollectionJobExecutorTest {
         when(leases.transitionState(anyString(), anyLong(), any(), any(), anyString(), anyString())).thenReturn(true);
         when(attempts.insertPreContact(anyString(), anyLong(), anyInt(), anyString(), anyString(), anyInt())).thenReturn("attempt-1");
         when(attempts.writeOutcome(anyString(), anyLong(), anyString(), isNull(), anyBoolean(), isNull(), isNull(), isNull())).thenReturn(true);
-        when(collector.collect(any(), any(), any())).thenThrow(new IllegalStateException("synthetic private detail"));
+        when(collector.collect(any(), any(), any(), any())).thenThrow(new IllegalStateException("synthetic private detail"));
         var executor = new PolicyCollectionJobExecutor(leases, attempts, runs, repository, collector, key -> List.of());
         assertInstanceOf(JobOutcome.Failed.class, executor.execute("job-1", 1, "run-1"));
         verify(repository, never()).publish(anyString(), anyLong(), anyList(), anyString());
@@ -35,7 +35,7 @@ class PolicyCollectionJobExecutorTest {
                 eq("policy_collect_failed"), eq("preflight target=run-1: FAILED_IllegalStateException"));
         when(repository.eligible("mds-1", "run-1")).thenReturn(false);
         assertInstanceOf(JobOutcome.Rejected.class, executor.execute("job-1", 1, "run-1"));
-        verify(collector, times(1)).collect(any(), any(), any());
+        verify(collector, times(1)).collect(any(), any(), any(), any());
     }
     @Test void successfulDiscoveryQueuesOnlyMatchingMdsAndMissingGatesBlockIt() {
         var repository = mock(PolicyCollectionRepository.class);
@@ -107,6 +107,52 @@ class PolicyCollectionJobExecutorTest {
         when(repository.publishWithWarnings(anyString(), anyLong(), anyList(), anyString(), anyString())).thenReturn(false);
         assertInstanceOf(JobOutcome.ZombieStopped.class, executor.execute("job-pan", 1, "run-pan"));
         verify(leases, never()).transitionState(anyString(), anyLong(), any(), eq(JobState.FAILED), anyString(), anyString(), anyString());
+    }
+
+    @Test void cpCheckpointSurvivesLaterFailureAndMapsToPanoramaWarningOutcome() throws Exception {
+        var leases = mock(JobLeaseRepository.class);
+        var attempts = mock(JobStepAttemptRepository.class);
+        var runs = mock(DiscoveryRunRepository.class);
+        var repository = mock(PolicyCollectionRepository.class);
+        var collector = mock(CheckPointPolicyCollector.class);
+        var run = new DiscoveryRun("run-1", "check_point", "192.0.2.10", "synthetic-ref", "synthetic-actor",
+            DiscoveryRunState.FINISHED, Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
+        when(runs.findRun("run-1")).thenReturn(Optional.of(run));
+        when(repository.request("job-1")).thenReturn(Optional.of(new PolicyCollectionRepository.Request("mds-1", "", false)));
+        when(repository.eligible("mds-1", "run-1")).thenReturn(true);
+        when(leases.transitionState(anyString(), anyLong(), any(), any(), anyString(), anyString())).thenReturn(true);
+        when(attempts.insertPreContact(anyString(), anyLong(), anyInt(), anyString(), anyString(), anyInt())).thenReturn("attempt-1");
+        when(attempts.writeOutcome(anyString(), anyLong(), anyString(), isNull(), anyBoolean(), isNull(), isNull(), isNull())).thenReturn(true);
+        when(repository.checkpoint(anyString(), anyLong(), any(), anyString())).thenReturn(true);
+        when(repository.publishWithWarnings(anyString(), anyLong(), anyList(), anyString(), anyString())).thenReturn(true);
+        var metadata = new com.securityexpert.nexus.ui2.policy.PolicySnapshot.Metadata("policy-1", "mds-1", "MGR-BRAVO-01", "CP", "domain-1",
+            "DOM-TANGO-01", "OBJ-POLICY-01", "2026-10-02T03:39:00Z", "", List.of());
+        var snapshot = new com.securityexpert.nexus.ui2.policy.PolicySnapshot(metadata, List.of(), Map.of(), List.of(
+            new com.securityexpert.nexus.ui2.policy.PolicySnapshot.CollectionFailure("layer-2", "COLLECTION_PENDING", "OBJ-LAYER-02", 0)));
+        when(collector.collect(any(), any(), any(), any())).thenAnswer(call -> {
+            java.util.function.Consumer<com.securityexpert.nexus.ui2.policy.PolicySnapshot> publish = call.getArgument(3);
+            publish.accept(snapshot);
+            throw PolicyCollectionTrace.failure("JOB_DEADLINE");
+        });
+        var executor = new PolicyCollectionJobExecutor(leases, attempts, runs, repository, collector, key -> List.of());
+        assertInstanceOf(JobOutcome.Completed.class, executor.execute("job-1", 1, "run-1"));
+        var order = inOrder(repository);
+        order.verify(repository).request("job-1");
+        order.verify(repository).eligible("mds-1", "run-1");
+        order.verify(repository).checkpoint(eq("job-1"), eq(1L), any(), anyString());
+        order.verify(repository).publishWithWarnings(eq("job-1"), eq(1L), anyList(), anyString(), contains("JOB_DEADLINE"));
+        verify(leases, never()).transitionState(anyString(), anyLong(), any(), eq(JobState.FAILED), anyString(), anyString(), anyString());
+        doReturn(List.of(snapshot)).when(collector).collect(any(), any(), any(), any());
+        assertInstanceOf(JobOutcome.Completed.class, executor.execute("job-1", 1, "run-1"));
+        when(repository.publishWithWarnings(anyString(), anyLong(), anyList(), anyString(), anyString())).thenReturn(false);
+        assertInstanceOf(JobOutcome.ZombieStopped.class, executor.execute("job-1", 1, "run-1"));
+        doAnswer(call -> {
+            java.util.function.Consumer<com.securityexpert.nexus.ui2.policy.PolicySnapshot> publish = call.getArgument(3);
+            publish.accept(snapshot);
+            return List.of(snapshot);
+        }).when(collector).collect(any(), any(), any(), any());
+        when(repository.checkpoint(anyString(), anyLong(), any(), anyString())).thenReturn(false);
+        assertInstanceOf(JobOutcome.ZombieStopped.class, executor.execute("job-1", 1, "run-1"));
     }
 
 }

@@ -45,7 +45,7 @@ public final class PolicyPrivacy {
         return names.maskPolicyName(key, text);
     }
     private static String safeReason(String text) {
-        if (text.equals("INLINE_LAYER_NAME_MISSING")) return text;
+        if (Set.of("INLINE_LAYER_NAME_MISSING", "COLLECTION_PENDING").contains(text)) return text;
         int delimiter = text.lastIndexOf(": ");
         if (delimiter < 0) return "COLLECTION_FAILED";
         String code = text.substring(delimiter + 2);
