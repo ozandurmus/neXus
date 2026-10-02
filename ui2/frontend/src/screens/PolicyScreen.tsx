@@ -362,7 +362,7 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
                 {(expandedContainers.has(key) || !!term) && children.filter(p => !term || sourceMatches || matches(container.containerName) || matches(p.name)).map(policy =>
                   <Box key={policy.id} sx={{ pl: 1 }}><Stack direction="row" alignItems="center">
                     {selection([policy], displayName(policy.name, "Policy"))}
-                    <Button fullWidth aria-label={displayName(policy.name, "Policy")} variant="text"
+                    <Button fullWidth aria-label={`Policy ${displayName(policy.name, "Policy")}`} variant="text"
                       aria-pressed={selected === policy.id} aria-current={selected === policy.id ? "page" : undefined} sx={{ justifyContent: "flex-start", textTransform: "none", bgcolor: selected === policy.id ? m3.scHigh : undefined, boxShadow: "none", minWidth: 0 }}
                       onClick={() => { setSelected(policy.id); setPage(0); setCollapsed(new Set()); }}>
                       <Box component="span" aria-label="Stored snapshot" sx={{ width: 6, height: 6, borderRadius: "50%", bgcolor: m3.success, mr: 1, flexShrink: 0 }} />{displayName(policy.name, "Policy")}</Button>
