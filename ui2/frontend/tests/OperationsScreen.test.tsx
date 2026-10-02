@@ -114,11 +114,12 @@ describe("OperationsScreen tabs", () => {
     expect(screen.getByText(/Phase B & C: 4-Eyes Controlled Failover Gate/i)).toBeInTheDocument();
   });
 
-  it("lists the enrolled cluster in a table with vendor, members and readiness, not a chip wall", async () => {
+  it("lists the enrolled cluster in a card with vendor, members and readiness", async () => {
     stubFetch(MEMBERS, null);
     render(withTheme(<OperationsScreen />));
     await screen.findByText("1 clusters enrolled");
-    expect(screen.getByRole("table")).toBeInTheDocument();
+    expect(screen.queryByRole("table")).toBeNull();
+    expect(screen.getByRole("list", { name: "HA clusters" })).toBeInTheDocument();
     expect(screen.getByText("FW-ROMEO-01-M1")).toBeInTheDocument();
     expect(screen.getByText("FW-ROMEO-01-M2")).toBeInTheDocument();
     expect(screen.getAllByText("Unknown").length).toBeGreaterThan(0);
@@ -169,7 +170,7 @@ describe("job totals reconcile (review 2026-09-23)", () => {
   });
 });
 
-it("shows a VSX unit directly below its cluster with outcome and window", async () => {
+it("nests a VSX unit inside its cluster with a separate readiness action", async () => {
   const from = new Date(Date.now() - 3600_000).toISOString();
   vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
     const url = String(input);
@@ -180,9 +181,11 @@ it("shows a VSX unit directly below its cluster with outcome and window", async 
   }));
   render(withTheme(<OperationsScreen />));
   expect(await screen.findByText("VS-ROMEO-01-07")).toBeInTheDocument();
-  const row = screen.getByText("VS-ROMEO-01-07").closest("tr")!;
-  expect(within(row).getByText("PASS")).toBeInTheDocument();
-  expect(within(row).getByText("Active window")).toBeInTheDocument();
+  const parent = screen.getByRole("listitem", { name: "CLS-ROMEO-01" });
+  const row = within(parent).getByRole("list", { name: "Virtual systems in CLS-ROMEO-01" });
+  expect(within(row).getByRole("button", { name: "Run pre-checks" })).toBeInTheDocument();
+  fireEvent.click(within(row).getByRole("button", { name: "Open Virtual System VS-ROMEO-01-07" }));
+  expect(await screen.findByLabelText("Readiness checks")).toBeInTheDocument();
   await waitFor(() => expect(vi.mocked(fetch).mock.calls.filter(([input]) => String(input).includes("cp-failover"))).toHaveLength(1));
   expect(String(vi.mocked(fetch).mock.calls.find(([input]) => String(input).includes("cp-failover"))?.[0])).toBe("/api/v2/cp-failover/summary");
 });
