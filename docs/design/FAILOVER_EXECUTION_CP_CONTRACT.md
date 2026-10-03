@@ -25,7 +25,7 @@ Supersedes, for Check Point execution, the read-only-only scope of `FAILOVER_REA
 | # | Check | Command (Expert) | PASS when |
 | --- | --- | --- | --- |
 | 1 | Cluster state | `cphaprob stat` | exactly one Active and one Standby, both members listed by both, mode supported |
-| 2 | Cluster IP table | `cphaprob tablestat` | both members report the same cluster virtual IP / interface mapping (it is the cluster IP table, not a sync check -- Check Point CLI reference) |
+| 2 | Cluster IP table | `cphaprob tablestat` | both observers report the same address set per opaque member, including interface names when present; numeric interface indices are observer-local and excluded (PO measured correction, 2026-10-03) |
 | 3 | Cluster interfaces | `cphaprob -a if` | every required interface UP on both; CCP up |
 | 5 | ARP | `arp -an` (entry count only) | standby has a comparable ARP population (recorded for §3) |
 | 6 | Connections | `fw tab -t connections -s` (#VALS, #PEAK) | recorded; standby within sync tolerance of active |
@@ -162,12 +162,12 @@ promotes it.
   Zero active count passes for nonnegative standby counts; the ratio is undefined and omitted. Missing counts
   or unverified active role remain UNKNOWN. Store member count/peak, active and compared counts, difference,
   ratio when defined, and the applied rule. Post-check remains new-active/pre-switch-active >= 80% (§3).
-- Check 2 compares each opaque member/interface coordinate across the two observations. Ordering, `(Local)`
-  markers and MAC differences do not affect equality. Member-specific addresses are not compared to the other
-  member's addresses. The measured fixtures do not establish that any member-local row can safely be discarded;
-  keep those rows and the existing VS UNKNOWN behavior on unequal tables. Record mismatching coordinates,
-  missing observer side, and address mismatch enums with comparison-local numbered address aliases only.
-  These aliases preserve equality within the comparison, not identity between runs. No raw address is retained
-  in derived data or rendered in ReadinessCheckView. The measured table reports interface IDs, not names;
-  display the ID verbatim without numeric normalization or an invented name lookup.
+- Check 2 compares per-member address sets, including explicit interface names when supplied. Numeric interface
+  indices are observer-local and never comparison keys (PO measured correction, 2026-10-03). Ordering, `(Local)`
+  markers and MAC differences do not affect equality. Keep member-specific addresses under their own opaque member;
+  do not compare one member's address set with the other's. Equal sets PASS. A member address absent on either
+  observer FAILS, including VS contexts; absent/unrecognised tables or equal tables without two-member evidence remain UNKNOWN.
+  The supplied four-row shape (two addresses per member, interface 6 on one observer and 3 on the other) must PASS.
+  Persist missing-observer enums and comparison-local numbered address aliases only; no raw address, numeric index
+  or interface name is retained in derived data. Aliases preserve equality only within the comparison.
 - All changes reuse existing reads, sessions and command gates. No new command or gate row.

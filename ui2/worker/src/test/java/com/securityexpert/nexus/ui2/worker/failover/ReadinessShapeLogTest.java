@@ -13,6 +13,13 @@ class ReadinessShapeLogTest {
         assertEquals("aaaaaaaaaa aaaaaaaa",ReadinessShapeLog.textShape("ActiveName xActivex"));
     }
 
+    @Test void canonicalAddressSetsKeepMemberShapeWithoutInterfaceNamesOrAddresses() {
+        var log=new ReadinessShapeLog("check_point");
+        String message=log.logTables("FAIL",java.util.Set.of("01||192.0.2.1"),
+            java.util.Set.of("02|eth1|198.51.100.1"));
+        assertEquals("[READINESS_SHAPE] vendor=check_point check=2"
+            +" a={entries=1,members=[01],interfaces=[]} b={entries=1,members=[02],interfaces=[]} shape=",message);
+    }
     @Test void tableFailuresLogBothMembersCoordinatesWithoutAddressesOnce() {
         for(String status:java.util.List.of("FAIL","UNKNOWN")) {
             var log=new ReadinessShapeLog("check_point");

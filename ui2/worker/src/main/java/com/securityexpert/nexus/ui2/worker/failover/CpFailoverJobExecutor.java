@@ -307,8 +307,7 @@ public final class CpFailoverJobExecutor {
         var ta=CpFailoverChecks.ipTable(command(first,TABLE));
         var tb=CpFailoverChecks.ipTable(command(second,TABLE));
         boolean tables=CpFailoverChecks.twoTableMembers(ta) && ta.equals(tb);
-        String tableStatus=tables?"PASS":vsId==null && CpFailoverChecks.twoTableMembers(ta)
-            && CpFailoverChecks.twoTableMembers(tb)?"FAIL":"UNKNOWN";
+        String tableStatus=tables?"PASS":!ta.isEmpty() && !tb.isEmpty() && !ta.equals(tb)?"FAIL":"UNKNOWN";
         shapes.logTables(tableStatus,ta,tb);
         var difference=new java.util.HashMap<>(CpFailoverChecks.tableDifference(ta,tb));
         if(!tables) difference.put("reason",ta.isEmpty() || tb.isEmpty() || ta.equals(tb)?"TABLE_UNRECOGNIZED":"tables differ");

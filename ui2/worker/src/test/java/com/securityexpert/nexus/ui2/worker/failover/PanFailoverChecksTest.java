@@ -42,9 +42,6 @@ class PanFailoverChecksTest {
         return "<response status=\"success\"><result>"+body+"</result></response>";
     }
     @Test void addedChecksPassFailUnknown() {
-        assertEquals("PASS",PanFailoverChecks.sessionSync(result("<session-sync>in-sync</session-sync>")));
-        assertEquals("FAIL",PanFailoverChecks.sessionSync(result("<session-sync>disabled</session-sync>")));
-        assertEquals("UNKNOWN",PanFailoverChecks.sessionSync(result("<session-sync>other</session-sync>")));
         assertEquals(100L,PanFailoverChecks.sessions(result("<active-sessions>100</active-sessions>")));
         assertEquals(null,PanFailoverChecks.sessions(result("<active-sessions>bad</active-sessions>")));
         assertEquals("PASS",PanFailoverChecks.carried(100L,80L));
@@ -56,7 +53,7 @@ class PanFailoverChecksTest {
         assertEquals("UNKNOWN",PanFailoverChecks.versions(version,result("<system/>")));
     }
     @Test void unknownReasonsNameExistingLookupPathsWithoutGuessingFields() {
-        String[] paths={"group/running-sync","session-sync","num-active or active-sessions"};
+        String[] paths={"group/running-sync","enabled and messages/entry/{enable,sent,recv,desc}","num-active or active-sessions"};
         for (int check=4;check<=6;check++) {
             assertEquals(false,PanFailoverChecks.fieldFound(check,result("<other/>")));
             assertEquals("{\"reason\":\"field not found\",\"looked_for\":\"/response/result/"+paths[check-4]+"\"}",
@@ -65,7 +62,7 @@ class PanFailoverChecksTest {
             assertEquals("{}",PanFailoverChecks.unknownDerived(check,"FAIL",true));
         }
         assertEquals(true,PanFailoverChecks.fieldFound(4,result("<group><running-sync>other</running-sync></group>")));
-        assertEquals(true,PanFailoverChecks.fieldFound(5,result("<session-sync/>")));
+        assertEquals(true,PanFailoverChecks.fieldFound(5,result("<enabled/><messages/>")));
         assertEquals(true,PanFailoverChecks.fieldFound(6,result("<active-sessions>invalid</active-sessions>")));
         assertEquals("{\"reason\":\"unrecognised field value\",\"looked_for\":\"/response/result/num-active or active-sessions\"}",
             PanFailoverChecks.unknownDerived(6,"UNKNOWN",true));
@@ -84,14 +81,44 @@ class PanFailoverChecksTest {
         String cli=com.securityexpert.nexus.ui2.worker.inventory.Fixtures.read("pan/readiness_state_sync_cli.txt");
         org.junit.jupiter.api.Assertions.assertTrue(cli.contains("State Synchronization Status: Complete"));
         org.junit.jupiter.api.Assertions.assertTrue(cli.contains("no (device not in active state)"));
-        // Synthetic shapes use only the field names supplied by the PO. The status/count paths are unproved.
+        // A CLI Complete label and nested dp shape do not substitute for the measured XML fields.
         for(String enabled:new String[]{"yes","no (device not in active state)"}) {
             String shape=result("<dp><enabled>"+enabled+"</enabled><aa_enabled>no</aa_enabled></dp>");
-            assertEquals("UNKNOWN",PanFailoverChecks.sessionSync(shape));
+            assertEquals("UNKNOWN",PanFailoverChecks.sessionSync(shape,shape));
             assertEquals(null,PanFailoverChecks.sessions(shape));
             assertEquals(false,PanFailoverChecks.fieldFound(5,shape));
             assertEquals(false,PanFailoverChecks.fieldFound(6,shape));
         }
+    }
+    static String syncXml(String enabled,String sent,String recv) {
+        String entries="";
+        for(String desc:new String[]{"session setup","session update"})
+            entries+="<entry><enable>yes</enable><version>1</version><sent>"+sent+"</sent>"
+                +"<recv>"+recv+"</recv><desc>"+desc+"</desc></entry>";
+        return result("<dp>0</dp><enabled>"+enabled+"</enabled><aa_enabled>no</aa_enabled>"
+            +"<sync_conf>yes</sync_conf><messages>"+entries+"</messages>");
+    }
+    @Test void measuredSessionMessagesUseActiveSentAndPassiveReceived() {
+        String active=syncXml("yes","20","0");
+        String passive=syncXml("no (device not in active state)","0","10");
+        assertEquals("PASS",PanFailoverChecks.sessionSync(active,passive));
+        assertEquals(true,PanFailoverChecks.fieldFound(5,active));
+        assertEquals("PASS",PanFailoverChecks.sessionSync(active,passive.replace("session setup","temporary")
+            .replace("session update","session setup").replace("temporary","session update")));
+        assertEquals("FAIL",PanFailoverChecks.sessionSync(syncXml("yes","0","0"),syncXml("no","0","0")));
+        assertEquals("FAIL",PanFailoverChecks.sessionSync(syncXml("no","20","0"),passive));
+        assertEquals("FAIL",PanFailoverChecks.sessionSync(syncXml("yes","0","0"),passive));
+        assertEquals("FAIL",PanFailoverChecks.sessionSync(active,syncXml("no","0","0")));
+        assertEquals("FAIL",PanFailoverChecks.sessionSync(active.replace("<enable>yes", "<enable>no"),passive));
+        for(String invalid:new String[]{"bad","-1","9223372036854775808"})
+            assertEquals("FAIL",PanFailoverChecks.sessionSync(syncXml("yes",invalid,"0"),passive));
+        for(String tag:new String[]{"enabled","sent","enable","desc"}) {
+            String missing=active.replaceAll("<"+tag+">[^<]*</"+tag+">","");
+            assertEquals("UNKNOWN",PanFailoverChecks.sessionSync(missing,passive));
+        }
+        assertEquals("UNKNOWN",PanFailoverChecks.sessionSync(active,passive.replace("<recv>10</recv>","")));
+        assertEquals("UNKNOWN",PanFailoverChecks.sessionSync(active,passive.replace("session update","other")));
+        assertEquals("UNKNOWN",PanFailoverChecks.sessionSync(active,result("<session-sync>in-sync</session-sync>")));
     }
     public static void main(String[] args) {
         var test=new PanFailoverChecksTest(); test.pairPassFailAndUnknown(); test.activeActiveRefused(); test.addedChecksPassFailUnknown();

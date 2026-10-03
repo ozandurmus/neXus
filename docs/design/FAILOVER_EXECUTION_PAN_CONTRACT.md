@@ -41,7 +41,7 @@ the two `request high-availability state` op commands above, direct firewall onl
 ## 6. Amendment 2026-09-27 -- session sync, session takeover, version parity (PO: "Ekleyelim")
 | # | Check | Read (direct firewall XML API) | PASS when |
 | --- | --- | --- | --- |
-| 5 | Session synchronization (HA2) | `<show><high-availability><state-synchronization/></high-availability></show>` (new) | session sync reported current / in sync on both peers; a failed or disabled state -> FAIL; unrecognised -> UNKNOWN |
+| 5 | Session synchronization (HA2) | `<show><high-availability><state-synchronization/></high-availability></show>` (new) | on the active peer `enabled=yes`, session setup/update entries `enable=yes` and `sent > 0`; on the passive peer the same entries have `recv > 0` (PO measured correction, 2026-10-03) |
 | 6 | Sessions carried | `<show><session><info/></session></show>` (new) | pre: recorded on both; post: the new active's active-session count at least 80 % of the pre-check active's |
 | 7 | Version parity | `<show><system><info/></system></show>` (existing gate) | PAN-OS version and app / threat content versions equal on both peers |
 All three run as pre- and post-checks. New read gate rows for 5 and 6.
@@ -50,3 +50,16 @@ All three run as pre- and post-checks. New read gate rows for 5 and 6.
 Same rule as `FAILOVER_EXECUTION_CP_CONTRACT.md` §13 for the §3/§6 Palo Alto checks: a read-only "Run pre-checks"
 per HA pair, and a 4-hourly pass (one session per peer, commands in order, configurable pause); the result is shown
 with its age in Operations › HA & readiness and never replaces the fresh pre-check at the start of a run.
+
+## 8. Measured parser correction 2026-10-03 (Product Owner brief)
+
+Check 5 reads `response/result/{dp, enabled, aa_enabled, sync_conf,
+messages/entry{enable, version, sent, recv, desc}}`, not a `Complete` or `session-sync` field.
+Select the active observer from the existing identity-verified HA state; match `session setup` and `session update`
+by `desc`, independently of entry ordering. Require active `enabled=yes`, both active message entries `enable=yes`
+and positive `sent`, and positive passive `recv` for both entries. Passive `enabled=no (device not in active state)`
+is normal and does not fail this check. Disabled active sync or disabled active message entries FAIL; zero active
+sent counters while sessions exist, or zero passive receive counters for active traffic, FAIL. Missing required
+fields/entries remain UNKNOWN; present invalid counters fail closed. The existing session-info count read is unchanged.
+The positive-counter PASS requirement is applied conservatively even to an idle pair; zero counters do not prove sync.
+No new command, session, gate row, retry or collection cadence is introduced; raw XML is not persisted.

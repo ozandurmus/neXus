@@ -57,7 +57,7 @@ class CpFailoverJobExecutorTest {
         boolean down,up,stuck,badPre,badPost,badSync,badPolicy,changedPolicyPost;
         boolean readyMember,badPnotes,badBonds,badRoutes,missingDefault,recentFailover;
         String unknownCommand, failedCommand;
-        boolean extraTableRows,reverseActive;
+        boolean extraTableRows,reverseActive,observerLocalIndices;
         String peerPolicyTime;
         long[] connectionCounts;
         String prefix="";
@@ -128,6 +128,7 @@ class CpFailoverJobExecutorTest {
                     if(cmd.endsWith("cphaprob tablestat")) {
                         String text="---- Unique IP's Table ----\nMember Interface IP-Address\n"
                             +"0 1 192.0.2.21\n1 1 "+(badPre&&!first&&!down?"192.0.2.99":"192.0.2.22")+"\n";
+                        if(observerLocalIndices) text+="0 "+(first?"6":"3")+" 198.51.100.21\n1 "+(first?"6":"3")+" 198.51.100.22\n";
                         if(extraTableRows && first) text+="0 2 198.51.100.21\n1 2 198.51.100.22\n";
                         return new ExecResult.Completed(text,0);
                     }
@@ -297,16 +298,27 @@ class CpFailoverJobExecutorTest {
         check(store.checks.size()==4);
         check(script.commands.size()==4);
     }
-    @Test void differingVsTablesStayUnknownAndStopWithoutWrites() {
+    @Test void observerLocalIndicesPassInReadinessIncludingVsContexts() {
+        for(String vs:List.of("", "12")) {
+            Store store=new Store(); store.kind="READINESS"; store.vsId=vs.isEmpty()?null:vs;
+            Script script=new Script(); script.observerLocalIndices=true;
+            run(store,script);
+            check(store.checks.stream().filter(c -> c.equals("pre:2:PASS")).count()==2);
+            check(store.derivedValues.stream().filter(d -> d.contains("\"firstEntries\":4")
+                && d.contains("\"secondEntries\":4") && d.contains("\"differences\":[]")).count()==2);
+            check(script.downCount==0 && script.upCount==0);
+        }
+    }
+    @Test void differingVsAddressSetsFailAndStopWithoutWrites() {
         for(boolean extra:List.of(false,true)) {
             Store store=new Store(); store.kind="READINESS"; store.vsId="12";
             Script script=new Script(); script.badPre=!extra; script.extraTableRows=extra;
             run(store,script);
-            check("UNKNOWN".equals(store.outcome));
-            check(store.checks.contains("pre:2:UNKNOWN"));
+            check("NOT_READY".equals(store.outcome));
+            check(store.checks.contains("pre:2:FAIL"));
             check(store.derivedValues.stream().filter(d -> d.contains("\"reason\":\"tables differ\"")
                 && d.contains("\"firstEntries\":"+(extra?4:2)) && d.contains("\"secondEntries\":2")
-                && d.contains(extra?"MISSING_ON_SECOND":"ADDRESS_MISMATCH")).count()==2);
+                && d.contains("MISSING_ON_SECOND")).count()==2);
             check(store.derivedValues.stream().noneMatch(d -> d.contains("192.0.2.") || d.contains("198.51.100.")));
             check(script.downCount==0 && script.upCount==0);
         }

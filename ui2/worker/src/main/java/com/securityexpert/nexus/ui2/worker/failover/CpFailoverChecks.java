@@ -28,7 +28,7 @@ public final class CpFailoverChecks {
     public static final long POLICY_MAX_SKEW_SECONDS = 600;
     public static final double TRAFFIC_MIN_RATIO = 0.50;
     private static final Pattern LOCAL = Pattern.compile("(?i)\\(local\\)");
-    private static final Pattern IP_ROW = Pattern.compile("(?m)^\\s*([^\\s()]+)\\s+(\\d+)\\s+([0-9a-fA-F:.]+)(?:[ \\t]+[0-9a-fA-F:]+)?[ \\t]*$");
+    private static final Pattern IP_ROW = Pattern.compile("(?m)^\\s*([^\\s()]+)\\s+(\\d+|[A-Za-z][A-Za-z0-9_.:-]{0,63})\\s+([0-9a-fA-F:.]+)(?:[ \\t]+[0-9a-fA-F:]+)?[ \\t]*$");
     private static final Pattern INTERFACE = Pattern.compile("(?m)^\\s*([A-Za-z][A-Za-z0-9_.:-]{0,63})[ \\t]+(?:\\(((?:S|HA|LS|LM|P)(?:,[ \t]*(?:S|HA|LS|LM|P))*)\\)[ \\t]+)?(UP|DOWN|Non-Monitored)\\b(.*)$");
     private static final Pattern CONNECTION = Pattern.compile("(?im)^\\s*\\S+\\s+connections\\s+\\d+\\s+(\\d+)\\s+(\\d+)\\s+\\d+\\s*$");
     private static final Pattern DEV = Pattern.compile("(?m)^\\s*([A-Za-z0-9_.:-]{1,64}):\\s*((?:\\d+\\s+){15}\\d+)\\s*$");
@@ -70,15 +70,14 @@ public final class CpFailoverChecks {
     /** Compare complete tables in memory; never persist addresses or interface identifiers. */
     public static Set<String> ipTable(String output) {
         if (output==null || !output.contains("Unique IP's Table")) return Set.of();
-        Set<String> rows=new HashSet<>(); Map<String,String> mapping=new HashMap<>();
+        Set<String> rows=new HashSet<>();
         for(String raw:output.split("\\R")) {
             String line=LOCAL.matcher(raw).replaceAll(" ");
             if(!line.strip().matches("[0-9].*")) continue;
             Matcher m=IP_ROW.matcher(line);
             if(!m.matches()) return Set.of();
-            String key=m.group(1)+"|"+m.group(2);
-            String previous=mapping.putIfAbsent(key,m.group(3));
-            if(previous!=null && !previous.equals(m.group(3))) return Set.of();
+            // Numeric indices are observer-local; only explicit interface names are comparable.
+            String key=m.group(1)+"|"+(m.group(2).matches("[0-9]+")?"":m.group(2));
             rows.add(key+"|"+m.group(3));
         }
         return Set.copyOf(rows);
@@ -86,24 +85,20 @@ public final class CpFailoverChecks {
     public static boolean twoTableMembers(Set<String> rows) {
         return rows.stream().map(row -> row.substring(0,row.indexOf('|'))).distinct().count()==2;
     }
-    /** Compare the same opaque member/interface key across observations, not local versus peer IPs. */
+    /** Compare per-member address sets (and explicit names), retaining only safe address aliases. */
     public static Map<String,Object> tableDifference(Set<String> a,Set<String> b) {
-        Map<String,String> left=new java.util.TreeMap<>(),right=new java.util.TreeMap<>();
-        for(String row:a) left.put(row.substring(0,row.lastIndexOf('|')),row.substring(row.lastIndexOf('|')+1));
-        for(String row:b) right.put(row.substring(0,row.lastIndexOf('|')),row.substring(row.lastIndexOf('|')+1));
-        var keys=new java.util.TreeSet<>(left.keySet()); keys.addAll(right.keySet());
-        // Comparison-local aliases preserve address equality without retaining raw addresses.
+        var rows=new java.util.TreeSet<>(a); rows.addAll(b);
         var addresses=new HashMap<String,Integer>();
         var differences=new ArrayList<Map<String,Object>>();
-        for(String key:keys) {
-            String x=left.get(key),y=right.get(key);
-            for(String address:new String[]{x,y}) if(address!=null) addresses.computeIfAbsent(address,ignored -> addresses.size()+1);
-            if(java.util.Objects.equals(x,y)) continue;
-            String[] coordinate=key.split("\\|",2);
-            differences.add(Map.of("member",coordinate[0],"interface",coordinate[1],
-                "reason",x==null?"MISSING_ON_FIRST":y==null?"MISSING_ON_SECOND":"ADDRESS_MISMATCH",
-                "firstAddress",x==null?0:addresses.get(x),
-                "secondAddress",y==null?0:addresses.get(y)));
+        for(String row:rows) {
+            String address=row.substring(row.lastIndexOf('|')+1);
+            addresses.computeIfAbsent(address,ignored -> addresses.size()+1);
+            boolean first=a.contains(row),second=b.contains(row);
+            if(first && second) continue;
+            differences.add(Map.of("member",row.substring(0,row.indexOf('|')),
+                "reason",first?"MISSING_ON_SECOND":"MISSING_ON_FIRST",
+                "firstAddress",first?addresses.get(address):0,
+                "secondAddress",second?addresses.get(address):0));
         }
         return Map.of("firstEntries",a.size(),"secondEntries",b.size(),"differences",differences);
     }

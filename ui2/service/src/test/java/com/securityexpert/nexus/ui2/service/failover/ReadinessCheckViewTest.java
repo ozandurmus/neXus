@@ -93,6 +93,14 @@ class ReadinessCheckViewTest {
             .replace("\"interface\":\"28\"","\"interface\":\"192.0.2.2\"");
         assertFalse(row(false,2,"FAIL",malicious).get("summary").toString().contains("192.0.2."));
     }
+    @Test void missingMemberAddressExplainsTheObserverWithoutAnInterfaceIndex() throws Exception {
+        String derived="{\"entries\":4,\"differences\":[{\"member\":\"01\","
+            +"\"reason\":\"MISSING_ON_SECOND\",\"firstAddress\":2,\"secondAddress\":0}]}";
+        assertTrue(row(false,2,"FAIL",derived).get("summary").toString()
+            .contains("table member 01: missing on second observer"));
+        assertTrue(row(true,5,"UNKNOWN","{}").get("summary").toString().contains("messages/entry"));
+        assertFalse(row(true,5,"UNKNOWN","{}").get("summary").toString().contains("Complete"));
+    }
     @Test void missingPanSessionCountNamesTheCurrentAndLegacyFields() throws Exception {
         assertEquals("Session count missing or not recognised: /response/result/num-active or active-sessions",
             row(true,6,"UNKNOWN","{}").get("summary"));

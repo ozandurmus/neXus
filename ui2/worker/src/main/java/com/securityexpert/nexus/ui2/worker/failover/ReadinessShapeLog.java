@@ -62,9 +62,9 @@ final class ReadinessShapeLog {
         var interfaces=new java.util.TreeSet<String>();
         for(String row:rows) {
             String[] columns=row.split("\\|",3);
-            if(columns.length==3 && columns[0].matches("[0-9]+") && columns[1].matches("[0-9]+")) {
+            if(columns.length==3 && columns[0].matches("[0-9]+")) {
                 members.add(columns[0]);
-                interfaces.add(columns[1]);
+                if(columns[1].matches("[0-9]+")) interfaces.add(columns[1]);
             }
         }
         return "{entries="+rows.size()+",members="+members+",interfaces="+interfaces+"}";
