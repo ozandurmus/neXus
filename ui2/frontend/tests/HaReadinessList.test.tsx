@@ -22,6 +22,31 @@ function setup(extra = {}) {
 const table = () => screen.getByRole("table", { name: "HA clusters" });
 const row = (name: string) => within(table()).getByRole("row", { name });
 afterEach(() => vi.useRealTimers());
+it("keeps cluster and VS expansion through summary arrival, refresh and reordering", () => {
+  const vs = { ...summary(clusters[0].ref, "NOT_READY"), unitId: "opaque-vs", virtual_system: "VS-ALPHA-07" };
+  const props = { clusters, rows: {}, running: null, busy: false, progress: {}, error: null,
+    onOpen: vi.fn(), onRun: vi.fn(), onBulkRun: vi.fn() };
+  const { rerender } = render(<HaReadinessList {...props} />);
+  const expand = (title: string) => within(row(title)).getByRole("button", { name: `Checks for ${title}` });
+  fireEvent.click(expand(clusters[0].title));
+  expect(row(clusters[0].title)).toHaveAttribute("aria-expanded", "true");
+  const refreshed: Record<string, CpFailoverSummary[]> = { ...rows, [clusters[0].ref]: [{ ...summary(clusters[0].ref, "NOT_READY"), clusterId: "opaque-cluster", unitId: "opaque-cluster" }, vs] };
+  rerender(<HaReadinessList {...props} rows={refreshed} />);
+  expect(row(clusters[0].title)).toHaveAttribute("aria-expanded", "true");
+  expect(expand(clusters[0].title)).toHaveAttribute("aria-expanded", "true");
+  expect(screen.getByRole("region", { name: `Checks for ${clusters[0].title}` })).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: `Virtual systems in ${clusters[0].title}` }));
+  fireEvent.click(expand("Virtual System VS-ALPHA-07"));
+  const updated = { ...refreshed, [clusters[0].ref]: refreshed[clusters[0].ref].map(unit => ({ ...unit, readiness: { ...unit.readiness!, status: "READY" as const } })) };
+  rerender(<HaReadinessList {...props} clusters={[...clusters].reverse()} rows={updated} />);
+  expect(row(clusters[0].title)).toHaveAttribute("aria-expanded", "true");
+  expect(row("Virtual System VS-ALPHA-07")).toHaveAttribute("aria-expanded", "true");
+  fireEvent.click(expand(clusters[0].title));
+  expect(row(clusters[0].title)).toHaveAttribute("aria-expanded", "false");
+  expect(row("Virtual System VS-ALPHA-07")).toHaveAttribute("aria-expanded", "true");
+  rerender(<HaReadinessList {...props} rows={{}} />);
+  expect(row(clusters[0].title)).toHaveAttribute("aria-expanded", "false");
+});
 it("uses full width, compact rows and cluster counts, sorting not ready, unknown, ready", () => {
   setup();
   const layout = table().closest(".ha-readiness-full-width")!;

@@ -25,7 +25,9 @@ public final class CheckPointPolicyCollector {
     private final Duration jobTimeout;
     private final Duration readTimeout;
     private final LongSupplier nanoTime;
-    private final ObjectMapper json = new ObjectMapper();
+    private final ObjectMapper json = new ObjectMapper()
+        .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
+        .enable(com.fasterxml.jackson.core.JsonParser.Feature.STRICT_DUPLICATE_DETECTION);
 
     public CheckPointPolicyCollector(DeviceTransport transport, GateRegistryPort gates, PolicyCollectionRepository repository) {
         this(transport, gates, repository, Duration.ofSeconds(Long.parseLong(
@@ -335,8 +337,8 @@ public final class CheckPointPolicyCollector {
             throw PolicyCollectionTrace.failure(timedOut.streaming() ? "STREAMING_TIMEOUT" : "TIMEOUT");
         if (!(result instanceof ExecResult.Completed completed)) throw PolicyCollectionTrace.failure(result.getClass().getSimpleName());
         try {
-            JsonNode root = json.readTree(completed.output());
-            if (root != null && root.isObject() && (root.has("code") || root.has("message"))) {
+            JsonNode root = json.readTree(jsonBody(completed.output()));
+            if (root != null && root.isObject() && (root.has("code") || (root.has("message") && !root.has("objects") && !root.has("packages") && !root.has("rulebase")))) {
                 String message = (root.path("code").asText("") + " " + root.path("message").asText("")).toLowerCase(Locale.ROOT);
                 if (message.contains("session") || message.contains("lock") || message.contains("too many"))
                     throw PolicyCollectionTrace.failure("API_SESSION_PRESSURE");
@@ -344,15 +346,63 @@ public final class CheckPointPolicyCollector {
             }
             if (completed.exitStatus() != 0) throw PolicyCollectionTrace.failure("EXIT_" + completed.exitStatus());
             if (root == null || !root.isObject()) throw failure();
+            if (gate <= 0) validatePreflight(root, gate < 0 ? "objects" : "packages");
             return root;
+        } catch (PolicyCollectionTrace.Failure invalid) {
+            if (gate <= 0) invalidPreflight(completed.output());
+            if (completed.exitStatus() != 0 && invalid.getMessage().endsWith(": INVALID_OR_INCOMPLETE_RESPONSE"))
+                throw PolicyCollectionTrace.failure("EXIT_" + completed.exitStatus());
+            throw invalid;
         } catch (java.io.IOException invalid) {
+            if (gate <= 0) invalidPreflight(completed.output());
             if (completed.exitStatus() != 0) throw PolicyCollectionTrace.failure("EXIT_" + completed.exitStatus());
             throw failure();
         }
     }
 
+    /** Skip text-only banner lines, never search past a malformed JSON candidate. */
+    private static String jsonBody(String output) {
+        String body = output.startsWith("\uFEFF") ? output.substring(1) : output;
+        body = body.stripLeading();
+        while (!body.startsWith("{") && !body.startsWith("[")) {
+            int newline = body.indexOf('\n');
+            if (newline < 0 || body.substring(0, newline).contains("{") || body.substring(0, newline).contains("[")) throw failure();
+            body = body.substring(newline + 1).stripLeading();
+        }
+        return body;
+    }
+
+    private static void validatePreflight(JsonNode root, String field) {
+        completeList(root, field);
+        Set<String> seen = new HashSet<>();
+        for (JsonNode item : root.path(field)) {
+            if (!seen.add(required(item, "uid"))) throw failure();
+            required(item, "name");
+            if (field.equals("packages")) {
+                if (!item.path("access-layers").isArray() || !item.path("installation-targets").isArray()) throw failure();
+                for (JsonNode layer : item.path("access-layers")) {
+                    required(layer, "uid"); required(layer, "name");
+                }
+                for (JsonNode target : item.path("installation-targets")) {
+                    if (target.isTextual()) {
+                        if (target.textValue().isBlank()) throw failure();
+                    } else required(target, "uid");
+                }
+            }
+        }
+    }
+
+    private static void invalidPreflight(String output) {
+        int limit = Math.min(output.length(), 2048);
+        String shape = output.substring(0, limit).replaceAll("\\p{L}", "a").replaceAll("\\p{N}", "9")
+            .replaceAll("[^\\x20-\\x7E\r\n\t]", "?");
+        com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.add("job", "note",
+            "invalid preflight bytes=" + output.getBytes(java.nio.charset.StandardCharsets.UTF_8).length
+                + " shapeTruncated=" + (limit < output.length()) + " shape=" + shape);
+    }
+
     static void completeList(JsonNode root, String field) {
-        if (!root.path(field).isArray() || !root.path("total").isIntegralNumber()
+        if (!root.path(field).isArray() || !root.path("total").isIntegralNumber() || !root.path("total").canConvertToInt()
                 || root.path("total").asLong() != root.path(field).size() || root.path(field).size() > 500) throw failure();
     }
     static String required(JsonNode object, String field) {

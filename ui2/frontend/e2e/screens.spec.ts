@@ -74,7 +74,7 @@ async function screenHasData(page: Page, screen: ScreenId, settleReads: () => Pr
       const before = page.url();
       await expect(row.getByRole("checkbox")).toBeDisabled();
       await expect(row).toHaveAttribute("aria-expanded", "false");
-      await row.click();
+      await row.getByRole("button", { name: /^Checks for / }).click();
       await expect(row).toHaveAttribute("aria-expanded", "true");
       await page.getByRole("region", { name: /^Checks for / }).getByRole("button", { name: "Open full detail" }).click();
       const drawer = page.getByRole("dialog", { name: "HA readiness detail" });

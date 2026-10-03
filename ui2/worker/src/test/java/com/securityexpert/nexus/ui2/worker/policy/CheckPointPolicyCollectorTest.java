@@ -41,13 +41,13 @@ class CheckPointPolicyCollectorTest {
             collector.collect(run, request, () -> true);
             verify(transport, times(6)).execInteractive(any(), argThat(spec -> spec.streamingExtensionMs() == 120_000), eq(Duration.ofSeconds(420)));
             reset(transport);
-            when(transport.execInteractive(any(), any(), any())).thenReturn(ok("{}"));
+            when(transport.execInteractive(any(), any(), any())).thenReturn(ok("{\"total\":0,\"objects\":[]}"));
             long now = 10;
             var bounded = new CheckPointPolicyCollector(transport, gates, repository, Duration.ofHours(2), () -> now);
             bounded.read(session, MgmtCliCommands.domainList(), -1, now + Duration.ofSeconds(450).toNanos(), () -> true);
             verify(transport).execInteractive(any(), argThat(spec -> spec.streamingExtensionMs() == 30_000), eq(Duration.ofSeconds(420)));
             reset(transport);
-            when(transport.execInteractive(any(), any(), any())).thenReturn(ok("{}"));
+            when(transport.execInteractive(any(), any(), any())).thenReturn(ok("{\"total\":0,\"objects\":[]}"));
             bounded.read(session, MgmtCliCommands.domainList(), -1, now + Duration.ofSeconds(30).toNanos(), () -> true);
             verify(transport).execInteractive(any(), argThat(spec -> spec.streamingExtensionMs() == 0), eq(Duration.ofSeconds(30)));
             for (String invalid : List.of("0", "-1", "2147484")) {
@@ -78,6 +78,97 @@ class CheckPointPolicyCollectorTest {
         assertTrue(published.contains(snapshots.get(0)));
         verify(transport, times(2)).connect(any(), any(), any());
         verify(transport, times(2)).disconnect(session);
+    }
+
+    @Test void completeResponsesWithBannerAndExtraFieldsWorkInSerialAndParallel() {
+        for (int sessions : List.of(1, 4)) {
+            setup(command -> {
+                String body = ((ExecResult.Completed) answer(command)).output();
+                if (command.contains("show-packages")) body = body.replace("\"total\":1", "\"message\":\"Synthetic metadata\",\"extra\":{},\"total\":1");
+                return ok("\uFEFFSynthetic banner 42\r\nNotice: synthetic environment\n" + body);
+            });
+            var collector = new CheckPointPolicyCollector(transport, gates, repository, Duration.ofHours(2), sessions);
+            var snapshots = collector.collect(run, request, () -> true);
+            assertEquals(1, snapshots.size());
+            assertTrue(snapshots.get(0).failures().isEmpty());
+        }
+    }
+
+    @Test void emptyDomainsAndDomainsWithoutPackagesAreComplete() {
+        for (int sessions : List.of(1, 4)) {
+            for (boolean emptyDomains : List.of(true, false)) {
+                setup(command -> command.contains("show-domains") && !emptyDomains ? answer(command)
+                    : ok(command.contains("show-domains") ? "{\"total\":0,\"objects\":[],\"extra\":true}"
+                        : "{\"total\":0,\"packages\":[],\"from\":0,\"to\":0}"));
+                var collector = new CheckPointPolicyCollector(transport, gates, repository, Duration.ofHours(2), sessions);
+                List<PolicySnapshot.CollectionFailure> failures = new ArrayList<>();
+                assertTrue(collector.collect(run, request, () -> true, snapshot -> fail("No package to publish"), failures::add).isEmpty());
+                assertTrue(failures.isEmpty());
+            }
+        }
+    }
+
+    @Test void invalidPreflightFailsClosedAndRecordsOnlyMaskedShapeAndUtf8Length() throws Exception {
+        for (String body : List.of("", "Synthetic banner only", "{\"total\":0,\"packages\":[", "{\"total\":0,\"packages\":[]} trailing",
+                "{\"total\":0,\"packages\":[]} {}", "{broken\n{\"total\":0,\"packages\":[]}",
+                "{\"total\":1,\"packages\":[]}", "{\"packages\":[]}", "{\"total\":-1,\"packages\":[]}",
+                "{\"total\":18446744073709551616,\"packages\":[]}",
+                "{\"total\":\"0\",\"packages\":[]}", "{\"total\":0,\"total\":0,\"packages\":[]}",
+                "{\"total\":0,\"packages\":null}", "{\"total\":1,\"packages\":[{}]}",
+                "{\"total\":1,\"packages\":[{\"uid\":\"pkg\",\"name\":\"Package\"}]}",
+                "{\"total\":1,\"packages\":[{\"uid\":\"pkg\",\"name\":\"Package\",\"access-layers\":[{}],\"installation-targets\":[]}]}",
+                "{\"total\":1,\"packages\":[{\"uid\":\"pkg\",\"name\":\"Package\",\"access-layers\":[],\"installation-targets\":[\"\"]}]}",
+                "[]", "{\"code\":\"generic_error\",\"message\":\"Synthetic failure\"}",
+                "Synthetic é42\n{\"total\":0,\"packages\":[")) {
+            var collector = setup(command -> ok(body));
+            var transcript = new com.securityexpert.nexus.ui2.worker.transcript.JobTranscript();
+            try (var scope = com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.open(transcript)) {
+                var error = assertThrows(PolicyCollectionTrace.Failure.class, () -> collector.read(session,
+                    MgmtCliCommands.showPackages("DOM-TANGO-01"), 0, Long.MAX_VALUE, () -> true));
+                assertTrue(error.getMessage().endsWith(": INVALID_OR_INCOMPLETE_RESPONSE"));
+            }
+            var sink = new java.io.ByteArrayOutputStream(); transcript.writeTo(sink);
+            String note = sink.toString(java.nio.charset.StandardCharsets.UTF_8).lines()
+                .map(line -> { try { return new com.fasterxml.jackson.databind.ObjectMapper().readTree(line).path("text").asText(); }
+                    catch (java.io.IOException invalid) { throw new AssertionError(invalid); } })
+                .filter(text -> text.startsWith("invalid preflight bytes=")).findFirst().orElseThrow();
+            assertTrue(note.startsWith("invalid preflight bytes=" + body.getBytes(java.nio.charset.StandardCharsets.UTF_8).length + " shapeTruncated=false shape="));
+            String shape = note.substring(note.indexOf(" shape=") + 7);
+            assertTrue(shape.codePoints().allMatch(c -> !Character.isLetter(c) || c == 'a'));
+            assertTrue(shape.codePoints().allMatch(c -> !Character.isDigit(c) || c == '9'));
+            assertFalse(note.contains("Synthetic"));
+        }
+    }
+
+    @Test void incompleteOrDuplicateDomainIdentitiesAreRejected() {
+        for (String body : List.of("{\"total\":1,\"objects\":[]}", "{\"total\":1,\"objects\":[{\"uid\":\"domain\",\"name\":\"\"}]}",
+                "{\"total\":2,\"objects\":[{\"uid\":\"domain\",\"name\":\"DOM-TANGO-01\"},{\"uid\":\"domain\",\"name\":\"DOM-BRAVO-02\"}]}")) {
+            var collector = setup(command -> ok(body));
+            assertThrows(PolicyCollectionTrace.Failure.class, () -> collector.read(session, MgmtCliCommands.domainList(), -1, Long.MAX_VALUE, () -> true));
+        }
+    }
+
+    @Test void invalidShapeIsBoundedAndNonzeroExitAndSessionPressureRemainFailures() throws Exception {
+        String body = "Synthetic é42 ".repeat(300);
+        var collector = setup(command -> ok(body));
+        var transcript = new com.securityexpert.nexus.ui2.worker.transcript.JobTranscript();
+        try (var scope = com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.open(transcript)) {
+            assertThrows(PolicyCollectionTrace.Failure.class, () -> collector.read(session,
+                MgmtCliCommands.domainList(), -1, Long.MAX_VALUE, () -> true));
+        }
+        var sink = new java.io.ByteArrayOutputStream(); transcript.writeTo(sink);
+        String note = sink.toString(java.nio.charset.StandardCharsets.UTF_8).lines()
+            .map(line -> { try { return new com.fasterxml.jackson.databind.ObjectMapper().readTree(line).path("text").asText(); }
+                catch (java.io.IOException invalid) { throw new AssertionError(invalid); } })
+            .filter(text -> text.startsWith("invalid preflight bytes=")).findFirst().orElseThrow();
+        assertTrue(note.contains("bytes=" + body.getBytes(java.nio.charset.StandardCharsets.UTF_8).length + " shapeTruncated=true"));
+        assertEquals(2048, note.substring(note.indexOf(" shape=") + 7).length());
+        var exitCollector = setup(command -> new ExecResult.Completed("Synthetic failure", 1));
+        assertTrue(assertThrows(PolicyCollectionTrace.Failure.class, () -> exitCollector.read(session,
+            MgmtCliCommands.domainList(), -1, Long.MAX_VALUE, () -> true)).getMessage().endsWith(": EXIT_1"));
+        var pressureCollector = setup(command -> ok("{\"code\":\"generic_error\",\"message\":\"Too many sessions\"}"));
+        assertTrue(assertThrows(PolicyCollectionTrace.Failure.class, () -> pressureCollector.read(session,
+            MgmtCliCommands.domainList(), -1, Long.MAX_VALUE, () -> true)).getMessage().endsWith(": API_SESSION_PRESSURE"));
     }
 
     private static ExecResult ok(String json) { return new ExecResult.Completed(json, 0); }
