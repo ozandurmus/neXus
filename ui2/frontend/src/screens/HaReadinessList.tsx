@@ -98,7 +98,7 @@ export function HaReadinessList({ clusters, rows, running, busy, progress, error
   const renderRow = (item: typeof items[number], row?: CpFailoverSummary, nested = false) => {
     const { cluster, vendor } = item;
     const title = nested ? `Virtual System ${row?.virtual_system ?? "Unknown"}` : cluster.title;
-    const key = JSON.stringify([cluster.ref, row?.unitId ?? null]);
+    const key = JSON.stringify([cluster.ref, nested ? row?.unitId : null]);
     const status = nested ? row?.readiness?.status ?? "UNKNOWN" : item.status;
     const s = statuses[status];
     const rolesAt = nested ? row?.readiness?.observedAt : cluster.members.map(m => m.inventory_collected_at ?? "").sort().at(-1);
@@ -122,6 +122,11 @@ export function HaReadinessList({ clusters, rows, running, busy, progress, error
         </TableCell>
         <TableCell><Chip size="small" icon={<Icon name={s.icon} size={16} />} label={s.label} sx={{ minWidth: "min-content", bgcolor: s.bg, color: s.ink, '& .MuiChip-label': { overflow: "visible", textOverflow: "clip" }, '& .MuiChip-icon': { color: "inherit" } }} /></TableCell>
         <TableCell component="th" scope="row" sx={{ pl: nested ? 4 : 2 }}>
+          <IconButton size="small" aria-label={`Checks for ${title}`} aria-expanded={isExpanded}
+            aria-controls={isExpanded ? `checks-${encodeURIComponent(key)}` : undefined}
+            onClick={event => { event.stopPropagation(); setExpanded(current => toggle(current, key)); }}>
+            <span aria-hidden>{isExpanded ? "▾" : "▸"}</span>
+          </IconButton>
           {!nested && children.length > 0 && <IconButton size="small" aria-label={`Virtual systems in ${cluster.title}`} aria-expanded={openVs.has(cluster.ref)}
             onClick={event => { event.stopPropagation(); setOpenVs(current => toggle(current, cluster.ref)); }}><span aria-hidden>{openVs.has(cluster.ref) ? "▾" : "▸"}</span></IconButton>}
           <Box component="span" sx={{ fontWeight: 600, mr: 1 }}>{title}</Box><VendorBadge vendor={vendor} />
