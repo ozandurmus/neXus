@@ -240,8 +240,8 @@ public final class PanFailoverJobExecutor {
                 :PanFailoverChecks.roles(a,b,"passive","active"))
             :PanFailoverChecks.roles(a,b,oldActive==first?"suspended":"active",
                 oldActive==second?"suspended":"active");
-        String syncA=PanFailoverChecks.sessionSync(call(first,SESSION_SYNC));
-        String syncB=PanFailoverChecks.sessionSync(call(second,SESSION_SYNC));
+        String syncA=call(first,SESSION_SYNC);
+        String syncB=call(second,SESSION_SYNC);
         Long sessionsA=PanFailoverChecks.sessions(call(first,SESSIONS));
         Long sessionsB=PanFailoverChecks.sessions(call(second,SESSIONS));
         String versions=PanFailoverChecks.versions(call(first,SYSTEM),call(second,SYSTEM));
@@ -250,8 +250,9 @@ public final class PanFailoverJobExecutor {
         String carried=sessionsA==null || sessionsB==null?"UNKNOWN"
             :oldActive==null?"PASS":PanFailoverChecks.carried(before,active);
         String[] statuses={role,PanFailoverChecks.relationship(a,b),PanFailoverChecks.links(a,b),
-            PanFailoverChecks.sync(a,b),"PASS".equals(syncA)&&"PASS".equals(syncB)?"PASS":
-                "FAIL".equals(syncA)||"FAIL".equals(syncB)?"FAIL":"UNKNOWN",carried,versions};
+            PanFailoverChecks.sync(a,b),"active".equals(a.role())
+                ?PanFailoverChecks.sessionSync(syncA,syncB)
+                :"active".equals(b.role())?PanFailoverChecks.sessionSync(syncB,syncA):"UNKNOWN",carried,versions};
         for (int i=0;i<statuses.length;i++) {
             int no=i+1;
             shapes.logUnknown(no,statuses[i]);

@@ -175,7 +175,7 @@ class CpFailoverChecksTest {
             .replace("1  4", "(Local)\n1  4").replace("00:00:5e:00:53:06","00:00:5e:00:53:16"))));
         check(!rows.equals(CpFailoverChecks.ipTable(table.replace("0  4", "1  4").replace("1  5", "0  5"))));
         check(!rows.equals(CpFailoverChecks.ipTable(table.replace("192.0.2.95", "192.0.2.96"))));
-        check(CpFailoverChecks.ipTable(table+"0 4 192.0.2.99\n").isEmpty());
+        check(CpFailoverChecks.ipTable(table+"0 4 192.0.2.99\n").size()==5);
         check(CpFailoverChecks.ipTable(table+"0 6 malformed\n").isEmpty());
         check(CpFailoverChecks.connections(Fixtures.read("cp/failover_connections.txt")).count()==4521);
         check(CpFailoverChecks.bytesByInterface(Fixtures.read("cp/failover_net_dev.txt")).get("gretap0")==19000);
@@ -289,19 +289,34 @@ class CpFailoverChecksTest {
         var a=CpFailoverChecks.ipTable(TABLE);
         var b=CpFailoverChecks.ipTable(TABLE.replace("192.0.2.22","192.0.2.99"));
         var diff=CpFailoverChecks.tableDifference(a,b);
-        check(diff.toString().contains("ADDRESS_MISMATCH"));
-        check(diff.toString().contains("member=1") && diff.toString().contains("interface=1"));
+        check(diff.toString().contains("MISSING_ON_FIRST") && diff.toString().contains("MISSING_ON_SECOND"));
+        check(diff.toString().contains("member=1") && !diff.toString().contains("interface="));
         check(!diff.toString().contains("192.0.2."));
         var missing=CpFailoverChecks.ipTable(TABLE.replace("1 1 192.0.2.22", "1 2 192.0.2.22"));
         String details=CpFailoverChecks.tableDifference(a,missing).toString();
-        check(details.contains("MISSING_ON_FIRST") && details.contains("MISSING_ON_SECOND"));
+        check(details.contains("differences=[]"));
         check(CpFailoverChecks.tableDifference(a,a).get("differences").equals(java.util.List.of()));
-        // Each member keeps its own address. Only matching coordinates across observations are compared.
+        // Each member keeps its own address; numeric indices are observer-local.
         check(CpFailoverChecks.tableDifference(a,CpFailoverChecks.ipTable(TABLE.replace("(Local)","(local)")))
             .get("differences").equals(java.util.List.of()));
         check(CpFailoverChecks.tableDifference(a,Set.of()).toString().contains("MISSING_ON_SECOND"));
-        var opaque=Set.of("01|001|192.0.2.1");
-        check(CpFailoverChecks.tableDifference(opaque,Set.of()).toString().contains("interface=001"));
+        var opaque=CpFailoverChecks.ipTable("Unique IP's Table\n01 001 192.0.2.1\n");
+        check(CpFailoverChecks.tableDifference(opaque,Set.of()).toString().contains("member=01"));
+    }
+    @Test void observerLocalIndexShapeComparesPerMemberAddressSets() {
+        String first="Unique IP's Table\n0 1 192.0.2.10\n0 6 192.0.2.11\n"
+            +"1 1 192.0.2.20\n1 6 192.0.2.21\n";
+        String second=first.replace(" 6 "," 3 ");
+        var a=CpFailoverChecks.ipTable(first); var b=CpFailoverChecks.ipTable(second);
+        check(a.size()==4 && b.size()==4 && a.equals(b));
+        check(CpFailoverChecks.tableDifference(a,b).get("differences").equals(java.util.List.of()));
+        var missing=CpFailoverChecks.ipTable(second.replace("1 3 192.0.2.21\n",""));
+        check(CpFailoverChecks.tableDifference(a,missing).toString().contains("MISSING_ON_SECOND"));
+        check(CpFailoverChecks.tableDifference(missing,a).toString().contains("MISSING_ON_FIRST"));
+        check(!a.equals(CpFailoverChecks.ipTable(second.replace("0 3 192.0.2.11","1 3 192.0.2.11"))));
+        String named=first.replace(" 6 "," eth1 ");
+        check(!CpFailoverChecks.ipTable(named).equals(CpFailoverChecks.ipTable(named.replace("eth1","eth2"))));
+        check(CpFailoverChecks.ipTable(first+"0 3 192.0.2.11\n").equals(a));
     }
     public static void main(String[] args) {
         var t=new CpFailoverChecksTest(); t.approvedChecksAndVsContext(); t.unrecognisedMeansUnknown(); t.syncAndPolicyPassFailUnknown();

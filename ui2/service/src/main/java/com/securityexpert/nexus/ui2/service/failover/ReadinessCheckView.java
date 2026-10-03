@@ -42,7 +42,7 @@ public final class ReadinessCheckView {
                 case 2 -> "Peer relationship could not be verified";
                 case 3 -> "HA link state not recognised";
                 case 4 -> "Configuration sync field missing or not recognised";
-                case 5 -> "Session sync field missing or not recognised: /response/result/session-sync; Complete status XML mapping unverified";
+                case 5 -> "Session sync evidence missing: /response/result/enabled and messages/entry/{enable,sent,recv,desc}";
                 case 6 -> "Session count missing or not recognised: /response/result/num-active or active-sessions";
                 case 7 -> "Version fields missing or not recognised";
                 default -> "Check evidence unavailable";
@@ -107,7 +107,7 @@ public final class ReadinessCheckView {
         for(JsonNode row:d.path("differences")) {
             // Table coordinates are opaque strings; never render arbitrary derived text or raw addresses.
             String member=row.path("member").asText(),iface=row.path("interface").asText();
-            if(!member.matches("[0-9]+") || !iface.matches("[0-9]+")) continue;
+            if(!member.matches("[0-9]+") || !iface.isEmpty() && !iface.matches("[0-9]+")) continue;
             String reason=switch(row.path("reason").asText()) {
                 case "ADDRESS_MISMATCH" -> "address differs ("+addressAlias(row,"firstAddress")
                     +" / "+addressAlias(row,"secondAddress")+")";
@@ -115,7 +115,7 @@ public final class ReadinessCheckView {
                 case "MISSING_ON_SECOND" -> "missing on second observer";
                 default -> "difference unrecognised";
             };
-            details.add("table member "+member+", interface "+iface+": "+reason);
+            details.add("table member "+member+(iface.isEmpty()?"":", interface "+iface)+": "+reason);
         }
         return summary+(details.isEmpty()?"":"; "+String.join("; ",details));
     }

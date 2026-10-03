@@ -26,6 +26,7 @@ public final class PanFailoverChecks {
     }
 
     static boolean fieldFound(int check,String xml) {
+        if(check==5) return child(result(xml),"enabled")!=null && child(result(xml),"messages")!=null;
         if(check==6) return child(result(xml),"num-active")!=null || child(result(xml),"active-sessions")!=null;
         String path=fieldPath(check);
         if (path==null) return false;
@@ -38,7 +39,7 @@ public final class PanFailoverChecks {
     private static String fieldPath(int check) {
         return switch(check) {
             case 4 -> "/response/result/group/running-sync";
-            case 5 -> "/response/result/session-sync";
+            case 5 -> "/response/result/enabled and messages/entry/{enable,sent,recv,desc}";
             case 6 -> "/response/result/num-active or active-sessions";
             default -> null;
         };
@@ -85,10 +86,36 @@ public final class PanFailoverChecks {
                 value(group,"running-sync"));
         } catch (Exception invalid) { return unknown; }
     }
-    public static String sessionSync(String xml) {
-        String state=value(result(xml),"session-sync");
-        return status("current".equals(state) || "in-sync".equals(state),
-            "failed".equals(state) || "disabled".equals(state));
+    public static String sessionSync(String activeXml,String passiveXml) {
+        Element active=result(activeXml),passive=result(passiveXml);
+        if(child(active,"enabled")==null) return "UNKNOWN";
+        if(!"yes".equals(value(active,"enabled"))) return "FAIL";
+        boolean missing=false,failed=false;
+        for(String description:new String[]{"session setup","session update"}) {
+            Element sent=message(active,description),received=message(passive,description);
+            if(sent==null || received==null || child(sent,"enable")==null
+                    || child(sent,"sent")==null || child(received,"recv")==null) {
+                missing=true; continue;
+            }
+            Long sentCount=count(text(sent,"sent")),recvCount=count(text(received,"recv"));
+            if(!"yes".equals(value(sent,"enable")) || sentCount==null || recvCount==null) {
+                failed=true; continue;
+            }
+            if(sentCount==0 || recvCount==0) failed=true;
+        }
+        return failed?"FAIL":missing?"UNKNOWN":"PASS";
+    }
+    private static Element message(Element result,String description) {
+        Element messages=child(result,"messages"),found=null;
+        if(messages==null) return null;
+        for(Node n=messages.getFirstChild();n!=null;n=n.getNextSibling()) {
+            if(n instanceof Element entry && "entry".equals(entry.getTagName())
+                    && description.equals(value(entry,"desc"))) {
+                if(found!=null) return null;
+                found=entry;
+            }
+        }
+        return found;
     }
     public static Long sessions(String xml) {
         Element r=result(xml);

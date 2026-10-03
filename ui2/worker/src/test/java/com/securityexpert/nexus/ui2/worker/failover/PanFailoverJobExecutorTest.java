@@ -50,9 +50,12 @@ class PanFailoverJobExecutorTest {
                             || command.contains("<session><info/>")))
                         return new XmlApiResult.Completed(200,"<response status=\"success\"><result><other/>"
                             +"</result></response>");
-                    if (command.contains("<state-synchronization/>"))
-                        return new XmlApiResult.Completed(200,"<response status=\"success\"><result><session-sync>"
-                            +(badSync&&!first?"disabled":"in-sync")+"</session-sync></result></response>");
+                    if (command.contains("<state-synchronization/>")) {
+                        boolean active=first?!suspended:suspended;
+                        return new XmlApiResult.Completed(200,PanFailoverChecksTest.syncXml(
+                            badSync && active?"no":active?"yes":"no (device not in active state)",
+                            active?"20":"0",active?"0":"20"));
+                    }
                     if (command.contains("<session><info/>"))
                         return new XmlApiResult.Completed(200,"<response status=\"success\"><result><num-active>"
                             +(badSessions&&!first?"invalid":lowPostSessions&&suspended&&!first?"79":"100")
