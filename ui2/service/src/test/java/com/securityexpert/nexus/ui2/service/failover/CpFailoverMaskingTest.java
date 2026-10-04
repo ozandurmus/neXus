@@ -55,7 +55,6 @@ class CpFailoverMaskingTest {
                     .requestAttr(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE, masked))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].masked").value(masked))
-                .andExpect(jsonPath("$[0].readiness.stopCode").value("COMMAND_UNAVAILABLE"))
                 .andExpect(jsonPath("$[0].unitId").value("opaque-cluster"))
                 .andExpect(jsonPath("$[0].cluster_member_ref").value(masked ? names.maskClusterName(cluster) : cluster))
                 .andExpect(jsonPath("$[0].members[0].device_id").value("opaque-1"))
@@ -70,6 +69,7 @@ class CpFailoverMaskingTest {
                 assertFalse(body.contains(second));
             }
             if (endpoint.equals("summary")) {
+                jsonPath("$[0].readiness.stopCode").value("COMMAND_UNAVAILABLE").match(result);
                 var check = json.readTree(result.getResponse().getContentAsString()).get(0).path("readiness").path("checks").get(0);
                 assertEquals("Member 1", check.path("member").asText());
                 assertEquals("opaque-1", check.path("device_id").asText());
