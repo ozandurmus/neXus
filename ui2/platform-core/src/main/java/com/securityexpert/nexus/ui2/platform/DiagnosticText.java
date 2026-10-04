@@ -52,6 +52,10 @@ public final class DiagnosticText {
         String[] lines = scrubSecrets(text).split("\\R", -1);
         for (int i=0; i<lines.length; i++) {
             if (i>0) result.append('\n');
+            if (lines[i].equals("[SECRET REDACTED]")) {
+                result.append(lines[i]);
+                continue;
+            }
             var named = identity.matcher(lines[i]);
             if (named.matches()) {
                 result.append(named.group(1)).append(knownNames.containsKey(named.group(2))
