@@ -2,6 +2,9 @@ package com.securityexpert.nexus.ui2.worker.failover;
 
 import java.io.StringReader;
 import java.util.Locale;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 
 import javax.xml.XMLConstants;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -86,24 +89,66 @@ public final class PanFailoverChecks {
                 value(group,"running-sync"));
         } catch (Exception invalid) { return unknown; }
     }
+    public record SessionSync(String status, String derived) {}
+
     public static String sessionSync(String activeXml,String passiveXml) {
-        Element active=result(activeXml),passive=result(passiveXml);
-        if(child(active,"enabled")==null) return "UNKNOWN";
-        if(!"yes".equals(value(active,"enabled"))) return "FAIL";
-        boolean missing=false,failed=false;
-        for(String description:new String[]{"session setup","session update"}) {
-            Element sent=message(active,description),received=message(passive,description);
-            if(sent==null || received==null || child(sent,"enable")==null
-                    || child(sent,"sent")==null || child(received,"recv")==null) {
-                missing=true; continue;
+        return sessionSyncEvidence(activeXml,passiveXml).status();
+    }
+
+    public static SessionSync sessionSyncEvidence(String activeXml,String passiveXml) {
+        ObjectNode derived=JsonNodeFactory.instance.objectNode();
+        ArrayNode missing=derived.putArray("missing"),unrecognised=derived.putArray("unrecognised");
+        boolean failed=false;
+        String[] xml={activeXml,passiveXml};
+        String[] members={"active","passive"};
+        for(int i=0;i<members.length;i++) {
+            Element member=result(xml[i]);
+            ObjectNode facts=derived.putObject(members[i]);
+            Boolean enabled=syncBoolean(member,"enabled",members[i]+".enabled",facts,missing,unrecognised);
+            if(i==0 && Boolean.FALSE.equals(enabled)) failed=true;
+            ObjectNode messages=facts.putObject("messages");
+            if(child(member,"messages")==null) missing.add(members[i]+".messages");
+            for(String description:new String[]{"session setup","session update"}) {
+                String path=members[i]+".messages."+description;
+                Element entry=message(member,description);
+                ObjectNode counters=messages.putObject(description);
+                if(entry==null) missing.add(path+".entry/desc");
+                Boolean enable=syncBoolean(entry,"enable",path+".enable",counters,missing,unrecognised);
+                Long sent=syncCount(entry,"sent",path+".sent",counters,missing,unrecognised);
+                Long recv=syncCount(entry,"recv",path+".recv",counters,missing,unrecognised);
+                if((i==0 && (Boolean.FALSE.equals(enable) || Long.valueOf(0).equals(sent)))
+                        || (i==1 && Long.valueOf(0).equals(recv))) failed=true;
             }
-            Long sentCount=count(text(sent,"sent")),recvCount=count(text(received,"recv"));
-            if(!"yes".equals(value(sent,"enable")) || sentCount==null || recvCount==null) {
-                failed=true; continue;
-            }
-            if(sentCount==0 || recvCount==0) failed=true;
         }
-        return failed?"FAIL":missing?"UNKNOWN":"PASS";
+        String status=!missing.isEmpty() || !unrecognised.isEmpty()?"UNKNOWN":failed?"FAIL":"PASS";
+        return new SessionSync(status,derived.toString());
+    }
+
+    private static String syncValue(Element parent,String tag,String path,ArrayNode missing) {
+        if(child(parent,tag)==null) { missing.add(path); return null; }
+        return text(parent,tag);
+    }
+    private static Boolean syncBoolean(Element parent,String tag,String path,ObjectNode facts,
+            ArrayNode missing,ArrayNode unrecognised) {
+        String value=syncValue(parent,tag,path,missing);
+        if(value==null) return null;
+        Boolean parsed=switch(value.toLowerCase(Locale.ROOT)) {
+            case "yes","true","enabled" -> true;
+            case "no","false","disabled","no (device not in active state)" -> false;
+            default -> null;
+        };
+        if(parsed==null) unrecognised.add(path+":"+ReadinessShapeLog.valueShape(value));
+        else facts.put(tag,parsed);
+        return parsed;
+    }
+    private static Long syncCount(Element parent,String tag,String path,ObjectNode facts,
+            ArrayNode missing,ArrayNode unrecognised) {
+        String value=syncValue(parent,tag,path,missing);
+        if(value==null) return null;
+        Long parsed=value.matches("(?:[0-9]+|[0-9]{1,3}(?:,[0-9]{3})+)")?count(value.replace(",","")):null;
+        if(parsed==null) unrecognised.add(path+":"+ReadinessShapeLog.valueShape(value));
+        else facts.put(tag,parsed);
+        return parsed;
     }
     private static Element message(Element result,String description) {
         Element messages=child(result,"messages"),found=null;

@@ -42,7 +42,7 @@ public final class ReadinessCheckView {
                 case 2 -> "Peer relationship could not be verified";
                 case 3 -> "HA link state not recognised";
                 case 4 -> "Configuration sync field missing or not recognised";
-                case 5 -> "Session sync fields missing or not recognised: /response/result/enabled and messages/entry fields enable, sent, recv and desc";
+                case 5 -> sessionSyncSummary(status,d);
                 case 6 -> "Session count missing or not recognised: /response/result/num-active or active-sessions";
                 case 7 -> "Version fields missing or not recognised";
                 default -> "Check evidence unavailable";
@@ -69,7 +69,7 @@ public final class ReadinessCheckView {
             case 2 -> pass ? "Reciprocal peer relationship verified" : "Peer relationship not ready";
             case 3 -> pass ? "Required HA links up on both members" : "An HA link is down";
             case 4 -> pass ? "Running configuration synchronized on both members" : "Configuration not synchronized";
-            case 5 -> pass ? "Sessions synchronized on both members" : "Session synchronization failed or disabled";
+            case 5 -> sessionSyncSummary(status,d);
             case 6 -> count(d,"count"," active sessions")+(pass ? "" : ", below carry tolerance");
             case 7 -> pass ? "Software and content versions match on both members" : "Software or content versions differ";
             default -> "Check result unavailable";
@@ -98,6 +98,30 @@ public final class ReadinessCheckView {
                 +", "+count(d,"routeCount"," routes")+(pass ? "" : "; routing not ready");
             default -> "Check result unavailable";
         };
+    }
+
+    private static String sessionSyncSummary(String status,JsonNode d) {
+        String summary="UNKNOWN".equals(status)
+            ?"Session sync fields missing or not recognised: /response/result/enabled and messages/entry fields enable, sent, recv and desc"
+            :"PASS".equals(status)?"Sessions synchronized on both members":"Session synchronization failed or disabled";
+        if(d.path("missing").isArray() && !d.path("missing").isEmpty())
+            summary+="; missing fields: "+d.path("missing").size();
+        if(d.path("unrecognised").isArray() && !d.path("unrecognised").isEmpty())
+            summary+="; unrecognised values: "+d.path("unrecognised").size();
+        for(String member:new String[]{"active","passive"}) {
+            JsonNode facts=d.path(member);
+            if(facts.path("enabled").isBoolean())
+                summary+="; "+member+" sync "+(facts.path("enabled").asBoolean()?"enabled":"disabled");
+            for(String message:new String[]{"session setup","session update"}) {
+                JsonNode counters=facts.path("messages").path(message);
+                if(counters.path("enable").isBoolean())
+                    summary+="; "+member+" "+message+" "+(counters.path("enable").asBoolean()?"enabled":"disabled");
+                for(String field:new String[]{"sent","recv"})
+                    if(counters.path(field).isIntegralNumber() && counters.path(field).asLong()>=0)
+                        summary+=", "+field+" "+counters.path(field).asLong();
+            }
+        }
+        return summary;
     }
 
     private static String tableSummary(boolean pass,JsonNode d) {

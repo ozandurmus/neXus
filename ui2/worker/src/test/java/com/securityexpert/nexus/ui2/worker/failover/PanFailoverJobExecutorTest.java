@@ -148,6 +148,17 @@ class PanFailoverJobExecutorTest {
         assertEquals(1,script.suspendCount); assertEquals(1,script.functionalCount);
         assertTrue(result.checks().contains("post:7:PASS"));
     }
+    @Test void sessionSyncFailurePersistsProofForBothMemberRows() {
+        Script script=new Script(); script.badSync=true;
+        Result result=run(script,true);
+        assertTrue(result.checks().contains("pre:5:FAIL"));
+        for(int index:new int[]{8,9}) {
+            String derived=result.derived().get(index);
+            assertTrue(derived.contains("\"active\":{\"enabled\":false"));
+            assertTrue(derived.contains("\"sent\":20,\"recv\":0"));
+            assertTrue(derived.contains("\"passive\":{\"enabled\":false"));
+        }
+    }
     @Test void precheckFailNeverWrites() {
         Script script=new Script(); script.badPre=true; Result result=run(script);
         assertEquals("STOPPED",result.state());
@@ -200,6 +211,13 @@ class PanFailoverJobExecutorTest {
         assertEquals(0,script.suspendCount); assertEquals(0,script.functionalCount);
         for (int check=4;check<=6;check++) {
             assertTrue(result.checks().contains("pre:"+check+":UNKNOWN"));
+            if(check==5) {
+                for(int index:new int[]{8,9}) {
+                    assertTrue(result.derived().get(index).contains("\"missing\":[\"passive.enabled\""));
+                    assertTrue(result.derived().get(index).contains("\"active\":{\"enabled\":true"));
+                }
+                continue;
+            }
             String expected=PanFailoverChecks.unknownDerived(check,"UNKNOWN",false);
             assertEquals(expected,result.derived().get((check-1)*2));
             assertEquals(expected,result.derived().get((check-1)*2+1));
