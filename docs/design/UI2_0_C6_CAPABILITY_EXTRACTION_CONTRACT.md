@@ -366,7 +366,7 @@ rest of this repository's checks runs:
 ```
 
 (`application/workflows/maintenance.py::repository_privacy_check()`, which
-calls `utils.repository_privacy.scan_repository(...)` — the local, offline
+calls `tools.privacy.repository_privacy.scan_repository(...)` — the local, offline
 Corporate-Git privacy gate: no network, no credentials, matched values never
 printed.) This applies to a fixture file **exactly as to any other
 repository file** (workflow §3.1, verbatim) — there is no "it's just a test
@@ -669,6 +669,6 @@ here, and not a PO ruling to make in the abstract.
   privacy/DLP ("follow... the local repository privacy gate", cited in §3.5).
 - `utils/action_taxonomy.py` — the five action classes, referenced for
   field 1's `action_class`.
-- `utils/support_bundle.py::Tokenizer`, `utils/repository_privacy.py`,
+- `utils/support_bundle.py::Tokenizer`, `tools/privacy/repository_privacy.py`,
   `application/workflows/maintenance.py::repository_privacy_check()` — the
   exact fixture-generation and DLP-gate entry points named in §3.

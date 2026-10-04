@@ -163,7 +163,7 @@ ledger on a full checkpoint.
 | Recovery / backup plane (`RB.x`) | `utils/recovery_collect.py::run_recovery_collection`, `utils/recovery_manifest.py`, `utils/recovery_store.py`, `utils/recovery_operational_ledger.py::OperationalWriteLedger` | manifests + encrypted artifacts on a separate root; ledger has a Postgres backend | class 1; never console-submittable (`console_refusal`), never reachable over HTTP as bytes (`CON.0` §7.6) |
 | Discovery lifecycle + capability profiles (`0.6.1C`) | `utils/discovery_lifecycle.py::LifecycleStore`, `utils/capability_registry.py::CapabilityStore` | in-memory per run, serialized only into `discoveryUiData` | `PCP` §17 names lifecycle `DISCOVERED` records as "the natural candidate set" for onboarding |
 | Compliance engine (`0.6.6B`, `CE.1`) | `utils/compliance_posture.py::build_compliance_posture`, `utils/framework_catalog.py::{framework_entry,requirements_for}` (`CIS`, `PCI-DSS`, `BDDK`), `utils/compliance_check_pack.py::load_compliance_checks`, `utils/control_assignment.py` | file policies in `data/state/` (`control_assignments.json`, `compliance_checks.json`); trend ledger in `data_root` | **its primary input is `configuration_ui`, the presentation projection** built by `build_configuration_ui_payload` — the evaluator is keyed on a UI payload, not on a persisted evidence projection (see `F-8`) |
-| Project plan | `utils/project_plan.py::build_project_plan_payload` | reads `project/*.json` from the repository checkout | engineering state, not product data; no network |
+| Project plan | `tools/delivery/project_plan.py::build_project_plan_payload` | reads `project/*.json` from the repository checkout | engineering state, not product data; no network |
 
 ### 2.4 Summary of the mismatch, as measured
 

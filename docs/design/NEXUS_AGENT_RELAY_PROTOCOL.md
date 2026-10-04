@@ -80,14 +80,14 @@ One GitHub issue carries one engineering movement.
 The official repository command renders session packets before GitHub write:
 
 ```text
-py scripts/gov_session_transfer.py render FILE
+py tools/delivery/gov_session_transfer.py render FILE
 ```
 
 After GitHub stores a body or final engineering comment, the author retrieves
 the raw stored text and validates that exact text:
 
 ```text
-py scripts/gov_session_transfer.py validate FILE
+py tools/delivery/gov_session_transfer.py validate FILE
 ```
 
 Successful local rendering is insufficient if the stored form has not been
@@ -123,7 +123,7 @@ Given a `RELAY_READY` locator, the receiver must:
 
 1. parse the exact `owner/repository#issue` target without guessing;
 2. retrieve the raw issue body and all comments;
-3. validate the body with `scripts/gov_session_transfer.py` and require a
+3. validate the body with `tools/delivery/gov_session_transfer.py` and require a
    protocol-v2 `SESSION_START`;
 4. reconstruct repository authority through `AI_START_HERE.md` before treating
    packet claims as true;

@@ -453,7 +453,7 @@ alternative is implementing LDAP over TLS by hand: BER/DER encoding, the bind
 and search protocol, result-code handling. That is a security-critical wire
 protocol, and writing one is categorically worse than depending on an
 established implementation. The stdlib-only precedent that matters
-(`scripts/orchestrator.py`, the dashboard app) covers *local tooling with no
+(`tools/delivery/orchestrator.py`, the dashboard app) covers *local tooling with no
 protocol surface*; the product itself already depends on `paramiko`, `lxml`,
 `requests` and `cryptography` for exactly this reason. `ldap3` is the same
 kind of dependency as `paramiko`.

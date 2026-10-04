@@ -1,6 +1,6 @@
 # roles/WORKER.md — orchestrated worker brief template
 
-This is the fixed template `scripts/orchestrator.py::render_worker_md` reads
+This is the fixed template `tools/delivery/orchestrator.py::render_worker_md` reads
 at dispatch time (parsed, not a Python string literal) to build each
 movement's own `.nexus/WORKER.md` — the file an orchestrated worker actually
 reads. `.nexus/WORKER.md` is this template's rendered instance for one
@@ -19,7 +19,7 @@ stdin); the report JSON is never passed inline on the command line. Then
 close with:
 
 ```
-python3 scripts/local_relay.py append --file $NEXUS_RELAY_FILE --role engineer --marker SESSION_CLOSE --report /path/to/session_close_report.json --outcome DONE
+python3 tools/delivery/local_relay.py append --file $NEXUS_RELAY_FILE --role engineer --marker SESSION_CLOSE --report /path/to/session_close_report.json --outcome DONE
 ```
 
 ## Standing rules

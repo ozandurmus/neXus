@@ -170,7 +170,7 @@ no Google credential exists in this environment.
 
 ## 4. The architectural finding — this is the contract's real question
 
-`ProviderAdapter` (`scripts/orchestrator_providers.py`, GOV.ORCH.2 §2.1) is
+`ProviderAdapter` (`tools/delivery/orchestrator_providers.py`, GOV.ORCH.2 §2.1) is
 defined entirely around **a subprocess and a JSON-lines log file**:
 `build_argv`, `build_env`, `stdin_source`, `summarize_line`,
 `session_id_from_log`, `observed_model`, `usage_from_event`,

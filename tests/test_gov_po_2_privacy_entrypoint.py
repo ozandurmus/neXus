@@ -17,7 +17,7 @@ from application.workflows import maintenance as maintenance_wf
 pytestmark = pytest.mark.runtime_platform
 
 ROOT = Path(__file__).resolve().parent.parent
-SCRIPT_PATH = ROOT / "scripts/repository_privacy_check.py"
+SCRIPT_PATH = ROOT / "tools/privacy/repository_privacy_check.py"
 
 
 def _load_script():
@@ -78,7 +78,7 @@ def test_standalone_imports_only_the_authorized_privacy_symbols():
     tree = ast.parse(SCRIPT_PATH.read_text(encoding="utf-8"))
     privacy_imports = [
         node for node in tree.body
-        if isinstance(node, ast.ImportFrom) and node.module == "utils.repository_privacy"
+        if isinstance(node, ast.ImportFrom) and node.module == "tools.privacy.repository_privacy"
     ]
     assert len(privacy_imports) == 1
     assert {alias.name for alias in privacy_imports[0].names} == {

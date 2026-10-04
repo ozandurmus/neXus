@@ -324,7 +324,7 @@ version_ha_state/`:
 **Sanitization mechanism:** `Tokenizer.token()`/`Tokenizer.network_token()`
 under an HMAC key from `_get_support_key()`, invoked exclusively through
 `scripts/ui2_extract_fixtures.py`, which runs the DLP privacy gate
-(`utils.repository_privacy.scan_repository`, the same scanner
+(`tools.privacy.repository_privacy.scan_repository`, the same scanner
 `main.py --repository-privacy-check` runs) against a staging directory
 **before** copying anything into `--output-dir`; a finding refuses the
 write outright (the tool's own documented behaviour, verified by reading
@@ -342,7 +342,7 @@ only clear-text field.
 1. `scripts/ui2_extract_fixtures.py`'s own run refuses to write on any DLP
    finding (mandatory, not optional — see above).
 2. Independently, before this movement's commit: `python3
-   scripts/repository_privacy_check.py` run against the full working tree,
+   tools/privacy/repository_privacy_check.py` run against the full working tree,
    including the new fixture directory, exactly as it runs against any
    other file (`C6` §3.5 — "there is no 'it's just a test fixture'
    exemption").
@@ -365,7 +365,7 @@ only clear-text field.
 | `test_not_applicable_fields_carry_rationale` | Any field marked `NOT_APPLICABLE` has an empty or missing `state_rationale`, or reuses identical rationale text as an `UNKNOWN` field on the same capability |
 | `test_gate_reference_naming_discipline` | Either `exec` step's `gate_reference` is anything other than the literal `NOT_APPLICABLE` or the literal `UNKNOWN: requires gate entry` — in particular, fails if a free-text `gate_id` is invented where none is source-committed |
 | `test_channel_drain_field_present_and_paired` | The spec's field-6b state/`validation_plan_ref` pairing (§4) is missing, or is silently resolved to `KNOWN`/`NOT_APPLICABLE` without a recorded PO validation session artifact |
-| `test_fixture_sanitization_gate_passes` | `python3 scripts/repository_privacy_check.py` exits non-zero against the working tree with the new fixture directory present |
+| `test_fixture_sanitization_gate_passes` | `python3 tools/privacy/repository_privacy_check.py` exits non-zero against the working tree with the new fixture directory present |
 | `test_no_off_queue_capability_claimed` | The committed spec's `capability_id` is not exactly `cp_gaia_inventory_show_version_ha_state`, or claims a scope beyond `FIRST-CAPABILITY` (e.g. VSX or an interfaces/routes field) |
 
 Each test proves only what its row states: a passing `test_fixture_set_
@@ -398,7 +398,7 @@ tolerant-regex handling is correct (that is row 6's own test surface).
    metadata fields present exactly where required and absent elsewhere.
 8. **AC-8.** No fixture file, spec file, or this document itself contains a
    device name, management IP address, hostname, serial number, or other
-   customer identifier; `python3 scripts/repository_privacy_check.py`
+   customer identifier; `python3 tools/privacy/repository_privacy_check.py`
    passes against the full working tree including the new files.
 9. **AC-9.** Every behavioural claim about Line-1 in this document cites a
    specific file and function (or line range); no vendor behaviour is
@@ -414,8 +414,8 @@ tolerant-regex handling is correct (that is row 6's own test surface).
 ## 10. Validation plan (runnable commands)
 
 ```
-python3 -m pytest -q -p no:cacheprovider tests/test_architecture_convergence.py tests/test_cold_start_budget.py
-python3 scripts/repository_privacy_check.py
+python3 -m pytest -q -p no:cacheprovider tests/test_architecture_convergence.py tools/tests/test_cold_start_budget.py
+python3 tools/privacy/repository_privacy_check.py
 git diff --check
 ```
 

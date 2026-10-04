@@ -27,7 +27,7 @@ depending on which tool opened it.
 |---|---|---|
 | `roles/PO.md` | `PO.md` moved here verbatim (root `PO.md` becomes a 2-line pointer for one release) | `PO.md` |
 | `roles/ENGINEER.md` | reading order (QUEUE.md, CURRENT_STATE, AI_HANDOVER, then the named design doc), the SESSION START/CLOSE obligation (pointer to `AI_START_HERE.md` schemas, not a copy), validation ladder pointer, git lane rule, five stop questions adapted to engineering | `AI_START_HERE.md` reading order + `CLAUDE.md` engineer delta |
-| `roles/WORKER.md` | the template `scripts/orchestrator.py::render_worker_md` uses, checked in; the orchestrator reads it from here instead of a Python string; `.nexus/WORKER.md` is its rendered instance | `orchestrator.py` template constants |
+| `roles/WORKER.md` | the template `tools/delivery/orchestrator.py::render_worker_md` uses, checked in; the orchestrator reads it from here instead of a Python string; `.nexus/WORKER.md` is its rendered instance | `orchestrator.py` template constants |
 | `roles/REVIEWER.md` | the read-only reviewer procedure now in `.claude/agents/nexus-po-evidence-reviewer.md` and `nexus-council-seat.md`, without Claude frontmatter; the agent files keep their frontmatter and become 3-line pointers to this file | `.claude/agents/*.md` |
 
 `AGENTS.md` gains one section `## Role dispatch` (≤ 80 words): if
@@ -55,7 +55,7 @@ read only it; otherwise state your role in your first message and read
   edited accordingly; `GOV_PO_ROLE_MIGRATION.md` gets an amendment note
   only (FROZEN) stating that its `.claude/settings.json` references are
   read as `.claude/nexus-po.settings.json`.
-- A test `tests/test_vendor_neutral_governance.py` asserts that no file
+- A test `tools/tests/test_vendor_neutral_governance.py` asserts that no file
   in `AGENTS.md`, `AI_START_HERE.md`, `CURRENT_STATE.md`, `roles/*.md`,
   `docs/reference/COPILOT_OPERATING_MODEL.md`, `.github/prompts/*.md`
   contains a model or vendor product name from a fixed list (Sonnet,
@@ -66,7 +66,7 @@ read only it; otherwise state your role in your first message and read
 
 ### 2.3 Enforcement that must be equal across tools
 
-1. **Push gate in the main checkout.** `scripts/orchestrator.py
+1. **Push gate in the main checkout.** `tools/delivery/orchestrator.py
    install-hooks [--path <checkout>]` installs the same
    `nexus_worker_prepush.py` hook into any checkout via
    `core.hooksPath` (repo-local `.githooks/` directory committed, hook
@@ -76,7 +76,7 @@ read only it; otherwise state your role in your first message and read
    merge` branch of `nexus_engineer_tool_gate.py` is removed and its
    test adjusted; the hook keeps only the privacy/force-push checks,
    which now duplicate the git hook and stay as defense in depth.
-3. **PO write scope.** `scripts/nexus_po_scope_check.py`: given a
+3. **PO write scope.** `tools/delivery/nexus_po_scope_check.py`: given a
    branch and a base, exits 1 if a `gov/po-*` branch touches a path
    outside the governance set in `GOV_PO_ROLE_MIGRATION.md` §4 (read the
    set from a small JSON `config/po_write_scope.json` so the rule has
@@ -101,14 +101,14 @@ In: `roles/*.md` (new), `PO.md` (pointer), `AGENTS.md` (one added
 section), `CLAUDE.md`, `.github/copilot-instructions.md`,
 `docs/reference/MODEL_TIER_MAP.md` (new), `docs/reference/COPILOT_OPERATING_MODEL.md`,
 `docs/design/GOV_PO_ROLE_MIGRATION.md` (amendment note only),
-`.claude/agents/*.md` (pointers), `scripts/orchestrator.py`
+`.claude/agents/*.md` (pointers), `tools/delivery/orchestrator.py`
 (`install-hooks`, `preflight`, template from `roles/WORKER.md`),
-`scripts/nexus_engineer_tool_gate.py`, `scripts/nexus_po_scope_check.py`
+`tools/delivery/nexus_engineer_tool_gate.py`, `tools/delivery/nexus_po_scope_check.py`
 (new), `config/po_write_scope.json` (new), `.githooks/pre-push`,
-`.github/workflows/validation.yml`, tests (`tests/test_vendor_neutral_governance.py`,
-`tests/test_po_scope_check.py`, `tests/test_orchestrator.py`,
-`tests/test_worker_brief.py`, `tests/test_nexus_engineer_tool_gate.py`,
-`tests/test_gov_po_role.py`).
+`.github/workflows/validation.yml`, tests (`tools/tests/test_vendor_neutral_governance.py`,
+`tools/tests/test_po_scope_check.py`, `tools/tests/test_orchestrator.py`,
+`tools/tests/test_worker_brief.py`, `tools/tests/test_nexus_engineer_tool_gate.py`,
+`tools/tests/test_gov_po_role.py`).
 
 Out: any product code; relay tooling; packet schema; `.claude/skills`
 bodies (they stay Claude-only PO conveniences); GitHub branch
@@ -139,8 +139,8 @@ protection settings.
 ## 5. Validation plan (machine-readable)
 
 ```
-python3 -m pytest -q tests/test_vendor_neutral_governance.py tests/test_po_scope_check.py tests/test_orchestrator.py tests/test_worker_brief.py tests/test_nexus_engineer_tool_gate.py tests/test_gov_po_role.py tests/test_cold_start_budget.py tests/test_architecture_convergence.py
-python3 scripts/repository_privacy_check.py
+python3 -m pytest -q tools/tests/test_vendor_neutral_governance.py tools/tests/test_po_scope_check.py tools/tests/test_orchestrator.py tools/tests/test_worker_brief.py tools/tests/test_nexus_engineer_tool_gate.py tools/tests/test_gov_po_role.py tools/tests/test_cold_start_budget.py tests/test_architecture_convergence.py
+python3 tools/privacy/repository_privacy_check.py
 git diff --check
 ```
 

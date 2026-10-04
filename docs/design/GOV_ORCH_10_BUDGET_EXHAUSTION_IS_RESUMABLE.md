@@ -98,7 +98,7 @@ That worked, but it put the assistant in the worker's seat, which
    by this path either.
 6. The report of a resumed run records that it was a budget resume and the
    ceiling it was given.
-7. `python3 -m pytest tests/test_orchestrator.py -q` passes, including new
+7. `python3 -m pytest tools/tests/test_orchestrator.py -q` passes, including new
    tests for items 1, 2 and 3.
 
 ## 5. Out of scope

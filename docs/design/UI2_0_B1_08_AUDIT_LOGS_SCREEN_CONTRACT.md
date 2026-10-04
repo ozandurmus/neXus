@@ -539,7 +539,7 @@ disagreement between two authorities") and left for the Product Owner.
 ./ui2/gradlew -p ui2 architectureTest
 cd ui2/frontend && npm ci && npm test && npm run build
 ./ui2/gradlew -p ui2 check
-python3 -m pytest -q -p no:cacheprovider tests/test_architecture_convergence.py tests/test_contract_authority_status.py tests/test_design_cross_references_resolve.py tests/test_cold_start_budget.py
+python3 -m pytest -q -p no:cacheprovider tests/test_architecture_convergence.py tools/tests/test_contract_authority_status.py tools/tests/test_design_cross_references_resolve.py tools/tests/test_cold_start_budget.py
 python3 main.py --repository-privacy-check
 ```
 

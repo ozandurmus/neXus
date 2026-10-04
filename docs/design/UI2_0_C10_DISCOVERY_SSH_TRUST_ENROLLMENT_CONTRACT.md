@@ -130,7 +130,7 @@ either predates the current fail-closed transport or was never reconciled
 with it; either way it does not describe v1 behavior. This ruling does not
 itself edit `project/QUEUE.md` — that file is state, out of this movement's
 scope (`.nexus/WORKER.md`) — the implementation successor (§9) closes or
-rewords the queue line through `scripts/project_queue.py`, per `AGENTS.md`
+rewords the queue line through `tools/delivery/project_queue.py`, per `AGENTS.md`
 GOV.ORCH.5, citing this contract as the ruling.
 
 Note for precision: `DEVICE_IMPORT_AND_ENROLLMENT_CONTRACT.md` EC-6's
@@ -377,7 +377,7 @@ contract closes that `UNKNOWN` by deferring it, not by approving it.
   action taxonomy."
 - `project/QUEUE.md` — `ui2_ssh_strict_host_key_trust_in_production`,
   adjudicated superseded-for-SSH-transport by §4 above; the implementation
-  successor closes or rewords the line via `scripts/project_queue.py`.
+  successor closes or rewords the line via `tools/delivery/project_queue.py`.
 - `.nexus/WORKER.md` and `.nexus/approved_task.json` — this movement's own
   dispatch, objective, and Product Owner authorization for `FROZEN` status.
 

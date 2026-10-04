@@ -55,7 +55,7 @@ cd frontend && npm ci && npx vitest run
 Deploy to the development host (watched, stops at the first failure, 12-minute limit):
 
 ```bash
-scripts/hosta_deploy.sh
+tools/delivery/hosta_deploy.sh
 ```
 
 ## Privacy

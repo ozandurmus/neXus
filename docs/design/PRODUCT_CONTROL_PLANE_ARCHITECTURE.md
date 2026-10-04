@@ -1274,8 +1274,8 @@ canonical authority competes with them.
 
 - Docs/state movement only: no product code, tests, taxonomy, console
   route, device command or schema changed.
-- Required green before merge: `utils.project_plan.build_project_plan_payload()
-  ["metadata_warnings"] == []`; `scripts/build_history_index.py --check`;
+- Required green before merge: `tools.delivery.project_plan.build_project_plan_payload()
+  ["metadata_warnings"] == []`; `tools/delivery/build_history_index.py --check`;
   `tests/test_architecture_convergence.py` (project-state consistency,
   draft-doc/terminal-record gate, `CURRENT_STATE.md` ≤ 200 lines and naming
   the current build); every `build_history.json` doc link resolves;

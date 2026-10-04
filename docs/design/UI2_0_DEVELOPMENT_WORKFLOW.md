@@ -183,7 +183,7 @@ Fixture set rules:
 - Fixtures carry the command tuple they answer, the vendor version, and the
   capture date; the Java parser test asserts against the spec's parser
   semantics, not against Python output.
-- The DLP gate (`utils/repository_privacy.py`, CI privacy gate) applies to
+- The DLP gate (`tools/privacy/repository_privacy.py`, CI privacy gate) applies to
   fixtures exactly as to any other file; the tokenizer output must pass it.
 
 ### 3.2 The Java collection engine (core of B1)
@@ -464,7 +464,7 @@ resumed after an `error_max_budget_usd` death.
   uses their own credentials manually). Java and Line-1 records stay
   separate (Astra 4.4).
 - Its test suite stays green on `main`; the one known red
-  (`tests/test_nexus_engineer_tool_gate.py::test_ac1_live_bug_regression_against_real_repository_state`,
+  (`tools/tests/test_nexus_engineer_tool_gate.py::test_ac1_live_bug_regression_against_real_repository_state`,
   worktree-only) is tracked separately.
 
 ---

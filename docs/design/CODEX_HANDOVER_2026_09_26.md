@@ -19,12 +19,12 @@ Turkish, decides fast, and looks at the product every day under the masked `aivi
   repository artefact in **English**.
 - **Privacy law:** never echo raw hostnames, addresses, serials or account names in chat, commits, docs or logs
   (`TopologyNamePseudonymizer` masks them for aiview). Query the live DB with counts and opaque ids. The gate
-  `python3 scripts/repository_privacy_check.py` must PASS before every commit.
+  `python3 tools/privacy/repository_privacy_check.py` must PASS before every commit.
 - **Every device command needs a gate row** (`gate_registry`, migration + `gate_registry_fixture.yaml`) before it is
   issued. A parse-scope extension of a gated command needs no new gate. Secrets never leave the encrypted artefact.
 - **Measure first:** an unmeasured vendor output is logged as shape/field names (letters→`a`, digits→`9`, no values) on
   the first run, then parsed. Never guess a vendor semantic; write `UNKNOWN`.
-- **Queue:** `project/QUEUE.md` via `python3 scripts/project_queue.py add|status|note` (never edit the JSON).
+- **Queue:** `project/QUEUE.md` via `python3 tools/delivery/project_queue.py add|status|note` (never edit the JSON).
 - **Commits:** end with the Co-Authored-By attribution line the harness gives (model name and its no-reply address); no "Generated with" footer. Push to
   `origin` (GitHub) and `hosta` (the host's bare repo) — `git push origin main && git push hosta main`.
 - **External reviews** only through `scripts/consult_*.py` (Astra = `codex exec -m gpt-6-astra`, Fable =
@@ -36,8 +36,8 @@ Turkish, decides fast, and looks at the product every day under the masked `aivi
 - DB: `kubectl -n ui2 exec -i ui2-db-0 -- sh -c 'psql -U "$POSTGRES_USER" -d ui2 -At'`. Audit triggers need
   `set_config('app.actor_fingerprint', …, true)` and `set_config('app.action_id', …, true)` in any manual write.
 - **Every new `V*.sql` is dry-run first:** pipe `BEGIN; <file>; ROLLBACK;` into the psql above with `-v ON_ERROR_STOP=1`.
-- **Deploy:** `bash scripts/hosta_deploy.sh` (exit 4 = a job in flight, retry after 25 s; the loop we used:
-  `for i in $(seq 1 30); do bash scripts/hosta_deploy.sh; rc=$?; [ $rc -ne 4 ] && break; sleep 25; done`). It pushes
+- **Deploy:** `bash tools/delivery/hosta_deploy.sh` (exit 4 = a job in flight, retry after 25 s; the loop we used:
+  `for i in $(seq 1 30); do bash tools/delivery/hosta_deploy.sh; rc=$?; [ $rc -ne 4 ] && break; sleep 25; done`). It pushes
   `main`, builds in-cluster, rolls service/worker/compliance and waits for 1/1. **Then** set `ui2-configuration` to the
   same digest by hand (`kubectl -n ui2 set image deploy/ui2-configuration <container>=<service image>`), because
   `run_build.sh` does not. Verify: `site 200`, `schema <n> true`.
@@ -141,9 +141,9 @@ AI_HANDOVER.md, docs/design/CODEX_HANDOVER_2026_09_26.md. Then say "SESSION STAR
 Ground rules you must keep: chat with the Product Owner in Turkish, repository artefacts in English; never echo a raw
 hostname, address, serial or account name anywhere (aiview masking law); every new device command gets a gate row in a
 migration plus gate_registry_fixture.yaml before it runs; every new V*.sql is dry-run in BEGIN/ROLLBACK on the live DB
-before deploy; deploy only with scripts/hosta_deploy.sh and then set ui2-configuration to the same image digest; watch
+before deploy; deploy only with tools/delivery/hosta_deploy.sh and then set ui2-configuration to the same image digest; watch
 every deploy and job you start to its end state in the same turn; ask the PO before any deleting or irreversible
-command on HOST-A; never use HOST-A as a jump server; run scripts/repository_privacy_check.py before each commit;
+command on HOST-A; never use HOST-A as a jump server; run tools/privacy/repository_privacy_check.py before each commit;
 commits end with a Co-Authored-By line and carry no "Generated with" footer; push to origin and hosta; measure a vendor
 output's shape before parsing it and write UNKNOWN rather than a guess; external reviews only via scripts/consult_*.py.
 
@@ -159,5 +159,5 @@ Your first tasks, in order (details in CODEX_HANDOVER §5):
    logs, fix parsers, then trigger and measure the backups; record each first run as a queue note.
 3. Cluster view for ASA failover pairs and FortiGate HA clusters.
 4. Infoblox richer data: propose the WAPI reads to the PO, gate, implement.
-Everything else: project/QUEUE.md (write only via scripts/project_queue.py).
+Everything else: project/QUEUE.md (write only via tools/delivery/project_queue.py).
 ```

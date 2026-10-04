@@ -31,7 +31,7 @@ the human or the higher authority resolve it.**
 3. `project/*.json` — machine-readable project-state authority
    (`project/README.md` defines which file owns what;
    `utils/project_plan._cross_authority_warnings` plus
-   `tests/test_live_project_governance.py` enforce internal JSON↔JSON and
+   `tools/tests/test_live_project_governance.py` enforce internal JSON↔JSON and
    JSON↔`CURRENT_STATE.md` agreement).
 4. `CURRENT_STATE.md` — concise, hot, human-readable projection of #3. Must
    never contain a claim `project/*.json` doesn't support.
@@ -285,7 +285,7 @@ When a `SESSION START`/`SESSION CLOSE` crosses a session or tool boundary —
 a Product Owner instruction to an agent, or an agent's handoff back —
 both directions transport as one symmetric, direction-neutral
 `NEXUS_SESSION_PACKET` carrying the complete report (`docs/design/
-GOV_SESSION_TRANSFER_PROTOCOL.md`, `scripts/gov_session_transfer.py`, both
+GOV_SESSION_TRANSFER_PROTOCOL.md`, `tools/delivery/gov_session_transfer.py`, both
 FROZEN — PO APPROVED). No narrative, heading, or explanation belongs
 outside the sentinel pair in that case — the packet's `report` object *is*
 the report, not a pointer to one held elsewhere; `refs` stays reference
@@ -370,7 +370,7 @@ the HTML render harness green
 repository privacy gate.
 
 **Amendment (GOV.ORCH.5):** state updates to `project/backlog.json` and
-`project/roadmap.json` go through `scripts/project_queue.py`
+`project/roadmap.json` go through `tools/delivery/project_queue.py`
 (`add`/`status`/`note`/`decide`), which validates and re-renders
 `project/QUEUE.md`; agents read `project/QUEUE.md`, never `project/*.json`
 directly.

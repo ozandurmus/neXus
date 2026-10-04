@@ -190,7 +190,7 @@ spec:
             # volume (30-database-pvc.yaml); not one of the two closed
             # writable paths the image itself declares (FS-3), which stay
             # service-only. The service Deployment never mounts this claim
-            # (tests/test_ui2_deployment_manifests.py asserts both halves).
+            # (tools/tests/test_ui2_deployment_manifests.py asserts both halves).
             - name: artefact-store
               mountPath: /app/artefact-store
             - name: cc-inbox

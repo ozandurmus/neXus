@@ -43,8 +43,8 @@ implementation.
 
 **Scope.** All UI 2.0 feature work. This does not retire the existing Python
 tooling, its tests, or the repository governance scripts
-(`scripts/project_queue.py`, `scripts/repository_privacy_check.py`,
-`scripts/gov_session_transfer.py`), which remain the repository's own
+(`tools/delivery/project_queue.py`, `tools/privacy/repository_privacy_check.py`,
+`tools/delivery/gov_session_transfer.py`), which remain the repository's own
 machinery and are unaffected.
 
 **Consequence.** A Java implementation that reproduces a Python script's
@@ -226,7 +226,7 @@ rather than dispatching them. It also merged on its own verification rather
 than the §2 condition (`verify.passed` **and** Product Owner review).
 
 Mitigating fact, not an excuse: these sessions ran in a cloud container where
-the `roles/PO.md` §3 loop (`scripts/local_relay.py` + `scripts/orchestrator.py`
+the `roles/PO.md` §3 loop (`tools/delivery/local_relay.py` + `tools/delivery/orchestrator.py`
 in the foreground) was not the available dispatch path, and parallel work was
 run through in-session agents instead. That changes the mechanism, not the
 rule. The rule's purpose — that implementation is produced by a worker under a

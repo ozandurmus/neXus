@@ -214,7 +214,7 @@ the PO/engineer skill prompts do, exactly as `RELAY_READY owner/repo#issue`
 is a human- or skill-supplied locator today, not a push notification
 either).
 
-`scripts/local_relay.py watch` (GOV_PO_1_LOCAL_RELAY_WATCH_COMMAND,
+`tools/delivery/local_relay.py watch` (GOV_PO_1_LOCAL_RELAY_WATCH_COMMAND,
 2026-09-08) narrows, but does not remove, the manual-re-checking friction
 that discipline implies: it is a single bounded, blocking, read-only
 polling command a session invokes explicitly — directly, or backgrounded
@@ -232,26 +232,26 @@ human's explicit written authorization before acting on any
 `RELAY_DECISION`-class content per `GOV_PO_ROLE_MIGRATION.md` D2-D4/D12,
 unchanged by this command.
 
-## 9. CLI — `scripts/local_relay.py`
+## 9. CLI — `tools/delivery/local_relay.py`
 
 Stdlib only, offline, synchronous — no network, daemon, credential, or
-device access, mirroring `scripts/gov_session_transfer.py`'s own
-constraints exactly. Imports `scripts/gov_session_transfer.py` directly to
+device access, mirroring `tools/delivery/gov_session_transfer.py`'s own
+constraints exactly. Imports `tools/delivery/gov_session_transfer.py` directly to
 validate `SESSION_START`/`SESSION_CLOSE` `report` objects against its
 existing schema (`_REPORT_SCHEMA_BY_TYPE`, `_validate_node`, `OUTCOMES`) —
 reused, not re-derived, so the two transports can never drift into two
 different ideas of what a valid report looks like.
 
 ```
-py scripts/local_relay.py create   --start FILE|- [--dir relay] [--slug SLUG]
-py scripts/local_relay.py append   --file FILE --role {po|engineer} --marker MARKER
+py tools/delivery/local_relay.py create   --start FILE|- [--dir relay] [--slug SLUG]
+py tools/delivery/local_relay.py append   --file FILE --role {po|engineer} --marker MARKER
                                     [--subject S] [--text T]
                                     [--report FILE|-] [--outcome OUTCOME]
                                     [--authorized-by A] [--scope S] [--supersedes S]
                                     [--next {po|engineer}] [--close] [--good-to-go]
                                     [--in-progress]
-py scripts/local_relay.py status   --file FILE
-py scripts/local_relay.py validate --file FILE
+py tools/delivery/local_relay.py status   --file FILE
+py tools/delivery/local_relay.py validate --file FILE
 ```
 
 - `create` reads one **bare** `SESSION_START` packet object — the exact
@@ -297,7 +297,7 @@ pattern). This is a deliberate difference, not an oversight: `--body-file`
 is restricted because it posts to an externally-visible GitHub comment — a
 real exfiltration surface. `relay/*.json` is a file the interactive PO role
 already has direct `Edit`/`Write` access to under this same movement
-(`scripts/nexus_po_tool_gate.py`'s new `relay/*.json` pattern); a
+(`tools/delivery/nexus_po_tool_gate.py`'s new `relay/*.json` pattern); a
 `--start`/`--report` path restriction here would restrict nothing an
 existing, already-granted `Edit` call could not already accomplish by hand.
 

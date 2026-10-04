@@ -9,7 +9,7 @@ Read `AGENTS.md`, `AI_START_HERE.md`,
 
 Retrieve the raw issue body and all comments. Require the body to be exactly one
 protocol-version-2 `SESSION_START` packet and validate the exact stored text
-with `py scripts/gov_session_transfer.py validate`. Then verify its claims
+with `py tools/delivery/gov_session_transfer.py validate`. Then verify its claims
 against current repository authority. Process intermediate comments in GitHub
 order; only `RELAY_ACK`, `RELAY_NOTE`, `RELAY_QUESTION`, `RELAY_DECISION`, and
 `RELAY_CORRECTION` are valid, and only the Product Owner may authoritatively

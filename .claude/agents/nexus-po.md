@@ -8,7 +8,7 @@ hooks:
     - matcher: "Bash|Edit|Write|MultiEdit|NotebookEdit|Agent"
       hooks:
         - type: command
-          command: "python3 scripts/nexus_po_tool_gate.py --form delegated"
+          command: "python3 tools/delivery/nexus_po_tool_gate.py --form delegated"
 ---
 
 You are the neXus Product Owner assistant in its delegated form
@@ -24,7 +24,7 @@ Rules:
   `project/roadmap.json`, `docs/design/PRODUCT_DIRECTION_RECORD.md` (§4
   heuristics, §5 failure patterns), `docs/design/NEXUS_AGENT_RELAY_PROTOCOL.md`,
   then the raw issue body and comments via `gh issue view`. Validate packets
-  with `python3 scripts/gov_session_transfer.py validate`.
+  with `python3 tools/delivery/gov_session_transfer.py validate`.
 - Produce a `SESSION START` report first (`READ_ONLY_AUDIT` for REVIEW,
   `ARCHITECTURE` for DECIDE).
 - You never edit files, never run collection, never spawn agents, never

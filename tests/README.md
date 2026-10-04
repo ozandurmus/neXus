@@ -1,8 +1,8 @@
-# Python tooling validation (PR0)
+# Python tooling validation
 
-The maintained product is `ui2/`. Python default discovery is the explicit
-`testpaths` file list in root `pytest.ini`, not all of `tests/`. PR2 moved the
-retired product tests to `history/tests/`; live paths stay here until PR3.
+The maintained product is `ui2/`. Python default discovery is `tools/tests/`, configured in root `pytest.ini`.
+PR2 moved retired product tests to `history/tests/`; PR3 moved live tools and
+tests to `tools/`. Remaining UNSURE tests here are opt-in.
 No historical device command is authorized by retaining a test or an old
 implementation.
 
@@ -16,9 +16,9 @@ From the repository root:
 ```sh
 python3 -m pytest --collect-only -q
 python3 -m pytest -q -n auto --dist worksteal
-python3 scripts/repository_privacy_check.py
+python3 tools/privacy/repository_privacy_check.py
 # CI comparison: existing merge-base findings remain debt; new findings fail.
-python3 scripts/repository_privacy_check.py --privacy-baseline-ref origin/main
+python3 tools/privacy/repository_privacy_check.py --privacy-baseline-ref origin/main
 git diff --check
 ```
 
@@ -61,9 +61,9 @@ import subprocess
 from pathlib import Path
 config = configparser.ConfigParser()
 config.read('pytest.ini')
-live = set(config['pytest']['testpaths'].split())
+live = {p.name for p in Path("tools/tests").glob("test_*.py")}
 paths = subprocess.check_output(['git', 'ls-files', 'tests/*.py', 'history/tests/*.py'], text=True).splitlines()
-excluded = [p for p in paths if Path(p).name.startswith('test_') and p not in live]
+excluded = [p for p in paths if Path(p).name.startswith('test_') and Path(p).name not in live]
 print('\n'.join(excluded))
 print(f'{len(excluded)} excluded files')
 PY
@@ -116,9 +116,9 @@ No state, contract status, deployment or remote Git operation is changed.
 - Focused PR0 suite: 55 passed, including baseline behavior, discovery/import
   isolation, routing/workflow, governance extraction and isolated ship state.
   After final workflow/governance edits, the affected subset passed 43 tests.
-- `python3 scripts/repository_privacy_check.py`: PASS, zero findings.
-- `git diff --check`, `python3 scripts/build_history_index.py --check`,
-  `python3 scripts/project_queue.py check`: PASS. Changed tracked paths route
+- `python3 tools/privacy/repository_privacy_check.py`: PASS, zero findings.
+- `git diff --check`, `python3 tools/delivery/build_history_index.py --check`,
+  `python3 tools/delivery/project_queue.py check`: PASS. Changed tracked paths route
   to `full`.
 - Frontend `npx tsc --noEmit -p .`, `npx vitest run` (51 files / 490 tests),
   `npm run build`: PASS. The attempted Vitest `--cacheDir` CLI option was

@@ -9,7 +9,7 @@ no pull request per change, so an SDLC audit could not point at a review record 
 
 ## Decision
 1. Every change -- a worker lane or a reviewer hotfix -- is pushed as a branch and merged into `main` through a GitHub
-   pull request. `scripts/standalone_orchestrate.py ship --task <lane>` / `ship --branch <branch>` open the PR (what
+   pull request. `tools/delivery/standalone_orchestrate.py ship --task <lane>` / `ship --branch <branch>` open the PR (what
    changed, the checks run, notes), merge it with a rebase merge, deploy from the merged `main` and comment the
    in-cluster e2e result on the PR. `ship` refuses to run without a task or branch.
 2. **Option (a):** the engineering session merges once its checks pass (Java suites incl. architecture tests,

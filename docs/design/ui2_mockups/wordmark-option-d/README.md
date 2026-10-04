@@ -91,5 +91,5 @@ for file in files:
 assert preview.count('width="32"') == 2
 print('PASS: six outlined SVGs; three sizes each; both app marks at 32 px')
 PY
-python3 scripts/repository_privacy_check.py
+python3 tools/privacy/repository_privacy_check.py
 ```

@@ -501,7 +501,7 @@ is therefore unrun at the time of writing.
    `grep -n -A 2 '^## Status$' docs/design/PAN_DISCOVERY_CONTRACT.md` shows a
    leading `DRAFT` token.
 2. The repository privacy gate reports zero findings:
-   `python3 scripts/repository_privacy_check.py`.
+   `python3 tools/privacy/repository_privacy_check.py`.
 3. The document contains no address literal:
    `grep -n -E '([0-9]{1,3}\.){3}[0-9]{1,3}' docs/design/PAN_DISCOVERY_CONTRACT.md`
    matches nothing, and no literal resembling a colon-separated IPv6 address
@@ -514,7 +514,7 @@ is therefore unrun at the time of writing.
    `git diff --name-status origin/main...HEAD` reports exactly one `A` line,
    naming this document and no other path.
 6. `git diff --check origin/main...HEAD` is clean, and
-   `python3 -m pytest tests/test_contract_authority_status.py tests/test_architecture_convergence.py tests/test_project_files_budget.py -q`
+   `python3 -m pytest tools/tests/test_contract_authority_status.py tests/test_architecture_convergence.py tools/tests/test_project_files_budget.py -q`
    passes.
 
 ### Band 2 — property checks, provable over synthetic fixtures

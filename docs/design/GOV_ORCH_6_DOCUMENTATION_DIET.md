@@ -54,13 +54,13 @@ language law`, `English by default`, `opaque`, `MATCH`, `MISMATCH`,
 for the same permission again`; `.github/prompts/relay-bootstrap.prompt.md`
 cited in `AGENTS.md`, `AI_START_HERE.md`, `CLAUDE.md`,
 `.github/copilot-instructions.md`, `build-start`, `build-close`.
-`tests/test_worker_brief.py`: the orchestrated-worker sentence in
+`tools/tests/test_worker_brief.py`: the orchestrated-worker sentence in
 `AI_START_HERE.md` verbatim; exactly one `SESSION START` and one
 `SESSION CLOSE` heading outside `docs/history/**`; `Contradiction
 report` in `AGENTS.md`; `GOV_PO_ROLE_MIGRATION.md` amendment heading and
-FROZEN line. `tests/test_gov_po_role.py`: the two comment-only-episode
+FROZEN line. `tools/tests/test_gov_po_role.py`: the two comment-only-episode
 strings in `AGENTS.md`; `CLAUDE.md` keeps `never invokes` …
-`nexus-decision-council`. `tests/test_gov_relay_protocol.py`: relay
+`nexus-decision-council`. `tools/tests/test_gov_relay_protocol.py`: relay
 bootstrap citations.
 
 ## 4. Acceptance criteria
@@ -68,7 +68,7 @@ bootstrap citations.
 - AC-1: Word counts after the movement: `AGENTS.md` ≤ 2,700,
   `AI_START_HERE.md` ≤ 1,900, `CURRENT_STATE.md` ≤ 800,
   `AI_HANDOVER.md` ≤ 250, `CLAUDE.md` ≤ 400 (measured with `wc -w`);
-  a new test `tests/test_cold_start_budget.py` asserts these ceilings so
+  a new test `tools/tests/test_cold_start_budget.py` asserts these ceilings so
   they cannot silently regrow.
 - AC-2: Every pin in §3 still holds (the existing tests are the
   proof; run them).
@@ -85,8 +85,8 @@ bootstrap citations.
 ## 5. Validation plan (machine-readable)
 
 ```
-python3 -m pytest -q tests/test_cold_start_budget.py tests/test_architecture_convergence.py tests/test_worker_brief.py tests/test_gov_po_role.py tests/test_gov_relay_protocol.py tests/test_project_queue.py
-python3 scripts/repository_privacy_check.py
+python3 -m pytest -q tools/tests/test_cold_start_budget.py tests/test_architecture_convergence.py tools/tests/test_worker_brief.py tools/tests/test_gov_po_role.py tools/tests/test_gov_relay_protocol.py tools/tests/test_project_queue.py
+python3 tools/privacy/repository_privacy_check.py
 git diff --check
 ```
 

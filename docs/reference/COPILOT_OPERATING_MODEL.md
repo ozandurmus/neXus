@@ -189,7 +189,7 @@ Measured empirically in this worktree; durable until re-measured:
   in the same validation plan: the suite creates untracked `data/`/`logs/`
   directories that the gate then flags, failing a movement whose diff is
   otherwise clean.
-- `tests/test_nexus_engineer_tool_gate.py::test_ac1_live_bug_regression_against_real_repository_state`
+- `tools/tests/test_nexus_engineer_tool_gate.py::test_ac1_live_bug_regression_against_real_repository_state`
   appears as a failure only while a movement worktree exists (it inspects
   live repository state); treat it as parallel-dispatch-sensitive, not a
   regression.

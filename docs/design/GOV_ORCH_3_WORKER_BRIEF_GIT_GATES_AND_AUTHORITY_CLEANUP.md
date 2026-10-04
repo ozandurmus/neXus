@@ -35,7 +35,7 @@ call). Content, in this order, and nothing else:
 5. Validation commands (object-form `validation_plan` rendered as
    fenced commands; prose entries listed as "manual").
 6. Git: base, lane, merge gate string, merge mode (GOV.ORCH.2).
-7. Relay closeout: the exact `py scripts/local_relay.py append --file
+7. Relay closeout: the exact `py tools/delivery/local_relay.py append --file
    $NEXUS_RELAY_FILE --role engineer --marker SESSION_CLOSE ...` shape
    and the rule "re-read the relay file first".
 8. Standing rules, fixed text, under 200 words: smallest diff; no repo
@@ -92,7 +92,7 @@ A worker in any other tool has no gate at all.
    checkout's hooks directory, so a per-worktree `core.hooksPath` is the
    only way to scope the hook). The hook denies a push that is
    `--force`/`-f`, or whose privacy scan (shared
-   `scripts/orchestrator_verify.py` function from GOV.ORCH.1) reports
+   `tools/delivery/orchestrator_verify.py` function from GOV.ORCH.1) reports
    new findings against `base_sha`. Same decision logic as the Claude
    hook, now enforced by git for every tool.
 2. **Merge only through the orchestrator.** `gh pr merge` by the engineer
@@ -169,11 +169,11 @@ copies (`AI_START_HERE.md`, `COPILOT_OPERATING_MODEL.md` twice), against
 
 ## Scope
 
-In: `scripts/orchestrator.py` (WORKER.md generation, prompt text, hook
-install), `scripts/orchestrator_verify.py` (hook entry point),
-`scripts/nexus_worker_prepush.py` (new, the hook body), tests
-(`tests/test_orchestrator.py`, new `tests/test_worker_brief.py`,
-`tests/test_worker_prepush.py`, doc-uniqueness test in the existing
+In: `tools/delivery/orchestrator.py` (WORKER.md generation, prompt text, hook
+install), `tools/delivery/orchestrator_verify.py` (hook entry point),
+`tools/delivery/nexus_worker_prepush.py` (new, the hook body), tests
+(`tools/tests/test_orchestrator.py`, new `tools/tests/test_worker_brief.py`,
+`tools/tests/test_worker_prepush.py`, doc-uniqueness test in the existing
 docs/project-state test module), `AI_START_HERE.md`,
 `docs/reference/COPILOT_OPERATING_MODEL.md`,
 `docs/design/GOV_PO_ROLE_MIGRATION.md` (amendment block only),
@@ -185,8 +185,8 @@ branch-protection settings, any product code.
 ## Validation plan (machine-readable)
 
 ```
-py -m pytest -q tests/test_orchestrator.py tests/test_worker_brief.py tests/test_worker_prepush.py tests/test_gov_po_role.py tests/test_gov_relay_protocol.py
-py scripts/repository_privacy_check.py
+py -m pytest -q tools/tests/test_orchestrator.py tools/tests/test_worker_brief.py tools/tests/test_worker_prepush.py tools/tests/test_gov_po_role.py tools/tests/test_gov_relay_protocol.py
+py tools/privacy/repository_privacy_check.py
 git diff --check
 ```
 

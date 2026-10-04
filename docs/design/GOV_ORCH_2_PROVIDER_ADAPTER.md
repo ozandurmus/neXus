@@ -10,7 +10,7 @@ prompt and argv) and makes `docs/reference/COPILOT_OPERATING_MODEL.md`'s
 
 ## 1. Problem
 
-`scripts/orchestrator.py::_spawn_engineer` hard-codes the `claude` binary
+`tools/delivery/orchestrator.py::_spawn_engineer` hard-codes the `claude` binary
 and Claude-Code-only flags (`--settings`, `--add-dir`,
 `--permission-prompts none`, `--max-budget-usd`,
 `--output-format stream-json --verbose`, `--resume`), and
@@ -22,7 +22,7 @@ is fiction and movement `NXS-LOCAL-0069` ran on an unrecorded default.
 
 ### 2.1 Adapter interface
 
-New module `scripts/orchestrator_providers.py`:
+New module `tools/delivery/orchestrator_providers.py`:
 
 ```python
 class ProviderAdapter(Protocol):
@@ -108,16 +108,16 @@ prompt says "do not merge; publish SESSION_CLOSE and stop", and
 `run` performs the integration after a green `verify` using the
 existing merge-lock + `git merge origin/main` + convergence check
 sequence from `nexus_engineer_tool_gate.py`, moved into
-`scripts/orchestrator_verify.py::integrate`. The hook keeps calling the
+`tools/delivery/orchestrator_verify.py::integrate`. The hook keeps calling the
 shared function.
 
 ## 3. Scope
 
-In: `scripts/orchestrator_providers.py` (new), `scripts/orchestrator.py`
+In: `tools/delivery/orchestrator_providers.py` (new), `tools/delivery/orchestrator.py`
 (adapter wiring, `--provider`, `--merge-mode`, audit fields),
-`scripts/orchestrator_verify.py` (`integrate`), `scripts/orchestrator_dashboard.py`
+`tools/delivery/orchestrator_verify.py` (`integrate`), `tools/delivery/orchestrator_dashboard.py`
 (display the provider fields only), tests
-(`tests/test_orchestrator_providers.py` new; `tests/test_orchestrator.py`),
+(`tools/tests/test_orchestrator_providers.py` new; `tools/tests/test_orchestrator.py`),
 one "Amended by GOV.ORCH.2" note in GOV.PO.3 §3.5, and the
 `COPILOT_OPERATING_MODEL.md` worker-selection paragraph updated to name
 the flag.
@@ -151,8 +151,8 @@ relay tooling, OpenRouter, device or deployment code.
 ## 5. Validation plan (machine-readable)
 
 ```
-py -m pytest -q tests/test_orchestrator.py tests/test_orchestrator_providers.py tests/test_orchestrator_verify.py tests/test_orchestrator_dashboard.py
-py scripts/repository_privacy_check.py
+py -m pytest -q tools/tests/test_orchestrator.py tools/tests/test_orchestrator_providers.py tools/tests/test_orchestrator_verify.py tools/tests/test_orchestrator_dashboard.py
+py tools/privacy/repository_privacy_check.py
 git diff --check
 ```
 

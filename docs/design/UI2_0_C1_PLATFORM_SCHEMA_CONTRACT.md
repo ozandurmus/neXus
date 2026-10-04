@@ -841,7 +841,7 @@ it in this FROZEN contract's authority chain asserted the opposite. The same
 defect class was adjudicated for the B1 family by
 `docs/design/UI2_0_B1_01A_PLATFORM_SKELETON_CONTRACT.md` ("Why a successor
 instead of an amendment") and is now machine-checked by
-`tests/test_contract_authority_status.py`. The cited document is precedent and
+`tools/tests/test_contract_authority_status.py`. The cited document is precedent and
 evidence, not authority, for anything in this contract.
 
 **Adjudication: reclassification, not a successor contract.** Every use of the
@@ -881,6 +881,6 @@ reconcile locally: this correction settles only that
 `PCP_STORAGE_ENGINE_DECISION.md` is not authority here, and leaves item 4's
 standing open. It is left standing and flagged for the contract owner,
 together with the detector gap that hides it:
-`tests/test_contract_authority_status.py::_classify` matches the token
+`tools/tests/test_contract_authority_status.py::_classify` matches the token
 `FROZEN` inside the phrase "NOT frozen" and therefore classifies that document
 as frozen, so no citation of it is currently flagged in either direction.

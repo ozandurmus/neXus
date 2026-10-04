@@ -10,7 +10,7 @@
 
 ## 1. Context and Motivation
 
-During live operator testing on the development K3s cluster HOST_A (`ui2.nexus.local`), several functional blockers and UX regressions were identified across discovery, gateway inventory, authentication, and role authorization. Furthermore, the Product Owner (PO) observed that emergency live fixes were implemented monolithically within the assistant session rather than through the repository's prescribed Orchestrator / Relay dispatch workflow (`scripts/orchestrator.py`, `relay/NXS-LOCAL-*.json`).
+During live operator testing on the development K3s cluster HOST_A (`ui2.nexus.local`), several functional blockers and UX regressions were identified across discovery, gateway inventory, authentication, and role authorization. Furthermore, the Product Owner (PO) observed that emergency live fixes were implemented monolithically within the assistant session rather than through the repository's prescribed Orchestrator / Relay dispatch workflow (`tools/delivery/orchestrator.py`, `relay/NXS-LOCAL-*.json`).
 
 This decision record serves two purposes:
 1. **Durable Architecture Record:** Formally documents the 5 technical remediation items delivered and validated on the live cluster.
@@ -94,10 +94,10 @@ To eliminate monolithic in-session coding and ensure complete continuity across 
 ### 4.1 Separation of Roles
 1. **The PO Assistant Agent (Lead Orchestrator):**
    - Must NEVER write product implementation code directly into the repository unless explicitly authorized for a 1-line hotfix.
-   - Responsible for: Scope clarification, contract drafting/freezing, architectural review, running `scripts/project_queue.py` and `scripts/orchestrator.py`, test verification, and deployment.
+   - Responsible for: Scope clarification, contract drafting/freezing, architectural review, running `tools/delivery/project_queue.py` and `tools/delivery/orchestrator.py`, test verification, and deployment.
 2. **The Worker Subagents (Codex / Flash / Astra):**
    - Execute the code implementation within bounded contracts and targeted test files.
-   - Report results through relay packets (`relay/NXS-LOCAL-*.json`) or orchestrator dispatch ledger (`scripts/dispatch_ledger.py`).
+   - Report results through relay packets (`relay/NXS-LOCAL-*.json`) or orchestrator dispatch ledger (`tools/delivery/dispatch_ledger.py`).
 
 ### 4.2 Standard PO Prompt Template for Build / Test Requests
 When the Product Owner submits a feature or test request, the following prompt structure ensures no agent skips the orchestration workflow:
@@ -111,7 +111,7 @@ Worker Model Preferred: <Codex / Gemini Flash / Astra>
 Instructions:
 1. Act strictly as the Lead Orchestrator (PO Assistant). Do not write implementation code directly in this session.
 2. Audit the relevant FROZEN contract and create/update the task contract if needed.
-3. Queue and dispatch the work to the designated worker model using `scripts/orchestrator.py` or relay dispatch.
+3. Queue and dispatch the work to the designated worker model using `tools/delivery/orchestrator.py` or relay dispatch.
 4. Verify the worker's relay output and ensure local tests pass (Gradle, ArchUnit, repository privacy check).
 5. Only after verification, summarize the outcome and request deployment approval.
 ```

@@ -47,7 +47,7 @@ to open a PR overrides its copied “PO opens” wording; merge remains orchestr
   historical Line-1 planning. They do not drive the Java product projection.
   Java NEXT is unassigned pending PO sequencing; no new scheduling decision is made.
 - `CURRENT_STATE.md`: concise projection of these records. Queue/current-build
-  writes go through `scripts/project_queue.py`, including generated history/index.
+  writes go through `tools/delivery/project_queue.py`, including generated history/index.
 
 Unclassified new active backlog rows are excluded and warned about. Terminal
 rows default to historical reference unless explicitly selected. Missing or

@@ -5,7 +5,7 @@ only your role's reading order and stop conditions.
 
 ## Step 0
 
-Once per checkout: `py scripts/orchestrator.py install-hooks` (installs the
+Once per checkout: `py tools/delivery/orchestrator.py install-hooks` (installs the
 committed push gate via `core.hooksPath`; safe to re-run).
 
 ## Reading order

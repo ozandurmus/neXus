@@ -11,7 +11,7 @@ the schedules. Do not replace the digest checks with tag defaults.
    `sources.example.json` to private host configuration, replacing every placeholder locally. Proxy values and
    node/service addresses never belong in Git. The four scanner images must supply Semgrep/Python 3, gitleaks
    (`dir` and `git` commands), Trivy, and `zap-baseline.py` respectively, with non-root execution supported.
-2. Run `python3 scripts/mirror_security_images.py --sources <private-sources.json> --config <private-security.json>`.
+2. Run `python3 tools/security/mirror_security_images.py --sources <private-sources.json> --config <private-security.json>`.
    This builds a one-line `FROM image@digest` with the **same pinned Kaniko builder** in `ui2-build`, pushes only to
    the local registry, and writes the resulting digest references to the private config atomically. Builder jobs
    retain the existing Kaniko root/writable-filesystem exception; scanners do not inherit it. Registry reads by
@@ -28,9 +28,9 @@ the schedules. Do not replace the digest checks with tag defaults.
 5. Save the private config as `~/.config/nexus/security.json`. Render and apply:
 
    ```sh
-   python3 scripts/security_manifests.py --config "$HOME/.config/nexus/security.json" > /tmp/security-manifests.json
+   python3 tools/security/security_manifests.py --config "$HOME/.config/nexus/security.json" > /tmp/security-manifests.json
    kubectl apply -f /tmp/security-manifests.json
-   python3 scripts/security_host.py snapshot --config "$HOME/.config/nexus/security.json" --rules "$HOME/.config/nexus/security-rules"
+   python3 tools/security/security_host.py snapshot --config "$HOME/.config/nexus/security.json" --rules "$HOME/.config/nexus/security-rules"
    ```
 
    The renderer emits namespace, ServiceAccount, source/report claims, PV, NetworkPolicy, script ConfigMap, daily

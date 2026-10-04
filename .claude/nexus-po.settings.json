@@ -20,6 +20,7 @@
       "Edit(static/**)",
       "Edit(tests/**)",
       "Edit(scripts/**)",
+      "Edit(tools/**)",
       "Edit(main.py)",
       "Edit(config.py)",
       "Edit(AGENTS.md)",
@@ -37,6 +38,7 @@
       "Write(static/**)",
       "Write(tests/**)",
       "Write(scripts/**)",
+      "Write(tools/**)",
       "Write(.claude/**)",
       "Write(.github/**)"
     ]
@@ -48,7 +50,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 scripts/nexus_po_tool_gate.py --form interactive"
+            "command": "python3 tools/delivery/nexus_po_tool_gate.py --form interactive"
           }
         ]
       }

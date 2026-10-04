@@ -10,8 +10,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 if sys.argv[1:2] == ["mcp"]:
     del sys.argv[1]
-    runpy.run_module("scripts.workbench_companion_mcp", run_name="__main__")
+    runpy.run_module("tools.delivery.workbench_companion_mcp", run_name="__main__")
 else:
-    from scripts.workbench_companion import main
+    from tools.delivery.workbench_companion import main
 
     raise SystemExit(main())

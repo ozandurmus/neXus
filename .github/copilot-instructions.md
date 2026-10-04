@@ -3,7 +3,7 @@ order and role: `/roles/ENGINEER.md`. Follow `/AI_START_HERE.md`'s reading
 order exactly; do not improvise a shorter or reordered version of it.
 
 - Model/reasoning tiers for this tool: `/docs/reference/MODEL_TIER_MAP.md`.
-- Session-boundary packets: `py scripts/gov_session_transfer.py render`,
+- Session-boundary packets: `py tools/delivery/gov_session_transfer.py render`,
   validated, per `/docs/design/GOV_SESSION_TRANSFER_PROTOCOL.md` (FROZEN).
 - Relay bootstrap: for `RELAY_READY owner/repository#issue`, follow
   `.github/prompts/relay-bootstrap.prompt.md` and

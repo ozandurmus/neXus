@@ -380,7 +380,7 @@ permitted when every one of these holds:
 | --- | --- | --- |
 | `/var/lib/nexus-cc/in` | Radware Cyber Controller (own configuration backup) | RADWARE_CYBER_CONTROLLER_OWN_BACKUP_RECEIVER.md |
 
-`tests/test_ui2_deployment_manifests.py` enforces 1–4 and 6 on the parsed manifests.
+`tools/tests/test_ui2_deployment_manifests.py` enforces 1–4 and 6 on the parsed manifests.
 
 ### 5.2 The kinds
 

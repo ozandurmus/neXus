@@ -109,7 +109,7 @@ You are not just a task delegator; you are the product's architectural guardian.
 | Base ref | `origin/main` at its current HEAD, fetched first |
 | Branch lane | `feature/<movement-slug>` |
 | Contract status a worker may implement | FROZEN only. A DRAFT contract is a design input, never a dispatch authority |
-| Packet schema | `docs/design/GOV_SESSION_TRANSFER_PROTOCOL.md` protocol 2, as validated by `scripts/gov_session_transfer.py`; whatever the validator rejects is wrong, whatever a DRAFT proposes is not yet real |
+| Packet schema | `docs/design/GOV_SESSION_TRANSFER_PROTOCOL.md` protocol 2, as validated by `tools/delivery/gov_session_transfer.py`; whatever the validator rejects is wrong, whatever a DRAFT proposes is not yet real |
 | Merge | Only after `verify.passed` and PO review; never on a worker's own claim; and never reported before `gh pr view` says `MERGED` (section 6) |
 | Vendor measurement | A contract that names a vendor command, route or field may only be implemented once a **measurement record** exists next to it, committed, saying which tool was used, which commands were run and which field names came back (counts and shapes, never a value). No worker chooses a vendor command from product knowledge |
 | Worker's PR | The packet's `merge_gate` says in words that the worker opens the PR and does not merge. A worker that is not told this does not open one |
@@ -139,7 +139,7 @@ not a design for how it might be run. Follow it step for step.
    `NXS-LOCAL-0184`.
 4. Confirm the lane is unused and, when two movements run together, give them
    non-colliding migration numbers.
-5. `python3 scripts/local_relay.py create --start <packet> --role po --slug <movement>-<slug>`,
+5. `python3 tools/delivery/local_relay.py create --start <packet> --role po --slug <movement>-<slug>`,
    then **set the relay file's internal `id` to the movement id** -- the tool
    assigns its own and the worker's close is refused when they differ.
 
@@ -148,7 +148,7 @@ A "no" to any of these is a stop, not a workaround.
 ### Dispatching
 
 ```
-nohup python3 -u scripts/orchestrator.py run --movement NXS-LOCAL-NNNN \
+nohup python3 -u tools/delivery/orchestrator.py run --movement NXS-LOCAL-NNNN \
     --provider codex --model gpt-5.6-terra --effort medium \
     --max-budget-usd <from scope> > <scratch>/run-NXS-LOCAL-NNNN.log 2>&1 &
 ```
@@ -251,7 +251,7 @@ live work. Read `usage`, render the ledger and write that row's assessment.
 - Open work by id, Now/Next, open decisions: `project/QUEUE.md` (generated; never hand-edit `project/*.json`).
 - Dispatch mechanics, worktrees, hooks: `docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md` and its GOV.ORCH amendments.
 - Relay transport: `docs/design/LOCAL_RELAY_PROTOCOL.md`.
-- Workbench: `py scripts/orchestrator.py dashboard`, open the printed URL with its `#t=` fragment.
+- Workbench: `py tools/delivery/orchestrator.py dashboard`, open the printed URL with its `#t=` fragment.
 
 ## 5. Before every dispatch, answer these in the packet or stop
 
@@ -313,7 +313,7 @@ A "no" to any of these is a stop, not a workaround.
   is a comparable — never billed spend
   (`docs/reference/PROVIDER_OPERATING_NOTES.md`).
 
-- After each dispatch closes, run `python3 scripts/dispatch_ledger.py render`
+- After each dispatch closes, run `python3 tools/delivery/dispatch_ledger.py render`
   and fill that movement's assessment cell in `project/DISPATCH_LEDGER.md`.
 
 - **A worker can finish green and uncommitted.** The default provider's

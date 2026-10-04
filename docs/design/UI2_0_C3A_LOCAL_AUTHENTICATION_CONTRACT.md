@@ -756,7 +756,7 @@ and audit state.
     forced-bootstrap-change test and the no-credential-in-audit test.
 11. **AC-11.** §11.3 below is the UNKNOWN register.
 12. **AC-12.** The repository privacy gate
-    (`scripts/repository_privacy_check.py`) reports zero findings against
+    (`tools/privacy/repository_privacy_check.py`) reports zero findings against
     this diff, and the diff is exactly one added file under
     `docs/design/`.
 

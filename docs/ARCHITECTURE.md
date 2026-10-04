@@ -322,7 +322,7 @@ One large multi-stage function (~750 lines):
   `__COMPLIANCE_JSON_PLACEHOLDER__` (`compliance_posture` — 10 deterministic
   CIS/PCI/BDDK-mapped controls),
   `__PROJECT_PLAN_JSON_PLACEHOLDER__` (`project/*.json` via
-  `utils/project_plan.py`),
+  `tools/delivery/project_plan.py`),
   `__DISCOVERY_JSON_PLACEHOLDER__` (lifecycle / capability / coordinator /
   scheduler observability). Result: a single dependency-free `output/index.html`.
   The script is `utils.html_export.SCRIPT_MODULE_FILENAMES` concatenated in a
