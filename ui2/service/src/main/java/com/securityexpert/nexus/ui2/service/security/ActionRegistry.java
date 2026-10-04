@@ -142,7 +142,7 @@ public final class ActionRegistry {
 
     private void seedActions() {
         register(new ActionDescriptor(POLICY_COLLECT, true, Optional.of(RoleToken.SECURITY_ADMIN),
-                java.util.Set.of(RoleToken.ONBOARDING_ADMIN)));
+                java.util.Set.of(RoleToken.ONBOARDING_ADMIN, RoleToken.REPLAY_VIEWER)));
         register(new ActionDescriptor(POLICY_READ, true, Optional.of(RoleToken.SECURITY_ADMIN),
                 java.util.Set.of(RoleToken.ONBOARDING_ADMIN, RoleToken.REPLAY_VIEWER)));
         register(new ActionDescriptor(HTTPS_CERTIFICATE_ACCEPT, true, Optional.of(RoleToken.SECURITY_ADMIN)));
