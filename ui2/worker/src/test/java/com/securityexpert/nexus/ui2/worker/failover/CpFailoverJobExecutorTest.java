@@ -376,6 +376,19 @@ class CpFailoverJobExecutorTest {
             check(script.downCount==0 && script.upCount==0);
         });
     }
+    @Test void warningOnlyReadinessOutputsStayUnknownWithoutWrites() {
+        Map<String,Integer> commands=Map.of("cphaprob -a if",3,"arp -an",5,"cat /proc/net/dev",8,
+            "fw stat",10,"cphaprob -ia list",11,"cphaprob show_bond",12);
+        commands.forEach((command,no) -> {
+            Store store=new Store(); store.kind="READINESS"; store.vsId="12";
+            Script script=new Script();
+            script.measured=Map.of(command,"Warning! This is a test sentence with 'set something' in it.");
+            run(store,script);
+            check("UNKNOWN".equals(store.outcome));
+            check(store.checks.contains("pre:"+no+":UNKNOWN"));
+            check(script.downCount==0 && script.upCount==0);
+        });
+    }
     @Test void readyReadinessNeverSkipsFreshFailoverPrecheck() {
         Store store=new Store(); store.kind="READINESS";
         Script script=new Script(); run(store,script);

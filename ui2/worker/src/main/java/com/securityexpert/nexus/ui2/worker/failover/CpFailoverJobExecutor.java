@@ -52,7 +52,15 @@ public final class CpFailoverJobExecutor {
     private Stop readinessFailure;
     private ReadinessShapeLog shapes;
 
-    private record Member(String id, TransportSession session) {}
+    private static final class Member {
+        private final String id;
+        private final TransportSession session;
+        private final long openedAtNanos=System.nanoTime();
+        private int sessionCommandIndex;
+        Member(String id,TransportSession session) { this.id=id; this.session=session; }
+        String id() { return id; }
+        TransportSession session() { return session; }
+    }
     private record Measure(CpFailoverChecks.State state, Set<String> table,
             CpFailoverChecks.Interfaces interfaces, int arp, CpFailoverChecks.Connections connections, long traffic,
             String policyName, CpFailoverChecks.Routing routing) {}
@@ -228,7 +236,10 @@ public final class CpFailoverJobExecutor {
         // here (reads and clusterXL_admin alike) runs in one, as the vsenv-wrapped VS form always did.
         String literal=vsId==null?"bash -lc '"+command+"'":"bash -lc 'vsenv "+vsId+" && "+command+"'";
         if(DOWN.equals(command)||UP.equals(command)) writeInFlight=true;
-        ExecResult result=ssh.exec(member.session(),new ExecSpec(literal,IF.equals(command)),Duration.ofSeconds(g.timeoutS()));
+        boolean pty=IF.equals(command);
+        int sessionCommandIndex=++member.sessionCommandIndex;
+        long sessionElapsedMs=(System.nanoTime()-member.openedAtNanos)/1_000_000;
+        ExecResult result=ssh.exec(member.session(),new ExecSpec(literal,pty),Duration.ofSeconds(g.timeoutS()));
         if(!(result instanceof ExecResult.Completed completed) || completed.exitStatus()!=0) {
             attempts.writeOutcome(attempt,epoch,"FAILED","COMMAND_UNAVAILABLE",false,null,null,null);
             throw new Stop("COMMAND_UNAVAILABLE",0);
@@ -244,7 +255,7 @@ public final class CpFailoverJobExecutor {
             case PNOTES -> 11; case BONDS -> 12; case FAILOVER -> 13; case ROUTING -> 14;
             default -> 0;
         };
-        if (check!=0) shapes.capture(check,completed.output());
+        if (check!=0) shapes.capture(check,completed.output(),pty,sessionCommandIndex,sessionElapsedMs);
         return check==0?completed.output():normalizeRead(command,completed.output(),vsId,shapes);
     }
     /** Remove only the documented transport preamble; never mask command errors. */

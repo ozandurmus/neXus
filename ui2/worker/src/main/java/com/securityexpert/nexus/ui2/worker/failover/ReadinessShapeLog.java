@@ -1,5 +1,7 @@
 package com.securityexpert.nexus.ui2.worker.failover;
 
+import com.securityexpert.nexus.ui2.platform.DiagnosticText;
+
 import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
@@ -12,7 +14,7 @@ import java.util.stream.Collectors;
 import javax.xml.stream.XMLInputFactory;
 import javax.xml.stream.XMLStreamConstants;
 
-/** Per-run diagnostics retain only bounded shapes, never raw responses. */
+/** Per-run diagnostics retain bounded shapes and masked vendor diagnostics, never raw responses. */
 final class ReadinessShapeLog {
     private static final System.Logger LOG=System.getLogger(ReadinessShapeLog.class.getName());
     private static final int MAX_BYTES=2048;
@@ -20,6 +22,7 @@ final class ReadinessShapeLog {
         "(?<![\\p{L}\\p{N}_])(?:Cluster Mode|High Availability|Active|ACTIVE|Standby|STANDBY|Down|DOWN|UP|Non-Monitored|\\((?:S|HA|LS|LM|P)(?:,[ \t]*(?:S|HA|LS|LM|P))*\\)|READY|\\(local\\)|ID|State|Name)(?![\\p{L}\\p{N}_])");
     private final String vendor;
     private final Map<Integer,String> shapes=new HashMap<>();
+    private final Map<Integer,String> executions=new HashMap<>();
     private final Set<Integer> logged=new HashSet<>();
 
     ReadinessShapeLog(String vendor) { this.vendor=vendor; }
@@ -38,10 +41,24 @@ final class ReadinessShapeLog {
         shapes.merge(check,shape,(a,b) -> a.equals(b)?a:bounded(a+"\n"+b));
     }
 
+    void capture(int check,String output,boolean pty,int sessionCommandIndex,long sessionElapsedMs) {
+        if (logged.contains(check)) return;
+        capture(check,output);
+        String execution="{outputBytes="+(output==null?0:output.getBytes(StandardCharsets.UTF_8).length)
+            +",lineCount="+(output==null?0:output.lines().count())+",pty="+pty
+            +",sessionCommandIndex="+sessionCommandIndex+",sessionElapsedMs="+sessionElapsedMs+"}";
+        executions.merge(check,execution,(a,b) -> bounded(a+";"+b));
+    }
+
+    private String executionInfo(int check) {
+        String info=executions.remove(check);
+        return info==null?"":" executions="+info;
+    }
+
     String logUnknown(int check,String status) {
         if (!"UNKNOWN".equals(status) || !logged.add(check)) return null;
         String message=bounded("[READINESS_SHAPE] vendor="+vendor+" check="+check
-            +" shape="+shapes.getOrDefault(check,""));
+            +executionInfo(check)+" shape="+shapes.getOrDefault(check,""));
         LOG.log(System.Logger.Level.INFO,message);
         shapes.remove(check);
         return message;
@@ -50,7 +67,7 @@ final class ReadinessShapeLog {
     String logTables(String status,Set<String> a,Set<String> b) {
         if ((!"FAIL".equals(status) && !"UNKNOWN".equals(status)) || !logged.add(2)) return null;
         String message=bounded("[READINESS_SHAPE] vendor="+vendor+" check=2"
-            +" a="+tableShape(a)+" b="+tableShape(b)+" shape="+shapes.getOrDefault(2,""));
+            +executionInfo(2)+" a="+tableShape(a)+" b="+tableShape(b)+" shape="+shapes.getOrDefault(2,""));
         LOG.log(System.Logger.Level.INFO,message);
         shapes.remove(2);
         return message;
@@ -72,7 +89,13 @@ final class ReadinessShapeLog {
 
     static String textShape(String output) {
         if (output==null) return "";
-        String firstLines=output.lines().limit(25).collect(Collectors.joining("\n"));
+        return bounded(output.lines().limit(25).map(line ->
+            line.startsWith("Warning!") || line.startsWith("Error") || line.startsWith("ERROR") || line.startsWith("Usage")
+                ? DiagnosticText.masked(line,token -> "[MASKED]") : lineShape(line))
+            .collect(Collectors.joining("\n")));
+    }
+
+    private static String lineShape(String firstLines) {
         StringBuilder shape=new StringBuilder();
         var tokens=TOKENS.matcher(firstLines);
         int end=0;
