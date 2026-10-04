@@ -6,6 +6,43 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 class ReadinessShapeLogTest {
+    @Test void warningUsesReadableMaskedVocabularyAndOtherLinesStayShapes() {
+        var log=new ReadinessShapeLog("check_point");
+        log.capture(3,"Warning! This is a test sentence with 'set something' in it.\nopaque123");
+        assertEquals("[READINESS_SHAPE] vendor=check_point check=3 shape="
+            +"Warning! This is a [MASKED] [MASKED] with 'set [MASKED]' in it.\naaaaaa999",
+            log.logUnknown(3,"UNKNOWN"));
+    }
+
+    @Test void diagnosticPrefixesMaskIdentitiesAddressesAndSecrets() {
+        for(String prefix:java.util.List.of("Warning!","Error","ERROR","Usage")) {
+            String output=ReadinessShapeLog.textShape(prefix
+                +" host CP-SPARK-TEST-01 192.0.2.10 2001:db8::1 02:00:00:00:00:01 test@example.invalid serial-123");
+            assertEquals(prefix+" host "+"[MASKED] ".repeat(5)+"[MASKED]",output);
+        }
+        assertEquals("[SECRET REDACTED]",ReadinessShapeLog.textShape("Warning! password synthetic-value"));
+        assertEquals("aaaaaaa! aaaaaaa",ReadinessShapeLog.textShape("warning! unknown"));
+    }
+
+    @Test void unknownLogsEachCapturedExecutionWithoutMergingIdenticalOutputs() {
+        var log=new ReadinessShapeLog("check_point");
+        log.capture(3,"é\n",true,3,125);
+        log.capture(3,"é\n",true,3,250);
+        assertNull(log.logUnknown(3,"PASS"));
+        assertEquals("[READINESS_SHAPE] vendor=check_point check=3 executions="
+            +"{outputBytes=3,lineCount=1,pty=true,sessionCommandIndex=3,sessionElapsedMs=125};"
+            +"{outputBytes=3,lineCount=1,pty=true,sessionCommandIndex=3,sessionElapsedMs=250} shape=a",
+            log.logUnknown(3,"UNKNOWN"));
+        assertNull(log.logUnknown(3,"UNKNOWN"));
+    }
+
+    @Test void unknownTableLogAlsoIncludesExecutionTelemetry() {
+        var log=new ReadinessShapeLog("check_point");
+        log.capture(2,"",false,2,10);
+        assertTrue(log.logTables("UNKNOWN",java.util.Set.of(),java.util.Set.of()).contains(
+            "executions={outputBytes=0,lineCount=0,pty=false,sessionCommandIndex=2,sessionElapsedMs=10}"));
+    }
+
     @Test void textMasksNamesAddressesAndUnicodeButKeepsOnlyApprovedTokens() {
         String tokens="Cluster Mode High Availability Active ACTIVE Standby STANDBY Down DOWN UP Non-Monitored (S) (LS) (HA) (S, LS) READY (local) ID State Name";
         assertEquals(tokens,ReadinessShapeLog.textShape(tokens));
@@ -66,7 +103,7 @@ class ReadinessShapeLogTest {
         assertEquals(25,ReadinessShapeLog.textShape("abc123\n".repeat(30)).lines().count());
         assertFalse(ReadinessShapeLog.xmlShape("<response>\n"+"<entry/>\n".repeat(24)
             +"<beyond-limit/></response>").contains("beyond-limit"));
-        for (String output:new String[]{"X".repeat(4000),"☃".repeat(2000)})
+        for (String output:new String[]{"X".repeat(4000),"☃".repeat(2000),"Warning! "+"This ".repeat(1000)})
             assertTrue(ReadinessShapeLog.textShape(output).getBytes(StandardCharsets.UTF_8).length<=2048);
         assertTrue(ReadinessShapeLog.xmlShape("<response>"+"<entry/>".repeat(1000)+"</response>")
             .getBytes(StandardCharsets.UTF_8).length<=2048);
