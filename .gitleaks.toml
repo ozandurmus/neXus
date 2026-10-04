@@ -3,6 +3,16 @@ title = "neXus security baseline (2026-09-30)"
 [extend]
 useDefault = true
 
+# Runtime-built replacements do not remove these exact synthetic fixtures from Git history.
+[[allowlists]]
+description = "Exact historical diagnostic and inventory test fixtures"
+targetRules = ["generic-api-key"]
+regexTarget = "secret"
+regexes = [
+    '''^synthetic-value$''',
+    '''^synthetic-inventory-mask-key-0001$''',
+]
+
 # PO-approved retired dashboard token; preserve history. No working-tree path exemption.
 [[allowlists]]
 description = "Retired local dashboard bearer token, PO 2026-09-30; review 2026-12-31"
