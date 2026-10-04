@@ -2,6 +2,19 @@ package com.securityexpert.nexus.ui2.platform;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 class DiagnosticTextTest {
+    @Test void maskedPreservesSecretRedactionPlaceholdersWithoutTokenizingThem() {
+        String raw="Status: UP\nWarning! password synthetic-value\ntoken: synthetic-value\n"
+                +"-----BEGIN PRIVATE KEY-----\nsynthetic-value\n-----END PRIVATE KEY-----\ninvented-host 192.0.2.10";
+        String expected="Status: UP\n"+"[SECRET REDACTED]\n".repeat(5)+"[MASKED] [MASKED]";
+        java.util.function.Function<String,String> maskToken=token -> {
+            assertNotEquals("SECRET",token);
+            assertNotEquals("REDACTED",token);
+            return "[MASKED]";
+        };
+        assertEquals(expected,DiagnosticText.masked(raw,maskToken));
+        assertEquals(expected,DiagnosticText.masked(DiagnosticText.scrubSecrets(raw),
+                java.util.Map.of("REDACTED","invented-replacement"),maskToken));
+    }
     @Test void secretsNeverReachEitherProjectionAndUnknownTokensStayMasked() {
         String raw="Hostname: synthetic-private-name\nStatus: UP\ninet addr:192.0.2.10\npassword: synthetic-secret\n-----BEGIN PRIVATE KEY-----\nsynthetic-key\n-----END PRIVATE KEY-----";
         String admin=DiagnosticText.scrubSecrets(raw);
