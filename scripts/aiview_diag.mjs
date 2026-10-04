@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Usage: NEXUS_E2E_BASE_URL, NEXUS_E2E_MACHINE_URL and NEXUS_E2E_MACHINE_TOKEN
 // node scripts/aiview_diag.mjs --target FW-TANGO-04 --gate <gate_id> [--param <VS id>]
+// node scripts/aiview_diag.mjs --list --target FW-MIKE-07-M1
 import { parseArgs } from 'node:util';
 import { randomUUID } from 'node:crypto';
 import { setTimeout as sleep } from 'node:timers/promises';
@@ -13,10 +14,12 @@ export async function run(args = process.argv.slice(2), env = process.env,
   { request = fetch, pause = sleep, print = text => process.stdout.write(text) } = {}) {
   const { values } = parseArgs({ args, options: {
     target: { type: 'string' }, gate: { type: 'string' }, param: { type: 'string' },
+    list: { type: 'boolean' },
   } });
-  if (!/^FW-[A-Z]+-[0-9]+$/.test(values.target ?? '') || !/^[a-z0-9_]+$/.test(values.gate ?? '')
+  if (!/^[A-Z]{2,4}(-[A-Z0-9]+){1,4}$/.test(values.target ?? '')
+      || (values.list ? values.gate !== undefined || values.param !== undefined : !/^[a-z0-9_]+$/.test(values.gate ?? ''))
       || (values.param !== undefined && !/^[A-Za-z0-9_.-]{1,31}$/.test(values.param))) {
-    throw new Error('Use --target <pseudonym> --gate <gate_id> [--param <VS id>]');
+    throw new Error('Use --target <pseudonym> --gate <gate_id> [--param <VS id>] or --list --target <pseudonym>');
   }
   let base, machine;
   try {
@@ -48,6 +51,13 @@ export async function run(args = process.argv.slice(2), env = process.env,
   const targets = listing.targets?.filter(target => target.target === values.target) ?? [];
   if (targets.length !== 1 || listing.canExecute !== true) throw new Error('Target is unavailable or ambiguous');
   const target = targets[0];
+  if (values.list) {
+    print(JSON.stringify({ target: target.target,
+      runnableGateIds: (target.commands ?? []).filter(command => command.runnable === true).map(command => command.gate_id),
+      virtualSystems: target.virtualSystems ?? [],
+    }) + '\n');
+    return;
+  }
   if (!target.commands?.some(command => command.gate_id === values.gate && command.runnable === true)) {
     throw new Error('Gate is not runnable for this target');
   }
