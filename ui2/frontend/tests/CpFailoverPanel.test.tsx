@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
@@ -26,6 +26,19 @@ beforeEach(() => {
 });
 
 describe("Check Point failover", () => {
+  it.each(["check_point", "palo_alto"] as const)("renders an empty %s lookup without an error or actions", async (vendor) => {
+    api.units.mockResolvedValue([]);
+    render(<ThemeProvider theme={m3Theme}><CpFailoverPanel memberDeviceId="member-device-id" vendor={vendor} /></ThemeProvider>);
+    await waitFor(() => expect(api.units).toHaveResolvedWith([]));
+    expect(screen.getByText("No eligible failover units")).toBeInTheDocument();
+    expect(api.units).toHaveBeenCalledWith("member-device-id", vendor);
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryByText(/Request failed|CLUSTER_NOT_FOUND|CLUSTER_NOT_ELIGIBLE/)).toBeNull();
+    expect(screen.queryByRole("button")).toBeNull();
+    expect(api.approvals).not.toHaveBeenCalled();
+    expect(api.runs).not.toHaveBeenCalled();
+  });
+
   it.each([
     ["PLANNED", "PLANNED", -1], ["PRECHECK", "PRECHECK", 0], ["FAILING_OVER", "FAILING_OVER", 1],
     ["SWITCHED", "SWITCHED", 2], ["POSTCHECK", "POSTCHECK", 3], ["RETURNING", "RETURNING", 3], ["DONE", "DONE", 4],
