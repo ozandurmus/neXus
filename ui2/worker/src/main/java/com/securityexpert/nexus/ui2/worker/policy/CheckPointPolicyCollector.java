@@ -138,11 +138,15 @@ public final class CheckPointPolicyCollector {
                         "MDS " + request.sourceId(), "CP", container, domainName, name, Instant.now().toString(), "", targets.stream().distinct().toList());
                     String natRef = ref("cp-nat", container, uid);
                     failures.add(new CollectionFailure(natRef, "COLLECTION_PENDING", "NAT", 0));
+                    long checkpointInterval = CpPolicyParallelCollection.configuredCheckpointInterval().toNanos();
+                    long[] lastCheckpoint = {nanoTime.getAsLong() - checkpointInterval};
                     List<JsonNode> access = access(session, domainName, policy.path("access-layers"), deadline, lease, failures,
                         completed -> {
+                            if (nanoTime.getAsLong() - lastCheckpoint[0] < checkpointInterval) return;
                             var checkpoint = snapshot(metadata, completed, List.of(), failures);
                             checkPublication(deadline, lease);
                             publish.accept(checkpoint);
+                            lastCheckpoint[0] = nanoTime.getAsLong();
                         });
                     List<JsonNode> nat = List.of();
                     try {

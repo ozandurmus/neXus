@@ -328,6 +328,114 @@ class CpPolicyParallelCollectionTest {
         }
     }
 
+    @Test void checkpointsAreThrottledPerPackageButCompletionAlwaysPublishes() {
+        var clock = new AtomicLong();
+        setup(2, command -> {
+            if (command.contains("show-packages")) return ok(packages(domain("first", "First") + ","
+                + domain("second", "Second") + "," + domain("third", "Third")));
+            if (command.contains("show-access-rulebase")) {
+                String uid = command.contains("name 'First'") ? "first" : command.contains("name 'Second'") ? "second" : "third";
+                return page(uid, 0, 1, 1, rule(uid + "-rule"), "");
+            }
+            return answer(command);
+        });
+        var collector = new CheckPointPolicyCollector(transport, gates, repository, Duration.ofHours(2), 2, clock::get);
+        List<PolicySnapshot> checkpoints = new ArrayList<>();
+        var progress = new ArrayList<PolicyCollectionTrace.LayerProgress>();
+        var steps = new AtomicInteger();
+        List<PolicySnapshot> snapshots;
+        try (var trace = new PolicyCollectionTrace("synthetic-source", (step, total) -> steps.incrementAndGet(),
+                measurement -> {}, progress::add)) {
+            snapshots = collector.collect(run, request, () -> true, checkpoints::add);
+        }
+        assertTrue(steps.get() >= 6); // Domain/package reads and every layer/page still report progress.
+        assertTrue(progress.size() >= 7); // Page and completed-layer counters survive skipped checkpoints.
+        assertEquals(2, checkpoints.size()); // First completed layer and final package, despite a frozen clock.
+        assertEquals(snapshots.get(0), checkpoints.get(1));
+        assertEquals(3, rules(snapshots.get(0)).size());
+        assertTrue(snapshots.get(0).failures().isEmpty()); cleanup();
+    }
+
+    @Test void singleSessionAlsoThrottlesWholePackageCheckpoints() {
+        setup(1, command -> {
+            if (command.contains("show-packages")) return ok(packages(domain("first", "First") + "," + domain("second", "Second")));
+            if (command.contains("show-access-rulebase")) {
+                String uid = command.contains("name 'First'") ? "first" : "second";
+                return page(uid, 0, 1, 1, rule(uid + "-rule"), "");
+            }
+            return answer(command);
+        });
+        var collector = new CheckPointPolicyCollector(transport, gates, repository, Duration.ofHours(2), 1, () -> 0);
+        List<PolicySnapshot> checkpoints = new ArrayList<>();
+        var snapshots = collector.collect(run, request, () -> true, checkpoints::add);
+        assertEquals(2, checkpoints.size()); assertEquals(snapshots.get(0), checkpoints.get(1));
+        assertEquals(2, rules(snapshots.get(0)).size()); cleanup();
+    }
+
+    @Test void elapsedCheckpointIntervalAllowsAnotherPartialSnapshot() {
+        var clock = new AtomicLong();
+        setup(2, command -> {
+            if (command.contains("show-packages")) return ok(packages(domain("first", "First") + ","
+                + domain("second", "Second") + "," + domain("third", "Third")));
+            if (command.contains("show-access-rulebase")) {
+                String uid = command.contains("name 'First'") ? "first" : command.contains("name 'Second'") ? "second" : "third";
+                return page(uid, 0, 1, 1, rule(uid + "-rule"), "");
+            }
+            return answer(command);
+        });
+        var collector = new CheckPointPolicyCollector(transport, gates, repository, Duration.ofHours(2), 2, clock::get);
+        List<PolicySnapshot> checkpoints = new ArrayList<>();
+        var snapshots = collector.collect(run, request, () -> {
+            clock.addAndGet(Duration.ofSeconds(60).toNanos()); return true;
+        }, checkpoints::add);
+        assertEquals(4, checkpoints.size()); // Three access layers plus NAT completion.
+        assertEquals(snapshots.get(0), checkpoints.get(3)); cleanup();
+    }
+
+    @Test void checkpointIntervalIsConfigurableAndMustBePositive() {
+        String key = "ui2.policy.cp.checkpoint-interval", old = System.getProperty(key);
+        try {
+            System.setProperty(key, "90"); assertEquals(Duration.ofSeconds(90), CpPolicyParallelCollection.configuredCheckpointInterval());
+            for (String invalid : List.of("0", "-1")) {
+                System.setProperty(key, invalid);
+                assertThrows(IllegalArgumentException.class, CpPolicyParallelCollection::configuredCheckpointInterval);
+            }
+        } finally {
+            if (old == null) System.clearProperty(key); else System.setProperty(key, old);
+        }
+    }
+
+    @Test void synthetic3500RulePackageBuildAndSerializationAreBounded() {
+        var json = new com.fasterxml.jackson.databind.ObjectMapper();
+        List<com.fasterxml.jackson.databind.JsonNode> pages = new ArrayList<>();
+        for (int offset = 0; offset < 3500; offset += 100) {
+            var page = json.createObjectNode().put("uid", "synthetic-layer").put("name", "Layer").put("total", 3500)
+                .put("from", offset + 1).put("to", offset + 100);
+            var rulebase = page.putArray("rulebase");
+            var dictionary = page.putArray("objects-dictionary");
+            for (int i = offset; i < offset + 100; i++) {
+                rulebase.addObject().put("uid", "synthetic-rule-" + i).put("type", "access-rule")
+                    .putArray("source").add("synthetic-object-" + i);
+                dictionary.addObject().put("uid", "synthetic-object-" + i).put("type", "host")
+                    .put("name", "OBJ-ADDRESS-" + i).put("ipv4-address", "192.0.2.8");
+            }
+            pages.add(page);
+        }
+        var metadata = new PolicySnapshot.Metadata("synthetic-policy", "synthetic-source", "Synthetic source", "CP",
+            "synthetic-domain", "DOM-TANGO-01", "Package", "2026-10-02T00:00:00Z", "", List.of());
+        assertTimeout(Duration.ofSeconds(5), () -> {
+            long started = System.nanoTime();
+            var snapshot = CheckPointPolicyCollector.snapshot(metadata, pages, List.of(), List.of());
+            long mapped = System.nanoTime();
+            String body = json.writeValueAsString(snapshot);
+            long serialized = System.nanoTime();
+            assertEquals(3500, rules(snapshot).size()); assertEquals(3500, snapshot.objects().size());
+            assertFalse(body.isEmpty());
+            System.out.printf("Synthetic policy rules=3500 mappingMs=%d serializationMs=%d%n",
+                (mapped - started) / 1_000_000, (serialized - mapped) / 1_000_000);
+        });
+    }
+
     @Test void configurationUsesPropertyAndRejectsOutsideTheHardCap() {
         String old = System.getProperty("ui2.policy.cp.max-sessions");
         try {

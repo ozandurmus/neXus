@@ -127,14 +127,16 @@ public class PolicyCollectionRepository {
                 "layer", r.get("layer", Integer.class), "layers", r.get("layers", Integer.class), "rulesFetched", r.get("rules", Integer.class))));
     }
 
-    /** Each completed-layer checkpoint commits independently, without terminating the collection. */
+    /** Lease validation ends before the independent snapshot write; checkpoints never lock jobs. */
     public boolean checkpoint(String jobId, long epoch, PolicySnapshotRepository.Stored snapshot, String actor) {
-        return new AuditedTransactionBoundary(tx).inTransaction(actor, "policy_collect_checkpoint", db -> {
-            if (db.fetch("select job_id from jobs where job_id = {0} and lease_epoch = {1} and state = 'EXECUTING' "
-                    + "and lease_expires_at > now() for update", jobId, epoch).isEmpty()) return false;
-            new PolicySnapshotRepository(scoped(db)).save(snapshot, actor, "policy_collect_checkpoint");
-            return true;
-        });
+        boolean live = tx.inTransaction(db -> !db.fetch(
+            "select job_id from jobs where job_id = {0} and lease_epoch = {1} and state = 'EXECUTING' "
+                + "and lease_expires_at > now()", jobId, epoch).isEmpty());
+        if (!live) return false;
+        // A lease can change after this read. Only final publication may transition the job,
+        // and it revalidates the epoch under FOR UPDATE in its own transaction.
+        new PolicySnapshotRepository(tx).save(snapshot, actor, "policy_collect_checkpoint");
+        return true;
     }
 
     /** Publication and the terminal transition share a row lock and transaction. */
