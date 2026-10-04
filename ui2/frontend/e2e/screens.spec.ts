@@ -67,8 +67,12 @@ async function screenHasData(page: Page, screen: ScreenId, settleReads: () => Pr
       for (const name of ["Status", "Cluster", "Active ↔ Standby members", "Primary reason", "Last evaluated"]) {
         await expect(table.getByRole("columnheader", { name, exact: true })).toBeVisible();
       }
-      const row = table.locator("tbody tr[aria-expanded]").first();
-      await expect(row).toBeVisible();
+      const firstRow = table.locator("tbody tr[aria-expanded]").first();
+      await expect(firstRow).toBeVisible();
+      // Summary reads may reorder rows by status; keep inspecting the same opaque identity.
+      const identity = await firstRow.getAttribute("data-readiness-row");
+      expect(identity).not.toBeNull();
+      const row = table.locator(`tbody tr[data-readiness-row=${JSON.stringify(identity)}]`);
       await expect(page.getByRole("checkbox", { name: "Select all visible" })).toBeDisabled();
       await expect(page.getByRole("toolbar", { name: "Bulk readiness actions" })).toHaveCount(0);
       const before = page.url();

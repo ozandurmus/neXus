@@ -3,6 +3,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
 import { OperationsScreen } from "../src/screens/OperationsScreen";
+import { HaReadinessList } from "../src/screens/HaReadinessList";
+import type { CpFailoverSummary, DeviceSummary } from "../src/auth/adminApi";
 
 function withTheme(node: React.ReactElement) {
   return <ThemeProvider theme={m3Theme}>{node}</ThemeProvider>;
@@ -228,6 +230,51 @@ it("opens full detail in a right drawer, keeps the list and does not change the 
 
 const BULK_MEMBERS = [...MEMBERS, ...MEMBERS.map((member, index) => ({ ...member, device_id: `pan-member-${index}`, hostname: `FW-TANGO-02-M${index + 1}`, vendor_hint: "palo_alto", cluster_member_ref: "CLS-TANGO-02" }))];
 const BULK_SUMMARY = [...READY_SUMMARY, { ...READY_SUMMARY[0], clusterId: "opaque-pan", unitId: "opaque-pan", cluster_member_ref: "CLS-TANGO-02", vendor: "palo_alto", members: BULK_MEMBERS.slice(2) }];
+
+it("starts every HA row collapsed and unselected when a late summary reorders the list", async () => {
+  stubFetch(BULK_MEMBERS, BULK_SUMMARY);
+  const original = vi.mocked(fetch).getMockImplementation()!;
+  let finishSummary!: (response: Response) => void;
+  const summary = new Promise<Response>(resolve => { finishSummary = resolve; });
+  vi.mocked(fetch).mockImplementation((input, init) => String(input) === "/api/v2/cp-failover/summary"
+    ? summary : original(input, init));
+  render(withTheme(<OperationsScreen />));
+  const row = await screen.findByRole("row", { name: "CLS-ROMEO-01" });
+  const identity = row.getAttribute("data-readiness-row");
+  expect(row).toHaveAttribute("aria-expanded", "false");
+  expect(within(row).getByRole("checkbox")).not.toBeChecked();
+  await act(async () => finishSummary(new Response(JSON.stringify([
+    BULK_SUMMARY[0], { ...BULK_SUMMARY[1], readiness: { ...BULK_SUMMARY[1].readiness, status: "NOT_READY" } },
+  ]))));
+  const table = screen.getByRole("table", { name: "HA clusters" });
+  expect(within(table).getAllByRole("row")[1]).toHaveAccessibleName("CLS-TANGO-02");
+  expect(screen.getByRole("row", { name: "CLS-ROMEO-01" })).toBe(row);
+  expect(row).toHaveAttribute("data-readiness-row", identity);
+  for (const name of ["CLS-ROMEO-01", "CLS-TANGO-02"]) {
+    const refreshed = within(table).getByRole("row", { name });
+    expect(refreshed).toHaveAttribute("aria-expanded", "false");
+    expect(within(refreshed).getByRole("checkbox")).not.toBeChecked();
+  }
+});
+
+it("keeps user expansion on the same HA identity when a refresh changes status ordering", () => {
+  const clusters = ["CLS-ROMEO-01", "CLS-TANGO-02"].map(ref => ({
+    ref, title: ref, members: BULK_MEMBERS.filter(member => member.cluster_member_ref === ref) as DeviceSummary[],
+  }));
+  const rows = Object.fromEntries(BULK_SUMMARY.map(row => [row.cluster_member_ref, [row]])) as Record<string, CpFailoverSummary[]>;
+  const props = { clusters, rows, running: null, busy: false, progress: {}, error: null,
+    onOpen: vi.fn(), onRun: vi.fn(), onBulkRun: vi.fn() };
+  const { rerender } = render(withTheme(<HaReadinessList {...props} />));
+  const row = screen.getByRole("row", { name: "CLS-ROMEO-01" });
+  fireEvent.click(within(row).getByRole("button", { name: "Checks for CLS-ROMEO-01" }));
+  rerender(withTheme(<HaReadinessList {...props} rows={{ ...rows,
+    "CLS-TANGO-02": [{ ...rows["CLS-TANGO-02"][0], readiness: { ...rows["CLS-TANGO-02"][0].readiness!, status: "NOT_READY" } }],
+  }} />));
+  expect(within(screen.getByRole("table", { name: "HA clusters" })).getAllByRole("row")[1]).toHaveAccessibleName("CLS-TANGO-02");
+  expect(screen.getByRole("row", { name: "CLS-ROMEO-01" })).toBe(row);
+  expect(row).toHaveAttribute("aria-expanded", "true");
+  expect(screen.getByRole("row", { name: "CLS-TANGO-02" })).toHaveAttribute("aria-expanded", "false");
+});
 
 it("calls each selected unit's vendor readiness API sequentially and reports per-row progress", async () => {
   stubFetch(BULK_MEMBERS, BULK_SUMMARY);
