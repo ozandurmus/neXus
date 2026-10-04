@@ -15,9 +15,22 @@ def _write(root: Path, rel: str, text: str) -> None:
 def test_clean_synthetic_repository_passes(tmp_path):
     _write(tmp_path, "main.py", "ENDPOINT = '192.0.2.10'\n")
     _write(tmp_path, "tests/test_sample.py", "api_key = 'synthetic-token'\nIP='10.0.0.1'\n")
+    # The archive retains precisely the existing test-fixture semantics.
+    fixture = "api_key = 'fixture-token-not-a-secret'\nENDPOINT = '192.0.2.10'\n"
+    for prefix in ("tests", "history/tests"):
+        _write(tmp_path, f"{prefix}/test_archived.py", fixture)
     report = scan_repository(tmp_path)
     assert report.gate == "PASS"
     assert report.findings == ()
+    # Neither archived source nor a similarly named directory is a test root.
+    for prefix in ("history/utils", "history/tests_extra", "history/nested/tests"):
+        _write(tmp_path, f"{prefix}/sample.py", fixture)
+    report = scan_repository(tmp_path)
+    assert report.gate == "FAIL"
+    assert {(f.path, f.rule) for f in report.findings} == {
+        (f"{prefix}/sample.py", "CREDENTIAL_LITERAL")
+        for prefix in ("history/utils", "history/tests_extra", "history/nested/tests")
+    }
 
 
 def test_private_endpoint_and_local_user_path_fail_without_echoing_values(tmp_path):
@@ -34,10 +47,14 @@ def test_private_endpoint_and_local_user_path_fail_without_echoing_values(tmp_pa
 def test_forbidden_runtime_and_binary_artifacts_fail(tmp_path):
     (tmp_path / "output").mkdir()
     (tmp_path / "capture.pcap").write_bytes(b"synthetic")
+    (tmp_path / "history/tests").mkdir(parents=True)
+    (tmp_path / "history/tests/capture.pcap").write_bytes(b"synthetic")
     report = scan_repository(tmp_path)
     rules = {finding.rule for finding in report.findings}
     assert "RUNTIME_DIRECTORY_PRESENT" in rules
     assert "PACKET_CAPTURE" in rules
+    assert any(f.path == "history/tests/capture.pcap" and f.rule == "PACKET_CAPTURE"
+               for f in report.findings)
 
 
 def test_private_key_marker_is_reported_without_key_body(tmp_path):

@@ -1,9 +1,10 @@
 # Python tooling validation (PR0)
 
 The maintained product is `ui2/`. Python default discovery is the explicit
-`testpaths` file list in root `pytest.ini`, not all of `tests/`. Files stay at
-their current paths until PR2/PR3. No historical device command is authorized
-by retaining a test or an old implementation.
+`testpaths` file list in root `pytest.ini`, not all of `tests/`. PR2 moved the
+retired product tests to `history/tests/`; live paths stay here until PR3.
+No historical device command is authorized by retaining a test or an old
+implementation.
 
 Install only `requirements-dev.txt` for live tooling. It contains the existing
 pytest, xdist, PyYAML and Playwright dependencies; no Python product requirements
@@ -61,7 +62,7 @@ from pathlib import Path
 config = configparser.ConfigParser()
 config.read('pytest.ini')
 live = set(config['pytest']['testpaths'].split())
-paths = subprocess.check_output(['git', 'ls-files', 'tests/*.py'], text=True).splitlines()
+paths = subprocess.check_output(['git', 'ls-files', 'tests/*.py', 'history/tests/*.py'], text=True).splitlines()
 excluded = [p for p in paths if Path(p).name.startswith('test_') and p not in live]
 print('\n'.join(excluded))
 print(f'{len(excluded)} excluded files')
@@ -74,14 +75,17 @@ Only in a separately approved offline environment with synthetic fixtures and
 legacy dependencies already available:
 
 ```sh
-# Explicit paths override default testpaths; this opts into all historical tests.
-python3 -m pytest -q tests
-# Or select one historical file:
+cd history
+python3 -m pytest --collect-only
+# Or select one historical file after reviewing its offline requirements:
 python3 -m pytest -q tests/test_known_safety_gaps.py
 ```
 
-Historical reproduction needs `requirements.txt`, `requirements-console.txt`
-and `requirements-dev.txt`. Default tooling conftest retains only path setup,
+Historical reproduction needs `history/requirements.txt`,
+`history/requirements-console.txt` and root `requirements-dev.txt`.
+See `history/README.md` for the retained UNSURE entry points and collection
+limitations; the archive is not a standalone supported runtime.
+Default tooling conftest retains only path setup,
 relay-environment cleanup and the repository privacy lock; it does not import
 or stub a legacy SSH client. Opt-in historical tests are not a live release gate.
 

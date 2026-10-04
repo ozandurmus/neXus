@@ -96,7 +96,7 @@ def test_unknown_or_empty_scope_is_blocked():
 
 
 def test_migration_roots_never_skip_live_gates():
-    for path in ("history/README.md", "history/application/main.py", "tools/privacy/check.py", "tools/README.md", "pytest.ini", "AGENTS.md"):
+    for path in ("history/README.md", "history/application/main.py", "tools/privacy/check.py", "tools/README.md", "pytest.ini", "AGENTS.md", "tests/test_dev0_4_repository_privacy_gate.py"):
         assert classify([path]) == "full"
         assert classify([path, "unmapped/file.txt"]) == "blocked"
     assert classify(["history/main.py", "tools/delivery/run.py", "README.md"]) == "full"

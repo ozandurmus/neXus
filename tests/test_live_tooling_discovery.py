@@ -22,6 +22,11 @@ def test_live_sources_do_not_import_legacy_product(pytestconfig):
     # Traverse local Python imports without loading the retired product.
     pending = [ROOT / p for p in pytestconfig.getini("testpaths")]
     pending.append(ROOT / "tests/conftest.py")
+    with (ROOT / "docs/repo_inventory.csv").open() as source:
+        pending.extend(ROOT / row["path"] for row in csv.DictReader(source)
+                       if row["classification"] == "LIVE_TOOLING"
+                       and row["python_file"] == "true"
+                       and row["path"] != "utils/action_taxonomy.py")
     visited = set()
     legacy = {"application", "checkpoint", "panorama", "configuration", "console",
               "replay", "signal_intake", "main", "config"}
@@ -43,6 +48,10 @@ def test_live_sources_do_not_import_legacy_product(pytestconfig):
             for name in names:
                 assert name.split(".")[0] not in legacy, (path.relative_to(ROOT), name)
                 assert not name.startswith("utils.") or name in live_utils, (path.relative_to(ROOT), name)
+                if name in live_utils:
+                    rel = Path(*name.split("."))
+                    assert ((ROOT / rel.with_suffix(".py")).is_file()
+                            or (ROOT / rel / "__init__.py").is_file()), name
                 rel = Path(*name.split("."))
                 for local in (ROOT / rel.with_suffix(".py"), ROOT / rel / "__init__.py",
                               ROOT / "scripts" / rel.with_suffix(".py")):
