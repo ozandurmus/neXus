@@ -17,6 +17,13 @@ class SubnetPreservingIpMaskerTest {
     }
 
     @Test
+    void redactsNonDefaultAddressesWhosePrefixLeavesNoSyntheticNetworkBits() {
+        assertThat(masker.mask("192.0.2.17/0")).isEqualTo("[REDACTED_IP]");
+        assertThat(masker.maskText("destination 198.51.100.9/0"))
+                .isEqualTo("destination [REDACTED_IP]");
+    }
+
+    @Test
     void preservesSubnetAndHostOffsetsForVipAndMembers() {
         String vip = masker.mask("192.168.230.1");
         String m1 = masker.mask("192.168.230.2");

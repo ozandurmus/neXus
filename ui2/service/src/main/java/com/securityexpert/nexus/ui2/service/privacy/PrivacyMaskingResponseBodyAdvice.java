@@ -250,27 +250,9 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
                         result.put(key, value);
                     }
                 }
-                case "address", "management_ip", "network" -> {
-                    if (value instanceof String s) {
-                        result.put(key, ipMasker.mask(s));
-                    } else {
-                        result.put(key, value);
-                    }
-                }
-                case "ip_addresses" -> {
-                    if (value instanceof String s) {
-                        result.put(key, ipMasker.maskText(s));
-                    } else {
-                        result.put(key, value);
-                    }
-                }
-                case "destination", "next_hop" -> {
-                    if (value instanceof String s) {
-                        result.put(key, ipMasker.mask(s));
-                    } else {
-                        result.put(key, value);
-                    }
-                }
+                case "address", "management_ip", "network", "ip_addresses", "destination", "next_hop",
+                        "gateway", "addresses", "secondary_addresses", "alternate_addresses", "ipv6_addresses" ->
+                    result.put(key, maskAddressValue(value, clusterRef));
                 case "terminal_reason", "latest_job_terminal_reason", "peer_follow_reason", "observed_value", "message" -> {
                     if (value instanceof String s) {
                         result.put(key, topologyPseudonymizer.maskText(ipMasker.maskText(s)));
@@ -289,6 +271,26 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
             }
         }
         return result;
+    }
+
+    private Object maskAddressValue(Object value, String parentContextRef) {
+        if (value instanceof String text) {
+            // IPv6 has no relationship-preserving masker yet: fail closed, including mixed address lists.
+            String masked = ipMasker.mask(text);
+            if (!"[REDACTED_IP]".equals(masked) || text.contains(":")) {
+                return masked;
+            }
+            String maskedText = ipMasker.maskText(text);
+            return maskedText.equals(text) ? masked : maskedText;
+        }
+        if (value instanceof List<?> list) {
+            List<Object> result = new ArrayList<>(list.size());
+            for (Object item : list) {
+                result.add(maskAddressValue(item, parentContextRef));
+            }
+            return result;
+        }
+        return maskObject(value, parentContextRef);
     }
 
     private List<Object> maskList(List<?> list, String parentContextRef) {

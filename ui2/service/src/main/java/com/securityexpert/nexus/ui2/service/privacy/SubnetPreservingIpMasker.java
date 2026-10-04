@@ -166,6 +166,10 @@ public class SubnetPreservingIpMasker {
 
         long synthNetBase = (((10L << 24) | (((long) x) << 16) | (((long) y) << 8)) & mask);
         long synthIpLong = synthNetBase | hostOffset;
+        // A broad prefix or HMAC collision can reproduce the source address. Never publish it as a pseudonym.
+        if (synthIpLong == ipLong) {
+            return "[REDACTED_IP]";
+        }
 
         int so1 = (int) ((synthIpLong >> 24) & 0xFF);
         int so2 = (int) ((synthIpLong >> 16) & 0xFF);
