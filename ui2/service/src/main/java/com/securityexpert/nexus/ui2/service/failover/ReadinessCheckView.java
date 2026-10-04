@@ -42,7 +42,7 @@ public final class ReadinessCheckView {
                 case 2 -> "Peer relationship could not be verified";
                 case 3 -> "HA link state not recognised";
                 case 4 -> "Configuration sync field missing or not recognised";
-                case 5 -> "Session sync evidence missing: /response/result/enabled and messages/entry/{enable,sent,recv,desc}";
+                case 5 -> "Session sync fields missing or not recognised: /response/result/enabled and messages/entry fields enable, sent, recv and desc";
                 case 6 -> "Session count missing or not recognised: /response/result/num-active or active-sessions";
                 case 7 -> "Version fields missing or not recognised";
                 default -> "Check evidence unavailable";
