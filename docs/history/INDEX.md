@@ -1,7 +1,7 @@
 # Build History Index
 
 One line per build, newest first. **Generated** from `project/build_history.json`
-by `scripts/build_history_index.py` — do not hand-edit; edit the JSON and
+by `tools/delivery/build_history_index.py` — do not hand-edit; edit the JSON and
 regenerate. Open a row's linked document only when you need that build's detail.
 
 | Build | Status | Dates | Title | Summary | Docs |

@@ -64,7 +64,7 @@ checks do not grant failover execution, write, approval or scheduling rights.
 
 - [Archive boundaries and optional reproduction](../history/README.md).
 - [Documentation relocation map](../history/docs/RELOCATION.md): exact old and
-  new paths for the first PR4 batch, plus the remaining scope.
+  new paths for PR4 batches 1 and 2, plus the remaining scope.
 
 Retired documentation moves to `history/docs/` with its original structure and
 contents preserved. Active frozen contracts, command-gate records, Java mockup
