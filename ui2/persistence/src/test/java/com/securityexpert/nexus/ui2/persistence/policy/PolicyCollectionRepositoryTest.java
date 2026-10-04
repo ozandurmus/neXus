@@ -86,7 +86,7 @@ class PolicyCollectionRepositoryTest {
                 "synthetic-actor", "PARTIAL_SNAPSHOT layer-1: TIMEOUT"));
     }
 
-    @Test void checkpointCommitsUnderLeaseLockWithoutTerminalTransition() {
+    @Test void checkpointValidatesLeaseWithoutRowLockOrTerminalTransition() {
         for (boolean live : List.of(true, false)) {
             List<String> sql = new ArrayList<>();
             var create = DSL.using(SQLDialect.POSTGRES);
@@ -98,11 +98,32 @@ class PolicyCollectionRepositoryTest {
             }), SQLDialect.POSTGRES)));
             assertEquals(live, repository.checkpoint("job-1", 7,
                 new PolicySnapshotRepository.Stored("policy-1", "2026-10-02T03:39:00Z", "{}", "{}"), "synthetic-actor"));
-            assertTrue(sql.stream().anyMatch(q -> q.contains("lease_expires_at > now() for update")));
+            assertTrue(sql.stream().anyMatch(q -> q.contains("lease_expires_at > now()")));
+            assertFalse(sql.stream().anyMatch(q -> q.contains("for update")));
             assertEquals(live, sql.stream().anyMatch(q -> q.startsWith("insert into policy_snapshot")));
             assertFalse(sql.stream().anyMatch(q -> q.startsWith("update jobs")));
         }
     }
+    @Test void checkpointReadTransactionEndsBeforeSnapshotWriteTransactionStarts() {
+        var transactions = new AtomicInteger();
+        var create = DSL.using(SQLDialect.POSTGRES);
+        var db = DSL.using(new MockConnection(context -> {
+            if (context.sql().startsWith("select job_id")) assertEquals(1, transactions.get());
+            if (context.sql().startsWith("insert into policy_snapshot")) assertEquals(2, transactions.get());
+            return new MockResult[] { new MockResult(1, context.sql().startsWith("select job_id")
+                ? create.fetchFromStringData(new String[] { "job_id" }, new String[] { "job-1" }) : null) };
+        }), SQLDialect.POSTGRES);
+        var delegate = new JooqTransactionBoundary(db);
+        var tx = new com.securityexpert.nexus.ui2.persistence.TransactionBoundary() {
+            @Override public <T> T inTransaction(java.util.function.Function<DSLContext, T> work) {
+                transactions.incrementAndGet(); return delegate.inTransaction(work);
+            }
+        };
+        assertTrue(new PolicyCollectionRepository(tx).checkpoint("job-1", 7,
+            new PolicySnapshotRepository.Stored("policy-1", "2026-10-02T00:00:00Z", "{}", "{}"), "synthetic-actor"));
+        assertEquals(2, transactions.get());
+    }
+
     @Test void statusReadsLatestLayerCountersInCurrentLeaseEpoch() {
         List<String> sql = new ArrayList<>();
         var create = DSL.using(SQLDialect.POSTGRES);

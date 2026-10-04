@@ -36,6 +36,7 @@ final class CpPolicyParallelCollection {
     private final List<Policy> policies = new ArrayList<>();
     private final Map<String, Integer> domainOrder = new HashMap<>();
     private final Safety safety;
+    private final long checkpointInterval = configuredCheckpointInterval().toNanos();
 
     CpPolicyParallelCollection(CheckPointPolicyCollector collector, PolicyCollectionRepository repository,
             int maximum, LongSupplier clock, DiscoveryRun run, PolicyCollectionRepository.Request request,
@@ -278,7 +279,19 @@ final class CpPolicyParallelCollection {
         checkpoint(layer.policy, layer);
     }
 
+    static Duration configuredCheckpointInterval() {
+        Duration interval = Duration.ofSeconds(Long.parseLong(System.getProperty("ui2.policy.cp.checkpoint-interval",
+            System.getenv().getOrDefault("UI2_POLICY_CP_CHECKPOINT_INTERVAL", "60"))));
+        if (interval.isZero() || interval.isNegative()) throw new IllegalArgumentException("POLICY_CHECKPOINT_INTERVAL_MUST_BE_POSITIVE");
+        return interval;
+    }
+
     private void checkpoint(Policy policy, Layer changed) {
+        progress(policy);
+        boolean complete = policy.layers.values().stream().allMatch(l -> l.done || l.failure != null)
+            && (policy.nat.done || policy.nat.failure != null);
+        long now = clock.getAsLong();
+        if (!complete && policy.lastCheckpoint != null && now - policy.lastCheckpoint < checkpointInterval) return;
         List<JsonNode> access = new ArrayList<>();
         List<CollectionFailure> failures = new ArrayList<>(policy.extra);
         for (Layer layer : policy.layers.values()) {
@@ -297,7 +310,7 @@ final class CpPolicyParallelCollection {
         }
         collector.checkPublication(deadline, lease);
         publish.accept(snapshot); policy.latest = snapshot;
-        progress(policy);
+        policy.lastCheckpoint = clock.getAsLong();
     }
 
     private void progress(Policy policy) {
@@ -340,6 +353,7 @@ final class CpPolicyParallelCollection {
         final List<CollectionFailure> extra = new ArrayList<>();
         Layer nat;
         PolicySnapshot latest;
+        Long lastCheckpoint;
         Policy(Metadata metadata, String domain) { this.metadata = metadata; this.domain = domain; }
     }
     private static final class Layer {
