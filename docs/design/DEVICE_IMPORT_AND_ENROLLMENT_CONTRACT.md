@@ -519,7 +519,7 @@ Three bands, in the shape `CP-DISCOVERY` §9 and `PAN-DISCOVERY` §11 use.
    (Before 2026-09-14 this check asserted a `DRAFT` token; the freeze
    replaced it rather than leaving it to contradict the status block.)
 2. The repository privacy gate reports zero findings:
-   `python3 scripts/repository_privacy_check.py`.
+   `python3 tools/privacy/repository_privacy_check.py`.
 3. The document contains no address literal:
    `grep -n -E '([0-9]{1,3}\.){3}[0-9]{1,3}' docs/design/DEVICE_IMPORT_AND_ENROLLMENT_CONTRACT.md`
    matches nothing, and no literal resembling a colon-separated IPv6 address
@@ -531,12 +531,12 @@ Three bands, in the shape `CP-DISCOVERY` §9 and `PAN-DISCOVERY` §11 use.
 5. The diff carries no implementation: `git diff --name-status
    origin/main...HEAD` reports only this document under `docs/design/` plus
    the durable project-state files `AGENTS.md`'s "Project-state update rule"
-   requires, written through `scripts/project_queue.py`. No path under
+   requires, written through `tools/delivery/project_queue.py`. No path under
    `utils/`, `scripts/` (other than the queue tool's own JSON writes),
    `ui2/` or `tests/` appears.
 6. `git diff --check origin/main...HEAD` is clean, and
-   `python3 -m pytest tests/test_contract_authority_status.py
-   tests/test_architecture_convergence.py tests/test_project_files_budget.py -q`
+   `python3 -m pytest tools/tests/test_contract_authority_status.py
+   tests/test_architecture_convergence.py tools/tests/test_project_files_budget.py -q`
    passes.
 
 ### Band 2 — property checks, provable over synthetic fixtures

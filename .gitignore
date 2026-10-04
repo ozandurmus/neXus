@@ -8,7 +8,7 @@
 /.cas/
 /support_bundles/
 
-# scripts/local_relay.py's shared append lock (GOV_PO_3_APPROVED_MOVEMENT_
+# tools/delivery/local_relay.py's shared append lock (GOV_PO_3_APPROVED_MOVEMENT_
 # ORCHESTRATION.md section 3.6): an ephemeral sidecar advisory-lock file,
 # never durable governance content -- the relay/*.json file it locks is.
 relay/*.json.lock

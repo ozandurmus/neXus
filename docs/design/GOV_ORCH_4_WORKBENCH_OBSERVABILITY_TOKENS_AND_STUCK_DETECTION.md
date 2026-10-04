@@ -3,8 +3,8 @@
 ## Status
 
 **FROZEN — PRODUCT OWNER APPROVED, 2026-09-11 (chat directive "hepsine ok").** Extends the shipped
-PO + Orchestrator workbench (`py scripts/orchestrator.py dashboard`,
-relay `NXS-LOCAL-0021`, `scripts/orchestrator_dashboard.py`,
+PO + Orchestrator workbench (`py tools/delivery/orchestrator.py dashboard`,
+relay `NXS-LOCAL-0021`, `tools/delivery/orchestrator_dashboard.py`,
 `scripts/dashboard_assets/`). Depends on GOV.ORCH.1 (record fields,
 `run` report) and GOV.ORCH.2 (provider adapters). Keeps every existing
 workbench invariant: stdlib backend, vanilla JS, localhost, token +
@@ -37,7 +37,7 @@ The workbench shows movement cards, stage and a log tail, but:
 
 ## 3. Design
 
-### 3.1 Usage accounting (`scripts/orchestrator_usage.py`, new)
+### 3.1 Usage accounting (`tools/delivery/orchestrator_usage.py`, new)
 
 One pure function per provider, both returning the same shape:
 
@@ -172,18 +172,18 @@ list): the first screen is a **Kanban board**, not a list of headings.
 
 ### 3.6 CLI
 
-`py scripts/orchestrator.py usage [--movement ID] [--since ISO] [--json]`
+`py tools/delivery/orchestrator.py usage [--movement ID] [--since ISO] [--json]`
 prints the same data as `/api/usage` as a table or JSON, so a PO in a
 terminal-only tool gets the numbers without the browser.
 
 ## 4. Scope
 
-In: `scripts/orchestrator_usage.py` (new), `scripts/orchestrator_providers.py`
-(`usage_from_event`), `scripts/orchestrator_dashboard.py` (health, board,
-traffic, usage routes), `scripts/orchestrator.py` (`usage` subcommand,
+In: `tools/delivery/orchestrator_usage.py` (new), `tools/delivery/orchestrator_providers.py`
+(`usage_from_event`), `tools/delivery/orchestrator_dashboard.py` (health, board,
+traffic, usage routes), `tools/delivery/orchestrator.py` (`usage` subcommand,
 read the usage file for the `run` report), `scripts/dashboard_assets/*`,
-`config/model_prices.json` (new), tests (`tests/test_orchestrator_usage.py`
-new, `tests/test_orchestrator_dashboard.py`, `tests/test_orchestrator_providers.py`).
+`config/model_prices.json` (new), tests (`tools/tests/test_orchestrator_usage.py`
+new, `tools/tests/test_orchestrator_dashboard.py`, `tools/tests/test_orchestrator_providers.py`).
 
 Out: any write action beyond the existing relay-write set; live session
 channels; charts; changes to relay tooling or packet schema; price values.
@@ -228,8 +228,8 @@ channels; charts; changes to relay tooling or packet schema; price values.
 ## 6. Validation plan (machine-readable)
 
 ```
-python3 -m pytest -q tests/test_orchestrator_usage.py tests/test_orchestrator_dashboard.py tests/test_orchestrator_providers.py tests/test_orchestrator.py
-python3 scripts/repository_privacy_check.py
+python3 -m pytest -q tools/tests/test_orchestrator_usage.py tools/tests/test_orchestrator_dashboard.py tools/tests/test_orchestrator_providers.py tools/tests/test_orchestrator.py
+python3 tools/privacy/repository_privacy_check.py
 git diff --check
 ```
 

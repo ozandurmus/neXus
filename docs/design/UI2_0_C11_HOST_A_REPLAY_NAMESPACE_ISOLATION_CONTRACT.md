@@ -507,7 +507,7 @@ concrete next movement to approve, gated by §3's preconditions:
    existing convention so the two sets read as siblings, never as one
    overloaded set.
 2. **Conformance tests** in a new `tests/test_ui2_replay_deployment_manifests.py`,
-   following `tests/test_ui2_deployment_manifests.py`'s existing parser and
+   following `tools/tests/test_ui2_deployment_manifests.py`'s existing parser and
    style: distinct namespace/labels (§4, `NS-1`'s grep), same image
    digest as production (§5), both NetworkPolicies' exact selectors and
    ports (§8), no `NodePort`/`LoadBalancer` (§9), and — the check specific to
@@ -588,5 +588,5 @@ document's freeze can certify in advance.
 - `deploy/ui2/` — the existing production manifest set and naming convention
   this contract's successor mirrors under `deploy/ui2-replay/`, never
   amends.
-- `tests/test_ui2_deployment_manifests.py` — the existing test style the
+- `tools/tests/test_ui2_deployment_manifests.py` — the existing test style the
   successor's `tests/test_ui2_replay_deployment_manifests.py` follows.

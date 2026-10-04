@@ -18,7 +18,7 @@ Use one-shot, file-backed local test runs to prevent repeated token/credit burn:
   `DEV.TEST.1`, 2026-09-06): `py -m pytest -q -n auto --dist worksteal >
   pytest_result.log 2>&1` (requires `pip install -r requirements-dev.txt`;
   ~44s on 16 cores vs ~110s serial on the same box; ~30s/4 workers on a
-  16-core dev box's full 1958-test suite). `scripts/pytest_one_shot.ps1` does
+  16-core dev box's full 1958-test suite). `tools/delivery/pytest_one_shot.ps1` does
   this by default; pass `-Serial` (or `-n0`) as an explicit diagnostic
   override when isolating a single failure's traceback, never as the default
   full-suite validation path. A parallel run once hid a real shared-state
@@ -110,7 +110,7 @@ mapping. A file that fails to parse cannot schedule a job under **any**
 trigger, on **any** branch, regardless of who pushed it — which is exactly
 the symptom observed and exactly why it looked identity/branch-related
 until someone actually ran the file through a YAML parser. Fixed by
-rewording the f-string; `tests/test_ci_workflow_fast_pr_regression.py::
+rewording the f-string; `tools/tests/test_ci_workflow_fast_pr_regression.py::
 test_workflow_yaml_parses` (`pyyaml` dev dependency) now parses this file
 on every test run specifically so a future syntax defect fails locally
 before push, not silently in the cloud after merge.

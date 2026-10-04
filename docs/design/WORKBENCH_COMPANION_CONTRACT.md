@@ -44,12 +44,12 @@ Source inspection at baseline `b8704077906b6cad4b742d2d8bc4a472b4fcdd04`:
 
 | Existing implementation | Consequence for the companion |
 |---|---|
-| `scripts/orchestrator_dashboard.py::build_movement_summary` calls `build_pending_action_card`, Git/PR helpers and `compute_usage` | Do not call this wrapper, `build_board`, `gather_movements`, detail/traffic builders or dashboard HTTP routes. Summary generation can register actions and read logs. |
-| `scripts/orchestrator.py::_cmd_status` saves reconciled records; `_status_row` reads the activity log | Do not invoke the status CLI or `_status_row`. Read validated source fields without reconciliation. |
-| `scripts/orchestrator_usage.py::compute_usage` / `update_usage` parse the engineer log and write the canonical cache | Only consume an existing cache. The companion never becomes a second collector. |
+| `tools/delivery/orchestrator_dashboard.py::build_movement_summary` calls `build_pending_action_card`, Git/PR helpers and `compute_usage` | Do not call this wrapper, `build_board`, `gather_movements`, detail/traffic builders or dashboard HTTP routes. Summary generation can register actions and read logs. |
+| `tools/delivery/orchestrator.py::_cmd_status` saves reconciled records; `_status_row` reads the activity log | Do not invoke the status CLI or `_status_row`. Read validated source fields without reconciliation. |
+| `tools/delivery/orchestrator_usage.py::compute_usage` / `update_usage` parse the engineer log and write the canonical cache | Only consume an existing cache. The companion never becomes a second collector. |
 | `usage_summary_only` reads the cache; `_public_shape` / `_cost_for` expose four cost sources but default some absent counters to zero | Reuse pure projection only for validated canonical cache shapes. Distinguish missing, corrupt, partial and stale caches before helpers normalize missing input. |
-| `scripts/dispatch_ledger.py::render` derives attempt count from `max(1, revision + retry_count)`; only the latest attempt has retained usage evidence | Preserve attempt provenance and unknown earlier attempts. Never split a movement total across attempts or sum cumulative polls. |
-| `scripts/local_relay.py::validate_relay_object` validates ordering and ownership | Reuse the validator on bounded local JSON in memory; discard entry bodies after projecting safe fields. Do not call append/watch commands from the companion. |
+| `tools/delivery/dispatch_ledger.py::render` derives attempt count from `max(1, revision + retry_count)`; only the latest attempt has retained usage evidence | Preserve attempt provenance and unknown earlier attempts. Never split a movement total across attempts or sum cumulative polls. |
+| `tools/delivery/local_relay.py::validate_relay_object` validates ordering and ownership | Reuse the validator on bounded local JSON in memory; discard entry bodies after projecting safe fields. Do not call append/watch commands from the companion. |
 
 The adapter must preserve unknown counters in partial input; it must not let
 the projection's zero defaults invent measurements or a priced total. Mark
@@ -330,8 +330,8 @@ SESSION_CLOSE handed to the orchestrator. No runtime implementation is claimed.
 Architecture validation commands:
 
 ```text
-python3 -m pytest -q -p no:cacheprovider tests/test_contract_authority_status.py tests/test_design_cross_references_resolve.py
-python3 scripts/repository_privacy_check.py
+python3 -m pytest -q -p no:cacheprovider tools/tests/test_contract_authority_status.py tools/tests/test_design_cross_references_resolve.py
+python3 tools/privacy/repository_privacy_check.py
 git diff --check
 git diff --check origin/main
 ```

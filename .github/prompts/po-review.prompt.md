@@ -7,7 +7,7 @@ Read `AGENTS.md`, `AI_START_HERE.md`, `docs/design/GOV_PO_ROLE_MIGRATION.md`,
 `docs/design/NEXUS_AGENT_RELAY_PROTOCOL.md`, `CURRENT_STATE.md`,
 `docs/design/PRODUCT_DIRECTION_RECORD.md` §4–§5, then the raw issue body and
 comments. Validate the body and any final `SESSION_CLOSE` with
-`py scripts/gov_session_transfer.py validate`. Do not edit any file.
+`py tools/delivery/gov_session_transfer.py validate`. Do not edit any file.
 
 Produce a `SESSION START` in this session (`READ_ONLY_AUDIT` for review,
 `ARCHITECTURE` for a decision). Apply the direction record's §4 heuristics

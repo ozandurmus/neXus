@@ -513,7 +513,7 @@ and none relax `AGENTS.md`/`CLAUDE.md`'s existing reasoning-routing law.
     session]
 59. **PO reference notes over re-reading large source files in full —
     2026-09-08.** Question: re-read a large tool source file (e.g.
-    `scripts/orchestrator.py`, `scripts/local_relay.py`) in full whenever
+    `tools/delivery/orchestrator.py`, `tools/delivery/local_relay.py`) in full whenever
     its exact behavior (a required CLI flag, a resume/dispatch decision
     rule) is needed again, or keep a durable compact reference. Chosen:
     capture the operational facts the PO session repeatedly needs (required

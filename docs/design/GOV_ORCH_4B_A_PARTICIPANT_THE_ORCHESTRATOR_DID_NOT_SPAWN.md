@@ -12,7 +12,7 @@ stand unchanged.
 
 §3.3 defines a closed six-value health field — `healthy`, `silent`,
 `exited_without_close`, `awaiting_po`, `failed`, `done` — and
-`scripts/orchestrator_dashboard.py::derive_health` returns exactly one of
+`tools/delivery/orchestrator_dashboard.py::derive_health` returns exactly one of
 them, enforced by that section's own AC-5 test. Its precedence is: a
 terminal outcome wins; then `awaiting_po`, because an engineer that posts a
 question ends its process on purpose; then a dead-but-not-terminal process

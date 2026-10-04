@@ -12,7 +12,7 @@ by theme against the direction record's sequencing rationale; draft one
 protocol-v2 `SESSION_START` per movement, sized to the §7 targets (≤ 8
 acceptance criteria, ≤ 12 non-test source files, one subsystem boundary,
 justified exceptions in `risks`); render each with
-`py scripts/gov_session_transfer.py render`; propose `project/*.json`
+`py tools/delivery/gov_session_transfer.py render`; propose `project/*.json`
 changes as a diff on a `gov/po-*` branch. A PLAN that changes repository
 state is a governance movement: open its own relay issue with the
 `SESSION_START` body and close it with a `SESSION_CLOSE` final comment.

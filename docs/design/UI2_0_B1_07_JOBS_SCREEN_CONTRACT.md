@@ -363,8 +363,8 @@ correct view, never a wrong one.
 ./ui2/gradlew -p ui2 architectureTest
 cd ui2/frontend && npm ci && npm test && npm run build
 ./ui2/gradlew -p ui2 check
-python3 -m pytest -q -p no:cacheprovider tests/test_architecture_convergence.py tests/test_cold_start_budget.py
-python3 scripts/repository_privacy_check.py
+python3 -m pytest -q -p no:cacheprovider tests/test_architecture_convergence.py tools/tests/test_cold_start_budget.py
+python3 tools/privacy/repository_privacy_check.py
 git diff --check
 ```
 The frontend tests run inside the `frontend` npm workspace `UI2_0_B1_01_

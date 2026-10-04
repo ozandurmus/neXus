@@ -25,7 +25,7 @@ Both budget-exhausted movements of 2026-09-13 recorded exactly:
 
 — `NXS-LOCAL-0130` and `NXS-LOCAL-0131`, identically.
 
-Reading `scripts/orchestrator.py` shows this is not a coincidence of two runs
+Reading `tools/delivery/orchestrator.py` shows this is not a coincidence of two runs
 but a property of the code:
 
 - `budget_exhausted` is appended **inside** the `if exit_code != 0` branch. It
@@ -92,7 +92,7 @@ work reach `main`.
    the tests written for the superseded R-2 are updated rather than deleted —
    the mixed-reason test of GOV.ORCH.10 §4 item 2 becomes acceptance item 3
    here, with a reason outside the table.
-6. `python3 -m pytest tests/test_orchestrator.py -q` passes.
+6. `python3 -m pytest tools/tests/test_orchestrator.py -q` passes.
 
 ## 5. Out of scope
 

@@ -109,7 +109,7 @@ spec:
         - |
           set -eu
           until [ -f /workspace/ready ]; do sleep 1; done
-          exec bash /workspace/scripts/integration_runner.sh
+          exec bash /workspace/tools/delivery/integration_runner.sh
         env:
         - name: HOME
           value: /home/runner

@@ -4,7 +4,7 @@
 
 **FROZEN — PRODUCT OWNER APPROVED, 2026-09-11 (chat directive "hepsine ok"). Direction approved by
 the Product Owner in chat, 2026-09-11 ("Hepsi go").** Depends on
-GOV.ORCH.5 (`scripts/project_queue.py`, backlog note move, redaction on
+GOV.ORCH.5 (`tools/delivery/project_queue.py`, backlog note move, redaction on
 write). Extends the same pattern to `build_history.json`,
 `roadmap.json` and `feature_registry.json`, and caps their size.
 
@@ -14,7 +14,7 @@ write). Extends the same pattern to `build_history.json`,
 (285 KB), `summary` (172 KB) and `risks_forward` (80 KB) are 88 % of
 it. `roadmap.json` is 120 KB; `now_next` prose (49 KB) and
 `open_decisions` (41 KB, 18 of 39 already decided) are 75 %.
-`feature_registry.json` is 64 KB. `utils/project_plan.py` uses only
+`feature_registry.json` is 64 KB. `tools/delivery/project_plan.py` uses only
 state fields for counts and percentages, but passes whole build rows to
 the page. Anyone who edits these files trips the privacy gate on
 pre-existing findings, and the files keep growing because narrative is
@@ -31,7 +31,7 @@ appended in place.
 | `feature_registry.json` | everything (criteria are data), except free-text `description`/`value` longer than 400 chars, which are truncated with a `detail` pointer to `docs/history/features/<id>.md` | the full text |
 | `backlog.json` | as GOV.ORCH.5 left it | as GOV.ORCH.5 left it |
 
-Every moved text passes the same redaction `scripts/project_queue.py`
+Every moved text passes the same redaction `tools/delivery/project_queue.py`
 applies on write (IPv4 → `<PRIVATE_IP>`, device hostname patterns →
 `<DEVICE_NAME>`, credential-looking literals → `<REDACTED>`); a moved
 file may never carry a privacy finding.
@@ -41,14 +41,14 @@ file may never carry a privacy finding.
 `build_history.json` keeps the newest 20 builds plus every build whose
 status is not terminal. All other builds move to
 `project/archive/build_history_2026.json` (same row schema, already
-split per §2.1). `utils/project_plan.py::_load` gains a helper that
+split per §2.1). `tools/delivery/project_plan.py::_load` gains a helper that
 loads current + archive rows for counting only; the page shows current
 rows and one line "N builds archived (docs/history/INDEX.md)".
-`scripts/build_history_index.py --check` reads both files.
+`tools/delivery/build_history_index.py --check` reads both files.
 
 ### 2.3 One write path
 
-`scripts/project_queue.py` gains `build add|status|note` and
+`tools/delivery/project_queue.py` gains `build add|status|note` and
 `decision open|decide` subcommands mirroring the backlog ones, with the
 same validation, canonical write, redaction, and history-file appends.
 The `render` output (`QUEUE.md`) gains a "Recent builds" section (last 5,
@@ -56,7 +56,7 @@ one line each) so the PO never opens `build_history.json`.
 
 ### 2.4 Size budgets, enforced
 
-`tests/test_project_files_budget.py`: `backlog.json` ≤ 60 KB,
+`tools/tests/test_project_files_budget.py`: `backlog.json` ≤ 60 KB,
 `roadmap.json` ≤ 40 KB, `build_history.json` ≤ 80 KB,
 `feature_registry.json` ≤ 70 KB, `project/QUEUE.md` ≤ 1,500 words;
 plus "no field named `note`, `evidence`, `risks_forward` longer than
@@ -65,7 +65,7 @@ plus "no field named `note`, `evidence`, `risks_forward` longer than
 ### 2.5 Render equivalence
 
 Before any data move, run `python3 scripts/render_sample.py` and save
-the project-plan payload (`utils.project_plan.build_project_plan_payload()`)
+the project-plan payload (`tools.delivery.project_plan.build_project_plan_payload()`)
 to a fixture; after the move, every count, percentage, warning list and
 build id set must be identical, and every field `static/project_plan_ui.js`
 renders must still be present (a moved narrative field is replaced by
@@ -75,16 +75,16 @@ HTML-export tests must pass unchanged.
 
 ## 3. Scope
 
-In: `scripts/project_queue.py`, `utils/project_plan.py` (load helper
-and archive count only), `scripts/build_history_index.py` (read both
+In: `tools/delivery/project_queue.py`, `tools/delivery/project_plan.py` (load helper
+and archive count only), `tools/delivery/build_history_index.py` (read both
 files), `static/project_plan_ui.js` (render pointer only),
 `project/build_history.json`, `project/roadmap.json`,
 `project/feature_registry.json`, `project/archive/` (new),
 `docs/history/builds/`, `docs/history/roadmap/`, `docs/history/features/`
 (new, generated once), `docs/design/PRODUCT_DIRECTION_RECORD.md`
 (appended section), `project/README.md` (one paragraph: state vs
-narrative, write path), tests (`tests/test_project_files_budget.py` new,
-`tests/test_project_queue.py`, existing project-plan tests read-only),
+narrative, write path), tests (`tools/tests/test_project_files_budget.py` new,
+`tools/tests/test_project_queue.py`, existing project-plan tests read-only),
 `.github/workflows/validation.yml`.
 
 Out: `backlog.json` (GOV.ORCH.5), deleting any data, changing any count
@@ -103,7 +103,7 @@ or percentage, any other UI change, relay tooling.
   passes reading both.
 - AC-4: `project_queue.py build` and `decision` subcommands round-trip
   on fixture copies with validation, redaction and history appends.
-- AC-5: `python3 scripts/repository_privacy_check.py` reports zero
+- AC-5: `python3 tools/privacy/repository_privacy_check.py` reports zero
   findings under `project/` and `docs/history/{builds,roadmap,features}/`
   (record before/after totals).
 - AC-6: `QUEUE.md` has the "Recent builds" section and stays under 1,500
@@ -115,10 +115,10 @@ or percentage, any other UI change, relay tooling.
 ## 5. Validation plan (machine-readable)
 
 ```
-python3 -m pytest -q tests/test_project_files_budget.py tests/test_project_queue.py tests/test_phase0_6_1b_1_2_interactive_project_plan.py tests/test_html_export_placeholder_integrity.py tests/test_architecture_convergence.py
-python3 scripts/project_queue.py check
-python3 scripts/build_history_index.py --check
-python3 scripts/repository_privacy_check.py
+python3 -m pytest -q tools/tests/test_project_files_budget.py tools/tests/test_project_queue.py tests/test_phase0_6_1b_1_2_interactive_project_plan.py tests/test_html_export_placeholder_integrity.py tests/test_architecture_convergence.py
+python3 tools/delivery/project_queue.py check
+python3 tools/delivery/build_history_index.py --check
+python3 tools/privacy/repository_privacy_check.py
 git diff --check
 ```
 

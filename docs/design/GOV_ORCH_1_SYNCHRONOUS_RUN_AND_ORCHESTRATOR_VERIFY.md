@@ -11,7 +11,7 @@ for one additive, backward-compatible field in §4.
 
 ## 1. Problem
 
-`scripts/orchestrator.py start` returns immediately after spawning the
+`tools/delivery/orchestrator.py start` returns immediately after spawning the
 engineer. Completion is inferred only from the relay file reaching
 `status == "CLOSED"`; `retry_count` is never incremented, so
 `reconcile_phase` can never reach `failed` and a dead engineer stays
@@ -30,7 +30,7 @@ claim can be wrong without anyone noticing.
 New subcommand:
 
 ```
-py scripts/orchestrator.py run --movement NXS-LOCAL-NNNN
+py tools/delivery/orchestrator.py run --movement NXS-LOCAL-NNNN
     [--timeout SECONDS] [--heartbeat-timeout SECONDS]
     [--model MODEL] [--effort EFFORT] [--max-budget-usd USD]
     [--no-verify]
@@ -79,13 +79,13 @@ and the last 40 lines of combined output:
    files keep working.
 3. `git diff --check` against `report.git.base`.
 4. The repository privacy gate exactly as
-   `scripts/nexus_engineer_tool_gate.py::_privacy_check` runs it today
+   `tools/delivery/nexus_engineer_tool_gate.py::_privacy_check` runs it today
    (baseline-aware against the movement's `base_sha`). The gate function
-   is moved to a shared module (`scripts/orchestrator_verify.py`) and the
+   is moved to a shared module (`tools/delivery/orchestrator_verify.py`) and the
    hook calls it from there; behaviour unchanged.
 
 `verify` is also a standalone subcommand
-(`py scripts/orchestrator.py verify --movement NXS-LOCAL-NNNN`) so a PO can
+(`py tools/delivery/orchestrator.py verify --movement NXS-LOCAL-NNNN`) so a PO can
 re-verify a finished worktree without re-dispatching.
 
 ### 2.3 Retry and failure accounting
@@ -110,7 +110,7 @@ re-verify a finished worktree without re-dispatching.
   "duration_s": 1234.5,
   "verify": {
     "passed": true,
-    "steps": [{"name": "validation_plan[0]", "argv": ["py","-m","pytest","-q","tests/test_orchestrator.py"],
+    "steps": [{"name": "validation_plan[0]", "argv": ["py","-m","pytest","-q","tools/tests/test_orchestrator.py"],
                "exit_code": 0, "duration_s": 41.2, "tail": "..."}]
   },
   "worktree_path": "...", "branch": "feature/..."
@@ -134,7 +134,7 @@ in the old one as `legacy_state_dir`.
 (unchanged) or an object:
 
 ```json
-{"name": "targeted tests", "argv": ["py", "-m", "pytest", "-q", "tests/test_orchestrator.py"]}
+{"name": "targeted tests", "argv": ["py", "-m", "pytest", "-q", "tools/tests/test_orchestrator.py"]}
 ```
 
 `gov_session_transfer.py`'s schema accepts both forms for this field only
@@ -144,15 +144,15 @@ untouched. A packet with only string items validates exactly as today.
 ## 4. Scope
 
 In:
-- `scripts/orchestrator.py` (`run`, `verify`, retry accounting, state
+- `tools/delivery/orchestrator.py` (`run`, `verify`, retry accounting, state
   dir default, report object)
-- `scripts/orchestrator_verify.py` (new; shared privacy-gate call and
+- `tools/delivery/orchestrator_verify.py` (new; shared privacy-gate call and
   validation-plan runner)
-- `scripts/nexus_engineer_tool_gate.py` (call the shared function; no
+- `tools/delivery/nexus_engineer_tool_gate.py` (call the shared function; no
   behaviour change)
-- `scripts/gov_session_transfer.py` (validation_plan item union)
-- `tests/test_orchestrator.py`, `tests/test_gov_session_transfer.py`,
-  new `tests/test_orchestrator_verify.py`
+- `tools/delivery/gov_session_transfer.py` (validation_plan item union)
+- `tools/tests/test_orchestrator.py`, `tools/tests/test_gov_session_transfer.py`,
+  new `tools/tests/test_orchestrator_verify.py`
 - `docs/design/GOV_PO_3_APPROVED_MOVEMENT_ORCHESTRATION.md`: one
   "Amended by GOV.ORCH.1" note under §3.1/§3.5/§3.7 pointing here (no
   restatement)
@@ -183,7 +183,7 @@ Out:
   with a non-list `argv`.
 - AC-8: The privacy gate hook behaves identically before and after the
   move to `orchestrator_verify.py` (existing
-  `tests/test_gov_po_3_ci_privacy_gate_baseline.py` green).
+  `tools/tests/test_gov_po_3_ci_privacy_gate_baseline.py` green).
 - AC-9: State dir default is under `<worktrees-dir>/.state/`; a record in
   the legacy temp location is still listed by `status`.
 - AC-10: `git diff --check` clean; privacy gate 0 new findings; no change
@@ -192,8 +192,8 @@ Out:
 ## 6. Validation plan (machine-readable)
 
 ```
-py -m pytest -q tests/test_orchestrator.py tests/test_orchestrator_verify.py tests/test_gov_session_transfer.py tests/test_gov_po_3_ci_privacy_gate_baseline.py tests/test_local_relay_protocol.py
-py scripts/repository_privacy_check.py
+py -m pytest -q tools/tests/test_orchestrator.py tools/tests/test_orchestrator_verify.py tools/tests/test_gov_session_transfer.py tools/tests/test_gov_po_3_ci_privacy_gate_baseline.py tools/tests/test_local_relay_protocol.py
+py tools/privacy/repository_privacy_check.py
 git diff --check
 ```
 

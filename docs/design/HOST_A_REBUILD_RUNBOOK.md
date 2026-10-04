@@ -72,7 +72,7 @@ authentication instead of failing loudly -- every SFTP push then dies at `authen
    (uid 185, gid 0, like the export pod in `scripts/hosta_export_all.sh`); `tar -xf artefact-store.tar -C /store`
    streamed in; count 1,515 files.
 7. **Application**: `bash ~/run_build.sh` (builds and sets the image), then apply `deploy/ui2/50-…` to `60-…`;
-   `scripts/hosta_deploy.sh` from then on.
+   `tools/delivery/hosta_deploy.sh` from then on.
 8. **Cyber Controller receiver** (sudo; RADWARE_CYBER_CONTROLLER_OWN_BACKUP_RECEIVER.md): user `nexus-cc` (group
    `nexuscc`, **gid 2600** — the worker manifest's supplemental group), `/var/lib/nexus-cc` root:root 755 and
    `/var/lib/nexus-cc/in` nexus-cc:nexuscc 2770 (the whole disk is neXus's now), the `Match User nexus-cc` block at the end of
@@ -106,7 +106,7 @@ authentication instead of failing loudly -- every SFTP push then dies at `authen
   from the host's `/etc/ssl/certs/ca-certificates.crt`. It lived only in the `ui2-build` namespace, which the export did
   not cover — the export script should include it next time.
 - **No GitHub credential on the host.** The code is pushed to a bare repository on the host (`~/nexus.git`, HEAD →
-  `main`); `~/nexus` is its clone; `scripts/hosta_deploy.sh` pushes before building.
+  `main`); `~/nexus` is its clone; `tools/delivery/hosta_deploy.sh` pushes before building.
 - **The artefact store** was restored by extracting the archive straight into the local-path volume directory with
   `sudo tar --same-owner --numeric-owner` (98 GB through `kubectl exec` stdin times out); files 185:0 0600.
 - **`ui2-configuration`** is not updated by `run_build.sh`; set its image to the same digest after a build.

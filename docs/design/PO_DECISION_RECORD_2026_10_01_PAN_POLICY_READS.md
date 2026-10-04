@@ -75,13 +75,13 @@ Panorama behavior remain UNVERIFIED under the worker execution boundary.
   `--cacheDir .cache/vitest` invocation was rejected by the installed Vitest CLI;
   the existing Vite `.cache/vite` setting was then used successfully.
 - `cd ui2/frontend && npm run build`: PASS.
-- `python3 -m pytest -q tests/test_pan_policy_gate_contract.py tests/test_cp_policy_gate_contract.py tests/test_migration_versions_unique.py tests/test_migration_audit_context.py`:
+- `python3 -m pytest -q tools/tests/test_pan_policy_gate_contract.py tools/tests/test_cp_policy_gate_contract.py tools/tests/test_migration_versions_unique.py tools/tests/test_migration_audit_context.py`:
   PASS, 4 tests.
 - `python3 -m pytest -q tests/test_html_render_harness.py tests/test_architecture_convergence.py::test_project_metadata_has_no_cross_authority_contradictions`:
   6 passed, 1 skipped, 1 failed. Chromium startup for the Playwright smoke test was
   denied by the macOS sandbox (`bootstrap_check_in`, Permission denied); no browser
   inspection completed. No product/state fix is indicated by that environment failure.
-- `python3 scripts/repository_privacy_check.py`: PASS, zero findings after moving
+- `python3 tools/privacy/repository_privacy_check.py`: PASS, zero findings after moving
   test-created runtime logs outside the worktree. The intermediate check flagged
   only `logs` / RUNTIME_DIRECTORY_PRESENT; no contents or matched values were read.
 - `git diff --check`: PASS.

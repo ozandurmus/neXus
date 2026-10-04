@@ -79,7 +79,7 @@ this review. No SSH connection or host inventory was performed.
   that neXus did not cause an incident. Report causal uncertainty honestly.
 
 Repository evidence inspected: `deploy/ui2/00-namespace.yaml`, deployment and
-storage manifest structure, `tests/test_ui2_deployment_manifests.py`, privacy
+storage manifest structure, `tools/tests/test_ui2_deployment_manifests.py`, privacy
 gate entry point and state-consistency tests. The manifest guard is a source
 check; it does not prove that cluster admission or network denial is installed.
 
@@ -327,7 +327,7 @@ Python-dependent hook installation and validation could not start because the
 previously recorded `.venv/bin/python` path is absent. No environment bootstrap
 or interpreter change was attempted. Privacy gate, state consistency and test
 results are therefore **UNVERIFIED**, not green. Queue registration via
-`scripts/project_queue.py` remains pending; project JSON was not edited by hand.
+`tools/delivery/project_queue.py` remains pending; project JSON was not edited by hand.
 Targeted/full regression and real-environment tests were not run. Manual review
 checked the cited authority and local links; whitespace checks cover the draft
 and handover. These checks do not validate server safety.

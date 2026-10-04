@@ -5,7 +5,7 @@
 **FROZEN — PRODUCT OWNER APPROVED, 2026-09-07 (GOV.SESSION.1A correction
 round 1).** A tool-independent session-boundary convention: a packet is
 informational and never self-authorizing (§2). Reference implementation:
-`scripts/gov_session_transfer.py` (stdlib only).
+`tools/delivery/gov_session_transfer.py` (stdlib only).
 
 **Protocol version 2 (correction round 3, GOV.SESSION.1A):** version 1's
 pointer-only packet (a bare `movement` id plus `refs`, no report content)
@@ -154,7 +154,7 @@ permitted inside `report`.
 | `state_updates` | list of non-empty strings (may be empty) |
 | `next.movement` | non-empty string |
 | `next.movement_type` | one of the `movement_type` values above |
-| `next.status` | one of `utils/project_plan.py::STATUS_VALUES`: `done`, `in_progress`, `planned`, `blocked`, `deferred`, `complete`, `complete_with_followup`, `automated_validated`, `real_env_validated` |
+| `next.status` | one of `tools/delivery/project_plan.py::STATUS_VALUES`: `done`, `in_progress`, `planned`, `blocked`, `deferred`, `complete`, `complete_with_followup`, `automated_validated`, `real_env_validated` |
 | `next.objective` | non-empty string |
 | `recommended_reasoning.tier` | non-empty string |
 | `recommended_reasoning.reason` | non-empty string |
@@ -182,18 +182,18 @@ Syntactically valid JSON that is simply incomplete (mandatory trailing
 fields never written) is rejected the same way as malformed JSON — both
 end in no packet being emitted or accepted.
 
-Full templates: `tests/test_gov_session_transfer.py`'s `_start_obj`/
+Full templates: `tools/tests/test_gov_session_transfer.py`'s `_start_obj`/
 `_close_obj` fixtures build one complete, currently-valid packet of each
 type; that file is the executable form of this contract.
 
 ## 5. CLI
 
-`scripts/gov_session_transfer.py` — stdlib only. Three operations:
+`tools/delivery/gov_session_transfer.py` — stdlib only. Three operations:
 
 ```
-py scripts/gov_session_transfer.py render   FILE|- [--out FILE]
-py scripts/gov_session_transfer.py extract  FILE|-
-py scripts/gov_session_transfer.py validate FILE|-
+py tools/delivery/gov_session_transfer.py render   FILE|- [--out FILE]
+py tools/delivery/gov_session_transfer.py extract  FILE|-
+py tools/delivery/gov_session_transfer.py validate FILE|-
 ```
 
 `render` reads one **bare** JSON object (no sentinel) from `FILE` or stdin
@@ -213,4 +213,4 @@ narrative alongside the packet is rejected rather than mined for the
 payload. `validate` prints `{"valid": bool, "errors": [...]}` for the same
 input shape. Exit codes: `0` success, `1` invalid packet, `2` usage error.
 No network, daemon, credential, or device access. See
-`tests/test_gov_session_transfer.py` for the exact contract.
+`tools/tests/test_gov_session_transfer.py` for the exact contract.

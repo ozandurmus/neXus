@@ -21,7 +21,7 @@ If this `SESSION CLOSE` crosses a session/tool boundary (must be returned to
 a Product Owner or another session/tool), transport it as exactly one
 sentinel-wrapped protocol-version-2 `NEXUS_SESSION_PACKET` per
 `docs/design/GOV_SESSION_TRANSFER_PROTOCOL.md` — build and validate it with
-`py scripts/gov_session_transfer.py render` first. The packet's `report`
+`py tools/delivery/gov_session_transfer.py render` first. The packet's `report`
 object carries the complete content above, field by field; no heading,
 summary, or explanation outside the sentinel pair in that case.
 

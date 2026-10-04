@@ -193,7 +193,7 @@ it does not claim the API alone guarantees instantaneous dataplane convergence.
 
 ## 6. Successor acceptance and real-cluster validation
 
-Add conformance coverage to `tests/test_ui2_deployment_manifests.py`, following
+Add conformance coverage to `tools/tests/test_ui2_deployment_manifests.py`, following
 its existing parser and test style. Check the exact object, namespace, database
 selector, two same-namespace peer selectors, TCP 5432, explicit policy types,
 empty database egress, and absence of broadening rules. Bind against the current
@@ -235,7 +235,7 @@ responses, DSNs or credentials, and clean up temporary validation resources.
 
 **Next movement: IMPLEMENTATION, feature implementation / medium.** Deliver
 only `deploy/ui2/46-database-networkpolicy.yaml`, focused additions to
-`tests/test_ui2_deployment_manifests.py`, and the smallest existing deployment
+`tools/tests/test_ui2_deployment_manifests.py`, and the smallest existing deployment
 runbook/harness update needed for §§5-6. Locate and inspect those implementation
 files/tests before editing; do not invent a parallel deployment or credential
 path. Do not change the selectors, workloads, ports, Secrets, application code,

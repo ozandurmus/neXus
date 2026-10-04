@@ -140,7 +140,7 @@ consumed today. No accounting or retention redesign is authorized.
 ## 6. Material 3 and keyboard contract
 
 Use `/dashboard-theme.css` from
-`scripts/orchestrator_dashboard.py::product_theme_css`, reading the existing
+`tools/delivery/orchestrator_dashboard.py::product_theme_css`, reading the existing
 `ui2/frontend/src/theme/m3Theme.ts` palette. That TypeScript file is a visual
 reference, not permission to adopt React/MUI or copy a second palette.
 Use existing surface/container, on-surface, outline, primary, attention,
@@ -161,12 +161,12 @@ scrolling without clipping controls or preventing access to details.
 ## 7. Exact implementation/test successor and completion gates
 
 The next movement is **IMPLEMENTATION — table-first Workbench navigation**,
-limited to `scripts/dashboard_assets/index.html`, `dashboard.js`,
+limited to `tools/delivery/dashboard_assets/index.html`, `dashboard.js`,
 `dashboard.css`, the minimal compatible projection in
-`scripts/orchestrator_dashboard.py`, and its targeted tests. Reuse the current
+`tools/delivery/orchestrator_dashboard.py`, and its targeted tests. Reuse the current
 theme bridge and authenticated routes; no new credential/network path.
-Tests extend `tests/test_orchestrator_dashboard.py` and add one browser test
-file `tests/test_orchestrator_dashboard_browser.py` using synthetic same-origin
+Tests extend `tools/tests/test_orchestrator_dashboard.py` and add one browser test
+file `tools/tests/test_orchestrator_dashboard_browser.py` using synthetic same-origin
 responses, isolated browser storage and no live operational data. Reuse an
 existing browser harness if available; the successor must name its executable
 runtime and command before implementation. DOM-string/server-field assertions

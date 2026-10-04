@@ -107,7 +107,7 @@ via `READ_TOOLS` (`Read`, `Grep`, `Glob`, `LS`, `ToolSearch`, `WebFetch`,
 `WebSearch`, `TodoWrite`) in both PO forms; `gh issue view/list`, `gh pr
 view/checks/list`, read-only `git` (`status`, `log`, `diff`, `show`,
 `rev-parse`, `fetch`, `branch --show-current`/`--list`, `merge-base`,
-`cat-file`, `ls-files`); `scripts/gov_session_transfer.py
+`cat-file`, `ls-files`); `tools/delivery/gov_session_transfer.py
 validate`/`local_relay.py status`/`validate` (both forms, read-only).
 
 **Genuinely new** (§3.1, §3.5): `gh pr diff`, `gh run view`, `gh run list`
@@ -127,7 +127,7 @@ entries (`docs/design/PRODUCT_DIRECTION_RECORD.md`,
 
 **Narrowed** (§3.3): `docs/history/INDEX.md` leaves `GOVERNANCE_PATHS` — it
 becomes reachable only through the already-allowlisted
-`scripts/build_history_index.py`, matching the discipline every engineering
+`tools/delivery/build_history_index.py`, matching the discipline every engineering
 movement in this session already followed by hand (`gov_po_1_gate_4`,
 `relay#16`) rather than hand-editing a file whose own header claims to be
 generated.
@@ -181,7 +181,7 @@ movement, not code shipped by this movement (§7 scope).
 
 ### 3.1 New read-only Bash prefixes
 
-Add to `COMMON_PREFIXES` in `scripts/nexus_po_tool_gate.py` (both forms,
+Add to `COMMON_PREFIXES` in `tools/delivery/nexus_po_tool_gate.py` (both forms,
 matching the existing `gh pr view`/`gh pr checks`/`gh pr list` precedent):
 
 ```
@@ -237,7 +237,7 @@ result as permanent.
 
 **Path pattern.** `docs/design/po_drafts/*.md` — flat directory (no
 subdirectories), added as a second pattern list in
-`scripts/nexus_po_tool_gate.py` alongside (not merged into)
+`tools/delivery/nexus_po_tool_gate.py` alongside (not merged into)
 `GOVERNANCE_PATHS`, the same way `LOCAL_RELAY_FILE_PATTERN` was added
 (`GOV_PO_1_LOCAL_RELAY_PROTOCOL` precedent): `Edit`/`Write` on a target
 matching this pattern is allowed in interactive form only, subject to the
@@ -315,14 +315,14 @@ different mechanism.
 ### 3.3 `docs/history/INDEX.md` leaves `GOVERNANCE_PATHS`
 
 Remove `"docs/history/INDEX.md"` from the `GOVERNANCE_PATHS` tuple in
-`scripts/nexus_po_tool_gate.py`. It remains reachable exactly as it is for
-every role today: only through `scripts/build_history_index.py` (already
+`tools/delivery/nexus_po_tool_gate.py`. It remains reachable exactly as it is for
+every role today: only through `tools/delivery/build_history_index.py` (already
 allowlisted in both `COMMON_PREFIXES`, read-only `--check`, and
 `INTERACTIVE_EXTRA_PREFIXES`, generating). This is a pure narrowing — no
 new write surface, one fewer way to hand-edit a file whose own file header
 already claims to be generated, and one fewer way to drift out of sync
 with `project/build_history.json` (the exact defect
-`scripts/build_history_index.py`'s own module docstring was written to
+`tools/delivery/build_history_index.py`'s own module docstring was written to
 close, per `tests/test_architecture_convergence.py`).
 
 ### 3.4 The offline repository-privacy-check mechanism
@@ -343,7 +343,7 @@ value before handing it to the human.
 "Thin CLI/bootstrap layer... delegates to `application.cli.run`"); even the
 one branch that matters here,
 `application.workflows.maintenance.repository_privacy_check()`, does
-nothing but call `utils.repository_privacy.scan_repository(_REPO_ROOT)`
+nothing but call `tools.privacy.repository_privacy.scan_repository(_REPO_ROOT)`
 and print its report — but *reaching* that branch through `main.py`
 requires importing `application.cli`, which at module level imports
 `application.workflows.checkpoint`/`maintenance`/`recovery` and
@@ -353,15 +353,15 @@ exact-match gate exception for `<interpreter> main.py
 --repository-privacy-check` (and nothing else) would also need to
 enumerate every accepted interpreter spelling
 (`python3`/`python`/`py`/`.venv/bin/python`, mirroring the existing
-`scripts/gov_session_transfer.py` prefix list), and would silently need
+`tools/delivery/gov_session_transfer.py` prefix list), and would silently need
 re-verification every time `application/cli.py`'s argument surface changes
 near that flag (e.g. a future flag combination check). A standalone
 script avoids both costs and matches the established `scripts/` pattern
 (`gov_session_transfer.py`, `local_relay.py`, `build_history_index.py`):
 narrow, stdlib-plus-one-import, offline, no vendor surface.
 
-**Specification:** `scripts/repository_privacy_check.py`, importing
-*only* `utils.repository_privacy.RepositoryPrivacyError` and
+**Specification:** `tools/privacy/repository_privacy_check.py`, importing
+*only* `tools.privacy.repository_privacy.RepositoryPrivacyError` and
 `scan_repository` (the exact two names
 `application/workflows/maintenance.py::repository_privacy_check()`
 already imports lazily) — no import of `application.*`, `config`, or any
@@ -370,7 +370,7 @@ vendor/collector module. It reproduces
 (`0` on `PASS`, `1` on any other gate value, `2` on
 `RepositoryPrivacyError`) so its output is identical to `main.py
 --repository-privacy-check`'s today, byte-for-byte other than the banner
-line. Add `"python3 scripts/repository_privacy_check.py"` (and its
+line. Add `"python3 tools/privacy/repository_privacy_check.py"` (and its
 `python`/`py`/`.venv/bin/python` siblings) to `COMMON_PREFIXES` — read-only,
 no arguments, safe in both forms, mirroring
 `gov_session_transfer.py validate`'s own treatment.
@@ -380,7 +380,7 @@ regression test.** The claim that the two entry points produce identical
 output is a claim this document makes, not (yet) a claim a test enforces.
 `GOV_PO_2_IMPLEMENTATION` must add a regression test that runs both
 `main.py --repository-privacy-check` and
-`scripts/repository_privacy_check.py` and asserts matching `stdout`
+`tools/privacy/repository_privacy_check.py` and asserts matching `stdout`
 (modulo the stated banner-line exception) and matching exit code, for at
 least one `PASS`-gate case and one non-`PASS`-gate case (a fixture-induced
 finding). Without this test, the "byte-for-byte other than the banner
@@ -532,12 +532,12 @@ for the four-seat round's outcome and provenance.
 (`project/build_history.json`, `project/roadmap.json`, `CURRENT_STATE.md`,
 `AI_HANDOVER.md`, `docs/history/INDEX.md` regeneration); the local relay
 file `relay/NXS-LOCAL-0002-gov-po-2-visibility.json` (this movement's own
-`SESSION_CLOSE` entry, appended via `scripts/local_relay.py`).
+`SESSION_CLOSE` entry, appended via `tools/delivery/local_relay.py`).
 
 **Out (all deferred to `GOV_PO_2_IMPLEMENTATION`, after freeze):** any
-change to `scripts/nexus_po_tool_gate.py`, `.claude/nexus-po.settings.json`,
+change to `tools/delivery/nexus_po_tool_gate.py`, `.claude/nexus-po.settings.json`,
 any agent definition file (new or existing), or
-`tests/test_gov_po_role.py`; any change to a FROZEN document's own text;
+`tools/tests/test_gov_po_role.py`; any change to a FROZEN document's own text;
 freezing or ratifying this document itself (the Product Owner's separate,
 later act); invoking `nexus-decision-council` (§6 only records the
 recommendation for that future episode).

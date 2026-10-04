@@ -11,7 +11,7 @@ everything must serve it."). Nothing has been moved or deleted. Backlog `legacy_
 | Group | What | Size (tracked files) | Serves neXus? |
 |---|---|---|---|
 | **neXus product** | `ui2/` (Java/Spring service, worker, CLI, React frontend, migrations), `deploy/` | ~1 100 | yes — this is the product |
-| **Governance tooling (Python)** | `scripts/project_queue.py`, `scripts/repository_privacy_check.py` (the push gate), `scripts/gov_session_transfer.py`, `scripts/build_history_index.py`, `scripts/consult_*.py`, orchestrator scripts, `tests/test_architecture_convergence.py` | ~50 | yes — plan, privacy gate, consultation law |
+| **Governance tooling (Python)** | `tools/delivery/project_queue.py`, `tools/privacy/repository_privacy_check.py` (the push gate), `tools/delivery/gov_session_transfer.py`, `tools/delivery/build_history_index.py`, `scripts/consult_*.py`, orchestrator scripts, `tests/test_architecture_convergence.py` | ~50 | yes — plan, privacy gate, consultation law |
 | **Project state and law** | `AGENTS.md`, `CLAUDE.md`, `project/`, `CURRENT_STATE.md`, `docs/design/`, `docs/history/`, `relay/`, `roles/` | many | yes |
 | **Legacy Python product** | `utils/`, `application/`, `checkpoint/`, `configuration/`, `console/`, `panorama/`, `replay/`, `signal_intake/`, `plugins/`, `migrations/`, `templates/`, `static/`, `main.py`, `config.py`, `Dockerfile`, `docker-compose*.yml`, `requirements*.txt`, most of `tests/` (≈195 files) | ≈350 | no — historical; UI2 replaced it |
 | **Root clutter** | one-off `patch_*.py`, `precise_fix*.py`, `fix_*.py`, `_realenv_*.py`, `_write_r0x_policy.py`, `create_relays.py`, `Test*.java/.class`, `run-02xx.log`, `reply_0280.json`, `*.patch`, `SESSION_START*.json` | ≈40 | no |
@@ -22,8 +22,8 @@ everything must serve it."). Nothing has been moved or deleted. Backlog `legacy_
    "the single source of truth for what the product may execute". "Architectural invariants":
    `utils/failover/` contents are enforced by `tests/test_architecture_convergence.py`. Removing the code
    without amending these makes the constitution point at nothing.
-2. **The convergence test imports legacy code** (`utils.project_plan`, `utils.failover`), and
-   `scripts/project_queue.py` depends on `utils/project_plan.py`.
+2. **The convergence test imports legacy code** (`tools.delivery.project_plan`, `utils.failover`), and
+   `tools/delivery/project_queue.py` depends on `tools/delivery/project_plan.py`.
 3. **History.** Build records and design documents cite legacy paths; they stay valid only as history.
 
 ## 3. Proposed steps (each reversible; nothing leaves Git history)
@@ -35,7 +35,7 @@ everything must serve it."). Nothing has been moved or deleted. Backlog `legacy_
    name it (a PO amendment, like the 2026-09-19 and 2026-09-22 ones). The failover invariant is restated
    for UI2 (no class 2 action in `ActionRegistry`, test-enforced in `ui2/architecture-tests`).
 3. **Keep the governance tooling** under `tools/governance/` (or `scripts/` unchanged), with the pieces of
-   `utils/project_plan.py` it needs moved next to it.
+   `tools/delivery/project_plan.py` it needs moved next to it.
 4. **Archive the legacy product** into a new repository, `neXus-legacy-python`, **private**, with its full
    history (`git subtree split` / `git filter-repo` over the legacy paths), then remove those paths from
    neXus in one commit that names the archive.

@@ -93,7 +93,7 @@ The engineering session creates `ui2-e2e-machine-token` on HOST-A with a random
 256-bit token under key `token` and its lowercase SHA-256 under key `sha256`.
 It creates optional `ui2-e2e-canary` key `sha256` with one lowercase SHA-256
 per line, derived locally from real address and serial values without printing
-those values. Generate this payload offline with `python3 scripts/e2e_canary_digests.py`,
+those values. Generate this payload offline with `python3 tools/e2e/e2e_canary_digests.py`,
 feeding one identity value per line on stdin; only sorted unique digests go to stdout.
 The helper excludes exactly unspecified/default (`0.0.0.0`), limited broadcast, loopback (`127/8`), link-local (`169.254/16`) and
 multicast (`224/4`) values, including CIDR forms. These convey protocol/routing
@@ -144,15 +144,15 @@ browser request guard. Empty estates, no standalone gateway, missing vendors,
 no enabled backup target or no backup history fail explicitly.
 
 Sandbox validation is limited to type-checking, test discovery, Vitest, build
-and `python3 scripts/repository_privacy_check.py` from the repository root.
+and `python3 tools/privacy/repository_privacy_check.py` from the repository root.
 Live Chrome execution and role/HTTP/data behavior must be verified by the
 engineering session; offline discovery is not live acceptance.
 
 ## Running it (engineering session, 2026-09-27)
-- `scripts/hosta_e2e.sh` builds the runner image from the context the last deploy streamed
+- `tools/e2e/hosta_e2e.sh` builds the runner image from the context the last deploy streamed
   (`deploy/ui2-image-build/32-e2e-build-job.yaml`), runs the `ui2-e2e` Job with that image, re-points the 4-hourly
   `ui2-e2e` CronJob at it, and prints the summary. Exit 0 = pass, 1 = test failures, 2 = could not run.
-- `scripts/standalone_orchestrate.py ship` runs it after every deploy and prints `{"e2e": "pass"|"FAIL", ...}`.
+- `tools/delivery/standalone_orchestrate.py ship` runs it after every deploy and prints `{"e2e": "pass"|"FAIL", ...}`.
 - Secrets on HOST-A: `ui2-e2e-machine-token` (token + sha256, created once, rotate by deleting it and restarting the
   service) and `ui2-e2e-canary` (SHA-256 of real interface/management addresses and serials; refresh when the estate
   changes). Neither is in the repository.

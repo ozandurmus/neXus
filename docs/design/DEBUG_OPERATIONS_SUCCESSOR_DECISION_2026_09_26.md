@@ -76,7 +76,7 @@ has no second product approver. No device command is approved by this code chang
 ## Delivery evidence
 
 Code `655bc26` was merged with explicit PO approval and deployed through
-`scripts/hosta_deploy.sh` on 2026-09-26. Schema 91 succeeded; service, worker and
+`tools/delivery/hosta_deploy.sh` on 2026-09-26. Schema 91 succeeded; service, worker and
 configuration were ready 1/1, configuration matched the service digest, and the
 output store was accessible. Diagnostic jobs: zero. First real-command and
 AIView visual acceptance remain pending; status is automated-validated.

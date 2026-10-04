@@ -35,7 +35,7 @@ the tokenizer key is persisted (``data/.support_hmac.key`` by default, or
 ``FBUDDY_SUPPORT_HASH_KEY``), so identity equality holds across separate
 invocations too, not only within one.
 
-The DLP privacy gate (``utils.repository_privacy.scan_repository``, the
+The DLP privacy gate (``tools.privacy.repository_privacy.scan_repository``, the
 same offline scanner ``main.py --repository-privacy-check`` runs) is
 mandatory and blocking (C6 section 3.5): fixtures are written to a
 temporary staging directory first, scanned, and only copied into
@@ -52,7 +52,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from utils.repository_privacy import RepositoryPrivacyError, PrivacyReport, scan_repository
+from tools.privacy.repository_privacy import RepositoryPrivacyError, PrivacyReport, scan_repository
 from utils.support_bundle import SENSITIVE_KEYS, Tokenizer, _get_support_key
 
 FIXTURE_KINDS = ("REAL", "SYNTHETIC", "DERIVED")
@@ -88,7 +88,7 @@ class FixtureDLPRefusalError(RuntimeError):
 
     Carries the ``PrivacyReport`` so a caller can report rule/location
     without ever surfacing a matched value (same posture as
-    ``utils.repository_privacy`` itself).
+    ``tools.privacy.repository_privacy`` itself).
     """
 
     def __init__(self, report: PrivacyReport):

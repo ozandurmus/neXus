@@ -339,8 +339,8 @@ real device:** none — the PO validation session (workflow §5 row 6,
 ./ui2/gradlew -p ui2 architectureTest
 ./ui2/gradlew -p ui2 check
 podman build --file ui2/Containerfile --tag nexus-ui2:local ui2
-python3 -m pytest -q -p no:cacheprovider tests/test_architecture_convergence.py tests/test_cold_start_budget.py
-python3 scripts/repository_privacy_check.py
+python3 -m pytest -q -p no:cacheprovider tests/test_architecture_convergence.py tools/tests/test_cold_start_budget.py
+python3 tools/privacy/repository_privacy_check.py
 ```
 
 ## 11. Worker route and effort

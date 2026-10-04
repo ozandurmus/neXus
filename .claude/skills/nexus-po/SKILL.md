@@ -33,7 +33,7 @@ or contact a device.
   sequenced. Output: one drafted `SESSION_START` per next movement, sized to
   the §7 targets (≤ 8 acceptance criteria, ≤ 12 non-test source files, one
   subsystem boundary; exceptions justified in `risks`, never by hiding a
-  requirement), rendered with `scripts/gov_session_transfer.py render`; plus
+  requirement), rendered with `tools/delivery/gov_session_transfer.py render`; plus
   proposed `project/*.json` changes. A `PLAN` that changes `project/*.json`
   or the direction record **is a governance movement** with its own relay
   issue, `SESSION_START` body and `SESSION_CLOSE` final comment (§5.1.1).

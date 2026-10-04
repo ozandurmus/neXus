@@ -43,7 +43,7 @@ made the PO/engineer exchange itself file-based and turn-enforced; it did
 not remove the human act of starting the engineer.
 
 This document specifies a deterministic local runner,
-`scripts/orchestrator.py`, that the Product Owner (from an interactive
+`tools/delivery/orchestrator.py`, that the Product Owner (from an interactive
 `nexus-po` session) uses to dispatch an **already-approved** movement to a
 separate, isolated `claude -p` engineer process running in its own git
 worktree, and that tracks that process through development, correction,
@@ -58,7 +58,7 @@ tracking it, serializing its merge, recovering it after an interruption —
 is what this document adds.
 
 **What this document is not.** It is not a new agent framework, a new SDK
-dependency, or a replacement for `scripts/local_relay.py`'s schemas and
+dependency, or a replacement for `tools/delivery/local_relay.py`'s schemas and
 validators (§3.6, §7). It is not a security sandbox: worktree isolation
 reduces file collisions between concurrent movements, nothing more
 (invariant, restated from the movement's own `SESSION_START`). It does not
@@ -193,10 +193,10 @@ regardless of who directed it.
 
 1. The Product Owner, in an interactive `nexus-po` session, runs `PLAN`/
    `REVIEW`/`DECIDE` as today and opens or advances a movement's local
-   relay file (`scripts/local_relay.py create`, unchanged).
+   relay file (`tools/delivery/local_relay.py create`, unchanged).
 2. When the relay file's `SESSION_START` is ready and `next_actor` is
    `"engineer"`, the Product Owner runs one new Bash command:
-   `python3 scripts/orchestrator.py start --movement <relay-id>`.
+   `python3 tools/delivery/orchestrator.py start --movement <relay-id>`.
 3. The orchestrator validates the relay file, computes the approved-task
    hash (§3.5), creates one git worktree on a `feature/*` branch from the
    `SESSION_START`'s own `git.base`/`git.lane` fields (§3.3), writes a
@@ -219,26 +219,26 @@ regardless of who directed it.
    adds no new decision authority and makes no judgment calls itself; it is
    process lifecycle only.
 
-### 3.2 `scripts/orchestrator.py` — commands and argument-list discipline
+### 3.2 `tools/delivery/orchestrator.py` — commands and argument-list discipline
 
 ```
-py scripts/orchestrator.py start  --movement <relay-id>
-py scripts/orchestrator.py status --movement <relay-id>
-py scripts/orchestrator.py stop   --movement <relay-id> [--force]
+py tools/delivery/orchestrator.py start  --movement <relay-id>
+py tools/delivery/orchestrator.py status --movement <relay-id>
+py tools/delivery/orchestrator.py stop   --movement <relay-id> [--force]
 ```
 
 (`py`/`python3`/`python`/`.venv/bin/python` siblings, matching every other
 `scripts/` tool's interpreter-spelling precedent.) `<relay-id>` is the
-relay file's own id (`NXS-LOCAL-NNNN`, matching `scripts/local_relay.py`'s
+relay file's own id (`NXS-LOCAL-NNNN`, matching `tools/delivery/local_relay.py`'s
 existing scheme) — unambiguous and glob-resolvable to exactly one file
 (`relay/<relay-id>-*.json`), unlike the free-text `movement` field.
 
 **Argument-list discipline (a required AC-1 property, not a style
-preference).** Every subprocess `scripts/orchestrator.py` itself spawns —
+preference).** Every subprocess `tools/delivery/orchestrator.py` itself spawns —
 `git worktree add`, `claude -p`, `gh pr view` for status checks — is built
 as a Python list passed to `subprocess.run`/`subprocess.Popen` with
 `shell=False` (the default), never a formatted/interpolated string passed
-through a shell. This is the same discipline `scripts/nexus_po_tool_gate.py`
+through a shell. This is the same discipline `tools/delivery/nexus_po_tool_gate.py`
 documents for its own tokenizer (never build a command by string
 concatenation of untrusted or task-derived content) and is what makes "no
 arbitrary shell text" a structural property rather than a convention: even
@@ -298,7 +298,7 @@ introduce that restriction: AC-1 asks for "normal dev tools: Read / Edit /
 Write / Bash / Git," and that is what an orchestrated engineer session
 gets. `.claude/nexus-engineer.settings.json` is default-**allow**, with
 exactly two narrow, orchestration-specific additions layered via a
-`PreToolUse` hook (`scripts/nexus_engineer_tool_gate.py`, to be built in
+`PreToolUse` hook (`tools/delivery/nexus_engineer_tool_gate.py`, to be built in
 AC-3) scoped to precisely two command shapes:
 
 1. **The code-publish / artifact-egress boundary (AC-7).** Before `git
@@ -307,7 +307,7 @@ AC-3) scoped to precisely two command shapes:
    via `subprocess.run([sys.executable, "main.py",
    "--repository-privacy-check"], cwd=<repo root>)` (the engineer profile
    has ordinary `main.py` access, unlike the PO role, so no new script is
-   needed for this movement — `scripts/repository_privacy_check.py`, §3.4
+   needed for this movement — `tools/privacy/repository_privacy_check.py`, §3.4
    of `GOV_PO_2`, remains that document's own separate, not-yet-landed
    deliverable and this movement does not depend on it) — and denies the
    push/PR-create with the check's own reported findings if it does not
@@ -346,7 +346,7 @@ govern an interactive one, unchanged by this document.
 At `start` time, the orchestrator reads the relay file fresh from disk,
 extracts `entries[0]` (the `SESSION_START` entry — the one already-approved
 task; `entries[0]` is structurally guaranteed to be `SESSION_START` by
-`scripts/local_relay.py`'s own `validate_relay_object`, §3.6), and:
+`tools/delivery/local_relay.py`'s own `validate_relay_object`, §3.6), and:
 
 1. Serializes it canonically — `json.dumps(entries[0], indent=2,
    sort_keys=True, ensure_ascii=False)`, the identical form
@@ -380,7 +380,7 @@ review, unchanged.
 
 **The problem this closes.** A git worktree checks out the full tree at
 its base commit, including whatever `relay/*.json` files existed there. If
-the engineer process ran `scripts/local_relay.py append --file relay/
+the engineer process ran `tools/delivery/local_relay.py append --file relay/
 <id>-*.json` with a path relative to its own worktree, it would silently
 read and write **its own worktree's copy** — never visible to the Product
 Owner's session in the original checkout, and never merged back except
@@ -389,7 +389,7 @@ turn-taking channel). This is exactly the failure `SESSION_START`'s own
 `risks` field names: "a per-worktree copy silently breaks agent
 visibility."
 
-**The fix — a canonical-location resolver in `scripts/local_relay.py`
+**The fix — a canonical-location resolver in `tools/delivery/local_relay.py`
 (AC-3 build target, specified here).** `create`/`append`/`status`/
 `validate`/`watch` already accept an explicit `--file`/`--dir` path; this
 is unchanged. What is added is resolution when the caller does not pass
@@ -543,11 +543,11 @@ movement is integrating) rather than hanging indefinitely.
 originally-named gap): re-validation against an advanced `main` is a
 technical gate, not a documented convention.** Before the actual `gh pr
 merge` is allowed to proceed, the engineer profile's hook
-(`scripts/nexus_engineer_tool_gate.py`) — while still holding the
+(`tools/delivery/nexus_engineer_tool_gate.py`) — while still holding the
 just-acquired lock — runs, in order: (1) `git fetch origin` then `git merge
 origin/main` into the movement's own branch, in its own worktree; (2)
 `python3 -m pytest tests/test_architecture_convergence.py -q` and `python3
-scripts/build_history_index.py --check` against that merged state. Any
+tools/delivery/build_history_index.py --check` against that merged state. Any
 failure at either step denies the `gh pr merge` call with the concrete
 failure (a merge conflict to resolve, or a test/check failure) and releases
 the lock immediately, so one movement's own failure never blocks another's
@@ -683,16 +683,16 @@ genuinely requires human action, and does not attempt to.
 
 ## 6. Scope
 
-**In:** this document; `scripts/orchestrator.py`; `.claude/nexus-engineer.
-settings.json` and `scripts/nexus_engineer_tool_gate.py`; the
-`scripts/nexus_po_tool_gate.py` extension letting the PO role invoke
-`orchestrator start/status/stop`; the `scripts/local_relay.py` canonical-
+**In:** this document; `tools/delivery/orchestrator.py`; `.claude/nexus-engineer.
+settings.json` and `tools/delivery/nexus_engineer_tool_gate.py`; the
+`tools/delivery/nexus_po_tool_gate.py` extension letting the PO role invoke
+`orchestrator start/status/stop`; the `tools/delivery/local_relay.py` canonical-
 location resolver and shared append lock; the AC-4 verifications above; the
 AC-5 demonstrations (§8, run once AC-3 lands); project-state reconciliation
 inside the AC-3 PR.
 
 **Out:** `gov_po_2_implementation` (separate, unchanged, and this document
-does not depend on `scripts/repository_privacy_check.py` landing first —
+does not depend on `tools/privacy/repository_privacy_check.py` landing first —
 §3.4); any real-device execution capability; any change to vendor
 collectors, OP.2, or the console job engine; a second orchestration/agent
 framework; re-validating a PR against an advanced `main` after the merge
@@ -705,12 +705,12 @@ Approved and implemented in this same movement (relay/NXS-LOCAL-0007,
 entry 3, `RELAY_DECISION`). Additions A/B/C from that decision are folded
 directly into the targets below, not tracked as separate files.
 
-- `scripts/orchestrator.py` — `start`/`status`/`stop`, per §3.2–§3.7.
+- `tools/delivery/orchestrator.py` — `start`/`status`/`stop`, per §3.2–§3.7.
 - `.claude/nexus-engineer.settings.json` + `scripts/nexus_engineer_tool_
   gate.py` — the two-check hook, per §3.4.
-- `scripts/nexus_po_tool_gate.py`: add `"python3 scripts/orchestrator.py
+- `tools/delivery/nexus_po_tool_gate.py`: add `"python3 tools/delivery/orchestrator.py
   status"` (and interpreter siblings) to `COMMON_PREFIXES` (read-only, both
-  forms); add `"python3 scripts/orchestrator.py start"` / `"...  stop"`
+  forms); add `"python3 tools/delivery/orchestrator.py start"` / `"...  stop"`
   (and siblings) to `INTERACTIVE_EXTRA_PREFIXES` only — matching the
   existing `local_relay.py create`/`append` precedent — using
   boundary-safe prefix matching (matched prefix followed by a space or
@@ -718,7 +718,7 @@ directly into the targets below, not tracked as separate files.
   fix `GOV_PO_2` §3.1 already required for its own three new prefixes so
   this movement does not add a fourth unbounded-prefix instance to the
   gate.
-- `scripts/local_relay.py`: the canonical-location resolver (§3.6),
+- `tools/delivery/local_relay.py`: the canonical-location resolver (§3.6),
   implemented as two environment variables rather than one to match each
   subcommand's real argument shape — `NEXUS_CANONICAL_RELAY_DIR` as
   `create --dir`'s default (a directory), `NEXUS_RELAY_FILE` as `append`/
@@ -728,18 +728,18 @@ directly into the targets below, not tracked as separate files.
   existing schema/validators, nothing re-derived; an explicit `--dir`/
   `--file` argument always wins over either variable, and default behavior
   with neither set is unchanged.
-- `scripts/orchestrator.py merge-lock {acquire|release}`: the primitive
+- `tools/delivery/orchestrator.py merge-lock {acquire|release}`: the primitive
   `nexus_engineer_tool_gate.py` calls to serialize `gh pr merge` (§3.8),
   backed by the same `_FileLock`.
-- `tests/test_orchestrator.py`: pure decision-logic unit tests (dispatch
+- `tools/tests/test_orchestrator.py`: pure decision-logic unit tests (dispatch
   validation, duplicate-start/staleness detection, revision/hash
   computation, merge-lock acquire/release/staleness, canonical-path
   resolution) that do not require actually spawning a `claude -p` process;
-  targeted extensions to `tests/test_gov_po_role.py` for the two new gate
-  prefixes; targeted extensions to `tests/test_local_relay_protocol.py`
+  targeted extensions to `tools/tests/test_gov_po_role.py` for the two new gate
+  prefixes; targeted extensions to `tools/tests/test_local_relay_protocol.py`
   for the resolver and lock.
 - Project-state/handover reconciliation (AC-8) inside the same PR.
-- `tests/test_gov_po_role.py`, `tests/test_local_relay_protocol.py`,
+- `tools/tests/test_gov_po_role.py`, `tools/tests/test_local_relay_protocol.py`,
   `tests/test_architecture_convergence.py` keep passing unmodified in
   their existing assertions (only additive changes above).
 
@@ -820,7 +820,7 @@ or real-device approval boundary.
 
 `main` branch protection (PR required, CI green) is recorded as the final
 tool-neutral gate: after the per-worktree `pre-push` hook
-(`scripts/nexus_worker_prepush.py`) and the orchestrator's own `verify`/
+(`tools/delivery/nexus_worker_prepush.py`) and the orchestrator's own `verify`/
 `integrate` sequence, branch protection is the backstop no tool or worker
 can bypass. This document does not change GitHub settings itself; enabling
 or confirming branch protection is a Product Owner action, recorded on the

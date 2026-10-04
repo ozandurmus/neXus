@@ -16,7 +16,7 @@ before and both of which had already drifted:
    and they disagreed: roadmap said `0.7.4` (completed 2026-08-29) while the
    newest build record was `OP.0a` (2026-09-01) and the feature registry still
    called that same work `planned`. The JSON↔JSON rules live in
-   `utils.project_plan._cross_authority_warnings` (they run in the render path);
+   `tools.delivery.project_plan._cross_authority_warnings` (they run in the render path);
    the Markdown↔JSON rules live here, where they cost nothing at runtime.
 """
 from __future__ import annotations
@@ -140,7 +140,7 @@ def test_project_metadata_has_no_cross_authority_contradictions():
     """The JSON↔JSON gate. Extends the pre-existing `metadata_warnings`
     assertion with the cross-file rules; it was green while three files each
     named a different current build."""
-    from utils.project_plan import build_project_plan_payload
+    from tools.delivery.project_plan import build_project_plan_payload
 
     assert build_project_plan_payload()["metadata_warnings"] == []
 
@@ -191,7 +191,7 @@ def test_build_history_index_is_derived_not_hand_maintained():
     while actually being hand-edited, and drifted to a newest row of `0.7.4`.
     It is now really generated; this proves the checked-in copy is current."""
     result = subprocess.run(
-        [sys.executable, str(ROOT / "scripts" / "build_history_index.py"), "--check"],
+        [sys.executable, str(ROOT / "tools" / "delivery" / "build_history_index.py"), "--check"],
         capture_output=True, text=True, cwd=str(ROOT),
     )
     assert result.returncode == 0, result.stdout + result.stderr
@@ -405,7 +405,7 @@ def test_a_draft_contract_never_backs_a_terminal_build_history_record():
     is authority-semantics, not prose-matching: it keys off the doc's self-
     declared status token, so it holds for any future DRAFT contract, not
     only OP.0b.0."""
-    from utils.project_plan import _TERMINAL_BUILD_STATUSES
+    from tools.delivery.project_plan import _TERMINAL_BUILD_STATUSES
 
     for build in _load("build_history.json")["builds"]:
         for doc_path in (build.get("docs") or {}).values():

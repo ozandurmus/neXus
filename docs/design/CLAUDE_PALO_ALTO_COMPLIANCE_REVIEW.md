@@ -80,7 +80,7 @@ The overall shape is right: tri-metric posture, fail-closed defaults, vendor-par
 
 - **No FROZEN contract.** New vendor semantics, a new framework-mapping schema, possible new commands, and a user-visible scoring model — the lifecycle requires a frozen contract before implementation. `docs/design/CLAUDE_PALO_ALTO_COMPLIANCE_REVIEW.md` is untracked; a `DRAFT` cannot authorize these load-bearing semantics.
 - **"Commit and push to `main`"** — push/merge is PO-controlled. Cite the authorizing directive rather than assuming it, and do not push before real-env validation; `REAL_ENV_VALIDATED` precedes `DONE`.
-- **Missing gates:** the HTML render harness (`compliance_overview` payload and UI change), `tests/fixtures/uitest/` updates, and project-state updates via `scripts/project_queue.py` plus `CURRENT_STATE.md` / `build_history.json`.
+- **Missing gates:** the HTML render harness (`compliance_overview` payload and UI change), `tests/fixtures/uitest/` updates, and project-state updates via `tools/delivery/project_queue.py` plus `CURRENT_STATE.md` / `build_history.json`.
 - **Missing tests:** a sanitizer corpus asserting zero leakage *including* a tag not on the list; a matrix test that no input can yield PASS when the evidence source is absent (mirroring the `OP.0a` generated-matrix pattern); vendor-routing fail-closed negatives; a Panorama-template fixture proving no false FAIL.
 - **Fixtures must be synthetic.** No real device configuration, ever — and a Playwright screenshot of the live compliance dashboard carries real hostnames and addresses into a shareable artifact. Use a redacted path.
 

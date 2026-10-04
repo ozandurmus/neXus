@@ -9,7 +9,7 @@ write path and nothing else.
 
 ## 1. The defect, measured
 
-`scripts/project_queue.py` has two ways to write `docs/history/backlog/<id>.md`:
+`tools/delivery/project_queue.py` has two ways to write `docs/history/backlog/<id>.md`:
 
 - `cmd_note` **appends** to the file when it exists.
 - `cmd_status`, on a move to a terminal status, calls `_move_note_to_history`,
@@ -84,8 +84,8 @@ afterwards that each history file still contains its pre-existing narrative.
    asserts the appended note survives. That is the sequence a worker naturally
    uses, and it is the sequence that lost data.
 6. The heading's `status:` line reflects the new status after closure (N-4).
-7. `python3 -m pytest tests/test_project_queue.py -q` passes.
-8. `python3 scripts/project_queue.py check` passes.
+7. `python3 -m pytest tools/tests/test_project_queue.py -q` passes.
+8. `python3 tools/delivery/project_queue.py check` passes.
 
 ## 5. Out of scope
 

@@ -101,7 +101,7 @@ movement's scope (deployment movement).
 
 ## privacy_gate
 
-Command: `python3 scripts/repository_privacy_check.py`
+Command: `python3 tools/privacy/repository_privacy_check.py`
 Exit code: 0
 
 ```

@@ -79,7 +79,7 @@ decision (`13D` DS-3).
 
 ## 3. Consequences for the backlog
 
-Applied in the same change as this record, through `scripts/project_queue.py`
+Applied in the same change as this record, through `tools/delivery/project_queue.py`
 (never by hand): the Python-line feature items that this sequence will never
 build are closed as superseded or moved to the reserve, with each
 history file naming the UI 2.0 contract or item that carries the intent

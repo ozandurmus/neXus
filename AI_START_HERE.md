@@ -71,7 +71,7 @@ outside it — on Windows under `%LOCALAPPDATA%\SecurityExpert\runtime\`.
 | `py .\main.py --only cp` / `--only vsx` / `--only pan-config` | Collect one plane fresh, reuse the rest; HTML is marked NOT A CHECKPOINT. |
 | `py .\main.py --render-only` | Rebuild HTML from the last `unified.json` + telemetry. No network, no credentials. |
 | `py .\main.py --cp-config-collect --cp-config-stage all` / `--cp-config-probe` | Check Point current-configuration collection / evidence probe only. |
-| `python3 scripts/repository_privacy_check.py` | Standalone local/offline Corporate-Git privacy gate. No network, no credentials, matched values never printed. |
+| `python3 tools/privacy/repository_privacy_check.py` | Standalone local/offline Corporate-Git privacy gate. No network, no credentials, matched values never printed. |
 | `py .\main.py --console [--console-port N]` | Operator console (`CON.1`+`CON.2`): authenticated loopback HTTP service serving the existing UI live from local artifacts, plus a job engine. Only class 0 job types are submittable. Requires `pip install -r requirements-console.txt`. |
 
 Vendor/config imports are lazy — maintenance modes return before touching them.
@@ -135,7 +135,7 @@ different tool, a fresh chat — not a substitute for the reading order above
 report below as its nested `report` object, nothing narrative outside the
 sentinel pair, identical in both directions:
 `docs/design/GOV_SESSION_TRANSFER_PROTOCOL.md` (FROZEN — PO APPROVED) +
-`py scripts/gov_session_transfer.py --help`.
+`py tools/delivery/gov_session_transfer.py --help`.
 
 For a GitHub-issue relay locator, use the one shared bootstrap prompt
 `.github/prompts/relay-bootstrap.prompt.md` and the frozen
@@ -237,7 +237,7 @@ No model brand is a permanent implementation default.
   candidates. One-shot, file-backed, **parallel by default**
   (`DEV.TEST.1`, 2026-09-06): `py -m pytest -q -n auto --dist worksteal >
   pytest_result.log 2>&1`. A serial run (`-n0`, or
-  `scripts/pytest_one_shot.ps1 -Serial`) remains available only as an
+  `tools/delivery/pytest_one_shot.ps1 -Serial`) remains available only as an
   explicit diagnostic override when isolating a single failure — never the
   default full-suite path; the one shared-state leak a parallel run
   previously hid is fixed and directly regression-tested regardless of
@@ -245,11 +245,11 @@ No model brand is a permanent implementation default.
   economy"). Risk-based, not mandatory for every bounded PR —
   `docs/AI_DEVELOPMENT_PROTOCOL.md` "CI validation policy" is the canonical
   trigger list and CI shape; this entry doesn't repeat it.
-- **Repository privacy gate**: `python3 scripts/repository_privacy_check.py`.
+- **Repository privacy gate**: `python3 tools/privacy/repository_privacy_check.py`.
   Delete gitignored `data/`/`logs/` first; a test run recreates them and the
   gate flags them as runtime directories present.
 - **State consistency**: `project_metadata_has_no_cross_authority_contradictions`
-  (part of `tests/test_live_project_governance.py`) must show zero warnings.
+  (part of `tools/tests/test_live_project_governance.py`) must show zero warnings.
 - **HTML render harness**: required alongside the full suite whenever
   `templates/index.html`, any `static/*.js` UI module, `static/style.css`, or a payload
   builder changes (`docs/AI_DEVELOPMENT_PROTOCOL.md` has the exact trigger

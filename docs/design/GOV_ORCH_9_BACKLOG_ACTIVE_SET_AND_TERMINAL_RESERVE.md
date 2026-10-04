@@ -50,18 +50,18 @@ reading session never reads.
   rather than merely under the regression ceiling — so this amendment
   **closes** §2.4's known pre-existing gap instead of perpetuating it.
 - **B-5.** An item that becomes terminal moves to the reserve through the
-  single write path (`scripts/project_queue.py`), never by hand. An item that
+  single write path (`tools/delivery/project_queue.py`), never by hand. An item that
   reopens moves back the same way. `AGENTS.md`'s project-state update rule and
   GOV.ORCH.5's "never hand-edit `project/*.json`" both continue to apply, to
   both files.
 - **B-6.** Nothing is deleted and no count changes. Every count, percentage and
-  warning `utils/project_plan.py` produces must be identical before and after,
+  warning `tools/delivery/project_plan.py` produces must be identical before and after,
   which means anything that counts the backlog reads **both** files, exactly as
   GOV.ORCH.8 §2.2's `_load` helper does for builds.
 
 ## 3. Budgets, amended
 
-`tests/test_project_files_budget.py`:
+`tools/tests/test_project_files_budget.py`:
 
 - `project/backlog.json` — **≤ 40 KiB**, enforced, with no known-gap escape
   clause. The existing 63 KiB regression ceiling and the conditional assertion
@@ -81,17 +81,17 @@ reading session never reads.
 3. The union of the two files equals the original 154 items, item for item, by
    id — proved by a check that compares the id sets and each row's content, not
    by a count alone.
-4. `utils.project_plan.build_project_plan_payload()` produces an **identical**
+4. `tools.delivery.project_plan.build_project_plan_payload()` produces an **identical**
    payload before and after: every count, percentage, warning list and id set.
    This is GOV.ORCH.8 §2.5's render-equivalence rule, applied here.
-5. `python3 scripts/project_queue.py check` passes, and `render` produces a
+5. `python3 tools/delivery/project_queue.py check` passes, and `render` produces a
    `QUEUE.md` whose open-item content is unchanged.
-6. `scripts/project_queue.py` reads both files wherever it counts or looks up by
+6. `tools/delivery/project_queue.py` reads both files wherever it counts or looks up by
    id, writes each item to the file its status selects, and moves an item
    between the two files when its status crosses the terminal boundary — with a
    test for each direction.
 7. The repository privacy gate reports zero findings.
-8. `python3 -m pytest tests/test_project_files_budget.py tests/test_architecture_convergence.py -q` passes.
+8. `python3 -m pytest tools/tests/test_project_files_budget.py tests/test_architecture_convergence.py -q` passes.
 
 ## 5. Out of scope
 

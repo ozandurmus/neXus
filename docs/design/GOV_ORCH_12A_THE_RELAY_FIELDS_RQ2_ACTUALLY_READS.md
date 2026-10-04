@@ -10,7 +10,7 @@ unchanged.
 
 **This corrects a Product Owner defect, not a worker's.** RQ-2 named two
 fields by the names the Product Owner assistant remembered rather than the
-names `scripts/local_relay.py` writes. The first movement dispatched against
+names `tools/delivery/local_relay.py` writes. The first movement dispatched against
 it (`NXS-LOCAL-0166`, the first Codex dispatch of this loop) found the
 mismatch on its own focused test, refused to substitute a field silently,
 raised a `RELAY_QUESTION` and stopped — exactly the behaviour the law asks
@@ -18,7 +18,7 @@ for, and the reason this record exists instead of a quiet divergence.
 
 ## 1. The measurement
 
-A relay file written by `scripts/local_relay.py` carries, per entry, exactly:
+A relay file written by `tools/delivery/local_relay.py` carries, per entry, exactly:
 `actor`, `marker`, `seq`, `timestamp`, and, depending on the marker,
 `subject`, `text`, `report`. There is **no `role` field on an entry** and
 **no `next_actor` on an entry**; `next_actor` is a single top-level field on
@@ -47,5 +47,5 @@ RQ-2's condition is restated, unchanged in intent:
 ## 3. Cross-references
 
 - `GOV_ORCH_12_AN_ANSWERED_RELAY_QUESTION_IS_RESUMABLE.md` RQ-1..RQ-6.
-- `NEXUS_AGENT_RELAY_PROTOCOL.md`; `scripts/local_relay.py` — the writer
+- `NEXUS_AGENT_RELAY_PROTOCOL.md`; `tools/delivery/local_relay.py` — the writer
   whose field names §1 records.

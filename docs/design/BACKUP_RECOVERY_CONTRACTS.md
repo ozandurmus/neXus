@@ -671,7 +671,7 @@ Each is a test that must exist before the corresponding phase closes.
 | 9.2 | The wrapping key is not under `<recovery_root>` | `RB.1` | resolver rejects a key path inside the recovery root |
 | 9.3 | Recovery payload never reaches `output/index.html` | `RB.5` | render with recovery data present; grep rendered HTML for artifact bytes/digests-of-payload |
 | 9.4 | Recovery payload never reaches the support bundle | `RB.1` | build a bundle with a populated recovery root; assert exclusion |
-| 9.5 | Privacy gate fails on recovery artifacts/keys in the repo tree | `RB.1` | extend `utils/repository_privacy.py`; `.enc`/vault paths join `*.pem`/`known_hosts` |
+| 9.5 | Privacy gate fails on recovery artifacts/keys in the repo tree | `RB.1` | extend `tools/privacy/repository_privacy.py`; `.enc`/vault paths join `*.pem`/`known_hosts` |
 | 9.6 | `restore` block non-null ⇒ manifest rejected | `RB.1` | validator raises |
 | 9.7 | `restore_proven: true` without `restore_proof` ⇒ rejected | `RB.4` | validator raises |
 | 9.8 | V3 check with absent inventory ⇒ `NOT_APPLICABLE`, never `PASS` | `RB.4` | fixture with no matching inventory device |
