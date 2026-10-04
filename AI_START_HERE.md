@@ -22,20 +22,12 @@ Product maturity axis: `SEE → VERIFY → TRACE → RECOVER → OPERATE`.
 in progress; `RECOVER` has shipped its first controlled writes; `OPERATE` has
 shipped its read-only half.
 
-**What the product may do is an explicit taxonomy, not a slogan**
-(`utils/action_taxonomy.py` — the single source of truth):
-
-| Class | What | Status |
-| --- | --- | --- |
-| 0 — read | discovery, inventory, config collection, compliance, verification, preflight, readiness | permitted; the overwhelming majority of the product |
-| 1 — controlled recovery write | narrowly scoped recovery ops: backup creation, exact generated-artifact cleanup | permitted **only** through the `RB.x` contracts (per-entity ledger, minimum re-execution interval, distinct backup credential, fail-closed allowlist); **not** console-submittable |
-| 2 — operational state change | failover, cluster role transition | **no member exists**; hard-gated by `FAILOVER_ENGINE_ARCHITECTURE.md` §10 |
-| 3 — configuration write | config / object / policy-rule modification | prohibited |
-| 4 — policy / deployment / remediation | policy install, automated remediation | prohibited |
-
-The older "the product is read-only" shorthand stopped being true when `RB.x`
-shipped; do not restore it. `"operational-write"` in existing code and durable
-records is this repository's legacy name for **class 1** only.
+**Live command and failover authority is Java**, per PO decision 2026-10-04.
+See `AGENTS.md` "Network action taxonomy" and "Architectural invariants" for
+`ActionClass`, `ActionRegistry`, the command gate registry, and worker/service
+tests. Python taxonomy and failover code below are historical only; they grant
+no live permissions. Default Python validation is the explicit LIVE_TOOLING
+manifest in `pytest.ini`; legacy tests are opt-in (see `tests/README.md`).
 
 - Product baseline: see `CURRENT_STATE.md`
 - Engineering baseline: see `CURRENT_STATE.md` (never hard-code a specific
@@ -49,7 +41,7 @@ records is this repository's legacy name for **class 1** only.
 
 ---
 
-## How it works in 30 lines
+## Historical Python product (pending PR2 archive)
 
 **One Python CLI.** Dependencies: `lxml`, `paramiko`, `requests`. `--console`
 is the one optional exception — a loopback web server, off by default,
@@ -79,7 +71,7 @@ outside it — on Windows under `%LOCALAPPDATA%\SecurityExpert\runtime\`.
 | `py .\main.py --only cp` / `--only vsx` / `--only pan-config` | Collect one plane fresh, reuse the rest; HTML is marked NOT A CHECKPOINT. |
 | `py .\main.py --render-only` | Rebuild HTML from the last `unified.json` + telemetry. No network, no credentials. |
 | `py .\main.py --cp-config-collect --cp-config-stage all` / `--cp-config-probe` | Check Point current-configuration collection / evidence probe only. |
-| `py .\main.py --repository-privacy-check` | Local/offline Corporate-Git privacy gate. No network, no credentials, matched values never printed. |
+| `python3 scripts/repository_privacy_check.py` | Standalone local/offline Corporate-Git privacy gate. No network, no credentials, matched values never printed. |
 | `py .\main.py --console [--console-port N]` | Operator console (`CON.1`+`CON.2`): authenticated loopback HTTP service serving the existing UI live from local artifacts, plus a job engine. Only class 0 job types are submittable. Requires `pip install -r requirements-console.txt`. |
 
 Vendor/config imports are lazy — maintenance modes return before touching them.
@@ -100,7 +92,7 @@ trust/compliance preflight): **`docs/ARCHITECTURE.md` "CLI reference"**.
 | `utils/device_registry.py` | `PCP.1` Device Registry: opaque `device_id`, endpoint normalization, lifecycle; filesystem-only |
 | `templates/`, `static/` | single-page UI shell + navigation model; contract detail: `docs/ARCHITECTURE.md` |
 | `console/` + `templates/console.html` + `static/console_actions.js` | operator console (`--console`): closed job vocabulary, single-worker executor, durable records; imports no vendor/collector module |
-| `utils/action_taxonomy.py`, `utils/failover/` | the five action classes; `OP.0a` HA readiness assessment only, no plan/executor/adapter (test-enforced) |
+| `utils/action_taxonomy.py`, `utils/failover/` | retired Python taxonomy/readiness; not live authority, pending PR2 |
 | `project/*.json`, `tests/` | living plan metadata; phase-scoped test suites — baseline is `CURRENT_STATE.md`, never hard-coded here |
 
 Full mechanism detail: **`docs/ARCHITECTURE.md`**.
@@ -253,11 +245,11 @@ No model brand is a permanent implementation default.
   economy"). Risk-based, not mandatory for every bounded PR —
   `docs/AI_DEVELOPMENT_PROTOCOL.md` "CI validation policy" is the canonical
   trigger list and CI shape; this entry doesn't repeat it.
-- **Repository privacy gate**: `py .\main.py --repository-privacy-check`.
+- **Repository privacy gate**: `python3 scripts/repository_privacy_check.py`.
   Delete gitignored `data/`/`logs/` first; a test run recreates them and the
   gate flags them as runtime directories present.
 - **State consistency**: `project_metadata_has_no_cross_authority_contradictions`
-  (part of `tests/test_architecture_convergence.py`) must show zero warnings.
+  (part of `tests/test_live_project_governance.py`) must show zero warnings.
 - **HTML render harness**: required alongside the full suite whenever
   `templates/index.html`, any `static/*.js` UI module, `static/style.css`, or a payload
   builder changes (`docs/AI_DEVELOPMENT_PROTOCOL.md` has the exact trigger
@@ -288,11 +280,9 @@ patterns or credential paths, new write primitives, Git PR creation/push/merge.
 For Git, explicit Product Owner authorization controls the decision and permits
 the agent to execute and verify the named action; it does not require the human
 to operate GitHub personally.
-Prohibited at current maturity (taxonomy classes 2–4): firewall
-configuration writes, policy install, commit, reboot/shutdown, forced
-failover, interface/routing change, credential change, automatic
-remediation. Class 1 controlled recovery writes are permitted only through
-their existing `RB.x` contracts and are never exposed on an HTTP surface.
+Live action admission and command permissions come from the Java authorities
+named in AGENTS.md. Historical Python class restrictions below are not a live
+allowlist; no documentation or test-discovery change authorizes a device action.
 
 ---
 

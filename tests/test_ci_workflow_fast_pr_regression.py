@@ -93,9 +93,8 @@ def test_pr_job_does_not_invoke_full_suite():
 def test_pr_job_retains_the_cheap_safety_gates():
     validate_block = _job_block(_read_workflow(), "validate")
     for expected in (
-        "python -m compileall -q",
-        "python main.py --repository-privacy-check",
-        "python -m pytest -q tests/test_architecture_convergence.py",
+        "python3 scripts/repository_privacy_check.py",
+        "python -m pytest -q tests/test_live_project_governance.py",
         "python scripts/build_history_index.py --check",
         "git diff --check",
     ):
@@ -139,7 +138,9 @@ def test_component_selections_are_explicit_and_separate():
     targeted_block = _job_block(_read_workflow(), "targeted-regression")
     assert "classification == 'ldap'" in targeted_block
     assert "contains(needs.regression-scope.outputs.classification, 'discovery')" in targeted_block
-    assert ":discovery:unitTest" in targeted_block
+    assert ":discovery:unitTest" not in targeted_block
+    assert ":worker:unitTest" in targeted_block
+    assert ":job-engine:unitTest" in targeted_block
     assert "contains(needs.regression-scope.outputs.classification, 'inventory')" in targeted_block
     assert "*JooqDeviceRepositoryTest" in targeted_block
     assert "*Device*" in targeted_block
@@ -166,9 +167,8 @@ def test_full_regression_runs_for_major_prs_and_manual_dispatch():
 def test_full_regression_job_retains_the_same_cheap_gates():
     full_block = _job_block(_read_workflow(), "full-regression")
     for expected in (
-        "python -m compileall -q",
-        "python main.py --repository-privacy-check",
-        "python -m pytest -q tests/test_architecture_convergence.py",
+        "python3 scripts/repository_privacy_check.py",
+        "python -m pytest -q tests/test_live_project_governance.py",
         "python scripts/build_history_index.py --check",
         "git diff --check",
     ):
@@ -190,3 +190,16 @@ def test_push_to_main_is_not_an_automatic_full_regression_trigger():
     full_block = _job_block(_read_workflow(), "full-regression")
     assert "github.event_name == 'push'" not in full_block
     assert "github.event_name == 'workflow_dispatch'" in full_block
+
+
+def test_ci_uses_only_tooling_python_dependencies_and_java_regression():
+    workflow = yaml.safe_load(_read_workflow())
+    commands = "\n".join(step.get("run", "") for job in workflow["jobs"].values() for step in job["steps"])
+    for forbidden in ("-r requirements.txt", "-r requirements-console.txt", "compileall", "python main.py", "tests/test_architecture_convergence.py", ":discovery:unitTest"):
+        assert forbidden not in commands
+    assert "-r requirements-dev.txt" in commands
+    full = _job_block(_read_workflow(), "full-regression")
+    assert "unitTest architectureTest" in full
+    assert "npx tsc --noEmit -p ." in full
+    assert "npx vitest run" in full
+    assert "npm run build" in full

@@ -1,15 +1,4 @@
-"""GOV.PO.3 CI privacy-gate baseline scoping (relay/NXS-LOCAL-0020).
-
-AC-1's live bug: the GitHub Actions 'validation' workflow's repository
-privacy gate (`python main.py --repository-privacy-check`) scanned the full
-working tree with no baseline, so the two pre-existing, already-accepted
-findings relay/NXS-LOCAL-0014 already taught the local pre-push hook
-(scripts/nexus_engineer_tool_gate.py) to ignore permanently failed CI on
-every PR instead. This extends that same baseline-aware comparison (now
-shared in utils.repository_privacy, AC-2) to the CI-facing entry point
-(application/workflows/maintenance.py::repository_privacy_check, reached via
-`python main.py --repository-privacy-check --privacy-baseline-ref <ref>`).
-"""
+"""Standalone CI privacy gate: preserve merge-base comparison and fail-closed behavior."""
 from __future__ import annotations
 
 import subprocess
@@ -17,9 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from application.cli import build_parser
-from application.context import ApplicationContext
-from application.workflows import maintenance as maintenance_wf
+from scripts import repository_privacy_check as privacy_cli
 from utils.repository_privacy import (
     PrivacyFinding,
     baseline_finding_keys,
@@ -109,30 +96,16 @@ def test_baseline_finding_keys_resolves_merge_base_with_given_ref(tmp_path):
     assert finding_key(tmp_path, new_only[0]) not in keys
 
 
-# --- AC-3/AC-4: the CI-facing entry point (application.workflows.maintenance) -
-
-
-def test_ci_privacy_check_rejects_baseline_ref_without_the_check():
-    import main
-
-    with pytest.raises(SystemExit) as exc:
-        main.main(["--privacy-baseline-ref", "origin/main"])
-    assert exc.value.code != 0
+# --- AC-3/AC-4: standalone CI entry point ---
 
 
 def test_ci_privacy_check_pre_existing_finding_passes_with_baseline(tmp_path, monkeypatch):
     _init_repo(tmp_path)
     _write(tmp_path, "docs/notes.md", "intro\n" + CREDENTIAL_LINE)
     _commit_all(tmp_path, "base")
-    monkeypatch.setattr(maintenance_wf, "_REPO_ROOT", tmp_path)
+    monkeypatch.setattr(privacy_cli, "_REPO_ROOT", tmp_path)
 
-    parser = build_parser()
-    args = parser.parse_args(["--repository-privacy-check", "--privacy-baseline-ref", "main"])
-    ctx = ApplicationContext(args=args, parser=parser, provenance="manual")
-
-    with pytest.raises(SystemExit) as exc:
-        maintenance_wf.repository_privacy_check(ctx)
-    assert exc.value.code == 0
+    assert privacy_cli.main(["--privacy-baseline-ref", "main"]) == 0
 
 
 def test_ci_privacy_check_new_finding_still_fails_with_baseline(tmp_path, monkeypatch):
@@ -140,15 +113,9 @@ def test_ci_privacy_check_new_finding_still_fails_with_baseline(tmp_path, monkey
     _write(tmp_path, "docs/notes.md", "intro\n" + CREDENTIAL_LINE)
     _commit_all(tmp_path, "base")
     _write(tmp_path, "docs/other.md", 'api_key = "brand-new-synthetic-leak"\n')
-    monkeypatch.setattr(maintenance_wf, "_REPO_ROOT", tmp_path)
+    monkeypatch.setattr(privacy_cli, "_REPO_ROOT", tmp_path)
 
-    parser = build_parser()
-    args = parser.parse_args(["--repository-privacy-check", "--privacy-baseline-ref", "main"])
-    ctx = ApplicationContext(args=args, parser=parser, provenance="manual")
-
-    with pytest.raises(SystemExit) as exc:
-        maintenance_wf.repository_privacy_check(ctx)
-    assert exc.value.code == 1
+    assert privacy_cli.main(["--privacy-baseline-ref", "main"]) == 1
 
 
 def test_ci_privacy_check_without_baseline_ref_fails_exactly_as_before(tmp_path, monkeypatch):
@@ -157,15 +124,9 @@ def test_ci_privacy_check_without_baseline_ref_fails_exactly_as_before(tmp_path,
     _init_repo(tmp_path)
     _write(tmp_path, "docs/notes.md", "intro\n" + CREDENTIAL_LINE)
     _commit_all(tmp_path, "base")
-    monkeypatch.setattr(maintenance_wf, "_REPO_ROOT", tmp_path)
+    monkeypatch.setattr(privacy_cli, "_REPO_ROOT", tmp_path)
 
-    parser = build_parser()
-    args = parser.parse_args(["--repository-privacy-check"])
-    ctx = ApplicationContext(args=args, parser=parser, provenance="manual")
-
-    with pytest.raises(SystemExit) as exc:
-        maintenance_wf.repository_privacy_check(ctx)
-    assert exc.value.code == 1
+    assert privacy_cli.main([]) == 1
 
 
 # --- AC-6: real reproduction against this repository's actual current state -
@@ -215,3 +176,23 @@ def test_ac6_synthetic_new_finding_still_fails_against_origin_main(real_reposito
         assert finding_key(ROOT, new_only[0]) not in keys
     finally:
         scratch.unlink()
+
+
+@pytest.mark.parametrize("ref", ["missing-baseline", ""])
+def test_unavailable_baseline_cannot_accept_a_finding(tmp_path, monkeypatch, capsys, ref):
+    _init_repo(tmp_path)
+    _write(tmp_path, "docs/notes.md", CREDENTIAL_LINE)
+    _commit_all(tmp_path, "base")
+    monkeypatch.setattr(privacy_cli, "_REPO_ROOT", tmp_path)
+    assert privacy_cli.main(["--privacy-baseline-ref", ref]) == 1
+    output = capsys.readouterr().out
+    assert "unavailable" in output
+    assert "hunter2-synthetic" not in output
+
+
+def test_clean_scan_does_not_resolve_baseline(tmp_path, monkeypatch):
+    monkeypatch.setattr(privacy_cli, "_REPO_ROOT", tmp_path)
+    def unexpected(*args):
+        pytest.fail("clean scan must not resolve a baseline")
+    monkeypatch.setattr(privacy_cli, "baseline_finding_keys", unexpected)
+    assert privacy_cli.main(["--privacy-baseline-ref", "missing-baseline"]) == 0

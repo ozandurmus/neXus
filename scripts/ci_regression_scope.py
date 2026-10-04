@@ -65,7 +65,17 @@ DELIVERY_FILES = {
     "tests/test_gov_po_3_ci_privacy_gate_baseline.py",
     "tests/test_nexus_engineer_tool_gate.py",
 }
-MAJOR_PREFIXES = ("ui2/build.gradle.kts", "ui2/settings.gradle.kts", "gradle/", "requirements")
+# Migration roots always run live regression, including their Markdown files.
+# Unknown paths still block, even in a mixed change containing a known full route.
+MAJOR_PREFIXES = ("ui2/build.gradle.kts", "ui2/settings.gradle.kts", "gradle/", "requirements", "history/", "tools/")
+TOOLING_FILES = {
+    "AGENTS.md", "AI_START_HERE.md", "CLAUDE.md", "pytest.ini",
+    "scripts/repository_privacy_check.py", "utils/repository_privacy.py",
+    "tests/test_live_project_governance.py", "tests/test_live_tooling_discovery.py",
+    "tests/README.md", "tests/test_cold_start_budget.py",
+    "tests/test_action_taxonomy_java_parity.py",
+    "tests/test_gov_po_2_privacy_entrypoint.py", "tests/test_security_scans.py",
+}
 COMPONENT_PREFIXES = (
     ("discovery", DISCOVERY_PREFIXES),
     ("inventory", INVENTORY_PREFIXES),
@@ -84,10 +94,19 @@ def component_for_path(path: str) -> str | None:
 def classify(paths: list[str]) -> str:
     if not paths:
         return "blocked"
+
+    def full_path(path: str) -> bool:
+        return path in TOOLING_FILES or path.startswith(MAJOR_PREFIXES)
+
+    if any(full_path(path) for path in paths):
+        def known(path: str) -> bool:
+            return (full_path(path) or path in DELIVERY_FILES
+                    or component_for_path(path) is not None
+                    or path.startswith(tuple(LDAP_PREFIXES))
+                    or path.startswith("docs/") or path.endswith(".md"))
+        return "full" if all(known(path) for path in paths) else "blocked"
     if all(path.startswith("docs/") or path.endswith(".md") for path in paths):
         return "skip"
-    if any(path.startswith(MAJOR_PREFIXES) for path in paths):
-        return "full"
     ldap = all(path in DELIVERY_FILES for path in paths) or (
         all(path in DELIVERY_FILES or path.startswith(tuple(LDAP_PREFIXES)) or path.startswith(("ui2/persistence/", "ui2/service/")) for path in paths)
         and any(path.startswith(LDAP_ANCHORS) for path in paths)

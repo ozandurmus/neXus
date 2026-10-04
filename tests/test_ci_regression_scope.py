@@ -93,3 +93,10 @@ def test_major_changes_require_full_regression():
 def test_unknown_or_empty_scope_is_blocked():
     assert classify(["unmapped/file.txt"]) == "blocked"
     assert classify([]) == "blocked"
+
+
+def test_migration_roots_never_skip_live_gates():
+    for path in ("history/README.md", "history/application/main.py", "tools/privacy/check.py", "tools/README.md", "pytest.ini", "AGENTS.md"):
+        assert classify([path]) == "full"
+        assert classify([path, "unmapped/file.txt"]) == "blocked"
+    assert classify(["history/main.py", "tools/delivery/run.py", "README.md"]) == "full"

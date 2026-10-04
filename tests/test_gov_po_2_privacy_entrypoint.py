@@ -44,7 +44,7 @@ def _run_main() -> tuple[int, str]:
 def _run_standalone(module) -> tuple[int, str]:
     output = io.StringIO()
     with contextlib.redirect_stdout(output):
-        code = module.main()
+        code = module.main([])
     return code, output.getvalue()
 
 
@@ -84,6 +84,8 @@ def test_standalone_imports_only_the_authorized_privacy_symbols():
     assert {alias.name for alias in privacy_imports[0].names} == {
         "RepositoryPrivacyError",
         "scan_repository",
+        "baseline_finding_keys",
+        "finding_key",
     }
     assert not any(
         isinstance(node, ast.ImportFrom) and (
@@ -104,3 +106,9 @@ def test_standalone_is_directly_executable_from_the_repository():
     assert result.returncode in {0, 1}
     assert "ModuleNotFoundError" not in result.stderr
     assert "No matched values were printed." in result.stdout
+
+
+def test_legacy_cli_rejects_baseline_ref_without_the_check():
+    with pytest.raises(SystemExit) as exc:
+        main.main(["--privacy-baseline-ref", "origin/main"])
+    assert exc.value.code != 0

@@ -1,29 +1,10 @@
-# Development / test dependencies. Not required to run SecurityExpert.
-# Runtime deps are in requirements.txt.
-#
-#   py -m pip install -r requirements.txt -r requirements-dev.txt
-#
-# Full suite (parallel): py -m pytest -q -n auto --dist worksteal
-#   ~44s on 16 cores vs ~110s serial. `worksteal` lets idle workers pick up
-#   from busy ones, which matters given uneven test durations.
-#   Use `-n0` (or scripts/pytest_one_shot.ps1 -Serial) for a serial run when
-#   debugging a single failure.
-
+# Standalone LIVE_TOOLING test dependencies (no product requirements).
+# Install: python3 -m pip install -r requirements-dev.txt
+# Run: python3 -m pytest -q -n auto --dist worksteal
 pytest>=8
 pytest-xdist>=3.6
-
-# Validates .github/workflows/validation.yml actually parses (DEV.TEST.1
-# post-merge incident, 2026-09-06: an unquoted plain scalar with a bare
-# ": " inside an f-string label broke GitHub Actions' ability to schedule
-# ANY job for ANY trigger on this file, silently, for two commits and a
-# merge, because nothing validated the YAML before push). See
-# tests/test_ci_workflow_fast_pr_regression.py::test_workflow_yaml_parses.
 pyyaml>=6
 
-# Optional: powers the Playwright-based render-harness DOM check
-# (tools/render-harness/check_render_playwright.py), a real-Chromium
-# alternative to the bun+happy-dom path when that toolchain is unavailable
-# or its script-eval shim breaks against a newer happy-dom/bun pairing.
-# Skipped cleanly by tests/test_html_render_harness.py if not installed.
-# One-time setup: py -m pip install -r requirements-dev.txt && playwright install chromium
+# Required by the synthetic Workbench browser tests, not the legacy renderer.
+# CI prepares Chromium with: python3 -m playwright install --with-deps chromium
 playwright>=1.40

@@ -260,13 +260,14 @@ def test_build_gates_before_first_rollout():
     assert source.index('IMAGE_DIGEST="') < source.index("scripts/security_host.py gate") < source.index("kubectl -n ui2 set image")
 
 
-def test_ship_skip_requires_reason_before_any_git_action(monkeypatch):
+def test_ship_skip_requires_reason_before_any_git_action(monkeypatch, tmp_path):
     import standalone_orchestrate as sa
     import argparse
+    monkeypatch.setattr(sa, "STATE_DIR", tmp_path)
     monkeypatch.setattr(sa, "_git", lambda *a, **kw: pytest.fail("Git must not run for an invalid bypass"))
     for reason in ("", "   ", "line\nbreak"):
         with pytest.raises(SystemExit, match="requires"):
-            sa.cmd_ship(argparse.Namespace(skip_security=reason))
+            sa.cmd_ship(argparse.Namespace(skip_security=reason, task="synthetic-task", branch=None))
 
 
 @pytest.mark.parametrize("missing", [False, True])
