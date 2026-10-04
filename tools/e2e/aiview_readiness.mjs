@@ -4,8 +4,8 @@
 // node tools/e2e/aiview_readiness.mjs --vendor pan --all [--wait]
 import { parseArgs } from 'node:util';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { pathToFileURL } from 'node:url';
-import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { realpathSync } from 'node:fs';
 
 const PSEUDONYM = /^[A-Z]{2,4}(-[A-Z0-9]+){1,4}$/;
 const TERMINAL = new Set(['DONE', 'STOPPED']);
@@ -102,7 +102,7 @@ export async function run(args = process.argv.slice(2), env = process.env,
   if (submitted.length) throw new Error('Timed out waiting for readiness; runs were not resubmitted');
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+if (process.argv[1] && realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1])) {
   run().catch(() => {
     // Never print response bodies, URLs, tokens or HTTP-client exception text.
     process.stderr.write('AIView readiness failed. Check configuration, permissions and masked run history.\n');

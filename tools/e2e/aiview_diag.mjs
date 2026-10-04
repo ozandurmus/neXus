@@ -5,8 +5,8 @@
 import { parseArgs } from 'node:util';
 import { randomUUID } from 'node:crypto';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { pathToFileURL } from 'node:url';
-import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { realpathSync } from 'node:fs';
 
 const TERMINAL = new Set(['COMPLETED', 'FAILED', 'REJECTED', 'CANCELLED', 'OUTCOME_UNKNOWN', 'RECONCILED']);
 
@@ -79,7 +79,7 @@ export async function run(args = process.argv.slice(2), env = process.env,
   throw new Error('Timed out waiting for diagnostic; the job was not resubmitted');
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+if (process.argv[1] && realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1])) {
   run().catch(() => {
     // Never print response bodies, URLs, tokens or exception text from the HTTP client.
     process.stderr.write('AIView diagnostic failed. Check configuration, permissions and masked job history.\n');

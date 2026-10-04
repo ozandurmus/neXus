@@ -17,14 +17,18 @@ import java.time.Instant;
 import java.util.*;
 
 class PolicyApiTest {
-    @Test void policyRoutesKeepReadsSeparateFromAdminCollection() {
+    @Test void policyRoutesAllowMaskedCollectionWithoutOtherWrites() {
         var action = new ActionRegistry().find(ActionRegistry.POLICY_READ).orElseThrow();
         assertEquals(Set.of(RoleToken.SECURITY_ADMIN, RoleToken.ONBOARDING_ADMIN, RoleToken.REPLAY_VIEWER), action.requiredRoleTokens());
         for (String route : List.of("GET /api/v2/policy/tree", "GET /api/v2/policy/collections/*", "GET /api/v2/policy/devices", "GET /api/v2/policy/devices/*", "GET /api/v2/policy/policies/*", "GET /api/v2/policy/policies/*/history", "GET /api/v2/policy/objects/*"))
             assertEquals(ActionRegistry.POLICY_READ, SecurityWebMvcConfig.ACTION_ID_BY_ROUTE.get(route));
-        assertEquals(Set.of(RoleToken.SECURITY_ADMIN, RoleToken.ONBOARDING_ADMIN),
+        assertEquals(Set.of(RoleToken.SECURITY_ADMIN, RoleToken.ONBOARDING_ADMIN, RoleToken.REPLAY_VIEWER),
                 new ActionRegistry().find(ActionRegistry.POLICY_COLLECT).orElseThrow().requiredRoleTokens());
         assertEquals(ActionRegistry.POLICY_COLLECT, SecurityWebMvcConfig.ACTION_ID_BY_ROUTE.get("POST /api/v2/policy/sources/*/collect"));
+        // The request cannot carry a command, endpoint, credential or arbitrary transport parameters.
+        assertEquals(List.of("domainRef"), Arrays.stream(
+                com.securityexpert.nexus.ui2.service.api.PolicyCollectionController.CollectRequest.class.getRecordComponents())
+                .map(java.lang.reflect.RecordComponent::getName).toList());
     }
     @Test void mvcEnforcesSessionRbacMaskingAndNoStoreForEachPersona() throws Exception {
         var sessions = mock(SessionRepository.class);
@@ -65,16 +69,15 @@ class PolicyApiTest {
             when(rbac.evaluateAny(eq(actor), eq(new ActionRegistry().find(ActionRegistry.POLICY_READ).orElseThrow().requiredRoleTokens()), any())).thenReturn(decision);
             when(rbac.evaluate(eq(actor), eq(Optional.of(RoleToken.REPLAY_VIEWER)), any())).thenReturn(
                     new RbacEvaluator.Decision(role.equals(RoleToken.REPLAY_VIEWER) ? AuthzOutcome.PERMITTED : AuthzOutcome.DENIED, Optional.of("test"), Optional.empty(), Optional.empty()));
-            boolean admin = role.equals(RoleToken.SECURITY_ADMIN) || role.equals(RoleToken.ONBOARDING_ADMIN);
             when(rbac.evaluateAny(eq(actor), eq(new ActionRegistry().find(ActionRegistry.POLICY_COLLECT).orElseThrow().requiredRoleTokens()), any())).thenReturn(
-                    new RbacEvaluator.Decision(admin ? AuthzOutcome.PERMITTED : AuthzOutcome.DENIED, Optional.of("test"), Optional.empty(), Optional.empty()));
+                    new RbacEvaluator.Decision(allowed ? AuthzOutcome.PERMITTED : AuthzOutcome.DENIED, Optional.of("test"), Optional.empty(), Optional.empty()));
             String collectPath = "/api/v2/policy/sources/pan-1/collect";
             mvc.perform(post(collectPath).servletPath(collectPath).cookie(new Cookie("ui2_session", cookie))
                     .contentType("application/json").content("{\"domainRef\":\"\"}"))
                     .andExpect(status().isUnauthorized());
             mvc.perform(post(collectPath).servletPath(collectPath).cookie(new Cookie("ui2_session", cookie))
                     .header("X-CSRF-Token", "synthetic-csrf").header("Origin", "https://example.invalid").contentType("application/json").content("{\"domainRef\":\"\"}"))
-                    .andExpect(status().is(admin ? 202 : 403));
+                    .andExpect(status().is(allowed ? 202 : 403));
             // Use the repository's session-cookie name, the same boundary used by every controller.
             var response = mvc.perform(get("/api/v2/policy/policies/policy-1").servletPath("/api/v2/policy/policies/policy-1").cookie(new Cookie("ui2_session", cookie)));
             for (String path : List.of("/api/v2/policy/tree", "/api/v2/policy/collections/job-1", "/api/v2/policy/policies/policy-1/history")) {
@@ -95,6 +98,80 @@ class PolicyApiTest {
                 assertTrue(text.contains(names.maskPolicyName("policy", "Synthetic policy")));
             } else assertTrue(text.contains("Synthetic policy"));
         }
+    }
+    @Test void replayAndMachineCollectionRequireCsrfOriginAndPreserveWriteDenials() throws Exception {
+        for (boolean machine : List.of(false, true)) {
+            var sessions = mock(SessionRepository.class);
+            var rbac = mock(RbacEvaluator.class);
+            var collections = mock(PolicyCollectionService.class);
+            String cookie = "synthetic-policy-session", actor = "synthetic-policy-actor";
+            Instant now = Instant.now();
+            var session = new SessionRecord(SessionHasher.hash(cookie), actor, "synthetic-csrf", SessionState.ACTIVE,
+                    now, now, now.plusSeconds(3600), now.plusSeconds(7200),
+                    Optional.empty(), Optional.empty(), Optional.empty(), machine);
+            when(sessions.findBySessionId(eq(session.sessionId()), any(Instant.class))).thenReturn(Optional.of(session));
+            when(rbac.evaluateAny(eq(actor), anySet(), any(Instant.class))).thenAnswer(call -> {
+                Set<String> roles = call.getArgument(1);
+                return new RbacEvaluator.Decision(roles.contains(RoleToken.REPLAY_VIEWER)
+                        ? AuthzOutcome.PERMITTED : AuthzOutcome.DENIED,
+                        Optional.of("test"), Optional.empty(), Optional.empty());
+            });
+            when(rbac.evaluate(eq(actor), any(), any(Instant.class))).thenAnswer(call -> {
+                Optional<String> role = call.getArgument(1);
+                return new RbacEvaluator.Decision(role.filter(RoleToken.REPLAY_VIEWER::equals).isPresent()
+                        ? AuthzOutcome.PERMITTED : AuthzOutcome.DENIED,
+                        Optional.of("test"), Optional.empty(), Optional.empty());
+            });
+            when(collections.sources()).thenReturn(List.of());
+            when(collections.collect("source-1", "", actor)).thenReturn(Optional.of("job-1"));
+            var gate = new GateChain(sessions, new ActionRegistry(), rbac, mock(AuthzDecisionRepository.class));
+            var mvc = MockMvcBuilders.standaloneSetup(
+                    new com.securityexpert.nexus.ui2.service.api.PolicyCollectionController(collections, rbac),
+                    new PolicyWriteProbe()).setControllerAdvice(new PrivacyMaskingResponseBodyAdvice(
+                        new SubnetPreservingIpMasker(new byte[32]), new TopologyNamePseudonymizer(new byte[32])))
+                    .addInterceptors(new GateChainInterceptor(gate, SecurityWebMvcConfig.ACTION_ID_BY_ROUTE)).build();
+            String sources = "/api/v2/policy/sources", collect = sources + "/source-1/collect";
+            mvc.perform(get(sources).servletPath(sources).cookie(new Cookie("ui2_session", cookie)))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$.canCollect").value(true))
+                    .andExpect(jsonPath("$.canCancel").value(false))
+                    .andExpect(header().string("X-Nexus-Masked", "true"));
+            for (String csrf : List.of("", "wrong")) {
+                mvc.perform(post(collect).servletPath(collect).cookie(new Cookie("ui2_session", cookie))
+                        .header("X-CSRF-Token", csrf).header("Origin", "https://example.invalid")
+                        .contentType("application/json").content("{\"domainRef\":\"\"}"))
+                        .andExpect(status().isUnauthorized());
+            }
+            mvc.perform(post(collect).servletPath(collect).cookie(new Cookie("ui2_session", cookie))
+                    .header("X-CSRF-Token", "synthetic-csrf").contentType("application/json").content("{\"domainRef\":\"\"}"))
+                    .andExpect(status().isUnauthorized());
+            verify(collections, never()).collect(anyString(), anyString(), anyString());
+            mvc.perform(post(collect).servletPath(collect).cookie(new Cookie("ui2_session", cookie))
+                    .header("X-CSRF-Token", "synthetic-csrf").header("Origin", "https://example.invalid")
+                    .contentType("application/json").content("{\"domainRef\":\"\"}"))
+                    .andExpect(status().isAccepted()).andExpect(jsonPath("$.jobId").value("job-1"));
+            verify(collections).collect("source-1", "", actor);
+            when(collections.collect("source-1", "", actor)).thenReturn(Optional.empty());
+            mvc.perform(post(collect).servletPath(collect).cookie(new Cookie("ui2_session", cookie))
+                    .header("X-CSRF-Token", "synthetic-csrf").header("Origin", "https://example.invalid")
+                    .contentType("application/json").content("{\"domainRef\":\"\"}"))
+                    .andExpect(status().isConflict()).andExpect(jsonPath("$.error").value("POLICY_SOURCE_BUSY_OR_INELIGIBLE"));
+            for (String path : List.of(sources, sources + "/source-1", sources + "/source-1/cancel",
+                    "/api/v2/policy/collections/job-1/cancel", "/api/v2/jobs/job-1/cancel")) {
+                for (String method : List.of("POST", "PUT", "PATCH", "DELETE")) {
+                    mvc.perform(request(org.springframework.http.HttpMethod.valueOf(method), path).servletPath(path)
+                            .cookie(new Cookie("ui2_session", cookie)).header("X-CSRF-Token", "synthetic-csrf")
+                            .header("Origin", "https://example.invalid")).andExpect(status().isForbidden());
+                }
+            }
+        }
+    }
+    @org.springframework.web.bind.annotation.RestController
+    static class PolicyWriteProbe {
+        @org.springframework.web.bind.annotation.RequestMapping(method = {org.springframework.web.bind.annotation.RequestMethod.POST,
+                org.springframework.web.bind.annotation.RequestMethod.PUT, org.springframework.web.bind.annotation.RequestMethod.PATCH,
+                org.springframework.web.bind.annotation.RequestMethod.DELETE}, value = {"/api/v2/policy/sources", "/api/v2/policy/sources/{id}",
+                "/api/v2/policy/sources/{id}/cancel", "/api/v2/policy/collections/{id}/cancel", "/api/v2/jobs/{id}/cancel"})
+        public void write() { fail("Policy writes must never reach the controller"); }
     }
     @Test void controllerBoundsPagingAndScopesObjectsToPolicyAssignments() {
         var query = mock(PolicyQueryService.class); var controller = new PolicyController(query);

@@ -189,7 +189,8 @@ public final class GateChain {
 
     private static boolean isReadOnlyPost(String method, String actionId) {
         return "POST".equalsIgnoreCase(method) && (ActionRegistry.FMG_DIAGNOSTIC_RUN.equals(actionId)
-                || ActionRegistry.CP_READINESS_START.equals(actionId));
+                || ActionRegistry.CP_READINESS_START.equals(actionId)
+                || ActionRegistry.POLICY_COLLECT.equals(actionId));
     }
 
     private static boolean isReadMethod(String method) {
