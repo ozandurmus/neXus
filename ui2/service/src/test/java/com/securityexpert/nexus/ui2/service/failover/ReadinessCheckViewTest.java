@@ -56,6 +56,19 @@ class ReadinessCheckViewTest {
         }
         assertEquals("Interface table not recognised",row(false,3,"UNKNOWN","{\"up\":0}").get("summary"));
     }
+    @Test void unknownChecksWithMissingFieldsNeverRenderJsonFragments() throws Exception {
+        assertEquals("Session sync fields missing or not recognised: /response/result/enabled and messages/entry fields enable, sent, recv and desc",
+            row(true,5,"UNKNOWN","{}").get("summary"));
+        for (boolean pan:new boolean[]{false,true}) for (int no=1;no<=14;no++)
+            for (String derived:new String[]{"{}","null","[]"}) {
+                var view=row(pan,no,"UNKNOWN",derived);
+                String summary=view.get("summary").toString();
+                assertFalse(summary.isBlank());
+                assertFalse(summary.contains("{") || summary.contains("}")
+                    || summary.contains("[") || summary.contains("]"));
+                assertEquals("UNKNOWN",view.get("result"));
+            }
+    }
     @Test void readinessSyncReportsBaselineAndIncrementInsteadOfLifetimeLoss() throws Exception {
         assertEquals("Sync OK, baseline recorded",row(false,9,"PASS",
             "{\"lostUpdates\":853745,\"baselineRecorded\":true}").get("summary"));
