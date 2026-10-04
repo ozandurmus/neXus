@@ -13,9 +13,10 @@ is the single owner of the rule and is not restated here.
 ## What this is
 
 **neXus** (formerly SecurityExpert) — a multi-vendor network-security *evidence* platform.
-It collects and reconciles runtime inventory and current configuration from
-Check Point (MDS/CMA), Check Point VSX, and Palo Alto Panorama / PAN-OS, then
-publishes a single static HTML report plus a sanitized shareable support bundle.
+The maintained product is UI2: Java with a React/TypeScript frontend.
+Start with the [Java documentation index](docs/README.md) for architecture,
+operations, security and active contracts. The retired Python product and
+its static-report workflow are preserved under `history/`.
 
 Product maturity axis: `SEE → VERIFY → TRACE → RECOVER → OPERATE`.
 `SEE` (inventory) is mature; `VERIFY` (configuration + alignment + compliance) is
@@ -41,7 +42,11 @@ manifest in `pytest.ini`; legacy tests are opt-in (see `tests/README.md`).
 
 ---
 
-## Historical Python product (pending PR2 archive)
+## Historical Python product (archived under history/)
+
+The paths and commands in this historical section describe the retired tree,
+not the Java runtime. See [archive boundaries](history/README.md) and the
+[document relocation map](history/docs/RELOCATION.md).
 
 **One Python CLI.** Dependencies: `lxml`, `paramiko`, `requests`. `--console`
 is the one optional exception — a loopback web server, off by default,
