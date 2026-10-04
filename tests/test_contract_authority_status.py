@@ -98,6 +98,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+import sys
 from pathlib import Path
 
 import pytest
@@ -330,38 +331,36 @@ def test_every_catalogued_exemption_still_describes_a_real_citation():
     )
 
 
-def test_the_gate_catches_an_injected_violation():
-    """Self-proof: the detector must fire on a real FROZEN→DRAFT authority
-    citation. Uses the live corpus's own statuses, so it cannot pass
-    vacuously."""
-    status = _status_by_name()
-    frozen = next((name for name, value in status.items() if value == "frozen"), None)
-    draft = next((name for name, value in status.items() if value == "draft"), None)
-    if not frozen or not draft:
-        pytest.fail(f"corpus lacks a FROZEN or a DRAFT contract to prove against: {status}")
-    path = DESIGN_DIR / frozen
-    original = path.read_text(encoding="utf-8")
-    try:
-        path.write_text(
-            original.rstrip("\n")
-            + f"\n\n## 99. Injected\n\nPer `{draft}` §1, this behaviour is authorized.\n",
-            encoding="utf-8",
-        )
-        assert _new_findings(), "detector missed an injected FROZEN -> DRAFT authority citation"
-    finally:
-        path.write_text(original, encoding="utf-8")
+def test_the_gate_catches_an_injected_violation(tmp_path, monkeypatch):
+    """Prove detection in an isolated corpus without mutating live contracts."""
+    monkeypatch.setattr(sys.modules[__name__], "DESIGN_DIR", tmp_path)
+    path = tmp_path / "SYNTHETIC_FROZEN.md"
+    original = "# Synthetic contract\n\n## Status\n\nFROZEN\n"
+    path.write_text(original, encoding="utf-8")
+    (tmp_path / "SYNTHETIC_DRAFT.md").write_text(
+        "# Synthetic proposal\n\n## Status\n\nDRAFT\n", encoding="utf-8")
+    assert not _new_findings()
+    path.write_text(original + "\n## Injected\n\nPer `SYNTHETIC_DRAFT.md`, this behaviour is authorized.\n",
+                    encoding="utf-8")
+    findings = _new_findings()
+    assert len(findings) == 1
+    assert "SYNTHETIC_FROZEN.md" in findings[0] and "SYNTHETIC_DRAFT.md" in findings[0]
+    path.write_text(original, encoding="utf-8")
     assert not _new_findings(), "detector left state behind after the injected violation"
 
 
-def test_an_exemption_does_not_generalize_to_a_new_citation_in_the_same_pair():
+def test_an_exemption_does_not_generalize_to_a_new_citation_in_the_same_pair(tmp_path, monkeypatch):
     """The allowlist is keyed to an exact paragraph, not to a document pair: a
     second, different citation between the same two documents must still
     fail."""
     if not _KNOWN_DRAFT_AUTHORITY_CITATIONS:
         pytest.skip("no catalogued exemptions to prove non-generalization against")
     citing, cited, _ = next(iter(_KNOWN_DRAFT_AUTHORITY_CITATIONS))
-    path = DESIGN_DIR / citing
-    original = path.read_text(encoding="utf-8")
+    original = (DESIGN_DIR / citing).read_text(encoding="utf-8")
+    cited_text = (DESIGN_DIR / cited).read_text(encoding="utf-8")
+    monkeypatch.setattr(sys.modules[__name__], "DESIGN_DIR", tmp_path)
+    path = tmp_path / citing
+    (tmp_path / cited).write_text(cited_text, encoding="utf-8")
     try:
         path.write_text(
             original.rstrip("\n")

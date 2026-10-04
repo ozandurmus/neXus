@@ -213,7 +213,7 @@ The existing `64Mi/50m` request and `256Mi/200m` limit may be used as a starting
 8. Define K3s resource validation, readiness, request limits, timeout, and NetworkPolicy enforcement evidence.
 9. Require golden tests for deterministic evaluation, missing-evidence retention, catalog mismatch, idempotency, scoring, drift comparability, and adversarial privacy leakage.
 
-## SESSION CLOSE
+## Review session close
 
 Read-only architectural review completed. No source, configuration, project state, deployment, database, device, or production data was changed. No tests or live-cluster validation were run. Git showed pre-existing untracked draft/consultation files; this review did not create or modify them.
 

@@ -1,4 +1,4 @@
-## SESSION START
+## Review session start
 
 **Role:** REVIEWER (architectural evaluation, read-only). No repository file was modified.
 
