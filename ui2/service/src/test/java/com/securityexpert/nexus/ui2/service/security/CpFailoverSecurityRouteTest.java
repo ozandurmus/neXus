@@ -91,4 +91,78 @@ class CpFailoverSecurityRouteTest {
                 .andExpect(jsonPath("$.error").value("ACTION_MAPPING_REQUIRED"));
         verifyNoMoreInteractions(service);
     }
+    @Test
+    void readinessOnlyPostsAllowReplayAndMachineSessionsWithCsrfAndOrigin() throws Exception {
+        for (boolean machine : List.of(false, true)) {
+            var sessions = mock(SessionRepository.class);
+            var rbac = mock(RbacEvaluator.class);
+            var service = mock(CpFailoverService.class);
+            String cookie = "synthetic-session", actor = "synthetic-actor";
+            Instant now = Instant.now();
+            var session = new SessionRecord(SessionHasher.hash(cookie), actor, "synthetic-csrf", SessionState.ACTIVE,
+                    now, now, now.plusSeconds(3600), now.plusSeconds(7200),
+                    Optional.empty(), Optional.empty(), Optional.empty(), machine);
+            when(sessions.findBySessionId(eq(session.sessionId()), any(Instant.class))).thenReturn(Optional.of(session));
+            when(rbac.evaluate(eq(actor), any(), any(Instant.class))).thenAnswer(call -> {
+                Optional<String> role = call.getArgument(1);
+                return new RbacEvaluator.Decision(role.filter(RoleToken.REPLAY_VIEWER::equals).isPresent()
+                        ? AuthzOutcome.PERMITTED : AuthzOutcome.DENIED,
+                        Optional.of("test"), Optional.empty(), Optional.empty());
+            });
+            when(rbac.evaluateAny(eq(actor), anySet(), any(Instant.class))).thenAnswer(call -> {
+                Set<String> roles = call.getArgument(1);
+                return new RbacEvaluator.Decision(roles.contains(RoleToken.REPLAY_VIEWER)
+                        ? AuthzOutcome.PERMITTED : AuthzOutcome.DENIED,
+                        Optional.of("test"), Optional.empty(), Optional.empty());
+            });
+            when(service.requestReadiness(eq("opaque-cluster"), eq("opaque-unit"), eq(actor), anyString()))
+                    .thenReturn("opaque-run");
+            var gate = new GateChain(sessions, new ActionRegistry(), rbac, mock(AuthzDecisionRepository.class));
+            var mvc = MockMvcBuilders.standaloneSetup(new CpFailoverController(service), new ScheduleWriteProbe())
+                    .addInterceptors(new GateChainInterceptor(gate, SecurityWebMvcConfig.ACTION_ID_BY_ROUTE)).build();
+            for (String vendor : List.of("cp", "pan")) {
+                String prefix = "/api/v2/" + vendor + "-failover";
+                String path = prefix + "/units/opaque-unit/readiness";
+                String body = "{\"clusterId\":\"opaque-cluster\",\"unitId\":\"opaque-unit\"}";
+                mvc.perform(post(path).servletPath(path).cookie(new Cookie("ui2_session", cookie))
+                        .header("X-CSRF-Token", "synthetic-csrf").header("Origin", "https://example.invalid")
+                        .contentType("application/json").content(body))
+                        .andExpect(status().isOk()).andExpect(jsonPath("$.runId").value("opaque-run"));
+                for (String csrf : List.of("", "wrong")) {
+                    mvc.perform(post(path).servletPath(path).cookie(new Cookie("ui2_session", cookie))
+                            .header("X-CSRF-Token", csrf).header("Origin", "https://example.invalid")
+                            .contentType("application/json").content(body)).andExpect(status().isUnauthorized());
+                }
+                mvc.perform(post(path).servletPath(path).cookie(new Cookie("ui2_session", cookie))
+                        .header("X-CSRF-Token", "synthetic-csrf").contentType("application/json").content(body))
+                        .andExpect(status().isUnauthorized());
+                for (String suffix : List.of("/runs", "/approvals", "/approvals/opaque-approval/revoke")) {
+                    String denied = prefix + suffix;
+                    mvc.perform(post(denied).servletPath(denied).cookie(new Cookie("ui2_session", cookie))
+                            .header("X-CSRF-Token", "synthetic-csrf").header("Origin", "https://example.invalid")
+                            .contentType("application/json").content(body)).andExpect(status().isForbidden());
+                }
+                verify(service).requestReadiness("opaque-cluster", "opaque-unit", actor,
+                        vendor.equals("cp") ? "check_point" : "palo_alto");
+            }
+            for (String path : List.of("/api/v2/failover/opaque-cluster/schedules",
+                    "/api/v2/failover/schedules/opaque-schedule/cancel",
+                    "/api/v2/failover/schedules/opaque-schedule/trigger")) {
+                for (String method : List.of("POST", "PUT", "PATCH", "DELETE")) {
+                    mvc.perform(request(org.springframework.http.HttpMethod.valueOf(method), path).servletPath(path)
+                            .cookie(new Cookie("ui2_session", cookie)).header("X-CSRF-Token", "synthetic-csrf")
+                            .header("Origin", "https://example.invalid")).andExpect(status().isForbidden());
+                }
+            }
+            verifyNoMoreInteractions(service);
+        }
+    }
+
+    @org.springframework.web.bind.annotation.RestController
+    static class ScheduleWriteProbe {
+        @RequestMapping({"/api/v2/failover/{cluster}/schedules", "/api/v2/failover/schedules/{id}/cancel",
+                "/api/v2/failover/schedules/{id}/trigger"})
+        public void write() { fail("Schedule write must never reach the controller"); }
+    }
+
 }

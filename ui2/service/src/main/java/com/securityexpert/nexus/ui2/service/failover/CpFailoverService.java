@@ -60,7 +60,7 @@ public final class CpFailoverService {
     private void requireReader(String actor) {
         if (!"system:failover-readiness-scheduler".equals(actor)
                 && !allowed(actor, RoleToken.OPERATOR) && !allowed(actor, RoleToken.SECURITY_ADMIN)
-                && !allowed(actor, RoleToken.VIEWER))
+                && !allowed(actor, RoleToken.VIEWER) && !allowed(actor, RoleToken.REPLAY_VIEWER))
             throw new Refusal("WRONG_ROLE");
     }
 
@@ -78,7 +78,7 @@ public final class CpFailoverService {
         return summaries(actor);
     }
     private List<Summary> summaries(String actor) {
-        boolean canRunReadiness = mayStart(actor);
+        boolean canRunReadiness = mayStart(actor) || allowed(actor, RoleToken.REPLAY_VIEWER);
         Map<String, List<JooqCpFailoverRepository.SummaryMember>> facts = store.summaryMembers().stream()
             .collect(Collectors.groupingBy(JooqCpFailoverRepository.SummaryMember::deviceId));
         Map<StatusKey, JooqCpFailoverRepository.SummaryStatus> statuses = store.summaryStatuses().stream()
@@ -285,7 +285,7 @@ public final class CpFailoverService {
     }
 
     public String requestReadiness(String clusterId, String unitId, String actor, String vendor) {
-        requireOperator(actor);
+        if (!mayStart(actor) && !allowed(actor, RoleToken.REPLAY_VIEWER)) throw new Refusal("WRONG_ROLE");
         return submitReadiness(clusterId, unitId, actor, vendor);
     }
     public String requestScheduledReadiness(ReadinessTarget target) {
