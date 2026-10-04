@@ -62,4 +62,6 @@ is added to it. Privacy scanning still covers this entire archive, with only
 the same test-fixture treatment at the exact `history/tests/` root.
 
 See [PR2 review notes](PR2_NOTES.md) for retained UNSURE paths, validation and
-remaining gaps. Documentation relocation belongs to PR4.
+remaining gaps. PR4 starts documentation relocation with the
+[old-to-new path map](docs/RELOCATION.md); current documentation starts at
+[the Java documentation index](../docs/README.md).
