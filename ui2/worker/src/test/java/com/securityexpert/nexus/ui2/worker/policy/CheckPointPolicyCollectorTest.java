@@ -340,8 +340,9 @@ class CheckPointPolicyCollectorTest {
         verify(transport, never()).execInteractive(eq(session), argThat(spec -> spec.command().contains(" limit 50 offset ")), any());
     }
     @Test void malformedMappedInlineLayerDoesNotPreventNatOrSiblingPublication() {
-        var collector = setup(command -> command.contains("name 'Inline'")
+        setup(command -> command.contains("name 'Inline'")
             ? ok(page("child", 1, 1, 1, "{\"uid\":\"r3\",\"type\":\"unsupported-entry\"}", "")) : answer(command));
+        var collector = new CheckPointPolicyCollector(transport, gates, repository, Duration.ofHours(2), () -> 0L);
         List<PolicySnapshot> checkpoints = new ArrayList<>();
         var snapshot = collector.collect(run, request, () -> true, checkpoints::add).get(0);
         assertEquals(List.of("r1", "r2", "n1"), snapshot.sections().stream()
@@ -415,15 +416,18 @@ class CheckPointPolicyCollectorTest {
     }
 
     @Test void laterFailedPackageKeepsPriorPackageAndReportsItsIncompleteLayers() {
-        var collector = setup(command -> {
+        var clock = new java.util.concurrent.atomic.AtomicLong();
+        setup(command -> {
             if (command.contains("show-packages")) return ok("""
                 {"total":2,"packages":[
                   {"uid":"pkg-01","name":"Package","access-layers":[{"uid":"layer","name":"Layer"}],"installation-targets":[]},
                   {"uid":"pkg-02","name":"Unfinished","access-layers":[{"uid":"other","name":"Unfinished"}],"installation-targets":[]}]}
                 """);
             if (command.contains("'Unfinished'")) return new ExecResult.TimedOut();
+            if (command.contains("name 'Inline'")) clock.set(CpPolicyParallelCollection.configuredCheckpointInterval().toNanos());
             return answer(command);
         });
+        var collector = new CheckPointPolicyCollector(transport, gates, repository, Duration.ofHours(2), clock::get);
         List<PolicySnapshot> checkpoints = new ArrayList<>();
         var collected = collector.collect(run, request, () -> true, checkpoints::add);
         assertEquals(2, collected.size());
@@ -432,6 +436,8 @@ class CheckPointPolicyCollectorTest {
         assertEquals("Unfinished", collected.get(1).failures().get(0).layerName());
         assertTrue(collected.get(1).failures().stream().allMatch(f -> f.reason().endsWith(": TIMEOUT")));
         assertEquals(4, checkpoints.size());
+        assertEquals(collected.get(0), checkpoints.get(2));
+        assertEquals(collected.get(1), checkpoints.get(3));
     }
 
 }
