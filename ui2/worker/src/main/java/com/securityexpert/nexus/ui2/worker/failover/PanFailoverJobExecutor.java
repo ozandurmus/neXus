@@ -249,14 +249,16 @@ public final class PanFailoverJobExecutor {
             :(oldActive==first?sessionsB:sessionsA);
         String carried=sessionsA==null || sessionsB==null?"UNKNOWN"
             :oldActive==null?"PASS":PanFailoverChecks.carried(before,active);
+        var sessionSync="active".equals(a.role())?PanFailoverChecks.sessionSyncEvidence(syncA,syncB)
+            :"active".equals(b.role())?PanFailoverChecks.sessionSyncEvidence(syncB,syncA)
+                :new PanFailoverChecks.SessionSync("UNKNOWN","{\"missing\":[\"active role\"]}");
         String[] statuses={role,PanFailoverChecks.relationship(a,b),PanFailoverChecks.links(a,b),
-            PanFailoverChecks.sync(a,b),"active".equals(a.role())
-                ?PanFailoverChecks.sessionSync(syncA,syncB)
-                :"active".equals(b.role())?PanFailoverChecks.sessionSync(syncB,syncA):"UNKNOWN",carried,versions};
+            PanFailoverChecks.sync(a,b),sessionSync.status(),carried,versions};
         for (int i=0;i<statuses.length;i++) {
             int no=i+1;
             shapes.logUnknown(no,statuses[i]);
             String reason=PanFailoverChecks.unknownDerived(no,statuses[i],fieldsFound.getOrDefault(no,false));
+            if (no==5) reason=sessionSync.derived();
             if (no==6 && !"UNKNOWN".equals(statuses[i])) reason="{\"count\":"+sessionsA+"}";
             String derived=no==1?"{\"role\":\""+a.role()+"\"}":reason;
             store.check(runId,phase,first.id(),null,no,statuses[i],derived);

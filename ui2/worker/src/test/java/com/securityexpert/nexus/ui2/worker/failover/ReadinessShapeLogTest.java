@@ -47,6 +47,21 @@ class ReadinessShapeLogTest {
             "<!DOCTYPE response [<!ENTITY local 'gw-test-01'>]><response>&local;</response>"));
     }
 
+    @Test void panCheckFiveLogsMaskedValuesOnlyForUnknown() {
+        var log=new ReadinessShapeLog("palo_alto");
+        log.capture(5,"<response><result><enabled>Enabled</enabled><sent>1,234</sent>"
+            +"<recv><![CDATA[pending99]]></recv><name>FW-TEST-01</name></result></response>");
+        assertNull(log.logUnknown(5,"PASS"));
+        assertNull(log.logUnknown(5,"FAIL"));
+        String message=log.logUnknown(5,"UNKNOWN");
+        assertTrue(message.contains("<enabled>aaaaaaa</enabled>"));
+        assertTrue(message.contains("<sent>9,999</sent>"));
+        assertTrue(message.contains("<recv>aaaaaaa99</recv>"));
+        assertFalse(message.contains("Enabled") || message.contains("pending99") || message.contains("FW-TEST-01"));
+        assertNull(log.logUnknown(5,"UNKNOWN"));
+        assertEquals("aaa99",ReadinessShapeLog.valueShape("bad99"));
+    }
+
     @Test void shapesAreLimitedToFirst25LinesAndTwoKilobytes() {
         assertEquals(25,ReadinessShapeLog.textShape("abc123\n".repeat(30)).lines().count());
         assertFalse(ReadinessShapeLog.xmlShape("<response>\n"+"<entry/>\n".repeat(24)

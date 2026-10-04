@@ -34,7 +34,7 @@ final class ReadinessShapeLog {
 
     void capture(int check,String output) {
         if (logged.contains(check)) return;
-        String shape="palo_alto".equals(vendor)?xmlShape(output):textShape(output);
+        String shape="palo_alto".equals(vendor)?xmlShape(output,check==5):textShape(output);
         shapes.merge(check,shape,(a,b) -> a.equals(b)?a:bounded(a+"\n"+b));
     }
 
@@ -90,7 +90,15 @@ final class ReadinessShapeLog {
             (Character.isISOControl(c) && c!='\n' && c!='\t') || Character.getType(c)==Character.FORMAT?'?':c));
     }
 
-    static String xmlShape(String output) {
+    static String valueShape(String value) {
+        StringBuilder shape=new StringBuilder();
+        mask(value,shape);
+        return bounded(shape.toString());
+    }
+
+    static String xmlShape(String output) { return xmlShape(output,false); }
+
+    private static String xmlShape(String output,boolean values) {
         if (output==null || output.isBlank()) return "";
         try {
             var factory=XMLInputFactory.newFactory();
@@ -105,6 +113,10 @@ final class ReadinessShapeLog {
                 while (reader.hasNext()) {
                     int event=reader.next();
                     if (reader.getLocation().getLineNumber()>25) break;
+                    if(values && (event==XMLStreamConstants.CHARACTERS || event==XMLStreamConstants.CDATA)) {
+                        mask(reader.getText(),shape);
+                        if(shape.length()>=MAX_BYTES) break;
+                    }
                     if (event==XMLStreamConstants.DTD) return "<unparseable>";
                     if (event==XMLStreamConstants.START_ELEMENT || event==XMLStreamConstants.END_ELEMENT) {
                         shape.append(event==XMLStreamConstants.END_ELEMENT?"</":"<");

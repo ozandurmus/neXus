@@ -118,6 +118,17 @@ class ReadinessCheckViewTest {
         assertEquals("Session count missing or not recognised: /response/result/num-active or active-sessions",
             row(true,6,"UNKNOWN","{}").get("summary"));
     }
+    @Test void panSessionSyncDisplaysOnlySafeEvidence() throws Exception {
+        String facts="{\"active\":{\"enabled\":false,\"messages\":{\"session setup\":{\"enable\":true,\"sent\":1234,\"recv\":0}}},"
+            +"\"passive\":{\"enabled\":false},\"missing\":[\"SYNTHETIC-PRIVATE-NAME\"],"
+            +"\"unrecognised\":[\"SYNTHETIC-PRIVATE-NAME\"]}";
+        String failed=row(true,5,"FAIL",facts).get("summary").toString();
+        assertTrue(failed.contains("active sync disabled"));
+        assertTrue(failed.contains("active session setup enabled, sent 1234, recv 0"));
+        String unknown=row(true,5,"UNKNOWN",facts).get("summary").toString();
+        assertTrue(unknown.contains("missing fields: 1") && unknown.contains("unrecognised values: 1"));
+        assertFalse(unknown.contains("SYNTHETIC-PRIVATE-NAME"));
+    }
     @Test void sensitiveDerivedStringsNeverEnterSummaries() throws Exception {
         String derived="{\"role\":\"SYNTHETIC-PRIVATE-NAME\",\"reason\":\"SYNTHETIC-PRIVATE-NAME\","
             +"\"policy\":\"SYNTHETIC-PRIVATE-NAME\",\"up\":\"SYNTHETIC-PRIVATE-NAME\"}";

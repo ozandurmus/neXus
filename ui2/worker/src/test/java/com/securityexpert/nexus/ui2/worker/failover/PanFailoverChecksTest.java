@@ -111,7 +111,7 @@ class PanFailoverChecksTest {
         assertEquals("FAIL",PanFailoverChecks.sessionSync(active,syncXml("no","0","0")));
         assertEquals("FAIL",PanFailoverChecks.sessionSync(active.replace("<enable>yes", "<enable>no"),passive));
         for(String invalid:new String[]{"bad","-1","9223372036854775808"})
-            assertEquals("FAIL",PanFailoverChecks.sessionSync(syncXml("yes",invalid,"0"),passive));
+            assertEquals("UNKNOWN",PanFailoverChecks.sessionSync(syncXml("yes",invalid,"0"),passive));
         for(String tag:new String[]{"enabled","sent","enable","desc"}) {
             String missing=active.replaceAll("<"+tag+">[^<]*</"+tag+">","");
             assertEquals("UNKNOWN",PanFailoverChecks.sessionSync(missing,passive));
@@ -119,6 +119,45 @@ class PanFailoverChecksTest {
         assertEquals("UNKNOWN",PanFailoverChecks.sessionSync(active,passive.replace("<recv>10</recv>","")));
         assertEquals("UNKNOWN",PanFailoverChecks.sessionSync(active,passive.replace("session update","other")));
         assertEquals("UNKNOWN",PanFailoverChecks.sessionSync(active,result("<session-sync>in-sync</session-sync>")));
+    }
+    @Test void sessionSyncEvidenceIsFailClosedAndRetainsBothMembers() throws Exception {
+        var json=new com.fasterxml.jackson.databind.ObjectMapper();
+        String active=syncXml("Enabled","1,234","0"),passive=syncXml("Disabled","0","1,234");
+        var healthy=PanFailoverChecks.sessionSyncEvidence(active,passive);
+        assertEquals("PASS",healthy.status());
+        var facts=json.readTree(healthy.derived());
+        assertEquals(true,facts.path("active").path("enabled").asBoolean());
+        assertEquals(false,facts.path("passive").path("enabled").asBoolean());
+        assertEquals(1234,facts.path("active").path("messages").path("session setup").path("sent").asLong());
+        assertEquals(1234,facts.path("passive").path("messages").path("session update").path("recv").asLong());
+        var disabled=PanFailoverChecks.sessionSyncEvidence(active.replace("Enabled","false"),passive);
+        assertEquals("FAIL",disabled.status());
+        assertEquals(false,json.readTree(disabled.derived()).path("active").path("enabled").asBoolean());
+        assertEquals("UNKNOWN",PanFailoverChecks.sessionSyncEvidence("","").status());
+        assertEquals("UNKNOWN",PanFailoverChecks.sessionSyncEvidence(result(""),result("")).status());
+        for(String tag:new String[]{"enabled","messages","entry","enable","sent","recv","desc"})
+            for(boolean first:new boolean[]{true,false}) {
+                String incomplete=(first?active:passive).replaceAll("<"+tag+">.*?</"+tag+">","");
+                var unknown=PanFailoverChecks.sessionSyncEvidence(first?incomplete:active,first?passive:incomplete);
+                assertEquals("UNKNOWN",unknown.status(),tag);
+                org.junit.jupiter.api.Assertions.assertTrue(json.readTree(unknown.derived()).path("missing").size()>0,tag);
+            }
+        for(String value:new String[]{"yes","true","Enabled","YES","TrUe","ENABLED"})
+            assertEquals("PASS",PanFailoverChecks.sessionSync(active.replace("Enabled",value),passive));
+        for(String value:new String[]{"no","false","Disabled","NO","FaLsE","DISABLED"})
+            assertEquals("FAIL",PanFailoverChecks.sessionSync(active.replace("Enabled",value),passive));
+        for(String value:new String[]{"bad99","1,23","-1","9223372036854775808",""}) {
+            var unknown=PanFailoverChecks.sessionSyncEvidence(active.replace("1,234",value),passive);
+            assertEquals("UNKNOWN",unknown.status());
+            org.junit.jupiter.api.Assertions.assertTrue(json.readTree(unknown.derived()).path("unrecognised").size()>0);
+            org.junit.jupiter.api.Assertions.assertFalse(unknown.derived().contains("bad99"));
+        }
+        var unknownEnabled=PanFailoverChecks.sessionSyncEvidence(active.replace("Enabled","pending99"),passive);
+        assertEquals("UNKNOWN",unknownEnabled.status());
+        org.junit.jupiter.api.Assertions.assertTrue(json.readTree(unknownEnabled.derived())
+            .path("unrecognised").get(0).asText().equals("active.enabled:aaaaaaa99"));
+        assertEquals("UNKNOWN",PanFailoverChecks.sessionSync(active,passive.replace("Disabled","pending99")));
+        assertEquals("UNKNOWN",PanFailoverChecks.sessionSync(active.replace("Enabled","no"),passive.replace("<recv>1,234</recv>","")));
     }
     public static void main(String[] args) {
         var test=new PanFailoverChecksTest(); test.pairPassFailAndUnknown(); test.activeActiveRefused(); test.addedChecksPassFailUnknown();
