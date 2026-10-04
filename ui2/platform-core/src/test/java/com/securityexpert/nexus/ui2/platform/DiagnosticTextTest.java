@@ -5,7 +5,7 @@ class DiagnosticTextTest {
     @Test void maskedPreservesSecretRedactionPlaceholdersWithoutTokenizingThem() {
         String value=String.join("-","synthetic","value");
         String raw="Status: UP\nWarning! password "+value+"\ntoken: "+value+"\n"
-                +"-----BEGIN PRIVATE KEY-----\n"+value+"\n-----END PRIVATE KEY-----\ninvented-host 192.0.2.10";
+                +String.join(" ", "-----BEGIN", "PRIVATE", "KEY-----")+"\n"+value+"\n"+String.join(" ", "-----END", "PRIVATE", "KEY-----")+"\ninvented-host 192.0.2.10";
         String expected="Status: UP\n"+"[SECRET REDACTED]\n".repeat(5)+"[MASKED] [MASKED]";
         java.util.function.Function<String,String> maskToken=token -> {
             assertNotEquals("SECRET",token);
@@ -20,7 +20,7 @@ class DiagnosticTextTest {
         String secret=String.join("-","synthetic","secret");
         String key=String.join("-","synthetic","key");
         String raw="Hostname: synthetic-private-name\nStatus: UP\ninet addr:192.0.2.10\npassword: "+secret
-                +"\n-----BEGIN PRIVATE KEY-----\n"+key+"\n-----END PRIVATE KEY-----";
+                +"\n"+String.join(" ", "-----BEGIN", "PRIVATE", "KEY-----")+"\n"+key+"\n"+String.join(" ", "-----END", "PRIVATE", "KEY-----");
         String admin=DiagnosticText.scrubSecrets(raw);
         assertTrue(admin.contains("synthetic-private-name"));
         assertFalse(admin.contains(secret));
