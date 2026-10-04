@@ -101,7 +101,7 @@ export function DiagnosticPanel() {
     if (vs) setGateId(devices.find(d => d.deviceId === id)?.commands.find(c => c.command_template.includes("<VSID>"))?.gate_id ?? "");
   }
   async function run() {
-    if (!canExecute || !deviceId || !selected || !validParameter || busy) return;
+    if (!canExecute || !deviceId || !selected?.runnable || !validParameter || busy) return;
     setSubmitting(true); setMessage(""); setCopied(false);
     requestId.current ??= crypto.randomUUID();
     try {
@@ -186,8 +186,8 @@ export function DiagnosticPanel() {
                 </TextField> : needsParameter ? <TextField label="Parameter" value={parameter} disabled={busy} inputProps={{ maxLength: 31 }}
                   onChange={e => { setParameter(e.target.value); requestId.current = null; }} error={parameter.length > 0 && !validParameter}
                   helperText="One token: letters, digits, underscore, period or hyphen" /> : null}
-                <Button variant="contained" onClick={run} disabled={!canExecute || !selected || !validParameter || busy} sx={{ whiteSpace: "nowrap" }}>
-                  {submitting ? "Submitting…" : "Run read"}</Button>
+                {canExecute && selected?.runnable && <Button variant="contained" onClick={run} disabled={!validParameter || busy} sx={{ whiteSpace: "nowrap" }}>
+                  {submitting ? "Submitting…" : "Run read"}</Button>}
               </Stack>
             </>}
           </Paper>

@@ -112,11 +112,21 @@ public final class DiagnosticService {
     }
 
     public AdmissionResult submitRead(String deviceId, String gateId, String parameter, String requestId, String actor) {
-        if (actor == null || outputStore == null || !sshTarget(deviceId))
-            return new AdmissionResult.Refused("DIAGNOSTIC_UNAVAILABLE", "Command or transport is not approved for this device");
+        return submitRead(deviceId, gateId, parameter, requestId, actor, false);
+    }
+
+    public AdmissionResult submitRead(String deviceId, String gateId, String parameter, String requestId, String actor,
+            boolean masked) {
+        if (actor == null || !sshTarget(deviceId))
+            return new AdmissionResult.Refused(masked ? "DIAGNOSTIC_RUN_NOT_PERMITTED" : "DIAGNOSTIC_UNAVAILABLE",
+                    "Command or transport is not approved for this device");
         var device = devices.find(deviceId).orElseThrow();
         var read = com.securityexpert.nexus.ui2.jobs.diagnostic.DiagnosticRead.resolve(device.vendorHint(),device.role(),
             modelOrPlatform(deviceId, devices.findSummary(deviceId).flatMap(s -> s.observedModel()).orElse(null)),gateId,parameter,gates);
+        if (masked && read.isEmpty())
+            return new AdmissionResult.Refused("DIAGNOSTIC_RUN_NOT_PERMITTED", "Only approved read gates are permitted");
+        if (outputStore == null)
+            return new AdmissionResult.Refused("DIAGNOSTIC_UNAVAILABLE", "Output store unavailable");
         return submitResolved(deviceId, read, requestId, actor);
     }
 
@@ -180,7 +190,7 @@ public final class DiagnosticService {
                     if (masked) {
                         var knownNames=new java.util.HashMap<String,String>();
                         devices.listAll().forEach(d -> d.observedHostname().ifPresent(n -> knownNames.put(n,names.maskDeviceName(n,d.clusterMemberRef().orElse(null)))));
-                        output=com.securityexpert.nexus.ui2.platform.DiagnosticText.masked(output, token -> {
+                        output=com.securityexpert.nexus.ui2.platform.DiagnosticText.masked(output, knownNames, token -> {
                             if (knownNames.containsKey(token)) return knownNames.get(token);
                             if (token.matches("[0-9]{1,3}(\\.[0-9]{1,3}){3}(/([0-9]|[12][0-9]|3[0-2]))?")) {
                                 String ip=ipMasker.maskText(token);
@@ -263,7 +273,7 @@ public final class DiagnosticService {
                     List<java.util.Map<String, Object>> commands = commandsByProfile.computeIfAbsent(profile, k ->
                             com.securityexpert.nexus.ui2.jobs.diagnostic.DiagnosticRead.commands(d.vendorHint(), d.role(),
                                     model, cachedGates).stream().map(c -> java.util.Map.<String, Object>of(
-                                    "gate_id", c.gateId(), "command_template", c.commandTemplate(), "description", description(c.gateId(), c.commandTemplate()), "timeout_s", c.timeoutS()))
+                                    "gate_id", c.gateId(), "command_template", c.commandTemplate(), "description", description(c.gateId(), c.commandTemplate()), "timeout_s", c.timeoutS(), "runnable", true))
                                     .toList());
                     List<String> virtualSystems = virtualSystems(contextsByDevice.getOrDefault(d.deviceId(), List.of()));
                     if (virtualSystems.isEmpty()) commands = commands.stream()

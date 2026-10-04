@@ -10,7 +10,7 @@ import com.securityexpert.nexus.ui2.platform.RoleToken;
 
 class DiagnosticSecurityRouteTest {
     @Test
-    void executionRequiresSuperAdminWhileReadProjectionIsCheckedByController() {
+    void executionAllowsAdminOrReplayViewerWhileControllerRestrictsTheGate() {
         var actions = new ActionRegistry();
         for (String route : new String[] { "GET /api/v2/diagnostics/targets", "GET /api/v2/diagnostics/ports",
                 "GET /api/v2/diagnostics/preview",
@@ -19,5 +19,7 @@ class DiagnosticSecurityRouteTest {
             assertEquals(route.startsWith("POST") ? Optional.of(RoleToken.SECURITY_ADMIN) : Optional.empty(),
                     actions.find(actionId).orElseThrow().requiredRoleToken());
         }
+        assertEquals(java.util.Set.of(RoleToken.SECURITY_ADMIN, RoleToken.REPLAY_VIEWER),
+                actions.find(ActionRegistry.FMG_DIAGNOSTIC_RUN).orElseThrow().requiredRoleTokens());
     }
 }

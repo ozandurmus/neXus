@@ -37,7 +37,7 @@ public final class DiagnosticController {
     public ResponseEntity<?> targets(HttpServletRequest request) {
         requireReadAccess(request);
         return ResponseEntity.ok(Map.of("targets", service.targets(isMasked(request)),
-                "canExecute", isAdministrator(request)));
+                "canExecute", isMasked(request) || isAdministrator(request)));
     }
 
     @GetMapping("/api/v2/diagnostics/ports")
@@ -71,7 +71,13 @@ public final class DiagnosticController {
             String actor=(String)servletRequest.getAttribute(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE);
             String requestId = request.containsKey("request_id") ? (String)request.get("request_id")
                 : java.util.UUID.randomUUID().toString();
-            return admitted(service.submitRead(deviceId,gateId,(String)request.get("parameter"),requestId,actor));
+            return admitted(isMasked(servletRequest)
+                    ? service.submitRead(deviceId,gateId,(String)request.get("parameter"),requestId,actor,true)
+                    : service.submitRead(deviceId,gateId,(String)request.get("parameter"),requestId,actor));
+        }
+        if (isMasked(servletRequest)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("code", "DIAGNOSTIC_RUN_NOT_PERMITTED"));
         }
         if (!request.keySet().equals(Set.of("device_id", "port", "request_id"))
                 || !(request.get("device_id") instanceof String deviceId)
@@ -100,7 +106,8 @@ public final class DiagnosticController {
         return switch(result) {
             case AdmissionResult.Admitted a -> ResponseEntity.status(HttpStatus.ACCEPTED).body(Map.of("job_id",a.jobId()));
             case AdmissionResult.Deduplicated d -> ResponseEntity.status(HttpStatus.ACCEPTED).body(Map.of("job_id",d.jobId()));
-            case AdmissionResult.Refused r -> ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("code",r.code()));
+            case AdmissionResult.Refused r -> ResponseEntity.status("DIAGNOSTIC_RUN_NOT_PERMITTED".equals(r.code())
+                    ? HttpStatus.FORBIDDEN : HttpStatus.CONFLICT).body(Map.of("code",r.code()));
         };
     }
 

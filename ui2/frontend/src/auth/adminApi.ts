@@ -825,7 +825,7 @@ export interface DiagnosticTarget {
   readonly vendor: string;
   readonly cluster?: string | null;
   readonly virtualSystems?: readonly string[];
-  readonly commands: ReadonlyArray<{ gate_id: string; command_template: string; description?: string; timeout_s: number }>;
+  readonly commands: ReadonlyArray<{ gate_id: string; command_template: string; description?: string; timeout_s: number; runnable: boolean }>;
 }
 
 export function listFmgDiagnosticTargets(): Promise<{ targets: DiagnosticTarget[]; canExecute: boolean }> {
