@@ -36,7 +36,7 @@ public class SubnetPreservingIpMasker {
     }
 
     /**
-     * Registers a known subnet prefix (e.g. "10.230.4.0/23" or "10.230.4.12/23")
+     * Registers a known subnet prefix (e.g. "192.0.2.0/23" or "192.0.2.12/23")
      * into the Longest Prefix Match (LPM) table so bare IPs (VIPs, gateways) inherit it.
      */
     public void registerSubnet(String cidrOrIp) {
@@ -66,7 +66,7 @@ public class SubnetPreservingIpMasker {
     }
 
     /**
-     * Masks an IPv4 address (e.g. "192.168.230.1" or "192.168.230.2/24").
+     * Masks an IPv4 address (e.g. "192.0.2.1" or "192.0.2.2/24").
      * Preserves loopback, default route, and subnet relationships.
      */
     public String mask(String ipOrCidr) {
@@ -122,7 +122,8 @@ public class SubnetPreservingIpMasker {
             prefixLen = 24; // default unless matched by LPM
         }
 
-        // Special network invariant preservation
+        // Unspecified/default, broadcast, loopback, link-local and multicast addresses
+        // describe protocol scope rather than estate identities; preserve their routing meaning.
         if (o1 == 0 && o2 == 0 && o3 == 0 && o4 == 0) {
             return trimmed; // 0.0.0.0 or 0.0.0.0/0
         }
@@ -131,6 +132,10 @@ public class SubnetPreservingIpMasker {
         }
         if (o1 == 255 && o2 == 255 && o3 == 255 && o4 == 255) {
             return trimmed; // 255.255.255.255 broadcast
+        }
+
+        if ((o1 == 169 && o2 == 254) || (o1 >= 224 && o1 <= 239)) {
+            return trimmed; // link-local or multicast
         }
 
         long ipLong = (((long) o1) << 24) | (((long) o2) << 16) | (((long) o3) << 8) | o4;
@@ -160,14 +165,19 @@ public class SubnetPreservingIpMasker {
             }
         }
 
+        // Prefixes broader than /4 cannot preserve host offsets inside the reserved space.
+        if (prefixLen < 4) {
+            return "[REDACTED_IP]";
+        }
         byte[] hmacBytes = hmacSha256("SUBNET:" + netAddressStr + "/" + prefixLen);
         int x = (hmacBytes[0] & 0xFF) % 240 + 10; // 10..249
         int y = (hmacBytes[1] & 0xFF) % 254 + 1;  // 1..254
 
-        long synthNetBase = (((10L << 24) | (((long) x) << 16) | (((long) y) << 8)) & mask);
+        int firstOctet = 240 + (hmacBytes[2] & 0x0F); // reserved 240/4, 28 synthetic bits
+        long synthNetBase = (((((long) firstOctet) << 24) | (((long) x) << 16) | (((long) y) << 8)) & mask);
         long synthIpLong = synthNetBase | hostOffset;
         // A broad prefix or HMAC collision can reproduce the source address. Never publish it as a pseudonym.
-        if (synthIpLong == ipLong) {
+        if (synthIpLong == ipLong || synthIpLong == 0xFFFFFFFFL) {
             return "[REDACTED_IP]";
         }
 

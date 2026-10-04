@@ -20,6 +20,9 @@ import com.securityexpert.nexus.ui2.service.audit.JobLogQueryService.JobEvent;
 import com.securityexpert.nexus.ui2.service.security.GateChainInterceptor;
 
 class PrivacyMaskingResponseBodyAdviceTest {
+    private String adviceIp() {
+        return new SubnetPreservingIpMasker("01234567890123456789012345678901".getBytes(StandardCharsets.UTF_8)).mask("192.0.2.2");
+    }
 
     private PrivacyMaskingResponseBodyAdvice advice;
     private HttpServletRequest httpRequest;
@@ -118,7 +121,7 @@ class PrivacyMaskingResponseBodyAdviceTest {
         when(httpRequest.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE)).thenReturn(true);
         Map<String, Object> member = new LinkedHashMap<>();
         member.put("virtual_system", "SG-EXAMPLEBANK-1");
-        member.put("address", "192.168.230.14");
+        member.put("address", "192.0.2.14");
         member.put("platform", "Reporter");
         member.put("hardware_type", "SG-Enterprise");
         member.put("hypervisor", "SGOS 7.4.15.1 SWG Edition (build 307841)");
@@ -129,7 +132,7 @@ class PrivacyMaskingResponseBodyAdviceTest {
         @SuppressWarnings("unchecked")
         Map<String, Object> masked = ((List<Map<String, Object>>) result.get("grid_members")).get(0);
         assertThat((String) masked.get("virtual_system")).doesNotContain("EXAMPLEBANK");
-        assertThat((String) masked.get("address")).doesNotContain("192.168.230.14");
+        assertThat((String) masked.get("address")).doesNotContain("192.0.2.14");
         assertThat(masked.get("platform")).isEqualTo("Reporter");
         assertThat(masked.get("hardware_type")).isEqualTo("SG-Enterprise");
         assertThat(masked.get("hypervisor")).isEqualTo("SGOS 7.4.15.1 SWG Edition (build 307841)");
@@ -162,7 +165,7 @@ class PrivacyMaskingResponseBodyAdviceTest {
         dev1.put("hostname", "FW-CKP-EXAMPLEBANKMOBAPP-AA-1");
         dev1.put("cluster_member_ref", "FW-CKP-EXAMPLEBANKMOBAPP-AA-CLS");
         dev1.put("virtual_systems", "VS-APP, VS-DB");
-        dev1.put("latest_job_terminal_reason", "connect_failed to 192.168.230.2: timed out");
+        dev1.put("latest_job_terminal_reason", "connect_failed to 192.0.2.2: timed out");
 
         Map<String, Object> body = Map.of("devices", List.of(dev1));
 
@@ -179,7 +182,7 @@ class PrivacyMaskingResponseBodyAdviceTest {
         assertThat((String) maskedDev.get("hostname")).startsWith("FW-").doesNotContain("EXAMPLEBANK");
         assertThat((String) maskedDev.get("cluster_member_ref")).startsWith("CLS-").doesNotContain("EXAMPLEBANK");
         assertThat((String) maskedDev.get("virtual_systems")).doesNotContain("VS-APP");
-        assertThat((String) maskedDev.get("latest_job_terminal_reason")).doesNotContain("192.168.230.2").contains("10.");
+        assertThat((String) maskedDev.get("latest_job_terminal_reason")).doesNotContain("192.0.2.2").contains(adviceIp());
 
         // In-memory original map must NOT be mutated
         assertThat(dev1.get("hostname")).isEqualTo("FW-CKP-EXAMPLEBANKMOBAPP-AA-1");
@@ -215,10 +218,10 @@ class PrivacyMaskingResponseBodyAdviceTest {
     void masksDeviceAndClusterInventoryForReplayViewer() {
         when(httpRequest.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE)).thenReturn(true);
 
-        Map<String, Object> addr1 = Map.of("address", "192.168.230.1/24", "role", "cluster_virtual");
-        Map<String, Object> addr2 = Map.of("address", "192.168.230.2/24", "role", "cluster_member");
+        Map<String, Object> addr1 = Map.of("address", "192.0.2.1/24", "role", "cluster_virtual");
+        Map<String, Object> addr2 = Map.of("address", "192.0.2.2/24", "role", "cluster_member");
         Map<String, Object> iface = Map.of("name", "eth1", "addresses", List.of(addr1, addr2));
-        Map<String, Object> route = Map.of("destination", "10.50.0.0/16", "next_hop", "192.168.230.254");
+        Map<String, Object> route = Map.of("destination", "10.50.0.0/16", "next_hop", "192.0.2.254");
         Map<String, Object> context = Map.of("context", "system", "interfaces", List.of(iface), "routes", List.of(route));
 
         Map<String, Object> clusterInventory = new LinkedHashMap<>();
@@ -270,7 +273,7 @@ class PrivacyMaskingResponseBodyAdviceTest {
         when(httpRequest.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE)).thenReturn(true);
 
         JobEvent event = new JobEvent("job-123", "DEVICE_INVENTORY", "148bd45b-e5b4-490b-95c5-54862e2d63d0",
-                "FAILED", "connect_failed to 192.168.230.2: timed out", Instant.now());
+                "FAILED", "connect_failed to 192.0.2.2: timed out", Instant.now());
 
         List<JobEvent> jobEvents = List.of(event);
 
@@ -281,7 +284,7 @@ class PrivacyMaskingResponseBodyAdviceTest {
         JobEvent maskedEvent = result.get(0);
         assertThat(maskedEvent.jobId()).isEqualTo("job-123");
         assertThat(maskedEvent.targetDeviceId()).isEqualTo("148bd45b-e5b4-490b-95c5-54862e2d63d0");
-        assertThat(maskedEvent.terminalReason()).doesNotContain("192.168.230.2").contains("10.");
+        assertThat(maskedEvent.terminalReason()).doesNotContain("192.0.2.2").contains(adviceIp());
     }
 
     @Test
@@ -292,7 +295,7 @@ class PrivacyMaskingResponseBodyAdviceTest {
         advice.maskObject(Map.of("hostname", "FW-CKP-EXAMPLEBANKMOBAPP-AA-1"), null);
 
         JobEvent event = new JobEvent("job-999", "DEVICE_INVENTORY", "148bd45b-e5b4-490b-95c5-54862e2d63d0",
-                "FAILED", "SSH connection to FW-CKP-EXAMPLEBANKMOBAPP-AA-1 at 192.168.230.2 timed out", Instant.now());
+                "FAILED", "SSH connection to FW-CKP-EXAMPLEBANKMOBAPP-AA-1 at 192.0.2.2 timed out", Instant.now());
 
         @SuppressWarnings("unchecked")
         List<JobEvent> result = (List<JobEvent>) advice.beforeBodyWrite(List.of(event), null, null, null, serverRequest, null);
@@ -300,9 +303,9 @@ class PrivacyMaskingResponseBodyAdviceTest {
         assertThat(result).hasSize(1);
         String reason = result.get(0).terminalReason();
         assertThat(reason).doesNotContain("FW-CKP-EXAMPLEBANKMOBAPP-AA-1");
-        assertThat(reason).doesNotContain("192.168.230.2");
+        assertThat(reason).doesNotContain("192.0.2.2");
         assertThat(reason).contains("FW-");
-        assertThat(reason).contains("10.");
+        assertThat(reason).contains(adviceIp());
     }
 
     @Test

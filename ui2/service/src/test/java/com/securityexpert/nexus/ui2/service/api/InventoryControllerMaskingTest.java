@@ -37,11 +37,23 @@ class InventoryControllerMaskingTest {
     private static final Pattern IPV4 = Pattern.compile("\\b\\d{1,3}(?:\\.\\d{1,3}){3}\\b");
     private static final List<String> ADDRESSES = List.of(
             "192.0.2.10/24", "198.51.100.20/24", "198.51.100.21", "192.0.2.17/0", "2001:db8::10/64");
+    private static final List<String> SPECIAL = List.of("0.0.0.0/0", "127.0.0.1/8", "169.254.0.1/16", "224.0.0.1/4", "255.255.255.255");
     private final byte[] key = String.join("-", "synthetic", "inventory", "mask", "key", "0001")
             .getBytes(StandardCharsets.UTF_8);
     private final SubnetPreservingIpMasker ips = new SubnetPreservingIpMasker(key);
     private final PrivacyMaskingResponseBodyAdvice advice = new PrivacyMaskingResponseBodyAdvice(
             ips, new TopologyNamePseudonymizer(key));
+
+    @Test
+    void specialRoutesPassThroughWhileIdentityAddressesUseReservedSpace() {
+        var body = Map.of("routes", SPECIAL.stream().map(ip -> Map.of("destination", ip)).toList(),
+                "address", ADDRESSES.get(0));
+        JsonNode masked = JSON.valueToTree(advice.maskObject(body, null));
+        assertThat(masked.get("address").asText()).matches("(?:24[0-9]|25[0-5])\\..*/24");
+        for (int i = 0; i < SPECIAL.size(); i++) {
+            assertThat(masked.get("routes").get(i).get("destination").asText()).isEqualTo(SPECIAL.get(i));
+        }
+    }
 
     @Test
     void bluecoatRoutingIsMaskedOnDeviceAndClusterEndpoints() throws Exception {
