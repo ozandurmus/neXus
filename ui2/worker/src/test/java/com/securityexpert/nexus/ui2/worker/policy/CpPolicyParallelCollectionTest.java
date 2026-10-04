@@ -77,7 +77,7 @@ class CpPolicyParallelCollectionTest {
     private static ExecResult ok(String json) { return new ExecResult.Completed(json, 0); }
     private static String domain(String uid, String name) { return "{\"uid\":\"" + uid + "\",\"name\":\"" + name + "\"}"; }
     private static String packages(String layers) {
-        return "{\"total\":1,\"packages\":[{\"uid\":\"pkg-01\",\"name\":\"Package\",\"access-layers\":[" + layers + "],\"installation-targets\":[]}]}";
+        return "{\"from\":1,\"to\":1,\"total\":1,\"packages\":[{\"uid\":\"pkg-01\",\"name\":\"Package\",\"access-layers\":[" + layers + "],\"installation-targets\":[]}]}";
     }
     private static int offset(String command) {
         var matcher = java.util.regex.Pattern.compile(" offset '([0-9]+)'").matcher(command);

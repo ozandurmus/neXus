@@ -16,7 +16,13 @@ public final class MgmtCliCommands {
     }
 
     public static String showPackages(String domain) {
-        return "mgmt_cli -r true -d " + quote(domain) + " -f json show-packages limit 500 details-level full";
+        return showPackages(domain, 0, 20);
+    }
+
+    public static String showPackages(String domain, int offset, int limit) {
+        if (offset < 0 || limit < 1 || limit > 500) throw new IllegalArgumentException("Invalid package page");
+        return "mgmt_cli -r true -d " + quote(domain) + " -f json show-packages limit " + limit
+                + " offset " + quote(Integer.toString(offset)) + " details-level full";
     }
 
     public static String showAccessRulebase(String domain, String layer, int offset) {
