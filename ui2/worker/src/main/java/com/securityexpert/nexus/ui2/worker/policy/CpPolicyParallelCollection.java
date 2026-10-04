@@ -185,19 +185,25 @@ final class CpPolicyParallelCollection {
             found = true;
             domainOrder.putIfAbsent(container, domainOrder.size());
             if (repository.beginDomain(request.sourceId(), container, request.automatic()))
-                pending.add(new Work(MgmtCliCommands.showPackages(name), 0, null, 0, 0, 0, packages -> packages(uid, name, container, packages),
-                    error -> {
-                        collector.checkPublication(deadline, lease);
-                        domainFailure.accept(new CollectionFailure(container, PolicyCollectionTrace.reason(error), "Packages", 0));
-                    }));
+                enqueuePackages(uid, name, container, new PackagePages(collector.packagePageSize), 0);
         }
         if (!found) throw failure();
     }
 
-    private void packages(String domainUid, String domain, String container, JsonNode root) {
-        completeList(root, "packages");
+    private void enqueuePackages(String uid, String domain, String container, PackagePages listing, int offset) {
+        pending.add(new Work(MgmtCliCommands.showPackages(domain, offset, collector.packagePageSize), 0, null, offset, 0, 0,
+            page -> {
+                if (listing.add(page, offset)) packages(uid, domain, container, listing.items);
+                else enqueuePackages(uid, domain, container, listing, listing.to);
+            }, error -> {
+                collector.checkPublication(deadline, lease);
+                domainFailure.accept(new CollectionFailure(container, PolicyCollectionTrace.reason(error), "Packages", offset));
+            }));
+    }
+
+    private void packages(String domainUid, String domain, String container, List<JsonNode> items) {
         Set<String> seen = new HashSet<>();
-        for (JsonNode node : root.path("packages")) {
+        for (JsonNode node : items) {
             String uid = required(node, "uid"), name = required(node, "name");
             if (!seen.add(uid) || !node.path("access-layers").isArray() || !node.path("installation-targets").isArray()) throw failure();
             List<Target> targets = new ArrayList<>();

@@ -33,6 +33,118 @@ class CheckPointPolicyCollectorTest {
     }
     private static ExecSpec policySpec(String command) { return new ExecSpec(command, false, 120_000); }
 
+    @Test void packageListingCollects105PackagesAcrossThreeConfiguredPagesInSerialAndParallel() {
+        String previous = System.getProperty("ui2.policy.cp.package-page-size");
+        try {
+            System.setProperty("ui2.policy.cp.package-page-size", "50");
+            for (int sessions : List.of(1, 4)) {
+                reset(transport, repository);
+                setup(command -> {
+                    if (command.contains("show-packages")) {
+                        var offset = java.util.regex.Pattern.compile(" offset '([0-9]+)' ").matcher(command);
+                        assertTrue(offset.find());
+                        assertTrue(command.contains(" limit 50 "));
+                        assertTrue(command.endsWith("details-level full"));
+                        return ok(packagePage(Integer.parseInt(offset.group(1)), 50, 105));
+                    }
+                    if (command.contains("show-nat-rulebase")) return ok(page("nat", 0, 0, 0, "", ""));
+                    return answer(command);
+                });
+                var collector = new CheckPointPolicyCollector(transport, gates, repository, Duration.ofHours(2), sessions);
+                var snapshots = collector.collect(run, request, () -> true);
+                assertEquals(105, snapshots.size());
+                assertEquals(105, snapshots.stream().map(s -> s.metadata().id()).distinct().count());
+                assertTrue(snapshots.stream().allMatch(s -> s.failures().isEmpty()));
+                for (int offset : List.of(0, 50, 100)) verify(transport).execInteractive(eq(session),
+                    eq(policySpec(MgmtCliCommands.showPackages("DOM-TANGO-01", offset, 50))), eq(Duration.ofSeconds(300)));
+                verify(transport, times(3)).execInteractive(any(), argThat(spec -> spec.command().contains("show-packages")), any());
+            }
+            for (String invalid : List.of("0", "-1", "501")) {
+                System.setProperty("ui2.policy.cp.package-page-size", invalid);
+                assertThrows(IllegalArgumentException.class, () -> new CheckPointPolicyCollector(transport, gates, repository));
+            }
+        } finally {
+            if (previous == null) System.clearProperty("ui2.policy.cp.package-page-size");
+            else System.setProperty("ui2.policy.cp.package-page-size", previous);
+        }
+    }
+
+    @Test void truncatedPackagePageFailsOnlyItsDomainWithOffsetAndSafeDiagnostics() throws Exception {
+        String truncated = "{\"from\":21,\"total\":25,\"packages\":[{\"name\":\"Synthetic é42\"";
+        for (int sessions : List.of(1, 4)) {
+            reset(transport, repository);
+            setup(command -> {
+                if (command.equals(MgmtCliCommands.domainList())) return ok("{\"total\":2,\"objects\":[{\"uid\":\"broken\",\"name\":\"DOM-BRAVO-02\"},{\"uid\":\"domain-01\",\"name\":\"DOM-TANGO-01\"}]}");
+                if (command.equals(MgmtCliCommands.showPackages("DOM-BRAVO-02"))) return ok(packagePage(0, 20, 25));
+                if (command.equals(MgmtCliCommands.showPackages("DOM-BRAVO-02", 20, 20))) return ok(truncated);
+                return answer(command);
+            });
+            var collector = new CheckPointPolicyCollector(transport, gates, repository, Duration.ofHours(2), sessions);
+            var transcript = new com.securityexpert.nexus.ui2.worker.transcript.JobTranscript();
+            List<PolicySnapshot.CollectionFailure> failures = new ArrayList<>();
+            try (var scope = com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.open(transcript)) {
+                var snapshots = collector.collect(run, request, () -> true, snapshot -> {}, failures::add);
+                assertEquals(1, snapshots.size());
+                assertTrue(snapshots.get(0).failures().isEmpty());
+            }
+            assertEquals(1, failures.size());
+            assertEquals(20, failures.get(0).offset());
+            assertEquals(PolicySnapshot.ref("mds-1", "broken"), failures.get(0).layerRef());
+            assertTrue(failures.get(0).reason().endsWith(": INVALID_OR_INCOMPLETE_RESPONSE"));
+            var sink = new java.io.ByteArrayOutputStream(); transcript.writeTo(sink);
+            String notes = sink.toString(java.nio.charset.StandardCharsets.UTF_8);
+            assertTrue(notes.contains("bytes=" + truncated.getBytes(java.nio.charset.StandardCharsets.UTF_8).length));
+            assertTrue(notes.contains("endedMidJson=true exitCode=0"));
+            assertFalse(notes.contains("Synthetic"));
+            assertFalse(notes.contains("DOM-BRAVO-02"));
+            verify(transport, never()).execInteractive(any(), argThat(spec -> spec.command().contains("'DOM-BRAVO-02'")
+                && !spec.command().contains("show-packages")), any());
+        }
+    }
+
+    @Test void packagePagingRejectsGapsChangingTotalsAndDuplicateIdentities() {
+        for (String defect : List.of("gap", "total", "duplicate", "empty")) {
+            var collector = setup(command -> {
+                if (!command.contains("show-packages")) return answer(command);
+                if (command.equals(MgmtCliCommands.showPackages("DOM-TANGO-01"))) return ok(packagePage(0, 20, 25));
+                String next = packagePage(20, 20, 25);
+                return ok(switch (defect) {
+                    case "gap" -> next.replace("\"from\":21", "\"from\":22");
+                    case "total" -> next.replace("\"total\":25", "\"total\":26");
+                    case "duplicate" -> next.replace("pkg-20", "pkg-0");
+                    default -> "{\"from\":21,\"to\":25,\"total\":25,\"packages\":[]}";
+                });
+            });
+            List<PolicySnapshot.CollectionFailure> failures = new ArrayList<>();
+            assertTrue(collector.collect(run, request, () -> true, snapshot -> fail("Incomplete domain"), failures::add).isEmpty());
+            assertEquals(20, failures.get(0).offset());
+        }
+    }
+
+    @Test void invalidPackageJsonDiagnosticsRetainNonzeroExitAndDistinguishClosedMalformedJson() throws Exception {
+        for (String body : List.of("{\"packages\":[", "{broken}")) {
+            var collector = setup(command -> new ExecResult.Completed(body, 7));
+            var transcript = new com.securityexpert.nexus.ui2.worker.transcript.JobTranscript();
+            try (var scope = com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.open(transcript)) {
+                assertTrue(assertThrows(PolicyCollectionTrace.Failure.class, () -> collector.read(session,
+                    MgmtCliCommands.showPackages("DOM-TANGO-01", 20, 20), 0, Long.MAX_VALUE, () -> true))
+                    .getMessage().endsWith(": EXIT_7"));
+            }
+            var sink = new java.io.ByteArrayOutputStream(); transcript.writeTo(sink);
+            assertTrue(sink.toString(java.nio.charset.StandardCharsets.UTF_8)
+                .contains("endedMidJson=" + body.endsWith("[") + " exitCode=7"));
+        }
+    }
+
+    private static String packagePage(int offset, int limit, int total) {
+        int to = Math.min(offset + limit, total);
+        var packages = new ArrayList<String>();
+        for (int index = offset; index < to; index++) packages.add("{\"uid\":\"pkg-" + index
+            + "\",\"name\":\"Package-" + index + "\",\"access-layers\":[],\"installation-targets\":[]}");
+        return "{\"from\":" + (offset + 1) + ",\"to\":" + to + ",\"total\":" + total + ",\"packages\":["
+            + String.join(",", packages) + "]}";
+    }
+
     @Test void configuredTimeoutAppliesToEveryPolicyReadAndExtensionRespectsJobDeadline() {
         String previous = System.getProperty("ui2.policy.cp.read-timeout");
         try {
@@ -132,7 +244,7 @@ class CheckPointPolicyCollectorTest {
                 .map(line -> { try { return new com.fasterxml.jackson.databind.ObjectMapper().readTree(line).path("text").asText(); }
                     catch (java.io.IOException invalid) { throw new AssertionError(invalid); } })
                 .filter(text -> text.startsWith("invalid preflight bytes=")).findFirst().orElseThrow();
-            assertTrue(note.startsWith("invalid preflight bytes=" + body.getBytes(java.nio.charset.StandardCharsets.UTF_8).length + " shapeTruncated=false shape="));
+            assertTrue(note.startsWith("invalid preflight bytes=" + body.getBytes(java.nio.charset.StandardCharsets.UTF_8).length + " shapeTruncated=false endedMidJson="));
             String shape = note.substring(note.indexOf(" shape=") + 7);
             assertTrue(shape.codePoints().allMatch(c -> !Character.isLetter(c) || c == 'a'));
             assertTrue(shape.codePoints().allMatch(c -> !Character.isDigit(c) || c == '9'));
@@ -182,7 +294,7 @@ class CheckPointPolicyCollectorTest {
     private ExecResult answer(String command) {
         if (command.equals(MgmtCliCommands.domainList())) return ok("{\"total\":1,\"objects\":[{\"uid\":\"domain-01\",\"name\":\"DOM-TANGO-01\"}]}");
         if (command.equals(MgmtCliCommands.showPackages("DOM-TANGO-01"))) return ok("""
-            {"total":1,"packages":[{"uid":"pkg-01","name":"Package","access-layers":[{"uid":"layer","name":"Layer"}],"installation-targets":[{"uid":"target-01"}]}]}
+            {"from":1,"to":1,"total":1,"packages":[{"uid":"pkg-01","name":"Package","access-layers":[{"uid":"layer","name":"Layer"}],"installation-targets":[{"uid":"target-01"}]}]}
             """);
         if (command.equals(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Layer", 0))) return ok(page("layer", 1, 1, 2, RULE, DICTIONARY));
         if (command.equals(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Layer", 1))) return ok(page("layer", 2, 2, 2, "{\"uid\":\"r2\",\"type\":\"access-rule\"}", ""));
@@ -229,12 +341,14 @@ class CheckPointPolicyCollectorTest {
     }
 
     @Test void commandsAreExactlyApprovedAndQuoted() {
-        assertEquals("mgmt_cli -r true -d 'DOM' -f json show-packages limit 500 details-level full", MgmtCliCommands.showPackages("DOM"));
+        assertEquals("mgmt_cli -r true -d 'DOM' -f json show-packages limit 20 offset '0' details-level full", MgmtCliCommands.showPackages("DOM"));
         assertEquals("mgmt_cli -r true -d 'DOM' -f json show-access-rulebase name 'LAYER' limit 100 offset '500' details-level full use-object-dictionary true", MgmtCliCommands.showAccessRulebase("DOM", "LAYER", 500));
         assertEquals("mgmt_cli -r true -d 'DOM' -f json show-nat-rulebase package 'PKG' limit 500 offset '0' details-level standard use-object-dictionary true", MgmtCliCommands.showNatRulebase("DOM", "PKG", 0));
         assertTrue(MgmtCliCommands.showPackages("O'Brien; $(false)").contains("'O'\\''Brien; $(false)'"));
         assertThrows(IllegalArgumentException.class, () -> MgmtCliCommands.showAccessRulebase("DOM", "Layer", -1));
         assertThrows(IllegalArgumentException.class, () -> MgmtCliCommands.showPackages("DOM\nnext"));
+        assertThrows(IllegalArgumentException.class, () -> MgmtCliCommands.showPackages("DOM", -1, 20));
+        assertThrows(IllegalArgumentException.class, () -> MgmtCliCommands.showPackages("DOM", 0, 0));
         CpPolicyGates.requireAll(gates);
         assertTrue(CpPolicyGates.capability(gates).executionEligible());
         assertFalse(CpPolicyGates.capability(key -> List.of()).executionEligible());
@@ -419,7 +533,7 @@ class CheckPointPolicyCollectorTest {
         var clock = new java.util.concurrent.atomic.AtomicLong();
         setup(command -> {
             if (command.contains("show-packages")) return ok("""
-                {"total":2,"packages":[
+                {"from":1,"to":2,"total":2,"packages":[
                   {"uid":"pkg-01","name":"Package","access-layers":[{"uid":"layer","name":"Layer"}],"installation-targets":[]},
                   {"uid":"pkg-02","name":"Unfinished","access-layers":[{"uid":"other","name":"Unfinished"}],"installation-targets":[]}]}
                 """);
