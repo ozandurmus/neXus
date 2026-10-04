@@ -148,14 +148,14 @@ public final class CpFailoverService {
         return lookupUnits(ref, actor, vendor);
     }
 
-    /** Inventory lookups may have no PAN HA unit; admission keeps using strict units(). */
+    /** Inventory lookups may have no HA unit; admission keeps using strict units(). */
     private List<Unit> lookupUnits(String clusterRef, String actor, String vendor) {
         try {
             if (clusterRef == null) throw new Refusal("CLUSTER_NOT_FOUND");
             return units(opaque(clusterRef), actor, vendor);
         } catch (Refusal refused) {
-            if ("palo_alto".equals(vendor) && ("CLUSTER_NOT_FOUND".equals(refused.code())
-                    || "CLUSTER_NOT_ELIGIBLE".equals(refused.code()))) return List.of();
+            if ("CLUSTER_NOT_FOUND".equals(refused.code())
+                    || "CLUSTER_NOT_ELIGIBLE".equals(refused.code())) return List.of();
             throw refused;
         }
     }

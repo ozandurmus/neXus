@@ -72,8 +72,7 @@ class CpFailoverServiceTest {
         assertEquals(CLUSTER,units.get(0).label());
         assertTrue(service.mayApprove("actor-1"));
         assertTrue(service.mayStart("actor-1"));
-        assertEquals("CLUSTER_NOT_FOUND",assertThrows(CpFailoverService.Refusal.class,
-            () -> service.unitsForRef("unknown","actor-1")).code());
+        assertEquals(List.of(),service.unitsForRef("unknown","actor-1"));
     }
     private void noUnit(String scenario, String vendor) {
         ready("ACTIVE", "STANDBY");
@@ -101,43 +100,45 @@ class CpFailoverServiceTest {
     }
     @ParameterizedTest
     @ValueSource(strings = {"standalone", "management_server", "ineligible"})
-    void cpReadRefusalsRemainUnchanged(String scenario) throws Exception {
+    void cpReadLookupsReturnEmptyAtServiceAndController(String scenario) throws Exception {
         noUnit(scenario, "check_point");
-        String code = "ineligible".equals(scenario) ? "CLUSTER_NOT_ELIGIBLE" : "CLUSTER_NOT_FOUND";
-        assertEquals(code, assertThrows(CpFailoverService.Refusal.class,
-            () -> service.unitsForMember(A, "actor-1")).code());
-        assertEquals(code, assertThrows(CpFailoverService.Refusal.class,
-            () -> service.unitsForRef(CLUSTER, "actor-1")).code());
+        assertEquals(List.of(), service.unitsForMember(A, "actor-1"));
+        assertEquals(List.of(), service.unitsForRef(CLUSTER, "actor-1"));
         var mvc = MockMvcBuilders.standaloneSetup(new CpFailoverController(service)).build();
         String path = "/api/v2/cp-failover/units";
         for (String parameter : List.of("memberDeviceId", "clusterRef"))
             mvc.perform(get(path).servletPath(path).param(parameter, "memberDeviceId".equals(parameter) ? A : CLUSTER)
                 .requestAttr(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE, "actor-1"))
-                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value(code));
+                .andExpect(status().isOk()).andExpect(content().json("[]"));
+        verifyNoInteractions(store);
     }
     @ParameterizedTest
     @ValueSource(strings = {"standalone", "management_server", "ineligible"})
-    void panWriteEndpointsStillRefuseMissingOrIneligibleClusters(String scenario) throws Exception {
-        noUnit(scenario, "palo_alto");
+    void writeEndpointsStillRefuseMissingOrIneligibleClusters(String scenario) throws Exception {
         String code = "ineligible".equals(scenario) ? "CLUSTER_NOT_ELIGIBLE" : "CLUSTER_NOT_FOUND";
         var mvc = MockMvcBuilders.standaloneSetup(new CpFailoverController(service)).build();
-        for (String endpoint : List.of("approvals", "runs", "units/" + CLUSTER_ID + "/readiness")) {
-            String path = "/api/v2/pan-failover/" + endpoint;
-            mvc.perform(post(path).servletPath(path)
-                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
-                .content("{\"clusterId\":\"" + CLUSTER_ID + "\",\"unitId\":\"" + CLUSTER_ID + "\"}")
-                .requestAttr(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE, "actor-1"))
-                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value(code));
+        for (String vendor : List.of("check_point", "palo_alto")) {
+            noUnit(scenario, vendor);
+            for (String endpoint : List.of("approvals", "runs", "units/" + CLUSTER_ID + "/readiness")) {
+                String path = "/api/v2/" + ("palo_alto".equals(vendor) ? "pan" : "cp") + "-failover/" + endpoint;
+                mvc.perform(post(path).servletPath(path)
+                    .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                    .content("{\"clusterId\":\"" + CLUSTER_ID + "\",\"unitId\":\"" + CLUSTER_ID + "\"}")
+                    .requestAttr(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE, "actor-1"))
+                    .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value(code));
+            }
         }
         verifyNoInteractions(store);
     }
-    @Test void panReadLookupsDoNotSuppressAuthorizationRefusals() {
+    @ParameterizedTest
+    @ValueSource(strings = {"check_point", "palo_alto"})
+    void readLookupsDoNotSuppressAuthorizationRefusals(String vendor) {
         when(rbac.evaluate(anyString(),any(),any())).thenReturn(new RbacEvaluator.Decision(
             AuthzOutcome.DENIED,Optional.empty(),Optional.empty(),Optional.empty()));
         assertEquals("WRONG_ROLE", assertThrows(CpFailoverService.Refusal.class,
-            () -> service.unitsForMember(A, "actor-1", "palo_alto")).code());
+            () -> service.unitsForMember(A, "actor-1", vendor)).code());
         assertEquals("WRONG_ROLE", assertThrows(CpFailoverService.Refusal.class,
-            () -> service.unitsForRef(CLUSTER, "actor-1", "palo_alto")).code());
+            () -> service.unitsForRef(CLUSTER, "actor-1", vendor)).code());
         verifyNoInteractions(devices, inventory, store);
     }
     @Test void vsUnitsUseRawNamesFromDeviceSummaryAndVsidWhenMissing() {
