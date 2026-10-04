@@ -87,7 +87,8 @@ public final class GateChain {
         if (!now.isBefore(session.absoluteExpiresAt())) {
             return refuse("E1", 401, "SESSION_EXPIRED", "absolute_expires_at elapsed");
         }
-        if (session.machine() && !isReadMethod(request.method())) {
+        if (session.machine() && !isReadMethod(request.method())
+                && !isDiagnosticRead(request.method(), request.actionId())) {
             sessionRepository.auditMachineRefusal("machine_session_read_only");
             return refuse("MACHINE", 403, "MACHINE_SESSION_READ_ONLY", "machine session attempted a write");
         }
@@ -172,13 +173,22 @@ public final class GateChain {
     }
 
     public Optional<GateOutcome.Refused> machineWriteRefusal(Optional<String> rawCookie, String method, Instant now) {
-        if (isReadMethod(method) || rawCookie.isEmpty()) return Optional.empty();
+        return machineWriteRefusal(rawCookie, method, now, null);
+    }
+
+    public Optional<GateOutcome.Refused> machineWriteRefusal(Optional<String> rawCookie, String method, Instant now,
+            String actionId) {
+        if (isReadMethod(method) || isDiagnosticRead(method, actionId) || rawCookie.isEmpty()) return Optional.empty();
         return sessionRepository.findBySessionId(SessionHasher.hash(rawCookie.get()), now)
                 .filter(session -> session.machine() && session.isActive(now))
                 .map(session -> {
                     sessionRepository.auditMachineRefusal("machine_session_read_only");
                     return refuse("MACHINE", 403, "MACHINE_SESSION_READ_ONLY", "machine session attempted a write");
                 });
+    }
+
+    private static boolean isDiagnosticRead(String method, String actionId) {
+        return "POST".equalsIgnoreCase(method) && ActionRegistry.FMG_DIAGNOSTIC_RUN.equals(actionId);
     }
 
     private static boolean isReadMethod(String method) {

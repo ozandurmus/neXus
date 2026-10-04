@@ -101,6 +101,33 @@ class DiagnosticJobExecutorTest {
         assertEquals(JobState.OUTCOME_UNKNOWN,terminal.get());
         assertEquals(0,contacts.get());
     }
+    @Test void revokedReadAndWriteGatesAreRejectedBeforeContact() {
+        var rows = GateRegistryFixtureLoader.loadFromStream(getClass().getClassLoader().getResourceAsStream("capabilities/gate_registry_fixture.yaml"));
+        for (String gateId : new String[]{"cp_inventory_cphaprob_stat", "cp_failover_down", "cp_failover_up"}) {
+            var leases = mock(JobLeaseRepository.class);
+            var attempts = mock(JobStepAttemptRepository.class);
+            var devices = mock(DeviceRepository.class);
+            var jobs = mock(JobRecordDao.class);
+            var transport = mock(DeviceTransport.class);
+            var store = mock(ArtefactStore.class);
+            when(devices.find("device-1")).thenReturn(Optional.of(new DeviceRecord("device-1", "gateway", "check_point",
+                    "manual", Instant.now(), false, DeviceEnrollmentState.ENROLLED, false, "credential-ref")));
+            when(devices.findEndpointByDeviceId("device-1")).thenReturn(Optional.of(new EndpointRecord(
+                    "endpoint-1", "device-1", "ssh_exec", "192.0.2.10", Instant.now())));
+            String command = gateId.equals("cp_inventory_cphaprob_stat") ? "cphaprob stat"
+                    : gateId.equals("cp_failover_down") ? "clusterXL_admin down" : "clusterXL_admin up";
+            when(jobs.findDiagnostic("job-1")).thenReturn(Optional.of(new JobRecordDao.DiagnosticJob(
+                    "job-1", "device-1", null, "CLAIMED", null, false, null, null, null,
+                    command, "synthetic-actor", Instant.now(), null, gateId)));
+            new DiagnosticJobExecutor(leases, attempts, devices, jobs, transport,
+                    key -> gateId.equals("cp_inventory_cphaprob_stat") ? List.of()
+                            : rows.stream().filter(row -> row.key().equals(key)).toList(), store)
+                    .execute("job-1", 1, "device-1", "192.0.2.10", 22, "credential-ref");
+            verify(leases).transitionState("job-1", 1, JobState.CLAIMED, JobState.REJECTED,
+                    "system:worker", "diagnostic_claim_check", "DIAGNOSTIC_UNAVAILABLE");
+            verifyNoInteractions(transport, store, attempts);
+        }
+    }
     private static <T> T stub(Class<T> type,java.util.function.BiFunction<String,Object[],Object> handler) {
         return type.cast(java.lang.reflect.Proxy.newProxyInstance(type.getClassLoader(),new Class<?>[]{type},
             (proxy,method,args)->handler.apply(method.getName(),args)));

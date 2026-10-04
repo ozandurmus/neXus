@@ -205,6 +205,8 @@ location + classification**, never the matched value.
 
 ## Mandatory AIView inspection & post-parsing masking law
 
+The aiview persona, including its machine session, may run approved CLASS_0 diagnostic reads (PO decision 2026-10-04); never CLASS_1/2. Output always passes through the masked projection.
+
 For all active fleet devices, clusters, virtual systems, and operational planes (inventory, configuration, compliance, backup & recovery):
 
 - **Exclusive AIView Verification Mode**: All UI inspections, visual reviews, screenshots, validation evidence, and Product Owner sign-offs MUST be conducted exclusively under the `aiview` persona / role (`role:replay_viewer`).

@@ -210,9 +210,10 @@ class DiagnosticServiceTest {
         var jobs=mock(JobRecordDao.class);
         var rows=GateRegistryFixtureLoader.loadFromStream(getClass().getClassLoader()
             .getResourceAsStream("capabilities/gate_registry_fixture.yaml"));
+        var registryReady = new java.util.concurrent.atomic.AtomicBoolean(true);
         var service=new DiagnosticService(devices,mock(DeviceInventoryRepository.class),mock(JobAdmissionService.class),jobs,
             new TopologyNamePseudonymizer("synthetic-test-key".getBytes()),
-            key -> rows.stream().filter(row -> row.key().equals(key)).toList(),
+            key -> registryReady.get() ? rows.stream().filter(row -> row.key().equals(key)).toList() : List.of(),
             new com.securityexpert.nexus.ui2.service.boot.DeviceCompositionConfiguration.ArtefactStoreAccess(
                 mock(com.securityexpert.nexus.ui2.persistence.artefact.ArtefactStore.class)),
             mock(com.securityexpert.nexus.ui2.service.security.LocalIdentityResolver.class),
@@ -233,6 +234,7 @@ class DiagnosticServiceTest {
         when(devices.findSummary("device-1")).thenReturn(Optional.of(summary));
         var commands=service.targets(true).get(0).commands();
         assertTrue(commands.stream().anyMatch(c -> "fgt_get_system_status".equals(c.get("gate_id"))));
+        assertTrue(commands.stream().allMatch(c -> Boolean.TRUE.equals(c.get("runnable"))));
         assertFalse(commands.stream().anyMatch(c -> String.valueOf(c.get("gate_id")).startsWith("cp_")));
         assertFalse(commands.stream().anyMatch(c -> "fgt_context_moves".equals(c.get("gate_id"))));
         String requestId="00000000-0000-0000-0000-000000000001";
@@ -240,6 +242,25 @@ class DiagnosticServiceTest {
             instanceof com.securityexpert.nexus.ui2.jobs.admission.AdmissionResult.Refused);
         assertTrue(service.submitRead("device-1","fgt_execute_ha_manage_list","bad;token",requestId,"actor")
             instanceof com.securityexpert.nexus.ui2.jobs.admission.AdmissionResult.Refused);
+        for (var row : rows) {
+            if (row.actionClass() != com.securityexpert.nexus.ui2.platform.ActionClass.CLASS_0_READ) {
+                var refused = (com.securityexpert.nexus.ui2.jobs.admission.AdmissionResult.Refused)
+                        service.submitRead("device-1", row.gateId(), null, requestId, "actor", true);
+                assertEquals("DIAGNOSTIC_RUN_NOT_PERMITTED", refused.code(), row.gateId());
+            }
+        }
+        assertEquals("DIAGNOSTIC_RUN_NOT_PERMITTED", ((com.securityexpert.nexus.ui2.jobs.admission.AdmissionResult.Refused)
+                service.submitRead("device-1", "unknown_gate", null, requestId, "actor", true)).code());
+        registryReady.set(false);
+        assertEquals("DIAGNOSTIC_RUN_NOT_PERMITTED", ((com.securityexpert.nexus.ui2.jobs.admission.AdmissionResult.Refused)
+                service.submitRead("device-1", "fgt_get_system_status", null, requestId, "actor", true)).code());
+        registryReady.set(true);
         verifyNoInteractions(jobs);
+        when(jobs.insertDiagnosticRead(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.eq("diagnostic:" + requestId),
+                org.mockito.ArgumentMatchers.eq("device-1"), org.mockito.ArgumentMatchers.eq("fgt_get_system_status"),
+                org.mockito.ArgumentMatchers.eq("get system status"), org.mockito.ArgumentMatchers.eq("actor")))
+                .thenReturn(new JobRecordDao.DiagnosticAdmission("ADMITTED", "job-1"));
+        assertTrue(service.submitRead("device-1", "fgt_get_system_status", null, requestId, "actor", true)
+                instanceof com.securityexpert.nexus.ui2.jobs.admission.AdmissionResult.Admitted);
     }
 }

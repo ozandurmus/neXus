@@ -101,6 +101,8 @@ logs:
 
 ## Post-parsing operational mandate: mandatory AIView funnel
 
+The aiview persona, including its machine session, may run approved CLASS_0 diagnostic reads (PO decision 2026-10-04); never CLASS_1/2. Output always passes through the masked projection.
+
 Once vendor discovery, capability measurement, and core parsing models are established for an estate, raw operational identities must never enter conversational or review surfaces:
 
 1. **Mandatory AIView Persona (`role:replay_viewer`)**:

@@ -9,7 +9,7 @@ afterEach(() => vi.unstubAllGlobals());
 const row = { jobId: "prior-job", targetDeviceId: "device-1", target: "FW-TANGO-04", command: "get system status",
   description: "System status", state: "COMPLETED", actor: "ACTOR-01", submittedAt: "2026-09-26T10:00:00Z",
   startedAt: "2026-09-26T10:00:01Z", durationMs: 1500, exitStatus: 0 };
-function setup({ canExecute = true, queued = false } = {}) {
+function setup({ canExecute = true, queued = false, runnable = true } = {}) {
   const calls: Array<{ url: string; body?: string }> = [];
   vi.stubGlobal("fetch", vi.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
@@ -19,12 +19,12 @@ function setup({ canExecute = true, queued = false } = {}) {
     if (url === "/api/v2/diagnostics/targets") return reply({ targets: [
       { deviceId: "device-2", target: "FW-BRAVO-02", vendor: "check_point", cluster: "CLS-ROMEO-01", virtualSystems: ["001", "13"],
         commands: [{ gate_id: "cp_inventory_vsid_cphaprob_stat", description: "Virtual system cluster status",
-          command_template: "bash -lc 'vsenv <VSID> && cphaprob stat'", timeout_s: 30 },
+          command_template: "bash -lc 'vsenv <VSID> && cphaprob stat'", timeout_s: 30, runnable },
           { gate_id: "cp_inventory_cphaprob_stat", description: "ZZ Plain cluster status",
-            command_template: "cphaprob stat", timeout_s: 30 }] },
+            command_template: "cphaprob stat", timeout_s: 30, runnable }] },
       { deviceId: "device-1", target: "FW-TANGO-04", vendor: "fortinet", virtualSystems: [], commands: [
-        { gate_id: "fgt_get_system_status", description: "System status", command_template: "get system status", timeout_s: 30 },
-        { gate_id: "fgt_read_parameter", description: "Interface details", command_template: "show interface <name>", timeout_s: 30 },
+        { gate_id: "fgt_get_system_status", description: "System status", command_template: "get system status", timeout_s: 30, runnable },
+        { gate_id: "fgt_read_parameter", description: "Interface details", command_template: "show interface <name>", timeout_s: 30, runnable },
       ] }], canExecute });
     if (url.startsWith("/api/v2/diagnostics/history")) return reply({ runs: [row, { ...row, jobId: "other-job", targetDeviceId: "device-2", actor: "ACTOR-02" }] });
     if (url === "/api/v2/diagnostics" && init?.method === "POST") return reply({ job_id: "job-1" });
@@ -94,7 +94,7 @@ it("honors server canExecute while retaining masked history and has no client ro
   setup({ canExecute: false });
   fireEvent.click(await screen.findByRole("button", { name: "FW-TANGO-04" }));
   fireEvent.click(screen.getByRole("button", { name: "System status get system status" }));
-  expect(screen.getByRole("button", { name: "Run read" })).toBeDisabled();
+  expect(screen.queryByRole("button", { name: "Run read" })).not.toBeInTheDocument();
   fireEvent.click(await screen.findByRole("button", { name: "View" }));
   expect(await screen.findByText("Masked")).toBeInTheDocument();
   const source = readFileSync("src/screens/DiagnosticPanel.tsx", "utf8");
@@ -116,4 +116,12 @@ it("orders plain reads before VS reads and only shows the selector for a VS comm
   expect(screen.queryByLabelText("Virtual system")).not.toBeInTheDocument();
   expect(screen.queryByLabelText("Parameter")).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Run read" })).toBeEnabled();
+});
+
+it("does not offer Run for a non-runnable command even when the session can execute", async () => {
+  const calls = setup({ runnable: false });
+  fireEvent.click(await screen.findByRole("button", { name: "FW-TANGO-04" }));
+  fireEvent.click(screen.getByRole("button", { name: "System status get system status" }));
+  expect(screen.queryByRole("button", { name: "Run read" })).not.toBeInTheDocument();
+  expect(calls.some(c => c.url === "/api/v2/diagnostics")).toBe(false);
 });

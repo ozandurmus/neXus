@@ -85,8 +85,12 @@ public final class GateChainInterceptor implements HandlerInterceptor {
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler)
             throws Exception {
+        String path = (request.getServletPath().length() > 1 && request.getServletPath().endsWith("/"))
+                ? request.getServletPath().substring(0, request.getServletPath().length() - 1)
+                : request.getServletPath();
         Optional<GateOutcome.Refused> machineRefusal = gateChain == null ? Optional.empty()
-                : gateChain.machineWriteRefusal(findSessionCookie(request), request.getMethod(), Instant.now());
+                : gateChain.machineWriteRefusal(findSessionCookie(request), request.getMethod(), Instant.now(),
+                        actionIdFor(request.getMethod(), path));
         if (machineRefusal.isPresent()) {
             response.setStatus(403);
             response.setContentType("application/json");
@@ -104,9 +108,6 @@ public final class GateChainInterceptor implements HandlerInterceptor {
             }
             return true;
         }
-        String path = (request.getServletPath().length() > 1 && request.getServletPath().endsWith("/"))
-                ? request.getServletPath().substring(0, request.getServletPath().length() - 1)
-                : request.getServletPath();
         String actionId = actionIdFor(request.getMethod(), path);
         if (actionId == null) {
             if (explicitlyUngatedRoutes.contains(request.getMethod() + " " + path)) {
