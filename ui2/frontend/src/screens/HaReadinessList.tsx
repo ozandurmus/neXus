@@ -108,7 +108,7 @@ export function HaReadinessList({ clusters, rows, running, busy, progress, error
     const children = item.units.filter(unit => unit.unitId !== unit.clusterId);
     const isExpanded = expanded.has(key);
     return <Fragment key={key}>
-      <TableRow aria-label={title} aria-expanded={isExpanded} aria-controls={isExpanded ? `checks-${encodeURIComponent(key)}` : undefined}
+      <TableRow data-readiness-row={key} aria-label={title} aria-expanded={isExpanded} aria-controls={isExpanded ? `checks-${encodeURIComponent(key)}` : undefined}
         tabIndex={0} onClick={() => setExpanded(current => toggle(current, key))}
         onKeyDown={event => {
           if (event.target !== event.currentTarget) return;
