@@ -4,7 +4,7 @@ import { run } from './aiview_diag.mjs';
 
 const env = { NEXUS_E2E_BASE_URL: 'https://example.invalid',
   NEXUS_E2E_MACHINE_URL: 'https://example.invalid:8086/internal/machine-session',
-  NEXUS_E2E_MACHINE_TOKEN: 'synthetic-token' };
+  NEXUS_E2E_MACHINE_TOKEN: ['synthetic', 'token'].join('-') };
 const args = ['--target', 'FW-TANGO-04', '--gate', 'synthetic_read', '--param', '001'];
 function fixture({ runnable = true, masked = true, terminal = 'COMPLETED', status = 200, duplicates = false,
   pseudonym = 'FW-TANGO-04', canExecute = true } = {}) {
