@@ -31,7 +31,7 @@ the human or the higher authority resolve it.**
 3. `project/*.json` — machine-readable project-state authority
    (`project/README.md` defines which file owns what;
    `utils/project_plan._cross_authority_warnings` plus
-   `tests/test_architecture_convergence.py` enforce internal JSON↔JSON and
+   `tests/test_live_project_governance.py` enforce internal JSON↔JSON and
    JSON↔`CURRENT_STATE.md` agreement).
 4. `CURRENT_STATE.md` — concise, hot, human-readable projection of #3. Must
    never contain a claim `project/*.json` doesn't support.
@@ -434,16 +434,20 @@ reproduce real secrets or operational identities in prompts, docs, tests or
 metadata.
 
 Note the data-sensitivity `CLASS 0-3` scheme in `PRIVACY_AND_DATA_HANDLING.md`
-and the operational-risk `utils.action_taxonomy` `CLASS_0..CLASS_4` scheme
+and the operational-risk Java `ActionClass` scheme
 are unrelated namespaces that happen to share small integers and the word
 "class" — do not conflate them.
 
 ## Network action taxonomy
 
-`utils/action_taxonomy.py` is the single source of truth for what the
-product may execute — `CLASS_0_READ` through `CLASS_4_POLICY_DEPLOYMENT`.
-Documentation references it; do not redefine the taxonomy in prose
-(`AI_START_HERE.md` carries the current human-readable table). No automatic
+Per PO decision 2026-10-04, live authority is Java:
+`ui2/platform-core/src/main/java/com/securityexpert/nexus/ui2/platform/ActionClass.java`
+defines classes;
+`ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/security/ActionRegistry.java`
+defines actions. `ui2/capability-registry/`, approved gate migrations and
+`ui2/capability-registry/src/main/resources/capabilities/gate_registry_fixture.yaml`
+define permitted commands. `utils/action_taxonomy.py` is legacy pending PR2;
+no live tool imports it. No automatic
 (unscheduled-trigger, non-ledgered) network-device write/change operation is
 permitted at the current maturity; class 1 controlled recovery writes are
 permitted only through their `RB.x` contracts, are never console-submittable,
@@ -516,14 +520,13 @@ Product Owner first for any deleting or irreversible command and never uses HOST
 - No Browser → device path. The operator console submits typed intent
   (`job_type` + `entity_id`) against a closed module-level registry; no
   command, argv fragment, path, or API route ever originates in the browser.
-- `utils/failover/` contains only read-only assessment/evidence modules
-  (`assessment.py`, `preflight_model.py`, `preflight_readiness.py`) with
-  exactly one verdict roll-up (`assessment._verdict_for`). The absence of a plan,
-  executor, or vendor adapter is enforced by
-  `tests/test_architecture_convergence.py`, not a current-phase courtesy.
-- `OP.0a`'s HA readiness assessment cannot emit `SAFE_TO_FAILOVER` or
-  `DEGRADED_PROCEED_WITH_RISK` — enforced over a generated matrix, not
-  merely undocumented.
+- Failover authority is Java:
+  `ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/failover/`,
+  `ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/failover/`,
+  their corresponding tests, and job-engine failover/architecture tests.
+  Readiness != execution authorization. Python `utils/failover/` and its
+  OP.0a/no-executor tests are legacy, not live permissions or layout constraints.
+  This succession grants no command or execution approval.
 - Corporate Git operations follow "Git authority and execution law" above.
 
 ## Check Point

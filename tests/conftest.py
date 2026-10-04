@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import sys
 import tempfile
-import types
 from pathlib import Path
 
 import pytest
@@ -42,25 +41,3 @@ def real_repository_privacy_lock():
             yield
         finally:
             fcntl.flock(lock, fcntl.LOCK_UN)
-
-
-# The parser characterization tests do not open SSH sessions.  Allow them to
-# run in a lightweight test environment where Paramiko is not installed.
-try:
-    import paramiko  # noqa: F401
-except ModuleNotFoundError:
-    stub = types.ModuleType("paramiko")
-
-    class _SSHClient:
-        pass
-
-    class _AutoAddPolicy:
-        pass
-
-    class _RejectPolicy:
-        pass
-
-    stub.SSHClient = _SSHClient
-    stub.AutoAddPolicy = _AutoAddPolicy
-    stub.RejectPolicy = _RejectPolicy
-    sys.modules["paramiko"] = stub

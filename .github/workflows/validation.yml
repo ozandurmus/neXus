@@ -111,7 +111,7 @@ jobs:
           python-version: '3.12'
           cache: pip
       - name: Prepare declared Python test dependencies
-        run: pip install -r requirements.txt -r requirements-dev.txt
+        run: pip install -r requirements-dev.txt
       - name: Targeted routing and real-root privacy regression
         run: >-
           python3 -m pytest -q -n 2 --dist worksteal
@@ -124,47 +124,40 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
-      - name: Approved LDAP targeted regression
-        if: needs.regression-scope.outputs.classification == 'ldap'
+      - name: Prepare frontend for targeted regression
         run: |
           npm --prefix ui2/frontend ci
           npm --prefix ui2/frontend run build
+      - name: Approved LDAP targeted regression
+        if: needs.regression-scope.outputs.classification == 'ldap'
+        run: |
           npm --prefix ui2/frontend test -- tests/ProjectPlanPanel.test.tsx tests/LoginScreen.test.tsx tests/AuthGate.test.tsx
           ./ui2/gradlew --no-daemon --console=plain -p ui2 -PfrontendPrebuilt=true :ldap-adapter:unitTest :platform-core:unitTest :persistence:unitTest :cli:unitTest :architecture-tests:architectureTest
           ./ui2/gradlew --no-daemon --console=plain -p ui2 -PfrontendPrebuilt=true :service:unitTest --tests '*Login*' --tests '*RoleBinding*' --tests '*Rbac*' --tests '*Directory*' --tests '*Security*' --tests '*Local*' --tests '*ProjectPlanReader*' --tests '*FirstBoot*'
       - name: Discovery targeted regression
         if: contains(needs.regression-scope.outputs.classification, 'discovery')
-        run: ./ui2/gradlew --no-daemon --console=plain -p ui2 :discovery:unitTest
+        run: ./ui2/gradlew --no-daemon --console=plain -p ui2 -PfrontendPrebuilt=true :platform-core:unitTest :persistence:unitTest :service:unitTest :worker:unitTest :job-engine:unitTest
       - name: Inventory targeted regression
         if: contains(needs.regression-scope.outputs.classification, 'inventory')
         run: |
-          npm --prefix ui2/frontend ci
           npm --prefix ui2/frontend test -- tests/AdministrationScreen.test.tsx
-          ./ui2/gradlew --no-daemon --console=plain -p ui2 :persistence:unitTest --tests '*JooqDeviceRepositoryTest'
-          ./ui2/gradlew --no-daemon --console=plain -p ui2 :service:unitTest --tests '*Device*'
-          ./ui2/gradlew --no-daemon --console=plain -p ui2 :worker:unitTest --tests '*Inventory*'
+          ./ui2/gradlew --no-daemon --console=plain -p ui2 -PfrontendPrebuilt=true :persistence:unitTest --tests '*JooqDeviceRepositoryTest'
+          ./ui2/gradlew --no-daemon --console=plain -p ui2 -PfrontendPrebuilt=true :service:unitTest --tests '*Device*'
+          ./ui2/gradlew --no-daemon --console=plain -p ui2 -PfrontendPrebuilt=true :worker:unitTest --tests '*Inventory*'
       - name: Privacy targeted regression
         if: contains(needs.regression-scope.outputs.classification, 'privacy')
-        run: ./ui2/gradlew --no-daemon --console=plain -p ui2 :service:unitTest --tests '*TopologyNamePseudonymizerTest'
+        run: ./ui2/gradlew --no-daemon --console=plain -p ui2 -PfrontendPrebuilt=true :service:unitTest --tests '*TopologyNamePseudonymizerTest'
       - name: Shell targeted regression
         if: contains(needs.regression-scope.outputs.classification, 'shell')
         run: |
-          npm --prefix ui2/frontend ci
           npm --prefix ui2/frontend test -- tests/App.test.tsx
 
-  # FAST PR VALIDATION — runs on every pull_request. Cheap, high-value gates
-  # only: import sanity, the repository/privacy gate, project-state
-  # consistency, the build-history index, a small stable safety/regression
-  # smoke set, and the whitespace/conflict-marker check. Deliberately does
-  # NOT run the full pytest suite (see the `full-regression` job below).
-  # Job id kept as `validate` (unchanged from the previous single-job
-  # workflow) so an existing branch-protection required-status-check named
-  # `validate` keeps matching on pull_request events without repository
-  # settings needing to change.
+  # Keep the required validate status: privacy, live tooling and project checks.
+  # The explicit pytest.ini manifest excludes the retired Python product.
   validate:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -198,14 +191,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
           pip install -r requirements-dev.txt
-          pip install -r requirements-console.txt
-
-      - name: Import validation
-        # Catches a syntax error or a broken import before anything else
-        # spends time on it, and covers modules no test imports directly.
-        run: python -m compileall -q main.py application console configuration checkpoint panorama utils scripts
 
       - name: Repository privacy gate
         # Must run on the clean checkout, BEFORE any test run: a test run
@@ -215,13 +201,13 @@ jobs:
         # pre-existing repository debt (scripts/nexus_engineer_tool_gate.py's
         # pre-push hook already treats it that way) and must not fail CI on
         # every PR; a genuinely new finding still fails exactly as before.
-        run: python main.py --repository-privacy-check --privacy-baseline-ref origin/main
+        run: python3 scripts/repository_privacy_check.py --privacy-baseline-ref origin/main
 
       - name: Project-state consistency
         # The cross-authority rules in utils/project_plan. Fails when
         # CURRENT_STATE.md, roadmap.json, feature_registry.json,
         # build_history.json and backlog.json stop agreeing.
-        run: python -m pytest -q tests/test_architecture_convergence.py
+        run: python -m pytest -q tests/test_live_project_governance.py
 
       - name: Build history index is current
         run: python scripts/build_history_index.py --check
@@ -234,35 +220,15 @@ jobs:
         # and QUEUE.md size ceilings, plus the no-long-narrative-field rule.
         run: python -m pytest -q tests/test_project_files_budget.py
 
-      - name: PR smoke / safety regression set
-        # A small, stable, hand-picked set of fast tests that stand in for
-        # "affected-subsystem regression" on an ordinary bounded PR — not a
-        # path->test classifier (deliberately not built: see
-        # docs/AI_DEVELOPMENT_PROTOCOL.md "Testing tiers"). Covers the
-        # invariants a regression here would most likely break: credential
-        # redaction, the repository privacy gate's own test surface, known
-        # safety-gap coverage, and the frontend-rendering shared-state-leak
-        # guard called out in the full-suite step's own long-standing
-        # comment. A change with a wider blast radius (dependencies, shared
-        # test infra, schema/storage, concurrency, security boundary, CI
-        # infra itself, or an explicit PO/contract requirement) still
-        # requires a full regression per AI_START_HERE.md's validation
-        # ladder and AGENTS.md's engineering laws — run it locally or via
-        # workflow_dispatch before merging such a PR.
-        run: >-
-          python -m pytest -q
-          tests/test_credential_redaction.py
-          tests/test_dev0_4_repository_privacy_gate.py
-          tests/test_known_safety_gaps.py
-          tests/test_frontend_rendering_boundary.py
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Prepare declared Chromium test runtime
+        run: python -m playwright install --with-deps chromium
 
-      - name: GOV.ORCH.7 governance/scope tests
-        # Section 2.3 item 5 CI parity: the vendor-neutral governance guard
-        # and the PO write-scope check's own unit suite. A separate step
-        # (not folded into "PR smoke / safety regression set" above) so a
-        # concurrent movement adding its own cold-start-budget step here
-        # does not need to touch this one, or vice versa.
-        run: python -m pytest -q tests/test_vendor_neutral_governance.py tests/test_po_scope_check.py
+      - name: Live tooling regression
+        run: python -m pytest -q -n 2 --dist worksteal
 
       - name: Whitespace / conflict-marker check
         # Checks the whole HEAD tree against git's constant empty-tree SHA,
@@ -312,28 +278,21 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
           pip install -r requirements-dev.txt
-          pip install -r requirements-console.txt
 
       - name: Prepare declared Chromium test runtime
         run: python -m playwright install --with-deps chromium
 
-      - name: Import validation
-        # Catches a syntax error or a broken import before the suite spends
-        # time on it, and covers modules no test imports directly.
-        run: python -m compileall -q main.py application console configuration checkpoint panorama utils scripts
-
       - name: Repository privacy gate
         # Must run on the clean checkout, BEFORE the suite: a test run creates
         # gitignored data/ + logs/ that the gate would otherwise flag.
-        run: python main.py --repository-privacy-check --privacy-baseline-ref origin/main
+        run: python3 scripts/repository_privacy_check.py --privacy-baseline-ref origin/main
 
       - name: Project-state consistency
         # The cross-authority rules in utils/project_plan. Fails when
         # CURRENT_STATE.md, roadmap.json, feature_registry.json,
         # build_history.json and backlog.json stop agreeing.
-        run: python -m pytest -q tests/test_architecture_convergence.py
+        run: python -m pytest -q tests/test_live_project_governance.py
 
       - name: Build history index is current
         run: python scripts/build_history_index.py --check
@@ -351,28 +310,25 @@ jobs:
         # the log rather than leaving `-n auto`'s choice implicit.
         run: python -c "import os; print(f'CPU count (xdist -n auto target) -> {os.cpu_count()}')"
 
-      - name: Full test suite (parallel)
-        # DEV.TEST.1 (2026-09-06): parallelized. The prior "serial on purpose"
-        # reasoning no longer holds -- the actual root cause of the suite's two
-        # long-standing order-dependent failures was scripts/render_uitest.py
-        # leaving three utils.html_export payload builders rebound after an
-        # in-process call (a bare module-level rebind, not monkeypatch.setattr,
-        # so it silently outlived the call and leaked into whichever later
-        # run_html_export() shared its worker). That is now fixed with a
-        # try/finally restore (scripts/render_uitest.py::_injected_builders)
-        # and directly regression-tested regardless of worker/order
-        # (tests/test_frontend_rendering_boundary.py::
-        # test_render_uitest_restores_the_builders_it_injects) -- so the one
-        # concrete leak that motivated running this job serially is now caught
-        # by a guard test, not by hoping the polluter and its victim land in
-        # the same process. `-n auto --dist worksteal` matches the exact
-        # command already proven locally (requirements-dev.txt,
-        # scripts/pytest_one_shot.ps1, docs/AI_DEVELOPMENT_PROTOCOL.md); a
-        # serial run remains available as an explicit diagnostic override
-        # (`-n0`), never the default validation path. A single pytest-xdist
-        # master process aggregates every worker's result into one exit code,
-        # so no worker's failure can be masked by another worker's pass.
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Full live tooling suite (parallel)
         run: python -m pytest -q -n auto --dist worksteal
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+      - name: Frontend validation and build
+        working-directory: ui2/frontend
+        run: |
+          npm ci
+          npx tsc --noEmit -p .
+          npx vitest run
+          npm run build
+      - name: Java unit and architecture regression
+        run: ./ui2/gradlew --no-daemon --console=plain -p ui2 -PfrontendPrebuilt=true unitTest architectureTest
 
       - name: Whitespace / conflict-marker check
         # Checks the whole HEAD tree against git's constant empty-tree SHA,
