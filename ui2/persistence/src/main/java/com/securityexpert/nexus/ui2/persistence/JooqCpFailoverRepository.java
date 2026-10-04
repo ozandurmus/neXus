@@ -38,7 +38,12 @@ public class JooqCpFailoverRepository {
     public record SummaryStatus(String clusterRef, String vsId, String vendor, boolean activeWindow,
             String state, String outcome, Instant scheduledFor) {}
     public record ReadinessStatus(String clusterRef, String vsId, String vendor, String outcome,
-            Instant observedAt, String failedCheck, String checks) {}
+            Instant observedAt, String failedCheck, String checks, String stopCode) {
+        public ReadinessStatus(String clusterRef,String vsId,String vendor,String outcome,
+                Instant observedAt,String failedCheck,String checks) {
+            this(clusterRef,vsId,vendor,outcome,observedAt,failedCheck,checks,null);
+        }
+    }
 
     private final TransactionBoundary boundary;
     private final AuditedTransactionBoundary audited;
@@ -108,7 +113,7 @@ public class JooqCpFailoverRepository {
         return boundary.inTransaction(dsl -> dsl.fetch("""
             with latest as (
                 select distinct on (vendor,cluster_ref,coalesce(vs_id,''))
-                    run_id,cluster_ref,vs_id,vendor,outcome,finished_at,failed_check
+                    run_id,cluster_ref,vs_id,vendor,outcome,finished_at,failed_check,message
                 from failover_run where run_kind='READINESS' and state in ('DONE','STOPPED')
                 order by vendor,cluster_ref,coalesce(vs_id,''),finished_at desc
             ), checks as (
@@ -118,7 +123,7 @@ public class JooqCpFailoverRepository {
                 from failover_check_result c join latest l on l.run_id=c.run_id
                 where c.phase='pre' group by c.run_id
             )
-            select r.cluster_ref,r.vs_id,r.vendor,r.outcome,r.finished_at,r.failed_check,
+            select r.cluster_ref,r.vs_id,r.vendor,r.outcome,r.finished_at,r.failed_check,r.message,
                 coalesce(c.checks,'[]'::jsonb) as checks
             from latest r left join checks c on c.run_id=r.run_id
             """)
@@ -126,7 +131,7 @@ public class JooqCpFailoverRepository {
                 r.get("vendor", String.class), r.get("outcome", String.class),
                 Optional.ofNullable(r.get("finished_at", java.time.OffsetDateTime.class))
                     .map(java.time.OffsetDateTime::toInstant).orElse(null), r.get("failed_check", String.class),
-                r.get("checks", JSONB.class).data())));
+                r.get("checks", JSONB.class).data(),r.get("message", String.class))));
     }
 
     /** Last stored readiness counters; never borrow another member, unit or VS baseline. */

@@ -82,6 +82,41 @@ class CpFailoverChecksTest {
                 +"\n2 192.0.2.12 0% STANDBY").pair());
         }
     }
+    @Test void vslsVocabularyPreservesUnhealthyEvidenceAndBackupRole() {
+        String fixture="Cluster Mode: Virtual System Load Sharing (Active Up)\n"
+            +"ID Unique Address Assigned Load State Name\n"
+            +"01 192.0.2.11 100% ACTIVE(!) FW-TEST-01\n"
+            +"02 (local) 192.0.2.12 0% DOWN FW-TEST-02\nActive PNOTEs: synthetic\n";
+        var unhealthy=CpFailoverChecks.state(fixture);
+        check(unhealthy.mode().equals("VSLS") && !unhealthy.pair());
+        check(CpFailoverChecks.stateEvidence(unhealthy).equals(Map.of(
+            "mode","VSLS","role","DOWN","local_state","DOWN","peer_state","ACTIVE(!)")));
+        for(String token:new String[]{"ACTIVE(!)","ACTIVE","STANDBY","BACKUP","DOWN","READY","INIT","LOST","ACTIVE ATTENTION"}) {
+            var state=CpFailoverChecks.state(fixture.replace("ACTIVE(!)","ACTIVE").replace("DOWN",token));
+            check(!state.mode().equals("UNKNOWN"));
+            check(state.members().get("02").equals(token));
+            check(state.localRole().equals(token.equals("BACKUP")?"STANDBY":token));
+            check(state.pair()==(token.equals("BACKUP") || token.equals("STANDBY")));
+        }
+        check(CpFailoverChecks.state(fixture.replace("DOWN","UNRECOGNIZED")).mode().equals("UNKNOWN"));
+        check(CpFailoverChecks.state(fixture.replace("(local)","")).mode().equals("UNKNOWN"));
+        var backup=CpFailoverChecks.state(fixture.replace("ACTIVE(!)","ACTIVE").replace("DOWN","BACKUP"));
+        var active=CpFailoverChecks.state(fixture.replace("ACTIVE(!)","ACTIVE").replace("DOWN","BACKUP")
+            .replace("02 (local)","02").replace("01 192", "01 (local) 192"));
+        check(CpFailoverChecks.corroborated(backup,active));
+    }
+    @Test void arpTablesAcceptVsPreambleAndZeroEntriesButRejectErrors() {
+        String preamble="Context is set to Virtual Device FW-TEST-01 (ID 01).\n";
+        String entry="? (192.0.2.31) at 02:00:00:00:00:01 [ether] on eth0\n";
+        check(CpFailoverChecks.arpCount(preamble+entry)==1);
+        check(CpFailoverChecks.arpCount(preamble+entry+entry)==2);
+        check(CpFailoverChecks.arpCount(preamble)==0);
+        check(CpFailoverChecks.arpCount("")==0);
+        for(String error:new String[]{"Permission denied","arp: command not found","invalid output"})
+            check(CpFailoverChecks.arpCount(preamble+error)==-1);
+        check(CpFailoverChecks.arpCount(entry+preamble)==-1);
+    }
+
     @Test void syncAndPolicyPassFailUnknown() {
         check(CpFailoverChecks.syncStatus(SYNC).equals("PASS"));
         check(CpFailoverChecks.syncStatus(SYNC.replace("Sync status: OK", "Sync status: Off - Full-sync failure")).equals("FAIL"));

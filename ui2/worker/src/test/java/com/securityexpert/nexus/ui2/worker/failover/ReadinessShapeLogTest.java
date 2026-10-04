@@ -100,6 +100,19 @@ class ReadinessShapeLogTest {
         assertEquals("aaa99",ReadinessShapeLog.valueShape("bad99"));
     }
 
+    @Test void configurationSyncUnknownLogsMaskedValuesBeyondXmlLineLimit() {
+        var log=new ReadinessShapeLog("palo_alto");
+        log.capture(4,"<response status=\"success\"><result><group>\n"+"\n".repeat(30)
+            +"<running-sync>pending99</running-sync><running-sync-enabled>Enabled</running-sync-enabled>"
+            +"</group></result></response>");
+        assertNull(log.logUnknown(4,"PASS"));
+        assertNull(log.logUnknown(4,"FAIL"));
+        String message=log.logUnknown(4,"UNKNOWN");
+        assertTrue(message.contains("running-sync=aaaaaaa99"));
+        assertTrue(message.contains("running-sync-enabled=aaaaaaa"));
+        assertFalse(message.contains("pending99") || message.contains("Enabled"));
+    }
+
     @Test void shapesAreLimitedToFirst25LinesAndTwoKilobytes() {
         assertEquals(25,ReadinessShapeLog.textShape("abc123\n".repeat(30)).lines().count());
         assertFalse(ReadinessShapeLog.xmlShape("<response>\n"+"<entry/>\n".repeat(24)

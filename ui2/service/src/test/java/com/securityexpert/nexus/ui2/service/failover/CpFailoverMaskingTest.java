@@ -42,7 +42,7 @@ class CpFailoverMaskingTest {
         when(service.summary("synthetic-actor")).thenReturn(List.of(new CpFailoverService.Summary(unit,
             "check_point", false, null, null, null,
             new JooqCpFailoverRepository.ReadinessStatus(cluster, null, "check_point", "READY", Instant.EPOCH, null,
-                "[{\"memberRef\":\"opaque-1\",\"checkNo\":1,\"status\":\"PASS\",\"derived\":{\"role\":\"ACTIVE\",\"hostname\":\"synthetic-firewall-1\"}}]"), true)));
+                "[{\"memberRef\":\"opaque-1\",\"checkNo\":1,\"status\":\"PASS\",\"derived\":{\"role\":\"ACTIVE\",\"hostname\":\"synthetic-firewall-1\"}}]","COMMAND_UNAVAILABLE"), true)));
         byte[] key = "synthetic-readiness-masking-key-01".getBytes(StandardCharsets.UTF_8);
         var names = new TopologyNamePseudonymizer(key);
         var advice = new PrivacyMaskingResponseBodyAdvice(new SubnetPreservingIpMasker(key), names);
@@ -55,6 +55,7 @@ class CpFailoverMaskingTest {
                     .requestAttr(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE, masked))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].masked").value(masked))
+                .andExpect(jsonPath("$[0].readiness.stopCode").value("COMMAND_UNAVAILABLE"))
                 .andExpect(jsonPath("$[0].unitId").value("opaque-cluster"))
                 .andExpect(jsonPath("$[0].cluster_member_ref").value(masked ? names.maskClusterName(cluster) : cluster))
                 .andExpect(jsonPath("$[0].members[0].device_id").value("opaque-1"))

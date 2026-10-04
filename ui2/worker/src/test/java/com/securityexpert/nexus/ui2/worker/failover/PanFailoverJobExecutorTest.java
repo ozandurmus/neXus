@@ -176,6 +176,17 @@ class PanFailoverJobExecutorTest {
         assertEquals(1,script.suspendCount); assertEquals(0,script.functionalCount);
         assertTrue(result.checks().contains("post:3:FAIL"));
     }
+    @Test void readinessLinkFailurePersistsBothMemberStates() {
+        Script script=new Script(); script.badPre=true;
+        Result result=run(script,true);
+        assertEquals("NOT_READY",result.outcome());
+        assertTrue(result.checks().contains("pre:3:FAIL"));
+        for(int index:new int[]{4,5}) {
+            assertTrue(result.derived().get(index).contains("\"first\":{\"ha1\":\"up\""));
+            assertTrue(result.derived().get(index).contains("\"ha2\":\"down\""));
+        }
+        assertEquals(0,script.suspendCount);
+    }
     @Test void addedPrecheckFailuresNeverSuspend() {
         for (int check=5;check<=7;check++) {
             Script script=new Script();
@@ -215,6 +226,13 @@ class PanFailoverJobExecutorTest {
                 for(int index:new int[]{8,9}) {
                     assertTrue(result.derived().get(index).contains("\"missing\":[\"passive.enabled\""));
                     assertTrue(result.derived().get(index).contains("\"active\":{\"enabled\":true"));
+                }
+                continue;
+            }
+            if(check==4) {
+                for(int index:new int[]{6,7}) {
+                    assertTrue(result.derived().get(index).contains("second.running-sync"));
+                    assertTrue(result.derived().get(index).contains("\"running-sync\":\"synchronized\""));
                 }
                 continue;
             }

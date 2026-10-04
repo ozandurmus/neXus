@@ -38,12 +38,12 @@ public final class CpFailoverChecks {
 
     public record State(String mode, Map<String,String> members, String localId, String localRole) {
         public boolean pair() { return members.size()==2 && members.values().stream().filter("ACTIVE"::equals).count()==1
-            && members.values().stream().filter("STANDBY"::equals).count()==1 && localId!=null; }
+            && members.values().stream().filter(state -> "STANDBY".equals(state) || "VSLS".equals(mode) && "BACKUP".equals(state)).count()==1 && localId!=null; }
     }
     public static State state(String output) {
         State unknown=new State("UNKNOWN",Map.of(),null,"UNKNOWN");
-        if (!CheckPointHaStateParser.clusterModeOf(output).filter(mode -> mode.equals("High Availability")
-                || mode.equals("Virtual System Load Sharing")).isPresent())
+        String mode=CheckPointHaStateParser.clusterModeOf(output).orElse("UNKNOWN");
+        if (!mode.equals("High Availability") && !mode.equals("Virtual System Load Sharing"))
             return unknown;
         Map<String,String> roles=new HashMap<>(); String local=null;
         for (String line:output.split("\\R")) {
@@ -54,17 +54,28 @@ public final class CpFailoverChecks {
             if (columns.length<3 || !columns[1].matches("[0-9a-fA-F:.]+")) continue;
             int stateColumn=columns[2].endsWith("%")?3:2;
             if (columns.length<=stateColumn) return unknown;
-            String role=CheckPointHaStateParser.memberStateOf(columns[stateColumn]).orElse(null);
+            String role=columns[stateColumn].toUpperCase(Locale.ROOT);
+            if ("ACTIVE".equals(role) && columns.length>stateColumn+1
+                    && "ATTENTION".equalsIgnoreCase(columns[stateColumn+1])) role="ACTIVE ATTENTION";
+            if (!Set.of("ACTIVE(!)","ACTIVE","STANDBY","BACKUP","DOWN","READY","INIT","LOST","ACTIVE ATTENTION").contains(role)) role=null;
             if (role==null || roles.putIfAbsent(columns[0],role)!=null) return unknown;
             if (isLocal) {
                 if (local!=null) return unknown;
                 local=columns[0];
             }
         }
-        return roles.size()<2 || local==null?unknown:new State("HA",Map.copyOf(roles),local,roles.get(local));
+        return roles.size()<2 || local==null?unknown:new State(mode.equals("Virtual System Load Sharing")?"VSLS":"HA",Map.copyOf(roles),local,
+            mode.equals("Virtual System Load Sharing") && "BACKUP".equals(roles.get(local))?"STANDBY":roles.get(local));
     }
     public static boolean corroborated(State a,State b) {
-        return a.pair() && b.pair() && a.members().equals(b.members()) && !a.localId().equals(b.localId());
+        return a.pair() && b.pair() && a.mode().equals(b.mode()) && a.members().equals(b.members()) && !a.localId().equals(b.localId());
+    }
+
+    public static Map<String,Object> stateEvidence(State state) {
+        return Map.of("role",state.localRole(),"mode",state.mode(),
+            "local_state",state.localId()==null?"UNKNOWN":state.members().get(state.localId()),
+            "peer_state",state.members().entrySet().stream().filter(e -> !e.getKey().equals(state.localId()))
+                .map(Map.Entry::getValue).findFirst().orElse("UNKNOWN"));
     }
 
     /** Compare complete tables in memory; never persist addresses or interface identifiers. */
@@ -186,7 +197,7 @@ public final class CpFailoverChecks {
     public static int arpCount(String output) {
         if(output==null) return -1;
         int count=0; for(String line:output.split("\\R")) {
-            if(line.isBlank()) continue;
+            if(line.isBlank() || count==0 && line.matches("(?i)^Context is set to Virtual Device [^\\r\\n]+ \\(ID [0-9]+\\)\\.$")) continue;
             if(!line.matches("^\\? \\([0-9a-fA-F:.]+\\) at .+ on [A-Za-z0-9_.:-]+.*$")) return -1;
             count++;
         }

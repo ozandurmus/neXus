@@ -61,6 +61,14 @@ describe("Readiness card", () => {
     expect(screen.queryByText("AIView Pseudonymized")).toBeNull();
   });
 
+  it("explains an unavailable command even with no check observations", () => {
+    const { rerender } = render(<ReadinessCard {...props} checks={[]} status="UNKNOWN" stopCode="COMMAND_UNAVAILABLE" />);
+    expect(screen.getByText("Unknown")).toBeInTheDocument();
+    expect(screen.getByText("Command not available on device (login environment)")).toBeInTheDocument();
+    rerender(<ReadinessCard {...props} checks={[]} status="UNKNOWN" stopCode="COLLECTION_FAILED" />);
+    expect(screen.queryByText("Command not available on device (login environment)")).toBeNull();
+  });
+
   it("caps long messages to two lines and allows expansion", () => {
     vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockReturnValue(80);
     vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(32);

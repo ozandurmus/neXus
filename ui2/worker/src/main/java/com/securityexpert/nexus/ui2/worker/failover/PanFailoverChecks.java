@@ -18,7 +18,7 @@ public final class PanFailoverChecks {
     public static final int SESSION_TOLERANCE_PERCENT = 80;
     public record State(String mode, String role, String localSerial, String peerSerial,
             String peerConnection, String ha1, String ha1Backup, boolean backupConfigured,
-            String ha2, String runningSync) {}
+            String ha2, String runningSync, String ha2Backup, boolean ha2BackupConfigured, String runningSyncEnabled) {}
     private PanFailoverChecks() {}
 
     static String unknownDerived(int check,String status,boolean fieldFound) {
@@ -46,6 +46,12 @@ public final class PanFailoverChecks {
             case 6 -> "/response/result/num-active or active-sessions";
             default -> null;
         };
+    }
+
+    static String configurationSyncShape(String xml) {
+        Element group=child(result(xml),"group");
+        return "running-sync="+ReadinessShapeLog.valueShape(text(group,"running-sync"))
+            +" running-sync-enabled="+ReadinessShapeLog.valueShape(text(group,"running-sync-enabled"));
     }
 
     private static Element child(Element parent, String name) {
@@ -76,7 +82,7 @@ public final class PanFailoverChecks {
         } catch (Exception invalid) { return null; }
     }
     public static State parse(String xml) {
-        State unknown=new State("","","","","","","",false,"","");
+        State unknown=new State("","","","","","","",false,"","","",false,"");
         try {
             Element group=child(result(xml),"group");
             if (group==null) return unknown;
@@ -85,8 +91,9 @@ public final class PanFailoverChecks {
             return new State(value(group,"mode"),value(local,"state"),text(local,"serial-num"),
                 text(peer,"serial-num"),value(peer,"conn-status"),value(child(peer,"conn-ha1"),"conn-status"),
                 value(child(peer,"conn-ha1-backup"),"conn-status"),
-                !value(local,"ha1-backup-ipaddr").isEmpty(),value(child(peer,"conn-ha2"),"conn-status"),
-                value(group,"running-sync"));
+                !value(local,"ha1-backup-ipaddr").isEmpty() || child(peer,"conn-ha1-backup")!=null,value(child(peer,"conn-ha2"),"conn-status"),
+                value(group,"running-sync"),value(child(peer,"conn-ha2-backup"),"conn-status"),
+                !value(local,"ha2-backup-ipaddr").isEmpty() || child(peer,"conn-ha2-backup")!=null,value(group,"running-sync-enabled"));
         } catch (Exception invalid) { return unknown; }
     }
     public record SessionSync(String status, String derived) {}
@@ -205,15 +212,67 @@ public final class PanFailoverChecks {
         return status("up".equals(a.peerConnection()) && "up".equals(b.peerConnection()),
             "down".equals(a.peerConnection()) || "down".equals(b.peerConnection()));
     }
-    public static String links(State a,State b) {
-        String[] links={a.ha1(),a.ha2(),b.ha1(),b.ha2(),
-            a.backupConfigured()?a.ha1Backup():"up",b.backupConfigured()?b.ha1Backup():"up"};
-        for (String link:links) if ("down".equals(link)) return "FAIL";
-        for (String link:links) if (!"up".equals(link)) return "UNKNOWN";
-        return "PASS";
+    public static String links(State a,State b) { return linksEvidence(a,b).status(); }
+
+    public static SessionSync linksEvidence(State a,State b) {
+        ObjectNode derived=JsonNodeFactory.instance.objectNode();
+        ArrayNode missing=derived.putArray("missing"),unrecognised=derived.putArray("unrecognised");
+        boolean failed=false;
+        State[] states={a,b};
+        String[] members={"first","second"};
+        for(int i=0;i<states.length;i++) {
+            State state=states[i];
+            ObjectNode facts=derived.putObject(members[i]);
+            String[] names={"ha1","ha1-backup","ha2","ha2-backup"};
+            String[] values={state.ha1(),state.ha1Backup(),state.ha2(),state.ha2Backup()};
+            boolean[] required={true,state.backupConfigured(),true,state.ha2BackupConfigured()};
+            for(int j=0;j<names.length;j++) {
+                String path=members[i]+"."+names[j],value=values[j];
+                if(value.isEmpty()) {
+                    if(required[j]) missing.add(path);
+                    else facts.put(names[j],"not observed (optional)");
+                } else if(!"up".equals(value) && !"down".equals(value)) {
+                    unrecognised.add(path+":"+ReadinessShapeLog.valueShape(value));
+                } else {
+                    facts.put(names[j],value);
+                    failed |= "down".equals(value);
+                }
+            }
+        }
+        return new SessionSync(!missing.isEmpty() || !unrecognised.isEmpty()?"UNKNOWN":failed?"FAIL":"PASS",derived.toString());
     }
-    public static String sync(State a,State b) {
-        return "synchronized".equals(a.runningSync()) && "synchronized".equals(b.runningSync())
-            ?"PASS":"UNKNOWN";
+
+    public static String sync(State a,State b) { return syncEvidence(a,b).status(); }
+
+    public static SessionSync syncEvidence(State a,State b) {
+        ObjectNode derived=JsonNodeFactory.instance.objectNode();
+        ArrayNode missing=derived.putArray("missing"),unrecognised=derived.putArray("unrecognised");
+        boolean failed=false,unknown=false;
+        State[] states={a,b};
+        String[] members={"first","second"};
+        for(int i=0;i<states.length;i++) {
+            State state=states[i];
+            ObjectNode facts=derived.putObject(members[i]);
+            String value=state.runningSync();
+            if(value.isEmpty()) { missing.add(members[i]+".running-sync"); unknown=true; }
+            else if(!java.util.Set.of("synchronized","not synchronized","synchronization in progress","unknown").contains(value)) {
+                unrecognised.add(members[i]+".running-sync:"+ReadinessShapeLog.valueShape(value)); unknown=true;
+            } else {
+                facts.put("running-sync",value);
+                if(!"synchronized".equals(value)) {
+                    if("up".equals(state.peerConnection()) && "yes".equals(state.runningSyncEnabled())) failed=true;
+                    else unknown=true;
+                }
+            }
+            if(java.util.Set.of("up","down").contains(state.peerConnection()))
+                facts.put("peer-reachable","up".equals(state.peerConnection()));
+            else if(state.peerConnection().isEmpty()) missing.add(members[i]+".peer-connection");
+            else unrecognised.add(members[i]+".peer-connection:"+ReadinessShapeLog.valueShape(state.peerConnection()));
+            if(java.util.Set.of("yes","no").contains(state.runningSyncEnabled()))
+                facts.put("running-sync-enabled",state.runningSyncEnabled());
+            else if(state.runningSyncEnabled().isEmpty()) missing.add(members[i]+".running-sync-enabled");
+            else unrecognised.add(members[i]+".running-sync-enabled:"+ReadinessShapeLog.valueShape(state.runningSyncEnabled()));
+        }
+        return new SessionSync(unknown?"UNKNOWN":failed?"FAIL":"PASS",derived.toString());
     }
 }

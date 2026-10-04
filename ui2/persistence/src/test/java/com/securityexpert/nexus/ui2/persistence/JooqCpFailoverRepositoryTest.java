@@ -21,6 +21,8 @@ class JooqCpFailoverRepositoryTest {
             assertTrue(sql.contains("distinct on (vendor,cluster_ref,coalesce(vs_id,''))"));
             assertTrue(sql.contains("join latest l on l.run_id=c.run_id"));
             assertTrue(sql.contains("where c.phase='pre' group by c.run_id"));
+            assertTrue(sql.contains("failed_check,message"));
+            assertTrue(sql.contains("r.failed_check,r.message"));
             assertTrue(sql.contains("coalesce(c.checks,'[]'::jsonb)"));
             return new MockResult[]{new MockResult(0,DSL.using(SQLDialect.POSTGRES)
                 .newResult(DSL.field("cluster_ref",String.class)))};

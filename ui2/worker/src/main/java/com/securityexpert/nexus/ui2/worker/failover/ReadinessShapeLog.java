@@ -37,7 +37,7 @@ final class ReadinessShapeLog {
 
     void capture(int check,String output) {
         if (logged.contains(check)) return;
-        String shape="palo_alto".equals(vendor)?xmlShape(output,check==5):textShape(output);
+        String shape="palo_alto".equals(vendor)?check==4?PanFailoverChecks.configurationSyncShape(output):xmlShape(output,check==5):textShape(output);
         shapes.merge(check,shape,(a,b) -> a.equals(b)?a:bounded(a+"\n"+b));
     }
 

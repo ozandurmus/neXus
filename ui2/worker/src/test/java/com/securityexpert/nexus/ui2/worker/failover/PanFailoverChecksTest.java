@@ -159,6 +159,54 @@ class PanFailoverChecksTest {
         assertEquals("UNKNOWN",PanFailoverChecks.sessionSync(active,passive.replace("Disabled","pending99")));
         assertEquals("UNKNOWN",PanFailoverChecks.sessionSync(active.replace("Enabled","no"),passive.replace("<recv>1,234</recv>","")));
     }
+    @Test void linksPersistAllObservedStatesAndUnknownOutranksPartialFailure() throws Exception {
+        String healthy=xml("active","passive","0011","0022","up","up","synchronized")
+            .replace("</peer-info>","<conn-ha1-backup><conn-status>up</conn-status></conn-ha1-backup>"
+                +"<conn-ha2-backup><conn-status>down</conn-status></conn-ha2-backup></peer-info>");
+        var a=PanFailoverChecks.parse(healthy);
+        var assessment=PanFailoverChecks.linksEvidence(a,a);
+        assertEquals("FAIL",assessment.status());
+        var json=new com.fasterxml.jackson.databind.ObjectMapper();
+        var derived=json.readTree(assessment.derived());
+        for(String member:new String[]{"first","second"}) {
+            assertEquals("up",derived.path(member).path("ha1").asText());
+            assertEquals("up",derived.path(member).path("ha1-backup").asText());
+            assertEquals("up",derived.path(member).path("ha2").asText());
+            assertEquals("down",derived.path(member).path("ha2-backup").asText());
+        }
+        for(String link:new String[]{"ha1","ha2"}) {
+            var missing=PanFailoverChecks.parse(healthy.replace("<conn-"+link+"><conn-status>up</conn-status></conn-"+link+">",""));
+            var unknown=PanFailoverChecks.linksEvidence(a,missing);
+            assertEquals("UNKNOWN",unknown.status());
+            org.junit.jupiter.api.Assertions.assertTrue(json.readTree(unknown.derived()).path("missing").size()>0);
+        }
+        var unexpected=PanFailoverChecks.linksEvidence(a,PanFailoverChecks.parse(healthy.replace("<conn-status>up", "<conn-status>pending99")));
+        assertEquals("UNKNOWN",unexpected.status());
+        org.junit.jupiter.api.Assertions.assertTrue(unexpected.derived().contains("aaaaaaa99"));
+        org.junit.jupiter.api.Assertions.assertFalse(unexpected.derived().contains("pending99"));
+        var required=PanFailoverChecks.parse(healthy.replace("</local-info>","<ha2-backup-ipaddr>192.0.2.15</ha2-backup-ipaddr></local-info>")
+            .replace("<conn-ha2-backup><conn-status>down</conn-status></conn-ha2-backup>",""));
+        assertEquals("UNKNOWN",PanFailoverChecks.links(a,required));
+    }
+    @Test void configurationSyncVocabularyRequiresReachableEnabledPeerForFailure() throws Exception {
+        String healthy=xml("active","passive","0011","0022","up","up","synchronized")
+            .replace("<running-sync>","<running-sync-enabled>YES</running-sync-enabled><running-sync>");
+        var good=PanFailoverChecks.parse(healthy);
+        for(String state:new String[]{"not synchronized","synchronization in progress","unknown"}) {
+            var bad=PanFailoverChecks.parse(healthy.replace("synchronized",state.toUpperCase(java.util.Locale.ROOT)));
+            var result=PanFailoverChecks.syncEvidence(good,bad);
+            assertEquals("FAIL",result.status());
+            org.junit.jupiter.api.Assertions.assertTrue(result.derived().contains(state));
+            for(String enabled:new String[]{"no","pending99",""})
+                assertEquals("UNKNOWN",PanFailoverChecks.sync(good,PanFailoverChecks.parse(
+                    healthy.replace("synchronized",state).replace("<running-sync-enabled>YES", "<running-sync-enabled>"+enabled))));
+            assertEquals("UNKNOWN",PanFailoverChecks.sync(good,PanFailoverChecks.parse(
+                healthy.replace("synchronized",state).replace("<conn-status>up", "<conn-status>down"))));
+        }
+        assertEquals("PASS",PanFailoverChecks.sync(good,PanFailoverChecks.parse(healthy.replace("synchronized","SYNCHRONIZED"))));
+        assertEquals("UNKNOWN",PanFailoverChecks.sync(good,PanFailoverChecks.parse(healthy.replace("synchronized","pending99"))));
+        assertEquals("UNKNOWN",PanFailoverChecks.sync(good,PanFailoverChecks.parse(healthy.replace("<running-sync>synchronized</running-sync>",""))));
+    }
     public static void main(String[] args) {
         var test=new PanFailoverChecksTest(); test.pairPassFailAndUnknown(); test.activeActiveRefused(); test.addedChecksPassFailUnknown();
     }

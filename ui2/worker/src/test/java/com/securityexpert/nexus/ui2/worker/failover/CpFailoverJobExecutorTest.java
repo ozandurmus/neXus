@@ -26,7 +26,7 @@ class CpFailoverJobExecutorTest {
     private static final String CLUSTER="CLS-TEST-01", A="FW-TEST-01", B="FW-TEST-02";
     private static void check(boolean value) { if(!value) throw new AssertionError(); }
     private static final class Store extends JooqCpFailoverRepository {
-        String state="PLANNED",outcome; boolean valid=true; final List<String> checks=new ArrayList<>();
+        String state="PLANNED",outcome,stopCode; boolean valid=true; final List<String> checks=new ArrayList<>();
         final List<String> derivedValues=new ArrayList<>();
         String vsId,kind="FAILOVER";
         Optional<Check> previous=Optional.empty();
@@ -45,7 +45,7 @@ class CpFailoverJobExecutorTest {
         }
         @Override public boolean windowValid(String id) { return valid; }
         @Override public void state(String id,String next,String step,String result,String failed,String message) {
-            state=next; outcome=result;
+            state=next; outcome=result; stopCode=message;
         }
         @Override public void command(String id,String gateId) {}
         @Override public void check(String id,String phase,String member,String vs,int no,String status,String derived) {
@@ -406,7 +406,49 @@ class CpFailoverJobExecutorTest {
         run(store,script);
         check("UNKNOWN".equals(store.outcome) && store.checks.size()==2);
         check(script.commands.size()==3 && script.downCount==0);
+        check("COMMAND_UNAVAILABLE".equals(store.stopCode));
     }
+    @Test void loginEnvironmentErrorsCarryStopCodeEvenWithZeroExit() {
+        for(String error:List.of("cphaprob: command not found","bash: /synthetic/profile: No such file or directory","Permission denied")) {
+            Store store=new Store(); store.kind="READINESS";
+            Script script=new Script(); script.measured=Map.of("cphaprob stat",error);
+            run(store,script);
+            check("UNKNOWN".equals(store.outcome));
+            check("COMMAND_UNAVAILABLE".equals(store.stopCode));
+            check(store.checks.isEmpty() && script.commands.size()==1 && script.downCount==0);
+        }
+    }
+    @Test void arpVsPreambleRetainsCountsIncludingEmptyTables() {
+        for(int count:List.of(0,1,2)) {
+            Store store=new Store(); store.kind="READINESS"; store.vsId="12";
+            Script script=new Script(); script.measured=Map.of("arp -an",
+                "Context is set to Virtual Device VS-SYNTHETIC (ID 12).\n"
+                +"? (192.0.2.31) at 02:00:00:00:00:01 [ether] on eth0\n".repeat(count));
+            run(store,script);
+            check("READY".equals(store.outcome));
+            check(store.derivedValues.stream().filter(d -> d.equals("{\"count\":"+count+"}")).count()==2);
+        }
+    }
+    @Test void unavailableCommandPreservesStopCodeAfterEarlierBlockingFailure() {
+        Store store=new Store(); store.kind="READINESS";
+        Script script=new Script(); script.badPre=true; script.failedCommand="arp -an";
+        run(store,script);
+        check("NOT_READY".equals(store.outcome));
+        check("COMMAND_UNAVAILABLE".equals(store.stopCode));
+        check(script.downCount==0);
+    }
+    @Test void unhealthyVslsRunFailsWithEvidenceAndStillCollectsLaterChecks() {
+        Store store=new Store(); store.kind="READINESS";
+        Script script=new Script(); script.measured=Map.of("cphaprob stat",
+            "Cluster Mode: Virtual System Load Sharing (Active Up)\n"
+            +"1 (local) 192.0.2.11 0% DOWN\n2          192.0.2.12 100% ACTIVE(!)\nActive PNOTEs: synthetic\n");
+        run(store,script);
+        check("NOT_READY".equals(store.outcome));
+        check(store.checks.contains("pre:1:FAIL") && store.checks.size()==24);
+        check(store.derivedValues.get(0).contains("\"local_state\":\"DOWN\""));
+        check(store.derivedValues.get(0).contains("\"peer_state\":\"ACTIVE(!)\""));
+    }
+
     @Test void informationalUnknownDoesNotBlockReadiness() {
         Store store=new Store(); store.kind="READINESS";
         Script script=new Script(); script.unknownCommand="cphaprob show_failover";
