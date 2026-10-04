@@ -119,6 +119,7 @@ public final class CpFailoverController {
                     });
                     m.put("readiness", Map.of("status", readiness.outcome(), "observedAt", readiness.observedAt(),
                         "failedCheck", readiness.failedCheck() == null ? "" : readiness.failedCheck(),
+                        "stopCode", readiness.stopCode() == null ? "" : readiness.stopCode(),
                         "checks", JSON.convertValue(rows, List.class)));
                 } catch (java.io.IOException invalidStoredJson) {
                     throw new IllegalStateException("Stored readiness checks are invalid", invalidStoredJson);

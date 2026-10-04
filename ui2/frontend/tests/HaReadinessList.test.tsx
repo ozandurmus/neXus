@@ -193,3 +193,14 @@ it("shows per-row progress and disables actions during a batch", () => {
   expect(within(row("CLS-BRAVO-02")).getByRole("status")).toHaveTextContent("Queued");
   expect(screen.getByRole("checkbox", { name: "Select all visible" })).toBeDisabled();
 });
+
+it("shows the stored login-environment stop reason for unknown base and virtual units", () => {
+  const base = { ...summary(clusters[0].ref, "READY"), readiness: {
+    status: "UNKNOWN" as const, observedAt: at, failedCheck: "", stopCode: "COMMAND_UNAVAILABLE", checks: [],
+  } };
+  const vs = { ...base, unitId: "opaque-vs", virtual_system: "VS-ALPHA-07" };
+  setup({ rows: { [clusters[0].ref]: [base, vs] } });
+  expect(within(row(clusters[0].title)).getByText("Command not available on device (login environment)")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: `Virtual systems in ${clusters[0].title}` }));
+  expect(within(row("Virtual System VS-ALPHA-07")).getByText("Command not available on device (login environment)")).toBeInTheDocument();
+});

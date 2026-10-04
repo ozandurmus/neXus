@@ -20,7 +20,7 @@ import { Icon, type IconName } from "../shell/Icon";
 import { StatePanel, VendorBadge, vendorDisplayName } from "../shell/States";
 import { formatTime, relativeAge, DISPLAY_TZ_LABEL } from "../shell/time";
 import { m3 } from "../theme/m3Theme";
-import { ReadinessChecksTable } from "./ReadinessChecksTable";
+import { ReadinessChecksTable, readinessStopReason } from "./ReadinessChecksTable";
 
 type Cluster = { ref: string; title: string; members: DeviceSummary[] };
 type Status = "READY" | "NOT_READY" | "UNKNOWN" | "UNSUPPORTED";
@@ -50,8 +50,8 @@ export function canRunReadiness(row?: CpFailoverSummary) {
 }
 
 function primaryReason(row?: CpFailoverSummary) {
-  return row?.readiness?.status === "NOT_READY" ? row.readiness.failedCheck || "Blocking conditions observed"
-    : row?.readiness?.status === "READY" ? "No blocking conditions observed" : "Readiness has not been established";
+  return readinessStopReason(row?.readiness?.stopCode) ?? (row?.readiness?.status === "NOT_READY" ? row.readiness.failedCheck || "Blocking conditions observed"
+    : row?.readiness?.status === "READY" ? "No blocking conditions observed" : "Readiness has not been established");
 }
 
 /** Presentation only: status, permissions and masked names remain server-owned. */

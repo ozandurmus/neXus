@@ -157,11 +157,12 @@ public final class CpFailoverJobExecutor {
             ?JobState.OUTCOME_UNKNOWN:JobState.FAILED,"system:cp-failover-worker","cp_failover_stopped",code);
     }
     private void finishReadiness(String code,int check,String status) {
+        String stopCode=code;
         if (readinessFailure!=null && (!"FAIL".equals(status) || "FAIL".equals(readinessFailure.status))) {
             code=readinessFailure.code; check=readinessFailure.check; status=readinessFailure.status;
         }
         String outcome="PASS".equals(status)?"READY":"FAIL".equals(status)?"NOT_READY":"UNKNOWN";
-        store.state(runId,"DONE","DONE",outcome,check==0?null:checkName(check),code);
+        store.state(runId,"DONE","DONE",outcome,check==0?null:checkName(check),"COMMAND_UNAVAILABLE".equals(stopCode)?stopCode:code);
         leases.transitionState(jobId,epoch,JobState.EXECUTING,JobState.COMPLETED,
             "system:cp-failover-worker","cp_readiness_done",outcome);
     }
@@ -240,7 +241,8 @@ public final class CpFailoverJobExecutor {
         int sessionCommandIndex=++member.sessionCommandIndex;
         long sessionElapsedMs=(System.nanoTime()-member.openedAtNanos)/1_000_000;
         ExecResult result=ssh.exec(member.session(),new ExecSpec(literal,pty),Duration.ofSeconds(g.timeoutS()));
-        if(!(result instanceof ExecResult.Completed completed) || completed.exitStatus()!=0) {
+        if(!(result instanceof ExecResult.Completed completed) || completed.exitStatus()!=0
+                || commandUnavailable(completed.output())) {
             attempts.writeOutcome(attempt,epoch,"FAILED","COMMAND_UNAVAILABLE",false,null,null,null);
             throw new Stop("COMMAND_UNAVAILABLE",0);
         }
@@ -258,6 +260,12 @@ public final class CpFailoverJobExecutor {
         if (check!=0) shapes.capture(check,completed.output(),pty,sessionCommandIndex,sessionElapsedMs);
         return check==0?completed.output():normalizeRead(command,completed.output(),vsId,shapes);
     }
+    static boolean commandUnavailable(String output) {
+        if(output==null) return false;
+        String lower=output.toLowerCase(java.util.Locale.ROOT);
+        return lower.contains("command not found") || lower.contains("no such file or directory")
+            || lower.contains("permission denied");
+    }
     /** Remove only the documented transport preamble; never mask command errors. */
     static String normalizeRead(String command,String output,String vsId,ReadinessShapeLog shapes) {
         if(output==null) return null;
@@ -270,7 +278,8 @@ public final class CpFailoverJobExecutor {
         String remaining=output.substring(preamble.end());
         boolean banner=preamble.group().lines().anyMatch(line -> line.startsWith("Warning!"));
         // A banner alone must not become an apparently valid empty ARP table.
-        if(banner && !readable(command,remaining)) return output;
+        if(banner && (remaining.isBlank() && !preamble.group().contains("Context is set to Virtual Device ")
+                || !readable(command,remaining))) return output;
         if(banner) shapes.logBannerStripped();
         return remaining;
     }
@@ -280,7 +289,7 @@ public final class CpFailoverJobExecutor {
             case STAT -> !"UNKNOWN".equals(CpFailoverChecks.state(output).mode());
             case TABLE -> !CpFailoverChecks.ipTable(output).isEmpty();
             case IF -> CpFailoverChecks.interfaces(output).ccpPresent();
-            case ARP -> !output.isBlank() && CpFailoverChecks.arpCount(output)>=0;
+            case ARP -> CpFailoverChecks.arpCount(output)>=0;
             case CONN -> CpFailoverChecks.connections(output)!=null;
             case TRAFFIC -> !CpFailoverChecks.bytesByInterface(output).isEmpty();
             case SYNC -> !"UNKNOWN".equals(CpFailoverChecks.syncStatus(output));
@@ -312,9 +321,9 @@ public final class CpFailoverJobExecutor {
         var b=CpFailoverChecks.state(command(second,STAT));
         boolean states=before==null?CpFailoverChecks.corroborated(a,b)
             : roles(a,b,oldActive==first?second:first,"ACTIVE",oldActive,"DOWN",first,second);
-        String stateStatus=states?"PASS":"HA".equals(a.mode()) && "HA".equals(b.mode())?"FAIL":"UNKNOWN";
-        record(phase,first,1,stateStatus,"{\"role\":\""+a.localRole()+"\"}");
-        record(phase,second,1,stateStatus,"{\"role\":\""+b.localRole()+"\"}");
+        String stateStatus=states?"PASS":!"UNKNOWN".equals(a.mode()) && !"UNKNOWN".equals(b.mode())?"FAIL":"UNKNOWN";
+        record(phase,first,1,stateStatus,json(CpFailoverChecks.stateEvidence(a)));
+        record(phase,second,1,stateStatus,json(CpFailoverChecks.stateEvidence(b)));
         if(!states) checkFailed("CLUSTER_STATE_NOT_READY",1,stateStatus);
         var ta=CpFailoverChecks.ipTable(command(first,TABLE));
         var tb=CpFailoverChecks.ipTable(command(second,TABLE));

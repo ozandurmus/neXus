@@ -120,7 +120,7 @@ function UnitPanel({ unit, expanded, onExpand }: { unit: CpFailoverUnit; expande
         {unit.canSchedule && <M3Button emphasis="outlined" disabled={!canSchedule} onClick={() => setDialog("schedule")}>Schedule</M3Button>}
       </Box>
       <ReadinessCard checks={readinessRun?.checks.filter(check => check.phase === "pre") ?? []}
-        members={unit.members} cluster={label} vendor={unit.vendor} status={readinessRun?.outcome}
+        members={unit.members} cluster={label} vendor={unit.vendor} status={readinessRun?.outcome} stopCode={readinessRun?.message}
         observedAt={readinessRun?.checks.map(check => check.observedAt).sort().at(-1)} masked={unit.masked === true}
         running={Boolean(readinessRun && activeStates.includes(readinessRun.state))} disabled={!idle} canRun={unit.canStart} onRun={() => void act(() => runCpFailoverReadiness(unit))} />
       {run && <Box aria-label="Failover run">

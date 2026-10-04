@@ -252,12 +252,16 @@ public final class PanFailoverJobExecutor {
         var sessionSync="active".equals(a.role())?PanFailoverChecks.sessionSyncEvidence(syncA,syncB)
             :"active".equals(b.role())?PanFailoverChecks.sessionSyncEvidence(syncB,syncA)
                 :new PanFailoverChecks.SessionSync("UNKNOWN","{\"missing\":[\"active role\"]}");
-        String[] statuses={role,PanFailoverChecks.relationship(a,b),PanFailoverChecks.links(a,b),
-            PanFailoverChecks.sync(a,b),sessionSync.status(),carried,versions};
+        var links=PanFailoverChecks.linksEvidence(a,b);
+        var configurationSync=PanFailoverChecks.syncEvidence(a,b);
+        String[] statuses={role,PanFailoverChecks.relationship(a,b),links.status(),
+            configurationSync.status(),sessionSync.status(),carried,versions};
         for (int i=0;i<statuses.length;i++) {
             int no=i+1;
             shapes.logUnknown(no,statuses[i]);
             String reason=PanFailoverChecks.unknownDerived(no,statuses[i],fieldsFound.getOrDefault(no,false));
+            if (no==3) reason=links.derived();
+            if (no==4) reason=configurationSync.derived();
             if (no==5) reason=sessionSync.derived();
             if (no==6 && !"UNKNOWN".equals(statuses[i])) reason="{\"count\":"+sessionsA+"}";
             String derived=no==1?"{\"role\":\""+a.role()+"\"}":reason;

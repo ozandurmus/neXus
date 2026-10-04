@@ -75,10 +75,14 @@ function CheckMessage({ text }: { text: string }) {
   </Box>;
 }
 
-export function ReadinessCard({ checks, members, status, cluster, vendor, observedAt, masked = false, running = false, disabled = false, canRun, onRun, error }: {
+export function readinessStopReason(stopCode?: string | null) {
+  return stopCode === "COMMAND_UNAVAILABLE" ? "Command not available on device (login environment)" : null;
+}
+
+export function ReadinessCard({ checks, members, status, cluster, vendor, observedAt, masked = false, running = false, disabled = false, canRun, onRun, error, stopCode }: {
   checks: ReadinessCheck[]; members?: ReadinessMember[]; status?: string | null; cluster: string;
   vendor?: string; observedAt?: string | null; masked?: boolean; running?: boolean; disabled?: boolean; canRun: boolean;
-  onRun: () => void; error?: string | null;
+  onRun: () => void; error?: string | null; stopCode?: string | null;
 }) {
   const rows = checkRows(checks, members);
   const blocking = rows.filter(row => row.failed).length;
@@ -109,6 +113,7 @@ export function ReadinessCard({ checks, members, status, cluster, vendor, observ
           <Typography variant="h6" sx={{ fontWeight: 600 }}>{count}</Typography>
         </Box>)}
     </Box>
+    {!running && readinessStopReason(stopCode) && <Typography variant="body2" sx={{ mb: 1 }}>{readinessStopReason(stopCode)}</Typography>}
     {error && <Typography role="alert" variant="body2" sx={{ color: m3.criticalInk, mb: 1 }}>{error}</Typography>}
     <TableContainer><ReadinessChecksTable checks={checks} members={members} /></TableContainer>
     {!checks.length && <Typography variant="body2" sx={{ color: m3.onSurfaceVar, py: 2 }}>No observations yet</Typography>}
