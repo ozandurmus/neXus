@@ -125,7 +125,7 @@ The §2/§12 pre-check set (plain and per-VS in `vsenv`) also runs **without a f
 window** -- it is read-only:
 - **On demand:** a "Run pre-checks" action per unit (cluster or VS) in Operations › HA & readiness and on the
   Failover tab; allowed to the roles that may read failover state and run collections (operator, security_admin).
-- **Every 4 hours** (the PO's cadence from `FAILOVER_READINESS_CHECKS_CP_PAN_DRAFT.md`): one SSH session per
+- **Every 4 hours** (the PO-approved cadence in this amendment): one SSH session per
   member, commands one at a time in order, a configurable pause between commands (default 2 s), units processed one
   after another (never in parallel against the same member).
 - **Result:** stored like a run's pre-check phase (a readiness record per unit with its check rows); shown as

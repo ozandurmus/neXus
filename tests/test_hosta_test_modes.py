@@ -39,7 +39,12 @@ def test_nightly_full_and_ephemeral_isolation_manifests():
     spec = database["spec"]["template"]["spec"]
     assert "postgres:16@sha256:" in spec["initContainers"][0]["image"]
     assert not spec["automountServiceAccountToken"]
-    assert all("persistentVolumeClaim" not in volume for volume in spec["volumes"])
+    # Only the dependency cache survives; database and checkout remain per-run.
+    persistent = [v for v in spec["volumes"] if "persistentVolumeClaim" in v]
+    assert persistent == [{"name": "gradle-cache", "persistentVolumeClaim": {
+        "claimName": "ui2-integration-gradle-cache"}}]
+    for name in ("data", "workspace", "socket", "tmp", "home", "runner-tmp"):
+        assert next(v for v in spec["volumes"] if v["name"] == name)["emptyDir"] == {}
 
 
 @pytest.mark.parametrize("failure", ["", "setup", "apply", "archive", "gradle", "skipped", "missing", "duplicate", "inconsistent", "cleanup"])
@@ -145,14 +150,17 @@ def test_integration_runner_has_no_forwarding_or_local_gradle():
 @pytest.mark.parametrize("kind,expected", [("pass",0),("failure",1),("skipped",1),("missing",2),("malformed",2),("gradle",1)])
 def test_junit_summary_is_bounded_and_sanitized(tmp_path, kind, expected):
     if kind != "missing":
-        cases = ''.join(f'<testcase classname="example.SyntheticTest" name="test{i}()"><failure message="private detail"/></testcase>' for i in range(25)) if kind == "failure" else ''
-        xml = f'<testsuite tests="25" failures="{25 if kind == "failure" else 0}" errors="0" skipped="{1 if kind == "skipped" else 0}">{cases}</testsuite>'
+        cases = ''.join(f'<testcase classname="example.SyntheticTest" name="test{i}()"><failure message="synthetic detail 192.0.2.10 synthetic.invalid&#10;withheld second line"/></testcase>' for i in range(45)) if kind == "failure" else ''
+        xml = f'<testsuite tests="45" failures="{45 if kind == "failure" else 0}" errors="0" skipped="{1 if kind == "skipped" else 0}">{cases}</testsuite>'
         (tmp_path / "TEST-synthetic.xml").write_text('invalid' if kind == "malformed" else xml)
     result = subprocess.run(["java", str(ROOT / "scripts/IntegrationSummary.java"), "1" if kind == "gradle" else "0", str(tmp_path)], capture_output=True, text=True)
     assert result.returncode == expected, result.stderr
     assert result.stdout.count("INTEGRATION:") == 1
-    assert "private detail" not in result.stdout
-    assert sum(line.startswith("FAILED ") for line in result.stdout.splitlines()) == (20 if kind == "failure" else 0)
+    for raw in ("192.0.2.10", "synthetic.invalid", "withheld second line"):
+        assert raw not in result.stdout
+    if kind == "failure":
+        assert "Exception: synthetic detail <ip> <host>" in result.stdout
+    assert sum(line.startswith("FAILED ") for line in result.stdout.splitlines()) == (40 if kind == "failure" else 0)
 
 
 @pytest.fixture(scope="module")

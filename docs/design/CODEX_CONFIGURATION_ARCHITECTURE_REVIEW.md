@@ -169,7 +169,7 @@ A revised contract should freeze these decisions:
 8. Immutable, restricted-v2-compatible image and manifest with no external route.
 9. Explicit compatibility and rollback policy during worker-to-service ownership migration.
 
-## SESSION CLOSE
+## Review session close
 
 Read-only architectural review completed. No source, configuration, project state, Git history, deployment, device, credential, or production data was changed. No tests were run; conclusions are based on frozen contracts, current source, migrations, tests, and manifests. The worktree remains on `main` with the already-present untracked architecture draft and consultation script.
 

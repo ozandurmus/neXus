@@ -17,7 +17,10 @@ _CEILINGS = {
     # the opening paragraph -- raised by exactly the words added, per the
     # movement's own instruction.
     # PR #359: +124 words for the new "## Host action boundary" section.
-    "AGENTS.md": 3528,
+    # Since 3c7ac6da (the last ceiling update), ratified host/device-action,
+    # AIView/privacy and Java-authority amendments added a net 815 words.
+    # Preserve the previous 49-word headroom; do not trim binding safety law.
+    "AGENTS.md": 4343,
     "AI_START_HERE.md": 2250,
     "CURRENT_STATE.md": 1050,
     "AI_HANDOVER.md": 300,

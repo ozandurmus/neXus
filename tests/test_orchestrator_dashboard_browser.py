@@ -6,6 +6,7 @@ python3 -m pytest -q -p no:cacheprovider tests/test_orchestrator_dashboard_brows
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -112,6 +113,37 @@ def traffic(page):
 def resolve(page, index, data, status=200):
     page.evaluate("args => synthetic.pending[args[0]].resolve(args[1], args[2])", [index, data, status])
     settle(page)
+
+
+def test_classification_projection_preserves_terminal_precedence_and_filter_counts():
+    """Exercise the shipped projection offline, independently of Chromium startup."""
+    source = (ROOT / "scripts/dashboard_assets/dashboard.js").read_text()
+    projection = source[source.index("  function classify("):source.index("  function matchingRows(")]
+    snapshot = board(
+        row("A"), row("B", "awaiting_po"), row("C", "failed"), row("D", "silent"),
+        row("E", "exited_without_close"), row("F", "handed_over"), row("G", stage="integration"),
+        row("H", "done"), row("I", "unrecognized"), row("J", "awaiting_po", phase="cancelled"),
+        row("K", "failed", terminal_outcome="CANCELLED"), row("01"), row("1"),
+        archive=[row("A", "done", archived=True), row("L", "failed", relay_status="CLOSED")],
+    )
+    script = projection + """
+      const rows = projectBoard(JSON.parse(process.argv[1]));
+      const ids = filter => rows.filter(row => member(row, filter)).map(row => row.movement_id);
+      process.stdout.write(JSON.stringify({
+        active: ids('active'), needs: ids('needs'), archive: ids('archive'),
+        classes: Object.fromEntries(rows.map(row => [row.movement_id, row.classification])),
+        uncertain: rows.filter(row => row.evidence_uncertain).map(row => row.movement_id)
+      }));
+    """
+    result = subprocess.run(["node", "-e", script, json.dumps(snapshot)],
+                            check=True, capture_output=True, text=True, timeout=10)
+    actual = json.loads(result.stdout)
+    assert actual["active"] == ["A", "B", "C", "D", "E", "F", "G", "I", "01", "1"]
+    assert actual["needs"] == ["B", "C", "D", "E"]
+    assert actual["archive"] == ["H", "J", "K", "L"]
+    assert actual["classes"]["L"] == "Done"
+    assert actual["classes"]["J"] == actual["classes"]["K"] == "Stopped"
+    assert actual["uncertain"] == ["A"]
 
 
 def test_navigation_classification_counts_and_exact_id_deduplication(workbench):

@@ -648,7 +648,18 @@ def test_gitleaks_allowlists_only_the_approved_commit_and_seven_exact_test_paths
     config = tomllib.loads((REPO_ROOT / ".gitleaks.toml").read_text())
     assert config["extend"] == {"useDefault": True}
     assert "rules" not in config, "Keep the default detection rules intact"
-    history, fixtures = config["allowlists"]
+    synthetic, history, fixtures = config["allowlists"]
+    assert synthetic["targetRules"] == ["generic-api-key"]
+    assert synthetic["regexTarget"] == "secret"
+    assert synthetic["regexes"] == [
+        "^synthetic-value$", "^synthetic-inventory-mask-key-0001$",
+    ]
+    assert not {"commits", "paths", "stopwords"} & synthetic.keys()
+    for pattern in synthetic["regexes"]:
+        value = pattern[1:-1]
+        assert re.fullmatch(pattern, value)
+        assert not re.search(pattern, "prefix-" + value)
+        assert not re.search(pattern, value + "-suffix")
     assert history["commits"] == ["8288cb4cd61178d049d348da39d95816f5e93852"]
     assert history["targetRules"] == ["generic-api-key"]
     assert not {"paths", "regexes", "stopwords"} & history.keys()
