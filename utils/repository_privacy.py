@@ -132,7 +132,7 @@ def _is_text_candidate(path: Path) -> bool:
 
 
 def _safe_test_fixture(path: Path) -> bool:
-    return bool(path.parts and path.parts[0] == "tests")
+    return path.parts[:1] == ("tests",) or path.parts[:2] == ("history", "tests")
 
 
 def _is_repository_safe_ip(value: str, *, test_fixture: bool) -> bool:

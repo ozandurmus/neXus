@@ -75,6 +75,7 @@ TOOLING_FILES = {
     "tests/README.md", "tests/test_cold_start_budget.py",
     "tests/test_action_taxonomy_java_parity.py",
     "tests/test_gov_po_2_privacy_entrypoint.py", "tests/test_security_scans.py",
+    "tests/test_dev0_4_repository_privacy_gate.py",
 }
 COMPONENT_PREFIXES = (
     ("discovery", DISCOVERY_PREFIXES),
