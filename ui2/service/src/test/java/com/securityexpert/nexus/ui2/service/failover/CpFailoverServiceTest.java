@@ -16,6 +16,7 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import com.securityexpert.nexus.ui2.service.api.CpFailoverController;
 import com.securityexpert.nexus.ui2.service.security.GateChainInterceptor;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -73,6 +74,71 @@ class CpFailoverServiceTest {
         assertTrue(service.mayStart("actor-1"));
         assertEquals("CLUSTER_NOT_FOUND",assertThrows(CpFailoverService.Refusal.class,
             () -> service.unitsForRef("unknown","actor-1")).code());
+    }
+    private void noUnit(String scenario, String vendor) {
+        ready("ACTIVE", "STANDBY");
+        Optional<String> ref = "ineligible".equals(scenario) ? Optional.of(CLUSTER) : Optional.empty();
+        var member = new DeviceSummaryRecord(A,
+            "management_server".equals(scenario) ? "management_server" : "gateway", vendor,
+            DeviceEnrollmentState.ENROLLED, Optional.empty(), Optional.empty(), Optional.empty(),
+            Optional.empty(), ref);
+        when(devices.listAll()).thenReturn(List.of(member));
+        when(devices.findMembersByClusterRef(CLUSTER)).thenReturn(List.of(member));
+    }
+    @ParameterizedTest
+    @ValueSource(strings = {"standalone", "management_server", "ineligible"})
+    void panReadLookupsReturnEmptyAtServiceAndController(String scenario) throws Exception {
+        noUnit(scenario, "palo_alto");
+        assertEquals(List.of(), service.unitsForMember(A, "actor-1", "palo_alto"));
+        assertEquals(List.of(), service.unitsForRef(CLUSTER, "actor-1", "palo_alto"));
+        var mvc = MockMvcBuilders.standaloneSetup(new CpFailoverController(service)).build();
+        String path = "/api/v2/pan-failover/units";
+        for (String parameter : List.of("memberDeviceId", "clusterRef"))
+            mvc.perform(get(path).servletPath(path).param(parameter, "memberDeviceId".equals(parameter) ? A : CLUSTER)
+                .requestAttr(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE, "actor-1"))
+                .andExpect(status().isOk()).andExpect(content().json("[]"));
+        verifyNoInteractions(store);
+    }
+    @ParameterizedTest
+    @ValueSource(strings = {"standalone", "management_server", "ineligible"})
+    void cpReadRefusalsRemainUnchanged(String scenario) throws Exception {
+        noUnit(scenario, "check_point");
+        String code = "ineligible".equals(scenario) ? "CLUSTER_NOT_ELIGIBLE" : "CLUSTER_NOT_FOUND";
+        assertEquals(code, assertThrows(CpFailoverService.Refusal.class,
+            () -> service.unitsForMember(A, "actor-1")).code());
+        assertEquals(code, assertThrows(CpFailoverService.Refusal.class,
+            () -> service.unitsForRef(CLUSTER, "actor-1")).code());
+        var mvc = MockMvcBuilders.standaloneSetup(new CpFailoverController(service)).build();
+        String path = "/api/v2/cp-failover/units";
+        for (String parameter : List.of("memberDeviceId", "clusterRef"))
+            mvc.perform(get(path).servletPath(path).param(parameter, "memberDeviceId".equals(parameter) ? A : CLUSTER)
+                .requestAttr(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE, "actor-1"))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value(code));
+    }
+    @ParameterizedTest
+    @ValueSource(strings = {"standalone", "management_server", "ineligible"})
+    void panWriteEndpointsStillRefuseMissingOrIneligibleClusters(String scenario) throws Exception {
+        noUnit(scenario, "palo_alto");
+        String code = "ineligible".equals(scenario) ? "CLUSTER_NOT_ELIGIBLE" : "CLUSTER_NOT_FOUND";
+        var mvc = MockMvcBuilders.standaloneSetup(new CpFailoverController(service)).build();
+        for (String endpoint : List.of("approvals", "runs", "units/" + CLUSTER_ID + "/readiness")) {
+            String path = "/api/v2/pan-failover/" + endpoint;
+            mvc.perform(post(path).servletPath(path)
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .content("{\"clusterId\":\"" + CLUSTER_ID + "\",\"unitId\":\"" + CLUSTER_ID + "\"}")
+                .requestAttr(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE, "actor-1"))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value(code));
+        }
+        verifyNoInteractions(store);
+    }
+    @Test void panReadLookupsDoNotSuppressAuthorizationRefusals() {
+        when(rbac.evaluate(anyString(),any(),any())).thenReturn(new RbacEvaluator.Decision(
+            AuthzOutcome.DENIED,Optional.empty(),Optional.empty(),Optional.empty()));
+        assertEquals("WRONG_ROLE", assertThrows(CpFailoverService.Refusal.class,
+            () -> service.unitsForMember(A, "actor-1", "palo_alto")).code());
+        assertEquals("WRONG_ROLE", assertThrows(CpFailoverService.Refusal.class,
+            () -> service.unitsForRef(CLUSTER, "actor-1", "palo_alto")).code());
+        verifyNoInteractions(devices, inventory, store);
     }
     @Test void vsUnitsUseRawNamesFromDeviceSummaryAndVsidWhenMissing() {
         ready("ACTIVE","STANDBY");
@@ -235,6 +301,10 @@ class CpFailoverServiceTest {
                 InventoryHaFact.SOURCE_PAN_HIGH_AVAILABILITY_STATE)))));
         assertEquals("UNSUPPORTED_HA_MODE",assertThrows(CpFailoverService.Refusal.class,
             () -> service.units(CLUSTER_ID,"actor-1","palo_alto")).code());
+        assertEquals("UNSUPPORTED_HA_MODE",assertThrows(CpFailoverService.Refusal.class,
+            () -> service.unitsForMember(A,"actor-1","palo_alto")).code());
+        assertEquals("UNSUPPORTED_HA_MODE",assertThrows(CpFailoverService.Refusal.class,
+            () -> service.unitsForRef(CLUSTER,"actor-1","palo_alto")).code());
         verifyNoInteractions(store);
     }
     @Test void summaryIncludesCpVsxAndPanWithWindowsAndLatestRuns() {

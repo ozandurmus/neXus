@@ -132,8 +132,8 @@ public final class CpFailoverService {
     public List<Unit> unitsForRef(String clusterRef, String actor, String vendor) {
         requireReader(actor);
         if (clusterRef == null || devices.listAll().stream().noneMatch(d -> d.clusterMemberRef().filter(clusterRef::equals).isPresent()))
-            throw new Refusal("CLUSTER_NOT_FOUND");
-        return units(opaque(clusterRef), actor, vendor);
+            return lookupUnits(null, actor, vendor);
+        return lookupUnits(clusterRef, actor, vendor);
     }
 
     /** By a member's opaque device id. */
@@ -145,8 +145,19 @@ public final class CpFailoverService {
         String ref = memberDeviceId == null ? null : devices.listAll().stream()
             .filter(d -> d.deviceId().equals(memberDeviceId)).findFirst()
             .flatMap(DeviceSummaryRecord::clusterMemberRef).orElse(null);
-        if (ref == null) throw new Refusal("CLUSTER_NOT_FOUND");
-        return units(opaque(ref), actor, vendor);
+        return lookupUnits(ref, actor, vendor);
+    }
+
+    /** Inventory lookups may have no PAN HA unit; admission keeps using strict units(). */
+    private List<Unit> lookupUnits(String clusterRef, String actor, String vendor) {
+        try {
+            if (clusterRef == null) throw new Refusal("CLUSTER_NOT_FOUND");
+            return units(opaque(clusterRef), actor, vendor);
+        } catch (Refusal refused) {
+            if ("palo_alto".equals(vendor) && ("CLUSTER_NOT_FOUND".equals(refused.code())
+                    || "CLUSTER_NOT_ELIGIBLE".equals(refused.code()))) return List.of();
+            throw refused;
+        }
     }
 
     public List<Unit> units(String clusterId, String actor) {
