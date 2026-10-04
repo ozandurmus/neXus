@@ -142,8 +142,9 @@ public final class CheckPointPolicyCollector {
                     long[] lastCheckpoint = {nanoTime.getAsLong() - checkpointInterval};
                     List<JsonNode> access = access(session, domainName, policy.path("access-layers"), deadline, lease, failures,
                         completed -> {
-                            if (nanoTime.getAsLong() - lastCheckpoint[0] < checkpointInterval) return;
                             var checkpoint = snapshot(metadata, completed, List.of(), failures);
+                            // Validate each layer even when its checkpoint write is throttled.
+                            if (nanoTime.getAsLong() - lastCheckpoint[0] < checkpointInterval) return;
                             checkPublication(deadline, lease);
                             publish.accept(checkpoint);
                             lastCheckpoint[0] = nanoTime.getAsLong();

@@ -291,7 +291,6 @@ final class CpPolicyParallelCollection {
         boolean complete = policy.layers.values().stream().allMatch(l -> l.done || l.failure != null)
             && (policy.nat.done || policy.nat.failure != null);
         long now = clock.getAsLong();
-        if (!complete && policy.lastCheckpoint != null && now - policy.lastCheckpoint < checkpointInterval) return;
         List<JsonNode> access = new ArrayList<>();
         List<CollectionFailure> failures = new ArrayList<>(policy.extra);
         for (Layer layer : policy.layers.values()) {
@@ -308,6 +307,8 @@ final class CpPolicyParallelCollection {
             changed.done = false;
             fail(changed, invalid, 0); return;
         }
+        // Mapping failures belong to the changed layer, even between persisted checkpoints.
+        if (!complete && policy.lastCheckpoint != null && now - policy.lastCheckpoint < checkpointInterval) return;
         collector.checkPublication(deadline, lease);
         publish.accept(snapshot); policy.latest = snapshot;
         policy.lastCheckpoint = clock.getAsLong();

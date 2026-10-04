@@ -328,6 +328,32 @@ class CpPolicyParallelCollectionTest {
         }
     }
 
+    @Test void malformedLayerBetweenCheckpointsKeepsSiblingAndPublishesFailedPackage() {
+        var published = new CountDownLatch(1);
+        setup(2, command -> {
+            if (command.contains("show-packages")) return ok(packages(domain("first", "First") + "," + domain("broken", "Broken")));
+            if (command.contains("name 'Broken'")) {
+                await(published);
+                return page("broken", 0, 1, 1, "{\"uid\":\"invalid\",\"type\":\"unsupported-entry\"}", "");
+            }
+            if (command.contains("show-access-rulebase")) return page("first", 0, 1, 1, rule("complete"), "");
+            return answer(command);
+        });
+        var collector = new CheckPointPolicyCollector(transport, gates, repository, Duration.ofHours(2), 2, () -> 0);
+        List<PolicySnapshot> checkpoints = new ArrayList<>();
+        var snapshots = collector.collect(run, request, () -> true, checkpoint -> {
+            checkpoints.add(checkpoint); published.countDown();
+        });
+        var snapshot = snapshots.get(0);
+        assertEquals(List.of("complete"), rules(snapshot));
+        assertEquals(1, snapshot.failures().size());
+        assertEquals("Broken", snapshot.failures().get(0).layerName());
+        assertEquals(2, checkpoints.size());
+        assertEquals(snapshot, checkpoints.get(1));
+        assertTrue(reads.stream().anyMatch(c -> c.contains("show-nat-rulebase")));
+        cleanup();
+    }
+
     @Test void checkpointsAreThrottledPerPackageButCompletionAlwaysPublishes() {
         var clock = new AtomicLong();
         setup(2, command -> {
