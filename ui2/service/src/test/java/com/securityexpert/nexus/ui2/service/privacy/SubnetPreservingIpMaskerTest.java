@@ -24,14 +24,40 @@ class SubnetPreservingIpMaskerTest {
     }
 
     @Test
-    void preservesSubnetAndHostOffsetsForVipAndMembers() {
-        String vip = masker.mask("192.168.230.1");
-        String m1 = masker.mask("192.168.230.2");
-        String m2 = masker.mask("192.168.230.3");
+    void confinesAllRepresentablePrefixesToReservedSpace() {
+        for (int prefix = 4; prefix <= 32; prefix++) {
+            for (int host = 0; host <= 255; host++) {
+                String masked = masker.mask("192.0.2." + host + "/" + prefix);
+                assertThat(masked).matches("(?:24[0-9]|25[0-5])\\..*/" + prefix);
+                assertThat(masked).doesNotStartWith("10.").doesNotStartWith("172.").doesNotStartWith("192.");
+            }
+        }
+        for (int prefix = 0; prefix < 4; prefix++) {
+            assertThat(masker.mask("198.51.100.9/" + prefix)).isEqualTo("[REDACTED_IP]");
+        }
+    }
 
-        assertThat(vip).isNotNull().startsWith("10.");
-        assertThat(m1).isNotNull().startsWith("10.");
-        assertThat(m2).isNotNull().startsWith("10.");
+    @Test
+    void preservesExactlyTheSpecialAddressClasses() {
+        for (String address : new String[]{"0.0.0.0", "255.255.255.255", "127.0.0.0", "127.255.255.255",
+                "169.254.0.0", "169.254.255.255", "224.0.0.0", "239.255.255.255"}) {
+            assertThat(masker.mask(address)).isEqualTo(address);
+            assertThat(masker.mask(address + "/24")).isEqualTo(address + "/24");
+            assertThat(masker.maskText("route " + address)).isEqualTo("route " + address);
+        }
+        assertThat(masker.mask("999.0.0.1")).isEqualTo("[REDACTED_IP]");
+        assertThat(masker.mask("127.0.0.1/33")).isEqualTo("[REDACTED_IP]");
+    }
+
+    @Test
+    void preservesSubnetAndHostOffsetsForVipAndMembers() {
+        String vip = masker.mask("192.0.2.1");
+        String m1 = masker.mask("192.0.2.2");
+        String m2 = masker.mask("192.0.2.3");
+
+        assertThat(vip).isNotNull().matches("(?:24[0-9]|25[0-5])\\..*");
+        assertThat(m1).isNotNull().matches("(?:24[0-9]|25[0-5])\\..*");
+        assertThat(m2).isNotNull().matches("(?:24[0-9]|25[0-5])\\..*");
 
         // Subnet prefixes must match
         int lastDotVip = vip.lastIndexOf('.');
@@ -53,8 +79,8 @@ class SubnetPreservingIpMaskerTest {
 
     @Test
     void mapsDifferentSubnetsToDifferentSyntheticSubnets() {
-        String ip1 = masker.mask("192.168.230.1");
-        String ip2 = masker.mask("172.16.50.1");
+        String ip1 = masker.mask("192.0.2.1");
+        String ip2 = masker.mask("198.51.100.1");
 
         String prefix1 = ip1.substring(0, ip1.lastIndexOf('.'));
         String prefix2 = ip2.substring(0, ip2.lastIndexOf('.'));
@@ -64,9 +90,9 @@ class SubnetPreservingIpMaskerTest {
 
     @Test
     void preservesCidrSuffix() {
-        String masked = masker.mask("192.168.230.1/24");
+        String masked = masker.mask("192.0.2.1/24");
         assertThat(masked).endsWith("/24");
-        assertThat(masked).startsWith("10.");
+        assertThat(masked).matches("(?:24[0-9]|25[0-5])\\..*");
     }
 
     @Test
@@ -79,30 +105,33 @@ class SubnetPreservingIpMaskerTest {
 
     @Test
     void masksEmbeddedIpsInFreeText() {
-        String log = "connect_failed to 192.168.230.2: timed out after 10000ms";
+        String log = "connect_failed to 192.0.2.2: timed out after 10000ms";
         String maskedLog = masker.maskText(log);
 
-        assertThat(maskedLog).doesNotContain("192.168.230.2");
-        assertThat(maskedLog).contains("connect_failed to 10.");
+        assertThat(maskedLog).doesNotContain("192.0.2.2");
+        assertThat(maskedLog).contains("connect_failed to " + masker.mask("192.0.2.2"));
         assertThat(maskedLog).contains(": timed out after 10000ms");
     }
 
     @Test
     void deterministicAcrossMultipleCalls() {
-        String first = masker.mask("10.230.213.204");
-        String second = masker.mask("10.230.213.204");
+        String first = masker.mask("203.0.113.204");
+        String second = masker.mask("203.0.113.204");
         assertThat(second).isEqualTo(first);
+        assertThat(new SubnetPreservingIpMasker("01234567890123456789012345678901".getBytes(StandardCharsets.UTF_8))
+                .mask("203.0.113.204")).isEqualTo(first);
+        assertThat(new SubnetPreservingIpMasker(new byte[32]).mask("203.0.113.204")).isNotEqualTo(first);
     }
 
     @Test
     void inheritsContainingPrefixForBareVipInSlash23() {
         // Register /23 network
-        masker.registerSubnet("10.230.4.12/23");
-        String m1 = masker.mask("10.230.4.12/23");
-        String m2 = masker.mask("10.230.4.13/23");
+        masker.registerSubnet("192.0.2.12/23");
+        String m1 = masker.mask("192.0.2.12/23");
+        String m2 = masker.mask("192.0.2.13/23");
 
         // VIP without CIDR prefix
-        String vip = masker.mask("10.230.4.11");
+        String vip = masker.mask("192.0.2.11");
 
         assertThat(m1).endsWith("/23");
         assertThat(m2).endsWith("/23");

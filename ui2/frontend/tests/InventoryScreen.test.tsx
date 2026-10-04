@@ -260,7 +260,7 @@ describe("InventoryScreen device list", () => {
                 {
                   context: "physical",
                   interfaces: [
-                    { name: "Mgmt", kind: "physical", addresses: [{ address: "10.176.107.91/24", family: "ipv4", role: "cluster_virtual" }], presence: "all", differences: [] },
+                    { name: "Mgmt", kind: "physical", addresses: [{ address: "240.1.2.91/24", family: "ipv4", role: "cluster_virtual" }], presence: "all", differences: [] },
                   ],
                   routes: [],
                 },
@@ -331,7 +331,7 @@ describe("InventoryScreen device list", () => {
                 {
                   context: "physical",
                   interfaces: [
-                    { name: "Mgmt", kind: "physical", addresses: [{ address: "10.1.1.1/24", family: "ipv4", role: "cluster_virtual" }], presence: "all", differences: [] },
+                    { name: "Mgmt", kind: "physical", addresses: [{ address: "240.1.1.1/24", family: "ipv4", role: "cluster_virtual" }], presence: "all", differences: [] },
                   ],
                   routes: [],
                 },
@@ -406,7 +406,7 @@ describe("InventoryScreen device list", () => {
               contexts: [
                 {
                   context: "physical",
-                  interfaces: [{ name: "Mgmt", kind: "physical", addresses: [{ address: "10.1.1.1/24", family: "ipv4", role: "member" }] }],
+                  interfaces: [{ name: "Mgmt", kind: "physical", addresses: [{ address: "240.1.1.1/24", family: "ipv4", role: "member" }] }],
                   routes: [],
                 },
                 {

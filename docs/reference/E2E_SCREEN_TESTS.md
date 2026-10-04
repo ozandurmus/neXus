@@ -93,7 +93,21 @@ The engineering session creates `ui2-e2e-machine-token` on HOST-A with a random
 256-bit token under key `token` and its lowercase SHA-256 under key `sha256`.
 It creates optional `ui2-e2e-canary` key `sha256` with one lowercase SHA-256
 per line, derived locally from real address and serial values without printing
-those values. Rotation replaces both token keys together, then rolls the service
+those values. Generate this payload offline with `python3 scripts/e2e_canary_digests.py`,
+feeding one identity value per line on stdin; only sorted unique digests go to stdout.
+The helper excludes exactly unspecified/default (`0.0.0.0`), limited broadcast, loopback (`127/8`), link-local (`169.254/16`) and
+multicast (`224/4`) values, including CIDR forms. These convey protocol/routing
+scope rather than estate identities, matching the masker pass-through policy.
+The engineering session remains responsible for refreshing the existing Secret;
+this helper does not access the database, cluster or devices.
+
+AIView IPv4 identity pseudonyms use reserved `240/4`; representable prefix
+lengths and host offsets are retained, while prefixes broader than `/4` fail
+closed as `[REDACTED_IP]`. Masked IP pseudonyms visible to aiview change once;
+device pseudonyms (`FW-...`) do not. This range separates pseudonyms from the
+estate's routed address space; it is not a claim of injective mapping over all IPv4.
+
+Rotation replaces both token keys together, then rolls the service
 and starts a fresh Job; removing the Secret disables machine login. No agent or
 person copies the plain token into a repository or chat. The Job receives the
 token as an environment variable; the service receives only its digest.
