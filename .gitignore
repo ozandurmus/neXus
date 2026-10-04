@@ -98,6 +98,11 @@ _realenv_gate_runner.py
 # repository content)
 /scratchpad/
 
+# Root scratch outputs are archived under history/scratch/.
+/run-*.log
+/reply_*.json
+/*.patch
+
 # Local one-shot test / render output logs (never repository content)
 pytest_result.log
 pytest_*.log

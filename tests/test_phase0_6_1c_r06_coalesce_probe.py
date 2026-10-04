@@ -70,7 +70,7 @@ def test_r06_same_process_second_request_coalesces():
 
 def test_r06_probe_script_returns_pass():
     """The default standalone probe is explicitly synthetic preflight."""
-    import _realenv_r06_coalesce_probe as probe
+    from history.scratch import _realenv_r06_coalesce_probe as probe
 
     result = probe._run_probe()
 
@@ -89,7 +89,7 @@ def test_r06_probe_script_returns_pass():
 
 def test_r06_no_second_session_flag_set():
     """r06_no_second_session must be True when coalescing works correctly."""
-    import _realenv_r06_coalesce_probe as probe
+    from history.scratch import _realenv_r06_coalesce_probe as probe
 
     result = probe._run_probe()
     assert result["r06_no_second_session"] is True
@@ -97,7 +97,7 @@ def test_r06_no_second_session_flag_set():
 
 def test_r06_probe_main_exits_zero(capsys):
     """probe.main() must exit 0 on a clean environment."""
-    import _realenv_r06_coalesce_probe as probe
+    from history.scratch import _realenv_r06_coalesce_probe as probe
 
     with pytest.raises(SystemExit) as exc:
         probe.main([])
@@ -110,7 +110,7 @@ def test_r06_probe_main_exits_zero(capsys):
 
 def test_r06_real_environment_mode_requires_one_real_operation():
     """A supplied real operation runs once while the overlap is coalesced."""
-    import _realenv_r06_coalesce_probe as probe
+    from history.scratch import _realenv_r06_coalesce_probe as probe
 
     operation_calls = []
     result = probe._run_probe(
@@ -153,7 +153,7 @@ def test_r06_different_endpoints_are_not_coalesced():
 
 def test_r06_coordinator_budget_unchanged_after_probe():
     """Concurrency budget must not be modified by the probe."""
-    import _realenv_r06_coalesce_probe as probe
+    from history.scratch import _realenv_r06_coalesce_probe as probe
     from utils.collection_executor import DEFAULT_CONCURRENCY_BUDGETS
 
     probe._run_probe()
