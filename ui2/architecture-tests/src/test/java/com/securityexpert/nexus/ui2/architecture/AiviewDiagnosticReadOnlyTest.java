@@ -14,10 +14,12 @@ import com.securityexpert.nexus.ui2.service.security.ActionRegistry;
 
 class AiviewDiagnosticReadOnlyTest {
     @Test
-    void replayViewerHasOnlyDiagnosticReadExecutionAuthorityAndNoNonReadGateCanResolve() {
+    void replayViewerHasOnlyReadExecutionAuthorityAndNoNonReadGateCanResolve() {
         var actions = new ActionRegistry();
         assertEquals(Set.of(RoleToken.SECURITY_ADMIN, RoleToken.REPLAY_VIEWER),
                 actions.find(ActionRegistry.FMG_DIAGNOSTIC_RUN).orElseThrow().requiredRoleTokens());
+        assertEquals(Set.of(RoleToken.OPERATOR, RoleToken.SECURITY_ADMIN, RoleToken.REPLAY_VIEWER),
+                actions.find(ActionRegistry.CP_READINESS_START).orElseThrow().requiredRoleTokens());
         for (String action : new String[]{ActionRegistry.CP_FAILOVER_APPROVE, ActionRegistry.CP_FAILOVER_START}) {
             assertFalse(actions.find(action).orElseThrow().requiredRoleTokens().contains(RoleToken.REPLAY_VIEWER));
         }

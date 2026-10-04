@@ -202,6 +202,51 @@ class CpFailoverServiceTest {
             () -> service.requestReadiness(CLUSTER_ID,CLUSTER_ID,"actor-1","check_point")).code());
         verify(store).requestReadiness(CLUSTER,null,"actor-1",A,"check_point");
     }
+    @Test void replayViewerAdmissionCreatesOnlyReadinessJobWithActorAudit() {
+        ready("ACTIVE", "STANDBY");
+        when(rbac.evaluate(anyString(), any(), any())).thenAnswer(call -> {
+            Optional<String> role = call.getArgument(1);
+            return new RbacEvaluator.Decision(role.filter(
+                com.securityexpert.nexus.ui2.platform.RoleToken.REPLAY_VIEWER::equals).isPresent()
+                ? AuthzOutcome.PERMITTED : AuthzOutcome.DENIED,
+                Optional.of("test"), Optional.empty(), Optional.empty());
+        });
+        var writes = new java.util.ArrayList<String>();
+        var dsl = org.jooq.impl.DSL.using(new org.jooq.tools.jdbc.MockConnection(query -> {
+            String sql = query.sql();
+            if (sql.startsWith("select run_id")) return new org.jooq.tools.jdbc.MockResult[]{
+                new org.jooq.tools.jdbc.MockResult(0, org.jooq.impl.DSL.using(org.jooq.SQLDialect.POSTGRES)
+                    .newResult(org.jooq.impl.DSL.field("run_id", String.class)))};
+            writes.add(sql);
+            if (sql.startsWith("insert into failover_run")) {
+                assertTrue(sql.contains("'READINESS'"));
+                assertEquals("actor-1", query.bindings()[3]);
+            }
+            if (sql.startsWith("insert into jobs")) {
+                assertEquals("cp_failover_readiness", query.bindings()[1]);
+                assertEquals("actor-1", query.bindings()[4]);
+                assertEquals("read", query.bindings()[6]);
+            }
+            return new org.jooq.tools.jdbc.MockResult[]{new org.jooq.tools.jdbc.MockResult(1)};
+        }), org.jooq.SQLDialect.POSTGRES);
+        var repository = new JooqCpFailoverRepository(new com.securityexpert.nexus.ui2.persistence.TransactionBoundary() {
+            @Override public <T> T inTransaction(java.util.function.Function<org.jooq.DSLContext, T> work) {
+                return work.apply(dsl);
+            }
+        });
+        var admission = new CpFailoverService(devices, inventory, repository, rbac, trust);
+        assertNotNull(admission.requestReadiness(CLUSTER_ID, CLUSTER_ID, "actor-1", "check_point"));
+        assertEquals(1, writes.stream().filter(sql -> sql.startsWith("insert into jobs")).count());
+        assertEquals(1, writes.stream().filter(sql -> sql.startsWith("insert into failover_run")).count());
+        assertTrue(writes.contains("SET LOCAL app.actor_fingerprint = 'actor-1'"));
+        assertTrue(writes.contains("SET LOCAL app.action_id = 'failover_readiness_request'"));
+        assertFalse(admission.mayStart("actor-1"));
+        assertFalse(admission.mayApprove("actor-1"));
+        assertEquals("WRONG_ROLE", assertThrows(CpFailoverService.Refusal.class,
+            () -> admission.request(CLUSTER_ID, CLUSTER_ID, null, "actor-1")).code());
+        verifyNoInteractions(store);
+    }
+
     @Test void concurrentReadinessAdmissionRaceIsRefused() {
         ready("ACTIVE","STANDBY");
         when(store.requestReadiness(CLUSTER,null,"actor-1",A,"check_point"))

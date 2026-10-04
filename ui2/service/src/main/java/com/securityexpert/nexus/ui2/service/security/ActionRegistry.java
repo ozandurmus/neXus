@@ -127,6 +127,7 @@ public final class ActionRegistry {
     /** Search includes setting values, so it has the same gate as the configuration text read. */
     public static final String GLOBAL_SEARCH_READ = "global_search_read";
     public static final String CP_FAILOVER_APPROVE = "cp_failover_approve";
+    public static final String CP_READINESS_START = "cp_readiness_start";
     public static final String CP_FAILOVER_START = "cp_failover_start";
     public static final String CP_FAILOVER_READ = "cp_failover_read";
 
@@ -222,9 +223,11 @@ public final class ActionRegistry {
         register(new ActionDescriptor(CP_FAILOVER_APPROVE, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(CP_FAILOVER_START, true, Optional.of(RoleToken.OPERATOR),
                 java.util.Set.of(RoleToken.SECURITY_ADMIN)));
+        register(new ActionDescriptor(CP_READINESS_START, true, Optional.of(RoleToken.OPERATOR),
+                java.util.Set.of(RoleToken.SECURITY_ADMIN, RoleToken.REPLAY_VIEWER)));
         // Viewers see failover units, windows and runs (read-only); approving and starting stay with their roles.
         register(new ActionDescriptor(CP_FAILOVER_READ, true, Optional.of(RoleToken.OPERATOR),
-                java.util.Set.of(RoleToken.SECURITY_ADMIN, RoleToken.VIEWER)));
+                java.util.Set.of(RoleToken.SECURITY_ADMIN, RoleToken.VIEWER, RoleToken.REPLAY_VIEWER)));
         // Class 1: never console-submittable, refused by E3 unconditionally,
         // regardless of role -- exists so E3's unconditional refusal and
         // E3-never-reevaluated-inside-E4 (test 12) are both testable without
