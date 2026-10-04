@@ -60,7 +60,7 @@ class CpFailoverJobExecutorTest {
         boolean extraTableRows,reverseActive,observerLocalIndices;
         String peerPolicyTime;
         long[] connectionCounts;
-        String prefix="";
+        String prefix="",lineEnding="\n";
         Map<String,String> measured=Map.of();
         int downCount,upCount,connectCount;
         final List<String> commands=new ArrayList<>();
@@ -93,7 +93,9 @@ class CpFailoverJobExecutorTest {
                         long count=connectionCounts[first?0:1];
                         output="HOST NAME ID #VALS #PEAK #SLINKS\nlocalhost connections 8158 "+count+" 60000 0\n";
                     }
-                    return new ExecResult.Completed(prefix+output,c.exitStatus());
+                    output=prefix+output;
+                    if(lineEnding.equals("\r\n")) output=output.replace("\r\n","\n").replace("\n",lineEnding);
+                    return new ExecResult.Completed(output,c.exitStatus());
                 });
         }
         DeviceTransport baseTransport() {
@@ -273,6 +275,66 @@ class CpFailoverJobExecutorTest {
         check(store.checks.contains("pre:9:FAIL"));
         check(store.derivedValues.stream().anyMatch(d -> d.contains("\"lostUpdatesIncrease\":1")));
         check("NOT_READY".equals(store.outcome));
+    }
+    private static final String LOGIN_WARNING="Warning! Synthetic boot password reminder.\n";
+    private static final String VS_CONTEXT="Context is set to Virtual Device VS-SYNTHETIC (ID 12).\n";
+    private static List<String> loginPreambles() {
+        return List.of("",VS_CONTEXT,LOGIN_WARNING,LOGIN_WARNING+VS_CONTEXT,VS_CONTEXT+LOGIN_WARNING,
+            LOGIN_WARNING.replace(".\n",". \t\n")+VS_CONTEXT.replace(".\n",". \t\n"),
+            "\n"+LOGIN_WARNING+"\n \t\n"+VS_CONTEXT+"\n"+LOGIN_WARNING+LOGIN_WARNING+"\n");
+    }
+    @Test void loginWarningReadinessPassesHealthyLfAndCrlfFixtures() throws Exception {
+        var json=new com.fasterxml.jackson.databind.ObjectMapper();
+        Map<String,String> fixture=json.readValue(Fixtures.read("cp/readiness_login_warning.json"),
+            new com.fasterxml.jackson.core.type.TypeReference<Map<String,String>>() {});
+        for(String eol:List.of("\n","\r\n")) for(String prefix:loginPreambles()) {
+            Store store=new Store(); store.kind="READINESS"; store.vsId="12";
+            Script script=new Script(); script.measured=fixture; script.prefix=prefix; script.lineEnding=eol;
+            run(store,script);
+            org.junit.jupiter.api.Assertions.assertEquals("READY",store.outcome,store.checks.toString());
+            for(int no:List.of(3,5,8,10,11,12))
+                org.junit.jupiter.api.Assertions.assertEquals(2L,
+                    store.checks.stream().filter(c -> c.equals("pre:"+no+":PASS")).count(),"check "+no);
+            check(store.derivedValues.stream().filter(d -> d.contains("\"up\":7")
+                && d.contains("\"required\":7")).count()==2);
+            check(script.downCount==0 && script.upCount==0);
+        }
+        check(ReadinessShapeLog.textShape(LOGIN_WARNING).contains("[SECRET REDACTED]"));
+    }
+    @Test void loginWarningReadinessKeepsUnreadableOutputsUnknown() {
+        Map<String,Integer> commands=Map.of("cphaprob -a if",3,"arp -an",5,"cat /proc/net/dev",8,
+            "fw stat",10,"cphaprob -ia list",11,"cphaprob show_bond",12);
+        for(String eol:List.of("\n","\r\n")) for(String prefix:loginPreambles())
+            commands.forEach((command,no) -> {
+                Store store=new Store(); store.kind="READINESS"; store.vsId="12";
+                Script script=new Script(); script.prefix=prefix; script.lineEnding=eol;
+                script.measured=Map.of(command,"Error: synthetic unreadable command output\n");
+                run(store,script);
+                check(store.checks.stream().filter(c -> c.equals("pre:"+no+":UNKNOWN")).count()==2);
+                check(script.downCount==0 && script.upCount==0);
+            });
+    }
+    @Test void normalizationPreservesErrorsMismatchedOpaqueVsidsAndBodyWarnings() {
+        var shapes=new ReadinessShapeLog("check_point");
+        for(String eol:List.of("\n","\r\n")) {
+            String body="There are no pnotes in problem state\n";
+            for(String prefix:loginPreambles())
+                org.junit.jupiter.api.Assertions.assertEquals(body.replace("\n",eol),
+                    CpFailoverJobExecutor.normalizeRead("cphaprob -ia list",
+                        (prefix+body).replace("\n",eol),"12",shapes));
+            for(String prefix:loginPreambles()) {
+                String error="Error: synthetic command failed\n";
+                String normalized=CpFailoverJobExecutor.normalizeRead("cphaprob -ia list",
+                    (prefix+error+VS_CONTEXT+LOGIN_WARNING).replace("\n",eol),"12",shapes);
+                check(normalized.contains((error+VS_CONTEXT+LOGIN_WARNING).replace("\n",eol)));
+            }
+            for(String vsId:List.of("012","13")) {
+                String wrong=(VS_CONTEXT+body).replace("\n",eol);
+                check(CpFailoverJobExecutor.normalizeRead("cphaprob -ia list",wrong,vsId,shapes).equals(wrong));
+            }
+            String bodyWarning=(body+LOGIN_WARNING).replace("\n",eol);
+            check(CpFailoverJobExecutor.normalizeRead("cphaprob -ia list",bodyWarning,"12",shapes).equals(bodyWarning));
+        }
     }
     @Test void readNormalizationRejectsUnprovedBannerAndWrongContext() {
         var shapes=new ReadinessShapeLog("check_point");

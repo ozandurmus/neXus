@@ -163,6 +163,29 @@ class CpFailoverChecksTest {
         }
     }
 
+    @Test void loginWarningLayoutParsesHealthyLfAndCrlfBodies() throws Exception {
+        var json=new com.fasterxml.jackson.databind.ObjectMapper();
+        Map<String,String> fixture=json.readValue(Fixtures.read("cp/readiness_login_warning.json"),
+            new com.fasterxml.jackson.core.type.TypeReference<Map<String,String>>() {});
+        for(String eol:java.util.List.of("\n","\r\n")) {
+            String interfaces=fixture.get("cphaprob -a if").replace("\n",eol);
+            var parsed=CpFailoverChecks.interfaces(interfaces);
+            check(parsed.ccpPresent() && parsed.healthy() && parsed.required()==7);
+            check(parsed.names().equals(Set.of("eth1-01","eth1-02","Sync","eth1-01.1234",
+                "eth1-01.1235","eth1-01.1236","eth1-01.1237")));
+            check(parsed.trafficNames().size()==6 && !parsed.trafficNames().contains("Sync"));
+            check(!CpFailoverChecks.interfaces(interfaces.replace("Sync (S)             UP", "Sync (S)             DOWN")).healthy());
+            check(!CpFailoverChecks.interfaces(interfaces.replace("eth1-01.1237         UP", "truncated row")).ccpPresent());
+            check(CpFailoverChecks.arpCount(fixture.get("arp -an").replace("\n",eol))==1);
+            var bytes=CpFailoverChecks.bytesByInterface(fixture.get("cat /proc/net/dev").replace("\n",eol));
+            check(bytes.keySet().equals(parsed.names()) && bytes.values().stream().allMatch(v -> v==3000L));
+            check(CpFailoverChecks.trafficBytesPerSecond(bytes,bytes,parsed.trafficNames())==0);
+            check(CpFailoverChecks.policy(fixture.get("fw stat").replace("\n",eol)).status().equals("PASS"));
+            check(CpFailoverChecks.pnotes(fixture.get("cphaprob -ia list").replace("\n",eol)).status().equals("PASS"));
+            check(CpFailoverChecks.bonds(fixture.get("cphaprob show_bond").replace("\n",eol)).equals("PASS"));
+        }
+    }
+
     @Test void measuredTablesIgnoreMacButPreserveMemberAndInterfaceMappings() {
         String table=Fixtures.read("cp/failover_tablestat.txt");
         var rows=CpFailoverChecks.ipTable(table);

@@ -1,0 +1,8 @@
+{
+  "cphaprob -a if": "\nvsid 1:\n------\nCCP mode: Manual (Unicast)\nRequired interfaces: 7\nRequired secured interfaces: 1\n\n\nInterface Name:      Status:\n\neth1-01              UP\neth1-02              UP\nSync (S)             UP\neth1-01.1234         UP\neth1-01.1235         UP\neth1-01.1236         UP\neth1-01.1237         UP\n\nS - sync, HA/LS - bond type, LM - link monitor, P - probing\n\nVirtual cluster interfaces: 6\n\neth1-01         192.0.2.10\n",
+  "arp -an": "? (192.0.2.31) at 02:00:00:00:00:01 [ether] on eth1-01\n",
+  "cat /proc/net/dev": "Inter-| Receive | Transmit\n face |bytes packets errs drop fifo frame compressed multicast|bytes packets errs drop fifo colls carrier compressed\neth1-01: 1000 0 0 0 0 0 0 0 2000 0 0 0 0 0 0 0\neth1-02: 1000 0 0 0 0 0 0 0 2000 0 0 0 0 0 0 0\nSync: 1000 0 0 0 0 0 0 0 2000 0 0 0 0 0 0 0\neth1-01.1234: 1000 0 0 0 0 0 0 0 2000 0 0 0 0 0 0 0\neth1-01.1235: 1000 0 0 0 0 0 0 0 2000 0 0 0 0 0 0 0\neth1-01.1236: 1000 0 0 0 0 0 0 0 2000 0 0 0 0 0 0 0\neth1-01.1237: 1000 0 0 0 0 0 0 0 2000 0 0 0 0 0 0 0\n",
+  "fw stat": "HOST POLICY DATE\nlocalhost Synthetic_Policy 10Sep2018 14:01:25 : [>eth1-01]\n",
+  "cphaprob -ia list": "There are no pnotes in problem state\n",
+  "cphaprob show_bond": "No bond interfaces are configured.\n"
+}

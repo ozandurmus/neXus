@@ -261,19 +261,20 @@ public final class CpFailoverJobExecutor {
     /** Remove only the documented transport preamble; never mask command errors. */
     static String normalizeRead(String command,String output,String vsId,ReadinessShapeLog shapes) {
         if(output==null) return null;
-        String normalized=output;
-        if(vsId!=null) normalized=normalized.replaceFirst(
-            "\\AContext is set to Virtual Device [^\\r\\n]+ \\(ID "+java.util.regex.Pattern.quote(vsId)+"\\)\\.(?:\\r?\\n|$)", "");
-        int end=normalized.indexOf('\n');
-        if(end>=0 && normalized.substring(0,end).stripTrailing().matches("Warning! [^\\r\\n]*\\.")) {
-            String remaining=normalized.substring(end+1);
-            if(readable(command,remaining)) {
-                shapes.logBannerStripped();
-                normalized=remaining;
-            }
-        }
-        return normalized;
+        String context=vsId==null?"(?!)":"Context is set to Virtual Device [^\\r\\n]+ \\(ID "
+            +java.util.regex.Pattern.quote(vsId)+"\\)\\.[ \t]*(?:\\r?\\n|$)";
+        var preamble=java.util.regex.Pattern.compile(
+            "\\A(?:[ \\t]*\\r?\\n|Warning! [^\\r\\n]*\\.[ \t]*(?:\\r?\\n|$)|"+context+")+"
+        ).matcher(output);
+        if(!preamble.find()) return output;
+        String remaining=output.substring(preamble.end());
+        boolean banner=preamble.group().lines().anyMatch(line -> line.startsWith("Warning!"));
+        // A banner alone must not become an apparently valid empty ARP table.
+        if(banner && !readable(command,remaining)) return output;
+        if(banner) shapes.logBannerStripped();
+        return remaining;
     }
+
     private static boolean readable(String command,String output) {
         return switch(command) {
             case STAT -> !"UNKNOWN".equals(CpFailoverChecks.state(output).mode());
