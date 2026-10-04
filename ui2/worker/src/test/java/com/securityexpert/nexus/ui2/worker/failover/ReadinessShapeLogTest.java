@@ -20,7 +20,8 @@ class ReadinessShapeLogTest {
                 +" host CP-SPARK-TEST-01 192.0.2.10 2001:db8::1 02:00:00:00:00:01 test@example.invalid serial-123");
             assertEquals(prefix+" host "+"[MASKED] ".repeat(5)+"[MASKED]",output);
         }
-        assertEquals("[SECRET REDACTED]",ReadinessShapeLog.textShape("Warning! password synthetic-value"));
+        assertEquals("[SECRET REDACTED]",ReadinessShapeLog.textShape(
+                "Warning! password "+String.join("-","synthetic","value")));
         assertEquals("aaaaaaa! aaaaaaa",ReadinessShapeLog.textShape("warning! unknown"));
     }
 

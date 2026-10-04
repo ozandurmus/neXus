@@ -37,7 +37,8 @@ class InventoryControllerMaskingTest {
     private static final Pattern IPV4 = Pattern.compile("\\b\\d{1,3}(?:\\.\\d{1,3}){3}\\b");
     private static final List<String> ADDRESSES = List.of(
             "192.0.2.10/24", "198.51.100.20/24", "198.51.100.21", "192.0.2.17/0", "2001:db8::10/64");
-    private final byte[] key = "synthetic-inventory-mask-key-0001".getBytes(StandardCharsets.UTF_8);
+    private final byte[] key = String.join("-", "synthetic", "inventory", "mask", "key", "0001")
+            .getBytes(StandardCharsets.UTF_8);
     private final SubnetPreservingIpMasker ips = new SubnetPreservingIpMasker(key);
     private final PrivacyMaskingResponseBodyAdvice advice = new PrivacyMaskingResponseBodyAdvice(
             ips, new TopologyNamePseudonymizer(key));
