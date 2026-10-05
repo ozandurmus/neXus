@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Host-side isolated candidate check. Never invokes the production rollout path.
 
-Database bytes go only through exec pipes; command errors and pod logs are withheld.
+Database bytes go only through exec pipes; pod logs are withheld.
+Kubectl failures retain bounded, masked API diagnostics in the step log.
 Build Jobs use the existing Kaniko/proxy/CA setup with their own emptyDir contexts.
 The 60 s database-copy target is UNKNOWN until the reviewer's live run;
 TIMING preview_db_copy measures the complete snapshot/dump/filtered-copy phase.
@@ -11,13 +12,16 @@ import base64
 import copy
 from contextlib import contextmanager
 import json
+import os
 from pathlib import Path
 import re
 import secrets
 import select
+import shutil
 import signal
 import subprocess
 import sys
+import tempfile
 import time
 
 NS = "ui2-preview"
@@ -32,34 +36,205 @@ JOIN (SELECT DISTINCT ON (device_id) artefact_id FROM public.backup_artefact
 PG_ENV = 'export PGUSER="${POSTGRESQL_USER:-${POSTGRES_USER:-ui2_migrate}}"; export PGDATABASE="${POSTGRESQL_DATABASE:-${POSTGRES_DB:-ui2}}"; export PGPASSWORD="${POSTGRESQL_PASSWORD:-${POSTGRES_PASSWORD:-}}"; '
 
 
+PHASE = "preview_setup"
+STEP = "get namespace"
+LOG = None
+LOAD_CONTEXT = """set -e
+tar -xf - -C /workspace
+for input in /workspace/project/deploy_info.json /workspace/ui2/.ca/*.pem /workspace/ui2/.gradle-home/wrapper/dists/gradle-8.14.3-bin/*/gradle-8.14.3-bin.zip; do
+    test -s "$input" || { echo CONTEXT_INCOMPLETE >&2; exit 1; }
+done
+touch /workspace/.ready
+"""
+
+
+class PreviewFailure(RuntimeError):
+    def __init__(self, reason):
+        super().__init__("Preview operation failed; details withheld")
+        self.phase, self.step, self.reason = PHASE, STEP, reason
+
+
+def classify_reason(stderr="", code=None):
+    text = stderr.lower()
+    if "context_incomplete" in text:
+        return "CONTEXT_INCOMPLETE"
+    if "namespace" in text and ("does not match" in text or "must pass '--namespace" in text):
+        return "NAMESPACE_MISMATCH"
+    if "forbidden" in text:
+        return "FORBIDDEN"
+    if "is invalid" in text:
+        return "MANIFEST_INVALID"
+    if "already exists" in text or "alreadyexists" in text:
+        return "ALREADY_EXISTS"
+    if "notfound" in text or "not found" in text:
+        return "NOT_FOUND"
+    if code in (124, 137) or "timed out" in text or "timeout" in text or "deadlineexceeded" in text or "deadline exceeded" in text:
+        return "TIMEOUT"
+    return "OTHER"
+
+
+@contextmanager
+def private_log():
+    global LOG
+    directory = Path.home() / ".local/state/nexus-preview"
+    directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+    directory.chmod(0o700)
+    fd, _ = tempfile.mkstemp(prefix=time.strftime("%Y%m%dT%H%M%S-"), suffix=".log", dir=directory)
+    with os.fdopen(fd, "w+") as log:
+        LOG = log
+        try:
+            for old in sorted(directory.glob("*.log"), key=lambda p: p.stat().st_mtime, reverse=True)[10:]:
+                old.unlink()
+            yield
+        finally:
+            LOG = None
+
+
+def overlay_host_inputs(repo):
+    """Copy only the approved host-local build inputs into the archived candidate."""
+    global STEP
+    STEP = "overlay host inputs"
+    source = (Path.home() / "nexus").resolve()
+    repo = repo.resolve()
+    patterns = ("ui2/.ca/*.pem",
+                "ui2/.gradle-home/wrapper/dists/gradle-8.14.3-bin/*/gradle-8.14.3-bin.zip")
+    inputs = []
+    try:
+        for pattern in patterns:
+            matches = sorted(source.glob(pattern))
+            if not matches:
+                raise PreviewFailure("HOST_INPUT_MISSING")
+            for path in matches:
+                target = repo / path.relative_to(source)
+                # Never follow links into other host inputs or outside the candidate tree.
+                if not path.is_file() or path.resolve() != path or target.resolve() != target:
+                    raise PreviewFailure("HOST_INPUT_MISSING")
+                inputs.append((path, target))
+        for path, target in inputs:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(path, target)
+    except OSError:
+        raise PreviewFailure("HOST_INPUT_MISSING") from None
+
+
+def prepare_build_context(repo, commit):
+    """Mirror run_build.sh's generated metadata without changing the source checkout."""
+    overlay_host_inputs(repo)
+    global STEP
+    STEP = "prepare build context"
+    project = repo / "project"
+    project.mkdir(parents=True, exist_ok=True)
+    (project / "deploy_info.json").write_text(json.dumps({
+        "commit": commit,
+        "built_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "preview": True,
+    }, indent=2) + "\n", encoding="utf-8")
+
+
+def failure_line(error):
+    if not isinstance(error, PreviewFailure):
+        error = PreviewFailure("TIMEOUT" if isinstance(error, subprocess.TimeoutExpired) else "OTHER")
+    return f"PREVIEW E2E: FAIL phase={error.phase} step={error.step} reason={error.reason}"
+
+
 @contextmanager
 def timing(phase):
+    global PHASE
+    previous, PHASE = PHASE, phase
     start = time.monotonic()
     try:
         yield
+    except (OSError, ValueError, KeyError, TypeError, RuntimeError, subprocess.SubprocessError) as error:
+        if isinstance(error, PreviewFailure):
+            raise
+        reason = "TIMEOUT" if isinstance(error, subprocess.TimeoutExpired) else (
+            "DB_COPY_FAILED" if phase == "preview_db_copy" else
+            "IMAGE_BUILD_FAILED" if phase.startswith("preview_build") else "OTHER")
+        raise PreviewFailure(reason) from None
     finally:
+        PHASE = previous
         print(f"TIMING {phase} {time.monotonic() - start:.3f}", flush=True)
 
 
+def masked_error(stderr):
+    """Keep API error wording/field paths, never arbitrary identities or values.
+
+    Kubectl may embed an entire rejected object (including Secret data), a
+    principal or a URL. Unknown tokens are withheld rather than guessed safe.
+    """
+    text = stderr.decode(errors="replace") if isinstance(stderr, bytes) else stderr or ""
+    text = re.sub(r'"[^"\n]*"|\'[^\'\n]*\'|\{[^\n]*\}|\[[^\n]*\]', '[MASKED]', text)
+    safe = set("error from server forbidden invalid alreadyexists notfound conflict badrequest "
+               "deployment service pod job namespace secret configmap list networkpolicy statefulset "
+               "is are the a an of in on for to with and or not does match must pass cannot "
+               "create patch update get resource resources api group at cluster scope user "
+               "field fields required immutable value values unknown strict decoding missing "
+               "selector labels namespace name kind version metadata spec status containers "
+               "timeout timed out deadline exceeded connection refused unable validate validation "
+               "failed failure no found exists apply manifest masked".split())
+    def token(match):
+        value = match.group()
+        fields = {"spec", "metadata", "status", "selector", "matchLabels", "template", "labels", "name",
+                  "namespace", "containers", "ports", "env", "value", "image", "volumeMounts", "volumes",
+                  "resources", "limits", "requests", "replicas", "strategy", "type", "clusterIP", "port", "targetPort"}
+        if value.lower() in safe or (value.startswith(("spec.", "metadata.", "status."))
+                                     and all(part in fields for part in value.split("."))):
+            return value
+        return "MASKED"
+    return re.sub(r'[A-Za-z0-9_./@=+-]+', token, text).replace('\n', ' ')[:1500]
+
+
 def k(namespace, *args, input=None, timeout=120):
-    result = subprocess.run(["kubectl", "-n", namespace, *args], input=input,
-                            capture_output=True, text=True, timeout=timeout)
+    global STEP
+    verb = args[0]
+    kinds = {"pod", "pods", "job", "jobs", "jobs,pods", "namespace", "secret", "service", "deployment"}
+    kind = next((a.split("/")[0] for a in args[1:] if a.split("/")[0] in kinds), "manifest")
+    if input is not None and verb == "apply":
+        kind = json.loads(input)["kind"]
+    STEP = verb + " " + kind
+    argv = ["kubectl"] + (["-n", namespace] if namespace is not None else []) + list(args)
+    def failed(stderr, reason):
+        line = f"PREVIEW STEP: phase={PHASE} step={STEP} reason={reason} error=" + masked_error(stderr)
+        if LOG is not None:
+            LOG.write(line + "\n")
+            LOG.flush()
+        print(line, flush=True)
+        raise PreviewFailure(reason) from None
+    try:
+        result = subprocess.run(argv, input=input, capture_output=True, text=True, timeout=timeout)
+    except subprocess.TimeoutExpired as error:
+        failed(error.stderr, "TIMEOUT")
     if result.returncode:
-        raise RuntimeError("Preview cluster operation failed; details withheld")
+        failed(result.stderr, classify_reason(result.stderr, result.returncode))
     return result.stdout
 
 
 def load(repo, name):
     # kubectl already understands the existing YAML; no additional YAML dependency.
-    return json.loads(k(NS, "create", "--dry-run=client", "-f", str(repo / name), "-o", "json"))
+    # Parsing must honor the source namespace, not the preview target namespace.
+    return json.loads(k(None, "create", "--dry-run=client", "-f", str(repo / name), "-o", "json"))
 
 
 def create(namespace, obj):
-    k(namespace, "create", "-f", "-", input=json.dumps(obj))
+    # Flatten Lists: namespace is a property of each item, never of the List.
+    if obj["kind"] == "List":
+        for item in obj["items"]:
+            create(namespace, item)
+        return
+    obj = copy.deepcopy(obj)
+    if obj["kind"] != "Namespace":
+        obj.setdefault("metadata", {})["namespace"] = namespace
+    k(namespace, "apply", "--server-side", "--field-manager=nexus-preview", "-f", "-", input=json.dumps(obj))
+
+
+def preview_name(name):
+    if name.startswith("ui2-preview"):
+        return NS + name[len("ui2-preview"):]
+    return NS + "-" + name.removeprefix("ui2-")
 
 
 def metadata(name, labels=None):
-    return dict(name=name, namespace=NS, labels=labels or {})
+    return dict(name=preview_name(name), namespace=NS, labels={**(labels or {}), LABEL: NS})
 
 
 def policy(name, component, ingress, egress):
@@ -73,14 +248,32 @@ def peer(component, ports, direction):
             "ports": [dict(protocol="TCP", port=p) for p in ports]}
 
 
-def policies():
-    return [policy("database-only", "database", [peer("service", [5432], "from"),
-                                               peer("compliance", [5432], "from")], []),
+def policies(workers):
+    endpoints = [(w["component"], w["ports"]) for w in workers if w["ports"]]
+    return [policy("database-only", "database", [peer(c, [5432], "from")
+                                               for c in ["service"] + [w["component"] for w in workers]], []),
             policy("service-only", "service", [peer("e2e", [8080, 8086], "from")],
-                   [peer("database", [5432], "to"), peer("compliance", [8085], "to")]),
-            policy("compliance-only", "compliance", [peer("service", [8085], "from")],
-                   [peer("database", [5432], "to")]),
+                   [peer("database", [5432], "to")] + [peer(c, ports, "to") for c, ports in endpoints]),
+            *[policy(w["component"] + "-only", w["component"],
+                     [peer(c, w["ports"], "from") for c in ["service"] + [v["component"] for v in workers]
+                      if c != w["component"] and w["ports"]],
+                     [peer("database", [5432], "to")] + [peer(c, ports, "to") for c, ports in endpoints
+                                                       if c != w["component"]]) for w in workers],
             policy("e2e-only", "e2e", [], [peer("service", [8080, 8086], "to")])]
+
+
+def preview_references(value):
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if key in {"secret", "configMap", "secretKeyRef", "configMapKeyRef", "secretRef", "configMapRef"}:
+                for name_key in ("name", "secretName"):
+                    if name_key in item:
+                        item[name_key] = preview_name(item[name_key])
+            else:
+                preview_references(item)
+    elif isinstance(value, list):
+        for item in value:
+            preview_references(item)
 
 
 def pod_spec(template):
@@ -91,9 +284,11 @@ def pod_spec(template):
     spec.setdefault("securityContext", {}).setdefault("fsGroup", 0)
     # No production PVC, hostPath or writable state is ever shared.
     for volume in spec.get("volumes", []):
-        if "persistentVolumeClaim" in volume:
-            volume.pop("persistentVolumeClaim")
+        if "persistentVolumeClaim" in volume or "hostPath" in volume:
+            volume.pop("persistentVolumeClaim", None)
+            volume.pop("hostPath", None)
             volume["emptyDir"] = {"sizeLimit": "8Gi"}
+    preview_references(spec)
     return spec
 
 
@@ -105,42 +300,35 @@ def database_manifest(template):
         "app.kubernetes.io/component": "database"}), spec=spec)
 
 
-def compliance_manifest(template, image, db_ip):
+def workload_manifest(template, image, db_ip, endpoints):
     result = copy.deepcopy(template)
-    labels = {"app.kubernetes.io/component": "compliance"}
-    result["metadata"] = metadata("ui2-preview-compliance")
+    labels = {**template["spec"]["template"]["metadata"]["labels"], LABEL: NS}
+    result["metadata"] = metadata(template["metadata"]["name"], labels)
     result["spec"]["selector"] = dict(matchLabels=labels)
     result["spec"]["template"] = dict(metadata=dict(labels=labels), spec=pod_spec(template))
-    container = result["spec"]["template"]["spec"]["containers"][0]
-    container["image"] = image
-    replacements = {"UI2_DB_HOST": db_ip, "UI2_DB_PORT": "5432", "UI2_DB_NAME": "ui2",
-                    "UI2_DB_URL": f"jdbc:postgresql://{db_ip}:5432/ui2",
-                    "UI2_SCHEDULING_ENABLED": "false", "LOGGING_LEVEL_ROOT": "ERROR"}
-    container["env"] = [e for e in container["env"] if e["name"] not in replacements] + [
-        dict(name=name, value=value) for name, value in replacements.items()]
+    for container in result["spec"]["template"]["spec"]["containers"]:
+        container["image"] = image
+        replacements = {"UI2_DB_HOST": db_ip, "UI2_DB_PORT": "5432", "UI2_DB_NAME": "ui2",
+                        "UI2_DB_URL": f"jdbc:postgresql://{db_ip}:5432/ui2",
+                        "UI2_SCHEDULING_ENABLED": "false", "UI2_SESSION_COOKIE_SECURE": "false",
+                        "LOGGING_LEVEL_ROOT": "ERROR"}
+        env = []
+        for entry in container.get("env", []):
+            name = entry["name"]
+            if name in replacements or name in {"UI2_CP_BACKUP_CREDENTIAL_REF", "UI2_CC_RECEIVER_HOST",
+                                                "PAN_DISCOVERY_TRUST_PINNED_FINGERPRINT_SHA256"}:
+                continue
+            if name.endswith("_SERVICE_URL"):
+                # Match the production Service name; DNS/network access outside preview stays denied.
+                source = entry.get("value", "")
+                target = next((url for service, url in endpoints.items()
+                               if re.match(r"https?://" + re.escape(service) + r"(?:[.:/]|$)", source)), None)
+                if target is None:
+                    raise RuntimeError("Preview worker endpoint missing")
+                entry = dict(name=name, value=target)
+            env.append(entry)
+        container["env"] = env + [dict(name=name, value=value) for name, value in replacements.items()]
     return result
-
-
-def service_manifest(template, image, db_ip, compliance_ip):
-    result = copy.deepcopy(template)
-    labels = {"app.kubernetes.io/component": "service"}
-    result["metadata"] = metadata("ui2-preview-service")
-    result["spec"]["selector"] = dict(matchLabels=labels)
-    result["spec"]["template"] = dict(metadata=dict(labels=labels), spec=pod_spec(template))
-    container = result["spec"]["template"]["spec"]["containers"][0]
-    container["image"] = image
-    container["args"] = ["service"]
-    replacements = {"UI2_DB_HOST": db_ip, "UI2_DB_PORT": "5432", "UI2_DB_NAME": "ui2",
-                    "UI2_DB_URL": f"jdbc:postgresql://{db_ip}:5432/ui2",
-                    "UI2_SCHEDULING_ENABLED": "false", "UI2_SESSION_COOKIE_SECURE": "false",
-                    "LOGGING_LEVEL_ROOT": "ERROR",
-                    "UI2_COMPLIANCE_SERVICE_URL": f"http://{compliance_ip}:8085"}
-    removed = set(replacements) | {"UI2_CONFIG_SERVICE_URL", "UI2_COMPLIANCE_SERVICE_URL",
-                                  "UI2_CP_BACKUP_CREDENTIAL_REF"}
-    container["env"] = [e for e in container["env"] if e["name"] not in removed] + [
-        dict(name=name, value=value) for name, value in replacements.items()]
-    return result
-
 
 def e2e_manifest(template, image, service_ip):
     result = copy.deepcopy(template)
@@ -155,6 +343,7 @@ def e2e_manifest(template, image, service_ip):
     container["env"] = [e for e in container["env"] if e["name"] not in replacements] + [
         dict(name=name, value=value) for name, value in replacements.items()]
     result["spec"]["template"]["spec"] = spec
+    result["spec"]["template"]["metadata"]["labels"][LABEL] = NS
     return result
 
 
@@ -177,22 +366,35 @@ def build_manifest(template, loader, name, commit, owner, dockerfile, destinatio
                            annotations={"nexus/commit": commit})
     job["spec"]["backoffLimit"] = 0
     job["spec"]["activeDeadlineSeconds"] = 1800
-    spec = pod_spec(template)
+    # Preserve the host's complete builder setup; isolate only the context volume.
+    spec = job["spec"]["template"]["spec"]
+    spec["volumes"] = [v for v in spec["volumes"] if v["name"] != "context"] + [
+        dict(name="context", emptyDir={"sizeLimit": "8Gi"})]
+    spec["automountServiceAccountToken"] = False
+    spec.setdefault("securityContext", {}).setdefault("fsGroup", 0)
     builder = spec["containers"][0]
     builder["args"] = [a for a in builder["args"] if not a.startswith(
         ("--context=", "--dockerfile=", "--destination=", "--digest-file="))] + [
         "--context=dir:///workspace" + ("/ui2/frontend" if dockerfile.endswith("Dockerfile.e2e") else ""),
         "--dockerfile=/workspace/" + dockerfile, "--destination=" + destination,
         "--digest-file=/dev/termination-log"]
+    builder["terminationMessagePath"] = "/dev/termination-log"
     builder["terminationMessagePolicy"] = "File"
-    builder["env"] = [e for e in builder.get("env", []) if e["name"] != "UI2_IMAGE_TAG"]
+    builder["env"] = [e for e in builder.get("env", []) if e["name"] != "UI2_IMAGE_TAG"] + [
+        dict(name="UI2_IMAGE_TAG", value=commit[:12])]
     init = copy.deepcopy(loader["spec"]["containers"][0])
     init["name"] = "context-loader"
     init["command"] = ["sh", "-c", "while [ ! -f /workspace/.ready ]; do sleep 1; done"]
+    # Host-local templates may carry a different path or subPath. Both containers
+    # must see the root of this pod's emptyDir, never the production context PVC.
+    for container in (builder, init):
+        mounts = [m for m in container.get("volumeMounts", []) if m["name"] != "context"]
+        if any(m["mountPath"] == "/" or m["mountPath"].rstrip("/") == "/workspace"
+               or m["mountPath"].startswith("/workspace/") for m in mounts):
+            raise PreviewFailure("CONTEXT_INCOMPLETE")
+        container["volumeMounts"] = mounts + [dict(name="context", mountPath="/workspace")]
     # Kaniko's established root build exception does not apply to the loader.
     init["securityContext"]["runAsNonRoot"] = True
-    init["volumeMounts"].append(dict(name="preview-ca", mountPath="/run/corp-ca", readOnly=True))
-    spec["volumes"].append(dict(name="preview-ca", configMap=dict(name="corp-ca")))
     spec["initContainers"] = [init]
     job["spec"]["template"] = dict(metadata=dict(labels={LABEL: owner}), spec=spec)
     return job
@@ -220,7 +422,8 @@ def pipe_commands(source, target, timeout=60):
 
 
 def build_images(repo, commit, owner):
-    template = json.loads(k(BUILD_NS, "create", "--dry-run=client", "-f",
+    prepare_build_context(repo, commit)
+    template = json.loads(k(None, "create", "--dry-run=client", "-f",
                             str(Path.home() / "build-job-proxy.yaml"), "-o", "json"))
     loader = load(repo, "deploy/ui2-image-build/20-context-loader.yaml")
     images = []
@@ -244,10 +447,7 @@ def build_images(repo, commit, owner):
             pod_name = pod["metadata"]["name"]
             pipe_commands(["tar", "-C", str(repo), "-cf", "-", "ui2", "project", "docs"],
                           ["kubectl", "-n", BUILD_NS, "exec", "-i", pod_name, "-c", "context-loader", "--",
-                           "sh", "-c", 'set -e; tar -xf - -C /workspace; mkdir -p /workspace/ui2/.ca; '
-                           'for certificate in /run/corp-ca/*; do '
-                           'cp "$certificate" "/workspace/ui2/.ca/$(basename "$certificate").pem"; done; '
-                           'touch /workspace/.ready'], timeout=120)
+                           "sh", "-c", LOAD_CONTEXT], timeout=120)
             job = wait_job(BUILD_NS, name)
             if (job.get("metadata", {}).get("annotations", {}).get("nexus/commit") != commit
                     or job.get("metadata", {}).get("labels", {}).get(LABEL) != owner):
@@ -299,7 +499,7 @@ def exported_snapshot(source):
 
 def copy_database():
     source = ["kubectl", "-n", "ui2", "exec", "ui2-db-0", "--", "sh", "-c"]
-    target = ["kubectl", "-n", NS, "exec", "-i", "ui2-preview-db", "--", "sh", "-c"]
+    target = ["kubectl", "-n", NS, "exec", "-i", preview_name("ui2-preview-db"), "--", "sh", "-c"]
     read_only = PG_ENV + 'export PGOPTIONS="-c default_transaction_read_only=on -c statement_timeout=55000"; '
     with exported_snapshot(source) as snapshot:
         pipe_commands(source + [read_only + "exec pg_dump --format=custom --compress=0 --snapshot=" + snapshot
@@ -331,40 +531,77 @@ def setup_database(repo):
     create(NS, dict(apiVersion="v1", kind="Secret", metadata=metadata("ui2-db"), type="Opaque",
                     data={name: base64.b64encode(value.encode()).decode() for name, value in values.items()}))
     create(NS, database_manifest(template))
-    k(NS, "wait", "--for=condition=Ready", "pod/ui2-preview-db", "--timeout=120s", timeout=130)
+    k(NS, "wait", "--for=condition=Ready", "pod/" + preview_name("ui2-preview-db"), "--timeout=120s", timeout=130)
     with timing("preview_db_copy"):
         copy_database()
-    return json.loads(k(NS, "get", "pod", "ui2-preview-db", "-o", "json"))["status"]["podIP"]
+    return json.loads(k(NS, "get", "pod", preview_name("ui2-preview-db"), "-o", "json"))["status"]["podIP"]
 
 
-def setup_compliance(repo, image, db_ip):
-    templates = load(repo, "deploy/ui2/55-compliance-deployment.yaml")["items"]
-    deployment = next(t for t in templates if t["kind"] == "Deployment")
-    service = copy.deepcopy(next(t for t in templates if t["kind"] == "Service"))
-    service["metadata"] = metadata("ui2-preview-compliance")
-    service["spec"]["selector"] = {"app.kubernetes.io/component": "compliance"}
-    create(NS, compliance_manifest(deployment, image, db_ip))
-    create(NS, service)
-    k(NS, "rollout", "status", "deployment/ui2-preview-compliance", "--timeout=300s", timeout=310)
-    # Resolve the preview Service once through Kubernetes; runtime DNS egress stays denied.
-    return json.loads(k(NS, "get", "service", "ui2-preview-compliance", "-o", "json"))["spec"]["clusterIP"]
+def worker_templates(repo):
+    """Discover N worker roles directly from the production deployment templates."""
+    workers, objects = [], []
+    directory = repo / "deploy/ui2"
+    paths = sorted(set(directory.glob("*-deployment.yaml")) | set(directory.glob("*-service.yaml")))
+    for path in paths:
+        source = load(repo, str(path.relative_to(repo)))
+        objects.extend(source["items"] if source["kind"] == "List" else [source])
+    for deployment in (o for o in objects if o["kind"] == "Deployment"):
+        containers = deployment["spec"]["template"]["spec"]["containers"]
+        if not any(c.get("args", [])[:1] == ["worker"] for c in containers):
+            continue
+        component = deployment["spec"]["template"]["metadata"]["labels"]["app.kubernetes.io/component"]
+        services = [o for o in objects if o["kind"] == "Service" and o["spec"].get("selector") and
+                    all(deployment["spec"]["template"]["metadata"]["labels"].get(k) == v
+                        for k, v in o["spec"]["selector"].items())]
+        workers.append(dict(deployment=deployment, services=services, component=component,
+                            ports=sorted({p["port"] for o in services for p in o["spec"]["ports"]})))
+    if not workers:
+        raise RuntimeError("No production worker templates found")
+    return workers
 
 
-def setup_service(repo, image, db_ip, compliance_ip):
-    service = service_manifest(load(repo, "deploy/ui2/50-service-deployment.yaml"), image, db_ip, compliance_ip)
-    # Only the keys required by the existing authenticated service path, never production DB credentials.
-    spec = service["spec"]["template"]["spec"]
-    names = {v["secret"]["secretName"] for v in spec["volumes"] if "secret" in v} - {"ui2-db"}
-    names.add("ui2-e2e-machine-token")
-    for name in sorted(names):
+def service_object(template):
+    result = copy.deepcopy(template)
+    result["metadata"] = metadata(template["metadata"]["name"], template["metadata"].get("labels"))
+    result["spec"]["selector"][LABEL] = NS
+    result["spec"]["type"] = "ClusterIP"
+    for field in ("clusterIP", "clusterIPs", "healthCheckNodePort", "externalIPs", "loadBalancerIP"):
+        result["spec"].pop(field, None)
+    for port in result["spec"]["ports"]:
+        port.pop("nodePort", None)
+    return result
+
+
+def setup_worker_services(workers):
+    endpoints = {}
+    for worker in workers:
+        for template in worker["services"]:
+            service = service_object(template)
+            create(NS, service)
+            ip = json.loads(k(NS, "get", "service", service["metadata"]["name"], "-o", "json"))["spec"]["clusterIP"]
+            endpoints[template["metadata"]["name"]] = f"http://{ip}:" + str(service["spec"]["ports"][0]["port"])
+    return endpoints
+
+
+def setup_workload(template, image, db_ip, endpoints):
+    source_spec = template["spec"]["template"]["spec"]
+    names = {v["secret"]["secretName"] for v in source_spec.get("volumes", []) if "secret" in v}
+    names.update(e["valueFrom"]["secretKeyRef"]["name"] for c in source_spec["containers"] for e in c.get("env", [])
+                 if "secretKeyRef" in e.get("valueFrom", {}))
+    deployment = workload_manifest(template, image, db_ip, endpoints)
+    for name in sorted(names - {"ui2-db"}):
         copy_secret(name)
+    create(NS, deployment)
+    k(NS, "rollout", "status", "deployment/" + deployment["metadata"]["name"], "--timeout=300s", timeout=310)
+    return deployment
+
+
+def setup_service(repo, image, db_ip, endpoints):
+    setup_workload(load(repo, "deploy/ui2/50-service-deployment.yaml"), image, db_ip, endpoints)
+    templates = load(repo, "deploy/ui2/56-service-internal.yaml")["items"]
+    service = service_object(next(t for t in templates if t["kind"] == "Service"))
     create(NS, service)
-    create(NS, dict(apiVersion="v1", kind="Service", metadata=metadata("ui2-preview-service"),
-                    spec=dict(type="ClusterIP", selector={"app.kubernetes.io/component": "service"},
-                              ports=[dict(name="http", port=8080, targetPort="http"),
-                                     dict(name="machine", port=8086, targetPort="machine")])))
-    k(NS, "rollout", "status", "deployment/ui2-preview-service", "--timeout=300s", timeout=310)
-    return json.loads(k(NS, "get", "service", "ui2-preview-service", "-o", "json"))["spec"]["clusterIP"]
+    return json.loads(k(NS, "get", "service", service["metadata"]["name"], "-o", "json"))["spec"]["clusterIP"]
 
 
 def cleanup(owner):
@@ -394,32 +631,42 @@ def cleanup(owner):
 
 
 def run(repo, commit):
+    global NS, PHASE
     if not re.fullmatch(r"[0-9a-f]{40}", commit):
         raise ValueError("Invalid candidate commit")
-    if k(NS, "get", "namespace", NS, "--ignore-not-found", "-o", "name").strip():
-        raise RuntimeError("Preview namespace already exists; refusing to reuse or delete it")
-    owner = secrets.token_hex(6)
+    previous_ns, owner = NS, secrets.token_hex(6)
+    NS = "ui2-preview-" + owner
+    PHASE = "preview_setup"
     try:
-        create(NS, dict(apiVersion="v1", kind="Namespace", metadata=dict(name=NS, labels={LABEL: owner})))
-        for item in policies():
-            create(NS, item)
-        images = build_images(repo, commit, owner)
-        with timing("preview_database"):
-            db_ip = setup_database(repo)
-        with timing("preview_compliance"):
-            compliance_ip = setup_compliance(repo, images[0], db_ip)
-        with timing("preview_service"):
-            service_ip = setup_service(repo, images[0], db_ip, compliance_ip)
-        with timing("preview_e2e"):
-            templates = load(repo, "deploy/ui2/70-e2e-job.yaml")
-            job = next(t for t in templates["items"] if t["kind"] == "Job")
-            # Canary is optional in the production manifest; copy it only if provisioned.
-            if k("ui2", "get", "secret", "ui2-e2e-canary", "--ignore-not-found", "-o", "name").strip():
-                copy_secret("ui2-e2e-canary")
-            create(NS, e2e_manifest(job, images[1], service_ip))
-            wait_job(NS, "ui2-preview-e2e", timeout=930)
+        if k(NS, "get", "namespace", NS, "--ignore-not-found", "-o", "name").strip():
+            raise RuntimeError("Preview namespace already exists; refusing to reuse or delete it")
+        try:
+            create(NS, dict(apiVersion="v1", kind="Namespace", metadata=dict(name=NS, labels={LABEL: owner})))
+            workers = worker_templates(repo)
+            for item in policies(workers):
+                create(NS, item)
+            with timing("preview_build"):
+                images = build_images(repo, commit, owner)
+            with timing("preview_database"):
+                db_ip = setup_database(repo)
+            with timing("preview_workers"):
+                endpoints = setup_worker_services(workers)
+                for worker in workers:
+                    with timing("preview_" + worker["component"]):
+                        setup_workload(worker["deployment"], images[0], db_ip, endpoints)
+            with timing("preview_service"):
+                service_ip = setup_service(repo, images[0], db_ip, endpoints)
+            with timing("preview_e2e"):
+                templates = load(repo, "deploy/ui2/70-e2e-job.yaml")
+                job = next(t for t in templates["items"] if t["kind"] == "Job")
+                if k("ui2", "get", "secret", "ui2-e2e-canary", "--ignore-not-found", "-o", "name").strip():
+                    copy_secret("ui2-e2e-canary")
+                create(NS, e2e_manifest(job, images[1], service_ip))
+                wait_job(NS, preview_name("ui2-preview-e2e"), timeout=930)
+        finally:
+            cleanup(owner)
     finally:
-        cleanup(owner)
+        NS = previous_ns
     print("PREVIEW E2E: PASS", flush=True)
 
 
@@ -435,6 +682,8 @@ if __name__ == "__main__":
     for sig in (signal.SIGTERM, signal.SIGINT):
         signal.signal(sig, interrupted)
     try:
-        run(args.repo, args.commit)
-    except (OSError, ValueError, KeyError, TypeError, RuntimeError, subprocess.SubprocessError):
-        sys.exit("PREVIEW E2E: FAIL; details withheld")
+        with private_log():
+            run(args.repo, args.commit)
+    except (OSError, ValueError, KeyError, TypeError, RuntimeError, subprocess.SubprocessError) as error:
+        print(failure_line(error), flush=True)
+        sys.exit(1)
