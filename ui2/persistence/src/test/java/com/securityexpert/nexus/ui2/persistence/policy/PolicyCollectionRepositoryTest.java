@@ -191,4 +191,23 @@ class PolicyCollectionRepositoryTest {
         assertEquals(0, status.get("gapUnits"));
     }
 
+    @Test void inventoryReuseQueriesExactDomainTypeAndConfiguredCutoffWithoutChangingSnapshot() {
+        var sql = new ArrayList<String>(); var bindings = new ArrayList<Object>();
+        var create = DSL.using(SQLDialect.POSTGRES);
+        var calls = new AtomicInteger();
+        var repository = new PolicyCollectionRepository(new JooqTransactionBoundary(DSL.using(new MockConnection(context -> {
+            sql.add(context.sql()); bindings.addAll(Arrays.asList(context.bindings()));
+            var rows = calls.getAndIncrement() == 0 ? create.fetchFromStringData(new String[] { "present" }, new String[] { "1" })
+                : create.fetchFromStringData(new String[] { "present" });
+            return new MockResult[] { new MockResult(rows.size(), rows) };
+        }), SQLDialect.POSTGRES)));
+        var cutoff = java.time.Instant.parse("2026-10-04T10:00:00Z");
+        assertTrue(repository.inventoryFresh("source-1", "domain-1", "hosts", cutoff));
+        assertFalse(repository.inventoryFresh("source-1", "domain-2", "hosts", cutoff));
+        assertTrue(sql.stream().allMatch(query -> query.startsWith("select 1 from cp_policy_object_inventory")
+            && query.contains("source_id = ?") && query.contains("domain_ref = ?") && query.contains("object_type = ?")
+            && query.contains("collected_at > ?::timestamptz") && query.contains("snapshot->>'status' <> 'UNSUPPORTED'")));
+        assertTrue(bindings.contains(cutoff.toString())); assertTrue(bindings.contains("domain-2"));
+    }
+
 }

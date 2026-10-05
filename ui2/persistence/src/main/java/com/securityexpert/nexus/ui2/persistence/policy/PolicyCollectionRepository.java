@@ -75,6 +75,14 @@ public class PolicyCollectionRepository {
             + (automatic ? "where policy_collection_domain.attempted_at <= now() - interval '6 hours'" : ""), sourceId, domainRef) == 1);
     }
 
+    /** Reuse each domain/type inventory, including its explicit gaps, until the configured interval expires. */
+    public boolean inventoryFresh(String source, String domain, String type, java.time.Instant cutoff) {
+        return tx.inTransaction(db -> !db.fetch("select 1 from cp_policy_object_inventory where source_id = {0} "
+            + "and domain_ref = {1} and object_type = {2} and collected_at > {3}::timestamptz "
+            + "and snapshot->>'status' <> 'UNSUPPORTED'",
+            source, domain, type, cutoff.toString()).isEmpty());
+    }
+
     /** Parsed inventories share existing admission, audit and domain throttling. */
     public void saveInventory(String source, String domain, String type, String at, String snapshot, String actor) {
         new AuditedTransactionBoundary(tx).inTransaction(actor, "policy_collect_objects", db -> {

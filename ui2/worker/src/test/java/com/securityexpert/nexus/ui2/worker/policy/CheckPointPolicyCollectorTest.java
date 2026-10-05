@@ -766,4 +766,47 @@ class CheckPointPolicyCollectorTest {
         assertEquals(collected.get(1), checkpoints.get(3));
     }
 
+    @Test void malformedRulebasePageRetriesSameCommandOnceAndKeepsMaskedStructureDiagnostics() throws Exception {
+        for (int sessions : List.of(1, 4)) for (boolean recover : List.of(true, false)) {
+            reset(transport, repository);
+            var attempts = new AtomicInteger();
+            setup(command -> command.equals(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Layer", 0))
+                && (attempts.incrementAndGet() == 1 || !recover)
+                ? ok("Synthetic banner\n{\"rulebase\":[") : answer(command));
+            var collector = new CheckPointPolicyCollector(transport, gates, repository, Duration.ofHours(2), sessions);
+            var transcript = new com.securityexpert.nexus.ui2.worker.transcript.JobTranscript();
+            try (var scope = com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.open(transcript)) {
+                var snapshot = collector.collect(run, request, () -> true).get(0);
+                assertEquals(recover ? 0 : 1, snapshot.failures().size());
+                assertFalse(snapshot.sections().stream().filter(section -> section.source().equals("CP NAT rulebase")).toList().isEmpty());
+            }
+            assertEquals(2, attempts.get());
+            verify(transport, times(2)).execInteractive(any(), argThat(spec -> spec.command().equals(
+                MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Layer", 0))), any());
+            var sink = new java.io.ByteArrayOutputStream(); transcript.writeTo(sink);
+            String notes = sink.toString(java.nio.charset.StandardCharsets.UTF_8);
+            assertTrue(notes.contains("STRUCTURE rootParsed=false rootType=UNPARSED"));
+            assertTrue(notes.contains("leadingNonJsonLines=1")); assertTrue(notes.contains("endedMidJson=true"));
+            assertTrue(notes.contains("bytes=")); assertTrue(notes.contains("exitCode=0")); assertFalse(notes.contains("Synthetic"));
+        }
+    }
+
+    @Test void rulebaseInvalidPaginationDiagnosticsShowOnlyKeysCountersAndArraySizes() throws Exception {
+        setup(this::answer);
+        String body = "Synthetic banner\n{\"uid\":\"synthetic-layer\",\"from\":2,\"to\":1,\"total\":3,"
+            + "\"rulebase\":[],\"objects-dictionary\":[{\"uid\":\"synthetic-object\"}]}";
+        when(transport.execInteractive(any(), any(), any())).thenReturn(ok(body));
+        var transcript = new com.securityexpert.nexus.ui2.worker.transcript.JobTranscript();
+        try (var scope = com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.open(transcript)) {
+            assertThrows(PolicyCollectionTrace.Failure.class, () -> new CheckPointPolicyCollector(transport, gates, repository)
+                .read(session, MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Layer", 0), 1, Long.MAX_VALUE, () -> true));
+        }
+        var sink = new java.io.ByteArrayOutputStream(); transcript.writeTo(sink);
+        String notes = sink.toString(java.nio.charset.StandardCharsets.UTF_8);
+        assertTrue(notes.contains("rulebase:ARRAY(size=0)")); assertTrue(notes.contains("objects-dictionary:ARRAY(size=1)"));
+        assertTrue(notes.contains("counters=[from=2, to=1, total=3]"));
+        assertTrue(notes.contains("leadingNonJsonLines=1")); assertTrue(notes.contains("endedMidJson=false"));
+        assertFalse(notes.contains("synthetic-layer")); assertFalse(notes.contains("synthetic-object"));
+    }
+
 }
