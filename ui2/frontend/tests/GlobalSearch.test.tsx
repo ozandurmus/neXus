@@ -61,3 +61,36 @@ it("offers Retry after a server error", async () => {
   fireEvent.click(screen.getByRole("button", { name: "Retry" }));
   await waitFor(() => expect(calls.filter(c => c.startsWith("/api/v2/search"))).toHaveLength(2));
 });
+
+it("groups IP matches with counts, route details and policy usage, then pages only Routes", async () => {
+  const calls: string[] = [];
+  const route = { device_id: "opaque-001", device: "FW-TANGO-04", context: "VS-ROMEO-01",
+    interface: "eth0", destination: "192.0.2.0/24", next_hop: "192.0.2.1", protocol: "static",
+    route_table: "VRF-ROMEO-01", default_fallback: false, href: "?screen=inventory&device_id=opaque-001&tab=routes" };
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+    const path = String(input); calls.push(path);
+    if (path === "/devices") return new Response(JSON.stringify({ devices: [] }));
+    return new Response(JSON.stringify(path.includes("group=routes") ? {
+      devices: [], settings: [], evidence: [], counts: { routes: 2 },
+      routes: [{ ...route, destination: "0.0.0.0/0", default_fallback: true }],
+    } : {
+      devices: [], settings: [], evidence: [], counts: { interfaces: 1, routes: 2, policy_objects: 1 },
+      interfaces: [{ ...route, address: "192.0.2.10/24" }], routes: [route],
+      policy_objects: [{ id: "object-1", name: "ADDR-ROMEO-01", type: "host", rule_count: 3,
+        href: "?screen=policy&tab=objects&policy_id=policy-1" }],
+    }));
+  }));
+  render(<GlobalSearch />);
+  const input = screen.getByRole("textbox", { name: "Search devices, settings and evidence" });
+  fireEvent.focus(input); fireEvent.change(input, { target: { value: "192.0.2.10" } });
+  await waitFor(() => expect(screen.getByText("Interfaces (1)")).toBeInTheDocument());
+  expect(screen.getByText("Routes (2)")).toBeInTheDocument();
+  expect(screen.getByText("Policy objects (1)")).toBeInTheDocument();
+  expect(screen.getByRole("option", { name: /used in 3 rules/ })).toHaveAttribute("href", "?screen=policy&tab=objects&policy_id=policy-1");
+  expect(screen.getByRole("option", { name: /192.0.2.0\/24/ })).toHaveTextContent("VS-ROMEO-01 · VRF-ROMEO-01 · 192.0.2.1 · eth0 · static");
+  fireEvent.click(screen.getByRole("button", { name: "Show more routes" }));
+  await waitFor(() => expect(calls).toContain("/api/v2/search?q=192.0.2.10&limit=20&group=routes&offset=1"));
+  await waitFor(() => expect(screen.getByRole("option", { name: /Default route fallback/ })).toBeInTheDocument());
+  expect(screen.queryByRole("button", { name: "Show more routes" })).toBeNull();
+  expect(screen.getByText("Interfaces (1)")).toBeInTheDocument();
+});

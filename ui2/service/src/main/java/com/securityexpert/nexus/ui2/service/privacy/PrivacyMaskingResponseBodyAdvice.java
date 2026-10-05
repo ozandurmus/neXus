@@ -59,6 +59,15 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
         }
         HttpServletRequest httpRequest = servletRequest.getServletRequest();
         Boolean isReplayViewer = (Boolean) httpRequest.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE);
+        if (body instanceof com.securityexpert.nexus.ui2.service.search.IpSearchResponse search) {
+            // The IP search service has explicitly projected names, contexts and addresses after matching.
+            // Reapplying subnet/VS pseudonymization would produce different identities from other screens.
+            if (Boolean.TRUE.equals(isReplayViewer)) {
+                if (!search.masked()) throw new IllegalStateException("IP search projection required");
+                if (response != null) response.getHeaders().set(MASKED_HEADER, "true");
+            }
+            return search.body();
+        }
         if (body instanceof com.securityexpert.nexus.ui2.service.policy.PolicyResponse policy) {
             if (!Boolean.TRUE.equals(isReplayViewer)) return policy.body();
             if (response != null) response.getHeaders().set(MASKED_HEADER, "true");
@@ -102,6 +111,11 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
     /** True when the request's session is the replay viewer (AIView), i.e. when a body must be masked. */
     public static boolean isReplayViewer(HttpServletRequest request) {
         return Boolean.TRUE.equals(request.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE));
+    }
+
+    /** Deterministic labels for stored search fields outside the device/VS identity vocabulary. */
+    public String maskSearchLabel(String namespace, String value) {
+        return topologyPseudonymizer.maskPolicyName(namespace, value);
     }
 
     /**

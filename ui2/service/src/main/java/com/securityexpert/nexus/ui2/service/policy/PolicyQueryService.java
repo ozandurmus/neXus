@@ -11,6 +11,7 @@ import java.util.*;
 
 @Service
 public final class PolicyQueryService {
+    private final TransactionBoundary transactionsForSearch;
     private final PolicySnapshotRepository repository;
     private final ObjectMapper mapper;
     private final TopologyNamePseudonymizer names;
@@ -26,6 +27,7 @@ public final class PolicyQueryService {
     @org.springframework.beans.factory.annotation.Autowired
     public PolicyQueryService(TransactionBoundary transactions, ObjectMapper mapper, TopologyNamePseudonymizer names,
             LocalFirewallPolicyService local, com.securityexpert.nexus.ui2.service.privacy.SubnetPreservingIpMasker ips) {
+        this.transactionsForSearch = transactions;
         this.ips = ips;
         this.local = local;
         this.repository = new PolicySnapshotRepository(transactions);
@@ -239,6 +241,78 @@ public final class PolicyQueryService {
         }
         return Optional.of(new PolicyResponse(Map.of("sourceId", source, "containerId", domain,
             "hits", hits.stream().skip((long) page * 200).limit(200).toList(), "total", hits.size())));
+    }
+
+    /** Match bounded batches from the streamed index using the shared SQL address semantics. */
+    public Map<String, Object> searchAddresses(String query, int limit, int offset, boolean masked) {
+        record Scope(String source, String domain) {}
+        var scopes = repositoryAddressScopes().stream().map(row -> new Scope(
+            row.get("source_id", String.class), row.get("domain_ref", String.class))).toList();
+        var hits = new ArrayList<Map<String, Object>>();
+        for (var scope : scopes) {
+            var index = domainIndex(scope.source(), scope.domain());
+            var aliases = index.aliases;
+            var objects = new LinkedHashMap<String, Map<String, Object>>();
+            for (var object : index.objects) objects.put((String) object.get("uid"), object);
+            var parents = new HashMap<String, Set<String>>();
+            for (var entry : objects.entrySet()) {
+                var object = entry.getValue();
+                if (!Set.of("group", "address-group").contains(object.get("type"))
+                        || object.containsKey("status") && !"RESOLVED".equals(object.get("status"))) continue;
+                for (Object member : (List<?>) object.getOrDefault("members", List.of())) {
+                    String id = aliases.getOrDefault((String) member, (String) member);
+                    parents.computeIfAbsent(id, k -> new LinkedHashSet<>()).add(entry.getKey());
+                }
+            }
+            var direct = addressMatches(index.objects, query);
+            var matching = containingGroups(direct, parents);
+            for (String id : new TreeSet<>(matching)) {
+                var object = objects.get(id);
+                if (object == null) continue;
+                String name = (String) object.get("name");
+                if (masked) name = String.valueOf(searchable(object, true).get("name"));
+                var hit = new LinkedHashMap<String, Object>();
+                hit.put("id", object.get("id")); hit.put("name", name);
+                hit.put("type", object.get("type")); hit.put("rule_count", index.rules.getOrDefault(id, List.of()).stream().map(r -> ref((String) r.get("policyId"), (String) r.get("ruleId"))).distinct().count());
+                String policy = index.snapshots.stream().map(s -> s.metadata().id()).sorted().findFirst().orElse("");
+                hit.put("href", "?screen=policy&tab=objects&source_id=" + searchUrl(scope.source())
+                    + "&container_id=" + searchUrl(scope.domain()) + "&policy_id=" + searchUrl(policy));
+                hits.add(hit);
+            }
+        }
+        return Map.of("items", hits.stream().skip(offset).limit(limit).toList(), "total", hits.size());
+    }
+    private static String searchUrl(String id) {
+        return java.net.URLEncoder.encode(id, java.nio.charset.StandardCharsets.UTF_8);
+    }
+    static Set<String> containingGroups(Set<String> leaves, Map<String, Set<String>> parents) {
+        var matching = new LinkedHashSet<>(leaves);
+        var queue = new ArrayDeque<>(leaves);
+        while (!queue.isEmpty()) for (String parent : parents.getOrDefault(queue.removeFirst(), Set.of()))
+            if (matching.add(parent)) queue.add(parent);
+        return matching;
+    }
+    private List<org.jooq.Record> repositoryAddressScopes() {
+        return transactionsForSearch.inTransaction(db -> new ArrayList<>(db.fetch("""
+            select source_id, domain_ref from cp_policy_object_inventory
+            where snapshot->>'status' = 'RESOLVED'
+            union
+            select metadata->>'sourceId', metadata->>'containerId' from policy_snapshot
+            order by 1, 2
+            """)));
+    }
+    private Set<String> addressMatches(List<Map<String, Object>> objects, String query) {
+        var matching = new LinkedHashSet<String>();
+        for (int offset = 0; offset < objects.size(); offset += 200) {
+            String batch;
+            try { batch = mapper.writeValueAsString(objects.subList(offset, Math.min(offset + 200, objects.size()))); }
+            catch (com.fasterxml.jackson.core.JsonProcessingException invalid) { throw new IllegalStateException("POLICY_INVENTORY_INVALID"); }
+            matching.addAll(transactionsForSearch.inTransaction(db -> db.fetch("""
+                select o->>'uid' as uid from jsonb_array_elements({0}::jsonb) o
+                where search_policy_address(o, {1}::inet)
+                """, batch, query).map(row -> row.get("uid", String.class))));
+        }
+        return matching;
     }
 
     public List<Metadata> catalog() {

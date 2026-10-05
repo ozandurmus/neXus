@@ -47,14 +47,41 @@ export interface GlobalSearchEvidence {
   readonly href: string;
 }
 
+export type IpSearchGroup = "interfaces" | "routes" | "policy_objects";
+export interface GlobalSearchInterface {
+  readonly device_id: string;
+  readonly device: string | null;
+  readonly context: string;
+  readonly interface: string;
+  readonly address: string;
+  readonly href: string;
+}
+export interface GlobalSearchRoute extends Omit<GlobalSearchInterface, "address"> {
+  readonly destination: string;
+  readonly next_hop: string | null;
+  readonly protocol: string;
+  readonly route_table: string | null;
+  readonly default_fallback: boolean;
+}
+export interface GlobalSearchPolicyObject {
+  readonly id: string;
+  readonly name: string;
+  readonly type: string;
+  readonly rule_count: number;
+  readonly href: string;
+}
 export interface GlobalSearchResponse {
+  readonly interfaces?: readonly GlobalSearchInterface[];
+  readonly routes?: readonly GlobalSearchRoute[];
+  readonly policy_objects?: readonly GlobalSearchPolicyObject[];
+  readonly counts?: Partial<Record<IpSearchGroup, number>>;
   readonly devices: readonly GlobalSearchDevice[];
   readonly settings: readonly GlobalSearchSetting[];
   readonly evidence: readonly GlobalSearchEvidence[];
 }
 
-export function globalSearch(q: string, limit = 20): Promise<GlobalSearchResponse> {
-  return call(`/api/v2/search?q=${encodeURIComponent(q)}&limit=${limit}`, "GET");
+export function globalSearch(q: string, limit = 20, group?: IpSearchGroup, offset = 0): Promise<GlobalSearchResponse> {
+  return call(`/api/v2/search?q=${encodeURIComponent(q)}&limit=${limit}${group ? `&group=${group}&offset=${offset}` : ""}`, "GET");
 }
 
 async function csrfToken(): Promise<string | undefined> {
