@@ -1273,8 +1273,15 @@ export interface JobTranscriptEntry {
   readonly text: string;
 }
 
-export function getJobTranscript(jobId: string): Promise<JobTranscriptEntry[]> {
-  return call(`/jobs/${encodeURIComponent(jobId)}/transcript`, "GET");
+export async function getJobTranscript(jobId: string): Promise<JobTranscriptEntry[]> {
+  const value = await call<unknown>(`/jobs/${encodeURIComponent(jobId)}/transcript`, "GET");
+  // A truncated 200 response must be an error, never an empty transcript.
+  if (!Array.isArray(value) || !value.every((entry) => entry && typeof entry === "object"
+    && typeof entry.seq === "number" && typeof entry.at === "string" && typeof entry.elapsedMs === "number"
+    && typeof entry.channel === "string" && typeof entry.kind === "string" && typeof entry.text === "string")) {
+    throw { status: 200, body: { error: "TRANSCRIPT_PARSE_FAILED" } } satisfies ApiError;
+  }
+  return value as JobTranscriptEntry[];
 }
 
 export interface JobQueryParams {

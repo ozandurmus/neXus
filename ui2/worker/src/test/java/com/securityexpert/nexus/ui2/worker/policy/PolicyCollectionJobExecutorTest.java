@@ -13,6 +13,59 @@ import com.securityexpert.nexus.ui2.persistence.discovery.*;
 import com.securityexpert.nexus.ui2.persistence.policy.*;
 
 class PolicyCollectionJobExecutorTest {
+    @Test void bothPolicyJobWritersStoreReadableGzipJsonLines(@org.junit.jupiter.api.io.TempDir java.nio.file.Path root) throws Exception {
+        for (String vendor : List.of("check_point", "palo_alto")) {
+            String jobType = vendor.equals("check_point") ? "cp_policy_collect" : "pan_policy_collect";
+            var leases = mock(JobLeaseRepository.class);
+            var attempts = mock(JobStepAttemptRepository.class);
+            var runs = mock(DiscoveryRunRepository.class);
+            var repository = mock(PolicyCollectionRepository.class);
+            var cp = mock(CheckPointPolicyCollector.class);
+            var pan = mock(PanoramaPolicyCollector.class);
+            var jobs = mock(com.securityexpert.nexus.ui2.persistence.jobrecords.JobRecordDao.class);
+            var ref = new java.util.concurrent.atomic.AtomicReference<String>();
+            var key = new java.util.concurrent.atomic.AtomicReference<byte[]>();
+            when(jobs.writeBackupTranscript(eq(jobType), eq(1L), anyString(), any())).thenAnswer(call -> {
+                ref.set(call.getArgument(2)); key.set(call.getArgument(3)); return true;
+            });
+            var run = new DiscoveryRun("synthetic-run", vendor, "192.0.2.10", "synthetic-ref", "synthetic-actor",
+                DiscoveryRunState.FINISHED, Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
+            when(runs.findRun("synthetic-run")).thenReturn(Optional.of(run));
+            when(repository.request(jobType)).thenReturn(Optional.of(new PolicyCollectionRepository.Request("synthetic-manager", "", false)));
+            when(repository.eligible("synthetic-manager", "synthetic-run")).thenReturn(true);
+            when(leases.transitionState(anyString(), anyLong(), any(), any(), anyString(), anyString())).thenReturn(true);
+            when(attempts.insertPreContact(anyString(), anyLong(), anyInt(), anyString(), anyString(), anyInt())).thenReturn("synthetic-attempt");
+            when(attempts.writeOutcome(anyString(), anyLong(), anyString(), isNull(), anyBoolean(), isNull(), isNull(), isNull())).thenReturn(true);
+            when(repository.publish(anyString(), anyLong(), anyList(), anyString())).thenReturn(true);
+            org.mockito.stubbing.Answer<Object> collect = call -> {
+                var channel = vendor.equals("check_point") ? "ssh" : "https";
+                com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.add(channel, "request", "synthetic request");
+                com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.add(channel, "response", "synthetic response");
+                return List.of();
+            };
+            doAnswer(collect).when(cp).collect(any(), any(), any(), any(), any());
+            doAnswer(collect).when(pan).collect(any(), any(), any(), any());
+            var cipher = com.securityexpert.nexus.ui2.platform.ArtefactStoreCipher.fromBase64Key(
+                Base64.getEncoder().encodeToString(new byte[32]));
+            var store = new com.securityexpert.nexus.ui2.persistence.artefact.FileArtefactStore(root.resolve(jobType), cipher);
+            var executor = new PolicyCollectionJobExecutor(leases, attempts, runs, repository, cp, ignored -> List.of())
+                .withPanorama(pan).withTranscript(store, jobs);
+            assertInstanceOf(JobOutcome.Completed.class, executor.execute(jobType, 1, "synthetic-run"));
+            assertNotNull(ref.get());
+            try (var input = store.retrieve(new com.securityexpert.nexus.ui2.persistence.artefact.ArtefactRef(ref.get()), key.get(), true);
+                 var lines = new java.io.BufferedReader(new java.io.InputStreamReader(input, java.nio.charset.StandardCharsets.UTF_8))) {
+                var json = new com.fasterxml.jackson.databind.ObjectMapper();
+                var entries = lines.lines().map(line -> {
+                    try { return json.readTree(line); } catch (java.io.IOException invalid) { throw new AssertionError(invalid); }
+                }).toList();
+                assertEquals(3, entries.size(), jobType);
+                assertEquals("synthetic response", entries.get(1).get("text").asText());
+                assertEquals("Completed", entries.get(2).get("text").asText());
+                assertEquals("verdict", entries.get(2).get("kind").asText());
+            }
+        }
+    }
+
     @Test @org.junit.jupiter.api.Timeout(15)
     void concurrentPagesCloseTheirOwnLedgerAttempts() {
         var leases = mock(JobLeaseRepository.class);
