@@ -81,6 +81,16 @@ class PolicyChunkStoreTest {
         return new MockResult[]{new MockResult(1, null)};
     }
 
+    @Test void incompleteDomainRetainsSignalForResumeWithoutEnablingReuse() {
+        var repository = new PolicyCollectionRepository(tx);
+        var request = new PolicyCollectionRepository.Request("source-1", "", false, PolicyCollectionRepository.Mode.FULL, "job-1", 7);
+        String signal = "{\"uid\":\"published-001\"}";
+        assertTrue(repository.saveDomain(request, "domain-1", "COLLECTING", false, signal, "[]", 0, null, "synthetic-actor"));
+        var resumed = repository.domainForRequest(request, "domain-1").orElseThrow();
+        assertFalse(resumed.complete());
+        assertEquals(signal, resumed.signalJson());
+    }
+
     @Test void resumedUnitsAndCurrentDomainsReadBoundedChunkGenerations() {
         var repository = new PolicyCollectionRepository(tx);
         var request = new PolicyCollectionRepository.Request("source-1", "", false, PolicyCollectionRepository.Mode.FULL, "job-1", 7);

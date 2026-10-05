@@ -74,7 +74,7 @@ final class CpDomainReuse {
             } catch (java.io.IOException | RuntimeException invalid) { /* Unproven stored evidence requires a full collection. */ }
         }
         if (domain.reused) {
-            save(container, domain, "REUSED", false);
+            save(container, domain, "REUSED", true);
             PolicyCollectionTrace.packages(domain.snapshots.size());
             domain.snapshots.values().forEach(s -> PolicyCollectionTrace.done(s.metadata().id()));
             return List.copyOf(domain.snapshots.values());
@@ -119,8 +119,13 @@ final class CpDomainReuse {
         Domain domain = domains.get(container); domain.expected = packages; update(container, domain);
     }
     private void update(String container, Domain domain) {
-        // Only finish publishes the domain record after every package checkpoint/write has returned.
-        save(container, domain, "COLLECTING", false);
+        // Publish each terminal domain before inventory collection or a later drain can stop the run.
+        boolean terminal = domain.expected >= 0 && domain.snapshots.size() == domain.expected
+            && domain.snapshots.values().stream().flatMap(s -> s.failures().stream())
+                .noneMatch(f -> f.reason().equals("COLLECTION_PENDING"));
+        boolean complete = terminal && !domain.gap
+            && domain.snapshots.values().stream().allMatch(s -> s.failures().isEmpty());
+        save(container, domain, terminal ? "COLLECTED" : "COLLECTING", complete);
     }
     void gap(String container) {
         if (domains.containsKey(container)) { Domain domain = domains.get(container); domain.gap = true; save(container, domain, "COLLECTED", false); }
@@ -141,7 +146,7 @@ final class CpDomainReuse {
                 .map(PolicySnapshot.Rule::hitCounts).filter(Objects::nonNull).map(PolicySnapshot.HitCounts::collectedAt)
                 .filter(Objects::nonNull).min(String::compareTo).orElse(null);
             if (!repository.saveDomain(request, container, status, complete,
-                    complete && domain.signal != null ? JSON.writeValueAsString(domain.signal) : null,
+                    domain.signal != null ? JSON.writeValueAsString(domain.signal) : null,
                     JSON.writeValueAsString(status.equals("COLLECTING") || domain.reused && !complete ? List.of() : domain.snapshots.values()), rules, hits, WorkerActor.RESERVED_ACTOR_FINGERPRINT))
                 throw PolicyCollectionTrace.failure("LEASE_LOST");
         } catch (com.securityexpert.nexus.ui2.persistence.policy.PolicyDatabaseFailure unavailable) {

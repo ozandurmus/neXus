@@ -129,8 +129,8 @@ final class CpPolicyParallelCollection {
                                 failed(work, invalid);
                             } else {
                                 safety.streak = 0;
-                                if (work.gate == 1 || work.gate == 3)
-                                    JobTranscriptScope.add("job", "note", "invalid rulebase " + preflightStructure("", result.page) + " check=" + rejectingCheck(invalid));
+                                if (work.gate >= 1 && work.gate <= 3)
+                                    rejectedRulebase(result.page, rejectingCheck(invalid));
                                 if (retryPage(work, invalid))
                                     pending.addFirst(new Work(work.command, work.gate, work.layer, work.offset, work.end, 1, work.accept));
                                 else if (work.gate == 3) fallbackHits(work.layer);

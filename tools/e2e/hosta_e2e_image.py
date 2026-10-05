@@ -60,7 +60,7 @@ def start(commit, repo):
     kubectl("create", "-f", "-", input=json.dumps(build))
 
 
-def ensure(commit, repo, timeout=1800, sleep=time.sleep, monotonic=time.monotonic):
+def ensure(commit, repo, timeout=600, sleep=time.sleep, monotonic=time.monotonic):
     current = json.loads(kubectl("get", "job", NAME, "--ignore-not-found", "-o", "json") or "{}")
     if not matching(current, commit) or "Failed" in conditions(current):
         start(commit, repo)
@@ -80,9 +80,12 @@ def ensure(commit, repo, timeout=1800, sleep=time.sleep, monotonic=time.monotoni
                     digest = ended.get("message", "").strip()
                     if status["name"] == current["spec"]["template"]["spec"]["containers"][0]["name"] and ended.get("exitCode") == 0 and re.fullmatch(r"sha256:[0-9a-f]{64}", digest):
                         digests.add(digest)
-            if len(digests) != 1:
-                raise RuntimeError("E2E runner digest missing or ambiguous")
-            return digests.pop()
+            if len(digests) > 1:
+                raise RuntimeError("E2E runner digest ambiguous")
+            if digests:
+                return digests.pop()
+            # Job completion can precede the pod termination message becoming visible.
+
         sleep(5)
     raise RuntimeError("E2E runner build timed out")
 
