@@ -10,7 +10,7 @@ public final class DiagnosticRead {
     public static final String CAPABILITY = "diagnostic_read";
     // Read-class gates that alter CLI state, export/copy data, write files, or require collector-owned paths.
     public static final Set<String> DIAGNOSTIC_EXCLUDED = Set.of(
-        "cp_policy_packages", "cp_policy_access_rulebase", "cp_policy_nat_rulebase",
+        "cp_policy_packages", "cp_policy_packages_paged", "cp_policy_access_rulebase", "cp_policy_nat_rulebase",
         "cp_spark_backup_push", "cp_backup_archive_digest", "mds_mdsstat", "mds_gaia_configuration",
         "mds_cplic_print", "mds_netstat_rn", "mds_uname", "mds_backup_poll", "mds_list_workdir",
         "mds_sha256sum", "asa_terminal_pager_0", "asa_scp_fetch_archive",
