@@ -63,7 +63,7 @@ final class CpDomainReuse {
             } catch (java.io.IOException | RuntimeException invalid) { /* Unproven stored evidence requires a full collection. */ }
         }
         if (domain.reused) {
-            save(container, domain, "REUSED", true);
+            save(container, domain, "REUSED", false);
             PolicyCollectionTrace.packages(domain.snapshots.size());
             domain.snapshots.values().forEach(s -> PolicyCollectionTrace.done(s.metadata().id()));
             return List.copyOf(domain.snapshots.values());
@@ -81,17 +81,16 @@ final class CpDomainReuse {
         Domain domain = domains.get(container); domain.expected = packages; update(container, domain);
     }
     private void update(String container, Domain domain) {
-        boolean finished = domain.expected >= 0 && domain.snapshots.size() == domain.expected
-            && domain.snapshots.values().stream().flatMap(s -> s.failures().stream()).noneMatch(f -> f.reason().equals("COLLECTION_PENDING"));
-        save(container, domain, finished ? "COLLECTED" : "COLLECTING", finished && !domain.gap
-            && domain.snapshots.values().stream().allMatch(s -> s.failures().isEmpty()));
+        // Only finish publishes the domain record after every package checkpoint/write has returned.
+        save(container, domain, "COLLECTING", false);
     }
     void gap(String container) {
         if (domains.containsKey(container)) { Domain domain = domains.get(container); domain.gap = true; save(container, domain, "COLLECTED", false); }
     }
     void finish() {
         domains.forEach((container, domain) -> {
-            if (!domain.reused) save(container, domain, "COLLECTED", !domain.gap && domain.expected >= 0 && domain.snapshots.size() == domain.expected
+            save(container, domain, domain.reused ? "REUSED" : "COLLECTED", !domain.gap
+                && (domain.reused || domain.expected >= 0 && domain.snapshots.size() == domain.expected)
                 && domain.snapshots.values().stream().allMatch(s -> s.failures().isEmpty()));
         });
     }
@@ -104,8 +103,8 @@ final class CpDomainReuse {
                 .map(PolicySnapshot.Rule::hitCounts).filter(Objects::nonNull).map(PolicySnapshot.HitCounts::collectedAt)
                 .filter(Objects::nonNull).min(String::compareTo).orElse(null);
             if (!repository.saveDomain(request, container, status, complete,
-                    domain.signal == null ? null : JSON.writeValueAsString(domain.signal),
-                    JSON.writeValueAsString(status.equals("COLLECTING") ? List.of() : domain.snapshots.values()), rules, hits, WorkerActor.RESERVED_ACTOR_FINGERPRINT))
+                    complete && domain.signal != null ? JSON.writeValueAsString(domain.signal) : null,
+                    JSON.writeValueAsString(status.equals("COLLECTING") || domain.reused && !complete ? List.of() : domain.snapshots.values()), rules, hits, WorkerActor.RESERVED_ACTOR_FINGERPRINT))
                 throw PolicyCollectionTrace.failure("LEASE_LOST");
         } catch (com.securityexpert.nexus.ui2.persistence.policy.PolicyDatabaseFailure unavailable) {
             domain.databaseFailed = true; domain.gap = true;
