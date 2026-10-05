@@ -375,8 +375,13 @@ public final class CheckPointPolicyCollector {
         String page = offset.find() ? " offset=" + offset.group(1) + (limit.find() ? " limit=" + limit.group(1) : "") : "";
         PolicyCollectionTrace.step(step + page, target);
         checkActive(deadline, lease);
-        if (gate == 3) PolicyHitGates.require(gates, true);
-        else if (gate >= 0) CpPolicyGates.require(gates, gate);
+        try {
+            if (gate == 3) PolicyHitGates.require(gates, true);
+            else if (gate >= 0) CpPolicyGates.require(gates, gate);
+        } catch (IllegalStateException unavailable) {
+            if (!"POLICY_GATE_UNAVAILABLE".equals(unavailable.getMessage())) throw unavailable;
+            throw PolicyCollectionTrace.failure("POLICY_GATE_UNAVAILABLE");
+        }
         long remaining = deadline - nanoTime.getAsLong();
         if (remaining <= 0) throw PolicyCollectionTrace.failure("JOB_DEADLINE");
         long started = System.nanoTime();

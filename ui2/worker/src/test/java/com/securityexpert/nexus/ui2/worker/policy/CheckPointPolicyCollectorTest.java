@@ -92,12 +92,13 @@ class CheckPointPolicyCollectorTest {
             };
             var collector = new CheckPointPolicyCollector(transport, revoked, repository, Duration.ofHours(2), sessions);
             List<PolicySnapshot.CollectionFailure> failures = new ArrayList<>();
-            var error = assertThrows(IllegalStateException.class, () ->
+            var error = assertThrows(PolicyCollectionTrace.Failure.class, () ->
                 collector.collect(run, request, () -> true, snapshot -> fail("Revoked gate"), failures::add));
-            assertEquals("policy: POLICY_GATE_UNAVAILABLE", error.getMessage());
+            assertEquals("policy: POLICY_GATE_UNAVAILABLE", error.getMessage(), "sessions=" + sessions);
             assertEquals(3, checks.get());
             assertTrue(failures.isEmpty());
             verify(transport, times(1)).execInteractive(any(), argThat(spec -> spec.command().contains("show-packages")), any());
+            verify(repository, never()).targets(anyString(), anyString(), anyString());
         }
     }
 
