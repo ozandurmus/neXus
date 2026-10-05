@@ -76,7 +76,15 @@ class ModuleEndpointRuntimeTest {
             jobs.insertRequestedIfAbsentForRun("bad-job", "bad-key", "cp_policy_collect", "synthetic-run", "read",
                 "pan_policy_collect", "synthetic-actor", "fixture").orElseThrow();
             var leases = new JooqJobLeaseDao(tx);
-            assertTrue(leases.claimNext("general-pod", List.of("cp_policy_collect"), Duration.ofMinutes(10)).isEmpty());
+            assertTrue(leases.claimNext("policy-pod", List.of("cp_policy_collect"), Duration.ofMinutes(10)).isEmpty());
+            try (var migrate = fixture.migrateConnection()) {
+                migrate.setAutoCommit(false);
+                Ui2Rows.setAuditContext(migrate, "synthetic-release", "policy_fixture_handover");
+                try (var statement = migrate.createStatement()) {
+                    statement.executeUpdate("update module_runtime_control set effective_owner='policy',fallback_enabled=false where module='policy'");
+                }
+                migrate.commit();
+            }
             var runtime = new ModuleRuntimeRepository(tx);
             assertTrue(runtime.heartbeat("policy", "policy-pod"));
             runtime.requestDrain("policy", "policy-pod");
@@ -95,4 +103,51 @@ class ModuleEndpointRuntimeTest {
             assertTrue(leases.claimNext("policy-other", List.of("cp_policy_collect"), Duration.ofMinutes(10)).isEmpty());
         }
     }
+    @Test void migrationSeedsGeneralAndRecoversMissingOrStaleOwnersIdempotently() throws Exception {
+        try (var fixture = Ui2PostgresFixture.createAndMigrate("module_ownership_safety")) {
+            var tx = new JooqTransactionBoundary(DSL.using(fixture.appDataSource(), SQLDialect.POSTGRES));
+            assertEquals(9, tx.inTransaction(db -> db.fetchOne(
+                "select count(*)::int from module_runtime_control where effective_owner='general' and fallback_enabled").get(0, Integer.class)));
+            var jobs = new JooqJobRecordDao(tx);
+            jobs.insertRequestedIfAbsentForRun("fallback-job", "fallback-key", "cp_policy_collect", "synthetic-run", "read",
+                "cp_policy_collect", "synthetic-actor", "fixture").orElseThrow();
+            assertEquals("fallback-job", new JooqJobLeaseDao(tx).claimNext("general-synthetic", List.of("cp_policy_collect"),
+                Duration.ofMinutes(10)).orElseThrow().jobId());
+            try (var migrate = fixture.migrateConnection()) {
+                migrate.setAutoCommit(false);
+                Ui2Rows.setAuditContext(migrate, "synthetic-release", "owner_recovery_fixture");
+                try (var statement = migrate.createStatement()) {
+                    statement.executeUpdate("update jobs set state='COMPLETED' where job_id='fallback-job'");
+                    statement.executeUpdate("update module_runtime_control set effective_owner=module,fallback_enabled=false,"
+                        + "owner_instance=module||'-synthetic',owner_heartbeat_at=case when module='backup' then now() "
+                        + "when module='policy' then now()-interval '61 seconds' else null end "
+                        + "where module in ('policy','scheduler','backup')");
+                    String recovery;
+                    try (var input = getClass().getResourceAsStream("/db/migration/V129__module_ownership_safety.sql")) {
+                        assertNotNull(input);
+                        recovery = new String(input.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+                    }
+                    statement.execute(recovery);
+                    try (var rows = statement.executeQuery("select count(*) from module_runtime_control "
+                        + "where module in ('policy','scheduler') and effective_owner='general' and fallback_enabled and owner_instance is null")) {
+                        assertTrue(rows.next()); assertEquals(2, rows.getInt(1));
+                    }
+                    long generation;
+                    try (var rows = statement.executeQuery("select generation from module_runtime_control where module='policy'")) {
+                        assertTrue(rows.next()); generation = rows.getLong(1);
+                    }
+                    statement.execute(recovery);
+                    try (var rows = statement.executeQuery("select generation from module_runtime_control where module='policy'")) {
+                        assertTrue(rows.next()); assertEquals(generation, rows.getLong(1));
+                    }
+                    try (var rows = statement.executeQuery("select effective_owner='backup' and not fallback_enabled "
+                        + "and owner_instance is not null from module_runtime_control where module='backup'")) {
+                        assertTrue(rows.next()); assertTrue(rows.getBoolean(1));
+                    }
+                }
+                migrate.commit();
+            }
+        }
+    }
+
 }

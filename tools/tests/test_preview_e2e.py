@@ -153,6 +153,7 @@ def test_every_orchestration_failure_tears_down(monkeypatch, failed, capsys):
     monkeypatch.setattr(preview, "setup_workload", workload)
     monkeypatch.setattr(preview, "setup_service", service)
     monkeypatch.setattr(preview, "load", lambda *a: {"items": [template("deploy/ui2/70-e2e-job.yaml", "Job")]})
+    monkeypatch.setattr(preview, "assert_module_claims", lambda *a: phase("claims"))
     monkeypatch.setattr(preview, "wait_job", lambda *a, **kw: phase("wait"))
     monkeypatch.setattr(preview, "cleanup", lambda owner: calls.append("cleanup"))
     if failed:
@@ -622,6 +623,7 @@ def test_complete_preview_uses_unique_scopes_all_workers_and_cleanup(monkeypatch
     monkeypatch.setattr(preview, "build_images", lambda *a: [IMAGE, IMAGE])
     monkeypatch.setattr(preview, "setup_database", lambda *a: "192.0.2.10")
     monkeypatch.setattr(preview, "copy_secret", lambda *a: None)
+    monkeypatch.setattr(preview, "assert_module_claims", lambda *a: None)
     monkeypatch.setattr(preview, "wait_job", lambda *a, **kw: None)
     def cleanup(owner):
         cleanup_scopes.append((preview.NS, owner))
@@ -810,6 +812,7 @@ def test_run_failure_keeps_substep_despite_cleanup(tmp_path, monkeypatch, operat
     monkeypatch.setattr(preview.Path, "home", lambda: tmp_path)
     monkeypatch.setattr(preview, "k", lambda *a, **kw: "")
     monkeypatch.setattr(preview, "create", lambda *a: None)
+    monkeypatch.setattr(preview, "assert_module_claims", lambda *a: None)
     monkeypatch.setattr(preview, "worker_templates", lambda *a: [dict(component="synthetic", deployment={}, ports=[8081])])
     monkeypatch.setattr(preview, "policies", lambda *a: [])
     monkeypatch.setattr(preview, "build_images", lambda *a: [IMAGE, IMAGE])

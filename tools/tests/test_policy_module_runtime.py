@@ -42,6 +42,7 @@ def test_bounded_wait_retains_old_digest_and_the_drain(monkeypatch):
         deploy.wait_drain("policy", 1, 20, sleep=sleep, clock=lambda: now[0])
     monkeypatch.setattr(deploy, "query", lambda sql: "f" if "fallback_enabled" in sql else "t")
     monkeypatch.setattr(deploy, "run", lambda *args: calls.append(args) or OLD)
+    monkeypatch.setattr(deploy, "ensure_policy", lambda *args: OLD)
     monkeypatch.setattr(deploy, "request_drain", lambda *args: 1)
     monkeypatch.setattr(deploy, "wait_drain", lambda *args: (_ for _ in ()).throw(deploy.Blocked("bounded drain")))
     with pytest.raises(deploy.Blocked):
@@ -61,9 +62,13 @@ def test_replace_waits_for_old_pod_deletion_before_clearing_the_claim_fence(monk
         return ""
     monkeypatch.setattr(deploy, "query", lambda sql: "f" if "fallback_enabled" in sql else "t")
     monkeypatch.setattr(deploy, "run", run)
+    monkeypatch.setattr(deploy, "ensure_policy", lambda *args: OLD)
+    monkeypatch.setattr(deploy, "wait_heartbeat", lambda *args: events.append(("heartbeat",)))
+    monkeypatch.setattr(deploy, "handover_policy", lambda *args: events.append(("handover",)))
     monkeypatch.setattr(deploy, "request_drain", lambda *args: events.append(("drain",)) or 7)
     monkeypatch.setattr(deploy, "wait_drain", lambda *args: events.append(("barrier",)))
-    monkeypatch.setattr(deploy, "clear_drain", lambda *args: events.append(("clear",)))
+    original_query = deploy.query
+    monkeypatch.setattr(deploy, "query", lambda sql: events.append(("clear",)) or "t" if "owner_instance=null" in sql else original_query(sql))
     monkeypatch.setattr(deploy, "module_e2e", lambda *args: events.append(("e2e",)))
     deploy.replace("policy", IMAGE, "synthetic-snapshot")
     assert events.index(("drain",)) < events.index(("barrier",))
@@ -72,6 +77,7 @@ def test_replace_waits_for_old_pod_deletion_before_clearing_the_claim_fence(monk
     assert changed < cleared
     assert any("pods" in event for event in events[changed + 1:cleared])
     assert all("ui2-worker" not in event for event in events)
+    assert events.index(("heartbeat",)) < events.index(("handover",)) < events.index(("e2e",))
 
 
 def test_rollback_requires_a_compatible_snapshot_and_uses_its_exact_module_digest():

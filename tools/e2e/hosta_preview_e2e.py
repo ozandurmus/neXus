@@ -654,8 +654,9 @@ SELECT set_config('app.actor_fingerprint','system:preview',true);
 SELECT set_config('app.action_id','preview_runtime_reset',true);
 DO $$ BEGIN
  IF to_regclass('module_runtime_control') IS NOT NULL THEN
-  UPDATE module_runtime_control SET owner_instance=NULL,owner_heartbeat_at=NULL,
-   drain_requested=TRUE,drain_generation=drain_generation+1,drain_ack_at=NULL,drain_ack_generation=NULL;
+  UPDATE module_runtime_control SET effective_owner='general',fallback_enabled=TRUE,
+   generation=generation+1,owner_instance=NULL,owner_heartbeat_at=NULL,
+   drain_requested=FALSE,drain_generation=drain_generation+1,drain_ack_at=NULL,drain_ack_generation=NULL;
   DELETE FROM endpoint_admission;
   DELETE FROM runtime_task_lease;
   UPDATE jobs SET state='OUTCOME_UNKNOWN',outcome='OUTCOME_UNKNOWN' WHERE state IN ('CLAIMED','EXECUTING');
@@ -664,6 +665,59 @@ END $$;
 COMMIT;"""
     k(NS, "exec", "-i", preview_name("ui2-preview-db"), "--", "sh", "-c",
       PG_ENV + "exec psql -Xq --set=ON_ERROR_STOP=1 -d ui2", input=sql)
+
+
+def assert_module_claims(repo, workers):
+    """Exercise the production atomic claim and DB trigger; roll back every synthetic claim."""
+    roles = {c.get("args", ["worker", "general"])[1] if len(c.get("args", [])) > 1 else "general"
+             for w in workers for c in w["deployment"]["spec"]["template"]["spec"]["containers"]
+             if c.get("args", [])[:1] == ["worker"]}
+    if not {"general", "policy"}.issubset(roles):
+        raise RuntimeError("Preview lacks a required claim owner pod")
+    def db(sql):
+        return k(NS, "exec", "-i", preview_name("ui2-preview-db"), "--", "sh", "-c",
+                 PG_ENV + "exec psql -XqAt --set=ON_ERROR_STOP=1 -d ui2", input=sql)
+    deadline = time.monotonic() + 120
+    while db("SELECT count(*)=2 FROM module_runtime_control WHERE module IN ('general','policy') "
+             "AND owner_instance IS NOT NULL AND owner_heartbeat_at>now()-interval '60 seconds';").strip() != "t":
+        if time.monotonic() >= deadline:
+            raise RuntimeError("Preview claim owners lack live heartbeats")
+        time.sleep(2)
+    db("BEGIN;SELECT set_config('app.actor_fingerprint','system:preview',true);"
+       "SELECT set_config('app.action_id','preview_policy_handover',true);"
+       "SELECT pg_advisory_xact_lock(294611);"
+       "UPDATE module_runtime_control SET effective_owner='policy',fallback_enabled=FALSE,generation=generation+1 "
+       "WHERE module='policy' AND owner_instance IS NOT NULL AND owner_heartbeat_at>now()-interval '60 seconds';COMMIT;")
+    source = (repo / "ui2/job-engine/src/main/java/com/securityexpert/nexus/ui2/jobs/lease/ClaimStatementText.java").read_text()
+    claim = source.split('"""', 2)[1].strip()
+    mapping = (repo / "ui2/service/src/main/resources/db/migration/V128__module_endpoint_runtime.sql").read_text().split("CREATE TABLE", 1)[0]
+    capabilities = sorted(set(re.findall(r"'([a-z]+_[a-z_]+)'", mapping)) -
+                          {"policy", "backup", "inventory", "failover", "diagnostics", "configuration"})
+    for capability in capabilities:
+        # Formatting is limited to repository-owned capability literals; owner identity stays inside SQL.
+        statement = claim.replace("{0}", "quote_literal(instance)").replace("{1}", "quote_literal('60')").replace("{2}", "quote_literal(capability)")
+        # PL/pgSQL builds the exact statement with locally read owner identity.
+        # Use Python to quote the fixed SQL segments rather than exposing the instance.
+        parts = re.split(r"(quote_literal\((?:instance|capability|'60')\))", statement)
+        expression = " || ".join("'" + part.replace("'", "''") + "'" if i % 2 == 0 else part
+                                 for i, part in enumerate(parts))
+        result = db("BEGIN;SELECT pg_advisory_xact_lock(294611);"
+            "SELECT set_config('app.actor_fingerprint','system:preview',true);"
+            "SELECT set_config('app.action_id','preview_claim_assertion',true);"
+            "DO $$ DECLARE instance TEXT; capability TEXT := '" + capability + "'; claimed TEXT; epoch BIGINT; BEGIN "
+            "SELECT r.owner_instance INTO STRICT instance FROM module_runtime_control m "
+            "JOIN module_runtime_control r ON r.module=m.effective_owner WHERE m.module=ui2_job_module(capability) "
+            "AND NOT m.drain_requested AND NOT r.drain_requested AND r.owner_instance IS NOT NULL "
+            "AND r.owner_heartbeat_at>now()-interval '60 seconds';"
+            "IF NOT FOUND THEN RAISE EXCEPTION 'PREVIEW_OWNER_UNAVAILABLE'; END IF;"
+            "INSERT INTO jobs(job_id,job_type,capability_id,target_kind,target_ref,state,action_class,submitted_by_actor_fingerprint,submitted_at) "
+            "VALUES('preview-claim-assertion',capability,capability,'discovery_run','preview-synthetic-target','REQUESTED','read','system:preview','1970-01-01');"
+            "EXECUTE " + expression + " INTO claimed,epoch;"
+            "IF claimed IS DISTINCT FROM 'preview-claim-assertion' THEN RAISE EXCEPTION 'PREVIEW_CLAIM_DENIED'; END IF;"
+            "END $$;SELECT 'CLAIM_PASS';ROLLBACK;")
+        if "CLAIM_PASS" not in result.splitlines():
+            raise RuntimeError("Preview module claim assertion failed")
+    print("PREVIEW MODULE CLAIMS: PASS", flush=True)
 
 
 def cleanup(owner):
@@ -733,6 +787,9 @@ def run(repo, commit):
                 for worker in (w for w in workers if not w["ports"]):
                     with timing("preview_" + worker["component"]):
                         setup_workload(worker["deployment"], images[0], db_ip, endpoints)
+            with timing("preview_claims"):
+                STEP = "assert module claims"
+                assert_module_claims(repo, workers)
             with timing("preview_e2e"):
                 STEP = "load e2e templates"
                 templates = load(repo, "deploy/ui2/70-e2e-job.yaml")
