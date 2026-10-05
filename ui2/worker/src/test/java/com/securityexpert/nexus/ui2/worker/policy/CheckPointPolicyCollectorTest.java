@@ -33,32 +33,21 @@ class CheckPointPolicyCollectorTest {
     }
     private static ExecSpec policySpec(String command) { return new ExecSpec(command, false, 120_000); }
 
-    @Test void packageListingCollects105PackagesAcrossThreeConfiguredPagesInSerialAndParallel() {
+    @Test void serverCappedPackageListingFailsClosedInSerialAndParallelWithoutAnotherPage() {
+        for (int sessions : List.of(1, 4)) {
+            reset(transport, repository);
+            setup(command -> command.contains("show-packages") ? ok(packagePage(0, 20, 105)) : answer(command));
+            var collector = new CheckPointPolicyCollector(transport, gates, repository, Duration.ofHours(2), sessions);
+            List<PolicySnapshot.CollectionFailure> failures = new ArrayList<>();
+            assertTrue(collector.collect(run, request, () -> true, snapshot -> fail("Incomplete domain"), failures::add).isEmpty());
+            assertEquals(1, failures.size());
+            assertTrue(failures.get(0).reason().endsWith(": PACKAGE_LIST_TRUNCATED_BY_SERVER (total=105, returned=20)"));
+            assertEquals(0, failures.get(0).offset());
+            verify(transport, times(1)).execInteractive(any(), argThat(spec -> spec.command().contains("show-packages")), any());
+            verify(repository, never()).targets(anyString(), anyString(), anyString());
+        }
         String previous = System.getProperty("ui2.policy.cp.package-page-size");
         try {
-            System.setProperty("ui2.policy.cp.package-page-size", "50");
-            for (int sessions : List.of(1, 4)) {
-                reset(transport, repository);
-                setup(command -> {
-                    if (command.contains("show-packages")) {
-                        var offset = java.util.regex.Pattern.compile(" offset '([0-9]+)' ").matcher(command);
-                        assertTrue(offset.find());
-                        assertTrue(command.contains(" limit 50 "));
-                        assertTrue(command.endsWith("details-level full"));
-                        return ok(packagePage(Integer.parseInt(offset.group(1)), 50, 105));
-                    }
-                    if (command.contains("show-nat-rulebase")) return ok(page("nat", 0, 0, 0, "", ""));
-                    return answer(command);
-                });
-                var collector = new CheckPointPolicyCollector(transport, gates, repository, Duration.ofHours(2), sessions);
-                var snapshots = collector.collect(run, request, () -> true);
-                assertEquals(105, snapshots.size());
-                assertEquals(105, snapshots.stream().map(s -> s.metadata().id()).distinct().count());
-                assertTrue(snapshots.stream().allMatch(s -> s.failures().isEmpty()));
-                for (int offset : List.of(0, 50, 100)) verify(transport).execInteractive(eq(session),
-                    eq(policySpec(MgmtCliCommands.showPackages("DOM-TANGO-01", offset, 50))), eq(Duration.ofSeconds(300)));
-                verify(transport, times(3)).execInteractive(any(), argThat(spec -> spec.command().contains("show-packages")), any());
-            }
             for (String invalid : List.of("0", "-1", "501")) {
                 System.setProperty("ui2.policy.cp.package-page-size", invalid);
                 assertThrows(IllegalArgumentException.class, () -> new CheckPointPolicyCollector(transport, gates, repository));
@@ -69,14 +58,13 @@ class CheckPointPolicyCollectorTest {
         }
     }
 
-    @Test void truncatedPackagePageFailsOnlyItsDomainWithOffsetAndSafeDiagnostics() throws Exception {
+    @Test void malformedPackageListingFailsOnlyItsDomainWithSafeDiagnostics() throws Exception {
         String truncated = "{\"from\":21,\"total\":25,\"packages\":[{\"name\":\"Synthetic é42\"";
         for (int sessions : List.of(1, 4)) {
             reset(transport, repository);
             setup(command -> {
                 if (command.equals(MgmtCliCommands.domainList())) return ok("{\"total\":2,\"objects\":[{\"uid\":\"broken\",\"name\":\"DOM-BRAVO-02\"},{\"uid\":\"domain-01\",\"name\":\"DOM-TANGO-01\"}]}");
-                if (command.equals(MgmtCliCommands.showPackages("DOM-BRAVO-02"))) return ok(packagePage(0, 20, 25));
-                if (command.equals(MgmtCliCommands.showPackages("DOM-BRAVO-02", 20, 20))) return ok(truncated);
+                if (command.equals(MgmtCliCommands.showPackages("DOM-BRAVO-02"))) return ok(truncated);
                 return answer(command);
             });
             var collector = new CheckPointPolicyCollector(transport, gates, repository, Duration.ofHours(2), sessions);
@@ -88,13 +76,14 @@ class CheckPointPolicyCollectorTest {
                 assertTrue(snapshots.get(0).failures().isEmpty());
             }
             assertEquals(1, failures.size());
-            assertEquals(20, failures.get(0).offset());
+            assertEquals(0, failures.get(0).offset());
             assertEquals(PolicySnapshot.ref("mds-1", "broken"), failures.get(0).layerRef());
             assertTrue(failures.get(0).reason().endsWith(": INVALID_OR_INCOMPLETE_RESPONSE"));
             var sink = new java.io.ByteArrayOutputStream(); transcript.writeTo(sink);
             String notes = sink.toString(java.nio.charset.StandardCharsets.UTF_8);
             assertTrue(notes.contains("bytes=" + truncated.getBytes(java.nio.charset.StandardCharsets.UTF_8).length));
             assertTrue(notes.contains("endedMidJson=true exitCode=0"));
+            assertTrue(notes.contains("STRUCTURE rootParsed=false rootType=UNPARSED"));
             assertFalse(notes.contains("Synthetic"));
             assertFalse(notes.contains("DOM-BRAVO-02"));
             verify(transport, never()).execInteractive(any(), argThat(spec -> spec.command().contains("'DOM-BRAVO-02'")
@@ -102,22 +91,21 @@ class CheckPointPolicyCollectorTest {
         }
     }
 
-    @Test void packagePagingRejectsGapsChangingTotalsAndDuplicateIdentities() {
-        for (String defect : List.of("gap", "total", "duplicate", "empty")) {
+    @Test void packageListingRejectsGapsInconsistentTotalsAndDuplicateIdentities() {
+        for (String defect : List.of("gap", "total", "duplicate")) {
+            reset(transport, repository);
             var collector = setup(command -> {
                 if (!command.contains("show-packages")) return answer(command);
-                if (command.equals(MgmtCliCommands.showPackages("DOM-TANGO-01"))) return ok(packagePage(0, 20, 25));
-                String next = packagePage(20, 20, 25);
+                String page = packagePage(0, 20, 20);
                 return ok(switch (defect) {
-                    case "gap" -> next.replace("\"from\":21", "\"from\":22");
-                    case "total" -> next.replace("\"total\":25", "\"total\":26");
-                    case "duplicate" -> next.replace("pkg-20", "pkg-0");
-                    default -> "{\"from\":21,\"to\":25,\"total\":25,\"packages\":[]}";
+                    case "gap" -> page.replace("\"from\":1", "\"from\":2");
+                    case "total" -> page.replace("\"total\":20", "\"total\":19");
+                    default -> page.replace("pkg-1\"", "pkg-0\"");
                 });
             });
             List<PolicySnapshot.CollectionFailure> failures = new ArrayList<>();
             assertTrue(collector.collect(run, request, () -> true, snapshot -> fail("Incomplete domain"), failures::add).isEmpty());
-            assertEquals(20, failures.get(0).offset());
+            assertEquals(0, failures.get(0).offset());
         }
     }
 
@@ -237,7 +225,9 @@ class CheckPointPolicyCollectorTest {
             try (var scope = com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.open(transcript)) {
                 var error = assertThrows(PolicyCollectionTrace.Failure.class, () -> collector.read(session,
                     MgmtCliCommands.showPackages("DOM-TANGO-01"), 0, Long.MAX_VALUE, () -> true));
-                assertTrue(error.getMessage().endsWith(": INVALID_OR_INCOMPLETE_RESPONSE"));
+                boolean capped = body.equals("{\"total\":1,\"packages\":[]}")
+                    || body.equals("{\"total\":18446744073709551616,\"packages\":[]}");
+                assertTrue(error.getMessage().contains(capped ? "PACKAGE_LIST_TRUNCATED_BY_SERVER" : "INVALID_OR_INCOMPLETE_RESPONSE"));
             }
             var sink = new java.io.ByteArrayOutputStream(); transcript.writeTo(sink);
             String note = sink.toString(java.nio.charset.StandardCharsets.UTF_8).lines()
@@ -249,6 +239,57 @@ class CheckPointPolicyCollectorTest {
             assertTrue(shape.codePoints().allMatch(c -> !Character.isLetter(c) || c == 'a'));
             assertTrue(shape.codePoints().allMatch(c -> !Character.isDigit(c) || c == '9'));
             assertFalse(note.contains("Synthetic"));
+            assertTrue(note.contains("STRUCTURE rootParsed="));
+        }
+    }
+
+    @Test void invalidPreflightStructureReportsBannerCountersTypesAndArraySizesWithoutValues() throws Exception {
+        String prefix = "Synthetic é banner\r\nSynthetic notice\n";
+        String body = prefix + "{\"from\":1,\"to\":0,\"total\":3,\"packages\":[],"
+            + "\"objects\":[\"Synthetic identity\"],\"message\":\"Synthetic secret\",\"Synthetic-key\":[1,2]}";
+        var collector = setup(command -> ok(body));
+        var transcript = new com.securityexpert.nexus.ui2.worker.transcript.JobTranscript();
+        try (var scope = com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.open(transcript)) {
+            var error = assertThrows(PolicyCollectionTrace.Failure.class, () -> collector.read(session,
+                MgmtCliCommands.showPackages("DOM-TANGO-01"), 0, Long.MAX_VALUE, () -> true));
+            assertTrue(error.getMessage().endsWith(": PACKAGE_LIST_TRUNCATED_BY_SERVER (total=3, returned=0)"));
+        }
+        String structure = CheckPointPolicyCollector.preflightStructure(body,
+            new com.fasterxml.jackson.databind.ObjectMapper().readTree(body.substring(prefix.length())));
+        assertTrue(structure.contains("rootParsed=true rootType=OBJECT leadingNonJsonLines=2 leadingNonJsonBytes="
+            + prefix.getBytes(java.nio.charset.StandardCharsets.UTF_8).length));
+        assertTrue(structure.contains("packages:ARRAY(size=0)"));
+        assertTrue(structure.contains("objects:ARRAY(size=1)"));
+        assertTrue(structure.contains("<masked-key>:ARRAY(size=2)"));
+        assertTrue(structure.contains("message:STRING"));
+        assertTrue(structure.contains("counters=[from=1, to=0, total=3]"));
+        assertFalse(structure.contains("Synthetic"));
+        var sink = new java.io.ByteArrayOutputStream(); transcript.writeTo(sink);
+        String notes = sink.toString(java.nio.charset.StandardCharsets.UTF_8);
+        assertTrue(notes.contains(structure));
+        assertTrue(notes.contains("paging unavailable: gate literal fixed"));
+        assertFalse(notes.contains(" offset=0"));
+        assertFalse(notes.contains(" limit=20"));
+        assertFalse(notes.contains("Synthetic"));
+        String typed = CheckPointPolicyCollector.preflightStructure("{}",
+            new com.fasterxml.jackson.databind.ObjectMapper().readTree("{\"from\":\"Synthetic value\",\"to\":null,\"packages\":[]}"));
+        assertTrue(typed.contains("counters=[from=STRING, to=NULL, total=MISSING]"));
+        assertFalse(typed.contains("Synthetic"));
+    }
+
+    @Test void oversizedPackageListAndNonObjectRootHaveGenericReasonAndStructure() throws Exception {
+        for (String body : List.of(packagePage(0, 501, 501), "[]")) {
+            var collector = setup(command -> ok(body));
+            var transcript = new com.securityexpert.nexus.ui2.worker.transcript.JobTranscript();
+            try (var scope = com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.open(transcript)) {
+                assertTrue(assertThrows(PolicyCollectionTrace.Failure.class, () -> collector.read(session,
+                    MgmtCliCommands.showPackages("DOM-TANGO-01"), 0, Long.MAX_VALUE, () -> true))
+                    .getMessage().endsWith(": INVALID_OR_INCOMPLETE_RESPONSE"));
+            }
+            var sink = new java.io.ByteArrayOutputStream(); transcript.writeTo(sink);
+            String notes = sink.toString(java.nio.charset.StandardCharsets.UTF_8);
+            assertTrue(notes.contains("STRUCTURE rootParsed=true rootType=" + (body.equals("[]") ? "ARRAY" : "OBJECT")));
+            if (!body.equals("[]")) assertTrue(notes.contains("packages:ARRAY(size=501)"));
         }
     }
 
