@@ -621,17 +621,33 @@ class CheckPointPolicyCollectorTest {
         for (String bad : List.of(page("layer", 2, 2, 2, RULE, DICTIONARY), page("layer", 1, 0, 2, RULE, DICTIONARY),
                 "{\"total\":1,\"rulebase\":[],\"objects-dictionary\":[]}")) {
             var collector = setup(c -> ok(bad));
-            assertThrows(IllegalStateException.class, () -> collector.pages(session, n -> "synthetic-page", 1, Long.MAX_VALUE, () -> true));
+            assertThrows(IllegalStateException.class, () -> collector.pages(session,
+                offset -> MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Layer", offset), 1, Long.MAX_VALUE, () -> true));
         }
         AtomicInteger changed = new AtomicInteger();
         var changing = setup(c -> ok(changed.getAndIncrement() == 0 ? page("layer", 1, 1, 2, RULE, DICTIONARY)
                 : page("layer", 2, 2, 3, RULE, DICTIONARY)));
-        assertThrows(IllegalStateException.class, () -> changing.pages(session, n -> "synthetic-page", 1, Long.MAX_VALUE, () -> true));
+        assertThrows(IllegalStateException.class, () -> changing.pages(session,
+            offset -> MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Layer", offset), 1, Long.MAX_VALUE, () -> true));
+        AtomicInteger repeated = new AtomicInteger();
+        var repeating = setup(c -> {
+            repeated.incrementAndGet();
+            return ok(page("layer", 1, 1, 2, RULE, DICTIONARY));
+        });
+        assertThrows(IllegalStateException.class, () -> repeating.pages(session,
+            offset -> MgmtCliCommands.showNatRulebase("DOM-TANGO-01", "Package", offset), 2, Long.MAX_VALUE, () -> true));
+        assertEquals(2, repeated.get());
         AtomicInteger count = new AtomicInteger();
-        var collector = setup(c -> { int n = count.incrementAndGet(); return ok(page("layer", n, n, 201, RULE, DICTIONARY)); });
-        assertThrows(IllegalStateException.class, () -> collector.pages(session, n -> "synthetic-page", 1, Long.MAX_VALUE, () -> true));
+        var collector = setup(c -> {
+            int n = count.incrementAndGet();
+            return ok(page("layer", n, n, 201, RULE.replace("\"r1\"", "\"synthetic-rule-" + n + "\""), DICTIONARY));
+        });
+        assertThrows(IllegalStateException.class, () -> collector.pages(session,
+            offset -> MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Layer", offset), 1, Long.MAX_VALUE, () -> true));
         assertEquals(200, count.get());
-        assertThrows(IllegalStateException.class, () -> collector.pages(session, n -> "synthetic-page", 1, 0, () -> true));
+        assertThrows(IllegalStateException.class, () -> collector.pages(session,
+            offset -> MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Layer", offset), 1, 0, () -> true));
+        assertEquals(200, count.get());
         assertThrows(IllegalStateException.class, () -> collector.collect(run, request, () -> false));
     }
     @Test void timedOutAccessPageRetriesSameOffsetOnceAtFiftyWithFullDictionary() {
