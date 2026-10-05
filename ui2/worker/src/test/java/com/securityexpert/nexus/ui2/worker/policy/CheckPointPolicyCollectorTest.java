@@ -390,7 +390,7 @@ class CheckPointPolicyCollectorTest {
         var transcript = new com.securityexpert.nexus.ui2.worker.transcript.JobTranscript();
         try (var scope = com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.open(transcript)) {
             var error = assertThrows(PolicyCollectionTrace.Failure.class, () -> collector.read(session,
-                MgmtCliCommands.showPackages("DOM-TANGO-01"), 0, Long.MAX_VALUE, () -> true));
+                MgmtCliCommands.showPackages("DOM-TANGO-01"), CpPolicyGates.PACKAGES_50, Long.MAX_VALUE, () -> true));
             assertTrue(error.getMessage().endsWith(": INVALID_OR_INCOMPLETE_RESPONSE"));
         }
         String structure = CheckPointPolicyCollector.preflightStructure(body,
@@ -408,12 +408,33 @@ class CheckPointPolicyCollectorTest {
         assertTrue(notes.contains(structure));
         assertFalse(notes.contains("paging unavailable: gate literal fixed"));
         assertTrue(notes.contains(" offset=0"));
-        assertTrue(notes.contains(" limit=20"));
+        assertTrue(notes.contains(" limit=50"));
         assertFalse(notes.contains("Synthetic"));
         String typed = CheckPointPolicyCollector.preflightStructure("{}",
             new com.fasterxml.jackson.databind.ObjectMapper().readTree("{\"from\":\"Synthetic value\",\"to\":null,\"packages\":[]}"));
         assertTrue(typed.contains("counters=[from=STRING, to=NULL, total=MISSING]"));
         assertFalse(typed.contains("Synthetic"));
+    }
+
+    @Test void malformedDomainPackageAndObjectReadsKeepMaskedStructureDiagnostics() throws Exception {
+        for (int gate : List.of(-1, 0, CpPolicyGates.PACKAGES_50, CpPolicyGates.OBJECT_BASE)) {
+            for (String body : List.of("Synthetic banner\n{\"objects\":[", "[]")) {
+                var collector = setup(command -> ok(body));
+                String command = gate < 0 ? MgmtCliCommands.domainList()
+                    : gate >= CpPolicyGates.OBJECT_BASE ? MgmtCliCommands.showPolicyObjects("DOM-TANGO-01", "times", 0)
+                    : MgmtCliCommands.showPackages("DOM-TANGO-01", 0, gate == 0 ? 20 : 50);
+                var transcript = new com.securityexpert.nexus.ui2.worker.transcript.JobTranscript();
+                try (var scope = com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.open(transcript)) {
+                    assertTrue(assertThrows(PolicyCollectionTrace.Failure.class, () -> collector.read(session,
+                        command, gate, Long.MAX_VALUE, () -> true)).getMessage().endsWith(": INVALID_OR_INCOMPLETE_RESPONSE"));
+                }
+                var sink = new java.io.ByteArrayOutputStream(); transcript.writeTo(sink);
+                String notes = sink.toString(java.nio.charset.StandardCharsets.UTF_8);
+                assertTrue(notes.contains(body.equals("[]") ? "STRUCTURE rootParsed=true rootType=ARRAY"
+                    : "STRUCTURE rootParsed=false rootType=UNPARSED"), "gate=" + gate);
+                assertFalse(notes.contains("Synthetic"));
+            }
+        }
     }
 
     @Test void oversizedPackageListAndNonObjectRootHaveGenericReasonAndStructure() throws Exception {
@@ -618,7 +639,8 @@ class CheckPointPolicyCollectorTest {
         var collector = setup(command -> {
             if (command.equals(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Layer", 0)) && firstPage.getAndIncrement() == 0)
                 return new ExecResult.TimedOut();
-            return answer(command.replace(" limit 50 offset ", " limit 100 offset "));
+            return answer(command.contains("show-access-rulebase")
+                ? command.replace(" limit 50 offset ", " limit 100 offset ") : command);
         });
         var snapshot = collector.collect(run, request, () -> true).get(0);
         assertTrue(snapshot.failures().isEmpty());
