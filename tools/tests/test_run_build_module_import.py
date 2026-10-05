@@ -67,7 +67,7 @@ def test_all_build_python_scripts_and_rollback_wrappers_import_outside_checkout(
 
 
 @pytest.mark.parametrize("failure,apply_files,events_expected", [
-    ("targets", "", []), ("git", "", ["git"]),
+    ("targets", "", ["git"] * 3), ("git", "", ["git"]),
     ("snapshot", "synthetic.yaml", ["git"] * 4 + ["snapshot"]),
     ("apply", "synthetic.yaml", ["git"] * 4 + ["snapshot", "apply"]),
     ("apply", "", ["git"] * 4 + ["snapshot", "apply"]),
