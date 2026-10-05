@@ -20,7 +20,7 @@ public final class MgmtCliCommands {
     }
 
     public static String showPackages(String domain, int offset, int limit) {
-        if (offset < 0 || limit < 1 || limit > 500) throw new IllegalArgumentException("Invalid package page");
+        if (offset < 0 || limit != 20) throw new IllegalArgumentException("Invalid package page");
         return "mgmt_cli -r true -d " + quote(domain) + " -f json show-packages limit " + limit
                 + " offset " + quote(Integer.toString(offset)) + " details-level full";
     }
