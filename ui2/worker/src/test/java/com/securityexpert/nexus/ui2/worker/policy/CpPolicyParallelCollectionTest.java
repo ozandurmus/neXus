@@ -90,12 +90,16 @@ class CpPolicyParallelCollectionTest {
             + ",\"total\":" + total + ",\"rulebase\":[" + rules + "],\"objects-dictionary\":[" + dictionary + "]}");
     }
     private static String rule(String uid) { return "{\"uid\":\"" + uid + "\",\"type\":\"access-rule\"}"; }
+    private static String pageRules(int offset, int to) {
+        return java.util.stream.IntStream.range(offset, to).mapToObj(i -> rule("r" + i))
+            .collect(java.util.stream.Collectors.joining(","));
+    }
     private ExecResult answer(String command) {
         if (command.contains("show-domains")) return ok("{\"total\":1,\"objects\":[" + domain("domain-01", "DOM-TANGO-01") + "]}");
         if (command.contains("show-packages")) return ok(packages(domain("layer", "Layer")));
         if (command.contains("show-nat-rulebase")) return page("nat", 0, 0, 0, "", "");
         int offset = offset(command);
-        return page("layer", offset, Math.min(offset + 100, 400), 400, rule("r" + offset), "");
+        return page("layer", offset, Math.min(offset + 100, 400), 400, pageRules(offset, Math.min(offset + 100, 400)), "");
     }
     private static List<String> rules(PolicySnapshot snapshot) {
         return snapshot.sections().stream().flatMap(s -> s.rules().stream()).map(PolicySnapshot.Rule::uuid).toList();
@@ -115,7 +119,7 @@ class CpPolicyParallelCollectionTest {
         });
         List<PolicySnapshot> checkpoints = new ArrayList<>();
         var snapshots = collector.collect(run, request, () -> true, checkpoints::add);
-        assertEquals(List.of("r0", "r100", "r200", "r300"), rules(snapshots.get(0)));
+        assertEquals(java.util.stream.IntStream.range(0, 400).mapToObj(i -> "r" + i).toList(), rules(snapshots.get(0)));
         assertTrue(snapshots.get(0).failures().isEmpty());
         assertTrue(checkpoints.size() >= 2); assertTrue(peak.get() >= 2); cleanup();
     }
@@ -126,7 +130,7 @@ class CpPolicyParallelCollectionTest {
             if (command.contains("show-access-rulebase")) {
                 int offset = offset(command);
                 if (offset >= 200 && offset <= 500) { four.countDown(); await(four); }
-                return page("layer", offset, Math.min(offset + 100, 700), 700, rule("r" + offset), "");
+                return page("layer", offset, Math.min(offset + 100, 700), 700, pageRules(offset, Math.min(offset + 100, 700)), "");
             }
             return answer(command);
         });
@@ -248,6 +252,7 @@ class CpPolicyParallelCollectionTest {
         assertEquals(1, opened.size()); assertEquals(1, peak.get()); cleanup();
         reset(transport); opened.clear(); closed.clear();
         var parallel = setup(4, this::answer).collect(run, request, () -> true).get(0);
+        assertEquals(400, rules(serial).size()); assertTrue(serial.failures().isEmpty());
         assertEquals(serial.sections(), parallel.sections()); assertEquals(serial.objects(), parallel.objects());
         assertEquals(serial.failures(), parallel.failures()); assertEquals(serial.metadata().id(), parallel.metadata().id()); cleanup();
     }
@@ -332,12 +337,25 @@ class CpPolicyParallelCollectionTest {
     }
 
     @Test void changingTotalsAndWrongLayerIdentityStayIncomplete() {
-        for (boolean wrongUid : List.of(false, true)) {
+        for (int sessions : List.of(1, 4)) for (boolean wrongUid : List.of(false, true)) {
             reset(transport); opened.clear(); closed.clear();
-            var collector = setup(4, command -> command.contains("show-access-rulebase") && offset(command) == 100
-                ? page(wrongUid ? "other" : "layer", 100, 200, wrongUid ? 400 : 401, rule("r100"), "") : answer(command));
+            var collector = setup(sessions, command -> command.contains("show-access-rulebase") && offset(command) == 100
+                ? page(wrongUid ? "other" : "layer", 100, 200, wrongUid ? 400 : 401, pageRules(100, 200), "") : answer(command));
             var snapshot = collector.collect(run, request, () -> true).get(0);
             assertFalse(snapshot.failures().isEmpty()); assertTrue(rules(snapshot).isEmpty()); cleanup();
+        }
+    }
+
+    @Test void incompleteRulesAndMissingDictionaryUidAreRejectedInBothModes() {
+        for (int sessions : List.of(1, 4)) for (boolean missingDictionaryUid : List.of(false, true)) {
+            reset(transport); opened.clear(); closed.clear();
+            var collector = setup(sessions, command -> command.contains("show-access-rulebase")
+                ? page("layer", 0, 100, 100, missingDictionaryUid ? pageRules(0, 100) : rule("r0"),
+                    missingDictionaryUid ? "{\"type\":\"host\"}" : "") : answer(command));
+            var snapshot = collector.collect(run, request, () -> true).get(0);
+            assertEquals(1, snapshot.failures().size());
+            assertTrue(snapshot.failures().get(0).reason().endsWith(": INVALID_OR_INCOMPLETE_RESPONSE"));
+            assertTrue(rules(snapshot).isEmpty()); cleanup();
         }
     }
 

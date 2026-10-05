@@ -396,12 +396,11 @@ public final class CheckPointPolicyCollector {
                 };
                 try {
                     layer = pages(session, offset -> MgmtCliCommands.showAccessRulebase(domain, name, offset)
-                        + (hits ? " show-hits true" : ""), hits ? 3 : 1, deadline, lease, progress);
+                        + (hits ? " show-hits true" : ""), hits ? 3 : 1, deadline, lease, progress, uid);
                 } catch (RuntimeException unsupportedHits) {
                     if (!hits || PolicyCollectionTrace.fatal(unsupportedHits)) throw unsupportedHits;
-                    layer = pages(session, offset -> MgmtCliCommands.showAccessRulebase(domain, name, offset), 1, deadline, lease, progress);
+                    layer = pages(session, offset -> MgmtCliCommands.showAccessRulebase(domain, name, offset), 1, deadline, lease, progress, uid);
                 }
-                for (JsonNode page : layer) if (!uid.equals(required(page, "uid"))) throw failure();
                 for (JsonNode page : layer)
                     for (JsonNode object : page.path("objects-dictionary")) dictionary.put(required(object, "uid"), object);
                 Set<String> inline = new LinkedHashSet<>();
@@ -453,6 +452,9 @@ public final class CheckPointPolicyCollector {
         return pages(session, command, gate, deadline, lease, count -> {});
     }
     private List<JsonNode> pages(TransportSession session, IntFunction<String> command, int gate, long deadline, BooleanSupplier lease, IntConsumer progress) {
+        return pages(session, command, gate, deadline, lease, progress, null);
+    }
+    private List<JsonNode> pages(TransportSession session, IntFunction<String> command, int gate, long deadline, BooleanSupplier lease, IntConsumer progress, String layerUid) {
         List<JsonNode> pages = new ArrayList<>();
         int offset = 0, total = -1, rules = 0;
         Set<String> seenRules = new HashSet<>();
@@ -468,7 +470,7 @@ public final class CheckPointPolicyCollector {
                         page = read(session, command.apply(offset).replace(" limit 100 offset ", " limit 50 offset "), gate, deadline, lease, total);
                     }
                 }
-                total = pageTotal(page, offset, total, gate);
+                total = pageTotal(page, offset, total, gate, layerUid);
                 Set<String> ids = ruleUids(page.path("rulebase"));
                 if (!Collections.disjoint(seenRules, ids)) {
                     invalidPreflight("", 0, false, page, "DUPLICATE_RULE_UID");
@@ -488,8 +490,14 @@ public final class CheckPointPolicyCollector {
         }
     }
     static int pageTotal(JsonNode page, int offset, int expectedTotal, int gate) {
+        return pageTotal(page, offset, expectedTotal, gate, null);
+    }
+    static int pageTotal(JsonNode page, int offset, int expectedTotal, int gate, String layerUid) {
         if (!page.path("rulebase").isArray() || !page.path("objects-dictionary").isArray()
                 || !page.path("total").canConvertToInt() || !page.path("total").isIntegralNumber()) throw pageRejected("PAGE_SCHEMA");
+        if ((gate == 1 || gate == 3) && layerUid != null && !layerUid.equals(required(page, "uid")))
+            throw pageRejected("LAYER_UID");
+        for (JsonNode object : page.path("objects-dictionary")) required(object, "uid");
         int total = page.path("total").intValue();
         if (total < 0 || (expectedTotal != -1 && expectedTotal != total)) throw pageRejected("TOTAL_CHANGED");
         if (total == 0) {
