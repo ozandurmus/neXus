@@ -1740,7 +1740,7 @@ const policyDomainPath = (source: string, domain: string, view: string, page: nu
 export const getPolicyObjects = (source: string, domain: string, page = 0, q = "", type = "", hygiene = "") =>
   call<PolicyObjectPage>(`${policyDomainPath(source, domain, "objects", page, q)}&type=${encodeURIComponent(type)}&hygiene=${encodeURIComponent(hygiene)}`, "GET");
 export const getPolicyUsage = (source: string, domain: string, uid: string, page = 0) =>
-  call<PolicyUsage>(policyDomainPath(source, domain, `objects/${encodeURIComponent(uid)}/usage`, page), "GET");
+  call<PolicyUsage>(`${policyDomainPath(source, domain, "object-usage", page)}&uid=${encodeURIComponent(uid)}`, "GET");
 export const getPolicyInstallations = (source: string, domain: string, page = 0, q = "", policy = "") =>
   call<PolicyInstallationPage>(`${policyDomainPath(source, domain, "installation", page, q)}&policy=${encodeURIComponent(policy)}`, "GET");
 

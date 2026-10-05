@@ -64,7 +64,7 @@ it("loads and pages masked objects and sends type, hygiene and search to the ser
 });
 
 it("shows where-used rule locations and group references in a masked, paged drawer", async () => {
-  const request = vi.fn(async (url: string) => new Response(JSON.stringify(url.includes("/usage?") ? {
+  const request = vi.fn(async (url: string) => new Response(JSON.stringify(url.includes("/object-usage?") ? {
     object: objects[0], rules: [{ policyId: "policy-1", policyName: "POL-TANGO-01", layerRef: "layer-1", layerName: "LAYER-TANGO-01", ruleId: "rule-1", number: 7 }],
     groups: [{ id: "group-1", uid: "group-uid", name: "GRP-TANGO-01", type: "group" }], ruleCount: 201, groupCount: 1, page: 0, pageSize: 200,
   } : objectPage), { status: 200, headers: { "X-Nexus-Masked": "true" } }));
@@ -74,7 +74,7 @@ it("shows where-used rule locations and group references in a masked, paged draw
   expect(await within(drawer).findByRole("table", { name: "Rules using object" })).toHaveTextContent("LAYER-TANGO-01");
   expect(within(drawer).getByText("7")).toBeInTheDocument(); expect(within(drawer).getByText("GRP-TANGO-01")).toBeInTheDocument();
   fireEvent.click(within(drawer).getByRole("button", { name: "Next" }));
-  await waitFor(() => expect(request.mock.calls.at(-1)?.[0]).toContain("objects/uid-1/usage?source=source-1&page=1"));
+  await waitFor(() => expect(request.mock.calls.at(-1)?.[0]).toContain("object-usage?source=source-1&page=1&q=&uid=uid-1"));
 });
 
 it.each(["Objects", "Installation"] as const)("shows %s empty and incomplete evidence instead of invented results", async tab => {

@@ -87,8 +87,8 @@ public final class PolicyController {
         return policies.domainObjects(source, id, page, q, type, hygiene, PrivacyMaskingResponseBodyAdvice.isReplayViewer(request))
             .<ResponseEntity<?>>map(PolicyController::ok).orElseGet(() -> error(HttpStatus.NOT_FOUND));
     }
-    @GetMapping("/api/v2/policy/domains/{id}/objects/{uid}/usage")
-    public ResponseEntity<?> usage(@PathVariable String id, @PathVariable String uid, @RequestParam String source,
+    @GetMapping("/api/v2/policy/domains/{id}/object-usage")
+    public ResponseEntity<?> usage(@PathVariable String id, @RequestParam String uid, @RequestParam String source,
             @RequestParam(defaultValue = "0") int page) {
         if (!validDomain(source, page, "")) return error(HttpStatus.BAD_REQUEST);
         return policies.objectUsage(source, id, uid, page).<ResponseEntity<?>>map(PolicyController::ok).orElseGet(() -> error(HttpStatus.NOT_FOUND));
