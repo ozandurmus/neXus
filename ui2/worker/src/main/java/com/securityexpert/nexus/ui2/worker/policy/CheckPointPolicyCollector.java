@@ -486,12 +486,13 @@ public final class CheckPointPolicyCollector {
             if (gate <= 0 || gate == CpPolicyGates.PACKAGES_50) validatePreflight(root, gate < 0 ? "objects" : "packages");
             return root;
         } catch (PolicyCollectionTrace.Failure invalid) {
-            if (gate <= 0 || gate == CpPolicyGates.PACKAGES_50) invalidPreflight(completed.output(), completed.exitStatus(), false, root);
+            if (gate <= 0 || gate == CpPolicyGates.PACKAGES_50 || gate >= CpPolicyGates.OBJECT_BASE)
+                invalidPreflight(completed.output(), completed.exitStatus(), false, root);
             if (completed.exitStatus() != 0 && invalid.getMessage().endsWith(": INVALID_OR_INCOMPLETE_RESPONSE"))
                 throw PolicyCollectionTrace.failure("EXIT_" + completed.exitStatus());
             throw invalid;
         } catch (java.io.IOException invalid) {
-            if (gate <= 0 || gate == CpPolicyGates.PACKAGES_50) invalidPreflight(completed.output(), completed.exitStatus(),
+            if (gate <= 0 || gate == CpPolicyGates.PACKAGES_50 || gate >= CpPolicyGates.OBJECT_BASE) invalidPreflight(completed.output(), completed.exitStatus(),
                 invalid instanceof com.fasterxml.jackson.core.io.JsonEOFException, root);
             if (completed.exitStatus() != 0) throw PolicyCollectionTrace.failure("EXIT_" + completed.exitStatus());
             throw failure();
