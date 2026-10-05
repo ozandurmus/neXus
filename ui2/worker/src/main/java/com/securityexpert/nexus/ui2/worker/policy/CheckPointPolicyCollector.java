@@ -126,19 +126,9 @@ public final class CheckPointPolicyCollector {
                 Set<String> seen = new HashSet<>();
                 for (JsonNode policy : packages) {
                     String uid = required(policy, "uid"), name = required(policy, "name");
-                    if (!seen.add(uid) || !policy.path("access-layers").isArray()) throw failure();
+                    if (!seen.add(uid)) throw failure();
                     List<CollectionFailure> failures = new ArrayList<>();
-                    List<Target> targets = new ArrayList<>();
-                    if (!policy.path("installation-targets").isArray()) throw failure();
-                    for (JsonNode target : policy.path("installation-targets")) {
-                        String targetUid = target.isTextual() ? target.textValue() : required(target, "uid");
-                        var enrolled = repository.targets(run.runId(), domainName, targetUid);
-                        if (enrolled.isEmpty()) {
-                            // Preserve management assignments without inventing an enrolled-device match.
-                            targets.add(new Target(ref("cp-install-target", request.sourceId(), domainUid, targetUid),
-                                target.isObject() ? target.path("name").asText("Unresolved installation target") : "Unresolved installation target", "", "UNKNOWN"));
-                        } else targets.addAll(enrolled);
-                    }
+                    List<Target> targets = installationTargets(run, request, domainUid, domainName, policy);
                     Metadata metadata = new Metadata(ref(request.sourceId(), domainUid, uid), request.sourceId(),
                         "MDS " + request.sourceId(), "CP", container, domainName, name, Instant.now().toString(), "", targets.stream().distinct().toList());
                     PolicyCollectionTrace.unit(metadata.id());
@@ -230,8 +220,10 @@ public final class CheckPointPolicyCollector {
                     || !page.path("to").isIntegralNumber() || !page.path("to").canConvertToInt()) throw failure();
             to = page.path("to").intValue();
             if (to <= offset || to > total || to - offset > limit || to - offset != page.path("packages").size()) throw failure();
+            int index = 0;
             for (JsonNode item : page.path("packages")) {
-                if (!seen.add(required(item, "uid"))) throw failure();
+                if (!seen.add(required(item, "uid"))) throw invalidPackage(index, "uid", item.path("uid"));
+                index++;
                 items.add(item);
             }
             if (to < total && to - offset != limit) throw failure();
@@ -246,7 +238,10 @@ public final class CheckPointPolicyCollector {
     private List<JsonNode> access(TransportSession session, String domain, JsonNode roots, long deadline, BooleanSupplier lease,
             List<CollectionFailure> failures, Consumer<List<JsonNode>> publish) {
         Map<String, String> pending = new LinkedHashMap<>();
-        for (JsonNode root : roots) pending.put(required(root, "uid"), required(root, "name"));
+        for (JsonNode root : roots) {
+            JsonNode layer = scopedLayer(root);
+            pending.put(required(layer, "uid"), required(layer, "name"));
+        }
         Set<String> fetched = new HashSet<>();
         Map<String, JsonNode> dictionary = new HashMap<>();
         List<JsonNode> all = new ArrayList<>();
@@ -447,21 +442,75 @@ public final class CheckPointPolicyCollector {
                 || !root.path("total").canConvertToInt() || root.path("total").intValue() < root.path(field).size()
                 || root.path(field).size() > 20 || (root.path("total").intValue() > 0 && root.path(field).isEmpty())) throw failure();
         Set<String> seen = new HashSet<>();
+        int index = 0;
         for (JsonNode item : root.path(field)) {
-            if (!seen.add(required(item, "uid"))) throw failure();
-            required(item, "name");
-            if (field.equals("packages")) {
-                if (!item.path("access-layers").isArray() || !item.path("installation-targets").isArray()) throw failure();
-                for (JsonNode layer : item.path("access-layers")) {
-                    required(layer, "uid"); required(layer, "name");
-                }
-                for (JsonNode target : item.path("installation-targets")) {
-                    if (target.isTextual()) {
-                        if (target.textValue().isBlank()) throw failure();
-                    } else required(target, "uid");
+            if (field.equals("packages")) validatePackage(item, index, seen);
+            else {
+                if (!seen.add(required(item, "uid"))) throw failure();
+                required(item, "name");
+            }
+            index++;
+        }
+    }
+
+    private static void validatePackage(JsonNode item, int index, Set<String> seen) {
+        String field = "uid";
+        JsonNode value = item.path(field);
+        try {
+            if (!seen.add(required(item, field))) throw failure();
+            field = "name"; value = item.path(field);
+            required(item, field);
+            field = "access-layers"; value = item.path(field);
+            boolean optional = !item.has("access") || item.path("access").isBoolean() && !item.path("access").booleanValue();
+            if (value.isMissingNode()) {
+                if (!optional) throw failure();
+            } else {
+                if (!value.isArray() || value.isEmpty() && !optional) throw failure();
+                for (JsonNode layer : value) {
+                    JsonNode scoped = scopedLayer(layer);
+                    required(scoped, "uid"); required(scoped, "name");
                 }
             }
+            field = "installation-targets"; value = item.path(field);
+            if (value.isTextual() && "all".equals(value.textValue())) return;
+            if (!value.isArray()) throw failure();
+            for (JsonNode target : value) {
+                if (target.isTextual()) {
+                    if (target.textValue().isBlank()) throw failure();
+                } else required(target, "uid");
+            }
+        } catch (PolicyCollectionTrace.Failure invalid) {
+            throw invalidPackage(index, field, value);
         }
+    }
+
+    private static PolicyCollectionTrace.Failure invalidPackage(int index, String field, JsonNode value) {
+        String diagnostic = "invalid package item=" + index + " field=" + field + " type=" + value.getNodeType();
+        com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.add("job", "note", diagnostic);
+        System.getLogger(CheckPointPolicyCollector.class.getName()).log(System.Logger.Level.WARNING, diagnostic);
+        return PolicyCollectionTrace.failure("INVALID_PACKAGE_ITEM:" + field);
+    }
+
+    static JsonNode scopedLayer(JsonNode layer) {
+        return !layer.has("uid") && !layer.has("name") ? layer.path("domain") : layer;
+    }
+
+    List<Target> installationTargets(DiscoveryRun run, PolicyCollectionRepository.Request request,
+            String domainUid, String domain, JsonNode policy) {
+        List<Target> targets = new ArrayList<>();
+        JsonNode installation = policy.path("installation-targets");
+        if (installation.isTextual() && "all".equals(installation.textValue())) {
+            // ALL is management intent, not proof of enrollment or runtime installation.
+            return List.of(new Target(ref("cp-install-target-all", request.sourceId(), domainUid), "ALL", "", "UNKNOWN"));
+        }
+        for (JsonNode target : installation) {
+            String uid = target.isTextual() ? target.textValue() : required(target, "uid");
+            var enrolled = repository.targets(run.runId(), domain, uid);
+            if (enrolled.isEmpty()) targets.add(new Target(ref("cp-install-target", request.sourceId(), domainUid, uid),
+                target.isObject() ? target.path("name").asText("Unresolved installation target") : "Unresolved installation target", "", "UNKNOWN"));
+            else targets.addAll(enrolled);
+        }
+        return targets;
     }
 
     private static void invalidPreflight(String output, int exitCode, boolean endedMidJson, JsonNode root) {
