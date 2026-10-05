@@ -72,7 +72,8 @@ def test_all_build_python_scripts_and_rollback_wrappers_import_outside_checkout(
     ("apply", "synthetic.yaml", ["git"] * 4 + ["snapshot", "apply"]),
     ("apply", "", ["git"] * 4 + ["snapshot", "apply"]),
 ])
-def test_build_failure_reports_no_changes_only_before_mutation(checkout, tmp_path, failure, apply_files, events_expected):
+@pytest.mark.parametrize("repo_override", [False, True])
+def test_build_failure_reports_no_changes_only_before_mutation(checkout, tmp_path, failure, apply_files, events_expected, repo_override):
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     events = tmp_path / "events"
@@ -88,7 +89,9 @@ def test_build_failure_reports_no_changes_only_before_mutation(checkout, tmp_pat
         '#!/bin/bash\necho snapshot >> "$EVENTS"\n[ "$FAILURE" != snapshot ] || exit 17\n'
         'echo \'{"snapshot": "synthetic-snapshot"}\'\n')
     result = outside_run(["bash", str(checkout / "deploy/ui2-image-build/run_build.sh")], env={
-        "HOME": str(tmp_path), "PATH": str(bin_dir) + os.pathsep + os.defpath,
+        "HOME": str(tmp_path / "unrelated-home" if repo_override else tmp_path),
+        "REPO": str(checkout) if repo_override else "",
+        "PATH": str(bin_dir) + os.pathsep + os.defpath,
         "EVENTS": str(events), "FAILURE": failure,
         "NEXUS_DEPLOY_TARGETS": "unknown" if failure == "targets" else "service",
         "NEXUS_DEPLOY_APPLY_FILES": apply_files, "NEXUS_SKIP_SECURITY_REASON": "synthetic test",

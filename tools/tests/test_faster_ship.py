@@ -135,9 +135,9 @@ def test_context_mismatch_refuses_before_build_mutation(monkeypatch):
 
 def test_deploy_starts_both_parallel_phases_before_waiting_and_gates_rollout():
     source = (ROOT / "deploy/ui2-image-build/run_build.sh").read_text()
-    assert source.index("security_host.py snapshot") < source.index("security_host.py start") < source.index("kubectl apply -f ~/build-job-proxy.yaml")
-    assert source.index("hosta_e2e_image.py start") < source.index("Checking build job completion")
-    assert source.index("security_host.py gate") < source.index("python3 tools/delivery/module_deploy.py --targets")
+    assert source.index('security_host.py" snapshot') < source.index('security_host.py" start') < source.index("kubectl apply -f ~/build-job-proxy.yaml")
+    assert source.index('hosta_e2e_image.py" start') < source.index("Checking build job completion")
+    assert source.index('security_host.py" gate') < source.index('python3 "$REPO/tools/delivery/module_deploy.py" --targets')
     assert '--job-name "$SECURITY_JOB"' in source
     assert '[ -z "${NEXUS_SKIP_SECURITY_REASON:-}" ] && [ "$SECURITY_CONFIGURED" = 1 ]' in source
     observer = (ROOT / "tools/delivery/hosta_deploy.sh").read_text()
@@ -195,6 +195,11 @@ with open(os.environ['TEST_CALLS'], 'a') as stream:
 if name == 'git' and args[0] == 'rev-parse':
     print('a' * (12 if '--short=12' in args else 40))
 elif name == 'python3':
+    if args[0] == '-c':
+        print(json.load(sys.stdin)['snapshot'])
+        sys.exit(0)
+    if Path(args[0]).is_absolute():
+        args[0] = str(Path(args[0]).relative_to(os.environ['REPO']))
     if args[:2] == ['tools/delivery/release_snapshot.py', 'snapshot']:
         assert args[2:] == ['--commit', 'a' * 40]
         print(json.dumps({'snapshot': '20261005T010000000000Z_' + 'a' * 12}))
@@ -202,6 +207,14 @@ elif name == 'python3':
         print('security-gate-' + 'b' * 12)
     elif args[:2] == ['tools/security/security_host.py', 'gate']:
         sys.exit(1 if os.environ['TEST_MODE'] == 'gate-failure' else 0)
+    else:
+        assert args[:2] in [
+            ['tools/delivery/module_deploy.py', '--validate-targets'],
+            ['tools/delivery/module_deploy.py', '--targets'],
+            ['tools/security/security_host.py', 'snapshot'],
+            ['tools/e2e/hosta_e2e_image.py', 'start'],
+            ['tools/e2e/hosta_e2e_image.py', 'ensure'],
+        ], args
 elif name == 'kubectl':
     if '-i' in args or ('-f' in args and args[args.index('-f') + 1] == '-'):
         sys.stdin.read()
@@ -216,10 +229,14 @@ elif name == 'kubectl':
         path.chmod(0o755)
     result = subprocess.run(["bash", str(ROOT / "deploy/ui2-image-build/run_build.sh")], capture_output=True,
         text=True, timeout=20, env={**os.environ, "HOME": str(home), "PATH": str(tools) + ":" + os.environ["PATH"],
-        "TEST_CALLS": str(calls), "TEST_MODE": mode, "NEXUS_SKIP_SECURITY_REASON": "synthetic exercise" if mode == "skip" else ""})
+        "REPO": str(home / "nexus"), "TEST_CALLS": str(calls), "TEST_MODE": mode,
+        "NEXUS_SKIP_SECURITY_REASON": "synthetic exercise" if mode == "skip" else ""})
     assert result.returncode == (1 if mode == "gate-failure" else 0), result.stderr
     executed = [json.loads(line) for line in calls.read_text().splitlines()]
-    rolled = any(c[:2] == ["python3", "tools/delivery/module_deploy.py"] for c in executed)
+    for call in executed:
+        if call[0] == "python3" and Path(call[1]).is_absolute():
+            call[1] = str(Path(call[1]).relative_to(home / "nexus"))
+    rolled = any(c[:3] == ["python3", "tools/delivery/module_deploy.py", "--targets"] for c in executed)
     assert rolled == (mode != "gate-failure")
     scanned = any(c[:3] == ["python3", "tools/security/security_host.py", "start"] for c in executed)
     assert scanned == (mode in ("pass", "gate-failure"))

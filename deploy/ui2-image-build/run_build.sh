@@ -15,7 +15,7 @@ report_failure() {
   fi
 }
 trap report_failure EXIT
-REPO="$HOME/nexus"
+REPO="${REPO:-$HOME/nexus}"
 cd "$REPO"
 NEXUS_DEPLOY_TARGETS="${NEXUS_DEPLOY_TARGETS:-service worker configuration compliance policy}"
 python3 "$REPO/tools/delivery/module_deploy.py" --validate-targets "$NEXUS_DEPLOY_TARGETS"
