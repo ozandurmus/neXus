@@ -127,7 +127,23 @@ def test_claim_sql_constants_match_and_all_device_opens_are_admitted():
 def test_deploy_entry_points_pass_targets_without_a_global_job_wait():
     build = (ROOT / "deploy/ui2-image-build/run_build.sh").read_text()
     wrapper = (ROOT / "tools/delivery/hosta_deploy.sh").read_text()
-    assert 'module_deploy.py --targets "$NEXUS_DEPLOY_TARGETS"' in build
+    assert 'module_deploy.py" --targets "$NEXUS_DEPLOY_TARGETS"' in build
     assert "--targets)" in wrapper
     assert "select count(*) from jobs where state in ('CLAIMED','EXECUTING')" not in build + wrapper
     assert 'export NEXUS_DEPLOY_TARGETS="$TARGETS"' in wrapper
+
+
+def test_module_e2e_resolves_runner_and_template_outside_checkout(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    calls = []
+    def run(*args, **kwargs):
+        calls.append(args)
+        if args[0] == "python3":
+            return "sha256:" + "a" * 64
+        if "get" in args:
+            return "1"
+        return ""
+    monkeypatch.setattr(deploy, "run", run)
+    deploy.module_e2e("a" * 40)
+    assert calls[0] == ("python3", str(ROOT / "tools/e2e/hosta_e2e_image.py"), "ensure", "--commit", "a" * 40)
+    assert any("apply" in call for call in calls)

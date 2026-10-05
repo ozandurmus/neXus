@@ -215,7 +215,7 @@ def test_new_statefulset_refuses_storage_unsafe_pruning(tmp_path, monkeypatch):
 def test_build_snapshot_precedes_every_mutation_and_optional_apply():
     script = (ROOT / "deploy/ui2-image-build/run_build.sh").read_text()
     snapshot = script.index("bash tools/delivery/release_snapshot.sh")
-    assert snapshot < script.index("kubectl apply") < script.index("security_host.py snapshot")
+    assert snapshot < script.index("kubectl apply") < script.index('security_host.py" snapshot')
     deploy = (ROOT / "tools/delivery/hosta_deploy.sh").read_text()
     assert "for f in $APPLY_NAMES; do kubectl apply" not in deploy
     assert 'export NEXUS_DEPLOY_APPLY_FILES="$APPLY_NAMES"' in deploy
