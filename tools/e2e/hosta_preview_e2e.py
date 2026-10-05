@@ -173,6 +173,16 @@ def masked_error(stderr):
     principal or a URL. Unknown tokens are withheld rather than guessed safe.
     """
     text = stderr.decode(errors="replace") if isinstance(stderr, bytes) else stderr or ""
+    # Row contents are data, including nested/quoted and multiline values.
+    text = re.sub(r'(Failing row contains\s*)\(.*', r'\1([MASKED])', text, flags=re.S)
+    identifiers = []
+
+    def schema_name(match):
+        identifiers.append(match.group(2))
+        return match.group(1) + f'"SCHEMAIDENTIFIER{len(identifiers) - 1}"'
+    text = re.sub(r'((?:relation|constraint|column)\s+)"([A-Za-z_][A-Za-z0-9_]*)"', schema_name, text)
+    # Only contextual SQL identifiers survive the generic quoted-value mask.
+    text = re.sub(r'"SCHEMAIDENTIFIER(\d+)"', r'SCHEMAIDENTIFIER\1', text)
     text = re.sub(r'"[^"\n]*"|\'[^\'\n]*\'|\{[^\n]*\}|\[[^\n]*\]', '[MASKED]', text)
     safe = set("error from server forbidden invalid alreadyexists notfound conflict badrequest "
                "deployment service pod job namespace secret configmap list networkpolicy statefulset "
@@ -181,9 +191,14 @@ def masked_error(stderr):
                "field fields required immutable value values unknown strict decoding missing "
                "selector labels namespace name kind version metadata spec status containers "
                "timeout timed out deadline exceeded connection refused unable validate validation "
-               "failed failure no found exists apply manifest masked".split())
+               "failed failure no found exists apply manifest masked detail violates check constraint "
+               "relation column null not-null row contains new failing duplicate key syntax permission denied".split())
     def token(match):
         value = match.group()
+        if re.fullmatch(r'SCHEMAIDENTIFIER\d+', value):
+            index = int(value.removeprefix('SCHEMAIDENTIFIER'))
+            if index < len(identifiers):
+                return '"' + identifiers[index] + '"'
         fields = {"spec", "metadata", "status", "selector", "matchLabels", "template", "labels", "name",
                   "namespace", "containers", "ports", "env", "value", "image", "volumeMounts", "volumes",
                   "resources", "limits", "requests", "replicas", "strategy", "type", "clusterIP", "port", "targetPort"}
@@ -667,6 +682,24 @@ COMMIT;"""
       PG_ENV + "exec psql -Xq --set=ON_ERROR_STOP=1 -d ui2", input=sql)
 
 
+def preview_claim_insert():
+    """Admission-shaped fixture SQL; only claimed inside a rolled-back transaction.
+
+    The Python preview cannot invoke the Java DAO. Match its run-target
+    admission fields and V90's closed diagnostic parameter shape instead.
+    No diagnostic command or result is needed to assert ownership.
+    """
+    return (
+        "INSERT INTO jobs(job_id,job_type,capability_id,target_kind,target_ref,state,action_class,"
+        "submitted_by_actor_fingerprint,submitted_at,idempotency_key,precheck_results,"
+        "diagnostic_port,diagnostic_gate_revision) "
+        "VALUES('preview-claim-assertion',capability,capability,'discovery_run','preview-synthetic-target',"
+        "'REQUESTED','read','system:preview','1970-01-01','preview-claim-assertion','[]'::jsonb,"
+        "CASE WHEN capability='fmg_interface_detail' THEN 'port1' ELSE NULL END,"
+        "CASE WHEN capability='fmg_interface_detail' THEN 90 ELSE NULL END);"
+    )
+
+
 def assert_module_claims(repo, workers):
     """Exercise the production atomic claim and DB trigger; roll back every synthetic claim."""
     roles = {c.get("args", ["worker", "general"])[1] if len(c.get("args", [])) > 1 else "general"
@@ -710,8 +743,7 @@ def assert_module_claims(repo, workers):
             "AND NOT m.drain_requested AND NOT r.drain_requested AND r.owner_instance IS NOT NULL "
             "AND r.owner_heartbeat_at>now()-interval '60 seconds';"
             "IF NOT FOUND THEN RAISE EXCEPTION 'PREVIEW_OWNER_UNAVAILABLE'; END IF;"
-            "INSERT INTO jobs(job_id,job_type,capability_id,target_kind,target_ref,state,action_class,submitted_by_actor_fingerprint,submitted_at) "
-            "VALUES('preview-claim-assertion',capability,capability,'discovery_run','preview-synthetic-target','REQUESTED','read','system:preview','1970-01-01');"
+            + preview_claim_insert() +
             "EXECUTE " + expression + " INTO claimed,epoch;"
             "IF claimed IS DISTINCT FROM 'preview-claim-assertion' THEN RAISE EXCEPTION 'PREVIEW_CLAIM_DENIED'; END IF;"
             "END $$;SELECT 'CLAIM_PASS';ROLLBACK;")
