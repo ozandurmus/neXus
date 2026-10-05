@@ -31,7 +31,7 @@ def template(path, kind=None):
 
 def local_load(repo, path):
     docs = list(yaml.safe_load_all((repo / path).read_text()))
-    return docs[0] if len(docs) == 1 else dict(kind="List", items=docs)
+    return dict(kind="List", items=docs)
 
 
 def container_image(deployment):
@@ -327,7 +327,7 @@ def test_database_bootstrap_uses_new_secret_and_refuses_image_drift(monkeypatch,
     db = template("deploy/ui2/40-database-statefulset.yaml")
     pinned = db["spec"]["template"]["spec"]["containers"][0]["image"]
     objects = []
-    monkeypatch.setattr(preview, "load", lambda repo, path: template(path))
+    monkeypatch.setattr(preview, "load", local_load)
     monkeypatch.setattr(preview, "create", lambda ns, obj: objects.append(obj))
     monkeypatch.setattr(preview, "copy_database", lambda: None)
     def fake(ns, *args, **kwargs):
@@ -438,7 +438,7 @@ def test_build_pipeline_binds_candidate_to_owner_and_digest(monkeypatch, fault):
         streamed.append((source, target))
         if fault == "upload": raise RuntimeError("synthetic upload failure")
     monkeypatch.setattr(preview, "k", fake)
-    monkeypatch.setattr(preview, "load", lambda repo, path: template(path))
+    monkeypatch.setattr(preview, "load", local_load)
     monkeypatch.setattr(preview, "create", create)
     monkeypatch.setattr(preview, "wait_job", wait)
     monkeypatch.setattr(preview, "pipe_commands", stream)
@@ -551,6 +551,7 @@ def test_failed_apply_logs_masked_error_text_and_field_reason(tmp_path, monkeypa
                 preview.create(preview.NS, dict(kind="Deployment", metadata=dict(name="synthetic-deployment")))
     assert error.value.phase == "preview_compliance" and error.value.step == "apply Deployment"
     assert error.value.reason == reason
+    assert preview.failure_line(error.value).endswith(f"{reason}:PreviewFailure")
     output = capsys.readouterr().out
     log = next((tmp_path / ".local/state/nexus-preview").glob("*.log"))
     assert log.stat().st_mode & 0o777 == 0o600
@@ -756,3 +757,82 @@ def test_host_overlay_fails_closed_before_build_for_missing_or_linked_inputs(tmp
     assert caught.value.reason == "HOST_INPUT_MISSING"
     assert "step=overlay host inputs reason=HOST_INPUT_MISSING" in preview.failure_line(caught.value)
     assert not (candidate / "ui2/.ca").exists() or fault == "candidate-link"
+
+
+@pytest.mark.parametrize("documents,expected", [
+    ([{"kind": "Deployment"}, {"kind": "Service"}, {"kind": "ConfigMap"}],
+     ["Deployment", "Service", "ConfigMap"]),
+    ([{"kind": "Pod"}], ["Pod"]),
+    ([{"kind": "List", "items": [{"kind": "Pod"}, {"kind": "Service"}]}], ["Pod", "Service"]),
+    ([{"kind": "List", "items": [{"kind": "Pod"}, {"kind": "List", "items": [
+        {"kind": "Service"}, {"kind": "List", "items": [{"kind": "ConfigMap"}]}]}]}],
+     ["Pod", "Service", "ConfigMap"]),
+])
+@pytest.mark.parametrize("separator", ["", " \n\t\r\n"])
+def test_load_concatenated_json_flattens_all_lists(monkeypatch, documents, expected, separator):
+    stream = separator + separator.join(json.dumps(o) for o in documents) + separator
+    monkeypatch.setattr(preview.subprocess, "run", lambda argv, **kw:
+                        subprocess.CompletedProcess(argv, 0, stream, ""))
+    assert preview.load(ROOT, "synthetic.yaml") == {
+        "kind": "List", "items": [{"kind": kind} for kind in expected]}
+
+
+def test_malformed_stream_failure_is_logged_without_message_before_log_closes(tmp_path, monkeypatch):
+    monkeypatch.setattr(preview.Path, "home", lambda: tmp_path)
+    monkeypatch.setattr(preview.subprocess, "run", lambda argv, **kw:
+                        subprocess.CompletedProcess(argv, 0, '{"kind":"Pod"}\nsynthetic-private', ""))
+    with pytest.raises(preview.PreviewFailure) as caught:
+        with preview.private_log():
+            with preview.timing("preview_setup"):
+                preview.load(ROOT, "synthetic.yaml")
+    line = preview.failure_line(caught.value)
+    assert line == "PREVIEW E2E: FAIL phase=preview_setup step=load templates reason=OTHER:JSONDecodeError"
+    log = next((tmp_path / ".local/state/nexus-preview").glob("*.log"))
+    assert log.read_text() == line + "\n"
+    assert "synthetic-private" not in log.read_text()
+    assert preview.LOG is None
+
+
+@pytest.mark.parametrize("operation,step,phase", [
+    ("create", "create namespace", "preview_setup"),
+    ("worker_templates", "load templates", "preview_setup"),
+    ("policies", "policies", "preview_setup"),
+    ("build_images", "build images", "preview_build"),
+    ("setup_database", "setup database", "preview_database"),
+    ("setup_worker_services", "worker services", "preview_workers"),
+    ("setup_workload", "setup worker", "preview_synthetic"),
+    ("setup_service", "setup service", "preview_service"),
+    ("wait_job", "wait e2e job", "preview_e2e"),
+])
+def test_run_failure_keeps_substep_despite_cleanup(tmp_path, monkeypatch, operation, step, phase):
+    monkeypatch.setattr(preview.Path, "home", lambda: tmp_path)
+    monkeypatch.setattr(preview, "k", lambda *a, **kw: "")
+    monkeypatch.setattr(preview, "create", lambda *a: None)
+    monkeypatch.setattr(preview, "worker_templates", lambda *a: [dict(component="synthetic", deployment={})])
+    monkeypatch.setattr(preview, "policies", lambda *a: [])
+    monkeypatch.setattr(preview, "build_images", lambda *a: [IMAGE, IMAGE])
+    monkeypatch.setattr(preview, "setup_database", lambda *a: "192.0.2.10")
+    monkeypatch.setattr(preview, "setup_worker_services", lambda *a: {})
+    monkeypatch.setattr(preview, "setup_workload", lambda *a: None)
+    monkeypatch.setattr(preview, "setup_service", lambda *a: "192.0.2.20")
+    monkeypatch.setattr(preview, "load", local_load)
+    monkeypatch.setattr(preview, "e2e_manifest", lambda *a: {})
+    monkeypatch.setattr(preview, "wait_job", lambda *a, **kw: None)
+    cleaned = []
+    def cleanup(owner):
+        preview.STEP = "delete namespace"
+        cleaned.append(owner)
+    monkeypatch.setattr(preview, "cleanup", cleanup)
+    def fail(*a, **kw):
+        raise ValueError("synthetic withheld detail")
+    monkeypatch.setattr(preview, operation, fail)
+    with pytest.raises(preview.PreviewFailure) as caught:
+        with preview.private_log():
+            preview.run(ROOT, COMMIT)
+    assert cleaned
+    line = preview.failure_line(caught.value)
+    assert f"phase={phase} step={step}" in line
+    assert line.endswith(":ValueError")
+    log = next((tmp_path / ".local/state/nexus-preview").glob("*.log"))
+    assert log.read_text() == line + "\n"
+    assert "synthetic withheld detail" not in log.read_text()
