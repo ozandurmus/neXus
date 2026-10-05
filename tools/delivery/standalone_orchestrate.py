@@ -340,7 +340,18 @@ def _deploy(skip_security: str | None = None) -> None:
     tail = log.read_text(errors="replace").strip().splitlines()[-3:]
     from tools.security.security_host import safe_summary
     security_passed = False
+    snapshot_ids = set()
     for line in log.read_text(errors="replace").splitlines():
+        if line.startswith('{"snapshot":'):
+            try:
+                snapshot_id = json.loads(line)["snapshot"]
+            except (ValueError, KeyError, TypeError):
+                raise SystemExit("release snapshot summary malformed; ship stopped") from None
+            if not isinstance(snapshot_id, str) or not re.fullmatch(r"\d{8}T\d{12}Z_[a-f0-9]{12}", snapshot_id):
+                raise SystemExit("release snapshot id invalid; ship stopped")
+            if snapshot_id not in snapshot_ids:
+                print(json.dumps({"snapshot": snapshot_id}), flush=True)
+                snapshot_ids.add(snapshot_id)
         if line.startswith('{"passed":'):
             try:
                 summary = safe_summary(line)
@@ -350,6 +361,8 @@ def _deploy(skip_security: str | None = None) -> None:
                 raise SystemExit("security gate summary malformed; ship stopped") from None
     if rc != 0:
         raise SystemExit(f"deploy failed (rc={rc}); see {log}: " + " | ".join(t[:160] for t in tail))
+    if len(snapshot_ids) != 1:
+        raise SystemExit("one release snapshot required; ship stopped")
     not_configured = '"security_gate":"not_configured"' in log.read_text(errors="replace")
     if not_configured:
         print(json.dumps({"security_gate": "not_configured"}), flush=True)

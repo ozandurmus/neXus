@@ -12,6 +12,13 @@ git fetch
 git checkout main
 git pull origin main
 
+# Capture the RUNNING release before security loaders, optional manifests or build mutations.
+RELEASE_SNAPSHOT=$(bash tools/delivery/release_snapshot.sh)
+printf '%s\n' "$RELEASE_SNAPSHOT"
+for manifest in ${NEXUS_DEPLOY_APPLY_FILES:-}; do
+  kubectl apply -f "$manifest"
+done
+
 COMMIT_SHA="$(git rev-parse HEAD)"
 phase_start=$SECONDS
 timing() { printf "TIMING %s %s\n" "$1" "$((SECONDS - $2))"; }
