@@ -122,8 +122,14 @@ class JobTranscriptControllerTest {
         when(store.retrieve(any(), any(), eq(false))).thenThrow(new IllegalStateException("synthetic private detail"));
         var badKey = controller(store, new JobRecordDao.BackupTranscriptRef("synthetic/ref", new byte[] {1}));
         assertEquals(Map.of("error", "TRANSCRIPT_DECRYPT_FAILED"), badKey.transcript(JOB_ID, new MockHttpServletRequest()).getBody());
-        assertFalse(badKey.health(JOB_ID).getBody().decrypts());
-        when(store.retrieve(any(), any(), eq(false))).thenThrow(new java.nio.file.NoSuchFileException("synthetic/ref"));
+        assertEquals(new JobTranscriptController.TranscriptHealth(true, false, null, "UNKNOWN", "TRANSCRIPT_DECRYPT_FAILED"),
+                badKey.health(JOB_ID).getBody());
+        var mvc = MockMvcBuilders.standaloneSetup(badKey).build();
+        mvc.perform(get("/jobs/{id}/transcript", JOB_ID)).andExpect(status().isInternalServerError())
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(content().json("{\"error\":\"TRANSCRIPT_DECRYPT_FAILED\"}", true));
+        // Restubbing with when(...) would invoke the previous throwing stub during test setup.
+        doThrow(new java.nio.file.NoSuchFileException("synthetic/ref")).when(store).retrieve(any(), any(), eq(false));
         assertEquals("TRANSCRIPT_MISSING", badKey.health(JOB_ID).getBody().errorCode());
         assertFalse(badKey.health(JOB_ID).getBody().present());
     }

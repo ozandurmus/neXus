@@ -292,6 +292,12 @@ class ProjectPlanReaderTest {
         assertFalse(tracksOf(payload).isEmpty());
         assertTrue(payload.get("current_build") != null);
         assertEquals(List.of(), warningsOf(payload), "Project authorities and explicit Java selections must reconcile");
+        List<?> backlog = (List<?>) payload.get("backlog");
+        for (String id : List.of("tufin_access_query_tab", "network_topology_path_analysis", "transcript_per_run_listing")) {
+            assertTrue(backlog.stream().anyMatch(row -> row instanceof Map<?, ?> item
+                    && id.equals(item.get("id")) && "java_feature".equals(item.get("classification"))
+                    && "planned".equals(item.get("status"))), id + " must remain a planned Java feature");
+        }
         assertEquals("java_ui2", payload.get("product_scope"));
         assertEquals("UNKNOWN", ((Map<?, ?>) payload.get("source_metadata")).get("freshness"));
     }

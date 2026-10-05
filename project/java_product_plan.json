@@ -100,6 +100,9 @@
     "NXS-LOCAL-0158"
   ],
   "backlog_classifications": {
+    "tufin_access_query_tab": "java_feature",
+    "network_topology_path_analysis": "java_feature",
+    "transcript_per_run_listing": "java_feature",
     "cp_cphaprob_peer_observation_corroboration": "legacy_reference",
     "pan_ha_serial_identity_hardening": "legacy_reference",
     "deploy1_evidence_egress_policy": "legacy_reference",
