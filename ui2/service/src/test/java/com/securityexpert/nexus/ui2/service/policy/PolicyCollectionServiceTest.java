@@ -113,7 +113,7 @@ class PolicyCollectionServiceTest {
         }
         when(progress.get("state", String.class)).thenReturn("COMPLETED");
         when(progress.get("reason", String.class)).thenReturn("PARTIAL_SNAPSHOT access target=layer-1: TIMEOUT");
-        when(progress.get("failure_codes", String[].class)).thenReturn(new String[]{"TIMEOUT", "HTTP_403"});
+        when(progress.get("failure_codes", String.class)).thenReturn("TIMEOUT,HTTP_403");
         var withGaps = new PolicyCollectionService(tx).status("job-1").orElseThrow();
         var safeGaps = (Map<?, ?>) PolicyPrivacy.mask(withGaps, "", new TopologyNamePseudonymizer(new byte[32]), new SubnetPreservingIpMasker(new byte[32]));
         assertEquals("PARTIAL", safeGaps.get("outcome"));
