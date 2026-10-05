@@ -1,5 +1,5 @@
-# Project queue (generated — do not edit; run: py scripts/project_queue.py render)
-Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-09-30T18:51:25Z
+# Project queue (generated — do not edit; run: py tools/delivery/project_queue.py render)
+Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-10-05T08:20:00Z
 
 ## Now
 - NXS-LOCAL-0370 — Infoblox for real, observed facts follow every read, inventory for HTTPS vendors (automated_validated)
@@ -67,6 +67,7 @@ Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-09-30T18:51:25Z
 - P1/planned script_execution_module — Script Execution: operator scripts (.sh/.py/.jar or inline (target: PO decision record 2026-09-22 (automatio)
 - P1/planned task_executor_automation_module — Task Executor / Automation module: operator-authored, orde (target: )
 - P1/planned top_app_bar_search_is_not_an_input — The top app bar search is a styled box containing static t (target: ui2/frontend/src/shell/TopAppBar.tsx)
+- P1/planned transcript_per_run_listing — Jobs/Backups/Policy: list every run separately with type, (target: )
 - P1/planned ui2_audit_logging — Audit logging for device and user management (target: ui2)
 - P1/planned ui2_auth_placement_second_authenticated_surface — UI2 AUTH-PLACEMENT: where session and RBAC enforcement liv (target: PO_DECISION_RECORD_2026_09_13D section 3)
 - P1/planned ui2_b1_08_audit_logs_screen — UI2 B1-8 -- audit & logs screen (every mutation since B1-2 (target: workflow §5 B1-8)
@@ -117,11 +118,13 @@ Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-09-30T18:51:25Z
 - P2/planned radware_cc_identity_and_defensepro_reads
 - P2/planned regression_mapping_backend_trees_unmapped
 - P2/planned test_fixture_realistic_names_cleanup
+- P2/planned tufin_access_query_tab
 - P2/planned ui2_password_policy_configurable
 - P2/planned ui2_role_display
 - P3/planned corporate_inspection_ca_verify_with_it
 - P3/planned cp_cphaprob_peer_observation_corroboration
 - P3/planned device_role_vocabulary_declared_twice
+- P3/planned network_topology_path_analysis
 - P3/planned old_export_copies_disposal
 - P3/planned pytest_xdist_privacy_scan_scratch_file_race
 - P3/planned run_build_sets_configuration_image
