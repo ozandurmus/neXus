@@ -258,7 +258,7 @@ def test_dast_uses_read_only_session_and_baseline_without_logging_cookie(tmp_pat
 
 def test_build_gates_before_first_rollout():
     source = (manifests.ROOT / "deploy/ui2-image-build/run_build.sh").read_text()
-    assert source.index('IMAGE_DIGEST="') < source.index("tools/security/security_host.py gate") < source.index("kubectl -n ui2 set image")
+    assert source.index('IMAGE_DIGEST="') < source.index('tools/security/security_host.py" gate') < source.index('python3 "$REPO/tools/delivery/module_deploy.py" --targets')
 
 
 def test_ship_skip_requires_reason_before_any_git_action(monkeypatch, tmp_path):
