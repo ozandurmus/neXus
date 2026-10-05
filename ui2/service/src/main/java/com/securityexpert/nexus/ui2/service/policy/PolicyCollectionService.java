@@ -38,9 +38,18 @@ public class PolicyCollectionService {
         Map<String, Object> view = new LinkedHashMap<>(status);
         String state = String.valueOf(status.get("state"));
         String reason = String.valueOf(status.get("reason"));
-        view.put("outcome", reason.startsWith("PARTIAL_SNAPSHOT") ? "PARTIAL"
+        boolean gaps = ((Number) status.getOrDefault("gapUnits", 0)).intValue() > 0 || reason.startsWith("PARTIAL_SNAPSHOT");
+        view.put("outcome", state.equals("COMPLETED") && gaps ? "PARTIAL"
             : state.equals("COMPLETED") ? "COMPLETED"
             : Set.of("FAILED", "REJECTED", "OUTCOME_UNKNOWN").contains(state) ? "FAILED" : "UNKNOWN");
+        // Completed jobs carry warnings through unit failure codes, never a contradictory terminal reason.
+        if (state.equals("COMPLETED")) {
+            view.put("reason", "");
+            if (gaps && ((Number) view.getOrDefault("gapUnits", 0)).intValue() == 0) {
+                view.remove("gapUnits"); // Legacy jobs recorded only the first warning, not the total number of units.
+                view.put("unitFailureCodes", List.of(PolicyPrivacy.failureCode(reason)));
+            }
+        }
         tx.inTransaction(db -> db.fetch("select finished_at, transcript_artefact_ref is not null as has_transcript from jobs where job_id = {0}", status.get("jobId"))
             .stream().findFirst()).ifPresent(row -> {
                 var at = row.get("finished_at", OffsetDateTime.class);

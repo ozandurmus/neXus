@@ -130,8 +130,8 @@ class PolicyCollectionRepositoryTest {
         var repository = new PolicyCollectionRepository(new JooqTransactionBoundary(DSL.using(new MockConnection(context -> {
             sql.add(context.sql());
             return new MockResult[] { new MockResult(1, create.fetchFromStringData(
-                new String[] { "state", "cancel_requested", "reason", "step", "total", "layer", "layers", "rules" },
-                new String[] { "EXECUTING", "true", "", "12", "0", "2", "5", "4000" })) };
+                new String[] { "state", "cancel_requested", "reason", "step", "total", "layer", "layers", "rules", "packages_done", "packages_total", "domains_done", "domains_total", "read_timeout_seconds", "started_at", "last_activity_at", "failure_codes" },
+                new String[] { "EXECUTING", "true", "", "12", "0", "2", "5", "4000", "14", "43", "3", "3", "60", "2026-10-05T06:00:00Z", "2026-10-05T06:22:48Z", null })) };
         }), SQLDialect.POSTGRES)));
         var status = repository.status("job-1").orElseThrow();
         assertEquals(true, status.get("cancelRequested"));
@@ -140,6 +140,14 @@ class PolicyCollectionRepositoryTest {
         assertEquals(2, status.get("layer"));
         assertEquals(5, status.get("layers"));
         assertEquals(4000, status.get("rulesFetched"));
+        assertEquals(14, status.get("packagesDone"));
+        assertEquals(43, status.get("packagesTotal"));
+        assertEquals(60L, status.get("readTimeoutSeconds"));
+        assertEquals("2026-10-05T06:00:00Z", status.get("startedAt"));
+        assertEquals("2026-10-05T06:22:48Z", status.get("lastActivityAt"));
+        assertTrue(sql.get(0).contains("nullif(split_part(l.step_kind, '_', 6), '')"));
+        assertTrue(sql.get(0).contains("^POLICY_PROGRESS_[0-9]+$"));
+        assertTrue(sql.get(0).contains("POLICY_PROGRESS_GAP_"));
         assertTrue(sql.get(0).contains("order by step_index desc limit 1"));
         assertTrue(sql.get(0).contains("lease_epoch = j.lease_epoch"));
         assertTrue(sql.get(0).contains("select step_index, step_kind"));
@@ -153,11 +161,12 @@ class PolicyCollectionRepositoryTest {
             sql.add(context.sql()); bindings.addAll(Arrays.asList(context.bindings()));
             return new MockResult[] { new MockResult(1, context.sql().startsWith("select p.job_id")
                 ? create.fetchFromStringData(new String[]{"job_id"}, new String[]{"job-latest"})
-                : create.fetchFromStringData(new String[]{"state", "cancel_requested", "reason", "step", "total", "layer", "layers", "rules"},
-                    new String[]{"COMPLETED", "false", "", "4", "0", "0", "0", "0"})) };
+                : create.fetchFromStringData(new String[]{"state", "cancel_requested", "reason", "step", "total", "layer", "layers", "rules", "packages_done", "packages_total", "domains_done", "domains_total", "read_timeout_seconds", "started_at", "last_activity_at", "failure_codes"},
+                    new String[]{"COMPLETED", "false", "", "4", "0", "0", "0", "0", null, null, null, null, "0", null, null, null})) };
         }), SQLDialect.POSTGRES)));
         var status = repository.latestStatus("source-1").orElseThrow();
         assertEquals("job-latest", status.get("jobId"));
+        assertFalse(status.containsKey("packagesTotal")); // Legacy rows cannot prove package totals.
         assertEquals("COMPLETED", status.get("state"));
         assertEquals(false, status.get("cancelRequested"));
         assertEquals(0, status.get("total"));

@@ -68,6 +68,11 @@ class PolicyCollectionServiceTest {
         when(progress.get("layer", Integer.class)).thenReturn(2);
         when(progress.get("layers", Integer.class)).thenReturn(5);
         when(progress.get("rules", Integer.class)).thenReturn(4000);
+        when(progress.get("packages_done", Integer.class)).thenReturn(14);
+        when(progress.get("packages_total", Integer.class)).thenReturn(43);
+        when(progress.get("read_timeout_seconds", Long.class)).thenReturn(60L);
+        when(progress.get("started_at", OffsetDateTime.class)).thenReturn(OffsetDateTime.parse("2026-10-05T06:00:00Z"));
+        when(progress.get("last_activity_at", OffsetDateTime.class)).thenReturn(OffsetDateTime.parse("2026-10-05T06:22:48Z"));
         var presentation = mock(Record.class);
         when(presentation.get("finished_at", OffsetDateTime.class)).thenReturn(OffsetDateTime.parse("2026-10-02T04:00:00Z"));
         when(presentation.get("has_transcript", Boolean.class)).thenReturn(true);
@@ -86,6 +91,11 @@ class PolicyCollectionServiceTest {
         assertEquals(true, masked.get("cancelRequested"));
         assertEquals(view.get("collectedAt"), masked.get("collectedAt"));
         assertEquals(true, masked.get("hasTranscript"));
+        assertEquals(14, masked.get("packagesDone"));
+        assertEquals(43, masked.get("packagesTotal"));
+        assertEquals(60L, masked.get("readTimeoutSeconds"));
+        assertEquals(view.get("startedAt"), masked.get("startedAt"));
+        assertEquals(view.get("lastActivityAt"), masked.get("lastActivityAt"));
         for (var sample : List.of(new String[]{"COMPLETED", "COLLECTION_PENDING", "COMPLETED"},
                 new String[]{"COMPLETED", "PARTIAL_SNAPSHOT undisclosed step", "PARTIAL"},
                 new String[]{"FAILED", "TIMEOUT", "FAILED"})) {
@@ -95,6 +105,21 @@ class PolicyCollectionServiceTest {
             assertEquals(sample[2], outcome.get("outcome"));
             var safe = (Map<?, ?>) PolicyPrivacy.mask(outcome, "", new TopologyNamePseudonymizer(new byte[32]), new SubnetPreservingIpMasker(new byte[32]));
             assertEquals(sample[2], safe.get("outcome"));
+            if (sample[0].equals("COMPLETED")) assertEquals("", safe.get("reason"));
+            if (sample[2].equals("PARTIAL")) {
+                assertFalse(safe.containsKey("gapUnits"));
+                assertEquals(List.of("COLLECTION_FAILED"), safe.get("unitFailureCodes"));
+            }
         }
+        when(progress.get("state", String.class)).thenReturn("COMPLETED");
+        when(progress.get("reason", String.class)).thenReturn("PARTIAL_SNAPSHOT access target=layer-1: TIMEOUT");
+        when(progress.get("failure_codes", String[].class)).thenReturn(new String[]{"TIMEOUT", "HTTP_403"});
+        var withGaps = new PolicyCollectionService(tx).status("job-1").orElseThrow();
+        var safeGaps = (Map<?, ?>) PolicyPrivacy.mask(withGaps, "", new TopologyNamePseudonymizer(new byte[32]), new SubnetPreservingIpMasker(new byte[32]));
+        assertEquals("PARTIAL", safeGaps.get("outcome"));
+        assertEquals("", safeGaps.get("reason"));
+        assertEquals(2, safeGaps.get("gapUnits"));
+        assertEquals(List.of("TIMEOUT", "HTTP_403"), safeGaps.get("unitFailureCodes"));
+
     }
 }

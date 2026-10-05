@@ -1722,5 +1722,5 @@ export type PolicyContainer = { containerId: string; containerName: string };
 export const getPolicyTree = (source = "", container = "", device = "") => call<{
   sources?: PolicyCollectionSource[]; devices?: PolicyTarget[]; containers?: PolicyContainer[]; policies?: PolicyMetadata[];
 }>(`/api/v2/policy/tree?source=${encodeURIComponent(source)}&container=${encodeURIComponent(container)}&device=${encodeURIComponent(device)}`, "GET");
-export type PolicyCollectionStatus = { cancelRequested?: boolean; jobId: string; state: string; outcome?: string; reason: string; step: number; total: number; layer?: number; layers?: number; rulesFetched?: number; collectedAt?: string; hasTranscript?: boolean };
+export type PolicyCollectionStatus = { cancelRequested?: boolean; jobId: string; state: string; outcome?: string; reason: string; step: number; total: number; layer?: number; layers?: number; rulesFetched?: number; packagesDone?: number; packagesTotal?: number; domainsDone?: number; domainsTotal?: number; startedAt?: string; lastActivityAt?: string; readTimeoutSeconds?: number; gapUnits?: number; unitFailureCodes?: string[]; collectedAt?: string; hasTranscript?: boolean };
 export const getPolicyCollectionStatus = (id: string) => call<PolicyCollectionStatus>(`/api/v2/policy/collections/${encodeURIComponent(id)}`, "GET");

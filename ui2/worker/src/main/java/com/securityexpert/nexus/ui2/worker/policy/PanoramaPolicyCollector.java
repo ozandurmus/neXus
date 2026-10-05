@@ -94,6 +94,7 @@ public final class PanoramaPolicyCollector {
         }
         char[] key = null;
         var timer = Executors.newSingleThreadScheduledExecutor();
+        PolicyCollectionTrace.timeout(TIMEOUT);
         long deadline = clock.getAsLong() + jobTimeout.toNanos();
         long[] bytes = {0};
         ApiTarget target = new ApiTarget(scope.sourceId(), run.managementAddress());
@@ -126,6 +127,8 @@ public final class PanoramaPolicyCollector {
             List<CollectionFailure> failures = new ArrayList<>();
             // Parent-first order allows inheritance without retaining unrelated DG responses.
             List<String> order = new ArrayList<>(parents.keySet());
+            PolicyCollectionTrace.packages((int) order.stream().filter(name -> scope.domainRef().isEmpty()
+                || scope.domainRef().equals(ref(scope.sourceId(), "device-group", name))).count());
             String collectedAt = Instant.now().toString();
             Map<String, Map<String, FirewallHits>> hitCache = new HashMap<>();
             int published = 0, rulesFetched = 0;
@@ -133,7 +136,9 @@ public final class PanoramaPolicyCollector {
                 String name = order.get(i);
                 String container = ref(scope.sourceId(), "device-group", name);
                 long before = bytes[0];
-                PolicyCollectionTrace.layer(i + 1, order.size(), rulesFetched);
+                boolean unitFinished = false;
+                PolicyCollectionTrace.unit("pan-groups");
+                PolicyCollectionTrace.layer(0, 0, rulesFetched);
                 try {
                     Element group = read(target, checked(1, name, key, lease), timer, deadline, bytes, name);
                     deviceGroups.appendChild(document.importNode(group, true));
@@ -147,6 +152,8 @@ public final class PanoramaPolicyCollector {
                     var snapshot = new PanoramaPolicyMapper().mapUnverifiedPrecedence(metadata, config, name, parents);
                     long rules = snapshot.sections().stream().mapToLong(section -> section.rules().size()).sum();
                     long objects = snapshot.objects().size();
+                    rulesFetched += (int) rules;
+                    PolicyCollectionTrace.layer(0, 0, rulesFetched);
                     if (rules > 50_000 || objects > 200_000) {
                         com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.add("job", "note",
                                 "DG_SIZE bytes=" + (bytes[0] - before) + " rules=" + rules + " objects=" + objects);
@@ -158,16 +165,17 @@ public final class PanoramaPolicyCollector {
                     if (Thread.currentThread().isInterrupted()) throw PolicyCollectionTrace.failure("INTERRUPTED");
                     publish.accept(snapshot);
                     published++;
-                    rulesFetched += (int) rules;
-                    PolicyCollectionTrace.layer(i + 1, order.size(), rulesFetched);
+                    unitFinished = true;
                 } catch (IllegalArgumentException | PolicyCollectionTrace.Failure invalid) {
                     if (invalid instanceof PolicyCollectionTrace.Failure traced && PolicyCollectionTrace.fatal(traced)) throw traced;
+                    unitFinished = true;
                     String reason = PolicyCollectionTrace.reason(invalid);
                     if (reason.endsWith(": SIZE_LIMIT")) reason = "bytes=" + (bytes[0] - before) + " " + reason;
                     failures.add(new CollectionFailure(container, reason));
                     com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.add("job", "note",
                             "INCOMPLETE_DG " + container + " " + reason);
                 } finally {
+                    if (unitFinished && (scope.domainRef().isEmpty() || scope.domainRef().equals(container))) PolicyCollectionTrace.done(container);
                     Set<String> needed = new HashSet<>();
                     for (String future : order.subList(i + 1, order.size())) {
                         String parent = parents.get(future);

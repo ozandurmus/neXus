@@ -2,10 +2,10 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { afterEach, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
-import { PolicyScreen, collectionOutcome, progress, csvCell, collectedLabel, sourceStatusLabel } from "../src/screens/PolicyScreen";
+import { PolicyScreen, collectionOutcome, progress, csvCell, collectedLabel, sourceStatusLabel, collectionStalled, runningLabel } from "../src/screens/PolicyScreen";
 import { VirtualPolicyCards } from "../src/screens/PolicyRuleViewer";
 import { loadErrorText } from "../e2e/safety";
-import type { PolicyMetadata, PolicyPage, PolicyRule } from "../src/auth/adminApi";
+import type { PolicyMetadata, PolicyPage, PolicyRule, PolicyCollectionStatus } from "../src/auth/adminApi";
 
 const metadata: PolicyMetadata = { id: "policy-1", sourceId: "source-1", sourceName: "MGR-BRAVO-01", vendor: "PAN", containerId: "container-1",
   containerName: "DOM-TANGO-01", name: "OBJ-POLICY-01", collectedAt: "2026-10-01T12:00:00Z", artefactRef: "artifact-1", ruleCount: 1,
@@ -280,7 +280,7 @@ it("displays each latest collection outcome without treating a partial completio
   vi.stubGlobal("fetch", fetch); mount();
   await screen.findByRole("button", { name: "MGR-BRAVO-01" });
   expect(screen.getByText("Last collection failed at collection step 2 of 8 — access was refused")).toBeInTheDocument();
-  expect(screen.getByText(/Partial · UNKNOWN · Last collection was incomplete at collection step 4 of 8/)).toBeInTheDocument();
+  expect(screen.getByText(/Completed with gaps \(unit count unknown\) · UNKNOWN/)).toBeInTheDocument();
   expect(screen.getByText("Collected · UNKNOWN")).toBeInTheDocument();
   expect(screen.queryByText("Loading policies…")).toBeNull();
   expect(fetch.mock.calls).toHaveLength(2);
@@ -572,7 +572,49 @@ it("maps each source job and formats collection time in the display timezone", (
   expect(collectedLabel(job.collectedAt, now)).toBe("Collected 2 Oct 2026, 09:06 · 2 h ago");
   expect(sourceStatusLabel(job, now)).toBe("Collected · 2 h ago");
   expect(collectionOutcome({ ...job, state: "RUNNING" })).toBe("RUNNING");
-  expect(sourceStatusLabel({ ...job, outcome: "PARTIAL", reason: "PARTIAL_SNAPSHOT access: TIMEOUT" }, now)).toMatch(/^Partial · 2 h ago/);
+  expect(sourceStatusLabel({ ...job, outcome: "PARTIAL", reason: "PARTIAL_SNAPSHOT access: TIMEOUT" }, now)).toMatch(/^Completed with gaps \(unit count unknown\) · 2 h ago/);
   expect(sourceStatusLabel({ ...job, state: "CANCELLED", reason: "Collection cancelled" }, now)).toBe("Cancelled · Collection cancelled");
   expect(sourceStatusLabel({ ...job, state: "FAILED", reason: "TIMEOUT" }, now)).toContain("time limit was reached");
+});
+
+
+it.each(["running", "stalled", "completed", "gaps", "failed"])("renders the %s collection card", async state => {
+  const now = new Date();
+  const job: PolicyCollectionStatus = { jobId: "job-progress", state: "EXECUTING", reason: "", step: 765, total: 0,
+    packagesDone: 14, packagesTotal: 43, domainsDone: 3, domainsTotal: 3, layer: 2, layers: 2, rulesFetched: 2701,
+    startedAt: new Date(now.getTime() - 23 * 60000).toISOString(),
+    lastActivityAt: new Date(now.getTime() - (state === "stalled" ? 121 : 12) * 1000).toISOString(), readTimeoutSeconds: 60 };
+  if (state === "completed" || state === "gaps") job.state = "COMPLETED";
+  if (state === "gaps") { job.outcome = "PARTIAL"; job.gapUnits = 2; job.unitFailureCodes = ["TIMEOUT", "HTTP_403"]; }
+  if (state === "failed") { job.state = "FAILED"; job.reason = "TIMEOUT"; }
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ canCollect: false,
+    sources: [{ sourceId: "source-progress", sourceName: "MGR-BRAVO-01", vendor: "CP", collection: job }] }), { status: 200 })));
+  mount();
+  await screen.findByRole("button", { name: "MGR-BRAVO-01" });
+  if (state === "running" || state === "stalled") {
+    expect(within(screen.getByRole("group", { name: "Policy source" })).getByRole("status")).toHaveTextContent(/Running for 23 min · 14\/43 packages · 2,701 rules · last activity/);
+    expect(screen.getByText("Current package layer 2/2")).toBeInTheDocument();
+    expect(screen.queryByText("No activity for more than twice the read timeout.") !== null).toBe(state === "stalled");
+  } else if (state === "gaps") {
+    expect(screen.getByText(/Completed with gaps \(2 units\)/)).toBeInTheDocument();
+    expect(screen.getByText("Unit failure codes: TIMEOUT, HTTP_403")).toBeInTheDocument();
+    expect(screen.queryByText(/COLLECTION_FAILED/)).toBeNull();
+  } else if (state === "completed") expect(screen.getByText("Collected · UNKNOWN")).toBeInTheDocument();
+  else expect(screen.getByText(/Last collection failed.*time limit was reached/)).toBeInTheDocument();
+});
+
+it("uses successful activity and a strict twice-timeout boundary, never elapsed runtime, to warn", () => {
+  const now = new Date("2026-10-05T06:23:00Z");
+  const job: PolicyCollectionStatus = { jobId: "job-progress", state: "EXECUTING", reason: "", step: 765, total: 0,
+    packagesDone: 14, packagesTotal: 43, rulesFetched: 2701, startedAt: "2026-10-05T06:00:00Z",
+    lastActivityAt: "2026-10-05T06:22:48Z", readTimeoutSeconds: 60 };
+  expect(runningLabel(job, now)).toBe("Running for 23 min · 14/43 packages · 2,701 rules · last activity 12 s ago");
+  expect(collectionStalled(job, now)).toBe(false);
+  expect(collectionStalled({ ...job, lastActivityAt: "2026-10-05T06:21:00Z" }, now)).toBe(false);
+  expect(collectionStalled({ ...job, lastActivityAt: "2026-10-05T06:20:59Z" }, now)).toBe(true);
+  expect(collectionStalled({ ...job, lastActivityAt: undefined }, now)).toBe(false);
+  expect(collectionStalled({ ...job, lastActivityAt: "invalid" }, now)).toBe(false);
+  expect(collectionStalled({ ...job, readTimeoutSeconds: 0 }, now)).toBe(false);
+  expect(collectionStalled({ ...job, state: "COMPLETED", lastActivityAt: "2026-10-05T06:00:00Z" }, now)).toBe(false);
+  expect(runningLabel({ ...job, domainsDone: 1, domainsTotal: 3 }, now)).toContain("14/at least 43 packages");
 });
