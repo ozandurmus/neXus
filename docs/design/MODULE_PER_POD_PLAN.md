@@ -1,6 +1,7 @@
 # Module-per-pod migration plan
 
-Status: DRAFT — analysis only; not an implementation or device-command contract.
+Status: APPROVED — direction approved by PO 2026-10-05; not a device-command contract.
+Shared runtime semantics: [MODULE_POD_RUNTIME_CONTRACT.md](MODULE_POD_RUNTIME_CONTRACT.md) (FROZEN).
 Date: 2026-10-05. PO decision: `module_per_pod_split` (2026-09-22), reaffirmed 2026-10-05.
 Source baseline: `b8472c07c0cfe739c7bf2367117e9f677347becb`, branch `sa/module-per-pod-plan`.
 
@@ -173,8 +174,9 @@ each eligible set. `J/executor/JobReconciler` behavior must remain:
 - Expired cancellation follows the existing cancellation branch.
 
 Separate global capacity leases below are admission controls, not replacements
-for this job state machine. Any new schema/security boundary needs its own
-approved implementation contract later; none is frozen here.
+for this job state machine. Shared schema/admission/drain semantics are frozen in
+[MODULE_POD_RUNTIME_CONTRACT.md](MODULE_POD_RUNTIME_CONTRACT.md); implementation
+must satisfy that contract before split device owners are enabled.
 
 ## 5. Resources and connection budgets
 
@@ -197,22 +199,23 @@ configuration 100m/256Mi → 1 CPU/2Gi; compliance 100m/256Mi → 1 CPU/4Gi
 
 ### Proposed initial envelopes (one replica each)
 
-These are conservative starting allocations, not measured peak guarantees.
-Keep current parser/evaluator limits initially. Low idle worker RSS does not
-establish policy parsing or backup peak memory.
+These numbers are sizing guidance, not strict requirements or measured peak
+guarantees: use modest requests, no CPU limits and generous memory limits.
+Low idle worker RSS does not establish policy parsing or backup peak memory.
+DB connection and device concurrency budgets remain safety constraints.
 
 | Pod | CPU request / limit | Memory request / limit | DB maximum / min idle | Initial claim loops |
 | --- | --- | --- | --- | --- |
-| service | 500m / 4 | 1Gi / 8Gi | 16 / 2 | 0 |
-| policy | 500m / 2 | 512Mi / 4Gi | 6 / 1 | 1, internal CP session cap ≤4 |
-| backup | 250m / 2 | 256Mi / 2Gi | 4 / 1 | 2 |
-| inventory/discovery | 250m / 2 | 256Mi / 2Gi | 6 / 1 | 2 |
-| failover | 100m / 1 | 256Mi / 1Gi | 4 / 1 | 1 |
-| diagnostics | 100m / 1 | 256Mi / 1Gi | 3 / 1 | 1 |
-| configuration (collection + parser + diff) | 250m / 2 | 512Mi / 2Gi | 4 / 1 | 2 |
-| compliance (evaluation + warmup persistence) | 100m / 1 | 256Mi / 4Gi | 3 / 1 | 0 |
-| scheduler/notifications | 100m / 1 | 256Mi / 1Gi | 4 / 1 | 0 |
-| fallback (temporary) | 250m / 2 | 256Mi / 2Gi | 10 / 2 | up to 10, shared global cap |
+| service | 500m / none | 1Gi / 8Gi | 16 / 2 | 0 |
+| policy | 500m / none | 512Mi / 4Gi | 6 / 1 | 1, internal CP session cap ≤4 |
+| backup | 250m / none | 256Mi / 2Gi | 4 / 1 | 2 |
+| inventory/discovery | 250m / none | 256Mi / 2Gi | 6 / 1 | 2 |
+| failover | 100m / none | 256Mi / 1Gi | 4 / 1 | 1 |
+| diagnostics | 100m / none | 256Mi / 1Gi | 3 / 1 | 1 |
+| configuration (collection + parser + diff) | 250m / none | 512Mi / 2Gi | 4 / 1 | 2 |
+| compliance (evaluation + warmup persistence) | 100m / none | 256Mi / 4Gi | 3 / 1 | 0 |
+| scheduler/notifications | 100m / none | 256Mi / 1Gi | 4 / 1 | 0 |
+| fallback (temporary) | 250m / none | 256Mi / 2Gi | 10 / 2 | up to 10, shared global cap |
 
 Final DB maximum **50**, min idle **10**. Worst transitional maximum **60**,
 min idle **12**, leaving 40 of 100 for migrations, administration, transient
@@ -225,10 +228,11 @@ its separate test database, never this production connection allowance.
 
 Final CPU requests total 2.15 cores; memory requests 3.5Gi and limits 25Gi.
 Including fallback: 2.4 requested cores, 3.75Gi requests, 27Gi memory limits.
-CPU limits are ceilings and may overcommit 16 cores; reserve host capacity for
-PostgreSQL, k3s and builds, and verify throttling/latency before increasing
-parallelism. Keep JVM heap/native-memory room within limits. Benchmark pool
-waits under heartbeat plus persistence load; never hold a DB connection for a
+Do not set CPU limits; reserve host capacity for PostgreSQL, k3s and builds
+through modest requests and verify resource pressure/latency before increasing
+parallelism. Memory figures remain generous starting guidance, not fixed ceilings.
+Keep JVM heap/native-memory room within limits. Benchmark pool waits under
+heartbeat plus persistence load; never hold a DB connection for a
 30–55 minute device operation to enforce a semaphore.
 
 ### Shared safety budgets: prevent multiplication
@@ -456,8 +460,10 @@ cross-authority consistency test. Record actual outcomes in the session close.
 Project metadata and handover files remain owned by the engineering session,
 unchanged under this brief.
 
-Remaining implementation prerequisites: approved global capacity/endpoint
-lease and drain schema semantics; validated endpoint-identity sharing;
+Shared global capacity/endpoint lease and drain semantics are now approved in
+[MODULE_POD_RUNTIME_CONTRACT.md](MODULE_POD_RUNTIME_CONTRACT.md). Remaining
+implementation prerequisites: contract implementation and validation, including
+module-selective rollback and policy resume; validated endpoint-identity sharing;
 service/legacy failover entry-point integration; background cache ownership;
 measured peak memory/pool demand; actual CNI/PVC behavior; and per-module live
 acceptance. No new device command is needed by the proposed split. If later
