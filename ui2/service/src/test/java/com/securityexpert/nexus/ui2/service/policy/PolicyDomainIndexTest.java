@@ -34,6 +34,16 @@ class PolicyDomainIndexTest {
         assertEquals(2, index.groups.get("0001").size());
         assertFalse(index.rules.containsKey("1"));
     }
+    @Test void usageShowsTheStoredAccessLayerRatherThanItsSectionHeading() {
+        var snapshot = snapshot(List.of()); var original = snapshot.sections().get(0).rules().get(0);
+        var rule = new Rule(original.id(), original.uuid(), original.number(), original.name(), original.enabled(),
+            original.source(), original.destination(), original.service(), original.application(), original.action(), original.log(), original.comment(),
+            Map.of("layer-name", List.of("Synthetic access layer")));
+        var group = item("group-uid", "Synthetic group", "group", List.of());
+        var index = new PolicyDomainIndex(List.of(inventory("groups", "RESOLVED", group)), List.of(new PolicySnapshot(snapshot.metadata(),
+            List.of(new Section("section-1", "Synthetic section heading", "CP access layer", null, List.of(rule))), Map.of())));
+        assertEquals("Synthetic access layer", index.rules.get("group-uid").get(0).get("layerName"));
+    }
     @Test void translatedNatObjectsAreUsageReferencesToo() {
         var natObject = item("nat-uid", "Synthetic NAT object", "host", List.of(), "ipv4-address: 192.0.2.9");
         var snapshot = snapshot(List.of()); var original = snapshot.sections().get(0).rules().get(0);

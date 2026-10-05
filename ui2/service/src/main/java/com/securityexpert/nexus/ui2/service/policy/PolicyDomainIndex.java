@@ -40,7 +40,7 @@ final class PolicyDomainIndex {
                 if (!visited.add(uid)) continue;
                 if (items.containsKey(uid)) rules.computeIfAbsent(uid, k -> new ArrayList<>()).add(Map.of(
                     "policyId", snapshot.metadata().id(), "policyName", snapshot.metadata().name(),
-                    "layerRef", section.id(), "layerName", section.name(), "ruleId", rule.id(), "number", rule.number()));
+                    "layerRef", section.id(), "layerName", rule.extras().getOrDefault("layer-name", List.of()).stream().findFirst().orElse(section.name()), "ruleId", rule.id(), "number", rule.number()));
                 var object = items.get(uid);
                 if (object != null) refs.addAll(referencedMembers(object));
                 else if (snapshot.objects().containsKey(id)) refs.addAll(snapshot.objects().get(id).members());
