@@ -627,13 +627,14 @@ public final class CheckPointPolicyCollector {
             }
             return root;
         } catch (PolicyCollectionTrace.Failure invalid) {
-            if (gate >= 1 && gate <= 3) rejectedRulebase(root, rejectingCheck(invalid));
+            if (gate >= 1 && gate <= 3) rejectedRulebase(completed.output(), completed.exitStatus(), false, root, rejectingCheck(invalid));
             else invalidPreflight(completed.output(), completed.exitStatus(), false, root, rejectingCheck(invalid));
             if (completed.exitStatus() != 0 && invalid.getMessage().endsWith(": INVALID_OR_INCOMPLETE_RESPONSE"))
                 throw PolicyCollectionTrace.failure("EXIT_" + completed.exitStatus());
             throw invalid;
         } catch (java.io.IOException invalid) {
-            if (gate >= 1 && gate <= 3) rejectedRulebase(root, "JSON_PARSE");
+            if (gate >= 1 && gate <= 3) rejectedRulebase(completed.output(), completed.exitStatus(),
+                invalid instanceof com.fasterxml.jackson.core.io.JsonEOFException, root, "JSON_PARSE");
             else invalidPreflight(completed.output(), completed.exitStatus(),
                 invalid instanceof com.fasterxml.jackson.core.io.JsonEOFException, root, "JSON_PARSE");
             if (completed.exitStatus() != 0) throw PolicyCollectionTrace.failure("EXIT_" + completed.exitStatus());
@@ -750,9 +751,14 @@ public final class CheckPointPolicyCollector {
     }
 
     static void rejectedRulebase(JsonNode root, String check) {
+        rejectedRulebase("", 0, false, root, check);
+    }
+
+    private static void rejectedRulebase(String output, int exitCode, boolean endedMidJson, JsonNode root, String check) {
         int[] counts = new int[2];
         if (root != null) structureCounts(root.path("rulebase"), counts, 0);
-        String note = "invalid rulebase " + preflightStructure("", root)
+        String note = "invalid rulebase bytes=" + output.getBytes(java.nio.charset.StandardCharsets.UTF_8).length
+            + " endedMidJson=" + endedMidJson + " exitCode=" + exitCode + " " + preflightStructure(output, root)
             + " sections=" + counts[0] + " rules=" + counts[1] + " check=" + check;
         com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.add("job", "note", note);
         System.getLogger(CheckPointPolicyCollector.class.getName()).log(System.Logger.Level.WARNING, note);

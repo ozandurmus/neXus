@@ -803,6 +803,7 @@ class CheckPointPolicyCollectorTest {
             String notes = sink.toString(java.nio.charset.StandardCharsets.UTF_8);
             assertTrue(notes.contains("STRUCTURE rootParsed=false rootType=UNPARSED"));
             assertTrue(notes.contains("leadingNonJsonLines=1")); assertTrue(notes.contains("endedMidJson=true"));
+            assertTrue(notes.contains("sections=0 rules=0 check=JSON_PARSE"));
             assertTrue(notes.contains("bytes=")); assertTrue(notes.contains("exitCode=0")); assertFalse(notes.contains("Synthetic"));
         }
     }
@@ -822,6 +823,7 @@ class CheckPointPolicyCollectorTest {
         assertTrue(notes.contains("rulebase:ARRAY(size=0)")); assertTrue(notes.contains("objects-dictionary:ARRAY(size=1)"));
         assertTrue(notes.contains("counters=[from=2, to=1, total=3]"));
         assertTrue(notes.contains("leadingNonJsonLines=1")); assertTrue(notes.contains("endedMidJson=false"));
+        assertTrue(notes.contains("sections=0 rules=0 check="));
         assertFalse(notes.contains("synthetic-layer")); assertFalse(notes.contains("synthetic-object"));
     }
 
