@@ -157,11 +157,11 @@ class CpChangedDomainsTest {
     @Test void inventoryWriteGapIsRecordedAndDoesNotInvalidateRuleReuseInEitherCollector() throws Exception {
         for (int maximum : List.of(1, 4)) {
             var repository = mock(PolicyCollectionRepository.class);
-        when(repository.saveUnit(any(), anyString(), anyString(), anyString())).thenReturn(true);
+            when(repository.saveUnit(any(), anyString(), anyString(), anyString())).thenReturn(true);
             var signal = CpDomainReuse.signal(json.readTree(SIGNAL));
             when(repository.previousDomain("source-1", container)).thenReturn(Optional.of(new PolicyCollectionRepository.DomainRun(
                 true, json.writeValueAsString(signal), json.writeValueAsString(List.of(stored())))));
-            when(repository.beginDomain(anyString(), anyString(), anyBoolean())).thenReturn(true);
+            when(repository.beginDomain(any(PolicyCollectionRepository.Request.class), anyString())).thenReturn(true);
             when(repository.saveDomain(any(), anyString(), anyString(), anyBoolean(), nullable(String.class), anyString(), anyInt(), nullable(String.class), anyString())).thenReturn(true);
             doThrow(new com.securityexpert.nexus.ui2.persistence.policy.PolicyDatabaseFailure("synthetic", "INVENTORY_UPSERT", 100))
                 .when(repository).saveInventory(anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
@@ -177,7 +177,10 @@ class CpChangedDomainsTest {
             var collector = new CheckPointPolicyCollector(transport, gates, repository, Duration.ofMinutes(5), maximum);
             var request = new PolicyCollectionRepository.Request("source-1", "", false, PolicyCollectionRepository.Mode.CHANGED_ONLY, "job-1", 7);
             var gaps = new ArrayList<PolicySnapshot.CollectionFailure>();
-            assertEquals(List.of(stored()), collector.collect(run, request, () -> true, snapshot -> {}, gaps::add));
+            var published = new ArrayList<PolicySnapshot>();
+            assertEquals(List.of(stored()), collector.collect(run, request, () -> true, published::add, gaps::add));
+            assertEquals(List.of(stored()), published);
+            verify(repository).beginDomain(request, container);
             assertFalse(gaps.isEmpty()); assertTrue(gaps.stream().allMatch(g -> g.reason().equals("POLICY_DB_INVENTORY_WRITE_FAILED")));
             assertTrue(commands.stream().noneMatch(c -> c.contains("show-packages") || c.contains("rulebase")));
             verify(repository).saveDomain(eq(request), eq(container), eq("REUSED"), eq(true), contains("published-001"),
