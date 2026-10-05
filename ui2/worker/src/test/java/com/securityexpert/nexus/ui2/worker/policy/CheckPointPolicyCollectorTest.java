@@ -37,6 +37,11 @@ class CheckPointPolicyCollectorTest {
         for (int sessions : List.of(1, 4)) for (int total : List.of(21, 40, 0)) {
             reset(transport, repository);
             setup(command -> {
+                if (command.contains("show-nat-rulebase")) {
+                    assertTrue(java.util.stream.IntStream.range(0, total).anyMatch(index -> command.equals(
+                        MgmtCliCommands.showNatRulebase("DOM-TANGO-01", "Package-" + index, 0))));
+                    return ok(page("nat", 0, 0, 0, "", ""));
+                }
                 if (!command.contains("show-packages")) return answer(command);
                 var offset = java.util.regex.Pattern.compile(" offset '([0-9]+)'").matcher(command);
                 assertTrue(offset.find());
@@ -89,7 +94,7 @@ class CheckPointPolicyCollectorTest {
             List<PolicySnapshot.CollectionFailure> failures = new ArrayList<>();
             var error = assertThrows(IllegalStateException.class, () ->
                 collector.collect(run, request, () -> true, snapshot -> fail("Revoked gate"), failures::add));
-            assertTrue(error.getMessage().endsWith(": POLICY_GATE_UNAVAILABLE"));
+            assertEquals("POLICY_GATE_UNAVAILABLE", error.getMessage());
             assertEquals(3, checks.get());
             assertTrue(failures.isEmpty());
             verify(transport, times(1)).execInteractive(any(), argThat(spec -> spec.command().contains("show-packages")), any());
@@ -431,6 +436,14 @@ class CheckPointPolicyCollectorTest {
 
     @Test void commandsAreExactlyApprovedAndQuoted() {
         assertEquals("mgmt_cli -r true -d 'DOM' -f json show-packages limit 20 offset '0' details-level full", MgmtCliCommands.showPackages("DOM"));
+        for (int offset : List.of(0, 20, 40)) {
+            assertEquals(CpPolicyGates.COMMANDS.get(0).replace("<DOMAIN>", "DOM").replace("<N>", Integer.toString(offset)),
+                MgmtCliCommands.showPackages("DOM", offset, 20));
+        }
+        var packageRows = gates.findByCanonicalKey(new CanonicalCommandKey("check_point", "cp_multi_domain_server",
+            "expert", "SSH_EXEC", CpPolicyGates.COMMANDS.get(0)));
+        assertEquals(1, packageRows.size());
+        assertEquals("cp_policy_packages_paged", packageRows.get(0).gateId());
         assertEquals("mgmt_cli -r true -d 'DOM' -f json show-access-rulebase name 'LAYER' limit 100 offset '500' details-level full use-object-dictionary true", MgmtCliCommands.showAccessRulebase("DOM", "LAYER", 500));
         assertEquals("mgmt_cli -r true -d 'DOM' -f json show-nat-rulebase package 'PKG' limit 500 offset '0' details-level standard use-object-dictionary true", MgmtCliCommands.showNatRulebase("DOM", "PKG", 0));
         assertTrue(MgmtCliCommands.showPackages("O'Brien; $(false)").contains("'O'\\''Brien; $(false)'"));
