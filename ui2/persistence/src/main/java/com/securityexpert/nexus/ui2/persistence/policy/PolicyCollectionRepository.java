@@ -161,7 +161,7 @@ public class PolicyCollectionRepository {
                 + "on conflict (job_id, domain_ref) do update set status = excluded.status, complete = excluded.complete, "
                 + "signal = excluded.signal, snapshots = excluded.snapshots, rules_count = excluded.rules_count, hits_collected_at = excluded.hits_collected_at, "
                 + "chunk_generation = excluded.chunk_generation, chunk_count = excluded.chunk_count",
-                request.jobId(), request.sourceId(), domain, status, complete, complete ? signal : null, rules, hitsAt, manifest.generation(), manifest.count());
+                request.jobId(), request.sourceId(), domain, status, complete, signal, rules, hitsAt, manifest.generation(), manifest.count());
             return true;
         }));
     }

@@ -487,10 +487,11 @@ public final class CheckPointPolicyCollector {
                         page = read(session, command.apply(offset).replace(" limit 100 offset ", " limit 50 offset "), gate, deadline, lease, total);
                     }
                 }
-                total = pageTotal(page, offset, total, gate, layerUid);
+                try { total = pageTotal(page, offset, total, gate, layerUid); }
+                catch (RuntimeException invalid) { rejectedRulebase(page, rejectingCheck(invalid)); throw invalid; }
                 Set<String> ids = ruleUids(page.path("rulebase"));
                 if (!Collections.disjoint(seenRules, ids)) {
-                    invalidPreflight("", 0, false, page, "DUPLICATE_RULE_UID");
+                    rejectedRulebase(page, "DUPLICATE_RULE_UID");
                     throw pageRejected("DUPLICATE_RULE_UID");
                 }
                 seenRules.addAll(ids);
@@ -626,12 +627,14 @@ public final class CheckPointPolicyCollector {
             }
             return root;
         } catch (PolicyCollectionTrace.Failure invalid) {
-            invalidPreflight(completed.output(), completed.exitStatus(), false, root, rejectingCheck(invalid));
+            if (gate >= 1 && gate <= 3) rejectedRulebase(root, rejectingCheck(invalid));
+            else invalidPreflight(completed.output(), completed.exitStatus(), false, root, rejectingCheck(invalid));
             if (completed.exitStatus() != 0 && invalid.getMessage().endsWith(": INVALID_OR_INCOMPLETE_RESPONSE"))
                 throw PolicyCollectionTrace.failure("EXIT_" + completed.exitStatus());
             throw invalid;
         } catch (java.io.IOException invalid) {
-            invalidPreflight(completed.output(), completed.exitStatus(),
+            if (gate >= 1 && gate <= 3) rejectedRulebase(root, "JSON_PARSE");
+            else invalidPreflight(completed.output(), completed.exitStatus(),
                 invalid instanceof com.fasterxml.jackson.core.io.JsonEOFException, root, "JSON_PARSE");
             if (completed.exitStatus() != 0) throw PolicyCollectionTrace.failure("EXIT_" + completed.exitStatus());
             throw failure();
@@ -744,6 +747,23 @@ public final class CheckPointPolicyCollector {
         System.getLogger(CheckPointPolicyCollector.class.getName()).log(System.Logger.Level.WARNING,
             "invalid preflight bytes=" + output.getBytes(java.nio.charset.StandardCharsets.UTF_8).length
                 + " endedMidJson=" + endedMidJson + " exitCode=" + exitCode + " " + structure);
+    }
+
+    static void rejectedRulebase(JsonNode root, String check) {
+        int[] counts = new int[2];
+        if (root != null) structureCounts(root.path("rulebase"), counts, 0);
+        String note = "invalid rulebase " + preflightStructure("", root)
+            + " sections=" + counts[0] + " rules=" + counts[1] + " check=" + check;
+        com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.add("job", "note", note);
+        System.getLogger(CheckPointPolicyCollector.class.getName()).log(System.Logger.Level.WARNING, note);
+    }
+
+    private static void structureCounts(JsonNode nodes, int[] counts, int depth) {
+        if (!nodes.isArray() || depth > 32) return;
+        for (JsonNode node : nodes) {
+            if (node.has("rulebase")) { counts[0]++; structureCounts(node.path("rulebase"), counts, depth + 1); }
+            else counts[1]++;
+        }
     }
 
     /** Only schema keys and integer pagination counters may be emitted; unknown keys can carry identities. */

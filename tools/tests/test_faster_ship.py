@@ -66,8 +66,31 @@ def test_runner_never_uses_stale_logs_or_incomplete_build(monkeypatch, kind):
             status=dict(containerStatuses=[dict(name="builder", state=dict(terminated=dict(exitCode=0, message="" if kind == "missing-digest" else DIGEST)))]))]))
     monkeypatch.setattr(runner, "kubectl", fake)
     monkeypatch.setattr(runner, "start", lambda *args: None)
+    elapsed = [0]
     with pytest.raises(RuntimeError):
-        runner.ensure(COMMIT, ROOT, timeout=0 if kind == "timeout" else 1)
+        runner.ensure(COMMIT, ROOT, timeout=0 if kind == "timeout" else 1,
+                      sleep=lambda seconds: elapsed.__setitem__(0, elapsed[0] + seconds),
+                      monotonic=lambda: elapsed[0])
+
+
+@pytest.mark.parametrize("delay", [10, 595, 605])
+def test_runner_polls_delayed_digest_for_up_to_ten_minutes(monkeypatch, delay):
+    elapsed = [0]
+    def fake(*args, **kwargs):
+        if args[:2] == ("get", "job"):
+            return json.dumps(completed_job())
+        return json.dumps(dict(items=[dict(metadata=dict(ownerReferences=[dict(uid="synthetic-job")]),
+            status=dict(containerStatuses=[dict(name="builder", state=dict(terminated=dict(
+                exitCode=0, message=DIGEST if elapsed[0] >= delay else "")))]))]))
+    monkeypatch.setattr(runner, "kubectl", fake)
+    kwargs = dict(sleep=lambda seconds: elapsed.__setitem__(0, elapsed[0] + seconds), monotonic=lambda: elapsed[0])
+    if delay < 600:
+        assert runner.ensure(COMMIT, ROOT, **kwargs) == DIGEST
+        assert elapsed[0] == delay
+    else:
+        with pytest.raises(RuntimeError, match="timed out"):
+            runner.ensure(COMMIT, ROOT, **kwargs)
+        assert elapsed[0] == 600
 
 
 def test_runner_build_inherits_proxy_ca_and_freezes_commit(monkeypatch):
@@ -114,7 +137,7 @@ def test_deploy_starts_both_parallel_phases_before_waiting_and_gates_rollout():
     source = (ROOT / "deploy/ui2-image-build/run_build.sh").read_text()
     assert source.index("security_host.py snapshot") < source.index("security_host.py start") < source.index("kubectl apply -f ~/build-job-proxy.yaml")
     assert source.index("hosta_e2e_image.py start") < source.index("Checking build job completion")
-    assert source.index("security_host.py gate") < source.index("kubectl -n ui2 set image")
+    assert source.index("security_host.py gate") < source.index("python3 tools/delivery/module_deploy.py --targets")
     assert '--job-name "$SECURITY_JOB"' in source
     assert '[ -z "${NEXUS_SKIP_SECURITY_REASON:-}" ] && [ "$SECURITY_CONFIGURED" = 1 ]' in source
     observer = (ROOT / "tools/delivery/hosta_deploy.sh").read_text()
@@ -196,7 +219,7 @@ elif name == 'kubectl':
         "TEST_CALLS": str(calls), "TEST_MODE": mode, "NEXUS_SKIP_SECURITY_REASON": "synthetic exercise" if mode == "skip" else ""})
     assert result.returncode == (1 if mode == "gate-failure" else 0), result.stderr
     executed = [json.loads(line) for line in calls.read_text().splitlines()]
-    rolled = any(c[:5] == ["kubectl", "-n", "ui2", "set", "image"] for c in executed)
+    rolled = any(c[:2] == ["python3", "tools/delivery/module_deploy.py"] for c in executed)
     assert rolled == (mode != "gate-failure")
     scanned = any(c[:3] == ["python3", "tools/security/security_host.py", "start"] for c in executed)
     assert scanned == (mode in ("pass", "gate-failure"))
