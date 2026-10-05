@@ -131,7 +131,7 @@ class PolicyCollectionRepositoryTest {
             sql.add(context.sql());
             return new MockResult[] { new MockResult(1, create.fetchFromStringData(
                 new String[] { "state", "cancel_requested", "reason", "step", "total", "layer", "layers", "rules", "packages_done", "packages_total", "domains_done", "domains_total", "read_timeout_seconds", "started_at", "last_activity_at", "failure_codes" },
-                new String[] { "EXECUTING", "true", "", "12", "0", "2", "5", "4000", "14", "43", "3", "3", "60", "2026-10-05T06:00:00Z", "2026-10-05T06:22:48Z", null })) };
+                new String[] { "EXECUTING", "true", "", "12", "0", "2", "5", "4000", "14", "43", "3", "3", "60", "2026-10-05T06:00:00Z", "2026-10-05T06:22:48Z", "READ_TIMEOUT,COLLECTION_FAILED,READ_TIMEOUT" })) };
         }), SQLDialect.POSTGRES)));
         var status = repository.status("job-1").orElseThrow();
         assertEquals(true, status.get("cancelRequested"));
@@ -145,6 +145,9 @@ class PolicyCollectionRepositoryTest {
         assertEquals(60L, status.get("readTimeoutSeconds"));
         assertEquals("2026-10-05T06:00:00Z", status.get("startedAt"));
         assertEquals("2026-10-05T06:22:48Z", status.get("lastActivityAt"));
+        assertEquals(List.of("READ_TIMEOUT", "COLLECTION_FAILED", "READ_TIMEOUT"), status.get("unitFailureCodes"));
+        assertEquals(3, status.get("gapUnits"));
+        assertTrue(sql.get(0).contains("array_to_string(array(select"));
         assertTrue(sql.get(0).contains("nullif(split_part(l.step_kind, '_', 6), '')"));
         assertTrue(sql.get(0).contains("^POLICY_PROGRESS_[0-9]+$"));
         assertTrue(sql.get(0).contains("POLICY_PROGRESS_GAP_"));
@@ -170,8 +173,22 @@ class PolicyCollectionRepositoryTest {
         assertEquals("COMPLETED", status.get("state"));
         assertEquals(false, status.get("cancelRequested"));
         assertEquals(0, status.get("total"));
+        assertEquals(List.of(), status.get("unitFailureCodes"));
+        assertEquals(0, status.get("gapUnits"));
         assertTrue(sql.get(0).contains("order by j.submitted_at desc limit 1"));
         assertEquals(List.of("source-1", "job-latest"), bindings);
+    }
+
+    @Test void statusWithoutGapsReturnsEmptyFailureCodes() {
+        var create = DSL.using(SQLDialect.POSTGRES);
+        var repository = new PolicyCollectionRepository(new JooqTransactionBoundary(DSL.using(new MockConnection(context ->
+            new MockResult[] { new MockResult(1, create.fetchFromStringData(
+                new String[] { "state", "cancel_requested", "reason", "step", "total", "layer", "layers", "rules", "packages_done", "packages_total", "domains_done", "domains_total", "read_timeout_seconds", "started_at", "last_activity_at", "failure_codes" },
+                new String[] { "COMPLETED", "false", "", "0", "0", "0", "0", "0", "0", null, "0", "0", "0", null, null, "" })) }
+        ), SQLDialect.POSTGRES)));
+        var status = repository.status("job-1").orElseThrow();
+        assertEquals(List.of(), status.get("unitFailureCodes"));
+        assertEquals(0, status.get("gapUnits"));
     }
 
 }
