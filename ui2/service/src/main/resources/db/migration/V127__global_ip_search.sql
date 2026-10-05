@@ -67,7 +67,7 @@ BEGIN
                 END LOOP;
             END IF;
         END IF;
-        IF subnet IS NOT NULL AND prefix ~ '^[0-9]{1,3}$' AND prefix::int <= CASE WHEN bits = 4 THEN 32 ELSE 128 END THEN
+        IF subnet IS NOT NULL AND prefix ~ '^[0-9]{1,3}$' AND prefix::int <= (CASE WHEN bits = 4 THEN 32 ELSE 128 END) THEN
             subnet := set_masklen(subnet, prefix::int);
             IF network(subnet) && network(query) THEN found := true; END IF;
         END IF;
