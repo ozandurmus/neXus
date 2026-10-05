@@ -22,7 +22,7 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
     static final Map<String, String> ACTION_ID_BY_ROUTE = Map.ofEntries(
             Map.entry("GET /api/v2/policy/sources", ActionRegistry.POLICY_READ),
             Map.entry("GET /api/v2/policy/domains/*/objects", ActionRegistry.POLICY_READ),
-            Map.entry("GET /api/v2/policy/domains/*/objects/*/usage", ActionRegistry.POLICY_READ),
+            Map.entry("GET /api/v2/policy/domains/*/object-usage", ActionRegistry.POLICY_READ),
             Map.entry("GET /api/v2/policy/domains/*/objects/duplicates", ActionRegistry.POLICY_READ),
             Map.entry("GET /api/v2/policy/domains/*/installation", ActionRegistry.POLICY_READ),
             Map.entry("GET /api/v2/policy/domains/*/unused", ActionRegistry.POLICY_READ),

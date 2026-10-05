@@ -72,6 +72,19 @@ class GateChainInterceptorSecurityTest {
                 method.invoke(interceptor, "POST", "/backups/artefact-1/delete"));
     }
 
+    @Test
+    void policyRoutesResolveToTheirRegisteredActions() throws Exception {
+        var interceptor = new GateChainInterceptor(null, SecurityWebMvcConfig.ACTION_ID_BY_ROUTE);
+        var method = GateChainInterceptor.class.getDeclaredMethod("actionIdFor", String.class, String.class);
+        method.setAccessible(true);
+        for (var route : SecurityWebMvcConfig.ACTION_ID_BY_ROUTE.entrySet()) {
+            if (!route.getKey().contains(" /api/v2/policy/")) continue;
+            String[] parts = route.getKey().split(" ", 2);
+            assertEquals(route.getValue(), method.invoke(interceptor, parts[0], parts[1].replace("*", "synthetic-ref")),
+                    route.getKey());
+        }
+    }
+
     /** The interceptor wildcards one segment at a time: a two-"*" route never matches (V64, 2026-09-24). */
     @Test
     void everyMappedRouteHasAtMostOneWildcard() {

@@ -20,7 +20,7 @@ class PolicyApiTest {
     @Test void policyRoutesAllowMaskedCollectionWithoutOtherWrites() {
         var action = new ActionRegistry().find(ActionRegistry.POLICY_READ).orElseThrow();
         assertEquals(Set.of(RoleToken.SECURITY_ADMIN, RoleToken.ONBOARDING_ADMIN, RoleToken.REPLAY_VIEWER), action.requiredRoleTokens());
-        for (String route : List.of("GET /api/v2/policy/tree", "GET /api/v2/policy/collections/*", "GET /api/v2/policy/devices", "GET /api/v2/policy/devices/*", "GET /api/v2/policy/policies/*", "GET /api/v2/policy/policies/*/history", "GET /api/v2/policy/objects/*", "GET /api/v2/policy/domains/*/objects", "GET /api/v2/policy/domains/*/unused", "GET /api/v2/policy/domains/*/gateways", "GET /api/v2/policy/domains/*/hits", "GET /api/v2/policy/domains/*/objects/*/usage", "GET /api/v2/policy/domains/*/objects/duplicates", "GET /api/v2/policy/domains/*/installation"))
+        for (String route : List.of("GET /api/v2/policy/tree", "GET /api/v2/policy/collections/*", "GET /api/v2/policy/devices", "GET /api/v2/policy/devices/*", "GET /api/v2/policy/policies/*", "GET /api/v2/policy/policies/*/history", "GET /api/v2/policy/objects/*", "GET /api/v2/policy/domains/*/objects", "GET /api/v2/policy/domains/*/unused", "GET /api/v2/policy/domains/*/gateways", "GET /api/v2/policy/domains/*/hits", "GET /api/v2/policy/domains/*/object-usage", "GET /api/v2/policy/domains/*/objects/duplicates", "GET /api/v2/policy/domains/*/installation"))
             assertEquals(ActionRegistry.POLICY_READ, SecurityWebMvcConfig.ACTION_ID_BY_ROUTE.get(route));
         assertEquals(Set.of(RoleToken.SECURITY_ADMIN, RoleToken.ONBOARDING_ADMIN, RoleToken.REPLAY_VIEWER),
                 new ActionRegistry().find(ActionRegistry.POLICY_COLLECT).orElseThrow().requiredRoleTokens());
@@ -71,7 +71,7 @@ class PolicyApiTest {
                     new RbacEvaluator.Decision(role.equals(RoleToken.REPLAY_VIEWER) ? AuthzOutcome.PERMITTED : AuthzOutcome.DENIED, Optional.of("test"), Optional.empty(), Optional.empty()));
             when(rbac.evaluateAny(eq(actor), eq(new ActionRegistry().find(ActionRegistry.POLICY_COLLECT).orElseThrow().requiredRoleTokens()), any())).thenReturn(
                     new RbacEvaluator.Decision(allowed ? AuthzOutcome.PERMITTED : AuthzOutcome.DENIED, Optional.of("test"), Optional.empty(), Optional.empty()));
-            for (String view : List.of("objects", "unused", "gateways", "hits", "objects/uid-1/usage", "objects/duplicates", "installation")) {
+            for (String view : List.of("objects", "unused", "gateways", "hits", "object-usage", "objects/duplicates", "installation")) {
                 when(query.domainInventory("manager-1", "domain-1", view, 0)).thenReturn(Optional.of(new PolicyResponse(body)));
                 when(query.domainHits("manager-1", "domain-1", 0)).thenReturn(Optional.of(new PolicyResponse(body)));
                 when(query.domainObjects(eq("manager-1"), eq("domain-1"), eq(0), eq(""), eq(""), eq(""), anyBoolean())).thenReturn(Optional.of(new PolicyResponse(body)));
@@ -79,8 +79,8 @@ class PolicyApiTest {
                 when(query.objectDuplicates(eq("manager-1"), eq("domain-1"), eq(0), eq(""), anyBoolean())).thenReturn(Optional.of(new PolicyResponse(body)));
                 when(query.installations(eq("manager-1"), eq("domain-1"), eq(0), eq(""), eq(""), anyBoolean())).thenReturn(Optional.of(new PolicyResponse(body)));
                 String path = "/api/v2/policy/domains/domain-1/" + view;
-                mvc.perform(get(path).servletPath(path).param("source", "manager-1")).andExpect(status().isUnauthorized());
-                var result = mvc.perform(get(path).servletPath(path).param("source", "manager-1")
+                mvc.perform(get(path).servletPath(path).param("source", "manager-1").param("uid", "uid-1")).andExpect(status().isUnauthorized());
+                var result = mvc.perform(get(path).servletPath(path).param("source", "manager-1").param("uid", "uid-1")
                     .cookie(new Cookie("ui2_session", cookie))).andExpect(status().is(allowed ? 200 : 403)).andReturn();
                 if (allowed) {
                     assertEquals("no-store", result.getResponse().getHeader("Cache-Control"));
