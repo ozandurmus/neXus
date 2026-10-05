@@ -370,7 +370,7 @@ public final class CheckPointPolicyCollector {
         String target = ref("cp-policy-read", command.replaceAll(" limit [0-9]+ offset ", " limit PAGE offset "));
         var offset = java.util.regex.Pattern.compile(" offset '([0-9]+)' ").matcher(command);
         var limit = java.util.regex.Pattern.compile(" limit ([0-9]+) ").matcher(command);
-        String page = offset.find() ? " offset=" + offset.group(1) + (limit.find() ? " limit=" + limit.group(1) : "") : "";
+        String page = gate == 0 ? " paging unavailable: gate literal fixed" : offset.find() ? " offset=" + offset.group(1) + (limit.find() ? " limit=" + limit.group(1) : "") : "";
         PolicyCollectionTrace.step(step + page, target);
         checkActive(deadline, lease);
         if (gate == 3) PolicyHitGates.require(gates, true);
@@ -389,8 +389,9 @@ public final class CheckPointPolicyCollector {
         if (result instanceof ExecResult.TimedOut timedOut)
             throw PolicyCollectionTrace.failure(timedOut.streaming() ? "STREAMING_TIMEOUT" : "TIMEOUT");
         if (!(result instanceof ExecResult.Completed completed)) throw PolicyCollectionTrace.failure(result.getClass().getSimpleName());
+        JsonNode root = null;
         try {
-            JsonNode root = json.readTree(jsonBody(completed.output()));
+            root = json.readTree(jsonBody(completed.output()));
             if (root != null && root.isObject() && (root.has("code") || (root.has("message") && !root.has("objects") && !root.has("packages") && !root.has("rulebase")))) {
                 String message = (root.path("code").asText("") + " " + root.path("message").asText("")).toLowerCase(Locale.ROOT);
                 if (message.contains("session") || message.contains("lock") || message.contains("too many"))
@@ -402,13 +403,13 @@ public final class CheckPointPolicyCollector {
             if (gate <= 0) validatePreflight(root, gate < 0 ? "objects" : "packages");
             return root;
         } catch (PolicyCollectionTrace.Failure invalid) {
-            if (gate <= 0) invalidPreflight(completed.output(), completed.exitStatus(), false);
+            if (gate <= 0) invalidPreflight(completed.output(), completed.exitStatus(), false, root);
             if (completed.exitStatus() != 0 && invalid.getMessage().endsWith(": INVALID_OR_INCOMPLETE_RESPONSE"))
                 throw PolicyCollectionTrace.failure("EXIT_" + completed.exitStatus());
             throw invalid;
         } catch (java.io.IOException invalid) {
             if (gate <= 0) invalidPreflight(completed.output(), completed.exitStatus(),
-                invalid instanceof com.fasterxml.jackson.core.io.JsonEOFException);
+                invalid instanceof com.fasterxml.jackson.core.io.JsonEOFException, root);
             if (completed.exitStatus() != 0) throw PolicyCollectionTrace.failure("EXIT_" + completed.exitStatus());
             throw failure();
         }
@@ -427,6 +428,10 @@ public final class CheckPointPolicyCollector {
     }
 
     private static void validatePreflight(JsonNode root, String field) {
+        if (field.equals("packages") && root.path(field).isArray() && root.path("total").isIntegralNumber()
+                && root.path("total").bigIntegerValue().compareTo(java.math.BigInteger.valueOf(root.path(field).size())) > 0)
+            throw PolicyCollectionTrace.failure("PACKAGE_LIST_TRUNCATED_BY_SERVER (total=" + root.path("total").bigIntegerValue()
+                + ", returned=" + root.path(field).size() + ")");
         if (field.equals("objects")) completeList(root, field);
         else if (!root.path(field).isArray() || !root.path("total").isIntegralNumber()
                 || !root.path("total").canConvertToInt() || root.path("total").intValue() < root.path(field).size()
@@ -449,17 +454,44 @@ public final class CheckPointPolicyCollector {
         }
     }
 
-    private static void invalidPreflight(String output, int exitCode, boolean endedMidJson) {
+    private static void invalidPreflight(String output, int exitCode, boolean endedMidJson, JsonNode root) {
         int limit = Math.min(output.length(), 2048);
         String shape = output.substring(0, limit).replaceAll("\\p{L}", "a").replaceAll("\\p{N}", "9")
             .replaceAll("[^\\x20-\\x7E\r\n\t]", "?");
+        String structure = preflightStructure(output, root);
         com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.add("job", "note",
             "invalid preflight bytes=" + output.getBytes(java.nio.charset.StandardCharsets.UTF_8).length
                 + " shapeTruncated=" + (limit < output.length()) + " endedMidJson=" + endedMidJson
-                + " exitCode=" + exitCode + " shape=" + shape);
+                + " exitCode=" + exitCode + " " + structure + " shape=" + shape);
         System.getLogger(CheckPointPolicyCollector.class.getName()).log(System.Logger.Level.WARNING,
             "invalid preflight bytes=" + output.getBytes(java.nio.charset.StandardCharsets.UTF_8).length
-                + " endedMidJson=" + endedMidJson + " exitCode=" + exitCode);
+                + " endedMidJson=" + endedMidJson + " exitCode=" + exitCode + " " + structure);
+    }
+
+    /** Only schema keys and integer pagination counters may be emitted; unknown keys can carry identities. */
+    static String preflightStructure(String output, JsonNode root) {
+        int brace = output.indexOf('{');
+        String prefix = brace < 0 ? output : output.substring(0, brace);
+        long lines = prefix.chars().filter(c -> c == '\n').count();
+        if (!prefix.isBlank() && !prefix.endsWith("\n")) lines++;
+        var fields = new ArrayList<String>();
+        var counters = new ArrayList<String>();
+        if (root != null && root.isObject()) {
+            root.fields().forEachRemaining(entry -> {
+                String key = entry.getKey();
+                JsonNode value = entry.getValue();
+                String safeKey = Set.of("from", "to", "total", "packages", "objects", "rulebase", "code", "message", "uid", "name")
+                    .contains(key) ? key : "<masked-key>";
+                fields.add(safeKey + ":" + value.getNodeType() + (value.isArray() ? "(size=" + value.size() + ")" : ""));
+            });
+            for (String key : List.of("from", "to", "total")) {
+                JsonNode value = root.path(key);
+                counters.add(key + "=" + (value.isIntegralNumber() ? value.bigIntegerValue() : value.getNodeType()));
+            }
+        }
+        return "STRUCTURE rootParsed=" + (root != null) + " rootType=" + (root == null ? "UNPARSED" : root.getNodeType())
+            + " leadingNonJsonLines=" + lines + " leadingNonJsonBytes=" + prefix.getBytes(java.nio.charset.StandardCharsets.UTF_8).length
+            + " fields=" + fields + " counters=" + counters;
     }
 
     static void completeList(JsonNode root, String field) {
