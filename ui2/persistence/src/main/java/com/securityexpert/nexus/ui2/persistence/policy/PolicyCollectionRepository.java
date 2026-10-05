@@ -124,9 +124,9 @@ public class PolicyCollectionRepository {
             + "coalesce(nullif(split_part(l.step_kind, '_', 11), '')::int, 0) as domains_total, "
             + "(select min(created_at) from job_step_attempt where job_id = j.job_id "
             + "and step_kind in ('CP_POLICY_READ', 'PAN_POLICY_READ')) as started_at, "
-            + "array(select substring(step_kind from 'POLICY_PROGRESS_GAP_(.*)') from job_step_attempt "
+            + "array_to_string(array(select substring(step_kind from 'POLICY_PROGRESS_GAP_(.*)') from job_step_attempt "
             + "where job_id = j.job_id and lease_epoch = j.lease_epoch and step_kind like 'POLICY_PROGRESS_GAP_%' "
-            + "order by step_index desc) as failure_codes "
+            + "order by step_index desc), ',') as failure_codes "
             + "from jobs j join policy_collection_request p on p.job_id = j.job_id "
             + "left join lateral (select step_index, step_kind from job_step_attempt where job_id = j.job_id and lease_epoch = j.lease_epoch "
             + "and step_kind ~ '^POLICY_PROGRESS_[0-9]+$' order by step_index desc limit 1) a on true "
@@ -151,9 +151,10 @@ public class PolicyCollectionRepository {
                     var at = r.get(field, java.time.OffsetDateTime.class);
                     if (at != null) view.put(field.equals("started_at") ? "startedAt" : "lastActivityAt", at.toInstant().toString());
                 }
-                String[] codes = r.get("failure_codes", String[].class);
-                view.put("unitFailureCodes", codes == null ? List.of() : List.of(codes));
-                view.put("gapUnits", codes == null ? 0 : codes.length);
+                String codes = r.get("failure_codes", String.class);
+                List<String> failureCodes = codes == null || codes.isEmpty() ? List.of() : List.of(codes.split(","));
+                view.put("unitFailureCodes", failureCodes);
+                view.put("gapUnits", failureCodes.size());
                 return view;
             }));
     }
