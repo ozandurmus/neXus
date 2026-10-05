@@ -8,6 +8,7 @@ import com.securityexpert.nexus.ui2.service.api.PolicyController;
 import com.securityexpert.nexus.ui2.service.policy.*;
 import com.securityexpert.nexus.ui2.service.privacy.*;
 import com.securityexpert.nexus.ui2.persistence.identity.*;
+import com.securityexpert.nexus.ui2.persistence.policy.PolicyCollectionRepository.Mode;
 import com.securityexpert.nexus.ui2.platform.*;
 import com.securityexpert.nexus.ui2.policy.PolicySnapshot;
 import org.junit.jupiter.api.Test;
@@ -17,7 +18,7 @@ import java.time.Instant;
 import java.util.*;
 
 class PolicyApiTest {
-    @Test void policyRoutesAllowMaskedCollectionWithoutOtherWrites() {
+    @Test void policyRoutesAllowMaskedCollectionWithoutOtherWrites() throws Exception {
         var action = new ActionRegistry().find(ActionRegistry.POLICY_READ).orElseThrow();
         assertEquals(Set.of(RoleToken.SECURITY_ADMIN, RoleToken.ONBOARDING_ADMIN, RoleToken.REPLAY_VIEWER), action.requiredRoleTokens());
         for (String route : List.of("GET /api/v2/policy/tree", "GET /api/v2/policy/collections/*", "GET /api/v2/policy/devices", "GET /api/v2/policy/devices/*", "GET /api/v2/policy/policies/*", "GET /api/v2/policy/policies/*/history", "GET /api/v2/policy/objects/*", "GET /api/v2/policy/domains/*/objects", "GET /api/v2/policy/domains/*/unused", "GET /api/v2/policy/domains/*/gateways", "GET /api/v2/policy/domains/*/hits", "GET /api/v2/policy/domains/*/object-usage", "GET /api/v2/policy/domains/*/objects/duplicates", "GET /api/v2/policy/domains/*/installation"))
@@ -26,9 +27,31 @@ class PolicyApiTest {
                 new ActionRegistry().find(ActionRegistry.POLICY_COLLECT).orElseThrow().requiredRoleTokens());
         assertEquals(ActionRegistry.POLICY_COLLECT, SecurityWebMvcConfig.ACTION_ID_BY_ROUTE.get("POST /api/v2/policy/sources/*/collect"));
         // The request cannot carry a command, endpoint, credential or arbitrary transport parameters.
-        assertEquals(List.of("domainRef"), Arrays.stream(
+        assertEquals(List.of("domainRef", "mode"), Arrays.stream(
                 com.securityexpert.nexus.ui2.service.api.PolicyCollectionController.CollectRequest.class.getRecordComponents())
                 .map(java.lang.reflect.RecordComponent::getName).toList());
+        var collections = mock(PolicyCollectionService.class);
+        var mvc = MockMvcBuilders.standaloneSetup(
+                new com.securityexpert.nexus.ui2.service.api.PolicyCollectionController(collections, mock(RbacEvaluator.class))).build();
+        String path = "/api/v2/policy/sources/source-1/collect";
+        for (String body : List.of("{\"domainRef\":\"domain-1\"}",
+                "{\"domainRef\":\"domain-1\",\"mode\":\"CHANGED_ONLY\"}",
+                "{\"domainRef\":\"domain-1\",\"mode\":\"FULL\"}")) {
+            Mode mode = body.contains("FULL") ? Mode.FULL : Mode.CHANGED_ONLY;
+            when(collections.collect("source-1", "domain-1", "synthetic-actor", mode)).thenReturn(Optional.of("job-1"));
+            mvc.perform(post(path).contentType("application/json").content(body)
+                    .requestAttr(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE, "synthetic-actor"))
+                    .andExpect(status().isAccepted()).andExpect(jsonPath("$.jobId").value("job-1"))
+                    .andExpect(header().string("Cache-Control", "no-store"));
+        }
+        verify(collections, times(2)).collect("source-1", "domain-1", "synthetic-actor", Mode.CHANGED_ONLY);
+        verify(collections).collect("source-1", "domain-1", "synthetic-actor", Mode.FULL);
+        clearInvocations(collections);
+        mvc.perform(post(path).contentType("application/json")
+                .content("{\"domainRef\":\"domain-1\",\"mode\":\"INVALID\"}"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.error").value("INVALID_COLLECTION_MODE"))
+                .andExpect(header().string("Cache-Control", "no-store"));
+        verifyNoInteractions(collections);
     }
     @Test void mvcEnforcesSessionRbacMaskingAndNoStoreForEachPersona() throws Exception {
         var sessions = mock(SessionRepository.class);
@@ -36,7 +59,7 @@ class PolicyApiTest {
         var audit = mock(AuthzDecisionRepository.class);
         var query = mock(PolicyQueryService.class);
         var collections = mock(PolicyCollectionService.class);
-        when(collections.collect(eq("pan-1"), eq(""), anyString())).thenReturn(Optional.of("job-1"));
+        when(collections.collect(eq("pan-1"), eq(""), anyString(), eq(Mode.CHANGED_ONLY))).thenReturn(Optional.of("job-1"));
         var meta = new PolicySnapshot.Metadata("policy-1", "manager-1", "Synthetic manager", "PAN", "domain-1", "Synthetic domain",
                 "Synthetic policy", "2026-10-01T12:00:00Z", "artifact-1", List.of());
         var snapshot = new PolicySnapshot(meta, List.of(), Map.of());
@@ -142,7 +165,7 @@ class PolicyApiTest {
                         Optional.of("test"), Optional.empty(), Optional.empty());
             });
             when(collections.sources()).thenReturn(List.of());
-            when(collections.collect("source-1", "", actor)).thenReturn(Optional.of("job-1"));
+            when(collections.collect("source-1", "", actor, Mode.CHANGED_ONLY)).thenReturn(Optional.of("job-1"));
             var gate = new GateChain(sessions, new ActionRegistry(), rbac, mock(AuthzDecisionRepository.class));
             var mvc = MockMvcBuilders.standaloneSetup(
                     new com.securityexpert.nexus.ui2.service.api.PolicyCollectionController(collections, rbac),
@@ -163,13 +186,13 @@ class PolicyApiTest {
             mvc.perform(post(collect).servletPath(collect).cookie(new Cookie("ui2_session", cookie))
                     .header("X-CSRF-Token", "synthetic-csrf").contentType("application/json").content("{\"domainRef\":\"\"}"))
                     .andExpect(status().isUnauthorized());
-            verify(collections, never()).collect(anyString(), anyString(), anyString());
+            verify(collections, never()).collect(anyString(), anyString(), anyString(), any(Mode.class));
             mvc.perform(post(collect).servletPath(collect).cookie(new Cookie("ui2_session", cookie))
                     .header("X-CSRF-Token", "synthetic-csrf").header("Origin", "https://example.invalid")
                     .contentType("application/json").content("{\"domainRef\":\"\"}"))
                     .andExpect(status().isAccepted()).andExpect(jsonPath("$.jobId").value("job-1"));
-            verify(collections).collect("source-1", "", actor);
-            when(collections.collect("source-1", "", actor)).thenReturn(Optional.empty());
+            verify(collections).collect("source-1", "", actor, Mode.CHANGED_ONLY);
+            when(collections.collect("source-1", "", actor, Mode.CHANGED_ONLY)).thenReturn(Optional.empty());
             mvc.perform(post(collect).servletPath(collect).cookie(new Cookie("ui2_session", cookie))
                     .header("X-CSRF-Token", "synthetic-csrf").header("Origin", "https://example.invalid")
                     .contentType("application/json").content("{\"domainRef\":\"\"}"))
