@@ -23,6 +23,21 @@ class GateResolverTest {
     }
 
     @Test
+    void pagedPackagesGateResolvesAndOffsetInjectionIsRejected() {
+        var rows = GateRegistryFixtureLoader.loadFromStream(
+            getClass().getResourceAsStream("/capabilities/gate_registry_fixture.yaml"));
+        GateRegistryPort registry = key -> rows.stream().filter(row -> row.key().equals(key)).toList();
+        String command = "mgmt_cli -r true -d '<DOMAIN>' -f json show-packages limit 20 offset '<N>' details-level full";
+        var key = new CanonicalCommandKey("check_point", "cp_multi_domain_server", "expert", "SSH_EXEC", command);
+        assertTrue(GateResolver.resolve(key, Optional.empty(), registry) instanceof GateResolution.Known);
+        for (String injected : List.of("-1", "0; echo injected", "0' ; echo injected; '")) {
+            var invalid = new CanonicalCommandKey("check_point", "cp_multi_domain_server", "expert", "SSH_EXEC",
+                command.replace("<N>", injected));
+            assertTrue(GateResolver.resolve(invalid, Optional.empty(), registry) instanceof GateResolution.Unknown);
+        }
+    }
+
+    @Test
     void zeroRowsResolvesUnknownRequiresGateEntry() {
         CanonicalCommandKey key = new CanonicalCommandKey("check_point", "cp_gaia_gateway", "clish", "SSH_EXEC",
                 "show version");

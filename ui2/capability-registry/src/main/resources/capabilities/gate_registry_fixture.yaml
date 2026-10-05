@@ -2935,6 +2935,22 @@ gates:
     secret_output_risk: "sensitive policy data; parse in memory"
     safe_telemetry_fields: ["outcome", "packageCount", "ruleCount"]
     source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_01_CP_POLICY_READS.md"
+  - gate_id: "cp_policy_packages_paged"
+    vendor: "check_point"
+    platform_role_scope: "cp_multi_domain_server"
+    shell_context: "expert"
+    transport_kind: "SSH_EXEC"
+    canonical_command_key: "mgmt_cli -r true -d '<DOMAIN>' -f json show-packages limit 20 offset '<N>' details-level full"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 300
+    retry_rule: "once on timeout with limit 50"
+    max_frequency: "manual admin request; automatic at most once per domain per 6 hours"
+    session_reuse_rule: "one interactive SSH session per job; serial"
+    unsupported_behavior_ref: "UNKNOWN"
+    secret_output_risk: "sensitive policy data; parse in memory"
+    safe_telemetry_fields: ["outcome", "packageCount", "ruleCount"]
+    source_document_pointer: "PO 2026-10-05; cp-packages-offset-gate; approved paged show-packages read"
   - gate_id: "cp_policy_access_rulebase"
     vendor: "check_point"
     platform_role_scope: "cp_multi_domain_server"

@@ -1,0 +1,5 @@
+-- PO 2026-10-05: approved paged packages read; preserve the fixed packages gate.
+SELECT set_config('app.actor_fingerprint', 'migration:V123_cp_policy_packages_paged', true);
+SELECT set_config('app.action_id', 'gate_registry_insert_by_migration', true);
+INSERT INTO gate_registry (gate_id, vendor, platform_role_scope, shell_context, transport_kind, canonical_command_key, action_class, sign_off_state, timeout_s, retry_rule, max_frequency, session_reuse_rule, unsupported_behavior_ref, secret_output_risk, safe_telemetry_fields, source_document_pointer)
+VALUES ('cp_policy_packages_paged', 'check_point', 'cp_multi_domain_server', 'expert', 'SSH_EXEC', 'mgmt_cli -r true -d ''<DOMAIN>'' -f json show-packages limit 20 offset ''<N>'' details-level full', 'read', 'SIGNED_OFF', 300, 'once on timeout with limit 50', 'manual admin request; automatic at most once per domain per 6 hours', 'one interactive SSH session per job; serial', 'UNKNOWN', 'sensitive policy data; parse in memory', '["outcome", "packageCount", "ruleCount"]', 'PO 2026-10-05; cp-packages-offset-gate; approved paged show-packages read');

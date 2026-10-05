@@ -9,7 +9,7 @@ public final class CpPolicyGates {
     private CpPolicyGates() {}
     public static final String CAPABILITY = "cp_policy_collect";
     public static final List<String> COMMANDS = List.of(
-        "mgmt_cli -r true -d '<DOMAIN>' -f json show-packages limit 500 details-level full",
+        "mgmt_cli -r true -d '<DOMAIN>' -f json show-packages limit 20 offset '<N>' details-level full",
         "mgmt_cli -r true -d '<DOMAIN>' -f json show-access-rulebase name '<LAYER>' limit 100 offset '<N>' details-level full use-object-dictionary true",
         "mgmt_cli -r true -d '<DOMAIN>' -f json show-nat-rulebase package '<PKG>' limit 500 offset '<N>' details-level standard use-object-dictionary true");
     public static Capability capability(GateRegistryPort registry) {
@@ -26,8 +26,8 @@ public final class CpPolicyGates {
         var rows = registry.findByCanonicalKey(new CanonicalCommandKey("check_point", "cp_multi_domain_server",
                 "expert", "SSH_EXEC", COMMANDS.get(index)));
         if (rows.size() != 1 || rows.get(0).signOffState() != SignOffState.SIGNED_OFF
-                || rows.get(0).actionClass() != ActionClass.CLASS_0_READ || rows.get(0).timeoutS() != (index == 1 ? 300 : 60)
-                || !rows.get(0).retryRule().equals(index == 1 ? "once on timeout with limit 50" : "none"))
+                || rows.get(0).actionClass() != ActionClass.CLASS_0_READ || rows.get(0).timeoutS() != (index == 0 || index == 1 ? 300 : 60)
+                || !rows.get(0).retryRule().equals(index == 0 || index == 1 ? "once on timeout with limit 50" : "none"))
             throw new IllegalStateException("POLICY_GATE_UNAVAILABLE");
     }
     public static void requireAll(GateRegistryPort registry) {

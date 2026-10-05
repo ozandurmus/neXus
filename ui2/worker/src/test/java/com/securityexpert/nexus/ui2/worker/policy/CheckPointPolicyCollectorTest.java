@@ -33,29 +33,79 @@ class CheckPointPolicyCollectorTest {
     }
     private static ExecSpec policySpec(String command) { return new ExecSpec(command, false, 120_000); }
 
-    @Test void serverCappedPackageListingFailsClosedInSerialAndParallelWithoutAnotherPage() {
-        for (int sessions : List.of(1, 4)) {
+    @Test void pagedPackagesCompleteBeforeCollectionInSerialAndParallel() {
+        for (int sessions : List.of(1, 4)) for (int total : List.of(21, 40, 0)) {
             reset(transport, repository);
-            setup(command -> command.contains("show-packages") ? ok(packagePage(0, 20, 105)) : answer(command));
+            setup(command -> {
+                if (!command.contains("show-packages")) return answer(command);
+                var offset = java.util.regex.Pattern.compile(" offset '([0-9]+)'").matcher(command);
+                assertTrue(offset.find());
+                assertTrue(command.contains(" limit 20 "));
+                return ok(packagePage(Integer.parseInt(offset.group(1)), 20, total));
+            });
+            var collector = new CheckPointPolicyCollector(transport, gates, repository, Duration.ofHours(2), sessions);
+            List<PolicySnapshot.CollectionFailure> failures = new ArrayList<>();
+            assertEquals(total, collector.collect(run, request, () -> true, snapshot -> {}, failures::add).size());
+            assertTrue(failures.isEmpty());
+            verify(transport, times(total == 0 ? 1 : 2)).execInteractive(any(),
+                argThat(spec -> spec.command().contains("show-packages")), any());
+        }
+    }
+
+    @Test void inconsistentSecondPackagePageReportsOffsetWithoutCollectingPackages() {
+        for (int sessions : List.of(1, 4)) for (String defect : List.of("total", "duplicate", "from", "size")) {
+            reset(transport, repository);
+            setup(command -> {
+                if (!command.contains("show-packages")) return answer(command);
+                if (command.contains("offset '0'")) return ok(packagePage(0, 20, 21));
+                String page = packagePage(20, 20, 21);
+                return ok(switch (defect) {
+                    case "total" -> page.replace("\"total\":21", "\"total\":22");
+                    case "duplicate" -> page.replace("pkg-20", "pkg-0");
+                    case "from" -> page.replace("\"from\":21", "\"from\":20");
+                    default -> page.replace("\"to\":21", "\"to\":20");
+                });
+            });
             var collector = new CheckPointPolicyCollector(transport, gates, repository, Duration.ofHours(2), sessions);
             List<PolicySnapshot.CollectionFailure> failures = new ArrayList<>();
             assertTrue(collector.collect(run, request, () -> true, snapshot -> fail("Incomplete domain"), failures::add).isEmpty());
             assertEquals(1, failures.size());
-            assertTrue(failures.get(0).reason().endsWith(": PACKAGE_LIST_TRUNCATED_BY_SERVER (total=105, returned=20)"));
-            assertEquals(0, failures.get(0).offset());
-            verify(transport, times(1)).execInteractive(any(), argThat(spec -> spec.command().contains("show-packages")), any());
+            assertEquals(20, failures.get(0).offset());
             verify(repository, never()).targets(anyString(), anyString(), anyString());
         }
-        String previous = System.getProperty("ui2.policy.cp.package-page-size");
-        try {
-            for (String invalid : List.of("0", "-1", "501")) {
-                System.setProperty("ui2.policy.cp.package-page-size", invalid);
-                assertThrows(IllegalArgumentException.class, () -> new CheckPointPolicyCollector(transport, gates, repository));
-            }
-        } finally {
-            if (previous == null) System.clearProperty("ui2.policy.cp.package-page-size");
-            else System.setProperty("ui2.policy.cp.package-page-size", previous);
+    }
+
+    @Test void packageGateIsRecheckedBeforeEveryPage() {
+        for (int sessions : List.of(1, 4)) {
+            reset(transport, repository);
+            setup(command -> command.contains("show-packages") ? ok(packagePage(0, 20, 21)) : answer(command));
+            var checks = new AtomicInteger();
+            GateRegistryPort revoked = key -> {
+                if (key.equals(new CanonicalCommandKey("check_point", "cp_multi_domain_server", "expert", "SSH_EXEC",
+                        CpPolicyGates.COMMANDS.get(0))) && checks.incrementAndGet() > 2) return List.of();
+                return gates.findByCanonicalKey(key);
+            };
+            var collector = new CheckPointPolicyCollector(transport, revoked, repository, Duration.ofHours(2), sessions);
+            List<PolicySnapshot.CollectionFailure> failures = new ArrayList<>();
+            var error = assertThrows(IllegalStateException.class, () ->
+                collector.collect(run, request, () -> true, snapshot -> fail("Revoked gate"), failures::add));
+            assertTrue(error.getMessage().endsWith(": POLICY_GATE_UNAVAILABLE"));
+            assertEquals(3, checks.get());
+            assertTrue(failures.isEmpty());
+            verify(transport, times(1)).execInteractive(any(), argThat(spec -> spec.command().contains("show-packages")), any());
         }
+    }
+
+    @Test void nonPagedDomainReadHasNoPageAnnotation() throws Exception {
+        var collector = setup(this::answer);
+        var transcript = new com.securityexpert.nexus.ui2.worker.transcript.JobTranscript();
+        try (var scope = com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.open(transcript)) {
+            collector.read(session, MgmtCliCommands.domainList(), -1, Long.MAX_VALUE, () -> true);
+        }
+        var sink = new java.io.ByteArrayOutputStream(); transcript.writeTo(sink);
+        String notes = sink.toString(java.nio.charset.StandardCharsets.UTF_8);
+        assertFalse(notes.contains(" offset="));
+        assertFalse(notes.contains(" limit="));
     }
 
     @Test void malformedPackageListingFailsOnlyItsDomainWithSafeDiagnostics() throws Exception {
@@ -225,9 +275,7 @@ class CheckPointPolicyCollectorTest {
             try (var scope = com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.open(transcript)) {
                 var error = assertThrows(PolicyCollectionTrace.Failure.class, () -> collector.read(session,
                     MgmtCliCommands.showPackages("DOM-TANGO-01"), 0, Long.MAX_VALUE, () -> true));
-                boolean capped = body.equals("{\"total\":1,\"packages\":[]}")
-                    || body.equals("{\"total\":18446744073709551616,\"packages\":[]}");
-                assertTrue(error.getMessage().contains(capped ? "PACKAGE_LIST_TRUNCATED_BY_SERVER" : "INVALID_OR_INCOMPLETE_RESPONSE"));
+                assertTrue(error.getMessage().contains("INVALID_OR_INCOMPLETE_RESPONSE"));
             }
             var sink = new java.io.ByteArrayOutputStream(); transcript.writeTo(sink);
             String note = sink.toString(java.nio.charset.StandardCharsets.UTF_8).lines()
@@ -252,7 +300,7 @@ class CheckPointPolicyCollectorTest {
         try (var scope = com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.open(transcript)) {
             var error = assertThrows(PolicyCollectionTrace.Failure.class, () -> collector.read(session,
                 MgmtCliCommands.showPackages("DOM-TANGO-01"), 0, Long.MAX_VALUE, () -> true));
-            assertTrue(error.getMessage().endsWith(": PACKAGE_LIST_TRUNCATED_BY_SERVER (total=3, returned=0)"));
+            assertTrue(error.getMessage().endsWith(": INVALID_OR_INCOMPLETE_RESPONSE"));
         }
         String structure = CheckPointPolicyCollector.preflightStructure(body,
             new com.fasterxml.jackson.databind.ObjectMapper().readTree(body.substring(prefix.length())));
@@ -267,9 +315,9 @@ class CheckPointPolicyCollectorTest {
         var sink = new java.io.ByteArrayOutputStream(); transcript.writeTo(sink);
         String notes = sink.toString(java.nio.charset.StandardCharsets.UTF_8);
         assertTrue(notes.contains(structure));
-        assertTrue(notes.contains("paging unavailable: gate literal fixed"));
-        assertFalse(notes.contains(" offset=0"));
-        assertFalse(notes.contains(" limit=20"));
+        assertFalse(notes.contains("paging unavailable: gate literal fixed"));
+        assertTrue(notes.contains(" offset=0"));
+        assertTrue(notes.contains(" limit=20"));
         assertFalse(notes.contains("Synthetic"));
         String typed = CheckPointPolicyCollector.preflightStructure("{}",
             new com.fasterxml.jackson.databind.ObjectMapper().readTree("{\"from\":\"Synthetic value\",\"to\":null,\"packages\":[]}"));
@@ -390,6 +438,7 @@ class CheckPointPolicyCollectorTest {
         assertThrows(IllegalArgumentException.class, () -> MgmtCliCommands.showPackages("DOM\nnext"));
         assertThrows(IllegalArgumentException.class, () -> MgmtCliCommands.showPackages("DOM", -1, 20));
         assertThrows(IllegalArgumentException.class, () -> MgmtCliCommands.showPackages("DOM", 0, 0));
+        assertThrows(IllegalArgumentException.class, () -> MgmtCliCommands.showPackages("DOM", 0, 50));
         CpPolicyGates.requireAll(gates);
         assertTrue(CpPolicyGates.capability(gates).executionEligible());
         assertFalse(CpPolicyGates.capability(key -> List.of()).executionEligible());

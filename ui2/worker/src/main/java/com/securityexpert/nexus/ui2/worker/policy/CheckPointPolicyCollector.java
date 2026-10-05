@@ -47,9 +47,7 @@ public final class CheckPointPolicyCollector {
         if (maxSessions < 1 || maxSessions > 4) throw new IllegalArgumentException("POLICY_MAX_SESSIONS_MUST_BE_1_TO_4");
         this.maxSessions = maxSessions;
         this.readTimeout = configuredReadTimeout();
-        this.packagePageSize = Integer.parseInt(System.getProperty("ui2.policy.cp.package-page-size",
-            System.getenv().getOrDefault("UI2_POLICY_CP_PACKAGE_PAGE_SIZE", "20")));
-        if (packagePageSize < 1 || packagePageSize > 500) throw new IllegalArgumentException("POLICY_PACKAGE_PAGE_SIZE_OUT_OF_RANGE");
+        this.packagePageSize = 20;
         if (jobTimeout.isZero() || jobTimeout.isNegative()) throw new IllegalArgumentException("POLICY_DEADLINE_MUST_BE_POSITIVE");
         this.transport = transport; this.gates = gates; this.repository = repository;
         this.jobTimeout = jobTimeout; this.nanoTime = nanoTime;
@@ -215,8 +213,10 @@ public final class CheckPointPolicyCollector {
             int nextTotal = page.path("total").intValue();
             if (++count > MAX_PAGES || offset != to || (total != -1 && total != nextTotal)) throw failure();
             total = nextTotal;
+            if (!page.path("from").isIntegralNumber() || !page.path("from").canConvertToInt()
+                    || !page.path("to").isIntegralNumber() || !page.path("to").canConvertToInt()) throw failure();
             if (total == 0) {
-                if (offset != 0 || !page.path("packages").isEmpty()) throw failure();
+                if (offset != 0 || (page.path("from").intValue() != 0 && page.path("from").intValue() != 1) || page.path("to").intValue() != 0 || !page.path("packages").isEmpty()) throw failure();
                 return true;
             }
             if (!page.path("from").isIntegralNumber() || !page.path("from").canConvertToInt() || page.path("from").asLong() != offset + 1L
@@ -227,8 +227,10 @@ public final class CheckPointPolicyCollector {
                 if (!seen.add(required(item, "uid"))) throw failure();
                 items.add(item);
             }
+            if (to < total && to - offset != limit) throw failure();
             if (to < total && count == MAX_PAGES) throw failure();
-            return to >= total;
+            if (to == total && items.size() != total) throw failure();
+            return to == total;
         }
     }
 
@@ -370,7 +372,7 @@ public final class CheckPointPolicyCollector {
         String target = ref("cp-policy-read", command.replaceAll(" limit [0-9]+ offset ", " limit PAGE offset "));
         var offset = java.util.regex.Pattern.compile(" offset '([0-9]+)' ").matcher(command);
         var limit = java.util.regex.Pattern.compile(" limit ([0-9]+) ").matcher(command);
-        String page = gate == 0 ? " paging unavailable: gate literal fixed" : offset.find() ? " offset=" + offset.group(1) + (limit.find() ? " limit=" + limit.group(1) : "") : "";
+        String page = offset.find() ? " offset=" + offset.group(1) + (limit.find() ? " limit=" + limit.group(1) : "") : "";
         PolicyCollectionTrace.step(step + page, target);
         checkActive(deadline, lease);
         if (gate == 3) PolicyHitGates.require(gates, true);
@@ -428,14 +430,10 @@ public final class CheckPointPolicyCollector {
     }
 
     private static void validatePreflight(JsonNode root, String field) {
-        if (field.equals("packages") && root.path(field).isArray() && root.path("total").isIntegralNumber()
-                && root.path("total").bigIntegerValue().compareTo(java.math.BigInteger.valueOf(root.path(field).size())) > 0)
-            throw PolicyCollectionTrace.failure("PACKAGE_LIST_TRUNCATED_BY_SERVER (total=" + root.path("total").bigIntegerValue()
-                + ", returned=" + root.path(field).size() + ")");
         if (field.equals("objects")) completeList(root, field);
         else if (!root.path(field).isArray() || !root.path("total").isIntegralNumber()
                 || !root.path("total").canConvertToInt() || root.path("total").intValue() < root.path(field).size()
-                || root.path(field).size() > 500 || (root.path("total").intValue() > 0 && root.path(field).isEmpty())) throw failure();
+                || root.path(field).size() > 20 || (root.path("total").intValue() > 0 && root.path(field).isEmpty())) throw failure();
         Set<String> seen = new HashSet<>();
         for (JsonNode item : root.path(field)) {
             if (!seen.add(required(item, "uid"))) throw failure();
