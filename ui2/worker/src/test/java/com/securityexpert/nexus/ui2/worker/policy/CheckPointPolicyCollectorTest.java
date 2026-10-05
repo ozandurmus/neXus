@@ -33,6 +33,88 @@ class CheckPointPolicyCollectorTest {
     }
     private static ExecSpec policySpec(String command) { return new ExecSpec(command, false, 120_000); }
 
+    @Test void allInstallationTargetsAndOptionalAccessLayersWorkInSerialAndParallel() {
+        for (int sessions : List.of(1, 4)) for (String access : List.of("", "\"access\":false,", "\"access\":false,\"access-layers\":[],")) {
+            reset(transport, repository);
+            setup(command -> command.contains("show-packages")
+                ? ok("{\"from\":1,\"to\":1,\"total\":1,\"packages\":[{\"uid\":\"pkg-01\",\"name\":\"Package\","
+                    + access + "\"installation-targets\":\"all\"}]}") : answer(command));
+            var collector = new CheckPointPolicyCollector(transport, gates, repository, Duration.ofHours(2), sessions);
+            var snapshots = collector.collect(run, request, () -> true);
+            assertEquals(1, snapshots.size());
+            assertTrue(snapshots.get(0).failures().isEmpty());
+            assertEquals("ALL", snapshots.get(0).metadata().targets().get(0).name());
+            assertEquals("UNKNOWN", snapshots.get(0).metadata().targets().get(0).syncStatus());
+            verify(repository, never()).targets(anyString(), anyString(), anyString());
+            verify(transport, never()).execInteractive(any(), argThat(spec -> spec.command().contains("show-access-rulebase")), any());
+            verify(transport).execInteractive(any(), eq(policySpec(MgmtCliCommands.showNatRulebase("DOM-TANGO-01", "Package", 0))), any());
+        }
+    }
+
+    @Test void domainScopedLayerIdentityIsUsedInSerialAndParallel() {
+        for (int sessions : List.of(1, 4)) {
+            reset(transport, repository);
+            setup(command -> {
+                String body = ((ExecResult.Completed) answer(command)).output();
+                if (command.contains("show-packages")) body = body.replace(
+                    "{\"uid\":\"layer\",\"name\":\"Layer\"}", "{\"domain\":{\"uid\":\"layer\",\"name\":\"Layer\"}}");
+                return ok(body);
+            });
+            var collector = new CheckPointPolicyCollector(transport, gates, repository, Duration.ofHours(2), sessions);
+            var snapshots = collector.collect(run, request, () -> true);
+            assertEquals(1, snapshots.size());
+            assertTrue(snapshots.get(0).failures().isEmpty());
+            verify(transport).execInteractive(any(), eq(policySpec(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Layer", 0))), any());
+        }
+    }
+
+    @Test void malformedPackageItemsReportOnlyIndexFieldAndType() throws Exception {
+        var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        for (String field : List.of("uid", "name", "access-layers", "installation-targets")) {
+            var item = mapper.createObjectNode().put("uid", "Synthetic-private-uid").put("name", "Synthetic-private-name");
+            item.putArray("access-layers"); item.putArray("installation-targets");
+            item.put(field, "");
+            var collector = setup(command -> ok("{\"total\":1,\"packages\":[" + item + "]}"));
+            var transcript = new com.securityexpert.nexus.ui2.worker.transcript.JobTranscript();
+            try (var scope = com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.open(transcript)) {
+                var error = assertThrows(PolicyCollectionTrace.Failure.class, () -> collector.read(session,
+                    MgmtCliCommands.showPackages("DOM-TANGO-01"), 0, Long.MAX_VALUE, () -> true));
+                assertTrue(error.getMessage().endsWith(": INVALID_PACKAGE_ITEM:" + field));
+            }
+            var sink = new java.io.ByteArrayOutputStream(); transcript.writeTo(sink);
+            String notes = sink.toString(java.nio.charset.StandardCharsets.UTF_8);
+            assertTrue(notes.contains("item=0 field=" + field + " type=STRING"));
+            assertFalse(notes.contains("Synthetic-private"));
+        }
+    }
+
+    @Test void malformedItemFailureReachesDomainResultInSerialAndParallel() {
+        for (int sessions : List.of(1, 4)) {
+            reset(transport, repository);
+            setup(command -> command.contains("show-packages")
+                ? ok(packagePage(0, 20, 21).replaceFirst("\"installation-targets\":\\[\\]", "\"installation-targets\":\"unsupported\""))
+                : answer(command));
+            var collector = new CheckPointPolicyCollector(transport, gates, repository, Duration.ofHours(2), sessions);
+            List<PolicySnapshot.CollectionFailure> failures = new ArrayList<>();
+            assertTrue(collector.collect(run, request, () -> true, snapshot -> fail("Invalid package"), failures::add).isEmpty());
+            assertEquals(1, failures.size());
+            assertEquals(0, failures.get(0).offset());
+            assertTrue(failures.get(0).reason().endsWith(": INVALID_PACKAGE_ITEM:installation-targets"));
+            verify(repository, never()).targets(anyString(), anyString(), anyString());
+        }
+    }
+
+    @Test void accessEnabledPackagesRequireNonemptyLayersAndLayerIdentityRemainsRequired() {
+        for (String fields : List.of("\"access\":true", "\"access\":true,\"access-layers\":[]",
+                "\"access\":false,\"access-layers\":null", "\"access-layers\":[{\"domain\":{\"uid\":\"layer\"}}]")) {
+            var collector = setup(command -> ok("{\"total\":1,\"packages\":[{\"uid\":\"pkg\",\"name\":\"Package\","
+                + fields + ",\"installation-targets\":[]}] }"));
+            var error = assertThrows(PolicyCollectionTrace.Failure.class, () -> collector.read(session,
+                MgmtCliCommands.showPackages("DOM-TANGO-01"), 0, Long.MAX_VALUE, () -> true));
+            assertTrue(error.getMessage().endsWith(": INVALID_PACKAGE_ITEM:access-layers"));
+        }
+    }
+
     @Test void pagedPackagesCompleteBeforeCollectionInSerialAndParallel() {
         for (int sessions : List.of(1, 4)) for (int total : List.of(21, 40, 0)) {
             reset(transport, repository);
@@ -281,7 +363,8 @@ class CheckPointPolicyCollectorTest {
             try (var scope = com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.open(transcript)) {
                 var error = assertThrows(PolicyCollectionTrace.Failure.class, () -> collector.read(session,
                     MgmtCliCommands.showPackages("DOM-TANGO-01"), 0, Long.MAX_VALUE, () -> true));
-                assertTrue(error.getMessage().contains("INVALID_OR_INCOMPLETE_RESPONSE"));
+                assertTrue(error.getMessage().contains("INVALID_OR_INCOMPLETE_RESPONSE")
+                    || error.getMessage().contains("INVALID_PACKAGE_ITEM:"));
             }
             var sink = new java.io.ByteArrayOutputStream(); transcript.writeTo(sink);
             String note = sink.toString(java.nio.charset.StandardCharsets.UTF_8).lines()

@@ -209,21 +209,17 @@ final class CpPolicyParallelCollection {
         Set<String> seen = new HashSet<>();
         for (JsonNode node : items) {
             String uid = required(node, "uid"), name = required(node, "name");
-            if (!seen.add(uid) || !node.path("access-layers").isArray() || !node.path("installation-targets").isArray()) throw failure();
-            List<Target> targets = new ArrayList<>();
-            for (JsonNode target : node.path("installation-targets")) {
-                String targetUid = target.isTextual() ? target.textValue() : required(target, "uid");
-                var enrolled = repository.targets(run.runId(), domain, targetUid);
-                if (enrolled.isEmpty()) targets.add(new Target(ref("cp-install-target", request.sourceId(), domainUid, targetUid),
-                    target.isObject() ? target.path("name").asText("Unresolved installation target") : "Unresolved installation target", "", "UNKNOWN"));
-                else targets.addAll(enrolled);
-            }
+            if (!seen.add(uid)) throw failure();
+            List<Target> targets = collector.installationTargets(run, request, domainUid, domain, node);
             var metadata = new Metadata(ref(request.sourceId(), domainUid, uid), request.sourceId(), "MDS " + request.sourceId(),
                 "CP", container, domain, name, Instant.now().toString(), "", targets.stream().distinct().toList());
             Policy policy = new Policy(metadata, domain);
             policies.add(policy);
             Map<String, String> roots = new LinkedHashMap<>();
-            for (JsonNode layer : node.path("access-layers")) roots.put(required(layer, "uid"), required(layer, "name"));
+            for (JsonNode layer : node.path("access-layers")) {
+                JsonNode scoped = CheckPointPolicyCollector.scopedLayer(layer);
+                roots.put(required(scoped, "uid"), required(scoped, "name"));
+            }
             roots.forEach((layerUid, layerName) -> addLayer(policy, layerUid, layerName));
             policy.nat = new Layer(policy, "", "NAT", ref("cp-nat", container, uid), 2,
                 offset -> MgmtCliCommands.showNatRulebase(domain, name, offset));
