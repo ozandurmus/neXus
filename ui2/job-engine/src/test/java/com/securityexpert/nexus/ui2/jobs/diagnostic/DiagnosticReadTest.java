@@ -3,6 +3,27 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 import com.securityexpert.nexus.ui2.capability.*;
 class DiagnosticReadTest {
+    @Test void v124PolicyGatesStayOutOfDiagnostics() {
+        var rows=GateRegistryFixtureLoader.loadFromStream(getClass().getClassLoader().getResourceAsStream("capabilities/gate_registry_fixture.yaml"));
+        GateRegistryPort gates=key -> rows.stream().filter(r -> r.key().equals(key)).toList();
+        var v124Ids=java.util.Set.of(
+            "cp_policy_access_rulebase_hits", "cp_policy_packages_50", "cp_policy_times", "cp_policy_time_groups",
+            "cp_policy_gateways_and_servers", "cp_policy_hosts", "cp_policy_networks", "cp_policy_groups",
+            "cp_policy_groups_with_exclusion", "cp_policy_address_ranges", "cp_policy_services_tcp",
+            "cp_policy_services_udp", "cp_policy_services_icmp", "cp_policy_services_icmp6", "cp_policy_services_other",
+            "cp_policy_services_sctp", "cp_policy_services_dce_rpc", "cp_policy_services_rpc", "cp_policy_service_groups",
+            "cp_policy_access_roles", "cp_policy_dynamic_objects", "cp_policy_dns_domains", "cp_policy_security_zones",
+            "cp_policy_unused_objects");
+        for (String gateId: v124Ids)
+            assertTrue(rows.stream().anyMatch(row -> row.gateId().equals(gateId)),gateId);
+        var cp=DiagnosticRead.commands("check_point","management_server",null,gates);
+        assertTrue(cp.stream().anyMatch(c -> c.gateId().equals("mds_show_version_all")));
+        assertTrue(cp.stream().noneMatch(c -> v124Ids.contains(c.gateId())));
+        assertTrue(cp.stream().noneMatch(c -> c.gateId().startsWith("cp_policy_")));
+        for (String role: new String[]{"gateway","management_server"})
+            assertTrue(DiagnosticRead.commands("palo_alto",role,null,gates).stream()
+                .noneMatch(c -> c.gateId().startsWith("pan_policy_")));
+    }
     @Test void exactReviewedReadsOnlyForMatchingDeviceScope() {
         var rows=GateRegistryFixtureLoader.loadFromStream(getClass().getClassLoader().getResourceAsStream("capabilities/gate_registry_fixture.yaml"));
         GateRegistryPort gates=key -> rows.stream().filter(r -> r.key().equals(key)).toList();
