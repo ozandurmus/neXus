@@ -2,7 +2,9 @@
 import argparse
 import copy
 from contextlib import contextmanager
+from datetime import datetime, timezone
 import json
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -18,11 +20,18 @@ import standalone_orchestrate as sa
 
 COMMIT = "a" * 40
 IMAGE = "registry.example.invalid/candidate@sha256:" + "b" * 64
+ENDPOINTS = {"ui2-compliance": "http://192.0.2.30:8085",
+             "ui2-configuration": "http://192.0.2.40:8084"}
 
 
 def template(path, kind=None):
     docs = list(yaml.safe_load_all((ROOT / path).read_text()))
     return next(d for d in docs if kind is None or d["kind"] == kind)
+
+
+def local_load(repo, path):
+    docs = list(yaml.safe_load_all((repo / path).read_text()))
+    return docs[0] if len(docs) == 1 else dict(kind="List", items=docs)
 
 
 def container_image(deployment):
@@ -33,13 +42,13 @@ def test_runtime_manifests_are_ephemeral_and_use_only_the_preview_database():
     db_source = template("deploy/ui2/40-database-statefulset.yaml")
     service_source = template("deploy/ui2/50-service-deployment.yaml")
     db = preview.database_manifest(db_source)
-    service = preview.service_manifest(service_source, IMAGE, "192.0.2.10", "192.0.2.30")
+    service = preview.workload_manifest(service_source, IMAGE, "192.0.2.10", ENDPOINTS)
     e2e = preview.e2e_manifest(template("deploy/ui2/70-e2e-job.yaml", "Job"), IMAGE, "192.0.2.20")
     assert db["spec"]["containers"][0]["image"] == db_source["spec"]["template"]["spec"]["containers"][0]["image"]
     assert service_source["spec"]["template"]["spec"]["containers"][0]["image"] != IMAGE
     compliance_source = template("deploy/ui2/55-compliance-deployment.yaml", "Deployment")
     before = copy.deepcopy(compliance_source)
-    compliance = preview.compliance_manifest(compliance_source, IMAGE, "192.0.2.10")
+    compliance = preview.workload_manifest(compliance_source, IMAGE, "192.0.2.10", ENDPOINTS)
     assert compliance_source == before
     assert compliance["spec"]["selector"]["matchLabels"] == compliance["spec"]["template"]["metadata"]["labels"]
     worker = compliance["spec"]["template"]["spec"]["containers"][0]
@@ -78,19 +87,24 @@ def test_runtime_manifests_are_ephemeral_and_use_only_the_preview_database():
     assert e2e["spec"]["suspend"] is False and e2e["spec"]["backoffLimit"] == 0
 
 
-def test_network_policies_have_no_dns_internet_or_cross_namespace_exception():
-    db, service, compliance, e2e = preview.policies()
+def test_network_policies_have_no_dns_internet_or_cross_namespace_exception(monkeypatch):
+    monkeypatch.setattr(preview, "load", local_load)
+    workers = preview.worker_templates(ROOT)
+    objects = preview.policies(workers)
+    db, service, *rest = objects
     assert db["spec"]["egress"] == []
+    assert len(db["spec"]["ingress"]) == len(workers) + 1
     assert service["spec"]["egress"] == [preview.peer("database", [5432], "to"),
-                                          preview.peer("compliance", [8085], "to")]
-    assert compliance["spec"]["egress"] == [preview.peer("database", [5432], "to")]
-    assert compliance["spec"]["ingress"] == [preview.peer("service", [8085], "from")]
-    assert db["spec"]["ingress"] == [preview.peer("service", [5432], "from"),
-                                       preview.peer("compliance", [5432], "from")]
-    assert e2e["spec"]["egress"] == [preview.peer("service", [8080, 8086], "to")]
-    for obj in (db, service, compliance, e2e):
+                                         preview.peer("configuration", [8084], "to"),
+                                         preview.peer("compliance", [8085], "to")]
+    assert rest[-1]["spec"]["egress"] == [preview.peer("service", [8080, 8086], "to")]
+    assert len(objects) == len(workers) + 3
+    for obj in objects:
         assert obj["spec"]["policyTypes"] == ["Ingress", "Egress"]
         assert "namespaceSelector" not in json.dumps(obj) and "ipBlock" not in json.dumps(obj)
+        assert all(p["port"] in (5432, 8080, 8084, 8085, 8086)
+                   for rule in obj["spec"]["egress"] for p in rule["ports"])
+
 
 
 def test_build_uses_pinned_kaniko_new_tag_emptydir_and_corporate_ca():
@@ -107,12 +121,12 @@ def test_build_uses_pinned_kaniko_new_tag_emptydir_and_corporate_ca():
     assert "--context=dir:///workspace" in builder["args"]
     assert obj["metadata"]["annotations"]["nexus/commit"] == COMMIT
     assert spec["initContainers"][0]["securityContext"]["runAsNonRoot"] is True
-    assert any(v.get("configMap", {}).get("name") == "corp-ca" for v in spec["volumes"])
+    assert spec["volumes"][-1] == dict(name="context", emptyDir={"sizeLimit": "8Gi"})
     assert all("persistentVolumeClaim" not in v and "hostPath" not in v for v in spec["volumes"])
     assert original == before
 
 
-@pytest.mark.parametrize("failed", ["namespace", "policy", "build", "database", "compliance", "service", "job", "wait", None])
+@pytest.mark.parametrize("failed", ["namespace", "policy", "build", "database", "configuration", "compliance", "worker", "service", "job", "wait", None])
 def test_every_orchestration_failure_tears_down(monkeypatch, failed, capsys):
     calls = []
     def phase(name, result=None):
@@ -125,13 +139,18 @@ def test_every_orchestration_failure_tears_down(monkeypatch, failed, capsys):
         "namespace" if obj["kind"] == "Namespace" else "policy" if obj["kind"] == "NetworkPolicy" else "job"))
     monkeypatch.setattr(preview, "build_images", lambda *a: phase("build", [IMAGE, IMAGE]))
     monkeypatch.setattr(preview, "setup_database", lambda *a: phase("database", "192.0.2.10"))
-    def compliance(repo, image, db_ip):
-        assert image == IMAGE and db_ip == "192.0.2.10"
-        return phase("compliance", "192.0.2.30")
-    def service(repo, image, db_ip, compliance_ip):
-        assert image == IMAGE and db_ip == "192.0.2.10" and compliance_ip == "192.0.2.30"
+    def workload(template, image, db_ip, endpoints):
+        assert image == IMAGE and db_ip == "192.0.2.10" and endpoints == ENDPOINTS
+        return phase(template["spec"]["template"]["metadata"]["labels"]["app.kubernetes.io/component"])
+    def service(repo, image, db_ip, endpoints):
+        assert image == IMAGE and db_ip == "192.0.2.10" and endpoints == ENDPOINTS
         return phase("service", "192.0.2.20")
-    monkeypatch.setattr(preview, "setup_compliance", compliance)
+    with monkeypatch.context() as loader_patch:
+        loader_patch.setattr(preview, "load", local_load)
+        workers = preview.worker_templates(ROOT)
+    monkeypatch.setattr(preview, "worker_templates", lambda repo: workers)
+    monkeypatch.setattr(preview, "setup_worker_services", lambda workers: ENDPOINTS)
+    monkeypatch.setattr(preview, "setup_workload", workload)
     monkeypatch.setattr(preview, "setup_service", service)
     monkeypatch.setattr(preview, "load", lambda *a: {"items": [template("deploy/ui2/70-e2e-job.yaml", "Job")]})
     monkeypatch.setattr(preview, "wait_job", lambda *a, **kw: phase("wait"))
@@ -253,7 +272,7 @@ def test_ship_gate_before_push_pr_merge_and_deploy(tmp_path, monkeypatch, mode):
         assert not any(e[0] in ("push", "gh", "deploy") for e in events)
     else:
         assert sa._ship(args) == 0
-        if mode in ("auto", "force"):
+        if mode != "skip":
             assert events.index(("preview",)) < next(i for i, e in enumerate(events) if e[0] == "push")
         else:
             assert ("preview",) not in events
@@ -332,12 +351,14 @@ def test_database_bootstrap_uses_new_secret_and_refuses_image_drift(monkeypatch,
 
 
 @pytest.mark.parametrize("failed_rollout", [False, True])
-def test_compliance_setup_uses_candidate_preview_service_and_waits_for_readiness(monkeypatch, failed_rollout):
+@pytest.mark.parametrize("component", ["configuration", "compliance", "worker"])
+def test_worker_setup_uses_candidate_preview_services_and_waits_for_readiness(monkeypatch, failed_rollout, component):
     objects, calls = [], []
-    monkeypatch.setattr(preview, "load", lambda repo, path: {"items": list(
-        yaml.safe_load_all((repo / path).read_text()))})
+    monkeypatch.setattr(preview, "load", local_load)
+    workers = preview.worker_templates(ROOT)
+    worker = next(w for w in workers if w["component"] == component)
     monkeypatch.setattr(preview, "create", lambda ns, obj: objects.append(obj))
-    monkeypatch.setattr(preview, "copy_secret", lambda *a: pytest.fail("Compliance needs no credentials"))
+    monkeypatch.setattr(preview, "copy_secret", lambda *a: None)
     def fake(ns, *args, **kwargs):
         assert ns == preview.NS
         calls.append(args)
@@ -345,30 +366,30 @@ def test_compliance_setup_uses_candidate_preview_service_and_waits_for_readiness
             raise RuntimeError("synthetic readiness failure")
         return json.dumps(dict(spec=dict(clusterIP="192.0.2.30")))
     monkeypatch.setattr(preview, "k", fake)
+    endpoints = preview.setup_worker_services([worker])
     if failed_rollout:
         with pytest.raises(RuntimeError, match="readiness failure"):
-            preview.setup_compliance(ROOT, IMAGE, "192.0.2.10")
-        assert len(calls) == 1
+            preview.setup_workload(worker["deployment"], IMAGE, "192.0.2.10", ENDPOINTS)
     else:
-        assert preview.setup_compliance(ROOT, IMAGE, "192.0.2.10") == "192.0.2.30"
-        assert calls[-1] == ("get", "service", "ui2-preview-compliance", "-o", "json")
-    deployment, service = objects
-    assert calls[0][:3] == ("rollout", "status", "deployment/ui2-preview-compliance")
+        preview.setup_workload(worker["deployment"], IMAGE, "192.0.2.10", ENDPOINTS)
+    deployment = objects[-1]
+    assert calls[-1][:3] == ("rollout", "status", "deployment/ui2-preview-" + component)
     assert container_image(deployment) == IMAGE
     assert all(o["metadata"]["namespace"] == preview.NS for o in objects)
-    assert service["metadata"]["name"] == "ui2-preview-compliance"
-    assert service["spec"]["type"] == "ClusterIP"
-    assert service["spec"]["selector"] == deployment["spec"]["template"]["metadata"]["labels"]
-    assert service["spec"]["ports"] == [dict(name="http", port=8085, targetPort=8085, protocol="TCP")]
+    for service in objects[:-1]:
+        assert service["metadata"]["name"] == "ui2-preview-" + component
+        assert service["spec"]["type"] == "ClusterIP"
+        assert service["spec"]["selector"] == deployment["spec"]["template"]["metadata"]["labels"]
+        assert endpoints[worker["services"][0]["metadata"]["name"]] == "http://192.0.2.30:" + str(worker["ports"][0])
 
 
 def test_service_copies_only_required_keys_and_has_namespace_only_service(monkeypatch):
     objects, copied = [], []
-    monkeypatch.setattr(preview, "load", lambda repo, path: template(path))
+    monkeypatch.setattr(preview, "load", local_load)
     monkeypatch.setattr(preview, "copy_secret", copied.append)
     monkeypatch.setattr(preview, "create", lambda ns, obj: objects.append(obj))
     monkeypatch.setattr(preview, "k", lambda *a, **kw: json.dumps(dict(spec=dict(clusterIP="192.0.2.20"))))
-    assert preview.setup_service(ROOT, IMAGE, "192.0.2.10", "192.0.2.30") == "192.0.2.20"
+    assert preview.setup_service(ROOT, IMAGE, "192.0.2.10", ENDPOINTS) == "192.0.2.20"
     assert "ui2-db" not in copied and "ui2-e2e-machine-token" in copied
     service = next(o for o in objects if o["kind"] == "Service")
     assert service["spec"]["type"] == "ClusterIP"
@@ -391,6 +412,7 @@ def test_client_requires_pass_exit_and_verdict(monkeypatch, code, marker, capsys
 
 @pytest.mark.parametrize("fault", [None, "upload", "replaced", "wrong-owner", "missing-digest"])
 def test_build_pipeline_binds_candidate_to_owner_and_digest(monkeypatch, fault):
+    monkeypatch.setattr(preview, "prepare_build_context", lambda *a: None)
     source = template("deploy/ui2-image-build/30-build-job.yaml")
     source["spec"]["template"]["spec"]["containers"][0]["env"] = [
         dict(name="HTTPS_PROXY", value="http://192.0.2.30:3128")]
@@ -429,8 +451,10 @@ def test_build_pipeline_binds_candidate_to_owner_and_digest(monkeypatch, fault):
         for obj in created:
             assert obj["metadata"]["namespace"] == preview.BUILD_NS
             assert obj["metadata"]["labels"][preview.LABEL] == "synthetic-owner"
-            assert obj["spec"]["template"]["spec"]["containers"][0]["env"] == source["spec"]["template"]["spec"]["containers"][0]["env"]
-        assert all("/run/corp-ca/" in target[-1] for _, target in streamed)
+            assert obj["spec"]["template"]["spec"]["containers"][0]["env"] == (
+                source["spec"]["template"]["spec"]["containers"][0]["env"] +
+                [dict(name="UI2_IMAGE_TAG", value=COMMIT[:12])])
+        assert all(target[-1] == preview.LOAD_CONTEXT for _, target in streamed)
 
 
 @pytest.mark.parametrize("mode", ["pass", "fail", "signal"])
@@ -460,6 +484,7 @@ else:
     Path(os.environ['TEST_WORK']).write_text(sys.argv[sys.argv.index('--repo') + 1])
     print('synthetic detail withheld', flush=True)
     print('TIMING preview_e2e 0.001', flush=True)
+    print('PREVIEW STEP: phase=preview_compliance step=apply Deployment reason=OTHER error=field is immutable', flush=True)
     if os.environ['TEST_MODE'] == 'signal':
         os.kill(os.getppid(), signal.SIGTERM)
         time.sleep(30)
@@ -479,3 +504,255 @@ else:
     assert work.exists() and not Path(work.read_text()).exists()
     assert list(scratch.iterdir()) == []
     assert "synthetic detail" not in result.stdout
+    assert "PREVIEW STEP: phase=preview_compliance" in result.stdout
+
+
+@pytest.mark.parametrize("path", ["deploy/ui2/55-compliance-deployment.yaml",
+                                  "deploy/ui2/54-configuration-deployment.yaml"])
+def test_source_list_is_parsed_without_preview_namespace(monkeypatch, path):
+    def run(argv, **kwargs):
+        assert argv[:3] == ["kubectl", "create", "--dry-run=client"]
+        assert "-n" not in argv
+        return subprocess.CompletedProcess(argv, 0, json.dumps(local_load(ROOT, path)), "")
+    monkeypatch.setattr(preview.subprocess, "run", run)
+    assert [o["kind"] for o in preview.load(ROOT, path)["items"]] == ["Deployment", "Service"]
+
+
+def test_apply_flattens_lists_and_sets_each_namespace_without_mutating_source(monkeypatch):
+    source = local_load(ROOT, "deploy/ui2/55-compliance-deployment.yaml")
+    before, applied = copy.deepcopy(source), []
+    def run(argv, **kwargs):
+        assert argv[:6] == ["kubectl", "-n", "ui2-preview-synthetic", "apply", "--server-side",
+                           "--field-manager=nexus-preview"]
+        applied.append(json.loads(kwargs["input"]))
+        return subprocess.CompletedProcess(argv, 0, "", "")
+    monkeypatch.setattr(preview.subprocess, "run", run)
+    preview.create("ui2-preview-synthetic", source)
+    assert source == before
+    assert [o["kind"] for o in applied] == ["Deployment", "Service"]
+    assert all(o["metadata"]["namespace"] == "ui2-preview-synthetic" for o in applied)
+
+
+@pytest.mark.parametrize("stderr,reason", [
+    ('Deployment "synthetic-deployment" is invalid: spec.selector: Invalid value: '
+     '{"private": "synthetic-secret"}: field is immutable', "MANIFEST_INVALID"),
+    ('Error from server (Forbidden): User "synthetic-principal" cannot create resource "deployments" '
+     'in namespace "synthetic-namespace"', "FORBIDDEN"),
+    ('Error from server: strict decoding error: unknown field "spec.syntheticField"', "OTHER"),
+    ('connection refused https://example.invalid:6443 password=synthetic-secret 192.0.2.10', "OTHER"),
+])
+def test_failed_apply_logs_masked_error_text_and_field_reason(tmp_path, monkeypatch, capsys, stderr, reason):
+    monkeypatch.setattr(preview.Path, "home", lambda: tmp_path)
+    monkeypatch.setattr(preview.subprocess, "run", lambda argv, **kw:
+                        subprocess.CompletedProcess(argv, 1, "", stderr))
+    with preview.private_log():
+        with preview.timing("preview_compliance"):
+            with pytest.raises(preview.PreviewFailure) as error:
+                preview.create(preview.NS, dict(kind="Deployment", metadata=dict(name="synthetic-deployment")))
+    assert error.value.phase == "preview_compliance" and error.value.step == "apply Deployment"
+    assert error.value.reason == reason
+    output = capsys.readouterr().out
+    log = next((tmp_path / ".local/state/nexus-preview").glob("*.log"))
+    assert log.stat().st_mode & 0o777 == 0o600
+    assert "PREVIEW STEP: phase=preview_compliance step=apply Deployment" in output
+    for target in (output, log.read_text()):
+        assert all(s not in target for s in ("synthetic-principal", "synthetic-secret", "synthetic-namespace",
+                                             "synthetic-deployment", "example.invalid", "192.0.2.10"))
+        if reason == "MANIFEST_INVALID":
+            assert "spec.selector" in target and "field is immutable" in target
+        if reason == "FORBIDDEN":
+            assert "Forbidden" in target and "cannot create resource" in target
+
+
+def test_timeout_preserves_phase_and_masks_partial_stderr(monkeypatch, capsys):
+    def run(*a, **kw):
+        raise subprocess.TimeoutExpired(a, 1, stderr=b'connection to example.invalid timed out')
+    monkeypatch.setattr(preview.subprocess, "run", run)
+    with pytest.raises(preview.PreviewFailure) as error:
+        preview.k(preview.NS, "get", "pod", "synthetic-pod")
+    assert error.value.reason == "TIMEOUT"
+    assert "example.invalid" not in capsys.readouterr().out
+
+
+def test_generic_worker_discovery_and_rendering_uses_production_args_ports_and_labels(tmp_path, monkeypatch):
+    monkeypatch.setattr(preview, "load", local_load)
+    path = tmp_path / "deploy/ui2/57-synthetic-deployment.yaml"
+    path.parent.mkdir(parents=True)
+    deployment = template("deploy/ui2/54-configuration-deployment.yaml", "Deployment")
+    service = template("deploy/ui2/54-configuration-deployment.yaml", "Service")
+    deployment["metadata"]["name"] = service["metadata"]["name"] = "ui2-synthetic-module"
+    for labels in (deployment["metadata"]["labels"], deployment["spec"]["selector"]["matchLabels"],
+                   deployment["spec"]["template"]["metadata"]["labels"], service["spec"]["selector"]):
+        labels["app.kubernetes.io/component"] = "synthetic-module"
+    deployment["spec"]["template"]["spec"]["containers"][0]["args"] = ["worker", "synthetic-module"]
+    path.write_text(yaml.safe_dump(deployment))
+    path.with_name("58-synthetic-service.yaml").write_text(yaml.safe_dump(service))
+    workers = preview.worker_templates(ROOT) + preview.worker_templates(tmp_path)
+    assert len(workers) == 4
+    before = copy.deepcopy(workers)
+    for namespace in ("ui2-preview-first", "ui2-preview-second"):
+        monkeypatch.setattr(preview, "NS", namespace)
+        for worker in workers:
+            obj = preview.workload_manifest(worker["deployment"], IMAGE, "192.0.2.10", ENDPOINTS)
+            labels = obj["spec"]["template"]["metadata"]["labels"]
+            assert obj["spec"]["selector"]["matchLabels"] == labels
+            assert labels[preview.LABEL] == namespace
+            assert obj["metadata"]["namespace"] == namespace
+            assert obj["metadata"]["name"].startswith(namespace + "-")
+            spec = obj["spec"]["template"]["spec"]
+            assert spec["containers"][0]["args"] == worker["deployment"]["spec"]["template"]["spec"]["containers"][0]["args"]
+            assert all("hostPath" not in v and "persistentVolumeClaim" not in v for v in spec["volumes"])
+            assert all(v["secret"]["secretName"].startswith(namespace + "-") for v in spec["volumes"] if "secret" in v)
+            for source in worker["services"]:
+                svc = preview.service_object(source)
+                assert svc["metadata"]["name"].startswith(namespace + "-")
+                assert all(labels[k] == v for k, v in svc["spec"]["selector"].items())
+                assert svc["spec"]["ports"] == source["spec"]["ports"]
+        assert all(o["metadata"]["name"].startswith(namespace + "-") for o in preview.policies(workers))
+    assert workers == before
+
+
+@pytest.mark.parametrize("cleanup_failure", [False, True])
+def test_complete_preview_uses_unique_scopes_all_workers_and_cleanup(monkeypatch, capsys, cleanup_failure):
+    objects, scopes, cleanup_scopes = [], [], []
+    monkeypatch.setattr(preview, "load", local_load)
+    monkeypatch.setattr(preview.secrets, "token_hex", lambda n: "synthetic-owner")
+    monkeypatch.setattr(preview, "create", lambda ns, obj: objects.append(copy.deepcopy(obj)))
+    monkeypatch.setattr(preview, "build_images", lambda *a: [IMAGE, IMAGE])
+    monkeypatch.setattr(preview, "setup_database", lambda *a: "192.0.2.10")
+    monkeypatch.setattr(preview, "copy_secret", lambda *a: None)
+    monkeypatch.setattr(preview, "wait_job", lambda *a, **kw: None)
+    def cleanup(owner):
+        cleanup_scopes.append((preview.NS, owner))
+        if cleanup_failure:
+            raise RuntimeError("Preview teardown incomplete; ship blocked")
+    monkeypatch.setattr(preview, "cleanup", cleanup)
+    def k(ns, *args, **kwargs):
+        scopes.append((ns, args))
+        if args[:2] == ("get", "service"):
+            return json.dumps(dict(spec=dict(clusterIP="192.0.2.20")))
+        return ""
+    monkeypatch.setattr(preview, "k", k)
+    if cleanup_failure:
+        with pytest.raises(RuntimeError, match="teardown incomplete"):
+            preview.run(ROOT, COMMIT)
+    else:
+        preview.run(ROOT, COMMIT)
+    assert preview.NS == "ui2-preview"
+    assert cleanup_scopes == [("ui2-preview-synthetic-owner", "synthetic-owner")]
+    assert len([o for o in objects if o["kind"] == "Deployment"]) == 4
+    for obj in objects:
+        if obj["kind"] != "Namespace":
+            assert obj["metadata"]["namespace"] == "ui2-preview-synthetic-owner"
+            assert obj["metadata"]["name"].startswith("ui2-preview-synthetic-owner-")
+    assert ("PREVIEW E2E: PASS" in capsys.readouterr().out) == (not cleanup_failure)
+    assert any(a[:3] == ("rollout", "status", "deployment/ui2-preview-synthetic-owner-configuration") for ns, a in scopes)
+
+
+def test_client_surfaces_masked_step_and_failure_and_total_time(monkeypatch, capsys):
+    monkeypatch.setattr(sa, "_git", lambda *a, **kw: "# Synthetic wrapper\n")
+    line = "PREVIEW STEP: phase=preview_compliance step=apply Deployment reason=MANIFEST_INVALID error=field is immutable"
+    monkeypatch.setattr(sa.subprocess, "run", lambda *a, **kw:
+                        subprocess.CompletedProcess(a, 1, line + "\nPREVIEW E2E: FAIL\n", ""))
+    with pytest.raises(SystemExit, match="stopped before PR"):
+        sa._preview_e2e(ROOT, COMMIT)
+    output = capsys.readouterr().out
+    assert line in output and "PREVIEW E2E: FAIL" in output and "TIMING preview_total " in output
+
+
+def synthetic_host_inputs(home):
+    paths = ("ui2/.ca/synthetic.pem", "ui2/.ca/second.pem",
+             "ui2/.gradle-home/wrapper/dists/gradle-8.14.3-bin/synthetic-hash/gradle-8.14.3-bin.zip")
+    for path in paths:
+        file = home / "nexus" / path
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_bytes(b"synthetic build input")
+    return paths
+
+
+def test_context_preparation_matches_production_metadata_and_preserves_source(tmp_path, monkeypatch):
+    monkeypatch.setattr(preview.Path, "home", lambda: tmp_path)
+    inputs = synthetic_host_inputs(tmp_path)
+    source = tmp_path / "nexus"
+    (source / "project").mkdir()
+    (source / "project/deploy_info.json").write_text('{"commit": "stale"}')
+    before = {p: p.read_bytes() for p in source.rglob("*") if p.is_file()}
+    candidate = tmp_path / "candidate"
+    (candidate / "project").mkdir(parents=True)
+    (candidate / "project/deploy_info.json").write_text('{"commit": "stale candidate"}')
+
+    production = (ROOT / "deploy/ui2-image-build/run_build.sh").read_text()
+    preparation = production.split('BUILT_AT="', 1)[1].split('echo "Starting loader...', 1)[0]
+    # Fail if production gains another generated context input without preview parity.
+    assert re.findall(r">\s*(\S+)", preparation) == ["project/deploy_info.json"]
+    printf_line = next(line for line in preparation.splitlines() if line.startswith("printf "))
+    production_context = tmp_path / "production"
+    (production_context / "project").mkdir(parents=True)
+    subprocess.run(["bash", "-c", 'COMMIT_SHA=$1; BUILT_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"\n' + printf_line,
+                    "parity", COMMIT], cwd=production_context, check=True)
+    expected = json.loads((production_context / "project/deploy_info.json").read_text())
+
+    started = datetime.now(timezone.utc).replace(microsecond=0)
+    preview.prepare_build_context(candidate, COMMIT)
+    finished = datetime.now(timezone.utc).replace(microsecond=0)
+    info = json.loads((candidate / "project/deploy_info.json").read_text())
+    assert set(info) == set(expected) | {"preview"}
+    assert info["commit"] == expected["commit"] == COMMIT
+    assert info["preview"] is True
+    assert re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", info["built_at"])
+    assert started <= datetime.fromisoformat(info["built_at"].replace("Z", "+00:00")) <= finished
+    assert {str(p.relative_to(candidate)) for p in candidate.rglob("*") if p.is_file()} == (
+        set(inputs) | {"project/deploy_info.json"})
+    assert before == {p: p.read_bytes() for p in source.rglob("*") if p.is_file()}
+
+
+def test_host_overlay_copies_only_approved_globs_and_preserves_source(tmp_path, monkeypatch):
+    monkeypatch.setattr(preview.Path, "home", lambda: tmp_path)
+    paths = synthetic_host_inputs(tmp_path)
+    excluded = (".env", "ui2/.env", "ui2/.ca/private.key", "ui2/.ca/nested/extra.pem",
+                "ui2/.gradle-home/cache.bin",
+                "ui2/.gradle-home/wrapper/dists/gradle-8.14.3-bin/synthetic-hash/extra.zip",
+                "ui2/.gradle-home/wrapper/dists/gradle-8.14.2-bin/synthetic-hash/gradle-8.14.3-bin.zip")
+    for path in excluded:
+        file = tmp_path / "nexus" / path
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_bytes(b"synthetic excluded input")
+    before = {p: p.read_bytes() for p in (tmp_path / "nexus").rglob("*") if p.is_file()}
+    candidate = tmp_path / "candidate"
+    candidate.mkdir()
+    (candidate / "tracked.txt").write_text("candidate source")
+    preview.overlay_host_inputs(candidate)
+    copied = {str(p.relative_to(candidate)) for p in candidate.rglob("*") if p.is_file()}
+    assert copied == set(paths) | {"tracked.txt"}
+    assert (candidate / "tracked.txt").read_text() == "candidate source"
+    assert all((candidate / path).read_bytes() == before[tmp_path / "nexus" / path] for path in paths)
+    assert before == {p: p.read_bytes() for p in (tmp_path / "nexus").rglob("*") if p.is_file()}
+
+
+@pytest.mark.parametrize("fault", ["ca-missing", "zip-missing", "file-link", "directory-link", "candidate-link"])
+def test_host_overlay_fails_closed_before_build_for_missing_or_linked_inputs(tmp_path, monkeypatch, fault):
+    monkeypatch.setattr(preview.Path, "home", lambda: tmp_path)
+    paths = synthetic_host_inputs(tmp_path)
+    source = tmp_path / "nexus"
+    candidate = tmp_path / "candidate"
+    candidate.mkdir()
+    if fault == "ca-missing":
+        for path in paths[:2]:
+            (source / path).unlink()
+    elif fault == "zip-missing":
+        (source / paths[2]).unlink()
+    elif fault == "file-link":
+        (source / paths[0]).unlink()
+        (source / paths[0]).symlink_to(source / paths[1])
+    elif fault == "directory-link":
+        (source / "ui2/.ca").rename(source / "ui2/other")
+        (source / "ui2/.ca").symlink_to(source / "ui2/other", target_is_directory=True)
+    else:
+        (candidate / "ui2").symlink_to(source / "ui2", target_is_directory=True)
+    monkeypatch.setattr(preview, "k", lambda *a, **kw: pytest.fail("Missing inputs must prevent cluster build"))
+    with pytest.raises(preview.PreviewFailure) as caught:
+        with preview.timing("preview_build"):
+            preview.build_images(candidate, COMMIT, "synthetic-owner")
+    assert caught.value.reason == "HOST_INPUT_MISSING"
+    assert "step=overlay host inputs reason=HOST_INPUT_MISSING" in preview.failure_line(caught.value)
+    assert not (candidate / "ui2/.ca").exists() or fault == "candidate-link"

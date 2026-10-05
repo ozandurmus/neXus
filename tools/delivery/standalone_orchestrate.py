@@ -398,9 +398,10 @@ def _preview_e2e(repo: Path, commit: str) -> None:
         wrapper = _git("show", commit + ":tools/e2e/hosta_preview_e2e.sh", cwd=repo)
         result = subprocess.run(["bash", "-s", "--", "--repo", str(repo), "--commit", commit],
                                 input=wrapper, capture_output=True, text=True, timeout=7200)
-        # The wrapper only returns timings and a derived verdict, never raw pod logs.
+        # The wrapper returns timings, masked API diagnostics and a derived verdict.
         for line in result.stdout.splitlines():
-            if re.fullmatch(r"TIMING preview_[a-z_]+ [0-9.]+", line):
+            if (re.fullmatch(r"TIMING preview_[a-z_]+ [0-9.]+", line)
+                    or line.startswith(("PREVIEW STEP: ", "PREVIEW E2E: FAIL"))):
                 print(line, flush=True)
         if result.returncode != 0 or "PREVIEW E2E: PASS" not in result.stdout.splitlines():
             raise SystemExit("preview e2e failed; stopped before PR creation/merge")
@@ -475,10 +476,8 @@ def _ship(args: argparse.Namespace) -> int:
                           capture_output=True, text=True)
     if gate.returncode != 0 or "Gate:                 PASS" not in gate.stdout:
         raise SystemExit("privacy gate did not pass; nothing pushed")
-    touched = _git("diff", "--name-only", "origin/main..." + branch).splitlines()
-    needs_preview = getattr(args, "preview_e2e", False) or any(
-        p.startswith(("ui2/frontend/", "ui2/service/")) for p in touched)
-    if needs_preview and skip_preview is None:
+    # Structural/template/worker changes need the same gate as frontend changes.
+    if skip_preview is None:
         _preview_e2e(wt if args.task else REPO_ROOT, _git("rev-parse", branch))
     _git("push", "-q", "--force-with-lease", "origin", branch + ":" + branch)
     commits = _git("log", "--format=- %s", "origin/main.." + branch)
@@ -557,7 +556,7 @@ def main(argv: list[str] | None = None) -> int:
     sh.add_argument("--skip-security", metavar="REASON", help="emergency bypass; a reason is mandatory and printed")
     preview = sh.add_mutually_exclusive_group()
     preview.add_argument("--preview-e2e", action="store_true",
-                         help="isolated pre-merge quick e2e (automatic for frontend/service changes)")
+                         help="isolated pre-merge quick e2e (enabled by default for every ship)")
     preview.add_argument("--no-preview-e2e", metavar="REASON", help="skip preview e2e with a recorded reason")
     c = sub.add_parser("clean")
     c.add_argument("--task", required=True)

@@ -25,8 +25,9 @@ wait "$child"
 result=$?
 child=
 exit "$result"'
-# No raw build, DB or E2E logs cross the boundary. pipefail preserves either streaming failure.
+# Only masked API diagnostics, timings and verdicts cross the boundary.
+# pipefail preserves either streaming failure.
 git -C "$repo" archive --format=tar "$commit" | \
   ssh -o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 \
     "$host" "bash -c $(printf '%q' "$remote") -- $commit" 2>/dev/null | \
-  awk '/^TIMING preview_[a-z_]+ [0-9.]+$/ || /^PREVIEW E2E: (PASS|FAIL)/'
+  awk '/^TIMING preview_[a-z_]+ [0-9.]+$/ || /^PREVIEW E2E: (PASS|FAIL)/ || /^PREVIEW STEP: /'
