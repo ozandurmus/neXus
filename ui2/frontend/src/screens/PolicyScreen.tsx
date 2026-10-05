@@ -103,9 +103,9 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
   const [eligibleSources, setEligibleSources] = useState<Set<string>>(new Set());
   const [collecting, setCollecting] = useState(false);
   const [collectionStatus, setCollectionStatus] = useState("");
-  const [selected, setSelected] = useState("");
+  const [selected, setSelected] = useState(() => new URLSearchParams(window.location.search).get("policy_id") ?? "");
   const [device, setDevice] = useState(() => new URLSearchParams(window.location.search).get("device_id") ?? "");
-  const [tab, setTab] = useState<"Rules" | "Objects" | "Installation">("Rules");
+  const [tab, setTab] = useState<"Rules" | "Objects" | "Installation">(() => new URLSearchParams(window.location.search).get("tab") === "objects" ? "Objects" : "Rules");
   const [hitFilter, setHitFilter] = useState("");
   const [hitDays, setHitDays] = useState(90);
   const [page, setPage] = useState(0);
@@ -230,6 +230,15 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
   };
   const selectedPolicies = catalog.filter(policy => checked.has(policy.id));
   const selectedMetadata = catalog.find(policy => policy.id === selected);
+  const [linkedDomain] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    const sourceId = params.get("source_id"), containerId = params.get("container_id");
+    return sourceId && containerId ? { sourceId, containerId } : null;
+  });
+  const objectMetadata = selectedMetadata ?? (linkedDomain ? {
+    ...linkedDomain, id: "", sourceName: "", containerName: "", name: "", vendor: "CP",
+    collectedAt: "", artefactRef: "", targets: [],
+  } : null);
   const exportSelected = async () => {
     setExporting(true); setCollectionStatus("");
     try {
@@ -430,12 +439,12 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
           </FormControl>
         </Stack>
         {collectionStatus && <Typography role="status" sx={{ mb: 1 }}>{collectionStatus}</Typography>}
-        {selected && <Tabs value={tab} onChange={(_, value) => { setTab(value); setDrawer(null); drawerRequest.current++; }} aria-label="Policy tabs" sx={{ mb: 2 }}>
+        {(selected || objectMetadata) && <Tabs value={tab} onChange={(_, value) => { setTab(value); setDrawer(null); drawerRequest.current++; }} aria-label="Policy tabs" sx={{ mb: 2 }}>
           {["Rules", "Objects", "Installation"].map(label => <Tab key={label} label={label} value={label} />)}
         </Tabs>}
-        {selected && tab !== "Rules" && selectedMetadata && <PolicyDomainTab
-          key={`${tab}:${selectedMetadata.sourceId}:${selectedMetadata.containerId}:${revision}`}
-          tab={tab} metadata={selectedMetadata} policies={catalog} />}
+        {tab !== "Rules" && objectMetadata && <PolicyDomainTab
+          key={`${tab}:${objectMetadata.sourceId}:${objectMetadata.containerId}:${revision}`}
+          tab={tab} metadata={objectMetadata} policies={catalog} />}
         <Box role="tabpanel" aria-label="Rules" hidden={tab !== "Rules"} sx={{ display: tab === "Rules" ? "contents" : "none" }}>
         {error && <Box data-error-code={errorCode}><EmptyPanel title="Policy unavailable" body={error}><Button onClick={() => setRevision(n => n + 1)}>Retry</Button></EmptyPanel></Box>}
         {loadingTree && !error && <Typography role="status">Loading policies…</Typography>}

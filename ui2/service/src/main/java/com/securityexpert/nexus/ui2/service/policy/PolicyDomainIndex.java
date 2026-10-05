@@ -10,6 +10,7 @@ final class PolicyDomainIndex {
     final List<Map<String, Object>> objects = new ArrayList<>();
     final List<Map<String, Object>> duplicates = new ArrayList<>();
     final Map<String, List<Map<String, Object>>> rules = new HashMap<>(), groups = new HashMap<>();
+    final Map<String, String> aliases = new HashMap<>();
     final List<CpObjectInventory> inventories;
     final List<PolicySnapshot> snapshots;
 
@@ -42,9 +43,18 @@ final class PolicyDomainIndex {
             gatewayState.type(), gatewayState.collectedAt(), gatewayState.status(), gatewayState.reason(), gateways, gatewayState.pages(), gatewayState.seconds()));
         this.inventories = List.copyOf(states.values());
         boolean unusedKnown = unusedState[0];
-        var aliases = new HashMap<String, String>();
+        var inventoryUids = Set.copyOf(items.keySet());
+        var statuses = new HashMap<String, String>();
         items.values().forEach(o -> { aliases.put(o.id(), o.uid()); aliases.put(o.uid(), o.uid()); });
         for (var snapshot : snapshots) items.values().forEach(o -> aliases.put(ref(snapshot.metadata().id(), "object", o.uid()), o.uid()));
+        // Snapshot-only objects (including PAN) use their existing opaque ID as their lookup reference.
+        for (var snapshot : snapshots) for (var object : snapshot.objects().values()) {
+            if (aliases.containsKey(object.id())) continue;
+            aliases.put(object.id(), object.id());
+            items.putIfAbsent(object.id(), new CpObjectInventory.Item(object.id(), object.id(), object.name(),
+                object.type(), object.members(), object.values(), object.schedule(), List.of()));
+            statuses.put(object.id(), object.status());
+        }
         for (var object : items.values()) for (String member : referencedMembers(object)) {
             groups.computeIfAbsent(member, k -> new ArrayList<>()).add(Map.of("id", object.id(), "uid", object.uid(), "name", object.name(), "type", object.type()));
         }
@@ -82,8 +92,9 @@ final class PolicyDomainIndex {
             var row = new LinkedHashMap<String, Object>();
             row.put("id", object.id()); row.put("uid", object.uid()); row.put("name", object.name()); row.put("type", object.type());
             row.put("values", object.values()); row.put("members", object.members()); row.put("schedule", object.schedule());
-            row.put("unused", unusedKnown ? unused.contains(object.uid()) : null);
-            boolean group = Set.of("group", "service-group", "time-group").contains(object.type());
+            row.put("status", statuses.getOrDefault(object.uid(), "RESOLVED"));
+            row.put("unused", unusedKnown && inventoryUids.contains(object.uid()) ? unused.contains(object.uid()) : null);
+            boolean group = Set.of("group", "address-group", "service-group", "time-group").contains(object.type());
             row.put("emptyGroup", group && object.members().isEmpty());
             row.put("singleMember", group && new HashSet<>(object.members()).size() == 1);
             row.put("duplicateId", duplicateIds.get(object.uid()));

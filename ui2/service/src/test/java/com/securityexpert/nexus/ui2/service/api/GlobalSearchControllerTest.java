@@ -20,6 +20,15 @@ class GlobalSearchControllerTest {
     }
 
     @Test
+    void rejectsUnknownGroupsAndUnboundedOffsets() {
+        var controller = new GlobalSearchController(null);
+        var request = new MockHttpServletRequest();
+        assertEquals(HttpStatus.BAD_REQUEST, controller.search("192.0.2.8", 20, "unknown", 0, request).getStatusCode());
+        assertEquals(HttpStatus.BAD_REQUEST, controller.search("192.0.2.8", 20, "routes", -1, request).getStatusCode());
+        assertEquals(HttpStatus.BAD_REQUEST, controller.search("192.0.2.8", 20, "routes", 10001, request).getStatusCode());
+    }
+
+    @Test
     void readActionHasTheSameRoleAsConfigurationText() {
         var actions = new ActionRegistry();
         assertEquals(actions.find(ActionRegistry.DEVICE_CONFIGURATION_TEXT_READ).orElseThrow().requiredRoleToken(),

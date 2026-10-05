@@ -636,3 +636,15 @@ it("full refresh submits FULL and reused-domain progress retains the original hi
   const call = fetch.mock.calls.find(([url]) => url.endsWith("/collect"));
   expect(JSON.parse(call?.[1]?.body as string)).toEqual({ domainRef: "", mode: "FULL" });
 });
+
+it("opens the Policy Objects tab from a global search link", async () => {
+  window.history.replaceState(null, "", `/?screen=policy&tab=objects&policy_id=${metadata.id}&source_id=${metadata.sourceId}&container_id=${metadata.containerId}`);
+  const fetch = vi.fn(async (input: string) => new Response(JSON.stringify(
+    input.includes(`/domains/${metadata.containerId}/objects`) ? { objects: [], total: 0, page: 0, pageSize: 200, types: [] }
+      : treeBody(input) ?? (input === "/api/v2/policy/sources" ? { sources: [], canCollect: false } : page)),
+    { headers: { "X-Nexus-Masked": "true" } }));
+  vi.stubGlobal("fetch", fetch);
+  mount();
+  await waitFor(() => expect(screen.getByRole("tab", { name: "Objects" })).toHaveAttribute("aria-selected", "true"));
+  await waitFor(() => expect(fetch.mock.calls.some(([path]) => path.includes(`/domains/${metadata.containerId}/objects`))).toBe(true));
+});

@@ -28,6 +28,7 @@ import com.securityexpert.nexus.ui2.service.privacy.PrivacyMaskingResponseBodyAd
 public final class GlobalSearchService {
     private record RunRef(String deviceId, String runId, String vendor) { }
 
+    private final com.securityexpert.nexus.ui2.service.policy.PolicyQueryService policies;
     private final DeviceRepository devices;
     private final DevicePlatformFactsRepository facts;
     private final TransactionBoundary transactions;
@@ -40,7 +41,9 @@ public final class GlobalSearchService {
     };
 
     public GlobalSearchService(DeviceRepository devices, DevicePlatformFactsRepository facts,
-            TransactionBoundary transactions, PrivacyMaskingResponseBodyAdvice masking) {
+            TransactionBoundary transactions, PrivacyMaskingResponseBodyAdvice masking,
+            com.securityexpert.nexus.ui2.service.policy.PolicyQueryService policies) {
+        this.policies = policies;
         this.devices = devices;
         this.facts = facts;
         this.transactions = transactions;
@@ -48,6 +51,11 @@ public final class GlobalSearchService {
     }
 
     public Map<String, Object> search(String term, int limit, boolean masked) {
+        return search(term, limit, masked, "", 0);
+    }
+
+    public Map<String, Object> search(String term, int limit, boolean masked, String group, int offset) {
+        IpQuery ip = IpQuery.parse(term);
         List<DeviceSummaryRecord> deviceRows = devices.listAll();
         Map<String, DevicePlatformFacts> platformFacts = facts.findAll();
         // Register names before masking free-form setting values and terminal reasons.
@@ -76,6 +84,26 @@ public final class GlobalSearchService {
                 hit.put("href", "?screen=inventory&device_id=" + url(device.deviceId()));
                 deviceHits.add(hit);
             }
+        }
+
+        if (ip != null) {
+            Map<String, Object> out = new LinkedHashMap<>();
+            Map<String, Long> counts = new LinkedHashMap<>();
+            for (String key : List.of("interfaces", "routes", "policy_objects")) {
+                if (!group.isEmpty() && !group.equals(key)) continue;
+                if (key.equals("policy_objects")) {
+                    var page = policies.searchAddresses(ip.value(), limit, offset, masked);
+                    out.put(key, page.get("items"));
+                    counts.put(key, ((Number) page.get("total")).longValue());
+                } else {
+                    var page = IpInventorySearch.search(transactions, ip, key.equals("routes"), limit, offset,
+                        identityById, masking, masked);
+                    out.put(key, page.items()); counts.put(key, page.total());
+                }
+            }
+            out.put("counts", counts);
+            out.put("devices", deviceHits); out.put("settings", List.of()); out.put("evidence", List.of());
+            return out;
         }
 
         List<RunRef> runs = transactions.inTransaction(dsl -> dsl.fetch(

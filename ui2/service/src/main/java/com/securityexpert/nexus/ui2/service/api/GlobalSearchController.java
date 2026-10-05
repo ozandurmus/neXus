@@ -20,14 +20,23 @@ public final class GlobalSearchController {
         this.search = search;
     }
 
+    public ResponseEntity<?> search(String q, Integer limit, HttpServletRequest request) {
+        return search(q, limit, null, null, request);
+    }
+
     @GetMapping("/api/v2/search")
-    public ResponseEntity<Map<String, Object>> search(@RequestParam(required = false) String q,
-            @RequestParam(required = false) Integer limit, HttpServletRequest request) {
+    public ResponseEntity<?> search(@RequestParam(required = false) String q,
+            @RequestParam(required = false) Integer limit, @RequestParam(required = false) String group,
+            @RequestParam(required = false) Integer offset, HttpServletRequest request) {
         if (q == null || q.strip().length() < 2 || q.strip().length() > 100
-                || limit != null && limit < 1) {
+                || limit != null && limit < 1 || offset != null && (offset < 0 || offset > 10000)
+                || group != null && !java.util.Set.of("interfaces", "routes", "policy_objects").contains(group)) {
             return ResponseEntity.badRequest().body(Map.of("error", "INVALID_SEARCH_QUERY"));
         }
-        return ResponseEntity.ok(search.search(q.strip(), limit == null ? 20 : Math.min(limit, 50),
-                PrivacyMaskingResponseBodyAdvice.isReplayViewer(request)));
+        boolean masked = PrivacyMaskingResponseBodyAdvice.isReplayViewer(request);
+        var result = search.search(q.strip(), limit == null ? 20 : Math.min(limit, 50),
+                masked, group == null ? "" : group, offset == null ? 0 : offset);
+        return ResponseEntity.ok(com.securityexpert.nexus.ui2.service.search.IpQuery.parse(q.strip()) == null ? result
+            : new com.securityexpert.nexus.ui2.service.search.IpSearchResponse(result, masked));
     }
 }

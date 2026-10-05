@@ -22,6 +22,21 @@ class PolicyDomainIndexTest {
             new Cell(List.of(ref(meta.id(), "object", "group-uid")), false), empty, empty, empty, "Accept", "Log", "", Map.of());
         return new PolicySnapshot(meta, List.of(new Section("layer-1", "Synthetic layer", "CP access layer", null, List.of(rule))), Map.of());
     }
+    @Test void snapshotObjectsAppearInTheObjectTabAndNestedGroupsHaveUniqueUsage() {
+        var meta = snapshot(List.of()).metadata();
+        var host = new PolicyObject("host-id", "Synthetic address", "address", List.of(), List.of("ip-netmask: 192.0.2.8"), "RESOLVED");
+        var group = new PolicyObject("group-id", "Synthetic group", "address-group", List.of("host-id"), List.of(), "RESOLVED");
+        var empty = new Cell(List.of(), false);
+        var rule = new Rule("rule-id", "rule-uid", 1, "Synthetic rule", true, new Cell(List.of("group-id", "host-id"), false), empty, empty, empty, "Allow", "Log", "", Map.of());
+        var index = new PolicyDomainIndex(List.of(), List.of(new PolicySnapshot(meta,
+            List.of(new Section("layer-id", "Synthetic layer", "Pre rules", null, List.of(rule))), Map.of(host.id(), host, group.id(), group))));
+        assertEquals(2, index.objects.size());
+        assertEquals(1, index.rules.get("host-id").size());
+        assertEquals(1, index.rules.get("group-id").size());
+        assertEquals(java.util.Set.of("host-id", "group-id", "outer-id"), PolicyQueryService.containingGroups(
+            java.util.Set.of("host-id"), Map.of("host-id", java.util.Set.of("group-id"),
+                "group-id", java.util.Set.of("outer-id"), "outer-id", java.util.Set.of("group-id"))));
+    }
     @Test void usageJoinsOpaquePackageRefsAndTraversesCyclesWithoutDuplicatingRules() {
         var host = item("0001", "Synthetic host", "host", List.of(), "ipv4-address: 192.0.2.8");
         var group = item("group-uid", "Synthetic group", "group", List.of("0001", "cycle-uid", "0001"));

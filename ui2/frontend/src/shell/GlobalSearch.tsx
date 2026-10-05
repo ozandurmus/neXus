@@ -10,11 +10,11 @@ import { MONO, m3 } from "../theme/m3Theme";
 import { Icon } from "./Icon";
 import { StatePanel, isRestricted, VendorBadge } from "./States";
 import { setListSearchTerm, useListSearchState } from "./listSearch";
-import { globalSearch, listDevices, type DeviceSummary, type GlobalSearchResponse } from "../auth/adminApi";
+import { globalSearch, listDevices, type DeviceSummary, type GlobalSearchResponse, type IpSearchGroup } from "../auth/adminApi";
 
 /** The device and screen shortcuts stay immediate; stored settings and evidence arrive after the typing pause. */
 interface Hit { readonly kind: "device" | "cluster" | "vs" | "screen"; readonly label: string; readonly sub: string; readonly href: string; readonly vendor?: string | null }
-interface DisplayHit { readonly group: "Devices" | "Screens" | "Settings" | "Evidence"; readonly label: string; readonly sub: string; readonly href: string; readonly vendor?: string | null }
+interface DisplayHit { readonly group: "Devices" | "Screens" | "Settings" | "Evidence" | "Interfaces" | "Routes" | "Policy objects"; readonly label: string; readonly sub: string; readonly href: string; readonly vendor?: string | null }
 
 const SCREENS: Hit[] = [
   ["Overview", "overview"], ["Devices", "inventory"], ["Compliance", "compliance"],
@@ -55,7 +55,7 @@ function emphasis(value: string, term: string) {
 }
 
 function grouped(local: readonly Hit[], remote: GlobalSearchResponse | null): DisplayHit[] {
-  const out: DisplayHit[] = local.map(h => ({ ...h, group: h.kind === "screen" ? "Screens" : "Devices" }));
+  const out: DisplayHit[] = (remote?.counts ? [] : local).map(h => ({ ...h, group: h.kind === "screen" ? "Screens" : "Devices" }));
   for (const d of remote?.devices ?? []) {
     const hit: DisplayHit = { group: "Devices", label: d.name ?? d.device_id.slice(0, 8),
       sub: [d.model, d.software_version, d.cluster, d.management_address, d.serial].filter(Boolean).join(" · "),
@@ -67,7 +67,14 @@ function grouped(local: readonly Hit[], remote: GlobalSearchResponse | null): Di
     sub: [s.device_count && s.device_count > 1 ? `${s.device_count} devices (e.g. ${s.device})` : s.device, s.section, s.value_excerpt].filter(Boolean).join(" · "),
     href: s.href });
   for (const e of remote?.evidence ?? []) out.push({ group: "Evidence", label: e.label, sub: e.detail, href: e.href });
-  const order = ["Screens", "Devices", "Settings", "Evidence"];
+  for (const i of remote?.interfaces ?? []) out.push({ group: "Interfaces", label: i.address,
+    sub: [i.device, i.context, i.interface].filter(Boolean).join(" · "), href: i.href });
+  for (const r of remote?.routes ?? []) out.push({ group: "Routes", label: r.destination,
+    sub: [r.device, r.context, r.route_table, r.next_hop, r.interface, r.protocol,
+      r.default_fallback ? "Default route fallback" : null].filter(Boolean).join(" · "), href: r.href });
+  for (const o of remote?.policy_objects ?? []) out.push({ group: "Policy objects", label: o.name,
+    sub: `${o.type} · used in ${o.rule_count} rules`, href: o.href });
+  const order = ["Screens", "Devices", "Interfaces", "Routes", "Policy objects", "Settings", "Evidence"];
   return out.sort((a, b) => order.indexOf(a.group) - order.indexOf(b.group));
 }
 
@@ -81,6 +88,8 @@ export function GlobalSearch() {
   const [remote, setRemote] = useState<GlobalSearchResponse | null>(null);
   const [remoteError, setRemoteError] = useState<unknown>(null);
   const [retry, setRetry] = useState(0);
+  const [loadingGroup, setLoadingGroup] = useState<IpSearchGroup | null>(null);
+  const requestVersion = useRef(0);
   const [selected, setSelected] = useState(0);
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -88,6 +97,8 @@ export function GlobalSearch() {
     listDevices().then((r) => setDevices(r.devices ?? [])).catch(() => setFailed(true));
   }, [open, devices, failed]);
   useEffect(() => {
+    requestVersion.current++;
+    setLoadingGroup(null);
     const q = term.trim();
     setRemote(null);
     setRemoteError(null);
@@ -107,12 +118,27 @@ export function GlobalSearch() {
   const results = useMemo(() => hits(devices ?? [], term), [devices, term]);
   const entries = useMemo(() => grouped(results, remote), [results, remote]);
   useEffect(() => { setSelected(0); }, [term, remote]);
+  const showMore = async (group: IpSearchGroup) => {
+    if (!remote || loadingGroup) return;
+    const version = requestVersion.current;
+    const offset = remote[group]?.length ?? 0;
+    setLoadingGroup(group);
+    setRemoteError(null);
+    try {
+      const page = await globalSearch(term.trim(), 20, group, offset);
+      if (version === requestVersion.current) setRemote(previous => previous ? {
+        ...previous, [group]: [...(previous[group] ?? []), ...(page[group] ?? [])],
+        counts: { ...previous.counts, ...page.counts },
+      } : previous);
+    } catch (error) { if (version === requestVersion.current) setRemoteError(error); }
+    finally { if (version === requestVersion.current) setLoadingGroup(null); }
+  };
   return (
     <Box ref={box} sx={{ position: "relative", width: { xs: 180, md: 320 } }}>
       <Box sx={{ display: "flex", alignItems: "center", gap: 1, height: 36, px: 1.5, borderRadius: "8px",
                  border: `1px solid ${m3.outlineVar}`, bgcolor: m3.scLowest, color: m3.onSurfaceVar }}>
         <Icon name="search" size={18} />
-        <InputBase value={term} placeholder={filtersList ? "Filter this list, or search everything…" : "Search devices, settings, evidence…"} inputProps={{ "aria-label": "Search devices, settings and evidence" }}
+        <InputBase value={term} placeholder={filtersList ? "Filter this list, or search everything…" : "Search devices, IPs, routes, policy…"} inputProps={{ "aria-label": "Search devices, settings and evidence" }}
           onFocus={() => setOpen(true)} onChange={(e) => { setTerm(e.target.value); setOpen(true); }}
           onKeyDown={(e) => {
             if (e.key === "ArrowDown" || e.key === "ArrowUp") {
@@ -148,10 +174,12 @@ export function GlobalSearch() {
           {failed && <StatePanel variant="error" title="The device list could not be read" action={<Button onClick={() => { setFailed(false); setDevices(null); }}>Retry</Button>} />}
           {!failed && devices === null && <Typography variant="body2" sx={{ px: 1.5, py: 1 }}>Reading the device list…</Typography>}
           {devices !== null && entries.length === 0 && !remoteError && <StatePanel variant="empty" title="No matches" />}
-          {(["Screens", "Devices", "Settings", "Evidence"] as const).map(group => {
+          {(["Screens", "Devices", "Interfaces", "Routes", "Policy objects", "Settings", "Evidence"] as const).map(group => {
             const items = entries.map((h, index) => ({ h, index })).filter(({ h }) => h.group === group);
-            return items.length ? <Box key={group}>
-              <Typography sx={{ px: 1.5, pt: 1, fontSize: 11, fontWeight: 700, color: m3.onSurfaceVar }}>{group}</Typography>
+            const key: IpSearchGroup | undefined = group === "Interfaces" ? "interfaces" : group === "Routes" ? "routes" : group === "Policy objects" ? "policy_objects" : undefined;
+            const count = key ? remote?.counts?.[key] : undefined;
+            return items.length || count !== undefined ? <Box key={group}>
+              <Typography sx={{ px: 1.5, pt: 1, fontSize: 11, fontWeight: 700, color: m3.onSurfaceVar }}>{group}{count !== undefined ? ` (${count})` : ""}</Typography>
               {items.map(({ h, index }) => <Link key={`${h.href}-${index}`} href={h.href} underline="none" role="option" aria-selected={selected === index}
                 sx={{ display: "flex", alignItems: "center", gap: 1.25, px: 1.5, py: 0.75, color: m3.onSurface,
                   bgcolor: selected === index ? m3.sc : undefined, "&:hover": { bgcolor: m3.sc } }}>
@@ -161,7 +189,11 @@ export function GlobalSearch() {
                 <Typography noWrap sx={{ fontSize: 13, fontWeight: 600, fontFamily: h.group === "Screens" ? undefined : MONO }}>{emphasis(h.label, term)}</Typography>
                 <Typography noWrap variant="caption" sx={{ color: m3.onSurfaceVar, display: "block" }}>{emphasis(h.sub, term)}</Typography>
               </Box>
-            </Link>)}</Box> : null;
+            </Link>)}
+              {key && count !== undefined && items.length < count && items.length <= 10000 && <Button
+                aria-label={`Show more ${group.toLowerCase()}`} disabled={loadingGroup !== null}
+                onClick={() => void showMore(key)}>{loadingGroup === key ? "Loading…" : "Show more"}</Button>}
+            </Box> : null;
           })}
           {remoteError !== null && (isRestricted(remoteError)
             ? <StatePanel variant="restricted" title="Search results are restricted" />
