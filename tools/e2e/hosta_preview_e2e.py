@@ -49,9 +49,10 @@ touch /workspace/.ready
 
 
 class PreviewFailure(RuntimeError):
-    def __init__(self, reason):
+    def __init__(self, reason, exception_class="PreviewFailure"):
         super().__init__("Preview operation failed; details withheld")
         self.phase, self.step, self.reason = PHASE, STEP, reason
+        self.exception_class = exception_class
 
 
 def classify_reason(stderr="", code=None):
@@ -86,6 +87,9 @@ def private_log():
             for old in sorted(directory.glob("*.log"), key=lambda p: p.stat().st_mtime, reverse=True)[10:]:
                 old.unlink()
             yield
+        except (OSError, ValueError, KeyError, TypeError, RuntimeError, subprocess.SubprocessError) as error:
+            failure_line(error)
+            raise
         finally:
             LOG = None
 
@@ -133,8 +137,14 @@ def prepare_build_context(repo, commit):
 
 def failure_line(error):
     if not isinstance(error, PreviewFailure):
-        error = PreviewFailure("TIMEOUT" if isinstance(error, subprocess.TimeoutExpired) else "OTHER")
-    return f"PREVIEW E2E: FAIL phase={error.phase} step={error.step} reason={error.reason}"
+        error = PreviewFailure("TIMEOUT" if isinstance(error, subprocess.TimeoutExpired) else "OTHER",
+                               type(error).__name__)
+    line = (f"PREVIEW E2E: FAIL phase={error.phase} step={error.step} "
+            f"reason={error.reason}:{error.exception_class}")
+    if LOG is not None:
+        LOG.write(line + "\n")
+        LOG.flush()
+    return line
 
 
 @contextmanager
@@ -150,7 +160,7 @@ def timing(phase):
         reason = "TIMEOUT" if isinstance(error, subprocess.TimeoutExpired) else (
             "DB_COPY_FAILED" if phase == "preview_db_copy" else
             "IMAGE_BUILD_FAILED" if phase.startswith("preview_build") else "OTHER")
-        raise PreviewFailure(reason) from None
+        raise PreviewFailure(reason, type(error).__name__) from None
     finally:
         PHASE = previous
         print(f"TIMING {phase} {time.monotonic() - start:.3f}", flush=True)
@@ -193,17 +203,17 @@ def k(namespace, *args, input=None, timeout=120):
         kind = json.loads(input)["kind"]
     STEP = verb + " " + kind
     argv = ["kubectl"] + (["-n", namespace] if namespace is not None else []) + list(args)
-    def failed(stderr, reason):
-        line = f"PREVIEW STEP: phase={PHASE} step={STEP} reason={reason} error=" + masked_error(stderr)
+    def failed(stderr, reason, exception_class="PreviewFailure"):
+        line = f"PREVIEW STEP: phase={PHASE} step={STEP} reason={reason}:{exception_class} error=" + masked_error(stderr)
         if LOG is not None:
             LOG.write(line + "\n")
             LOG.flush()
         print(line, flush=True)
-        raise PreviewFailure(reason) from None
+        raise PreviewFailure(reason, exception_class) from None
     try:
         result = subprocess.run(argv, input=input, capture_output=True, text=True, timeout=timeout)
     except subprocess.TimeoutExpired as error:
-        failed(error.stderr, "TIMEOUT")
+        failed(error.stderr, "TIMEOUT", type(error).__name__)
     if result.returncode:
         failed(result.stderr, classify_reason(result.stderr, result.returncode))
     return result.stdout
@@ -212,7 +222,26 @@ def k(namespace, *args, input=None, timeout=120):
 def load(repo, name):
     # kubectl already understands the existing YAML; no additional YAML dependency.
     # Parsing must honor the source namespace, not the preview target namespace.
-    return json.loads(k(None, "create", "--dry-run=client", "-f", str(repo / name), "-o", "json"))
+    global STEP
+    STEP = "load templates"
+    stream = k(None, "create", "--dry-run=client", "-f", str(repo / name), "-o", "json")
+    STEP = "load templates"
+    decoder, items, offset = json.JSONDecoder(), [], 0
+
+    def append(obj):
+        if obj["kind"] == "List":
+            for item in obj["items"]:
+                append(item)
+        else:
+            items.append(obj)
+
+    while offset < len(stream):
+        if stream[offset].isspace():
+            offset += 1
+            continue
+        obj, offset = decoder.raw_decode(stream, offset)
+        append(obj)
+    return {"kind": "List", "items": items}
 
 
 def create(namespace, obj):
@@ -425,7 +454,8 @@ def build_images(repo, commit, owner):
     prepare_build_context(repo, commit)
     template = json.loads(k(None, "create", "--dry-run=client", "-f",
                             str(Path.home() / "build-job-proxy.yaml"), "-o", "json"))
-    loader = load(repo, "deploy/ui2-image-build/20-context-loader.yaml")
+    loader = next(o for o in load(repo, "deploy/ui2-image-build/20-context-loader.yaml")["items"]
+                  if o["kind"] == "Pod")
     images = []
     for role, dockerfile in (("service", "ui2/Containerfile"), ("e2e", "ui2/frontend/Dockerfile.e2e")):
         with timing("preview_build_" + role):
@@ -518,12 +548,14 @@ def copy_secret(name):
 
 
 def setup_database(repo):
-    template = load(repo, "deploy/ui2/40-database-statefulset.yaml")
+    template = next(o for o in load(repo, "deploy/ui2/40-database-statefulset.yaml")["items"]
+                    if o["kind"] == "StatefulSet")
     live = json.loads(k("ui2", "get", "pod", "ui2-db-0", "-o", "json"))
     pinned = template["spec"]["template"]["spec"]["containers"][0]["image"]
     if live["spec"]["containers"][0]["image"] != pinned:
         raise RuntimeError("Production PostgreSQL differs from the pinned bootstrap; preview refused")
-    config = load(repo, "deploy/ui2/10-configmap.yaml")
+    config = next(o for o in load(repo, "deploy/ui2/10-configmap.yaml")["items"]
+                  if o["kind"] == "ConfigMap")
     create(NS, dict(apiVersion="v1", kind="ConfigMap", metadata=metadata("ui2-config"),
                     data={key: config["data"][key] for key in ("db_name", "create-app-role.sh")}))
     values = {"migrate-user": "ui2_migrate", "app-user": "ui2_app",
@@ -597,7 +629,9 @@ def setup_workload(template, image, db_ip, endpoints):
 
 
 def setup_service(repo, image, db_ip, endpoints):
-    setup_workload(load(repo, "deploy/ui2/50-service-deployment.yaml"), image, db_ip, endpoints)
+    template = next(o for o in load(repo, "deploy/ui2/50-service-deployment.yaml")["items"]
+                    if o["kind"] == "Deployment")
+    setup_workload(template, image, db_ip, endpoints)
     templates = load(repo, "deploy/ui2/56-service-internal.yaml")["items"]
     service = service_object(next(t for t in templates if t["kind"] == "Service"))
     create(NS, service)
@@ -631,37 +665,51 @@ def cleanup(owner):
 
 
 def run(repo, commit):
-    global NS, PHASE
+    global NS, PHASE, STEP
     if not re.fullmatch(r"[0-9a-f]{40}", commit):
         raise ValueError("Invalid candidate commit")
     previous_ns, owner = NS, secrets.token_hex(6)
     NS = "ui2-preview-" + owner
     PHASE = "preview_setup"
+    STEP = "get namespace"
     try:
         if k(NS, "get", "namespace", NS, "--ignore-not-found", "-o", "name").strip():
             raise RuntimeError("Preview namespace already exists; refusing to reuse or delete it")
         try:
-            create(NS, dict(apiVersion="v1", kind="Namespace", metadata=dict(name=NS, labels={LABEL: owner})))
-            workers = worker_templates(repo)
-            for item in policies(workers):
-                create(NS, item)
+            with timing("preview_setup"):
+                STEP = "create namespace"
+                create(NS, dict(apiVersion="v1", kind="Namespace", metadata=dict(name=NS, labels={LABEL: owner})))
+                STEP = "load templates"
+                workers = worker_templates(repo)
+                STEP = "policies"
+                for item in policies(workers):
+                    create(NS, item)
             with timing("preview_build"):
+                STEP = "build images"
                 images = build_images(repo, commit, owner)
             with timing("preview_database"):
+                STEP = "setup database"
                 db_ip = setup_database(repo)
             with timing("preview_workers"):
+                STEP = "worker services"
                 endpoints = setup_worker_services(workers)
                 for worker in workers:
                     with timing("preview_" + worker["component"]):
+                        STEP = "setup worker"
                         setup_workload(worker["deployment"], images[0], db_ip, endpoints)
             with timing("preview_service"):
+                STEP = "setup service"
                 service_ip = setup_service(repo, images[0], db_ip, endpoints)
             with timing("preview_e2e"):
+                STEP = "load e2e templates"
                 templates = load(repo, "deploy/ui2/70-e2e-job.yaml")
+                STEP = "select e2e job"
                 job = next(t for t in templates["items"] if t["kind"] == "Job")
                 if k("ui2", "get", "secret", "ui2-e2e-canary", "--ignore-not-found", "-o", "name").strip():
                     copy_secret("ui2-e2e-canary")
+                STEP = "create e2e job"
                 create(NS, e2e_manifest(job, images[1], service_ip))
+                STEP = "wait e2e job"
                 wait_job(NS, preview_name("ui2-preview-e2e"), timeout=930)
         finally:
             cleanup(owner)
