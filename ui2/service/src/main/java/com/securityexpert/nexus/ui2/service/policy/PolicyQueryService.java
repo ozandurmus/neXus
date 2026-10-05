@@ -32,6 +32,36 @@ public final class PolicyQueryService {
         this.mapper = mapper;
         this.names = names;
     }
+    /** Independent type gaps remain visible even when there are no policy packages. */
+    public Optional<PolicyResponse> domainInventory(String source, String domain, String view, int page) {
+        var inventories = repository.inventories(source, domain).stream()
+            .map(json -> read(json, com.securityexpert.nexus.ui2.policy.CpObjectInventory.class)).toList();
+        var selected = inventories.stream().filter(i -> switch (view) {
+            case "unused" -> i.type().equals("unused-objects");
+            case "gateways" -> i.type().equals("gateways-and-servers");
+            default -> !i.type().equals("unused-objects") && !i.type().equals("gateways-and-servers");
+        }).toList();
+        if (selected.isEmpty()) return Optional.empty();
+        var items = selected.stream().flatMap(i -> i.objects().stream()).toList();
+        var states = selected.stream().map(i -> Map.of("type", i.type(), "status", i.status(), "reason", i.reason(),
+            "collectedAt", i.collectedAt(), "pages", i.pages(), "objects", i.objects().size(), "seconds", i.seconds())).toList();
+        return Optional.of(new PolicyResponse(Map.of("sourceId", source, "containerId", domain, "types", states,
+            "objects", items.stream().skip((long) page * 200).limit(200).map(this::map).toList(), "total", items.size())));
+    }
+
+    public Optional<PolicyResponse> domainHits(String source, String domain, int page) {
+        var snapshots = repository.domainSnapshots(source, domain).stream().map(json -> read(json, PolicySnapshot.class)).toList();
+        if (snapshots.isEmpty()) return Optional.empty();
+        List<Map<String, Object>> hits = new ArrayList<>();
+        for (var snapshot : snapshots) for (var section : snapshot.sections()) for (var rule : section.rules()) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("id", rule.id()); row.put("ruleId", rule.id()); row.put("policyId", snapshot.metadata().id());
+            row.put("hitCounts", rule.hitCounts() == null ? null : map(rule.hitCounts())); hits.add(row);
+        }
+        return Optional.of(new PolicyResponse(Map.of("sourceId", source, "containerId", domain,
+            "hits", hits.stream().skip((long) page * 200).limit(200).toList(), "total", hits.size())));
+    }
+
     public List<Metadata> catalog() {
         var catalog = new ArrayList<>(repository.catalog().stream().map(json -> read(json, Metadata.class)).toList());
         if (local != null) local.snapshots().forEach(snapshot -> catalog.add(snapshot.metadata()));

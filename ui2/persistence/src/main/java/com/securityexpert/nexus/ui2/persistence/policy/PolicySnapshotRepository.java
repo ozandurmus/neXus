@@ -26,6 +26,16 @@ public final class PolicySnapshotRepository {
         return transactions.inTransaction(db -> db.fetch("select snapshot::text as snapshot from policy_snapshot where policy_id = {0}", id)
                 .stream().findFirst().map(row -> row.get("snapshot", String.class)));
     }
+    public List<String> inventories(String source, String domain) {
+        return transactions.inTransaction(db -> db.fetch("select snapshot::text as snapshot from cp_policy_object_inventory "
+                + "where source_id = {0} and domain_ref = {1} order by object_type", source, domain)
+                .map(row -> row.get("snapshot", String.class)));
+    }
+    public List<String> domainSnapshots(String source, String domain) {
+        return transactions.inTransaction(db -> db.fetch("select snapshot::text as snapshot from policy_snapshot "
+                + "where metadata->>'sourceId' = {0} and metadata->>'containerId' = {1} order by policy_id", source, domain)
+                .map(row -> row.get("snapshot", String.class)));
+    }
     public List<String> history(String policyId, String ruleId, int page) {
         return transactions.inTransaction(db -> db.fetch("select jsonb_build_object('revision', revision_id, 'ruleId', rule_id, "
                 + "'identityFallback', identity_fallback, 'changeType', change_type, 'collectedAt', collected_at, "

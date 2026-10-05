@@ -71,6 +71,28 @@ public final class PolicyController {
         }
         return error(HttpStatus.NOT_FOUND);
     }
+    @GetMapping("/api/v2/policy/domains/{id}/objects")
+    public ResponseEntity<?> inventory(@PathVariable String id, @RequestParam String source,
+            @RequestParam(defaultValue = "0") int page) { return inventoryView(id, source, "objects", page); }
+    @GetMapping("/api/v2/policy/domains/{id}/unused")
+    public ResponseEntity<?> unused(@PathVariable String id, @RequestParam String source,
+            @RequestParam(defaultValue = "0") int page) { return inventoryView(id, source, "unused", page); }
+    @GetMapping("/api/v2/policy/domains/{id}/gateways")
+    public ResponseEntity<?> gateways(@PathVariable String id, @RequestParam String source,
+            @RequestParam(defaultValue = "0") int page) { return inventoryView(id, source, "gateways", page); }
+    @GetMapping("/api/v2/policy/domains/{id}/hits")
+    public ResponseEntity<?> hits(@PathVariable String id, @RequestParam String source,
+            @RequestParam(defaultValue = "0") int page) {
+        if (source.isBlank() || page < 0) return error(HttpStatus.BAD_REQUEST);
+        return policies.domainHits(source, id, page).<ResponseEntity<?>>map(PolicyController::ok)
+            .orElseGet(() -> error(HttpStatus.NOT_FOUND));
+    }
+    private ResponseEntity<?> inventoryView(String id, String source, String view, int page) {
+        if (source.isBlank() || page < 0) return error(HttpStatus.BAD_REQUEST);
+        return policies.domainInventory(source, id, view, page).<ResponseEntity<?>>map(PolicyController::ok)
+            .orElseGet(() -> error(HttpStatus.NOT_FOUND));
+    }
+
     private static ResponseEntity<?> ok(Object body) { return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(body); }
     private static ResponseEntity<?> error(HttpStatus status) { return ResponseEntity.status(status).cacheControl(CacheControl.noStore()).body(Map.of("error", status.name())); }
 }

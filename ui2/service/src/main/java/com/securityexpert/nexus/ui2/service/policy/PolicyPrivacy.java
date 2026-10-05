@@ -7,8 +7,11 @@ import com.securityexpert.nexus.ui2.service.privacy.SubnetPreservingIpMasker;
 /** Fail-closed policy projection: unfamiliar fields and free-form extensions never pass through AIView. */
 public final class PolicyPrivacy {
     private PolicyPrivacy() {}
-    private static final Set<String> OPAQUE = Set.of("id", "sourceId", "containerId", "deviceId", "artefactRef", "parentRuleId", "layerRef", "jobId", "ruleId");
+    private static final Set<String> OPAQUE = Set.of("id", "sourceId", "containerId", "deviceId", "artefactRef", "parentRuleId", "layerRef", "jobId", "ruleId", "policyId", "uid");
     private static final Set<String> ENUMS = Set.of("CP", "PAN", "static", "hide", "any", "address", "group", "service", "service-group", "address-group",
+            "simple-gateway", "simple-cluster", "cluster", "gateway", "checkpoint-host", "vsx-cluster", "vsx-gateway", "vsx-cluster-member", "CpmiGatewayCluster", "CpmiVsClusterNetobj", "CpmiVsxClusterNetobj", "CpmiVsxNetobj", "CpmiVsxClusterMember",
+            "COLLECTION_FAILED", "host", "network", "address-range", "group-with-exclusion", "service-tcp", "service-udp", "service-icmp", "service-icmp6", "service-other", "service-sctp", "service-dce-rpc", "service-rpc", "access-role", "dynamic-object", "dns-domain", "security-zone",
+            "times", "time-groups", "gateways-and-servers", "hosts", "networks", "groups", "groups-with-exclusion", "address-ranges", "services-tcp", "services-udp", "services-icmp", "services-icmp6", "services-other", "services-sctp", "services-dce-rpc", "services-rpc", "service-groups", "access-roles", "dynamic-objects", "dns-domains", "security-zones", "unused-objects",
             "LOCAL_FIREWALL", "MANAGEMENT", "application-group", "tag", "time", "time-group", "schedule", "unresolved", "UNRESOLVED", "UNSUPPORTED", "RESOLVED", "DYNAMIC", "CYCLE", "LIMIT", "UNKNOWN",
             "MATCH", "MISMATCH", "IN_SYNC", "OUT_OF_SYNC", "PENDING", "Accept", "Drop", "Reject", "allow", "deny", "drop", "reject", "reset-client", "reset-server", "reset-both", "Apply Layer", "Log", "None", "Alert");
     public static Object mask(Object value, String key, TopologyNamePseudonymizer names, SubnetPreservingIpMasker ips) {
@@ -51,7 +54,7 @@ public final class PolicyPrivacy {
                 else if (field.equals("name") && map.containsKey("deviceId")) out.put(field, names.maskDeviceName((String) v, null));
                 else if (field.equals("name") && v instanceof String text) out.put(field, names.maskPolicyName(
                     map.containsKey("sourceId") ? "policy" : map.containsKey("number") ? "rule"
-                        : map.containsKey("type") ? String.valueOf(map.get("type")) : "name", text));
+                        : map.containsKey("type") ? objectNameType(String.valueOf(map.get("type"))) : "name", text));
                 else out.put(field, mask(v, field, names, ips));
             });
             return out;
@@ -63,7 +66,7 @@ public final class PolicyPrivacy {
         if (key.equals("state")) return Set.of("REQUESTED", "CLAIMED", "EXECUTING", "RECONCILING", "COMPLETED", "FAILED", "REJECTED", "CANCELLED", "OUTCOME_UNKNOWN", "RECONCILED").contains(text) ? text : "UNKNOWN";
         if (key.equals("outcome")) return Set.of("COMPLETED", "PARTIAL", "FAILED", "UNKNOWN").contains(text) ? text : "UNKNOWN";
         if (key.equals("unitFailureCodes")) return failureCode(text);
-        if (key.equals("reason")) return safeReason(text);
+        if (key.equals("reason")) return text.equals("COLLECTION_SKIPPED") ? text : safeReason(text);
         if (Set.of("firstHit", "lastHit", "createdAt", "modifiedAt", "startedAt", "lastActivityAt").contains(key)) {
             try { return java.time.Instant.parse(text).toString(); } catch (RuntimeException invalid) { return null; }
         }
@@ -82,6 +85,7 @@ public final class PolicyPrivacy {
         if (key.equals("ruleType")) return Set.of("universal", "interzone", "intrazone").contains(text) ? text : "UNKNOWN";
         if (Set.of("from", "to", "source-user", "category").contains(key) && text.equals("any")) return text;
         if (key.equals("changedBy")) return names.maskPolicyName("last-modifier", text);
+        if (key.equals("policyName")) return names.maskPolicyName("policy", text);
         if (key.equals("comment")) return "Withheld in AIView";
         if (key.equals("sourceName")) return names.maskDeviceName(text, null);
         if (key.equals("containerName")) return names.maskDomainName(text);
@@ -90,12 +94,21 @@ public final class PolicyPrivacy {
         if (key.equals("type") || key.equals("status") || key.equals("vendor") || key.equals("action") || key.equals("syncStatus") || key.equals("policyKind"))
             return ENUMS.contains(text) ? text : "UNKNOWN";
         if (key.equals("log")) return ENUMS.contains(text) || text.matches("start=(yes|no|UNKNOWN), end=(yes|no|UNKNOWN)") ? text : "UNKNOWN";
-        if (key.equals("values") && (text.matches("(?:port|icmp-type|icmp-code|protocol/(?:tcp|udp)/(?:port|source-port)): [0-9,<>*:/ -]+")
-                || text.matches("protocol: (tcp|udp|icmp)") || text.matches("mask-length[46]: [0-9]{1,3}") || text.matches("color: color[0-9]+"))) return text;
-        if (key.equals("values") && text.matches("(?:(?:ipv4-address|subnet4|ip-netmask|ip-range|ip-address-first|ip-address-last): )?[0-9./ -]+"))
+        if (key.equals("values") && (text.matches("(?:port|source-port|icmp-type|icmp-code|protocol/(?:tcp|udp)/(?:port|source-port)): [0-9,<>*:/ -]+")
+                || text.matches("protocol: (tcp|udp|icmp|icmp6|sctp|other|dce-rpc|rpc|[0-9]{1,3})") || text.matches("mask-length[46]: [0-9]{1,3}") || text.matches("color: color[0-9]+"))) return text;
+        if (key.equals("values") && text.matches("(?:(?:ipv4-address|ipv4-address-first|ipv4-address-last|subnet4|subnet-mask|ip-netmask|ip-range|ip-address-first|ip-address-last): )?[0-9./ -]+"))
             return ips.maskText(text);
         return names.maskPolicyName(key, text);
     }
+    private static String objectNameType(String type) {
+        return switch (type) {
+            case "host", "network", "address-range" -> "address";
+            case "group-with-exclusion" -> "group";
+            case "service-tcp", "service-udp", "service-icmp", "service-icmp6", "service-other", "service-sctp", "service-dce-rpc", "service-rpc" -> "service";
+            default -> type;
+        };
+    }
+
     public static String failureCode(String text) {
         String code = text.contains(": ") ? text.substring(text.lastIndexOf(": ") + 2) : text;
         if (Set.of("INLINE_LAYER_NAME_MISSING", "COLLECTION_PENDING").contains(code)) return code;

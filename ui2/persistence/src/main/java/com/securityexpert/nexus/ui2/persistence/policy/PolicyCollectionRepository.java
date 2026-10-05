@@ -75,6 +75,17 @@ public class PolicyCollectionRepository {
             + (automatic ? "where policy_collection_domain.attempted_at <= now() - interval '6 hours'" : ""), sourceId, domainRef) == 1);
     }
 
+    /** Parsed inventories share existing admission, audit and domain throttling. */
+    public void saveInventory(String source, String domain, String type, String at, String snapshot, String actor) {
+        new AuditedTransactionBoundary(tx).inTransaction(actor, "policy_collect_objects", db -> {
+            db.execute("insert into cp_policy_object_inventory(source_id, domain_ref, object_type, collected_at, snapshot) "
+                + "values ({0}, {1}, {2}, {3}::timestamptz, {4}::jsonb) on conflict (source_id, domain_ref, object_type) "
+                + "do update set collected_at = excluded.collected_at, snapshot = excluded.snapshot "
+                + "where cp_policy_object_inventory.collected_at < excluded.collected_at", source, domain, type, at, snapshot);
+            return null;
+        });
+    }
+
     /** Exact stored discovery-key relation, never a display-name or address heuristic. */
     public List<Target> targets(String runId, String domainName, String targetUid) {
         return tx.inTransaction(db -> db.fetch("select distinct d.device_id, c.display_name, d.virtual_system_ref from discovery_candidate c "

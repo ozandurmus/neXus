@@ -50,6 +50,15 @@ final class PolicyCollectionTrace implements AutoCloseable {
             }
         };
     }
+    static void elapsed(long nanos) {
+        JobTranscriptScope.add("job", "note", "policy totalSeconds=" + nanos / 1_000_000_000.0);
+    }
+    static void objects(String type, int pages, int objects, long nanos) {
+        String counters = "policy objects type=" + type + " pages=" + pages + " objects=" + objects
+            + " seconds=" + nanos / 1_000_000_000.0;
+        JobTranscriptScope.add("job", "note", counters);
+        System.getLogger(PolicyCollectionTrace.class.getName()).log(System.Logger.Level.INFO, counters);
+    }
     static void concurrency(int previous, int current) {
         String counts = "policy concurrency=" + current + " previous=" + previous;
         JobTranscriptScope.add("job", "note", counts);
