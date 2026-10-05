@@ -3476,3 +3476,20 @@ gates:
     secret_output_risk: "sensitive object data; parse in memory; no raw retention"
     safe_telemetry_fields: ["outcome", "pages", "objects", "seconds"]
     source_document_pointer: "PO 2026-10-05; cp-objects-hits-collect; approved CLASS_0 reads"
+
+  - gate_id: "cp_policy_last_published_session"
+    vendor: "check_point"
+    platform_role_scope: "cp_multi_domain_server"
+    shell_context: "expert"
+    transport_kind: "SSH_EXEC"
+    canonical_command_key: "mgmt_cli -r true -d '<DOMAIN>' -f json show-last-published-session"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 300
+    retry_rule: "none"
+    max_frequency: "manual policy request; automatic at most once per domain per 6 hours"
+    session_reuse_rule: "existing policy SSH sessions; bounded adaptive concurrency"
+    unsupported_behavior_ref: "UNKNOWN; missing or failed signal collects domain fully"
+    secret_output_risk: "sensitive session data; retain only uid and publish-time; no raw retention"
+    safe_telemetry_fields: ["outcome", "domainsReused", "domainsCollected", "rulesReused", "rulesFetched"]
+    source_document_pointer: "PO 2026-10-05; cp-changed-domains; approved CLASS_0 read"

@@ -24,7 +24,7 @@ class CheckPointPolicyCollectorTest {
         getClass().getResourceAsStream("/capabilities/gate_registry_fixture.yaml")).stream().filter(r -> r.key().equals(key) && !r.gateId().equals("cp_policy_access_rulebase_hits")).toList();
     private final DiscoveryRun run = new DiscoveryRun("run-1", "check_point", "192.0.2.10", "synthetic-ref", "synthetic-actor",
         DiscoveryRunState.FINISHED, Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
-    private final PolicyCollectionRepository.Request request = new PolicyCollectionRepository.Request("mds-1", "", false);
+    private final PolicyCollectionRepository.Request request = new PolicyCollectionRepository.Request("mds-1", "", false, PolicyCollectionRepository.Mode.FULL, "", 0);
 
     private CheckPointPolicyCollector setup(java.util.function.Function<String, ExecResult> answers) {
         when(transport.connect(any(), any(), any())).thenReturn(new ConnectResult.Authenticated(session));

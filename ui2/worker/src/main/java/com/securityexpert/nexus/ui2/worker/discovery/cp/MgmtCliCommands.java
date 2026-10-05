@@ -15,6 +15,10 @@ public final class MgmtCliCommands {
         return "netstat -an";
     }
 
+    public static String showLastPublishedSession(String domain) {
+        return "mgmt_cli -r true -d " + quote(domain) + " -f json show-last-published-session";
+    }
+
     public static String showPackages(String domain) {
         return showPackages(domain, 0, 50);
     }

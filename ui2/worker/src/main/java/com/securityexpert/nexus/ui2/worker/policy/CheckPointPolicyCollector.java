@@ -92,6 +92,9 @@ public final class CheckPointPolicyCollector {
 
     public List<PolicySnapshot> collect(DiscoveryRun run, PolicyCollectionRepository.Request request, BooleanSupplier lease,
             Consumer<PolicySnapshot> publish, Consumer<CollectionFailure> domainFailure) {
+        var reuse = new CpDomainReuse(repository, request);
+        Consumer<PolicySnapshot> domainPublish = snapshot -> { reuse.snapshot(snapshot); publish.accept(snapshot); };
+        Consumer<CollectionFailure> domainGap = gap -> { reuse.gap(gap.layerRef()); domainFailure.accept(gap); };
         if (!"check_point".equals(run.vendor())) throw failure();
         CpPolicyGates.requireAll(gates);
         if (!lease.getAsBoolean()) throw PolicyCollectionTrace.failure("LEASE_LOST");
@@ -100,7 +103,7 @@ public final class CheckPointPolicyCollector {
         long started = nanoTime.getAsLong();
         if (maxSessions > 1) {
             try { return new CpPolicyParallelCollection(this, repository, maxSessions, nanoTime,
-                run, request, deadline, lease, publish, domainFailure).collect(); }
+                run, request, deadline, lease, domainPublish, domainGap, reuse).collect(); }
             finally { PolicyCollectionTrace.elapsed(nanoTime.getAsLong() - started); }
         }
         TransportSession session = connect(run, deadline, lease);
@@ -119,17 +122,34 @@ public final class CheckPointPolicyCollector {
                 found = true;
                 if (!repository.beginDomain(request.sourceId(), container, request.automatic())) { PolicyCollectionTrace.packages(0); continue; }
                 if (session == null) session = connect(run, deadline, lease);
+                reuse.begin(container);
+                JsonNode signal = null;
+                if (request.mode() == PolicyCollectionRepository.Mode.CHANGED_ONLY) {
+                    try { signal = read(session, MgmtCliCommands.showLastPublishedSession(domainName),
+                        CpPolicyGates.LAST_PUBLISHED_SESSION, deadline, lease); }
+                    catch (RuntimeException unavailable) {
+                        if (PolicyCollectionTrace.fatal(unavailable)) throw unavailable;
+                        transport.disconnect(session); session = connect(run, deadline, lease);
+                    }
+                }
+                List<PolicySnapshot> reused = reuse.decide(container, signal);
+                objectDomains.put(container, domainName);
+                if (reused != null) {
+                    for (PolicySnapshot snapshot : reused) domainPublish.accept(snapshot);
+                    snapshots.addAll(reused); continue;
+                }
                 List<JsonNode> packages;
                 try {
                     packages = packagePages(session, domainName, deadline, lease);
                 } catch (RuntimeException incomplete) {
                     if (PolicyCollectionTrace.fatal(incomplete)) throw incomplete;
                     checkPublication(deadline, lease);
-                    domainFailure.accept(new CollectionFailure(container, PolicyCollectionTrace.reason(incomplete), "Packages", reached(incomplete)));
+                    domainGap.accept(new CollectionFailure(container, PolicyCollectionTrace.reason(incomplete), "Packages", reached(incomplete)));
                     transport.disconnect(session); session = null;
                     continue;
                 }
                 objectDomains.put(container, domainName);
+                reuse.planned(container, packages.size());
                 PolicyCollectionTrace.packages(packages.size());
                 Set<String> seen = new HashSet<>();
                 for (JsonNode policy : packages) {
@@ -150,7 +170,7 @@ public final class CheckPointPolicyCollector {
                             // Validate each layer even when its checkpoint write is throttled.
                             if (nanoTime.getAsLong() - lastCheckpoint[0] < checkpointInterval) return;
                             checkPublication(deadline, lease);
-                            publish.accept(checkpoint);
+                            domainPublish.accept(checkpoint);
                             lastCheckpoint[0] = nanoTime.getAsLong();
                         });
                     List<JsonNode> nat = List.of();
@@ -170,7 +190,7 @@ public final class CheckPointPolicyCollector {
                         snapshot = snapshot(metadata, access, List.of(), failures);
                     }
                     checkPublication(deadline, lease);
-                    publish.accept(snapshot);
+                    domainPublish.accept(snapshot);
                     snapshots.add(snapshot);
                     PolicyCollectionTrace.done(metadata.id());
                 }
@@ -181,6 +201,7 @@ public final class CheckPointPolicyCollector {
                 collectObjects(session, request.sourceId(), domain.getKey(), domain.getValue(), deadline, lease);
             }
             checkActive(deadline, lease);
+            reuse.finish();
             return List.copyOf(snapshots);
         } finally {
             if (session != null) transport.disconnect(session);

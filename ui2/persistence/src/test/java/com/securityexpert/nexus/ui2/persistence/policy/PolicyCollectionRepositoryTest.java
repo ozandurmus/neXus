@@ -210,4 +210,28 @@ class PolicyCollectionRepositoryTest {
         assertTrue(bindings.contains(cutoff.toString())); assertTrue(bindings.contains("domain-2"));
     }
 
+    @Test void previousDomainUsesLatestAttemptWithoutFilteringOutGaps() {
+        List<String> sql = new ArrayList<>();
+        var create = DSL.using(SQLDialect.POSTGRES);
+        var repository = new PolicyCollectionRepository(new JooqTransactionBoundary(DSL.using(new MockConnection(context -> {
+            sql.add(context.sql());
+            return new MockResult[] { new MockResult(1, create.fetchFromStringData(new String[] { "complete", "signal", "snapshots" },
+                new String[] { "false", "{}", "[]" })) };
+        }), SQLDialect.POSTGRES)));
+        assertFalse(repository.previousDomain("source-1", "domain-1").orElseThrow().complete());
+        assertTrue(sql.get(0).contains("order by attempted_at desc limit 1"));
+        assertFalse(sql.get(0).contains("and complete"));
+    }
+    @Test void lostLeaseCannotWriteADomainReuseMarker() {
+        List<String> sql = new ArrayList<>();
+        var create = DSL.using(SQLDialect.POSTGRES);
+        var repository = new PolicyCollectionRepository(new JooqTransactionBoundary(DSL.using(new MockConnection(context -> {
+            sql.add(context.sql());
+            return new MockResult[] { new MockResult(0, context.sql().startsWith("select job_id")
+                ? create.fetchFromStringData(new String[] { "job_id" }) : null) };
+        }), SQLDialect.POSTGRES)));
+        var request = new PolicyCollectionRepository.Request("source-1", "", false, PolicyCollectionRepository.Mode.CHANGED_ONLY, "job-1", 7);
+        assertFalse(repository.saveDomain(request, "domain-1", "REUSED", true, "{}", "[]", 0, null, "synthetic-actor"));
+        assertTrue(sql.stream().noneMatch(q -> q.startsWith("insert into cp_policy_domain_run")));
+    }
 }

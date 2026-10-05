@@ -36,6 +36,12 @@ public class PolicyCollectionService {
     public Optional<Map<String, Object>> status(String jobId) { return repository.status(jobId).map(this::presentation); }
     private Map<String, Object> presentation(Map<String, Object> status) {
         Map<String, Object> view = new LinkedHashMap<>(status);
+        var domains = repository.domainProgress(String.valueOf(status.get("jobId")));
+        view.put("domains", domains);
+        view.put("domainsReused", domains.stream().filter(d -> "REUSED".equals(d.get("status"))).count());
+        view.put("domainsCollected", domains.stream().filter(d -> "COLLECTED".equals(d.get("status"))).count());
+        view.put("rulesReused", domains.stream().filter(d -> "REUSED".equals(d.get("status")))
+            .mapToInt(d -> ((Number) d.get("rules")).intValue()).sum());
         String state = String.valueOf(status.get("state"));
         String reason = String.valueOf(status.get("reason"));
         boolean gaps = ((Number) status.getOrDefault("gapUnits", 0)).intValue() > 0 || reason.startsWith("PARTIAL_SNAPSHOT");
@@ -59,11 +65,14 @@ public class PolicyCollectionService {
         return view;
     }
     public Optional<String> collect(String source, String domain, String actor) {
+        return collect(source, domain, actor, PolicyCollectionRepository.Mode.CHANGED_ONLY);
+    }
+    public Optional<String> collect(String source, String domain, String actor, PolicyCollectionRepository.Mode mode) {
         if (source == null || source.isBlank() || domain == null || domain.length() > 100) return Optional.empty();
         var eligible = repository.sources().stream().filter(s -> s.sourceId().equals(source)).findFirst();
         if (eligible.isEmpty()) return Optional.empty();
         if ("palo_alto".equals(eligible.get().vendor())) PanPolicyGates.requireAll(gates);
         else CpPolicyGates.requireAll(gates);
-        return repository.enqueue(source, domain, false, actor);
+        return repository.enqueue(source, domain, false, actor, mode);
     }
 }

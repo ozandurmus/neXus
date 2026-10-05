@@ -112,18 +112,18 @@ it("offers first collection on an empty MDS and sends only opaque scope with CSR
     return new Response(JSON.stringify(body), { status: init?.method === "POST" ? 202 : 200 });
   });
   vi.stubGlobal("fetch", fetch); mount();
-  fireEvent.click(await screen.findByRole("button", { name: "Collect policies" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Collect changes" }));
   await screen.findByText("Collecting · 0 steps");
   const call = fetch.mock.calls.find(([url]) => url.endsWith("/collect"));
   expect(call?.[0]).toBe("/api/v2/policy/sources/mds-1/collect");
-  expect(JSON.parse(call?.[1]?.body as string)).toEqual({ domainRef: "" });
+  expect(JSON.parse(call?.[1]?.body as string)).toEqual({ domainRef: "", mode: "CHANGED_ONLY" });
   expect(new Headers(call?.[1]?.headers).get("X-CSRF-Token")).toBe("synthetic-csrf");
   expect(screen.getByRole("button", { name: "Refresh snapshots" })).toBeInTheDocument();
 });
 it("uses server authorization and exposes no collection action to AIView", async () => {
   mockFetch(); mount(); await navigate();
   await screen.findByRole("region", { name: "Policy rulebase" });
-  expect(screen.queryByRole("button", { name: "Collect policies" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Collect changes" })).toBeNull();
 });
 it("offers domain collection with its opaque reference and reports queue refusal", async () => {
   vi.stubGlobal("fetch", vi.fn(async (input: string, init?: RequestInit) => {
@@ -134,7 +134,7 @@ it("offers domain collection with its opaque reference and reports queue refusal
   }));
   mount(); await navigate();
   await screen.findByRole("region", { name: "Policy rulebase" });
-  const actions = screen.getAllByRole("button", { name: "Collect policies" });
+  const actions = screen.getAllByRole("button", { name: "Collect changes" });
   expect(actions).toHaveLength(2);
   fireEvent.click(actions[1]);
   await screen.findByText(/collection is temporarily unavailable/);
@@ -153,12 +153,12 @@ it("queues Panorama node collection with opaque intent and hides DG-specific act
   });
   vi.stubGlobal("fetch", fetch); mount(); await navigate();
   await screen.findByRole("region", { name: "Policy rulebase" });
-  const actions = screen.getAllByRole("button", { name: "Collect policies" });
+  const actions = screen.getAllByRole("button", { name: "Collect changes" });
   expect(actions).toHaveLength(1); fireEvent.click(actions[0]);
   await screen.findByText("Collecting · 0 steps");
   const call = fetch.mock.calls.find(([url]) => url.endsWith("/collect"));
   expect(call?.[0]).toBe(`/api/v2/policy/sources/${metadata.sourceId}/collect`);
-  expect(JSON.parse(call?.[1]?.body as string)).toEqual({ domainRef: "" });
+  expect(JSON.parse(call?.[1]?.body as string)).toEqual({ domainRef: "", mode: "CHANGED_ONLY" });
 });
 it("badges the stored local firewall policy under AIView", async () => {
   mockFetch({ ...page, policyKind: "LOCAL_FIREWALL" }); mount(); await navigate();
@@ -213,7 +213,7 @@ it("backs off polling, suspends while hidden and stops on the precise terminal r
     return new Response(JSON.stringify(body), { status: init?.method === "POST" ? 202 : 200 });
   }));
   const view = mount();
-  const action = await screen.findByRole("button", { name: "Collect policies" });
+  const action = await screen.findByRole("button", { name: "Collect changes" });
   vi.useFakeTimers();
   await act(async () => { fireEvent.click(action); });
   const advance = async (ms: number) => { await act(async () => { await vi.advanceTimersByTimeAsync(ms); }); };
@@ -251,7 +251,7 @@ it("discovers automatic collections and stops all pending polling on unmount", a
   let view: ReturnType<typeof mount> | undefined;
   await act(async () => { view = mount(); });
   expect(screen.getByText("Collecting · 4/8")).toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: "Collect policies" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Collect changes" })).toBeNull();
   view!.unmount();
   await act(async () => { await vi.advanceTimersByTimeAsync(60000); });
   expect(fetch.mock.calls.some(([url]) => url.includes("/collections/"))).toBe(false);
@@ -516,7 +516,7 @@ it("deduplicates selected PAN policies into one authorized source collection", a
   await screen.findByText("Collecting · 0 steps");
   const posts = fetch.mock.calls.filter(([, init]) => init?.method === "POST");
   expect(posts).toHaveLength(1);
-  expect(JSON.parse(posts[0][1]?.body as string)).toEqual({ domainRef: "" });
+  expect(JSON.parse(posts[0][1]?.body as string)).toEqual({ domainRef: "", mode: "CHANGED_ONLY" });
 });
 
 it("collects selected CP domains sequentially and refreshes after each completion", async () => {
@@ -617,4 +617,22 @@ it("uses successful activity and a strict twice-timeout boundary, never elapsed 
   expect(collectionStalled({ ...job, readTimeoutSeconds: 0 }, now)).toBe(false);
   expect(collectionStalled({ ...job, state: "COMPLETED", lastActivityAt: "2026-10-05T06:00:00Z" }, now)).toBe(false);
   expect(runningLabel({ ...job, domainsDone: 1, domainsTotal: 3 }, now)).toContain("14/at least 43 packages");
+});
+
+it("full refresh submits FULL and reused-domain progress retains the original hit time", async () => {
+  const fetch = vi.fn(async (input: string, init?: RequestInit) => {
+    const body = input.endsWith("/collect") ? { jobId: "job-full" }
+      : input === "/api/v2/policy/sources" ? { sources: [{ sourceId: metadata.sourceId, sourceName: metadata.sourceName, vendor: "CP", collection: {
+        jobId: "job-old", state: "COMPLETED", reason: "", step: 1, total: 1, domainsReused: 1, domainsCollected: 0, rulesReused: 1, rulesFetched: 0,
+        domains: [{ containerId: metadata.containerId, status: "REUSED", rules: 1, publishTime: "2026-10-03T00:00:00Z", hitsCollectedAt: "2026-10-04T00:00:00Z" }],
+      } }], canCollect: true } : treeBody(input) ?? page;
+    return new Response(JSON.stringify(body), { status: 200, headers: { "X-Nexus-Masked": "true" } });
+  });
+  vi.stubGlobal("fetch", fetch); mount();
+  expect(await screen.findByText(/reused · unchanged since 2026-10-03T00:00:00Z · hits collected at 2026-10-04T00:00:00Z/)).toBeInTheDocument();
+  expect(screen.getByText(/Domains: 1 reused · 0 collected · Rules: 1 reused · 0 fetched/)).toBeInTheDocument();
+  fireEvent.click(await screen.findByRole("button", { name: "Full refresh (incl. hit counts)" }));
+  await waitFor(() => expect(fetch.mock.calls.some(([url]) => url.endsWith("/collect"))).toBe(true));
+  const call = fetch.mock.calls.find(([url]) => url.endsWith("/collect"));
+  expect(JSON.parse(call?.[1]?.body as string)).toEqual({ domainRef: "", mode: "FULL" });
 });
