@@ -21,10 +21,12 @@ import com.securityexpert.nexus.ui2.worker.transcript.*;
 
 @Timeout(15)
 class CpPolicyParallelCollectionTest {
+    @org.junit.jupiter.api.BeforeEach void isolateRuleCollection() { System.setProperty("ui2.policy.cp.collect-objects", "false"); }
+    @org.junit.jupiter.api.AfterEach void restoreObjectCollection() { System.clearProperty("ui2.policy.cp.collect-objects"); }
     private final DeviceTransport transport = mock(DeviceTransport.class);
     private final PolicyCollectionRepository repository = mock(PolicyCollectionRepository.class);
     private final GateRegistryPort gates = key -> GateRegistryFixtureLoader.loadFromStream(
-        getClass().getResourceAsStream("/capabilities/gate_registry_fixture.yaml")).stream().filter(r -> r.key().equals(key)).toList();
+        getClass().getResourceAsStream("/capabilities/gate_registry_fixture.yaml")).stream().filter(r -> r.key().equals(key) && !r.gateId().equals("cp_policy_access_rulebase_hits")).toList();
     private final DiscoveryRun run = new DiscoveryRun("run-1", "check_point", "192.0.2.10", "synthetic-ref", "synthetic-actor",
         DiscoveryRunState.FINISHED, Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
     private final PolicyCollectionRepository.Request request = new PolicyCollectionRepository.Request("mds-1", "", false);
@@ -57,7 +59,7 @@ class CpPolicyParallelCollectionTest {
     @Test void packageTimeoutPreservesFailureAndOtherDomainsContinue() {
         var collector = setup(4, command -> {
             if (command.contains("show-domains")) return ok("{\"total\":2,\"objects\":[" + domain("broken", "DOM-BRAVO-02") + "," + domain("domain-01", "DOM-TANGO-01") + "]}");
-            if (command.equals(MgmtCliCommands.showPackages("DOM-BRAVO-02"))) return new ExecResult.TimedOut();
+            if (command.contains("show-packages") && command.contains("'DOM-BRAVO-02'")) return new ExecResult.TimedOut();
             return answer(command);
         });
         List<PolicySnapshot> published = new ArrayList<>();
@@ -163,7 +165,7 @@ class CpPolicyParallelCollectionTest {
             assertTrue(snapshot.failures().isEmpty(), () -> failure.getClass().getSimpleName() + ": " + snapshot.failures());
             assertEquals(2, attempts.get());
             assertEquals(2, Collections.frequency(reads, MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Layer", 0)));
-            assertTrue(reads.stream().noneMatch(c -> c.contains(" limit 50 offset "))); cleanup();
+            assertTrue(reads.stream().noneMatch(c -> c.contains("show-access-rulebase") && c.contains(" limit 50 offset "))); cleanup();
         }
     }
 

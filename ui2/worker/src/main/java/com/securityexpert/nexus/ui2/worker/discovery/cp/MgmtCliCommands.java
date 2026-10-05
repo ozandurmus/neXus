@@ -16,11 +16,11 @@ public final class MgmtCliCommands {
     }
 
     public static String showPackages(String domain) {
-        return showPackages(domain, 0, 20);
+        return showPackages(domain, 0, 50);
     }
 
     public static String showPackages(String domain, int offset, int limit) {
-        if (offset < 0 || limit != 20) throw new IllegalArgumentException("Invalid package page");
+        if (offset < 0 || (limit != 20 && limit != 50)) throw new IllegalArgumentException("Invalid package page");
         return "mgmt_cli -r true -d " + quote(domain) + " -f json show-packages limit " + limit
                 + " offset " + quote(Integer.toString(offset)) + " details-level full";
     }
@@ -39,6 +39,14 @@ public final class MgmtCliCommands {
         if (offset < 0) throw new IllegalArgumentException("Invalid policy offset");
         return "mgmt_cli -r true -d " + quote(domain) + " -f json show-nat-rulebase package " + quote(policy)
                 + " limit 500 offset " + quote(Integer.toString(offset)) + " details-level standard use-object-dictionary true";
+    }
+
+    public static String showPolicyObjects(String domain, String type, int offset) {
+        int index = com.securityexpert.nexus.ui2.jobs.policy.CpPolicyGates.OBJECT_TYPES.indexOf(type);
+        if (index < 0 || offset < 0) throw new IllegalArgumentException("Invalid object page");
+        return "mgmt_cli -r true -d " + quote(domain) + " -f json show-" + type
+            + " limit 50 offset " + quote(Integer.toString(offset)) + " details-level full"
+            + (type.equals("groups") || type.equals("service-groups") ? " dereference-group-members false" : "");
     }
 
     private static String quote(String value) {

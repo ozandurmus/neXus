@@ -3,7 +3,7 @@ package com.securityexpert.nexus.ui2.jobs.policy;
 import com.securityexpert.nexus.ui2.capability.*;
 import com.securityexpert.nexus.ui2.platform.ActionClass;
 
-/** Optional proposed reads. DRAFTED rows never authorize transport, including authentication. */
+/** Optional hit reads. DRAFTED rows never authorize transport, including authentication. */
 public final class PolicyHitGates {
     private PolicyHitGates() {}
     public static final String CP_COMMAND = CpPolicyGates.COMMANDS.get(1) + " show-hits true";

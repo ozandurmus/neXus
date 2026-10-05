@@ -16,6 +16,23 @@ class PolicyPrivacyTest {
         assertEquals("device-1", masked.path("firewalls").get(0).path("deviceId").asText());
         assertFalse(masked.toString().contains("Synthetic context"));
     }
+    @Test void inventoryUsesRuleObjectAliasesMasksIpsAndRetainsOpaqueJoinsAndGaps() {
+        var item = Map.of("id", "object-1", "uid", "uid-001", "name", "Synthetic address", "type", "host",
+            "members", List.of("uid-002"), "values", List.of("ipv4-address: 192.0.2.8", "port: 443"),
+            "policyInstallations", List.of(Map.of("policyName", "Synthetic policy", "installed", false)));
+        var body = Map.of("objects", List.of(item), "types", List.of(Map.of("type", "hosts", "status", "COLLECTION_FAILED",
+            "reason", "policy: TIMEOUT", "pages", 2, "seconds", 1.25)));
+        var masked = new com.fasterxml.jackson.databind.ObjectMapper().valueToTree(PolicyPrivacy.mask(body, "", names, ips));
+        var object = masked.path("objects").get(0);
+        assertEquals(names.maskPolicyName("address", "Synthetic address"), object.path("name").asText());
+        assertEquals("uid-001", object.path("uid").asText()); assertEquals("uid-002", object.path("members").get(0).asText());
+        assertEquals("ipv4-address: " + ips.mask("192.0.2.8"), object.path("values").get(0).asText());
+        assertEquals("port: 443", object.path("values").get(1).asText());
+        assertEquals(names.maskPolicyName("policy", "Synthetic policy"), object.path("policyInstallations").get(0).path("policyName").asText());
+        assertEquals("COLLECTION_FAILED", masked.path("types").get(0).path("status").asText());
+        assertEquals("hosts", masked.path("types").get(0).path("type").asText());
+        assertFalse(masked.toString().contains("Synthetic")); assertFalse(masked.toString().contains("192.0.2.8"));
+    }
     private final TopologyNamePseudonymizer names = new TopologyNamePseudonymizer(new byte[32]);
     private final SubnetPreservingIpMasker ips = new SubnetPreservingIpMasker(new byte[32]);
 

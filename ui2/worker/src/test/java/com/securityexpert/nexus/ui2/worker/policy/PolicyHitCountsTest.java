@@ -54,14 +54,14 @@ class PolicyHitCountsTest {
                 .sections().get(0).rules().get(0).hitCounts().hits());
         assertThrows(IllegalArgumentException.class, () -> PolicyHitCounts.pan(PolicyXml.parse("<response status='success'><result/></response>").getDocumentElement(), first, collected));
     }
-    @Test void unsignedFixtureCannotEnableEitherVariantAndCommandEscapesContext() {
+    @Test void signedCpAndUnsignedPanFixtureRespectApprovalAndCommandEscapesContext() {
         GateRegistryPort gates = key -> GateRegistryFixtureLoader.loadFromStream(getClass().getResourceAsStream("/capabilities/gate_registry_fixture.yaml"))
                 .stream().filter(row -> row.key().equals(key)).toList();
         CpPolicyGates.requireAll(gates); PanPolicyGates.requireAll(gates);
-        for (boolean cp : List.of(true, false)) {
-            assertFalse(PolicyHitGates.enabled(gates, cp));
-            assertThrows(IllegalStateException.class, () -> PolicyHitGates.require(gates, cp));
-        }
+        assertTrue(PolicyHitGates.enabled(gates, true));
+        assertDoesNotThrow(() -> PolicyHitGates.require(gates, true));
+        assertFalse(PolicyHitGates.enabled(gates, false));
+        assertThrows(IllegalStateException.class, () -> PolicyHitGates.require(gates, false));
         String context = "vsys'&<>\"";
         var spec = PanoramaPolicyCollector.hitRequest(context, new char[0]);
         var xml = PolicyXml.parse(spec.formParams().get("cmd"));

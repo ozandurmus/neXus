@@ -47,7 +47,7 @@ public final class CheckPointPolicyCollector {
         if (maxSessions < 1 || maxSessions > 4) throw new IllegalArgumentException("POLICY_MAX_SESSIONS_MUST_BE_1_TO_4");
         this.maxSessions = maxSessions;
         this.readTimeout = configuredReadTimeout();
-        this.packagePageSize = 20;
+        this.packagePageSize = 50;
         if (jobTimeout.isZero() || jobTimeout.isNegative()) throw new IllegalArgumentException("POLICY_DEADLINE_MUST_BE_POSITIVE");
         this.transport = transport; this.gates = gates; this.repository = repository;
         this.jobTimeout = jobTimeout; this.nanoTime = nanoTime;
@@ -73,6 +73,8 @@ public final class CheckPointPolicyCollector {
         return connected.session();
     }
 
+    GateRegistryPort gates() { return gates; }
+
     long cleanupTimeoutSeconds() { return readTimeout.toSeconds() + 150; }
 
     static int configuredMaxSessions() {
@@ -95,8 +97,12 @@ public final class CheckPointPolicyCollector {
         if (!lease.getAsBoolean()) throw PolicyCollectionTrace.failure("LEASE_LOST");
         PolicyCollectionTrace.timeout(readTimeout);
         long deadline = nanoTime.getAsLong() + jobTimeout.toNanos();
-        if (maxSessions > 1) return new CpPolicyParallelCollection(this, repository, maxSessions, nanoTime,
-            run, request, deadline, lease, publish, domainFailure).collect();
+        long started = nanoTime.getAsLong();
+        if (maxSessions > 1) {
+            try { return new CpPolicyParallelCollection(this, repository, maxSessions, nanoTime,
+                run, request, deadline, lease, publish, domainFailure).collect(); }
+            finally { PolicyCollectionTrace.elapsed(nanoTime.getAsLong() - started); }
+        }
         TransportSession session = connect(run, deadline, lease);
         try {
             var domains = read(session, MgmtCliCommands.domainList(), -1, deadline, lease);
@@ -122,6 +128,7 @@ public final class CheckPointPolicyCollector {
                     transport.disconnect(session); session = null;
                     continue;
                 }
+                collectObjects(session, request.sourceId(), container, domainName, deadline, lease);
                 PolicyCollectionTrace.packages(packages.size());
                 Set<String> seen = new HashSet<>();
                 for (JsonNode policy : packages) {
@@ -172,6 +179,7 @@ public final class CheckPointPolicyCollector {
             return List.copyOf(snapshots);
         } finally {
             if (session != null) transport.disconnect(session);
+            PolicyCollectionTrace.elapsed(nanoTime.getAsLong() - started);
         }
     }
 
@@ -189,40 +197,101 @@ public final class CheckPointPolicyCollector {
         int offset = 0;
         try {
             while (true) {
-                JsonNode page = read(session, MgmtCliCommands.showPackages(domain, offset, packagePageSize), 0, deadline, lease);
+                JsonNode page = read(session, MgmtCliCommands.showPackages(domain, offset, packagePageSize), CpPolicyGates.PACKAGES_50, deadline, lease);
                 if (listing.add(page, offset)) return List.copyOf(listing.items);
                 offset = listing.to;
             }
         } catch (RuntimeException incomplete) {
-            throw new PageFailure(PolicyCollectionTrace.reason(incomplete), offset);
+            if (PolicyCollectionTrace.fatal(incomplete)) throw incomplete;
+            listing = new PackagePages(20); offset = 0;
+            try {
+                while (true) {
+                    JsonNode page = read(session, MgmtCliCommands.showPackages(domain, offset, 20), 0, deadline, lease);
+                    if (listing.add(page, offset)) return List.copyOf(listing.items);
+                    offset = listing.to;
+                }
+            } catch (RuntimeException fallback) { throw new PageFailure(PolicyCollectionTrace.reason(fallback), offset); }
         }
+    }
+
+    static boolean collectObjectsEnabled() {
+        return Boolean.parseBoolean(System.getProperty("ui2.policy.cp.collect-objects",
+            System.getenv().getOrDefault("UI2_POLICY_CP_COLLECT_OBJECTS", "true")));
+    }
+
+    void collectObjects(TransportSession session, String source, String container, String domain,
+            long deadline, BooleanSupplier lease) {
+        for (String type : CpPolicyGates.OBJECT_TYPES) {
+            if (!collectObjectsEnabled() || type.equals("gateways-and-servers") && domain.equalsIgnoreCase("Global")) {
+                storeObjects(source, container, type, List.of(), 0, 0, "UNSUPPORTED", "COLLECTION_SKIPPED", deadline, lease);
+                continue;
+            }
+            long started = nanoTime.getAsLong();
+            PackagePages listing = new PackagePages(50, "objects");
+            int offset = 0;
+            try {
+                while (true) {
+                    JsonNode page = read(session, MgmtCliCommands.showPolicyObjects(domain, type, offset),
+                        CpPolicyGates.OBJECT_BASE + CpPolicyGates.OBJECT_TYPES.indexOf(type), deadline, lease);
+                    if (listing.add(page, offset)) break;
+                    offset = listing.to;
+                }
+                storeObjects(source, container, type, listing.items, listing.count, nanoTime.getAsLong() - started,
+                    "RESOLVED", "", deadline, lease);
+            } catch (RuntimeException gap) {
+                if (PolicyCollectionTrace.fatal(gap)) throw gap;
+                storeObjects(source, container, type, List.of(), listing.count, nanoTime.getAsLong() - started,
+                    "COLLECTION_FAILED", PolicyCollectionTrace.reason(gap), deadline, lease);
+            }
+        }
+    }
+
+    void storeObjects(String source, String container, String type, List<JsonNode> nodes,
+            int pages, long elapsed, String status, String reason, long deadline, BooleanSupplier lease) {
+        var items = CpObjectInventoryParser.parse(source, container, nodes);
+        var snapshot = new com.securityexpert.nexus.ui2.policy.CpObjectInventory(source, container, type,
+            Instant.now().toString(), status, reason, items, pages, elapsed / 1_000_000_000.0);
+        final String payload;
+        try { payload = json.writeValueAsString(snapshot); }
+        catch (java.io.IOException invalid) { throw failure(); }
+        checkPublication(deadline, lease);
+        repository.saveInventory(source, container, type, snapshot.collectedAt(), payload, com.securityexpert.nexus.ui2.platform.WorkerActor.RESERVED_ACTOR_FINGERPRINT);
+        PolicyCollectionTrace.objects(type, pages, items.size(), elapsed);
     }
 
     static final class PackagePages {
         final List<JsonNode> items = new ArrayList<>();
         private final Set<String> seen = new HashSet<>();
         private final int limit;
-        private int total = -1, count;
+        private final String field;
+        private int total = -1;
+        int count;
         int to;
-        PackagePages(int limit) { this.limit = limit; }
+        PackagePages(int limit) { this(limit, "packages"); }
+        PackagePages(int limit, String field) { this.limit = limit; this.field = field; }
         boolean add(JsonNode page, int offset) {
-            validatePreflight(page, "packages");
+            if (field.equals("packages")) validatePreflight(page, field);
+            else if (!page.path(field).isArray() || !page.path("total").isIntegralNumber()
+                    || !page.path("total").canConvertToInt() || page.path("total").intValue() < 0) throw failure();
             int nextTotal = page.path("total").intValue();
             if (++count > MAX_PAGES || offset != to || (total != -1 && total != nextTotal)) throw failure();
             total = nextTotal;
             if (!page.path("from").isIntegralNumber() || !page.path("from").canConvertToInt()
                     || !page.path("to").isIntegralNumber() || !page.path("to").canConvertToInt()) throw failure();
             if (total == 0) {
-                if (offset != 0 || (page.path("from").intValue() != 0 && page.path("from").intValue() != 1) || page.path("to").intValue() != 0 || !page.path("packages").isEmpty()) throw failure();
+                if (offset != 0 || (page.path("from").intValue() != 0 && page.path("from").intValue() != 1) || page.path("to").intValue() != 0 || !page.path(field).isEmpty()) throw failure();
                 return true;
             }
             if (!page.path("from").isIntegralNumber() || !page.path("from").canConvertToInt() || page.path("from").asLong() != offset + 1L
                     || !page.path("to").isIntegralNumber() || !page.path("to").canConvertToInt()) throw failure();
             to = page.path("to").intValue();
-            if (to <= offset || to > total || to - offset > limit || to - offset != page.path("packages").size()) throw failure();
+            if (to <= offset || to > total || to - offset > limit || to - offset != page.path(field).size()) throw failure();
             int index = 0;
-            for (JsonNode item : page.path("packages")) {
-                if (!seen.add(required(item, "uid"))) throw invalidPackage(index, "uid", item.path("uid"));
+            for (JsonNode item : page.path(field)) {
+                if (!seen.add(required(item, "uid"))) {
+                    if (field.equals("packages")) throw invalidPackage(index, "uid", item.path("uid"));
+                    throw failure();
+                }
                 index++;
                 items.add(item);
             }
@@ -257,12 +326,17 @@ public final class CheckPointPolicyCollector {
                 if (fetched.size() > MAX_PAGES) throw failure();
                 final int previousRules = rules[0];
                 boolean hits = PolicyHitGates.enabled(gates, true);
-                layer = pages(session, offset -> MgmtCliCommands.showAccessRulebase(domain, name, offset)
-                        + (hits ? " show-hits true" : ""), hits ? 3 : 1, deadline, lease,
-                    count -> {
-                        rules[0] = previousRules + count;
-                        PolicyCollectionTrace.layer(fetched.size(), fetched.size() + pending.size(), rules[0]);
-                    });
+                IntConsumer progress = count -> {
+                    rules[0] = previousRules + count;
+                    PolicyCollectionTrace.layer(fetched.size(), fetched.size() + pending.size(), rules[0]);
+                };
+                try {
+                    layer = pages(session, offset -> MgmtCliCommands.showAccessRulebase(domain, name, offset)
+                        + (hits ? " show-hits true" : ""), hits ? 3 : 1, deadline, lease, progress);
+                } catch (RuntimeException unsupportedHits) {
+                    if (!hits || PolicyCollectionTrace.fatal(unsupportedHits)) throw unsupportedHits;
+                    layer = pages(session, offset -> MgmtCliCommands.showAccessRulebase(domain, name, offset), 1, deadline, lease, progress);
+                }
                 for (JsonNode page : layer) if (!uid.equals(required(page, "uid"))) throw failure();
                 for (JsonNode page : layer)
                     for (JsonNode object : page.path("objects-dictionary")) dictionary.put(required(object, "uid"), object);
@@ -409,15 +483,15 @@ public final class CheckPointPolicyCollector {
             }
             if (completed.exitStatus() != 0) throw PolicyCollectionTrace.failure("EXIT_" + completed.exitStatus());
             if (root == null || !root.isObject()) throw failure();
-            if (gate <= 0) validatePreflight(root, gate < 0 ? "objects" : "packages");
+            if (gate <= 0 || gate == CpPolicyGates.PACKAGES_50) validatePreflight(root, gate < 0 ? "objects" : "packages");
             return root;
         } catch (PolicyCollectionTrace.Failure invalid) {
-            if (gate <= 0) invalidPreflight(completed.output(), completed.exitStatus(), false, root);
+            if (gate <= 0 || gate == CpPolicyGates.PACKAGES_50) invalidPreflight(completed.output(), completed.exitStatus(), false, root);
             if (completed.exitStatus() != 0 && invalid.getMessage().endsWith(": INVALID_OR_INCOMPLETE_RESPONSE"))
                 throw PolicyCollectionTrace.failure("EXIT_" + completed.exitStatus());
             throw invalid;
         } catch (java.io.IOException invalid) {
-            if (gate <= 0) invalidPreflight(completed.output(), completed.exitStatus(),
+            if (gate <= 0 || gate == CpPolicyGates.PACKAGES_50) invalidPreflight(completed.output(), completed.exitStatus(),
                 invalid instanceof com.fasterxml.jackson.core.io.JsonEOFException, root);
             if (completed.exitStatus() != 0) throw PolicyCollectionTrace.failure("EXIT_" + completed.exitStatus());
             throw failure();
@@ -440,7 +514,7 @@ public final class CheckPointPolicyCollector {
         if (field.equals("objects")) completeList(root, field);
         else if (!root.path(field).isArray() || !root.path("total").isIntegralNumber()
                 || !root.path("total").canConvertToInt() || root.path("total").intValue() < root.path(field).size()
-                || root.path(field).size() > 20 || (root.path("total").intValue() > 0 && root.path(field).isEmpty())) throw failure();
+                || root.path(field).size() > 50 || (root.path("total").intValue() > 0 && root.path(field).isEmpty())) throw failure();
         Set<String> seen = new HashSet<>();
         int index = 0;
         for (JsonNode item : root.path(field)) {

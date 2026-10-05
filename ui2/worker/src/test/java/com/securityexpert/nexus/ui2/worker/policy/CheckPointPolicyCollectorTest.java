@@ -15,11 +15,13 @@ import com.securityexpert.nexus.ui2.policy.PolicySnapshot;
 import com.securityexpert.nexus.ui2.worker.discovery.cp.MgmtCliCommands;
 
 class CheckPointPolicyCollectorTest {
+    @org.junit.jupiter.api.BeforeEach void isolateRuleCollection() { System.setProperty("ui2.policy.cp.collect-objects", "false"); }
+    @org.junit.jupiter.api.AfterEach void restoreObjectCollection() { System.clearProperty("ui2.policy.cp.collect-objects"); }
     private final DeviceTransport transport = mock(DeviceTransport.class);
     private final TransportSession session = () -> "synthetic-session";
     private final PolicyCollectionRepository repository = mock(PolicyCollectionRepository.class);
     private final GateRegistryPort gates = key -> GateRegistryFixtureLoader.loadFromStream(
-        getClass().getResourceAsStream("/capabilities/gate_registry_fixture.yaml")).stream().filter(r -> r.key().equals(key)).toList();
+        getClass().getResourceAsStream("/capabilities/gate_registry_fixture.yaml")).stream().filter(r -> r.key().equals(key) && !r.gateId().equals("cp_policy_access_rulebase_hits")).toList();
     private final DiscoveryRun run = new DiscoveryRun("run-1", "check_point", "192.0.2.10", "synthetic-ref", "synthetic-actor",
         DiscoveryRunState.FINISHED, Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
     private final PolicyCollectionRepository.Request request = new PolicyCollectionRepository.Request("mds-1", "", false);
@@ -127,14 +129,14 @@ class CheckPointPolicyCollectorTest {
                 if (!command.contains("show-packages")) return answer(command);
                 var offset = java.util.regex.Pattern.compile(" offset '([0-9]+)'").matcher(command);
                 assertTrue(offset.find());
-                assertTrue(command.contains(" limit 20 "));
-                return ok(packagePage(Integer.parseInt(offset.group(1)), 20, total));
+                assertTrue(command.contains(" limit 50 "));
+                return ok(packagePage(Integer.parseInt(offset.group(1)), 50, total));
             });
             var collector = new CheckPointPolicyCollector(transport, gates, repository, Duration.ofHours(2), sessions);
             List<PolicySnapshot.CollectionFailure> failures = new ArrayList<>();
             assertEquals(total, collector.collect(run, request, () -> true, snapshot -> {}, failures::add).size());
             assertTrue(failures.isEmpty());
-            verify(transport, times(total == 0 ? 1 : 2)).execInteractive(any(),
+            verify(transport, times(1)).execInteractive(any(),
                 argThat(spec -> spec.command().contains("show-packages")), any());
         }
     }
@@ -165,11 +167,11 @@ class CheckPointPolicyCollectorTest {
     @Test void packageGateIsRecheckedBeforeEveryPage() {
         for (int sessions : List.of(1, 4)) {
             reset(transport, repository);
-            setup(command -> command.contains("show-packages") ? ok(packagePage(0, 20, 21)) : answer(command));
+            setup(command -> command.contains("show-packages") ? ok(packagePage(0, 50, 51)) : answer(command));
             var checks = new AtomicInteger();
             GateRegistryPort revoked = key -> {
                 if (key.equals(new CanonicalCommandKey("check_point", "cp_multi_domain_server", "expert", "SSH_EXEC",
-                        CpPolicyGates.COMMANDS.get(0))) && checks.incrementAndGet() > 2) return List.of();
+                        CpPolicyGates.COMMANDS.get(CpPolicyGates.PACKAGES_50))) && checks.incrementAndGet() > 2) return List.of();
                 return gates.findByCanonicalKey(key);
             };
             var collector = new CheckPointPolicyCollector(transport, revoked, repository, Duration.ofHours(2), sessions);
@@ -202,7 +204,7 @@ class CheckPointPolicyCollectorTest {
             reset(transport, repository);
             setup(command -> {
                 if (command.equals(MgmtCliCommands.domainList())) return ok("{\"total\":2,\"objects\":[{\"uid\":\"broken\",\"name\":\"DOM-BRAVO-02\"},{\"uid\":\"domain-01\",\"name\":\"DOM-TANGO-01\"}]}");
-                if (command.equals(MgmtCliCommands.showPackages("DOM-BRAVO-02"))) return ok(truncated);
+                if (command.contains("show-packages") && command.contains("'DOM-BRAVO-02'")) return ok(truncated);
                 return answer(command);
             });
             var collector = new CheckPointPolicyCollector(transport, gates, repository, Duration.ofHours(2), sessions);
@@ -301,7 +303,7 @@ class CheckPointPolicyCollectorTest {
     @Test void failedPackageReadMarksDomainIncompleteAndContinuesOnFreshSession() {
         var collector = setup(command -> {
             if (command.equals(MgmtCliCommands.domainList())) return ok("{\"total\":2,\"objects\":[{\"uid\":\"broken\",\"name\":\"DOM-BRAVO-02\"},{\"uid\":\"domain-01\",\"name\":\"DOM-TANGO-01\"}]}");
-            if (command.equals(MgmtCliCommands.showPackages("DOM-BRAVO-02"))) return new ExecResult.TimedOut();
+            if (command.contains("show-packages") && command.contains("'DOM-BRAVO-02'")) return new ExecResult.TimedOut();
             return answer(command);
         });
         List<PolicySnapshot> published = new ArrayList<>();
@@ -470,6 +472,7 @@ class CheckPointPolicyCollectorTest {
     private static final String DICTIONARY = "{\"uid\":\"host1\",\"name\":\"OBJ-ADDRESS-01\",\"type\":\"host\",\"ipv4-address\":\"192.0.2.8\"},"
         + "{\"uid\":\"accept\",\"name\":\"Accept\"},{\"uid\":\"child\",\"name\":\"Inline\",\"type\":\"access-layer\"}";
     private ExecResult answer(String command) {
+        if (command.contains("show-packages")) command = command.replace(" limit 20 offset ", " limit 50 offset ");
         if (command.equals(MgmtCliCommands.domainList())) return ok("{\"total\":1,\"objects\":[{\"uid\":\"domain-01\",\"name\":\"DOM-TANGO-01\"}]}");
         if (command.equals(MgmtCliCommands.showPackages("DOM-TANGO-01"))) return ok("""
             {"from":1,"to":1,"total":1,"packages":[{"uid":"pkg-01","name":"Package","access-layers":[{"uid":"layer","name":"Layer"}],"installation-targets":[{"uid":"target-01"}]}]}
@@ -519,7 +522,7 @@ class CheckPointPolicyCollectorTest {
     }
 
     @Test void commandsAreExactlyApprovedAndQuoted() {
-        assertEquals("mgmt_cli -r true -d 'DOM' -f json show-packages limit 20 offset '0' details-level full", MgmtCliCommands.showPackages("DOM"));
+        assertEquals("mgmt_cli -r true -d 'DOM' -f json show-packages limit 50 offset '0' details-level full", MgmtCliCommands.showPackages("DOM"));
         for (int offset : List.of(0, 20, 40)) {
             assertEquals(CpPolicyGates.COMMANDS.get(0).replace("<DOMAIN>", "DOM").replace("<N>", Integer.toString(offset)),
                 MgmtCliCommands.showPackages("DOM", offset, 20));
@@ -535,7 +538,7 @@ class CheckPointPolicyCollectorTest {
         assertThrows(IllegalArgumentException.class, () -> MgmtCliCommands.showPackages("DOM\nnext"));
         assertThrows(IllegalArgumentException.class, () -> MgmtCliCommands.showPackages("DOM", -1, 20));
         assertThrows(IllegalArgumentException.class, () -> MgmtCliCommands.showPackages("DOM", 0, 0));
-        assertThrows(IllegalArgumentException.class, () -> MgmtCliCommands.showPackages("DOM", 0, 50));
+        assertDoesNotThrow(() -> MgmtCliCommands.showPackages("DOM", 0, 50));
         CpPolicyGates.requireAll(gates);
         assertTrue(CpPolicyGates.capability(gates).executionEligible());
         assertFalse(CpPolicyGates.capability(key -> List.of()).executionEligible());
@@ -638,7 +641,7 @@ class CheckPointPolicyCollectorTest {
         assertEquals(1, snapshot.failures().size());
         assertTrue(snapshot.failures().get(0).reason().endsWith(": STREAMING_TIMEOUT"));
         verify(transport).execInteractive(eq(session), eq(policySpec(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Inline", 0))), any());
-        verify(transport, never()).execInteractive(eq(session), argThat(spec -> spec.command().contains(" limit 50 offset ")), any());
+        verify(transport, never()).execInteractive(eq(session), argThat(spec -> spec.command().contains("show-access-rulebase") && spec.command().contains(" limit 50 offset ")), any());
     }
     @Test void malformedMappedInlineLayerDoesNotPreventNatOrSiblingPublication() {
         setup(command -> command.contains("name 'Inline'")
