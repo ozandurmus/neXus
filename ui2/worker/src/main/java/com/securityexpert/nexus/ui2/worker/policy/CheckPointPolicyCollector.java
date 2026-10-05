@@ -100,7 +100,11 @@ public final class CheckPointPolicyCollector {
                 domainFailure.accept(new CollectionFailure(snapshot.metadata().id(), "POLICY_DB_SNAPSHOT_WRITE_FAILED"));
             }
         };
-        Consumer<CollectionFailure> domainGap = gap -> { reuse.gap(gap.layerRef()); domainFailure.accept(gap); };
+        Consumer<CollectionFailure> domainGap = gap -> {
+            // Object gaps are reported independently; they cannot invalidate gap-free rule evidence.
+            if (!gap.reason().equals("POLICY_DB_INVENTORY_WRITE_FAILED")) reuse.gap(gap.layerRef());
+            domainFailure.accept(gap);
+        };
         if (!"check_point".equals(run.vendor())) throw failure();
         CpPolicyGates.requireAll(gates);
         if (!lease.getAsBoolean()) throw PolicyCollectionTrace.failure("LEASE_LOST");

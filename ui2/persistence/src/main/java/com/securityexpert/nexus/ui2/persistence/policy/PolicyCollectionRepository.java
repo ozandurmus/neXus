@@ -88,24 +88,35 @@ public class PolicyCollectionRepository {
 
     /** Inspect the latest attempt, including incomplete attempts; never fall back past gaps. */
     public Optional<DomainRun> previousDomain(String source, String domain) {
-        return tx.inTransaction(db -> db.fetch("select complete, signal::text as signal, snapshots::text as snapshots "
+        var row = tx.inTransaction(db -> db.fetch("select complete, signal::text as signal, snapshots::text as snapshots, chunk_generation, chunk_count "
             + "from cp_policy_domain_run where source_id = {0} and domain_ref = {1} order by attempted_at desc limit 1",
-            source, domain).stream().findFirst().map(r -> new DomainRun(Boolean.TRUE.equals(r.get("complete", Boolean.class)),
-                r.get("signal", String.class), r.get("snapshots", String.class))));
+            source, domain).stream().findFirst());
+        return row.map(r -> new DomainRun(Boolean.TRUE.equals(r.get("complete", Boolean.class)), r.get("signal", String.class),
+            r.field("chunk_generation") == null || r.get("chunk_generation", String.class) == null ? r.get("snapshots", String.class)
+                : new PolicyChunkStore(tx).read(source, domain, "", "DOMAIN", new PolicyChunkStore.Manifest(
+                    r.get("chunk_generation", String.class), r.get("chunk_count", Integer.class)))));
     }
 
-    /** Pending attempts invalidate reuse immediately; publication remains fenced by the job lease. */
+    /** A fenced, small manifest publishes only a fully written immutable generation. */
     public boolean saveDomain(Request request, String domain, String status, boolean complete, String signal,
             String snapshots, int rules, String hitsAt, String actor) {
-        return PolicyJsonWrite.guarded("PolicyCollectionRepository.saveDomain", "DOMAIN_UPSERT", PolicyJsonWrite.bytes(signal, snapshots),
+        for (String parameter : new String[]{request.jobId(), request.sourceId(), domain, status, signal, hitsAt, actor})
+            PolicyChunkStore.requireBounded(PolicyJsonWrite.bytes(parameter));
+        boolean live = tx.inTransaction(db -> !db.fetch("select job_id from jobs where job_id = {0} and lease_epoch = {1} "
+            + "and state = 'EXECUTING' and lease_expires_at > now()", request.jobId(), request.epoch()).isEmpty());
+        if (!live) return false;
+        PolicyChunkStore.validateSnapshots(snapshots);
+        var manifest = new PolicyChunkStore(tx).write(request.sourceId(), domain, "", "DOMAIN", snapshots, actor);
+        return PolicyJsonWrite.guarded("PolicyCollectionRepository.saveDomain", "DOMAIN_UPSERT", PolicyJsonWrite.bytes(signal),
             () -> new AuditedTransactionBoundary(tx).inTransaction(actor, "policy_collect_domain", db -> {
             if (db.fetch("select job_id from jobs where job_id = {0} and lease_epoch = {1} and state = 'EXECUTING' "
                     + "and lease_expires_at > now() for update", request.jobId(), request.epoch()).isEmpty()) return false;
-            db.execute("insert into cp_policy_domain_run(job_id, source_id, domain_ref, status, complete, signal, snapshots, rules_count, hits_collected_at) "
-                + "values ({0},{1},{2},{3},{4},{5}::jsonb,{6}::jsonb,{7},{8}::timestamptz) "
+            db.execute("insert into cp_policy_domain_run(job_id, source_id, domain_ref, status, complete, signal, snapshots, rules_count, hits_collected_at, chunk_generation, chunk_count) "
+                + "values ({0},{1},{2},{3},{4},{5}::jsonb,'[]'::jsonb,{6},{7}::timestamptz,{8},{9}) "
                 + "on conflict (job_id, domain_ref) do update set status = excluded.status, complete = excluded.complete, "
-                + "signal = excluded.signal, snapshots = excluded.snapshots, rules_count = excluded.rules_count, hits_collected_at = excluded.hits_collected_at",
-                request.jobId(), request.sourceId(), domain, status, complete, PolicyJsonWrite.json(db, signal), PolicyJsonWrite.json(db, snapshots), rules, hitsAt);
+                + "signal = excluded.signal, snapshots = excluded.snapshots, rules_count = excluded.rules_count, hits_collected_at = excluded.hits_collected_at, "
+                + "chunk_generation = excluded.chunk_generation, chunk_count = excluded.chunk_count",
+                request.jobId(), request.sourceId(), domain, status, complete, complete ? signal : null, rules, hitsAt, manifest.generation(), manifest.count());
             return true;
         }));
     }
@@ -133,14 +144,19 @@ public class PolicyCollectionRepository {
             source, domain, type, cutoff.toString()).isEmpty());
     }
 
-    /** Parsed inventories share existing admission, audit and domain throttling. */
+    /** Metadata is small; object arrays are streamed into immutable bounded chunks. */
     public void saveInventory(String source, String domain, String type, String at, String snapshot, String actor) {
-        PolicyJsonWrite.guarded("PolicyCollectionRepository.saveInventory", "INVENTORY_UPSERT", PolicyJsonWrite.bytes(snapshot),
+        PolicyChunkStore.requireBounded(PolicyJsonWrite.bytes(at));
+        String metadata = PolicyChunkStore.inventoryMetadata(snapshot);
+        PolicyChunkStore.requireBounded(PolicyJsonWrite.bytes(metadata));
+        var manifest = new PolicyChunkStore(tx).write(source, domain, type, "INVENTORY", snapshot, actor);
+        PolicyJsonWrite.guarded("PolicyCollectionRepository.saveInventory", "INVENTORY_UPSERT", PolicyJsonWrite.bytes(metadata),
             () -> new AuditedTransactionBoundary(tx).inTransaction(actor, "policy_collect_objects", db -> {
-            db.execute("insert into cp_policy_object_inventory(source_id, domain_ref, object_type, collected_at, snapshot) "
-                + "values ({0}, {1}, {2}, {3}::timestamptz, {4}::jsonb) on conflict (source_id, domain_ref, object_type) "
-                + "do update set collected_at = excluded.collected_at, snapshot = excluded.snapshot "
-                + "where cp_policy_object_inventory.collected_at < excluded.collected_at", source, domain, type, at, PolicyJsonWrite.json(db, snapshot));
+            db.execute("insert into cp_policy_object_inventory(source_id, domain_ref, object_type, collected_at, snapshot, chunk_generation, chunk_count) "
+                + "values ({0},{1},{2},{3}::timestamptz,{4}::jsonb,{5},{6}) on conflict (source_id, domain_ref, object_type) "
+                + "do update set collected_at = excluded.collected_at, snapshot = excluded.snapshot, "
+                + "chunk_generation = excluded.chunk_generation, chunk_count = excluded.chunk_count "
+                + "where cp_policy_object_inventory.collected_at < excluded.collected_at", source, domain, type, at, metadata, manifest.generation(), manifest.count());
             return null;
         }));
     }

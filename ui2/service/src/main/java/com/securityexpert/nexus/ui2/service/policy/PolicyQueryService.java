@@ -34,19 +34,66 @@ public final class PolicyQueryService {
     }
     /** Independent type gaps remain visible even when there are no policy packages. */
     public Optional<PolicyResponse> domainInventory(String source, String domain, String view, int page) {
-        var inventories = repository.inventories(source, domain).stream()
-            .map(json -> read(json, com.securityexpert.nexus.ui2.policy.CpObjectInventory.class)).toList();
-        var selected = inventories.stream().filter(i -> switch (view) {
-            case "unused" -> i.type().equals("unused-objects");
-            case "gateways" -> i.type().equals("gateways-and-servers");
-            default -> !i.type().equals("unused-objects") && !i.type().equals("gateways-and-servers");
-        }).toList();
-        if (selected.isEmpty()) return Optional.empty();
-        var items = selected.stream().flatMap(i -> i.objects().stream()).toList();
-        var states = selected.stream().map(i -> Map.of("type", i.type(), "status", i.status(), "reason", i.reason(),
-            "collectedAt", i.collectedAt(), "pages", i.pages(), "objects", i.objects().size(), "seconds", i.seconds())).toList();
-        return Optional.of(new PolicyResponse(Map.of("sourceId", source, "containerId", domain, "types", states,
-            "objects", items.stream().skip((long) page * 200).limit(200).map(this::map).toList(), "total", items.size())));
+        var states = new LinkedHashMap<String, Map<String, Object>>();
+        var objects = new ArrayList<Map<String, Object>>();
+        int[] total = {0};
+        long offset = (long) page * 200;
+        inventoryChunks(source, domain, inventory -> {
+            boolean selected = switch (view) {
+                case "unused" -> inventory.type().equals("unused-objects");
+                case "gateways" -> inventory.type().equals("gateways-and-servers");
+                default -> !inventory.type().equals("unused-objects") && !inventory.type().equals("gateways-and-servers");
+            };
+            if (!selected) return;
+            var state = states.computeIfAbsent(inventory.type(), type -> new LinkedHashMap<>(Map.of(
+                "type", type, "status", inventory.status(), "reason", inventory.reason(), "collectedAt", inventory.collectedAt(),
+                "pages", inventory.pages(), "objects", 0, "seconds", inventory.seconds())));
+            state.put("objects", (int) state.get("objects") + inventory.objects().size());
+            for (var item : inventory.objects()) {
+                if (total[0] >= offset && objects.size() < 200) objects.add(map(item));
+                total[0]++;
+            }
+        });
+        if (states.isEmpty()) return Optional.empty();
+        return Optional.of(new PolicyResponse(Map.of("sourceId", source, "containerId", domain, "types", List.copyOf(states.values()),
+            "objects", objects, "total", total[0])));
+    }
+
+    /** New inventories are parsed as bounded item batches; old JSON rows retain compatibility. */
+    private void inventoryChunks(String source, String domain, java.util.function.Consumer<com.securityexpert.nexus.ui2.policy.CpObjectInventory> consume) {
+        repository.streamInventoryChunks(source, domain, (metadata, reader) -> {
+            try {
+                if (metadata == null) {
+                    consume.accept(mapper.readValue(reader, com.securityexpert.nexus.ui2.policy.CpObjectInventory.class));
+                    return;
+                }
+                var header = read(metadata, com.securityexpert.nexus.ui2.policy.CpObjectInventory.class);
+                var batch = new ArrayList<com.securityexpert.nexus.ui2.policy.CpObjectInventory.Item>();
+                try (var parser = mapper.getFactory().createParser(reader)) {
+                    if (parser.nextToken() != com.fasterxml.jackson.core.JsonToken.START_OBJECT)
+                        throw new IllegalStateException("POLICY_INVENTORY_INVALID");
+                    while (parser.nextToken() != com.fasterxml.jackson.core.JsonToken.END_OBJECT) {
+                        if (parser.currentToken() != com.fasterxml.jackson.core.JsonToken.FIELD_NAME)
+                            throw new IllegalStateException("POLICY_INVENTORY_INVALID");
+                        String field = parser.currentName(); parser.nextToken();
+                        if (!field.equals("objects")) { parser.skipChildren(); continue; }
+                        if (parser.currentToken() != com.fasterxml.jackson.core.JsonToken.START_ARRAY)
+                            throw new IllegalStateException("POLICY_INVENTORY_INVALID");
+                        while (parser.nextToken() != com.fasterxml.jackson.core.JsonToken.END_ARRAY) {
+                            batch.add(mapper.readValue(parser, com.securityexpert.nexus.ui2.policy.CpObjectInventory.Item.class));
+                            if (batch.size() == 200) { consume.accept(inventoryBatch(header, batch)); batch.clear(); }
+                        }
+                    }
+                }
+                // An empty terminal batch also exposes metadata for inventories with zero objects.
+                consume.accept(inventoryBatch(header, batch));
+            } catch (java.io.IOException invalid) { throw new IllegalStateException("POLICY_INVENTORY_INVALID"); }
+        });
+    }
+    private static com.securityexpert.nexus.ui2.policy.CpObjectInventory inventoryBatch(
+            com.securityexpert.nexus.ui2.policy.CpObjectInventory header, List<com.securityexpert.nexus.ui2.policy.CpObjectInventory.Item> items) {
+        return new com.securityexpert.nexus.ui2.policy.CpObjectInventory(header.sourceId(), header.containerId(), header.type(),
+            header.collectedAt(), header.status(), header.reason(), items, header.pages(), header.seconds());
     }
 
     private record CachedDomain(String revision, PolicyDomainIndex index) {}
@@ -54,7 +101,7 @@ public final class PolicyQueryService {
 
     // ponytail: one lock for the bounded 32-domain cache; split locks only if stored-read contention is measured.
     synchronized PolicyDomainIndex domainIndex(String source, String domain) {
-        var inventories = repository.inventories(source, domain);
+        var inventories = repository.inventoryRevision(source, domain);
         var snapshots = repository.domainSnapshots(source, domain);
         String revision;
         try {
@@ -67,7 +114,7 @@ public final class PolicyQueryService {
         String key = ref(source, domain);
         var cached = domainCache.get(key);
         if (cached != null && cached.revision().equals(revision)) return cached.index();
-        var index = new PolicyDomainIndex(inventories.stream().map(json -> read(json, com.securityexpert.nexus.ui2.policy.CpObjectInventory.class)).toList(),
+        var index = new PolicyDomainIndex(consume -> inventoryChunks(source, domain, consume),
             snapshots.stream().map(json -> read(json, PolicySnapshot.class)).toList());
         domainCache.put(key, new CachedDomain(revision, index));
         if (domainCache.size() > 32) domainCache.remove(domainCache.keySet().iterator().next());
@@ -84,7 +131,7 @@ public final class PolicyQueryService {
     }
     private List<Map<String, Object>> typeStates(PolicyDomainIndex index) {
         return index.inventories.stream().map(i -> Map.<String, Object>of("type", i.type(), "status", i.status(),
-            "collectedAt", i.collectedAt(), "objects", i.objects().size())).toList();
+            "collectedAt", i.collectedAt(), "objects", index.objectCounts.getOrDefault(i.type(), 0))).toList();
     }
     public Optional<PolicyResponse> domainObjects(String source, String domain, int page, String q, String type, String hygiene, boolean masked) {
         var index = domainIndex(source, domain);

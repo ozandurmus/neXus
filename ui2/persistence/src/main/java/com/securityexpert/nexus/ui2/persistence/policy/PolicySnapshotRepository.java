@@ -28,9 +28,35 @@ public final class PolicySnapshotRepository {
                 .stream().findFirst().map(row -> row.get("snapshot", String.class)));
     }
     public List<String> inventories(String source, String domain) {
-        return transactions.inTransaction(db -> db.fetch("select snapshot::text as snapshot from cp_policy_object_inventory "
-                + "where source_id = {0} and domain_ref = {1} order by object_type", source, domain)
-                .map(row -> row.get("snapshot", String.class)));
+        var result = new java.util.ArrayList<String>();
+        streamInventories(source, domain, reader -> {
+            try { var out = new java.io.StringWriter(); reader.transferTo(out); result.add(out.toString()); }
+            catch (java.io.IOException invalid) { throw new IllegalStateException("POLICY_CHUNK_INVALID"); }
+        });
+        return result;
+    }
+    /** Each reader fetches one bounded chunk at a time, outside the manifest transaction. */
+    public void streamInventories(String source, String domain, java.util.function.Consumer<java.io.Reader> consume) {
+        streamInventoryChunks(source, domain, (metadata, reader) -> consume.accept(reader));
+    }
+    public void streamInventoryChunks(String source, String domain, java.util.function.BiConsumer<String, java.io.Reader> consume) {
+        var rows = transactions.inTransaction(db -> db.fetch("select snapshot::text as snapshot, object_type, chunk_generation, chunk_count "
+            + "from cp_policy_object_inventory where source_id = {0} and domain_ref = {1} order by object_type", source, domain));
+        for (var row : rows) {
+            try (var reader = row.field("chunk_generation") == null || row.get("chunk_generation", String.class) == null
+                    ? new java.io.StringReader(row.get("snapshot", String.class))
+                    : new PolicyChunkStore(transactions).reader(source, domain, row.get("object_type", String.class), "INVENTORY",
+                        new PolicyChunkStore.Manifest(row.get("chunk_generation", String.class), row.get("chunk_count", Integer.class)))) {
+                consume.accept(row.field("chunk_generation") == null || row.get("chunk_generation", String.class) == null
+                    ? null : row.get("snapshot", String.class), reader);
+            } catch (java.io.IOException invalid) { throw new IllegalStateException("POLICY_CHUNK_INVALID"); }
+        }
+    }
+    public List<String> inventoryRevision(String source, String domain) {
+        return transactions.inTransaction(db -> db.fetch("select snapshot::text as snapshot, object_type, chunk_generation, chunk_count "
+            + "from cp_policy_object_inventory where source_id = {0} and domain_ref = {1} order by object_type", source, domain)
+            .map(row -> row.get("snapshot", String.class) + (row.field("chunk_generation") == null ? "" :
+                "|" + row.get("chunk_generation", String.class) + "|" + row.get("chunk_count", Integer.class))));
     }
     public List<String> domainSnapshots(String source, String domain) {
         return transactions.inTransaction(db -> db.fetch("select snapshot::text as snapshot from policy_snapshot "

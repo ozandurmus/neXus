@@ -116,10 +116,12 @@ class CpChangedDomainsTest {
         assertNull(reuse.decide(container, json.readTree(SIGNAL)));
         reuse.planned(container, 1);
         reuse.snapshot(stored());
+        verify(repository, never()).saveDomain(any(), anyString(), anyString(), eq(true), nullable(String.class), anyString(), anyInt(), nullable(String.class), anyString());
+        reuse.finish();
         verify(repository).saveDomain(eq(request), eq(container), eq("COLLECTED"), eq(true), contains("published-001"),
             contains("rule-001"), eq(1), eq("2026-10-04T00:00:00Z"), anyString());
         reuse.gap(container);
-        verify(repository).saveDomain(eq(request), eq(container), eq("COLLECTED"), eq(false), contains("published-001"),
+        verify(repository, atLeastOnce()).saveDomain(eq(request), eq(container), eq("COLLECTED"), eq(false), isNull(),
             contains("rule-001"), eq(1), eq("2026-10-04T00:00:00Z"), anyString());
     }
     @Test void publishedSessionApiErrorsCollectFullyWithoutInvalidPreflightNoise() throws Exception {
@@ -135,6 +137,48 @@ class CpChangedDomainsTest {
             assertFalse(notes.contains("invalid preflight")); assertFalse(notes.contains("Sensitive synthetic message"));
         }
         assertEquals("<masked-code>", CheckPointPolicyCollector.safeApiCode(json.readTree("\"private-identity\"")));
+    }
+
+    @Test void ruleGapBeforeFinishNeverPublishesAChangedDomainSignal() throws Exception {
+        var repository = mock(PolicyCollectionRepository.class);
+        var request = new PolicyCollectionRepository.Request("source-1", "", false, PolicyCollectionRepository.Mode.CHANGED_ONLY, "job-1", 7);
+        when(repository.previousDomain(anyString(), anyString())).thenReturn(Optional.empty());
+        when(repository.saveDomain(any(), anyString(), anyString(), anyBoolean(), nullable(String.class), anyString(), anyInt(), nullable(String.class), anyString())).thenReturn(true);
+        var reuse = new CpDomainReuse(repository, request);
+        reuse.begin(container); reuse.decide(container, json.readTree(SIGNAL)); reuse.planned(container, 1);
+        reuse.snapshot(stored()); reuse.gap(container); reuse.finish();
+        verify(repository, never()).saveDomain(any(), anyString(), anyString(), eq(true), nullable(String.class), anyString(), anyInt(), nullable(String.class), anyString());
+        verify(repository, never()).saveDomain(any(), anyString(), anyString(), anyBoolean(), notNull(), anyString(), anyInt(), nullable(String.class), anyString());
+    }
+
+    @Test void inventoryWriteGapIsRecordedAndDoesNotInvalidateRuleReuseInEitherCollector() throws Exception {
+        for (int maximum : List.of(1, 4)) {
+            var repository = mock(PolicyCollectionRepository.class);
+            var signal = CpDomainReuse.signal(json.readTree(SIGNAL));
+            when(repository.previousDomain("source-1", container)).thenReturn(Optional.of(new PolicyCollectionRepository.DomainRun(
+                true, json.writeValueAsString(signal), json.writeValueAsString(List.of(stored())))));
+            when(repository.beginDomain(anyString(), anyString(), anyBoolean())).thenReturn(true);
+            when(repository.saveDomain(any(), anyString(), anyString(), anyBoolean(), nullable(String.class), anyString(), anyInt(), nullable(String.class), anyString())).thenReturn(true);
+            doThrow(new com.securityexpert.nexus.ui2.persistence.policy.PolicyDatabaseFailure("synthetic", "INVENTORY_UPSERT", 100))
+                .when(repository).saveInventory(anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
+            var transport = mock(DeviceTransport.class);
+            var commands = new CopyOnWriteArrayList<String>();
+            when(transport.connect(any(), any(), any())).thenAnswer(call -> new ConnectResult.Authenticated(() -> UUID.randomUUID().toString()));
+            when(transport.execInteractive(any(), any(), any())).thenAnswer(call -> {
+                String command = ((ExecSpec) call.getArgument(1)).command(); commands.add(command);
+                if (command.contains("show-domains")) return new ExecResult.Completed("{\"total\":1,\"objects\":[{\"uid\":\"domain-1\",\"name\":\"DOM-TANGO-01\"}]}", 0);
+                if (command.contains("show-last-published-session")) return new ExecResult.Completed(SIGNAL, 0);
+                return new ExecResult.Completed("{\"total\":0,\"from\":0,\"to\":0,\"objects\":[]}", 0);
+            });
+            var collector = new CheckPointPolicyCollector(transport, gates, repository, Duration.ofMinutes(5), maximum);
+            var request = new PolicyCollectionRepository.Request("source-1", "", false, PolicyCollectionRepository.Mode.CHANGED_ONLY, "job-1", 7);
+            var gaps = new ArrayList<PolicySnapshot.CollectionFailure>();
+            assertEquals(List.of(stored()), collector.collect(run, request, () -> true, snapshot -> {}, gaps::add));
+            assertFalse(gaps.isEmpty()); assertTrue(gaps.stream().allMatch(g -> g.reason().equals("POLICY_DB_INVENTORY_WRITE_FAILED")));
+            assertTrue(commands.stream().noneMatch(c -> c.contains("show-packages") || c.contains("rulebase")));
+            verify(repository).saveDomain(eq(request), eq(container), eq("REUSED"), eq(true), contains("published-001"),
+                contains("rule-001"), eq(1), eq("2026-10-04T00:00:00Z"), anyString());
+        }
     }
 
     @Test void domainDatabaseFailureDisablesReuseAndDoesNotStopCollection() throws Exception {

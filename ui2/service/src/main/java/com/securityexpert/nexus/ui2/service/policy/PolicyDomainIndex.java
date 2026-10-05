@@ -13,16 +13,35 @@ final class PolicyDomainIndex {
     final List<CpObjectInventory> inventories;
     final List<PolicySnapshot> snapshots;
 
+    final Map<String, Integer> objectCounts = new LinkedHashMap<>();
     PolicyDomainIndex(List<CpObjectInventory> inventories, List<PolicySnapshot> snapshots) {
-        this.inventories = List.copyOf(inventories); this.snapshots = List.copyOf(snapshots);
+        this(consume -> inventories.forEach(consume), snapshots);
+    }
+    /** Retain derived lookup state, not the full inventory JSON or duplicate parsed item lists. */
+    PolicyDomainIndex(java.util.function.Consumer<java.util.function.Consumer<CpObjectInventory>> stream,
+            List<PolicySnapshot> snapshots) {
+        this.snapshots = List.copyOf(snapshots);
         var items = new LinkedHashMap<String, CpObjectInventory.Item>();
         var unused = new HashSet<String>();
-        boolean unusedKnown = inventories.stream().anyMatch(i -> i.type().equals("unused-objects") && i.status().equals("RESOLVED"));
-        for (var inventory : inventories) {
+        boolean[] unusedState = {false};
+        var states = new LinkedHashMap<String, CpObjectInventory>();
+        var gateways = new ArrayList<CpObjectInventory.Item>();
+        stream.accept(inventory -> {
+            objectCounts.merge(inventory.type(), inventory.objects().size(), Integer::sum);
+            states.put(inventory.type(), new CpObjectInventory(inventory.sourceId(), inventory.containerId(), inventory.type(),
+                inventory.collectedAt(), inventory.status(), inventory.reason(), List.of(), inventory.pages(), inventory.seconds()));
             if (inventory.type().equals("unused-objects")) {
-                if (inventory.status().equals("RESOLVED")) inventory.objects().forEach(o -> unused.add(o.uid()));
-            } else if (!inventory.type().equals("gateways-and-servers")) inventory.objects().forEach(o -> items.put(o.uid(), o));
-        }
+                if (inventory.status().equals("RESOLVED")) {
+                    unusedState[0] = true; inventory.objects().forEach(o -> unused.add(o.uid()));
+                }
+            } else if (inventory.type().equals("gateways-and-servers")) gateways.addAll(inventory.objects());
+            else inventory.objects().forEach(o -> items.put(o.uid(), o));
+        });
+        var gatewayState = states.get("gateways-and-servers");
+        if (gatewayState != null) states.put(gatewayState.type(), new CpObjectInventory(gatewayState.sourceId(), gatewayState.containerId(),
+            gatewayState.type(), gatewayState.collectedAt(), gatewayState.status(), gatewayState.reason(), gateways, gatewayState.pages(), gatewayState.seconds()));
+        this.inventories = List.copyOf(states.values());
+        boolean unusedKnown = unusedState[0];
         var aliases = new HashMap<String, String>();
         items.values().forEach(o -> { aliases.put(o.id(), o.uid()); aliases.put(o.uid(), o.uid()); });
         for (var snapshot : snapshots) items.values().forEach(o -> aliases.put(ref(snapshot.metadata().id(), "object", o.uid()), o.uid()));
