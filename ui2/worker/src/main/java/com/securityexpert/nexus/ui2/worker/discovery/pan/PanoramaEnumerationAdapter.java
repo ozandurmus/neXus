@@ -113,6 +113,7 @@ public final class PanoramaEnumerationAdapter implements PanoramaEnumeration {
             List<RawDeviceInput> devices = PanoramaResponseParser.extractDevices(enumerationCompleted.body());
             return new PanoramaEnumerationResult.Completed(devices, requestCount, KeyDisposalOutcome.DISCARDED);
         } catch (RuntimeException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
             LOGGER.log(System.Logger.Level.WARNING, "Panorama enumeration failed with exception: " + e.getMessage(), e);
             KeyDisposalOutcome outcome = key == null ? KeyDisposalOutcome.NOT_OBTAINED : KeyDisposalOutcome.DISCARDED;
             return new PanoramaEnumerationResult.Failed("panorama enumeration did not complete: " + e.getMessage(), requestCount, outcome);
@@ -128,6 +129,7 @@ public final class PanoramaEnumerationAdapter implements PanoramaEnumeration {
         try {
             return credentialResolver.resolve(credentialRef);
         } catch (RuntimeException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
             return null;
         }
     }
@@ -136,6 +138,7 @@ public final class PanoramaEnumerationAdapter implements PanoramaEnumeration {
         try {
             return trustRuleResolver.resolveTrust(trustRuleRef);
         } catch (RuntimeException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
             return null;
         }
     }

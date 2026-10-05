@@ -39,7 +39,7 @@ import com.securityexpert.nexus.ui2.worker.inventory.InventoryRequest;
  */
 public final class WorkerClaimLoop {
 
-    private static final List<String> ELIGIBLE_CAPABILITY_IDS = List.of(
+    private static final List<String> ALL_CAPABILITY_IDS = List.of(
             "cp_policy_collect", "pan_policy_collect",
             "cp_cluster_failover", "pan_cluster_failover", "cp_failover_readiness", "pan_failover_readiness",
             com.securityexpert.nexus.ui2.jobs.diagnostic.DiagnosticRead.CAPABILITY,
@@ -58,6 +58,16 @@ public final class WorkerClaimLoop {
             DiscoveryCapabilityIds.BCMC_DISCOVERY_ENUMERATE,
             BackupCapabilityIds.CP_GAIA_BACKUP_LOCAL, BackupCapabilityIds.CP_SPARK_SFTP_BACKUP, BackupCapabilityIds.CP_GAIA_SNAPSHOT,
             BackupCapabilityIds.PAN_DEVICE_STATE_BACKUP, BackupCapabilityIds.CP_MDS_EXPORT, BackupCapabilityIds.RDW_CC_CONFIG_BACKUP);
+    private List<String> eligibleCapabilityIds = claimCapabilities("general", false);
+    public static List<String> claimCapabilities(String role, boolean policyFallback) {
+        if ("policy".equals(role)) return policyFallback ? List.of() : List.of("cp_policy_collect", "pan_policy_collect");
+        if (!"general".equals(role)) throw new IllegalArgumentException("UNKNOWN_WORKER_ROLE");
+        return ALL_CAPABILITY_IDS.stream().filter(id -> policyFallback || !List.of("cp_policy_collect", "pan_policy_collect").contains(id)).toList();
+    }
+    public WorkerClaimLoop withRole(String role, boolean policyFallback) {
+        eligibleCapabilityIds = claimCapabilities(role, policyFallback);
+        return this;
+    }
     private static final int DEFAULT_SSH_PORT = 22;
 
     private final JobLeaseRepository leaseRepository;
@@ -153,15 +163,7 @@ public final class WorkerClaimLoop {
     }
 
     static int httpsPortOf(String addressRef) {
-        int colon = addressRef.lastIndexOf(':');
-        if (colon < 0) {
-            return 443;
-        }
-        try {
-            return Integer.parseInt(addressRef.substring(colon + 1));
-        } catch (NumberFormatException notAPort) {
-            return 443;
-        }
+        return com.securityexpert.nexus.ui2.persistence.runtime.EndpointAddress.port(addressRef, 443);
     }
     private final String workerId;
     private final Duration leaseDuration;
@@ -190,6 +192,47 @@ public final class WorkerClaimLoop {
         this.checkPointTrustRuleRef = Objects.requireNonNull(checkPointTrustRuleRef, "checkPointTrustRuleRef");
         this.paloAltoTrustRuleRef = Objects.requireNonNull(paloAltoTrustRuleRef, "paloAltoTrustRuleRef");
         this.backupCredentialRef = Objects.requireNonNull(backupCredentialRef, "backupCredentialRef");
+    }
+
+    private WorkerClaimLoop(JobLeaseRepository leases, JobRecordDao jobs, DeviceRepository devices,
+            com.securityexpert.nexus.ui2.worker.policy.PolicyCollectionJobExecutor policy, String instance,
+            String cpTrust, String panTrust, boolean fallback) {
+        leaseRepository = Objects.requireNonNull(leases); jobRecordDao = Objects.requireNonNull(jobs);
+        deviceRepository = Objects.requireNonNull(devices); policyCollection = Objects.requireNonNull(policy);
+        confirmJobExecutor = null; inventoryJobExecutor = null; configurationJobExecutor = null;
+        discoveryJobExecutor = null; backupJobExecutor = null; workerId = instance;
+        leaseDuration = Duration.ofMinutes(10); checkPointTrustRuleRef = cpTrust; paloAltoTrustRuleRef = panTrust;
+        backupCredentialRef = Optional.empty(); withRole("policy", fallback);
+    }
+    public static WorkerClaimLoop policy(JobLeaseRepository leases, JobRecordDao jobs, DeviceRepository devices,
+            com.securityexpert.nexus.ui2.worker.policy.PolicyCollectionJobExecutor policy, String instance,
+            String cpTrust, String panTrust, boolean fallback) {
+        return new WorkerClaimLoop(leases, jobs, devices, policy, instance, cpTrust, panTrust, fallback);
+    }
+
+    private com.securityexpert.nexus.ui2.persistence.runtime.EndpointAdmissionRepository endpointAdmission;
+    private com.securityexpert.nexus.ui2.persistence.runtime.ModuleRuntimeRepository moduleRuntime;
+    public WorkerClaimLoop withRuntimeAdmission(
+            com.securityexpert.nexus.ui2.persistence.runtime.EndpointAdmissionRepository admission,
+            com.securityexpert.nexus.ui2.persistence.runtime.ModuleRuntimeRepository runtime) {
+        endpointAdmission = admission; moduleRuntime = runtime; return this;
+    }
+    private com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime admissionScope(ClaimedJob claim) {
+        if (endpointAdmission == null) return null; // Offline claim-loop fixtures use no real transport.
+        var job = jobRecordDao.find(claim.jobId()).orElseThrow();
+        String capability = job.capabilityId();
+        String purpose = capability.contains("policy") ? "POLICY"
+            : capability.contains("backup") || capability.equals("cp_gaia_snapshot") ? "BACKUP"
+            : capability.contains("configuration") ? "CONFIGURATION"
+            : capability.contains("discovery") ? "DISCOVERY"
+            : capability.contains("confirm") ? "ENROLLMENT"
+            : capability.contains("readiness") ? "FAILOVER_READINESS"
+            : capability.contains("failover") ? "FAILOVER_EXECUTION"
+            : capability.equals("diagnostic_read") || capability.equals("fmg_interface_detail") ? "DIAGNOSTIC" : "INVENTORY";
+        return com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.open(
+            new com.securityexpert.nexus.ui2.persistence.runtime.EndpointAdmissionRepository.Owner(
+                claim.jobId(), claim.leaseEpoch(), null, 0, workerId.startsWith("policy-") ? "policy" : "general",
+                workerId, moduleRuntime.generation(claim.jobId(), claim.leaseEpoch()), purpose, capability.equals("cp_policy_collect")));
     }
 
     private static final System.Logger LOGGER = System.getLogger(WorkerClaimLoop.class.getName());
@@ -233,7 +276,7 @@ public final class WorkerClaimLoop {
 
     /** @return {@code true} if a job was claimed and run to some outcome; {@code false} if the queue was empty. */
     public boolean claimAndExecuteOnce() {
-        Optional<ClaimedJob> claim = leaseRepository.claimNext(workerId, ELIGIBLE_CAPABILITY_IDS, leaseDuration);
+        Optional<ClaimedJob> claim = leaseRepository.claimNext(workerId, eligibleCapabilityIds, leaseDuration);
         if (claim.isEmpty()) {
             return false;
         }
@@ -243,10 +286,29 @@ public final class WorkerClaimLoop {
         // it while it was still running, a second thread started the same backup on the same device,
         // and the pair looped until the fifth epoch failed it.
         java.util.concurrent.ScheduledFuture<?> heartbeat = scheduleHeartbeat(claimed);
-        try (var cancellation = new com.securityexpert.nexus.ui2.worker.JobCancellationScope(
+        try (var admission = admissionScope(claimed);
+             var cancellation = new com.securityexpert.nexus.ui2.worker.JobCancellationScope(
                 () -> leaseRepository.cancellationRequested(claimed.jobId(), claimed.leaseEpoch()))) {
             com.securityexpert.nexus.ui2.worker.JobCancellationScope.check();
+            if (admission != null) {
+                admission.acquireFleet();
+                var job = jobRecordDao.find(claimed.jobId()).orElseThrow();
+                if ("discovery_run".equals(job.targetKind())) {
+                    moduleRuntime.discoveryEndpointKey(job.targetRef()).ifPresent(admission::preflight);
+                } else deviceRepository.findEndpointByDeviceId(job.targetDeviceId()).ifPresent(endpoint -> {
+                    int port = endpoint.transportKind().toLowerCase(java.util.Locale.ROOT).contains("ssh") ? 22 : 443;
+                    var device = deviceRepository.find(job.targetDeviceId());
+                    if (device.isPresent() && "bluecoat".equals(device.get().vendorHint())) port = 8082;
+                    admission.preflight(com.securityexpert.nexus.ui2.persistence.runtime.EndpointAddress.key(endpoint.addressRef(), port));
+                });
+            }
             return executeClaimed(claimed);
+        } catch (com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.LeaseLost lost) {
+            LOGGER.log(System.Logger.Level.WARNING, "ENDPOINT_LEASE_LOST; checkpoints retained for fenced recovery");
+            return true;
+        } catch (com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.AdmissionWait waiting) {
+            if (endpointAdmission != null) endpointAdmission.defer(claimed.jobId(), claimed.leaseEpoch());
+            return true;
         } catch (com.securityexpert.nexus.ui2.worker.JobCancellationScope.Cancelled cancelled) {
             return true;
         } finally {
@@ -485,6 +547,7 @@ public final class WorkerClaimLoop {
                     peerRequestFactory, false);
             return true;
         } catch (Throwable t) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(t);
             LOGGER.log(System.Logger.Level.ERROR,
                     "Worker {0} caught unhandled error executing job {1}: {2}",
                     workerId, claimed.jobId(), t.getMessage(), t);
@@ -583,19 +646,9 @@ public final class WorkerClaimLoop {
     }
 
     private static String hostOf(String addressRef) {
-        int colon = addressRef.lastIndexOf(':');
-        return colon < 0 ? addressRef : addressRef.substring(0, colon);
+        return com.securityexpert.nexus.ui2.persistence.runtime.EndpointAddress.host(addressRef);
     }
-
     private static int portOf(String addressRef) {
-        int colon = addressRef.lastIndexOf(':');
-        if (colon < 0) {
-            return DEFAULT_SSH_PORT;
-        }
-        try {
-            return Integer.parseInt(addressRef.substring(colon + 1));
-        } catch (NumberFormatException notAPort) {
-            return DEFAULT_SSH_PORT;
-        }
+        return com.securityexpert.nexus.ui2.persistence.runtime.EndpointAddress.port(addressRef, DEFAULT_SSH_PORT);
     }
 }

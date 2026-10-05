@@ -134,6 +134,7 @@ public final class ConfigurationJobExecutor {
             return new JobOutcome.Failed(describeFailure(result));
         }
 
+        com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.checkPublication();
         String vendor = switch (request.vendor()) {
             case CHECK_POINT -> "check_point";
             case PALO_ALTO -> "palo_alto";
@@ -152,6 +153,7 @@ public final class ConfigurationJobExecutor {
                             "[OBSERVED_FACTS_REFRESHED] job {0}: hostname/version changed on this read", jobId);
                 }
             } catch (RuntimeException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
                 System.getLogger(ConfigurationJobExecutor.class.getName()).log(System.Logger.Level.WARNING, "[CONFIG_IDENTITY_REFRESH_FAILED] job {0}: {1}", jobId, e.getMessage());
             }
         }
@@ -189,6 +191,7 @@ public final class ConfigurationJobExecutor {
             try {
                 deviceConfigurationRepository.recordRun(run, data.artefact(), ACTOR, ACTION_COMPLETED);
             } catch (RuntimeException recordFailed) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(recordFailed);
                 leaseRepository.transitionState(jobId, leaseEpoch, JobState.EXECUTING, JobState.FAILED, ACTOR,
                         ACTION_FAILED, "configuration_run_write_failed: " + recordFailed.getMessage());
                 return new JobOutcome.Failed("configuration_run_write_failed: " + recordFailed.getMessage());
@@ -237,6 +240,7 @@ public final class ConfigurationJobExecutor {
                     CONFIGURATION_RETENTION_TIER, Optional.empty(), artefact.artefactRef(), Optional.empty());
             backupArtefactManifestRepository.record(manifest, ACTOR, ACTION_MANIFEST_RECORDED);
         } catch (IllegalStateException versionUnresolvable) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(versionUnresolvable);
             // C7 section 3.3's refusal -- see method Javadoc.
         }
     }

@@ -35,9 +35,13 @@ class PolicyCollectionRepositoryTest {
         var snapshot = new PolicySnapshotRepository.Stored("policy-1", "2026-10-01T12:00:00Z", "{}", "{}");
         assertFalse(repository.publish("job-1", 7, List.of(snapshot), "synthetic-actor"));
         assertFalse(repository.checkpoint("job-1", 7, snapshot, "synthetic-actor"));
+        assertFalse(repository.saveUnit(new PolicyCollectionRepository.Request("source-1", "", false,
+            PolicyCollectionRepository.Mode.FULL, "job-1", 7), "unit-1", "version-1", "{}"));
         assertFalse(repository.publishWithWarnings("job-1", 7, List.of(snapshot), "synthetic-actor", "PARTIAL_SNAPSHOT layer-1: TIMEOUT"));
-        assertTrue(sql.stream().anyMatch(s -> s.contains("lease_epoch = ?") && s.contains("lease_expires_at > now() for update")));
-        assertFalse(sql.stream().anyMatch(s -> s.startsWith("insert into policy_snapshot")));
+        assertTrue(sql.stream().anyMatch(s -> s.contains("lease_epoch = ?") && s.contains("lease_expires_at > now()")
+            && s.contains("ui2_job_owner_valid(job_id,lease_epoch)") && s.contains("for update")));
+        assertFalse(sql.stream().anyMatch(s -> s.startsWith("insert into policy_snapshot")
+            || s.startsWith("insert into policy_unit_checkpoint") || s.startsWith("insert into cp_policy_json_chunk")));
     }    @Test void unmatchedPanMemberUsesOpaqueReferenceAndExactDiscoveryIdentity() {
         List<String> sql = new ArrayList<>();
         List<Object> bindings = new ArrayList<>();

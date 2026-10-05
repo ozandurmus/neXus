@@ -191,6 +191,7 @@ public final class FortiManagerExecutor {
         try {
             creds = credentials.apply(credentialRef);
         } catch (RuntimeException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
             return new Login.Refused("credential reference not resolvable", false);
         }
         String body = JSON.writeValueAsString(Map.of("id", 1, "method", "exec", "params",

@@ -58,7 +58,7 @@ public final class JobReconciler {
                         RECONCILER_ACTOR, "job_reconcile_cancel", "CANCELLED");
                 continue;
             }
-            if (job.leaseEpoch() >= 5) {
+            if (leaseRepository.retryBudgetUsed(job.jobId(), job.leaseEpoch()) >= 5) {
                 leaseRepository.transitionState(job.jobId(), job.leaseEpoch(), JobState.EXECUTING, JobState.FAILED,
                         RECONCILER_ACTOR, "job_reconcile_max_attempts", "lease expired repeatedly (" + job.leaseEpoch() + " attempts)");
                 continue;

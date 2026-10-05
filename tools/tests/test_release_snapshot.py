@@ -53,6 +53,8 @@ def mock_cluster(monkeypatch, version="89", items=None):
         if "cat" in args:
             return json.dumps({"commit": COMMIT}).encode()
         command = args[-1]
+        if "to_regclass" in command:
+            return b"f"
         if "flyway_schema_history" in command:
             return version.encode()
         if "pg_dump" in command:
@@ -279,6 +281,8 @@ elif "pg_dump" in args[-1]:
     print("CREATE TABLE synthetic_table(id integer);")
 elif "flyway_schema_history" in args[-1]:
     print("89")
+elif "to_regclass" in args[-1]:
+    print("f")
 else:
     sys.exit(99)
 ''')

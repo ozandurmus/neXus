@@ -28,7 +28,7 @@ public final class CollectionEngineRows {
         audited(connection, statement -> statement.execute(
                 "INSERT INTO jobs(job_id, job_type, capability_id, target_device_id, "
                         + "submitted_by_actor_fingerprint, state, action_class) VALUES ("
-                        + literal(id) + ", 'harness.collect', " + literal(capabilityId) + ", "
+                        + literal(id) + ", " + literal(capabilityId) + ", " + literal(capabilityId) + ", "
                         + literal(deviceId) + ", " + literal(Ui2Rows.ACTOR) + ", 'REQUESTED', 'read')"));
         return id;
     }

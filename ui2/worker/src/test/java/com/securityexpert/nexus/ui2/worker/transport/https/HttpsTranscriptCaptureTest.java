@@ -29,6 +29,16 @@ class HttpsTranscriptCaptureTest {
                 });
     }
 
+    @Test void validatesTimeoutBeforeAdmissionButValidRequestsStillRequireAdmission() {
+        HttpsDeviceClient client = new HttpsDeviceClient();
+        var target = new HttpsDeviceClient.Target("192.0.2.10", 443);
+        var credentials = new HttpsDeviceClient.Credentials("synthetic-user", "synthetic-secret".toCharArray());
+        assertThrows(IllegalArgumentException.class,
+                () -> client.get(target, "/valid", credentials, Duration.ZERO, 1024));
+        assertThrows(IllegalStateException.class,
+                () -> client.get(target, "/valid", credentials, Duration.ofSeconds(1), 1024));
+    }
+
     @Test void recordsRequestAndResponseOnlyWithScopeWithoutContactingAnEndpoint() throws Exception {
         HttpsDeviceClient client = new HttpsDeviceClient();
         var target = new HttpsDeviceClient.Target("192.0.2.10", 443);

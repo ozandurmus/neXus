@@ -132,6 +132,7 @@ public final class PanFailoverJobExecutor {
             Thread.currentThread().interrupt();
             if (readiness) finishReadiness("INTERRUPTED",0,"UNKNOWN"); else stop("INTERRUPTED",0);
         } catch (RuntimeException unexpected) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(unexpected);
             if (readiness) finishReadiness("COLLECTION_FAILED",0,"UNKNOWN");
             else stop(wrote?"OUTCOME_UNCERTAIN":"PRECHECK_UNAVAILABLE",0);
         }

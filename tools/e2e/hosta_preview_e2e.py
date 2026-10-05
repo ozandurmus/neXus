@@ -333,6 +333,7 @@ def workload_manifest(template, image, db_ip, endpoints):
     result = copy.deepcopy(template)
     labels = {**template["spec"]["template"]["metadata"]["labels"], LABEL: NS}
     result["metadata"] = metadata(template["metadata"]["name"], labels)
+    result["spec"]["replicas"] = 1
     result["spec"]["selector"] = dict(matchLabels=labels)
     result["spec"]["template"] = dict(metadata=dict(labels=labels), spec=pod_spec(template))
     for container in result["spec"]["template"]["spec"]["containers"]:
@@ -623,6 +624,15 @@ def setup_workload(template, image, db_ip, endpoints):
     deployment = workload_manifest(template, image, db_ip, endpoints)
     for name in sorted(names - {"ui2-db"}):
         copy_secret(name)
+    for volume in source_spec.get("volumes", []):
+        if "configMap" in volume and volume["configMap"]["name"] != "ui2-config":
+            name = volume["configMap"]["name"]
+            config = json.loads(k("ui2", "get", "configmap", name, "--ignore-not-found", "-o", "json") or "null")
+            if config is None and name == "corp-ca":
+                config = json.loads(k("ui2-build", "get", "configmap", name, "-o", "json"))
+            if config is None:
+                raise RuntimeError("Preview trust ConfigMap unavailable")
+            create(NS, dict(apiVersion="v1", kind="ConfigMap", metadata=metadata(name), data=config.get("data", {})))
     create(NS, deployment)
     k(NS, "rollout", "status", "deployment/" + deployment["metadata"]["name"], "--timeout=300s", timeout=310)
     return deployment
@@ -636,6 +646,24 @@ def setup_service(repo, image, db_ip, endpoints):
     service = service_object(next(t for t in templates if t["kind"] == "Service"))
     create(NS, service)
     return json.loads(k(NS, "get", "service", service["metadata"]["name"], "-o", "json"))["spec"]["clusterIP"]
+
+
+def reset_preview_runtime():
+    sql = """BEGIN;
+SELECT set_config('app.actor_fingerprint','system:preview',true);
+SELECT set_config('app.action_id','preview_runtime_reset',true);
+DO $$ BEGIN
+ IF to_regclass('module_runtime_control') IS NOT NULL THEN
+  UPDATE module_runtime_control SET owner_instance=NULL,owner_heartbeat_at=NULL,
+   drain_requested=TRUE,drain_generation=drain_generation+1,drain_ack_at=NULL,drain_ack_generation=NULL;
+  DELETE FROM endpoint_admission;
+  DELETE FROM runtime_task_lease;
+  UPDATE jobs SET state='OUTCOME_UNKNOWN',outcome='OUTCOME_UNKNOWN' WHERE state IN ('CLAIMED','EXECUTING');
+ END IF;
+END $$;
+COMMIT;"""
+    k(NS, "exec", "-i", preview_name("ui2-preview-db"), "--", "sh", "-c",
+      PG_ENV + "exec psql -Xq --set=ON_ERROR_STOP=1 -d ui2", input=sql)
 
 
 def cleanup(owner):
@@ -693,13 +721,18 @@ def run(repo, commit):
             with timing("preview_workers"):
                 STEP = "worker services"
                 endpoints = setup_worker_services(workers)
-                for worker in workers:
+                for worker in (w for w in workers if w["ports"]):
                     with timing("preview_" + worker["component"]):
                         STEP = "setup worker"
                         setup_workload(worker["deployment"], images[0], db_ip, endpoints)
             with timing("preview_service"):
                 STEP = "setup service"
                 service_ip = setup_service(repo, images[0], db_ip, endpoints)
+            reset_preview_runtime()
+            with timing("preview_device_workers"):
+                for worker in (w for w in workers if not w["ports"]):
+                    with timing("preview_" + worker["component"]):
+                        setup_workload(worker["deployment"], images[0], db_ip, endpoints)
             with timing("preview_e2e"):
                 STEP = "load e2e templates"
                 templates = load(repo, "deploy/ui2/70-e2e-job.yaml")

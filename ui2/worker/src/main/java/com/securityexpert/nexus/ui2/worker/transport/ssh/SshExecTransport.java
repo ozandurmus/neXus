@@ -76,17 +76,32 @@ public final class SshExecTransport implements DeviceTransport {
     @Override
     public ConnectResult connect(ConnectionTarget target, ConnectSpec spec, Duration timeout) {
         com.securityexpert.nexus.ui2.worker.JobCancellationScope.check();
+        if (spec.trustRuleRef() == null || spec.trustRuleRef().isBlank()
+                || trustRuleResolver.authorizedAlgorithms(spec.trustRuleRef(), target.host(), target.port()).filter(java.util.List::isEmpty).isPresent())
+            return new ConnectResult.HostKeyRejected("TRUST_ENTRY_MISSING");
+        var admission = com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.ssh(target.host(), target.port());
         try {
-            ConnectResult result = connectRaw(target, spec, timeout);
-            JobTranscriptScope.add("ssh", "note", "connect outcome: " + result.getClass().getSimpleName());
-            return result;
+            synchronized (admission) {
+                admission.check();
+                ConnectResult result = connectRaw(target, spec, timeout, admission);
+                if (result instanceof ConnectResult.Authenticated connected) {
+                    var owned = (SshTransportSession) connected.session();
+                    owned.admission = admission;
+                    admission.onLoss(() -> { try { owned.closeInteractiveShell(); } finally { owned.jschSession().disconnect(); } });
+                    admission.check();
+                } else admission.closed();
+                JobTranscriptScope.add("ssh", "note", "connect outcome: " + result.getClass().getSimpleName());
+                return result;
+            }
         } catch (RuntimeException e) {
+            admission.abort();
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
             JobTranscriptScope.add("ssh", "note", "connect outcome: " + e.getClass().getSimpleName());
             throw e;
         }
     }
 
-    private ConnectResult connectRaw(ConnectionTarget target, ConnectSpec spec, Duration timeout) {
+    private ConnectResult connectRaw(ConnectionTarget target, ConnectSpec spec, Duration timeout, com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.Lease admission) {
         if (spec.trustRuleRef() == null || spec.trustRuleRef().isBlank()) {
             LOG.log(System.Logger.Level.WARNING, "SSH connection aborted for {0}:{1}: trust rule ref is missing",
                     derivedOnly ? "<redacted>" : target.host(), target.port());
@@ -127,9 +142,13 @@ public final class SshExecTransport implements DeviceTransport {
         }
 
         Session session = null;
+        boolean authenticated = false;
         try {
             JSch jsch = new JSch();
             session = jsch.getSession(credential.username(), target.host(), target.port());
+            Session ownedSession = session;
+            admission.onLoss(ownedSession::disconnect);
+            admission.check();
             session.setUserInfo(silentUserInfo(credential));
             if (credential.password() != null) {
                 session.setPassword(new String(credential.password()));
@@ -149,6 +168,7 @@ public final class SshExecTransport implements DeviceTransport {
                     derivedOnly ? "<redacted>" : target.host(), target.port(), totalConnectElapsed, jschElapsed);
 
             SshTransportSession wrapped = new SshTransportSession(UUID.randomUUID().toString(), session);
+            authenticated = true;
             return new ConnectResult.Authenticated(wrapped);
         } catch (JSchException e) {
             long totalConnectElapsed = System.currentTimeMillis() - connectStartMs;
@@ -183,7 +203,7 @@ public final class SshExecTransport implements DeviceTransport {
             }
             return new ConnectResult.AuthenticationFailed(derivedOnly ? "AUTH_FAILED" : message);
         } finally {
-            if (session != null && !session.isConnected()) {
+            if (session != null && !authenticated) {
                 session.disconnect();
             }
         }
@@ -216,6 +236,7 @@ public final class SshExecTransport implements DeviceTransport {
 
     @Override
     public ExecResult exec(TransportSession session, ExecSpec spec, Duration timeout) {
+        checkAdmission(session);
         com.securityexpert.nexus.ui2.worker.JobCancellationScope.check();
         long started = System.nanoTime();
         ExecResult result = execRaw(session, spec, timeout);
@@ -321,6 +342,7 @@ public final class SshExecTransport implements DeviceTransport {
      */
     @Override
     public ExecResult execInteractive(TransportSession session, ExecSpec spec, Duration timeout) {
+        checkAdmission(session);
         com.securityexpert.nexus.ui2.worker.JobCancellationScope.check();
         long started = System.nanoTime();
         ExecResult result = execInteractiveRaw(session, spec, timeout);
@@ -387,6 +409,7 @@ public final class SshExecTransport implements DeviceTransport {
 
     @Override
     public boolean resyncPrompt(TransportSession session, Duration quiet) {
+        checkAdmission(session);
         if (!(session instanceof SshTransportSession sshSession)) {
             return false;
         }
@@ -406,6 +429,7 @@ public final class SshExecTransport implements DeviceTransport {
     @Override
     public ExecResult execInteractiveAnswering(TransportSession session, ExecSpec spec,
             java.util.List<com.securityexpert.nexus.ui2.jobs.transport.PromptAnswer> answers, Duration timeout) {
+        checkAdmission(session);
         com.securityexpert.nexus.ui2.worker.JobCancellationScope.check();
         long started = System.nanoTime();
         ExecResult result = execInteractiveAnsweringRaw(session, spec, answers, timeout);
@@ -452,6 +476,7 @@ public final class SshExecTransport implements DeviceTransport {
 
     @Override
     public FetchResult fetch(TransportSession session, FetchSpec spec, Duration timeout) {
+        checkAdmission(session);
         throw new TransportNotImplementedException("sftp_get/scp_get");
     }
 
@@ -467,6 +492,7 @@ public final class SshExecTransport implements DeviceTransport {
     @Override
     public FetchStreamResult fetchStreaming(TransportSession session, FetchSpec spec, Duration timeout,
             OutputStream sink) {
+        checkAdmission(session);
         com.securityexpert.nexus.ui2.worker.JobCancellationScope.check();
         if (JobTranscriptScope.current() == null) return fetchStreamingRaw(session, spec, timeout, sink);
         long started = System.nanoTime();
@@ -482,6 +508,7 @@ public final class SshExecTransport implements DeviceTransport {
                     + " durationMs=" + (System.nanoTime() - started) / 1_000_000);
             return result;
         } catch (RuntimeException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
             JobTranscriptScope.add("sftp", "transfer", "failed file=" + spec.remotePath() + " size=" + captured.count()
                     + " reason=" + e.getClass().getSimpleName());
             throw e;
@@ -560,6 +587,7 @@ public final class SshExecTransport implements DeviceTransport {
      */
     public long scpFetch(TransportSession session, String remotePath, ScpSink sink, long maxBytes, Duration timeout)
             throws IOException {
+        checkAdmission(session);
         com.securityexpert.nexus.ui2.worker.JobCancellationScope.check();
         long started = System.nanoTime();
         JobTranscriptScope.add("scp", "transfer", "fetch requested file=" + remotePath);
@@ -683,12 +711,18 @@ public final class SshExecTransport implements DeviceTransport {
         throw new TransportNotImplementedException("xml_api_call");
     }
 
+    private static void checkAdmission(TransportSession session) {
+        com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.checkCommand();
+        if (session instanceof SshTransportSession ssh && ssh.admission != null) ssh.admission.check();
+    }
+
     @Override
     public void disconnect(TransportSession session) {
         if (session instanceof SshTransportSession sshSession) {
             LOG.log(System.Logger.Level.INFO, "[SSH_DISCONNECT] session disconnected: {0}", session.sessionId());
             sshSession.closeInteractiveShell();
             sshSession.jschSession().disconnect();
+            if (sshSession.admission != null) sshSession.admission.closed();
         }
     }
 

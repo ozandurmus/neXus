@@ -97,6 +97,7 @@ public final class PanSetConfigReader {
             connectResult = transport.connect(sshTarget, new ConnectSpec(credentialRef, trustRuleRef, Optional.empty()),
                     CONNECT_TIMEOUT);
         } catch (IllegalStateException credentialUnresolvable) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(credentialUnresolvable);
             return new Outcome.Unavailable("ssh credential: " + credentialUnresolvable.getMessage());
         }
         if (!(connectResult instanceof ConnectResult.Authenticated authenticated)) {

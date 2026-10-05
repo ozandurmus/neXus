@@ -134,8 +134,10 @@ public final class HttpsDeviceClient implements HttpsDeviceCalls {
             // Appliances are addressed by IP; endpoint identification stays off. The endpoint's leaf pin is trust.
             // X509ExtendedTrustManager handles all handshake overloads without JSSE's hostname-validation wrapper.
             params.setEndpointIdentificationAlgorithm("");
-            return HttpClient.newBuilder().sslContext(ssl).sslParameters(params)
+            HttpClient client = HttpClient.newBuilder().sslContext(ssl).sslParameters(params)
                     .followRedirects(HttpClient.Redirect.NEVER).connectTimeout(Duration.ofSeconds(15)).build();
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.http(target.host(), target.port(), client);
+            return client;
         } catch (java.security.GeneralSecurityException e) {
             throw new IllegalStateException("could not build the HTTPS device TLS configuration", e);
         }
@@ -178,6 +180,7 @@ public final class HttpsDeviceClient implements HttpsDeviceCalls {
     @Override
     public FormReply formRequest(Target target, String path, Map<String, String> form, String cookies, Duration timeout, int maxBytes)
             throws IOException, InterruptedException {
+        try {
         com.securityexpert.nexus.ui2.worker.JobCancellationScope.check();
         if (JobTranscriptScope.current() != null) JobTranscriptScope.add("https", "request",
                 (form == null ? "GET " : "POST ") + JobTranscript.safePath(path)
@@ -212,10 +215,13 @@ public final class HttpsDeviceClient implements HttpsDeviceCalls {
         if (captured != null) recordResponse(r, withoutCookieSecrets(
                 JobTranscript.withoutSentSecrets(captured, form), cookies));
         return new FormReply(r.statusCode(), set, r.headers().firstValue("Location"), new String(data, StandardCharsets.UTF_8));
+
+        } finally { com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.closeHttpClients(); }
     }
 
     @Override
     public SessionLogin login(Target target, String path, String json, Duration timeout) throws IOException, InterruptedException {
+        try {
         com.securityexpert.nexus.ui2.worker.JobCancellationScope.check();
         if (JobTranscriptScope.current() != null) JobTranscriptScope.add("https", "request",
                 "POST " + JobTranscript.safePath(path) + "\n" + JobTranscript.safeJson(json));
@@ -237,6 +243,8 @@ public final class HttpsDeviceClient implements HttpsDeviceCalls {
                 .filter(v -> v.toUpperCase(Locale.ROOT).startsWith("JSESSIONID="))
                 .findFirst();
         return new SessionLogin(r.statusCode(), cookie, r.sslSession().flatMap(HttpsDeviceClient::peerCertificateName));
+
+        } finally { com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.closeHttpClients(); }
     }
 
     /** The first DNS subject alternative name of the peer's leaf certificate, else its subject CN; empty on any failure. */
@@ -263,6 +271,7 @@ public final class HttpsDeviceClient implements HttpsDeviceCalls {
             }
             return Optional.empty();
         } catch (Exception e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
             return Optional.empty();
         }
     }
@@ -271,12 +280,16 @@ public final class HttpsDeviceClient implements HttpsDeviceCalls {
     @Override
     public DownloadResult download(Target target, String method, String path, Map<String, String> form, Credentials creds,
             OutputStream sink, long maxBytes, Duration timeout) {
+        try {
         return download(target, method, path, form, creds, null, sink, maxBytes, timeout);
+
+        } finally { com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.closeHttpClients(); }
     }
 
     @Override
     public DownloadResult download(Target target, String method, String path, Map<String, String> form, Credentials creds,
             String requestContentType, OutputStream sink, long maxBytes, Duration timeout) {
+        try {
         long started = System.nanoTime();
         long total = 0;
         MessageDigest digest = JobTranscriptScope.current() == null ? null : sha256();
@@ -325,6 +338,8 @@ public final class HttpsDeviceClient implements HttpsDeviceCalls {
             JobTranscriptScope.add("https", "note", "download interrupted");
             return new DownloadResult.Failed("interrupted");
         }
+
+        } finally { com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.closeHttpClients(); }
     }
 
     /** The path-and-query of an absolute URL the device returned, only if it names the same host (never a redirect off it). */
@@ -347,6 +362,7 @@ public final class HttpsDeviceClient implements HttpsDeviceCalls {
 
     private TextResponse text(Target target, String method, String path, String contentType, String body, Credentials creds,
             Duration timeout, int maxBytes) throws IOException, InterruptedException {
+        try {
         HttpResponse<InputStream> r = send(target, method, path, contentType, body, creds, timeout, HttpResponse.BodyHandlers.ofInputStream());
         try (InputStream in = r.body()) {
             byte[] bytes = in.readNBytes(maxBytes + 1);
@@ -358,13 +374,15 @@ public final class HttpsDeviceClient implements HttpsDeviceCalls {
             return new TextResponse(r.statusCode(), r.headers().firstValue("Content-Type"), s, truncated,
                     r.sslSession().flatMap(HttpsDeviceClient::peerCertificateName));
         }
+
+        } finally { com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.closeHttpClients(); }
     }
 
     private <T> HttpResponse<T> send(Target target, String method, String path, String contentType, String body, Credentials creds,
             Duration timeout, HttpResponse.BodyHandler<T> handler) throws IOException, InterruptedException {
         com.securityexpert.nexus.ui2.worker.JobCancellationScope.check();
         // A fresh TLS context prevents connection/session reuse from skipping a changed pin or strict policy.
-        HttpClient client = client(target);
+        HttpClient client = null;
         String current = path;
         for (int hop = 0; ; hop++) {
             String sentMethod = hop == 0 ? method : "GET";
@@ -396,7 +414,9 @@ public final class HttpsDeviceClient implements HttpsDeviceCalls {
                     b.header("Content-Type", contentType);
                 }
             }
-            HttpResponse<T> r = client.send(b.build(), handler);
+            HttpRequest request = b.build();
+            if (client == null) client = client(target);
+            HttpResponse<T> r = client.send(request, handler);
             int s = r.statusCode();
             if ((s == 301 || s == 302 || s == 303 || s == 307 || s == 308) && hop < MAX_REDIRECTS && "GET".equals(method)) {
                 Optional<String> next = r.headers().firstValue("Location").flatMap(loc -> loc.startsWith("/")

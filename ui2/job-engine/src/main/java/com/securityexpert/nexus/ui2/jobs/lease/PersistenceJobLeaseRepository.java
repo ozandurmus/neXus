@@ -43,6 +43,9 @@ public final class PersistenceJobLeaseRepository implements JobLeaseRepository {
     }
 
     @Override
+    public long retryBudgetUsed(String jobId, long epoch) { return dao.retryBudgetUsed(jobId, epoch); }
+
+    @Override
     public boolean heartbeat(String jobId, long leaseEpoch, Duration leaseDuration) {
         return dao.heartbeat(jobId, leaseEpoch, leaseDuration);
     }

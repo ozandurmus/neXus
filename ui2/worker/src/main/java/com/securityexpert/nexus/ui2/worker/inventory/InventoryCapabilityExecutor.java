@@ -125,6 +125,7 @@ public final class InventoryCapabilityExecutor {
         try {
             connectResult = transport.connect(target, spec, READ_TIMEOUT);
         } catch (IllegalStateException credentialUnresolvable) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(credentialUnresolvable);
             long elapsed = System.currentTimeMillis() - overallStart;
             LOG.log(System.Logger.Level.WARNING,
                     "[INVENTORY_COLLECT_FAILED] Credential unresolvable for {0}:{1} after {2}ms: {3}",
@@ -422,6 +423,7 @@ public final class InventoryCapabilityExecutor {
                             identityReadOutput(session, InventoryReadPlan.CP_SHOW_HOSTNAME, false));
                 }
             } catch (RuntimeException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
                 LOG.log(System.Logger.Level.WARNING, "[INVENTORY_IDENTITY_READ_FAILED] {0}", e.getClass().getSimpleName());
                 gaiaVersion = Optional.empty();
                 gaiaHostname = Optional.empty();
@@ -444,6 +446,7 @@ public final class InventoryCapabilityExecutor {
         try {
             credential = panCredentialResolver.resolve(request.credentialRef());
         } catch (IllegalStateException credentialUnresolvable) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(credentialUnresolvable);
             return new InventoryResult.CredentialUnresolvable(String.valueOf(credentialUnresolvable.getMessage()));
         }
 
@@ -717,6 +720,7 @@ public final class InventoryCapabilityExecutor {
             }
             return bits;
         } catch (Exception e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
             return 24;
         }
     }
@@ -890,7 +894,8 @@ public final class InventoryCapabilityExecutor {
             if (b.name.contains(".")) {
                 try {
                     vlanId = Optional.of(Integer.parseInt(b.name.split("\\.")[1]));
-                } catch (Exception ignored) {}
+                } catch (Exception ignored) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(ignored);}
             }
             result.add(new ParsedInterface(b.name, parent, kind, b.state, addrs, vlanId));
         }
@@ -964,6 +969,7 @@ public final class InventoryCapabilityExecutor {
             long mask = bits == 0 ? 0 : (0xFFFFFFFFL << (32 - bits)) & 0xFFFFFFFFL;
             return (a & mask) == (n & mask);
         } catch (Exception e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
             return false;
         }
     }
@@ -1094,6 +1100,7 @@ public final class InventoryCapabilityExecutor {
         try {
             result = transport.exec(session, new ExecSpec(command), READ_TIMEOUT);
         } catch (Exception e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
             long elapsedMs = System.currentTimeMillis() - startMs;
             LOG.log(System.Logger.Level.WARNING,
                     "[INVENTORY_EXEC_EXCEPTION] cmd=\"{0}\" threw exception after {1}ms: {2}",
@@ -1181,6 +1188,7 @@ public final class InventoryCapabilityExecutor {
         try {
             result = transport.exec(session, new ExecSpec(command, true), READ_TIMEOUT);
         } catch (Exception e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
             long elapsedMs = System.currentTimeMillis() - startMs;
             LOG.log(System.Logger.Level.WARNING,
                     "[INVENTORY_EXEC_PTY_EXCEPTION] cmd=\"{0}\" threw exception after {1}ms: {2}",
@@ -1226,6 +1234,7 @@ public final class InventoryCapabilityExecutor {
         try {
             result = transport.execInteractive(session, new ExecSpec(command), READ_TIMEOUT);
         } catch (Exception e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
             // Mirrors execOutput's/execOutputPty's own catch around the primary exec attempt --
             // an unscripted or unexpected failure here (including TransportNotImplementedException,
             // when no ssh_exec adapter is registered at all) must fall through to the caller's
@@ -1259,6 +1268,7 @@ public final class InventoryCapabilityExecutor {
             }
             return com.securityexpert.nexus.ui2.worker.inventory.policy.PaloAltoJobsParser.parse(jobs);
         } catch (RuntimeException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
             return com.securityexpert.nexus.ui2.worker.inventory.policy.PolicyInstallRead.NONE;
         }
     }

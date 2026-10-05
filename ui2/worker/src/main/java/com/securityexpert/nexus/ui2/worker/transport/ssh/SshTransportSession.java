@@ -16,6 +16,7 @@ final class SshTransportSession implements TransportSession {
 
     private final String sessionId;
     private final Session jschSession;
+    com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.Lease admission;
     private InteractiveShellSession interactiveShell;
 
     SshTransportSession(String sessionId, Session jschSession) {

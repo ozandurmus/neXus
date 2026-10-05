@@ -91,8 +91,9 @@ public final class Ui2WorkerMain {
     }
 
     public static void main(String[] args) {
-        if ("configuration".equalsIgnoreCase(System.getenv("NEXUS_WORKLOAD_ROLE"))
-                || (args.length > 0 && "configuration".equalsIgnoreCase(args[0]))) {
+        String role = resolveRole(args, System.getenv("NEXUS_WORKLOAD_ROLE"));
+        boolean policyFallback = Boolean.parseBoolean(System.getProperty("ui2.worker.claim-policy-fallback", "false"));
+        if ("configuration".equals(role)) {
             try {
                 com.securityexpert.nexus.ui2.worker.configuration.server.Ui2ConfigurationMain.main(args);
                 return;
@@ -101,8 +102,7 @@ public final class Ui2WorkerMain {
                 System.exit(1);
             }
         }
-        if ("compliance".equalsIgnoreCase(System.getenv("NEXUS_WORKLOAD_ROLE"))
-                || (args.length > 0 && "compliance".equalsIgnoreCase(args[0]))) {
+        if ("compliance".equals(role)) {
             try {
                 com.securityexpert.nexus.ui2.worker.compliance.server.Ui2ComplianceMain.main(args);
                 return;
@@ -120,12 +120,13 @@ public final class Ui2WorkerMain {
         String artefactStoreKeyBase64 =
                 SecretFile.readRequired(Path.of(requireEnv("UI2_ARTEFACT_STORE_KEY_FILE")), "artefact_store_key");
         Path artefactStoreRoot = Path.of(System.getenv().getOrDefault("UI2_ARTEFACT_STORE_ROOT", "/var/lib/ui2/artefacts"));
-        String hostnameFingerprintKeyBase64 = SecretFile.readRequired(
+        String hostnameFingerprintKeyBase64 = "policy".equals(role) ? null : SecretFile.readRequired(
                 Path.of(requireEnv("UI2_HOSTNAME_FINGERPRINT_KEY_FILE")), "hostname_fingerprint_key");
         String checkPointTrustRuleRef = System.getenv().getOrDefault("UI2_CP_TRUST_RULE_REF", "utils.cp_ssh_trust");
         String paloAltoTrustRuleRef =
                 System.getenv().getOrDefault("UI2_PAN_TRUST_RULE_REF", "utils.pan_xml_api_trust");
 
+        if ("policy".equals(role)) System.setProperty("ui2.db.pool.maximum-pool-size", "6");
         var databasePool = WorkerDatabasePool.create(
                 TransactionBoundaryFactory.jdbcDataSource(jdbcUrl, dbUser, dbPassword), System.getProperties());
         TransactionBoundary transactionBoundary = TransactionBoundaryFactory.fromDataSource(databasePool);
@@ -156,6 +157,19 @@ public final class Ui2WorkerMain {
                         enrolledDeviceTrustRuleResolver, false), true);
         PanTrustRuleResolver panTrustRuleResolver = EnvironmentPanTrustRuleResolver.INSTANCE;
         PanXmlApiTransport panTransport = new PanXmlApiTransport(paloAltoTrustRuleRef, panTrustRuleResolver);
+
+        var endpointAdmission = new com.securityexpert.nexus.ui2.persistence.runtime.EndpointAdmissionRepository(transactionBoundary);
+        com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.install(endpointAdmission);
+        var moduleRuntime = new com.securityexpert.nexus.ui2.persistence.runtime.ModuleRuntimeRepository(transactionBoundary);
+        String instance = role + "-" + UUID.randomUUID();
+        if (!moduleRuntime.heartbeat(role, instance)) throw new IllegalStateException("MODULE_OWNER_CONFLICT");
+        if ("policy".equals(role)) {
+            if (!moduleRuntime.compatibleGeneralLive()) throw new IllegalStateException("COMPATIBLE_GENERAL_BOOTSTRAP_REQUIRED");
+            startPolicy(transactionBoundary, databasePool, moduleRuntime, endpointAdmission, instance, leaseRepository,
+                attemptRepository, deviceRepository, strictFailoverSsh, panTransport, panCredentialResolverFor(resolverComponents),
+                artefactStoreRoot, artefactStoreKeyBase64, checkPointTrustRuleRef, paloAltoTrustRuleRef, policyFallback);
+            return;
+        }
 
         // WORKER.md "Both vendors in one worker": one composite DeviceTransport
         // routes ssh_exec to sshTransport and pan_xml_api to panTransport; the
@@ -338,7 +352,7 @@ public final class Ui2WorkerMain {
                         System.getenv().getOrDefault("UI2_FAILOVER_COMMAND_PAUSE_SECONDS", "2"))));
             WorkerClaimLoop claimLoop = new WorkerClaimLoop(leaseRepository, jobRecordDao, deviceRepository,
                     confirmJobExecutor, inventoryJobExecutor, configurationJobExecutor, discoveryJobExecutor,
-                    backupJobExecutor, "worker-" + UUID.randomUUID(), Duration.ofMinutes(10), checkPointTrustRuleRef,
+                    backupJobExecutor, instance, Duration.ofMinutes(10), checkPointTrustRuleRef,
                     paloAltoTrustRuleRef, backupCredentialRef)
                     .withHttpsConfirm(httpsConfirmJobExecutor)
                     .withHttpsInventory(httpsInventoryJobExecutor)
@@ -346,11 +360,37 @@ public final class Ui2WorkerMain {
                     .withCpFailover(cpFailoverExecutor)
                     .withPanFailover(panFailoverExecutor)
                     .withDiagnosticReads(genericDiagnosticExecutor)
-                    .withPolicyCollection(policyCollectionExecutor);
+                    .withPolicyCollection(policyCollectionExecutor)
+                    .withRole(role, policyFallback)
+                    .withRuntimeAdmission(endpointAdmission, moduleRuntime);
             claimLoop.withPlatformFacts(platformFactsRepository);
             claimLoops.add(claimLoop);
             executor.submit(() -> claimLoop.runUntilInterrupted(Duration.ofSeconds(2)));
         }
+
+        com.securityexpert.nexus.ui2.jobs.executor.JobReconciler reconciler =
+                new com.securityexpert.nexus.ui2.jobs.executor.JobReconciler(leaseRepository);
+        java.util.concurrent.ScheduledExecutorService reconcilerExecutor =
+                java.util.concurrent.Executors.newSingleThreadScheduledExecutor(r -> {
+                    Thread t = new Thread(r, "job-reconciler");
+                    t.setDaemon(true);
+                    return t;
+                });
+        var ownerHeartbeat = java.util.concurrent.Executors.newSingleThreadScheduledExecutor();
+        ownerHeartbeat.scheduleWithFixedDelay(() -> {
+            try {
+                if (databasePool.getHikariPoolMXBean() != null) {
+                    var stats = databasePool.getHikariPoolMXBean();
+                    moduleRuntime.poolStats(role, instance, stats.getActiveConnections(), stats.getIdleConnections(),
+                        stats.getThreadsAwaitingConnection(), WorkerDatabasePool.TIMEOUTS.sum(), WorkerDatabasePool.WAIT_NANOS.sum());
+                }
+                if (!moduleRuntime.heartbeat(role, instance)) {
+                    claimLoops.forEach(WorkerClaimLoop::requestStop); executor.shutdown(); ownerHeartbeat.shutdown();
+                }
+            } catch (RuntimeException unavailable) {
+                System.getLogger(Ui2WorkerMain.class.getName()).log(System.Logger.Level.WARNING, "MODULE_HEARTBEAT_UNAVAILABLE");
+            }
+        }, 10, 10, java.util.concurrent.TimeUnit.SECONDS);
 
         // Graceful drain on SIGTERM (a rollout): stop claiming, finish what is running, up to
         // UI2_WORKER_DRAIN_SECONDS (default 840 s -- the deployment's terminationGracePeriodSeconds
@@ -362,30 +402,25 @@ public final class Ui2WorkerMain {
             System.Logger log = System.getLogger(Ui2WorkerMain.class.getName());
             log.log(System.Logger.Level.INFO, "[WORKER_DRAIN] stop requested; finishing in-flight jobs (up to "
                     + drainSeconds + " s)");
-            claimLoops.forEach(WorkerClaimLoop::requestStop);
-            executor.shutdown();
+            try { moduleRuntime.requestDrain(role, instance); }
+            finally { claimLoops.forEach(WorkerClaimLoop::requestStop); executor.shutdown(); reconcilerExecutor.shutdown(); }
             try {
+                long until = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(drainSeconds);
                 boolean drained = executor.awaitTermination(drainSeconds, java.util.concurrent.TimeUnit.SECONDS);
+                drained &= reconcilerExecutor.awaitTermination(Math.max(0, until-System.nanoTime()), java.util.concurrent.TimeUnit.NANOSECONDS);
                 log.log(System.Logger.Level.INFO, "[WORKER_DRAIN] " + (drained ? "all in-flight jobs finished"
                         : "drain window elapsed with jobs still running; the reconciler will requeue them"));
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             } finally {
+                ownerHeartbeat.shutdownNow();
                 databasePool.close();
             }
         }, "worker-drain"));
 
-        com.securityexpert.nexus.ui2.jobs.executor.JobReconciler reconciler =
-                new com.securityexpert.nexus.ui2.jobs.executor.JobReconciler(leaseRepository);
-        java.util.concurrent.ScheduledExecutorService reconcilerExecutor =
-                java.util.concurrent.Executors.newSingleThreadScheduledExecutor(r -> {
-                    Thread t = new Thread(r, "job-reconciler");
-                    t.setDaemon(true);
-                    return t;
-                });
         reconcilerExecutor.scheduleWithFixedDelay(() -> {
             try {
-                reconciler.reconcileOnce();
+                moduleRuntime.runTask(role, instance, "JobReconciler.reconcileOnce", reconciler::reconcileOnce);
             } catch (Throwable t) {
                 System.getLogger(Ui2WorkerMain.class.getName())
                         .log(System.Logger.Level.WARNING, "Periodic job reconciliation error: " + t.getMessage(), t);
@@ -398,7 +433,7 @@ public final class Ui2WorkerMain {
                         new com.securityexpert.nexus.ui2.persistence.artefact.BackupArtefactDeletionRequests(transactionBoundary), artefactStoreRoot);
         reconcilerExecutor.scheduleWithFixedDelay(() -> {
             try {
-                orphanPurger.runOnce();
+                moduleRuntime.runTask(role, instance, "OrphanArtefactPurger.runOnce", orphanPurger::runOnce);
             } catch (Throwable t) {
                 System.getLogger(Ui2WorkerMain.class.getName())
                         .log(System.Logger.Level.WARNING, "Orphan backup purge error: " + t.getMessage(), t);
@@ -416,7 +451,7 @@ public final class Ui2WorkerMain {
                                 artefactStoreRoot));
         reconcilerExecutor.scheduleWithFixedDelay(() -> {
             try {
-                backupPolicyRepository.find().ifPresent(policy -> {
+                moduleRuntime.runTask(role, instance, "RetentionPruningService.prune", () -> backupPolicyRepository.find().ifPresent(policy -> {
                     var summary = pruningService.prune(
                             new com.securityexpert.nexus.ui2.worker.backup.retention.RetentionPruningService.PruningPolicy(
                                     policy.backupRetentionDays(), policy.snapshotRetentionDepth()));
@@ -426,12 +461,72 @@ public final class Ui2WorkerMain {
                                         + " bytes=" + summary.bytesReclaimed() + " (retention " + policy.backupRetentionDays()
                                         + " d, depth " + policy.snapshotRetentionDepth() + ")");
                     }
-                });
+                }));
             } catch (Throwable t) {
                 System.getLogger(Ui2WorkerMain.class.getName())
                         .log(System.Logger.Level.WARNING, "Retention pruning error: " + t.getMessage(), t);
             }
         }, 120, 3600, java.util.concurrent.TimeUnit.SECONDS);
+    }
+
+    static String resolveRole(String[] args, String environment) {
+        String argument = args.length == 0 ? null : args[0].toLowerCase(java.util.Locale.ROOT);
+        String env = environment == null || environment.isBlank() ? null : environment.toLowerCase(java.util.Locale.ROOT);
+        if (args.length > 1 || (argument != null && env != null && !argument.equals(env)))
+            throw new IllegalArgumentException("CONFLICTING_WORKER_ROLE");
+        String role = argument != null ? argument : env != null ? env : "general";
+        if (!java.util.Set.of("general", "policy", "configuration", "compliance").contains(role))
+            throw new IllegalArgumentException("UNKNOWN_WORKER_ROLE");
+        return role;
+    }
+
+    private static StoreBackedPanCredentialResolver panCredentialResolverFor(CredentialStoreComposition.ResolverComponents components) {
+        return new StoreBackedPanCredentialResolver(components.credentialReferenceRepository(), components.credentialRepository(), components.cipher());
+    }
+
+    private static void startPolicy(TransactionBoundary boundary, com.zaxxer.hikari.HikariDataSource pool,
+            com.securityexpert.nexus.ui2.persistence.runtime.ModuleRuntimeRepository runtime,
+            com.securityexpert.nexus.ui2.persistence.runtime.EndpointAdmissionRepository admission, String instance,
+            JobLeaseRepository leases, JobStepAttemptRepository attempts, JooqDeviceRepository devices,
+            SshExecTransport ssh, PanXmlApiTransport pan, StoreBackedPanCredentialResolver credentials,
+            Path root, String key, String cpTrust, String panTrust, boolean fallback) {
+        var gates = new PersistenceGateRegistryPort(new JooqGateRegistryDao(boundary));
+        var runs = new JooqDiscoveryRunRepository(boundary);
+        var policies = new com.securityexpert.nexus.ui2.persistence.policy.PolicyCollectionRepository(boundary);
+        var deadline = Duration.ofSeconds(Long.parseLong(System.getenv().getOrDefault("UI2_POLICY_RUN_DEADLINE_SECONDS", "7200")));
+        var store = new FileArtefactStore(root, ArtefactStoreCipher.fromBase64Key(key));
+        var jobs = new JooqJobRecordDao(boundary);
+        var transport = new CompositeDeviceTransport(WorkerBootstrap.buildTransportRegistry(ssh, pan));
+        var policy = new com.securityexpert.nexus.ui2.worker.policy.PolicyCollectionJobExecutor(leases, attempts, runs, policies,
+            new com.securityexpert.nexus.ui2.worker.policy.CheckPointPolicyCollector(ssh, gates, policies, deadline), gates)
+            .withPanorama(new com.securityexpert.nexus.ui2.worker.policy.PanoramaPolicyCollector(transport, gates, credentials, policies, deadline))
+            .withTranscript(store, jobs);
+        // Policy composition has no enrollment, backup, inventory, configuration or failover executors.
+        var loop = WorkerClaimLoop.policy(leases, jobs, devices, policy, instance, cpTrust, panTrust, fallback)
+            .withRuntimeAdmission(admission, runtime);
+        var executor = java.util.concurrent.Executors.newSingleThreadExecutor();
+        executor.submit(() -> loop.runUntilInterrupted(Duration.ofSeconds(2)));
+        var heartbeat = java.util.concurrent.Executors.newSingleThreadScheduledExecutor();
+        heartbeat.scheduleWithFixedDelay(() -> {
+            try {
+                if (pool.getHikariPoolMXBean() != null) {
+                    var stats = pool.getHikariPoolMXBean();
+                    runtime.poolStats("policy", instance, stats.getActiveConnections(), stats.getIdleConnections(),
+                        stats.getThreadsAwaitingConnection(), WorkerDatabasePool.TIMEOUTS.sum(), WorkerDatabasePool.WAIT_NANOS.sum());
+                }
+                if (!runtime.heartbeat("policy", instance)) { loop.requestStop(); executor.shutdown(); heartbeat.shutdown(); }
+            }
+            catch (RuntimeException unavailable) {
+                System.getLogger(Ui2WorkerMain.class.getName()).log(System.Logger.Level.WARNING, "MODULE_HEARTBEAT_UNAVAILABLE");
+            }
+        }, 10, 10, java.util.concurrent.TimeUnit.SECONDS);
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            try { runtime.requestDrain("policy", instance); }
+            finally { loop.requestStop(); executor.shutdown(); }
+            try { executor.awaitTermination(840, java.util.concurrent.TimeUnit.SECONDS); }
+            catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); }
+            finally { heartbeat.shutdownNow(); pool.close(); }
+        }, "policy-drain"));
     }
 
     private static String requireEnv(String name) {

@@ -23,9 +23,9 @@ class PolicyCheckpointConcurrencyTest {
             var source = fixture.appDataSource();
             var tx = new JooqTransactionBoundary(DSL.using(source, SQLDialect.POSTGRES));
             new JooqJobRecordDao(tx).insertRequestedIfAbsentForRun("job-1", "job-1", "cp_policy_collect",
-                "synthetic-run", "read", "policy_collect", "synthetic-actor", "policy_collect").orElseThrow();
+                "synthetic-run", "read", "cp_policy_collect", "synthetic-actor", "policy_collect").orElseThrow();
             var leases = new JooqJobLeaseDao(tx);
-            long epoch = leases.claimNext("synthetic-worker", List.of("cp_policy_collect"), Duration.ofMinutes(10)).orElseThrow().leaseEpoch();
+            long epoch = leases.claimNext("policy-synthetic", List.of("cp_policy_collect"), Duration.ofMinutes(10)).orElseThrow().leaseEpoch();
             assertTrue(leases.transitionState("job-1", epoch, "CLAIMED", "EXECUTING", "synthetic-actor", "policy_collect"));
             new PolicySnapshotRepository(tx).save(new PolicySnapshotRepository.Stored("policy-1", "2026-10-01T00:00:00Z",
                 "{}", "{\"failures\":[{}]}"), "synthetic-actor", "policy_collect_checkpoint");
@@ -66,6 +66,30 @@ class PolicyCheckpointConcurrencyTest {
             }
         }
     }
+    @Test void expiredPolicyLeaseCannotPublishDuringDrainEvenWithValidOwnerGeneration() throws Exception {
+        try (var fixture = Ui2PostgresFixture.create("policy_expired_drain")) {
+            fixture.runFlyway();
+            var tx = new JooqTransactionBoundary(DSL.using(fixture.appDataSource(), SQLDialect.POSTGRES));
+            new JooqJobRecordDao(tx).insertRequestedIfAbsentForRun("job-1", "job-1", "cp_policy_collect",
+                "synthetic-run", "read", "cp_policy_collect", "synthetic-actor", "policy_collect").orElseThrow();
+            var leases = new JooqJobLeaseDao(tx);
+            long epoch = leases.claimNext("policy-synthetic", List.of("cp_policy_collect"), Duration.ofMinutes(10)).orElseThrow().leaseEpoch();
+            assertTrue(leases.transitionState("job-1", epoch, "CLAIMED", "EXECUTING", "synthetic-actor", "policy_collect"));
+            new AuditedTransactionBoundary(tx).inTransaction("synthetic-actor", "policy_test_drain", db -> {
+                db.execute("update module_runtime_control set drain_requested=true,drain_generation=drain_generation+1 where module='policy'");
+                db.execute("update jobs set lease_expires_at=now()-interval '1 second' where job_id={0}", "job-1");
+                return null;
+            });
+            assertTrue(tx.inTransaction(db -> db.fetchOne("select ui2_job_owner_valid({0},{1})", "job-1", epoch).get(0, Boolean.class)));
+            var repository = new PolicyCollectionRepository(tx);
+            var snapshot = new PolicySnapshotRepository.Stored("policy-1", "2026-10-05T00:00:00Z", "{}", "{\"failures\":[]}");
+            assertFalse(repository.publish("job-1", epoch, List.of(snapshot), "synthetic-actor"));
+            assertFalse(repository.publishWithWarnings("job-1", epoch, List.of(snapshot), "synthetic-actor", "PARTIAL_SNAPSHOT"));
+            assertEquals(0, tx.inTransaction(db -> db.fetchOne("select count(*)::int from policy_snapshot").get(0, Integer.class)));
+            assertEquals("EXECUTING", tx.inTransaction(db -> db.fetchOne("select state from jobs where job_id={0}", "job-1").get(0, String.class)));
+        }
+    }
+
     @Test void chunkedSnapshotIsAtomicUnderAppRoleAndStagingDisappearsAfterCommitAndRollback() throws Exception {
         try (var fixture = Ui2PostgresFixture.create("policy_chunked_write")) {
             fixture.runFlyway();

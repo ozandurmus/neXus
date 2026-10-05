@@ -14,7 +14,7 @@ import java.util.regex.Pattern;
 
 /**
  * Semantic Deviation Engine for network firewall backup configurations.
- * 
+ *
  * <p>Compares consecutive backups for Check Point (Gaia Clish) and Palo Alto (PAN-OS XML),
  * classifying differences into MAJOR deviations (alert triggered) versus MINOR/UNCHANGED:
  * <ul>

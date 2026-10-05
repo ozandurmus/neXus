@@ -72,6 +72,7 @@ public final class CheckPointSnapshotExecutor {
         try {
             connectResult = transport.connect(request.connectionTarget(), spec, CONNECT_TIMEOUT);
         } catch (IllegalStateException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
             return new BackupResult.CredentialUnresolvable(e.getMessage());
         }
 
@@ -157,6 +158,7 @@ public final class CheckPointSnapshotExecutor {
             fetchResult = transport.fetchStreaming(session, new FetchSpec(remotePath, MAX_SNAPSHOT_BYTES),
                     FETCH_TIMEOUT, handle.sink());
         } catch (RuntimeException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
             closeQuietly(handle);
             return new BackupResult.ArtefactStoreFailed("snapshot fetch streaming failed: " + e.getMessage());
         }
@@ -236,6 +238,7 @@ public final class CheckPointSnapshotExecutor {
         try {
             handle.close();
         } catch (Exception ignored) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(ignored);
         }
     }
 

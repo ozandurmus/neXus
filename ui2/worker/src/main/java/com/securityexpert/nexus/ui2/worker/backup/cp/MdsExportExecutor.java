@@ -69,6 +69,7 @@ public final class MdsExportExecutor {
             connect = transport.connect(request.connectionTarget(),
                     new ConnectSpec(request.credentialRef().get(), request.trustRuleRef(), Optional.empty()), CONNECT_TIMEOUT);
         } catch (IllegalStateException unresolvable) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(unresolvable);
             return new BackupResult.CredentialUnresolvable(String.valueOf(unresolvable.getMessage()));
         }
         if (!(connect instanceof ConnectResult.Authenticated authenticated)) {
@@ -166,6 +167,7 @@ public final class MdsExportExecutor {
         try {
             fetched = transport.fetchStreaming(session, new FetchSpec(bundle, MAX_BUNDLE_BYTES), FETCH, handle.sink());
         } catch (RuntimeException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
             closeQuietly(handle);
             remove(session, dir);
             return new BackupResult.ArtefactStoreFailed("sftp fetch failed: " + e.getClass().getSimpleName());

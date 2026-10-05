@@ -33,6 +33,7 @@ public class FailoverExecutionService {
         DriftEvaluationResult evaluate(ClusterEvidenceSnapshot snapshot);
     }
 
+    private ServiceEndpointAdmission endpointAdmission;
     private final FailoverAuthorizationService authzService;
     private final PreflightService preflightService;
     private final FailoverPilotAllowlist pilotAllowlist;
@@ -55,7 +56,6 @@ public class FailoverExecutionService {
         this(authzService, preflightService, pilotAllowlist, new DurableQuarantineStore());
     }
 
-    @Autowired
     public FailoverExecutionService(
         FailoverAuthorizationService authzService,
         PreflightService preflightService,
@@ -70,6 +70,14 @@ public class FailoverExecutionService {
         // Register default executors
         registerExecutor(new CheckPointClusterXLExecutor());
         registerExecutor(new PaloAltoHaExecutor());
+    }
+
+    @Autowired
+    public FailoverExecutionService(FailoverAuthorizationService authzService, PreflightService preflightService,
+            FailoverPilotAllowlist pilotAllowlist, DurableQuarantineStore quarantineStore,
+            ServiceEndpointAdmission endpointAdmission) {
+        this(authzService, preflightService, pilotAllowlist, quarantineStore);
+        this.endpointAdmission = Objects.requireNonNull(endpointAdmission);
     }
 
     public void registerExecutor(FailoverDeviceExecutor executor) {
@@ -135,7 +143,7 @@ public class FailoverExecutionService {
             throw new IllegalStateException("Another failover execution is currently in progress (fleet-wide concurrency limit = 1)");
         }
 
-        try {
+        try (var admission = endpointAdmission == null ? null : endpointAdmission.open()) {
             if (activeClusterLocks.putIfAbsent(clusterRef, Boolean.TRUE) != null) {
                 throw new IllegalStateException("Cluster execution lock is already held for: " + clusterRef);
             }
@@ -168,6 +176,7 @@ public class FailoverExecutionService {
 
                 ClusterMemberEvidence active = activeOpt.get();
                 ClusterMemberEvidence standby = standbyOpt.get();
+                if (admission != null) admission.members(active.memberId(), standby.memberId());
 
                 // Signed target member enforcement (Claude F-P0.5)
                 if (signedTargetMemberId != null && !signedTargetMemberId.equals(active.memberId())) {
@@ -244,6 +253,7 @@ public class FailoverExecutionService {
                 // 7. Submit At-Most-Once Mutation Command
                 FailoverCommandResult cmdResult;
                 try {
+                    if (admission != null) admission.dispatched();
                     cmdResult = executor.executeAction(active.memberId(), actionKind);
                 } catch (Exception ex) {
                     cmdResult = FailoverCommandResult.failure(-1, "Command execution error", ex.getClass().getSimpleName(),
@@ -304,6 +314,7 @@ public class FailoverExecutionService {
                     // untouched. Corroborate with a guarded post-observation before trusting that.
                     TwoSidedObservation rejectObs;
                     try {
+                        if (admission != null) admission.check();
                         rejectObs = executor.observePostcondition(clusterRef, active.memberId(), standby.memberId());
                     } catch (Exception obsEx) {
                         quarantineStore.engageQuarantine(clusterRef, executionId,
@@ -347,6 +358,7 @@ public class FailoverExecutionService {
                 // 8. Two-Sided Independent Direct Post-Verification Observation
                 TwoSidedObservation postObs;
                 try {
+                    if (admission != null) admission.check();
                     postObs = executor.observePostcondition(clusterRef, active.memberId(), standby.memberId());
                 } catch (Exception ex) {
                     quarantineStore.engageQuarantine(clusterRef, executionId,

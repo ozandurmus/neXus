@@ -196,6 +196,24 @@ def deployed_commit(fallback):
     raise SafeReleaseError("deployed commit unavailable; valid build commit fallback required")
 
 
+def runtime_state():
+    def sql(query):
+        import shlex
+        return run("kubectl", "-n", "ui2", "exec", "ui2-db-0", "--", "sh", "-c",
+                   'psql -v ON_ERROR_STOP=1 -U "${POSTGRES_USER:-$POSTGRESQL_USER}" -d ui2 -Atc ' + shlex.quote(query)).decode().strip()
+    available = sql("select to_regclass('module_runtime_control') is not null")
+    if available == "f":
+        return {"compatible_runtime": False, "modules": [], "tasks": []}
+    if available != "t":
+        raise SafeReleaseError("runtime compatibility unavailable; snapshot refused")
+    modules = json.loads(sql("select coalesce(json_agg(m order by module),'[]') from "
+                             "(select module,effective_owner,fallback_enabled,generation,drain_requested,drain_generation "
+                             "from module_runtime_control) m"))
+    tasks = json.loads(sql("select coalesce(json_agg(t order by task_key),'[]') from "
+                           "(select task_key,owner_role,owner_generation,epoch,state from runtime_task_lease) t"))
+    return {"compatible_runtime": True, "modules": modules, "tasks": tasks}
+
+
 def snapshot(root, fallback_commit=None):
     with step("deployed-commit lookup"):
         commit = deployed_commit(fallback_commit)
@@ -245,6 +263,8 @@ def snapshot(root, fallback_commit=None):
             captures[namespace] = {"present": True, "resources": len(clean), "jobs_and_pods": "templates only"}
         with step("Flyway version query"):
             version = schema_version()
+        with step("module ownership capture"):
+            runtime = runtime_state()
         with step("schema dump"):
             dump = run("kubectl", "-n", "ui2", "exec", "ui2-db-0", "--", "sh", "-c",
                        'pg_dump -U "${POSTGRES_USER:-$POSTGRESQL_USER}" -d ui2 --schema-only --no-owner --no-privileges')
@@ -256,7 +276,7 @@ def snapshot(root, fallback_commit=None):
         with step("snapshot publication"):
             (directory / "schema.sql.gz").write_bytes(gzip.compress(dump))
             manifest = {"format": 1, "snapshot": snapshot_id, "deployed_commit": commit,
-                        "schema_version": version, "captured": captures, "images": images,
+                        "schema_version": version, "captured": captures, "images": images, "runtime": runtime,
                         "checksums": {p.name: checksum(p) for p in sorted(directory.iterdir())}}
             write(directory / "manifest.json", manifest)
             directory.rename(root / snapshot_id)
@@ -311,6 +331,8 @@ def rollback(root, target, apply, allow_newer):
         raise SafeReleaseError("live schema is newer; review additive compatibility and use --allow-newer-schema")
     if version_key(saved) > version_key(live):
         raise SafeReleaseError("live schema is older than snapshot; required migrations are absent")
+    if apply and runtime_state()["compatible_runtime"]:
+        raise SafeReleaseError("split runtime requires module-controlled drain and exact-snapshot rollback; global apply refused")
     plans = []
     removals = []
     for namespace in NAMESPACES:

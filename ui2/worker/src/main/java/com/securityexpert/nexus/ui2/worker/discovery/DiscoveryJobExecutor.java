@@ -128,6 +128,7 @@ public final class DiscoveryJobExecutor {
 
         EnumerationOutcome outcome = enumerate(run.get());
 
+        com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.checkPublication();
         boolean outcomeWritten = attemptRepository.writeOutcome(attemptId, leaseEpoch,
                 outcome.succeeded ? "MATCHED" : "EXPECTATION_UNMET", null, outcome.succeeded,
                 null, null, fingerprintOf(outcome)); // No response byte/line measurement reaches this executor.
@@ -147,6 +148,7 @@ public final class DiscoveryJobExecutor {
             discoveryRunRepository.replaceCandidates(runId, outcome.candidates, ACTOR, ACTION_COMPLETED);
             discoveryRunRepository.markFinished(runId, outcome.outcomeSummary, ACTOR, ACTION_COMPLETED);
         } catch (RuntimeException persistFailed) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(persistFailed);
             LOGGER.log(System.Logger.Level.WARNING, "Discovery candidate persistence failed: {0}",
                     persistFailed.getClass().getSimpleName());
             leaseRepository.transitionState(jobId, leaseEpoch, JobState.EXECUTING, JobState.FAILED, ACTOR,

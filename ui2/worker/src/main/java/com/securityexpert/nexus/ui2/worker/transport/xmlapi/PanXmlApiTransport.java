@@ -100,13 +100,16 @@ public final class PanXmlApiTransport implements DeviceTransport {
     /** T-1/T-2/T-4: one POST to {@code target.baseUrl() + "/api/"}, never any other path or host. */
     @Override
     public XmlApiResult xmlApiCall(ApiTarget target, XmlApiSpec spec, Duration timeout) {
+        try {
         com.securityexpert.nexus.ui2.worker.JobCancellationScope.check();
         HttpClient client;
         URI uri;
         try {
             uri = resolveUri(target);
             client = buildClient(uri);
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.http(uri.getHost(), uri.getPort() < 0 ? 443 : uri.getPort(), client);
         } catch (RuntimeException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
             return new XmlApiResult.Failed("trust rule could not be resolved into a usable TLS configuration");
         }
         try {
@@ -134,6 +137,8 @@ public final class PanXmlApiTransport implements DeviceTransport {
             Thread.currentThread().interrupt();
             return new XmlApiResult.Failed("xml api call was interrupted");
         }
+
+        } finally { com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.closeHttpClients(); }
     }
 
     /**
@@ -149,13 +154,16 @@ public final class PanXmlApiTransport implements DeviceTransport {
     @Override
     public <T> XmlApiStreamOutcome<T> xmlApiCallStreaming(ApiTarget target, XmlApiSpec spec, Duration timeout,
             XmlApiStreamHandler<T> handler) {
+        try {
         com.securityexpert.nexus.ui2.worker.JobCancellationScope.check();
         HttpClient client;
         URI uri;
         try {
             uri = resolveUri(target);
             client = buildClient(uri);
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.http(uri.getHost(), uri.getPort() < 0 ? 443 : uri.getPort(), client);
         } catch (RuntimeException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
             return new XmlApiStreamOutcome.Failed<>("trust rule could not be resolved into a usable TLS configuration");
         }
         try {
@@ -230,6 +238,8 @@ public final class PanXmlApiTransport implements DeviceTransport {
             Thread.currentThread().interrupt();
             return new XmlApiStreamOutcome.Failed<>("xml api streaming call was interrupted");
         }
+
+        } finally { com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.closeHttpClients(); }
     }
 
     @Override

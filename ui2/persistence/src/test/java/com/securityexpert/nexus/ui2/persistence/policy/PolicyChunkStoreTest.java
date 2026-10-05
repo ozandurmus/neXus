@@ -12,6 +12,7 @@ class PolicyChunkStoreTest {
     private record Chunk(byte[] payload, int plainBytes) {}
     private final Map<String, Map<Integer, Chunk>> chunks = new HashMap<>();
     private final Map<String, Object[]> inventories = new TreeMap<>();
+    private Object[] unit, domain;
     private final List<String> statements = new ArrayList<>();
     private final DSLContext create = DSL.using(SQLDialect.POSTGRES);
     private boolean failChunks;
@@ -22,7 +23,8 @@ class PolicyChunkStoreTest {
             T value = work.apply(DSL.using(new MockConnection(PolicyChunkStoreTest.this::execute), SQLDialect.POSTGRES));
             var sql = statements.subList(before, statements.size());
             boolean chunk = sql.stream().anyMatch(s -> s.startsWith("insert into cp_policy_json_chunk"));
-            boolean manifest = sql.stream().anyMatch(s -> s.startsWith("insert into cp_policy_object_inventory"));
+            boolean manifest = sql.stream().anyMatch(s -> s.startsWith("insert into cp_policy_object_inventory")
+                || s.startsWith("insert into policy_unit_checkpoint") || s.startsWith("insert into cp_policy_domain_run"));
             assertFalse(chunk && manifest, "Each chunk must commit before manifest publication");
             if (chunk) chunkTransactions++;
             if (manifest) manifestTransactions++;
@@ -39,6 +41,23 @@ class PolicyChunkStoreTest {
         if (sql.startsWith("insert into cp_policy_json_chunk")) {
             if (failChunks) throw new java.sql.SQLException("synthetic database failure");
             chunks.computeIfAbsent((String) args[0], k -> new TreeMap<>()).put((Integer) args[5], new Chunk((byte[]) args[6], (Integer) args[7]));
+        } else if (sql.startsWith("select job_id")) {
+            return new MockResult[]{new MockResult(1, create.fetchFromStringData(new String[]{"job_id"}, new String[]{"job-1"}))};
+        } else if (sql.startsWith("insert into policy_unit_checkpoint")) unit = args;
+        else if (sql.startsWith("insert into cp_policy_domain_run")) domain = args;
+        else if (sql.startsWith("select snapshot::text") && sql.contains("from policy_unit_checkpoint")) {
+            var rows = create.newResult(new Field<?>[]{DSL.field("snapshot", String.class), DSL.field("chunk_generation", String.class), DSL.field("chunk_count", Integer.class)});
+            if (unit != null) {
+                var row = create.newRecord(rows.fields()); row.fromArray("{}", unit[3], unit[4]); rows.add(row);
+            }
+            return new MockResult[]{new MockResult(rows.size(), rows)};
+        } else if (sql.startsWith("select complete")) {
+            var rows = create.newResult(new Field<?>[]{DSL.field("complete", Boolean.class), DSL.field("signal", String.class), DSL.field("snapshots", String.class),
+                DSL.field("chunk_generation", String.class), DSL.field("chunk_count", Integer.class)});
+            if (domain != null) {
+                var row = create.newRecord(rows.fields()); row.fromArray(domain[4], domain[5], "[]", domain[8], domain[9]); rows.add(row);
+            }
+            return new MockResult[]{new MockResult(rows.size(), rows)};
         } else if (sql.startsWith("insert into cp_policy_object_inventory")) inventories.put((String) args[2], args);
         else if (sql.startsWith("select snapshot::text")) {
             var rows = create.newResult(new Field<?>[]{DSL.field("snapshot", String.class), DSL.field("object_type", String.class),
@@ -60,6 +79,22 @@ class PolicyChunkStoreTest {
             return new MockResult[]{new MockResult(1, rows)};
         }
         return new MockResult[]{new MockResult(1, null)};
+    }
+
+    @Test void resumedUnitsAndCurrentDomainsReadBoundedChunkGenerations() {
+        var repository = new PolicyCollectionRepository(tx);
+        var request = new PolicyCollectionRepository.Request("source-1", "", false, PolicyCollectionRepository.Mode.FULL, "job-1", 7);
+        String snapshot = "{\"synthetic\":\"" + "x".repeat(2 * PolicyChunkStore.MAX_BYTES) + "\"}";
+        assertTrue(repository.saveUnit(request, "unit-1", "version-1", snapshot));
+        assertEquals(snapshot, repository.resumedUnit(request, "unit-1", "version-1").orElseThrow());
+        assertTrue(repository.saveDomain(request, "domain-1", "COLLECTED", true, "{}", "[" + snapshot + "]", 0, null, "synthetic-actor"));
+        assertEquals("[" + snapshot + "]", repository.domainForRequest(request, "domain-1").orElseThrow().snapshotsJson());
+        assertEquals(2, manifestTransactions);
+        assertTrue(chunkTransactions > 2);
+        var previousUnit = unit;
+        failChunks = true;
+        assertThrows(PolicyDatabaseFailure.class, () -> repository.saveUnit(request, "unit-1", "version-2", snapshot));
+        assertSame(previousUnit, unit, "A failed chunk must not replace the resumable unit manifest");
     }
 
     @Test void sixtyMiBInventoryUsesShortBoundedWritesAndReadsBackExactlyIncludingUnicode() {

@@ -143,6 +143,7 @@ public final class CpFailoverJobExecutor {
             Thread.currentThread().interrupt();
             if (readiness) finishReadiness("INTERRUPTED",0,"UNKNOWN"); else stop("INTERRUPTED",0);
         } catch (RuntimeException unexpected) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(unexpected);
             if (readiness) finishReadiness("COLLECTION_FAILED",0,"UNKNOWN");
             else stop(wrote?"OUTCOME_UNCERTAIN":"PRECHECK_UNAVAILABLE",0);
         } finally {
@@ -180,11 +181,8 @@ public final class CpFailoverJobExecutor {
             .orElseThrow(() -> new Stop("DEVICE_NOT_ELIGIBLE",0));
         var endpoint=devices.findEndpointByDeviceId(summary.deviceId())
             .orElseThrow(() -> new Stop("ENDPOINT_MISSING",0));
-        String address=endpoint.addressRef(); int colon=address.lastIndexOf(':');
-        String host=colon<0?address:address.substring(0,colon);
-        int port=22;
-        if(colon>=0) try { port=Integer.parseInt(address.substring(colon+1)); }
-            catch(NumberFormatException invalid) { throw new Stop("ENDPOINT_INVALID",0); }
+        String host=com.securityexpert.nexus.ui2.persistence.runtime.EndpointAddress.host(endpoint.addressRef());
+        int port=com.securityexpert.nexus.ui2.persistence.runtime.EndpointAddress.port(endpoint.addressRef(),22);
         var result=ssh.connect(new ConnectionTarget(endpoint.endpointId(),host,port),
             new ConnectSpec(device.credentialReferenceId(),
                 PersistedManagementEndpointTrustResolver.scopeRef(host,port),java.util.Optional.empty()),Duration.ofSeconds(30));

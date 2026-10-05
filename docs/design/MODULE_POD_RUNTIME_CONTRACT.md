@@ -132,6 +132,27 @@ contain only roles, purpose classes and opaque instance ids, never endpoints,
 principals or device identities. Alert on capacity breach, lost owner/heartbeat,
 quarantine and bounded-drain expiry; do not report admission waits as unhealthy.
 
+### Endpoint identity resolution, engineering session 2026-10-05
+
+The Product Owner supplied the following endpoint identity decision for the
+policy implementation step. The contract status remains FROZEN.
+
+- The admission key is always `addr:` plus the normalized management address:
+  lowercase host (IPv6 bracketed), `:` and explicit port, using the transport's
+  default port when absent. No DNS lookup or identifier normalization occurs.
+- Jobs with a target device obtain `addressRef` from its management endpoint
+  through `DeviceRepository.findEndpointByDeviceId(...)`. Address-only paths
+  normalize their contacted host and port identically. Endpoint record ids and
+  device row ids are never admission keys.
+- Two device rows with the same normalized management address share one budget
+  across every purpose, including manager contact initiated for a child.
+- Known limitation: DNS-name and IP aliases for one box are not unified.
+  Alias resolution is outside this step's scope.
+
+The engineering session's final PO rule supersedes the previous record-id
+proposal and resolves its shared-address implementation blocker. §2 limits,
+fencing, quarantine and transport-close requirements remain unchanged.
+
 ## 3. Drain and recovery
 
 Normal replacement first persists drain_requested and increments drain_generation;

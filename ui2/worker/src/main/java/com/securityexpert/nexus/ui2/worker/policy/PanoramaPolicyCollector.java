@@ -20,6 +20,7 @@ import com.securityexpert.nexus.ui2.worker.transport.xmlapi.PanCredentialResolve
 
 /** Serial Panorama intent reads; complete independent DGs survive a failed sibling. */
 public final class PanoramaPolicyCollector {
+    private static final com.fasterxml.jackson.databind.ObjectMapper SNAPSHOTS = new com.fasterxml.jackson.databind.ObjectMapper();
     static final int MAX_GROUPS = 200;
     private static final Duration TIMEOUT = Duration.ofSeconds(60);
     static final long MAX_RESPONSE_BYTES = 128L * 1024 * 1024;
@@ -86,7 +87,8 @@ public final class PanoramaPolicyCollector {
         PolicyCollectionTrace.step("credential resolution", scope.sourceId());
         com.securityexpert.nexus.ui2.worker.transport.xmlapi.PanCredentialMaterial credential;
         try { credential = credentials.resolve(run.credentialReferenceId()); }
-        catch (RuntimeException unavailable) { throw PolicyCollectionTrace.failure("CREDENTIAL_UNRESOLVABLE"); }
+        catch (RuntimeException unavailable) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(unavailable); throw PolicyCollectionTrace.failure("CREDENTIAL_UNRESOLVABLE"); }
         if (credential == null) throw PolicyCollectionTrace.failure("CREDENTIAL_UNUSABLE");
         if (credential.username() == null || credential.username().isBlank() || credential.password() == null) {
             if (credential.password() != null) Arrays.fill(credential.password(), '\0');
@@ -147,6 +149,14 @@ public final class PanoramaPolicyCollector {
                     if (!lease.getAsBoolean()) throw PolicyCollectionTrace.failure("LEASE_LOST");
                     if (clock.getAsLong() >= deadline) throw PolicyCollectionTrace.failure("JOB_DEADLINE");
                     PolicyCollectionTrace.step("device group " + container + " mapping", scope.sourceId());
+                    String version = contentVersion(document, members.toString(), parents.toString());
+                    var resumed = repository.resumedUnit(scope, container, version);
+                    if (resumed.isPresent()) {
+                        var previous = checkpoint(resumed.get());
+                        if (!previous.metadata().sourceId().equals(scope.sourceId()) || !previous.metadata().containerId().equals(container))
+                            throw PolicyCollectionTrace.failure("CHECKPOINT_IDENTITY_MISMATCH");
+                        publish.accept(previous); published++; unitFinished = true; continue;
+                    }
                     var metadata = new Metadata(ref(container, "policy"), scope.sourceId(), "Panorama " + scope.sourceId(), "PAN", container,
                             name, name, collectedAt, "", targets(run, scope.sourceId(), members.get(name)));
                     var snapshot = new PanoramaPolicyMapper().mapUnverifiedPrecedence(metadata, config, name, parents);
@@ -164,6 +174,8 @@ public final class PanoramaPolicyCollector {
                     if (clock.getAsLong() >= deadline) throw PolicyCollectionTrace.failure("JOB_DEADLINE");
                     if (Thread.currentThread().isInterrupted()) throw PolicyCollectionTrace.failure("INTERRUPTED");
                     publish.accept(snapshot);
+                    if (!scope.jobId().isEmpty() && snapshot.failures().isEmpty() && !repository.saveUnit(scope, container, version, checkpoint(snapshot)))
+                        throw PolicyCollectionTrace.failure("LEASE_LOST");
                     published++;
                     unitFinished = true;
                 } catch (IllegalArgumentException | PolicyCollectionTrace.Failure invalid) {
@@ -237,6 +249,7 @@ public final class PanoramaPolicyCollector {
                 cache.put(memberRef, parsed);
                 members.add(parsed);
             } catch (RuntimeException unavailable) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(unavailable);
                 String reason = PolicyCollectionTrace.reason(unavailable);
                 if (Set.of("CANCELLED", "LEASE_LOST", "JOB_DEADLINE", "POLICY_GATE_UNAVAILABLE", "INTERRUPTED")
                         .stream().anyMatch(code -> reason.endsWith(": " + code))) throw unavailable;
@@ -248,6 +261,29 @@ public final class PanoramaPolicyCollector {
         }
         return PolicyHitCounts.aggregate(snapshot, members);
     }
+    private static PolicySnapshot checkpoint(String value) {
+        try { return SNAPSHOTS.readValue(value, PolicySnapshot.class); }
+        catch (IOException invalid) { throw PolicyCollectionTrace.failure("CHECKPOINT_NOT_EVALUABLE"); }
+    }
+    private static String checkpoint(PolicySnapshot snapshot) {
+        try { return SNAPSHOTS.writeValueAsString(snapshot); }
+        catch (IOException invalid) { throw PolicyCollectionTrace.failure("CHECKPOINT_NOT_EVALUABLE"); }
+    }
+    static String contentVersion(org.w3c.dom.Document document, String members, String parents) {
+        try {
+            // Only an opaque content token persists; formatting changes force recollection.
+            var digest = java.security.MessageDigest.getInstance("SHA-256");
+            try (var output = new java.security.DigestOutputStream(java.io.OutputStream.nullOutputStream(), digest)) {
+                var transformer = javax.xml.transform.TransformerFactory.newInstance().newTransformer();
+                transformer.transform(new javax.xml.transform.dom.DOMSource(document), new javax.xml.transform.stream.StreamResult(output));
+                output.write(("\n" + members + "\n" + parents).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            }
+            return java.util.HexFormat.of().formatHex(digest.digest());
+        } catch (java.security.GeneralSecurityException | javax.xml.transform.TransformerException | IOException invalid) {
+            throw PolicyCollectionTrace.failure("CHECKPOINT_VERSION_NOT_EVALUABLE");
+        }
+    }
+
     private void checkHitRead(BooleanSupplier lease) {
         com.securityexpert.nexus.ui2.worker.JobCancellationScope.check();
         if (!lease.getAsBoolean()) throw PolicyCollectionTrace.failure("LEASE_LOST");

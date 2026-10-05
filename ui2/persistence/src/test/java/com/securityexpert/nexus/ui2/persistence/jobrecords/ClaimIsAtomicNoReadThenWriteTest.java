@@ -52,8 +52,8 @@ class ClaimIsAtomicNoReadThenWriteTest {
         assertEquals(1, updateStatementCount, "the claim statement must be exactly one UPDATE jobs statement");
         assertEquals(1, forUpdateCount, "exactly one FOR UPDATE SKIP LOCKED row-locking clause");
         assertEquals(1, returningCount, "the claim statement must carry exactly one RETURNING clause");
-        assertEquals(3, selectCount,
-                "the claim must include its lock, candidate, and active-inventory count in one statement");
+        assertEquals(8, selectCount,
+                "the claim must include its lock, owner fence, candidate, and global capacity predicates in one statement");
         assertTrue(sql.contains("FOR UPDATE SKIP LOCKED"), "must use FOR UPDATE SKIP LOCKED (C2 §4.1)");
         assertTrue(sql.contains("pg_advisory_xact_lock(294611)"),
                 "the global inventory limit must serialize concurrent claims");

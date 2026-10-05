@@ -49,6 +49,7 @@ public final class PolicyCollectionJobExecutor {
                     "system:discovery-refresh".equals(run.requestedByActorFingerprint())
                         ? PolicyCollectionRepository.Mode.FULL : PolicyCollectionRepository.Mode.CHANGED_ONLY);
         } catch (RuntimeException unavailable) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(unavailable);
             System.getLogger(getClass().getName()).log(System.Logger.Level.WARNING, "POLICY_AUTOMATIC_ADMISSION_FAILED");
         }
     }
@@ -99,6 +100,7 @@ public final class PolicyCollectionJobExecutor {
                     if (!transcriptJobs.writeBackupTranscript(jobId, epoch, stored.ref().value(), stored.wrappedDataKey()))
                         throw new IllegalStateException("TRANSCRIPT_REFERENCE_NOT_RECORDED");
                 } catch (Exception error) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(error);
                     System.getLogger(getClass().getName()).log(System.Logger.Level.WARNING, "POLICY_TRANSCRIPT_NOT_STORED: " + error.getClass().getSimpleName());
                 }
             }
@@ -124,6 +126,7 @@ public final class PolicyCollectionJobExecutor {
         if (attempt == null) return new JobOutcome.ZombieStopped();
         PolicySnapshotRepository.Stored[] latest = {null};
         java.util.function.Consumer<com.securityexpert.nexus.ui2.policy.PolicySnapshot> publish = snapshot -> {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.checkPublication();
             var stored = stored(snapshot);
             if (!repository.checkpoint(jobId, epoch, stored, ACTOR)) throw PolicyCollectionTrace.failure("LEASE_LOST");
             latest[0] = stored;
@@ -131,7 +134,7 @@ public final class PolicyCollectionJobExecutor {
         try {
             List<com.securityexpert.nexus.ui2.policy.PolicySnapshot.CollectionFailure> failures;
             if ("palo_alto".equals(run.get().vendor())) {
-                failures = panorama.collect(run.get(), request.get(),
+                failures = panorama.collect(run.get(), request.get().withLease(epoch),
                     () -> leases.heartbeat(jobId, epoch, Duration.ofMinutes(10)), publish);
             } else {
                 failures = new java.util.ArrayList<>();
@@ -143,6 +146,7 @@ public final class PolicyCollectionJobExecutor {
             String reason = failures.stream().map(f -> f.layerRef() + ": " + f.reason()).findFirst().orElse("");
             return finish(jobId, epoch, attempt, latest[0], reason, false);
         } catch (Exception incomplete) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(incomplete);
             String reason = PolicyCollectionTrace.reason(incomplete);
             if (reason.endsWith(": LEASE_LOST")) return new JobOutcome.ZombieStopped();
             return finish(jobId, epoch, attempt, latest[0], reason, PolicyCollectionTrace.fatal(incomplete));

@@ -38,11 +38,12 @@ class CpChangedDomainsTest {
     }
     private List<String> collect(int maximum, PolicyCollectionRepository.Mode mode, String reply, boolean complete, boolean match) throws Exception {
         var repository = mock(PolicyCollectionRepository.class);
+        when(repository.saveUnit(any(), anyString(), anyString(), anyString())).thenReturn(true);
         var signal = CpDomainReuse.signal(json.readTree(SIGNAL));
         if (!match) signal = new CpDomainReuse.Signal("published-002", signal.posix(), signal.iso8601(), signal.publishTime());
         when(repository.previousDomain("source-1", container)).thenReturn(Optional.of(new PolicyCollectionRepository.DomainRun(
             complete, json.writeValueAsString(signal), json.writeValueAsString(List.of(stored())))));
-        when(repository.beginDomain(anyString(), anyString(), anyBoolean())).thenReturn(true);
+        when(repository.beginDomain(any(PolicyCollectionRepository.Request.class), anyString())).thenReturn(true);
         when(repository.targets(anyString(), anyString(), anyString())).thenReturn(List.of());
         when(repository.inventoryFresh(anyString(), anyString(), anyString(), any())).thenReturn(true);
         List<String> commands = new CopyOnWriteArrayList<>();
@@ -107,6 +108,7 @@ class CpChangedDomainsTest {
     }
     @Test void domainMarkersStayIncompleteUntilAllPackagesFinishAndHitTimeIsPreserved() throws Exception {
         var repository = mock(PolicyCollectionRepository.class);
+        when(repository.saveUnit(any(), anyString(), anyString(), anyString())).thenReturn(true);
         var request = new PolicyCollectionRepository.Request("source-1", "", false, PolicyCollectionRepository.Mode.CHANGED_ONLY, "job-1", 7);
         when(repository.previousDomain(anyString(), anyString())).thenReturn(Optional.empty());
         when(repository.saveDomain(any(), anyString(), anyString(), anyBoolean(), nullable(String.class), anyString(), anyInt(), nullable(String.class), anyString())).thenReturn(true);
@@ -141,6 +143,7 @@ class CpChangedDomainsTest {
 
     @Test void ruleGapBeforeFinishNeverPublishesAChangedDomainSignal() throws Exception {
         var repository = mock(PolicyCollectionRepository.class);
+        when(repository.saveUnit(any(), anyString(), anyString(), anyString())).thenReturn(true);
         var request = new PolicyCollectionRepository.Request("source-1", "", false, PolicyCollectionRepository.Mode.CHANGED_ONLY, "job-1", 7);
         when(repository.previousDomain(anyString(), anyString())).thenReturn(Optional.empty());
         when(repository.saveDomain(any(), anyString(), anyString(), anyBoolean(), nullable(String.class), anyString(), anyInt(), nullable(String.class), anyString())).thenReturn(true);
@@ -154,6 +157,7 @@ class CpChangedDomainsTest {
     @Test void inventoryWriteGapIsRecordedAndDoesNotInvalidateRuleReuseInEitherCollector() throws Exception {
         for (int maximum : List.of(1, 4)) {
             var repository = mock(PolicyCollectionRepository.class);
+        when(repository.saveUnit(any(), anyString(), anyString(), anyString())).thenReturn(true);
             var signal = CpDomainReuse.signal(json.readTree(SIGNAL));
             when(repository.previousDomain("source-1", container)).thenReturn(Optional.of(new PolicyCollectionRepository.DomainRun(
                 true, json.writeValueAsString(signal), json.writeValueAsString(List.of(stored())))));
@@ -183,6 +187,7 @@ class CpChangedDomainsTest {
 
     @Test void domainDatabaseFailureDisablesReuseAndDoesNotStopCollection() throws Exception {
         var repository = mock(PolicyCollectionRepository.class);
+        when(repository.saveUnit(any(), anyString(), anyString(), anyString())).thenReturn(true);
         var request = new PolicyCollectionRepository.Request("source-1", "", false, PolicyCollectionRepository.Mode.CHANGED_ONLY, "job-1", 7);
         var signal = CpDomainReuse.signal(json.readTree(SIGNAL));
         when(repository.previousDomain(anyString(), anyString())).thenReturn(Optional.of(new PolicyCollectionRepository.DomainRun(

@@ -78,6 +78,7 @@ public final class ConfirmCapabilityExecutor {
         try {
             connectResult = transport.connect(target, spec, READ_TIMEOUT);
         } catch (IllegalStateException credentialUnresolvable) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(credentialUnresolvable);
             long elapsed = System.currentTimeMillis() - overallStart;
             LOG.log(System.Logger.Level.WARNING,
                     "[CONFIRM_FAILED] Credential unresolvable for {0}:{1} after {2}ms: {3}",
@@ -149,6 +150,7 @@ public final class ConfirmCapabilityExecutor {
         try {
             credential = panCredentialResolver.resolve(request.credentialRef());
         } catch (IllegalStateException credentialUnresolvable) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(credentialUnresolvable);
             return new ConfirmResult.CredentialUnresolvable(String.valueOf(credentialUnresolvable.getMessage()));
         }
 

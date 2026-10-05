@@ -125,6 +125,7 @@ public final class InventoryJobExecutor {
 
         InventoryResult result = inventoryExecutor.collect(request, recordedIdentity, strictRefuseEnabled);
 
+        com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.checkPublication();
         String outcomeToken = result instanceof InventoryResult.Completed ? "MATCHED" : "EXPECTATION_UNMET";
         boolean outcomeWritten =
                 attemptRepository.writeOutcome(attemptId, leaseEpoch, outcomeToken, null, 0L, 0L, fingerprintOf(result));
@@ -148,6 +149,7 @@ public final class InventoryJobExecutor {
         try {
             deviceInventoryRepository.recordRun(run, ACTOR, ACTION_COMPLETED);
         } catch (RuntimeException recordFailed) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(recordFailed);
             long elapsed = System.currentTimeMillis() - jobStart;
             String reasonWithTime = "inventory_run_write_failed: " + recordFailed.getMessage() + " (after " + elapsed + "ms)";
             LOG.log(System.Logger.Level.ERROR,
@@ -166,6 +168,7 @@ public final class InventoryJobExecutor {
                     LOG.log(System.Logger.Level.INFO, "[OBSERVED_FACTS_REFRESHED] Inventory job {0}: hostname/model/version changed on this read", jobId);
                 }
             } catch (RuntimeException refreshFailed) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(refreshFailed);
                 LOG.log(System.Logger.Level.WARNING, "[OBSERVED_FACTS_REFRESH_FAILED] Inventory job {0}: {1}", jobId, refreshFailed.getMessage());
             }
         }
@@ -174,6 +177,7 @@ public final class InventoryJobExecutor {
             try {
                 platformFactsRepository.record(read.forDevice(targetDeviceId));
             } catch (RuntimeException factsFailed) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(factsFailed);
                 LOG.log(System.Logger.Level.WARNING, "[PLATFORM_FACTS_WRITE_FAILED] Inventory job {0} for device {1}: {2}",
                         jobId, targetDeviceId, factsFailed.getMessage());
             }
@@ -184,6 +188,7 @@ public final class InventoryJobExecutor {
                         jobId, read.policyInstall().sourceRead(), read.policyInstall().policyName().isPresent(),
                         read.policyInstall().installedAtText().isPresent(), read.policyInstall().installedAt().isPresent());
             } catch (RuntimeException policyFailed) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(policyFailed);
                 LOG.log(System.Logger.Level.WARNING, "[POLICY_INSTALL_WRITE_FAILED] Inventory job {0}: {1}", jobId, policyFailed.getMessage());
             }
         });

@@ -44,6 +44,8 @@ public interface JobLeaseRepository {
 
     default List<ClaimedJob> findExpiredCancellationRequests() { return List.of(); }
 
+    default long retryBudgetUsed(String jobId, long epoch) { return epoch; }
+
     boolean heartbeat(String jobId, long leaseEpoch, Duration leaseDuration);
 
     /**

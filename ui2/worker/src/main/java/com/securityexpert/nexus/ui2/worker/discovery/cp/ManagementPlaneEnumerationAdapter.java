@@ -92,6 +92,7 @@ public final class ManagementPlaneEnumerationAdapter implements ManagementPlaneE
         try {
             connectResult = transport.connect(target, spec, CONNECT_TIMEOUT);
         } catch (RuntimeException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
             LOGGER.log(System.Logger.Level.WARNING, "Check Point management connection failed", e);
             return new ManagementPlaneEnumerationResult.Failed("NOT_EVALUABLE", 0, SessionDisconnectOutcome.NOT_OPENED);
         }
@@ -124,6 +125,7 @@ public final class ManagementPlaneEnumerationAdapter implements ManagementPlaneE
             channelStates = ConnectionTableReducer.reduce(
                     firstObservation, secondObservation, candidates, request.configuredChannelPort());
         } catch (RuntimeException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
             caught = e;
         }
         // T-1: disconnect is attempted whether or not the try block above failed.
@@ -158,6 +160,7 @@ public final class ManagementPlaneEnumerationAdapter implements ManagementPlaneE
         try {
             return credentialResolver.resolve(credentialRef);
         } catch (RuntimeException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
             return null;
         }
     }
@@ -167,6 +170,7 @@ public final class ManagementPlaneEnumerationAdapter implements ManagementPlaneE
             transport.disconnect(session);
             return SessionDisconnectOutcome.CLOSED;
         } catch (RuntimeException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
             return SessionDisconnectOutcome.FAILED_TO_CLOSE;
         }
     }
