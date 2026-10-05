@@ -1098,6 +1098,33 @@
       "priority": "P2",
       "target": "docs/design/FORTINET_CONTRACT.md",
       "note": ""
+    },
+    {
+      "id": "tufin_access_query_tab",
+      "category": "UI 2.0 (Java product line)",
+      "title": "Policy > Access query sub-tab backed by Tufin SecureTrack topology path API (src/dst/service -> verdict, hops, rules, path image; masked JSON for aiview, image admin-only)",
+      "status": "planned",
+      "priority": "P2",
+      "target": "",
+      "note": ""
+    },
+    {
+      "id": "network_topology_path_analysis",
+      "category": "UI 2.0 (Java product line)",
+      "title": "Own L3 topology + path analysis (switches/routers, F5/Citrix, ACI via APIC) Tufin/Opinnate style; phased: L3 map -> path query -> ADC hops -> ACI contracts",
+      "status": "planned",
+      "priority": "P3",
+      "target": "",
+      "note": ""
+    },
+    {
+      "id": "transcript_per_run_listing",
+      "category": "UI 2.0 (Java product line)",
+      "title": "Jobs/Backups/Policy: list every run separately with type, time, outcome and its own transcript button (transcripts are already stored per job)",
+      "status": "planned",
+      "priority": "P1",
+      "target": "",
+      "note": ""
     }
   ]
 }
