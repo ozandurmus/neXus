@@ -303,11 +303,9 @@ final class CpPolicyParallelCollection {
     }
 
     private void page(Layer layer, int offset, int end, JsonNode page) {
-        int total = pageTotal(page, offset, layer.total, layer.gate);
-        if ((layer.gate == 1 || layer.gate == 3) && !layer.uid.equals(required(page, "uid"))) throw pageRejected("LAYER_UID");
+        int total = pageTotal(page, offset, layer.total, layer.gate, layer.uid);
         int to = total == 0 ? 0 : page.path("to").intValue();
         if (end > 0 && to > end) throw pageRejected("PAGE_END");
-        for (JsonNode object : page.path("objects-dictionary")) required(object, "uid");
         Set<String> ids = ruleUids(page.path("rulebase"));
         for (String id : ids) {
             Integer previous = layer.rulePages.get(id);
