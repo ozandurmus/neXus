@@ -172,15 +172,14 @@ def test_scan_shell_runs_only_its_half(tmp_path, mode, expected):
     assert (work / "trivy-image-0.json").exists() == (mode != "trivy-source")
 
 
-@pytest.mark.parametrize("mode", ["pass", "gate-failure", "not-configured", "skip"])
+@pytest.mark.parametrize("mode", ["pass", "gate-failure", "not-configured", "skip", "invalid-targets"])
 def test_build_script_refuses_rollout_on_gate_failure_and_preserves_bypasses(tmp_path, mode):
     import os
     import subprocess
     home, tools = tmp_path / "home", tmp_path / "bin"
     (home / "nexus/project").mkdir(parents=True)
-    snapshot_script = home / "nexus/tools/delivery/release_snapshot.sh"
-    snapshot_script.parent.mkdir(parents=True)
-    snapshot_script.write_text('exec python3 tools/delivery/release_snapshot.py snapshot "$@"\n')
+    # The old checkout has no delivery scripts; the pull makes them available.
+    assert not (home / "nexus/tools/delivery").exists()
     (home / ".config/nexus").mkdir(parents=True)
     tools.mkdir()
     if mode != "not-configured":
@@ -194,12 +193,23 @@ with open(os.environ['TEST_CALLS'], 'a') as stream:
     stream.write(json.dumps([name, *args]) + '\\n')
 if name == 'git' and args[0] == 'rev-parse':
     print('a' * (12 if '--short=12' in args else 40))
+elif name == 'git' and args == ['pull', 'origin', 'main']:
+    delivery = Path(os.environ['REPO']) / 'tools/delivery'
+    delivery.mkdir(parents=True)
+    (delivery / 'module_deploy.py').write_text('# Synthetic target validator\\n')
+    (delivery / 'release_snapshot.py').write_text('# Synthetic snapshot helper\\n')
+    (delivery / 'release_snapshot.sh').write_text(
+        'exec python3 tools/delivery/release_snapshot.py snapshot "$@"\\n')
 elif name == 'python3':
     if args[0] == '-c':
         print(json.load(sys.stdin)['snapshot'])
         sys.exit(0)
     if Path(args[0]).is_absolute():
         args[0] = str(Path(args[0]).relative_to(os.environ['REPO']))
+    if args[0].startswith('tools/delivery/'):
+        assert (Path(os.environ['REPO']) / args[0]).is_file(), 'script missing before checkout update'
+    if args[:2] == ['tools/delivery/module_deploy.py', '--validate-targets']:
+        sys.exit(2 if os.environ['TEST_MODE'] == 'invalid-targets' else 0)
     if args[:2] == ['tools/delivery/release_snapshot.py', 'snapshot']:
         assert args[2:] == ['--commit', 'a' * 40]
         print(json.dumps({'snapshot': '20261005T010000000000Z_' + 'a' * 12}))
@@ -209,7 +219,6 @@ elif name == 'python3':
         sys.exit(1 if os.environ['TEST_MODE'] == 'gate-failure' else 0)
     else:
         assert args[:2] in [
-            ['tools/delivery/module_deploy.py', '--validate-targets'],
             ['tools/delivery/module_deploy.py', '--targets'],
             ['tools/security/security_host.py', 'snapshot'],
             ['tools/e2e/hosta_e2e_image.py', 'start'],
@@ -230,12 +239,24 @@ elif name == 'kubectl':
     result = subprocess.run(["bash", str(ROOT / "deploy/ui2-image-build/run_build.sh")], capture_output=True,
         text=True, timeout=20, env={**os.environ, "HOME": str(home), "PATH": str(tools) + ":" + os.environ["PATH"],
         "REPO": str(home / "nexus"), "TEST_CALLS": str(calls), "TEST_MODE": mode,
+        "NEXUS_DEPLOY_TARGETS": "unknown" if mode == "invalid-targets" else "service worker configuration compliance policy",
+        "NEXUS_DEPLOY_APPLY_FILES": "synthetic-manifest.yaml",
         "NEXUS_SKIP_SECURITY_REASON": "synthetic exercise" if mode == "skip" else ""})
-    assert result.returncode == (1 if mode == "gate-failure" else 0), result.stderr
+    assert result.returncode == (2 if mode == "invalid-targets" else 1 if mode == "gate-failure" else 0), result.stderr
     executed = [json.loads(line) for line in calls.read_text().splitlines()]
     for call in executed:
         if call[0] == "python3" and Path(call[1]).is_absolute():
             call[1] = str(Path(call[1]).relative_to(home / "nexus"))
+    assert executed[:3] == [["git", "fetch"], ["git", "checkout", "main"], ["git", "pull", "origin", "main"]]
+    assert executed[3] == ["python3", "tools/delivery/module_deploy.py", "--validate-targets",
+                           "unknown" if mode == "invalid-targets" else "service worker configuration compliance policy"]
+    if mode == "invalid-targets":
+        assert len(executed) == 4
+        assert "no changes applied" in result.stderr
+        assert not (home / "nexus/project/deploy_info.json").exists()
+        return
+    assert executed[4][:2] == ["git", "rev-parse"]
+    assert executed[5][:3] == ["python3", "tools/delivery/release_snapshot.py", "snapshot"]
     rolled = any(c[:3] == ["python3", "tools/delivery/module_deploy.py", "--targets"] for c in executed)
     assert rolled == (mode != "gate-failure")
     scanned = any(c[:3] == ["python3", "tools/security/security_host.py", "start"] for c in executed)

@@ -18,10 +18,12 @@ trap report_failure EXIT
 REPO="${REPO:-$HOME/nexus}"
 cd "$REPO"
 NEXUS_DEPLOY_TARGETS="${NEXUS_DEPLOY_TARGETS:-service worker configuration compliance policy}"
-python3 "$REPO/tools/delivery/module_deploy.py" --validate-targets "$NEXUS_DEPLOY_TARGETS"
 git fetch
 git checkout main
 git pull origin main
+
+# Use the updated checkout's scripts before any build or deployment changes.
+python3 "$REPO/tools/delivery/module_deploy.py" --validate-targets "$NEXUS_DEPLOY_TARGETS"
 
 # Capture the RUNNING release before security loaders, optional manifests or build mutations.
 COMMIT_SHA="$(git rev-parse HEAD)"
