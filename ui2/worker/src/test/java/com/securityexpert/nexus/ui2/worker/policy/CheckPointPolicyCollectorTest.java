@@ -94,7 +94,7 @@ class CheckPointPolicyCollectorTest {
             List<PolicySnapshot.CollectionFailure> failures = new ArrayList<>();
             var error = assertThrows(IllegalStateException.class, () ->
                 collector.collect(run, request, () -> true, snapshot -> fail("Revoked gate"), failures::add));
-            assertEquals("POLICY_GATE_UNAVAILABLE", error.getMessage());
+            assertEquals("policy: POLICY_GATE_UNAVAILABLE", error.getMessage());
             assertEquals(3, checks.get());
             assertTrue(failures.isEmpty());
             verify(transport, times(1)).execInteractive(any(), argThat(spec -> spec.command().contains("show-packages")), any());
