@@ -29,6 +29,10 @@ class CpObjectInventoryCollectionTest {
     private final List<CpObjectInventory> stored = new ArrayList<>();
 
     private CheckPointPolicyCollector collector(int sessions, java.util.function.Function<String, ExecResult> answers) throws Exception {
+        return collector(sessions, answers, System::nanoTime);
+    }
+    private CheckPointPolicyCollector collector(int sessions, java.util.function.Function<String, ExecResult> answers,
+            java.util.function.LongSupplier clock) throws Exception {
         var sequence = new AtomicInteger();
         when(transport.connect(any(), any(), any())).thenAnswer(call -> {
             String id = "synthetic-session-" + sequence.incrementAndGet();
@@ -40,7 +44,7 @@ class CpObjectInventoryCollectionTest {
         when(repository.targets(anyString(), anyString(), anyString())).thenReturn(List.of());
         doAnswer(call -> { stored.add(json.readValue(call.getArgument(4, String.class), CpObjectInventory.class)); return null; })
             .when(repository).saveInventory(anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
-        return new CheckPointPolicyCollector(transport, gates, repository, Duration.ofMinutes(10), sessions);
+        return new CheckPointPolicyCollector(transport, gates, repository, Duration.ofHours(2), sessions, clock);
     }
     private static ExecResult ok(String body) { return new ExecResult.Completed(body, 0); }
     private ExecResult answer(String command) {
@@ -90,7 +94,8 @@ class CpObjectInventoryCollectionTest {
         assertEquals(51, hosts.objects().size()); assertEquals(2, hosts.pages());
         assertEquals("host-0", hosts.objects().get(0).uid());
         var gap = stored.stream().filter(i -> i.type().equals("networks")).findFirst().orElseThrow();
-        assertEquals("COLLECTION_FAILED", gap.status()); assertTrue(gap.objects().isEmpty());
+        assertEquals("TYPE_INCOMPLETE", gap.status());
+        assertTrue(gap.reason().contains("fetched=0 total=UNKNOWN")); assertTrue(gap.objects().isEmpty());
         var gateways = stored.stream().filter(i -> i.type().equals("gateways-and-servers")).findFirst().orElseThrow();
         assertEquals("OBJ-POLICY-01", gateways.objects().get(0).policyInstallations().get(0).policyName());
         assertNull(gateways.objects().get(0).policyInstallations().get(0).installed());
@@ -161,4 +166,119 @@ class CpObjectInventoryCollectionTest {
         changing.add(json.readTree(hosts(0)), 0);
         assertThrows(IllegalStateException.class, () -> changing.add(json.readTree(hosts(50).replace("\"total\":51", "\"total\":52")), 50));
     }
+    private String objectPage(int offset, int total) {
+        var page = json.createObjectNode().put("from", offset + 1).put("to", Math.min(total, offset + 50)).put("total", total);
+        var objects = page.putArray("objects");
+        for (int i = offset; i < Math.min(total, offset + 50); i++)
+            objects.addObject().put("uid", "synthetic-host-" + i).put("name", "OBJ-HOST-" + i).put("type", "host");
+        return page.toString();
+    }
+    private static int offset(String command) {
+        var match = java.util.regex.Pattern.compile(" offset '([0-9]+)' ").matcher(command);
+        assertTrue(match.find()); return Integer.parseInt(match.group(1));
+    }
+
+    @Test void objectCapDerivesFromTotalWithSlackAndHardCeiling() {
+        var pages = new CheckPointPolicyCollector.PackagePages(50, "objects");
+        assertEquals(2, pages.pageCap(0)); assertEquals(203, pages.pageCap(10001));
+        assertEquals(2000, pages.pageCap(Integer.MAX_VALUE));
+        assertEquals(200, new CheckPointPolicyCollector.PackagePages(50).pageCap(10001));
+    }
+
+    @ParameterizedTest @ValueSource(ints = {1, 4})
+    void moreThanTenThousandObjectsSurviveAndPartialTypeKeepsFetchedAndTotal(int sessions) throws Exception {
+        collector(sessions, command -> {
+            if (command.contains("show-hosts")) return ok(objectPage(offset(command), 10051));
+            if (command.contains("show-networks")) return offset(command) == 0 ? ok(objectPage(0, 51))
+                : ok("{\"objects\":[");
+            return answer(command);
+        }).collect(run, request, () -> true);
+        var hosts = stored.stream().filter(i -> i.type().equals("hosts")).findFirst().orElseThrow();
+        assertEquals("RESOLVED", hosts.status()); assertEquals(10051, hosts.objects().size()); assertEquals(202, hosts.pages());
+        var networks = stored.stream().filter(i -> i.type().equals("networks")).findFirst().orElseThrow();
+        assertEquals("TYPE_INCOMPLETE", networks.status()); assertEquals(50, networks.objects().size());
+        assertTrue(networks.reason().contains("fetched=50 total=51"));
+    }
+
+    @ParameterizedTest @ValueSource(ints = {1, 4})
+    void inventoriesStartOnlyAfterAllDomainsPublishAndTimingStartsAtFirstTypeRead(int sessions) throws Exception {
+        var published = new AtomicInteger();
+        var clock = new java.util.concurrent.atomic.AtomicLong();
+        var collector = collector(sessions, command -> {
+            if (command.contains("show-domains")) return ok("{\"total\":2,\"objects\":["
+                + "{\"uid\":\"domain-1\",\"name\":\"DOM-TANGO-01\"},"
+                + "{\"uid\":\"domain-2\",\"name\":\"DOM-BRAVO-02\"}]}");
+            boolean objectRead = CpPolicyGates.OBJECT_TYPES.stream().anyMatch(type -> command.contains(" show-" + type + " "));
+            if (objectRead) {
+                assertEquals(2, published.get(), "Every domain's final package must be published first");
+                clock.addAndGet(Duration.ofSeconds(1).toNanos());
+            } else clock.addAndGet(Duration.ofSeconds(100).toNanos());
+            return command.contains("show-hosts") ? ok(hosts(offset(command))) : answer(command);
+        }, clock::get);
+        collector.collect(run, request, () -> true, snapshot -> {
+            if (snapshot.failures().isEmpty()) published.incrementAndGet();
+        });
+        var hosts = stored.stream().filter(i -> i.type().equals("hosts")).toList();
+        assertEquals(2, hosts.size());
+        assertTrue(hosts.stream().allMatch(i -> i.seconds() >= 2 && i.seconds() <= 46), hosts::toString);
+        if (sessions == 1) assertTrue(hosts.stream().allMatch(i -> i.seconds() == 2));
+    }
+
+    @ParameterizedTest @ValueSource(ints = {1, 4})
+    void recentInventoriesAreReusedWithoutReadsWritesOrNewTimestamps(int sessions) throws Exception {
+        var collector = collector(sessions, this::answer);
+        when(repository.inventoryFresh(anyString(), anyString(), anyString(), any())).thenReturn(true);
+        var before = java.time.Instant.now().minus(Duration.ofHours(24));
+        collector.collect(run, request, () -> true);
+        assertTrue(stored.isEmpty());
+        verify(transport, times(4)).execInteractive(any(), any(), any());
+        var cutoff = org.mockito.ArgumentCaptor.forClass(java.time.Instant.class);
+        verify(repository, times(22)).inventoryFresh(eq("mds-1"), anyString(), anyString(), cutoff.capture());
+        assertFalse(cutoff.getValue().isBefore(before));
+        assertFalse(cutoff.getValue().isAfter(java.time.Instant.now().minus(Duration.ofHours(24))));
+    }
+
+    @Test void objectReuseIntervalDefaultsToOneDayAndAcceptsSecondsOverride() {
+        String key = "ui2.policy.cp.objects-every", old = System.getProperty(key);
+        try {
+            System.clearProperty(key); assertEquals(Duration.ofHours(24), CheckPointPolicyCollector.configuredObjectsEvery());
+            System.setProperty(key, "3600"); assertEquals(Duration.ofHours(1), CheckPointPolicyCollector.configuredObjectsEvery());
+            System.setProperty(key, "0"); assertEquals(Duration.ZERO, CheckPointPolicyCollector.configuredObjectsEvery());
+            System.setProperty(key, "-1"); assertThrows(IllegalArgumentException.class, CheckPointPolicyCollector::configuredObjectsEvery);
+        } finally { if (old == null) System.clearProperty(key); else System.setProperty(key, old); }
+    }
+
+    @Test void differentDomainsCollectObjectsConcurrentlyWithinFourSessions() throws Exception {
+        var bothDomains = new java.util.concurrent.CountDownLatch(2);
+        var active = new AtomicInteger(); var maximum = new AtomicInteger();
+        var collector = collector(4, command -> {
+            if (command.contains("show-domains")) return ok("{\"total\":2,\"objects\":["
+                + "{\"uid\":\"domain-1\",\"name\":\"DOM-TANGO-01\"},"
+                + "{\"uid\":\"domain-2\",\"name\":\"DOM-BRAVO-02\"}]}");
+            if (command.contains("show-hosts") && offset(command) == 0) {
+                maximum.accumulateAndGet(active.incrementAndGet(), Math::max);
+                bothDomains.countDown();
+                try { assertTrue(bothDomains.await(5, java.util.concurrent.TimeUnit.SECONDS)); }
+                catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); throw new AssertionError(interrupted); }
+                finally { active.decrementAndGet(); }
+            }
+            return answer(command);
+        });
+        collector.collect(run, request, () -> true);
+        assertEquals(2, maximum.get());
+        verify(transport, atMost(4)).connect(any(), any(), any());
+        assertEquals(44, stored.size());
+    }
+
+    @Test void hardCeilingRetainsValidatedObjectsAndInvalidPageAddsNoObjects() throws Exception {
+        var listing = new CheckPointPolicyCollector.PackagePages(50, "objects");
+        for (int offset = 0; offset < 99950; offset += 50) assertFalse(listing.add(json.readTree(objectPage(offset, 100001)), offset));
+        assertThrows(IllegalStateException.class, () -> listing.add(json.readTree(objectPage(99950, 100001)), 99950));
+        assertEquals(100000, listing.items.size()); assertEquals(100001, listing.total);
+        var duplicate = new CheckPointPolicyCollector.PackagePages(50, "objects");
+        duplicate.add(json.readTree(hosts(0)), 0);
+        assertThrows(IllegalStateException.class, () -> duplicate.add(json.readTree(hosts(50).replace("host-50", "host-0")), 50));
+        assertEquals(50, duplicate.items.size()); assertEquals(50, duplicate.to);
+    }
+
 }

@@ -34,6 +34,7 @@ final class CpPolicyParallelCollection {
     private final ExecutorService pool;
     private final CompletionService<Result> completions;
     private final Deque<Work> pending = new ArrayDeque<>();
+    private final Map<String, String> objectDomains = new LinkedHashMap<>();
     private final List<Policy> policies = new ArrayList<>();
     private final Map<String, Integer> domainOrder = new HashMap<>();
     private final Safety safety;
@@ -51,11 +52,19 @@ final class CpPolicyParallelCollection {
 
     List<PolicySnapshot> collect() {
         int active = 0;
-        boolean stopped = false;
+        boolean stopped = false, objectsPhase = false;
         PolicyCollectionTrace.concurrency(1, safety.limit);
         pending.add(new Work(MgmtCliCommands.domainList(), -1, null, 0, 0, 0, this::domains));
         try {
-            while (!pending.isEmpty() || active > 0) {
+            while (true) {
+                if (pending.isEmpty() && active == 0) {
+                    if (stopped || objectsPhase) break;
+                    objectsPhase = true;
+                    collector.checkActive(deadline, lease);
+                    for (String type : CpPolicyGates.OBJECT_TYPES)
+                        objectDomains.forEach((container, domain) -> enqueueObjects(domain, container, type));
+                    if (pending.isEmpty()) break;
+                }
                 collector.checkPublication(deadline, lease);
                 stopped |= cancelled.getAsBoolean();
                 if (stopped) pending.clear();
@@ -70,6 +79,7 @@ final class CpPolicyParallelCollection {
                 if (active == 0) break;
                 Result result = completions.take().get(); active--;
                 Work work = result.work;
+                if (work.inventory != null) work.inventory.elapsed = clock.getAsLong() - work.inventory.started;
                 if (work.layer != null && work.gate != work.layer.gate) {
                     if (result.error != null && PolicyCollectionTrace.fatal(result.error)) throw result.error;
                     continue;
@@ -86,10 +96,10 @@ final class CpPolicyParallelCollection {
                         else safety.streak = 0;
                     }
                     stopped |= cancelled.getAsBoolean();
-                    if (!stopped && work.layer != null && work.gate == 3) {
-                        fallbackHits(work.layer);
-                    } else if (!stopped && work.layer != null && retryable(result.error) && work.attempt == 0) {
+                    if (!stopped && work.layer != null && retryPage(work, result.error)) {
                         pending.addFirst(new Work(work.command, work.gate, work.layer, work.offset, work.end, 1, work.accept));
+                    } else if (!stopped && work.layer != null && work.gate == 3) {
+                        fallbackHits(work.layer);
                     } else if (work.layer != null) {
                         fail(work.layer, result.error, work.offset);
                     } else if (work.failed != null) work.failed.accept(result.error);
@@ -107,7 +117,11 @@ final class CpPolicyParallelCollection {
                                 work.failed.accept(invalid);
                             } else {
                                 safety.streak = 0;
-                                if (work.gate == 3) fallbackHits(work.layer);
+                                if (work.gate == 1 || work.gate == 3)
+                                    JobTranscriptScope.add("job", "note", "invalid rulebase " + preflightStructure("", result.page));
+                                if (retryPage(work, invalid))
+                                    pending.addFirst(new Work(work.command, work.gate, work.layer, work.offset, work.end, 1, work.accept));
+                                else if (work.gate == 3) fallbackHits(work.layer);
                                 else fail(work.layer, invalid, work.offset);
                             }
                         }
@@ -142,6 +156,7 @@ final class CpPolicyParallelCollection {
 
     private Result execute(Work work) {
         long started = clock.getAsLong();
+        if (work.inventory != null && work.inventory.started == null) work.inventory.started = started;
         try {
             if (closeFailed.get()) throw PolicyCollectionTrace.failure("SESSION_CLEANUP_FAILED");
             collector.checkActive(deadline, lease);
@@ -157,7 +172,7 @@ final class CpPolicyParallelCollection {
                     throw PolicyCollectionTrace.failure(connected.getClass().getSimpleName());
                 session.set(authenticated.session()); sessions.add(authenticated.session());
             }
-            return new Result(work, collector.read(session.get(), work.command, work.gate, deadline, lease), null, clock.getAsLong() - started);
+            return new Result(work, collector.read(session.get(), work.command, work.gate, deadline, lease, work.layer == null ? -1 : work.layer.total), null, clock.getAsLong() - started);
         } catch (RuntimeException error) {
             // An unhealthy shell must not carry the retried page or any sibling read.
             closeSession();
@@ -214,7 +229,7 @@ final class CpPolicyParallelCollection {
     }
 
     private void packages(String domainUid, String domain, String container, List<JsonNode> items) {
-        enqueueObjects(domain, container);
+        objectDomains.put(container, domain);
         PolicyCollectionTrace.packages(items.size());
         Set<String> seen = new HashSet<>();
         for (JsonNode node : items) {
@@ -296,24 +311,23 @@ final class CpPolicyParallelCollection {
         enqueue(layer, 0, 0);
     }
 
-    private void enqueueObjects(String domain, String container) {
-        for (String type : CpPolicyGates.OBJECT_TYPES) {
-            if (!CheckPointPolicyCollector.collectObjectsEnabled() || type.equals("gateways-and-servers") && domain.equalsIgnoreCase("Global")) {
-                collector.storeObjects(request.sourceId(), container, type, List.of(), 0, 0,
-                    "UNSUPPORTED", "COLLECTION_SKIPPED", deadline, lease);
-            } else enqueueObjectPage(domain, container, type, new PackagePages(50, "objects"), 0, clock.getAsLong());
-        }
+    private void enqueueObjects(String domain, String container, String type) {
+        if (collector.reuseObjects(request.sourceId(), container, type)) return;
+        if (!CheckPointPolicyCollector.collectObjectsEnabled() || type.equals("gateways-and-servers") && domain.equalsIgnoreCase("Global")) {
+            collector.storeObjects(request.sourceId(), container, type, List.of(), 0, 0,
+                "UNSUPPORTED", "COLLECTION_SKIPPED", deadline, lease);
+        } else enqueueObjectPage(domain, container, type, new PackagePages(50, "objects"), 0);
     }
 
-    private void enqueueObjectPage(String domain, String container, String type, PackagePages listing, int offset, long started) {
+    private void enqueueObjectPage(String domain, String container, String type, PackagePages listing, int offset) {
         int gate = CpPolicyGates.OBJECT_BASE + CpPolicyGates.OBJECT_TYPES.indexOf(type);
         pending.add(new Work(MgmtCliCommands.showPolicyObjects(domain, type, offset), gate, null, offset, 0, 0,
             page -> {
                 if (listing.add(page, offset)) collector.storeObjects(request.sourceId(), container, type,
-                    listing.items, listing.count, clock.getAsLong() - started, "RESOLVED", "", deadline, lease);
-                else enqueueObjectPage(domain, container, type, listing, listing.to, started);
-            }, error -> collector.storeObjects(request.sourceId(), container, type, List.of(), listing.count,
-                clock.getAsLong() - started, "COLLECTION_FAILED", PolicyCollectionTrace.reason(error), deadline, lease)));
+                    listing.items, listing.count, listing.elapsed, "RESOLVED", "", deadline, lease);
+                else enqueueObjectPage(domain, container, type, listing, listing.to);
+            }, error -> collector.storeIncompleteObjects(request.sourceId(), container, type, listing,
+                listing.elapsed, error, deadline, lease), listing));
     }
 
     private void fail(Layer layer, RuntimeException error, int offset) {
@@ -366,6 +380,11 @@ final class CpPolicyParallelCollection {
         PolicyCollectionTrace.layer(policy.metadata.id(), started, policy.layers.size(), rules);
     }
 
+    private static boolean retryPage(Work work, RuntimeException error) {
+        return work.attempt == 0 && (retryable(error) || (work.gate == 1 || work.gate == 3)
+            && PolicyCollectionTrace.reason(error).endsWith(": INVALID_OR_INCOMPLETE_RESPONSE"));
+    }
+
     static boolean retryable(RuntimeException error) {
         String reason = PolicyCollectionTrace.reason(error);
         return Set.of("TIMEOUT", "TimedOut", "ChannelFailed", "API_SESSION_PRESSURE")
@@ -387,7 +406,11 @@ final class CpPolicyParallelCollection {
     }
 
     private record Work(String command, int gate, Layer layer, int offset, int end, int attempt,
-            Consumer<JsonNode> accept, Consumer<RuntimeException> failed) {
+            Consumer<JsonNode> accept, Consumer<RuntimeException> failed, PackagePages inventory) {
+        Work(String command, int gate, Layer layer, int offset, int end, int attempt,
+                Consumer<JsonNode> accept, Consumer<RuntimeException> failed) {
+            this(command, gate, layer, offset, end, attempt, accept, failed, null);
+        }
         Work(String command, int gate, Layer layer, int offset, int end, int attempt, Consumer<JsonNode> accept) {
             this(command, gate, layer, offset, end, attempt, accept, null);
         }
