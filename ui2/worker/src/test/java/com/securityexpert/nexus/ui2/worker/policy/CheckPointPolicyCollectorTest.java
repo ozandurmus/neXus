@@ -825,4 +825,67 @@ class CheckPointPolicyCollectorTest {
         assertFalse(notes.contains("synthetic-layer")); assertFalse(notes.contains("synthetic-object"));
     }
 
+    @Test void nestedSectionsAndSharedRuleUidAcrossLayersCollectInBothModes() {
+        for (int sessions : List.of(1, 4)) {
+            reset(transport, repository);
+            setup(command -> {
+                if (command.contains("show-access-rulebase")) {
+                    if (command.contains("'Child'")) return ok(page("child", 1, 1, 1,
+                        "{\"uid\":\"shared-rule\",\"type\":\"access-rule\"}", ""));
+                    return ok(page("layer", 1, 2, 2,
+                        "{\"uid\":\"section-1\",\"type\":\"access-section\",\"rulebase\":["
+                        + "{\"uid\":\"shared-rule\",\"type\":\"access-rule\",\"inline-layer\":\"child\"},"
+                        + "{\"uid\":\"sibling-rule\",\"type\":\"access-rule\"}]}",
+                        "{\"uid\":\"child\",\"name\":\"Child\",\"type\":\"access-layer\"}"));
+                }
+                return answer(command);
+            });
+            var collector = new CheckPointPolicyCollector(transport, gates, repository, Duration.ofMinutes(5), sessions);
+            var result = collector.collect(run, request, () -> true);
+            assertEquals(1, result.size()); assertTrue(result.get(0).failures().isEmpty());
+            assertEquals(2, result.get(0).sections().stream().flatMap(section -> section.rules().stream())
+                .filter(rule -> rule.uuid().equals("shared-rule")).count());
+        }
+    }
+
+    @Test void rejectedNestedCountNamesTheCheckWithoutRuleIdentities() throws Exception {
+        var collector = setup(command -> ok(page("layer", 1, 2, 2,
+            "{\"uid\":\"section-1\",\"rulebase\":[{\"uid\":\"private-rule\"}]}", "")));
+        var transcript = new com.securityexpert.nexus.ui2.worker.transcript.JobTranscript();
+        try (var scope = com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.open(transcript)) {
+            assertThrows(PolicyCollectionTrace.Failure.class, () -> collector.read(session,
+                MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Layer", 0), 1, Long.MAX_VALUE, () -> true));
+        }
+        var sink = new java.io.ByteArrayOutputStream(); transcript.writeTo(sink);
+        String notes = sink.toString(java.nio.charset.StandardCharsets.UTF_8);
+        assertTrue(notes.contains("check=NESTED_RULE_COUNT")); assertFalse(notes.contains("private-rule"));
+    }
+
+    @Test void duplicateRulesAreRejectedOnlyWithinOneLayerPageSequence() throws Exception {
+        var collector = setup(command -> ok(command.contains("offset '0'")
+            ? page("layer", 1, 1, 2, "{\"uid\":\"same-rule\",\"type\":\"access-rule\"}", "")
+            : page("layer", 2, 2, 2, "{\"uid\":\"same-rule\",\"type\":\"access-rule\"}", "")));
+        assertThrows(PolicyCollectionTrace.Failure.class, () -> collector.pages(session,
+            offset -> MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Layer", offset), 1, Long.MAX_VALUE, () -> true));
+    }
+
+    @Test void snapshotDatabaseFailureIsAUnitGapAndSiblingsStillPublish() {
+        for (int sessions : List.of(1, 4)) {
+            reset(transport, repository);
+            setup(command -> command.contains("show-packages") ? ok(packagePage(0, 50, 2))
+                : command.contains("show-access-rulebase") || command.contains("show-nat-rulebase")
+                    ? ok(page("layer", 0, 0, 0, "", "")) : answer(command));
+            var collector = new CheckPointPolicyCollector(transport, gates, repository, Duration.ofMinutes(5), sessions);
+            List<PolicySnapshot.CollectionFailure> gaps = new ArrayList<>();
+            Set<String> published = new HashSet<>();
+            collector.collect(run, request, () -> true, snapshot -> {
+                if (snapshot.metadata().name().equals("Package-0"))
+                    throw new PolicyDatabaseFailure("PolicySnapshotRepository.save", "SNAPSHOT_UPSERT_HISTORY_TRIGGER", 100000);
+                published.add(snapshot.metadata().name());
+            }, gaps::add);
+            assertTrue(published.contains("Package-1"));
+            assertTrue(gaps.stream().anyMatch(gap -> gap.reason().equals("POLICY_DB_SNAPSHOT_WRITE_FAILED")));
+        }
+    }
+
 }

@@ -66,4 +66,27 @@ class PolicyCheckpointConcurrencyTest {
             }
         }
     }
+    @Test void chunkedSnapshotIsAtomicUnderAppRoleAndStagingDisappearsAfterCommitAndRollback() throws Exception {
+        try (var fixture = Ui2PostgresFixture.create("policy_chunked_write")) {
+            fixture.runFlyway();
+            try (var connection = fixture.appConnection()) {
+                var db = DSL.using(connection, SQLDialect.POSTGRES);
+                var tx = new JooqTransactionBoundary(db);
+                var repository = new PolicySnapshotRepository(tx);
+                String padding = "synthetic-é😀".repeat(20000);
+                String snapshot = "{\"sections\":[],\"objects\":{},\"failures\":[],\"padding\":\"" + padding + "\"}";
+                repository.save(new PolicySnapshotRepository.Stored("policy-1", "2026-10-05T00:00:00Z", "{}", snapshot),
+                    "synthetic-actor", "policy_collect_checkpoint");
+                assertEquals(padding, db.fetchOne("select snapshot->>'padding' from policy_snapshot where policy_id='policy-1'").get(0, String.class));
+                assertEquals(1, db.fetchOne("select count(*)::int from policy_rule_history_baseline where policy_id='policy-1'").get(0, Integer.class));
+                assertEquals(0, db.fetchOne("select count(*)::int from pg_class where relnamespace=pg_my_temp_schema() and relname like 'policy_json_%'").get(0, Integer.class));
+                assertThrows(PolicyDatabaseFailure.class, () -> repository.save(new PolicySnapshotRepository.Stored(
+                    "policy-1", "2026-10-05T00:01:00Z", "{}", snapshot.substring(0, snapshot.length() - 1)),
+                    "synthetic-actor", "policy_collect_checkpoint"));
+                assertEquals(padding, db.fetchOne("select snapshot->>'padding' from policy_snapshot where policy_id='policy-1'").get(0, String.class));
+                assertEquals(0, db.fetchOne("select count(*)::int from pg_class where relnamespace=pg_my_temp_schema() and relname like 'policy_json_%'").get(0, Integer.class));
+            }
+        }
+    }
+
 }

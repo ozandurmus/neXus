@@ -97,16 +97,17 @@ public class PolicyCollectionRepository {
     /** Pending attempts invalidate reuse immediately; publication remains fenced by the job lease. */
     public boolean saveDomain(Request request, String domain, String status, boolean complete, String signal,
             String snapshots, int rules, String hitsAt, String actor) {
-        return new AuditedTransactionBoundary(tx).inTransaction(actor, "policy_collect_domain", db -> {
+        return PolicyJsonWrite.guarded("PolicyCollectionRepository.saveDomain", "DOMAIN_UPSERT", PolicyJsonWrite.bytes(signal, snapshots),
+            () -> new AuditedTransactionBoundary(tx).inTransaction(actor, "policy_collect_domain", db -> {
             if (db.fetch("select job_id from jobs where job_id = {0} and lease_epoch = {1} and state = 'EXECUTING' "
                     + "and lease_expires_at > now() for update", request.jobId(), request.epoch()).isEmpty()) return false;
             db.execute("insert into cp_policy_domain_run(job_id, source_id, domain_ref, status, complete, signal, snapshots, rules_count, hits_collected_at) "
                 + "values ({0},{1},{2},{3},{4},{5}::jsonb,{6}::jsonb,{7},{8}::timestamptz) "
                 + "on conflict (job_id, domain_ref) do update set status = excluded.status, complete = excluded.complete, "
                 + "signal = excluded.signal, snapshots = excluded.snapshots, rules_count = excluded.rules_count, hits_collected_at = excluded.hits_collected_at",
-                request.jobId(), request.sourceId(), domain, status, complete, signal, snapshots, rules, hitsAt);
+                request.jobId(), request.sourceId(), domain, status, complete, PolicyJsonWrite.json(db, signal), PolicyJsonWrite.json(db, snapshots), rules, hitsAt);
             return true;
-        });
+        }));
     }
 
     public List<Map<String, Object>> domainProgress(String jobId) {
@@ -134,13 +135,14 @@ public class PolicyCollectionRepository {
 
     /** Parsed inventories share existing admission, audit and domain throttling. */
     public void saveInventory(String source, String domain, String type, String at, String snapshot, String actor) {
-        new AuditedTransactionBoundary(tx).inTransaction(actor, "policy_collect_objects", db -> {
+        PolicyJsonWrite.guarded("PolicyCollectionRepository.saveInventory", "INVENTORY_UPSERT", PolicyJsonWrite.bytes(snapshot),
+            () -> new AuditedTransactionBoundary(tx).inTransaction(actor, "policy_collect_objects", db -> {
             db.execute("insert into cp_policy_object_inventory(source_id, domain_ref, object_type, collected_at, snapshot) "
                 + "values ({0}, {1}, {2}, {3}::timestamptz, {4}::jsonb) on conflict (source_id, domain_ref, object_type) "
                 + "do update set collected_at = excluded.collected_at, snapshot = excluded.snapshot "
-                + "where cp_policy_object_inventory.collected_at < excluded.collected_at", source, domain, type, at, snapshot);
+                + "where cp_policy_object_inventory.collected_at < excluded.collected_at", source, domain, type, at, PolicyJsonWrite.json(db, snapshot));
             return null;
-        });
+        }));
     }
 
     /** Exact stored discovery-key relation, never a display-name or address heuristic. */

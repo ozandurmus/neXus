@@ -13,11 +13,13 @@ final class CpDomainReuse {
     private static final ObjectMapper JSON = new ObjectMapper();
     private final PolicyCollectionRepository repository;
     private final PolicyCollectionRepository.Request request;
+    private java.util.function.Consumer<PolicySnapshot.CollectionFailure> databaseGap = gap -> {};
+    CpDomainReuse onDatabaseGap(java.util.function.Consumer<PolicySnapshot.CollectionFailure> callback) { databaseGap = callback; return this; }
     private final Map<String, Domain> domains = new LinkedHashMap<>();
     private static final class Domain {
         PolicyCollectionRepository.DomainRun previous;
         Signal signal;
-        boolean reused, gap;
+        boolean reused, gap, databaseFailed;
         int expected = -1;
         final Map<String, PolicySnapshot> snapshots = new LinkedHashMap<>();
     }
@@ -47,7 +49,7 @@ final class CpDomainReuse {
     List<PolicySnapshot> decide(String container, JsonNode root) {
         Domain domain = domains.get(container);
         domain.signal = root == null ? null : signal(root);
-        if (request.mode() == PolicyCollectionRepository.Mode.CHANGED_ONLY && domain.signal != null
+        if (!domain.databaseFailed && request.mode() == PolicyCollectionRepository.Mode.CHANGED_ONLY && domain.signal != null
                 && domain.previous != null && domain.previous.complete() && domain.previous.signalJson() != null) {
             try {
                 Signal previous = JSON.readValue(domain.previous.signalJson(), Signal.class);
@@ -95,7 +97,7 @@ final class CpDomainReuse {
     }
     private void save(String container, Domain domain, String status, boolean complete) {
         // Direct offline collector tests have no ledger job. Production requests always carry a lease.
-        if (request.jobId().isEmpty()) return;
+        if (request.jobId().isEmpty() || domain.databaseFailed) return;
         try {
             int rules = domain.snapshots.values().stream().flatMap(s -> s.sections().stream()).mapToInt(s -> s.rules().size()).sum();
             String hits = domain.snapshots.values().stream().flatMap(s -> s.sections().stream()).flatMap(s -> s.rules().stream())
@@ -103,8 +105,11 @@ final class CpDomainReuse {
                 .filter(Objects::nonNull).min(String::compareTo).orElse(null);
             if (!repository.saveDomain(request, container, status, complete,
                     domain.signal == null ? null : JSON.writeValueAsString(domain.signal),
-                    JSON.writeValueAsString(domain.snapshots.values()), rules, hits, WorkerActor.RESERVED_ACTOR_FINGERPRINT))
+                    JSON.writeValueAsString(status.equals("COLLECTING") ? List.of() : domain.snapshots.values()), rules, hits, WorkerActor.RESERVED_ACTOR_FINGERPRINT))
                 throw PolicyCollectionTrace.failure("LEASE_LOST");
+        } catch (com.securityexpert.nexus.ui2.persistence.policy.PolicyDatabaseFailure unavailable) {
+            domain.databaseFailed = true; domain.gap = true;
+            databaseGap.accept(new PolicySnapshot.CollectionFailure(container, "POLICY_DB_DOMAIN_WRITE_FAILED"));
         } catch (com.fasterxml.jackson.core.JsonProcessingException invalid) {
             throw PolicyCollectionTrace.failure("INVALID_OR_INCOMPLETE_RESPONSE");
         }
