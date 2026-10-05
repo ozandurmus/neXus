@@ -586,3 +586,34 @@ def test_main_accepts_commit_fallback(tmp_path, monkeypatch):
     monkeypatch.setattr(rs, "snapshot", lambda root, commit: calls.append((root, commit)))
     assert rs.main() == 0
     assert calls == [(tmp_path / "release-snapshots", COMMIT)]
+
+
+def test_pre_split_snapshot_can_restore_a_live_split_runtime(tmp_path, monkeypatch, capsys):
+    directory, _ = capture(tmp_path, monkeypatch)
+    calls = mock_cluster(monkeypatch, version='129')
+    monkeypatch.setattr(rs, 'runtime_state', lambda: {'compatible_runtime': True, 'modules': [], 'tasks': []})
+    monkeypatch.setattr(rs, 'stop_split_runtime', lambda snapshot: calls.append((('stop_split', snapshot), None)))
+    diff_mock(monkeypatch)
+    rs.rollback(tmp_path, str(directory), False, True)
+    assert not any('stop_split' in args or 'apply' in args for args, _ in calls)
+    assert 'return every module to general' in capsys.readouterr().out
+    rs.rollback(tmp_path, str(directory), True, True)
+    stopped = next(i for i, (args, _) in enumerate(calls) if 'stop_split' in args)
+    applied = next(i for i, (args, _) in enumerate(calls) if 'apply' in args)
+    assert stopped < applied
+
+
+@pytest.mark.parametrize('apply', [False, True])
+def test_split_snapshot_uses_module_controlled_path(tmp_path, monkeypatch, apply):
+    directory, _ = capture(tmp_path, monkeypatch)
+    manifest_path = directory / 'manifest.json'
+    manifest = json.loads(manifest_path.read_text())
+    manifest['runtime'] = {'compatible_runtime': True, 'modules': [], 'tasks': []}
+    manifest_path.write_text(json.dumps(manifest))
+    calls = mock_cluster(monkeypatch)
+    monkeypatch.setattr(rs, 'runtime_state', lambda: manifest['runtime'])
+    routed = []
+    monkeypatch.setattr(rs, 'split_rollback', lambda *a: routed.append(a))
+    rs.rollback(tmp_path, str(directory), apply, False)
+    assert routed[0][1:] == (directory.name, apply)
+    assert not any('apply' in args for args, _ in calls)

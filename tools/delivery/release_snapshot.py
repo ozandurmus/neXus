@@ -13,6 +13,8 @@ import re
 import shutil
 import subprocess
 import sys
+import shlex
+import time
 
 NAMESPACES = ("ui2", "ui2-security", "ui2-build")
 RESOURCES = ("deployments,statefulsets,daemonsets,cronjobs,jobs,services,configmaps,"
@@ -196,11 +198,12 @@ def deployed_commit(fallback):
     raise SafeReleaseError("deployed commit unavailable; valid build commit fallback required")
 
 
+def sql(query):
+    return run("kubectl", "-n", "ui2", "exec", "ui2-db-0", "--", "sh", "-c",
+               'psql -v ON_ERROR_STOP=1 -U "${POSTGRES_USER:-$POSTGRESQL_USER}" -d ui2 -Atc ' + shlex.quote(query)).decode().strip()
+
+
 def runtime_state():
-    def sql(query):
-        import shlex
-        return run("kubectl", "-n", "ui2", "exec", "ui2-db-0", "--", "sh", "-c",
-                   'psql -v ON_ERROR_STOP=1 -U "${POSTGRES_USER:-$POSTGRESQL_USER}" -d ui2 -Atc ' + shlex.quote(query)).decode().strip()
     available = sql("select to_regclass('module_runtime_control') is not null")
     if available == "f":
         return {"compatible_runtime": False, "modules": [], "tasks": []}
@@ -314,6 +317,67 @@ def restore_items(directory, manifest, namespace):
     return items
 
 
+def stop_split_runtime(snapshot):
+    # Full rollback to an old binary cannot coexist with any split owner.
+    sql("begin;select set_config('app.actor_fingerprint','system:release',true);"
+        "select set_config('app.action_id','full_rollback_drain',true);"
+        "select pg_advisory_xact_lock(294611);"
+        "update module_runtime_control set drain_requested=true,drain_generation=drain_generation+1;commit;")
+    deadline = time.monotonic() + 600
+    idle = ("select not exists(select 1 from jobs where state in ('CLAIMED','EXECUTING')) "
+            "and not exists(select 1 from endpoint_admission where state in ('LEASED','QUARANTINED')) "
+            "and not exists(select 1 from runtime_task_lease where state in ('LEASED','QUARANTINED'))")
+    while sql(idle) != "t":
+        if time.monotonic() >= deadline:
+            raise SafeReleaseError("full rollback drain expired; active or uncertain work retained")
+        time.sleep(5)
+    for item in get("ui2", "deployments")["items"]:
+        containers = item["spec"]["template"]["spec"]["containers"]
+        if any(c.get("args", [])[:1] == ["worker"] for c in containers) or item["metadata"]["name"] == "ui2-service":
+            name = item["metadata"]["name"]
+            run("kubectl", "-n", "ui2", "scale", "deployment/" + name, "--replicas=0")
+            selector = ",".join(k + "=" + v for k, v in item["spec"]["selector"]["matchLabels"].items())
+            run("kubectl", "-n", "ui2", "wait", "--for=delete", "pod", "-l", selector, "--timeout=600s")
+    if sql(idle) != "t":
+        raise SafeReleaseError("full rollback has active or uncertain work; ownership retained")
+    sql("begin;select set_config('app.actor_fingerprint','system:release',true);"
+        "select set_config('app.action_id','full_rollback_ownership',true);"
+        "select pg_advisory_xact_lock(294611);"
+        "update module_runtime_control set effective_owner='general',"
+        "fallback_enabled=case when module='general' then fallback_enabled else true end,generation=generation+1,"
+        "drain_requested=false,drain_ack_at=null,drain_ack_generation=null,owner_instance=null,owner_heartbeat_at=null,"
+        "last_reason='pre-split snapshot rollback',last_snapshot_id=" + "'" + snapshot.replace("'", "''") + "';commit;")
+
+
+def split_rollback(manifest, snapshot, apply):
+    import module_deploy
+    policy = next((m for m in manifest["runtime"].get("modules", []) if m["module"] == "policy"), None)
+    fallback = policy is not None and policy["effective_owner"] == "general"
+    targets = [target for target in module_deploy.TARGETS if any(
+        item["kind"] == "Deployment" and item["workload"] == "ui2-" + target
+        for item in manifest["images"].get("ui2", []))]
+    images = {target: module_deploy.rollback_image(manifest, target) for target in targets}
+    for target, image in images.items():
+        print(json.dumps({"rollback": "module-controlled", "module": target, "image": image,
+                          "drain": target in module_deploy.ROLES, "policy_fallback_capability": target == "worker",
+                          "ownership": "general/fallback=true; policy stopped" if target == "policy" and fallback else
+                                       "ready heartbeat before policy handover" if target == "policy" else "preserved"}))
+    if fallback and "policy" not in targets:
+        print("Policy: drain and stop added owner; return ownership to general/fallback=true.")
+    if not apply:
+        print("Dry run only. Use --apply for module-controlled snapshot rollback.")
+        return
+    # Restore the compatible general owner first, so fallback recovery has a live executor.
+    for target, image in images.items():
+        if target != "policy" or not fallback:
+            module_deploy.replace(target, image, snapshot, authorization="snapshot-rollback")
+    if fallback:
+        module_deploy.return_policy_to_general(snapshot, "snapshot-rollback")
+        if "policy" in images:
+            module_deploy.run("kubectl", "-n", "ui2", "set", "image", "deployment/ui2-policy", "policy=" + images["policy"])
+        module_deploy.module_e2e()
+
+
 def rollback(root, target, apply, allow_newer):
     if target == "latest":
         candidates = sorted(p for p in root.iterdir() if SNAPSHOT_ID.fullmatch(p.name)
@@ -331,8 +395,15 @@ def rollback(root, target, apply, allow_newer):
         raise SafeReleaseError("live schema is newer; review additive compatibility and use --allow-newer-schema")
     if version_key(saved) > version_key(live):
         raise SafeReleaseError("live schema is older than snapshot; required migrations are absent")
-    if apply and runtime_state()["compatible_runtime"]:
-        raise SafeReleaseError("split runtime requires module-controlled drain and exact-snapshot rollback; global apply refused")
+    live_runtime = runtime_state()["compatible_runtime"]
+    if manifest.get("runtime", {}).get("compatible_runtime"):
+        if not live_runtime:
+            raise SafeReleaseError("snapshot requires the module runtime schema")
+        return split_rollback(manifest, directory.name, apply)
+    if live_runtime:
+        print("Full rollback: drain and stop all worker/service owners; restore snapshot manifests/images; "
+              "return every module to general, enable dedicated-module fallback, preserve the general self flag. "
+              "Schema, data and uncertain leases are preserved.")
     plans = []
     removals = []
     for namespace in NAMESPACES:
@@ -368,6 +439,8 @@ def rollback(root, target, apply, allow_newer):
     if not apply:
         print("Dry run only. Use --apply to restore these manifests.")
         return
+    if live_runtime:
+        stop_split_runtime(directory.name)
     # Rollback must not interrupt an executing product job.
     inflight = run("kubectl", "-n", "ui2", "exec", "ui2-db-0", "--", "sh", "-c",
                    'psql -U "${POSTGRES_USER:-$POSTGRESQL_USER}" -d ui2 -Atc "select count(*) from jobs where state in (\'CLAIMED\',\'EXECUTING\')"').decode().strip()

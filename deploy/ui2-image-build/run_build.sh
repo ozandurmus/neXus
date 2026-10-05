@@ -129,7 +129,8 @@ echo "Updating selected deployments..."
 SNAPSHOT_ID=$(printf '%s\n' "$RELEASE_SNAPSHOT" | python3 -c 'import json,sys; print(json.load(sys.stdin)["snapshot"])')
 python3 "$REPO/tools/delivery/module_deploy.py" --targets "$NEXUS_DEPLOY_TARGETS" \
   --image "registry.kube-system.svc.cluster.local/nexus-ui2-service@$IMAGE_DIGEST" \
-  --snapshot "$HOME/release-snapshots/$SNAPSHOT_ID" --commit "$COMMIT_SHA" --wait-limit "${WORKER_WAIT_LIMIT_S:-14400}"
+  --snapshot "$HOME/release-snapshots/$SNAPSHOT_ID" --commit "$COMMIT_SHA" --wait-limit "${WORKER_WAIT_LIMIT_S:-14400}" \
+  --authorization-ref "${NEXUS_MODULE_AUTHORIZATION_REF:-}"
 
 timing rollout "$rollout_start"
 python3 "$REPO/tools/e2e/hosta_e2e_image.py" ensure --commit "$COMMIT_SHA" >/dev/null
