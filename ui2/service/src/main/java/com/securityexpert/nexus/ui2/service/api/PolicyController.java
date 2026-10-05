@@ -43,12 +43,19 @@ public final class PolicyController {
     }
     /** Management policies remain navigable before any target has been assigned. */
     @GetMapping("/api/v2/policy/policies/{id}")
-    public ResponseEntity<?> page(@PathVariable String id, @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "") String q, HttpServletRequest request) {
+    public ResponseEntity<?> filteredPage(@PathVariable String id, @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "") String q, @RequestParam(defaultValue = "") String hitFilter,
+            @RequestParam(defaultValue = "90") int days, HttpServletRequest request) {
+        if (!Set.of("", "never", "inactive").contains(hitFilter) || days < 1 || days > 36500) return error(HttpStatus.BAD_REQUEST);
+        return page(id, page, q, request, hitFilter, days);
+    }
+    public ResponseEntity<?> page(String id, int page, String q, HttpServletRequest request) { return page(id, page, q, request, "", 90); }
+    private ResponseEntity<?> page(String id, int page, String q, HttpServletRequest request, String hitFilter, int days) {
         if (page < 0 || q.length() > 1000) return error(HttpStatus.BAD_REQUEST);
         try {
-            return policies.find(id).<ResponseEntity<?>>map(snapshot -> ok(policies.page(snapshot, page, q,
-                    PrivacyMaskingResponseBodyAdvice.isReplayViewer(request)))).orElseGet(() -> error(HttpStatus.NOT_FOUND));
+            return policies.find(id).<ResponseEntity<?>>map(snapshot -> ok(hitFilter.isEmpty()
+                    ? policies.page(snapshot, page, q, PrivacyMaskingResponseBodyAdvice.isReplayViewer(request))
+                    : policies.page(snapshot, page, q, PrivacyMaskingResponseBodyAdvice.isReplayViewer(request), hitFilter, days))).orElseGet(() -> error(HttpStatus.NOT_FOUND));
         } catch (IllegalArgumentException invalid) { return error(HttpStatus.BAD_REQUEST); }
     }
     @GetMapping("/api/v2/policy/policies/{id}/history")
@@ -72,8 +79,36 @@ public final class PolicyController {
         return error(HttpStatus.NOT_FOUND);
     }
     @GetMapping("/api/v2/policy/domains/{id}/objects")
-    public ResponseEntity<?> inventory(@PathVariable String id, @RequestParam String source,
-            @RequestParam(defaultValue = "0") int page) { return inventoryView(id, source, "objects", page); }
+    public ResponseEntity<?> objects(@PathVariable String id, @RequestParam String source,
+            @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "") String q,
+            @RequestParam(defaultValue = "") String type, @RequestParam(defaultValue = "") String hygiene, HttpServletRequest request) {
+        if (!validDomain(source, page, q) || !Set.of("", "host", "network", "range", "group", "service", "service-group", "time", "access-role", "dynamic", "dns-domain", "zone").contains(type)
+                || !Set.of("", "unused", "duplicates", "empty", "single").contains(hygiene)) return error(HttpStatus.BAD_REQUEST);
+        return policies.domainObjects(source, id, page, q, type, hygiene, PrivacyMaskingResponseBodyAdvice.isReplayViewer(request))
+            .<ResponseEntity<?>>map(PolicyController::ok).orElseGet(() -> error(HttpStatus.NOT_FOUND));
+    }
+    @GetMapping("/api/v2/policy/domains/{id}/objects/{uid}/usage")
+    public ResponseEntity<?> usage(@PathVariable String id, @PathVariable String uid, @RequestParam String source,
+            @RequestParam(defaultValue = "0") int page) {
+        if (!validDomain(source, page, "")) return error(HttpStatus.BAD_REQUEST);
+        return policies.objectUsage(source, id, uid, page).<ResponseEntity<?>>map(PolicyController::ok).orElseGet(() -> error(HttpStatus.NOT_FOUND));
+    }
+    @GetMapping("/api/v2/policy/domains/{id}/objects/duplicates")
+    public ResponseEntity<?> duplicates(@PathVariable String id, @RequestParam String source,
+            @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "") String q, HttpServletRequest request) {
+        if (!validDomain(source, page, q)) return error(HttpStatus.BAD_REQUEST);
+        return policies.objectDuplicates(source, id, page, q, PrivacyMaskingResponseBodyAdvice.isReplayViewer(request))
+            .<ResponseEntity<?>>map(PolicyController::ok).orElseGet(() -> error(HttpStatus.NOT_FOUND));
+    }
+    @GetMapping("/api/v2/policy/domains/{id}/installation")
+    public ResponseEntity<?> installation(@PathVariable String id, @RequestParam String source,
+            @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "") String q,
+            @RequestParam(defaultValue = "") String policy, HttpServletRequest request) {
+        if (!validDomain(source, page, q)) return error(HttpStatus.BAD_REQUEST);
+        return policies.installations(source, id, page, q, policy, PrivacyMaskingResponseBodyAdvice.isReplayViewer(request))
+            .<ResponseEntity<?>>map(PolicyController::ok).orElseGet(() -> error(HttpStatus.NOT_FOUND));
+    }
+    private static boolean validDomain(String source, int page, String q) { return !source.isBlank() && page >= 0 && q.length() <= 1000; }
     @GetMapping("/api/v2/policy/domains/{id}/unused")
     public ResponseEntity<?> unused(@PathVariable String id, @RequestParam String source,
             @RequestParam(defaultValue = "0") int page) { return inventoryView(id, source, "unused", page); }

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Box, Button, Checkbox, Chip, Drawer, IconButton, Tooltip, FormControl, InputLabel, MenuItem, Select, Stack, TextField, Typography } from "@mui/material";
+import { Box, Button, Tabs, Tab, Checkbox, Chip, Drawer, IconButton, Tooltip, FormControl, InputLabel, MenuItem, Select, Stack, TextField, Typography } from "@mui/material";
 import { ScreenRoot, ScreenHeader, EmptyPanel } from "../shell/ScreenLayout";
 import { VendorBadge } from "../shell/States";
 import { Icon } from "../shell/Icon";
@@ -9,6 +9,8 @@ import { m3 } from "../theme/m3Theme";
 import { cancelJob, listPolicies, getPolicyCollectionStatus, type PolicyCollectionStatus, listPolicySources, collectPolicies, type PolicyCollectionSource, getPolicy, getPolicyObject, type PolicyTarget, type PolicyMetadata, type PolicyObject, type PolicyRule, type PolicyCell, type PolicyPage } from "../auth/adminApi";
 
 import { VirtualPolicyCards, RuleDetailPanel, RuleHistory, scheduleLabel, sectionLabel, reportPolicyLoadError } from "./PolicyRuleViewer";
+
+import { PolicyDomainTab } from "./PolicyDomainTabs";
 
 const runningStates = ["REQUESTED", "CLAIMED", "EXECUTING", "RECONCILING", "RUNNING"];
 const isRunning = (job: PolicyCollectionStatus) => runningStates.includes(job.state);
@@ -103,6 +105,9 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
   const [collectionStatus, setCollectionStatus] = useState("");
   const [selected, setSelected] = useState("");
   const [device, setDevice] = useState(() => new URLSearchParams(window.location.search).get("device_id") ?? "");
+  const [tab, setTab] = useState<"Rules" | "Objects" | "Installation">("Rules");
+  const [hitFilter, setHitFilter] = useState("");
+  const [hitDays, setHitDays] = useState(90);
   const [page, setPage] = useState(0);
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
@@ -162,20 +167,20 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
     let active = true;
     policyRequest.current++;
     setScrollTop(0); setData(null); setDrawer(null); drawerRequest.current++; setError(""); setErrorCode("");
-    if (selected) getPolicy(selected, page, query).then(result => {
+    if (selected) getPolicy(selected, page, query, hitFilter, hitDays).then(result => {
       if (!result?.metadata || !Array.isArray(result.sections)) throw new Error("Empty policy response");
       if (active) setData(result);
     })
       .catch(error => { if (active) { setErrorCode(reportPolicyLoadError("rules", error)); setError("Policy rules could not be loaded."); } });
     return () => { active = false; };
-  }, [selected, page, query, revision]);
+  }, [selected, page, query, revision, hitFilter, hitDays]);
   useEffect(() => () => { drawerRequest.current++; }, []);
   const scheduleMinute = Math.floor(now.getTime() / 60000);
   // Refresh derived schedule status from stored evidence; never triggers collection.
   useEffect(() => {
     if (!selected || !data) return;
     const request = policyRequest.current; let active = true;
-    getPolicy(selected, page, query).then(result => {
+    getPolicy(selected, page, query, hitFilter, hitDays).then(result => {
       if (active && request === policyRequest.current) setData(result);
     }).catch(() => { /* Retain the last stored projection on a transient read failure. */ });
     return () => { active = false; };
@@ -183,7 +188,7 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
   const objects = useMemo(() => new Map((data?.objects ?? []).map(o => [o.id, o])), [data]);
 
   const ruleSelectionRequest = useRef(0);
-  useEffect(() => { ruleSelectionRequest.current++; setSelectedRules(new Set()); }, [selected, query, revision]);
+  useEffect(() => { ruleSelectionRequest.current++; setSelectedRules(new Set()); }, [selected, query, revision, hitFilter, hitDays]);
   const selectAllRules = async (value: boolean) => {
     const request = ++ruleSelectionRequest.current;
     if (!value || !data) { setSelectedRules(new Set()); return; }
@@ -191,7 +196,7 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
     try {
       const ids = new Set<string>();
       for (let index = 0; index * data.pageSize < data.total; index++) {
-        const result = index === page ? data : await getPolicy(selected, index, query);
+        const result = index === page ? data : await getPolicy(selected, index, query, hitFilter, hitDays);
         if (request !== ruleSelectionRequest.current) return;
         result.sections.forEach(section => section.rules.forEach(rule => ids.add(rule.id)));
       }
@@ -224,6 +229,7 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
       disabled={ids.length === 0} inputProps={{ "aria-label": `Select ${name}` }} onChange={(_, value) => selectPolicies(ids, value)} sx={{ p: 0.5 }} />;
   };
   const selectedPolicies = catalog.filter(policy => checked.has(policy.id));
+  const selectedMetadata = catalog.find(policy => policy.id === selected);
   const exportSelected = async () => {
     setExporting(true); setCollectionStatus("");
     try {
@@ -415,6 +421,13 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
           </FormControl>
         </Stack>
         {collectionStatus && <Typography role="status" sx={{ mb: 1 }}>{collectionStatus}</Typography>}
+        {selected && <Tabs value={tab} onChange={(_, value) => { setTab(value); setDrawer(null); drawerRequest.current++; }} aria-label="Policy tabs" sx={{ mb: 2 }}>
+          {["Rules", "Objects", "Installation"].map(label => <Tab key={label} label={label} value={label} />)}
+        </Tabs>}
+        {selected && tab !== "Rules" && selectedMetadata && <PolicyDomainTab
+          key={`${tab}:${selectedMetadata.sourceId}:${selectedMetadata.containerId}:${revision}`}
+          tab={tab} metadata={selectedMetadata} policies={catalog} />}
+        <Box role="tabpanel" aria-label="Rules" hidden={tab !== "Rules"} sx={{ display: tab === "Rules" ? "contents" : "none" }}>
         {error && <Box data-error-code={errorCode}><EmptyPanel title="Policy unavailable" body={error}><Button onClick={() => setRevision(n => n + 1)}>Retry</Button></EmptyPanel></Box>}
         {loadingTree && !error && <Typography role="status">Loading policies…</Typography>}
         {!selected && !loadingTree && !error && <Box role="status" aria-label={sources.length ? "No collected policy" : "No policy snapshot"} sx={{ textAlign: "center", py: 3, color: m3.onSurfaceVar }}>
@@ -432,6 +445,13 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
                 {data.metadata.targets.length === 0 ? <Chip size="small" label="Unassigned" /> : data.metadata.targets.map(t => <Tooltip key={t.deviceId} title={`${t.context ? `${t.context} · ` : ""}${t.syncStatus}`}><Chip size="small" variant="outlined" label={<Stack direction="row" gap={0.75} alignItems="center"><span>{displayName(t.name, "Device")}</span><Box component="span" aria-label={t.syncStatus} sx={{ width: 6, height: 6, borderRadius: "50%", bgcolor: t.syncStatus === "IN_SYNC" ? m3.success : t.syncStatus === "OUT_OF_SYNC" ? m3.warning : m3.outline }} /></Stack>} /></Tooltip>)}</Stack>
               <Typography variant="caption">{data.policyKind === "LOCAL_FIREWALL" ? "Stored local configuration; runtime enforcement is not inferred." : "Management intent; installation and runtime enforcement are not inferred."}</Typography>
             </>}
+            {selected && <Stack direction="row" gap={1} sx={{ mt: 1 }}>
+              <TextField select label="Hit filter" size="small" value={hitFilter} sx={{ minWidth: 200 }} onChange={e => { setHitFilter(e.target.value); setPage(0); }}>
+                <MenuItem value="">All hit evidence</MenuItem><MenuItem value="inactive">No hits in N days</MenuItem><MenuItem value="never">Never hit</MenuItem>
+              </TextField>
+              {hitFilter === "inactive" && <TextField label="Days without hits" type="number" size="small" value={hitDays} inputProps={{ min: 1, max: 36500 }}
+                onChange={e => { const n = Number(e.target.value); if (Number.isInteger(n) && n >= 1 && n <= 36500) { setHitDays(n); setPage(0); } }} />}
+            </Stack>}
             {selected && <TextField label="Rule query" size="small" fullWidth value={search}
               placeholder="source.ip='192.0.2.10' AND service='tcp/443'"
               helperText="Fields: source.ip, destination.ip, service, application, action, name, comment, user, zone.from, zone.to, enabled, expired, time. Hit filters: lasthit.days>90, hits=0. AND / OR / NOT, parentheses; plain text searches names and comments."
@@ -460,6 +480,7 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
                 <Button disabled={(page + 1) * 200 >= data.total} onClick={() => setPage(n => n + 1)}>Next</Button>
               </Stack>
             </>}
+        </Box>
           </Box>
         </Box>
     </Box>

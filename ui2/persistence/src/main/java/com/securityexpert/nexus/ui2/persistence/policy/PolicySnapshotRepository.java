@@ -2,6 +2,7 @@ package com.securityexpert.nexus.ui2.persistence.policy;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Objects;
 import com.securityexpert.nexus.ui2.persistence.TransactionBoundary;
 import com.securityexpert.nexus.ui2.persistence.AuditedTransactionBoundary;
 
@@ -35,6 +36,22 @@ public final class PolicySnapshotRepository {
         return transactions.inTransaction(db -> db.fetch("select snapshot::text as snapshot from policy_snapshot "
                 + "where metadata->>'sourceId' = {0} and metadata->>'containerId' = {1} order by policy_id", source, domain)
                 .map(row -> row.get("snapshot", String.class)));
+    }
+    public record InventoryLink(String uid, String name, String deviceId) {}
+    /** Navigation links only: exact stored UID/name matches within the management source/domain, never identity proof. */
+    public List<InventoryLink> inventoryLinks(String source, String domain) {
+        return transactions.inTransaction(db -> db.fetch("select distinct c.stable_identifier, c.display_name, d.device_id "
+            + "from devices manager join endpoints e on e.device_id = manager.device_id "
+            + "join discovery_run r on r.management_address = e.address_ref and r.vendor = manager.vendor_hint and r.state = 'FINISHED' "
+            + "join discovery_candidate c on c.run_id = r.run_id "
+            + "join devices d on d.discovery_match_key = 'check_point|' || c.owning_domain || '|' || c.stable_identifier "
+            + "where manager.device_id = {0} and c.owning_domain in "
+            + "(select metadata->>'containerName' from policy_snapshot where metadata->>'sourceId' = {0} and metadata->>'containerId' = {1}) "
+            + "union select '', t->>'name', d.device_id from policy_snapshot p "
+            + "cross join lateral jsonb_array_elements(p.metadata->'targets') t join devices d on d.device_id = t->>'deviceId' "
+            + "where p.metadata->>'sourceId' = {0} and p.metadata->>'containerId' = {1}",
+            source, domain).map(row -> new InventoryLink(Objects.requireNonNullElse(row.get("stable_identifier", String.class), ""),
+                Objects.requireNonNullElse(row.get("display_name", String.class), ""), row.get("device_id", String.class))));
     }
     public List<String> history(String policyId, String ruleId, int page) {
         return transactions.inTransaction(db -> db.fetch("select jsonb_build_object('revision', revision_id, 'ruleId', rule_id, "

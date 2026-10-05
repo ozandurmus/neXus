@@ -3,7 +3,7 @@ import { loadErrorText } from "../e2e/safety";
 
 // Offline browser proof only: synthetic AIView API projections; no deployment or device contact.
 // Run: node_modules/.bin/playwright test --config playwright.policy-local.config.ts
-test("policy local: 54 containers, rule drawer, recursive drawer and masked CSV", async ({ page }) => {
+test("policy local: 54 containers, three tabs, rule drawer, recursive drawer and masked CSV", async ({ page }) => {
   const targets = [{ deviceId: "device-1", name: "FW-TANGO-04", context: "VS-ROMEO-01", syncStatus: "UNKNOWN" }];
   const policies = Array.from({ length: 54 }, (_, index) => ({ id: `policy-${index}`, name: `POL-ALPHA-${index}`,
     sourceId: "source-1", sourceName: "MGR-BRAVO-01", containerId: `container-${index}`, containerName: `DOM-TANGO-${index}`,
@@ -29,6 +29,10 @@ test("policy local: 54 containers, rule drawer, recursive drawer and masked CSV"
     else if (path === "/api/v2/policy/sources") body = { canCollect: false, sources: [{ sourceId: "source-1", sourceName: "MGR-BRAVO-01", vendor: "PAN",
       collection: { jobId: "job-latest", state: "COMPLETED", outcome: "COMPLETED", reason: "COLLECTION_FAILED", step: 221, total: 60, collectedAt: new Date(Date.now() - 7200000).toISOString() } }] };
     else if (path === "/api/v2/policy/devices") body = { policies, devices: targets };
+    else if (path.includes("/domains/") && path.endsWith("/objects")) body = { objects: [{ id: "inventory-1", uid: "uid-1", name: "ADDR-ROMEO-01", type: "host", values: ["ipv4-address: 240.12.0.8"],
+      members: [], unused: true, emptyGroup: false, singleMember: false, duplicateId: null, ruleCount: 1, groupCount: 0 }], types: [], total: 1, page: 0, pageSize: 200 };
+    else if (path.includes("/domains/") && path.endsWith("/installation")) body = { installations: [{ id: "gateway-1", policyId: "policy-53", policyName: "POL-ALPHA-53",
+      name: "FW-TANGO-04", deviceId: "device-1", allTargets: true, targeted: true, installed: null }], types: [], total: 1, page: 0, pageSize: 200 };
     else if (path.startsWith("/api/v2/policy/policies/")) body = { metadata: policies.find(p => path.endsWith(p.id)),
       sections: [{ id: "section-1", name: "Pre rules", source: "Shared", total: 1, rules: [rule] }],
       objects: [group, { id: "any-1", name: "ANY", type: "any", status: "RESOLVED" }], total: 1, page: 0, pageSize: 200 };
@@ -71,6 +75,17 @@ test("policy local: 54 containers, rule drawer, recursive drawer and masked CSV"
   await object.getByText("ADDR-ROMEO-01", { exact: false }).first().click();
   await expect(object.getByText("192.0.2.8")).toBeVisible();
   await object.getByRole("button", { name: "Close", exact: true }).click();
+  await page.getByRole("tab", { name: "Objects", exact: true }).click();
+  const objectTable = page.getByRole("table", { name: "Policy objects" });
+  await expect(objectTable.getByText("ADDR-ROMEO-01")).toBeVisible();
+  await expect(objectTable.getByText("ipv4-address: 240.12.0.8")).toBeVisible();
+  await page.getByRole("tab", { name: "Installation", exact: true }).click();
+  const installation = page.getByRole("table", { name: "Policy installation" });
+  await expect(installation.getByRole("link", { name: "FW-TANGO-04" })).toHaveAttribute("href", "/?screen=inventory&device_id=device-1");
+  await expect(installation.getByText("ALL", { exact: true })).toBeVisible();
+  await expect(installation.getByText("UNKNOWN", { exact: true })).toBeVisible();
+  await page.getByRole("tab", { name: "Rules", exact: true }).click();
+  await expect(page.getByRole("region", { name: "Policy rulebase" })).toBeVisible();
   await page.getByRole("checkbox", { name: "Select DOM-TANGO-53" }).check();
   await expect(page.getByRole("button", { name: "Collect selected" })).toHaveCount(0);
   const download = page.waitForEvent("download");
