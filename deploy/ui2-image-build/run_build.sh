@@ -7,9 +7,18 @@
 set -euo pipefail
 export KUBECONFIG=~/.kube/config
 
-cd ~/nexus
+CHANGES_STARTED=0
+report_failure() {
+  rc=$?
+  if [ "$rc" -ne 0 ] && [ "$CHANGES_STARTED" = 0 ]; then
+    echo "no changes applied" >&2
+  fi
+}
+trap report_failure EXIT
+REPO="$HOME/nexus"
+cd "$REPO"
 NEXUS_DEPLOY_TARGETS="${NEXUS_DEPLOY_TARGETS:-service worker configuration compliance policy}"
-python3 -c 'from tools.delivery.module_deploy import validate_targets; import sys; validate_targets(sys.argv[1])' "$NEXUS_DEPLOY_TARGETS"
+python3 "$REPO/tools/delivery/module_deploy.py" --validate-targets "$NEXUS_DEPLOY_TARGETS"
 git fetch
 git checkout main
 git pull origin main
@@ -19,6 +28,7 @@ COMMIT_SHA="$(git rev-parse HEAD)"
 RELEASE_SNAPSHOT=$(bash tools/delivery/release_snapshot.sh --commit "$COMMIT_SHA")
 printf '%s\n' "$RELEASE_SNAPSHOT"
 for manifest in ${NEXUS_DEPLOY_APPLY_FILES:-}; do
+  CHANGES_STARTED=1
   kubectl apply -f "$manifest"
 done
 
@@ -31,9 +41,10 @@ if [ -n "${NEXUS_SKIP_SECURITY_REASON:-}" ]; then
 elif [ "$SECURITY_CONFIGURED" = 0 ]; then
   echo '{"security_gate":"not_configured"}'
 else
-  python3 tools/security/security_host.py snapshot --config "$HOME/.config/nexus/security.json" \
+  CHANGES_STARTED=1
+  python3 "$REPO/tools/security/security_host.py" snapshot --config "$HOME/.config/nexus/security.json" \
     --rules "$HOME/.config/nexus/security-rules"
-  SECURITY_JOB=$(python3 tools/security/security_host.py start --config "$HOME/.config/nexus/security.json" --commit "$COMMIT_SHA")
+  SECURITY_JOB=$(python3 "$REPO/tools/security/security_host.py" start --config "$HOME/.config/nexus/security.json" --commit "$COMMIT_SHA")
 fi
 timing source_snapshot "$phase_start"
 phase_start=$SECONDS
@@ -42,6 +53,7 @@ echo "Recording deploy_info.json: commit=$COMMIT_SHA built_at=$BUILT_AT"
 printf '{\n  "commit": "%s",\n  "built_at": "%s"\n}\n' "$COMMIT_SHA" "$BUILT_AT" > project/deploy_info.json
 
 echo "Starting loader..."
+CHANGES_STARTED=1
 kubectl apply -f deploy/ui2-image-build/00-namespace.yaml
 kubectl apply -f deploy/ui2-image-build/10-context-pvc.yaml
 kubectl delete pod ui2-build-context-loader -n ui2-build --ignore-not-found --force --grace-period=0 || true
@@ -62,7 +74,7 @@ image_start=$SECONDS
 kubectl apply -f ~/build-job-proxy.yaml
 # Start from the same immutable context while the service image is building.
 e2e_start=$SECONDS
-python3 tools/e2e/hosta_e2e_image.py start --commit "$COMMIT_SHA"
+python3 "$REPO/tools/e2e/hosta_e2e_image.py" start --commit "$COMMIT_SHA"
 
 echo "Waiting for build pod to be scheduled..."
 for i in {1..30}; do
@@ -106,20 +118,20 @@ echo "Digest is $IMAGE_DIGEST"
 if [ -z "${NEXUS_SKIP_SECURITY_REASON:-}" ] && [ "$SECURITY_CONFIGURED" = 1 ]; then
   gate_start=$SECONDS
   echo "Running security-gate on the freshly built digest..."
-  python3 tools/security/security_host.py gate --config "$HOME/.config/nexus/security.json" \
+  python3 "$REPO/tools/security/security_host.py" gate --config "$HOME/.config/nexus/security.json" \
     --image "registry.kube-system.svc.cluster.local/nexus-ui2-service@$IMAGE_DIGEST" --commit "$COMMIT_SHA" --job-name "$SECURITY_JOB"
   timing security_gate_wait "$gate_start"
 fi
 
-python3 tools/e2e/hosta_e2e_image.py ensure --commit "$COMMIT_SHA" >/dev/null
+python3 "$REPO/tools/e2e/hosta_e2e_image.py" ensure --commit "$COMMIT_SHA" >/dev/null
 rollout_start=$SECONDS
 echo "Updating selected deployments..."
 SNAPSHOT_ID=$(printf '%s\n' "$RELEASE_SNAPSHOT" | python3 -c 'import json,sys; print(json.load(sys.stdin)["snapshot"])')
-python3 tools/delivery/module_deploy.py --targets "$NEXUS_DEPLOY_TARGETS" \
+python3 "$REPO/tools/delivery/module_deploy.py" --targets "$NEXUS_DEPLOY_TARGETS" \
   --image "registry.kube-system.svc.cluster.local/nexus-ui2-service@$IMAGE_DIGEST" \
   --snapshot "$HOME/release-snapshots/$SNAPSHOT_ID" --commit "$COMMIT_SHA" --wait-limit "${WORKER_WAIT_LIMIT_S:-14400}"
 
 timing rollout "$rollout_start"
-python3 tools/e2e/hosta_e2e_image.py ensure --commit "$COMMIT_SHA" >/dev/null
+python3 "$REPO/tools/e2e/hosta_e2e_image.py" ensure --commit "$COMMIT_SHA" >/dev/null
 timing e2e_image_ready "$e2e_start"
 echo "Done. Deployed commit: $COMMIT_SHA (built_at $BUILT_AT)"

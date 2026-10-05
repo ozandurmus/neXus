@@ -7,7 +7,11 @@ from pathlib import Path
 import re
 import shlex
 import subprocess
+import sys
 import time
+
+REPO = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 TARGETS = {"service": "service", "worker": "worker", "policy": "policy",
            "configuration": "configuration", "compliance": "compliance"}
@@ -100,10 +104,10 @@ def clear_drain(target, generation, snapshot):
 
 def module_e2e(commit=None):
     args = ("--commit", commit) if commit else ()
-    digest = run("python3", "tools/e2e/hosta_e2e_image.py", "ensure", *args)
+    digest = run("python3", str(REPO / "tools/e2e/hosta_e2e_image.py"), "ensure", *args)
     if not re.fullmatch(r"sha256:[a-f0-9]{64}", digest):
         raise Blocked("masked e2e runner digest unavailable")
-    text = Path("deploy/ui2/70-e2e-job.yaml").read_text()
+    text = (REPO / "deploy/ui2/70-e2e-job.yaml").read_text()
     jobs = [doc for doc in text.split("\n---\n") if re.search(r"^kind: Job$", doc, re.M)]
     if len(jobs) != 1:
         raise Blocked("masked e2e template unavailable")
@@ -204,16 +208,23 @@ def return_policy_to_general(snapshot, authorization):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--targets", required=True)
+    selection = parser.add_mutually_exclusive_group(required=True)
+    selection.add_argument("--targets")
+    selection.add_argument("--validate-targets", metavar="TARGETS")
     parser.add_argument("--image")
     parser.add_argument("--commit")
     parser.add_argument("--rollback", action="store_true")
     parser.add_argument("--return-policy-to-general", action="store_true")
     parser.add_argument("--authorization-ref")
-    parser.add_argument("--snapshot", required=True)
+    parser.add_argument("--snapshot")
     parser.add_argument("--wait-limit", type=int, default=14400)
     args = parser.parse_args()
+    if args.validate_targets is None and not args.snapshot:
+        parser.error("--snapshot is required for deployment or rollback")
     try:
+        if args.validate_targets is not None:
+            validate_targets(args.validate_targets)
+            return
         targets = validate_targets(args.targets)
         if not args.rollback and not args.return_policy_to_general and (args.image is None or not re.fullmatch(r".+@sha256:[a-f0-9]{64}", args.image)):
             raise Blocked("candidate image must be immutable")

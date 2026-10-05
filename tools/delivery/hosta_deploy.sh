@@ -47,7 +47,11 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-python3 -c 'import sys; sys.path.insert(0, "tools/delivery"); from module_deploy import validate_targets; validate_targets(sys.argv[1])' "$TARGETS" || exit 64
+REPO="$(cd "$(dirname "$0")/../.." && pwd)"
+python3 "$REPO/tools/delivery/module_deploy.py" --validate-targets "$TARGETS" || {
+  echo "no changes applied" >&2
+  exit 64
+}
 
 for m in "${APPLY[@]:-}"; do
   [ -n "$m" ] && scp -q "$m" "$HOST:/tmp/$(basename "$m")"
