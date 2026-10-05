@@ -164,6 +164,7 @@ class BackupJobExecutorEndToEndTest {
     @Test void everyBackupCapabilityStoresAFailureTranscriptBeforeTransport(@TempDir Path tempDir) throws Exception {
         for (String capability : java.util.List.of(
                 com.securityexpert.nexus.ui2.jobs.admission.BackupCapabilityIds.CP_GAIA_BACKUP_LOCAL,
+                com.securityexpert.nexus.ui2.jobs.admission.BackupCapabilityIds.CP_GAIA_SNAPSHOT,
                 com.securityexpert.nexus.ui2.jobs.admission.BackupCapabilityIds.CP_MDS_EXPORT,
                 com.securityexpert.nexus.ui2.jobs.admission.BackupCapabilityIds.CP_SPARK_SFTP_BACKUP,
                 com.securityexpert.nexus.ui2.jobs.admission.BackupCapabilityIds.ASA_CONFIG_BACKUP,
@@ -183,6 +184,8 @@ class BackupJobExecutorEndToEndTest {
             try (var in = store.retrieve(new ArtefactRef(ref.get()), key.get(), true)) {
                 String text = new String(in.readAllBytes(), StandardCharsets.UTF_8);
                 assertTrue(text.contains("backup started: " + capability));
+                var json = new com.fasterxml.jackson.databind.ObjectMapper();
+                for (String line : text.lines().toList()) assertTrue(json.readTree(line).isObject(), capability);
                 assertTrue(text.contains("FAILED:"));
                 assertTrue(text.contains("\"kind\":\"verdict\""));
             }

@@ -61,6 +61,38 @@ describe("backup job transcript access", () => {
     expect(screen.queryByText("No steps were recorded (bug)")).toBeNull();
   });
 
+  it.each(["TRANSCRIPT_DECRYPT_FAILED", "TRANSCRIPT_PARSE_FAILED", "TRANSCRIPT_MISSING"])("shows the stable server error %s", async (code) => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: code }), { status: code === "TRANSCRIPT_MISSING" ? 409 : 500 })));
+    render(<JobTranscriptDrawer jobId="job-error" hasTranscript />);
+    fireEvent.click(screen.getByRole("button", { name: "Transcript" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(`Transcript could not be loaded (${code}).`);
+    expect(screen.queryByText("No steps were recorded (bug)")).toBeNull();
+    expect(screen.getByRole("button", { name: "Download (.txt)" })).toBeDisabled();
+  });
+
+  it.each(["[", JSON.stringify({}), JSON.stringify([{}])])("rejects malformed successful content: %s", async (body) => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(body)));
+    render(<JobTranscriptDrawer jobId="job-broken" hasTranscript />);
+    fireEvent.click(screen.getByRole("button", { name: "Transcript" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("TRANSCRIPT_PARSE_FAILED");
+    expect(screen.getByRole("button", { name: "Download (.txt)" })).toBeDisabled();
+  });
+
+  it("keeps forbidden content distinct from missing steps", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("", { status: 403 })));
+    render(<JobTranscriptDrawer jobId="job-forbidden" hasTranscript />);
+    fireEvent.click(screen.getByRole("button", { name: "Transcript" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("TRANSCRIPT_FORBIDDEN");
+  });
+
+  it("does not display arbitrary exception details", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: "synthetic private detail" }), { status: 500 })));
+    render(<JobTranscriptDrawer jobId="job-private-error" hasTranscript />);
+    fireEvent.click(screen.getByRole("button", { name: "Transcript" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("TRANSCRIPT_LOAD_FAILED");
+    expect(screen.queryByText(/synthetic private detail/)).toBeNull();
+  });
+
   it("builds a downloadable text representation", () => {
     expect(transcriptAsText(entries)).toContain("2026-09-27T10:00:00Z (+4 ms) [SSH] command\nshow synthetic");
   });
