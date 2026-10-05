@@ -45,7 +45,9 @@ public final class PolicyCollectionJobExecutor {
             if ("palo_alto".equals(run.vendor())) PanPolicyGates.requireAll(gates);
             else CpPolicyGates.requireAll(gates);
             for (var source : repository.sources()) if (source.runId().equals(run.runId()))
-                repository.enqueue(source.sourceId(), "", true, ACTOR);
+                repository.enqueue(source.sourceId(), "", true, ACTOR,
+                    "system:discovery-refresh".equals(run.requestedByActorFingerprint())
+                        ? PolicyCollectionRepository.Mode.FULL : PolicyCollectionRepository.Mode.CHANGED_ONLY);
         } catch (RuntimeException unavailable) {
             System.getLogger(getClass().getName()).log(System.Logger.Level.WARNING, "POLICY_AUTOMATIC_ADMISSION_FAILED");
         }
@@ -133,7 +135,7 @@ public final class PolicyCollectionJobExecutor {
                     () -> leases.heartbeat(jobId, epoch, Duration.ofMinutes(10)), publish);
             } else {
                 failures = new java.util.ArrayList<>();
-                var snapshots = collector.collect(run.get(), request.get(),
+                var snapshots = collector.collect(run.get(), request.get().withLease(epoch),
                     () -> leases.heartbeat(jobId, epoch, Duration.ofMinutes(10)), publish, failures::add);
                 failures.addAll(snapshots.stream().flatMap(snapshot -> snapshot.failures().stream()).toList());
             }

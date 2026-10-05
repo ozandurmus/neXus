@@ -6,7 +6,7 @@ import { Icon } from "../shell/Icon";
 import { relativeAge, DISPLAY_TZ } from "../shell/time";
 import { JobTranscriptDrawer } from "./JobTranscriptDrawer";
 import { m3 } from "../theme/m3Theme";
-import { cancelJob, listPolicies, getPolicyCollectionStatus, type PolicyCollectionStatus, listPolicySources, collectPolicies, type PolicyCollectionSource, getPolicy, getPolicyObject, type PolicyTarget, type PolicyMetadata, type PolicyObject, type PolicyRule, type PolicyCell, type PolicyPage } from "../auth/adminApi";
+import { cancelJob, listPolicies, getPolicyCollectionStatus, type PolicyCollectionMode, type PolicyCollectionStatus, listPolicySources, collectPolicies, type PolicyCollectionSource, getPolicy, getPolicyObject, type PolicyTarget, type PolicyMetadata, type PolicyObject, type PolicyRule, type PolicyCell, type PolicyPage } from "../auth/adminApi";
 
 import { VirtualPolicyCards, RuleDetailPanel, RuleHistory, scheduleLabel, sectionLabel, reportPolicyLoadError } from "./PolicyRuleViewer";
 
@@ -285,10 +285,10 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
     document.addEventListener("visibilitychange", visibility);
     return () => { active = false; window.clearTimeout(timer); document.removeEventListener("visibilitychange", visibility); };
   }, [activeJobIds]);
-  const collect = async (source: string, domain = "") => {
+  const collect = async (source: string, domain = "", mode: PolicyCollectionMode = "CHANGED_ONLY") => {
     setCollecting(true); setCollectionStatus("");
     try {
-      const queued = await collectPolicies(source, domain);
+      const queued = await collectPolicies(source, domain, mode);
       setJobs(current => [...current.filter(job => job.sourceId !== source), { sourceId: source, jobId: queued.jobId, state: "REQUESTED", reason: "", step: 0, total: 0 }]);
     } catch { setBulkQueue([]); setCollectionStatus("Policy collection is temporarily unavailable. The source may be busy."); }
     finally { setCollecting(false); }
@@ -304,7 +304,10 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
     }
   };
   const collectButton = (source: string, domain = "") => canCollect && eligibleSources.has(source)
-    ? <Button size="small" variant="outlined" disabled={collecting || activeJobs.length > 0 || bulkQueue.length > 0} onClick={() => void collect(source, domain)}>Collect policies</Button> : null;
+    ? <Stack direction="row" flexWrap="wrap" gap={1}>
+      <Button size="small" variant="outlined" disabled={collecting || activeJobs.length > 0 || bulkQueue.length > 0} onClick={() => void collect(source, domain)}>Collect changes</Button>
+      <Button size="small" disabled={collecting || activeJobs.length > 0 || bulkQueue.length > 0} onClick={() => void collect(source, domain, "FULL")}>Full refresh (incl. hit counts)</Button>
+    </Stack> : null;
   useEffect(() => {
     if (!canCollect || collecting || loadingTree || activeJobIds || !bulkQueue.length) return;
     const [next, ...rest] = bulkQueue; setBulkQueue(rest);
@@ -365,6 +368,12 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
                   {outcome === "FAILED" && (job.outcome === "PARTIAL" || job.reason.startsWith("PARTIAL_SNAPSHOT")) && " · partial snapshot available"}
                   </Typography>}
               {running && (job.layers ?? 0) > 0 && job.packagesTotal !== undefined && <Typography variant="caption" display="block">Current package layer {bounded(job.layer ?? 0, job.layers ?? 0)}/{job.layers}</Typography>}
+              {!!job.domains?.length && <Box>
+                <Typography variant="caption" display="block">Domains: {job.domainsReused ?? 0} reused · {job.domainsCollected ?? 0} collected · Rules: {job.rulesReused ?? 0} reused · {job.rulesFetched ?? 0} fetched</Typography>
+                {job.domains.map(domain => <Typography key={domain.containerId} variant="caption" display="block">
+                  {displayName(catalog.find(p => p.containerId === domain.containerId)?.containerName, "Policy domain")}: {domain.status === "REUSED" ? `reused · unchanged since ${domain.publishTime ?? "unknown"} · hits collected at ${domain.hitsCollectedAt ?? "unknown"}` : domain.status === "COLLECTED" ? "collected" : "collecting"}
+                </Typography>)}
+              </Box>}
               {running && collectionStalled(job, now) && <Typography role="alert" variant="caption" color="warning.main" display="block">No activity for more than twice the read timeout.</Typography>}
               {outcome === "PARTIAL" && <Typography variant="caption" display="block">Unit failure codes: {(job.unitFailureCodes?.length ? job.unitFailureCodes : ["COLLECTION_FAILED"]).join(", ")}</Typography>}
               {outcome === "PARTIAL" && <FailureDetails reason={(job.unitFailureCodes?.length ? job.unitFailureCodes : ["COLLECTION_FAILED"]).join("\n")} allowed={canCollect} job={job} />}

@@ -25,7 +25,7 @@ class CpObjectInventoryCollectionTest {
     private final PolicyCollectionRepository repository = mock(PolicyCollectionRepository.class);
     private final DiscoveryRun run = new DiscoveryRun("run-1", "check_point", "192.0.2.10", "synthetic-ref", "synthetic-actor",
         DiscoveryRunState.FINISHED, Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
-    private final PolicyCollectionRepository.Request request = new PolicyCollectionRepository.Request("mds-1", "", false);
+    private final PolicyCollectionRepository.Request request = new PolicyCollectionRepository.Request("mds-1", "", false, PolicyCollectionRepository.Mode.FULL, "", 0);
     private final List<CpObjectInventory> stored = new ArrayList<>();
 
     private CheckPointPolicyCollector collector(int sessions, java.util.function.Function<String, ExecResult> answers) throws Exception {

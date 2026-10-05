@@ -175,10 +175,10 @@ class PolicyCollectionJobExecutorTest {
             .stream().filter(row -> row.key().equals(key)).toList();
         var executor = new PolicyCollectionJobExecutor(null, null, null, repository, null, gates);
         executor.afterDiscovery(run);
-        verify(repository).enqueue(eq("mds-1"), eq(""), eq(true), anyString());
-        verify(repository, never()).enqueue(eq("mds-2"), anyString(), anyBoolean(), anyString());
+        verify(repository).enqueue(eq("mds-1"), eq(""), eq(true), anyString(), eq(PolicyCollectionRepository.Mode.CHANGED_ONLY));
+        verify(repository, never()).enqueue(eq("mds-2"), anyString(), anyBoolean(), anyString(), any());
         new PolicyCollectionJobExecutor(null, null, null, repository, null, key -> List.of()).afterDiscovery(run);
-        verify(repository, times(1)).enqueue(anyString(), anyString(), anyBoolean(), anyString());
+        verify(repository, times(1)).enqueue(anyString(), anyString(), anyBoolean(), anyString(), any());
     }    @Test void panoramaFailureDoesNotPublishAndDiscoveryUsesOnlyApprovedGates() {
         var leases = mock(JobLeaseRepository.class);
         var attempts = mock(JobStepAttemptRepository.class);
@@ -200,7 +200,7 @@ class PolicyCollectionJobExecutorTest {
             .stream().filter(row -> row.key().equals(key)).toList();
         var executor = new PolicyCollectionJobExecutor(leases, attempts, runs, repository, null, gates).withPanorama(collector);
         executor.afterDiscovery(run);
-        verify(repository).enqueue(eq("pan-1"), eq(""), eq(true), anyString());
+        verify(repository).enqueue(eq("pan-1"), eq(""), eq(true), anyString(), eq(PolicyCollectionRepository.Mode.CHANGED_ONLY));
         assertInstanceOf(JobOutcome.Failed.class, executor.execute("job-pan", 1, "run-pan"));
         verify(repository, never()).publish(anyString(), anyLong(), anyList(), anyString());
         verify(attempts).insertPreContact(eq("job-pan"), eq(1L), eq(0), eq("PAN_POLICY_READ"), eq("read"), eq(1));
@@ -270,5 +270,16 @@ class PolicyCollectionJobExecutorTest {
             when(repository.checkpoint(anyString(), anyLong(), any(), anyString())).thenReturn(false);
             assertInstanceOf(JobOutcome.ZombieStopped.class, executor.execute("job-1", 1, "run-1"));
         }
+    }
+    @Test void nightlyDiscoveryQueuesFullWhileDaytimeKeepsChangedOnly() {
+        var repository = mock(PolicyCollectionRepository.class);
+        when(repository.sources()).thenReturn(List.of(new PolicyCollectionRepository.Source("mds-1", "run-1")));
+        GateRegistryPort gates = key -> GateRegistryFixtureLoader.loadFromStream(getClass().getResourceAsStream("/capabilities/gate_registry_fixture.yaml"))
+            .stream().filter(row -> row.key().equals(key)).toList();
+        var executor = new PolicyCollectionJobExecutor(null, null, null, repository, null, gates);
+        var run = new DiscoveryRun("run-1", "check_point", "192.0.2.10", "synthetic-ref", "system:discovery-refresh",
+            DiscoveryRunState.FINISHED, Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
+        executor.afterDiscovery(run);
+        verify(repository).enqueue(eq("mds-1"), eq(""), eq(true), anyString(), eq(PolicyCollectionRepository.Mode.FULL));
     }
 }

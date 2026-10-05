@@ -10,7 +10,14 @@ public class PolicyCollectionRepository {
     public record Source(String sourceId, String runId, String vendor) {
         public Source(String sourceId, String runId) { this(sourceId, runId, "check_point"); }
     }
-    public record Request(String sourceId, String domainRef, boolean automatic) {}
+    public enum Mode { CHANGED_ONLY, FULL }
+    public record Request(String sourceId, String domainRef, boolean automatic, Mode mode, String jobId, long epoch) {
+        public Request(String sourceId, String domainRef, boolean automatic) {
+            this(sourceId, domainRef, automatic, Mode.CHANGED_ONLY, "", 0);
+        }
+        public Request withLease(long epoch) { return new Request(sourceId, domainRef, automatic, mode, jobId, epoch); }
+    }
+    public record DomainRun(boolean complete, String signalJson, String snapshotsJson) {}
     public record FirewallEndpoint(String address, String credentialReferenceId) {}
     private final TransactionBoundary tx;
     public PolicyCollectionRepository(TransactionBoundary tx) { this.tx = tx; }
@@ -40,12 +47,16 @@ public class PolicyCollectionRepository {
     }
 
     public Optional<Request> request(String jobId) {
-        return tx.inTransaction(db -> db.fetch("select source_id, domain_ref, automatic from policy_collection_request where job_id = {0}", jobId)
-            .stream().findFirst().map(r -> new Request(r.get("source_id", String.class), r.get("domain_ref", String.class), r.get("automatic", Boolean.class))));
+        return tx.inTransaction(db -> db.fetch("select source_id, domain_ref, automatic, mode from policy_collection_request where job_id = {0}", jobId)
+            .stream().findFirst().map(r -> new Request(r.get("source_id", String.class), r.get("domain_ref", String.class), r.get("automatic", Boolean.class), Mode.valueOf(r.get("mode", String.class)), jobId, 0)));
     }
 
     /** Serialize admission per MDS, including requests against different discovery runs. */
     public Optional<String> enqueue(String sourceId, String domainRef, boolean automatic, String actor) {
+        return enqueue(sourceId, domainRef, automatic, actor, Mode.CHANGED_ONLY);
+    }
+    public Optional<String> enqueue(String sourceId, String domainRef, boolean automatic, String actor, Mode mode) {
+        Objects.requireNonNull(mode);
         return new AuditedTransactionBoundary(tx).inTransaction(actor, "policy_collect", db -> {
             db.execute("select pg_advisory_xact_lock(hashtextextended({0}, 0))", "policy:" + sourceId);
             var source = new PolicyCollectionRepository(scoped(db)).sources().stream().filter(s -> s.sourceId().equals(sourceId)).findFirst();
@@ -62,8 +73,8 @@ public class PolicyCollectionRepository {
             String id = UUID.randomUUID().toString();
             new JooqJobRecordDao(scoped(db)).insertRequestedIfAbsentForRun(id, id, capability, source.get().runId(),
                     "read", capability, actor, "policy_collect").orElseThrow();
-            db.execute("insert into policy_collection_request(job_id, source_id, domain_ref, automatic) values ({0},{1},{2},{3})",
-                    id, sourceId, domainRef, automatic);
+            db.execute("insert into policy_collection_request(job_id, source_id, domain_ref, automatic, mode) values ({0},{1},{2},{3},{4})",
+                    id, sourceId, domainRef, automatic, mode.name());
             return Optional.of(id);
         });
     }
@@ -73,6 +84,44 @@ public class PolicyCollectionRepository {
         return tx.inTransaction(db -> db.execute("insert into policy_collection_domain(source_id, domain_ref, attempted_at) values ({0},{1},now()) "
             + "on conflict (source_id, domain_ref) do update set attempted_at = excluded.attempted_at "
             + (automatic ? "where policy_collection_domain.attempted_at <= now() - interval '6 hours'" : ""), sourceId, domainRef) == 1);
+    }
+
+    /** Inspect the latest attempt, including incomplete attempts; never fall back past gaps. */
+    public Optional<DomainRun> previousDomain(String source, String domain) {
+        return tx.inTransaction(db -> db.fetch("select complete, signal::text as signal, snapshots::text as snapshots "
+            + "from cp_policy_domain_run where source_id = {0} and domain_ref = {1} order by attempted_at desc limit 1",
+            source, domain).stream().findFirst().map(r -> new DomainRun(Boolean.TRUE.equals(r.get("complete", Boolean.class)),
+                r.get("signal", String.class), r.get("snapshots", String.class))));
+    }
+
+    /** Pending attempts invalidate reuse immediately; publication remains fenced by the job lease. */
+    public boolean saveDomain(Request request, String domain, String status, boolean complete, String signal,
+            String snapshots, int rules, String hitsAt, String actor) {
+        return new AuditedTransactionBoundary(tx).inTransaction(actor, "policy_collect_domain", db -> {
+            if (db.fetch("select job_id from jobs where job_id = {0} and lease_epoch = {1} and state = 'EXECUTING' "
+                    + "and lease_expires_at > now() for update", request.jobId(), request.epoch()).isEmpty()) return false;
+            db.execute("insert into cp_policy_domain_run(job_id, source_id, domain_ref, status, complete, signal, snapshots, rules_count, hits_collected_at) "
+                + "values ({0},{1},{2},{3},{4},{5}::jsonb,{6}::jsonb,{7},{8}::timestamptz) "
+                + "on conflict (job_id, domain_ref) do update set status = excluded.status, complete = excluded.complete, "
+                + "signal = excluded.signal, snapshots = excluded.snapshots, rules_count = excluded.rules_count, hits_collected_at = excluded.hits_collected_at",
+                request.jobId(), request.sourceId(), domain, status, complete, signal, snapshots, rules, hitsAt);
+            return true;
+        });
+    }
+
+    public List<Map<String, Object>> domainProgress(String jobId) {
+        return tx.inTransaction(db -> db.fetch("select domain_ref, status, signal->>'publishTime' as publish_time, rules_count, hits_collected_at "
+            + "from cp_policy_domain_run where job_id = {0} order by domain_ref", jobId).map(r -> {
+                Map<String, Object> view = new LinkedHashMap<>();
+                view.put("containerId", r.get("domain_ref", String.class));
+                view.put("status", r.get("status", String.class));
+                view.put("rules", r.get("rules_count", Integer.class));
+                String published = r.get("publish_time", String.class);
+                if (published != null) view.put("publishTime", published);
+                var at = r.get("hits_collected_at", java.time.OffsetDateTime.class);
+                if (at != null) view.put("hitsCollectedAt", at.toInstant().toString());
+                return view;
+            }));
     }
 
     /** Reuse each domain/type inventory, including its explicit gaps, until the configured interval expires. */

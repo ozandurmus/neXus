@@ -63,11 +63,12 @@ public final class PolicyPrivacy {
         if (!(value instanceof String text)) return "Withheld in AIView";
         if (text.isEmpty()) return text;
         if (OPAQUE.contains(key) || key.equals("refs") || key.equals("members") || key.equals("collectedAt")) return text;
+        if (key.equals("status") && Set.of("COLLECTING", "COLLECTED", "REUSED").contains(text)) return text;
         if (key.equals("state")) return Set.of("REQUESTED", "CLAIMED", "EXECUTING", "RECONCILING", "COMPLETED", "FAILED", "REJECTED", "CANCELLED", "OUTCOME_UNKNOWN", "RECONCILED").contains(text) ? text : "UNKNOWN";
         if (key.equals("outcome")) return Set.of("COMPLETED", "PARTIAL", "FAILED", "UNKNOWN").contains(text) ? text : "UNKNOWN";
         if (key.equals("unitFailureCodes")) return failureCode(text);
         if (key.equals("reason")) return text.equals("COLLECTION_SKIPPED") ? text : safeReason(text);
-        if (Set.of("firstHit", "lastHit", "createdAt", "modifiedAt", "startedAt", "lastActivityAt").contains(key)) {
+        if (Set.of("firstHit", "lastHit", "createdAt", "modifiedAt", "startedAt", "lastActivityAt", "publishTime", "hitsCollectedAt").contains(key)) {
             try { return java.time.Instant.parse(text).toString(); } catch (RuntimeException invalid) { return null; }
         }
         if (Set.of("start", "end", "changedOn").contains(key)) {

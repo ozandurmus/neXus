@@ -20,6 +20,8 @@ import static com.securityexpert.nexus.ui2.worker.policy.CheckPointPolicyCollect
 /** One coordinator owns assembly/publication; each executor thread owns one trusted SSH session. */
 final class CpPolicyParallelCollection {
     private final CheckPointPolicyCollector collector;
+    private final CpDomainReuse reuse;
+    private final List<PolicySnapshot> reused = new ArrayList<>();
     private final PolicyCollectionRepository repository;
     private final DiscoveryRun run;
     private final PolicyCollectionRepository.Request request;
@@ -42,8 +44,8 @@ final class CpPolicyParallelCollection {
 
     CpPolicyParallelCollection(CheckPointPolicyCollector collector, PolicyCollectionRepository repository,
             int maximum, LongSupplier clock, DiscoveryRun run, PolicyCollectionRepository.Request request,
-            long deadline, BooleanSupplier lease, Consumer<PolicySnapshot> publish, Consumer<CollectionFailure> domainFailure) {
-        this.collector = collector; this.repository = repository; this.clock = clock; this.run = run;
+            long deadline, BooleanSupplier lease, Consumer<PolicySnapshot> publish, Consumer<CollectionFailure> domainFailure, CpDomainReuse reuse) {
+        this.reuse = reuse; this.collector = collector; this.repository = repository; this.clock = clock; this.run = run;
         this.request = request; this.deadline = deadline; this.lease = lease; this.publish = publish; this.domainFailure = domainFailure;
         safety = new Safety(maximum);
         pool = Executors.newFixedThreadPool(maximum, worker -> new Thread(worker, "cp-policy-page"));
@@ -91,7 +93,7 @@ final class CpPolicyParallelCollection {
                         }
                         throw result.error;
                     }
-                    if (work.layer != null || work.gate >= CpPolicyGates.OBJECT_BASE) {
+                    if (work.layer != null || (work.gate >= CpPolicyGates.OBJECT_BASE && work.gate < CpPolicyGates.LAST_PUBLISHED_SESSION)) {
                         if (retryable(result.error)) safety.pressure();
                         else safety.streak = 0;
                     }
@@ -108,7 +110,7 @@ final class CpPolicyParallelCollection {
                     if (work.layer == null || work.layer.failure == null) {
                         try {
                             work.accept.accept(result.page);
-                            if ((work.layer != null && work.layer.failure == null) || work.gate >= CpPolicyGates.OBJECT_BASE) safety.success(result.elapsed);
+                            if ((work.layer != null && work.layer.failure == null) || (work.gate >= CpPolicyGates.OBJECT_BASE && work.gate < CpPolicyGates.LAST_PUBLISHED_SESSION)) safety.success(result.elapsed);
                         }
                         catch (RuntimeException invalid) {
                             if (PolicyCollectionTrace.fatal(invalid)) throw invalid;
@@ -130,8 +132,10 @@ final class CpPolicyParallelCollection {
             }
             if (stopped || cancelled.getAsBoolean()) throw PolicyCollectionTrace.failure("CANCELLED");
             collector.checkActive(deadline, lease);
-            return policies.stream().sorted(Comparator.comparingInt(p -> domainOrder.get(p.metadata.containerId())))
-                .map(p -> p.latest).toList();
+            reuse.finish();
+            List<PolicySnapshot> result = new ArrayList<>(reused);
+            policies.forEach(p -> result.add(p.latest));
+            return result.stream().sorted(Comparator.comparingInt(p -> domainOrder.get(p.metadata().containerId()))).toList();
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
             throw PolicyCollectionTrace.failure("INTERRUPTED");
@@ -209,11 +213,25 @@ final class CpPolicyParallelCollection {
             if (!request.domainRef().isEmpty() && !container.equals(request.domainRef())) continue;
             found = true;
             domainOrder.putIfAbsent(container, domainOrder.size());
-            if (repository.beginDomain(request.sourceId(), container, request.automatic()))
-                enqueuePackages(uid, name, container, new PackagePages(collector.packagePageSize), 0, collector.packagePageSize);
-            else PolicyCollectionTrace.packages(0);
+            if (repository.beginDomain(request.sourceId(), container, request.automatic())) {
+                reuse.begin(container);
+                if (request.mode() == PolicyCollectionRepository.Mode.FULL) domainSignal(uid, name, container, null);
+                else pending.add(new Work(MgmtCliCommands.showLastPublishedSession(name), CpPolicyGates.LAST_PUBLISHED_SESSION,
+                    null, 0, 0, 0, page -> domainSignal(uid, name, container, page),
+                    error -> domainSignal(uid, name, container, null)));
+            } else PolicyCollectionTrace.packages(0);
         }
         if (!found) throw failure();
+    }
+
+    private void domainSignal(String uid, String name, String container, JsonNode signal) {
+        List<PolicySnapshot> snapshots = reuse.decide(container, signal);
+        if (snapshots == null) enqueuePackages(uid, name, container, new PackagePages(collector.packagePageSize), 0, collector.packagePageSize);
+        else {
+            objectDomains.put(container, name);
+            snapshots.forEach(publish);
+            reused.addAll(snapshots);
+        }
     }
 
     private void enqueuePackages(String uid, String domain, String container, PackagePages listing, int offset, int limit) {
@@ -230,6 +248,7 @@ final class CpPolicyParallelCollection {
 
     private void packages(String domainUid, String domain, String container, List<JsonNode> items) {
         objectDomains.put(container, domain);
+        reuse.planned(container, items.size());
         PolicyCollectionTrace.packages(items.size());
         Set<String> seen = new HashSet<>();
         for (JsonNode node : items) {

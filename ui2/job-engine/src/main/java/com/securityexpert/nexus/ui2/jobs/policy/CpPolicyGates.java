@@ -35,9 +35,11 @@ public final class CpPolicyGates {
         "mgmt_cli -r true -d '<DOMAIN>' -f json show-dynamic-objects limit 50 offset '<N>' details-level full",
         "mgmt_cli -r true -d '<DOMAIN>' -f json show-dns-domains limit 50 offset '<N>' details-level full",
         "mgmt_cli -r true -d '<DOMAIN>' -f json show-security-zones limit 50 offset '<N>' details-level full",
-        "mgmt_cli -r true -d '<DOMAIN>' -f json show-unused-objects limit 50 offset '<N>' details-level full");
+        "mgmt_cli -r true -d '<DOMAIN>' -f json show-unused-objects limit 50 offset '<N>' details-level full",
+        "mgmt_cli -r true -d '<DOMAIN>' -f json show-last-published-session");
     public static final int PACKAGES_50 = 4;
     public static final int OBJECT_BASE = 5;
+    public static final int LAST_PUBLISHED_SESSION = COMMANDS.size() - 1;
     public static final List<String> OBJECT_TYPES = List.of("times", "time-groups", "gateways-and-servers", "hosts", "networks", "groups", "groups-with-exclusion", "address-ranges", "services-tcp", "services-udp", "services-icmp", "services-icmp6", "services-other", "services-sctp", "services-dce-rpc", "services-rpc", "service-groups", "access-roles", "dynamic-objects", "dns-domains", "security-zones", "unused-objects");
     public static Capability capability(GateRegistryPort registry) {
         var steps = new java.util.ArrayList<CapabilityStep>();

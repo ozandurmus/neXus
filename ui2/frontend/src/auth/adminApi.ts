@@ -1746,12 +1746,13 @@ export const getPolicyInstallations = (source: string, domain: string, page = 0,
 
 export type PolicyCollectionSource = { sourceId: string; sourceName: string; vendor: string; collection?: PolicyCollectionStatus };
 export const listPolicySources = () => call<{ sources: PolicyCollectionSource[]; canCollect: boolean; canCancel?: boolean }>("/api/v2/policy/sources", "GET");
-export const collectPolicies = (sourceId: string, domainRef = "") => call<{ jobId: string }>(
-  `/api/v2/policy/sources/${encodeURIComponent(sourceId)}/collect`, "POST", { domainRef });
+export type PolicyCollectionMode = "CHANGED_ONLY" | "FULL";
+export const collectPolicies = (sourceId: string, domainRef = "", mode: PolicyCollectionMode = "CHANGED_ONLY") => call<{ jobId: string }>(
+  `/api/v2/policy/sources/${encodeURIComponent(sourceId)}/collect`, "POST", { domainRef, mode });
 
 export type PolicyContainer = { containerId: string; containerName: string };
 export const getPolicyTree = (source = "", container = "", device = "") => call<{
   sources?: PolicyCollectionSource[]; devices?: PolicyTarget[]; containers?: PolicyContainer[]; policies?: PolicyMetadata[];
 }>(`/api/v2/policy/tree?source=${encodeURIComponent(source)}&container=${encodeURIComponent(container)}&device=${encodeURIComponent(device)}`, "GET");
-export type PolicyCollectionStatus = { cancelRequested?: boolean; jobId: string; state: string; outcome?: string; reason: string; step: number; total: number; layer?: number; layers?: number; rulesFetched?: number; packagesDone?: number; packagesTotal?: number; domainsDone?: number; domainsTotal?: number; startedAt?: string; lastActivityAt?: string; readTimeoutSeconds?: number; gapUnits?: number; unitFailureCodes?: string[]; collectedAt?: string; hasTranscript?: boolean };
+export type PolicyCollectionStatus = { domainsReused?: number; domainsCollected?: number; rulesReused?: number; domains?: { containerId: string; status: "COLLECTING" | "COLLECTED" | "REUSED"; rules: number; publishTime?: string; hitsCollectedAt?: string }[]; cancelRequested?: boolean; jobId: string; state: string; outcome?: string; reason: string; step: number; total: number; layer?: number; layers?: number; rulesFetched?: number; packagesDone?: number; packagesTotal?: number; domainsDone?: number; domainsTotal?: number; startedAt?: string; lastActivityAt?: string; readTimeoutSeconds?: number; gapUnits?: number; unitFailureCodes?: string[]; collectedAt?: string; hasTranscript?: boolean };
 export const getPolicyCollectionStatus = (id: string) => call<PolicyCollectionStatus>(`/api/v2/policy/collections/${encodeURIComponent(id)}`, "GET");

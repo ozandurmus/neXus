@@ -77,6 +77,7 @@ class PolicyCollectionServiceTest {
         when(presentation.get("finished_at", OffsetDateTime.class)).thenReturn(OffsetDateTime.parse("2026-10-02T04:00:00Z"));
         when(presentation.get("has_transcript", Boolean.class)).thenReturn(true);
         when(db.fetch(anyString(), any(Object[].class))).thenAnswer(call -> result(
+            ((String) call.getArgument(0)).startsWith("select domain_ref") ? null :
             ((String) call.getArgument(0)).startsWith("select finished_at") ? presentation : progress));
         var view = new PolicyCollectionService(tx).status("job-1").orElseThrow();
         assertEquals("2026-10-02T04:00:00Z", view.get("collectedAt"));

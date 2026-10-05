@@ -12,7 +12,9 @@ import com.securityexpert.nexus.ui2.platform.*;
 
 @RestController
 public final class PolicyCollectionController {
-    public record CollectRequest(String domainRef) {}
+    public record CollectRequest(String domainRef, String mode) {
+        public CollectRequest(String domainRef) { this(domainRef, null); }
+    }
     private final PolicyCollectionService collections;
     private final RbacEvaluator rbac;
     public PolicyCollectionController(PolicyCollectionService collections, RbacEvaluator rbac) {
@@ -35,9 +37,13 @@ public final class PolicyCollectionController {
     @PostMapping("/api/v2/policy/sources/{id}/collect")
     public ResponseEntity<?> collect(@PathVariable String id, @RequestBody CollectRequest body, HttpServletRequest request) {
         try {
-            return collections.collect(id, body.domainRef(), actor(request)).<ResponseEntity<?>>map(job ->
+            var mode = body.mode() == null ? com.securityexpert.nexus.ui2.persistence.policy.PolicyCollectionRepository.Mode.CHANGED_ONLY
+                : com.securityexpert.nexus.ui2.persistence.policy.PolicyCollectionRepository.Mode.valueOf(body.mode());
+            return collections.collect(id, body.domainRef() == null ? "" : body.domainRef(), actor(request), mode).<ResponseEntity<?>>map(job ->
                 ResponseEntity.accepted().cacheControl(CacheControl.noStore()).body(Map.of("jobId", job)))
                 .orElseGet(() -> ResponseEntity.status(409).cacheControl(CacheControl.noStore()).body(Map.of("error", "POLICY_SOURCE_BUSY_OR_INELIGIBLE")));
+        } catch (IllegalArgumentException invalid) {
+            return ResponseEntity.badRequest().cacheControl(CacheControl.noStore()).body(Map.of("error", "INVALID_COLLECTION_MODE"));
         } catch (IllegalStateException unavailable) {
             return ResponseEntity.status(409).cacheControl(CacheControl.noStore()).body(Map.of("error", "POLICY_GATE_UNAVAILABLE"));
         }
