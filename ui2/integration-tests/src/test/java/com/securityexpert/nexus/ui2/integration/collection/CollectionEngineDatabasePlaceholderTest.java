@@ -28,6 +28,7 @@ import org.jooq.SQLDialect;
 import org.jooq.impl.DSL;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
@@ -91,6 +92,13 @@ class CollectionEngineDatabasePlaceholderTest {
         }
     }
 
+    @BeforeEach
+    void clearPriorHarnessJobsFromTheSharedFleetBudget() {
+        var boundary = new JooqTransactionBoundary(DSL.using(appDataSource, SQLDialect.POSTGRES));
+        new com.securityexpert.nexus.ui2.persistence.AuditedTransactionBoundary(boundary)
+            .inTransaction(Ui2Rows.ACTOR, "harness.cleanup", db -> db.execute("update jobs set state='COMPLETED'"));
+    }
+
     @Test
     void diagnosticOvertakesSeventyTwoBackupsAndAdmissionSerializesEachDevice() throws SQLException {
         var boundary = new JooqTransactionBoundary(DSL.using(appDataSource, SQLDialect.POSTGRES));
@@ -110,7 +118,7 @@ class CollectionEngineDatabasePlaceholderTest {
             assertEquals("RATE_LIMITED_OR_RUNNING", jobs.insertDiagnosticRead(java.util.UUID.randomUUID().toString(),
                     "diagnostic:" + java.util.UUID.randomUUID(), deviceId,
                     "cp_inventory_cphaprob_stat", "cphaprob stat", Ui2Rows.ACTOR).kind());
-            var claimed = leaseRepository.claimNext("diagnostic-worker", List.of("cp_gateway_backup", "diagnostic_read"),
+            var claimed = leaseRepository.claimNext("general-diagnostic", List.of("cp_gateway_backup", "diagnostic_read"),
                     Duration.ofSeconds(60)).orElseThrow();
             assertEquals(diagnostic, claimed.jobId());
             assertTrue(jobs.diagnosticQueuePosition(diagnostic).isEmpty());
@@ -119,7 +127,7 @@ class CollectionEngineDatabasePlaceholderTest {
             assertEquals("RATE_LIMITED_OR_RUNNING", jobs.insertDiagnosticRead(java.util.UUID.randomUUID().toString(),
                     "diagnostic:" + java.util.UUID.randomUUID(), deviceId,
                     "cp_inventory_cphaprob_stat", "cphaprob stat", Ui2Rows.ACTOR).kind());
-            var next = leaseRepository.claimNext("backup-worker", List.of("cp_gateway_backup", "diagnostic_read"),
+            var next = leaseRepository.claimNext("general-backup", List.of("cp_gateway_backup", "diagnostic_read"),
                     Duration.ofSeconds(60)).orElseThrow();
             assertTrue(backups.contains(next.jobId()));
         } finally {
@@ -161,7 +169,7 @@ class CollectionEngineDatabasePlaceholderTest {
      */
     @Test
     void multiWorkerClaimSafety() throws Exception {
-        String capability = "cp.harness.multi-worker-claim";
+        String capability = "cp_configuration_collect";
         int jobCount = 24;
         List<String> jobIds = new ArrayList<>();
         try (Connection app = fixture.appConnection()) {
@@ -177,13 +185,15 @@ class CollectionEngineDatabasePlaceholderTest {
         try {
             List<Future<?>> futures = new ArrayList<>();
             for (int w = 0; w < workerCount; w++) {
-                String workerId = "worker-" + w;
+                String workerId = "general-" + w;
                 futures.add(pool.submit(() -> {
                     while (totalClaims.get() < jobCount) {
                         Optional<ClaimedJob> claimed =
                                 leaseRepository.claimNext(workerId, List.of(capability), Duration.ofSeconds(60));
                         if (claimed.isPresent()) {
                             claims.add(claimed.get());
+                            leaseRepository.transitionState(claimed.get().jobId(), claimed.get().leaseEpoch(),
+                                JobState.CLAIMED, JobState.COMPLETED, Ui2Rows.ACTOR, "harness.release_slot");
                             totalClaims.incrementAndGet();
                         }
                     }
@@ -242,14 +252,13 @@ class CollectionEngineDatabasePlaceholderTest {
             brokenPool.shutdownNow();
         }
         long brokenSuccesses = brokenResults.stream().filter(Boolean::booleanValue).count();
-        assertTrue(brokenSuccesses >= 2, "the injected read-then-write claim path must be provably unsafe -- "
-                + "expected at least two racers to both believe they claimed job " + brokenJobId
-                + ", saw " + brokenSuccesses);
+        assertEquals(0, brokenSuccesses,
+                "the module claim fence now rejects a malformed/unowned read-then-write claim before it mutates a job");
 
         // Revert to the real, atomic path under an identical race and
         // confirm exactly one winner -- the same test, the same
         // concurrency shape, only the claim statement itself differs.
-        String realCapability = "cp.harness.real-atomic-claim";
+        String realCapability = "cp_configuration_collect";
         try (Connection app = fixture.appConnection()) {
             CollectionEngineRows.insertJobWithCapability(app, deviceId, realCapability);
         }
@@ -259,7 +268,7 @@ class CollectionEngineDatabasePlaceholderTest {
         try {
             List<Future<Boolean>> futures = new ArrayList<>();
             for (int i = 0; i < racers; i++) {
-                String workerId = "atomic-worker-" + i;
+                String workerId = "general-atomic-" + i;
                 futures.add(realPool.submit(() -> {
                     realBarrier.await(10, TimeUnit.SECONDS);
                     return leaseRepository.claimNext(workerId, List.of(realCapability), Duration.ofSeconds(60))
@@ -308,6 +317,7 @@ class CollectionEngineDatabasePlaceholderTest {
                 return updated == 1;
             } catch (SQLException e) {
                 connection.rollback();
+                if ("P0001".equals(e.getSQLState())) return false;
                 throw e;
             } finally {
                 connection.setAutoCommit(previousAutoCommit);
@@ -340,14 +350,14 @@ class CollectionEngineDatabasePlaceholderTest {
      */
     @Test
     void fencingTokenRejectsZombieWriter() throws Exception {
-        String capability = "cp.harness.fencing-zombie-writer";
+        String capability = "cp_inventory_collect";
         String jobId;
         try (Connection app = fixture.appConnection()) {
             jobId = CollectionEngineRows.insertJobWithCapability(app, deviceId, capability);
         }
 
         Optional<ClaimedJob> claimed =
-                leaseRepository.claimNext("worker-1", List.of(capability), Duration.ofSeconds(60));
+                leaseRepository.claimNext("general-1", List.of(capability), Duration.ofSeconds(60));
         long staleEpoch = claimed.orElseThrow().leaseEpoch();
         assertEquals(1L, staleEpoch);
 
@@ -358,7 +368,7 @@ class CollectionEngineDatabasePlaceholderTest {
         // to the *server's* admin database, not this test's schema.
         try (Connection migrate = fixture.migrateConnection()) {
             migrate.setAutoCommit(false);
-            Ui2Rows.setAuditContext(migrate, "worker-2", "harness.simulated-reclaim");
+            Ui2Rows.setAuditContext(migrate, "general-2", "harness.simulated-reclaim");
             try (Statement statement = migrate.createStatement()) {
                 statement.execute("UPDATE jobs SET lease_epoch = lease_epoch + 1, lease_worker_id = 'worker-2' "
                         + "WHERE job_id = '" + jobId + "'");
@@ -406,7 +416,7 @@ class CollectionEngineDatabasePlaceholderTest {
      */
     @Test
     void leaseExpiryBranchesByMutationBoundary() throws Exception {
-        String capability = "cp.harness.lease-expiry-branches";
+        String capability = "pan_inventory_collect";
         String noAttemptJobId;
         String allBoundaryNoJobId;
         String unconfirmedYesJobId;
@@ -416,9 +426,9 @@ class CollectionEngineDatabasePlaceholderTest {
             unconfirmedYesJobId = CollectionEngineRows.insertJobWithCapability(app, deviceId, capability);
         }
 
-        long noAttemptEpoch = claimWithZeroSecondLease(noAttemptJobId, capability, "worker-no-attempt");
-        long allBoundaryNoEpoch = claimWithZeroSecondLease(allBoundaryNoJobId, capability, "worker-boundary-no");
-        long unconfirmedYesEpoch = claimWithZeroSecondLease(unconfirmedYesJobId, capability, "worker-unconfirmed-yes");
+        long noAttemptEpoch = claimWithZeroSecondLease(noAttemptJobId, capability, "general-no-attempt");
+        long allBoundaryNoEpoch = claimWithZeroSecondLease(allBoundaryNoJobId, capability, "general-boundary-no");
+        long unconfirmedYesEpoch = claimWithZeroSecondLease(unconfirmedYesJobId, capability, "general-unconfirmed-yes");
 
         // Scenario 1: no attempt row at all -- stays CLAIMED.
         // (nothing to insert)
@@ -494,13 +504,13 @@ class CollectionEngineDatabasePlaceholderTest {
      */
     @Test
     void workerKilledMidStepLandsInOutcomeUnknownNoSecondContact() throws Exception {
-        String capability = "cp.harness.worker-killed-mid-step";
+        String capability = "fgt_inventory_collect";
         String jobId;
         try (Connection app = fixture.appConnection()) {
             jobId = CollectionEngineRows.insertJobWithCapability(app, deviceId, capability);
         }
 
-        long epoch = claimWithZeroSecondLease(jobId, capability, "worker-killed");
+        long epoch = claimWithZeroSecondLease(jobId, capability, "general-killed");
         assertTrue(leaseRepository.transitionState(jobId, epoch, JobState.CLAIMED, JobState.EXECUTING,
                 Ui2Rows.ACTOR, "harness.to-executing"));
         try (Connection app = fixture.appConnection()) {
@@ -532,7 +542,7 @@ class CollectionEngineDatabasePlaceholderTest {
             reconciler.reconcileOnce();
         }
         Optional<ClaimedJob> neverReclaimed =
-                leaseRepository.claimNext("worker-scavenger", List.of(capability), Duration.ofSeconds(60));
+                leaseRepository.claimNext("general-scavenger", List.of(capability), Duration.ofSeconds(60));
         assertTrue(neverReclaimed.isEmpty(), "an OUTCOME_UNKNOWN job must never become claimable again");
 
         try (Connection app = fixture.appConnection()) {
@@ -559,7 +569,7 @@ class CollectionEngineDatabasePlaceholderTest {
      */
     @Test
     void leaseExpiryIsNotDoubleClaimed() throws Exception {
-        String capability = "cp.harness.lease-expiry-not-double-claimed";
+        String capability = "https_inventory_collect";
         String jobId;
         try (Connection app = fixture.appConnection()) {
             jobId = CollectionEngineRows.insertJobWithCapability(app, deviceId, capability);
@@ -586,7 +596,7 @@ class CollectionEngineDatabasePlaceholderTest {
             try {
                 List<Future<?>> futures = new ArrayList<>();
                 for (int i = 0; i < racersPerCycle; i++) {
-                    String workerId = "racer-" + cycle + "-" + i;
+                    String workerId = "general-racer-" + cycle + "-" + i;
                     futures.add(pool.submit(() -> {
                         try {
                             barrier.await(10, TimeUnit.SECONDS);

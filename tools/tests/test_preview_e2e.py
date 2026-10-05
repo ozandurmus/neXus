@@ -589,7 +589,7 @@ def test_generic_worker_discovery_and_rendering_uses_production_args_ports_and_l
     path.write_text(yaml.safe_dump(deployment))
     path.with_name("58-synthetic-service.yaml").write_text(yaml.safe_dump(service))
     workers = preview.worker_templates(ROOT) + preview.worker_templates(tmp_path)
-    assert len(workers) == 4
+    assert len(workers) == 5
     before = copy.deepcopy(workers)
     for namespace in ("ui2-preview-first", "ui2-preview-second"):
         monkeypatch.setattr(preview, "NS", namespace)
@@ -630,6 +630,8 @@ def test_complete_preview_uses_unique_scopes_all_workers_and_cleanup(monkeypatch
     monkeypatch.setattr(preview, "cleanup", cleanup)
     def k(ns, *args, **kwargs):
         scopes.append((ns, args))
+        if args[:2] == ("get", "configmap"):
+            return json.dumps(dict(data={}))
         if args[:2] == ("get", "service"):
             return json.dumps(dict(spec=dict(clusterIP="192.0.2.20")))
         return ""
@@ -641,7 +643,7 @@ def test_complete_preview_uses_unique_scopes_all_workers_and_cleanup(monkeypatch
         preview.run(ROOT, COMMIT)
     assert preview.NS == "ui2-preview"
     assert cleanup_scopes == [("ui2-preview-synthetic-owner", "synthetic-owner")]
-    assert len([o for o in objects if o["kind"] == "Deployment"]) == 4
+    assert len([o for o in objects if o["kind"] == "Deployment"]) == 5
     for obj in objects:
         if obj["kind"] != "Namespace":
             assert obj["metadata"]["namespace"] == "ui2-preview-synthetic-owner"
@@ -808,7 +810,7 @@ def test_run_failure_keeps_substep_despite_cleanup(tmp_path, monkeypatch, operat
     monkeypatch.setattr(preview.Path, "home", lambda: tmp_path)
     monkeypatch.setattr(preview, "k", lambda *a, **kw: "")
     monkeypatch.setattr(preview, "create", lambda *a: None)
-    monkeypatch.setattr(preview, "worker_templates", lambda *a: [dict(component="synthetic", deployment={})])
+    monkeypatch.setattr(preview, "worker_templates", lambda *a: [dict(component="synthetic", deployment={}, ports=[8081])])
     monkeypatch.setattr(preview, "policies", lambda *a: [])
     monkeypatch.setattr(preview, "build_images", lambda *a: [IMAGE, IMAGE])
     monkeypatch.setattr(preview, "setup_database", lambda *a: "192.0.2.10")

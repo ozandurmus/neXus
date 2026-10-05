@@ -22,7 +22,7 @@ import com.securityexpert.nexus.ui2.worker.backup.diff.SemanticDeviationEngine;
 
 /**
  * Backup executor for Palo Alto Networks firewalls (PAN-OS 11.x) and Panorama.
- * 
+ *
  * <p>Streams the complete {@code device-state} bundle directly from the XML API
  * into encrypted vault storage with zero local disk footprint on the target firewall.
  * Concurrently extracts the {@code running-config.xml} for AST semantic deviation analysis.</p>
@@ -107,6 +107,7 @@ public final class PaloAltoBackupExecutor {
         try {
             credential = credentialResolver.resolve(credentialRef);
         } catch (RuntimeException unresolvable) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(unresolvable);
             return new PanBackupResult(false, null, null, noDeviation, "credential_unresolvable: " + unresolvable.getMessage());
         }
         XmlApiResult keyResult = transport.xmlApiCall(target,
@@ -173,6 +174,7 @@ public final class PaloAltoBackupExecutor {
             streamOutcome = transport.xmlApiCallStreaming(target, exportSpec, EXPORT_TIMEOUT,
                     is -> copyValidatedExport(is, new BoundedOutputStream(deviceState, MAX_BUFFERED_DEVICE_STATE_BYTES)));
         } catch (Exception e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
             return new PanBackupResult(false, null, null, deviationOutcome, "Device state export failed: stream transfer error");
         }
         if (!(streamOutcome instanceof XmlApiStreamOutcome.Completed<StreamedExport> completed)) {
@@ -244,6 +246,7 @@ public final class PaloAltoBackupExecutor {
             ArtefactStore.ArtefactMetadata metadata = handle.finish();
             return new PanBackupResult(true, metadata.ref().value(), metadata, deviationOutcome, null, missing);
         } catch (Exception e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
             try {
                 handle.close();
             } catch (IOException ignored) {

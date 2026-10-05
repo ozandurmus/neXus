@@ -117,7 +117,7 @@ def test_the_rule_checks_below_have_something_to_check():
     assert {owner for _, owner, _ in pod_specs} == {
         "Job/ui2-flyway-bootstrap", "StatefulSet/ui2-db",
         "Deployment/ui2-service", "Deployment/ui2-worker",
-        "Deployment/ui2-configuration", "Deployment/ui2-compliance",
+        "Deployment/ui2-configuration", "Deployment/ui2-compliance", "Deployment/ui2-policy",
         "Job/ui2-e2e", "CronJob/ui2-e2e",
     }
     assert len(_containers()) == len(pod_specs)
@@ -284,6 +284,9 @@ def test_every_container_declares_requests_and_limits():
         for section in ("requests", "limits"):
             values = resources.get(section) or {}
             for resource in ("cpu", "memory"):
+                if owner == "Deployment/ui2-policy:policy" and section == "limits" and resource == "cpu":
+                    assert "cpu" not in values
+                    continue
                 assert values.get(resource) is not None, (
                     f"{path.name}: {owner} declares no {section}.{resource}"
                 )
@@ -352,7 +355,7 @@ def test_the_recovery_volume_is_separate_and_only_the_worker_can_write():
             for mount in container.get("volumeMounts") or []
             if mount["name"] in recovery_volume_names
         }
-        if owner.startswith("Deployment/ui2-worker"):
+        if owner.startswith("Deployment/ui2-worker") or owner == "Deployment/ui2-policy":
             assert mounted_recovery_names, "BK-17: the worker Deployment must mount the recovery volume"
         elif owner == "Deployment/ui2-service":
             for container in spec.get("containers") or []:

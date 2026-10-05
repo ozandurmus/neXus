@@ -92,6 +92,7 @@ public final class DiagnosticJobExecutor {
             }
             finish(jobId,epoch,ok?JobState.COMPLETED:JobState.FAILED,ok?"OUTPUT_RECORDED":"COMMAND_EXIT_NONZERO");
         } catch (Exception failure) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(failure);
             finish(jobId,epoch,JobState.OUTCOME_UNKNOWN,"DIAGNOSTIC_OUTCOME_UNCERTAIN");
         } finally { if (session!=null) ssh.disconnect(session); }
     }

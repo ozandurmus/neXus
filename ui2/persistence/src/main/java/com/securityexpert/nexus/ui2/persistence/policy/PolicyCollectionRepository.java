@@ -86,15 +86,60 @@ public class PolicyCollectionRepository {
             + (automatic ? "where policy_collection_domain.attempted_at <= now() - interval '6 hours'" : ""), sourceId, domainRef) == 1);
     }
 
+    public boolean beginDomain(Request request, String domain) {
+        if (!request.jobId().isEmpty() && tx.inTransaction(db -> !db.fetch(
+                "select job_id from cp_policy_domain_run where job_id={0} and source_id={1} and domain_ref={2}",
+                request.jobId(), request.sourceId(), domain).isEmpty())) return true;
+        return beginDomain(request.sourceId(), domain, request.automatic());
+    }
+    public Optional<DomainRun> domainForRequest(Request request, String domain) {
+        if (request.jobId().isEmpty()) return Optional.empty();
+        var row = tx.inTransaction(db -> db.fetch("select complete,signal::text,snapshots::text,chunk_generation,chunk_count from cp_policy_domain_run "
+            + "where job_id={0} and source_id={1} and domain_ref={2}", request.jobId(), request.sourceId(), domain)
+            .stream().findFirst());
+        return row.map(r -> domainRun(r, request.sourceId(), domain));
+    }
+    public Optional<String> resumedUnit(Request request, String unit, String version) {
+        if (request.jobId().isEmpty()) return Optional.empty();
+        var row = tx.inTransaction(db -> db.fetch("select snapshot::text,chunk_generation,chunk_count from policy_unit_checkpoint where job_id={0} "
+            + "and unit_ref={1} and source_version={2} and complete", request.jobId(), unit, version)
+            .stream().findFirst());
+        return row.map(r -> r.get("chunk_generation", String.class) == null ? r.get("snapshot", String.class)
+            : new PolicyChunkStore(tx).read(request.sourceId(), request.jobId(), unit, "DOMAIN",
+                new PolicyChunkStore.Manifest(r.get("chunk_generation", String.class), r.get("chunk_count", Integer.class))));
+    }
+    public boolean saveUnit(Request request, String unit, String version, String snapshot) {
+        if (request.jobId().isEmpty()) return true; // Offline collector fixtures have no ledger job.
+        for (String parameter : new String[]{request.jobId(), request.sourceId(), unit, version})
+            PolicyChunkStore.requireBounded(PolicyJsonWrite.bytes(parameter));
+        boolean live = tx.inTransaction(db -> !db.fetch("select job_id from jobs where job_id={0} and lease_epoch={1} "
+            + "and state='EXECUTING' and lease_expires_at > now() and ui2_job_owner_valid(job_id,lease_epoch)",
+            request.jobId(), request.epoch()).isEmpty());
+        if (!live) return false;
+        var manifest = new PolicyChunkStore(tx).write(request.sourceId(), request.jobId(), unit, "DOMAIN", snapshot, "system:worker");
+        return new AuditedTransactionBoundary(tx).inTransaction("system:worker", "policy_unit_checkpoint", db -> {
+            if (db.fetch("select job_id from jobs where job_id={0} and lease_epoch={1} and state='EXECUTING' "
+                    + "and lease_expires_at > now() and ui2_job_owner_valid(job_id,lease_epoch) for update", request.jobId(), request.epoch()).isEmpty()) return false;
+            db.execute("insert into policy_unit_checkpoint(job_id,unit_ref,source_version,snapshot,complete,chunk_generation,chunk_count) "
+                + "values({0},{1},{2},'{}'::jsonb,true,{3},{4}) on conflict(job_id,unit_ref) do update "
+                + "set source_version=excluded.source_version,snapshot=excluded.snapshot,complete=true, "
+                + "chunk_generation=excluded.chunk_generation,chunk_count=excluded.chunk_count",
+                request.jobId(), unit, version, manifest.generation(), manifest.count()); return true;
+        });
+    }
+
     /** Inspect the latest attempt, including incomplete attempts; never fall back past gaps. */
     public Optional<DomainRun> previousDomain(String source, String domain) {
         var row = tx.inTransaction(db -> db.fetch("select complete, signal::text as signal, snapshots::text as snapshots, chunk_generation, chunk_count "
             + "from cp_policy_domain_run where source_id = {0} and domain_ref = {1} order by attempted_at desc limit 1",
             source, domain).stream().findFirst());
-        return row.map(r -> new DomainRun(Boolean.TRUE.equals(r.get("complete", Boolean.class)), r.get("signal", String.class),
+        return row.map(r -> domainRun(r, source, domain));
+    }
+    private DomainRun domainRun(org.jooq.Record r, String source, String domain) {
+        return new DomainRun(Boolean.TRUE.equals(r.get("complete", Boolean.class)), r.get("signal", String.class),
             r.field("chunk_generation") == null || r.get("chunk_generation", String.class) == null ? r.get("snapshots", String.class)
                 : new PolicyChunkStore(tx).read(source, domain, "", "DOMAIN", new PolicyChunkStore.Manifest(
-                    r.get("chunk_generation", String.class), r.get("chunk_count", Integer.class)))));
+                    r.get("chunk_generation", String.class), r.get("chunk_count", Integer.class))));
     }
 
     /** A fenced, small manifest publishes only a fully written immutable generation. */
@@ -110,7 +155,7 @@ public class PolicyCollectionRepository {
         return PolicyJsonWrite.guarded("PolicyCollectionRepository.saveDomain", "DOMAIN_UPSERT", PolicyJsonWrite.bytes(signal),
             () -> new AuditedTransactionBoundary(tx).inTransaction(actor, "policy_collect_domain", db -> {
             if (db.fetch("select job_id from jobs where job_id = {0} and lease_epoch = {1} and state = 'EXECUTING' "
-                    + "and lease_expires_at > now() for update", request.jobId(), request.epoch()).isEmpty()) return false;
+                    + "and lease_expires_at > now() and ui2_job_owner_valid(job_id,lease_epoch) for update", request.jobId(), request.epoch()).isEmpty()) return false;
             db.execute("insert into cp_policy_domain_run(job_id, source_id, domain_ref, status, complete, signal, snapshots, rules_count, hits_collected_at, chunk_generation, chunk_count) "
                 + "values ({0},{1},{2},{3},{4},{5}::jsonb,'[]'::jsonb,{6},{7}::timestamptz,{8},{9}) "
                 + "on conflict (job_id, domain_ref) do update set status = excluded.status, complete = excluded.complete, "
@@ -271,7 +316,7 @@ public class PolicyCollectionRepository {
     private boolean publish(String jobId, long epoch, List<PolicySnapshotRepository.Stored> snapshots, String actor, String failure, boolean completedWithWarnings) {
         return new AuditedTransactionBoundary(tx).inTransaction(actor, "policy_collect_publish", db -> {
             if (db.fetch("select job_id from jobs where job_id = {0} and lease_epoch = {1} and state = 'EXECUTING' "
-                    + "and lease_expires_at > now() for update", jobId, epoch).isEmpty()) return false;
+                    + "and lease_expires_at > now() and ui2_job_owner_valid(job_id,lease_epoch) for update", jobId, epoch).isEmpty()) return false;
             var repository = new PolicySnapshotRepository(scoped(db));
             for (var snapshot : snapshots) repository.save(snapshot, actor, "policy_collect_publish");
             if (!new com.securityexpert.nexus.ui2.persistence.jobrecords.JooqJobLeaseDao(scoped(db)).transitionState(

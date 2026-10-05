@@ -40,10 +40,12 @@ final class PolicyCollectionTrace implements AutoCloseable {
     }
     static <T> java.util.concurrent.Callable<T> worker(java.util.concurrent.Callable<T> operation) {
         var parent = ACTIVE.get();
+        var endpointScope = com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.current();
         var transcript = JobTranscriptScope.current();
         var cancelled = com.securityexpert.nexus.ui2.worker.JobCancellationScope.requested();
         return () -> {
-            try (var cancellation = new com.securityexpert.nexus.ui2.worker.JobCancellationScope(cancelled);
+            try (var endpoint = com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.attach(endpointScope);
+                 var cancellation = new com.securityexpert.nexus.ui2.worker.JobCancellationScope(cancelled);
                  var scope = transcript == null ? null : JobTranscriptScope.open(transcript);
                  var trace = parent == null ? null : new PolicyCollectionTrace(parent)) {
                 return operation.call();

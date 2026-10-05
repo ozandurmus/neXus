@@ -116,6 +116,7 @@ public final class BackupCapabilityExecutor {
         try {
             connectResult = transport.connect(request.connectionTarget(), spec, CONNECT_TIMEOUT);
         } catch (IllegalStateException credentialUnresolvable) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(credentialUnresolvable);
             return new BackupResult.CredentialUnresolvable(String.valueOf(credentialUnresolvable.getMessage()));
         }
         if (!(connectResult instanceof ConnectResult.Authenticated authenticated)) {
@@ -209,6 +210,7 @@ public final class BackupCapabilityExecutor {
             try {
                 archiveLedger.record(deviceId, archiveBaseName(archivePath.get()));
             } catch (RuntimeException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
                 LOG.log(System.Logger.Level.WARNING, "[BACKUP] archive ledger record failed: " + e.getMessage());
             }
         }
@@ -238,6 +240,7 @@ public final class BackupCapabilityExecutor {
             fetchResult = transport.fetchStreaming(session, new FetchSpec(name, MAX_ARCHIVE_BYTES), FETCH_TIMEOUT,
                     handle.sink());
         } catch (RuntimeException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
             closeQuietly(handle);
             // Measured live 2026-09-22: three runs ended "sftp fetch failed: " with nothing after the colon --
             // an exception with no message. The class name is the reason then, and the stack goes to the log.
@@ -288,6 +291,7 @@ public final class BackupCapabilityExecutor {
             try {
                 archiveLedger.markDeleted(deviceId, archiveBaseName(name));
             } catch (RuntimeException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
                 LOG.log(System.Logger.Level.WARNING, "[BACKUP] archive ledger mark-deleted failed: " + e.getMessage());
             }
         }
@@ -303,6 +307,7 @@ public final class BackupCapabilityExecutor {
         try {
             pending = archiveLedger.pendingFor(deviceId);
         } catch (RuntimeException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
             LOG.log(System.Logger.Level.WARNING, "[BACKUP] archive ledger read failed: " + e.getMessage());
             return;
         }

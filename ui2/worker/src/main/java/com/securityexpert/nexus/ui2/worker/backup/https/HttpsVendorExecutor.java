@@ -149,6 +149,7 @@ public final class HttpsVendorExecutor {
         try {
             creds = credentials.apply(credentialRef);
         } catch (RuntimeException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
             return new ConfirmOutcome.Failed("credential reference not resolvable");
         }
         try {
@@ -231,6 +232,7 @@ public final class HttpsVendorExecutor {
                 default -> new InventoryOutcome.Failed("no HTTPS inventory read for vendor " + vendor);
             };
         } catch (RuntimeException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
             return new InventoryOutcome.Failed("credential_unresolvable: " + e.getClass().getSimpleName());
         } catch (IOException e) {
             return new InventoryOutcome.Failed(e.getClass().getSimpleName() + (e.getMessage() == null ? "" : ": " + e.getMessage()));
@@ -327,6 +329,7 @@ public final class HttpsVendorExecutor {
             try {
                 pages[i] = infobloxPages(target, creds, version, object, HttpsVendorPlan.INFOBLOX_SUMMARY_FIELDS[i]);
             } catch (IOException | RuntimeException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
                 LOG.log(System.Logger.Level.WARNING, "[HTTPS_INVENTORY] infoblox {0} read failed HTTP unknown ({1})",
                         object, e.getClass().getSimpleName());
             }
@@ -416,6 +419,7 @@ public final class HttpsVendorExecutor {
                         new Identity(CyberControllerTree.field(e, "name"), Optional.of(model), CyberControllerTree.field(e, "deviceVersion")));
             }
         } catch (RuntimeException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
             return new InventoryOutcome.Failed("credential_unresolvable: " + e.getClass().getSimpleName());
         } catch (IOException e) {
             return new InventoryOutcome.Failed(e.getClass().getSimpleName());
@@ -608,6 +612,7 @@ public final class HttpsVendorExecutor {
             }
             return new CcDeviceList(Optional.of(JSON.readTree(r.body())), "");
         } catch (RuntimeException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
             return new CcDeviceList(Optional.empty(), "CREDENTIAL_UNRESOLVABLE");
         } catch (IOException e) {
             return new CcDeviceList(Optional.empty(), "UNREACHABLE");
@@ -647,6 +652,7 @@ public final class HttpsVendorExecutor {
             Credentials creds = credentials.apply(mcCredentialRef);
             return mcEntry(mc, creds, host).map(d -> new ConfirmOutcome.Confirmed(proxySgIdentity(d)));
         } catch (RuntimeException | IOException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
             return Optional.empty();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -697,6 +703,7 @@ public final class HttpsVendorExecutor {
                             com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryContext.PHYSICAL, interfaces, routes)),
                     List.of(), Optional.empty(), proxySgIdentity(entry.get())));
         } catch (RuntimeException | IOException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
             return Optional.of(new InventoryOutcome.Failed("management center: " + e.getClass().getSimpleName()));
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -740,6 +747,7 @@ public final class HttpsVendorExecutor {
                 return Optional.of(new BackupResult.ArtefactStoreFailed("bundle could not be stored: " + e.getClass().getSimpleName()));
             }
         } catch (RuntimeException | IOException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
             return Optional.of(new BackupResult.ConnectFailed("management center: " + e.getClass().getSimpleName()));
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -756,6 +764,7 @@ public final class HttpsVendorExecutor {
             return Optional.of(mcCommand(mc, creds, entry.get().get("uuid").asText(),
                     HttpsVendorPlan.MC_CMD_SHOW_CONFIGURATION));
         } catch (RuntimeException | IOException | McCommandFailed e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
             return Optional.empty();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -915,6 +924,7 @@ public final class HttpsVendorExecutor {
                 return new CcDeviceList(list, list.isPresent() ? "" : "LIST_FAILED");
             }
         } catch (RuntimeException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
             return new CcDeviceList(Optional.empty(), "CREDENTIAL_UNRESOLVABLE");
         } catch (IOException e) {
             return new CcDeviceList(Optional.empty(), "UNREACHABLE");
@@ -945,6 +955,7 @@ public final class HttpsVendorExecutor {
                         Optional.of("Radware DefensePro (listed by Cyber Controller)"), Optional.empty())));
             }
         } catch (RuntimeException | IOException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
             LOG.log(System.Logger.Level.WARNING, "[CYBER_CONTROLLER] confirm via Cyber Controller failed: {0}", e.getClass().getSimpleName());
             return Optional.empty();
         } catch (InterruptedException e) {
@@ -971,6 +982,7 @@ public final class HttpsVendorExecutor {
             creds = credentials.apply(ccCredentialRef);
             passphrase = new String(credentials.apply(passphraseRef.get()).password());
         } catch (RuntimeException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
             return Optional.of(new BackupResult.CredentialUnresolvable("Cyber Controller or passphrase credential not resolvable"));
         }
         try {
@@ -1038,6 +1050,7 @@ public final class HttpsVendorExecutor {
         try {
             creds = credentials.apply(credentialRef);
         } catch (RuntimeException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
             return new BackupResult.CredentialUnresolvable("credential reference not resolvable -- refused before any device contact");
         }
         try {
@@ -1106,6 +1119,7 @@ public final class HttpsVendorExecutor {
         try {
             passphrase = new String(credentials.apply(passphraseRef.get()).password());
         } catch (RuntimeException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
             return new BackupResult.CredentialUnresolvable("export passphrase credential not resolvable");
         }
         Map<String, String> form = new LinkedHashMap<>();

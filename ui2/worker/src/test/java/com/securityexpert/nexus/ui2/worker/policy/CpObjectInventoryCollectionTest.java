@@ -40,7 +40,7 @@ class CpObjectInventoryCollectionTest {
             return new ConnectResult.Authenticated(session);
         });
         when(transport.execInteractive(any(), any(), any())).thenAnswer(call -> answers.apply(((ExecSpec) call.getArgument(1)).command()));
-        when(repository.beginDomain(anyString(), anyString(), anyBoolean())).thenReturn(true);
+        when(repository.beginDomain(any(PolicyCollectionRepository.Request.class), anyString())).thenReturn(true);
         when(repository.targets(anyString(), anyString(), anyString())).thenReturn(List.of());
         doAnswer(call -> { stored.add(json.readValue(call.getArgument(4, String.class), CpObjectInventory.class)); return null; })
             .when(repository).saveInventory(anyString(), anyString(), anyString(), anyString(), anyString(), anyString());

@@ -157,6 +157,7 @@ public final class ConfigurationCapabilityExecutor {
         try {
             connectResult = transport.connect(target, spec, IDENTITY_TIMEOUT);
         } catch (IllegalStateException credentialUnresolvable) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(credentialUnresolvable);
             return new ConfigurationResult.CredentialUnresolvable(String.valueOf(credentialUnresolvable.getMessage()));
         }
         if (!(connectResult instanceof ConnectResult.Authenticated authenticated)) {
@@ -216,6 +217,7 @@ public final class ConfigurationCapabilityExecutor {
         try {
             connectResult = transport.connect(target, spec, IDENTITY_TIMEOUT);
         } catch (IllegalStateException credentialUnresolvable) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(credentialUnresolvable);
             return new ConfigurationResult.CredentialUnresolvable(String.valueOf(credentialUnresolvable.getMessage()));
         }
         if (!(connectResult instanceof ConnectResult.Authenticated authenticated)) {
@@ -283,6 +285,7 @@ public final class ConfigurationCapabilityExecutor {
                     .configuration(new com.securityexpert.nexus.ui2.worker.transport.https.HttpsDeviceClient.Target(
                             target.host(), target.port()), request.credentialRef());
         } catch (IllegalStateException credentialUnresolvable) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(credentialUnresolvable);
             return new ConfigurationResult.CredentialUnresolvable(String.valueOf(credentialUnresolvable.getMessage()));
         }
         if (read.text().isEmpty()) {
@@ -347,6 +350,7 @@ public final class ConfigurationCapabilityExecutor {
         try {
             credential = panCredentialResolver.resolve(request.credentialRef());
         } catch (IllegalStateException credentialUnresolvable) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(credentialUnresolvable);
             return new ConfigurationResult.CredentialUnresolvable(String.valueOf(credentialUnresolvable.getMessage()));
         }
 

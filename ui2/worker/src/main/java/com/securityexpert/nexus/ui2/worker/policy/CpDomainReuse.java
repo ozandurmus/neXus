@@ -19,7 +19,7 @@ final class CpDomainReuse {
     private static final class Domain {
         PolicyCollectionRepository.DomainRun previous;
         Signal signal;
-        boolean reused, gap, databaseFailed;
+        boolean reused, gap, databaseFailed, sameRequest;
         int expected = -1;
         final Map<String, PolicySnapshot> snapshots = new LinkedHashMap<>();
     }
@@ -29,9 +29,11 @@ final class CpDomainReuse {
     void begin(String container) {
         Domain domain = new Domain();
         // Read before recording the current pending attempt, including empty complete domains.
-        domain.previous = repository.previousDomain(request.sourceId(), container).orElse(null);
+        var current = repository.domainForRequest(request, container);
+        domain.sameRequest = current.isPresent();
+        domain.previous = current.orElseGet(() -> repository.previousDomain(request.sourceId(), container).orElse(null));
         domains.put(container, domain);
-        save(container, domain, "COLLECTING", false);
+        if (!domain.sameRequest) save(container, domain, "COLLECTING", false);
     }
     static Signal signal(JsonNode root) {
         try {
@@ -49,16 +51,25 @@ final class CpDomainReuse {
     List<PolicySnapshot> decide(String container, JsonNode root) {
         Domain domain = domains.get(container);
         domain.signal = root == null ? null : signal(root);
-        if (!domain.databaseFailed && request.mode() == PolicyCollectionRepository.Mode.CHANGED_ONLY && domain.signal != null
-                && domain.previous != null && domain.previous.complete() && domain.previous.signalJson() != null) {
+        if (domain.sameRequest && domain.previous != null && domain.previous.signalJson() != null && !"[]".equals(domain.previous.snapshotsJson())) {
+            try {
+                Signal previous = domain.previous.signalJson() == null ? null : JSON.readValue(domain.previous.signalJson(), Signal.class);
+                if (previous == null || domain.signal == null || !domain.signal.equals(previous))
+                    throw PolicyCollectionTrace.failure("CHECKPOINT_SOURCE_VERSION_NOT_EVALUABLE");
+            } catch (java.io.IOException invalid) { throw PolicyCollectionTrace.failure("CHECKPOINT_SOURCE_VERSION_NOT_EVALUABLE"); }
+        }
+        if (!domain.databaseFailed && (request.mode() == PolicyCollectionRepository.Mode.CHANGED_ONLY || domain.sameRequest) && domain.signal != null
+                && domain.previous != null && (domain.previous.complete() || domain.sameRequest) && domain.previous.signalJson() != null) {
             try {
                 Signal previous = JSON.readValue(domain.previous.signalJson(), Signal.class);
                 List<PolicySnapshot> snapshots = JSON.readValue(domain.previous.snapshotsJson(),
                     JSON.getTypeFactory().constructCollectionType(List.class, PolicySnapshot.class));
-                if (domain.signal.equals(previous) && snapshots.stream().allMatch(s -> s.failures().isEmpty()
-                        && s.metadata().sourceId().equals(request.sourceId()) && s.metadata().containerId().equals(container))) {
-                    snapshots.forEach(s -> domain.snapshots.put(s.metadata().id(), s));
-                    domain.reused = true;
+                boolean identity = snapshots.stream().allMatch(snapshot -> snapshot.metadata().sourceId().equals(request.sourceId())
+                    && snapshot.metadata().containerId().equals(container));
+                if (identity && domain.signal.equals(previous)) {
+                    snapshots.stream().filter(snapshot -> snapshot.failures().isEmpty())
+                        .forEach(snapshot -> domain.snapshots.put(snapshot.metadata().id(), snapshot));
+                    domain.reused = domain.previous.complete() && domain.snapshots.size() == snapshots.size();
                 }
             } catch (java.io.IOException | RuntimeException invalid) { /* Unproven stored evidence requires a full collection. */ }
         }
@@ -71,9 +82,36 @@ final class CpDomainReuse {
         save(container, domain, "COLLECTING", false);
         return null;
     }
+    PolicySnapshot resumedPackage(String container, String policy) {
+        Domain domain = domains.get(container);
+        if (domain == null || !domain.sameRequest || domain.databaseFailed) return null;
+        PolicySnapshot stored = domain.snapshots.get(policy);
+        if (stored != null || domain.signal == null) return stored;
+        try {
+            var checkpoint = repository.resumedUnit(request, policy, JSON.writeValueAsString(domain.signal));
+            if (checkpoint.isEmpty()) return null;
+            stored = JSON.readValue(checkpoint.get(), PolicySnapshot.class);
+            if (!stored.metadata().sourceId().equals(request.sourceId()) || !stored.metadata().containerId().equals(container)
+                    || !stored.metadata().id().equals(policy) || !stored.failures().isEmpty())
+                throw PolicyCollectionTrace.failure("CHECKPOINT_IDENTITY_MISMATCH");
+            domain.snapshots.put(policy, stored);
+            return stored;
+        } catch (java.io.IOException invalid) { throw PolicyCollectionTrace.failure("CHECKPOINT_SOURCE_VERSION_NOT_EVALUABLE"); }
+    }
+    private void checkpoint(PolicySnapshot snapshot, Domain domain) {
+        if (request.jobId().isEmpty() || domain.databaseFailed || domain.signal == null || !snapshot.failures().isEmpty()) return;
+        try {
+            if (!repository.saveUnit(request, snapshot.metadata().id(), JSON.writeValueAsString(domain.signal), JSON.writeValueAsString(snapshot)))
+                throw PolicyCollectionTrace.failure("LEASE_LOST");
+        } catch (com.securityexpert.nexus.ui2.persistence.policy.PolicyDatabaseFailure unavailable) {
+            domain.databaseFailed = true; domain.gap = true;
+            databaseGap.accept(new PolicySnapshot.CollectionFailure(snapshot.metadata().containerId(), "POLICY_DB_UNIT_WRITE_FAILED"));
+        } catch (java.io.IOException invalid) { throw PolicyCollectionTrace.failure("INVALID_OR_INCOMPLETE_RESPONSE"); }
+    }
     void snapshot(PolicySnapshot snapshot) {
         Domain domain = domains.get(snapshot.metadata().containerId());
         if (domain == null || domain.reused) return;
+        checkpoint(snapshot, domain);
         domain.snapshots.put(snapshot.metadata().id(), snapshot);
         update(snapshot.metadata().containerId(), domain);
     }

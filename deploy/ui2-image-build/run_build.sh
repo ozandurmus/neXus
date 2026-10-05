@@ -8,6 +8,8 @@ set -euo pipefail
 export KUBECONFIG=~/.kube/config
 
 cd ~/nexus
+NEXUS_DEPLOY_TARGETS="${NEXUS_DEPLOY_TARGETS:-service worker configuration compliance policy}"
+python3 -c 'from tools.delivery.module_deploy import validate_targets; import sys; validate_targets(sys.argv[1])' "$NEXUS_DEPLOY_TARGETS"
 git fetch
 git checkout main
 git pull origin main
@@ -109,37 +111,13 @@ if [ -z "${NEXUS_SKIP_SECURITY_REASON:-}" ] && [ "$SECURITY_CONFIGURED" = 1 ]; t
   timing security_gate_wait "$gate_start"
 fi
 
+python3 tools/e2e/hosta_e2e_image.py ensure --commit "$COMMIT_SHA" >/dev/null
 rollout_start=$SECONDS
-echo "Updating deployments..."
-kubectl -n ui2 set image deployment/ui2-service service="registry.kube-system.svc.cluster.local/nexus-ui2-service@$IMAGE_DIGEST"
-kubectl -n ui2 set image deployment/ui2-compliance compliance="registry.kube-system.svc.cluster.local/nexus-ui2-service@$IMAGE_DIGEST"
-
-# PO, 2026-09-24: never replace the worker under a running job (a rollout drains it and a long job -- an MDS export --
-# is cut off). The check sits here, right before the worker changes, not at the start: a job started during the build
-# is seen. Waits up to WORKER_WAIT_LIMIT_S (default 4 h), then leaves the worker on the old image and says so.
-inflight() {
-  kubectl -n ui2 exec ui2-db-0 -- sh -c "psql -U \"\$POSTGRES_USER\" -d ui2 -Atc \"select count(*) from jobs where state in ('CLAIMED','EXECUTING')\""
-}
-waited=0
-while n="$(inflight)" && [ "$n" != "0" ]; do
-  if [ "$waited" -ge "${WORKER_WAIT_LIMIT_S:-14400}" ]; then
-    echo "Worker NOT updated: $n job(s) still in flight after ${waited}s; service and compliance are on the new image, worker and configuration are not."
-    exit 5
-  fi
-  echo "Worker waiting: $n job(s) in flight; checking again in 30 s (waited ${waited}s)"
-  sleep 30
-  waited=$((waited + 30))
-done
-kubectl -n ui2 set image deployment/ui2-worker worker="registry.kube-system.svc.cluster.local/nexus-ui2-service@$IMAGE_DIGEST"
-# ui2-configuration is the second worker (args: worker configuration); it was left on a 2026-09-24 image until the
-# 2026-10-01 security scan found it, so it follows the worker under the same in-flight check.
-kubectl -n ui2 set image deployment/ui2-configuration configuration="registry.kube-system.svc.cluster.local/nexus-ui2-service@$IMAGE_DIGEST"
-
-echo "Waiting for rollout..."
-kubectl -n ui2 rollout status deployment/ui2-service --timeout=600s
-kubectl -n ui2 rollout status deployment/ui2-worker --timeout=600s
-kubectl -n ui2 rollout status deployment/ui2-compliance --timeout=600s
-kubectl -n ui2 rollout status deployment/ui2-configuration --timeout=600s
+echo "Updating selected deployments..."
+SNAPSHOT_ID=$(printf '%s\n' "$RELEASE_SNAPSHOT" | python3 -c 'import json,sys; print(json.load(sys.stdin)["snapshot"])')
+python3 tools/delivery/module_deploy.py --targets "$NEXUS_DEPLOY_TARGETS" \
+  --image "registry.kube-system.svc.cluster.local/nexus-ui2-service@$IMAGE_DIGEST" \
+  --snapshot "$HOME/release-snapshots/$SNAPSHOT_ID" --commit "$COMMIT_SHA" --wait-limit "${WORKER_WAIT_LIMIT_S:-14400}"
 
 timing rollout "$rollout_start"
 python3 tools/e2e/hosta_e2e_image.py ensure --commit "$COMMIT_SHA" >/dev/null

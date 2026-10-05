@@ -10,7 +10,7 @@ import java.util.UUID;
 
 /**
  * Retention and Pruning Engine for the neXus Backup Engine.
- * 
+ *
  * <p>Enforces the Product Owner's retention contract:
  * <ul>
  *   <li>Daily backups retained for 30 days (1 month). Expired backups pruned daily.</li>

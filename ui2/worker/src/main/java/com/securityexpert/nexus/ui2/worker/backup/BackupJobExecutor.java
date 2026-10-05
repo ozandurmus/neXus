@@ -203,6 +203,7 @@ public final class BackupJobExecutor {
                 JobTranscriptScope.add("job", "verdict", verdict);
                 return outcome;
             } catch (RuntimeException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
                 JobTranscriptScope.add("job", "verdict", "FAILED: unexpected " + e.getClass().getSimpleName());
                 throw e;
             }
@@ -215,6 +216,7 @@ public final class BackupJobExecutor {
                     if (!transcriptJobs.writeBackupTranscript(jobId, leaseEpoch, stored.ref().value(), stored.wrappedDataKey()))
                         throw new IllegalStateException("job transcript reference not recorded");
                 } catch (Exception e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
                     if (stored != null) discardStoredArtefact(stored);
                     LOG.warning("[TRANSCRIPT] not stored: " + e.getClass().getSimpleName());
                 }
@@ -476,10 +478,12 @@ public final class BackupJobExecutor {
                 try {
                     retentionPruningService.prune(com.securityexpert.nexus.ui2.worker.backup.retention.RetentionPruningService.PruningPolicy.DEFAULT);
                 } catch (Exception ignored) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(ignored);
                 }
             }
             return Optional.of(artefactId);
         } catch (IllegalStateException versionUnresolvable) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(versionUnresolvable);
             return Optional.empty();
         }
     }

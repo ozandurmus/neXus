@@ -127,6 +127,7 @@ public final class PulseSecureExecutor {
         try {
             c = credentials.apply(credentialRef);
         } catch (RuntimeException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
             return new Login.Refused("credential reference not resolvable", false);
         }
         Session s = new Session();
@@ -265,6 +266,7 @@ public final class PulseSecureExecutor {
         try {
             pass = new String(credentials.apply(passphraseRef.get()).password());
         } catch (RuntimeException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
             return new BackupResult.CredentialUnresolvable("export passphrase credential not resolvable");
         }
         Map<String, java.nio.file.Path> files = new LinkedHashMap<>();

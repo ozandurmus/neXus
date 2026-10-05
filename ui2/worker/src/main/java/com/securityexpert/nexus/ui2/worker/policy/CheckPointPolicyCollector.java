@@ -66,8 +66,8 @@ public final class CheckPointPolicyCollector {
         checkActive(deadline, lease);
         PolicyCollectionTrace.step("connect", "cp-policy-source");
         var result = com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.withoutRecording(() -> transport.connect(
-            new ConnectionTarget(run.managementAddress(), run.managementAddress(), 22),
-            new ConnectSpec(run.credentialReferenceId(), PersistedManagementEndpointTrustResolver.scopeRef(run.managementAddress(), 22), Optional.empty()),
+            new ConnectionTarget(run.managementAddress(), com.securityexpert.nexus.ui2.persistence.runtime.EndpointAddress.host(run.managementAddress()), com.securityexpert.nexus.ui2.persistence.runtime.EndpointAddress.port(run.managementAddress(), 22)),
+            new ConnectSpec(run.credentialReferenceId(), PersistedManagementEndpointTrustResolver.scopeRef(com.securityexpert.nexus.ui2.persistence.runtime.EndpointAddress.host(run.managementAddress()), com.securityexpert.nexus.ui2.persistence.runtime.EndpointAddress.port(run.managementAddress(), 22)), Optional.empty()),
             Duration.ofNanos(Math.min(Duration.ofSeconds(30).toNanos(), deadline - nanoTime.getAsLong()))));
         if (!(result instanceof ConnectResult.Authenticated connected)) throw PolicyCollectionTrace.failure(result.getClass().getSimpleName());
         return connected.session();
@@ -130,14 +130,15 @@ public final class CheckPointPolicyCollector {
                 String container = ref(request.sourceId(), domainUid);
                 if (!request.domainRef().isEmpty() && !container.equals(request.domainRef())) continue;
                 found = true;
-                if (!repository.beginDomain(request.sourceId(), container, request.automatic())) { PolicyCollectionTrace.packages(0); continue; }
-                if (session == null) session = connect(run, deadline, lease);
+                if (!repository.beginDomain(request, container)) { PolicyCollectionTrace.packages(0); continue; }
                 reuse.begin(container);
+                if (session == null) session = connect(run, deadline, lease);
                 JsonNode signal = null;
-                if (request.mode() == PolicyCollectionRepository.Mode.CHANGED_ONLY) {
+                if (request.mode() == PolicyCollectionRepository.Mode.CHANGED_ONLY || !request.jobId().isEmpty()) {
                     try { signal = read(session, MgmtCliCommands.showLastPublishedSession(domainName),
                         CpPolicyGates.LAST_PUBLISHED_SESSION, deadline, lease); }
                     catch (RuntimeException unavailable) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(unavailable);
                         if (PolicyCollectionTrace.fatal(unavailable)) throw unavailable;
                         transport.disconnect(session); session = connect(run, deadline, lease);
                     }
@@ -152,6 +153,7 @@ public final class CheckPointPolicyCollector {
                 try {
                     packages = packagePages(session, domainName, deadline, lease);
                 } catch (RuntimeException incomplete) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(incomplete);
                     if (PolicyCollectionTrace.fatal(incomplete)) throw incomplete;
                     checkPublication(deadline, lease);
                     domainGap.accept(new CollectionFailure(container, PolicyCollectionTrace.reason(incomplete), "Packages", reached(incomplete)));
@@ -165,6 +167,10 @@ public final class CheckPointPolicyCollector {
                 for (JsonNode policy : packages) {
                     String uid = required(policy, "uid"), name = required(policy, "name");
                     if (!seen.add(uid)) throw failure();
+                    var resumed = reuse.resumedPackage(container, ref(request.sourceId(), domainUid, uid));
+                    if (resumed != null) {
+                        domainPublish.accept(resumed); snapshots.add(resumed); PolicyCollectionTrace.done(resumed.metadata().id()); continue;
+                    }
                     List<CollectionFailure> failures = new ArrayList<>();
                     List<Target> targets = installationTargets(run, request, domainUid, domainName, policy);
                     Metadata metadata = new Metadata(ref(request.sourceId(), domainUid, uid), request.sourceId(),
@@ -189,6 +195,7 @@ public final class CheckPointPolicyCollector {
                             count -> PolicyCollectionTrace.rules("nat", count));
                         failures.removeIf(f -> f.layerRef().equals(natRef));
                     } catch (RuntimeException incomplete) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(incomplete);
                         if (PolicyCollectionTrace.fatal(incomplete)) throw incomplete;
                         failures.removeIf(f -> f.layerRef().equals(natRef));
                         failures.add(new CollectionFailure(natRef, PolicyCollectionTrace.reason(incomplete), "NAT", reached(incomplete)));
@@ -241,6 +248,7 @@ public final class CheckPointPolicyCollector {
                 offset = listing.to;
             }
         } catch (RuntimeException incomplete) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(incomplete);
             if (PolicyCollectionTrace.fatal(incomplete)) throw incomplete;
             listing = new PackagePages(20); offset = 0;
             try {
@@ -249,7 +257,8 @@ public final class CheckPointPolicyCollector {
                     if (listing.add(page, offset)) return List.copyOf(listing.items);
                     offset = listing.to;
                 }
-            } catch (RuntimeException fallback) { throw new PageFailure(PolicyCollectionTrace.reason(fallback), offset); }
+            } catch (RuntimeException fallback) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(fallback); throw new PageFailure(PolicyCollectionTrace.reason(fallback), offset); }
         }
     }
 
@@ -298,6 +307,7 @@ public final class CheckPointPolicyCollector {
                 storeObjects(source, container, type, listing.items, listing.count, nanoTime.getAsLong() - started,
                     "RESOLVED", "", deadline, lease);
             } catch (RuntimeException gap) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(gap);
                 if (PolicyCollectionTrace.fatal(gap)) throw gap;
                 storeIncompleteObjects(source, container, type, listing, nanoTime.getAsLong() - started, gap, deadline, lease);
             }
@@ -402,6 +412,7 @@ public final class CheckPointPolicyCollector {
                     layer = pages(session, offset -> MgmtCliCommands.showAccessRulebase(domain, name, offset)
                         + (hits ? " show-hits true" : ""), hits ? 3 : 1, deadline, lease, progress, uid);
                 } catch (RuntimeException unsupportedHits) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(unsupportedHits);
                     if (!hits || PolicyCollectionTrace.fatal(unsupportedHits)) throw unsupportedHits;
                     layer = pages(session, offset -> MgmtCliCommands.showAccessRulebase(domain, name, offset), 1, deadline, lease, progress, uid);
                 }
@@ -416,6 +427,7 @@ public final class CheckPointPolicyCollector {
                     } else pending.put(child, required(object, "name"));
                 }
             } catch (RuntimeException incomplete) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(incomplete);
                 if (PolicyCollectionTrace.fatal(incomplete)) throw incomplete;
                 failures.add(new CollectionFailure(layerRef, PolicyCollectionTrace.reason(incomplete), name, reached(incomplete)));
                 continue;
@@ -427,6 +439,7 @@ public final class CheckPointPolicyCollector {
             pending.forEach((id, label) -> failures.add(new CollectionFailure(ref("cp-layer", domain, id), "COLLECTION_PENDING", label, 0)));
             try { publish.accept(List.copyOf(all)); }
             catch (RuntimeException incomplete) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(incomplete);
                 if (PolicyCollectionTrace.fatal(incomplete)) throw incomplete;
                 all.subList(previousPages, all.size()).clear();
                 checkpoint.add(new CollectionFailure(layerRef, PolicyCollectionTrace.reason(incomplete), name, 0));
@@ -490,6 +503,7 @@ public final class CheckPointPolicyCollector {
             }
             throw failure();
         } catch (RuntimeException incomplete) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(incomplete);
             throw new PageFailure(PolicyCollectionTrace.reason(incomplete), offset);
         }
     }
@@ -567,6 +581,7 @@ public final class CheckPointPolicyCollector {
             if (gate == 3) PolicyHitGates.require(gates, true);
             else if (gate >= 0) CpPolicyGates.require(gates, gate);
         } catch (IllegalStateException unavailable) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(unavailable);
             if (!"POLICY_GATE_UNAVAILABLE".equals(unavailable.getMessage())) throw unavailable;
             throw PolicyCollectionTrace.failure("POLICY_GATE_UNAVAILABLE");
         }

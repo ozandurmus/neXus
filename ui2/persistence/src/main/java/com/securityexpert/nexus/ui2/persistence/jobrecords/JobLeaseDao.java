@@ -23,6 +23,8 @@ public interface JobLeaseDao {
 
     default List<ClaimedJobRow> findExpiredCancellationRequests() { return List.of(); }
 
+    default long retryBudgetUsed(String jobId, long epoch) { return epoch; }
+
     boolean heartbeat(String jobId, long leaseEpoch, Duration leaseDuration);
 
     /** {@code expectedFromState}/{@code toState} are the plain {@code JobState} enum names. */

@@ -80,6 +80,7 @@ public final class CyberControllerBackupExecutor {
         try {
             receiverPassword = passwordOf.apply(receiverCredentialRef.get());
         } catch (RuntimeException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
             return new BackupResult.CredentialUnresolvable("backup receiver credential not resolvable");
         }
         ConnectResult connect;
@@ -87,6 +88,7 @@ public final class CyberControllerBackupExecutor {
             connect = transport.connect(request.connectionTarget(),
                     new ConnectSpec(request.credentialRef().get(), request.trustRuleRef(), Optional.empty()), CONNECT_TIMEOUT);
         } catch (IllegalStateException unresolvable) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(unresolvable);
             return new BackupResult.CredentialUnresolvable(String.valueOf(unresolvable.getMessage()));
         }
         if (!(connect instanceof ConnectResult.Authenticated authenticated)) {
@@ -181,6 +183,7 @@ public final class CyberControllerBackupExecutor {
                 }
                 removed++;
             } catch (RuntimeException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
                 // Opportunistic cleanup must not invalidate the already stored and cleaned backup.
                 break;
             }

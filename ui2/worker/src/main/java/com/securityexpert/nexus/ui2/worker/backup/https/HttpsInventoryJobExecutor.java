@@ -104,6 +104,7 @@ public final class HttpsInventoryJobExecutor {
             inventory.recordRun(new InventoryRun(UUID.randomUUID().toString(), deviceId, jobId, Instant.now(), done.contexts().size(),
                     done.contexts(), List.of(), done.virtualSystems(), done.members(), done.gridSummary()), ACTOR, "inventory_completed");
         } catch (RuntimeException writeFailed) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(writeFailed);
             String reason = "inventory_run_write_failed: " + writeFailed.getMessage() + " (after " + ms + "ms)";
             leases.transitionState(jobId, leaseEpoch, JobState.EXECUTING, JobState.FAILED, ACTOR, "inventory_failed", reason);
             return new JobOutcome.Failed(reason);
@@ -114,12 +115,14 @@ public final class HttpsInventoryJobExecutor {
                     done.identity().haRole(), ACTOR,
                     "inventory_identity_refresh");
         } catch (RuntimeException refreshFailed) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(refreshFailed);
             LOG.log(System.Logger.Level.WARNING, "[OBSERVED_FACTS_REFRESH_FAILED] HTTPS inventory job {0}: {1}", jobId, refreshFailed.getMessage());
         }
         try {
             done.identity().haPairClaim().ifPresent(claim -> devices.recordHaPairClaim(deviceId, claim, ACTOR,
                     "inventory_ha_pair_claim"));
         } catch (RuntimeException claimFailed) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(claimFailed);
             // The inventory itself is stored; a failed pair claim only leaves the pairing as it was (review 2026-09-27).
             LOG.log(System.Logger.Level.WARNING, "[HA] pair claim write failed for inventory job {0}: {1}", jobId,
                     claimFailed.getClass().getSimpleName());

@@ -169,6 +169,7 @@ public final class ConfirmJobExecutor {
                         targetDeviceId, Optional.empty(), Optional.empty(), Optional.of("gaia_embedded"),
                         java.util.Map.of(), Optional.empty(), "cp_spark_show_diag_software_version", Optional.empty()));
             } catch (RuntimeException factsWriteFailed) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(factsWriteFailed);
                 LOG.log(System.Logger.Level.WARNING, "[SPARK_PLATFORM_FACTS_WRITE_FAILED] {0}", factsWriteFailed.getClass().getSimpleName());
             }
         }

@@ -200,6 +200,7 @@ public final class FortiGateExecutor {
             LOG.log(System.Logger.Level.INFO, "[FGT] MEASURE ha manage secondary: statusRead={0} model={1} serialIsPeer={2} role={3}",
                     peerStatus.isPresent(), ps.model().isPresent(), serialIsPeer, peerRole.orElse("unknown"));
         } catch (RuntimeException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
             LOG.log(System.Logger.Level.INFO, "[FGT] MEASURE ha manage failed: {0}", e.getClass().getSimpleName());
         } finally {
             if (hopped) {

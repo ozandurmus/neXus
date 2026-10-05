@@ -90,6 +90,18 @@ public class SystemStatusService {
             body.put("namespace", namespace);
             body.put("metrics_note", metricsNote);
             body.put("pods", rows);
+            body.put("modules", moduleHealth(rows));
+            long unmapped = transactionBoundary.inTransaction(db -> db.fetchOne("select count(*) from jobs "
+                + "where state='REQUESTED' and (job_type is distinct from capability_id or ui2_job_module(capability_id) is null)").get(0, Long.class));
+            body.put("unmapped_queued_jobs", unmapped);
+            if (unmapped > 0) System.getLogger(SystemStatusService.class.getName()).log(System.Logger.Level.WARNING,
+                "JOB_OWNER_NOT_EVALUABLE queued={0}", unmapped);
+            body.put("endpoint_admission", transactionBoundary.inTransaction(db -> db.fetch(
+                "select owner_role,purpose_class,state,count(*) as count,extract(epoch from (now()-min(requested_at))) as oldest_age_seconds "
+                + "from endpoint_admission group by owner_role,purpose_class,state order by owner_role,purpose_class,state")
+                .stream().map(record -> Map.of("role", record.get("owner_role", String.class),
+                    "purpose", record.get("purpose_class", String.class), "state", record.get("state", String.class),
+                    "count", record.get("count", Long.class), "oldest_age_seconds", record.get("oldest_age_seconds", Double.class))).toList()));
         } catch (IOException | InterruptedException | RuntimeException e) {
             if (e instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
@@ -99,6 +111,40 @@ public class SystemStatusService {
             body.put("pods", List.of());
         }
         return body;
+    }
+
+    private List<Map<String, Object>> moduleHealth(List<Map<String, Object>> pods) {
+        return transactionBoundary.inTransaction(db -> {
+            List<Map<String, Object>> modules = new ArrayList<>();
+            for (Record control : db.fetch("select module,effective_owner,drain_requested,drain_generation,drain_ack_generation,pool_active,pool_idle,pool_pending,pool_timeouts,pool_wait_nanos,admission_wait_ms,admission_grants,"
+                    + "(select owner_heartbeat_at>now()-interval '60 seconds' from module_runtime_control owner where owner.module=module_runtime_control.effective_owner) as live from module_runtime_control order by module")) {
+                String module = control.get("module", String.class);
+                String owner = control.get("effective_owner", String.class);
+                var queued = db.fetchOne("select count(*),extract(epoch from (now()-min(submitted_at))) from jobs "
+                    + "where state='REQUESTED' and ui2_job_module(capability_id)={0}", module);
+                long depth = queued.get(0, Long.class);
+                String component = owner.equals("general") ? "worker" : owner;
+                long ready = pods.stream().filter(row -> component.equals(row.get("component"))
+                    && "Running".equals(row.get("phase")) && "1/1".equals(row.get("ready"))).count();
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("module", module); row.put("owner", owner); row.put("ready_pods", ready);
+                row.put("queued", depth); row.put("oldest_age_seconds", queued.get(1, Double.class));
+                row.put("draining", control.get("drain_requested", Boolean.class));
+                for (String field : List.of("pool_active", "pool_idle", "pool_pending", "pool_timeouts", "pool_wait_nanos", "admission_wait_ms", "admission_grants"))
+                    row.put(field, control.get(field));
+                row.put("owner_live", Boolean.TRUE.equals(control.get("live", Boolean.class)));
+                row.put("admission_timeouts", db.fetchOne("select coalesce(sum(admission_deferrals),0) from jobs where ui2_job_module(capability_id)={0}", module).get(0, Long.class));
+                if (module.equals("policy") && depth > 0 && (ready == 0 || !Boolean.TRUE.equals(control.get("live", Boolean.class))) && !Boolean.TRUE.equals(control.get("drain_requested", Boolean.class))) {
+                    row.put("alert", "POLICY_CONSUMER_MISSING");
+                    System.getLogger(SystemStatusService.class.getName()).log(System.Logger.Level.WARNING,
+                        "POLICY_CONSUMER_MISSING queued={0}", depth);
+                }
+                row.put("permits", db.fetchOne("select count(*) from endpoint_admission where owner_role={0} and state='LEASED'", owner).get(0, Long.class));
+                row.put("quarantined_permits", db.fetchOne("select count(*) from endpoint_admission where owner_role={0} and state='QUARANTINED'", owner).get(0, Long.class));
+                modules.add(row);
+            }
+            return modules;
+        });
     }
 
     private static Map<String, Object> podRow(JsonNode pod, JsonNode usage) {

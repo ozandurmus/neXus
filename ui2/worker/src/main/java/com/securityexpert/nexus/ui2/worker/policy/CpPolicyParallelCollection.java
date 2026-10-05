@@ -118,6 +118,7 @@ final class CpPolicyParallelCollection {
                             if ((work.layer != null && work.layer.failure == null) || (work.gate >= CpPolicyGates.OBJECT_BASE && work.gate < CpPolicyGates.LAST_PUBLISHED_SESSION)) safety.success(result.elapsed);
                         }
                         catch (RuntimeException invalid) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(invalid);
                             if (PolicyCollectionTrace.fatal(invalid)) throw invalid;
                             if (work.layer == null) {
                                 if (invalid instanceof com.securityexpert.nexus.ui2.persistence.policy.PolicyDatabaseFailure) {
@@ -149,6 +150,7 @@ final class CpPolicyParallelCollection {
             Thread.currentThread().interrupt();
             throw PolicyCollectionTrace.failure("INTERRUPTED");
         } catch (ExecutionException failed) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(failed);
             throw PolicyCollectionTrace.failure("WORKER_FAILED");
         } finally {
             // Interrupt exceptional exits; normal/cancelled exits have drained every submitted read.
@@ -185,8 +187,8 @@ final class CpPolicyParallelCollection {
                 long remaining = deadline - clock.getAsLong();
                 if (remaining <= 0) throw PolicyCollectionTrace.failure("JOB_DEADLINE");
                 ConnectResult connected = JobTranscriptScope.withoutRecording(() -> collector.transport.connect(
-                    new ConnectionTarget(run.managementAddress(), run.managementAddress(), 22),
-                    new ConnectSpec(run.credentialReferenceId(), PersistedManagementEndpointTrustResolver.scopeRef(run.managementAddress(), 22), Optional.empty()),
+                    new ConnectionTarget(run.managementAddress(), com.securityexpert.nexus.ui2.persistence.runtime.EndpointAddress.host(run.managementAddress()), com.securityexpert.nexus.ui2.persistence.runtime.EndpointAddress.port(run.managementAddress(), 22)),
+                    new ConnectSpec(run.credentialReferenceId(), PersistedManagementEndpointTrustResolver.scopeRef(com.securityexpert.nexus.ui2.persistence.runtime.EndpointAddress.host(run.managementAddress()), com.securityexpert.nexus.ui2.persistence.runtime.EndpointAddress.port(run.managementAddress(), 22)), Optional.empty()),
                     Duration.ofNanos(Math.min(Duration.ofSeconds(30).toNanos(), remaining))));
                 if (!(connected instanceof ConnectResult.Authenticated authenticated))
                     throw PolicyCollectionTrace.failure(connected.getClass().getSimpleName());
@@ -194,6 +196,7 @@ final class CpPolicyParallelCollection {
             }
             return new Result(work, collector.read(session.get(), work.command, work.gate, deadline, lease, work.layer == null ? -1 : work.layer.total), null, clock.getAsLong() - started);
         } catch (RuntimeException error) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(error);
             // An unhealthy shell must not carry the retried page or any sibling read.
             closeSession();
             if (closeFailed.get()) error = PolicyCollectionTrace.failure("SESSION_CLEANUP_FAILED");
@@ -211,6 +214,7 @@ final class CpPolicyParallelCollection {
         JobTranscriptScope.withoutRecording(() -> {
             try { collector.transport.disconnect(owned); }
             catch (RuntimeException failed) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(failed);
                 closeFailed.set(true);
                 System.getLogger(getClass().getName()).log(System.Logger.Level.WARNING, "POLICY_SESSION_CLOSE_FAILED");
             }
@@ -229,9 +233,9 @@ final class CpPolicyParallelCollection {
             if (!request.domainRef().isEmpty() && !container.equals(request.domainRef())) continue;
             found = true;
             domainOrder.putIfAbsent(container, domainOrder.size());
-            if (repository.beginDomain(request.sourceId(), container, request.automatic())) {
+            if (repository.beginDomain(request, container)) {
                 reuse.begin(container);
-                if (request.mode() == PolicyCollectionRepository.Mode.FULL) domainSignal(uid, name, container, null);
+                if (request.mode() == PolicyCollectionRepository.Mode.FULL && request.jobId().isEmpty()) domainSignal(uid, name, container, null);
                 else pending.add(new Work(MgmtCliCommands.showLastPublishedSession(name), CpPolicyGates.LAST_PUBLISHED_SESSION,
                     null, 0, 0, 0, page -> domainSignal(uid, name, container, page),
                     error -> domainSignal(uid, name, container, null)));
@@ -270,6 +274,8 @@ final class CpPolicyParallelCollection {
         for (JsonNode node : items) {
             String uid = required(node, "uid"), name = required(node, "name");
             if (!seen.add(uid)) throw failure();
+            var completed = reuse.resumedPackage(container, ref(request.sourceId(), domainUid, uid));
+            if (completed != null) { publish.accept(completed); reused.add(completed); PolicyCollectionTrace.done(completed.metadata().id()); continue; }
             List<Target> targets = collector.installationTargets(run, request, domainUid, domain, node);
             var metadata = new Metadata(ref(request.sourceId(), domainUid, uid), request.sourceId(), "MDS " + request.sourceId(),
                 "CP", container, domain, name, Instant.now().toString(), "", targets.stream().distinct().toList());

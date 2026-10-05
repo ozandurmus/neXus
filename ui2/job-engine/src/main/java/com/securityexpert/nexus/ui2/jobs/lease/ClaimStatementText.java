@@ -17,17 +17,31 @@ public final class ClaimStatementText {
     public static final String SQL = """
             WITH inventory_claim_lock AS (
                 SELECT pg_advisory_xact_lock(294611)
+            ), owner_control AS MATERIALIZED (
+                SELECT m.* FROM module_runtime_control m, inventory_claim_lock
+                ORDER BY m.module FOR UPDATE OF m
             )
             UPDATE jobs
             SET state = 'CLAIMED',
                 lease_worker_id = {0},
                 lease_epoch = lease_epoch + 1,
                 lease_expires_at = now() + ({1} || ' seconds')::interval,
-                last_heartbeat_at = now()
+                last_heartbeat_at = now(),
+                lease_owner_generation = (SELECT generation FROM owner_control WHERE module=ui2_job_module(jobs.capability_id))
             WHERE job_id = (
                 SELECT job_id FROM jobs, inventory_claim_lock
                 WHERE state = 'REQUESTED'
                   AND capability_id = ANY(string_to_array({2}, ','))
+                  AND job_type = ANY(string_to_array({2}, ','))
+                  AND job_type = capability_id
+                  AND (admission_not_before IS NULL OR admission_not_before <= now())
+                  AND ((SELECT count(*) FROM jobs WHERE state IN ('CLAIMED', 'EXECUTING'))
+                    + (SELECT count(*) FROM runtime_task_lease WHERE task_key='fleet.failover.execution' AND owner_role='service')) < 10
+                  AND EXISTS (SELECT 1 FROM owner_control m JOIN owner_control r ON r.module=m.effective_owner
+                    WHERE m.module=ui2_job_module(jobs.capability_id)
+                      AND m.effective_owner=split_part({0}, '-', 1)
+                      AND NOT m.drain_requested AND NOT r.drain_requested
+                      AND (r.owner_instance IS NULL OR (r.owner_instance={0} AND r.owner_heartbeat_at>now()-interval '60 seconds')))
                   AND (capability_id <> ALL(ARRAY['cp_inventory_collect', 'pan_inventory_collect'])
                     OR (SELECT count(*) FROM jobs
                         WHERE state IN ('CLAIMED', 'EXECUTING')

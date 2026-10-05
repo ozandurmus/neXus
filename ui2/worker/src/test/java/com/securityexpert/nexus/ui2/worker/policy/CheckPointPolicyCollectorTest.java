@@ -29,7 +29,7 @@ class CheckPointPolicyCollectorTest {
     private CheckPointPolicyCollector setup(java.util.function.Function<String, ExecResult> answers) {
         when(transport.connect(any(), any(), any())).thenReturn(new ConnectResult.Authenticated(session));
         when(transport.execInteractive(eq(session), any(), any())).thenAnswer(call -> answers.apply(((ExecSpec) call.getArgument(1)).command()));
-        when(repository.beginDomain(anyString(), anyString(), anyBoolean())).thenReturn(true);
+        when(repository.beginDomain(any(PolicyCollectionRepository.Request.class), anyString())).thenReturn(true);
         when(repository.targets(anyString(), anyString(), anyString())).thenReturn(List.of(new PolicySnapshot.Target("device-1", "FW-TANGO-04", "", "UNKNOWN")));
         return new CheckPointPolicyCollector(transport, gates, repository, Duration.ofHours(2), 1);
     }
@@ -611,7 +611,7 @@ class CheckPointPolicyCollectorTest {
     }
     @Test void sixHourSkipAndDomainScopeDoNotIssuePackageReads() {
         var collector = setup(this::answer);
-        when(repository.beginDomain(anyString(), anyString(), eq(true))).thenReturn(false);
+        when(repository.beginDomain(argThat(request -> request.automatic()), anyString())).thenReturn(false);
         assertTrue(collector.collect(run, new PolicyCollectionRepository.Request("mds-1", "", true), () -> true).isEmpty());
         verify(transport, times(1)).execInteractive(any(), any(), any());
         assertThrows(IllegalStateException.class, () -> collector.collect(run,

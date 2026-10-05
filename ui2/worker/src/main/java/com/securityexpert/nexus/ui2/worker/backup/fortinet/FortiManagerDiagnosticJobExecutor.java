@@ -59,6 +59,7 @@ public final class FortiManagerDiagnosticJobExecutor {
             signedOff = resolved instanceof GateResolution.Known known
                     && "fmg_ssh_fmnetwork_interface_detail".equals(known.gateId()) && known.timeoutS() == 60;
         } catch (RuntimeException invalidGate) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(invalidGate);
             signedOff = false;
         }
         if (!eligible || !portKnown || !signedOff) {
@@ -105,6 +106,7 @@ public final class FortiManagerDiagnosticJobExecutor {
             leases.transitionState(jobId, leaseEpoch, JobState.EXECUTING, JobState.COMPLETED, ACTOR,
                     "diagnostic_completed", "SAFE_RESULT_RECORDED");
         } catch (RuntimeException failed) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(failed);
             leases.transitionState(jobId, leaseEpoch, JobState.EXECUTING, JobState.OUTCOME_UNKNOWN, ACTOR,
                     "diagnostic_dispatch_uncertain", "DIAGNOSTIC_DISPATCH_UNKNOWN");
         }

@@ -75,6 +75,7 @@ public final class QuantumSparkBackupExecutor {
         try {
             receiverPassword = passwordOf.apply(receiverCredentialRef.get());
         } catch (RuntimeException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
             return new BackupResult.CredentialUnresolvable("Spark receiver credential cannot be resolved");
         }
         if (receiverPassword == null) return new BackupResult.CredentialUnresolvable("Spark receiver credential is empty");
@@ -89,6 +90,7 @@ public final class QuantumSparkBackupExecutor {
                 transport.disconnect(authenticated.session());
             }
         } catch (IllegalStateException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
             return new BackupResult.CredentialUnresolvable("Spark backup credential cannot be resolved");
         } finally {
             Arrays.fill(receiverPassword, '\0');

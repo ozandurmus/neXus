@@ -24,12 +24,12 @@ public final class JooqJobStepAttemptDao implements JobStepAttemptDao {
     public String insertPreContact(String jobId, long leaseEpoch, int stepIndex, String stepKind,
             String actionClass, int attemptNumber) {
         String attemptId = UUID.randomUUID().toString();
-        auditedTransactionBoundary.inTransaction("system:worker", "job_step_attempt_pre_contact", dsl -> dsl.execute(
+        int inserted = auditedTransactionBoundary.inTransaction("system:worker", "job_step_attempt_pre_contact", dsl -> dsl.execute(
                 "insert into job_step_attempt(attempt_id, job_id, lease_epoch, step_index, step_kind, "
                         + "attempt_number, action_class, mutation_boundary_crossed) "
-                        + "values ({0}, {1}, {2}, {3}, {4}, {5}, {6}, false)",
+                        + "select {0}, {1}, {2}, {3}, {4}, {5}, {6}, false where ui2_job_owner_valid({1},{2}) and exists(select 1 from jobs where job_id={1} and state='EXECUTING')",
                 attemptId, jobId, leaseEpoch, stepIndex, stepKind, attemptNumber, actionClass));
-        return attemptId;
+        return inserted == 1 ? attemptId : null;
     }
 
     @Override
@@ -37,7 +37,7 @@ public final class JooqJobStepAttemptDao implements JobStepAttemptDao {
         int updated = auditedTransactionBoundary.inTransaction("system:worker", "job_step_attempt_boundary_crossed",
                 dsl -> dsl.execute(
                         "update job_step_attempt set mutation_boundary_crossed = true, sent_at = now() "
-                                + "where attempt_id = {0} and lease_epoch = {1} and mutation_boundary_crossed = false",
+                                + "where attempt_id = {0} and lease_epoch = {1} and mutation_boundary_crossed = false and ui2_job_owner_valid(job_id,lease_epoch) and exists(select 1 from jobs where jobs.job_id=job_step_attempt.job_id and jobs.state='EXECUTING')",
                         attemptId, leaseEpoch));
         return updated == 1;
     }
@@ -56,7 +56,7 @@ public final class JooqJobStepAttemptDao implements JobStepAttemptDao {
                 dsl -> dsl.execute(
                         "update job_step_attempt set outcome = {0}, error_class = {1}, matched_expectation = {2}, "
                                 + "output_bytes = {3}, output_lines = {4}, fingerprint_sha256 = {5} "
-                                + "where attempt_id = {6} and lease_epoch = {7}",
+                                + "where attempt_id = {6} and lease_epoch = {7} and ui2_job_owner_valid(job_id,lease_epoch)",
                         outcome, errorClass, matchedExpectation, outputBytes, outputLines, fingerprintSha256,
                         attemptId, leaseEpoch));
         return updated == 1;

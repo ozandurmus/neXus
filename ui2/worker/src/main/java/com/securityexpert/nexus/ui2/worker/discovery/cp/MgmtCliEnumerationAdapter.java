@@ -70,6 +70,7 @@ public final class MgmtCliEnumerationAdapter implements ManagementPlaneEnumerati
         try {
             connectResult = transport.connect(target, spec, CONNECT_TIMEOUT);
         } catch (RuntimeException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
             return new ManagementPlaneEnumerationResult.Failed("NOT_EVALUABLE", 0, SessionDisconnectOutcome.NOT_OPENED);
         }
         if (connectResult instanceof ConnectResult.AuthenticationFailed failure && "NOT_EVALUABLE".equals(failure.reason())) {
@@ -97,6 +98,7 @@ public final class MgmtCliEnumerationAdapter implements ManagementPlaneEnumerati
             List<ConnectionTableRow> secondObservation = readConnectionTableObservation(session);
             channelStates = ConnectionTableReducer.reduce(firstObservation, secondObservation, candidates, request.configuredChannelPort());
         } catch (RuntimeException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
             caught = e;
         }
 
@@ -115,7 +117,7 @@ public final class MgmtCliEnumerationAdapter implements ManagementPlaneEnumerati
                     requestCount, disconnectOutcome);
         }
         log.info(String.format("discovery enumeration completed: candidateCount=%d requestCount=%d", candidates.size(), requestCount));
-        
+
         List<RawCandidateInput> finalCandidates = new ArrayList<>();
         for (RawCandidateInput candidate : candidates) {
             Optional<ConnectionTableChannelState> state = candidate.managementAddress().isPresent()
@@ -134,6 +136,7 @@ public final class MgmtCliEnumerationAdapter implements ManagementPlaneEnumerati
         try {
             return credentialResolver.resolve(credentialRef);
         } catch (RuntimeException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
             return null;
         }
     }
@@ -143,6 +146,7 @@ public final class MgmtCliEnumerationAdapter implements ManagementPlaneEnumerati
             transport.disconnect(session);
             return SessionDisconnectOutcome.CLOSED;
         } catch (RuntimeException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
             return SessionDisconnectOutcome.FAILED_TO_CLOSE;
         }
     }
@@ -163,6 +167,7 @@ public final class MgmtCliEnumerationAdapter implements ManagementPlaneEnumerati
                 domains.add("SMC User"); // Fallback for single domain / non-MDS environments
             }
         } catch (Exception e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
             log.warning("Failed to parse domains JSON, assuming single domain");
             domains.add("SMC User");
         }
@@ -182,7 +187,7 @@ public final class MgmtCliEnumerationAdapter implements ManagementPlaneEnumerati
         try {
             JsonNode root = mapper.readTree(response);
             JsonNode objects = root.get("objects");
-            
+
             if (objects != null && objects.isArray()) {
                 // Pass 1: Find all clusters and map member names to their cluster UIDs
                 Map<String, String> memberNameToClusterUid = new HashMap<>();
@@ -209,7 +214,7 @@ public final class MgmtCliEnumerationAdapter implements ManagementPlaneEnumerati
                     String uid = obj.get("uid").asText();
                     String type = obj.has("type") ? obj.get("type").asText() : "";
                     String name = obj.has("na" + "me") ? obj.get("na" + "me").asText() : "";
-                    
+
                     ObjectType objType = ObjectType.GATEWAY;
                     boolean isVirtHost = false;
                     boolean isVirtSystem = false;
@@ -256,14 +261,14 @@ public final class MgmtCliEnumerationAdapter implements ManagementPlaneEnumerati
 
                     Address ipv4 = obj.has("ipv4-address") ? Address.of(obj.get("ipv4-address").asText()) : Address.absent();
                     Address mgmtIp = ipv4;
-                    
+
                     if (objType == ObjectType.CLUSTER || objType == ObjectType.MEMBER) {
                         isProduct = true;
                     }
 
                     ClassificationFlags flags = new ClassificationFlags(isProduct, isVirtHost, isVirtSystem);
                     Optional<ClusterReference> clusterRef = Optional.empty();
-                    
+
                     if (objType == ObjectType.MEMBER && memberNameToClusterUid.containsKey(name)) {
                          String clusterUid = memberNameToClusterUid.get(name);
                          clusterRef = Optional.of(new ClusterReference(Optional.of(OpaqueId.of(clusterUid)), Optional.empty()));
@@ -283,13 +288,14 @@ public final class MgmtCliEnumerationAdapter implements ManagementPlaneEnumerati
             }
             log.info(String.format("queryGateways: objects_array_size=%d, parsed=%d, missingUid=%d, added=%d", objects != null ? objects.size() : -1, parsed, missingStableIdentifier, results.size()));
         } catch (Exception e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
             log.warning("Failed to parse show-gateways-and-servers JSON");
             throw new ManagementPlaneQueryFailedException();
         }
-        
+
         ParseCounts previous = parseCounts.getOrDefault(ObjectType.GATEWAY, new ParseCounts(0, 0));
         parseCounts.put(ObjectType.GATEWAY, new ParseCounts(previous.parsed() + parsed, previous.missingStableIdentifier() + missingStableIdentifier));
-        
+
         return results;
     }
 

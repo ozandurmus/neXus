@@ -22,7 +22,7 @@ set -uo pipefail
 rollback_hint() {
   rc=$?
   if [ "$rc" -ne 0 ]; then
-    echo 'Rollback on HOST-A: bash ~/nexus/tools/delivery/rollback.sh latest --apply (preview first; schema guard applies)' >&2
+    echo 'Rollback: review the exact snapshot and use module_deploy.py --rollback with explicit targets; split-runtime global apply is refused' >&2
   fi
 }
 trap rollback_hint EXIT
@@ -33,8 +33,10 @@ if [ -z "$HOST" ]; then echo "set NEXUS_HOST or write user@host to ~/.config/nex
 LIMIT="${NEXUS_DEPLOY_LIMIT_S:-4500}"
 SKIP_SECURITY_B64=""
 APPLY=()
+TARGETS="service worker configuration compliance policy"
 while [ $# -gt 0 ]; do
   case "$1" in
+    --targets) TARGETS="$2"; shift 2 ;;
     --apply) APPLY+=("$2"); shift 2 ;;
     --skip-security)
       [ $# -ge 2 ] && [ -n "${2//[[:space:]]/}" ] || { echo "--skip-security requires a reason" >&2; exit 64; }
@@ -44,6 +46,8 @@ while [ $# -gt 0 ]; do
     *) echo "unknown argument: $1" >&2; exit 64 ;;
   esac
 done
+
+python3 -c 'import sys; sys.path.insert(0, "tools/delivery"); from module_deploy import validate_targets; validate_targets(sys.argv[1])' "$TARGETS" || exit 64
 
 for m in "${APPLY[@]:-}"; do
   [ -n "$m" ] && scp -q "$m" "$HOST:/tmp/$(basename "$m")"
@@ -55,7 +59,7 @@ for m in "${APPLY[@]:-}"; do [ -n "$m" ] && APPLY_NAMES="$APPLY_NAMES /tmp/$(bas
 # repository (~/nexus.git), which ~/nexus (run_build.sh's checkout) pulls from.
 git -C "$(dirname "$0")/../.." push -q "ssh://$HOST/~/nexus.git" main || { echo "STOP: push to the host repository failed" >&2; exit 6; }
 
-ssh -o ConnectTimeout=10 "$HOST" "LIMIT=$LIMIT SKIP_SECURITY_B64='$SKIP_SECURITY_B64' APPLY_NAMES='$APPLY_NAMES' bash -s" <<'REMOTE'
+ssh -o ConnectTimeout=10 "$HOST" "LIMIT=$LIMIT SKIP_SECURITY_B64='$SKIP_SECURITY_B64' APPLY_NAMES='$APPLY_NAMES' TARGETS='$TARGETS' bash -s" <<'REMOTE'
 set -uo pipefail
 export KUBECONFIG=$HOME/.kube/config
 export NEXUS_SKIP_SECURITY_REASON="$(printf '%s' "$SKIP_SECURITY_B64" | base64 --decode)"
@@ -67,9 +71,8 @@ if ! git --git-dir="$HOME/nexus.git" show main:deploy/ui2-image-build/run_build.
   echo "run_build.sh synchronized from main"
 fi
 q() { kubectl -n ui2 exec ui2-db-0 -- sh -c "psql -U \"\$POSTGRES_USER\" -d ui2 -Atc \"$1\""; }
-inflight=$(q "select count(*) from jobs where state in ('CLAIMED','EXECUTING')")
-if [ "$inflight" != "0" ]; then echo "STOP: $inflight job(s) in flight; deploy not started"; exit 4; fi
 export NEXUS_DEPLOY_APPLY_FILES="$APPLY_NAMES"
+export NEXUS_DEPLOY_TARGETS="$TARGETS"
 before=$(kubectl -n ui2 get pods --no-headers -o custom-columns=N:.metadata.name | tr '\n' ' ')
 lastbuild=$(kubectl -n ui2-build get pods --no-headers --sort-by=.metadata.creationTimestamp 2>/dev/null | grep -E '^ui2-image-build-' | tail -1 | awk '{print $1}')
 nohup bash ~/run_build.sh > /tmp/nexus_build.log 2>&1 &
@@ -79,7 +82,7 @@ while true; do
   b=$(kubectl -n ui2-build get pods --no-headers --sort-by=.metadata.creationTimestamp 2>/dev/null | grep -E '^ui2-image-build-' | tail -1)
   bname=$(echo "$b" | awk '{print $1}'); bstate=$(echo "$b" | awk '{print $3}')
   [ "$bname" = "$lastbuild" ] && bstate="(waiting for the new build pod)"
-  new=$(kubectl -n ui2 get pods --no-headers 2>/dev/null | grep -E 'ui2-(service|worker)' | while read n r s rs rest; do case " $before " in *" $n "*) ;; *) echo "$n $r $s $rs";; esac; done)
+  new=$(kubectl -n ui2 get pods --no-headers 2>/dev/null | grep -E "ui2-($(echo "$TARGETS" | tr ' ' '|'))-" | while read n r s rs rest; do case " $before " in *" $n "*) ;; *) echo "$n $r $s $rs";; esac; done)
   echo "t=${t}s build=$bstate new=[$(echo "$new" | tr '\n' ';')]"
   grep -E '^\{"snapshot": "[0-9TZ_a-f]+"\}$' /tmp/nexus_build.log || true
   # run_build.sh ended without "Done." -> it failed or stopped on purpose; say why instead of waiting out the limit
@@ -88,7 +91,7 @@ while true; do
     echo "STOP: run_build.sh ended without Done."; tail -4 /tmp/nexus_build.log | cut -c1-220; exit 5
   fi
   # waiting for in-flight jobs before the worker changes: not a hang, and not counted against the limit
-  if tail -1 /tmp/nexus_build.log | grep -q '^Worker waiting'; then tail -1 /tmp/nexus_build.log; start=$(( $(date +%s) - t + 15 )); continue; fi
+  if tail -1 /tmp/nexus_build.log | grep -q '^Module waiting'; then tail -1 /tmp/nexus_build.log; start=$(( $(date +%s) - t + 15 )); continue; fi
   if [ "$bname" != "$lastbuild" ] && [ "$bstate" = "Error" ]; then
     echo "STOP: build failed"; kubectl -n ui2-build logs "$bname" --tail=4 | cut -c1-220; exit 1
   fi
@@ -98,8 +101,7 @@ while true; do
     kubectl -n ui2 logs "$p" --tail=400 2>/dev/null | grep -E '^Message|ERROR|Exception' | cut -c1-220 | head -5
     exit 2
   fi
-  up=$(echo "$new" | grep -c ' 1/1 Running ')
-  if [ "$up" -ge 2 ] && grep -q '^Done\.' /tmp/nexus_build.log; then echo "UP after ${t}s"; break; fi
+  if grep -q '^Done\.' /tmp/nexus_build.log; then echo "UP after ${t}s"; break; fi
   if [ $t -gt "$LIMIT" ]; then echo "STOP: over ${LIMIT}s"; tail -3 /tmp/nexus_build.log; exit 3; fi
 done
 # Already validated counts from security_host.py (or the not_configured marker); preserve it for the ship caller.

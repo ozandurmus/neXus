@@ -51,7 +51,7 @@ class CpPolicyParallelCollectionTest {
             try { return answer.apply(command); }
             finally { active.decrementAndGet(); busy.remove(session.sessionId()); }
         }).when(transport).execInteractive(any(), any(), any());
-        when(repository.beginDomain(anyString(), anyString(), anyBoolean())).thenReturn(true);
+        when(repository.beginDomain(any(PolicyCollectionRepository.Request.class), anyString())).thenReturn(true);
         when(repository.targets(anyString(), anyString(), anyString())).thenReturn(List.of());
         return new CheckPointPolicyCollector(transport, gates, repository, Duration.ofHours(2), maximum);
     }
@@ -283,7 +283,7 @@ class CpPolicyParallelCollectionTest {
 
     @Test void changedOnlyDomainReuseAndScopeSkipPackageReads() {
         var collector = setup(4, this::answer);
-        when(repository.beginDomain(anyString(), anyString(), eq(true))).thenReturn(false);
+        when(repository.beginDomain(argThat(request -> request.automatic()), anyString())).thenReturn(false);
         assertTrue(collector.collect(run, new PolicyCollectionRepository.Request("mds-1", "", true), () -> true).isEmpty());
         assertEquals(1, reads.size()); cleanup();
         assertThrows(PolicyCollectionTrace.Failure.class, () -> collector.collect(run,
