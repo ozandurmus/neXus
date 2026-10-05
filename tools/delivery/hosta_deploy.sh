@@ -5,7 +5,7 @@
 #
 # What it does, every step with a hard limit:
 #   1. refuses if a device job is CLAIMED/EXECUTING (a rollout would drain it mid-flight);
-#   2. applies any --apply manifests (kubectl -n ui2 only);
+#   2. passes any --apply manifests to run_build.sh, after its release snapshot;
 #   3. starts ~/run_build.sh on the host (detached) and polls every 15 s:
 #        - the NEWEST image-build pod (Completed / Error),
 #        - the NEW ui2-service and ui2-worker pods (the ones that were not there before);
@@ -19,6 +19,13 @@
 #   5. on success prints the site status, the schema version and the image digest.
 # PO rule 2026-09-22: every job I start is followed to an end state; a build is ~100 s, a deploy ~3 min.
 set -uo pipefail
+rollback_hint() {
+  rc=$?
+  if [ "$rc" -ne 0 ]; then
+    echo 'Rollback on HOST-A: bash ~/nexus/tools/delivery/rollback.sh latest --apply (preview first; schema guard applies)' >&2
+  fi
+}
+trap rollback_hint EXIT
 # The host is local configuration, never a repository literal (privacy gate): NEXUS_HOST, or the first line of
 # ~/.config/nexus/hosta (e.g. user@address).
 HOST="${NEXUS_HOST:-$(head -1 "$HOME/.config/nexus/hosta" 2>/dev/null)}"
@@ -62,7 +69,7 @@ fi
 q() { kubectl -n ui2 exec ui2-db-0 -- sh -c "psql -U \"\$POSTGRES_USER\" -d ui2 -Atc \"$1\""; }
 inflight=$(q "select count(*) from jobs where state in ('CLAIMED','EXECUTING')")
 if [ "$inflight" != "0" ]; then echo "STOP: $inflight job(s) in flight; deploy not started"; exit 4; fi
-for f in $APPLY_NAMES; do kubectl apply -f "$f" | sed 's/^/applied: /'; done
+export NEXUS_DEPLOY_APPLY_FILES="$APPLY_NAMES"
 before=$(kubectl -n ui2 get pods --no-headers -o custom-columns=N:.metadata.name | tr '\n' ' ')
 lastbuild=$(kubectl -n ui2-build get pods --no-headers --sort-by=.metadata.creationTimestamp 2>/dev/null | grep -E '^ui2-image-build-' | tail -1 | awk '{print $1}')
 nohup bash ~/run_build.sh > /tmp/nexus_build.log 2>&1 &
@@ -74,6 +81,7 @@ while true; do
   [ "$bname" = "$lastbuild" ] && bstate="(waiting for the new build pod)"
   new=$(kubectl -n ui2 get pods --no-headers 2>/dev/null | grep -E 'ui2-(service|worker)' | while read n r s rs rest; do case " $before " in *" $n "*) ;; *) echo "$n $r $s $rs";; esac; done)
   echo "t=${t}s build=$bstate new=[$(echo "$new" | tr '\n' ';')]"
+  grep -E '^\{"snapshot": "[0-9TZ_a-f]+"\}$' /tmp/nexus_build.log || true
   # run_build.sh ended without "Done." -> it failed or stopped on purpose; say why instead of waiting out the limit
   if ! pgrep -f "bash $HOME/run_build.sh" >/dev/null && ! pgrep -f "bash ~/run_build.sh" >/dev/null && ! grep -q '^Done\.' /tmp/nexus_build.log; then
     grep '^{"passed":' /tmp/nexus_build.log || true
@@ -96,6 +104,7 @@ while true; do
 done
 # Already validated counts from security_host.py (or the not_configured marker); preserve it for the ship caller.
 grep -E '^\{"(passed|security_gate)":' /tmp/nexus_build.log || true
+grep -E '^\{"snapshot": "[0-9TZ_a-f]+"\}$' /tmp/nexus_build.log || true
 grep -E '^TIMING [a-z_]+ [0-9]+$' /tmp/nexus_build.log || true
 # HTTPS since 2026-09-27 (HTTP answers 301); -k: the local CA is not in the host's trust store.
 echo "site $(curl -sk --noproxy '*' -o /dev/null -w '%{http_code}' https://127.0.0.1/)"
