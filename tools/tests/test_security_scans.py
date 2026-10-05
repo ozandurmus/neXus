@@ -282,6 +282,7 @@ def test_orchestrator_stops_before_configuration_sync_on_gate_failure(tmp_path, 
     def deployment(argv, **kwargs):
         calls.append(argv)
         assert argv == ["bash", "tools/delivery/hosta_deploy.sh"]
+        kwargs["stdout"].write(json.dumps({"snapshot": "20261005T010000000000Z_" + "a" * 12}) + "\n")
         kwargs["stdout"].write("" if missing else json.dumps(host.safe_summary(json.dumps(result))) + "\n")
         return SimpleNamespace(returncode=0 if missing else 5)
 
@@ -290,7 +291,7 @@ def test_orchestrator_stops_before_configuration_sync_on_gate_failure(tmp_path, 
         sa._deploy()
     assert len(calls) == 1
     if not missing:
-        assert json.loads(capsys.readouterr().out)["counts"] == result["counts"]
+        assert json.loads(capsys.readouterr().out.splitlines()[-1])["counts"] == result["counts"]
 
 
 def test_split_gate_keeps_source_before_digest_and_one_summary():

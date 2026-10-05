@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Private, host-local release snapshots. JSON manifests are also valid YAML."""
 import argparse
+from contextlib import contextmanager
 from datetime import datetime, timezone
 import fcntl
 import gzip
@@ -23,11 +24,39 @@ RESTORE_KINDS = {"Namespace", "Deployment", "StatefulSet", "DaemonSet", "CronJob
 VERSION = re.compile(r"\d+(?:[._]\d+)*")
 
 
+class SafeReleaseError(RuntimeError):
+    """A diagnostic authored here, containing no command output or operational values."""
+
+
+@contextmanager
+def step(name):
+    try:
+        yield
+    except Exception as error:
+        if not hasattr(error, "release_step"):
+            error.release_step = name
+        raise
+
+
+def failure_message(error):
+    if isinstance(error, SafeReleaseError):
+        return str(error)
+    if isinstance(error, KeyError):
+        return "required resource field missing"
+    if isinstance(error, ValueError):
+        return "invalid response or snapshot format"
+    if isinstance(error, subprocess.TimeoutExpired):
+        return "local command timed out"
+    if isinstance(error, OSError):
+        return "local prerequisite or filesystem operation failed"
+    return "release operation failed; raw exception details withheld"
+
+
 def run(*argv, input=None):
     result = subprocess.run(argv, input=input, capture_output=True, timeout=600)
     if result.returncode:
         # Never relay command output: manifests, DB errors and diffs are local-only.
-        raise RuntimeError(f"{argv[0]} failed (exit {result.returncode})")
+        raise SafeReleaseError(f"{argv[0]} failed (exit {result.returncode})")
     return result.stdout
 
 
@@ -42,7 +71,7 @@ def write(path, value):
 def pod_spec(item):
     spec = item.get("spec", {})
     if item["kind"] == "CronJob":
-        return spec["jobTemplate"]["spec"]["template"]["spec"]
+        return spec.get("jobTemplate", {}).get("spec", {}).get("template", {}).get("spec")
     if item["kind"] == "Pod":
         return spec
     return spec.get("template", {}).get("spec")
@@ -69,8 +98,9 @@ def prune(value):
         result.pop("secrets", None)
     if result.get("kind") == "Job":
         # Job selectors contain controller-generated identity. Templates are evidence only.
-        result["spec"].pop("selector", None)
-        labels = result["spec"]["template"].get("metadata", {}).get("labels", {})
+        spec = result.get("spec", {})
+        spec.pop("selector", None)
+        labels = spec.get("template", {}).get("metadata", {}).get("labels", {})
         for key in list(labels):
             if key in ("controller-uid", "job-name") or key.startswith("batch.kubernetes.io/"):
                 del labels[key]
@@ -80,10 +110,20 @@ def prune(value):
     return result
 
 
+def completed(item):
+    status = item.get("status", {})
+    return (item.get("kind") == "Pod" and status.get("phase") in ("Succeeded", "Failed") or
+            item.get("kind") == "Job" and any(
+                condition.get("type") in ("Complete", "Failed") and condition.get("status") == "True"
+                for condition in status.get("conditions", [])))
+
+
 def pin_images(items, pods):
     """Resolve tag references from observed container status; refuse ambiguous or absent digests."""
     observed = {}
     for pod in pods:
+        if completed(pod):
+            continue
         spec = pod_spec(pod)
         for field, status_field in (("containers", "containerStatuses"),
                                     ("initContainers", "initContainerStatuses")):
@@ -95,6 +135,8 @@ def pin_images(items, pods):
                     observed.setdefault(container["image"], set()).add(image_id)
     images = []
     for item in items:
+        if completed(item):
+            continue
         spec = pod_spec(item)
         if spec is None:
             continue
@@ -104,7 +146,7 @@ def pin_images(items, pods):
                 if "@" not in image or not DIGEST.fullmatch(image.split("@")[-1]):
                     candidates = observed.get(image, set())
                     if len(candidates) != 1:
-                        raise RuntimeError("missing or ambiguous workload image digest; snapshot refused")
+                        raise SafeReleaseError("missing or ambiguous workload image digest; snapshot refused")
                     image = next(iter(candidates))
                     container["image"] = image
                 images.append({"kind": item["kind"], "workload": item["metadata"]["name"],
@@ -117,13 +159,13 @@ def schema_version():
     value = run("kubectl", "-n", "ui2", "exec", "ui2-db-0", "--", "sh", "-c",
                 'psql -U "${POSTGRES_USER:-$POSTGRESQL_USER}" -d ui2 -Atc "' + sql + '"').decode().strip()
     if not VERSION.fullmatch(value):
-        raise RuntimeError("Flyway schema version missing or unsupported")
+        raise SafeReleaseError("Flyway schema version missing or unsupported")
     return value
 
 
 def version_key(value):
     if not VERSION.fullmatch(value):
-        raise RuntimeError("invalid Flyway version")
+        raise SafeReleaseError("invalid Flyway version")
     parts = [int(v) for v in re.split(r"[._]", value)]
     while len(parts) > 1 and parts[-1] == 0:
         parts.pop()
@@ -141,60 +183,84 @@ def retain(root):
         shutil.rmtree(old)
 
 
-def snapshot(root):
-    commit = json.loads(run("kubectl", "-n", "ui2", "exec", "deployment/ui2-service", "--",
-                            "cat", "/app/project/deploy_info.json"))["commit"]
-    if not re.fullmatch(r"[a-f0-9]{40}", commit):
-        raise RuntimeError("deployed commit missing or invalid")
+def deployed_commit(fallback):
+    try:
+        commit = json.loads(run("kubectl", "-n", "ui2", "exec", "deployment/ui2-service", "--",
+                                "cat", "/app/project/deploy_info.json"))["commit"]
+        if isinstance(commit, str) and re.fullmatch(r"[a-f0-9]{40}", commit):
+            return commit
+    except (RuntimeError, KeyError, ValueError, TypeError, OSError, subprocess.TimeoutExpired):
+        pass
+    if isinstance(fallback, str) and re.fullmatch(r"[a-f0-9]{40}", fallback):
+        return fallback
+    raise SafeReleaseError("deployed commit unavailable; valid build commit fallback required")
+
+
+def snapshot(root, fallback_commit=None):
+    with step("deployed-commit lookup"):
+        commit = deployed_commit(fallback_commit)
     snapshot_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ") + "_" + commit[:12]
     directory = root / ("." + snapshot_id + ".partial")
-    directory.mkdir(mode=0o700)
+    with step("snapshot directory"):
+        directory.mkdir(mode=0o700)
     try:
         captures, images = {}, {}
         for namespace in NAMESPACES:
-            ns = json.loads(run("kubectl", "get", "namespace", namespace, "--ignore-not-found", "-o", "json") or b"null")
-            if ns is None:
-                if namespace == "ui2":
-                    raise RuntimeError("running namespace missing")
-                captures[namespace] = {"present": False}
-                continue
+            with step("namespace capture"):
+                ns = json.loads(run("kubectl", "get", "namespace", namespace, "--ignore-not-found", "-o", "json") or b"null")
+                if ns is None:
+                    if namespace == "ui2":
+                        raise SafeReleaseError("running namespace missing")
+                    captures[namespace] = {"present": False}
+                    continue
             resources = RESOURCES if namespace == "ui2" else RESOURCES + ",persistentvolumeclaims"
-            items = get(namespace, resources)["items"]
-            for item in items:
-                if item["kind"] in ("Deployment", "StatefulSet", "DaemonSet"):
-                    status, spec = item.get("status", {}), item["spec"]
-                    desired = status.get("desiredNumberScheduled", 0) if item["kind"] == "DaemonSet" else spec.get("replicas", 1)
-                    ready = status.get("numberReady", 0) if item["kind"] == "DaemonSet" else status.get("readyReplicas", 0)
-                    updated = status.get("updatedNumberScheduled", 0) if item["kind"] == "DaemonSet" else status.get("updatedReplicas", 0)
-                    if desired and (ready != desired or updated != desired or
-                                    status.get("observedGeneration") != item["metadata"].get("generation")):
-                        raise RuntimeError("workload is not stable; snapshot refused")
+            with step("resource capture"):
+                items = get(namespace, resources)["items"]
+            with step("workload stability"):
+                for item in items:
+                    if item["kind"] in ("Deployment", "StatefulSet", "DaemonSet"):
+                        status, spec = item.get("status", {}), item["spec"]
+                        desired = status.get("desiredNumberScheduled", 0) if item["kind"] == "DaemonSet" else spec.get("replicas", 1)
+                        ready = status.get("numberReady", 0) if item["kind"] == "DaemonSet" else status.get("readyReplicas", 0)
+                        updated = status.get("updatedNumberScheduled", 0) if item["kind"] == "DaemonSet" else status.get("updatedReplicas", 0)
+                        if desired and (ready != desired or updated != desired or
+                                        status.get("observedGeneration") != item["metadata"].get("generation")):
+                            raise SafeReleaseError("workload is not stable; snapshot refused")
             # Standalone build/security loaders are captured for evidence, never restarted by rollback.
-            pods = get(namespace, "pods")["items"]
+            with step("pod capture"):
+                pods = get(namespace, "pods")["items"]
             items += [p for p in pods if not p.get("metadata", {}).get("ownerReferences")]
-            images[namespace] = pin_images(items, pods)
-            clean = [prune(ns)] + [prune(item) for item in items]
-            write(directory / f"{namespace}.yaml", {"apiVersion": "v1", "kind": "List", "items": clean})
+            with step("image digest resolution"):
+                images[namespace] = pin_images(items, pods)
+            with step("resource pruning"):
+                clean = [prune(ns)] + [prune(item) for item in items]
+            with step("manifest write"):
+                write(directory / f"{namespace}.yaml", {"apiVersion": "v1", "kind": "List", "items": clean})
             # Server-side projection: Secret contents never enter this process or its files.
-            secrets = run("kubectl", "-n", namespace, "get", "secrets", "-o",
-                          'jsonpath={range .items[*]}{.metadata.name}{"\\t"}{.metadata.resourceVersion}{"\\n"}{end}')
-            write(directory / f"{namespace}-secrets.json", [dict(zip(("name", "resourceVersion"), line.split("\t")))
-                                                           for line in secrets.decode().splitlines()])
+            with step("Secret metadata capture"):
+                secrets = run("kubectl", "-n", namespace, "get", "secrets", "-o",
+                              'jsonpath={range .items[*]}{.metadata.name}{"\\t"}{.metadata.resourceVersion}{"\\n"}{end}')
+                write(directory / f"{namespace}-secrets.json", [dict(zip(("name", "resourceVersion"), line.split("\t")))
+                                                               for line in secrets.decode().splitlines()])
             captures[namespace] = {"present": True, "resources": len(clean), "jobs_and_pods": "templates only"}
-        version = schema_version()
-        dump = run("kubectl", "-n", "ui2", "exec", "ui2-db-0", "--", "sh", "-c",
-                   'pg_dump -U "${POSTGRES_USER:-$POSTGRESQL_USER}" -d ui2 --schema-only --no-owner --no-privileges')
-        if not dump:
-            raise RuntimeError("empty schema dump")
-        if schema_version() != version:
-            raise RuntimeError("schema changed during capture; snapshot refused")
-        (directory / "schema.sql.gz").write_bytes(gzip.compress(dump))
-        manifest = {"format": 1, "snapshot": snapshot_id, "deployed_commit": commit,
-                    "schema_version": version, "captured": captures, "images": images,
-                    "checksums": {p.name: checksum(p) for p in sorted(directory.iterdir())}}
-        write(directory / "manifest.json", manifest)
-        directory.rename(root / snapshot_id)
-        retain(root)
+        with step("Flyway version query"):
+            version = schema_version()
+        with step("schema dump"):
+            dump = run("kubectl", "-n", "ui2", "exec", "ui2-db-0", "--", "sh", "-c",
+                       'pg_dump -U "${POSTGRES_USER:-$POSTGRESQL_USER}" -d ui2 --schema-only --no-owner --no-privileges')
+            if not dump:
+                raise SafeReleaseError("empty schema dump")
+        with step("Flyway version verification"):
+            if schema_version() != version:
+                raise SafeReleaseError("schema changed during capture; snapshot refused")
+        with step("snapshot publication"):
+            (directory / "schema.sql.gz").write_bytes(gzip.compress(dump))
+            manifest = {"format": 1, "snapshot": snapshot_id, "deployed_commit": commit,
+                        "schema_version": version, "captured": captures, "images": images,
+                        "checksums": {p.name: checksum(p) for p in sorted(directory.iterdir())}}
+            write(directory / "manifest.json", manifest)
+            directory.rename(root / snapshot_id)
+            retain(root)
         print(json.dumps({"snapshot": snapshot_id}))
     except BaseException:
         shutil.rmtree(directory, ignore_errors=True)
@@ -204,17 +270,17 @@ def snapshot(root):
 def load_snapshot(directory):
     manifest = json.loads((directory / "manifest.json").read_text())
     if manifest["format"] != 1 or manifest["snapshot"] != directory.name:
-        raise RuntimeError("invalid snapshot manifest")
+        raise SafeReleaseError("invalid snapshot manifest")
     required = {"schema.sql.gz"}
     for namespace in NAMESPACES:
         if manifest["captured"][namespace]["present"]:
             required.update((f"{namespace}.yaml", f"{namespace}-secrets.json"))
     if set(manifest["checksums"]) != required:
-        raise RuntimeError("incomplete snapshot checksums")
+        raise SafeReleaseError("incomplete snapshot checksums")
     for name, digest in manifest["checksums"].items():
         path = directory / name
         if path.is_symlink() or checksum(path) != digest:
-            raise RuntimeError("snapshot checksum mismatch")
+            raise SafeReleaseError("snapshot checksum mismatch")
     return manifest
 
 
@@ -233,7 +299,7 @@ def rollback(root, target, apply, allow_newer):
         candidates = sorted(p for p in root.iterdir() if SNAPSHOT_ID.fullmatch(p.name)
                             and p.is_dir() and not p.is_symlink() and (p / "manifest.json").is_file())
         if not candidates:
-            raise RuntimeError("no complete snapshot")
+            raise SafeReleaseError("no complete snapshot")
         directory = candidates[-1]
     else:
         directory = Path(target).expanduser().resolve()
@@ -242,9 +308,9 @@ def rollback(root, target, apply, allow_newer):
     saved = manifest["schema_version"]
     print(f"Schema note: snapshot={saved}; live={live}; schema and DB data will not be restored.", flush=True)
     if version_key(saved) < version_key(live) and not allow_newer:
-        raise RuntimeError("live schema is newer; review additive compatibility and use --allow-newer-schema")
+        raise SafeReleaseError("live schema is newer; review additive compatibility and use --allow-newer-schema")
     if version_key(saved) > version_key(live):
-        raise RuntimeError("live schema is older than snapshot; required migrations are absent")
+        raise SafeReleaseError("live schema is older than snapshot; required migrations are absent")
     plans = []
     removals = []
     for namespace in NAMESPACES:
@@ -256,7 +322,7 @@ def rollback(root, target, apply, allow_newer):
         diff = subprocess.run(["kubectl", "-n", namespace, "diff", "-f", "-"], input=payload,
                               capture_output=True, timeout=600)
         if diff.returncode not in (0, 1):
-            raise RuntimeError("kubectl diff failed; nothing restored")
+            raise SafeReleaseError("kubectl diff failed; nothing restored")
         print(f"Diff: {namespace}", flush=True)
         sys.stdout.buffer.write(diff.stdout)
         sys.stdout.flush()
@@ -270,11 +336,11 @@ def rollback(root, target, apply, allow_newer):
                     policy = item["spec"].get("persistentVolumeClaimRetentionPolicy", {})
                     if policy.get("whenScaled") == "Delete" and (
                             saved_items[key]["spec"].get("replicas", 1) < item["spec"].get("replicas", 1)):
-                        raise RuntimeError("StatefulSet scale-down would delete PVCs; rollback refused")
+                        raise SafeReleaseError("StatefulSet scale-down would delete PVCs; rollback refused")
                 if key in saved_keys or item["kind"] not in RESTORE_KINDS or item["kind"] == "Namespace":
                     continue
                 if item["kind"] == "StatefulSet":
-                    raise RuntimeError("new StatefulSet requires manual storage-safe review; rollback refused")
+                    raise SafeReleaseError("new StatefulSet requires manual storage-safe review; rollback refused")
                 removals.append((namespace, *key))
                 print(f"Remove added resource: {namespace}/{key[0]}/{key[1]}", flush=True)
     if not apply:
@@ -284,7 +350,7 @@ def rollback(root, target, apply, allow_newer):
     inflight = run("kubectl", "-n", "ui2", "exec", "ui2-db-0", "--", "sh", "-c",
                    'psql -U "${POSTGRES_USER:-$POSTGRESQL_USER}" -d ui2 -Atc "select count(*) from jobs where state in (\'CLAIMED\',\'EXECUTING\')"').decode().strip()
     if inflight != "0":
-        raise RuntimeError("jobs in flight or unknown; rollback refused")
+        raise SafeReleaseError("jobs in flight or unknown; rollback refused")
     for namespace, kind, name in removals:
         if kind in ("Deployment", "DaemonSet", "CronJob"):
             run("kubectl", "-n", namespace, "delete", kind.lower(), name, "--wait=true", "--timeout=600s")
@@ -300,7 +366,7 @@ def rollback(root, target, apply, allow_newer):
     status = run("curl", "-sk", "--noproxy", "*", "--max-time", "30", "-o", "/dev/null", "-w", "%{http_code}",
                  "https://127.0.0.1/").decode().strip()
     if status != "200":
-        raise RuntimeError("restored site did not return 200")
+        raise SafeReleaseError("restored site did not return 200")
     print("Rollback applied; site 200. Authenticated AIView verification remains required.")
 
 
@@ -311,27 +377,29 @@ def main():
     parser.add_argument("target", nargs="?", default="latest")
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--allow-newer-schema", action="store_true")
+    parser.add_argument("--commit", help="build commit fallback when deployed metadata is unavailable")
     args = parser.parse_args()
-    root = Path.home() / "release-snapshots"
-    root.mkdir(mode=0o700, exist_ok=True)
-    if root.is_symlink():
-        parser.error("snapshot root must not be a symlink")
-    root.chmod(0o700)
     try:
-        with (root / ".lock").open("a") as lock:
+        with step("local prerequisites"):
+            root = Path.home() / "release-snapshots"
+            root.mkdir(mode=0o700, exist_ok=True)
+            if root.is_symlink():
+                raise SafeReleaseError("snapshot root must not be a symlink")
+            root.chmod(0o700)
+        with step("release lock"), (root / ".lock").open("a") as lock:
             fcntl.flock(lock, fcntl.LOCK_EX)
-            if args.action == "snapshot":
-                if args.apply or args.allow_newer_schema or args.target != "latest":
-                    parser.error("snapshot accepts no rollback arguments")
-                snapshot(root)
-            else:
-                rollback(root, args.target, args.apply, args.allow_newer_schema)
-    except RuntimeError as error:
-        print(str(error), file=sys.stderr)
-        return 1
-    except (KeyError, ValueError, OSError, subprocess.TimeoutExpired):
-        # Exceptions from parsers/IO may contain operational contents. Keep diagnostics bounded.
-        print("Release operation refused or failed; check local prerequisites, schema compatibility and snapshot integrity.", file=sys.stderr)
+            with step(args.action):
+                if args.action == "snapshot":
+                    if args.apply or args.allow_newer_schema or args.target != "latest":
+                        raise SafeReleaseError("snapshot accepts no rollback arguments")
+                    snapshot(root, args.commit)
+                else:
+                    if args.commit is not None:
+                        raise SafeReleaseError("commit fallback is only accepted for snapshot")
+                    rollback(root, args.target, args.apply, args.allow_newer_schema)
+    except Exception as error:
+        print(f"Release failed at {getattr(error, 'release_step', 'local prerequisites')}: "
+              f"{type(error).__name__}: {failure_message(error)}", file=sys.stderr)
         return 1
     return 0
 

@@ -332,3 +332,253 @@ def test_statefulset_scale_down_cannot_delete_claims(tmp_path, monkeypatch):
     with pytest.raises(RuntimeError, match="delete PVCs"):
         rs.rollback(tmp_path, "latest", True, False)
     assert not any("apply" in args or "delete" in args for args, _ in calls)
+
+
+def resource_fixture(kind):
+    """Synthetic API objects with the structural fields returned by Kubernetes."""
+    if kind in {"Deployment", "StatefulSet", "DaemonSet", "CronJob", "Job"}:
+        item = workload(kind)
+        item["apiVersion"] = "batch/v1" if kind in {"CronJob", "Job"} else "apps/v1"
+        if kind in {"CronJob", "Job", "DaemonSet"}:
+            item["spec"].pop("replicas", None)
+        if kind == "DaemonSet":
+            item["status"] = {"desiredNumberScheduled": 1, "numberReady": 1,
+                              "updatedNumberScheduled": 1, "observedGeneration": 1}
+        if kind == "Job":
+            item["spec"]["selector"] = {"matchLabels": {"batch.kubernetes.io/controller-uid": "synthetic"}}
+            item["spec"]["template"]["metadata"]["labels"]["batch.kubernetes.io/job-name"] = "synthetic-job"
+    else:
+        item = {"apiVersion": "v1", "kind": kind,
+                "metadata": {"name": "synthetic-resource", "namespace": "ui2"}}
+        fields = {
+            "Service": {"spec": {"ports": [{"port": 80, "targetPort": 8080}],
+                                   "selector": {"app": "synthetic"}, "clusterIP": "192.0.2.10"}},
+            "ConfigMap": {"data": {"status": "synthetic", "metadata": "preserve"}},
+            "NetworkPolicy": {"spec": {"podSelector": {"matchLabels": {"app": "synthetic"}},
+                                         "policyTypes": ["Ingress"], "ingress": []}},
+            "ServiceAccount": {"automountServiceAccountToken": False,
+                               "secrets": [{"name": "synthetic-token"}]},
+            "Role": {"rules": [{"apiGroups": [""], "resources": ["pods"], "verbs": ["get"]}]},
+            "RoleBinding": {"roleRef": {"apiGroup": "rbac.authorization.k8s.io", "kind": "Role",
+                                         "name": "synthetic-role"},
+                            "subjects": [{"kind": "ServiceAccount", "name": "synthetic-reader", "namespace": "ui2"}]},
+            "PodDisruptionBudget": {"spec": {"minAvailable": 1, "selector": {"matchLabels": {"app": "synthetic"}}}},
+            "PersistentVolumeClaim": {"spec": {"accessModes": ["ReadWriteOnce"],
+                                               "resources": {"requests": {"storage": "1Gi"}}}},
+            "Namespace": {},
+            "Pod": {"spec": {"containers": [{"name": "synthetic", "image": IMAGE}]}}
+        }
+        item.update(fields[kind])
+        item["apiVersion"] = {"NetworkPolicy": "networking.k8s.io/v1", "Role": "rbac.authorization.k8s.io/v1",
+                              "RoleBinding": "rbac.authorization.k8s.io/v1", "PodDisruptionBudget": "policy/v1"}.get(kind, "v1")
+    item["metadata"].update({"uid": "synthetic-uid", "resourceVersion": "5", "generation": 1,
+                               "creationTimestamp": "2026-10-05T00:00:00Z", "managedFields": [{}],
+                               "annotations": {"kubectl.kubernetes.io/last-applied-configuration": "synthetic",
+                                               "synthetic.example/keep": "preserve"}})
+    item.setdefault("status", {"synthetic": "server-state"})
+    return item
+
+
+CAPTURE_KINDS = ("Deployment", "StatefulSet", "DaemonSet", "CronJob", "Job", "Service", "ConfigMap",
+                 "NetworkPolicy", "ServiceAccount", "Role", "RoleBinding", "PodDisruptionBudget",
+                 "PersistentVolumeClaim", "Namespace", "Pod")
+
+
+@pytest.mark.parametrize("kind", CAPTURE_KINDS)
+def test_prune_realistic_captured_kind(kind):
+    item = resource_fixture(kind)
+    original = deepcopy(item)
+    cleaned = rs.prune(item)
+    assert item == original
+    assert "status" not in cleaned
+    assert not {"uid", "resourceVersion", "generation", "creationTimestamp", "managedFields"} & cleaned["metadata"].keys()
+    assert cleaned["metadata"]["annotations"] == {"synthetic.example/keep": "preserve"}
+    for field in ("data", "rules", "subjects", "roleRef", "automountServiceAccountToken"):
+        if field in item:
+            assert cleaned[field] == item[field]
+    if kind == "ServiceAccount":
+        assert "secrets" not in cleaned
+    if kind == "Job":
+        assert "selector" not in cleaned["spec"]
+        assert "batch.kubernetes.io/job-name" not in cleaned["spec"]["template"]["metadata"]["labels"]
+    if rs.pod_spec(item) is not None:
+        assert rs.pod_spec(cleaned) == rs.pod_spec(item)
+
+
+@pytest.mark.parametrize("kind", CAPTURE_KINDS)
+@pytest.mark.parametrize("missing", ["spec", "template"])
+def test_prune_missing_spec_or_template(kind, missing):
+    item = resource_fixture(kind)
+    if missing == "spec":
+        item.pop("spec", None)
+    else:
+        spec = item.get("spec", {})
+        spec.pop("template", None)
+        spec.get("jobTemplate", {}).get("spec", {}).pop("template", None)
+    assert "status" not in rs.prune(item)
+    assert rs.pod_spec(item) is None or kind == "Pod"
+
+
+def test_snapshot_all_captured_shapes(tmp_path, monkeypatch):
+    mock_cluster(monkeypatch, items=[resource_fixture(k) for k in CAPTURE_KINDS if k not in {"Namespace", "Pod"}])
+    rs.snapshot(tmp_path)
+    directory = next(tmp_path.iterdir())
+    assert rs.load_snapshot(directory)["schema_version"] == "89"
+    captured = json.loads((directory / "ui2.yaml").read_text())["items"]
+    assert {i["kind"] for i in captured} == set(CAPTURE_KINDS) - {"Pod"}
+    assert all("status" not in i for i in captured)
+
+
+@pytest.mark.parametrize("prefix", ["docker-pullable://", ""])
+def test_status_digest_formats_for_regular_and_init_containers(prefix):
+    item = workload(image="example.invalid/synthetic:tag")
+    spec = item["spec"]["template"]["spec"]
+    spec["initContainers"][0]["image"] = "example.invalid/synthetic-init:tag"
+    pod = {"kind": "Pod", "spec": deepcopy(spec), "status": {
+        "containerStatuses": [{"name": "service", "imageID": prefix + IMAGE}],
+        "initContainerStatuses": [{"name": "prepare", "imageID": prefix + IMAGE}]}}
+    assert [i["image"] for i in rs.pin_images([item], [pod])] == [IMAGE, IMAGE]
+
+
+@pytest.mark.parametrize("response", [b"89\n", b"89.1\n", b"89_2\n"])
+def test_flyway_query_shape(monkeypatch, response):
+    def query(*args):
+        assert args[:7] == ("kubectl", "-n", "ui2", "exec", "ui2-db-0", "--", "sh")
+        assert "psql" in args[-1] and "-Atc" in args[-1]
+        assert "where success and version is not null order by installed_rank desc limit 1" in args[-1]
+        return response
+    monkeypatch.setattr(rs, "run", query)
+    assert rs.schema_version() == response.decode().strip()
+
+
+@pytest.mark.parametrize("response", [b"", b"version\n89\n(1 row)", b"synthetic-invalid"])
+def test_flyway_invalid_result_refuses(monkeypatch, response):
+    monkeypatch.setattr(rs, "run", lambda *args: response)
+    with pytest.raises(RuntimeError, match="Flyway"):
+        rs.schema_version()
+
+
+@pytest.mark.parametrize("response", [b"{}", b"not-json", b'{"commit": null}', b'{"commit": "invalid"}', b"[]"])
+def test_deployed_commit_invalid_metadata_falls_back(monkeypatch, response):
+    monkeypatch.setattr(rs, "run", lambda *args: response)
+    assert rs.deployed_commit(COMMIT) == COMMIT
+    with pytest.raises(RuntimeError, match="fallback"):
+        rs.deployed_commit(None)
+
+
+def test_deployed_commit_exec_failure_falls_back(tmp_path, monkeypatch):
+    mock_cluster(monkeypatch)
+    original = rs.run
+    def run(*args, **kwargs):
+        if "cat" in args:
+            assert "deployment/ui2-service" in args
+            raise RuntimeError("synthetic diagnostic must not escape")
+        return original(*args, **kwargs)
+    monkeypatch.setattr(rs, "run", run)
+    rs.snapshot(tmp_path, COMMIT)
+    assert rs.load_snapshot(next(tmp_path.iterdir()))["deployed_commit"] == COMMIT
+
+
+def test_deployed_commit_prefers_running_release(monkeypatch):
+    mock_cluster(monkeypatch)
+    assert rs.deployed_commit("c" * 40) == COMMIT
+
+
+def test_completed_jobs_and_e2e_pods_do_not_block_snapshot(tmp_path, monkeypatch):
+    job = resource_fixture("Job")
+    job["spec"]["template"]["spec"]["containers"][0]["image"] = "example.invalid/synthetic:old"
+    job["status"] = {"conditions": [{"type": "Complete", "status": "True"}], "succeeded": 1}
+    pod = resource_fixture("Pod")
+    pod["spec"]["containers"][0]["image"] = "example.invalid/synthetic-e2e:old"
+    pod["status"] = {"phase": "Succeeded"}
+    mock_cluster(monkeypatch, items=[resource_fixture("Deployment"), job])
+    original = rs.get
+    monkeypatch.setattr(rs, "get", lambda ns, resources: {"items": [pod]} if resources == "pods" else original(ns, resources))
+    rs.snapshot(tmp_path)
+    manifest = rs.load_snapshot(next(tmp_path.iterdir()))
+    assert all(i["kind"] == "Deployment" for i in manifest["images"]["ui2"])
+
+
+@pytest.mark.parametrize("failure,expected", [
+    (KeyError("synthetic-private-value"), "required resource field missing"),
+    (ValueError("synthetic-private-value\nsecond line"), "invalid response or snapshot format"),
+    (OSError("synthetic-private-value"), "local prerequisite or filesystem operation failed"),
+    (subprocess.TimeoutExpired(["synthetic-private-value"], 1), "local command timed out"),
+    (RuntimeError("synthetic-private-value"), "raw exception details withheld")])
+def test_main_reports_one_safe_step_class_message(tmp_path, monkeypatch, capsys, failure, expected):
+    import sys
+    monkeypatch.setattr(rs.Path, "home", lambda: tmp_path)
+    monkeypatch.setattr(sys, "argv", ["release_snapshot.py", "snapshot"])
+    mock_cluster(monkeypatch)
+    def prune(item):
+        raise failure
+    monkeypatch.setattr(rs, "prune", prune)
+    assert rs.main() == 1
+    output = capsys.readouterr()
+    assert output.out == ""
+    assert len(output.err.splitlines()) == 1
+    assert f"resource pruning: {type(failure).__name__}:" in output.err
+    assert expected in output.err
+    assert "synthetic-private-value" not in output.err
+    assert not list((tmp_path / "release-snapshots").glob("*.partial"))
+
+
+def test_build_passes_commit_before_snapshot():
+    script = (ROOT / "deploy/ui2-image-build/run_build.sh").read_text()
+    assert script.index('COMMIT_SHA="$(git rev-parse HEAD)"') < script.index("bash tools/delivery/release_snapshot.sh")
+    assert 'release_snapshot.sh --commit "$COMMIT_SHA"' in script
+
+
+@pytest.mark.parametrize("kind", ["Deployment", "StatefulSet", "DaemonSet", "CronJob", "Job"])
+def test_nested_template_server_metadata_is_pruned(kind):
+    item = resource_fixture(kind)
+    spec = item["spec"]
+    if kind == "CronJob":
+        spec = spec["jobTemplate"]["spec"]
+        item["spec"]["jobTemplate"]["metadata"] = deepcopy(item["metadata"])
+    spec["template"]["metadata"].update(deepcopy(item["metadata"]))
+    cleaned = rs.prune(item)
+    text = json.dumps(cleaned)
+    assert "kubectl.kubernetes.io/" not in text
+    assert "resourceVersion" not in text and "creationTimestamp" not in text
+    assert "managedFields" not in text and "synthetic-uid" not in text
+    assert rs.pod_spec(cleaned) == rs.pod_spec(item)
+
+
+@pytest.mark.parametrize("kind", ["Deployment", "StatefulSet", "DaemonSet"])
+def test_stability_refuses_real_workload_rollout(tmp_path, monkeypatch, kind):
+    item = resource_fixture(kind)
+    item["status"]["observedGeneration"] = 0
+    mock_cluster(monkeypatch, items=[item])
+    with pytest.raises(RuntimeError, match="stable") as raised:
+        rs.snapshot(tmp_path)
+    assert raised.value.release_step == "workload stability"
+    assert not list(tmp_path.iterdir())
+
+
+def test_schema_change_during_capture_refuses_publication(tmp_path, monkeypatch):
+    mock_cluster(monkeypatch)
+    versions = iter(["89", "90"])
+    monkeypatch.setattr(rs, "schema_version", lambda: next(versions))
+    with pytest.raises(RuntimeError, match="schema changed") as raised:
+        rs.snapshot(tmp_path)
+    assert raised.value.release_step == "Flyway version verification"
+    assert not list(tmp_path.iterdir())
+
+
+def test_command_failure_does_not_expose_output(monkeypatch):
+    monkeypatch.setattr(rs.subprocess, "run", lambda *args, **kwargs:
+                        subprocess.CompletedProcess(args, 1, b"synthetic-private-output", b"synthetic-private-error"))
+    with pytest.raises(rs.SafeReleaseError) as raised:
+        rs.run("kubectl", "synthetic-argument")
+    assert rs.failure_message(raised.value) == "kubectl failed (exit 1)"
+
+
+def test_main_accepts_commit_fallback(tmp_path, monkeypatch):
+    import sys
+    monkeypatch.setattr(rs.Path, "home", lambda: tmp_path)
+    monkeypatch.setattr(sys, "argv", ["release_snapshot.py", "snapshot", "--commit", COMMIT])
+    calls = []
+    monkeypatch.setattr(rs, "snapshot", lambda root, commit: calls.append((root, commit)))
+    assert rs.main() == 0
+    assert calls == [(tmp_path / "release-snapshots", COMMIT)]

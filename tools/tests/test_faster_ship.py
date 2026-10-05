@@ -155,6 +155,9 @@ def test_build_script_refuses_rollout_on_gate_failure_and_preserves_bypasses(tmp
     import subprocess
     home, tools = tmp_path / "home", tmp_path / "bin"
     (home / "nexus/project").mkdir(parents=True)
+    snapshot_script = home / "nexus/tools/delivery/release_snapshot.sh"
+    snapshot_script.parent.mkdir(parents=True)
+    snapshot_script.write_text('exec python3 tools/delivery/release_snapshot.py snapshot "$@"\n')
     (home / ".config/nexus").mkdir(parents=True)
     tools.mkdir()
     if mode != "not-configured":
@@ -169,7 +172,10 @@ with open(os.environ['TEST_CALLS'], 'a') as stream:
 if name == 'git' and args[0] == 'rev-parse':
     print('a' * (12 if '--short=12' in args else 40))
 elif name == 'python3':
-    if args[:2] == ['tools/security/security_host.py', 'start']:
+    if args[:2] == ['tools/delivery/release_snapshot.py', 'snapshot']:
+        assert args[2:] == ['--commit', 'a' * 40]
+        print(json.dumps({'snapshot': '20261005T010000000000Z_' + 'a' * 12}))
+    elif args[:2] == ['tools/security/security_host.py', 'start']:
         print('security-gate-' + 'b' * 12)
     elif args[:2] == ['tools/security/security_host.py', 'gate']:
         sys.exit(1 if os.environ['TEST_MODE'] == 'gate-failure' else 0)
