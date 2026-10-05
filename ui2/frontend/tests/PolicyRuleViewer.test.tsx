@@ -16,9 +16,9 @@ afterEach(() => { vi.unstubAllGlobals(); });
 it("explains disabled hit collection without showing a zero", async () => {
   mount(<RuleMetrics rule={rule} />);
   const tile = screen.getByText("Last hit").parentElement!;
-  expect(tile).toHaveTextContent("—");
+  expect(tile).toHaveTextContent("UNKNOWN");
   fireEvent.mouseOver(tile);
-  expect(await screen.findByRole("tooltip")).toHaveTextContent("hit counts not collected (awaiting approval)");
+  expect(await screen.findByRole("tooltip")).toHaveTextContent("Last hit unknown");
 });
 it("shows collected last hit in cards and per-firewall counters and timestamps in the drawer", () => {
   const collectedAt = "2026-10-02T12:00:00Z", lastHit = "2026-07-01T12:00:00Z";
@@ -26,7 +26,9 @@ it("shows collected last hit in cards and per-firewall counters and timestamps i
     firewalls: [{ deviceId: "device-1", context: "CTX-TANGO-01", hits: 2, firstHit: null, lastHit, createdAt: "2026-01-01T00:00:00Z", modifiedAt: null, collectedAt },
       { deviceId: "device-2", context: "CTX-TANGO-01", hits: 3, firstHit: null, lastHit: null, createdAt: null, modifiedAt: null, collectedAt }] } };
   const { unmount } = mount(<VirtualPolicyCards sections={[{ ...section, rules: [counted] }]} collapsed={new Set()} scrollTop={0} toggle={vi.fn()} objects={objects} metadata={metadata} openObject={vi.fn()} openRule={vi.fn()} selected={new Set()} onSelect={vi.fn()} />);
-  expect(screen.getByText("Last hit").parentElement).toHaveTextContent(lastHit);
+  expect(screen.getByText("Last hit").parentElement).toHaveTextContent(/d ago/);
+  expect(screen.getByText("Hits").parentElement).toHaveTextContent("5");
+  expect(screen.getByText("First hit").parentElement).toHaveTextContent("UNKNOWN");
   unmount();
   mount(<RuleDetailPanel rule={counted} section={section} metadata={{ ...metadata, vendor: "PAN", targets: [
     { deviceId: "device-1", name: "FW-TANGO-04", context: "CTX-TANGO-01", syncStatus: "UNKNOWN" },
@@ -51,7 +53,7 @@ it("renders dense cards with expansion, negation, disabled, expired and unavaila
   fireEvent.click(within(card).getByRole("button", { name: "OBJ-RULE-01" })); expect(openRule).toHaveBeenCalledWith(rule);
   expect(within(card).getByText("Access layer: OBJ-LAYER-01")).toBeInTheDocument();
   expect(within(card).getByText("High")).toBeInTheDocument();
-  expect(within(card).getByText("Last hit").parentElement).toHaveTextContent("—");
+  expect(within(card).getByText("Last hit").parentElement).toHaveTextContent("UNKNOWN");
 });
 it("keeps detail nav on the page and exposes object and revision views", async () => {
   vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ revisions: [], page: 0 }), { status: 200 })));
@@ -95,4 +97,20 @@ it("labels PAN sections precisely, collapses empty sections and uses responsive 
   expect(container.querySelector(".policy-rule-misc details")).toBeInTheDocument();
   expect(container.querySelector(".policy-rule-metrics")).toHaveStyle({ width: "220px", gridTemplateColumns: "repeat(2, minmax(0, 1fr))" });
   expect(container.textContent).not.toMatch(/[a-f0-9]{32}/i);
+});
+
+it("shows hit timestamps with relative last-hit and absolute tooltip plus the full schedule in compact cards", async () => {
+  const lastHit = new Date(Date.now() - 3600000).toISOString();
+  const counted: PolicyRule = { ...rule, hitCounts: { hits: 7, firstHit: "2026-01-01T00:00:00Z", lastHit, source: "mds", collectedAt: "2026-10-05T00:00:00Z", firewalls: [] },
+    schedules: [{ kind: "recurring", start: null, end: null, windows: [{ days: [1, 2, 3, 4, 5], monthDays: [], start: "08:00", end: "17:00" }], timezone: "UTC", timezoneKnown: true }] };
+  mount(<VirtualPolicyCards sections={[{ ...section, rules: [counted] }]} collapsed={new Set()} scrollTop={0} toggle={vi.fn()} objects={objects} metadata={metadata} openObject={vi.fn()} openRule={vi.fn()} selected={new Set()} onSelect={vi.fn()} />);
+  const tile = screen.getByText("Last hit").parentElement!;
+  expect(tile).toHaveTextContent("1 h ago");
+  fireEvent.mouseOver(tile);
+  expect(await screen.findByRole("tooltip")).toHaveTextContent(lastHit);
+  expect(screen.getByText("First hit").parentElement).toHaveTextContent("2026-01-01 03:00:00");
+  expect(screen.getByText("Hits").parentElement).toHaveTextContent("7");
+  const scheduleCell = screen.getByText("SCHEDULE:").parentElement!;
+  expect(scheduleCell).toHaveTextContent("Weekdays 08:00–17:00 · UTC");
+  expect(scheduleCell).toBeVisible();
 });

@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import { Box, Button, Checkbox, Chip, Stack, Table, TableBody, TableCell, TableHead, TableRow, Tooltip, Typography } from "@mui/material";
+import { relativeAge, formatTime } from "../shell/time";
 import { VendorBadge } from "../shell/States";
 import { m3 } from "../theme/m3Theme";
 import { getPolicyHistory, type PolicyCell, type PolicyMetadata, type PolicyObject, type PolicyPage, type PolicyRevision, type PolicyRule, type PolicySchedule, type PolicySection } from "../auth/adminApi";
 
-export function reportPolicyLoadError(scope: "snapshots" | "rules" | "object" | "history", error: unknown) {
+export function reportPolicyLoadError(scope: "snapshots" | "rules" | "object" | "history" | "inventory" | "usage", error: unknown) {
   // Record categories only: error messages and API bodies may contain sensitive identities.
   const failure = error as { status?: unknown; body?: { error?: unknown } } | null;
   const code = failure?.body?.error === "TIMEOUT" ? "TIMEOUT"
@@ -27,7 +28,7 @@ export function scheduleLabel(s: PolicySchedule) {
     return `${s.start ? `From ${date(s.start)} · ` : ""}${s.end ? `Until ${date(s.end)}` : "No end date"} · ${zone}`;
   }
   const dayNames = ["", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-  return `${s.windows.map(w => `${w.months?.length ? `Months ${w.months.join(", ")} · ` : ""}${w.days.join(",") === "1,2,3,4,5" ? "Weekdays" : w.days.length ? w.days.map(d => dayNames[d]).join(", ") : w.monthDays.length ? `Days ${w.monthDays.join(", ")} of month` : "Daily"} ${w.start}–${w.end}`).join("; ")}${s.end ? ` · Until ${date(s.end)}` : ""} · ${zone}`;
+  return `${s.start ? `From ${date(s.start)} · ` : ""}${s.windows.map(w => `${w.months?.length ? `Months ${w.months.join(", ")} · ` : ""}${w.days.join(",") === "1,2,3,4,5" ? "Weekdays" : w.days.length ? w.days.map(d => dayNames[d]).join(", ") : w.monthDays.length ? `Days ${w.monthDays.join(", ")} of month` : "Daily"} ${w.start}–${w.end}`).join("; ")}${s.end ? ` · Until ${date(s.end)}` : ""} · ${zone}`;
 }
 export function containerLabel(metadata: PolicyMetadata, section: PolicySection, rule: PolicyRule) {
   if (metadata.vendor === "CP") return `${section.parentRuleId ? "Inline layer" : "Access layer"}: ${rule.extras["layer-name"]?.[0] ?? section.name}`;
@@ -63,7 +64,9 @@ function Extra({ name, values, objects, openObject }: { name: string; values: st
 export function RuleMetrics({ rule }: { rule: PolicyRule }) {
   const status = rule.timeStatus ?? "unknown";
   const tiles = [
-    ["Last hit", rule.hitCounts?.lastHit ?? "—", rule.hitCounts ? `Hits: ${rule.hitCounts.hits ?? "UNKNOWN"} · ${rule.hitCounts.source} · Collected: ${rule.hitCounts.collectedAt}` : "hit counts not collected (awaiting approval)"],
+    ["Hits", String(rule.hitCounts?.hits ?? "UNKNOWN"), rule.hitCounts ? `${rule.hitCounts.source} · Collected: ${rule.hitCounts.collectedAt}` : "Hit counts not collected"],
+    ["Last hit", relativeAge(rule.hitCounts?.lastHit), rule.hitCounts?.lastHit ? `${formatTime(rule.hitCounts.lastHit)} · ${rule.hitCounts.lastHit}` : "Last hit unknown"],
+    ["First hit", formatTime(rule.hitCounts?.firstHit), rule.hitCounts?.firstHit ?? "First hit unknown"],
     ["Last modified", rule.extras["last-modified"]?.[0] ?? "—", "vendor modification time, when collected"],
     ["Time/Schedule status", status === "unknown" ? "—" : status, (rule.schedules ?? []).map(scheduleLabel).join("; ") || (status === "always" ? "Unbounded schedule" : "schedule not collected")],
     ["Permissiveness", rule.permissiveness?.level === "Unknown" ? "—" : rule.permissiveness?.level ?? "—", rule.permissiveness?.reasons.join("; ") || "requires analysis"],
@@ -91,6 +94,8 @@ export function RuleFields({ rule, objects, openObject, compact = false }: { rul
     '@media (max-width: 1399px)': compact ? { gridTemplateColumns: "repeat(3, minmax(90px, 1fr)) 60px", '& > .policy-rule-misc': { gridColumn: "1 / -1" } } : {},
     '@media (max-width: 700px)': { gridTemplateColumns: "repeat(2, minmax(0, 1fr))" } }}>
     {(compact ? fields.slice(0, 4) : fields).map(([name, content]) => <Box key={name as string} sx={{ minWidth: 0, overflowWrap: "anywhere" }}><Typography variant="caption" display="block" sx={{ fontWeight: 700 }}>{name}</Typography>{content}</Box>)}
+    {compact && <Box sx={{ gridColumn: "1 / -1", minWidth: 0 }}><Typography variant="caption" fontWeight={700}>SCHEDULE: </Typography>
+      <Typography component="span" variant="caption">{(rule.schedules ?? []).map(scheduleLabel).join("; ") || (rule.timeStatus === "always" ? "Always" : "UNKNOWN")}</Typography></Box>}
     {compact && <Box className="policy-rule-misc" sx={{ minWidth: 0, overflowWrap: "anywhere" }}>{fields.slice(4).map(([name, content]) =>
       <Box component="details" key={name as string}><Box component="summary" sx={{ cursor: "pointer", fontSize: 12, fontWeight: 700 }}>{name}</Box>{content}</Box>)}</Box>}
   </Box>;

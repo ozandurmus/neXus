@@ -7,7 +7,7 @@ import com.securityexpert.nexus.ui2.service.privacy.SubnetPreservingIpMasker;
 /** Fail-closed policy projection: unfamiliar fields and free-form extensions never pass through AIView. */
 public final class PolicyPrivacy {
     private PolicyPrivacy() {}
-    private static final Set<String> OPAQUE = Set.of("id", "sourceId", "containerId", "deviceId", "artefactRef", "parentRuleId", "layerRef", "jobId", "ruleId", "policyId", "uid");
+    private static final Set<String> OPAQUE = Set.of("id", "sourceId", "containerId", "deviceId", "artefactRef", "parentRuleId", "layerRef", "jobId", "ruleId", "policyId", "uid", "duplicateId");
     private static final Set<String> ENUMS = Set.of("CP", "PAN", "static", "hide", "any", "address", "group", "service", "service-group", "address-group",
             "simple-gateway", "simple-cluster", "cluster", "gateway", "checkpoint-host", "vsx-cluster", "vsx-gateway", "vsx-cluster-member", "CpmiGatewayCluster", "CpmiVsClusterNetobj", "CpmiVsxClusterNetobj", "CpmiVsxNetobj", "CpmiVsxClusterMember",
             "COLLECTION_FAILED", "host", "network", "address-range", "group-with-exclusion", "service-tcp", "service-udp", "service-icmp", "service-icmp6", "service-other", "service-sctp", "service-dce-rpc", "service-rpc", "access-role", "dynamic-object", "dns-domain", "security-zone",

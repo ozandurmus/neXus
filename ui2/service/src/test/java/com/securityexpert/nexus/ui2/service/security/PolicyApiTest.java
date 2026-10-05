@@ -20,7 +20,7 @@ class PolicyApiTest {
     @Test void policyRoutesAllowMaskedCollectionWithoutOtherWrites() {
         var action = new ActionRegistry().find(ActionRegistry.POLICY_READ).orElseThrow();
         assertEquals(Set.of(RoleToken.SECURITY_ADMIN, RoleToken.ONBOARDING_ADMIN, RoleToken.REPLAY_VIEWER), action.requiredRoleTokens());
-        for (String route : List.of("GET /api/v2/policy/tree", "GET /api/v2/policy/collections/*", "GET /api/v2/policy/devices", "GET /api/v2/policy/devices/*", "GET /api/v2/policy/policies/*", "GET /api/v2/policy/policies/*/history", "GET /api/v2/policy/objects/*", "GET /api/v2/policy/domains/*/objects", "GET /api/v2/policy/domains/*/unused", "GET /api/v2/policy/domains/*/gateways", "GET /api/v2/policy/domains/*/hits"))
+        for (String route : List.of("GET /api/v2/policy/tree", "GET /api/v2/policy/collections/*", "GET /api/v2/policy/devices", "GET /api/v2/policy/devices/*", "GET /api/v2/policy/policies/*", "GET /api/v2/policy/policies/*/history", "GET /api/v2/policy/objects/*", "GET /api/v2/policy/domains/*/objects", "GET /api/v2/policy/domains/*/unused", "GET /api/v2/policy/domains/*/gateways", "GET /api/v2/policy/domains/*/hits", "GET /api/v2/policy/domains/*/objects/*/usage", "GET /api/v2/policy/domains/*/objects/duplicates", "GET /api/v2/policy/domains/*/installation"))
             assertEquals(ActionRegistry.POLICY_READ, SecurityWebMvcConfig.ACTION_ID_BY_ROUTE.get(route));
         assertEquals(Set.of(RoleToken.SECURITY_ADMIN, RoleToken.ONBOARDING_ADMIN, RoleToken.REPLAY_VIEWER),
                 new ActionRegistry().find(ActionRegistry.POLICY_COLLECT).orElseThrow().requiredRoleTokens());
@@ -71,9 +71,13 @@ class PolicyApiTest {
                     new RbacEvaluator.Decision(role.equals(RoleToken.REPLAY_VIEWER) ? AuthzOutcome.PERMITTED : AuthzOutcome.DENIED, Optional.of("test"), Optional.empty(), Optional.empty()));
             when(rbac.evaluateAny(eq(actor), eq(new ActionRegistry().find(ActionRegistry.POLICY_COLLECT).orElseThrow().requiredRoleTokens()), any())).thenReturn(
                     new RbacEvaluator.Decision(allowed ? AuthzOutcome.PERMITTED : AuthzOutcome.DENIED, Optional.of("test"), Optional.empty(), Optional.empty()));
-            for (String view : List.of("objects", "unused", "gateways", "hits")) {
+            for (String view : List.of("objects", "unused", "gateways", "hits", "objects/uid-1/usage", "objects/duplicates", "installation")) {
                 when(query.domainInventory("manager-1", "domain-1", view, 0)).thenReturn(Optional.of(new PolicyResponse(body)));
                 when(query.domainHits("manager-1", "domain-1", 0)).thenReturn(Optional.of(new PolicyResponse(body)));
+                when(query.domainObjects(eq("manager-1"), eq("domain-1"), eq(0), eq(""), eq(""), eq(""), anyBoolean())).thenReturn(Optional.of(new PolicyResponse(body)));
+                when(query.objectUsage("manager-1", "domain-1", "uid-1", 0)).thenReturn(Optional.of(new PolicyResponse(body)));
+                when(query.objectDuplicates(eq("manager-1"), eq("domain-1"), eq(0), eq(""), anyBoolean())).thenReturn(Optional.of(new PolicyResponse(body)));
+                when(query.installations(eq("manager-1"), eq("domain-1"), eq(0), eq(""), eq(""), anyBoolean())).thenReturn(Optional.of(new PolicyResponse(body)));
                 String path = "/api/v2/policy/domains/domain-1/" + view;
                 mvc.perform(get(path).servletPath(path).param("source", "manager-1")).andExpect(status().isUnauthorized());
                 var result = mvc.perform(get(path).servletPath(path).param("source", "manager-1")
@@ -193,12 +197,20 @@ class PolicyApiTest {
         assertEquals(400, controller.page("policy-1", -1, "", new org.springframework.mock.web.MockHttpServletRequest()).getStatusCode().value());
         assertEquals(400, controller.page("policy-1", 0, "x".repeat(1001), new org.springframework.mock.web.MockHttpServletRequest()).getStatusCode().value());
         assertEquals(400, controller.object("object-1", "", "").getStatusCode().value());
-        assertEquals(400, controller.inventory("domain-1", "", 0).getStatusCode().value());
+        assertEquals(400, controller.objects("domain-1", "", 0, "", "", "", new org.springframework.mock.web.MockHttpServletRequest()).getStatusCode().value());
         assertEquals(400, controller.hits("domain-1", "source-1", -1).getStatusCode().value());
-        when(query.domainInventory("source-1", "domain-1", "objects", 0)).thenReturn(Optional.empty());
-        assertEquals(404, controller.inventory("domain-1", "source-1", 0).getStatusCode().value());
+        when(query.domainObjects(eq("source-1"), eq("domain-1"), eq(0), eq(""), eq(""), eq(""), anyBoolean())).thenReturn(Optional.empty());
+        assertEquals(404, controller.objects("domain-1", "source-1", 0, "", "", "", new org.springframework.mock.web.MockHttpServletRequest()).getStatusCode().value());
         when(query.domainInventory("source-1", "domain-1", "unused", 0)).thenReturn(Optional.of(new PolicyResponse(Map.of("objects", List.of(), "total", 0))));
         assertEquals(200, controller.unused("domain-1", "source-1", 0).getStatusCode().value());
+        var request = new org.springframework.mock.web.MockHttpServletRequest();
+        assertEquals(400, controller.objects("domain-1", "source-1", 0, "", "unknown-type", "", request).getStatusCode().value());
+        assertEquals(400, controller.objects("domain-1", "source-1", 0, "", "", "bad-filter", request).getStatusCode().value());
+        assertEquals(400, controller.usage("domain-1", "uid-1", "source-1", -1).getStatusCode().value());
+        assertEquals(400, controller.duplicates("domain-1", "source-1", 0, "x".repeat(1001), request).getStatusCode().value());
+        assertEquals(400, controller.installation("domain-1", "", 0, "", "", request).getStatusCode().value());
+        assertEquals(400, controller.filteredPage("policy-1", 0, "", "bad-filter", 90, request).getStatusCode().value());
+        assertEquals(400, controller.filteredPage("policy-1", 0, "", "inactive", 0, request).getStatusCode().value());
         when(query.catalog()).thenReturn(List.of());
         assertEquals(200, controller.device("missing", "", 0, "", new org.springframework.mock.web.MockHttpServletRequest()).getStatusCode().value());
         assertEquals(404, controller.object("object-1", "missing", "policy-1").getStatusCode().value());

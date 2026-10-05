@@ -49,6 +49,138 @@ public final class PolicyQueryService {
             "objects", items.stream().skip((long) page * 200).limit(200).map(this::map).toList(), "total", items.size())));
     }
 
+    private record CachedDomain(String revision, PolicyDomainIndex index) {}
+    private final Map<String, CachedDomain> domainCache = new LinkedHashMap<>(16, 0.75f, true);
+
+    // ponytail: one lock for the bounded 32-domain cache; split locks only if stored-read contention is measured.
+    synchronized PolicyDomainIndex domainIndex(String source, String domain) {
+        var inventories = repository.inventories(source, domain);
+        var snapshots = repository.domainSnapshots(source, domain);
+        String revision;
+        try {
+            var digest = java.security.MessageDigest.getInstance("SHA-256");
+            for (var rows : List.of(inventories, snapshots)) for (String json : rows) {
+                digest.update(json.getBytes(java.nio.charset.StandardCharsets.UTF_8)); digest.update((byte) 0);
+            }
+            revision = HexFormat.of().formatHex(digest.digest());
+        } catch (java.security.NoSuchAlgorithmException impossible) { throw new IllegalStateException(impossible); }
+        String key = ref(source, domain);
+        var cached = domainCache.get(key);
+        if (cached != null && cached.revision().equals(revision)) return cached.index();
+        var index = new PolicyDomainIndex(inventories.stream().map(json -> read(json, com.securityexpert.nexus.ui2.policy.CpObjectInventory.class)).toList(),
+            snapshots.stream().map(json -> read(json, PolicySnapshot.class)).toList());
+        domainCache.put(key, new CachedDomain(revision, index));
+        if (domainCache.size() > 32) domainCache.remove(domainCache.keySet().iterator().next());
+        return index;
+    }
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> searchable(Map<String, Object> row, boolean masked) {
+        return masked ? (Map<String, Object>) PolicyPrivacy.mask(row, "", names, ips) : row;
+    }
+    private boolean matches(Map<String, Object> row, String q, boolean masked) {
+        var view = searchable(row, masked);
+        return (view.getOrDefault("name", "") + " " + view.getOrDefault("policyName", "") + " " + view.getOrDefault("values", ""))
+            .toLowerCase(Locale.ROOT).contains(q.toLowerCase(Locale.ROOT));
+    }
+    private List<Map<String, Object>> typeStates(PolicyDomainIndex index) {
+        return index.inventories.stream().map(i -> Map.<String, Object>of("type", i.type(), "status", i.status(),
+            "collectedAt", i.collectedAt(), "objects", i.objects().size())).toList();
+    }
+    public Optional<PolicyResponse> domainObjects(String source, String domain, int page, String q, String type, String hygiene, boolean masked) {
+        var index = domainIndex(source, domain);
+        if (index.inventories.isEmpty() && index.snapshots.isEmpty()) return Optional.empty();
+        var items = index.objects.stream().filter(o -> type.isEmpty() || objectType(String.valueOf(o.get("type"))).equals(type))
+            .filter(o -> switch (hygiene) {
+                case "unused" -> Boolean.TRUE.equals(o.get("unused"));
+                case "duplicates" -> o.get("duplicateId") != null;
+                case "empty" -> Boolean.TRUE.equals(o.get("emptyGroup"));
+                case "single" -> Boolean.TRUE.equals(o.get("singleMember"));
+                default -> true;
+            }).filter(o -> matches(o, q, masked)).sorted(Comparator.comparing(o -> hygiene.equals("duplicates")
+                ? String.valueOf(o.get("duplicateId")) + o.get("id") : String.valueOf(searchable(o, masked).get("name")) + o.get("id"))).toList();
+        return Optional.of(new PolicyResponse(Map.of("objects", items.stream().skip((long) page * 200).limit(200).toList(),
+            "total", items.size(), "page", page, "pageSize", 200, "types", typeStates(index))));
+    }
+    private static String objectType(String type) {
+        if (type.startsWith("service-") && !type.equals("service-group")) return "service";
+        return switch (type) {
+            case "address-range" -> "range"; case "group-with-exclusion", "address-group" -> "group";
+            case "time-group" -> "time"; case "dynamic-object" -> "dynamic"; case "security-zone" -> "zone";
+            default -> type;
+        };
+    }
+    public Optional<PolicyResponse> objectUsage(String source, String domain, String uid, int page) {
+        var index = domainIndex(source, domain);
+        var object = index.objects.stream().filter(o -> o.get("uid").equals(uid)).findFirst();
+        if (object.isEmpty()) return Optional.empty();
+        var rules = index.rules.getOrDefault(uid, List.of()); var groups = index.groups.getOrDefault(uid, List.of());
+        return Optional.of(new PolicyResponse(Map.of("object", object.get(), "rules", rules.stream().skip((long) page * 200).limit(200).toList(),
+            "groups", groups.stream().skip((long) page * 200).limit(200).toList(), "ruleCount", rules.size(), "groupCount", groups.size(), "page", page, "pageSize", 200)));
+    }
+    public Optional<PolicyResponse> objectDuplicates(String source, String domain, int page, String q, boolean masked) {
+        var index = domainIndex(source, domain);
+        if (index.inventories.isEmpty()) return Optional.empty();
+        var matchingIds = index.objects.stream().filter(o -> matches(o, q, masked)).map(o -> o.get("id")).collect(java.util.stream.Collectors.toSet());
+        var groups = index.duplicates.stream().filter(group -> ((List<?>) group.get("objects")).stream()
+            .anyMatch(o -> matchingIds.contains(((Map<?, ?>) o).get("id")))).toList();
+        var boundedGroups = groups.stream().skip((long) page * 200).limit(200).map(group -> {
+            var members = (List<?>) group.get("objects");
+            return Map.of("id", group.get("id"), "objects", members.stream().limit(200).toList(), "total", members.size());
+        }).toList();
+        return Optional.of(new PolicyResponse(Map.of("duplicates", boundedGroups, "total", groups.size(), "page", page, "pageSize", 200)));
+    }
+    public Optional<PolicyResponse> installations(String source, String domain, int page, String q, String policy, boolean masked) {
+        var index = domainIndex(source, domain);
+        if (index.snapshots.isEmpty()) return Optional.empty();
+        var links = repository.inventoryLinks(source, domain);
+        var gateways = index.inventories.stream().filter(i -> i.type().equals("gateways-and-servers"))
+            .flatMap(i -> i.objects().stream()).toList();
+        var rows = new ArrayList<Map<String, Object>>();
+        for (var snapshot : index.snapshots) {
+            var metadata = snapshot.metadata();
+            if (!policy.isEmpty() && !metadata.id().equals(policy)) continue;
+            boolean all = metadata.targets().stream().anyMatch(t -> t.name().equals("ALL"));
+            var seen = new HashSet<String>();
+            for (var gateway : gateways) {
+                var matchingLinks = links.stream().filter(l -> (!l.uid().isEmpty() && l.uid().equals(gateway.uid())) || (!l.name().isEmpty() && l.name().equals(gateway.name()))).toList();
+                var target = metadata.targets().stream().filter(t -> (!t.name().isEmpty() && t.name().equals(gateway.name()))
+                    || matchingLinks.stream().anyMatch(l -> l.deviceId().equals(t.deviceId()))).findFirst();
+                var observed = gateway.policyInstallations().stream().filter(i -> i.policyName().equals(metadata.name())).toList();
+                var installationStates = observed.stream().map(com.securityexpert.nexus.ui2.policy.CpObjectInventory.Installation::installed).distinct().toList();
+                boolean allGateway = all && Set.of("simple-gateway", "simple-cluster", "cluster", "gateway", "vsx-cluster", "vsx-gateway", "vsx-cluster-member",
+                    "CpmiGatewayCluster", "CpmiVsClusterNetobj", "CpmiVsxClusterNetobj", "CpmiVsxNetobj", "CpmiVsxClusterMember").contains(gateway.type());
+                if (!allGateway && target.isEmpty() && observed.isEmpty()) continue;
+                var uidMatches = matchingLinks.stream().filter(l -> l.uid().equals(gateway.uid())).toList();
+                var ids = (uidMatches.isEmpty() ? matchingLinks : uidMatches).stream()
+                    .map(PolicySnapshotRepository.InventoryLink::deviceId).distinct().toList();
+                String deviceId = ids.size() == 1 ? ids.get(0) : "";
+                var row = new LinkedHashMap<String, Object>();
+                row.put("policyId", metadata.id()); row.put("policyName", metadata.name()); row.put("id", gateway.id());
+                row.put("name", gateway.name()); row.put("type", gateway.type()); row.put("deviceId", deviceId);
+                row.put("targeted", allGateway || target.isPresent()); row.put("allTargets", allGateway);
+                row.put("installed", installationStates.size() == 1 ? installationStates.get(0) : null);
+                rows.add(row); target.ifPresent(t -> seen.add(t.deviceId()));
+            }
+            for (var target : metadata.targets()) {
+                if (seen.contains(target.deviceId()) && !target.name().equals("ALL")) continue;
+                if (target.name().equals("ALL") && rows.stream().anyMatch(r -> r.get("policyId").equals(metadata.id()) && Boolean.TRUE.equals(r.get("allTargets")))) continue;
+                var row = new LinkedHashMap<String, Object>();
+                row.put("policyId", metadata.id()); row.put("policyName", metadata.name()); row.put("id", target.deviceId());
+                row.put("name", target.name().equals("ALL") ? "" : target.name()); row.put("deviceId", links.stream().anyMatch(l -> l.deviceId().equals(target.deviceId())) ? target.deviceId() : "");
+                row.put("targeted", true); row.put("allTargets", target.name().equals("ALL")); row.put("installed", null);
+                rows.add(row);
+            }
+            if (metadata.targets().isEmpty() && rows.stream().noneMatch(r -> r.get("policyId").equals(metadata.id()))) {
+                var row = new LinkedHashMap<String, Object>();
+                row.put("policyId", metadata.id()); row.put("policyName", metadata.name()); row.put("id", metadata.id());
+                row.put("name", ""); row.put("deviceId", ""); row.put("targeted", null); row.put("allTargets", false); row.put("installed", null); rows.add(row);
+            }
+        }
+        var matches = rows.stream().filter(r -> matches(r, q, masked)).toList();
+        return Optional.of(new PolicyResponse(Map.of("installations", matches.stream().skip((long) page * 200).limit(200).toList(),
+            "total", matches.size(), "page", page, "pageSize", 200, "types", typeStates(index))));
+    }
+
     public Optional<PolicyResponse> domainHits(String source, String domain, int page) {
         var snapshots = repository.domainSnapshots(source, domain).stream().map(json -> read(json, PolicySnapshot.class)).toList();
         if (snapshots.isEmpty()) return Optional.empty();
@@ -114,13 +246,18 @@ public final class PolicyQueryService {
     private Map<String, Object> map(Object value) { return mapper.convertValue(value, Map.class); }
 
     public PolicyResponse page(PolicySnapshot snapshot, int page, String query, boolean masked) {
+        return page(snapshot, page, query, masked, "", 90);
+    }
+    public PolicyResponse page(PolicySnapshot snapshot, int page, String query, boolean masked, String hitFilter, int days) {
         PolicySnapshot searchable = snapshot;
         if (masked) searchable = mapper.convertValue(PolicyPrivacy.mask(map(snapshot), "", names,
                 ips), PolicySnapshot.class);
         var predicate = PolicyRuleQuery.compile(query, searchable.objects(), java.time.Instant.now(), snapshot.metadata().vendor());
         Set<String> matches = searchable.sections().stream().flatMap(s -> s.rules().stream()).filter(predicate)
                 .map(Rule::id).collect(java.util.stream.Collectors.toSet());
-        List<Rule> matching = snapshot.sections().stream().flatMap(s -> s.rules().stream()).filter(r -> matches.contains(r.id())).toList();
+        var now = java.time.Instant.now();
+        List<Rule> matching = snapshot.sections().stream().flatMap(s -> s.rules().stream()).filter(r -> matches.contains(r.id()))
+            .filter(r -> hitMatches(r, hitFilter, days, now)).toList();
         Set<String> ids = new HashSet<>();
         matching.stream().skip((long) page * 200).limit(200).forEach(r -> ids.add(r.id()));
         List<Map<String, Object>> sections = new ArrayList<>();
@@ -152,6 +289,15 @@ public final class PolicyQueryService {
         body.put("sections", sections); body.put("objects", objects);
         body.put("page", page); body.put("pageSize", 200); body.put("total", matching.size());
         return new PolicyResponse(body);
+    }
+    static boolean hitMatches(Rule rule, String filter, int days, java.time.Instant now) {
+        if (filter.isEmpty()) return true;
+        var hits = rule.hitCounts();
+        if (hits == null) return false;
+        if (Long.valueOf(0).equals(hits.hits()) && hits.firstHit() == null && hits.lastHit() == null) return true;
+        if (filter.equals("never") || hits.lastHit() == null) return false;
+        try { return !java.time.Instant.parse(hits.lastHit()).isAfter(now.minus(java.time.Duration.ofDays(days))); }
+        catch (RuntimeException invalid) { return false; }
     }
     public PolicyResponse history(String policy, String rule, int page) {
         return new PolicyResponse(Map.of("revisions", repository.history(policy, rule, page).stream()

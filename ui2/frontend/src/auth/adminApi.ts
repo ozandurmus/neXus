@@ -1717,8 +1717,32 @@ export interface PolicyRule {
 export interface PolicySection { id: string; name: string; source: string; parentRuleId: string | null; rules: PolicyRule[]; total: number }
 export interface PolicyPage { failures?: { layerRef: string; reason: string; layerName?: string; offset?: number }[]; policyKind?: "LOCAL_FIREWALL" | "MANAGEMENT"; metadata: PolicyMetadata; sections: PolicySection[]; objects: PolicyObject[]; page: number; pageSize: number; total: number }
 export const listPolicies = () => call<{ policies: PolicyMetadata[]; devices: PolicyTarget[] }>("/api/v2/policy/devices", "GET");
-export const getPolicy = (id: string, page: number, q: string) => call<PolicyPage>(`/api/v2/policy/policies/${encodeURIComponent(id)}?page=${page}&q=${encodeURIComponent(q)}`, "GET");
+export const getPolicy = (id: string, page: number, q: string, hitFilter = "", days = 90) => call<PolicyPage>(`/api/v2/policy/policies/${encodeURIComponent(id)}?page=${page}&q=${encodeURIComponent(q)}${hitFilter ? `&hitFilter=${hitFilter}&days=${days}` : ""}`, "GET");
 export const getPolicyObject = (id: string, policy: string) => call<{ object: PolicyObject }>(`/api/v2/policy/objects/${encodeURIComponent(id)}?policy=${encodeURIComponent(policy)}`, "GET");
+
+export interface PolicyInventoryObject extends Omit<PolicyObject, "status"> {
+  uid: string; unused: boolean | null; emptyGroup: boolean; singleMember: boolean;
+  duplicateId: string | null; ruleCount: number; groupCount: number;
+}
+export interface PolicyTypeState { type: string; status: string; collectedAt: string; objects: number }
+export interface PolicyObjectPage { objects: PolicyInventoryObject[]; total: number; page: number; pageSize: number; types: PolicyTypeState[] }
+export interface PolicyUsage {
+  object: PolicyInventoryObject; rules: { policyId: string; policyName: string; layerRef: string; layerName: string; ruleId: string; number: number }[];
+  groups: { id: string; uid: string; name: string; type: string }[]; ruleCount: number; groupCount: number; page: number; pageSize: number;
+}
+export interface PolicyInstallation {
+  id: string; policyId: string; policyName: string; name: string; deviceId: string;
+  targeted: boolean | null; allTargets: boolean; installed: boolean | null;
+}
+export interface PolicyInstallationPage { installations: PolicyInstallation[]; total: number; page: number; pageSize: number; types: PolicyTypeState[] }
+const policyDomainPath = (source: string, domain: string, view: string, page: number, q = "") =>
+  `/api/v2/policy/domains/${encodeURIComponent(domain)}/${view}?source=${encodeURIComponent(source)}&page=${page}&q=${encodeURIComponent(q)}`;
+export const getPolicyObjects = (source: string, domain: string, page = 0, q = "", type = "", hygiene = "") =>
+  call<PolicyObjectPage>(`${policyDomainPath(source, domain, "objects", page, q)}&type=${encodeURIComponent(type)}&hygiene=${encodeURIComponent(hygiene)}`, "GET");
+export const getPolicyUsage = (source: string, domain: string, uid: string, page = 0) =>
+  call<PolicyUsage>(policyDomainPath(source, domain, `objects/${encodeURIComponent(uid)}/usage`, page), "GET");
+export const getPolicyInstallations = (source: string, domain: string, page = 0, q = "", policy = "") =>
+  call<PolicyInstallationPage>(`${policyDomainPath(source, domain, "installation", page, q)}&policy=${encodeURIComponent(policy)}`, "GET");
 
 export type PolicyCollectionSource = { sourceId: string; sourceName: string; vendor: string; collection?: PolicyCollectionStatus };
 export const listPolicySources = () => call<{ sources: PolicyCollectionSource[]; canCollect: boolean; canCancel?: boolean }>("/api/v2/policy/sources", "GET");

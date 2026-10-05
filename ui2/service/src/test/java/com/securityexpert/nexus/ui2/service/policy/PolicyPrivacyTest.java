@@ -33,6 +33,23 @@ class PolicyPrivacyTest {
         assertEquals("hosts", masked.path("types").get(0).path("type").asText());
         assertFalse(masked.toString().contains("Synthetic")); assertFalse(masked.toString().contains("192.0.2.8"));
     }
+    @Test void domainUsageDuplicatesAndInstallationMaskNestedNamesButKeepSafeFlagsAndJoinKeys() {
+        var object = Map.of("uid", "uid-001", "name", "Synthetic address", "type", "host", "duplicateId", "duplicate-1", "emptyGroup", false,
+            "values", List.of("ipv4-address: 192.0.2.8"));
+        var body = Map.of("object", object, "duplicates", List.of(Map.of("id", "duplicate-1", "objects", List.of(object))),
+            "rules", List.of(Map.of("policyId", "policy-1", "policyName", "Synthetic package", "layerName", "Synthetic layer", "number", 7)),
+            "groups", List.of(Map.of("id", "group-1", "name", "Synthetic group", "type", "group")),
+            "installations", List.of(Map.of("deviceId", "device-1", "name", "Synthetic gateway", "allTargets", true, "installed", false)));
+        var masked = new com.fasterxml.jackson.databind.ObjectMapper().valueToTree(PolicyPrivacy.mask(body, "", names, ips));
+        assertFalse(masked.toString().contains("Synthetic")); assertFalse(masked.toString().contains("192.0.2.8"));
+        assertEquals("duplicate-1", masked.path("object").path("duplicateId").asText());
+        assertEquals(masked.path("object").path("name"), masked.path("duplicates").get(0).path("objects").get(0).path("name"));
+        assertEquals("uid-001", masked.path("object").path("uid").asText());
+        assertEquals(7, masked.path("rules").get(0).path("number").asInt());
+        assertEquals(names.maskDeviceName("Synthetic gateway", null), masked.path("installations").get(0).path("name").asText());
+        assertTrue(masked.path("installations").get(0).path("allTargets").asBoolean());
+        assertFalse(masked.path("installations").get(0).path("installed").asBoolean());
+    }
     private final TopologyNamePseudonymizer names = new TopologyNamePseudonymizer(new byte[32]);
     private final SubnetPreservingIpMasker ips = new SubnetPreservingIpMasker(new byte[32]);
 
