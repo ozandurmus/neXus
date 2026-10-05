@@ -24,7 +24,7 @@ export function collectionOutcome(job: PolicyCollectionStatus) {
   if (isRunning(job)) return "RUNNING";
   if (job.state === "CANCELLED") return "CANCELLED";
   if (["FAILED", "REJECTED", "OUTCOME_UNKNOWN"].includes(job.state)) return "FAILED";
-  if (job.outcome === "PARTIAL" || job.reason?.startsWith("PARTIAL_SNAPSHOT")) return "PARTIAL";
+  if ((job.gapUnits ?? 0) > 0 || job.outcome === "PARTIAL" || job.reason?.startsWith("PARTIAL_SNAPSHOT")) return "PARTIAL";
   if (job.state === "COMPLETED") return "COMPLETED";
   return "UNKNOWN";
 }
@@ -39,10 +39,25 @@ export function sourceStatusLabel(job: PolicyCollectionStatus, now: Date) {
   const age = relativeAge(job.collectedAt, now);
   const outcome = collectionOutcome(job);
   if (outcome === "COMPLETED") return `Collected · ${age}`;
-  if (outcome === "PARTIAL") return `Partial · ${age} · ${failureSentence(`PARTIAL_SNAPSHOT ${job.reason}`, job.step, job.total)}`;
+  if (outcome === "PARTIAL") return `Completed with gaps (${job.gapUnits === undefined || job.gapUnits === 0 ? "unit count unknown" : `${job.gapUnits} units`}) · ${age}`;
   if (outcome === "CANCELLED") return `Cancelled · ${job.reason || "Collection cancelled"}`;
   if (outcome === "FAILED") return failureSentence(job.reason, job.step, job.total) + (job.collectedAt ? ` · ${age}` : "");
   return "Collection status unknown";
+}
+export function collectionStalled(job: PolicyCollectionStatus, now: Date) {
+  const activity = Date.parse(job.lastActivityAt ?? "");
+  return isRunning(job) && Number.isFinite(activity) && (job.readTimeoutSeconds ?? 0) > 0
+    && now.getTime() - activity > job.readTimeoutSeconds! * 2000;
+}
+export function runningLabel(job: PolicyCollectionStatus, now: Date) {
+  const started = Date.parse(job.startedAt ?? "");
+  const elapsed = Number.isFinite(started) ? Math.max(0, Math.floor((now.getTime() - started) / 60000)) : undefined;
+  const activity = Date.parse(job.lastActivityAt ?? "");
+  const seconds = Number.isFinite(activity) ? Math.max(0, Math.floor((now.getTime() - activity) / 1000)) : undefined;
+  const total = job.packagesTotal ?? 0;
+  const discovering = (job.domainsTotal ?? 0) > (job.domainsDone ?? 0);
+  const denominator = total === 0 && !job.domainsTotal ? "?" : `${discovering ? "at least " : ""}${total}`;
+  return `Running${elapsed === undefined ? "" : ` for ${elapsed} min`} · ${job.packagesDone ?? 0}/${denominator} packages · ${(job.rulesFetched ?? 0).toLocaleString("en-US")} rules · last activity ${seconds === undefined ? "unknown" : `${seconds} s ago`}`;
 }
 // Spreadsheet formula characters must remain text, including after leading whitespace.
 export function csvCell(value: unknown) {
@@ -59,7 +74,7 @@ function failureSentence(reason: string, step?: number, total?: number) {
 function FailureDetails({ reason, allowed, job }: { reason: string; allowed: boolean; job?: PolicyCollectionStatus }) {
   return allowed ? <Box component="details" sx={{ mt: 0.5, overflowWrap: "anywhere" }}>
     <Box component="summary" sx={{ cursor: "pointer", color: m3.primary, fontSize: 12 }}>Details</Box>
-    {job && <Typography variant="caption" display="block">Collection progress: {progress(job.step, job.total)}</Typography>}
+    {job && <Typography variant="caption" display="block">Collection progress: {job.packagesTotal === undefined ? progress(job.step, job.total) : `${job.packagesDone ?? 0}/${job.packagesTotal} packages`}</Typography>}
     <Typography component="pre" variant="caption" sx={{ whiteSpace: "pre-wrap", m: 0 }}>{reason}</Typography>
     {job && <JobTranscriptDrawer jobId={job.jobId} hasTranscript={job.hasTranscript === true} title="Policy collection transcript" />}
   </Box> : null;
@@ -97,7 +112,7 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
   const [revision, setRevision] = useState(0);
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
-    const timer = window.setInterval(() => setNow(new Date()), 60000);
+    const timer = window.setInterval(() => setNow(new Date()), 1000);
     return () => window.clearInterval(timer);
   }, []);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -155,6 +170,7 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
     return () => { active = false; };
   }, [selected, page, query, revision]);
   useEffect(() => () => { drawerRequest.current++; }, []);
+  const scheduleMinute = Math.floor(now.getTime() / 60000);
   // Refresh derived schedule status from stored evidence; never triggers collection.
   useEffect(() => {
     if (!selected || !data) return;
@@ -163,7 +179,7 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
       if (active && request === policyRequest.current) setData(result);
     }).catch(() => { /* Retain the last stored projection on a transient read failure. */ });
     return () => { active = false; };
-  }, [now]);
+  }, [scheduleMinute]);
   const objects = useMemo(() => new Map((data?.objects ?? []).map(o => [o.id, o])), [data]);
 
   const ruleSelectionRequest = useRef(0);
@@ -338,11 +354,15 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
               {source.vendor === "PAN" ? "Panorama" : source.vendor === "CP" ? "MDS" : "Management server"} · {nodes.length} containers
             </Typography>
             {job && <Box sx={{ my: 0.5 }}>
-              {running ? <Chip role="status" size="small" color="primary" label={job.layer ? `Collecting · unit ${bounded(job.layer, job.layers ?? 0)}${job.layers ? `/${job.layers}` : ""}, rules fetched ${job.rulesFetched ?? 0}` : `Collecting · ${progress(job.step, job.total, false)}`} />
+              {running ? <Chip role="status" size="small" color="primary" sx={{ maxWidth: "100%", height: "auto", "& .MuiChip-label": { whiteSpace: "normal", py: 0.5 } }} label={job.packagesTotal !== undefined ? runningLabel(job, now) : job.layer ? `Collecting · unit ${bounded(job.layer, job.layers ?? 0)}${job.layers ? `/${job.layers}` : ""}, rules fetched ${job.rulesFetched ?? 0}` : `Collecting · ${progress(job.step, job.total, false)}`} />
                 : <Typography role="status" variant="caption">{sourceStatusLabel(job, now)}
                   {outcome === "FAILED" && (job.outcome === "PARTIAL" || job.reason.startsWith("PARTIAL_SNAPSHOT")) && " · partial snapshot available"}
                   </Typography>}
-              {(outcome === "FAILED" || outcome === "PARTIAL") && job.reason && <FailureDetails reason={job.reason} allowed={canCollect} job={job} />}
+              {running && (job.layers ?? 0) > 0 && job.packagesTotal !== undefined && <Typography variant="caption" display="block">Current package layer {bounded(job.layer ?? 0, job.layers ?? 0)}/{job.layers}</Typography>}
+              {running && collectionStalled(job, now) && <Typography role="alert" variant="caption" color="warning.main" display="block">No activity for more than twice the read timeout.</Typography>}
+              {outcome === "PARTIAL" && <Typography variant="caption" display="block">Unit failure codes: {(job.unitFailureCodes?.length ? job.unitFailureCodes : ["COLLECTION_FAILED"]).join(", ")}</Typography>}
+              {outcome === "PARTIAL" && <FailureDetails reason={(job.unitFailureCodes?.length ? job.unitFailureCodes : ["COLLECTION_FAILED"]).join("\n")} allowed={canCollect} job={job} />}
+              {outcome === "FAILED" && job.reason && <FailureDetails reason={job.reason} allowed={canCollect} job={job} />}
             </Box>}
             {running && job && canCancel && <Button size="small"
               disabled={job.cancelRequested || cancelling.includes(job.jobId)} onClick={() => void cancel(job.jobId)}>

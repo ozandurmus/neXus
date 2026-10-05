@@ -115,16 +115,47 @@ public class PolicyCollectionRepository {
             + "coalesce(a.step_index, 0) as step, coalesce(substring(a.step_kind from 'POLICY_PROGRESS_([0-9]+)')::int, 0) as total, "
             + "coalesce(split_part(l.step_kind, '_', 3)::int, 0) as layer, "
             + "coalesce(split_part(l.step_kind, '_', 4)::int, 0) as layers, "
-            + "coalesce(split_part(l.step_kind, '_', 5)::int, 0) as rules "
+            + "coalesce(split_part(l.step_kind, '_', 5)::int, 0) as rules, "
+            + "coalesce(nullif(split_part(l.step_kind, '_', 6), '')::int, 0) as packages_done, "
+            + "nullif(split_part(l.step_kind, '_', 7), '')::int as packages_total, "
+            + "coalesce(nullif(split_part(l.step_kind, '_', 8), '')::bigint, 0) as read_timeout_seconds, "
+            + "to_timestamp(nullif(nullif(split_part(l.step_kind, '_', 9), ''), '0')::bigint / 1000.0) as last_activity_at, "
+            + "coalesce(nullif(split_part(l.step_kind, '_', 10), '')::int, 0) as domains_done, "
+            + "coalesce(nullif(split_part(l.step_kind, '_', 11), '')::int, 0) as domains_total, "
+            + "(select min(created_at) from job_step_attempt where job_id = j.job_id "
+            + "and step_kind in ('CP_POLICY_READ', 'PAN_POLICY_READ')) as started_at, "
+            + "array(select substring(step_kind from 'POLICY_PROGRESS_GAP_(.*)') from job_step_attempt "
+            + "where job_id = j.job_id and lease_epoch = j.lease_epoch and step_kind like 'POLICY_PROGRESS_GAP_%' "
+            + "order by step_index desc) as failure_codes "
             + "from jobs j join policy_collection_request p on p.job_id = j.job_id "
             + "left join lateral (select step_index, step_kind from job_step_attempt where job_id = j.job_id and lease_epoch = j.lease_epoch "
-            + "and step_kind like 'POLICY_PROGRESS_%' order by step_index desc limit 1) a on true "
+            + "and step_kind ~ '^POLICY_PROGRESS_[0-9]+$' order by step_index desc limit 1) a on true "
             + "left join lateral (select step_kind from job_step_attempt where job_id = j.job_id and lease_epoch = j.lease_epoch "
             + "and step_kind like 'POLICY_LAYER_%' order by step_index desc limit 1) l on true "
-            + "where j.job_id = {0}", jobId).stream().findFirst().map(r -> Map.<String, Object>of(
-                "jobId", jobId, "cancelRequested", Boolean.TRUE.equals(r.get("cancel_requested", Boolean.class)), "state", r.get("state", String.class), "reason", r.get("reason", String.class),
-                "step", r.get("step", Integer.class), "total", r.get("total", Integer.class),
-                "layer", r.get("layer", Integer.class), "layers", r.get("layers", Integer.class), "rulesFetched", r.get("rules", Integer.class))));
+            + "where j.job_id = {0}", jobId).stream().findFirst().map(r -> {
+                Map<String, Object> view = new LinkedHashMap<>(Map.of(
+                    "jobId", jobId, "cancelRequested", Boolean.TRUE.equals(r.get("cancel_requested", Boolean.class)),
+                    "state", r.get("state", String.class), "reason", r.get("reason", String.class),
+                    "step", r.get("step", Integer.class), "total", r.get("total", Integer.class),
+                    "layer", r.get("layer", Integer.class), "layers", r.get("layers", Integer.class), "rulesFetched", r.get("rules", Integer.class)));
+                for (String field : List.of("packages_done", "packages_total", "domains_done", "domains_total")) {
+                    String key = switch (field) {
+                        case "packages_done" -> "packagesDone"; case "packages_total" -> "packagesTotal";
+                        case "domains_done" -> "domainsDone"; default -> "domainsTotal";
+                    };
+                    Integer value = r.get(field, Integer.class);
+                    if (value != null) view.put(key, value);
+                }
+                view.put("readTimeoutSeconds", Optional.ofNullable(r.get("read_timeout_seconds", Long.class)).orElse(0L));
+                for (String field : List.of("started_at", "last_activity_at")) {
+                    var at = r.get(field, java.time.OffsetDateTime.class);
+                    if (at != null) view.put(field.equals("started_at") ? "startedAt" : "lastActivityAt", at.toInstant().toString());
+                }
+                String[] codes = r.get("failure_codes", String[].class);
+                view.put("unitFailureCodes", codes == null ? List.of() : List.of(codes));
+                view.put("gapUnits", codes == null ? 0 : codes.length);
+                return view;
+            }));
     }
 
     /** Lease validation ends before the independent snapshot write; checkpoints never lock jobs. */

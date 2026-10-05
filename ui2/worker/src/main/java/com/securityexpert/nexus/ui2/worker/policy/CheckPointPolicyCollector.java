@@ -93,6 +93,7 @@ public final class CheckPointPolicyCollector {
         if (!"check_point".equals(run.vendor())) throw failure();
         CpPolicyGates.requireAll(gates);
         if (!lease.getAsBoolean()) throw PolicyCollectionTrace.failure("LEASE_LOST");
+        PolicyCollectionTrace.timeout(readTimeout);
         long deadline = nanoTime.getAsLong() + jobTimeout.toNanos();
         if (maxSessions > 1) return new CpPolicyParallelCollection(this, repository, maxSessions, nanoTime,
             run, request, deadline, lease, publish, domainFailure).collect();
@@ -100,6 +101,8 @@ public final class CheckPointPolicyCollector {
         try {
             var domains = read(session, MgmtCliCommands.domainList(), -1, deadline, lease);
             completeList(domains, "objects");
+            PolicyCollectionTrace.domains((int) java.util.stream.StreamSupport.stream(domains.path("objects").spliterator(), false)
+                .filter(d -> request.domainRef().isEmpty() || ref(request.sourceId(), required(d, "uid")).equals(request.domainRef())).count());
             List<PolicySnapshot> snapshots = new ArrayList<>();
             boolean found = request.domainRef().isEmpty();
             for (JsonNode domain : domains.path("objects")) {
@@ -107,7 +110,7 @@ public final class CheckPointPolicyCollector {
                 String container = ref(request.sourceId(), domainUid);
                 if (!request.domainRef().isEmpty() && !container.equals(request.domainRef())) continue;
                 found = true;
-                if (!repository.beginDomain(request.sourceId(), container, request.automatic())) continue;
+                if (!repository.beginDomain(request.sourceId(), container, request.automatic())) { PolicyCollectionTrace.packages(0); continue; }
                 if (session == null) session = connect(run, deadline, lease);
                 List<JsonNode> packages;
                 try {
@@ -119,6 +122,7 @@ public final class CheckPointPolicyCollector {
                     transport.disconnect(session); session = null;
                     continue;
                 }
+                PolicyCollectionTrace.packages(packages.size());
                 Set<String> seen = new HashSet<>();
                 for (JsonNode policy : packages) {
                     String uid = required(policy, "uid"), name = required(policy, "name");
@@ -137,6 +141,7 @@ public final class CheckPointPolicyCollector {
                     }
                     Metadata metadata = new Metadata(ref(request.sourceId(), domainUid, uid), request.sourceId(),
                         "MDS " + request.sourceId(), "CP", container, domainName, name, Instant.now().toString(), "", targets.stream().distinct().toList());
+                    PolicyCollectionTrace.unit(metadata.id());
                     String natRef = ref("cp-nat", container, uid);
                     failures.add(new CollectionFailure(natRef, "COLLECTION_PENDING", "NAT", 0));
                     long checkpointInterval = CpPolicyParallelCollection.configuredCheckpointInterval().toNanos();
@@ -152,7 +157,8 @@ public final class CheckPointPolicyCollector {
                         });
                     List<JsonNode> nat = List.of();
                     try {
-                        nat = pages(session, offset -> MgmtCliCommands.showNatRulebase(domainName, name, offset), 2, deadline, lease);
+                        nat = pages(session, offset -> MgmtCliCommands.showNatRulebase(domainName, name, offset), 2, deadline, lease,
+                            count -> PolicyCollectionTrace.rules("nat", count));
                         failures.removeIf(f -> f.layerRef().equals(natRef));
                     } catch (RuntimeException incomplete) {
                         if (PolicyCollectionTrace.fatal(incomplete)) throw incomplete;
@@ -168,6 +174,7 @@ public final class CheckPointPolicyCollector {
                     checkPublication(deadline, lease);
                     publish.accept(snapshot);
                     snapshots.add(snapshot);
+                    PolicyCollectionTrace.done(metadata.id());
                 }
             }
             if (!found) throw failure();

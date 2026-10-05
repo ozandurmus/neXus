@@ -177,6 +177,8 @@ final class CpPolicyParallelCollection {
 
     private void domains(JsonNode root) {
         completeList(root, "objects");
+        PolicyCollectionTrace.domains((int) java.util.stream.StreamSupport.stream(root.path("objects").spliterator(), false)
+            .filter(d -> request.domainRef().isEmpty() || ref(request.sourceId(), required(d, "uid")).equals(request.domainRef())).count());
         boolean found = request.domainRef().isEmpty();
         for (JsonNode domain : root.path("objects")) {
             String uid = required(domain, "uid"), name = required(domain, "name");
@@ -186,6 +188,7 @@ final class CpPolicyParallelCollection {
             domainOrder.putIfAbsent(container, domainOrder.size());
             if (repository.beginDomain(request.sourceId(), container, request.automatic()))
                 enqueuePackages(uid, name, container, new PackagePages(collector.packagePageSize), 0);
+            else PolicyCollectionTrace.packages(0);
         }
         if (!found) throw failure();
     }
@@ -202,6 +205,7 @@ final class CpPolicyParallelCollection {
     }
 
     private void packages(String domainUid, String domain, String container, List<JsonNode> items) {
+        PolicyCollectionTrace.packages(items.size());
         Set<String> seen = new HashSet<>();
         for (JsonNode node : items) {
             String uid = required(node, "uid"), name = required(node, "name");
@@ -247,7 +251,7 @@ final class CpPolicyParallelCollection {
         int to = total == 0 ? 0 : page.path("to").intValue();
         if (end > 0 && to > end) throw failure();
         for (JsonNode object : page.path("objects-dictionary")) required(object, "uid");
-        layer.pages.put(offset, page);
+        if (layer.pages.put(offset, page) == null) layer.rulesFetched += ruleCount(page.path("rulebase"));
         progress(layer.policy);
         if (layer.total < 0) {
             layer.total = total;
@@ -318,12 +322,14 @@ final class CpPolicyParallelCollection {
         collector.checkPublication(deadline, lease);
         publish.accept(snapshot); policy.latest = snapshot;
         policy.lastCheckpoint = clock.getAsLong();
+        if (complete) PolicyCollectionTrace.done(policy.metadata.id());
     }
 
     private void progress(Policy policy) {
-        int rules = policy.layers.values().stream().flatMap(l -> l.pages.values().stream()).mapToInt(p -> ruleCount(p.path("rulebase"))).sum();
+        int rules = policy.layers.values().stream().mapToInt(l -> l.rulesFetched).sum();
         int started = (int) policy.layers.values().stream().filter(l -> !l.pages.isEmpty() || l.failure != null).count();
-        PolicyCollectionTrace.layer(started, policy.layers.size(), rules);
+        rules += policy.nat.rulesFetched;
+        PolicyCollectionTrace.layer(policy.metadata.id(), started, policy.layers.size(), rules);
     }
 
     static boolean retryable(RuntimeException error) {
@@ -369,7 +375,7 @@ final class CpPolicyParallelCollection {
         final int gate;
         final IntFunction<String> command;
         final TreeMap<Integer, JsonNode> pages = new TreeMap<>();
-        int total = -1, issued;
+        int total = -1, issued, rulesFetched;
         boolean done;
         CollectionFailure failure;
         Layer(Policy policy, String uid, String name, String ref, int gate, IntFunction<String> command) {

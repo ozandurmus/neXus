@@ -194,6 +194,8 @@ class PolicyCollectionJobExecutorTest {
             doAnswer(collect).when(pan).collect(any(), any(), any(), any());
             var executor = new PolicyCollectionJobExecutor(leases, attempts, runs, repository, cp, key -> List.of()).withPanorama(pan);
             assertInstanceOf(JobOutcome.Completed.class, executor.execute("job-1", 1, "run-1"));
+            verify(attempts).insertPreContact(eq("job-1"), eq(1L), eq(-1),
+                eq("POLICY_PROGRESS_GAP_XML_PARSE_OR_SIZE_FAILED"), eq("read"), eq(1));
             var order = inOrder(repository);
             order.verify(repository).request("job-1");
             order.verify(repository).eligible("manager-1", "run-1");

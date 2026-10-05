@@ -259,7 +259,18 @@ class CpPolicyParallelCollectionTest {
             if (command.contains("show-access-rulebase")) { layerReads.countDown(); await(layerReads); return page("layer", 0, 1, 1, rule("r0"), ""); }
             return answer(command);
         });
-        var snapshots = collector.collect(run, request, () -> true);
+        var progress = new ArrayList<PolicyCollectionTrace.LayerProgress>();
+        List<PolicySnapshot> snapshots;
+        try (var trace = new PolicyCollectionTrace("run-1", (step, total) -> {}, measurement -> {}, progress::add)) {
+            snapshots = collector.collect(run, request, () -> true);
+        }
+        var last = progress.get(progress.size() - 1);
+        assertEquals(2, last.domainsTotal());
+        assertEquals(2, last.domainsDone());
+        assertEquals(2, last.packagesTotal());
+        assertEquals(2, last.packagesDone());
+        assertEquals(2, last.rules());
+        assertTrue(last.lastActivity() > 0);
         assertEquals(2, snapshots.size()); assertTrue(snapshots.stream().allMatch(s -> s.failures().isEmpty())); cleanup();
     }
 

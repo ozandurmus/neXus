@@ -75,7 +75,10 @@ public final class PolicyCollectionJobExecutor {
                  pending.remove(Thread.currentThread().getId());
              }, progress -> {
                  String id = attempts.insertPreContact(jobId, epoch, progress.step(),
-                     "POLICY_LAYER_" + progress.layer() + "_" + progress.layers() + "_" + progress.rules(), "read", 1);
+                     "POLICY_LAYER_" + progress.layer() + "_" + progress.layers() + "_" + progress.rules()
+                         + "_" + progress.packagesDone() + "_" + progress.packagesTotal()
+                         + "_" + progress.readTimeoutSeconds() + "_" + progress.lastActivity()
+                         + "_" + progress.domainsDone() + "_" + progress.domainsTotal(), "read", 1);
                  if (id == null || !attempts.writeOutcome(id, epoch, "MATCHED", null, true, null, null, null))
                      throw PolicyCollectionTrace.failure("LEASE_LOST");
              })) {
@@ -134,12 +137,27 @@ public final class PolicyCollectionJobExecutor {
                     () -> leases.heartbeat(jobId, epoch, Duration.ofMinutes(10)), publish, failures::add);
                 failures.addAll(snapshots.stream().flatMap(snapshot -> snapshot.failures().stream()).toList());
             }
+            recordGaps(jobId, epoch, failures);
             String reason = failures.stream().map(f -> f.layerRef() + ": " + f.reason()).findFirst().orElse("");
             return finish(jobId, epoch, attempt, latest[0], reason, false);
         } catch (Exception incomplete) {
             String reason = PolicyCollectionTrace.reason(incomplete);
             if (reason.endsWith(": LEASE_LOST")) return new JobOutcome.ZombieStopped();
             return finish(jobId, epoch, attempt, latest[0], reason, PolicyCollectionTrace.fatal(incomplete));
+        }
+    }
+
+    private void recordGaps(String jobId, long epoch,
+            List<com.securityexpert.nexus.ui2.policy.PolicySnapshot.CollectionFailure> failures) {
+        var units = new LinkedHashMap<String, String>();
+        failures.forEach(f -> units.putIfAbsent(f.layerRef(), f.reason()));
+        int index = -1;
+        for (String reason : units.values()) {
+            String code = reason.contains(": ") ? reason.substring(reason.lastIndexOf(": ") + 2) : reason;
+            if (!code.matches("[A-Za-z][A-Za-z0-9_]{0,79}")) code = "COLLECTION_FAILED";
+            String id = attempts.insertPreContact(jobId, epoch, index--, "POLICY_PROGRESS_GAP_" + code, "read", 1);
+            if (id == null || !attempts.writeOutcome(id, epoch, "MATCHED", null, true, null, null, null))
+                throw PolicyCollectionTrace.failure("LEASE_LOST");
         }
     }
 

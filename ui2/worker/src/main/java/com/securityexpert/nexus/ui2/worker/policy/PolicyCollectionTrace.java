@@ -7,7 +7,16 @@ import com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope;
 final class PolicyCollectionTrace implements AutoCloseable {
     private static final ThreadLocal<PolicyCollectionTrace> ACTIVE = new ThreadLocal<>();
     record Measurement(long bytes, String outcome) {}
-    record LayerProgress(int step, int layer, int layers, int rules) {}
+    record LayerProgress(int step, int layer, int layers, int rules, int packagesDone, int packagesTotal,
+            long readTimeoutSeconds, long lastActivity, int domainsDone, int domainsTotal) {}
+    private static final class Counters {
+        final java.util.Map<String, Integer> rules = new java.util.HashMap<>();
+        final java.util.Set<String> completed = new java.util.HashSet<>();
+        int packagesTotal, domainsDone, domainsTotal, layer, layers;
+        long timeout, lastActivity;
+    }
+    private final Counters counters;
+    private String unit = "policy";
     private java.util.function.Consumer<LayerProgress> layerProgress = progress -> {};
     private final BiConsumer<Integer, Integer> progress;
     private final java.util.function.Consumer<Measurement> measured;
@@ -19,7 +28,7 @@ final class PolicyCollectionTrace implements AutoCloseable {
     }
     PolicyCollectionTrace(String target, BiConsumer<Integer, Integer> progress, java.util.function.Consumer<Measurement> measured) {
         this.target = target; this.progress = progress; this.measured = measured;
-        this.count = new java.util.concurrent.atomic.AtomicInteger(); ACTIVE.set(this);
+        this.count = new java.util.concurrent.atomic.AtomicInteger(); counters = new Counters(); ACTIVE.set(this);
     }
     PolicyCollectionTrace(String target, BiConsumer<Integer, Integer> progress, java.util.function.Consumer<Measurement> measured,
             java.util.function.Consumer<LayerProgress> layers) {
@@ -27,7 +36,7 @@ final class PolicyCollectionTrace implements AutoCloseable {
     }
     private PolicyCollectionTrace(PolicyCollectionTrace parent) {
         target = parent.target; progress = parent.progress; measured = parent.measured;
-        layerProgress = parent.layerProgress; count = parent.count; total = parent.total; ACTIVE.set(this);
+        layerProgress = parent.layerProgress; count = parent.count; total = parent.total; counters = parent.counters; ACTIVE.set(this);
     }
     static <T> java.util.concurrent.Callable<T> worker(java.util.concurrent.Callable<T> operation) {
         var parent = ACTIVE.get();
@@ -46,9 +55,48 @@ final class PolicyCollectionTrace implements AutoCloseable {
         JobTranscriptScope.add("job", "note", counts);
         System.getLogger(PolicyCollectionTrace.class.getName()).log(System.Logger.Level.INFO, counts);
     }
+    private void emit() {
+        layerProgress.accept(new LayerProgress(count.incrementAndGet(), counters.layer, counters.layers,
+            counters.rules.values().stream().mapToInt(Integer::intValue).sum(), counters.completed.size(),
+            counters.packagesTotal, counters.timeout, counters.lastActivity, counters.domainsDone, counters.domainsTotal));
+    }
+    static void timeout(java.time.Duration timeout) {
+        var trace = ACTIVE.get();
+        if (trace != null) synchronized (trace.counters) { trace.counters.timeout = timeout.toSeconds(); trace.emit(); }
+    }
+    static void domains(int total) {
+        var trace = ACTIVE.get();
+        if (trace != null) synchronized (trace.counters) { trace.counters.domainsTotal = total; trace.emit(); }
+    }
+    static void packages(int total) {
+        var trace = ACTIVE.get();
+        if (trace != null) synchronized (trace.counters) {
+            trace.counters.packagesTotal += total;
+            if (trace.counters.domainsTotal > 0) trace.counters.domainsDone++;
+            trace.emit();
+        }
+    }
+    static void unit(String unit) { var trace = ACTIVE.get(); if (trace != null) trace.unit = unit; }
+    static void done(String unit) {
+        var trace = ACTIVE.get();
+        if (trace != null) synchronized (trace.counters) { if (trace.counters.completed.add(unit)) trace.emit(); }
+    }
     static void layer(int layer, int layers, int rules) {
         var trace = ACTIVE.get();
-        if (trace != null) trace.layerProgress.accept(new LayerProgress(trace.count.incrementAndGet(), layer, layers, rules));
+        if (trace != null) layer(trace.unit, layer, layers, rules);
+    }
+    static void layer(String unit, int layer, int layers, int rules) {
+        var trace = ACTIVE.get();
+        if (trace != null) synchronized (trace.counters) {
+            trace.counters.layer = layer; trace.counters.layers = layers;
+            trace.counters.rules.merge(unit, rules, Math::max); trace.emit();
+        }
+    }
+    static void rules(String counter, int rules) {
+        var trace = ACTIVE.get();
+        if (trace != null) synchronized (trace.counters) {
+            trace.counters.rules.merge(trace.unit + ":" + counter, rules, Math::max); trace.emit();
+        }
     }
     static void plan(int total) { var trace = ACTIVE.get(); if (trace != null) trace.total = total; }
     static void step(String step, String target) {
@@ -60,7 +108,12 @@ final class PolicyCollectionTrace implements AutoCloseable {
     }
     static void result(long started, long bytes, String outcome) {
         var trace = ACTIVE.get();
-        if (trace != null) trace.measured.accept(new Measurement(bytes, outcome));
+        if (trace != null) {
+            trace.measured.accept(new Measurement(bytes, outcome));
+            if (outcome.equals("Completed")) synchronized (trace.counters) {
+                trace.counters.lastActivity = System.currentTimeMillis(); trace.emit();
+            }
+        }
         JobTranscriptScope.add("job", "response", "bytes=" + (bytes < 0 ? "UNKNOWN" : bytes) + " durationMs=" + (System.nanoTime() - started) / 1_000_000 + " outcome=" + outcome);
     }
     static Failure failure(String reason) {

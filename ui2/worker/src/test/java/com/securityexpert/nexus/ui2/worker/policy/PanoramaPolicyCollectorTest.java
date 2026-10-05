@@ -179,10 +179,12 @@ class PanoramaPolicyCollectorTest {
         try (var trace = new PolicyCollectionTrace("manager-1", (step, total) -> {}, measurement -> {}, progress::add)) {
             collector(responses(), new ArrayList<>(), new char[0]).collect(run, scope, () -> true, snapshot -> {});
         }
-        assertEquals(4, progress.size());
-        assertEquals(2, progress.get(3).layer());
-        assertEquals(2, progress.get(3).layers());
-        assertEquals(10, progress.get(3).rules());
+        assertTrue(progress.size() >= 4);
+        assertEquals(0, progress.get(progress.size() - 1).layer());
+        assertEquals(0, progress.get(progress.size() - 1).layers());
+        assertEquals(10, progress.get(progress.size() - 1).rules());
+        assertEquals(2, progress.get(progress.size() - 1).packagesDone());
+        assertEquals(2, progress.get(progress.size() - 1).packagesTotal());
     }
 
     @Test void cumulativeResponsesAbove64MbPublishBeforeReadingTheNextGroup() throws Exception {
