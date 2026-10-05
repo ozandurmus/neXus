@@ -841,3 +841,91 @@ def test_run_failure_keeps_substep_despite_cleanup(tmp_path, monkeypatch, operat
     log = next((tmp_path / ".local/state/nexus-preview").glob("*.log"))
     assert log.read_text() == line + "\n"
     assert "synthetic withheld detail" not in log.read_text()
+
+
+def test_postgres_error_keeps_schema_names_and_masks_entire_row():
+    stderr = ('ERROR: new row for relation "jobs" violates check constraint '
+              '"chk_jobs_diagnostic_port"\nDETAIL: Failing row contains '
+              '(synthetic-account, 192.0.2.15, "nested (value)",\nsecret-value).')
+    masked = preview.masked_error(stderr.encode())
+    assert 'ERROR: new row for relation "jobs" violates check constraint "chk_jobs_diagnostic_port"' in masked
+    assert 'DETAIL: Failing row contains ([MASKED])' in masked
+    assert all(value not in masked for value in ('synthetic-account', '192.0.2.15', 'nested', 'secret-value'))
+    null_error = preview.masked_error('ERROR: null value in column "state" of relation "jobs" violates not-null constraint')
+    assert 'column "state" of relation "jobs"' in null_error
+    assert 'null value' in null_error
+    assert 'not-null constraint' in null_error
+    assert 'synthetic-device' not in preview.masked_error('ERROR: value "synthetic-device" invalid')
+    assert preview.masked_error('DETAIL: Failing row contains (relation "synthetic_data"') == 'DETAIL: Failing row contains ([MASKED])'
+
+
+def jobs_ddl_database():
+    """Evaluate migration-owned jobs checks offline; this is not a PostgreSQL integration test."""
+    import sqlite3
+
+    migrations = ROOT / 'ui2/service/src/main/resources/db/migration'
+    declarations = []
+    for path in sorted(migrations.glob('V*__*.sql'), key=lambda p: int(p.name.split('__')[0][1:])):
+        sql = re.sub(r'--[^\n]*', '', path.read_text())
+        initial = re.search(r'CREATE TABLE jobs\s*\((.*?)\);', sql, re.S)
+        if initial:
+            declarations.extend(re.split(r',\s*(?=[a-z_]+\s+(?:TEXT|TIMESTAMPTZ))', initial[1].strip()))
+        for match in re.finditer(r'ALTER TABLE jobs\s+(.*?);', sql, re.S):
+            operation = match[1].strip()
+            if operation.startswith('ADD CONSTRAINT'):
+                declarations.append(operation.removeprefix('ADD '))
+            elif operation.startswith('ADD COLUMN'):
+                declarations.extend(re.sub(r'^ADD COLUMN\s+', '', part.strip())
+                                    for part in re.split(r',\s*(?=ADD COLUMN)', operation))
+            else:
+                column, change = re.fullmatch(r'ALTER COLUMN (\w+) (DROP DEFAULT|DROP NOT NULL)', operation).groups()
+                for i, declaration in enumerate(declarations):
+                    if declaration.startswith(column + ' '):
+                        declarations[i] = (re.sub(r'\s+DEFAULT\s+[^,]+', '', declaration)
+                                           if change == 'DROP DEFAULT' else declaration.replace('NOT NULL', ''))
+    # SQLite requires table constraints after all column declarations.
+    declarations.sort(key=lambda declaration: declaration.startswith('CONSTRAINT'))
+    ddl = 'CREATE TABLE jobs (' + ','.join(declarations) + ')'
+    ddl = ddl.replace('::jsonb', '').replace('DEFAULT now()', 'DEFAULT CURRENT_TIMESTAMP')
+    ddl = re.sub(r'(\w+)\s+~\s+', r'\1 REGEXP ', ddl)
+    connection = sqlite3.connect(':memory:')
+    connection.create_function('regexp', 2, lambda pattern, value: value is not None and bool(re.search(pattern, value)))
+    connection.execute(ddl)
+    return connection
+
+
+def test_preview_claim_rows_satisfy_migration_checks_and_rollback(monkeypatch):
+    import sqlite3
+
+    connection = jobs_ddl_database()
+    statements = []
+    def database(namespace, *args, input=None, **kwargs):
+        statements.append(input)
+        if input.startswith('SELECT count(*)=2'):
+            return 't'
+        if 'preview_policy_handover' in input:
+            return ''
+        capability = re.search(r"capability TEXT := '([^']+)'", input)[1]
+        insert = re.search(r'INSERT INTO jobs.*?;', input, re.S)[0].replace('::jsonb', '')
+        insert = re.sub(r'\bcapability\b', "'" + capability + "'", insert)
+        assert input.endswith("SELECT 'CLAIM_PASS';ROLLBACK;")
+        connection.execute('BEGIN')
+        connection.execute(insert)
+        row = connection.execute('SELECT job_type,capability_id,state,action_class,idempotency_key,precheck_results FROM jobs').fetchone()
+        assert row == (capability, capability, 'REQUESTED', 'read', 'preview-claim-assertion', '[]')
+        connection.execute("UPDATE jobs SET state='CLAIMED',lease_epoch=lease_epoch+1")
+        if capability == 'fmg_interface_detail':
+            with pytest.raises(sqlite3.IntegrityError, match='chk_jobs_diagnostic_port'):
+                connection.execute('UPDATE jobs SET diagnostic_port=NULL')
+        connection.rollback()
+        assert connection.execute('SELECT count(*) FROM jobs').fetchone()[0] == 0
+        return 'CLAIM_PASS\n'
+
+    monkeypatch.setattr(preview, 'k', database)
+    monkeypatch.setattr(preview, 'load', local_load)
+    try:
+        preview.assert_module_claims(ROOT, preview.worker_templates(ROOT))
+        assert sum('preview_claim_assertion' in sql for sql in statements) > 20
+        assert any("capability TEXT := 'fmg_interface_detail'" in sql for sql in statements)
+    finally:
+        connection.close()
