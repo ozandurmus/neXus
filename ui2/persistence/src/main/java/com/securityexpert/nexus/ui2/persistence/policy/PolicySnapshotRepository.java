@@ -64,12 +64,14 @@ public final class PolicySnapshotRepository {
     }
     /** Future approved collectors publish a complete parse atomically; older runs cannot replace newer ones. */
     public void save(Stored stored, String actorFingerprint, String actionId) {
-        new AuditedTransactionBoundary(transactions).inTransaction(actorFingerprint, actionId, db -> {
+        PolicyJsonWrite.guarded("PolicySnapshotRepository.save", "SNAPSHOT_UPSERT_HISTORY_TRIGGER",
+            PolicyJsonWrite.bytes(stored.metadataJson(), stored.snapshotJson()),
+            () -> new AuditedTransactionBoundary(transactions).inTransaction(actorFingerprint, actionId, db -> {
             db.execute("insert into policy_snapshot(policy_id, collected_at, metadata, snapshot) values ({0}, {1}::timestamptz, {2}::jsonb, {3}::jsonb) "
                     + "on conflict (policy_id) do update set collected_at = excluded.collected_at, metadata = excluded.metadata, snapshot = excluded.snapshot "
                     + "where policy_snapshot.collected_at < excluded.collected_at",
-                    stored.id(), stored.collectedAt(), stored.metadataJson(), stored.snapshotJson());
+                    stored.id(), stored.collectedAt(), PolicyJsonWrite.json(db, stored.metadataJson()), PolicyJsonWrite.json(db, stored.snapshotJson()));
             return null;
-        });
+        }));
     }
 }

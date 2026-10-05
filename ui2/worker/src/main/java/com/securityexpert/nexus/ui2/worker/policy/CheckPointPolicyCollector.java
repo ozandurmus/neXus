@@ -92,8 +92,14 @@ public final class CheckPointPolicyCollector {
 
     public List<PolicySnapshot> collect(DiscoveryRun run, PolicyCollectionRepository.Request request, BooleanSupplier lease,
             Consumer<PolicySnapshot> publish, Consumer<CollectionFailure> domainFailure) {
-        var reuse = new CpDomainReuse(repository, request);
-        Consumer<PolicySnapshot> domainPublish = snapshot -> { reuse.snapshot(snapshot); publish.accept(snapshot); };
+        var reuse = new CpDomainReuse(repository, request).onDatabaseGap(domainFailure);
+        Consumer<PolicySnapshot> domainPublish = snapshot -> {
+            try { publish.accept(snapshot); reuse.snapshot(snapshot); }
+            catch (com.securityexpert.nexus.ui2.persistence.policy.PolicyDatabaseFailure unavailable) {
+                reuse.gap(snapshot.metadata().containerId());
+                domainFailure.accept(new CollectionFailure(snapshot.metadata().id(), "POLICY_DB_SNAPSHOT_WRITE_FAILED"));
+            }
+        };
         Consumer<CollectionFailure> domainGap = gap -> { reuse.gap(gap.layerRef()); domainFailure.accept(gap); };
         if (!"check_point".equals(run.vendor())) throw failure();
         CpPolicyGates.requireAll(gates);
@@ -198,7 +204,10 @@ public final class CheckPointPolicyCollector {
             if (!found) throw failure();
             for (var domain : objectDomains.entrySet()) {
                 if (session == null) session = connect(run, deadline, lease);
-                collectObjects(session, request.sourceId(), domain.getKey(), domain.getValue(), deadline, lease);
+                try { collectObjects(session, request.sourceId(), domain.getKey(), domain.getValue(), deadline, lease); }
+                catch (com.securityexpert.nexus.ui2.persistence.policy.PolicyDatabaseFailure unavailable) {
+                    domainGap.accept(new CollectionFailure(domain.getKey(), "POLICY_DB_INVENTORY_WRITE_FAILED"));
+                }
             }
             checkActive(deadline, lease);
             reuse.finish();
@@ -426,7 +435,7 @@ public final class CheckPointPolicyCollector {
 
     static int ruleCount(JsonNode rules) { return ruleCount(rules, 0); }
     private static int ruleCount(JsonNode rules, int depth) {
-        if (depth > 32) throw failure();
+        if (depth > 32 || !rules.isArray()) throw pageRejected("RULEBASE_NESTING");
         int count = 0;
         for (JsonNode rule : rules) count += rule.has("rulebase") ? ruleCount(rule.path("rulebase"), depth + 1) : 1;
         return count;
@@ -446,6 +455,7 @@ public final class CheckPointPolicyCollector {
     private List<JsonNode> pages(TransportSession session, IntFunction<String> command, int gate, long deadline, BooleanSupplier lease, IntConsumer progress) {
         List<JsonNode> pages = new ArrayList<>();
         int offset = 0, total = -1, rules = 0;
+        Set<String> seenRules = new HashSet<>();
         try {
             for (int pageNo = 0; pageNo < MAX_PAGES; pageNo++) {
                 JsonNode page;
@@ -459,6 +469,12 @@ public final class CheckPointPolicyCollector {
                     }
                 }
                 total = pageTotal(page, offset, total, gate);
+                Set<String> ids = ruleUids(page.path("rulebase"));
+                if (!Collections.disjoint(seenRules, ids)) {
+                    invalidPreflight("", 0, false, page, "DUPLICATE_RULE_UID");
+                    throw pageRejected("DUPLICATE_RULE_UID");
+                }
+                seenRules.addAll(ids);
                 if (total == 0) { pages.add(page); return pages; }
                 int to = page.path("to").intValue();
                 pages.add(page); offset = to;
@@ -473,18 +489,39 @@ public final class CheckPointPolicyCollector {
     }
     static int pageTotal(JsonNode page, int offset, int expectedTotal, int gate) {
         if (!page.path("rulebase").isArray() || !page.path("objects-dictionary").isArray()
-                || !page.path("total").canConvertToInt() || !page.path("total").isIntegralNumber()) throw failure();
+                || !page.path("total").canConvertToInt() || !page.path("total").isIntegralNumber()) throw pageRejected("PAGE_SCHEMA");
         int total = page.path("total").intValue();
-        if (total < 0 || (expectedTotal != -1 && expectedTotal != total)) throw failure();
+        if (total < 0 || (expectedTotal != -1 && expectedTotal != total)) throw pageRejected("TOTAL_CHANGED");
         if (total == 0) {
-            if (offset != 0 || !page.path("rulebase").isEmpty()) throw failure();
+            if (offset != 0 || !page.path("rulebase").isEmpty()) throw pageRejected("EMPTY_PAGE_RANGE");
             return total;
         }
         if (!page.path("from").isIntegralNumber() || !page.path("to").isIntegralNumber()
-                || !page.path("to").canConvertToInt() || page.path("from").asLong() != offset + 1L) throw failure();
+                || !page.path("to").canConvertToInt() || page.path("from").asLong() != offset + 1L) throw pageRejected("PAGE_FROM");
         int to = page.path("to").intValue();
-        if (to <= offset || to > total || to - offset > (gate == 1 || gate == 3 ? 100 : 500) || page.path("rulebase").isEmpty()) throw failure();
+        if (to <= offset || to > total || to - offset > (gate == 1 || gate == 3 ? 100 : 500)) throw pageRejected("PAGE_TO");
+        if (ruleCount(page.path("rulebase")) != to - offset) throw pageRejected("NESTED_RULE_COUNT");
+        ruleUids(page.path("rulebase"));
         return total;
+    }
+
+    static Set<String> ruleUids(JsonNode nodes) {
+        Set<String> ids = new HashSet<>();
+        ruleUids(nodes, ids, 0);
+        return ids;
+    }
+    private static void ruleUids(JsonNode nodes, Set<String> ids, int depth) {
+        if (depth > 32 || !nodes.isArray()) throw pageRejected("RULEBASE_NESTING");
+        for (JsonNode node : nodes) {
+            if (node.has("rulebase")) ruleUids(node.path("rulebase"), ids, depth + 1);
+            else if (node.path("uid").isTextual() && !ids.add(node.path("uid").textValue())) throw pageRejected("DUPLICATE_RULE_UID");
+        }
+    }
+    static PolicyCollectionTrace.Failure pageRejected(String check) { return new PageRejected(check); }
+    static String rejectingCheck(RuntimeException error) { return error instanceof PageRejected rejected ? rejected.check : "SCHEMA_OR_MAPPING"; }
+    private static final class PageRejected extends PolicyCollectionTrace.Failure {
+        final String check;
+        PageRejected(String check) { super(PolicyCollectionTrace.failure("INVALID_OR_INCOMPLETE_RESPONSE").getMessage()); this.check = check; }
     }
     private static final class PageFailure extends PolicyCollectionTrace.Failure {
         final int offset;
@@ -539,6 +576,14 @@ public final class CheckPointPolicyCollector {
         try {
             root = json.readTree(jsonBody(completed.output()));
             if (root != null && root.isObject() && (root.has("code") || (root.has("message") && !root.has("objects") && !root.has("packages") && !root.has("rulebase")))) {
+                String code = safeApiCode(root.path("code"));
+                if (gate == CpPolicyGates.LAST_PUBLISHED_SESSION) {
+                    String note = "published-session signal unavailable code=" + code + " message=<masked>";
+                    com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.add("job", "note", note);
+                    System.getLogger(getClass().getName()).log(System.Logger.Level.INFO, note);
+                    // An API error never proves an unchanged domain. Collect fully, including unknown errors.
+                    return json.createObjectNode();
+                }
                 String message = (root.path("code").asText("") + " " + root.path("message").asText("")).toLowerCase(Locale.ROOT);
                 if (message.contains("session") || message.contains("lock") || message.contains("too many"))
                     throw PolicyCollectionTrace.failure("API_SESSION_PRESSURE");
@@ -554,13 +599,13 @@ public final class CheckPointPolicyCollector {
             }
             return root;
         } catch (PolicyCollectionTrace.Failure invalid) {
-            invalidPreflight(completed.output(), completed.exitStatus(), false, root);
+            invalidPreflight(completed.output(), completed.exitStatus(), false, root, rejectingCheck(invalid));
             if (completed.exitStatus() != 0 && invalid.getMessage().endsWith(": INVALID_OR_INCOMPLETE_RESPONSE"))
                 throw PolicyCollectionTrace.failure("EXIT_" + completed.exitStatus());
             throw invalid;
         } catch (java.io.IOException invalid) {
             invalidPreflight(completed.output(), completed.exitStatus(),
-                invalid instanceof com.fasterxml.jackson.core.io.JsonEOFException, root);
+                invalid instanceof com.fasterxml.jackson.core.io.JsonEOFException, root, "JSON_PARSE");
             if (completed.exitStatus() != 0) throw PolicyCollectionTrace.failure("EXIT_" + completed.exitStatus());
             throw failure();
         }
@@ -655,11 +700,16 @@ public final class CheckPointPolicyCollector {
         return targets;
     }
 
-    private static void invalidPreflight(String output, int exitCode, boolean endedMidJson, JsonNode root) {
+    static String safeApiCode(JsonNode code) {
+        String value = code.asText("");
+        return value.matches("(?:generic_err_|err_)[a-z0-9_]{1,80}") ? value : "<masked-code>";
+    }
+
+    private static void invalidPreflight(String output, int exitCode, boolean endedMidJson, JsonNode root, String check) {
         int limit = Math.min(output.length(), 2048);
         String shape = output.substring(0, limit).replaceAll("\\p{L}", "a").replaceAll("\\p{N}", "9")
             .replaceAll("[^\\x20-\\x7E\r\n\t]", "?");
-        String structure = preflightStructure(output, root);
+        String structure = preflightStructure(output, root) + " check=" + check;
         com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.add("job", "note",
             "invalid preflight bytes=" + output.getBytes(java.nio.charset.StandardCharsets.UTF_8).length
                 + " shapeTruncated=" + (limit < output.length()) + " endedMidJson=" + endedMidJson

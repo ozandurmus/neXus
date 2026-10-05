@@ -64,7 +64,12 @@ final class CpPolicyParallelCollection {
                     objectsPhase = true;
                     collector.checkActive(deadline, lease);
                     for (String type : CpPolicyGates.OBJECT_TYPES)
-                        objectDomains.forEach((container, domain) -> enqueueObjects(domain, container, type));
+                        objectDomains.forEach((container, domain) -> {
+                            try { enqueueObjects(domain, container, type); }
+                            catch (com.securityexpert.nexus.ui2.persistence.policy.PolicyDatabaseFailure unavailable) {
+                                domainFailure.accept(new CollectionFailure(container, "POLICY_DB_INVENTORY_WRITE_FAILED"));
+                            }
+                        });
                     if (pending.isEmpty()) break;
                 }
                 collector.checkPublication(deadline, lease);
@@ -104,7 +109,7 @@ final class CpPolicyParallelCollection {
                         fallbackHits(work.layer);
                     } else if (work.layer != null) {
                         fail(work.layer, result.error, work.offset);
-                    } else if (work.failed != null) work.failed.accept(result.error);
+                    } else if (work.failed != null) failed(work, result.error);
                     else throw result.error;
                 } else {
                     if (work.layer == null || work.layer.failure == null) {
@@ -115,12 +120,16 @@ final class CpPolicyParallelCollection {
                         catch (RuntimeException invalid) {
                             if (PolicyCollectionTrace.fatal(invalid)) throw invalid;
                             if (work.layer == null) {
+                                if (invalid instanceof com.securityexpert.nexus.ui2.persistence.policy.PolicyDatabaseFailure) {
+                                    domainFailure.accept(new CollectionFailure(ref("cp-inventory-write", work.command), "POLICY_DB_INVENTORY_WRITE_FAILED"));
+                                    continue;
+                                }
                                 if (work.failed == null) throw invalid;
-                                work.failed.accept(invalid);
+                                failed(work, invalid);
                             } else {
                                 safety.streak = 0;
                                 if (work.gate == 1 || work.gate == 3)
-                                    JobTranscriptScope.add("job", "note", "invalid rulebase " + preflightStructure("", result.page));
+                                    JobTranscriptScope.add("job", "note", "invalid rulebase " + preflightStructure("", result.page) + " check=" + rejectingCheck(invalid));
                                 if (retryPage(work, invalid))
                                     pending.addFirst(new Work(work.command, work.gate, work.layer, work.offset, work.end, 1, work.accept));
                                 else if (work.gate == 3) fallbackHits(work.layer);
@@ -134,7 +143,7 @@ final class CpPolicyParallelCollection {
             collector.checkActive(deadline, lease);
             reuse.finish();
             List<PolicySnapshot> result = new ArrayList<>(reused);
-            policies.forEach(p -> result.add(p.latest));
+            policies.forEach(p -> { if (p.latest != null) result.add(p.latest); });
             return result.stream().sorted(Comparator.comparingInt(p -> domainOrder.get(p.metadata().containerId()))).toList();
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
@@ -155,6 +164,13 @@ final class CpPolicyParallelCollection {
                 if (interrupted) Thread.currentThread().interrupt();
                 if (closeFailed.get()) throw PolicyCollectionTrace.failure("SESSION_CLEANUP_FAILED");
             }
+        }
+    }
+
+    private void failed(Work work, RuntimeException error) {
+        try { work.failed.accept(error); }
+        catch (com.securityexpert.nexus.ui2.persistence.policy.PolicyDatabaseFailure unavailable) {
+            domainFailure.accept(new CollectionFailure(ref("cp-inventory-write", work.command), "POLICY_DB_INVENTORY_WRITE_FAILED"));
         }
     }
 
@@ -288,10 +304,16 @@ final class CpPolicyParallelCollection {
 
     private void page(Layer layer, int offset, int end, JsonNode page) {
         int total = pageTotal(page, offset, layer.total, layer.gate);
-        if ((layer.gate == 1 || layer.gate == 3) && !layer.uid.equals(required(page, "uid"))) throw failure();
+        if ((layer.gate == 1 || layer.gate == 3) && !layer.uid.equals(required(page, "uid"))) throw pageRejected("LAYER_UID");
         int to = total == 0 ? 0 : page.path("to").intValue();
-        if (end > 0 && to > end) throw failure();
+        if (end > 0 && to > end) throw pageRejected("PAGE_END");
         for (JsonNode object : page.path("objects-dictionary")) required(object, "uid");
+        Set<String> ids = ruleUids(page.path("rulebase"));
+        for (String id : ids) {
+            Integer previous = layer.rulePages.get(id);
+            if (previous != null && previous != offset) throw pageRejected("DUPLICATE_RULE_UID");
+        }
+        ids.forEach(id -> layer.rulePages.put(id, offset));
         if (layer.pages.put(offset, page) == null) layer.rulesFetched += ruleCount(page.path("rulebase"));
         progress(layer.policy);
         if (layer.total < 0) {
@@ -326,7 +348,7 @@ final class CpPolicyParallelCollection {
     private void fallbackHits(Layer layer) {
         layer.gate = 1;
         layer.command = offset -> MgmtCliCommands.showAccessRulebase(layer.policy.domain, layer.name, offset);
-        layer.pages.clear(); layer.total = -1; layer.issued = 0; layer.rulesFetched = 0; layer.done = false;
+        layer.pages.clear(); layer.rulePages.clear(); layer.total = -1; layer.issued = 0; layer.rulesFetched = 0; layer.done = false;
         enqueue(layer, 0, 0);
     }
 
@@ -451,6 +473,7 @@ final class CpPolicyParallelCollection {
         int gate;
         IntFunction<String> command;
         final TreeMap<Integer, JsonNode> pages = new TreeMap<>();
+        final Map<String, Integer> rulePages = new HashMap<>();
         int total = -1, issued, rulesFetched;
         boolean done;
         CollectionFailure failure;

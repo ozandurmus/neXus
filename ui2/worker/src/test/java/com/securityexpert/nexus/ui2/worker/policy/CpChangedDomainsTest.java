@@ -122,4 +122,34 @@ class CpChangedDomainsTest {
         verify(repository).saveDomain(eq(request), eq(container), eq("COLLECTED"), eq(false), contains("published-001"),
             contains("rule-001"), eq(1), eq("2026-10-04T00:00:00Z"), anyString());
     }
+    @Test void publishedSessionApiErrorsCollectFullyWithoutInvalidPreflightNoise() throws Exception {
+        for (int maximum : List.of(1, 4)) for (String code : List.of("generic_err_object_not_found", "err_not_supported")) {
+            var transcript = new com.securityexpert.nexus.ui2.worker.transcript.JobTranscript();
+            try (var scope = com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.open(transcript)) {
+                assertFetched(collect(maximum, PolicyCollectionRepository.Mode.CHANGED_ONLY,
+                    "{\"code\":\"" + code + "\",\"message\":\"Sensitive synthetic message\"}", true, true));
+            }
+            var sink = new java.io.ByteArrayOutputStream(); transcript.writeTo(sink);
+        String notes = sink.toString(java.nio.charset.StandardCharsets.UTF_8);
+            assertTrue(notes.contains("signal unavailable code=" + code));
+            assertFalse(notes.contains("invalid preflight")); assertFalse(notes.contains("Sensitive synthetic message"));
+        }
+        assertEquals("<masked-code>", CheckPointPolicyCollector.safeApiCode(json.readTree("\"private-identity\"")));
+    }
+
+    @Test void domainDatabaseFailureDisablesReuseAndDoesNotStopCollection() throws Exception {
+        var repository = mock(PolicyCollectionRepository.class);
+        var request = new PolicyCollectionRepository.Request("source-1", "", false, PolicyCollectionRepository.Mode.CHANGED_ONLY, "job-1", 7);
+        var signal = CpDomainReuse.signal(json.readTree(SIGNAL));
+        when(repository.previousDomain(anyString(), anyString())).thenReturn(Optional.of(new PolicyCollectionRepository.DomainRun(
+            true, json.writeValueAsString(signal), json.writeValueAsString(List.of(stored())))));
+        when(repository.saveDomain(any(), anyString(), anyString(), anyBoolean(), nullable(String.class), anyString(), anyInt(), nullable(String.class), anyString()))
+            .thenThrow(new com.securityexpert.nexus.ui2.persistence.policy.PolicyDatabaseFailure("PolicyCollectionRepository.saveDomain", "DOMAIN_UPSERT", 100000));
+        List<PolicySnapshot.CollectionFailure> gaps = new ArrayList<>();
+        var reuse = new CpDomainReuse(repository, request).onDatabaseGap(gaps::add);
+        reuse.begin(container); assertNull(reuse.decide(container, json.readTree(SIGNAL)));
+        reuse.planned(container, 1); reuse.snapshot(stored()); reuse.finish();
+        assertEquals("POLICY_DB_DOMAIN_WRITE_FAILED", gaps.get(0).reason()); assertEquals(1, gaps.size());
+    }
+
 }
