@@ -16,6 +16,7 @@ import com.securityexpert.nexus.ui2.jobs.failover.execution.FailoverExecutionSta
 import com.securityexpert.nexus.ui2.jobs.failover.model.*;
 import com.securityexpert.nexus.ui2.jobs.failover.schedule.*;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -29,6 +30,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Service coordinating scheduled maintenance window failovers.
@@ -79,6 +81,9 @@ public class FailoverScheduleService {
             "client_nonce, scheduled_at, claimed_at, executed_at, execution_result_id, abort_reason_code, " +
             "abort_reason, cancelled_by, cancelled_at, baseline_format_version, key_id, algorithm_version ";
 
+    @Value("${ui2.failover.scheduled-execution-enabled:false}")
+    private boolean scheduledExecutionEnabled;
+
     private final PreflightService preflightService;
     private final FailoverAuthorizationService authzService;
     private final FailoverExecutionService executionService;
@@ -127,6 +132,9 @@ public class FailoverScheduleService {
         this.admissionControl = Objects.requireNonNull(admissionControl, "admissionControl must not be null");
         this.keyManagementService = Objects.requireNonNull(keyManagementService, "keyManagementService must not be null");
         this.jdbcTemplate = jdbcTemplate;
+        if (jdbcTemplate != null && jdbcTemplate.getDataSource() != null) {
+            scheduleLedger.requireSameDataSource(jdbcTemplate);
+        }
         this.driftEngine = Objects.requireNonNull(driftEngine, "driftEngine must not be null");
         this.clockHealthCheck = Objects.requireNonNull(clockHealthCheck, "clockHealthCheck must not be null");
         this.baselineJsonMapper = new ObjectMapper()
@@ -156,7 +164,13 @@ public class FailoverScheduleService {
 
     public FailoverScheduleRecord scheduleMaintenanceWindow(ScheduleWindowRequest request) {
         Objects.requireNonNull(request, "request must not be null");
+        return scheduleLedger.inTransaction(() -> {
+            scheduleLedger.lockFleet();
+            return bookInsideTransaction(request);
+        });
+    }
 
+    private FailoverScheduleRecord bookInsideTransaction(ScheduleWindowRequest request) {
         // 1. Four-Eyes Principal Validation (CF-P0.14: canonicalized comparison, not raw equalsIgnoreCase)
         PrincipalCanonicalization.requireDistinctPrincipals(
             request.requesterId(), request.approverId(), "Scheduling maintenance window");
@@ -278,11 +292,7 @@ public class FailoverScheduleService {
         }
 
         FailoverScheduleRecord cancelled = record.withCancellation(operatorId, Instant.now());
-        updateScheduleCas(scheduleId, record.status(), cancelled);
-        scheduleLedger.recordTransition(
-            scheduleId, record.status(), FailoverScheduleStatus.CANCELLED, null,
-            operatorId, "Schedule cancelled by operator: " + reason
-        );
+        transition(record, cancelled, null, operatorId, "Schedule cancelled by operator: " + reason, false);
         return cancelled;
     }
 
@@ -313,8 +323,7 @@ public class FailoverScheduleService {
                 FailoverScheduleStatus.ABORTED_WINDOW_EXPIRED, "WINDOW_EXPIRED",
                 "Execution window deadline passed before mutation dispatch (" + now + " >= deadline: " + record.executionDeadline() + ")"
             );
-            updateScheduleCas(scheduleId, record.status(), expired);
-            scheduleLedger.recordTransition(scheduleId, record.status(), FailoverScheduleStatus.ABORTED_WINDOW_EXPIRED, attemptId, triggeringActor, "Window expired");
+            transition(record, expired, attemptId, triggeringActor, "Window expired", false);
             return expired;
         }
 
@@ -327,8 +336,7 @@ public class FailoverScheduleService {
                 FailoverScheduleStatus.ABORTED_KEY_UNAVAILABLE, "KEY_UNAVAILABLE",
                 "Signing key or algorithm is unavailable; envelope cannot be verified"
             );
-            updateScheduleCas(scheduleId, record.status(), keyUnavailable);
-            scheduleLedger.recordTransition(scheduleId, record.status(), FailoverScheduleStatus.ABORTED_KEY_UNAVAILABLE, attemptId, triggeringActor, "Signing key unavailable at dispatch");
+            transition(record, keyUnavailable, attemptId, triggeringActor, "Signing key unavailable at dispatch", false);
             return keyUnavailable;
         }
 
@@ -348,8 +356,7 @@ public class FailoverScheduleService {
                 FailoverScheduleStatus.ABORTED_TAMPERED, "BASELINE_DIGEST_MISMATCH",
                 "Stored baseline content does not re-derive to its recorded assessment digest"
             );
-            updateScheduleCas(scheduleId, record.status(), baselineTampered);
-            scheduleLedger.recordTransition(scheduleId, record.status(), FailoverScheduleStatus.ABORTED_TAMPERED, attemptId, triggeringActor, "Baseline digest mismatch at dispatch");
+            transition(record, baselineTampered, attemptId, triggeringActor, "Baseline digest mismatch at dispatch", false);
             return baselineTampered;
         }
 
@@ -367,15 +374,21 @@ public class FailoverScheduleService {
                 FailoverScheduleStatus.ABORTED_TAMPERED, "CRYPTO_SIGNATURE_INVALID",
                 "Schedule cryptographic signature verification failed: record has been tampered with"
             );
-            updateScheduleCas(scheduleId, record.status(), tampered);
-            scheduleLedger.recordTransition(scheduleId, record.status(), FailoverScheduleStatus.ABORTED_TAMPERED, attemptId, triggeringActor, "HMAC signature verification failed");
+            transition(record, tampered, attemptId, triggeringActor, "HMAC signature verification failed", false);
             return tampered;
+        }
+
+        // This lane does not authorize generic scheduled device writes.
+        if (!scheduledExecutionEnabled) {
+            var disabled = record.withAbort(FailoverScheduleStatus.ABORTED_PRE_MUTATION,
+                "SCHEDULED_EXECUTION_DISABLED", "Generic scheduled execution is disabled");
+            transition(record, disabled, attemptId, triggeringActor, "Scheduled execution disabled", false);
+            return disabled;
         }
 
         // 4. Claim the Schedule
         FailoverScheduleRecord claimed = record.withClaim(now);
-        updateScheduleCas(scheduleId, record.status(), claimed);
-        scheduleLedger.recordTransition(scheduleId, record.status(), FailoverScheduleStatus.CLAIMED_VERIFYING, attemptId, triggeringActor, "Claimed for execution");
+        transition(record, claimed, attemptId, triggeringActor, "Claimed for execution", false);
 
         // 5. Authorize Execution Lease for System Scheduler
         FailoverAuthorizationRequest authzReq = new FailoverAuthorizationRequest(
@@ -392,60 +405,76 @@ public class FailoverScheduleService {
                 FailoverScheduleStatus.ABORTED_PRE_MUTATION, "AUTHORIZATION_REFUSED",
                 "Authorization lease could not be issued: " + ((FourEyesAuthorizationResult.Refused) authzResult).reason()
             );
-            updateScheduleCas(scheduleId, claimed.status(), aborted);
-            scheduleLedger.recordTransition(scheduleId, claimed.status(), FailoverScheduleStatus.ABORTED_PRE_MUTATION, attemptId, triggeringActor, "Authz lease refused");
+            transition(claimed, aborted, attemptId, triggeringActor, "Authz lease refused", false);
             return aborted;
         }
 
         FailoverLeaseToken leaseToken = authorized.leaseToken();
+        AtomicReference<FailoverScheduleRecord> attemptState = new AtomicReference<>(claimed);
 
         // 6. Atomic In-Lock Single-Snapshot Execution (Astra P0.1 & Claude F-P1.9)
-        FailoverExecutionResult execResult = executionService.executeScheduledFailover(
-            record.clusterRef(),
-            leaseToken.tokenId(),
-            record.clientNonce(),
-            record.actionKind(),
-            "SYSTEM_SCHEDULER",
-            record.signedMutationTarget(),
-            record.executionDeadline(),
-            liveSnapshot -> {
-                // Inside Phase C exclusive lock:
-                // a. Clock Health Check #13
-                CheckResult clockRes = clockHealthCheck.evaluate(liveSnapshot);
-                if (clockRes.isBlockingFailure()) {
-                    return DriftEvaluationResult.blocked(
-                        Map.of("clock_health", DriftDimensionStatus.MISMATCH),
-                        List.of("CLOCK_UNTRUSTED"),
-                        List.of("Clock health evaluation failed: " + clockRes.summary()),
-                        preflightService.evaluateSnapshot(liveSnapshot)
-                    );
-                }
+        FailoverExecutionResult execResult;
+        try {
+            execResult = executionService.executeScheduledFailover(
+                record.clusterRef(),
+                leaseToken.tokenId(),
+                record.clientNonce(),
+                record.actionKind(),
+                "SYSTEM_SCHEDULER",
+                record.signedMutationTarget(),
+                record.executionDeadline(),
+                liveSnapshot -> {
+                    // Inside Phase C exclusive lock:
+                    // a. Clock Health Check #13
+                    CheckResult clockRes = clockHealthCheck.evaluate(liveSnapshot);
+                    if (clockRes.isBlockingFailure()) {
+                        return DriftEvaluationResult.blocked(
+                            Map.of("clock_health", DriftDimensionStatus.MISMATCH),
+                            List.of("CLOCK_UNTRUSTED"),
+                            List.of("Clock health evaluation failed: " + clockRes.summary()),
+                            preflightService.evaluateSnapshot(liveSnapshot)
+                        );
+                    }
 
-                // b. Full Preflight Battery evaluated against this exact live snapshot
-                // (Claude CF-P0.13: never a separately cached/fetched report).
-                PreflightReport t0Report = preflightService.evaluateSnapshot(liveSnapshot);
+                    // b. Full Preflight Battery evaluated against this exact live snapshot
+                    // (Claude CF-P0.13: never a separately cached/fetched report).
+                    PreflightReport t0Report = preflightService.evaluateSnapshot(liveSnapshot);
 
-                // c. Drift Evaluation against signed baseline
-                DriftEvaluationResult driftRes = driftEngine.evaluateDrift(record.baselineSummary(), liveSnapshot, t0Report);
-                if (!driftRes.isPass()) {
+                    // c. Drift Evaluation against signed baseline
+                    DriftEvaluationResult driftRes = driftEngine.evaluateDrift(record.baselineSummary(), liveSnapshot, t0Report);
+                    if (!driftRes.isPass()) {
+                        return driftRes;
+                    }
+
+                    // d. Storage-enforced single-use grant consumption (Claude F-P0.3)
+                    try {
+                        var dispatching = claimed.withStatus(FailoverScheduleStatus.DISPATCHING);
+                        transition(claimed, dispatching, attemptId, triggeringActor,
+                            "Grant consumed and dispatch boundary durably recorded", true);
+                        attemptState.set(dispatching);
+                    } catch (Exception ex) {
+                        return DriftEvaluationResult.blocked(
+                            Map.of("grant_consumption", DriftDimensionStatus.MISMATCH),
+                            List.of("DISPATCH_BOUNDARY_REFUSED"),
+                            List.of("Durable dispatch admission failed"),
+                            t0Report
+                        );
+                    }
+
                     return driftRes;
                 }
-
-                // d. Storage-enforced single-use grant consumption (Claude F-P0.3)
-                try {
-                    scheduleLedger.consumeGrant(record.grantId(), record.scheduleId(), attemptId);
-                } catch (Exception ex) {
-                    return DriftEvaluationResult.blocked(
-                        Map.of("grant_consumption", DriftDimensionStatus.MISMATCH),
-                        List.of("GRANT_ALREADY_CONSUMED"),
-                        List.of("Single-use grant check failed: " + ex.getMessage()),
-                        t0Report
-                    );
-                }
-
-                return driftRes;
+            );
+        } catch (Throwable failure) {
+            FailoverScheduleRecord current = attemptState.get();
+            var stopped = current.withAbort(current.status().isMutationBoundaryCrossed()
+                    ? FailoverScheduleStatus.OUTCOME_UNKNOWN : FailoverScheduleStatus.ABORTED_PRE_MUTATION,
+                "EXECUTION_INTERRUPTED", "Execution did not return a corroborated result");
+            transition(current, stopped, attemptId, triggeringActor, "Execution interrupted", false);
+            if (failure instanceof Error error) {
+                throw error;
             }
-        );
+            return stopped;
+        }
 
         // 7. Map Execution Result to Schedule Terminal State
         FailoverScheduleStatus finalStatus;
@@ -461,9 +490,13 @@ public class FailoverScheduleService {
             finalStatus = FailoverScheduleStatus.ABORTED_PRE_MUTATION;
         }
 
-        FailoverScheduleRecord finished = claimed.withCompletion(finalStatus, execResult.executionId(), Instant.now());
-        updateScheduleCas(scheduleId, claimed.status(), finished);
-        scheduleLedger.recordTransition(scheduleId, claimed.status(), finalStatus, attemptId, triggeringActor, execResult.summary());
+        FailoverScheduleRecord current = attemptState.get();
+        if (current.status() != FailoverScheduleStatus.DISPATCHING
+            && execResult.state() != FailoverExecutionState.ABORTED_PRE_MUTATION) {
+            finalStatus = FailoverScheduleStatus.OUTCOME_UNKNOWN;
+        }
+        FailoverScheduleRecord finished = current.withCompletion(finalStatus, execResult.executionId(), Instant.now());
+        transition(current, finished, attemptId, triggeringActor, execResult.summary(), false);
 
         return finished;
     }
@@ -513,17 +546,35 @@ public class FailoverScheduleService {
                 FailoverScheduleStatus.OUTCOME_UNKNOWN, RECONCILIATION_REASON_CODE,
                 "Schedule was left in " + record.status() + " by a prior process; outcome cannot be corroborated after restart"
             );
-            updateScheduleCas(record.scheduleId(), record.status(), reconciled);
-            scheduleLedger.recordTransition(
-                record.scheduleId(), record.status(), FailoverScheduleStatus.OUTCOME_UNKNOWN, correlationId,
-                RECONCILIATION_ACTOR, "Startup reconciliation: prior process crashed mid-dispatch"
-            );
-            executionService.engageQuarantine(
-                record.clusterRef(), correlationId,
-                "Startup reconciliation: schedule " + record.scheduleId() + " left in " + record.status() + " by a prior process",
-                Set.of(record.baselineSummary().activeMemberId(), record.baselineSummary().standbyMemberId())
-            );
+            scheduleLedger.inTransaction(() -> {
+                scheduleLedger.lockFleet();
+                updateScheduleCas(record.scheduleId(), record.status(), reconciled);
+                scheduleLedger.recordTransition(
+                    record.scheduleId(), record.status(), FailoverScheduleStatus.OUTCOME_UNKNOWN, correlationId,
+                    RECONCILIATION_ACTOR, "Startup reconciliation: prior process crashed mid-dispatch"
+                );
+                executionService.engageQuarantine(
+                    record.clusterRef(), correlationId,
+                    "Startup reconciliation: schedule " + record.scheduleId() + " left in " + record.status() + " by a prior process",
+                    record.baselineSummary() != null && record.baselineSummary().hasRequiredFields()
+                        ? Set.of(record.baselineSummary().activeMemberId(), record.baselineSummary().standbyMemberId()) : Set.of()
+                );
+                return null;
+            });
         }
+    }
+
+    private void transition(FailoverScheduleRecord previous, FailoverScheduleRecord next,
+                            String attemptId, String actor, String details, boolean consumeGrant) {
+        scheduleLedger.inCommittedTransaction(() -> {
+            scheduleLedger.lockFleet();
+            updateScheduleCas(previous.scheduleId(), previous.status(), next);
+            if (consumeGrant) {
+                scheduleLedger.consumeGrant(previous.grantId(), previous.scheduleId(), attemptId);
+            }
+            scheduleLedger.recordTransition(previous.scheduleId(), previous.status(), next.status(), attemptId, actor, details);
+            return null;
+        });
     }
 
     private Collection<FailoverScheduleRecord> allSchedulesSnapshot() {
@@ -573,13 +624,13 @@ public class FailoverScheduleService {
                     "abort_reason_code = ?, abort_reason = ?, cancelled_by = ?, cancelled_at = ?, version = version + 1 " +
                     "WHERE schedule_id = ? AND status = ?",
                 newRecord.status().name(),
-                newRecord.claimedAt() != null ? Timestamp.from(newRecord.claimedAt()) : null,
-                newRecord.executedAt() != null ? Timestamp.from(newRecord.executedAt()) : null,
+                newRecord.claimedAt() != null ? FailoverScheduleEnvelope.storageTime(newRecord.claimedAt()).atOffset(ZoneOffset.UTC) : null,
+                newRecord.executedAt() != null ? FailoverScheduleEnvelope.storageTime(newRecord.executedAt()).atOffset(ZoneOffset.UTC) : null,
                 newRecord.executionResultId(),
                 newRecord.abortReasonCode(),
                 newRecord.abortReason(),
                 newRecord.cancelledBy(),
-                newRecord.cancelledAt() != null ? Timestamp.from(newRecord.cancelledAt()) : null,
+                newRecord.cancelledAt() != null ? FailoverScheduleEnvelope.storageTime(newRecord.cancelledAt()).atOffset(ZoneOffset.UTC) : null,
                 scheduleId, expectedFromStatus.name()
             );
             if (rows != 1) {
@@ -601,7 +652,7 @@ public class FailoverScheduleService {
         try {
             return baselineJsonMapper.writeValueAsString(baseline);
         } catch (Exception e) {
-            throw new IllegalStateException("Failed to serialize baseline snapshot summary: " + e.getMessage(), e);
+            throw new IllegalStateException("BASELINE_SERIALIZATION_FAILED");
         }
     }
 

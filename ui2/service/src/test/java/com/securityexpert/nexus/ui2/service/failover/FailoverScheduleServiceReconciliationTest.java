@@ -41,6 +41,9 @@ class FailoverScheduleServiceReconciliationTest {
         FailoverKeyManagementService keyManagementService = FailoverKeyManagementService.withFixedSecretForTesting(TEST_SECRET);
         JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
 
+        when(scheduleLedger.inTransaction(any())).thenAnswer(invocation ->
+            ((java.util.function.Supplier<?>) invocation.getArgument(0)).get());
+
         FailoverScheduleRecord orphaned = buildClaimedRecord();
 
         @SuppressWarnings("unchecked")

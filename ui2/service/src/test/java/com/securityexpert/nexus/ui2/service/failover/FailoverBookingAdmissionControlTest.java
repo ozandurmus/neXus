@@ -97,6 +97,15 @@ class FailoverBookingAdmissionControlTest {
         assertTrue(ex.getMessage().contains("volume"));
     }
 
+    @Test
+    void dispatchingWindowStillExcludesOtherClusters() {
+        Instant start = Instant.now().plusSeconds(3600);
+        var dispatching = buildRecord(start, start.plusSeconds(3600), FailoverScheduleStatus.DISPATCHING);
+        var failure = assertThrows(IllegalStateException.class, () -> admissionControl.validateBookingAdmission(
+            start.plusSeconds(60), start.plusSeconds(600), 5, "synthetic-other-cluster", List.of(dispatching)));
+        assertTrue(failure.getMessage().contains("overlap"));
+    }
+
     private static FailoverScheduleRecord buildRecord(Instant windowStart, Instant windowEnd, FailoverScheduleStatus status) {
         return buildRecordForCluster(CLUSTER_REF, windowStart, windowEnd, status);
     }

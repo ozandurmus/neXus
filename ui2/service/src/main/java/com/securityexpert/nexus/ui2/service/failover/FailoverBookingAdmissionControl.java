@@ -23,11 +23,8 @@ import java.util.Objects;
  *    end-to-start in one direction only and {@code abs()} masked the true gap for a new window placed
  *    before an existing one).
  *
- * <p>This class validates a caller-supplied snapshot of existing schedules; it does not itself
- * read or lock durable storage. Cross-instance atomicity of the read-then-admit sequence is the
- * enforced-singleton-deployment gap the Engine Final Review names (§9 item 2) until full
- * durability lands -- {@code synchronized} here only serializes concurrent admission checks within
- * one JVM instance.</p>
+ * <p>The caller holds the PostgreSQL fleet transaction lock from reading existing schedules
+ * through insertion and ledger append. Database exclusion also rejects overlapping inserts.</p>
  */
 @Component
 public class FailoverBookingAdmissionControl {
@@ -85,7 +82,8 @@ public class FailoverBookingAdmissionControl {
             }
 
             // Fleet overlap check for active/scheduled windows
-            if (existing.status().isRunnable() || existing.status() == FailoverScheduleStatus.CLAIMED_VERIFYING) {
+            if (existing.status().isRunnable() || existing.status() == FailoverScheduleStatus.CLAIMED_VERIFYING
+                || existing.status() == FailoverScheduleStatus.DISPATCHING) {
                 boolean overlaps = windowStart.isBefore(existing.executionDeadline()) &&
                     existing.windowStart().isBefore(newDeadline);
                 if (overlaps) {
