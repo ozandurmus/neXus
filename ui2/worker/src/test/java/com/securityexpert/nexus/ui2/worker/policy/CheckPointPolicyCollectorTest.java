@@ -676,6 +676,7 @@ class CheckPointPolicyCollectorTest {
     private ExecResult answer(String command) {
         if (command.contains("show-packages")) command = command.replace(" limit 20 offset ", " limit 50 offset ");
         if (command.equals(MgmtCliCommands.domainList())) return ok("{\"total\":1,\"objects\":[{\"uid\":\"domain-01\",\"name\":\"DOM-TANGO-01\"}]}");
+        if (command.equals(MgmtCliCommands.showLastPublishedSession("DOM-TANGO-01"))) return ok("{}");
         if (command.equals(MgmtCliCommands.showPackages("DOM-TANGO-01"))) return ok("""
             {"from":1,"to":1,"total":1,"packages":[{"uid":"pkg-01","name":"Package","access-layers":[{"uid":"layer","name":"Layer"}],"installation-targets":[{"uid":"target-01"}]}]}
             """);
@@ -685,7 +686,7 @@ class CheckPointPolicyCollectorTest {
         if (command.equals(MgmtCliCommands.showNatRulebase("DOM-TANGO-01", "Package", 0))) return ok(page("nat", 1, 1, 1,
             "{\"uid\":\"n1\",\"type\":\"nat-rule\",\"original-source\":\"host1\",\"translated-source\":\"translated\",\"method\":\"hide\"}",
             "{\"uid\":\"translated\",\"name\":\"OBJ-ADDRESS-02\",\"type\":\"host\",\"ipv4-address\":\"198.51.100.8\"}"));
-        throw new AssertionError("Unexpected command");
+        throw new AssertionError("Unexpected command: " + command);
     }
     @Test void cancelBetweenPagesKeepsOnlyCompleteLayersAndDisconnects() {
         var cancelled = new java.util.concurrent.atomic.AtomicBoolean();
