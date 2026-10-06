@@ -74,6 +74,14 @@ class FailoverMutationFenceTest {
         }
         mustCall(CpFailoverJobExecutor.class,"command",CpFailoverJobExecutor.class,"requireMutationAdmission");
         mustCall(PanFailoverJobExecutor.class,"call",PanFailoverJobExecutor.class,"requireMutationAdmission");
+        for (Class<?> worker:List.of(CpFailoverJobExecutor.class,PanFailoverJobExecutor.class)) {
+            String send=worker==CpFailoverJobExecutor.class?"command":"call";
+            mustCall(worker,send,repository,"prepareDispatch");
+            mustCall(worker,send,repository,"dispatch");
+            mustCall(worker,"confirmDispatch",repository,"confirmDispatch");
+            mustCall(worker,"state",repository,"workerState");
+            mustCall(worker,"stop",repository,"workerState");
+        }
     }
 
     @Test void disabledWorkersRefuseEveryWriteEvenWhenPrivateDispatchIsCalledDirectly() throws Exception {

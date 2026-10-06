@@ -52,7 +52,7 @@ public final class CpFailoverJobExecutor {
     private long epoch;
     private int commandIndex;
     private boolean wrote;
-    private boolean writeInFlight;
+    private JooqCpFailoverRepository.Dispatch dispatch;
     private boolean readiness;
     private Stop readinessFailure;
     private ReadinessShapeLog shapes;
@@ -115,7 +115,7 @@ public final class CpFailoverJobExecutor {
         this.readiness="READINESS".equals(run.get().kind());
         this.readinessFailure=null;
         this.shapes=new ReadinessShapeLog("check_point");
-        this.epoch=epoch; this.commandIndex=0; this.wrote=false; this.writeInFlight=false;
+        this.epoch=epoch; this.commandIndex=0; this.wrote=false; this.dispatch=null;
         if(!leases.transitionState(jobId,epoch,JobState.CLAIMED,JobState.EXECUTING,
                 "system:cp-failover-worker","cp_failover_start")) return;
         Member first=null,second=null;
@@ -138,7 +138,7 @@ public final class CpFailoverJobExecutor {
             first=connect(members.get(0)); second=connect(members.get(1));
             if(first.session().presentedIdentity().equals(second.session().presentedIdentity()))
                 throw new Stop("OBSERVERS_NOT_DISTINCT",0);
-            store.state(runId,"PRECHECK","PRECHECK",null,null,null);
+            state("PRECHECK","PRECHECK",null,null,null);
             Pair before=checks("pre",first,second,null,null);
             if (readiness) {
                 finishReadiness("READY",0,"PASS");
@@ -146,21 +146,20 @@ public final class CpFailoverJobExecutor {
             }
             Member formerActive="ACTIVE".equals(before.a().state().localRole())?first:second;
             Member formerStandby=formerActive==first?second:first;
-            store.state(runId,"FAILING_OVER","FAILING_OVER",null,null,null);
-            wrote=true;
+            state("FAILING_OVER","FAILING_OVER",null,null,null);
             command(formerActive,DOWN);
             if(!waitFor(first,second,formerStandby,"ACTIVE",formerActive,"DOWN"))
                 throw new Stop("FAILOVER_TIMEOUT",1);
-            store.state(runId,"SWITCHED","SWITCHED",null,null,null);
-            store.state(runId,"POSTCHECK","POSTCHECK",null,null,null);
+            confirmDispatch();
+            state("SWITCHED","SWITCHED",null,null,null);
+            state("POSTCHECK","POSTCHECK",null,null,null);
             checks("post",first,second,before,formerActive);
-            store.state(runId,"RETURNING","RETURNING",null,null,null);
+            state("RETURNING","RETURNING",null,null,null);
             command(formerActive,UP);
             if(!waitFor(first,second,formerStandby,"ACTIVE",formerActive,"STANDBY"))
                 throw new Stop("RETURN_TIMEOUT",1);
-            store.state(runId,"DONE","DONE","SUCCEEDED",null,"NO_PROBLEMS_FOUND");
-            leases.transitionState(jobId,epoch,JobState.EXECUTING,JobState.COMPLETED,
-                "system:cp-failover-worker","cp_failover_done","SUCCEEDED");
+            confirmDispatch();
+            state("DONE","DONE","SUCCEEDED",null,"NO_PROBLEMS_FOUND");
         } catch (Stop stopped) {
             if (readiness) finishReadiness(stopped.code,stopped.check,stopped.check==0?"UNKNOWN":stopped.status);
             else stop(stopped.code,stopped.check);
@@ -182,11 +181,16 @@ public final class CpFailoverJobExecutor {
         if (!"ADMITTED".equals(decision)) throw new Stop(decision==null?"ADMISSION_UNAVAILABLE":decision,0);
     }
 
+    private void state(String state,String step,String outcome,String check,String message) {
+        if (readiness) store.state(runId,state,step,outcome,check,message);
+        else if (!store.workerState(runId,epoch,state,step,outcome,check,message))
+            throw new Stop("DISPATCH_OWNER_LOST",0);
+    }
     private void stop(String code,int check) {
-        store.state(runId,"STOPPED",store.runByJob(jobId).map(JooqCpFailoverRepository.Run::step).orElse("UNKNOWN"),
-            code,check==0?null:String.valueOf(check),code);
-        leases.transitionState(jobId,epoch,JobState.EXECUTING,writeInFlight || "OUTCOME_UNCERTAIN".equals(code)
-            ?JobState.OUTCOME_UNKNOWN:JobState.FAILED,"system:cp-failover-worker","cp_failover_stopped",code);
+        store.workerState(runId,epoch,"STOPPED","STOPPED",code,check==0?null:String.valueOf(check),code);
+    }
+    private void confirmDispatch() {
+        if (dispatch==null || !store.confirmDispatch(dispatch)) throw new Stop("OUTCOME_UNCERTAIN",0);
     }
     private void finishReadiness(String code,int check,String status) {
         String stopCode=code;
@@ -194,7 +198,7 @@ public final class CpFailoverJobExecutor {
             code=readinessFailure.code; check=readinessFailure.check; status=readinessFailure.status;
         }
         String outcome="PASS".equals(status)?"READY":"FAIL".equals(status)?"NOT_READY":"UNKNOWN";
-        store.state(runId,"DONE","DONE",outcome,check==0?null:checkName(check),"COMMAND_UNAVAILABLE".equals(stopCode)?stopCode:code);
+        state("DONE","DONE",outcome,check==0?null:checkName(check),"COMMAND_UNAVAILABLE".equals(stopCode)?stopCode:code);
         leases.transitionState(jobId,epoch,JobState.EXECUTING,JobState.COMPLETED,
             "system:cp-failover-worker","cp_readiness_done",outcome);
     }
@@ -272,6 +276,21 @@ public final class CpFailoverJobExecutor {
         var g=gate(command);
         if (commandIndex > 0 && !commandPause.isZero()) pause.sleep(commandPause);
         if(vsId!=null && !vsId.matches("[0-9]{1,10}")) throw new Stop("VSID_INVALID",0);
+        if (DOWN.equals(command) || UP.equals(command)) {
+            if (!mutationSwitch.enabled()) throw new Stop(FailoverMutationSwitch.DISABLED,0);
+            requireMutationAdmission(false);
+            dispatch=store.prepareDispatch(runId,epoch,commandIndex++,member.id(),g.gateId(),g.actionClass().id());
+            wrote=true;
+            String literal=vsId==null?"bash -lc '"+command+"'":"bash -lc 'vsenv "+vsId+" && "+command+"'";
+            boolean replied=store.dispatch(dispatch,() -> {
+                if (!mutationSwitch.enabled()) return false;
+                ExecResult result=ssh.exec(member.session(),new ExecSpec(literal,false),Duration.ofSeconds(g.timeoutS()));
+                return result instanceof ExecResult.Completed c && c.exitStatus()==0
+                    && c.output()!=null && c.output().length()<=262144 && !commandUnavailable(c.output());
+            });
+            if (!replied) throw new Stop("OUTCOME_UNCERTAIN",0);
+            return "";
+        }
         if(!attempts.findByJobAndStep(jobId,commandIndex).isEmpty()) throw new Stop("PRIOR_ATTEMPT_NOT_REPLAYED",0);
         String attempt=attempts.insertPreContact(jobId,epoch,commandIndex++,g.gateId(),g.actionClass().id(),1);
         if(attempt==null) throw new Stop("PRE_CONTACT_RECORD_FAILED",0);
@@ -281,13 +300,9 @@ public final class CpFailoverJobExecutor {
         // exec shell lacks the Check Point environment. Inventory already falls back to a login shell; every CP command
         // here (reads and clusterXL_admin alike) runs in one, as the vsenv-wrapped VS form always did.
         String literal=vsId==null?"bash -lc '"+command+"'":"bash -lc 'vsenv "+vsId+" && "+command+"'";
-        if(DOWN.equals(command)||UP.equals(command)) writeInFlight=true;
         boolean pty=IF.equals(command);
         int sessionCommandIndex=++member.sessionCommandIndex;
         long sessionElapsedMs=(System.nanoTime()-member.openedAtNanos)/1_000_000;
-        if ((DOWN.equals(command)||UP.equals(command)) && !mutationSwitch.enabled())
-            throw new Stop(FailoverMutationSwitch.DISABLED,0);
-        if (DOWN.equals(command)||UP.equals(command)) requireMutationAdmission(true);
         ExecResult result=ssh.exec(member.session(),new ExecSpec(literal,pty),Duration.ofSeconds(g.timeoutS()));
         if(!(result instanceof ExecResult.Completed completed) || completed.exitStatus()!=0
                 || commandUnavailable(completed.output())) {
@@ -298,7 +313,6 @@ public final class CpFailoverJobExecutor {
             throw new Stop("OUTPUT_UNAVAILABLE",0);
         if(!attempts.writeOutcome(attempt,epoch,"MATCHED",null,true,null,null,null))
             throw new Stop("ATTEMPT_RECORD_FAILED",0);
-        writeInFlight=false;
         int check=switch(command) {
             case STAT -> 1; case TABLE -> 2; case IF -> 3; case ARP -> 5;
             case CONN -> 6; case TRAFFIC -> 8; case SYNC -> 9; case POLICY -> 10;

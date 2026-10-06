@@ -22,6 +22,10 @@ class JooqCpFailoverRepositoryTest {
         assertEquals("FAILOVER_MUTATION_DISABLED",repository.startDue("run","member-a"));
         assertEquals("FAILOVER_MUTATION_DISABLED",repository.mutationAdmission("run","unit",null,
             "check_point",java.util.Set.of("member-a","member-b"),true));
+        assertThrows(IllegalStateException.class,() -> repository.prepareDispatch("run",1,0,
+            "member-a","cp_failover_down","operational-state-change"));
+        assertThrows(IllegalStateException.class,() -> repository.dispatch(
+            new JooqCpFailoverRepository.Dispatch("nonce","run","job",1),() -> {fail("Transport touched"); return true;}));
     }
 
     @org.junit.jupiter.api.Test

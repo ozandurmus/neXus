@@ -30,6 +30,8 @@ class PanFailoverJobExecutorTest {
     private static final String CLUSTER="CLS-TEST-01", A="FW-TEST-01", B="FW-TEST-02";
     private static final class Script {
         String admission="ADMITTED", writeAdmission="ADMITTED", returnAdmission="ADMITTED";
+        String failBeforeStep,failAfterStep,lostReplyStep,runtimeErrorStep;
+        int prepared,replies,observations;
         boolean suspended,functional,stuck,badPre,badPost,badSync,badSessions,badVersion,lowPostSessions;
         boolean missingFields;
         String evidenceFault;
@@ -45,11 +47,11 @@ class PanFailoverJobExecutorTest {
                     String command=spec.formParams().get("cmd");
                     if (command.contains("<suspend/>")) {
                         suspended=true; suspendCount++;
-                        return new XmlApiResult.Completed(200,"<response status=\"success\"/>");
+                        return writeReply("FAILING_OVER");
                     }
                     if (command.contains("<functional/>")) {
                         functional=true; functionalCount++;
-                        return new XmlApiResult.Completed(200,"<response status=\"success\"/>");
+                        return writeReply("RETURNING");
                     }
                     boolean first=A.equals(((ApiTarget)args[0]).endpointId());
                     if (missingFields && !first && (command.contains("<state-synchronization/>")
@@ -102,6 +104,10 @@ class PanFailoverJobExecutorTest {
                     return new XmlApiResult.Completed(200,missingFields && !first
                         ?body.replace("<running-sync>synchronized</running-sync>",""):body);
                 });
+        }
+        XmlApiResult writeReply(String step) {
+            if (step.equals(runtimeErrorStep)) throw new IllegalStateException("SYNTHETIC_TRANSPORT_FAILURE");
+            return new XmlApiResult.Completed(step.equals(lostReplyStep)?504:200,"<response status=\"success\"/>");
         }
     }
     private static DeviceSummaryRecord summary(String id) {
@@ -157,11 +163,28 @@ class PanFailoverJobExecutorTest {
             "run-1",CLUSTER,null,readiness?null:"approval-1","actor-1",Instant.now(),"job-1",
             state.get(),state.get(),outcome.get(),null,null,"palo_alto",readiness?"READINESS":"FAILOVER")));
         when(store.windowValid("run-1")).thenReturn(true);
+        AtomicInteger admissions=new AtomicInteger();
         when(store.mutationAdmission(eq("run-1"),eq(CLUSTER),isNull(),eq("palo_alto"),
             eq(java.util.Set.of(A,B)),anyBoolean(),eq("job-1"),eq(1L))).thenAnswer(inv ->
-                Boolean.TRUE.equals(inv.getArgument(5)) ? (script.suspended?script.returnAdmission:script.writeAdmission) : script.admission);
+                admissions.incrementAndGet()==1 ? script.admission : script.suspended ? script.returnAdmission : script.writeAdmission);
         doAnswer(inv -> {state.set(inv.getArgument(1)); outcome.set(inv.getArgument(3)); failedCheck.set(inv.getArgument(4)); return null;})
             .when(store).state(anyString(),anyString(),anyString(),nullable(String.class),nullable(String.class),nullable(String.class));
+        when(store.workerState(anyString(),anyLong(),anyString(),anyString(),nullable(String.class),nullable(String.class),nullable(String.class)))
+            .thenAnswer(inv -> {state.set(inv.getArgument(2)); outcome.set(inv.getArgument(4)); failedCheck.set(inv.getArgument(5)); return true;});
+        when(store.prepareDispatch(anyString(),anyLong(),anyInt(),anyString(),anyString(),anyString())).thenAnswer(inv -> {
+            if (state.get().equals(script.failBeforeStep)) throw new IllegalStateException("SYNTHETIC_DB_FAILURE");
+            script.prepared++;
+            return new JooqCpFailoverRepository.Dispatch(state.get(),"run-1","job-1",1);
+        });
+        when(store.dispatch(any(),any())).thenAnswer(inv -> {
+            assertEquals(script.replies+1,script.prepared);
+            java.util.function.Supplier<Boolean> send=inv.getArgument(1);
+            boolean reply;
+            try { reply=send.get(); } catch (RuntimeException failure) { reply=false; }
+            if (state.get().equals(script.failAfterStep)) throw new IllegalStateException("SYNTHETIC_DB_FAILURE");
+            script.replies++; return reply;
+        });
+        when(store.confirmDispatch(any())).thenAnswer(inv -> {script.observations++; return true;});
         doAnswer(inv -> {checks.add(inv.getArgument(1)+":"+inv.getArgument(4)+":"+inv.getArgument(5));
             derived.add(inv.getArgument(6)); return null;})
             .when(store).check(anyString(),anyString(),anyString(),nullable(String.class),anyInt(),anyString(),anyString());
@@ -172,6 +195,23 @@ class PanFailoverJobExecutorTest {
         return new Result(state.get(),outcome.get(),checks,derived,failedCheck.get());
     }
     private record Result(String state,String outcome,List<String> checks,List<String> derived,String failedCheck) {}
+    @Test void everyWriteStopsAtPersistenceAndDeliveryFailuresWithoutReplay() {
+        for (String step:List.of("FAILING_OVER","RETURNING")) {
+            for (String fault:List.of("before","after","lost","runtime")) {
+                Script script=new Script();
+                switch (fault) {
+                    case "before" -> script.failBeforeStep=step;
+                    case "after" -> script.failAfterStep=step;
+                    case "lost" -> script.lostReplyStep=step;
+                    case "runtime" -> script.runtimeErrorStep=step;
+                }
+                assertEquals("STOPPED",run(script).state());
+                assertEquals("FAILING_OVER".equals(step)&&"before".equals(fault)?0:1,script.suspendCount);
+                assertEquals("RETURNING".equals(step)&&!"before".equals(fault)?1:0,script.functionalCount);
+                assertEquals("RETURNING".equals(step)?1:0,script.observations);
+            }
+        }
+    }
     @Test void disabledSwitchStopsBeforeTransportOrAttempts() {
         Script script=new Script(); Result result=run(script,false,false);
         assertEquals("STOPPED",result.state());
