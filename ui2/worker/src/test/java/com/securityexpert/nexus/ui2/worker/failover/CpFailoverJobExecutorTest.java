@@ -45,6 +45,14 @@ class CpFailoverJobExecutorTest {
             return Optional.of(new Run("run-1",CLUSTER,vsId,"READINESS".equals(kind)?null:"approval-1","actor-1",
                 Instant.now(),id,state,state,outcome,null,null,"check_point",kind));
         }
+        String admission="ADMITTED", writeAdmission="ADMITTED";
+        int admissionCount;
+        @Override public String mutationAdmission(String id,String cluster,String vs,String vendor,
+                java.util.Set<String> members,boolean possibleSend) {
+            admissionCount++;
+            CpFailoverJobExecutorTest.check(CLUSTER.equals(cluster) && java.util.Set.of(A,B).equals(members));
+            return possibleSend ? writeAdmission : admission;
+        }
         @Override public boolean windowValid(String id) { return valid; }
         @Override public void state(String id,String next,String step,String result,String failed,String message) {
             state=next; outcome=result; stopCode=message;
@@ -55,6 +63,23 @@ class CpFailoverJobExecutorTest {
             derivedValues.add(derived);
         }
     }
+    @Test void admissionRefusesBeforeAnyTransport() {
+        for (String code:List.of("OPEN_INCIDENT","WRONG_UNIT","MEMBER_SET_CHANGED","FLEET_MUTATION_ACTIVE")) {
+            Store store=new Store(); store.admission=code;
+            Script script=new Script(); run(store,script);
+            org.junit.jupiter.api.Assertions.assertEquals(code,store.outcome);
+            check(script.downCount==0 && script.upCount==0);
+            check(store.checks.isEmpty() && store.admissionCount==1);
+        }
+    }
+
+    @Test void admissionIsRecheckedAfterReadinessBeforeTheWrite() {
+        Store store=new Store(); store.writeAdmission="MEMBER_SET_CHANGED";
+        Script script=new Script(); run(store,script);
+        org.junit.jupiter.api.Assertions.assertEquals("MEMBER_SET_CHANGED",store.outcome);
+        check(script.downCount==0 && script.upCount==0 && store.admissionCount==2);
+    }
+
     private static final class Script {
         boolean down,up,stuck,badPre,badPost,badSync,badPolicy,changedPolicyPost;
         boolean readyMember,badPnotes,badBonds,badRoutes,missingDefault,recentFailover;

@@ -5,18 +5,12 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * Server-owned pilot allowlist fence.
- * In accordance with Phase C risk containment laws:
- * 1. Execution is strictly confined to explicitly authorized lab clusters.
- * 2. Non-lab / production / UNKNOWN environments fail closed.
- * 3. Enforces that both member endpoints are enrolled within the pilot scope.
- */
+/** Ordinary server-owned enrollment resolver; the historical class name is retained for callers. */
 public class FailoverPilotAllowlist {
 
     public record PilotEnrollment(
         String clusterId,
-        String environmentClassification, // strictly "LAB_PILOT"
+        String environmentClassification,
         Set<String> enrolledMemberIds,
         String authorizedBy,
         boolean active
@@ -28,35 +22,21 @@ public class FailoverPilotAllowlist {
         }
 
         public boolean isEligibleForPilot() {
-            return active && "LAB_PILOT".equalsIgnoreCase(environmentClassification);
+            return active && enrolledMemberIds.size() == 2;
         }
     }
 
     private final Map<String, PilotEnrollment> enrollments = new ConcurrentHashMap<>();
 
+    private final java.util.function.Function<String, PilotEnrollment> resolver;
+
+    /** Empty explicit fixture registry, never seeded with product identities. */
     public FailoverPilotAllowlist() {
-        // Seed authorized lab pilot clusters
-        enrollCluster(new PilotEnrollment(
-            "cls-uuid-cp",
-            "LAB_PILOT",
-            Set.of("dev-cp-1", "dev-cp-2", "FW-TANGO-01", "FW-JULIET-06"),
-            "PO_APPROVED_LAB_PILOT",
-            true
-        ));
-        enrollCluster(new PilotEnrollment(
-            "cls-uuid-pa",
-            "LAB_PILOT",
-            Set.of("dev-pa-1", "dev-pa-2", "FW-TANGO-04", "FW-BRAVO-02"),
-            "PO_APPROVED_LAB_PILOT",
-            true
-        ));
-        enrollCluster(new PilotEnrollment(
-            "cls-01",
-            "LAB_PILOT",
-            Set.of("dev-cp-1", "dev-cp-2", "FW-TANGO-01", "FW-JULIET-06", "cls-01"),
-            "PO_APPROVED_LAB_PILOT",
-            true
-        ));
+        this.resolver = enrollments::get;
+    }
+
+    public FailoverPilotAllowlist(java.util.function.Function<String, PilotEnrollment> resolver) {
+        this.resolver = Objects.requireNonNull(resolver);
     }
 
     public void enrollCluster(PilotEnrollment enrollment) {
@@ -66,13 +46,18 @@ public class FailoverPilotAllowlist {
 
     public boolean isClusterAllowed(String clusterId) {
         if (clusterId == null) return false;
-        PilotEnrollment enrollment = enrollments.get(clusterId);
+        PilotEnrollment enrollment = resolver.apply(clusterId);
         return enrollment != null && enrollment.isEligibleForPilot();
+    }
+
+    public Set<String> enrolledMemberIds(String clusterId) {
+        PilotEnrollment enrollment = clusterId == null ? null : resolver.apply(clusterId);
+        return enrollment != null && enrollment.isEligibleForPilot() ? enrollment.enrolledMemberIds() : Set.of();
     }
 
     public boolean isExecutionAllowed(String clusterId, String targetMemberId) {
         if (clusterId == null || targetMemberId == null) return false;
-        PilotEnrollment enrollment = enrollments.get(clusterId);
+        PilotEnrollment enrollment = resolver.apply(clusterId);
         if (enrollment == null || !enrollment.isEligibleForPilot()) {
             return false;
         }

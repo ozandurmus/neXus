@@ -22,12 +22,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * durably as the schedule it protects; an in-memory-only quarantine that resets on restart would
  * silently drop the safety guarantee it exists to provide.</p>
  *
- * <p>The {@code failover_quarantine} schema (V31) keys one row per {@code cluster_ref}: the
- * current (active or most recently acknowledged) quarantine state, not a full multi-incident
- * history table. {@link #getAuditHistory()} in durable mode therefore returns the latest known
- * row per cluster, not every historical engage/acknowledge event -- the same constraint the schema
- * itself carries. The lightweight in-memory fallback (no {@link JdbcTemplate} wired) keeps the
- * previous full-history behavior for unit tests that inspect it directly.</p>
+ * <p>Each (unit, execution) is an immutable incident. Release updates only the exact
+ * incident's acknowledgment fields; another incident is never overwritten or cleared.</p>
  */
 @Component
 public class DurableQuarantineStore {
@@ -53,7 +49,8 @@ public class DurableQuarantineStore {
     private final ObjectMapper memberIdsJsonMapper = new ObjectMapper();
 
     // In-memory fallback store, used only when no JdbcTemplate is wired (lightweight unit tests).
-    private final Map<String, QuarantineEntry> memoryActiveQuarantines = new ConcurrentHashMap<>();
+    private record IncidentKey(String cluster, String execution) {}
+    private final Map<IncidentKey, QuarantineEntry> memoryActiveQuarantines = new ConcurrentHashMap<>();
     private final List<QuarantineEntry> memoryAuditHistory = Collections.synchronizedList(new ArrayList<>());
 
     @Autowired
@@ -70,7 +67,7 @@ public class DurableQuarantineStore {
         return jdbcTemplate != null;
     }
 
-    public void engageQuarantine(
+    public synchronized void engageQuarantine(
         String clusterRef,
         String executionId,
         String reason,
@@ -87,11 +84,7 @@ public class DurableQuarantineStore {
                     "(cluster_ref, execution_id, reason, quarantined_member_ids, quarantined_at, " +
                     "acknowledged_at, acknowledged_by, second_approver_id, review_notes, active) " +
                     "VALUES (?, ?, ?, ?::jsonb, ?, NULL, NULL, NULL, NULL, true) " +
-                    "ON CONFLICT (cluster_ref) DO UPDATE SET " +
-                    "execution_id = EXCLUDED.execution_id, reason = EXCLUDED.reason, " +
-                    "quarantined_member_ids = EXCLUDED.quarantined_member_ids, " +
-                    "quarantined_at = EXCLUDED.quarantined_at, acknowledged_at = NULL, " +
-                    "acknowledged_by = NULL, second_approver_id = NULL, review_notes = NULL, active = true",
+                    "ON CONFLICT (cluster_ref, execution_id) DO NOTHING",
                 clusterRef, executionId, reason, writeMemberIdsJson(safeMemberIds), Timestamp.from(Instant.now())
             );
             return;
@@ -101,7 +94,9 @@ public class DurableQuarantineStore {
             clusterRef, executionId, Instant.now(), reason, safeMemberIds,
             false, null, null, null, null
         );
-        memoryActiveQuarantines.put(clusterRef, entry);
+        IncidentKey key = new IncidentKey(clusterRef, executionId);
+        if (memoryAuditHistory.stream().anyMatch(e -> e.clusterRef().equals(clusterRef) && e.executionId().equals(executionId))) return;
+        memoryActiveQuarantines.put(key, entry);
         memoryAuditHistory.add(entry);
     }
 
@@ -110,7 +105,19 @@ public class DurableQuarantineStore {
         if (isDurable()) {
             return queryActiveRow(clusterRef) != null;
         }
-        return memoryActiveQuarantines.containsKey(clusterRef);
+        return memoryActiveQuarantines.values().stream().anyMatch(e -> e.clusterRef().equals(clusterRef));
+    }
+
+    public boolean blocksMutation(String clusterRef, Set<String> memberIds) {
+        if (isDurable()) {
+            return Boolean.TRUE.equals(jdbcTemplate.queryForObject(
+                "SELECT EXISTS (SELECT 1 FROM failover_quarantine q WHERE active AND (cluster_ref=? "
+                + "OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(q.quarantined_member_ids) AS m(member_id) "
+                + "WHERE ?::jsonb @> jsonb_build_array(m.member_id))))", Boolean.class,
+                clusterRef, writeMemberIdsJson(memberIds)));
+        }
+        return memoryActiveQuarantines.values().stream().anyMatch(e -> e.clusterRef().equals(clusterRef)
+            || !Collections.disjoint(e.quarantinedMemberIds(), memberIds));
     }
 
     public Optional<QuarantineEntry> getActiveQuarantine(String clusterRef) {
@@ -118,7 +125,7 @@ public class DurableQuarantineStore {
         if (isDurable()) {
             return Optional.ofNullable(queryActiveRow(clusterRef));
         }
-        return Optional.ofNullable(memoryActiveQuarantines.get(clusterRef));
+        return memoryActiveQuarantines.values().stream().filter(e -> e.clusterRef().equals(clusterRef)).findFirst();
     }
 
     /**
@@ -153,41 +160,24 @@ public class DurableQuarantineStore {
     private synchronized boolean acknowledgeQuarantineDurable(
         String clusterRef, String expectedExecutionId, String operatorId, String secondApproverId, String auditReason
     ) {
-        QuarantineEntry existing = queryActiveRow(clusterRef);
-        if (existing == null) {
-            return false;
-        }
-        if (!existing.executionId().equals(expectedExecutionId)) {
-            throw new IllegalStateException("Quarantine CAS mismatch: cluster quarantine was engaged by a different execution (" +
-                existing.executionId() + " != expected " + expectedExecutionId + ")");
-        }
-
-        int rows = jdbcTemplate.update(
-            "UPDATE failover_quarantine SET active = false, acknowledged_at = ?, acknowledged_by = ?, " +
-                "second_approver_id = ?, review_notes = ? WHERE cluster_ref = ? AND execution_id = ? AND active = true",
-            Timestamp.from(Instant.now()), operatorId, secondApproverId, auditReason, clusterRef, expectedExecutionId
-        );
-        return rows == 1;
+        return Boolean.TRUE.equals(jdbcTemplate.queryForObject(
+            "SELECT ui2_release_failover_incident(?, ?, ?, ?, ?)", Boolean.class,
+            clusterRef, expectedExecutionId, operatorId, secondApproverId, auditReason));
     }
 
     private synchronized boolean acknowledgeQuarantineInMemory(
         String clusterRef, String expectedExecutionId, String operatorId, String secondApproverId, String auditReason
     ) {
-        QuarantineEntry existing = memoryActiveQuarantines.get(clusterRef);
+        QuarantineEntry existing = memoryActiveQuarantines.get(new IncidentKey(clusterRef, expectedExecutionId));
         if (existing == null) {
             return false;
         }
-        if (!existing.executionId().equals(expectedExecutionId)) {
-            throw new IllegalStateException("Quarantine CAS mismatch: cluster quarantine was engaged by a different execution (" +
-                existing.executionId() + " != expected " + expectedExecutionId + ")");
-        }
-
         QuarantineEntry acked = new QuarantineEntry(
             existing.clusterRef(), existing.executionId(), existing.quarantinedAt(), existing.reason(),
             existing.quarantinedMemberIds(), true, operatorId, secondApproverId, Instant.now(), auditReason
         );
-        memoryActiveQuarantines.remove(clusterRef);
-        memoryAuditHistory.add(acked);
+        memoryActiveQuarantines.remove(new IncidentKey(clusterRef, expectedExecutionId));
+        memoryAuditHistory.replaceAll(e -> e.clusterRef().equals(clusterRef) && e.executionId().equals(expectedExecutionId) ? acked : e);
         return true;
     }
 
@@ -202,7 +192,7 @@ public class DurableQuarantineStore {
 
     private QuarantineEntry queryActiveRow(String clusterRef) {
         List<QuarantineEntry> rows = jdbcTemplate.query(
-            "SELECT " + SELECT_COLUMNS + "FROM failover_quarantine WHERE cluster_ref = ? AND active = true",
+            "SELECT " + SELECT_COLUMNS + "FROM failover_quarantine WHERE cluster_ref = ? AND active = true ORDER BY quarantined_at, execution_id",
             (rs, rowNum) -> mapRow(rs), clusterRef);
         return rows.isEmpty() ? null : rows.get(0);
     }

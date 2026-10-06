@@ -31,6 +31,19 @@ class FailoverExecutionControllerTest {
         verifyNoInteractions(service);
     }
 
+    @Test void incidentReleaseRequiresTheExactReviewedIncident() {
+        var service=mock(FailoverExecutionService.class);
+        var controller=new FailoverExecutionController(service);
+        var request=new MockHttpServletRequest();
+        request.setAttribute(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE,"synthetic-actor");
+        assertEquals(HttpStatus.BAD_REQUEST,controller.acknowledgeQuarantine("unit-a",
+            new FailoverExecutionController.AcknowledgeQuarantinePayload(null,"synthetic-approver","Reviewed incident"),request).getStatusCode());
+        verifyNoInteractions(service);
+        var payload=new FailoverExecutionController.AcknowledgeQuarantinePayload("stale-incident","synthetic-approver","Reviewed incident");
+        assertEquals(HttpStatus.CONFLICT,controller.acknowledgeQuarantine("unit-a",payload,request).getStatusCode());
+        verify(service).acknowledgeQuarantine("unit-a","stale-incident","synthetic-actor","synthetic-approver","Reviewed incident");
+    }
+
     @Test void genericServiceRefusesManualAndScheduledDispatchEvenWithRegisteredTransport() {
         var authz=mock(FailoverAuthorizationService.class);
         var preflight=mock(PreflightService.class);

@@ -29,6 +29,7 @@ import com.securityexpert.nexus.ui2.worker.transport.xmlapi.PanCredentialMateria
 class PanFailoverJobExecutorTest {
     private static final String CLUSTER="CLS-TEST-01", A="FW-TEST-01", B="FW-TEST-02";
     private static final class Script {
+        String admission="ADMITTED", writeAdmission="ADMITTED";
         boolean suspended,functional,stuck,badPre,badPost,badSync,badSessions,badVersion,lowPostSessions;
         boolean missingFields;
         int suspendCount,functionalCount,callCount;
@@ -138,6 +139,8 @@ class PanFailoverJobExecutorTest {
             "run-1",CLUSTER,null,readiness?null:"approval-1","actor-1",Instant.now(),"job-1",
             state.get(),state.get(),outcome.get(),null,null,"palo_alto",readiness?"READINESS":"FAILOVER")));
         when(store.windowValid("run-1")).thenReturn(true);
+        when(store.mutationAdmission(eq("run-1"),eq(CLUSTER),isNull(),eq("palo_alto"),
+            eq(java.util.Set.of(A,B)),anyBoolean())).thenAnswer(inv -> Boolean.TRUE.equals(inv.getArgument(5)) ? script.writeAdmission : script.admission);
         doAnswer(inv -> {state.set(inv.getArgument(1)); outcome.set(inv.getArgument(3)); failedCheck.set(inv.getArgument(4)); return null;})
             .when(store).state(anyString(),anyString(),anyString(),nullable(String.class),nullable(String.class),nullable(String.class));
         doAnswer(inv -> {checks.add(inv.getArgument(1)+":"+inv.getArgument(4)+":"+inv.getArgument(5));
@@ -156,6 +159,20 @@ class PanFailoverJobExecutorTest {
         assertEquals(FailoverMutationSwitch.DISABLED,result.outcome());
         assertEquals(0,script.suspendCount); assertEquals(0,script.functionalCount);
         assertEquals(0,script.callCount);
+    }
+    @Test void admissionRefusesBeforeAnyTransport() {
+        for (String code:List.of("OPEN_INCIDENT","WRONG_UNIT","MEMBER_SET_CHANGED","FLEET_MUTATION_ACTIVE")) {
+            Script script=new Script(); script.admission=code;
+            Result result=run(script);
+            assertEquals(code,result.outcome()); assertEquals(0,script.callCount);
+        }
+    }
+    @Test void admissionIsRecheckedAfterReadinessBeforeTheWrite() {
+        Script script=new Script(); script.writeAdmission="OPEN_INCIDENT";
+        Result result=run(script);
+        assertEquals("OPEN_INCIDENT",result.outcome());
+        assertEquals(0,script.suspendCount); assertEquals(0,script.functionalCount);
+        assertTrue(script.callCount>0);
     }
     @Test void happyPath() {
         Script script=new Script(); Result result=run(script);

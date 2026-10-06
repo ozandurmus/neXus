@@ -5,6 +5,9 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.Set;
+import org.jooq.DSLContext;
+import com.securityexpert.nexus.ui2.persistence.device.JooqDeviceRepository;
 
 import org.jooq.Record;
 import org.jooq.JSONB;
@@ -45,10 +48,16 @@ public class JooqCpFailoverRepository {
         }
     }
 
+    private final boolean mutationEnabled;
     private final TransactionBoundary boundary;
     private final AuditedTransactionBoundary audited;
 
     public JooqCpFailoverRepository(TransactionBoundary boundary) {
+        this(boundary, "true".equalsIgnoreCase(System.getenv("NEXUS_FAILOVER_MUTATION_ENABLED")));
+    }
+
+    public JooqCpFailoverRepository(TransactionBoundary boundary, boolean mutationEnabled) {
+        this.mutationEnabled = mutationEnabled;
         this.boundary = boundary;
         this.audited = new AuditedTransactionBoundary(boundary);
     }
@@ -185,7 +194,15 @@ public class JooqCpFailoverRepository {
     }
     public Decision request(String cluster, String vsId, Instant scheduledFor, String actor, String targetDeviceId,
             boolean immediate, String vendor) {
+        return requestBound(cluster, vsId, scheduledFor, actor, targetDeviceId, immediate, vendor, null);
+    }
+
+    public Decision requestBound(String cluster, String vsId, Instant scheduledFor, String actor, String targetDeviceId,
+            boolean immediate, String vendor, Set<String> expectedMembers) {
+        if (!mutationEnabled) return new Decision("FAILOVER_MUTATION_DISABLED", null);
+        Set<String> binding=expectedMembers==null ? null : Set.copyOf(expectedMembers);
         return audited.inTransaction(actor, "failover_run_request", dsl -> {
+            lockAdmission(dsl);
             Record a = dsl.fetchOne("select * from failover_approval where cluster_ref={0} "
                 + "and vs_id is not distinct from {1} and revoked_at is null "
                 + "and window_from <= {2} and window_until > {2} and vendor={3} "
@@ -195,10 +212,16 @@ public class JooqCpFailoverRepository {
                 + "and vs_id is not distinct from {1} and vendor={2} and state not in ('DONE','STOPPED') limit 1",
                 cluster, vsId, vendor);
             if (active != null) return new Decision("RUN_ALREADY_ACTIVE", null);
+            List<String> members = JooqDeviceRepository.enrolledFailoverMembers(dsl, cluster, vendor);
+            if (members.size()!=2 || !members.contains(targetDeviceId)) return new Decision("CLUSTER_NOT_ELIGIBLE", null);
+            if (binding != null && !Set.copyOf(members).equals(binding))
+                return new Decision("MEMBER_SET_CHANGED", null);
+            String refusal = admissionRefusal(dsl, cluster, members, null);
+            if (refusal != null) return new Decision(refusal, null);
             String id = UUID.randomUUID().toString();
-            dsl.execute("insert into failover_run(run_id,cluster_ref,vs_id,approval_id,requested_by,scheduled_for,state,step,vendor) "
-                + "values({0},{1},{2},{3},{4},{5},'PLANNED','PLANNED',{6})", id, cluster, vsId,
-                a.get("approval_id", String.class), actor, Timestamp.from(scheduledFor), vendor);
+            dsl.execute("insert into failover_run(run_id,cluster_ref,vs_id,approval_id,requested_by,scheduled_for,state,step,vendor,target_member_ids) "
+                + "values({0},{1},{2},{3},{4},{5},'PLANNED','PLANNED',{6},jsonb_build_array({7}::text,{8}::text))", id, cluster, vsId,
+                a.get("approval_id", String.class), actor, Timestamp.from(scheduledFor), vendor, members.get(0), members.get(1));
             if (immediate) admit(dsl, id, targetDeviceId, actor, vendor);
             return new Decision("ADMITTED", id);
         });
@@ -244,7 +267,9 @@ public class JooqCpFailoverRepository {
     }
 
     public String startDue(String id, String targetDeviceId) {
+        if (!mutationEnabled) return "FAILOVER_MUTATION_DISABLED";
         return audited.inTransaction("system:failover-scheduler", "failover_schedule_start", dsl -> {
+            lockAdmission(dsl);
             Record r = dsl.fetchOne("select r.*,a.window_until,a.revoked_at from failover_run r "
                 + "join failover_approval a on a.approval_id=r.approval_id where r.run_id={0} for update of r", id);
             if (r == null || !"PLANNED".equals(r.get("state", String.class)) || r.get("job_id") != null) return "ALREADY_CLAIMED";
@@ -252,6 +277,12 @@ public class JooqCpFailoverRepository {
                 dsl.execute("update failover_run set state='STOPPED',step='PLANNED',outcome='WINDOW_EXPIRED',"
                     + "message='WINDOW_EXPIRED',finished_at=now() where run_id={0}", id);
                 return "WINDOW_EXPIRED";
+            }
+            List<String> members = JooqDeviceRepository.enrolledFailoverMembers(dsl, r.get("cluster_ref", String.class), r.get("vendor", String.class));
+            String refusal = validateTarget(dsl, r, members, targetDeviceId);
+            if (refusal != null) {
+                dsl.execute("update failover_run set state='STOPPED',outcome={1},message={1},finished_at=now() where run_id={0}", id, refusal);
+                return refusal;
             }
             admit(dsl, id, targetDeviceId, r.get("requested_by", String.class), r.get("vendor", String.class));
             return "ADMITTED";
@@ -297,11 +328,59 @@ public class JooqCpFailoverRepository {
             .map(JooqCpFailoverRepository::run));
     }
     public void state(String id, String state, String step, String outcome, String failedCheck, String message) {
-        audited.inTransaction("system:failover-worker", "failover_state_change", id, dsl -> dsl.execute(
+        audited.inTransaction("system:failover-worker", "failover_state_change", id, dsl -> {
+            lockAdmission(dsl);
+            return dsl.execute(
             "update failover_run set state={1},step={2},outcome={3},failed_check={4},message={5},"
             + "finished_at=case when {1} in ('DONE','STOPPED') then now() else null end where run_id={0}",
-            id, state, step, outcome, failedCheck, message));
+            id, state, step, outcome, failedCheck, message);
+        });
     }
+    private static void lockAdmission(DSLContext dsl) {
+        dsl.execute("select pg_advisory_xact_lock(136, 1)");
+    }
+
+    private static String admissionRefusal(DSLContext dsl, String cluster, List<String> members, String runId) {
+        if (!dsl.fetch("select 1 from failover_quarantine where active and "
+                + "(cluster_ref={0} or quarantined_member_ids @> jsonb_build_array({1}::text) "
+                + "or quarantined_member_ids @> jsonb_build_array({2}::text))", cluster, members.get(0), members.get(1)).isEmpty())
+            return "OPEN_INCIDENT";
+        if (!dsl.fetch("select 1 from failover_run where run_kind='FAILOVER' "
+                + "and state not in ('DONE','STOPPED') and run_id is distinct from {0}", runId).isEmpty())
+            return "FLEET_MUTATION_ACTIVE";
+        return null;
+    }
+
+    private static String validateTarget(DSLContext dsl, Record r, List<String> members, String target) {
+        if (members.size()!=2 || !members.contains(target)) return "CLUSTER_NOT_ELIGIBLE";
+        boolean unchanged = Boolean.TRUE.equals(dsl.fetchOne("select target_member_ids = "
+            + "jsonb_build_array({1}::text,{2}::text) as unchanged from failover_run where run_id={0}",
+            r.get("run_id", String.class), members.get(0), members.get(1)).get("unchanged", Boolean.class));
+        if (!unchanged) return "MEMBER_SET_CHANGED";
+        return admissionRefusal(dsl, r.get("cluster_ref", String.class), members, r.get("run_id", String.class));
+    }
+
+    /** Recheck the immutable request before any contact and again immediately before each write. */
+    public String mutationAdmission(String id, String cluster, String vsId, String vendor,
+            Set<String> expectedMembers, boolean possibleSend) {
+        if (!mutationEnabled) return "FAILOVER_MUTATION_DISABLED";
+        return audited.inTransaction("system:failover-worker", "failover_mutation_admission", id, dsl -> {
+            lockAdmission(dsl);
+            Record r = dsl.fetchOne("select * from failover_run where run_id={0} for update", id);
+            if (r==null || !"FAILOVER".equals(r.get("run_kind", String.class))
+                    || !cluster.equals(r.get("cluster_ref", String.class))
+                    || !java.util.Objects.equals(vsId,r.get("vs_id", String.class))
+                    || !vendor.equals(r.get("vendor", String.class))) return "WRONG_UNIT";
+            if (Set.of("DONE","STOPPED").contains(r.get("state", String.class))) return "RUN_TERMINAL";
+            List<String> members = JooqDeviceRepository.enrolledFailoverMembers(dsl, cluster, vendor);
+            if (!Set.copyOf(members).equals(expectedMembers)) return "MEMBER_SET_CHANGED";
+            String refusal = validateTarget(dsl, r, members, members.isEmpty()?null:members.get(0));
+            if (refusal != null) return refusal;
+            if (possibleSend) dsl.execute("update failover_run set mutation_possible=true where run_id={0}", id);
+            return "ADMITTED";
+        });
+    }
+
     /** An audited pre-contact state change is the command ledger entry. */
     public void command(String id, String gateId) {
         audited.inTransaction("system:failover-worker", "failover_command_" + gateId, id,
