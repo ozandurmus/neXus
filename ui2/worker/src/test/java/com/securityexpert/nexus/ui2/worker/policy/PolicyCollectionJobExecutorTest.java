@@ -66,6 +66,33 @@ class PolicyCollectionJobExecutorTest {
         }
     }
 
+    @Test void allDomainsThrottledCannotFinishAsPlainCompleted() {
+        var leases = mock(JobLeaseRepository.class);
+        var attempts = mock(JobStepAttemptRepository.class);
+        var runs = mock(DiscoveryRunRepository.class);
+        var repository = mock(PolicyCollectionRepository.class);
+        var collector = mock(CheckPointPolicyCollector.class);
+        var run = new DiscoveryRun("run-1", "check_point", "192.0.2.10", "synthetic-ref", "synthetic-actor",
+            DiscoveryRunState.FINISHED, Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
+        when(runs.findRun("run-1")).thenReturn(Optional.of(run));
+        when(repository.request("job-1")).thenReturn(Optional.of(new PolicyCollectionRepository.Request("mds-1", "", true)));
+        when(repository.eligible("mds-1", "run-1")).thenReturn(true);
+        when(leases.transitionState(anyString(), anyLong(), any(), any(), anyString(), anyString())).thenReturn(true);
+        when(attempts.insertPreContact(anyString(), anyLong(), anyInt(), anyString(), anyString(), anyInt()))
+            .thenAnswer(call -> "attempt-" + call.getArgument(2));
+        when(attempts.writeOutcome(anyString(), anyLong(), anyString(), isNull(), anyBoolean(), any(), isNull(), isNull())).thenReturn(true);
+        when(repository.publish(anyString(), anyLong(), anyList(), anyString(), anyString())).thenReturn(true);
+        doAnswer(call -> {
+            @SuppressWarnings("unchecked") var failure = (java.util.function.Consumer<com.securityexpert.nexus.ui2.policy.PolicySnapshot.CollectionFailure>) call.getArgument(4);
+            failure.accept(new com.securityexpert.nexus.ui2.policy.PolicySnapshot.CollectionFailure("domain-1", "THROTTLED"));
+            return List.of();
+        }).when(collector).collect(any(), any(), any(), any(), any());
+        var executor = new PolicyCollectionJobExecutor(leases, attempts, runs, repository, collector, key -> List.of());
+        assertInstanceOf(JobOutcome.Failed.class, executor.execute("job-1", 1, "run-1"));
+        verify(repository).publish(eq("job-1"), eq(1L), eq(List.of()), anyString(), eq("domain-1: THROTTLED"));
+        verify(repository, never()).publish(anyString(), anyLong(), anyList(), anyString());
+    }
+
     @Test @org.junit.jupiter.api.Timeout(15)
     void concurrentPagesCloseTheirOwnLedgerAttempts() {
         var leases = mock(JobLeaseRepository.class);

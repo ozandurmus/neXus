@@ -24,6 +24,19 @@ class PolicyCollectionRepositoryTest {
         assertFalse(sql.get(2).contains("where policy_collection_domain"));
         assertTrue(sql.stream().allMatch(s -> s.contains("on conflict (source_id, domain_ref) do update")));
     }
+    @Test void automaticFullBypassesThrottleButChangedOnlyRetainsIt() {
+        List<String> sql = new ArrayList<>();
+        var repository = new PolicyCollectionRepository(new JooqTransactionBoundary(DSL.using(new MockConnection(context -> {
+            sql.add(context.sql());
+            return new MockResult[] { new MockResult(1, null) };
+        }), SQLDialect.POSTGRES)));
+        for (var mode : PolicyCollectionRepository.Mode.values()) {
+            var request = new PolicyCollectionRepository.Request("source-1", "", true, mode, "", 0);
+            assertTrue(repository.beginDomain(request, "domain-01"));
+            assertEquals(mode == PolicyCollectionRepository.Mode.CHANGED_ONLY,
+                sql.get(sql.size() - 1).contains("attempted_at <= now() - interval '6 hours'"));
+        }
+    }
     @Test void expiredLeaseCannotPublishEvenAnOtherwiseCompleteSnapshot() {
         List<String> sql = new ArrayList<>();
         var create = DSL.using(SQLDialect.POSTGRES);

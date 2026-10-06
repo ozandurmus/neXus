@@ -97,6 +97,17 @@ class PolicyCollectionServiceTest {
         assertEquals(60L, masked.get("readTimeoutSeconds"));
         assertEquals(view.get("startedAt"), masked.get("startedAt"));
         assertEquals(view.get("lastActivityAt"), masked.get("lastActivityAt"));
+        when(progress.get("state", String.class)).thenReturn("COMPLETED");
+        when(progress.get("reason", String.class)).thenReturn("PARTIAL_SNAPSHOT domain-1: THROTTLED");
+        when(progress.get("failure_codes", String.class)).thenReturn("THROTTLED");
+        var throttled = new PolicyCollectionService(tx).status("job-1").orElseThrow();
+        assertEquals("PARTIAL", throttled.get("outcome"));
+        assertFalse(throttled.containsKey("collectedAt"));
+        var maskedThrottle = (Map<?, ?>) PolicyPrivacy.mask(throttled, "",
+            new TopologyNamePseudonymizer(new byte[32]), new SubnetPreservingIpMasker(new byte[32]));
+        assertEquals(List.of("THROTTLED"), maskedThrottle.get("unitFailureCodes"));
+
+        when(progress.get("failure_codes", String.class)).thenReturn(null);
         for (var sample : List.of(new String[]{"COMPLETED", "COLLECTION_PENDING", "COMPLETED"},
                 new String[]{"COMPLETED", "PARTIAL_SNAPSHOT undisclosed step", "PARTIAL"},
                 new String[]{"FAILED", "TIMEOUT", "FAILED"})) {

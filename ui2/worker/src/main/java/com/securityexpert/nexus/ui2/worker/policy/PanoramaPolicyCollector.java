@@ -169,7 +169,7 @@ public final class PanoramaPolicyCollector {
                                 "DG_SIZE bytes=" + (bytes[0] - before) + " rules=" + rules + " objects=" + objects);
                         throw PolicyCollectionTrace.failure("SIZE_LIMIT");
                     }
-                    snapshot = collectHits(snapshot, timer, deadline, bytes, lease, hitCache, scope.automatic());
+                    snapshot = collectHits(snapshot, timer, deadline, bytes, lease, hitCache, scope.throttledAutomatic(), failures);
                     if (!lease.getAsBoolean()) throw PolicyCollectionTrace.failure("LEASE_LOST");
                     if (clock.getAsLong() >= deadline) throw PolicyCollectionTrace.failure("JOB_DEADLINE");
                     if (Thread.currentThread().isInterrupted()) throw PolicyCollectionTrace.failure("INTERRUPTED");
@@ -218,7 +218,7 @@ public final class PanoramaPolicyCollector {
                 Map.of(PanoramaApiRoutes.KEY_HEADER_NAME, new String(key)));
     }
     private PolicySnapshot collectHits(PolicySnapshot snapshot, ScheduledExecutorService timer, long deadline,
-            long[] bytes, BooleanSupplier lease, Map<String, Map<String, FirewallHits>> cache, boolean automatic) {
+            long[] bytes, BooleanSupplier lease, Map<String, Map<String, FirewallHits>> cache, boolean automatic, List<CollectionFailure> failures) {
         if (!PolicyHitGates.enabled(gates, false)) return snapshot;
         List<Map<String, FirewallHits>> members = new ArrayList<>();
         Set<String> seen = new HashSet<>();
@@ -235,7 +235,10 @@ public final class PanoramaPolicyCollector {
                 var endpoint = repository.panFirewall(member.deviceId());
                 if (endpoint.isEmpty()) continue;
                 checkHitRead(lease);
-                if (!repository.beginDomain(member.deviceId(), ref("rule-hit-count", member.context()), automatic)) continue;
+                if (!repository.beginDomain(member.deviceId(), ref("rule-hit-count", member.context()), automatic)) {
+                    failures.add(new CollectionFailure(memberRef, "THROTTLED"));
+                    continue;
+                }
                 credential = credentials.resolve(endpoint.get().credentialReferenceId());
                 if (credential == null || credential.username() == null || credential.username().isBlank() || credential.password() == null)
                     continue;

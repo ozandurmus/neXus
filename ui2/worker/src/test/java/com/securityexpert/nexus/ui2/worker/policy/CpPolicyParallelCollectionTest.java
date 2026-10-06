@@ -56,6 +56,52 @@ class CpPolicyParallelCollectionTest {
         return new CheckPointPolicyCollector(transport, gates, repository, Duration.ofHours(2), maximum);
     }
 
+    @Test void throttledDomainsAreExplicitInSerialAndParallel() {
+        for (int maximum : List.of(1, 4)) {
+            var collector = setup(maximum, this::answer);
+            when(repository.beginDomain(any(PolicyCollectionRepository.Request.class), anyString())).thenReturn(false);
+            var failures = new ArrayList<PolicySnapshot.CollectionFailure>();
+            int before = reads.size();
+            assertTrue(collector.collect(run, request, () -> true, s -> fail("Throttled domain published"), failures::add).isEmpty());
+            assertEquals(List.of("THROTTLED"), failures.stream().map(PolicySnapshot.CollectionFailure::reason).toList());
+            assertEquals(1, reads.size() - before);
+            cleanup();
+        }
+    }
+
+    @Test void fiveDomainsReuseFourAndRecollectOnlyTheRuleGapInSerialAndParallel() throws Exception {
+        var json = new com.fasterxml.jackson.databind.ObjectMapper();
+        for (int maximum : List.of(1, 4)) {
+            var saved = new HashMap<String, PolicyCollectionRepository.DomainRun>();
+            var collector = setup(maximum, command -> {
+                if (command.contains("show-domains")) return ok("{\"total\":5,\"objects\":[" +
+                    java.util.stream.IntStream.rangeClosed(1, 5).mapToObj(i -> domain("domain-" + i, "DOM-TANGO-0" + i))
+                        .collect(java.util.stream.Collectors.joining(",")) + "]}");
+                if (command.contains("show-last-published-session")) return ok("{\"uid\":\"published-001\",\"publish-time\":{\"posix\":1791158400000,\"iso-8601\":\"2026-10-05T00:00Z\"}}");
+                if (command.contains("show-access-rulebase") && command.contains("DOM-TANGO-05")) return new ExecResult.TimedOut();
+                return answer(command);
+            });
+            when(repository.previousDomain(anyString(), anyString())).thenAnswer(c -> Optional.ofNullable(saved.get(c.getArgument(1))));
+            when(repository.saveUnit(any(), anyString(), anyString(), anyString())).thenReturn(true);
+            when(repository.saveDomain(any(), anyString(), anyString(), anyBoolean(), nullable(String.class),
+                anyString(), anyInt(), nullable(String.class), anyString())).thenAnswer(c -> {
+                    saved.put(c.getArgument(1), new PolicyCollectionRepository.DomainRun(c.getArgument(3), c.getArgument(4), c.getArgument(5)));
+                    return true;
+                });
+            var full = new PolicyCollectionRepository.Request("mds-1", "", true, PolicyCollectionRepository.Mode.FULL, "job-full", 1);
+            assertEquals(5, collector.collect(run, full, () -> true, s -> {}).size());
+            assertEquals(4, saved.values().stream().filter(PolicyCollectionRepository.DomainRun::complete).count());
+            assertFalse(saved.get(PolicySnapshot.ref("mds-1", "domain-5")).complete());
+            reads.clear();
+            var changed = new PolicyCollectionRepository.Request("mds-1", "", false, PolicyCollectionRepository.Mode.CHANGED_ONLY, "job-changed", 1);
+            assertEquals(5, collector.collect(run, changed, () -> true, s -> {}).size());
+            var packageReads = reads.stream().filter(c -> c.contains("show-packages")).toList();
+            assertEquals(1, packageReads.size());
+            assertTrue(packageReads.get(0).contains("DOM-TANGO-05"));
+            cleanup();
+        }
+    }
+
     @Test void packageTimeoutPreservesFailureAndOtherDomainsContinue() {
         var collector = setup(4, command -> {
             if (command.contains("show-domains")) return ok("{\"total\":2,\"objects\":[" + domain("broken", "DOM-BRAVO-02") + "," + domain("domain-01", "DOM-TANGO-01") + "]}");
