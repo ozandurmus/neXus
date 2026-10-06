@@ -65,6 +65,56 @@ class CpPolicyParallelCollectionTest {
             assertTrue(collector.collect(run, request, () -> true, s -> fail("Throttled domain published"), failures::add).isEmpty());
             assertEquals(List.of("THROTTLED"), failures.stream().map(PolicySnapshot.CollectionFailure::reason).toList());
             assertEquals(1, reads.size() - before);
+            var transcript = new JobTranscript();
+            try (var scope = JobTranscriptScope.open(transcript)) {
+                assertTrue(collector.collect(run, request, () -> true).isEmpty());
+            }
+            var bytes = new ByteArrayOutputStream();
+            assertDoesNotThrow(() -> transcript.writeTo(bytes));
+            assertTrue(bytes.toString(java.nio.charset.StandardCharsets.UTF_8).contains("THROTTLED"));
+            assertEquals(2, reads.size() - before);
+            cleanup();
+        }
+    }
+
+    @Test void throttledDomainDoesNotAbortOtherDomainsInSerialAndParallel() {
+        for (int maximum : List.of(1, 4)) {
+            var collector = setup(maximum, command -> {
+                if (command.contains("show-domains")) return ok("{\"total\":2,\"objects\":["
+                    + domain("throttled", "DOM-BRAVO-02") + "," + domain("domain-01", "DOM-TANGO-01") + "]}");
+                if (command.contains("show-last-published-session")) return ok("{}");
+                return answer(command);
+            });
+            String throttled = PolicySnapshot.ref("mds-1", "throttled");
+            when(repository.beginDomain(any(PolicyCollectionRepository.Request.class), eq(throttled))).thenReturn(false);
+            var changed = new PolicyCollectionRepository.Request("mds-1", "", true);
+            var failures = new ArrayList<PolicySnapshot.CollectionFailure>();
+            var snapshots = collector.collect(run, changed, () -> true, s -> {}, failures::add);
+            assertEquals(List.of(new PolicySnapshot.CollectionFailure(throttled, "THROTTLED")), failures);
+            assertEquals(1, snapshots.size());
+            assertTrue(snapshots.get(0).failures().isEmpty());
+            assertEquals(1, collector.collect(run, changed, () -> true).size());
+            assertFalse(reads.stream().anyMatch(c -> c.contains("show-packages") && c.contains("DOM-BRAVO-02")));
+            cleanup();
+        }
+    }
+
+    @Test void domainsOutsideRequestedScopeAreNotThrottledInSerialAndParallel() {
+        for (int maximum : List.of(1, 4)) {
+            var collector = setup(maximum, command -> {
+                if (command.contains("show-domains")) return ok("{\"total\":2,\"objects\":["
+                    + domain("outside", "DOM-BRAVO-02") + "," + domain("domain-01", "DOM-TANGO-01") + "]}");
+                if (command.contains("show-last-published-session")) return ok("{}");
+                return answer(command);
+            });
+            String outside = PolicySnapshot.ref("mds-1", "outside");
+            when(repository.beginDomain(any(PolicyCollectionRepository.Request.class), eq(outside))).thenReturn(false);
+            var scoped = new PolicyCollectionRepository.Request("mds-1", PolicySnapshot.ref("mds-1", "domain-01"), true);
+            var failures = new ArrayList<PolicySnapshot.CollectionFailure>();
+            assertEquals(1, collector.collect(run, scoped, () -> true, s -> {}, failures::add).size());
+            assertTrue(failures.isEmpty());
+            verify(repository, never()).beginDomain(any(PolicyCollectionRepository.Request.class), eq(outside));
+            assertFalse(reads.stream().anyMatch(c -> c.contains("show-packages") && c.contains("DOM-BRAVO-02")));
             cleanup();
         }
     }

@@ -87,7 +87,11 @@ public final class CheckPointPolicyCollector {
     }
 
     public List<PolicySnapshot> collect(DiscoveryRun run, PolicyCollectionRepository.Request request, BooleanSupplier lease, Consumer<PolicySnapshot> publish) {
-        return collect(run, request, lease, publish, failure -> { throw new PolicyCollectionTrace.Failure(failure.reason()); });
+        return collect(run, request, lease, publish, failure -> {
+            if ("THROTTLED".equals(failure.reason())) {
+                com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.add("job", "note", failure.layerRef() + ": THROTTLED");
+            } else throw new PolicyCollectionTrace.Failure(failure.reason());
+        });
     }
 
     public List<PolicySnapshot> collect(DiscoveryRun run, PolicyCollectionRepository.Request request, BooleanSupplier lease,
