@@ -1,5 +1,7 @@
 package com.securityexpert.nexus.ui2.service.failover;
 
+import com.securityexpert.nexus.ui2.jobs.failover.FailoverMutationSwitch;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -253,6 +255,7 @@ public class FailoverScheduleService {
     }
 
     public synchronized FailoverScheduleRecord dispatchScheduledExecution(String scheduleId, String triggeringActor) {
+        FailoverMutationSwitch.refuseGenericExecution();
         Objects.requireNonNull(scheduleId, "scheduleId must not be null");
         Objects.requireNonNull(triggeringActor, "triggeringActor must not be null");
 

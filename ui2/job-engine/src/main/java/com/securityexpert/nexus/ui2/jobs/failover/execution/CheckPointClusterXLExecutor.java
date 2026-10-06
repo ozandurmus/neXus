@@ -1,6 +1,5 @@
 package com.securityexpert.nexus.ui2.jobs.failover.execution;
 
-import java.time.Instant;
 import java.util.Objects;
 import java.util.function.BiFunction;
 
@@ -23,8 +22,9 @@ public class CheckPointClusterXLExecutor implements FailoverDeviceExecutor {
 
     public CheckPointClusterXLExecutor() {
         this(
-            (memberId, cmd) -> FailoverCommandResult.success(cmd + " executed on " + memberId),
-            (clusterId, memberId) -> MemberObservation.of(memberId, "STANDBY", true, true, "cphaprob stat: OK")
+            (memberId, cmd) -> FailoverCommandResult.failure(-1, "TRANSPORT_UNAVAILABLE",
+                "No failover transport configured", FailoverCommandResult.DeliveryCertainty.DEFINITELY_NOT_SUBMITTED),
+            (clusterId, memberId) -> MemberObservation.failed(memberId, "TRANSPORT_UNAVAILABLE")
         );
     }
 

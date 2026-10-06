@@ -1,5 +1,7 @@
 package com.securityexpert.nexus.ui2.worker.failover;
 
+import com.securityexpert.nexus.ui2.jobs.failover.FailoverMutationSwitch;
+
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -25,6 +27,7 @@ import com.securityexpert.nexus.ui2.worker.transport.ssh.PersistedManagementEndp
 
 /** One failover unit, two trusted sessions, serial commands, no automatic rollback. */
 public final class CpFailoverJobExecutor {
+    private final FailoverMutationSwitch mutationSwitch;
     @FunctionalInterface public interface Pause { void sleep(Duration duration) throws InterruptedException; }
     private static final Duration POLL_INTERVAL=Duration.ofSeconds(3);
     private static final int MAX_POLLS=21;
@@ -86,6 +89,14 @@ public final class CpFailoverJobExecutor {
     public CpFailoverJobExecutor(JooqCpFailoverRepository store, DeviceRepository devices,
             JobLeaseRepository leases, JobStepAttemptRepository attempts,DeviceTransport ssh,
             GateRegistryPort gates,Pause pause,Duration commandPause) {
+        this(store,devices,leases,attempts,ssh,gates,pause,commandPause,
+            FailoverMutationSwitch.fromEnvironment());
+    }
+    public CpFailoverJobExecutor(JooqCpFailoverRepository store, DeviceRepository devices,
+            JobLeaseRepository leases, JobStepAttemptRepository attempts,DeviceTransport ssh,
+            GateRegistryPort gates,Pause pause,Duration commandPause,
+            FailoverMutationSwitch mutationSwitch) {
+        this.mutationSwitch=java.util.Objects.requireNonNull(mutationSwitch);
         this.store=store; this.devices=devices; this.leases=leases; this.attempts=attempts;
         this.ssh=ssh; this.gates=gates; this.pause=pause; this.commandPause=commandPause;
     }
@@ -105,6 +116,7 @@ public final class CpFailoverJobExecutor {
                 "system:cp-failover-worker","cp_failover_start")) return;
         Member first=null,second=null;
         try {
+            if (!readiness && !mutationSwitch.enabled()) throw new Stop(FailoverMutationSwitch.DISABLED,0);
             if(!readiness && !store.windowValid(runId)) throw new Stop("WINDOW_EXPIRED",0);
             List<DeviceSummaryRecord> members=devices.findMembersByClusterRef(run.get().clusterRef());
             if(members.size()!=2 || members.stream().anyMatch(m -> !"check_point".equals(m.vendorHint())))
@@ -191,6 +203,7 @@ public final class CpFailoverJobExecutor {
     }
     private GateResolution.Known gate(String command) {
         boolean write=DOWN.equals(command)||UP.equals(command);
+        if (write && !mutationSwitch.enabled()) throw new Stop(FailoverMutationSwitch.DISABLED,0);
         if(!writeAllowed(readiness ? "READINESS" : "FAILOVER", command))
             throw new Stop("READINESS_WRITE_REFUSED",0);
         String key=vsId==null?command:"bash -lc 'vsenv <VSID> && "+command+"'";
@@ -238,6 +251,8 @@ public final class CpFailoverJobExecutor {
         boolean pty=IF.equals(command);
         int sessionCommandIndex=++member.sessionCommandIndex;
         long sessionElapsedMs=(System.nanoTime()-member.openedAtNanos)/1_000_000;
+        if ((DOWN.equals(command)||UP.equals(command)) && !mutationSwitch.enabled())
+            throw new Stop(FailoverMutationSwitch.DISABLED,0);
         ExecResult result=ssh.exec(member.session(),new ExecSpec(literal,pty),Duration.ofSeconds(g.timeoutS()));
         if(!(result instanceof ExecResult.Completed completed) || completed.exitStatus()!=0
                 || commandUnavailable(completed.output())) {

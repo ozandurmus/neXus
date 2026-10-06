@@ -1,5 +1,7 @@
 package com.securityexpert.nexus.ui2.service.failover;
 
+import com.securityexpert.nexus.ui2.jobs.failover.FailoverMutationSwitch;
+
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Comparator;
@@ -36,6 +38,7 @@ public final class CpFailoverService {
         public String code() { return code; }
     }
 
+    private final FailoverMutationSwitch mutationSwitch;
     private final DeviceRepository devices;
     private final DeviceInventoryRepository inventory;
     private final JooqCpFailoverRepository store;
@@ -44,6 +47,15 @@ public final class CpFailoverService {
 
     public CpFailoverService(DeviceRepository devices, DeviceInventoryRepository inventory,
             JooqCpFailoverRepository store, RbacEvaluator rbac, ManagementEndpointSshTrustRepository trust) {
+        this(devices,inventory,store,rbac,trust,
+            FailoverMutationSwitch.fromEnvironment());
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public CpFailoverService(DeviceRepository devices, DeviceInventoryRepository inventory,
+            JooqCpFailoverRepository store, RbacEvaluator rbac, ManagementEndpointSshTrustRepository trust,
+            FailoverMutationSwitch mutationSwitch) {
+        this.mutationSwitch=java.util.Objects.requireNonNull(mutationSwitch);
         this.devices=devices; this.inventory=inventory; this.store=store; this.rbac=rbac;
         this.trust=trust;
     }
@@ -258,6 +270,7 @@ public final class CpFailoverService {
     }
     public String request(String clusterId,String unitId,Instant scheduledFor,String actor,String vendor) {
         requireOperator(actor);
+        if (!mutationSwitch.enabled()) throw new Refusal(FailoverMutationSwitch.DISABLED);
         Unit u=unit(clusterId,unitId,actor,vendor);
         Instant now=Instant.now();
         Instant when=scheduledFor==null ? now : scheduledFor;
@@ -346,6 +359,7 @@ public final class CpFailoverService {
 
     @org.springframework.scheduling.annotation.Scheduled(fixedDelay = 3000, initialDelay = 3000)
     public void startDue() {
+        if (!mutationSwitch.enabled()) return;
         for (var run: store.due()) {
             List<DeviceSummaryRecord> members=devices.findMembersByClusterRef(run.clusterRef());
             String vendor=run.vendor();

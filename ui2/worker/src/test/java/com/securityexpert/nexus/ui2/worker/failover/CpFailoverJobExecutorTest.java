@@ -1,5 +1,7 @@
 package com.securityexpert.nexus.ui2.worker.failover;
 
+import com.securityexpert.nexus.ui2.jobs.failover.FailoverMutationSwitch;
+
 import java.lang.reflect.Proxy;
 import java.time.Duration;
 import java.time.Instant;
@@ -212,8 +214,18 @@ class CpFailoverJobExecutorTest {
         return key -> rows.stream().filter(row -> row.key().equals(key)).toList();
     }
     private static void run(Store store,Script script) {
-        new CpFailoverJobExecutor(store,devices(),leases(),attempts(),script.transport(),gates(),d -> {})
+        new CpFailoverJobExecutor(store,devices(),leases(),attempts(),script.transport(),gates(),d -> {},
+            Duration.ZERO,new FailoverMutationSwitch(!"READINESS".equals(store.kind)))
             .execute("job-1",1);
+    }
+    @Test void disabledSwitchStopsBeforeTransportOrAttempts() {
+        Store store=new Store(); Script script=new Script();
+        new CpFailoverJobExecutor(store,devices(),leases(),attempts(),script.transport(),gates(),d -> {},
+            Duration.ZERO,new FailoverMutationSwitch(false)).execute("job-1",1);
+        check("STOPPED".equals(store.state));
+        check(FailoverMutationSwitch.DISABLED.equals(store.outcome));
+        check(script.connectCount==0 && script.commands.isEmpty());
+        check(script.downCount==0 && script.upCount==0);
     }
     @Test void measuredOutputsThroughReadStepAndVsUsesOwnActiveMember() throws Exception {
         var json=new com.fasterxml.jackson.databind.ObjectMapper();

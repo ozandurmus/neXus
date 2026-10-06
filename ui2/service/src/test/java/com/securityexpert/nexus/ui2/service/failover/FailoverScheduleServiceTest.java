@@ -1,5 +1,7 @@
 package com.securityexpert.nexus.ui2.service.failover;
 
+import com.securityexpert.nexus.ui2.jobs.failover.FailoverMutationSwitch;
+
 import com.securityexpert.nexus.ui2.jobs.failover.checks.ClockHealthCheck;
 import com.securityexpert.nexus.ui2.jobs.failover.execution.FailoverActionKind;
 import com.securityexpert.nexus.ui2.jobs.failover.model.*;
@@ -137,25 +139,11 @@ class FailoverScheduleServiceTest {
     }
 
     @Test
-    @DisplayName("Dispatch aborts with ABORTED_WINDOW_EXPIRED when execution window has passed")
-    void expiredWindowAbortTest() {
-        // Schedule in the future then dispatch after deadline passed
-        Instant start = Instant.now().plus(Duration.ofMillis(10));
-        Instant end = start.plus(Duration.ofMillis(50));
-
-        FailoverScheduleRecord record = scheduleService.scheduleMaintenanceWindow(new FailoverScheduleService.ScheduleWindowRequest(
-            CLUSTER_REF, FailoverActionKind.CONTROLLED_FAILOVER, start, end,
-            1, "alice", "bob", "Short test maintenance window", "nonce-1"
-        ));
-
-        // Sleep past window
-        try {
-            Thread.sleep(100);
-        } catch (InterruptedException ignored) {}
-
-        FailoverScheduleRecord res = scheduleService.dispatchScheduledExecution(record.scheduleId(), "CRON_RUNNER");
-        assertEquals(FailoverScheduleStatus.ABORTED_WINDOW_EXPIRED, res.status());
-        assertEquals("WINDOW_EXPIRED", res.abortReasonCode());
+    @DisplayName("Generic scheduled dispatch is disabled before schedule lookup or ledger writes")
+    void dispatchDisabledTest() {
+        assertEquals(FailoverMutationSwitch.GENERIC_DISABLED,assertThrows(SecurityException.class,
+            () -> scheduleService.dispatchScheduledExecution("synthetic-schedule","synthetic-actor")).getMessage());
+        assertTrue(scheduleLedger.getTransitionsForSchedule("synthetic-schedule").isEmpty());
     }
 
     // Helper StubPreflightService
