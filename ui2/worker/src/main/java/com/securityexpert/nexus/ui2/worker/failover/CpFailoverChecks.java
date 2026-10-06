@@ -221,7 +221,7 @@ public final class CpFailoverChecks {
                 boolean sync=(m.group(2)!=null && java.util.Arrays.asList(m.group(2).split(",[ \t]*")).contains("S")) || "Sync".equalsIgnoreCase(m.group(1))
                     || (m.group(4).toLowerCase(Locale.ROOT).contains("sync")
                         && !m.group(4).toLowerCase(Locale.ROOT).contains("non sync"));
-                if(!sync && !m.group(1).matches("(?i)(?:lo|mgmt|management)(?:[0-9.].*)?")) traffic.add(m.group(1));
+                if(!sync) traffic.add(m.group(1));
             } else down=true;
         }
         // Prefer scoped subinterfaces over an overlapping parent aggregate.
@@ -256,6 +256,10 @@ public final class CpFailoverChecks {
     public static double trafficBytesPerSecond(Map<String,TrafficBytes> before,Map<String,TrafficBytes> after,
             Set<String> interfaces,long elapsedNanos) {
         if(before.isEmpty() || after.isEmpty() || interfaces.isEmpty() || elapsedNanos<=0) return -1;
+        // Preserve observed interfaces; exclude non-forwarding counters only when measuring traffic.
+        interfaces=new HashSet<>(interfaces);
+        interfaces.removeIf(name -> name.matches("(?i)(?:lo|mgmt|management)(?:[0-9.].*)?"));
+        if(interfaces.isEmpty()) return -1;
         // The interface list has no slave mapping: mixed bond/physical selection cannot prove non-overlap.
         if(interfaces.stream().anyMatch(n -> n.startsWith("bond"))
                 && interfaces.stream().anyMatch(n -> !n.startsWith("bond"))) return -1;

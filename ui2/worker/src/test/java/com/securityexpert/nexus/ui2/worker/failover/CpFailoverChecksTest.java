@@ -224,7 +224,8 @@ class CpFailoverChecksTest {
             String interfaces=Fixtures.read("cp/failover_interfaces_"+shape+".txt");
             var parsed=CpFailoverChecks.interfaces(interfaces);
             check(parsed.healthy() && parsed.names().size()==4);
-            check(parsed.trafficNames().equals(Set.of("Mgmt","eth2-01","bond1.3843")));
+            assertEquals(Set.of("Mgmt","eth2-01","bond1.3843"),parsed.trafficNames(),
+                "Measured non-sync interface classification: "+shape);
             check(!CpFailoverChecks.interfaces(interfaces.replace("(LS) UP","(LS) DOWN")).healthy());
             String sync=Fixtures.read("cp/failover_sync_"+shape+".txt");
             check(CpFailoverChecks.syncStatus(sync).equals("PASS"));
@@ -403,11 +404,17 @@ class CpFailoverChecksTest {
         assertEquals("FAIL",CpFailoverChecks.trafficStatus(100,49.99));
         assertEquals("PASS",CpFailoverChecks.trafficStatus(100,50));
     }
-    @Test void trafficSelectionExcludesNonForwardingAndOverlappingParents() {
+    @Test void trafficMeasurementExcludesNonForwardingAndOverlappingParents() {
         var selected=CpFailoverChecks.interfaces("CCP mode: Automatic\nRequired interfaces: 1\n"
             +"lo UP non sync\nMgmt UP non sync\nSync (S) UP\neth1 Non-Monitored\n"
             +"bond1 UP non sync\nbond1.10 UP non sync\n");
-        assertEquals(Set.of("bond1.10"),selected.trafficNames());
+        assertEquals(Set.of("lo","Mgmt","bond1.10"),selected.trafficNames());
+        var before=Map.of("bond1.10",new CpFailoverChecks.TrafficBytes(100,100));
+        var after=Map.of("bond1.10",new CpFailoverChecks.TrafficBytes(600,600));
+        assertEquals(200.0,CpFailoverChecks.trafficBytesPerSecond(before,after,selected.trafficNames(),5_000_000_000L),
+            "Missing non-forwarding counters must neither block nor contribute to forwarding traffic");
+        assertEquals(-1.0,CpFailoverChecks.trafficBytesPerSecond(before,after,Set.of("lo","Mgmt"),5_000_000_000L),
+            "A selection with no forwarding interfaces must remain unknown");
     }
     @Test void onlyIntentionalAdminDownIsAccepted() {
         for(String name:java.util.List.of("ADMIN_DOWN","admin_down")) {
