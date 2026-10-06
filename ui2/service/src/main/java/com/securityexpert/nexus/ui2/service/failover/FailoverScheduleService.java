@@ -3,6 +3,7 @@ package com.securityexpert.nexus.ui2.service.failover;
 import com.securityexpert.nexus.ui2.jobs.failover.FailoverMutationSwitch;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.securityexpert.nexus.ui2.jobs.failover.authz.FailoverAuthorizationRequest;
@@ -23,6 +24,7 @@ import org.springframework.stereotype.Service;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
+import java.time.ZoneOffset;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
@@ -59,7 +61,12 @@ public class FailoverScheduleService {
         String approverId,
         String reason,
         String clientNonce
-    ) {}
+    ) {
+        public ScheduleWindowRequest {
+            windowStart = FailoverScheduleEnvelope.storageTime(windowStart);
+            windowEnd = FailoverScheduleEnvelope.storageTime(windowEnd);
+        }
+    }
 
     private static final Duration PRE_ADMISSION_BUDGET = Duration.ofSeconds(30);
     private static final String RECONCILIATION_ACTOR = "SYSTEM_STARTUP_RECONCILIATION";
@@ -70,7 +77,7 @@ public class FailoverScheduleService {
             "signed_mutation_target, window_start, window_end, max_start_delay_minutes, execution_deadline, " +
             "requester_id, approver_id, grant_id, baseline_digest, baseline_json, envelope_signature, status, " +
             "client_nonce, scheduled_at, claimed_at, executed_at, execution_result_id, abort_reason_code, " +
-            "abort_reason, cancelled_by, cancelled_at ";
+            "abort_reason, cancelled_by, cancelled_at, baseline_format_version ";
 
     private final PreflightService preflightService;
     private final FailoverAuthorizationService authzService;
@@ -124,7 +131,23 @@ public class FailoverScheduleService {
         this.clockHealthCheck = Objects.requireNonNull(clockHealthCheck, "clockHealthCheck must not be null");
         this.baselineJsonMapper = new ObjectMapper()
             .registerModule(new JavaTimeModule())
-            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+            .enable(DeserializationFeature.FAIL_ON_MISSING_CREATOR_PROPERTIES)
+            .enable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES);
+    }
+
+    private void requireFreshEvidence(String clusterRef, ClusterEvidenceSnapshot snapshot) {
+        Instant now = Instant.now();
+        if (!clusterRef.equals(snapshot.clusterId()) || !snapshot.bothMembersDirectlyObserved()
+            || clockHealthCheck.evaluate(snapshot).isBlockingFailure()) {
+            throw new IllegalStateException("BASELINE_EVIDENCE_UNAVAILABLE");
+        }
+        for (ClusterMemberEvidence member : List.of(snapshot.memberA(), snapshot.memberB())) {
+            if (member.observedAt().isAfter(now)
+                || member.observedAt().isBefore(now.minus(ClockHealthCheck.MAX_EVIDENCE_AGE))) {
+                throw new IllegalStateException("BASELINE_EVIDENCE_STALE");
+            }
+        }
     }
 
     private boolean isDurable() {
@@ -148,13 +171,17 @@ public class FailoverScheduleService {
         );
 
         // 3. Cluster Readiness Baseline Verification
-        PreflightReport report = preflightService.getLatestReport(request.clusterRef());
+        ClusterEvidenceSnapshot snapshot = preflightService.buildSnapshotForCluster(request.clusterRef());
+        requireFreshEvidence(request.clusterRef(), snapshot);
+        PreflightReport report = preflightService.evaluateSnapshot(snapshot);
+        if (report.evidenceSnapshot() != snapshot || !request.clusterRef().equals(report.clusterId())) {
+            throw new IllegalStateException("BASELINE_EVIDENCE_MISMATCH");
+        }
         if (report.overallVerdict() != PreflightVerdict.NO_BLOCKING_CONDITIONS_OBSERVED) {
             throw new IllegalStateException("Cannot schedule failover when cluster pre-flight checks report blocking conditions (" +
                 report.blockingFailureCount() + " blocking failure(s) observed)");
         }
 
-        ClusterEvidenceSnapshot snapshot = preflightService.buildSnapshotForCluster(request.clusterRef());
         Optional<ClusterMemberEvidence> activeOpt = snapshot.activeMember();
         Optional<ClusterMemberEvidence> standbyOpt = snapshot.standbyMember();
 
@@ -169,7 +196,7 @@ public class FailoverScheduleService {
         String commandFamilyId = vendor.contains("PAN") ? "PAN_HA_MUTATION_GATE" : "CP_CLUSTERXL_MUTATION_GATE";
         String grantId = "grant-" + UUID.randomUUID();
         String scheduleId = "sched-" + UUID.randomUUID();
-        Instant now = Instant.now();
+        Instant now = FailoverScheduleEnvelope.storageTime(Instant.now());
 
         // 4. Durable Signing Key Resolution (CF-P0.5): fail cleanly rather than sign with a key
         // that will not durably verify after a restart.
@@ -185,14 +212,17 @@ public class FailoverScheduleService {
         BaselineSnapshotSummary baselineDraft = BaselineSnapshotSummary.of(
             request.clusterRef(), vendor, snapshot.haMode(), active.memberId(), standby.memberId(),
             active.softwareVersion(), active.installedPolicyHash(), active.flapCountLast24Hours(),
-            "PENDING", now
+            "PENDING", snapshot.snapshotTimestamp()
         );
+        if (!baselineDraft.hasRequiredFields()) {
+            throw new IllegalStateException("BASELINE_INSUFFICIENT_EVIDENCE");
+        }
         String baselineDigest = baselineDraft.computeCanonicalDigest();
 
         BaselineSnapshotSummary baseline = BaselineSnapshotSummary.of(
             request.clusterRef(), vendor, snapshot.haMode(), active.memberId(), standby.memberId(),
             active.softwareVersion(), active.installedPolicyHash(), active.flapCountLast24Hours(),
-            baselineDigest, now
+            baselineDigest, snapshot.snapshotTimestamp()
         );
 
         Instant executionDeadline = FailoverScheduleRecord.computeExecutionDeadline(
@@ -306,7 +336,12 @@ public class FailoverScheduleService {
         // baseline first: without this, a party able to write the stored baseline could
         // change the recorded active member, keep the old digest, pass envelope
         // verification, and have a mutating command aimed at the wrong member of the pair.
-        if (!record.baselineSummary().digestMatchesContent()) {
+        if (record.baselineFormatVersion() != BaselineSnapshotSummary.FORMAT_VERSION
+            || record.baselineSummary() == null || !record.baselineSummary().hasRequiredFields()
+            || !record.clusterRef().equals(record.baselineSummary().clusterRef())
+            || !record.signedMutationTarget().equals(record.baselineSummary().activeMemberId())
+            || !record.vendor().equals(record.baselineSummary().vendor())
+            || !record.baselineSummary().matchesStoredDigest(record.baselineDigest())) {
             FailoverScheduleRecord baselineTampered = record.withAbort(
                 FailoverScheduleStatus.ABORTED_TAMPERED, "BASELINE_DIGEST_MISMATCH",
                 "Stored baseline content does not re-derive to its recorded assessment digest"
@@ -321,7 +356,7 @@ public class FailoverScheduleService {
             record.scheduleId(), record.clusterRef(), record.vendor(), record.commandFamilyId(),
             record.actionKind().name(), record.signedMutationTarget(), record.windowStart(), record.windowEnd(),
             record.maxStartDelayMinutes(), record.requesterId(), record.approverId(),
-            record.grantId(), record.baselineSummary().assessmentDigest(), record.clientNonce(),
+            record.grantId(), record.baselineDigest(), record.clientNonce(),
             FailoverScheduleEnvelope.DEFAULT_KEY_ID, FailoverScheduleEnvelope.DEFAULT_ALG_VERSION
         );
 
@@ -510,14 +545,14 @@ public class FailoverScheduleService {
         if (isDurable()) {
             jdbcTemplate.update(
                 "INSERT INTO failover_schedules (" + SCHEDULE_COLUMNS + ", version) VALUES (" +
-                    "?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?::jsonb,?,?,?,?,?,?,?,?,?,?,?,1)",
+                    "?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?::jsonb,?,?,?,?,?,?,?,?,?,?,?,?,1)",
                 record.scheduleId(), record.clusterRef(), record.maskedClusterName(), record.vendor(),
                 record.commandFamilyId(), record.actionKind().name(), record.signedMutationTarget(),
-                Timestamp.from(record.windowStart()), Timestamp.from(record.windowEnd()), record.maxStartDelayMinutes(),
-                Timestamp.from(record.executionDeadline()), record.requesterId(), record.approverId(), record.grantId(),
-                record.baselineSummary().assessmentDigest(), writeBaselineJson(record.baselineSummary()),
+                record.windowStart().atOffset(ZoneOffset.UTC), record.windowEnd().atOffset(ZoneOffset.UTC), record.maxStartDelayMinutes(),
+                record.executionDeadline().atOffset(ZoneOffset.UTC), record.requesterId(), record.approverId(), record.grantId(),
+                record.baselineDigest(), writeBaselineJson(record.baselineSummary()),
                 record.envelopeSignature(), record.status().name(), record.clientNonce(),
-                Timestamp.from(record.scheduledAt()), null, null, null, null, null, null, null
+                record.scheduledAt().atOffset(ZoneOffset.UTC), null, null, null, null, null, null, null, record.baselineFormatVersion()
             );
             return;
         }
@@ -572,7 +607,7 @@ public class FailoverScheduleService {
         try {
             return baselineJsonMapper.readValue(json, BaselineSnapshotSummary.class);
         } catch (Exception e) {
-            throw new IllegalStateException("Failed to deserialize baseline snapshot summary: " + e.getMessage(), e);
+            return null; // Do not expose corrupt evidence; dispatch records ABORTED_TAMPERED.
         }
     }
 
@@ -606,7 +641,8 @@ public class FailoverScheduleService {
             rs.getString("abort_reason_code"),
             rs.getString("abort_reason"),
             rs.getString("cancelled_by"),
-            cancelledAt != null ? cancelledAt.toInstant() : null
+            cancelledAt != null ? cancelledAt.toInstant() : null,
+            rs.getString("baseline_digest"), rs.getInt("baseline_format_version")
         );
     }
 }

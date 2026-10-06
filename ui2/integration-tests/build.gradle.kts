@@ -46,6 +46,8 @@ dependencies {
     // directly in this module's test source, so the same dependency is
     // repeated here.
     testImplementation(libs.spring.boot.starter.web)
+    // Already used by service; the schedule round-trip tests call JdbcTemplate directly.
+    testImplementation(libs.spring.boot.starter.jdbc)
     testRuntimeOnly(libs.flyway.database.postgresql)
     testRuntimeOnly(libs.junit.platform.launcher)
 }

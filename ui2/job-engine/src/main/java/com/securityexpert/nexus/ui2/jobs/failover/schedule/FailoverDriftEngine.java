@@ -53,6 +53,18 @@ public class FailoverDriftEngine {
         }
         dimensions.put("evidence_snapshot_identity", DriftDimensionStatus.MATCH);
 
+        if (!baseline.hasRequiredFields()) {
+            dimensions.put("baseline_dimensions", DriftDimensionStatus.NOT_EVALUABLE);
+            return DriftEvaluationResult.insufficientEvidence(dimensions, REASON_INSUFFICIENT_EVIDENCE,
+                "Required baseline dimensions are missing", t0Report);
+        }
+        if (!baseline.clusterRef().equals(liveSnapshot.clusterId())
+            || !baseline.clusterRef().equals(t0Report.clusterId())) {
+            dimensions.put("cluster_identity", DriftDimensionStatus.MISMATCH);
+            return DriftEvaluationResult.blocked(dimensions, List.of(REASON_TOPOLOGY_CHANGED),
+                List.of("Evidence is not bound to the scheduled cluster"), t0Report);
+        }
+
         // 1. Preflight Report Verdict Check
         if (t0Report.overallVerdict() != PreflightVerdict.NO_BLOCKING_CONDITIONS_OBSERVED) {
             dimensions.put("preflight_readiness", DriftDimensionStatus.MISMATCH);
@@ -110,7 +122,7 @@ public class FailoverDriftEngine {
         }
 
         boolean vendorMatch = baseline.vendor().equalsIgnoreCase(liveSnapshot.vendor());
-        boolean haModeMatch = baseline.haMode() == null || baseline.haMode().equalsIgnoreCase(liveSnapshot.haMode());
+        boolean haModeMatch = baseline.haMode().equalsIgnoreCase(liveSnapshot.haMode());
         if (!vendorMatch || !haModeMatch) {
             dimensions.put("cluster_topology", DriftDimensionStatus.MISMATCH);
             reasonCodes.add(REASON_TOPOLOGY_CHANGED);
@@ -161,26 +173,9 @@ public class FailoverDriftEngine {
             dimensions.put("installed_policy", DriftDimensionStatus.MATCH);
         }
 
-        // 7. Flap / Transition Counter Check
-        long liveTransitions = liveActive.flapCountLast24Hours();
-        if (liveTransitions < baseline.transitionCounter()) {
-            // A live counter lower than the baseline indicates a reboot or counter rollover
-            // since authorization was granted; the baseline transition history can no longer
-            // be trusted as continuous evidence.
-            dimensions.put("flap_history", DriftDimensionStatus.NOT_EVALUABLE);
-            return DriftEvaluationResult.insufficientEvidence(
-                dimensions, REASON_CLUSTER_FLAP_DETECTED,
-                "Live transition counter is lower than the authorized baseline (member reboot or counter rollover suspected)",
-                t0Report
-            );
-        } else if (liveTransitions > baseline.transitionCounter()) {
-            dimensions.put("flap_history", DriftDimensionStatus.MISMATCH);
-            reasonCodes.add(REASON_CLUSTER_FLAP_DETECTED);
-            messages.add("Cluster role transitions observed between authorization baseline and T₀ window (" +
-                (liveTransitions - baseline.transitionCounter()) + " new transition(s))");
-        } else {
-            dimensions.put("flap_history", DriftDimensionStatus.MATCH);
-        }
+        // Last-24-hour counts are rolling windows, not cumulative sequence numbers.
+        // A decrease can mean old events aged out; equal counts cannot prove continuity.
+        // Leave flap admission to the same-pass preflight battery and its existing policy.
 
         if (!reasonCodes.isEmpty()) {
             return DriftEvaluationResult.drift(dimensions, reasonCodes, messages, t0Report);

@@ -4,6 +4,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.HexFormat;
 import java.util.Objects;
 
@@ -23,13 +24,15 @@ public record BaselineSnapshotSummary(
     String assessmentDigest,
     Instant recordedAt
 ) {
+    public static final int FORMAT_VERSION = 2;
+
     public BaselineSnapshotSummary {
         Objects.requireNonNull(clusterRef, "clusterRef must not be null");
         Objects.requireNonNull(vendor, "vendor must not be null");
         Objects.requireNonNull(activeMemberId, "activeMemberId must not be null");
         Objects.requireNonNull(standbyMemberId, "standbyMemberId must not be null");
         Objects.requireNonNull(assessmentDigest, "assessmentDigest must not be null");
-        Objects.requireNonNull(recordedAt, "recordedAt must not be null");
+        recordedAt = Objects.requireNonNull(recordedAt, "recordedAt must not be null").truncatedTo(ChronoUnit.MICROS);
     }
 
     public static BaselineSnapshotSummary of(
@@ -58,6 +61,7 @@ public record BaselineSnapshotSummary(
      */
     public String computeCanonicalDigest() {
         StringBuilder sb = new StringBuilder();
+        appendField(sb, "NEXUS_FAILOVER_BASELINE_V2");
         appendField(sb, clusterRef);
         appendField(sb, vendor);
         appendField(sb, haMode);
@@ -93,6 +97,24 @@ public record BaselineSnapshotSummary(
         byte[] carried = assessmentDigest.getBytes(StandardCharsets.UTF_8);
         byte[] recomputed = computeCanonicalDigest().getBytes(StandardCharsets.UTF_8);
         return MessageDigest.isEqual(carried, recomputed);
+    }
+
+    /** Required dimensions cannot disappear into a wildcard comparison. */
+    public boolean hasRequiredFields() {
+        return present(clusterRef) && present(vendor) && present(haMode)
+            && present(activeMemberId) && present(standbyMemberId)
+            && !activeMemberId.equals(standbyMemberId)
+            && present(softwareVersion) && present(policyHash);
+    }
+
+    public boolean matchesStoredDigest(String storedDigest) {
+        return storedDigest != null && MessageDigest.isEqual(
+            assessmentDigest.getBytes(StandardCharsets.UTF_8), storedDigest.getBytes(StandardCharsets.UTF_8))
+            && digestMatchesContent();
+    }
+
+    private static boolean present(String value) {
+        return value != null && !value.isBlank();
     }
 
     private static void appendField(StringBuilder sb, String value) {

@@ -2,6 +2,7 @@ package com.securityexpert.nexus.ui2.jobs.failover.schedule;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Objects;
 
 /**
@@ -26,7 +27,7 @@ public record FailoverScheduleEnvelope(
     String keyId,
     String algVersion
 ) {
-    public static final String DOMAIN_SEPARATOR = "NEXUS_FAILOVER_SCHEDULE_V1";
+    public static final String DOMAIN_SEPARATOR = "NEXUS_FAILOVER_SCHEDULE_V2";
     public static final String DEFAULT_ALG_VERSION = "HMAC_SHA256_V1";
     public static final String DEFAULT_KEY_ID = "k1";
 
@@ -37,8 +38,8 @@ public record FailoverScheduleEnvelope(
         Objects.requireNonNull(commandFamilyId, "commandFamilyId must not be null");
         Objects.requireNonNull(actionKind, "actionKind must not be null");
         Objects.requireNonNull(signedMutationTarget, "signedMutationTarget must not be null");
-        Objects.requireNonNull(windowStart, "windowStart must not be null");
-        Objects.requireNonNull(windowEnd, "windowEnd must not be null");
+        windowStart = storageTime(windowStart);
+        windowEnd = storageTime(windowEnd);
         Objects.requireNonNull(requesterId, "requesterId must not be null");
         Objects.requireNonNull(approverId, "approverId must not be null");
         Objects.requireNonNull(grantId, "grantId must not be null");
@@ -73,6 +74,11 @@ public record FailoverScheduleEnvelope(
         appendField(sb, keyId);
         appendField(sb, algVersion);
         return sb.toString().getBytes(StandardCharsets.UTF_8);
+    }
+
+    /** PostgreSQL timestamptz stores microseconds; normalize before signing, never after. */
+    public static Instant storageTime(Instant value) {
+        return Objects.requireNonNull(value, "timestamp must not be null").truncatedTo(ChronoUnit.MICROS);
     }
 
     private static void appendField(StringBuilder sb, String value) {
