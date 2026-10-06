@@ -59,7 +59,8 @@ public final class PanFailoverJobExecutor {
     private String jobId,runId;
     private long epoch;
     private int commandIndex;
-    private boolean wrote,writeInFlight;
+    private boolean wrote;
+    private JooqCpFailoverRepository.Dispatch dispatch;
     private boolean readiness;
     private Stop readinessFailure;
     private String switchMirroredRoles;
@@ -104,7 +105,7 @@ public final class PanFailoverJobExecutor {
         this.switchMirroredRoles=null;
         this.shapes=new ReadinessShapeLog("palo_alto");
         this.fieldsFound.clear();
-        this.commandIndex=0; this.wrote=false; this.writeInFlight=false;
+        this.commandIndex=0; this.wrote=false; this.dispatch=null;
         if (!leases.transitionState(jobId,epoch,JobState.CLAIMED,JobState.EXECUTING,
                 "system:pan-failover-worker","pan_failover_start")) return;
         try {
@@ -124,7 +125,7 @@ public final class PanFailoverJobExecutor {
             for (String command:List.of(STATE,SESSION_SYNC,SESSIONS,SYSTEM)) gate(command);
             if (!readiness) { gate(SUSPEND); gate(FUNCTIONAL); }
             Peer first=peer(members.get(0)),second=peer(members.get(1));
-            store.state(runId,"PRECHECK","PRECHECK",null,null,null);
+            state("PRECHECK","PRECHECK",null,null,null);
             PanFailoverChecks.State a=read(first),b=read(second);
             Long before=checks("pre",first,second,a,b,null,null);
             if (readiness) {
@@ -133,22 +134,21 @@ public final class PanFailoverJobExecutor {
             }
             Peer formerActive="active".equals(a.role())?first:second;
             Peer newActive=formerActive==first?second:first;
-            store.state(runId,"FAILING_OVER","FAILING_OVER",null,null,null);
-            wrote=true;
+            state("FAILING_OVER","FAILING_OVER",null,null,null);
             call(formerActive,SUSPEND);
             if (!waitFor(first,second,newActive,"active",formerActive,"suspended"))
                 throw new Stop("FAILOVER_TIMEOUT",1);
-            store.state(runId,"SWITCHED","SWITCHED",null,null,null);
-            store.state(runId,"POSTCHECK","POSTCHECK",null,null,null);
+            confirmDispatch();
+            state("SWITCHED","SWITCHED",null,null,null);
+            state("POSTCHECK","POSTCHECK",null,null,null);
             a=read(first); b=read(second);
             checks("post",first,second,a,b,formerActive,before);
-            store.state(runId,"RETURNING","RETURNING",null,null,null);
+            state("RETURNING","RETURNING",null,null,null);
             call(formerActive,FUNCTIONAL);
             if (!waitFor(first,second,newActive,"active",formerActive,"passive"))
                 throw new Stop("RETURN_TIMEOUT",1);
-            store.state(runId,"DONE","DONE","SUCCEEDED",null,"NO_PROBLEMS_FOUND");
-            leases.transitionState(jobId,epoch,JobState.EXECUTING,JobState.COMPLETED,
-                "system:pan-failover-worker","pan_failover_done","SUCCEEDED");
+            confirmDispatch();
+            state("DONE","DONE","SUCCEEDED",null,"NO_PROBLEMS_FOUND");
         } catch (Stop stopped) {
             if (readiness) finishReadiness(stopped.code,stopped.check,stopped.check==0?"UNKNOWN":stopped.status); else stop(stopped.code,stopped.check);
         } catch (InterruptedException interrupted) {
@@ -166,18 +166,23 @@ public final class PanFailoverJobExecutor {
         if (!"ADMITTED".equals(decision)) throw new Stop(decision==null?"ADMISSION_UNAVAILABLE":decision,0);
     }
 
+    private void state(String state,String step,String outcome,String check,String message) {
+        if (readiness) store.state(runId,state,step,outcome,check,message);
+        else if (!store.workerState(runId,epoch,state,step,outcome,check,message))
+            throw new Stop("DISPATCH_OWNER_LOST",0);
+    }
     private void stop(String code,int check) {
-        store.state(runId,"STOPPED",store.runByJob(jobId).map(JooqCpFailoverRepository.Run::step).orElse("UNKNOWN"),
-            code,check==0?null:String.valueOf(check),code);
-        leases.transitionState(jobId,epoch,JobState.EXECUTING,writeInFlight || "OUTCOME_UNCERTAIN".equals(code)
-            ?JobState.OUTCOME_UNKNOWN:JobState.FAILED,"system:pan-failover-worker","pan_failover_stopped",code);
+        store.workerState(runId,epoch,"STOPPED","STOPPED",code,check==0?null:String.valueOf(check),code);
+    }
+    private void confirmDispatch() {
+        if (dispatch==null || !store.confirmDispatch(dispatch)) throw new Stop("OUTCOME_UNCERTAIN",0);
     }
     private void finishReadiness(String code,int check,String status) {
         if (readinessFailure!=null && (!"FAIL".equals(status) || "FAIL".equals(readinessFailure.status))) {
             code=readinessFailure.code; check=readinessFailure.check; status=readinessFailure.status;
         }
         String outcome="PASS".equals(status)?"READY":"FAIL".equals(status)?"NOT_READY":"UNKNOWN";
-        store.state(runId,"DONE","DONE",outcome,check==0?null:checkName(check),code);
+        state("DONE","DONE",outcome,check==0?null:checkName(check),code);
         leases.transitionState(jobId,epoch,JobState.EXECUTING,JobState.COMPLETED,
             "system:pan-failover-worker","pan_readiness_done",outcome);
     }
@@ -232,15 +237,26 @@ public final class PanFailoverJobExecutor {
     private String call(Peer peer,String command) throws InterruptedException {
         var g=gate(command);
         if (commandIndex > 0 && !commandPause.isZero()) pause.sleep(commandPause);
+        if (!isRead(command)) {
+            if (!mutationSwitch.enabled()) throw new Stop(FailoverMutationSwitch.DISABLED,0);
+            requireMutationAdmission(false);
+            dispatch=store.prepareDispatch(runId,epoch,commandIndex++,peer.id(),g.gateId(),g.actionClass().id());
+            wrote=true;
+            boolean replied=store.dispatch(dispatch,() -> {
+                if (!mutationSwitch.enabled()) return false;
+                var result=transport.xmlApiCall(peer.target(),new XmlApiSpec("POST","op","","direct_firewall",
+                    Map.of("cmd",command),Map.of("X-PAN-KEY",peer.key())),Duration.ofSeconds(g.timeoutS()));
+                return result instanceof XmlApiResult.Completed c && c.httpStatus()==200
+                    && c.body()!=null && c.body().length()<=262144 && SUCCESS.matcher(c.body()).find();
+            });
+            if (!replied) throw new Stop("OUTCOME_UNCERTAIN",0);
+            return "";
+        }
         if (!attempts.findByJobAndStep(jobId,commandIndex).isEmpty()) throw new Stop("PRIOR_ATTEMPT_NOT_REPLAYED",0);
         String attempt=attempts.insertPreContact(jobId,epoch,commandIndex++,g.gateId(),g.actionClass().id(),1);
         if (attempt==null) throw new Stop("PRE_CONTACT_RECORD_FAILED",0);
         if (!attempts.markBoundaryCrossed(attempt,epoch)) throw new Stop("PRE_CONTACT_UNCERTAIN",0);
         store.command(runId,g.gateId());
-        if (!isRead(command)) writeInFlight=true;
-        if (!isRead(command) && !mutationSwitch.enabled())
-            throw new Stop(FailoverMutationSwitch.DISABLED,0);
-        if (!isRead(command)) requireMutationAdmission(true);
         var result=transport.xmlApiCall(peer.target(),new XmlApiSpec("POST","op","","direct_firewall",
             Map.of("cmd",command),Map.of("X-PAN-KEY",peer.key())),Duration.ofSeconds(g.timeoutS()));
         if (!(result instanceof XmlApiResult.Completed completed) || completed.httpStatus()!=200
@@ -251,7 +267,6 @@ public final class PanFailoverJobExecutor {
         }
         if (!attempts.writeOutcome(attempt,epoch,"MATCHED",null,true,null,null,null))
             throw new Stop("ATTEMPT_RECORD_FAILED",0);
-        writeInFlight=false;
         int fieldCheck=STATE.equals(command)?4:SESSION_SYNC.equals(command)?5:SESSIONS.equals(command)?6:0;
         if (fieldCheck!=0) fieldsFound.merge(fieldCheck,PanFailoverChecks.fieldFound(fieldCheck,completed.body()),
             (a,b) -> a && b);

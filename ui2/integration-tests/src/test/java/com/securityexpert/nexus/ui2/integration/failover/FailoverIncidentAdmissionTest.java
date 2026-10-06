@@ -9,6 +9,7 @@ import org.jooq.impl.DSL;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
+import java.time.Duration;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
@@ -20,6 +21,203 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /** Real PostgreSQL admission/incident transactions; no worker transport or device is constructed. */
 class FailoverIncidentAdmissionTest {
+    private record Execution(String run,String job,long epoch,String member) {}
+    private static Execution executing(Ui2PostgresFixture fixture,JooqCpFailoverRepository repo,Set<String> members) {
+        var decision=request(repo,"unit-dispatch",null,"check_point",members);
+        assertEquals("ADMITTED",decision.code());
+        mutate(fixture,dsl -> dsl.execute("update module_runtime_control set owner_instance='general-synthetic',"
+            + "owner_heartbeat_at=now() where module='general'"));
+        var leases=new com.securityexpert.nexus.ui2.persistence.jobrecords.JooqJobLeaseDao(
+            new JooqTransactionBoundary(DSL.using(fixture.appDataSource(),SQLDialect.POSTGRES)));
+        var job=leases.claimNext("general-synthetic",List.of("cp_cluster_failover"),Duration.ofMinutes(10)).orElseThrow();
+        assertTrue(leases.transitionState(job.jobId(),job.leaseEpoch(),"CLAIMED","EXECUTING",Ui2Rows.ACTOR,"synthetic_start"));
+        assertTrue(repo.workerState(decision.runId(),job.leaseEpoch(),"FAILING_OVER","FAILING_OVER",null,null,null));
+        return new Execution(decision.runId(),job.jobId(),job.leaseEpoch(),members.iterator().next());
+    }
+    private static JooqCpFailoverRepository.Dispatch prepare(JooqCpFailoverRepository repo,Execution e) {
+        return repo.prepareDispatch(e.run(),e.epoch(),0,e.member(),"cp_failover_down","operational-state-change");
+    }
+    private static long count(Ui2PostgresFixture fixture,String table) {
+        return mutate(fixture,dsl -> dsl.fetchOne("select count(*) from "+table).get(0,Long.class));
+    }
+    private static void expire(Ui2PostgresFixture fixture,Execution e) {
+        mutate(fixture,dsl -> dsl.execute("update jobs set lease_expires_at=now()-interval '1 second' where job_id={0}",e.job()));
+    }
+    private static JooqCpFailoverRepository fault(Ui2PostgresFixture fixture,String prefix,boolean after) {
+        var fired=new java.util.concurrent.atomic.AtomicBoolean();
+        var listener=new org.jooq.impl.DefaultExecuteListener() {
+            private void fail(org.jooq.ExecuteContext ctx,boolean end) {
+                if (after==end && ctx.sql()!=null && ctx.sql().startsWith(prefix) && fired.compareAndSet(false,true))
+                    throw new IllegalStateException("SYNTHETIC_DB_FAILURE");
+            }
+            @Override public void executeStart(org.jooq.ExecuteContext ctx) { fail(ctx,false); }
+            @Override public void executeEnd(org.jooq.ExecuteContext ctx) { fail(ctx,true); }
+        };
+        var db=DSL.using(fixture.appDataSource(),SQLDialect.POSTGRES);
+        return new JooqCpFailoverRepository(new JooqTransactionBoundary(DSL.using(db.configuration()
+            .derive(new org.jooq.impl.DefaultExecuteListenerProvider(listener)))),true);
+    }
+
+    @Test void intentAttemptStateAndAuditRollbackTogetherBeforeSend() throws Exception {
+        try (var fixture=Ui2PostgresFixture.createAndMigrate("failover_intent_faults")) {
+            var repo=repository(fixture); var members=pair(fixture,"unit-dispatch","check_point");
+            approve(repo,"unit-dispatch",null,"check_point");
+            for (String write:List.of("insert into job_step_attempt","insert into failover_dispatch_intent",
+                    "update failover_run set mutation_possible")) for (boolean after:List.of(false,true)) {
+                var e=executing(fixture,repo,members);
+                long audits=count(fixture,"audit_log");
+                assertThrows(RuntimeException.class,() -> prepare(fault(fixture,write,after),e));
+                assertEquals(0,count(fixture,"job_step_attempt"));
+                assertEquals(0,count(fixture,"failover_dispatch_intent"));
+                assertEquals(audits,count(fixture,"audit_log"));
+                assertFalse(mutate(fixture,dsl -> dsl.fetchOne("select mutation_possible from failover_run where run_id={0}",e.run())
+                    .get(0,Boolean.class)));
+                assertTrue(repo.workerState(e.run(),e.epoch(),"STOPPED","PRECHECK","SYNTHETIC_STOP",null,null));
+                assertEquals(0,count(fixture,"failover_quarantine"));
+            }
+        }
+    }
+
+    @Test void lostReplyRuntimeFailureAndPersistenceFailureNeverReplayAcrossRestart() throws Exception {
+        try (var fixture=Ui2PostgresFixture.createAndMigrate("failover_reply_faults")) {
+            var repo=repository(fixture); var members=pair(fixture,"unit-dispatch","check_point");
+            approve(repo,"unit-dispatch",null,"check_point");
+            for (String write:List.of("update failover_dispatch_intent set dispatch_claimed",
+                    "update failover_dispatch_intent set delivery","update job_step_attempt set outcome"))
+                for (boolean after:List.of(false,true)) {
+                    var e=executing(fixture,repo,members); var intent=prepare(repo,e);
+                    var sent=new java.util.concurrent.atomic.AtomicInteger();
+                    assertThrows(RuntimeException.class,() -> fault(fixture,write,after).dispatch(intent,() -> {
+                        sent.incrementAndGet(); return true;
+                    }));
+                    assertEquals(write.contains("dispatch_claimed")?0:1,sent.get());
+                    var restarted=repository(fixture);
+                    assertEquals(0,restarted.reconcileDispatches(),"Unexpired work belongs to the live owner");
+                    assertThrows(RuntimeException.class,() -> prepare(restarted,e),"The request cannot create another intent");
+                    expire(fixture,e);
+                    assertEquals(1,restarted.reconcileDispatches());
+                    assertEquals(0,restarted.reconcileDispatches());
+                    assertEquals("OUTCOME_UNKNOWN",restarted.detail(e.run()).orElseThrow().run().outcome());
+                    assertFalse(restarted.dispatch(intent,() -> {fail("Uncertain dispatch was replayed"); return true;}));
+                    assertEquals("UNRESOLVED_DISPATCH",request(restarted,"unit-dispatch",null,"check_point",members).code());
+                    assertTrue(release(fixture,"unit-dispatch",e.run()));
+                }
+            for (boolean runtimeError:List.of(false,true)) {
+                var e=executing(fixture,repo,members); var intent=prepare(repo,e);
+                assertFalse(repo.dispatch(intent,() -> {if (runtimeError) throw new IllegalStateException("SYNTHETIC_LOST_REPLY"); return false;}));
+                assertEquals("OUTCOME_UNKNOWN",repo.detail(e.run()).orElseThrow().run().outcome());
+                assertFalse(repo.dispatch(intent,() -> {fail("Repeated send"); return true;}));
+                assertTrue(release(fixture,"unit-dispatch",e.run()));
+            }
+        }
+    }
+
+    @Test void replyIsNotObservationAndStaleEpochOrModuleOwnerCannotSend() throws Exception {
+        try (var fixture=Ui2PostgresFixture.createAndMigrate("failover_fencing")) {
+            var repo=repository(fixture); var members=pair(fixture,"unit-dispatch","check_point");
+            approve(repo,"unit-dispatch",null,"check_point");
+            var e=executing(fixture,repo,members); var intent=prepare(repo,e);
+            assertThrows(RuntimeException.class,() -> repo.prepareDispatch(e.run(),e.epoch()+1,1,e.member(),"cp_failover_up","operational-state-change"));
+            assertFalse(repo.dispatch(new JooqCpFailoverRepository.Dispatch(intent.nonce(),e.run(),e.job(),e.epoch()+1),
+                () -> {fail("Stale lease epoch sent"); return true;}));
+            assertFalse(repo.workerState(e.run(),e.epoch()+1,"DONE","DONE","SUCCEEDED",null,null));
+            assertTrue(repo.dispatch(intent,() -> true));
+            assertEquals("NOT_OBSERVED",mutate(fixture,dsl -> dsl.fetchOne("select observation from failover_dispatch_intent where nonce={0}",intent.nonce()).get(0,String.class)));
+            assertThrows(RuntimeException.class,() -> repo.workerState(e.run(),e.epoch(),"DONE","DONE","SUCCEEDED",null,null));
+            assertFalse(repo.dispatch(intent,() -> {fail("Reply must not allow replay"); return true;}));
+            assertTrue(repo.confirmDispatch(intent));
+            assertTrue(repo.workerState(e.run(),e.epoch(),"RETURNING","RETURNING",null,null,null));
+            var returning=repo.prepareDispatch(e.run(),e.epoch(),1,e.member(),"cp_failover_up","operational-state-change");
+            mutate(fixture,dsl -> dsl.execute("update module_runtime_control set owner_instance='general-other' where module='general'"));
+            assertFalse(repo.dispatch(returning,() -> {fail("Stale module owner sent"); return true;}));
+            assertFalse(repo.workerState(e.run(),e.epoch(),"DONE","DONE","SUCCEEDED",null,null));
+            assertEquals(0,repo.reconcileDispatches(),"Ownership uncertainty does not steal a live lease");
+            expire(fixture,e);
+            assertEquals(1,repo.reconcileDispatches());
+            assertEquals(1,count(fixture,"failover_quarantine"));
+        }
+    }
+
+    @Test void secondReplicaCannotReconcileOrReplayAnInFlightDispatch() throws Exception {
+        try (var fixture=Ui2PostgresFixture.createAndMigrate("failover_inflight")) {
+            var repo=repository(fixture); var members=pair(fixture,"unit-dispatch","check_point");
+            approve(repo,"unit-dispatch",null,"check_point");
+            var e=executing(fixture,repo,members); var intent=prepare(repo,e);
+            var entered=new CountDownLatch(1); var resume=new CountDownLatch(1);
+            var pool=Executors.newSingleThreadExecutor();
+            try {
+                var sender=pool.submit(() -> repo.dispatch(intent,() -> {
+                    entered.countDown();
+                    try { assertTrue(resume.await(10,TimeUnit.SECONDS)); }
+                    catch (InterruptedException interrupted) { throw new IllegalStateException(interrupted); }
+                    return true;
+                }));
+                assertTrue(entered.await(10,TimeUnit.SECONDS));
+                expire(fixture,e);
+                var other=repository(fixture);
+                var generic=new com.securityexpert.nexus.ui2.persistence.jobrecords.JooqJobLeaseDao(
+                    new JooqTransactionBoundary(DSL.using(fixture.appDataSource(),SQLDialect.POSTGRES)));
+                assertTrue(generic.findExpiredUnconfirmedYes().isEmpty());
+                assertFalse(generic.transitionState(e.job(),e.epoch(),"EXECUTING","OUTCOME_UNKNOWN",
+                    Ui2Rows.ACTOR,"job_reconcile_outcome_unknown"));
+                assertEquals(0,other.reconcileDispatches(),"The sender still owns the dispatch critical section");
+                assertFalse(other.dispatch(intent,() -> {fail("Second replica sent"); return true;}));
+                assertFalse(other.workerState(e.run(),e.epoch(),"STOPPED","STOPPED","SYNTHETIC",null,null));
+                resume.countDown(); assertTrue(sender.get(10,TimeUnit.SECONDS));
+                assertEquals(1,other.reconcileDispatches());
+                assertEquals(1,count(fixture,"failover_quarantine"));
+            } finally { resume.countDown(); pool.shutdownNow(); }
+        }
+    }
+
+    @Test void terminalStateAttemptAndIncidentAreAtomicUnderFaults() throws Exception {
+        try (var fixture=Ui2PostgresFixture.createAndMigrate("failover_terminal_faults")) {
+            var repo=repository(fixture); var members=pair(fixture,"unit-dispatch","check_point");
+            approve(repo,"unit-dispatch",null,"check_point");
+            for (String write:List.of("update failover_dispatch_intent set observation",
+                    "update job_step_attempt set outcome","update failover_run set state='STOPPED'",
+                    "update jobs set state='OUTCOME_UNKNOWN'")) for (boolean after:List.of(false,true)) {
+                var e=executing(fixture,repo,members); prepare(repo,e);
+                long incidents=count(fixture,"failover_quarantine"), audits=count(fixture,"audit_log");
+                assertThrows(RuntimeException.class,() -> fault(fixture,write,after)
+                    .workerState(e.run(),e.epoch(),"STOPPED","STOPPED","SYNTHETIC",null,"SYNTHETIC"));
+                assertEquals(incidents,count(fixture,"failover_quarantine"));
+                assertEquals(audits,count(fixture,"audit_log"));
+                assertEquals("FAILING_OVER",repo.detail(e.run()).orElseThrow().run().state());
+                expire(fixture,e); assertEquals(1,repo.reconcileDispatches());
+                assertTrue(release(fixture,"unit-dispatch",e.run()));
+            }
+        }
+    }
+
+    @Test void observationAndSuccessfulStateUpdatesRollbackWithTheirAudit() throws Exception {
+        try (var fixture=Ui2PostgresFixture.createAndMigrate("failover_observation_faults")) {
+            var repo=repository(fixture); var members=pair(fixture,"unit-dispatch","check_point");
+            approve(repo,"unit-dispatch",null,"check_point");
+            var e=executing(fixture,repo,members); var intent=prepare(repo,e);
+            assertTrue(repo.dispatch(intent,() -> true));
+            for (boolean after:List.of(false,true)) {
+                long audits=count(fixture,"audit_log");
+                assertThrows(RuntimeException.class,() -> fault(fixture,
+                    "update failover_dispatch_intent set observation='CONFIRMED'",after).confirmDispatch(intent));
+                assertEquals(audits,count(fixture,"audit_log"));
+                assertEquals("NOT_OBSERVED",mutate(fixture,dsl -> dsl.fetchOne(
+                    "select observation from failover_dispatch_intent where nonce={0}",intent.nonce()).get(0,String.class)));
+            }
+            assertTrue(repo.confirmDispatch(intent));
+            for (String write:List.of("update failover_run set state=","update jobs set state="))
+                for (boolean after:List.of(false,true)) {
+                    long audits=count(fixture,"audit_log");
+                    assertThrows(RuntimeException.class,() -> fault(fixture,write,after)
+                        .workerState(e.run(),e.epoch(),"DONE","DONE","SUCCEEDED",null,null));
+                    assertEquals(audits,count(fixture,"audit_log"));
+                    assertEquals("FAILING_OVER",repo.detail(e.run()).orElseThrow().run().state());
+                }
+            assertTrue(repo.workerState(e.run(),e.epoch(),"DONE","DONE","SUCCEEDED",null,null));
+            assertEquals(0,repo.reconcileDispatches());
+            assertEquals(0,count(fixture,"failover_quarantine"));
+        }
+    }
     private static JooqCpFailoverRepository repository(Ui2PostgresFixture fixture) {
         return new JooqCpFailoverRepository(new JooqTransactionBoundary(
             DSL.using(fixture.appDataSource(),SQLDialect.POSTGRES)),true);

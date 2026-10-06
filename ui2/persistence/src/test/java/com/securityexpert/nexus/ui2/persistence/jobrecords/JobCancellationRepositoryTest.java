@@ -50,6 +50,8 @@ class JobCancellationRepositoryTest {
         assertTrue(sql.get(0).contains("lease_epoch = ? and cancel_requested and state = 'EXECUTING'"));
         assertTrue(sql.get(1).contains("cancel_requested and lease_expires_at < now()"));
         for (int i = 2; i < 5; i++) assertTrue(sql.get(i).contains("not j.cancel_requested"));
+        for (int i = 1; i < 5; i++) assertTrue(sql.get(i).contains("not exists(select 1 from failover_dispatch_intent"));
         assertTrue(sql.get(sql.size() - 1).contains("and (not cancel_requested or ? = 'CANCELLED')"));
+        assertTrue(sql.get(sql.size() - 1).contains("not like 'job_reconcile%' or not exists"));
     }
 }

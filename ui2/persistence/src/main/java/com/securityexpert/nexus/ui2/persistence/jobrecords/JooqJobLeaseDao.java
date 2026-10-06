@@ -106,7 +106,8 @@ public final class JooqJobLeaseDao implements JobLeaseDao {
     @Override
     public List<ClaimedJobRow> findExpiredCancellationRequests() {
         return transactionBoundary.inTransaction(db -> db.fetch(
-            "select job_id, lease_epoch from jobs where state = 'EXECUTING' and cancel_requested and lease_expires_at < now()")
+            "select job_id, lease_epoch from jobs where state = 'EXECUTING' and cancel_requested and lease_expires_at < now() "
+                + "and not exists(select 1 from failover_dispatch_intent i where i.job_id=jobs.job_id)")
             .stream().map(JooqJobLeaseDao::toClaimedJobRow).toList());
     }
 
@@ -146,7 +147,9 @@ public final class JooqJobLeaseDao implements JobLeaseDao {
                         + "'OUTCOME_UNKNOWN', 'RECONCILED') then now() else finished_at end "
                         + "where job_id = {1} and lease_epoch = {2} and state = {3} "
                         + "and (not cancel_requested or {0} = 'CANCELLED') "
-                        + "and ({5} like 'job_reconcile%' or ui2_job_owner_valid(job_id,lease_epoch))",
+                        + "and ({5} like 'job_reconcile%' or ui2_job_owner_valid(job_id,lease_epoch)) "
+                        + "and ({5} not like 'job_reconcile%' or not exists "
+                        + "(select 1 from failover_dispatch_intent i where i.job_id=jobs.job_id))",
                 toState, jobId, leaseEpoch, expectedFromState, com.securityexpert.nexus.ui2.persistence.https.HttpsCertificateWarnings.appendTo(
                         terminalReason == null ? toState : terminalReason), actionId));
         return updated == 1;
@@ -156,6 +159,7 @@ public final class JooqJobLeaseDao implements JobLeaseDao {
     public List<ClaimedJobRow> findExpiredWithNoAttempt() {
         return transactionBoundary.inTransaction(dsl -> dsl.fetch(
                 "select j.job_id, j.lease_epoch from jobs j where j.state = 'CLAIMED' and j.lease_expires_at < now() and not j.cancel_requested "
+                        + "and not exists(select 1 from failover_dispatch_intent i where i.job_id=j.job_id) "
                         + "and not exists (select 1 from job_step_attempt a "
                         + "where a.job_id = j.job_id and a.lease_epoch = j.lease_epoch)")
                 .stream().map(JooqJobLeaseDao::toClaimedJobRow).toList());
@@ -165,6 +169,7 @@ public final class JooqJobLeaseDao implements JobLeaseDao {
     public List<ClaimedJobRow> findExpiredAllBoundaryNo() {
         return transactionBoundary.inTransaction(dsl -> dsl.fetch(
                 "select j.job_id, j.lease_epoch from jobs j where j.state = 'EXECUTING' and j.lease_expires_at < now() and not j.cancel_requested "
+                        + "and not exists(select 1 from failover_dispatch_intent i where i.job_id=j.job_id) "
                         + "and exists (select 1 from job_step_attempt a "
                         + "where a.job_id = j.job_id and a.lease_epoch = j.lease_epoch) "
                         + "and not exists (select 1 from job_step_attempt a "
@@ -177,6 +182,7 @@ public final class JooqJobLeaseDao implements JobLeaseDao {
     public List<ClaimedJobRow> findExpiredUnconfirmedYes() {
         return transactionBoundary.inTransaction(dsl -> dsl.fetch(
                 "select j.job_id, j.lease_epoch from jobs j where j.state = 'EXECUTING' and j.lease_expires_at < now() and not j.cancel_requested "
+                        + "and not exists(select 1 from failover_dispatch_intent i where i.job_id=j.job_id) "
                         + "and exists (select 1 from job_step_attempt a "
                         + "where a.job_id = j.job_id and a.lease_epoch = j.lease_epoch "
                         + "and a.mutation_boundary_crossed = true and a.outcome is null)")

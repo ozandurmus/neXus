@@ -339,6 +339,8 @@ public final class Ui2WorkerMain {
                 platformFactsRepository);
         java.util.concurrent.ExecutorService executor = java.util.concurrent.Executors.newFixedThreadPool(10);
         java.util.List<WorkerClaimLoop> claimLoops = new java.util.ArrayList<>();
+        var failoverRecovery = new com.securityexpert.nexus.ui2.persistence.JooqCpFailoverRepository(transactionBoundary);
+        failoverRecovery.reconcileDispatches();
         for (int i = 0; i < 10; i++) {
             var cpFailoverExecutor = new com.securityexpert.nexus.ui2.worker.failover.CpFailoverJobExecutor(
                     new com.securityexpert.nexus.ui2.persistence.JooqCpFailoverRepository(transactionBoundary),
@@ -420,7 +422,10 @@ public final class Ui2WorkerMain {
 
         reconcilerExecutor.scheduleWithFixedDelay(() -> {
             try {
-                moduleRuntime.runTask(role, instance, "JobReconciler.reconcileOnce", reconciler::reconcileOnce);
+                moduleRuntime.runTask(role, instance, "JobReconciler.reconcileOnce", () -> {
+                    failoverRecovery.reconcileDispatches();
+                    reconciler.reconcileOnce();
+                });
             } catch (Throwable t) {
                 System.getLogger(Ui2WorkerMain.class.getName())
                         .log(System.Logger.Level.WARNING, "Periodic job reconciliation error: " + t.getMessage(), t);

@@ -460,6 +460,10 @@ public class JooqCpFailoverRepository {
     }
 
     private static String admissionRefusal(DSLContext dsl, String cluster, List<String> members, String runId) {
+        if (!dsl.fetch("select 1 from failover_dispatch_intent i where run_id is distinct from {0} "
+                + "and (observation='NOT_OBSERVED' or (observation='OUTCOME_UNKNOWN' and exists "
+                + "(select 1 from failover_quarantine q where q.execution_id=i.run_id and q.active)))", runId).isEmpty())
+            return "UNRESOLVED_DISPATCH";
         if (!dsl.fetch("select 1 from failover_quarantine where active and "
                 + "(cluster_ref={0} or quarantined_member_ids @> jsonb_build_array({1}::text) "
                 + "or quarantined_member_ids @> jsonb_build_array({2}::text))", cluster, members.get(0), members.get(1)).isEmpty())
@@ -540,6 +544,182 @@ public class JooqCpFailoverRepository {
     public void command(String id, String gateId) {
         audited.inTransaction("system:failover-worker", "failover_command_" + gateId, id,
             dsl -> dsl.execute("update failover_run set message={1} where run_id={0}", id, gateId));
+    }
+
+    public record Dispatch(String nonce, String runId, String jobId, long epoch) {}
+
+    private static boolean dispatchLock(DSLContext dsl, String run) {
+        return Boolean.TRUE.equals(dsl.fetchOne("select pg_try_advisory_xact_lock(138,hashtext({0})) as acquired",run)
+            .get("acquired",Boolean.class));
+    }
+
+    /** Strict owner check: legacy null module generations never authorize a mutation. */
+    private static boolean owns(DSLContext dsl, String job, long epoch) {
+        return !dsl.fetch("select j.job_id from jobs j join module_runtime_control m "
+            + "on m.module=ui2_job_module(j.capability_id) join module_runtime_control r on r.module=m.effective_owner "
+            + "where j.job_id={0} and j.lease_epoch={1} and j.state='EXECUTING' and not j.cancel_requested "
+            + "and j.lease_expires_at>clock_timestamp() and j.lease_owner_generation=m.generation "
+            + "and m.effective_owner=split_part(j.lease_worker_id,'-',1) "
+            + "and not m.drain_requested and not r.drain_requested "
+            + "and r.owner_instance=j.lease_worker_id and r.owner_heartbeat_at>clock_timestamp()-interval '60 seconds'",
+            job, epoch).isEmpty();
+    }
+
+    /** Commit the attempt, immutable dispatch identity and command ledger before transport invocation. */
+    public Dispatch prepareDispatch(String id, long epoch, int index, String member, String gate, String actionClass) {
+        if (!mutationEnabled) throw new IllegalStateException("FAILOVER_MUTATION_DISABLED");
+        return audited.inTransaction("system:failover-worker", "failover_dispatch_intent", id, dsl -> {
+            if (!dispatchLock(dsl,id)) throw new IllegalStateException("DISPATCH_BUSY");
+            lockAdmission(dsl);
+            Record r=dsl.fetchOne("select * from failover_run where run_id={0} for update",id);
+            if (r==null || !"FAILOVER".equals(r.get("run_kind",String.class)))
+                throw new IllegalStateException("RUN_NOT_FOUND");
+            String job=r.get("job_id",String.class), step=r.get("step",String.class);
+            if (!Set.of("FAILING_OVER","RETURNING").contains(step) || !owns(dsl,job,epoch))
+                throw new IllegalStateException("DISPATCH_OWNER_LOST");
+            List<String> members=JooqDeviceRepository.enrolledFailoverMembers(dsl,
+                r.get("cluster_ref",String.class),r.get("vendor",String.class));
+            String refusal=validateTarget(dsl,r,members,member);
+            if (refusal!=null) throw new IllegalStateException(refusal);
+            if (dsl.fetch("select 1 from failover_approval where approval_id={0} and revoked_at is null "
+                    + "and window_from<=clock_timestamp() and window_until>clock_timestamp()",r.get("approval_id")).isEmpty())
+                throw new IllegalStateException("WINDOW_EXPIRED");
+            if (!dsl.fetch("select 1 from failover_dispatch_intent where run_id={0} "
+                    + "and (step={1} or observation<>'CONFIRMED')",id,step).isEmpty())
+                throw new IllegalStateException("PRIOR_ATTEMPT_NOT_REPLAYED");
+            String nonce=UUID.randomUUID().toString(), attempt=UUID.randomUUID().toString();
+            requireOne(dsl.execute("insert into job_step_attempt(attempt_id,job_id,lease_epoch,step_index,step_kind,"
+                + "attempt_number,action_class,mutation_boundary_crossed,sent_at) values({0},{1},{2},{3},{4},1,{5},true,now())",
+                attempt,job,epoch,index,gate,actionClass));
+            requireOne(dsl.execute("insert into failover_dispatch_intent(nonce,run_id,attempt_id,job_id,lease_epoch,"
+                + "owner_generation,owner_instance,step,member_ref,gate_id) select {0},{1},{2},job_id,lease_epoch,"
+                + "lease_owner_generation,lease_worker_id,{3},{4},{5} from jobs where job_id={6} and lease_epoch={7}",
+                nonce,id,attempt,step,member,gate,job,epoch));
+            requireOne(dsl.execute("update failover_run set mutation_possible=true,message={1} where run_id={0}",id,gate));
+            return new Dispatch(nonce,id,job,epoch);
+        });
+    }
+
+    private static void requireOne(int rows) {
+        if (rows!=1) throw new IllegalStateException("FAILOVER_PERSISTENCE_FENCE");
+    }
+
+    /**
+     * The locked intent is the dispatch linearization point. Reconciliation skips it until this bounded
+     * invocation ends; it is never assigned to another sender. Do not hold module/admission locks across
+     * transport: endpoint lease renewal uses independent transactions. Only a safe reply bit leaves the callback.
+     * A rollback after send retains the already committed intent and therefore blocks fleet admission.
+     */
+    public boolean dispatch(Dispatch intent, java.util.function.Supplier<Boolean> send) {
+        if (!mutationEnabled || intent==null) throw new IllegalStateException("DISPATCH_REFUSED");
+        // Consume once in a separate committed transaction. Even a lost commit reply cannot cause replay.
+        boolean claimed=audited.inTransaction("system:failover-worker","failover_dispatch_claim",intent.runId(),dsl -> {
+            if (!dispatchLock(dsl,intent.runId()) || !owns(dsl,intent.jobId(),intent.epoch())) return false;
+            return dsl.execute("update failover_dispatch_intent set dispatch_claimed=true where nonce={0} "
+                + "and run_id={1} and job_id={2} and lease_epoch={3} and not dispatch_claimed "
+                + "and observation='NOT_OBSERVED'",intent.nonce(),intent.runId(),intent.jobId(),intent.epoch())==1;
+        });
+        if (!claimed) return false;
+        return audited.inTransaction("system:failover-worker", "failover_dispatch_reply", intent.runId(), dsl -> {
+            if (!dispatchLock(dsl,intent.runId())) return false;
+            Record row=dsl.fetchOne("select * from failover_dispatch_intent where nonce={0} and run_id={1} "
+                + "and job_id={2} and lease_epoch={3} and delivery='MAY_HAVE_BEEN_SENT' "
+                + "and observation='NOT_OBSERVED' and dispatch_claimed for update",intent.nonce(),intent.runId(),intent.jobId(),intent.epoch());
+            if (row==null || !owns(dsl,intent.jobId(),intent.epoch())) return false;
+            // Recheck approval and the committed owner immediately before the single send.
+            Record run=dsl.fetchOne("select r.* from failover_run r join failover_approval a on a.approval_id=r.approval_id "
+                    + "join jobs j on j.job_id=r.job_id where r.run_id={0} and r.state not in ('DONE','STOPPED') "
+                    + "and a.revoked_at is null and a.window_from<=clock_timestamp() and a.window_until>clock_timestamp() "
+                    + "and j.lease_worker_id={1} and j.lease_owner_generation={2}",intent.runId(),
+                    row.get("owner_instance"),row.get("owner_generation"));
+            if (run==null || !row.get("step").equals(run.get("step"))) return false;
+            List<String> members=JooqDeviceRepository.enrolledFailoverMembers(dsl,
+                run.get("cluster_ref",String.class),run.get("vendor",String.class));
+            if (validateTarget(dsl,run,members,row.get("member_ref",String.class))!=null) return false;
+            boolean replied;
+            try { replied=Boolean.TRUE.equals(send.get()); }
+            catch (RuntimeException uncertain) { replied=false; }
+            requireOne(dsl.execute("update failover_dispatch_intent set delivery={1} where nonce={0}",
+                intent.nonce(),replied?"REPLY_RECEIVED":"UNKNOWN"));
+            requireOne(dsl.execute("update job_step_attempt set outcome={1},matched_expectation=false,error_class={2} "
+                + "where attempt_id={0}",row.get("attempt_id"),replied?"REPLY_RECEIVED":"OUTCOME_UNKNOWN",
+                replied?null:"DELIVERY_UNCERTAIN"));
+            if (!replied) unknown(dsl,intent.runId(),intent.jobId(),"DELIVERY_UNCERTAIN",null);
+            return replied;
+        });
+    }
+
+    /** Independent role observations, never the write reply, confirm the requested effect. */
+    public boolean confirmDispatch(Dispatch intent) {
+        return audited.inTransaction("system:failover-worker","failover_dispatch_observed",intent.runId(),dsl -> {
+            if (!dispatchLock(dsl,intent.runId()) || !owns(dsl,intent.jobId(),intent.epoch())) return false;
+            return dsl.execute("update failover_dispatch_intent set observation='CONFIRMED' where nonce={0} "
+                + "and lease_epoch={1} and run_id={2} and job_id={3} "
+                + "and delivery='REPLY_RECEIVED' and observation='NOT_OBSERVED'",
+                intent.nonce(),intent.epoch(),intent.runId(),intent.jobId())==1;
+        });
+    }
+
+    /** Atomic fenced run/job termination; V136 creates the incident in this same transaction. */
+    public boolean workerState(String id, long epoch, String state, String step, String outcome,
+            String failedCheck, String message) {
+        return audited.inTransaction("system:failover-worker","failover_worker_state",id,dsl -> {
+            if (!dispatchLock(dsl,id)) return false;
+            lockAdmission(dsl);
+            Record r=dsl.fetchOne("select job_id,mutation_possible,step from failover_run where run_id={0} "
+                + "and state not in ('DONE','STOPPED') for update",id);
+            if (r==null || !owns(dsl,r.get("job_id",String.class),epoch)) return false;
+            String job=r.get("job_id",String.class);
+            if ("STOPPED".equals(state) && Boolean.TRUE.equals(r.get("mutation_possible",Boolean.class))) {
+                unknown(dsl,id,job,message,failedCheck);
+                return true;
+            }
+            if ("DONE".equals(state) && !dsl.fetch("select 1 from failover_dispatch_intent where run_id={0} "
+                    + "and observation<>'CONFIRMED'",id).isEmpty()) throw new IllegalStateException("UNRESOLVED_DISPATCH");
+            requireOne(dsl.execute("update failover_run set state={1},step={2},outcome={3},failed_check={4},message={5},"
+                + "finished_at=case when {1} in ('DONE','STOPPED') then now() else null end where run_id={0}",
+                id,state,"STOPPED".equals(state)?r.get("step",String.class):step,outcome,failedCheck,message));
+            if (Set.of("DONE","STOPPED").contains(state)) requireOne(dsl.execute("update jobs set state={1},"
+                + "outcome={1},terminal_reason={2},finished_at=now() where job_id={0} and lease_epoch={3}",
+                job,"DONE".equals(state)?"COMPLETED":"FAILED",outcome,epoch));
+            return true;
+        });
+    }
+
+    private static void unknown(DSLContext dsl, String run, String job, String reason, String failedCheck) {
+        lockAdmission(dsl);
+        dsl.execute("update failover_dispatch_intent set observation='OUTCOME_UNKNOWN',"
+            + "delivery=case when delivery='MAY_HAVE_BEEN_SENT' then 'UNKNOWN' else delivery end "
+            + "where run_id={0} and observation='NOT_OBSERVED'",run);
+        dsl.execute("update job_step_attempt set outcome='OUTCOME_UNKNOWN',error_class='OUTCOME_UNCERTAIN',"
+            + "matched_expectation=false where attempt_id in (select attempt_id from failover_dispatch_intent "
+            + "where run_id={0} and observation='OUTCOME_UNKNOWN')",run);
+        requireOne(dsl.execute("update failover_run set state='STOPPED',outcome='OUTCOME_UNKNOWN',message={1},"
+            + "failed_check=coalesce({2},failed_check),finished_at=now() where run_id={0}",run,reason,failedCheck));
+        requireOne(dsl.execute("update jobs set state='OUTCOME_UNKNOWN',outcome='OUTCOME_UNKNOWN',"
+            + "terminal_reason={1},finished_at=now() where job_id={0}",job,reason));
+    }
+
+    /** Startup and periodic recovery: no transport and no takeover of a locked or live-owned intent. */
+    public int reconcileDispatches() {
+        return audited.inTransaction("system:failover-worker","failover_dispatch_reconcile",dsl -> {
+            int recovered=0;
+            for (Record row:dsl.fetch("select distinct i.run_id,i.job_id from failover_dispatch_intent i join failover_run r on r.run_id=i.run_id "
+                    + "where i.observation='NOT_OBSERVED' or r.state not in ('DONE','STOPPED') "
+                    + "order by i.run_id")) {
+                String job=row.get("job_id",String.class), run=row.get("run_id",String.class);
+                if (!dispatchLock(dsl,run)) continue;
+                if (dsl.fetch("select job_id from jobs where job_id={0} for update skip locked",job).isEmpty()) continue;
+                // Recheck inside the transaction; an unexpired lease is not evidence of a dead process.
+                if (!dsl.fetch("select 1 from jobs where job_id={0} "
+                        + "and state in ('CLAIMED','EXECUTING') and lease_expires_at>clock_timestamp()",job).isEmpty()) continue;
+                if (dsl.fetch("select 1 from failover_dispatch_intent i join failover_run r on r.run_id=i.run_id "
+                        + "where i.run_id={0} and (i.observation='NOT_OBSERVED' or r.state not in ('DONE','STOPPED'))",run).isEmpty()) continue;
+                unknown(dsl,run,job,"OWNER_LOST",null);
+                recovered++;
+            }
+            return recovered;
+        });
     }
     public void check(String id, String phase, String member, String vsId, int no, String status, String derived) {
         audited.inTransaction("system:failover-worker", "failover_check", id, dsl -> dsl.execute(

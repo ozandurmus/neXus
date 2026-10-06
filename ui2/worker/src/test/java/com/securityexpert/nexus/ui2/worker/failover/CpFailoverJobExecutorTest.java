@@ -49,17 +49,35 @@ class CpFailoverJobExecutorTest {
                 Instant.now(),id,state,state,outcome,null,null,"check_point",kind));
         }
         String admission="ADMITTED", writeAdmission="ADMITTED", returnAdmission="ADMITTED";
+        String failBeforeStep, failAfterStep;
+        int prepared, replies, observations;
         int admissionCount;
         @Override public String mutationAdmission(String id,String cluster,String vs,String vendor,
                 java.util.Set<String> members,boolean possibleSend,String jobId,long epoch) {
             admissionCount++;
             CpFailoverJobExecutorTest.check(CLUSTER.equals(cluster) && java.util.Set.of(A,B).equals(members));
-            return possibleSend ? (admissionCount==2 ? writeAdmission : returnAdmission) : admission;
+            return admissionCount==1 ? admission : admissionCount==2 ? writeAdmission : returnAdmission;
         }
         @Override public boolean windowValid(String id) { return valid; }
         @Override public void state(String id,String next,String step,String result,String failed,String message) {
             state=next; outcome=result; stopCode=message;
         }
+        @Override public boolean workerState(String id,long epoch,String next,String step,String result,String failed,String message) {
+            state(id,next,step,result,failed,message); return true;
+        }
+        @Override public Dispatch prepareDispatch(String id,long epoch,int index,String member,String gate,String actionClass) {
+            if (state.equals(failBeforeStep)) throw new IllegalStateException("SYNTHETIC_DB_FAILURE");
+            prepared++;
+            return new Dispatch(state,id,"job-1",epoch);
+        }
+        @Override public boolean dispatch(Dispatch intent,java.util.function.Supplier<Boolean> send) {
+            CpFailoverJobExecutorTest.check(prepared==replies+1);
+            boolean result;
+            try { result=send.get(); } catch (RuntimeException failure) { result=false; }
+            if (state.equals(failAfterStep)) throw new IllegalStateException("SYNTHETIC_DB_FAILURE");
+            replies++; return result;
+        }
+        @Override public boolean confirmDispatch(Dispatch intent) { observations++; return true; }
         @Override public void command(String id,String gateId) {}
         @Override public void check(String id,String phase,String member,String vs,int no,String status,String derived) {
             checks.add(phase+":"+no+":"+status);
@@ -97,6 +115,7 @@ class CpFailoverJobExecutorTest {
     }
 
     private static final class Script {
+        String lostReplyStep, runtimeErrorStep;
         boolean down,up,stuck,badPre,badPost,badSync,badPolicy,changedPolicyPost;
         boolean readyMember,badPnotes,badBonds,badRoutes,missingDefault,recentFailover;
         String unknownCommand, failedCommand;
@@ -110,6 +129,10 @@ class CpFailoverJobExecutorTest {
         int downCount,upCount,connectCount;
         final List<String> commands=new ArrayList<>();
         long bytesA=1000,bytesB=1000;
+        ExecResult writeReply(String step) {
+            if (step.equals(runtimeErrorStep)) throw new IllegalStateException("SYNTHETIC_TRANSPORT_FAILURE");
+            return step.equals(lostReplyStep)?new ExecResult.TimedOut():new ExecResult.Completed("ok",0);
+        }
         DeviceTransport transport() {
             var base=baseTransport();
             return (DeviceTransport)Proxy.newProxyInstance(DeviceTransport.class.getClassLoader(),
@@ -174,8 +197,8 @@ class CpFailoverJobExecutorTest {
                     if (cmd.equals(failedCommand)) return new ExecResult.Completed("",1);
                     if (cmd.equals(unknownCommand)) return new ExecResult.Completed("unrecognized synthetic output",0);
                     boolean first=member.endsWith("11");
-                    if(cmd.endsWith("clusterXL_admin down")) {down=true;downCount++;return new ExecResult.Completed("ok",0);}
-                    if(cmd.endsWith("clusterXL_admin up")) {up=true;upCount++;return new ExecResult.Completed("ok",0);}
+                    if(cmd.endsWith("clusterXL_admin down")) {down=true;downCount++;return writeReply("FAILING_OVER");}
+                    if(cmd.endsWith("clusterXL_admin up")) {up=true;upCount++;return writeReply("RETURNING");}
                     if(cmd.endsWith("cphaprob stat")) {
                         String roleA=up?"Standby":down&&!stuck?"Down":"Active";
                         String roleB=readyMember?"READY":down&&!stuck?"Active":"Standby";
@@ -279,6 +302,24 @@ class CpFailoverJobExecutorTest {
         new CpFailoverJobExecutor(store,devices(),leases(),attempts(),script.transport(),gates(),d -> {},
             Duration.ZERO,new FailoverMutationSwitch(!"READINESS".equals(store.kind)))
             .execute("job-1",1);
+    }
+    @Test void everyWriteStopsAtPersistenceAndDeliveryFailuresWithoutReplay() {
+        for (String step:List.of("FAILING_OVER","RETURNING")) {
+            for (String fault:List.of("before","after","lost","runtime")) {
+                Store store=new Store(); Script script=new Script();
+                switch (fault) {
+                    case "before" -> store.failBeforeStep=step;
+                    case "after" -> store.failAfterStep=step;
+                    case "lost" -> script.lostReplyStep=step;
+                    case "runtime" -> script.runtimeErrorStep=step;
+                }
+                run(store,script);
+                check("STOPPED".equals(store.state));
+                check(script.downCount==("FAILING_OVER".equals(step)&&"before".equals(fault)?0:1));
+                check(script.upCount==("RETURNING".equals(step)&&!"before".equals(fault)?1:0));
+                check(store.observations==("RETURNING".equals(step)?1:0));
+            }
+        }
     }
     @Test void disabledSwitchStopsBeforeTransportOrAttempts() {
         Store store=new Store(); Script script=new Script();
