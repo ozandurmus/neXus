@@ -98,6 +98,91 @@ class CheckPointPolicyCollectorTest {
         }
     }
 
+    @Test void emptyAccessLayersAreCollectedAndCompleteInBothCollectors() {
+        for (int sessions : List.of(1, 4)) {
+            reset(transport, repository);
+            setup(command -> {
+                if (command.contains("show-access-rulebase"))
+                    return ok("{\"uid\":\"layer\",\"name\":\"Layer\",\"total\":0,\"rulebase\":[]}");
+                if (command.contains("show-nat-rulebase")) return ok(page("nat", 0, 0, 0, "", ""));
+                return answer(command);
+            });
+            when(repository.saveUnit(any(), anyString(), anyString(), anyString())).thenReturn(true);
+            when(repository.saveDomain(any(), anyString(), anyString(), anyBoolean(), nullable(String.class), anyString(), anyInt(), nullable(String.class), anyString())).thenReturn(true);
+            var leased = new PolicyCollectionRepository.Request("mds-1", "", false, PolicyCollectionRepository.Mode.FULL, "job-empty", 1);
+            var snapshots = new CheckPointPolicyCollector(transport, gates, repository, Duration.ofHours(2), sessions)
+                .collect(run, leased, () -> true);
+            assertEquals(1, snapshots.size());
+            assertTrue(snapshots.get(0).failures().isEmpty());
+            assertTrue(snapshots.get(0).sections().stream().allMatch(section -> section.rules().isEmpty()));
+            assertTrue(snapshots.get(0).sections().stream().anyMatch(section -> section.source().equals("CP access layer")));
+            verify(repository, atLeastOnce()).saveDomain(eq(leased), anyString(), eq("COLLECTED"), eq(true), nullable(String.class), anyString(), anyInt(), nullable(String.class), anyString());
+        }
+    }
+
+    @Test void emptyPagesRequireIntegralZeroConsistentCountersAndInitialOffset() throws Exception {
+        var json = new com.fasterxml.jackson.databind.ObjectMapper();
+        String base = "{\"total\":0,\"rulebase\":[]}";
+        for (String counters : List.of("", ",\"from\":0,\"to\":0", ",\"from\":1,\"to\":0", ",\"from\":1", ",\"to\":0"))
+            assertEquals(0, CheckPointPolicyCollector.pageTotal(json.readTree(base.replace("}", counters + "}")), 0, -1, 1));
+        for (String bad : List.of("{\"total\":0.0,\"rulebase\":[]}", "{\"total\":1,\"rulebase\":[]}",
+                "{\"total\":0,\"rulebase\":[{}]}", "{\"total\":0,\"rulebase\":[],\"from\":2}",
+                "{\"total\":0,\"rulebase\":[],\"to\":1}", "{\"total\":0,\"rulebase\":[],\"from\":null}",
+                "{\"total\":0,\"rulebase\":[],\"to\":\"0\"}", "{\"total\":0,\"rulebase\":[],\"objects-dictionary\":null}")) {
+            assertThrows(PolicyCollectionTrace.Failure.class, () -> CheckPointPolicyCollector.pageTotal(json.readTree(bad), 0, -1, 1));
+        }
+        assertThrows(PolicyCollectionTrace.Failure.class, () -> CheckPointPolicyCollector.pageTotal(json.readTree(base), 1, -1, 1));
+        assertThrows(PolicyCollectionTrace.Failure.class, () -> CheckPointPolicyCollector.pageTotal(json.readTree(base), 0, 1, 1));
+    }
+
+    @Test void inlineUidReferencesDoNotNeedDictionaryNamesInBothCollectors() {
+        for (int sessions : List.of(1, 4)) for (boolean objectReference : List.of(false, true)) {
+            reset(transport, repository);
+            setup(command -> {
+                if (command.contains("show-access-rulebase uid 'layer'")) {
+                    String rule = objectReference ? RULE.replace("\"inline-layer\":\"child\"", "\"inline-layer\":{\"uid\":\"child\"}") : RULE;
+                    return ok(page("layer", 1, 1, 1, rule, ""));
+                }
+                return answer(command);
+            });
+            var snapshots = new CheckPointPolicyCollector(transport, gates, repository, Duration.ofHours(2), sessions)
+                .collect(run, request, () -> true);
+            assertTrue(snapshots.get(0).failures().isEmpty());
+            assertTrue(snapshots.get(0).sections().stream().flatMap(section -> section.rules().stream()).anyMatch(rule -> rule.uuid().equals("r3")));
+            verify(transport).execInteractive(any(), eq(policySpec(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "child", "Inline layer", 0))), any());
+            verify(transport, never()).execInteractive(any(), argThat(spec -> spec.command().contains("show-access-rulebase name ")), any());
+        }
+    }
+
+    @Test void ambiguousNameOnlyLayerLeavesDomainIncompleteInBothCollectors() throws Exception {
+        for (int sessions : List.of(1, 4)) {
+            reset(transport, repository);
+            setup(command -> {
+                if (command.contains("show-packages")) return ok(((ExecResult.Completed) answer(command)).output()
+                    .replace("{\"uid\":\"layer\",\"name\":\"Layer\"}", "{\"name\":\"Layer\"}"));
+                if (command.contains("show-access-rulebase name "))
+                    return ok("{\"code\":\"generic_err_object_field_not_unique\",\"message\":\"Synthetic-private-layer\"}");
+                return answer(command);
+            });
+            when(repository.saveUnit(any(), anyString(), anyString(), anyString())).thenReturn(true);
+            when(repository.saveDomain(any(), anyString(), anyString(), anyBoolean(), nullable(String.class), anyString(), anyInt(), nullable(String.class), anyString())).thenReturn(true);
+            var leased = new PolicyCollectionRepository.Request("mds-1", "", false, PolicyCollectionRepository.Mode.FULL, "job-ambiguous", 1);
+            var transcript = new com.securityexpert.nexus.ui2.worker.transcript.JobTranscript();
+            List<PolicySnapshot> snapshots;
+            try (var scope = com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.open(transcript)) {
+                snapshots = new CheckPointPolicyCollector(transport, gates, repository, Duration.ofHours(2), sessions)
+                    .collect(run, leased, () -> true);
+            }
+            assertTrue(snapshots.get(0).failures().stream().anyMatch(failure -> failure.reason().endsWith("LAYER_NAME_AMBIGUOUS")));
+            verify(repository, atLeastOnce()).saveDomain(eq(leased), anyString(), eq("COLLECTED"), eq(false), nullable(String.class), anyString(), anyInt(), nullable(String.class), anyString());
+            verify(repository, never()).saveDomain(eq(leased), anyString(), anyString(), eq(true), nullable(String.class), anyString(), anyInt(), nullable(String.class), anyString());
+            var sink = new java.io.ByteArrayOutputStream(); transcript.writeTo(sink);
+            assertTrue(sink.toString(java.nio.charset.StandardCharsets.UTF_8).contains("layerDomainType=ABSENT"));
+            assertFalse(sink.toString(java.nio.charset.StandardCharsets.UTF_8).contains("Synthetic-private-layer"));
+            verify(transport, times(1)).execInteractive(any(), eq(policySpec(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Layer", 0))), any());
+        }
+    }
+
     @Test void missingLayerUidUsesNameFallbackInBothCollectors() {
         for (int sessions : List.of(1, 4)) {
             reset(transport, repository);
@@ -130,6 +215,7 @@ class CheckPointPolicyCollectorTest {
             if (gate == 1) assertTrue(notes.contains("layerDomainType=global domain"));
         }
         var json = new com.fasterxml.jackson.databind.ObjectMapper();
+        assertEquals("ABSENT", CheckPointPolicyCollector.layerDomainType(json.readTree("{}")));
         for (String type : List.of("domain", "global domain", "data domain", "Synthetic-private-type")) {
             var layer = json.readTree("{\"domain\":{\"domain-type\":\"" + type + "\"}}");
             assertEquals(type.startsWith("Synthetic") ? "<masked>" : type, CheckPointPolicyCollector.layerDomainType(layer));
