@@ -100,6 +100,10 @@
     "NXS-LOCAL-0158"
   ],
   "backlog_classifications": {
+    "spring_boot_4_spring_security_migration": "java_debt",
+    "enterprise_platform_conformance": "java_feature",
+    "module_e2e_fail_fast": "agent_operations",
+    "machine_session_probe_isolation": "agent_operations",
     "tufin_access_query_tab": "java_feature",
     "network_topology_path_analysis": "java_feature",
     "transcript_per_run_listing": "java_feature",
