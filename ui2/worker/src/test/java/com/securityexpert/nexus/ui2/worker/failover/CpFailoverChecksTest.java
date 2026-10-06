@@ -19,8 +19,6 @@ class CpFailoverChecksTest {
         + "(Local)\n0 1 192.0.2.21\n1 1 192.0.2.22\n";
     private static final String IF = "CCP mode: Automatic\nRequired interfaces: 2\n"
         + "Interface Name: Status:\neth0 UP non sync\neth1 UP sync\n";
-    private static final String CONN = "HOST NAME ID #VALS #PEAK #SLINKS\n"
-        + "localhost connections 8158 100 150 0\n";
     private static final String SYNC = "Delta Sync Statistics\nSync status: OK\nDrops:\n"
         + "Lost updates................................. 0\nLost bulk update events...................... 0\n";
     private static final String POLICY = "HOST POLICY DATE\nlocalhost Sample_Policy 10Sep2018 14:01:25 : [>eth0]\n";
@@ -40,12 +38,8 @@ class CpFailoverChecksTest {
         check(CpFailoverChecks.interfaces(IF).trafficNames().equals(Set.of("eth0")));
         check(!CpFailoverChecks.interfaces(IF.replace("eth1 UP", "eth1 DOWN")).healthy());
         check(CpFailoverChecks.arpCount("? (192.0.2.31) at 02:00:00:00:00:01 [ether] on eth0\n")==1);
-        check(CpFailoverChecks.connections(CONN).count()==100);
-        check(CpFailoverChecks.connections(CONN).peak()==150);
         check(CpFailoverChecks.trafficBytesPerSecond(CpFailoverChecks.bytesByInterface(DEV_A),
-            CpFailoverChecks.bytesByInterface(DEV_B),Set.of("eth0","eth1"))==400);
-        check(CpFailoverChecks.ratio(80,100,CpFailoverChecks.CONNECTION_MIN_RATIO));
-        check(!CpFailoverChecks.ratio(49,100,CpFailoverChecks.TRAFFIC_MIN_RATIO));
+            CpFailoverChecks.bytesByInterface(DEV_B),Set.of("eth0","eth1"),5_000_000_000L)==400);
         // The same strict projections apply to a VS after its command is wrapped by vsenv.
         check(CpFailoverChecks.state(ACTIVE).localRole().equals("ACTIVE"));
     }
@@ -54,9 +48,8 @@ class CpFailoverChecksTest {
         check(CpFailoverChecks.ipTable("unsupported").isEmpty());
         check(!CpFailoverChecks.interfaces("unsupported").healthy());
         check(CpFailoverChecks.arpCount("unsupported")==-1);
-        check(CpFailoverChecks.connections("unsupported")==null);
         check(CpFailoverChecks.bytesByInterface("unsupported").isEmpty());
-        check(CpFailoverChecks.trafficBytesPerSecond(Map.of(),Map.of(),Set.of("eth0"))==-1);
+        check(CpFailoverChecks.trafficBytesPerSecond(Map.of(),Map.of(),Set.of("eth0"),5_000_000_000L)==-1);
     }
     @Test void inventoryStyleHaAndVsFixturesKeepOpaqueIdsAndCorroborate() {
         var plain=CpFailoverChecks.state(Fixtures.read("cp/cphaprob_stat_r8120_ha.txt"));
@@ -274,13 +267,13 @@ class CpFailoverChecksTest {
             check(parsed.ccpPresent() && parsed.healthy() && parsed.required()==7);
             check(parsed.names().equals(Set.of("eth1-01","eth1-02","Sync","eth1-01.1234",
                 "eth1-01.1235","eth1-01.1236","eth1-01.1237")));
-            check(parsed.trafficNames().size()==6 && !parsed.trafficNames().contains("Sync"));
+            check(parsed.trafficNames().size()==5 && !parsed.trafficNames().contains("Sync"));
             check(!CpFailoverChecks.interfaces(interfaces.replace("Sync (S)             UP", "Sync (S)             DOWN")).healthy());
             check(!CpFailoverChecks.interfaces(interfaces.replace("eth1-01.1237         UP", "truncated row")).ccpPresent());
             check(CpFailoverChecks.arpCount(fixture.get("arp -an").replace("\n",eol))==1);
             var bytes=CpFailoverChecks.bytesByInterface(fixture.get("cat /proc/net/dev").replace("\n",eol));
-            check(bytes.keySet().equals(parsed.names()) && bytes.values().stream().allMatch(v -> v==3000L));
-            check(CpFailoverChecks.trafficBytesPerSecond(bytes,bytes,parsed.trafficNames())==0);
+            check(bytes.keySet().equals(parsed.names()) && bytes.values().stream().allMatch(v -> v.received()+v.transmitted()==3000L));
+            check(CpFailoverChecks.trafficBytesPerSecond(bytes,bytes,parsed.trafficNames(),5_000_000_000L)==0);
             check(CpFailoverChecks.policy(fixture.get("fw stat").replace("\n",eol)).status().equals("PASS"));
             check(CpFailoverChecks.pnotes(fixture.get("cphaprob -ia list").replace("\n",eol)).status().equals("PASS"));
             check(CpFailoverChecks.bonds(fixture.get("cphaprob show_bond").replace("\n",eol)).equals("PASS"));
@@ -301,8 +294,7 @@ class CpFailoverChecksTest {
         check(!rows.equals(CpFailoverChecks.ipTable(table.replace("192.0.2.95", "192.0.2.96"))));
         check(CpFailoverChecks.ipTable(table+"0 4 192.0.2.99\n").size()==5);
         check(CpFailoverChecks.ipTable(table+"0 6 malformed\n").isEmpty());
-        check(CpFailoverChecks.connections(Fixtures.read("cp/failover_connections.txt")).count()==4521);
-        check(CpFailoverChecks.bytesByInterface(Fixtures.read("cp/failover_net_dev.txt")).get("gretap0")==19000);
+        check(CpFailoverChecks.bytesByInterface(Fixtures.read("cp/failover_net_dev.txt")).get("gretap0").equals(new CpFailoverChecks.TrafficBytes(9000,10000)));
     }
     @Test void approvedCriticalDeviceAndBondShapes() {
         check(CpFailoverChecks.pnotes(Fixtures.read("cp/failover_pnotes_ok.txt")).status().equals("PASS"));
@@ -390,24 +382,56 @@ class CpFailoverChecksTest {
         var singleHour=new CpFailoverChecks.Policy("PASS",a.name(),"1Oct2026 0:01:00");
         check(CpFailoverChecks.policyParity(a,singleHour,null,null).status().equals("PASS"));
     }
-    @Test void connectionVolumeAndToleranceBoundaries() {
-        long[][] cases={{3127,2285,1},{3000,1001,1},{3000,1000,0},{3000,999,0},
-            {9999,4999,0},{9998,4999,1},{9999,5000,1},{10000,7999,0},{10000,8000,1},
-            {10001,8000,0},{10001,8001,1},{0,0,1},{0,3000,1},{100,0,1},
-            {2000,0,0},{4000,1999,0},{4000,2000,1},{9999,12000,1}};
-        for(long[] c:cases) {
-            var result=CpFailoverChecks.connectionParity(c[0],c[1],false);
-            check(result.status().equals(c[2]==1?"PASS":"FAIL"));
-            check(result.derived().get("rule").equals(c[0]<10000?"LOW_VOLUME_ABSOLUTE_OR_RATIO":"RATIO_80"));
-            check(result.derived().get("activeCount").equals(c[0]));
-            check(result.derived().get("comparedCount").equals(c[1]));
-            check(result.derived().containsKey("ratio")== (c[0]>0));
+    @Test void sessionContinuityIsNeverPass() {
+        assertEquals("NOT_EVALUATED",CpFailoverChecks.sessionContinuity().status());
+        assertEquals(Map.of("reason","SESSION_CONTINUITY_NOT_EVALUATED"),CpFailoverChecks.sessionContinuity().derived());
+    }
+    @Test void trafficUsesMeasuredElapsedAndRejectsMissingResetOrZeroBaseline() {
+        var before=Map.of("eth0",new CpFailoverChecks.TrafficBytes(100,100));
+        var after=Map.of("eth0",new CpFailoverChecks.TrafficBytes(1100,100));
+        assertEquals(100.0,CpFailoverChecks.trafficBytesPerSecond(before,after,Set.of("eth0"),10_000_000_000L));
+        for(long elapsed:new long[]{0,-1})
+            assertEquals(-1.0,CpFailoverChecks.trafficBytesPerSecond(before,after,Set.of("eth0"),elapsed));
+        assertEquals(-1.0,CpFailoverChecks.trafficBytesPerSecond(after,before,Set.of("eth0"),5_000_000_000L));
+        assertEquals(-1.0,CpFailoverChecks.trafficBytesPerSecond(before,Map.of(),Set.of("eth0"),5_000_000_000L));
+        assertEquals(-1.0,CpFailoverChecks.trafficBytesPerSecond(before,
+            Map.of("eth0",new CpFailoverChecks.TrafficBytes(50,10000)),Set.of("eth0"),5_000_000_000L));
+        assertEquals(-1.0,CpFailoverChecks.trafficBytesPerSecond(before,after,Set.of("bond1","eth0"),5_000_000_000L));
+        assertEquals("UNKNOWN",CpFailoverChecks.trafficStatus(0,100));
+        assertEquals("UNKNOWN",CpFailoverChecks.trafficStatus(100,-1));
+        assertEquals("FAIL",CpFailoverChecks.trafficStatus(100,0));
+        assertEquals("FAIL",CpFailoverChecks.trafficStatus(100,49.99));
+        assertEquals("PASS",CpFailoverChecks.trafficStatus(100,50));
+    }
+    @Test void trafficSelectionExcludesNonForwardingAndOverlappingParents() {
+        var selected=CpFailoverChecks.interfaces("CCP mode: Automatic\nRequired interfaces: 1\n"
+            +"lo UP non sync\nMgmt UP non sync\nSync (S) UP\neth1 Non-Monitored\n"
+            +"bond1 UP non sync\nbond1.10 UP non sync\n");
+        assertEquals(Set.of("bond1.10"),selected.trafficNames());
+    }
+    @Test void onlyIntentionalAdminDownIsAccepted() {
+        for(String name:java.util.List.of("ADMIN_DOWN","admin_down")) {
+            String output="Device Name: "+name+"\nCurrent state: problem\n";
+            assertEquals("FAIL",CpFailoverChecks.pnotes(output).status());
+            assertEquals("PASS",CpFailoverChecks.pnotes(output,true).status());
+            assertEquals("FAIL",CpFailoverChecks.pnotes(output+"Device Name: fwd\n",true).status());
         }
-        check(CpFailoverChecks.connectionParity(-1,10,false).status().equals("UNKNOWN"));
-        check(CpFailoverChecks.connectionParity(10,-1,false).status().equals("UNKNOWN"));
-        check(CpFailoverChecks.connectionParity(100,79,true).status().equals("FAIL"));
-        check(CpFailoverChecks.connectionParity(100,80,true).status().equals("PASS"));
-        check(CpFailoverChecks.connectionParity(100,80,true).derived().get("rule").equals("POST_RATIO_80"));
+        assertEquals("UNKNOWN",CpFailoverChecks.pnotes("unrecognized",true).status());
+    }
+    @Test void cpstatUsesExistingParserAndPolicyRules() {
+        String output="Policy name: Sample_Policy\nInstall time: 2026-10-06 12:00:00\n";
+        var a=CpFailoverChecks.cpstatPolicy(output);
+        assertEquals("PASS",CpFailoverChecks.policyParity(a,a,null,null).status());
+        assertEquals("FAIL",CpFailoverChecks.policyParity(a,
+            CpFailoverChecks.cpstatPolicy(output.replace("Sample_Policy","Other_Policy")),null,null).status());
+        assertEquals("FAIL",CpFailoverChecks.policyParity(a,a,"Other_Policy",a.name()).status());
+        for(int skew:new int[]{600,601}) {
+            var b=CpFailoverChecks.cpstatPolicy(output.replace("12:00:00",skew==600?"12:10:00":"12:10:01"));
+            assertEquals(skew==600?"PASS":"FAIL",CpFailoverChecks.policyParity(a,b,null,null).status());
+        }
+        assertEquals("UNKNOWN",CpFailoverChecks.policyParity(a,CpFailoverChecks.cpstatPolicy(""),null,null).status());
+        assertEquals("UNKNOWN",CpFailoverChecks.policyParity(a,
+            CpFailoverChecks.cpstatPolicy("Policy name: Sample_Policy\n"),null,null).status());
     }
     @Test void tableDifferencesExplainCoordinatesWithoutRawAddresses() {
         var a=CpFailoverChecks.ipTable(TABLE);

@@ -20,18 +20,12 @@ import com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointHaStateParser;
 
 /** Strict, in-memory projections of the approved Check Point checks. */
 public final class CpFailoverChecks {
-    public static final double ARP_MIN_RATIO = 0.80;
-    public static final double CONNECTION_MIN_RATIO = 0.80;
-    public static final long CONNECTION_LOW_VOLUME = 10_000;
-    public static final long CONNECTION_ABSOLUTE_TOLERANCE = 2_000;
-    public static final double CONNECTION_LOW_MIN_RATIO = 0.50;
     public static final long POLICY_MAX_SKEW_SECONDS = 600;
     public static final double TRAFFIC_MIN_RATIO = 0.50;
     private static final Pattern MODE = Pattern.compile("(?im)^\\s*Cluster mode:[ \t]*([^\\r\\n]+)$");
     private static final Pattern LOCAL = Pattern.compile("(?i)\\(local\\)");
     private static final Pattern IP_ROW = Pattern.compile("(?m)^\\s*([^\\s()]+)\\s+(\\d+|[A-Za-z][A-Za-z0-9_.:-]{0,63})\\s+([0-9a-fA-F:.]+)(?:[ \\t]+[0-9a-fA-F:]+)?[ \\t]*$");
     private static final Pattern INTERFACE = Pattern.compile("(?m)^\\s*([A-Za-z][A-Za-z0-9_.:-]{0,63})[ \\t]+(?:\\(((?:S|HA|LS|LM|P)(?:,[ \t]*(?:S|HA|LS|LM|P))*)\\)[ \\t]+)?(UP|DOWN|Non-Monitored)\\b(.*)$");
-    private static final Pattern CONNECTION = Pattern.compile("(?im)^\\s*\\S+\\s+connections\\s+\\d+\\s+(\\d+)\\s+(\\d+)\\s+\\d+\\s*$");
     private static final Pattern DEV = Pattern.compile("(?m)^\\s*([A-Za-z0-9_.:-]{1,64}):\\s*((?:\\d+\\s+){15}\\d+)\\s*$");
     private static final Pattern SYNC_STATUS = Pattern.compile("(?m)^Sync status:\\s*(OK|Off\\s*-.*|Fullsync in progress|Problem\\s*\\(.*\\))\\s*$");
     private static final Pattern POLICY_ROW = Pattern.compile("(?m)^localhost\\s+(\\S+)\\s+(\\d{1,2}[A-Za-z]{3}\\d{4})\\s+(\\d{1,2}:\\d{2}:\\d{2})\\s+:.*$");
@@ -150,17 +144,22 @@ public final class CpFailoverChecks {
     }
 
     public record Assessment(String status,Map<String,Object> derived) {}
-    public static Assessment connectionParity(long active,long compared,boolean post) {
-        boolean low=!post && active<CONNECTION_LOW_VOLUME;
-        var d=new HashMap<String,Object>();
-        d.put("activeCount",active); d.put("comparedCount",compared);
-        d.put("rule",post?"POST_RATIO_80":low?"LOW_VOLUME_ABSOLUTE_OR_RATIO":"RATIO_80");
-        if(active<0 || compared<0) return new Assessment("UNKNOWN",Map.copyOf(d));
-        if(active>0) d.put("ratio",(double)compared/active);
-        d.put("difference",Math.abs(active-compared));
-        boolean pass=low ? Math.abs(active-compared)<CONNECTION_ABSOLUTE_TOLERANCE
-            || ratio(compared,active,CONNECTION_LOW_MIN_RATIO) : ratio(compared,active,CONNECTION_MIN_RATIO);
-        return new Assessment(pass?"PASS":"FAIL",Map.copyOf(d));
+    public static Assessment sessionContinuity() {
+        return new Assessment("NOT_EVALUATED",Map.of("reason","SESSION_CONTINUITY_NOT_EVALUATED"));
+    }
+
+    public static String trafficStatus(double baseline,double current) {
+        if(!Double.isFinite(baseline) || !Double.isFinite(current) || baseline<=0 || current<0)
+            return "UNKNOWN";
+        return current/baseline>=TRAFFIC_MIN_RATIO?"PASS":"FAIL";
+    }
+
+    /** Reuse the inventory parser; retain policy identities only in memory. */
+    public static Policy cpstatPolicy(String output) {
+        var read=com.securityexpert.nexus.ui2.worker.inventory.policy.CheckPointPolicyParser.parse(output);
+        String time=read.installedAt().map(t -> DateTimeFormatter.ofPattern("dMMMuuuu H:mm:ss",Locale.ENGLISH)
+            .withZone(ZoneId.of("Europe/Istanbul")).format(t)).orElse(null);
+        return new Policy(read.policyName().isPresent()?"PASS":"UNKNOWN",read.policyName().orElse(null),time);
     }
 
     public static Assessment policyParity(Policy a,Policy b,String previousA,String previousB) {
@@ -222,9 +221,12 @@ public final class CpFailoverChecks {
                 boolean sync=(m.group(2)!=null && java.util.Arrays.asList(m.group(2).split(",[ \t]*")).contains("S")) || "Sync".equalsIgnoreCase(m.group(1))
                     || (m.group(4).toLowerCase(Locale.ROOT).contains("sync")
                         && !m.group(4).toLowerCase(Locale.ROOT).contains("non sync"));
-                if(!sync) traffic.add(m.group(1));
+                if(!sync && !m.group(1).matches("(?i)(?:lo|mgmt|management)(?:[0-9.].*)?")) traffic.add(m.group(1));
             } else down=true;
         }
+        // Prefer scoped subinterfaces over an overlapping parent aggregate.
+        Set<String> selected=Set.copyOf(traffic);
+        traffic.removeIf(parent -> selected.stream().anyMatch(child -> child.startsWith(parent+".")));
         if(!hasCount) required=monitored;
         return new Interfaces(Set.copyOf(up),Set.copyOf(traffic),required,true,
             monitored>0 && up.size()>=required && !down);
@@ -238,38 +240,34 @@ public final class CpFailoverChecks {
         }
         return count;
     }
-    public record Connections(long count,long peak) {}
-    public static Connections connections(String output) {
-        if(output==null || !output.contains("#VALS") || !output.contains("#PEAK")) return null;
-        Matcher m=CONNECTION.matcher(output);
-        if(!m.find()) return null;
-        try { return new Connections(Long.parseLong(m.group(1)),Long.parseLong(m.group(2))); }
-        catch(NumberFormatException invalid) { return null; }
-    }
-    public static Map<String,Long> bytesByInterface(String output) {
+    public record TrafficBytes(long received,long transmitted) {}
+    public static Map<String,TrafficBytes> bytesByInterface(String output) {
         if(output==null || !output.contains("Receive") || !output.contains("Transmit")) return Map.of();
-        Map<String,Long> counters=new HashMap<>(); Matcher m=DEV.matcher(output);
+        Map<String,TrafficBytes> counters=new HashMap<>(); Matcher m=DEV.matcher(output);
         while(m.find()) {
             try {
                 String[] columns=m.group(2).trim().split("\\s+");
-                counters.put(m.group(1),Math.addExact(Long.parseLong(columns[0]),Long.parseLong(columns[8])));
+                if(counters.put(m.group(1),new TrafficBytes(Long.parseLong(columns[0]),Long.parseLong(columns[8])))!=null)
+                    return Map.of();
             } catch (NumberFormatException | ArithmeticException invalid) { return Map.of(); }
         }
         return Map.copyOf(counters);
     }
-    public static long trafficBytesPerSecond(Map<String,Long> before,Map<String,Long> after,Set<String> interfaces) {
-        if(before.isEmpty() || after.isEmpty() || interfaces.isEmpty()) return -1;
+    public static double trafficBytesPerSecond(Map<String,TrafficBytes> before,Map<String,TrafficBytes> after,
+            Set<String> interfaces,long elapsedNanos) {
+        if(before.isEmpty() || after.isEmpty() || interfaces.isEmpty() || elapsedNanos<=0) return -1;
+        // The interface list has no slave mapping: mixed bond/physical selection cannot prove non-overlap.
+        if(interfaces.stream().anyMatch(n -> n.startsWith("bond"))
+                && interfaces.stream().anyMatch(n -> !n.startsWith("bond"))) return -1;
         long delta=0;
         for(String name:interfaces) {
-            Long a=before.get(name),b=after.get(name);
-            if(a==null || b==null || b<a) return -1;
-            try { delta=Math.addExact(delta,b-a); }
+            TrafficBytes a=before.get(name),b=after.get(name);
+            if(a==null || b==null || a.received()<0 || a.transmitted()<0
+                    || b.received()<a.received() || b.transmitted()<a.transmitted()) return -1;
+            try { delta=Math.addExact(delta,Math.addExact(b.received()-a.received(),b.transmitted()-a.transmitted())); }
             catch(ArithmeticException overflow) { return -1; }
         }
-        return delta/5;
-    }
-    public static boolean ratio(long value,long baseline,double minimum) {
-        return baseline>=0 && value>=0 && value>=baseline*minimum;
+        return delta/(elapsedNanos/1_000_000_000.0);
     }
     public static String syncStatus(String output) {
         if(output==null) return "UNKNOWN";
@@ -352,15 +350,17 @@ public final class CpFailoverChecks {
     private static final Set<String> BUILTIN_PNOTES=Set.of("Problem Notification", "Interface Active Check",
         "Load Balancing Configuration", "Recovery Delay", "CoreXL Configuration", "Fullsync", "Policy", "fwd",
         "cphad", "routed", "cvpnd", "ted", "VSX", "VSX Config", "Instances", "Hibernating", "Init", "ADMIN_DOWN");
-    public static Pnotes pnotes(String output) {
+    public static Pnotes pnotes(String output) { return pnotes(output,false); }
+    public static Pnotes pnotes(String output,boolean expectedAdminDown) {
         if(output==null) return new Pnotes("UNKNOWN",List.of());
         List<String> names=new ArrayList<>();
         Matcher name=Pattern.compile("(?m)^[ \\t]*Device Name:[ \\t]*([^\\r\\n]+)$").matcher(output);
         while(name.find()) {
             String value=name.group(1).strip();
+            if(value.equals("admin_down")) value="ADMIN_DOWN";
             names.add(BUILTIN_PNOTES.contains(value)?value:"CUSTOM_PNOTE_"+(names.size()+1));
         }
-        if(!names.isEmpty()) return new Pnotes("FAIL",List.copyOf(names));
+        if(!names.isEmpty()) return new Pnotes(expectedAdminDown && names.equals(List.of("ADMIN_DOWN"))?"PASS":"FAIL",List.copyOf(names));
         return new Pnotes(output.strip().equals("There are no pnotes in problem state")?"PASS":"UNKNOWN",List.of());
     }
 

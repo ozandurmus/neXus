@@ -33,7 +33,7 @@ class PanFailoverJobExecutorTest {
         String failBeforeStep,failAfterStep,lostReplyStep,runtimeErrorStep;
         int prepared,replies,observations;
         boolean suspended,functional,stuck,badPre,badPost,badSync,badSessions,badVersion,lowPostSessions;
-        boolean missingFields;
+        boolean missingFields,preempt,badFinal;
         String evidenceFault;
         int suspendCount,functionalCount,callCount;
         DeviceTransport transport() {
@@ -76,7 +76,8 @@ class PanFailoverJobExecutorTest {
                         :(suspended&&!stuck?"active":"passive");
                     String peer=first?(suspended&&!stuck?"active":"passive")
                         :(functional?"passive":suspended&&!stuck?"suspended":"active");
-                    String ha2=(badPre&&!suspended || badPost&&suspended)&&!first?"down":"up";
+                    if(preempt && functional) { local=first?"active":"passive"; peer=first?"passive":"active"; }
+                    String ha2=(badFinal && functional || badPre&&!suspended || badPost&&suspended)&&!first?"down":"up";
                     String body="<response status=\"success\"><result><group><mode>Active-Passive</mode>"
                         +"<running-sync>synchronized</running-sync><local-info><state>"+local+"</state>"
                         +"<serial-num>"+(first?"0011":"0022")+"</serial-num></local-info>"
@@ -268,7 +269,7 @@ class PanFailoverJobExecutorTest {
         assertEquals(2,result.derived().stream().filter(d -> d.contains("\"mirrored_roles\":\"NOT_EVALUABLE\"")
             && d.contains("\"switch_mirrored_roles\":\"NOT_EVALUABLE\"")
             && d.contains("\"reciprocal_identity\":\"PASS\"")).count());
-        assertEquals(28,result.checks().size(),"Keep the existing unique pre/post check rows");
+        assertEquals(42,result.checks().size(),"Preserve distinct pre/post/post-return check rows");
     }
     @Test void missingPostPeerRoleNeverRelaxesSerialReciprocity() {
         Script script=new Script(); script.evidenceFault="post-missing-opaque";
@@ -294,6 +295,18 @@ class PanFailoverJobExecutorTest {
         assertEquals("DONE",result.state());
         assertEquals(1,script.suspendCount); assertEquals(1,script.functionalCount);
         assertTrue(result.checks().contains("post:7:PASS"));
+        for(int no=1;no<=7;no++) assertTrue(result.checks().contains("post_return:"+no+":PASS"));
+    }
+    @Test void finalHealthFailureStopsAfterBothMutations() {
+        Script script=new Script(); script.badFinal=true; Result result=run(script);
+        assertEquals("STOPPED",result.state());
+        assertTrue(result.checks().contains("post_return:3:FAIL"));
+        assertEquals(1,script.suspendCount); assertEquals(1,script.functionalCount);
+    }
+    @Test void unexpectedPreemptionStopsAfterReturn() {
+        Script script=new Script(); script.preempt=true; Result result=run(script);
+        assertEquals("STOPPED",result.state()); assertEquals("UNEXPECTED_ROLES",result.outcome());
+        assertEquals(1,script.suspendCount); assertEquals(1,script.functionalCount);
     }
     @Test void sessionSyncFailurePersistsProofForBothMemberRows() {
         Script script=new Script(); script.badSync=true;
