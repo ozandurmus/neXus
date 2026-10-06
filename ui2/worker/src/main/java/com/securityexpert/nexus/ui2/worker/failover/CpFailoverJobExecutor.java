@@ -60,6 +60,7 @@ public final class CpFailoverJobExecutor {
     private static final class Member {
         private final String id;
         private final TransportSession session;
+        private boolean identityVerified=true;
         private final long openedAtNanos=System.nanoTime();
         private int sessionCommandIndex;
         private String localId;
@@ -213,19 +214,26 @@ public final class CpFailoverJobExecutor {
             .filter(e -> summary.deviceId().equals(e.deviceId()) && "ssh_exec".equalsIgnoreCase(e.transportKind()))
             .orElseThrow(() -> new Stop("ENDPOINT_MISSING",0));
         String identity=devices.findConfirmFacts(summary.deviceId()).flatMap(f -> f.recordedIdentityPrimary())
-            .filter(value -> !value.isBlank()).orElseThrow(() -> new Stop("IDENTITY_NOT_VERIFIED",0));
+            .filter(value -> !value.isBlank()).orElse(null);
+        if(identity==null && !readiness) throw new Stop("IDENTITY_NOT_VERIFIED",0);
         String host=com.securityexpert.nexus.ui2.persistence.runtime.EndpointAddress.host(endpoint.addressRef());
         int port=com.securityexpert.nexus.ui2.persistence.runtime.EndpointAddress.port(endpoint.addressRef(),22);
         var result=ssh.connect(new ConnectionTarget(endpoint.endpointId(),host,port),
             new ConnectSpec(device.credentialReferenceId(),
                 PersistedManagementEndpointTrustResolver.scopeRef(host,port),java.util.Optional.empty()),Duration.ofSeconds(30));
         if(!(result instanceof ConnectResult.Authenticated auth)) throw new Stop("TRUSTED_CONNECTION_REQUIRED",0);
-        if(!auth.session().presentedIdentity().filter(identity::equals).isPresent()) {
+        if(auth.session().presentedIdentity().filter(value -> !value.isBlank()).isEmpty()
+                || identity!=null && !auth.session().presentedIdentity().filter(identity::equals).isPresent()) {
             ssh.disconnect(auth.session());
             throw new Stop("IDENTITY_NOT_VERIFIED",0);
         }
-        // The local row belongs to this enrolled member by session provenance, never by its display name.
-        return new Member(summary.deviceId(),auth.session());
+        Member member=new Member(summary.deviceId(),auth.session());
+        if(identity==null) {
+            member.identityVerified=false;
+            readinessFailure=new Stop("IDENTITY_NOT_RECORDED",1,"UNKNOWN");
+        }
+        // Session provenance is identity-verified for mutations; missing enrollment is explicit in readiness.
+        return member;
     }
     private GateResolution.Known gate(String command) {
         boolean write=DOWN.equals(command)||UP.equals(command);
@@ -367,9 +375,13 @@ public final class CpFailoverJobExecutor {
         var b=readState(second);
         boolean states=before==null?CpFailoverChecks.corroborated(a,b)
             : roles(a,b,oldActive==first?second:first,"ACTIVE",oldActive,"DOWN",first,second);
-        String stateStatus=states?"PASS":!"UNKNOWN".equals(a.mode()) && !"UNKNOWN".equals(b.mode())?"FAIL":"UNKNOWN";
-        record(phase,first,1,stateStatus,json(CpFailoverChecks.stateEvidence(a)));
-        record(phase,second,1,stateStatus,json(CpFailoverChecks.stateEvidence(b)));
+        String stateStatus=states?"PASS":a.supportedMode() && b.supportedMode()?"FAIL":"UNKNOWN";
+        for(Member member:List.of(first,second)) {
+            var evidence=new java.util.HashMap<>(CpFailoverChecks.stateEvidence(member==first?a:b));
+            evidence.put("identity",member.identityVerified?"MATCH":"NOT_EVALUABLE");
+            if(!member.identityVerified) evidence.put("reason","IDENTITY_NOT_RECORDED");
+            record(phase,member,1,!member.identityVerified && "PASS".equals(stateStatus)?"UNKNOWN":stateStatus,json(evidence));
+        }
         if(!states) checkFailed("CLUSTER_STATE_NOT_READY",1,stateStatus);
         var ta=CpFailoverChecks.ipTable(command(first,TABLE));
         var tb=CpFailoverChecks.ipTable(command(second,TABLE));
@@ -508,7 +520,7 @@ public final class CpFailoverJobExecutor {
     }
     private static boolean roles(CpFailoverChecks.State a,CpFailoverChecks.State b,Member active,
             String activeRole,Member other,String otherRole,Member first,Member second) {
-        return "HA".equals(a.mode()) && "HA".equals(b.mode()) && a.members().size()==2
+        return a.supportedMode() && b.supportedMode() && a.members().size()==2
             && "PASS".equals(CpFailoverChecks.reciprocal(a,b))
             && (active==first?activeRole:otherRole).equals(a.localRole())
             && (active==second?activeRole:otherRole).equals(b.localRole());

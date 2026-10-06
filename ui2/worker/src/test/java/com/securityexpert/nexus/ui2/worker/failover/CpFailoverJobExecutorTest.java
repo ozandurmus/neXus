@@ -236,6 +236,9 @@ class CpFailoverJobExecutorTest {
             Optional.empty(),Optional.empty(),Optional.empty(),Optional.empty(),Optional.of(CLUSTER));
     }
     private static DeviceRepository devices() {
+        return devices(true);
+    }
+    private static DeviceRepository devices(boolean recordedIdentity) {
         return (DeviceRepository)Proxy.newProxyInstance(DeviceRepository.class.getClassLoader(),
             new Class<?>[]{DeviceRepository.class},(proxy,method,args) -> switch(method.getName()) {
                 case "findMembersByClusterRef" -> List.of(summary(A),summary(B));
@@ -244,7 +247,7 @@ class CpFailoverJobExecutorTest {
                 case "findEndpointByDeviceId" -> Optional.of(new EndpointRecord("endpoint-ref",(String)args[0],"ssh_exec",
                     A.equals(args[0])?"192.0.2.11":"192.0.2.12",Instant.EPOCH));
                 case "findConfirmFacts" -> Optional.of(new DeviceConfirmFacts(Optional.empty(),Optional.empty(),
-                    Optional.empty(),Optional.empty(),Optional.of(A.equals(args[0])?"synthetic-key-a":"synthetic-key-b"),Optional.empty(),
+                    Optional.empty(),Optional.empty(),recordedIdentity?Optional.of(A.equals(args[0])?"synthetic-key-a":"synthetic-key-b"):Optional.empty(),Optional.empty(),
                     DeviceConfirmFacts.IDENTITY_MISMATCH_NONE,Optional.empty(),Optional.empty(),Optional.of(CLUSTER),
                     Optional.empty(),DeviceConfirmFacts.PEER_FOLLOW_CORROBORATED,Optional.empty()));
                 default -> throw new AssertionError(method.getName());
@@ -295,6 +298,55 @@ class CpFailoverJobExecutorTest {
             check(script.commands.isEmpty());
         }
     }
+    @Test void missingRecordedIdentityContinuesOnlyTheReadinessBattery() {
+        for(boolean readiness:List.of(false,true)) {
+            Store store=new Store(); store.kind=readiness?"READINESS":"FAILOVER";
+            Script script=new Script();
+            new CpFailoverJobExecutor(store,devices(false),leases(),attempts(),script.transport(),gates(),d -> {},
+                Duration.ZERO,new FailoverMutationSwitch(!readiness)).execute("job-1",1);
+            assertEquals(readiness?"UNKNOWN":"IDENTITY_NOT_VERIFIED",store.outcome);
+            assertEquals(readiness?"IDENTITY_NOT_RECORDED":"IDENTITY_NOT_VERIFIED",store.stopCode);
+            assertEquals(0,script.downCount); assertEquals(0,script.upCount);
+            if(readiness) {
+                assertEquals(24,store.checks.size());
+                assertEquals(2,store.checks.stream().filter("pre:1:UNKNOWN"::equals).count());
+                assertTrue(store.checks.contains("pre:14:PASS"));
+                assertTrue(store.derivedValues.stream().anyMatch(d -> d.contains("IDENTITY_NOT_RECORDED")));
+            } else assertEquals(0,script.connectCount);
+        }
+    }
+    @Test void readinessStillBlocksMismatchedOrUnpresentedIdentity() {
+        for(boolean missing:List.of(false,true)) {
+            Store store=new Store(); store.kind="READINESS";
+            Script script=new Script(); script.missingIdentity=missing; script.wrongIdentity=!missing;
+            run(store,script);
+            assertEquals("UNKNOWN",store.outcome);
+            assertEquals("IDENTITY_NOT_VERIFIED",store.stopCode);
+            assertTrue(script.commands.isEmpty());
+        }
+    }
+    @Test void unsupportedModesAreUnknownAndNeverUnhealthyInReadiness() {
+        for(String mode:List.of("Load Sharing Unicast","Virtual System Load Sharing")) {
+            Store store=new Store(); store.kind="READINESS";
+            Script script=new Script(); script.reportedMode=mode;
+            run(store,script);
+            assertEquals("UNKNOWN",store.outcome);
+            assertEquals(2,store.checks.stream().filter("pre:1:UNKNOWN"::equals).count());
+            assertTrue(store.checks.stream().noneMatch(s -> s.endsWith(":FAIL")));
+            assertTrue(store.derivedValues.stream().anyMatch(d -> d.contains("UNSUPPORTED_MODE")));
+        }
+    }
+    @Test void perVsVslsLabelSupportsReadinessSwitchAndReturn() {
+        for(boolean readiness:List.of(false,true)) {
+            Store store=new Store(); store.vsId="12"; store.kind=readiness?"READINESS":"FAILOVER";
+            Script script=new Script(); script.reportedMode="Virtual System Load Sharing";
+            script.prefix="Context is set to Virtual Device VS-SYNTHETIC (ID 12).\n";
+            run(store,script);
+            assertEquals(readiness?"READY":"SUCCEEDED",store.outcome);
+            assertEquals(readiness?0:1,script.downCount); assertEquals(readiness?0:1,script.upCount);
+            assertTrue(script.commands.stream().allMatch(c -> c.startsWith("bash -lc 'vsenv 12 && ")));
+        }
+    }
     @Test void localIdsCannotRebindToTheOtherSessionAfterSwitch() {
         Store store=new Store(); Script script=new Script(); script.swapLocalIdsAfterDown=true;
         run(store,script);
@@ -329,7 +381,7 @@ class CpFailoverJobExecutorTest {
                 +(banner?"Warning! Synthetic login notice.\n":"");
             run(store,script);
             String context=shape+" banner="+banner+" checks="+store.checks;
-            assertEquals(shape.equals("gateway")?"READY":shape.equals("vs0")?"UNKNOWN":"NOT_READY",store.outcome,context);
+            assertEquals(shape.equals("vs0")?"UNKNOWN":"READY",store.outcome,context);
             assertEquals(24,store.checks.size(),"All readiness checks must be recorded: "+context);
             assertTrue(script.downCount==0 && script.upCount==0,"Readiness must not dispatch writes: "+context);
         }
@@ -548,7 +600,7 @@ class CpFailoverJobExecutorTest {
         check(script.downCount==0);
     }
     @Test void unhealthyVslsRunFailsWithEvidenceAndStillCollectsLaterChecks() {
-        Store store=new Store(); store.kind="READINESS";
+        Store store=new Store(); store.kind="READINESS"; store.vsId="12";
         Script script=new Script(); script.measured=Map.of("cphaprob stat",
             "Cluster Mode: Virtual System Load Sharing (Active Up)\n"
             +"1 (local) 192.0.2.11 0% DOWN\n2          192.0.2.12 100% ACTIVE(!)\nActive PNOTEs: synthetic\n");

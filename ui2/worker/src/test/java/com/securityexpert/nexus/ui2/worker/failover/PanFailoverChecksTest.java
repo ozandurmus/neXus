@@ -75,6 +75,34 @@ class PanFailoverChecksTest {
     private static String result(String body) {
         return "<response status=\"success\"><result>"+body+"</result></response>";
     }
+    @Test void afterWriteAllowsOnlyTheActiveObserversMissingSuspendedPeerRole() {
+        var suspended=PanFailoverChecks.parse(xml("suspended","active","0011","0022","up","up","synchronized"));
+        for(String peer:new String[]{"","unknown","initial"}) {
+            var active=PanFailoverChecks.parse(xml("active",peer,"0022","0011","up","up","synchronized"));
+            assertEquals("UNKNOWN",PanFailoverChecks.roles(suspended,active,"suspended","active"));
+            assertEquals("PASS",PanFailoverChecks.roles(suspended,active,"suspended","active",true));
+            assertEquals("PASS",PanFailoverChecks.roles(active,suspended,"active","suspended",true));
+            assertEquals("PASS",PanFailoverChecks.relationship(suspended,active,true));
+            assertEquals("NOT_EVALUABLE",PanFailoverChecks.mirroredRoles(suspended,active));
+            org.junit.jupiter.api.Assertions.assertTrue(PanFailoverChecks.stateEvidence(active,suspended)
+                .contains("\"mirrored_roles\":\"NOT_EVALUABLE\""));
+        }
+        for(String peer:new String[]{"active","passive"}) {
+            var active=PanFailoverChecks.parse(xml("active",peer,"0022","0011","up","up","synchronized"));
+            assertEquals("FAIL",PanFailoverChecks.roles(suspended,active,"suspended","active",true));
+        }
+        for(String serial:new String[]{"","11","0099"}) {
+            var active=PanFailoverChecks.parse(xml("active","","0022",serial,"up","up","synchronized"));
+            assertEquals(serial.isEmpty()?"UNKNOWN":"FAIL",PanFailoverChecks.roles(suspended,active,"suspended","active",true));
+        }
+        var active=PanFailoverChecks.parse(xml("active","","0022","0011","up","up","synchronized"));
+        for(String role:new String[]{"passive","active",""}) {
+            var other=PanFailoverChecks.parse(xml(role,"active","0011","0022","up","up","synchronized"));
+            assertEquals("UNKNOWN",PanFailoverChecks.roles(other,active,"passive","active",true));
+        }
+        var blindSuspended=PanFailoverChecks.parse(xml("suspended","","0011","0022","up","up","synchronized"));
+        assertEquals("UNKNOWN",PanFailoverChecks.roles(blindSuspended,active,"suspended","active",true));
+    }
     @Test void addedChecksPassFailUnknown() {
         assertEquals(100L,PanFailoverChecks.sessions(result("<active-sessions>100</active-sessions>")));
         assertEquals(null,PanFailoverChecks.sessions(result("<active-sessions>bad</active-sessions>")));

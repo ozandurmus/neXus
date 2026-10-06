@@ -62,6 +62,7 @@ public final class PanFailoverJobExecutor {
     private boolean wrote,writeInFlight;
     private boolean readiness;
     private Stop readinessFailure;
+    private String switchMirroredRoles;
     private ReadinessShapeLog shapes;
     private final Map<Integer,Boolean> fieldsFound=new java.util.HashMap<>();
 
@@ -100,6 +101,7 @@ public final class PanFailoverJobExecutor {
         this.jobId=jobId; this.runId=run.get().id(); this.epoch=epoch;
         this.readiness=READINESS_KIND.equals(run.get().kind());
         this.readinessFailure=null;
+        this.switchMirroredRoles=null;
         this.shapes=new ReadinessShapeLog("palo_alto");
         this.fieldsFound.clear();
         this.commandIndex=0; this.wrote=false; this.writeInFlight=false;
@@ -272,7 +274,7 @@ public final class PanFailoverJobExecutor {
             ?("active".equals(a.role())?PanFailoverChecks.roles(a,b,"active","passive")
                 :PanFailoverChecks.roles(a,b,"passive","active"))
             :PanFailoverChecks.roles(a,b,oldActive==first?"suspended":"active",
-                oldActive==second?"suspended":"active");
+                oldActive==second?"suspended":"active",true);
         String syncA=call(first,SESSION_SYNC);
         String syncB=call(second,SESSION_SYNC);
         Long sessionsA=PanFailoverChecks.sessions(call(first,SESSIONS));
@@ -287,7 +289,7 @@ public final class PanFailoverJobExecutor {
                 :new PanFailoverChecks.SessionSync("UNKNOWN","{\"missing\":[\"active role\"]}");
         var links=PanFailoverChecks.linksEvidence(a,b);
         var configurationSync=PanFailoverChecks.syncEvidence(a,b);
-        String[] statuses={role,PanFailoverChecks.relationship(a,b),links.status(),
+        String[] statuses={role,PanFailoverChecks.relationship(a,b,oldActive!=null),links.status(),
             configurationSync.status(),sessionSync.status(),carried,versions};
         for (int i=0;i<statuses.length;i++) {
             int no=i+1;
@@ -297,10 +299,10 @@ public final class PanFailoverJobExecutor {
             if (no==4) reason=configurationSync.derived();
             if (no==5) reason=sessionSync.derived();
             if (no==6 && !"UNKNOWN".equals(statuses[i])) reason="{\"count\":"+sessionsA+"}";
-            String derived=no==1?PanFailoverChecks.stateEvidence(a):reason;
+            String derived=no==1?PanFailoverChecks.stateEvidence(a,b,switchMirroredRoles):reason;
             store.check(runId,phase,first.id(),null,no,statuses[i],derived);
             if (no==6 && !"UNKNOWN".equals(statuses[i])) reason="{\"count\":"+sessionsB+"}";
-            derived=no==1?PanFailoverChecks.stateEvidence(b):reason;
+            derived=no==1?PanFailoverChecks.stateEvidence(b,a,switchMirroredRoles):reason;
             store.check(runId,phase,second.id(),null,no,statuses[i],derived);
         }
         for (int i=0;i<statuses.length;i++) if (!"PASS".equals(statuses[i])) {
@@ -315,8 +317,11 @@ public final class PanFailoverJobExecutor {
         for (int i=0;i<MAX_POLLS;i++) {
             var a=read(first); var b=read(second);
             String status=PanFailoverChecks.roles(a,b,active==first?activeRole:otherRole,
-                active==second?activeRole:otherRole);
-            if ("PASS".equals(status)) return true;
+                active==second?activeRole:otherRole,true);
+            if("PASS".equals(status)) {
+                if("suspended".equals(otherRole)) switchMirroredRoles=PanFailoverChecks.mirroredRoles(a,b);
+                return true;
+            }
             if (i<MAX_POLLS-1) pause.sleep(POLL);
         }
         return false;
