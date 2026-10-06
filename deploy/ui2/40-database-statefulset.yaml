@@ -131,7 +131,8 @@ spec:
       volumes:
         - name: database-config
           configMap:
-            name: ui2-config
+            name: ui2-db-config
+            optional: true
             items:
               - key: policy-memory.conf
                 path: policy-memory.conf
@@ -151,3 +152,19 @@ spec:
         - name: data
           persistentVolumeClaim:
             claimName: ui2-db-data
+---
+# Keep tuning with the workload so applying this file supplies both objects.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ui2-db-config
+  namespace: ui2
+  labels:
+    app.kubernetes.io/part-of: nexus-ui2
+    app.kubernetes.io/component: database
+data:
+  # Loaded by the database image's existing postgresql-cfg include mechanism.
+  policy-memory.conf: |
+    shared_buffers = '1GB'
+    work_mem = '32MB'
+    maintenance_work_mem = '256MB'

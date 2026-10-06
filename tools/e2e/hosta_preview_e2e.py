@@ -564,8 +564,8 @@ def copy_secret(name):
 
 
 def setup_database(repo):
-    template = next(o for o in load(repo, "deploy/ui2/40-database-statefulset.yaml")["items"]
-                    if o["kind"] == "StatefulSet")
+    objects = load(repo, "deploy/ui2/40-database-statefulset.yaml")["items"]
+    template = next(o for o in objects if o["kind"] == "StatefulSet")
     live = json.loads(k("ui2", "get", "pod", "ui2-db-0", "-o", "json"))
     pinned = template["spec"]["template"]["spec"]["containers"][0]["image"]
     if live["spec"]["containers"][0]["image"] != pinned:
@@ -574,6 +574,10 @@ def setup_database(repo):
                   if o["kind"] == "ConfigMap")
     create(NS, dict(apiVersion="v1", kind="ConfigMap", metadata=metadata("ui2-config"),
                     data={key: config["data"][key] for key in ("db_name", "create-app-role.sh")}))
+    for obj in objects:
+        if obj["kind"] == "ConfigMap":
+            create(NS, dict(apiVersion="v1", kind="ConfigMap", metadata=metadata(obj["metadata"]["name"]),
+                            data=obj["data"]))
     values = {"migrate-user": "ui2_migrate", "app-user": "ui2_app",
               "migrate-password": secrets.token_urlsafe(32), "app-password": secrets.token_urlsafe(32)}
     create(NS, dict(apiVersion="v1", kind="Secret", metadata=metadata("ui2-db"), type="Opaque",

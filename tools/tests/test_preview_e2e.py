@@ -341,6 +341,16 @@ def test_database_bootstrap_uses_new_secret_and_refuses_image_drift(monkeypatch,
     monkeypatch.setattr(preview.time, "monotonic", lambda: next(ticks))
     assert preview.setup_database(ROOT) == "192.0.2.10"
     assert "TIMING preview_db_copy 2.500" in capsys.readouterr().out
+    tuning = next(o for o in objects if o["kind"] == "ConfigMap"
+                  and o["metadata"]["name"] == preview.preview_name("ui2-db-config"))
+    source_tuning = template("deploy/ui2/40-database-statefulset.yaml", "ConfigMap")
+    assert tuning["data"] == source_tuning["data"]
+    pod = next(o for o in objects if o["kind"] == "Pod")
+    config = next(v["configMap"] for v in pod["spec"]["volumes"] if v["name"] == "database-config")
+    assert config["name"] == tuning["metadata"]["name"]
+    assert config["optional"] is True
+    assert objects.index(tuning) < objects.index(pod)
+    assert pod["spec"]["containers"][0]["resources"] == db["spec"]["template"]["spec"]["containers"][0]["resources"]
     secret = next(o for o in objects if o["kind"] == "Secret")
     assert set(secret["data"]) == {"app-user", "app-password", "migrate-user", "migrate-password"}
     assert all(o["metadata"]["namespace"] == preview.NS for o in objects)
