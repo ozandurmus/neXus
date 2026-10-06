@@ -56,6 +56,17 @@ class CpFailoverServiceTest {
         verifyNoInteractions(store,devices,inventory,trust);
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"OPEN_INCIDENT", "MEMBER_SET_CHANGED", "FLEET_MUTATION_ACTIVE"})
+    void commonAdmissionRefusalsReachTheCaller(String code) {
+        ready("ACTIVE","STANDBY");
+        when(store.requestBound(eq(CLUSTER),isNull(),any(),eq("actor-1"),eq(A),eq(true),
+            eq("check_point"),eq(java.util.Set.of(A,B))))
+            .thenReturn(new JooqCpFailoverRepository.Decision(code,null));
+        assertEquals(code,assertThrows(CpFailoverService.Refusal.class,
+            () -> service.request(CLUSTER_ID,CLUSTER_ID,null,"actor-1")).code());
+    }
+
     private static DeviceSummaryRecord summary(String id) {
         return new DeviceSummaryRecord(id,"gateway","check_point",DeviceEnrollmentState.ENROLLED,
             Optional.empty(),Optional.empty(),Optional.empty(),Optional.empty(),Optional.of(CLUSTER));
@@ -197,7 +208,7 @@ class CpFailoverServiceTest {
     }
     @Test void noWindowRefusedBeforeJob() {
         ready("ACTIVE","STANDBY");
-        when(store.request(eq(CLUSTER),isNull(),any(),eq("actor-1"),eq(A),eq(true)))
+        when(store.requestBound(eq(CLUSTER),isNull(),any(),eq("actor-1"),eq(A),eq(true),eq("check_point"),eq(java.util.Set.of(A,B))))
             .thenReturn(new JooqCpFailoverRepository.Decision("NO_PRE_APPROVAL",null));
         var refused=assertThrows(CpFailoverService.Refusal.class,
             () -> service.request(CLUSTER_ID,CLUSTER_ID,null,"actor-1"));
@@ -205,7 +216,7 @@ class CpFailoverServiceTest {
     }
     @Test void concurrentRunRefusedBeforeJob() {
         ready("ACTIVE","STANDBY");
-        when(store.request(eq(CLUSTER),isNull(),any(),eq("actor-1"),eq(A),eq(true)))
+        when(store.requestBound(eq(CLUSTER),isNull(),any(),eq("actor-1"),eq(A),eq(true),eq("check_point"),eq(java.util.Set.of(A,B))))
             .thenReturn(new JooqCpFailoverRepository.Decision("RUN_ALREADY_ACTIVE",null));
         var refused=assertThrows(CpFailoverService.Refusal.class,
             () -> service.request(CLUSTER_ID,CLUSTER_ID,null,"actor-1"));

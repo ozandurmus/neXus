@@ -283,22 +283,24 @@ export function OperationsScreen() {
   };
 
   const handleAcknowledgeQuarantine = async () => {
-    if (!selectedCluster) return;
+    if (!selectedCluster || !executionResult?.execution_id) return;
+    setActionError(null);
     try {
       const res = await fetch(`/api/v2/failover/${encodeURIComponent(selectedCluster)}/quarantine/acknowledge`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          execution_id: executionResult.execution_id,
           approver_id: ackApproverId,
           reason: ackReason,
         }),
       });
-      if (res.ok) {
-        setQuarantined(false);
-        setShowQuarantineAckModal(false);
-      }
-    } catch {
-      // ignore
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.code || data.reason || "Incident release refused");
+      setQuarantined(data.quarantine_active !== false);
+      setShowQuarantineAckModal(false);
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Incident release failed");
     }
   };
 
@@ -660,6 +662,8 @@ export function OperationsScreen() {
               <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
                 Entity quarantine protects the cluster and both endpoints from conflicting mutations. Acknowledgment requires a second authorized approver.
               </Typography>
+              <Typography variant="body2">Incident: {executionResult?.execution_id || "Unavailable"}</Typography>
+              {actionError && <Typography color="error" role="alert">{actionError}</Typography>}
               <TextField
                 label="Second Approver ID"
                 size="small"
@@ -683,7 +687,7 @@ export function OperationsScreen() {
             </M3Button>
             <M3Button
               emphasis="filled"
-              disabled={ackReason.trim().length < 8 || !ackApproverId.trim()}
+              disabled={!executionResult?.execution_id || ackReason.trim().length < 8 || !ackApproverId.trim()}
               onClick={handleAcknowledgeQuarantine}
             >
               Confirm & Lift Quarantine

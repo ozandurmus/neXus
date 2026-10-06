@@ -65,6 +65,17 @@ class FailoverMutationFenceTest {
         mustCall(PanFailoverJobExecutor.class,"call",FailoverMutationSwitch.class,"enabled");
     }
 
+    @Test void bothWorkersUseCommonDurableAdmissionBeforeContactAndAtEachWrite() {
+        var repository=com.securityexpert.nexus.ui2.persistence.JooqCpFailoverRepository.class;
+        mustCall(CpFailoverService.class,"request",repository,"requestBound");
+        for (Class<?> worker:List.of(CpFailoverJobExecutor.class,PanFailoverJobExecutor.class)) {
+            mustCall(worker,"execute",worker,"requireMutationAdmission");
+            mustCall(worker,"requireMutationAdmission",repository,"mutationAdmission");
+        }
+        mustCall(CpFailoverJobExecutor.class,"command",CpFailoverJobExecutor.class,"requireMutationAdmission");
+        mustCall(PanFailoverJobExecutor.class,"call",PanFailoverJobExecutor.class,"requireMutationAdmission");
+    }
+
     @Test void disabledWorkersRefuseEveryWriteEvenWhenPrivateDispatchIsCalledDirectly() throws Exception {
         var disabled=new FailoverMutationSwitch(false);
         var cp=new CpFailoverJobExecutor(null,null,null,null,null,null,d -> {},java.time.Duration.ZERO,disabled);

@@ -411,6 +411,18 @@ public final class JooqDeviceRepository implements DeviceRepository {
                 .toList());
     }
 
+    /** Reuse the ordinary unit resolver inside the caller's admission transaction. */
+    public static List<String> enrolledFailoverMembers(DSLContext dsl, String cluster, String vendor) {
+        var resolved = dsl.fetch("select resolved.device_id, resolved.vendor_hint, resolved.role, "
+            + "enrolled.disabled, enrolled.enrollment_state from (" + FIND_MEMBERS_BY_CLUSTER_QUERY
+            + ") resolved join devices enrolled on enrolled.device_id=resolved.device_id order by resolved.device_id", cluster);
+        if (resolved.size()!=2 || resolved.stream().anyMatch(r -> !vendor.equals(r.get("vendor_hint",String.class))
+                || !"gateway".equals(r.get("role",String.class)) || Boolean.TRUE.equals(r.get("disabled",Boolean.class))
+                || !java.util.Set.of("ENROLLED","DEGRADED").contains(r.get("enrollment_state",String.class))))
+            return List.of();
+        return resolved.getValues("device_id", String.class);
+    }
+
     private static boolean backupTargetOf(Record row) {
         return row.field("backup_target") != null && Boolean.TRUE.equals(row.get("backup_target", Boolean.class));
     }

@@ -26,6 +26,8 @@ import com.securityexpert.nexus.ui2.worker.transport.xmlapi.PanCredentialResolve
 
 /** Direct, identity-checked pair execution. A failed step never triggers automatic fail-back. */
 public final class PanFailoverJobExecutor {
+    private String requestCluster, requestVs;
+    private java.util.Set<String> requestMembers = java.util.Set.of();
     private final FailoverMutationSwitch mutationSwitch;
     @FunctionalInterface public interface Pause { void sleep(Duration duration) throws InterruptedException; }
     private static final String STATE="<show><high-availability><state/></high-availability></show>";
@@ -109,6 +111,12 @@ public final class PanFailoverJobExecutor {
             List<DeviceSummaryRecord> members=devices.findMembersByClusterRef(run.get().clusterRef());
             if (members.size()!=2 || members.stream().anyMatch(m -> !"palo_alto".equals(m.vendorHint())))
                 throw new Stop("CLUSTER_NOT_ELIGIBLE",0);
+            if (!readiness) {
+                requestCluster=run.get().clusterRef(); requestVs=run.get().vsId();
+                requestMembers=members.stream().map(DeviceSummaryRecord::deviceId)
+                    .collect(java.util.stream.Collectors.toUnmodifiableSet());
+                requireMutationAdmission(false);
+            }
             if (!attempts.findByJobAndStep(jobId,0).isEmpty()) throw new Stop("PRIOR_ATTEMPT_NOT_REPLAYED",0);
             for (String command:List.of(STATE,SESSION_SYNC,SESSIONS,SYSTEM)) gate(command);
             if (!readiness) { gate(SUSPEND); gate(FUNCTIONAL); }
@@ -149,6 +157,12 @@ public final class PanFailoverJobExecutor {
             else stop(wrote?"OUTCOME_UNCERTAIN":"PRECHECK_UNAVAILABLE",0);
         }
     }
+    private void requireMutationAdmission(boolean possibleSend) {
+        if (!mutationSwitch.enabled()) throw new Stop(FailoverMutationSwitch.DISABLED,0);
+        String decision=store.mutationAdmission(runId,requestCluster,requestVs,"palo_alto",requestMembers,possibleSend);
+        if (!"ADMITTED".equals(decision)) throw new Stop(decision==null?"ADMISSION_UNAVAILABLE":decision,0);
+    }
+
     private void stop(String code,int check) {
         store.state(runId,"STOPPED",store.runByJob(jobId).map(JooqCpFailoverRepository.Run::step).orElse("UNKNOWN"),
             code,check==0?null:String.valueOf(check),code);
@@ -222,6 +236,7 @@ public final class PanFailoverJobExecutor {
         if (!isRead(command)) writeInFlight=true;
         if (!isRead(command) && !mutationSwitch.enabled())
             throw new Stop(FailoverMutationSwitch.DISABLED,0);
+        if (!isRead(command)) requireMutationAdmission(true);
         var result=transport.xmlApiCall(peer.target(),new XmlApiSpec("POST","op","","direct_firewall",
             Map.of("cmd",command),Map.of("X-PAN-KEY",peer.key())),Duration.ofSeconds(g.timeoutS()));
         if (!(result instanceof XmlApiResult.Completed completed) || completed.httpStatus()!=200

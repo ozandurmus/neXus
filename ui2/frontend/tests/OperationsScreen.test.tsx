@@ -134,6 +134,39 @@ describe("OperationsScreen tabs", () => {
     expect(screen.getByText(/Phase B & C: 4-Eyes Controlled Failover Gate/i)).toBeInTheDocument();
   });
 
+  it.each([
+    { status: 409, active: true },
+    { status: 200, active: true },
+    { status: 200, active: false },
+  ])("releases only the displayed incident and preserves remaining quarantine ($status/$active)", async ({ status, active }) => {
+    stubFetch(MEMBERS, READY_SUMMARY);
+    const fallback = vi.mocked(fetch).getMockImplementation()!;
+    vi.mocked(fetch).mockImplementation((input, init) => {
+      const url = String(input);
+      const reply = (code: number, body: unknown) => Promise.resolve(new Response(JSON.stringify(body), { status: code }));
+      if (url.endsWith("/authorize")) return reply(200, { token_id: "synthetic-token" });
+      if (url.endsWith("/execute")) return reply(409, { execution_id: "incident-reviewed", state: "OUTCOME_UNKNOWN", quarantine_active: true });
+      if (url.endsWith("/quarantine/acknowledge")) return reply(status, { code: "INCIDENT_CAS_MISMATCH", quarantine_active: active });
+      return fallback(input, init);
+    });
+    render(withTheme(<OperationsScreen />));
+    fireEvent.click(await screen.findByText("CLS-ROMEO-01"));
+    fireEvent.click(screen.getByRole("button", { name: "Open full detail" }));
+    fireEvent.click(screen.getByRole("button", { name: "Authorize Failover (4-Eyes)" }));
+    fireEvent.click(screen.getByRole("button", { name: "Authorize & Preview Dry-Run Plan" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Execute Controlled Failover" }));
+    await screen.findByText(/Execution ID: incident-reviewed/);
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Acknowledge Quarantine (4-Eyes)" }));
+    expect(screen.getByText("Incident: incident-reviewed")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Confirm & Lift Quarantine" }));
+    await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([url, init]) =>
+      String(url).endsWith("/quarantine/acknowledge") && JSON.parse(String(init?.body)).execution_id === "incident-reviewed")).toBe(true));
+    if (status === 409) expect(await screen.findByRole("alert")).toHaveTextContent("INCIDENT_CAS_MISMATCH");
+    else await waitFor(() => expect(screen.queryByText("Incident: incident-reviewed")).toBeNull());
+    expect(screen.queryByText("STICKY ENTITY QUARANTINE ACTIVE (OUTCOME_UNKNOWN)") !== null).toBe(active);
+  });
+
   it("lists the enrolled cluster in a dense table with vendor, members and readiness", async () => {
     stubFetch(MEMBERS, null);
     render(withTheme(<OperationsScreen />));

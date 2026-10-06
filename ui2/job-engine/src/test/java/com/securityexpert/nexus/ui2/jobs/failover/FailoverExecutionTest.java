@@ -97,30 +97,17 @@ class FailoverExecutionTest {
     }
 
     @Test
-    @DisplayName("FailoverPilotAllowlist strictly restricts execution to enrolled lab clusters and members")
+    @DisplayName("Enrollment is empty by default and supports any server-enrolled unit")
     void pilotAllowlistTest() {
         FailoverPilotAllowlist allowlist = new FailoverPilotAllowlist();
-
-        // Enrolled lab cluster and member
-        assertTrue(allowlist.isClusterAllowed("cls-uuid-cp"));
-        assertTrue(allowlist.isExecutionAllowed("cls-uuid-cp", "dev-cp-1"));
-
-        // Enrolled cluster, unenrolled member
-        assertFalse(allowlist.isExecutionAllowed("cls-uuid-cp", "unauthorized-member"));
-
-        // Unenrolled cluster
-        assertFalse(allowlist.isClusterAllowed("prod-perimeter-cluster-01"));
-        assertFalse(allowlist.isExecutionAllowed("prod-perimeter-cluster-01", "prod-fw-1"));
-
-        // Production environment cluster must be rejected even if active
+        assertFalse(allowlist.isClusterAllowed("cls-uuid-cp"));
+        var members = new java.util.HashSet<>(Set.of("member-a", "member-b"));
         allowlist.enrollCluster(new FailoverPilotAllowlist.PilotEnrollment(
-            "prod-cls-01",
-            "PRODUCTION",
-            Set.of("prod-m1", "prod-m2"),
-            "ADMIN",
-            true
-        ));
-        assertFalse(allowlist.isClusterAllowed("prod-cls-01"));
-        assertFalse(allowlist.isExecutionAllowed("prod-cls-01", "prod-m1"));
+            "unit-selected", "PRODUCTION", members, "synthetic-actor", true));
+        members.add("injected-member");
+        assertTrue(allowlist.isClusterAllowed("unit-selected"));
+        assertTrue(allowlist.isExecutionAllowed("unit-selected", "member-a"));
+        assertFalse(allowlist.isExecutionAllowed("unit-selected", "injected-member"));
+        assertFalse(allowlist.isExecutionAllowed("wrong-unit", "member-a"));
     }
 }

@@ -22,9 +22,15 @@ class CpFailoverPlainSqlTest {
             try (var connection = fixture.appConnection()) {
                 device = Ui2Rows.insertDevice(connection, Ui2Rows.insertCredentialReference(connection), "ENROLLED");
                 Ui2Rows.insertEndpoint(connection, device);
+                String peer=Ui2Rows.insertDevice(connection, Ui2Rows.insertCredentialReference(connection), "ENROLLED");
+                Ui2Rows.insertEndpoint(connection, peer);
+                new com.securityexpert.nexus.ui2.persistence.AuditedTransactionBoundary(
+                    new JooqTransactionBoundary(DSL.using(connection,SQLDialect.POSTGRES)))
+                    .inTransaction(Ui2Rows.ACTOR,"synthetic_enrollment",dsl -> dsl.execute(
+                        "update devices set vendor_hint='check_point',role='gateway',cluster_member_ref='CLS-TEST-01'"));
             }
             var repository = new JooqCpFailoverRepository(new JooqTransactionBoundary(
-                    DSL.using(fixture.appDataSource(), SQLDialect.POSTGRES)));
+                    DSL.using(fixture.appDataSource(), SQLDialect.POSTGRES)),true);
             String cluster = "CLS-TEST-01";
             String actor = Ui2Rows.ACTOR;
             Instant now = Instant.now();

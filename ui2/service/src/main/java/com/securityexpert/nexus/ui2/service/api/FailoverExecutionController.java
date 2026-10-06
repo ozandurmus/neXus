@@ -31,6 +31,7 @@ public class FailoverExecutionController {
     ) {}
 
     public record AcknowledgeQuarantinePayload(
+        @JsonProperty("execution_id") String executionId,
         @JsonProperty("approver_id") String approverId,
         @JsonProperty("reason") String reason
     ) {}
@@ -80,18 +81,20 @@ public class FailoverExecutionController {
             ));
         }
 
-        if (payload == null || payload.approverId() == null || payload.reason() == null) {
+        if (payload == null || payload.executionId() == null || payload.executionId().isBlank() || payload.approverId() == null || payload.reason() == null) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of(
                 "error", "INVALID_PAYLOAD",
                 "code", "MISSING_REQUIRED_FIELDS",
-                "reason", "approver_id and reason are required to acknowledge quarantine"
+                "reason", "execution_id, approver_id and reason are required to acknowledge quarantine"
             ));
         }
 
         try {
-            executionService.acknowledgeQuarantine(clusterRef, actor, payload.approverId(), payload.reason());
+            if (!executionService.acknowledgeQuarantine(clusterRef, payload.executionId(), actor, payload.approverId(), payload.reason()))
+                return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("code", "INCIDENT_CAS_MISMATCH"));
             return ResponseEntity.ok(Map.of(
-                "status", "QUARANTINE_LIFTED",
+                "status", "INCIDENT_RELEASED",
+                "quarantine_active", executionService.isClusterQuarantined(clusterRef),
                 "cluster_id", opaqueClusterId(clusterRef),
                 "acknowledged_by", actor,
                 "approved_by", payload.approverId()

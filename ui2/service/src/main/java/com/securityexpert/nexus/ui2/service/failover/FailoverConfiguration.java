@@ -18,7 +18,15 @@ public class FailoverConfiguration {
     }
 
     @Bean
-    public FailoverPilotAllowlist failoverPilotAllowlist() {
-        return new FailoverPilotAllowlist();
+    public FailoverPilotAllowlist failoverPilotAllowlist(
+            com.securityexpert.nexus.ui2.persistence.device.DeviceRepository devices) {
+        return new FailoverPilotAllowlist(cluster -> {
+            var members=devices.findMembersByClusterRef(cluster);
+            if (members.size()!=2 || members.stream().anyMatch(m ->
+                    devices.find(m.deviceId()).filter(d -> d.permitsReadCollection()).isEmpty())) return null;
+            return new FailoverPilotAllowlist.PilotEnrollment(cluster,"ENROLLED",
+                members.stream().map(com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord::deviceId)
+                    .collect(java.util.stream.Collectors.toUnmodifiableSet()),"SERVER_RESOLVED",true);
+        });
     }
 }

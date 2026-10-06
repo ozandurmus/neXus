@@ -282,11 +282,9 @@ public final class CpFailoverService {
                 || passive.equals(a) && "ACTIVE".equals(b))) throw new Refusal("CLUSTER_STATE_NOT_READY");
         if ("check_point".equals(vendor)) for (DeviceSummaryRecord member:u.members()) requireTrusted(member);
         try {
-            var decision="check_point".equals(vendor)
-                ?store.request(u.members().get(0).clusterMemberRef().orElseThrow(),u.vsId(),
-                    when,actor,u.members().get(0).deviceId(),scheduledFor==null)
-                :store.request(u.members().get(0).clusterMemberRef().orElseThrow(),u.vsId(),
-                    when,actor,u.members().get(0).deviceId(),scheduledFor==null,vendor);
+            var decision=store.requestBound(u.members().get(0).clusterMemberRef().orElseThrow(),u.vsId(),
+                when,actor,u.members().get(0).deviceId(),scheduledFor==null,vendor,
+                u.members().stream().map(DeviceSummaryRecord::deviceId).collect(Collectors.toUnmodifiableSet()));
             if (!"ADMITTED".equals(decision.code())) throw new Refusal(decision.code());
             return decision.runId();
         } catch (org.springframework.dao.DuplicateKeyException duplicate) {

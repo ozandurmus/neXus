@@ -22,7 +22,7 @@ import java.util.concurrent.Semaphore;
  * 1. At-most-once command submission: zero blind retries across mutation boundary.
  * 2. Pre-condition JIT re-check: direct two-sided read immediately before mutation.
  * 3. Atomic in-lock single-snapshot gate callback for scheduled executions (Astra P0.1 & Claude F-P1.9).
- * 4. Server-owned pilot allowlist fence: denies unapproved production clusters.
+ * 4. Server-owned enrollment fence: denies absent or inactive enrolled units.
  * 5. Fleet-wide concurrency capped at 1.
  * 6. Sticky entity quarantine: ambiguous outcomes or transport drops lock cluster and members
  *    under OUTCOME_UNKNOWN until CAS 4-eyes audited acknowledgment.
@@ -128,13 +128,13 @@ public class FailoverExecutionService {
         String executionId = "exec-" + UUID.randomUUID();
         Instant requestedAt = Instant.now();
 
-        // 1. Pilot Fence Check (Checked at boundary)
+        // 1. Enrolled unit check (checked at boundary)
         if (!pilotAllowlist.isClusterAllowed(clusterRef)) {
-            throw new SecurityException("Cluster is not enrolled in the authorized lab pilot allowlist (pilot fence invariant)");
+            throw new SecurityException("Cluster is not an eligible enrolled unit");
         }
 
         // 2. Sticky Quarantine Check (Durable store)
-        if (quarantineStore.isClusterQuarantined(clusterRef)) {
+        if (quarantineStore.blocksMutation(clusterRef, pilotAllowlist.enrolledMemberIds(clusterRef))) {
             throw new IllegalStateException("Cluster is currently under sticky quarantine due to a previous ambiguous execution");
         }
 
@@ -199,7 +199,7 @@ public class FailoverExecutionService {
                 if (!pilotAllowlist.isExecutionAllowed(clusterRef, active.memberId())) {
                     return recordAborted(
                         executionId, clusterRef, maskedName, vendor, actionKind, requestedAt, operatorId,
-                        "Pilot fence check failed: target member " + active.maskedName() + " is not enrolled in pilot allowlist"
+                        "Enrollment check failed: target member " + active.maskedName() + " is not enrolled in the selected unit"
                     );
                 }
 
@@ -519,13 +519,6 @@ public class FailoverExecutionService {
         quarantineStore.engageQuarantine(clusterRef, executionId, reason, memberIds);
     }
 
-    public boolean acknowledgeQuarantine(String clusterRef, String requesterId, String approverId, String reason) {
-        Optional<DurableQuarantineStore.QuarantineEntry> active = quarantineStore.getActiveQuarantine(clusterRef);
-        if (active.isEmpty()) {
-            throw new IllegalArgumentException("Cluster is not currently quarantined");
-        }
-        return quarantineStore.acknowledgeQuarantine(clusterRef, active.get().executionId(), requesterId, approverId, reason);
-    }
 
     private FailoverDeviceExecutor resolveExecutor(String vendor) {
         if (vendor == null || vendor.isBlank()) {

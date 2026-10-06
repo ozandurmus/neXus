@@ -27,6 +27,8 @@ import com.securityexpert.nexus.ui2.worker.transport.ssh.PersistedManagementEndp
 
 /** One failover unit, two trusted sessions, serial commands, no automatic rollback. */
 public final class CpFailoverJobExecutor {
+    private String requestCluster, requestVs;
+    private java.util.Set<String> requestMembers = java.util.Set.of();
     private final FailoverMutationSwitch mutationSwitch;
     @FunctionalInterface public interface Pause { void sleep(Duration duration) throws InterruptedException; }
     private static final Duration POLL_INTERVAL=Duration.ofSeconds(3);
@@ -121,6 +123,12 @@ public final class CpFailoverJobExecutor {
             List<DeviceSummaryRecord> members=devices.findMembersByClusterRef(run.get().clusterRef());
             if(members.size()!=2 || members.stream().anyMatch(m -> !"check_point".equals(m.vendorHint())))
                 throw new Stop("CLUSTER_NOT_ELIGIBLE",0);
+            if (!readiness) {
+                requestCluster=run.get().clusterRef(); requestVs=run.get().vsId();
+                requestMembers=members.stream().map(DeviceSummaryRecord::deviceId)
+                    .collect(java.util.stream.Collectors.toUnmodifiableSet());
+                requireMutationAdmission(false);
+            }
             if(!attempts.findByJobAndStep(jobId,0).isEmpty()) throw new Stop("PRIOR_ATTEMPT_NOT_REPLAYED",0);
             for(String command:List.of(STAT,TABLE,IF,ARP,CONN,TRAFFIC,SYNC,POLICY,PNOTES,BONDS,FAILOVER,ROUTING)) gate(command);
             if (!readiness) { gate(DOWN); gate(UP); }
@@ -163,6 +171,12 @@ public final class CpFailoverJobExecutor {
             if(second!=null) ssh.disconnect(second.session());
         }
     }
+    private void requireMutationAdmission(boolean possibleSend) {
+        if (!mutationSwitch.enabled()) throw new Stop(FailoverMutationSwitch.DISABLED,0);
+        String decision=store.mutationAdmission(runId,requestCluster,requestVs,"check_point",requestMembers,possibleSend);
+        if (!"ADMITTED".equals(decision)) throw new Stop(decision==null?"ADMISSION_UNAVAILABLE":decision,0);
+    }
+
     private void stop(String code,int check) {
         store.state(runId,"STOPPED",store.runByJob(jobId).map(JooqCpFailoverRepository.Run::step).orElse("UNKNOWN"),
             code,check==0?null:String.valueOf(check),code);
@@ -253,6 +267,7 @@ public final class CpFailoverJobExecutor {
         long sessionElapsedMs=(System.nanoTime()-member.openedAtNanos)/1_000_000;
         if ((DOWN.equals(command)||UP.equals(command)) && !mutationSwitch.enabled())
             throw new Stop(FailoverMutationSwitch.DISABLED,0);
+        if (DOWN.equals(command)||UP.equals(command)) requireMutationAdmission(true);
         ExecResult result=ssh.exec(member.session(),new ExecSpec(literal,pty),Duration.ofSeconds(g.timeoutS()));
         if(!(result instanceof ExecResult.Completed completed) || completed.exitStatus()!=0
                 || commandUnavailable(completed.output())) {
