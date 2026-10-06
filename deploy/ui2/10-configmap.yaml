@@ -20,11 +20,6 @@ data:
   db_port: "5432"
   db_name: ui2
   log_level: INFO
-  # Loaded by the database image's existing postgresql-cfg include mechanism.
-  policy-memory.conf: |
-    shared_buffers = '1GB'
-    work_mem = '32MB'
-    maintenance_work_mem = '256MB'
   ingress_host: ui2.nexus.local
 
   # The session cookie's Secure attribute. The service defaults it to `true`;

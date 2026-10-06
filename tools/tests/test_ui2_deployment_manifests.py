@@ -306,12 +306,19 @@ def test_policy_snapshot_memory_budget_and_postgresql_config_mount():
     assert mount["readOnly"] is True
     spec = next(spec for _, owner, spec in _pod_specs() if owner == "StatefulSet/ui2-db")
     config = next(v["configMap"] for v in spec["volumes"] if v["name"] == "database-config")
-    assert config["name"] == "ui2-config"
+    assert config["name"] == "ui2-db-config"
+    assert config["optional"] is True
     assert config["items"] == [{"key": "policy-memory.conf", "path": "policy-memory.conf"}]
-    data = next(doc["data"] for _, doc in _documents() if doc.get("kind") == "ConfigMap")
+    documents = load_documents((MANIFEST_DIR / "40-database-statefulset.yaml").read_text())
+    tuning = next(doc for doc in documents if doc["kind"] == "ConfigMap")
+    assert tuning["metadata"]["name"] == config["name"]
+    assert tuning["metadata"]["namespace"] == "ui2"
+    data = tuning["data"]
     assert data["policy-memory.conf"].splitlines() == [
         "shared_buffers = '1GB'", "work_mem = '32MB'", "maintenance_work_mem = '256MB'",
     ]
+    common = load_documents((MANIFEST_DIR / "10-configmap.yaml").read_text())[0]
+    assert "policy-memory.conf" not in common["data"]
 
 
 def test_every_writable_path_is_supplied_as_a_mount():
