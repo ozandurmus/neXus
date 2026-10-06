@@ -2967,6 +2967,22 @@ gates:
     secret_output_risk: "sensitive policy data; parse in memory"
     safe_telemetry_fields: ["outcome", "packageCount", "ruleCount"]
     source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_01_CP_POLICY_READS.md"
+  - gate_id: "cp_policy_access_rulebase_uid"
+    vendor: "check_point"
+    platform_role_scope: "cp_multi_domain_server"
+    shell_context: "expert"
+    transport_kind: "SSH_EXEC"
+    canonical_command_key: "mgmt_cli -r true -d '<DOMAIN>' -f json show-access-rulebase uid '<UID>' limit 100 offset '<N>' details-level full use-object-dictionary true"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 300
+    retry_rule: "once on timeout with limit 50"
+    max_frequency: "manual admin request; automatic at most once per domain per 6 hours"
+    session_reuse_rule: "one interactive SSH session per job; serial"
+    unsupported_behavior_ref: "UNKNOWN"
+    secret_output_risk: "sensitive policy data; parse in memory"
+    safe_telemetry_fields: ["outcome", "packageCount", "ruleCount"]
+    source_document_pointer: "PO 2026-10-06; cp-layer-by-uid; approved UID access-layer read"
   - gate_id: "cp_policy_nat_rulebase"
     vendor: "check_point"
     platform_role_scope: "cp_multi_domain_server"
@@ -3069,6 +3085,22 @@ gates:
     safe_telemetry_fields: ["outcome", "ruleCount"]
     source_document_pointer: "PO 2026-10-05; cp-objects-hits-collect; approved hits read"
 
+  - gate_id: "cp_policy_access_rulebase_uid_hits"
+    vendor: "check_point"
+    platform_role_scope: "cp_multi_domain_server"
+    shell_context: "expert"
+    transport_kind: "SSH_EXEC"
+    canonical_command_key: "mgmt_cli -r true -d '<DOMAIN>' -f json show-access-rulebase uid '<UID>' limit 100 offset '<N>' details-level full use-object-dictionary true show-hits true"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 300
+    retry_rule: "none"
+    max_frequency: "manual policy request; automatic at most once per domain per 6 hours"
+    session_reuse_rule: "existing policy SSH session; serial"
+    unsupported_behavior_ref: "UNKNOWN; retain policy without hit metrics"
+    secret_output_risk: "sensitive rule identities; parse in memory; no raw retention"
+    safe_telemetry_fields: ["outcome", "ruleCount"]
+    source_document_pointer: "PO 2026-10-06; cp-layer-by-uid; approved UID access-layer read"
   - gate_id: "pan_policy_rule_hit_count"
     vendor: "palo_alto"
     platform_role_scope: "pan_firewall"

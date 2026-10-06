@@ -264,7 +264,7 @@ class CpPolicyParallelCollectionTest {
             var snapshot = collector.collect(run, request, () -> true).get(0);
             assertTrue(snapshot.failures().isEmpty(), () -> failure.getClass().getSimpleName() + ": " + snapshot.failures());
             assertEquals(2, attempts.get());
-            assertEquals(2, Collections.frequency(reads, MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Layer", 0)));
+            assertEquals(2, Collections.frequency(reads, MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "layer", "Layer", 0)));
             assertTrue(reads.stream().noneMatch(c -> c.contains("show-access-rulebase") && c.contains(" limit 50 offset "))); cleanup();
         }
     }
@@ -299,8 +299,8 @@ class CpPolicyParallelCollectionTest {
         var cancellationSet = new CountDownLatch(1);
         var collector = setup(2, command -> {
             if (command.contains("show-packages")) return ok(packages(domain("first", "First") + "," + domain("second", "Second") + "," + domain("third", "Third")));
-            if (command.contains("name 'First'")) { await(second); cancelled.set(true); cancellationSet.countDown(); return page("first", 0, 1, 1, rule("complete"), ""); }
-            if (command.contains("name 'Second'")) { second.countDown(); await(cancellationSet); return page("second", 0, 1, 2, rule("partial"), ""); }
+            if (command.contains("uid 'first'")) { await(second); cancelled.set(true); cancellationSet.countDown(); return page("first", 0, 1, 1, rule("complete"), ""); }
+            if (command.contains("uid 'second'")) { second.countDown(); await(cancellationSet); return page("second", 0, 1, 2, rule("partial"), ""); }
             return answer(command);
         });
         List<PolicySnapshot> checkpoints = new ArrayList<>();
@@ -310,7 +310,7 @@ class CpPolicyParallelCollectionTest {
         }
         assertTrue(checkpoints.stream().anyMatch(p -> rules(p).contains("complete")));
         assertTrue(checkpoints.stream().noneMatch(p -> rules(p).contains("partial")));
-        assertTrue(reads.stream().noneMatch(c -> c.contains("name 'Third'") || c.contains("offset '1'") || c.contains("show-nat-rulebase"))); cleanup();
+        assertTrue(reads.stream().noneMatch(c -> c.contains("uid 'third'") || c.contains("offset '1'") || c.contains("show-nat-rulebase"))); cleanup();
     }
 
     @Test void cancelledTimedOutPageIsNotRetried() {
@@ -415,13 +415,13 @@ class CpPolicyParallelCollectionTest {
 
     @Test void inlineDiscoveryShortPagesAndDictionariesMatchSerial() {
         Function<String, ExecResult> responses = command -> {
-            if (command.contains("name 'Layer'")) {
+            if (command.contains("uid 'layer'")) {
                 int offset = offset(command);
                 return page("layer", offset, offset + 1, 2,
                     offset == 0 ? "{\"uid\":\"parent\",\"type\":\"access-rule\",\"inline-layer\":\"child\",\"source\":[\"object-01\"]}" : rule("sibling"),
                     offset == 0 ? "{\"uid\":\"child\",\"name\":\"Inline\"},{\"uid\":\"object-01\",\"type\":\"host\",\"name\":\"OBJ-ADDRESS-01\",\"ipv4-address\":\"192.0.2.8\"}" : "");
             }
-            if (command.contains("name 'Inline'")) return page("child", 0, 1, 1, rule("nested"), "");
+            if (command.contains("uid 'child'")) return page("child", 0, 1, 1, rule("nested"), "");
             return answer(command);
         };
         var serial = setup(1, responses).collect(run, request, () -> true).get(0); cleanup();
@@ -459,7 +459,7 @@ class CpPolicyParallelCollectionTest {
         var published = new CountDownLatch(1);
         setup(2, command -> {
             if (command.contains("show-packages")) return ok(packages(domain("first", "First") + "," + domain("broken", "Broken")));
-            if (command.contains("name 'Broken'")) {
+            if (command.contains("uid 'broken'")) {
                 await(published);
                 return page("broken", 0, 1, 1, "{\"uid\":\"invalid\",\"type\":\"unsupported-entry\"}", "");
             }
@@ -487,7 +487,7 @@ class CpPolicyParallelCollectionTest {
             if (command.contains("show-packages")) return ok(packages(domain("first", "First") + ","
                 + domain("second", "Second") + "," + domain("third", "Third")));
             if (command.contains("show-access-rulebase")) {
-                String uid = command.contains("name 'First'") ? "first" : command.contains("name 'Second'") ? "second" : "third";
+                String uid = command.contains("uid 'first'") ? "first" : command.contains("uid 'second'") ? "second" : "third";
                 return page(uid, 0, 1, 1, rule(uid + "-rule"), "");
             }
             return answer(command);
@@ -513,7 +513,7 @@ class CpPolicyParallelCollectionTest {
         setup(1, command -> {
             if (command.contains("show-packages")) return ok(packages(domain("first", "First") + "," + domain("second", "Second")));
             if (command.contains("show-access-rulebase")) {
-                String uid = command.contains("name 'First'") ? "first" : "second";
+                String uid = command.contains("uid 'first'") ? "first" : "second";
                 return page(uid, 0, 1, 1, rule(uid + "-rule"), "");
             }
             return answer(command);
@@ -531,7 +531,7 @@ class CpPolicyParallelCollectionTest {
             if (command.contains("show-packages")) return ok(packages(domain("first", "First") + ","
                 + domain("second", "Second") + "," + domain("third", "Third")));
             if (command.contains("show-access-rulebase")) {
-                String uid = command.contains("name 'First'") ? "first" : command.contains("name 'Second'") ? "second" : "third";
+                String uid = command.contains("uid 'first'") ? "first" : command.contains("uid 'second'") ? "second" : "third";
                 return page(uid, 0, 1, 1, rule(uid + "-rule"), "");
             }
             return answer(command);

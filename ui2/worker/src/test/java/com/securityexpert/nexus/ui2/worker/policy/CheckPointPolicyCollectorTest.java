@@ -66,8 +66,103 @@ class CheckPointPolicyCollectorTest {
             var snapshots = collector.collect(run, request, () -> true);
             assertEquals(1, snapshots.size());
             assertTrue(snapshots.get(0).failures().isEmpty());
+            verify(transport).execInteractive(any(), eq(policySpec(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "layer", "Layer", 0))), any());
+        }
+    }
+
+    @Test void uidLayersAvoidNameApiErrorsAndCompleteTheDomainInBothCollectors() throws Exception {
+        for (int sessions : List.of(1, 4)) for (boolean hits : List.of(false, true)) {
+            reset(transport, repository);
+            setup(command -> {
+                if (command.contains("show-access-rulebase name "))
+                    return ok("{\"code\":\"generic_err_object_not_found\",\"message\":\"Synthetic-private-layer\"}");
+                if (command.contains("show-last-published-session")) return ok("{}");
+                return answer(command.replace(" show-hits true", ""));
+            });
+            when(repository.saveUnit(any(), anyString(), anyString(), anyString())).thenReturn(true);
+            when(repository.saveDomain(any(), anyString(), anyString(), anyBoolean(), nullable(String.class), anyString(), anyInt(), nullable(String.class), anyString())).thenReturn(true);
+            GateRegistryPort selectedGates = hits ? key -> GateRegistryFixtureLoader.loadFromStream(
+                getClass().getResourceAsStream("/capabilities/gate_registry_fixture.yaml")).stream().filter(row -> row.key().equals(key)).toList() : gates;
+            var collector = new CheckPointPolicyCollector(transport, selectedGates, repository, Duration.ofHours(2), sessions);
+            assertThrows(PolicyCollectionTrace.Failure.class, () -> collector.read(session,
+                MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Layer", 0), 1, Long.MAX_VALUE, () -> true));
+            clearInvocations(transport);
+            var leased = new PolicyCollectionRepository.Request("mds-1", "", false, PolicyCollectionRepository.Mode.FULL, "job-uid", 1);
+            var snapshots = collector.collect(run, leased, () -> true);
+            assertEquals(1, snapshots.size());
+            assertTrue(snapshots.get(0).failures().isEmpty());
+            verify(repository, atLeastOnce()).saveDomain(eq(leased), anyString(), eq("COLLECTED"), eq(true), nullable(String.class), anyString(), anyInt(), nullable(String.class), anyString());
+            verify(transport, never()).execInteractive(any(), argThat(spec -> spec.command().contains("show-access-rulebase name ")), any());
+            verify(transport).execInteractive(any(), eq(policySpec(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "layer", "Layer", 0) + (hits ? " show-hits true" : ""))), any());
+            verify(transport).execInteractive(any(), eq(policySpec(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "child", "Inline", 0) + (hits ? " show-hits true" : ""))), any());
+        }
+    }
+
+    @Test void missingLayerUidUsesNameFallbackInBothCollectors() {
+        for (int sessions : List.of(1, 4)) {
+            reset(transport, repository);
+            setup(command -> {
+                if (command.contains("show-packages")) return ok(((ExecResult.Completed) answer(command)).output()
+                    .replace("{\"uid\":\"layer\",\"name\":\"Layer\"}", "{\"name\":\"Layer\"}"));
+                return answer(command.replace("show-access-rulebase name 'Layer'", "show-access-rulebase uid 'layer'"));
+            });
+            var collector = new CheckPointPolicyCollector(transport, gates, repository, Duration.ofHours(2), sessions);
+            var snapshots = collector.collect(run, request, () -> true);
+            assertEquals(1, snapshots.size());
+            assertTrue(snapshots.get(0).failures().isEmpty());
             verify(transport).execInteractive(any(), eq(policySpec(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Layer", 0))), any());
         }
+    }
+
+    @Test void apiErrorDiagnosticsMaskMessagesAndUnknownCodesAndDomainTypes() throws Exception {
+        for (int gate : List.of(0, 1)) for (String code : List.of("generic_err_object_not_found", "Synthetic-private-code")) {
+            var collector = setup(command -> ok("{\"code\":\"" + code + "\",\"message\":\"Synthetic-private-layer\"}"));
+            var transcript = new com.securityexpert.nexus.ui2.worker.transcript.JobTranscript();
+            try (var scope = com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.open(transcript)) {
+                assertThrows(PolicyCollectionTrace.Failure.class, () -> collector.read(session,
+                    gate == 0 ? MgmtCliCommands.showPackages("DOM-TANGO-01") : MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "layer", "Layer", 0),
+                    gate, Long.MAX_VALUE, () -> true, -1, "global domain"));
+            }
+            var sink = new java.io.ByteArrayOutputStream(); transcript.writeTo(sink);
+            String notes = sink.toString(java.nio.charset.StandardCharsets.UTF_8);
+            assertTrue(notes.contains("apiCode=" + (code.startsWith("generic_err_") ? code : "<masked-code>")));
+            assertFalse(notes.contains("Synthetic-private"));
+            if (gate == 1) assertTrue(notes.contains("layerDomainType=global domain"));
+        }
+        var json = new com.fasterxml.jackson.databind.ObjectMapper();
+        for (String type : List.of("domain", "global domain", "data domain", "Synthetic-private-type")) {
+            var layer = json.readTree("{\"domain\":{\"domain-type\":\"" + type + "\"}}");
+            assertEquals(type.startsWith("Synthetic") ? "<masked>" : type, CheckPointPolicyCollector.layerDomainType(layer));
+        }
+    }
+
+    @Test void domainTypesComeFromPackageAndInlineLayerReferences() throws Exception {
+        setup(command -> {
+            String body = ((ExecResult.Completed) answer(command)).output();
+            if (command.contains("show-packages")) body = body.replace(
+                "{\"uid\":\"layer\",\"name\":\"Layer\"}",
+                "{\"uid\":\"layer\",\"name\":\"Layer\",\"domain\":{\"domain-type\":\"global domain\"}}");
+            if (command.contains("show-access-rulebase")) body = body.replace(
+                "\"type\":\"access-layer\"", "\"type\":\"access-layer\",\"domain\":{\"domain-type\":\"data domain\"}");
+            return ok(body);
+        });
+        var transcript = new com.securityexpert.nexus.ui2.worker.transcript.JobTranscript();
+        try (var scope = com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.open(transcript)) {
+            assertTrue(new CheckPointPolicyCollector(transport, gates, repository, Duration.ofHours(2), 1)
+                .collect(run, request, () -> true).get(0).failures().isEmpty());
+        }
+        var sink = new java.io.ByteArrayOutputStream(); transcript.writeTo(sink);
+        String notes = sink.toString(java.nio.charset.StandardCharsets.UTF_8);
+        assertTrue(notes.contains("layerDomainType=global domain"));
+        assertTrue(notes.contains("layerDomainType=data domain"));
+    }
+
+    @Test void missingUidGateFailsBeforeTransport() {
+        var collector = new CheckPointPolicyCollector(transport, key -> List.of(), repository, Duration.ofMinutes(5), 1);
+        assertTrue(assertThrows(PolicyCollectionTrace.Failure.class, () -> collector.read(session,
+            MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "layer", "Layer", 0), 1, Long.MAX_VALUE, () -> true))
+            .getMessage().endsWith(": POLICY_GATE_UNAVAILABLE"));
+        verifyNoInteractions(transport);
     }
 
     @Test void malformedPackageItemsReportOnlyIndexFieldAndType() throws Exception {
@@ -498,9 +593,9 @@ class CheckPointPolicyCollectorTest {
         if (command.equals(MgmtCliCommands.showPackages("DOM-TANGO-01"))) return ok("""
             {"from":1,"to":1,"total":1,"packages":[{"uid":"pkg-01","name":"Package","access-layers":[{"uid":"layer","name":"Layer"}],"installation-targets":[{"uid":"target-01"}]}]}
             """);
-        if (command.equals(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Layer", 0))) return ok(page("layer", 1, 1, 2, RULE, DICTIONARY));
-        if (command.equals(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Layer", 1))) return ok(page("layer", 2, 2, 2, "{\"uid\":\"r2\",\"type\":\"access-rule\"}", ""));
-        if (command.equals(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Inline", 0))) return ok(page("child", 1, 1, 1, "{\"uid\":\"r3\",\"type\":\"access-rule\"}", ""));
+        if (command.equals(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "layer", "Layer", 0))) return ok(page("layer", 1, 1, 2, RULE, DICTIONARY));
+        if (command.equals(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "layer", "Layer", 1))) return ok(page("layer", 2, 2, 2, "{\"uid\":\"r2\",\"type\":\"access-rule\"}", ""));
+        if (command.equals(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "child", "Inline", 0))) return ok(page("child", 1, 1, 1, "{\"uid\":\"r3\",\"type\":\"access-rule\"}", ""));
         if (command.equals(MgmtCliCommands.showNatRulebase("DOM-TANGO-01", "Package", 0))) return ok(page("nat", 1, 1, 1,
             "{\"uid\":\"n1\",\"type\":\"nat-rule\",\"original-source\":\"host1\",\"translated-source\":\"translated\",\"method\":\"hide\"}",
             "{\"uid\":\"translated\",\"name\":\"OBJ-ADDRESS-02\",\"type\":\"host\",\"ipv4-address\":\"198.51.100.8\"}"));
@@ -510,7 +605,7 @@ class CheckPointPolicyCollectorTest {
         var cancelled = new java.util.concurrent.atomic.AtomicBoolean();
         var collector = setup(command -> {
             var result = answer(command);
-            if (command.equals(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Layer", 1))) cancelled.set(true);
+            if (command.equals(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "layer", "Layer", 1))) cancelled.set(true);
             return result;
         });
         List<PolicySnapshot> checkpoints = new ArrayList<>();
@@ -521,7 +616,7 @@ class CheckPointPolicyCollectorTest {
         assertEquals(1, checkpoints.size());
         assertEquals(List.of("r1", "r2"), checkpoints.get(0).sections().stream().flatMap(s -> s.rules().stream())
             .map(PolicySnapshot.Rule::uuid).toList());
-        verify(transport, never()).execInteractive(eq(session), eq(policySpec(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Inline", 0))), any());
+        verify(transport, never()).execInteractive(eq(session), eq(policySpec(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "child", "Inline", 0))), any());
         verify(transport).disconnect(session);
     }
 
@@ -529,7 +624,7 @@ class CheckPointPolicyCollectorTest {
         var cancelled = new java.util.concurrent.atomic.AtomicBoolean();
         var collector = setup(command -> {
             var result = answer(command);
-            if (command.equals(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Layer", 0))) cancelled.set(true);
+            if (command.equals(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "layer", "Layer", 0))) cancelled.set(true);
             return result;
         });
         List<PolicySnapshot> checkpoints = new ArrayList<>();
@@ -539,7 +634,7 @@ class CheckPointPolicyCollectorTest {
         assertTrue(checkpoints.isEmpty());
         cancelled.set(false);
         setup(this::answer).collect(run, request, () -> true);
-        verify(transport, times(2)).execInteractive(eq(session), eq(policySpec(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Layer", 0))), any());
+        verify(transport, times(2)).execInteractive(eq(session), eq(policySpec(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "layer", "Layer", 0))), any());
     }
 
     @Test void commandsAreExactlyApprovedAndQuoted() {
@@ -553,6 +648,11 @@ class CheckPointPolicyCollectorTest {
         assertEquals(1, packageRows.size());
         assertEquals("cp_policy_packages_paged", packageRows.get(0).gateId());
         assertEquals("mgmt_cli -r true -d 'DOM' -f json show-access-rulebase name 'LAYER' limit 100 offset '500' details-level full use-object-dictionary true", MgmtCliCommands.showAccessRulebase("DOM", "LAYER", 500));
+        assertEquals("mgmt_cli -r true -d 'DOM' -f json show-access-rulebase uid '00Ab' limit 100 offset '500' details-level full use-object-dictionary true",
+            MgmtCliCommands.showAccessRulebase("DOM", "00Ab", "LAYER", 500));
+        assertEquals(MgmtCliCommands.showAccessRulebase("DOM", "LAYER", 500), MgmtCliCommands.showAccessRulebase("DOM", null, "LAYER", 500));
+        assertThrows(IllegalArgumentException.class, () -> MgmtCliCommands.showAccessRulebase("DOM", "", "LAYER", 0));
+        assertThrows(IllegalArgumentException.class, () -> MgmtCliCommands.showAccessRulebase("DOM", "synthetic-uid", "LAYER", -1));
         assertEquals("mgmt_cli -r true -d 'DOM' -f json show-nat-rulebase package 'PKG' limit 500 offset '0' details-level standard use-object-dictionary true", MgmtCliCommands.showNatRulebase("DOM", "PKG", 0));
         assertTrue(MgmtCliCommands.showPackages("O'Brien; $(false)").contains("'O'\\''Brien; $(false)'"));
         assertThrows(IllegalArgumentException.class, () -> MgmtCliCommands.showAccessRulebase("DOM", "Layer", -1));
@@ -622,13 +722,13 @@ class CheckPointPolicyCollectorTest {
                 "{\"total\":1,\"rulebase\":[],\"objects-dictionary\":[]}")) {
             var collector = setup(c -> ok(bad));
             assertThrows(IllegalStateException.class, () -> collector.pages(session,
-                offset -> MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Layer", offset), 1, Long.MAX_VALUE, () -> true));
+                offset -> MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "layer", "Layer", offset), 1, Long.MAX_VALUE, () -> true));
         }
         AtomicInteger changed = new AtomicInteger();
         var changing = setup(c -> ok(changed.getAndIncrement() == 0 ? page("layer", 1, 1, 2, RULE, DICTIONARY)
                 : page("layer", 2, 2, 3, RULE, DICTIONARY)));
         assertThrows(IllegalStateException.class, () -> changing.pages(session,
-            offset -> MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Layer", offset), 1, Long.MAX_VALUE, () -> true));
+            offset -> MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "layer", "Layer", offset), 1, Long.MAX_VALUE, () -> true));
         AtomicInteger repeated = new AtomicInteger();
         var repeating = setup(c -> {
             repeated.incrementAndGet();
@@ -643,46 +743,46 @@ class CheckPointPolicyCollectorTest {
             return ok(page("layer", n, n, 201, RULE.replace("\"r1\"", "\"synthetic-rule-" + n + "\""), DICTIONARY));
         });
         assertThrows(IllegalStateException.class, () -> collector.pages(session,
-            offset -> MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Layer", offset), 1, Long.MAX_VALUE, () -> true));
+            offset -> MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "layer", "Layer", offset), 1, Long.MAX_VALUE, () -> true));
         assertEquals(200, count.get());
         assertThrows(IllegalStateException.class, () -> collector.pages(session,
-            offset -> MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Layer", offset), 1, 0, () -> true));
+            offset -> MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "layer", "Layer", offset), 1, 0, () -> true));
         assertEquals(200, count.get());
         assertThrows(IllegalStateException.class, () -> collector.collect(run, request, () -> false));
     }
     @Test void timedOutAccessPageRetriesSameOffsetOnceAtFiftyWithFullDictionary() {
         AtomicInteger firstPage = new AtomicInteger();
         var collector = setup(command -> {
-            if (command.equals(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Layer", 0)) && firstPage.getAndIncrement() == 0)
+            if (command.equals(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "layer", "Layer", 0)) && firstPage.getAndIncrement() == 0)
                 return new ExecResult.TimedOut();
             return answer(command.contains("show-access-rulebase")
                 ? command.replace(" limit 50 offset ", " limit 100 offset ") : command);
         });
         var snapshot = collector.collect(run, request, () -> true).get(0);
         assertTrue(snapshot.failures().isEmpty());
-        verify(transport).execInteractive(eq(session), eq(policySpec(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Layer", 0, 50))), eq(Duration.ofSeconds(300)));
+        verify(transport).execInteractive(eq(session), eq(policySpec(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "layer", "Layer", 0).replace(" limit 100 ", " limit 50 "))), eq(Duration.ofSeconds(300)));
         assertEquals(1, firstPage.get());
     }
     @Test void twiceTimedOutInlineLayerKeepsParentAndNatAndBadgesIncomplete() {
-        var collector = setup(command -> command.contains("name 'Inline'") ? new ExecResult.TimedOut() : answer(command));
+        var collector = setup(command -> command.contains("uid 'child'") ? new ExecResult.TimedOut() : answer(command));
         var snapshot = collector.collect(run, request, () -> true).get(0);
         assertEquals(1, snapshot.failures().size());
         assertTrue(snapshot.failures().get(0).reason().endsWith(": TIMEOUT"));
         assertEquals(List.of("r1", "r2", "n1"), snapshot.sections().stream().flatMap(section -> section.rules().stream()).map(PolicySnapshot.Rule::uuid).toList());
-        verify(transport).execInteractive(eq(session), eq(policySpec(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Inline", 0, 50))), eq(Duration.ofSeconds(300)));
+        verify(transport).execInteractive(eq(session), eq(policySpec(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "child", "Inline", 0).replace(" limit 100 ", " limit 50 "))), eq(Duration.ofSeconds(300)));
         verify(transport).disconnect(session);
     }
     @Test void streamingTimeoutDoesNotReissuePageAtEitherLimit() {
-        var collector = setup(command -> command.contains("name 'Inline'")
+        var collector = setup(command -> command.contains("uid 'child'")
             ? new ExecResult.TimedOut(true) : answer(command));
         var snapshot = collector.collect(run, request, () -> true).get(0);
         assertEquals(1, snapshot.failures().size());
         assertTrue(snapshot.failures().get(0).reason().endsWith(": STREAMING_TIMEOUT"));
-        verify(transport).execInteractive(eq(session), eq(policySpec(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Inline", 0))), any());
+        verify(transport).execInteractive(eq(session), eq(policySpec(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "child", "Inline", 0))), any());
         verify(transport, never()).execInteractive(eq(session), argThat(spec -> spec.command().contains("show-access-rulebase") && spec.command().contains(" limit 50 offset ")), any());
     }
     @Test void malformedMappedInlineLayerDoesNotPreventNatOrSiblingPublication() {
-        setup(command -> command.contains("name 'Inline'")
+        setup(command -> command.contains("uid 'child'")
             ? ok(page("child", 1, 1, 1, "{\"uid\":\"r3\",\"type\":\"unsupported-entry\"}", "")) : answer(command));
         var collector = new CheckPointPolicyCollector(transport, gates, repository, Duration.ofHours(2), () -> 0L);
         List<PolicySnapshot> checkpoints = new ArrayList<>();
@@ -698,7 +798,7 @@ class CheckPointPolicyCollectorTest {
     @Test void expiredJobBudgetCannotSendOrRetryAnyPage() {
         var collector = setup(this::answer);
         assertThrows(IllegalStateException.class, () -> collector.pages(session,
-            offset -> MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Layer", offset), 1, System.nanoTime() - 1, () -> true));
+            offset -> MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "layer", "Layer", offset), 1, System.nanoTime() - 1, () -> true));
         verify(transport, never()).execInteractive(any(), any(), any());
     }
 
@@ -706,7 +806,7 @@ class CheckPointPolicyCollectorTest {
         var clock = new java.util.concurrent.atomic.AtomicLong();
         List<PolicySnapshot> checkpoints = new ArrayList<>();
         setup(command -> {
-            if (command.contains("name 'Inline'")) {
+            if (command.contains("uid 'child'")) {
                 clock.set(Duration.ofHours(2).toNanos());
                 return ok(page("child", 1, 1, 2, "{\"uid\":\"r3\",\"type\":\"access-rule\"}", ""));
             }
@@ -718,7 +818,7 @@ class CheckPointPolicyCollectorTest {
             var failure = assertThrows(PolicyCollectionTrace.Failure.class, () -> collector.collect(run, request, () -> true, checkpoint -> {
                 checkpoints.add(checkpoint);
                 if (checkpoints.size() == 1) verify(transport, never()).execInteractive(eq(session),
-                    eq(policySpec(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Inline", 0))), any());
+                    eq(policySpec(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "child", "Inline", 0))), any());
             }));
             assertTrue(failure.getMessage().endsWith(": JOB_DEADLINE"));
         }
@@ -729,7 +829,7 @@ class CheckPointPolicyCollectorTest {
         assertEquals(2, progress.get(progress.size() - 1).layer());
         assertEquals(2, progress.get(progress.size() - 1).layers());
         assertEquals(2, progress.get(progress.size() - 1).rules());
-        verify(transport, never()).execInteractive(eq(session), eq(policySpec(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Inline", 1))), any());
+        verify(transport, never()).execInteractive(eq(session), eq(policySpec(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "child", "Inline", 1))), any());
         verify(transport, never()).execInteractive(eq(session), eq(policySpec(MgmtCliCommands.showNatRulebase("DOM-TANGO-01", "Package", 0))), any());
     }
     @Test void noCompletedLayerDoesNotPublishOnDeadline() {
@@ -765,8 +865,8 @@ class CheckPointPolicyCollectorTest {
                   {"uid":"pkg-01","name":"Package","access-layers":[{"uid":"layer","name":"Layer"}],"installation-targets":[]},
                   {"uid":"pkg-02","name":"Unfinished","access-layers":[{"uid":"other","name":"Unfinished"}],"installation-targets":[]}]}
                 """);
-            if (command.contains("'Unfinished'")) return new ExecResult.TimedOut();
-            if (command.contains("name 'Inline'")) clock.set(CpPolicyParallelCollection.configuredCheckpointInterval().toNanos());
+            if (command.contains("'Unfinished'") || command.contains("uid 'other'")) return new ExecResult.TimedOut();
+            if (command.contains("uid 'child'")) clock.set(CpPolicyParallelCollection.configuredCheckpointInterval().toNanos());
             return answer(command);
         });
         var collector = new CheckPointPolicyCollector(transport, gates, repository, Duration.ofHours(2), clock::get);
@@ -786,7 +886,7 @@ class CheckPointPolicyCollectorTest {
         for (int sessions : List.of(1, 4)) for (boolean recover : List.of(true, false)) {
             reset(transport, repository);
             var attempts = new AtomicInteger();
-            setup(command -> command.equals(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Layer", 0))
+            setup(command -> command.equals(MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "layer", "Layer", 0))
                 && (attempts.incrementAndGet() == 1 || !recover)
                 ? ok("Synthetic banner\n{\"rulebase\":[") : answer(command));
             var collector = new CheckPointPolicyCollector(transport, gates, repository, Duration.ofHours(2), sessions);
@@ -798,7 +898,7 @@ class CheckPointPolicyCollectorTest {
             }
             assertEquals(2, attempts.get());
             verify(transport, times(2)).execInteractive(any(), argThat(spec -> spec.command().equals(
-                MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Layer", 0))), any());
+                MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "layer", "Layer", 0))), any());
             var sink = new java.io.ByteArrayOutputStream(); transcript.writeTo(sink);
             String notes = sink.toString(java.nio.charset.StandardCharsets.UTF_8);
             assertTrue(notes.contains("STRUCTURE rootParsed=false rootType=UNPARSED"));
@@ -816,7 +916,7 @@ class CheckPointPolicyCollectorTest {
         var transcript = new com.securityexpert.nexus.ui2.worker.transcript.JobTranscript();
         try (var scope = com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.open(transcript)) {
             assertThrows(PolicyCollectionTrace.Failure.class, () -> new CheckPointPolicyCollector(transport, gates, repository)
-                .read(session, MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Layer", 0), 1, Long.MAX_VALUE, () -> true));
+                .read(session, MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "layer", "Layer", 0), 1, Long.MAX_VALUE, () -> true));
         }
         var sink = new java.io.ByteArrayOutputStream(); transcript.writeTo(sink);
         String notes = sink.toString(java.nio.charset.StandardCharsets.UTF_8);
@@ -832,7 +932,7 @@ class CheckPointPolicyCollectorTest {
             reset(transport, repository);
             setup(command -> {
                 if (command.contains("show-access-rulebase")) {
-                    if (command.contains("'Child'")) return ok(page("child", 1, 1, 1,
+                    if (command.contains("uid 'child'")) return ok(page("child", 1, 1, 1,
                         "{\"uid\":\"shared-rule\",\"type\":\"access-rule\"}", ""));
                     return ok(page("layer", 1, 2, 2,
                         "{\"uid\":\"section-1\",\"type\":\"access-section\",\"rulebase\":["
@@ -856,7 +956,7 @@ class CheckPointPolicyCollectorTest {
         var transcript = new com.securityexpert.nexus.ui2.worker.transcript.JobTranscript();
         try (var scope = com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.open(transcript)) {
             assertThrows(PolicyCollectionTrace.Failure.class, () -> collector.read(session,
-                MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Layer", 0), 1, Long.MAX_VALUE, () -> true));
+                MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "layer", "Layer", 0), 1, Long.MAX_VALUE, () -> true));
         }
         var sink = new java.io.ByteArrayOutputStream(); transcript.writeTo(sink);
         String notes = sink.toString(java.nio.charset.StandardCharsets.UTF_8);
@@ -868,7 +968,7 @@ class CheckPointPolicyCollectorTest {
             ? page("layer", 1, 1, 2, "{\"uid\":\"same-rule\",\"type\":\"access-rule\"}", "")
             : page("layer", 2, 2, 2, "{\"uid\":\"same-rule\",\"type\":\"access-rule\"}", "")));
         assertThrows(PolicyCollectionTrace.Failure.class, () -> collector.pages(session,
-            offset -> MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "Layer", offset), 1, Long.MAX_VALUE, () -> true));
+            offset -> MgmtCliCommands.showAccessRulebase("DOM-TANGO-01", "layer", "Layer", offset), 1, Long.MAX_VALUE, () -> true));
     }
 
     @Test void snapshotDatabaseFailureIsAUnitGapAndSiblingsStillPublish() {
