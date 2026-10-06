@@ -146,6 +146,23 @@ class FailoverScheduleServiceTest {
         assertTrue(scheduleLedger.getTransitionsForSchedule("synthetic-schedule").isEmpty());
     }
 
+    @Test
+    void staleOrWrongClusterEvidenceCannotBeBooked() {
+        var original = preflightService.snapshot;
+        preflightService.snapshot = new ClusterEvidenceSnapshot(original.snapshotId(), original.clusterId(),
+            original.maskedClusterName(), original.vendor(), original.haMode(), null,
+            original.memberA(), original.memberB(), Instant.now().minusSeconds(301));
+        Instant start = Instant.now().plusSeconds(3600);
+        var request = new FailoverScheduleService.ScheduleWindowRequest(CLUSTER_REF,
+            FailoverActionKind.CONTROLLED_FAILOVER, start, start.plusSeconds(3600), 15,
+            "synthetic-requester", "synthetic-approver", "Synthetic maintenance", "nonce-fresh");
+        assertThrows(IllegalStateException.class, () -> scheduleService.scheduleMaintenanceWindow(request));
+        preflightService.snapshot = new ClusterEvidenceSnapshot(original.snapshotId(), "other-cluster",
+            original.maskedClusterName(), original.vendor(), original.haMode(), null,
+            original.memberA(), original.memberB(), Instant.now());
+        assertThrows(IllegalStateException.class, () -> scheduleService.scheduleMaintenanceWindow(request));
+    }
+
     // Helper StubPreflightService
     private static class StubPreflightService extends PreflightService {
         private PreflightReport report;
@@ -175,7 +192,13 @@ class FailoverScheduleServiceTest {
 
         @Override
         public PreflightReport getLatestReport(String clusterRef) {
-            return report;
+            throw new AssertionError("Booking must not use a separately cached report");
+        }
+
+        @Override
+        public PreflightReport evaluateSnapshot(ClusterEvidenceSnapshot evidence) {
+            return PreflightReport.fromResults(evidence.clusterId(), evidence.maskedClusterName(),
+                evidence.vendor(), evidence.haMode(), report.checks(), evidence);
         }
 
         @Override

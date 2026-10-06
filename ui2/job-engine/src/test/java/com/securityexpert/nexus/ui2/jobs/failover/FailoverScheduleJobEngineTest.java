@@ -132,7 +132,7 @@ class FailoverScheduleJobEngineTest {
     private static final String T0_SNAPSHOT_ID = "t0-snapshot-drift-test";
 
     @Test
-    @DisplayName("FailoverDriftEngine detects active member, policy, and flap drift")
+    @DisplayName("FailoverDriftEngine detects identity/policy drift and uses same-pass flap admission")
     void driftEngineEvaluationTest() {
         FailoverDriftEngine engine = new FailoverDriftEngine();
         Instant now = Instant.now();
@@ -221,9 +221,12 @@ class FailoverScheduleJobEngineTest {
             T0_SNAPSHOT_ID, "cls-cp-01", "CLS-TANGO-01", "CHECK_POINT", "ClusterXL", null,
             flappedActive, liveStandby, now
         );
-        DriftEvaluationResult flapResult = engine.evaluateDrift(baseline, flappedSnapshot, cleanReport);
+        PreflightReport flapReport = PreflightReport.fromResults("cls-cp-01", "CLS-TANGO-01",
+            "CHECK_POINT", "ClusterXL", List.of(new com.securityexpert.nexus.ui2.jobs.failover.checks.FlapHistoryCheck()
+                .evaluate(flappedSnapshot)), flappedSnapshot);
+        DriftEvaluationResult flapResult = engine.evaluateDrift(baseline, flappedSnapshot, flapReport);
         assertFalse(flapResult.isPass());
-        assertTrue(flapResult.typedReasonCodes().contains(FailoverDriftEngine.REASON_CLUSTER_FLAP_DETECTED));
+        assertTrue(flapResult.typedReasonCodes().contains(FailoverDriftEngine.REASON_PREFLIGHT_BLOCKED));
     }
 
     @Test
@@ -284,7 +287,7 @@ class FailoverScheduleJobEngineTest {
     }
 
     @Test
-    @DisplayName("FailoverDriftEngine fails closed on missing live software version, policy hash, and counter rollback")
+    @DisplayName("Missing dimensions fail closed; rolling counts may decrease as events age out")
     void driftEngineInsufficientEvidenceTest() {
         FailoverDriftEngine engine = new FailoverDriftEngine();
         Instant now = Instant.now();
@@ -336,12 +339,12 @@ class FailoverScheduleJobEngineTest {
         DriftEvaluationResult res2 = engine.evaluateDrift(baseline, s2, r2);
         assertEquals(DriftEvaluationResult.DriftStatus.INSUFFICIENT_EVIDENCE, res2.status());
 
-        // 3. Live transition counter lower than baseline (reboot/rollover suspected) -> NOT_EVALUABLE
+        // 3. A lower last-24-hour count does not prove a reboot or counter rollover.
         ClusterMemberEvidence rolledBackActive = new ClusterMemberEvidence(
             "dev-cp-1", "FW-TANGO-01", "ACTIVE", "STANDBY", "ClusterXL",
             "SYNCHRONIZED", 0L, true, 0, true, List.of(),
             true, 0, "R81.20", "hash-policy-v1",
-            20, 30, 1000L, 50000L, false, 0, 0, // counter reset to 0, baseline was 5
+            20, 30, 1000L, 50000L, false, 0, 0, // old events have aged out of the rolling window
             false, true, now
         );
         ClusterEvidenceSnapshot s3 = new ClusterEvidenceSnapshot(
@@ -352,8 +355,15 @@ class FailoverScheduleJobEngineTest {
             List.of(CheckResult.pass("chk1", "Check 1", "Health", EnforcementPolicy.BLOCKING, "OK")), s3
         );
         DriftEvaluationResult res3 = engine.evaluateDrift(baseline, s3, r3);
-        assertEquals(DriftEvaluationResult.DriftStatus.INSUFFICIENT_EVIDENCE, res3.status());
-        assertTrue(res3.typedReasonCodes().contains(FailoverDriftEngine.REASON_CLUSTER_FLAP_DETECTED));
+        assertTrue(res3.isPass());
+        for (String missing : java.util.Arrays.asList(null, "", " ")) {
+            var incomplete = BaselineSnapshotSummary.of(baseline.clusterRef(), baseline.vendor(),
+                baseline.haMode(), baseline.activeMemberId(), baseline.standbyMemberId(), missing,
+                baseline.policyHash(), baseline.transitionCounter(), baseline.assessmentDigest(), baseline.recordedAt());
+            var result = engine.evaluateDrift(incomplete, s3, r3);
+            assertEquals(DriftDimensionStatus.NOT_EVALUABLE, result.dimensions().get("baseline_dimensions"));
+            assertFalse(result.isPass());
+        }
     }
 
     @Test

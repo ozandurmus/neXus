@@ -82,4 +82,15 @@ class FailoverIntegrityClosureTest {
         assertFalse(substituted.digestMatchesContent(),
             "a baseline whose content no longer produces its recorded digest must not be trusted");
     }
+    @Test
+    void independentDigestCopyAndRequiredFieldsMustAgree() {
+        var sealed = sealedBaseline("dev-cp-1");
+        assertTrue(sealed.matchesStoredDigest(sealed.assessmentDigest()));
+        assertFalse(sealed.matchesStoredDigest("different-digest"));
+        assertFalse(sealed.matchesStoredDigest(null));
+        var missing = BaselineSnapshotSummary.of("cls-ref-1", "check_point", null,
+            "dev-cp-1", "dev-cp-2", null, null, 0, "placeholder", Instant.now());
+        assertFalse(missing.hasRequiredFields());
+    }
+
 }

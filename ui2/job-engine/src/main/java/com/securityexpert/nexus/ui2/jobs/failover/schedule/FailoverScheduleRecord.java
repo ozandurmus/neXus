@@ -35,8 +35,28 @@ public record FailoverScheduleRecord(
     String abortReasonCode,
     String abortReason,
     String cancelledBy,
-    Instant cancelledAt
+    Instant cancelledAt,
+    String baselineDigest,
+    int baselineFormatVersion
 ) {
+    /** Existing in-memory callers supply their baseline digest directly. */
+    public FailoverScheduleRecord(
+        String scheduleId, String clusterRef, String maskedClusterName, String vendor,
+        String commandFamilyId, FailoverActionKind actionKind, String signedMutationTarget,
+        Instant windowStart, Instant windowEnd, int maxStartDelayMinutes, Instant executionDeadline,
+        String requesterId, String approverId, String grantId, BaselineSnapshotSummary baselineSummary,
+        String envelopeSignature, FailoverScheduleStatus status, String clientNonce, Instant scheduledAt,
+        Instant claimedAt, Instant executedAt, String executionResultId, String abortReasonCode,
+        String abortReason, String cancelledBy, Instant cancelledAt
+    ) {
+        this(scheduleId, clusterRef, maskedClusterName, vendor, commandFamilyId, actionKind,
+            signedMutationTarget, windowStart, windowEnd, maxStartDelayMinutes, executionDeadline,
+            requesterId, approverId, grantId, baselineSummary, envelopeSignature, status, clientNonce,
+            scheduledAt, claimedAt, executedAt, executionResultId, abortReasonCode, abortReason,
+            cancelledBy, cancelledAt, baselineSummary != null ? baselineSummary.assessmentDigest() : null,
+            BaselineSnapshotSummary.FORMAT_VERSION);
+    }
+
     public FailoverScheduleRecord {
         Objects.requireNonNull(scheduleId, "scheduleId must not be null");
         Objects.requireNonNull(clusterRef, "clusterRef must not be null");
@@ -50,11 +70,15 @@ public record FailoverScheduleRecord(
         Objects.requireNonNull(requesterId, "requesterId must not be null");
         Objects.requireNonNull(approverId, "approverId must not be null");
         Objects.requireNonNull(grantId, "grantId must not be null");
-        Objects.requireNonNull(baselineSummary, "baselineSummary must not be null");
+        // A corrupt persisted baseline remains representable so dispatch can record a safe abort.
         Objects.requireNonNull(envelopeSignature, "envelopeSignature must not be null");
         Objects.requireNonNull(status, "status must not be null");
         Objects.requireNonNull(scheduledAt, "scheduledAt must not be null");
 
+        windowStart = FailoverScheduleEnvelope.storageTime(windowStart);
+        windowEnd = FailoverScheduleEnvelope.storageTime(windowEnd);
+        executionDeadline = FailoverScheduleEnvelope.storageTime(executionDeadline);
+        scheduledAt = FailoverScheduleEnvelope.storageTime(scheduledAt);
         Instant expectedDeadline = computeExecutionDeadline(windowStart, windowEnd, maxStartDelayMinutes);
         if (!executionDeadline.equals(expectedDeadline)) {
             throw new IllegalArgumentException(
@@ -73,6 +97,8 @@ public record FailoverScheduleRecord(
         if (maxStartDelayMinutes <= 0) {
             throw new IllegalArgumentException("maxStartDelayMinutes must be positive");
         }
+        windowStart = FailoverScheduleEnvelope.storageTime(windowStart);
+        windowEnd = FailoverScheduleEnvelope.storageTime(windowEnd);
         Instant delayedDeadline = windowStart.plus(Duration.ofMinutes(maxStartDelayMinutes));
         return delayedDeadline.isBefore(windowEnd) ? delayedDeadline : windowEnd;
     }
@@ -83,7 +109,7 @@ public record FailoverScheduleRecord(
             signedMutationTarget, windowStart, windowEnd, maxStartDelayMinutes, executionDeadline,
             requesterId, approverId, grantId, baselineSummary, envelopeSignature, newStatus,
             clientNonce, scheduledAt, claimedAt, executedAt, executionResultId, abortReasonCode,
-            abortReason, cancelledBy, cancelledAt
+            abortReason, cancelledBy, cancelledAt, baselineDigest, baselineFormatVersion
         );
     }
 
@@ -93,7 +119,7 @@ public record FailoverScheduleRecord(
             signedMutationTarget, windowStart, windowEnd, maxStartDelayMinutes, executionDeadline,
             requesterId, approverId, grantId, baselineSummary, envelopeSignature,
             FailoverScheduleStatus.CLAIMED_VERIFYING, clientNonce, scheduledAt, claimedAtTime,
-            executedAt, executionResultId, abortReasonCode, abortReason, cancelledBy, cancelledAt
+            executedAt, executionResultId, abortReasonCode, abortReason, cancelledBy, cancelledAt, baselineDigest, baselineFormatVersion
         );
     }
 
@@ -103,7 +129,7 @@ public record FailoverScheduleRecord(
             signedMutationTarget, windowStart, windowEnd, maxStartDelayMinutes, executionDeadline,
             requesterId, approverId, grantId, baselineSummary, envelopeSignature, abortStatus,
             clientNonce, scheduledAt, claimedAt, executedAt, executionResultId, reasonCode,
-            message, cancelledBy, cancelledAt
+            message, cancelledBy, cancelledAt, baselineDigest, baselineFormatVersion
         );
     }
 
@@ -113,7 +139,7 @@ public record FailoverScheduleRecord(
             signedMutationTarget, windowStart, windowEnd, maxStartDelayMinutes, executionDeadline,
             requesterId, approverId, grantId, baselineSummary, envelopeSignature,
             FailoverScheduleStatus.CANCELLED, clientNonce, scheduledAt, claimedAt, executedAt,
-            executionResultId, abortReasonCode, abortReason, operatorId, when
+            executionResultId, abortReasonCode, abortReason, operatorId, when, baselineDigest, baselineFormatVersion
         );
     }
 
@@ -123,7 +149,7 @@ public record FailoverScheduleRecord(
             signedMutationTarget, windowStart, windowEnd, maxStartDelayMinutes, executionDeadline,
             requesterId, approverId, grantId, baselineSummary, envelopeSignature, finalStatus,
             clientNonce, scheduledAt, claimedAt, executedAtTime, resultId, abortReasonCode,
-            abortReason, cancelledBy, cancelledAt
+            abortReason, cancelledBy, cancelledAt, baselineDigest, baselineFormatVersion
         );
     }
 }
