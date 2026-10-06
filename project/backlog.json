@@ -1125,6 +1125,42 @@
       "priority": "P1",
       "target": "",
       "note": ""
+    },
+    {
+      "id": "spring_boot_4_spring_security_migration",
+      "category": "Security",
+      "title": "Migrate to Spring Boot 4 / Spring Framework 7.0.9+ and Spring Security authentication/authorization; preserve RBAC",
+      "status": "planned",
+      "priority": "P1",
+      "target": "2026-11-05: CVE-2026-47884 baseline exception review deadline",
+      "note": ""
+    },
+    {
+      "id": "enterprise_platform_conformance",
+      "category": "Architecture",
+      "title": "Parked: Maven; Bitbucket/Jenkins S2I/ArgoCD/Artifactory; OpenShift manifests (random UID, Routes, Nginx); SAML SSO; CyberArk device credentials; Instana Java agent/EUM; Axios instead of fetch; MapStruct for new mappers; assess Spring Data JDBC versus jOOQ",
+      "status": "planned",
+      "priority": "Parked",
+      "target": "Only if a move to the corporate platform is decided",
+      "note": ""
+    },
+    {
+      "id": "module_e2e_fail_fast",
+      "category": "Delivery",
+      "title": "module_e2e: wait for Complete or Failed and fail fast; Complete-only wait hangs for 900 s on Failed e2e",
+      "status": "planned",
+      "priority": "P2",
+      "target": "tools/delivery/module_deploy.py",
+      "note": ""
+    },
+    {
+      "id": "machine_session_probe_isolation",
+      "category": "Testing / Authentication",
+      "title": "Probes displace the e2e runner's machine session (one session per token): use a separate probe machine identity or allow concurrent machine sessions",
+      "status": "planned",
+      "priority": "P2",
+      "target": "",
+      "note": ""
     }
   ]
 }
