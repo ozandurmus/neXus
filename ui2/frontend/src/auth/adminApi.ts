@@ -1558,12 +1558,20 @@ export interface PodStatusView {
   readonly memory_limit_bytes: number | null;
 }
 
+export interface ModuleStatusView {
+  readonly module: string;
+  readonly owner: string;
+  readonly quarantined_permits: number;
+}
+
 export interface PodsView {
   readonly available: boolean;
   readonly reason?: string;
   readonly metrics_note?: string | null;
   readonly read_at: string;
   readonly pods: readonly PodStatusView[];
+  readonly modules?: readonly ModuleStatusView[];
+  readonly quarantined_by_role?: ReadonlyArray<Pick<ModuleStatusView, "owner" | "quarantined_permits">>;
 }
 
 export function getSystemPods(): Promise<PodsView> {

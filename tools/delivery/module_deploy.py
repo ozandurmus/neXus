@@ -89,7 +89,9 @@ def barrier(target, generation):
            " and state in ('LEASED','QUARANTINED')) "
            "and not exists(select 1 from runtime_task_lease where owner_role=" + literal(role) +
            " and state in ('LEASED','QUARANTINED'))) from module_runtime_control where module=" + literal(role))
-    return query(sql) == "t"
+    result = query("begin;" + audit("quarantine-drain") +
+                   "select ui2_release_orphan_quarantines();" + sql + ";commit;")
+    return [line for line in result.splitlines() if line in ("t", "f")] == ["t"]
 
 
 def wait_drain(target, generation, limit, sleep=time.sleep, clock=time.monotonic):

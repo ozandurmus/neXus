@@ -17,15 +17,20 @@ public final class ModuleRuntimeRepository {
     public boolean heartbeat(String role, String instance) {
         return transactions.inTransaction("system:worker", "module_heartbeat", db -> {
             db.fetch("select pg_advisory_xact_lock(294611)");
+            // A fenced process is still alive; record it even when it cannot own the module.
+            db.execute("insert into runtime_instance_heartbeat(owner_instance,heartbeat_at) values({0},now()) "
+                + "on conflict(owner_instance) do update set heartbeat_at=excluded.heartbeat_at", instance);
             db.execute("update runtime_task_lease set heartbeat_at=now(),expires_at=now()+interval '60 seconds' "
                 + "where owner_instance={0} and task_key<>'fleet.failover.execution' and state='LEASED' and expires_at>now() and exists(select 1 from module_runtime_control "
                 + "where module={1} and owner_instance={0} and generation=runtime_task_lease.owner_generation)", instance, role);
-            return db.execute("update module_runtime_control set owner_instance={0},owner_heartbeat_at=now(),"
+            boolean owned = db.execute("update module_runtime_control set owner_instance={0},owner_heartbeat_at=now(),"
                 + "drain_ack_at=case when drain_requested then now() else null end,drain_ack_generation=case when drain_requested then drain_generation else null end "
                 + "where module={1} and (owner_instance={0} or owner_instance is null "
                 + "or (owner_heartbeat_at < now()-interval '60 seconds' and not exists(select 1 from jobs "
                 + "where state in ('CLAIMED','EXECUTING') and split_part(lease_worker_id,'-',1)={1}) and not exists(select 1 from runtime_task_lease where owner_role={1})))",
                 instance, role) == 1;
+            db.fetch("select ui2_release_orphan_quarantines()");
+            return owned;
         });
     }
     public void poolStats(String role, String instance, int active, int idle, int pending, long timeouts, long waits) {
@@ -37,7 +42,7 @@ public final class ModuleRuntimeRepository {
         String token = java.util.UUID.randomUUID().toString();
         boolean granted = transactions.inTransaction("system:worker", "runtime_task_admission", db -> {
             db.fetch("select pg_advisory_xact_lock(294611)");
-            db.execute("update runtime_task_lease set state='QUARANTINED' where expires_at<=now() and state='LEASED'");
+            db.fetch("select ui2_release_orphan_quarantines()");
             return db.execute("insert into runtime_task_lease(task_key,owner_role,owner_instance,owner_generation,token,epoch,state,expires_at) "
                 + "select {0},{1},{2},generation,{3},nextval('endpoint_permit_epoch'),'LEASED',now()+interval '60 seconds' "
                 + "from module_runtime_control where module={1} and owner_instance={2} and not drain_requested "

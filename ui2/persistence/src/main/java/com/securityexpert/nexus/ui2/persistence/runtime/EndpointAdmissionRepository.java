@@ -19,12 +19,15 @@ public final class EndpointAdmissionRepository {
         try { return transactions.inTransaction("system:worker", action, work); }
         catch (org.jooq.exception.DataAccessException unavailable) { throw new IllegalStateException("ADMISSION_DB_UNAVAILABLE"); }
     }
-    private static void lock(DSLContext db) { db.fetch("select pg_advisory_xact_lock(294612)"); }
+    private static void lock(DSLContext db) {
+        db.fetch("select pg_advisory_xact_lock(294611)");
+        db.fetch("select pg_advisory_xact_lock(294612)");
+    }
     public Optional<Permit> acquire(String ticket, String endpoint, String session, Owner owner) {
         return transaction("endpoint_admission", db -> {
             lock(db);
             // TTL alone cannot prove remote termination: expired holders still occupy capacity.
-            db.execute("update endpoint_admission set state='QUARANTINED' where state='LEASED' and expires_at <= now()");
+            db.fetch("select ui2_release_orphan_quarantines()");
             db.execute("delete from endpoint_admission where state='WAITING' and (expires_at <= now() or exists(select 1 from jobs where jobs.job_id=endpoint_admission.job_id and (cancel_requested or jobs.state='CANCELLED')))");
             if (!validOwner(db, owner, true)) return Optional.empty();
             String token = UUID.randomUUID().toString();
@@ -99,12 +102,11 @@ public final class EndpointAdmissionRepository {
     }
     public Optional<TaskPermit> acquireFleet(String role, String instance, long generation, String job, long epoch) {
         return transaction("fleet_failover_admission", db -> {
-            db.fetch("select pg_advisory_xact_lock(294611)");
             lock(db);
+            db.fetch("select ui2_release_orphan_quarantines()");
             if (job != null && db.fetch("select job_id from jobs where job_id={0} and lease_epoch={1} "
                     + "and lease_worker_id={2} and state in ('CLAIMED','EXECUTING') and ui2_job_owner_valid(job_id,lease_epoch)", job, epoch, instance).isEmpty()) return Optional.empty();
             if (job == null && db.fetchOne("select count(*) from jobs where state in ('CLAIMED','EXECUTING')").get(0, Long.class) >= 10) return Optional.empty();
-            db.execute("update runtime_task_lease set state='QUARANTINED' where expires_at<=now() and state='LEASED'");
             String token = UUID.randomUUID().toString();
             var row = db.fetchOne("insert into runtime_task_lease(task_key,owner_role,owner_instance,owner_generation,token,epoch,state,expires_at,bound_job_id,bound_job_epoch) "
                 + "values('fleet.failover.execution',{0},{1},{2},{3},nextval('endpoint_permit_epoch'),'LEASED',now()+interval '60 seconds',{4},{5}) "
@@ -113,10 +115,12 @@ public final class EndpointAdmissionRepository {
         });
     }
     public boolean renewFleet(TaskPermit permit) {
-        return transaction("fleet_failover_heartbeat", db ->
-            db.execute("update runtime_task_lease set heartbeat_at=now(),expires_at=now()+interval '60 seconds' "
+        return transaction("fleet_failover_heartbeat", db -> {
+            lock(db);
+            return db.execute("update runtime_task_lease set heartbeat_at=now(),expires_at=now()+interval '60 seconds' "
                 + "where task_key={0} and token={1} and epoch={2} and state='LEASED' and expires_at>now()",
-                permit.key(), permit.token(), permit.epoch()) == 1);
+                permit.key(), permit.token(), permit.epoch()) == 1;
+        });
     }
     public void releaseFleetClosed(TaskPermit permit) {
         transaction("fleet_failover_release", db -> {

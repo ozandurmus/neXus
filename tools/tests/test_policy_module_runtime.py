@@ -153,3 +153,26 @@ def test_module_e2e_resolves_runner_and_template_outside_checkout(tmp_path, monk
     deploy.module_e2e("a" * 40)
     assert calls[0] == ("python3", str(ROOT / "tools/e2e/hosta_e2e_image.py"), "ensure", "--commit", "a" * 40)
     assert any("apply" in call for call in calls)
+
+
+@pytest.mark.parametrize("output,ready", [
+    ("BEGIN\nsystem:release\nmodule_release\nquarantine-drain\n2\nt\nCOMMIT", True),
+    ("BEGIN\n2\nf\nCOMMIT", False), ("2\nCOMMIT", False), ("t\nf", False),
+])
+def test_drain_reconciles_orphans_in_same_audited_transaction_and_reads_only_boolean(monkeypatch, output, ready):
+    queries = []
+    monkeypatch.setattr(deploy, "query", lambda sql: queries.append(sql) or output)
+    assert deploy.barrier("policy", 7) is ready
+    sql = queries[0]
+    assert sql.startswith("begin;") and sql.endswith(";commit;")
+    assert "system:release" in sql
+    assert sql.index("ui2_release_orphan_quarantines()") < sql.index("select (drain_requested")
+    assert "drain_generation=7" in sql and "QUARANTINED" in sql
+
+
+def test_drain_release_database_failure_propagates(monkeypatch):
+    def unavailable(sql):
+        raise deploy.Blocked("synthetic database unavailable")
+    monkeypatch.setattr(deploy, "query", unavailable)
+    with pytest.raises(deploy.Blocked, match="database unavailable"):
+        deploy.barrier("policy", 7)

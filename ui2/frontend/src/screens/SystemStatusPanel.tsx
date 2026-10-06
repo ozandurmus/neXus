@@ -87,6 +87,12 @@ export function SystemStatusPanel() {
           <M3Button emphasis="text" onClick={load}>Refresh</M3Button>
         </Box>
         {!pods.available && <Alert severity="warning">{pods.reason}</Alert>}
+        {(pods.quarantined_by_role ?? pods.modules ?? []).filter((row, index, rows) => row.quarantined_permits > 0
+          && rows.findIndex((other) => other.owner === row.owner) === index).map((row) => (
+          <Alert key={row.owner} severity="warning" sx={{ mb: 1 }}>
+            {row.owner}: {row.quarantined_permits} quarantined permits or task leases. Collection and deployment drain may be blocked.
+          </Alert>
+        ))}
         {pods.metrics_note && <Alert severity="info" sx={{ mb: 1 }}>{pods.metrics_note}</Alert>}
         {pods.available && (
           <Table size="small">
