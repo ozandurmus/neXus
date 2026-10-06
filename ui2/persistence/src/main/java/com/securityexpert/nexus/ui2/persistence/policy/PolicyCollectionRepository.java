@@ -15,6 +15,7 @@ public class PolicyCollectionRepository {
         public Request(String sourceId, String domainRef, boolean automatic) {
             this(sourceId, domainRef, automatic, Mode.CHANGED_ONLY, "", 0);
         }
+        public boolean throttledAutomatic() { return automatic && mode == Mode.CHANGED_ONLY; }
         public Request withLease(long epoch) { return new Request(sourceId, domainRef, automatic, mode, jobId, epoch); }
     }
     public record DomainRun(boolean complete, String signalJson, String snapshotsJson) {}
@@ -67,7 +68,7 @@ public class PolicyCollectionRepository {
                 + "where p.source_id = {0} and j.state in ('REQUESTED','CLAIMED','EXECUTING','RECONCILING') limit 1", sourceId);
             // A domain-only request cannot silently satisfy a different scope.
             if (!active.isEmpty()) return Optional.empty();
-            if ("palo_alto".equals(source.get().vendor()) && !new PolicyCollectionRepository(scoped(db)).beginDomain(sourceId, "", automatic))
+            if ("palo_alto".equals(source.get().vendor()) && !new PolicyCollectionRepository(scoped(db)).beginDomain(sourceId, "", automatic && mode == Mode.CHANGED_ONLY))
                 return Optional.empty();
             String capability = "palo_alto".equals(source.get().vendor()) ? "pan_policy_collect" : "cp_policy_collect";
             String id = UUID.randomUUID().toString();
@@ -90,7 +91,7 @@ public class PolicyCollectionRepository {
         if (!request.jobId().isEmpty() && tx.inTransaction(db -> !db.fetch(
                 "select job_id from cp_policy_domain_run where job_id={0} and source_id={1} and domain_ref={2}",
                 request.jobId(), request.sourceId(), domain).isEmpty())) return true;
-        return beginDomain(request.sourceId(), domain, request.automatic());
+        return beginDomain(request.sourceId(), domain, request.throttledAutomatic());
     }
     public Optional<DomainRun> domainForRequest(Request request, String domain) {
         if (request.jobId().isEmpty()) return Optional.empty();

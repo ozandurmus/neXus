@@ -59,7 +59,9 @@ public class PolicyCollectionService {
         tx.inTransaction(db -> db.fetch("select finished_at, transcript_artefact_ref is not null as has_transcript from jobs where job_id = {0}", status.get("jobId"))
             .stream().findFirst()).ifPresent(row -> {
                 var at = row.get("finished_at", OffsetDateTime.class);
-                if (at != null) view.put("collectedAt", at.toInstant().toString());
+                if (at != null && !reason.contains("THROTTLED")
+                        && !(status.get("unitFailureCodes") instanceof List<?> codes && codes.contains("THROTTLED")))
+                    view.put("collectedAt", at.toInstant().toString());
                 view.put("hasTranscript", Boolean.TRUE.equals(row.get("has_transcript", Boolean.class)));
             });
         return view;

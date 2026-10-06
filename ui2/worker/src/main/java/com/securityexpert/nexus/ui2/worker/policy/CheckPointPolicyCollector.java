@@ -130,7 +130,10 @@ public final class CheckPointPolicyCollector {
                 String container = ref(request.sourceId(), domainUid);
                 if (!request.domainRef().isEmpty() && !container.equals(request.domainRef())) continue;
                 found = true;
-                if (!repository.beginDomain(request, container)) { PolicyCollectionTrace.packages(0); continue; }
+                if (!repository.beginDomain(request, container)) {
+                    domainFailure.accept(new CollectionFailure(container, "THROTTLED"));
+                    PolicyCollectionTrace.packages(0); continue;
+                }
                 reuse.begin(container);
                 if (session == null) session = connect(run, deadline, lease);
                 JsonNode signal = null;

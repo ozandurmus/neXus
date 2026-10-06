@@ -51,6 +51,66 @@ class PanoramaPolicyCollectorTest {
         assertEquals(5L, counted.hitCounts().hits()); assertEquals("device", counted.hitCounts().source());
         assertEquals(8, index.get());
     }
+    @Test void automaticFullRefreshesHitsDespiteRecentAttempt() throws Exception {
+        GateRegistryPort signed = key -> gates.findByCanonicalKey(key).stream().map(r -> r.gateId().equals("pan_policy_rule_hit_count")
+                ? new GateRow(r.gateId(), r.vendor(), r.platformRoleScope(), r.shellContext(), r.transportKind(), r.canonicalCommandKey(),
+                    r.actionClass(), SignOffState.SIGNED_OFF, r.timeoutS(), r.retryRule(), r.maxFrequency(), r.sessionReuseRule(),
+                    r.unsupportedBehaviorRef(), r.secretOutputRisk(), r.safeTelemetryFields(), r.sourceDocumentPointer()) : r).toList();
+        var replies = responses();
+        replies.add(success("<key>synthetic-member-key</key>"));
+        replies.add(success("<rule-hit-count><vsys><entry name='vsys1'><rule-base><entry name='security'><rules>"
+                + "<entry name='Synthetic child pre'><hit-count>5</hit-count><last-hit-timestamp>100</last-hit-timestamp></entry>"
+                + "</rules></entry></rule-base></entry></vsys></rule-hit-count>"));
+        when(repository.panTargets("run-1", "manager-1", "synthetic-member-01", "vsys1", "IN_SYNC"))
+                .thenReturn(List.of(new PolicySnapshot.Target("device-1", "FW-TANGO-04", "vsys1", "IN_SYNC")));
+        when(repository.panFirewall("device-1")).thenReturn(Optional.of(new PolicyCollectionRepository.FirewallEndpoint("192.0.2.20", "synthetic-ref")));
+        when(repository.beginDomain(anyString(), anyString(), eq(false))).thenReturn(true);
+        var transport = mock(DeviceTransport.class);
+        var index = new AtomicInteger();
+        doAnswer(call -> {
+            int i = index.getAndIncrement();
+            var target = (ApiTarget) call.getArgument(0);
+            assertEquals(i < 6 ? "192.0.2.10" : "192.0.2.20", target.baseUrl());
+            @SuppressWarnings("unchecked") var handler = (XmlApiStreamHandler<Element>) call.getArgument(3);
+            return new XmlApiStreamOutcome.Completed<>(200, handler.handle(new ByteArrayInputStream(replies.get(i).getBytes(StandardCharsets.UTF_8))));
+        }).when(transport).xmlApiCallStreaming(any(), any(), any(), any());
+        var snapshots = new PanoramaPolicyCollector(transport, signed, ref -> new PanCredentialMaterial("synthetic-user", new char[0]), repository)
+                .collect(run, new PolicyCollectionRepository.Request("manager-1", "", true, PolicyCollectionRepository.Mode.FULL, "", 0), () -> true);
+        var counted = snapshots.stream().flatMap(s -> s.sections().stream()).flatMap(s -> s.rules().stream())
+                .filter(r -> r.uuid().equals("uuid-03")).findFirst().orElseThrow();
+        assertEquals(5L, counted.hitCounts().hits()); assertEquals("device", counted.hitCounts().source());
+        assertEquals(8, index.get());
+        verify(repository).beginDomain(eq("device-1"), anyString(), eq(false));
+    }
+    @Test void automaticChangedOnlyReportsThrottledHitReads() throws Exception {
+        GateRegistryPort signed = key -> gates.findByCanonicalKey(key).stream().map(r -> r.gateId().equals("pan_policy_rule_hit_count")
+                ? new GateRow(r.gateId(), r.vendor(), r.platformRoleScope(), r.shellContext(), r.transportKind(), r.canonicalCommandKey(),
+                    r.actionClass(), SignOffState.SIGNED_OFF, r.timeoutS(), r.retryRule(), r.maxFrequency(), r.sessionReuseRule(),
+                    r.unsupportedBehaviorRef(), r.secretOutputRisk(), r.safeTelemetryFields(), r.sourceDocumentPointer()) : r).toList();
+        var replies = responses();
+        replies.add(success("<key>synthetic-member-key</key>"));
+        replies.add(success("<rule-hit-count><vsys><entry name='vsys1'><rule-base><entry name='security'><rules>"
+                + "<entry name='Synthetic child pre'><hit-count>5</hit-count><last-hit-timestamp>100</last-hit-timestamp></entry>"
+                + "</rules></entry></rule-base></entry></vsys></rule-hit-count>"));
+        when(repository.panTargets("run-1", "manager-1", "synthetic-member-01", "vsys1", "IN_SYNC"))
+                .thenReturn(List.of(new PolicySnapshot.Target("device-1", "FW-TANGO-04", "vsys1", "IN_SYNC")));
+        when(repository.panFirewall("device-1")).thenReturn(Optional.of(new PolicyCollectionRepository.FirewallEndpoint("192.0.2.20", "synthetic-ref")));
+        when(repository.beginDomain(anyString(), anyString(), anyBoolean())).thenReturn(false);
+        var transport = mock(DeviceTransport.class);
+        var index = new AtomicInteger();
+        doAnswer(call -> {
+            int i = index.getAndIncrement();
+            var target = (ApiTarget) call.getArgument(0);
+            assertEquals(i < 6 ? "192.0.2.10" : "192.0.2.20", target.baseUrl());
+            @SuppressWarnings("unchecked") var handler = (XmlApiStreamHandler<Element>) call.getArgument(3);
+            return new XmlApiStreamOutcome.Completed<>(200, handler.handle(new ByteArrayInputStream(replies.get(i).getBytes(StandardCharsets.UTF_8))));
+        }).when(transport).xmlApiCallStreaming(any(), any(), any(), any());
+        var snapshots = new PanoramaPolicyCollector(transport, signed, ref -> new PanCredentialMaterial("synthetic-user", new char[0]), repository)
+                .collect(run, new PolicyCollectionRepository.Request("manager-1", "", true, PolicyCollectionRepository.Mode.CHANGED_ONLY, "", 0), () -> true);
+        assertEquals(6, index.get());
+        assertTrue(snapshots.stream().flatMap(s -> s.failures().stream()).anyMatch(f -> f.reason().equals("THROTTLED")));
+        verify(repository).beginDomain(eq("device-1"), anyString(), eq(true));
+    }
     private final GateRegistryPort gates = key -> GateRegistryFixtureLoader.loadFromStream(getClass()
             .getResourceAsStream("/capabilities/gate_registry_fixture.yaml")).stream().filter(row -> row.key().equals(key)).toList();
     private final DiscoveryRun run = new DiscoveryRun("run-1", "palo_alto", "192.0.2.10", "synthetic-ref", "synthetic-actor",

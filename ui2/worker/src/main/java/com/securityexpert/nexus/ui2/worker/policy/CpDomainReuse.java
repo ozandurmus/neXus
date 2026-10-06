@@ -67,7 +67,7 @@ final class CpDomainReuse {
                 boolean identity = snapshots.stream().allMatch(snapshot -> snapshot.metadata().sourceId().equals(request.sourceId())
                     && snapshot.metadata().containerId().equals(container));
                 if (identity && domain.signal.equals(previous)) {
-                    snapshots.stream().filter(snapshot -> snapshot.failures().isEmpty())
+                    snapshots.stream().filter(CpDomainReuse::ruleComplete)
                         .forEach(snapshot -> domain.snapshots.put(snapshot.metadata().id(), snapshot));
                     domain.reused = domain.previous.complete() && domain.snapshots.size() == snapshots.size();
                 }
@@ -92,14 +92,14 @@ final class CpDomainReuse {
             if (checkpoint.isEmpty()) return null;
             stored = JSON.readValue(checkpoint.get(), PolicySnapshot.class);
             if (!stored.metadata().sourceId().equals(request.sourceId()) || !stored.metadata().containerId().equals(container)
-                    || !stored.metadata().id().equals(policy) || !stored.failures().isEmpty())
+                    || !stored.metadata().id().equals(policy) || !ruleComplete(stored))
                 throw PolicyCollectionTrace.failure("CHECKPOINT_IDENTITY_MISMATCH");
             domain.snapshots.put(policy, stored);
             return stored;
         } catch (java.io.IOException invalid) { throw PolicyCollectionTrace.failure("CHECKPOINT_SOURCE_VERSION_NOT_EVALUABLE"); }
     }
     private void checkpoint(PolicySnapshot snapshot, Domain domain) {
-        if (request.jobId().isEmpty() || domain.databaseFailed || domain.signal == null || !snapshot.failures().isEmpty()) return;
+        if (request.jobId().isEmpty() || domain.databaseFailed || domain.signal == null || !ruleComplete(snapshot)) return;
         try {
             if (!repository.saveUnit(request, snapshot.metadata().id(), JSON.writeValueAsString(domain.signal), JSON.writeValueAsString(snapshot)))
                 throw PolicyCollectionTrace.failure("LEASE_LOST");
@@ -118,13 +118,18 @@ final class CpDomainReuse {
     void planned(String container, int packages) {
         Domain domain = domains.get(container); domain.expected = packages; update(container, domain);
     }
+    // Only proven non-rule gaps are advisory. Unknown reasons remain fail-closed.
+    private static boolean ruleComplete(PolicySnapshot snapshot) {
+        return snapshot.failures().stream().allMatch(f -> Set.of(
+            "POLICY_HITS_UNAVAILABLE", "POLICY_DB_INVENTORY_WRITE_FAILED").contains(f.reason()));
+    }
     private void update(String container, Domain domain) {
         // Publish each terminal domain before inventory collection or a later drain can stop the run.
         boolean terminal = domain.expected >= 0 && domain.snapshots.size() == domain.expected
             && domain.snapshots.values().stream().flatMap(s -> s.failures().stream())
                 .noneMatch(f -> f.reason().equals("COLLECTION_PENDING"));
         boolean complete = terminal && !domain.gap
-            && domain.snapshots.values().stream().allMatch(s -> s.failures().isEmpty());
+            && domain.snapshots.values().stream().allMatch(CpDomainReuse::ruleComplete);
         save(container, domain, terminal ? "COLLECTED" : "COLLECTING", complete);
     }
     void gap(String container) {
@@ -134,7 +139,7 @@ final class CpDomainReuse {
         domains.forEach((container, domain) -> {
             save(container, domain, domain.reused ? "REUSED" : "COLLECTED", !domain.gap
                 && (domain.reused || domain.expected >= 0 && domain.snapshots.size() == domain.expected)
-                && domain.snapshots.values().stream().allMatch(s -> s.failures().isEmpty()));
+                && domain.snapshots.values().stream().allMatch(CpDomainReuse::ruleComplete));
         });
     }
     private void save(String container, Domain domain, String status, boolean complete) {

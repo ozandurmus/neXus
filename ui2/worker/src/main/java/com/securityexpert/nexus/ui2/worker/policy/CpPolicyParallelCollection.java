@@ -239,7 +239,10 @@ final class CpPolicyParallelCollection {
                 else pending.add(new Work(MgmtCliCommands.showLastPublishedSession(name), CpPolicyGates.LAST_PUBLISHED_SESSION,
                     null, 0, 0, 0, page -> domainSignal(uid, name, container, page),
                     error -> domainSignal(uid, name, container, null)));
-            } else PolicyCollectionTrace.packages(0);
+            } else {
+                domainFailure.accept(new CollectionFailure(container, "THROTTLED"));
+                PolicyCollectionTrace.packages(0);
+            }
         }
         if (!found) throw failure();
     }

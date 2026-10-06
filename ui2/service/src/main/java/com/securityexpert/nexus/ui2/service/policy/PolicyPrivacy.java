@@ -112,7 +112,7 @@ public final class PolicyPrivacy {
 
     public static String failureCode(String text) {
         String code = text.contains(": ") ? text.substring(text.lastIndexOf(": ") + 2) : text;
-        if (Set.of("INLINE_LAYER_NAME_MISSING", "COLLECTION_PENDING").contains(code)) return code;
+        if (Set.of("INLINE_LAYER_NAME_MISSING", "COLLECTION_PENDING", "THROTTLED").contains(code)) return code;
         // Reuse the reason allowlist; unrecognized text remains withheld.
         String safe = safeReason("policy: " + code);
         return safe.startsWith("COLLECTION_FAILED: ") ? safe.substring("COLLECTION_FAILED: ".length())
@@ -120,11 +120,11 @@ public final class PolicyPrivacy {
     }
 
     private static String safeReason(String text) {
-        if (Set.of("INLINE_LAYER_NAME_MISSING", "COLLECTION_PENDING").contains(text)) return text;
+        if (Set.of("INLINE_LAYER_NAME_MISSING", "COLLECTION_PENDING", "THROTTLED").contains(text)) return text;
         int delimiter = text.lastIndexOf(": ");
         if (delimiter < 0) return "COLLECTION_FAILED";
         String code = text.substring(delimiter + 2);
-        if (!code.matches("(?:HTTP_[0-9]{3}|API_ERROR_[0-9]{1,6}|EXIT_[0-9]+|FAILED_[A-Za-z]+|TIMEOUT|STREAMING_TIMEOUT|API_SESSION_PRESSURE|SIZE_LIMIT|JOB_DEADLINE|LEASE_LOST|POLICY_GATE_UNAVAILABLE|PANORAMA_TARGET_NOT_FOUND|PANORAMA_COLLECTOR_NOT_WIRED|POLICY_REQUEST_NOT_FOUND|DISCOVERY_RUN_NOT_FOUND|POLICY_SOURCE_NOT_ELIGIBLE|CREDENTIAL_UNRESOLVABLE|CREDENTIAL_UNUSABLE|TRANSPORT_NOT_REGISTERED|TLS_TARGET_UNRESOLVABLE|TRANSPORT_FAILED|INTERRUPTED|XML_PARSE_OR_SIZE_FAILED|API_RESPONSE_ERROR|INVALID_OR_INCOMPLETE_RESPONSE|ChannelFailed|TimedOut|HostKeyRejected|AuthenticationFailed)"))
+        if (!code.matches("(?:HTTP_[0-9]{3}|API_ERROR_[0-9]{1,6}|EXIT_[0-9]+|FAILED_[A-Za-z]+|THROTTLED|TIMEOUT|STREAMING_TIMEOUT|API_SESSION_PRESSURE|SIZE_LIMIT|JOB_DEADLINE|LEASE_LOST|POLICY_GATE_UNAVAILABLE|PANORAMA_TARGET_NOT_FOUND|PANORAMA_COLLECTOR_NOT_WIRED|POLICY_REQUEST_NOT_FOUND|DISCOVERY_RUN_NOT_FOUND|POLICY_SOURCE_NOT_ELIGIBLE|CREDENTIAL_UNRESOLVABLE|CREDENTIAL_UNUSABLE|TRANSPORT_NOT_REGISTERED|TLS_TARGET_UNRESOLVABLE|TRANSPORT_FAILED|INTERRUPTED|XML_PARSE_OR_SIZE_FAILED|API_RESPONSE_ERROR|INVALID_OR_INCOMPLETE_RESPONSE|ChannelFailed|TimedOut|HostKeyRejected|AuthenticationFailed)"))
             return "COLLECTION_FAILED";
         var target = java.util.regex.Pattern.compile("target=([a-f0-9-]{36}|(?:source|manager|mds|pan|run|layer)-[0-9]+)(?=: )").matcher(text);
         if (!target.find()) return "COLLECTION_FAILED: " + code;
