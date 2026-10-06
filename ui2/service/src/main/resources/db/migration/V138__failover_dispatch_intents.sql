@@ -43,8 +43,22 @@ CREATE TRIGGER failover_dispatch_guard BEFORE UPDATE OR DELETE ON failover_dispa
 -- Even an accidentally terminal run cannot bypass an unresolved dispatch reservation.
 -- Reconciliation records uncertainty and an incident before this fleet fence clears.
 CREATE FUNCTION ui2_failover_dispatch_admission() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE incident_dispatch_ref TEXT;
 BEGIN
  PERFORM pg_advisory_xact_lock(136, 1);
+ -- This trigger runs before failover_run_guard: preserve its more actionable incident cause.
+ IF NEW.run_kind='FAILOVER' AND NEW.state NOT IN ('DONE','STOPPED') THEN
+  SELECT i.nonce INTO incident_dispatch_ref FROM failover_quarantine q
+   LEFT JOIN failover_dispatch_intent i ON i.run_id=q.execution_id AND i.observation<>'CONFIRMED'
+   WHERE q.active AND (q.cluster_ref=NEW.cluster_ref OR EXISTS (
+    SELECT 1 FROM jsonb_array_elements_text(q.quarantined_member_ids) AS m(member_id)
+    WHERE NEW.target_member_ids @> jsonb_build_array(m.member_id)))
+   ORDER BY i.nonce NULLS LAST,q.execution_id LIMIT 1;
+  IF FOUND THEN
+   RAISE EXCEPTION 'OPEN_INCIDENT'
+    USING DETAIL=coalesce('dispatchRef=' || incident_dispatch_ref,'OPEN_INCIDENT');
+  END IF;
+ END IF;
  IF NEW.run_kind='FAILOVER' AND NEW.state NOT IN ('DONE','STOPPED') AND EXISTS (
      SELECT 1 FROM failover_dispatch_intent i WHERE i.run_id<>NEW.run_id
       AND (i.observation='NOT_OBSERVED' OR (i.observation='OUTCOME_UNKNOWN' AND EXISTS (
