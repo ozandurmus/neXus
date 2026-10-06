@@ -109,7 +109,8 @@ public final class PanFailoverJobExecutor {
             if (!readiness && !mutationSwitch.enabled()) throw new Stop(FailoverMutationSwitch.DISABLED,0);
             if (!readiness && !store.windowValid(runId)) throw new Stop("WINDOW_EXPIRED",0);
             List<DeviceSummaryRecord> members=devices.findMembersByClusterRef(run.get().clusterRef());
-            if (members.size()!=2 || members.stream().anyMatch(m -> !"palo_alto".equals(m.vendorHint())))
+            if (members.size()!=2 || members.get(0).deviceId().equals(members.get(1).deviceId())
+                    || members.stream().anyMatch(m -> !"palo_alto".equals(m.vendorHint())))
                 throw new Stop("CLUSTER_NOT_ELIGIBLE",0);
             if (!readiness) {
                 requestCluster=run.get().clusterRef(); requestVs=run.get().vsId();
@@ -189,10 +190,11 @@ public final class PanFailoverJobExecutor {
         var device=devices.find(summary.deviceId()).filter(d -> d.permitsReadCollection())
             .orElseThrow(() -> new Stop("DEVICE_NOT_ELIGIBLE",0));
         var endpoint=devices.findEndpointByDeviceId(summary.deviceId())
-            .filter(e -> "pan_xml_api".equalsIgnoreCase(e.transportKind()))
+            .filter(e -> summary.deviceId().equals(e.deviceId()) && "pan_xml_api".equalsIgnoreCase(e.transportKind()))
             .orElseThrow(() -> new Stop("ENDPOINT_MISSING",0));
         String identity=devices.findConfirmFacts(summary.deviceId())
-            .flatMap(f -> f.recordedIdentityPrimary()).orElseThrow(() -> new Stop("IDENTITY_NOT_VERIFIED",0));
+            .flatMap(f -> f.recordedIdentityPrimary()).filter(value -> !value.isBlank())
+            .orElseThrow(() -> new Stop("IDENTITY_NOT_VERIFIED",0));
         var credential=credentials.resolve(device.credentialReferenceId());
         var target=new ApiTarget(endpoint.endpointId(),endpoint.addressRef());
         var result=transport.xmlApiCall(target,new XmlApiSpec("POST","keygen","","",
@@ -295,10 +297,10 @@ public final class PanFailoverJobExecutor {
             if (no==4) reason=configurationSync.derived();
             if (no==5) reason=sessionSync.derived();
             if (no==6 && !"UNKNOWN".equals(statuses[i])) reason="{\"count\":"+sessionsA+"}";
-            String derived=no==1?"{\"role\":\""+a.role()+"\"}":reason;
+            String derived=no==1?PanFailoverChecks.stateEvidence(a):reason;
             store.check(runId,phase,first.id(),null,no,statuses[i],derived);
             if (no==6 && !"UNKNOWN".equals(statuses[i])) reason="{\"count\":"+sessionsB+"}";
-            derived=no==1?"{\"role\":\""+b.role()+"\"}":reason;
+            derived=no==1?PanFailoverChecks.stateEvidence(b):reason;
             store.check(runId,phase,second.id(),null,no,statuses[i],derived);
         }
         for (int i=0;i<statuses.length;i++) if (!"PASS".equals(statuses[i])) {

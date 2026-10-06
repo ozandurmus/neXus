@@ -32,6 +32,7 @@ class PanFailoverJobExecutorTest {
         String admission="ADMITTED", writeAdmission="ADMITTED", returnAdmission="ADMITTED";
         boolean suspended,functional,stuck,badPre,badPost,badSync,badSessions,badVersion,lowPostSessions;
         boolean missingFields;
+        String evidenceFault;
         int suspendCount,functionalCount,callCount;
         DeviceTransport transport() {
             return (DeviceTransport) Proxy.newProxyInstance(DeviceTransport.class.getClassLoader(),
@@ -81,6 +82,17 @@ class PanFailoverJobExecutorTest {
                         +"</serial-num><conn-status>up</conn-status><conn-ha1><conn-status>up</conn-status>"
                         +"</conn-ha1><conn-ha2><conn-status>"+ha2+"</conn-status></conn-ha2>"
                         +"</peer-info></group></result></response>";
+                    if(evidenceFault!=null) {
+                        if(evidenceFault.equals("missing")) body=body.replace("<peer-info><state>"+peer+"</state>","<peer-info>");
+                        if(evidenceFault.equals("opposed") || evidenceFault.equals("post-opposed") && suspended)
+                            body=body.replace("<peer-info><state>"+peer+"</state>","<peer-info><state>passive</state>");
+                        if(evidenceFault.equals("observer")) body=body.replace("<serial-num>"+(first?"0011":"0022")+"</serial-num></local-info>",
+                            "<serial-num>"+(first?"0022":"0011")+"</serial-num></local-info>");
+                        if(evidenceFault.equals("opaque")) body=body.replace("<peer-info><state>"+peer+"</state><serial-num>"+(first?"0022":"0011"),
+                            "<peer-info><state>"+peer+"</state><serial-num>"+(first?"22":"11"));
+                        if(evidenceFault.equals("mode")) body=body.replace("Active-Passive","Active-Active");
+                        if(evidenceFault.equals("both-active")) body=body.replace("<state>passive</state>","<state>active</state>");
+                    }
                     return new XmlApiResult.Completed(200,missingFields && !first
                         ?body.replace("<running-sync>synchronized</running-sync>",""):body);
                 });
@@ -184,6 +196,28 @@ class PanFailoverJobExecutorTest {
             assertEquals(code,run(beforeUp).outcome());
             assertEquals(1,beforeUp.suspendCount); assertEquals(0,beforeUp.functionalCount);
         }
+    }
+    @Test void missingOpposedOrMisboundEvidenceBlocksWrites() {
+        for(String fault:List.of("missing","opposed","observer","opaque","mode","both-active")) {
+            Script script=new Script(); script.evidenceFault=fault;
+            Result result=run(script);
+            assertEquals("STOPPED",result.state(),fault);
+            assertEquals(0,script.suspendCount,fault); assertEquals(0,script.functionalCount,fault);
+            assertTrue(result.derived().stream().noneMatch(value -> value.contains("0011") || value.contains("0022")));
+        }
+    }
+    @Test void opposedPeerAfterSuspendNeverPermitsReturn() {
+        Script script=new Script(); script.evidenceFault="post-opposed";
+        Result result=run(script);
+        assertEquals("STOPPED",result.state());
+        assertEquals(1,script.suspendCount); assertEquals(0,script.functionalCount);
+    }
+    @Test void missingPeerRoleIsUnknownInReadinessProjection() {
+        Script script=new Script(); script.evidenceFault="missing";
+        Result result=run(script,true);
+        assertEquals("UNKNOWN",result.outcome());
+        assertTrue(result.checks().contains("pre:2:UNKNOWN"));
+        assertTrue(result.derived().stream().anyMatch(value -> value.contains("MISSING_OR_UNRECOGNIZED_ROLE")));
     }
     @Test void happyPath() {
         Script script=new Script(); Result result=run(script);

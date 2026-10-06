@@ -27,6 +27,7 @@ public final class CpFailoverChecks {
     public static final double CONNECTION_LOW_MIN_RATIO = 0.50;
     public static final long POLICY_MAX_SKEW_SECONDS = 600;
     public static final double TRAFFIC_MIN_RATIO = 0.50;
+    private static final Pattern MODE = Pattern.compile("(?im)^\\s*Cluster mode:[ \t]*([^\\r\\n]+)$");
     private static final Pattern LOCAL = Pattern.compile("(?i)\\(local\\)");
     private static final Pattern IP_ROW = Pattern.compile("(?m)^\\s*([^\\s()]+)\\s+(\\d+|[A-Za-z][A-Za-z0-9_.:-]{0,63})\\s+([0-9a-fA-F:.]+)(?:[ \\t]+[0-9a-fA-F:]+)?[ \\t]*$");
     private static final Pattern INTERFACE = Pattern.compile("(?m)^\\s*([A-Za-z][A-Za-z0-9_.:-]{0,63})[ \\t]+(?:\\(((?:S|HA|LS|LM|P)(?:,[ \t]*(?:S|HA|LS|LM|P))*)\\)[ \\t]+)?(UP|DOWN|Non-Monitored)\\b(.*)$");
@@ -37,14 +38,20 @@ public final class CpFailoverChecks {
     private CpFailoverChecks() {}
 
     public record State(String mode, Map<String,String> members, String localId, String localRole) {
-        public boolean pair() { return members.size()==2 && members.values().stream().filter("ACTIVE"::equals).count()==1
-            && members.values().stream().filter(state -> "STANDBY".equals(state) || "VSLS".equals(mode) && "BACKUP".equals(state)).count()==1 && localId!=null; }
+        public boolean pair() { return "HA".equals(mode) && members.size()==2 && members.values().stream().filter("ACTIVE"::equals).count()==1
+            && members.values().stream().filter("STANDBY"::equals).count()==1 && localId!=null; }
     }
     public static State state(String output) {
         State unknown=new State("UNKNOWN",Map.of(),null,"UNKNOWN");
         String mode=CheckPointHaStateParser.clusterModeOf(output).orElse("UNKNOWN");
+        Matcher reported=MODE.matcher(output==null?"":output);
+        if(!reported.find()) return unknown;
+        String label=reported.group(1).strip();
+        if(reported.find()) return unknown;
+        if("High Availability".equals(mode) && !label.matches(
+                "(?i)High Availability(?: \\((?:Active|Primary) Up\\))?(?: with IGMP Membership)?")) return unknown;
         if (!mode.equals("High Availability") && !mode.equals("Virtual System Load Sharing"))
-            return unknown;
+            return new State("UNSUPPORTED",Map.of(),null,"UNKNOWN");
         Map<String,String> roles=new HashMap<>(); String local=null;
         for (String line:output.split("\\R")) {
             if (line.toLowerCase(Locale.ROOT).contains("virtual devices status on each cluster member")) break;
@@ -65,14 +72,38 @@ public final class CpFailoverChecks {
             }
         }
         return roles.size()<2 || local==null?unknown:new State(mode.equals("Virtual System Load Sharing")?"VSLS":"HA",Map.copyOf(roles),local,
-            mode.equals("Virtual System Load Sharing") && "BACKUP".equals(roles.get(local))?"STANDBY":roles.get(local));
+            roles.get(local));
     }
     public static boolean corroborated(State a,State b) {
-        return a.pair() && b.pair() && a.mode().equals(b.mode()) && a.members().equals(b.members()) && !a.localId().equals(b.localId());
+        return a.pair() && b.pair() && "PASS".equals(reciprocal(a,b));
+    }
+
+    /** Tables must be from distinct, verified member sessions in one collection pass. */
+    public static String reciprocal(State a,State b) {
+        if(a.localId()==null || b.localId()==null || a.members().size()!=2 || b.members().size()!=2)
+            return "UNKNOWN";
+        return !a.localId().equals(b.localId()) && a.members().equals(b.members())
+            && a.localRole().equals(b.members().get(a.localId()))
+            && b.localRole().equals(a.members().get(b.localId())) ? "PASS" : "FAIL";
+    }
+
+    /** The executor supplies the opaque VSID used by the approved vsenv wrapper. */
+    public static State state(String output,String vsId) {
+        if(output!=null) {
+            Matcher context=Pattern.compile("(?im)^(?:Virtual System[ \t]+([^\r\n]+)|Context is set to Virtual Device [^\r\n]+ \\(ID ([^()]+)\\)\\.)[ \t]*$").matcher(output);
+            while(context.find()) {
+                String observed=context.group(1)!=null?context.group(1).strip():context.group(2);
+                if(!java.util.Objects.equals(vsId,observed)) return state(null);
+            }
+            if(vsId!=null && output.toLowerCase(Locale.ROOT).contains("virtual devices status on each cluster member"))
+                return state(null);
+        }
+        return state(output);
     }
 
     public static Map<String,Object> stateEvidence(State state) {
         return Map.of("role",state.localRole(),"mode",state.mode(),
+            "reason",!"HA".equals(state.mode())?"UNSUPPORTED":"OBSERVED",
             "local_state",state.localId()==null?"UNKNOWN":state.members().get(state.localId()),
             "peer_state",state.members().entrySet().stream().filter(e -> !e.getKey().equals(state.localId()))
                 .map(Map.Entry::getValue).findFirst().orElse("UNKNOWN"));

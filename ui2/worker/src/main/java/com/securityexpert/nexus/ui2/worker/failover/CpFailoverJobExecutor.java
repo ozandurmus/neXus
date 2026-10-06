@@ -62,6 +62,7 @@ public final class CpFailoverJobExecutor {
         private final TransportSession session;
         private final long openedAtNanos=System.nanoTime();
         private int sessionCommandIndex;
+        private String localId;
         Member(String id,TransportSession session) { this.id=id; this.session=session; }
         String id() { return id; }
         TransportSession session() { return session; }
@@ -121,7 +122,8 @@ public final class CpFailoverJobExecutor {
             if (!readiness && !mutationSwitch.enabled()) throw new Stop(FailoverMutationSwitch.DISABLED,0);
             if(!readiness && !store.windowValid(runId)) throw new Stop("WINDOW_EXPIRED",0);
             List<DeviceSummaryRecord> members=devices.findMembersByClusterRef(run.get().clusterRef());
-            if(members.size()!=2 || members.stream().anyMatch(m -> !"check_point".equals(m.vendorHint())))
+            if(members.size()!=2 || members.get(0).deviceId().equals(members.get(1).deviceId())
+                    || members.stream().anyMatch(m -> !"check_point".equals(m.vendorHint())))
                 throw new Stop("CLUSTER_NOT_ELIGIBLE",0);
             if (!readiness) {
                 requestCluster=run.get().clusterRef(); requestVs=run.get().vsId();
@@ -133,6 +135,8 @@ public final class CpFailoverJobExecutor {
             for(String command:List.of(STAT,TABLE,IF,ARP,CONN,TRAFFIC,SYNC,POLICY,PNOTES,BONDS,FAILOVER,ROUTING)) gate(command);
             if (!readiness) { gate(DOWN); gate(UP); }
             first=connect(members.get(0)); second=connect(members.get(1));
+            if(first.session().presentedIdentity().equals(second.session().presentedIdentity()))
+                throw new Stop("OBSERVERS_NOT_DISTINCT",0);
             store.state(runId,"PRECHECK","PRECHECK",null,null,null);
             Pair before=checks("pre",first,second,null,null);
             if (readiness) {
@@ -206,13 +210,21 @@ public final class CpFailoverJobExecutor {
         var device=devices.find(summary.deviceId()).filter(d -> d.permitsReadCollection())
             .orElseThrow(() -> new Stop("DEVICE_NOT_ELIGIBLE",0));
         var endpoint=devices.findEndpointByDeviceId(summary.deviceId())
+            .filter(e -> summary.deviceId().equals(e.deviceId()) && "ssh_exec".equalsIgnoreCase(e.transportKind()))
             .orElseThrow(() -> new Stop("ENDPOINT_MISSING",0));
+        String identity=devices.findConfirmFacts(summary.deviceId()).flatMap(f -> f.recordedIdentityPrimary())
+            .filter(value -> !value.isBlank()).orElseThrow(() -> new Stop("IDENTITY_NOT_VERIFIED",0));
         String host=com.securityexpert.nexus.ui2.persistence.runtime.EndpointAddress.host(endpoint.addressRef());
         int port=com.securityexpert.nexus.ui2.persistence.runtime.EndpointAddress.port(endpoint.addressRef(),22);
         var result=ssh.connect(new ConnectionTarget(endpoint.endpointId(),host,port),
             new ConnectSpec(device.credentialReferenceId(),
                 PersistedManagementEndpointTrustResolver.scopeRef(host,port),java.util.Optional.empty()),Duration.ofSeconds(30));
         if(!(result instanceof ConnectResult.Authenticated auth)) throw new Stop("TRUSTED_CONNECTION_REQUIRED",0);
+        if(!auth.session().presentedIdentity().filter(identity::equals).isPresent()) {
+            ssh.disconnect(auth.session());
+            throw new Stop("IDENTITY_NOT_VERIFIED",0);
+        }
+        // The local row belongs to this enrolled member by session provenance, never by its display name.
         return new Member(summary.deviceId(),auth.session());
     }
     private GateResolution.Known gate(String command) {
@@ -344,9 +356,15 @@ public final class CpFailoverJobExecutor {
         record(phase,member,9,assessment.status(),json(assessment.derived()));
         return assessment.status();
     }
+    private CpFailoverChecks.State readState(Member member) throws InterruptedException {
+        var state=CpFailoverChecks.state(command(member,STAT),vsId);
+        if(member.localId!=null && !member.localId.equals(state.localId())) return CpFailoverChecks.state(null);
+        if(state.localId()!=null) member.localId=state.localId();
+        return state;
+    }
     private Pair checks(String phase,Member first,Member second,Pair before,Member oldActive) throws InterruptedException {
-        var a=CpFailoverChecks.state(command(first,STAT));
-        var b=CpFailoverChecks.state(command(second,STAT));
+        var a=readState(first);
+        var b=readState(second);
         boolean states=before==null?CpFailoverChecks.corroborated(a,b)
             : roles(a,b,oldActive==first?second:first,"ACTIVE",oldActive,"DOWN",first,second);
         String stateStatus=states?"PASS":!"UNKNOWN".equals(a.mode()) && !"UNKNOWN".equals(b.mode())?"FAIL":"UNKNOWN";
@@ -481,8 +499,8 @@ public final class CpFailoverJobExecutor {
     private boolean waitFor(Member first,Member second,Member active,String activeRole,Member other,
             String otherRole) throws InterruptedException {
         for(int i=0;i<MAX_POLLS;i++) {
-            var a=CpFailoverChecks.state(command(first,STAT));
-            var b=CpFailoverChecks.state(command(second,STAT));
+            var a=readState(first);
+            var b=readState(second);
             if(roles(a,b,active,activeRole,other,otherRole,first,second)) return true;
             if(i<MAX_POLLS-1) pause.sleep(POLL_INTERVAL);
         }
@@ -491,8 +509,7 @@ public final class CpFailoverJobExecutor {
     private static boolean roles(CpFailoverChecks.State a,CpFailoverChecks.State b,Member active,
             String activeRole,Member other,String otherRole,Member first,Member second) {
         return "HA".equals(a.mode()) && "HA".equals(b.mode()) && a.members().size()==2
-            && a.members().equals(b.members()) && a.localId()!=null && b.localId()!=null
-            && !a.localId().equals(b.localId())
+            && "PASS".equals(CpFailoverChecks.reciprocal(a,b))
             && (active==first?activeRole:otherRole).equals(a.localRole())
             && (active==second?activeRole:otherRole).equals(b.localRole());
     }

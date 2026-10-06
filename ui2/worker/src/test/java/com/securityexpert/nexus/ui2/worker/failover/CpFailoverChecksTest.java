@@ -90,21 +90,50 @@ class CpFailoverChecksTest {
         var unhealthy=CpFailoverChecks.state(fixture);
         check(unhealthy.mode().equals("VSLS") && !unhealthy.pair());
         check(CpFailoverChecks.stateEvidence(unhealthy).equals(Map.of(
-            "mode","VSLS","role","DOWN","local_state","DOWN","peer_state","ACTIVE(!)")));
+            "mode","VSLS","role","DOWN","reason","UNSUPPORTED","local_state","DOWN","peer_state","ACTIVE(!)")));
         for(String token:new String[]{"ACTIVE(!)","ACTIVE","STANDBY","BACKUP","DOWN","READY","INIT","LOST","ACTIVE ATTENTION"}) {
             var state=CpFailoverChecks.state(fixture.replace("ACTIVE(!)","ACTIVE").replace("DOWN",token));
             check(!state.mode().equals("UNKNOWN"));
             check(state.members().get("02").equals(token));
-            check(state.localRole().equals(token.equals("BACKUP")?"STANDBY":token));
-            check(state.pair()==(token.equals("BACKUP") || token.equals("STANDBY")));
+            check(state.localRole().equals(token));
+            check(!state.pair());
         }
         check(CpFailoverChecks.state(fixture.replace("DOWN","UNRECOGNIZED")).mode().equals("UNKNOWN"));
         check(CpFailoverChecks.state(fixture.replace("(local)","")).mode().equals("UNKNOWN"));
         var backup=CpFailoverChecks.state(fixture.replace("ACTIVE(!)","ACTIVE").replace("DOWN","BACKUP"));
         var active=CpFailoverChecks.state(fixture.replace("ACTIVE(!)","ACTIVE").replace("DOWN","BACKUP")
             .replace("02 (local)","02").replace("01 192", "01 (local) 192"));
-        check(CpFailoverChecks.corroborated(backup,active));
+        check(!CpFailoverChecks.corroborated(backup,active));
     }
+    @Test void reciprocalClaimsFailClosedWithoutNormalizingOpaqueIds() {
+        var a=CpFailoverChecks.state(ACTIVE);
+        check(CpFailoverChecks.reciprocal(a,CpFailoverChecks.state(STANDBY)).equals("PASS"));
+        for(String other:new String[]{STANDBY.replace("Active","Down"),
+                STANDBY.replace("2 (local)","02 (local)"),ACTIVE}) {
+            check(CpFailoverChecks.reciprocal(a,CpFailoverChecks.state(other)).equals("FAIL"));
+        }
+        check(CpFailoverChecks.reciprocal(a,CpFailoverChecks.state(STANDBY.replace("(local)",""))).equals("UNKNOWN"));
+        check(!CpFailoverChecks.corroborated(a,CpFailoverChecks.state(STANDBY.replace("Standby","Active"))));
+        check(!CpFailoverChecks.corroborated(a,CpFailoverChecks.state("Cluster Mode: High Availability\n2 (local) 192.0.2.12 Standby")));
+    }
+    @Test void onlyReportedHaModeIsAdmittedRegardlessOfAssignedLoad() {
+        for(String mode:new String[]{"Virtual System Load Sharing","Load Sharing Unicast","Load Sharing Multicast",
+                "VRRP","unknown","High Availability unexpected"}) {
+            var a=CpFailoverChecks.state(ACTIVE.replace("High Availability",mode));
+            var b=CpFailoverChecks.state(STANDBY.replace("High Availability",mode));
+            check(!CpFailoverChecks.corroborated(a,b));
+            check(CpFailoverChecks.stateEvidence(a).get("reason").equals("UNSUPPORTED"));
+        }
+        check(!CpFailoverChecks.state(ACTIVE+"Cluster Mode: Virtual System Load Sharing\n").pair());
+    }
+    @Test void vsContextIsOpaqueAndChassisTablesAreNotVsEvidence() {
+        String vs=Fixtures.read("cp/cphaprob_stat_vsx_vs.txt");
+        check(CpFailoverChecks.state(vs,"12").pair());
+        for(String expected:new String[]{null,"012","13"}) check(!CpFailoverChecks.state(vs,expected).pair());
+        check(!CpFailoverChecks.state("Context is set to Virtual Device VS-SYNTHETIC (ID 012).\n"+ACTIVE,"12").pair());
+        check(!CpFailoverChecks.state(ACTIVE+"Virtual Devices Status on each Cluster Member\n","12").pair());
+    }
+
     @Test void arpTablesAcceptVsPreambleAndZeroEntriesButRejectErrors() {
         String preamble="Context is set to Virtual Device FW-TEST-01 (ID 01).\n";
         String entry="? (192.0.2.31) at 02:00:00:00:00:01 [ether] on eth0\n";
@@ -158,9 +187,9 @@ class CpFailoverChecksTest {
         for(String shape:new String[]{"ha","vsx_chassis","vsx_vs"}) {
             String output=Fixtures.read("cp/failover_stat_"+shape+".txt");
             var state=CpFailoverChecks.state(output);
-            check(state.pair() && state.members().size()==2);
+            check(state.pair()==shape.equals("ha") && state.members().size()==2);
             check(CpFailoverChecks.corroborated(state,CpFailoverChecks.state(output
-                .replace("1 (local)","1").replace("2          ","2 (local) "))));
+                .replace("1 (local)","1").replace("2          ","2 (local) ")))==shape.equals("ha"));
             check(CpFailoverChecks.policy(Fixtures.read("cp/failover_policy_"+shape+".txt")).status().equals("PASS"));
             String interfaces=Fixtures.read("cp/failover_interfaces_"+shape+".txt");
             var parsed=CpFailoverChecks.interfaces(interfaces);
