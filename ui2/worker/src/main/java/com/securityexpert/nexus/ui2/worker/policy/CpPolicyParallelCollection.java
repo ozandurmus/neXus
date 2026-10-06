@@ -285,21 +285,22 @@ final class CpPolicyParallelCollection {
             Policy policy = new Policy(metadata, domain);
             policies.add(policy);
             Map<String, JsonNode> roots = new LinkedHashMap<>();
-            for (JsonNode layer : node.path("access-layers")) {
+            for (JsonNode layer : packageLayers(node, items)) {
                 JsonNode scoped = CheckPointPolicyCollector.scopedLayer(layer);
                 roots.put(layerKey(scoped), scoped);
             }
-            roots.values().forEach(layer -> addLayer(policy, layer));
+            roots.values().forEach(layer -> addLayer(policy, layer, "package"));
             policy.nat = new Layer(policy, "", "NAT", ref("cp-nat", container, uid), 2,
                 offset -> MgmtCliCommands.showNatRulebase(domain, name, offset));
             enqueue(policy.nat, 0, 0);
         }
     }
 
-    private void addLayer(Policy policy, JsonNode reference) {
+    private void addLayer(Policy policy, JsonNode reference, String path) {
         String uid = layerUid(reference), name = required(reference, "name"), key = layerKey(reference);
         if (policy.layers.containsKey(key)) return;
         if (policy.layers.size() >= MAX_PAGES) throw failure();
+        if (uid == null) layerUidMissing(path);
         boolean hits = com.securityexpert.nexus.ui2.jobs.policy.PolicyHitGates.enabled(collector.gates(), true);
         Layer layer = new Layer(policy, uid, name, ref("cp-layer", policy.domain, uid == null ? key : uid), hits ? 3 : 1,
             offset -> MgmtCliCommands.showAccessRulebase(policy.domain, uid, name, offset) + (hits ? " show-hits true" : ""));
@@ -344,9 +345,9 @@ final class CpPolicyParallelCollection {
             for (Layer sibling : policy.layers.values()) if (sibling.done && sibling.failure == null)
                 for (JsonNode p : sibling.pages.values()) for (JsonNode object : p.path("objects-dictionary")) dictionary.put(required(object, "uid"), object);
             Map<String, JsonNode> children = new LinkedHashMap<>();
-            for (JsonNode p : layer.pages.values()) inline(p.path("rulebase"), children, 0);
+            for (JsonNode p : layer.pages.values()) inline(p.path("rulebase"), children, 0, dictionary);
             for (String child : children.keySet()) if (!policy.layers.containsKey("uid:" + child)) {
-                addLayer(policy, inlineReference(children.get(child), dictionary));
+                addLayer(policy, inlineReference(children.get(child), dictionary), "inline");
             }
         }
         checkpoint(policy, layer);

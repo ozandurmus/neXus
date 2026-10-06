@@ -187,7 +187,7 @@ public final class CheckPointPolicyCollector {
                     failures.add(new CollectionFailure(natRef, "COLLECTION_PENDING", "NAT", 0));
                     long checkpointInterval = CpPolicyParallelCollection.configuredCheckpointInterval().toNanos();
                     long[] lastCheckpoint = {nanoTime.getAsLong() - checkpointInterval};
-                    List<JsonNode> access = access(session, domainName, policy.path("access-layers"), deadline, lease, failures,
+                    List<JsonNode> access = access(session, domainName, packageLayers(policy, packages), deadline, lease, failures,
                         completed -> {
                             var checkpoint = snapshot(metadata, completed, List.of(), failures);
                             // Validate each layer even when its checkpoint write is throttled.
@@ -379,7 +379,15 @@ public final class CheckPointPolicyCollector {
                 index++;
             }
             seen.addAll(pageSeen);
-            page.path(field).forEach(items::add);
+            for (JsonNode item : page.path(field)) {
+                if (field.equals("packages") && page.path("objects-dictionary").isArray()) {
+                    var copy = ((com.fasterxml.jackson.databind.node.ObjectNode) item).deepCopy();
+                    var dictionary = copy.putArray("objects-dictionary");
+                    item.path("objects-dictionary").forEach(dictionary::add);
+                    page.path("objects-dictionary").forEach(dictionary::add);
+                    items.add(copy);
+                } else items.add(item);
+            }
             to = nextTo;
             if (to < total && count == cap) throw failure();
             if (to == total && items.size() != total) throw failure();
@@ -397,6 +405,7 @@ public final class CheckPointPolicyCollector {
             pending.put(layerKey(layer), layer);
         }
         Set<String> fetched = new HashSet<>();
+        Set<String> inlineKeys = new HashSet<>();
         Map<String, JsonNode> dictionary = new HashMap<>();
         List<JsonNode> all = new ArrayList<>();
         int[] rules = {0};
@@ -408,6 +417,7 @@ public final class CheckPointPolicyCollector {
             if (!fetched.add(key)) continue;
             String layerRef = ref("cp-layer", domain, uid == null ? key : uid);
             String domainType = layerDomainType(reference);
+            if (uid == null) layerUidMissing(inlineKeys.contains(key) ? "inline" : "package");
             PolicyCollectionTrace.layer(fetched.size(), fetched.size() + pending.size(), rules[0]);
             List<JsonNode> layer;
             try {
@@ -429,10 +439,11 @@ public final class CheckPointPolicyCollector {
                 for (JsonNode page : layer)
                     for (JsonNode object : page.path("objects-dictionary")) dictionary.put(required(object, "uid"), object);
                 Map<String, JsonNode> inline = new LinkedHashMap<>();
-                for (JsonNode page : layer) inline(page.path("rulebase"), inline, 0);
+                for (JsonNode page : layer) inline(page.path("rulebase"), inline, 0, dictionary);
                 for (String child : inline.keySet()) if (!fetched.contains("uid:" + child) && !pending.containsKey("uid:" + child)) {
                     JsonNode object = inlineReference(inline.get(child), dictionary);
                     pending.put(layerKey(object), object);
+                    inlineKeys.add(layerKey(object));
                 }
             } catch (RuntimeException incomplete) {
             com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(incomplete);
@@ -465,19 +476,21 @@ public final class CheckPointPolicyCollector {
         return count;
     }
 
-    static void inline(JsonNode rules, Map<String, JsonNode> ids, int depth) {
+    static void inline(JsonNode rules, Map<String, JsonNode> ids, int depth, Map<String, JsonNode> dictionary) {
         if (depth > 32) throw failure();
         for (JsonNode rule : rules) {
             if (rule.has("inline-layer")) {
-                JsonNode reference = rule.path("inline-layer");
-                ids.put(inlineUid(reference), reference);
+                JsonNode reference = inlineReference(rule.path("inline-layer"), dictionary);
+                // Keep the mapper's parent/child join on the resolved opaque UID.
+                ((com.fasterxml.jackson.databind.node.ObjectNode) rule).set("inline-layer", reference);
+                ids.put(layerUid(reference) == null ? layerKey(reference) : layerUid(reference), reference);
             }
-            if (rule.has("rulebase")) inline(rule.path("rulebase"), ids, depth + 1);
+            if (rule.has("rulebase")) inline(rule.path("rulebase"), ids, depth + 1, dictionary);
         }
     }
 
     static String inlineUid(JsonNode reference) {
-        if (reference.isObject()) return required(reference, "uid");
+        if (reference.isObject()) return reference.has("uid") ? required(reference, "uid") : "name:" + required(reference, "name");
         if (!reference.isTextual() || reference.textValue().isBlank()) throw failure();
         return reference.textValue();
     }
@@ -485,6 +498,15 @@ public final class CheckPointPolicyCollector {
     static JsonNode inlineReference(JsonNode reference, Map<String, JsonNode> dictionary) {
         String uid = inlineUid(reference);
         JsonNode object = reference.isObject() ? reference : dictionary.get(uid);
+        if (reference.isObject() && !reference.has("uid")) {
+            return resolveLayer(reference, dictionary.values().stream()
+                .filter(objectNode -> "access-layer".equals(objectNode.path("type").asText())).toList());
+        }
+        if (object == null) {
+            JsonNode named = resolveLayer(scopedLayer(reference), dictionary.values().stream()
+                .filter(objectNode -> "access-layer".equals(objectNode.path("type").asText())).toList());
+            if (layerUid(named) != null) return named;
+        }
         var layer = object == null ? com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.objectNode()
             : ((com.fasterxml.jackson.databind.node.ObjectNode) object).deepCopy();
         layer.put("uid", uid);
@@ -753,7 +775,43 @@ public final class CheckPointPolicyCollector {
         return PolicyCollectionTrace.failure("INVALID_PACKAGE_ITEM:" + field);
     }
 
+    static JsonNode packageLayers(JsonNode policy, List<JsonNode> packages) {
+        List<JsonNode> candidates = new ArrayList<>();
+        for (JsonNode item : packages) {
+            for (JsonNode layer : item.path("access-layers")) candidates.add(scopedLayer(layer));
+            for (JsonNode object : item.path("objects-dictionary"))
+                if ("access-layer".equals(object.path("type").asText())) candidates.add(object);
+        }
+        var roots = com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.arrayNode();
+        for (JsonNode layer : policy.path("access-layers")) roots.add(resolveLayer(scopedLayer(layer), candidates));
+        return roots;
+    }
+
+    static JsonNode resolveLayer(JsonNode reference, Collection<JsonNode> candidates) {
+        if (layerUid(reference) != null) return reference;
+        String name = required(reference, "name");
+        Map<String, JsonNode> matches = new LinkedHashMap<>();
+        for (JsonNode candidate : candidates) {
+            String uid = layerUid(candidate);
+            if (uid != null && name.equals(candidate.path("name").asText())) matches.put(uid, candidate);
+        }
+        if (matches.size() != 1) return reference;
+        var resolved = ((com.fasterxml.jackson.databind.node.ObjectNode) reference).deepCopy();
+        resolved.put("uid", matches.keySet().iterator().next());
+        return resolved;
+    }
+
+    static void layerUidMissing(String path) {
+        String diagnostic = "LAYER_UID_MISSING path=" + path;
+        com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.add("job", "note", diagnostic);
+        System.getLogger(CheckPointPolicyCollector.class.getName()).log(System.Logger.Level.WARNING, diagnostic);
+    }
+
     static JsonNode scopedLayer(JsonNode layer) {
+        if (layer.isTextual()) {
+            if (layer.textValue().isBlank()) throw failure();
+            return com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.objectNode().put("name", layer.textValue());
+        }
         return !layer.has("uid") && !layer.has("name") ? layer.path("domain") : layer;
     }
 
