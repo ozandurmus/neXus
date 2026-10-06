@@ -65,7 +65,10 @@ public final class CpFailoverController {
     private static ResponseEntity<?> result(java.util.function.Supplier<Object> action) {
         try { return ResponseEntity.ok(action.get()); }
         catch (CpFailoverService.Refusal refused) {
-            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("code",refused.code()));
+            Map<String,Object> body = new LinkedHashMap<>();
+            body.put("code", refused.code());
+            if (refused.dispatchRef()!=null) body.put("dispatchRef", refused.dispatchRef());
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
         } catch (IllegalArgumentException invalid) {
             return ResponseEntity.badRequest().body(Map.of("code","INVALID_REQUEST"));
         }

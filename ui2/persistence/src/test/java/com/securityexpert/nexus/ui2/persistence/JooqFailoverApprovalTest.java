@@ -15,13 +15,14 @@ import static org.junit.jupiter.api.Assertions.*;
 class JooqFailoverApprovalTest {
     private static final Set<String> MEMBERS=Set.of("member-a","member-b");
     private static final Instant NOW=Instant.parse("2026-10-06T12:00:00Z");
-    private static final class Database implements MockDataProvider, TransactionBoundary {
+    static final class Database implements MockDataProvider, TransactionBoundary {
         final Map<String,Object> approval=new LinkedHashMap<>();
         final Map<String,Object> run=new LinkedHashMap<>();
         final DSLContext sql=DSL.using(new MockConnection(this),SQLDialect.POSTGRES);
         final JooqCpFailoverRepository repository=new JooqCpFailoverRepository(this,true);
         Set<String> members=MEMBERS;
-        String consumed,incident;
+        String consumed,incident,dispatchRef;
+        boolean unresolvedDispatch,fleetMutation;
         boolean owner=true,expiredAtBoundary;
         int insertedRuns,insertedJobs,writes;
         Instant clock=NOW;
@@ -69,8 +70,15 @@ class JooqFailoverApprovalTest {
                 return new MockResult[]{new MockResult(rows.size(),rows)};
             }
             if (query.startsWith("select target_member_ids")) return row(Map.of("unchanged",MEMBERS.equals(members)));
-            if (query.contains("from failover_quarantine")) return incident==null?none():row(Map.of("incident",incident));
-            if (query.startsWith("select 1 from failover_run")) return none();
+            if (query.startsWith("select i.nonce as dispatch_ref from failover_quarantine")) {
+                assertTrue(query.contains("i.run_id=q.execution_id and i.observation<>'CONFIRMED'"));
+                assertTrue(query.contains("where q.active and (q.cluster_ref=?"));
+                assertTrue(query.contains("q.quarantined_member_ids @> jsonb_build_array"));
+                return incident==null?none():row(Collections.singletonMap("dispatch_ref",dispatchRef));
+            }
+            if (query.startsWith("select 1 from failover_dispatch_intent"))
+                return unresolvedDispatch?row(Map.of("unresolved",1)):none();
+            if (query.startsWith("select 1 from failover_run")) return fleetMutation?row(Map.of("active",1)):none();
             if (query.startsWith("insert into failover_run")) { insertedRuns++; consumed=(String)ctx.bindings()[0]; }
             else if (query.startsWith("insert into jobs")) insertedJobs++;
             else if (query.startsWith("update failover_approval set approved_by")) approval.put("approved_by",ctx.bindings()[0]);

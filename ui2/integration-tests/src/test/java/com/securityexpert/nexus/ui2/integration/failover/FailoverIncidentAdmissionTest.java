@@ -61,7 +61,6 @@ class FailoverIncidentAdmissionTest {
     @Test void intentAttemptStateAndAuditRollbackTogetherBeforeSend() throws Exception {
         try (var fixture=Ui2PostgresFixture.createAndMigrate("failover_intent_faults")) {
             var repo=repository(fixture); var members=pair(fixture,"unit-dispatch","check_point");
-            approve(repo,"unit-dispatch",null,"check_point");
             for (String write:List.of("insert into job_step_attempt","insert into failover_dispatch_intent",
                     "update failover_run set mutation_possible")) for (boolean after:List.of(false,true)) {
                 var e=executing(fixture,repo,members);
@@ -81,7 +80,6 @@ class FailoverIncidentAdmissionTest {
     @Test void lostReplyRuntimeFailureAndPersistenceFailureNeverReplayAcrossRestart() throws Exception {
         try (var fixture=Ui2PostgresFixture.createAndMigrate("failover_reply_faults")) {
             var repo=repository(fixture); var members=pair(fixture,"unit-dispatch","check_point");
-            approve(repo,"unit-dispatch",null,"check_point");
             for (String write:List.of("update failover_dispatch_intent set dispatch_claimed",
                     "update failover_dispatch_intent set delivery","update job_step_attempt set outcome"))
                 for (boolean after:List.of(false,true)) {
@@ -99,7 +97,15 @@ class FailoverIncidentAdmissionTest {
                     assertEquals(0,restarted.reconcileDispatches());
                     assertEquals("OUTCOME_UNKNOWN",restarted.detail(e.run()).orElseThrow().run().outcome());
                     assertFalse(restarted.dispatch(intent,() -> {fail("Uncertain dispatch was replayed"); return true;}));
-                    assertEquals("UNRESOLVED_DISPATCH",request(restarted,"unit-dispatch",null,"check_point",members).code());
+                    var refused=request(restarted,"unit-dispatch",null,"check_point",members);
+                    assertEquals("OPEN_INCIDENT",refused.code());
+                    assertEquals(intent.nonce(),refused.dispatchRef());
+                    var databaseRefusal=assertThrows(org.jooq.exception.DataAccessException.class,() -> mutate(fixture,dsl ->
+                        dsl.execute("insert into failover_run(run_id,cluster_ref,approval_id,requested_by,scheduled_for,state,step,vendor,target_member_ids) "
+                            + "select {0},cluster_ref,approval_id,requested_by,now(),'PLANNED','PLANNED',vendor,target_member_ids "
+                            + "from failover_run where run_id={1}",java.util.UUID.randomUUID().toString(),e.run())));
+                    assertTrue(databaseRefusal.getMessage().contains("OPEN_INCIDENT"));
+                    assertTrue(databaseRefusal.getMessage().contains("dispatchRef="+intent.nonce()));
                     assertTrue(release(fixture,"unit-dispatch",e.run()));
                 }
             for (boolean runtimeError:List.of(false,true)) {
@@ -115,7 +121,6 @@ class FailoverIncidentAdmissionTest {
     @Test void replyIsNotObservationAndStaleEpochOrModuleOwnerCannotSend() throws Exception {
         try (var fixture=Ui2PostgresFixture.createAndMigrate("failover_fencing")) {
             var repo=repository(fixture); var members=pair(fixture,"unit-dispatch","check_point");
-            approve(repo,"unit-dispatch",null,"check_point");
             var e=executing(fixture,repo,members); var intent=prepare(repo,e);
             assertThrows(RuntimeException.class,() -> repo.prepareDispatch(e.run(),e.epoch()+1,1,e.member(),"cp_failover_up","operational-state-change"));
             assertFalse(repo.dispatch(new JooqCpFailoverRepository.Dispatch(intent.nonce(),e.run(),e.job(),e.epoch()+1),
@@ -141,7 +146,6 @@ class FailoverIncidentAdmissionTest {
     @Test void secondReplicaCannotReconcileOrReplayAnInFlightDispatch() throws Exception {
         try (var fixture=Ui2PostgresFixture.createAndMigrate("failover_inflight")) {
             var repo=repository(fixture); var members=pair(fixture,"unit-dispatch","check_point");
-            approve(repo,"unit-dispatch",null,"check_point");
             var e=executing(fixture,repo,members); var intent=prepare(repo,e);
             var entered=new CountDownLatch(1); var resume=new CountDownLatch(1);
             var pool=Executors.newSingleThreadExecutor();
@@ -173,7 +177,6 @@ class FailoverIncidentAdmissionTest {
     @Test void terminalStateAttemptAndIncidentAreAtomicUnderFaults() throws Exception {
         try (var fixture=Ui2PostgresFixture.createAndMigrate("failover_terminal_faults")) {
             var repo=repository(fixture); var members=pair(fixture,"unit-dispatch","check_point");
-            approve(repo,"unit-dispatch",null,"check_point");
             for (String write:List.of("update failover_dispatch_intent set observation",
                     "update job_step_attempt set outcome","update failover_run set state='STOPPED'",
                     "update jobs set state='OUTCOME_UNKNOWN'")) for (boolean after:List.of(false,true)) {
@@ -193,7 +196,6 @@ class FailoverIncidentAdmissionTest {
     @Test void observationAndSuccessfulStateUpdatesRollbackWithTheirAudit() throws Exception {
         try (var fixture=Ui2PostgresFixture.createAndMigrate("failover_observation_faults")) {
             var repo=repository(fixture); var members=pair(fixture,"unit-dispatch","check_point");
-            approve(repo,"unit-dispatch",null,"check_point");
             var e=executing(fixture,repo,members); var intent=prepare(repo,e);
             assertTrue(repo.dispatch(intent,() -> true));
             for (boolean after:List.of(false,true)) {

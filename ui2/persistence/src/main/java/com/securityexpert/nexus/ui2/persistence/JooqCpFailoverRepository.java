@@ -52,7 +52,9 @@ public class JooqCpFailoverRepository {
     public record Check(String phase, String memberRef, String vsId, int checkNo, String status,
             String derived, Instant observedAt) {}
     public record Detail(Run run, List<Check> checks) {}
-    public record Decision(String code, String runId) {}
+    public record Decision(String code, String runId, String dispatchRef) {
+        public Decision(String code, String runId) { this(code, runId, null); }
+    }
     public record SummaryMember(String deviceId, boolean readable, String transportKind,
             boolean inventoryPresent, String context, boolean panSupported) {}
     public record SummaryStatus(String clusterRef, String vsId, String vendor, boolean activeWindow,
@@ -326,8 +328,8 @@ public class JooqCpFailoverRepository {
             if (members.size()!=2 || !members.contains(targetDeviceId)) return new Decision("CLUSTER_NOT_ELIGIBLE", null);
             if (!Set.copyOf(members).equals(binding))
                 return new Decision("MEMBER_SET_CHANGED", null);
-            String refusal = admissionRefusal(dsl, cluster, members, null);
-            if (refusal != null) return new Decision(refusal, null);
+            Decision refusal = admissionDecision(dsl, cluster, members, null);
+            if (refusal != null) return refusal;
             dsl.execute("update failover_approval set warning_confirmed_at=clock_timestamp() where approval_id={0}",requestId);
             String id = UUID.randomUUID().toString();
             dsl.execute("insert into failover_run(run_id,cluster_ref,vs_id,approval_id,requested_by,scheduled_for,state,step,vendor,target_member_ids,request_revision) "
@@ -460,17 +462,27 @@ public class JooqCpFailoverRepository {
     }
 
     private static String admissionRefusal(DSLContext dsl, String cluster, List<String> members, String runId) {
+        Decision refusal = admissionDecision(dsl, cluster, members, runId);
+        return refusal == null ? null : refusal.code();
+    }
+
+    private static Decision admissionDecision(DSLContext dsl, String cluster, List<String> members, String runId) {
+        // The unit/member incident is the operator-actionable cause and takes precedence over
+        // the fleet dispatch fence. If its own dispatch is unresolved, retain OPEN_INCIDENT
+        // and attach that dispatch reference separately; never attribute an unrelated dispatch.
+        Record incident = dsl.fetchOne("select i.nonce as dispatch_ref from failover_quarantine q "
+            + "left join failover_dispatch_intent i on i.run_id=q.execution_id and i.observation<>'CONFIRMED' "
+            + "where q.active and (q.cluster_ref={0} or q.quarantined_member_ids @> jsonb_build_array({1}::text) "
+            + "or q.quarantined_member_ids @> jsonb_build_array({2}::text)) "
+            + "order by i.nonce nulls last,q.execution_id limit 1", cluster, members.get(0), members.get(1));
+        if (incident != null) return new Decision("OPEN_INCIDENT", null, incident.get("dispatch_ref", String.class));
         if (!dsl.fetch("select 1 from failover_dispatch_intent i where run_id is distinct from {0} "
                 + "and (observation='NOT_OBSERVED' or (observation='OUTCOME_UNKNOWN' and exists "
                 + "(select 1 from failover_quarantine q where q.execution_id=i.run_id and q.active)))", runId).isEmpty())
-            return "UNRESOLVED_DISPATCH";
-        if (!dsl.fetch("select 1 from failover_quarantine where active and "
-                + "(cluster_ref={0} or quarantined_member_ids @> jsonb_build_array({1}::text) "
-                + "or quarantined_member_ids @> jsonb_build_array({2}::text))", cluster, members.get(0), members.get(1)).isEmpty())
-            return "OPEN_INCIDENT";
+            return new Decision("UNRESOLVED_DISPATCH", null);
         if (!dsl.fetch("select 1 from failover_run where run_kind='FAILOVER' "
                 + "and state not in ('DONE','STOPPED') and run_id is distinct from {0}", runId).isEmpty())
-            return "FLEET_MUTATION_ACTIVE";
+            return new Decision("FLEET_MUTATION_ACTIVE", null);
         return null;
     }
 

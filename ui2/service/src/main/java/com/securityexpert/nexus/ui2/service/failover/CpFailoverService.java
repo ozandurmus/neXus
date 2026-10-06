@@ -34,7 +34,10 @@ public final class CpFailoverService {
     private record StatusKey(String clusterRef, String vsId, String vendor) {}
     public static final class Refusal extends RuntimeException {
         private final String code;
-        public Refusal(String code) { super(code); this.code=code; }
+        private final String dispatchRef;
+        public Refusal(String code) { this(code, null); }
+        public Refusal(String code, String dispatchRef) { super(code); this.code=code; this.dispatchRef=dispatchRef; }
+        public String dispatchRef() { return dispatchRef; }
         public String code() { return code; }
     }
 
@@ -315,7 +318,7 @@ public final class CpFailoverService {
                 when,actor,u.members().get(0).deviceId(),scheduledFor==null,vendor,
                 u.members().stream().map(DeviceSummaryRecord::deviceId).collect(Collectors.toUnmodifiableSet()),
                 requestId,revision,nonce,warningConfirmed,policy);
-            if (!"ADMITTED".equals(decision.code())) throw new Refusal(decision.code());
+            if (!"ADMITTED".equals(decision.code())) throw new Refusal(decision.code(), decision.dispatchRef());
             return decision.runId();
         } catch (org.springframework.dao.DuplicateKeyException duplicate) {
             throw new Refusal("RUN_ALREADY_ACTIVE");
@@ -338,7 +341,7 @@ public final class CpFailoverService {
         try {
             var decision = store.requestReadiness(u.members().get(0).clusterMemberRef().orElseThrow(),
                 u.vsId(), actor, u.members().get(0).deviceId(), vendor);
-            if (!"ADMITTED".equals(decision.code())) throw new Refusal(decision.code());
+            if (!"ADMITTED".equals(decision.code())) throw new Refusal(decision.code(), decision.dispatchRef());
             return decision.runId();
         } catch (org.springframework.dao.DuplicateKeyException duplicate) {
             throw new Refusal("RUN_ALREADY_ACTIVE");

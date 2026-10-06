@@ -28,6 +28,31 @@ class JooqCpFailoverRepositoryTest {
             new JooqCpFailoverRepository.Dispatch("nonce","run","job",1),() -> {fail("Transport touched"); return true;}));
     }
 
+    @ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({
+        "true,false,false,OPEN_INCIDENT",
+        "true,true,false,OPEN_INCIDENT",
+        "true,true,true,OPEN_INCIDENT",
+        "false,true,false,UNRESOLVED_DISPATCH",
+        "false,false,false,FLEET_MUTATION_ACTIVE"
+    })
+    void repositoryRefusesBeforeInsertingARequest(boolean incident, boolean unresolved,
+            boolean relatedDispatch, String expected) {
+        var db = new JooqFailoverApprovalTest.Database();
+        db.incident = incident ? "incident-a" : null;
+        db.unresolvedDispatch = unresolved;
+        db.dispatchRef = relatedDispatch ? "dispatch-a" : null;
+        db.fleetMutation = true;
+        var decision = db.start("nonce-a");
+        assertEquals(expected, decision.code());
+        assertEquals(relatedDispatch ? "dispatch-a" : null, decision.dispatchRef());
+        assertNull(decision.runId());
+        assertEquals(expected, db.dispatch(), "Worker admission must use the same cause precedence");
+        assertEquals(0, db.insertedRuns);
+        assertEquals(0, db.insertedJobs);
+        assertEquals(0, db.writes);
+    }
+
     @org.junit.jupiter.api.Test
     void unboundWindowCannotAuthorizeAnotherRun() {
         var repository=new JooqCpFailoverRepository(new TransactionBoundary() {

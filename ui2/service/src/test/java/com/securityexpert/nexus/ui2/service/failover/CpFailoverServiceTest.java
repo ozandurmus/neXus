@@ -57,14 +57,16 @@ class CpFailoverServiceTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"OPEN_INCIDENT", "MEMBER_SET_CHANGED", "FLEET_MUTATION_ACTIVE"})
+    @ValueSource(strings = {"OPEN_INCIDENT", "UNRESOLVED_DISPATCH", "MEMBER_SET_CHANGED", "FLEET_MUTATION_ACTIVE"})
     void commonAdmissionRefusalsReachTheCaller(String code) {
         ready("ACTIVE","STANDBY");
         when(store.requestBound(eq(CLUSTER),isNull(),any(),eq("actor-1"),eq(A),eq(true),
             eq("check_point"),eq(java.util.Set.of(A,B)),eq("request-a"),eq(1L),eq("nonce-a"),eq(true),eq(JooqCpFailoverRepository.ADMIN_SINGLE)))
-            .thenReturn(new JooqCpFailoverRepository.Decision(code,null));
-        assertEquals(code,assertThrows(CpFailoverService.Refusal.class,
-            () -> service.request(CLUSTER_ID,CLUSTER_ID,null,"actor-1","check_point","request-a",1,"nonce-a",true)).code());
+            .thenReturn(new JooqCpFailoverRepository.Decision(code,null,"OPEN_INCIDENT".equals(code)?"dispatch-a":null));
+        var refusal=assertThrows(CpFailoverService.Refusal.class,
+            () -> service.request(CLUSTER_ID,CLUSTER_ID,null,"actor-1","check_point","request-a",1,"nonce-a",true));
+        assertEquals(code,refusal.code());
+        assertEquals("OPEN_INCIDENT".equals(code)?"dispatch-a":null,refusal.dispatchRef());
     }
 
     private void roles(String actor,java.util.Set<String> roles) {
