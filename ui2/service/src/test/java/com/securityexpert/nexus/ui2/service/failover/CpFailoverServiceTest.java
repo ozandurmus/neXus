@@ -43,7 +43,7 @@ class CpFailoverServiceTest {
 
     @Test void disabledSwitchRefusesBothVendorsBeforeAdmissionAndDueDispatch() {
         when(rbac.evaluate(anyString(),any(),any())).thenReturn(new RbacEvaluator.Decision(
-            AuthzOutcome.PERMITTED,Optional.empty(),Optional.empty(),Optional.empty()));
+            AuthzOutcome.PERMITTED,Optional.of(RbacEvaluator.ROOT_AUTHORITY),Optional.empty(),Optional.empty()));
         var disabled=new CpFailoverService(devices,inventory,store,rbac,trust,
             new FailoverMutationSwitch(false));
         for (String vendor:List.of("check_point","palo_alto")) {
@@ -61,10 +61,51 @@ class CpFailoverServiceTest {
     void commonAdmissionRefusalsReachTheCaller(String code) {
         ready("ACTIVE","STANDBY");
         when(store.requestBound(eq(CLUSTER),isNull(),any(),eq("actor-1"),eq(A),eq(true),
-            eq("check_point"),eq(java.util.Set.of(A,B))))
+            eq("check_point"),eq(java.util.Set.of(A,B)),eq("request-a"),eq(1L),eq("nonce-a"),eq(true),eq(JooqCpFailoverRepository.ADMIN_SINGLE)))
             .thenReturn(new JooqCpFailoverRepository.Decision(code,null));
         assertEquals(code,assertThrows(CpFailoverService.Refusal.class,
-            () -> service.request(CLUSTER_ID,CLUSTER_ID,null,"actor-1")).code());
+            () -> service.request(CLUSTER_ID,CLUSTER_ID,null,"actor-1","check_point","request-a",1,"nonce-a",true)).code());
+    }
+
+    private void roles(String actor,java.util.Set<String> roles) {
+        when(rbac.evaluate(eq(actor),any(),any())).thenAnswer(call -> {
+            Optional<String> role=call.getArgument(1);
+            return new RbacEvaluator.Decision(role.filter(roles::contains).isPresent()?AuthzOutcome.PERMITTED:AuthzOutcome.DENIED,
+                Optional.of("synthetic-authority"),Optional.empty(),Optional.empty());
+        });
+    }
+    @Test void serverRolesSelectAdminAndTwoPersonPolicyAndReplayViewerIsDenied() {
+        ready("ACTIVE","STANDBY");
+        String id="1d730385-5706-4625-a0e9-23c2f3fe1863";
+        Instant from=Instant.now(),until=from.plusSeconds(600);
+        roles("principal-a",java.util.Set.of(com.securityexpert.nexus.ui2.platform.RoleToken.SECURITY_ADMIN));
+        service.createApprovalRequest(id,CLUSTER_ID,CLUSTER_ID,from,until,"Synthetic request","principal-a","check_point");
+        verify(store).createRequestApproval(id,CLUSTER,null,CLUSTER_ID,java.util.Set.of(A,B),from,until,
+            "Synthetic request","principal-a","check_point",JooqCpFailoverRepository.ADMIN_SINGLE);
+        roles("principal-b",java.util.Set.of(com.securityexpert.nexus.ui2.platform.RoleToken.OPERATION_ADMIN));
+        service.createApprovalRequest(id,CLUSTER_ID,CLUSTER_ID,from,until,"Synthetic request","principal-b","check_point");
+        verify(store).createRequestApproval(id,CLUSTER,null,CLUSTER_ID,java.util.Set.of(A,B),from,until,
+            "Synthetic request","principal-b","check_point",JooqCpFailoverRepository.TWO_PERSON);
+        for (String role:List.of(com.securityexpert.nexus.ui2.platform.RoleToken.REPLAY_VIEWER,
+                com.securityexpert.nexus.ui2.platform.RoleToken.OPERATOR)) {
+            roles("principal-c",java.util.Set.of(role));
+            assertFalse(service.mayApprove("principal-c")); assertFalse(service.mayStart("principal-c"));
+            assertEquals("WRONG_ROLE",assertThrows(CpFailoverService.Refusal.class,() ->
+                service.createApprovalRequest(id,CLUSTER_ID,CLUSTER_ID,from,until,"Synthetic request","principal-c","check_point")).code());
+            for (Instant when:new Instant[]{null,until.minusSeconds(60)}) assertEquals("WRONG_ROLE",
+                assertThrows(CpFailoverService.Refusal.class,() -> service.request(CLUSTER_ID,CLUSTER_ID,when,
+                    "principal-c","check_point",id,1,"nonce-a",true)).code());
+        }
+    }
+    @Test void secondApprovalTakesAuthenticatedActorNotBrowserApprover() throws Exception {
+        var mockService=mock(CpFailoverService.class);
+        var mvc=MockMvcBuilders.standaloneSetup(new CpFailoverController(mockService)).build();
+        String path="/api/v2/cp-failover/approvals/request-a/approve";
+        mvc.perform(post(path).servletPath(path).contentType("application/json")
+            .content("{\"clusterId\":\"unit-a\",\"unitId\":\"unit-a\",\"revision\":1,\"approver_id\":\"forged-principal\"}")
+            .requestAttr(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE,"principal-a"))
+            .andExpect(status().isOk());
+        verify(mockService).secondApproval("request-a",1,"unit-a","unit-a","principal-a","check_point");
     }
 
     private static DeviceSummaryRecord summary(String id) {
@@ -79,7 +120,7 @@ class CpFailoverServiceTest {
     }
     private void ready(String aRole,String bRole) {
         when(rbac.evaluate(anyString(),any(),any())).thenReturn(new RbacEvaluator.Decision(
-            AuthzOutcome.PERMITTED,Optional.empty(),Optional.empty(),Optional.empty()));
+            AuthzOutcome.PERMITTED,Optional.of(RbacEvaluator.ROOT_AUTHORITY),Optional.empty(),Optional.empty()));
         when(devices.listAll()).thenReturn(List.of(summary(A),summary(B)));
         when(devices.findMembersByClusterRef(CLUSTER)).thenReturn(List.of(summary(A),summary(B)));
         for(String id:List.of(A,B)) {
@@ -202,24 +243,24 @@ class CpFailoverServiceTest {
         when(rbac.evaluate(anyString(),any(),any())).thenReturn(new RbacEvaluator.Decision(
             AuthzOutcome.DENIED,Optional.empty(),Optional.empty(),Optional.empty()));
         var refused=assertThrows(CpFailoverService.Refusal.class,
-            () -> service.request(CLUSTER_ID,CLUSTER_ID,null,"actor-1"));
+            () -> service.request(CLUSTER_ID,CLUSTER_ID,null,"actor-1","check_point","request-a",1,"nonce-a",true));
         assertEquals("WRONG_ROLE",refused.code());
         verifyNoInteractions(store,devices,inventory,trust);
     }
     @Test void noWindowRefusedBeforeJob() {
         ready("ACTIVE","STANDBY");
-        when(store.requestBound(eq(CLUSTER),isNull(),any(),eq("actor-1"),eq(A),eq(true),eq("check_point"),eq(java.util.Set.of(A,B))))
+        when(store.requestBound(eq(CLUSTER),isNull(),any(),eq("actor-1"),eq(A),eq(true),eq("check_point"),eq(java.util.Set.of(A,B)),eq("request-a"),eq(1L),eq("nonce-a"),eq(true),eq(JooqCpFailoverRepository.ADMIN_SINGLE)))
             .thenReturn(new JooqCpFailoverRepository.Decision("NO_PRE_APPROVAL",null));
         var refused=assertThrows(CpFailoverService.Refusal.class,
-            () -> service.request(CLUSTER_ID,CLUSTER_ID,null,"actor-1"));
+            () -> service.request(CLUSTER_ID,CLUSTER_ID,null,"actor-1","check_point","request-a",1,"nonce-a",true));
         assertEquals("NO_PRE_APPROVAL",refused.code());
     }
     @Test void concurrentRunRefusedBeforeJob() {
         ready("ACTIVE","STANDBY");
-        when(store.requestBound(eq(CLUSTER),isNull(),any(),eq("actor-1"),eq(A),eq(true),eq("check_point"),eq(java.util.Set.of(A,B))))
+        when(store.requestBound(eq(CLUSTER),isNull(),any(),eq("actor-1"),eq(A),eq(true),eq("check_point"),eq(java.util.Set.of(A,B)),eq("request-a"),eq(1L),eq("nonce-a"),eq(true),eq(JooqCpFailoverRepository.ADMIN_SINGLE)))
             .thenReturn(new JooqCpFailoverRepository.Decision("RUN_ALREADY_ACTIVE",null));
         var refused=assertThrows(CpFailoverService.Refusal.class,
-            () -> service.request(CLUSTER_ID,CLUSTER_ID,null,"actor-1"));
+            () -> service.request(CLUSTER_ID,CLUSTER_ID,null,"actor-1","check_point","request-a",1,"nonce-a",true));
         assertEquals("RUN_ALREADY_ACTIVE",refused.code());
     }
     @Test void onDemandReadinessPropagatesActiveUnitRefusal() {
@@ -343,19 +384,16 @@ class CpFailoverServiceTest {
             .andExpect(jsonPath("$.checks[1].derived").value("{\"role\":\"ACTIVE\"}"));
         verify(devices,never()).findSummary(anyString());
     }
-    @Test void incorrectMemberStateRefusedBeforeAdmission() {
-        ready("ACTIVE","ACTIVE");
-        var refused=assertThrows(CpFailoverService.Refusal.class,
-            () -> service.request(CLUSTER_ID,CLUSTER_ID,null,"actor-1"));
-        assertEquals("CLUSTER_STATE_NOT_READY",refused.code());
+    @Test void unboundLegacyRequestIsRefusedBeforeAdmission() {
+        ready("ACTIVE","STANDBY");
+        assertEquals("REQUEST_BINDING_REQUIRED",assertThrows(CpFailoverService.Refusal.class,
+            () -> service.request(CLUSTER_ID,CLUSTER_ID,null,"actor-1")).code());
         verifyNoInteractions(store);
     }
-    @Test void untrustedHostRefusedBeforeAdmission() {
+    @Test void warningConfirmationIsRequiredBeforeAdmission() {
         ready("ACTIVE","STANDBY");
-        when(trust.findActiveAlgorithms(anyString(),eq(22))).thenReturn(List.of());
-        var refused=assertThrows(CpFailoverService.Refusal.class,
-            () -> service.request(CLUSTER_ID,CLUSTER_ID,null,"actor-1"));
-        assertEquals("TRUSTED_HOST_KEY_REQUIRED",refused.code());
+        assertEquals("WARNING_CONFIRMATION_REQUIRED",assertThrows(CpFailoverService.Refusal.class,
+            () -> service.request(CLUSTER_ID,CLUSTER_ID,null,"actor-1","check_point","request-a",1,"nonce-a",false)).code());
         verifyNoInteractions(store);
     }
     @Test void panActiveActiveRefusedWithoutVsUnits() {
@@ -383,7 +421,7 @@ class CpFailoverServiceTest {
     }
     @Test void summaryIncludesCpVsxAndPanWithWindowsAndLatestRuns() {
         when(rbac.evaluate(anyString(),any(),any())).thenReturn(new RbacEvaluator.Decision(
-            AuthzOutcome.PERMITTED,Optional.empty(),Optional.empty(),Optional.empty()));
+            AuthzOutcome.PERMITTED,Optional.of(RbacEvaluator.ROOT_AUTHORITY),Optional.empty(),Optional.empty()));
         var cpA = summary(A);
         var cpB = summary(B);
         var vsA = new DeviceSummaryRecord("VS-A", "gateway", "check_point", DeviceEnrollmentState.ENROLLED,
@@ -417,7 +455,7 @@ class CpFailoverServiceTest {
             && "VS-TEST-APP (VSID 13)".equals(r.unit().label()) && "PASS".equals(r.lastRunOutcome())));
         assertTrue(rows.stream().anyMatch(r -> "palo_alto".equals(r.vendor()) && !r.activeWindow()
             && "STOPPED".equals(r.lastRunState()) && runAt.equals(r.lastRunAt())));
-        verify(rbac,org.mockito.Mockito.times(2)).evaluate(anyString(),any(),any());
+        verify(rbac,org.mockito.Mockito.times(3)).evaluate(anyString(),any(),any());
         verify(store).readinessStatuses();
         verify(store).summaryMembers();
         verify(store).summaryStatuses();
@@ -426,7 +464,7 @@ class CpFailoverServiceTest {
     }
     @Test void summaryKeepsBulkReadsAndAuthorizationConstantFor45Clusters() {
         when(rbac.evaluate(anyString(),any(),any())).thenReturn(new RbacEvaluator.Decision(
-            AuthzOutcome.PERMITTED,Optional.empty(),Optional.empty(),Optional.empty()));
+            AuthzOutcome.PERMITTED,Optional.of(RbacEvaluator.ROOT_AUTHORITY),Optional.empty(),Optional.empty()));
         var members = new java.util.ArrayList<DeviceSummaryRecord>();
         var facts = new java.util.ArrayList<JooqCpFailoverRepository.SummaryMember>();
         for (int i=0;i<45;i++) for (int member=0;member<2;member++) {
@@ -438,7 +476,7 @@ class CpFailoverServiceTest {
         when(devices.listAll()).thenReturn(members);
         when(store.summaryMembers()).thenReturn(facts);
         assertEquals(45,service.summary("actor-1").size());
-        verify(rbac,org.mockito.Mockito.times(2)).evaluate(anyString(),any(),any());
+        verify(rbac,org.mockito.Mockito.times(3)).evaluate(anyString(),any(),any());
         verify(store).summaryMembers();
         verify(store).summaryStatuses();
         verify(store).readinessStatuses();
@@ -457,8 +495,8 @@ class CpFailoverServiceTest {
         new CpFailoverServiceTest().wrongRoleRefusedBeforeAdmission();
         new CpFailoverServiceTest().noWindowRefusedBeforeJob();
         new CpFailoverServiceTest().concurrentRunRefusedBeforeJob();
-        new CpFailoverServiceTest().incorrectMemberStateRefusedBeforeAdmission();
-        new CpFailoverServiceTest().untrustedHostRefusedBeforeAdmission();
+        new CpFailoverServiceTest().unboundLegacyRequestIsRefusedBeforeAdmission();
+        new CpFailoverServiceTest().warningConfirmationIsRequiredBeforeAdmission();
         new CpFailoverServiceTest().panActiveActiveRefusedWithoutVsUnits();
     }
 }

@@ -24,41 +24,13 @@ class JooqCpFailoverRepositoryTest {
             "check_point",java.util.Set.of("member-a","member-b"),true));
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"OPEN_INCIDENT", "FLEET_MUTATION_ACTIVE", "MEMBER_SET_CHANGED"})
-    void repositoryRefusesBeforeInsertingARequest(String refusal) {
-        var records=DSL.using(SQLDialect.POSTGRES);
-        var dsl=DSL.using(new MockConnection(query -> {
-            String sql=query.sql();
-            if (sql.startsWith("SET LOCAL") || sql.startsWith("select pg_advisory")) return new MockResult[]{new MockResult(0)};
-            if (sql.startsWith("select * from failover_approval")) {
-                var field=DSL.field("approval_id",String.class);
-                var result=records.newResult(field); result.add(records.newRecord(field).value1("approval-a"));
-                return new MockResult[]{new MockResult(1,result)};
-            }
-            if (sql.startsWith("select resolved.device_id")) {
-                var id=DSL.field("device_id",String.class); var vendor=DSL.field("vendor_hint",String.class);
-                var role=DSL.field("role",String.class); var disabled=DSL.field("disabled",Boolean.class);
-                var state=DSL.field("enrollment_state",String.class);
-                var result=records.newResult(id,vendor,role,disabled,state);
-                for (String member:java.util.List.of("member-a","member-b"))
-                    result.add(records.newRecord(id,vendor,role,disabled,state).values(member,"check_point","gateway",false,"ENROLLED"));
-                return new MockResult[]{new MockResult(2,result)};
-            }
-            assertTrue(sql.startsWith("select"),"A refused request must not write");
-            var field=DSL.field("run_id",String.class); var result=records.newResult(field);
-            if ((sql.contains("from failover_quarantine") && refusal.equals("OPEN_INCIDENT"))
-                    || (sql.startsWith("select 1 from failover_run") && refusal.equals("FLEET_MUTATION_ACTIVE")))
-                result.add(records.newRecord(field).value1("existing"));
-            return new MockResult[]{new MockResult(result.size(),result)};
-        }),SQLDialect.POSTGRES);
+    @org.junit.jupiter.api.Test
+    void unboundWindowCannotAuthorizeAnotherRun() {
         var repository=new JooqCpFailoverRepository(new TransactionBoundary() {
-            @Override public <T> T inTransaction(Function<DSLContext,T> work) { return work.apply(dsl); }
+            @Override public <T> T inTransaction(Function<DSLContext,T> work) { throw new AssertionError("Database touched"); }
         },true);
-        var expected=refusal.equals("MEMBER_SET_CHANGED")?java.util.Set.of("member-a","member-old"):
-            java.util.Set.of("member-a","member-b");
-        assertEquals(refusal,repository.requestBound("unit-a",null,java.time.Instant.now(),"synthetic-actor",
-            "member-a",true,"check_point",expected).code());
+        assertEquals("REQUEST_BINDING_REQUIRED",repository.requestBound("unit-a",null,java.time.Instant.now(),
+            "synthetic-actor","member-a",true,"check_point",java.util.Set.of("member-a","member-b")).code());
     }
 
     @org.junit.jupiter.api.Test

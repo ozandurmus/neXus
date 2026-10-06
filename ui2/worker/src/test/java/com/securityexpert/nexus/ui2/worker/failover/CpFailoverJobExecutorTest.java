@@ -45,13 +45,13 @@ class CpFailoverJobExecutorTest {
             return Optional.of(new Run("run-1",CLUSTER,vsId,"READINESS".equals(kind)?null:"approval-1","actor-1",
                 Instant.now(),id,state,state,outcome,null,null,"check_point",kind));
         }
-        String admission="ADMITTED", writeAdmission="ADMITTED";
+        String admission="ADMITTED", writeAdmission="ADMITTED", returnAdmission="ADMITTED";
         int admissionCount;
         @Override public String mutationAdmission(String id,String cluster,String vs,String vendor,
-                java.util.Set<String> members,boolean possibleSend) {
+                java.util.Set<String> members,boolean possibleSend,String jobId,long epoch) {
             admissionCount++;
             CpFailoverJobExecutorTest.check(CLUSTER.equals(cluster) && java.util.Set.of(A,B).equals(members));
-            return possibleSend ? writeAdmission : admission;
+            return possibleSend ? (admissionCount==2 ? writeAdmission : returnAdmission) : admission;
         }
         @Override public boolean windowValid(String id) { return valid; }
         @Override public void state(String id,String next,String step,String result,String failed,String message) {
@@ -78,6 +78,19 @@ class CpFailoverJobExecutorTest {
         Script script=new Script(); run(store,script);
         org.junit.jupiter.api.Assertions.assertEquals("MEMBER_SET_CHANGED",store.outcome);
         check(script.downCount==0 && script.upCount==0 && store.admissionCount==2);
+    }
+
+    @Test void expiryRevocationAndOwnershipAreRecheckedBeforeBothWrites() {
+        for (String refusal:List.of("WINDOW_EXPIRED","APPROVAL_REVOKED","OWNERSHIP_LOST","OPEN_INCIDENT")) {
+            Store beforeDown=new Store(); beforeDown.writeAdmission=refusal;
+            Script noWrite=new Script(); run(beforeDown,noWrite);
+            org.junit.jupiter.api.Assertions.assertEquals(refusal,beforeDown.outcome);
+            check(noWrite.downCount==0 && noWrite.upCount==0);
+            Store beforeUp=new Store(); beforeUp.returnAdmission=refusal;
+            Script downOnly=new Script(); run(beforeUp,downOnly);
+            org.junit.jupiter.api.Assertions.assertEquals(refusal,beforeUp.outcome);
+            check(downOnly.downCount==1 && downOnly.upCount==0);
+        }
     }
 
     private static final class Script {

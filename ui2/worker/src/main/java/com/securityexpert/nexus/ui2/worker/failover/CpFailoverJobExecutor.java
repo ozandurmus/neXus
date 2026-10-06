@@ -173,7 +173,7 @@ public final class CpFailoverJobExecutor {
     }
     private void requireMutationAdmission(boolean possibleSend) {
         if (!mutationSwitch.enabled()) throw new Stop(FailoverMutationSwitch.DISABLED,0);
-        String decision=store.mutationAdmission(runId,requestCluster,requestVs,"check_point",requestMembers,possibleSend);
+        String decision=store.mutationAdmission(runId,requestCluster,requestVs,"check_point",requestMembers,possibleSend,jobId,epoch);
         if (!"ADMITTED".equals(decision)) throw new Stop(decision==null?"ADMISSION_UNAVAILABLE":decision,0);
     }
 

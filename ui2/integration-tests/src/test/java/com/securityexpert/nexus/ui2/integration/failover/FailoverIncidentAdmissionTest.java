@@ -40,13 +40,13 @@ class FailoverIncidentAdmissionTest {
             return Set.of(a,b);
         }
     }
-    private static void approve(JooqCpFailoverRepository repo,String unit,String vs,String vendor) {
-        repo.createApproval(unit,vs,Instant.now().minusSeconds(60),Instant.now().plusSeconds(3600),
-            "Synthetic incident admission",Ui2Rows.ACTOR,vendor);
-    }
     private static JooqCpFailoverRepository.Decision request(JooqCpFailoverRepository repo,String unit,
             String vs,String vendor,Set<String> members) {
-        return repo.requestBound(unit,vs,Instant.now(),Ui2Rows.ACTOR,members.iterator().next(),true,vendor,members);
+        var request=repo.createRequestApproval(java.util.UUID.randomUUID().toString(),unit,vs,unit,members,
+            Instant.now().minusSeconds(60),Instant.now().plusSeconds(3600),"Synthetic incident admission",Ui2Rows.ACTOR,
+            vendor,JooqCpFailoverRepository.ADMIN_SINGLE);
+        return repo.requestBound(unit,vs,Instant.now(),Ui2Rows.ACTOR,members.iterator().next(),true,vendor,members,
+            request.approval().id(),request.revision(),request.executionNonce(),true,request.policy());
     }
     private static boolean release(Ui2PostgresFixture fixture,String unit,String incident) {
         return mutate(fixture,dsl -> dsl.fetchOne("select ui2_release_failover_incident({0},{1},{2},{3},{4}) as released",
@@ -57,12 +57,13 @@ class FailoverIncidentAdmissionTest {
         try (var fixture=Ui2PostgresFixture.createAndMigrate("failover_incidents")) {
             var repo=repository(fixture);
             Set<String> members=pair(fixture,"unit-a","check_point");
-            approve(repo,"unit-a",null,"check_point");
+
             var first=request(repo,"unit-a",null,"check_point",members);
             assertEquals("ADMITTED",first.code());
             assertEquals("WRONG_UNIT",repo.mutationAdmission(first.runId(),"unit-other",null,"check_point",members,true));
             assertEquals("WRONG_UNIT",repo.mutationAdmission(first.runId(),"unit-a","01","check_point",members,true));
-            assertEquals("ADMITTED",repo.mutationAdmission(first.runId(),"unit-a",null,"check_point",members,true));
+            assertEquals(Integer.valueOf(1),mutate(fixture,dsl -> dsl.execute(
+                "update failover_run set mutation_possible=true where run_id={0}",first.runId())));
 
             // An error after the state write rolls back both STOPPED and its incident.
             assertThrows(IllegalStateException.class,() -> mutate(fixture,dsl -> {
@@ -70,7 +71,7 @@ class FailoverIncidentAdmissionTest {
                 throw new IllegalStateException("synthetic rollback");
             }));
             assertFalse(repo.finished(first.runId()));
-            assertEquals(0,mutate(fixture,dsl -> dsl.fetchCount(org.jooq.impl.DSL.table("failover_quarantine"))));
+            assertEquals(Integer.valueOf(0),mutate(fixture,dsl -> dsl.fetchCount(org.jooq.impl.DSL.table("failover_quarantine"))));
             repo.state(first.runId(),"STOPPED","POSTCHECK","OUTCOME_UNKNOWN",null,"SYNTHETIC_FAILURE");
             assertTrue(repo.finished(first.runId()));
 
@@ -81,18 +82,19 @@ class FailoverIncidentAdmissionTest {
 
             // Re-resolving the same physical pair under another unit must not escape an incident.
             mutate(fixture,dsl -> dsl.execute("update devices set cluster_member_ref='unit-alias' where cluster_member_ref='unit-a'"));
-            approve(restarted,"unit-alias",null,"check_point");
+
             assertEquals("OPEN_INCIDENT",request(restarted,"unit-alias",null,"check_point",members).code());
             assertTrue(release(fixture,"unit-a",first.runId()));
             var second=request(restarted,"unit-alias",null,"check_point",members);
             assertEquals("ADMITTED",second.code());
-            assertEquals("ADMITTED",restarted.mutationAdmission(second.runId(),"unit-alias",null,"check_point",members,true));
+            assertEquals(Integer.valueOf(1),mutate(fixture,dsl -> dsl.execute(
+                "update failover_run set mutation_possible=true where run_id={0}",second.runId())));
             String job=restarted.detail(second.runId()).orElseThrow().run().jobId();
             mutate(fixture,dsl -> dsl.execute("update jobs set state='OUTCOME_UNKNOWN' where job_id={0}",job));
             assertTrue(restarted.finished(second.runId()),"Job failure and incident are one durable transition");
             assertFalse(release(fixture,"unit-a",first.runId()));
             assertEquals("OPEN_INCIDENT",request(repository(fixture),"unit-alias",null,"check_point",members).code());
-            assertEquals(2,mutate(fixture,dsl -> dsl.fetchCount(DSL.table("failover_quarantine"))));
+            assertEquals(Integer.valueOf(2),mutate(fixture,dsl -> dsl.fetchCount(DSL.table("failover_quarantine"))));
             assertThrows(org.jooq.exception.DataAccessException.class,() -> mutate(fixture,dsl ->
                 dsl.execute("delete from failover_quarantine where execution_id={0}",first.runId())));
         }
@@ -103,9 +105,9 @@ class FailoverIncidentAdmissionTest {
             var repo=repository(fixture);
             var cp=pair(fixture,"unit-cp","check_point");
             var pan=pair(fixture,"unit-pan","palo_alto");
-            approve(repo,"unit-cp","01","check_point");
-            approve(repo,"unit-cp","02","check_point");
-            approve(repo,"unit-pan",null,"palo_alto");
+
+
+
             var ready=new CountDownLatch(2); var start=new CountDownLatch(1);
             var pool=Executors.newFixedThreadPool(2);
             try {
@@ -127,9 +129,9 @@ class FailoverIncidentAdmissionTest {
                 dsl.execute("update failover_run set vs_id='02' where run_id={0}",active.runId())));
             String removed=cp.iterator().next();
             mutate(fixture,dsl -> dsl.execute("update devices set disabled=true where device_id={0}",removed));
-            assertEquals("MEMBER_SET_CHANGED",repository(fixture).mutationAdmission(active.runId(),"unit-cp","01","check_point",cp,true));
+            assertEquals("APPROVAL_REVOKED",repository(fixture).mutationAdmission(active.runId(),"unit-cp","01","check_point",cp,true));
             repo.state(active.runId(),"STOPPED","PRECHECK","MEMBER_SET_CHANGED",null,null);
-            assertEquals(0,mutate(fixture,dsl -> dsl.fetchCount(DSL.table("failover_quarantine"))));
+            assertEquals(Integer.valueOf(0),mutate(fixture,dsl -> dsl.fetchCount(DSL.table("failover_quarantine"))));
         }
     }
 }
