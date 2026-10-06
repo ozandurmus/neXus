@@ -29,7 +29,7 @@ import com.securityexpert.nexus.ui2.worker.transport.xmlapi.PanCredentialMateria
 class PanFailoverJobExecutorTest {
     private static final String CLUSTER="CLS-TEST-01", A="FW-TEST-01", B="FW-TEST-02";
     private static final class Script {
-        String admission="ADMITTED", writeAdmission="ADMITTED";
+        String admission="ADMITTED", writeAdmission="ADMITTED", returnAdmission="ADMITTED";
         boolean suspended,functional,stuck,badPre,badPost,badSync,badSessions,badVersion,lowPostSessions;
         boolean missingFields;
         int suspendCount,functionalCount,callCount;
@@ -140,7 +140,8 @@ class PanFailoverJobExecutorTest {
             state.get(),state.get(),outcome.get(),null,null,"palo_alto",readiness?"READINESS":"FAILOVER")));
         when(store.windowValid("run-1")).thenReturn(true);
         when(store.mutationAdmission(eq("run-1"),eq(CLUSTER),isNull(),eq("palo_alto"),
-            eq(java.util.Set.of(A,B)),anyBoolean())).thenAnswer(inv -> Boolean.TRUE.equals(inv.getArgument(5)) ? script.writeAdmission : script.admission);
+            eq(java.util.Set.of(A,B)),anyBoolean(),eq("job-1"),eq(1L))).thenAnswer(inv ->
+                Boolean.TRUE.equals(inv.getArgument(5)) ? (script.suspended?script.returnAdmission:script.writeAdmission) : script.admission);
         doAnswer(inv -> {state.set(inv.getArgument(1)); outcome.set(inv.getArgument(3)); failedCheck.set(inv.getArgument(4)); return null;})
             .when(store).state(anyString(),anyString(),anyString(),nullable(String.class),nullable(String.class),nullable(String.class));
         doAnswer(inv -> {checks.add(inv.getArgument(1)+":"+inv.getArgument(4)+":"+inv.getArgument(5));
@@ -173,6 +174,16 @@ class PanFailoverJobExecutorTest {
         assertEquals("OPEN_INCIDENT",result.outcome());
         assertEquals(0,script.suspendCount); assertEquals(0,script.functionalCount);
         assertTrue(script.callCount>0);
+    }
+    @Test void expiryRevocationAndOwnershipBlockDownAndReturn() {
+        for (String code:List.of("WINDOW_EXPIRED","APPROVAL_REVOKED","OWNERSHIP_LOST","OPEN_INCIDENT")) {
+            Script beforeDown=new Script(); beforeDown.writeAdmission=code;
+            assertEquals(code,run(beforeDown).outcome());
+            assertEquals(0,beforeDown.suspendCount); assertEquals(0,beforeDown.functionalCount);
+            Script beforeUp=new Script(); beforeUp.returnAdmission=code;
+            assertEquals(code,run(beforeUp).outcome());
+            assertEquals(1,beforeUp.suspendCount); assertEquals(0,beforeUp.functionalCount);
+        }
     }
     @Test void happyPath() {
         Script script=new Script(); Result result=run(script);

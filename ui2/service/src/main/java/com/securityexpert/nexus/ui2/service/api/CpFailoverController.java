@@ -21,8 +21,8 @@ import com.securityexpert.nexus.ui2.service.privacy.PrivacyMaskingResponseBodyAd
 @RequestMapping({"/api/v2/cp-failover", "/api/v2/pan-failover"})
 public final class CpFailoverController {
     private static final com.fasterxml.jackson.databind.ObjectMapper JSON = new com.fasterxml.jackson.databind.ObjectMapper();
-    public record ApprovalRequest(String clusterId, String unitId, Instant windowFrom, Instant windowUntil, String reason) {}
-    public record RunRequest(String clusterId, String unitId, Instant scheduledFor) {}
+    public record ApprovalRequest(String clusterId, String unitId, Instant windowFrom, Instant windowUntil, String reason, String requestId) {}
+    public record RunRequest(String clusterId, String unitId, Instant scheduledFor, String requestId, long revision, String executionNonce, boolean warningConfirmed) {}
     public record ReadinessRequest(String clusterId, String unitId) {}
     private final CpFailoverService service;
     public CpFailoverController(CpFailoverService service) { this.service=service; }
@@ -130,8 +130,15 @@ public final class CpFailoverController {
     }
     @PostMapping("/approvals")
     public ResponseEntity<?> approve(@RequestBody ApprovalRequest body,HttpServletRequest request) {
-        return result(() -> approval(service.approve(body.clusterId(),body.unitId(),body.windowFrom(),
-            body.windowUntil(),body.reason(),actor(request),vendor(request))));
+        return result(() -> service.createApprovalRequest(body.requestId(),body.clusterId(),body.unitId(),body.windowFrom(),
+            body.windowUntil(),body.reason(),actor(request),vendor(request)));
+    }
+    public record SecondApprovalRequest(String clusterId,String unitId,long revision) {}
+    @PostMapping("/approvals/{requestId}/approve")
+    public ResponseEntity<?> secondApproval(@PathVariable String requestId,@RequestBody SecondApprovalRequest body,
+            HttpServletRequest request) {
+        return result(() -> service.secondApproval(requestId,body.revision(),body.clusterId(),body.unitId(),
+            actor(request),vendor(request)));
     }
     @GetMapping("/approvals")
     public ResponseEntity<?> approvals(@RequestParam String clusterId,@RequestParam String unitId,HttpServletRequest request) {
@@ -143,7 +150,8 @@ public final class CpFailoverController {
     }
     @PostMapping("/runs")
     public ResponseEntity<?> start(@RequestBody RunRequest body,HttpServletRequest request) {
-        return result(() -> Map.of("runId",service.request(body.clusterId(),body.unitId(),body.scheduledFor(),actor(request),vendor(request))));
+        return result(() -> Map.of("runId",service.request(body.clusterId(),body.unitId(),body.scheduledFor(),actor(request),vendor(request),
+            body.requestId(),body.revision(),body.executionNonce(),body.warningConfirmed())));
     }
     @PostMapping("/units/{unitId}/readiness")
     public ResponseEntity<?> readiness(@PathVariable String unitId, @RequestBody ReadinessRequest body,

@@ -18,7 +18,7 @@ class AiviewDiagnosticReadOnlyTest {
         var actions = new ActionRegistry();
         assertEquals(Set.of(RoleToken.SECURITY_ADMIN, RoleToken.REPLAY_VIEWER),
                 actions.find(ActionRegistry.FMG_DIAGNOSTIC_RUN).orElseThrow().requiredRoleTokens());
-        assertEquals(Set.of(RoleToken.OPERATOR, RoleToken.SECURITY_ADMIN, RoleToken.REPLAY_VIEWER),
+        assertEquals(Set.of(RoleToken.OPERATOR, RoleToken.SECURITY_ADMIN, RoleToken.OPERATION_ADMIN, RoleToken.REPLAY_VIEWER),
                 actions.find(ActionRegistry.CP_READINESS_START).orElseThrow().requiredRoleTokens());
         assertEquals(Set.of(RoleToken.SECURITY_ADMIN, RoleToken.ONBOARDING_ADMIN, RoleToken.REPLAY_VIEWER),
                 actions.find(ActionRegistry.POLICY_COLLECT).orElseThrow().requiredRoleTokens());

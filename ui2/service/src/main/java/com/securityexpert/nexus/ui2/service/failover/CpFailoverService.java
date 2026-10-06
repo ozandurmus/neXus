@@ -67,30 +67,38 @@ public final class CpFailoverService {
         return actor != null && rbac.evaluate(actor, Optional.of(role), Instant.now()).outcome() == AuthzOutcome.PERMITTED;
     }
     private void requireAdmin(String actor) {
-        if (!allowed(actor, RoleToken.SECURITY_ADMIN)) throw new Refusal("WRONG_ROLE");
+        if (replayViewer(actor) || !allowed(actor, RoleToken.SECURITY_ADMIN)) throw new Refusal("WRONG_ROLE");
+    }
+    private boolean replayViewer(String actor) {
+        if (actor==null) return false;
+        var decision=rbac.evaluate(actor,Optional.of(RoleToken.REPLAY_VIEWER),Instant.now());
+        return decision.outcome()==AuthzOutcome.PERMITTED
+            && !decision.authority().filter(RbacEvaluator.ROOT_AUTHORITY::equals).isPresent();
+    }
+    /** security_admin (including the root administrator) explicitly selects the admin policy. */
+    private String approvalPolicy(String actor) {
+        if (replayViewer(actor)) throw new Refusal("WRONG_ROLE");
+        if (allowed(actor,RoleToken.SECURITY_ADMIN)) return JooqCpFailoverRepository.ADMIN_SINGLE;
+        if (allowed(actor,RoleToken.OPERATION_ADMIN)) return JooqCpFailoverRepository.TWO_PERSON;
+        throw new Refusal("WRONG_ROLE");
     }
     private void requireReader(String actor) {
         if (!"system:failover-readiness-scheduler".equals(actor)
-                && !allowed(actor, RoleToken.OPERATOR) && !allowed(actor, RoleToken.SECURITY_ADMIN)
+                && !allowed(actor, RoleToken.OPERATOR) && !allowed(actor, RoleToken.OPERATION_ADMIN) && !allowed(actor, RoleToken.SECURITY_ADMIN)
                 && !allowed(actor, RoleToken.VIEWER) && !allowed(actor, RoleToken.REPLAY_VIEWER))
             throw new Refusal("WRONG_ROLE");
     }
 
-    private void requireOperator(String actor) {
-        if (!allowed(actor, RoleToken.OPERATOR) && !allowed(actor, RoleToken.SECURITY_ADMIN))
-            throw new Refusal("WRONG_ROLE");
+    public boolean mayApprove(String actor) {
+        return !replayViewer(actor) && (allowed(actor, RoleToken.SECURITY_ADMIN) || allowed(actor,RoleToken.OPERATION_ADMIN));
     }
-
-    public boolean mayApprove(String actor) { return allowed(actor, RoleToken.SECURITY_ADMIN); }
-    public boolean mayStart(String actor) {
-        return allowed(actor, RoleToken.OPERATOR) || mayApprove(actor);
-    }
+    public boolean mayStart(String actor) { return mayApprove(actor); }
     public List<Summary> summary(String actor) {
         requireReader(actor);
         return summaries(actor);
     }
     private List<Summary> summaries(String actor) {
-        boolean canRunReadiness = mayStart(actor) || allowed(actor, RoleToken.REPLAY_VIEWER);
+        boolean canRunReadiness = mayStart(actor) || allowed(actor,RoleToken.OPERATOR) || allowed(actor, RoleToken.REPLAY_VIEWER);
         Map<String, List<JooqCpFailoverRepository.SummaryMember>> facts = store.summaryMembers().stream()
             .collect(Collectors.groupingBy(JooqCpFailoverRepository.SummaryMember::deviceId));
         Map<StatusKey, JooqCpFailoverRepository.SummaryStatus> statuses = store.summaryStatuses().stream()
@@ -245,14 +253,34 @@ public final class CpFailoverService {
     public JooqCpFailoverRepository.Approval approve(String clusterId, String unitId, Instant from,
             Instant until, String reason, String actor, String vendor) {
         requireAdmin(actor);
-        Unit unit=unit(clusterId,unitId,actor,vendor);
+        throw new Refusal("REQUEST_BINDING_REQUIRED");
+    }
+
+    public JooqCpFailoverRepository.RequestApproval createApprovalRequest(String requestId,String clusterId,
+            String unitId,Instant from,Instant until,String reason,String actor,String vendor) {
+        String policy=approvalPolicy(actor);
+        Unit u=unit(clusterId,unitId,actor,vendor);
+        if (requestId==null || !requestId.equals(UUID.fromString(requestId).toString())) throw new Refusal("REQUEST_ID_REQUIRED");
         if (from==null || until==null || !until.isAfter(from) || !until.isAfter(Instant.now())
                 || reason==null || reason.isBlank() || reason.length()>500) throw new Refusal("INVALID_WINDOW");
-        if ("check_point".equals(vendor)) return store.createApproval(unit.members().get(0).clusterMemberRef().orElseThrow(),
-            unit.vsId(),from,until,reason,actor);
-        return store.createApproval(unit.members().get(0).clusterMemberRef().orElseThrow(), unit.vsId(),
-            from,until,reason,actor,vendor);
+        return store.createRequestApproval(requestId,u.members().get(0).clusterMemberRef().orElseThrow(),u.vsId(),
+            u.id(),u.members().stream().map(DeviceSummaryRecord::deviceId).collect(Collectors.toUnmodifiableSet()),
+            from,until,reason,actor,vendor,policy);
     }
+
+    public JooqCpFailoverRepository.RequestApproval secondApproval(String requestId,long revision,
+            String clusterId,String unitId,String actor,String vendor) {
+        approvalPolicy(actor);
+        Unit u=unit(clusterId,unitId,actor,vendor);
+        var request=store.requestApproval(requestId).orElseThrow(() -> new Refusal("REQUEST_NOT_FOUND"));
+        if (!u.id().equals(request.unitRef()) || !u.members().get(0).clusterMemberRef().orElseThrow()
+                .equals(request.approval().clusterRef())) throw new Refusal("REQUEST_CHANGED");
+        String result=store.approveRequest(requestId,revision,actor,vendor,
+            u.members().stream().map(DeviceSummaryRecord::deviceId).collect(Collectors.toUnmodifiableSet()));
+        if (!"APPROVED".equals(result)) throw new Refusal(result);
+        return store.requestApproval(requestId).orElseThrow(() -> new Refusal("REQUEST_NOT_FOUND"));
+    }
+
     public List<JooqCpFailoverRepository.Approval> approvals(String clusterId, String unitId, String actor) {
         return approvals(clusterId,unitId,actor,"check_point");
     }
@@ -264,27 +292,29 @@ public final class CpFailoverService {
     }
     public boolean revoke(String approvalId,String actor) { requireAdmin(actor); return store.revoke(approvalId,actor); }
 
-    /** Latest independent member observations are only an admission filter; the worker rechecks live. */
+    /** Explicit confirmation starts one request-bound job; its worker owns all fresh readiness checks. */
     public String request(String clusterId,String unitId,Instant scheduledFor,String actor) {
         return request(clusterId,unitId,scheduledFor,actor,"check_point");
     }
     public String request(String clusterId,String unitId,Instant scheduledFor,String actor,String vendor) {
-        requireOperator(actor);
+        return request(clusterId,unitId,scheduledFor,actor,vendor,null,0,null,false);
+    }
+    public String request(String clusterId,String unitId,Instant scheduledFor,String actor,String vendor,
+            String requestId,long revision,String nonce,boolean warningConfirmed) {
+        String policy=approvalPolicy(actor);
         if (!mutationSwitch.enabled()) throw new Refusal(FailoverMutationSwitch.DISABLED);
         Unit u=unit(clusterId,unitId,actor,vendor);
         Instant now=Instant.now();
         Instant when=scheduledFor==null ? now : scheduledFor;
-        if (when.isBefore(now.minusSeconds(2))) throw new Refusal("OUTSIDE_WINDOW");
-        String a=observedRole(u.members().get(0),u.vsId(),vendor);
-        String b=observedRole(u.members().get(1),u.vsId(),vendor);
-        String passive="palo_alto".equals(vendor)?"PASSIVE":"STANDBY";
-        if (!("ACTIVE".equals(a) && passive.equals(b)
-                || passive.equals(a) && "ACTIVE".equals(b))) throw new Refusal("CLUSTER_STATE_NOT_READY");
-        if ("check_point".equals(vendor)) for (DeviceSummaryRecord member:u.members()) requireTrusted(member);
+        // A completed or in-flight request is replayed by the repository without another job.
+        // Readiness is always collected afresh by that job, never by a second UI confirmation.
+        if (requestId==null || nonce==null || revision!=1) throw new Refusal("REQUEST_BINDING_REQUIRED");
+        if (!warningConfirmed) throw new Refusal("WARNING_CONFIRMATION_REQUIRED");
         try {
             var decision=store.requestBound(u.members().get(0).clusterMemberRef().orElseThrow(),u.vsId(),
                 when,actor,u.members().get(0).deviceId(),scheduledFor==null,vendor,
-                u.members().stream().map(DeviceSummaryRecord::deviceId).collect(Collectors.toUnmodifiableSet()));
+                u.members().stream().map(DeviceSummaryRecord::deviceId).collect(Collectors.toUnmodifiableSet()),
+                requestId,revision,nonce,warningConfirmed,policy);
             if (!"ADMITTED".equals(decision.code())) throw new Refusal(decision.code());
             return decision.runId();
         } catch (org.springframework.dao.DuplicateKeyException duplicate) {
@@ -296,7 +326,7 @@ public final class CpFailoverService {
     }
 
     public String requestReadiness(String clusterId, String unitId, String actor, String vendor) {
-        if (!mayStart(actor) && !allowed(actor, RoleToken.REPLAY_VIEWER)) throw new Refusal("WRONG_ROLE");
+        if (!mayStart(actor) && !allowed(actor,RoleToken.OPERATOR) && !allowed(actor, RoleToken.REPLAY_VIEWER)) throw new Refusal("WRONG_ROLE");
         return submitReadiness(clusterId, unitId, actor, vendor);
     }
     public String requestScheduledReadiness(ReadinessTarget target) {

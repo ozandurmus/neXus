@@ -1,9 +1,6 @@
 package com.securityexpert.nexus.ui2.service.api;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.securityexpert.nexus.ui2.jobs.failover.authz.FailoverAuthorizationRequest;
-import com.securityexpert.nexus.ui2.jobs.failover.authz.FailoverLeaseToken;
-import com.securityexpert.nexus.ui2.jobs.failover.authz.FourEyesAuthorizationResult;
 import com.securityexpert.nexus.ui2.jobs.failover.plan.FailoverActionStep;
 import com.securityexpert.nexus.ui2.jobs.failover.plan.FailoverExecutionPlan;
 import com.securityexpert.nexus.ui2.service.failover.FailoverAuthorizationService;
@@ -52,57 +49,9 @@ public class FailoverAuthorizationController {
         @RequestBody(required = false) AuthorizePayload payload,
         HttpServletRequest servletRequest
     ) {
-        String requesterId = actingUser(servletRequest);
-        if (requesterId == null || requesterId.isBlank()) {
-            Map<String, Object> err = new LinkedHashMap<>();
-            err.put("error", "AUTHENTICATION_REQUIRED");
-            err.put("code", "ACTOR_FINGERPRINT_MISSING");
-            err.put("reason", "An authenticated actor fingerprint is required to request failover authorization");
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(err);
-        }
-
-        if (payload == null) {
-            Map<String, Object> err = new LinkedHashMap<>();
-            err.put("error", "INVALID_PAYLOAD");
-            err.put("code", "MISSING_REQUEST_BODY");
-            err.put("reason", "An authorization payload is required");
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(err);
-        }
-
-        FailoverAuthorizationRequest request = new FailoverAuthorizationRequest(
-            clusterRef,
-            requesterId,
-            payload.approverId() != null ? payload.approverId() : "",
-            payload.reason() != null ? payload.reason() : "",
-            payload.maintenanceWindowRef() != null ? payload.maintenanceWindowRef() : "",
-            payload.assessmentDigest() != null ? payload.assessmentDigest() : "",
-            payload.nonce() != null ? payload.nonce() : ""
-        );
-
-        FourEyesAuthorizationResult result = authorizationService.authorizeFailover(request);
-        return switch (result) {
-            case FourEyesAuthorizationResult.Authorized authorized -> {
-                FailoverLeaseToken token = authorized.leaseToken();
-                Map<String, Object> body = new LinkedHashMap<>();
-                body.put("status", "AUTHORIZED");
-                body.put("token_id", token.tokenId());
-                body.put("cluster_id", opaqueClusterId(token.clusterRef()));
-                body.put("requester_id", token.requesterId());
-                body.put("approver_id", token.approverId());
-                body.put("assessment_digest", token.assessmentDigest());
-                body.put("issued_at", token.issuedAt().toString());
-                body.put("expires_at", token.expiresAt().toString());
-                body.put("token_signature", token.tokenSignature());
-                yield ResponseEntity.ok(body);
-            }
-            case FourEyesAuthorizationResult.Refused refused -> {
-                Map<String, Object> body = new LinkedHashMap<>();
-                body.put("error", "AUTHORIZATION_REFUSED");
-                body.put("code", refused.code());
-                body.put("reason", refused.reason());
-                yield ResponseEntity.status(HttpStatus.CONFLICT).body(body);
-            }
-        };
+        // Caller-provided approver identities are never authentication evidence.
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of(
+            "error", "AUTHORIZATION_REFUSED", "code", "REQUEST_BOUND_APPROVAL_REQUIRED"));
     }
 
     @PostMapping("/{clusterRef}/dry-run")

@@ -43,83 +43,19 @@ class FailoverAuthorizationControllerTest {
     }
 
     @Test
-    @DisplayName("authorize() rejects request when actor fingerprint is missing with 403")
-    void authorizeRejectsMissingActor() {
-        MockHttpServletRequest req = new MockHttpServletRequest();
-        var payload = new FailoverAuthorizationController.AuthorizePayload(
-            "operator-bob",
-            "Emergency maintenance drill ticket SEC-101",
-            "CHG-101",
-            "sha256:digest-abc",
-            "nonce-001"
-        );
-
-        ResponseEntity<Map<String, Object>> response = controller.authorize("cls-01", payload, req);
-        assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode());
-        assertEquals("ACTOR_FINGERPRINT_MISSING", response.getBody().get("code"));
-    }
-
-    @Test
-    @DisplayName("authorize() rejects 4-Eyes identity collision (requester == approver) with 409")
-    void authorizeRejectsIdentityCollision() {
-        MockHttpServletRequest req = new MockHttpServletRequest();
-        req.setAttribute(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE, "operator-alice");
-
-        var payload = new FailoverAuthorizationController.AuthorizePayload(
-            "operator-alice", // collision
-            "Emergency maintenance drill ticket SEC-101",
-            "CHG-101",
-            "sha256:digest-abc",
-            "nonce-001"
-        );
-
-        ResponseEntity<Map<String, Object>> response = controller.authorize("cls-01", payload, req);
-        assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
-        assertEquals("FOUR_EYES_IDENTITY_COLLISION", response.getBody().get("code"));
-    }
-
-    @Test
-    @DisplayName("authorize() refuses authorization when pre-flight assessment reports blocking conditions")
-    void authorizeRefusesWhenPreflightBlocks() {
-        preflightService.setVerdict(PreflightVerdict.BLOCKING_CONDITIONS_PRESENT);
-
-        MockHttpServletRequest req = new MockHttpServletRequest();
-        req.setAttribute(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE, "operator-alice");
-
-        var payload = new FailoverAuthorizationController.AuthorizePayload(
-            "operator-bob",
-            "Emergency maintenance drill ticket SEC-101",
-            "CHG-101",
-            "sha256:digest-abc",
-            "nonce-001"
-        );
-
-        ResponseEntity<Map<String, Object>> response = controller.authorize("cls-01", payload, req);
-        assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
-        assertEquals("PREFLIGHT_BLOCKING_CONDITIONS_PRESENT", response.getBody().get("code"));
-    }
-
-    @Test
-    @DisplayName("authorize() issues lease token when dual-control and pre-flight criteria are satisfied")
-    void authorizeIssuesLeaseToken() {
-        preflightService.setVerdict(PreflightVerdict.NO_BLOCKING_CONDITIONS_OBSERVED);
-
-        MockHttpServletRequest req = new MockHttpServletRequest();
-        req.setAttribute(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE, "operator-alice");
-
-        var payload = new FailoverAuthorizationController.AuthorizePayload(
-            "operator-bob",
-            "Emergency maintenance drill ticket SEC-101",
-            "CHG-101",
-            "sha256:digest-abc",
-            "nonce-001"
-        );
-
-        ResponseEntity<Map<String, Object>> response = controller.authorize("cls-01", payload, req);
-        assertEquals(HttpStatus.OK, response.getStatusCode());
-        assertEquals("AUTHORIZED", response.getBody().get("status"));
-        assertNotNull(response.getBody().get("token_id"));
-        assertNotNull(response.getBody().get("token_signature"));
+    void callerSuppliedApproverNeverAuthorizesEvenWithAnAuthenticatedCaller() {
+        var mocked=org.mockito.Mockito.mock(FailoverAuthorizationService.class);
+        var fenced=new FailoverAuthorizationController(mocked);
+        for (String actor:new String[]{null,"synthetic-initiator"}) {
+            var req=new MockHttpServletRequest();
+            req.setAttribute(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE,actor);
+            var payload=new FailoverAuthorizationController.AuthorizePayload(
+                "forged-approver","Synthetic request","window-a","digest-a","nonce-a");
+            var response=fenced.authorize("unit-a",payload,req);
+            assertEquals(HttpStatus.FORBIDDEN,response.getStatusCode());
+            assertEquals("REQUEST_BOUND_APPROVAL_REQUIRED",response.getBody().get("code"));
+        }
+        org.mockito.Mockito.verifyNoInteractions(mocked);
     }
 
     @Test
@@ -130,16 +66,10 @@ class FailoverAuthorizationControllerTest {
         MockHttpServletRequest req = new MockHttpServletRequest();
         req.setAttribute(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE, "operator-alice");
 
-        // 1. Authorize to obtain lease token
-        var authPayload = new FailoverAuthorizationController.AuthorizePayload(
-            "operator-bob",
-            "Emergency maintenance drill ticket SEC-101",
-            "CHG-101",
-            "sha256:digest-abc",
-            "nonce-001"
-        );
-        ResponseEntity<Map<String, Object>> authResp = controller.authorize("cls-01", authPayload, req);
-        String tokenId = (String) authResp.getBody().get("token_id");
+        // The legacy internal dry-run mechanism remains testable; HTTP cannot mint its lease.
+        var result=authzService.authorizeFailover(new com.securityexpert.nexus.ui2.jobs.failover.authz.FailoverAuthorizationRequest(
+            "cls-01","operator-alice","operator-bob","Synthetic dry-run test","CHG-101","sha256:digest-abc","nonce-001"));
+        String tokenId=((com.securityexpert.nexus.ui2.jobs.failover.authz.FourEyesAuthorizationResult.Authorized)result).leaseToken().tokenId();
 
         // 2. Compile dry-run
         var dryRunPayload = new FailoverAuthorizationController.DryRunPayload(tokenId, "nonce-001");
