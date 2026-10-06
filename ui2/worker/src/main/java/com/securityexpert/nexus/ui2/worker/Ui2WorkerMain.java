@@ -162,7 +162,7 @@ public final class Ui2WorkerMain {
         com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.install(endpointAdmission);
         var moduleRuntime = new com.securityexpert.nexus.ui2.persistence.runtime.ModuleRuntimeRepository(transactionBoundary);
         String instance = role + "-" + UUID.randomUUID();
-        if (!moduleRuntime.heartbeat(role, instance)) throw new IllegalStateException("MODULE_OWNER_CONFLICT");
+        WorkerOwnershipWait.await(role, () -> moduleRuntime.heartbeat(role, instance));
         if ("policy".equals(role)) {
             if (!moduleRuntime.compatibleGeneralLive()) throw new IllegalStateException("COMPATIBLE_GENERAL_BOOTSTRAP_REQUIRED");
             startPolicy(transactionBoundary, databasePool, moduleRuntime, endpointAdmission, instance, leaseRepository,
