@@ -281,6 +281,12 @@ class PolicyCollectionJobExecutorTest {
             order.verify(repository).eligible("manager-1", "run-1");
             order.verify(repository).checkpoint(eq("job-1"), eq(1L), any(), anyString());
             order.verify(repository).publishWithWarnings(eq("job-1"), eq(1L), anyList(), anyString(), startsWith("PARTIAL_SNAPSHOT "));
+            failure[0] = "THROTTLED";
+            assertInstanceOf(JobOutcome.Completed.class, executor.execute("job-1", 1, "run-1"));
+            verify(repository).publishWithWarnings(eq("job-1"), eq(1L), anyList(), anyString(),
+                eq("PARTIAL_SNAPSHOT unit-2: policy: THROTTLED"));
+            verify(attempts).insertPreContact(eq("job-1"), eq(1L), eq(-1),
+                eq("POLICY_PROGRESS_GAP_THROTTLED"), eq("read"), eq(1));
             failure[0] = "";
             assertInstanceOf(JobOutcome.Completed.class, executor.execute("job-1", 1, "run-1"));
             verify(repository).publish(eq("job-1"), eq(1L), eq(List.of()), anyString());
