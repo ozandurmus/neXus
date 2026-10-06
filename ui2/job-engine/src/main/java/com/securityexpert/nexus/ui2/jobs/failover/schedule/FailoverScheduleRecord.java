@@ -37,7 +37,9 @@ public record FailoverScheduleRecord(
     String cancelledBy,
     Instant cancelledAt,
     String baselineDigest,
-    int baselineFormatVersion
+    int baselineFormatVersion,
+    String keyId,
+    String algorithmVersion
 ) {
     /** Existing in-memory callers supply their baseline digest directly. */
     public FailoverScheduleRecord(
@@ -54,7 +56,8 @@ public record FailoverScheduleRecord(
             requesterId, approverId, grantId, baselineSummary, envelopeSignature, status, clientNonce,
             scheduledAt, claimedAt, executedAt, executionResultId, abortReasonCode, abortReason,
             cancelledBy, cancelledAt, baselineSummary != null ? baselineSummary.assessmentDigest() : null,
-            BaselineSnapshotSummary.FORMAT_VERSION);
+            BaselineSnapshotSummary.FORMAT_VERSION, FailoverScheduleEnvelope.DEFAULT_KEY_ID,
+            FailoverScheduleEnvelope.DEFAULT_ALG_VERSION);
     }
 
     public FailoverScheduleRecord {
@@ -109,7 +112,7 @@ public record FailoverScheduleRecord(
             signedMutationTarget, windowStart, windowEnd, maxStartDelayMinutes, executionDeadline,
             requesterId, approverId, grantId, baselineSummary, envelopeSignature, newStatus,
             clientNonce, scheduledAt, claimedAt, executedAt, executionResultId, abortReasonCode,
-            abortReason, cancelledBy, cancelledAt, baselineDigest, baselineFormatVersion
+            abortReason, cancelledBy, cancelledAt, baselineDigest, baselineFormatVersion, keyId, algorithmVersion
         );
     }
 
@@ -119,7 +122,7 @@ public record FailoverScheduleRecord(
             signedMutationTarget, windowStart, windowEnd, maxStartDelayMinutes, executionDeadline,
             requesterId, approverId, grantId, baselineSummary, envelopeSignature,
             FailoverScheduleStatus.CLAIMED_VERIFYING, clientNonce, scheduledAt, claimedAtTime,
-            executedAt, executionResultId, abortReasonCode, abortReason, cancelledBy, cancelledAt, baselineDigest, baselineFormatVersion
+            executedAt, executionResultId, abortReasonCode, abortReason, cancelledBy, cancelledAt, baselineDigest, baselineFormatVersion, keyId, algorithmVersion
         );
     }
 
@@ -129,7 +132,7 @@ public record FailoverScheduleRecord(
             signedMutationTarget, windowStart, windowEnd, maxStartDelayMinutes, executionDeadline,
             requesterId, approverId, grantId, baselineSummary, envelopeSignature, abortStatus,
             clientNonce, scheduledAt, claimedAt, executedAt, executionResultId, reasonCode,
-            message, cancelledBy, cancelledAt, baselineDigest, baselineFormatVersion
+            message, cancelledBy, cancelledAt, baselineDigest, baselineFormatVersion, keyId, algorithmVersion
         );
     }
 
@@ -139,7 +142,7 @@ public record FailoverScheduleRecord(
             signedMutationTarget, windowStart, windowEnd, maxStartDelayMinutes, executionDeadline,
             requesterId, approverId, grantId, baselineSummary, envelopeSignature,
             FailoverScheduleStatus.CANCELLED, clientNonce, scheduledAt, claimedAt, executedAt,
-            executionResultId, abortReasonCode, abortReason, operatorId, when, baselineDigest, baselineFormatVersion
+            executionResultId, abortReasonCode, abortReason, operatorId, when, baselineDigest, baselineFormatVersion, keyId, algorithmVersion
         );
     }
 
@@ -149,7 +152,7 @@ public record FailoverScheduleRecord(
             signedMutationTarget, windowStart, windowEnd, maxStartDelayMinutes, executionDeadline,
             requesterId, approverId, grantId, baselineSummary, envelopeSignature, finalStatus,
             clientNonce, scheduledAt, claimedAt, executedAtTime, resultId, abortReasonCode,
-            abortReason, cancelledBy, cancelledAt, baselineDigest, baselineFormatVersion
+            abortReason, cancelledBy, cancelledAt, baselineDigest, baselineFormatVersion, keyId, algorithmVersion
         );
     }
 }

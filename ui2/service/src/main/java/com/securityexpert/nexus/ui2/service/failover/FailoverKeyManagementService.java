@@ -1,210 +1,137 @@
 package com.securityexpert.nexus.ui2.service.failover;
 
+import com.securityexpert.nexus.ui2.jobs.failover.schedule.FailoverScheduleEnvelope;
 import com.securityexpert.nexus.ui2.jobs.failover.schedule.ScheduleCryptographicService;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
+import java.nio.file.*;
+import java.nio.file.attribute.PosixFilePermissions;
+import java.security.SecureRandom;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.security.SecureRandom;
 import java.util.HexFormat;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.Set;
 
-/**
- * CF-P0.5: the Stage 1 engine minted a fresh random HMAC master secret in
- * {@code FailoverScheduleService}'s constructor on every process start. Every
- * schedule signed before a restart failed verification after it -- reported as
- * {@code ABORTED_TAMPERED}, a false tamper finding rather than the true cause
- * (key unavailability from a process restart).
- *
- * <p>Resolution order, first source that yields a non-blank value wins:
- * <ol>
- *   <li>{@code NEXUS_FAILOVER_MASTER_SECRET} environment variable.</li>
- *   <li>{@code nexus.failover.master-secret} system property.</li>
- *   <li>A local storage file (default {@code .nexus_failover_master.key}):
- *   read if present; if absent, a new secret is generated once with
- *   {@link SecureRandom} and persisted so every subsequent process start
- *   (in the same deployment, same file) reads the same key back.</li>
- * </ol>
- *
- * <p>This class never generates a secret that is not also durably readable on
- * the next resolution call -- an ephemeral, unpersisted, process-lifetime-only
- * key is exactly the CF-P0.5 defect. If every source fails (an unreadable or
- * unwritable file, for example), {@link #resolveMasterSecret()} returns
- * {@link Optional#empty()} rather than fabricating one; callers must fail
- * closed to {@code ABORTED_KEY_UNAVAILABLE}, never proceed with a signature
- * that cannot be durably re-verified.</p>
- */
+/** Runtime resolution is read-only. Provisioning is an explicit, separate offline operation. */
 @Component
 public class FailoverKeyManagementService {
-
-    private static final Logger LOG = LoggerFactory.getLogger(FailoverKeyManagementService.class);
-
-    static final String ENV_MASTER_SECRET = "NEXUS_FAILOVER_MASTER_SECRET";
-    static final String SYSPROP_MASTER_SECRET = "nexus.failover.master-secret";
-    private static final String DEFAULT_KEY_FILE = ".nexus_failover_master.key";
-    /** Records that this location has already been provisioned once; see resolveFromLocalStorageFile. */
-    private static final String PROVISIONED_MARKER_SUFFIX = ".provisioned";
-    private static final String PROVISIONED_MARKER_CONTENT =
-        "This location was provisioned with a failover signing key. If the key file is missing while this\n"
-        + "marker is present, the key was lost: the service fails closed to ABORTED_KEY_UNAVAILABLE rather\n"
-        + "than minting a replacement, which would report every existing schedule as tampered.\n";
-
     private final Path keyFile;
-    private final Path provisioningMarker;
-    private final Map<String, ScheduleCryptographicService> cryptoServicesByKeyId = new ConcurrentHashMap<>();
-    private volatile byte[] resolvedMasterSecret;
+    private byte[] testSecret;
 
     public FailoverKeyManagementService() {
-        this(Path.of(DEFAULT_KEY_FILE));
+        this("");
     }
 
     @Autowired
-    public FailoverKeyManagementService(@Value("${ui2.failover.master-key-file:.nexus_failover_master.key}") String keyFilePath) {
-        this(Path.of(Objects.requireNonNull(keyFilePath, "keyFilePath must not be null")));
+    public FailoverKeyManagementService(@Value("${ui2.failover.master-key-file:}") String keyFilePath) {
+        this.keyFile = keyFilePath == null || keyFilePath.isBlank() ? null : Path.of(keyFilePath);
     }
 
-    /** Test/tooling entry point: pin the local storage file to an isolated location. */
     public FailoverKeyManagementService(Path keyFile) {
         this.keyFile = Objects.requireNonNull(keyFile, "keyFile must not be null");
-        this.provisioningMarker = this.keyFile.resolveSibling(this.keyFile.getFileName() + PROVISIONED_MARKER_SUFFIX);
     }
 
-    /**
-     * Test-only entry point: bypasses env/system-property/local-file resolution entirely and
-     * signs with a fixed secret supplied directly by the test. {@code keyFile} is never consulted
-     * because {@link #resolveMasterSecret()} short-circuits once {@code resolvedMasterSecret} is
-     * already populated.
-     */
-    static FailoverKeyManagementService withFixedSecretForTesting(byte[] fixedMasterSecret) {
-        FailoverKeyManagementService service = new FailoverKeyManagementService(Path.of(DEFAULT_KEY_FILE));
-        service.resolvedMasterSecret = Objects.requireNonNull(fixedMasterSecret, "fixedMasterSecret must not be null").clone();
+    static FailoverKeyManagementService withFixedSecretForTesting(byte[] secret) {
+        FailoverKeyManagementService service = new FailoverKeyManagementService();
+        service.testSecret = Objects.requireNonNull(secret, "secret must not be null").clone();
         return service;
     }
 
     /**
-     * Resolves the durable 32-byte HMAC master secret, memoizing the first
-     * successful resolution for the lifetime of this instance. Never returns
-     * a value that was not also durably persisted (env/system-property
-     * sources are already durable by definition; the file source persists
-     * before returning).
+     * Explicit offline bootstrap; never invoked by runtime lookup or application startup.
+     * Requires an existing durable directory. CREATE_NEW refuses replacement, including symlinks.
+     * A lost key must be restored from custody, never bootstrapped over existing authorizations.
      */
+    public static void initializeKey(Path keyFile) {
+        if (keyFile == null || !keyFile.isAbsolute() || keyFile.getParent() == null
+            || !Files.isDirectory(keyFile.getParent(), LinkOption.NOFOLLOW_LINKS)) {
+            throw new IllegalStateException("KEY_INITIALIZATION_UNAVAILABLE");
+        }
+        byte[] secret = new byte[32];
+        new SecureRandom().nextBytes(secret);
+        try (SeekableByteChannel channel = Files.newByteChannel(keyFile,
+            Set.of(StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS),
+            PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------")))) {
+            ByteBuffer bytes = StandardCharsets.US_ASCII.encode(HexFormat.of().formatHex(secret));
+            while (bytes.hasRemaining()) {
+                channel.write(bytes);
+            }
+            if (channel instanceof java.nio.channels.FileChannel fileChannel) {
+                fileChannel.force(true);
+            }
+        } catch (IOException | UnsupportedOperationException | SecurityException e) {
+            // File paths and key material never enter logs or shareable exception messages.
+            throw new IllegalStateException("KEY_INITIALIZATION_UNAVAILABLE");
+        } finally {
+            java.util.Arrays.fill(secret, (byte) 0);
+        }
+    }
+
+    /** No cache: key loss, a missing mount or changed file permissions fail closed on the next use. */
     public Optional<byte[]> resolveMasterSecret() {
-        byte[] cached = resolvedMasterSecret;
-        if (cached != null) {
-            return Optional.of(cached);
+        if (testSecret != null) {
+            return Optional.of(testSecret.clone());
         }
-        synchronized (this) {
-            if (resolvedMasterSecret != null) {
-                return Optional.of(resolvedMasterSecret);
-            }
-            Optional<byte[]> resolved = resolveFromEnv()
-                .or(FailoverKeyManagementService::resolveFromSystemProperty)
-                .or(this::resolveFromLocalStorageFile);
-            resolved.ifPresent(secret -> resolvedMasterSecret = secret);
-            return resolved;
-        }
-    }
-
-    /**
-     * CF-P1.2: resolves a signing/verification service bound to a specific
-     * {@code keyId}. Only the {@code "k1"} identity is backed by the durable
-     * master secret today -- any other {@code keyId} (a rotated or unknown
-     * key) resolves to {@link Optional#empty()}, which is the caller's signal
-     * to abort with {@code ABORTED_KEY_UNAVAILABLE} rather than guess a key.
-     */
-    public Optional<ScheduleCryptographicService> resolveCryptoService(String keyId) {
-        Objects.requireNonNull(keyId, "keyId must not be null");
-        if (!"k1".equals(keyId)) {
-            LOG.warn("failover_key_unavailable: unknown keyId requested (keyId={})", keyId);
+        if (keyFile == null || !keyFile.isAbsolute()) {
             return Optional.empty();
         }
-        ScheduleCryptographicService cached = cryptoServicesByKeyId.get(keyId);
-        if (cached != null) {
-            return Optional.of(cached);
-        }
-        Optional<byte[]> secret = resolveMasterSecret();
-        if (secret.isEmpty()) {
-            LOG.warn("failover_key_unavailable: no master secret source resolved (keyId={})", keyId);
-            return Optional.empty();
-        }
-        ScheduleCryptographicService created = new ScheduleCryptographicService(secret.get());
-        ScheduleCryptographicService existing = cryptoServicesByKeyId.putIfAbsent(keyId, created);
-        return Optional.of(existing != null ? existing : created);
-    }
-
-    private static Optional<byte[]> resolveFromEnv() {
-        String value = System.getenv(ENV_MASTER_SECRET);
-        return (value != null && !value.isBlank()) ? Optional.of(deriveKeyMaterial(value)) : Optional.empty();
-    }
-
-    private static Optional<byte[]> resolveFromSystemProperty() {
-        String value = System.getProperty(SYSPROP_MASTER_SECRET);
-        return (value != null && !value.isBlank()) ? Optional.of(deriveKeyMaterial(value)) : Optional.empty();
-    }
-
-    private Optional<byte[]> resolveFromLocalStorageFile() {
         try {
-            if (Files.exists(keyFile)) {
-                String hex = Files.readString(keyFile, StandardCharsets.UTF_8).strip();
-                if (hex.isEmpty()) {
-                    LOG.warn("failover_key_unavailable: local storage file is empty (path={})", keyFile);
-                    return Optional.empty();
-                }
-                return Optional.of(HexFormat.of().parseHex(hex));
-            }
-
-            // CF-P0.5: a missing key file is only safe to replace the very first time.
-            // Generating a fresh key after the key was lost is worse than refusing to
-            // start: every schedule sealed under the old key then fails verification and
-            // is reported as ABORTED_TAMPERED, so an operational accident -- an
-            // unmounted volume, a cleaned directory -- becomes indistinguishable from an
-            // attacker having altered a schedule. The provisioning marker records that a
-            // key once existed here, and its presence without the key means loss, which
-            // fails closed to ABORTED_KEY_UNAVAILABLE.
-            if (Files.exists(provisioningMarker)) {
-                LOG.warn("failover_key_unavailable: key file is missing but this location was already provisioned; "
-                    + "refusing to mint a replacement (path={})", keyFile);
+            if (!Files.isRegularFile(keyFile, LinkOption.NOFOLLOW_LINKS)
+                || !Files.getPosixFilePermissions(keyFile, LinkOption.NOFOLLOW_LINKS)
+                    .equals(PosixFilePermissions.fromString("rw-------"))) {
                 return Optional.empty();
             }
-
-            byte[] generated = new byte[32];
-            new SecureRandom().nextBytes(generated);
-            String hex = HexFormat.of().formatHex(generated);
-            Path parent = keyFile.toAbsolutePath().getParent();
-            if (parent != null) {
-                Files.createDirectories(parent);
+            try (SeekableByteChannel channel = Files.newByteChannel(keyFile,
+                Set.of(StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS))) {
+                if (channel.size() != 64) {
+                    return Optional.empty();
+                }
+                ByteBuffer bytes = ByteBuffer.allocate(64);
+                while (bytes.hasRemaining()) {
+                    if (channel.read(bytes) < 0) {
+                        return Optional.empty();
+                    }
+                }
+                bytes.flip();
+                return Optional.of(HexFormat.of().parseHex(StandardCharsets.US_ASCII.decode(bytes).toString()));
             }
-            Files.writeString(keyFile, hex, StandardCharsets.UTF_8,
-                StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
-            Files.writeString(provisioningMarker, PROVISIONED_MARKER_CONTENT, StandardCharsets.UTF_8,
-                StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-            LOG.info("failover_master_key_generated: persisted a new durable signing key on first provisioning (path={})", keyFile);
-            return Optional.of(generated);
-        } catch (IOException | IllegalArgumentException e) {
-            LOG.warn("failover_key_unavailable: local storage file could not be read or created (path={}, cause={})",
-                keyFile, e.getClass().getSimpleName());
+        } catch (IOException | IllegalArgumentException | UnsupportedOperationException | SecurityException e) {
             return Optional.empty();
         }
     }
 
-    /** Deterministically maps an arbitrary-length configured secret onto exactly 32 bytes of key material. */
-    private static byte[] deriveKeyMaterial(String secret) {
+    /** Content-bound identity distinguishes a wrong key mount from altered schedule content. */
+    public Optional<String> currentKeyId() {
+        return resolveMasterSecret().map(FailoverKeyManagementService::keyIdentifier);
+    }
+
+    private static String keyIdentifier(byte[] secret) {
         try {
-            return MessageDigest.getInstance("SHA-256").digest(secret.getBytes(StandardCharsets.UTF_8));
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            digest.update("NEXUS_FAILOVER_KEY_ID_V1".getBytes(StandardCharsets.US_ASCII));
+            return "sha256-" + HexFormat.of().formatHex(digest.digest(secret));
         } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 not available: " + e.getMessage(), e);
+            throw new IllegalStateException("KEY_ALGORITHM_UNAVAILABLE");
         }
+    }
+
+    public Optional<ScheduleCryptographicService> resolveCryptoService(String keyId) {
+        return resolveCryptoService(keyId, FailoverScheduleEnvelope.DEFAULT_ALG_VERSION);
+    }
+
+    public Optional<ScheduleCryptographicService> resolveCryptoService(String keyId, String algorithmVersion) {
+        if (keyId == null || !FailoverScheduleEnvelope.DEFAULT_ALG_VERSION.equals(algorithmVersion)) {
+            return Optional.empty();
+        }
+        return resolveMasterSecret().filter(secret -> keyIdentifier(secret).equals(keyId))
+            .map(ScheduleCryptographicService::new);
     }
 }

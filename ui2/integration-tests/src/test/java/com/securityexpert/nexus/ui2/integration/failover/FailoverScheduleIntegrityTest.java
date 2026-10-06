@@ -65,27 +65,32 @@ class FailoverScheduleIntegrityTest {
             record.commandFamilyId(), record.actionKind().name(), record.signedMutationTarget(), record.windowStart(),
             record.windowEnd(), record.maxStartDelayMinutes(), record.requesterId(), record.approverId(),
             record.grantId(), record.baselineDigest(), record.clientNonce(),
-            FailoverScheduleEnvelope.DEFAULT_KEY_ID, FailoverScheduleEnvelope.DEFAULT_ALG_VERSION);
+            record.keyId(), record.algorithmVersion());
     }
 
     @Test void nanosecondsRoundTripWithoutChangingSignedContent() throws Exception {
         try (var fixture = Ui2PostgresFixture.createAndMigrate("schedule_precision")) {
             var jdbc = new JdbcTemplate(fixture.appDataSource());
+            FailoverKeyManagementService.initializeKey(directory.resolve("schedule.key"));
             var keys = new FailoverKeyManagementService(directory.resolve("schedule.key"));
             var service = service(jdbc, keys);
             Instant start = Instant.now().plusSeconds(3600).with(java.time.temporal.ChronoField.NANO_OF_SECOND, 123456789);
             var booked = service.scheduleMaintenanceWindow(request(start));
-            var reloaded = service(jdbc, keys).getSchedule(booked.scheduleId()).orElseThrow();
+            var restartedKeys = new FailoverKeyManagementService(directory.resolve("schedule.key"));
+            var reloaded = service(jdbc, restartedKeys).getSchedule(booked.scheduleId()).orElseThrow();
             assertEquals(123456000, reloaded.windowStart().getNano());
             assertEquals(booked, reloaded);
+            assertEquals(keys.currentKeyId().orElseThrow(), reloaded.keyId());
+            assertEquals(FailoverScheduleEnvelope.DEFAULT_ALG_VERSION, reloaded.algorithmVersion());
             assertTrue(reloaded.baselineSummary().matchesStoredDigest(reloaded.baselineDigest()));
-            assertTrue(keys.resolveCryptoService("k1").orElseThrow().verifyEnvelope(envelope(reloaded), reloaded.envelopeSignature()));
+            assertTrue(restartedKeys.resolveCryptoService(reloaded.keyId(), reloaded.algorithmVersion()).orElseThrow().verifyEnvelope(envelope(reloaded), reloaded.envelopeSignature()));
         }
     }
 
     @Test void columnJsonClusterAndMissingFieldsAbortBeforeExecution() throws Exception {
         try (var fixture = Ui2PostgresFixture.createAndMigrate("schedule_tamper")) {
             var jdbc = new JdbcTemplate(fixture.appDataSource());
+            FailoverKeyManagementService.initializeKey(directory.resolve("schedule.key"));
             var keys = new FailoverKeyManagementService(directory.resolve("schedule.key"));
             var service = service(jdbc, keys);
             for (String alteration : List.of(
@@ -105,4 +110,27 @@ class FailoverScheduleIntegrityTest {
             }
         }
     }
+    @Test void unavailablePersistedKeyOrAlgorithmAbortsAfterReload() throws Exception {
+        try (var fixture = Ui2PostgresFixture.createAndMigrate("schedule_key")) {
+            var jdbc = new JdbcTemplate(fixture.appDataSource());
+            Path key = directory.resolve("schedule.key");
+            FailoverKeyManagementService.initializeKey(key);
+            var keys = new FailoverKeyManagementService(key);
+            for (String field : List.of("key_id", "algorithm_version", "lost-storage")) {
+                var booked = service(jdbc, keys).scheduleMaintenanceWindow(request(Instant.now().plusMillis(300)));
+                if (field.equals("lost-storage")) {
+                    java.nio.file.Files.delete(key);
+                } else {
+                    jdbc.update("UPDATE failover_schedules SET " + field + " = 'unknown' WHERE schedule_id = ?", booked.scheduleId());
+                }
+                TimeUnit.MILLISECONDS.sleep(350);
+                var result = service(jdbc, new FailoverKeyManagementService(key))
+                    .dispatchScheduledExecution(booked.scheduleId(), "synthetic-scheduler");
+                assertEquals(FailoverScheduleStatus.ABORTED_KEY_UNAVAILABLE, result.status());
+                assertEquals("KEY_UNAVAILABLE", result.abortReasonCode());
+                assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM failover_grant_consumption", Integer.class));
+            }
+        }
+    }
+
 }
