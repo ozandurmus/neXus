@@ -91,10 +91,10 @@ spec:
           resources:
             requests:
               cpu: 100m
-              memory: 256Mi
-            limits:
-              cpu: "1"
               memory: 1Gi
+            limits:
+              cpu: "4"
+              memory: 6Gi
           readinessProbe:
             exec:
               command: ["pg_isready", "-q", "-h", "127.0.0.1", "-p", "5432"]
@@ -125,7 +125,16 @@ spec:
             - name: start-hooks
               mountPath: /opt/app-root/src/postgresql-start
               readOnly: true
+            - name: database-config
+              mountPath: /opt/app-root/src/postgresql-cfg
+              readOnly: true
       volumes:
+        - name: database-config
+          configMap:
+            name: ui2-config
+            items:
+              - key: policy-memory.conf
+                path: policy-memory.conf
         - name: pgsql-home
           emptyDir: {}
         - name: run
