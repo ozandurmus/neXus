@@ -428,13 +428,11 @@ public final class CheckPointPolicyCollector {
                 }
                 for (JsonNode page : layer)
                     for (JsonNode object : page.path("objects-dictionary")) dictionary.put(required(object, "uid"), object);
-                Set<String> inline = new LinkedHashSet<>();
+                Map<String, JsonNode> inline = new LinkedHashMap<>();
                 for (JsonNode page : layer) inline(page.path("rulebase"), inline, 0);
-                for (String child : inline) if (!fetched.contains("uid:" + child) && !pending.containsKey("uid:" + child)) {
-                    JsonNode object = dictionary.get(child);
-                    if (object == null) {
-                        failures.add(new CollectionFailure(ref("cp-layer", domain, child), "INLINE_LAYER_NAME_MISSING"));
-                    } else pending.put(layerKey(object), object);
+                for (String child : inline.keySet()) if (!fetched.contains("uid:" + child) && !pending.containsKey("uid:" + child)) {
+                    JsonNode object = inlineReference(inline.get(child), dictionary);
+                    pending.put(layerKey(object), object);
                 }
             } catch (RuntimeException incomplete) {
             com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(incomplete);
@@ -467,19 +465,38 @@ public final class CheckPointPolicyCollector {
         return count;
     }
 
-    static void inline(JsonNode rules, Set<String> ids, int depth) {
+    static void inline(JsonNode rules, Map<String, JsonNode> ids, int depth) {
         if (depth > 32) throw failure();
         for (JsonNode rule : rules) {
-            if (rule.has("inline-layer")) ids.add(required(rule, "inline-layer"));
+            if (rule.has("inline-layer")) {
+                JsonNode reference = rule.path("inline-layer");
+                ids.put(inlineUid(reference), reference);
+            }
             if (rule.has("rulebase")) inline(rule.path("rulebase"), ids, depth + 1);
         }
+    }
+
+    static String inlineUid(JsonNode reference) {
+        if (reference.isObject()) return required(reference, "uid");
+        if (!reference.isTextual() || reference.textValue().isBlank()) throw failure();
+        return reference.textValue();
+    }
+
+    static JsonNode inlineReference(JsonNode reference, Map<String, JsonNode> dictionary) {
+        String uid = inlineUid(reference);
+        JsonNode object = reference.isObject() ? reference : dictionary.get(uid);
+        var layer = object == null ? com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.objectNode()
+            : ((com.fasterxml.jackson.databind.node.ObjectNode) object).deepCopy();
+        layer.put("uid", uid);
+        if (!layer.has("name")) layer.put("name", "Inline layer");
+        return layer;
     }
 
     List<JsonNode> pages(TransportSession session, IntFunction<String> command, int gate, long deadline, BooleanSupplier lease) {
         return pages(session, command, gate, deadline, lease, count -> {});
     }
     private List<JsonNode> pages(TransportSession session, IntFunction<String> command, int gate, long deadline, BooleanSupplier lease, IntConsumer progress) {
-        return pages(session, command, gate, deadline, lease, progress, null, "<masked>");
+        return pages(session, command, gate, deadline, lease, progress, null, "ABSENT");
     }
     private List<JsonNode> pages(TransportSession session, IntFunction<String> command, int gate, long deadline, BooleanSupplier lease, IntConsumer progress, String layerUid, String domainType) {
         List<JsonNode> pages = new ArrayList<>();
@@ -522,15 +539,19 @@ public final class CheckPointPolicyCollector {
         return pageTotal(page, offset, expectedTotal, gate, null);
     }
     static int pageTotal(JsonNode page, int offset, int expectedTotal, int gate, String layerUid) {
-        if (!page.path("rulebase").isArray() || !page.path("objects-dictionary").isArray()
+        if (!page.path("rulebase").isArray()
                 || !page.path("total").canConvertToInt() || !page.path("total").isIntegralNumber()) throw pageRejected("PAGE_SCHEMA");
+        boolean empty = offset == 0 && page.path("total").intValue() == 0 && page.path("rulebase").isEmpty();
+        if (!page.path("objects-dictionary").isArray() && !(empty && (gate == 1 || gate == 3) && !page.has("objects-dictionary")))
+            throw pageRejected("PAGE_SCHEMA");
         if ((gate == 1 || gate == 3) && layerUid != null && !layerUid.equals(required(page, "uid")))
             throw pageRejected("LAYER_UID");
         for (JsonNode object : page.path("objects-dictionary")) required(object, "uid");
         int total = page.path("total").intValue();
         if (total < 0 || (expectedTotal != -1 && expectedTotal != total)) throw pageRejected("TOTAL_CHANGED");
         if (total == 0) {
-            if (offset != 0 || !page.path("rulebase").isEmpty()) throw pageRejected("EMPTY_PAGE_RANGE");
+            if (!empty || !(emptyCounter(page, "from", 0) || emptyCounter(page, "from", 1)) || !emptyCounter(page, "to", 0))
+                throw pageRejected("EMPTY_PAGE_RANGE");
             return total;
         }
         if (!page.path("from").isIntegralNumber() || !page.path("to").isIntegralNumber()
@@ -540,6 +561,11 @@ public final class CheckPointPolicyCollector {
         if (ruleCount(page.path("rulebase")) != to - offset) throw pageRejected("NESTED_RULE_COUNT");
         ruleUids(page.path("rulebase"));
         return total;
+    }
+
+    private static boolean emptyCounter(JsonNode page, String field, int expected) {
+        JsonNode counter = page.path(field);
+        return counter.isMissingNode() || counter.isIntegralNumber() && counter.canConvertToInt() && counter.intValue() == expected;
     }
 
     static Set<String> ruleUids(JsonNode nodes) {
@@ -581,7 +607,7 @@ public final class CheckPointPolicyCollector {
     }
 
     JsonNode read(TransportSession session, String command, int gate, long deadline, BooleanSupplier lease, int expectedTotal) {
-        return read(session, command, gate, deadline, lease, expectedTotal, "<masked>");
+        return read(session, command, gate, deadline, lease, expectedTotal, "ABSENT");
     }
 
     JsonNode read(TransportSession session, String command, int gate, long deadline, BooleanSupplier lease, int expectedTotal, String domainType) {
@@ -628,6 +654,8 @@ public final class CheckPointPolicyCollector {
                     // An API error never proves an unchanged domain. Collect fully, including unknown errors.
                     return json.createObjectNode();
                 }
+                if ((gate == 1 || gate == 3) && !uidAccess && "generic_err_object_field_not_unique".equals(code))
+                    throw PolicyCollectionTrace.failure("LAYER_NAME_AMBIGUOUS");
                 String message = (root.path("code").asText("") + " " + root.path("message").asText("")).toLowerCase(Locale.ROOT);
                 if (message.contains("session") || message.contains("lock") || message.contains("too many"))
                     throw PolicyCollectionTrace.failure("API_SESSION_PRESSURE");
@@ -741,7 +769,7 @@ public final class CheckPointPolicyCollector {
     static String layerDomainType(JsonNode layer) {
         String value = layer.path("domain").path("domain-type").asText("");
         if (value.isEmpty()) value = layer.path("domain-type").asText("");
-        return Set.of("domain", "global domain", "data domain").contains(value) ? value : "<masked>";
+        return value.isEmpty() ? "ABSENT" : Set.of("domain", "global domain", "data domain").contains(value) ? value : "<masked>";
     }
 
     List<Target> installationTargets(DiscoveryRun run, PolicyCollectionRepository.Request request,
@@ -782,7 +810,7 @@ public final class CheckPointPolicyCollector {
     }
 
     static void rejectedRulebase(JsonNode root, String check) {
-        rejectedRulebase(root, check, "<masked>");
+        rejectedRulebase(root, check, "ABSENT");
     }
 
     static void rejectedRulebase(JsonNode root, String check, String domainType) {

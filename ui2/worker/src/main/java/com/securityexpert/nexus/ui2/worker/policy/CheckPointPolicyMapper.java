@@ -79,7 +79,7 @@ public final class CheckPointPolicyMapper {
     private static void inlineLayers(JsonNode nodes, Set<String> inline, int depth) {
         if (depth > 32) throw new IllegalArgumentException("Policy nesting limit exceeded");
         for (JsonNode node : nodes) {
-            if (node.has("inline-layer")) inline.add(node.path("inline-layer").asText());
+            if (node.has("inline-layer")) inline.add(CheckPointPolicyCollector.inlineUid(node.path("inline-layer")));
             if (node.has("rulebase")) inlineLayers(node.path("rulebase"), inline, depth + 1);
         }
     }
@@ -134,7 +134,7 @@ public final class CheckPointPolicyMapper {
                     resolve(node.path("action"), dict), resolve(node.path("track").path("type"), dict), node.path("comments").asText(""), extras, PolicyHitCounts.checkPoint(node.path("hits"), meta.collectedAt())));
             if (node.has("inline-layer")) {
                 flush(sections, section, name, parent, pending);
-                layer(meta, node.path("inline-layer").asText(), ruleId, layers, dict, objects, sections, path);
+                layer(meta, CheckPointPolicyCollector.inlineUid(node.path("inline-layer")), ruleId, layers, dict, objects, sections, path);
             }
         }
         flush(sections, section, name, parent, pending);

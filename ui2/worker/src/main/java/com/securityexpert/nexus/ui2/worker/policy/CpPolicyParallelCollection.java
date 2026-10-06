@@ -194,7 +194,7 @@ final class CpPolicyParallelCollection {
                     throw PolicyCollectionTrace.failure(connected.getClass().getSimpleName());
                 session.set(authenticated.session()); sessions.add(authenticated.session());
             }
-            return new Result(work, collector.read(session.get(), work.command, work.gate, deadline, lease, work.layer == null ? -1 : work.layer.total, work.layer == null ? "<masked>" : work.layer.domainType), null, clock.getAsLong() - started);
+            return new Result(work, collector.read(session.get(), work.command, work.gate, deadline, lease, work.layer == null ? -1 : work.layer.total, work.layer == null ? "ABSENT" : work.layer.domainType), null, clock.getAsLong() - started);
         } catch (RuntimeException error) {
             com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(error);
             // An unhealthy shell must not carry the retried page or any sibling read.
@@ -343,12 +343,10 @@ final class CpPolicyParallelCollection {
             // Use ordered pages so dictionary collision semantics equal the serial collector.
             for (Layer sibling : policy.layers.values()) if (sibling.done && sibling.failure == null)
                 for (JsonNode p : sibling.pages.values()) for (JsonNode object : p.path("objects-dictionary")) dictionary.put(required(object, "uid"), object);
-            Set<String> children = new LinkedHashSet<>();
+            Map<String, JsonNode> children = new LinkedHashMap<>();
             for (JsonNode p : layer.pages.values()) inline(p.path("rulebase"), children, 0);
-            for (String child : children) if (!policy.layers.containsKey("uid:" + child)) {
-                JsonNode object = dictionary.get(child);
-                if (object == null) policy.extra.add(new CollectionFailure(ref("cp-layer", policy.domain, child), "INLINE_LAYER_NAME_MISSING"));
-                else addLayer(policy, object);
+            for (String child : children.keySet()) if (!policy.layers.containsKey("uid:" + child)) {
+                addLayer(policy, inlineReference(children.get(child), dictionary));
             }
         }
         checkpoint(policy, layer);
@@ -479,7 +477,7 @@ final class CpPolicyParallelCollection {
     private static final class Layer {
         final Policy policy;
         final String uid, name, ref;
-        String domainType = "<masked>";
+        String domainType = "ABSENT";
         int gate;
         IntFunction<String> command;
         final TreeMap<Integer, JsonNode> pages = new TreeMap<>();
