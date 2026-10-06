@@ -1,5 +1,8 @@
 package com.securityexpert.nexus.ui2.worker.failover;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import com.securityexpert.nexus.ui2.jobs.failover.FailoverMutationSwitch;
 
 import java.lang.reflect.Proxy;
@@ -125,7 +128,7 @@ class CpFailoverJobExecutorTest {
                     if(peerPolicyTime!=null && literal.endsWith("fw stat'") && !((TransportSession)args[0]).sessionId().endsWith("11"))
                         output=output.replace("14:01:25",peerPolicyTime);
                     if(reverseActive && literal.endsWith("cphaprob stat'")) output=output
-                        .replace("Active","TEMP").replace("Standby","Active").replace("TEMP","Standby");
+                        .replace("% Active","% TEMP").replace("% Standby","% Active").replace("% TEMP","% Standby");
                     if(reverseActive && literal.endsWith("fw tab -t connections -s'")) {
                         boolean first=((TransportSession)args[0]).sessionId().endsWith("11");
                         output=output.replace("8158 100 150",first?"8158 1168 1500":"8158 47 1500");
@@ -325,14 +328,18 @@ class CpFailoverJobExecutorTest {
             script.prefix=(store.vsId==null?"":"Context is set to Virtual Device VS-SYNTHETIC (ID 12).\n")
                 +(banner?"Warning! Synthetic login notice.\n":"");
             run(store,script);
-            org.junit.jupiter.api.Assertions.assertEquals(shape.equals("gateway")?"READY":shape.equals("vs0")?"UNKNOWN":"NOT_READY",store.outcome,shape+" banner="+banner+" "+store.checks);
-            check(store.checks.size()==24 && script.downCount==0 && script.upCount==0);
+            String context=shape+" banner="+banner+" checks="+store.checks;
+            assertEquals(shape.equals("gateway")?"READY":shape.equals("vs0")?"UNKNOWN":"NOT_READY",store.outcome,context);
+            assertEquals(24,store.checks.size(),"All readiness checks must be recorded: "+context);
+            assertTrue(script.downCount==0 && script.upCount==0,"Readiness must not dispatch writes: "+context);
         }
         Store store=new Store(); store.kind="READINESS"; store.vsId="12";
         Script script=new Script(); script.reverseActive=true;
         run(store,script);
-        check(store.checks.contains("pre:6:PASS"));
-        check("READY".equals(store.outcome));
+        assertEquals(2,store.checks.stream().filter("pre:1:PASS"::equals).count(),
+            "Reversed VS roles must retain reciprocal HA evidence: "+store.checks);
+        assertTrue(store.checks.contains("pre:6:PASS"),"VS connection parity check 6: "+store.checks);
+        assertEquals("READY",store.outcome,"VS readiness with reversed active member: "+store.checks);
     }
     @Test void oneSecondPolicySkewPassesParity() {
         Store store=new Store(); store.kind="READINESS";
@@ -358,11 +365,15 @@ class CpFailoverJobExecutorTest {
             long active=high?10000:3127,standby=high?7999:2285;
             script.connectionCounts=reverse?new long[]{standby,active}:new long[]{active,standby};
             run(store,script);
-            check(store.checks.contains(high?"pre:6:FAIL":"pre:6:PASS"));
-            check(store.derivedValues.stream().filter(d -> d.contains("\"activeCount\":"+active)
+            String context="reverse="+reverse+" high="+high+" checks="+store.checks;
+            assertEquals(2,store.checks.stream().filter("pre:1:PASS"::equals).count(),
+                "Both members must pass reciprocal HA check 1: "+context);
+            assertTrue(store.checks.contains(high?"pre:6:FAIL":"pre:6:PASS"),"Connection parity check 6: "+context);
+            assertEquals(2,store.derivedValues.stream().filter(d -> d.contains("\"activeCount\":"+active)
                 && d.contains("\"comparedCount\":"+standby) && d.contains("\"ratio\":")
-                && d.contains(high?"RATIO_80":"LOW_VOLUME_ABSOLUTE_OR_RATIO")).count()==2);
-            check(script.downCount==0 && script.upCount==0);
+                && d.contains(high?"RATIO_80":"LOW_VOLUME_ABSOLUTE_OR_RATIO")).count(),
+                "Both connection checks must persist the actual active and standby counts: "+context);
+            assertTrue(script.downCount==0 && script.upCount==0,"Readiness must not dispatch writes: "+context);
         }
     }
     @Test void readinessUsesStoredCounterBaselineAndRecordsIncrease() {
