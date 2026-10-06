@@ -292,6 +292,28 @@ def test_every_container_declares_requests_and_limits():
                 )
 
 
+def test_policy_snapshot_memory_budget_and_postgresql_config_mount():
+    containers = {owner: container for _, owner, container in _containers()}
+    database = containers["StatefulSet/ui2-db:database"]
+    assert database["resources"] == {
+        "requests": {"cpu": "100m", "memory": "1Gi"},
+        "limits": {"cpu": "4", "memory": "6Gi"},
+    }
+    assert containers["Deployment/ui2-policy:policy"]["resources"]["limits"]["memory"] == "8Gi"
+    assert containers["Deployment/ui2-service:service"]["resources"]["limits"]["memory"] == "8Gi"
+    mount = next(m for m in database["volumeMounts"] if m["name"] == "database-config")
+    assert mount["mountPath"] == "/opt/app-root/src/postgresql-cfg"
+    assert mount["readOnly"] is True
+    spec = next(spec for _, owner, spec in _pod_specs() if owner == "StatefulSet/ui2-db")
+    config = next(v["configMap"] for v in spec["volumes"] if v["name"] == "database-config")
+    assert config["name"] == "ui2-config"
+    assert config["items"] == [{"key": "policy-memory.conf", "path": "policy-memory.conf"}]
+    data = next(doc["data"] for _, doc in _documents() if doc.get("kind") == "ConfigMap")
+    assert data["policy-memory.conf"].splitlines() == [
+        "shared_buffers = '1GB'", "work_mem = '32MB'", "maintenance_work_mem = '256MB'",
+    ]
+
+
 def test_every_writable_path_is_supplied_as_a_mount():
     """FS-4: with a read-only root filesystem, a written path is a mount."""
     for path, owner, spec in _pod_specs():
