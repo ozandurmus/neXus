@@ -101,6 +101,11 @@ class CpFailoverServiceTest {
     }
     @Test void secondApprovalTakesAuthenticatedActorNotBrowserApprover() throws Exception {
         var mockService=mock(CpFailoverService.class);
+        var approved=new JooqCpFailoverRepository.Approval("request-a",CLUSTER,null,Instant.EPOCH,
+            Instant.EPOCH.plusSeconds(3600),"Synthetic drill","principal-a",null);
+        when(mockService.secondApproval("request-a",1,"unit-a","unit-a","principal-a","check_point"))
+            .thenReturn(new JooqCpFailoverRepository.RequestApproval(approved,1,"unit-a","members-opaque",
+                JooqCpFailoverRepository.TWO_PERSON,1,"initiator-opaque","nonce-opaque"));
         var mvc=MockMvcBuilders.standaloneSetup(new CpFailoverController(mockService)).build();
         String path="/api/v2/cp-failover/approvals/request-a/approve";
         mvc.perform(post(path).servletPath(path).contentType("application/json")

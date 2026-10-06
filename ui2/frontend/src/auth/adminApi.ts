@@ -1658,18 +1658,19 @@ export function getOverview(): Promise<OverviewView> {
 export type CpFailoverState = "PLANNED" | "PRECHECK" | "FAILING_OVER" | "SWITCHED" | "POSTCHECK" | "RETURNING" | "DONE" | "STOPPED";
 export type CpFailoverCheckStatus = "PASS" | "FAIL" | "UNKNOWN" | "WARN";
 export interface ReadinessMember { device_id: string; hostname: string | null; ha_role: string | null }
-export interface CpFailoverUnit { masked?: boolean; members?: ReadinessMember[]; unitId: string; clusterId: string; cluster_member_ref: string; vendor?: "check_point" | "palo_alto"; virtual_system?: string; canApprove: boolean; canStart: boolean; canSchedule: boolean }
+export interface CpFailoverUnit { maskedName?: string; maskedMembers?: Array<Omit<ReadinessMember, "hostname"> & { maskedLabel: string }>; masked?: boolean; members?: ReadinessMember[]; unitId: string; clusterId: string; cluster_member_ref: string; vendor?: "check_point" | "palo_alto"; virtual_system?: string; canApprove: boolean; canStart: boolean; canSchedule: boolean; mode?: string; refusalReason?: string | null; readinessObservedAt?: string | null }
 export interface ReadinessCheck { device_id?: string; checkNo: number; title: string; member: string; result: CpFailoverCheckStatus; summary: string; blocking: boolean }
-export interface CpFailoverSummary extends Pick<CpFailoverUnit, "unitId" | "clusterId" | "cluster_member_ref" | "vendor" | "virtual_system" | "members" | "masked"> {
+export interface CpFailoverSummary extends Pick<CpFailoverUnit, "unitId" | "clusterId" | "cluster_member_ref" | "vendor" | "virtual_system" | "members" | "masked" | "mode" | "refusalReason" | "readinessObservedAt"> {
   activeWindow: boolean; lastRunState: string | null; lastRunOutcome: string | null; lastRunAt: string | null; canRunReadiness: boolean;
   readiness: { status: "READY" | "NOT_READY" | "UNKNOWN"; observedAt: string; failedCheck: string; stopCode?: string; checks: Array<ReadinessCheck & { status: CpFailoverCheckStatus; derived: Record<string, unknown> }> } | null;
 }
-export interface CpFailoverApproval { approvalId: string; windowFrom: string; windowUntil: string; reason: string; approvedBy: string; revokedAt: string | null }
+export interface CpFailoverApproval { approvalId: string; windowFrom: string; windowUntil: string; reason: string; revokedAt: string | null; requestId?: string; revision?: number; policy?: "ADMIN_SINGLE" | "OPERATION_ADMIN_TWO_PERSON"; approved?: boolean; executionNonce?: string; canStart?: boolean; canApprove?: boolean }
 export interface CpFailoverRun {
   runId: string; approvalId: string; scheduledFor: string; state: CpFailoverState; step: string;
   outcome: string | null; failedCheck: string | null; message: string | null; steps: string[]; kind?: "FAILOVER" | "READINESS";
+  mutationPossible?: boolean | null; incidentRef?: string | null; lastConfirmedRoles?: Record<string, string>;
 }
-export interface CpFailoverCheck extends ReadinessCheck { phase: "pre" | "post"; device_id: string; hostname: string | null; cluster_member_ref: string; checkNo: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14; status: CpFailoverCheckStatus; derived: string; observedAt: string }
+export interface CpFailoverCheck extends ReadinessCheck { phase: "pre" | "post" | "final"; device_id: string; hostname: string | null; cluster_member_ref: string; checkNo: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14; status: CpFailoverCheckStatus; derived: string; observedAt: string }
 export interface CpFailoverRunDetail extends CpFailoverRun { checks: CpFailoverCheck[] }
 
 const failoverPath = (vendor?: string) => vendor === "palo_alto" ? "/api/v2/pan-failover" : "/api/v2/cp-failover";
@@ -1680,11 +1681,13 @@ export const listCpFailoverSummary = () => call<CpFailoverSummary[]>("/api/v2/cp
 export const listCpFailoverApprovals = (unit: CpFailoverUnit) => call<CpFailoverApproval[]>(`${failoverPath(unit.vendor)}/approvals?${cpQuery(unit)}`, "GET");
 export const listCpFailoverRuns = (unit: CpFailoverUnit) => call<CpFailoverRun[]>(`${failoverPath(unit.vendor)}/runs?${cpQuery(unit)}`, "GET");
 export const getCpFailoverRun = (runId: string, vendor?: string) => call<CpFailoverRunDetail>(`${failoverPath(vendor)}/runs/${encodeURIComponent(runId)}`, "GET");
-export const approveCpFailover = (unit: CpFailoverUnit, from: string, until: string, reason: string) =>
-  call<CpFailoverApproval>(`${failoverPath(unit.vendor)}/approvals`, "POST", { clusterId: unit.clusterId, unitId: unit.unitId, windowFrom: from, windowUntil: until, reason });
+export const approveCpFailover = (unit: CpFailoverUnit, from: string, until: string, reason: string, requestId: string) =>
+  call<CpFailoverApproval>(`${failoverPath(unit.vendor)}/approvals`, "POST", { clusterId: unit.clusterId, unitId: unit.unitId, windowFrom: from, windowUntil: until, reason, requestId });
+export const secondApproveCpFailover = (unit: CpFailoverUnit, requestId: string, revision: number) =>
+  call<CpFailoverApproval>(`${failoverPath(unit.vendor)}/approvals/${encodeURIComponent(requestId)}/approve`, "POST", { clusterId: unit.clusterId, unitId: unit.unitId, revision });
 export const revokeCpFailover = (approvalId: string, vendor?: string) => call<{ revoked: boolean }>(`${failoverPath(vendor)}/approvals/${encodeURIComponent(approvalId)}/revoke`, "POST");
-export const startCpFailover = (unit: CpFailoverUnit, scheduledFor: string | null) =>
-  call<{ runId: string }>(`${failoverPath(unit.vendor)}/runs`, "POST", { clusterId: unit.clusterId, unitId: unit.unitId, scheduledFor });
+export const startCpFailover = (unit: CpFailoverUnit, binding: { requestId: string; revision: number; executionNonce: string; warningConfirmed: true }) =>
+  call<{ runId: string }>(`${failoverPath(unit.vendor)}/runs`, "POST", { clusterId: unit.clusterId, unitId: unit.unitId, scheduledFor: null, ...binding });
 export const runCpFailoverReadiness = (unit: Pick<CpFailoverUnit, "clusterId" | "unitId" | "vendor">) =>
   call<{ runId: string }>(`${failoverPath(unit.vendor)}/units/${encodeURIComponent(unit.unitId)}/readiness`, "POST",
     { clusterId: unit.clusterId, unitId: unit.unitId });
