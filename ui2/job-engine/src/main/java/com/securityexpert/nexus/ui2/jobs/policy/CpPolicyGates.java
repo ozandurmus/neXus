@@ -37,6 +37,13 @@ public final class CpPolicyGates {
         "mgmt_cli -r true -d '<DOMAIN>' -f json show-security-zones limit 50 offset '<N>' details-level full",
         "mgmt_cli -r true -d '<DOMAIN>' -f json show-unused-objects limit 50 offset '<N>' details-level full",
         "mgmt_cli -r true -d '<DOMAIN>' -f json show-last-published-session");
+    public static final String ACCESS_UID_COMMAND = COMMANDS.get(1).replace("name '<LAYER>'", "uid '<UID>'");
+    public static String accessUidCommand(boolean hits) {
+        return ACCESS_UID_COMMAND + (hits ? " show-hits true" : "");
+    }
+    public static void requireAccessUid(GateRegistryPort registry, boolean hits) {
+        require(registry, accessUidCommand(hits), 300, hits ? "none" : "once on timeout with limit 50");
+    }
     public static final int PACKAGES_50 = 4;
     public static final int OBJECT_BASE = 5;
     public static final int LAST_PUBLISHED_SESSION = COMMANDS.size() - 1;
@@ -49,20 +56,27 @@ public final class CpPolicyGates {
             steps.add(new CapabilityStep(StepKind.EXEC, "expert", command, false,
                 java.util.Optional.empty(), java.util.Optional.empty(), java.util.Optional.empty()));
         }
+        steps.add(new CapabilityStep(StepKind.EXEC, "expert", ACCESS_UID_COMMAND, false,
+            java.util.Optional.empty(), java.util.Optional.empty(), java.util.Optional.empty()));
         var disconnect = new CapabilityStep(StepKind.DISCONNECT, "not_applicable", null, false,
                 java.util.Optional.empty(), java.util.Optional.empty(), java.util.Optional.empty());
         return new CapabilityRegistryLoader(registry).load(new CapabilitySpec(CAPABILITY, "check_point", "cp_multi_domain_server",
                 TransportKind.SSH_EXEC, MaturityState.CAP_OFFLINE, steps, List.of(disconnect), "2026-10-01", List.of(), false));
     }
     public static void require(GateRegistryPort registry, int index) {
+        require(registry, COMMANDS.get(index), index == 2 ? 60 : 300,
+            index == 0 || index == 1 ? "once on timeout with limit 50" : "none");
+    }
+    private static void require(GateRegistryPort registry, String command, int timeout, String retry) {
         var rows = registry.findByCanonicalKey(new CanonicalCommandKey("check_point", "cp_multi_domain_server",
-                "expert", "SSH_EXEC", COMMANDS.get(index)));
+                "expert", "SSH_EXEC", command));
         if (rows.size() != 1 || rows.get(0).signOffState() != SignOffState.SIGNED_OFF
-                || rows.get(0).actionClass() != ActionClass.CLASS_0_READ || rows.get(0).timeoutS() != (index == 2 ? 60 : 300)
-                || !rows.get(0).retryRule().equals(index == 0 || index == 1 ? "once on timeout with limit 50" : "none"))
+                || rows.get(0).actionClass() != ActionClass.CLASS_0_READ || rows.get(0).timeoutS() != timeout
+                || !rows.get(0).retryRule().equals(retry))
             throw new IllegalStateException("POLICY_GATE_UNAVAILABLE");
     }
     public static void requireAll(GateRegistryPort registry) {
         for (int i = 0; i < COMMANDS.size(); i++) if (i != 3) require(registry, i);
+        requireAccessUid(registry, false);
     }
 }

@@ -130,7 +130,7 @@ final class CpPolicyParallelCollection {
                             } else {
                                 safety.streak = 0;
                                 if (work.gate >= 1 && work.gate <= 3)
-                                    rejectedRulebase(result.page, rejectingCheck(invalid));
+                                    rejectedRulebase(result.page, rejectingCheck(invalid), work.layer.domainType);
                                 if (retryPage(work, invalid))
                                     pending.addFirst(new Work(work.command, work.gate, work.layer, work.offset, work.end, 1, work.accept));
                                 else if (work.gate == 3) fallbackHits(work.layer);
@@ -194,7 +194,7 @@ final class CpPolicyParallelCollection {
                     throw PolicyCollectionTrace.failure(connected.getClass().getSimpleName());
                 session.set(authenticated.session()); sessions.add(authenticated.session());
             }
-            return new Result(work, collector.read(session.get(), work.command, work.gate, deadline, lease, work.layer == null ? -1 : work.layer.total), null, clock.getAsLong() - started);
+            return new Result(work, collector.read(session.get(), work.command, work.gate, deadline, lease, work.layer == null ? -1 : work.layer.total, work.layer == null ? "<masked>" : work.layer.domainType), null, clock.getAsLong() - started);
         } catch (RuntimeException error) {
             com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(error);
             // An unhealthy shell must not carry the retried page or any sibling read.
@@ -284,25 +284,27 @@ final class CpPolicyParallelCollection {
                 "CP", container, domain, name, Instant.now().toString(), "", targets.stream().distinct().toList());
             Policy policy = new Policy(metadata, domain);
             policies.add(policy);
-            Map<String, String> roots = new LinkedHashMap<>();
+            Map<String, JsonNode> roots = new LinkedHashMap<>();
             for (JsonNode layer : node.path("access-layers")) {
                 JsonNode scoped = CheckPointPolicyCollector.scopedLayer(layer);
-                roots.put(required(scoped, "uid"), required(scoped, "name"));
+                roots.put(layerKey(scoped), scoped);
             }
-            roots.forEach((layerUid, layerName) -> addLayer(policy, layerUid, layerName));
+            roots.values().forEach(layer -> addLayer(policy, layer));
             policy.nat = new Layer(policy, "", "NAT", ref("cp-nat", container, uid), 2,
                 offset -> MgmtCliCommands.showNatRulebase(domain, name, offset));
             enqueue(policy.nat, 0, 0);
         }
     }
 
-    private void addLayer(Policy policy, String uid, String name) {
-        if (policy.layers.containsKey(uid)) return;
+    private void addLayer(Policy policy, JsonNode reference) {
+        String uid = layerUid(reference), name = required(reference, "name"), key = layerKey(reference);
+        if (policy.layers.containsKey(key)) return;
         if (policy.layers.size() >= MAX_PAGES) throw failure();
         boolean hits = com.securityexpert.nexus.ui2.jobs.policy.PolicyHitGates.enabled(collector.gates(), true);
-        Layer layer = new Layer(policy, uid, name, ref("cp-layer", policy.domain, uid), hits ? 3 : 1,
-            offset -> MgmtCliCommands.showAccessRulebase(policy.domain, name, offset) + (hits ? " show-hits true" : ""));
-        policy.layers.put(uid, layer); enqueue(layer, 0, 0);
+        Layer layer = new Layer(policy, uid, name, ref("cp-layer", policy.domain, uid == null ? key : uid), hits ? 3 : 1,
+            offset -> MgmtCliCommands.showAccessRulebase(policy.domain, uid, name, offset) + (hits ? " show-hits true" : ""));
+        layer.domainType = layerDomainType(reference);
+        policy.layers.put(key, layer); enqueue(layer, 0, 0);
     }
 
     private void enqueue(Layer layer, int offset, int end) {
@@ -343,10 +345,10 @@ final class CpPolicyParallelCollection {
                 for (JsonNode p : sibling.pages.values()) for (JsonNode object : p.path("objects-dictionary")) dictionary.put(required(object, "uid"), object);
             Set<String> children = new LinkedHashSet<>();
             for (JsonNode p : layer.pages.values()) inline(p.path("rulebase"), children, 0);
-            for (String child : children) if (!policy.layers.containsKey(child)) {
+            for (String child : children) if (!policy.layers.containsKey("uid:" + child)) {
                 JsonNode object = dictionary.get(child);
                 if (object == null) policy.extra.add(new CollectionFailure(ref("cp-layer", policy.domain, child), "INLINE_LAYER_NAME_MISSING"));
-                else addLayer(policy, child, required(object, "name"));
+                else addLayer(policy, object);
             }
         }
         checkpoint(policy, layer);
@@ -354,7 +356,7 @@ final class CpPolicyParallelCollection {
 
     private void fallbackHits(Layer layer) {
         layer.gate = 1;
-        layer.command = offset -> MgmtCliCommands.showAccessRulebase(layer.policy.domain, layer.name, offset);
+        layer.command = offset -> MgmtCliCommands.showAccessRulebase(layer.policy.domain, layer.uid, layer.name, offset);
         layer.pages.clear(); layer.rulePages.clear(); layer.total = -1; layer.issued = 0; layer.rulesFetched = 0; layer.done = false;
         enqueue(layer, 0, 0);
     }
@@ -477,6 +479,7 @@ final class CpPolicyParallelCollection {
     private static final class Layer {
         final Policy policy;
         final String uid, name, ref;
+        String domainType = "<masked>";
         int gate;
         IntFunction<String> command;
         final TreeMap<Integer, JsonNode> pages = new TreeMap<>();
