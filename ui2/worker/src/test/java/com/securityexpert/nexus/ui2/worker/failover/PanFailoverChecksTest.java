@@ -38,6 +38,40 @@ class PanFailoverChecksTest {
             .replace("Active-Passive","Active-Active"));
         assertEquals("FAIL",PanFailoverChecks.roles(a,b,"active","passive"));
     }
+    @Test void reciprocalRolesRequireBothPeerClaimsAndOpaqueSerialAgreement() {
+        String first=xml("active","passive","0011","0022","up","up","synchronized");
+        String second=xml("passive","active","0022","0011","up","up","synchronized");
+        var a=PanFailoverChecks.parse(first);
+        for(String missing:new String[]{"<peer-info>","<peer-info><state>unknown</state>",
+                "<peer-info><state>active</state><state>active</state>"}) {
+            var b=PanFailoverChecks.parse(second.replace("<peer-info><state>active</state>",missing));
+            assertEquals("UNKNOWN",PanFailoverChecks.roles(a,b,"active","passive"));
+            assertEquals("UNKNOWN",PanFailoverChecks.relationship(a,b));
+        }
+        for(String bad:new String[]{second.replace("<peer-info><state>active", "<peer-info><state>passive"),
+                second.replace("0011","11"),second.replace("0022","22"),first,
+                second.replace("<local-info><state>passive","<local-info><state>active")}) {
+            assertEquals("FAIL",PanFailoverChecks.roles(a,PanFailoverChecks.parse(bad),"active","passive"));
+        }
+        assertEquals("UNKNOWN",PanFailoverChecks.roles(PanFailoverChecks.parse(
+            first.replace("<peer-info><state>passive</state>","<peer-info>")),
+            PanFailoverChecks.parse(second),"active","passive"));
+        for(String mode:new String[]{"Active-Active","unknown",""}) {
+            var unsupported=PanFailoverChecks.parse(first.replace("Active-Passive",mode));
+            assertEquals(mode.isEmpty()?"UNKNOWN":"FAIL",PanFailoverChecks.roles(unsupported,
+                PanFailoverChecks.parse(second),"active","passive"));
+            org.junit.jupiter.api.Assertions.assertTrue(PanFailoverChecks.stateEvidence(unsupported).contains("UNSUPPORTED"));
+        }
+    }
+    @Test void suspendedAndReturnRolesAlsoNeedReciprocalClaims() {
+        var active=PanFailoverChecks.parse(xml("active","suspended","0022","0011","up","up","synchronized"));
+        var suspended=PanFailoverChecks.parse(xml("suspended","active","0011","0022","up","up","synchronized"));
+        assertEquals("PASS",PanFailoverChecks.roles(suspended,active,"suspended","active"));
+        assertEquals("FAIL",PanFailoverChecks.roles(PanFailoverChecks.parse(
+            xml("suspended","passive","0011","0022","up","up","synchronized")),active,"suspended","active"));
+        String facts=PanFailoverChecks.stateEvidence(suspended);
+        org.junit.jupiter.api.Assertions.assertFalse(facts.contains("0011") || facts.contains("0022"));
+    }
     private static String result(String body) {
         return "<response status=\"success\"><result>"+body+"</result></response>";
     }

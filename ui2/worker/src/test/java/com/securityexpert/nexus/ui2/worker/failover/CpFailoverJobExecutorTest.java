@@ -98,6 +98,8 @@ class CpFailoverJobExecutorTest {
         boolean readyMember,badPnotes,badBonds,badRoutes,missingDefault,recentFailover;
         String unknownCommand, failedCommand;
         boolean extraTableRows,reverseActive,observerLocalIndices;
+        boolean wrongIdentity,missingIdentity,opposedPeer,sameObserver,swapLocalIdsAfterDown;
+        String reportedMode;
         String peerPolicyTime;
         long[] connectionCounts;
         String prefix="",lineEnding="\n";
@@ -133,6 +135,12 @@ class CpFailoverJobExecutorTest {
                         long count=connectionCounts[first?0:1];
                         output="HOST NAME ID #VALS #PEAK #SLINKS\nlocalhost connections 8158 "+count+" 60000 0\n";
                     }
+                    if(literal.endsWith("cphaprob stat'")) {
+                        if(reportedMode!=null) output=output.replace("High Availability",reportedMode);
+                        if(swapLocalIdsAfterDown && down) output=output.replaceAll("(?m)^1 ","TEMP ").replaceAll("(?m)^2 ","1 ").replaceAll("(?m)^TEMP ","2 ");
+                        if(opposedPeer && !((TransportSession)args[0]).sessionId().endsWith("11"))
+                            output=output.replace("100% Active","100% Down");
+                    }
                     output=prefix+output;
                     if(lineEnding.equals("\r\n")) output=output.replace("\r\n","\n").replace("\n",lineEnding);
                     return new ExecResult.Completed(output,c.exitStatus());
@@ -144,7 +152,13 @@ class CpFailoverJobExecutorTest {
                     if(method.getName().equals("connect")) {
                         connectCount++;
                         ConnectionTarget target=(ConnectionTarget)args[0];
-                        return new ConnectResult.Authenticated(() -> target.host());
+                        return new ConnectResult.Authenticated(new TransportSession() {
+                            public String sessionId() { return sameObserver?"192.0.2.11":target.host(); }
+                            public Optional<String> presentedIdentity() {
+                                return missingIdentity?Optional.empty():Optional.of(wrongIdentity?"synthetic-other-key":
+                                    target.host().endsWith("11")?"synthetic-key-a":"synthetic-key-b");
+                            }
+                        });
                     }
                     if(method.getName().equals("disconnect")) return null;
                     if(!method.getName().equals("exec")) throw new AssertionError(method.getName());
@@ -226,6 +240,10 @@ class CpFailoverJobExecutorTest {
                     Instant.EPOCH,false,DeviceEnrollmentState.ENROLLED,false,"credential-ref"));
                 case "findEndpointByDeviceId" -> Optional.of(new EndpointRecord("endpoint-ref",(String)args[0],"ssh_exec",
                     A.equals(args[0])?"192.0.2.11":"192.0.2.12",Instant.EPOCH));
+                case "findConfirmFacts" -> Optional.of(new DeviceConfirmFacts(Optional.empty(),Optional.empty(),
+                    Optional.empty(),Optional.empty(),Optional.of(A.equals(args[0])?"synthetic-key-a":"synthetic-key-b"),Optional.empty(),
+                    DeviceConfirmFacts.IDENTITY_MISMATCH_NONE,Optional.empty(),Optional.empty(),Optional.of(CLUSTER),
+                    Optional.empty(),DeviceConfirmFacts.PEER_FOLLOW_CORROBORATED,Optional.empty()));
                 default -> throw new AssertionError(method.getName());
             });
     }
@@ -265,6 +283,37 @@ class CpFailoverJobExecutorTest {
         check(script.connectCount==0 && script.commands.isEmpty());
         check(script.downCount==0 && script.upCount==0);
     }
+    @Test void unverifiedEndpointIdentityStopsBeforeAnyCommand() {
+        for(boolean missing:List.of(false,true)) {
+            Store store=new Store(); Script script=new Script();
+            script.missingIdentity=missing; script.wrongIdentity=!missing;
+            run(store,script);
+            check(store.state.equals("STOPPED") && store.stopCode.equals("IDENTITY_NOT_VERIFIED"));
+            check(script.commands.isEmpty());
+        }
+    }
+    @Test void localIdsCannotRebindToTheOtherSessionAfterSwitch() {
+        Store store=new Store(); Script script=new Script(); script.swapLocalIdsAfterDown=true;
+        run(store,script);
+        check(store.state.equals("STOPPED"));
+        check(script.downCount==1 && script.upCount==0);
+    }
+    @Test void reciprocalAndModeFailuresNeverDispatchWrites() {
+        for(String failure:List.of("opposed","observer","vsls","unknown","wrong-vs","chassis")) {
+            Store store=new Store(); Script script=new Script();
+            script.opposedPeer=failure.equals("opposed"); script.sameObserver=failure.equals("observer");
+            if(failure.equals("vsls")) script.reportedMode="Virtual System Load Sharing";
+            if(failure.equals("unknown")) script.reportedMode="Unknown";
+            if(failure.equals("wrong-vs")) {store.vsId="12"; script.prefix="Context is set to Virtual Device VS-SYNTHETIC (ID 012).\n";}
+            if(failure.equals("chassis")) {
+                store.vsId="12";
+                script.measured=Map.of("cphaprob stat",Fixtures.read("cp/failover_stat_vsx_chassis.txt")
+                    .replace("Virtual System Load Sharing","High Availability"));
+            }
+            run(store,script);
+            check(store.state.equals("STOPPED")); check(script.downCount==0 && script.upCount==0);
+        }
+    }
     @Test void measuredOutputsThroughReadStepAndVsUsesOwnActiveMember() throws Exception {
         var json=new com.fasterxml.jackson.databind.ObjectMapper();
         for(String shape:List.of("vs0","vs1","gateway")) for(boolean banner:List.of(false,true)) {
@@ -276,7 +325,7 @@ class CpFailoverJobExecutorTest {
             script.prefix=(store.vsId==null?"":"Context is set to Virtual Device VS-SYNTHETIC (ID 12).\n")
                 +(banner?"Warning! Synthetic login notice.\n":"");
             run(store,script);
-            org.junit.jupiter.api.Assertions.assertEquals("READY",store.outcome,shape+" banner="+banner+" "+store.checks);
+            org.junit.jupiter.api.Assertions.assertEquals(shape.equals("gateway")?"READY":shape.equals("vs0")?"UNKNOWN":"NOT_READY",store.outcome,shape+" banner="+banner+" "+store.checks);
             check(store.checks.size()==24 && script.downCount==0 && script.upCount==0);
         }
         Store store=new Store(); store.kind="READINESS"; store.vsId="12";

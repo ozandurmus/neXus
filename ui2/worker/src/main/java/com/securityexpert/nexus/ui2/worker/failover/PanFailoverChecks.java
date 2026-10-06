@@ -16,7 +16,7 @@ import org.xml.sax.InputSource;
 /** Derived, fail-closed facts from each firewall's direct HA-state response. */
 public final class PanFailoverChecks {
     public static final int SESSION_TOLERANCE_PERCENT = 80;
-    public record State(String mode, String role, String localSerial, String peerSerial,
+    public record State(String mode, String role, String peerRole, String localSerial, String peerSerial,
             String peerConnection, String ha1, String ha1Backup, boolean backupConfigured,
             String ha2, String runningSync, String ha2Backup, boolean ha2BackupConfigured, String runningSyncEnabled) {}
     private PanFailoverChecks() {}
@@ -56,9 +56,14 @@ public final class PanFailoverChecks {
 
     private static Element child(Element parent, String name) {
         if (parent == null) return null;
-        for (Node n=parent.getFirstChild(); n!=null; n=n.getNextSibling())
-            if (n instanceof Element element && name.equals(element.getTagName())) return element;
-        return null;
+        Element found=null;
+        for (Node n=parent.getFirstChild(); n!=null; n=n.getNextSibling()) {
+            if (n instanceof Element element && name.equals(element.getTagName())) {
+                if(found!=null) return null;
+                found=element;
+            }
+        }
+        return found;
     }
     private static String text(Element parent,String name) {
         Element e=child(parent,name);
@@ -82,13 +87,13 @@ public final class PanFailoverChecks {
         } catch (Exception invalid) { return null; }
     }
     public static State parse(String xml) {
-        State unknown=new State("","","","","","","",false,"","","",false,"");
+        State unknown=new State("","","","","","","","",false,"","","",false,"");
         try {
             Element group=child(result(xml),"group");
             if (group==null) return unknown;
             Element local=child(group,"local-info"),peer=child(group,"peer-info");
             if (local==null || peer==null) return unknown;
-            return new State(value(group,"mode"),value(local,"state"),text(local,"serial-num"),
+            return new State(value(group,"mode"),value(local,"state"),value(peer,"state"),text(local,"serial-num"),
                 text(peer,"serial-num"),value(peer,"conn-status"),value(child(peer,"conn-ha1"),"conn-status"),
                 value(child(peer,"conn-ha1-backup"),"conn-status"),
                 !value(local,"ha1-backup-ipaddr").isEmpty() || child(peer,"conn-ha1-backup")!=null,value(child(peer,"conn-ha2"),"conn-status"),
@@ -200,17 +205,35 @@ public final class PanFailoverChecks {
     public static String roles(State a,State b,String expectedA,String expectedB) {
         if (!"active-passive".equals(a.mode()) || !"active-passive".equals(b.mode()))
             return status(false,!a.mode().isEmpty() && !b.mode().isEmpty());
+        String reciprocal=reciprocal(a,b);
+        if(!"PASS".equals(reciprocal)) return reciprocal;
         return status(expectedA.equals(a.role()) && expectedB.equals(b.role()),
             knownRole(a.role()) && knownRole(b.role()));
     }
-    public static String relationship(State a,State b) {
+    public static String reciprocal(State a,State b) {
         boolean ids=!a.localSerial().isEmpty() && !b.localSerial().isEmpty()
             && !a.peerSerial().isEmpty() && !b.peerSerial().isEmpty();
         if (!ids) return "UNKNOWN";
         if (a.localSerial().equals(b.localSerial())) return "FAIL";
         if (!a.peerSerial().equals(b.localSerial()) || !b.peerSerial().equals(a.localSerial())) return "FAIL";
+        if(!knownRole(a.role()) || !knownRole(b.role()) || !knownRole(a.peerRole()) || !knownRole(b.peerRole()))
+            return "UNKNOWN";
+        return a.peerRole().equals(b.role()) && b.peerRole().equals(a.role())?"PASS":"FAIL";
+    }
+    public static String relationship(State a,State b) {
+        String reciprocal=reciprocal(a,b);
+        if(!"PASS".equals(reciprocal)) return reciprocal;
         return status("up".equals(a.peerConnection()) && "up".equals(b.peerConnection()),
             "down".equals(a.peerConnection()) || "down".equals(b.peerConnection()));
+    }
+    public static String stateEvidence(State state) {
+        ObjectNode facts=JsonNodeFactory.instance.objectNode();
+        facts.put("role",knownRole(state.role())?state.role():"unknown");
+        facts.put("peer_role",knownRole(state.peerRole())?state.peerRole():"unknown");
+        facts.put("mode","active-passive".equals(state.mode())?"active-passive":"unsupported");
+        facts.put("reason",!"active-passive".equals(state.mode())?"UNSUPPORTED"
+            :!knownRole(state.role()) || !knownRole(state.peerRole())?"MISSING_OR_UNRECOGNIZED_ROLE":"OBSERVED");
+        return facts.toString();
     }
     public static String links(State a,State b) { return linksEvidence(a,b).status(); }
 
