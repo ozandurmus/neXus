@@ -25,7 +25,39 @@ public final class CpFailoverController {
     public record RunRequest(String clusterId, String unitId, Instant scheduledFor, String requestId, long revision, String executionNonce, boolean warningConfirmed) {}
     public record ReadinessRequest(String clusterId, String unitId) {}
     private final CpFailoverService service;
-    public CpFailoverController(CpFailoverService service) { this.service=service; }
+    private final com.securityexpert.nexus.ui2.persistence.TransactionBoundary projections;
+    private final com.securityexpert.nexus.ui2.service.privacy.TopologyNamePseudonymizer names;
+    public CpFailoverController(CpFailoverService service) { this(service,null,null); }
+    @org.springframework.beans.factory.annotation.Autowired
+    public CpFailoverController(CpFailoverService service,
+            com.securityexpert.nexus.ui2.persistence.TransactionBoundary projections,
+            com.securityexpert.nexus.ui2.service.privacy.TopologyNamePseudonymizer names) {
+        this.service=service; this.projections=projections; this.names=names;
+    }
+    private Map<String,Object> approvalView(JooqCpFailoverRepository.Approval a,HttpServletRequest request) {
+        Map<String,Object> view=approval(a);
+        view.remove("approvedBy");
+        if (projections!=null) new JooqCpFailoverRepository(projections).requestApproval(a.id()).ifPresent(binding -> {
+            view.put("requestId",a.id()); view.put("revision",binding.revision());
+            view.put("policy",binding.policy()); view.put("approved",a.approvedBy()!=null);
+            boolean initiator=actor(request).equals(binding.initiatedBy())
+                && !PrivacyMaskingResponseBodyAdvice.isReplayViewer(request);
+            view.put("canStart",initiator && service.mayStart(actor(request)));
+            view.put("canApprove",!initiator && service.mayApprove(actor(request))
+                && JooqCpFailoverRepository.TWO_PERSON.equals(binding.policy()) && a.approvedBy()==null);
+            if (initiator) view.put("executionNonce",binding.executionNonce());
+        });
+        return view;
+    }
+    private Map<String,Object> requestView(JooqCpFailoverRepository.RequestApproval binding,HttpServletRequest request) {
+        Map<String,Object> view=approval(binding.approval());
+        view.remove("approvedBy");
+        view.put("requestId",binding.approval().id()); view.put("revision",binding.revision());
+        view.put("policy",binding.policy()); view.put("approved",binding.approval().approvedBy()!=null);
+        if (actor(request).equals(binding.initiatedBy()) && !PrivacyMaskingResponseBodyAdvice.isReplayViewer(request))
+            view.put("executionNonce",binding.executionNonce());
+        return view;
+    }
     private static String actor(HttpServletRequest request) {
         return (String)request.getAttribute(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE);
     }
@@ -62,6 +94,39 @@ public final class CpFailoverController {
         if (u.vsId()!=null) m.put("virtual_system",u.label());
         return m;
     }
+    private void eligibility(Map<String,Object> view,CpFailoverService.Unit u,
+            JooqCpFailoverRepository.ReadinessStatus readiness) {
+        String refusal=readiness==null ? "INSUFFICIENT_EVIDENCE" : readiness.stopCode();
+        String mode="UNKNOWN";
+        if (names!=null) {
+            String cluster=u.members().get(0).clusterMemberRef().orElseThrow();
+            view.put("maskedName",u.vsId()==null ? names.maskClusterName(cluster) : names.maskVirtualSystem(u.label(),cluster));
+            view.put("maskedMembers",u.members().stream().map(member -> Map.of(
+                "device_id",member.deviceId(),"maskedLabel",names.maskDeviceName(member.observedHostname().orElse("Unknown"),cluster),
+                "ha_role",member.observedHaRole().orElse("UNKNOWN"))).toList());
+        }
+        if (readiness!=null) try {
+            for (var check:JSON.readTree(readiness.checks())) if (check.path("checkNo").asInt()==1) {
+                var facts=check.path("derived");
+                String observedMode=facts.path("mode").asText();
+                if (java.util.Set.of("HA","VSLS","LOAD_SHARING","active-passive","active-active","UNKNOWN").contains(observedMode)) mode=observedMode;
+                String reason=facts.path("reason").asText();
+                if (java.util.Set.of("UNSUPPORTED_MODE","IDENTITY_NOT_RECORDED","UNSUPPORTED").contains(reason)) refusal=reason;
+            }
+        } catch (java.io.IOException invalid) { refusal="INSUFFICIENT_EVIDENCE"; }
+        if (readiness!=null && !"READY".equals(readiness.outcome()) && (refusal==null || refusal.isBlank())) refusal="READINESS_NOT_READY";
+        if (projections!=null) {
+            boolean incident=projections.inTransaction(db -> db.fetchOne(
+                "select exists(select 1 from failover_quarantine where active and (cluster_ref={0} "
+                    + "or quarantined_member_ids @> jsonb_build_array({1}::text) "
+                    + "or quarantined_member_ids @> jsonb_build_array({2}::text))) as open",
+                u.members().get(0).clusterMemberRef().orElseThrow(),u.members().get(0).deviceId(),u.members().get(1).deviceId())
+                .get("open",Boolean.class));
+            if (incident) refusal="OPEN_INCIDENT";
+        }
+        view.put("mode",mode); view.put("refusalReason",refusal);
+        view.put("readinessObservedAt",readiness==null ? null : readiness.observedAt());
+    }
     private static ResponseEntity<?> result(java.util.function.Supplier<Object> action) {
         try { return ResponseEntity.ok(action.get()); }
         catch (CpFailoverService.Refusal refused) {
@@ -90,6 +155,9 @@ public final class CpFailoverController {
                 m.put("canApprove",service.mayApprove(actor(request)));
                 m.put("canStart",service.mayStart(actor(request)));
                 m.put("canSchedule",service.mayStart(actor(request)));
+                var readiness=service.summary(actor(request)).stream().filter(s -> s.unit().id().equals(u.id()))
+                    .map(CpFailoverService.Summary::readiness).filter(java.util.Objects::nonNull).findFirst().orElse(null);
+                eligibility(m,u,readiness);
                 return m;
             }).toList());
     }
@@ -104,6 +172,7 @@ public final class CpFailoverController {
             m.put("lastRunOutcome", s.lastRunOutcome());
             m.put("lastRunAt", s.lastRunAt());
             m.put("canRunReadiness", s.canRunReadiness());
+            eligibility(m,s.unit(),s.readiness());
             if (s.readiness() != null) {
                 var readiness = s.readiness();
                 try {
@@ -133,19 +202,19 @@ public final class CpFailoverController {
     }
     @PostMapping("/approvals")
     public ResponseEntity<?> approve(@RequestBody ApprovalRequest body,HttpServletRequest request) {
-        return result(() -> service.createApprovalRequest(body.requestId(),body.clusterId(),body.unitId(),body.windowFrom(),
-            body.windowUntil(),body.reason(),actor(request),vendor(request)));
+        return result(() -> requestView(service.createApprovalRequest(body.requestId(),body.clusterId(),body.unitId(),body.windowFrom(),
+            body.windowUntil(),body.reason(),actor(request),vendor(request)),request));
     }
     public record SecondApprovalRequest(String clusterId,String unitId,long revision) {}
     @PostMapping("/approvals/{requestId}/approve")
     public ResponseEntity<?> secondApproval(@PathVariable String requestId,@RequestBody SecondApprovalRequest body,
             HttpServletRequest request) {
-        return result(() -> service.secondApproval(requestId,body.revision(),body.clusterId(),body.unitId(),
-            actor(request),vendor(request)));
+        return result(() -> requestView(service.secondApproval(requestId,body.revision(),body.clusterId(),body.unitId(),
+            actor(request),vendor(request)),request));
     }
     @GetMapping("/approvals")
     public ResponseEntity<?> approvals(@RequestParam String clusterId,@RequestParam String unitId,HttpServletRequest request) {
-        return result(() -> service.approvals(clusterId,unitId,actor(request),vendor(request)).stream().map(CpFailoverController::approval).toList());
+        return result(() -> service.approvals(clusterId,unitId,actor(request),vendor(request)).stream().map(a -> approvalView(a,request)).toList());
     }
     @PostMapping("/approvals/{approvalId}/revoke")
     public ResponseEntity<?> revoke(@PathVariable String approvalId,HttpServletRequest request) {
@@ -172,6 +241,21 @@ public final class CpFailoverController {
     public ResponseEntity<?> detail(@PathVariable String runId,HttpServletRequest request) {
         return result(() -> service.detail(runId,actor(request)).filter(d -> vendor(request).equals(d.run().vendor())).map(d -> {
             Map<String,Object> view=run(d.run());
+            if (projections!=null) projections.inTransaction(db -> {
+                var row=db.fetchOne("select mutation_possible from failover_run where run_id={0}",runId);
+                view.put("mutationPossible",row==null ? null : row.get("mutation_possible",Boolean.class));
+                var incident=db.fetchOne("select execution_id from failover_quarantine where execution_id={0} and active",runId);
+                view.put("incidentRef",incident==null ? null : incident.get("execution_id",String.class));
+                return null;
+            });
+            view.put("sessionContinuity","NOT_EVALUATED");
+            view.put("lastConfirmedRoles",d.checks().stream().filter(c -> c.checkNo()==1 && "PASS".equals(c.status()))
+                .collect(java.util.stream.Collectors.toMap(JooqCpFailoverRepository.Check::memberRef,c -> {
+                    try {
+                        String role=JSON.readTree(c.derived()).path("role").asText().toUpperCase(java.util.Locale.ROOT);
+                        return java.util.Set.of("ACTIVE","STANDBY","PASSIVE","DOWN","SUSPENDED").contains(role)?role:"UNKNOWN";
+                    } catch (java.io.IOException invalid) { return "UNKNOWN"; }
+                },(earlier,later) -> later)));
             var members=d.checks().stream().map(JooqCpFailoverRepository.Check::memberRef).distinct().sorted().toList();
             view.put("checks",d.checks().stream().map(c -> {
                 Map<String,Object> check=new LinkedHashMap<>();

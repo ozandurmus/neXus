@@ -50,7 +50,8 @@ export function canRunReadiness(row?: CpFailoverSummary) {
 }
 
 function primaryReason(row?: CpFailoverSummary) {
-  return readinessStopReason(row?.readiness?.stopCode) ?? (row?.readiness?.status === "NOT_READY" ? row.readiness.failedCheck || "Blocking conditions observed"
+  if (!row) return "INSUFFICIENT_EVIDENCE";
+  return row?.refusalReason || readinessStopReason(row?.readiness?.stopCode) || (row?.readiness?.status === "NOT_READY" ? row.readiness.failedCheck || "Blocking conditions observed"
     : row?.readiness?.status === "READY" ? "No blocking conditions observed" : "Readiness has not been established");
 }
 
@@ -130,6 +131,7 @@ export function HaReadinessList({ clusters, rows, running, busy, progress, error
           {!nested && children.length > 0 && <IconButton size="small" aria-label={`Virtual systems in ${cluster.title}`} aria-expanded={openVs.has(cluster.ref)}
             onClick={event => { event.stopPropagation(); setOpenVs(current => toggle(current, cluster.ref)); }}><span aria-hidden>{openVs.has(cluster.ref) ? "▾" : "▸"}</span></IconButton>}
           <Box component="span" sx={{ fontWeight: 600, mr: 1 }}>{title}</Box><VendorBadge vendor={vendor} />
+          <Typography variant="caption">Mode: {row?.mode ?? "UNKNOWN"}</Typography>
         </TableCell>
         <TableCell title={`Roles observed: ${rolesAt ? `${formatTime(rolesAt)} ${DISPLAY_TZ_LABEL}` : "Not observed"}`}>
           Active: {roleNames(["active"])} <span aria-hidden>↔</span> Standby: {roleNames(["standby", "passive"])}
@@ -203,7 +205,7 @@ export function HaReadinessList({ clusters, rows, running, busy, progress, error
     {unsupported.length > 0 && <Box component="details" open={showUnsupported || filter === "UNSUPPORTED"} onToggle={e => setShowUnsupported(e.currentTarget.open)} sx={{ mt: 1.5, border: `1px solid ${m3.outlineVar}`, borderRadius: 2, p: 1.5, bgcolor: m3.scLow }}>
       <Box component="summary" sx={{ cursor: "pointer", color: m3.onSurfaceVar, fontWeight: 600 }}>Not supported · {unsupported.length} clusters</Box>
       <Typography variant="body2" sx={{ color: m3.onSurfaceVar, my: 1 }}>Readiness pre-checks are not supported for these vendors; enrolled clusters are shown for inventory context.</Typography>
-      <Box component="ul" sx={{ listStyle: "none", m: 0, p: 0 }}>{unsupported.map(({ cluster, vendor }) => <Box component="li" key={cluster.ref} sx={{ display: "flex", gap: 1, alignItems: "center", py: 0.75 }}><Typography variant="body2">{cluster.title}</Typography><VendorBadge vendor={vendor} /></Box>)}</Box>
+      <Box component="ul" sx={{ listStyle: "none", m: 0, p: 0 }}>{unsupported.map(({ cluster, vendor }) => <Box component="li" key={cluster.ref} sx={{ display: "flex", gap: 1, alignItems: "center", py: 0.75 }}><Typography variant="body2">{cluster.title}</Typography><VendorBadge vendor={vendor} /><Typography variant="caption">UNSUPPORTED_MODE · Readiness: not evaluated</Typography></Box>)}</Box>
     </Box>}
     {visible.length === 0 && <StatePanel variant="empty" title="No clusters match these filters" />}
   </Box>;

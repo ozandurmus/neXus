@@ -29,7 +29,8 @@ function stubFetch(devices: unknown[], summary: unknown | null) {
     if (url === "/api/v2/cp-failover/summary") return json(200, summary ?? []);
     if (url.includes("/readiness")) return json(200, { runId: "run-ready" });
     if (url.endsWith("/runs/run-ready")) return json(200, { state: "DONE", outcome: "READY", checks: [] });
-    if (url.endsWith("/schedules")) return json(200, []);
+    if (url.includes("/units?")) return json(200, (summary as typeof READY_SUMMARY ?? []).map(row => ({ ...row, canApprove: false, canStart: false, canSchedule: false })));
+    if (url.includes("/approvals?") || url.includes("/runs?")) return json(200, []);
     if (url.startsWith("/api/v2/jobs")) return json(200, { items: [], page: 1, page_size: 50, total: 0, states: [], job_types: [], total_24h: 0, completed_24h: 0, failed_24h: 0, running: 0 });
     return json(200, {});
   }));
@@ -101,20 +102,15 @@ describe("OperationsScreen tabs", () => {
     expect(screen.queryByText("AIView Pseudonymized") !== null).toBe(masked);
   });
 
-  it.each([
-    { masked: true, canRun: true, allowed: false },
-    { masked: false, canRun: false, allowed: false },
-    { masked: false, canRun: true, allowed: true },
-  ])("gates schedule reads on the row affordance (%j)", async ({ masked, canRun, allowed }) => {
-    stubFetch(MEMBERS, READY_SUMMARY.map(row => ({ ...row, masked, canRunReadiness: canRun })));
+  it("opens the existing request-bound panel without generic execution or scheduling", async () => {
+    stubFetch(MEMBERS, READY_SUMMARY);
     render(withTheme(<OperationsScreen />));
     fireEvent.click(await screen.findByText("CLS-ROMEO-01"));
     fireEvent.click(screen.getByRole("button", { name: "Open full detail" }));
-    await screen.findByRole("dialog", { name: "HA readiness detail" });
+    expect(await screen.findByLabelText("Check Point failover")).toBeInTheDocument();
     await act(async () => {});
-    expect(vi.mocked(fetch).mock.calls.some(([input]) => String(input).endsWith("/schedules"))).toBe(allowed);
-    expect(screen.queryByText("Available to operators") !== null).toBe(!allowed);
-    expect(screen.queryByRole("button", { name: "Schedule Maintenance Window" }) !== null).toBe(allowed);
+    expect(vi.mocked(fetch).mock.calls.some(([input]) => /\/(schedules|authorize|execute)$/.test(String(input)))).toBe(false);
+    expect(screen.queryByRole("button", { name: /4-Eyes|Schedule Maintenance/ })).toBeNull();
   });
 
   it("submits read-only readiness from the unit row", async () => {
@@ -123,48 +119,6 @@ describe("OperationsScreen tabs", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Run pre-checks" }));
     await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([input, init]) =>
       String(input).endsWith("/units/opaque-cluster/readiness") && (init as RequestInit)?.method === "POST")).toBe(true));
-  });
-
-  it("opens the 4-Eyes gate and the maintenance-window dialogs for a real cluster", async () => {
-    stubFetch(MEMBERS, READY_SUMMARY);
-    render(withTheme(<OperationsScreen />));
-    fireEvent.click(await screen.findByText("CLS-ROMEO-01"));
-    fireEvent.click(screen.getByRole("button", { name: "Open full detail" }));
-    fireEvent.click(screen.getByRole("button", { name: "Authorize Failover (4-Eyes)" }));
-    expect(screen.getByText(/Phase B & C: 4-Eyes Controlled Failover Gate/i)).toBeInTheDocument();
-  });
-
-  it.each([
-    { status: 409, active: true },
-    { status: 200, active: true },
-    { status: 200, active: false },
-  ])("releases only the displayed incident and preserves remaining quarantine ($status/$active)", async ({ status, active }) => {
-    stubFetch(MEMBERS, READY_SUMMARY);
-    const fallback = vi.mocked(fetch).getMockImplementation()!;
-    vi.mocked(fetch).mockImplementation((input, init) => {
-      const url = String(input);
-      const reply = (code: number, body: unknown) => Promise.resolve(new Response(JSON.stringify(body), { status: code }));
-      if (url.endsWith("/authorize")) return reply(200, { token_id: "synthetic-token" });
-      if (url.endsWith("/execute")) return reply(409, { execution_id: "incident-reviewed", state: "OUTCOME_UNKNOWN", quarantine_active: true });
-      if (url.endsWith("/quarantine/acknowledge")) return reply(status, { code: "INCIDENT_CAS_MISMATCH", quarantine_active: active });
-      return fallback(input, init);
-    });
-    render(withTheme(<OperationsScreen />));
-    fireEvent.click(await screen.findByText("CLS-ROMEO-01"));
-    fireEvent.click(screen.getByRole("button", { name: "Open full detail" }));
-    fireEvent.click(screen.getByRole("button", { name: "Authorize Failover (4-Eyes)" }));
-    fireEvent.click(screen.getByRole("button", { name: "Authorize & Preview Dry-Run Plan" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Execute Controlled Failover" }));
-    await screen.findByText(/Execution ID: incident-reviewed/);
-    fireEvent.click(screen.getByRole("button", { name: "Close" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Acknowledge Quarantine (4-Eyes)" }));
-    expect(screen.getByText("Incident: incident-reviewed")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Confirm & Lift Quarantine" }));
-    await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([url, init]) =>
-      String(url).endsWith("/quarantine/acknowledge") && JSON.parse(String(init?.body)).execution_id === "incident-reviewed")).toBe(true));
-    if (status === 409) expect(await screen.findByRole("alert")).toHaveTextContent("INCIDENT_CAS_MISMATCH");
-    else await waitFor(() => expect(screen.queryByText("Incident: incident-reviewed")).toBeNull());
-    expect(screen.queryByText("STICKY ENTITY QUARANTINE ACTIVE (OUTCOME_UNKNOWN)") !== null).toBe(active);
   });
 
   it("lists the enrolled cluster in a dense table with vendor, members and readiness", async () => {
@@ -228,7 +182,7 @@ it("nests a VSX unit inside its cluster with a separate readiness action", async
     const url = String(input);
     const body = url === "/devices" ? { devices: MEMBERS }
       : url.endsWith("/cp-failover/summary") ? [{ clusterId: "opaque-cluster", unitId: "opaque-vs", cluster_member_ref: "CLS-ROMEO-01", virtual_system: "VS-ROMEO-01-07", vendor: "check_point", members: MEMBERS, masked: false, activeWindow: true, lastRunState: "DONE", lastRunOutcome: "PASS", lastRunAt: from, canRunReadiness: true, readiness: null }]
-      : {};
+      : url.includes("/units?") || url.includes("/approvals?") || url.includes("/runs?") ? [] : {};
     return Promise.resolve(new Response(JSON.stringify(body), { status: 200 }));
   }));
   render(withTheme(<OperationsScreen />));
@@ -241,7 +195,7 @@ it("nests a VSX unit inside its cluster with a separate readiness action", async
   expect(screen.getByRole("region", { name: "Checks for Virtual System VS-ROMEO-01-07" })).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Open full detail" }));
   expect(await screen.findByLabelText("Readiness checks")).toBeInTheDocument();
-  await waitFor(() => expect(vi.mocked(fetch).mock.calls.filter(([input]) => String(input).includes("cp-failover"))).toHaveLength(1));
+  await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([input]) => String(input).includes("/units?memberDeviceId="))).toBe(true));
   expect(String(vi.mocked(fetch).mock.calls.find(([input]) => String(input).includes("cp-failover"))?.[0])).toBe("/api/v2/cp-failover/summary");
 });
 

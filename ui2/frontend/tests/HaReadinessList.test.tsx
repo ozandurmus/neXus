@@ -204,3 +204,9 @@ it("shows the stored login-environment stop reason for unknown base and virtual 
   fireEvent.click(screen.getByRole("button", { name: `Virtual systems in ${clusters[0].title}` }));
   expect(within(row("Virtual System VS-ALPHA-07")).getByText("Command not available on device (login environment)")).toBeInTheDocument();
 });
+
+it.each(["UNSUPPORTED_MODE", "IDENTITY_NOT_RECORDED", "OPEN_INCIDENT"])("shows the exact failover refusal %s with mode and age", refusalReason => {
+  setup({ rows: { ...rows, "CLS-ALPHA-01": [{ ...rows["CLS-ALPHA-01"][0], refusalReason, mode: "HA" }] } });
+  expect(within(row("CLS-ALPHA-01")).getByText(refusalReason)).toBeInTheDocument();
+  expect(within(row("CLS-ALPHA-01")).getByText("Mode: HA")).toBeInTheDocument();
+});
