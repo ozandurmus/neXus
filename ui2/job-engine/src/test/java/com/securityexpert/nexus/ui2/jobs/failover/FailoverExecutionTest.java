@@ -1,5 +1,7 @@
 package com.securityexpert.nexus.ui2.jobs.failover;
 
+import com.securityexpert.nexus.ui2.jobs.failover.FailoverMutationSwitch;
+
 import com.securityexpert.nexus.ui2.jobs.failover.execution.*;
 import com.securityexpert.nexus.ui2.jobs.failover.pilot.FailoverPilotAllowlist;
 import org.junit.jupiter.api.DisplayName;
@@ -11,6 +13,30 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.junit.jupiter.api.Assertions.*;
 
 class FailoverExecutionTest {
+
+    @Test void defaultTransportsNeverClaimSuccessForEitherActionOrObservation() {
+        for (FailoverDeviceExecutor executor:java.util.List.of(new CheckPointClusterXLExecutor(),new PaloAltoHaExecutor())) {
+            for (var action:FailoverActionKind.values()) {
+                var result=executor.executeAction("synthetic-member",action);
+                assertFalse(result.successful());
+                assertEquals(FailoverCommandResult.DeliveryCertainty.DEFINITELY_NOT_SUBMITTED,result.certainty());
+            }
+            var observed=executor.observePostcondition("synthetic-unit","synthetic-member-a","synthetic-member-b");
+            assertFalse(observed.memberAObservation().observationSuccessful());
+            assertFalse(observed.memberBObservation().observationSuccessful());
+            assertEquals("UNKNOWN",observed.memberAObservation().observedRole());
+            assertEquals("UNKNOWN",observed.memberBObservation().observedRole());
+        }
+    }
+
+    @Test void switchDeniesMissingAndMalformedConfiguration() {
+        for (String value:new String[]{null,"","false","1","yes"," true ","invalid"}) {
+            assertFalse(FailoverMutationSwitch.fromValue(value).enabled());
+        }
+        assertTrue(FailoverMutationSwitch.fromValue("true").enabled());
+        assertTrue(FailoverMutationSwitch.fromValue("TRUE").enabled());
+        assertThrows(SecurityException.class,FailoverMutationSwitch::refuseGenericExecution);
+    }
 
     @Test
     @DisplayName("CheckPointClusterXLExecutor executes exact OP.2.1 commands for failover and reversal")

@@ -1,7 +1,10 @@
 package com.securityexpert.nexus.ui2.worker.failover;
 
+import com.securityexpert.nexus.ui2.jobs.failover.FailoverMutationSwitch;
+
 import java.lang.reflect.Proxy;
 import java.time.Instant;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -28,10 +31,11 @@ class PanFailoverJobExecutorTest {
     private static final class Script {
         boolean suspended,functional,stuck,badPre,badPost,badSync,badSessions,badVersion,lowPostSessions;
         boolean missingFields;
-        int suspendCount,functionalCount;
+        int suspendCount,functionalCount,callCount;
         DeviceTransport transport() {
             return (DeviceTransport) Proxy.newProxyInstance(DeviceTransport.class.getClassLoader(),
                 new Class<?>[]{DeviceTransport.class},(proxy,method,args) -> {
+                    callCount++;
                     if (!"xmlApiCall".equals(method.getName())) throw new AssertionError(method.getName());
                     XmlApiSpec spec=(XmlApiSpec)args[1];
                     if ("keygen".equals(spec.type()))
@@ -124,6 +128,9 @@ class PanFailoverJobExecutorTest {
     }
     private static Result run(Script script) { return run(script,false); }
     private static Result run(Script script,boolean readiness) {
+        return run(script,readiness,!readiness);
+    }
+    private static Result run(Script script,boolean readiness,boolean enabled) {
         JooqCpFailoverRepository store=mock(JooqCpFailoverRepository.class);
         AtomicReference<String> state=new AtomicReference<>("PLANNED"),outcome=new AtomicReference<>(),failedCheck=new AtomicReference<>();
         List<String> checks=new ArrayList<>(),derived=new ArrayList<>();
@@ -137,11 +144,19 @@ class PanFailoverJobExecutorTest {
             derived.add(inv.getArgument(6)); return null;})
             .when(store).check(anyString(),anyString(),anyString(),nullable(String.class),anyInt(),anyString(),anyString());
         new PanFailoverJobExecutor(store,devices(),leases(),attempts(),script.transport(),
-            ref -> new PanCredentialMaterial("synthetic-user","synthetic-password".toCharArray()),gates(),d -> {})
+            ref -> new PanCredentialMaterial("synthetic-user","synthetic-password".toCharArray()),gates(),d -> {},
+            Duration.ZERO,new FailoverMutationSwitch(enabled))
             .execute("job-1",1);
         return new Result(state.get(),outcome.get(),checks,derived,failedCheck.get());
     }
     private record Result(String state,String outcome,List<String> checks,List<String> derived,String failedCheck) {}
+    @Test void disabledSwitchStopsBeforeTransportOrAttempts() {
+        Script script=new Script(); Result result=run(script,false,false);
+        assertEquals("STOPPED",result.state());
+        assertEquals(FailoverMutationSwitch.DISABLED,result.outcome());
+        assertEquals(0,script.suspendCount); assertEquals(0,script.functionalCount);
+        assertEquals(0,script.callCount);
+    }
     @Test void happyPath() {
         Script script=new Script(); Result result=run(script);
         assertEquals("DONE",result.state());

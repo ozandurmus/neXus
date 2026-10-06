@@ -1,5 +1,7 @@
 package com.securityexpert.nexus.ui2.service.failover;
 
+import com.securityexpert.nexus.ui2.jobs.failover.FailoverMutationSwitch;
+
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
@@ -37,7 +39,22 @@ class CpFailoverServiceTest {
     private final JooqCpFailoverRepository store=mock(JooqCpFailoverRepository.class);
     private final RbacEvaluator rbac=mock(RbacEvaluator.class);
     private final ManagementEndpointSshTrustRepository trust=mock(ManagementEndpointSshTrustRepository.class);
-    private final CpFailoverService service=new CpFailoverService(devices,inventory,store,rbac,trust);
+    private final CpFailoverService service=new CpFailoverService(devices,inventory,store,rbac,trust,new FailoverMutationSwitch(true));
+
+    @Test void disabledSwitchRefusesBothVendorsBeforeAdmissionAndDueDispatch() {
+        when(rbac.evaluate(anyString(),any(),any())).thenReturn(new RbacEvaluator.Decision(
+            AuthzOutcome.PERMITTED,Optional.empty(),Optional.empty(),Optional.empty()));
+        var disabled=new CpFailoverService(devices,inventory,store,rbac,trust,
+            new FailoverMutationSwitch(false));
+        for (String vendor:List.of("check_point","palo_alto")) {
+            assertEquals(FailoverMutationSwitch.DISABLED,assertThrows(CpFailoverService.Refusal.class,
+                () -> disabled.request(CLUSTER_ID,CLUSTER_ID,null,"synthetic-actor",vendor)).code());
+            assertEquals(FailoverMutationSwitch.DISABLED,assertThrows(CpFailoverService.Refusal.class,
+                () -> disabled.request(CLUSTER_ID,CLUSTER_ID,Instant.now().plusSeconds(60),"synthetic-actor",vendor)).code());
+        }
+        disabled.startDue();
+        verifyNoInteractions(store,devices,inventory,trust);
+    }
 
     private static DeviceSummaryRecord summary(String id) {
         return new DeviceSummaryRecord(id,"gateway","check_point",DeviceEnrollmentState.ENROLLED,
@@ -234,7 +251,7 @@ class CpFailoverServiceTest {
                 return work.apply(dsl);
             }
         });
-        var admission = new CpFailoverService(devices, inventory, repository, rbac, trust);
+        var admission = new CpFailoverService(devices, inventory, repository, rbac, trust,new FailoverMutationSwitch(false));
         assertNotNull(admission.requestReadiness(CLUSTER_ID, CLUSTER_ID, "actor-1", "check_point"));
         assertEquals(1, writes.stream().filter(sql -> sql.startsWith("insert into jobs")).count());
         assertEquals(1, writes.stream().filter(sql -> sql.startsWith("insert into failover_run")).count());

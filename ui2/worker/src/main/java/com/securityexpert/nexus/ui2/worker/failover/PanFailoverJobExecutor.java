@@ -1,5 +1,7 @@
 package com.securityexpert.nexus.ui2.worker.failover;
 
+import com.securityexpert.nexus.ui2.jobs.failover.FailoverMutationSwitch;
+
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -24,6 +26,7 @@ import com.securityexpert.nexus.ui2.worker.transport.xmlapi.PanCredentialResolve
 
 /** Direct, identity-checked pair execution. A failed step never triggers automatic fail-back. */
 public final class PanFailoverJobExecutor {
+    private final FailoverMutationSwitch mutationSwitch;
     @FunctionalInterface public interface Pause { void sleep(Duration duration) throws InterruptedException; }
     private static final String STATE="<show><high-availability><state/></high-availability></show>";
     private static final String SESSION_SYNC="<show><high-availability><state-synchronization/></high-availability></show>";
@@ -73,6 +76,14 @@ public final class PanFailoverJobExecutor {
     public PanFailoverJobExecutor(JooqCpFailoverRepository store,DeviceRepository devices,
             JobLeaseRepository leases,JobStepAttemptRepository attempts,DeviceTransport transport,
             PanCredentialResolver credentials,GateRegistryPort gates,Pause pause,Duration commandPause) {
+        this(store,devices,leases,attempts,transport,credentials,gates,pause,commandPause,
+            FailoverMutationSwitch.fromEnvironment());
+    }
+    public PanFailoverJobExecutor(JooqCpFailoverRepository store,DeviceRepository devices,
+            JobLeaseRepository leases,JobStepAttemptRepository attempts,DeviceTransport transport,
+            PanCredentialResolver credentials,GateRegistryPort gates,Pause pause,Duration commandPause,
+            FailoverMutationSwitch mutationSwitch) {
+        this.mutationSwitch=java.util.Objects.requireNonNull(mutationSwitch);
         this.store=store; this.devices=devices; this.leases=leases; this.attempts=attempts;
         this.transport=transport; this.credentials=credentials; this.gates=gates; this.pause=pause;
         this.commandPause=commandPause;
@@ -93,6 +104,7 @@ public final class PanFailoverJobExecutor {
         if (!leases.transitionState(jobId,epoch,JobState.CLAIMED,JobState.EXECUTING,
                 "system:pan-failover-worker","pan_failover_start")) return;
         try {
+            if (!readiness && !mutationSwitch.enabled()) throw new Stop(FailoverMutationSwitch.DISABLED,0);
             if (!readiness && !store.windowValid(runId)) throw new Stop("WINDOW_EXPIRED",0);
             List<DeviceSummaryRecord> members=devices.findMembersByClusterRef(run.get().clusterRef());
             if (members.size()!=2 || members.stream().anyMatch(m -> !"palo_alto".equals(m.vendorHint())))
@@ -177,6 +189,7 @@ public final class PanFailoverJobExecutor {
         return new Peer(summary.deviceId(),target,match.group(1),identity);
     }
     private GateResolution.Known gate(String command) {
+        if (!isRead(command) && !mutationSwitch.enabled()) throw new Stop(FailoverMutationSwitch.DISABLED,0);
         if (readiness && !writeAllowed(READINESS_KIND,command)) throw new Stop("READINESS_WRITE_REFUSED",0);
         String expected=STATE.equals(command)?"pan_inventory_show_ha_state"
             :SESSION_SYNC.equals(command)?"pan_failover_session_sync"
@@ -207,6 +220,8 @@ public final class PanFailoverJobExecutor {
         if (!attempts.markBoundaryCrossed(attempt,epoch)) throw new Stop("PRE_CONTACT_UNCERTAIN",0);
         store.command(runId,g.gateId());
         if (!isRead(command)) writeInFlight=true;
+        if (!isRead(command) && !mutationSwitch.enabled())
+            throw new Stop(FailoverMutationSwitch.DISABLED,0);
         var result=transport.xmlApiCall(peer.target(),new XmlApiSpec("POST","op","","direct_firewall",
             Map.of("cmd",command),Map.of("X-PAN-KEY",peer.key())),Duration.ofSeconds(g.timeoutS()));
         if (!(result instanceof XmlApiResult.Completed completed) || completed.httpStatus()!=200

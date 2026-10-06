@@ -1,5 +1,7 @@
 package com.securityexpert.nexus.ui2.service.failover;
 
+import com.securityexpert.nexus.ui2.jobs.failover.FailoverMutationSwitch;
+
 import com.securityexpert.nexus.ui2.jobs.failover.authz.FailoverLeaseToken;
 import com.securityexpert.nexus.ui2.jobs.failover.execution.*;
 import com.securityexpert.nexus.ui2.jobs.failover.model.ClusterEvidenceSnapshot;
@@ -66,10 +68,6 @@ public class FailoverExecutionService {
         this.preflightService = Objects.requireNonNull(preflightService, "preflightService must not be null");
         this.pilotAllowlist = Objects.requireNonNull(pilotAllowlist, "pilotAllowlist must not be null");
         this.quarantineStore = Objects.requireNonNull(quarantineStore, "quarantineStore must not be null");
-
-        // Register default executors
-        registerExecutor(new CheckPointClusterXLExecutor());
-        registerExecutor(new PaloAltoHaExecutor());
     }
 
     @Autowired
@@ -92,6 +90,7 @@ public class FailoverExecutionService {
         FailoverActionKind actionKind,
         String operatorId
     ) {
+        FailoverMutationSwitch.refuseGenericExecution();
         return executeFailoverInternal(clusterRef, tokenId, clientNonce, actionKind, operatorId, null, null, null);
     }
 
@@ -106,6 +105,7 @@ public class FailoverExecutionService {
         ScheduledPreMutationGate scheduledGate
     ) {
         Objects.requireNonNull(executionDeadline, "executionDeadline must not be null for a scheduled execution");
+        FailoverMutationSwitch.refuseGenericExecution();
         return executeFailoverInternal(clusterRef, tokenId, clientNonce, actionKind, operatorId, signedTargetMemberId, executionDeadline, scheduledGate);
     }
 

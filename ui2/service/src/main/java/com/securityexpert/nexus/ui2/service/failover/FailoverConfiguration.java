@@ -1,5 +1,7 @@
 package com.securityexpert.nexus.ui2.service.failover;
 
+import com.securityexpert.nexus.ui2.jobs.failover.FailoverMutationSwitch;
+
 import com.securityexpert.nexus.ui2.jobs.failover.pilot.FailoverPilotAllowlist;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -9,6 +11,11 @@ import org.springframework.context.annotation.Configuration;
  */
 @Configuration
 public class FailoverConfiguration {
+
+    @Bean
+    public FailoverMutationSwitch failoverMutationSwitch() {
+        return FailoverMutationSwitch.fromEnvironment();
+    }
 
     @Bean
     public FailoverPilotAllowlist failoverPilotAllowlist() {
