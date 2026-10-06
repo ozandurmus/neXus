@@ -93,7 +93,7 @@ class CpFailoverChecksTest {
         var unhealthy=CpFailoverChecks.state(fixture);
         check(unhealthy.mode().equals("VSLS") && !unhealthy.pair());
         check(CpFailoverChecks.stateEvidence(unhealthy).equals(Map.of(
-            "mode","VSLS","role","DOWN","reason","UNSUPPORTED","local_state","DOWN","peer_state","ACTIVE(!)")));
+            "mode","VSLS","role","DOWN","reason","UNSUPPORTED_MODE","local_state","DOWN","peer_state","ACTIVE(!)")));
         for(String token:new String[]{"ACTIVE(!)","ACTIVE","STANDBY","BACKUP","DOWN","READY","INIT","LOST","ACTIVE ATTENTION"}) {
             var state=CpFailoverChecks.state(fixture.replace("ACTIVE(!)","ACTIVE").replace("DOWN",token));
             check(!state.mode().equals("UNKNOWN"));
@@ -136,7 +136,8 @@ class CpFailoverChecksTest {
             var a=CpFailoverChecks.state(ACTIVE.replace("High Availability",mode));
             var b=CpFailoverChecks.state(STANDBY.replace("High Availability",mode));
             check(!CpFailoverChecks.corroborated(a,b));
-            check(CpFailoverChecks.stateEvidence(a).get("reason").equals("UNSUPPORTED"));
+            assertEquals("UNKNOWN".equals(a.mode())?"UNRECOGNIZED_STATE":"UNSUPPORTED_MODE",
+                CpFailoverChecks.stateEvidence(a).get("reason"));
         }
         check(!CpFailoverChecks.state(ACTIVE+"Cluster Mode: Virtual System Load Sharing\n").pair());
     }
@@ -146,6 +147,28 @@ class CpFailoverChecksTest {
         for(String expected:new String[]{null,"012","13"}) check(!CpFailoverChecks.state(vs,expected).pair());
         check(!CpFailoverChecks.state("Context is set to Virtual Device VS-SYNTHETIC (ID 012).\n"+ACTIVE,"12").pair());
         check(!CpFailoverChecks.state(ACTIVE+"Virtual Devices Status on each Cluster Member\n","12").pair());
+    }
+
+    @Test void vslsLabelRequiresMatchingOpaqueVsContextAndContractStandbyRole() {
+        String a=ACTIVE.replace("High Availability","Virtual System Load Sharing");
+        String b=STANDBY.replace("High Availability","Virtual System Load Sharing");
+        var first=CpFailoverChecks.state(a,"012");
+        var second=CpFailoverChecks.state(b,"012");
+        check(CpFailoverChecks.corroborated(first,second));
+        assertEquals("012",first.vsId());
+        assertEquals("VSLS",first.mode());
+        assertEquals("OBSERVED",CpFailoverChecks.stateEvidence(second).get("reason"));
+        assertEquals("STANDBY",CpFailoverChecks.stateEvidence(second).get("role"));
+        for(String context:new String[]{null,"12","13",""})
+            assertFalse(CpFailoverChecks.corroborated(first,CpFailoverChecks.state(b,context)));
+        for(String role:new String[]{"BACKUP","ACTIVE","DOWN","READY","INIT","LOST","ACTIVE(!)"}) {
+            var other=CpFailoverChecks.state(b.replace("Standby",role),"012");
+            assertFalse(other.pair(),"Frozen CP contract section 10 requires exactly Active + Standby");
+            assertEquals(role,CpFailoverChecks.stateEvidence(other).get("role"));
+        }
+        assertFalse(CpFailoverChecks.state(a+"Virtual Devices Status on each Cluster Member\n","012").pair());
+        assertFalse(CpFailoverChecks.state("Context is set to Virtual Device VS-SYNTHETIC (ID 12).\n"+a,"012").pair());
+        assertFalse(CpFailoverChecks.state(a+"3 192.0.2.13 0% Standby\n","012").pair());
     }
 
     @Test void arpTablesAcceptVsPreambleAndZeroEntriesButRejectErrors() {

@@ -203,31 +203,69 @@ public final class PanFailoverChecks {
         return "active".equals(role) || "passive".equals(role) || "suspended".equals(role);
     }
     public static String roles(State a,State b,String expectedA,String expectedB) {
+        return roles(a,b,expectedA,expectedB,false);
+    }
+    public static String roles(State a,State b,String expectedA,String expectedB,boolean afterWrite) {
         if (!"active-passive".equals(a.mode()) || !"active-passive".equals(b.mode()))
             return status(false,!a.mode().isEmpty() && !b.mode().isEmpty());
-        String reciprocal=reciprocal(a,b);
+        String reciprocal=reciprocal(a,b,afterWrite);
         if(!"PASS".equals(reciprocal)) return reciprocal;
         return status(expectedA.equals(a.role()) && expectedB.equals(b.role()),
             knownRole(a.role()) && knownRole(b.role()));
     }
     public static String reciprocal(State a,State b) {
+        return reciprocal(a,b,false);
+    }
+    private static String reciprocal(State a,State b,boolean afterWrite) {
+        String identity=reciprocalIdentity(a,b);
+        if(!"PASS".equals(identity)) return identity;
+        String mirrored=mirroredRoles(a,b);
+        if("NOT_EVALUABLE".equals(mirrored)) {
+            // Only the active observer may temporarily lose the suspended peer's role.
+            boolean suspendedPair="suspended".equals(a.role()) && "active".equals(b.role())
+                && "active".equals(a.peerRole()) && !knownRole(b.peerRole())
+                || "suspended".equals(b.role()) && "active".equals(a.role())
+                && "active".equals(b.peerRole()) && !knownRole(a.peerRole());
+            return afterWrite && suspendedPair?"PASS":"UNKNOWN";
+        }
+        return mirrored;
+    }
+    public static String reciprocalIdentity(State a,State b) {
         boolean ids=!a.localSerial().isEmpty() && !b.localSerial().isEmpty()
             && !a.peerSerial().isEmpty() && !b.peerSerial().isEmpty();
         if (!ids) return "UNKNOWN";
         if (a.localSerial().equals(b.localSerial())) return "FAIL";
         if (!a.peerSerial().equals(b.localSerial()) || !b.peerSerial().equals(a.localSerial())) return "FAIL";
-        if(!knownRole(a.role()) || !knownRole(b.role()) || !knownRole(a.peerRole()) || !knownRole(b.peerRole()))
-            return "UNKNOWN";
-        return a.peerRole().equals(b.role()) && b.peerRole().equals(a.role())?"PASS":"FAIL";
+        return "PASS";
+    }
+    public static String mirroredRoles(State a,State b) {
+        if(knownRole(a.peerRole()) && knownRole(b.role()) && !a.peerRole().equals(b.role())
+                || knownRole(b.peerRole()) && knownRole(a.role()) && !b.peerRole().equals(a.role())) return "FAIL";
+        return knownRole(a.role()) && knownRole(b.role()) && knownRole(a.peerRole()) && knownRole(b.peerRole())
+            ?"PASS":"NOT_EVALUABLE";
     }
     public static String relationship(State a,State b) {
-        String reciprocal=reciprocal(a,b);
+        return relationship(a,b,false);
+    }
+    public static String relationship(State a,State b,boolean afterWrite) {
+        String reciprocal=reciprocal(a,b,afterWrite);
         if(!"PASS".equals(reciprocal)) return reciprocal;
         return status("up".equals(a.peerConnection()) && "up".equals(b.peerConnection()),
             "down".equals(a.peerConnection()) || "down".equals(b.peerConnection()));
     }
     public static String stateEvidence(State state) {
+        return stateEvidence(state,null);
+    }
+    public static String stateEvidence(State state,State peer) {
+        return stateEvidence(state,peer,null);
+    }
+    public static String stateEvidence(State state,State peer,String switchMirroredRoles) {
         ObjectNode facts=JsonNodeFactory.instance.objectNode();
+        if(switchMirroredRoles!=null) facts.put("switch_mirrored_roles",switchMirroredRoles);
+        if(peer!=null) {
+            facts.put("reciprocal_identity",reciprocalIdentity(state,peer));
+            facts.put("mirrored_roles",mirroredRoles(state,peer));
+        }
         facts.put("role",knownRole(state.role())?state.role():"unknown");
         facts.put("peer_role",knownRole(state.peerRole())?state.peerRole():"unknown");
         facts.put("mode","active-passive".equals(state.mode())?"active-passive":"unsupported");

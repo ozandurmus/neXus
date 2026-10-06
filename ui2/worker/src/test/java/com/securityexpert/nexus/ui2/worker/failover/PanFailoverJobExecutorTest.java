@@ -83,6 +83,12 @@ class PanFailoverJobExecutorTest {
                         +"</conn-ha1><conn-ha2><conn-status>"+ha2+"</conn-status></conn-ha2>"
                         +"</peer-info></group></result></response>";
                     if(evidenceFault!=null) {
+                        if(evidenceFault.startsWith("post-missing") && suspended && !functional && !first)
+                            body=body.replace("<peer-info><state>"+peer+"</state>","<peer-info>");
+                        if(evidenceFault.equals("post-missing-opaque") && suspended && !functional && !first)
+                            body=body.replace("<peer-info><serial-num>0011", "<peer-info><serial-num>11");
+                        if(evidenceFault.equals("return-missing") && functional && !first)
+                            body=body.replace("<peer-info><state>"+peer+"</state>","<peer-info>");
                         if(evidenceFault.equals("missing")) body=body.replace("<peer-info><state>"+peer+"</state>","<peer-info>");
                         if(evidenceFault.equals("opposed") || evidenceFault.equals("post-opposed") && suspended)
                             body=body.replace("<peer-info><state>"+peer+"</state>","<peer-info><state>passive</state>");
@@ -211,6 +217,30 @@ class PanFailoverJobExecutorTest {
         Result result=run(script);
         assertEquals("STOPPED",result.state());
         assertEquals(1,script.suspendCount); assertEquals(0,script.functionalCount);
+    }
+    @Test void missingActivePeerRoleAfterSuspendCompletesWithNotEvaluableMirrorEvidence() {
+        Script script=new Script(); script.evidenceFault="post-missing";
+        Result result=run(script);
+        assertEquals("SUCCEEDED",result.outcome());
+        assertEquals(1,script.suspendCount); assertEquals(1,script.functionalCount);
+        assertTrue(result.checks().contains("post:1:PASS"));
+        assertTrue(result.checks().contains("post:2:PASS"));
+        assertEquals(2,result.derived().stream().filter(d -> d.contains("\"mirrored_roles\":\"NOT_EVALUABLE\"")
+            && d.contains("\"switch_mirrored_roles\":\"NOT_EVALUABLE\"")
+            && d.contains("\"reciprocal_identity\":\"PASS\"")).count());
+        assertEquals(28,result.checks().size(),"Keep the existing unique pre/post check rows");
+    }
+    @Test void missingPostPeerRoleNeverRelaxesSerialReciprocity() {
+        Script script=new Script(); script.evidenceFault="post-missing-opaque";
+        Result result=run(script);
+        assertEquals("FAILOVER_TIMEOUT",result.outcome());
+        assertEquals(1,script.suspendCount); assertEquals(0,script.functionalCount);
+    }
+    @Test void missingPeerRoleAfterReturnDoesNotUseTheSuspendedException() {
+        Script script=new Script(); script.evidenceFault="return-missing";
+        Result result=run(script);
+        assertEquals("RETURN_TIMEOUT",result.outcome());
+        assertEquals(1,script.suspendCount); assertEquals(1,script.functionalCount);
     }
     @Test void missingPeerRoleIsUnknownInReadinessProjection() {
         Script script=new Script(); script.evidenceFault="missing";
