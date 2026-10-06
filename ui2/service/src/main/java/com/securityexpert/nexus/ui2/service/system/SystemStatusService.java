@@ -61,6 +61,11 @@ public class SystemStatusService {
     public Map<String, Object> pods() {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("read_at", Instant.now().toString());
+        body.put("quarantined_by_role", transactionBoundary.inTransaction(db -> db.fetch(
+            "select owner_role as owner,count(*) as quarantined_permits from ("
+            + "select owner_role from endpoint_admission where state='QUARANTINED' union all "
+            + "select owner_role from runtime_task_lease where state='QUARANTINED') permits "
+            + "group by owner_role order by owner_role").intoMaps()));
         if (!Files.exists(SA_DIR.resolve("token"))) {
             body.put("available", false);
             body.put("reason", "the service runs without a Kubernetes service account token; pod status cannot be read");
@@ -140,7 +145,8 @@ public class SystemStatusService {
                         "POLICY_CONSUMER_MISSING queued={0}", depth);
                 }
                 row.put("permits", db.fetchOne("select count(*) from endpoint_admission where owner_role={0} and state='LEASED'", owner).get(0, Long.class));
-                row.put("quarantined_permits", db.fetchOne("select count(*) from endpoint_admission where owner_role={0} and state='QUARANTINED'", owner).get(0, Long.class));
+                row.put("quarantined_permits", db.fetchOne("select (select count(*) from endpoint_admission where owner_role={0} and state='QUARANTINED') "
+                    + "+ (select count(*) from runtime_task_lease where owner_role={0} and state='QUARANTINED')", owner).get(0, Long.class));
                 modules.add(row);
             }
             return modules;

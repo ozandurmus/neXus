@@ -87,7 +87,7 @@ public final class SshExecTransport implements DeviceTransport {
                 if (result instanceof ConnectResult.Authenticated connected) {
                     var owned = (SshTransportSession) connected.session();
                     owned.admission = admission;
-                    admission.onLoss(() -> { try { owned.closeInteractiveShell(); } finally { owned.jschSession().disconnect(); } });
+                    admission.onLoss(() -> disconnect(owned));
                     admission.check();
                 } else admission.closed();
                 JobTranscriptScope.add("ssh", "note", "connect outcome: " + result.getClass().getSimpleName());
@@ -720,9 +720,15 @@ public final class SshExecTransport implements DeviceTransport {
     public void disconnect(TransportSession session) {
         if (session instanceof SshTransportSession sshSession) {
             LOG.log(System.Logger.Level.INFO, "[SSH_DISCONNECT] session disconnected: {0}", session.sessionId());
-            sshSession.closeInteractiveShell();
-            sshSession.jschSession().disconnect();
-            if (sshSession.admission != null) sshSession.admission.closed();
+            try {
+                sshSession.closeInteractiveShell();
+            } finally {
+                // Shell cleanup failure must never leave the underlying SSH session alive.
+                sshSession.jschSession().disconnect();
+                if (sshSession.jschSession().isConnected())
+                    throw new IllegalStateException("SSH_SESSION_STILL_CONNECTED");
+                if (sshSession.admission != null) sshSession.admission.closed();
+            }
         }
     }
 
