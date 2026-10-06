@@ -5,13 +5,21 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.transaction.TransactionDefinition;
+import java.util.function.Supplier;
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.time.ZoneOffset;
+import com.securityexpert.nexus.ui2.jobs.failover.schedule.FailoverScheduleEnvelope;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -27,10 +35,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * {@link JdbcTemplate}, with {@link DuplicateKeyException} on the grant table's primary key
  * translated to the single-use invariant violation.</p>
  *
- * <p>CF-P1.4: within a single JVM instance, {@link #recordTransition} serializes chain
- * construction (read current tip, compute the next hash, insert) under this instance's monitor --
- * the minimum viable fix the review named until cross-instance CAS/locking lands; an enforced
- * singleton deployment guard covers the remaining gap (see the Engine Final Review, §9 item 2).</p>
+ * <p>PostgreSQL transaction locks serialize tip allocation across replicas. Framed V2 hashes
+ * use storage precision. This unkeyed chain does not protect against a privileged DB rewrite.</p>
  *
  * <p>The lightweight no-arg constructor keeps the previous in-memory-only behavior for unit tests
  * that never wire a Spring {@link JdbcTemplate}; Spring-managed instances always resolve the
@@ -49,7 +55,8 @@ public class FailoverScheduleLedger {
         String attemptId,
         String actorId,
         Instant timestamp,
-        String details
+        String details,
+        int formatVersion
     ) {}
 
     public record GrantConsumption(
@@ -65,7 +72,7 @@ public class FailoverScheduleLedger {
     static final String NO_ATTEMPT = "NONE";
 
     private static final String SELECT_COLUMNS =
-        "entry_index, prev_hash, entry_hash, schedule_id, from_status, to_status, attempt_id, actor_id, details, created_at ";
+        "entry_index, prev_hash, entry_hash, schedule_id, from_status, to_status, attempt_id, actor_id, details, created_at, format_version ";
 
     private final JdbcTemplate jdbcTemplate;
 
@@ -87,6 +94,39 @@ public class FailoverScheduleLedger {
         return jdbcTemplate != null;
     }
 
+    void requireSameDataSource(JdbcTemplate schedules) {
+        if (schedules != null && schedules.getDataSource() != null
+            && (jdbcTemplate == null || jdbcTemplate.getDataSource() != schedules.getDataSource())) {
+            throw new IllegalArgumentException("SCHEDULE_TRANSACTION_DATASOURCE_MISMATCH");
+        }
+    }
+
+    /** Ledger appends join their caller's transaction on this exact datasource. */
+    public synchronized <T> T inTransaction(Supplier<T> operation) {
+        return transaction(operation, TransactionDefinition.PROPAGATION_REQUIRED);
+    }
+
+    /** A dispatch boundary must be committed before the callback can permit a send. */
+    synchronized <T> T inCommittedTransaction(Supplier<T> operation) {
+        return transaction(operation, TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+    }
+
+    private <T> T transaction(Supplier<T> operation, int propagation) {
+        if (!isDurable()) {
+            return operation.get();
+        }
+        TransactionTemplate transaction = new TransactionTemplate(new DataSourceTransactionManager(
+            Objects.requireNonNull(jdbcTemplate.getDataSource(), "ledger datasource")));
+        transaction.setPropagationBehavior(propagation);
+        return transaction.execute(status -> operation.get());
+    }
+
+    void lockFleet() {
+        if (isDurable()) {
+            jdbcTemplate.execute("SELECT pg_advisory_xact_lock(13223401)");
+        }
+    }
+
     public synchronized TransitionEntry recordTransition(
         String scheduleId,
         FailoverScheduleStatus fromStatus,
@@ -101,10 +141,13 @@ public class FailoverScheduleLedger {
 
         String effectiveAttemptId = attemptId != null ? attemptId : NO_ATTEMPT;
         String sanitizedDetails = details != null ? details : "";
-        Instant now = Instant.now();
+        Instant now = FailoverScheduleEnvelope.storageTime(Instant.now());
 
         if (isDurable()) {
-            return recordTransitionDurable(scheduleId, fromStatus, toStatus, effectiveAttemptId, actorId, sanitizedDetails, now);
+            return inTransaction(() -> {
+                jdbcTemplate.execute("SELECT pg_advisory_xact_lock(13223402)");
+                return recordTransitionDurable(scheduleId, fromStatus, toStatus, effectiveAttemptId, actorId, sanitizedDetails, now);
+            });
         }
         return recordTransitionInMemory(scheduleId, fromStatus, toStatus, effectiveAttemptId, actorId, sanitizedDetails, now);
     }
@@ -126,18 +169,18 @@ public class FailoverScheduleLedger {
             prevHash = (String) tip.get(0).get("entry_hash");
         }
 
-        String entryHash = computeHash(prevHash, nextIndex, scheduleId, fromStatus, toStatus, effectiveAttemptId, actorId, sanitizedDetails, now);
+        String entryHash = computeHash(prevHash, nextIndex, scheduleId, fromStatus, toStatus, effectiveAttemptId, actorId, sanitizedDetails, now, 2);
 
         jdbcTemplate.update(
             "INSERT INTO failover_schedule_ledger " +
-                "(entry_index, prev_hash, entry_hash, schedule_id, from_status, to_status, attempt_id, actor_id, details, created_at) " +
-                "VALUES (?,?,?,?,?,?,?,?,?,?)",
+                "(entry_index, prev_hash, entry_hash, schedule_id, from_status, to_status, attempt_id, actor_id, details, created_at, format_version) " +
+                "VALUES (?,?,?,?,?,?,?,?,?,?,2)",
             nextIndex, prevHash, entryHash, scheduleId,
             fromStatus != null ? fromStatus.name() : null,
-            toStatus.name(), effectiveAttemptId, actorId, sanitizedDetails, Timestamp.from(now)
+            toStatus.name(), effectiveAttemptId, actorId, sanitizedDetails, now.atOffset(ZoneOffset.UTC)
         );
 
-        return new TransitionEntry(nextIndex, prevHash, entryHash, scheduleId, fromStatus, toStatus, effectiveAttemptId, actorId, now, sanitizedDetails);
+        return new TransitionEntry(nextIndex, prevHash, entryHash, scheduleId, fromStatus, toStatus, effectiveAttemptId, actorId, now, sanitizedDetails, 2);
     }
 
     private TransitionEntry recordTransitionInMemory(
@@ -146,10 +189,10 @@ public class FailoverScheduleLedger {
     ) {
         long nextIndex = memoryLedger.size();
         String prevHash = memoryLedger.isEmpty() ? GENESIS_HASH : memoryLedger.get(memoryLedger.size() - 1).entryHash();
-        String entryHash = computeHash(prevHash, nextIndex, scheduleId, fromStatus, toStatus, effectiveAttemptId, actorId, sanitizedDetails, now);
+        String entryHash = computeHash(prevHash, nextIndex, scheduleId, fromStatus, toStatus, effectiveAttemptId, actorId, sanitizedDetails, now, 2);
 
         TransitionEntry entry = new TransitionEntry(
-            nextIndex, prevHash, entryHash, scheduleId, fromStatus, toStatus, effectiveAttemptId, actorId, now, sanitizedDetails
+            nextIndex, prevHash, entryHash, scheduleId, fromStatus, toStatus, effectiveAttemptId, actorId, now, sanitizedDetails, 2
         );
         memoryLedger.add(entry);
         return entry;
@@ -168,7 +211,7 @@ public class FailoverScheduleLedger {
             try {
                 jdbcTemplate.update(
                     "INSERT INTO failover_grant_consumption (grant_id, schedule_id, attempt_id, consumed_at) VALUES (?,?,?,?)",
-                    grantId, scheduleId, effectiveAttemptId, Timestamp.from(Instant.now()));
+                    grantId, scheduleId, effectiveAttemptId, FailoverScheduleEnvelope.storageTime(Instant.now()).atOffset(ZoneOffset.UTC));
             } catch (DuplicateKeyException e) {
                 throw new IllegalStateException(
                     "Authorization grant " + grantId + " has already been consumed (single-use grant invariant)", e);
@@ -176,7 +219,7 @@ public class FailoverScheduleLedger {
             return;
         }
 
-        GrantConsumption inserted = new GrantConsumption(grantId, scheduleId, effectiveAttemptId, Instant.now());
+        GrantConsumption inserted = new GrantConsumption(grantId, scheduleId, effectiveAttemptId, FailoverScheduleEnvelope.storageTime(Instant.now()));
         GrantConsumption existing = memoryConsumedGrants.putIfAbsent(grantId, inserted);
         if (existing != null) {
             throw new IllegalStateException("Authorization grant " + grantId + " has already been consumed at " +
@@ -214,8 +257,14 @@ public class FailoverScheduleLedger {
     public boolean verifyChainIntegrity() {
         List<TransitionEntry> entries = allEntriesOrdered();
         String expectedPrev = GENESIS_HASH;
+        boolean seenV2 = false;
         for (int i = 0; i < entries.size(); i++) {
             TransitionEntry entry = entries.get(i);
+            if ((entry.formatVersion() != 1 && entry.formatVersion() != 2)
+                || (seenV2 && entry.formatVersion() == 1)) {
+                return false;
+            }
+            seenV2 |= entry.formatVersion() == 2;
             if (entry.index() != i) {
                 return false;
             }
@@ -224,7 +273,7 @@ public class FailoverScheduleLedger {
             }
             String computed = computeHash(
                 entry.prevHash(), entry.index(), entry.scheduleId(), entry.fromStatus(), entry.toStatus(),
-                entry.attemptId(), entry.actorId(), entry.details(), entry.timestamp()
+                entry.attemptId(), entry.actorId(), entry.details(), entry.timestamp(), entry.formatVersion()
             );
             if (!entry.entryHash().equals(computed)) {
                 return false;
@@ -255,7 +304,7 @@ public class FailoverScheduleLedger {
             rs.getString("attempt_id"),
             rs.getString("actor_id"),
             rs.getTimestamp("created_at").toInstant(),
-            rs.getString("details")
+            rs.getString("details"), rs.getInt("format_version")
         );
     }
 
@@ -268,20 +317,42 @@ public class FailoverScheduleLedger {
         String attemptId,
         String actorId,
         String details,
-        Instant timestamp
+        Instant timestamp,
+        int formatVersion
     ) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            String payload = prevHash + "|" + index + "|" + scheduleId + "|" +
+            if (formatVersion == 1) {
+                // Historical format is never rewritten or claimed to have V2 precision guarantees.
+                String payload = prevHash + "|" + index + "|" + scheduleId + "|" +
                 (fromStatus != null ? fromStatus.name() : "NULL") + "|" +
                 toStatus.name() + "|" +
                 (attemptId != null ? attemptId : "NULL") + "|" +
                 actorId + "|" +
                 details + "|" +
                 timestamp.toString();
-            byte[] hash = digest.digest(payload.getBytes(StandardCharsets.UTF_8));
+                return HexFormat.of().formatHex(digest.digest(payload.getBytes(StandardCharsets.UTF_8)));
+            }
+            if (formatVersion != 2) {
+                throw new IllegalArgumentException("Unsupported ledger format");
+            }
+            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+            try (DataOutputStream out = new DataOutputStream(bytes)) {
+                for (String field : new String[] { "NEXUS_FAILOVER_LEDGER_V2", prevHash, Long.toString(index),
+                    scheduleId, fromStatus == null ? null : fromStatus.name(), toStatus.name(), attemptId,
+                    actorId, details, timestamp.toString() }) {
+                    if (field == null) {
+                        out.writeInt(-1);
+                    } else {
+                        byte[] encoded = field.getBytes(StandardCharsets.UTF_8);
+                        out.writeInt(encoded.length);
+                        out.write(encoded);
+                    }
+                }
+            }
+            byte[] hash = digest.digest(bytes.toByteArray());
             return HexFormat.of().formatHex(hash);
-        } catch (NoSuchAlgorithmException e) {
+        } catch (NoSuchAlgorithmException | IOException e) {
             throw new IllegalStateException("SHA-256 not available: " + e.getMessage(), e);
         }
     }

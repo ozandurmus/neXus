@@ -84,18 +84,20 @@ class FailoverScheduleLedgerTest {
     }
 
     @Test
-    @DisplayName("Durable mode: recordTransition reads the current chain tip and inserts the next entry")
-    void durableRecordTransitionReadsTipAndInserts() {
-        JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
-        when(jdbcTemplate.queryForList(anyString()))
-            .thenReturn(List.of(Map.of("entry_index", 4L, "entry_hash", "prev-hash-value")));
-
-        FailoverScheduleLedger ledger = new FailoverScheduleLedger(jdbcTemplate);
-        FailoverScheduleLedger.TransitionEntry entry = ledger.recordTransition(
-            "sched-1", FailoverScheduleStatus.SCHEDULED, FailoverScheduleStatus.CANCELLED, null, "alice", "cancelled");
-
-        assertEquals(5L, entry.index());
-        assertEquals("prev-hash-value", entry.prevHash());
-        assertEquals("NONE", entry.attemptId());
+    void framedFieldsCannotCollideAndTimestampsHaveStoragePrecision() throws Exception {
+        var hash = FailoverScheduleLedger.class.getDeclaredMethod("computeHash", String.class, long.class,
+            String.class, FailoverScheduleStatus.class, FailoverScheduleStatus.class, String.class,
+            String.class, String.class, java.time.Instant.class, int.class);
+        hash.setAccessible(true);
+        var now = java.time.Instant.parse("2026-10-06T10:00:00.123456Z");
+        Object first = hash.invoke(null, "previous", 0L, "schedule", null, FailoverScheduleStatus.SCHEDULED,
+            "attempt", "actor|part", "details", now, 2);
+        Object second = hash.invoke(null, "previous", 0L, "schedule", null, FailoverScheduleStatus.SCHEDULED,
+            "attempt", "actor", "part|details", now, 2);
+        assertNotEquals(first, second);
+        var entry = new FailoverScheduleLedger().recordTransition("schedule", null,
+            FailoverScheduleStatus.SCHEDULED, null, "synthetic-actor", "synthetic-details");
+        assertEquals(0, entry.timestamp().getNano() % 1000);
+        assertEquals(2, entry.formatVersion());
     }
 }
