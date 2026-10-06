@@ -34,6 +34,7 @@ class CpFailoverJobExecutorTest {
         String state="PLANNED",outcome,stopCode; boolean valid=true; final List<String> checks=new ArrayList<>();
         final List<String> derivedValues=new ArrayList<>();
         String vsId,kind="FAILOVER";
+        boolean incidentRequired;
         Optional<Check> previous=Optional.empty();
         @Override public Optional<Check> previousReadinessSync(String run,String member,String vs) {
             CpFailoverJobExecutorTest.check(java.util.Objects.equals(vsId,vs));
@@ -63,6 +64,7 @@ class CpFailoverJobExecutorTest {
             state=next; outcome=result; stopCode=message;
         }
         @Override public boolean workerState(String id,long epoch,String next,String step,String result,String failed,String message) {
+            incidentRequired |= "STOPPED".equals(next) && prepared>0;
             state(id,next,step,result,failed,message); return true;
         }
         @Override public Dispatch prepareDispatch(String id,long epoch,int index,String member,String gate,String actionClass) {
@@ -123,7 +125,10 @@ class CpFailoverJobExecutorTest {
         boolean wrongIdentity,missingIdentity,opposedPeer,sameObserver,swapLocalIdsAfterDown;
         String reportedMode;
         String peerPolicyTime;
-        long[] connectionCounts;
+        boolean zeroBaseline,preempt,extraPnote,adminOnNewActive,adminAfterReturn;
+        String trafficFaultPhase,trafficFault,cpstatFaultPhase,cpstatFault;
+        int samplesA,samplesB;
+        String phase() { return up?"post_return":down?"post":"pre"; }
         String prefix="",lineEnding="\n";
         Map<String,String> measured=Map.of();
         int downCount,upCount,connectCount;
@@ -152,20 +157,17 @@ class CpFailoverJobExecutorTest {
                         output=output.replace("14:01:25",peerPolicyTime);
                     if(reverseActive && literal.endsWith("cphaprob stat'")) output=output
                         .replace("% Active","% TEMP").replace("% Standby","% Active").replace("% TEMP","% Standby");
-                    if(reverseActive && literal.endsWith("fw tab -t connections -s'")) {
-                        boolean first=((TransportSession)args[0]).sessionId().endsWith("11");
-                        output=output.replace("8158 100 150",first?"8158 1168 1500":"8158 47 1500");
-                    }
-                    if(connectionCounts!=null && literal.endsWith("fw tab -t connections -s'")) {
-                        boolean first=((TransportSession)args[0]).sessionId().endsWith("11");
-                        long count=connectionCounts[first?0:1];
-                        output="HOST NAME ID #VALS #PEAK #SLINKS\nlocalhost connections 8158 "+count+" 60000 0\n";
-                    }
                     if(literal.endsWith("cphaprob stat'")) {
                         if(reportedMode!=null) output=output.replace("High Availability",reportedMode);
                         if(swapLocalIdsAfterDown && down) output=output.replaceAll("(?m)^1 ","TEMP ").replaceAll("(?m)^2 ","1 ").replaceAll("(?m)^TEMP ","2 ");
                         if(opposedPeer && !((TransportSession)args[0]).sessionId().endsWith("11"))
                             output=output.replace("100% Active","100% Down");
+                    }
+                    if(literal.endsWith("cat /proc/net/dev'") && measured.containsKey("cat /proc/net/dev")) {
+                        boolean first=((TransportSession)args[0]).sessionId().endsWith("11");
+                        long offset=(first?samplesA:samplesB)*1000L;
+                        var matcher=java.util.regex.Pattern.compile("(?m)^([ \t]*[A-Za-z0-9_.:-]+:[ \t]*)([0-9]+)").matcher(output);
+                        output=matcher.replaceAll(m -> m.group(1)+(Long.parseLong(m.group(2))+offset));
                     }
                     output=prefix+output;
                     if(lineEnding.equals("\r\n")) output=output.replace("\r\n","\n").replace("\n",lineEnding);
@@ -200,8 +202,8 @@ class CpFailoverJobExecutorTest {
                     if(cmd.endsWith("clusterXL_admin down")) {down=true;downCount++;return writeReply("FAILING_OVER");}
                     if(cmd.endsWith("clusterXL_admin up")) {up=true;upCount++;return writeReply("RETURNING");}
                     if(cmd.endsWith("cphaprob stat")) {
-                        String roleA=up?"Standby":down&&!stuck?"Down":"Active";
-                        String roleB=readyMember?"READY":down&&!stuck?"Active":"Standby";
+                        String roleA=up?(preempt?"Active":"Standby"):down&&!stuck?"Down":"Active";
+                        String roleB=up&&preempt?"Standby":readyMember?"READY":down&&!stuck?"Active":"Standby";
                         String text="Cluster Mode: High Availability (Active Up)\nNumber Unique Address Assigned Load State\n"
                             +"1 "+(first?"(local) ":"")+"192.0.2.11 100% "+roleA+"\n"
                             +"2 "+(!first?"(local) ":"")+"192.0.2.12 0% "+roleB+"\n";
@@ -218,10 +220,16 @@ class CpFailoverJobExecutorTest {
                         "CCP mode: Automatic\nRequired interfaces: 1\neth0 UP non sync\n",0);
                     if(cmd.endsWith("arp -an")) return new ExecResult.Completed(
                         "? (192.0.2.31) at 02:00:00:00:00:01 [ether] on eth0\n",0);
-                    if(cmd.endsWith("fw tab -t connections -s")) return new ExecResult.Completed(badPost&&down&&!first?"":
-                        "HOST NAME ID #VALS #PEAK #SLINKS\nlocalhost connections 8158 100 150 0\n",0);
                     if(cmd.endsWith("cat /proc/net/dev")) {
-                        long bytes=first?(bytesA+=1000):(bytesB+=1000);
+                        int sample=first?++samplesA:++samplesB;
+                        long delta=zeroBaseline && !down?0:1000;
+                        if(phase().equals(trafficFaultPhase) && !first) {
+                            if("missing".equals(trafficFault)) return new ExecResult.Completed("unrecognized",0);
+                            if("low".equals(trafficFault)) delta=499;
+                            if("reset".equals(trafficFault) && sample%2==0) delta=-1000;
+                        }
+                        if(badPost && down && !first) return new ExecResult.Completed("unrecognized",0);
+                        long bytes=first?(bytesA+=delta):(bytesB+=delta);
                         return new ExecResult.Completed("Inter-| Receive | Transmit\nface |bytes packets errs drop fifo frame compressed multicast|bytes packets errs drop fifo colls carrier compressed\n"
                             +"eth0: "+bytes+" 0 0 0 0 0 0 0 100 0 0 0 0 0 0 0\n",0);
                     }
@@ -231,8 +239,21 @@ class CpFailoverJobExecutorTest {
                     if(cmd.endsWith("fw stat")) return new ExecResult.Completed(
                         "HOST POLICY DATE\nlocalhost "+((badPolicy&&!first&&!down || changedPolicyPost&&down)?"Other_Policy":"Sample_Policy")
                             +" 10Sep2018 14:01:25 : [>eth0]\n",0);
-                    if(cmd.equals("cphaprob -ia list")) return new ExecResult.Completed(
-                        Fixtures.read("cp/failover_pnotes_"+(badPnotes || down&&first?"problem":"ok")+".txt"),0);
+                    if(cmd.equals("cpstat -f policy fw")) {
+                        boolean fault=phase().equals(cpstatFaultPhase);
+                        if(fault && "missing".equals(cpstatFault)) return new ExecResult.Completed("Install time:\n",0);
+                        String policy=fault && ("changed".equals(cpstatFault) || !first && "mismatch".equals(cpstatFault))
+                            ?"Other_Policy":"Sample_Policy";
+                        String time=fault && !first && "skew".equals(cpstatFault)?"12:10:01":"12:00:00";
+                        return new ExecResult.Completed("Policy name: "+policy+"\nInstall time: 2026-10-06 "+time+"\n",0);
+                    }
+                    if(cmd.equals("cphaprob -ia list")) {
+                        if(badPnotes) return new ExecResult.Completed(Fixtures.read("cp/failover_pnotes_problem.txt"),0);
+                        if(down && (!up && (first || adminOnNewActive) || up && first && adminAfterReturn))
+                            return new ExecResult.Completed("Device Name: admin_down\nCurrent state: problem\n"
+                                +(extraPnote?"Device Name: fwd\nCurrent state: problem\n":""),0);
+                        return new ExecResult.Completed(Fixtures.read("cp/failover_pnotes_ok.txt"),0);
+                    }
                     if(cmd.equals("cphaprob show_bond")) return new ExecResult.Completed(
                         Fixtures.read("cp/failover_bonds.txt").replace("|UP    |",badBonds?"|UP!   |":"|UP    |"),0);
                     if(cmd.equals("cphaprob show_failover")) {
@@ -299,8 +320,9 @@ class CpFailoverJobExecutorTest {
         return key -> rows.stream().filter(row -> row.key().equals(key)).toList();
     }
     private static void run(Store store,Script script) {
-        new CpFailoverJobExecutor(store,devices(),leases(),attempts(),script.transport(),gates(),d -> {},
-            Duration.ZERO,new FailoverMutationSwitch(!"READINESS".equals(store.kind)))
+        var nanos=new java.util.concurrent.atomic.AtomicLong();
+        new CpFailoverJobExecutor(store,devices(),leases(),attempts(),script.transport(),gates(),d -> nanos.addAndGet(d.toNanos()),
+            Duration.ZERO,new FailoverMutationSwitch(!"READINESS".equals(store.kind)),nanos::get)
             .execute("job-1",1);
     }
     @Test void everyWriteStopsAtPersistenceAndDeliveryFailuresWithoutReplay() {
@@ -343,8 +365,9 @@ class CpFailoverJobExecutorTest {
         for(boolean readiness:List.of(false,true)) {
             Store store=new Store(); store.kind=readiness?"READINESS":"FAILOVER";
             Script script=new Script();
-            new CpFailoverJobExecutor(store,devices(false),leases(),attempts(),script.transport(),gates(),d -> {},
-                Duration.ZERO,new FailoverMutationSwitch(!readiness)).execute("job-1",1);
+            var nanos=new java.util.concurrent.atomic.AtomicLong();
+            new CpFailoverJobExecutor(store,devices(false),leases(),attempts(),script.transport(),gates(),d -> nanos.addAndGet(d.toNanos()),
+                Duration.ZERO,new FailoverMutationSwitch(!readiness),nanos::get).execute("job-1",1);
             assertEquals(readiness?"UNKNOWN":"IDENTITY_NOT_VERIFIED",store.outcome);
             assertEquals(readiness?"IDENTITY_NOT_RECORDED":"IDENTITY_NOT_VERIFIED",store.stopCode);
             assertEquals(0,script.downCount); assertEquals(0,script.upCount);
@@ -383,8 +406,8 @@ class CpFailoverJobExecutorTest {
             Script script=new Script(); script.reportedMode="Virtual System Load Sharing";
             script.prefix="Context is set to Virtual Device VS-SYNTHETIC (ID 12).\n";
             run(store,script);
-            assertEquals(readiness?"READY":"SUCCEEDED",store.outcome);
-            assertEquals(readiness?0:1,script.downCount); assertEquals(readiness?0:1,script.upCount);
+            assertEquals(readiness?"READY":"COMMAND_GATE_UNAVAILABLE",store.outcome);
+            assertEquals(0,script.downCount); assertEquals(0,script.upCount);
             assertTrue(script.commands.stream().allMatch(c -> c.startsWith("bash -lc 'vsenv 12 && ")));
         }
     }
@@ -431,7 +454,7 @@ class CpFailoverJobExecutorTest {
         run(store,script);
         assertEquals(2,store.checks.stream().filter("pre:1:PASS"::equals).count(),
             "Reversed VS roles must retain reciprocal HA evidence: "+store.checks);
-        assertTrue(store.checks.contains("pre:6:PASS"),"VS connection parity check 6: "+store.checks);
+        assertTrue(store.checks.contains("pre:6:NOT_EVALUATED"),"VS session continuity check 6: "+store.checks);
         assertEquals("READY",store.outcome,"VS readiness with reversed active member: "+store.checks);
     }
     @Test void oneSecondPolicySkewPassesParity() {
@@ -451,22 +474,15 @@ class CpFailoverJobExecutorTest {
             && d.contains("\"installSkewSeconds\":601")).count()==2);
         check(script.downCount==0 && script.upCount==0);
     }
-    @Test void connectionRuleUsesActualActiveMemberAndPersistsBothCounts() {
-        for(boolean reverse:List.of(false,true)) for(boolean high:List.of(false,true)) {
-            Store store=new Store(); store.kind="READINESS";
-            Script script=new Script(); script.reverseActive=reverse;
-            long active=high?10000:3127,standby=high?7999:2285;
-            script.connectionCounts=reverse?new long[]{standby,active}:new long[]{active,standby};
-            run(store,script);
-            String context="reverse="+reverse+" high="+high+" checks="+store.checks;
-            assertEquals(2,store.checks.stream().filter("pre:1:PASS"::equals).count(),
-                "Both members must pass reciprocal HA check 1: "+context);
-            assertTrue(store.checks.contains(high?"pre:6:FAIL":"pre:6:PASS"),"Connection parity check 6: "+context);
-            assertEquals(2,store.derivedValues.stream().filter(d -> d.contains("\"activeCount\":"+active)
-                && d.contains("\"comparedCount\":"+standby) && d.contains("\"ratio\":")
-                && d.contains(high?"RATIO_80":"LOW_VOLUME_ABSOLUTE_OR_RATIO")).count(),
-                "Both connection checks must persist the actual active and standby counts: "+context);
-            assertTrue(script.downCount==0 && script.upCount==0,"Readiness must not dispatch writes: "+context);
+    @Test void sessionContinuityIsInformationalAndNeverCollected() {
+        for(boolean readiness:List.of(false,true)) {
+            Store store=new Store(); store.kind=readiness?"READINESS":"FAILOVER";
+            Script script=new Script(); run(store,script);
+            assertEquals(readiness?"READY":"SUCCEEDED",store.outcome);
+            assertTrue(script.commands.stream().noneMatch(c -> c.contains("fw tab")));
+            assertEquals(readiness?2:6,store.derivedValues.stream()
+                .filter(d -> d.contains("SESSION_CONTINUITY_NOT_EVALUATED")).count());
+            assertTrue(store.checks.stream().filter(c -> c.contains(":6:")).allMatch(c -> c.endsWith(":NOT_EVALUATED")));
         }
     }
     @Test void readinessUsesStoredCounterBaselineAndRecordsIncrease() {
@@ -556,6 +572,84 @@ class CpFailoverJobExecutorTest {
         check(store.checks.stream().anyMatch(s -> s.equals("post:10:PASS")));
         check(store.derivedValues.stream().anyMatch(d -> d.contains("\"sentRejectNotifications\":4554")));
     }
+    @Test void threeTrafficWindowsAreDistinctAndBaselineEndsBeforeDown() {
+        Store store=new Store(); Script script=new Script(); run(store,script);
+        assertEquals("SUCCEEDED",store.outcome);
+        for(String phase:List.of("pre","post","post_return")) {
+            assertEquals(2,store.checks.stream().filter((phase+":8:PASS")::equals).count());
+            assertEquals(2,store.checks.stream().filter((phase+":10:PASS")::equals).count());
+        }
+        assertEquals(6,script.samplesA); assertEquals(6,script.samplesB);
+        assertEquals(12,script.commands.stream().filter(c -> c.endsWith("cat /proc/net/dev'")).count());
+        int down=script.commands.indexOf("bash -lc 'clusterXL_admin down'");
+        assertTrue(script.commands.get(down-1).endsWith("cat /proc/net/dev'"));
+        assertTrue(script.commands.get(down-2).endsWith("cat /proc/net/dev'"));
+        assertEquals(2,store.checks.stream().filter("post_return:9:PASS"::equals).count());
+        assertEquals(2,store.checks.stream().filter("post_return:11:PASS"::equals).count());
+    }
+    @Test void trafficFailureInEveryWindowStopsWithoutRetry() {
+        for(String phase:List.of("pre","post","post_return")) for(String fault:List.of("reset","missing","low")) {
+            if(phase.equals("pre") && fault.equals("low")) continue;
+            Store store=new Store(); Script script=new Script();
+            script.trafficFaultPhase=phase; script.trafficFault=fault; run(store,script);
+            assertEquals("TRAFFIC_BELOW_TOLERANCE",store.outcome,phase+" "+fault);
+            assertTrue(store.checks.contains(phase+":8:"+(fault.equals("low")?"FAIL":"UNKNOWN")));
+            assertEquals(phase.equals("pre")?0:1,script.downCount);
+            assertEquals(phase.equals("post_return")?1:0,script.upCount);
+            assertEquals(!phase.equals("pre"),store.incidentRequired);
+        }
+        Store store=new Store(); Script script=new Script(); script.zeroBaseline=true; run(store,script);
+        assertEquals("TRAFFIC_BELOW_TOLERANCE",store.outcome);
+        assertTrue(store.checks.contains("pre:8:UNKNOWN")); assertEquals(0,script.downCount);
+    }
+    @Test void missingTrafficReplyRecordsUnknownAndStopsBeforeMutation() {
+        Store store=new Store(); Script script=new Script(); script.failedCommand="cat /proc/net/dev"; run(store,script);
+        assertEquals("TRAFFIC_BELOW_TOLERANCE",store.outcome);
+        assertEquals(2,store.checks.stream().filter("pre:8:UNKNOWN"::equals).count());
+        assertEquals(0,script.downCount);
+    }
+    @Test void memberRatesUseSeparateMonotonicIntervals() {
+        Store store=new Store(); Script script=new Script();
+        long[] times={0,2,10,22,30,32,40,52,60,62,70,82};
+        var index=new AtomicInteger();
+        new CpFailoverJobExecutor(store,devices(),leases(),attempts(),script.transport(),gates(),d -> {},
+            Duration.ZERO,new FailoverMutationSwitch(true),() -> times[index.getAndIncrement()]*1_000_000_000L)
+            .execute("job-1",1);
+        assertEquals("SUCCEEDED",store.outcome);
+        assertEquals(3,store.derivedValues.stream().filter(d -> d.contains("\"bytesPerSecond\":100.0")
+            && d.contains("\"elapsedNanos\":10000000000")).count());
+        assertEquals(3,store.derivedValues.stream().filter(d -> d.contains("\"bytesPerSecond\":50.0")
+            && d.contains("\"elapsedNanos\":20000000000")).count());
+    }
+    @Test void cpstatPolicyFailsClosedInAllFailoverPhases() {
+        for(String phase:List.of("pre","post","post_return")) for(String fault:List.of("mismatch","skew","missing","changed")) {
+            if(phase.equals("pre") && fault.equals("changed")) continue;
+            Store store=new Store(); Script script=new Script();
+            script.cpstatFaultPhase=phase; script.cpstatFault=fault; run(store,script);
+            assertEquals("POLICY_NOT_MATCHED",store.outcome,phase+" "+fault);
+            assertTrue(store.checks.contains(phase+":10:"+(fault.equals("missing")?"UNKNOWN":"FAIL")));
+            assertEquals(phase.equals("pre")?0:1,script.downCount);
+            assertEquals(phase.equals("post_return")?1:0,script.upCount);
+            assertTrue(store.derivedValues.stream().noneMatch(d -> d.contains("Sample_Policy") || d.contains("Other_Policy")));
+        }
+    }
+    @Test void intentionalAdminDownNeverExcusesOtherMembersOrFaults() {
+        for(String fault:List.of("extra","new_active","after_return")) {
+            Store store=new Store(); Script script=new Script();
+            script.extraPnote=fault.equals("extra"); script.adminOnNewActive=fault.equals("new_active");
+            script.adminAfterReturn=fault.equals("after_return"); run(store,script);
+            assertEquals("PNOTES_NOT_READY",store.outcome);
+            assertEquals(1,script.downCount); assertEquals(fault.equals("after_return")?1:0,script.upCount);
+            assertTrue(store.incidentRequired);
+        }
+    }
+    @Test void unexpectedPreemptionStopsAndUsesIncidentBoundary() {
+        Store store=new Store(); Script script=new Script(); script.preempt=true; run(store,script);
+        assertEquals("UNEXPECTED_ROLES",store.outcome);
+        assertEquals(1,script.downCount); assertEquals(1,script.upCount);
+        assertTrue(store.incidentRequired);
+        assertTrue(store.checks.stream().noneMatch(c -> c.startsWith("post_return:")));
+    }
     @Test void precheckFailStopsBeforeWrite() {
         Store store=new Store(); Script script=new Script(); script.badPre=true; run(store,script);
         check(store.state.equals("STOPPED") && script.downCount==0 && script.upCount==0);
@@ -599,7 +693,7 @@ class CpFailoverJobExecutorTest {
             check(store.checks.size()==24);
             check(store.checks.contains("pre:3:UNKNOWN"));
             check(store.checks.stream().filter(c -> c.equals("pre:14:PASS")).count()==2);
-            check(script.connectCount==2 && script.commands.size()==26);
+            check(script.connectCount==2 && script.commands.size()==24);
             check(script.downCount==0 && script.upCount==0);
         }
     }
@@ -674,11 +768,11 @@ class CpFailoverJobExecutorTest {
     }
     @Test void unknownOutputFromEveryCheckStaysUnknownWithoutWrites() {
         Map<String,Integer> commands=Map.of("cphaprob stat",1,"cphaprob tablestat",2,"cphaprob -a if",3,
-            "fw tab -t connections -s",6,"cat /proc/net/dev",8,"cphaprob syncstat",9,"fw stat",10);
+            "cat /proc/net/dev",8,"cphaprob syncstat",9,"fw stat",10);
         commands.forEach((command,no) -> {
             Store store=new Store(); store.kind="READINESS";
             Script script=new Script(); script.unknownCommand=command; run(store,script);
-            check("UNKNOWN".equals(store.outcome));
+            check((no==5?"READY":"UNKNOWN").equals(store.outcome));
             check(store.checks.contains("pre:"+no+":UNKNOWN"));
             check(script.downCount==0 && script.upCount==0);
         });
@@ -691,7 +785,7 @@ class CpFailoverJobExecutorTest {
             Script script=new Script();
             script.measured=Map.of(command,"Warning! This is a test sentence with 'set something' in it.");
             run(store,script);
-            check("UNKNOWN".equals(store.outcome));
+            check((no==5?"READY":"UNKNOWN").equals(store.outcome));
             check(store.checks.contains("pre:"+no+":UNKNOWN"));
             check(script.downCount==0 && script.upCount==0);
         });
@@ -735,7 +829,7 @@ class CpFailoverJobExecutorTest {
     @Test void postcheckFailStopsWithoutUp() {
         Store store=new Store(); Script script=new Script(); script.badPost=true; run(store,script);
         check(store.state.equals("STOPPED") && script.downCount==1 && script.upCount==0);
-        check(store.checks.stream().anyMatch(s -> s.equals("post:6:UNKNOWN")));
+        check(store.checks.stream().anyMatch(s -> s.equals("post:8:UNKNOWN")));
     }
     @Test void changedPolicyAfterFailoverStopsWithoutUp() {
         Store store=new Store(); Script script=new Script(); script.changedPolicyPost=true; run(store,script);
@@ -749,8 +843,10 @@ class CpFailoverJobExecutorTest {
     }
     @Test void vsxNeverUsesChassisContext() {
         Store store=new Store(); store.vsId="12"; Script script=new Script(); run(store,script);
-        check(store.state.equals("DONE") && script.downCount==1 && script.upCount==1);
-        check(script.commands.stream().allMatch(c -> c.startsWith("bash -lc 'vsenv 12 && ")));
+        // No VS cpstat gate is approved: refuse before opening either session, never fall back to chassis.
+        assertEquals("COMMAND_GATE_UNAVAILABLE",store.outcome);
+        assertEquals(0,script.connectCount);
+        assertTrue(script.commands.isEmpty());
     }
     @Test void approvedBlockingChecksStopBeforeWrite() {
         for(String command:List.of("cphaprob -ia list","cphaprob show_bond","cpstat os -f routing")) {

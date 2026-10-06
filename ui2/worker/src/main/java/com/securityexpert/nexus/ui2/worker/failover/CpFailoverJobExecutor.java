@@ -34,8 +34,8 @@ public final class CpFailoverJobExecutor {
     private static final Duration POLL_INTERVAL=Duration.ofSeconds(3);
     private static final int MAX_POLLS=21;
     private static final String STAT="cphaprob stat", TABLE="cphaprob tablestat", IF="cphaprob -a if";
-    private static final String ARP="arp -an", CONN="fw tab -t connections -s", TRAFFIC="cat /proc/net/dev";
-    private static final String SYNC="cphaprob syncstat", POLICY="fw stat";
+    private static final String ARP="arp -an", TRAFFIC="cat /proc/net/dev";
+    private static final String SYNC="cphaprob syncstat", POLICY="fw stat", CPSTAT_POLICY="cpstat -f policy fw";
     private static final String PNOTES="cphaprob -ia list", BONDS="cphaprob show_bond";
     private static final String FAILOVER="cphaprob show_failover", ROUTING="cpstat os -f routing";
     private static final ObjectMapper JSON=new ObjectMapper();
@@ -48,6 +48,8 @@ public final class CpFailoverJobExecutor {
     private final GateRegistryPort gates;
     private final Pause pause;
     private final Duration commandPause;
+    private final java.util.function.LongSupplier nanoTime;
+    private int polls;
     private String jobId,runId,vsId;
     private long epoch;
     private int commandIndex;
@@ -69,8 +71,8 @@ public final class CpFailoverJobExecutor {
         TransportSession session() { return session; }
     }
     private record Measure(CpFailoverChecks.State state, Set<String> table,
-            CpFailoverChecks.Interfaces interfaces, int arp, CpFailoverChecks.Connections connections, long traffic,
-            String policyName, CpFailoverChecks.Routing routing) {}
+            CpFailoverChecks.Interfaces interfaces, int arp, double traffic,
+            String policyName, String cpstatPolicyName, CpFailoverChecks.Routing routing) {}
     private record Pair(Measure a, Measure b) {
         Measure forMember(Member member,Member first) { return member==first?a:b; }
     }
@@ -100,6 +102,13 @@ public final class CpFailoverJobExecutor {
             JobLeaseRepository leases, JobStepAttemptRepository attempts,DeviceTransport ssh,
             GateRegistryPort gates,Pause pause,Duration commandPause,
             FailoverMutationSwitch mutationSwitch) {
+        this(store,devices,leases,attempts,ssh,gates,pause,commandPause,mutationSwitch,System::nanoTime);
+    }
+    CpFailoverJobExecutor(JooqCpFailoverRepository store, DeviceRepository devices,
+            JobLeaseRepository leases, JobStepAttemptRepository attempts,DeviceTransport ssh,
+            GateRegistryPort gates,Pause pause,Duration commandPause,FailoverMutationSwitch mutationSwitch,
+            java.util.function.LongSupplier nanoTime) {
+        this.nanoTime=nanoTime;
         this.mutationSwitch=java.util.Objects.requireNonNull(mutationSwitch);
         this.store=store; this.devices=devices; this.leases=leases; this.attempts=attempts;
         this.ssh=ssh; this.gates=gates; this.pause=pause; this.commandPause=commandPause;
@@ -115,7 +124,7 @@ public final class CpFailoverJobExecutor {
         this.readiness="READINESS".equals(run.get().kind());
         this.readinessFailure=null;
         this.shapes=new ReadinessShapeLog("check_point");
-        this.epoch=epoch; this.commandIndex=0; this.wrote=false; this.dispatch=null;
+        this.epoch=epoch; this.commandIndex=0; this.polls=0; this.wrote=false; this.dispatch=null;
         if(!leases.transitionState(jobId,epoch,JobState.CLAIMED,JobState.EXECUTING,
                 "system:cp-failover-worker","cp_failover_start")) return;
         Member first=null,second=null;
@@ -133,8 +142,8 @@ public final class CpFailoverJobExecutor {
                 requireMutationAdmission(false);
             }
             if(!attempts.findByJobAndStep(jobId,0).isEmpty()) throw new Stop("PRIOR_ATTEMPT_NOT_REPLAYED",0);
-            for(String command:List.of(STAT,TABLE,IF,ARP,CONN,TRAFFIC,SYNC,POLICY,PNOTES,BONDS,FAILOVER,ROUTING)) gate(command);
-            if (!readiness) { gate(DOWN); gate(UP); }
+            for(String command:List.of(STAT,TABLE,IF,ARP,TRAFFIC,SYNC,POLICY,PNOTES,BONDS,FAILOVER,ROUTING)) gate(command);
+            if (!readiness) { gate(CPSTAT_POLICY); gate(DOWN); gate(UP); }
             first=connect(members.get(0)); second=connect(members.get(1));
             if(first.session().presentedIdentity().equals(second.session().presentedIdentity()))
                 throw new Stop("OBSERVERS_NOT_DISTINCT",0);
@@ -154,11 +163,14 @@ public final class CpFailoverJobExecutor {
             state("SWITCHED","SWITCHED",null,null,null);
             state("POSTCHECK","POSTCHECK",null,null,null);
             checks("post",first,second,before,formerActive);
+            if(polls>=MAX_POLLS) throw new Stop("POLL_BUDGET_EXHAUSTED",1);
             state("RETURNING","RETURNING",null,null,null);
             command(formerActive,UP);
             if(!waitFor(first,second,formerStandby,"ACTIVE",formerActive,"STANDBY"))
                 throw new Stop("RETURN_TIMEOUT",1);
             confirmDispatch();
+            state("POSTCHECK","POST_RETURN",null,null,null);
+            checks("post_return",first,second,before,formerActive);
             state("DONE","DONE","SUCCEEDED",null,"NO_PROBLEMS_FOUND");
         } catch (Stop stopped) {
             if (readiness) finishReadiness(stopped.code,stopped.check,stopped.check==0?"UNKNOWN":stopped.status);
@@ -244,7 +256,7 @@ public final class CpFailoverJobExecutor {
         if (write && !mutationSwitch.enabled()) throw new Stop(FailoverMutationSwitch.DISABLED,0);
         if(!writeAllowed(readiness ? "READINESS" : "FAILOVER", command))
             throw new Stop("READINESS_WRITE_REFUSED",0);
-        String key=vsId==null?command:"bash -lc 'vsenv <VSID> && "+command+"'";
+        String key=vsId==null?(CPSTAT_POLICY.equals(command)?"bash -lc '"+command+"'":command):"bash -lc 'vsenv <VSID> && "+command+"'";
         var resolution=GateResolver.resolve(new CanonicalCommandKey("check_point","cp_gaia_gateway",
             "expert","SSH_EXEC",key),java.util.Optional.of(write
                 ?ActionClass.CLASS_2_OPERATIONAL_STATE_CHANGE:ActionClass.CLASS_0_READ),gates);
@@ -254,10 +266,10 @@ public final class CpFailoverJobExecutor {
             case IF -> vsId==null?"cp_inventory_cphaprob_a_if":"cp_inventory_vsid_cphaprob_a_if";
             case TABLE -> "cp_failover_tablestat";
             case ARP -> "cp_failover_arp";
-            case CONN -> "cp_failover_connections";
             case TRAFFIC -> "cp_failover_traffic";
             case SYNC -> "cp_failover_syncstat";
             case POLICY -> "cp_failover_fw_stat";
+            case CPSTAT_POLICY -> "cp_policy_install_cpstat";
             case PNOTES -> "cp_failover_pnotes";
             case BONDS -> "cp_failover_bonds";
             case FAILOVER -> "cp_failover_last_event";
@@ -315,7 +327,7 @@ public final class CpFailoverJobExecutor {
             throw new Stop("ATTEMPT_RECORD_FAILED",0);
         int check=switch(command) {
             case STAT -> 1; case TABLE -> 2; case IF -> 3; case ARP -> 5;
-            case CONN -> 6; case TRAFFIC -> 8; case SYNC -> 9; case POLICY -> 10;
+            case TRAFFIC -> 8; case SYNC -> 9; case POLICY,CPSTAT_POLICY -> 10;
             case PNOTES -> 11; case BONDS -> 12; case FAILOVER -> 13; case ROUTING -> 14;
             default -> 0;
         };
@@ -352,10 +364,10 @@ public final class CpFailoverJobExecutor {
             case TABLE -> !CpFailoverChecks.ipTable(output).isEmpty();
             case IF -> CpFailoverChecks.interfaces(output).ccpPresent();
             case ARP -> CpFailoverChecks.arpCount(output)>=0;
-            case CONN -> CpFailoverChecks.connections(output)!=null;
             case TRAFFIC -> !CpFailoverChecks.bytesByInterface(output).isEmpty();
             case SYNC -> !"UNKNOWN".equals(CpFailoverChecks.syncStatus(output));
             case POLICY -> !"UNKNOWN".equals(CpFailoverChecks.policy(output).status());
+            case CPSTAT_POLICY -> !"UNKNOWN".equals(CpFailoverChecks.cpstatPolicy(output).status());
             case PNOTES -> !"UNKNOWN".equals(CpFailoverChecks.pnotes(output).status());
             case BONDS -> !"UNKNOWN".equals(CpFailoverChecks.bonds(output));
             case FAILOVER -> CpFailoverChecks.lastFailover(output,Instant.now()).lastFailoverAt()!=null;
@@ -385,10 +397,11 @@ public final class CpFailoverJobExecutor {
         return state;
     }
     private Pair checks(String phase,Member first,Member second,Pair before,Member oldActive) throws InterruptedException {
+        boolean switched="post".equals(phase);
         var a=readState(first);
         var b=readState(second);
         boolean states=before==null?CpFailoverChecks.corroborated(a,b)
-            : roles(a,b,oldActive==first?second:first,"ACTIVE",oldActive,"DOWN",first,second);
+            : roles(a,b,oldActive==first?second:first,"ACTIVE",oldActive,switched?"DOWN":"STANDBY",first,second);
         String stateStatus=states?"PASS":a.supportedMode() && b.supportedMode()?"FAIL":"UNKNOWN";
         for(Member member:List.of(first,second)) {
             var evidence=new java.util.HashMap<>(CpFailoverChecks.stateEvidence(member==first?a:b));
@@ -397,6 +410,8 @@ public final class CpFailoverJobExecutor {
             record(phase,member,1,!member.identityVerified && "PASS".equals(stateStatus)?"UNKNOWN":stateStatus,json(evidence));
         }
         if(!states) checkFailed("CLUSTER_STATE_NOT_READY",1,stateStatus);
+        double[] rates=before==null?null:trafficWindow(phase,first,second,
+            before.a().interfaces(),before.b().interfaces(),before,oldActive);
         var ta=CpFailoverChecks.ipTable(command(first,TABLE));
         var tb=CpFailoverChecks.ipTable(command(second,TABLE));
         boolean tables=CpFailoverChecks.twoTableMembers(ta) && ta.equals(tb);
@@ -415,51 +430,23 @@ public final class CpFailoverJobExecutor {
         record(phase,second,3,ib.healthy()?"PASS":ib.ccpPresent()?"FAIL":"UNKNOWN",json(Map.of("up",ib.names().size(),"required",ib.required())));
         if(!ia.healthy() || !ib.healthy()) checkFailed("INTERFACE_NOT_READY",3,
             !ia.ccpPresent() || !ib.ccpPresent() ? "UNKNOWN" : "FAIL");
+        if(before!=null && (!ia.trafficNames().equals(before.a().interfaces().trafficNames())
+                || !ib.trafficNames().equals(before.b().interfaces().trafficNames()))) {
+            for(Member member:List.of(first,second)) record(phase,member,8,"UNKNOWN","{\"reason\":\"TRAFFIC_SCOPE_CHANGED\"}");
+            checkFailed("TRAFFIC_SCOPE_CHANGED",8,"UNKNOWN");
+        }
         int arpA=CpFailoverChecks.arpCount(command(first,ARP));
         int arpB=CpFailoverChecks.arpCount(command(second,ARP));
         Member active=before==null?("ACTIVE".equals(a.localRole())?first:second):(oldActive==first?second:first);
-        long baseArp=before==null?(active==first?arpA:arpB):(oldActive==first?before.a().arp():before.b().arp());
-        long currentArp=active==first?arpA:arpB;
-        boolean arp=arpA>=0 && arpB>=0 && (before==null
-            ?CpFailoverChecks.ratio(active==first?arpB:arpA,baseArp,CpFailoverChecks.ARP_MIN_RATIO)
-            :CpFailoverChecks.ratio(currentArp,baseArp,CpFailoverChecks.ARP_MIN_RATIO));
         // Contract §15 (PO 2026-09-30): ARP is information only -- counts recorded, never blocking.
         String arpStatus=arpA<0 || arpB<0?"UNKNOWN":"PASS";
         record(phase,first,5,arpStatus,arpA<0?"{}":"{\"count\":"+arpA+"}");
         record(phase,second,5,arpStatus,arpB<0?"{}":"{\"count\":"+arpB+"}");
-        var ca=CpFailoverChecks.connections(command(first,CONN));
-        var cb=CpFailoverChecks.connections(command(second,CONN));
-        long baseConn=ca==null || cb==null?-1:before==null?(active==first?ca.count():cb.count())
-            :(oldActive==first?before.a().connections().count():before.b().connections().count());
-        long currentConn=ca==null || cb==null?-1:active==first?ca.count():cb.count();
-        long comparedConn=before==null?(ca==null || cb==null?-1:active==first?cb.count():ca.count()):currentConn;
-        var connection=CpFailoverChecks.connectionParity(baseConn,comparedConn,before!=null);
-        String connStatus=before==null && !states?"UNKNOWN":connection.status();
-        for(Member member:List.of(first,second)) {
-            var counts=member==first?ca:cb;
-            var derived=new java.util.HashMap<>(connection.derived());
-            if(counts!=null) { derived.put("count",counts.count()); derived.put("peak",counts.peak()); }
-            record(phase,member,6,connStatus,json(derived));
-        }
-        if(!"PASS".equals(connStatus)) checkFailed("CONNECTIONS_BELOW_TOLERANCE",6,connStatus);
-        var preA=CpFailoverChecks.bytesByInterface(command(first,TRAFFIC));
-        var preB=CpFailoverChecks.bytesByInterface(command(second,TRAFFIC));
-        pause.sleep(Duration.ofSeconds(5));
-        long rateA=CpFailoverChecks.trafficBytesPerSecond(preA,
-            CpFailoverChecks.bytesByInterface(command(first,TRAFFIC)),ia.trafficNames());
-        long rateB=CpFailoverChecks.trafficBytesPerSecond(preB,
-            CpFailoverChecks.bytesByInterface(command(second,TRAFFIC)),ib.trafficNames());
-        long baseRate=before==null?(active==first?rateA:rateB)
-            :(oldActive==first?before.a().traffic():before.b().traffic());
-        long currentRate=active==first?rateA:rateB;
-        boolean traffic=rateA>=0 && rateB>=0 && (before==null || currentRate>0
-            && CpFailoverChecks.ratio(currentRate,baseRate,CpFailoverChecks.TRAFFIC_MIN_RATIO));
-        String trafficStatus=traffic?"PASS":rateA<0 || rateB<0?"UNKNOWN":"FAIL";
-        record(phase,first,8,trafficStatus,rateA<0?"{}":"{\"bytesPerSecond\":"+rateA+"}");
-        record(phase,second,8,trafficStatus,rateB<0?"{}":"{\"bytesPerSecond\":"+rateB+"}");
-        if(!traffic) checkFailed("TRAFFIC_BELOW_TOLERANCE",8,trafficStatus);
-        String syncOutputA=before==null || active==first?command(first,SYNC):null;
-        String syncOutputB=before==null || active==second?command(second,SYNC):null;
+        var continuity=CpFailoverChecks.sessionContinuity();
+        for(Member member:List.of(first,second))
+            record(phase,member,6,continuity.status(),json(continuity.derived()));
+        String syncOutputA=!switched || active==first?command(first,SYNC):null;
+        String syncOutputB=!switched || active==second?command(second,SYNC):null;
         String syncA=recordSync(phase,first,syncOutputA);
         String syncB=recordSync(phase,second,syncOutputB);
         if("FAIL".equals(syncA) || "FAIL".equals(syncB) || "UNKNOWN".equals(syncA) || "UNKNOWN".equals(syncB))
@@ -468,14 +455,19 @@ public final class CpFailoverJobExecutor {
         var policyB=CpFailoverChecks.policy(command(second,POLICY));
         var parity=CpFailoverChecks.policyParity(policyA,policyB,
             before==null?null:before.a().policyName(),before==null?null:before.b().policyName());
-        String policyStatus=parity.status();
-        record(phase,first,10,policyStatus,json(parity.derived()));
-        record(phase,second,10,policyStatus,json(parity.derived()));
+        var cpstatA=readiness?policyA:CpFailoverChecks.cpstatPolicy(command(first,CPSTAT_POLICY));
+        var cpstatB=readiness?policyB:CpFailoverChecks.cpstatPolicy(command(second,CPSTAT_POLICY));
+        var cpstatParity=CpFailoverChecks.policyParity(cpstatA,cpstatB,
+            before==null?null:before.a().cpstatPolicyName(),before==null?null:before.b().cpstatPolicyName());
+        String policyStatus="FAIL".equals(parity.status()) || "FAIL".equals(cpstatParity.status())?"FAIL"
+            :"PASS".equals(parity.status()) && "PASS".equals(cpstatParity.status())?"PASS":"UNKNOWN";
+        String policyEvidence=readiness?json(Map.of("fwStat",parity.derived()))
+            :json(Map.of("fwStat",parity.derived(),"cpstat",cpstatParity.derived()));
+        record(phase,first,10,policyStatus,policyEvidence);
+        record(phase,second,10,policyStatus,policyEvidence);
         if(!"PASS".equals(policyStatus)) checkFailed("POLICY_NOT_MATCHED",10,policyStatus);
         for(Member member:List.of(first,second)) {
-            // The intentionally down former active reports ADMIN_DOWN after the switch.
-            if(before!=null && member!=active) continue;
-            var pnotes=CpFailoverChecks.pnotes(command(member,PNOTES));
+            var pnotes=CpFailoverChecks.pnotes(command(member,PNOTES),switched && member==oldActive);
             record(phase,member,11,pnotes.status(),json(Map.of("pnotes",pnotes.names())));
             if(!"PASS".equals(pnotes.status())) checkFailed("PNOTES_NOT_READY",11,pnotes.status());
             String bondOutput=command(member,BONDS);
@@ -496,17 +488,50 @@ public final class CpFailoverJobExecutor {
         }
         CpFailoverChecks.Routing routingA=null,routingB=null;
         for(Member member:List.of(first,second)) {
-            if(before!=null && member!=active) continue;
+            if(switched && member!=active) continue;
             var routing=CpFailoverChecks.routing(command(member,ROUTING));
             if(member==first) routingA=routing; else routingB=routing;
             String status=routing==null?"UNKNOWN":before==null?"PASS"
-                :routing.defaultRoute() && routing.count()==before.forMember(oldActive,first).routing().count()?"PASS":"FAIL";
+                :member==active?(routing.defaultRoute() && routing.count()==before.forMember(oldActive,first).routing().count()?"PASS":"FAIL")
+                :routing.equals(before.forMember(member,first).routing())?"PASS":"FAIL";
             record(phase,member,14,status,routing==null?"{}":json(Map.of(
                 "routeCount",routing.count(),"defaultRoute",routing.defaultRoute())));
             if(!"PASS".equals(status)) checkFailed("ROUTING_NOT_READY",14,status);
         }
-        return new Pair(new Measure(a,ta,ia,arpA,ca,rateA,policyA.name(),routingA),
-            new Measure(b,tb,ib,arpB,cb,rateB,policyB.name(),routingB));
+        if(before==null) rates=trafficWindow(phase,first,second,ia,ib,null,active);
+        else if(!roles(readState(first),readState(second),active,"ACTIVE",oldActive,
+                switched?"DOWN":"STANDBY",first,second)) throw new Stop("UNEXPECTED_ROLES",1);
+        return new Pair(new Measure(a,ta,ia,arpA,rates[0],policyA.name(),cpstatA.name(),routingA),
+            new Measure(b,tb,ib,arpB,rates[1],policyB.name(),cpstatB.name(),routingB));
+    }
+    private Map<String,CpFailoverChecks.TrafficBytes> trafficSample(Member member) throws InterruptedException {
+        try { return CpFailoverChecks.bytesByInterface(command(member,TRAFFIC)); }
+        catch(Stop unavailable) {
+            if(!Set.of("COMMAND_UNAVAILABLE","OUTPUT_UNAVAILABLE").contains(unavailable.code)) throw unavailable;
+            return Map.of();
+        }
+    }
+    private double[] trafficWindow(String phase,Member first,Member second,
+            CpFailoverChecks.Interfaces ia,CpFailoverChecks.Interfaces ib,Pair before,Member oldActive)
+            throws InterruptedException {
+        var preA=trafficSample(first);
+        long startA=nanoTime.getAsLong();
+        var preB=trafficSample(second);
+        long startB=nanoTime.getAsLong();
+        pause.sleep(Duration.ofSeconds(5));
+        var postA=trafficSample(first);
+        long elapsedA=nanoTime.getAsLong()-startA;
+        var postB=trafficSample(second);
+        long elapsedB=nanoTime.getAsLong()-startB;
+        double rateA=CpFailoverChecks.trafficBytesPerSecond(preA,postA,ia.trafficNames(),elapsedA);
+        double rateB=CpFailoverChecks.trafficBytesPerSecond(preB,postB,ib.trafficNames(),elapsedB);
+        double baseline=before==null?(oldActive==first?rateA:rateB):before.forMember(oldActive,first).traffic();
+        double current=before==null?baseline:oldActive==first?rateB:rateA;
+        String status=rateA<0 || rateB<0?"UNKNOWN":CpFailoverChecks.trafficStatus(baseline,current);
+        record(phase,first,8,status,json(Map.of("bytesPerSecond",rateA,"elapsedNanos",elapsedA)));
+        record(phase,second,8,status,json(Map.of("bytesPerSecond",rateB,"elapsedNanos",elapsedB)));
+        if(!"PASS".equals(status)) checkFailed("TRAFFIC_BELOW_TOLERANCE",8,status);
+        return new double[]{rateA,rateB};
     }
     private void checkFailed(String code,int check,String status) {
         if (!readiness) throw new Stop(code,check,status);
@@ -516,7 +541,7 @@ public final class CpFailoverJobExecutor {
         catch(JsonProcessingException invalid) { throw new IllegalStateException("Derived projection unavailable"); }
     }
     private void record(String phase,Member member,int no,String status,String derived) {
-        if (readiness && no!=13 && !"PASS".equals(status)
+        if (readiness && no!=5 && no!=6 && no!=13 && !"PASS".equals(status)
                 && (readinessFailure==null || !"FAIL".equals(readinessFailure.status) && "FAIL".equals(status)))
             readinessFailure=new Stop("CHECK_NOT_READY",no,status);
         shapes.logUnknown(no,status);
@@ -524,11 +549,14 @@ public final class CpFailoverJobExecutor {
     }
     private boolean waitFor(Member first,Member second,Member active,String activeRole,Member other,
             String otherRole) throws InterruptedException {
-        for(int i=0;i<MAX_POLLS;i++) {
+        for(;polls<MAX_POLLS;) {
+            polls++;
             var a=readState(first);
             var b=readState(second);
             if(roles(a,b,active,activeRole,other,otherRole,first,second)) return true;
-            if(i<MAX_POLLS-1) pause.sleep(POLL_INTERVAL);
+            if("STANDBY".equals(otherRole) && ("ACTIVE".equals((other==first?a:b).localRole())
+                    || "STANDBY".equals((active==first?a:b).localRole()))) throw new Stop("UNEXPECTED_ROLES",1);
+            if(polls<MAX_POLLS) pause.sleep(POLL_INTERVAL);
         }
         return false;
     }

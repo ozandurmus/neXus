@@ -148,6 +148,12 @@ public final class PanFailoverJobExecutor {
             if (!waitFor(first,second,newActive,"active",formerActive,"passive"))
                 throw new Stop("RETURN_TIMEOUT",1);
             confirmDispatch();
+            state("POSTCHECK","POST_RETURN",null,null,null);
+            a=read(first); b=read(second);
+            checks("post_return",first,second,a,b,formerActive,before);
+            if(!"PASS".equals(PanFailoverChecks.roles(read(first),read(second),
+                    formerActive==first?"passive":"active",formerActive==second?"passive":"active")))
+                throw new Stop("UNEXPECTED_ROLES",1);
             state("DONE","DONE","SUCCEEDED",null,"NO_PROBLEMS_FOUND");
         } catch (Stop stopped) {
             if (readiness) finishReadiness(stopped.code,stopped.check,stopped.check==0?"UNKNOWN":stopped.status); else stop(stopped.code,stopped.check);
@@ -285,11 +291,13 @@ public final class PanFailoverJobExecutor {
     }
     private Long checks(String phase,Peer first,Peer second,PanFailoverChecks.State a,
             PanFailoverChecks.State b,Peer oldActive,Long before) throws InterruptedException {
+        boolean switched="post".equals(phase);
+        String returnedRole=switched?"suspended":"passive";
         String role=oldActive==null
             ?("active".equals(a.role())?PanFailoverChecks.roles(a,b,"active","passive")
                 :PanFailoverChecks.roles(a,b,"passive","active"))
-            :PanFailoverChecks.roles(a,b,oldActive==first?"suspended":"active",
-                oldActive==second?"suspended":"active",true);
+            :PanFailoverChecks.roles(a,b,oldActive==first?returnedRole:"active",
+                oldActive==second?returnedRole:"active",switched);
         String syncA=call(first,SESSION_SYNC);
         String syncB=call(second,SESSION_SYNC);
         Long sessionsA=PanFailoverChecks.sessions(call(first,SESSIONS));
@@ -304,7 +312,7 @@ public final class PanFailoverJobExecutor {
                 :new PanFailoverChecks.SessionSync("UNKNOWN","{\"missing\":[\"active role\"]}");
         var links=PanFailoverChecks.linksEvidence(a,b);
         var configurationSync=PanFailoverChecks.syncEvidence(a,b);
-        String[] statuses={role,PanFailoverChecks.relationship(a,b,oldActive!=null),links.status(),
+        String[] statuses={role,PanFailoverChecks.relationship(a,b,switched),links.status(),
             configurationSync.status(),sessionSync.status(),carried,versions};
         for (int i=0;i<statuses.length;i++) {
             int no=i+1;
@@ -332,11 +340,13 @@ public final class PanFailoverJobExecutor {
         for (int i=0;i<MAX_POLLS;i++) {
             var a=read(first); var b=read(second);
             String status=PanFailoverChecks.roles(a,b,active==first?activeRole:otherRole,
-                active==second?activeRole:otherRole,true);
+                active==second?activeRole:otherRole,"suspended".equals(otherRole));
             if("PASS".equals(status)) {
                 if("suspended".equals(otherRole)) switchMirroredRoles=PanFailoverChecks.mirroredRoles(a,b);
                 return true;
             }
+            if("passive".equals(otherRole) && ("active".equals((other==first?a:b).role())
+                    || "passive".equals((active==first?a:b).role()))) throw new Stop("UNEXPECTED_ROLES",1);
             if (i<MAX_POLLS-1) pause.sleep(POLL);
         }
         return false;

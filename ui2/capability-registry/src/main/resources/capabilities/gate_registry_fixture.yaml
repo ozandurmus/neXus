@@ -169,12 +169,12 @@ gates:
     sign_off_state: SIGNED_OFF
     timeout_s: 30
     retry_rule: none
-    max_frequency: "pre/post once per member; cphaprob stat additionally every 3 s for at most 60 s per failover run"
+    max_frequency: "once pre and twice in each post-switch and post-return phase per member; shared budget of 21 polls every 3 s across DOWN and UP per run"
     session_reuse_rule: "one session per device per run"
     unsupported_behavior_ref: "a standalone gateway reporting no cluster is a result, not an error"
     secret_output_risk: none
     safe_telemetry_fields: []
-    source_document_pointer: "docs/design/CP_INVENTORY_COMMAND_GATE_ENTRIES.md entry 4"
+    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_06_FAILOVER_EXECUTION_ESTATE.md item 7; approved PR9 phases"
 
   # Platform identity facts (PLATFORM_IDENTITY_FACTS_CONTRACT §3): the Product Owner ran
   # both commands by hand on an R81.20 management server on 2026-09-22 and supplied the
@@ -240,12 +240,12 @@ gates:
     sign_off_state: SIGNED_OFF
     timeout_s: 30
     retry_rule: none
-    max_frequency: "once pre and once post per member per failover run"
+    max_frequency: "once pre, once post-switch and once post-return per member per failover run; once per readiness run"
     session_reuse_rule: "one session per device per run"
     unsupported_behavior_ref: "no cluster virtual interfaces is a result, not an error"
     secret_output_risk: none
     safe_telemetry_fields: []
-    source_document_pointer: "docs/design/CP_INVENTORY_COMMAND_GATE_ENTRIES.md entry 5"
+    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_06_FAILOVER_EXECUTION_ESTATE.md item 7; approved PR9 phases"
 
   - gate_id: cp_inventory_vsx_stat_v
     vendor: check_point
@@ -389,12 +389,12 @@ gates:
     sign_off_state: SIGNED_OFF
     timeout_s: 30
     retry_rule: none
-    max_frequency: "once pre and once post per member per failover run"
+    max_frequency: "once pre, once post-switch and once post-return per member per failover run; once per readiness run"
     session_reuse_rule: "one session per device per run, VS0 never re-entered"
     unsupported_behavior_ref: "no cluster virtual interfaces for this VS is a result, not an error"
     secret_output_risk: none
     safe_telemetry_fields: []
-    source_document_pointer: "docs/design/CP_INVENTORY_COMMAND_GATE_ENTRIES.md entry 13"
+    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_06_FAILOVER_EXECUTION_ESTATE.md item 7; approved PR9 phases"
 
   - gate_id: cp_inventory_vsid_cphaprob_stat
     vendor: check_point
@@ -406,12 +406,12 @@ gates:
     sign_off_state: SIGNED_OFF
     timeout_s: 30
     retry_rule: none
-    max_frequency: "pre/post once per member; cphaprob stat additionally every 3 s for at most 60 s per failover run"
+    max_frequency: "once pre and twice in each post-switch and post-return phase per member; shared budget of 21 polls every 3 s across DOWN and UP per run"
     session_reuse_rule: "one session per device per run, VS0 never re-entered"
     unsupported_behavior_ref: "same standalone-result rule as entry 4"
     secret_output_risk: none
     safe_telemetry_fields: []
-    source_document_pointer: "docs/design/CP_INVENTORY_COMMAND_GATE_ENTRIES.md entry 14"
+    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_06_FAILOVER_EXECUTION_ESTATE.md item 7; approved PR9 phases"
 
   # cp_vsx_interfaces_identical_to_physical (2026-09-21, Product Owner
   # correction): "fw getifs" replaces "ip -details -4 addr show"/"ip -6 addr
@@ -540,12 +540,12 @@ gates:
     sign_off_state: SIGNED_OFF
     timeout_s: 30
     retry_rule: none
-    max_frequency: "once pre and once post per peer per run"
+    max_frequency: "once pre, once post-switch and once post-return per member per failover run; once per readiness run"
     session_reuse_rule: "the one key-generation session per run"
     unsupported_behavior_ref: "non-XML or error envelope is a result, not an error"
     secret_output_risk: none
     safe_telemetry_fields: []
-    source_document_pointer: "docs/design/PAN_INVENTORY_API_ROUTE_GATE_ENTRIES.md entry 1"
+    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_06_FAILOVER_EXECUTION_ESTATE.md item 7; approved PR9 phases"
 
   - gate_id: pan_inventory_show_ha_state
     vendor: palo_alto
@@ -557,12 +557,12 @@ gates:
     sign_off_state: SIGNED_OFF
     timeout_s: 30
     retry_rule: none
-    max_frequency: "pre/post once per peer; additionally every 3 s for at most 60 s per transition"
+    max_frequency: "once pre, once post-switch and twice post-return per peer; additionally every 3 s for at most 60 s per transition"
     session_reuse_rule: "the one key-generation session per run"
     unsupported_behavior_ref: "HA disabled means no peer, a result, not an error"
     secret_output_risk: none
     safe_telemetry_fields: []
-    source_document_pointer: "docs/design/PAN_INVENTORY_API_ROUTE_GATE_ENTRIES.md entry 2"
+    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_06_FAILOVER_EXECUTION_ESTATE.md item 7; approved PR9 phases"
 
   - gate_id: pan_inventory_show_interface_all
     vendor: palo_alto
@@ -976,12 +976,12 @@ gates:
     sign_off_state: 'SIGNED_OFF'
     timeout_s: 30
     retry_rule: 'none'
-    max_frequency: 'once per device per run'
-    session_reuse_rule: 'the inventory session'
-    unsupported_behavior_ref: 'no install-time line -> UNKNOWN; the inventory run continues'
-    secret_output_risk: 'none expected (policy name, install time)'
+    max_frequency: "once per device per inventory run; once pre, once post-switch and once post-return per member per failover run; once per readiness run"
+    session_reuse_rule: "existing inventory or failover SSH session per member; serial; gateway Expert login shell"
+    unsupported_behavior_ref: "missing policy or install time -> UNKNOWN; blocks failover, inventory continues"
+    secret_output_risk: "policy identities stay in memory; only equality, presence and install-time skew are projected"
     safe_telemetry_fields: []
-    source_document_pointer: 'docs/design/POLICY_INSTALL_TIME_COMMAND_GATE_ENTRIES.md #1 -- PO approved 2026-09-23; bindings UNVERIFIED until measured'
+    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_06_FAILOVER_EXECUTION_ESTATE.md item 7; approved PR9 phases"
   - gate_id: pan_policy_install_show_jobs
     vendor: 'palo_alto'
     platform_role_scope: 'pan_firewall'
@@ -2385,12 +2385,12 @@ gates:
     sign_off_state: SIGNED_OFF
     timeout_s: 30
     retry_rule: none
-    max_frequency: "once pre and once post per member per run"
+    max_frequency: "once pre, once post-switch and once post-return per member per failover run; once per readiness run"
     session_reuse_rule: "one SSH session per member per run; commands serial"
     unsupported_behavior_ref: UNKNOWN
     secret_output_risk: none
     safe_telemetry_fields: []
-    source_document_pointer: "docs/design/FAILOVER_EXECUTION_CP_CONTRACT.md §4"
+    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_06_FAILOVER_EXECUTION_ESTATE.md item 7; approved PR9 phases"
 
   - gate_id: pan_failover_session_sync
     vendor: palo_alto
@@ -2402,12 +2402,12 @@ gates:
     sign_off_state: SIGNED_OFF
     timeout_s: 30
     retry_rule: none
-    max_frequency: "once pre and once post per peer per run"
+    max_frequency: "once pre, once post-switch and once post-return per member per failover run; once per readiness run"
     session_reuse_rule: "one key per peer per run"
     unsupported_behavior_ref: UNKNOWN
     secret_output_risk: none
     safe_telemetry_fields: []
-    source_document_pointer: "docs/design/FAILOVER_EXECUTION_PAN_CONTRACT.md §6"
+    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_06_FAILOVER_EXECUTION_ESTATE.md item 7; approved PR9 phases"
 
   - gate_id: pan_failover_session_info
     vendor: palo_alto
@@ -2419,12 +2419,12 @@ gates:
     sign_off_state: SIGNED_OFF
     timeout_s: 30
     retry_rule: none
-    max_frequency: "once pre and once post per peer per run"
+    max_frequency: "once pre, once post-switch and once post-return per member per failover run; once per readiness run"
     session_reuse_rule: "one key per peer per run"
     unsupported_behavior_ref: UNKNOWN
     secret_output_risk: none
     safe_telemetry_fields: []
-    source_document_pointer: "docs/design/FAILOVER_EXECUTION_PAN_CONTRACT.md §6"
+    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_06_FAILOVER_EXECUTION_ESTATE.md item 7; approved PR9 phases"
 
   - gate_id: pan_failover_suspend
     vendor: palo_alto
@@ -2470,12 +2470,12 @@ gates:
     sign_off_state: SIGNED_OFF
     timeout_s: 30
     retry_rule: none
-    max_frequency: "once pre and once post per member per run"
+    max_frequency: "once pre, once post-switch and once post-return per member per failover run; once per readiness run"
     session_reuse_rule: "one SSH session per member per run; commands serial"
     unsupported_behavior_ref: UNKNOWN
     secret_output_risk: none
     safe_telemetry_fields: []
-    source_document_pointer: "docs/design/FAILOVER_EXECUTION_CP_CONTRACT.md §4"
+    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_06_FAILOVER_EXECUTION_ESTATE.md item 7; approved PR9 phases"
 
   - gate_id: cp_failover_connections
     vendor: check_point
@@ -2504,12 +2504,12 @@ gates:
     sign_off_state: SIGNED_OFF
     timeout_s: 30
     retry_rule: none
-    max_frequency: "two samples 5 s apart pre and post per member per run"
+    max_frequency: "two samples 5 s apart per member in baseline immediately before DOWN, post-switch and post-return; once per readiness run"
     session_reuse_rule: "one SSH session per member per run; commands serial"
     unsupported_behavior_ref: UNKNOWN
     secret_output_risk: none
     safe_telemetry_fields: []
-    source_document_pointer: "docs/design/FAILOVER_EXECUTION_CP_CONTRACT.md §4"
+    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_06_FAILOVER_EXECUTION_ESTATE.md item 7; approved PR9 phases"
 
   - gate_id: cp_failover_syncstat
     vendor: check_point
@@ -2521,12 +2521,12 @@ gates:
     sign_off_state: SIGNED_OFF
     timeout_s: 30
     retry_rule: none
-    max_frequency: "once pre and once post per member per run"
+    max_frequency: "once pre, once post-switch and once post-return per member per failover run; once per readiness run"
     session_reuse_rule: "one SSH session per member per run; commands serial"
     unsupported_behavior_ref: UNKNOWN
     secret_output_risk: none
     safe_telemetry_fields: []
-    source_document_pointer: "docs/design/FAILOVER_EXECUTION_CP_CONTRACT.md §12"
+    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_06_FAILOVER_EXECUTION_ESTATE.md item 7; approved PR9 phases"
 
   - gate_id: cp_failover_fw_stat
     vendor: check_point
@@ -2538,12 +2538,12 @@ gates:
     sign_off_state: SIGNED_OFF
     timeout_s: 30
     retry_rule: none
-    max_frequency: "once pre and once post per member per run"
+    max_frequency: "once pre, once post-switch and once post-return per member per failover run; once per readiness run"
     session_reuse_rule: "one SSH session per member per run; commands serial"
     unsupported_behavior_ref: UNKNOWN
     secret_output_risk: none
     safe_telemetry_fields: []
-    source_document_pointer: "docs/design/FAILOVER_EXECUTION_CP_CONTRACT.md §12"
+    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_06_FAILOVER_EXECUTION_ESTATE.md item 7; approved PR9 phases"
 
   - gate_id: cp_failover_down
     vendor: check_point
@@ -2589,12 +2589,12 @@ gates:
     sign_off_state: SIGNED_OFF
     timeout_s: 30
     retry_rule: none
-    max_frequency: "once pre and once post per member per run"
+    max_frequency: "once pre, once post-switch and once post-return per member per failover run; once per readiness run"
     session_reuse_rule: "one SSH session per member per run; commands serial"
     unsupported_behavior_ref: UNKNOWN
     secret_output_risk: none
     safe_telemetry_fields: []
-    source_document_pointer: "docs/design/FAILOVER_EXECUTION_CP_CONTRACT.md §4"
+    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_06_FAILOVER_EXECUTION_ESTATE.md item 7; approved PR9 phases"
 
   - gate_id: cp_failover_arp_vsid
     vendor: check_point
@@ -2606,12 +2606,12 @@ gates:
     sign_off_state: SIGNED_OFF
     timeout_s: 30
     retry_rule: none
-    max_frequency: "once pre and once post per member per run"
+    max_frequency: "once pre, once post-switch and once post-return per member per failover run; once per readiness run"
     session_reuse_rule: "one SSH session per member per run; commands serial"
     unsupported_behavior_ref: UNKNOWN
     secret_output_risk: none
     safe_telemetry_fields: []
-    source_document_pointer: "docs/design/FAILOVER_EXECUTION_CP_CONTRACT.md §4"
+    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_06_FAILOVER_EXECUTION_ESTATE.md item 7; approved PR9 phases"
 
   - gate_id: cp_failover_connections_vsid
     vendor: check_point
@@ -2640,12 +2640,12 @@ gates:
     sign_off_state: SIGNED_OFF
     timeout_s: 30
     retry_rule: none
-    max_frequency: "two samples 5 s apart pre and post per member per run"
+    max_frequency: "two samples 5 s apart per member in baseline immediately before DOWN, post-switch and post-return; once per readiness run"
     session_reuse_rule: "one SSH session per member per run; commands serial"
     unsupported_behavior_ref: UNKNOWN
     secret_output_risk: none
     safe_telemetry_fields: []
-    source_document_pointer: "docs/design/FAILOVER_EXECUTION_CP_CONTRACT.md §4"
+    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_06_FAILOVER_EXECUTION_ESTATE.md item 7; approved PR9 phases"
 
   - gate_id: cp_failover_syncstat_vsid
     vendor: check_point
@@ -2657,12 +2657,12 @@ gates:
     sign_off_state: SIGNED_OFF
     timeout_s: 30
     retry_rule: none
-    max_frequency: "once pre and once post per member per run"
+    max_frequency: "once pre, once post-switch and once post-return per member per failover run; once per readiness run"
     session_reuse_rule: "one SSH session per member per run; commands serial"
     unsupported_behavior_ref: UNKNOWN
     secret_output_risk: none
     safe_telemetry_fields: []
-    source_document_pointer: "docs/design/FAILOVER_EXECUTION_CP_CONTRACT.md §12"
+    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_06_FAILOVER_EXECUTION_ESTATE.md item 7; approved PR9 phases"
 
   - gate_id: cp_failover_fw_stat_vsid
     vendor: check_point
@@ -2674,12 +2674,12 @@ gates:
     sign_off_state: SIGNED_OFF
     timeout_s: 30
     retry_rule: none
-    max_frequency: "once pre and once post per member per run"
+    max_frequency: "once pre, once post-switch and once post-return per member per failover run; once per readiness run"
     session_reuse_rule: "one SSH session per member per run; commands serial"
     unsupported_behavior_ref: UNKNOWN
     secret_output_risk: none
     safe_telemetry_fields: []
-    source_document_pointer: "docs/design/FAILOVER_EXECUTION_CP_CONTRACT.md §12"
+    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_06_FAILOVER_EXECUTION_ESTATE.md item 7; approved PR9 phases"
 
   - gate_id: cp_failover_down_vsid
     vendor: check_point
@@ -2793,12 +2793,12 @@ gates:
     sign_off_state: SIGNED_OFF
     timeout_s: 30
     retry_rule: none
-    max_frequency: "once pre and once post per member per run"
+    max_frequency: "once pre, once post-switch and once post-return per member per failover run; once per readiness run"
     session_reuse_rule: "one SSH session per member per run; commands serial"
     unsupported_behavior_ref: UNKNOWN
     secret_output_risk: none
     safe_telemetry_fields: [pnotes]
-    source_document_pointer: "ui2/service/src/main/resources/db/migration/V111__cp_failover_measured_checks.sql (PO approved 2026-09-30)"
+    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_06_FAILOVER_EXECUTION_ESTATE.md item 7; approved PR9 phases"
 
   - gate_id: cp_failover_pnotes_vsid
     vendor: check_point
@@ -2810,12 +2810,12 @@ gates:
     sign_off_state: SIGNED_OFF
     timeout_s: 30
     retry_rule: none
-    max_frequency: "once pre and once post per member per run"
+    max_frequency: "once pre, once post-switch and once post-return per member per failover run; once per readiness run"
     session_reuse_rule: "one SSH session per member per run; commands serial"
     unsupported_behavior_ref: UNKNOWN
     secret_output_risk: none
     safe_telemetry_fields: [pnotes]
-    source_document_pointer: "ui2/service/src/main/resources/db/migration/V111__cp_failover_measured_checks.sql (PO approved 2026-09-30)"
+    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_06_FAILOVER_EXECUTION_ESTATE.md item 7; approved PR9 phases"
 
   - gate_id: cp_failover_bonds
     vendor: check_point
@@ -2827,12 +2827,12 @@ gates:
     sign_off_state: SIGNED_OFF
     timeout_s: 30
     retry_rule: none
-    max_frequency: "once pre and once post per member per run"
+    max_frequency: "once pre, once post-switch and once post-return per member per failover run; once per readiness run"
     session_reuse_rule: "one SSH session per member per run; commands serial"
     unsupported_behavior_ref: UNKNOWN
     secret_output_risk: none
     safe_telemetry_fields: []
-    source_document_pointer: "ui2/service/src/main/resources/db/migration/V111__cp_failover_measured_checks.sql (PO approved 2026-09-30)"
+    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_06_FAILOVER_EXECUTION_ESTATE.md item 7; approved PR9 phases"
 
   - gate_id: cp_failover_bonds_vsid
     vendor: check_point
@@ -2844,12 +2844,12 @@ gates:
     sign_off_state: SIGNED_OFF
     timeout_s: 30
     retry_rule: none
-    max_frequency: "once pre and once post per member per run"
+    max_frequency: "once pre, once post-switch and once post-return per member per failover run; once per readiness run"
     session_reuse_rule: "one SSH session per member per run; commands serial"
     unsupported_behavior_ref: UNKNOWN
     secret_output_risk: none
     safe_telemetry_fields: []
-    source_document_pointer: "ui2/service/src/main/resources/db/migration/V111__cp_failover_measured_checks.sql (PO approved 2026-09-30)"
+    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_06_FAILOVER_EXECUTION_ESTATE.md item 7; approved PR9 phases"
 
   - gate_id: cp_failover_last_event
     vendor: check_point
@@ -2861,12 +2861,12 @@ gates:
     sign_off_state: SIGNED_OFF
     timeout_s: 30
     retry_rule: none
-    max_frequency: "once pre and once post per member per run"
+    max_frequency: "once pre, once post-switch and once post-return per member per failover run; once per readiness run"
     session_reuse_rule: "one SSH session per member per run; commands serial"
     unsupported_behavior_ref: UNKNOWN
     secret_output_risk: none
     safe_telemetry_fields: [lastFailoverAt, assumedTimeZone]
-    source_document_pointer: "ui2/service/src/main/resources/db/migration/V111__cp_failover_measured_checks.sql (PO approved 2026-09-30)"
+    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_06_FAILOVER_EXECUTION_ESTATE.md item 7; approved PR9 phases"
 
   - gate_id: cp_failover_last_event_vsid
     vendor: check_point
@@ -2878,12 +2878,12 @@ gates:
     sign_off_state: SIGNED_OFF
     timeout_s: 30
     retry_rule: none
-    max_frequency: "once pre and once post per member per run"
+    max_frequency: "once pre, once post-switch and once post-return per member per failover run; once per readiness run"
     session_reuse_rule: "one SSH session per member per run; commands serial"
     unsupported_behavior_ref: UNKNOWN
     secret_output_risk: none
     safe_telemetry_fields: [lastFailoverAt, assumedTimeZone]
-    source_document_pointer: "ui2/service/src/main/resources/db/migration/V111__cp_failover_measured_checks.sql (PO approved 2026-09-30)"
+    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_06_FAILOVER_EXECUTION_ESTATE.md item 7; approved PR9 phases"
 
   - gate_id: cp_failover_routing
     vendor: check_point
@@ -2895,12 +2895,12 @@ gates:
     sign_off_state: SIGNED_OFF
     timeout_s: 30
     retry_rule: none
-    max_frequency: "once pre and once post per member per run"
+    max_frequency: "once pre, once post-switch and once post-return per member per failover run; once per readiness run"
     session_reuse_rule: "one SSH session per member per run; commands serial"
     unsupported_behavior_ref: UNKNOWN
     secret_output_risk: none
     safe_telemetry_fields: [routeCount, defaultRoute]
-    source_document_pointer: "ui2/service/src/main/resources/db/migration/V111__cp_failover_measured_checks.sql (PO approved 2026-09-30)"
+    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_06_FAILOVER_EXECUTION_ESTATE.md item 7; approved PR9 phases"
 
   - gate_id: cp_failover_routing_vsid
     vendor: check_point
@@ -2912,12 +2912,12 @@ gates:
     sign_off_state: SIGNED_OFF
     timeout_s: 30
     retry_rule: none
-    max_frequency: "once pre and once post per member per run"
+    max_frequency: "once pre, once post-switch and once post-return per member per failover run; once per readiness run"
     session_reuse_rule: "one SSH session per member per run; commands serial"
     unsupported_behavior_ref: UNKNOWN
     secret_output_risk: none
     safe_telemetry_fields: [routeCount, defaultRoute]
-    source_document_pointer: "ui2/service/src/main/resources/db/migration/V111__cp_failover_measured_checks.sql (PO approved 2026-09-30)"
+    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_06_FAILOVER_EXECUTION_ESTATE.md item 7; approved PR9 phases"
 
   - gate_id: "cp_policy_packages"
     vendor: "check_point"
