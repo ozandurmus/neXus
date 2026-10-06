@@ -111,7 +111,7 @@ class PolicyRuleHistorySchemaTest {
                 legacyNanos = System.nanoTime() - legacyStarted;
                 try (var statement = db.createStatement()) { statement.executeUpdate("delete from policy_snapshot where policy_id='legacy-policy'"); }
             } finally {
-                try (var resource = getClass().getResourceAsStream("/db/migration/V122__policy_history_bulk_capture.sql");
+                try (var resource = getClass().getResourceAsStream("/db/migration/V132__policy_history_bounded_memory.sql");
                      var migration = fixture.migrateConnection(); var statement = migration.createStatement()) {
                     assertNotNull(resource);
                     statement.execute(new String(resource.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8));
@@ -140,6 +140,123 @@ class PolicyRuleHistorySchemaTest {
             System.out.printf("Synthetic policy rules=3500 buildMs=%d jsonbCheckpointMs=%d legacyHistoryMs=%d legacyTimedOut=%s historyMs=%d unchangedMs=%d%n",
                 buildNanos / 1_000_000, checkpointNanos / 1_000_000, legacyNanos / 1_000_000, legacyTimedOut,
                 historyNanos / 1_000_000, unchangedNanos / 1_000_000);
+        }
+    }
+
+
+    private String migration(String name) throws Exception {
+        try (var resource = getClass().getResourceAsStream("/db/migration/" + name)) {
+            assertNotNull(resource);
+            return new String(resource.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        }
+    }
+
+    private java.util.List<String> historyScenario(Connection db) throws Exception {
+        String initial = rule("opaque-001", 1, "s1", true).replace("\"extras\":{}",
+            "\"extras\":{\"time\":[\"s2\",\"s1\"],\"vpn\":[\"missing\"],"
+            + "\"last-modified\":[\"synthetic-time-1\"],\"last-modifier\":[\"synthetic-editor\"]}");
+        String fallback = rule("fallback", 2, "missing", true).replace("\"uuid\":\"fallback\"", "\"uuid\":\"\"");
+        save(db, 1, initial + "," + fallback, false);
+        save(db, 2, "", true);
+        String modified = initial.replace("\"number\":1", "\"number\":3").replace("\"enabled\":true", "\"enabled\":false");
+        save(db, 3, modified + "," + fallback, false);
+        String countersOnly = modified.substring(0, modified.length() - 1) + ",\"hitCounts\":{\"hits\":99}}";
+        save(db, 4, countersOnly + "," + fallback, false);
+        // Object names and parent context are configuration history, unlike counters/editor metadata.
+        try (var statement = db.createStatement()) {
+            statement.executeUpdate("update policy_snapshot set collected_at='2026-10-02T05:00:00Z', "
+                + "snapshot=jsonb_set(jsonb_set(snapshot, '{objects,s1,name}', '\"OBJ-RENAMED\"'), "
+                + "'{sections,0,parentRuleId}', '\"synthetic-parent\"') where policy_id='policy-1'");
+        }
+        save(db, 6, modified + "," + modified + "," + fallback, false); // Ambiguous UUID is excluded.
+        save(db, 7, modified, false); // Previous duplicate remains excluded; fallback is removed.
+        save(db, 8, initial, false);
+        save(db, 7, "", false); // Older publication cannot advance the baseline.
+        save(db, 9, "", true);
+        save(db, 10, "", false);
+        var result = new java.util.ArrayList<String>();
+        try (var statement = db.createStatement(); var rows = statement.executeQuery(
+                "select (to_jsonb(h) - 'revision_id')::text from policy_rule_history h order by collected_at, rule_key")) {
+            while (rows.next()) result.add(rows.getString(1));
+        }
+        return result;
+    }
+
+    @Test void boundedCaptureMatchesV122HistoryExactly() throws Exception {
+        try (var fixture = Ui2PostgresFixture.create("policy_history_equivalence")) {
+            fixture.runFlyway();
+            String original = migration("V120__policy_rule_history.sql");
+            original = original.substring(original.indexOf("CREATE FUNCTION fn_policy_history_rules("),
+                original.indexOf("CREATE FUNCTION fn_policy_history_fields("))
+                .replace("CREATE FUNCTION", "CREATE OR REPLACE FUNCTION");
+            try (var db = fixture.migrateConnection(); var statement = db.createStatement()) {
+                statement.execute(original);
+                statement.execute(migration("V122__policy_history_bulk_capture.sql"));
+            }
+            java.util.List<String> expected;
+            try (var db = fixture.appConnection()) {
+                expected = historyScenario(db);
+                assertFalse(expected.isEmpty());
+                try (var statement = db.createStatement()) { statement.executeUpdate("delete from policy_snapshot"); }
+            }
+            try (var db = fixture.migrateConnection(); var statement = db.createStatement()) {
+                statement.execute(migration("V132__policy_history_bounded_memory.sql"));
+            }
+            try (var db = fixture.appConnection()) {
+                assertEquals(expected, historyScenario(db));
+            }
+        }
+    }
+
+    @Test @org.junit.jupiter.api.Timeout(180)
+    void synthetic16000RuleSnapshotOver27MbPreservesHistoryAndRollback() throws Exception {
+        try (var fixture = Ui2PostgresFixture.create("policy_history_large")) {
+            fixture.runFlyway();
+            var rules = new java.util.ArrayList<String>();
+            var objects = new java.util.ArrayList<String>();
+            for (int i = 0; i < 16000; i++) {
+                rules.add(rule("rule-" + i, i + 1, "object-" + i, true));
+                objects.add("\"object-" + i + "\":{\"name\":\"OBJ-SERVICE-" + i
+                    + "\",\"description\":\"" + "synthetic ".repeat(160) + "\"}");
+            }
+            String body = "{\"sections\":[{\"source\":\"Shared\",\"name\":\"Layer\",\"rules\":["
+                + String.join(",", rules) + "]}],\"objects\":{" + String.join(",", objects) + "},\"failures\":[]}";
+            assertTrue(body.getBytes(java.nio.charset.StandardCharsets.UTF_8).length >= 27_000_000);
+            try (var connection = fixture.appConnection()) {
+                var db = org.jooq.impl.DSL.using(connection, org.jooq.SQLDialect.POSTGRES);
+                db.execute("SET statement_timeout='45s'");
+                db.execute("SET work_mem='4MB'");
+                var repository = new com.securityexpert.nexus.ui2.persistence.policy.PolicySnapshotRepository(
+                    new com.securityexpert.nexus.ui2.persistence.JooqTransactionBoundary(db));
+                for (int revision = 1; revision <= 2; revision++) {
+                    repository.save(new com.securityexpert.nexus.ui2.persistence.policy.PolicySnapshotRepository.Stored(
+                        "policy-1", "2026-10-02T0" + revision + ":00:00Z", "{}", body),
+                        "synthetic-actor", "policy_collect_publish");
+                    assertEquals(16000, count(connection)); // Unchanged second publication adds nothing.
+                }
+                // A single changed rule in another full-size publication creates exactly one revision.
+                String modified = body.replace("\"uuid\":\"rule-0\",\"name\":\"OBJ-RULE-01\",\"number\":1,\"enabled\":true",
+                    "\"uuid\":\"rule-0\",\"name\":\"OBJ-RULE-01\",\"number\":1,\"enabled\":false");
+                assertNotEquals(body, modified);
+                repository.save(new com.securityexpert.nexus.ui2.persistence.policy.PolicySnapshotRepository.Stored(
+                    "policy-1", "2026-10-02T03:00:00Z", "{}", modified), "synthetic-actor", "policy_collect_publish");
+                assertEquals(16001, count(connection));
+                assertTrue(db.fetchOne("select changes = '[{\"field\":\"enabled\",\"before\":true,\"after\":false}]'::jsonb "
+                    + "from policy_rule_history where change_type='modified'").get(0, Boolean.class));
+                connection.setAutoCommit(false);
+                try {
+                    db.execute("update policy_snapshot set snapshot='{\"sections\":[],\"objects\":{},\"failures\":[]}'::jsonb");
+                    assertEquals(32001, count(connection));
+                } finally {
+                    connection.rollback();
+                    connection.setAutoCommit(true);
+                }
+                assertEquals(16001, count(connection));
+                assertTrue(db.fetchOne("select b.snapshot = p.snapshot from policy_rule_history_baseline b "
+                    + "join policy_snapshot p using(policy_id)").get(0, Boolean.class));
+                assertEquals(0, db.fetchOne("select count(*)::int from pg_class where relnamespace=pg_my_temp_schema() "
+                    + "and relname like 'policy_json_%'").get(0, Integer.class));
+            }
         }
     }
 
