@@ -1,5 +1,8 @@
 package com.securityexpert.nexus.ui2.worker.failover;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+
 import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
@@ -107,14 +110,25 @@ class CpFailoverChecksTest {
     }
     @Test void reciprocalClaimsFailClosedWithoutNormalizingOpaqueIds() {
         var a=CpFailoverChecks.state(ACTIVE);
-        check(CpFailoverChecks.reciprocal(a,CpFailoverChecks.state(STANDBY)).equals("PASS"));
-        for(String other:new String[]{STANDBY.replace("Active","Down"),
-                STANDBY.replace("2 (local)","02 (local)"),ACTIVE}) {
-            check(CpFailoverChecks.reciprocal(a,CpFailoverChecks.state(other)).equals("FAIL"));
+        assertEquals("PASS",CpFailoverChecks.reciprocal(a,CpFailoverChecks.state(STANDBY)),
+            "Coherent reciprocal member observations");
+        for(var scenario:Map.of("opposed peer role",STANDBY.replace("% Active","% Down"),
+                "different opaque local ID",STANDBY.replace("2 (local)","02 (local)"),
+                "same local observer",ACTIVE).entrySet()) {
+            var b=CpFailoverChecks.state(scenario.getValue());
+            assertEquals("HA",b.mode(),"Fixture must preserve HA mode: "+scenario.getKey());
+            assertEquals("FAIL",CpFailoverChecks.reciprocal(a,b),"Reciprocal check: "+scenario.getKey());
         }
-        check(CpFailoverChecks.reciprocal(a,CpFailoverChecks.state(STANDBY.replace("(local)",""))).equals("UNKNOWN"));
-        check(!CpFailoverChecks.corroborated(a,CpFailoverChecks.state(STANDBY.replace("Standby","Active"))));
-        check(!CpFailoverChecks.corroborated(a,CpFailoverChecks.state("Cluster Mode: High Availability\n2 (local) 192.0.2.12 Standby")));
+        var padded=CpFailoverChecks.state(STANDBY.replace("2 (local)","02 (local)"));
+        assertEquals("02",padded.localId(),"Opaque local ID must retain its leading zero");
+        assertEquals("PASS",CpFailoverChecks.reciprocal(CpFailoverChecks.state(ACTIVE.replace("\n2 ","\n02 ")),padded),
+            "Exactly matching opaque IDs must corroborate");
+        assertEquals("UNKNOWN",CpFailoverChecks.reciprocal(a,CpFailoverChecks.state(STANDBY.replace("(local)",""))),
+            "Missing local observation must fail closed");
+        assertFalse(CpFailoverChecks.corroborated(a,CpFailoverChecks.state(STANDBY.replace("Standby","Active"))),
+            "Conflicting active roles must not corroborate");
+        assertFalse(CpFailoverChecks.corroborated(a,CpFailoverChecks.state("Cluster Mode: High Availability\n2 (local) 192.0.2.12 Standby")),
+            "Incomplete member table must not corroborate");
     }
     @Test void onlyReportedHaModeIsAdmittedRegardlessOfAssignedLoad() {
         for(String mode:new String[]{"Virtual System Load Sharing","Load Sharing Unicast","Load Sharing Multicast",
