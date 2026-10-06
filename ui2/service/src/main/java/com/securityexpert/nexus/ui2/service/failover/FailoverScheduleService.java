@@ -77,7 +77,7 @@ public class FailoverScheduleService {
             "signed_mutation_target, window_start, window_end, max_start_delay_minutes, execution_deadline, " +
             "requester_id, approver_id, grant_id, baseline_digest, baseline_json, envelope_signature, status, " +
             "client_nonce, scheduled_at, claimed_at, executed_at, execution_result_id, abort_reason_code, " +
-            "abort_reason, cancelled_by, cancelled_at, baseline_format_version ";
+            "abort_reason, cancelled_by, cancelled_at, baseline_format_version, key_id, algorithm_version ";
 
     private final PreflightService preflightService;
     private final FailoverAuthorizationService authzService;
@@ -200,11 +200,12 @@ public class FailoverScheduleService {
 
         // 4. Durable Signing Key Resolution (CF-P0.5): fail cleanly rather than sign with a key
         // that will not durably verify after a restart.
+        String signingKeyId = keyManagementService.currentKeyId()
+            .orElseThrow(() -> new IllegalStateException("ABORTED_KEY_UNAVAILABLE"));
         ScheduleCryptographicService cryptoService = keyManagementService
-            .resolveCryptoService(FailoverScheduleEnvelope.DEFAULT_KEY_ID)
+            .resolveCryptoService(signingKeyId)
             .orElseThrow(() -> new IllegalStateException(
-                "ABORTED_KEY_UNAVAILABLE: signing key '" + FailoverScheduleEnvelope.DEFAULT_KEY_ID +
-                    "' is not available; a new schedule cannot be sealed"));
+                "ABORTED_KEY_UNAVAILABLE: a new schedule cannot be sealed"));
 
         // Deterministic content digest (Claude CF-P0.2): computed over the baseline's own
         // fields, not a random token, so the digest can be independently re-derived and
@@ -234,7 +235,7 @@ public class FailoverScheduleService {
             scheduleId, request.clusterRef(), vendor, commandFamilyId, request.actionKind().name(),
             active.memberId(), request.windowStart(), request.windowEnd(), request.maxStartDelayMinutes(),
             request.requesterId(), request.approverId(), grantId, baselineDigest,
-            request.clientNonce(), FailoverScheduleEnvelope.DEFAULT_KEY_ID,
+            request.clientNonce(), signingKeyId,
             FailoverScheduleEnvelope.DEFAULT_ALG_VERSION
         );
 
@@ -245,7 +246,8 @@ public class FailoverScheduleService {
             request.actionKind(), active.memberId(), request.windowStart(), request.windowEnd(),
             request.maxStartDelayMinutes(), executionDeadline, request.requesterId(), request.approverId(),
             grantId, baseline, envelopeSignature, FailoverScheduleStatus.SCHEDULED, request.clientNonce(),
-            now, null, null, null, null, null, null, null
+            now, null, null, null, null, null, null, null, baselineDigest,
+            BaselineSnapshotSummary.FORMAT_VERSION, signingKeyId, FailoverScheduleEnvelope.DEFAULT_ALG_VERSION
         );
 
         insertSchedule(record);
@@ -319,11 +321,11 @@ public class FailoverScheduleService {
         // 2. Durable Signing Key Resolution (CF-P0.5/CF-P1.2): a key that cannot be resolved is
         // reported as ABORTED_KEY_UNAVAILABLE, never as a false ABORTED_TAMPERED.
         Optional<ScheduleCryptographicService> cryptoServiceOpt =
-            keyManagementService.resolveCryptoService(FailoverScheduleEnvelope.DEFAULT_KEY_ID);
+            keyManagementService.resolveCryptoService(record.keyId(), record.algorithmVersion());
         if (cryptoServiceOpt.isEmpty()) {
             FailoverScheduleRecord keyUnavailable = record.withAbort(
                 FailoverScheduleStatus.ABORTED_KEY_UNAVAILABLE, "KEY_UNAVAILABLE",
-                "Signing key '" + FailoverScheduleEnvelope.DEFAULT_KEY_ID + "' could not be resolved; envelope cannot be verified"
+                "Signing key or algorithm is unavailable; envelope cannot be verified"
             );
             updateScheduleCas(scheduleId, record.status(), keyUnavailable);
             scheduleLedger.recordTransition(scheduleId, record.status(), FailoverScheduleStatus.ABORTED_KEY_UNAVAILABLE, attemptId, triggeringActor, "Signing key unavailable at dispatch");
@@ -357,7 +359,7 @@ public class FailoverScheduleService {
             record.actionKind().name(), record.signedMutationTarget(), record.windowStart(), record.windowEnd(),
             record.maxStartDelayMinutes(), record.requesterId(), record.approverId(),
             record.grantId(), record.baselineDigest(), record.clientNonce(),
-            FailoverScheduleEnvelope.DEFAULT_KEY_ID, FailoverScheduleEnvelope.DEFAULT_ALG_VERSION
+            record.keyId(), record.algorithmVersion()
         );
 
         if (!cryptoServiceOpt.get().verifyEnvelope(envelope, record.envelopeSignature())) {
@@ -545,14 +547,14 @@ public class FailoverScheduleService {
         if (isDurable()) {
             jdbcTemplate.update(
                 "INSERT INTO failover_schedules (" + SCHEDULE_COLUMNS + ", version) VALUES (" +
-                    "?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?::jsonb,?,?,?,?,?,?,?,?,?,?,?,?,1)",
+                    "?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?::jsonb,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1)",
                 record.scheduleId(), record.clusterRef(), record.maskedClusterName(), record.vendor(),
                 record.commandFamilyId(), record.actionKind().name(), record.signedMutationTarget(),
                 record.windowStart().atOffset(ZoneOffset.UTC), record.windowEnd().atOffset(ZoneOffset.UTC), record.maxStartDelayMinutes(),
                 record.executionDeadline().atOffset(ZoneOffset.UTC), record.requesterId(), record.approverId(), record.grantId(),
                 record.baselineDigest(), writeBaselineJson(record.baselineSummary()),
                 record.envelopeSignature(), record.status().name(), record.clientNonce(),
-                record.scheduledAt().atOffset(ZoneOffset.UTC), null, null, null, null, null, null, null, record.baselineFormatVersion()
+                record.scheduledAt().atOffset(ZoneOffset.UTC), null, null, null, null, null, null, null, record.baselineFormatVersion(), record.keyId(), record.algorithmVersion()
             );
             return;
         }
@@ -642,7 +644,8 @@ public class FailoverScheduleService {
             rs.getString("abort_reason"),
             rs.getString("cancelled_by"),
             cancelledAt != null ? cancelledAt.toInstant() : null,
-            rs.getString("baseline_digest"), rs.getInt("baseline_format_version")
+            rs.getString("baseline_digest"), rs.getInt("baseline_format_version"),
+            rs.getString("key_id"), rs.getString("algorithm_version")
         );
     }
 }
