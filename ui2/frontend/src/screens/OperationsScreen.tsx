@@ -157,10 +157,10 @@ export function OperationsScreen() {
       PaperProps={{ role: "dialog", "aria-modal": true, "aria-label": "HA readiness detail", sx: { width: "min(100vw, 1000px)", p: 2, bgcolor: m3.scLowest } }}>
       {selectedCluster && <>
         <M3Button emphasis="text" onClick={() => setSelectedCluster(null)}>Close detail</M3Button>
-        {selectedReadinessRow && <ReadinessCard checks={selectedReadinessRow.readiness?.checks ?? []}
-          members={selectedReadinessRow.members} cluster={selected?.title ?? "Masked unit"} vendor={selectedReadinessRow.vendor}
-          masked={selectedReadinessRow.masked} status={selectedReadinessRow.readiness?.status}
-          observedAt={selectedReadinessRow.readiness?.observedAt} canRun={false} onRun={() => {}} />}
+        <ReadinessCard checks={selectedReadinessRow?.readiness?.checks ?? []}
+          members={selectedReadinessRow?.members} cluster={selected?.title ?? "Masked unit"} vendor={selectedReadinessRow?.vendor}
+          masked={selectedReadinessRow?.masked} status={selectedReadinessRow?.readiness?.status}
+          observedAt={selectedReadinessRow?.readiness?.observedAt} canRun={false} onRun={() => {}} />
         {selected?.members[0] && ["check_point", "palo_alto"].includes(selected.members[0].vendor_hint) ?
           <CpFailoverPanel key={selectedCluster} memberDeviceId={selected.members[0].device_id}
             vendor={selected.members[0].vendor_hint as "check_point" | "palo_alto"} initialUnitId={expandedUnit} />

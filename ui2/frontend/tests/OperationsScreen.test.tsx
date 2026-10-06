@@ -199,15 +199,27 @@ it("nests a VSX unit inside its cluster with a separate readiness action", async
   expect(String(vi.mocked(fetch).mock.calls.find(([input]) => String(input).includes("cp-failover"))?.[0])).toBe("/api/v2/cp-failover/summary");
 });
 
-it("opens full detail in a right drawer, keeps the list and does not change the URL", async () => {
-  stubFetch(MEMBERS, READY_SUMMARY);
+it.each([
+  { scenario: "stored results", summary: READY_SUMMARY },
+  { scenario: "masked stored results", summary: READY_SUMMARY.map(row => ({ ...row, masked: true })) },
+  { scenario: "no summary yet", summary: [] },
+])("opens full detail with $scenario, keeps the results table and failover flow", async ({ summary }) => {
+  stubFetch(MEMBERS, summary);
   render(withTheme(<OperationsScreen />));
   const url = window.location.href;
   fireEvent.keyDown(await screen.findByRole("row", { name: "CLS-ROMEO-01" }), { key: "Enter" });
   fireEvent.click(screen.getByRole("button", { name: "Open full detail" }));
   const drawer = screen.getByRole("dialog", { name: "HA readiness detail" });
   expect(drawer).toHaveClass("MuiDrawer-paperAnchorRight");
-  expect(within(drawer).getByRole("table", { name: "Readiness results" })).toBeInTheDocument();
+  const results = within(drawer).getByRole("table", { name: "Readiness results" });
+  expect(results).toBeVisible();
+  if (summary.length) {
+    expect(within(results).getByText("Active")).toBeVisible();
+    expect(within(results).getByText("Standby")).toBeVisible();
+  } else {
+    expect(within(drawer).getByText("No observations yet")).toBeVisible();
+  }
+  expect(within(drawer).getByLabelText("Check Point failover")).toBeInTheDocument();
   expect(screen.getByRole("table", { name: "HA clusters", hidden: true })).toBeInTheDocument();
   expect(window.location.href).toBe(url);
   fireEvent.click(within(drawer).getByRole("button", { name: "Close detail" }));
