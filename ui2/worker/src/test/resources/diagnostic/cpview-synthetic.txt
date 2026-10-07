@@ -1,0 +1,15 @@
+[Traffic]
+Throughput in: 120 Mbps
+Throughput out: 80 Mbps
+Packets/s: 1500 pps
+Drops: 3
+CPU %: 12 %
+Concurrent connections: 2400
+New connections/s: 70 connections/s
+[Invented appliance section]
+Synthetic interface: invented-port
+Synthetic endpoint: 192.0.2.20
+Synthetic policy: invented-policy
+Synthetic user: invented-person
+Unknown counter: 999 Mbps
+Context: 7

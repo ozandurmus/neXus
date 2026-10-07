@@ -7,6 +7,7 @@ import com.securityexpert.nexus.ui2.platform.ActionClass;
 
 /** Exact signed-off SSH reads, resolved again against the live gate at dispatch. */
 public final class DiagnosticRead {
+    public static final String CPVIEW_GATE = "cp_diagnostic_cpview_measure";
     public static final String CAPABILITY = "diagnostic_read";
     // Read-class gates that alter CLI state, export/copy data, write files, or require collector-owned paths.
     public static final Set<String> DIAGNOSTIC_EXCLUDED = Set.of(
@@ -89,9 +90,11 @@ public final class DiagnosticRead {
 
     private static boolean eligible(GateRow row, String vendor, String role, String model) {
         if (!row.vendor().equals(vendor) || !"SSH_EXEC".equals(row.transportKind())
-                || row.actionClass() != ActionClass.CLASS_0_READ || row.signOffState() != SignOffState.SIGNED_OFF
+                || row.actionClass() != ActionClass.CLASS_0_READ || (row.signOffState() != SignOffState.SIGNED_OFF && !CPVIEW_GATE.equals(row.gateId()))
                 || row.gateId().startsWith("cp_policy_") || row.gateId().startsWith("pan_policy_")
                 || DIAGNOSTIC_EXCLUDED.contains(row.gateId()) || row.canonicalCommandKey().contains("%s")) return false;
+        if (CPVIEW_GATE.equals(row.gateId()) && (model == null || model.isBlank()
+                || CheckPointSparkModelHint.isKnownSparkModel(Optional.of(model)))) return false;
         String scope = switch (vendor) {
             case "check_point" -> "management_server".equals(role) ? "cp_multi_domain_server" :
                 "gateway".equals(role) ? CheckPointSparkModelHint.isKnownSparkModel(Optional.ofNullable(model))
@@ -113,7 +116,8 @@ public final class DiagnosticRead {
         try {
             var resolution = GateResolver.resolve(row.key(), Optional.of(ActionClass.CLASS_0_READ), gates);
             return resolution instanceof GateResolution.Known known && known.gateId().equals(row.gateId())
-                && known.actionClass() == ActionClass.CLASS_0_READ ? Optional.of(known) : Optional.empty();
+                && known.actionClass() == ActionClass.CLASS_0_READ
+                && (!CPVIEW_GATE.equals(row.gateId()) || known.timeoutS() == 30) ? Optional.of(known) : Optional.empty();
         } catch (RuntimeException invalidGate) { return Optional.empty(); }
     }
     private DiagnosticRead() {}

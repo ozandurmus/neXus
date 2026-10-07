@@ -31,6 +31,31 @@ import com.securityexpert.nexus.ui2.service.privacy.TopologyNamePseudonymizer;
 
 class DiagnosticServiceTest {
     @Test
+    void pendingCpviewGateCannotCreateJobEvenForPlainMember() {
+        var devices = mock(DeviceRepository.class);
+        var inventory = mock(DeviceInventoryRepository.class);
+        var jobs = mock(JobRecordDao.class);
+        when(devices.find("device-1")).thenReturn(Optional.of(new DeviceRecord("device-1", "gateway", "check_point",
+                "manual", Instant.now(), false, DeviceEnrollmentState.ENROLLED, false, "synthetic-reference")));
+        when(devices.findEndpointByDeviceId("device-1")).thenReturn(Optional.of(new EndpointRecord(
+                "endpoint-1", "device-1", "ssh_exec", "192.0.2.10", Instant.now())));
+        when(devices.findSummary("device-1")).thenReturn(Optional.of(new DeviceSummaryRecord("device-1", "gateway", "check_point",
+                DeviceEnrollmentState.ENROLLED, Optional.empty(), Optional.of("invented-appliance"), Optional.empty(), Optional.empty(), Optional.of("opaque-cluster"))));
+        when(inventory.findLatestRun("device-1")).thenReturn(Optional.of(new InventoryRun("run-1", "device-1", "old-job", Instant.now(), 1,
+                List.of(new InventoryContext("physical", List.of(), List.of())), List.of(), Optional.empty())));
+        var rows = GateRegistryFixtureLoader.loadFromStream(getClass().getResourceAsStream("/capabilities/gate_registry_fixture.yaml"));
+        var service = new DiagnosticService(devices, inventory, null, jobs,
+                new TopologyNamePseudonymizer("synthetic-test-key".getBytes()),
+                key -> rows.stream().filter(r -> r.key().equals(key)).toList(),
+                new com.securityexpert.nexus.ui2.service.boot.DeviceCompositionConfiguration.ArtefactStoreAccess(
+                        mock(com.securityexpert.nexus.ui2.persistence.artefact.ArtefactStore.class)), null, null);
+        var result = service.submitRead("device-1", "cp_diagnostic_cpview_measure", null,
+                java.util.UUID.randomUUID().toString(), "synthetic-actor", true);
+        assertTrue(result instanceof com.securityexpert.nexus.ui2.jobs.admission.AdmissionResult.Refused);
+        verifyNoInteractions(jobs);
+    }
+
+    @Test
     void virtualSystemFilteringIsPerDeviceAndPreservesProfileMemo() {
         var devices=mock(DeviceRepository.class);
         var inventory=mock(DeviceInventoryRepository.class);

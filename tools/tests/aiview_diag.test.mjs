@@ -7,11 +7,12 @@ const env = { NEXUS_E2E_BASE_URL: 'https://example.invalid',
   NEXUS_E2E_MACHINE_TOKEN: ['synthetic', 'token'].join('-') };
 const args = ['--target', 'FW-TANGO-04', '--gate', 'synthetic_read', '--param', '001'];
 function fixture({ runnable = true, masked = true, terminal = 'COMPLETED', status = 200, duplicates = false,
-  pseudonym = 'FW-TANGO-04', canExecute = true } = {}) {
+  pseudonym = 'FW-TANGO-04', canExecute = true, cpview = false } = {}) {
   const calls = [], output = [];
   let polls = 0;
-  const target = { target: pseudonym, deviceId: 'opaque-device', virtualSystems: ['001', '13'],
-    commands: [{ gate_id: 'synthetic_read', runnable }, { gate_id: 'synthetic_disabled', runnable: false }] };
+  const target = { target: pseudonym, deviceId: 'opaque-device', vendor: cpview ? 'check_point' : 'synthetic',
+    cluster: cpview ? 'CLS-ROMEO-01' : null, virtualSystems: cpview ? [] : ['001', '13'],
+    commands: [{ gate_id: cpview ? 'cp_diagnostic_cpview_measure' : 'synthetic_read', runnable }, { gate_id: 'synthetic_disabled', runnable: false }] };
   return { calls, output, io: { print: text => output.push(text), pause: async () => {},
     request: async (url, init) => {
       calls.push({ url: String(url), init });
@@ -110,4 +111,25 @@ test('failed jobs report masked output then fail; timeout never resubmits', asyn
   const waiting = fixture({ terminal: 'EXECUTING' });
   await assert.rejects(run(args, env, waiting.io), /Timed out/);
   assert.equal(waiting.calls.filter(call => new URL(call.url).pathname === '/api/v2/diagnostics').length, 1);
+});
+
+test('cpview selects the fixed gate and refuses parameters or VSX before submission', async () => {
+  const f = fixture();
+  await assert.rejects(run(['--cpview', '--target', 'FW-TANGO-04', '--param', '001'], env, f.io));
+  assert.equal(f.calls.length, 0);
+  await assert.rejects(run(['--cpview', '--target', 'FW-TANGO-04'], env, f.io), /plain Check Point/);
+  assert.ok(!f.calls.some(call => new URL(call.url).pathname === '/api/v2/diagnostics'));
+});
+
+test('cpview prints only the server masked projection after one fixed-gate submission', async () => {
+  const f = fixture({ cpview: true });
+  await run(['--cpview', '--target', 'FW-TANGO-04'], env, f.io);
+  const submitted = f.calls.filter(call => new URL(call.url).pathname === '/api/v2/diagnostics');
+  assert.equal(submitted.length, 1);
+  assert.equal(JSON.parse(submitted[0].init.body).gate_id, 'cp_diagnostic_cpview_measure');
+  assert.equal(JSON.parse(submitted[0].init.body).parameter, undefined);
+  assert.deepEqual(f.output, ['Status: UP\n']);
+  const pending = fixture({ cpview: true, runnable: false });
+  await assert.rejects(run(['--cpview', '--target', 'FW-TANGO-04'], env, pending.io), /not runnable/);
+  assert.ok(!pending.calls.some(call => new URL(call.url).pathname === '/api/v2/diagnostics'));
 });

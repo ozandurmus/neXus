@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 // Usage: NEXUS_E2E_BASE_URL, NEXUS_E2E_MACHINE_URL and NEXUS_E2E_MACHINE_TOKEN
 // node tools/e2e/aiview_diag.mjs --target FW-TANGO-04 --gate <gate_id> [--param <VS id>]
+// Preparation only; execution requires exact-command PO sign-off.
+// node tools/e2e/aiview_diag.mjs --cpview --target FW-TANGO-04
 // node tools/e2e/aiview_diag.mjs --list --target FW-MIKE-07-M1
 import { parseArgs } from 'node:util';
 import { randomUUID } from 'node:crypto';
@@ -14,8 +16,14 @@ export async function run(args = process.argv.slice(2), env = process.env,
   { request = fetch, pause = sleep, print = text => process.stdout.write(text) } = {}) {
   const { values } = parseArgs({ args, options: {
     target: { type: 'string' }, gate: { type: 'string' }, param: { type: 'string' },
+    cpview: { type: 'boolean' },
     list: { type: 'boolean' },
   } });
+  if (values.cpview) {
+    if (values.list || values.gate !== undefined || values.param !== undefined)
+      throw new Error('Use --cpview --target <pseudonym>');
+    values.gate = 'cp_diagnostic_cpview_measure';
+  }
   if (!/^[A-Z]{2,4}(-[A-Z0-9]+){1,4}$/.test(values.target ?? '')
       || (values.list ? values.gate !== undefined || values.param !== undefined : !/^[a-z0-9_]+$/.test(values.gate ?? ''))
       || (values.param !== undefined && !/^[A-Za-z0-9_.-]{1,31}$/.test(values.param))) {
@@ -51,6 +59,9 @@ export async function run(args = process.argv.slice(2), env = process.env,
   const targets = listing.targets?.filter(target => target.target === values.target) ?? [];
   if (targets.length !== 1 || listing.canExecute !== true) throw new Error('Target is unavailable or ambiguous');
   const target = targets[0];
+  if (values.gate === 'cp_diagnostic_cpview_measure' && (values.param !== undefined
+      || target.vendor !== 'check_point' || !target.cluster || !Array.isArray(target.virtualSystems)
+      || target.virtualSystems.length !== 0)) throw new Error('A plain Check Point gateway member is required');
   if (values.list) {
     print(JSON.stringify({ target: target.target,
       runnableGateIds: (target.commands ?? []).filter(command => command.runnable === true).map(command => command.gate_id),
