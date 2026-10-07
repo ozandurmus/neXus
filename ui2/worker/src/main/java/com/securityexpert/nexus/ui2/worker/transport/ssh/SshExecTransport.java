@@ -240,7 +240,7 @@ public final class SshExecTransport implements DeviceTransport {
         com.securityexpert.nexus.ui2.worker.JobCancellationScope.check();
         long started = System.nanoTime();
         ExecResult result = execRaw(session, spec, timeout);
-        if (!derivedOnly) {
+        if (!derivedOnly && spec.outputLimitBytes() == 0) {
             recordAnswer(result);
             recordStatus(result, started);
         }
@@ -251,6 +251,7 @@ public final class SshExecTransport implements DeviceTransport {
         if (!(session instanceof SshTransportSession sshSession)) {
             return new ExecResult.ChannelFailed("not an ssh_exec session");
         }
+        boolean derivedOnly = this.derivedOnly || spec.outputLimitBytes() > 0;
         long execStartMs = System.currentTimeMillis();
         LOG.log(System.Logger.Level.INFO,
                 "[SSH_EXEC] START cmd=\"{0}\" timeout={1}ms",
@@ -273,6 +274,7 @@ public final class SshExecTransport implements DeviceTransport {
             long firstByteMs = -1;
             while (true) {
                 while (in.available() > 0) {
+                    if (spec.outputLimitBytes() > 0 && System.currentTimeMillis() > deadline) return new ExecResult.TimedOut();
                     int read = in.read(chunk, 0, chunk.length);
                     if (read < 0) {
                         break;
@@ -283,13 +285,18 @@ public final class SshExecTransport implements DeviceTransport {
                                 "[SSH_EXEC] FIRST_DATA cmd=\"{0}\" after {1}ms",
                                 derivedOnly ? "<redacted>" : spec.command(), firstByteMs);
                     }
+                    if (spec.outputLimitBytes() > 0 && read > spec.outputLimitBytes() - buffer.size() - errors.size())
+                        return new ExecResult.ChannelFailed("OUTPUT_LIMIT_EXCEEDED");
                     buffer.write(chunk, 0, read);
                 }
                 while (err.available() > 0) {
+                    if (spec.outputLimitBytes() > 0 && System.currentTimeMillis() > deadline) return new ExecResult.TimedOut();
                     int read = err.read(chunk, 0, chunk.length);
                     if (read < 0) {
                         break;
                     }
+                    if (spec.outputLimitBytes() > 0 && read > spec.outputLimitBytes() - buffer.size() - errors.size())
+                        return new ExecResult.ChannelFailed("OUTPUT_LIMIT_EXCEEDED");
                     if (errors.size() < 64 * 1024 * 1024)
                         errors.write(chunk, 0, Math.min(read, 64 * 1024 * 1024 - errors.size()));
                 }

@@ -8,13 +8,20 @@ package com.securityexpert.nexus.ui2.jobs.transport;
  * {@code cphaprob -a -m if} cluster-interface read) produce no output at all
  * over a plain, non-terminal exec channel and need one. {@code streamingExtensionMs}
  * allows one additional interactive wait while output is flowing; zero preserves
- * the existing fixed timeout. It never resends the command.
+ * the existing fixed timeout. It never resends the command. A positive
+ * {@code outputLimitBytes} bounds combined stdout/stderr and suppresses raw
+ * answer transcripts; zero preserves the existing collector behavior.
  */
-public record ExecSpec(String command, boolean pty, long streamingExtensionMs) {
+public record ExecSpec(String command, boolean pty, long streamingExtensionMs, int outputLimitBytes) {
 
     public ExecSpec {
+        if (outputLimitBytes < 0) throw new IllegalArgumentException("NEGATIVE_OUTPUT_LIMIT");
         if (streamingExtensionMs < 0 || streamingExtensionMs > 120_000)
             throw new IllegalArgumentException("STREAMING_EXTENSION_MUST_BE_0_TO_120000_MS");
+    }
+
+    public ExecSpec(String command, boolean pty, long streamingExtensionMs) {
+        this(command, pty, streamingExtensionMs, 0);
     }
 
     public ExecSpec(String command, boolean pty) {

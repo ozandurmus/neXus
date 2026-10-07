@@ -121,6 +121,10 @@ public final class DiagnosticService {
             return new AdmissionResult.Refused(masked ? "DIAGNOSTIC_RUN_NOT_PERMITTED" : "DIAGNOSTIC_UNAVAILABLE",
                     "Command or transport is not approved for this device");
         var device = devices.find(deviceId).orElseThrow();
+        if (com.securityexpert.nexus.ui2.jobs.diagnostic.DiagnosticRead.CPVIEW_GATE.equals(gateId)
+                && !com.securityexpert.nexus.ui2.persistence.device.CpviewTarget.eligible(device,
+                    devices.findSummary(deviceId), inventory.findLatestRun(deviceId)))
+            return new AdmissionResult.Refused("DIAGNOSTIC_RUN_NOT_PERMITTED", "An enrolled plain gateway member is required");
         var read = com.securityexpert.nexus.ui2.jobs.diagnostic.DiagnosticRead.resolve(device.vendorHint(),device.role(),
             modelOrPlatform(deviceId, devices.findSummary(deviceId).flatMap(s -> s.observedModel()).orElse(null)),gateId,parameter,gates);
         if (masked && read.isEmpty())
@@ -187,7 +191,7 @@ public final class DiagnosticService {
                 try (var stream=outputStore.retrieve(new com.securityexpert.nexus.ui2.persistence.artefact.ArtefactRef(ref.get().reference()),ref.get().wrappedKey(),false)) {
                     output=new String(stream.readNBytes(com.securityexpert.nexus.ui2.platform.DiagnosticText.MAX_BYTES+256),java.nio.charset.StandardCharsets.UTF_8);
                     output=com.securityexpert.nexus.ui2.platform.DiagnosticText.scrubSecrets(output);
-                    if (masked) {
+                    if (masked && !com.securityexpert.nexus.ui2.jobs.diagnostic.DiagnosticRead.CPVIEW_GATE.equals(job.gateId())) {
                         var knownNames=new java.util.HashMap<String,String>();
                         devices.listAll().forEach(d -> d.observedHostname().ifPresent(n -> knownNames.put(n,names.maskDeviceName(n,d.clusterMemberRef().orElse(null)))));
                         output=com.securityexpert.nexus.ui2.platform.DiagnosticText.masked(output, knownNames, token -> {
@@ -278,6 +282,10 @@ public final class DiagnosticService {
                     List<String> virtualSystems = virtualSystems(contextsByDevice.getOrDefault(d.deviceId(), List.of()));
                     if (virtualSystems.isEmpty()) commands = commands.stream()
                             .filter(c -> !((String) c.get("command_template")).contains("<VSID>")).toList();
+                    if (commands.stream().anyMatch(c -> com.securityexpert.nexus.ui2.jobs.diagnostic.DiagnosticRead.CPVIEW_GATE.equals(c.get("gate_id")))
+                            && !devices.find(d.deviceId()).filter(device -> com.securityexpert.nexus.ui2.persistence.device.CpviewTarget.eligible(
+                            device, Optional.of(d), inventory.findLatestRun(d.deviceId()))).isPresent())
+                        commands = commands.stream().filter(c -> !com.securityexpert.nexus.ui2.jobs.diagnostic.DiagnosticRead.CPVIEW_GATE.equals(c.get("gate_id"))).toList();
                     return new TargetOption(d.deviceId(), d.observedHostname()
                             .map(name -> masked ? names.maskDeviceName(name, d.clusterMemberRef().orElse(null)) : name)
                             .orElse("Unknown"), d.vendorHint(),

@@ -16,6 +16,34 @@ import com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope;
 
 class SshTranscriptCaptureTest {
     @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(ints = {0, 1})
+    void boundedMeasurementCapsCombinedStreamsAndNeverRecordsRawAnswers(int excess) throws Exception {
+        var session = mock(com.jcraft.jsch.Session.class);
+        var channel = mock(com.jcraft.jsch.ChannelExec.class);
+        when(session.openChannel("exec")).thenReturn(channel);
+        int limit = 1024 * 1024;
+        String stdout = "invented-private-field" + "x".repeat(limit / 2 - "invented-private-field".length());
+        when(channel.getInputStream()).thenReturn(new java.io.ByteArrayInputStream(stdout.getBytes(StandardCharsets.UTF_8)));
+        when(channel.getErrStream()).thenReturn(new java.io.ByteArrayInputStream("x".repeat(limit / 2 + excess).getBytes(StandardCharsets.UTF_8)));
+        when(channel.isClosed()).thenReturn(true);
+        var transport = new SshExecTransport(ref -> { throw new AssertionError("no credential lookup"); },
+                ref -> java.util.Optional.empty());
+        var transcript = new JobTranscript();
+        try (JobTranscriptScope ignored = JobTranscriptScope.open(transcript)) {
+            var result = transport.exec(new SshTransportSession("synthetic", session),
+                    new com.securityexpert.nexus.ui2.jobs.transport.ExecSpec("bash -lc 'cpview -p'", false, 0, limit),
+                    java.time.Duration.ofSeconds(30));
+            if (excess == 0) assertInstanceOf(ExecResult.Completed.class, result);
+            else assertEquals(new ExecResult.ChannelFailed("OUTPUT_LIMIT_EXCEEDED"), result);
+        }
+        var out = new ByteArrayOutputStream();
+        transcript.writeTo(out);
+        assertFalse(out.toString(StandardCharsets.UTF_8).contains("invented-private-field"));
+        verify(channel).setPty(false);
+        verify(channel).disconnect();
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
     @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
     void scpRecordsFileSizeHashAndTornTransfer(boolean torn) throws Exception {
         var session = mock(com.jcraft.jsch.Session.class);

@@ -26,6 +26,7 @@ public final class DiagnosticJobExecutor {
     private final GateRegistryPort gates;
     private final ArtefactStore store;
     private final com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFactsRepository platformFacts;
+    private final com.securityexpert.nexus.ui2.persistence.device.inventory.DeviceInventoryRepository inventory;
     public DiagnosticJobExecutor(JobLeaseRepository leases, JobStepAttemptRepository attempts, DeviceRepository devices,
             JobRecordDao jobs, DeviceTransport ssh, GateRegistryPort gates, ArtefactStore store) {
         this(leases, attempts, devices, jobs, ssh, gates, store,
@@ -34,8 +35,15 @@ public final class DiagnosticJobExecutor {
     public DiagnosticJobExecutor(JobLeaseRepository leases, JobStepAttemptRepository attempts, DeviceRepository devices,
             JobRecordDao jobs, DeviceTransport ssh, GateRegistryPort gates, ArtefactStore store,
             com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFactsRepository platformFacts) {
+        this(leases, attempts, devices, jobs, ssh, gates, store, platformFacts, null);
+    }
+    public DiagnosticJobExecutor(JobLeaseRepository leases, JobStepAttemptRepository attempts, DeviceRepository devices,
+            JobRecordDao jobs, DeviceTransport ssh, GateRegistryPort gates, ArtefactStore store,
+            com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFactsRepository platformFacts,
+            com.securityexpert.nexus.ui2.persistence.device.inventory.DeviceInventoryRepository inventory) {
         this.leases=leases; this.attempts=attempts; this.devices=devices; this.jobs=jobs; this.ssh=ssh; this.gates=gates; this.store=store;
         this.platformFacts=platformFacts;
+        this.inventory = inventory;
     }
     public void execute(String jobId, long epoch, String deviceId, String host, int port, String credentialRef) {
         var device=devices.find(deviceId);
@@ -45,6 +53,10 @@ public final class DiagnosticJobExecutor {
         var read=device.flatMap(d -> job.flatMap(j -> j.gateId()==null
             ? DiagnosticRead.resolve(d.vendorHint(),d.role(),model,j.command(),gates)
             : DiagnosticRead.resolveStored(d.vendorHint(),d.role(),model,j.gateId(),j.command(),gates)));
+        boolean cpview = read.filter(r -> DiagnosticRead.CPVIEW_GATE.equals(r.gateId())).isPresent();
+        if (cpview && (inventory == null || device.isEmpty()
+                || !com.securityexpert.nexus.ui2.persistence.device.CpviewTarget.eligible(device.get(),
+                    devices.findSummary(deviceId), inventory.findLatestRun(deviceId)))) read = Optional.empty();
         if (device.isEmpty() || !device.get().permitsReadCollection() || job.isEmpty()
                 || devices.findEndpointByDeviceId(deviceId).filter(e -> "ssh_exec".equals(e.transportKind())).isEmpty()
                 || !deviceId.equals(job.get().targetDeviceId()) || read.isEmpty() || store==null) {
@@ -69,11 +81,23 @@ public final class DiagnosticJobExecutor {
             if (!interactive && "cp_gaia_gateway".equals(read.get().platformRoleScope())
                     && !command.startsWith("bash -lc "))
                 command="bash -lc '"+command.replace("'", "'\"'\"'")+"'";
-            var spec=new ExecSpec(command,true);
+            var spec=cpview ? new ExecSpec(command,false,0,com.securityexpert.nexus.ui2.platform.CpviewProjection.MAX_BYTES)
+                : new ExecSpec(command,true);
             var result=interactive ? ssh.execInteractive(session,spec,Duration.ofSeconds(read.get().timeoutSeconds()))
                 : ssh.exec(session,spec,Duration.ofSeconds(read.get().timeoutSeconds()));
+            if (cpview && (result instanceof ExecResult.TimedOut || result instanceof ExecResult.ChannelFailed)) {
+                String reason = result instanceof ExecResult.TimedOut ? "TIMEOUT"
+                    : "OUTPUT_LIMIT_EXCEEDED".equals(((ExecResult.ChannelFailed) result).reason()) ? "OUTPUT_LIMIT_EXCEEDED" : "OUTPUT_UNAVAILABLE";
+                attempts.writeOutcome(attempt,epoch,"EXPECTATION_UNMET",reason,false,0L,0L,null);
+                finish(jobId,epoch,JobState.FAILED,reason); return;
+            }
             if (!(result instanceof ExecResult.Completed completed)) { finish(jobId,epoch,JobState.OUTCOME_UNKNOWN,"OUTPUT_UNAVAILABLE"); return; }
-            String output=DiagnosticText.scrubSecrets(completed.output());
+            if (cpview && completed.output().getBytes(StandardCharsets.UTF_8).length > com.securityexpert.nexus.ui2.platform.CpviewProjection.MAX_BYTES) {
+                attempts.writeOutcome(attempt,epoch,"EXPECTATION_UNMET","OUTPUT_LIMIT_EXCEEDED",false,0L,0L,null);
+                finish(jobId,epoch,JobState.FAILED,"OUTPUT_LIMIT_EXCEEDED"); return;
+            }
+            String output=cpview ? com.securityexpert.nexus.ui2.platform.CpviewProjection.project(completed.output())
+                : DiagnosticText.scrubSecrets(completed.output());
             byte[] bytes=output.getBytes(StandardCharsets.UTF_8);
             if (bytes.length>DiagnosticText.MAX_BYTES) {
                 output=new String(bytes,0,DiagnosticText.MAX_BYTES-32,StandardCharsets.UTF_8)+"\n[TRUNCATED]";
