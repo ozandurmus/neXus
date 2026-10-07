@@ -22,6 +22,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 
 NS = "ui2-preview"
@@ -445,18 +446,65 @@ def build_manifest(template, loader, name, commit, owner, dockerfile, destinatio
     return job
 
 
-def pipe_commands(source, target, timeout=60):
+def database_copy_cause(stderr):
+    """Return only safe categories; never retain or report diagnostic values."""
+    text = stderr.lower()
+    if "invalid snapshot identifier" in text or "snapshot does not exist" in text:
+        return "SNAPSHOT_LOST"
+    if "timeout" in text or "timed out" in text:
+        return "TIMEOUT"
+    if "broken pipe" in text:
+        return "PIPE_BROKEN"
+    return None
+
+
+def pipe_commands(source, target, timeout=60, database=False):
     """Fail on either side, including a producer failing after a successful restore."""
-    producer = subprocess.Popen(source, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+    diagnostics = [None, None]
+    readers = []
+
+    def drain(stream, index):
+        tail = ""
+        priority = {None: 0, "PIPE_BROKEN": 1, "TIMEOUT": 2, "SNAPSHOT_LOST": 3}
+        while chunk := stream.read(4096):
+            text = tail + chunk.decode(errors="replace")
+            cause = database_copy_cause(text)
+            if priority[cause] > priority[diagnostics[index]]:
+                diagnostics[index] = cause
+            tail = text[-256:]
+        stream.close()
+
+    def read_errors(process, index):
+        reader = threading.Thread(target=drain, args=(process.stderr, index), daemon=True)
+        reader.start()
+        readers.append(reader)
+
+    producer = subprocess.Popen(source, stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE if database else subprocess.DEVNULL)
     consumer = None
     try:
-        consumer = subprocess.Popen(target, stdin=producer.stdout, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if database:
+            read_errors(producer, 0)
+        consumer = subprocess.Popen(target, stdin=producer.stdout, stdout=subprocess.DEVNULL,
+                                    stderr=subprocess.PIPE if database else subprocess.DEVNULL)
+        if database:
+            read_errors(consumer, 1)
         producer.stdout.close()
         deadline = time.monotonic() + timeout
         consumed = consumer.wait(timeout=max(0.01, deadline - time.monotonic()))
         produced = producer.wait(timeout=max(0.01, deadline - time.monotonic()))
+        for reader in readers:
+            reader.join()
         if consumed or produced:
+            if database:
+                cause = next((c for c in ("SNAPSHOT_LOST", "TIMEOUT") if c in diagnostics), None)
+                cause = cause or ((diagnostics[1] or "RESTORE_ERROR") if consumed else diagnostics[0])
+                raise PreviewFailure("DB_COPY_FAILED" + ("_" + cause if cause else ""))
             raise RuntimeError("Preview stream failed; details withheld")
+    except subprocess.TimeoutExpired:
+        if database:
+            raise PreviewFailure("DB_COPY_FAILED_TIMEOUT", "TimeoutExpired") from None
+        raise
     finally:
         for process in (consumer, producer):
             if process is not None and process.poll() is None:
@@ -464,6 +512,8 @@ def pipe_commands(source, target, timeout=60):
                 process.wait()
         if producer.stdout and not producer.stdout.closed:
             producer.stdout.close()
+        for reader in readers:
+            reader.join()
 
 
 def build_images(repo, commit, owner):
@@ -519,17 +569,18 @@ def build_images(repo, commit, owner):
 def exported_snapshot(source):
     # Hold one read-only snapshot so filtered rows cannot refer to artefacts created after the dump.
     holder = subprocess.Popen(source[:4] + ["-i"] + source[4:] + [PG_ENV
-        + 'export PGOPTIONS="-c default_transaction_read_only=on -c idle_in_transaction_session_timeout=240000"; '
+        + 'export PGOPTIONS="-c default_transaction_read_only=on -c idle_in_transaction_session_timeout='
+        + str((12 * database_statement_timeout() + 60) * 1000) + '"; '
         + 'exec psql -XAtq --set=ON_ERROR_STOP=1'],
         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
     try:
         holder.stdin.write("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY;\nSELECT pg_export_snapshot();\n")
         holder.stdin.flush()
         if not select.select([holder.stdout], [], [], 15)[0]:
-            raise RuntimeError("Preview snapshot unavailable")
+            raise PreviewFailure("DB_COPY_FAILED_SNAPSHOT_LOST")
         token = holder.stdout.readline().strip()
         if not re.fullmatch(r"[0-9A-Fa-f]+-[0-9A-Fa-f]+-[0-9]+", token):
-            raise RuntimeError("Preview snapshot unavailable")
+            raise PreviewFailure("DB_COPY_FAILED_SNAPSHOT_LOST")
         yield token
     finally:
         try:
@@ -543,18 +594,30 @@ def exported_snapshot(source):
         holder.stdout.close()
 
 
+def database_statement_timeout():
+    """Seconds per statement; allow four per stream and three streams per snapshot."""
+    seconds = int(os.environ.get("NEXUS_PREVIEW_DB_STATEMENT_TIMEOUT_SECONDS", "900"))
+    if not 0 < seconds <= (2147483647 - 60000) // 12000:
+        raise ValueError("Preview database timeout outside supported range")
+    return seconds
+
+
 def copy_database():
     source = ["kubectl", "-n", "ui2", "exec", "ui2-db-0", "--", "sh", "-c"]
     target = ["kubectl", "-n", NS, "exec", "-i", preview_name("ui2-preview-db"), "--", "sh", "-c"]
-    read_only = PG_ENV + 'export PGOPTIONS="-c default_transaction_read_only=on -c statement_timeout=55000"; '
+    seconds = database_statement_timeout()
+    read_only = PG_ENV + 'export PGOPTIONS="-c default_transaction_read_only=on -c statement_timeout=' + str(seconds * 1000) + '"; '
+    restore_options = PG_ENV + 'export PGOPTIONS="-c statement_timeout=' + str(seconds * 1000) + '"; '
     with exported_snapshot(source) as snapshot:
         pipe_commands(source + [read_only + "exec pg_dump --format=custom --compress=0 --snapshot=" + snapshot
                                 + " --exclude-table-data=public.audit_log --exclude-table-data=public.backup_artefact_entry"],
-                      target + [PG_ENV + "exec pg_restore --exit-on-error --no-owner --dbname=ui2"])
+                      target + [restore_options + "exec pg_restore --exit-on-error --no-owner --dbname=ui2"],
+                      timeout=4 * seconds, database=True)
         for table, query in (("audit_log", AUDIT_SELECT), ("backup_artefact_entry", ENTRY_SELECT)):
             sql = "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY; SET TRANSACTION SNAPSHOT '" + snapshot + "'; COPY (" + query + ") TO STDOUT; COMMIT"
             pipe_commands(source + [read_only + 'exec psql -Xq --set=ON_ERROR_STOP=1 -c "' + sql + '"'],
-                          target + [PG_ENV + 'exec psql -Xq --set=ON_ERROR_STOP=1 -c "COPY public.' + table + ' FROM STDIN"'])
+                          target + [restore_options + 'exec psql -Xq --set=ON_ERROR_STOP=1 -c "COPY public.' + table + ' FROM STDIN"'],
+                          timeout=4 * seconds, database=True)
 
 
 def copy_secret(name):
