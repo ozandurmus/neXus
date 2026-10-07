@@ -14,6 +14,13 @@ import org.jooq.JSONB;
 
 /** Audited storage and atomic job admission for one Check Point failover unit. */
 public class JooqCpFailoverRepository {
+    /** Only emitted by the switch check before invoking any transport. */
+    public static final class NotSent extends RuntimeException {
+        public NotSent() { super("MUTATION_DISABLED_BEFORE_SEND"); }
+    }
+
+    private enum SendResult { NOT_SENT, REPLIED, NO_REPLY }
+
     public record Approval(String id, String clusterRef, String vsId, Instant from, Instant until,
             String reason, String approvedBy, Instant revokedAt) {}
     public static final int APPROVAL_POLICY_VERSION = 1;
@@ -477,7 +484,7 @@ public class JooqCpFailoverRepository {
             + "order by i.nonce nulls last,q.execution_id limit 1", cluster, members.get(0), members.get(1));
         if (incident != null) return new Decision("OPEN_INCIDENT", null, incident.get("dispatch_ref", String.class));
         if (!dsl.fetch("select 1 from failover_dispatch_intent i where run_id is distinct from {0} "
-                + "and (observation='NOT_OBSERVED' or (observation='OUTCOME_UNKNOWN' and exists "
+                + "and delivery<>'NOT_SENT' and (observation='NOT_OBSERVED' or (observation='OUTCOME_UNKNOWN' and exists "
                 + "(select 1 from failover_quarantine q where q.execution_id=i.run_id and q.active)))", runId).isEmpty())
             return new Decision("UNRESOLVED_DISPATCH", null);
         if (!dsl.fetch("select 1 from failover_run where run_kind='FAILOVER' "
@@ -619,7 +626,8 @@ public class JooqCpFailoverRepository {
     /**
      * The locked intent is the dispatch linearization point. Reconciliation skips it until this bounded
      * invocation ends; it is never assigned to another sender. Do not hold module/admission locks across
-     * transport: endpoint lease renewal uses independent transactions. Only a safe reply bit leaves the callback.
+     * transport: endpoint lease renewal uses independent transactions. Only a safe reply bit or a proven
+     * pre-transport NotSent signal leaves the callback.
      * A rollback after send retains the already committed intent and therefore blocks fleet admission.
      */
     public boolean dispatch(Dispatch intent, java.util.function.Supplier<Boolean> send) {
@@ -632,24 +640,36 @@ public class JooqCpFailoverRepository {
                 + "and observation='NOT_OBSERVED'",intent.nonce(),intent.runId(),intent.jobId(),intent.epoch())==1;
         });
         if (!claimed) return false;
-        return audited.inTransaction("system:failover-worker", "failover_dispatch_reply", intent.runId(), dsl -> {
-            if (!dispatchLock(dsl,intent.runId())) return false;
+        SendResult result=audited.inTransaction("system:failover-worker", "failover_dispatch_reply", intent.runId(), dsl -> {
+            if (!dispatchLock(dsl,intent.runId())) return SendResult.NO_REPLY;
             Record row=dsl.fetchOne("select * from failover_dispatch_intent where nonce={0} and run_id={1} "
                 + "and job_id={2} and lease_epoch={3} and delivery='MAY_HAVE_BEEN_SENT' "
                 + "and observation='NOT_OBSERVED' and dispatch_claimed for update",intent.nonce(),intent.runId(),intent.jobId(),intent.epoch());
-            if (row==null || !owns(dsl,intent.jobId(),intent.epoch())) return false;
+            if (row==null || !owns(dsl,intent.jobId(),intent.epoch())) return SendResult.NO_REPLY;
             // Recheck approval and the committed owner immediately before the single send.
             Record run=dsl.fetchOne("select r.* from failover_run r join failover_approval a on a.approval_id=r.approval_id "
                     + "join jobs j on j.job_id=r.job_id where r.run_id={0} and r.state not in ('DONE','STOPPED') "
                     + "and a.revoked_at is null and a.window_from<=clock_timestamp() and a.window_until>clock_timestamp() "
                     + "and j.lease_worker_id={1} and j.lease_owner_generation={2}",intent.runId(),
                     row.get("owner_instance"),row.get("owner_generation"));
-            if (run==null || !row.get("step").equals(run.get("step"))) return false;
+            if (run==null || !row.get("step").equals(run.get("step"))) return SendResult.NO_REPLY;
             List<String> members=JooqDeviceRepository.enrolledFailoverMembers(dsl,
                 run.get("cluster_ref",String.class),run.get("vendor",String.class));
-            if (validateTarget(dsl,run,members,row.get("member_ref",String.class))!=null) return false;
+            if (validateTarget(dsl,run,members,row.get("member_ref",String.class))!=null) return SendResult.NO_REPLY;
             boolean replied;
             try { replied=Boolean.TRUE.equals(send.get()); }
+            catch (NotSent notSent) {
+                lockAdmission(dsl);
+                requireOne(dsl.execute("update failover_dispatch_intent set delivery='NOT_SENT' where nonce={0}",intent.nonce()));
+                requireOne(dsl.execute("update job_step_attempt set outcome='NOT_SENT',matched_expectation=false,"
+                    + "error_class='MUTATION_DISABLED_BEFORE_SEND',mutation_boundary_crossed=false,sent_at=null "
+                    + "where attempt_id={0}",row.get("attempt_id")));
+                requireOne(dsl.execute("update failover_run set state='STOPPED',outcome='MUTATION_DISABLED_BEFORE_SEND',"
+                    + "message='MUTATION_DISABLED_BEFORE_SEND',finished_at=now() where run_id={0}",intent.runId()));
+                requireOne(dsl.execute("update jobs set state='FAILED',outcome='MUTATION_DISABLED_BEFORE_SEND',"
+                    + "terminal_reason='MUTATION_DISABLED_BEFORE_SEND',finished_at=now() where job_id={0}",intent.jobId()));
+                return SendResult.NOT_SENT;
+            }
             catch (RuntimeException uncertain) { replied=false; }
             requireOne(dsl.execute("update failover_dispatch_intent set delivery={1} where nonce={0}",
                 intent.nonce(),replied?"REPLY_RECEIVED":"UNKNOWN"));
@@ -657,8 +677,11 @@ public class JooqCpFailoverRepository {
                 + "where attempt_id={0}",row.get("attempt_id"),replied?"REPLY_RECEIVED":"OUTCOME_UNKNOWN",
                 replied?null:"DELIVERY_UNCERTAIN"));
             if (!replied) unknown(dsl,intent.runId(),intent.jobId(),"DELIVERY_UNCERTAIN",null);
-            return replied;
+            return replied?SendResult.REPLIED:SendResult.NO_REPLY;
         });
+        // Propagate only after the terminal state and intent have committed together.
+        if (result==SendResult.NOT_SENT) throw new NotSent();
+        return result==SendResult.REPLIED;
     }
 
     /** Independent role observations, never the write reply, confirm the requested effect. */
@@ -702,7 +725,7 @@ public class JooqCpFailoverRepository {
         lockAdmission(dsl);
         dsl.execute("update failover_dispatch_intent set observation='OUTCOME_UNKNOWN',"
             + "delivery=case when delivery='MAY_HAVE_BEEN_SENT' then 'UNKNOWN' else delivery end "
-            + "where run_id={0} and observation='NOT_OBSERVED'",run);
+            + "where run_id={0} and delivery<>'NOT_SENT' and observation='NOT_OBSERVED'",run);
         dsl.execute("update job_step_attempt set outcome='OUTCOME_UNKNOWN',error_class='OUTCOME_UNCERTAIN',"
             + "matched_expectation=false where attempt_id in (select attempt_id from failover_dispatch_intent "
             + "where run_id={0} and observation='OUTCOME_UNKNOWN')",run);
@@ -717,7 +740,7 @@ public class JooqCpFailoverRepository {
         return audited.inTransaction("system:failover-worker","failover_dispatch_reconcile",dsl -> {
             int recovered=0;
             for (Record row:dsl.fetch("select distinct i.run_id,i.job_id from failover_dispatch_intent i join failover_run r on r.run_id=i.run_id "
-                    + "where i.observation='NOT_OBSERVED' or r.state not in ('DONE','STOPPED') "
+                    + "where i.delivery<>'NOT_SENT' and (i.observation='NOT_OBSERVED' or r.state not in ('DONE','STOPPED')) "
                     + "order by i.run_id")) {
                 String job=row.get("job_id",String.class), run=row.get("run_id",String.class);
                 if (!dispatchLock(dsl,run)) continue;
@@ -726,7 +749,7 @@ public class JooqCpFailoverRepository {
                 if (!dsl.fetch("select 1 from jobs where job_id={0} "
                         + "and state in ('CLAIMED','EXECUTING') and lease_expires_at>clock_timestamp()",job).isEmpty()) continue;
                 if (dsl.fetch("select 1 from failover_dispatch_intent i join failover_run r on r.run_id=i.run_id "
-                        + "where i.run_id={0} and (i.observation='NOT_OBSERVED' or r.state not in ('DONE','STOPPED'))",run).isEmpty()) continue;
+                        + "where i.run_id={0} and i.delivery<>'NOT_SENT' and (i.observation='NOT_OBSERVED' or r.state not in ('DONE','STOPPED'))",run).isEmpty()) continue;
                 unknown(dsl,run,job,"OWNER_LOST",null);
                 recovered++;
             }

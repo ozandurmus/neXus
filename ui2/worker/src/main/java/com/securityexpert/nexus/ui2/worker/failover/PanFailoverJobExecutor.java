@@ -155,6 +155,8 @@ public final class PanFailoverJobExecutor {
                     formerActive==first?"passive":"active",formerActive==second?"passive":"active")))
                 throw new Stop("UNEXPECTED_ROLES",1);
             state("DONE","DONE","SUCCEEDED",null,"NO_PROBLEMS_FOUND");
+        } catch (JooqCpFailoverRepository.NotSent notSent) {
+            stop("MUTATION_DISABLED_BEFORE_SEND",0);
         } catch (Stop stopped) {
             if (readiness) finishReadiness(stopped.code,stopped.check,stopped.check==0?"UNKNOWN":stopped.status); else stop(stopped.code,stopped.check);
         } catch (InterruptedException interrupted) {
@@ -249,11 +251,13 @@ public final class PanFailoverJobExecutor {
             dispatch=store.prepareDispatch(runId,epoch,commandIndex++,peer.id(),g.gateId(),g.actionClass().id());
             wrote=true;
             boolean replied=store.dispatch(dispatch,() -> {
-                if (!mutationSwitch.enabled()) return false;
-                var result=transport.xmlApiCall(peer.target(),new XmlApiSpec("POST","op","","direct_firewall",
-                    Map.of("cmd",command),Map.of("X-PAN-KEY",peer.key())),Duration.ofSeconds(g.timeoutS()));
-                return result instanceof XmlApiResult.Completed c && c.httpStatus()==200
-                    && c.body()!=null && c.body().length()<=262144 && SUCCESS.matcher(c.body()).find();
+                if (!mutationSwitch.enabled()) throw new JooqCpFailoverRepository.NotSent();
+                try {
+                    var result=transport.xmlApiCall(peer.target(),new XmlApiSpec("POST","op","","direct_firewall",
+                        Map.of("cmd",command),Map.of("X-PAN-KEY",peer.key())),Duration.ofSeconds(g.timeoutS()));
+                    return result instanceof XmlApiResult.Completed c && c.httpStatus()==200
+                        && c.body()!=null && c.body().length()<=262144 && SUCCESS.matcher(c.body()).find();
+                } catch (RuntimeException uncertain) { return false; }
             });
             if (!replied) throw new Stop("OUTCOME_UNCERTAIN",0);
             return "";

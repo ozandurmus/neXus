@@ -35,7 +35,8 @@ class CpFailoverJobExecutorTest {
         String state="PLANNED",outcome,stopCode; boolean valid=true; final List<String> checks=new ArrayList<>();
         final List<String> derivedValues=new ArrayList<>();
         String vsId,kind="FAILOVER";
-        boolean incidentRequired;
+        boolean incidentRequired, notSent;
+        Runnable beforeSend=() -> {};
         Optional<Check> previous=Optional.empty();
         @Override public Optional<Check> previousReadinessSync(String run,String member,String vs) {
             CpFailoverJobExecutorTest.check(java.util.Objects.equals(vsId,vs));
@@ -65,6 +66,7 @@ class CpFailoverJobExecutorTest {
             state=next; outcome=result; stopCode=message;
         }
         @Override public boolean workerState(String id,long epoch,String next,String step,String result,String failed,String message) {
+            if ("STOPPED".equals(state)) return false;
             incidentRequired |= "STOPPED".equals(next) && prepared>0;
             state(id,next,step,result,failed,message); return true;
         }
@@ -76,7 +78,12 @@ class CpFailoverJobExecutorTest {
         @Override public boolean dispatch(Dispatch intent,java.util.function.Supplier<Boolean> send) {
             CpFailoverJobExecutorTest.check(prepared==replies+1);
             boolean result;
-            try { result=send.get(); } catch (RuntimeException failure) { result=false; }
+            beforeSend.run();
+            try { result=send.get(); }
+            catch (NotSent cancelled) {
+                notSent=true; state="STOPPED"; outcome="MUTATION_DISABLED_BEFORE_SEND";
+                throw cancelled;
+            } catch (RuntimeException failure) { result=false; }
             if (state.equals(failAfterStep)) throw new IllegalStateException("SYNTHETIC_DB_FAILURE");
             replies++; return result;
         }
@@ -119,6 +126,7 @@ class CpFailoverJobExecutorTest {
 
     private static final class Script {
         String lostReplyStep, runtimeErrorStep;
+        boolean notSentTransportFailure;
         boolean down,up,stuck,badPre,badPost,badSync,badPolicy,changedPolicyPost;
         boolean readyMember,badPnotes,badBonds,badRoutes,missingDefault,recentFailover;
         String unknownCommand, failedCommand;
@@ -136,7 +144,10 @@ class CpFailoverJobExecutorTest {
         final List<String> commands=new ArrayList<>();
         long bytesA=1000,bytesB=1000;
         ExecResult writeReply(String step) {
-            if (step.equals(runtimeErrorStep)) throw new IllegalStateException("SYNTHETIC_TRANSPORT_FAILURE");
+            if (step.equals(runtimeErrorStep)) {
+                if (notSentTransportFailure) throw new JooqCpFailoverRepository.NotSent();
+                throw new IllegalStateException("SYNTHETIC_TRANSPORT_FAILURE");
+            }
             return step.equals(lostReplyStep)?new ExecResult.TimedOut():new ExecResult.Completed("ok",0);
         }
         DeviceTransport transport() {
@@ -321,11 +332,35 @@ class CpFailoverJobExecutorTest {
         return key -> rows.stream().filter(row -> row.key().equals(key)).toList();
     }
     private static void run(Store store,Script script) {
+        run(store,script,new FailoverMutationSwitch(!"READINESS".equals(store.kind)));
+    }
+    private static void run(Store store,Script script,FailoverMutationSwitch mutationSwitch) {
         var nanos=new java.util.concurrent.atomic.AtomicLong();
         new CpFailoverJobExecutor(store,devices(),leases(),attempts(),script.transport(),gates(),d -> nanos.addAndGet(d.toNanos()),
-            Duration.ZERO,new FailoverMutationSwitch(!"READINESS".equals(store.kind)),nanos::get)
+            Duration.ZERO,mutationSwitch,nanos::get)
             .execute("job-1",1);
     }
+    @Test void switchOffAfterClaimStopsWithoutSendingOrIncident() {
+        var enabled=new java.util.concurrent.atomic.AtomicBoolean(true);
+        var mutationSwitch=org.mockito.Mockito.mock(FailoverMutationSwitch.class);
+        org.mockito.Mockito.when(mutationSwitch.enabled()).thenAnswer(inv -> enabled.get());
+        Store store=new Store(); Script script=new Script();
+        store.beforeSend=() -> enabled.set(false);
+        run(store,script,mutationSwitch);
+        assertEquals("STOPPED",store.state);
+        assertEquals("MUTATION_DISABLED_BEFORE_SEND",store.outcome);
+        check(store.notSent && !store.incidentRequired && store.observations==0);
+        check(script.downCount==0 && script.upCount==0);
+    }
+
+    @Test void notSentSignalFromStartedTransportRemainsUncertain() {
+        Script script=new Script(); script.runtimeErrorStep="FAILING_OVER"; script.notSentTransportFailure=true;
+        Store store=new Store(); run(store,script);
+        assertEquals("STOPPED",store.state);
+        assertEquals("OUTCOME_UNCERTAIN",store.outcome);
+        check(!store.notSent && store.incidentRequired && script.downCount==1);
+    }
+
     @Test void everyWriteStopsAtPersistenceAndDeliveryFailuresWithoutReplay() {
         for (String step:List.of("FAILING_OVER","RETURNING")) {
             for (String fault:List.of("before","after","lost","runtime")) {
