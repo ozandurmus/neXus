@@ -606,7 +606,39 @@ class CpFailoverJobExecutorTest {
         Store store=new Store(); Script script=new Script(); script.failedCommand="cat /proc/net/dev"; run(store,script);
         assertEquals("TRAFFIC_BELOW_TOLERANCE",store.outcome);
         assertEquals(2,store.checks.stream().filter("pre:8:UNKNOWN"::equals).count());
+        assertEquals(2,store.derivedValues.stream().filter(d -> d.contains("\"reason\":\"EMPTY_SAMPLE\"")
+            && d.contains("\"selectedCount\":1") && d.contains("\"presentBeforeCount\":0")
+            && d.contains("\"presentAfterCount\":0")).count());
         assertEquals(0,script.downCount);
+    }
+    @Test void trafficParserReasonsReachBothMembersWithoutInterfaceNames() throws Exception {
+        String net="Inter-| Receive | Transmit\neth0: 100 0 0 0 0 0 0 0 200 0 0 0 0 0 0 0\n";
+        var json=new com.fasterxml.jackson.databind.ObjectMapper();
+        for(String reason:List.of("DUPLICATE_INTERFACE","PARSE_ERROR","BOND_PHYSICAL_OVERLAP","INTERFACE_MISSING_IN_SAMPLE")) {
+            Store store=new Store(); store.kind="READINESS"; Script script=new Script();
+            String interfaces="CCP mode: Automatic\nRequired interfaces: 1\neth0 UP non sync\n";
+            String counters=net;
+            if(reason.equals("DUPLICATE_INTERFACE")) counters+=net.substring(net.indexOf("eth0:"));
+            if(reason.equals("PARSE_ERROR")) counters=net.replace("0 200","0 invalid");
+            if(reason.equals("BOND_PHYSICAL_OVERLAP")) interfaces+="bond1 UP non sync\n";
+            if(reason.equals("INTERFACE_MISSING_IN_SAMPLE")) interfaces=interfaces.replace("eth0 ","eth0.10 ");
+            script.measured=Map.of("cphaprob -a if",interfaces,"cat /proc/net/dev",counters);
+            run(store,script);
+            assertEquals(2,store.checks.stream().filter("pre:8:UNKNOWN"::equals).count(),reason);
+            int recorded=0;
+            for(String derived:store.derivedValues) {
+                var evidence=json.readTree(derived);
+                if(!evidence.has("bytesPerSecond")) continue;
+                recorded++;
+                assertEquals(reason,evidence.get("reason").asText());
+                assertEquals(-1.0,evidence.get("bytesPerSecond").asDouble());
+                assertEquals(6,evidence.size());
+                assertTrue(evidence.has("selectedCount") && evidence.has("presentBeforeCount") && evidence.has("presentAfterCount"));
+                assertFalse(derived.contains("eth0") || derived.contains("bond1"));
+            }
+            assertEquals(2,recorded);
+            assertEquals(0,script.downCount);
+        }
     }
     @Test void memberRatesUseSeparateMonotonicIntervals() {
         Store store=new Store(); Script script=new Script();

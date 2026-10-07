@@ -241,37 +241,67 @@ public final class CpFailoverChecks {
         return count;
     }
     public record TrafficBytes(long received,long transmitted) {}
-    public static Map<String,TrafficBytes> bytesByInterface(String output) {
-        if(output==null || !output.contains("Receive") || !output.contains("Transmit")) return Map.of();
-        Map<String,TrafficBytes> counters=new HashMap<>(); Matcher m=DEV.matcher(output);
-        while(m.find()) {
+    public enum TrafficReason {
+        NONE, EMPTY_SAMPLE, DUPLICATE_INTERFACE, PARSE_ERROR, NO_TRAFFIC_INTERFACES,
+        BOND_PHYSICAL_OVERLAP, INTERFACE_MISSING_IN_SAMPLE, COUNTER_REGRESSION, OVERFLOW,
+        INVALID_ELAPSED
+    }
+    public record TrafficSample(Map<String,TrafficBytes> counters,TrafficReason reason) {
+        public TrafficSample { counters=Map.copyOf(counters); }
+    }
+    public record TrafficMeasurement(double bytesPerSecond,TrafficReason reason,int selectedCount,
+            int presentBeforeCount,int presentAfterCount) {
+        public Map<String,Object> derived(long elapsedNanos) {
+            return Map.of("bytesPerSecond",bytesPerSecond,"elapsedNanos",elapsedNanos,"reason",reason.name(),
+                "selectedCount",selectedCount,"presentBeforeCount",presentBeforeCount,"presentAfterCount",presentAfterCount);
+        }
+    }
+    public static TrafficSample bytesByInterface(String output) {
+        if(output==null || !output.contains("Receive") || !output.contains("Transmit"))
+            return new TrafficSample(Map.of(),TrafficReason.EMPTY_SAMPLE);
+        Map<String,TrafficBytes> counters=new HashMap<>();
+        for(String line:output.split("\\R")) {
+            if(line.isBlank() || line.contains("|")) continue;
+            Matcher m=DEV.matcher(line);
+            if(!m.matches()) return new TrafficSample(counters,TrafficReason.PARSE_ERROR);
             try {
                 String[] columns=m.group(2).trim().split("\\s+");
-                if(counters.put(m.group(1),new TrafficBytes(Long.parseLong(columns[0]),Long.parseLong(columns[8])))!=null)
-                    return Map.of();
-            } catch (NumberFormatException | ArithmeticException invalid) { return Map.of(); }
+                if(counters.putIfAbsent(m.group(1),new TrafficBytes(Long.parseLong(columns[0]),Long.parseLong(columns[8])))!=null)
+                    return new TrafficSample(counters,TrafficReason.DUPLICATE_INTERFACE);
+            } catch (NumberFormatException invalid) { return new TrafficSample(counters,TrafficReason.PARSE_ERROR); }
         }
-        return Map.copyOf(counters);
+        return new TrafficSample(counters,counters.isEmpty()?TrafficReason.EMPTY_SAMPLE:TrafficReason.NONE);
     }
-    public static double trafficBytesPerSecond(Map<String,TrafficBytes> before,Map<String,TrafficBytes> after,
+    public static TrafficMeasurement trafficBytesPerSecond(TrafficSample before,TrafficSample after,
             Set<String> interfaces,long elapsedNanos) {
-        if(before.isEmpty() || after.isEmpty() || interfaces.isEmpty() || elapsedNanos<=0) return -1;
         // Preserve observed interfaces; exclude non-forwarding counters only when measuring traffic.
         interfaces=new HashSet<>(interfaces);
         interfaces.removeIf(name -> name.matches("(?i)(?:lo|mgmt|management)(?:[0-9.].*)?"));
-        if(interfaces.isEmpty()) return -1;
+        int selected=interfaces.size();
+        int presentBefore=(int)interfaces.stream().filter(before.counters()::containsKey).count();
+        int presentAfter=(int)interfaces.stream().filter(after.counters()::containsKey).count();
+        TrafficReason reason=before.reason()!=TrafficReason.NONE?before.reason():after.reason();
+        if(reason==TrafficReason.NONE && (before.counters().isEmpty() || after.counters().isEmpty()))
+            reason=TrafficReason.EMPTY_SAMPLE;
+        if(reason==TrafficReason.NONE && interfaces.isEmpty()) reason=TrafficReason.NO_TRAFFIC_INTERFACES;
+        if(reason==TrafficReason.NONE && elapsedNanos<=0) reason=TrafficReason.INVALID_ELAPSED;
         // The interface list has no slave mapping: mixed bond/physical selection cannot prove non-overlap.
-        if(interfaces.stream().anyMatch(n -> n.startsWith("bond"))
-                && interfaces.stream().anyMatch(n -> !n.startsWith("bond"))) return -1;
+        // The gated show_bond summary supplies slave counts, not membership identities.
+        if(reason==TrafficReason.NONE && interfaces.stream().anyMatch(n -> n.startsWith("bond"))
+                && interfaces.stream().anyMatch(n -> !n.startsWith("bond"))) reason=TrafficReason.BOND_PHYSICAL_OVERLAP;
         long delta=0;
         for(String name:interfaces) {
-            TrafficBytes a=before.get(name),b=after.get(name);
-            if(a==null || b==null || a.received()<0 || a.transmitted()<0
-                    || b.received()<a.received() || b.transmitted()<a.transmitted()) return -1;
+            if(reason!=TrafficReason.NONE) break;
+            TrafficBytes a=before.counters().get(name),b=after.counters().get(name);
+            if(a==null || b==null) { reason=TrafficReason.INTERFACE_MISSING_IN_SAMPLE; break; }
+            if(a.received()<0 || a.transmitted()<0 || b.received()<a.received() || b.transmitted()<a.transmitted()) {
+                reason=TrafficReason.COUNTER_REGRESSION; break;
+            }
             try { delta=Math.addExact(delta,Math.addExact(b.received()-a.received(),b.transmitted()-a.transmitted())); }
-            catch(ArithmeticException overflow) { return -1; }
+            catch(ArithmeticException overflow) { reason=TrafficReason.OVERFLOW; break; }
         }
-        return delta/(elapsedNanos/1_000_000_000.0);
+        return new TrafficMeasurement(reason==TrafficReason.NONE?delta/(elapsedNanos/1_000_000_000.0):-1,
+            reason,selected,presentBefore,presentAfter);
     }
     public static String syncStatus(String output) {
         if(output==null) return "UNKNOWN";
