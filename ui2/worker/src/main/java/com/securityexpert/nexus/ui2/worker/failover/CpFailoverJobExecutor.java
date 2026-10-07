@@ -364,7 +364,7 @@ public final class CpFailoverJobExecutor {
             case TABLE -> !CpFailoverChecks.ipTable(output).isEmpty();
             case IF -> CpFailoverChecks.interfaces(output).ccpPresent();
             case ARP -> CpFailoverChecks.arpCount(output)>=0;
-            case TRAFFIC -> !CpFailoverChecks.bytesByInterface(output).isEmpty();
+            case TRAFFIC -> CpFailoverChecks.bytesByInterface(output).reason()==CpFailoverChecks.TrafficReason.NONE;
             case SYNC -> !"UNKNOWN".equals(CpFailoverChecks.syncStatus(output));
             case POLICY -> !"UNKNOWN".equals(CpFailoverChecks.policy(output).status());
             case CPSTAT_POLICY -> !"UNKNOWN".equals(CpFailoverChecks.cpstatPolicy(output).status());
@@ -504,11 +504,11 @@ public final class CpFailoverJobExecutor {
         return new Pair(new Measure(a,ta,ia,arpA,rates[0],policyA.name(),cpstatA.name(),routingA),
             new Measure(b,tb,ib,arpB,rates[1],policyB.name(),cpstatB.name(),routingB));
     }
-    private Map<String,CpFailoverChecks.TrafficBytes> trafficSample(Member member) throws InterruptedException {
+    private CpFailoverChecks.TrafficSample trafficSample(Member member) throws InterruptedException {
         try { return CpFailoverChecks.bytesByInterface(command(member,TRAFFIC)); }
         catch(Stop unavailable) {
             if(!Set.of("COMMAND_UNAVAILABLE","OUTPUT_UNAVAILABLE").contains(unavailable.code)) throw unavailable;
-            return Map.of();
+            return CpFailoverChecks.bytesByInterface(null);
         }
     }
     private double[] trafficWindow(String phase,Member first,Member second,
@@ -523,13 +523,14 @@ public final class CpFailoverJobExecutor {
         long elapsedA=nanoTime.getAsLong()-startA;
         var postB=trafficSample(second);
         long elapsedB=nanoTime.getAsLong()-startB;
-        double rateA=CpFailoverChecks.trafficBytesPerSecond(preA,postA,ia.trafficNames(),elapsedA);
-        double rateB=CpFailoverChecks.trafficBytesPerSecond(preB,postB,ib.trafficNames(),elapsedB);
+        var measurementA=CpFailoverChecks.trafficBytesPerSecond(preA,postA,ia.trafficNames(),elapsedA);
+        var measurementB=CpFailoverChecks.trafficBytesPerSecond(preB,postB,ib.trafficNames(),elapsedB);
+        double rateA=measurementA.bytesPerSecond(),rateB=measurementB.bytesPerSecond();
         double baseline=before==null?(oldActive==first?rateA:rateB):before.forMember(oldActive,first).traffic();
         double current=before==null?baseline:oldActive==first?rateB:rateA;
         String status=rateA<0 || rateB<0?"UNKNOWN":CpFailoverChecks.trafficStatus(baseline,current);
-        record(phase,first,8,status,json(Map.of("bytesPerSecond",rateA,"elapsedNanos",elapsedA)));
-        record(phase,second,8,status,json(Map.of("bytesPerSecond",rateB,"elapsedNanos",elapsedB)));
+        record(phase,first,8,status,json(measurementA.derived(elapsedA)));
+        record(phase,second,8,status,json(measurementB.derived(elapsedB)));
         if(!"PASS".equals(status)) checkFailed("TRAFFIC_BELOW_TOLERANCE",8,status);
         return new double[]{rateA,rateB};
     }

@@ -29,6 +29,10 @@ class CpFailoverChecksTest {
         .replace("eth1: 300", "eth1: 800").replace("eth1: 800 0 0 0 0 0 0 0 400", "eth1: 800 0 0 0 0 0 0 0 900");
     private static void check(boolean condition) { if(!condition) throw new AssertionError(); }
 
+    private static CpFailoverChecks.TrafficSample sample(Map<String,CpFailoverChecks.TrafficBytes> counters) {
+        return new CpFailoverChecks.TrafficSample(counters,CpFailoverChecks.TrafficReason.NONE);
+    }
+
     @Test void approvedChecksAndVsContext() {
         check(CpFailoverChecks.corroborated(CpFailoverChecks.state(ACTIVE),CpFailoverChecks.state(STANDBY)));
         check(!CpFailoverChecks.corroborated(CpFailoverChecks.state(ACTIVE),CpFailoverChecks.state(ACTIVE)));
@@ -39,7 +43,7 @@ class CpFailoverChecksTest {
         check(!CpFailoverChecks.interfaces(IF.replace("eth1 UP", "eth1 DOWN")).healthy());
         check(CpFailoverChecks.arpCount("? (192.0.2.31) at 02:00:00:00:00:01 [ether] on eth0\n")==1);
         check(CpFailoverChecks.trafficBytesPerSecond(CpFailoverChecks.bytesByInterface(DEV_A),
-            CpFailoverChecks.bytesByInterface(DEV_B),Set.of("eth0","eth1"),5_000_000_000L)==400);
+            CpFailoverChecks.bytesByInterface(DEV_B),Set.of("eth0","eth1"),5_000_000_000L).bytesPerSecond()==400);
         // The same strict projections apply to a VS after its command is wrapped by vsenv.
         check(CpFailoverChecks.state(ACTIVE).localRole().equals("ACTIVE"));
     }
@@ -48,8 +52,8 @@ class CpFailoverChecksTest {
         check(CpFailoverChecks.ipTable("unsupported").isEmpty());
         check(!CpFailoverChecks.interfaces("unsupported").healthy());
         check(CpFailoverChecks.arpCount("unsupported")==-1);
-        check(CpFailoverChecks.bytesByInterface("unsupported").isEmpty());
-        check(CpFailoverChecks.trafficBytesPerSecond(Map.of(),Map.of(),Set.of("eth0"),5_000_000_000L)==-1);
+        check(CpFailoverChecks.bytesByInterface("unsupported").reason()==CpFailoverChecks.TrafficReason.EMPTY_SAMPLE);
+        check(CpFailoverChecks.trafficBytesPerSecond(sample(Map.of()),sample(Map.of()),Set.of("eth0"),5_000_000_000L).bytesPerSecond()==-1);
     }
     @Test void inventoryStyleHaAndVsFixturesKeepOpaqueIdsAndCorroborate() {
         var plain=CpFailoverChecks.state(Fixtures.read("cp/cphaprob_stat_r8120_ha.txt"));
@@ -273,8 +277,8 @@ class CpFailoverChecksTest {
             check(!CpFailoverChecks.interfaces(interfaces.replace("eth1-01.1237         UP", "truncated row")).ccpPresent());
             check(CpFailoverChecks.arpCount(fixture.get("arp -an").replace("\n",eol))==1);
             var bytes=CpFailoverChecks.bytesByInterface(fixture.get("cat /proc/net/dev").replace("\n",eol));
-            check(bytes.keySet().equals(parsed.names()) && bytes.values().stream().allMatch(v -> v.received()+v.transmitted()==3000L));
-            check(CpFailoverChecks.trafficBytesPerSecond(bytes,bytes,parsed.trafficNames(),5_000_000_000L)==0);
+            check(bytes.counters().keySet().equals(parsed.names()) && bytes.counters().values().stream().allMatch(v -> v.received()+v.transmitted()==3000L));
+            check(CpFailoverChecks.trafficBytesPerSecond(bytes,bytes,parsed.trafficNames(),5_000_000_000L).bytesPerSecond()==0);
             check(CpFailoverChecks.policy(fixture.get("fw stat").replace("\n",eol)).status().equals("PASS"));
             check(CpFailoverChecks.pnotes(fixture.get("cphaprob -ia list").replace("\n",eol)).status().equals("PASS"));
             check(CpFailoverChecks.bonds(fixture.get("cphaprob show_bond").replace("\n",eol)).equals("PASS"));
@@ -295,7 +299,7 @@ class CpFailoverChecksTest {
         check(!rows.equals(CpFailoverChecks.ipTable(table.replace("192.0.2.95", "192.0.2.96"))));
         check(CpFailoverChecks.ipTable(table+"0 4 192.0.2.99\n").size()==5);
         check(CpFailoverChecks.ipTable(table+"0 6 malformed\n").isEmpty());
-        check(CpFailoverChecks.bytesByInterface(Fixtures.read("cp/failover_net_dev.txt")).get("gretap0").equals(new CpFailoverChecks.TrafficBytes(9000,10000)));
+        check(CpFailoverChecks.bytesByInterface(Fixtures.read("cp/failover_net_dev.txt")).counters().get("gretap0").equals(new CpFailoverChecks.TrafficBytes(9000,10000)));
     }
     @Test void approvedCriticalDeviceAndBondShapes() {
         check(CpFailoverChecks.pnotes(Fixtures.read("cp/failover_pnotes_ok.txt")).status().equals("PASS"));
@@ -388,16 +392,16 @@ class CpFailoverChecksTest {
         assertEquals(Map.of("reason","SESSION_CONTINUITY_NOT_EVALUATED"),CpFailoverChecks.sessionContinuity().derived());
     }
     @Test void trafficUsesMeasuredElapsedAndRejectsMissingResetOrZeroBaseline() {
-        var before=Map.of("eth0",new CpFailoverChecks.TrafficBytes(100,100));
-        var after=Map.of("eth0",new CpFailoverChecks.TrafficBytes(1100,100));
-        assertEquals(100.0,CpFailoverChecks.trafficBytesPerSecond(before,after,Set.of("eth0"),10_000_000_000L));
+        var before=sample(Map.of("eth0",new CpFailoverChecks.TrafficBytes(100,100)));
+        var after=sample(Map.of("eth0",new CpFailoverChecks.TrafficBytes(1100,100)));
+        assertEquals(100.0,CpFailoverChecks.trafficBytesPerSecond(before,after,Set.of("eth0"),10_000_000_000L).bytesPerSecond());
         for(long elapsed:new long[]{0,-1})
-            assertEquals(-1.0,CpFailoverChecks.trafficBytesPerSecond(before,after,Set.of("eth0"),elapsed));
-        assertEquals(-1.0,CpFailoverChecks.trafficBytesPerSecond(after,before,Set.of("eth0"),5_000_000_000L));
-        assertEquals(-1.0,CpFailoverChecks.trafficBytesPerSecond(before,Map.of(),Set.of("eth0"),5_000_000_000L));
+            assertEquals(-1.0,CpFailoverChecks.trafficBytesPerSecond(before,after,Set.of("eth0"),elapsed).bytesPerSecond());
+        assertEquals(-1.0,CpFailoverChecks.trafficBytesPerSecond(after,before,Set.of("eth0"),5_000_000_000L).bytesPerSecond());
+        assertEquals(-1.0,CpFailoverChecks.trafficBytesPerSecond(before,sample(Map.of()),Set.of("eth0"),5_000_000_000L).bytesPerSecond());
         assertEquals(-1.0,CpFailoverChecks.trafficBytesPerSecond(before,
-            Map.of("eth0",new CpFailoverChecks.TrafficBytes(50,10000)),Set.of("eth0"),5_000_000_000L));
-        assertEquals(-1.0,CpFailoverChecks.trafficBytesPerSecond(before,after,Set.of("bond1","eth0"),5_000_000_000L));
+            sample(Map.of("eth0",new CpFailoverChecks.TrafficBytes(50,10000))),Set.of("eth0"),5_000_000_000L).bytesPerSecond());
+        assertEquals(-1.0,CpFailoverChecks.trafficBytesPerSecond(before,after,Set.of("bond1","eth0"),5_000_000_000L).bytesPerSecond());
         assertEquals("UNKNOWN",CpFailoverChecks.trafficStatus(0,100));
         assertEquals("UNKNOWN",CpFailoverChecks.trafficStatus(100,-1));
         assertEquals("FAIL",CpFailoverChecks.trafficStatus(100,0));
@@ -409,12 +413,99 @@ class CpFailoverChecksTest {
             +"lo UP non sync\nMgmt UP non sync\nSync (S) UP\neth1 Non-Monitored\n"
             +"bond1 UP non sync\nbond1.10 UP non sync\n");
         assertEquals(Set.of("lo","Mgmt","bond1.10"),selected.trafficNames());
-        var before=Map.of("bond1.10",new CpFailoverChecks.TrafficBytes(100,100));
-        var after=Map.of("bond1.10",new CpFailoverChecks.TrafficBytes(600,600));
-        assertEquals(200.0,CpFailoverChecks.trafficBytesPerSecond(before,after,selected.trafficNames(),5_000_000_000L),
+        var before=sample(Map.of("bond1.10",new CpFailoverChecks.TrafficBytes(100,100)));
+        var after=sample(Map.of("bond1.10",new CpFailoverChecks.TrafficBytes(600,600)));
+        assertEquals(200.0,CpFailoverChecks.trafficBytesPerSecond(before,after,selected.trafficNames(),5_000_000_000L).bytesPerSecond(),
             "Missing non-forwarding counters must neither block nor contribute to forwarding traffic");
-        assertEquals(-1.0,CpFailoverChecks.trafficBytesPerSecond(before,after,Set.of("lo","Mgmt"),5_000_000_000L),
+        assertEquals(-1.0,CpFailoverChecks.trafficBytesPerSecond(before,after,Set.of("lo","Mgmt"),5_000_000_000L).bytesPerSecond(),
             "A selection with no forwarding interfaces must remain unknown");
+    }
+    private static CpFailoverChecks.TrafficMeasurement traffic(String before,String after,Set<String> selected) {
+        return CpFailoverChecks.trafficBytesPerSecond(CpFailoverChecks.bytesByInterface(before),
+            CpFailoverChecks.bytesByInterface(after),selected,5_000_000_000L);
+    }
+    @Test void trafficEmptySampleHasReasonAndPresenceCounts() {
+        for(String empty:new String[]{null,"unsupported","Inter-| Receive | Transmit\n"}) {
+            var result=traffic(empty,DEV_B,Set.of("eth0","eth1"));
+            assertEquals(CpFailoverChecks.TrafficReason.EMPTY_SAMPLE,result.reason());
+            assertEquals(-1.0,result.bytesPerSecond());
+            assertEquals(2,result.selectedCount());
+            assertEquals(0,result.presentBeforeCount());
+            assertEquals(2,result.presentAfterCount());
+            assertEquals(CpFailoverChecks.TrafficReason.EMPTY_SAMPLE,traffic(DEV_A,empty,Set.of("eth0")).reason());
+        }
+    }
+    @Test void trafficDuplicateInterfaceIsNotAnEmptySample() {
+        String duplicate=DEV_A+"eth0: 100 0 0 0 0 0 0 0 200 0 0 0 0 0 0 0\n";
+        assertEquals(CpFailoverChecks.TrafficReason.DUPLICATE_INTERFACE,traffic(duplicate,DEV_B,Set.of("eth0")).reason());
+        assertEquals(CpFailoverChecks.TrafficReason.DUPLICATE_INTERFACE,traffic(DEV_A,duplicate,Set.of("eth0")).reason());
+    }
+    @Test void trafficMalformedOrOutOfRangeCounterHasParseReason() {
+        for(String invalid:new String[]{"invalid","9223372036854775808","-1"}) {
+            String malformed=DEV_A.replace("eth0: 100","eth0: "+invalid);
+            assertEquals(CpFailoverChecks.TrafficReason.PARSE_ERROR,traffic(malformed,DEV_B,Set.of("eth0")).reason());
+            assertEquals(CpFailoverChecks.TrafficReason.PARSE_ERROR,traffic(DEV_A,malformed,Set.of("eth0")).reason());
+        }
+    }
+    @Test void trafficEmptyOrFullyExcludedSelectionHasReason() {
+        for(Set<String> selected:java.util.List.of(Set.<String>of(),Set.of("lo","Mgmt","management0"))) {
+            var result=traffic(DEV_A,DEV_B,selected);
+            assertEquals(CpFailoverChecks.TrafficReason.NO_TRAFFIC_INTERFACES,result.reason());
+            assertEquals(0,result.selectedCount());
+        }
+    }
+    @Test void bondSummaryCountsCannotProveMixedSelectionIsNonOverlapping() {
+        String mixed="CCP mode: Automatic\nRequired interfaces: 3\n"
+            +"bond1 UP non sync\neth1-01 UP non sync\neth1-02 UP non sync\n";
+        var selected=CpFailoverChecks.interfaces(mixed).trafficNames();
+        assertEquals(Set.of("bond1","eth1-01","eth1-02"),selected);
+        assertEquals("PASS",CpFailoverChecks.bonds(Fixtures.read("cp/failover_bonds.txt")));
+        String before=DEV_A.replace("eth0:","bond1:").replace("eth1:","eth1-01:")
+            +"eth1-02: 300 0 0 0 0 0 0 0 400 0 0 0 0 0 0 0\n";
+        String after=before.replace(": 100",": 600");
+        var result=traffic(before,after,selected);
+        assertEquals(CpFailoverChecks.TrafficReason.BOND_PHYSICAL_OVERLAP,result.reason());
+        assertEquals(-1.0,result.bytesPerSecond());
+        assertEquals(3,result.selectedCount());
+        assertEquals(3,result.presentBeforeCount());
+        assertEquals(3,result.presentAfterCount());
+        assertEquals(100.0,traffic(before,after,Set.of("bond1")).bytesPerSecond(),
+            "Changing only the interface selection reproduces PASS versus UNKNOWN");
+    }
+    @Test void trafficMissingSubinterfaceHasReasonAndUnequalPresenceCounts() {
+        String before=DEV_A.replace("eth0:","eth0.10:");
+        var result=traffic(before,DEV_B,Set.of("eth0.10"));
+        assertEquals(CpFailoverChecks.TrafficReason.INTERFACE_MISSING_IN_SAMPLE,result.reason());
+        assertEquals(1,result.selectedCount());
+        assertEquals(1,result.presentBeforeCount());
+        assertEquals(0,result.presentAfterCount());
+        assertEquals(CpFailoverChecks.TrafficReason.INTERFACE_MISSING_IN_SAMPLE,
+            traffic(DEV_A,before,Set.of("eth0.10")).reason());
+    }
+    @Test void trafficCounterRegressionHasReason() {
+        assertEquals(CpFailoverChecks.TrafficReason.COUNTER_REGRESSION,traffic(DEV_B,DEV_A,Set.of("eth0")).reason());
+        assertEquals(CpFailoverChecks.TrafficReason.COUNTER_REGRESSION,
+            traffic(DEV_A,DEV_B.replace("0 700","0 199"),Set.of("eth0")).reason());
+    }
+    @Test void trafficCounterSumOverflowHasReason() {
+        var zero=new CpFailoverChecks.TrafficBytes(0,0);
+        var huge=new CpFailoverChecks.TrafficBytes(Long.MAX_VALUE,1);
+        assertEquals(CpFailoverChecks.TrafficReason.OVERFLOW,CpFailoverChecks.trafficBytesPerSecond(
+            sample(Map.of("eth0",zero)),sample(Map.of("eth0",huge)),Set.of("eth0"),5_000_000_000L).reason());
+        huge=new CpFailoverChecks.TrafficBytes(Long.MAX_VALUE,0);
+        assertEquals(CpFailoverChecks.TrafficReason.OVERFLOW,CpFailoverChecks.trafficBytesPerSecond(
+            sample(Map.of("eth0",zero,"eth1",zero)),sample(Map.of("eth0",huge,"eth1",huge)),
+            Set.of("eth0","eth1"),5_000_000_000L).reason());
+    }
+    @Test void trafficInvalidElapsedHasDistinctReason() {
+        var sample=CpFailoverChecks.bytesByInterface(DEV_A);
+        for(long elapsed:new long[]{0,-1}) assertEquals(CpFailoverChecks.TrafficReason.INVALID_ELAPSED,
+            CpFailoverChecks.trafficBytesPerSecond(sample,sample,Set.of("eth0"),elapsed).reason());
+    }
+    @Test void trafficDerivedEvidenceContainsOnlyReasonRateTimeAndCounts() {
+        var result=traffic(DEV_A,DEV_B,Set.of("eth0","eth1"));
+        assertEquals(Map.of("bytesPerSecond",400.0,"elapsedNanos",5_000_000_000L,"reason","NONE",
+            "selectedCount",2,"presentBeforeCount",2,"presentAfterCount",2),result.derived(5_000_000_000L));
     }
     @Test void onlyIntentionalAdminDownIsAccepted() {
         for(String name:java.util.List.of("ADMIN_DOWN","admin_down")) {
