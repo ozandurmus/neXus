@@ -29,8 +29,11 @@ import com.securityexpert.nexus.ui2.worker.transport.xmlapi.PanCredentialMateria
 class PanFailoverJobExecutorTest {
     private static final String CLUSTER="CLS-TEST-01", A="FW-TEST-01", B="FW-TEST-02";
     private static final class Script {
+        Runnable beforeSend=() -> {};
+        boolean notSent;
         String admission="ADMITTED", writeAdmission="ADMITTED", returnAdmission="ADMITTED";
         String failBeforeStep,failAfterStep,lostReplyStep,runtimeErrorStep;
+        boolean notSentTransportFailure;
         int prepared,replies,observations;
         boolean suspended,functional,stuck,badPre,badPost,badSync,badSessions,badVersion,lowPostSessions;
         boolean missingFields,preempt,badFinal;
@@ -107,7 +110,10 @@ class PanFailoverJobExecutorTest {
                 });
         }
         XmlApiResult writeReply(String step) {
-            if (step.equals(runtimeErrorStep)) throw new IllegalStateException("SYNTHETIC_TRANSPORT_FAILURE");
+            if (step.equals(runtimeErrorStep)) {
+                if (notSentTransportFailure) throw new JooqCpFailoverRepository.NotSent();
+                throw new IllegalStateException("SYNTHETIC_TRANSPORT_FAILURE");
+            }
             return new XmlApiResult.Completed(step.equals(lostReplyStep)?504:200,"<response status=\"success\"/>");
         }
     }
@@ -157,6 +163,9 @@ class PanFailoverJobExecutorTest {
         return run(script,readiness,!readiness);
     }
     private static Result run(Script script,boolean readiness,boolean enabled) {
+        return run(script,readiness,new FailoverMutationSwitch(enabled));
+    }
+    private static Result run(Script script,boolean readiness,FailoverMutationSwitch mutationSwitch) {
         JooqCpFailoverRepository store=mock(JooqCpFailoverRepository.class);
         AtomicReference<String> state=new AtomicReference<>("PLANNED"),outcome=new AtomicReference<>(),failedCheck=new AtomicReference<>();
         List<String> checks=new ArrayList<>(),derived=new ArrayList<>();
@@ -171,7 +180,7 @@ class PanFailoverJobExecutorTest {
         doAnswer(inv -> {state.set(inv.getArgument(1)); outcome.set(inv.getArgument(3)); failedCheck.set(inv.getArgument(4)); return null;})
             .when(store).state(anyString(),anyString(),anyString(),nullable(String.class),nullable(String.class),nullable(String.class));
         when(store.workerState(anyString(),anyLong(),anyString(),anyString(),nullable(String.class),nullable(String.class),nullable(String.class)))
-            .thenAnswer(inv -> {state.set(inv.getArgument(2)); outcome.set(inv.getArgument(4)); failedCheck.set(inv.getArgument(5)); return true;});
+            .thenAnswer(inv -> {if ("STOPPED".equals(state.get())) return false; state.set(inv.getArgument(2)); outcome.set(inv.getArgument(4)); failedCheck.set(inv.getArgument(5)); return true;});
         when(store.prepareDispatch(anyString(),anyLong(),anyInt(),anyString(),anyString(),anyString())).thenAnswer(inv -> {
             if (state.get().equals(script.failBeforeStep)) throw new IllegalStateException("SYNTHETIC_DB_FAILURE");
             script.prepared++;
@@ -181,7 +190,12 @@ class PanFailoverJobExecutorTest {
             assertEquals(script.replies+1,script.prepared);
             java.util.function.Supplier<Boolean> send=inv.getArgument(1);
             boolean reply;
-            try { reply=send.get(); } catch (RuntimeException failure) { reply=false; }
+            script.beforeSend.run();
+            try { reply=send.get(); }
+            catch (JooqCpFailoverRepository.NotSent cancelled) {
+                script.notSent=true; state.set("STOPPED"); outcome.set("MUTATION_DISABLED_BEFORE_SEND");
+                throw cancelled;
+            } catch (RuntimeException failure) { reply=false; }
             if (state.get().equals(script.failAfterStep)) throw new IllegalStateException("SYNTHETIC_DB_FAILURE");
             script.replies++; return reply;
         });
@@ -191,11 +205,32 @@ class PanFailoverJobExecutorTest {
             .when(store).check(anyString(),anyString(),anyString(),nullable(String.class),anyInt(),anyString(),anyString());
         new PanFailoverJobExecutor(store,devices(),leases(),attempts(),script.transport(),
             ref -> new PanCredentialMaterial("synthetic-user","synthetic-password".toCharArray()),gates(),d -> {},
-            Duration.ZERO,new FailoverMutationSwitch(enabled))
+            Duration.ZERO,mutationSwitch)
             .execute("job-1",1);
         return new Result(state.get(),outcome.get(),checks,derived,failedCheck.get());
     }
     private record Result(String state,String outcome,List<String> checks,List<String> derived,String failedCheck) {}
+    @Test void switchOffAfterClaimStopsWithoutSending() {
+        var enabled=new java.util.concurrent.atomic.AtomicBoolean(true);
+        var mutationSwitch=mock(FailoverMutationSwitch.class);
+        when(mutationSwitch.enabled()).thenAnswer(inv -> enabled.get());
+        Script script=new Script(); script.beforeSend=() -> enabled.set(false);
+        Result result=run(script,false,mutationSwitch);
+        assertEquals("STOPPED",result.state());
+        assertEquals("MUTATION_DISABLED_BEFORE_SEND",result.outcome());
+        assertTrue(script.notSent);
+        assertEquals(0,script.suspendCount);
+        assertEquals(0,script.observations);
+    }
+
+    @Test void notSentSignalFromStartedTransportRemainsUncertain() {
+        Script script=new Script(); script.runtimeErrorStep="FAILING_OVER"; script.notSentTransportFailure=true;
+        Result result=run(script);
+        assertEquals("STOPPED",result.state());
+        assertEquals("OUTCOME_UNCERTAIN",result.outcome());
+        assertTrue(!script.notSent && script.suspendCount==1);
+    }
+
     @Test void everyWriteStopsAtPersistenceAndDeliveryFailuresWithoutReplay() {
         for (String step:List.of("FAILING_OVER","RETURNING")) {
             for (String fault:List.of("before","after","lost","runtime")) {

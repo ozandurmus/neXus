@@ -172,6 +172,8 @@ public final class CpFailoverJobExecutor {
             state("POSTCHECK","POST_RETURN",null,null,null);
             checks("post_return",first,second,before,formerActive);
             state("DONE","DONE","SUCCEEDED",null,"NO_PROBLEMS_FOUND");
+        } catch (JooqCpFailoverRepository.NotSent notSent) {
+            stop("MUTATION_DISABLED_BEFORE_SEND",0);
         } catch (Stop stopped) {
             if (readiness) finishReadiness(stopped.code,stopped.check,stopped.check==0?"UNKNOWN":stopped.status);
             else stop(stopped.code,stopped.check);
@@ -295,10 +297,12 @@ public final class CpFailoverJobExecutor {
             wrote=true;
             String literal=vsId==null?"bash -lc '"+command+"'":"bash -lc 'vsenv "+vsId+" && "+command+"'";
             boolean replied=store.dispatch(dispatch,() -> {
-                if (!mutationSwitch.enabled()) return false;
-                ExecResult result=ssh.exec(member.session(),new ExecSpec(literal,false),Duration.ofSeconds(g.timeoutS()));
-                return result instanceof ExecResult.Completed c && c.exitStatus()==0
-                    && c.output()!=null && c.output().length()<=262144 && !commandUnavailable(c.output());
+                if (!mutationSwitch.enabled()) throw new JooqCpFailoverRepository.NotSent();
+                try {
+                    ExecResult result=ssh.exec(member.session(),new ExecSpec(literal,false),Duration.ofSeconds(g.timeoutS()));
+                    return result instanceof ExecResult.Completed c && c.exitStatus()==0
+                        && c.output()!=null && c.output().length()<=262144 && !commandUnavailable(c.output());
+                } catch (RuntimeException uncertain) { return false; }
             });
             if (!replied) throw new Stop("OUTCOME_UNCERTAIN",0);
             return "";

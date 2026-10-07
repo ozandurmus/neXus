@@ -58,6 +58,37 @@ class FailoverIncidentAdmissionTest {
             .derive(new org.jooq.impl.DefaultExecuteListenerProvider(listener)))),true);
     }
 
+    @Test void notSentStopsWithoutIncidentAndReleasesAdmission() throws Exception {
+        try (var fixture=Ui2PostgresFixture.createAndMigrate("failover_not_sent")) {
+            var repo=repository(fixture); var members=pair(fixture,"unit-dispatch","check_point");
+            var e=executing(fixture,repo,members); var intent=prepare(repo,e);
+            assertThrows(JooqCpFailoverRepository.NotSent.class,() -> repo.dispatch(intent,
+                () -> { throw new JooqCpFailoverRepository.NotSent(); }));
+            var run=repo.detail(e.run()).orElseThrow().run();
+            assertEquals("STOPPED",run.state());
+            assertEquals("MUTATION_DISABLED_BEFORE_SEND",run.outcome());
+            assertEquals("NOT_SENT",mutate(fixture,dsl -> dsl.fetchOne(
+                "select delivery from failover_dispatch_intent where nonce={0}",intent.nonce()).get(0,String.class)));
+            assertEquals("NOT_OBSERVED",mutate(fixture,dsl -> dsl.fetchOne(
+                "select observation from failover_dispatch_intent where nonce={0}",intent.nonce()).get(0,String.class)));
+            assertEquals(0,count(fixture,"failover_quarantine"));
+            assertEquals(0,repo.reconcileDispatches());
+            assertFalse(repo.dispatch(intent,() -> {fail("Cancelled intent replayed"); return true;}));
+            assertEquals("ADMITTED",request(repo,"unit-dispatch",null,"check_point",members).code());
+        }
+    }
+
+    @Test void transportExceptionCreatesUnknownOutcomeAndIncident() throws Exception {
+        try (var fixture=Ui2PostgresFixture.createAndMigrate("failover_transport_exception")) {
+            var repo=repository(fixture); var members=pair(fixture,"unit-dispatch","check_point");
+            var e=executing(fixture,repo,members); var intent=prepare(repo,e);
+            assertFalse(repo.dispatch(intent,() -> { throw new IllegalStateException("SYNTHETIC_TRANSPORT_FAILURE"); }));
+            assertEquals("OUTCOME_UNKNOWN",repo.detail(e.run()).orElseThrow().run().outcome());
+            assertEquals(1,count(fixture,"failover_quarantine"));
+            assertEquals("OPEN_INCIDENT",request(repo,"unit-dispatch",null,"check_point",members).code());
+        }
+    }
+
     @Test void intentAttemptStateAndAuditRollbackTogetherBeforeSend() throws Exception {
         try (var fixture=Ui2PostgresFixture.createAndMigrate("failover_intent_faults")) {
             var repo=repository(fixture); var members=pair(fixture,"unit-dispatch","check_point");

@@ -28,6 +28,67 @@ class JooqCpFailoverRepositoryTest {
             new JooqCpFailoverRepository.Dispatch("nonce","run","job",1),() -> {fail("Transport touched"); return true;}));
     }
 
+    @org.junit.jupiter.api.Test
+    void notSentCommitsClosedIntentAndTerminalRunInTheSameTransaction() {
+        var db=new DispatchDatabase();
+        assertThrows(JooqCpFailoverRepository.NotSent.class,() -> db.repository.dispatch(db.intent,
+            () -> { throw new JooqCpFailoverRepository.NotSent(); }));
+        assertEquals(2,db.transactions);
+        assertTrue(db.writes.stream().allMatch(sql -> sql.startsWith("2:")));
+        assertTrue(db.writes.stream().anyMatch(sql -> sql.contains("delivery='NOT_SENT'")));
+        assertTrue(db.writes.stream().anyMatch(sql -> sql.contains("state='STOPPED',outcome='MUTATION_DISABLED_BEFORE_SEND'")));
+        assertTrue(db.writes.stream().noneMatch(sql -> sql.contains("OUTCOME_UNKNOWN") || sql.contains("set observation=")));
+    }
+
+    @org.junit.jupiter.api.Test
+    void transportExceptionStillPersistsUnknownDeliveryAndOutcome() {
+        var db=new DispatchDatabase();
+        assertFalse(db.repository.dispatch(db.intent,() -> { throw new IllegalStateException("SYNTHETIC_TRANSPORT_FAILURE"); }));
+        assertTrue(db.writes.stream().anyMatch(sql -> sql.contains("set observation='OUTCOME_UNKNOWN'")));
+        assertTrue(db.writes.stream().anyMatch(sql -> sql.contains("state='STOPPED',outcome='OUTCOME_UNKNOWN'")));
+        assertTrue(db.writes.stream().noneMatch(sql -> sql.contains("delivery='NOT_SENT'")));
+    }
+
+    private static final class DispatchDatabase implements TransactionBoundary {
+        final JooqFailoverApprovalTest.Database admission=new JooqFailoverApprovalTest.Database();
+        final java.util.List<String> writes=new java.util.ArrayList<>();
+        final JooqCpFailoverRepository.Dispatch intent=new JooqCpFailoverRepository.Dispatch("nonce-a","run-a","job-a",1);
+        final JooqCpFailoverRepository repository=new JooqCpFailoverRepository(this,true);
+        int transactions;
+        final DSLContext sql=DSL.using(new MockConnection(query -> {
+            String statement=query.sql();
+            if (statement.startsWith("select pg_try_advisory")) return row(java.util.Map.of("acquired",true));
+            if (statement.startsWith("select j.job_id")) return row(java.util.Map.of("job_id","job-a"));
+            if (statement.startsWith("select * from failover_dispatch_intent")) return row(java.util.Map.of(
+                "attempt_id","attempt-a","step","FAILING_OVER","member_ref","member-a",
+                "owner_instance","general-synthetic","owner_generation",1L));
+            if (statement.startsWith("select r.* from failover_run")) {
+                admission.run.put("step","FAILING_OVER");
+                return row(admission.run);
+            }
+            if (statement.startsWith("update failover_dispatch_intent set dispatch_claimed")) return new MockResult[]{new MockResult(1)};
+            if (statement.startsWith("update ")) {
+                writes.add(transactions+":"+statement);
+                return new MockResult[]{new MockResult(1)};
+            }
+            if (statement.startsWith("select 1 from failover_dispatch_intent"))
+                assertTrue(statement.contains("delivery<>'NOT_SENT'"),"Closed cancellations must not fence admission");
+            return admission.execute(query);
+        }),SQLDialect.POSTGRES);
+        @Override public <T> T inTransaction(Function<DSLContext,T> work) {
+            transactions++;
+            return work.apply(sql);
+        }
+        private MockResult[] row(java.util.Map<String,Object> values) {
+            var records=DSL.using(SQLDialect.POSTGRES);
+            org.jooq.Field<?>[] fields=values.entrySet().stream().map(e -> DSL.field(e.getKey(),
+                e.getValue()==null?String.class:e.getValue().getClass())).toArray(org.jooq.Field[]::new);
+            var rows=records.newResult(fields);
+            var record=records.newRecord(fields); record.fromArray(values.values().toArray()); rows.add(record);
+            return new MockResult[]{new MockResult(1,rows)};
+        }
+    }
+
     @ParameterizedTest
     @org.junit.jupiter.params.provider.CsvSource({
         "true,false,false,OPEN_INCIDENT",
