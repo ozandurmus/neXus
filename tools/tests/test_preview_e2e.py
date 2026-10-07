@@ -218,13 +218,80 @@ def test_stream_timeout_kills_both_processes():
                               [sys.executable, "-c", "import sys; sys.stdin.read()"], timeout=0.05)
 
 
-def test_copy_is_streamed_read_only_and_filters_only_the_two_requested_tables(monkeypatch):
+@pytest.mark.parametrize("value", ["0", "-1", "bad", "900; synthetic", "999999999"])
+def test_database_timeout_rejects_unsafe_or_unbounded_values(monkeypatch, value):
+    monkeypatch.setenv("NEXUS_PREVIEW_DB_STATEMENT_TIMEOUT_SECONDS", value)
+    monkeypatch.setattr(preview.subprocess, "Popen", lambda *a, **kw: pytest.fail("Invalid timeout must prevent copy"))
+    with pytest.raises(ValueError):
+        preview.copy_database()
+
+
+@pytest.mark.parametrize("producer_error,consumer_error,cause", [
+    ("pg_dump: ERROR: canceling statement due to statement timeout", "", "TIMEOUT"),
+    ('pg_dump: ERROR: invalid snapshot identifier "synthetic-private"', "", "SNAPSHOT_LOST"),
+    ("pg_dump: could not write to output file: Broken pipe", "", "PIPE_BROKEN"),
+    ("", "pg_restore: ERROR: violates foreign key constraint", "RESTORE_ERROR"),
+    ("Broken pipe", "pg_restore: ERROR: syntax error", "RESTORE_ERROR"),
+    ("statement timeout", "pg_restore: unexpected end of file", "TIMEOUT"),
+    ("synthetic unknown error", "", None),
+])
+def test_database_stream_reports_only_safe_cause(producer_error, consumer_error, cause, capsys):
+    private = '\nDETAIL: Failing row contains (synthetic-private, 192.0.2.15, synthetic-secret).'
+    source = [sys.executable, "-c",
+              "import sys; sys.stdout.write('synthetic'); sys.stderr.write(sys.argv[1]); sys.exit(int(sys.argv[2]))",
+              producer_error + private if producer_error else "", "1" if producer_error else "0"]
+    target = [sys.executable, "-c",
+              "import sys; sys.stdin.read(); sys.stderr.write(sys.argv[1]); sys.exit(int(sys.argv[2]))",
+              consumer_error + private if consumer_error else "", "1" if consumer_error else "0"]
+    with pytest.raises(preview.PreviewFailure) as caught:
+        with preview.timing("preview_db_copy"):
+            preview.pipe_commands(source, target, database=True)
+    reason = "DB_COPY_FAILED" + ("_" + cause if cause else "")
+    assert caught.value.reason == reason
+    line = preview.failure_line(caught.value)
+    assert f"phase=preview_db_copy" in line and f"reason={reason}:" in line
+    assert all(value not in str(caught.value) + line + capsys.readouterr().out
+               for value in ("synthetic-private", "192.0.2.15", "synthetic-secret"))
+
+
+def test_database_stream_drains_large_stderr_without_deadlock():
+    source = [sys.executable, "-c",
+              "import sys; sys.stderr.write('statement timeout\\n' + 'synthetic diagnostic\\n' * 20000); sys.exit(1)"]
+    target = [sys.executable, "-c", "import sys; sys.stdin.read()"]
+    with pytest.raises(preview.PreviewFailure) as caught:
+        preview.pipe_commands(source, target, timeout=5, database=True)
+    assert caught.value.reason == "DB_COPY_FAILED_TIMEOUT"
+
+
+def test_database_stream_success_ignores_stderr_warning():
+    source = [sys.executable, "-c", "import sys; sys.stdout.write('synthetic'); sys.stderr.write('synthetic warning')"]
+    target = [sys.executable, "-c", "import sys; assert sys.stdin.read() == 'synthetic'"]
+    preview.pipe_commands(source, target, database=True)
+
+
+def test_database_stream_deadline_reports_safe_timeout():
+    with pytest.raises(preview.PreviewFailure) as caught:
+        preview.pipe_commands([sys.executable, "-c", "import time; time.sleep(30)"],
+                              [sys.executable, "-c", "import sys; sys.stdin.read()"],
+                              timeout=0.05, database=True)
+    assert caught.value.reason == "DB_COPY_FAILED_TIMEOUT"
+
+
+@pytest.mark.parametrize("configured,seconds", [(None, 900), ("1200", 1200)])
+def test_copy_is_streamed_read_only_and_filters_only_the_two_requested_tables(monkeypatch, configured, seconds):
+    if configured is None:
+        monkeypatch.delenv("NEXUS_PREVIEW_DB_STATEMENT_TIMEOUT_SECONDS", raising=False)
+    else:
+        monkeypatch.setenv("NEXUS_PREVIEW_DB_STATEMENT_TIMEOUT_SECONDS", configured)
     calls = []
     @contextmanager
     def snapshot(source):
         yield "00000001-00000002-1"
     monkeypatch.setattr(preview, "exported_snapshot", snapshot)
-    monkeypatch.setattr(preview, "pipe_commands", lambda source, target: calls.append((source, target)))
+    def stream(source, target, **kwargs):
+        assert kwargs == {"timeout": 4 * seconds, "database": True}
+        calls.append((source, target))
+    monkeypatch.setattr(preview, "pipe_commands", stream)
     preview.copy_database()
     assert len(calls) == 3
     assert "--format=custom" in calls[0][0][-1]
@@ -237,7 +304,10 @@ def test_copy_is_streamed_read_only_and_filters_only_the_two_requested_tables(mo
     for source, target in calls:
         assert source[:4] == ["kubectl", "-n", "ui2", "exec"]
         assert "default_transaction_read_only=on" in source[-1]
+        assert f"statement_timeout={seconds * 1000}" in source[-1]
         assert target[:4] == ["kubectl", "-n", preview.NS, "exec"]
+        assert f"statement_timeout={seconds * 1000}" in target[-1]
+        assert "default_transaction_read_only=on" not in target[-1]
         assert "-i" in target and "-i" not in source
         assert "--file=" not in source[-1] and "--file=" not in target[-1]
 
@@ -296,12 +366,15 @@ def test_preview_cli_modes_are_mutually_exclusive(monkeypatch):
 
 
 @pytest.mark.parametrize("invalid", [False, True])
-def test_exported_snapshot_is_opaque_and_holder_rolls_back(monkeypatch, invalid):
+@pytest.mark.parametrize("seconds", [900, 1200])
+def test_exported_snapshot_is_opaque_and_holder_rolls_back(monkeypatch, invalid, seconds):
+    monkeypatch.setenv("NEXUS_PREVIEW_DB_STATEMENT_TIMEOUT_SECONDS", str(seconds))
     real_popen = subprocess.Popen
     holders = []
     def fake(argv, **kwargs):
         assert argv[:5] == ["kubectl", "-n", "ui2", "exec", "-i"]
         assert "default_transaction_read_only=on" in argv[-1]
+        assert f"idle_in_transaction_session_timeout={(12 * seconds + 60) * 1000}" in argv[-1]
         code = """import sys
 for line in sys.stdin:
     if 'pg_export_snapshot' in line:
@@ -314,9 +387,10 @@ for line in sys.stdin:
         return holder
     monkeypatch.setattr(preview.subprocess, "Popen", fake)
     if invalid:
-        with pytest.raises(RuntimeError, match="snapshot unavailable"):
+        with pytest.raises(preview.PreviewFailure) as caught:
             with preview.exported_snapshot(["kubectl", "-n", "ui2", "exec", "ui2-db-0", "--", "sh", "-c"]):
                 pytest.fail("Invalid snapshot must never be used")
+        assert caught.value.reason == "DB_COPY_FAILED_SNAPSHOT_LOST"
     else:
         with preview.exported_snapshot(["kubectl", "-n", "ui2", "exec", "ui2-db-0", "--", "sh", "-c"]) as token:
             assert token == "00000001-00000002-1"
