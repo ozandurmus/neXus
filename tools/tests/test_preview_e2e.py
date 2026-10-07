@@ -3,8 +3,10 @@ import argparse
 import copy
 from contextlib import contextmanager
 from datetime import datetime, timezone
+import io
 import json
 import re
+import shlex
 from pathlib import Path
 import subprocess
 import sys
@@ -106,6 +108,116 @@ def test_network_policies_have_no_dns_internet_or_cross_namespace_exception(monk
                    for rule in obj["spec"]["egress"] for p in rule["ports"])
 
 
+@pytest.fixture
+def database_network_objects():
+    source = dict(metadata=dict(labels={"statefulset.kubernetes.io/pod-name": "ui2-db-0"}),
+                  spec=dict(containers=[dict(ports=[dict(name="postgresql", containerPort=5432)])]))
+    target = dict(metadata=dict(labels={preview.LABEL: preview.NS, "app.kubernetes.io/component": "database"}),
+                  status=dict(podIP="192.0.2.25"))
+    labels = {preview.LABEL: "synthetic-owner", "kubernetes.io/metadata.name": preview.NS}
+    return source, target, labels
+
+
+@pytest.mark.parametrize("rules,allowed", [
+    ([], False), ([{}], True),
+    ([{"ports": [{"port": 80}]}], False),
+    ([{"ports": [{"port": 5432, "protocol": "UDP"}]}], False),
+    ([{"ports": [{"port": "postgresql"}]}], True),
+    ([{"ports": [{"port": 5400, "endPort": 5500}]}], True),
+    ([{"from": [{"podSelector": {}}]}], False),
+    ([{"from": [{}]}], True),
+    ([{"from": [{"namespaceSelector": {}}]}], True),
+    ([{"from": [{"namespaceSelector": {"matchLabels": {preview.LABEL: "other"}}}]}], False),
+    ([{"from": [{"namespaceSelector": {"matchExpressions": [
+        {"key": preview.LABEL, "operator": "In", "values": ["synthetic-owner"]}]}}]}], True),
+    ([{"from": [{"namespaceSelector": {}, "podSelector": {"matchLabels": {
+        "app.kubernetes.io/component": "service"}}}]}], False),
+    ([{"from": [{"ipBlock": {"cidr": "192.0.2.0/24"}}]}], True),
+    ([{"from": [{"ipBlock": {"cidr": "192.0.2.0/24", "except": ["192.0.2.25/32"]}}]}], False),
+])
+def test_database_ingress_evaluates_existing_allowances(database_network_objects, rules, allowed):
+    source, target, labels = database_network_objects
+    policies = [dict(spec=dict(podSelector={}, ingress=rules))]
+    assert preview.database_ingress_allowed(policies, source, target, labels) is allowed
+    assert preview.database_ingress_allowed([], source, target, labels)
+    policies.append(dict(spec=dict(podSelector={}, ingress=[{}])))
+    assert preview.database_ingress_allowed(policies, source, target, labels)
+    policies = [dict(spec=dict(podSelector={"matchLabels": {"app": "unrelated"}}, ingress=[])),
+                dict(spec=dict(podSelector={}, policyTypes=["Egress"], egress=[]))]
+    assert preview.database_ingress_allowed(policies, source, target, labels)
+
+
+@pytest.mark.parametrize("blocked", [False, True])
+@pytest.mark.parametrize("failure", [None, "create", "copy"])
+def test_database_network_allowance_is_temporary_and_scoped(monkeypatch, database_network_objects, blocked, failure):
+    source, target, labels = database_network_objects
+    calls, objects = [], []
+    def k(ns, *args, **kwargs):
+        calls.append((ns, args))
+        if args[0] == "delete":
+            assert args[1:3] == ("networkpolicy", preview.preview_name("db-copy"))
+            return ""
+        if args[1] == "pod":
+            return json.dumps(source if ns == "ui2" else target)
+        if args[1] == "namespace":
+            return json.dumps(dict(metadata=dict(labels=labels)))
+        assert ns == "ui2" and args[1] == "networkpolicy"
+        return json.dumps(dict(items=[dict(spec=dict(podSelector={}, ingress=[]))] if blocked else []))
+    def create(ns, obj):
+        objects.append((ns, obj))
+        if failure == "create":
+            raise RuntimeError("synthetic failure")
+    monkeypatch.setattr(preview, "k", k)
+    monkeypatch.setattr(preview, "create", create)
+    def transfer():
+        with preview.database_network_access():
+            if failure == "copy":
+                raise RuntimeError("synthetic failure")
+    if failure:
+        with pytest.raises(RuntimeError, match="synthetic failure"):
+            transfer()
+    else:
+        transfer()
+    assert [(ns, args[0]) for ns, args in calls[-2:]] == [("ui2", "delete"), (preview.NS, "delete")]
+    assert len(objects) == (2 if blocked and failure != "create" else 1)
+    ns, egress = objects[0]
+    assert ns == preview.NS and egress["spec"]["policyTypes"] == ["Egress"]
+    assert egress["spec"]["podSelector"]["matchLabels"] == target["metadata"]["labels"]
+    rule = egress["spec"]["egress"][0]
+    assert rule["ports"] == [dict(protocol="TCP", port=5432)]
+    assert rule["to"] == [dict(namespaceSelector=dict(matchLabels={"kubernetes.io/metadata.name": "ui2"}),
+                               podSelector=dict(matchLabels=source["metadata"]["labels"]))]
+    if len(objects) == 2:
+        ns, ingress = objects[1]
+        assert ns == "ui2" and ingress["spec"]["policyTypes"] == ["Ingress"]
+        rule = ingress["spec"]["ingress"][0]
+        assert rule["ports"] == [dict(protocol="TCP", port=5432)]
+        assert rule["from"] == [dict(namespaceSelector=dict(matchLabels=labels),
+                                     podSelector=egress["spec"]["podSelector"])]
+
+
+def test_source_credentials_are_separate_mounted_and_never_logged(monkeypatch, capsys):
+    objects = []
+    log = io.StringIO()
+    monkeypatch.setattr(preview, "LOG", log)
+    secret = dict(data={"migrate-user": "c3ludGhldGljLXVzZXI=", "migrate-password": "c3ludGhldGljLXBhc3M=",
+                        "app-password": "dW5yZWxhdGVk"})
+    monkeypatch.setattr(preview, "k", lambda *a, **kw: json.dumps(secret))
+    monkeypatch.setattr(preview, "create", lambda ns, obj: objects.append(obj))
+    preview.copy_secret("ui2-db", "ui2-db-source", ("migrate-user", "migrate-password"))
+    assert objects[0]["metadata"]["name"] == preview.preview_name("ui2-db-source")
+    assert objects[0]["data"] == {key: secret["data"][key] for key in ("migrate-user", "migrate-password")}
+    pod = preview.database_manifest(template("deploy/ui2/40-database-statefulset.yaml"))
+    volume = next(v for v in pod["spec"]["volumes"] if v["name"] == "source-db")
+    assert volume["secret"] == dict(secretName=objects[0]["metadata"]["name"], defaultMode=0o440)
+    container = pod["spec"]["containers"][0]
+    assert dict(name="source-db", mountPath="/run/source-db", readOnly=True) in container["volumeMounts"]
+    assert "/run/source-db" not in json.dumps(container["env"])
+    output = capsys.readouterr()
+    assert not output.out + output.err + log.getvalue()
+    assert not any(value in json.dumps(pod) for value in secret["data"].values())
+
+
 
 def test_build_uses_pinned_kaniko_new_tag_emptydir_and_corporate_ca():
     original = template("deploy/ui2-image-build/30-build-job.yaml")
@@ -168,18 +280,21 @@ def test_every_orchestration_failure_tears_down(monkeypatch, failed, capsys):
         assert calls.index("database") < calls.index("compliance") < calls.index("service") < calls.index("job")
 
 
-@pytest.mark.parametrize("failure", ["build-delete", "namespace-delete", "build-remains", "namespace-remains", "other-owner", None])
+@pytest.mark.parametrize("failure", ["build-delete", "namespace-delete", "build-remains", "namespace-remains", "policy-delete", "policy-remains", "other-owner", None])
 def test_cleanup_attempts_both_scopes_and_verifies_ownership_and_absence(monkeypatch, failure):
     calls = []
     def fake(ns, *args, **kwargs):
         calls.append((ns, args))
         if args[0] == "delete" and ((ns == preview.BUILD_NS and failure == "build-delete")
-                                   or (ns == preview.NS and failure == "namespace-delete")):
+                                   or (ns == preview.NS and failure == "namespace-delete")
+                                   or (ns == "ui2" and failure == "policy-delete")):
             raise RuntimeError("synthetic failure")
         if args[:2] == ("get", "namespace"):
             if args[-1] == "json":
                 return json.dumps({"metadata": {"labels": {preview.LABEL: "other" if failure == "other-owner" else "owner"}}})
             return "namespace/ui2-preview" if failure == "namespace-remains" else ""
+        if args[:2] == ("get", "networkpolicy"):
+            return json.dumps({"items": [{}] if failure == "policy-remains" else []})
         if args[:2] == ("get", "jobs,pods"):
             return json.dumps({"items": [{}] if failure == "build-remains" else []})
         return ""
@@ -189,6 +304,7 @@ def test_cleanup_attempts_both_scopes_and_verifies_ownership_and_absence(monkeyp
             preview.cleanup("owner")
     else:
         preview.cleanup("owner")
+    assert any(ns == "ui2" and a[0] == "delete" and preview.LABEL + "=" + preview.NS in a for ns, a in calls)
     assert any(ns == preview.BUILD_NS and a[0] == "delete" for ns, a in calls)
     assert any(ns == preview.NS and a[:2] == ("get", "namespace") for ns, a in calls)
     assert any(ns == preview.NS and a[0] == "delete" for ns, a in calls) == (failure != "other-owner")
@@ -226,6 +342,18 @@ def test_database_timeout_rejects_unsafe_or_unbounded_values(monkeypatch, value)
         preview.copy_database()
 
 
+@pytest.fixture
+def local_database_stream(monkeypatch):
+    run = subprocess.run
+    def local(argv, **kwargs):
+        assert argv[:4] == ["kubectl", "-n", preview.NS, "exec"]
+        assert argv[4:8] == [preview.preview_name("ui2-preview-db"), "--", "bash", "-c"]
+        assert "-i" not in argv
+        assert kwargs["stdin"] == kwargs["stdout"] == subprocess.DEVNULL
+        return run(["bash", "-c", argv[-1]], **kwargs)
+    monkeypatch.setattr(preview.subprocess, "run", local)
+
+
 @pytest.mark.parametrize("producer_error,consumer_error,cause", [
     ("pg_dump: ERROR: canceling statement due to statement timeout", "", "TIMEOUT"),
     ('pg_dump: ERROR: invalid snapshot identifier "synthetic-private"', "", "SNAPSHOT_LOST"),
@@ -233,9 +361,15 @@ def test_database_timeout_rejects_unsafe_or_unbounded_values(monkeypatch, value)
     ("", "pg_restore: ERROR: violates foreign key constraint", "RESTORE_ERROR"),
     ("Broken pipe", "pg_restore: ERROR: syntax error", "RESTORE_ERROR"),
     ("statement timeout", "pg_restore: unexpected end of file", "TIMEOUT"),
+    ("pg_dump: timed out", "pg_restore: unexpected end of file", "TIMEOUT"),
+    ("server closed the connection unexpectedly", "pg_restore: unexpected end of file", "STREAM_BROKEN"),
+    ("connection reset by peer", "", "STREAM_BROKEN"),
+    ("connection to server failed: Connection timed out", "", "STREAM_BROKEN"),
     ("synthetic unknown error", "", None),
 ])
-def test_database_stream_reports_only_safe_cause(producer_error, consumer_error, cause, capsys):
+def test_database_stream_reports_only_safe_cause(local_database_stream, monkeypatch, producer_error, consumer_error, cause, capsys):
+    log = io.StringIO()
+    monkeypatch.setattr(preview, "LOG", log)
     private = '\nDETAIL: Failing row contains (synthetic-private, 192.0.2.15, synthetic-secret).'
     source = [sys.executable, "-c",
               "import sys; sys.stdout.write('synthetic'); sys.stderr.write(sys.argv[1]); sys.exit(int(sys.argv[2]))",
@@ -245,71 +379,93 @@ def test_database_stream_reports_only_safe_cause(producer_error, consumer_error,
               consumer_error + private if consumer_error else "", "1" if consumer_error else "0"]
     with pytest.raises(preview.PreviewFailure) as caught:
         with preview.timing("preview_db_copy"):
-            preview.pipe_commands(source, target, database=True)
+            preview.database_stream(shlex.join(source), shlex.join(target), timeout=5)
     reason = "DB_COPY_FAILED" + ("_" + cause if cause else "")
     assert caught.value.reason == reason
     line = preview.failure_line(caught.value)
-    assert f"phase=preview_db_copy" in line and f"reason={reason}:" in line
-    assert all(value not in str(caught.value) + line + capsys.readouterr().out
+    assert "phase=preview_db_copy" in line and f"reason={reason}:" in line
+    assert all(value not in str(caught.value) + line + capsys.readouterr().out + log.getvalue()
                for value in ("synthetic-private", "192.0.2.15", "synthetic-secret"))
 
 
-def test_database_stream_drains_large_stderr_without_deadlock():
-    source = [sys.executable, "-c",
-              "import sys; sys.stderr.write('statement timeout\\n' + 'synthetic diagnostic\\n' * 20000); sys.exit(1)"]
-    target = [sys.executable, "-c", "import sys; sys.stdin.read()"]
+def test_database_stream_drains_large_stderr_without_deadlock(local_database_stream):
+    source = shlex.join([sys.executable, "-c",
+                        "import sys; sys.stderr.write('statement timeout\\n' + 'synthetic diagnostic\\n' * 20000); sys.exit(1)"])
     with pytest.raises(preview.PreviewFailure) as caught:
-        preview.pipe_commands(source, target, timeout=5, database=True)
+        preview.database_stream(source, "cat", timeout=5)
     assert caught.value.reason == "DB_COPY_FAILED_TIMEOUT"
 
 
-def test_database_stream_success_ignores_stderr_warning():
-    source = [sys.executable, "-c", "import sys; sys.stdout.write('synthetic'); sys.stderr.write('synthetic warning')"]
-    target = [sys.executable, "-c", "import sys; assert sys.stdin.read() == 'synthetic'"]
-    preview.pipe_commands(source, target, database=True)
+def test_database_stream_success_ignores_stderr_warning(local_database_stream, capsys):
+    preview.database_stream("printf synthetic; echo 'synthetic warning' >&2", "cat", timeout=5)
+    assert not capsys.readouterr().out
 
 
-def test_database_stream_deadline_reports_safe_timeout():
+def test_database_stream_deadline_reports_safe_timeout(monkeypatch):
+    def timeout(*args, **kwargs):
+        raise subprocess.TimeoutExpired("synthetic-private", 1, stderr="synthetic-secret")
+    monkeypatch.setattr(preview.subprocess, "run", timeout)
     with pytest.raises(preview.PreviewFailure) as caught:
-        preview.pipe_commands([sys.executable, "-c", "import time; time.sleep(30)"],
-                              [sys.executable, "-c", "import sys; sys.stdin.read()"],
-                              timeout=0.05, database=True)
+        preview.database_stream("source", "target", timeout=1)
     assert caught.value.reason == "DB_COPY_FAILED_TIMEOUT"
+    assert "synthetic" not in preview.failure_line(caught.value)
+
+
+@pytest.mark.parametrize("error", ["Copying stdin failed: i/o timeout", "websocket ping failed", "", "connection reset by peer"])
+def test_exec_transport_failure_is_stream_broken(monkeypatch, error, capsys):
+    monkeypatch.setattr(preview.subprocess, "run", lambda *a, **kw: subprocess.CompletedProcess(a, 1, stderr=error))
+    with pytest.raises(preview.PreviewFailure) as caught:
+        preview.database_stream("source", "target", timeout=1)
+    assert caught.value.reason == "DB_COPY_FAILED_STREAM_BROKEN"
+    assert not capsys.readouterr().out
 
 
 @pytest.mark.parametrize("configured,seconds", [(None, 900), ("1200", 1200)])
-def test_copy_is_streamed_read_only_and_filters_only_the_two_requested_tables(monkeypatch, configured, seconds):
+def test_copy_is_pod_to_pod_read_only_and_filters_only_the_two_requested_tables(monkeypatch, configured, seconds):
     if configured is None:
         monkeypatch.delenv("NEXUS_PREVIEW_DB_STATEMENT_TIMEOUT_SECONDS", raising=False)
     else:
         monkeypatch.setenv("NEXUS_PREVIEW_DB_STATEMENT_TIMEOUT_SECONDS", configured)
-    calls = []
+    calls, order = [], []
     @contextmanager
     def snapshot(source):
+        assert source == ["kubectl", "-n", "ui2", "exec", "ui2-db-0", "--", "sh", "-c"]
+        order.append("snapshot")
         yield "00000001-00000002-1"
+        order.append("rollback")
+    @contextmanager
+    def network():
+        order.append("network")
+        yield
+        order.append("teardown")
     monkeypatch.setattr(preview, "exported_snapshot", snapshot)
+    monkeypatch.setattr(preview, "database_network_access", network)
+    monkeypatch.setattr(preview, "k", lambda *a, **kw: json.dumps(dict(spec=dict(clusterIP="192.0.2.10"))))
     def stream(source, target, **kwargs):
-        assert kwargs == {"timeout": 4 * seconds, "database": True}
+        assert kwargs == {"timeout": 4 * seconds}
+        order.append("copy")
         calls.append((source, target))
-    monkeypatch.setattr(preview, "pipe_commands", stream)
+    monkeypatch.setattr(preview, "database_stream", stream)
     preview.copy_database()
-    assert len(calls) == 3
-    assert "--format=custom" in calls[0][0][-1]
-    assert "--snapshot=00000001-00000002-1" in calls[0][0][-1]
-    assert calls[0][0][-1].count("--exclude-table-data=") == 2
-    assert "--exit-on-error --no-owner" in calls[0][1][-1]
-    assert preview.AUDIT_SELECT in calls[1][0][-1]
-    assert preview.ENTRY_SELECT in calls[2][0][-1]
-    assert all("SET TRANSACTION SNAPSHOT '00000001-00000002-1'" in s[-1] for s, _ in calls[1:])
+    assert order == ["network", "snapshot", "copy", "copy", "copy", "rollback", "teardown"]
+    assert "--format=custom" in calls[0][0]
+    assert "--snapshot=00000001-00000002-1" in calls[0][0]
+    assert calls[0][0].count("--exclude-table-data=") == 2
+    assert "--exit-on-error --no-owner" in calls[0][1]
+    assert preview.AUDIT_SELECT in shlex.split(calls[1][0])[-1]
+    assert preview.ENTRY_SELECT in shlex.split(calls[2][0])[-1]
+    assert all("SET TRANSACTION SNAPSHOT '00000001-00000002-1'" in shlex.split(s)[-1] for s, _ in calls[1:])
     for source, target in calls:
-        assert source[:4] == ["kubectl", "-n", "ui2", "exec"]
-        assert "default_transaction_read_only=on" in source[-1]
-        assert f"statement_timeout={seconds * 1000}" in source[-1]
-        assert target[:4] == ["kubectl", "-n", preview.NS, "exec"]
-        assert f"statement_timeout={seconds * 1000}" in target[-1]
-        assert "default_transaction_read_only=on" not in target[-1]
-        assert "-i" in target and "-i" not in source
-        assert "--file=" not in source[-1] and "--file=" not in target[-1]
+        assert "kubectl" not in source + target
+        assert "export PGHOST=192.0.2.10" in source and "-h 127.0.0.1" in target
+        assert "default_transaction_read_only=on" in source
+        assert f"statement_timeout={seconds * 1000}" in source
+        assert f"statement_timeout={seconds * 1000}" in target
+        assert "default_transaction_read_only=on" not in target
+        assert "$(cat /run/source-db/migrate-user)" in source
+        assert "$(cat /run/source-db/migrate-password)" in source
+        assert "/run/source-db" not in target
+        assert "--file=" not in source + target
 
 
 @pytest.mark.parametrize("mode", ["auto", "force", "skip", "unrelated", "red"])
@@ -405,6 +561,8 @@ def test_database_bootstrap_uses_new_secret_and_refuses_image_drift(monkeypatch,
     monkeypatch.setattr(preview, "load", local_load)
     monkeypatch.setattr(preview, "create", lambda ns, obj: objects.append(obj))
     monkeypatch.setattr(preview, "copy_database", lambda: None)
+    copied = []
+    monkeypatch.setattr(preview, "copy_secret", lambda *a: copied.append(a))
     def fake(ns, *args, **kwargs):
         assert args[0] in ("get", "wait")
         if ns == "ui2":
@@ -414,6 +572,7 @@ def test_database_bootstrap_uses_new_secret_and_refuses_image_drift(monkeypatch,
     ticks = iter([10.0, 12.5])
     monkeypatch.setattr(preview.time, "monotonic", lambda: next(ticks))
     assert preview.setup_database(ROOT) == "192.0.2.10"
+    assert copied == [("ui2-db", "ui2-db-source", ("migrate-user", "migrate-password"))]
     assert "TIMING preview_db_copy 2.500" in capsys.readouterr().out
     tuning = next(o for o in objects if o["kind"] == "ConfigMap"
                   and o["metadata"]["name"] == preview.preview_name("ui2-db-config"))

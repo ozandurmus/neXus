@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Host-side isolated candidate check. Never invokes the production rollout path.
 
-Database bytes go only through exec pipes; pod logs are withheld.
+Database bytes stay on the pod-to-pod network; pod logs are withheld.
 Kubectl failures retain bounded, masked API diagnostics in the step log.
 Build Jobs use the existing Kaniko/proxy/CA setup with their own emptyDir contexts.
 The 60 s database-copy target is UNKNOWN until the reviewer's live run;
@@ -11,18 +11,19 @@ import argparse
 import base64
 import copy
 from contextlib import contextmanager
+import ipaddress
 import json
 import os
 from pathlib import Path
 import re
 import secrets
 import select
+import shlex
 import shutil
 import signal
 import subprocess
 import sys
 import tempfile
-import threading
 import time
 
 NS = "ui2-preview"
@@ -339,6 +340,10 @@ def pod_spec(template):
 
 def database_manifest(template):
     spec = pod_spec(template)
+    spec["volumes"].append(dict(name="source-db", secret=dict(
+        secretName=preview_name("ui2-db-source"), defaultMode=0o440)))
+    spec["containers"][0]["volumeMounts"].append(dict(
+        name="source-db", mountPath="/run/source-db", readOnly=True))
     spec["restartPolicy"] = "Never"
     spec["activeDeadlineSeconds"] = 3600
     return dict(apiVersion="v1", kind="Pod", metadata=metadata("ui2-preview-db", {
@@ -451,60 +456,35 @@ def database_copy_cause(stderr):
     text = stderr.lower()
     if "invalid snapshot identifier" in text or "snapshot does not exist" in text:
         return "SNAPSHOT_LOST"
+    if "statement timeout" in text:
+        return "TIMEOUT"
+    if any(marker in text for marker in ("copying stdin failed", "websocket", "connection reset",
+                                         "connection refused", "server closed the connection",
+                                         "could not connect", "connection timed out", "i/o timeout",
+                                         "no route to host", "network is unreachable")):
+        return "STREAM_BROKEN"
     if "timeout" in text or "timed out" in text:
         return "TIMEOUT"
+    if "unexpected end of file" in text or "unexpected eof" in text:
+        return "STREAM_BROKEN"
     if "broken pipe" in text:
         return "PIPE_BROKEN"
     return None
 
 
-def pipe_commands(source, target, timeout=60, database=False):
+def pipe_commands(source, target, timeout=60):
     """Fail on either side, including a producer failing after a successful restore."""
-    diagnostics = [None, None]
-    readers = []
-
-    def drain(stream, index):
-        tail = ""
-        priority = {None: 0, "PIPE_BROKEN": 1, "TIMEOUT": 2, "SNAPSHOT_LOST": 3}
-        while chunk := stream.read(4096):
-            text = tail + chunk.decode(errors="replace")
-            cause = database_copy_cause(text)
-            if priority[cause] > priority[diagnostics[index]]:
-                diagnostics[index] = cause
-            tail = text[-256:]
-        stream.close()
-
-    def read_errors(process, index):
-        reader = threading.Thread(target=drain, args=(process.stderr, index), daemon=True)
-        reader.start()
-        readers.append(reader)
-
-    producer = subprocess.Popen(source, stdout=subprocess.PIPE,
-                                stderr=subprocess.PIPE if database else subprocess.DEVNULL)
+    producer = subprocess.Popen(source, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
     consumer = None
     try:
-        if database:
-            read_errors(producer, 0)
         consumer = subprocess.Popen(target, stdin=producer.stdout, stdout=subprocess.DEVNULL,
-                                    stderr=subprocess.PIPE if database else subprocess.DEVNULL)
-        if database:
-            read_errors(consumer, 1)
+                                    stderr=subprocess.DEVNULL)
         producer.stdout.close()
         deadline = time.monotonic() + timeout
         consumed = consumer.wait(timeout=max(0.01, deadline - time.monotonic()))
         produced = producer.wait(timeout=max(0.01, deadline - time.monotonic()))
-        for reader in readers:
-            reader.join()
         if consumed or produced:
-            if database:
-                cause = next((c for c in ("SNAPSHOT_LOST", "TIMEOUT") if c in diagnostics), None)
-                cause = cause or ((diagnostics[1] or "RESTORE_ERROR") if consumed else diagnostics[0])
-                raise PreviewFailure("DB_COPY_FAILED" + ("_" + cause if cause else ""))
             raise RuntimeError("Preview stream failed; details withheld")
-    except subprocess.TimeoutExpired:
-        if database:
-            raise PreviewFailure("DB_COPY_FAILED_TIMEOUT", "TimeoutExpired") from None
-        raise
     finally:
         for process in (consumer, producer):
             if process is not None and process.poll() is None:
@@ -512,8 +492,31 @@ def pipe_commands(source, target, timeout=60, database=False):
                 process.wait()
         if producer.stdout and not producer.stdout.closed:
             producer.stdout.close()
-        for reader in readers:
-            reader.join()
+
+
+def database_stream(source, target, timeout):
+    """Run both ends inside the preview pod; exec carries only control/diagnostics."""
+    global STEP
+    STEP = "copy database"
+    script = ("set +x\n(" + source + ") | (" + target + ") >/dev/null\n"
+              'status=("${PIPESTATUS[@]}")\n'
+              'printf "NEXUS_COPY_STATUS=%s,%s\\n" "${status[0]}" "${status[1]}" >&2\n'
+              'test "${status[0]}" = 0 && test "${status[1]}" = 0')
+    try:
+        result = subprocess.run(
+            ["kubectl", "-n", NS, "exec", preview_name("ui2-preview-db"), "--", "bash", "-c", script],
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+            text=True, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        raise PreviewFailure("DB_COPY_FAILED_TIMEOUT", "TimeoutExpired") from None
+    status = re.search(r"NEXUS_COPY_STATUS=(\d+),(\d+)\s*$", result.stderr)
+    if result.returncode or not status or status.groups() != ("0", "0"):
+        cause = database_copy_cause(result.stderr)
+        if not status:
+            cause = cause or "STREAM_BROKEN"
+        elif status[2] != "0" and cause not in ("SNAPSHOT_LOST", "TIMEOUT", "STREAM_BROKEN"):
+            cause = "RESTORE_ERROR"
+        raise PreviewFailure("DB_COPY_FAILED" + ("_" + cause if cause else ""))
 
 
 def build_images(repo, commit, owner):
@@ -602,28 +605,109 @@ def database_statement_timeout():
     return seconds
 
 
+def selector_matches(selector, labels):
+    if any(labels.get(key) != value for key, value in selector.get("matchLabels", {}).items()):
+        return False
+    for expr in selector.get("matchExpressions", []):
+        key, op, values = expr["key"], expr["operator"], expr.get("values", [])
+        if not {"In": key in labels and labels[key] in values,
+                "NotIn": labels.get(key) not in values,
+                "Exists": key in labels, "DoesNotExist": key not in labels}.get(op, False):
+            return False
+    return True
+
+
+def database_ingress_allowed(policies, source, target, namespace_labels):
+    """Evaluate additive ingress policies for this preview pod and PostgreSQL port."""
+    selected = [p["spec"] for p in policies if "Ingress" in p["spec"].get("policyTypes", ["Ingress"])
+                and selector_matches(p["spec"]["podSelector"], source["metadata"]["labels"])]
+    named_ports = {p["name"] for c in source["spec"]["containers"] for p in c.get("ports", [])
+                   if p.get("containerPort") == 5432 and p.get("protocol", "TCP") == "TCP" and "name" in p}
+    for policy_spec in selected:
+        for rule in policy_spec.get("ingress", []):
+            if rule.get("ports") and not any(
+                p.get("protocol", "TCP") == "TCP" and
+                ("port" not in p or p["port"] in named_ports or
+                 isinstance(p["port"], int) and p["port"] <= 5432 <= p.get("endPort", p["port"]))
+                for p in rule["ports"]):
+                continue
+            if not rule.get("from"):
+                return True
+            for peer_spec in rule["from"]:
+                if "ipBlock" in peer_spec:
+                    block, address = peer_spec["ipBlock"], ipaddress.ip_address(target["status"]["podIP"])
+                    if address in ipaddress.ip_network(block["cidr"]) and not any(
+                            address in ipaddress.ip_network(cidr) for cidr in block.get("except", [])):
+                        return True
+                elif ("namespaceSelector" in peer_spec and
+                      selector_matches(peer_spec["namespaceSelector"], namespace_labels) and
+                      selector_matches(peer_spec.get("podSelector", {}), target["metadata"]["labels"])):
+                    return True
+                elif not peer_spec:
+                    return True
+    return not selected
+
+
+@contextmanager
+def database_network_access():
+    source = json.loads(k("ui2", "get", "pod", "ui2-db-0", "-o", "json"))
+    target = json.loads(k(NS, "get", "pod", preview_name("ui2-preview-db"), "-o", "json"))
+    namespace = json.loads(k(NS, "get", "namespace", NS, "-o", "json"))
+    existing = json.loads(k("ui2", "get", "networkpolicy", "-o", "json"))["items"]
+    db_selector = dict(matchLabels={"statefulset.kubernetes.io/pod-name": "ui2-db-0"})
+    ports = [dict(protocol="TCP", port=5432)]
+    # No DNS or general cross-namespace egress: connect to the service IP directly.
+    egress = dict(apiVersion="networking.k8s.io/v1", kind="NetworkPolicy", metadata=metadata("db-copy"),
+                  spec=dict(podSelector=dict(matchLabels={LABEL: NS, "app.kubernetes.io/component": "database"}),
+                            policyTypes=["Egress"], egress=[dict(to=[dict(
+                                namespaceSelector=dict(matchLabels={"kubernetes.io/metadata.name": "ui2"}),
+                                podSelector=db_selector)], ports=ports)]))
+    try:
+        create(NS, egress)
+        if not database_ingress_allowed(existing, source, target, namespace["metadata"]["labels"]):
+            create("ui2", dict(apiVersion="networking.k8s.io/v1", kind="NetworkPolicy", metadata=metadata("db-copy"),
+                               spec=dict(podSelector=db_selector, policyTypes=["Ingress"], ingress=[{
+                                   "from": [dict(namespaceSelector=dict(matchLabels={
+                                       LABEL: namespace["metadata"]["labels"][LABEL],
+                                       "kubernetes.io/metadata.name": NS}),
+                                       podSelector=egress["spec"]["podSelector"])], "ports": ports}])))
+        yield
+    finally:
+        # The outer teardown retries source-policy removal if either call fails.
+        for namespace_name in ("ui2", NS):
+            k(namespace_name, "delete", "networkpolicy", preview_name("db-copy"),
+              "--ignore-not-found", "--wait=true", "--timeout=120s", timeout=130)
+
+
 def copy_database():
     source = ["kubectl", "-n", "ui2", "exec", "ui2-db-0", "--", "sh", "-c"]
-    target = ["kubectl", "-n", NS, "exec", "-i", preview_name("ui2-preview-db"), "--", "sh", "-c"]
     seconds = database_statement_timeout()
-    read_only = PG_ENV + 'export PGOPTIONS="-c default_transaction_read_only=on -c statement_timeout=' + str(seconds * 1000) + '"; '
+    service = json.loads(k("ui2", "get", "service", "ui2-db", "-o", "json"))
+    address = str(ipaddress.ip_address(service["spec"]["clusterIP"]))
+    read_only = ('export PGUSER="$(cat /run/source-db/migrate-user)"; '
+                 'export PGPASSWORD="$(cat /run/source-db/migrate-password)"; '
+                 'export PGDATABASE="${POSTGRESQL_DATABASE:-${POSTGRES_DB:-ui2}}"; '
+                 'export PGHOST=' + shlex.quote(address) + '; '
+                 'export PGOPTIONS="-c default_transaction_read_only=on -c statement_timeout='
+                 + str(seconds * 1000) + '"; ')
     restore_options = PG_ENV + 'export PGOPTIONS="-c statement_timeout=' + str(seconds * 1000) + '"; '
-    with exported_snapshot(source) as snapshot:
-        pipe_commands(source + [read_only + "exec pg_dump --format=custom --compress=0 --snapshot=" + snapshot
-                                + " --exclude-table-data=public.audit_log --exclude-table-data=public.backup_artefact_entry"],
-                      target + [restore_options + "exec pg_restore --exit-on-error --no-owner --dbname=ui2"],
-                      timeout=4 * seconds, database=True)
+    with database_network_access(), exported_snapshot(source) as snapshot:
+        database_stream(read_only + "exec pg_dump --format=custom --compress=0 --snapshot=" + snapshot
+                        + " --exclude-table-data=public.audit_log --exclude-table-data=public.backup_artefact_entry",
+                        restore_options + "exec pg_restore -h 127.0.0.1 --exit-on-error --no-owner --dbname=ui2",
+                        timeout=4 * seconds)
         for table, query in (("audit_log", AUDIT_SELECT), ("backup_artefact_entry", ENTRY_SELECT)):
             sql = "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY; SET TRANSACTION SNAPSHOT '" + snapshot + "'; COPY (" + query + ") TO STDOUT; COMMIT"
-            pipe_commands(source + [read_only + 'exec psql -Xq --set=ON_ERROR_STOP=1 -c "' + sql + '"'],
-                          target + [restore_options + 'exec psql -Xq --set=ON_ERROR_STOP=1 -c "COPY public.' + table + ' FROM STDIN"'],
-                          timeout=4 * seconds, database=True)
+            database_stream(read_only + 'exec psql -Xq --set=ON_ERROR_STOP=1 -c ' + shlex.quote(sql),
+                            restore_options + 'exec psql -h 127.0.0.1 -Xq --set=ON_ERROR_STOP=1 -c "COPY public.' + table + ' FROM STDIN"',
+                            timeout=4 * seconds)
 
 
-def copy_secret(name):
+def copy_secret(name, target_name=None, keys=None):
     secret = json.loads(k("ui2", "get", "secret", name, "-o", "json"))
-    create(NS, dict(apiVersion="v1", kind="Secret", metadata=metadata(name),
-                    type=secret.get("type", "Opaque"), data=secret["data"]))
+    create(NS, dict(apiVersion="v1", kind="Secret", metadata=metadata(target_name or name),
+                    type=secret.get("type", "Opaque"),
+                    data={key: secret["data"][key] for key in keys} if keys else secret["data"]))
 
 
 def setup_database(repo):
@@ -645,6 +729,7 @@ def setup_database(repo):
               "migrate-password": secrets.token_urlsafe(32), "app-password": secrets.token_urlsafe(32)}
     create(NS, dict(apiVersion="v1", kind="Secret", metadata=metadata("ui2-db"), type="Opaque",
                     data={name: base64.b64encode(value.encode()).decode() for name, value in values.items()}))
+    copy_secret("ui2-db", "ui2-db-source", ("migrate-user", "migrate-password"))
     create(NS, database_manifest(template))
     k(NS, "wait", "--for=condition=Ready", "pod/" + preview_name("ui2-preview-db"), "--timeout=120s", timeout=130)
     with timing("preview_db_copy"):
@@ -820,10 +905,11 @@ def assert_module_claims(repo, workers):
 
 
 def cleanup(owner):
-    # Attempt both cleanups even if one API call fails. A cleanup failure is a red gate.
+    # Attempt every scope even if one API call fails. A cleanup failure is a red gate.
     failures = []
     with timing("preview_teardown"):
-        for namespace, kind, selector in ((BUILD_NS, "jobs", LABEL + "=" + owner), (NS, "namespace", "")):
+        for namespace, kind, selector in (("ui2", "networkpolicy", LABEL + "=" + NS),
+                                          (BUILD_NS, "jobs", LABEL + "=" + owner), (NS, "namespace", "")):
             try:
                 if kind == "namespace":
                     ns = json.loads(k(NS, "get", "namespace", NS, "--ignore-not-found", "-o", "json") or "{}")
@@ -837,8 +923,9 @@ def cleanup(owner):
                 else:
                     k(namespace, "delete", kind, "-l", selector, "--ignore-not-found", "--cascade=foreground",
                       "--wait=true", "--timeout=120s", timeout=130)
-                    if json.loads(k(namespace, "get", "jobs,pods", "-l", selector, "-o", "json"))["items"]:
-                        raise RuntimeError("Preview build objects remain")
+                    remaining = "jobs,pods" if kind == "jobs" else kind
+                    if json.loads(k(namespace, "get", remaining, "-l", selector, "-o", "json"))["items"]:
+                        raise RuntimeError("Preview objects remain")
             except (RuntimeError, OSError, ValueError, subprocess.SubprocessError):
                 failures.append(kind)
     if failures:
