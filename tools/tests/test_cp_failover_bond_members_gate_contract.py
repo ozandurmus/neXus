@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 class BondMembersGateContractTest(unittest.TestCase):
     def test_exact_migration_rows_match_fixture(self):
-        sql = (ROOT / "ui2/service/src/main/resources/db/migration/V142__cp_failover_bond_members.sql").read_text()
+        sql = (ROOT / "ui2/service/src/main/resources/db/migration/V143__cp_failover_bond_members.sql").read_text()
         fixture = (ROOT / "ui2/capability-registry/src/main/resources/capabilities/gate_registry_fixture.yaml").read_text()
         columns, values = re.search(r"INSERT INTO gate_registry \((.*?)\)\s*VALUES\s*(.*);", sql, re.S).groups()
         columns = columns.split(", ")
