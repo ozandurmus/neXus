@@ -1,5 +1,6 @@
 """Offline candidate gate: manifests, streaming failures, teardown and ship ordering."""
 import argparse
+import base64
 import copy
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -303,23 +304,26 @@ def test_database_network_allowance_is_temporary_and_scoped(monkeypatch, databas
                                      podSelector=egress["spec"]["podSelector"])]
 
 
-def test_source_credentials_are_separate_mounted_and_never_logged(monkeypatch, capsys):
+def test_source_credentials_are_separate_secret_env_refs_and_never_logged(monkeypatch, capsys):
     objects = []
     log = io.StringIO()
     monkeypatch.setattr(preview, "LOG", log)
-    secret = dict(data={"migrate-user": "c3ludGhldGljLXVzZXI=", "migrate-password": "c3ludGhldGljLXBhc3M=",
-                        "app-password": "dW5yZWxhdGVk"})
+    placeholder = base64.b64encode(b"synthetic-value").decode()
+    secret = dict(data={key: placeholder for key in
+                        ("migrate-user", "migrate-password", "app-password")})
     monkeypatch.setattr(preview, "k", lambda *a, **kw: json.dumps(secret))
     monkeypatch.setattr(preview, "create", lambda ns, obj: objects.append(obj))
     preview.copy_secret("ui2-db", "ui2-db-source", ("migrate-user", "migrate-password"))
     assert objects[0]["metadata"]["name"] == preview.preview_name("ui2-db-source")
     assert objects[0]["data"] == {key: secret["data"][key] for key in ("migrate-user", "migrate-password")}
     pod = preview.database_manifest(template("deploy/ui2/40-database-statefulset.yaml"))
-    volume = next(v for v in pod["spec"]["volumes"] if v["name"] == "source-db")
-    assert volume["secret"] == dict(secretName=objects[0]["metadata"]["name"], defaultMode=0o440)
     container = pod["spec"]["containers"][0]
-    assert dict(name="source-db", mountPath="/run/source-db", readOnly=True) in container["volumeMounts"]
-    assert "/run/source-db" not in json.dumps(container["env"])
+    env = {entry["name"]: entry for entry in container["env"]}
+    for name, key in (("PGUSER", "migrate-user"), ("PGPASSWORD", "migrate-password")):
+        assert env[name] == dict(name=name, valueFrom=dict(secretKeyRef=dict(
+            name=objects[0]["metadata"]["name"], key=key)))
+    assert all(v["name"] != "source-db" for v in pod["spec"]["volumes"])
+    assert all(v["name"] != "source-db" for v in container["volumeMounts"])
     output = capsys.readouterr()
     assert not output.out + output.err + log.getvalue()
     assert not any(value in json.dumps(pod) for value in secret["data"].values())
@@ -567,14 +571,16 @@ def test_copy_is_pod_to_pod_read_only_and_filters_only_the_two_requested_tables(
     assert all("SET TRANSACTION SNAPSHOT '00000001-00000002-1'" in shlex.split(s)[-1] for s, _ in calls[1:])
     for source, target in calls:
         assert "kubectl" not in source + target
-        assert "export PGHOST=192.0.2.10" in source and "-h 127.0.0.1" in target
+        assert "export PGHOST=192.0.2.10" in source
+        assert "PGHOST=" not in target and "-h " not in target
         assert "default_transaction_read_only=on" in source
         assert f"statement_timeout={seconds * 1000}" in source
         assert f"statement_timeout={seconds * 1000}" in target
         assert "default_transaction_read_only=on" not in target
-        assert "$(cat /run/source-db/migrate-user)" in source
-        assert "$(cat /run/source-db/migrate-password)" in source
-        assert "/run/source-db" not in target
+        assert "PGUSER=" not in source
+        assert "PGPASSWORD=" not in source + target
+        assert "cat " not in source + target
+        assert "/run/source-db" not in source + target
         assert "--file=" not in source + target
 
 
@@ -639,6 +645,8 @@ def test_exported_snapshot_is_opaque_and_holder_rolls_back(monkeypatch, invalid,
     holders = []
     def fake(argv, **kwargs):
         assert argv[:5] == ["kubectl", "-n", "ui2", "exec", "-i"]
+        assert "PGPASSWORD=" not in argv[-1]
+        assert "cat " not in argv[-1]
         assert "default_transaction_read_only=on" in argv[-1]
         assert f"idle_in_transaction_session_timeout={(12 * seconds + 60) * 1000}" in argv[-1]
         code = """import sys
@@ -893,7 +901,7 @@ def test_apply_flattens_lists_and_sets_each_namespace_without_mutating_source(mo
     ('Error from server (Forbidden): User "synthetic-principal" cannot create resource "deployments" '
      'in namespace "synthetic-namespace"', "FORBIDDEN"),
     ('Error from server: strict decoding error: unknown field "spec.syntheticField"', "OTHER"),
-    ('connection refused https://example.invalid:6443 password=synthetic-secret 192.0.2.10', "OTHER"),
+    ('connection refused https://example.invalid:6443 password=synthetic-value 192.0.2.10', "OTHER"),
 ])
 def test_failed_apply_logs_masked_error_text_and_field_reason(tmp_path, monkeypatch, capsys, stderr, reason):
     monkeypatch.setattr(preview.Path, "home", lambda: tmp_path)
@@ -911,7 +919,7 @@ def test_failed_apply_logs_masked_error_text_and_field_reason(tmp_path, monkeypa
     assert log.stat().st_mode & 0o777 == 0o600
     assert "PREVIEW STEP: phase=preview_compliance step=apply Deployment" in output
     for target in (output, log.read_text()):
-        assert all(s not in target for s in ("synthetic-principal", "synthetic-secret", "synthetic-namespace",
+        assert all(s not in target for s in ("synthetic-principal", "synthetic-secret", "synthetic-value", "synthetic-namespace",
                                              "synthetic-deployment", "example.invalid", "192.0.2.10"))
         if reason == "MANIFEST_INVALID":
             assert "spec.selector" in target and "field is immutable" in target

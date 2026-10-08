@@ -35,7 +35,7 @@ ENTRY_SELECT = """SELECT e.* FROM public.backup_artefact_entry e
 JOIN (SELECT DISTINCT ON (device_id) artefact_id FROM public.backup_artefact
       ORDER BY device_id, created_at DESC, artefact_id DESC) latest USING (artefact_id)"""
 # Values stay in the pod's environment, never in argv or logs. Source commands are read-only.
-PG_ENV = 'export PGUSER="${POSTGRESQL_USER:-${POSTGRES_USER:-ui2_migrate}}"; export PGDATABASE="${POSTGRESQL_DATABASE:-${POSTGRES_DB:-ui2}}"; export PGPASSWORD="${POSTGRESQL_PASSWORD:-${POSTGRES_PASSWORD:-}}"; '
+PG_ENV = 'unset PGPASSWORD; export PGUSER="${POSTGRESQL_USER:-${POSTGRES_USER:-ui2_migrate}}"; export PGDATABASE="${POSTGRESQL_DATABASE:-${POSTGRES_DB:-ui2}}"; '
 
 
 PHASE = "preview_setup"
@@ -348,10 +348,11 @@ def pod_spec(template):
 
 def database_manifest(template):
     spec = pod_spec(template)
-    spec["volumes"].append(dict(name="source-db", secret=dict(
-        secretName=preview_name("ui2-db-source"), defaultMode=0o440)))
-    spec["containers"][0]["volumeMounts"].append(dict(
-        name="source-db", mountPath="/run/source-db", readOnly=True))
+    spec["containers"][0].setdefault("env", []).extend([
+        dict(name=name, valueFrom=dict(secretKeyRef=dict(
+            name=preview_name("ui2-db-source"), key=key)))
+        for name, key in (("PGUSER", "migrate-user"), ("PGPASSWORD", "migrate-password"))
+    ])
     size = os.environ.get("NEXUS_PREVIEW_DB_DATA_SIZE_LIMIT", "32Gi")
     if not re.fullmatch(r"[1-9][0-9]*Gi", size):
         raise ValueError("Preview database size limit must be positive whole Gi")
@@ -737,22 +738,21 @@ def copy_database():
     seconds = database_statement_timeout()
     service = json.loads(k("ui2", "get", "service", "ui2-db", "-o", "json"))
     address = str(ipaddress.ip_address(service["spec"]["clusterIP"]))
-    read_only = ('export PGUSER="$(cat /run/source-db/migrate-user)"; '
-                 'export PGPASSWORD="$(cat /run/source-db/migrate-password)"; '
-                 'export PGDATABASE="${POSTGRESQL_DATABASE:-${POSTGRES_DB:-ui2}}"; '
+    read_only = ('export PGDATABASE="${POSTGRESQL_DATABASE:-${POSTGRES_DB:-ui2}}"; '
                  'export PGHOST=' + shlex.quote(address) + '; '
                  'export PGOPTIONS="-c default_transaction_read_only=on -c statement_timeout='
                  + str(seconds * 1000) + '"; ')
+    # Local socket authentication keeps source credentials out of preview restores.
     restore_options = PG_ENV + 'export PGOPTIONS="-c statement_timeout=' + str(seconds * 1000) + '"; '
     with database_network_access(), exported_snapshot(source) as snapshot:
         database_stream(read_only + "exec pg_dump --format=custom --compress=0 --snapshot=" + snapshot
                         + " --exclude-table-data=public.audit_log --exclude-table-data=public.backup_artefact_entry",
-                        restore_options + "exec pg_restore -h 127.0.0.1 --exit-on-error --no-owner --dbname=ui2",
+                        restore_options + "exec pg_restore --exit-on-error --no-owner --dbname=ui2",
                         timeout=4 * seconds)
         for table, query in (("audit_log", AUDIT_SELECT), ("backup_artefact_entry", ENTRY_SELECT)):
             sql = "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY; SET TRANSACTION SNAPSHOT '" + snapshot + "'; COPY (" + query + ") TO STDOUT; COMMIT"
             database_stream(read_only + 'exec psql -Xq --set=ON_ERROR_STOP=1 -c ' + shlex.quote(sql),
-                            restore_options + 'exec psql -h 127.0.0.1 -Xq --set=ON_ERROR_STOP=1 -c "COPY public.' + table + ' FROM STDIN"',
+                            restore_options + 'exec psql -Xq --set=ON_ERROR_STOP=1 -c "COPY public.' + table + ' FROM STDIN"',
                             timeout=4 * seconds)
 
 
