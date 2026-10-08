@@ -40,6 +40,113 @@ def container_image(deployment):
     return deployment["spec"]["template"]["spec"]["containers"][0]["image"]
 
 
+@pytest.mark.parametrize("size,expected", [(None, "32Gi"), ("48Gi", "48Gi")])
+def test_database_data_capacity_is_configurable_and_isolated(monkeypatch, size, expected):
+    if size is None:
+        monkeypatch.delenv("NEXUS_PREVIEW_DB_DATA_SIZE_LIMIT", raising=False)
+    else:
+        monkeypatch.setenv("NEXUS_PREVIEW_DB_DATA_SIZE_LIMIT", size)
+    source = template("deploy/ui2/40-database-statefulset.yaml")
+    source["spec"]["template"]["spec"]["volumes"].append(
+        dict(name="synthetic-scratch", persistentVolumeClaim=dict(claimName="synthetic-claim")))
+    before = copy.deepcopy(source)
+    database = preview.database_manifest(source)["spec"]["volumes"]
+    ordinary = preview.pod_spec(source)["volumes"]
+    assert next(v for v in database if v["name"] == "data")["emptyDir"] == {"sizeLimit": expected}
+    assert next(v for v in database if v["name"] == "synthetic-scratch")["emptyDir"] == {"sizeLimit": "8Gi"}
+    assert all(v["emptyDir"]["sizeLimit"] == "8Gi" for v in ordinary if "sizeLimit" in v.get("emptyDir", {}))
+    assert source == before
+
+
+@pytest.mark.parametrize("size", ["0Gi", "-1Gi", "", "32Gi; synthetic"])
+def test_database_data_capacity_rejects_invalid_limits(monkeypatch, size):
+    monkeypatch.setenv("NEXUS_PREVIEW_DB_DATA_SIZE_LIMIT", size)
+    with pytest.raises(ValueError):
+        preview.database_manifest(template("deploy/ui2/40-database-statefulset.yaml"))
+
+
+@pytest.mark.parametrize("status,cause", [
+    ({"phase": "Failed", "reason": "Evicted", "message":
+      "synthetic-private 192.0.2.15 exceeded ephemeral-storage synthetic-secret"}, "ephemeral-storage"),
+    ({"phase": "Failed", "reason": "Evicted"}, "Evicted"),
+    ({"phase": "Running", "containerStatuses": [{"state": {"terminated": {"reason": "OOMKilled"}}}]}, "OOMKilled"),
+    ({"phase": "Succeeded"}, "UNKNOWN"),
+    ({"phase": "Failed", "reason": "synthetic-private"}, "UNKNOWN"),
+    ({"phase": "Running"}, None),
+])
+def test_database_watch_reports_only_projected_causes(monkeypatch, status, cause, capsys):
+    def get(namespace, *args, **kwargs):
+        assert namespace == preview.NS
+        assert args == ("get", "pod", preview.preview_name("ui2-preview-db"), "-o", "json")
+        assert kwargs == {"timeout": 10}
+        return json.dumps({"status": status})
+    monkeypatch.setattr(preview, "k", get)
+    if cause is None:
+        preview.check_preview_database()
+        return
+    with pytest.raises(preview.PreviewFailure) as caught:
+        with preview.timing("preview_db_copy"):
+            preview.check_preview_database()
+    line = preview.failure_line(caught.value)
+    assert f"reason=DB_COPY_FAILED:PREVIEW_DB_EVICTED:{cause}" in line
+    assert all(value not in line + str(caught.value) + capsys.readouterr().out
+               for value in ("synthetic-private", "192.0.2.15", "synthetic-secret"))
+
+
+def test_database_watch_distinguishes_missing_pod_from_unavailable_evidence(monkeypatch):
+    for reason in ("NOT_FOUND", "FORBIDDEN", "TIMEOUT"):
+        def get(*args, **kwargs):
+            raise preview.PreviewFailure(reason)
+        monkeypatch.setattr(preview, "k", get)
+        with pytest.raises(preview.PreviewFailure) as caught:
+            preview.check_preview_database()
+        expected = "DB_COPY_FAILED_PREVIEW_DB_EVICTED:NOT_FOUND" if reason == "NOT_FOUND" else reason
+        assert caught.value.reason == expected
+
+
+def test_database_watch_detects_pod_deletion(monkeypatch):
+    monkeypatch.setattr(preview, "k", lambda *a, **kw: json.dumps({
+        "metadata": {"deletionTimestamp": "2026-10-07T00:00:00Z"}, "status": {"phase": "Running"}}))
+    with pytest.raises(preview.PreviewFailure) as caught:
+        preview.check_preview_database()
+    assert caught.value.reason == "DB_COPY_FAILED_PREVIEW_DB_EVICTED:UNKNOWN"
+
+
+@pytest.mark.parametrize("cause", ["FORBIDDEN", "TIMEOUT", "DB_COPY_FAILED"])
+def test_database_failure_line_surfaces_category_instead_of_exception_class(monkeypatch, cause):
+    monkeypatch.setattr(preview, "PHASE", "preview_db_copy")
+    line = preview.failure_line(preview.PreviewFailure(cause))
+    assert line.endswith("reason=DB_COPY_FAILED:" + ("OTHER" if cause == "DB_COPY_FAILED" else cause))
+
+
+def test_database_stream_watch_allows_success(local_database_stream, monkeypatch):
+    checks = []
+    monkeypatch.setattr(preview, "check_preview_database", lambda: checks.append(True))
+    preview.database_stream("printf synthetic", "cat", timeout=5)
+    assert len(checks) >= 2
+
+
+@pytest.mark.parametrize("sleep", [False, True])
+def test_database_stream_watch_catches_eviction_and_reaps_processes(local_database_stream, monkeypatch, sleep):
+    processes, checks = [], []
+    original = preview.subprocess.Popen
+    def start(*args, **kwargs):
+        process = original(*args, **kwargs)
+        processes.append(process)
+        return process
+    monkeypatch.setattr(preview.subprocess, "Popen", start)
+    def watch():
+        checks.append(True)
+        if len(checks) == 2:
+            raise preview.PreviewFailure("DB_COPY_FAILED_PREVIEW_DB_EVICTED:ephemeral-storage")
+    monkeypatch.setattr(preview, "check_preview_database", watch)
+    source = "exec sleep 30" if sleep else "printf synthetic"
+    with pytest.raises(preview.PreviewFailure) as caught:
+        preview.database_stream(source, "cat", timeout=5)
+    assert caught.value.reason == "DB_COPY_FAILED_PREVIEW_DB_EVICTED:ephemeral-storage"
+    assert len(processes) == 1 and processes[0].poll() is not None
+
+
 def test_runtime_manifests_are_ephemeral_and_use_only_the_preview_database():
     db_source = template("deploy/ui2/40-database-statefulset.yaml")
     service_source = template("deploy/ui2/50-service-deployment.yaml")
@@ -344,14 +451,16 @@ def test_database_timeout_rejects_unsafe_or_unbounded_values(monkeypatch, value)
 
 @pytest.fixture
 def local_database_stream(monkeypatch):
-    run = subprocess.run
+    start = subprocess.Popen
     def local(argv, **kwargs):
         assert argv[:4] == ["kubectl", "-n", preview.NS, "exec"]
         assert argv[4:8] == [preview.preview_name("ui2-preview-db"), "--", "bash", "-c"]
         assert "-i" not in argv
         assert kwargs["stdin"] == kwargs["stdout"] == subprocess.DEVNULL
-        return run(["bash", "-c", argv[-1]], **kwargs)
-    monkeypatch.setattr(preview.subprocess, "run", local)
+        return start(["bash", "-c", argv[-1]], **kwargs)
+    monkeypatch.setattr(preview.subprocess, "Popen", local)
+    monkeypatch.setattr(preview, "check_preview_database", lambda: None)
+    return start
 
 
 @pytest.mark.parametrize("producer_error,consumer_error,cause", [
@@ -383,7 +492,8 @@ def test_database_stream_reports_only_safe_cause(local_database_stream, monkeypa
     reason = "DB_COPY_FAILED" + ("_" + cause if cause else "")
     assert caught.value.reason == reason
     line = preview.failure_line(caught.value)
-    assert "phase=preview_db_copy" in line and f"reason={reason}:" in line
+    category = cause or "OTHER"
+    assert f"phase=preview_db_copy" in line and f"reason=DB_COPY_FAILED:{category}" in line
     assert all(value not in str(caught.value) + line + capsys.readouterr().out + log.getvalue()
                for value in ("synthetic-private", "192.0.2.15", "synthetic-secret"))
 
@@ -401,19 +511,19 @@ def test_database_stream_success_ignores_stderr_warning(local_database_stream, c
     assert not capsys.readouterr().out
 
 
-def test_database_stream_deadline_reports_safe_timeout(monkeypatch):
-    def timeout(*args, **kwargs):
-        raise subprocess.TimeoutExpired("synthetic-private", 1, stderr="synthetic-secret")
-    monkeypatch.setattr(preview.subprocess, "run", timeout)
+def test_database_stream_deadline_reports_safe_timeout(local_database_stream):
     with pytest.raises(preview.PreviewFailure) as caught:
-        preview.database_stream("source", "target", timeout=1)
+        preview.database_stream("exec sleep 30", "cat", timeout=0.05)
     assert caught.value.reason == "DB_COPY_FAILED_TIMEOUT"
     assert "synthetic" not in preview.failure_line(caught.value)
 
 
 @pytest.mark.parametrize("error", ["Copying stdin failed: i/o timeout", "websocket ping failed", "", "connection reset by peer"])
-def test_exec_transport_failure_is_stream_broken(monkeypatch, error, capsys):
-    monkeypatch.setattr(preview.subprocess, "run", lambda *a, **kw: subprocess.CompletedProcess(a, 1, stderr=error))
+def test_exec_transport_failure_is_stream_broken(local_database_stream, monkeypatch, error, capsys):
+    start = local_database_stream
+    def failed_exec(argv, **kwargs):
+        return start(["bash", "-c", "printf %s " + shlex.quote(error) + " >&2; exit 1"], **kwargs)
+    monkeypatch.setattr(preview.subprocess, "Popen", failed_exec)
     with pytest.raises(preview.PreviewFailure) as caught:
         preview.database_stream("source", "target", timeout=1)
     assert caught.value.reason == "DB_COPY_FAILED_STREAM_BROKEN"
