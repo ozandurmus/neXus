@@ -274,9 +274,25 @@ public final class CpFailoverChecks {
     }
     public static TrafficMeasurement trafficBytesPerSecond(TrafficSample before,TrafficSample after,
             Set<String> interfaces,long elapsedNanos) {
+        return trafficBytesPerSecond(before,after,interfaces,elapsedNanos,Map.of());
+    }
+    public static TrafficMeasurement trafficBytesPerSecond(TrafficSample before,TrafficSample after,
+            Set<String> interfaces,long elapsedNanos,Map<String,Set<String>> bondMembers) {
         // Preserve observed interfaces; exclude non-forwarding counters only when measuring traffic.
         interfaces=new HashSet<>(interfaces);
         interfaces.removeIf(name -> name.matches("(?i)(?:lo|mgmt|management)(?:[0-9.].*)?"));
+        var bonds=interfaces.stream().filter(n -> n.startsWith("bond")).toList();
+        boolean overlap=false;
+        if(!bonds.isEmpty() && interfaces.stream().anyMatch(n -> !n.startsWith("bond"))) {
+            overlap=bonds.stream().anyMatch(b -> !bondMembers.containsKey(b) || bondMembers.get(b).isEmpty());
+            Set<String> slaves=new HashSet<>();
+            for(String bond:bonds) for(String slave:bondMembers.getOrDefault(bond,Set.of()))
+                if(!slaves.add(slave)) overlap=true;
+            // A physical VLAN's relationship is not proven by its parent's membership alone.
+            if(interfaces.stream().filter(n -> !n.startsWith("bond"))
+                    .anyMatch(n -> slaves.stream().anyMatch(s -> n.startsWith(s+".")))) overlap=true;
+            if(!overlap) interfaces.removeIf(n -> !n.startsWith("bond") && slaves.contains(n));
+        }
         int selected=interfaces.size();
         int presentBefore=(int)interfaces.stream().filter(before.counters()::containsKey).count();
         int presentAfter=(int)interfaces.stream().filter(after.counters()::containsKey).count();
@@ -285,10 +301,7 @@ public final class CpFailoverChecks {
             reason=TrafficReason.EMPTY_SAMPLE;
         if(reason==TrafficReason.NONE && interfaces.isEmpty()) reason=TrafficReason.NO_TRAFFIC_INTERFACES;
         if(reason==TrafficReason.NONE && elapsedNanos<=0) reason=TrafficReason.INVALID_ELAPSED;
-        // The interface list has no slave mapping: mixed bond/physical selection cannot prove non-overlap.
-        // The gated show_bond summary supplies slave counts, not membership identities.
-        if(reason==TrafficReason.NONE && interfaces.stream().anyMatch(n -> n.startsWith("bond"))
-                && interfaces.stream().anyMatch(n -> !n.startsWith("bond"))) reason=TrafficReason.BOND_PHYSICAL_OVERLAP;
+        if(reason==TrafficReason.NONE && overlap) reason=TrafficReason.BOND_PHYSICAL_OVERLAP;
         long delta=0;
         for(String name:interfaces) {
             if(reason!=TrafficReason.NONE) break;
@@ -419,6 +432,57 @@ public final class CpFailoverChecks {
             } catch(NumberFormatException invalid) { return "UNKNOWN"; }
         }
         return !row?"UNKNOWN":failed?"FAIL":"PASS";
+    }
+
+    /** Same-pass command allowlist, never a persisted interface inventory. */
+    public static Map<String,Integer> bondCounts(String output) {
+        if("UNKNOWN".equals(bonds(output))) return Map.of();
+        Map<String,Integer> names=new HashMap<>();
+        for(String raw:output.split("\\R")) {
+            String line=raw.strip();
+            if(line.startsWith("Legend:")) break;
+            if(!line.startsWith("bond")) continue;
+            String[] columns=line.split("\\|",-1);
+            if(columns.length!=6 || !columns[0].strip().matches("bond[0-9]+(?:\\.[0-9]+)?")) return Map.of();
+            try {
+                if(names.putIfAbsent(columns[0].strip(),Integer.parseInt(columns[3].strip()))!=null) return Map.of();
+            } catch(NumberFormatException invalid) { return Map.of(); }
+        }
+        return Map.copyOf(names);
+    }
+
+    /** Require a complete, unambiguous table before proving non-membership. */
+    public static Set<String> bondSlaves(String output,String bond,int expectedCount) {
+        if(output==null || expectedCount<=0) return Set.of();
+        Set<String> fields=new HashSet<>(),slaves=new HashSet<>();
+        boolean table=false;
+        for(String raw:output.split("\\R")) {
+            String line=raw.strip();
+            if(line.isEmpty() || line.matches("[-+]+")) continue;
+            if(!table && line.matches("Slave name\\s*\\|\\s*Status\\s*\\|\\s*Link")) { table=true; continue; }
+            if(!table) {
+                String[] pair=line.split(":",2);
+                if(pair.length!=2 || !fields.add(pair[0])) return Set.of();
+                String value=pair[1].strip();
+                boolean valid=switch(pair[0]) {
+                    case "Bond name" -> value.equals(bond);
+                    case "Bond mode" -> Set.of("High Availability","Load Sharing").contains(value);
+                    case "Bond status" -> Set.of("UP","UP!","DOWN").contains(value);
+                    case "Configured slave interfaces" -> value.equals(Integer.toString(expectedCount));
+                    case "In use slave interfaces", "Required slave interfaces" -> value.matches("[0-9]+");
+                    default -> false;
+                };
+                if(!valid) return Set.of();
+            } else {
+                String[] columns=line.split("\\|",-1);
+                if(columns.length!=3) return Set.of();
+                String slave=columns[0].strip();
+                if(!slave.matches("[A-Za-z][A-Za-z0-9_-]{0,63}") || slave.startsWith("bond")
+                        || !Set.of("Active","Backup","Not Available").contains(columns[1].strip())
+                        || !Set.of("Yes","No").contains(columns[2].strip()) || !slaves.add(slave)) return Set.of();
+            }
+        }
+        return table && fields.size()==6 && slaves.size()==expectedCount?Set.copyOf(slaves):Set.of();
     }
 
     public record Failover(String status,String lastFailoverAt) {}

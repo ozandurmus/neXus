@@ -136,6 +136,8 @@ class CpFailoverJobExecutorTest {
         String peerPolicyTime;
         boolean zeroBaseline,preempt,extraPnote,adminOnNewActive,adminAfterReturn;
         String trafficFaultPhase,trafficFault,cpstatFaultPhase,cpstatFault;
+        String bondFailurePhase;
+        boolean peerBondAbsent;
         int samplesA,samplesB;
         String phase() { return up?"post_return":down?"post":"pre"; }
         String prefix="",lineEnding="\n";
@@ -163,6 +165,10 @@ class CpFailoverJobExecutorTest {
                         if(entry.getKey().equals("cphaprob stat") && !((TransportSession)args[0]).sessionId().endsWith("11"))
                             output=output.replace("1 (local)","1        ").replace("2          ","2 (local)  ");
                     }
+                    if(peerBondAbsent && literal.endsWith("cphaprob show_bond'")
+                            && !((TransportSession)args[0]).sessionId().endsWith("11"))
+                        output="No bond interfaces are configured.\n";
+                    if(phase().equals(bondFailurePhase) && literal.contains("show_bond \"")) output="unrecognized";
                     if(measured.containsKey("cphaprob -a if") && !measured.containsKey("cat /proc/net/dev")
                             && literal.endsWith("cat /proc/net/dev'")) output=output.replace("eth0:","bond1.3843:");
                     if(peerPolicyTime!=null && literal.endsWith("fw stat'") && !((TransportSession)args[0]).sessionId().endsWith("11"))
@@ -268,6 +274,7 @@ class CpFailoverJobExecutorTest {
                     }
                     if(cmd.equals("cphaprob show_bond")) return new ExecResult.Completed(
                         Fixtures.read("cp/failover_bonds.txt").replace("|UP    |",badBonds?"|UP!   |":"|UP    |"),0);
+                    if(cmd.startsWith("cphaprob show_bond \"")) return new ExecResult.Completed("unrecognized",0);
                     if(cmd.equals("cphaprob show_failover")) {
                         String output=Fixtures.read("cp/failover_last_event.txt");
                         if(recentFailover) output="Event time: "+java.time.format.DateTimeFormatter
@@ -675,6 +682,60 @@ class CpFailoverJobExecutorTest {
             assertEquals(2,recorded);
             assertEquals(0,script.downCount);
         }
+    }
+    @Test void selectedBondMembershipIsScopedQuotedAndNeverPersisted() {
+        for(String mode:List.of("READINESS","VS_READINESS","FAILOVER"))
+                for(String relation:List.of("slave","independent","invalid","unavailable","unknown","peer_absent","post_failure","return_failure")) {
+            boolean vs=mode.equals("VS_READINESS"), failover=mode.equals("FAILOVER");
+            if(!failover && relation.endsWith("failure")) continue;
+            Store store=new Store(); store.kind=failover?"FAILOVER":"READINESS"; if(vs) store.vsId="12";
+            Script script=new Script();
+            if(relation.equals("unavailable")) script.failedCommand="cphaprob show_bond \"bond1\"";
+            script.peerBondAbsent=relation.equals("peer_absent");
+            if(relation.equals("post_failure")) script.bondFailurePhase="post";
+            if(relation.equals("return_failure")) script.bondFailurePhase="post_return";
+            String bond=relation.equals("unknown")?"bond99":"bond1";
+            String detail=Fixtures.read("cp/failover_bond_members.txt");
+            if(relation.equals("independent")) detail=detail.replace("eth7","eth9");
+            if(relation.equals("invalid")) detail=detail.substring(0,detail.indexOf("eth8"));
+            script.measured=Map.of("cphaprob -a if","CCP mode: Automatic\nRequired interfaces: 2\n"
+                +bond+" UP non sync\neth7 UP non sync\n",
+                "cat /proc/net/dev","Inter-| Receive | Transmit\n"
+                    +bond+": 100 0 0 0 0 0 0 0 100 0 0 0 0 0 0 0\n"
+                    +"eth7: 100 0 0 0 0 0 0 0 100 0 0 0 0 0 0 0\n",
+                "cphaprob show_bond \"bond1\"",detail);
+            run(store,script);
+            boolean known=relation.equals("slave") || relation.equals("independent") || relation.endsWith("failure");
+            assertEquals(2,store.checks.stream().filter(("pre:8:"+(known?"PASS":"UNKNOWN"))::equals).count());
+            int reads=relation.equals("unknown")?0:relation.equals("peer_absent")?1
+                :!failover || !known?2:relation.equals("post_failure")?4:6;
+            assertEquals(reads,
+                script.commands.stream().filter(c -> c.contains("show_bond \"")).count());
+            if(failover && known) {
+                if(script.bondFailurePhase==null) {
+                    assertEquals("SUCCEEDED",store.outcome);
+                    assertEquals(2,store.checks.stream().filter("post:8:PASS"::equals).count());
+                    assertEquals(2,store.checks.stream().filter("post_return:8:PASS"::equals).count());
+                } else assertEquals(2,store.checks.stream().filter((script.bondFailurePhase+":8:UNKNOWN")::equals).count());
+            }
+            for(String command:script.commands) if(command.contains("show_bond \""))
+                assertEquals(vs?"bash -lc 'vsenv 12 && cphaprob show_bond \"bond1\"'"
+                    :"bash -lc 'cphaprob show_bond \"bond1\"'",command);
+            for(String evidence:store.derivedValues) {
+                assertFalse(evidence.contains("eth7") || evidence.contains("eth8") || evidence.contains(bond));
+                if(evidence.contains("bytesPerSecond")) {
+                    if(evidence.contains("BOND_PHYSICAL_OVERLAP")) assertTrue(evidence.contains("\"selectedCount\":2"));
+                    else assertTrue(evidence.contains("\"selectedCount\":"+(relation.equals("independent")?2:1)));
+                }
+            }
+        }
+    }
+    @Test void bondArgumentsRequireExactObservedNames() {
+        var observed=CpFailoverChecks.bondCounts(Fixtures.read("cp/failover_bonds.txt"));
+        assertEquals("cphaprob show_bond \"bond1\"",CpFailoverJobExecutor.bondCommand("bond1",observed));
+        for(String bad:List.of("bond99","bond01","bond1;bad","bond1\"","bond1$(bad)","bond1\n"))
+            org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+                () -> CpFailoverJobExecutor.bondCommand(bad,observed));
     }
     @Test void memberRatesUseSeparateMonotonicIntervals() {
         Store store=new Store(); Script script=new Script();

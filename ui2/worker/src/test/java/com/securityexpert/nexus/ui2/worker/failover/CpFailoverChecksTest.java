@@ -472,6 +472,53 @@ class CpFailoverChecksTest {
         assertEquals(100.0,traffic(before,after,Set.of("bond1")).bytesPerSecond(),
             "Changing only the interface selection reproduces PASS versus UNKNOWN");
     }
+    @Test void bondMembershipRequiresCompleteMatchingUniqueRows() {
+        String detail=Fixtures.read("cp/failover_bond_members.txt");
+        for(String eol:java.util.List.of("\n","\r\n"))
+            assertEquals(Set.of("eth7","eth8"),CpFailoverChecks.bondSlaves(detail.replace("\n",eol),"bond1",2));
+        for(String bad:java.util.List.of(detail.replace("bond1","bond2"),detail.replace("eth8","eth7"),
+                detail.substring(0,detail.indexOf("eth8")),detail+"unexpected\n",
+                detail.replace("Configured slave interfaces: 2","Configured slave interfaces: 3")))
+            assertEquals(Set.of(),CpFailoverChecks.bondSlaves(bad,"bond1",2));
+        assertEquals(java.util.Map.of("bond1",2),CpFailoverChecks.bondCounts(Fixtures.read("cp/failover_bonds.txt")));
+        assertEquals(java.util.Map.of(),CpFailoverChecks.bondCounts(
+            Fixtures.read("cp/failover_bonds.txt").replace("bond1 ","bond1;bad ")));
+    }
+    @Test void provenSlaveIsDroppedAndIndependentInterfaceIsSummed() {
+        var before=CpFailoverChecks.bytesByInterface(DEV_A.replace("eth0:","bond1:").replace("eth1:","eth7:"));
+        var after=CpFailoverChecks.bytesByInterface(DEV_B.replace("eth0:","bond1:").replace("eth1:","eth7:"));
+        var members=CpFailoverChecks.bondSlaves(Fixtures.read("cp/failover_bond_members.txt"),"bond1",2);
+        var selected=Set.of("bond1","eth7");
+        var slave=CpFailoverChecks.trafficBytesPerSecond(before,after,selected,5_000_000_000L,java.util.Map.of("bond1",members));
+        assertEquals(CpFailoverChecks.TrafficReason.NONE,slave.reason());
+        assertEquals(1,slave.selectedCount());
+        assertEquals(CpFailoverChecks.trafficBytesPerSecond(before,after,Set.of("bond1"),5_000_000_000L).bytesPerSecond(),slave.bytesPerSecond());
+        var independent=CpFailoverChecks.trafficBytesPerSecond(before,after,selected,5_000_000_000L,
+            java.util.Map.of("bond1",Set.of("eth8","eth9")));
+        assertEquals(CpFailoverChecks.TrafficReason.NONE,independent.reason());
+        assertEquals(2,independent.selectedCount());
+        assertEquals(slave.bytesPerSecond()+CpFailoverChecks.trafficBytesPerSecond(before,after,Set.of("eth7"),5_000_000_000L).bytesPerSecond(),independent.bytesPerSecond());
+        var unknown=CpFailoverChecks.trafficBytesPerSecond(before,after,selected,5_000_000_000L,
+            java.util.Map.of("bond1",CpFailoverChecks.bondSlaves("invalid","bond1",2)));
+        assertEquals(CpFailoverChecks.TrafficReason.BOND_PHYSICAL_OVERLAP,unknown.reason());
+    }
+    @Test void everySelectedBondMustProveNonMembershipWithoutConflictingSlaves() {
+        var before=new CpFailoverChecks.TrafficSample(java.util.Map.of(
+            "bond1",new CpFailoverChecks.TrafficBytes(0,0),"bond2",new CpFailoverChecks.TrafficBytes(0,0),
+            "eth9",new CpFailoverChecks.TrafficBytes(0,0)),CpFailoverChecks.TrafficReason.NONE);
+        var after=new CpFailoverChecks.TrafficSample(java.util.Map.of(
+            "bond1",new CpFailoverChecks.TrafficBytes(100,0),"bond2",new CpFailoverChecks.TrafficBytes(200,0),
+            "eth9",new CpFailoverChecks.TrafficBytes(300,0)),CpFailoverChecks.TrafficReason.NONE);
+        var selected=Set.of("bond1","bond2","eth9");
+        var complete=java.util.Map.of("bond1",Set.of("eth7"),"bond2",Set.of("eth8"));
+        var independent=CpFailoverChecks.trafficBytesPerSecond(before,after,selected,1_000_000_000L,complete);
+        assertEquals(600.0,independent.bytesPerSecond());
+        assertEquals(3,independent.selectedCount());
+        for(var ambiguous:java.util.List.of(java.util.Map.of("bond1",Set.of("eth7")),
+                java.util.Map.of("bond1",Set.of("eth7"),"bond2",Set.of("eth7"))))
+            assertEquals(CpFailoverChecks.TrafficReason.BOND_PHYSICAL_OVERLAP,
+                CpFailoverChecks.trafficBytesPerSecond(before,after,selected,1_000_000_000L,ambiguous).reason());
+    }
     @Test void trafficMissingSubinterfaceHasReasonAndUnequalPresenceCounts() {
         String before=DEV_A.replace("eth0:","eth0.10:");
         var result=traffic(before,DEV_B,Set.of("eth0.10"));

@@ -37,6 +37,7 @@ public final class CpFailoverJobExecutor {
     private static final String ARP="arp -an", TRAFFIC="cat /proc/net/dev";
     private static final String SYNC="cphaprob syncstat", POLICY="fw stat", CPSTAT_POLICY="cpstat -f policy fw";
     private static final String PNOTES="cphaprob -ia list", BONDS="cphaprob show_bond";
+    private static final String BOND_MEMBERS="cphaprob show_bond <BOND>";
     private static final String FAILOVER="cphaprob show_failover", ROUTING="cpstat os -f routing";
     private static final ObjectMapper JSON=new ObjectMapper();
     private static final String DOWN="clusterXL_admin down", UP="clusterXL_admin up";
@@ -274,6 +275,7 @@ public final class CpFailoverJobExecutor {
             case CPSTAT_POLICY -> "cp_policy_install_cpstat";
             case PNOTES -> "cp_failover_pnotes";
             case BONDS -> "cp_failover_bonds";
+            case BOND_MEMBERS -> "cp_failover_bond_members";
             case FAILOVER -> "cp_failover_last_event";
             case ROUTING -> "cp_failover_routing";
             case DOWN -> "cp_failover_down";
@@ -287,6 +289,16 @@ public final class CpFailoverJobExecutor {
         return !"READINESS".equals(kind) || !(DOWN.equals(command) || UP.equals(command));
     }
     private String command(Member member,String command) throws InterruptedException {
+        return command(member,command,null,Map.of());
+    }
+    static String bondCommand(String bond,Map<String,Integer> observedBonds) {
+        if(bond==null || !bond.matches("bond[0-9]+(?:\\.[0-9]+)?") || !observedBonds.containsKey(bond))
+            throw new IllegalArgumentException("BOND_NAME_NOT_OBSERVED");
+        return BONDS+" \""+bond+"\"";
+    }
+    private String command(Member member,String command,String bond,Map<String,Integer> observedBonds)
+            throws InterruptedException {
+        String readCommand=BOND_MEMBERS.equals(command)?bondCommand(bond,observedBonds):command;
         var g=gate(command);
         if (commandIndex > 0 && !commandPause.isZero()) pause.sleep(commandPause);
         if(vsId!=null && !vsId.matches("[0-9]{1,10}")) throw new Stop("VSID_INVALID",0);
@@ -315,7 +327,7 @@ public final class CpFailoverJobExecutor {
         // Measured 2026-09-30: on the fleet's gateways a plain exec of 'cphaprob stat' exits 0 with no output -- the
         // exec shell lacks the Check Point environment. Inventory already falls back to a login shell; every CP command
         // here (reads and clusterXL_admin alike) runs in one, as the vsenv-wrapped VS form always did.
-        String literal=vsId==null?"bash -lc '"+command+"'":"bash -lc 'vsenv "+vsId+" && "+command+"'";
+        String literal=vsId==null?"bash -lc '"+readCommand+"'":"bash -lc 'vsenv "+vsId+" && "+readCommand+"'";
         boolean pty=IF.equals(command);
         int sessionCommandIndex=++member.sessionCommandIndex;
         long sessionElapsedMs=(System.nanoTime()-member.openedAtNanos)/1_000_000;
@@ -336,7 +348,7 @@ public final class CpFailoverJobExecutor {
             default -> 0;
         };
         if (check!=0) shapes.capture(check,completed.output(),pty,sessionCommandIndex,sessionElapsedMs);
-        return check==0?completed.output():normalizeRead(command,completed.output(),vsId,shapes);
+        return check==0 && !BOND_MEMBERS.equals(command)?completed.output():normalizeRead(command,completed.output(),vsId,shapes);
     }
     static boolean commandUnavailable(String output) {
         if(output==null) return false;
@@ -374,6 +386,7 @@ public final class CpFailoverJobExecutor {
             case CPSTAT_POLICY -> !"UNKNOWN".equals(CpFailoverChecks.cpstatPolicy(output).status());
             case PNOTES -> !"UNKNOWN".equals(CpFailoverChecks.pnotes(output).status());
             case BONDS -> !"UNKNOWN".equals(CpFailoverChecks.bonds(output));
+            case BOND_MEMBERS -> output.startsWith("Bond name:");
             case FAILOVER -> CpFailoverChecks.lastFailover(output,Instant.now()).lastFailoverAt()!=null;
             case ROUTING -> CpFailoverChecks.routing(output)!=null;
             default -> false;
@@ -474,11 +487,6 @@ public final class CpFailoverJobExecutor {
             var pnotes=CpFailoverChecks.pnotes(command(member,PNOTES),switched && member==oldActive);
             record(phase,member,11,pnotes.status(),json(Map.of("pnotes",pnotes.names())));
             if(!"PASS".equals(pnotes.status())) checkFailed("PNOTES_NOT_READY",11,pnotes.status());
-            String bondOutput=command(member,BONDS);
-            String bonds=CpFailoverChecks.bonds(bondOutput);
-            record(phase,member,12,bonds,json(Map.of("noneConfigured",
-                bondOutput.strip().equals("No bond interfaces are configured."))));
-            if(!"PASS".equals(bonds)) checkFailed("BOND_NOT_READY",12,bonds);
         }
         for(Member member:List.of(first,second)) {
             String output=null;
@@ -518,6 +526,8 @@ public final class CpFailoverJobExecutor {
     private double[] trafficWindow(String phase,Member first,Member second,
             CpFailoverChecks.Interfaces ia,CpFailoverChecks.Interfaces ib,Pair before,Member oldActive)
             throws InterruptedException {
+        var bondsA=bondMembership(phase,first,ia.trafficNames());
+        var bondsB=bondMembership(phase,second,ib.trafficNames());
         var preA=trafficSample(first);
         long startA=nanoTime.getAsLong();
         var preB=trafficSample(second);
@@ -527,8 +537,8 @@ public final class CpFailoverJobExecutor {
         long elapsedA=nanoTime.getAsLong()-startA;
         var postB=trafficSample(second);
         long elapsedB=nanoTime.getAsLong()-startB;
-        var measurementA=CpFailoverChecks.trafficBytesPerSecond(preA,postA,ia.trafficNames(),elapsedA);
-        var measurementB=CpFailoverChecks.trafficBytesPerSecond(preB,postB,ib.trafficNames(),elapsedB);
+        var measurementA=CpFailoverChecks.trafficBytesPerSecond(preA,postA,ia.trafficNames(),elapsedA,bondsA);
+        var measurementB=CpFailoverChecks.trafficBytesPerSecond(preB,postB,ib.trafficNames(),elapsedB,bondsB);
         double rateA=measurementA.bytesPerSecond(),rateB=measurementB.bytesPerSecond();
         double baseline=before==null?(oldActive==first?rateA:rateB):before.forMember(oldActive,first).traffic();
         double current=before==null?baseline:oldActive==first?rateB:rateA;
@@ -537,6 +547,26 @@ public final class CpFailoverJobExecutor {
         record(phase,second,8,status,json(measurementB.derived(elapsedB)));
         if(!"PASS".equals(status)) checkFailed("TRAFFIC_BELOW_TOLERANCE",8,status);
         return new double[]{rateA,rateB};
+    }
+    private Map<String,Set<String>> bondMembership(String phase,Member member,Set<String> selected)
+            throws InterruptedException {
+        String summary=command(member,BONDS);
+        String status=CpFailoverChecks.bonds(summary);
+        record(phase,member,12,status,json(Map.of("noneConfigured",
+            summary.strip().equals("No bond interfaces are configured."))));
+        if(!"PASS".equals(status)) checkFailed("BOND_NOT_READY",12,status);
+        var observed=CpFailoverChecks.bondCounts(summary);
+        Map<String,Set<String>> membership=new java.util.HashMap<>();
+        for(String bond:observed.keySet().stream().filter(selected::contains).sorted().toList()) {
+            try {
+                String output=command(member,BOND_MEMBERS,bond,observed);
+                var slaves=CpFailoverChecks.bondSlaves(output,bond,observed.get(bond));
+                if(!slaves.isEmpty()) membership.put(bond,slaves);
+            } catch(Stop unavailable) {
+                if(!Set.of("COMMAND_UNAVAILABLE","OUTPUT_UNAVAILABLE").contains(unavailable.code)) throw unavailable;
+            }
+        }
+        return Map.copyOf(membership);
     }
     private void checkFailed(String code,int check,String status) {
         if (!readiness) throw new Stop(code,check,status);

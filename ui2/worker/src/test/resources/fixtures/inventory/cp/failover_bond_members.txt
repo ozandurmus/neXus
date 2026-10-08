@@ -1,0 +1,12 @@
+Bond name: bond1
+Bond mode: High Availability
+Bond status: UP
+
+Configured slave interfaces: 2
+In use slave interfaces: 2
+Required slave interfaces: 1
+
+Slave name      | Status          | Link
+----------------+-----------------+-------
+eth7            | Active          | Yes
+eth8            | Backup          | Yes
