@@ -6,6 +6,7 @@ import com.securityexpert.nexus.ui2.persistence.TransactionBoundary;
 /** Owner liveness and generation-matched drain acknowledgement. Never changes fallback ownership. */
 public final class ModuleRuntimeRepository {
     private final AuditedTransactionBoundary transactions;
+    private boolean ownershipReleased;
     public ModuleRuntimeRepository(TransactionBoundary boundary) { transactions = new AuditedTransactionBoundary(boundary); }
     public boolean compatibleGeneralLive() {
         return transactions.inTransaction("system:worker", "module_compatibility", db -> !db.fetch(
@@ -14,7 +15,8 @@ public final class ModuleRuntimeRepository {
             + "where state in ('CLAIMED','EXECUTING') and (lease_owner_generation is null "
             + "or split_part(lease_worker_id,'-',1) not in ('general','policy')))").isEmpty());
     }
-    public boolean heartbeat(String role, String instance) {
+    public synchronized boolean heartbeat(String role, String instance) {
+        if (ownershipReleased) return false;
         return transactions.inTransaction("system:worker", "module_heartbeat", db -> {
             db.fetch("select pg_advisory_xact_lock(294611)");
             // A fenced process is still alive; record it even when it cannot own the module.
@@ -56,11 +58,13 @@ public final class ModuleRuntimeRepository {
         }
     }
 
-    public void requestDrain(String role, String instance) {
-        transactions.inTransaction("system:worker", "module_drain", db -> {
+    /** Terminal for this process: a concurrent or queued heartbeat must not reacquire ownership. */
+    public synchronized void releaseOwnership(String role, String instance) {
+        ownershipReleased = true;
+        transactions.inTransaction("system:worker", "module_owner_release", db -> {
             db.fetch("select pg_advisory_xact_lock(294611)");
-            db.execute("update module_runtime_control set drain_requested=true,drain_generation=case when drain_requested then drain_generation else drain_generation+1 end,"
-                + "drain_ack_at=now(),drain_ack_generation=case when drain_requested then drain_generation else drain_generation+1 end where module={0} and owner_instance={1}", role, instance);
+            db.execute("update module_runtime_control set owner_instance=null,owner_heartbeat_at=null "
+                + "where module={0} and owner_instance={1}", role, instance);
             return null;
         });
     }

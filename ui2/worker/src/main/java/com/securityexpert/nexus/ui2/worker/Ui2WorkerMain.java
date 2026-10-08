@@ -404,8 +404,9 @@ public final class Ui2WorkerMain {
             System.Logger log = System.getLogger(Ui2WorkerMain.class.getName());
             log.log(System.Logger.Level.INFO, "[WORKER_DRAIN] stop requested; finishing in-flight jobs (up to "
                     + drainSeconds + " s)");
-            try { moduleRuntime.requestDrain(role, instance); }
-            finally { claimLoops.forEach(WorkerClaimLoop::requestStop); executor.shutdown(); reconcilerExecutor.shutdown(); }
+            claimLoops.forEach(WorkerClaimLoop::requestStop);
+            executor.shutdown();
+            reconcilerExecutor.shutdown();
             try {
                 long until = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(drainSeconds);
                 boolean drained = executor.awaitTermination(drainSeconds, java.util.concurrent.TimeUnit.SECONDS);
@@ -416,7 +417,8 @@ public final class Ui2WorkerMain {
                 Thread.currentThread().interrupt();
             } finally {
                 ownerHeartbeat.shutdownNow();
-                databasePool.close();
+                try { moduleRuntime.releaseOwnership(role, instance); }
+                finally { databasePool.close(); }
             }
         }, "worker-drain"));
 
@@ -526,11 +528,15 @@ public final class Ui2WorkerMain {
             }
         }, 10, 10, java.util.concurrent.TimeUnit.SECONDS);
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            try { runtime.requestDrain("policy", instance); }
-            finally { loop.requestStop(); executor.shutdown(); }
+            loop.requestStop();
+            executor.shutdown();
             try { executor.awaitTermination(840, java.util.concurrent.TimeUnit.SECONDS); }
             catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); }
-            finally { heartbeat.shutdownNow(); pool.close(); }
+            finally {
+                heartbeat.shutdownNow();
+                try { runtime.releaseOwnership("policy", instance); }
+                finally { pool.close(); }
+            }
         }, "policy-drain"));
     }
 

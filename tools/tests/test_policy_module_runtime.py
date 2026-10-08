@@ -50,6 +50,22 @@ def test_bounded_wait_retains_old_digest_and_the_drain(monkeypatch):
     assert not any("set" in args or "scale" in args for args in calls)
 
 
+@pytest.mark.parametrize("target,role", [("worker", "general"), ("policy", "policy")])
+def test_release_tool_bumps_drain_generation_and_requires_it_to_clear(monkeypatch, target, role):
+    queries = []
+    monkeypatch.setattr(deploy, "query", lambda sql: queries.append(sql) or "7")
+    assert deploy.request_drain(target, "synthetic-snapshot") == 7
+    request = queries[-1]
+    assert "pg_advisory_xact_lock(294611)" in request
+    assert "drain_requested=true,drain_generation=drain_generation+1" in request
+    assert "where module='" + role + "'" in request
+    deploy.clear_drain(target, 7, "synthetic-snapshot")
+    clear = queries[-1]
+    assert "pg_advisory_xact_lock(294611)" in clear
+    assert "drain_requested=false,drain_ack_at=null,drain_ack_generation=null" in clear
+    assert "where module='" + role + "' and drain_generation=7" in clear
+
+
 def test_replace_waits_for_old_pod_deletion_before_clearing_the_claim_fence(monkeypatch):
     events = []
     def run(*args):
@@ -100,7 +116,7 @@ def test_policy_manifest_has_only_its_required_dependencies_and_starts_disabled(
     assert spec["serviceAccountName"] == "ui2-policy" and spec["automountServiceAccountToken"] is False
     container = spec["containers"][0]
     assert container["args"] == ["worker", "policy"]
-    assert container["resources"] == {"requests": {"cpu": "250m", "memory": "512Mi"}, "limits": {"memory": "4Gi"}}
+    assert container["resources"] == {"requests": {"cpu": "250m", "memory": "512Mi"}, "limits": {"memory": "8Gi"}}
     assert "-Dui2.db.pool.maximum-pool-size=6" in next(e["value"] for e in container["env"] if e["name"] == "JAVA_TOOL_OPTIONS")
     assert not any("hostPath" in volume for volume in spec["volumes"])
     assert {v["name"] for v in spec["volumes"]} == {"tmp", "home", "db-credentials", "credential-store-key", "artefact-store-key", "artefact-store", "corp-ca"}
