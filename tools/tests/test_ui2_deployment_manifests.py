@@ -19,6 +19,7 @@ mappings and CronJob templates, so security checks cover every workload.
 
 from __future__ import annotations
 
+import base64
 import re
 from datetime import date
 import tomllib
@@ -104,6 +105,29 @@ def test_manifest_set_is_present_and_parsable():
     for path, doc in docs:
         assert doc.get("apiVersion"), f"{path.name}: no apiVersion"
         assert doc.get("kind"), f"{path.name}: no kind"
+
+
+@pytest.mark.parametrize("filename,container_name", [
+    ("50-service-deployment.yaml", "service"),
+    ("52-worker-deployment.yaml", "worker"),
+    ("57-policy-deployment.yaml", "policy"),
+])
+def test_failover_mutation_is_enabled_live_and_disabled_in_preview(monkeypatch, filename, container_name):
+    monkeypatch.syspath_prepend(str(REPO_ROOT / "tools" / "e2e"))
+    import hosta_preview_e2e as preview
+
+    source = next(doc for doc in load_documents((MANIFEST_DIR / filename).read_text())
+                  if doc["kind"] == "Deployment")
+    candidate = preview.workload_manifest(source, "registry.example.invalid/candidate@sha256:" + "a" * 64,
+                                          "192.0.2.10", {
+                                              "ui2-compliance": "http://192.0.2.30:8085",
+                                              "ui2-configuration": "http://192.0.2.40:8084",
+                                          })
+    for deployment, expected in ((source, "true"), (candidate, "false")):
+        container = next(c for c in deployment["spec"]["template"]["spec"]["containers"]
+                         if c["name"] == container_name)
+        entries = [e for e in container["env"] if e["name"] == "NEXUS_FAILOVER_MUTATION_ENABLED"]
+        assert entries == [{"name": "NEXUS_FAILOVER_MUTATION_ENABLED", "value": expected}]
 
 
 def test_the_rule_checks_below_have_something_to_check():
@@ -685,7 +709,8 @@ def test_gitleaks_allowlists_only_the_approved_commit_and_seven_exact_test_paths
     assert synthetic["regexTarget"] == "secret"
     assert synthetic["regexes"] == [
         "^synthetic-value$", "^synthetic-inventory-mask-key-0001$",
-    ]
+    ] + ["^" + base64.b64encode(value.encode()).decode() + "$"
+         for value in ("synthetic-user", "synthetic-pass")]
     assert not {"commits", "paths", "stopwords"} & synthetic.keys()
     for pattern in synthetic["regexes"]:
         value = pattern[1:-1]

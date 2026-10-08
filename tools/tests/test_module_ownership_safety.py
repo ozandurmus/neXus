@@ -199,7 +199,11 @@ def test_full_rollback_preserves_uncertain_work_without_stopping_pods(monkeypatc
 def test_general_replacement_installs_fallback_with_image_and_preserves_jvm_options(monkeypatch):
     calls = []
     worker = {'name': 'worker', 'env': [{'name': 'JAVA_TOOL_OPTIONS',
-              'value': '-Dui2.db.pool.maximum-pool-size=6 -Dui2.worker.claim-policy-fallback=false'}]}
+              'value': '-Dui2.db.pool.maximum-pool-size=6 -Dui2.worker.claim-policy-fallback=false'},
+              {'name': 'NEXUS_FAILOVER_MUTATION_ENABLED', 'value': 'true'},
+              {'name': 'SYNTHETIC_SETTING', 'valueFrom': {
+                  'configMapKeyRef': {'name': 'synthetic-config', 'key': 'setting'}}}]}
+    before = json.loads(json.dumps(worker))
     def run(*args, **kwargs):
         calls.append(args)
         return json.dumps({'spec': {'template': {'spec': {'containers': [worker]}}}}) if 'get' in args else ''
@@ -208,4 +212,8 @@ def test_general_replacement_installs_fallback_with_image_and_preserves_jvm_opti
     obj = json.loads(calls[-1][-1])['spec']['template']['spec']['containers'][0]
     assert obj['image'] == IMAGE
     assert obj['env'][0]['value'] == '-Dui2.db.pool.maximum-pool-size=6 -Dui2.worker.claim-policy-fallback=true'
+    # Kubernetes strategic merge updates only the named JVM entry, retaining the rest.
+    assert '--type=strategic' in calls[-1]
+    assert obj['env'] == [{'name': 'JAVA_TOOL_OPTIONS', 'value': obj['env'][0]['value']}]
+    assert worker == before
     assert 'patch' in calls[-1]

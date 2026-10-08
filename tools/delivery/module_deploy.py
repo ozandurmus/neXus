@@ -203,6 +203,7 @@ def replace_image(target, image):
     value = re.sub(r"(?<!\S)-Dui2.worker.claim-policy-fallback=\S+", "", options.get("value", "")).strip()
     value = (value + " -Dui2.worker.claim-policy-fallback=true").strip()
     # One pod-template update installs the image and fallback capability after the drain.
+    # Strategic merge keys env by name, preserving all other environment entries.
     patch = {"spec": {"template": {"spec": {"containers": [{"name": "worker", "image": image,
              "env": [{"name": "JAVA_TOOL_OPTIONS", "value": value}]}]}}}}
     run("kubectl", "-n", "ui2", "patch", "deployment/ui2-worker", "--type=strategic", "-p", json.dumps(patch))

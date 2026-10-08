@@ -41,6 +41,26 @@ def container_image(deployment):
     return deployment["spec"]["template"]["spec"]["containers"][0]["image"]
 
 
+@pytest.mark.parametrize("entry", [
+    None,
+    {"name": "NEXUS_FAILOVER_MUTATION_ENABLED", "value": "true"},
+    {"name": "NEXUS_FAILOVER_MUTATION_ENABLED",
+     "valueFrom": {"configMapKeyRef": {"name": "synthetic-config", "key": "mutation"}}},
+])
+def test_preview_forces_failover_mutation_disabled_without_changing_source(entry):
+    source = template("deploy/ui2/50-service-deployment.yaml")
+    container = source["spec"]["template"]["spec"]["containers"][0]
+    container["env"] = [e for e in container["env"] if e["name"] != "NEXUS_FAILOVER_MUTATION_ENABLED"]
+    if entry is not None:
+        container["env"].append(entry)
+    before = copy.deepcopy(source)
+    candidate = preview.workload_manifest(source, IMAGE, "192.0.2.10", ENDPOINTS)
+    env = candidate["spec"]["template"]["spec"]["containers"][0]["env"]
+    assert [e for e in env if e["name"] == "NEXUS_FAILOVER_MUTATION_ENABLED"] == [
+        {"name": "NEXUS_FAILOVER_MUTATION_ENABLED", "value": "false"}]
+    assert source == before
+
+
 @pytest.mark.parametrize("size,expected", [(None, "32Gi"), ("48Gi", "48Gi")])
 def test_database_data_capacity_is_configurable_and_isolated(monkeypatch, size, expected):
     if size is None:
