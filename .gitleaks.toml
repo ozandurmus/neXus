@@ -11,6 +11,9 @@ regexTarget = "secret"
 regexes = [
     '''^synthetic-value$''',
     '''^synthetic-inventory-mask-key-0001$''',
+    # base64 of synthetic-user / synthetic-pass in preview tests, PO 2026-10-08; review 2026-12-31
+    '''^c3ludGhldGljLXVzZXI=$''',
+    '''^c3ludGhldGljLXBhc3M=$''',
 ]
 
 # PO-approved retired dashboard token; preserve history. No working-tree path exemption.
