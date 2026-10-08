@@ -3533,7 +3533,7 @@ gates:
     transport_kind: "SSH_EXEC"
     canonical_command_key: "cpview -p"
     action_class: "read"
-    sign_off_state: "DRAFTED"
+    sign_off_state: "SIGNED_OFF"
     timeout_s: 30
     retry_rule: "none"
     max_frequency: "one explicitly PO-approved measurement on one selected enrolled plain gateway member; no polling"
@@ -3541,4 +3541,4 @@ gates:
     unsupported_behavior_ref: "TIMEOUT or UNKNOWN; no production reliance"
     secret_output_risk: "sensitive names and values; 1 MiB cap; in-memory masked projection only; no raw retention"
     safe_telemetry_fields: ["sectionNames", "fieldNames", "valueTypes", "units", "allowlistedCounters", "scopeMarkerPresent"]
-    source_document_pointer: "PO cpview measurement brief; PO_DECISION_RECORD_2026_10_06_FAILOVER_EXECUTION_ESTATE.md item 7; exact-command execution approval pending"
+    source_document_pointer: "PO cpview measurement brief; PO_DECISION_RECORD_2026_10_06_FAILOVER_EXECUTION_ESTATE.md item 7; exact-command execution approval pending; PO chat approval 2026-10-07 for one measurement on one plain gateway member"
