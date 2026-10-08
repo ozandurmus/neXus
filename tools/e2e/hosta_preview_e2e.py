@@ -351,7 +351,7 @@ def database_manifest(template):
     spec["containers"][0].setdefault("env", []).extend([
         dict(name=name, valueFrom=dict(secretKeyRef=dict(
             name=preview_name("ui2-db-source"), key=key)))
-        for name, key in (("PGUSER", "migrate-user"), ("PGPASSWORD", "migrate-password"))
+        for name, key in (("SOURCE_DB_USER", "migrate-user"), ("SOURCE_DB_PASSWORD", "migrate-password"))
     ])
     size = os.environ.get("NEXUS_PREVIEW_DB_DATA_SIZE_LIMIT", "32Gi")
     if not re.fullmatch(r"[1-9][0-9]*Gi", size):
@@ -742,16 +742,17 @@ def copy_database():
                  'export PGHOST=' + shlex.quote(address) + '; '
                  'export PGOPTIONS="-c default_transaction_read_only=on -c statement_timeout='
                  + str(seconds * 1000) + '"; ')
+    source_auth = 'env PGUSER="$SOURCE_DB_USER" PGPASSWORD="$SOURCE_DB_PASSWORD" '
     # Local socket authentication keeps source credentials out of preview restores.
     restore_options = PG_ENV + 'export PGOPTIONS="-c statement_timeout=' + str(seconds * 1000) + '"; '
     with database_network_access(), exported_snapshot(source) as snapshot:
-        database_stream(read_only + "exec pg_dump --format=custom --compress=0 --snapshot=" + snapshot
+        database_stream(read_only + "exec " + source_auth + "pg_dump --format=custom --compress=0 --snapshot=" + snapshot
                         + " --exclude-table-data=public.audit_log --exclude-table-data=public.backup_artefact_entry",
                         restore_options + "exec pg_restore --exit-on-error --no-owner --dbname=ui2",
                         timeout=4 * seconds)
         for table, query in (("audit_log", AUDIT_SELECT), ("backup_artefact_entry", ENTRY_SELECT)):
             sql = "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY; SET TRANSACTION SNAPSHOT '" + snapshot + "'; COPY (" + query + ") TO STDOUT; COMMIT"
-            database_stream(read_only + 'exec psql -Xq --set=ON_ERROR_STOP=1 -c ' + shlex.quote(sql),
+            database_stream(read_only + 'exec ' + source_auth + 'psql -Xq --set=ON_ERROR_STOP=1 -c ' + shlex.quote(sql),
                             restore_options + 'exec psql -Xq --set=ON_ERROR_STOP=1 -c "COPY public.' + table + ' FROM STDIN"',
                             timeout=4 * seconds)
 
