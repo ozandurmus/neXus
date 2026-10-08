@@ -97,7 +97,8 @@ class FailoverMutationFenceTest {
                 for (var method:worker.getClass().getDeclaredMethods()) {
                     if (!List.of("gate",checkPoint?"command":"call").contains(method.getName())) continue;
                     method.setAccessible(true);
-                    Object[] args=method.getParameterCount()==1?new Object[]{command}:new Object[]{null,command};
+                    Object[] args=new Object[method.getParameterCount()];
+                    args[args.length==1?0:1]=command;
                     var error=assertThrows(java.lang.reflect.InvocationTargetException.class,
                         () -> method.invoke(worker,args));
                     assertEquals(FailoverMutationSwitch.DISABLED,error.getCause().getMessage());
