@@ -141,8 +141,16 @@ def failure_line(error):
     if not isinstance(error, PreviewFailure):
         error = PreviewFailure("TIMEOUT" if isinstance(error, subprocess.TimeoutExpired) else "OTHER",
                                type(error).__name__)
+    if error.reason.startswith("DB_COPY_FAILED_"):
+        reason = error.reason.replace("DB_COPY_FAILED_", "DB_COPY_FAILED:", 1)
+    elif error.reason == "DB_COPY_FAILED":
+        reason = "DB_COPY_FAILED:OTHER"
+    elif error.phase == "preview_db_copy":
+        reason = "DB_COPY_FAILED:" + error.reason
+    else:
+        reason = f"{error.reason}:{error.exception_class}"
     line = (f"PREVIEW E2E: FAIL phase={error.phase} step={error.step} "
-            f"reason={error.reason}:{error.exception_class}")
+            f"reason={reason}")
     if LOG is not None:
         LOG.write(line + "\n")
         LOG.flush()
@@ -344,6 +352,12 @@ def database_manifest(template):
         secretName=preview_name("ui2-db-source"), defaultMode=0o440)))
     spec["containers"][0]["volumeMounts"].append(dict(
         name="source-db", mountPath="/run/source-db", readOnly=True))
+    size = os.environ.get("NEXUS_PREVIEW_DB_DATA_SIZE_LIMIT", "32Gi")
+    if not re.fullmatch(r"[1-9][0-9]*Gi", size):
+        raise ValueError("Preview database size limit must be positive whole Gi")
+    for volume in spec.get("volumes", []):
+        if volume["name"] == "data" and "emptyDir" in volume:
+            volume["emptyDir"]["sizeLimit"] = size
     spec["restartPolicy"] = "Never"
     spec["activeDeadlineSeconds"] = 3600
     return dict(apiVersion="v1", kind="Pod", metadata=metadata("ui2-preview-db", {
@@ -472,6 +486,31 @@ def database_copy_cause(stderr):
     return None
 
 
+def check_preview_database():
+    """Inspect pod health; only fixed cause tokens leave the status projection."""
+    try:
+        pod = json.loads(k(NS, "get", "pod", preview_name("ui2-preview-db"),
+                           "-o", "json", timeout=10))
+    except PreviewFailure as error:
+        if error.reason == "NOT_FOUND":
+            raise PreviewFailure("DB_COPY_FAILED_PREVIEW_DB_EVICTED:NOT_FOUND") from None
+        raise
+    status = pod.get("status", {})
+    ended = [c.get("state", {}).get("terminated")
+             for c in status.get("containerStatuses", [])]
+    if (status.get("phase") in {"Failed", "Succeeded"}
+            or status.get("reason") == "Evicted"
+            or any(ended) or pod.get("metadata", {}).get("deletionTimestamp")):
+        reason = status.get("reason", "")
+        if "ephemeral-storage" in status.get("message", "").lower():
+            reason = "ephemeral-storage"
+        else:
+            reason = next((c.get("reason") for c in ended if c), reason)
+            if reason not in {"Evicted", "OOMKilled", "Error", "Completed", "ContainerStatusUnknown"}:
+                reason = "UNKNOWN"
+        raise PreviewFailure("DB_COPY_FAILED_PREVIEW_DB_EVICTED:" + reason)
+
+
 def pipe_commands(source, target, timeout=60):
     """Fail on either side, including a producer failing after a successful restore."""
     producer = subprocess.Popen(source, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
@@ -502,16 +541,30 @@ def database_stream(source, target, timeout):
               'status=("${PIPESTATUS[@]}")\n'
               'printf "NEXUS_COPY_STATUS=%s,%s\\n" "${status[0]}" "${status[1]}" >&2\n'
               'test "${status[0]}" = 0 && test "${status[1]}" = 0')
+    check_preview_database()
+    process = subprocess.Popen(
+        ["kubectl", "-n", NS, "exec", preview_name("ui2-preview-db"), "--", "bash", "-c", script],
+        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+    deadline = time.monotonic() + timeout
     try:
-        result = subprocess.run(
-            ["kubectl", "-n", NS, "exec", preview_name("ui2-preview-db"), "--", "bash", "-c", script],
-            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
-            text=True, timeout=timeout)
-    except subprocess.TimeoutExpired:
-        raise PreviewFailure("DB_COPY_FAILED_TIMEOUT", "TimeoutExpired") from None
-    status = re.search(r"NEXUS_COPY_STATUS=(\d+),(\d+)\s*$", result.stderr)
-    if result.returncode or not status or status.groups() != ("0", "0"):
-        cause = database_copy_cause(result.stderr)
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise PreviewFailure("DB_COPY_FAILED_TIMEOUT", "TimeoutExpired")
+            try:
+                _, stderr = process.communicate(timeout=min(2, remaining))
+                break
+            except subprocess.TimeoutExpired:
+                check_preview_database()
+        check_preview_database()
+    finally:
+        if process.poll() is None:
+            process.kill()
+        process.wait()
+        process.stderr.close()
+    status = re.search(r"NEXUS_COPY_STATUS=(\d+),(\d+)\s*$", stderr)
+    if process.returncode or not status or status.groups() != ("0", "0"):
+        cause = database_copy_cause(stderr)
         if not status:
             cause = cause or "STREAM_BROKEN"
         elif status[2] != "0" and cause not in ("SNAPSHOT_LOST", "TIMEOUT", "STREAM_BROKEN"):
