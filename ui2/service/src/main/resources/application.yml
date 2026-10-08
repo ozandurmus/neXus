@@ -1,3 +1,5 @@
+# Device job windows: UI2_JOB_WINDOW_MINUTES (1..360, default 60), shared by service and workers.
+# Slots are fixed at 00:00, 06:00, 12:00, 18:00 Europe/Istanbul.
 # UI 2.0 service — Phase 1 step 1 (the shell).
 #
 # The URL is configuration. The credentials are FILES, per C1 section 6: a

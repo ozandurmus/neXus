@@ -104,7 +104,7 @@ export function ReadinessCard({ checks, members, status, cluster, vendor, observ
         <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>{cluster} · {vendorLabel} · {age}</Typography>
         {masked && <Chip size="small" label="AIView Pseudonymized" sx={{ mt: 0.75, bgcolor: m3.sc, color: m3.onSurfaceVar }} />}
       </Box>
-      {canRun && <M3Button emphasis="outlined" disabled={running || disabled} onClick={onRun}>Run pre-checks</M3Button>}
+      {canRun && <M3Button deviceJob emphasis="outlined" disabled={running || disabled} onClick={onRun}>Run pre-checks</M3Button>}
     </Stack>
     <Box sx={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 1.5, my: 2.5 }}>
       {[["Passed", rows.filter(row => row.passed).length], ["Blocking", blocking], ["Info", rows.filter(row => !row.blocking).length]].map(([label, count]) =>

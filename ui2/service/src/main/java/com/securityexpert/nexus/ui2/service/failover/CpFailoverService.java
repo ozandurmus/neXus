@@ -1,5 +1,6 @@
 package com.securityexpert.nexus.ui2.service.failover;
 
+import com.securityexpert.nexus.ui2.platform.JobWindowPolicy;
 import com.securityexpert.nexus.ui2.jobs.failover.FailoverMutationSwitch;
 
 import java.nio.charset.StandardCharsets;
@@ -41,6 +42,7 @@ public final class CpFailoverService {
         public String code() { return code; }
     }
 
+    private final JobWindowPolicy windows;
     private final FailoverMutationSwitch mutationSwitch;
     private final DeviceRepository devices;
     private final DeviceInventoryRepository inventory;
@@ -58,6 +60,13 @@ public final class CpFailoverService {
     public CpFailoverService(DeviceRepository devices, DeviceInventoryRepository inventory,
             JooqCpFailoverRepository store, RbacEvaluator rbac, ManagementEndpointSshTrustRepository trust,
             FailoverMutationSwitch mutationSwitch) {
+        this(devices, inventory, store, rbac, trust, mutationSwitch, JobWindowPolicy.SYSTEM);
+    }
+
+    CpFailoverService(DeviceRepository devices, DeviceInventoryRepository inventory,
+            JooqCpFailoverRepository store, RbacEvaluator rbac, ManagementEndpointSshTrustRepository trust,
+            FailoverMutationSwitch mutationSwitch, JobWindowPolicy windows) {
+        this.windows = windows;
         this.mutationSwitch=java.util.Objects.requireNonNull(mutationSwitch);
         this.devices=devices; this.inventory=inventory; this.store=store; this.rbac=rbac;
         this.trust=trust;
@@ -262,6 +271,7 @@ public final class CpFailoverService {
     public JooqCpFailoverRepository.RequestApproval createApprovalRequest(String requestId,String clusterId,
             String unitId,Instant from,Instant until,String reason,String actor,String vendor) {
         String policy=approvalPolicy(actor);
+        windows.requireOpen();
         Unit u=unit(clusterId,unitId,actor,vendor);
         if (requestId==null || !requestId.equals(UUID.fromString(requestId).toString())) throw new Refusal("REQUEST_ID_REQUIRED");
         if (from==null || until==null || !until.isAfter(from) || !until.isAfter(Instant.now())
@@ -306,6 +316,7 @@ public final class CpFailoverService {
             String requestId,long revision,String nonce,boolean warningConfirmed) {
         String policy=approvalPolicy(actor);
         if (!mutationSwitch.enabled()) throw new Refusal(FailoverMutationSwitch.DISABLED);
+        windows.requireOpen();
         Unit u=unit(clusterId,unitId,actor,vendor);
         Instant now=Instant.now();
         Instant when=scheduledFor==null ? now : scheduledFor;
@@ -336,6 +347,7 @@ public final class CpFailoverService {
         return submitReadiness(target.clusterId(),target.unitId(),"system:failover-readiness-scheduler",target.vendor());
     }
     private String submitReadiness(String clusterId, String unitId, String actor, String vendor) {
+        windows.requireOpen();
         Unit u = unit(clusterId, unitId, actor, vendor);
         if ("check_point".equals(vendor)) for (DeviceSummaryRecord member : u.members()) requireTrusted(member);
         try {
@@ -388,10 +400,11 @@ public final class CpFailoverService {
         return devices.findSummary(memberId).flatMap(DeviceSummaryRecord::observedHostname);
     }
 
-    @org.springframework.scheduling.annotation.Scheduled(fixedDelay = 3000, initialDelay = 3000)
+    @org.springframework.scheduling.annotation.Scheduled(cron = JobWindowPolicy.CRON, zone = JobWindowPolicy.ZONE)
     public void startDue() {
         if (!mutationSwitch.enabled()) return;
         for (var run: store.due()) {
+            if (!windows.isOpen()) break;
             List<DeviceSummaryRecord> members=devices.findMembersByClusterRef(run.clusterRef());
             String vendor=run.vendor();
             String passive="palo_alto".equals(vendor)?"PASSIVE":"STANDBY";

@@ -1618,7 +1618,7 @@ export function CollectNowButton({ deviceId, onCollected, enrollmentState }: { r
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5, alignItems: "flex-start" }}>
-      <M3Button
+      <M3Button deviceJob
         emphasis="outlined"
         icon="download"
         onClick={handleClick}
@@ -2269,7 +2269,7 @@ function RequestBackupControl({ deviceId, onAdmitted }: { readonly deviceId: str
           disabled={phase === "submitting"}
           inputProps={{ "aria-label": "Backup reason" }}
         />
-        <M3Button
+        <M3Button deviceJob
           emphasis="tonal"
           onClick={handleSubmit}
           disabled={tooShort || phase === "submitting"}

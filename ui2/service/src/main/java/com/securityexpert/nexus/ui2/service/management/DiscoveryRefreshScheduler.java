@@ -1,5 +1,6 @@
 package com.securityexpert.nexus.ui2.service.management;
 
+import com.securityexpert.nexus.ui2.platform.JobWindowPolicy;
 import java.util.List;
 import java.util.logging.Logger;
 
@@ -11,7 +12,7 @@ import com.securityexpert.nexus.ui2.persistence.TransactionBoundary;
 import com.securityexpert.nexus.ui2.service.discovery.DiscoveryRunService;
 
 /**
- * Re-runs discovery against every enrolled management server (Check Point MDS, Panorama) each night at 01:00 GMT+3
+ * Re-runs discovery against every enrolled management server (Check Point MDS, Panorama) at the shared six-hour Europe/Istanbul slots
  * (PO, 2026-09-23), so the managed-estate tree stays current and a device added on the manager shows up as "not in
  * neXus". It repeats the last finished run's own address, vendor and credential reference -- the same gated
  * management-plane reads, no new command. A manager with no earlier finished run is left alone: the first discovery
@@ -31,7 +32,7 @@ public class DiscoveryRefreshScheduler {
         this.discovery = discovery;
     }
 
-    @Scheduled(cron = "0 0 1 * * *", zone = "Europe/Istanbul")
+    @Scheduled(cron = JobWindowPolicy.CRON, zone = JobWindowPolicy.ZONE)
     public void nightly() {
         try {
             int started = refreshAll();
@@ -61,6 +62,7 @@ public class DiscoveryRefreshScheduler {
                         + "order by r.vendor, r.management_address, r.finished_at desc"));
         int started = 0;
         for (Record t : targets) {
+            if (!JobWindowPolicy.SYSTEM.isOpen()) break;
             if (Boolean.TRUE.equals(t.get("skip_timeout", Boolean.class))) {
                 LOG.info("[DISCOVERY_REFRESH] skipped: previous run timed out");
                 continue;

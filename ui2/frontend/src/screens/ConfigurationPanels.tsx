@@ -233,7 +233,7 @@ export function ConfigurationCollectNowButton({
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5, alignItems: "flex-start" }}>
-      <M3Button emphasis="filled" icon="download" onClick={handleClick} disabled={phase === "submitting" || phase === "polling"}>
+      <M3Button deviceJob emphasis="filled" icon="download" onClick={handleClick} disabled={phase === "submitting" || phase === "polling"}>
         {phase === "polling" ? jobPhaseLabel(jobState ?? "REQUESTED") : "Collect now"}
       </M3Button>
       {error && (

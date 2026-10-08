@@ -1,5 +1,7 @@
 package com.securityexpert.nexus.ui2.persistence;
 
+import com.securityexpert.nexus.ui2.platform.JobWindowPolicy;
+
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
@@ -75,6 +77,7 @@ public class JooqCpFailoverRepository {
     }
 
     private final boolean mutationEnabled;
+    private final JobWindowPolicy windows;
     private final TransactionBoundary boundary;
     private final AuditedTransactionBoundary audited;
 
@@ -83,6 +86,11 @@ public class JooqCpFailoverRepository {
     }
 
     public JooqCpFailoverRepository(TransactionBoundary boundary, boolean mutationEnabled) {
+        this(boundary, mutationEnabled, JobWindowPolicy.SYSTEM);
+    }
+
+    public JooqCpFailoverRepository(TransactionBoundary boundary, boolean mutationEnabled, JobWindowPolicy windows) {
+        this.windows = windows;
         this.mutationEnabled = mutationEnabled;
         this.boundary = boundary;
         this.audited = new AuditedTransactionBoundary(boundary);
@@ -307,6 +315,8 @@ public class JooqCpFailoverRepository {
             boolean immediate,String vendor,Set<String> expectedMembers,String requestId,long revision,
             String nonce,boolean warningConfirmed,String policy) {
         if (!mutationEnabled) return new Decision("FAILOVER_MUTATION_DISABLED",null);
+        windows.requireOpen();
+        if (scheduledFor != null) windows.requireOpen(scheduledFor);
         Set<String> binding=Set.copyOf(expectedMembers);
         return audited.inTransaction(actor,"failover_run_request",dsl -> {
             lockAdmission(dsl);
@@ -350,6 +360,7 @@ public class JooqCpFailoverRepository {
     /** Admission without a failover approval; shares the active-unit uniqueness fence. */
     public Decision requestReadiness(String cluster, String vsId, String actor, String targetDeviceId,
             String vendor) {
+        windows.requireOpen();
         return audited.inTransaction(actor, "failover_readiness_request", dsl -> {
             Record active = dsl.fetchOne("select run_id from failover_run where cluster_ref={0} "
                 + "and vs_id is not distinct from {1} and vendor={2} and state not in ('DONE','STOPPED') limit 1",
@@ -363,11 +374,12 @@ public class JooqCpFailoverRepository {
         });
     }
 
-    private static void admit(org.jooq.DSLContext dsl, String runId, String targetDeviceId, String actor, String vendor) {
+    private void admit(org.jooq.DSLContext dsl, String runId, String targetDeviceId, String actor, String vendor) {
         admit(dsl, runId, targetDeviceId, actor, vendor, "FAILOVER");
     }
-    private static void admit(org.jooq.DSLContext dsl, String runId, String targetDeviceId, String actor,
+    private void admit(org.jooq.DSLContext dsl, String runId, String targetDeviceId, String actor,
             String vendor, String runKind) {
+        windows.requireOpen();
         String jobId = UUID.randomUUID().toString();
         String kind = "palo_alto".equals(vendor)
             ? ("READINESS".equals(runKind) ? "pan_failover_readiness" : "pan_cluster_failover")
@@ -388,6 +400,7 @@ public class JooqCpFailoverRepository {
 
     public String startDue(String id, String targetDeviceId) {
         if (!mutationEnabled) return "FAILOVER_MUTATION_DISABLED";
+        windows.requireOpen();
         return audited.inTransaction("system:failover-scheduler", "failover_schedule_start", dsl -> {
             lockAdmission(dsl);
             Record r = dsl.fetchOne("select r.*,a.window_until,a.revoked_at from failover_run r "

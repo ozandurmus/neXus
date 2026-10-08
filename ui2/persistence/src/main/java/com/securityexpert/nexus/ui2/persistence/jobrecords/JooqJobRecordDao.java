@@ -1,5 +1,6 @@
 package com.securityexpert.nexus.ui2.persistence.jobrecords;
 
+import com.securityexpert.nexus.ui2.platform.JobWindowPolicy;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.Optional;
@@ -12,10 +13,16 @@ import com.securityexpert.nexus.ui2.persistence.TransactionBoundary;
 /** jOOQ-backed {@link JobRecordDao}. */
 public final class JooqJobRecordDao implements JobRecordDao {
 
+    private final JobWindowPolicy windows;
     private final TransactionBoundary transactionBoundary;
     private final AuditedTransactionBoundary auditedTransactionBoundary;
 
     public JooqJobRecordDao(TransactionBoundary transactionBoundary) {
+        this(transactionBoundary, JobWindowPolicy.SYSTEM);
+    }
+
+    public JooqJobRecordDao(TransactionBoundary transactionBoundary, JobWindowPolicy windows) {
+        this.windows = windows;
         this.transactionBoundary = transactionBoundary;
         this.auditedTransactionBoundary = new AuditedTransactionBoundary(transactionBoundary);
     }
@@ -23,7 +30,9 @@ public final class JooqJobRecordDao implements JobRecordDao {
     @Override
     public Optional<String> insertRequestedIfAbsent(String jobId, String idempotencyKey, String capabilityId,
             String targetDeviceId, String actionClass, String jobType, String actorFingerprint, String actionId) {
+        windows.requireOpen();
         return auditedTransactionBoundary.inTransaction(actorFingerprint, actionId, dsl -> {
+            windows.requireOpen();
             org.jooq.Result<Record> rows = dsl.fetch(
                     "insert into jobs(job_id, job_type, capability_id, target_device_id, target_kind, "
                             + "submitted_by_actor_fingerprint, submitted_at, idempotency_key, action_class, state) "
@@ -39,7 +48,9 @@ public final class JooqJobRecordDao implements JobRecordDao {
     @Override
     public Optional<String> insertRequestedIfAbsentForRun(String jobId, String idempotencyKey, String capabilityId,
             String targetRunId, String actionClass, String jobType, String actorFingerprint, String actionId) {
+        windows.requireOpen();
         return auditedTransactionBoundary.inTransaction(actorFingerprint, actionId, dsl -> {
+            windows.requireOpen();
             org.jooq.Result<Record> rows = dsl.fetch(
                     "insert into jobs(job_id, job_type, capability_id, target_ref, target_kind, "
                             + "submitted_by_actor_fingerprint, submitted_at, idempotency_key, action_class, state) "
@@ -77,7 +88,9 @@ public final class JooqJobRecordDao implements JobRecordDao {
     @Override
     public DiagnosticAdmission insertDiagnostic(String jobId, String idempotencyKey, String targetDeviceId,
             String port, String actorFingerprint, String actionId) {
+        windows.requireOpen();
         return auditedTransactionBoundary.inTransaction(actorFingerprint, actionId, dsl -> {
+            windows.requireOpen();
             Record locked = dsl.fetchOne("select device_id from devices where device_id = {0} for update", targetDeviceId);
             if (locked == null) {
                 return new DiagnosticAdmission("DEVICE_NOT_FOUND", null);
@@ -102,6 +115,7 @@ public final class JooqJobRecordDao implements JobRecordDao {
             if (Boolean.TRUE.equals(recent)) {
                 return new DiagnosticAdmission("RATE_LIMITED", null);
             }
+            windows.requireOpen();
             Record inserted = dsl.fetchOne("insert into jobs(job_id, job_type, capability_id, target_device_id, target_kind, "
                     + "submitted_by_actor_fingerprint, submitted_at, idempotency_key, action_class, state, diagnostic_port, diagnostic_gate_revision) "
                     + "values ({0}, 'fmg_interface_detail', 'fmg_interface_detail', {1}, 'device', {2}, now(), {3}, "
@@ -194,7 +208,9 @@ public final class JooqJobRecordDao implements JobRecordDao {
 
     @Override
     public DiagnosticAdmission insertDiagnosticRead(String jobId, String idempotencyKey, String deviceId, String gateId, String command, String actor) {
+        windows.requireOpen();
         return auditedTransactionBoundary.inTransaction(actor, "diagnostic_read_submitted", dsl -> {
+            windows.requireOpen();
             if (dsl.fetchOne("select device_id from devices where device_id={0} for update", deviceId) == null)
                 return new DiagnosticAdmission("DEVICE_NOT_FOUND", null);
             var prior = dsl.fetchOne("select job_id,target_device_id,diagnostic_gate_id,diagnostic_command,submitted_by_actor_fingerprint from jobs where idempotency_key={0}", idempotencyKey);
@@ -207,6 +223,7 @@ public final class JooqJobRecordDao implements JobRecordDao {
                 + "and capability_id in ('diagnostic_read','fmg_interface_detail') "
                 + "and (state in ('REQUESTED','CLAIMED','EXECUTING') or submitted_at > now()-interval '1 minute')) as busy", deviceId).get("busy", Boolean.class)))
                 return new DiagnosticAdmission("RATE_LIMITED_OR_RUNNING", null);
+            windows.requireOpen();
             var inserted = dsl.fetchOne("insert into jobs(job_id,job_type,capability_id,target_device_id,target_kind,submitted_by_actor_fingerprint,"
                 + "submitted_at,idempotency_key,action_class,state,diagnostic_gate_id,diagnostic_command) values ({0},'diagnostic_read','diagnostic_read',{1},'device',"
                 + "{2},now(),{3},'read','REQUESTED',{4},{5}) on conflict(idempotency_key) do nothing returning job_id", jobId,deviceId,actor,idempotencyKey,gateId,command);

@@ -15,6 +15,6 @@ public class OnboardingFlowScheduler {
 
     @Scheduled(fixedDelay = 5_000, initialDelay = 20_000)
     public void tick() {
-        flows.advanceAll();
+        if (com.securityexpert.nexus.ui2.platform.JobWindowPolicy.SYSTEM.isOpen()) flows.advanceAll();
     }
 }

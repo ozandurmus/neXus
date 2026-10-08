@@ -1,3 +1,4 @@
+import { JobButton } from "../shell/JobWindow";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Box, Button, Tabs, Tab, Checkbox, Chip, Drawer, IconButton, Tooltip, FormControl, InputLabel, MenuItem, Select, Stack, TextField, Typography } from "@mui/material";
 import { ScreenRoot, ScreenHeader, EmptyPanel } from "../shell/ScreenLayout";
@@ -314,8 +315,8 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
   };
   const collectButton = (source: string, domain = "") => canCollect && eligibleSources.has(source)
     ? <Stack direction="row" flexWrap="wrap" gap={1}>
-      <Button size="small" variant="outlined" disabled={collecting || activeJobs.length > 0 || bulkQueue.length > 0} onClick={() => void collect(source, domain)}>Collect changes</Button>
-      <Button size="small" disabled={collecting || activeJobs.length > 0 || bulkQueue.length > 0} onClick={() => void collect(source, domain, "FULL")}>Full refresh (incl. hit counts)</Button>
+      <JobButton size="small" variant="outlined" disabled={collecting || activeJobs.length > 0 || bulkQueue.length > 0} onClick={() => void collect(source, domain)}>Collect changes</JobButton>
+      <JobButton size="small" disabled={collecting || activeJobs.length > 0 || bulkQueue.length > 0} onClick={() => void collect(source, domain, "FULL")}>Full refresh (incl. hit counts)</JobButton>
     </Stack> : null;
   useEffect(() => {
     if (!canCollect || collecting || loadingTree || activeJobIds || !bulkQueue.length) return;
@@ -341,8 +342,8 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
         <TextField label="Search sources, containers and policies" size="small" fullWidth value={treeSearch} onChange={e => setTreeSearch(e.target.value)} sx={{ my: 1 }} />
         <Stack spacing={0.5} sx={{ mb: 1 }}>
           <Typography variant="caption">{selectedPolicies.length} policies selected</Typography>
-          {canCollect && <Button size="small" variant="outlined" disabled={collecting || !!activeJobIds || !!bulkQueue.length || !selectedPolicies.some(p => eligibleSources.has(p.sourceId))}
-            title="PAN collects the source; CP collects selected domains sequentially" onClick={collectSelected}>Collect selected</Button>}
+          {canCollect && <JobButton size="small" variant="outlined" disabled={collecting || !!activeJobIds || !!bulkQueue.length || !selectedPolicies.some(p => eligibleSources.has(p.sourceId))}
+            title="PAN collects the source; CP collects selected domains sequentially" onClick={collectSelected}>Collect selected</JobButton>}
           <Button size="small" disabled={exporting || !selectedPolicies.length} onClick={() => void exportSelected()}>Export selected rules (CSV)</Button>
           {!!bulkQueue.length && <Typography role="status" variant="caption">{bulkQueue.length} collection scopes waiting</Typography>}
         </Stack>

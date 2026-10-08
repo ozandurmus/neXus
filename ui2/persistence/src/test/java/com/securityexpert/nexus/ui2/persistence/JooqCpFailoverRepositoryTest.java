@@ -189,7 +189,8 @@ class JooqCpFailoverRepositoryTest {
             @Override public <T> T inTransaction(Function<DSLContext,T> work) {
                 return work.apply(dsl);
             }
-        });
+        }, false, new com.securityexpert.nexus.ui2.platform.JobWindowPolicy(
+            java.time.Clock.fixed(java.time.Instant.parse("2026-10-08T09:00:00Z"), java.time.ZoneOffset.UTC), 60));
         var decision = repository.requestReadiness("CLS-TEST-01", null, "actor-1", "FW-TEST-01", "check_point");
         assertEquals("RUN_ALREADY_ACTIVE", decision.code());
         assertNull(decision.runId());

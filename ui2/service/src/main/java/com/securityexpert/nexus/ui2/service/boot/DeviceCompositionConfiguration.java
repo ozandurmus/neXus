@@ -1,5 +1,6 @@
 package com.securityexpert.nexus.ui2.service.boot;
 
+import com.securityexpert.nexus.ui2.platform.JobWindowPolicy;
 import java.util.List;
 import java.util.Optional;
 
@@ -642,7 +643,7 @@ public class DeviceCompositionConfiguration {
         return new BackupScheduleTrigger(scheduler);
     }
 
-    /** The one-minute tick behind {@link com.securityexpert.nexus.ui2.service.device.backup.BackupScheduler}. */
+    /** Slot trigger for {@link com.securityexpert.nexus.ui2.service.device.backup.BackupScheduler}. */
     public static final class BackupScheduleTrigger {
         private static final java.util.logging.Logger LOG =
                 java.util.logging.Logger.getLogger(BackupScheduleTrigger.class.getName());
@@ -652,7 +653,7 @@ public class DeviceCompositionConfiguration {
             this.scheduler = scheduler;
         }
 
-        @org.springframework.scheduling.annotation.Scheduled(fixedDelay = 60_000, initialDelay = 30_000)
+        @org.springframework.scheduling.annotation.Scheduled(cron = JobWindowPolicy.CRON, zone = JobWindowPolicy.ZONE)
         public void tick() {
             try {
                 scheduler.tick(java.time.Instant.now());

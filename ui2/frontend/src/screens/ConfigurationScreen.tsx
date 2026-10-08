@@ -159,7 +159,7 @@ export function ConfigurationScreen() {
         subtitle={devices === null ? "Loading…" : `${collectedCount} device${collectedCount === 1 ? "" : "s"} collected${uncollectedCount > 0 ? ` · ${uncollectedCount} not collected` : ""}`}
         actions={
           <Stack direction="row" spacing={1.5}>
-            <M3Button emphasis="tonal" icon="operations" disabled={bulkBusy} onClick={handleBulkCollect}>
+            <M3Button deviceJob emphasis="tonal" icon="operations" disabled={bulkBusy} onClick={handleBulkCollect}>
               {bulkBusy ? "Starting..." : "Collect All"}
             </M3Button>
           </Stack>

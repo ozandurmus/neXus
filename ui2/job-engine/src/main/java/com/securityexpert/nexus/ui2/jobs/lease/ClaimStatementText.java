@@ -31,6 +31,7 @@ public final class ClaimStatementText {
             WHERE job_id = (
                 SELECT job_id FROM jobs, inventory_claim_lock
                 WHERE state = 'REQUESTED'
+                  AND clock_timestamp() < CAST({3} AS timestamptz)
                   AND capability_id = ANY(string_to_array({2}, ','))
                   AND job_type = ANY(string_to_array({2}, ','))
                   AND job_type = capability_id
