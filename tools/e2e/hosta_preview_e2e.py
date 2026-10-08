@@ -377,6 +377,7 @@ def workload_manifest(template, image, db_ip, endpoints):
         replacements = {"UI2_DB_HOST": db_ip, "UI2_DB_PORT": "5432", "UI2_DB_NAME": "ui2",
                         "UI2_DB_URL": f"jdbc:postgresql://{db_ip}:5432/ui2",
                         "UI2_SCHEDULING_ENABLED": "false", "UI2_SESSION_COOKIE_SECURE": "false",
+                        "UI2_JOB_WINDOW_MINUTES": "360",
                         "NEXUS_FAILOVER_MUTATION_ENABLED": "false",
                         "LOGGING_LEVEL_ROOT": "ERROR"}
         env = []
