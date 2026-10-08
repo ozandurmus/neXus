@@ -1,6 +1,7 @@
 """Offline ownership recovery regressions. No cluster or device access."""
 import json
 from pathlib import Path
+import re
 import subprocess
 import sys
 
@@ -169,7 +170,7 @@ def test_preview_uses_real_claim_sql_and_rolls_back_each_capability(monkeypatch)
     assert any("cp_policy_collect" in sql for sql in assertions)
     assert 'owner_heartbeat_at' in queries[0]
     assert "effective_owner='policy'" in queries[1]
-    assert all('{0}' not in sql and '{1}' not in sql and '{2}' not in sql for sql in assertions)
+    assert all(not re.search(r'\{\d+\}', sql) for sql in assertions)
     with pytest.raises(RuntimeError, match='required claim owner'):
         preview.assert_module_claims(ROOT, workers[:1])
 

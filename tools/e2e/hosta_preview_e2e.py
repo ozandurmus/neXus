@@ -936,7 +936,8 @@ def assert_module_claims(repo, workers):
                           {"policy", "backup", "inventory", "failover", "diagnostics", "configuration"})
     for capability in capabilities:
         # Formatting is limited to repository-owned capability literals; owner identity stays inside SQL.
-        statement = claim.replace("{0}", "quote_literal(instance)").replace("{1}", "quote_literal('60')").replace("{2}", "quote_literal(capability)")
+        statement = (claim.replace("{0}", "quote_literal(instance)").replace("{1}", "quote_literal('60')")
+                     .replace("{2}", "quote_literal(capability)").replace("{3}", "'infinity'"))
         # PL/pgSQL builds the exact statement with locally read owner identity.
         # Use Python to quote the fixed SQL segments rather than exposing the instance.
         parts = re.split(r"(quote_literal\((?:instance|capability|'60')\))", statement)

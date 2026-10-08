@@ -1312,6 +1312,20 @@ def jobs_ddl_database():
     return connection
 
 
+def test_preview_claim_sql_resolves_all_placeholders_with_open_window(monkeypatch):
+    statements = []
+    monkeypatch.setattr(preview, 'load', local_load)
+    monkeypatch.setattr(preview, 'k', lambda *a, **kw: statements.append(kw['input']) or
+                        ('CLAIM_PASS' if 'DO $$' in kw['input'] else 't'))
+
+    preview.assert_module_claims(ROOT, preview.worker_templates(ROOT))
+
+    claims = [sql for sql in statements if 'PREVIEW_CLAIM_DENIED' in sql]
+    assert len(claims) > 20
+    assert all(not re.search(r'\{\d+\}', sql) for sql in claims)
+    assert all("clock_timestamp() < CAST(''infinity'' AS timestamptz)" in sql for sql in claims)
+
+
 def test_preview_claim_rows_satisfy_migration_checks_and_rollback(monkeypatch):
     import sqlite3
 
