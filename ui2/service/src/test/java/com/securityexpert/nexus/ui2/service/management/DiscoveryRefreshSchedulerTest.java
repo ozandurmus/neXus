@@ -4,6 +4,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.function.Function;
+import java.time.Clock;
+import java.time.Instant;
+import com.securityexpert.nexus.ui2.platform.JobWindowPolicy;
 
 import org.jooq.DSLContext;
 import org.jooq.Record;
@@ -35,6 +38,7 @@ class DiscoveryRefreshSchedulerTest {
             }
         };
 
-        assertEquals(0, new DiscoveryRefreshScheduler(tx, null).refreshAll());
+        assertEquals(0, new DiscoveryRefreshScheduler(tx, null, new JobWindowPolicy(
+                Clock.fixed(Instant.parse("2026-10-08T09:10:00Z"), JobWindowPolicy.ZONE_ID), 60)).refreshAll());
     }
 }

@@ -26,10 +26,17 @@ public class DiscoveryRefreshScheduler {
 
     private final TransactionBoundary tx;
     private final DiscoveryRunService discovery;
+    private final JobWindowPolicy windows;
 
+    @org.springframework.beans.factory.annotation.Autowired
     public DiscoveryRefreshScheduler(TransactionBoundary tx, DiscoveryRunService discovery) {
+        this(tx, discovery, JobWindowPolicy.SYSTEM);
+    }
+
+    DiscoveryRefreshScheduler(TransactionBoundary tx, DiscoveryRunService discovery, JobWindowPolicy windows) {
         this.tx = tx;
         this.discovery = discovery;
+        this.windows = windows;
     }
 
     @Scheduled(cron = JobWindowPolicy.CRON, zone = JobWindowPolicy.ZONE)
@@ -62,7 +69,7 @@ public class DiscoveryRefreshScheduler {
                         + "order by r.vendor, r.management_address, r.finished_at desc"));
         int started = 0;
         for (Record t : targets) {
-            if (!JobWindowPolicy.SYSTEM.isOpen()) break;
+            if (!windows.isOpen()) break;
             if (Boolean.TRUE.equals(t.get("skip_timeout", Boolean.class))) {
                 LOG.info("[DISCOVERY_REFRESH] skipped: previous run timed out");
                 continue;

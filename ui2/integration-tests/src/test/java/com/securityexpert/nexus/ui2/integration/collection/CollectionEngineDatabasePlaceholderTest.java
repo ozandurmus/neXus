@@ -1,5 +1,6 @@
 package com.securityexpert.nexus.ui2.integration.collection;
 
+import com.securityexpert.nexus.ui2.integration.support.JobWindowTestPolicy;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -84,7 +85,7 @@ class CollectionEngineDatabasePlaceholderTest {
         appDataSource = fixture.appDataSource();
 
         TransactionBoundary boundary = new JooqTransactionBoundary(DSL.using(appDataSource, SQLDialect.POSTGRES));
-        leaseRepository = new PersistenceJobLeaseRepository(new JooqJobLeaseDao(boundary));
+        leaseRepository = new PersistenceJobLeaseRepository(new JooqJobLeaseDao(boundary, JobWindowTestPolicy.PERMISSIVE));
 
         try (Connection app = fixture.appConnection()) {
             String credentialReferenceId = Ui2Rows.insertCredentialReference(app);
@@ -102,7 +103,7 @@ class CollectionEngineDatabasePlaceholderTest {
     @Test
     void diagnosticOvertakesSeventyTwoBackupsAndAdmissionSerializesEachDevice() throws SQLException {
         var boundary = new JooqTransactionBoundary(DSL.using(appDataSource, SQLDialect.POSTGRES));
-        var jobs = new com.securityexpert.nexus.ui2.persistence.jobrecords.JooqJobRecordDao(boundary);
+        var jobs = new com.securityexpert.nexus.ui2.persistence.jobrecords.JooqJobRecordDao(boundary, JobWindowTestPolicy.PERMISSIVE);
         String diagnostic = java.util.UUID.randomUUID().toString();
         String request = "diagnostic:" + java.util.UUID.randomUUID();
         var backups = new ArrayList<String>();

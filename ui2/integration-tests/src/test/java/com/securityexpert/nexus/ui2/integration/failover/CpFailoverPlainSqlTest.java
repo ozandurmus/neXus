@@ -1,5 +1,6 @@
 package com.securityexpert.nexus.ui2.integration.failover;
 
+import com.securityexpert.nexus.ui2.integration.support.JobWindowTestPolicy;
 import static org.junit.jupiter.api.Assertions.*;
 
 import java.time.Instant;
@@ -42,7 +43,7 @@ class CpFailoverPlainSqlTest {
                         "update devices set vendor_hint='check_point',role='gateway',cluster_member_ref='CLS-TEST-01'"));
             }
             var repository = new JooqCpFailoverRepository(new JooqTransactionBoundary(
-                    DSL.using(fixture.appDataSource(), SQLDialect.POSTGRES)),true);
+                    DSL.using(fixture.appDataSource(), SQLDialect.POSTGRES)),true, JobWindowTestPolicy.PERMISSIVE);
             String cluster = "CLS-TEST-01";
             String actor = Ui2Rows.ACTOR;
             Instant now = Instant.now();

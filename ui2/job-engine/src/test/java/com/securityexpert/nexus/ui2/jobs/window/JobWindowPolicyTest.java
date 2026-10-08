@@ -7,9 +7,27 @@ import com.securityexpert.nexus.ui2.platform.JobWindowPolicy;
 import static org.junit.jupiter.api.Assertions.*;
 
 class JobWindowPolicyTest {
-    private final JobWindowPolicy policy = new JobWindowPolicy(Clock.systemUTC(), 60);
+    private static final Clock CLOCK = Clock.fixed(
+        Instant.parse("2026-10-08T09:10:00Z"), JobWindowPolicy.ZONE_ID);
+    private final JobWindowPolicy policy = new JobWindowPolicy(CLOCK, 60);
     private Instant at(String local) { return LocalDateTime.parse(local).atZone(JobWindowPolicy.ZONE_ID).toInstant(); }
 
+    @Test void admissionUsesTheInjectedClock() {
+        assertEquals(at("2026-10-08T12:10:00"), policy.now());
+        assertTrue(policy.isOpen());
+        assertDoesNotThrow(() -> policy.requireOpen());
+        var outside = new JobWindowPolicy(Clock.fixed(at("2026-10-08T13:00:00"), JobWindowPolicy.ZONE_ID), 60);
+        assertFalse(outside.isOpen());
+        assertThrows(JobWindowPolicy.OutsideWindow.class, () -> outside.requireOpen());
+    }
+    @Test void permissiveTestPolicyAdmitsAtEveryMinuteIncludingSlotBoundaries() {
+        for (int minute = 0; minute < 24 * 60; minute++) {
+            var instant = at("2026-10-08T00:00:00").plusSeconds(minute * 60L);
+            var permissive = new JobWindowPolicy(Clock.fixed(instant, JobWindowPolicy.ZONE_ID), 360);
+            assertTrue(permissive.isOpen());
+            assertDoesNotThrow(() -> permissive.requireOpen());
+        }
+    }
     @Test void boundariesAndNextWindow() {
         assertFalse(policy.isOpen(at("2026-10-08T11:59:59.999")));
         assertTrue(policy.isOpen(at("2026-10-08T12:00:00")));
@@ -28,11 +46,11 @@ class JobWindowPolicyTest {
         assertEquals(Instant.parse("2026-01-15T09:00:00Z"), at("2026-01-15T12:00:00"));
     }
     @Test void configurableDurationAndInvalidConfiguration() {
-        var shortWindow = new JobWindowPolicy(Clock.systemUTC(), 15);
+        var shortWindow = new JobWindowPolicy(CLOCK, 15);
         assertTrue(shortWindow.isOpen(at("2026-10-08T12:14:59")));
         assertFalse(shortWindow.isOpen(at("2026-10-08T12:15:00")));
-        assertThrows(IllegalArgumentException.class, () -> new JobWindowPolicy(Clock.systemUTC(), 0));
-        assertThrows(IllegalArgumentException.class, () -> new JobWindowPolicy(Clock.systemUTC(), 361));
+        assertThrows(IllegalArgumentException.class, () -> new JobWindowPolicy(CLOCK, 0));
+        assertThrows(IllegalArgumentException.class, () -> new JobWindowPolicy(CLOCK, 361));
     }
     @Test void onlyNamedInternalTasksAreExempt() {
         var outside = at("2026-10-08T13:00:00");

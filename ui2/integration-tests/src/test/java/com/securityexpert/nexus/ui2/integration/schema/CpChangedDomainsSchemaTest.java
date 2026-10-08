@@ -1,5 +1,6 @@
 package com.securityexpert.nexus.ui2.integration.schema;
 
+import com.securityexpert.nexus.ui2.integration.support.JobWindowTestPolicy;
 import static org.junit.jupiter.api.Assertions.*;
 import org.junit.jupiter.api.Test;
 import org.jooq.SQLDialect;
@@ -24,7 +25,7 @@ class CpChangedDomainsSchemaTest {
                     assertFalse(rows.next());
                 }
             }
-            var jobs = new JooqJobRecordDao(tx);
+            var jobs = new JooqJobRecordDao(tx, JobWindowTestPolicy.PERMISSIVE);
             assertTrue(jobs.insertRequestedIfAbsentForRun("job-1", "key-1", "cp_policy_collect", "run-1", "read",
                 "cp_policy_collect", "synthetic-actor", "policy_collect").isPresent());
             new AuditedTransactionBoundary(tx).inTransaction("synthetic-actor", "policy_collect", db -> {

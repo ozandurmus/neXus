@@ -1,5 +1,6 @@
 package com.securityexpert.nexus.ui2.integration.schema;
 
+import com.securityexpert.nexus.ui2.integration.support.JobWindowTestPolicy;
 import static org.junit.jupiter.api.Assertions.*;
 import java.time.Duration;
 import java.util.*;
@@ -35,10 +36,10 @@ class ModuleEndpointRuntimeTest {
             String keyA = EndpointAddress.key(devices.findEndpointByDeviceId(first).orElseThrow().addressRef(), 22);
             String keyB = EndpointAddress.key(devices.findEndpointByDeviceId(second).orElseThrow().addressRef(), 22);
             assertEquals(keyA, keyB);
-            var jobs = new JooqJobRecordDao(tx);
+            var jobs = new JooqJobRecordDao(tx, JobWindowTestPolicy.PERMISSIVE);
             jobs.insertRequestedIfAbsent("job-a", "key-a", "cp_inventory_collect", first, "read", "cp_inventory_collect", "synthetic-actor", "fixture").orElseThrow();
             jobs.insertRequestedIfAbsent("job-b", "key-b", "cp_configuration_collect", second, "read", "cp_configuration_collect", "synthetic-actor", "fixture").orElseThrow();
-            var leases = new JooqJobLeaseDao(tx);
+            var leases = new JooqJobLeaseDao(tx, JobWindowTestPolicy.PERMISSIVE);
             long epochA = leases.claimNext("general-pod-a", List.of("cp_inventory_collect"), Duration.ofMinutes(10)).orElseThrow().leaseEpoch();
             long epochB = leases.claimNext("general-pod-b", List.of("cp_configuration_collect"), Duration.ofMinutes(10)).orElseThrow().leaseEpoch();
             var podA = new EndpointAdmissionRepository(tx);
@@ -72,12 +73,12 @@ class ModuleEndpointRuntimeTest {
     @Test void drainAndClaimSerializeAndTheApplicationCannotChangeFallbackOwnership() throws Exception {
         try (var fixture = Ui2PostgresFixture.createAndMigrate("module_drain")) {
             var tx = new JooqTransactionBoundary(DSL.using(fixture.appDataSource(), SQLDialect.POSTGRES));
-            var jobs = new JooqJobRecordDao(tx);
+            var jobs = new JooqJobRecordDao(tx, JobWindowTestPolicy.PERMISSIVE);
             jobs.insertRequestedIfAbsentForRun("policy-job", "policy-key", "cp_policy_collect", "synthetic-run", "read",
                 "cp_policy_collect", "synthetic-actor", "fixture").orElseThrow();
             jobs.insertRequestedIfAbsentForRun("bad-job", "bad-key", "cp_policy_collect", "synthetic-run", "read",
                 "pan_policy_collect", "synthetic-actor", "fixture").orElseThrow();
-            var leases = new JooqJobLeaseDao(tx);
+            var leases = new JooqJobLeaseDao(tx, JobWindowTestPolicy.PERMISSIVE);
             assertTrue(leases.claimNext("policy-pod", List.of("cp_policy_collect"), Duration.ofMinutes(10)).isEmpty());
             try (var migrate = fixture.migrateConnection()) {
                 migrate.setAutoCommit(false);
@@ -195,10 +196,10 @@ class ModuleEndpointRuntimeTest {
             var tx = new JooqTransactionBoundary(DSL.using(fixture.appDataSource(), SQLDialect.POSTGRES));
             assertEquals(9, tx.inTransaction(db -> db.fetchOne(
                 "select count(*)::int from module_runtime_control where effective_owner='general' and fallback_enabled").get(0, Integer.class)));
-            var jobs = new JooqJobRecordDao(tx);
+            var jobs = new JooqJobRecordDao(tx, JobWindowTestPolicy.PERMISSIVE);
             jobs.insertRequestedIfAbsentForRun("fallback-job", "fallback-key", "cp_policy_collect", "synthetic-run", "read",
                 "cp_policy_collect", "synthetic-actor", "fixture").orElseThrow();
-            assertEquals("fallback-job", new JooqJobLeaseDao(tx).claimNext("general-synthetic", List.of("cp_policy_collect"),
+            assertEquals("fallback-job", new JooqJobLeaseDao(tx, JobWindowTestPolicy.PERMISSIVE).claimNext("general-synthetic", List.of("cp_policy_collect"),
                 Duration.ofMinutes(10)).orElseThrow().jobId());
             try (var migrate = fixture.migrateConnection()) {
                 migrate.setAutoCommit(false);

@@ -1,5 +1,6 @@
 package com.securityexpert.nexus.ui2.integration.schema;
 
+import com.securityexpert.nexus.ui2.integration.support.JobWindowTestPolicy;
 import static org.junit.jupiter.api.Assertions.*;
 import java.time.Duration;
 import java.util.List;
@@ -37,10 +38,10 @@ class QuarantineReleaseTest {
                 db.execute("update runtime_task_lease set state='LEASED'");
                 return null;
             });
-            var jobs = new JooqJobRecordDao(tx);
+            var jobs = new JooqJobRecordDao(tx, JobWindowTestPolicy.PERMISSIVE);
             jobs.insertRequestedIfAbsentForRun("synthetic-job", "synthetic-key", "cp_inventory_collect", "synthetic-run", "read",
                 "cp_inventory_collect", "synthetic-actor", "fixture").orElseThrow();
-            long epoch = new JooqJobLeaseDao(tx).claimNext("general-new", List.of("cp_inventory_collect"), Duration.ofMinutes(10))
+            long epoch = new JooqJobLeaseDao(tx, JobWindowTestPolicy.PERMISSIVE).claimNext("general-new", List.of("cp_inventory_collect"), Duration.ofMinutes(10))
                 .orElseThrow().leaseEpoch();
             var admissions = new EndpointAdmissionRepository(tx);
             assertTrue(admissions.acquire("new-ticket", "192.0.2.10:22", "new-session",
@@ -74,10 +75,10 @@ class QuarantineReleaseTest {
                 return null;
             });
             if (evidence.startsWith("job-")) {
-                var jobs = new JooqJobRecordDao(tx);
+                var jobs = new JooqJobRecordDao(tx, JobWindowTestPolicy.PERMISSIVE);
                 jobs.insertRequestedIfAbsentForRun("live-job", "live-key", "cp_inventory_collect", "synthetic-run", "read",
                     "cp_inventory_collect", "synthetic-actor", "fixture").orElseThrow();
-                new JooqJobLeaseDao(tx).claimNext("general-old", List.of("cp_inventory_collect"), Duration.ofMinutes(10)).orElseThrow();
+                new JooqJobLeaseDao(tx, JobWindowTestPolicy.PERMISSIVE).claimNext("general-old", List.of("cp_inventory_collect"), Duration.ofMinutes(10)).orElseThrow();
                 audited.inTransaction("system:worker", "synthetic-job-liveness", db -> db.execute(evidence.equals("job-heartbeat")
                     ? "update jobs set state='COMPLETED',lease_expires_at=now()-interval '1 second' where job_id='live-job'"
                     : "update jobs set last_heartbeat_at=now()-interval '121 seconds' where job_id='live-job'"));

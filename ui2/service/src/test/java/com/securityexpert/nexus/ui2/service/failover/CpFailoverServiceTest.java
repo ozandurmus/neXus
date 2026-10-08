@@ -1,6 +1,7 @@
 package com.securityexpert.nexus.ui2.service.failover;
 
 import com.securityexpert.nexus.ui2.jobs.failover.FailoverMutationSwitch;
+import com.securityexpert.nexus.ui2.platform.JobWindowPolicy;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -39,8 +40,10 @@ class CpFailoverServiceTest {
     private final JooqCpFailoverRepository store=mock(JooqCpFailoverRepository.class);
     private final RbacEvaluator rbac=mock(RbacEvaluator.class);
     private final ManagementEndpointSshTrustRepository trust=mock(ManagementEndpointSshTrustRepository.class);
-    private final CpFailoverService service=new CpFailoverService(devices,inventory,store,rbac,trust,new FailoverMutationSwitch(true), new com.securityexpert.nexus.ui2.platform.JobWindowPolicy(
-        java.time.Clock.fixed(Instant.parse("2026-10-08T09:00:00Z"), java.time.ZoneOffset.UTC), 60));
+    private static final JobWindowPolicy WINDOWS = new JobWindowPolicy(
+        java.time.Clock.fixed(Instant.parse("2026-10-08T09:10:00Z"), JobWindowPolicy.ZONE_ID), 60);
+    private final CpFailoverService service=new CpFailoverService(devices,inventory,store,rbac,trust,
+        new FailoverMutationSwitch(true), WINDOWS);
 
     @ParameterizedTest
     @ValueSource(strings = {"check_point", "palo_alto"})
@@ -60,7 +63,7 @@ class CpFailoverServiceTest {
         when(rbac.evaluate(anyString(),any(),any())).thenReturn(new RbacEvaluator.Decision(
             AuthzOutcome.PERMITTED,Optional.of(RbacEvaluator.ROOT_AUTHORITY),Optional.empty(),Optional.empty()));
         var disabled=new CpFailoverService(devices,inventory,store,rbac,trust,
-            new FailoverMutationSwitch(false));
+            new FailoverMutationSwitch(false), WINDOWS);
         for (String vendor:List.of("check_point","palo_alto")) {
             assertEquals(FailoverMutationSwitch.DISABLED,assertThrows(CpFailoverService.Refusal.class,
                 () -> disabled.request(CLUSTER_ID,CLUSTER_ID,null,"synthetic-actor",vendor)).code());
@@ -324,8 +327,8 @@ class CpFailoverServiceTest {
             @Override public <T> T inTransaction(java.util.function.Function<org.jooq.DSLContext, T> work) {
                 return work.apply(dsl);
             }
-        });
-        var admission = new CpFailoverService(devices, inventory, repository, rbac, trust,new FailoverMutationSwitch(false));
+        }, false, WINDOWS);
+        var admission = new CpFailoverService(devices, inventory, repository, rbac, trust,new FailoverMutationSwitch(false), WINDOWS);
         assertNotNull(admission.requestReadiness(CLUSTER_ID, CLUSTER_ID, "actor-1", "check_point"));
         assertEquals(1, writes.stream().filter(sql -> sql.startsWith("insert into jobs")).count());
         assertEquals(1, writes.stream().filter(sql -> sql.startsWith("insert into failover_run")).count());

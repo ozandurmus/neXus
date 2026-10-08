@@ -1,5 +1,6 @@
 package com.securityexpert.nexus.ui2.integration.device;
 
+import com.securityexpert.nexus.ui2.integration.support.JobWindowTestPolicy;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -81,7 +82,7 @@ class UnresolvedGateBlocksJobTest {
 
         admission = new JobAdmissionService(registry,
                 new PersistenceDeviceEnrollmentReadPort(devices),
-                new PersistenceJobAdmissionRepository(new JooqJobRecordDao(boundary)));
+                new PersistenceJobAdmissionRepository(new JooqJobRecordDao(boundary, JobWindowTestPolicy.PERMISSIVE)));
 
         try (Connection app = fixture.appConnection()) {
             String credentialReferenceId = Ui2Rows.insertCredentialReference(app);
