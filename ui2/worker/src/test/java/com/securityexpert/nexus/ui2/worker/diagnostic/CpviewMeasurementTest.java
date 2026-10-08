@@ -46,11 +46,13 @@ class CpviewMeasurementTest {
         when(attempts.markBoundaryCrossed("attempt-1", 1)).thenReturn(true);
         when(transport.connect(any(), any(), any())).thenReturn(new ConnectResult.Authenticated(mock(TransportSession.class)));
         when(transport.exec(any(), any(), any())).thenReturn(result);
-        var rows = GateRegistryFixtureLoader.loadFromStream(getClass().getResourceAsStream("/capabilities/gate_registry_fixture.yaml"));
-        GateRegistryPort gates = key -> rows.stream().filter(r -> r.key().equals(key)).map(r -> signed
-            ? new GateRow(r.gateId(), r.vendor(), r.platformRoleScope(), r.shellContext(), r.transportKind(), r.canonicalCommandKey(),
-                r.actionClass(), SignOffState.SIGNED_OFF, r.timeoutS(), r.retryRule(), r.maxFrequency(), r.sessionReuseRule(),
-                r.unsupportedBehaviorRef(), r.secretOutputRisk(), r.safeTelemetryFields(), r.sourceDocumentPointer()) : r).toList();
+        var row = new GateRow(DiagnosticRead.CPVIEW_GATE, "check_point", "cp_gaia_gateway", "expert", "SSH_EXEC",
+                "cpview -p", ActionClass.CLASS_0_READ, signed ? SignOffState.SIGNED_OFF : SignOffState.DRAFTED,
+                30, "none", "one measurement; no polling", "one trusted SSH session; no retry",
+                "TIMEOUT or UNKNOWN", "masked projection only",
+                List.of("sectionNames", "fieldNames", "valueTypes", "units", "allowlistedCounters", "scopeMarkerPresent"),
+                "synthetic-test-gate");
+        GateRegistryPort gates = key -> row.key().equals(key) ? List.of(row) : List.of();
         new DiagnosticJobExecutor(leases, attempts, devices, jobs, transport, gates, store, DevicePlatformFactsRepository.NONE, inventory)
                 .execute("job-1", 1, "device-1", "192.0.2.10", 22, "synthetic-reference");
     }

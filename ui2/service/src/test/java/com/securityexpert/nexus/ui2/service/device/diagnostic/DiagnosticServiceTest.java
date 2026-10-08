@@ -3,7 +3,11 @@ package com.securityexpert.nexus.ui2.service.device.diagnostic;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -15,6 +19,9 @@ import org.junit.jupiter.api.Test;
 
 import com.securityexpert.nexus.ui2.capability.GateRegistryFixtureLoader;
 import com.securityexpert.nexus.ui2.capability.GateRow;
+import com.securityexpert.nexus.ui2.capability.SignOffState;
+import com.securityexpert.nexus.ui2.jobs.diagnostic.DiagnosticRead;
+import com.securityexpert.nexus.ui2.platform.ActionClass;
 
 import com.securityexpert.nexus.ui2.jobs.admission.JobAdmissionService;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRecord;
@@ -32,9 +39,36 @@ import com.securityexpert.nexus.ui2.service.privacy.TopologyNamePseudonymizer;
 class DiagnosticServiceTest {
     @Test
     void pendingCpviewGateCannotCreateJobEvenForPlainMember() {
+        var jobs = mock(JobRecordDao.class);
+        var service = cpviewService(SignOffState.DRAFTED, jobs);
+        var result = service.submitRead("device-1", DiagnosticRead.CPVIEW_GATE, null,
+                java.util.UUID.randomUUID().toString(), "synthetic-actor", true);
+        assertEquals("DIAGNOSTIC_RUN_NOT_PERMITTED",
+                ((com.securityexpert.nexus.ui2.jobs.admission.AdmissionResult.Refused) result).code());
+        verifyNoInteractions(jobs);
+    }
+
+    @Test
+    void signedOffCpviewGateAdmitsExactlyOnePlainMemberMeasurement() {
+        var jobs = mock(JobRecordDao.class);
+        var service = cpviewService(SignOffState.SIGNED_OFF, jobs);
+        String requestId = java.util.UUID.randomUUID().toString();
+        when(jobs.insertDiagnosticRead(anyString(), eq("diagnostic:" + requestId), eq("device-1"),
+                eq(DiagnosticRead.CPVIEW_GATE), eq("cpview -p"), eq("synthetic-actor")))
+                .thenReturn(new JobRecordDao.DiagnosticAdmission("ADMITTED", "job-1"));
+
+        var result = service.submitRead("device-1", DiagnosticRead.CPVIEW_GATE, null,
+                requestId, "synthetic-actor", true);
+
+        assertEquals(new com.securityexpert.nexus.ui2.jobs.admission.AdmissionResult.Admitted("job-1"), result);
+        verify(jobs).insertDiagnosticRead(anyString(), eq("diagnostic:" + requestId), eq("device-1"),
+                eq(DiagnosticRead.CPVIEW_GATE), eq("cpview -p"), eq("synthetic-actor"));
+        verifyNoMoreInteractions(jobs);
+    }
+
+    private DiagnosticService cpviewService(SignOffState state, JobRecordDao jobs) {
         var devices = mock(DeviceRepository.class);
         var inventory = mock(DeviceInventoryRepository.class);
-        var jobs = mock(JobRecordDao.class);
         when(devices.find("device-1")).thenReturn(Optional.of(new DeviceRecord("device-1", "gateway", "check_point",
                 "manual", Instant.now(), false, DeviceEnrollmentState.ENROLLED, false, "synthetic-reference")));
         when(devices.findEndpointByDeviceId("device-1")).thenReturn(Optional.of(new EndpointRecord(
@@ -43,24 +77,30 @@ class DiagnosticServiceTest {
                 DeviceEnrollmentState.ENROLLED, Optional.empty(), Optional.of("invented-appliance"), Optional.empty(), Optional.empty(), Optional.of("opaque-cluster"))));
         when(inventory.findLatestRun("device-1")).thenReturn(Optional.of(new InventoryRun("run-1", "device-1", "old-job", Instant.now(), 1,
                 List.of(new InventoryContext("physical", List.of(), List.of())), List.of(), Optional.empty())));
-        var rows = GateRegistryFixtureLoader.loadFromStream(getClass().getResourceAsStream("/capabilities/gate_registry_fixture.yaml"));
-        var service = new DiagnosticService(devices, inventory, null, jobs,
+        var row = cpviewGate(state);
+        return new DiagnosticService(devices, inventory, null, jobs,
                 new TopologyNamePseudonymizer("synthetic-test-key".getBytes()),
-                key -> rows.stream().filter(r -> r.key().equals(key)).toList(),
+                key -> row.key().equals(key) ? List.of(row) : List.of(),
                 new com.securityexpert.nexus.ui2.service.boot.DeviceCompositionConfiguration.ArtefactStoreAccess(
                         mock(com.securityexpert.nexus.ui2.persistence.artefact.ArtefactStore.class)), null, null);
-        var result = service.submitRead("device-1", "cp_diagnostic_cpview_measure", null,
-                java.util.UUID.randomUUID().toString(), "synthetic-actor", true);
-        assertTrue(result instanceof com.securityexpert.nexus.ui2.jobs.admission.AdmissionResult.Refused);
-        verifyNoInteractions(jobs);
+    }
+
+    private GateRow cpviewGate(SignOffState state) {
+        return new GateRow(DiagnosticRead.CPVIEW_GATE, "check_point", "cp_gaia_gateway", "expert", "SSH_EXEC",
+                "cpview -p", ActionClass.CLASS_0_READ, state, 30, "none", "one measurement; no polling",
+                "one trusted SSH session; no retry", "TIMEOUT or UNKNOWN", "masked projection only",
+                List.of("sectionNames", "fieldNames", "valueTypes", "units", "allowlistedCounters", "scopeMarkerPresent"),
+                "synthetic-test-gate");
     }
 
     @Test
     void virtualSystemFilteringIsPerDeviceAndPreservesProfileMemo() {
         var devices=mock(DeviceRepository.class);
         var inventory=mock(DeviceInventoryRepository.class);
+        // Cpview eligibility checks are separate from VS filtering and profile memoisation.
         var rows=GateRegistryFixtureLoader.loadFromStream(getClass().getClassLoader()
-            .getResourceAsStream("capabilities/gate_registry_fixture.yaml"));
+            .getResourceAsStream("capabilities/gate_registry_fixture.yaml")).stream()
+            .filter(row -> !DiagnosticRead.CPVIEW_GATE.equals(row.gateId())).toList();
         var lookups=new java.util.HashMap<com.securityexpert.nexus.ui2.capability.CanonicalCommandKey,Integer>();
         var service=new DiagnosticService(devices,inventory,null,mock(JobRecordDao.class),
             new TopologyNamePseudonymizer("synthetic-test-key".getBytes()),key -> {
