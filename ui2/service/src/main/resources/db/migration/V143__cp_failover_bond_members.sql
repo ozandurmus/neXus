@@ -1,7 +1,7 @@
 -- PO approved 2026-10-08: selected-bond membership reads only.
 -- BOND is quoted and validated against the same member's same-pass summary.
 -- Interface names and raw replies remain in memory; persisted traffic evidence contains counts only.
-SELECT set_config('app.actor_fingerprint', 'migration:V142_cp_failover_bond_members', true);
+SELECT set_config('app.actor_fingerprint', 'migration:V143_cp_failover_bond_members', true);
 SELECT set_config('app.action_id', 'gate_registry_insert_by_migration', true);
 INSERT INTO gate_registry (gate_id, vendor, platform_role_scope, shell_context, transport_kind, canonical_command_key, action_class, sign_off_state, timeout_s, retry_rule, max_frequency, session_reuse_rule, unsupported_behavior_ref, secret_output_risk, safe_telemetry_fields, source_document_pointer)
 VALUES
