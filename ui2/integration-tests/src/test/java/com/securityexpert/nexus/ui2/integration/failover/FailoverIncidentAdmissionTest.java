@@ -1,5 +1,6 @@
 package com.securityexpert.nexus.ui2.integration.failover;
 
+import com.securityexpert.nexus.ui2.integration.support.JobWindowTestPolicy;
 import com.securityexpert.nexus.ui2.integration.support.Ui2PostgresFixture;
 import com.securityexpert.nexus.ui2.integration.support.Ui2Rows;
 import com.securityexpert.nexus.ui2.persistence.*;
@@ -28,7 +29,7 @@ class FailoverIncidentAdmissionTest {
         mutate(fixture,dsl -> dsl.execute("update module_runtime_control set owner_instance='general-synthetic',"
             + "owner_heartbeat_at=now() where module='general'"));
         var leases=new com.securityexpert.nexus.ui2.persistence.jobrecords.JooqJobLeaseDao(
-            new JooqTransactionBoundary(DSL.using(fixture.appDataSource(),SQLDialect.POSTGRES)));
+            new JooqTransactionBoundary(DSL.using(fixture.appDataSource(),SQLDialect.POSTGRES)), JobWindowTestPolicy.PERMISSIVE);
         var job=leases.claimNext("general-synthetic",List.of("cp_cluster_failover"),Duration.ofMinutes(10)).orElseThrow();
         assertTrue(leases.transitionState(job.jobId(),job.leaseEpoch(),"CLAIMED","EXECUTING",Ui2Rows.ACTOR,"synthetic_start"));
         assertTrue(repo.workerState(decision.runId(),job.leaseEpoch(),"FAILING_OVER","FAILING_OVER",null,null,null));
@@ -55,7 +56,7 @@ class FailoverIncidentAdmissionTest {
         };
         var db=DSL.using(fixture.appDataSource(),SQLDialect.POSTGRES);
         return new JooqCpFailoverRepository(new JooqTransactionBoundary(DSL.using(db.configuration()
-            .derive(new org.jooq.impl.DefaultExecuteListenerProvider(listener)))),true);
+            .derive(new org.jooq.impl.DefaultExecuteListenerProvider(listener)))),true, JobWindowTestPolicy.PERMISSIVE);
     }
 
     @Test void notSentStopsWithoutIncidentAndReleasesAdmission() throws Exception {
@@ -191,7 +192,7 @@ class FailoverIncidentAdmissionTest {
                 expire(fixture,e);
                 var other=repository(fixture);
                 var generic=new com.securityexpert.nexus.ui2.persistence.jobrecords.JooqJobLeaseDao(
-                    new JooqTransactionBoundary(DSL.using(fixture.appDataSource(),SQLDialect.POSTGRES)));
+                    new JooqTransactionBoundary(DSL.using(fixture.appDataSource(),SQLDialect.POSTGRES)), JobWindowTestPolicy.PERMISSIVE);
                 assertTrue(generic.findExpiredUnconfirmedYes().isEmpty());
                 assertFalse(generic.transitionState(e.job(),e.epoch(),"EXECUTING","OUTCOME_UNKNOWN",
                     Ui2Rows.ACTOR,"job_reconcile_outcome_unknown"));
@@ -253,7 +254,7 @@ class FailoverIncidentAdmissionTest {
     }
     private static JooqCpFailoverRepository repository(Ui2PostgresFixture fixture) {
         return new JooqCpFailoverRepository(new JooqTransactionBoundary(
-            DSL.using(fixture.appDataSource(),SQLDialect.POSTGRES)),true);
+            DSL.using(fixture.appDataSource(),SQLDialect.POSTGRES)),true, JobWindowTestPolicy.PERMISSIVE);
     }
     private static <T> T mutate(Ui2PostgresFixture fixture,Function<DSLContext,T> work) {
         return new AuditedTransactionBoundary(new JooqTransactionBoundary(

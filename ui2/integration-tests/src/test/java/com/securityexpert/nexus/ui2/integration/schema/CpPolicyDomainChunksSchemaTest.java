@@ -1,5 +1,6 @@
 package com.securityexpert.nexus.ui2.integration.schema;
 
+import com.securityexpert.nexus.ui2.integration.support.JobWindowTestPolicy;
 import static org.junit.jupiter.api.Assertions.*;
 import com.securityexpert.nexus.ui2.integration.support.Ui2PostgresFixture;
 import com.securityexpert.nexus.ui2.persistence.*;
@@ -17,7 +18,7 @@ class CpPolicyDomainChunksSchemaTest {
             var tx = new JooqTransactionBoundary(DSL.using(fixture.appDataSource(), SQLDialect.POSTGRES));
             var collections = new PolicyCollectionRepository(tx);
             var snapshots = new PolicySnapshotRepository(tx);
-            new JooqJobRecordDao(tx).insertRequestedIfAbsentForRun("job-1", "key-1", "cp_policy_collect", "run-1", "read",
+            new JooqJobRecordDao(tx, JobWindowTestPolicy.PERMISSIVE).insertRequestedIfAbsentForRun("job-1", "key-1", "cp_policy_collect", "run-1", "read",
                 "cp_policy_collect", "synthetic-actor", "policy_collect").orElseThrow();
             new AuditedTransactionBoundary(tx).inTransaction("synthetic-actor", "policy_collect", db -> {
                 db.execute("update jobs set state = 'EXECUTING', lease_epoch = 1, lease_expires_at = now() + interval '1 hour' where job_id = 'job-1'");
