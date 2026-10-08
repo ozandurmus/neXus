@@ -319,7 +319,8 @@ def test_source_credentials_are_separate_secret_env_refs_and_never_logged(monkey
     pod = preview.database_manifest(template("deploy/ui2/40-database-statefulset.yaml"))
     container = pod["spec"]["containers"][0]
     env = {entry["name"]: entry for entry in container["env"]}
-    for name, key in (("PGUSER", "migrate-user"), ("PGPASSWORD", "migrate-password")):
+    assert not any(name.startswith("PG") for name in env)
+    for name, key in (("SOURCE_DB_USER", "migrate-user"), ("SOURCE_DB_PASSWORD", "migrate-password")):
         assert env[name] == dict(name=name, valueFrom=dict(secretKeyRef=dict(
             name=objects[0]["metadata"]["name"], key=key)))
     assert all(v["name"] != "source-db" for v in pod["spec"]["volumes"])
@@ -577,8 +578,13 @@ def test_copy_is_pod_to_pod_read_only_and_filters_only_the_two_requested_tables(
         assert f"statement_timeout={seconds * 1000}" in source
         assert f"statement_timeout={seconds * 1000}" in target
         assert "default_transaction_read_only=on" not in target
-        assert "PGUSER=" not in source
-        assert "PGPASSWORD=" not in source + target
+        source_argv = shlex.split(source)
+        command = "pg_dump" if source == calls[0][0] else "psql"
+        assert source_argv[source_argv.index("exec") + 1:source_argv.index(command)] == [
+            "env", "PGUSER=$SOURCE_DB_USER", "PGPASSWORD=$SOURCE_DB_PASSWORD"]
+        assert "SOURCE_DB_" not in target
+        assert target.startswith(preview.PG_ENV)
+        assert "PGPASSWORD=" not in target
         assert "cat " not in source + target
         assert "/run/source-db" not in source + target
         assert "--file=" not in source + target
