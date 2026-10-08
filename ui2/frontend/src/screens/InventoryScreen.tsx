@@ -1054,10 +1054,10 @@ export function InventoryScreen() {
               onClick={() => downloadText(`devices-${new Date().toISOString().replace(/[:.]/g, "-")}.csv`, inventoryCsv(sortedDevices))}>
               Export inventory
             </M3Button>
-            <M3Button emphasis="tonal" icon="operations" disabled={bulkBusy} onClick={handleBulkCollect}>
+            <M3Button deviceJob emphasis="tonal" icon="operations" disabled={bulkBusy} onClick={handleBulkCollect}>
               {bulkBusy ? "Starting..." : "Bulk Collect"}
             </M3Button>
-            <M3Button emphasis="tonal" icon="config" disabled={configBulkBusy} onClick={handleConfigBulk}>
+            <M3Button deviceJob emphasis="tonal" icon="config" disabled={configBulkBusy} onClick={handleConfigBulk}>
               {configBulkBusy ? "Starting..." : "Read configuration, all"}
             </M3Button>
             <M3Button emphasis="filled" icon="plus" href="?screen=administration">Add device</M3Button>

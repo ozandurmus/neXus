@@ -26,7 +26,10 @@ export function runStep(state: CpFailoverState, step: string): number {
   if (current === "FINAL_POSTCHECK" || current === "POST_RETURN" || current === "POSTCHECK" && ["FINAL_POSTCHECK", "POST_RETURN", "final"].includes(step)) return 5;
   return ({ PLANNED: 0, PRECHECK: 0, FAILING_OVER: 1, SWITCHED: 2, POSTCHECK: 3, RETURNING: 4, DONE: 6 } as Record<string, number>)[current] ?? 0;
 }
-const errorText = (error: unknown) => (error as { body?: { code?: string } })?.body?.code ?? "Request failed";
+const errorText = (error: unknown) => {
+  const body = (error as { body?: { code?: string; message?: string } })?.body;
+  return body?.code === "OUTSIDE_JOB_WINDOW" ? body.message ?? "Device jobs are outside the scheduled window." : body?.code ?? "Request failed";
+};
 type Draft = { requestId: string; from: string; until: string; reason: string; confirmedRevision?: number };
 export function FailoverRun({ run, unit }: { run: CpFailoverRunDetail; unit: CpFailoverUnit }) {
   const stopped = run.state === "STOPPED", step = runStep(run.state, run.step);
@@ -125,7 +128,7 @@ function UnitPanel({ unit, expanded, onExpand, onRefreshUnits }: { unit: CpFailo
     {unit.refusalReason && <Typography color="error">{unit.refusalReason}</Typography>}
     {expanded && <Stack spacing={2} sx={{ mt: 1 }}>
       {pending && <Typography role="status">Awaiting second approval</Typography>}
-      {canOperate && <M3Button emphasis="filled" disabled={!idle || Boolean(unit.refusalReason) || Boolean(pending)} onClick={() => {
+      {canOperate && <M3Button deviceJob emphasis="filled" disabled={!idle || Boolean(unit.refusalReason) || Boolean(pending)} onClick={() => {
         if (draft?.confirmedRevision && bound?.approved && (!run || run.approvalId !== bound.approvalId)) { void act(() => start(bound)); return; }
         if (draft && (run?.approvalId === draft.requestId || Date.parse(draft.until) <= Date.now()
           || approvals.some(a => a.requestId === draft.requestId && a.revokedAt))) {
@@ -154,7 +157,7 @@ function UnitPanel({ unit, expanded, onExpand, onRefreshUnits }: { unit: CpFailo
         {error && <Typography role="alert" color="error">{error}</Typography>}
       </Stack></DialogContent>
       <DialogActions><M3Button emphasis="text" disabled={busy} onClick={() => setDialog(false)}>Cancel</M3Button>
-        <M3Button emphasis="filled" disabled={busy || !reason.trim() || (!draft && (!until || Date.parse(until) <= Date.now()))} onClick={() => void confirm()}>OK / Start</M3Button></DialogActions>
+        <M3Button deviceJob emphasis="filled" disabled={busy || !reason.trim() || (!draft && (!until || Date.parse(until) <= Date.now()))} onClick={() => void confirm()}>OK / Start</M3Button></DialogActions>
     </Dialog>
   </Card>;
 }

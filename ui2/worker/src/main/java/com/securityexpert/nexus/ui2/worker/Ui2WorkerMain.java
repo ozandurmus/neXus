@@ -91,6 +91,7 @@ public final class Ui2WorkerMain {
     }
 
     public static void main(String[] args) {
+        com.securityexpert.nexus.ui2.platform.JobWindowPolicy.SYSTEM.logPolicy();
         String role = resolveRole(args, System.getenv("NEXUS_WORKLOAD_ROLE"));
         boolean policyFallback = Boolean.parseBoolean(System.getProperty("ui2.worker.claim-policy-fallback", "false"));
         if ("configuration".equals(role)) {

@@ -1,3 +1,4 @@
+import { useJobWindow } from "./JobWindow";
 import { useState } from "react";
 import type { ReactNode } from "react";
 import Box from "@mui/material/Box";
@@ -23,12 +24,14 @@ import { Icon, type IconName } from "./Icon";
  */
 export function M3Button({
   emphasis,
+  deviceJob = false,
   icon,
   children,
   onClick,
   href,
   disabled,
 }: {
+  readonly deviceJob?: boolean;
   readonly emphasis: "filled" | "tonal" | "outlined" | "text";
   readonly icon?: IconName;
   readonly children: ReactNode;
@@ -36,6 +39,7 @@ export function M3Button({
   readonly href?: string;
   readonly disabled?: boolean;
 }) {
+  const jobWindow = useJobWindow();
   const byEmphasis = {
     filled: { bgcolor: m3.primary, color: m3.onPrimary, "&:hover": { bgcolor: m3.primary } },
     tonal: { bgcolor: m3.secondaryContainer, color: m3.onSecondaryContainer, "&:hover": { bgcolor: m3.secondaryContainer } },
@@ -46,7 +50,7 @@ export function M3Button({
     <Button
       href={href}
       onClick={onClick}
-      disabled={disabled}
+      disabled={disabled || (deviceJob && !jobWindow.open)}
       startIcon={icon ? <Icon name={icon} size={20} /> : undefined}
       sx={{
         height: 40,
@@ -60,7 +64,7 @@ export function M3Button({
         ...byEmphasis[emphasis],
       }}
     >
-      {children}
+      {children}{deviceJob && jobWindow.label && ` · ${jobWindow.label}`}
     </Button>
   );
 }

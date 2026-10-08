@@ -1,3 +1,4 @@
+import { JobButton } from "../shell/JobWindow";
 import { useEffect, useRef, useState } from "react";
 import { Alert, Box, Button, Chip, Divider, List, ListItemButton, ListItemText, ListSubheader,
   Paper, Stack, Step, StepLabel, Stepper, Table, TableBody, TableCell, TableContainer, TableHead,
@@ -110,7 +111,8 @@ export function DiagnosticPanel() {
       setRefresh(v => v + 1);
     } catch (error) {
       const code = (error as ApiError).body?.code;
-      setMessage(code === "DIAGNOSTIC_UNAVAILABLE" ? "This read is unavailable for this device."
+      setMessage(code === "OUTSIDE_JOB_WINDOW" ? String((error as ApiError).body?.message ?? "Device jobs are outside the scheduled window.")
+        : code === "DIAGNOSTIC_UNAVAILABLE" ? "This read is unavailable for this device."
         : code === "RATE_LIMITED_OR_RUNNING" ? "A command is running or was submitted within the last minute."
         : "Request refused or not confirmed. Retry uses the same request ID.");
     } finally { setSubmitting(false); }
@@ -186,8 +188,8 @@ export function DiagnosticPanel() {
                 </TextField> : needsParameter ? <TextField label="Parameter" value={parameter} disabled={busy} inputProps={{ maxLength: 31 }}
                   onChange={e => { setParameter(e.target.value); requestId.current = null; }} error={parameter.length > 0 && !validParameter}
                   helperText="One token: letters, digits, underscore, period or hyphen" /> : null}
-                {canExecute && selected?.runnable && <Button variant="contained" onClick={run} disabled={!validParameter || busy} sx={{ whiteSpace: "nowrap" }}>
-                  {submitting ? "Submitting…" : "Run read"}</Button>}
+                {canExecute && selected?.runnable && <JobButton variant="contained" onClick={run} disabled={!validParameter || busy} sx={{ whiteSpace: "nowrap" }}>
+                  {submitting ? "Submitting…" : "Run read"}</JobButton>}
               </Stack>
             </>}
           </Paper>

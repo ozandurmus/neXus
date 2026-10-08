@@ -39,7 +39,22 @@ class CpFailoverServiceTest {
     private final JooqCpFailoverRepository store=mock(JooqCpFailoverRepository.class);
     private final RbacEvaluator rbac=mock(RbacEvaluator.class);
     private final ManagementEndpointSshTrustRepository trust=mock(ManagementEndpointSshTrustRepository.class);
-    private final CpFailoverService service=new CpFailoverService(devices,inventory,store,rbac,trust,new FailoverMutationSwitch(true));
+    private final CpFailoverService service=new CpFailoverService(devices,inventory,store,rbac,trust,new FailoverMutationSwitch(true), new com.securityexpert.nexus.ui2.platform.JobWindowPolicy(
+        java.time.Clock.fixed(Instant.parse("2026-10-08T09:00:00Z"), java.time.ZoneOffset.UTC), 60));
+
+    @ParameterizedTest
+    @ValueSource(strings = {"check_point", "palo_alto"})
+    void outsideJobWindowRefusesManualReadinessAndFailoverBeforeTargetAccess(String vendor) {
+        roles("actor-1", java.util.Set.of(com.securityexpert.nexus.ui2.platform.RoleToken.SECURITY_ADMIN));
+        var outside = new CpFailoverService(devices, inventory, store, rbac, trust, new FailoverMutationSwitch(true),
+            new com.securityexpert.nexus.ui2.platform.JobWindowPolicy(java.time.Clock.fixed(
+                Instant.parse("2026-10-08T10:00:00Z"), java.time.ZoneOffset.UTC), 60));
+        assertThrows(com.securityexpert.nexus.ui2.platform.JobWindowPolicy.OutsideWindow.class,
+            () -> outside.request(CLUSTER_ID, CLUSTER_ID, null, "actor-1", vendor, "request", 1, "nonce", true));
+        assertThrows(com.securityexpert.nexus.ui2.platform.JobWindowPolicy.OutsideWindow.class,
+            () -> outside.requestReadiness(CLUSTER_ID, CLUSTER_ID, "actor-1", vendor));
+        verifyNoInteractions(store, devices, inventory, trust);
+    }
 
     @Test void disabledSwitchRefusesBothVendorsBeforeAdmissionAndDueDispatch() {
         when(rbac.evaluate(anyString(),any(),any())).thenReturn(new RbacEvaluator.Decision(

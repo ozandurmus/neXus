@@ -124,6 +124,10 @@ async function call<T>(path: string, method: "GET" | "POST" | "PUT", body?: unkn
   noteMasking(response);
   const parsed = await response.json().catch(() => ({}));
   if (!response.ok) {
+    if (parsed.code === "OUTSIDE_JOB_WINDOW") {
+      parsed.error = parsed.message;
+      parsed.reason = parsed.message;
+    }
     const error: ApiError = { status: response.status, body: parsed };
     throw error;
   }
@@ -1794,3 +1798,8 @@ export const getPolicyTree = (source = "", container = "", device = "") => call<
 }>(`/api/v2/policy/tree?source=${encodeURIComponent(source)}&container=${encodeURIComponent(container)}&device=${encodeURIComponent(device)}`, "GET");
 export type PolicyCollectionStatus = { domainsReused?: number; domainsCollected?: number; rulesReused?: number; domains?: { containerId: string; status: "COLLECTING" | "COLLECTED" | "REUSED"; rules: number; publishTime?: string; hitsCollectedAt?: string }[]; cancelRequested?: boolean; jobId: string; state: string; outcome?: string; reason: string; step: number; total: number; layer?: number; layers?: number; rulesFetched?: number; packagesDone?: number; packagesTotal?: number; domainsDone?: number; domainsTotal?: number; startedAt?: string; lastActivityAt?: string; readTimeoutSeconds?: number; gapUnits?: number; unitFailureCodes?: string[]; collectedAt?: string; hasTranscript?: boolean };
 export const getPolicyCollectionStatus = (id: string) => call<PolicyCollectionStatus>(`/api/v2/policy/collections/${encodeURIComponent(id)}`, "GET");
+
+/** Server-owned device job policy; no local timezone or duration guess. */
+export function getJobWindow(): Promise<import("../shell/JobWindow").JobWindowStatus> {
+  return call("/api/v2/job-window", "GET");
+}

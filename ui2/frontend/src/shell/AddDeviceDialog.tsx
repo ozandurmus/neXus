@@ -1,3 +1,4 @@
+import { JobButton } from "./JobWindow";
 import { useEffect, useMemo, useState } from "react";
 import Box from "@mui/material/Box";
 import Alert from "@mui/material/Alert";
@@ -750,7 +751,7 @@ function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly 
                   Stopped at {detail.onboarding.step}: {detail.onboarding.reason ?? "no reason recorded"}
                 </Typography>
                 <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
-                  <Button variant="outlined" onClick={() => void retryStoppedStep()}>Retry {detail.onboarding.step}</Button>
+                  <JobButton variant="outlined" onClick={() => void retryStoppedStep()}>Retry {detail.onboarding.step}</JobButton>
                 </Box>
               </Stack>
             )}
@@ -781,7 +782,7 @@ function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly 
                 <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>Wrong credential? Choose another and check again.</Typography>
                 {credentialSelectorFragment}
                 <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
-                  <Button variant="outlined" disabled={!credentialId} onClick={() => void retryWithCredential()}>Check again with this credential</Button>
+                  <JobButton variant="outlined" disabled={!credentialId} onClick={() => void retryWithCredential()}>Check again with this credential</JobButton>
                 </Box>
               </Stack>
             )}
@@ -990,17 +991,17 @@ function AddDeviceDialogContent({ onClose, initialMode = "single" }: { readonly 
           {phase === "terminal" || discoveryPhase === "done" ? "Close" : "Cancel"}
         </Button>
         {mode === "single" && phase !== "terminal" && (
-          <M3Button emphasis="filled" onClick={handleSubmit} disabled={!canSubmit}>
+          <M3Button deviceJob emphasis="filled" onClick={handleSubmit} disabled={!canSubmit}>
             Enrol
           </M3Button>
         )}
         {mode === "discovery" && discoveryPhase === "form" && (
-          <M3Button emphasis="filled" onClick={handleSubmit} disabled={!canSubmit}>
+          <M3Button deviceJob emphasis="filled" onClick={handleSubmit} disabled={!canSubmit}>
             Start discovery
           </M3Button>
         )}
         {mode === "discovery" && discoveryPhase === "candidates" && (
-          <M3Button emphasis="filled" onClick={handleImport}
+          <M3Button deviceJob emphasis="filled" onClick={handleImport}
             disabled={selectedCandidateIds.size === 0 || (vendor === "radware" && !passphraseCredentialId)}>
             {selectedCandidateIds.size > 0 ? `Import (${selectedCandidateIds.size})` : "Import"}
           </M3Button>

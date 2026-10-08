@@ -1,6 +1,7 @@
 package com.securityexpert.nexus.ui2.service.failover;
 
 import java.time.Clock;
+import com.securityexpert.nexus.ui2.platform.JobWindowPolicy;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Iterator;
@@ -19,44 +20,49 @@ import com.securityexpert.nexus.ui2.persistence.JooqCpFailoverRepository;
 public final class CpReadinessScheduler {
     private static final Logger LOG = LoggerFactory.getLogger(CpReadinessScheduler.class);
     private static final Duration RUN_CAP = Duration.ofMinutes(10);
-    static final Duration FIRST_PASS_DELAY = Duration.ofMinutes(10);
     private final CpFailoverService service;
     private final JooqCpFailoverRepository store;
     private final Duration unitPause;
-    private final Duration cadence;
+    private final JobWindowPolicy windows;
     private final Clock clock;
-    // A restart resets the pass; the first pass starts FIRST_PASS_DELAY after start so frequent deploys never starve it.
+    // A restart waits for the next slot; ticks never create another readiness pass.
     private Iterator<CpFailoverService.ReadinessTarget> targets;
-    private Instant nextPassAt;
     private Instant nextUnitAt;
     private Instant runDeadline;
     private String runId;
 
     @Autowired
     public CpReadinessScheduler(CpFailoverService service, JooqCpFailoverRepository store,
-            @Value("${ui2.failover.readiness-unit-pause-ms:2000}") long unitPauseMs,
-            @Value("${ui2.failover.readiness-cadence-ms:14400000}") long cadenceMs) {
-        this(service, store, unitPauseMs, cadenceMs, Clock.systemUTC());
+            @Value("${ui2.failover.readiness-unit-pause-ms:2000}") long unitPauseMs) {
+        this(service, store, unitPauseMs, Clock.systemUTC());
     }
 
     CpReadinessScheduler(CpFailoverService service, JooqCpFailoverRepository store,
-            long unitPauseMs, long cadenceMs, Clock clock) {
+            long unitPauseMs, Clock clock) {
         this.service = service;
         this.store = store;
         this.unitPause = Duration.ofMillis(Math.max(0, unitPauseMs));
-        this.cadence = Duration.ofMillis(Math.max(0, cadenceMs));
+        this.windows = new JobWindowPolicy(clock, JobWindowPolicy.SYSTEM.windowMinutes());
         this.clock = clock;
-        this.nextPassAt = clock.instant().plus(FIRST_PASS_DELAY.compareTo(cadence) < 0 ? FIRST_PASS_DELAY : cadence);
+    }
+
+    @Scheduled(cron = JobWindowPolicy.CRON, zone = JobWindowPolicy.ZONE)
+    public void beginPass() {
+        if (!windows.isOpen() || targets != null) return;
+        targets = service.readinessTargets().iterator();
+        nextUnitAt = clock.instant();
+        run();
     }
 
     @Scheduled(fixedDelay = 5000, initialDelay = 5000)
     public void run() {
         Instant now = clock.instant();
-        if (targets == null) {
-            if (now.isBefore(nextPassAt)) return;
-            targets = service.readinessTargets().iterator();
-            nextUnitAt = now;
+        if (!windows.isOpen(now)) {
+            targets = null;
+            runId = null; // Only forget the cursor; never cancel the admitted run.
+            return;
         }
+        if (targets == null) return;
         if (runId != null) {
             if (!now.isBefore(runDeadline)) {
                 LOG.warn("Readiness run reached the 10-minute scheduler cap; advancing after the unit pause");
@@ -69,13 +75,12 @@ public final class CpReadinessScheduler {
         if (now.isBefore(nextUnitAt)) return;
         if (!targets.hasNext()) {
             targets = null;
-            nextPassAt = now.plus(cadence);
             return;
         }
         try {
             runId = service.requestScheduledReadiness(targets.next());
             runDeadline = clock.instant().plus(RUN_CAP);
-        } catch (CpFailoverService.Refusal skipped) {
+        } catch (CpFailoverService.Refusal | JobWindowPolicy.OutsideWindow skipped) {
             // Admission remains fail-closed; continue with the next unit on a later tick.
             nextUnitAt = now.plus(unitPause);
         }

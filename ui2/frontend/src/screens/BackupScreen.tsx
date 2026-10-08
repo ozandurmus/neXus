@@ -1,3 +1,4 @@
+import { JobButton } from "../shell/JobWindow";
 import { BackupAttempts } from "./BackupAttempts";
 import { urlParam } from "../shell/urlParams";
 import { useCallback, useEffect, useState } from "react";
@@ -48,13 +49,8 @@ import {
 import { ScreenHeader, MetricGrid, MetricCard, ScreenRoot } from "../shell/ScreenLayout";
 import { M3Button, StatusChip } from "../shell/M3Widgets";
 import { Ts, VendorBadge } from "../shell/States";
-import { utcHourToLocal } from "../shell/time";
 
-/** " (= 05:00 GMT+3)" for a daily cron with a fixed minute and hour; "" when the expression is not that simple. */
-function cronLocal(cron: string | null | undefined): string {
-  const m = /^(\d{1,2})\s+(\d{1,2})\s+\*\s+\*\s+\*$/.exec((cron ?? "").trim());
-  return m ? ` (= ${utcHourToLocal(Number(m[2]), Number(m[1]))})` : "";
-}
+
 import Tooltip from "@mui/material/Tooltip";
 import { MONO, m3 } from "../theme/m3Theme";
 
@@ -379,7 +375,7 @@ export function BackupScreen() {
       setPolicy(saved);
       setPolicyOpen(false);
       setSuccessMessage(saved.schedule_enabled
-        ? `Policy saved: fleet backup scheduled at "${saved.daily_backup_cron}" (UTC), ${saved.backup_retention_days}-day retention.`
+        ? `Policy saved: fleet backup at 00:00, 06:00, 12:00, 18:00 Europe/Istanbul, ${saved.backup_retention_days}-day retention.`
         : `Policy saved: schedule off, ${saved.backup_retention_days}-day retention.`);
       setTimeout(() => setSuccessMessage(null), 8000);
     } catch (error) {
@@ -444,7 +440,7 @@ export function BackupScreen() {
             <M3Button emphasis="outlined" onClick={() => setPolicyOpen(true)}>
               Retention & Policies
             </M3Button>
-            <M3Button emphasis="filled" onClick={() => setFleetOpen(true)}>
+            <M3Button deviceJob emphasis="filled" onClick={() => setFleetOpen(true)}>
               Run Fleet Backup
             </M3Button>
           </Stack>
@@ -488,7 +484,7 @@ export function BackupScreen() {
         </DialogContent>
         <DialogActions>
           <M3Button emphasis="text" onClick={() => setFleetOpen(false)} disabled={fleetBusy}>Cancel</M3Button>
-          <M3Button emphasis="filled" onClick={handleFleetBackup} disabled={fleetBusy || fleetReason.trim().length < 8}>
+          <M3Button deviceJob emphasis="filled" onClick={handleFleetBackup} disabled={fleetBusy || fleetReason.trim().length < 8}>
             {fleetBusy ? "Requesting…" : "Run"}
           </M3Button>
         </DialogActions>
@@ -521,7 +517,7 @@ export function BackupScreen() {
           {!policy ? (
             <Typography sx={{ fontSize: 22, lineHeight: "40px", fontWeight: 650, color: m3.neutralInk }}>UNKNOWN</Typography>
           ) : policy.schedule_enabled ? (
-            <Typography sx={{ fontFamily: MONO, fontSize: 24, lineHeight: "40px", fontWeight: 600, color: m3.onSurface }}>{policy.daily_backup_cron}</Typography>
+            <Typography sx={{ fontFamily: MONO, fontSize: 24, lineHeight: "40px", fontWeight: 600, color: m3.onSurface }}>00 / 06 / 12 / 18</Typography>
           ) : (
             <Box sx={{ display: "flex", alignItems: "center", gap: 1, minHeight: 40 }}>
               <StatusChip tone="warn" label="Not scheduled" />
@@ -530,7 +526,7 @@ export function BackupScreen() {
           <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
             {policy
               ? policy.schedule_enabled
-                ? <>Cron in UTC{cronLocal(policy.daily_backup_cron)} · last run {policy.last_scheduled_run_at ? <Ts at={policy.last_scheduled_run_at} seconds={false} /> : "never"}</>
+                ? <>Europe/Istanbul · last run {policy.last_scheduled_run_at ? <Ts at={policy.last_scheduled_run_at} seconds={false} /> : "never"}</>
                 : "No backup runs on its own. Enable the schedule under Retention & Policies."
               : "Policy unavailable"}
           </Typography>
@@ -691,7 +687,7 @@ export function BackupScreen() {
               <Alert
                 severity="info"
                 action={
-                  <M3Button emphasis="tonal" disabled={relistBusy} onClick={() => void relistNow(contentsFor)}>
+                  <M3Button deviceJob emphasis="tonal" disabled={relistBusy} onClick={() => void relistNow(contentsFor)}>
                     {relistBusy ? <CircularProgress size={16} /> : "List now"}
                   </M3Button>
                 }
@@ -899,17 +895,10 @@ export function BackupScreen() {
             <Stack direction="row" spacing={1.5} alignItems="center">
               <Switch checked={scheduleEnabled} onChange={(e) => setScheduleEnabled(e.target.checked)} disabled={policyBusy} />
               <Typography variant="body2">
-                {scheduleEnabled ? "Scheduled fleet backup is ON: every backup target runs on the cron below." : "Scheduled fleet backup is OFF: backups run only from this screen."}
+                {scheduleEnabled ? "Scheduled fleet backup is ON: every backup target runs at the shared six-hour slots." : "Scheduled fleet backup is OFF: backups run only from this screen."}
               </Typography>
             </Stack>
-            <TextField
-              label="Fleet backup schedule (cron, UTC)"
-              value={dailyCron}
-              onChange={(e) => setDailyCron(e.target.value)}
-              helperText={`Five fields: minute hour day month weekday, in UTC (the server's schedule clock). 0 2 * * * = 02:00 UTC = ${utcHourToLocal(2)} every day.${cronLocal(dailyCron)}`}
-              disabled={policyBusy}
-              fullWidth
-            />
+            <Typography>Fleet backup schedule: 00:00, 06:00, 12:00, 18:00 Europe/Istanbul.</Typography>
             <TextField
               label="Backup retention (days)"
               type="number"
@@ -1150,18 +1139,18 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
                       <Stack direction="row" spacing={0} justifyContent="flex-end" alignItems="center" sx={{ whiteSpace: "nowrap",
                         "& .MuiButton-root": { minWidth: 0, px: 0.9, py: 0.25, fontSize: 12.5, textTransform: "none", borderRadius: "6px" } }}>
                         {item || summary?.backup_target ? (
-                          <Tooltip title="Take a configuration and state backup of this device now (needs it switched on as a backup target)"><span><Button size="small" variant="contained" disableElevation disabled={busy || !summary?.backup_target}
+                          <Tooltip title="Take a configuration and state backup of this device now (needs it switched on as a backup target)"><span><JobButton size="small" variant="contained" disableElevation disabled={busy || !summary?.backup_target}
                             sx={{ bgcolor: m3.secondaryContainer, color: m3.onSecondaryContainer, "&:hover": { bgcolor: m3.secondaryContainer }, mr: 0.5 }}
                             onClick={() => onBackupNow(item ?? { deviceId: id, name, ip: "", vendor: vendor ?? "unknown", role: "", lastBackupTime: "", backupType: "standard", validationLevel: "UNKNOWN", deviationState: "NOT EVALUATED", sizeBytes: 0, artefactId: "" }, "standard")}>
                             {busy ? <CircularProgress size={12} /> : "Backup Now"}
-                          </Button></span></Tooltip>
+                          </JobButton></span></Tooltip>
                         ) : null}
                         {vendor === "check_point" && summary?.role === "management_server" && summary?.backup_target ? (
-                          <Tooltip title="Multi-Domain Server export: one mds_backup of the whole server and every domain. Locks the MDS database while it runs; scheduled at night."><span><Button size="small" disabled={busy}
-                            onClick={() => onBackupNow(item ?? { deviceId: id, name, ip: "", vendor: vendor ?? "unknown", role: "management_server", lastBackupTime: "", backupType: "standard", validationLevel: "UNKNOWN", deviationState: "NOT EVALUATED", sizeBytes: 0, artefactId: "" }, "mds_export")}>MDS export</Button></span></Tooltip>
+                          <Tooltip title="Multi-Domain Server export: one mds_backup of the whole server and every domain. Locks the MDS database while it runs; scheduled at the shared job slots."><span><JobButton size="small" disabled={busy}
+                            onClick={() => onBackupNow(item ?? { deviceId: id, name, ip: "", vendor: vendor ?? "unknown", role: "management_server", lastBackupTime: "", backupType: "standard", validationLevel: "UNKNOWN", deviationState: "NOT EVALUATED", sizeBytes: 0, artefactId: "" }, "mds_export")}>MDS export</JobButton></span></Tooltip>
                         ) : null}
                         {vendor === "check_point" && item ? (
-                          <Tooltip title="Check Point only: a full Gaia OS snapshot, in addition to the configuration backup. Palo Alto has no equivalent here."><span><Button size="small" disabled={busy} onClick={() => onBackupNow(item, "snapshot")}>Snapshot</Button></span></Tooltip>
+                          <Tooltip title="Check Point only: a full Gaia OS snapshot, in addition to the configuration backup. Palo Alto has no equivalent here."><span><JobButton size="small" disabled={busy} onClick={() => onBackupNow(item, "snapshot")}>Snapshot</JobButton></span></Tooltip>
                         ) : null}
                         <Tooltip title={baselines[id] ? "Every backup of this device; ★ = a baseline archive is set for comparison" : "Every backup of this device"}><span><Button size="small" onClick={() => onHistory(item ?? { deviceId: id, name, ip: "", vendor: vendor ?? "unknown", role: "", lastBackupTime: "", backupType: "standard", validationLevel: "UNKNOWN", deviationState: "NOT EVALUATED", sizeBytes: 0, artefactId: "" })}>History{baselines[id] ? " ★" : ""}</Button></span></Tooltip>
                         <Button size="small" disabled={!item?.artefactId} onClick={() => item && onContents(item)}>Contents</Button>

@@ -111,8 +111,11 @@ export function OperationsScreen() {
       for (const item of rows) (byRef[item.cluster_member_ref] ??= []).push(item);
       setCpRows(byRef);
       return state === "DONE";
-    } catch {
-      setReadinessError("Could not start or refresh the readiness run.");
+    } catch (error) {
+      const body = (error as { body?: { code?: string; message?: string } })?.body;
+      setReadinessError(body?.code === "OUTSIDE_JOB_WINDOW"
+        ? body.message ?? "Device jobs are outside the scheduled window."
+        : "Could not start or refresh the readiness run.");
       return false;
     } finally {
       runLock.current = false;

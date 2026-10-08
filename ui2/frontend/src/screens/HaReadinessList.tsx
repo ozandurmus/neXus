@@ -1,3 +1,4 @@
+import { JobButton } from "../shell/JobWindow";
 import { Fragment, useEffect, useState } from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
@@ -139,10 +140,10 @@ export function HaReadinessList({ clusters, rows, running, busy, progress, error
         <TableCell title={primaryReason(row)}>{primaryReason(row)}</TableCell>
         <TableCell>{at ? <Box component="time" dateTime={at} title={`${formatTime(at)} ${DISPLAY_TZ_LABEL} · ${at}`}>{relativeAge(at, now)}</Box> : "Not evaluated"}</TableCell>
         {hasActions && <TableCell onClick={event => event.stopPropagation()}>
-          {row && canRunReadiness(row) && <Tooltip title="Run pre-checks"><span><IconButton size="small" aria-label="Run pre-checks" aria-busy={running === row.unitId} disabled={busy}
+          {row && canRunReadiness(row) && <Tooltip title="Run pre-checks"><span><JobButton size="small" aria-label="Run pre-checks" aria-busy={running === row.unitId} disabled={busy}
             onClick={() => onRun(row)} sx={{ color: m3.primary }}>
             {running === row.unitId ? <CircularProgress size={18} aria-label="Running pre-checks" /> : <Icon name="operations" size={18} />}
-          </IconButton></span></Tooltip>}
+          </JobButton></span></Tooltip>}
           {row && progress[row.unitId] && <Typography component="span" role="status" variant="caption">{progress[row.unitId]}</Typography>}
         </TableCell>}
       </TableRow>
@@ -181,7 +182,7 @@ export function HaReadinessList({ clusters, rows, running, busy, progress, error
       </TextField>
     </Box>
     {selectedRows.length > 0 && <Box role="toolbar" aria-label="Bulk readiness actions" sx={{ position: "sticky", top: 0, zIndex: 2, display: "flex", gap: 1, p: 1, mb: 1, bgcolor: m3.primaryContainer, borderRadius: 2 }}>
-      <Button disabled={busy} onClick={() => onBulkRun(selectedRows)}>Run pre-checks ({selectedRows.length})</Button>
+      <JobButton disabled={busy} onClick={() => onBulkRun(selectedRows)}>Run pre-checks ({selectedRows.length})</JobButton>
       <Button disabled={busy} onClick={() => setSelected(new Set())}>Clear selection</Button>
     </Box>}
     {error && <Box sx={{ mb: 1 }}><StatePanel variant="error" title={error} /></Box>}

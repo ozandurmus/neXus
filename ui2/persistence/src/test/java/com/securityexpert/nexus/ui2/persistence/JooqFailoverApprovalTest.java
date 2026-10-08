@@ -14,12 +14,13 @@ import static org.junit.jupiter.api.Assertions.*;
 /** Exercises real repository decisions; PostgreSQL locking still requires integration validation. */
 class JooqFailoverApprovalTest {
     private static final Set<String> MEMBERS=Set.of("member-a","member-b");
-    private static final Instant NOW=Instant.parse("2026-10-06T12:00:00Z");
+    private static final Instant NOW=Instant.parse("2026-10-06T09:00:00Z");
     static final class Database implements MockDataProvider, TransactionBoundary {
         final Map<String,Object> approval=new LinkedHashMap<>();
         final Map<String,Object> run=new LinkedHashMap<>();
         final DSLContext sql=DSL.using(new MockConnection(this),SQLDialect.POSTGRES);
-        final JooqCpFailoverRepository repository=new JooqCpFailoverRepository(this,true);
+        final JooqCpFailoverRepository repository=new JooqCpFailoverRepository(this,true, new com.securityexpert.nexus.ui2.platform.JobWindowPolicy(
+            java.time.Clock.fixed(NOW, java.time.ZoneOffset.UTC), 60));
         Set<String> members=MEMBERS;
         String consumed,incident,dispatchRef;
         boolean unresolvedDispatch,fleetMutation;

@@ -1,18 +1,14 @@
 package com.securityexpert.nexus.ui2.service.failover;
 
 import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
-
 import org.junit.jupiter.api.Test;
 import static org.mockito.Mockito.*;
-
 import com.securityexpert.nexus.ui2.persistence.JooqCpFailoverRepository;
 
 class CpReadinessSchedulerTest {
-    private static final Duration CADENCE = Duration.ofHours(4);
-    private static final Instant START = Instant.parse("2026-09-30T00:00:00Z");
+    private static final Instant START = Instant.parse("2026-10-08T09:00:00Z");
     private final CpFailoverService service = mock(CpFailoverService.class);
     private final JooqCpFailoverRepository store = mock(JooqCpFailoverRepository.class);
     private final Clock clock = mock(Clock.class);
@@ -20,81 +16,62 @@ class CpReadinessSchedulerTest {
         new CpFailoverService.ReadinessTarget("cluster-1", "unit-1", "check_point");
     private final CpFailoverService.ReadinessTarget second =
         new CpFailoverService.ReadinessTarget("cluster-2", "unit-2", "palo_alto");
-    private final CpReadinessScheduler scheduler;
+    private final CpReadinessScheduler scheduler = new CpReadinessScheduler(service, store, 2000, clock);
 
     CpReadinessSchedulerTest() {
         when(clock.instant()).thenReturn(START);
-        scheduler = new CpReadinessScheduler(service, store, 2000, CADENCE.toMillis(), clock);
         when(service.readinessTargets()).thenReturn(List.of(first, second));
         when(service.requestScheduledReadiness(first)).thenReturn("run-1");
         when(service.requestScheduledReadiness(second)).thenReturn("run-2");
     }
-
-    private void tick(Instant at) {
-        when(clock.instant()).thenReturn(at);
+    private void tick(long seconds) {
+        when(clock.instant()).thenReturn(START.plusSeconds(seconds));
         scheduler.run();
     }
-
-    @Test void firstPassAfterStartDelayThenCadencePreservesOrderCompletionAndPause() {
-        Instant due = START.plus(CpReadinessScheduler.FIRST_PASS_DELAY);
-        tick(due.minusMillis(1));
+    @Test void ticksNeverStartAPassAndCompletionDoesNotStartContinuousPolling() {
+        tick(0);
         verifyNoInteractions(service, store);
-        tick(due);
+        scheduler.beginPass();
         verify(service).requestScheduledReadiness(first);
-        tick(due.plusSeconds(5));
-        verify(service, never()).requestScheduledReadiness(second);
         when(store.finished("run-1")).thenReturn(true);
-        tick(due.plusSeconds(10));
-        tick(due.plusSeconds(10).plusMillis(1999));
-        verify(service, never()).requestScheduledReadiness(second);
-        tick(due.plusSeconds(12));
-        var order = inOrder(service);
-        order.verify(service).requestScheduledReadiness(first);
-        order.verify(service).requestScheduledReadiness(second);
+        tick(5); tick(7);
+        verify(service).requestScheduledReadiness(second);
         when(store.finished("run-2")).thenReturn(true);
-        tick(due.plusSeconds(15));
-        Instant end = due.plusSeconds(17);
-        tick(end);
-        tick(end.plus(CADENCE).minusMillis(1));
+        tick(10); tick(12); tick(100);
         verify(service).readinessTargets();
-        tick(end.plus(CADENCE));
+        tick(21600);
+        scheduler.beginPass();
         verify(service, times(2)).readinessTargets();
-        verify(service, times(2)).requestScheduledReadiness(first);
     }
-
-    @Test void stuckRunReleasesCursorAtHardCapAndStillHonorsPause() {
-        Instant due = START.plus(CpReadinessScheduler.FIRST_PASS_DELAY);
-        tick(due);
-        tick(due.plusSeconds(599));
+    @Test void closingTheWindowStopsSubmissionsWithoutKillingTheInflightRun() {
+        scheduler.beginPass();
+        tick(3600);
         verify(service, never()).requestScheduledReadiness(second);
-        tick(due.plusSeconds(600));
-        tick(due.plusSeconds(601));
+        verifyNoInteractions(store);
+        tick(21600);
+        verify(service).readinessTargets();
+    }
+    @Test void outsideWindowCannotBeginPass() {
+        tick(-60);
+        scheduler.beginPass();
+        verifyNoInteractions(service, store);
+    }
+    @Test void capAndPauseArePreserved() {
+        scheduler.beginPass();
+        tick(599);
         verify(service, never()).requestScheduledReadiness(second);
-        tick(due.plusSeconds(602));
+        tick(600); tick(601);
+        verify(service, never()).requestScheduledReadiness(second);
+        tick(602);
         verify(service).requestScheduledReadiness(second);
         verify(store, never()).stopPlanned(anyString(), anyString());
     }
-
-    @Test void refusedUnitDoesNotBlockTheRestOfThePass() {
-        when(service.requestScheduledReadiness(first))
-            .thenThrow(new CpFailoverService.Refusal("RUN_ALREADY_ACTIVE"));
-        Instant due = START.plus(CpReadinessScheduler.FIRST_PASS_DELAY);
-        tick(due);
-        tick(due.plusSeconds(1));
+    @Test void refusalAdvancesAfterPause() {
+        when(service.requestScheduledReadiness(first)).thenThrow(new CpFailoverService.Refusal("RUN_ALREADY_ACTIVE"));
+        scheduler.beginPass();
+        tick(1);
         verify(service, never()).requestScheduledReadiness(second);
-        tick(due.plusSeconds(2));
+        tick(2);
         verify(service).requestScheduledReadiness(second);
-        verifyNoInteractions(store);
-    }
-
-    @Test void emptyPassWaitsForTheNextCadence() {
-        when(service.readinessTargets()).thenReturn(List.of());
-        Instant due = START.plus(CpReadinessScheduler.FIRST_PASS_DELAY);
-        tick(due);
-        tick(due.plusSeconds(5));
-        verify(service).readinessTargets();
-        verify(service, never()).requestScheduledReadiness(any());
-        tick(due.plus(CADENCE));
-        verify(service, times(2)).readinessTargets();
     }
 }
