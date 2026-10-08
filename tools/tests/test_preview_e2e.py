@@ -41,6 +41,37 @@ def container_image(deployment):
     return deployment["spec"]["template"]["spec"]["containers"][0]["image"]
 
 
+@pytest.mark.parametrize("path", [
+    "deploy/ui2/50-service-deployment.yaml",
+    "deploy/ui2/52-worker-deployment.yaml",
+    "deploy/ui2/54-configuration-deployment.yaml",
+    "deploy/ui2/55-compliance-deployment.yaml",
+    "deploy/ui2/57-policy-deployment.yaml",
+])
+@pytest.mark.parametrize("entry", [
+    None,
+    {"name": "UI2_JOB_WINDOW_MINUTES", "value": "60"},
+    {"name": "UI2_JOB_WINDOW_MINUTES",
+     "valueFrom": {"configMapKeyRef": {"name": "synthetic-config", "key": "window"}}},
+])
+def test_preview_job_windows_are_contiguous_without_changing_live_templates(path, entry):
+    source = template(path, "Deployment")
+    for container in source["spec"]["template"]["spec"]["containers"]:
+        container["env"] = [e for e in container.get("env", []) if e["name"] != "UI2_JOB_WINDOW_MINUTES"]
+        if entry is not None:
+            container["env"].append(copy.deepcopy(entry))
+    before = copy.deepcopy(source)
+    candidate = preview.workload_manifest(source, IMAGE, "192.0.2.10", ENDPOINTS)
+    assert candidate["metadata"]["namespace"] == preview.NS
+    for container in candidate["spec"]["template"]["spec"]["containers"]:
+        assert [e for e in container["env"] if e["name"] == "UI2_JOB_WINDOW_MINUTES"] == [
+            {"name": "UI2_JOB_WINDOW_MINUTES", "value": "360"}]
+    assert source == before
+    assert all(e["name"] != "UI2_JOB_WINDOW_MINUTES"
+               for container in preview.database_manifest(template("deploy/ui2/40-database-statefulset.yaml"))["spec"]["containers"]
+               for e in container.get("env", []))
+
+
 @pytest.mark.parametrize("entry", [
     None,
     {"name": "NEXUS_FAILOVER_MUTATION_ENABLED", "value": "true"},
