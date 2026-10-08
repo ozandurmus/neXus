@@ -5,6 +5,8 @@ import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.*;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.jooq.SQLDialect;
 import org.jooq.impl.DSL;
 import com.securityexpert.nexus.ui2.integration.support.*;
@@ -87,7 +89,8 @@ class ModuleEndpointRuntimeTest {
             }
             var runtime = new ModuleRuntimeRepository(tx);
             assertTrue(runtime.heartbeat("policy", "policy-pod"));
-            runtime.requestDrain("policy", "policy-pod");
+            releaseSql(fixture, "update module_runtime_control set drain_requested=true,drain_generation=drain_generation+1 where module='policy'");
+            assertTrue(runtime.heartbeat("policy", "policy-pod"));
             assertTrue(leases.claimNext("policy-pod", List.of("cp_policy_collect"), Duration.ofMinutes(10)).isEmpty());
             assertEquals(1L, tx.inTransaction(db -> db.fetchOne("select drain_ack_generation from module_runtime_control where module='policy'").get(0, Long.class)));
             try (var app = fixture.appConnection(); var statement = app.createStatement()) {
@@ -101,6 +104,90 @@ class ModuleEndpointRuntimeTest {
             }
             assertEquals("policy-job", leases.claimNext("policy-pod", List.of("cp_policy_collect"), Duration.ofMinutes(10)).orElseThrow().jobId());
             assertTrue(leases.claimNext("policy-other", List.of("cp_policy_collect"), Duration.ofMinutes(10)).isEmpty());
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"general", "policy"})
+    void plainRestartAdmitsNewJobsAndPreservesInFlightLeaseFencing(String role) throws Exception {
+        try (var fixture = Ui2PostgresFixture.createAndMigrate("module_restart_" + role)) {
+            var tx = new JooqTransactionBoundary(DSL.using(fixture.appDataSource(), SQLDialect.POSTGRES));
+            if (role.equals("policy")) releaseSql(fixture,
+                "update module_runtime_control set effective_owner='policy',fallback_enabled=false where module='policy'");
+            var old = new ModuleRuntimeRepository(tx);
+            assertTrue(old.heartbeat(role, role + "-old"));
+            var jobs = new JooqJobRecordDao(tx);
+            jobs.insertRequestedIfAbsentForRun("in-flight", "key-first", "cp_policy_collect", "synthetic-run", "read",
+                "cp_policy_collect", "synthetic-actor", "fixture").orElseThrow();
+            var leases = new JooqJobLeaseDao(tx);
+            long epoch = leases.claimNext(role + "-old", List.of("cp_policy_collect"), Duration.ofMinutes(10))
+                .orElseThrow().leaseEpoch();
+            long generation = old.generation("in-flight", epoch);
+            assertTrue(leases.heartbeat("in-flight", epoch, Duration.ofMinutes(10)));
+
+            old.releaseOwnership(role, role + "-old");
+            assertTrue(tx.inTransaction(db -> db.fetchOne("select owner_instance is null and owner_heartbeat_at is null "
+                + "and not drain_requested and drain_generation=0 from module_runtime_control where module={0}", role).get(0, Boolean.class)));
+            assertEquals(generation, old.generation("in-flight", epoch));
+            var successor = new ModuleRuntimeRepository(tx);
+            assertTrue(successor.heartbeat(role, role + "-new"));
+            assertFalse(old.heartbeat(role, role + "-old"));
+            old.releaseOwnership(role, role + "-old"); // A late shutdown cannot clear the new owner.
+            assertTrue(tx.inTransaction(db -> db.fetchOne("select owner_instance={0} from module_runtime_control where module={1}",
+                role + "-new", role).get(0, Boolean.class)));
+            assertFalse(leases.heartbeat("in-flight", epoch, Duration.ofMinutes(10)));
+            assertFalse(leases.heartbeat("in-flight", epoch + 1, Duration.ofMinutes(10)));
+            assertTrue(leases.claimNext(role + "-new", List.of("cp_policy_collect"), Duration.ofMinutes(10)).isEmpty());
+
+            jobs.insertRequestedIfAbsentForRun("after-restart", "key-second", "cp_policy_collect", "synthetic-run", "read",
+                "cp_policy_collect", "synthetic-actor", "fixture").orElseThrow();
+            assertEquals("after-restart", leases.claimNext(role + "-new", List.of("cp_policy_collect"), Duration.ofMinutes(10))
+                .orElseThrow().jobId());
+        }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"general", "policy"})
+    void deployDrainSurvivesRestartUntilGenerationMatchedClear(String role) throws Exception {
+        try (var fixture = Ui2PostgresFixture.createAndMigrate("module_deploy_restart_" + role)) {
+            var tx = new JooqTransactionBoundary(DSL.using(fixture.appDataSource(), SQLDialect.POSTGRES));
+            if (role.equals("policy")) releaseSql(fixture,
+                "update module_runtime_control set effective_owner='policy',fallback_enabled=false where module='policy'");
+            var old = new ModuleRuntimeRepository(tx);
+            assertTrue(old.heartbeat(role, role + "-old"));
+            releaseSql(fixture, "update module_runtime_control set drain_requested=true,drain_generation=7,"
+                + "drain_ack_at=null,drain_ack_generation=null,last_reason='synthetic-release',last_snapshot_id='synthetic-snapshot' where module='" + role + "'");
+            old.releaseOwnership(role, role + "-old");
+            var successor = new ModuleRuntimeRepository(tx);
+            assertTrue(successor.heartbeat(role, role + "-new"));
+            assertTrue(tx.inTransaction(db -> db.fetchOne("select drain_requested and drain_generation=7 "
+                + "and drain_ack_generation=7 and last_reason='synthetic-release' and last_snapshot_id='synthetic-snapshot' "
+                + "from module_runtime_control where module={0}", role).get(0, Boolean.class)));
+            var jobs = new JooqJobRecordDao(tx);
+            jobs.insertRequestedIfAbsentForRun("drained-job", "drained-key", "cp_policy_collect", "synthetic-run", "read",
+                "cp_policy_collect", "synthetic-actor", "fixture").orElseThrow();
+            var leases = new JooqJobLeaseDao(tx);
+            assertTrue(leases.claimNext(role + "-new", List.of("cp_policy_collect"), Duration.ofMinutes(10)).isEmpty());
+            String clear = "update module_runtime_control set drain_requested=false,drain_ack_at=null,drain_ack_generation=null,"
+                + "owner_instance=null,owner_heartbeat_at=null where module='" + role + "' and drain_generation=";
+            releaseSql(fixture, clear + "6");
+            assertTrue(leases.claimNext(role + "-new", List.of("cp_policy_collect"), Duration.ofMinutes(10)).isEmpty());
+            releaseSql(fixture, clear + "7");
+            assertTrue(successor.heartbeat(role, role + "-new"));
+            assertEquals("drained-job", leases.claimNext(role + "-new", List.of("cp_policy_collect"), Duration.ofMinutes(10))
+                .orElseThrow().jobId());
+        }
+    }
+
+    private static void releaseSql(Ui2PostgresFixture fixture, String sql) throws Exception {
+        try (var connection = fixture.migrateConnection()) {
+            connection.setAutoCommit(false);
+            Ui2Rows.setAuditContext(connection, "synthetic-release", "module_release");
+            try (var statement = connection.createStatement()) {
+                statement.execute("select pg_advisory_xact_lock(294611)");
+                statement.executeUpdate(sql);
+            }
+            connection.commit();
         }
     }
     @Test void migrationSeedsGeneralAndRecoversMissingOrStaleOwnersIdempotently() throws Exception {
