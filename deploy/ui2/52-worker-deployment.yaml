@@ -57,6 +57,9 @@ spec:
           # second tag or a shell-interpreted environment variable.
           args: ["worker"]
           env:
+            # PO 2026-10-08: failover mutation enabled; set to "false" to disable writes (restart required)
+            - name: NEXUS_FAILOVER_MUTATION_ENABLED
+              value: "true"
             - name: JAVA_TOOL_OPTIONS
               value: -Dui2.worker.claim-policy-fallback=true
             # BK-11: the distinct backup credential (Admin > Credentials: Backup-User-LDAP), never the collection credential.

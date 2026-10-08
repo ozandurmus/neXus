@@ -57,6 +57,9 @@ spec:
             - name: machine
               containerPort: 8086
           env:
+            # PO 2026-10-08: failover mutation enabled; set to "false" to disable writes (restart required)
+            - name: NEXUS_FAILOVER_MUTATION_ENABLED
+              value: "true"
             # BK-11: the distinct backup credential (Admin > Credentials: Backup-User-LDAP), never the collection credential.
             - name: UI2_CP_BACKUP_CREDENTIAL_REF
               value: "a5c22471-26af-4cb1-a13e-090311c88c96"

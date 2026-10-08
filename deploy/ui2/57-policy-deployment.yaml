@@ -46,6 +46,9 @@ spec:
         - worker
         - policy
         env:
+        # PO 2026-10-08: failover mutation enabled; set to "false" to disable writes (restart required)
+        - name: NEXUS_FAILOVER_MUTATION_ENABLED
+          value: "true"
         - name: UI2_DB_HOST
           valueFrom:
             configMapKeyRef:
