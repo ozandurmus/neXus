@@ -2851,6 +2851,40 @@ gates:
     safe_telemetry_fields: []
     source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_06_FAILOVER_EXECUTION_ESTATE.md item 7; approved PR9 phases"
 
+  - gate_id: cp_failover_bond_members
+    vendor: "check_point"
+    platform_role_scope: "cp_gaia_gateway"
+    shell_context: "expert"
+    transport_kind: "SSH_EXEC"
+    canonical_command_key: "cphaprob show_bond <BOND>"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 30
+    retry_rule: "none"
+    max_frequency: "once per selected bond per phase per member"
+    session_reuse_rule: "one SSH session per member per run; commands serial"
+    unsupported_behavior_ref: "UNKNOWN"
+    secret_output_risk: "none"
+    safe_telemetry_fields: []
+    source_document_pointer: "PO chat approval 2026-10-08; CP R82 CLI reference, Viewing Bond Interfaces"
+
+  - gate_id: cp_failover_bond_members_vsid
+    vendor: "check_point"
+    platform_role_scope: "cp_gaia_gateway"
+    shell_context: "expert"
+    transport_kind: "SSH_EXEC"
+    canonical_command_key: "bash -lc 'vsenv <VSID> && cphaprob show_bond <BOND>'"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 30
+    retry_rule: "none"
+    max_frequency: "once per selected bond per phase per member"
+    session_reuse_rule: "one SSH session per member per run; commands serial"
+    unsupported_behavior_ref: "UNKNOWN"
+    secret_output_risk: "none"
+    safe_telemetry_fields: []
+    source_document_pointer: "PO chat approval 2026-10-08; CP R82 CLI reference, Viewing Bond Interfaces"
+
   - gate_id: cp_failover_last_event
     vendor: check_point
     platform_role_scope: cp_gaia_gateway
