@@ -3,6 +3,7 @@ import type { ScreenId } from "./types";
 // Read-only navigation contract, kept beside NavigationRail. The unit test compares
 // this list with the actual tab definitions; the full E2E suite consumes it.
 export const TAB_COVERAGE: readonly { screen: ScreenId; tabList: string; labels: readonly string[] }[] = [
+  { screen: "inventory", tabList: "Lifecycle view", labels: ["Fleet", "Catalog"] },
   { screen: "operations", tabList: "Operations sections", labels: ["HA & readiness", "Jobs", "Queue", "History", "Diagnostics"] },
   { screen: "administration", tabList: "Registry", labels: ["Device management", "Inventory exclusions", "Credentials"] },
   { screen: "administration", tabList: "Access", labels: ["Local identities", "Sessions", "Roles & Permissions", "LDAP Settings"] },

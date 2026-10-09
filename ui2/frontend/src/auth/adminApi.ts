@@ -134,6 +134,66 @@ async function call<T>(path: string, method: "GET" | "POST" | "PUT", body?: unkn
   return parsed as T;
 }
 
+export interface LifecycleCatalogEntry {
+  catalog_id: string;
+  vendor: string;
+  kind: "HARDWARE" | "SOFTWARE";
+  product: string;
+  end_of_sale: string | null;
+  end_of_support: string | null;
+  end_of_engineering: string | null;
+  source: "IMPORT" | "MANUAL";
+  note: string | null;
+  imported_by: string;
+  imported_at: string;
+}
+export type LifecycleCatalogInput = Pick<LifecycleCatalogEntry, "vendor" | "kind" | "product" | "end_of_sale" | "end_of_support" | "end_of_engineering" | "note">;
+export interface LifecycleMatch {
+  status: "MATCHED" | "NO_LIFECYCLE_DATA";
+  reason: string | null;
+  basis: string | null;
+  catalog: LifecycleCatalogEntry | null;
+}
+export interface LifecycleLicense {
+  name?: string;
+  kind?: string;
+  member?: string;
+  label: string;
+  expiry?: string | null;
+  status: string;
+  days_remaining?: number | null;
+}
+export interface LifecycleDevice {
+  device_id: string;
+  hostname: string | null;
+  cluster_member_ref: string | null;
+  vendor: string;
+  model: string | null;
+  software_version: string | null;
+  hardware: LifecycleMatch;
+  software: LifecycleMatch;
+  status: string;
+  risk: "EXPIRED" | "HIGH" | "MEDIUM" | "LOW" | "UNKNOWN";
+  support_days: number | null;
+  next_milestone: { name: string; date: string; days_remaining: number } | null;
+  nearest_license: LifecycleLicense | null;
+  licenses: LifecycleLicense[];
+  license_status: string;
+  support_contract_status: string;
+}
+export interface LifecycleFleet {
+  as_of: string;
+  devices: LifecycleDevice[];
+  summary: Record<string, number>;
+}
+export const getLifecycle = () => call<LifecycleFleet>("/api/v2/lifecycle", "GET");
+export const getDeviceLifecycle = (id: string) => call<LifecycleDevice>(`/devices/${encodeURIComponent(id)}/lifecycle`, "GET");
+export const getLifecycleCatalog = () => call<{ entries: LifecycleCatalogEntry[]; can_manage: boolean }>("/api/v2/lifecycle/catalog", "GET");
+export const saveLifecycleCatalog = (entry: LifecycleCatalogInput, id?: string) =>
+  call(id ? `/api/v2/lifecycle/catalog/${encodeURIComponent(id)}` : "/api/v2/lifecycle/catalog", id ? "PUT" : "POST", entry);
+export const importLifecycleCatalog = (csv: string) => call<{ imported: number }>("/api/v2/lifecycle/catalog/import", "POST", { csv });
+export const deleteLifecycleCatalog = (id: string) => call(`/api/v2/lifecycle/catalog/${encodeURIComponent(id)}/delete`, "POST");
+
 /**
  * The server marks a masked (aiview) response with `X-Nexus-Masked: true`; the shell shows the mask chip on every
  * screen from that header alone -- the browser never infers masking from a role token.

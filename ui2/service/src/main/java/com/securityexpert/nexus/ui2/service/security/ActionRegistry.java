@@ -35,6 +35,7 @@ public final class ActionRegistry {
      * open one.
      */
     public static final String DEVICE_INVENTORY_COLLECT = "device_inventory_collect";
+    public static final String LIFECYCLE_CATALOG_WRITE = "lifecycle_catalog_write";
     public static final String FMG_DIAGNOSTIC_READ = "fmg_diagnostic_read";
     public static final String FMG_DIAGNOSTIC_RUN = "fmg_diagnostic_run";
     /** NXS-LOCAL-0165 "Routes": {@code POST /devices/{id}/configuration/collect} -- same gate as {@link #DEVICE_INVENTORY_COLLECT}. */
@@ -141,6 +142,7 @@ public final class ActionRegistry {
     }
 
     private void seedActions() {
+        register(new ActionDescriptor(LIFECYCLE_CATALOG_WRITE, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(POLICY_COLLECT, true, Optional.of(RoleToken.SECURITY_ADMIN),
                 java.util.Set.of(RoleToken.ONBOARDING_ADMIN, RoleToken.REPLAY_VIEWER)));
         register(new ActionDescriptor(POLICY_READ, true, Optional.of(RoleToken.SECURITY_ADMIN),
