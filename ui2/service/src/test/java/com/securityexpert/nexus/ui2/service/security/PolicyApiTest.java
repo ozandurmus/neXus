@@ -21,7 +21,7 @@ class PolicyApiTest {
     @Test void policyRoutesAllowMaskedCollectionWithoutOtherWrites() throws Exception {
         var action = new ActionRegistry().find(ActionRegistry.POLICY_READ).orElseThrow();
         assertEquals(Set.of(RoleToken.SECURITY_ADMIN, RoleToken.ONBOARDING_ADMIN, RoleToken.REPLAY_VIEWER), action.requiredRoleTokens());
-        for (String route : List.of("GET /api/v2/policy/tree", "GET /api/v2/policy/collections/*", "GET /api/v2/policy/devices", "GET /api/v2/policy/devices/*", "GET /api/v2/policy/policies/*", "GET /api/v2/policy/policies/*/history", "GET /api/v2/policy/policies/*/hygiene", "GET /api/v2/policy/policies/*/hygiene.csv", "GET /api/v2/policy/policies/*/rules/*", "GET /api/v2/policy/objects/*", "GET /api/v2/policy/domains/*/objects", "GET /api/v2/policy/domains/*/unused", "GET /api/v2/policy/domains/*/gateways", "GET /api/v2/policy/domains/*/hits", "GET /api/v2/policy/domains/*/object-usage", "GET /api/v2/policy/domains/*/objects/duplicates", "GET /api/v2/policy/domains/*/installation"))
+        for (String route : List.of("GET /api/v2/policy/tree", "GET /api/v2/policy/collections/*", "GET /api/v2/policy/devices", "GET /api/v2/policy/devices/*", "GET /api/v2/policy/policies/*", "GET /api/v2/policy/policies/*/history", "GET /api/v2/policy/policies/*/hygiene", "GET /api/v2/policy/policies/*/hygiene.csv", "GET /api/v2/policy/policies/*/rules", "GET /api/v2/policy/objects/*", "GET /api/v2/policy/domains/*/objects", "GET /api/v2/policy/domains/*/unused", "GET /api/v2/policy/domains/*/gateways", "GET /api/v2/policy/domains/*/hits", "GET /api/v2/policy/domains/*/object-usage", "GET /api/v2/policy/domains/*/objects/duplicates", "GET /api/v2/policy/domains/*/installation"))
             assertEquals(ActionRegistry.POLICY_READ, SecurityWebMvcConfig.ACTION_ID_BY_ROUTE.get(route));
         assertEquals(Set.of(RoleToken.SECURITY_ADMIN, RoleToken.ONBOARDING_ADMIN, RoleToken.REPLAY_VIEWER),
                 new ActionRegistry().find(ActionRegistry.POLICY_COLLECT).orElseThrow().requiredRoleTokens());
@@ -97,10 +97,10 @@ class PolicyApiTest {
                     new RbacEvaluator.Decision(role.equals(RoleToken.REPLAY_VIEWER) ? AuthzOutcome.PERMITTED : AuthzOutcome.DENIED, Optional.of("test"), Optional.empty(), Optional.empty()));
             when(rbac.evaluateAny(eq(actor), eq(new ActionRegistry().find(ActionRegistry.POLICY_COLLECT).orElseThrow().requiredRoleTokens()), any())).thenReturn(
                     new RbacEvaluator.Decision(allowed ? AuthzOutcome.PERMITTED : AuthzOutcome.DENIED, Optional.of("test"), Optional.empty(), Optional.empty()));
-            for (String suffix : List.of("hygiene", "hygiene.csv", "rules/rule-1")) {
+            for (String suffix : List.of("hygiene", "hygiene.csv", "rules")) {
                 String path = "/api/v2/policy/policies/policy-1/" + suffix;
-                mvc.perform(get(path).servletPath(path)).andExpect(status().isUnauthorized());
-                var result = mvc.perform(get(path).servletPath(path).cookie(new Cookie("ui2_session", cookie)))
+                mvc.perform(get(path).servletPath(path).param("ruleId", "rule-1")).andExpect(status().isUnauthorized());
+                var result = mvc.perform(get(path).servletPath(path).param("ruleId", "rule-1").cookie(new Cookie("ui2_session", cookie)))
                     .andExpect(status().is(allowed ? 200 : 403)).andReturn();
                 if (allowed) {
                     assertEquals("no-store", result.getResponse().getHeader("Cache-Control"));
