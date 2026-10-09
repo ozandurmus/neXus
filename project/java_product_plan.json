@@ -101,6 +101,7 @@
   ],
   "backlog_classifications": {
     "spring_boot_4_spring_security_migration": "java_debt",
+    "ubi9_base_image_refresh": "java_debt",
     "enterprise_platform_conformance": "java_feature",
     "module_e2e_fail_fast": "agent_operations",
     "machine_session_probe_isolation": "agent_operations",
