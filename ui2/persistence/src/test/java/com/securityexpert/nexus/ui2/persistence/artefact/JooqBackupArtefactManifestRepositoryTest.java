@@ -7,6 +7,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.time.Instant;
+import java.util.logging.Handler;
+import java.util.logging.LogRecord;
+import java.util.logging.Logger;
 
 import org.jooq.DSLContext;
 import org.jooq.SQLDialect;
@@ -27,10 +31,38 @@ import com.securityexpert.nexus.ui2.persistence.TransactionBoundary;
 class JooqBackupArtefactManifestRepositoryTest {
 
     private static BackupArtefactManifestRecord sampleRecord(String vendor, Optional<String> softwareVersion) {
+        return sampleRecord(vendor, softwareVersion, Optional.empty());
+    }
+
+    private static BackupArtefactManifestRecord sampleRecord(String vendor, Optional<String> softwareVersion,
+            Optional<Instant> expiresAt) {
         return new BackupArtefactManifestRecord("artefact-1", "device-1", Optional.empty(),
                 ArtefactClass.CONFIGURATION, vendor, softwareVersion, "a".repeat(64), "plain-sha", 100L,
                 "cipher-sha", 132L, "v1", new byte[] { 1, 2, 3 }, ArtefactValidation.reachedWithoutRestore("V1"),
-                "standard", Optional.empty(), "/app/artefact-store", Optional.empty());
+                "standard", expiresAt, "/app/artefact-store", Optional.empty());
+    }
+
+    @Test
+    void missingExpiryWarnsWithoutIdentitiesAndExplicitExpiryDoesNotWarn() {
+        var messages = new ArrayList<String>();
+        var logger = Logger.getLogger(JooqBackupArtefactManifestRepository.class.getName());
+        var handler = new Handler() {
+            @Override public void publish(LogRecord record) { messages.add(record.getMessage()); }
+            @Override public void flush() { }
+            @Override public void close() { }
+        };
+        var dsl = DSL.using(new MockConnection(ctx -> new MockResult[] {new MockResult(1, null)}), SQLDialect.POSTGRES);
+        var repository = new JooqBackupArtefactManifestRepository(new JooqTransactionBoundary(dsl));
+        logger.addHandler(handler);
+        try {
+            repository.record(sampleRecord("palo_alto", Optional.empty()), "system:worker", "backup_artefact_recorded");
+            repository.record(sampleRecord("palo_alto", Optional.empty(), Optional.of(Instant.parse("2026-10-20T00:00:00Z"))),
+                    "system:worker", "backup_artefact_recorded");
+            assertEquals(List.of("[BACKUP_RETENTION] new_artefact_expires_at_null=true; expiry-based retention cannot apply"),
+                    messages);
+        } finally {
+            logger.removeHandler(handler);
+        }
     }
 
     @Test
