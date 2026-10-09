@@ -21,8 +21,8 @@ public final class PolicyController {
         return policies.find(id).<ResponseEntity<?>>map(s -> ok(policies.hygiene(s, page, findingClass, severity, days)))
             .orElseGet(() -> error(HttpStatus.NOT_FOUND));
     }
-    @GetMapping("/api/v2/policy/policies/{id}/rules/{ruleId}")
-    public ResponseEntity<?> rule(@PathVariable String id, @PathVariable String ruleId, @RequestParam(defaultValue = "90") int days) {
+    @GetMapping("/api/v2/policy/policies/{id}/rules")
+    public ResponseEntity<?> rule(@PathVariable String id, @RequestParam String ruleId, @RequestParam(defaultValue = "90") int days) {
         if (!validHygiene("", "", days)) return error(HttpStatus.BAD_REQUEST);
         return policies.find(id).flatMap(s -> policies.rule(s, ruleId, days)).<ResponseEntity<?>>map(PolicyController::ok)
             .orElseGet(() -> error(HttpStatus.NOT_FOUND));

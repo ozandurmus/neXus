@@ -1833,7 +1833,7 @@ const hygieneParams = (findingClass: string, severity: string, days: number) => 
 export const getPolicyHygiene = (id: string, page = 0, findingClass = "", severity = "", days = 90) =>
   call<PolicyHygienePage>(`/api/v2/policy/policies/${encodeURIComponent(id)}/hygiene?page=${page}&${hygieneParams(findingClass, severity, days)}`, "GET");
 export const getPolicyRule = (id: string, rule: string, days = 90) =>
-  call<PolicyRuleDetail>(`/api/v2/policy/policies/${encodeURIComponent(id)}/rules/${encodeURIComponent(rule)}?days=${days}`, "GET");
+  call<PolicyRuleDetail>(`/api/v2/policy/policies/${encodeURIComponent(id)}/rules?ruleId=${encodeURIComponent(rule)}&days=${days}`, "GET");
 export async function downloadPolicyHygiene(id: string, findingClass: string, severity: string, days: number) {
   const response = await fetch(`/api/v2/policy/policies/${encodeURIComponent(id)}/hygiene.csv?${hygieneParams(findingClass, severity, days)}`, { credentials: "include" });
   if (!response.ok) throw new Error("Hygiene export failed");

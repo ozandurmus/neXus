@@ -19,7 +19,7 @@ function mount(node: React.ReactNode) { return render(<ThemeProvider theme={m3Th
 function response(value: unknown) { return new Response(JSON.stringify(value), { status: 200 }); }
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 it("loads counts, filters and threshold, links rules and compares covering vs shadowed", async () => {
-  const fetcher = vi.fn(async (url: string) => url.includes("/rules/") ? response({ ...detail, rule: { ...detail.rule, id: url.includes("/r1?") ? "r1" : "r2", name: url.includes("/r1?") ? "RULE-ALPHA-01" : "RULE-BRAVO-02" } }) : response(page));
+  const fetcher = vi.fn(async (url: string) => url.includes("/rules?") ? response({ ...detail, rule: { ...detail.rule, id: url.includes("ruleId=r1&") ? "r1" : "r2", name: url.includes("ruleId=r1&") ? "RULE-ALPHA-01" : "RULE-BRAVO-02" } }) : response(page));
   vi.stubGlobal("fetch", fetcher); const openRule = vi.fn();
   mount(<PolicyHygieneTab openObject={vi.fn()} policy="p1" openRule={openRule} />);
   expect(screen.getByText("Loading hygiene…")).toBeInTheDocument();

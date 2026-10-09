@@ -38,7 +38,7 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("GET /api/v2/policy/domains/*/hits", ActionRegistry.POLICY_READ),
             Map.entry("GET /api/v2/policy/policies/*/hygiene", ActionRegistry.POLICY_READ),
             Map.entry("GET /api/v2/policy/policies/*/hygiene.csv", ActionRegistry.POLICY_READ),
-            Map.entry("GET /api/v2/policy/policies/*/rules/*", ActionRegistry.POLICY_READ),
+            Map.entry("GET /api/v2/policy/policies/*/rules", ActionRegistry.POLICY_READ),
             Map.entry("GET /api/v2/policy/tree", ActionRegistry.POLICY_READ),
             Map.entry("GET /api/v2/policy/collections/*", ActionRegistry.POLICY_READ),
             Map.entry("POST /api/v2/policy/sources/*/collect", ActionRegistry.POLICY_COLLECT),
