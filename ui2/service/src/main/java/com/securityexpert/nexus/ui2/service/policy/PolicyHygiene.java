@@ -5,7 +5,7 @@ import static com.securityexpert.nexus.ui2.policy.PolicySnapshot.*;
 import java.time.*;
 import java.util.*;
 
-/** Pure stored-evidence analysis. Section identity is the conservative evaluation boundary. */
+/** Pure stored-evidence analysis over proven, ordered evaluation scopes. */
 public final class PolicyHygiene {
     private PolicyHygiene() {}
     public static final Set<String> CLASSES = Set.of("shadowed", "conflict", "disabled", "unused", "expired", "broad", "unknown");
@@ -31,10 +31,14 @@ public final class PolicyHygiene {
         Budget budget = new Budget(workLimit);
         var resolver = new Resolver(snapshot.objects(), budget);
         Map<String, Assessment> results = new LinkedHashMap<>();
+        var scope = new EvaluationScope(snapshot.metadata());
+        List<Match> earlier = new ArrayList<>();
+        boolean earlierUnknown = false;
         for (Section section : snapshot.sections()) {
-            // Compare terminal actions within a section; unsupported predecessors remain uncertainty barriers.
-            List<Match> earlier = new ArrayList<>();
-            boolean earlierUnknown = false;
+            if (!scope.advance(section)) {
+                earlier.clear();
+                earlierUnknown = false;
+            }
             for (Rule rule : section.rules()) {
                 List<Finding> findings = new ArrayList<>();
                 String status = "UNKNOWN", reason = "analysis budget", covering = null;
@@ -62,11 +66,13 @@ public final class PolicyHygiene {
                             : "Broad selectors are present; see permissiveness reasons."));
                     }
                     reason = match.problem();
+                    if (scope.unproven) reason = "earlier sections not analysed";
                     if (reason == null) {
                         status = "NOT_SHADOWED";
                         if (earlierUnknown) reason = "earlier rule has unsupported constraints";
                         for (Match prior : earlier) {
                             budget.spend();
+                            if (disjoint(prior, match, snapshot.objects())) continue;
                             if (!compatible(prior, match)) { reason = "zone or install-on coverage is unproven"; continue; }
                             boolean covers = true;
                             for (int i = 0; i < 4 && covers; i++) covers = contains(prior.selectors().get(i), match.selectors().get(i), budget);
@@ -97,6 +103,59 @@ public final class PolicyHygiene {
             }
         }
         return new Result(Collections.unmodifiableMap(results), budget.left[0] < 0);
+    }
+    private static final class EvaluationScope {
+        private final Metadata metadata;
+        private final Set<String> parents = new HashSet<>();
+        private final Set<String> sectionIds = new HashSet<>();
+        private Section previous;
+        private int lastNumber, lastPhase = -1;
+        private boolean orderKnown = true;
+        boolean unproven;
+        EvaluationScope(Metadata metadata) { this.metadata = metadata; }
+        boolean advance(Section section) {
+            boolean joined = false;
+            if (metadata.vendor().equals("CP") && "CP access layer".equals(section.source())) {
+                joined = previous != null && "CP access layer".equals(previous.source())
+                    && Objects.equals(previous.parentRuleId(), section.parentRuleId());
+                if (!joined) {
+                    unproven = parents.contains(section.parentRuleId());
+                    lastNumber = 0;
+                    orderKnown = true;
+                }
+                parents.add(section.parentRuleId());
+                boolean ordered = orderKnown && sectionIds.add(section.id())
+                    && (section.parentRuleId() == null || !section.parentRuleId().isBlank());
+                for (Rule rule : section.rules()) {
+                    ordered &= rule.number() > lastNumber;
+                    lastNumber = rule.number();
+                }
+                if (joined && !ordered) unproven = true;
+                orderKnown = ordered;
+            } else if (metadata.vendor().equals("PAN")) {
+                int phase = panPhase(section);
+                boolean ordered = phase >= 0 && phase >= lastPhase && sectionIds.add(section.id());
+                joined = previous != null && orderKnown && ordered;
+                if (previous != null && !joined) unproven = true;
+                orderKnown &= ordered;
+                lastPhase = phase;
+            } else {
+                unproven = previous != null;
+            }
+            previous = section;
+            return joined && !unproven;
+        }
+        private int panPhase(Section section) {
+            if (section.parentRuleId() != null || metadata.id() == null || metadata.id().isBlank()
+                    || metadata.sourceId() == null || metadata.sourceId().isBlank()
+                    || metadata.containerId() == null || metadata.containerId().isBlank()
+                    || section.source() == null || section.source().isBlank()) return -1;
+            // Verify the mapper's opaque section identity; display labels do not establish phase or lineage.
+            var phases = List.of("pre-rulebase", "rulebase", "post-rulebase");
+            for (int i = 0; i < phases.size(); i++)
+                if (ref(metadata.id(), section.source(), phases.get(i)).equals(section.id())) return i;
+            return -1;
+        }
     }
     private static Finding finding(String cls, String severity, String evidence) { return new Finding(cls, severity, evidence); }
     private static Finding unknown(String evidence) { return finding("unknown", "LOW", evidence); }
@@ -144,6 +203,19 @@ public final class PolicyHygiene {
             if (problem.getMessage().equals("analysis budget")) throw problem;
             return new Match(rule, List.of(), Map.of(), problem.getMessage());
         }
+    }
+    private static boolean disjoint(Match a, Match b, Map<String, PolicyObject> objects) {
+        for (String key : List.of("from", "to", "install-on")) {
+            var left = a.placements().get(key); var right = b.placements().get(key);
+            if (left.isEmpty() || right.isEmpty()) continue;
+            if (key.equals("install-on")) {
+                // Resolved group membership and wildcard targets are not distinct atomic placements.
+                if (java.util.stream.Stream.concat(left.stream(), right.stream()).anyMatch(id ->
+                        objects.get(id).type().equals("any") || !objects.get(id).members().isEmpty())) continue;
+            } else if (left.contains("any") || right.contains("any")) continue;
+            if (Collections.disjoint(left, right)) return true;
+        }
+        return false;
     }
     private static boolean compatible(Match covering, Match covered) {
         for (String key : List.of("from", "to", "install-on")) {

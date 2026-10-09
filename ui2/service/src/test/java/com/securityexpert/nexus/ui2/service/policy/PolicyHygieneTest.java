@@ -68,22 +68,126 @@ class PolicyHygieneTest {
         objects.put("ports", object("ports", "service", "protocol: udp", "port: 400-500"));
         assertEquals("NOT_SHADOWED", analyze(List.of(first, second), objects).rules().get("r2").shadowStatus());
     }
-    @Test void unsupportedEarlierRulesAndIncompatibleZonesCannotProveClean() {
+    @Test void unsupportedEarlierRulesAndOverlappingUnequalZonesCannotProveClean() {
         var first = rule("r1", "missing", "port", "allow", true); var second = rule("r2", "host", "port", "allow", true);
         assertEquals("UNKNOWN", analyze(List.of(first, second), objects()).rules().get("r2").shadowStatus());
-        first = edit(rule("r1", "host", "port", "allow", true), cell("host"), Map.of("from", List.of("ZONE-ALPHA-01")));
+        first = edit(rule("r1", "host", "port", "allow", true), cell("host"), Map.of("from", List.of("ZONE-ALPHA-01", "ZONE-BRAVO-01")));
         second = edit(second, cell("host"), Map.of("from", List.of("ZONE-BRAVO-01")));
         assertEquals("UNKNOWN", analyze(List.of(first, second), objects()).rules().get("r2").shadowStatus());
         first = edit(first, cell("host"), Map.of("from", List.of("any")));
         assertEquals("REDUNDANT", analyze(List.of(first, second), objects()).rules().get("r2").shadowStatus());
     }
-    @Test void sectionsLayersInlineAndPrePostNeverCross() {
+    @Test void disjointZonesDoNotAddUncertaintyEvenWhenAnotherPlacementOverlaps() {
+        for (String key : List.of("from", "to")) {
+            String other = key.equals("from") ? "to" : "from";
+            var first = edit(rule("r1", "any", "any", "allow", true), cell("any"),
+                Map.of(key, List.of("ZONE-ALPHA-01"), other, List.of("ZONE-DELTA-01", "ZONE-ECHO-01")));
+            var second = edit(rule("r2", "host", "port", "allow", true), cell("host"),
+                Map.of(key, List.of("ZONE-BRAVO-01"), other, List.of("ZONE-DELTA-01")));
+            var result = analyze(List.of(first, second), objects()).rules().get("r2");
+            assertEquals("NOT_SHADOWED", result.shadowStatus());
+            assertNull(result.shadowReason());
+            assertFalse(result.findings().stream().anyMatch(f -> f.evidence().startsWith("Shadowing:")));
+            second = edit(second, cell("host"), Map.of(key, List.of("any")));
+            assertEquals("UNKNOWN", analyze(List.of(first, second), objects()).rules().get("r2").shadowStatus());
+        }
+    }
+    static PolicySnapshot sections(String vendor, Section... sections) {
+        var base = snapshot(List.of(), objects()); var m = base.metadata();
+        return new PolicySnapshot(new Metadata(m.id(), m.sourceId(), m.sourceName(), vendor, m.containerId(),
+            m.containerName(), m.name(), m.collectedAt(), m.artefactRef(), m.targets()), List.of(sections), base.objects());
+    }
+    static Rule cpRule(String id, String action) {
+        return edit(rule(id, "any", "any", action, true), cell("any"),
+            Map.of("time", List.of("any"), "install-on", List.of("any")));
+    }
+    static Section cpSection(String id, String parent, Rule... rules) {
+        return new Section(id, "OBJ-SECTION-01", "CP access layer", parent, List.of(rules));
+    }
+    static Section panSection(String source, String phase, Rule... rules) {
+        return new Section(ref("p1", source, phase), "OBJ-SECTION-01", source, null, List.of(rules));
+    }
+    static PolicyHygiene.Assessment assessment(PolicySnapshot snapshot, String id) {
+        return PolicyHygiene.analyze(snapshot, 90, NOW, 250000).rules().get(id);
+    }
+    @Test void checkPointConsecutiveSectionsCarryCoverageAndConflicts() {
+        for (String action : List.of("Accept", "Drop")) {
+            var snapshot = sections("CP", cpSection("s1", null, cpRule("r1", action)),
+                cpSection("s2", null, cpRule("r2", "Accept")));
+            var result = assessment(snapshot, "r2");
+            assertEquals(action.equals("Accept") ? "REDUNDANT" : "CONFLICT", result.shadowStatus());
+            assertEquals("r1", result.coveringRuleId());
+        }
+    }
+    @Test void checkPointInlineLayerStaysSeparateAndReturningParentIsUnproven() {
+        var snapshot = sections("CP", cpSection("s1", null, cpRule("r1", "Accept")),
+            cpSection("inline", "r1", cpRule("r2", "Accept")), cpSection("s3", null, cpRule("r3", "Accept")));
+        assertEquals("NOT_SHADOWED", assessment(snapshot, "r2").shadowStatus());
+        assertNull(assessment(snapshot, "r2").coveringRuleId());
+        assertEquals("UNKNOWN", assessment(snapshot, "r3").shadowStatus());
+        assertEquals("earlier sections not analysed", assessment(snapshot, "r3").shadowReason());
+    }
+    @Test void checkPointUnprovenSectionOrderStaysUnknownForEveryLaterRule() {
+        var snapshot = sections("CP", cpSection("s1", null, cpRule("r2", "Accept")),
+            cpSection("s2", null, cpRule("r1", "Accept"), cpRule("r3", "Accept")),
+            cpSection("s3", null, cpRule("r4", "Accept")));
+        for (String id : List.of("r1", "r3", "r4")) {
+            assertEquals("UNKNOWN", assessment(snapshot, id).shadowStatus());
+            assertEquals("earlier sections not analysed", assessment(snapshot, id).shadowReason());
+            assertNull(assessment(snapshot, id).coveringRuleId());
+        }
+    }
+    @Test void checkPointDuplicateSectionIdentityCannotProveCoverage() {
+        var snapshot = sections("CP", cpSection("s1", null, cpRule("r1", "Accept")),
+            cpSection("s1", null, cpRule("r2", "Accept")));
+        assertEquals("UNKNOWN", assessment(snapshot, "r2").shadowStatus());
+        assertEquals("earlier sections not analysed", assessment(snapshot, "r2").shadowReason());
+    }
+    @Test void panPreRulesCoverLocalAndPostRulesAcrossStoredChain() {
+        var first = rule("r1", "any", "any", "allow", true);
+        var second = rule("r2", "host", "port", "allow", true);
+        var snapshot = sections("PAN", panSection("Shared", "pre-rulebase", first),
+            panSection("OBJ-GROUP-01", "pre-rulebase"), panSection("OBJ-GROUP-01", "rulebase", second),
+            panSection("OBJ-GROUP-01", "post-rulebase", rule("r3", "host", "port", "deny", true)));
+        assertEquals("REDUNDANT", assessment(snapshot, "r2").shadowStatus());
+        assertEquals("r1", assessment(snapshot, "r2").coveringRuleId());
+        assertEquals("CONFLICT", assessment(snapshot, "r3").shadowStatus());
+    }
+    @Test void panUnprovenIdentityOrOrderCannotProveLaterSectionsCleanOrShadowed() {
         var first = rule("r1", "any", "any", "allow", true); var second = rule("r2", "host", "port", "allow", true);
-        for (String parent : List.of("", "r1")) {
-            var base = snapshot(List.of(), objects());
-            var s = new PolicySnapshot(base.metadata(), List.of(new Section("pre", "Pre rules", "Shared", null, List.of(first)),
-                new Section("post", "Post rules", "Shared", parent.isEmpty() ? null : parent, List.of(second))), base.objects());
-            assertEquals("NOT_SHADOWED", PolicyHygiene.analyze(s, 90, NOW, 250000).rules().get("r2").shadowStatus());
+        for (var snapshot : List.of(
+                sections("PAN", new Section("unproven", "Pre rules", "Shared", null, List.of(first)), panSection("Shared", "rulebase", second)),
+                sections("PAN", panSection("Shared", "post-rulebase", first), panSection("Shared", "rulebase", second)),
+                sections("PAN", panSection("Shared", "pre-rulebase", first), panSection("Shared", "pre-rulebase", second)),
+                sections("PAN", panSection("Shared", "pre-rulebase", first), new Section("unproven", "Local rules", "Shared", null, List.of(second))))) {
+            assertEquals("UNKNOWN", assessment(snapshot, "r2").shadowStatus());
+            assertEquals("earlier sections not analysed", assessment(snapshot, "r2").shadowReason());
+            assertNull(assessment(snapshot, "r2").coveringRuleId());
+        }
+    }
+    @Test void panLocalRulesCoverPostRulesAndDisabledPreRulesDoNotCoverLocal() {
+        var snapshot = sections("PAN", panSection("Shared", "pre-rulebase", rule("r1", "any", "any", "allow", false)),
+            panSection("OBJ-GROUP-01", "rulebase", rule("r2", "any", "any", "allow", true)),
+            panSection("OBJ-GROUP-01", "post-rulebase", rule("r3", "host", "port", "allow", true)));
+        assertEquals("NOT_SHADOWED", assessment(snapshot, "r2").shadowStatus());
+        assertEquals("REDUNDANT", assessment(snapshot, "r3").shadowStatus());
+        assertEquals("r2", assessment(snapshot, "r3").coveringRuleId());
+    }
+    @Test void unsupportedEarlierSectionRemainsAnUncertaintyBarrier() {
+        var first = edit(cpRule("r1", "Accept"), cell("missing"), Map.of());
+        var snapshot = sections("CP", cpSection("s1", null, first), cpSection("s2", null, cpRule("r2", "Accept")));
+        assertEquals("earlier rule has unsupported constraints", assessment(snapshot, "r2").shadowReason());
+        assertEquals("UNKNOWN", assessment(snapshot, "r2").shadowStatus());
+    }
+    @Test void installOnDisjointResolvedTargetsSkipButOverlapWildcardAndUnresolvedStayUnknown() {
+        var objects = objects();
+        objects.put("target-a", object("target-a", "host")); objects.put("target-b", object("target-b", "host"));
+        var first = edit(cpRule("r1", "Accept"), cell("any"), Map.of("install-on", List.of("target-a")));
+        for (var targets : List.of(List.of("target-b"), List.of("target-a", "target-b"), List.of("any"), List.of("missing"))) {
+            var second = edit(cpRule("r2", "Accept"), cell("any"), Map.of("install-on", targets));
+            var base = sections("CP", cpSection("s1", null, first, second));
+            var result = assessment(new PolicySnapshot(base.metadata(), base.sections(), objects), "r2");
+            assertEquals(targets.equals(List.of("target-b")) ? "NOT_SHADOWED" : "UNKNOWN", result.shadowStatus());
         }
     }
     @Test void checkPointEmptyApplicationIsNotAnUnresolvedSelectorButMissingTimeIs() {
