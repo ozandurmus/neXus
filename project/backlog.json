@@ -1127,6 +1127,15 @@
       "note": ""
     },
     {
+      "id": "ubi9_base_image_refresh",
+      "category": "Security",
+      "title": "Refresh the pinned UBI9 base image digests when Red Hat ships fixed gnutls/expat/krb5-libs; then remove the time-boxed OS-library exceptions",
+      "status": "planned",
+      "priority": "P2",
+      "target": "2026-10-31: OS-library baseline exception review date",
+      "note": ""
+    },
+    {
       "id": "spring_boot_4_spring_security_migration",
       "category": "Security",
       "title": "Migrate to Spring Boot 4 / Spring Framework 7.0.9+ and Spring Security authentication/authorization; preserve RBAC",
