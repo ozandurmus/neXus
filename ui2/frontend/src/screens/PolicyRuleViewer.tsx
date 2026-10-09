@@ -61,7 +61,7 @@ function Extra({ name, values, objects, openObject }: { name: string; values: st
     {values.length > 4 && <Button size="small" aria-expanded={expanded} onClick={() => setExpanded(v => !v)}>{expanded ? "▴ Less" : `+${values.length - 4} ▾`}</Button>}
   </Box>;
 }
-export function RuleMetrics({ rule }: { rule: PolicyRule }) {
+export function RuleMetrics({ rule, openRuleId }: { rule: PolicyRule; openRuleId?: (id: string) => void }) {
   const status = rule.timeStatus ?? "unknown";
   const tiles = [
     ["Hits", String(rule.hitCounts?.hits ?? "UNKNOWN"), rule.hitCounts ? `${rule.hitCounts.source} · Collected: ${rule.hitCounts.collectedAt}` : "Hit counts not collected"],
@@ -70,12 +70,17 @@ export function RuleMetrics({ rule }: { rule: PolicyRule }) {
     ["Last modified", rule.extras["last-modified"]?.[0] ?? "—", "vendor modification time, when collected"],
     ["Time/Schedule status", status === "unknown" ? "—" : status, (rule.schedules ?? []).map(scheduleLabel).join("; ") || (status === "always" ? "Unbounded schedule" : "schedule not collected")],
     ["Permissiveness", rule.permissiveness?.level === "Unknown" ? "—" : rule.permissiveness?.level ?? "—", rule.permissiveness?.reasons.join("; ") || "requires analysis"],
-    ["Shadowed", "—", "requires analysis"], ["Violations", "—", "requires analysis"],
+    ["Shadowed", rule.hygiene?.shadowStatus ?? "UNKNOWN", rule.hygiene?.shadowReason ?? "Stored-snapshot analysis"],
+    ["Violations", rule.hygiene ? String(rule.hygiene.findings.filter(f => f.findingClass !== "unknown").length) : "UNKNOWN", "Stored hygiene findings; UNKNOWN entries are evidence gaps"],
   ];
   return <Box className="policy-rule-metrics" aria-label="Rule metrics" sx={{ width: 220, maxWidth: "100%", display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 1 }}>
     {tiles.map(([name, value, tip]) => <Tooltip key={name} title={tip}><Box sx={{ borderBottom: `1px solid ${m3.outlineVar}`, pb: 1, minWidth: 0 }}>
       <Typography variant="caption" color="text.secondary">{name}</Typography>
       <Typography variant="body2" sx={{ fontWeight: 700, overflowWrap: "anywhere", color: value === "High" || value === "expired" ? m3.error : value === "Medium" ? m3.warning : value === "Low" ? m3.success : undefined }}>{value}</Typography>
+      {name === "Permissiveness" && <Typography variant="caption" display="block">Why this level: {tip}{rule.permissiveness?.score !== undefined ? ` · Score ${rule.permissiveness.score}` : ""}</Typography>}
+      {name === "Shadowed" && value === "UNKNOWN" && <Typography variant="caption" display="block">UNKNOWN because {rule.hygiene?.shadowReason ?? "analysis not available"}</Typography>}
+      {name === "Shadowed" && rule.hygiene?.coveringRuleId && openRuleId && <Button size="small" onClick={() => openRuleId(rule.hygiene!.coveringRuleId!)}>Covering rule</Button>}
+      {name === "Violations" && rule.hygiene?.findings.map((f, i) => <Typography key={i} variant="caption" display="block">{f.findingClass === "unknown" ? "UNKNOWN because" : `${f.severity} · ${f.findingClass}:`} {f.evidence}</Typography>)}
     </Box></Tooltip>)}
   </Box>;
 }
@@ -100,10 +105,10 @@ export function RuleFields({ rule, objects, openObject, compact = false }: { rul
       <Box component="details" key={name as string}><Box component="summary" sx={{ cursor: "pointer", fontSize: 12, fontWeight: 700 }}>{name}</Box>{content}</Box>)}</Box>}
   </Box>;
 }
-export function VirtualPolicyCards({ sections, collapsed, scrollTop, toggle, objects, metadata, openObject, openRule, selected, onSelect }: {
+export function VirtualPolicyCards({ sections, collapsed, scrollTop, toggle, objects, metadata, openObject, openRule, selected, onSelect, openRuleId }: {
   sections: PolicyPage["sections"]; collapsed: Set<string>; scrollTop: number; toggle: (id: string) => void;
   objects: Map<string, PolicyObject>; metadata: PolicyMetadata; openObject: (id: string) => void; openRule: (rule: PolicyRule) => void;
-  selected: Set<string>; onSelect: (id: string) => void;
+  selected: Set<string>; onSelect: (id: string) => void; openRuleId?: (id: string) => void;
 }) {
   const narrow = useMediaQuery("(max-width: 1399px)");
   const headerHeight = 44, cardHeight = narrow ? 430 : 280, start = Math.max(0, scrollTop - cardHeight * 2), end = start + 1800;
@@ -138,7 +143,7 @@ export function VirtualPolicyCards({ sections, collapsed, scrollTop, toggle, obj
           {rule.timeStatus === "expired" && <Chip size="small" color="error" label="Expired" />}
           {rule.expiring && <Chip size="small" color="warning" label="Expiring within 14 days" />}
         </Stack><Box sx={{ pt: 1, minWidth: 0 }}><RuleFields compact rule={rule} objects={objects} openObject={openObject} /></Box></Box>
-        <RuleMetrics rule={rule} />
+        <RuleMetrics rule={rule} openRuleId={openRuleId} />
       </Box>
     </Box>, cardHeight);
   }
@@ -175,15 +180,14 @@ export function RuleHistory({ policy, rule = "" }: { policy: string; rule?: stri
     </Table><Stack direction="row"><Button disabled={page === 0} onClick={() => setPage(p => p - 1)}>Previous revisions</Button><Button disabled={revisions.length < 200} onClick={() => setPage(p => p + 1)}>Next revisions</Button></Stack>
   </Box>;
 }
-export function RuleDetailPanel({ rule, section, metadata, objects, openObject }: { rule: PolicyRule; section: PolicySection; metadata: PolicyMetadata; objects: Map<string, PolicyObject>; openObject: (id: string) => void }) {
+export function RuleDetailPanel({ rule, section, metadata, objects, openObject, openRuleId }: { rule: PolicyRule; section: PolicySection; metadata: PolicyMetadata; objects: Map<string, PolicyObject>; openObject: (id: string) => void; openRuleId?: (id: string) => void }) {
   const [tab, setTab] = useState("Overview");
   return <Box><Typography variant="h6">{rule.name || "Unnamed rule"}</Typography>
     <Box sx={{ display: "grid", gridTemplateColumns: "130px minmax(0, 1fr)", gap: 2, mt: 2 }}>
       <Stack component="nav" aria-label="Rule detail navigation" alignItems="stretch">
-        {["Overview", "Rule history", "Objects"].map(label => <Button key={label} aria-pressed={tab === label} onClick={() => setTab(label)} sx={{ justifyContent: "flex-start", textTransform: "none" }}>{label}</Button>)}
-        {["Shadowing", "Violations"].map(label => <Tooltip key={label} title="coming later"><span><Button disabled>{label}</Button></span></Tooltip>)}
+        {["Overview", "Rule history", "Objects", "Shadowing", "Violations"].map(label => <Button key={label} aria-pressed={tab === label} onClick={() => setTab(label)} sx={{ justifyContent: "flex-start", textTransform: "none" }}>{label}</Button>)}
       </Stack><Box sx={{ minWidth: 0 }}>
-        {tab === "Overview" && <><RuleMetrics rule={rule} /><Typography variant="body2" sx={{ my: 2 }}>{metadata.sourceName} · {containerLabel(metadata, section, rule)} · Domain: {metadata.containerName} · Tags: {rule.extras.tag?.join(", ") || "—"}</Typography>
+        {tab === "Overview" && <><RuleMetrics rule={rule} openRuleId={openRuleId} /><Typography variant="body2" sx={{ my: 2 }}>{metadata.sourceName} · {containerLabel(metadata, section, rule)} · Domain: {metadata.containerName} · Tags: {rule.extras.tag?.join(", ") || "—"}</Typography>
           {rule.hitCounts && <Box sx={{ my: 2, overflowX: "auto" }}><Typography variant="body2">Hits: {rule.hitCounts.hits ?? "UNKNOWN"} · First hit: {rule.hitCounts.firstHit ?? "—"} · Source: {rule.hitCounts.source} · Collected: {rule.hitCounts.collectedAt}</Typography>
             {!!rule.hitCounts.firewalls.length && <Table size="small" aria-label="Per-firewall hit counts"><TableHead><TableRow>
               {["Firewall", "Context", "Hits", "First hit", "Last hit", "Created", "Modified", "Collected"].map(label => <TableCell key={label}>{label}</TableCell>)}
@@ -195,6 +199,7 @@ export function RuleDetailPanel({ rule, section, metadata, objects, openObject }
           </Box>}
           <Typography variant="caption" display="block">UUID: {rule.uuid || "—"}</Typography><Typography variant="caption" display="block">Enabled: {rule.enabled === null ? "UNKNOWN" : String(rule.enabled)}</Typography>
           <RuleFields rule={rule} objects={objects} openObject={openObject} /></>}
+        {(tab === "Shadowing" || tab === "Violations") && <RuleMetrics rule={rule} openRuleId={openRuleId} />}
         {tab === "Rule history" && <RuleHistory policy={metadata.id} rule={rule.id} />}
         {tab === "Objects" && <Stack alignItems="flex-start">{[...new Set([rule.source, rule.destination, rule.service, rule.application].flatMap(c => c.refs).concat(rule.extras.time ?? [], rule.extras.schedule ?? []))].map(id =>
           <Button key={id} onClick={() => openObject(id)}>{objects.get(id)?.name ?? "Unresolved object"}</Button>)}</Stack>}

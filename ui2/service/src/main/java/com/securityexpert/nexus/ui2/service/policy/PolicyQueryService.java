@@ -366,10 +366,85 @@ public final class PolicyQueryService {
     @SuppressWarnings("unchecked")
     private Map<String, Object> map(Object value) { return mapper.convertValue(value, Map.class); }
 
+    private record CachedHygiene(PolicySnapshot snapshot, int days, java.time.Instant at, PolicyHygiene.Result result) {}
+    private final Map<String, CachedHygiene> hygieneCache = new LinkedHashMap<>(8, 0.75f, true);
+    synchronized PolicyHygiene.Result analysis(PolicySnapshot snapshot, int days) {
+        var now = java.time.Instant.now();
+        var cached = hygieneCache.get(snapshot.metadata().id());
+        if (cached != null && cached.days() == days && cached.at().plusSeconds(30).isAfter(now) && cached.snapshot().equals(snapshot)) return cached.result();
+        var result = PolicyHygiene.analyze(snapshot, days, now, 250_000);
+        hygieneCache.put(snapshot.metadata().id(), new CachedHygiene(snapshot, days, now, result));
+        if (hygieneCache.size() > 4) hygieneCache.remove(hygieneCache.keySet().iterator().next());
+        return result;
+    }
+    private Map<String, Object> ruleView(Rule r, PolicySnapshot snapshot, PolicyHygiene.Result analysis) {
+        var rule = map(r); rule.put("identityFallback", r.uuid().isEmpty());
+        var assessment = analysis.rules().get(r.id());
+        rule.put("hygiene", map(assessment));
+        rule.put("timeStatus", assessment.timeStatus()); rule.put("expiring", assessment.expiring());
+        rule.put("schedules", PolicyRuleMetrics.time(r, snapshot.objects(), java.time.Instant.now(), snapshot.metadata().vendor()).schedules().stream().map(this::map).toList());
+        rule.put("permissiveness", assessment.permissiveness());
+        return rule;
+    }
+    public Optional<PolicyResponse> rule(PolicySnapshot snapshot, String id, int days) {
+        for (var section : snapshot.sections()) for (var rule : section.rules()) if (rule.id().equals(id)) {
+            var refs = new LinkedHashSet<String>();
+            for (var cell : List.of(rule.source(), rule.destination(), rule.service(), rule.application())) refs.addAll(cell.refs());
+            for (String key : List.of("time", "schedule", "install-on", "vpn", "content")) refs.addAll(rule.extras().getOrDefault(key, List.of()));
+            var objects = refs.stream().filter(snapshot.objects()::containsKey).map(ref -> {
+                var o = snapshot.objects().get(ref);
+                return map(new PolicyObject(o.id(), o.name(), o.type(), List.of(), List.of(), o.status(), o.schedule()));
+            }).toList();
+            var sectionView = map(new Section(section.id(), section.name(), section.source(), section.parentRuleId(), List.of()));
+            sectionView.put("total", section.rules().size());
+            return Optional.of(new PolicyResponse(Map.of("metadata", metadata(snapshot.metadata()), "rule", ruleView(rule, snapshot, analysis(snapshot, days)),
+                "section", sectionView, "objects", objects)));
+        }
+        return Optional.empty();
+    }
+    public PolicyResponse hygiene(PolicySnapshot snapshot, int page, String cls, String severity, int days) {
+        var analysis = analysis(snapshot, days);
+        Map<String, Integer> counts = new TreeMap<>(); PolicyHygiene.CLASSES.forEach(c -> counts.put(c, 0));
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (var section : snapshot.sections()) for (var rule : section.rules()) {
+            var assessment = analysis.rules().get(rule.id());
+            assessment.findings().stream().map(PolicyHygiene.Finding::findingClass).distinct().forEach(c -> counts.merge(c, 1, Integer::sum));
+            var findings = assessment.findings().stream().filter(f -> cls.isEmpty() || f.findingClass().equals(cls))
+                .filter(f -> severity.isEmpty() || f.severity().equals(severity)).toList();
+            if (findings.isEmpty()) continue;
+            rows.add(Map.of("ruleId", rule.id(), "number", rule.number(), "name", rule.name(), "sectionId", section.id(),
+                "findings", findings.stream().map(this::map).toList(), "hygiene", map(assessment)));
+        }
+        return new PolicyResponse(Map.of("rows", rows.stream().skip((long) page * 200).limit(200).toList(), "total", rows.size(),
+            "page", page, "pageSize", 200, "counts", counts, "budgetReached", analysis.budgetReached(), "days", days));
+    }
+    public byte[] hygieneCsv(PolicySnapshot snapshot, String cls, String severity, int days, boolean masked) {
+        var analysis = analysis(snapshot, days);
+        StringBuilder csv = new StringBuilder("Rule,Number,Class,Severity,Evidence,Covering rule,Counter window,Hit source,Collected at\r\n");
+        for (var section : snapshot.sections()) for (var rule : section.rules()) {
+            var assessment = analysis.rules().get(rule.id());
+            var identity = searchable(Map.of("name", rule.name(), "number", rule.number()), masked);
+            for (var finding : assessment.findings()) {
+                if ((!cls.isEmpty() && !cls.equals(finding.findingClass())) || (!severity.isEmpty() && !severity.equals(finding.severity()))) continue;
+                var safe = searchable(map(assessment), masked);
+                var fields = Arrays.asList(identity.get("name"), rule.number(), finding.findingClass(), finding.severity(), finding.evidence(),
+                    assessment.coveringRuleId(), safe.get("counterWindow"), safe.get("hitSource"), safe.get("hitsCollectedAt"));
+                csv.append(fields.stream().map(PolicyQueryService::csvCell).collect(java.util.stream.Collectors.joining(","))).append("\r\n");
+            }
+        }
+        return csv.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    }
+    private static String csvCell(Object value) {
+        String text = value == null ? "" : String.valueOf(value);
+        if (text.matches("(?s)^[\\s]*[=+@-].*")) text = "'" + text;
+        return "\"" + text.replace("\"", "\"\"") + "\"";
+    }
+
     public PolicyResponse page(PolicySnapshot snapshot, int page, String query, boolean masked) {
         return page(snapshot, page, query, masked, "", 90);
     }
     public PolicyResponse page(PolicySnapshot snapshot, int page, String query, boolean masked, String hitFilter, int days) {
+        var hygiene = analysis(snapshot, days);
         PolicySnapshot searchable = snapshot;
         if (masked) searchable = mapper.convertValue(PolicyPrivacy.mask(map(snapshot), "", names,
                 ips), PolicySnapshot.class);
@@ -390,13 +465,7 @@ public final class PolicyQueryService {
             for (Rule rule : rules) for (String key : List.of("time", "schedule", "install-on", "vpn", "content"))
                 objectIds.addAll(rule.extras().getOrDefault(key, List.of()));
             Map<String, Object> view = map(new Section(section.id(), section.name(), section.source(), section.parentRuleId(), rules));
-            view.put("rules", rules.stream().map(r -> {
-                var rule = map(r); rule.put("identityFallback", r.uuid().isEmpty());
-                var time = PolicyRuleMetrics.time(r, snapshot.objects(), java.time.Instant.now(), snapshot.metadata().vendor());
-                rule.put("timeStatus", time.status()); rule.put("schedules", time.schedules().stream().map(this::map).toList()); rule.put("expiring", time.expiring());
-                rule.put("permissiveness", PolicyRuleMetrics.permissiveness(r, snapshot.objects()));
-                return rule;
-            }).toList());
+            view.put("rules", rules.stream().map(r -> ruleView(r, snapshot, hygiene)).toList());
             view.put("total", section.rules().size());
             sections.add(view);
         }

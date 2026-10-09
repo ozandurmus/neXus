@@ -7,13 +7,30 @@ import com.securityexpert.nexus.ui2.service.privacy.SubnetPreservingIpMasker;
 /** Fail-closed policy projection: unfamiliar fields and free-form extensions never pass through AIView. */
 public final class PolicyPrivacy {
     private PolicyPrivacy() {}
-    private static final Set<String> OPAQUE = Set.of("id", "sourceId", "containerId", "deviceId", "artefactRef", "parentRuleId", "layerRef", "jobId", "ruleId", "policyId", "uid", "duplicateId");
+    private static final Set<String> OPAQUE = Set.of("id", "sourceId", "containerId", "deviceId", "artefactRef", "parentRuleId", "layerRef", "jobId", "ruleId", "policyId", "uid", "duplicateId", "sectionId", "coveringRuleId");
     private static final Set<String> ENUMS = Set.of("CP", "PAN", "static", "hide", "any", "address", "group", "service", "service-group", "address-group",
             "simple-gateway", "simple-cluster", "cluster", "gateway", "checkpoint-host", "vsx-cluster", "vsx-gateway", "vsx-cluster-member", "CpmiGatewayCluster", "CpmiVsClusterNetobj", "CpmiVsxClusterNetobj", "CpmiVsxNetobj", "CpmiVsxClusterMember",
             "COLLECTION_FAILED", "host", "network", "address-range", "group-with-exclusion", "service-tcp", "service-udp", "service-icmp", "service-icmp6", "service-other", "service-sctp", "service-dce-rpc", "service-rpc", "access-role", "dynamic-object", "dns-domain", "security-zone",
             "times", "time-groups", "gateways-and-servers", "hosts", "networks", "groups", "groups-with-exclusion", "address-ranges", "services-tcp", "services-udp", "services-icmp", "services-icmp6", "services-other", "services-sctp", "services-dce-rpc", "services-rpc", "service-groups", "access-roles", "dynamic-objects", "dns-domains", "security-zones", "unused-objects",
             "LOCAL_FIREWALL", "MANAGEMENT", "application-group", "tag", "time", "time-group", "schedule", "unresolved", "UNRESOLVED", "UNSUPPORTED", "RESOLVED", "DYNAMIC", "CYCLE", "LIMIT", "UNKNOWN",
             "MATCH", "MISMATCH", "IN_SYNC", "OUT_OF_SYNC", "PENDING", "Accept", "Drop", "Reject", "allow", "deny", "drop", "reject", "reset-client", "reset-server", "reset-both", "Apply Layer", "Log", "None", "Alert");
+    private static final Set<String> HYGIENE_REASONS = Set.of(
+        "analysis budget", "unsupported rulebase", "negated selector", "missing selector", "enabled state is unknown",
+        "non-terminal or unknown action", "time or content constraint", "user or category constraint", "zone rule type constraint",
+        "unresolved install-on selector", "unsupported rule constraint", "time evidence not collected", "unresolved object",
+        "group cycle or depth limit", "empty or dynamic group", "dynamic or unsupported object type", "unsupported address representation",
+        "missing address values", "unsupported object members", "ambiguous object values", "unsupported service constraint",
+        "unsupported port expression", "invalid port range", "missing service values", "earlier rule has unsupported constraints",
+        "zone or install-on coverage is unproven", "zone evidence not collected", "install-on evidence not collected", "snapshot collection incomplete");
+    private static final Set<String> HYGIENE_EVIDENCE = Set.of(
+        "Rule is disabled.", "Enabled state is unknown.", "Stored schedule has expired.", "Stored schedule expires within 14 days.",
+        "Schedule evidence is incomplete.", "Permissiveness cannot be established from resolved selectors.",
+        "Accept rule matches any source, destination, service and application.", "Broad selectors are present; see permissiveness reasons.",
+        "Earlier enabled rule fully covers this match with a different action.", "Earlier enabled rule fully covers this match with the same action.",
+        "Hit counts were not collected or are invalid.", "Hit counts are missing for a target.", "Last-hit timestamp is invalid.",
+        "Zero-hit counter window is shorter than the threshold.", "Zero hits contradict a recorded last hit.",
+        "Zero collected hits; counter reset/window is unknown.", "Last-hit time was not collected.",
+        "Last hit predates the threshold at counter collection time.");
     public static Object mask(Object value, String key, TopologyNamePseudonymizer names, SubnetPreservingIpMasker ips) {
         if (value == null || value instanceof Boolean || value instanceof Number) return value;
         if (key.equals("changes") && value instanceof List<?> changes) return changes.stream().map(change -> {
@@ -41,9 +58,9 @@ public final class PolicyPrivacy {
         if (key.equals("permissiveness") && value instanceof Map<?, ?> metric) {
             String level = String.valueOf(metric.get("level"));
             List<?> reasons = metric.get("reasons") instanceof List<?> list ? list : List.of();
-            return Map.of("level", Set.of("Low", "Medium", "High", "Unknown").contains(level) ? level : "Unknown",
+            return Map.of("score", metric.get("score") instanceof Number n ? n : 0, "level", Set.of("Low", "Medium", "High", "Unknown").contains(level) ? level : "Unknown",
                     "reasons", reasons.stream().filter(r -> r instanceof String s && (s.matches("(?:Any |Large CIDR in |Negated )(source|destination|service|application)(?: needs analysis)?")
-                            || s.equals("Broad service range") || s.equals("No broad selectors in resolved objects") || s.equals("Incomplete objects; assessment requires analysis"))).toList());
+                            || s.equals("Analysis budget reached") || s.equals("Broad service range") || s.equals("No broad selectors in resolved objects") || s.equals("Incomplete objects; assessment requires analysis"))).toList());
         }
         if (value instanceof Map<?, ?> map) {
             Map<String, Object> out = new LinkedHashMap<>();
@@ -62,6 +79,16 @@ public final class PolicyPrivacy {
         if (value instanceof List<?> list) return list.stream().map(item -> mask(item, key, names, ips)).toList();
         if (!(value instanceof String text)) return "Withheld in AIView";
         if (text.isEmpty()) return text;
+        if (key.equals("shadowStatus")) return Set.of("UNKNOWN", "NOT_SHADOWED", "REDUNDANT", "CONFLICT").contains(text) ? text : "UNKNOWN";
+        if (key.equals("shadowReason")) return HYGIENE_REASONS.contains(text) ? text : "unsupported rule constraint";
+        if (key.equals("findingClass")) return PolicyHygiene.CLASSES.contains(text) ? text : "unknown";
+        if (key.equals("severity")) return PolicyHygiene.SEVERITIES.contains(text) ? text : "LOW";
+        if (key.equals("hitSource")) return Set.of("device", "mds").contains(text) ? text : "UNKNOWN";
+        if (key.equals("counterWindow")) return text.equals("Counter window unknown; first hit is not a counter start.")
+            || text.matches("Counter window unknown; bounded above by rule age: [0-9]+ days\\.") ? text : "Counter window unknown.";
+        if (key.equals("evidence")) return HYGIENE_EVIDENCE.contains(text) || HYGIENE_REASONS.stream().anyMatch(r -> text.equals("Shadowing: " + r + "."))
+            ? text : "Evidence withheld in AIView.";
+
         if (OPAQUE.contains(key) || key.equals("refs") || key.equals("members") || key.equals("collectedAt")) return text;
         if (key.equals("status") && Set.of("COLLECTING", "COLLECTED", "REUSED").contains(text)) return text;
         if (key.equals("state")) return Set.of("REQUESTED", "CLAIMED", "EXECUTING", "RECONCILING", "COMPLETED", "FAILED", "REJECTED", "CANCELLED", "OUTCOME_UNKNOWN", "RECONCILED").contains(text) ? text : "UNKNOWN";

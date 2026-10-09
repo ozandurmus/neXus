@@ -13,6 +13,34 @@ public final class PolicyController {
     private final PolicyQueryService policies;
     public PolicyController(PolicyQueryService policies) { this.policies = policies; }
 
+    @GetMapping("/api/v2/policy/policies/{id}/hygiene")
+    public ResponseEntity<?> hygiene(@PathVariable String id, @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "") String findingClass, @RequestParam(defaultValue = "") String severity,
+            @RequestParam(defaultValue = "90") int days) {
+        if (page < 0 || !validHygiene(findingClass, severity, days)) return error(HttpStatus.BAD_REQUEST);
+        return policies.find(id).<ResponseEntity<?>>map(s -> ok(policies.hygiene(s, page, findingClass, severity, days)))
+            .orElseGet(() -> error(HttpStatus.NOT_FOUND));
+    }
+    @GetMapping("/api/v2/policy/policies/{id}/rules/{ruleId}")
+    public ResponseEntity<?> rule(@PathVariable String id, @PathVariable String ruleId, @RequestParam(defaultValue = "90") int days) {
+        if (!validHygiene("", "", days)) return error(HttpStatus.BAD_REQUEST);
+        return policies.find(id).flatMap(s -> policies.rule(s, ruleId, days)).<ResponseEntity<?>>map(PolicyController::ok)
+            .orElseGet(() -> error(HttpStatus.NOT_FOUND));
+    }
+    @GetMapping("/api/v2/policy/policies/{id}/hygiene.csv")
+    public ResponseEntity<?> hygieneCsv(@PathVariable String id, @RequestParam(defaultValue = "") String findingClass,
+            @RequestParam(defaultValue = "") String severity, @RequestParam(defaultValue = "90") int days, HttpServletRequest request) {
+        if (!validHygiene(findingClass, severity, days)) return error(HttpStatus.BAD_REQUEST);
+        boolean masked = PrivacyMaskingResponseBodyAdvice.isReplayViewer(request);
+        return policies.find(id).<ResponseEntity<?>>map(s -> ResponseEntity.ok().cacheControl(CacheControl.noStore())
+            .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=policy-hygiene.csv")
+            .contentType(MediaType.parseMediaType("text/csv;charset=UTF-8"))
+            .body(policies.hygieneCsv(s, findingClass, severity, days, masked))).orElseGet(() -> error(HttpStatus.NOT_FOUND));
+    }
+    private static boolean validHygiene(String cls, String severity, int days) {
+        return (cls.isEmpty() || PolicyHygiene.CLASSES.contains(cls)) && (severity.isEmpty() || PolicyHygiene.SEVERITIES.contains(severity)) && days >= 1 && days <= 36500;
+    }
+
     @GetMapping("/api/v2/policy/tree")
     public ResponseEntity<?> tree(@RequestParam(defaultValue = "") String source,
             @RequestParam(defaultValue = "") String container, @RequestParam(defaultValue = "") String device) {

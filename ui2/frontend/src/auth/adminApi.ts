@@ -1818,13 +1818,35 @@ export interface PolicyHitCounts {
   firewalls: { deviceId: string; context: string; hits: number | null; firstHit: string | null; lastHit: string | null;
     createdAt: string | null; modifiedAt: string | null; collectedAt: string }[];
 }
+export interface PolicyHygieneFinding { findingClass: string; severity: "HIGH" | "MEDIUM" | "LOW"; evidence: string }
+export interface PolicyHygieneAssessment {
+  shadowStatus: "UNKNOWN" | "NOT_SHADOWED" | "REDUNDANT" | "CONFLICT"; shadowReason: string | null; coveringRuleId: string | null;
+  findings: PolicyHygieneFinding[]; permissiveness: NonNullable<PolicyRule["permissiveness"]>;
+  timeStatus: string; expiring: boolean; counterWindow: string; hitSource: string; hitsCollectedAt: string | null;
+}
+export interface PolicyHygienePage {
+  rows: { ruleId: string; number: number; name: string; sectionId: string; findings: PolicyHygieneFinding[]; hygiene: PolicyHygieneAssessment }[];
+  counts: Record<string, number>; total: number; page: number; pageSize: number; budgetReached: boolean; days: number;
+}
+export interface PolicyRuleDetail { metadata: PolicyMetadata; rule: PolicyRule; section: PolicySection; objects: PolicyObject[] }
+const hygieneParams = (findingClass: string, severity: string, days: number) => new URLSearchParams({ findingClass, severity, days: String(days) });
+export const getPolicyHygiene = (id: string, page = 0, findingClass = "", severity = "", days = 90) =>
+  call<PolicyHygienePage>(`/api/v2/policy/policies/${encodeURIComponent(id)}/hygiene?page=${page}&${hygieneParams(findingClass, severity, days)}`, "GET");
+export const getPolicyRule = (id: string, rule: string, days = 90) =>
+  call<PolicyRuleDetail>(`/api/v2/policy/policies/${encodeURIComponent(id)}/rules/${encodeURIComponent(rule)}?days=${days}`, "GET");
+export async function downloadPolicyHygiene(id: string, findingClass: string, severity: string, days: number) {
+  const response = await fetch(`/api/v2/policy/policies/${encodeURIComponent(id)}/hygiene.csv?${hygieneParams(findingClass, severity, days)}`, { credentials: "include" });
+  if (!response.ok) throw new Error("Hygiene export failed");
+  return response.blob();
+}
 export interface PolicyRule {
   id: string; uuid: string; number: number; name: string; enabled: boolean | null;
   source: PolicyCell; destination: PolicyCell; service: PolicyCell; application: PolicyCell;
   action: string; log: string; comment: string; extras: Record<string, string[]>;
   hitCounts?: PolicyHitCounts | null;
+  hygiene?: PolicyHygieneAssessment;
   identityFallback?: boolean; timeStatus?: string; schedules?: PolicySchedule[]; expiring?: boolean;
-  permissiveness?: { level: "Low" | "Medium" | "High" | "Unknown"; reasons: string[] };
+  permissiveness?: { level: "Low" | "Medium" | "High" | "Unknown"; reasons: string[]; score?: number };
 }
 export interface PolicySection { id: string; name: string; source: string; parentRuleId: string | null; rules: PolicyRule[]; total: number }
 export interface PolicyPage { failures?: { layerRef: string; reason: string; layerName?: string; offset?: number }[]; policyKind?: "LOCAL_FIREWALL" | "MANAGEMENT"; metadata: PolicyMetadata; sections: PolicySection[]; objects: PolicyObject[]; page: number; pageSize: number; total: number }

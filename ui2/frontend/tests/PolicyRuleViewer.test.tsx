@@ -60,7 +60,7 @@ it("keeps detail nav on the page and exposes object and revision views", async (
   const openObject = vi.fn();
   mount(<RuleDetailPanel rule={rule} section={section} metadata={metadata} objects={objects} openObject={openObject} />);
   expect(screen.getByText(/Domain: DOM-TANGO-01/)).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Shadowing" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Shadowing" })).toBeEnabled();
   fireEvent.click(screen.getByRole("button", { name: "Objects" }));
   fireEvent.click(screen.getByRole("button", { name: "OBJ-ADDRESS-05" })); expect(openObject).toHaveBeenCalledWith("5");
   fireEvent.click(screen.getByRole("button", { name: "Rule history" }));
