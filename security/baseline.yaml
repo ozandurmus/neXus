@@ -262,6 +262,22 @@
     },
     {
       "tool": "trivy",
+      "rule": "CVE-2026-88647",
+      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: gnutls",
+      "reason": "Red Hat UBI9 openjdk-21-runtime base OS library, published 2026-10-09; the build cannot reach the UBI package repos to update it. The service is a JVM process: TLS is Java JSSE, so gnutls is not on the request path. Remove when Red Hat rebuilds the base image (backlog ubi9_base_image_refresh). PO 2026-10-09.",
+      "owner": "PO",
+      "review_date": "2026-10-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "CVE-2026-88648",
+      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: gnutls",
+      "reason": "Red Hat UBI9 openjdk-21-runtime base OS library, published 2026-10-09; the build cannot reach the UBI package repos to update it. The service is a JVM process: TLS is Java JSSE, so gnutls is not on the request path. Remove when Red Hat rebuilds the base image (backlog ubi9_base_image_refresh). PO 2026-10-09.",
+      "owner": "PO",
+      "review_date": "2026-10-31"
+    },
+    {
+      "tool": "trivy",
       "rule": "CVE-2026-66046",
       "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: expat",
       "reason": "Red Hat UBI9 openjdk-21-runtime base: the newest published digest (2026-10-01) still ships this package; the build cannot reach the UBI package repos to update it. The service is a JVM process: TLS is Java JSSE and XML is the JDK parser, so this OS library is not on the request path. Remove when Red Hat rebuilds the base image.",
