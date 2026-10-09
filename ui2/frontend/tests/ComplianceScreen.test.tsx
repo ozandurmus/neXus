@@ -5,6 +5,8 @@ import { ComplianceScreen } from "../src/screens/ComplianceScreen";
 
 afterEach(() => vi.unstubAllGlobals());
 
+const GUIDANCE = { summary: "Review password policy", steps: ["Open vendor settings", "Set the approved minimum"], cli: null, references: ["Vendor administration guide"], caution: "Review account access" };
+
 const OVERVIEW = {
   total_firewalls: 105, evaluated_firewalls: 102, assured_compliance_pct: 28.9, evidence_coverage_pct: 82.5,
   observed_compliance_pct: 34.7, critical_deficiencies: 172, data_gaps: 428,
@@ -21,11 +23,16 @@ const control = (id: string, category: string, status: "PASS" | "FAIL" | "DATA_U
 function stub() {
   vi.stubGlobal("fetch", vi.fn((url: string) => Promise.resolve(new Response(JSON.stringify(
     url.includes("/api/v2/compliance/controls/") ? {
-      control_id: "c1", title: "Control c1", severity: "HIGH", status: "FAIL", rationale: null,
+      control_id: "c1", title: "Control c1", severity: "HIGH", status: "FAIL", rationale: "Reduces credential exposure",
       frameworks: [], expected: [{ vendor: "check_point", text: "at least 5" }], devices: [
-        { device_id: "d1", hostname: "FW-TANGO-04", vendor: "check_point", status: "FAIL", observed_value: "3", message: "Too low" },
-        { device_id: "d2", hostname: "FW-JULIET-06", vendor: "check_point", status: "PASS", observed_value: "6", message: "OK" },
+        { device_id: "d1", hostname: "FW-TANGO-04", vendor: "check_point", status: "FAIL", observed_value: "3", message: "Too low", guidance: GUIDANCE },
+        { device_id: "d2", hostname: "FW-JULIET-06", vendor: "check_point", status: "PASS", observed_value: "6", message: "OK", guidance: GUIDANCE },
         { device_id: "d3", hostname: "FW-BRAVO-02", vendor: "check_point", status: "DATA_UNAVAILABLE", observed_value: null, message: null },
+      ],
+    } : url.includes("/devices/d1/compliance") ? {
+      device_id: "d1", hostname: "FW-TANGO-04", vendor: "check_point", items: [
+        { controlId: "c1", title: "Control c1", severity: "HIGH", displayStatus: "FAIL", observedValue: "3", rationale: "Reduces credential exposure", guidance: GUIDANCE },
+        { controlId: "c2", title: "Control c2", severity: "HIGH", displayStatus: "PASS" },
       ],
     } : url.includes("/compliance/overview") ? OVERVIEW : {
       controls: [
@@ -86,6 +93,36 @@ describe("Compliance -- UI review 2026-09-23", () => {
     expect(text).toContain("102 of 105 firewalls evaluated");
     expect(text).toContain("FW-TANGO-04");
     expect(text).toContain("command not in the collection scope");
+  });
+});
+
+describe("finding guidance and remediation export", () => {
+  it("shows observed evidence, rationale and guidance with passing guidance collapsed", async () => {
+    stub();
+    render(<ComplianceScreen />);
+    fireEvent.click(await screen.findByText("Control c1"));
+    expect(await screen.findByText("Why it matters")).toBeInTheDocument();
+    expect(screen.getByText("Observed")).toBeInTheDocument();
+    expect(screen.getByText("observed value not recorded")).toBeInTheDocument();
+    const details = screen.getAllByText("How to fix").map(el => el.parentElement!);
+    expect(details[0]).toHaveAttribute("open");
+    expect(details[1]).not.toHaveAttribute("open");
+    expect(screen.getAllByText("Review password policy")).toHaveLength(2);
+  });
+
+  it.each(["Remediation CSV", "Printable HTML"])("exports all failing findings for the selected device via %s", async label => {
+    stub();
+    const created: Blob[] = [];
+    vi.stubGlobal("URL", { ...URL, createObjectURL: (blob: Blob) => { created.push(blob); return "blob:x"; }, revokeObjectURL: () => {} });
+    render(<ComplianceScreen />);
+    fireEvent.click(await screen.findByText("Control c1"));
+    fireEvent.click((await screen.findAllByRole("button", { name: label }))[0]);
+    await vi.waitFor(() => expect(created).toHaveLength(1));
+    const text = await new Promise<string>(resolve => { const r = new FileReader(); r.onload = () => resolve(String(r.result)); r.readAsText(created[0]); });
+    expect(text).toContain("FW-TANGO-04");
+    expect(text).toContain("Review password policy");
+    expect(text).not.toContain("Control c2");
+    expect(fetch).toHaveBeenCalledWith(expect.stringContaining("/devices/d1/compliance"), expect.anything());
   });
 });
 

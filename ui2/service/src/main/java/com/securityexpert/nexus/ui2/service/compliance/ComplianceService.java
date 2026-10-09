@@ -582,6 +582,7 @@ public final class ComplianceService {
                 device.put("vendor", target.vendor());
                 device.put("status", item.get("displayStatus"));
                 device.put("observed_value", secret ? null : item.get("observedValue"));
+                device.put("guidance", item.get("guidance"));
                 device.put("message", secret ? "Evidence withheld" : item.get("message"));
                 devices.add(device);
                 break;
@@ -643,6 +644,7 @@ public final class ComplianceService {
         }
 
         Map<String, Object> response = new LinkedHashMap<>(eval);
+        response.put("items", publicItems(eval, fetchCatalog()));
         response.put("device_id", deviceId);
         String hostname = deviceRepository.findConfirmFacts(deviceId)
                 .flatMap(com.securityexpert.nexus.ui2.persistence.device.DeviceConfirmFacts::observedHostname)
@@ -650,6 +652,20 @@ public final class ComplianceService {
         response.put("hostname", hostname);
         response.put("vendor", device.get().vendorHint());
         return response;
+    }
+
+    static List<Map<String, Object>> publicItems(Map<String, Object> evaluation, List<Map<String, Object>> catalog) {
+        return getItems(evaluation).stream().map(item -> {
+            Map<String, Object> projected = new LinkedHashMap<>(item);
+            Map<String, Object> control = catalog.stream()
+                    .filter(c -> java.util.Objects.equals(c.get("id"), item.get("controlId"))).findFirst().orElse(null);
+            // A missing catalog cannot establish that an observed value is safe to export.
+            if (control == null || isSecretEvidence(control.get("bindings"))) {
+                projected.put("observedValue", null);
+                projected.put("message", "Evidence withheld");
+            }
+            return projected;
+        }).toList();
     }
 
     public Map<String, Object> evaluateDevice(String deviceId) {

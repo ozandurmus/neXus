@@ -1,4 +1,6 @@
-import { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import { Fragment, useState, useMemo, useEffect, useCallback, useRef } from "react";
+import { ComplianceGuidance, observedValue } from "./ComplianceGuidance";
+import { downloadRemediationReport } from "./complianceReport";
 import { urlParam } from "../shell/urlParams";
 
 /** Overview link values -> this screen's filter values (framework names are matched by keyword). */
@@ -34,6 +36,7 @@ import { formatUtc } from "../shell/time";
 import { MONO, m3 } from "../theme/m3Theme";
 import { responsesAreMasked } from "../auth/adminApi";
 import {
+  getDeviceCompliance,
   getComplianceOverview,
   getComplianceControls,
   getComplianceControlDetail,
@@ -138,6 +141,8 @@ export function ComplianceScreen() {
   const [selectedControl, setSelectedControl] = useState<ComplianceControlItem | null>(null);
   const [detail, setDetail] = useState<ComplianceControlDetail | null>(null);
   const [detailError, setDetailError] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState(false);
   const [deviceFilter, setDeviceFilter] = useState("ALL");
   const [familyFilter, setFamilyFilter] = useState(() => urlParam("family") ?? "");
   const controlsRef = useRef<HTMLDivElement>(null);
@@ -176,6 +181,19 @@ export function ComplianceScreen() {
       .catch(() => { if (active) setDetailError(true); });
     return () => { active = false; };
   }, [selectedControl]);
+
+  const exportDeviceReport = async (deviceId: string, format: "csv" | "html") => {
+    setExporting(true);
+    setExportError(false);
+    try {
+      const result = await getDeviceCompliance(deviceId);
+      downloadRemediationReport(result, format, responsesAreMasked());
+    } catch {
+      setExportError(true);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const selectFamily = (name: string) => {
     const family = name.split(" · ")[0];
@@ -829,14 +847,21 @@ export function ComplianceScreen() {
                   color={deviceFilter === status ? "primary" : "default"} onClick={() => setDeviceFilter(status)} />)}
               </Stack>
               <TableContainer><Table size="small"><TableHead><TableRow>
-                <TableCell>Device</TableCell><TableCell>Vendor</TableCell><TableCell>Status</TableCell><TableCell>Current value</TableCell><TableCell>Message</TableCell>
+                <TableCell>Device</TableCell><TableCell>Vendor</TableCell><TableCell>Status</TableCell><TableCell>Observed</TableCell><TableCell>Message</TableCell>
               </TableRow></TableHead><TableBody>
-                {detail.devices.filter((d) => deviceFilter === "ALL" || d.status === deviceFilter).map((d) => <TableRow key={d.device_id}>
+                {detail.devices.filter((d) => deviceFilter === "ALL" || d.status === deviceFilter).map((d) => <Fragment key={d.device_id}><TableRow>
                   <TableCell>{d.hostname ?? d.device_id}</TableCell><TableCell>{d.vendor}</TableCell>
                   <TableCell><Chip size="small" label={d.status === "FAIL" ? "Fail" : d.status === "PASS" ? "Pass" : "Not yet checked"} /></TableCell>
-                  <TableCell>{d.observed_value ?? (d.message === "Evidence withheld" ? "withheld" : "not available")}</TableCell><TableCell>{d.message ?? "—"}</TableCell>
-                </TableRow>)}
+                  <TableCell>{d.message === "Evidence withheld" ? "withheld" : observedValue(d.observed_value)}</TableCell><TableCell>{d.message ?? "—"}</TableCell>
+                </TableRow><TableRow><TableCell colSpan={5}>
+                  <ComplianceGuidance guidance={d.guidance} status={d.status} />
+                  <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                    <M3Button emphasis="outlined" disabled={exporting} onClick={() => exportDeviceReport(d.device_id, "csv")}>Remediation CSV</M3Button>
+                    <M3Button emphasis="outlined" disabled={exporting} onClick={() => exportDeviceReport(d.device_id, "html")}>Printable HTML</M3Button>
+                  </Stack>
+                </TableCell></TableRow></Fragment>)}
               </TableBody></Table></TableContainer>
+              {exportError && <Typography role="alert">Could not export the remediation report. Try again.</Typography>}
             </Card>}
             {detail && <Card sx={{ p: 2 }}>
               <Typography sx={{ fontWeight: 600 }}>Framework mappings</Typography>

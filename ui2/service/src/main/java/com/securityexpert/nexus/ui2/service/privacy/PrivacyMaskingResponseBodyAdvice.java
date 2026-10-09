@@ -267,7 +267,7 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
                 case "address", "management_ip", "network", "ip_addresses", "destination", "next_hop",
                         "gateway", "addresses", "secondary_addresses", "alternate_addresses", "ipv6_addresses" ->
                     result.put(key, maskAddressValue(value, clusterRef));
-                case "terminal_reason", "latest_job_terminal_reason", "peer_follow_reason", "observed_value", "message" -> {
+                case "terminal_reason", "latest_job_terminal_reason", "peer_follow_reason", "observed_value", "observedValue", "message" -> {
                     if (value instanceof String s) {
                         result.put(key, topologyPseudonymizer.maskText(ipMasker.maskText(s)));
                     } else {

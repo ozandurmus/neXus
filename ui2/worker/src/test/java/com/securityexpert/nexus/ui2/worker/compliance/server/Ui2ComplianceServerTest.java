@@ -121,6 +121,12 @@ class Ui2ComplianceServerTest {
         JsonNode json = mapper.readTree(response.body());
         assertEquals("c154432c-1e28-4a20-aa26-ab4a05c0d9af", json.get("deviceId").asText());
         assertEquals(24, json.get("totalAssigned").asInt());
+        for (JsonNode item : json.get("items")) {
+            assertTrue(item.path("guidance").path("summary").asText().length() > 0);
+            assertTrue(item.path("guidance").path("steps").size() > 0);
+            assertTrue(item.has("rationale"));
+            assertTrue(!item.has("remediation"));
+        }
         assertEquals(4, json.get("dataUnavailableCount").asInt());
     }
 
@@ -154,6 +160,12 @@ class Ui2ComplianceServerTest {
         assertEquals("e724dea5-10fa-469a-acd9-bd5362c84e8a", json.get("deviceId").asText());
         assertEquals("palo_alto", json.get("vendor").asText());
         assertEquals(24, json.get("totalAssigned").asInt());
+        for (JsonNode item : json.get("items")) {
+            assertTrue(item.path("guidance").path("summary").asText().length() > 0);
+            assertTrue(item.path("guidance").path("steps").size() > 0);
+            assertTrue(item.has("rationale"));
+            assertTrue(!item.has("remediation"));
+        }
         assertEquals(4, json.get("dataUnavailableCount").asInt());
         assertTrue(json.get("passCount").asInt() >= 1);
     }

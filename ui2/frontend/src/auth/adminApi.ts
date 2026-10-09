@@ -1446,6 +1446,14 @@ export interface ComplianceControlsResponse {
   readonly controls: readonly ComplianceControlItem[];
 }
 
+export interface ComplianceGuidance {
+  readonly summary: string;
+  readonly steps: readonly string[];
+  readonly cli?: string | null;
+  readonly references: readonly string[];
+  readonly caution?: string | null;
+}
+
 export interface DeviceComplianceItem {
   readonly controlId: string;
   readonly title: string;
@@ -1457,7 +1465,9 @@ export interface DeviceComplianceItem {
   readonly missingEvidenceId?: string;
   readonly requiredGateEntry?: string;
   readonly message?: string;
-  readonly observedValue?: string;
+  readonly observedValue?: string | null;
+  readonly rationale?: string | null;
+  readonly guidance?: ComplianceGuidance | null;
 }
 
 export interface DeviceComplianceResult {
@@ -1490,7 +1500,7 @@ export interface ComplianceControlDetail {
   readonly rationale: string | null;
   readonly frameworks: readonly ComplianceFrameworkMapping[];
   readonly expected: readonly { vendor: string; text: string }[];
-  readonly devices: readonly { device_id: string; hostname: string | null; vendor: string; status: string; observed_value: string | null; message: string | null }[];
+  readonly devices: readonly { device_id: string; hostname: string | null; vendor: string; status: string; observed_value: string | null; message: string | null; guidance?: ComplianceGuidance | null }[];
 }
 
 export function getComplianceControlDetail(id: string): Promise<ComplianceControlDetail> {

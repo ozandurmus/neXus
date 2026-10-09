@@ -86,7 +86,7 @@ class ComplianceServiceCacheParityTest {
                 gap += st.equals("DATA_UNAVAILABLE") ? 1 : 0;
                 items.append(i == 0 ? "" : ",").append("{\"controlId\":\"").append(c).append("\",\"displayStatus\":\"").append(st)
                         .append("\",\"severity\":\"").append(i == 0 ? "CRITICAL" : "HIGH").append("\",\"message\":\"m-").append(c)
-                        .append("\",\"observedValue\":\"secret-fixture\",\"frameworks\":[{\"framework\":\"").append(i % 2 == 0 ? "CIS" : "NIST_800_53").append("\"}]}");
+                        .append("\",\"observedValue\":\"secret-fixture\",\"guidance\":{\"summary\":\"Review the setting\",\"steps\":[\"Open vendor settings\"],\"references\":[\"Vendor guide\"]},\"frameworks\":[{\"framework\":\"").append(i % 2 == 0 ? "CIS" : "NIST_800_53").append("\"}]}");
             }
             double observed = pass + fail == 0 ? 0 : Math.round(pass * 1000.0 / (pass + fail)) / 10.0;
             send(ex, "{\"passCount\":" + pass + ",\"failCount\":" + fail + ",\"dataUnavailableCount\":" + gap
@@ -150,6 +150,7 @@ class ComplianceServiceCacheParityTest {
         assertThat(devices).isNotEmpty();
         assertThat(devices.stream().map(d -> d.get("status")).toList()).isSortedAccordingTo(
                 java.util.Comparator.comparingInt(s -> "FAIL".equals(s) ? 0 : "PASS".equals(s) ? 2 : 1));
+        assertThat(devices.get(0).get("guidance")).isInstanceOf(Map.class);
         assertThat(devices.get(0)).containsKeys("device_id", "hostname", "vendor", "observed_value", "message");
         assertThat(current.getControls().get(0).get("family")).isEqualTo("AC");
         List<Map<String, Object>> secretDevices = (List<Map<String, Object>>) current.getControlDetail("C2").get("devices");
@@ -218,6 +219,10 @@ class ComplianceServiceCacheParityTest {
         ComplianceService restarted = service(ComplianceService.PARALLELISM, store);
         assertThat(restarted.isEvaluationCacheWarm()).isTrue();
         assertThat(restarted.getOverview()).isEqualTo(first);
+        @SuppressWarnings("unchecked")
+        var devices = (List<Map<String, Object>>) restarted.getControlDetail("C1").get("devices");
+        assertThat(devices).allSatisfy(d -> assertThat(d.get("guidance")).isInstanceOf(Map.class));
+        assertThat(store.loadAll()).allSatisfy(row -> assertThat(row.resultJson()).contains("guidance"));
         assertThat(restarted.refreshInBackground()).isZero();
         assertThat(evaluations.get()).isZero();
     }

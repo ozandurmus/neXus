@@ -20,6 +20,25 @@ import com.securityexpert.nexus.ui2.service.audit.JobLogQueryService.JobEvent;
 import com.securityexpert.nexus.ui2.service.security.GateChainInterceptor;
 
 class PrivacyMaskingResponseBodyAdviceTest {
+    @Test
+    @SuppressWarnings("unchecked")
+    void masksStoredObservedValuesForDeviceReportsAndPreservesStaticGuidance() {
+        when(httpRequest.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE)).thenReturn(true);
+        Map<String, Object> guidance = Map.of("summary", "Review access", "steps", List.of("Review permitted sources"),
+                "references", List.of("Vendor management guide"));
+        Map<String, Object> body = Map.of("hostname", "synthetic-edge.example.invalid", "device_id", "opaque-device",
+                "items", List.of(Map.of("observedValue", "synthetic-edge.example.invalid at 192.0.2.10",
+                        "guidance", guidance)));
+        Map<String, Object> result = (Map<String, Object>) advice.beforeBodyWrite(body, null, null, null, serverRequest, null);
+        var item = ((List<Map<String, Object>>) result.get("items")).get(0);
+        assertThat(item.get("observedValue").toString()).doesNotContain("synthetic-edge.example.invalid", "192.0.2.10");
+        assertThat(item.get("guidance")).isEqualTo(guidance);
+        assertThat(result.get("device_id")).isEqualTo("opaque-device");
+        assertThat(body.toString()).contains("192.0.2.10");
+        when(httpRequest.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE)).thenReturn(false);
+        assertThat(advice.beforeBodyWrite(body, null, null, null, serverRequest, null)).isSameAs(body);
+    }
+
     private String adviceIp() {
         return new SubnetPreservingIpMasker("01234567890123456789012345678901".getBytes(StandardCharsets.UTF_8)).mask("192.0.2.2");
     }

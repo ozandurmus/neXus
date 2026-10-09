@@ -12,7 +12,7 @@ import com.securityexpert.nexus.ui2.worker.compliance.model.VendorBinding;
 /** The frozen configuration-only FortiGate and ASA controls. */
 public final class FortinetAsaComplianceCatalog {
     /** Bump on any catalog OR evaluator change: it is part of the stored-evaluation cache key (ComplianceService). */
-    public static final String CATALOG_VERSION = "2026.09.fgt-asa.10";
+    public static final String CATALOG_VERSION = "2026.10.09.fgt-asa.guidance.1";
     private FortinetAsaComplianceCatalog() {}
 
     private record Spec(String id, String title, Severity severity, String closest) {}
@@ -62,7 +62,8 @@ public final class FortinetAsaComplianceCatalog {
             ComplianceControl closest = existing.stream().filter(c -> c.id().equals(spec.closest())).findFirst().orElseThrow();
             result.add(new ComplianceControl(spec.id(), spec.title(), spec.title(), spec.severity(), "device_os", "device",
                     closest.frameworks(), List.of(new VendorBinding(vendor, platform,
-                            EvidenceRequirement.of("sanitized_configuration", spec.id(), spec.id(), null), AssertionRule.present()))));
+                            EvidenceRequirement.of("sanitized_configuration", spec.id(), spec.id(), null), AssertionRule.present(),
+                            ComplianceGuidanceCatalog.forControl(spec.id())))));
         }
         return List.copyOf(result);
     }
