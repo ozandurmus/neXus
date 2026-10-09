@@ -17,7 +17,7 @@ public final class CheckPointComplianceCatalog {
      * configuration hash and this version (V59, ComplianceService rule-set fingerprint); an unbumped logic change stays
      * invisible until the 6-hour backstop re-evaluates.
      */
-    public static final String CATALOG_VERSION = "2026.09.1";
+    public static final String CATALOG_VERSION = "2026.10.09.guidance.1";
 
     private CheckPointComplianceCatalog() {
     }
@@ -43,7 +43,8 @@ public final class CheckPointComplianceCatalog {
                         "check_point",
                         "gaia",
                         EvidenceRequirement.of("password_policy", "password-controls min-password-length", "gaia.password_policy.min_length", "CP-CMD-0012"),
-                        AssertionRule.gte(12)
+                        AssertionRule.gte(12),
+                        ComplianceGuidanceCatalog.forControl("gaia_cis_2_1_1_password_min_length")
                     )
                 )
             ),
@@ -66,7 +67,8 @@ public final class CheckPointComplianceCatalog {
                         "check_point",
                         "gaia",
                         EvidenceRequirement.of("password_policy", "password-controls complexity", "gaia.password_policy.complexity", "CP-CMD-0012"),
-                        AssertionRule.equalsStr("on")
+                        AssertionRule.equalsStr("on"),
+                        ComplianceGuidanceCatalog.forControl("gaia_cis_2_1_2_password_complexity")
                     )
                 )
             ),
@@ -89,7 +91,8 @@ public final class CheckPointComplianceCatalog {
                         "check_point",
                         "gaia",
                         EvidenceRequirement.of("password_policy", "password-controls history", "gaia.password_policy.history", "CP-CMD-0012"),
-                        AssertionRule.gte(5)
+                        AssertionRule.gte(5),
+                        ComplianceGuidanceCatalog.forControl("gaia_cis_2_1_3_password_history")
                     )
                 )
             ),
@@ -113,7 +116,8 @@ public final class CheckPointComplianceCatalog {
                         "check_point",
                         "gaia",
                         EvidenceRequirement.of("password_policy", "password-controls lockout-threshold", "gaia.password_policy.lockout_threshold", "CP-CMD-0012"),
-                        AssertionRule.lte(5)
+                        AssertionRule.lte(5),
+                        ComplianceGuidanceCatalog.forControl("gaia_cis_2_1_4_account_lockout_attempts")
                     )
                 )
             ),
@@ -136,7 +140,8 @@ public final class CheckPointComplianceCatalog {
                         "check_point",
                         "gaia",
                         EvidenceRequirement.of("password_policy", "password-controls lockout-duration", "gaia.password_policy.lockout_duration", "CP-CMD-0012"),
-                        AssertionRule.gte(30)
+                        AssertionRule.gte(30),
+                        ComplianceGuidanceCatalog.forControl("gaia_cis_2_1_5_account_lockout_duration")
                     )
                 )
             ),
@@ -160,7 +165,8 @@ public final class CheckPointComplianceCatalog {
                         "check_point",
                         "gaia",
                         EvidenceRequirement.of("clienv", "clienv inactivity-timeout", "gaia.clienv.timeout", "CP-CMD-0015"),
-                        AssertionRule.lte(10)
+                        AssertionRule.lte(10),
+                        ComplianceGuidanceCatalog.forControl("gaia_cis_2_5_2_session_timeout")
                     )
                 )
             ),
@@ -184,7 +190,8 @@ public final class CheckPointComplianceCatalog {
                         "check_point",
                         "gaia",
                         EvidenceRequirement.of("ssh", "sshd protocol", "gaia.sshd.protocol", "CP-CMD-0018"),
-                        AssertionRule.equalsStr("2")
+                        AssertionRule.equalsStr("2"),
+                        ComplianceGuidanceCatalog.forControl("gaia_cis_2_5_3_ssh_protocol_v2")
                     )
                 )
             ),
@@ -207,7 +214,8 @@ public final class CheckPointComplianceCatalog {
                         "check_point",
                         "gaia",
                         EvidenceRequirement.of("telnet", "telnet server", "gaia.telnet.state", "CP-CMD-0019"),
-                        AssertionRule.absent()
+                        AssertionRule.absent(),
+                        ComplianceGuidanceCatalog.forControl("gaia_cis_2_5_6_telnet_disabled")
                     )
                 )
             ),
@@ -230,7 +238,8 @@ public final class CheckPointComplianceCatalog {
                         "check_point",
                         "gaia",
                         EvidenceRequirement.of("web", "web ssl-port", "gaia.web.ssl_port", "CP-CMD-0021"),
-                        AssertionRule.present()
+                        AssertionRule.present(),
+                        ComplianceGuidanceCatalog.forControl("gaia_cis_2_5_5_web_https_only")
                     )
                 )
             ),
@@ -253,7 +262,8 @@ public final class CheckPointComplianceCatalog {
                         "check_point",
                         "gaia",
                         EvidenceRequirement.of("expert_password_hash", "expert-password-hash", "gaia.expert.hash", "CP-CMD-0025"),
-                        AssertionRule.present()
+                        AssertionRule.present(),
+                        ComplianceGuidanceCatalog.forControl("gaia_cis_2_1_8_non_default_admin")
                     )
                 )
             ),
@@ -277,7 +287,8 @@ public final class CheckPointComplianceCatalog {
                         "check_point",
                         "gaia",
                         EvidenceRequirement.of("ntp", "ntp server", "gaia.ntp.servers", "CP-CMD-0028"),
-                        AssertionRule.count_gte(2)
+                        AssertionRule.count_gte(2),
+                        ComplianceGuidanceCatalog.forControl("gaia_cis_2_3_1_ntp_redundancy")
                     )
                 )
             ),
@@ -301,7 +312,8 @@ public final class CheckPointComplianceCatalog {
                         "check_point",
                         "gaia",
                         EvidenceRequirement.of("syslog", "syslog server", "gaia.syslog.servers", "CP-CMD-0030"),
-                        AssertionRule.present()
+                        AssertionRule.present(),
+                        ComplianceGuidanceCatalog.forControl("gaia_cis_2_4_1_syslog_server")
                     )
                 )
             ),
@@ -323,7 +335,8 @@ public final class CheckPointComplianceCatalog {
                         "check_point",
                         "gaia",
                         EvidenceRequirement.of("format", "format date-format", "gaia.format.log", "CP-CMD-0033"),
-                        AssertionRule.present()
+                        AssertionRule.present(),
+                        ComplianceGuidanceCatalog.forControl("gaia_cis_2_4_2_log_quota")
                     )
                 )
             ),
@@ -345,7 +358,8 @@ public final class CheckPointComplianceCatalog {
                         "check_point",
                         "gaia",
                         EvidenceRequirement.of("core_dump", "core-dump total", "gaia.coredump.total", "CP-CMD-0035"),
-                        AssertionRule.present()
+                        AssertionRule.present(),
+                        ComplianceGuidanceCatalog.forControl("gaia_cis_2_4_3_core_dump_restriction")
                     )
                 )
             ),
@@ -369,7 +383,8 @@ public final class CheckPointComplianceCatalog {
                         "check_point",
                         "gaia",
                         EvidenceRequirement.of("message", "message banner", "gaia.message.banner", "CP-CMD-0040"),
-                        AssertionRule.equalsStr("on")
+                        AssertionRule.equalsStr("on"),
+                        ComplianceGuidanceCatalog.forControl("gaia_cis_2_2_1_login_banner")
                     )
                 )
             ),
@@ -391,7 +406,8 @@ public final class CheckPointComplianceCatalog {
                         "check_point",
                         "gaia",
                         EvidenceRequirement.of("arp", "arp table cache-size", "gaia.arp.cache_size", "CP-CMD-0045"),
-                        AssertionRule.gte(1024)
+                        AssertionRule.gte(1024),
+                        ComplianceGuidanceCatalog.forControl("gaia_cis_2_7_2_arp_cache_protection")
                     )
                 )
             ),
@@ -413,7 +429,8 @@ public final class CheckPointComplianceCatalog {
                         "check_point",
                         "gaia",
                         EvidenceRequirement.of("ip_conflicts_monitor", "ip-conflicts-monitor state", "gaia.ip_conflict.state", "CP-CMD-0048"),
-                        AssertionRule.equalsStr("off")
+                        AssertionRule.equalsStr("off"),
+                        ComplianceGuidanceCatalog.forControl("gaia_cis_2_7_3_ip_conflict_monitor")
                     )
                 )
             ),
@@ -435,7 +452,8 @@ public final class CheckPointComplianceCatalog {
                         "check_point",
                         "gaia",
                         EvidenceRequirement.of("clienv", "clienv debug", "gaia.clienv.debug", "CP-CMD-0050"),
-                        AssertionRule.equalsStr("0")
+                        AssertionRule.equalsStr("0"),
+                        ComplianceGuidanceCatalog.forControl("gaia_cis_2_7_4_clienv_debug_disabled")
                     )
                 )
             ),
@@ -457,7 +475,8 @@ public final class CheckPointComplianceCatalog {
                         "check_point",
                         "gaia",
                         EvidenceRequirement.of("grub2_password_hash", "grub2-password-hash", "gaia.grub2.hash", "CP-CMD-0055"),
-                        AssertionRule.present()
+                        AssertionRule.present(),
+                        ComplianceGuidanceCatalog.forControl("gaia_cis_2_1_9_grub2_password")
                     )
                 )
             ),
@@ -479,7 +498,8 @@ public final class CheckPointComplianceCatalog {
                         "check_point",
                         "gaia",
                         EvidenceRequirement.of("installer_policy", "installer policy check-for-updates-period", "gaia.installer.period", "CP-CMD-0060"),
-                        AssertionRule.present()
+                        AssertionRule.present(),
+                        ComplianceGuidanceCatalog.forControl("gaia_cis_2_8_1_installer_policy")
                     )
                 )
             ),
@@ -503,7 +523,8 @@ public final class CheckPointComplianceCatalog {
                         "check_point",
                         "gaia",
                         EvidenceRequirement.of("ssh_ciphers", "ssh ciphers", "gaia.ssh.ciphers", "CP-GATE-CIPHERS-01"),
-                        AssertionRule.noneMatch("(?i)(cbc|3des|arcfour|rc4)")
+                        AssertionRule.noneMatch("(?i)(cbc|3des|arcfour|rc4)"),
+                        ComplianceGuidanceCatalog.forControl("gaia_cis_2_5_4_ssh_strong_ciphers")
                     )
                 )
             ),
@@ -526,7 +547,8 @@ public final class CheckPointComplianceCatalog {
                         "check_point",
                         "gaia",
                         EvidenceRequirement.of("snmp_v3", "snmp v3 users", "gaia.snmp.v3_users", "CP-GATE-SNMP3-01"),
-                        AssertionRule.present()
+                        AssertionRule.present(),
+                        ComplianceGuidanceCatalog.forControl("gaia_cis_2_6_1_snmp_v3_only")
                     )
                 )
             ),
@@ -549,7 +571,8 @@ public final class CheckPointComplianceCatalog {
                         "check_point",
                         "gaia",
                         EvidenceRequirement.of("interface_status", "interface admin state", "gaia.interface.down", "CP-GATE-IFACE-01"),
-                        AssertionRule.present()
+                        AssertionRule.present(),
+                        ComplianceGuidanceCatalog.forControl("gaia_cis_2_7_1_unused_interfaces_disabled")
                     )
                 )
             ),
@@ -573,7 +596,8 @@ public final class CheckPointComplianceCatalog {
                         "check_point",
                         "gaia",
                         EvidenceRequirement.of("allowed_clients", "allowed-client subnet", "gaia.mgmt.allowed_clients", "CP-GATE-CLIENTS-01"),
-                        AssertionRule.present()
+                        AssertionRule.present(),
+                        ComplianceGuidanceCatalog.forControl("gaia_cis_2_5_1_mgmt_trusted_subnets")
                     )
                 )
             )

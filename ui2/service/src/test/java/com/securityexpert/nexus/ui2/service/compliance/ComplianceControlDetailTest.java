@@ -9,6 +9,25 @@ import org.junit.jupiter.api.Test;
 
 class ComplianceControlDetailTest {
     @Test
+    void reportProjectionWithholdsSecretAndUnknownEvidenceWithoutChangingStoredItems() {
+        var guidance = Map.of("summary", "Review access", "steps", List.of("Review the approved policy"));
+        Map<String, Object> item = Map.of("controlId", "c1", "observedValue", "synthetic-sensitive-value",
+                "message", "synthetic-sensitive-value", "guidance", guidance);
+        Map<String, Object> evaluation = Map.of("items", List.of(item));
+        Map<String, Object> secret = Map.of("id", "c1", "bindings", List.of(Map.of(
+                "evidenceRequirement", Map.of("settingKey", "gaia.expert.hash"))));
+        for (var catalog : List.of(List.of(secret), List.<Map<String, Object>>of())) {
+            var result = ComplianceService.publicItems(evaluation, catalog).get(0);
+            assertThat(result.get("observedValue")).isNull();
+            assertThat(result.get("message")).isEqualTo("Evidence withheld");
+            assertThat(result.get("guidance")).isEqualTo(guidance);
+        }
+        assertThat(item.get("observedValue")).isEqualTo("synthetic-sensitive-value");
+        var safe = ComplianceService.publicItems(evaluation, List.of(Map.of("id", "c1", "bindings", List.of())));
+        assertThat(safe.get(0)).isEqualTo(item);
+    }
+
+    @Test
     void assertionWordsCoverEveryCatalogOperator() {
         assertThat(ComplianceService.assertionText(Map.of("op", "gte", "targetNumber", 5))).isEqualTo("at least 5");
         assertThat(ComplianceService.assertionText(Map.of("op", "count_gte", "targetNumber", 5))).isEqualTo("at least 5");

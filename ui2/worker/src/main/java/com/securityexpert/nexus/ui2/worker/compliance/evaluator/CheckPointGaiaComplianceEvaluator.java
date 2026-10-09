@@ -235,6 +235,11 @@ public final class CheckPointGaiaComplianceEvaluator {
             }
         }
 
+        items = items.stream().map(item -> {
+            ComplianceControl control = catalog.stream().filter(c -> c.id().equals(item.controlId())).findFirst().orElseThrow();
+            return item.withGuidance(control, control.findBinding("check_point", "gaia"));
+        }).toList();
+
         int totalAssigned = items.size();
         int passCount = (int) items.stream().filter(i -> i.displayStatus() == DisplayStatus.PASS).count();
         int failCount = (int) items.stream().filter(i -> i.displayStatus() == DisplayStatus.FAIL).count();

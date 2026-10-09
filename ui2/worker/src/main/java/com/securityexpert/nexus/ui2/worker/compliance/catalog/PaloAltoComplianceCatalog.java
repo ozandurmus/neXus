@@ -22,7 +22,7 @@ public final class PaloAltoComplianceCatalog {
      * configuration hash and this version (V59, ComplianceService rule-set fingerprint); an unbumped logic change stays
      * invisible until the 6-hour backstop re-evaluates.
      */
-    public static final String CATALOG_VERSION = "2026.09.1";
+    public static final String CATALOG_VERSION = "2026.10.09.guidance.1";
 
     private PaloAltoComplianceCatalog() {
     }
@@ -48,7 +48,8 @@ public final class PaloAltoComplianceCatalog {
                         "palo_alto",
                         "pan_os",
                         EvidenceRequirement.of("system", "login-banner", "system.login_banner", "PAN-CMD-0010"),
-                        AssertionRule.present()
+                        AssertionRule.present(),
+                        ComplianceGuidanceCatalog.forControl("pan_cis_1_2_1_login_banner")
                     )
                 )
             ),
@@ -72,7 +73,8 @@ public final class PaloAltoComplianceCatalog {
                         "palo_alto",
                         "pan_os",
                         EvidenceRequirement.of("management", "idle-timeout", "setting.management.idle_timeout", "PAN-CMD-0012"),
-                        AssertionRule.lte(15)
+                        AssertionRule.lte(15),
+                        ComplianceGuidanceCatalog.forControl("pan_cis_1_2_2_idle_timeout")
                     )
                 )
             ),
@@ -96,7 +98,8 @@ public final class PaloAltoComplianceCatalog {
                         "palo_alto",
                         "pan_os",
                         EvidenceRequirement.of("management", "failed-attempts", "setting.management.failed_attempts", "PAN-CMD-0013"),
-                        AssertionRule.lte(5)
+                        AssertionRule.lte(5),
+                        ComplianceGuidanceCatalog.forControl("pan_cis_1_2_3_account_lockout_attempts")
                     )
                 )
             ),
@@ -119,7 +122,8 @@ public final class PaloAltoComplianceCatalog {
                         "palo_alto",
                         "pan_os",
                         EvidenceRequirement.of("management", "lockout-time", "setting.management.lockout_time", "PAN-CMD-0014"),
-                        AssertionRule.gte(30)
+                        AssertionRule.gte(30),
+                        ComplianceGuidanceCatalog.forControl("pan_cis_1_2_4_account_lockout_duration")
                     )
                 )
             ),
@@ -143,7 +147,8 @@ public final class PaloAltoComplianceCatalog {
                         "palo_alto",
                         "pan_os",
                         EvidenceRequirement.of("password_complexity", "minimum-length", "setting.management.password_complexity.minimum_length", "PAN-CMD-0015"),
-                        AssertionRule.gte(12)
+                        AssertionRule.gte(12),
+                        ComplianceGuidanceCatalog.forControl("pan_cis_1_2_5_password_min_length")
                     )
                 )
             ),
@@ -166,7 +171,8 @@ public final class PaloAltoComplianceCatalog {
                         "palo_alto",
                         "pan_os",
                         EvidenceRequirement.of("password_complexity", "enabled", "setting.management.password_complexity.enabled", "PAN-CMD-0016"),
-                        AssertionRule.equalsStr("yes")
+                        AssertionRule.equalsStr("yes"),
+                        ComplianceGuidanceCatalog.forControl("pan_cis_1_2_6_password_complexity")
                     )
                 )
             ),
@@ -189,7 +195,8 @@ public final class PaloAltoComplianceCatalog {
                         "palo_alto",
                         "pan_os",
                         EvidenceRequirement.of("password_complexity", "password-history", "setting.management.password_complexity.password_history", "PAN-CMD-0017"),
-                        AssertionRule.gte(5)
+                        AssertionRule.gte(5),
+                        ComplianceGuidanceCatalog.forControl("pan_cis_1_2_7_password_history")
                     )
                 )
             ),
@@ -212,7 +219,8 @@ public final class PaloAltoComplianceCatalog {
                         "palo_alto",
                         "pan_os",
                         EvidenceRequirement.of("password_complexity", "expiration-period", "setting.management.password_complexity.expiration_period", "PAN-CMD-0018"),
-                        AssertionRule.lte(90)
+                        AssertionRule.lte(90),
+                        ComplianceGuidanceCatalog.forControl("pan_cis_1_2_8_password_expiration")
                     )
                 )
             ),
@@ -235,7 +243,8 @@ public final class PaloAltoComplianceCatalog {
                         "palo_alto",
                         "pan_os",
                         EvidenceRequirement.of("service", "disable-telnet", "system.service.disable_telnet", "PAN-CMD-0020"),
-                        AssertionRule.equalsStr("yes")
+                        AssertionRule.equalsStr("yes"),
+                        ComplianceGuidanceCatalog.forControl("pan_cis_1_3_1_telnet_disabled")
                     )
                 )
             ),
@@ -258,7 +267,8 @@ public final class PaloAltoComplianceCatalog {
                         "palo_alto",
                         "pan_os",
                         EvidenceRequirement.of("service", "disable-http", "system.service.disable_http", "PAN-CMD-0021"),
-                        AssertionRule.equalsStr("yes")
+                        AssertionRule.equalsStr("yes"),
+                        ComplianceGuidanceCatalog.forControl("pan_cis_1_3_2_http_disabled")
                     )
                 )
             ),
@@ -282,7 +292,8 @@ public final class PaloAltoComplianceCatalog {
                         "palo_alto",
                         "pan_os",
                         EvidenceRequirement.of("system", "ssh-version", "system.ssh.version", "PAN-CMD-0022"),
-                        AssertionRule.present()
+                        AssertionRule.present(),
+                        ComplianceGuidanceCatalog.forControl("pan_cis_1_3_3_ssh_protocol_v2")
                     )
                 )
             ),
@@ -306,7 +317,8 @@ public final class PaloAltoComplianceCatalog {
                         "palo_alto",
                         "pan_os",
                         EvidenceRequirement.of("ssl_tls_service_profile", "tls-version-min", "ssl.tls_service_profile.min_version", "PAN-CMD-0023"),
-                        AssertionRule.matches("(?i)(tls1[-_.]?[23]|1\\.[23]|max)")
+                        AssertionRule.matches("(?i)(tls1[-_.]?[23]|1\\.[23]|max)"),
+                        ComplianceGuidanceCatalog.forControl("pan_cis_1_3_4_tls_version")
                     )
                 )
             ),
@@ -330,7 +342,8 @@ public final class PaloAltoComplianceCatalog {
                         "palo_alto",
                         "pan_os",
                         EvidenceRequirement.of("permitted_ip", "permitted-ip", "system.permitted_ip", "PAN-CMD-0025"),
-                        AssertionRule.present()
+                        AssertionRule.present(),
+                        ComplianceGuidanceCatalog.forControl("pan_cis_1_3_5_permitted_ip_addresses")
                     )
                 )
             ),
@@ -354,7 +367,8 @@ public final class PaloAltoComplianceCatalog {
                         "palo_alto",
                         "pan_os",
                         EvidenceRequirement.of("ntp_servers", "ntp-servers", "system.ntp_servers", "PAN-CMD-0030"),
-                        AssertionRule.present()
+                        AssertionRule.present(),
+                        ComplianceGuidanceCatalog.forControl("pan_cis_2_1_1_ntp_redundancy")
                     )
                 )
             ),
@@ -376,7 +390,8 @@ public final class PaloAltoComplianceCatalog {
                         "palo_alto",
                         "pan_os",
                         EvidenceRequirement.of("system", "timezone", "system.timezone", "PAN-CMD-0032"),
-                        AssertionRule.present()
+                        AssertionRule.present(),
+                        ComplianceGuidanceCatalog.forControl("pan_cis_2_1_2_timezone_configured")
                     )
                 )
             ),
@@ -398,7 +413,8 @@ public final class PaloAltoComplianceCatalog {
                         "palo_alto",
                         "pan_os",
                         EvidenceRequirement.of("dns_setting", "servers", "system.dns_setting.servers", "PAN-CMD-0034"),
-                        AssertionRule.present()
+                        AssertionRule.present(),
+                        ComplianceGuidanceCatalog.forControl("pan_cis_2_1_3_dns_servers")
                     )
                 )
             ),
@@ -422,7 +438,8 @@ public final class PaloAltoComplianceCatalog {
                         "palo_alto",
                         "pan_os",
                         EvidenceRequirement.of("log_settings", "syslog", "shared.log_settings.syslog", "PAN-CMD-0040"),
-                        AssertionRule.present()
+                        AssertionRule.present(),
+                        ComplianceGuidanceCatalog.forControl("pan_cis_2_2_1_syslog_forwarding")
                     )
                 )
             ),
@@ -445,7 +462,8 @@ public final class PaloAltoComplianceCatalog {
                         "palo_alto",
                         "pan_os",
                         EvidenceRequirement.of("log_settings", "system", "shared.log_settings.system", "PAN-CMD-0042"),
-                        AssertionRule.present()
+                        AssertionRule.present(),
+                        ComplianceGuidanceCatalog.forControl("pan_cis_2_2_2_system_log_forwarding")
                     )
                 )
             ),
@@ -469,7 +487,8 @@ public final class PaloAltoComplianceCatalog {
                         "palo_alto",
                         "pan_os",
                         EvidenceRequirement.of("log_settings", "config", "shared.log_settings.config", "PAN-CMD-0044"),
-                        AssertionRule.present()
+                        AssertionRule.present(),
+                        ComplianceGuidanceCatalog.forControl("pan_cis_2_2_3_config_log_forwarding")
                     )
                 )
             ),
@@ -492,7 +511,8 @@ public final class PaloAltoComplianceCatalog {
                         "palo_alto",
                         "pan_os",
                         EvidenceRequirement.of("high_availability", "encryption", "deviceconfig.high_availability.encryption", "PAN-CMD-0050"),
-                        AssertionRule.present()
+                        AssertionRule.present(),
+                        ComplianceGuidanceCatalog.forControl("pan_cis_2_3_1_ha_encryption")
                     )
                 )
             ),
@@ -515,7 +535,8 @@ public final class PaloAltoComplianceCatalog {
                         "palo_alto",
                         "pan_os",
                         EvidenceRequirement.of("snmp_setting", "snmpv3", "system.snmp.v3_users", "PAN-GATE-SNMP3-01"),
-                        AssertionRule.present()
+                        AssertionRule.present(),
+                        ComplianceGuidanceCatalog.forControl("pan_cis_4_1_1_snmpv3_only")
                     )
                 )
             ),
@@ -538,7 +559,8 @@ public final class PaloAltoComplianceCatalog {
                         "palo_alto",
                         "pan_os",
                         EvidenceRequirement.of("network_interface", "link-state", "network.interface.down", "PAN-GATE-IFACE-01"),
-                        AssertionRule.present()
+                        AssertionRule.present(),
+                        ComplianceGuidanceCatalog.forControl("pan_cis_4_1_2_unused_interfaces_down")
                     )
                 )
             ),
@@ -560,7 +582,8 @@ public final class PaloAltoComplianceCatalog {
                         "palo_alto",
                         "pan_os",
                         EvidenceRequirement.of("ddns", "ddns-client", "system.ddns.state", "PAN-GATE-DDNS-01"),
-                        AssertionRule.absent()
+                        AssertionRule.absent(),
+                        ComplianceGuidanceCatalog.forControl("pan_cis_4_1_3_ddns_disabled")
                     )
                 )
             ),
@@ -584,7 +607,8 @@ public final class PaloAltoComplianceCatalog {
                         "palo_alto",
                         "pan_os",
                         EvidenceRequirement.of("ssh_ciphers", "ciphers", "system.ssh.ciphers", "PAN-GATE-CIPHERS-01"),
-                        AssertionRule.noneMatch("(?i)(cbc|3des|arcfour|rc4)")
+                        AssertionRule.noneMatch("(?i)(cbc|3des|arcfour|rc4)"),
+                        ComplianceGuidanceCatalog.forControl("pan_cis_4_1_4_ssh_strong_ciphers")
                     )
                 )
             )

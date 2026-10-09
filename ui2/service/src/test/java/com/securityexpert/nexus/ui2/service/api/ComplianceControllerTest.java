@@ -24,6 +24,23 @@ import com.securityexpert.nexus.ui2.service.device.configuration.ConfigurationQu
 import com.securityexpert.nexus.ui2.service.device.configuration.FakeDeviceConfigurationRepository;
 
 class ComplianceControllerTest {
+    @Test
+    void deviceAndFindingEndpointsCarryOptionalGuidanceWithoutWriteFields() {
+        ComplianceService service = org.mockito.Mockito.mock(ComplianceService.class);
+        Map<String, Object> guidance = Map.of("summary", "Review the setting", "steps", List.of("Open vendor settings"),
+                "references", List.of("Vendor guide"));
+        Map<String, Object> result = Map.of("device_id", "synthetic-device", "items", List.of(Map.of(
+                "controlId", "synthetic-control", "observedValue", "8", "rationale", "Reduces exposure", "guidance", guidance)));
+        Map<String, Object> detail = Map.of("control_id", "synthetic-control", "devices", List.of(Map.of(
+                "device_id", "synthetic-device", "observed_value", "8", "guidance", guidance)));
+        org.mockito.Mockito.when(service.getDeviceCompliance("synthetic-device")).thenReturn(result);
+        org.mockito.Mockito.when(service.getControlDetail("synthetic-control")).thenReturn(detail);
+        ComplianceController controller = new ComplianceController(service);
+        assertEquals(result, controller.getDeviceCompliance("synthetic-device").getBody());
+        assertEquals(detail, controller.getControlDetail("synthetic-control").getBody());
+        assertTrue(!result.toString().contains("remediation"));
+    }
+
 
     static class FakeDeviceRepository implements DeviceRepository {
         @Override

@@ -55,7 +55,7 @@ public final class FortinetAsaComplianceEvaluator {
                     verdict == Verdict.UNKNOWN ? "Configuration evidence is missing, masked, partial, or ambiguous."
                             : verdict == Verdict.NOT_APPLICABLE ? "Configuration explicitly disables HA or failover."
                             : verdict == Verdict.PASS ? "Explicit configuration satisfies this control."
-                            : "Explicit configuration does not satisfy this control.", null));
+                            : "Explicit configuration does not satisfy this control.", null).withGuidance(c, c.findBinding(vendor, null)));
         }
         int pass = (int) items.stream().filter(i -> i.verdict() == Verdict.PASS).count();
         int fail = (int) items.stream().filter(i -> i.verdict() == Verdict.FAIL).count();

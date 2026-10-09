@@ -4,6 +4,11 @@ public record VendorBinding(
         String vendor,
         String platformFamily,
         EvidenceRequirement evidenceRequirement,
-        AssertionRule assertion
+        AssertionRule assertion,
+        ComplianceGuidance guidance
 ) {
+    public VendorBinding(String vendor, String platformFamily, EvidenceRequirement evidenceRequirement,
+            AssertionRule assertion) {
+        this(vendor, platformFamily, evidenceRequirement, assertion, null);
+    }
 }
