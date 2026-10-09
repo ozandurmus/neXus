@@ -7,10 +7,11 @@ import { Icon } from "../shell/Icon";
 import { relativeAge, DISPLAY_TZ } from "../shell/time";
 import { JobTranscriptDrawer } from "./JobTranscriptDrawer";
 import { m3 } from "../theme/m3Theme";
-import { cancelJob, listPolicies, getPolicyCollectionStatus, type PolicyCollectionMode, type PolicyCollectionStatus, listPolicySources, collectPolicies, type PolicyCollectionSource, getPolicy, getPolicyObject, type PolicyTarget, type PolicyMetadata, type PolicyObject, type PolicyRule, type PolicyCell, type PolicyPage } from "../auth/adminApi";
+import { cancelJob, listPolicies, getPolicyCollectionStatus, type PolicyCollectionMode, type PolicyCollectionStatus, listPolicySources, collectPolicies, type PolicyCollectionSource, getPolicy, getPolicyObject, type PolicyTarget, type PolicyMetadata, type PolicyObject, type PolicyRule, type PolicyCell, type PolicyPage, getPolicyRule, type PolicyRuleDetail } from "../auth/adminApi";
 
 import { VirtualPolicyCards, RuleDetailPanel, RuleHistory, scheduleLabel, sectionLabel, reportPolicyLoadError } from "./PolicyRuleViewer";
 
+import { PolicyHygieneTab } from "./PolicyHygieneTab";
 import { PolicyDomainTab } from "./PolicyDomainTabs";
 
 const runningStates = ["REQUESTED", "CLAIMED", "EXECUTING", "RECONCILING", "RUNNING"];
@@ -106,7 +107,7 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
   const [collectionStatus, setCollectionStatus] = useState("");
   const [selected, setSelected] = useState(() => new URLSearchParams(window.location.search).get("policy_id") ?? "");
   const [device, setDevice] = useState(() => new URLSearchParams(window.location.search).get("device_id") ?? "");
-  const [tab, setTab] = useState<"Rules" | "Objects" | "Installation">(() => new URLSearchParams(window.location.search).get("tab") === "objects" ? "Objects" : "Rules");
+  const [tab, setTab] = useState<"Rules" | "Objects" | "Installation" | "Hygiene">(() => new URLSearchParams(window.location.search).get("tab") === "objects" ? "Objects" : "Rules");
   const [hitFilter, setHitFilter] = useState("");
   const [hitDays, setHitDays] = useState(90);
   const [page, setPage] = useState(0);
@@ -122,7 +123,7 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
     return () => window.clearInterval(timer);
   }, []);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
-  const [drawer, setDrawer] = useState<{ rule?: PolicyRule; object?: PolicyObject; loading?: boolean; error?: string; errorCode?: string; history?: boolean } | null>(null);
+  const [drawer, setDrawer] = useState<{ rule?: PolicyRule; detail?: PolicyRuleDetail; object?: PolicyObject; loading?: boolean; error?: string; errorCode?: string; history?: boolean } | null>(null);
   const drawerRequest = useRef(0);
   const policyRequest = useRef(0);
   useEffect(() => {
@@ -214,6 +215,13 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
       if (request === drawerRequest.current) setDrawer({ object: result.object });
     }
     catch (error) { if (request === drawerRequest.current) setDrawer({ error: "Object details could not be loaded.", errorCode: reportPolicyLoadError("object", error) }); }
+  };
+  const openRuleId = async (id: string, days = 90) => {
+    const request = ++drawerRequest.current; setDrawer({ loading: true });
+    try {
+      const detail = await getPolicyRule(selected, id, days);
+      if (request === drawerRequest.current) setDrawer({ rule: detail.rule, detail });
+    } catch { if (request === drawerRequest.current) setDrawer({ error: "Rule details could not be loaded." }); }
   };
   const openRule = (rule: PolicyRule) => { drawerRequest.current++; setDrawer({ rule }); };
   const toggle = (set: Set<string>, id: string) => {
@@ -441,11 +449,12 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
         </Stack>
         {collectionStatus && <Typography role="status" sx={{ mb: 1 }}>{collectionStatus}</Typography>}
         {(selected || objectMetadata) && <Tabs value={tab} onChange={(_, value) => { setTab(value); setDrawer(null); drawerRequest.current++; }} aria-label="Policy tabs" sx={{ mb: 2 }}>
-          {["Rules", "Objects", "Installation"].map(label => <Tab key={label} label={label} value={label} />)}
+          {["Rules", "Objects", "Installation", "Hygiene"].map(label => <Tab key={label} label={label} value={label} />)}
         </Tabs>}
-        {tab !== "Rules" && objectMetadata && <PolicyDomainTab
+        {(tab === "Objects" || tab === "Installation") && objectMetadata && <PolicyDomainTab
           key={`${tab}:${objectMetadata.sourceId}:${objectMetadata.containerId}:${revision}`}
           tab={tab} metadata={objectMetadata} policies={catalog} />}
+        {tab === "Hygiene" && <PolicyHygieneTab key={`${selected}:${revision}`} policy={selected} openRule={(id, days) => void openRuleId(id, days)} openObject={openObject} />}
         <Box role="tabpanel" aria-label="Rules" hidden={tab !== "Rules"} sx={{ display: tab === "Rules" ? "contents" : "none" }}>
         {error && <Box data-error-code={errorCode}><EmptyPanel title="Policy unavailable" body={error}><Button onClick={() => setRevision(n => n + 1)}>Retry</Button></EmptyPanel></Box>}
         {loadingTree && !error && <Typography role="status">Loading policies…</Typography>}
@@ -488,7 +497,7 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
               <Box role="region" aria-label="Policy rulebase" onScroll={event => setScrollTop(event.currentTarget.scrollTop)}
                 sx={{ flex: "1 1 180px", minHeight: 140, overflowY: "auto", overflowX: "hidden", border: `1px solid ${m3.outlineVar}`, borderRadius: 2 }}>
                 <Box sx={{ minWidth: 0, p: 1 }}><VirtualPolicyCards sections={data.sections} collapsed={collapsed} scrollTop={scrollTop}
-                  metadata={data.metadata} objects={objects} openObject={openObject} openRule={openRule}
+                  metadata={data.metadata} objects={objects} openObject={openObject} openRule={openRule} openRuleId={id => void openRuleId(id)}
                   selected={selectedRules} onSelect={id => setSelectedRules(previous => toggle(previous, id))}
                   toggle={id => setCollapsed(previous => toggle(previous, id))} /></Box>
               </Box>
@@ -506,12 +515,13 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
     <Drawer anchor="right" open={drawer !== null} onClose={close}>
       <Box role="dialog" aria-modal="true" aria-label={drawer?.rule ? "Rule details" : drawer?.history ? "Policy history" : "Object details"} sx={{ width: { xs: "90vw", sm: drawer?.rule || drawer?.history ? 960 : 520 }, p: 3, overflowWrap: "anywhere" }}>
         <Button onClick={close}>Close</Button>
-        {drawer?.loading && <Typography role="status">Loading object…</Typography>}
+        {drawer?.loading && <Typography role="status">Loading details…</Typography>}
         {drawer?.error && <Typography role="alert" data-error-code={drawer.errorCode}>{drawer.error}</Typography>}
         {drawer?.object && <ObjectDetail object={drawer.object} />}
         {drawer?.history && <RuleHistory policy={selected} />}
-        {drawer?.rule && data && <RuleDetailPanel key={drawer.rule.id} rule={drawer.rule} metadata={data.metadata}
-          section={data.sections.find(section => section.rules.some(rule => rule.id === drawer.rule?.id))!} objects={objects} openObject={openObject} />}
+        {drawer?.rule && (drawer.detail || data) && <RuleDetailPanel key={drawer.rule.id} rule={drawer.rule} metadata={drawer.detail?.metadata ?? data!.metadata}
+          section={drawer.detail?.section ?? data!.sections.find(section => section.rules.some(rule => rule.id === drawer.rule?.id))!}
+          objects={drawer.detail ? new Map(drawer.detail.objects.map(o => [o.id, o])) : objects} openObject={openObject} openRuleId={id => void openRuleId(id)} />}
       </Box>
     </Drawer>
   </ScreenRoot>;

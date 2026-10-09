@@ -21,7 +21,7 @@ class PolicyApiTest {
     @Test void policyRoutesAllowMaskedCollectionWithoutOtherWrites() throws Exception {
         var action = new ActionRegistry().find(ActionRegistry.POLICY_READ).orElseThrow();
         assertEquals(Set.of(RoleToken.SECURITY_ADMIN, RoleToken.ONBOARDING_ADMIN, RoleToken.REPLAY_VIEWER), action.requiredRoleTokens());
-        for (String route : List.of("GET /api/v2/policy/tree", "GET /api/v2/policy/collections/*", "GET /api/v2/policy/devices", "GET /api/v2/policy/devices/*", "GET /api/v2/policy/policies/*", "GET /api/v2/policy/policies/*/history", "GET /api/v2/policy/objects/*", "GET /api/v2/policy/domains/*/objects", "GET /api/v2/policy/domains/*/unused", "GET /api/v2/policy/domains/*/gateways", "GET /api/v2/policy/domains/*/hits", "GET /api/v2/policy/domains/*/object-usage", "GET /api/v2/policy/domains/*/objects/duplicates", "GET /api/v2/policy/domains/*/installation"))
+        for (String route : List.of("GET /api/v2/policy/tree", "GET /api/v2/policy/collections/*", "GET /api/v2/policy/devices", "GET /api/v2/policy/devices/*", "GET /api/v2/policy/policies/*", "GET /api/v2/policy/policies/*/history", "GET /api/v2/policy/policies/*/hygiene", "GET /api/v2/policy/policies/*/hygiene.csv", "GET /api/v2/policy/policies/*/rules/*", "GET /api/v2/policy/objects/*", "GET /api/v2/policy/domains/*/objects", "GET /api/v2/policy/domains/*/unused", "GET /api/v2/policy/domains/*/gateways", "GET /api/v2/policy/domains/*/hits", "GET /api/v2/policy/domains/*/object-usage", "GET /api/v2/policy/domains/*/objects/duplicates", "GET /api/v2/policy/domains/*/installation"))
             assertEquals(ActionRegistry.POLICY_READ, SecurityWebMvcConfig.ACTION_ID_BY_ROUTE.get(route));
         assertEquals(Set.of(RoleToken.SECURITY_ADMIN, RoleToken.ONBOARDING_ADMIN, RoleToken.REPLAY_VIEWER),
                 new ActionRegistry().find(ActionRegistry.POLICY_COLLECT).orElseThrow().requiredRoleTokens());
@@ -73,6 +73,9 @@ class PolicyApiTest {
         when(query.tree("", "", "")).thenReturn(new PolicyResponse(Map.of("sources", List.of(Map.of("sourceId", "manager-1", "sourceName", "Synthetic manager", "vendor", "PAN")))));
         when(collections.status("job-1")).thenReturn(Optional.of(Map.of("jobId", "job-1", "state", "FAILED", "step", 2, "total", 6,
             "reason", "show devicegroups target=manager-1: HTTP_403")));
+        when(query.hygiene(snapshot, 0, "", "", 90)).thenReturn(new PolicyResponse(body));
+        when(query.rule(snapshot, "rule-1", 90)).thenReturn(Optional.of(new PolicyResponse(body)));
+        when(query.hygieneCsv(eq(snapshot), eq(""), eq(""), eq(90), anyBoolean())).thenReturn("Rule,Class\r\nRULE-ALPHA-01,unused".getBytes(java.nio.charset.StandardCharsets.UTF_8));
         var names = new TopologyNamePseudonymizer(new byte[32]);
         var advice = new PrivacyMaskingResponseBodyAdvice(new SubnetPreservingIpMasker(new byte[32]), names);
         var gate = new GateChain(sessions, new ActionRegistry(), rbac, audit);
@@ -94,6 +97,20 @@ class PolicyApiTest {
                     new RbacEvaluator.Decision(role.equals(RoleToken.REPLAY_VIEWER) ? AuthzOutcome.PERMITTED : AuthzOutcome.DENIED, Optional.of("test"), Optional.empty(), Optional.empty()));
             when(rbac.evaluateAny(eq(actor), eq(new ActionRegistry().find(ActionRegistry.POLICY_COLLECT).orElseThrow().requiredRoleTokens()), any())).thenReturn(
                     new RbacEvaluator.Decision(allowed ? AuthzOutcome.PERMITTED : AuthzOutcome.DENIED, Optional.of("test"), Optional.empty(), Optional.empty()));
+            for (String suffix : List.of("hygiene", "hygiene.csv", "rules/rule-1")) {
+                String path = "/api/v2/policy/policies/policy-1/" + suffix;
+                mvc.perform(get(path).servletPath(path)).andExpect(status().isUnauthorized());
+                var result = mvc.perform(get(path).servletPath(path).cookie(new Cookie("ui2_session", cookie)))
+                    .andExpect(status().is(allowed ? 200 : 403)).andReturn();
+                if (allowed) {
+                    assertEquals("no-store", result.getResponse().getHeader("Cache-Control"));
+                    if (role.equals(RoleToken.REPLAY_VIEWER)) {
+                        assertFalse(result.getResponse().getContentAsString().contains("Synthetic policy"));
+                        assertFalse(result.getResponse().getContentAsString().contains("192.0.2.8"));
+                        if (suffix.equals("hygiene.csv")) verify(query).hygieneCsv(snapshot, "", "", 90, true);
+                    }
+                }
+            }
             for (String view : List.of("objects", "unused", "gateways", "hits", "object-usage", "objects/duplicates", "installation")) {
                 when(query.domainInventory("manager-1", "domain-1", view, 0)).thenReturn(Optional.of(new PolicyResponse(body)));
                 when(query.domainHits("manager-1", "domain-1", 0)).thenReturn(Optional.of(new PolicyResponse(body)));
@@ -234,6 +251,11 @@ class PolicyApiTest {
         assertEquals(400, controller.installation("domain-1", "", 0, "", "", request).getStatusCode().value());
         assertEquals(400, controller.filteredPage("policy-1", 0, "", "bad-filter", 90, request).getStatusCode().value());
         assertEquals(400, controller.filteredPage("policy-1", 0, "", "inactive", 0, request).getStatusCode().value());
+        assertEquals(400, controller.hygiene("p", -1, "", "", 90).getStatusCode().value());
+        assertEquals(400, controller.hygiene("p", 0, "bogus", "", 90).getStatusCode().value());
+        assertEquals(400, controller.hygiene("p", 0, "", "bogus", 90).getStatusCode().value());
+        assertEquals(400, controller.rule("p", "r", 0).getStatusCode().value());
+        assertEquals(400, controller.hygieneCsv("p", "", "", 36501, request).getStatusCode().value());
         when(query.catalog()).thenReturn(List.of());
         assertEquals(200, controller.device("missing", "", 0, "", new org.springframework.mock.web.MockHttpServletRequest()).getStatusCode().value());
         assertEquals(404, controller.object("object-1", "missing", "policy-1").getStatusCode().value());
