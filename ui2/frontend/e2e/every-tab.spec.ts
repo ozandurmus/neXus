@@ -46,6 +46,18 @@ for (const screen of SCREEN_IDS) {
     await content(page);
   });
 }
+for (const label of ["Fleet", "Catalog"]) {
+  test(`full: inventory / Lifecycle / ${label}`, async ({ page, safety }) => {
+    await visit(page, "screen=inventory&view=lifecycle", "Devices");
+    await page.getByRole("tablist", { name: "Lifecycle view", exact: true }).getByRole("tab", { name: label, exact: true }).click();
+    await safety.checkpoint();
+    await content(page, page.getByRole("tabpanel", { name: label, exact: true }));
+    if (label === "Catalog") {
+      await expect(page.getByLabel("Import lifecycle CSV")).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Add row", exact: true })).toHaveCount(0);
+    }
+  });
+}
 for (const { screen, tabList, labels } of TAB_COVERAGE.filter(row => row.screen !== "inventory")) {
   for (const label of labels) {
     test(`full: ${screen} / ${label}`, async ({ page, safety }) => {

@@ -32,6 +32,8 @@ public final class AuditPresentationAllowlist {
      * {@code job_reconciliation} and {@code gate_registry}).
      */
     private static final Map<String, Set<String>> AUDITED_IN_FULL = Map.ofEntries(
+            Map.entry("lifecycle_catalog", Set.of("catalog_id", "vendor", "kind", "product", "end_of_sale",
+                    "end_of_support", "end_of_engineering", "source", "imported_at")),
             Map.entry("backup_baseline", Set.of("artefact_id", "device_id", "set_at")),
             Map.entry("backup_policy", Set.of(
                     "backup_retention_days", "created_at", "daily_backup_cron", "last_scheduled_run_at",

@@ -11,6 +11,7 @@ import { deleteDevice, getDeviceWorkspace, type DeviceWorkspaceView, type Action
 import { enrollmentStateLabel } from "../shell/deviceCopy";
 import { HttpsCertificatePanel } from "./HttpsCertificatePanel";
 import { Ts } from "../shell/States";
+import { DeviceLifecycleLine } from "./LifecycleScreen";
 
 function describeApiError(err: unknown): string {
   const apiErr = err as Partial<ApiError>;
@@ -157,6 +158,7 @@ export function DeviceWorkspaceScreen({ deviceId }: { readonly deviceId: string 
 
             <Box sx={{ bgcolor: m3.scHigh, p: 2, borderRadius: 2 }}>
               <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: "medium" }}>Collected Data</Typography>
+              <DeviceLifecycleLine key={deviceId} deviceId={deviceId} />
               <Typography variant="body2" color="text.secondary">
                 Collection is not yet direction-ed for this device's vendor (PO Gate 2026-09-12).
               </Typography>

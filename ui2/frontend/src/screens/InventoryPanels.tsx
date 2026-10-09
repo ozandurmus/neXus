@@ -4,6 +4,7 @@ import Button from "@mui/material/Button";
 import Chip from "@mui/material/Chip";
 import Stack from "@mui/material/Stack";
 import Table from "@mui/material/Table";
+import { DeviceLifecycleLine } from "./LifecycleScreen";
 import TableBody from "@mui/material/TableBody";
 import TableCell from "@mui/material/TableCell";
 import TableContainer from "@mui/material/TableContainer";
@@ -1846,6 +1847,7 @@ export function DeviceInventoryPanels({
         ) : null}
       </InventoryEntityHeader>
 
+      <DeviceLifecycleLine key={device.device_id} deviceId={device.device_id} />
       <DetailTabs
         ariaLabel="Device detail"
         configuration={configuration}

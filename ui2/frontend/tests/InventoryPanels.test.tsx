@@ -82,6 +82,7 @@ describe("InventoryScreen device selection and panels", () => {
           "/devices/dev-1": { ...device, job: null },
           "/devices/dev-1/https-certificate": { available: false },
           "/devices/dev-1/inventory": { device_id: "dev-1", collected_at: null, contexts: [] },
+          "/devices/dev-1/lifecycle": { device_id: "dev-1", risk: "UNKNOWN", status: "NO_LIFECYCLE_DATA" },
         };
         return Promise.resolve(jsonResponse(url in bodies ? 200 : 404, bodies[url] ?? { error: "NOT_FOUND" }));
       });
@@ -89,9 +90,9 @@ describe("InventoryScreen device selection and panels", () => {
       render(withTheme(<InventoryScreen />));
       fireEvent.click(await screen.findByText("FW-TANGO-04"));
       await screen.findByRole("tablist", { name: "Device detail" });
-      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(5));
       expect(fetchMock.mock.calls.map(([url]) => url).sort()).toEqual([
-        "/devices", "/devices/dev-1", "/devices/dev-1/https-certificate", "/devices/dev-1/inventory",
+        "/devices", "/devices/dev-1", "/devices/dev-1/https-certificate", "/devices/dev-1/inventory", "/devices/dev-1/lifecycle",
       ]);
       expect(screen.getByText("This device has not been collected yet. Use Collect now to read its interfaces.")).toBeInTheDocument();
       expect(screen.queryByText("Inventory unavailable")).toBeNull();

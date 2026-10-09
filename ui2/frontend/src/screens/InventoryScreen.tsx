@@ -21,6 +21,7 @@ import { JobStatusIndicator } from "../shell/JobStatusIndicator";
 import { HttpsCertificatePanel } from "./HttpsCertificatePanel";
 import { DeviceInventoryPanels, ClusterDetailPanels, VendorAvatar, deriveClusterTitle } from "./InventoryPanels";
 import { ClusterConfigurationDetail, DeviceConfigurationDetail } from "./ConfigurationDetail";
+import { LifecycleScreen } from "./LifecycleScreen";
 
 function describeApiError(err: unknown): string {
   const apiErr = err as Partial<ApiError>;
@@ -873,6 +874,7 @@ function FlatDeviceList({
 }
 
 export function InventoryScreen() {
+  const [lifecycleView, setLifecycleView] = useState(() => urlParam("view") === "lifecycle");
   const { data, error, refresh } = useFetchOnMount(
     () => listDevices().then((result) => result.devices ?? []),
     describeApiError,
@@ -1043,6 +1045,12 @@ export function InventoryScreen() {
     }
   };
 
+  if (lifecycleView) return <ScreenRoot>
+    <ScreenHeader title="Devices" subtitle="Lifecycle, end of support and licenses"
+      actions={<M3Button emphasis="tonal" onClick={() => setLifecycleView(false)}>Back to inventory</M3Button>} />
+    <LifecycleScreen />
+  </ScreenRoot>;
+
   return (
     <ScreenRoot>
       <ScreenHeader
@@ -1050,6 +1058,7 @@ export function InventoryScreen() {
         subtitle={devices === null ? "Loading…" : `${total} device${total === 1 ? "" : "s"} enrolled`}
         actions={
           <>
+            <M3Button emphasis="tonal" onClick={() => setLifecycleView(true)}>Lifecycle</M3Button>
             <M3Button emphasis="tonal" icon="download" disabled={!devices || devices.length === 0}
               onClick={() => downloadText(`devices-${new Date().toISOString().replace(/[:.]/g, "-")}.csv`, inventoryCsv(sortedDevices))}>
               Export inventory
