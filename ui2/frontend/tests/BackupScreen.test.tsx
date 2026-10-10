@@ -75,6 +75,18 @@ describe("the Backups screen (UI review 2026-09-23)", () => {
 
   afterEach(() => vi.unstubAllGlobals());
 
+  it("describes the daily Istanbul backup window separately from polling", async () => {
+    stub({ schedule_enabled: true, daily_backup_cron: "0 2 * * *", backup_retention_days: 14, snapshot_retention_depth: 1 },
+      { active_major_deviations: [], total_deviations_checked: 0 });
+    render(<BackupScreen />);
+    await screen.findByText("FW-TANGO-04-M1");
+    expect(screen.getByText("02:00 daily")).toBeInTheDocument();
+    expect(screen.queryByText("00 / 06 / 12 / 18")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Retention/i }));
+    expect(await screen.findByText("Fleet backup schedule: daily at 02:00 Europe/Istanbul; starts allowed until 02:59.")).toBeInTheDocument();
+    expect(screen.getByText(/every backup target runs once a day at 02:00 Europe\/Istanbul/)).toBeInTheDocument();
+  });
+
   it("shows one row per device with the target switch, the latest archive and every action", async () => {
     stub({ schedule_enabled: false, daily_backup_cron: "0 2 * * *", backup_retention_days: 14, snapshot_retention_depth: 1 }, { active_major_deviations: [], total_deviations_checked: 0 });
     render(<BackupScreen />);

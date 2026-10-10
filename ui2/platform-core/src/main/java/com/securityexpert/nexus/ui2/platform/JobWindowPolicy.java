@@ -12,7 +12,7 @@ public final class JobWindowPolicy {
     public static final String CRON = "0 0 0,6,12,18 * * *";
     public static final String CODE = "OUTSIDE_JOB_WINDOW";
     public static final ZoneId ZONE_ID = ZoneId.of(ZONE);
-    // These tasks only process stored data. No device capability is exempt; unknown capabilities fail closed.
+    // Stored-data exemptions; device backup admission uses the separate, named ScheduledBackupWindowPolicy.
     public static final Set<String> INTERNAL_TASKS = Set.of(
             "db_maintenance", "lease_reconciliation", "owner_heartbeat", "compliance_evaluation",
             "cluster_diff", "notification_forwarding");
@@ -53,9 +53,18 @@ public final class JobWindowPolicy {
     public void requireOpen(Instant instant) {
         if (!isOpen(instant)) throw new OutsideWindow(nextStart(instant));
     }
+    public void requireDeviceJobOpen(String capabilityId, String jobType, String actor) {
+        if (capabilityId.equals(jobType) && ScheduledBackupWindowPolicy.isScheduledBackup(jobType, actor)) {
+            if (!ScheduledBackupWindowPolicy.isOpen(now()))
+                throw new OutsideWindow(ScheduledBackupWindowPolicy.nextStart(now()));
+        } else {
+            requireOpen();
+        }
+    }
     public void logPolicy() {
         System.getLogger(JobWindowPolicy.class.getName()).log(System.Logger.Level.INFO,
-                "Job windows: zone=" + ZONE + " slots=00:00,06:00,12:00,18:00 window_minutes=" + windowMinutes);
+                "Job windows: zone=" + ZONE + " slots=00:00,06:00,12:00,18:00 window_minutes=" + windowMinutes
+                        + " scheduled_backup_window=02:00-02:59");
     }
     public static final class OutsideWindow extends RuntimeException {
         private final ZonedDateTime nextWindowStart;

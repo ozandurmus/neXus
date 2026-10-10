@@ -11,6 +11,7 @@ import com.securityexpert.nexus.ui2.jobs.admission.BackupCapabilityIds;
 import com.securityexpert.nexus.ui2.jobs.admission.JobAdmissionService;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRecord;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
+import com.securityexpert.nexus.ui2.platform.ScheduledBackupWindowPolicy;
 import com.securityexpert.nexus.ui2.service.security.ActionRegistry;
 
 /**
@@ -54,6 +55,12 @@ public final class BackupCollectService {
     private final Set<String> pilotAllowlist;
     private final boolean backupCredentialConfigured;
     private final Clock clock;
+    private java.util.function.Supplier<Set<String>> measuredMdsExports = Set::of;
+
+    public BackupCollectService withMdsExportEligibility(MdsExportEligibility eligibility) {
+        measuredMdsExports = Objects.requireNonNull(eligibility)::measuredTargets;
+        return this;
+    }
 
     public BackupCollectService(DeviceRepository deviceRepository, JobAdmissionService jobAdmissionService,
             Set<String> pilotAllowlist, boolean backupCredentialConfigured) {
@@ -187,13 +194,22 @@ public final class BackupCollectService {
     public BulkOutcome requestCollectAll(String actorFingerprint, String reason) {
         int targets = 0;
         int admitted = 0;
+        boolean scheduled = ScheduledBackupWindowPolicy.ACTOR.equals(actorFingerprint);
+        Set<String> mdsExports = scheduled ? measuredMdsExports.get() : Set.of();
+        Optional<String> nonce = scheduled
+                ? Optional.of("scheduled:" + clock.instant().atZone(
+                        com.securityexpert.nexus.ui2.platform.JobWindowPolicy.ZONE_ID).toLocalDate())
+                : Optional.empty();
         for (var device : deviceRepository.listAll()) {
             if (!device.backupTarget()
                     || device.enrollmentState() != com.securityexpert.nexus.ui2.platform.DeviceEnrollmentState.ENROLLED) {
                 continue;
             }
             targets++;
-            if (requestCollect(device.deviceId(), actorFingerprint, reason, Optional.empty()) instanceof Outcome.Admitted) {
+            boolean mdsExport = "check_point".equals(device.vendorHint())
+                    && "management_server".equals(device.role()) && mdsExports.contains(device.deviceId());
+            if (requestCollect(device.deviceId(), mdsExport ? ScheduledBackupWindowPolicy.MDS_ACTOR : actorFingerprint,
+                    reason, nonce, mdsExport ? "mds_export" : "backup") instanceof Outcome.Admitted) {
                 admitted++;
             }
         }

@@ -30,9 +30,9 @@ public final class JooqJobRecordDao implements JobRecordDao {
     @Override
     public Optional<String> insertRequestedIfAbsent(String jobId, String idempotencyKey, String capabilityId,
             String targetDeviceId, String actionClass, String jobType, String actorFingerprint, String actionId) {
-        windows.requireOpen();
+        windows.requireDeviceJobOpen(capabilityId, jobType, actorFingerprint);
         return auditedTransactionBoundary.inTransaction(actorFingerprint, actionId, dsl -> {
-            windows.requireOpen();
+            windows.requireDeviceJobOpen(capabilityId, jobType, actorFingerprint);
             org.jooq.Result<Record> rows = dsl.fetch(
                     "insert into jobs(job_id, job_type, capability_id, target_device_id, target_kind, "
                             + "submitted_by_actor_fingerprint, submitted_at, idempotency_key, action_class, state) "

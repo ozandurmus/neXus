@@ -1,6 +1,7 @@
 package com.securityexpert.nexus.ui2.persistence.jobrecords;
 
 import com.securityexpert.nexus.ui2.platform.JobWindowPolicy;
+import com.securityexpert.nexus.ui2.platform.ScheduledBackupWindowPolicy;
 import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
@@ -43,7 +44,14 @@ public final class JooqJobLeaseDao implements JobLeaseDao {
             WHERE job_id = (
                 SELECT job_id FROM jobs, inventory_claim_lock
                 WHERE state = 'REQUESTED'
-                  AND clock_timestamp() < CAST({3} AS timestamptz)
+                  AND CASE WHEN
+                    (submitted_by_actor_fingerprint = {7} AND capability_id = ANY(string_to_array({6}, ',')))
+                    OR (submitted_by_actor_fingerprint = {8} AND capability_id = {9})
+                  THEN clock_timestamp() >= CAST({4} AS timestamptz)
+                    AND clock_timestamp() < CAST({5} AS timestamptz)
+                    AND submitted_at >= CAST({4} AS timestamptz)
+                    AND submitted_at < CAST({5} AS timestamptz)
+                  ELSE clock_timestamp() < CAST({3} AS timestamptz) END
                   AND capability_id = ANY(string_to_array({2}, ','))
                   AND job_type = ANY(string_to_array({2}, ','))
                   AND job_type = capability_id
@@ -89,7 +97,8 @@ public final class JooqJobLeaseDao implements JobLeaseDao {
     @Override
     public Optional<ClaimedJobRow> claimNext(String workerId, List<String> eligibleCapabilityIds,
             Duration leaseDuration) {
-        if (!windows.isOpen() || eligibleCapabilityIds.isEmpty()) {
+        if ((!windows.isOpen() && !ScheduledBackupWindowPolicy.isOpen(windows.now()))
+                || eligibleCapabilityIds.isEmpty()) {
             // Never issues the statement against an empty eligible set --
             // string_to_array('', ',') would produce a one-element array
             // containing the empty string, a silent near-miss rather than
@@ -98,9 +107,14 @@ public final class JooqJobLeaseDao implements JobLeaseDao {
         }
         String joined = String.join(",", eligibleCapabilityIds);
         return auditedTransactionBoundary.inTransaction("system:worker", "job_claim", dsl -> {
-            if (!windows.isOpen()) return Optional.empty();
+            var now = windows.now();
+            if (!windows.isOpen(now) && !ScheduledBackupWindowPolicy.isOpen(now)) return Optional.empty();
+            var backupStart = ScheduledBackupWindowPolicy.start(now);
             Result<Record> rows = dsl.fetch(CLAIM_SQL, workerId, String.valueOf(leaseDuration.toSeconds()), joined,
-                    windows.slotStart(windows.now()).plusMinutes(windows.windowMinutes()).toOffsetDateTime());
+                    windows.slotStart(now).plusMinutes(windows.windowMinutes()).toOffsetDateTime(),
+                    backupStart.toOffsetDateTime(), backupStart.plusHours(1).toOffsetDateTime(),
+                    String.join(",", ScheduledBackupWindowPolicy.FLEET_JOB_TYPES), ScheduledBackupWindowPolicy.ACTOR,
+                    ScheduledBackupWindowPolicy.MDS_ACTOR, ScheduledBackupWindowPolicy.MDS_EXPORT);
             return rows.stream().findFirst()
                     .map(row -> new ClaimedJobRow(row.get("job_id", String.class), row.get("lease_epoch", Long.class)));
         });

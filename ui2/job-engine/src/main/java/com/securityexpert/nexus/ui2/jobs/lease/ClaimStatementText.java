@@ -31,7 +31,14 @@ public final class ClaimStatementText {
             WHERE job_id = (
                 SELECT job_id FROM jobs, inventory_claim_lock
                 WHERE state = 'REQUESTED'
-                  AND clock_timestamp() < CAST({3} AS timestamptz)
+                  AND CASE WHEN
+                    (submitted_by_actor_fingerprint = {7} AND capability_id = ANY(string_to_array({6}, ',')))
+                    OR (submitted_by_actor_fingerprint = {8} AND capability_id = {9})
+                  THEN clock_timestamp() >= CAST({4} AS timestamptz)
+                    AND clock_timestamp() < CAST({5} AS timestamptz)
+                    AND submitted_at >= CAST({4} AS timestamptz)
+                    AND submitted_at < CAST({5} AS timestamptz)
+                  ELSE clock_timestamp() < CAST({3} AS timestamptz) END
                   AND capability_id = ANY(string_to_array({2}, ','))
                   AND job_type = ANY(string_to_array({2}, ','))
                   AND job_type = capability_id
