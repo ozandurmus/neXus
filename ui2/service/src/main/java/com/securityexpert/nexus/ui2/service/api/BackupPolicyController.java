@@ -82,7 +82,7 @@ public final class BackupPolicyController {
             return Optional.of("schedule_enabled (true|false) is required");
         }
         if (request.dailyBackupCron() == null || !BackupScheduleDue.isValidCron(request.dailyBackupCron())) {
-            return Optional.of("daily_backup_cron must be a valid five-field cron expression (UTC), e.g. 0 2 * * *");
+            return Optional.of("daily_backup_cron must be a valid five-field cron expression (Europe/Istanbul), e.g. 0 2 * * *");
         }
         if (request.backupRetentionDays() == null || request.backupRetentionDays() < 1 || request.backupRetentionDays() > 3650) {
             return Optional.of("backup_retention_days must be between 1 and 3650");

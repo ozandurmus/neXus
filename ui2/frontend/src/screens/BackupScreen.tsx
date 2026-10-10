@@ -375,7 +375,7 @@ export function BackupScreen() {
       setPolicy(saved);
       setPolicyOpen(false);
       setSuccessMessage(saved.schedule_enabled
-        ? `Policy saved: fleet backup at 00:00, 06:00, 12:00, 18:00 Europe/Istanbul, ${saved.backup_retention_days}-day retention.`
+        ? `Policy saved: fleet backup daily at 02:00 Europe/Istanbul, ${saved.backup_retention_days}-day retention.`
         : `Policy saved: schedule off, ${saved.backup_retention_days}-day retention.`);
       setTimeout(() => setSuccessMessage(null), 8000);
     } catch (error) {
@@ -517,7 +517,7 @@ export function BackupScreen() {
           {!policy ? (
             <Typography sx={{ fontSize: 22, lineHeight: "40px", fontWeight: 650, color: m3.neutralInk }}>UNKNOWN</Typography>
           ) : policy.schedule_enabled ? (
-            <Typography sx={{ fontFamily: MONO, fontSize: 24, lineHeight: "40px", fontWeight: 600, color: m3.onSurface }}>00 / 06 / 12 / 18</Typography>
+            <Typography sx={{ fontFamily: MONO, fontSize: 24, lineHeight: "40px", fontWeight: 600, color: m3.onSurface }}>02:00 daily</Typography>
           ) : (
             <Box sx={{ display: "flex", alignItems: "center", gap: 1, minHeight: 40 }}>
               <StatusChip tone="warn" label="Not scheduled" />
@@ -895,10 +895,10 @@ export function BackupScreen() {
             <Stack direction="row" spacing={1.5} alignItems="center">
               <Switch checked={scheduleEnabled} onChange={(e) => setScheduleEnabled(e.target.checked)} disabled={policyBusy} />
               <Typography variant="body2">
-                {scheduleEnabled ? "Scheduled fleet backup is ON: every backup target runs at the shared six-hour slots." : "Scheduled fleet backup is OFF: backups run only from this screen."}
+                {scheduleEnabled ? "Scheduled fleet backup is ON: every backup target runs once a day at 02:00 Europe/Istanbul." : "Scheduled fleet backup is OFF: backups run only from this screen."}
               </Typography>
             </Stack>
-            <Typography>Fleet backup schedule: 00:00, 06:00, 12:00, 18:00 Europe/Istanbul.</Typography>
+            <Typography>Fleet backup schedule: daily at 02:00 Europe/Istanbul; starts allowed until 02:59.</Typography>
             <TextField
               label="Backup retention (days)"
               type="number"
@@ -1146,7 +1146,7 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
                           </JobButton></span></Tooltip>
                         ) : null}
                         {vendor === "check_point" && summary?.role === "management_server" && summary?.backup_target ? (
-                          <Tooltip title="Multi-Domain Server export: one mds_backup of the whole server and every domain. Locks the MDS database while it runs; scheduled at the shared job slots."><span><JobButton size="small" disabled={busy}
+                          <Tooltip title="Multi-Domain Server export: one mds_backup of the whole server and every domain. Locks the MDS database while it runs; after an operator-watched export, used as the daily 02:00 Europe/Istanbul backup."><span><JobButton size="small" disabled={busy}
                             onClick={() => onBackupNow(item ?? { deviceId: id, name, ip: "", vendor: vendor ?? "unknown", role: "management_server", lastBackupTime: "", backupType: "standard", validationLevel: "UNKNOWN", deviationState: "NOT EVALUATED", sizeBytes: 0, artefactId: "" }, "mds_export")}>MDS export</JobButton></span></Tooltip>
                         ) : null}
                         {vendor === "check_point" && item ? (

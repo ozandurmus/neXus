@@ -649,7 +649,7 @@ public class DeviceCompositionConfiguration {
         return new BackupScheduleTrigger(scheduler);
     }
 
-    /** Slot trigger for {@link com.securityexpert.nexus.ui2.service.device.backup.BackupScheduler}. */
+    /** Minute trigger within the daily backup window; the scheduler durably claims the local day. */
     public static final class BackupScheduleTrigger {
         private static final java.util.logging.Logger LOG =
                 java.util.logging.Logger.getLogger(BackupScheduleTrigger.class.getName());
@@ -659,7 +659,8 @@ public class DeviceCompositionConfiguration {
             this.scheduler = scheduler;
         }
 
-        @org.springframework.scheduling.annotation.Scheduled(cron = JobWindowPolicy.CRON, zone = JobWindowPolicy.ZONE)
+        @org.springframework.scheduling.annotation.Scheduled(
+                cron = com.securityexpert.nexus.ui2.platform.ScheduledBackupWindowPolicy.CRON, zone = JobWindowPolicy.ZONE)
         public void tick() {
             try {
                 scheduler.tick(java.time.Instant.now());
@@ -724,11 +725,12 @@ public class DeviceCompositionConfiguration {
     @Bean
     public BackupCollectService backupCollectService(DeviceRepository deviceRepository,
             JobAdmissionService jobAdmissionService,
-            com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFactsRepository platformFacts) {
+            com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFactsRepository platformFacts,
+            com.securityexpert.nexus.ui2.service.device.backup.MdsExportEligibility mdsExportEligibility) {
         java.util.Set<String> allowlist = parseCsvEnv("UI2_BACKUP_PILOT_DEVICE_IDS");
         boolean backupCredentialConfigured = !System.getenv().getOrDefault("UI2_CP_BACKUP_CREDENTIAL_REF", "").isBlank();
         return new BackupCollectService(deviceRepository, jobAdmissionService, allowlist, backupCredentialConfigured)
-                .withPlatformFacts(platformFacts);
+                .withPlatformFacts(platformFacts).withMdsExportEligibility(mdsExportEligibility);
     }
 
     private static java.util.Set<String> parseCsvEnv(String name) {
