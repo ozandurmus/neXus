@@ -53,6 +53,7 @@ public final class BackupScheduler {
                 "Scheduled fleet backup (slot " + slot.get() + ")");
         LOG.info("[BACKUP_SCHEDULE] slot " + slot.get() + ": targets=" + outcome.targets() + " admitted="
                 + outcome.admitted() + " refused=" + outcome.refused());
+        collectService.requestScheduledMdsExports();
         return slot;
     }
 }

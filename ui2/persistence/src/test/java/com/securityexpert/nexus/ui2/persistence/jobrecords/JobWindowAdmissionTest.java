@@ -102,8 +102,9 @@ class JobWindowAdmissionTest {
                 "cp_inventory_collect"), Duration.ofMinutes(5)).isEmpty());
         assertTrue(queries.stream().anyMatch(q -> q.contains("AND CASE WHEN")
                 && q.contains("submitted_at >= CAST(") && q.contains("submitted_at < CAST(")));
-        assertTrue(bindings.contains(ScheduledBackupWindowPolicy.start(atTwo.now()).toOffsetDateTime()));
-        assertTrue(bindings.contains(ScheduledBackupWindowPolicy.start(atTwo.now()).plusHours(1).toOffsetDateTime()));
+        // jOOQ's PostgreSQL binding converts OffsetDateTime to a JDBC timestamp string.
+        assertEquals(2, Collections.frequency(bindings, "2026-10-09 02:00:00+03:00"));
+        assertEquals(2, Collections.frequency(bindings, "2026-10-09 03:00:00+03:00"));
         assertTrue(bindings.contains(ScheduledBackupWindowPolicy.ACTOR));
         assertTrue(bindings.contains(ScheduledBackupWindowPolicy.MDS_ACTOR));
     }
