@@ -195,7 +195,6 @@ public final class BackupCollectService {
         int targets = 0;
         int admitted = 0;
         boolean scheduled = ScheduledBackupWindowPolicy.ACTOR.equals(actorFingerprint);
-        Set<String> mdsExports = scheduled ? measuredMdsExports.get() : Set.of();
         Optional<String> nonce = scheduled
                 ? Optional.of("scheduled:" + clock.instant().atZone(
                         com.securityexpert.nexus.ui2.platform.JobWindowPolicy.ZONE_ID).toLocalDate())
@@ -206,14 +205,23 @@ public final class BackupCollectService {
                 continue;
             }
             targets++;
-            boolean mdsExport = "check_point".equals(device.vendorHint())
-                    && "management_server".equals(device.role()) && mdsExports.contains(device.deviceId());
-            if (requestCollect(device.deviceId(), mdsExport ? ScheduledBackupWindowPolicy.MDS_ACTOR : actorFingerprint,
-                    reason, nonce, mdsExport ? "mds_export" : "backup") instanceof Outcome.Admitted) {
+            if (requestCollect(device.deviceId(), actorFingerprint, reason, nonce) instanceof Outcome.Admitted) {
                 admitted++;
             }
         }
         return new BulkOutcome(targets, admitted, targets - admitted);
+    }
+
+    /** Separate MDS export pass, invoked only after the fleet scheduler claims the local day. */
+    public void requestScheduledMdsExports() {
+        Instant now = clock.instant();
+        if (!ScheduledBackupWindowPolicy.isOpen(now)) return;
+        Optional<String> nonce = Optional.of("scheduled:" + now.atZone(
+                com.securityexpert.nexus.ui2.platform.JobWindowPolicy.ZONE_ID).toLocalDate());
+        for (String deviceId : measuredMdsExports.get()) {
+            requestCollect(deviceId, ScheduledBackupWindowPolicy.MDS_ACTOR,
+                    "Scheduled MDS export", nonce, "mds_export");
+        }
     }
 
     private String minuteBucket() {

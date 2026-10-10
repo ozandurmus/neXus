@@ -8,7 +8,7 @@ import org.springframework.stereotype.Component;
 import com.securityexpert.nexus.ui2.persistence.TransactionBoundary;
 import com.securityexpert.nexus.ui2.platform.ScheduledBackupWindowPolicy;
 
-/** The first MDS export remains operator-watched; measured targets can use it as their daily full backup. */
+/** The first MDS export remains operator-watched; later daily exports accompany the separate Gaia backup. */
 @Component
 public final class MdsExportEligibility {
     private final TransactionBoundary tx;
