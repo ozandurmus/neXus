@@ -1324,6 +1324,40 @@ def test_preview_claim_sql_resolves_all_placeholders_with_open_window(monkeypatc
     assert len(claims) > 20
     assert all(not re.search(r'\{\d+\}', sql) for sql in claims)
     assert all("clock_timestamp() < CAST(''infinity'' AS timestamptz)" in sql for sql in claims)
+    policy = (ROOT / 'ui2/platform-core/src/main/java/com/securityexpert/nexus/ui2/platform/ScheduledBackupWindowPolicy.java').read_text()
+    for constant in ('ACTOR', 'MDS_ACTOR', 'MDS_EXPORT'):
+        value = re.search(r'\b' + constant + r' = "([^"]+)"', policy)[1]
+        assert all("''" + value + "''" in sql for sql in claims)
+    fleet_types = re.findall(r'"([^"]+)"', policy.split('FLEET_JOB_TYPES = Set.of(', 1)[1].split(');', 1)[0])
+    for sql in claims:
+        joined = re.search(r"string_to_array\(''([^']+)'', '',''\)", sql)[1]
+        assert set(joined.split(',')) == set(fleet_types)
+        boundaries = re.findall(r"CAST\(''([^']+)'' AS timestamptz\)", sql)
+        start, end = map(datetime.fromisoformat, boundaries[:2])
+        assert (start.hour, start.minute, start.second) == (2, 0, 0)
+        assert (end - start).total_seconds() == 3600
+        assert start.utcoffset().total_seconds() == 10800
+        assert "'system:preview'" in sql
+
+
+def test_preview_claim_sql_rejects_new_unresolved_placeholder(monkeypatch):
+    statements = []
+    read_text = Path.read_text
+
+    def added_placeholder(path, *args, **kwargs):
+        source = read_text(path, *args, **kwargs)
+        if path.name == 'ClaimStatementText.java':
+            source = source.replace("WHERE state = 'REQUESTED'", "WHERE state = 'REQUESTED' AND {10}")
+        return source
+
+    monkeypatch.setattr(Path, 'read_text', added_placeholder)
+    monkeypatch.setattr(preview, 'load', local_load)
+    monkeypatch.setattr(preview, 'k', lambda *a, **kw: statements.append(kw['input']) or 't')
+
+    with pytest.raises(RuntimeError, match=r'unresolved placeholders: \{10\}'):
+        preview.assert_module_claims(ROOT, preview.worker_templates(ROOT))
+
+    assert not any('DO $$' in sql for sql in statements)
 
 
 def test_preview_claim_rows_satisfy_migration_checks_and_rollback(monkeypatch):
