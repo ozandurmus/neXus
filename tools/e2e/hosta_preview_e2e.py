@@ -11,6 +11,7 @@ import argparse
 import base64
 import copy
 from contextlib import contextmanager
+from datetime import datetime, timedelta
 import ipaddress
 import json
 import os
@@ -25,6 +26,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from zoneinfo import ZoneInfo
 
 NS = "ui2-preview"
 BUILD_NS = "ui2-build"
@@ -934,10 +936,21 @@ def assert_module_claims(repo, workers):
     mapping = (repo / "ui2/service/src/main/resources/db/migration/V128__module_endpoint_runtime.sql").read_text().split("CREATE TABLE", 1)[0]
     capabilities = sorted(set(re.findall(r"'([a-z]+_[a-z_]+)'", mapping)) -
                           {"policy", "backup", "inventory", "failover", "diagnostics", "configuration"})
+    backup_start = datetime.now(ZoneInfo("Europe/Istanbul")).replace(hour=2, minute=0, second=0, microsecond=0)
     for capability in capabilities:
         # Formatting is limited to repository-owned capability literals; owner identity stays inside SQL.
         statement = (claim.replace("{0}", "quote_literal(instance)").replace("{1}", "quote_literal('60')")
-                     .replace("{2}", "quote_literal(capability)").replace("{3}", "'infinity'"))
+                     .replace("{2}", "quote_literal(capability)").replace("{3}", "'infinity'")
+                     .replace("{4}", "'" + backup_start.isoformat() + "'")
+                     .replace("{5}", "'" + (backup_start + timedelta(hours=1)).isoformat() + "'")
+                     .replace("{6}", "'cp_gateway_backup,cp_spark_sftp_backup,pan_device_state_backup,"
+                              "fgt_config_backup,asa_config_backup,https_vendor_backup,rdw_cc_config_backup'")
+                     .replace("{7}", "'system:backup-scheduler'")
+                     .replace("{8}", "'system:mds-export-scheduler'")
+                     .replace("{9}", "'cp_mds_export'"))
+        unresolved = sorted(set(re.findall(r"\{\d+\}", statement)))
+        if unresolved:
+            raise RuntimeError("Preview claim SQL has unresolved placeholders: " + ", ".join(unresolved))
         # PL/pgSQL builds the exact statement with locally read owner identity.
         # Use Python to quote the fixed SQL segments rather than exposing the instance.
         parts = re.split(r"(quote_literal\((?:instance|capability|'60')\))", statement)
