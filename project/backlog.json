@@ -499,10 +499,10 @@
     {
       "id": "failover_p0_closure_set",
       "category": "failover",
-      "title": "Failover Engine: close the eight-item P0 set both external final reviews require before the engine may be considered deliverable",
-      "status": "planned",
+      "title": "Failover plan implementation landed; integration gate and attended real trial pending",
+      "status": "in_progress",
       "priority": "P1",
-      "target": "docs/design/CODEX_FAILOVER_ENGINE_FINAL_REVIEW.md Required P0 Closure Set",
+      "target": "docs/design/PO_DECISION_RECORD_2026_10_06_FAILOVER_EXECUTION_ESTATE.md",
       "note": ""
     },
     {
@@ -778,10 +778,10 @@
     {
       "id": "module_per_pod_split",
       "category": "ui2",
-      "title": "PO 2026-09-22: every module its own pod -- backup, compliance, automation, script-execution, operations, configuration, inventory each a separate Deployment (own job types, own drain); one shared service API and database",
-      "status": "planned",
+      "title": "Module runtime landed; policy/configuration/compliance pods split, remaining roles pending",
+      "status": "in_progress",
       "priority": "P1",
-      "target": "Major work; PO-requested ('ayır bunu'). Supersedes the deferred per_vendor_worker_split. Needs an architecture contract (module-per-pod topology, job-type routing per pod, shared secrets minimised per pod) before implementation.",
+      "target": "docs/design/MODULE_POD_RUNTIME_CONTRACT.md",
       "note": ""
     },
     {
@@ -913,10 +913,10 @@
     {
       "id": "scheduled_fleet_backup_enable_decision",
       "category": "backup",
-      "title": "Scheduled fleet backup is off (schedule_enabled=false); PO to decide whether the nightly fleet backup runs",
-      "status": "planned",
+      "title": "Fleet backups enabled: daily 02:00 Istanbul; 7-day PO retention, capacity verification pending",
+      "status": "in_progress",
       "priority": "P1",
-      "target": "Backups > Retention & Policies",
+      "target": "docs/design/INCIDENT_2026_10_10_BACKUP_FREQUENCY_DISK_FULL.md",
       "note": ""
     },
     {
@@ -1169,6 +1169,87 @@
       "status": "planned",
       "priority": "P2",
       "target": "",
+      "note": ""
+    },
+    {
+      "id": "cp_policy_chunked_hits_acceptance",
+      "category": "engineering",
+      "title": "CP chunked policy and hits landed; real-environment acceptance remains separate",
+      "status": "in_progress",
+      "priority": "P2",
+      "target": "docs/design/PO_DECISION_RECORD_2026_10_02_CP_POLICY_PARALLEL_SESSIONS.md",
+      "note": ""
+    },
+    {
+      "id": "nspm_wave1_acceptance",
+      "category": "engineering",
+      "title": "Policy hygiene and V144 lifecycle catalog landed; compliance guidance landed, Java/live acceptance pending",
+      "status": "in_progress",
+      "priority": "P1",
+      "target": "docs/design/PO_DECISION_RECORD_2026_10_09_NSPM_WAVE1.md",
+      "note": ""
+    },
+    {
+      "id": "release_snapshot_preview_acceptance",
+      "category": "engineering",
+      "title": "Release snapshots and isolated pre-merge masked preview e2e landed; operational verification separate",
+      "status": "in_progress",
+      "priority": "P2",
+      "target": "tools/delivery/release_snapshot.py; tools/e2e/hosta_preview_e2e.py",
+      "note": ""
+    },
+    {
+      "id": "nspm_change_report_merge",
+      "category": "engineering",
+      "title": "Wave 2 change-report lane written but unmerged",
+      "status": "in_progress",
+      "priority": "P1",
+      "target": "sa/policy-change-report-v145; docs/design/PO_DECISION_RECORD_2026_10_09_NSPM_WAVE1.md",
+      "note": ""
+    },
+    {
+      "id": "nspm_policy_lookup_merge",
+      "category": "engineering",
+      "title": "Wave 3 stored-policy lookup lane written but unmerged",
+      "status": "in_progress",
+      "priority": "P1",
+      "target": "sa/policy-lookup-merge2; docs/design/PO_DECISION_RECORD_2026_10_09_NSPM_WAVE1.md",
+      "note": ""
+    },
+    {
+      "id": "nspm_offline_analyzer_merge",
+      "category": "engineering",
+      "title": "Wave 3 offline SIEM CSV analyzer lane written but unmerged",
+      "status": "in_progress",
+      "priority": "P1",
+      "target": "sa/offline-analyzer-merge; docs/design/PO_DECISION_RECORD_2026_10_09_NSPM_WAVE1.md",
+      "note": ""
+    },
+    {
+      "id": "per_device_job_serialization_merge",
+      "category": "engineering",
+      "title": "Per-device job serialization lane written but unmerged",
+      "status": "in_progress",
+      "priority": "P1",
+      "target": "sa/per-device-job-serialization",
+      "note": ""
+    },
+    {
+      "id": "integration_tests_dependency_lock_repair",
+      "category": "engineering",
+      "title": "Main integration-tests compile blocked by dependency lock state; PO audit finding, not rerun here",
+      "status": "in_progress",
+      "priority": "P1",
+      "target": "ui2/integration-tests/gradle.lockfile",
+      "note": ""
+    },
+    {
+      "id": "cve_exception_review_dates",
+      "category": "engineering",
+      "title": "CVE exception reviews due 2026-10-31, 2026-11-05 and 2026-12-31 by rule/location",
+      "status": "planned",
+      "priority": "P1",
+      "target": "security/baseline.yaml",
       "note": ""
     }
   ]
