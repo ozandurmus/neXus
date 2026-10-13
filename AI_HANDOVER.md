@@ -1,18 +1,38 @@
 # NON-AUTHORITATIVE DERIVED SUMMARY — DO NOT USE AS PROJECT-STATE AUTHORITY
 
-# Snapshot (2026-09-26)
-HOST-A schema 91; Debug Phase 1 code 655bc26 is deployed from main. Service, worker and configuration are ready 1/1; configuration matches the service image digest. The output store is accessible. Diagnostic job count is zero. FortiManager physical link remains UNKNOWN.
+## Snapshot (2026-10-14)
+Repository baseline: `origin/main` / `c29079fa`, schema V144; live state not queried.
+Failover plan PRs 1–10 implementation landed: AUTOMATED_VALIDATED; no real trial.
+Policy/configuration/compliance pods exist; full module separation remains open.
+Polling: 00/06/12/18; scheduled full backups: daily 02:00 Europe/Istanbul.
+Retention: PO policy 7 days; see CURRENT_STATE.md and the backup incident record.
+Queue's last period build is still NXS-LOCAL-0370; it is not the release baseline.
 
-# What changed this session
-- Added all-device selection, typed gated diagnostic reads and persistent actor/target/command/time/outcome history.
-- Administrator output uses the existing encrypted artefact store after credential-secret scrubbing; AIView receives server-masked text. Old pilot summaries remain readable.
-- Initial executable SSH reads cover FortiManager, FortiGate and Cisco ASA. Unsupported commands/transports are refused. No saved-command catalog, scripts, writes or failover work.
+## What changed this session
+- Reconciled the hot checkpoint with Git, V92–V144 and October PO decisions;
+  recorded the disk-full incident, polling/backup outage and manual cleanup deviation.
+- Reconciled tool-managed queue entries and added bounded implementation/open-lane
+  records; preserved historical outcomes and the real-environment evidence boundary.
 
-# Exact next action
-Code c27014a is merged and deployed: SMC managed-device default tab, child selection/address display, all-vendor filters, and configuration refresh fixes. Service/worker/configuration are ready 1/1, schema 91, digests matched. After the PO signs back into AIView, verify the SMC manager opens Managed devices and clicking a child shows its stored address/model/version. Do not repeat the completed deployment or tests. Missing Fortinet configuration evidence and SMC discovery/import remain separate real-collection gaps; no device command was sent. Preserve the requirement for exact PO approval before agent diagnostic commands.
+## Exact next action
+Engineering owner: repair the main `:integration-tests` dependency lock state in
+its own code lane, run the required container Java gates, then arrange the first
+separately PO-authorized attended failover trial. Review the unmerged change-report,
+policy-lookup, offline-analyzer and per-device-serialization lanes for integration.
+Verify the stored seven-day retention policy and disk capacity before relying on
+scheduled backups. Do not repeat the incident cleanup.
 
-# Test delta
-207 frontend tests and production frontend build passed; focused Java diagnostic tests and Java architecture checks passed. Python render/architecture checks: 29 passed, 1 skipped. V91 live BEGIN/ROLLBACK and job insertion passed. Repository privacy passed. Full Gradle regression retains the previously observed container-environment failures and known ProjectPlanReaderTest failure; this build does not claim a green full Java suite.
+## Test delta
+Governance: `python3 -m pytest -q tools/tests/test_live_project_governance.py` —
+14 passed. `python3 tools/privacy/repository_privacy_check.py` — PASS, zero findings.
+`python3 tools/delivery/project_queue.py check` and `git diff --check` — PASS.
+No tests added; no frontend, Gradle, host or device tests were run.
 
-# New risks
-No real diagnostic read or authenticated live UI acceptance has been performed for Phase 1. Output masking is conservative for unknown tokens. No automatic history deletion was introduced. Device commands still require exact PO approval for agent use; HOST-A is never a jump host.
+## New risks / period record
+No real failover trial or full Java regression is claimed. CVE reviews are due
+2026-10-31 / 2026-11-05 / 2026-12-31 by rule/location (`security/baseline.yaml`).
+The queue tool's build-add contract requires advancing NOW and writing the generated
+`docs/history/INDEX.md` (and narrative history when a summary is supplied). This
+lane forbids history edits, so no retrospective September–October build-history
+record or roadmap build-pointer advance was made; the engineering owner must
+record the period through the tool in a separately scoped state session.

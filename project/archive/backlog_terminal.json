@@ -1455,6 +1455,15 @@
       "priority": "P3",
       "target": "",
       "note": ""
+    },
+    {
+      "id": "failover_execution_pr1_10_implementation",
+      "category": "engineering",
+      "title": "Failover PRs 1-10 landed V133-V143; automated validated, no real failover trial",
+      "status": "automated_validated",
+      "priority": "P1",
+      "target": "docs/design/PO_DECISION_RECORD_2026_10_06_FAILOVER_EXECUTION_ESTATE.md",
+      "note": ""
     }
   ]
 }

@@ -1,69 +1,71 @@
 # neXus — Current State
 
-Hot-path checkpoint only. Durable delivery state is in `project/QUEUE.md` and
-the generated project data it represents; contract succession is in
-`docs/design/DECISION_RECORD_SUCCESSOR_INDEX.md`.
+Hot checkpoint reconciled on 2026-10-14 against `origin/main` at `c29079fa`.
+`project/QUEUE.md` and its tool-managed data own delivery state; repository
+source proves implementation, not the current deployment or device health.
 
 ## Product today
 
-neXus (UI2, Java) runs on HOST-A against the live estate — 122 devices under
-management (2026-09-26) — and the Product Owner uses it daily under the
-`aiview` persona. Vendors read for real: Check Point (gateways, ClusterXL, VSX,
-MDS), Palo Alto (firewalls, HA, Panorama), Infoblox Grid Manager and members,
-Radware Cyber Controller and DefensePro, Symantec Management Center and its
-ProxySGs, FortiManager and FortiGates (discovery, inventory, configuration
-plane). Implemented and awaiting a first device: Cisco ASA, Pulse Secure.
-Screens: executive Overview (estate map), one device screen (inventory,
-configuration, backup and identity as tabs), Compliance (four frameworks),
-Backups (encrypted, downloadable under RBAC, listed and compared), Operations,
-Administration. Adding a device runs a server-side onboarding flow (identity →
-inventory → configuration, V77). Restore is deliberately disabled; the fleet
-backup schedule is not switched on.
+UI2 is the maintained Java/React product; repository schema is **V144**.
+Inventory, configuration, compliance, encrypted backups, Operations and Policy
+use masked `aiview` projections. Restore from the UI remains disabled.
+Check Point policy collection is chunked by domain, with incremental reuse,
+bounded history and rule hits (V115–V126, V130/V132). Management policy is
+configured intent, never proof of gateway enforcement.
+NSPM wave 1 policy hygiene and the operator-imported lifecycle catalog landed
+(V144); unresolved objects/hits remain UNKNOWN and missing catalog matches do
+not invent dates. Compliance includes operator guidance and per-device reports;
+guidance never applies remediation. Authority:
+[NSPM decision](docs/design/PO_DECISION_RECORD_2026_10_09_NSPM_WAVE1.md).
 
 ## Active build
 
-Continuous deploys 2026-09-25/26 on HOST-A (schema 91); the next tool starts
-from `docs/design/CODEX_HANDOVER_2026_09_26.md`. Predecessor build record
-`NXS-LOCAL-0370` (Infoblox, observed facts, HTTPS inventory). A build record
-for V73–V89 is still to be written. Open gates: first real runs of Cisco ASA,
-Pulse Secure, ProxySG discovery import; FortiManager physical link remains
-`UNSUPPORTED/UNKNOWN` after V87's per-port CLI form was rejected and V88/V89 lacked an explicit link field on the real appliance.
-Debug Phase 1 is deployed and automated-validated: all-device selection, typed
-gated diagnostic reads, persistent execution history, and administrator/masked
-output (`docs/design/DEBUG_OPERATIONS_SUCCESSOR_DECISION_2026_09_26.md`, FROZEN).
-Initial executable reads cover FortiManager, FortiGate and Cisco ASA. No diagnostic
-job has run; first real-command and AIView visual acceptance remain pending.
-Saved commands are Phase 2; automation and failover are outside this build.
-SMC inventory navigation and configuration refresh fixes are deployed
-(`smc_inventory_navigation` in the queue; code `c27014a`). Existing SMC inventory
-contains seven members. Post-deploy AIView acceptance awaits sign-in; discovery/import
-and missing Fortinet configuration collection remain unvalidated.
+`NXS-LOCAL-0370` remains the last recorded build in the queue, not the current
+schema/release baseline. The September–October period record is still open;
+this DOCS / STATE_UPDATE lane reconciles the hot checkpoint without rewriting
+historical outcomes. Failover execution plan PRs 1–10 implementation landed,
+including V133–V143: persisted mutation switch, request-bound authenticated
+approvals, durable dispatch intents, fenced reconciliation and bond traffic
+checks. Status: **AUTOMATED_VALIDATED**, not REAL_ENV_VALIDATED. **No real
+failover trial has been performed yet.** The full Java integration gate remains
+open; landed implementation does not satisfy the plan's real-trial closure.
+Authority: [2026-10-06 decision](docs/design/PO_DECISION_RECORD_2026_10_06_FAILOVER_EXECUTION_ESTATE.md)
+and its referenced [execution plan](docs/design/FAILOVER_EXECUTION_PLAN.md).
+The live deployment manifest enables the mutation switch; preview disables it.
+Neither setting authorizes execution: typed request, approval, fresh readiness,
+one fleet mutation and uncertain-outcome fencing still apply.
 
-## Open Product Owner decisions
+## Runtime and scheduling
 
-The queue owns the complete decision list. The current material decisions are
-the OP.2 operational-write limits and safeguards (`C-D4`–`C-D8`), failover
-vendor semantics (`D-V1`–`D-V9b`), enrollment exposure, LDAP TLS trust, and
-the Check Point backup asynchronous semantics. These decisions do not enable
-restore or scheduling.
+Module runtime/endpoint ownership landed (V128/V129/V131): policy,
+configuration and compliance have dedicated pods; other job modules remain
+under controlled general-worker ownership. Full module-per-pod migration is
+still in progress under the [runtime contract](docs/design/MODULE_POD_RUNTIME_CONTRACT.md).
+Pre-deploy release snapshots support guarded rollback; isolated pre-merge
+preview e2e checks the candidate with masked evidence and fails on page/API 4xx.
+Device polling/admission windows begin at **00:00 / 06:00 / 12:00 / 18:00
+Europe/Istanbul** (default 60-minute windows). Full scheduled fleet backups
+and daily MDS export instead run **once daily at 02:00 Europe/Istanbul**
+(PO 2026-10-10, PR #570; admission 02:00–02:59, no missed-day backlog).
+Backup retention is **7 days** (PO 2026-10-12, supplied in this brief;
+current stored policy was not queried). The scheduling/disk incident and
+manual manifest-deletion deviation are recorded in the
+[backup incident](docs/design/INCIDENT_2026_10_10_BACKUP_FREQUENCY_DISK_FULL.md).
 
-## Development environment
+## Open items and validation boundaries
 
-HOST-A is neXus's own host since its 2026-09-25 reinstall (Ubuntu 26.04.1,
-k3s v1.36.4, namespaces `ui2` and `ui2-build`, the whole 1 TB disk; no other
-product on it). Builds run in the cluster (kaniko) through the corporate proxy
-and are deployed with `scripts/hosta_deploy.sh`, which pushes the code to the
-host's own repository, stops at the first failure and replaces the worker only
-when no job is running. The agent works there through its own account with
-journal-logged sudo; deleting or irreversible commands need the Product Owner's
-yes first, and the host is never a jump server
-(`docs/design/PO_DECISION_RECORD_2026_09_24_HOST_A_OWNED_BY_NEXUS_AGENT_SUDO.md`).
-The repository on GitHub is public; the Product Owner's decision on visibility
-is open (`docs/design/LEGACY_PYTHON_SEPARATION_PLAN.md` §4).
-
-## Production and real-environment posture
-
-Development-ready, not production-ready. Production still needs OIDC/RBAC,
-trusted TLS and SSH host keys, database role separation, NetworkPolicy, secret
-management, audit retention, off-host recovery custody, and a restore drill.
-Concurrency remains one per vendor pending real-environment evidence.
+- NSPM wave 2 change report and wave 3 policy lookup/offline analyzer are
+  written in local lanes but not merged into this baseline. Compliance guidance
+  has already landed independently.
+- Per-device job serialization is written but not merged; endpoint transport
+  admission is a separate existing safety boundary.
+- `:integration-tests` does not compile on main because of dependency lock
+  state (PO audit finding); not rerun here because this lane forbids Gradle.
+  A green full Java regression is not claimed.
+- CVE exceptions remain time-boxed in `security/baseline.yaml`: UBI runtime
+  package entries review **2026-10-31**, Spring CVE-2026-47884 / CVE-2026-47890
+  review **2026-11-05**, and older base-library acceptances review
+  **2026-12-31**. Review is per rule/location; acceptance is not remediation.
+- First attended failover trial, full pod migration, integration lock repair,
+  retention-policy verification and capacity monitoring remain engineering-owner
+  follow-ups. This reconciliation performed no deployment or live validation.

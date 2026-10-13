@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py tools/delivery/project_queue.py render)
-Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-10-05T08:20:00Z
+Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-10-13T21:59:12Z
 
 ## Now
 - NXS-LOCAL-0370 — Infoblox for real, observed facts follow every read, inventory for HTTPS vendors (automated_validated)
@@ -23,7 +23,16 @@ Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-10-05T08:20:00Z
 - P1/in_progress backup_screen_backbox_model — Backup screen on the Backbox model: per-device history, sc (target: PO directive 2026-09-22 (Backbox standar)
 - P1/in_progress cp_management_server_collect_duration — Check Point management server Collect took 243 s: vsx stat (target: ui2/worker/src/main/java/com/securityexp)
 - P1/in_progress credential_profiles — Credential profile / enterprise vault abstraction (target: 1.0 foundation)
+- P1/in_progress failover_p0_closure_set — Failover plan implementation landed; integration gate and (target: docs/design/PO_DECISION_RECORD_2026_10_0)
 - P1/in_progress https_inventory_collect_radware — Radware Collect: https_inventory_collect for the Cyber Con (target: docs/design/RADWARE_CYBER_CONTROLLER_BAC)
+- P1/in_progress integration_tests_dependency_lock_repair — Main integration-tests compile blocked by dependency lock (target: ui2/integration-tests/gradle.lockfile)
+- P1/in_progress module_per_pod_split — Module runtime landed; policy/configuration/compliance pod (target: docs/design/MODULE_POD_RUNTIME_CONTRACT.)
+- P1/in_progress nspm_change_report_merge — Wave 2 change-report lane written but unmerged (target: sa/policy-change-report-v145; docs/desig)
+- P1/in_progress nspm_offline_analyzer_merge — Wave 3 offline SIEM CSV analyzer lane written but unmerged (target: sa/offline-analyzer-merge; docs/design/P)
+- P1/in_progress nspm_policy_lookup_merge — Wave 3 stored-policy lookup lane written but unmerged (target: sa/policy-lookup-merge2; docs/design/PO_)
+- P1/in_progress nspm_wave1_acceptance — Policy hygiene and V144 lifecycle catalog landed; complian (target: docs/design/PO_DECISION_RECORD_2026_10_0)
+- P1/in_progress per_device_job_serialization_merge — Per-device job serialization lane written but unmerged (target: sa/per-device-job-serialization)
+- P1/in_progress scheduled_fleet_backup_enable_decision — Fleet backups enabled: daily 02:00 Istanbul; 7-day PO rete (target: docs/design/INCIDENT_2026_10_10_BACKUP_F)
 - P1/in_progress ui2_b1_01_skeleton_ci_docker — UI2 B1-1 -- Gradle multi-module skeleton under ui2/, CI jo (target: workflow §5 B1-1)
 - P1/in_progress ui2_b1_03_identity_sessions — UI2 B1-3 -- identity & sessions (UnboundID LDAP bind, sing (target: workflow §5 B1-3)
 - P1/in_progress ui2_b1_04_collection_engine_core — UI2 B1-4 -- collection engine core (capability registry, s (target: workflow §5 B1-4)
@@ -43,9 +52,9 @@ Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-10-05T08:20:00Z
 - P1/planned cp_failover_command_gate_batch — Command gate: cphaprob stat, cphaprob -a if, cphaprob tabl (target: PO request 2026-09-12; network-device co)
 - P1/planned cp_platform_facts_empty_on_nine_gateways — Check Point platform facts: 9 of 62 gateways have a facts (target: )
 - P1/planned cp_spark_backup_settings_sftp — Quantum Spark (Gaia Embedded) backup: 'backup settings to (target: docs/design/VENDOR_BACKUP_CONTRACTS_2026)
+- P1/planned cve_exception_review_dates — CVE exception reviews due 2026-10-31, 2026-11-05 and 2026- (target: security/baseline.yaml)
 - P1/planned discovery_connection_state_never_populated — Check Point discovery never records the management plane's (target: MgmtCliEnumerationAdapter candidate cons)
 - P1/planned discovery_failure_summary_stores_certificate_subject — A failed Palo Alto discovery stores the presented certific (target: PanXmlApiTransport certificate exception)
-- P1/planned failover_p0_closure_set — Failover Engine: close the eight-item P0 set both external (target: docs/design/CODEX_FAILOVER_ENGINE_FINAL_)
 - P1/planned failover_peer_reciprocal_agreement_check — Eighth stop-condition: both members must agree reciprocall (target: PO rule 2026-09-12; _pan_reciprocal_corr)
 - P1/planned failover_pilot_fence_is_compiled_in — Failover pilot allowlist is hardcoded in a constructor and (target: FailoverPilotAllowlist)
 - P1/planned failover_readiness_check_contract — Failover readiness contract carrying the PO's four semanti (target: PO_DECISION_RECORD 3)
@@ -57,14 +66,13 @@ Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-10-05T08:20:00Z
 - P1/planned inventory_row_does_not_say_why_a_device_is_unconfirmed — The inventory row shows Registered, not confirmed without (target: InventoryScreen row rendering; jobs.term)
 - P1/planned ldap_tls_trust_store_pin_and_format — LDAP TLS trust store cannot be given a PIN or format; a pr (target: docs/design/LDAP_TLS_TRUST_STORE_PIN_GAP)
 - P1/planned legacy_python_separation — Separate the legacy Python product from the neXus reposito (target: docs/design/LEGACY_PYTHON_SEPARATION_PLA)
-- P1/planned module_per_pod_split — PO 2026-09-22: every module its own pod -- backup, complia (target: Major work; PO-requested ('ayır bunu').)
 - P1/planned pan_active_active_not_excluded_as_failover_unit — PAN active/active is not excluded as a failover unit (CP l (target: docs/design/PAN_ACTIVE_ACTIVE_FAILOVER_U)
 - P1/planned pan_collection_contract_from_measurement — Write the Palo Alto collection contract from the PAN_COLLE (target: docs/design/PAN_COLLECTION_MEASUREMENT_B)
 - P1/planned platform_identity_facts_on_configuration — PO 2026-09-22 'kesinlikle': serial number, software versio (target: Contract docs/design/PLATFORM_IDENTITY_F)
 - P1/planned radware_defensepro_getcfg_measurement — Measure DefensePro backup through the Cyber Controller (ge (target: RADWARE_CYBER_CONTROLLER_BACKUP_API_GATE)
 - P1/planned relay_id_reuse_when_record_uncommitted — local_relay _next_id reissues an id whose JSON was never c (target: GOV.ORCH successor or scripts/local_rela)
-- P1/planned scheduled_fleet_backup_enable_decision — Scheduled fleet backup is off (schedule_enabled=false); PO (target: Backups > Retention & Policies)
 - P1/planned script_execution_module — Script Execution: operator scripts (.sh/.py/.jar or inline (target: PO decision record 2026-09-22 (automatio)
+- P1/planned spring_boot_4_spring_security_migration — Migrate to Spring Boot 4 / Spring Framework 7.0.9+ and Spr (target: 2026-11-05: CVE-2026-47884 baseline exce)
 - P1/planned task_executor_automation_module — Task Executor / Automation module: operator-authored, orde (target: )
 - P1/planned top_app_bar_search_is_not_an_input — The top app bar search is a styled box containing static t (target: ui2/frontend/src/shell/TopAppBar.tsx)
 - P1/planned transcript_per_run_listing — Jobs/Backups/Policy: list every run separately with type, (target: )
@@ -89,9 +97,11 @@ Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-10-05T08:20:00Z
 - P1/planned vendor_fortinet_fortigate_backup — Fortinet FortiGate: full configuration backup over SSH inc (target: )
 - P1/planned vendor_panorama_backup — Palo Alto Panorama: device-bundle export + running config (target: )
 - P1/planned version_advisory_exposure — Security advisories and critical bugs for the versions the (target: )
+- P2/in_progress cp_policy_chunked_hits_acceptance
 - P2/in_progress cp_spark_exec_channel_rejected
 - P2/in_progress cp_vsx_interfaces_identical_to_physical
 - P2/in_progress fmg_link_state_diagnose_nic
+- P2/in_progress release_snapshot_preview_acceptance
 - P2/in_progress ui2_m3_design_transfer_pass
 - P2/in_progress ui_device_workspace_and_overview
 - P2/planned antigravity_provider_adapter
@@ -109,7 +119,9 @@ Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-10-05T08:20:00Z
 - P2/planned infoblox_member_facts
 - P2/planned java_product_plan_build_selection_is_stale
 - P2/planned m3_design_alignment_review
+- P2/planned machine_session_probe_isolation
 - P2/planned mds_ha_second_mds_read
+- P2/planned module_e2e_fail_fast
 - P2/planned orchestrator_worktree_lacks_frontend_dependencies
 - P2/planned pan_ha_serial_identity_hardening
 - P2/planned pan_keygen_no_usable_key_under_load
@@ -119,6 +131,7 @@ Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-10-05T08:20:00Z
 - P2/planned regression_mapping_backend_trees_unmapped
 - P2/planned test_fixture_realistic_names_cleanup
 - P2/planned tufin_access_query_tab
+- P2/planned ubi9_base_image_refresh
 - P2/planned ui2_password_policy_configurable
 - P2/planned ui2_role_display
 - P3/planned corporate_inspection_ca_verify_with_it
@@ -131,6 +144,7 @@ Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-10-05T08:20:00Z
 - P3/planned ui2_select_all
 - P3/planned waf_fortiweb_capability_scope_and_measurement
 - P3/planned workbench_borrow_from_agent_orchestration_tools
+- Parked/planned enterprise_platform_conformance
 ## Deferred — held, not finished (reason: docs/history/backlog/<id>.md)
 - P0 deploy1_oidc_viewer
 - P1 cp_preflight_ccp_tablestat_evidence
