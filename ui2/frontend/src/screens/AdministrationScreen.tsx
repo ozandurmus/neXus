@@ -1,3 +1,4 @@
+import { SshHostKeyPanel } from "./SshHostKeyPanel";
 import { useSession } from "../auth/SessionContext";
 import { useState } from "react";
 import type { ReactNode } from "react";
@@ -58,6 +59,7 @@ const GROUPS: readonly AdminGroupDef[] = [
       { slug: "local-identities", administratorOnly: true, label: "Local identities", panel: <LocalIdentitiesPanel /> },
       { slug: "sessions", administratorOnly: true, label: "Sessions", panel: <SessionsPanel /> },
       { slug: "roles-permissions", administratorOnly: true, label: "Roles & Permissions", panel: <CustomRolesPanel /> },
+      { slug: "ssh-trust", label: "SSH trust", panel: <SshHostKeyPanel settings /> },
       { slug: "ldap-settings", administratorOnly: true, label: "LDAP Settings", panel: <DirectorySettingsPanel /> },
     ],
   },

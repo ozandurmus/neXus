@@ -22,6 +22,21 @@ import com.securityexpert.nexus.ui2.service.security.GateChainInterceptor;
 class PrivacyMaskingResponseBodyAdviceTest {
     @Test
     @SuppressWarnings("unchecked")
+    void sshObservationMasksDeviceAndManagerIdentityButPreservesFingerprints() {
+        when(httpRequest.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE)).thenReturn(true);
+        var body = Map.of("hostname", "synthetic-edge.example.invalid", "serial_number", "SYNTHETIC-SERIAL",
+                "presented_fingerprint", "a".repeat(64), "expected_fingerprint_prefix", "b".repeat(16),
+                "model", "Synthetic model", "software_version", "1.2.3.4");
+        var result = (Map<String, Object>) advice.beforeBodyWrite(body, null, null, null, serverRequest, null);
+        assertThat(result.get("hostname")).isNotEqualTo(body.get("hostname"));
+        assertThat(result.get("serial_number")).isNotEqualTo(body.get("serial_number"));
+        assertThat(result.get("presented_fingerprint")).isEqualTo(body.get("presented_fingerprint"));
+        assertThat(result.get("expected_fingerprint_prefix")).isEqualTo(body.get("expected_fingerprint_prefix"));
+        assertThat(result.get("software_version")).isEqualTo("1.2.3.4");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
     void masksStoredObservedValuesForDeviceReportsAndPreservesStaticGuidance() {
         when(httpRequest.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE)).thenReturn(true);
         Map<String, Object> guidance = Map.of("summary", "Review access", "steps", List.of("Review permitted sources"),

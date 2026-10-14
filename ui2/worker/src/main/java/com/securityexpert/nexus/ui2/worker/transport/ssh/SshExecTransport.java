@@ -60,6 +60,7 @@ public final class SshExecTransport implements DeviceTransport {
     private final SshCredentialResolver credentialResolver;
     private final TrustRuleResolver trustRuleResolver;
     private final boolean derivedOnly;
+    private final com.securityexpert.nexus.ui2.persistence.discovery.SshHostKeyPolicyStore hostKeyPolicy;
 
     public SshExecTransport(SshCredentialResolver credentialResolver, TrustRuleResolver trustRuleResolver) {
         this(credentialResolver, trustRuleResolver, false);
@@ -68,6 +69,12 @@ public final class SshExecTransport implements DeviceTransport {
     /** Failover commands retain raw output only in memory for immediate parsing. */
     public SshExecTransport(SshCredentialResolver credentialResolver, TrustRuleResolver trustRuleResolver,
             boolean derivedOnly) {
+        this(credentialResolver, trustRuleResolver, derivedOnly, null);
+    }
+
+    public SshExecTransport(SshCredentialResolver credentialResolver, TrustRuleResolver trustRuleResolver,
+            boolean derivedOnly, com.securityexpert.nexus.ui2.persistence.discovery.SshHostKeyPolicyStore hostKeyPolicy) {
+        this.hostKeyPolicy = hostKeyPolicy;
         this.credentialResolver = Objects.requireNonNull(credentialResolver, "credentialResolver");
         this.trustRuleResolver = Objects.requireNonNull(trustRuleResolver, "trustRuleResolver");
         this.derivedOnly = derivedOnly;
@@ -153,10 +160,7 @@ public final class SshExecTransport implements DeviceTransport {
             if (credential.password() != null) {
                 session.setPassword(new String(credential.password()));
             }
-            // Host-key verification (contract §5, AGENTS.md "Check Point"):
-            // production SSH requires a trusted host key -- never accept-any,
-            // never trust-on-first-use. HostKeyVerifier is the pure decision;
-            // this repository wires it to JSch's own verification hook.
+            // The ratified WARN exception is checked and audited in the key hook before authentication.
             session.setHostKeyRepository(trustedOnlyRepository(spec.trustRuleRef(), target, trustFailure, trusted));
             session.setConfig("StrictHostKeyChecking", "yes");
             long jschStart = System.currentTimeMillis();
@@ -739,7 +743,20 @@ public final class SshExecTransport implements DeviceTransport {
         }
     }
 
-    private HostKeyRepository trustedOnlyRepository(String trustRuleRef, ConnectionTarget target,
+    private boolean mismatchAllowed(ConnectionTarget target, String ref, String algorithm, String presented) {
+        var owner = com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.owner();
+        if (hostKeyPolicy == null || owner == null) return false;
+        try {
+            String expected = trustRuleResolver.resolveExpectedFingerprint(ref, target.host(), target.port(), algorithm).orElseThrow();
+            return hostKeyPolicy.observe(owner.jobId(), owner.jobEpoch(), "FAILOVER_EXECUTION".equals(owner.purpose()),
+                    target.endpointId(), target.host(), target.port(), algorithm, presented, expected);
+        } catch (RuntimeException unavailable) {
+            LOG.log(System.Logger.Level.WARNING, "SSH_HOST_KEY_OBSERVATION_UNAVAILABLE");
+            return false;
+        }
+    }
+
+    HostKeyRepository trustedOnlyRepository(String trustRuleRef, ConnectionTarget target,
             String[] trustFailure, boolean[] trusted) {
         HostKeyVerifier verifier = new HostKeyVerifier(trustRuleResolver);
         return new HostKeyRepository() {
@@ -760,6 +777,11 @@ public final class SshExecTransport implements DeviceTransport {
                                 "SSH host key mismatch for {0}:{1}: presented fingerprint {2}",
                                 derivedOnly ? "<redacted>" : target.host(), target.port(),
                                 derivedOnly ? "<redacted>" : presented);
+                    }
+                    if (decision == HostKeyVerifier.Decision.MISMATCH && mismatchAllowed(target, trustRuleRef, algorithm, presented)) {
+                        trustFailure[0] = null;
+                        JobTranscriptScope.add("ssh", "note", "host_key_mismatch_warned: collected under an unverified identity");
+                        return OK;
                     }
                     return trusted[0] ? OK : NOT_INCLUDED;
                 } catch (JSchException e) {

@@ -1,3 +1,4 @@
+import { SshHostKeyPanel } from "./SshHostKeyPanel";
 import { useState } from "react";
 import Box from "@mui/material/Box";
 import Stack from "@mui/material/Stack";
@@ -83,6 +84,7 @@ export function DeviceWorkspaceScreen({ deviceId }: { readonly deviceId: string 
 
   return (
     <ScreenRoot>
+      <SshHostKeyPanel deviceId={deviceId} />
       <ScreenHeader
         title="Device Workspace"
         subtitle={device ? device.device_id : "Loading..."}
