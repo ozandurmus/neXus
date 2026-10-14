@@ -45,6 +45,47 @@ class JobWindowAdmissionTest {
         }
         assertThrows(JobWindowPolicy.OutsideWindow.class, () -> failover.startDue("run", "device"));
     }
+    @Test void claimAcquiresTransactionLockBeforeCandidateSnapshot() {
+        assertClaimLockOrdering(false, false);
+    }
+    @Test void windowClosingWhileWaitingForLockLeavesJobsUnclaimed() {
+        assertClaimLockOrdering(true, false);
+    }
+    @Test void scheduledBackupClaimAcquiresLockOutsidePollingWindow() {
+        assertClaimLockOrdering(false, true);
+    }
+    @Test void backupWindowClosingWhileWaitingForLockLeavesJobsUnclaimed() {
+        assertClaimLockOrdering(true, true);
+    }
+    private void assertClaimLockOrdering(boolean closeWindowAtLock, boolean backupWindow) {
+        var instant = new java.util.concurrent.atomic.AtomicReference<>(Instant.parse(
+                backupWindow ? "2026-10-08T23:30:00Z" : "2026-10-08T21:30:00Z"));
+        Clock clock = new Clock() {
+            @Override public ZoneId getZone() { return ZoneOffset.UTC; }
+            @Override public Clock withZone(ZoneId zone) { return this; }
+            @Override public Instant instant() { return instant.get(); }
+        };
+        List<String> queries = new ArrayList<>();
+        var sql = DSL.using(new MockConnection(query -> {
+            queries.add(query.sql());
+            if (closeWindowAtLock && query.sql().equals("SELECT pg_advisory_xact_lock(294611)"))
+                instant.set(Instant.parse(backupWindow ? "2026-10-09T00:00:00Z" : "2026-10-08T22:00:00Z"));
+            return new MockResult[] { new MockResult(0, DSL.using(SQLDialect.POSTGRES).newResult(
+                    DSL.field("job_id", String.class), DSL.field("lease_epoch", Long.class))) };
+        }), SQLDialect.POSTGRES);
+        TransactionBoundary database = new TransactionBoundary() {
+            @Override public <T> T inTransaction(Function<DSLContext, T> work) { return work.apply(sql); }
+        };
+        assertTrue(new JooqJobLeaseDao(database, new JobWindowPolicy(clock, 60))
+                .claimNext("general-synthetic", List.of(backupWindow ? "pan_device_state_backup" : "pan_inventory_collect"),
+                        Duration.ofMinutes(10)).isEmpty());
+        int isolation = queries.indexOf("SET TRANSACTION ISOLATION LEVEL READ COMMITTED");
+        int lock = queries.indexOf("SELECT pg_advisory_xact_lock(294611)");
+        assertTrue(isolation >= 0 && lock > isolation);
+        var claims = queries.stream().filter(q -> q.contains("UPDATE jobs")).toList();
+        assertEquals(closeWindowAtLock ? 0 : 1, claims.size());
+        if (!closeWindowAtLock) assertTrue(queries.indexOf(claims.getFirst()) > lock);
+    }
     @Test void queuedJobsWaitButClaimedAndExecutingJobsKeepTheirHeartbeat() {
         var leases = new JooqJobLeaseDao(noDatabase, outside);
         assertTrue(leases.claimNext("worker", List.of("diagnostic_read"), Duration.ofMinutes(5)).isEmpty());

@@ -81,12 +81,12 @@ class PolicyCheckpointConcurrencyTest {
                 db.execute("update jobs set lease_expires_at=now()-interval '1 second' where job_id={0}", "job-1");
                 return null;
             });
-            assertTrue(tx.inTransaction(db -> db.fetchOne("select ui2_job_owner_valid({0},{1})", "job-1", epoch).get(0, Boolean.class)));
+            assertTrue(tx.<Boolean>inTransaction(db -> db.fetchOne("select ui2_job_owner_valid({0},{1})", "job-1", epoch).get(0, Boolean.class)));
             var repository = new PolicyCollectionRepository(tx);
             var snapshot = new PolicySnapshotRepository.Stored("policy-1", "2026-10-05T00:00:00Z", "{}", "{\"failures\":[]}");
             assertFalse(repository.publish("job-1", epoch, List.of(snapshot), "synthetic-actor"));
             assertFalse(repository.publishWithWarnings("job-1", epoch, List.of(snapshot), "synthetic-actor", "PARTIAL_SNAPSHOT"));
-            assertEquals(0, tx.inTransaction(db -> db.fetchOne("select count(*)::int from policy_snapshot").get(0, Integer.class)));
+            assertEquals(0, tx.<Integer>inTransaction(db -> db.fetchOne("select count(*)::int from policy_snapshot").get(0, Integer.class)));
             assertEquals("EXECUTING", tx.inTransaction(db -> db.fetchOne("select state from jobs where job_id={0}", "job-1").get(0, String.class)));
         }
     }

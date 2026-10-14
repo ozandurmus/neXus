@@ -93,7 +93,7 @@ class ModuleEndpointRuntimeTest {
             releaseSql(fixture, "update module_runtime_control set drain_requested=true,drain_generation=drain_generation+1 where module='policy'");
             assertTrue(runtime.heartbeat("policy", "policy-pod"));
             assertTrue(leases.claimNext("policy-pod", List.of("cp_policy_collect"), Duration.ofMinutes(10)).isEmpty());
-            assertEquals(1L, tx.inTransaction(db -> db.fetchOne("select drain_ack_generation from module_runtime_control where module='policy'").get(0, Long.class)));
+            assertEquals(1L, tx.<Long>inTransaction(db -> db.fetchOne("select drain_ack_generation from module_runtime_control where module='policy'").get(0, Long.class)));
             try (var app = fixture.appConnection(); var statement = app.createStatement()) {
                 assertThrows(java.sql.SQLException.class, () -> statement.executeUpdate("update module_runtime_control set fallback_enabled=true,effective_owner='general' where module='policy'"));
             }
@@ -127,14 +127,14 @@ class ModuleEndpointRuntimeTest {
             assertTrue(leases.heartbeat("in-flight", epoch, Duration.ofMinutes(10)));
 
             old.releaseOwnership(role, role + "-old");
-            assertTrue(tx.inTransaction(db -> db.fetchOne("select owner_instance is null and owner_heartbeat_at is null "
+            assertTrue(tx.<Boolean>inTransaction(db -> db.fetchOne("select owner_instance is null and owner_heartbeat_at is null "
                 + "and not drain_requested and drain_generation=0 from module_runtime_control where module={0}", role).get(0, Boolean.class)));
             assertEquals(generation, old.generation("in-flight", epoch));
             var successor = new ModuleRuntimeRepository(tx);
             assertTrue(successor.heartbeat(role, role + "-new"));
             assertFalse(old.heartbeat(role, role + "-old"));
             old.releaseOwnership(role, role + "-old"); // A late shutdown cannot clear the new owner.
-            assertTrue(tx.inTransaction(db -> db.fetchOne("select owner_instance={0} from module_runtime_control where module={1}",
+            assertTrue(tx.<Boolean>inTransaction(db -> db.fetchOne("select owner_instance={0} from module_runtime_control where module={1}",
                 role + "-new", role).get(0, Boolean.class)));
             assertFalse(leases.heartbeat("in-flight", epoch, Duration.ofMinutes(10)));
             assertFalse(leases.heartbeat("in-flight", epoch + 1, Duration.ofMinutes(10)));
@@ -161,7 +161,7 @@ class ModuleEndpointRuntimeTest {
             old.releaseOwnership(role, role + "-old");
             var successor = new ModuleRuntimeRepository(tx);
             assertTrue(successor.heartbeat(role, role + "-new"));
-            assertTrue(tx.inTransaction(db -> db.fetchOne("select drain_requested and drain_generation=7 "
+            assertTrue(tx.<Boolean>inTransaction(db -> db.fetchOne("select drain_requested and drain_generation=7 "
                 + "and drain_ack_generation=7 and last_reason='synthetic-release' and last_snapshot_id='synthetic-snapshot' "
                 + "from module_runtime_control where module={0}", role).get(0, Boolean.class)));
             var jobs = new JooqJobRecordDao(tx);
@@ -194,7 +194,7 @@ class ModuleEndpointRuntimeTest {
     @Test void migrationSeedsGeneralAndRecoversMissingOrStaleOwnersIdempotently() throws Exception {
         try (var fixture = Ui2PostgresFixture.createAndMigrate("module_ownership_safety")) {
             var tx = new JooqTransactionBoundary(DSL.using(fixture.appDataSource(), SQLDialect.POSTGRES));
-            assertEquals(9, tx.inTransaction(db -> db.fetchOne(
+            assertEquals(9, tx.<Integer>inTransaction(db -> db.fetchOne(
                 "select count(*)::int from module_runtime_control where effective_owner='general' and fallback_enabled").get(0, Integer.class)));
             var jobs = new JooqJobRecordDao(tx, JobWindowTestPolicy.PERMISSIVE);
             jobs.insertRequestedIfAbsentForRun("fallback-job", "fallback-key", "cp_policy_collect", "synthetic-run", "read",

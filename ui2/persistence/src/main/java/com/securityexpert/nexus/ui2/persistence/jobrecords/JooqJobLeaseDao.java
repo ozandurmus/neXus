@@ -22,8 +22,9 @@ import com.securityexpert.nexus.ui2.persistence.TransactionBoundary;
  * files textually and asserts they match, rather than trusting a comment.
  * {@link #claimNext} is the <b>only</b> method in this class that mutates
  * {@code jobs.state} out of a {@code REQUESTED} row, and it issues exactly
- * one statement -- no separate {@code SELECT} to find a candidate followed
- * by a separate {@code UPDATE} (contract §8 test 1, AC-3).
+ * one candidate-selection/mutation statement -- no separate {@code SELECT}
+ * to find a candidate followed by a separate {@code UPDATE} (contract §8
+ * test 1, AC-3).
  */
 public final class JooqJobLeaseDao implements JobLeaseDao {
 
@@ -56,6 +57,12 @@ public final class JooqJobLeaseDao implements JobLeaseDao {
                   AND job_type = ANY(string_to_array({2}, ','))
                   AND job_type = capability_id
                   AND (admission_not_before IS NULL OR admission_not_before <= now())
+                  AND (jobs.target_device_id IS NULL OR NOT EXISTS (
+                      SELECT 1 FROM jobs active
+                      WHERE active.target_device_id = jobs.target_device_id
+                        AND active.state IN ('CLAIMED', 'EXECUTING')
+                        AND (active.lease_expires_at IS NULL OR active.lease_expires_at >= now())
+                  ))
                   AND ((SELECT count(*) FROM jobs WHERE state IN ('CLAIMED', 'EXECUTING'))
                     + (SELECT count(*) FROM runtime_task_lease WHERE task_key='fleet.failover.execution' AND owner_role='service')) < 10
                   AND EXISTS (SELECT 1 FROM owner_control m JOIN owner_control r ON r.module=m.effective_owner
@@ -107,6 +114,9 @@ public final class JooqJobLeaseDao implements JobLeaseDao {
         }
         String joined = String.join(",", eligibleCapabilityIds);
         return auditedTransactionBoundary.inTransaction("system:worker", "job_claim", dsl -> {
+            // Acquire before the claim statement so a waiting worker gets a fresh snapshot.
+            dsl.execute("SET TRANSACTION ISOLATION LEVEL READ COMMITTED");
+            dsl.execute("SELECT pg_advisory_xact_lock(294611)");
             var now = windows.now();
             if (!windows.isOpen(now) && !ScheduledBackupWindowPolicy.isOpen(now)) return Optional.empty();
             var backupStart = ScheduledBackupWindowPolicy.start(now);
