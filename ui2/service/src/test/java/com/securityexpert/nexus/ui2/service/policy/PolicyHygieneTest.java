@@ -99,7 +99,12 @@ class PolicyHygieneTest {
     }
     static Rule cpRule(String id, String action) {
         return edit(rule(id, "any", "any", action, true), cell("any"),
-            Map.of("time", List.of("any"), "install-on", List.of("any")));
+            Map.of("time", List.of("any"), "install-on", List.of("any"), "layer-name", List.of("LAYER-ALPHA")));
+    }
+    static Rule cpLayerRule(String id, int number, String layer, String action) {
+        var r = edit(cpRule(id, action), cell("any"), Map.of("layer-name", List.of(layer)));
+        return new Rule(r.id(), r.uuid(), number, r.name(), r.enabled(), r.source(), r.destination(), r.service(),
+            r.application(), r.action(), r.log(), r.comment(), r.extras());
     }
     static Section cpSection(String id, String parent, Rule... rules) {
         return new Section(id, "OBJ-SECTION-01", "CP access layer", parent, List.of(rules));
@@ -118,6 +123,31 @@ class PolicyHygieneTest {
             assertEquals(action.equals("Accept") ? "REDUNDANT" : "CONFLICT", result.shadowStatus());
             assertEquals("r1", result.coveringRuleId());
         }
+    }
+    @Test void checkPointOrderedLayersNeverShareShadowCoverage() {
+        for (int number : List.of(1, 2)) {
+            var snapshot = sections("CP", cpSection("s1", null, cpLayerRule("r1", 1, "LAYER-ALPHA", "Accept")),
+                cpSection("s2", null, cpLayerRule("r2", number, "LAYER-BRAVO", "Drop")),
+                cpSection("s3", null, cpLayerRule("r3", number + 1, "LAYER-BRAVO", "Drop")));
+            var result = assessment(snapshot, "r2");
+            assertEquals("NOT_SHADOWED", result.shadowStatus()); assertNull(result.coveringRuleId());
+            assertTrue(result.findings().stream().noneMatch(f -> Set.of("shadowed", "conflict").contains(f.findingClass())));
+            assertEquals("REDUNDANT", assessment(snapshot, "r3").shadowStatus());
+            assertEquals("r2", assessment(snapshot, "r3").coveringRuleId());
+        }
+    }
+    @Test void checkPointMissingLayerEvidenceDoesNotProveShadowing() {
+        var snapshot = sections("CP", cpSection("s1", null, cpRule("r1", "Accept")),
+            cpSection("s2", null, edit(cpRule("r2", "Drop"), cell("any"), Map.of("layer-name", List.of()))));
+        assertEquals("UNKNOWN", assessment(snapshot, "r2").shadowStatus());
+        assertNull(assessment(snapshot, "r2").coveringRuleId());
+    }
+    @Test void checkPointRepeatedLabelDoesNotJoinNonconsecutiveLayers() {
+        var snapshot = sections("CP", cpSection("s1", null, cpLayerRule("r1", 1, "LAYER-ALPHA", "Accept")),
+            cpSection("s2", null, cpLayerRule("r2", 1, "LAYER-BRAVO", "Accept")),
+            cpSection("s3", null, cpLayerRule("r3", 1, "LAYER-ALPHA", "Drop")));
+        assertEquals("NOT_SHADOWED", assessment(snapshot, "r3").shadowStatus());
+        assertNull(assessment(snapshot, "r3").coveringRuleId());
     }
     @Test void checkPointInlineLayerStaysSeparateAndReturningParentIsUnproven() {
         var snapshot = sections("CP", cpSection("s1", null, cpRule("r1", "Accept")),

@@ -66,7 +66,8 @@ public final class PolicyPrivacy {
             Map<String, Object> out = new LinkedHashMap<>();
             map.forEach((k, v) -> {
                 String field = String.valueOf(k);
-                if (field.equals("name") && "any".equals(map.get("type"))) out.put(field, "ANY");
+                if (field.equals("name") && "UNKNOWN".equals(v) && map.containsKey("ruleId")) out.put(field, "UNKNOWN");
+                else if (field.equals("name") && "any".equals(map.get("type"))) out.put(field, "ANY");
                 else if (field.equals("name") && map.containsKey("rules") && Set.of("Pre rules", "Post rules", "Local rules", "Inline layer unavailable").contains(v)) out.put(field, mask(v, "refs", names, ips));
                 else if (field.equals("name") && map.containsKey("deviceId")) out.put(field, names.maskDeviceName((String) v, null));
                 else if (field.equals("name") && v instanceof String text) out.put(field, names.maskPolicyName(
@@ -79,6 +80,35 @@ public final class PolicyPrivacy {
         if (value instanceof List<?> list) return list.stream().map(item -> mask(item, key, names, ips)).toList();
         if (!(value instanceof String text)) return "Withheld in AIView";
         if (text.isEmpty()) return text;
+        if (key.equals("memberStatus")) return Set.of("RESOLVED", "UNKNOWN").contains(text) ? text : "UNKNOWN";
+        if (key.equals("memberId")) return names.maskPolicyName("member", text);
+        if (key.equals("dimension")) return Set.of("source", "destination", "service").contains(text) ? text : "UNKNOWN";
+        if (key.equals("observedSource") || key.equals("observedDestination"))
+            return text.matches("[0-9.]+(?:/[0-9]{1,2})?") ? ips.maskText(text) : "Withheld in AIView";
+        if (key.equals("observedService")) return text.matches("(?:tcp|udp)/[0-9]{1,5}(?:-[0-9]{1,5})?") ? text : "UNKNOWN";
+        if (Set.of("periodStart", "periodEnd", "firstTime", "lastTime").contains(key)) {
+            try { return java.time.Instant.parse(text).toString(); } catch (RuntimeException invalid) { return ""; }
+        }
+        if (key.equals("statReason")) return PolicyLookup.REASONS.contains(text) || HYGIENE_REASONS.contains(text)
+            || Set.of("column count mismatch", "invalid count", "invalid time (use ISO-8601 UTC or epoch seconds/milliseconds)",
+                "invalid IP address", "invalid destination port", "invalid protocol", "invalid zone", "IPv6 unsupported",
+                "protocol unsupported", "no deciding rule", "ALLOWED", "DENIED", "UNKNOWN", "PARTIAL").contains(text) ? text : "UNKNOWN";
+        if (key.equals("zeroTraffic")) return text.matches("No traffic in this sample \\(period [0-9TZ:.+–-]+, [0-9]+ rows\\)\\.")
+            || text.matches("No traffic in this sample \\(period UNKNOWN–UNKNOWN, [0-9]+ rows\\)\\.") ? text : "No traffic in this sample; period UNKNOWN.";
+        if (key.equals("caution")) return OfflineAnalysis.CAUTION;
+        if (key.equals("comparisonNote")) return OfflineAnalysis.COMPARISON;
+        if (key.equals("attributionNote")) return OfflineAnalysis.ATTRIBUTION;
+        if (key.equals("suggestionNote")) return OfflineAnalysis.SET_LIMIT;
+        if (key.equals("verdict")) return Set.of("ALLOWED", "DENIED", "PARTIAL", "UNKNOWN").contains(text) ? text : "UNKNOWN";
+        if (key.equals("lookupReason")) return PolicyLookup.REASONS.contains(text) || HYGIENE_REASONS.contains(text) ? text : "unsupported rule constraint";
+        if (key.equals("limitations")) return PolicyLookup.LIMITATIONS.equals(text) ? text : "Withheld in AIView";
+        // Lookup addresses are user-entered or bounded subdivisions in the viewer's address space.
+        if (key.equals("querySource") || key.equals("queryDestination")) return text.matches("[0-9./-]{7,35}") ? text : "Withheld in AIView";
+        if (key.equals("queryService")) return text.matches("any|(?:tcp|udp)/[0-9]{1,5}") ? text : "UNKNOWN";
+        if (key.equals("changedBy") && text.equals(PolicyChangesService.UNKNOWN_ACTOR)) return text;
+        if (key.equals("nextCursor")) return text.matches("[A-Za-z0-9_-]{1,1024}") ? text : "";
+        if (key.equals("revision")) return text.matches("[0-9]+") ? text : "";
+        if (key.equals("changedFields")) return PolicyChangesService.FIELDS.contains(text) ? text : "UNKNOWN";
         if (key.equals("shadowStatus")) return Set.of("UNKNOWN", "NOT_SHADOWED", "REDUNDANT", "CONFLICT").contains(text) ? text : "UNKNOWN";
         if (key.equals("shadowReason")) return HYGIENE_REASONS.contains(text) ? text : "unsupported rule constraint";
         if (key.equals("findingClass")) return PolicyHygiene.CLASSES.contains(text) ? text : "unknown";
@@ -95,8 +125,11 @@ public final class PolicyPrivacy {
         if (key.equals("outcome")) return Set.of("COMPLETED", "PARTIAL", "FAILED", "UNKNOWN").contains(text) ? text : "UNKNOWN";
         if (key.equals("unitFailureCodes")) return failureCode(text);
         if (key.equals("reason")) return text.equals("COLLECTION_SKIPPED") ? text : safeReason(text);
-        if (Set.of("firstHit", "lastHit", "createdAt", "modifiedAt", "startedAt", "lastActivityAt", "publishTime", "hitsCollectedAt").contains(key)) {
+        if (Set.of("firstHit", "lastHit", "createdAt", "modifiedAt", "startedAt", "lastActivityAt", "publishTime", "hitsCollectedAt", "rangeStart", "rangeEnd").contains(key)) {
             try { return java.time.Instant.parse(text).toString(); } catch (RuntimeException invalid) { return null; }
+        }
+        if (key.equals("changedOn")) {
+            try { return java.time.Instant.parse(text).toString(); } catch (RuntimeException invalid) { /* Preserve legacy date-only evidence below. */ }
         }
         if (Set.of("start", "end", "changedOn").contains(key)) {
             try {

@@ -1895,3 +1895,79 @@ export const getPolicyCollectionStatus = (id: string) => call<PolicyCollectionSt
 export function getJobWindow(): Promise<import("../shell/JobWindow").JobWindowStatus> {
   return call("/api/v2/job-window", "GET");
 }
+
+export interface PolicyLookupQuery {
+  source: string; destination: string; service: string; sourceZone?: string; destinationZone?: string; target?: string; context?: string;
+}
+export interface PolicyLookupRule { ruleId: string; number: number; name: string; sectionId: string; sectionName: string; action: string; lookupReason?: string }
+export interface PolicyLookupDecision {
+  verdict: "ALLOWED" | "DENIED" | "PARTIAL" | "UNKNOWN"; lookupReason: string;
+  decidingRule: PolicyLookupRule | null; undecidableRules: PolicyLookupRule[];
+}
+export interface PolicyLookupResult extends PolicyLookupDecision {
+  policyId: string; collectedAt: string; limitations: string;
+  query: { querySource: string; queryDestination: string; queryService: string };
+  parts: (PolicyLookupDecision & { querySource: string; queryDestination: string })[];
+}
+export const lookupPolicy = (id: string, query: PolicyLookupQuery) =>
+  call<PolicyLookupResult>(`/api/v2/policy/policies/${encodeURIComponent(id)}/lookup`, "POST", query);
+
+export interface OfflineAnalysisSummary {
+  id: string; policyId: string; fileName: string; uploader: string; createdAt: string;
+  rowCount: number; periodStart: string; periodEnd: string;
+}
+export interface OfflineRule {
+  ruleId: string; name: string; number: number; action: string; sectionName: string; flowCount: number;
+  firstTime: string; lastTime: string; distinctSources: number; distinctDestinations: number; distinctServices: number;
+  topObserved: { observedSource?: string; observedDestination?: string; observedService?: string; count: number }[];
+  zeroTraffic: string; severity: string; memberStatus: string; lookupReason?: string;
+  unseenMembers: { memberId: string; name: string; dimension: string }[];
+  narrowing: { memberStatus?: string; suggestionNote?: string; observedSource?: string[]; observedDestination?: string[];
+    observedService?: string[]; coveragePercent?: number; coveredFlows?: number; caution?: string };
+}
+export interface OfflineAnalysisResult extends OfflineAnalysisSummary {
+  flowCount: number; attributedFlows: number; invalidRows: number; agreementCount: number; disagreementCount: number;
+  comparisonUnknownCount: number; comparisonEnabled: boolean; comparisonNote: string; attributionNote: string; limitations: string; caution: string;
+  parseStats: { statReason: string; count: number }[]; unknownStats: { statReason: string; count: number }[];
+  verdictStats: { statReason: string; count: number }[]; rules: OfflineRule[];
+}
+export function listOfflineAnalyses(policy: string, page = 0): Promise<{ analyses: OfflineAnalysisSummary[]; canManage: boolean }> {
+  return call(`/api/v2/policy/policies/${encodeURIComponent(policy)}/offline-analyses?page=${page}`, "GET");
+}
+export function getOfflineAnalysis(id: string): Promise<OfflineAnalysisResult> {
+  return call(`/api/v2/policy/offline-analyses/${encodeURIComponent(id)}`, "GET");
+}
+async function offlineMutation<T>(path: string, method: "POST" | "DELETE", body?: FormData): Promise<T> {
+  const token = await csrfToken();
+  const response = await fetchWithTimeout(path, { method, credentials: "include", body,
+    headers: token ? { "X-CSRF-Token": token } : {} }, 600_000);
+  noteMasking(response);
+  const parsed = await response.json().catch(() => ({}));
+  if (!response.ok) throw { status: response.status, body: parsed } satisfies ApiError;
+  return parsed as T;
+}
+export function uploadOfflineAnalysis(policy: string, file: File, mapping: Record<string, string>): Promise<{ id: string }> {
+  const body = new FormData(); body.append("mapping", JSON.stringify(mapping)); body.append("file", file);
+  return offlineMutation(`/api/v2/policy/policies/${encodeURIComponent(policy)}/offline-analyses`, "POST", body);
+}
+export function deleteOfflineAnalysis(id: string): Promise<{ deleted: boolean }> {
+  return offlineMutation(`/api/v2/policy/offline-analyses/${encodeURIComponent(id)}`, "DELETE");
+}
+export interface PolicyChangeFilters { from: string; to: string; policy: string; device: string; actor: string; changeType: string; field: string; q: string }
+export interface PolicyChangeRow {
+  revision: string; currentSnapshotLabel?: boolean; policyId: string; policyName: string; targets: PolicyTarget[]; ruleId: string;
+  number: number | null; name: string; changedOn: string; observedAtCollection: boolean;
+  changedBy: string; changeType: string; changedFields: string[]; changes: { field: string; before: unknown; after: unknown }[];
+}
+export interface PolicyChangesPage {
+  rows: PolicyChangeRow[]; summary: { total: number; actors: number; rules: number; counts: Record<string, number> };
+  nextCursor: string; rangeStart: string; rangeEnd: string;
+}
+const changeParams = (filters: PolicyChangeFilters) => new URLSearchParams({ ...filters });
+export const getPolicyChanges = (filters: PolicyChangeFilters, cursor = "") =>
+  call<PolicyChangesPage>(`/api/v2/policy/changes?${changeParams(filters)}&cursor=${encodeURIComponent(cursor)}`, "GET");
+export async function downloadPolicyChanges(filters: PolicyChangeFilters) {
+  const response = await fetch(`/api/v2/policy/changes.csv?${changeParams(filters)}`, { credentials: "include" });
+  if (!response.ok) throw new Error("Change export failed");
+  return response.blob();
+}

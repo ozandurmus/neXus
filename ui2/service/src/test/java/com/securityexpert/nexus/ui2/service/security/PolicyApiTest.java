@@ -18,10 +18,15 @@ import java.time.Instant;
 import java.util.*;
 
 class PolicyApiTest {
+    @Test void policyRoutesUseAtMostOneWildcard() {
+        SecurityWebMvcConfig.ACTION_ID_BY_ROUTE.keySet().stream()
+            .filter(route -> route.contains("/api/v2/policy/"))
+            .forEach(route -> assertTrue(route.chars().filter(c -> c == '*').count() <= 1, route));
+    }
     @Test void policyRoutesAllowMaskedCollectionWithoutOtherWrites() throws Exception {
         var action = new ActionRegistry().find(ActionRegistry.POLICY_READ).orElseThrow();
         assertEquals(Set.of(RoleToken.SECURITY_ADMIN, RoleToken.ONBOARDING_ADMIN, RoleToken.REPLAY_VIEWER), action.requiredRoleTokens());
-        for (String route : List.of("GET /api/v2/policy/tree", "GET /api/v2/policy/collections/*", "GET /api/v2/policy/devices", "GET /api/v2/policy/devices/*", "GET /api/v2/policy/policies/*", "GET /api/v2/policy/policies/*/history", "GET /api/v2/policy/policies/*/hygiene", "GET /api/v2/policy/policies/*/hygiene.csv", "GET /api/v2/policy/policies/*/rules", "GET /api/v2/policy/objects/*", "GET /api/v2/policy/domains/*/objects", "GET /api/v2/policy/domains/*/unused", "GET /api/v2/policy/domains/*/gateways", "GET /api/v2/policy/domains/*/hits", "GET /api/v2/policy/domains/*/object-usage", "GET /api/v2/policy/domains/*/objects/duplicates", "GET /api/v2/policy/domains/*/installation"))
+        for (String route : List.of("GET /api/v2/policy/changes", "GET /api/v2/policy/changes.csv", "GET /api/v2/policy/tree", "GET /api/v2/policy/collections/*", "GET /api/v2/policy/devices", "GET /api/v2/policy/devices/*", "GET /api/v2/policy/policies/*", "GET /api/v2/policy/policies/*/history", "GET /api/v2/policy/policies/*/hygiene", "GET /api/v2/policy/policies/*/hygiene.csv", "GET /api/v2/policy/policies/*/rules", "GET /api/v2/policy/objects/*", "GET /api/v2/policy/domains/*/objects", "GET /api/v2/policy/domains/*/unused", "GET /api/v2/policy/domains/*/gateways", "GET /api/v2/policy/domains/*/hits", "GET /api/v2/policy/domains/*/object-usage", "GET /api/v2/policy/domains/*/objects/duplicates", "GET /api/v2/policy/domains/*/installation"))
             assertEquals(ActionRegistry.POLICY_READ, SecurityWebMvcConfig.ACTION_ID_BY_ROUTE.get(route));
         assertEquals(Set.of(RoleToken.SECURITY_ADMIN, RoleToken.ONBOARDING_ADMIN, RoleToken.REPLAY_VIEWER),
                 new ActionRegistry().find(ActionRegistry.POLICY_COLLECT).orElseThrow().requiredRoleTokens());
@@ -231,6 +236,37 @@ class PolicyApiTest {
                 org.springframework.web.bind.annotation.RequestMethod.DELETE}, value = {"/api/v2/policy/sources", "/api/v2/policy/sources/{id}",
                 "/api/v2/policy/sources/{id}/cancel", "/api/v2/policy/collections/{id}/cancel", "/api/v2/jobs/{id}/cancel"})
         public void write() { fail("Policy writes must never reach the controller"); }
+    }
+    @Test void lookupRouteRequiresPolicyReadAndCsrfAndAllowsMaskedMachineReads() throws Exception {
+        assertEquals(ActionRegistry.POLICY_READ, SecurityWebMvcConfig.ACTION_ID_BY_ROUTE.get("POST /api/v2/policy/policies/*/lookup"));
+        var sessions = mock(SessionRepository.class); var rbac = mock(RbacEvaluator.class);
+        var audit = mock(AuthzDecisionRepository.class); var query = mock(PolicyQueryService.class);
+        var meta = new PolicySnapshot.Metadata("p1", "s1", "MGR-ALPHA", "PAN", "c1", "DOM-ALPHA", "POL-ALPHA", "2026-10-09T12:00:00Z", "a1", List.of());
+        when(query.find("p1")).thenReturn(Optional.of(new PolicySnapshot(meta, List.of(), Map.of())));
+        var names = new TopologyNamePseudonymizer(new byte[32]); var ips = new SubnetPreservingIpMasker(new byte[32]);
+        var controller = new com.securityexpert.nexus.ui2.service.api.PolicyLookupController(query, audit, names, ips);
+        var mvc = MockMvcBuilders.standaloneSetup(controller).setControllerAdvice(new PrivacyMaskingResponseBodyAdvice(ips, names))
+            .addInterceptors(new GateChainInterceptor(new GateChain(sessions, new ActionRegistry(), rbac, audit), SecurityWebMvcConfig.ACTION_ID_BY_ROUTE)).build();
+        String path = "/api/v2/policy/policies/p1/lookup";
+        String body = "{\"source\":\"192.0.2.8\",\"destination\":\"198.51.100.8\",\"service\":\"tcp/443\"}";
+        mvc.perform(post(path).servletPath(path).contentType("application/json").content(body)).andExpect(status().isUnauthorized());
+        for (boolean machine : List.of(false, true)) {
+            String cookie = "synthetic-lookup-" + machine; String actor = "synthetic-actor-" + machine; Instant now = Instant.now();
+            var session = new SessionRecord(SessionHasher.hash(cookie), actor, "synthetic-csrf", SessionState.ACTIVE, now, now,
+                now.plusSeconds(3600), now.plusSeconds(7200), Optional.empty(), Optional.empty(), Optional.empty(), machine);
+            when(sessions.findBySessionId(eq(session.sessionId()), any(Instant.class))).thenReturn(Optional.of(session));
+            when(rbac.evaluateAny(eq(actor), anySet(), any())).thenReturn(new RbacEvaluator.Decision(AuthzOutcome.PERMITTED, Optional.of("test"), Optional.empty(), Optional.empty()));
+            when(rbac.evaluate(eq(actor), any(), any())).thenReturn(new RbacEvaluator.Decision(AuthzOutcome.PERMITTED, Optional.of("test"), Optional.empty(), Optional.empty()));
+            mvc.perform(post(path).servletPath(path).cookie(new Cookie("ui2_session", cookie)).contentType("application/json").content(body)).andExpect(status().isUnauthorized());
+            var response = mvc.perform(post(path).servletPath(path).cookie(new Cookie("ui2_session", cookie))
+                .header("X-CSRF-Token", "synthetic-csrf").header("Origin", "https://example.invalid").contentType("application/json").content(body))
+                .andExpect(status().isOk()).andExpect(header().string("X-Nexus-Masked", "true")).andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(jsonPath("$.verdict").value("UNKNOWN")).andReturn().getResponse().getContentAsString();
+            assertTrue(response.contains("192.0.2.8")); assertTrue(response.contains("198.51.100.8")); // User-entered lookup inputs may be echoed.
+            when(rbac.evaluateAny(eq(actor), anySet(), any())).thenReturn(new RbacEvaluator.Decision(AuthzOutcome.DENIED, Optional.of("test"), Optional.empty(), Optional.empty()));
+            mvc.perform(post(path).servletPath(path).cookie(new Cookie("ui2_session", cookie))
+                .header("X-CSRF-Token", "synthetic-csrf").header("Origin", "https://example.invalid").contentType("application/json").content(body)).andExpect(status().isForbidden());
+        }
     }
     @Test void controllerBoundsPagingAndScopesObjectsToPolicyAssignments() {
         var query = mock(PolicyQueryService.class); var controller = new PolicyController(query);

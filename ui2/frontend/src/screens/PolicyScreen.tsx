@@ -11,6 +11,9 @@ import { cancelJob, listPolicies, getPolicyCollectionStatus, type PolicyCollecti
 
 import { VirtualPolicyCards, RuleDetailPanel, RuleHistory, scheduleLabel, sectionLabel, reportPolicyLoadError } from "./PolicyRuleViewer";
 
+import { PolicyOfflineTab } from "./PolicyOfflineTab";
+import { PolicyLookupTab } from "./PolicyLookupTab";
+import { PolicyChangesTab } from "./PolicyChangesTab";
 import { PolicyHygieneTab } from "./PolicyHygieneTab";
 import { PolicyDomainTab } from "./PolicyDomainTabs";
 
@@ -107,7 +110,7 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
   const [collectionStatus, setCollectionStatus] = useState("");
   const [selected, setSelected] = useState(() => new URLSearchParams(window.location.search).get("policy_id") ?? "");
   const [device, setDevice] = useState(() => new URLSearchParams(window.location.search).get("device_id") ?? "");
-  const [tab, setTab] = useState<"Rules" | "Objects" | "Installation" | "Hygiene">(() => new URLSearchParams(window.location.search).get("tab") === "objects" ? "Objects" : "Rules");
+  const [tab, setTab] = useState<"Rules" | "Objects" | "Installation" | "Hygiene" | "Changes" | "Lookup" | "Offline analysis">(() => new URLSearchParams(window.location.search).get("tab") === "objects" ? "Objects" : "Rules");
   const [hitFilter, setHitFilter] = useState("");
   const [hitDays, setHitDays] = useState(90);
   const [page, setPage] = useState(0);
@@ -206,23 +209,29 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
     } catch { if (request === ruleSelectionRequest.current) setCollectionStatus("Rule selection could not be completed."); }
     finally { setSelectingRules(false); }
   };
-  const openObject = async (id: string) => {
+  const openObject = async (id: string, policy = selected) => {
     const request = ++drawerRequest.current;
     setDrawer({ loading: true });
     try {
-      const result = await getPolicyObject(id, selected);
+      const result = await getPolicyObject(id, policy);
       if (!result?.object) throw new Error("Invalid object response");
       if (request === drawerRequest.current) setDrawer({ object: result.object });
     }
     catch (error) { if (request === drawerRequest.current) setDrawer({ error: "Object details could not be loaded.", errorCode: reportPolicyLoadError("object", error) }); }
   };
-  const openRuleId = async (id: string, days = 90) => {
+  const [lookupRule, setLookupRule] = useState<{ policy: string; rule: string } | null>(null);
+  const openRuleId = async (id: string, days = 90, policy = selected) => {
     const request = ++drawerRequest.current; setDrawer({ loading: true });
     try {
-      const detail = await getPolicyRule(selected, id, days);
+      const detail = await getPolicyRule(policy, id, days);
       if (request === drawerRequest.current) setDrawer({ rule: detail.rule, detail });
     } catch { if (request === drawerRequest.current) setDrawer({ error: "Rule details could not be loaded." }); }
   };
+  useEffect(() => {
+    if (lookupRule && selected === lookupRule.policy) {
+      void openRuleId(lookupRule.rule, 90, lookupRule.policy); setLookupRule(null);
+    }
+  }, [lookupRule, selected]);
   const openRule = (rule: PolicyRule) => { drawerRequest.current++; setDrawer({ rule }); };
   const toggle = (set: Set<string>, id: string) => {
     const next = new Set(set); next.has(id) ? next.delete(id) : next.add(id); return next;
@@ -448,12 +457,18 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
           </FormControl>
         </Stack>
         {collectionStatus && <Typography role="status" sx={{ mb: 1 }}>{collectionStatus}</Typography>}
-        {(selected || objectMetadata) && <Tabs value={tab} onChange={(_, value) => { setTab(value); setDrawer(null); drawerRequest.current++; }} aria-label="Policy tabs" sx={{ mb: 2 }}>
-          {["Rules", "Objects", "Installation", "Hygiene"].map(label => <Tab key={label} label={label} value={label} />)}
+        {<Tabs value={tab} onChange={(_, value) => { setTab(value); setDrawer(null); drawerRequest.current++; }} aria-label="Policy tabs" sx={{ mb: 2 }}>
+          {["Rules", "Objects", "Installation", "Hygiene", "Changes", "Lookup", "Offline analysis"].map(label => <Tab key={label} label={label} value={label} />)}
         </Tabs>}
         {(tab === "Objects" || tab === "Installation") && objectMetadata && <PolicyDomainTab
           key={`${tab}:${objectMetadata.sourceId}:${objectMetadata.containerId}:${revision}`}
           tab={tab} metadata={objectMetadata} policies={catalog} />}
+        <Box hidden={tab !== "Lookup"}>
+          <PolicyLookupTab policies={catalog} policy={selected} selectPolicy={setSelected}
+            openRule={(policy, rule) => { setSelected(policy); setLookupRule({ policy, rule }); }} />
+        </Box>
+        {tab === "Changes" && <PolicyChangesTab key={revision} policies={catalog} devices={targets} openRule={(policy, rule) => void openRuleId(rule, 90, policy)} />}
+        {tab === "Offline analysis" && <PolicyOfflineTab key={selected} policy={selected} openRule={id => void openRuleId(id, 90)} />}
         {tab === "Hygiene" && <PolicyHygieneTab key={`${selected}:${revision}`} policy={selected} openRule={(id, days) => void openRuleId(id, days)} openObject={openObject} />}
         <Box role="tabpanel" aria-label="Rules" hidden={tab !== "Rules"} sx={{ display: tab === "Rules" ? "contents" : "none" }}>
         {error && <Box data-error-code={errorCode}><EmptyPanel title="Policy unavailable" body={error}><Button onClick={() => setRevision(n => n + 1)}>Retry</Button></EmptyPanel></Box>}
@@ -521,7 +536,7 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
         {drawer?.history && <RuleHistory policy={selected} />}
         {drawer?.rule && (drawer.detail || data) && <RuleDetailPanel key={drawer.rule.id} rule={drawer.rule} metadata={drawer.detail?.metadata ?? data!.metadata}
           section={drawer.detail?.section ?? data!.sections.find(section => section.rules.some(rule => rule.id === drawer.rule?.id))!}
-          objects={drawer.detail ? new Map(drawer.detail.objects.map(o => [o.id, o])) : objects} openObject={openObject} openRuleId={id => void openRuleId(id)} />}
+          objects={drawer.detail ? new Map(drawer.detail.objects.map(o => [o.id, o])) : objects} openObject={id => void openObject(id, drawer.detail?.metadata.id ?? selected)} openRuleId={id => void openRuleId(id, 90, drawer.detail?.metadata.id ?? selected)} />}
       </Box>
     </Drawer>
   </ScreenRoot>;
