@@ -46,12 +46,12 @@ class QuarantineReleaseTest {
             var admissions = new EndpointAdmissionRepository(tx);
             assertTrue(admissions.acquire("new-ticket", "192.0.2.10:22", "new-session",
                 new Owner("synthetic-job", epoch, null, 0, "general", "general-new", 1, "INVENTORY", false)).isPresent());
-            assertEquals(0, tx.inTransaction(db -> db.fetchOne("select count(*)::int from runtime_task_lease").get(0, Integer.class)));
-            assertEquals(2, tx.inTransaction(db -> db.fetchOne("select count(*)::int from audit_log "
+            assertEquals(0, tx.<Integer>inTransaction(db -> db.fetchOne("select count(*)::int from runtime_task_lease").get(0, Integer.class)));
+            assertEquals(2, tx.<Integer>inTransaction(db -> db.fetchOne("select count(*)::int from audit_log "
                 + "where action_id='QUARANTINE_RELEASED_OWNER_GONE' and actor_fingerprint='system:worker' "
                 + "and operation='DELETE' and before_state->>'reason'='QUARANTINE_RELEASED_OWNER_GONE' "
                 + "and not before_state ? 'owner_instance' and not before_state ? 'endpoint_ref'").get(0, Integer.class)));
-            assertEquals(0, audited.inTransaction("system:release", "synthetic-drain", db ->
+            assertEquals(0, audited.<Integer>inTransaction("system:release", "synthetic-drain", db ->
                 db.fetchOne("select ui2_release_orphan_quarantines()").get(0, Integer.class)));
         }
     }
@@ -83,11 +83,11 @@ class QuarantineReleaseTest {
                     ? "update jobs set state='COMPLETED',lease_expires_at=now()-interval '1 second' where job_id='live-job'"
                     : "update jobs set last_heartbeat_at=now()-interval '121 seconds' where job_id='live-job'"));
             }
-            assertEquals(0, audited.inTransaction("system:release", "synthetic-drain", db ->
+            assertEquals(0, audited.<Integer>inTransaction("system:release", "synthetic-drain", db ->
                 db.fetchOne("select ui2_release_orphan_quarantines()").get(0, Integer.class)));
-            assertEquals(1, tx.inTransaction(db -> db.fetchOne("select count(*)::int from endpoint_admission").get(0, Integer.class)));
-            assertEquals(1, tx.inTransaction(db -> db.fetchOne("select count(*)::int from runtime_task_lease").get(0, Integer.class)));
-            assertEquals(0, tx.inTransaction(db -> db.fetchOne("select count(*)::int from audit_log where action_id='QUARANTINE_RELEASED_OWNER_GONE'").get(0, Integer.class)));
+            assertEquals(1, tx.<Integer>inTransaction(db -> db.fetchOne("select count(*)::int from endpoint_admission").get(0, Integer.class)));
+            assertEquals(1, tx.<Integer>inTransaction(db -> db.fetchOne("select count(*)::int from runtime_task_lease").get(0, Integer.class)));
+            assertEquals(0, tx.<Integer>inTransaction(db -> db.fetchOne("select count(*)::int from audit_log where action_id='QUARANTINE_RELEASED_OWNER_GONE'").get(0, Integer.class)));
         }
     }
 
@@ -96,12 +96,12 @@ class QuarantineReleaseTest {
             var tx = new JooqTransactionBoundary(DSL.using(fixture.appDataSource(), SQLDialect.POSTGRES));
             quarantine(new AuditedTransactionBoundary(tx));
             assertTrue(new ModuleRuntimeRepository(tx).heartbeat("general", "general-new"));
-            assertEquals(0, tx.inTransaction(db -> db.fetchOne("select count(*)::int from endpoint_admission").get(0, Integer.class)));
+            assertEquals(0, tx.<Integer>inTransaction(db -> db.fetchOne("select count(*)::int from endpoint_admission").get(0, Integer.class)));
             quarantine(new AuditedTransactionBoundary(tx));
             new AuditedTransactionBoundary(tx).inTransaction("system:worker", "synthetic-owner", db -> db.execute(
                 "update module_runtime_control set owner_instance='general-old',owner_heartbeat_at=now() where module='general'"));
             assertTrue(new ModuleRuntimeRepository(tx).heartbeat("general", "general-old"));
-            assertEquals(1, tx.inTransaction(db -> db.fetchOne("select count(*)::int from endpoint_admission").get(0, Integer.class)));
+            assertEquals(1, tx.<Integer>inTransaction(db -> db.fetchOne("select count(*)::int from endpoint_admission").get(0, Integer.class)));
         }
     }
 
@@ -115,11 +115,11 @@ class QuarantineReleaseTest {
                 db.execute("update module_runtime_control set owner_instance='general-new',owner_heartbeat_at=now() where module='general'");
                 return null;
             });
-            assertEquals(0, audited.inTransaction("system:release", "synthetic-drain", db ->
+            assertEquals(0, audited.<Integer>inTransaction("system:release", "synthetic-drain", db ->
                 db.fetchOne("select ui2_release_orphan_quarantines()").get(0, Integer.class)));
             audited.inTransaction("system:worker", "synthetic-expiry", db -> db.execute(
                 "update runtime_instance_heartbeat set heartbeat_at=now()-interval '121 seconds' where owner_instance='general-old'"));
-            assertEquals(2, audited.inTransaction("system:release", "synthetic-drain", db ->
+            assertEquals(2, audited.<Integer>inTransaction("system:release", "synthetic-drain", db ->
                 db.fetchOne("select ui2_release_orphan_quarantines()").get(0, Integer.class)));
         }
     }
@@ -132,9 +132,9 @@ class QuarantineReleaseTest {
             audited.inTransaction("system:worker", "synthetic-replacement", db -> db.execute(
                 "update module_runtime_control set owner_instance='general-new',owner_heartbeat_at=now() where module='general'"));
             assertFalse(new ModuleRuntimeRepository(tx).heartbeat("general", "general-old"));
-            assertEquals(0, audited.inTransaction("system:release", "synthetic-drain", db ->
+            assertEquals(0, audited.<Integer>inTransaction("system:release", "synthetic-drain", db ->
                 db.fetchOne("select ui2_release_orphan_quarantines()").get(0, Integer.class)));
-            assertEquals(1, tx.inTransaction(db -> db.fetchOne("select count(*)::int from endpoint_admission").get(0, Integer.class)));
+            assertEquals(1, tx.<Integer>inTransaction(db -> db.fetchOne("select count(*)::int from endpoint_admission").get(0, Integer.class)));
         }
     }
 
@@ -146,8 +146,8 @@ class QuarantineReleaseTest {
                 db.execute("select set_config('app.actor_fingerprint','',true)");
                 return db.fetch("select ui2_release_orphan_quarantines()");
             }));
-            assertEquals(1, tx.inTransaction(db -> db.fetchOne("select count(*)::int from endpoint_admission").get(0, Integer.class)));
-            assertEquals(1, tx.inTransaction(db -> db.fetchOne("select count(*)::int from runtime_task_lease").get(0, Integer.class)));
+            assertEquals(1, tx.<Integer>inTransaction(db -> db.fetchOne("select count(*)::int from endpoint_admission").get(0, Integer.class)));
+            assertEquals(1, tx.<Integer>inTransaction(db -> db.fetchOne("select count(*)::int from runtime_task_lease").get(0, Integer.class)));
         }
     }
 }

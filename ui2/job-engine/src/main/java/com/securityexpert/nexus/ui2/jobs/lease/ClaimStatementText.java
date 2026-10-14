@@ -1,8 +1,10 @@
 package com.securityexpert.nexus.ui2.jobs.lease;
 
 /**
- * C2 §4.1's claim statement, verbatim (column names adapted to this
- * movement's {@code V4} migration). One literal, parameterized, atomic
+ * C2 §4.1's claim statement with window, ownership and device admission.
+ * Callers must acquire advisory transaction lock 294611 in a preceding
+ * statement at READ COMMITTED so admission sees claims committed while waiting.
+ * One literal, parameterized, atomic
  * {@code UPDATE ... WHERE ... RETURNING} -- there is deliberately no
  * separate {@code SELECT} statement anywhere for finding a claimable row
  * (the {@code SELECT} here is a correlated subquery inside the same single
@@ -43,6 +45,12 @@ public final class ClaimStatementText {
                   AND job_type = ANY(string_to_array({2}, ','))
                   AND job_type = capability_id
                   AND (admission_not_before IS NULL OR admission_not_before <= now())
+                  AND (jobs.target_device_id IS NULL OR NOT EXISTS (
+                      SELECT 1 FROM jobs active
+                      WHERE active.target_device_id = jobs.target_device_id
+                        AND active.state IN ('CLAIMED', 'EXECUTING')
+                        AND (active.lease_expires_at IS NULL OR active.lease_expires_at >= now())
+                  ))
                   AND ((SELECT count(*) FROM jobs WHERE state IN ('CLAIMED', 'EXECUTING'))
                     + (SELECT count(*) FROM runtime_task_lease WHERE task_key='fleet.failover.execution' AND owner_role='service')) < 10
                   AND EXISTS (SELECT 1 FROM owner_control m JOIN owner_control r ON r.module=m.effective_owner

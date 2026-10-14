@@ -101,8 +101,9 @@ class FailoverIncidentAdmissionTest {
                 assertEquals(0,count(fixture,"job_step_attempt"));
                 assertEquals(0,count(fixture,"failover_dispatch_intent"));
                 assertEquals(audits,count(fixture,"audit_log"));
-                assertFalse(mutate(fixture,dsl -> dsl.fetchOne("select mutation_possible from failover_run where run_id={0}",e.run())
-                    .get(0,Boolean.class)));
+                boolean mutationPossible=mutate(fixture,dsl -> dsl.fetchOne("select mutation_possible from failover_run where run_id={0}",e.run())
+                    .get(0,Boolean.class));
+                assertFalse(mutationPossible);
                 assertTrue(repo.workerState(e.run(),e.epoch(),"STOPPED","PRECHECK","SYNTHETIC_STOP",null,null));
                 assertEquals(0,count(fixture,"failover_quarantine"));
             }

@@ -128,6 +128,10 @@ class CollectionEngineDatabasePlaceholderTest {
             assertEquals("RATE_LIMITED_OR_RUNNING", jobs.insertDiagnosticRead(java.util.UUID.randomUUID().toString(),
                     "diagnostic:" + java.util.UUID.randomUUID(), deviceId,
                     "cp_inventory_cphaprob_stat", "cphaprob stat", Ui2Rows.ACTOR).kind());
+            assertTrue(leaseRepository.claimNext("general-backup", List.of("cp_gateway_backup", "diagnostic_read"),
+                    Duration.ofSeconds(60)).isEmpty());
+            assertTrue(leaseRepository.transitionState(diagnostic, claimed.leaseEpoch(), JobState.EXECUTING,
+                    JobState.COMPLETED, Ui2Rows.ACTOR, "harness.diagnostic_complete"));
             var next = leaseRepository.claimNext("general-backup", List.of("cp_gateway_backup", "diagnostic_read"),
                     Duration.ofSeconds(60)).orElseThrow();
             assertTrue(backups.contains(next.jobId()));
