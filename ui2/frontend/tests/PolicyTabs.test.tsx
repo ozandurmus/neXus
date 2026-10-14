@@ -4,7 +4,7 @@ import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
 import { PolicyScreen } from "../src/screens/PolicyScreen";
 import { PolicyDomainTab } from "../src/screens/PolicyDomainTabs";
-import type { PolicyMetadata } from "../src/auth/adminApi";
+import type { PolicyMetadata, PolicyLookupResult } from "../src/auth/adminApi";
 
 const metadata: PolicyMetadata = { id: "policy-1", sourceId: "source-1", sourceName: "MGR-BRAVO-01", vendor: "CP",
   containerId: "domain-1", containerName: "DOM-TANGO-01", name: "POL-TANGO-01", collectedAt: "2026-10-05T00:00:00Z", artefactRef: "artifact-1", targets: [] };
@@ -121,4 +121,64 @@ it("renders empty/single-member flags and readable schedule values in Objects", 
   expect(within(table).getByText("Single member")).toBeInTheDocument();
   expect(within(table).getByText("Unused: UNKNOWN")).toBeInTheDocument();
   expect(within(table).getByText(/Weekdays 08:00–17:00/)).toHaveTextContent("From 1 Oct 2026 00:00");
+});
+
+
+it("opens the estate Changes tab and links a rule from another policy into the rule viewer", async () => {
+  const cell = { refs: [], negated: false };
+  const request = vi.fn(async (url: string) => {
+    if (url.includes("/api/v2/policy/changes?")) return new Response(JSON.stringify({
+      rows: [{ revision: "1", policyId: "policy-2", policyName: "POL-BRAVO-02", targets: [], ruleId: "rule-2", number: 2, name: "RULE-BRAVO-02",
+        changedOn: "2026-10-09T00:00:00Z", observedAtCollection: true, changedBy: "UNKNOWN (observed by collection)", changeType: "modified", changedFields: ["action"], changes: [] }],
+      summary: { total: 1, actors: 0, rules: 1, counts: { added: 0, modified: 1, removed: 0 } }, nextCursor: "", rangeStart: "2026-09-09T00:00:00Z", rangeEnd: "2026-10-09T00:00:00Z"
+    }), { status: 200 });
+    if (url.includes("/policy/policies/policy-2/rules?")) return new Response(JSON.stringify({
+      metadata: { ...metadata, id: "policy-2", name: "POL-BRAVO-02" }, section: { id: "s2", name: "Pre rules", source: "Shared", rules: [], total: 1 }, objects: [],
+      rule: { id: "rule-2", uuid: "uuid-2", number: 2, name: "RULE-BRAVO-02", enabled: true, source: cell, destination: cell, service: cell, application: cell, action: "allow", log: "Log", comment: "", extras: {} }
+    }), { status: 200 });
+    if (url.includes("/policy/devices")) return new Response(JSON.stringify({ policies: [metadata], devices: [] }), { status: 200 });
+    if (url.includes("/policy/tree")) return new Response(JSON.stringify({ sources: [] }), { status: 200 });
+    return new Response(JSON.stringify({ metadata, sections: [], objects: [], total: 0, page: 0, pageSize: 200 }), { status: 200 });
+  });
+  vi.stubGlobal("fetch", request); mount(<PolicyScreen />);
+  fireEvent.click(screen.getByRole("tab", { name: "Changes" }));
+  fireEvent.click(await screen.findByRole("button", { name: "2 · RULE-BRAVO-02" }));
+  await waitFor(() => expect(request).toHaveBeenCalledWith(expect.stringContaining("/policy/policies/policy-2/rules?ruleId=rule-2"), expect.anything()));
+  expect(await screen.findByRole("dialog", { name: "Rule details" })).toHaveTextContent("RULE-BRAVO-02");
+});
+
+it("keeps Lookup inputs and results when switching to Changes and Offline analysis and back", async () => {
+  const lookup: PolicyLookupResult = {
+    policyId: metadata.id, collectedAt: metadata.collectedAt, verdict: "DENIED", lookupReason: "implicit default deny",
+    decidingRule: null, undecidableRules: [], parts: [],
+    query: { querySource: "192.0.2.8", queryDestination: "198.51.100.8", queryService: "tcp/443" },
+    limitations: "Policy intent only. NAT, routing and anti-spoofing are not evaluated; IPv6 is unsupported.",
+  };
+  const request = vi.fn(async (url: string) => {
+    const body = url.endsWith("/lookup") ? lookup
+      : url.includes("/changes?") ? { rows: [], summary: { total: 0, actors: 0, rules: 0, counts: {} }, nextCursor: "", rangeStart: "", rangeEnd: "" }
+      : url.includes("/offline-analyses?") ? { analyses: [], canManage: false }
+      : url.endsWith("/devices") ? { policies: [metadata], devices: [] }
+      : url.endsWith("/tree") ? { sources: [] }
+      : { metadata, sections: [], objects: [], total: 0, page: 0, pageSize: 200 };
+    return new Response(JSON.stringify(body), { status: 200, headers: { "X-Nexus-Masked": "true" } });
+  });
+  vi.stubGlobal("fetch", request); mount(<PolicyScreen />);
+  fireEvent.click(screen.getByRole("tab", { name: "Lookup" }));
+  fireEvent.mouseDown(screen.getByLabelText(/Lookup policy/));
+  fireEvent.click(await screen.findByRole("option", { name: metadata.name }));
+  fireEvent.change(screen.getByLabelText(/Source IPv4 or CIDR/), { target: { value: lookup.query.querySource } });
+  fireEvent.change(screen.getByLabelText(/Destination IPv4 or CIDR/), { target: { value: lookup.query.queryDestination } });
+  fireEvent.click(screen.getByRole("button", { name: "Look up policy intent" }));
+  expect(await screen.findByLabelText("Lookup result 1")).toHaveTextContent("DENIED");
+  fireEvent.click(screen.getByRole("tab", { name: "Changes" }));
+  expect(await screen.findByText("No rule changes match these filters.")).toBeVisible();
+  expect(screen.getByLabelText("Lookup result 1")).not.toBeVisible();
+  fireEvent.click(screen.getByRole("tab", { name: "Offline analysis" }));
+  await waitFor(() => expect(request).toHaveBeenCalledWith(expect.stringContaining("/policy/policies/policy-1/offline-analyses?page=0"), expect.anything()));
+  expect(screen.getByLabelText("Lookup result 1")).not.toBeVisible();
+  fireEvent.click(screen.getByRole("tab", { name: "Lookup" }));
+  expect(screen.getByLabelText(/Source IPv4 or CIDR/)).toHaveValue(lookup.query.querySource);
+  expect(screen.getByLabelText("Lookup result 1")).toBeVisible();
+  expect(request.mock.calls.filter(([url]) => url.endsWith("/lookup"))).toHaveLength(1);
 });

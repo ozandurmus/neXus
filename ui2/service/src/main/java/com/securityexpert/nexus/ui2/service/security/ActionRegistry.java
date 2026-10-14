@@ -25,6 +25,7 @@ public final class ActionRegistry {
     public static final String DEVICE_DELETE = "device_delete";
     /** WORKER.md "Routes": {@code GET /devices} and {@code GET /devices/{id}} -- any authenticated session. */
     public static final String DEVICE_READ = "device_read";
+    public static final String POLICY_OFFLINE_WRITE = "policy_offline_write";
     public static final String POLICY_COLLECT = "policy_collect";
     public static final String POLICY_READ = "policy_read";
     /**
@@ -142,6 +143,8 @@ public final class ActionRegistry {
     }
 
     private void seedActions() {
+        register(new ActionDescriptor(POLICY_OFFLINE_WRITE, true, Optional.of(RoleToken.SECURITY_ADMIN),
+                java.util.Set.of(RoleToken.ONBOARDING_ADMIN)));
         register(new ActionDescriptor(LIFECYCLE_CATALOG_WRITE, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(POLICY_COLLECT, true, Optional.of(RoleToken.SECURITY_ADMIN),
                 java.util.Set.of(RoleToken.ONBOARDING_ADMIN, RoleToken.REPLAY_VIEWER)));
