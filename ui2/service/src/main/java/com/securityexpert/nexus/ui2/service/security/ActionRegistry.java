@@ -118,6 +118,8 @@ public final class ActionRegistry {
     public static final String LDAP_CONFIG_READ = "ldap_config_read";
     public static final String LDAP_CONFIG_WRITE = "ldap_config_write";
     /** Administration › Notifications (syslog, SMTP relay), 2026-09-22. */
+    public static final String SSH_TRUST_READ = "ssh_trust_read";
+    public static final String SSH_TRUST_MANAGE = "ssh_trust_manage";
     public static final String NOTIFICATION_CONFIG_READ = "notification_config_read";
     public static final String NOTIFICATION_CONFIG_WRITE = "notification_config_write";
     /** Administration › System: pods and storage use, read-only, 2026-09-22. */
@@ -216,6 +218,8 @@ public final class ActionRegistry {
         register(new ActionDescriptor(RBAC_ROLE_WRITE, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(LDAP_CONFIG_READ, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(LDAP_CONFIG_WRITE, true, Optional.of(RoleToken.SECURITY_ADMIN)));
+        register(new ActionDescriptor(SSH_TRUST_READ, true, Optional.empty()));
+        register(new ActionDescriptor(SSH_TRUST_MANAGE, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(NOTIFICATION_CONFIG_READ, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(NOTIFICATION_CONFIG_WRITE, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(SYSTEM_STATUS_READ, true, Optional.empty()));

@@ -124,7 +124,7 @@ public final class JobLogQueryService {
     /** Jobs joined to their device for the name; the join is outer so a job whose device was removed still lists. */
     private static final String FROM = " from jobs j left join devices d on d.device_id = j.target_device_id";
     private static final String SELECT = "select j.job_id, j.job_type, j.target_device_id, d.observed_hostname as device_name, "
-            + "j.state, j.outcome, j.terminal_reason, j.submitted_at, j.finished_at, "
+            + "j.state, j.outcome, CASE WHEN j.ssh_identity_unverified THEN concat_ws('; ', nullif(j.terminal_reason, ''), 'host_key_mismatch_warned: collected under an unverified identity') ELSE j.terminal_reason END AS terminal_reason, j.submitted_at, j.finished_at, "
             + "j.transcript_artefact_ref is not null as has_transcript, "
             + "case when j.finished_at is not null then extract(epoch from (j.finished_at - j.submitted_at)) * 1000 "
             + "     else extract(epoch from (now() - j.submitted_at)) * 1000 end as duration_ms" + FROM;

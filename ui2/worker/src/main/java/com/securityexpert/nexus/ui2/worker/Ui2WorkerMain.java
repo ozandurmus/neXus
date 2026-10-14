@@ -151,11 +151,12 @@ public final class Ui2WorkerMain {
         StoreBackedSshCredentialResolver sshCredentialResolver =
                 new StoreBackedSshCredentialResolver(resolverComponents.credentialReferenceRepository(),
                         resolverComponents.credentialRepository(), resolverComponents.cipher());
-        SshExecTransport sshTransport = new SshExecTransport(sshCredentialResolver, trustRuleResolver);
+        var hostKeyPolicy = new com.securityexpert.nexus.ui2.persistence.discovery.SshHostKeyPolicyStore(transactionBoundary);
+        SshExecTransport sshTransport = new SshExecTransport(sshCredentialResolver, trustRuleResolver, false, hostKeyPolicy);
         SshExecTransport strictFailoverSsh = new SshExecTransport(sshCredentialResolver,
                 new com.securityexpert.nexus.ui2.worker.transport.ssh.PersistedManagementEndpointTrustResolver(
                         new com.securityexpert.nexus.ui2.persistence.discovery.JooqManagementEndpointSshTrustRepository(transactionBoundary),
-                        enrolledDeviceTrustRuleResolver, false), true);
+                        enrolledDeviceTrustRuleResolver, false), true, hostKeyPolicy);
         PanTrustRuleResolver panTrustRuleResolver = EnvironmentPanTrustRuleResolver.INSTANCE;
         PanXmlApiTransport panTransport = new PanXmlApiTransport(paloAltoTrustRuleRef, panTrustRuleResolver);
 

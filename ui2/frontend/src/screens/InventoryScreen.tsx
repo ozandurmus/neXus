@@ -1,3 +1,4 @@
+import { SshHostKeyPanel } from "./SshHostKeyPanel";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { urlParam } from "../shell/urlParams";
 import Box from "@mui/material/Box";
@@ -1202,6 +1203,7 @@ export function InventoryScreen() {
               />
             ) : selectedDevice ? (
               <Stack spacing={2}>
+                <SshHostKeyPanel key={selectedDevice.device_id} deviceId={selectedDevice.device_id} />
                 {selectedDevice.role === "management_server" && selectedDevice.vendor_hint !== "bluecoat" && selectedDevice.vendor_hint !== "fortinet" && (
                   <ManagementTreePanel
                     deviceId={selectedDevice.device_id}

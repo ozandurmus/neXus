@@ -1896,6 +1896,25 @@ export function getJobWindow(): Promise<import("../shell/JobWindow").JobWindowSt
   return call("/api/v2/job-window", "GET");
 }
 
+export interface SshHostKeyObservation {
+  observation_id: string; device_id: string | null; hostname: string;
+  key_algorithm: string; presented_fingerprint: string; expected_fingerprint_prefix: string;
+  first_seen: string; last_seen: string; seen_count: number; status: "OPEN" | "ACCEPTED" | "REJECTED";
+  strict_refusal: boolean; ssh_identity_unverified: boolean; model: string | null; software_version: string | null;
+  serial_number: string | null; management_source: string;
+}
+export interface SshHostKeyView { mode: "WARN" | "STRICT"; observations: SshHostKeyObservation[] }
+export async function getSshHostKeyView(deviceId?: string): Promise<SshHostKeyView> {
+  const view = await call<SshHostKeyView>(`/api/v2/ssh-trust${deviceId ? `?device_id=${encodeURIComponent(deviceId)}` : ""}`, "GET");
+  if (!Array.isArray(view.observations) || !["WARN", "STRICT"].includes(view.mode)) throw new Error("INVALID_SSH_TRUST_RESPONSE");
+  return view;
+}
+export const setSshTrustMode = (mode: "WARN" | "STRICT") => call("/api/v2/ssh-trust/mode", "PUT", { mode });
+export const acceptSshHostKey = (id: string, confirmation: string) => call(
+  `/api/v2/ssh-trust/observations/${encodeURIComponent(id)}/accept`, "POST", { confirmation });
+export const rejectSshHostKey = (id: string) => call(
+  `/api/v2/ssh-trust/observations/${encodeURIComponent(id)}/reject`, "POST");
+
 export interface PolicyLookupQuery {
   source: string; destination: string; service: string; sourceZone?: string; destinationZone?: string; target?: string; context?: string;
 }

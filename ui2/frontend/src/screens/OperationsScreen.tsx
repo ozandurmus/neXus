@@ -1,3 +1,4 @@
+import { SshHostKeyPanel } from "./SshHostKeyPanel";
 import { canRunReadiness, haReadinessItems, HaReadinessList, type ReadinessProgress } from "./HaReadinessList";
 import { ReadinessCard } from "./ReadinessChecksTable";
 import { CpFailoverPanel } from "./CpFailoverPanel";
@@ -174,6 +175,7 @@ export function OperationsScreen() {
 
   return (
     <ScreenRoot>
+      <SshHostKeyPanel />
       <ScreenHeader
         title="Operations"
         subtitle="Inspect observed HA roles, readiness evaluations and jobs."
