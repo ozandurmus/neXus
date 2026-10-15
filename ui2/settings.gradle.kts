@@ -7,10 +7,10 @@ pluginManagement {
 
 // UI 2.0 — B1-1 skeleton.
 //
-// Eleven Java subprojects, per contract Correction C-1: `frontend` is a
+// Twelve Java subprojects, per contract Correction C-1: `frontend` is a
 // build-time npm workspace driven by a root Exec task, NOT a Gradle
 // subproject. `./ui2/gradlew -p ui2 projects` must list exactly these
-// eleven entries.
+// twelve entries.
 rootProject.name = "ui2"
 
 include(
@@ -25,6 +25,8 @@ include(
     "cli",
     "architecture-tests",
     "integration-tests",
+    // Data Sanitizer engine (docs/design/DATA_SANITIZER_CONTRACT.md §4).
+    "sanitizer",
 )
 
 // gradle/libs.versions.toml is auto-detected by Gradle's default version
