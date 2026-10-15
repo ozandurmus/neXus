@@ -18,8 +18,12 @@ class PolicyDomainQueryTest {
     private final ObjectMapper mapper = new ObjectMapper();
     private final List<CpObjectInventory> inventories = new ArrayList<>();
     private final List<PolicySnapshot> snapshots = new ArrayList<>();
-    private final TopologyNamePseudonymizer names = new TopologyNamePseudonymizer(new byte[32]);
+    private final java.util.concurrent.atomic.AtomicInteger maskCalls = new java.util.concurrent.atomic.AtomicInteger();
+    private final TopologyNamePseudonymizer names = new TopologyNamePseudonymizer(new byte[32]) {
+        @Override public String maskPolicyName(String namespace, String value) { maskCalls.incrementAndGet(); return super.maskPolicyName(namespace, value); }
+    };
     private final SubnetPreservingIpMasker ips = new SubnetPreservingIpMasker(new byte[32]);
+    private int revisionQueries, snapshotLoads;
     private PolicyQueryService query() { return query(false); }
     private PolicyQueryService query(boolean chunked) {
         var create = DSL.using(SQLDialect.POSTGRES);
@@ -41,7 +45,18 @@ class PolicyDomainQueryTest {
                     new String[]{"gateway-uid", "Synthetic gateway", "device-1"});
                 return new MockResult[]{new MockResult(rows.size(), rows)};
             }
+            if (context.sql().contains("as revision")) {
+                revisionQueries++;
+                var rows = create.newResult(new org.jooq.Field<?>[]{DSL.field("revision", String.class)});
+                for (var snapshot : snapshots) {
+                    var row = create.newRecord(rows.fields());
+                    row.set(DSL.field("revision", String.class), snapshot.metadata().id() + "|" + snapshot.metadata().collectedAt() + "|" + mapper.valueToTree(snapshot).toString().length());
+                    rows.add(row);
+                }
+                return new MockResult[]{new MockResult(rows.size(), rows)};
+            }
             boolean inventoryQuery = context.sql().contains("cp_policy_object_inventory");
+            if (!inventoryQuery) snapshotLoads++;
             var rows = create.fetchFromStringData(new String[]{"snapshot", "object_type", "chunk_generation", "chunk_count"});
             var values = inventoryQuery ? inventories : snapshots;
             for (var value : values) {
@@ -91,6 +106,34 @@ class PolicyDomainQueryTest {
             chunks.objectDuplicates("source-1", "domain-1", 0, "", false).orElseThrow().body());
         assertEquals(old.installations("source-1", "domain-1", 0, "", "", false).orElseThrow().body(),
             chunks.installations("source-1", "domain-1", 0, "", "", false).orElseThrow().body());
+    }
+    /** Guards the 2026-10-15 Objects-tab slowness: masking was O(n log n) per request and every request re-read all snapshots. */
+    @Test void maskedSearchProjectionIsBuiltOncePerIndexAndWarmRequestsDoNotReloadSnapshots() {
+        int count = 3000;
+        var objects = new LinkedHashMap<String, PolicyObject>();
+        for (int i = 0; i < count; i++) objects.put("a" + i, new PolicyObject("a" + i, "ADDR-SYNTH-" + i, "address", List.of(), List.of("ip-netmask: 192.0.2." + (i % 250)), "RESOLVED"));
+        var empty = new Cell(List.of(), false);
+        var rules = IntStream.range(0, 900).mapToObj(r -> new Rule("r" + r, "u" + r, r + 1, "RULE-" + r, true,
+            new Cell(List.of("a" + (r % count)), false), empty, empty, empty, "allow", "Log", "", Map.of())).toList();
+        var meta = new Metadata("policy-1", "source-1", "Synthetic Panorama", "PAN", "domain-1", "DG-TANGO-04", "DG-TANGO-04",
+            "2026-10-15T00:00:00Z", "artifact-1", List.of());
+        snapshots.add(new PolicySnapshot(meta, List.of(new Section("pre", "Pre rules", "DG-TANGO-04", null, rules)), objects));
+        var query = query();
+        query.domainObjects("source-1", "domain-1", 0, "", "", "", true).orElseThrow();
+        int firstMaskCalls = maskCalls.get();
+        assertTrue(firstMaskCalls <= 3 * count, "one masked projection pass, not one per comparison: " + firstMaskCalls);
+        for (int page = 0; page < 5; page++) {
+            var body = query.domainObjects("source-1", "domain-1", page, "", "", "", true).orElseThrow().body();
+            assertEquals(count, body.get("total"));
+        }
+        assertEquals(1, query.domainObjects("source-1", "domain-1", 0, names.maskPolicyName("address", "ADDR-SYNTH-7"), "", "", true).orElseThrow().body().get("total"));
+        assertEquals(firstMaskCalls + 1, maskCalls.get(), "warm masked requests reuse the projection");
+        var index = query.domainIndex("source-1", "domain-1");
+        assertEquals(1, index.viewBuilds); assertEquals(1, index.rulePasses);
+        assertEquals(1, snapshotLoads, "revision checks must not reload full snapshot documents");
+        assertTrue(revisionQueries >= 7);
+        var row = (Map<?, ?>) ((List<?>) query.domainObjects("source-1", "domain-1", 0, "", "", "", false).orElseThrow().body().get("objects")).get(0);
+        assertEquals(false, row.get("usageComplete"));
     }
     @Test void serverPagingSearchHygieneAndUsageAreScopedAndCacheInvalidatesOnAnySnapshotChange() {
         var hosts = IntStream.range(0, 201).mapToObj(i -> item("uid-" + i, "Synthetic host " + i, "host", List.of(), "ipv4-address: 192.0.2.8")).toArray(CpObjectInventory.Item[]::new);

@@ -80,6 +80,7 @@ public final class PolicyPrivacy {
         if (value instanceof List<?> list) return list.stream().map(item -> mask(item, key, names, ips)).toList();
         if (!(value instanceof String text)) return "Withheld in AIView";
         if (text.isEmpty()) return text;
+        if (Set.of("usageReasons", "unusedReasons", "usageGaps").contains(key)) return PolicyDomainIndex.REASONS.contains(text) ? text : "UNKNOWN";
         if (key.equals("memberStatus")) return Set.of("RESOLVED", "UNKNOWN").contains(text) ? text : "UNKNOWN";
         if (key.equals("memberId")) return names.maskPolicyName("member", text);
         if (key.equals("dimension")) return Set.of("source", "destination", "service").contains(text) ? text : "UNKNOWN";

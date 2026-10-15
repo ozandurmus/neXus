@@ -104,11 +104,13 @@ public final class PolicyQueryService {
     // ponytail: one lock for the bounded 32-domain cache; split locks only if stored-read contention is measured.
     synchronized PolicyDomainIndex domainIndex(String source, String domain) {
         var inventories = repository.inventoryRevision(source, domain);
-        var snapshots = repository.domainSnapshots(source, domain);
+        // Snapshot rows change only with a strictly newer collected_at (see PolicySnapshotRepository.save), so the
+        // revision check no longer reads and hashes every full snapshot document on each request.
+        var snapshotRevisions = repository.domainSnapshotRevisions(source, domain);
         String revision;
         try {
             var digest = java.security.MessageDigest.getInstance("SHA-256");
-            for (var rows : List.of(inventories, snapshots)) for (String json : rows) {
+            for (var rows : List.of(inventories, snapshotRevisions)) for (String json : rows) {
                 digest.update(json.getBytes(java.nio.charset.StandardCharsets.UTF_8)); digest.update((byte) 0);
             }
             revision = HexFormat.of().formatHex(digest.digest());
@@ -117,7 +119,7 @@ public final class PolicyQueryService {
         var cached = domainCache.get(key);
         if (cached != null && cached.revision().equals(revision)) return cached.index();
         var index = new PolicyDomainIndex(consume -> inventoryChunks(source, domain, consume),
-            snapshots.stream().map(json -> read(json, PolicySnapshot.class)).toList());
+            repository.domainSnapshots(source, domain).stream().map(json -> read(json, PolicySnapshot.class)).toList());
         domainCache.put(key, new CachedDomain(revision, index));
         if (domainCache.size() > 32) domainCache.remove(domainCache.keySet().iterator().next());
         return index;
@@ -138,17 +140,31 @@ public final class PolicyQueryService {
     public Optional<PolicyResponse> domainObjects(String source, String domain, int page, String q, String type, String hygiene, boolean masked) {
         var index = domainIndex(source, domain);
         if (index.inventories.isEmpty() && index.snapshots.isEmpty()) return Optional.empty();
-        var items = index.objects.stream().filter(o -> type.isEmpty() || objectType(String.valueOf(o.get("type"))).equals(type))
-            .filter(o -> switch (hygiene) {
-                case "unused" -> Boolean.TRUE.equals(o.get("unused"));
-                case "duplicates" -> o.get("duplicateId") != null;
-                case "empty" -> Boolean.TRUE.equals(o.get("emptyGroup"));
-                case "single" -> Boolean.TRUE.equals(o.get("singleMember"));
+        var views = views(index, masked);
+        String needle = q.toLowerCase(Locale.ROOT);
+        var objects = index.objects;
+        // The masked search/sort projection is built once per index; per request only filtering and sorting remain.
+        var items = java.util.stream.IntStream.range(0, objects.size())
+            .filter(i -> type.isEmpty() || objectType(String.valueOf(objects.get(i).get("type"))).equals(type))
+            .filter(i -> switch (hygiene) {
+                case "unused" -> Boolean.TRUE.equals(objects.get(i).get("unused"));
+                case "duplicates" -> objects.get(i).get("duplicateId") != null;
+                case "empty" -> Boolean.TRUE.equals(objects.get(i).get("emptyGroup"));
+                case "single" -> Boolean.TRUE.equals(objects.get(i).get("singleMember"));
                 default -> true;
-            }).filter(o -> matches(o, q, masked)).sorted(Comparator.comparing(o -> hygiene.equals("duplicates")
-                ? String.valueOf(o.get("duplicateId")) + o.get("id") : String.valueOf(searchable(o, masked).get("name")) + o.get("id"))).toList();
-        return Optional.of(new PolicyResponse(Map.of("objects", items.stream().skip((long) page * 200).limit(200).toList(),
-            "total", items.size(), "page", page, "pageSize", 200, "types", typeStates(index))));
+            }).filter(i -> needle.isEmpty() || views.text()[i].contains(needle)).boxed()
+            .sorted(Comparator.comparing(i -> hygiene.equals("duplicates")
+                ? String.valueOf(objects.get(i).get("duplicateId")) + objects.get(i).get("id") : views.sortKey()[i])).toList();
+        return Optional.of(new PolicyResponse(Map.of("objects", items.stream().skip((long) page * 200).limit(200).map(objects::get).toList(),
+            "total", items.size(), "page", page, "pageSize", 200, "types", typeStates(index), "usageGaps", index.usageGaps)));
+    }
+    private PolicyDomainIndex.Views views(PolicyDomainIndex index, boolean masked) {
+        // Only the searched/sorted fields are projected; name masking depends on "type", never on the other row fields.
+        return index.views(masked, row -> {
+            var fields = new LinkedHashMap<String, Object>();
+            for (String key : List.of("name", "type", "values")) if (row.containsKey(key)) fields.put(key, row.get(key));
+            return searchable(fields, masked);
+        });
     }
     private static String objectType(String type) {
         if (type.startsWith("service-") && !type.equals("service-group")) return "service";
@@ -164,12 +180,16 @@ public final class PolicyQueryService {
         if (object.isEmpty()) return Optional.empty();
         var rules = index.rules.getOrDefault(uid, List.of()); var groups = index.groups.getOrDefault(uid, List.of());
         return Optional.of(new PolicyResponse(Map.of("object", object.get(), "rules", rules.stream().skip((long) page * 200).limit(200).toList(),
-            "groups", groups.stream().skip((long) page * 200).limit(200).toList(), "ruleCount", rules.size(), "groupCount", groups.size(), "page", page, "pageSize", 200)));
+            "groups", groups.stream().skip((long) page * 200).limit(200).toList(), "ruleCount", rules.size(), "groupCount", groups.size(), "page", page, "pageSize", 200,
+            "usageComplete", object.get().get("usageComplete"), "usageReasons", object.get().get("usageReasons"))));
     }
     public Optional<PolicyResponse> objectDuplicates(String source, String domain, int page, String q, boolean masked) {
         var index = domainIndex(source, domain);
         if (index.inventories.isEmpty()) return Optional.empty();
-        var matchingIds = index.objects.stream().filter(o -> matches(o, q, masked)).map(o -> o.get("id")).collect(java.util.stream.Collectors.toSet());
+        var views = views(index, masked);
+        String needle = q.toLowerCase(Locale.ROOT);
+        var matchingIds = java.util.stream.IntStream.range(0, index.objects.size()).filter(i -> needle.isEmpty() || views.text()[i].contains(needle))
+            .mapToObj(i -> index.objects.get(i).get("id")).collect(java.util.stream.Collectors.toSet());
         var groups = index.duplicates.stream().filter(group -> ((List<?>) group.get("objects")).stream()
             .anyMatch(o -> matchingIds.contains(((Map<?, ?>) o).get("id")))).toList();
         var boundedGroups = groups.stream().skip((long) page * 200).limit(200).map(group -> {
