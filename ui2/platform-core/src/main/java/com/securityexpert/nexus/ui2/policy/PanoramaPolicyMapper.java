@@ -130,7 +130,9 @@ public final class PanoramaPolicyMapper {
             List<String> targetSelectors = PolicyXml.selectRelative(entry, "target/devices/entry").stream()
                     .map(e -> e.getAttribute("name")).toList();
             if (!targetSelectors.isEmpty()) extras.put("target-selectors", targetSelectors);
-            String disabled = text(entry, "disabled");
+            // PAN-OS config XML omits default values: a rule entry with no <disabled> leaf is enabled ("no" is the
+            // schema default). Only an explicit value other than yes/no stays unknown.
+            String disabled = PolicyXml.firstRelativeText(entry, "disabled").orElse("no").trim();
             String uuid = entry.getAttribute("uuid");
             rules.add(new Rule(ref(id, uuid.isEmpty() ? entry.getAttribute("name") : uuid), uuid, rules.size() + 1,
                     entry.getAttribute("name"), switch (disabled) { case "yes" -> false; case "no" -> true; default -> null; },
