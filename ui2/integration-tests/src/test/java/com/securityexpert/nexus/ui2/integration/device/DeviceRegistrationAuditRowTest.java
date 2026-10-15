@@ -122,10 +122,7 @@ class DeviceRegistrationAuditRowTest {
         String deviceId = Ui2Rows.opaqueId("dev-bypass");
         DataAccessException refused = assertThrows(DataAccessException.class,
                 () -> transactionBoundary.inTransaction(dsl -> dsl.execute(
-                        "insert into devices(device_id, vendor_hint, registration_source, is_test_target, "
-                                + "enrollment_state, disabled, credential_reference_id) "
-                                + "values ({0}, 'harness-vendor', 'manual', true, 'DRAFT', false, {1})",
-                        deviceId, credentialReferenceId)));
+                        Ui2Rows.insertDeviceSql(deviceId, credentialReferenceId, "DRAFT"))));
         assertTrue(refused.getMessage().contains("audit_context_missing")
                         || (refused.getCause() != null
                                 && refused.getCause().getMessage().contains("audit_context_missing")),

@@ -48,10 +48,7 @@ class AuditAtomicityTest {
             app.setAutoCommit(false);
             Ui2Rows.setAuditContext(app, Ui2Rows.ACTOR, "harness.rollback");
             try (Statement statement = app.createStatement()) {
-                statement.execute("INSERT INTO devices(device_id, vendor_hint, registration_source, "
-                        + "is_test_target, enrollment_state, disabled, credential_reference_id) VALUES ('"
-                        + deviceId + "', 'harness-vendor', 'manual', true, 'DRAFT', false, '"
-                        + credentialReferenceId + "')");
+                statement.execute(Ui2Rows.insertDeviceSql(deviceId, credentialReferenceId, "DRAFT"));
             }
             // Inside the transaction the pair is already both there -- the
             // audit row is written by the same statement's AFTER trigger, so

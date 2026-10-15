@@ -46,16 +46,44 @@ public final class Ui2Rows {
         return id;
     }
 
+    /**
+     * Every {@code devices} column that is NOT NULL without a default, in
+     * the order {@link #DEVICE_REQUIRED_VALUES} supplies them. V21 added
+     * {@code role}; V12 added {@code identity_mismatch_state} and
+     * {@code peer_follow_outcome} and then dropped their defaults, so a
+     * writer must state them -- the values here are exactly the ones
+     * {@code JooqDeviceRepository.registerDraft} writes for a new device.
+     */
+    public static final String DEVICE_REQUIRED_COLUMNS = "role, identity_mismatch_state, peer_follow_outcome";
+    public static final String DEVICE_REQUIRED_VALUES = "'gateway', 'NONE', 'NONE'";
+
     /** A {@code devices} row in {@code enrollmentState}, with its required credential reference. */
     public static String insertDevice(Connection connection, String credentialReferenceId, String enrollmentState)
             throws SQLException {
         String id = opaqueId("dev");
-        audited(connection, statement -> statement.execute(
-                "INSERT INTO devices(device_id, vendor_hint, registration_source, is_test_target, "
-                        + "enrollment_state, disabled, credential_reference_id) VALUES ("
-                        + literal(id) + ", 'harness-vendor', 'manual', true, "
-                        + literal(enrollmentState) + ", false, " + literal(credentialReferenceId) + ")"));
+        insertDevice(connection, id, credentialReferenceId, enrollmentState);
         return id;
+    }
+
+    /** As {@link #insertDevice(Connection, String, String)}, for a caller that needs a chosen opaque id. */
+    public static void insertDevice(Connection connection, String deviceId, String credentialReferenceId,
+            String enrollmentState) throws SQLException {
+        audited(connection, statement -> statement.execute(insertDeviceSql(deviceId, credentialReferenceId,
+                enrollmentState)));
+    }
+
+    /**
+     * The complete {@code devices} INSERT the seeding helpers use, exposed so a
+     * test that must issue the INSERT itself (for example without an audit
+     * context, to prove the trigger refuses it) fails only for the reason it
+     * names, never on an unrelated NOT NULL column.
+     */
+    public static String insertDeviceSql(String deviceId, String credentialReferenceId, String enrollmentState) {
+        return "INSERT INTO devices(device_id, vendor_hint, registration_source, is_test_target, "
+                + "enrollment_state, disabled, credential_reference_id, " + DEVICE_REQUIRED_COLUMNS + ") VALUES ("
+                + literal(deviceId) + ", 'harness-vendor', 'manual', true, "
+                + literal(enrollmentState) + ", false, " + literal(credentialReferenceId) + ", "
+                + DEVICE_REQUIRED_VALUES + ")";
     }
 
     public static String insertEndpoint(Connection connection, String deviceId) throws SQLException {
@@ -69,9 +97,9 @@ public final class Ui2Rows {
     public static String insertJob(Connection connection, String deviceId) throws SQLException {
         String id = opaqueId("job");
         audited(connection, statement -> statement.execute(
-                "INSERT INTO jobs(job_id, job_type, target_device_id, submitted_by_actor_fingerprint, "
+                "INSERT INTO jobs(job_id, job_type, target_kind, target_device_id, submitted_by_actor_fingerprint, "
                         + "state, action_class) VALUES ("
-                        + literal(id) + ", 'harness.collect', " + literal(deviceId) + ", " + literal(ACTOR)
+                        + literal(id) + ", 'harness.collect', 'device', " + literal(deviceId) + ", " + literal(ACTOR)
                         + ", 'REQUESTED', 'read')"));
         return id;
     }
