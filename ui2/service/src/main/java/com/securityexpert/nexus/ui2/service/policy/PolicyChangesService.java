@@ -28,7 +28,13 @@ public final class PolicyChangesService {
         this.repository = repository; this.mapper = mapper; this.names = names; this.ips = ips;
     }
     record Cursor(Instant from, Instant to, long ceiling, Position position) {}
-    public record Request(String from, String to, String policy, String device, String actor, String changeType, String field, String q, String cursor, int limit) {}
+    /** includeInitial: also list a policy's initial baseline capture (every rule 'added' when no baseline existed). */
+    public record Request(String from, String to, String policy, String device, String actor, String changeType, String field, String q, String cursor, int limit,
+                          boolean includeInitial) {
+        public Request(String from, String to, String policy, String device, String actor, String changeType, String field, String q, String cursor, int limit) {
+            this(from, to, policy, device, actor, changeType, field, q, cursor, limit, true);
+        }
+    }
     private Cursor cursor(Request request) {
         Cursor parsed = parseCursor(request);
         return parsed.ceiling() < 0 ? new Cursor(parsed.from(), parsed.to(), repository.ceiling(), null) : parsed;
@@ -59,7 +65,10 @@ public final class PolicyChangesService {
         return Base64.getUrlEncoder().withoutPadding().encodeToString((cursor.from() + "|" + cursor.to() + "|" + cursor.ceiling() + "|" + position.time() + "|" + position.revision()).getBytes(StandardCharsets.UTF_8));
     }
     private Filter filter(Request request, Cursor cursor) {
-        return new Filter(cursor.from(), cursor.to(), request.policy(), request.device(), request.changeType(), request.field());
+        return filter(request, cursor, request.includeInitial());
+    }
+    private Filter filter(Request request, Cursor cursor, boolean includeInitial) {
+        return new Filter(cursor.from(), cursor.to(), request.policy(), request.device(), request.changeType(), request.field(), includeInitial);
     }
     /** Filter identities after projection, so raw identity guesses cannot probe AIView. */
     private boolean matches(Map<String, Object> row, Request request) {
@@ -76,6 +85,7 @@ public final class PolicyChangesService {
             out.put("targets", metadata.getOrDefault("targets", List.of())); out.put("ruleId", row.ruleId());
             out.put("currentSnapshotLabel", row.currentLabel()); out.put("number", row.number()); out.put("name", row.name() == null ? "UNKNOWN" : row.name());
             out.put("changedOn", row.time()); out.put("observedAtCollection", row.observed()); out.put("changeType", row.changeType());
+            out.put("collectedAt", row.collectedAt()); out.put("initialCapture", row.initialCapture());
             out.put("changedBy", row.actor() == null || row.actor().isBlank() ? UNKNOWN_ACTOR : row.actor());
             out.put("changes", changes); out.put("changedFields", changes.stream().map(c -> c.get("field")).toList());
             return masked ? (Map<String, Object>) PolicyPrivacy.mask(out, "", names, ips) : out;
@@ -86,13 +96,17 @@ public final class PolicyChangesService {
         var rows = new ArrayList<Map<String, Object>>(); var actors = new HashSet<String>(); var rules = new HashSet<List<String>>();
         var counts = new LinkedHashMap<String, Long>(Map.of("added", 0L, "modified", 0L, "removed", 0L));
         boolean scannedSummary = !request.actor().isEmpty() || !request.q().isEmpty();
-        long total = 0; Position next = null; Position scan = scannedSummary ? null : cursor.position(); boolean more = false;
+        long total = 0, initial = 0; Position next = null; Position scan = scannedSummary ? null : cursor.position(); boolean more = false;
+        // A scanned summary reads initial captures too, so it can count what the default view leaves out.
+        Filter rowsFilter = filter(request, cursor, request.includeInitial() || scannedSummary);
         // Bounded batches keep the estate summary independent of page size, without retaining history payloads.
         while (true) {
-            var batch = repository.rows(filter(request, cursor), cursor.ceiling(), scan);
+            var batch = repository.rows(rowsFilter, cursor.ceiling(), scan);
             for (Row row : batch) {
                 var view = project(row, masked);
                 if (!matches(view, request)) continue;
+                if (row.initialCapture()) initial++;
+                if (row.initialCapture() && !request.includeInitial()) continue;
                 total++; counts.merge(row.changeType(), 1L, Long::sum); rules.add(List.of(row.policy(), row.ruleKey()));
                 if (row.actor() != null && !row.actor().isBlank()) actors.add(row.actor());
                 Position position = new Position(Instant.parse(row.time()), row.revision());
@@ -104,13 +118,14 @@ public final class PolicyChangesService {
             if (batch.size() < 500 || !scannedSummary && more) break;
             var last = batch.get(batch.size() - 1); scan = new Position(Instant.parse(last.time()), last.revision());
         }
-        return new PolicyResponse(Map.of("rows", rows, "summary", scannedSummary ? Map.of("total", total, "actors", actors.size(), "rules", rules.size(), "counts", counts) : repository.summary(filter(request, cursor), cursor.ceiling()),
+        return new PolicyResponse(Map.of("rows", rows, "summary", scannedSummary ? Map.of("total", total, "actors", actors.size(), "rules", rules.size(), "counts", counts,
+                "initialCaptures", initial, "initialCapturesIncluded", request.includeInitial()) : repository.summary(filter(request, cursor), cursor.ceiling()),
             "nextCursor", more && next != null ? encode(cursor, next) : "", "rangeStart", cursor.from().toString(), "rangeEnd", cursor.to().toString()));
     }
     public void csv(Request request, boolean masked, OutputStream output) throws IOException {
         Cursor cursor = cursor(request); Position scan = null;
         var writer = new BufferedWriter(new OutputStreamWriter(output, StandardCharsets.UTF_8));
-        writer.write("Time,Observed at collection,Policy,Devices,Rule number,Rule name,Current snapshot label,Change type,Actor,Field,Before,After\r\n");
+        writer.write("Time,Observed at collection,Policy,Devices,Rule number,Rule name,Current snapshot label,Change type,Actor,Field,Before,After,Collected at,Initial capture\r\n");
         while (true) {
             var batch = repository.rows(filter(request, cursor), cursor.ceiling(), scan);
             for (Row row : batch) {
@@ -121,7 +136,8 @@ public final class PolicyChangesService {
                     var c = (Map<?, ?>) diff;
                     List<Object> cells = Arrays.asList(view.get("changedOn"), view.get("observedAtCollection"), view.get("policyName"),
                         mapper.writeValueAsString(view.get("targets")), view.get("number"), view.get("name"), view.get("currentSnapshotLabel"), view.get("changeType"), view.get("changedBy"),
-                        c.get("field"), mapper.writeValueAsString(c.get("before")), mapper.writeValueAsString(c.get("after")));
+                        c.get("field"), mapper.writeValueAsString(c.get("before")), mapper.writeValueAsString(c.get("after")),
+                        view.get("collectedAt"), view.get("initialCapture"));
                     writer.write(String.join(",", cells.stream().map(PolicyChangesService::csvCell).toList())); writer.write("\r\n");
                 }
             }

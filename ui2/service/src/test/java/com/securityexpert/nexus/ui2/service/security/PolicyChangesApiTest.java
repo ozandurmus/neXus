@@ -63,6 +63,18 @@ class PolicyChangesApiTest {
             }
         }
     }
+    @Test void initialCapturesAreExcludedUnlessRequested() throws Exception {
+        var service = mock(PolicyChangesService.class);
+        when(service.changes(any(), anyBoolean())).thenReturn(new PolicyResponse(Map.of("rows", List.of())));
+        var mvc = MockMvcBuilders.standaloneSetup(new PolicyChangesController(service)).build();
+        mvc.perform(get("/api/v2/policy/changes")).andExpect(status().isOk());
+        verify(service).changes(argThat(r -> !r.includeInitial()), anyBoolean());
+        mvc.perform(get("/api/v2/policy/changes").param("includeInitial", "true")).andExpect(status().isOk());
+        verify(service).changes(argThat(PolicyChangesService.Request::includeInitial), anyBoolean());
+        var csv = mvc.perform(get("/api/v2/policy/changes.csv").param("includeInitial", "true")).andReturn();
+        csv.getAsyncResult(5000);
+        verify(service).validate(argThat(PolicyChangesService.Request::includeInitial));
+    }
     @Test void invalidFiltersReturnBadRequestWithoutExport() throws Exception {
         var service = mock(PolicyChangesService.class);
         doThrow(new IllegalArgumentException()).when(service).validate(any());

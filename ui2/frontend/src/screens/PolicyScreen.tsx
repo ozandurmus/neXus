@@ -2,7 +2,7 @@ import { JobButton } from "../shell/JobWindow";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Box, Button, Tabs, Tab, Checkbox, Chip, Drawer, IconButton, InputAdornment, Tooltip, FormControl, InputLabel, MenuItem, Select, Stack, TextField, Typography } from "@mui/material";
 import { ScreenRoot, ScreenHeader, EmptyPanel } from "../shell/ScreenLayout";
-import { VendorBadge } from "../shell/States";
+import { Ts, VendorBadge } from "../shell/States";
 import { Icon } from "../shell/Icon";
 import { relativeAge, DISPLAY_TZ } from "../shell/time";
 import { JobTranscriptDrawer } from "./JobTranscriptDrawer";
@@ -83,13 +83,58 @@ function failureSentence(reason: string, step?: number, total?: number) {
     : /PARSE|INVALID|RESPONSE|XML/.test(reason) ? "the reply was incomplete" : "the source did not answer";
   return `Last collection ${reason.startsWith("PARTIAL_SNAPSHOT") ? "was incomplete" : "failed"}${scope} — ${problem}`;
 }
+function CollectionProgress({ job }: { job: PolicyCollectionStatus }) {
+  return <Typography variant="caption" display="block">Collection progress: {job.packagesTotal === undefined ? progress(job.step, job.total) : `${job.packagesDone ?? 0}/${job.packagesTotal} packages`}</Typography>;
+}
 function FailureDetails({ reason, allowed, job }: { reason: string; allowed: boolean; job?: PolicyCollectionStatus }) {
   return allowed ? <Box component="details" sx={{ mt: 0.5, overflowWrap: "anywhere" }}>
     <Box component="summary" sx={{ cursor: "pointer", color: m3.primary, fontSize: 12 }}>Details</Box>
-    {job && <Typography variant="caption" display="block">Collection progress: {job.packagesTotal === undefined ? progress(job.step, job.total) : `${job.packagesDone ?? 0}/${job.packagesTotal} packages`}</Typography>}
+    {job && <CollectionProgress job={job} />}
     <Typography component="pre" variant="caption" sx={{ whiteSpace: "pre-wrap", m: 0 }}>{reason}</Typography>
     {job && <JobTranscriptDrawer jobId={job.jobId} hasTranscript={job.hasTranscript === true} title="Policy collection transcript" />}
   </Box> : null;
+}
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+/** One compact line for the source card: domain outcome counts and unit failures, never the per-domain dump. */
+export function collectionSummaryLine(job: PolicyCollectionStatus, partial: boolean) {
+  const parts: string[] = [];
+  const domains = job.domains ?? [];
+  if (domains.length) {
+    const by = (status: string) => domains.filter(d => d.status === status).length;
+    const states = [[by("REUSED"), "reused"], [by("COLLECTED"), "collected"], [by("COLLECTING"), "collecting"]] as const;
+    parts.push(`${plural(domains.length, "domain")}: ${states.filter(([n]) => n > 0).map(([n, label]) => `${n} ${label}`).join(", ")}`);
+  }
+  if (partial) {
+    const codes = job.unitFailureCodes?.length ?? 0;
+    parts.push(codes ? plural(codes, "unit failure") : "unit failures not itemised");
+  }
+  return parts.join(" · ");
+}
+/**
+ * Everything the card used to print inline -- domain list, rule counts, unit failure codes -- behind one disclosure.
+ * Failure codes are safe enums and stay visible to every reader; progress and the transcript keep their admin gate.
+ */
+function CollectionDetails({ job, partial, allowed, domainName }: { job: PolicyCollectionStatus; partial: boolean; allowed: boolean; domainName: (containerId: string) => string }) {
+  const codes = job.unitFailureCodes?.length ? job.unitFailureCodes : ["COLLECTION_FAILED"];
+  return <Box sx={{ mt: 0.25 }}>
+    <Typography variant="caption" display="block">{collectionSummaryLine(job, partial)}</Typography>
+    <Box component="details" sx={{ overflowWrap: "anywhere" }}>
+      <Box component="summary" sx={{ cursor: "pointer", color: m3.primary, fontSize: 12 }}>Details</Box>
+      {!!job.domains?.length && <>
+        <Typography variant="caption" display="block">Domains: {job.domainsReused ?? 0} reused · {job.domainsCollected ?? 0} collected · Rules: {job.rulesReused ?? 0} reused · {job.rulesFetched ?? 0} fetched</Typography>
+        <Box component="ul" aria-label="Collection domains" sx={{ m: 0, pl: 2 }}>
+          {job.domains.map(domain => <Typography component="li" key={domain.containerId} variant="caption" display="list-item">
+            {domainName(domain.containerId)}: {domain.status === "REUSED"
+              ? <>reused · unchanged since <Ts at={domain.publishTime} /> · hits collected at <Ts at={domain.hitsCollectedAt} /></>
+              : domain.status === "COLLECTED" ? "collected" : "collecting"}
+          </Typography>)}
+        </Box>
+      </>}
+      {partial && <Typography variant="caption" display="block">Unit failure codes: {codes.join(", ")}</Typography>}
+      {partial && allowed && <><CollectionProgress job={job} />
+        <JobTranscriptDrawer jobId={job.jobId} hasTranscript={job.hasTranscript === true} title="Policy collection transcript" /></>}
+    </Box>
+  </Box>;
 }
 
 export function PolicyScreen({ preview = false }: { preview?: boolean }) {
@@ -419,15 +464,9 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
                   {outcome === "FAILED" && (job.outcome === "PARTIAL" || job.reason.startsWith("PARTIAL_SNAPSHOT")) && " · partial snapshot available"}
                   </Typography>}
               {running && (job.layers ?? 0) > 0 && job.packagesTotal !== undefined && <Typography variant="caption" display="block">Current package layer {bounded(job.layer ?? 0, job.layers ?? 0)}/{job.layers}</Typography>}
-              {!!job.domains?.length && <Box>
-                <Typography variant="caption" display="block">Domains: {job.domainsReused ?? 0} reused · {job.domainsCollected ?? 0} collected · Rules: {job.rulesReused ?? 0} reused · {job.rulesFetched ?? 0} fetched</Typography>
-                {job.domains.map(domain => <Typography key={domain.containerId} variant="caption" display="block">
-                  {displayName(catalog.find(p => p.containerId === domain.containerId)?.containerName, "Policy domain")}: {domain.status === "REUSED" ? `reused · unchanged since ${domain.publishTime ?? "unknown"} · hits collected at ${domain.hitsCollectedAt ?? "unknown"}` : domain.status === "COLLECTED" ? "collected" : "collecting"}
-                </Typography>)}
-              </Box>}
               {running && collectionStalled(job, now) && <Typography role="alert" variant="caption" color="warning.main" display="block">No activity for more than twice the read timeout.</Typography>}
-              {outcome === "PARTIAL" && <Typography variant="caption" display="block">Unit failure codes: {(job.unitFailureCodes?.length ? job.unitFailureCodes : ["COLLECTION_FAILED"]).join(", ")}</Typography>}
-              {outcome === "PARTIAL" && <FailureDetails reason={(job.unitFailureCodes?.length ? job.unitFailureCodes : ["COLLECTION_FAILED"]).join("\n")} allowed={canCollect} job={job} />}
+              {(!!job.domains?.length || outcome === "PARTIAL") && <CollectionDetails job={job} partial={outcome === "PARTIAL"} allowed={canCollect}
+                domainName={id => displayName(catalog.find(p => p.containerId === id)?.containerName, "Policy domain")} />}
               {outcome === "FAILED" && job.reason && <FailureDetails reason={job.reason} allowed={canCollect} job={job} />}
             </Box>}
             {running && job && canCancel && <Button size="small"

@@ -46,6 +46,31 @@ class PolicyChangeReportSchemaTest {
             }
         }
     }
+    @Test void initialCapturesAreLeftOutOfTheDefaultReportAndCounted() throws Exception {
+        try (var fixture = Ui2PostgresFixture.create("policy_changes_initial")) {
+            fixture.runFlyway();
+            try (var db = fixture.appConnection(); var sql = db.createStatement()) {
+                sql.execute("insert into policy_snapshot values ('p1', '2026-10-09T00:00:00Z', '{\"name\":\"POL-ALPHA-01\",\"targets\":[]}', '{\"sections\":[],\"objects\":{},\"failures\":[]}')");
+                sql.execute("insert into policy_rule_history(policy_id,rule_key,rule_id,identity_fallback,change_type,collected_at,changes,initial_capture) values "
+                    + "('p1','uuid:r1','r1',false,'added','2026-10-08T00:00:00Z','[]',true),('p1','uuid:r2','r2',false,'added','2026-10-08T00:00:00Z','[]',true),"
+                    + "('p1','uuid:r1','r1',false,'modified','2026-10-08T06:00:00Z','[{\"field\":\"action\",\"before\":\"Accept\",\"after\":\"Drop\"}]',false)");
+                var repository = new PolicyChangeRepository(new JooqTransactionBoundary(DSL.using(db, SQLDialect.POSTGRES)));
+                long ceiling = repository.ceiling();
+                Instant from = Instant.parse("2026-10-08T00:00:00Z"), to = Instant.parse("2026-10-09T00:00:00Z");
+                var real = new PolicyChangeRepository.Filter(from, to, "", "", "", "", false);
+                var rows = repository.rows(real, ceiling, null);
+                assertEquals(1, rows.size()); assertFalse(rows.get(0).initialCapture());
+                assertEquals("2026-10-08T06:00:00.000000Z", rows.get(0).collectedAt());
+                var summary = repository.summary(real, ceiling);
+                assertEquals(1L, summary.get("total")); assertEquals(2L, summary.get("initialCaptures"));
+                assertEquals(0L, ((Map<?, ?>) summary.get("counts")).get("added"));
+                var all = new PolicyChangeRepository.Filter(from, to, "", "", "", "", true);
+                assertEquals(3, repository.rows(all, ceiling, null).size());
+                assertEquals(3L, repository.summary(all, ceiling).get("total"));
+                assertEquals(2, repository.rows(all, ceiling, null).stream().filter(PolicyChangeRepository.Row::initialCapture).count());
+            }
+        }
+    }
     @Test void indexMigrationIsIdempotentAndRollbackSafe() throws Exception {
         try (var fixture = Ui2PostgresFixture.create("policy_changes_rollback")) {
             fixture.runFlyway();

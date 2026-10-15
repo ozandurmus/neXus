@@ -17,8 +17,9 @@ public final class PolicyChangesController {
             @RequestParam(defaultValue = "") String policy, @RequestParam(defaultValue = "") String device,
             @RequestParam(defaultValue = "") String actor, @RequestParam(defaultValue = "") String changeType,
             @RequestParam(defaultValue = "") String field, @RequestParam(defaultValue = "") String q,
-            @RequestParam(defaultValue = "") String cursor, @RequestParam(defaultValue = "100") int limit, HttpServletRequest request) {
-        var filters = new PolicyChangesService.Request(from, to, policy, device, actor, changeType, field, q, cursor, limit);
+            @RequestParam(defaultValue = "") String cursor, @RequestParam(defaultValue = "100") int limit,
+            @RequestParam(defaultValue = "false") boolean includeInitial, HttpServletRequest request) {
+        var filters = new PolicyChangesService.Request(from, to, policy, device, actor, changeType, field, q, cursor, limit, includeInitial);
         boolean masked = PrivacyMaskingResponseBodyAdvice.isReplayViewer(request);
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(changes.changes(filters, masked));
     }
@@ -27,8 +28,9 @@ public final class PolicyChangesController {
             @RequestParam(defaultValue = "") String policy, @RequestParam(defaultValue = "") String device,
             @RequestParam(defaultValue = "") String actor, @RequestParam(defaultValue = "") String changeType,
             @RequestParam(defaultValue = "") String field, @RequestParam(defaultValue = "") String q,
-            @RequestParam(defaultValue = "") String cursor, @RequestParam(defaultValue = "100") int limit, HttpServletRequest request) {
-        var filters = new PolicyChangesService.Request(from, to, policy, device, actor, changeType, field, q, cursor, limit);
+            @RequestParam(defaultValue = "") String cursor, @RequestParam(defaultValue = "100") int limit,
+            @RequestParam(defaultValue = "false") boolean includeInitial, HttpServletRequest request) {
+        var filters = new PolicyChangesService.Request(from, to, policy, device, actor, changeType, field, q, cursor, limit, includeInitial);
         boolean masked = PrivacyMaskingResponseBodyAdvice.isReplayViewer(request);
         changes.validate(filters);
         StreamingResponseBody body = output -> changes.csv(filters, masked, output);
