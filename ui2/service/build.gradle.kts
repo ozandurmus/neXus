@@ -13,6 +13,8 @@ dependencies {
     api(project(":capability-registry"))
     api(project(":job-engine"))
     api(project(":ldap-adapter"))
+    // Data Sanitizer engine (docs/design/DATA_SANITIZER_CONTRACT.md §4).
+    implementation(project(":sanitizer"))
 
     implementation(libs.spring.boot.starter.web)
     // Security floor for the embedded server (see libs.versions.toml `tomcat`).

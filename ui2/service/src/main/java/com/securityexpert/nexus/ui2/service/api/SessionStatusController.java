@@ -171,6 +171,8 @@ public final class SessionStatusController {
                     com.securityexpert.nexus.ui2.platform.RoleToken.OPERATION_ADMIN,
                     com.securityexpert.nexus.ui2.platform.RoleToken.SECURITY_ADMIN,
                     com.securityexpert.nexus.ui2.platform.RoleToken.REPLAY_VIEWER).contains(token)) planes.add("PacketAnalysis");
+            // Data Sanitizer: the roles DATA_SANITIZE_RUN admits (never the replay viewer).
+            if (com.securityexpert.nexus.ui2.service.security.ActionRegistry.DATA_SANITIZE_RUN_ROLES.contains(token)) planes.add("Sanitizer");
             if (rbacRoleRepository != null) {
                 var role = rbacRoleRepository.findByTokenString(token);
                 if (role.isPresent() && role.get().permissions() != null && !role.get().permissions().isEmpty()) {

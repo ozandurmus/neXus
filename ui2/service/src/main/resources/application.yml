@@ -78,6 +78,19 @@ ui2:
     root: ${UI2_PACKET_ANALYSIS_ROOT:/app/packet-analysis}
     max-file-bytes: ${UI2_PACKET_ANALYSIS_MAX_FILE_BYTES:2147483648}
     max-store-bytes: ${UI2_PACKET_ANALYSIS_MAX_STORE_BYTES:107374182400}
+  sanitizer:
+    # Data Sanitizer (docs/design/DATA_SANITIZER_CONTRACT.md §3.1). Uploads and results are temporary files of this
+    # pod only (the JVM temporary directory is an emptyDir): the input is deleted when its job ends, the result after
+    # its one download or after output-ttl-minutes. Vault entries expire after vault-retention-days.
+    work-dir: ${UI2_SANITIZER_WORK_DIR:${java.io.tmpdir}/nexus-sanitizer}
+    max-file-bytes: ${UI2_SANITIZER_MAX_FILE_BYTES:2147483648}
+    vault-retention-days: ${UI2_SANITIZER_VAULT_RETENTION_DAYS:90}
+    output-ttl-minutes: ${UI2_SANITIZER_OUTPUT_TTL_MINUTES:60}
+    concurrent-jobs: ${UI2_SANITIZER_CONCURRENT_JOBS:2}
+    # Hook points, off by default (contract §3.2/§3.3): Packet Analysis "anonymize on upload" and the system-log
+    # export call SanitizerService.sanitizeFile / sanitizeLogExport when these are true.
+    packet-analysis-anonymize-on-upload: ${UI2_SANITIZER_PA_ON_UPLOAD:false}
+    log-export: ${UI2_SANITIZER_LOG_EXPORT:false}
   project-plan:
     # Empty by default: ProjectPlanConfiguration then locates the repository
     # checkout's own project/ directory itself (deployment_direction: local

@@ -50,6 +50,10 @@ final class NexusSessionCli {
                 .followRedirects(HttpClient.Redirect.NEVER).build();
     }
 
+    HttpClient client() {
+        return client;
+    }
+
     static Path defaultHome() {
         String env = System.getenv("NEXUS_CLI_HOME");
         return env != null && !env.isBlank() ? Path.of(env) : Path.of(System.getProperty("user.home"), ".nexus-cli");
@@ -82,6 +86,7 @@ final class NexusSessionCli {
         System.out.println("  pa-analyze <caseId> | pa-run <jobId> | pa-report <jobId> [dest.json]");
         System.out.println("  pa-download <captureId> <destPath>             security_admin; ledgered");
         System.out.println("  pa-delete <caseId>");
+        SanitizerCli.printUsage();
     }
 
     /** @return exit code, or -1 when {@code args[0]} is not one of this class's commands */
@@ -187,8 +192,11 @@ final class NexusSessionCli {
                     require(args, 2, "pa-delete <caseId>");
                     yield print(call("DELETE", PA + "/cases/" + id(args[1]), null));
                 }
-                default -> -1;
+                default -> new SanitizerCli(this).run(args);
             };
+        } catch (IllegalArgumentException e) {
+            System.err.println(e.getMessage().startsWith("usage: ") ? e.getMessage() : "usage: " + e.getMessage());
+            return 2;
         } catch (UsageException e) {
             System.err.println("usage: " + e.getMessage());
             return 2;

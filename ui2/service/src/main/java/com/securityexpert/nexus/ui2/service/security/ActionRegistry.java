@@ -150,6 +150,18 @@ public final class ActionRegistry {
             java.util.Set.of(RoleToken.OPERATOR, RoleToken.OPERATION_ADMIN, RoleToken.SECURITY_ADMIN);
     public static final java.util.Set<String> PACKET_ANALYSIS_RAW_ROLES = java.util.Set.of(RoleToken.SECURITY_ADMIN);
 
+    /**
+     * Data Sanitizer (docs/design/DATA_SANITIZER_CONTRACT.md §2 "Who"): sanitize a file -- operator, operation_admin,
+     * security_admin. Revert a returned file -- security_admin, and the user who ran the sanitize job: the action admits
+     * the run roles and the service restricts a non-security_admin's revert to the vaults of that actor's own jobs.
+     * The replay viewer (aiview) holds neither.
+     */
+    public static final String DATA_SANITIZE_RUN = "data_sanitize_run";
+    public static final String DATA_SANITIZE_REVERT = "data_sanitize_revert";
+    public static final java.util.Set<String> DATA_SANITIZE_RUN_ROLES =
+            java.util.Set.of(RoleToken.OPERATOR, RoleToken.OPERATION_ADMIN, RoleToken.SECURITY_ADMIN);
+    public static final java.util.Set<String> DATA_SANITIZE_REVERT_ANY_JOB_ROLES = java.util.Set.of(RoleToken.SECURITY_ADMIN);
+
     public static final String HTTPS_CERTIFICATE_ACCEPT = "https_certificate_accept";
     public static final String HTTPS_CERTIFICATE_STRICT = "https_certificate_strict";
 
@@ -167,6 +179,10 @@ public final class ActionRegistry {
                 java.util.Set.of(RoleToken.ONBOARDING_ADMIN, RoleToken.REPLAY_VIEWER)));
         register(new ActionDescriptor(POLICY_READ, true, Optional.of(RoleToken.SECURITY_ADMIN),
                 java.util.Set.of(RoleToken.ONBOARDING_ADMIN, RoleToken.REPLAY_VIEWER)));
+        register(new ActionDescriptor(DATA_SANITIZE_RUN, true, Optional.of(RoleToken.OPERATOR),
+                java.util.Set.of(RoleToken.OPERATION_ADMIN, RoleToken.SECURITY_ADMIN)));
+        register(new ActionDescriptor(DATA_SANITIZE_REVERT, true, Optional.of(RoleToken.SECURITY_ADMIN),
+                java.util.Set.of(RoleToken.OPERATOR, RoleToken.OPERATION_ADMIN)));
         register(new ActionDescriptor(HTTPS_CERTIFICATE_ACCEPT, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(HTTPS_CERTIFICATE_STRICT, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(ROLE_BINDING_CREATE, true, Optional.of(RoleToken.SECURITY_ADMIN)));
