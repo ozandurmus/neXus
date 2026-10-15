@@ -76,6 +76,12 @@ final class NexusSessionCli {
         System.out.println("  inventory-collect <deviceId> | configuration-collect <deviceId>");
         System.out.println("  syslog-measure-start                           measure system/config logs on every enrolled Palo Alto firewall");
         System.out.println("  syslog-measurements [deviceId]                 the recorded measurement summaries");
+        System.out.println("  pa-cases | pa-case <caseId>                    Packet Analysis cases (expiry: 7 days)");
+        System.out.println("  pa-case-create <title> [--payload-zeroing]");
+        System.out.println("  pa-upload <caseId> <capture.pcap|.pcapng>      streamed; 2 GB per file");
+        System.out.println("  pa-analyze <caseId> | pa-run <jobId> | pa-report <jobId> [dest.json]");
+        System.out.println("  pa-download <captureId> <destPath>             security_admin; ledgered");
+        System.out.println("  pa-delete <caseId>");
     }
 
     /** @return exit code, or -1 when {@code args[0]} is not one of this class's commands */
@@ -150,6 +156,37 @@ final class NexusSessionCli {
                 case "syslog-measure-start" -> print(call("POST", "/api/v2/diagnostics/system-log-measurements/start", "{}"));
                 case "syslog-measurements" -> print(call("GET", "/api/v2/diagnostics/system-log-measurements"
                         + (args.length > 1 ? queryString(new String[] {args[0], "device_id=" + args[1]}, 1) : ""), null));
+                case "pa-cases" -> print(call("GET", PA + "/cases", null));
+                case "pa-case" -> {
+                    require(args, 2, "pa-case <caseId>");
+                    yield print(call("GET", PA + "/cases/" + id(args[1]), null));
+                }
+                case "pa-case-create" -> {
+                    require(args, 2, "pa-case-create <title> [--payload-zeroing]");
+                    Map<String, Object> body = new LinkedHashMap<>();
+                    body.put("title", args[1]);
+                    body.put("payload_zeroing", args.length > 2 && "--payload-zeroing".equals(args[2]));
+                    yield print(call("POST", PA + "/cases", json(body)));
+                }
+                case "pa-upload" -> packetUpload(args);
+                case "pa-analyze" -> {
+                    require(args, 2, "pa-analyze <caseId>");
+                    yield print(call("POST", PA + "/cases/" + id(args[1]) + "/analyze", "{}"));
+                }
+                case "pa-run" -> {
+                    require(args, 2, "pa-run <jobId>");
+                    yield print(call("GET", PA + "/runs/" + id(args[1]), null));
+                }
+                case "pa-report" -> {
+                    require(args, 2, "pa-report <jobId> [dest.json]");
+                    var response = call("GET", PA + "/runs/" + id(args[1]) + "/report", null);
+                    yield args.length > 2 ? saveTo(response, Path.of(args[2])) : print(response);
+                }
+                case "pa-download" -> packetDownload(args);
+                case "pa-delete" -> {
+                    require(args, 2, "pa-delete <caseId>");
+                    yield print(call("DELETE", PA + "/cases/" + id(args[1]), null));
+                }
                 default -> -1;
             };
         } catch (UsageException e) {
@@ -300,6 +337,61 @@ final class NexusSessionCli {
         }
         System.out.println("downloaded " + Files.size(dest) + " bytes to " + dest);
         System.out.println("WARNING: the archive may carry secret-bearing files; the copy is yours to protect from here on.");
+        return 0;
+    }
+
+    // ---- packet analysis (PO decision record 2026-10-15; same routes and gates as the screen) ---------------
+
+    static final String PA = "/api/v2/packet-analysis";
+    private static final Pattern OPAQUE_ID = Pattern.compile("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}");
+
+    static String id(String value) {
+        if (!OPAQUE_ID.matcher(value).matches()) throw new UsageException("identifiers are opaque UUIDs, got: " + value);
+        return value;
+    }
+
+    /** The upload body, streamed from disk: one multipart part named {@code file}, never read into memory. */
+    static HttpRequest.BodyPublisher multipartFile(Path file, String boundary) throws IOException {
+        String name = file.getFileName().toString().replace("\"", "_").replace("\r", "_").replace("\n", "_");
+        return HttpRequest.BodyPublishers.concat(
+                HttpRequest.BodyPublishers.ofString("--" + boundary + "\r\nContent-Disposition: form-data; name=\"file\"; filename=\""
+                        + name + "\"\r\nContent-Type: application/octet-stream\r\n\r\n", StandardCharsets.UTF_8),
+                HttpRequest.BodyPublishers.ofFile(file),
+                HttpRequest.BodyPublishers.ofString("\r\n--" + boundary + "--\r\n", StandardCharsets.UTF_8));
+    }
+
+    private int packetUpload(String[] args) throws IOException, InterruptedException {
+        require(args, 3, "pa-upload <caseId> <capture.pcap|.pcapng>");
+        Session session = loadSession().orElseThrow(() -> new UsageException("not logged in"));
+        Path file = Path.of(args[2]);
+        if (!Files.isRegularFile(file)) throw new UsageException("no such file: " + file);
+        String boundary = "nexus-cli-" + java.util.UUID.randomUUID();
+        HttpRequest request = HttpRequest.newBuilder(URI.create(session.baseUrl() + PA + "/cases/" + id(args[1]) + "/captures"))
+                .header("Cookie", SESSION_COOKIE + "=" + session.cookie()).header("X-CSRF-Token", session.csrf())
+                .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+                .POST(multipartFile(file, boundary)).build();
+        System.err.println("uploading " + Files.size(file) + " bytes");
+        return print(client.send(request, HttpResponse.BodyHandlers.ofByteArray()));
+    }
+
+    private int packetDownload(String[] args) throws IOException, InterruptedException {
+        require(args, 3, "pa-download <captureId> <destPath>");
+        Session session = loadSession().orElseThrow(() -> new UsageException("not logged in"));
+        HttpRequest request = HttpRequest.newBuilder(URI.create(session.baseUrl() + PA + "/captures/" + id(args[1]) + "/download"))
+                .header("Cookie", SESSION_COOKIE + "=" + session.cookie()).GET().build();
+        HttpResponse<InputStream> response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
+        if (response.statusCode() != 200) {
+            try (InputStream in = response.body()) {
+                System.err.println("REFUSED: HTTP " + response.statusCode() + " " + snippet(in.readNBytes(2000)));
+            }
+            return response.statusCode() == 401 || response.statusCode() == 403 ? 3 : 1;
+        }
+        Path dest = Path.of(args[2]);
+        try (InputStream in = response.body()) {
+            Files.copy(in, dest, StandardCopyOption.REPLACE_EXISTING);
+        }
+        System.out.println("downloaded " + Files.size(dest) + " bytes to " + dest);
+        System.out.println("WARNING: a capture is raw evidence (7-day retention in neXus); the copy is yours to protect.");
         return 0;
     }
 
