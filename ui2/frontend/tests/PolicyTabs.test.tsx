@@ -144,7 +144,11 @@ it("opens the estate Changes tab and links a rule from another policy into the r
   fireEvent.click(screen.getByRole("tab", { name: "Changes" }));
   fireEvent.click(await screen.findByRole("button", { name: "2 · RULE-BRAVO-02" }));
   await waitFor(() => expect(request).toHaveBeenCalledWith(expect.stringContaining("/policy/policies/policy-2/rules?ruleId=rule-2"), expect.anything()));
-  expect(await screen.findByRole("dialog", { name: "Rule details" })).toHaveTextContent("RULE-BRAVO-02");
+  const dialog = await screen.findByRole("dialog", { name: "Rule details" });
+  expect(dialog).toHaveTextContent("RULE-BRAVO-02");
+  expect(within(dialog).getByText("UUID: uuid-2")).toBeInTheDocument();
+  expect(within(dialog).getByText(/Section: Pre rules/)).toBeInTheDocument();
+  expect(within(dialog).getByRole("button", { name: "Rule history" })).toBeInTheDocument();
 });
 
 it("keeps Lookup inputs and results when switching to Changes and Offline analysis and back", async () => {

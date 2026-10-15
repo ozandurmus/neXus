@@ -3,7 +3,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
 import { PolicyScreen, collectionOutcome, progress, csvCell, collectedLabel, sourceStatusLabel, collectionStalled, runningLabel } from "../src/screens/PolicyScreen";
-import { VirtualPolicyCards } from "../src/screens/PolicyRuleViewer";
+import { PolicyRuleTable, RULE_ROW_HEIGHT } from "../src/screens/PolicyRuleViewer";
 import { loadErrorText } from "../e2e/safety";
 import type { PolicyMetadata, PolicyPage, PolicyRule, PolicyCollectionStatus } from "../src/auth/adminApi";
 
@@ -67,10 +67,14 @@ it("opens recursive object members with cycle status and complete rule details",
   await within(drawer).findByText("192.0.2.8");
   expect(within(drawer).getAllByText(/CYCLE/).length).toBeGreaterThan(0);
   fireEvent.click(within(drawer).getByText("Close"));
-  fireEvent.click(screen.getByRole("button", { name: "OBJ-RULE-01" }));
-  drawer = screen.getByRole("dialog", { name: "Rule details" });
-  expect(within(drawer).getByText("UUID: uuid-1")).toBeInTheDocument();
-  expect(within(drawer).getByText("Enabled: false")).toBeInTheDocument();
+  const row = screen.getByRole("row", { name: "Rule 1: OBJ-RULE-01" });
+  fireEvent.click(row);
+  expect(row).toHaveAttribute("aria-expanded", "true");
+  const details = screen.getByRole("region", { name: "Rule 1 details" });
+  expect(within(details).getByText("UUID: uuid-1")).toBeInTheDocument();
+  expect(within(details).getByText("Enabled: false")).toBeInTheDocument();
+  expect(within(details).getByText("withheld:").parentElement).toHaveTextContent("withheld: Withheld in AIView");
+  expect(screen.queryByRole("dialog", { name: "Rule details" })).toBeNull();
 });
 it("renders only a 200-rule page from a 5000-rule policy and requests the next page", async () => {
   const large = { ...page, total: 5000, sections: [{ ...page.sections[0], total: 5000,
@@ -81,6 +85,20 @@ it("renders only a 200-rule page from a 5000-rule policy and requests the next p
   expect(screen.getByText("Page 1 of 25 · 5000 rules")).toBeInTheDocument();
   fireEvent.click(screen.getByText("Next"));
   await waitFor(() => expect(fetch.mock.calls.some(([url]) => url.includes("page=1"))).toBe(true));
+});
+it("scrolls the content pane as the single scroll container and renders the rule rows under it", async () => {
+  const large = { ...page, total: 200, sections: [{ ...page.sections[0], total: 200,
+    rules: Array.from({ length: 200 }, (_, i) => ({ ...rule, id: `rule-${i}`, number: i + 1, name: `OBJ-RULE-${i}` })) }] };
+  mockFetch(large); mount(); await navigate();
+  const rulebase = await screen.findByRole("region", { name: "Policy rulebase" });
+  const pane = screen.getByRole("region", { name: "Policy content" });
+  expect(screen.queryByText("OBJ-RULE-150")).toBeNull();
+  vi.spyOn(pane, "getBoundingClientRect").mockReturnValue({ top: 0 } as DOMRect);
+  vi.spyOn(rulebase, "getBoundingClientRect").mockReturnValue({ top: -150 * RULE_ROW_HEIGHT } as DOMRect);
+  fireEvent.scroll(pane);
+  expect(await screen.findByText("OBJ-RULE-150")).toBeInTheDocument();
+  expect(screen.queryByText("OBJ-RULE-0")).toBeNull();
+  expect(rulebase.querySelectorAll("[data-policy-rule]").length).toBeLessThanOrEqual(24);
 });
 it("sends only the name/comment search and resets pagination", async () => {
   const fetch = mockFetch(); mount(); await navigate();
@@ -192,11 +210,11 @@ it("loads catalog counts before expanding each navigation level", async () => {
 });
 it("virtualizes a 5000-rule response and reaches the final row on scroll", async () => {
   const rules = Array.from({ length: 5000 }, (_, i) => ({ ...rule, id: `rule-${i}`, name: `OBJ-RULE-${i}`, number: i + 1 }));
-  const props = { sections: [{ ...page.sections[0], rules, total: 5000 }], collapsed: new Set<string>(), toggle: vi.fn(), objects: new Map(page.objects.map(o => [o.id, o])), metadata, openObject: vi.fn(), openRule: vi.fn(), selected: new Set<string>(), onSelect: vi.fn() };
-  const view = render(<ThemeProvider theme={m3Theme}><VirtualPolicyCards {...props} scrollTop={0} /></ThemeProvider>);
+  const props = { sections: [{ ...page.sections[0], rules, total: 5000 }], collapsed: new Set<string>(), toggle: vi.fn(), objects: new Map(page.objects.map(o => [o.id, o])), metadata, openObject: vi.fn(), selected: new Set<string>(), onSelect: vi.fn() };
+  const view = render(<ThemeProvider theme={m3Theme}><PolicyRuleTable {...props} scrollTop={0} /></ThemeProvider>);
   expect(view.container.querySelectorAll("[data-policy-rule]").length).toBeLessThanOrEqual(24);
   expect(screen.queryByText("OBJ-RULE-4999")).toBeNull();
-  view.rerender(<ThemeProvider theme={m3Theme}><VirtualPolicyCards {...props} scrollTop={4995 * 280} /></ThemeProvider>);
+  view.rerender(<ThemeProvider theme={m3Theme}><PolicyRuleTable {...props} scrollTop={4995 * RULE_ROW_HEIGHT} /></ThemeProvider>);
   expect(screen.getByText("OBJ-RULE-4999")).toBeInTheDocument();
   expect(view.container.querySelectorAll("[data-policy-rule]").length).toBeLessThanOrEqual(24);
 });
@@ -550,6 +568,19 @@ it("collects selected CP domains sequentially and refreshes after each completio
   expect(fetch.mock.calls.filter(([url]) => url.endsWith("/devices"))).toHaveLength(3);
 });
 
+it("selects single rules from table rows without expanding them and keeps Select all in the table header", async () => {
+  const second: PolicyRule = { ...rule, id: "rule-2", number: 2, name: "OBJ-RULE-02", enabled: true };
+  mockFetch({ ...page, total: 2, sections: [{ ...page.sections[0], total: 2, rules: [rule, second] }] }); mount(); await navigate();
+  const rulebase = await screen.findByRole("region", { name: "Policy rulebase" });
+  const table = within(rulebase).getByRole("table", { name: "Policy rules" });
+  expect(within(within(table).getAllByRole("columnheader")[0]).getByRole("checkbox", { name: "Select all" })).toBeInTheDocument();
+  fireEvent.click(within(table).getByRole("checkbox", { name: "Select rule 2" }));
+  expect(screen.getByText("1 selected")).toBeInTheDocument();
+  expect(within(table).getByRole("row", { name: "Rule 2: OBJ-RULE-02" })).toHaveAttribute("aria-expanded", "false");
+  expect(within(table).getByRole("checkbox", { name: "Select all" })).toHaveAttribute("data-indeterminate", "true");
+  fireEvent.click(within(table).getByRole("checkbox", { name: "Select rule 2" }));
+  expect(screen.queryByText("1 selected")).toBeNull();
+});
 it("selects all matching rules across API pages and clears the active query chips", async () => {
   const fetch = vi.fn(async (input: string) => {
     const body = treeBody(input) ?? (input === "/api/v2/policy/sources" ? { sources: [{ sourceId: metadata.sourceId, sourceName: metadata.sourceName, vendor: metadata.vendor }], canCollect: false }

@@ -3,7 +3,7 @@ import { loadErrorText } from "../e2e/safety";
 
 // Offline browser proof only: synthetic AIView API projections; no deployment or device contact.
 // Run: node_modules/.bin/playwright test --config playwright.policy-local.config.ts
-test("policy local: 54 containers, three tabs, rule drawer, recursive drawer and masked CSV", async ({ page }) => {
+test("policy local: 54 containers, three tabs, rule table with inline details, recursive drawer and masked CSV", async ({ page }) => {
   const targets = [{ deviceId: "device-1", name: "FW-TANGO-04", context: "VS-ROMEO-01", syncStatus: "UNKNOWN" }];
   const policies = Array.from({ length: 54 }, (_, index) => ({ id: `policy-${index}`, name: `POL-ALPHA-${index}`,
     sourceId: "source-1", sourceName: "MGR-BRAVO-01", containerId: `container-${index}`, containerName: `DOM-TANGO-${index}`,
@@ -50,27 +50,34 @@ test("policy local: 54 containers, three tabs, rule drawer, recursive drawer and
   await page.getByRole("button", { name: "MGR-BRAVO-01" }).click();
   await expect(page.getByRole("group", { name: "Policy container", exact: true })).toHaveCount(54);
   await page.getByRole("button", { name: "DOM-TANGO-53", exact: true }).click();
-  await page.getByRole("button", { name: "POL-ALPHA-53", exact: true }).click();
+  await page.getByRole("button", { name: "Policy POL-ALPHA-53", exact: true }).click();
   await expect(page.getByRole("region", { name: "Policy content", exact: true })
     .getByRole("region", { name: "Policy rulebase", exact: true })).toBeVisible();
   await page.getByRole("textbox", { name: "Search sources, containers and policies" }).fill("POL-ALPHA-53");
   await expect(page.getByRole("group", { name: "Policy container", exact: true })).toHaveCount(1);
-  await page.getByRole("button", { name: "POL-ALPHA-53", exact: true }).click();
+  await page.getByRole("button", { name: "Policy POL-ALPHA-53", exact: true }).click();
   await expect(page.getByRole("region", { name: "Policy rulebase" })).toBeVisible();
   for (const width of [1550, 1390]) {
     await page.setViewportSize({ width, height: 784 });
-    await expect(page.locator(".policy-rule-card")).toHaveClass(width < 1400 ? /stacked/ : /wide/);
+    const rules = page.getByRole("table", { name: "Policy rules" });
+    await expect(rules.getByRole("row", { name: "Rule 1: RULE-BRAVO-12" })).toBeVisible();
+    await expect(rules.getByRole("columnheader", { name: "Application" })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     const region = page.getByRole("region", { name: "Policy rulebase" });
     expect(await region.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
+    // One scroll container: the content pane scrolls, the rule toolbar and the column headers stick to its top.
+    await expect(rules.getByRole("columnheader", { name: "Name" })).toHaveCSS("position", "sticky");
+    expect(await region.evaluate(node => getComputedStyle(node).overflowY)).toBe("visible");
     await expect(page.getByRole("button", { name: "Next", exact: true })).toBeInViewport();
     expect(await page.locator("body").innerText()).not.toMatch(/[a-f0-9]{32}/i);
   }
-  await page.getByRole("button", { name: "RULE-BRAVO-12", exact: true }).click();
-  const drawer = page.getByRole("dialog", { name: "Rule details" });
-  await expect(drawer.getByText("UUID: uuid-1")).toBeVisible();
-  await drawer.getByRole("button", { name: "Objects", exact: true }).click();
-  await drawer.getByRole("button", { name: "GRP-TANGO-01" }).click();
+  const row = page.getByRole("row", { name: "Rule 1: RULE-BRAVO-12" });
+  await row.focus(); await page.keyboard.press("Enter");
+  const details = page.getByRole("region", { name: "Rule 1 details" });
+  await expect(details.getByText("UUID: uuid-1")).toBeVisible();
+  await expect(row).toHaveAttribute("aria-expanded", "true");
+  await details.getByRole("button", { name: "Objects", exact: true }).click();
+  await details.getByRole("button", { name: "GRP-TANGO-01" }).click();
   const object = page.getByRole("dialog", { name: "Object details" });
   await object.getByText("ADDR-ROMEO-01", { exact: false }).first().click();
   await expect(object.getByText("192.0.2.8")).toBeVisible();
