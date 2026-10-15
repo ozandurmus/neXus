@@ -65,10 +65,14 @@ class ManagementEndpointSshTrustSchemaTest {
                 assertEquals(1, dsl.fetchOne("SELECT count(*) FROM management_endpoint_ssh_trust WHERE status = 'ACTIVE'").get(0, Integer.class));
                 var audit = dsl.fetch("SELECT before_state::text, after_state::text FROM audit_log WHERE table_name = 'management_endpoint_ssh_trust'");
                 assertEquals(3, audit.size());
-                assertFalse(audit.toString().contains("fixture-management"));
-                assertFalse(audit.toString().contains("0".repeat(64)));
-                assertFalse(audit.toString().contains("1".repeat(64)));
-                assertTrue(audit.toString().contains("RE-ENROLLED"));
+                // The full stored text, not Result.toString(): jOOQ's table rendering truncates long
+                // cells, which made these checks vacuous and hid the classification value.
+                String stored = audit.stream().map(row -> row.get(0, String.class) + "\n" + row.get(1, String.class))
+                        .collect(java.util.stream.Collectors.joining("\n"));
+                assertFalse(stored.contains("fixture-management"));
+                assertFalse(stored.contains("0".repeat(64)));
+                assertFalse(stored.contains("1".repeat(64)));
+                assertTrue(stored.contains("RE-ENROLLED"));
                 return null;
             });
         }
