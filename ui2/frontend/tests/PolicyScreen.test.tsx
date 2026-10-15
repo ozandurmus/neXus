@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { afterEach, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
-import { PolicyScreen, collectionOutcome, progress, csvCell, collectedLabel, sourceStatusLabel, collectionStalled, runningLabel } from "../src/screens/PolicyScreen";
+import { PolicyScreen, collectionOutcome, progress, csvCell, collectedLabel, sourceStatusLabel, collectionStalled, runningLabel, collectionSummaryLine } from "../src/screens/PolicyScreen";
 import { PolicyRuleTable, RULE_ROW_HEIGHT } from "../src/screens/PolicyRuleViewer";
 import { loadErrorText } from "../e2e/safety";
 import type { PolicyMetadata, PolicyPage, PolicyRule, PolicyCollectionStatus } from "../src/auth/adminApi";
@@ -628,10 +628,41 @@ it.each(["running", "stalled", "completed", "gaps", "failed"])("renders the %s c
     expect(screen.queryByText("No activity for more than twice the read timeout.") !== null).toBe(state === "stalled");
   } else if (state === "gaps") {
     expect(screen.getByText(/Completed with gaps \(2 units\)/)).toBeInTheDocument();
-    expect(screen.getByText("Unit failure codes: TIMEOUT, HTTP_403")).toBeInTheDocument();
+    expect(screen.getByText("2 unit failures")).toBeInTheDocument();
+    // Codes stay readable for every role, behind one Details disclosure instead of inline text.
+    const disclosure = screen.getByText("Details").closest("details")!;
+    expect(disclosure.open).toBe(false);
+    fireEvent.click(screen.getByText("Details"));
+    expect(within(disclosure).getByText("Unit failure codes: TIMEOUT, HTTP_403")).toBeInTheDocument();
     expect(screen.queryByText(/COLLECTION_FAILED/)).toBeNull();
+    expect(within(disclosure).queryByRole("button", { name: "Transcript" })).toBeNull();
   } else if (state === "completed") expect(screen.getByText("Collected · UNKNOWN")).toBeInTheDocument();
   else expect(screen.getByText(/Last collection failed.*time limit was reached/)).toBeInTheDocument();
+});
+
+it("folds an MDS card's domains and failure codes into one status line plus Details", async () => {
+  const job: PolicyCollectionStatus = { jobId: "job-mds", state: "COMPLETED", outcome: "PARTIAL", reason: "", step: 3, total: 3, gapUnits: 2,
+    unitFailureCodes: ["INVALID_OR_INCOMPLETE_RESPONSE", "TIMEOUT"], domainsReused: 1, domainsCollected: 2, rulesReused: 10, rulesFetched: 20, hasTranscript: true,
+    domains: [{ containerId: "dom-1", status: "REUSED", rules: 10, publishTime: "2026-10-03T00:00:00Z" },
+      { containerId: "dom-2", status: "COLLECTED", rules: 12 }, { containerId: "dom-3", status: "COLLECTED", rules: 8 }] };
+  expect(collectionSummaryLine(job, true)).toBe("3 domains: 1 reused, 2 collected · 2 unit failures");
+  expect(collectionSummaryLine({ ...job, domains: undefined, unitFailureCodes: [] }, true)).toBe("unit failures not itemised");
+  expect(collectionSummaryLine({ ...job, domains: [{ containerId: "dom-1", status: "COLLECTING", rules: 0 }] }, false)).toBe("1 domain: 1 collecting");
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ canCollect: true,
+    sources: [{ sourceId: "source-mds", sourceName: "MGR-BRAVO-01", vendor: "CP", collection: job }] }), { status: 200 })));
+  mount();
+  const card = await screen.findByRole("group", { name: "Policy source" });
+  await within(card).findByText(/Completed with gaps \(2 units\)/);
+  expect(within(card).getByText("3 domains: 1 reused, 2 collected · 2 unit failures")).toBeInTheDocument();
+  expect(within(card).getAllByText("Details")).toHaveLength(1);
+  const disclosure = within(card).getByText("Details").closest("details")!;
+  fireEvent.click(within(card).getByText("Details"));
+  // Nothing dropped: rule counts, every domain, every code, progress and the transcript are one click away.
+  expect(within(disclosure).getByText(/Rules: 10 reused · 20 fetched/)).toBeInTheDocument();
+  expect(within(disclosure).getAllByRole("listitem")).toHaveLength(3);
+  expect(within(disclosure).getByText("Unit failure codes: INVALID_OR_INCOMPLETE_RESPONSE, TIMEOUT")).toBeInTheDocument();
+  expect(within(disclosure).getByText(/^Collection progress:/)).toBeInTheDocument();
+  expect(within(disclosure).getByRole("button", { name: "Transcript" })).toBeInTheDocument();
 });
 
 it("uses successful activity and a strict twice-timeout boundary, never elapsed runtime, to warn", () => {
@@ -660,8 +691,18 @@ it("full refresh submits FULL and reused-domain progress retains the original hi
     return new Response(JSON.stringify(body), { status: 200, headers: { "X-Nexus-Masked": "true" } });
   });
   vi.stubGlobal("fetch", fetch); mount();
-  expect(await screen.findByText(/reused · unchanged since 2026-10-03T00:00:00Z · hits collected at 2026-10-04T00:00:00Z/)).toBeInTheDocument();
-  expect(screen.getByText(/Domains: 1 reused · 0 collected · Rules: 1 reused · 0 fetched/)).toBeInTheDocument();
+  // The card shows one compact line; the per-domain list sits behind Details with GMT+3 times and the raw ISO on hover.
+  expect(await screen.findByText("1 domain: 1 reused")).toBeInTheDocument();
+  const card = screen.getByRole("group", { name: "Policy source" });
+  const disclosure = within(card).getByText("Details").closest("details")!;
+  expect(disclosure.open).toBe(false);
+  fireEvent.click(within(card).getByText("Details"));
+  expect(within(disclosure).getByText(/Domains: 1 reused · 0 collected · Rules: 1 reused · 0 fetched/)).toBeInTheDocument();
+  const domain = within(within(disclosure).getByRole("list", { name: "Collection domains" })).getByRole("listitem");
+  expect(domain).toHaveTextContent(/reused · unchanged since 2026-10-03 03:00:00 · hits collected at 2026-10-04 03:00:00/);
+  expect(within(domain).getByLabelText("2026-10-03T00:00:00Z (UTC reference)")).toBeInTheDocument();
+  expect(within(domain).getByLabelText("2026-10-04T00:00:00Z (UTC reference)")).toBeInTheDocument();
+  expect(within(card).queryByText(/2026-10-03T00:00:00Z/)).toBeNull();
   fireEvent.click(await screen.findByRole("button", { name: "Full refresh (incl. hit counts)" }));
   await waitFor(() => expect(fetch.mock.calls.some(([url]) => url.endsWith("/collect"))).toBe(true));
   const call = fetch.mock.calls.find(([url]) => url.endsWith("/collect"));

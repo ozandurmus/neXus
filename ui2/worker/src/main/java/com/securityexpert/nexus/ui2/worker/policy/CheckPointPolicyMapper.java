@@ -120,12 +120,8 @@ public final class CheckPointPolicyMapper {
                 if (node.path("track").has(field)) extras.put("track-" + field, List.of(node.path("track").path(field).asText()));
             extras.put("layer-name", List.of(layerName));
             if (!node.has("time")) extras.put("time-uncollected", List.of("true"));
-            JsonNode modified = node.path("meta-info").path("last-modify-time");
-            if (!modified.isMissingNode()) {
-                String date = modified.isObject() ? modified.path("iso-8601").asText() : modified.asText();
-                try { extras.put("last-modified", List.of(com.securityexpert.nexus.ui2.policy.PolicySchedule.date(date))); }
-                catch (RuntimeException invalid) { /* Unsupported metadata remains absent. */ }
-            }
+            String modified = modifiedTime(node.path("meta-info").path("last-modify-time"));
+            if (modified != null) extras.put("last-modified", List.of(modified));
             if (node.path("meta-info").has("last-modifier")) extras.put("last-modifier", List.of(node.path("meta-info").path("last-modifier").asText()));
             pending.add(new Rule(ruleId, uuid, node.path("rule-number").asInt(0), node.path("name").asText(""),
                     node.path("enabled").isBoolean() ? node.path("enabled").asBoolean() : null,
@@ -139,6 +135,28 @@ public final class CheckPointPolicyMapper {
         }
         flush(sections, section, name, parent, pending);
         if (nodes.isEmpty()) sections.add(new Section(section, name, "CP access layer", parent, List.of()));
+    }
+    /**
+     * A rule's vendor modification time as a UTC instant, so the change report can date the revision instead of
+     * falling back to the collection time. CP returns {posix (milliseconds, as CpDomainReuse reads publish-time),
+     * iso-8601 (minute precision; the offset may lack a colon, e.g. +0300)}. When both parse they must agree within
+     * the ISO minute, otherwise the time stays absent (UNKNOWN). A zone-less value is kept as a local date only.
+     */
+    static String modifiedTime(JsonNode node) {
+        if (node.isMissingNode() || node.isNull()) return null;
+        String iso = node.isObject() ? node.path("iso-8601").asText("") : node.asText("");
+        java.time.Instant fromIso = null;
+        try { fromIso = java.time.OffsetDateTime.parse(iso.replaceFirst("([+-][0-9]{2})([0-9]{2})$", "$1:$2")).toInstant(); }
+        catch (RuntimeException notAnInstant) { /* Zone-less or unsupported ISO text. */ }
+        JsonNode posix = node.path("posix");
+        if (posix.isIntegralNumber() && posix.canConvertToLong() && posix.longValue() > 0) {
+            var fromPosix = java.time.Instant.ofEpochMilli(posix.longValue());
+            if (fromIso != null && Math.abs(java.time.Duration.between(fromIso, fromPosix).toSeconds()) >= 60) return null;
+            return fromPosix.toString();
+        }
+        if (fromIso != null) return fromIso.toString();
+        try { return com.securityexpert.nexus.ui2.policy.PolicySchedule.date(iso); }
+        catch (RuntimeException invalid) { return null; /* Unsupported metadata remains absent. */ }
     }
     private static void flush(List<Section> sections, String id, String name, String parent, List<Rule> pending) {
         if (pending.isEmpty()) return;

@@ -82,6 +82,37 @@ class PolicyChangesServiceTest {
         assertEquals("\"a\"\"b\ntext\"", PolicyChangesService.csvCell("a\"b\ntext"));
         assertEquals("\"\"", PolicyChangesService.csvCell(null));
     }
+    Row initialRow(long id) {
+        Row base = row(id, "Synthetic actor", true);
+        return new Row(id, "p1", "r" + id, "uuid:opaque-00" + id, "added", base.time(), true, "Synthetic actor", base.changes(), base.metadata(),
+            "Synthetic rule", 7, false, "2026-10-08T21:00:00Z", true);
+    }
+    @Test void initialCapturesAreHiddenByDefaultCountedAndShownOnRequest() throws Exception {
+        stub(List.of(row(3, "Synthetic actor", false), initialRow(2), initialRow(1)));
+        var hidden = new PolicyChangesService.Request("2026-09-09T00:00:00Z", "2026-10-10T00:00:00Z", "", "", "", "", "", "", "", 100, false);
+        // The repository is asked for real changes only; its summary owns the hidden count.
+        service.changes(hidden, false);
+        verify(repository, atLeastOnce()).rows(argThat(f -> !f.includeInitial()), eq(3L), isNull());
+        verify(repository).summary(argThat(f -> !f.includeInitial()), eq(3L));
+        // A scanned (actor/q) summary reads initial captures, counts them, and leaves them out of rows and totals.
+        var scanned = new PolicyChangesService.Request(hidden.from(), hidden.to(), "", "", "Synthetic", "", "", "", "", 100, false);
+        var json = mapper.valueToTree(service.changes(scanned, false).body());
+        assertEquals(1, json.path("rows").size()); assertEquals(1, json.path("summary").path("total").asInt());
+        assertEquals(2, json.path("summary").path("initialCaptures").asInt());
+        assertFalse(json.path("summary").path("initialCapturesIncluded").asBoolean());
+        assertEquals(0, json.path("summary").path("counts").path("added").asInt());
+        var shown = new PolicyChangesService.Request(hidden.from(), hidden.to(), "", "", "Synthetic", "", "", "", "", 100, true);
+        json = mapper.valueToTree(PolicyPrivacy.mask(service.changes(shown, false).body(), "", names, ips));
+        assertEquals(3, json.path("rows").size()); assertEquals(2, json.path("summary").path("counts").path("added").asInt());
+        // Grouping fields survive the AIView projection.
+        assertTrue(json.path("rows").get(1).path("initialCapture").asBoolean());
+        assertEquals("2026-10-08T21:00:00Z", json.path("rows").get(1).path("collectedAt").asText());
+        assertFalse(json.path("rows").get(0).path("initialCapture").asBoolean());
+        var output = new ByteArrayOutputStream(); service.csv(shown, false, output);
+        String csv = output.toString(java.nio.charset.StandardCharsets.UTF_8);
+        assertTrue(csv.startsWith("Time,Observed at collection,Policy,Devices,Rule number,Rule name,Current snapshot label,Change type,Actor,Field,Before,After,Collected at,Initial capture\r\n"));
+        assertTrue(csv.contains("\"2026-10-08T21:00:00Z\",\"true\""));
+    }
     @Test void invalidFiltersAndCursorsAreRejectedBeforeHistoryRead() {
         assertThrows(IllegalArgumentException.class, () -> service.changes(request("", "", "bad", 100), true));
         assertThrows(IllegalArgumentException.class, () -> service.changes(request("", "", "", 201), false));

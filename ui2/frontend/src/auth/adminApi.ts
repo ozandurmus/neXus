@@ -1980,17 +1980,24 @@ export function uploadOfflineAnalysis(policy: string, file: File, mapping: Recor
 export function deleteOfflineAnalysis(id: string): Promise<{ deleted: boolean }> {
   return offlineMutation(`/api/v2/policy/offline-analyses/${encodeURIComponent(id)}`, "DELETE");
 }
-export interface PolicyChangeFilters { from: string; to: string; policy: string; device: string; actor: string; changeType: string; field: string; q: string }
+/** includeInitial also lists a policy's initial baseline capture (every rule "added" when no baseline existed). */
+export interface PolicyChangeFilters { from: string; to: string; policy: string; device: string; actor: string; changeType: string; field: string; q: string; includeInitial?: boolean }
 export interface PolicyChangeRow {
   revision: string; currentSnapshotLabel?: boolean; policyId: string; policyName: string; targets: PolicyTarget[]; ruleId: string;
   number: number | null; name: string; changedOn: string; observedAtCollection: boolean;
   changedBy: string; changeType: string; changedFields: string[]; changes: { field: string; before: unknown; after: unknown }[];
+  /** The collection that recorded the revision (UTC ISO); groups the list. */
+  collectedAt?: string; initialCapture?: boolean;
 }
 export interface PolicyChangesPage {
-  rows: PolicyChangeRow[]; summary: { total: number; actors: number; rules: number; counts: Record<string, number> };
+  rows: PolicyChangeRow[]; summary: { total: number; actors: number; rules: number; counts: Record<string, number>; initialCaptures?: number; initialCapturesIncluded?: boolean };
   nextCursor: string; rangeStart: string; rangeEnd: string;
 }
-const changeParams = (filters: PolicyChangeFilters) => new URLSearchParams({ ...filters });
+const changeParams = ({ includeInitial, ...filters }: PolicyChangeFilters) => {
+  const params = new URLSearchParams({ ...filters });
+  if (includeInitial) params.set("includeInitial", "true");
+  return params;
+};
 export const getPolicyChanges = (filters: PolicyChangeFilters, cursor = "") =>
   call<PolicyChangesPage>(`/api/v2/policy/changes?${changeParams(filters)}&cursor=${encodeURIComponent(cursor)}`, "GET");
 export async function downloadPolicyChanges(filters: PolicyChangeFilters) {

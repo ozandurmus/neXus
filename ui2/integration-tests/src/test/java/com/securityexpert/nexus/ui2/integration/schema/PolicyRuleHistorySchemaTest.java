@@ -24,6 +24,68 @@ class PolicyRuleHistorySchemaTest {
             rows.next(); return rows.getInt(1);
         }
     }
+    private int count(Connection db, String where) throws Exception {
+        try (var statement = db.createStatement(); var rows = statement.executeQuery("select count(*) from policy_rule_history where " + where)) {
+            rows.next(); return rows.getInt(1);
+        }
+    }
+    private void saveSections(Connection db, int revision, String sections) throws Exception {
+        String snapshot = "{\"sections\":[" + sections + "],\"objects\":{\"s1\":{\"name\":\"OBJ-SERVICE-01\"}},\"failures\":[]}";
+        try (var statement = db.prepareStatement("insert into policy_snapshot values ('policy-1', ?::timestamptz, '{}'::jsonb, ?::jsonb) "
+                + "on conflict (policy_id) do update set collected_at=excluded.collected_at, snapshot=excluded.snapshot "
+                + "where policy_snapshot.collected_at < excluded.collected_at")) {
+            statement.setString(1, "2026-10-02T" + String.format("%02d", revision) + ":00:00Z"); statement.setString(2, snapshot); statement.executeUpdate();
+        }
+    }
+    private String section(String name, String rules) {
+        return "{\"source\":\"Shared\",\"name\":\"" + name + "\",\"rules\":[" + rules + "]}";
+    }
+    @Test void v149MarksInitialCaptureAndRecordsReordersButNotRenumberingAlone() throws Exception {
+        try (var fixture = Ui2PostgresFixture.create("policy_history_renumber")) {
+            fixture.runFlyway();
+            try (var db = fixture.appConnection()) {
+                save(db, 1, rule("r1", 1, "s1", true) + "," + rule("r2", 2, "s1", true) + "," + rule("r3", 3, "s1", true), false);
+                assertEquals(3, count(db)); assertEquals(3, count(db, "initial_capture and change_type='added'"));
+                // An insertion at the top renumbers every rule below it; only the inserted rule is a change.
+                save(db, 2, rule("r0", 1, "s1", true) + "," + rule("r1", 2, "s1", true) + "," + rule("r2", 3, "s1", true) + "," + rule("r3", 4, "s1", true), false);
+                assertEquals(4, count(db)); assertEquals(1, count(db, "not initial_capture and change_type='added' and rule_key='uuid:r0'"));
+                // A removal renumbers the rules below it; only the removed rule is a change.
+                save(db, 3, rule("r0", 1, "s1", true) + "," + rule("r2", 2, "s1", true) + "," + rule("r3", 3, "s1", true), false);
+                assertEquals(5, count(db)); assertEquals(1, count(db, "change_type='removed' and rule_key='uuid:r1'"));
+                assertEquals(0, count(db, "change_type='modified'"));
+                // A real reorder changes the rules' relative order and is recorded with the number diff.
+                save(db, 4, rule("r0", 1, "s1", true) + "," + rule("r3", 2, "s1", true) + "," + rule("r2", 3, "s1", true), false);
+                assertEquals(7, count(db));
+                assertEquals(2, count(db, "change_type='modified' and changes = jsonb_build_array(jsonb_build_object('field','number','before',"
+                    + "case rule_key when 'uuid:r2' then 2 else 3 end,'after',case rule_key when 'uuid:r2' then 3 else 2 end))"));
+                // Renumbered and changed in another field: the number change is kept alongside.
+                save(db, 5, rule("r3", 1, "s1", true) + "," + rule("r2", 2, "s1", false), false);
+                assertEquals(9, count(db)); // r0 removed, r2 modified
+                assertEquals(1, count(db, "change_type='modified' and rule_key='uuid:r2' and collected_at='2026-10-02T05:00:00Z' "
+                    + "and changes @> '[{\"field\":\"number\"},{\"field\":\"enabled\"}]'"));
+                assertEquals(0, count(db, "collected_at='2026-10-02T05:00:00Z' and rule_key='uuid:r3'"));
+                // Moving a rule to another section is a change of that rule only; the section it left keeps its order.
+                saveSections(db, 6, section("Layer A", rule("r0", 1, "s1", true)) + "," + section("Layer B", rule("r2", 2, "s1", true) + "," + rule("r3", 3, "s1", true)));
+                int before = count(db);
+                saveSections(db, 7, section("Layer A", rule("r0", 1, "s1", true) + "," + rule("r3", 2, "s1", true)) + "," + section("Layer B", rule("r2", 3, "s1", true)));
+                assertEquals(before + 1, count(db));
+                assertEquals(1, count(db, "collected_at='2026-10-02T07:00:00Z' and rule_key='uuid:r3' and changes @> '[{\"field\":\"section\"}]'"));
+                assertEquals(3, count(db, "initial_capture"));
+                // Backfill: forget the marker, re-run V149 twice (idempotent) and get the same first batch back.
+                try (var statement = db.createStatement()) { statement.executeUpdate("update policy_rule_history set initial_capture=false"); }
+            }
+            try (var db = fixture.migrateConnection(); var statement = db.createStatement()) {
+                String v149 = migration("V149__policy_history_initial_capture_and_renumbering.sql");
+                db.setAutoCommit(false);
+                statement.execute(v149); statement.execute(v149);
+                db.commit();
+            }
+            try (var db = fixture.appConnection()) {
+                assertEquals(3, count(db, "initial_capture"));
+                assertEquals(3, count(db, "initial_capture and collected_at='2026-10-02T01:00:00Z'"));
+            }
+        }
+    }
     @Test void applicationRoleRecordsAddsRemovalsFieldDiffsMovesAndIgnoresPartialOrOlderSnapshots() throws Exception {
         try (var fixture = Ui2PostgresFixture.create("policy_rule_history")) {
             fixture.runFlyway();
@@ -111,10 +173,12 @@ class PolicyRuleHistorySchemaTest {
                 legacyNanos = System.nanoTime() - legacyStarted;
                 try (var statement = db.createStatement()) { statement.executeUpdate("delete from policy_snapshot where policy_id='legacy-policy'"); }
             } finally {
+                // Restore the current capture (V149 supersedes V132's function) before measuring it.
                 try (var resource = getClass().getResourceAsStream("/db/migration/V132__policy_history_bounded_memory.sql");
                      var migration = fixture.migrateConnection(); var statement = migration.createStatement()) {
                     assertNotNull(resource);
                     statement.execute(new String(resource.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8));
+                    statement.execute(migration("V149__policy_history_initial_capture_and_renumbering.sql"));
                 }
             }
             String partial = body.replace("\"failures\":[]", "\"failures\":[{}]");

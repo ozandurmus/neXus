@@ -42,4 +42,19 @@ class CheckPointScheduleTest {
         var named = new CheckPointPolicyMapper().map(meta, java.util.List.of(page)).sections().get(0).rules().get(0);
         assertEquals("", named.uuid()); assertEquals("OBJ-RULE-01", named.name());
     }
+    @Test void ruleModificationTimeIsAUtcInstantTheChangeReportCanUse() throws Exception {
+        // CP's documented shape: posix milliseconds plus minute-precision ISO with a colon-less offset.
+        assertEquals("2026-10-09T18:51:37.761Z", CheckPointPolicyMapper.modifiedTime(json.readTree(
+            "{\"posix\":1791571897761,\"iso-8601\":\"2026-10-09T21:51+0300\"}")));
+        assertEquals("2026-10-09T18:51:00Z", CheckPointPolicyMapper.modifiedTime(json.readTree("{\"iso-8601\":\"2026-10-09T21:51+0300\"}")));
+        assertEquals("2026-10-01T00:00:00Z", CheckPointPolicyMapper.modifiedTime(json.readTree("{\"iso-8601\":\"2026-10-01T00:00:00Z\"}")));
+        assertEquals("2026-10-09T18:51:37.761Z", CheckPointPolicyMapper.modifiedTime(json.readTree("{\"posix\":1791571897761}")));
+        // Disagreeing representations (e.g. a seconds-based posix) prove nothing: the time stays UNKNOWN.
+        assertNull(CheckPointPolicyMapper.modifiedTime(json.readTree("{\"posix\":1791571897,\"iso-8601\":\"2026-10-09T21:51+0300\"}")));
+        // Zone-less text is kept as a local date, never promoted to an instant.
+        assertEquals("2026-10-09T21:51", CheckPointPolicyMapper.modifiedTime(json.readTree("{\"iso-8601\":\"2026-10-09T21:51\"}")));
+        assertNull(CheckPointPolicyMapper.modifiedTime(json.readTree("{\"iso-8601\":\"not a time\"}")));
+        assertNull(CheckPointPolicyMapper.modifiedTime(json.missingNode()));
+        assertNull(CheckPointPolicyMapper.modifiedTime(json.readTree("null")));
+    }
 }
