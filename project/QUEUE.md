@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py tools/delivery/project_queue.py render)
-Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-10-15T15:17:29Z
+Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-10-15T22:47:48Z
 
 ## Now
 - NXS-LOCAL-0370 — Infoblox for real, observed facts follow every read, inventory for HTTPS vendors (automated_validated)
@@ -23,6 +23,7 @@ Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-10-15T15:17:29Z
 - P1/in_progress backup_screen_backbox_model — Backup screen on the Backbox model: per-device history, sc (target: PO directive 2026-09-22 (Backbox standar)
 - P1/in_progress cp_management_server_collect_duration — Check Point management server Collect took 243 s: vsx stat (target: ui2/worker/src/main/java/com/securityexp)
 - P1/in_progress credential_profiles — Credential profile / enterprise vault abstraction (target: 1.0 foundation)
+- P1/in_progress data_sanitizer — Data Sanitizer IMPLEMENTED: keyed anonymization of pcap/pc (target: docs/design/DATA_SANITIZER_CONTRACT.md)
 - P1/in_progress failover_p0_closure_set — Failover plan implementation landed; integration gate and (target: docs/design/PO_DECISION_RECORD_2026_10_0)
 - P1/in_progress https_inventory_collect_radware — Radware Collect: https_inventory_collect for the Cyber Con (target: docs/design/RADWARE_CYBER_CONTROLLER_BAC)
 - P1/in_progress module_per_pod_split — Module runtime landed; policy/configuration/compliance pod (target: docs/design/MODULE_POD_RUNTIME_CONTRACT.)

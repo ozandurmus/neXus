@@ -1215,6 +1215,15 @@
       "priority": "P1",
       "target": "docs/design/PO_DECISION_RECORD_2026_10_15_PACKETBREAKER_PORTED_INTO_NEXUS.md",
       "note": ""
+    },
+    {
+      "id": "data_sanitizer",
+      "category": "ui2",
+      "title": "Data Sanitizer IMPLEMENTED: keyed anonymization of pcap/pcapng, text logs, CSV/XLSX and JSON with a reversible encrypted vault (V156), /api/v2/sanitize, CLI parity, Sanitize screen; hook points off by default",
+      "status": "in_progress",
+      "priority": "P1",
+      "target": "docs/design/DATA_SANITIZER_CONTRACT.md",
+      "note": ""
     }
   ]
 }

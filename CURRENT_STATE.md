@@ -61,6 +61,15 @@ self-owned `ui2-packet-analysis` worker that claims `packet_analysis_run` only (
 `unknown` until the engine port lands. Not REAL_ENV_VALIDATED. Authority:
 [decision record](docs/design/PO_DECISION_RECORD_2026_10_15_PACKETBREAKER_PORTED_INTO_NEXUS.md).
 
+## Data Sanitizer (branch, not yet shipped)
+
+`data_sanitizer` — **IMPLEMENTED, pending ship** (`ship/rel-4-sanitizer`, after `ship/rel-3-pan-hit`): one keyed engine
+(privacy HMAC key; prefix-preserving IP permutation, inventory pseudonyms) for pcap/pcapng (payload removed), text
+logs, CSV/XLSX and JSON, with a reversible round trip through an encrypted per-job vault (V156, 90-day retention),
+`/api/v2/sanitize`, CLI parity and the Sanitize screen (`data_sanitize_run` / `data_sanitize_revert`; aiview holds
+neither). Packet Analysis and log-export hooks are off by default. Not REAL_ENV_VALIDATED. Authority:
+[contract](docs/design/DATA_SANITIZER_CONTRACT.md).
+
 ## Open items and validation boundaries
 
 - NSPM wave 2 change report and wave 3 policy lookup/offline analyzer are
