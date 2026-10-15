@@ -22,6 +22,8 @@ class PolicyWorkerRoleTest {
         assertEquals("policy", Ui2WorkerMain.resolveRole(new String[]{"policy"}, "policy"));
         assertEquals("policy", Ui2WorkerMain.resolveRole(new String[0], "policy"));
         assertEquals("configuration", Ui2WorkerMain.resolveRole(new String[]{"configuration"}, null));
+        assertEquals("packet_analysis", Ui2WorkerMain.resolveRole(new String[]{"packet_analysis"}, null));
+        assertThrows(IllegalArgumentException.class, () -> Ui2WorkerMain.resolveRole(new String[]{"packet_analysis"}, "policy"));
         assertThrows(IllegalArgumentException.class, () -> Ui2WorkerMain.resolveRole(new String[]{"unknown"}, null));
         assertThrows(IllegalArgumentException.class, () -> Ui2WorkerMain.resolveRole(new String[]{"policy"}, "general"));
         assertThrows(IllegalArgumentException.class, () -> WorkerClaimLoop.claimCapabilities("unknown", false));
