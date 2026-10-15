@@ -43,6 +43,8 @@ def main() -> int:
     p.add_argument("--effort", default="high", choices=["low", "medium", "high", "xhigh", "max"])
     p.add_argument("--timeout", default="0", help="agy --print-timeout, e.g. 7200s; 0 waits for the turn")
     p.add_argument("--log", type=Path)
+    p.add_argument("--add-dir", type=Path, action="append", default=[],
+                   help="extra read-only context directory (e.g. a frozen reference checkout); repeatable")
     a = p.parse_args()
 
     wt = a.worktree.expanduser().resolve()
@@ -62,6 +64,8 @@ def main() -> int:
     log = a.log or Path("/tmp") / f"argon-{wt.name}-{int(time.time())}.log"
     cmd = ["agy", "-p", prompt, "--model", a.model, "--effort", a.effort, "--mode", "accept-edits",
            "--print-timeout", a.timeout]
+    for extra in a.add_dir:
+        cmd += ["--add-dir", str(extra.expanduser())]
     print(f"[argon] worktree={wt} branch={branch} model={a.model} effort={a.effort} log={log}", flush=True)
     with log.open("w", encoding="utf-8") as out:
         rc = subprocess.run(cmd, cwd=wt, stdout=out, stderr=subprocess.STDOUT).returncode

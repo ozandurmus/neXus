@@ -1,9 +1,6 @@
 {
   "permissions": {
     "allow": [
-      "list_dir(/private/tmp/claude-502/**)",
-      "list_dir(/Users/OzanDur/Codo/nexus-*/**)",
-      "list_dir(/Users/OzanDur/Codo/PacketBreaker/**)",
       "read_file(/Applications/Wireshark.app/**)",
       "read_file(/private/tmp/claude-502/**)",
       "read_file(/Users/OzanDur/Codo/nexus-*/**)",
@@ -34,7 +31,7 @@
       "command(git rev-parse)",
       "command(git ls-files)",
       "command(./gradlew)",
-      "command(cd ui2 && ./gradlew)",
+      "command(cd ui2 \u0026\u0026 ./gradlew)",
       "command(java)",
       "command(javac)",
       "command(python3)",
@@ -51,7 +48,25 @@
       "command(env )",
       "command(echo)",
       "command(pwd)",
-      "command(test )"
+      "command(test )",
+      "command(cd)",
+      "command(export)",
+      "command(xargs)",
+      "command(awk)",
+      "command(tr)",
+      "command(cut)",
+      "command(uniq)",
+      "command(touch)",
+      "command(chmod +x)",
+      "command(jq)",
+      "command(/Users/OzanDur/Codo/PacketBreaker/.venv/bin/python)",
+      "command(/Users/OzanDur/Codo/PacketBreaker/.venv/bin/packetbreaker)",
+      "command(/Users/OzanDur/Codo/PacketBreaker/.venv/bin/pytest)",
+      "command(./ui2/gradlew)",
+      "command(ui2/gradlew)",
+      "command(gradlew)",
+      "command(npx)",
+      "command(*)"
     ],
     "deny": [
       "command(ssh)",
