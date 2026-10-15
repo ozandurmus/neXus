@@ -100,6 +100,7 @@
     "NXS-LOCAL-0158"
   ],
   "backlog_classifications": {
+    "data_sanitizer": "java_feature",
     "packet_analysis_shell": "java_feature",
     "spring_boot_4_spring_security_migration": "java_debt",
     "cp_policy_chunked_hits_acceptance": "java_feature",
