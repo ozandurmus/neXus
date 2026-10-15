@@ -64,7 +64,7 @@ class PolicyChangeRepositoryTest {
     }
     @Test void v149MarkerAndRenumberFilterAreIdempotentTransactionalAndKeepHistory() throws Exception {
         String sql = java.nio.file.Files.readString(java.nio.file.Path.of(
-            "../service/src/main/resources/db/migration/V149__policy_history_initial_capture_and_renumbering.sql"));
+            "../service/src/main/resources/db/migration/V150__policy_history_initial_capture_and_renumbering.sql"));
         assertTrue(sql.contains("ALTER TABLE policy_rule_history ADD COLUMN IF NOT EXISTS initial_capture BOOLEAN NOT NULL DEFAULT false"));
         assertTrue(sql.contains("CREATE INDEX IF NOT EXISTS policy_changes_time_excluding_initial"));
         assertTrue(sql.contains("AND NOT h.initial_capture;"));

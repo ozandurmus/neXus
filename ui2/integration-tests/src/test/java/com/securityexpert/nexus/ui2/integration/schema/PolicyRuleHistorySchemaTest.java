@@ -71,11 +71,11 @@ class PolicyRuleHistorySchemaTest {
                 assertEquals(before + 1, count(db));
                 assertEquals(1, count(db, "collected_at='2026-10-02T07:00:00Z' and rule_key='uuid:r3' and changes @> '[{\"field\":\"section\"}]'"));
                 assertEquals(3, count(db, "initial_capture"));
-                // Backfill: forget the marker, re-run V149 twice (idempotent) and get the same first batch back.
+                // Backfill: forget the marker, re-run V150 twice (idempotent) and get the same first batch back.
                 try (var statement = db.createStatement()) { statement.executeUpdate("update policy_rule_history set initial_capture=false"); }
             }
             try (var db = fixture.migrateConnection(); var statement = db.createStatement()) {
-                String v149 = migration("V149__policy_history_initial_capture_and_renumbering.sql");
+                String v149 = migration("V150__policy_history_initial_capture_and_renumbering.sql");
                 db.setAutoCommit(false);
                 statement.execute(v149); statement.execute(v149);
                 db.commit();
@@ -173,12 +173,12 @@ class PolicyRuleHistorySchemaTest {
                 legacyNanos = System.nanoTime() - legacyStarted;
                 try (var statement = db.createStatement()) { statement.executeUpdate("delete from policy_snapshot where policy_id='legacy-policy'"); }
             } finally {
-                // Restore the current capture (V149 supersedes V132's function) before measuring it.
+                // Restore the current capture (V150 supersedes V132's function) before measuring it.
                 try (var resource = getClass().getResourceAsStream("/db/migration/V132__policy_history_bounded_memory.sql");
                      var migration = fixture.migrateConnection(); var statement = migration.createStatement()) {
                     assertNotNull(resource);
                     statement.execute(new String(resource.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8));
-                    statement.execute(migration("V149__policy_history_initial_capture_and_renumbering.sql"));
+                    statement.execute(migration("V150__policy_history_initial_capture_and_renumbering.sql"));
                 }
             }
             String partial = body.replace("\"failures\":[]", "\"failures\":[{}]");

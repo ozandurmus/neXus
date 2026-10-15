@@ -1,4 +1,4 @@
--- V149 -- policy change report noise (PO, 2026-10-15).
+-- V150 -- policy change report noise (PO, 2026-10-15).
 --
 -- 1. Initial baseline capture. When a policy has no comparison baseline yet, every rule of its first
 --    complete publication is recorded as 'added'. That is the policy's initial capture, not a change
