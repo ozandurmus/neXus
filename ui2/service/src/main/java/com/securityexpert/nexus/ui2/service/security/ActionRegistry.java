@@ -137,6 +137,19 @@ public final class ActionRegistry {
     public static final String CP_FAILOVER_START = "cp_failover_start";
     public static final String CP_FAILOVER_READ = "cp_failover_read";
 
+    /**
+     * PO decision record 2026-10-15 §6 (PacketBreaker ported into neXus): create a case, upload captures, request an
+     * analysis and delete one's own case -- operator-level roles and above. Raw packet details and capture download
+     * are {@link #PACKET_ANALYSIS_RAW_VIEW} (security_admin by default). {@link #PACKET_ANALYSIS_READ} lists cases and
+     * reads results; the replay viewer (aiview) holds only that one and always receives the masked projection.
+     */
+    public static final String PACKET_ANALYSIS_RUN = "packet_analysis_run";
+    public static final String PACKET_ANALYSIS_RAW_VIEW = "packet_analysis_raw_view";
+    public static final String PACKET_ANALYSIS_READ = "packet_analysis_read";
+    public static final java.util.Set<String> PACKET_ANALYSIS_RUN_ROLES =
+            java.util.Set.of(RoleToken.OPERATOR, RoleToken.OPERATION_ADMIN, RoleToken.SECURITY_ADMIN);
+    public static final java.util.Set<String> PACKET_ANALYSIS_RAW_ROLES = java.util.Set.of(RoleToken.SECURITY_ADMIN);
+
     public static final String HTTPS_CERTIFICATE_ACCEPT = "https_certificate_accept";
     public static final String HTTPS_CERTIFICATE_STRICT = "https_certificate_strict";
 
@@ -243,6 +256,11 @@ public final class ActionRegistry {
         // Viewers see failover units, windows and runs (read-only); approving and starting stay with their roles.
         register(new ActionDescriptor(CP_FAILOVER_READ, true, Optional.of(RoleToken.OPERATOR),
                 java.util.Set.of(RoleToken.SECURITY_ADMIN, RoleToken.OPERATION_ADMIN, RoleToken.VIEWER, RoleToken.REPLAY_VIEWER)));
+        register(new ActionDescriptor(PACKET_ANALYSIS_RUN, true, Optional.of(RoleToken.OPERATOR),
+                java.util.Set.of(RoleToken.OPERATION_ADMIN, RoleToken.SECURITY_ADMIN)));
+        register(new ActionDescriptor(PACKET_ANALYSIS_RAW_VIEW, true, Optional.of(RoleToken.SECURITY_ADMIN)));
+        register(new ActionDescriptor(PACKET_ANALYSIS_READ, true, Optional.of(RoleToken.OPERATOR),
+                java.util.Set.of(RoleToken.OPERATION_ADMIN, RoleToken.SECURITY_ADMIN, RoleToken.REPLAY_VIEWER)));
         // Class 1: never console-submittable, refused by E3 unconditionally,
         // regardless of role -- exists so E3's unconditional refusal and
         // E3-never-reevaluated-inside-E4 (test 12) are both testable without

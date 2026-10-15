@@ -72,6 +72,12 @@ ui2:
     # persisted on first use so a process restart reads the same key back
     # rather than minting an ephemeral one (see FailoverKeyManagementService).
     master-key-file: ${UI2_FAILOVER_MASTER_KEY_FILE:.nexus_failover_master.key}
+  packet-analysis:
+    # PO decision record 2026-10-15 §5: captures live only on the analysis volume (ui2-packet-analysis-data),
+    # at most 2 GB per file, and an upload that would take the store past 100 GB is refused.
+    root: ${UI2_PACKET_ANALYSIS_ROOT:/app/packet-analysis}
+    max-file-bytes: ${UI2_PACKET_ANALYSIS_MAX_FILE_BYTES:2147483648}
+    max-store-bytes: ${UI2_PACKET_ANALYSIS_MAX_STORE_BYTES:107374182400}
   project-plan:
     # Empty by default: ProjectPlanConfiguration then locates the repository
     # checkout's own project/ directory itself (deployment_direction: local

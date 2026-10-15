@@ -128,7 +128,8 @@ public final class GateChainInterceptor implements HandlerInterceptor {
                 ActionRegistry.JOB_TRANSCRIPT_READ.equals(actionId)
                         ? Optional.of(path.split("/")[2])
                         // getParameter can make the servlet container spool a multipart file before authorization.
-                        : ActionRegistry.POLICY_OFFLINE_WRITE.equals(actionId) ? Optional.empty()
+                        : ActionRegistry.POLICY_OFFLINE_WRITE.equals(actionId)
+                                || ActionRegistry.PACKET_ANALYSIS_RUN.equals(actionId) ? Optional.empty()
                         : Optional.ofNullable(request.getParameter("target_ref")));
 
         GateOutcome outcome = gateChain.evaluate(gateRequest, Instant.now());

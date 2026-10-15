@@ -166,6 +166,11 @@ public final class SessionStatusController {
             if (java.util.Set.of(com.securityexpert.nexus.ui2.platform.RoleToken.SECURITY_ADMIN,
                     com.securityexpert.nexus.ui2.platform.RoleToken.ONBOARDING_ADMIN,
                     com.securityexpert.nexus.ui2.platform.RoleToken.REPLAY_VIEWER).contains(token)) planes.add("Policy");
+            // Packet Analysis: the roles PACKET_ANALYSIS_READ admits (aiview sees the masked projection only).
+            if (java.util.Set.of(com.securityexpert.nexus.ui2.platform.RoleToken.OPERATOR,
+                    com.securityexpert.nexus.ui2.platform.RoleToken.OPERATION_ADMIN,
+                    com.securityexpert.nexus.ui2.platform.RoleToken.SECURITY_ADMIN,
+                    com.securityexpert.nexus.ui2.platform.RoleToken.REPLAY_VIEWER).contains(token)) planes.add("PacketAnalysis");
             if (rbacRoleRepository != null) {
                 var role = rbacRoleRepository.findByTokenString(token);
                 if (role.isPresent() && role.get().permissions() != null && !role.get().permissions().isEmpty()) {
