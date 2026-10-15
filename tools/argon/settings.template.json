@@ -1,6 +1,13 @@
 {
   "permissions": {
     "allow": [
+      "list_dir(/private/tmp/claude-502/**)",
+      "list_dir(/Users/OzanDur/Codo/nexus-*/**)",
+      "list_dir(/Users/OzanDur/Codo/PacketBreaker/**)",
+      "read_file(/Applications/Wireshark.app/**)",
+      "read_file(/private/tmp/claude-502/**)",
+      "read_file(/Users/OzanDur/Codo/nexus-*/**)",
+      "read_file(/Users/OzanDur/Codo/PacketBreaker/**)",
       "write_file(/Users/OzanDur/Codo/nexus-*/**)",
       "write_file(/private/tmp/claude-502/**)",
       "command(ls)",
