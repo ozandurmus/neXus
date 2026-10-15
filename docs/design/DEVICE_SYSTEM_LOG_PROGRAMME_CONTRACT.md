@@ -104,5 +104,10 @@ Output: the measurement record committed next to this contract (rule: measuremen
 2. **PAN config logs:** included, next to system logs (`log-type=config`).
 3. **Measurement scope:** every enrolled Check Point and Palo Alto firewall, not a sample. Other vendors follow
    once their system-log sources are researched from public vendor documentation.
+4. **Collection interval: every 6 hours** (PO, 2026-10-15: "log çekme intervalimizde 6 saat olmalı ki üstüne
+   yazmasın"), in the 00/06/12/18 Europe/Istanbul job windows. Reason: device-side rotation must never overwrite lines
+   before the pool holds them — on 2026-10-15 an MDS's own logs for the night of a crash were already rotated away
+   when it was examined. Phase A's M1 (repeated after 24 h) measures the growth rate; if any source rotates faster
+   than 6 hours, that source needs a shorter interval or a rotated-file read, decided by the PO from the measurement.
 
 The measurement reads in §4 still need the PO's exact-command OK before they run.
