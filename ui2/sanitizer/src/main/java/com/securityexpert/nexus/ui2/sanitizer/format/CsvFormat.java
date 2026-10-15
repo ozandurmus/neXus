@@ -32,29 +32,19 @@ public final class CsvFormat {
     private CsvFormat() {
     }
 
-    /** Picks the delimiter whose field count is the same (and above one) on the first lines, or {@code 0}. */
+    /**
+     * Picks the delimiter whose field count is the same (and above one) on the first records of {@code head}, or
+     * {@code 0}. Quoted fields may span lines; the last, possibly cut, record is not used.
+     */
     public static char sniffDelimiter(String head) {
-        String[] lines = head.split("\r\n|\n|\r", -1);
-        int usable = Math.min(lines.length - (head.endsWith("\n") || head.endsWith("\r") ? 1 : 0), 50);
-        if (usable >= lines.length) usable = lines.length - 1; // the last line may be cut mid-way
-        if (usable < 2) return 0;
         char best = 0;
         int bestCount = 1;
         for (char d : new char[] {',', ';', '\t', '|'}) {
-            int expected = -1;
-            boolean consistent = true;
-            int nonEmpty = 0;
-            for (int i = 0; i < usable; i++) {
-                if (lines[i].isEmpty()) continue;
-                nonEmpty++;
-                int count = fieldCount(lines[i], d);
-                if (count < 0 || (expected >= 0 && count != expected)) {
-                    consistent = false;
-                    break;
-                }
-                expected = count;
-            }
-            if (consistent && nonEmpty >= 2 && expected > bestCount) {
+            List<Integer> counts = recordFieldCounts(head, d, 50);
+            if (counts.size() < 2) continue;
+            int expected = counts.get(0);
+            boolean consistent = counts.stream().allMatch(c -> c == expected);
+            if (consistent && expected > bestCount) {
                 best = d;
                 bestCount = expected;
             }
@@ -62,16 +52,29 @@ public final class CsvFormat {
         return best;
     }
 
-    /** Fields on one physical line, or -1 when a quote is left open (a multi-line record: not used to sniff). */
-    private static int fieldCount(String line, char d) {
-        int count = 1;
+    /** Field counts of the complete, non-empty records at the start of {@code head}. */
+    private static List<Integer> recordFieldCounts(String head, char d, int max) {
+        List<Integer> out = new ArrayList<>();
+        int fields = 1;
         boolean quoted = false;
-        for (int i = 0; i < line.length(); i++) {
-            char c = line.charAt(i);
-            if (c == '"') quoted = !quoted;
-            else if (c == d && !quoted) count++;
+        boolean empty = true;
+        for (int i = 0; i < head.length() && out.size() < max; i++) {
+            char c = head.charAt(i);
+            if (c == '"') {
+                quoted = !quoted;
+                empty = false;
+            } else if (!quoted && c == d) {
+                fields++;
+                empty = false;
+            } else if (!quoted && (c == '\n' || c == '\r')) {
+                if (!empty) out.add(fields);
+                fields = 1;
+                empty = true;
+            } else {
+                empty = false;
+            }
         }
-        return quoted ? -1 : count;
+        return out;
     }
 
     /** @return the number of records processed */

@@ -10,3 +10,8 @@ dependencies {
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly(libs.junit.platform.launcher)
 }
+
+// The million-row CSV/XLSX tests prove the handlers stream: they must pass inside this deliberately small heap.
+tasks.withType<Test>().configureEach {
+    maxHeapSize = "256m"
+}

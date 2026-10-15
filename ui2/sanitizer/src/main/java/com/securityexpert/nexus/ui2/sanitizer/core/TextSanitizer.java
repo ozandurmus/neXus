@@ -30,7 +30,7 @@ public final class TextSanitizer {
     public static final String DEVICE_NAME = "device_name";
 
     private enum Type {
-        URL(90), EMAIL(80), USER_AT_HOST(75), MAC(70), IPV6(65), IPV4(60), KNOWN(55), FQDN(50), CONTEXT_HOST(40),
+        URL(90), EMAIL(80), USER_AT_HOST(75), MAC(70), IPV6(65), IPV4(60), KNOWN(55), FQDN(50), LEARNED(45), CONTEXT_HOST(40),
         SYSLOG_HOST(40), BARE_HOST(10);
 
         final int priority;
@@ -54,6 +54,9 @@ public final class TextSanitizer {
     private final TokenSink sink;
     private final Counts counts;
     private final PublicSuffixes suffixes = PublicSuffixes.get();
+    /** Host names this job has seen in a host context; their bare mentions elsewhere in the file follow. */
+    private final java.util.Set<String> learned = new java.util.HashSet<>();
+    static final int MAX_LEARNED = 200_000;
 
     public TextSanitizer(Mappers mappers, TokenSink sink, Counts counts) {
         this.mappers = mappers;
@@ -63,6 +66,17 @@ public final class TextSanitizer {
 
     public Counts counts() {
         return counts;
+    }
+
+    /**
+     * Remembers a host name seen in a host context (a host column, a host key) so its bare mentions in free text of
+     * the same job are replaced too. Bounded; single characters, numbers and stop words are never learned.
+     */
+    public void learn(String name) {
+        if (name == null || name.length() < 3 || learned.size() >= MAX_LEARNED) return;
+        if (!Patterns.BARE_HOST.matcher(name).matches() || name.chars().noneMatch(Character::isLetter)) return;
+        if (Patterns.HOST_STOPWORDS.contains(name.toLowerCase(Locale.ROOT))) return;
+        learned.add(name);
     }
 
     /** Free text (a log line, a cell, a JSON string). */
@@ -134,7 +148,7 @@ public final class TextSanitizer {
             Matcher s = pattern.matcher(text);
             if (s.find()) out.add(new Candidate(s.start(1), s.end(1), Type.SYSLOG_HOST, new String[] {s.group(1)}));
         }
-        if (mappers.known() != KnownNames.NONE) {
+        if (mappers.known() != KnownNames.NONE || !learned.isEmpty()) {
             Matcher w = Patterns.WORD.matcher(text);
             while (w.find()) {
                 String word = w.group();
@@ -145,6 +159,8 @@ public final class TextSanitizer {
                 }
                 if (!word.isEmpty() && mappers.known().pseudonymFor(word).isPresent()) {
                     out.add(new Candidate(w.start(), end, Type.KNOWN, new String[] {word}));
+                } else if (!word.isEmpty() && learned.contains(word)) {
+                    out.add(new Candidate(w.start(), end, Type.LEARNED, new String[] {word}));
                 }
             }
         }
@@ -226,7 +242,11 @@ public final class TextSanitizer {
                 String user = label(p[0], EMAIL);
                 yield user + "@" + host(p[1], EMAIL);
             }
-            case CONTEXT_HOST, SYSLOG_HOST, BARE_HOST -> host(p[0], HOSTNAME);
+            case CONTEXT_HOST, SYSLOG_HOST, LEARNED -> host(p[0], HOSTNAME);
+            case BARE_HOST -> {
+                learn(p[0]);
+                yield host(p[0], HOSTNAME);
+            }
             case KNOWN -> device(p[0]);
             case URL -> url(p[0], p[1]);
         };

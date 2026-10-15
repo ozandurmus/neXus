@@ -11,6 +11,8 @@ public final class HostHeaders {
     }
 
     public static boolean isHostHeader(String header) {
-        return header != null && header.length() <= 40 && Patterns.HOST_HEADER.matcher(header).matches();
+        if (header == null) return false;
+        String h = header.startsWith("\uFEFF") ? header.substring(1) : header;
+        return h.length() <= 40 && Patterns.HOST_HEADER.matcher(h).matches();
     }
 }
