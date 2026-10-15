@@ -142,7 +142,4 @@ class PcapParityTest {
         return m.group(1);
     }
 
-    static Map<String, String> unused() {
-        return Map.of();
-    }
 }

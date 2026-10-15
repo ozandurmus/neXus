@@ -467,7 +467,4 @@ class NexusPcapTest {
         return text.lines().toList();
     }
 
-    static Map<String, String> none() {
-        return Map.of();
-    }
 }

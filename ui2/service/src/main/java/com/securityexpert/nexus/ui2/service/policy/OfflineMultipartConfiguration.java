@@ -15,6 +15,8 @@ public class OfflineMultipartConfiguration {
                 if (path.matches("/api/v2/policy/policies/[^/]+/offline-analyses")) return false;
                 // Packet Analysis captures (up to 2 GB) are streamed to the analysis volume after the gates.
                 if (path.matches("/api/v2/packet-analysis/cases/[^/]+/captures")) return false;
+                // Data Sanitizer uploads (up to 2 GB) are streamed to the sanitizer work area after the gates.
+                if (path.equals("/api/v2/sanitize") || path.equals("/api/v2/sanitize/revert")) return false;
                 return super.isMultipart(request);
             }
         };

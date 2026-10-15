@@ -468,7 +468,4 @@ final class FrameRewriter {
         }
     }
 
-    static Map<String, Long> empty() {
-        return new HashMap<>();
-    }
 }
