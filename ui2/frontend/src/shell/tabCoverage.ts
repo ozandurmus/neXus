@@ -18,4 +18,5 @@ export const BACKUP_SECTIONS = ["All enrolled", "Targets", "Targets without arch
 export const SCREEN_HEADINGS: Record<ScreenId, string> = {
   policy: "Policy", overview: "Overview", inventory: "Devices", configuration: "Devices", compliance: "Compliance",
   backups: "Backups", operations: "Operations", administration: "Administration", packet_analysis: "Packet Analysis",
+  sanitizer: "Data Sanitizer",
 };

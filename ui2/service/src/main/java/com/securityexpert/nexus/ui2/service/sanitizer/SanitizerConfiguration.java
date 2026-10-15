@@ -65,6 +65,13 @@ public class SanitizerConfiguration {
                 Path.of(workDir), maxBytes, retentionDays, Duration.ofMinutes(outputTtlMinutes), executor);
     }
 
+    @Bean
+    public SanitizerHooks sanitizerHooks(
+            @Value("${ui2.sanitizer.packet-analysis-anonymize-on-upload:false}") boolean packetAnalysisOnUpload,
+            @Value("${ui2.sanitizer.log-export:false}") boolean logExport) {
+        return new SanitizerHooks(packetAnalysisOnUpload, logExport);
+    }
+
     /**
      * The inventory's device and cluster names with the pseudonyms the UI shows for them, read once per job (so a
      * device registered a minute ago is already covered). Names that are addresses are left to the address rules.

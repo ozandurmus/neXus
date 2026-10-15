@@ -2090,3 +2090,60 @@ export async function uploadPacketCapture(caseId: string, file: File, onProgress
     xhr.send(body);
   });
 }
+
+// ---- Data Sanitizer (docs/design/DATA_SANITIZER_CONTRACT.md §3.1) ---------------------------------------------
+/** What the server says this session may do; the screen renders it and decides nothing itself. */
+export interface SanitizerPermissions { readonly run: boolean; readonly revert: boolean; readonly revert_any_job: boolean }
+export interface SanitizerInfo {
+  readonly permissions: SanitizerPermissions;
+  readonly limits: { readonly max_file_bytes: number; readonly vault_retention_days: number;
+    readonly output_ttl_minutes: number; readonly vault_available: boolean };
+}
+export type SanitizerState = "RUNNING" | "SUCCEEDED" | "FAILED";
+export interface SanitizeJob {
+  readonly job_id: string; readonly state: SanitizerState; readonly file_type: string | null;
+  readonly created_at: string; readonly finished_at: string | null; readonly input_bytes: number | null;
+  readonly output_bytes: number | null; readonly counts: Record<string, number>; readonly failure_reason: string | null;
+  readonly output_state: string; readonly vault_entries: number; readonly vault_expires_at: string; readonly vault_pruned: boolean;
+}
+export interface RevertJob {
+  readonly revert_id: string; readonly state: SanitizerState; readonly scope: string; readonly source_job_id: string | null;
+  readonly file_type: string | null; readonly created_at: string; readonly finished_at: string | null;
+  readonly input_bytes: number | null; readonly output_bytes: number | null; readonly counts: Record<string, number>;
+  readonly failure_reason: string | null; readonly output_state: string;
+}
+const SANITIZE = "/api/v2/sanitize";
+export const getSanitizerInfo = () => call<SanitizerInfo>(`${SANITIZE}/jobs`, "GET");
+export const getSanitizeJob = (jobId: string) => call<SanitizeJob>(`${SANITIZE}/jobs/${encodeURIComponent(jobId)}`, "GET");
+export const getRevertJob = (revertId: string) => call<RevertJob>(`${SANITIZE}/reverts/${encodeURIComponent(revertId)}`, "GET");
+/** The browser's own download (streamed to disk); the server serves each result once and then deletes it. */
+export const sanitizeDownloadHref = (jobId: string) => `${SANITIZE}/jobs/${encodeURIComponent(jobId)}/download`;
+export const revertDownloadHref = (revertId: string) => `${SANITIZE}/reverts/${encodeURIComponent(revertId)}/download`;
+
+/**
+ * Upload one file with progress (XMLHttpRequest: fetch reports no upload progress); the browser streams it from disk.
+ * Form fields go before the file part, as the server reads them.
+ */
+export async function uploadForSanitizer(route: "sanitize" | "revert", file: File, fields: Record<string, string>,
+  onProgress: (sent: number, total: number) => void,
+  makeRequest: () => XMLHttpRequest = () => new XMLHttpRequest()): Promise<{ job_id?: string; revert_id?: string; state: string }> {
+  const token = await csrfToken();
+  const body = new FormData();
+  for (const [name, value] of Object.entries(fields)) body.append(name, value);
+  body.append("file", file, file.name);
+  return new Promise((resolve, reject) => {
+    const xhr = makeRequest();
+    xhr.open("POST", route === "sanitize" ? SANITIZE : `${SANITIZE}/revert`);
+    xhr.withCredentials = true;
+    if (token) xhr.setRequestHeader("X-CSRF-Token", token);
+    xhr.upload.onprogress = event => { if (event.lengthComputable) onProgress(event.loaded, event.total); };
+    xhr.onload = () => {
+      let parsed: Record<string, unknown> = {};
+      try { parsed = JSON.parse(xhr.responseText || "{}"); } catch { parsed = {}; }
+      if (xhr.status >= 200 && xhr.status < 300) resolve(parsed as { job_id?: string; revert_id?: string; state: string });
+      else reject({ status: xhr.status, body: parsed } satisfies ApiError);
+    };
+    xhr.onerror = () => reject({ status: 0, body: { error: "NETWORK" } } satisfies ApiError);
+    xhr.send(body);
+  });
+}
