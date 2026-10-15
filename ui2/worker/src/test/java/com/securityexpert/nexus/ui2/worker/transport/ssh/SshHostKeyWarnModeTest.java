@@ -19,14 +19,19 @@ class SshHostKeyWarnModeTest {
     }
     @Test void mismatchHookAllowsOnlyAfterDurableObservationAndNeverEnrolls() {
         var policy = mock(SshHostKeyPolicyStore.class);
-        var resolver = mock(TrustRuleResolver.class);
-        when(resolver.resolveExpectedFingerprint(anyString(), anyString(), anyInt(), anyString())).thenReturn(Optional.of("1".repeat(64)));
+        // A hand-written resolver, not a Mockito mock: stubbing a default interface method on a mock failed
+        // intermittently under full-suite load (Mockito MockUtil assertion), and nothing here needs a mock.
+        var tofuRecorded = new java.util.concurrent.atomic.AtomicBoolean();
+        TrustRuleResolver resolver = new TrustRuleResolver() {
+            @Override public Optional<String> resolveExpectedFingerprint(String trustRuleRef) { return Optional.of("1".repeat(64)); }
+            @Override public void recordTrustOnFirstUse(String host, int port, String algorithm, String fingerprint) { tofuRecorded.set(true); }
+        };
         when(policy.observe(anyString(), anyLong(), anyBoolean(), anyString(), anyString(), anyInt(), anyString(), anyString(), anyString())).thenReturn(true);
         var transport = new SshExecTransport(ref -> null, resolver, false, policy);
         try (var scope = EndpointRuntime.open(new Owner("job-fixture", 1, null, 0, "inventory", "worker-fixture", 1, "INVENTORY", false))) {
             assertEquals(HostKeyRepository.OK, transport.trustedOnlyRepository("ref", new ConnectionTarget("endpoint-fixture", "192.0.2.10", 22), new String[1], new boolean[1]).check("192.0.2.10", key()));
             verify(policy).observe(eq("job-fixture"), eq(1L), eq(false), eq("endpoint-fixture"), eq("192.0.2.10"), eq(22), eq("ssh-rsa"), anyString(), eq("1".repeat(64)));
-            verify(resolver, never()).recordTrustOnFirstUse(anyString(), anyInt(), anyString(), anyString());
+            assertFalse(tofuRecorded.get(), "a warned mismatch never enrolls trust on first use");
         }
     }
     @Test void refusedOrUnavailablePolicyAndMissingContextFailClosed() {
