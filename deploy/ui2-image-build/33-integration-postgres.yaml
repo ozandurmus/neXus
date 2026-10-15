@@ -101,7 +101,7 @@ spec:
           failureThreshold: 90
       containers:
       - name: runner
-        image: registry.access.redhat.com/ubi9/openjdk-21@sha256:645710be17ff582b0f2eb5d52f572556a2b73f4367290548bbc89431213e3ece
+        image: registry.access.redhat.com/ubi9/openjdk-21@sha256:bd995811a45eb587f97a105796f8f43df466a4269411a2a1642f0f9799f885db
         command:
         - /bin/bash
         - -c
