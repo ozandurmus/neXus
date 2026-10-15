@@ -3612,3 +3612,93 @@ gates:
     secret_output_risk: "sensitive names and values; 1 MiB cap; in-memory masked projection only; no raw retention"
     safe_telemetry_fields: ["sectionNames", "fieldNames", "valueTypes", "units", "allowlistedCounters", "scopeMarkerPresent"]
     source_document_pointer: "PO cpview measurement brief; PO_DECISION_RECORD_2026_10_06_FAILOVER_EXECUTION_ESTATE.md item 7; exact-command execution approval pending; PO chat approval 2026-10-07 for one measurement on one plain gateway member"
+
+  # M1: file identity, size and last write time; read twice 24 h apart to measure daily growth (PO 2026-10-15, system-log programme phase A measurement).
+  - gate_id: "cp_syslog_measure_stat"
+    vendor: "check_point"
+    platform_role_scope: "cp_gaia_gateway"
+    shell_context: "expert"
+    transport_kind: "SSH_EXEC"
+    canonical_command_key: "bash -lc 'stat -c \"%i %s %Y\" /var/log/messages /var/log/messages.1 $FWDIR/log/fwd.elg $CPDIR/log/cpd.elg $CPDIR/log/cpwd.elg'"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 30
+    retry_rule: "none"
+    max_frequency: "phase A measurement only: at most twice per device, 24 h apart, inside a job window; no polling"
+    session_reuse_rule: "one existing trusted SSH session; non-interactive bash login shell; no retry"
+    unsupported_behavior_ref: "a missing file is a result (stat/tail error text), not an error"
+    secret_output_risk: "log lines may carry names, addresses and user names; in-memory masked projection only; no raw retention"
+    safe_telemetry_fields: ["inode", "sizeBytes", "mtime"]
+    source_document_pointer: "docs/design/DEVICE_SYSTEM_LOG_PROGRAMME_CONTRACT.md §4; PO chat approval 2026-10-15 for M1/M2 on every enrolled Check Point firewall"
+
+  # M2: line format of /var/log/messages (PO 2026-10-15, system-log programme phase A measurement).
+  - gate_id: "cp_syslog_measure_tail_messages"
+    vendor: "check_point"
+    platform_role_scope: "cp_gaia_gateway"
+    shell_context: "expert"
+    transport_kind: "SSH_EXEC"
+    canonical_command_key: "bash -lc 'tail -n 20 /var/log/messages'"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 30
+    retry_rule: "none"
+    max_frequency: "phase A measurement only: at most twice per device, 24 h apart, inside a job window; no polling"
+    session_reuse_rule: "one existing trusted SSH session; non-interactive bash login shell; no retry"
+    unsupported_behavior_ref: "a missing file is a result (stat/tail error text), not an error"
+    secret_output_risk: "log lines may carry names, addresses and user names; in-memory masked projection only; no raw retention"
+    safe_telemetry_fields: ["timestampForm", "lineShape"]
+    source_document_pointer: "docs/design/DEVICE_SYSTEM_LOG_PROGRAMME_CONTRACT.md §4; PO chat approval 2026-10-15 for M1/M2 on every enrolled Check Point firewall"
+
+  # M2: line format of fwd.elg (PO 2026-10-15, system-log programme phase A measurement).
+  - gate_id: "cp_syslog_measure_tail_fwd"
+    vendor: "check_point"
+    platform_role_scope: "cp_gaia_gateway"
+    shell_context: "expert"
+    transport_kind: "SSH_EXEC"
+    canonical_command_key: "bash -lc 'tail -n 20 $FWDIR/log/fwd.elg'"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 30
+    retry_rule: "none"
+    max_frequency: "phase A measurement only: at most twice per device, 24 h apart, inside a job window; no polling"
+    session_reuse_rule: "one existing trusted SSH session; non-interactive bash login shell; no retry"
+    unsupported_behavior_ref: "a missing file is a result (stat/tail error text), not an error"
+    secret_output_risk: "log lines may carry names, addresses and user names; in-memory masked projection only; no raw retention"
+    safe_telemetry_fields: ["timestampForm", "lineShape"]
+    source_document_pointer: "docs/design/DEVICE_SYSTEM_LOG_PROGRAMME_CONTRACT.md §4; PO chat approval 2026-10-15 for M1/M2 on every enrolled Check Point firewall"
+
+  # M2: line format of cpd.elg (PO 2026-10-15, system-log programme phase A measurement).
+  - gate_id: "cp_syslog_measure_tail_cpd"
+    vendor: "check_point"
+    platform_role_scope: "cp_gaia_gateway"
+    shell_context: "expert"
+    transport_kind: "SSH_EXEC"
+    canonical_command_key: "bash -lc 'tail -n 20 $CPDIR/log/cpd.elg'"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 30
+    retry_rule: "none"
+    max_frequency: "phase A measurement only: at most twice per device, 24 h apart, inside a job window; no polling"
+    session_reuse_rule: "one existing trusted SSH session; non-interactive bash login shell; no retry"
+    unsupported_behavior_ref: "a missing file is a result (stat/tail error text), not an error"
+    secret_output_risk: "log lines may carry names, addresses and user names; in-memory masked projection only; no raw retention"
+    safe_telemetry_fields: ["timestampForm", "lineShape"]
+    source_document_pointer: "docs/design/DEVICE_SYSTEM_LOG_PROGRAMME_CONTRACT.md §4; PO chat approval 2026-10-15 for M1/M2 on every enrolled Check Point firewall"
+
+  # M2: line format of cpwd.elg (PO 2026-10-15, system-log programme phase A measurement).
+  - gate_id: "cp_syslog_measure_tail_cpwd"
+    vendor: "check_point"
+    platform_role_scope: "cp_gaia_gateway"
+    shell_context: "expert"
+    transport_kind: "SSH_EXEC"
+    canonical_command_key: "bash -lc 'tail -n 20 $CPDIR/log/cpwd.elg'"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 30
+    retry_rule: "none"
+    max_frequency: "phase A measurement only: at most twice per device, 24 h apart, inside a job window; no polling"
+    session_reuse_rule: "one existing trusted SSH session; non-interactive bash login shell; no retry"
+    unsupported_behavior_ref: "a missing file is a result (stat/tail error text), not an error"
+    secret_output_risk: "log lines may carry names, addresses and user names; in-memory masked projection only; no raw retention"
+    safe_telemetry_fields: ["timestampForm", "lineShape"]
+    source_document_pointer: "docs/design/DEVICE_SYSTEM_LOG_PROGRAMME_CONTRACT.md §4; PO chat approval 2026-10-15 for M1/M2 on every enrolled Check Point firewall"
