@@ -111,8 +111,14 @@ class PanoramaPolicyCollectorTest {
         assertTrue(snapshots.stream().flatMap(s -> s.failures().stream()).anyMatch(f -> f.reason().equals("THROTTLED")));
         verify(repository).beginDomain(eq("device-1"), anyString(), eq(true));
     }
+    // The fixture signs the hit-count read off (V155); most cases here pin it back to DRAFTED so they keep testing the
+    // "no hit metrics" path, and the signed cases above map it to SIGNED_OFF explicitly.
     private final GateRegistryPort gates = key -> GateRegistryFixtureLoader.loadFromStream(getClass()
-            .getResourceAsStream("/capabilities/gate_registry_fixture.yaml")).stream().filter(row -> row.key().equals(key)).toList();
+            .getResourceAsStream("/capabilities/gate_registry_fixture.yaml")).stream().filter(row -> row.key().equals(key))
+            .map(r -> r.gateId().equals("pan_policy_rule_hit_count")
+                ? new GateRow(r.gateId(), r.vendor(), r.platformRoleScope(), r.shellContext(), r.transportKind(), r.canonicalCommandKey(),
+                    r.actionClass(), SignOffState.DRAFTED, r.timeoutS(), r.retryRule(), r.maxFrequency(), r.sessionReuseRule(),
+                    r.unsupportedBehaviorRef(), r.secretOutputRisk(), r.safeTelemetryFields(), r.sourceDocumentPointer()) : r).toList();
     private final DiscoveryRun run = new DiscoveryRun("run-1", "palo_alto", "192.0.2.10", "synthetic-ref", "synthetic-actor",
             DiscoveryRunState.FINISHED, Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
     private final PolicyCollectionRepository.Request scope = new PolicyCollectionRepository.Request("manager-1", "", false);
