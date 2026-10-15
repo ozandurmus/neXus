@@ -53,10 +53,7 @@ class AuditContextMissingFailsClosedTest {
             app.setAutoCommit(false);
             try (Statement statement = app.createStatement()) {
                 SQLException failure = assertThrows(SQLException.class, () -> statement.execute(
-                        "INSERT INTO devices(device_id, vendor_hint, registration_source, is_test_target, "
-                                + "enrollment_state, disabled, credential_reference_id) VALUES ('"
-                                + deviceId + "', 'harness-vendor', 'manual', true, 'DRAFT', false, '"
-                                + credentialReferenceId + "')"));
+                        Ui2Rows.insertDeviceSql(deviceId, credentialReferenceId, "DRAFT")));
                 assertTrue(failure.getMessage().contains("audit_context_missing"),
                         "fn_audit_capture() must refuse a mutation with no audit context, naming "
                                 + "audit_context_missing");
@@ -92,10 +89,7 @@ class AuditContextMissingFailsClosedTest {
             try (Statement statement = app.createStatement()) {
                 statement.execute("SET LOCAL app.actor_fingerprint = 'harness-actor-fingerprint'");
                 SQLException failure = assertThrows(SQLException.class, () -> statement.execute(
-                        "INSERT INTO devices(device_id, vendor_hint, registration_source, is_test_target, "
-                                + "enrollment_state, disabled, credential_reference_id) VALUES ('"
-                                + deviceId + "', 'harness-vendor', 'manual', true, 'DRAFT', false, '"
-                                + credentialReferenceId + "')"));
+                        Ui2Rows.insertDeviceSql(deviceId, credentialReferenceId, "DRAFT")));
                 assertTrue(failure.getMessage().contains("audit_context_missing"));
             }
             app.rollback();
