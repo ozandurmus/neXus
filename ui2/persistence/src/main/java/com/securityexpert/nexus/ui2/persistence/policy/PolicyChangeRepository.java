@@ -6,7 +6,7 @@ import java.util.*;
 
 /** Indexed history reads; snapshots and collection paths are never modified. */
 public final class PolicyChangeRepository {
-    /** includeInitial=false leaves out a policy's initial baseline capture (V149), which is not a change anybody made. */
+    /** includeInitial=false leaves out a policy's initial baseline capture (V150), which is not a change anybody made. */
     public record Filter(Instant from, Instant to, String policy, String device, String changeType, String field, boolean includeInitial) {
         public Filter(Instant from, Instant to, String policy, String device, String changeType, String field) {
             this(from, to, policy, device, changeType, field, true);
