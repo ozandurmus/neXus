@@ -18,4 +18,6 @@ Claude-specific delta only; `roles/ENGINEER.md` carries the reading order.
   2026-09-25 reinstall HOST-A is neXus's own host: the 2026-09-24 decision
   (`docs/design/PO_DECISION_RECORD_2026_09_24_HOST_A_OWNED_BY_NEXUS_AGENT_SUDO.md`)
   governs sudo, ask-first commands and the no-jump-server rule.
-- Multi-Model Consultation & External Reviewers: Per constitutional law in AGENTS.md, whenever the Product Owner or a task directive requests consultation with Claude/Fable, Codex/Astra, or another external reviewer, the agent MUST ALWAYS execute the consultation through the authorized scripts in `scripts/` (e.g. `scripts/consult_claude_*.py` via `claude -p`, `scripts/consult_codex_*.py` via `codex exec`). Simulating reviews via internal subagents or personas is strictly prohibited.
+- Multi-Model Consultation & External Reviewers: Per constitutional law in AGENTS.md, whenever the Product Owner or a task directive requests consultation with Claude/Fable, Argon, or another external reviewer, the agent MUST ALWAYS execute the consultation through the authorized scripts in `scripts/` (e.g. `scripts/consult_claude_*.py` via `claude -p`, `scripts/consult_argon.py` via `agy -p`). Simulating reviews via internal subagents or personas is strictly prohibited. Codex is retired (PO 2026-10-15).
+- Argon worker lanes: `docs/design/PO_DECISION_RECORD_2026_10_15_ARGON_WORKER.md` — development lanes may go to Argon only through `scripts/argon_task.py` in a `~/Codo/nexus-*` worktree; you review, test and ship its output. `/argon` wraps both forms.
+
