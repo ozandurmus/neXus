@@ -190,6 +190,20 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
                 // by the IP masker, and a type label equal to a device name ("Reporter") read as that name.
                 case "presented_fingerprint", "expected_fingerprint_prefix" -> result.put(key, value);
                 case "platform", "hardware_type", "hypervisor", "software_version", "model", "platform_family" -> result.put(key, value);
+                // V148: a link-layer address keeps its vendor prefix (OUI) only; a zone name becomes a stable pseudonym.
+                case "mac_address" -> result.put(key, value instanceof String mac ? maskMac(mac) : value);
+                case "zone" -> result.put(key, value instanceof String zone ? topologyPseudonymizer.maskPolicyName("zone", zone) : value);
+                case "member_macs", "member_zones" -> {
+                    if (value instanceof Map<?, ?> byMember) {
+                        Map<String, Object> masked = new LinkedHashMap<>();
+                        byMember.forEach((member, v) -> masked.put(String.valueOf(member), v instanceof String text
+                                ? ("member_macs".equals(key) ? maskMac(text) : topologyPseudonymizer.maskPolicyName("zone", text))
+                                : v));
+                        result.put(key, masked);
+                    } else {
+                        result.put(key, value);
+                    }
+                }
                 case "cluster_member_ref" -> {
                     if (value instanceof String s) {
                         result.put(key, topologyPseudonymizer.maskClusterName(s));
@@ -286,6 +300,11 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
             }
         }
         return result;
+    }
+
+    /** {@code aa:bb:cc:dd:ee:ff} to {@code aa:bb:cc:**:**:**}; anything else is withheld entirely. */
+    static String maskMac(String mac) {
+        return mac.matches("(?i)[0-9a-f]{2}(:[0-9a-f]{2}){5}") ? mac.substring(0, 8).toLowerCase(java.util.Locale.ROOT) + ":**:**:**" : "[REDACTED_MAC]";
     }
 
     private Object maskAddressValue(Object value, String parentContextRef) {

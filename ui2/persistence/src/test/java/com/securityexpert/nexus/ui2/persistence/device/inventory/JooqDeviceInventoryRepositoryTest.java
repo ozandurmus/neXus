@@ -139,8 +139,8 @@ class JooqDeviceInventoryRepositoryTest {
                 new String[] { "addr-2", "iface-1", "192.0.2.1/24", "ipv4", "cluster_virtual" });
 
         Result<Record> interfaceResult = create.fetchFromStringData(
-                new String[] { "interface_id", "context", "name", "parent", "kind", "state", "vlan_id" },
-                new String[] { "iface-1", "physical", "eth0", null, "physical", "up", "100" });
+                new String[] { "interface_id", "context", "name", "parent", "kind", "state", "vlan_id", "mac_address", "zone" },
+                new String[] { "iface-1", "physical", "eth0", null, "physical", "up", "100", "00:1c:7f:0a:0b:0c", null });
 
         Result<Record> routeResult = create.fetchFromStringData(
                 new String[] { "route_id", "context", "destination", "next_hop", "interface", "protocol",
@@ -184,6 +184,8 @@ class JooqDeviceInventoryRepositoryTest {
         assertEquals(1, context.interfaces().size());
         assertEquals(2, context.interfaces().get(0).addresses().size());
         assertEquals(Optional.of(100), context.interfaces().get(0).vlanId(), "AC-4: the VLAN id round-trips");
+        assertEquals(Optional.of("00:1c:7f:0a:0b:0c"), context.interfaces().get(0).macAddress(), "V148: the MAC round-trips");
+        assertEquals(Optional.empty(), context.interfaces().get(0).zone(), "V148: no zone recorded stays empty");
         assertEquals(1, context.routes().size());
         assertTrue(run.gridMembers().isEmpty(), "a firewall run carries no grid members");
         assertEquals(2, run.gridSummary().dnsViews());

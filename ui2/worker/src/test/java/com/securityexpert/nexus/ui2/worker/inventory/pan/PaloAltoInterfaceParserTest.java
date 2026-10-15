@@ -85,4 +85,30 @@ class PaloAltoInterfaceParserTest {
         assertEquals(java.util.Map.of(), result.interfacesByVsys());
         assertTrue(result.physicalPorts().isEmpty());
     }
+
+    /** V148 (PO 2026-10-15): zone by interface name, link-layer address by physical port name, nothing guessed. */
+    @Test
+    void zonesAndPortMacAddressesAreReadByExactInterfaceName() {
+        PaloAltoInterfaceParseResult result = PaloAltoInterfaceParser.parse(Fixtures.read("pan/show_interface_all.xml"));
+
+        assertEquals("trust", result.interfaceNameToZone().get("ethernet1/1"));
+        assertEquals("dmz", result.interfaceNameToZone().get("ethernet1/2.100"));
+        assertEquals("dmz", result.interfaceNameToZone().get("ethernet1/3"));
+        assertEquals("trust", result.interfaceNameToZone().get("ethernet1/1.50"));
+        assertTrue(!result.interfaceNameToZone().containsKey("ha1"), "an interface with no zone leaf has no zone");
+
+        assertEquals("00:1b:17:00:01:01", result.portNameToMac().get("ethernet1/1"));
+        assertEquals("00:1b:17:00:01:03", result.portNameToMac().get("ethernet1/3"));
+        assertTrue(!result.portNameToMac().containsKey("ethernet1/2.100"), "a subinterface is not given its port's address");
+    }
+
+    @Test
+    void malformedOrAllZeroMacAndNotApplicableZoneAreNotRecorded() {
+        String body = "<response><result><ifnet><entry><name>ethernet1/9</name><zone>N/A</zone><vsys>1</vsys></entry></ifnet>"
+                + "<hw><entry><name>ethernet1/9</name><state>up</state><mac>00:00:00:00:00:00</mac></entry>"
+                + "<entry><name>ethernet1/8</name><state>up</state><mac>not-a-mac</mac></entry></hw></result></response>";
+        PaloAltoInterfaceParseResult result = PaloAltoInterfaceParser.parse(body);
+        assertTrue(result.interfaceNameToZone().isEmpty());
+        assertTrue(result.portNameToMac().isEmpty());
+    }
 }

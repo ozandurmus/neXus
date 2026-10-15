@@ -22,9 +22,14 @@ import java.util.Optional;
  *               V17): Check Point's {@code vlan protocol 802.1Q id <n>}
  *               detail line, or Palo Alto's {@code tag} leaf; empty for the
  *               vast majority of interfaces that carry no VLAN id at all
+ * @param macAddress the {@code device_interface.mac_address} column (V148): the link-layer address the
+ *               device itself reports -- Check Point {@code ip -o link show} {@code link/ether}, Palo Alto
+ *               {@code show interface all} {@code hw/entry/mac}; empty when not reported, never inferred
+ * @param zone   the {@code device_interface.zone} column (V148): Palo Alto {@code ifnet/entry/zone};
+ *               empty when the interface carries no zone or the vendor has no such field
  */
 public record InventoryInterface(String interfaceId, String name, Optional<String> parent, String kind, String state,
-        List<InventoryAddress> addresses, Optional<Integer> vlanId) {
+        List<InventoryAddress> addresses, Optional<Integer> vlanId, Optional<String> macAddress, Optional<String> zone) {
 
     public static final String KIND_PHYSICAL = "physical";
     public static final String KIND_VLAN = "vlan";
@@ -46,11 +51,25 @@ public record InventoryInterface(String interfaceId, String name, Optional<Strin
         Objects.requireNonNull(state, "state");
         addresses = addresses == null ? List.of() : List.copyOf(addresses);
         vlanId = vlanId == null ? Optional.empty() : vlanId;
+        macAddress = macAddress == null ? Optional.empty() : macAddress;
+        zone = zone == null ? Optional.empty() : zone;
+    }
+
+    /** Pre-V148 shape: no link-layer address and no zone recorded. */
+    public InventoryInterface(String interfaceId, String name, Optional<String> parent, String kind, String state,
+            List<InventoryAddress> addresses, Optional<Integer> vlanId) {
+        this(interfaceId, name, parent, kind, state, addresses, vlanId, Optional.empty(), Optional.empty());
     }
 
     /** Pre-V17 shape, kept so every existing caller that never mentions a VLAN id keeps compiling unchanged. */
     public InventoryInterface(String interfaceId, String name, Optional<String> parent, String kind, String state,
             List<InventoryAddress> addresses) {
         this(interfaceId, name, parent, kind, state, addresses, Optional.empty());
+    }
+
+    /** This interface with the link facts a separate read reported for it (an absent value keeps the current one). */
+    public InventoryInterface withLinkFacts(Optional<String> mac, Optional<String> zoneName) {
+        return new InventoryInterface(interfaceId, name, parent, kind, state, addresses, vlanId,
+                mac.isPresent() ? mac : macAddress, zoneName.isPresent() ? zoneName : zone);
     }
 }

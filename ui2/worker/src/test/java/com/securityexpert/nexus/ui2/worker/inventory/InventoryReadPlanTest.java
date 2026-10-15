@@ -21,6 +21,7 @@ class InventoryReadPlanTest {
         assertEquals(List.of(
                 "fw getifs",
                 "ip -4 addr show",
+                "ip -o link show",
                 "ip -4 route show table all",
                 "cphaprob stat",
                 "cphaprob -a if",
@@ -33,6 +34,7 @@ class InventoryReadPlanTest {
         assertEquals(List.of(
                 "bash -lc 'vsenv 0 && fw getifs'",
                 "bash -lc 'vsenv 0 && ip -4 addr show'",
+                "bash -lc 'vsenv 0 && ip -o link show'",
                 "bash -lc 'vsenv 0 && ip -4 route show table all'",
                 "bash -lc 'vsenv 0 && cphaprob stat'",
                 "bash -lc 'vsenv 0 && cphaprob -a if'",
@@ -72,8 +74,9 @@ class InventoryReadPlanTest {
     }
 
     @Test
-    void checkPointClosedSetHasExactlySixPhysicalReadsAndThreeVsidComposites() {
-        assertEquals(6, InventoryReadPlan.CHECK_POINT_PHYSICAL_READS.size());
+    void checkPointClosedSetHasExactlySevenPhysicalReadsAndThreeVsidComposites() {
+        // Six CF-3 reads plus the V148 link-layer read (PO 2026-10-15, gate entries 21/22).
+        assertEquals(7, InventoryReadPlan.CHECK_POINT_PHYSICAL_READS.size());
         assertEquals(3, InventoryReadPlan.checkPointVsidSteps("2").size());
     }
 

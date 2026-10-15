@@ -65,9 +65,10 @@ public final class JooqDeviceInventoryRepository implements DeviceInventoryRepos
             for (InventoryContext context : run.contexts()) {
                 for (InventoryInterface iface : context.interfaces()) {
                     dsl.execute("insert into device_interface(interface_id, run_id, context, name, parent, kind, "
-                            + "state, vlan_id) values ({0}, {1}, {2}, {3}, {4}, {5}, {6}, {7})",
+                            + "state, vlan_id, mac_address, zone) values ({0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9})",
                             iface.interfaceId(), run.runId(), context.context(), iface.name(),
-                            iface.parent().orElse(null), iface.kind(), iface.state(), iface.vlanId().orElse(null));
+                            iface.parent().orElse(null), iface.kind(), iface.state(), iface.vlanId().orElse(null),
+                            iface.macAddress().orElse(null), iface.zone().orElse(null));
                     for (InventoryAddress address : iface.addresses()) {
                         dsl.execute("insert into device_interface_address(address_id, interface_id, address, "
                                 + "family, role) values ({0}, {1}, {2}, {3}, {4})",
@@ -164,7 +165,7 @@ public final class JooqDeviceInventoryRepository implements DeviceInventoryRepos
         }
 
         Map<String, List<InventoryInterface>> interfacesByContext = new LinkedHashMap<>();
-        Result<Record> interfaceRows = dsl.fetch("select interface_id, context, name, parent, kind, state, vlan_id "
+        Result<Record> interfaceRows = dsl.fetch("select interface_id, context, name, parent, kind, state, vlan_id, mac_address, zone "
                 + "from device_interface where run_id = {0}", runId);
         for (Record row : interfaceRows) {
             String interfaceId = row.get("interface_id", String.class);
@@ -173,7 +174,9 @@ public final class JooqDeviceInventoryRepository implements DeviceInventoryRepos
                             Optional.ofNullable(row.get("parent", String.class)), row.get("kind", String.class),
                             row.get("state", String.class),
                             addressesByInterfaceId.getOrDefault(interfaceId, List.of()),
-                            Optional.ofNullable(row.get("vlan_id", Integer.class))));
+                            Optional.ofNullable(row.get("vlan_id", Integer.class)),
+                            Optional.ofNullable(row.get("mac_address", String.class)),
+                            Optional.ofNullable(row.get("zone", String.class))));
         }
 
         Map<String, List<InventoryRoute>> routesByContext = new LinkedHashMap<>();
