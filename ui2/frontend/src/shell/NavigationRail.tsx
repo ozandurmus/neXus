@@ -49,6 +49,8 @@ export const DESTINATIONS: readonly RailDestination[] = [
   { id: "operations", label: "Operations", icon: "operations", screen: "operations", requiredPlane: "Operations" },
   // PO decision record 2026-10-15: PacketBreaker ported into neXus as Packet Analysis (offline pcap analysis).
   { id: "packet-analysis", label: "Packets", icon: "rows", screen: "packet_analysis", requiredPlane: "PacketAnalysis" },
+  // Data Sanitizer (DATA_SANITIZER_CONTRACT.md §3.1, "Veri Anonimleştirme"): files in, sanitized or reverted files out.
+  { id: "sanitizer", label: "Sanitize", icon: "lock", screen: "sanitizer", requiredPlane: "Sanitizer" },
   { id: "admin", label: "Admin", icon: "admin", screen: "administration", requiredPlane: "Admin" },
 ];
 
@@ -89,6 +91,7 @@ export const DRAWER_GROUPS: readonly DrawerGroup[] = [
       { label: "HA & readiness", screen: "operations", requiredPlane: "Operations" },
       { label: "Backups & Recovery", screen: "backups", requiredPlane: "Operations" },
       { label: "Jobs", requiredPlane: "Operations" },
+      { label: "Data Sanitizer", screen: "sanitizer", requiredPlane: "Sanitizer" },
     ],
   },
   {
