@@ -70,6 +70,8 @@ class PolicyMappersTest {
         assertEquals(List.of("uuid-01", "uuid-02", "uuid-03", "uuid-04", "uuid-05", "uuid-06"), rules.stream().map(Rule::uuid).toList());
         assertEquals(2, snapshot.metadata().targets().size());
         assertTrue(rules.get(0).source().negated()); assertEquals(false, rules.get(0).enabled());
+        // PAN-OS omits the default: a rule entry without a <disabled> leaf is enabled, never "unknown".
+        assertTrue(rules.stream().skip(1).allMatch(r -> Boolean.TRUE.equals(r.enabled())), "absent <disabled> means enabled");
         assertTrue(snapshot.objects().values().stream().anyMatch(o -> o.status().equals("DYNAMIC")));
         assertTrue(snapshot.objects().values().stream().anyMatch(o -> o.type().equals("application-group")));
         assertTrue(snapshot.objects().values().stream().anyMatch(o -> o.type().equals("tag")));
