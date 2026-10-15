@@ -191,6 +191,7 @@ public final class GateChain {
         return "POST".equalsIgnoreCase(method) && (ActionRegistry.FMG_DIAGNOSTIC_RUN.equals(actionId)
                 || ActionRegistry.CP_READINESS_START.equals(actionId)
                 || ActionRegistry.POLICY_COLLECT.equals(actionId)
+                || ActionRegistry.SYSTEM_LOG_MEASURE_START.equals(actionId)
                 || ActionRegistry.POLICY_READ.equals(actionId));
     }
 
