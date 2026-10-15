@@ -8,7 +8,7 @@ import responses from "./fixtures/policy-live/aiview-responses.json";
 
 const page = JSON.parse(responses["/api/v2/policy/policies/{id}?page=0&q="]);
 const sources = JSON.parse(responses["/api/v2/policy/sources"]);
-const rule = page.sections.flatMap((section: { rules: { id: string; name: string }[] }) => section.rules)[0];
+const rule = page.sections.flatMap((section: { rules: { id: string; name: string; number: number }[] }) => section.rules)[0];
 
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
@@ -41,11 +41,17 @@ it("renders the masked live policy page, rule details and empty history without 
   const { fetch, debug, container } = mountLive();
   await navigate();
   const rulebase = await screen.findByRole("region", { name: "Policy rulebase" });
-  expect(within(rulebase).getAllByRole("article").length).toBeGreaterThan(0);
+  expect(rulebase.querySelectorAll("[data-policy-rule]").length).toBeGreaterThan(0);
+  expect(within(rulebase).getByRole("button", { name: "▾ Device-group post-rules · 866" })).toHaveAttribute("aria-expanded", "true");
+  expect(within(rulebase).getByText("5 empty sections")).toBeInTheDocument();
+  expect(within(rulebase).getByRole("columnheader", { name: "Application" })).toBeInTheDocument();
   expect(screen.getByText("Page 1 of 5 · 866 rules")).toBeInTheDocument();
   expect(container.textContent).not.toMatch(/could not be loaded/i);
-  fireEvent.click(within(rulebase).getByRole("button", { name: rule.name }));
-  const drawer = await screen.findByRole("dialog", { name: "Rule details" });
+  const row = within(rulebase).getByRole("row", { name: `Rule ${rule.number}: ${rule.name}` });
+  expect(row.querySelector('[data-column="permissiveness"]')).toHaveTextContent("High");
+  expect(row.querySelector('[data-column="hygiene"]')).toHaveTextContent("UNKNOWN");
+  fireEvent.click(row);
+  const drawer = within(rulebase).getByRole("region", { name: `Rule ${rule.number} details` });
   expect(within(drawer).getByText("Enabled: UNKNOWN")).toBeInTheDocument();
   fireEvent.click(within(drawer).getByRole("button", { name: "Rule history" }));
   expect(await within(drawer).findByText("No recorded changes.")).toBeInTheDocument();
@@ -68,8 +74,8 @@ it.each([
   if (scope !== "snapshots") await navigate();
   if (scope === "object" || scope === "history") {
     const rulebase = await screen.findByRole("region", { name: "Policy rulebase" });
-    fireEvent.click(within(rulebase).getByRole("button", { name: rule.name }));
-    const drawer = await screen.findByRole("dialog", { name: "Rule details" });
+    fireEvent.click(within(rulebase).getByRole("row", { name: `Rule ${rule.number}: ${rule.name}` }));
+    const drawer = within(rulebase).getByRole("region", { name: `Rule ${rule.number} details` });
     fireEvent.click(within(drawer).getByRole("button", { name: scope === "object" ? "Objects" : "Rule history" }));
     if (scope === "object") fireEvent.click(within(drawer).getAllByRole("button").find(button => button.textContent === page.objects[0].name)!);
   }

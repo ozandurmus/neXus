@@ -1,6 +1,6 @@
 import { JobButton } from "../shell/JobWindow";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Box, Button, Tabs, Tab, Checkbox, Chip, Drawer, IconButton, Tooltip, FormControl, InputLabel, MenuItem, Select, Stack, TextField, Typography } from "@mui/material";
+import { Box, Button, Tabs, Tab, Checkbox, Chip, Drawer, IconButton, InputAdornment, Tooltip, FormControl, InputLabel, MenuItem, Select, Stack, TextField, Typography } from "@mui/material";
 import { ScreenRoot, ScreenHeader, EmptyPanel } from "../shell/ScreenLayout";
 import { VendorBadge } from "../shell/States";
 import { Icon } from "../shell/Icon";
@@ -9,7 +9,7 @@ import { JobTranscriptDrawer } from "./JobTranscriptDrawer";
 import { m3 } from "../theme/m3Theme";
 import { cancelJob, listPolicies, getPolicyCollectionStatus, type PolicyCollectionMode, type PolicyCollectionStatus, listPolicySources, collectPolicies, type PolicyCollectionSource, getPolicy, getPolicyObject, type PolicyTarget, type PolicyMetadata, type PolicyObject, type PolicyRule, type PolicyCell, type PolicyPage, getPolicyRule, type PolicyRuleDetail } from "../auth/adminApi";
 
-import { VirtualPolicyCards, RuleDetailPanel, RuleHistory, scheduleLabel, sectionLabel, reportPolicyLoadError } from "./PolicyRuleViewer";
+import { PolicyRuleTable, RuleDetailPanel, RuleHistory, scheduleLabel, sectionLabel, reportPolicyLoadError } from "./PolicyRuleViewer";
 
 import { PolicyOfflineTab } from "./PolicyOfflineTab";
 import { PolicyLookupTab } from "./PolicyLookupTab";
@@ -17,6 +17,11 @@ import { PolicyChangesTab } from "./PolicyChangesTab";
 import { PolicyHygieneTab } from "./PolicyHygieneTab";
 import { PolicyDomainTab } from "./PolicyDomainTabs";
 
+// The policy page API returns a fixed 200 rules per page (PolicyQueryService.page); the client does not choose it.
+const RULE_PAGE_SIZE = 200;
+// The content pane's padding; the sticky rule toolbar extends over it so scrolled rows never show above the toolbar.
+const PANE_PADDING = 16;
+const QUERY_HELP = "Fields: source.ip, destination.ip, service, application, action, name, comment, user, zone.from, zone.to, enabled, expired, time. Hit filters: lasthit.days>90, hits=0. AND / OR / NOT, parentheses; plain text searches names and comments.";
 const runningStates = ["REQUESTED", "CLAIMED", "EXECUTING", "RECONCILING", "RUNNING"];
 const isRunning = (job: PolicyCollectionStatus) => runningStates.includes(job.state);
 // Labels are presentation only; identifiers remain unchanged as request keys.
@@ -96,6 +101,9 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
   const [jobs, setJobs] = useState<(PolicyCollectionStatus & { sourceId: string })[]>([]);
   const [targets, setTargets] = useState<PolicyTarget[]>([]);
   const [scrollTop, setScrollTop] = useState(0);
+  const [viewport, setViewport] = useState(0);
+  const [stickyTop, setStickyTop] = useState(0);
+  const content = useRef<HTMLElement>(null), rulebase = useRef<HTMLDivElement>(null), ruleToolbar = useRef<HTMLDivElement>(null);
   const [treeSearch, setTreeSearch] = useState("");
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [selectedRules, setSelectedRules] = useState<Set<string>>(new Set());
@@ -171,7 +179,7 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
   useEffect(() => {
     let active = true;
     policyRequest.current++;
-    setScrollTop(0); setData(null); setDrawer(null); drawerRequest.current++; setError(""); setErrorCode("");
+    setScrollTop(0); if (content.current) content.current.scrollTop = 0; setData(null); setDrawer(null); drawerRequest.current++; setError(""); setErrorCode("");
     if (selected) getPolicy(selected, page, query, hitFilter, hitDays).then(result => {
       if (!result?.metadata || !Array.isArray(result.sections)) throw new Error("Empty policy response");
       if (active) setData(result);
@@ -191,6 +199,23 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
     return () => { active = false; };
   }, [scheduleMinute]);
   const objects = useMemo(() => new Map((data?.objects ?? []).map(o => [o.id, o])), [data]);
+  // The content pane is the one scroll container: filters scroll away while the rule toolbar and column headers stick.
+  // The rule table renders only rows inside the visible part of the pane, so pass it the pane's scroll window.
+  const syncRuleWindow = () => {
+    const pane = content.current, table = rulebase.current;
+    if (!pane || !table) return;
+    setScrollTop(Math.max(0, Math.round(pane.getBoundingClientRect().top - table.getBoundingClientRect().top)));
+    setViewport(pane.clientHeight);
+    setStickyTop(Math.max(0, (ruleToolbar.current?.offsetHeight ?? 0) - PANE_PADDING));
+  };
+  const hasData = data !== null;
+  useEffect(() => {
+    syncRuleWindow();
+    window.addEventListener("resize", syncRuleWindow);
+    const toolbar = ruleToolbar.current, observer = toolbar && typeof ResizeObserver !== "undefined" ? new ResizeObserver(syncRuleWindow) : null;
+    if (toolbar) observer?.observe(toolbar);
+    return () => { window.removeEventListener("resize", syncRuleWindow); observer?.disconnect(); };
+  }, [hasData, tab]);
 
   const ruleSelectionRequest = useRef(0);
   useEffect(() => { ruleSelectionRequest.current++; setSelectedRules(new Set()); }, [selected, query, revision, hitFilter, hitDays]);
@@ -232,7 +257,6 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
       void openRuleId(lookupRule.rule, 90, lookupRule.policy); setLookupRule(null);
     }
   }, [lookupRule, selected]);
-  const openRule = (rule: PolicyRule) => { drawerRequest.current++; setDrawer({ rule }); };
   const toggle = (set: Set<string>, id: string) => {
     const next = new Set(set); next.has(id) ? next.delete(id) : next.add(id); return next;
   };
@@ -441,7 +465,7 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
         })}
         </Box>
       </Box>
-      <Box component="section" aria-label="Policy content" sx={{ minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", overflowY: "auto", overflowX: "hidden", bgcolor: m3.scLowest, borderRadius: 3, p: 2, border: `1px solid ${m3.outlineVar}`, '& > :not([role="region"])': { flexShrink: 0 } }}>
+      <Box component="section" aria-label="Policy content" ref={content} onScroll={tab === "Rules" ? syncRuleWindow : undefined} sx={{ minWidth: 0, minHeight: 0, display: "flex", flexDirection: "column", overflowY: "auto", overflowX: "hidden", bgcolor: m3.scLowest, borderRadius: 3, p: 2, border: `1px solid ${m3.outlineVar}`, '& > :not([role="region"])': { flexShrink: 0 } }}>
         <Stack direction="row" justifyContent="space-between" flexWrap="wrap" gap={2} sx={{ mb: 2 }}>
           <Typography variant="h6">{data ? displayName(data.metadata.name, "Policy") : "Stored policies"}</Typography>
           <FormControl size="small" sx={{ minWidth: 240 }}>
@@ -482,46 +506,51 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
             {data && <>
               {!!data.failures?.length && <Box><Chip color="warning" label="Partial snapshot · incomplete" />
                 {data.failures.map(f => <Box key={f.layerRef} role="alert"><Typography variant="body2">{f.layerName || f.layerRef}{f.offset !== undefined ? ` · offset ${f.offset}` : ""}: {failureSentence(f.reason)}</Typography><FailureDetails reason={f.reason} allowed={canCollect} /></Box>)}</Box>}
-              {data.policyKind === "LOCAL_FIREWALL" && <Chip size="small" label="local firewall policy" />}
-              <Chip size="small" title={data.metadata.collectedAt} label={collectedLabel(data.metadata.collectedAt, now)} sx={{ my: 1, alignSelf: "flex-start" }} />
-              <Stack direction="row" flexWrap="wrap" gap={1} alignItems="center" sx={{ my: 1 }}><Typography variant="body2">Assigned to:</Typography>
-                {data.metadata.targets.length === 0 ? <Chip size="small" label="Unassigned" /> : data.metadata.targets.map(t => <Tooltip key={t.deviceId} title={`${t.context ? `${t.context} · ` : ""}${t.syncStatus}`}><Chip size="small" variant="outlined" label={<Stack direction="row" gap={0.75} alignItems="center"><span>{displayName(t.name, "Device")}</span><Box component="span" aria-label={t.syncStatus} sx={{ width: 6, height: 6, borderRadius: "50%", bgcolor: t.syncStatus === "IN_SYNC" ? m3.success : t.syncStatus === "OUT_OF_SYNC" ? m3.warning : m3.outline }} /></Stack>} /></Tooltip>)}</Stack>
-              <Typography variant="caption">{data.policyKind === "LOCAL_FIREWALL" ? "Stored local configuration; runtime enforcement is not inferred." : "Management intent; installation and runtime enforcement are not inferred."}</Typography>
+              <Stack direction="row" flexWrap="wrap" gap={1} alignItems="center" sx={{ mb: 1 }}>
+                {data.policyKind === "LOCAL_FIREWALL" && <Chip size="small" label="local firewall policy" />}
+                <Chip size="small" title={data.metadata.collectedAt} label={collectedLabel(data.metadata.collectedAt, now)} />
+                <Typography variant="body2">Assigned to:</Typography>
+                {data.metadata.targets.length === 0 ? <Chip size="small" label="Unassigned" /> : data.metadata.targets.map(t => <Tooltip key={t.deviceId} title={`${t.context ? `${t.context} · ` : ""}${t.syncStatus}`}><Chip size="small" variant="outlined" label={<Stack direction="row" gap={0.75} alignItems="center"><span>{displayName(t.name, "Device")}</span><Box component="span" aria-label={t.syncStatus} sx={{ width: 6, height: 6, borderRadius: "50%", bgcolor: t.syncStatus === "IN_SYNC" ? m3.success : t.syncStatus === "OUT_OF_SYNC" ? m3.warning : m3.outline }} /></Stack>} /></Tooltip>)}
+                <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>{data.policyKind === "LOCAL_FIREWALL" ? "Stored local configuration; runtime enforcement is not inferred." : "Management intent; installation and runtime enforcement are not inferred."}</Typography>
+              </Stack>
             </>}
-            {selected && <Stack direction="row" gap={1} sx={{ mt: 1 }}>
-              <TextField select label="Hit filter" size="small" value={hitFilter} sx={{ minWidth: 200 }} onChange={e => { setHitFilter(e.target.value); setPage(0); }}>
+            {selected && <Stack direction="row" flexWrap="wrap" gap={1} alignItems="flex-start">
+              <TextField select label="Hit filter" size="small" value={hitFilter} sx={{ minWidth: 190, flex: "none" }} onChange={e => { setHitFilter(e.target.value); setPage(0); }}>
                 <MenuItem value="">All hit evidence</MenuItem><MenuItem value="inactive">No hits in N days</MenuItem><MenuItem value="never">Never hit</MenuItem>
               </TextField>
-              {hitFilter === "inactive" && <TextField label="Days without hits" type="number" size="small" value={hitDays} inputProps={{ min: 1, max: 36500 }}
+              {hitFilter === "inactive" && <TextField label="Days without hits" type="number" size="small" value={hitDays} inputProps={{ min: 1, max: 36500 }} sx={{ width: 150, flex: "none" }}
                 onChange={e => { const n = Number(e.target.value); if (Number.isInteger(n) && n >= 1 && n <= 36500) { setHitDays(n); setPage(0); } }} />}
+              <TextField label="Rule query" size="small" value={search} sx={{ flex: "1 1 320px", minWidth: 0 }}
+                placeholder="source.ip='192.0.2.10' AND service='tcp/443'"
+                inputProps={{ maxLength: 1000 }} onChange={e => setSearch(e.target.value)}
+                InputProps={{ endAdornment: <InputAdornment position="end"><Tooltip describeChild title={QUERY_HELP}>
+                  <IconButton size="small" edge="end" aria-label="Rule query help"><Box component="span" aria-hidden sx={{ fontSize: 14, fontWeight: 700, lineHeight: 1 }}>?</Box></IconButton>
+                </Tooltip></InputAdornment> }} />
             </Stack>}
-            {selected && <TextField label="Rule query" size="small" fullWidth value={search}
-              placeholder="source.ip='192.0.2.10' AND service='tcp/443'"
-              helperText="Fields: source.ip, destination.ip, service, application, action, name, comment, user, zone.from, zone.to, enabled, expired, time. Hit filters: lasthit.days>90, hits=0. AND / OR / NOT, parentheses; plain text searches names and comments."
-              inputProps={{ maxLength: 1000 }} onChange={e => setSearch(e.target.value)} sx={{ my: 2 }} />}
             {data && <>
-              <Stack direction="row" flexWrap="wrap" gap={1} alignItems="center" sx={{ mb: 1 }}>
-                <Checkbox size="small" inputProps={{ "aria-label": "Select all" }} checked={data.total > 0 && selectedRules.size === data.total}
-                  indeterminate={selectedRules.size > 0 && selectedRules.size < data.total} disabled={selectingRules || !data.total}
-                  onChange={(_, value) => { void selectAllRules(value); }} />
-                <Typography variant="body2">{data.total} rules found</Typography>
+              <Stack ref={ruleToolbar} direction="row" flexWrap="wrap" gap={1} alignItems="center"
+                sx={{ position: "sticky", top: -PANE_PADDING, zIndex: 4, bgcolor: m3.scLowest, pt: `${PANE_PADDING}px`, pb: 0.5 }}>
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>{data.total} rules found</Typography>
                 {selectedRules.size > 0 && <Typography variant="caption">{selectedRules.size} selected</Typography>}
                 {query && <>{(query.match(/[a-z.]+\s*=\s*(?:'(?:\\.|[^'])*'|true|false)/gi) ?? [query]).map((filter, index) => <Chip key={index} size="small" label={filter} title={query} sx={{ maxWidth: 500 }} />)}<Button size="small" onClick={() => setSearch("")}>Clear</Button></>}
                 <Button size="small" onClick={() => { drawerRequest.current++; setDrawer({ history: true }); }}>Policy history</Button>
+                <Stack direction="row" spacing={1} alignItems="center" sx={{ ml: "auto" }}>
+                  <Button size="small" disabled={page === 0} onClick={() => setPage(n => n - 1)}>Previous</Button>
+                  <Typography variant="caption">Page {page + 1} of {Math.max(1, Math.ceil(data.total / RULE_PAGE_SIZE))} · {data.total} rules</Typography>
+                  <Button size="small" disabled={(page + 1) * RULE_PAGE_SIZE >= data.total} onClick={() => setPage(n => n + 1)}>Next</Button>
+                </Stack>
               </Stack>
-              <Box role="region" aria-label="Policy rulebase" onScroll={event => setScrollTop(event.currentTarget.scrollTop)}
-                sx={{ flex: "1 1 180px", minHeight: 140, overflowY: "auto", overflowX: "hidden", border: `1px solid ${m3.outlineVar}`, borderRadius: 2 }}>
-                <Box sx={{ minWidth: 0, p: 1 }}><VirtualPolicyCards sections={data.sections} collapsed={collapsed} scrollTop={scrollTop}
-                  metadata={data.metadata} objects={objects} openObject={openObject} openRule={openRule} openRuleId={id => void openRuleId(id)}
+              {/* Not a scroll container itself: sticky headers need the pane to be the nearest scrolling ancestor. */}
+              <Box role="region" aria-label="Policy rulebase" ref={rulebase} sx={{ flexShrink: 0, minWidth: 0 }}>
+                <PolicyRuleTable key={data.metadata.id} sections={data.sections} collapsed={collapsed} scrollTop={scrollTop} viewportHeight={viewport} stickyTop={stickyTop}
+                  metadata={data.metadata} objects={objects} openObject={openObject} openRuleId={id => void openRuleId(id)}
                   selected={selectedRules} onSelect={id => setSelectedRules(previous => toggle(previous, id))}
-                  toggle={id => setCollapsed(previous => toggle(previous, id))} /></Box>
+                  toggle={id => setCollapsed(previous => toggle(previous, id))}
+                  headerSelect={<Checkbox size="small" inputProps={{ "aria-label": "Select all" }} checked={data.total > 0 && selectedRules.size === data.total}
+                    indeterminate={selectedRules.size > 0 && selectedRules.size < data.total} disabled={selectingRules || !data.total}
+                    onChange={(_, value) => { void selectAllRules(value); }} />} />
+                {data.total === 0 && <Typography sx={{ p: 2 }}>No matching rules.</Typography>}
               </Box>
-              {data.total === 0 && <Typography sx={{ py: 2 }}>No matching rules.</Typography>}
-              <Stack direction="row" spacing={2} alignItems="center" sx={{ mt: 1 }}>
-                <Button disabled={page === 0} onClick={() => setPage(n => n - 1)}>Previous</Button>
-                <Typography variant="caption">Page {page + 1} of {Math.max(1, Math.ceil(data.total / 200))} · {data.total} rules</Typography>
-                <Button disabled={(page + 1) * 200 >= data.total} onClick={() => setPage(n => n + 1)}>Next</Button>
-              </Stack>
             </>}
         </Box>
           </Box>
