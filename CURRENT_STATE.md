@@ -54,7 +54,7 @@ manual manifest-deletion deviation are recorded in the
 
 ## Packet Analysis (branch, not yet shipped)
 
-`packet_analysis_shell` — **IMPLEMENTED, engine stub** on `feature/packet-analysis-shell`: cases, streamed
+`packet_analysis_shell` — **IMPLEMENTED, engine stub, pending ship** (`ship/rel-2-pa-shell`, after `ship/rel-1-integration`; unit and PostgreSQL integration suites green): cases, streamed
 pcap/pcapng upload (2 GB per file, 100 GB store cap, 7-day retention with an hourly ledgered pruner), RBAC
 (`packet_analysis_run` / `packet_analysis_raw_view` / `packet_analysis_read`, aiview masked only) and a dedicated
 self-owned `ui2-packet-analysis` worker that claims `packet_analysis_run` only (V154). Every stage reports
