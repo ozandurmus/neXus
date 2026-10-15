@@ -52,6 +52,15 @@ current stored policy was not queried). The scheduling/disk incident and
 manual manifest-deletion deviation are recorded in the
 [backup incident](docs/design/INCIDENT_2026_10_10_BACKUP_FREQUENCY_DISK_FULL.md).
 
+## Packet Analysis (branch, not yet shipped)
+
+`packet_analysis_shell` — **IMPLEMENTED, engine stub** on `feature/packet-analysis-shell`: cases, streamed
+pcap/pcapng upload (2 GB per file, 100 GB store cap, 7-day retention with an hourly ledgered pruner), RBAC
+(`packet_analysis_run` / `packet_analysis_raw_view` / `packet_analysis_read`, aiview masked only) and a dedicated
+self-owned `ui2-packet-analysis` worker that claims `packet_analysis_run` only (V154). Every stage reports
+`unknown` until the engine port lands. Not REAL_ENV_VALIDATED. Authority:
+[decision record](docs/design/PO_DECISION_RECORD_2026_10_15_PACKETBREAKER_PORTED_INTO_NEXUS.md).
+
 ## Open items and validation boundaries
 
 - NSPM wave 2 change report and wave 3 policy lookup/offline analyzer are

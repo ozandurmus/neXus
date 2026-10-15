@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py tools/delivery/project_queue.py render)
-Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-10-15T09:21:40Z
+Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-10-15T15:17:29Z
 
 ## Now
 - NXS-LOCAL-0370 — Infoblox for real, observed facts follow every read, inventory for HTTPS vendors (automated_validated)
@@ -27,6 +27,7 @@ Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-10-15T09:21:40Z
 - P1/in_progress https_inventory_collect_radware — Radware Collect: https_inventory_collect for the Cyber Con (target: docs/design/RADWARE_CYBER_CONTROLLER_BAC)
 - P1/in_progress module_per_pod_split — Module runtime landed; policy/configuration/compliance pod (target: docs/design/MODULE_POD_RUNTIME_CONTRACT.)
 - P1/in_progress nspm_wave1_acceptance — Policy hygiene and V144 lifecycle catalog landed; complian (target: docs/design/PO_DECISION_RECORD_2026_10_0)
+- P1/in_progress packet_analysis_shell — Packet Analysis shell IMPLEMENTED (engine stub): cases, st (target: docs/design/PO_DECISION_RECORD_2026_10_1)
 - P1/in_progress scheduled_fleet_backup_enable_decision — Fleet backups enabled: daily 02:00 Istanbul; 7-day PO rete (target: docs/design/INCIDENT_2026_10_10_BACKUP_F)
 - P1/in_progress ui2_b1_01_skeleton_ci_docker — UI2 B1-1 -- Gradle multi-module skeleton under ui2/, CI jo (target: workflow §5 B1-1)
 - P1/in_progress ui2_b1_03_identity_sessions — UI2 B1-3 -- identity & sessions (UnboundID LDAP bind, sing (target: workflow §5 B1-3)
