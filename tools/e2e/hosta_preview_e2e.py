@@ -889,7 +889,9 @@ SELECT pg_advisory_xact_lock(294611);
 UPDATE jobs SET state='CANCELLED',outcome='CANCELLED' WHERE state='REQUESTED';
 DO $$ BEGIN
  IF to_regclass('module_runtime_control') IS NOT NULL THEN
-  UPDATE module_runtime_control SET effective_owner='general',fallback_enabled=TRUE,
+  -- Self-owned modules (V154 packet_analysis) are never handed to the general worker.
+  UPDATE module_runtime_control SET effective_owner=CASE WHEN module='packet_analysis' THEN module ELSE 'general' END,
+   fallback_enabled=(module<>'packet_analysis'),
    generation=generation+1,owner_instance=NULL,owner_heartbeat_at=NULL,
    drain_requested=FALSE,drain_generation=drain_generation+1,drain_ack_at=NULL,drain_ack_generation=NULL;
   DELETE FROM endpoint_admission;
@@ -913,11 +915,24 @@ def preview_claim_insert():
         "INSERT INTO jobs(job_id,job_type,capability_id,target_kind,target_ref,state,action_class,"
         "submitted_by_actor_fingerprint,submitted_at,idempotency_key,precheck_results,"
         "diagnostic_port,diagnostic_gate_revision) "
-        "VALUES('preview-claim-assertion',capability,capability,'discovery_run','preview-synthetic-target',"
+        "VALUES('preview-claim-assertion',capability,capability,"
+        "CASE WHEN capability='packet_analysis_run' THEN 'packet_analysis_case' ELSE 'discovery_run' END,"
+        "'preview-synthetic-target',"
         "'REQUESTED','read','system:preview','1970-01-01','preview-claim-assertion','[]'::jsonb,"
         "CASE WHEN capability='fmg_interface_detail' THEN 'port1' ELSE NULL END,"
         "CASE WHEN capability='fmg_interface_detail' THEN 90 ELSE NULL END);"
     )
+
+
+def job_module_mapping(repo):
+    """The latest ui2_job_module definition across the migrations (V128 first, V154 adds packet_analysis_run)."""
+    migrations = sorted((repo / "ui2/service/src/main/resources/db/migration").glob("V*__*.sql"),
+                        key=lambda path: int(path.name.split("__")[0][1:]))
+    definitions = [m[0] for path in migrations for m in
+                   re.finditer(r"FUNCTION ui2_job_module\(capability TEXT\).*?\$\$;", path.read_text(), re.S)]
+    if not definitions:
+        raise RuntimeError("ui2_job_module mapping unavailable")
+    return definitions[-1]
 
 
 def assert_module_claims(repo, workers):
@@ -927,11 +942,13 @@ def assert_module_claims(repo, workers):
              if c.get("args", [])[:1] == ["worker"]}
     if not {"general", "policy"}.issubset(roles):
         raise RuntimeError("Preview lacks a required claim owner pod")
+    owners = sorted({"general", "policy"} | ({"packet_analysis"} & roles))
     def db(sql):
         return k(NS, "exec", "-i", preview_name("ui2-preview-db"), "--", "sh", "-c",
                  PG_ENV + "exec psql -XqAt --set=ON_ERROR_STOP=1 -d ui2", input=sql)
     deadline = time.monotonic() + 120
-    while db("SELECT count(*)=2 FROM module_runtime_control WHERE module IN ('general','policy') "
+    while db("SELECT count(*)=" + str(len(owners)) + " FROM module_runtime_control WHERE module IN ("
+             + ",".join("'" + owner + "'" for owner in owners) + ") "
              "AND owner_instance IS NOT NULL AND owner_heartbeat_at>now()-interval '60 seconds';").strip() != "t":
         if time.monotonic() >= deadline:
             raise RuntimeError("Preview claim owners lack live heartbeats")
@@ -943,9 +960,10 @@ def assert_module_claims(repo, workers):
        "WHERE module='policy' AND owner_instance IS NOT NULL AND owner_heartbeat_at>now()-interval '60 seconds';COMMIT;")
     source = (repo / "ui2/job-engine/src/main/java/com/securityexpert/nexus/ui2/jobs/lease/ClaimStatementText.java").read_text()
     claim = source.split('"""', 2)[1].strip()
-    mapping = (repo / "ui2/service/src/main/resources/db/migration/V128__module_endpoint_runtime.sql").read_text().split("CREATE TABLE", 1)[0]
-    capabilities = sorted(set(re.findall(r"'([a-z]+_[a-z_]+)'", mapping)) -
-                          {"policy", "backup", "inventory", "failover", "diagnostics", "configuration"})
+    capabilities = sorted(set(re.findall(r"'([a-z]+_[a-z_]+)'", job_module_mapping(repo))) -
+                          {"policy", "backup", "inventory", "failover", "diagnostics", "configuration", "packet_analysis"})
+    if "packet_analysis" not in roles:
+        capabilities = [c for c in capabilities if c != "packet_analysis_run"]
     backup_start = datetime.now(ZoneInfo("Europe/Istanbul")).replace(hour=2, minute=0, second=0, microsecond=0)
     for capability in capabilities:
         # Formatting is limited to repository-owned capability literals; owner identity stays inside SQL.

@@ -14,9 +14,15 @@ REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 TARGETS = {"service": "service", "worker": "worker", "policy": "policy",
-           "configuration": "configuration", "compliance": "compliance"}
-ROLES = {"worker": "general", "policy": "policy"}
+           "configuration": "configuration", "compliance": "compliance",
+           "packet-analysis": "packet-analysis"}
+ROLES = {"worker": "general", "policy": "policy", "packet-analysis": "packet_analysis"}
 POLICY_TYPES = ("cp_policy_collect", "pan_policy_collect")
+# V154: modules that own themselves with no general fallback. The general worker has no executor for their job
+# types, so no release path ever hands them to it; without their pod, their jobs wait in REQUESTED.
+NEVER_GENERAL = ("packet_analysis",)
+# Dedicated modules whose drain barrier covers exactly their own job types.
+DEDICATED = {"policy": "policy", "packet-analysis": "packet_analysis"}
 
 
 class Blocked(RuntimeError):
@@ -78,7 +84,7 @@ def request_drain(target, snapshot):
 def barrier(target, generation):
     role = ROLES[target]
     # Ownership and exact capability mapping cover current and legacy rows without pod-name guesses.
-    filter_sql = ("ui2_job_module(j.capability_id)='policy'" if target == "policy" else
+    filter_sql = ("ui2_job_module(j.capability_id)=" + literal(DEDICATED[target]) if target in DEDICATED else
                   "(ui2_job_module(j.capability_id) in (select module from module_runtime_control where effective_owner='general') or module_runtime_control.owner_instance is null)")
     sql = ("select (drain_requested and drain_generation=" + str(generation) +
            " and drain_ack_generation=drain_generation and drain_ack_at is not null "
@@ -151,6 +157,21 @@ def ensure_policy(image):
     return None
 
 
+def ensure_packet_analysis(image):
+    """First release of the analysis worker: apply its volume claim and its manifest set with the candidate image."""
+    existing = run("kubectl", "-n", "ui2", "get", "deployment", "ui2-packet-analysis",
+                   "--ignore-not-found", "-o", "json")
+    if existing:
+        return json.loads(existing)["spec"]["template"]["spec"]["containers"][0]["image"]
+    run("kubectl", "-n", "ui2", "apply", "-f", "-", input=(REPO / "deploy/ui2/36-packet-analysis-pvc.yaml").read_text())
+    manifest = (REPO / "deploy/ui2/58-packet-analysis-deployment.yaml").read_text()
+    manifest, count = re.subn(r"(?m)^(\s*image: )\S+$", lambda match: match[1] + image, manifest)
+    if count != 1:
+        raise Blocked("packet-analysis template must contain exactly one workload image")
+    run("kubectl", "-n", "ui2", "apply", "-f", "-", input=manifest)
+    return None
+
+
 def wait_heartbeat(target, limit=120, sleep=time.sleep, clock=time.monotonic):
     deadline = clock() + limit
     while query("select owner_instance is not null and owner_heartbeat_at>now()-interval '60 seconds' "
@@ -173,6 +194,8 @@ def handover_policy(generation, snapshot, authorization):
 
 
 def reset_to_general(snapshot, module, generation, authorization="automatic-rollout-recovery"):
+    if module in NEVER_GENERAL:
+        raise Blocked(module + " is never handed to the general worker; its jobs wait for its own pod")
     # Caller has fenced and stopped the dedicated owner. Never discard permits.
     permit_scope = "owner_role=" + literal(module)
     if module == "policy":
@@ -215,8 +238,9 @@ def replace(target, image, snapshot, limit=14400, commit=None, authorization=Non
     fallback = target == "policy" and query("select fallback_enabled from module_runtime_control where module='policy'") == "t"
     if fallback and (not authorization or not re.fullmatch(r"[A-Za-z0-9_.:/-]{1,160}", authorization)):
         raise Blocked("policy ownership transfer requires an opaque PO authorization reference")
-    old = ensure_policy(image) if target == "policy" else run("kubectl", "-n", "ui2", "get", "deployment/ui2-" + target,
-              "-o", "jsonpath={.spec.template.spec.containers[0].image}")
+    old = (ensure_policy(image) if target == "policy" else ensure_packet_analysis(image) if target == "packet-analysis"
+           else run("kubectl", "-n", "ui2", "get", "deployment/ui2-" + target,
+                    "-o", "jsonpath={.spec.template.spec.containers[0].image}"))
     if old is not None and not re.fullmatch(r".+@sha256:[a-f0-9]{64}", old):
         raise Blocked("old workload digest is not immutable")
     generation = None

@@ -17,7 +17,7 @@ report_failure() {
 trap report_failure EXIT
 REPO="${REPO:-$HOME/nexus}"
 cd "$REPO"
-NEXUS_DEPLOY_TARGETS="${NEXUS_DEPLOY_TARGETS:-service worker configuration compliance policy}"
+NEXUS_DEPLOY_TARGETS="${NEXUS_DEPLOY_TARGETS:-service worker configuration compliance policy packet-analysis}"
 git fetch
 git checkout main
 git pull origin main

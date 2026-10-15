@@ -150,7 +150,7 @@ def test_full_rollback_stops_all_owners_before_general_reset(monkeypatch):
     assert 'drain_requested=true' in calls[0][1]
     stopped = next(i for i, event in enumerate(calls) if '--replicas=0' in event)
     deleted = next(i for i, event in enumerate(calls) if '--for=delete' in event)
-    restored = next(i for i, event in enumerate(calls) if event[0] == 'sql' and "effective_owner='general'" in event[1])
+    restored = next(i for i, event in enumerate(calls) if event[0] == 'sql' and "else 'general' end" in event[1])
     assert stopped < deleted < restored
     assert all('DELETE FROM' not in event[-1] for event in calls)
 
