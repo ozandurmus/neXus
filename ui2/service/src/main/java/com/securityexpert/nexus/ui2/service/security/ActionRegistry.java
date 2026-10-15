@@ -175,7 +175,9 @@ public final class ActionRegistry {
         register(new ActionDescriptor(FMG_DIAGNOSTIC_READ, true, Optional.empty()));
         register(new ActionDescriptor(FMG_DIAGNOSTIC_RUN, true, Optional.of(RoleToken.SECURITY_ADMIN),
                 java.util.Set.of(RoleToken.REPLAY_VIEWER)));
-        register(new ActionDescriptor(SYSTEM_LOG_MEASURE_START, true, Optional.of(RoleToken.SECURITY_ADMIN)));
+        // A read-only diagnostic measurement: aiview may start it, like CLASS_0 diagnostic reads (PO 2026-10-04).
+        register(new ActionDescriptor(SYSTEM_LOG_MEASURE_START, true, Optional.of(RoleToken.SECURITY_ADMIN),
+                java.util.Set.of(RoleToken.REPLAY_VIEWER)));
         register(new ActionDescriptor(DEVICE_CONFIGURATION_COLLECT, true, Optional.of(RoleToken.ONBOARDING_ADMIN)));
         register(new ActionDescriptor(DEVICE_CONFIGURATION_TEXT_READ, true, Optional.of(RoleToken.ONBOARDING_ADMIN)));
         register(new ActionDescriptor(NOTIFICATIONS_READ, true, Optional.empty()));

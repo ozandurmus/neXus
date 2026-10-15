@@ -23,11 +23,12 @@ class SystemLogMeasurementSecurityRouteTest {
     private static final String START = "/api/v2/diagnostics/system-log-measurements/start";
 
     @Test
-    void readIsPolicyReadAndStartIsAnAdministratorOnlyActionWithoutWildcards() {
+    void readIsPolicyReadAndStartIsARegisteredActionWithoutWildcards() {
         assertEquals(ActionRegistry.POLICY_READ, SecurityWebMvcConfig.ACTION_ID_BY_ROUTE.get("GET " + LIST));
         assertEquals(ActionRegistry.SYSTEM_LOG_MEASURE_START, SecurityWebMvcConfig.ACTION_ID_BY_ROUTE.get("POST " + START));
         var actions = new ActionRegistry();
-        assertEquals(Set.of(RoleToken.SECURITY_ADMIN),
+        // A read-only diagnostic measurement: security_admin or aiview (PO 2026-10-04 diagnostic rule).
+        assertEquals(Set.of(RoleToken.SECURITY_ADMIN, RoleToken.REPLAY_VIEWER),
                 actions.find(ActionRegistry.SYSTEM_LOG_MEASURE_START).orElseThrow().requiredRoleTokens());
         assertTrue(actions.find(ActionRegistry.POLICY_READ).orElseThrow().requiredRoleTokens().contains(RoleToken.REPLAY_VIEWER));
         var routes = SecurityWebMvcConfig.ACTION_ID_BY_ROUTE.entrySet().stream()
@@ -36,16 +37,14 @@ class SystemLogMeasurementSecurityRouteTest {
     }
 
     @Test
-    void aReplayViewerReadsTheSummariesMaskedButCannotStartAMeasurement() throws Exception {
+    void aReplayViewerReadsTheSummariesMaskedAndMayStartTheReadOnlyMeasurement() throws Exception {
         for (boolean machine : new boolean[] {false, true}) {
             var interceptor = interceptor(RoleToken.REPLAY_VIEWER, machine);
             var read = request("GET", LIST);
             assertTrue(interceptor.preHandle(read, new MockHttpServletResponse(), new Object()));
             assertEquals(true, read.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE));
             var start = request("POST", START);
-            var response = new MockHttpServletResponse();
-            assertFalse(interceptor.preHandle(start, response, new Object()));
-            assertEquals(403, response.getStatus());
+            assertTrue(interceptor.preHandle(start, new MockHttpServletResponse(), new Object()));
         }
     }
 
