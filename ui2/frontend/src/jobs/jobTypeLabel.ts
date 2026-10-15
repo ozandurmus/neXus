@@ -6,6 +6,7 @@ const VENDORS: Record<string, string> = {
 };
 
 export function jobTypeLabel(capabilityId: string, vendorHint?: string): string {
+  if (capabilityId === "packet_analysis_run") return "packet analysis";
   const confirmVendor = capabilityId.startsWith("device_confirm_")
     ? ({ fortigate: "FortiGate", https: undefined } as Record<string, string | undefined>)[capabilityId.slice("device_confirm_".length)] ?? VENDORS[capabilityId.slice("device_confirm_".length)]
     : undefined;

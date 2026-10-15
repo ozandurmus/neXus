@@ -12,6 +12,8 @@ const ConfigurationScreen = lazy(() => import("./screens/ConfigurationScreen").t
 const ComplianceScreen = lazy(() => import("./screens/ComplianceScreen").then((m) => ({ default: m.ComplianceScreen })));
 const BackupScreen = lazy(() => import("./screens/BackupScreen").then((m) => ({ default: m.BackupScreen })));
 const OperationsScreen = lazy(() => import("./screens/OperationsScreen").then((m) => ({ default: m.OperationsScreen })));
+const PacketAnalysisScreen = lazy(() => import("./screens/PacketAnalysisScreen").then((m) => ({ default: m.PacketAnalysisScreen })));
+const PacketAnalysisPreview = lazy(() => import("./preview/PacketAnalysisPreview").then((m) => ({ default: m.PacketAnalysisPreview })));
 const AdministrationScreen = lazy(() => import("./screens/AdministrationScreen").then((m) => ({ default: m.AdministrationScreen })));
 import { OverviewPreview } from "./preview/OverviewPreview";
 import { InventoryPreview } from "./preview/InventoryPreview";
@@ -46,6 +48,7 @@ const PRODUCT_SCREENS: Record<ScreenId, ComponentType> = {
   backups: BackupScreen,
   operations: OperationsScreen,
   administration: AdministrationScreen,
+  packet_analysis: PacketAnalysisScreen,
 };
 
 const PREVIEW_SCREENS: Record<ScreenId, ComponentType> = {
@@ -57,6 +60,7 @@ const PREVIEW_SCREENS: Record<ScreenId, ComponentType> = {
   backups: BackupPreview,
   operations: OperationsPreview,
   administration: AdministrationPreview,
+  packet_analysis: PacketAnalysisPreview,
 };
 
 export function screenFromSearch(search: string): { readonly screen: ScreenId; readonly preview: boolean } {

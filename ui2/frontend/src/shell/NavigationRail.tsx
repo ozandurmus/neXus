@@ -47,6 +47,8 @@ export const DESTINATIONS: readonly RailDestination[] = [
   // drawn for this destination before it was dropped.
   { id: "backups", label: "Backups", icon: "backup", screen: "backups", requiredPlane: "Operations" },
   { id: "operations", label: "Operations", icon: "operations", screen: "operations", requiredPlane: "Operations" },
+  // PO decision record 2026-10-15: PacketBreaker ported into neXus as Packet Analysis (offline pcap analysis).
+  { id: "packet-analysis", label: "Packets", icon: "rows", screen: "packet_analysis", requiredPlane: "PacketAnalysis" },
   { id: "admin", label: "Admin", icon: "admin", screen: "administration", requiredPlane: "Admin" },
 ];
 
@@ -76,6 +78,7 @@ export const DRAWER_GROUPS: readonly DrawerGroup[] = [
     leaves: [
       { label: "Policy", screen: "policy", requiredPlane: "Policy" },
       { label: "Compliance", screen: "compliance", requiredPlane: "Compliance" },
+      { label: "Packet Analysis", screen: "packet_analysis", requiredPlane: "PacketAnalysis" },
     ],
   },
   {
