@@ -104,35 +104,79 @@ public final class JooqActorAuthzStateRepository implements ActorAuthzStateRepos
                 .collect(Collectors.joining(",", "[", "]"));
     }
 
+    /**
+     * Parses the {@code group_references} JSON array of strings exactly as
+     * PostgreSQL renders a {@code jsonb} value: {@code ["a", "b"]}, with a
+     * space after each comma and JSON escapes inside strings. Anything else
+     * is refused rather than guessed at.
+     */
     static Set<String> fromJsonArray(String json) {
         Set<String> result = new LinkedHashSet<>();
-        String trimmed = json.strip();
-        if (trimmed.length() <= 2) {
-            return result;
+        String text = json.strip();
+        if (text.length() < 2 || text.charAt(0) != '[' || text.charAt(text.length() - 1) != ']') {
+            throw new IllegalStateException("group_references_not_a_json_array");
         }
-        String inner = trimmed.substring(1, trimmed.length() - 1);
-        boolean inString = false;
-        StringBuilder current = new StringBuilder();
-        for (int i = 0; i < inner.length(); i++) {
-            char c = inner.charAt(i);
-            if (c == '"' && (i == 0 || inner.charAt(i - 1) != '\\')) {
-                inString = !inString;
-                continue;
+        int end = text.length() - 1;
+        int i = skipWhitespace(text, 1, end);
+        while (i < end) {
+            if (text.charAt(i) != '"') {
+                throw new IllegalStateException("group_references_not_a_string_array");
             }
-            if (c == ',' && !inString) {
-                result.add(unescape(current.toString()));
-                current.setLength(0);
-                continue;
+            StringBuilder value = new StringBuilder();
+            i++;
+            while (true) {
+                if (i >= end) {
+                    throw new IllegalStateException("group_references_unterminated_string");
+                }
+                char c = text.charAt(i++);
+                if (c == '"') {
+                    break;
+                }
+                if (c != '\\') {
+                    value.append(c);
+                    continue;
+                }
+                if (i >= end) {
+                    throw new IllegalStateException("group_references_unterminated_string");
+                }
+                char escaped = text.charAt(i++);
+                switch (escaped) {
+                    case '"', '\\', '/' -> value.append(escaped);
+                    case 'b' -> value.append('\b');
+                    case 'f' -> value.append('\f');
+                    case 'n' -> value.append('\n');
+                    case 'r' -> value.append('\r');
+                    case 't' -> value.append('\t');
+                    case 'u' -> {
+                        if (i + 4 > end) {
+                            throw new IllegalStateException("group_references_bad_escape");
+                        }
+                        value.append((char) Integer.parseInt(text.substring(i, i + 4), 16));
+                        i += 4;
+                    }
+                    default -> throw new IllegalStateException("group_references_bad_escape");
+                }
             }
-            current.append(c);
-        }
-        if (!current.isEmpty()) {
-            result.add(unescape(current.toString()));
+            result.add(value.toString());
+            i = skipWhitespace(text, i, end);
+            if (i < end) {
+                if (text.charAt(i) != ',') {
+                    throw new IllegalStateException("group_references_not_a_string_array");
+                }
+                i = skipWhitespace(text, i + 1, end);
+                if (i >= end) {
+                    throw new IllegalStateException("group_references_not_a_string_array");
+                }
+            }
         }
         return result;
     }
 
-    private static String unescape(String value) {
-        return value.replace("\\\"", "\"").replace("\\\\", "\\");
+    private static int skipWhitespace(String text, int from, int end) {
+        int i = from;
+        while (i < end && Character.isWhitespace(text.charAt(i))) {
+            i++;
+        }
+        return i;
     }
 }
