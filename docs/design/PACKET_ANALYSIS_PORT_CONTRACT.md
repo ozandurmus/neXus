@@ -2,7 +2,7 @@
 
 ## Status
 
-**DRAFT — implementation authority for phase 0 (parity harness) only**, under
+**DRAFT — implementation authority for phase 0 (parity harness), the numeric layer and the product shell (§5)**, under
 `PO_DECISION_RECORD_2026_10_15_PACKETBREAKER_PORTED_INTO_NEXUS.md` (RATIFIED). Later phases are frozen one at a time
 once the PacketBreaker handover (`docs/HANDOVER_TO_NEXUS.md` in the frozen PacketBreaker repository, tag
 `freeze-before-nexus-port`) is read.
@@ -44,7 +44,32 @@ A port stage ships only when, for every golden scenario/variant it covers, the J
 golden ones. Differences that are deliberate (a proven Python bug) are listed in this contract with the scenario, the
 section path and the reason, and the PO is told.
 
-## 5. Out of scope until frozen per phase
+## 5. Containers (PO 2026-10-15: "tek bir yekün container bize sorun çıkarabilir")
+
+- API, upload, case list, results, RBAC, audit, masking: the existing `ui2-service` and frontend — no new container.
+- Engine: ONE new deployment `ui2-packet-analysis` (tshark + DuckDB + Java engine), own CPU/memory limits (start 4 CPU
+  / 10 GiB), lower priority class, one analysis at a time per pod, claims only `packet_analysis_run` jobs. Moves to its
+  own image (UBI9 + JRE 21 + tshark) so tshark never enters the other neXus images; until then it runs the common image
+  with the stub engine.
+- Storage: PVC `ui2-packet-analysis-data` (local-path, RWO; single node so service and engine pods share it). Only the
+  engine writes a case's DuckDB file (DuckDB is single-writer). Ingest and analysis stay in one pod for the same reason.
+- Why not one combined container: an 8 GB analysis spike or OOM would take uploads, UI and API down with it; tshark CVEs
+  would land in every neXus image scan; limits and scaling could not be set for the engine alone.
+
+## 6. Schedule (PO 2026-10-15: same pace as PacketBreaker itself, built 2026-10-08..14 in 168 commits)
+
+| Day | Parallel lanes | Gate |
+|---|---|---|
+| 1 | corpus + parity harness · Python-exact numeric/format layer · neXus shell (API, job, RBAC, retention, deployment, UI) with stub engine | corpus reproducible; shell green |
+| 2 | ingest (tshark -> DuckDB, metadata walker) · topology and case setup | L1 `packets` identical on the corpus |
+| 3 | core engine (selection, matching, clocks, loss classification, segments, verdict, export v11) | L2/L3 core sections identical |
+| 4 | detectors in 3 lanes: time/event · integrity/proxy/TLS/transport · UDP/DNS/RTP/SIP/vendor | whole corpus identical |
+| 5 | UI port into neXus, HTML export/compare/anonymizer, real-case parity on the operator's Mac, ship | same verdict on the three real cases |
+
+Defaults until the PO says otherwise: payload zeroing at upload optional and off; repository visibility and tshark
+licensing are the PO's.
+
+## 7. Out of scope until frozen per phase
 
 Pipeline stage boundaries, DuckDB schema, API shapes, UI, image build (tshark packaging on UBI9), and the neXus
 correlation (firewall, interface, MAC, zone and rule on the path).
