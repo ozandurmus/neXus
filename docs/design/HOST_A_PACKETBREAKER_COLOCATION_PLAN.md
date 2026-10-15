@@ -2,7 +2,7 @@
 
 ## Status
 
-**DRAFT — awaiting Product Owner ratification of §6.** On 2026-10-15 the Product Owner asked to host PacketBreaker (a
+**SUPERSEDED 2026-10-15 before ratification** by `PO_DECISION_RECORD_2026_10_15_PACKETBREAKER_PORTED_INTO_NEXUS.md` (PacketBreaker becomes a neXus feature, not a separate product). Kept as the record of the capacity measurement and risks. On 2026-10-15 the Product Owner asked to host PacketBreaker (a
 separate project of the same owner: offline pcap correlation and analysis, FastAPI + DuckDB + tshark) on HOST-A under
 a different name, without disturbing neXus's container layout. Answers given in chat the same day:
 
