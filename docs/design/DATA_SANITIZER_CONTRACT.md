@@ -32,12 +32,23 @@ One engine, four input kinds, one consistent mapping:
   `a.b.example.com`-style hierarchy survives; same label -> same token everywhere.
 - **MAC:** OUI kept (vendor stays visible), NIC half from HMAC.
 - **E-mail:** local part and domain labels by the hostname rule.
-- **One-way:** no reverse table is stored. Re-identification of a device pseudonym stays with the existing
-  security_admin inventory views. A sanitize job reports counts per type, never originals.
+- **Reversible on request (PO 2026-10-16):** "milyon IP hostname ... sanitize oldu, cloudda ... AI tooluna ... geri
+  geldi, tekrar koyup eski haline revert edebilmeliyim ... veri çıkışı olmadan". Every token a sanitize job emits is
+  recorded in a **mapping vault** inside neXus (token -> original, encrypted at rest with the artefact-store envelope
+  key; originals never leave neXus). A **revert** job takes any file that came back (text, CSV, XLSX, JSON, pcap) and
+  replaces every vault token it finds with its original — also inside new text written by the external tool around
+  the tokens. Only tokens present in the vault are reverted, so an IP the external tool invented is never mapped to a
+  real address. Name tokens use a recognizable form (`h-<10 hex>`, device pseudonyms like `FW-TANGO-04`) so they survive
+  editing; IP tokens are the prefix-preserved addresses and are reverted by exact vault lookup.
+- **Who:** sanitize — operator, operation_admin, security_admin (`DATA_SANITIZE_RUN`); revert —
+  security_admin and the user who ran the sanitize job (`DATA_SANITIZE_REVERT`); aiview neither. Every sanitize and
+  revert is audited with counts only. Vault entries expire after 90 days by default (configurable), pruned and
+  ledgered like other retention.
+- A sanitize job's summary reports counts per type, never originals.
 
 ## 3. Where it is used
 
-1. **Sanitize screen + API + CLI:** upload a file (pcap/pcapng, log/txt, csv, xlsx, json; 2 GB limit, type by content),
+1. **Sanitize / revert screen + API + CLI:** upload a file (pcap/pcapng, log/txt, csv, xlsx, json; 2 GB limit, type by content),
    download the sanitized file plus a summary (counts per type). Input processed in a temporary area and deleted when
    the job ends; never retained. Action `DATA_SANITIZE_RUN` (operator, operation_admin, security_admin); audited.
 2. **Packet Analysis upload:** option "anonymize on upload" runs the pcap path before the capture is stored.
