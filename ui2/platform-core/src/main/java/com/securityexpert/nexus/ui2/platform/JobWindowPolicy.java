@@ -16,6 +16,14 @@ public final class JobWindowPolicy {
     public static final Set<String> INTERNAL_TASKS = Set.of(
             "db_maintenance", "lease_reconciliation", "owner_heartbeat", "compliance_evaluation",
             "cluster_diff", "notification_forwarding");
+    /**
+     * Job types that touch no device: they analyse data an operator already uploaded. The windows exist for device
+     * polling (PO amendment 2026-10-10), so a claim whose whole eligible set is stored-data work is not held to them.
+     */
+    public static final Set<String> STORED_DATA_JOB_TYPES = Set.of(PacketAnalysisJob.CAPABILITY);
+    public static boolean storedDataOnly(java.util.Collection<String> capabilityIds) {
+        return !capabilityIds.isEmpty() && STORED_DATA_JOB_TYPES.containsAll(capabilityIds);
+    }
     public static final JobWindowPolicy SYSTEM = new JobWindowPolicy(Clock.systemUTC(),
             Integer.parseInt(System.getenv().getOrDefault("UI2_JOB_WINDOW_MINUTES", "60")));
 

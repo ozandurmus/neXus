@@ -285,6 +285,20 @@ class AuditRedactionPolicyTest {
             "notification_settings.syslog_facility", "notification_settings.syslog_port",
             "notification_settings.syslog_protocol", "notification_settings.updated_at",
             "notification_settings.updated_by",
+            // packet_analysis_* (V154; title, display_name, sha256 and storage_key are tier-2 redacted)
+            "packet_analysis_case.case_id", "packet_analysis_case.created_at", "packet_analysis_case.created_by",
+            "packet_analysis_case.expires_at", "packet_analysis_case.payload_zeroing", "packet_analysis_case.state",
+            "packet_analysis_case.total_bytes",
+            "packet_analysis_capture.capture_format", "packet_analysis_capture.capture_id",
+            "packet_analysis_capture.case_id", "packet_analysis_capture.size_bytes",
+            "packet_analysis_capture.uploaded_at", "packet_analysis_capture.uploaded_by",
+            "packet_analysis_run.case_id", "packet_analysis_run.engine_version", "packet_analysis_run.failure_reason",
+            "packet_analysis_run.finished_at", "packet_analysis_run.job_id", "packet_analysis_run.masked_summary",
+            "packet_analysis_run.requested_at", "packet_analysis_run.requested_by", "packet_analysis_run.started_at",
+            "packet_analysis_run.state",
+            "packet_analysis_ledger.actor_fingerprint", "packet_analysis_ledger.bytes", "packet_analysis_ledger.capture_id",
+            "packet_analysis_ledger.case_id", "packet_analysis_ledger.event", "packet_analysis_ledger.job_id",
+            "packet_analysis_ledger.ledger_id", "packet_analysis_ledger.occurred_at",
             // panorama_assignment
             "panorama_assignment.assignment_id", "panorama_assignment.computed_at",
             // policy_offline_analysis
@@ -481,8 +495,13 @@ class AuditRedactionPolicyTest {
             assertEquals(2, tierOf(app, "endpoints", "address_ref"));
             assertEquals(2, tierOf(app, "job_step_attempt", "captured_variables"));
             assertEquals(2, tierOf(app, "job_reconciliation", "evidence"));
+            // V154: operator free text and the identity/location of raw evidence (decision record 2026-10-15 §5).
+            assertEquals(2, tierOf(app, "packet_analysis_case", "title"));
+            assertEquals(2, tierOf(app, "packet_analysis_capture", "display_name"));
+            assertEquals(2, tierOf(app, "packet_analysis_capture", "sha256"));
+            assertEquals(2, tierOf(app, "packet_analysis_capture", "storage_key"));
 
-            // Beyond §3's seven: V17, V91, V97, V144 and V153 declared further redactions. The policy
+            // Beyond §3's seven: V17, V91, V97, V144, V153 and V154 declared further redactions. The policy
             // must hold exactly the declared set -- an extra entry is an undeclared redaction, a
             // missing one an unredacted column.
             java.util.Map<String, Integer> live = new java.util.TreeMap<>();
@@ -498,7 +517,7 @@ class AuditRedactionPolicyTest {
         }
     }
 
-    /** Every declared redaction and its tier: V5 (contract §3), V17, V91, V97, V144, V153. */
+    /** Every declared redaction and its tier: V5 (contract §3), V17, V91, V97, V144, V153, V154. */
     private static final java.util.Map<String, Integer> DECLARED_REDACTIONS = declaredRedactions(
             "backup_artefact.hostname_fingerprint", 2, "backup_artefact.recovery_volume_path", 2,
             "backup_artefact.virtual_system_ref", 2, "backup_artefact.wrapped_data_key", 1,
@@ -546,6 +565,8 @@ class AuditRedactionPolicyTest {
             2, "notification_routes.recipients", 2, "notification_settings.smtp_credential_ref", 2,
             "notification_settings.smtp_from", 2, "notification_settings.smtp_host", 2,
             "notification_settings.smtp_to", 2, "notification_settings.syslog_host", 2,
+            "packet_analysis_capture.display_name", 2, "packet_analysis_capture.sha256", 2,
+            "packet_analysis_capture.storage_key", 2, "packet_analysis_case.title", 2,
             "panorama_assignment.device_groups", 2, "panorama_assignment.device_serial", 2,
             "panorama_assignment.template_stack", 2, "panorama_assignment.templates", 2,
             "policy_offline_analysis.aggregates", 2, "policy_offline_analysis.file_name", 2,

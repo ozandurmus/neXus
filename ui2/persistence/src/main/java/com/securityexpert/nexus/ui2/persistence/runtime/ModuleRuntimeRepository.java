@@ -13,7 +13,7 @@ public final class ModuleRuntimeRepository {
             "select module from module_runtime_control where module='general' and owner_instance is not null "
             + "and owner_heartbeat_at>now()-interval '60 seconds' and not exists(select 1 from jobs "
             + "where state in ('CLAIMED','EXECUTING') and (lease_owner_generation is null "
-            + "or split_part(lease_worker_id,'-',1) not in ('general','policy')))").isEmpty());
+            + "or split_part(lease_worker_id,'-',1) not in ('general','policy','packet_analysis')))").isEmpty());
     }
     public synchronized boolean heartbeat(String role, String instance) {
         if (ownershipReleased) return false;

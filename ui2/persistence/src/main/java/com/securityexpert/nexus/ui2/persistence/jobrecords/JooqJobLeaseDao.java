@@ -104,7 +104,9 @@ public final class JooqJobLeaseDao implements JobLeaseDao {
     @Override
     public Optional<ClaimedJobRow> claimNext(String workerId, List<String> eligibleCapabilityIds,
             Duration leaseDuration) {
-        if ((!windows.isOpen() && !ScheduledBackupWindowPolicy.isOpen(windows.now()))
+        // A stored-data worker (packet analysis) claims only stored-data job types, so no device job can ride on it.
+        boolean storedData = JobWindowPolicy.storedDataOnly(eligibleCapabilityIds);
+        if ((!storedData && !windows.isOpen() && !ScheduledBackupWindowPolicy.isOpen(windows.now()))
                 || eligibleCapabilityIds.isEmpty()) {
             // Never issues the statement against an empty eligible set --
             // string_to_array('', ',') would produce a one-element array
@@ -118,10 +120,13 @@ public final class JooqJobLeaseDao implements JobLeaseDao {
             dsl.execute("SET TRANSACTION ISOLATION LEVEL READ COMMITTED");
             dsl.execute("SELECT pg_advisory_xact_lock(294611)");
             var now = windows.now();
-            if (!windows.isOpen(now) && !ScheduledBackupWindowPolicy.isOpen(now)) return Optional.empty();
+            if (!storedData && !windows.isOpen(now) && !ScheduledBackupWindowPolicy.isOpen(now)) return Optional.empty();
             var backupStart = ScheduledBackupWindowPolicy.start(now);
+            // Same statement; for stored-data work the window end is simply never reached during this claim.
+            var windowEnd = storedData ? now.atZone(JobWindowPolicy.ZONE_ID).plusDays(1)
+                    : windows.slotStart(now).plusMinutes(windows.windowMinutes());
             Result<Record> rows = dsl.fetch(CLAIM_SQL, workerId, String.valueOf(leaseDuration.toSeconds()), joined,
-                    windows.slotStart(now).plusMinutes(windows.windowMinutes()).toOffsetDateTime(),
+                    windowEnd.toOffsetDateTime(),
                     backupStart.toOffsetDateTime(), backupStart.plusHours(1).toOffsetDateTime(),
                     String.join(",", ScheduledBackupWindowPolicy.FLEET_JOB_TYPES), ScheduledBackupWindowPolicy.ACTOR,
                     ScheduledBackupWindowPolicy.MDS_ACTOR, ScheduledBackupWindowPolicy.MDS_EXPORT);
