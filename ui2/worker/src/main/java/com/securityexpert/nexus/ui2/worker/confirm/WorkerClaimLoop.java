@@ -43,6 +43,7 @@ public final class WorkerClaimLoop {
             "cp_policy_collect", "pan_policy_collect",
             "cp_cluster_failover", "pan_cluster_failover", "cp_failover_readiness", "pan_failover_readiness",
             com.securityexpert.nexus.ui2.jobs.diagnostic.DiagnosticRead.CAPABILITY,
+            com.securityexpert.nexus.ui2.jobs.diagnostic.PanSyslogMeasure.CAPABILITY,
             ConfirmCapabilityIds.DEVICE_CONFIRM_CHECK_POINT, ConfirmCapabilityIds.DEVICE_CONFIRM_PALO_ALTO,
             ConfirmCapabilityIds.DEVICE_CONFIRM_HTTPS, BackupCapabilityIds.HTTPS_VENDOR_BACKUP,
             ConfirmCapabilityIds.DEVICE_CONFIRM_CISCO_ASA, InventoryCapabilityIds.ASA_INVENTORY_COLLECT, BackupCapabilityIds.ASA_CONFIG_BACKUP,
@@ -118,6 +119,11 @@ public final class WorkerClaimLoop {
     }
     public WorkerClaimLoop withDiagnosticReads(com.securityexpert.nexus.ui2.worker.diagnostic.DiagnosticJobExecutor executor) {
         this.readDiagnosticExecutor=executor; return this;
+    }
+    private com.securityexpert.nexus.ui2.worker.diagnostic.PanSyslogMeasureJobExecutor panSyslogMeasureExecutor;
+    /** System-log programme phase A, M3/M4: the Palo Alto system/config log measurement. */
+    public WorkerClaimLoop withPanSyslogMeasure(com.securityexpert.nexus.ui2.worker.diagnostic.PanSyslogMeasureJobExecutor executor) {
+        this.panSyslogMeasureExecutor=executor; return this;
     }
     private com.securityexpert.nexus.ui2.worker.backup.fortinet.FortiManagerDiagnosticJobExecutor diagnosticJobExecutor;
 
@@ -228,7 +234,8 @@ public final class WorkerClaimLoop {
             : capability.contains("confirm") ? "ENROLLMENT"
             : capability.contains("readiness") ? "FAILOVER_READINESS"
             : capability.contains("failover") ? "FAILOVER_EXECUTION"
-            : capability.equals("diagnostic_read") || capability.equals("fmg_interface_detail") ? "DIAGNOSTIC" : "INVENTORY";
+            : capability.equals("diagnostic_read") || capability.equals("fmg_interface_detail")
+                || capability.equals(com.securityexpert.nexus.ui2.jobs.diagnostic.PanSyslogMeasure.CAPABILITY) ? "DIAGNOSTIC" : "INVENTORY";
         return com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.open(
             new com.securityexpert.nexus.ui2.persistence.runtime.EndpointAdmissionRepository.Owner(
                 claim.jobId(), claim.leaseEpoch(), null, 0, workerId.startsWith("policy-") ? "policy" : "general",
@@ -443,6 +450,13 @@ public final class WorkerClaimLoop {
                     readDiagnosticExecutor.execute(claimed.jobId(),claimed.leaseEpoch(),job.targetDeviceId(),
                         hostOf(endpoint.addressRef()),"management_server".equals(device.role()) ? 22 : portOf(endpoint.addressRef()),device.credentialReferenceId());
                 }
+                return true;
+            }
+            if (com.securityexpert.nexus.ui2.jobs.diagnostic.PanSyslogMeasure.CAPABILITY.equals(job.capabilityId())) {
+                if (panSyslogMeasureExecutor == null) {
+                    leaseRepository.transitionState(claimed.jobId(),claimed.leaseEpoch(),com.securityexpert.nexus.ui2.jobs.JobState.CLAIMED,
+                        com.securityexpert.nexus.ui2.jobs.JobState.REJECTED,"system:worker","syslog_measure_claim_check","EXECUTOR_UNAVAILABLE");
+                } else panSyslogMeasureExecutor.execute(claimed.jobId(),claimed.leaseEpoch(),job.targetDeviceId());
                 return true;
             }
             if (JobAdmissionService.FMG_INTERFACE_DETAIL.equals(job.capabilityId())) {

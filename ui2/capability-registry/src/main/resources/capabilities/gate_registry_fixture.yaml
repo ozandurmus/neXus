@@ -3702,3 +3702,58 @@ gates:
     secret_output_risk: "log lines may carry names, addresses and user names; in-memory masked projection only; no raw retention"
     safe_telemetry_fields: ["timestampForm", "lineShape"]
     source_document_pointer: "docs/design/DEVICE_SYSTEM_LOG_PROGRAMME_CONTRACT.md §4; PO chat approval 2026-10-15 for M1/M2 on every enrolled Check Point firewall"
+
+
+  # M3: enqueue a system-log query on one enrolled Palo Alto firewall (PO 2026-10-15, system-log programme phase A measurement).
+  - gate_id: "pan_syslog_measure_system_enqueue"
+    vendor: "palo_alto"
+    platform_role_scope: "pan_firewall"
+    shell_context: "not_applicable"
+    transport_kind: "PAN_XML_API"
+    canonical_command_key: "type=log&log-type=system&nlogs=100"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 30
+    retry_rule: "none"
+    max_frequency: "phase A measurement only: manual admin request, at most once per firewall per job window"
+    session_reuse_rule: "one existing-authentication API key per job; serial per firewall"
+    unsupported_behavior_ref: "an API error or an unfinished log job is UNKNOWN, never a number"
+    secret_output_risk: "log entries carry user names, addresses and host names; in-memory summary only (counts, field names, formats, enum values); no raw retention"
+    safe_telemetry_fields: ["entries", "spanSeconds", "resultBytes", "enqueueToFinMs", "fieldNames", "receiveTimeFormat", "subtypeCounts", "severityCounts", "eventidTopCounts"]
+    source_document_pointer: "DEVICE_SYSTEM_LOG_PROGRAMME_CONTRACT.md §4; PO chat approval 2026-10-15 for M3/M4 on every enrolled Palo Alto firewall"
+
+  # M4: enqueue a config-log query on one enrolled Palo Alto firewall (PO 2026-10-15, system-log programme phase A measurement).
+  - gate_id: "pan_syslog_measure_config_enqueue"
+    vendor: "palo_alto"
+    platform_role_scope: "pan_firewall"
+    shell_context: "not_applicable"
+    transport_kind: "PAN_XML_API"
+    canonical_command_key: "type=log&log-type=config&nlogs=100"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 30
+    retry_rule: "none"
+    max_frequency: "phase A measurement only: manual admin request, at most once per firewall per job window"
+    session_reuse_rule: "one existing-authentication API key per job; serial per firewall"
+    unsupported_behavior_ref: "an API error or an unfinished log job is UNKNOWN, never a number"
+    secret_output_risk: "log entries carry user names, addresses and host names; in-memory summary only (counts, field names, formats, enum values); no raw retention"
+    safe_telemetry_fields: ["entries", "spanSeconds", "resultBytes", "enqueueToFinMs", "fieldNames", "receiveTimeFormat", "cmdCounts"]
+    source_document_pointer: "DEVICE_SYSTEM_LOG_PROGRAMME_CONTRACT.md §4; PO chat approval 2026-10-15 for M3/M4 on every enrolled Palo Alto firewall"
+
+  # M3/M4: fetch one enqueued log job's results, polled until FIN with a bounded wait (PO 2026-10-15, system-log programme phase A measurement).
+  - gate_id: "pan_syslog_measure_job_get"
+    vendor: "palo_alto"
+    platform_role_scope: "pan_firewall"
+    shell_context: "not_applicable"
+    transport_kind: "PAN_XML_API"
+    canonical_command_key: "type=log&action=get&job-id=<id>"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 30
+    retry_rule: "none"
+    max_frequency: "polled every 2 s until FIN, at most 30 polls per enqueued log job; <id> is the digits-only job id the enqueue answered"
+    session_reuse_rule: "one existing-authentication API key per job; serial per firewall"
+    unsupported_behavior_ref: "a job not FIN within the bound, or an API error, is UNKNOWN, never a number"
+    secret_output_risk: "log entries carry user names, addresses and host names; in-memory summary only (counts, field names, formats, enum values); no raw retention"
+    safe_telemetry_fields: ["jobStatus", "entries", "resultBytes"]
+    source_document_pointer: "DEVICE_SYSTEM_LOG_PROGRAMME_CONTRACT.md §4; PO chat approval 2026-10-15 for M3/M4 on every enrolled Palo Alto firewall"

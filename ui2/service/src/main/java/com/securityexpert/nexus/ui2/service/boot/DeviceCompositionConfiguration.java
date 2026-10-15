@@ -169,6 +169,12 @@ public class DeviceCompositionConfiguration {
     }
 
     @Bean
+    public com.securityexpert.nexus.ui2.persistence.diagnostic.SystemLogMeasurementRepository systemLogMeasurementRepository(
+            TransactionBoundary transactionBoundary) {
+        return new com.securityexpert.nexus.ui2.persistence.diagnostic.JooqSystemLogMeasurementRepository(transactionBoundary);
+    }
+
+    @Bean
     public GateRegistryPort gateRegistryPort(TransactionBoundary transactionBoundary) {
         return new PersistenceGateRegistryPort(new JooqGateRegistryDao(transactionBoundary));
     }
@@ -201,6 +207,7 @@ public class DeviceCompositionConfiguration {
                 fortiManagerDiagnosticCapability(gateRegistryPort),
                 confirmCapability(com.securityexpert.nexus.ui2.jobs.diagnostic.DiagnosticRead.CAPABILITY,
                         "diagnostic", "reviewed_read", TransportKind.SSH_EXEC),
+                com.securityexpert.nexus.ui2.jobs.diagnostic.PanSyslogMeasure.capability(gateRegistryPort),
                 checkPointInventoryCapability(gateRegistryPort),
                 paloAltoInventoryCapability(gateRegistryPort),
                 checkPointConfigurationCapability(gateRegistryPort),

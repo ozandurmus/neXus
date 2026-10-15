@@ -109,6 +109,10 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("GET /api/v2/diagnostics/ports", ActionRegistry.FMG_DIAGNOSTIC_READ),
             Map.entry("POST /api/v2/diagnostics", ActionRegistry.FMG_DIAGNOSTIC_RUN),
             Map.entry("GET /api/v2/diagnostics/*", ActionRegistry.FMG_DIAGNOSTIC_READ),
+            // System-log programme phase A (M3/M4): summaries are a policy-grade read (masked for aiview); starting
+            // the measurement for every enrolled Palo Alto firewall is an administrator action.
+            Map.entry("GET /api/v2/diagnostics/system-log-measurements", ActionRegistry.POLICY_READ),
+            Map.entry("POST /api/v2/diagnostics/system-log-measurements/start", ActionRegistry.SYSTEM_LOG_MEASURE_START),
             Map.entry("POST /devices/inventory/collect-all", ActionRegistry.DEVICE_INVENTORY_COLLECT),
             Map.entry("GET /clusters/*/inventory", ActionRegistry.DEVICE_READ),
             // NXS-LOCAL-0165 "Routes": same wildcard shapes as the inventory
