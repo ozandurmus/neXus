@@ -1375,7 +1375,7 @@ def test_preview_claim_rows_satisfy_migration_checks_and_rollback(monkeypatch):
     statements = []
     def database(namespace, *args, input=None, **kwargs):
         statements.append(input)
-        if input.startswith('SELECT count(*)=2'):
+        if input.startswith('SELECT count(*)='):
             return 't'
         if 'preview_policy_handover' in input:
             return ''

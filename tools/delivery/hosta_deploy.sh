@@ -33,7 +33,7 @@ if [ -z "$HOST" ]; then echo "set NEXUS_HOST or write user@host to ~/.config/nex
 LIMIT="${NEXUS_DEPLOY_LIMIT_S:-4500}"
 SKIP_SECURITY_B64=""
 APPLY=()
-TARGETS="service worker configuration compliance policy"
+TARGETS="service worker configuration compliance policy packet-analysis"
 while [ $# -gt 0 ]; do
   case "$1" in
     --targets) TARGETS="$2"; shift 2 ;;

@@ -317,6 +317,12 @@ def restore_items(directory, manifest, namespace):
     return items
 
 
+# Self-owned modules (V154) keep their own ownership and pod across every rollback: the analysis worker is
+# independent of the rolled-back binaries, and its retention pruner keeps the 7-day raw-evidence law
+# (PO decision record 2026-10-15 §5) running. The general worker never receives packet_analysis_run.
+KEEP_ON_ROLLBACK = {"ui2-packet-analysis": "packet_analysis"}
+
+
 def stop_split_runtime(snapshot):
     # Full rollback to an old binary cannot coexist with any split owner.
     sql("begin;select set_config('app.actor_fingerprint','system:release',true);"
@@ -340,11 +346,13 @@ def stop_split_runtime(snapshot):
             run("kubectl", "-n", "ui2", "wait", "--for=delete", "pod", "-l", selector, "--timeout=600s")
     if sql(idle) != "t":
         raise SafeReleaseError("full rollback has active or uncertain work; ownership retained")
+    kept = ",".join("'" + module + "'" for module in sorted(KEEP_ON_ROLLBACK.values()))
     sql("begin;select set_config('app.actor_fingerprint','system:release',true);"
         "select set_config('app.action_id','full_rollback_ownership',true);"
         "select pg_advisory_xact_lock(294611);"
-        "update module_runtime_control set effective_owner='general',"
-        "fallback_enabled=case when module='general' then fallback_enabled else true end,generation=generation+1,"
+        "update module_runtime_control set effective_owner=case when module in (" + kept + ") then module else 'general' end,"
+        "fallback_enabled=case when module='general' or module in (" + kept + ") then fallback_enabled else true end,"
+        "generation=generation+1,"
         "drain_requested=false,drain_ack_at=null,drain_ack_generation=null,owner_instance=null,owner_heartbeat_at=null,"
         "last_reason='pre-split snapshot rollback',last_snapshot_id=" + "'" + snapshot.replace("'", "''") + "';commit;")
 
@@ -361,9 +369,13 @@ def split_rollback(manifest, snapshot, apply):
         print(json.dumps({"rollback": "module-controlled", "module": target, "image": image,
                           "drain": target in module_deploy.ROLES, "policy_fallback_capability": target == "worker",
                           "ownership": "general/fallback=true; policy stopped" if target == "policy" and fallback else
-                                       "ready heartbeat before policy handover" if target == "policy" else "preserved"}))
+                                       "ready heartbeat before policy handover" if target == "policy" else
+                                       "self-owned; never general" if target == "packet-analysis" else "preserved"}))
     if fallback and "policy" not in targets:
         print("Policy: drain and stop added owner; return ownership to general/fallback=true.")
+    if "packet-analysis" not in targets:
+        print("Packet analysis: absent from snapshot; a live ui2-packet-analysis is left running with its own "
+              "ownership (never general).")
     if not apply:
         print("Dry run only. Use --apply for module-controlled snapshot rollback.")
         return
@@ -402,10 +414,12 @@ def rollback(root, target, apply, allow_newer):
         return split_rollback(manifest, directory.name, apply)
     if live_runtime:
         print("Full rollback: drain and stop all worker/service owners; restore snapshot manifests/images; "
-              "return every module to general, enable dedicated-module fallback, preserve the general self flag. "
+              "return every module to general (self-owned packet_analysis keeps its owner and pod), "
+              "enable dedicated-module fallback, preserve the general self flag. "
               "Schema, data and uncertain leases are preserved.")
     plans = []
     removals = []
+    kept_workloads = []
     for namespace in NAMESPACES:
         items = restore_items(directory, manifest, namespace)
         if not items:
@@ -431,6 +445,10 @@ def rollback(root, target, apply, allow_newer):
                             saved_items[key]["spec"].get("replicas", 1) < item["spec"].get("replicas", 1)):
                         raise SafeReleaseError("StatefulSet scale-down would delete PVCs; rollback refused")
                 if key in saved_keys or item["kind"] not in RESTORE_KINDS or item["kind"] == "Namespace":
+                    continue
+                if item["kind"] == "Deployment" and key[1] in KEEP_ON_ROLLBACK:
+                    kept_workloads.append((key[1], item["spec"].get("replicas", 1)))
+                    print(f"Keep self-owned workload: {namespace}/{key[0]}/{key[1]}", flush=True)
                     continue
                 if item["kind"] == "StatefulSet":
                     raise SafeReleaseError("new StatefulSet requires manual storage-safe review; rollback refused")
@@ -458,6 +476,10 @@ def rollback(root, target, apply, allow_newer):
     for namespace, kind, name in removals:
         if kind not in ("Deployment", "DaemonSet", "CronJob"):
             run("kubectl", "-n", namespace, "delete", kind.lower(), name, "--wait=true", "--timeout=600s")
+    # stop_split_runtime scaled every worker to zero; a kept self-owned workload returns to its own replica count.
+    for name, replicas in kept_workloads:
+        run("kubectl", "-n", "ui2", "scale", "deployment/" + name, "--replicas=" + str(replicas))
+        run("kubectl", "-n", "ui2", "rollout", "status", "deployment/" + name, "--timeout=600s")
     status = run("curl", "-sk", "--noproxy", "*", "--max-time", "30", "-o", "/dev/null", "-w", "%{http_code}",
                  "https://127.0.0.1/").decode().strip()
     if status != "200":
