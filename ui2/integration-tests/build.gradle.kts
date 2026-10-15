@@ -41,12 +41,16 @@ dependencies {
     // named directly here because this module's tests construct an
     // InMemoryDirectoryServer, not merely the adapter class above it.
     testImplementation(libs.unboundid.ldapsdk)
-    // service declares spring-boot-starter-web as `implementation`, which
+    // service declares spring-boot-starter-webmvc as `implementation`, which
     // java-library does not expose to a consumer's compile classpath;
     // LoginController's HttpServletResponse parameter type is named
     // directly in this module's test source, so the same dependency is
-    // repeated here.
-    testImplementation(libs.spring.boot.starter.web)
+    // repeated here -- with the same Jackson 2-only web stack as :service
+    // (see service/build.gradle.kts).
+    testImplementation(libs.spring.boot.starter.webmvc) {
+        exclude(group = "org.springframework.boot", module = "spring-boot-starter-jackson")
+    }
+    testImplementation(libs.spring.boot.jackson2)
     // Already used by service; the schedule round-trip tests call JdbcTemplate directly.
     testImplementation(libs.spring.boot.starter.jdbc)
     testRuntimeOnly(libs.flyway.database.postgresql)

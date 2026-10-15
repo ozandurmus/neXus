@@ -18,6 +18,11 @@ server:
 spring:
   application:
     name: nexus-ui2
+  http:
+    converters:
+      # Spring Boot 4 defaults to Jackson 3. Every response DTO, @JsonProperty and JsonNode here is Jackson 2,
+      # so HTTP JSON stays on Jackson 2 (spring-boot-jackson2); see service/build.gradle.kts.
+      preferred-json-mapper: jackson2
   mvc:
     async:
       # A streamed backup download is an async request; the container default (30 s) cut a 5.8 GB MDS backup at
