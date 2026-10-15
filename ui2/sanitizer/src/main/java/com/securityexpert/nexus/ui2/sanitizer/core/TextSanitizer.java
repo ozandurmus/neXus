@@ -239,8 +239,9 @@ public final class TextSanitizer {
             case FQDN -> fqdn(p[0], FQDN, false);
             case EMAIL -> email(p[0], p[1]);
             case USER_AT_HOST -> {
-                String user = label(p[0], EMAIL);
-                yield user + "@" + host(p[1], EMAIL);
+                String user = label(p[0], null);
+                String host = host(p[1], EMAIL);
+                yield user + "@" + (host == null ? p[1] : host);
             }
             case CONTEXT_HOST, SYSLOG_HOST, LEARNED -> host(p[0], HOSTNAME);
             case BARE_HOST -> {
@@ -353,8 +354,9 @@ public final class TextSanitizer {
             if (i >= labels.length - suffix) {
                 out.append(labels[i]);
             } else if (i == 0 && mappers.known().pseudonymFor(labels[0]).isPresent()) {
-                out.append(device(labels[0]));
-                counts.add(DEVICE_NAME, -1); // counted once, as the name below
+                String pseudonym = mappers.known().pseudonymFor(labels[0]).orElseThrow();
+                sink.record(new VaultKey(VaultKind.DEVICE, pseudonym), labels[0]);
+                out.append(pseudonym); // the name is counted once, as an FQDN below
             } else {
                 out.append(label(labels[i], null));
             }
