@@ -113,6 +113,13 @@ public final class Ui2WorkerMain {
             }
         }
 
+        if (com.securityexpert.nexus.ui2.platform.PacketAnalysisJob.MODULE.equals(role)) {
+            // The analysis worker needs the database and the analysis volume only: no credential store, no artefact
+            // store, no device transport (decision record 2026-10-15 §4).
+            startPacketAnalysis();
+            return;
+        }
+
         String jdbcUrl = requireEnv("UI2_DB_URL");
         String dbUser = SecretFile.readRequired(Path.of(requireEnv("UI2_DB_APP_USER_FILE")), "worker.db_user");
         String dbPassword = SecretFile.readRequired(Path.of(requireEnv("UI2_DB_APP_PASSWORD_FILE")), "worker.db_password");
@@ -488,7 +495,8 @@ public final class Ui2WorkerMain {
         if (args.length > 1 || (argument != null && env != null && !argument.equals(env)))
             throw new IllegalArgumentException("CONFLICTING_WORKER_ROLE");
         String role = argument != null ? argument : env != null ? env : "general";
-        if (!java.util.Set.of("general", "policy", "configuration", "compliance").contains(role))
+        if (!java.util.Set.of("general", "policy", "configuration", "compliance",
+                com.securityexpert.nexus.ui2.platform.PacketAnalysisJob.MODULE).contains(role))
             throw new IllegalArgumentException("UNKNOWN_WORKER_ROLE");
         return role;
     }
@@ -544,6 +552,75 @@ public final class Ui2WorkerMain {
                 finally { pool.close(); }
             }
         }, "policy-drain"));
+    }
+
+    /**
+     * The {@code packet_analysis} module (deploy/ui2/58-packet-analysis-deployment.yaml): owns the
+     * {@code packet_analysis} module row, claims {@code packet_analysis_run} only, one analysis at a time, and runs
+     * the 7-day retention pruner under a runtime task lease.
+     */
+    private static void startPacketAnalysis() {
+        String role = com.securityexpert.nexus.ui2.platform.PacketAnalysisJob.MODULE;
+        String dbUser = SecretFile.readRequired(Path.of(requireEnv("UI2_DB_APP_USER_FILE")), "worker.db_user");
+        String dbPassword = SecretFile.readRequired(Path.of(requireEnv("UI2_DB_APP_PASSWORD_FILE")), "worker.db_password");
+        Path root = Path.of(System.getenv().getOrDefault("UI2_PACKET_ANALYSIS_ROOT", "/app/packet-analysis"));
+        long pruneSeconds = Long.parseLong(System.getenv().getOrDefault("UI2_PACKET_ANALYSIS_PRUNE_INTERVAL_SECONDS", "3600"));
+        System.setProperty("ui2.db.pool.maximum-pool-size", System.getProperty("ui2.db.pool.maximum-pool-size", "4"));
+        var pool = WorkerDatabasePool.create(
+                TransactionBoundaryFactory.jdbcDataSource(requireEnv("UI2_DB_URL"), dbUser, dbPassword), System.getProperties());
+        TransactionBoundary boundary = TransactionBoundaryFactory.fromDataSource(pool);
+        var runtime = new com.securityexpert.nexus.ui2.persistence.runtime.ModuleRuntimeRepository(boundary);
+        String instance = role + "-" + UUID.randomUUID();
+        WorkerOwnershipWait.await(role, () -> runtime.heartbeat(role, instance));
+
+        var leases = new PersistenceJobLeaseRepository(new JooqJobLeaseDao(boundary));
+        var attempts = new PersistenceJobStepAttemptRepository(new JooqJobStepAttemptDao(boundary));
+        var repository = new com.securityexpert.nexus.ui2.persistence.packetanalysis.PacketAnalysisRepository(boundary);
+        // TODO(packet-analysis engine port): replace the stub with the ui2/packet-analysis engine once a stage
+        // passes its parity gate (PACKET_ANALYSIS_PORT_CONTRACT.md §4).
+        var engine = new com.securityexpert.nexus.ui2.worker.packetanalysis.StubPacketAnalysisEngine();
+        var executor = new com.securityexpert.nexus.ui2.worker.packetanalysis.PacketAnalysisJobExecutor(
+                leases, attempts, repository, engine, root);
+        var loop = new com.securityexpert.nexus.ui2.worker.packetanalysis.PacketAnalysisClaimLoop(
+                leases, new JooqJobRecordDao(boundary), executor, instance, Duration.ofMinutes(10));
+        var pruner = new com.securityexpert.nexus.ui2.worker.packetanalysis.PacketAnalysisRetentionPruner(repository, root);
+
+        // One analysis at a time per pod: a single claiming thread.
+        var claims = java.util.concurrent.Executors.newSingleThreadExecutor();
+        claims.submit(() -> loop.runUntilInterrupted(Duration.ofSeconds(5)));
+        var scheduled = java.util.concurrent.Executors.newScheduledThreadPool(2);
+        scheduled.scheduleWithFixedDelay(() -> {
+            try {
+                if (pool.getHikariPoolMXBean() != null) {
+                    var stats = pool.getHikariPoolMXBean();
+                    runtime.poolStats(role, instance, stats.getActiveConnections(), stats.getIdleConnections(),
+                        stats.getThreadsAwaitingConnection(), WorkerDatabasePool.TIMEOUTS.sum(), WorkerDatabasePool.WAIT_NANOS.sum());
+                }
+                if (!runtime.heartbeat(role, instance)) { loop.requestStop(); claims.shutdown(); }
+            } catch (RuntimeException unavailable) {
+                System.getLogger(Ui2WorkerMain.class.getName()).log(System.Logger.Level.WARNING, "MODULE_HEARTBEAT_UNAVAILABLE");
+            }
+        }, 10, 10, java.util.concurrent.TimeUnit.SECONDS);
+        scheduled.scheduleWithFixedDelay(() -> {
+            try {
+                runtime.runTask(role, instance, "PacketAnalysisRetentionPruner.runOnce", pruner::runOnce);
+            } catch (Throwable t) {
+                System.getLogger(Ui2WorkerMain.class.getName()).log(System.Logger.Level.WARNING,
+                        "Packet analysis retention error: " + t.getClass().getSimpleName());
+            }
+        }, 60, pruneSeconds, java.util.concurrent.TimeUnit.SECONDS);
+        long drainSeconds = Long.parseLong(System.getenv().getOrDefault("UI2_WORKER_DRAIN_SECONDS", "840"));
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            loop.requestStop();
+            claims.shutdown();
+            try { claims.awaitTermination(drainSeconds, java.util.concurrent.TimeUnit.SECONDS); }
+            catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); }
+            finally {
+                scheduled.shutdownNow();
+                try { runtime.releaseOwnership(role, instance); }
+                finally { pool.close(); }
+            }
+        }, "packet-analysis-drain"));
     }
 
     private static String requireEnv(String name) {
