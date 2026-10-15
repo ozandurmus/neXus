@@ -118,36 +118,35 @@ class FailoverScheduleTransactionTest {
             assertEquals(1, count(jdbc, "failover_schedule_ledger"));
             fault.set("NONE");
             service.cancelSchedule(cancel.scheduleId(), "synthetic-actor", "Synthetic cancel");
+            // Generic dispatch is refused before the grant and ledger boundaries (0326f009), so a
+            // fault armed at either boundary is never reached and nothing is written.
             for (String stage : List.of("GRANT", "LEDGER")) {
                 var booked = service.scheduleMaintenanceWindow(FailoverScheduleIntegrityTest.request(Instant.now().plusMillis(300)));
                 TimeUnit.MILLISECONDS.sleep(350);
                 fault.set(stage);
-                var aborted = service.dispatchScheduledExecution(booked.scheduleId(), "synthetic-scheduler");
-                assertEquals(FailoverScheduleStatus.ABORTED_PRE_MUTATION, aborted.status());
-                assertEquals(0, count(jdbc, "failover_grant_consumption"));
+                FailoverScheduleIntegrityTest.assertGenericDispatchRefusedWithoutWrites(service, jdbc, booked.scheduleId());
                 assertTrue(ledger.getTransitionsForSchedule(booked.scheduleId()).stream()
                     .noneMatch(entry -> entry.toStatus() == FailoverScheduleStatus.DISPATCHING));
                 assertTrue(ledger.verifyChainIntegrity());
                 fault.set("NONE");
+                FailoverScheduleIntegrityTest.releaseFleetWindow(jdbc, booked.scheduleId());
             }
         }
     }
 
-    @Test void competingDispatchAndCrashKeepDurableFenceAndGrantAttribution() throws Exception {
+    /**
+     * Two replicas racing to dispatch the same due schedule. Generic dispatch is refused on both
+     * before the durable fence is taken (0326f009), even with the scheduled-execution flag forced on
+     * and an executor that would otherwise reach its boundary: neither replica reaches the boundary,
+     * the schedule stays SCHEDULED and no grant is consumed.
+     */
+    @Test void competingDispatchIsRefusedOnEveryReplicaBeforeTheDurableFence() throws Exception {
         try (var fixture = Ui2PostgresFixture.createAndMigrate("schedule_dispatch")) {
             var jdbc = new JdbcTemplate(fixture.appDataSource());
             var keys = keys();
             var ledger = new FailoverScheduleLedger(jdbc);
-            CountDownLatch boundary = new CountDownLatch(1);
-            CountDownLatch release = new CountDownLatch(1);
             var first = fakeDispatchService(jdbc, keys, ledger, () -> {
-                boundary.countDown();
-                try {
-                    if (!release.await(10, TimeUnit.SECONDS)) throw new AssertionError("Synthetic wait timeout");
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                }
-                throw new IllegalStateException("SYNTHETIC_CRASH_AFTER_BOUNDARY");
+                throw new AssertionError("Generic dispatch must never reach the mutation boundary");
             });
             var secondJdbc = new JdbcTemplate(fixture.appDataSource());
             var second = fakeDispatchService(secondJdbc, keys, new FailoverScheduleLedger(secondJdbc), () -> {
@@ -155,27 +154,24 @@ class FailoverScheduleTransactionTest {
                 });
             var booked = first.scheduleMaintenanceWindow(FailoverScheduleIntegrityTest.request(Instant.now().plusMillis(300)));
             TimeUnit.MILLISECONDS.sleep(350);
-            ExecutorService pool = Executors.newSingleThreadExecutor();
+            ExecutorService pool = Executors.newFixedThreadPool(2);
             try {
-                var running = pool.submit(() -> first.dispatchScheduledExecution(booked.scheduleId(), "synthetic-scheduler"));
-                assertTrue(boundary.await(10, TimeUnit.SECONDS));
-                assertEquals("DISPATCHING", jdbc.queryForObject("SELECT status FROM failover_schedules", String.class));
-                assertEquals(1, count(jdbc, "failover_grant_consumption"));
-                assertThrows(RuntimeException.class, () -> second.dispatchScheduledExecution(booked.scheduleId(), "synthetic-scheduler"));
-                release.countDown();
-                assertEquals(FailoverScheduleStatus.OUTCOME_UNKNOWN, running.get(10, TimeUnit.SECONDS).status());
-                String attempt = jdbc.queryForObject("SELECT attempt_id FROM failover_grant_consumption", String.class);
+                CountDownLatch start = new CountDownLatch(1);
+                List<Future<?>> racers = new ArrayList<>();
+                for (var service : List.of(first, second)) {
+                    racers.add(pool.submit(() -> {
+                        start.await();
+                        FailoverScheduleIntegrityTest.assertGenericDispatchRefusedWithoutWrites(service, jdbc,
+                            booked.scheduleId());
+                        return null;
+                    }));
+                }
+                start.countDown();
+                for (var racer : racers) racer.get(10, TimeUnit.SECONDS);
                 assertTrue(ledger.getTransitionsForSchedule(booked.scheduleId()).stream()
-                    .filter(entry -> entry.toStatus() == FailoverScheduleStatus.DISPATCHING)
-                    .allMatch(entry -> entry.attemptId().equals(attempt)));
-                assertThrows(RuntimeException.class, () -> jdbc.update("DELETE FROM failover_grant_consumption"));
-                // The uncertain row keeps the fleet fence even for a different, non-overlapping window.
-                var later = first.scheduleMaintenanceWindow(FailoverScheduleIntegrityTest.request(Instant.now().plusSeconds(14400)));
-                assertThrows(RuntimeException.class, () -> jdbc.update(
-                    "UPDATE failover_schedules SET status = 'CLAIMED_VERIFYING' WHERE schedule_id = ?", later.scheduleId()));
+                    .noneMatch(entry -> entry.toStatus() == FailoverScheduleStatus.DISPATCHING));
                 assertTrue(ledger.verifyChainIntegrity());
             } finally {
-                release.countDown();
                 pool.shutdownNow();
             }
         }
@@ -187,9 +183,9 @@ class FailoverScheduleTransactionTest {
             var service = FailoverScheduleIntegrityTest.service(jdbc, keys());
             var booked = service.scheduleMaintenanceWindow(FailoverScheduleIntegrityTest.request(Instant.now().plusMillis(300)));
             TimeUnit.MILLISECONDS.sleep(350);
-            var aborted = service.dispatchScheduledExecution(booked.scheduleId(), "synthetic-scheduler");
-            assertEquals("SCHEDULED_EXECUTION_DISABLED", aborted.abortReasonCode());
-            assertEquals(0, count(jdbc, "failover_grant_consumption"));
+            // 0326f009: refused outright (GENERIC_FAILOVER_EXECUTION_DISABLED) rather than recorded as an
+            // aborted schedule; the row is left untouched.
+            FailoverScheduleIntegrityTest.assertGenericDispatchRefusedWithoutWrites(service, jdbc, booked.scheduleId());
         }
     }
 

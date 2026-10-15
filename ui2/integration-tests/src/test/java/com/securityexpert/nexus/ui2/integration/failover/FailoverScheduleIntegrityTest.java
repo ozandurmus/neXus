@@ -1,6 +1,7 @@
 package com.securityexpert.nexus.ui2.integration.failover;
 
 import com.securityexpert.nexus.ui2.integration.support.Ui2PostgresFixture;
+import com.securityexpert.nexus.ui2.jobs.failover.FailoverMutationSwitch;
 import com.securityexpert.nexus.ui2.jobs.failover.execution.FailoverActionKind;
 import com.securityexpert.nexus.ui2.jobs.failover.model.*;
 import com.securityexpert.nexus.ui2.jobs.failover.pilot.FailoverPilotAllowlist;
@@ -87,7 +88,14 @@ class FailoverScheduleIntegrityTest {
         }
     }
 
-    @Test void columnJsonClusterAndMissingFieldsAbortBeforeExecution() throws Exception {
+    /**
+     * Since 0326f009 ("Disable alternate failover dispatch and default mutation to denied") generic
+     * scheduled dispatch is refused unconditionally, before the schedule row is read: no environment
+     * switch re-enables it ({@link FailoverMutationSwitch#refuseGenericExecution()}). The tamper
+     * detection this test used to drive therefore cannot be reached; what the real database must
+     * still prove is that a tampered row is never dispatched and the refusal writes nothing.
+     */
+    @Test void tamperedRowsAreRefusedBeforeAnyScheduleReadOrWrite() throws Exception {
         try (var fixture = Ui2PostgresFixture.createAndMigrate("schedule_tamper")) {
             var jdbc = new JdbcTemplate(fixture.appDataSource());
             FailoverKeyManagementService.initializeKey(directory.resolve("schedule.key"));
@@ -103,14 +111,14 @@ class FailoverScheduleIntegrityTest {
                 var booked = service.scheduleMaintenanceWindow(request(Instant.now().plusMillis(300)));
                 jdbc.update("UPDATE failover_schedules SET " + alteration + " WHERE schedule_id = ?", booked.scheduleId());
                 TimeUnit.MILLISECONDS.sleep(350);
-                var aborted = service(jdbc, keys).dispatchScheduledExecution(booked.scheduleId(), "synthetic-scheduler");
-                assertEquals(FailoverScheduleStatus.ABORTED_TAMPERED, aborted.status());
-                assertEquals("BASELINE_DIGEST_MISMATCH", aborted.abortReasonCode());
-                assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM failover_grant_consumption", Integer.class));
+                assertGenericDispatchRefusedWithoutWrites(service(jdbc, keys), jdbc, booked.scheduleId());
+                releaseFleetWindow(jdbc, booked.scheduleId());
             }
         }
     }
-    @Test void unavailablePersistedKeyOrAlgorithmAbortsAfterReload() throws Exception {
+
+    /** As above, for a persisted key id or algorithm the restarted service cannot resolve. */
+    @Test void unresolvableKeyRowsAreRefusedBeforeAnyScheduleReadOrWrite() throws Exception {
         try (var fixture = Ui2PostgresFixture.createAndMigrate("schedule_key")) {
             var jdbc = new JdbcTemplate(fixture.appDataSource());
             Path key = directory.resolve("schedule.key");
@@ -124,13 +132,36 @@ class FailoverScheduleIntegrityTest {
                     jdbc.update("UPDATE failover_schedules SET " + field + " = 'unknown' WHERE schedule_id = ?", booked.scheduleId());
                 }
                 TimeUnit.MILLISECONDS.sleep(350);
-                var result = service(jdbc, new FailoverKeyManagementService(key))
-                    .dispatchScheduledExecution(booked.scheduleId(), "synthetic-scheduler");
-                assertEquals(FailoverScheduleStatus.ABORTED_KEY_UNAVAILABLE, result.status());
-                assertEquals("KEY_UNAVAILABLE", result.abortReasonCode());
-                assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM failover_grant_consumption", Integer.class));
+                assertGenericDispatchRefusedWithoutWrites(service(jdbc, new FailoverKeyManagementService(key)), jdbc,
+                    booked.scheduleId());
+                releaseFleetWindow(jdbc, booked.scheduleId());
             }
         }
     }
 
+    /**
+     * Fixture cleanup only: a refused schedule stays SCHEDULED and keeps its fleet window (concurrency
+     * 1, V135 exclusion), so the next iteration's booking would overlap it. Retire it directly.
+     */
+    static void releaseFleetWindow(JdbcTemplate jdbc, String scheduleId) {
+        assertEquals(1, jdbc.update("UPDATE failover_schedules SET status = 'CANCELLED' WHERE schedule_id = ?", scheduleId));
+    }
+
+    /**
+     * The generic dispatch refusal: {@code GENERIC_FAILOVER_EXECUTION_DISABLED}, the row still
+     * {@code SCHEDULED}, no grant consumed and no ledger entry beyond the booking itself.
+     */
+    static void assertGenericDispatchRefusedWithoutWrites(FailoverScheduleService service, JdbcTemplate jdbc,
+                                                         String scheduleId) {
+        int ledgerRows = jdbc.queryForObject("SELECT count(*) FROM failover_schedule_ledger WHERE schedule_id = ?",
+            Integer.class, scheduleId);
+        var refused = assertThrows(SecurityException.class,
+            () -> service.dispatchScheduledExecution(scheduleId, "synthetic-scheduler"));
+        assertEquals(FailoverMutationSwitch.GENERIC_DISABLED, refused.getMessage());
+        assertEquals("SCHEDULED", jdbc.queryForObject("SELECT status FROM failover_schedules WHERE schedule_id = ?",
+            String.class, scheduleId));
+        assertEquals(ledgerRows, jdbc.queryForObject("SELECT count(*) FROM failover_schedule_ledger WHERE schedule_id = ?",
+            Integer.class, scheduleId));
+        assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM failover_grant_consumption", Integer.class));
+    }
 }
