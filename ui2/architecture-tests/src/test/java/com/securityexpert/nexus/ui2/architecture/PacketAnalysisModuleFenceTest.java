@@ -44,11 +44,19 @@ class PacketAnalysisModuleFenceTest {
             migration = files.filter(p -> p.getFileName().toString().endsWith("__packet_analysis_shell.sql")).findFirst().orElseThrow();
         }
         String sql = Files.readString(migration);
-        String original = Files.readString(MIGRATIONS.resolve("V128__module_endpoint_runtime.sql"));
-        String before = caseBody(original);
+        // The mapping V154 replaces is the latest earlier ui2_job_module definition (V128, then V151).
+        int version = migrationVersion(migration);
+        Path previous;
+        try (var files = Files.list(MIGRATIONS)) {
+            previous = files.filter(p -> migrationVersion(p) < version)
+                    .filter(p -> readUnchecked(p).contains("CREATE OR REPLACE FUNCTION ui2_job_module"))
+                    .max(java.util.Comparator.comparingInt(PacketAnalysisModuleFenceTest::migrationVersion)).orElseThrow();
+        }
+        String before = caseBody(Files.readString(previous));
         String after = caseBody(sql);
         assertEquals(before.replace(" ELSE NULL END", "") + " WHEN capability = 'packet_analysis_run' THEN 'packet_analysis'"
-                + " ELSE NULL END", after, "every V128 mapping is kept byte-for-byte; exactly one branch is added");
+                + " ELSE NULL END", after, "every " + previous.getFileName() + " mapping is kept byte-for-byte; "
+                + "exactly one branch is added");
         assertFalse(Pattern.compile("(?i)UPDATE\\s+module_runtime_control").matcher(sql).find(),
                 "no existing module row is changed");
         Matcher inserts = Pattern.compile("(?i)INSERT INTO module_runtime_control[^;]*;").matcher(sql);
@@ -67,6 +75,19 @@ class PacketAnalysisModuleFenceTest {
                 .resideInAnyPackage("..worker.transport..", "..worker.credential..", "..persistence.credential..",
                         "..capability..", "com.jcraft..")
                 .check(classes);
+    }
+
+    private static int migrationVersion(Path migration) {
+        Matcher version = Pattern.compile("^V(\\d+)__").matcher(migration.getFileName().toString());
+        return version.find() ? Integer.parseInt(version.group(1)) : -1;
+    }
+
+    private static String readUnchecked(Path file) {
+        try {
+            return Files.readString(file);
+        } catch (java.io.IOException e) {
+            throw new java.io.UncheckedIOException(e);
+        }
     }
 
     private static String caseBody(String sql) {
