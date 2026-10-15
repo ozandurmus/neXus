@@ -15,7 +15,8 @@ import java.util.zip.ZipFile;
 
 /**
  * The ICANN section of the Public Suffix List, read from the JDK's own copy
- * ({@code $JAVA_HOME/lib/security/public_suffix_list.dat}, one zip entry per TLD, ICANN rules indented by one space)
+ * ({@code $JAVA_HOME/lib/security/public_suffix_list.dat}: one zip entry per TLD, one rule per line, each line
+ * prefixed by a type byte -- 0 for ICANN rules, 1 for private-domain rules, which are ignored)
  * so no list is vendored here. The special-use and common private-network suffixes are always added. When the JDK
  * file is missing, a conservative built-in set is used (generic TLDs plus every two-letter country code).
  *
@@ -117,16 +118,16 @@ public final class PublicSuffixes {
             if (!special.contains(".")) tlds.add(special);
         }
         if (Files.isRegularFile(file)) {
-            try (ZipFile zip = new ZipFile(file.toFile())) {
+            try (ZipFile zip = new ZipFile(file.toFile(), StandardCharsets.ISO_8859_1)) {
                 Enumeration<? extends ZipEntry> entries = zip.entries();
                 while (entries.hasMoreElements()) {
                     ZipEntry entry = entries.nextElement();
                     try (InputStream in = zip.getInputStream(entry)) {
                         String text = new String(in.readAllBytes(), StandardCharsets.UTF_8);
                         for (String line : text.split("\n")) {
-                            // ICANN rules carry one leading space; private-domain rules (no space) are ignored.
-                            if (!line.startsWith(" ")) continue;
-                            String rule = line.strip().toLowerCase(Locale.ROOT);
+                            // Each rule carries a type byte: 0 for the ICANN section, 1 for private domains (ignored).
+                            if (line.isEmpty() || line.charAt(0) != '\0') continue;
+                            String rule = line.substring(1).strip().toLowerCase(Locale.ROOT);
                             if (rule.isEmpty()) continue;
                             String bare = rule.startsWith("!") ? rule.substring(1) : rule.startsWith("*.") ? rule.substring(2) : rule;
                             String asciiRule = toAsciiRule(bare);

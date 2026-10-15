@@ -74,6 +74,15 @@ public final class XlsxFormat {
 
     /** @return the number of text values seen */
     public static long process(Path input, OutputStream out, ValueRewriter rewriter) throws IOException {
+        return process(input, out, rewriter, name -> { });
+    }
+
+    /**
+     * @param learner receives every value found under a host-like header before any part is rewritten, so a host
+     *                name that a formula or a note mentions elsewhere in the workbook is replaced there too
+     */
+    public static long process(Path input, OutputStream out, ValueRewriter rewriter,
+            java.util.function.Consumer<String> learner) throws IOException {
         try (ZipSecureFile zip = new ZipSecureFile(input.toFile())) {
             Map<String, String> types = contentTypes(zip);
             Map<String, ZipArchiveEntry> byName = new HashMap<>();
@@ -86,7 +95,7 @@ public final class XlsxFormat {
             }
             Map<String, Set<Integer>> hostColumns = new HashMap<>();
             BitSet hostShared = new BitSet();
-            headerAnalysis(zip, byName, sst, sheets, hostColumns, hostShared);
+            headerAnalysis(zip, byName, sst, sheets, hostColumns, hostShared, learner);
 
             long[] seen = {0};
             ZipOutputStream zipOut = new ZipOutputStream(new BufferedOutputStream(out, 1 << 16));
@@ -161,8 +170,8 @@ public final class XlsxFormat {
      * string indexes used below a host-like header.
      */
     private static void headerAnalysis(ZipSecureFile zip, Map<String, ZipArchiveEntry> byName, String sst,
-            List<String> sheets, Map<String, Set<Integer>> hostColumns, BitSet hostShared)
-            throws IOException, XMLStreamException {
+            List<String> sheets, Map<String, Set<Integer>> hostColumns, BitSet hostShared,
+            java.util.function.Consumer<String> learner) throws IOException, XMLStreamException {
         Map<String, Map<Integer, Object>> headers = new HashMap<>();
         Set<Integer> wanted = new HashSet<>();
         for (String sheet : sheets) {
@@ -250,7 +259,9 @@ public final class XlsxFormat {
                 int rows = 0;
                 boolean hostCell = false;
                 boolean sharedCell = false;
+                boolean inlineCell = false;
                 StringBuilder text = null;
+                StringBuilder inline = null;
                 while (r.hasNext()) {
                     XMLEvent ev = r.nextEvent();
                     if (ev.isStartElement()) {
@@ -260,9 +271,13 @@ public final class XlsxFormat {
                         else if (local.equals("c")) {
                             hostCell = rows > 1 && cols.contains(column(attr(s, "r")));
                             sharedCell = "s".equals(attr(s, "t"));
+                            inlineCell = "inlineStr".equals(attr(s, "t"));
                         } else if (local.equals("v") && hostCell && sharedCell) text = new StringBuilder();
+                        else if (local.equals("t") && hostCell && inlineCell) inline = new StringBuilder();
                     } else if (ev.isCharacters() && text != null) {
                         text.append(ev.asCharacters().getData());
+                    } else if (ev.isCharacters() && inline != null) {
+                        inline.append(ev.asCharacters().getData());
                     } else if (ev.isEndElement() && ev.asEndElement().getName().getLocalPart().equals("v") && text != null) {
                         try {
                             hostShared.set(Integer.parseInt(text.toString().strip()));
@@ -270,6 +285,34 @@ public final class XlsxFormat {
                             // not an index
                         }
                         text = null;
+                    } else if (ev.isEndElement() && ev.asEndElement().getName().getLocalPart().equals("t") && inline != null) {
+                        learner.accept(inline.toString().strip());
+                        inline = null;
+                    }
+                }
+            }
+        }
+        // Pass D: the shared strings that sit under a host header, learned before anything is rewritten.
+        if (sst != null && !hostShared.isEmpty() && byName.get(sst) != null) {
+            try (InputStream in = zip.getInputStream(byName.get(sst))) {
+                XMLEventReader r = inputs().createXMLEventReader(in);
+                int index = -1;
+                StringBuilder text = null;
+                boolean inT = false;
+                while (r.hasNext()) {
+                    XMLEvent ev = r.nextEvent();
+                    if (ev.isStartElement()) {
+                        String local = ev.asStartElement().getName().getLocalPart();
+                        if (local.equals("si")) {
+                            index++;
+                            text = hostShared.get(index) ? new StringBuilder() : null;
+                        } else if (local.equals("t")) inT = true;
+                    } else if (ev.isCharacters() && inT && text != null) {
+                        text.append(ev.asCharacters().getData());
+                    } else if (ev.isEndElement()) {
+                        String local = ev.asEndElement().getName().getLocalPart();
+                        if (local.equals("t")) inT = false;
+                        if (local.equals("si") && text != null) learner.accept(text.toString().strip());
                     }
                 }
             }
