@@ -1865,12 +1865,15 @@ export const getPolicyObject = (id: string, policy: string) => call<{ object: Po
 export interface PolicyInventoryObject extends Omit<PolicyObject, "status"> {
   uid: string; unused: boolean | null; emptyGroup: boolean; singleMember: boolean;
   duplicateId: string | null; ruleCount: number; groupCount: number;
+  /** True only when a zero/total count is proven; otherwise counts are a lower bound and usageReasons explain why. */
+  usageComplete?: boolean; usageReasons?: string[]; unusedReasons?: string[];
 }
 export interface PolicyTypeState { type: string; status: string; collectedAt: string; objects: number }
-export interface PolicyObjectPage { objects: PolicyInventoryObject[]; total: number; page: number; pageSize: number; types: PolicyTypeState[] }
+export interface PolicyObjectPage { objects: PolicyInventoryObject[]; total: number; page: number; pageSize: number; types: PolicyTypeState[]; usageGaps?: string[] }
 export interface PolicyUsage {
   object: PolicyInventoryObject; rules: { policyId: string; policyName: string; layerRef: string; layerName: string; ruleId: string; number: number }[];
   groups: { id: string; uid: string; name: string; type: string }[]; ruleCount: number; groupCount: number; page: number; pageSize: number;
+  usageComplete?: boolean; usageReasons?: string[];
 }
 export interface PolicyInstallation {
   id: string; policyId: string; policyName: string; name: string; deviceId: string;

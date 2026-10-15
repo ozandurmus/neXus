@@ -1,11 +1,19 @@
 import { useEffect, useState } from "react";
-import { Box, Button, Chip, Drawer, MenuItem, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography } from "@mui/material";
-import { getPolicyObjects, getPolicyUsage, getPolicyInstallations, type PolicyMetadata, type PolicyObjectPage, type PolicyInstallationPage, type PolicyUsage } from "../auth/adminApi";
+import { Box, Button, Chip, Drawer, MenuItem, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Tooltip, Typography } from "@mui/material";
+import { getPolicyObjects, getPolicyUsage, getPolicyInstallations, type PolicyInventoryObject, type PolicyMetadata, type PolicyObjectPage, type PolicyInstallationPage, type PolicyUsage } from "../auth/adminApi";
 import { scheduleLabel, reportPolicyLoadError } from "./PolicyRuleViewer";
 
 const objectTypes = ["host", "network", "range", "group", "service", "service-group", "time", "access-role", "dynamic", "dns-domain", "zone"];
 const hygieneFilters = { "": "All objects", unused: "Unused", duplicates: "Duplicates", empty: "Empty groups", single: "Single-member groups" };
 const truth = (value: boolean | null) => value == null ? "UNKNOWN" : value ? "Yes" : "No";
+type UsageEvidence = Pick<PolicyInventoryObject, "ruleCount" | "groupCount" | "usageComplete" | "usageReasons">;
+/** A count is only exact when the server proved it; a missing flag fails closed to UNKNOWN / lower bound. */
+export function whereUsedLabel(usage: UsageEvidence) {
+  const counts = `${usage.ruleCount} rules · ${usage.groupCount} groups`;
+  if (usage.usageComplete === true) return counts;
+  return usage.ruleCount + usage.groupCount === 0 ? "UNKNOWN" : `at least ${counts}`;
+}
+const reasonText = (reasons: string[] | undefined, fallback: string) => reasons?.length ? reasons.join(" ") : fallback;
 
 function Paging({ page, total, size = 200, change }: { page: number; total: number; size?: number; change: (page: number) => void }) {
   return <Stack direction="row" alignItems="center" gap={1} sx={{ mt: 1 }}>
@@ -62,9 +70,13 @@ export function PolicyDomainTab({ tab, metadata, policies }: { tab: "Objects" | 
     </Stack>
     {error ? <Typography role="alert">{error} <Button onClick={() => setRetry(r => r + 1)}>Retry</Button></Typography>
       : !data ? <Typography role="status">Loading {tab.toLowerCase()}…</Typography> : <>
-        {!data.types.length && <Typography role="status">Object inventory not collected for this domain.</Typography>}
+        {!data.types.length && <Typography role="status">Object inventory not collected for this domain. Objects are listed from the stored policy.</Typography>}
         {data.types.filter(t => t.status !== "RESOLVED").map(t => <Chip key={t.type} size="small" color="warning" label={`${t.type}: ${t.status}`} sx={{ mr: 1, mb: 1 }} />)}
-        {tab === "Objects" && <Typography variant="caption" display="block">Unused is reported by the management snapshot. Missing evidence remains UNKNOWN; hygiene flags describe stored objects.</Typography>}
+        {tab === "Objects" && <Typography variant="caption" display="block">Unused comes only from the management unused-object report. Where used counts references in collected rules and groups; when that evidence is incomplete it shows UNKNOWN or a lower bound (hover for reasons).</Typography>}
+        {"objects" in data && !!data.usageGaps?.length && <Box role="note" aria-label="Where-used evidence gaps" sx={{ mt: 1 }}>
+          <Typography variant="caption" display="block">Where-used evidence is incomplete for this domain:</Typography>
+          {data.usageGaps.map(gap => <Typography key={gap} variant="caption" display="block">• {gap}</Typography>)}
+        </Box>}
         {tab === "Installation" && <Typography variant="caption" display="block">Targets are package intent; reported installation is management-plane evidence, not direct runtime enforcement.</Typography>}
         <Box sx={{ overflowX: "auto", mt: 1 }}><Table size="small" aria-label={`Policy ${tab.toLowerCase()}`}>
           <TableHead><TableRow>{(tab === "Objects" ? ["Name", "Type", "Value / schedule", "Members", "Hygiene", "Where used"]
@@ -73,11 +85,14 @@ export function PolicyDomainTab({ tab, metadata, policies }: { tab: "Objects" | 
             <TableCell>{object.name}</TableCell><TableCell>{object.type}</TableCell>
             <TableCell sx={{ overflowWrap: "anywhere", maxWidth: 320 }}>{object.schedule ? scheduleLabel(object.schedule) : object.values?.join("; ") || "—"}</TableCell>
             <TableCell>{object.members?.length ?? 0}</TableCell><TableCell>
-              {object.unused == null ? <Chip size="small" label="Unused: UNKNOWN" /> : object.unused && <Chip size="small" label="Unused" />}
+              {object.unused == null ? <Tooltip describeChild title={reasonText(object.unusedReasons, "Unused evidence is not available.")}>
+                <Chip size="small" label="Unused: UNKNOWN" /></Tooltip> : object.unused && <Chip size="small" label="Unused" />}
               {object.emptyGroup && <Chip size="small" label="Empty group" />}{object.singleMember && <Chip size="small" label="Single member" />}
               {object.duplicateId && <Chip size="small" label={`Duplicate set ${duplicates.indexOf(object.duplicateId) + 1}`} />}
-            </TableCell><TableCell><Button size="small" aria-label={`Where used: ${object.name}`} onClick={() => { setUid(object.uid); setUsagePage(0); }}>
-              {object.ruleCount} rules · {object.groupCount} groups</Button></TableCell>
+            </TableCell><TableCell><Tooltip describeChild title={object.usageComplete === true ? "Proven by the management unused-object report."
+              : reasonText(object.usageReasons, "Where-used evidence is incomplete.")}>
+              <Button size="small" aria-label={`Where used: ${object.name}`} onClick={() => { setUid(object.uid); setUsagePage(0); }}>
+              {whereUsedLabel(object)}</Button></Tooltip></TableCell>
           </TableRow>) : data.installations.map(row => <TableRow key={`${row.policyId}:${row.id}`}>
             <TableCell>{row.policyName}</TableCell><TableCell>{row.deviceId ? <Button size="small" href={`/?screen=inventory&device_id=${encodeURIComponent(row.deviceId)}`}>{row.name}</Button>
               : row.allTargets && !row.name ? "ALL" : row.name || "No observed target"}</TableCell>
@@ -93,11 +108,16 @@ export function PolicyDomainTab({ tab, metadata, policies }: { tab: "Objects" | 
         {usageError ? <Typography role="alert">Object usage could not be loaded.</Typography> : !usage ? <Typography role="status">Loading usage…</Typography> : <>
           <Typography variant="h6">{usage.object.name}</Typography>
           <Typography variant="caption">Includes rule references through groups. Group references are direct memberships.</Typography>
+          <Typography role="status" sx={{ mt: 1 }}>Where used: {whereUsedLabel(usage)}</Typography>
+          {usage.usageComplete !== true && <Box aria-label="Usage evidence gaps">
+            {(usage.usageReasons?.length ? usage.usageReasons : ["Where-used evidence is incomplete."]).map(r => <Typography key={r} variant="caption" display="block">• {r}</Typography>)}
+          </Box>}
           <Table size="small" aria-label="Rules using object"><TableHead><TableRow>{["Package", "Layer", "Rule number"].map(t => <TableCell key={t}>{t}</TableCell>)}</TableRow></TableHead>
             <TableBody>{usage.rules.map(r => <TableRow key={`${r.policyId}:${r.layerRef}:${r.ruleId}`}><TableCell>{r.policyName}</TableCell><TableCell>{r.layerName}</TableCell><TableCell>{r.number}</TableCell></TableRow>)}</TableBody></Table>
           <Typography variant="subtitle2" sx={{ mt: 2 }}>Groups referencing object</Typography>
           {usage.groups.map(g => <Typography key={g.id}>{g.name}</Typography>)}
-          {!usage.ruleCount && !usage.groupCount && <Typography>No stored references.</Typography>}
+          {!usage.ruleCount && !usage.groupCount && <Typography>{usage.usageComplete === true ? "No references; confirmed by the management unused-object report."
+            : "No references in collected rules and groups; usage remains UNKNOWN."}</Typography>}
           <Paging page={usagePage} total={Math.max(usage.ruleCount, usage.groupCount)} size={usage.pageSize} change={setUsagePage} />
         </>}
       </Box>

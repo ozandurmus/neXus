@@ -5,8 +5,31 @@ import static com.securityexpert.nexus.ui2.policy.PolicySnapshot.*;
 import com.securityexpert.nexus.ui2.policy.PolicySnapshot;
 import java.util.*;
 
-/** Derived only from stored, parsed snapshots. Identifiers are never normalized. */
+/**
+ * Derived only from stored, parsed snapshots. Identifiers are never normalized.
+ *
+ * <p>Where-used counts are computed once per index (one pass over every rule, then bounded group
+ * traversal) and are a lower bound unless proven complete. A zero count is only proven when the
+ * management's own unused-object report confirms it; every other gap stays UNKNOWN with a reason
+ * from {@link #REASONS}.
+ */
 final class PolicyDomainIndex {
+    static final String NO_RULES = "No rulebase is collected for this domain.";
+    static final String RULES_INCOMPLETE = "Rule collection is incomplete for this domain.";
+    static final String UNRESOLVED = "Some rule or group references could not be resolved.";
+    static final String DYNAMIC = "Dynamic group membership is not evaluated.";
+    static final String PAN_RULEBASES = "NAT, decryption and other non-security rulebases are not collected.";
+    static final String PAN_OTHER_GROUPS = "References from other device groups are not counted.";
+    static final String CP_OUTSIDE = "VPN, gateway topology and threat prevention references are not collected.";
+    static final String UNUSED_NOT_COLLECTED = "Management unused-object report is not collected.";
+    static final String NOT_IN_INVENTORY = "Object is not in the collected management inventory.";
+    static final String MANAGEMENT_IN_USE = "Management reports the object in use outside collected rules.";
+    static final String CONTRADICTION = "Management reports the object unused, but stored references exist.";
+    static final String TAG_REFERENCES = "Tag references are not counted.";
+    /** Fixed vocabulary: the only reason texts that may pass the AIView projection. */
+    static final Set<String> REASONS = Set.of(NO_RULES, RULES_INCOMPLETE, UNRESOLVED, DYNAMIC, PAN_RULEBASES, PAN_OTHER_GROUPS,
+        CP_OUTSIDE, UNUSED_NOT_COLLECTED, NOT_IN_INVENTORY, MANAGEMENT_IN_USE, CONTRADICTION, TAG_REFERENCES);
+
     final List<Map<String, Object>> objects = new ArrayList<>();
     final List<Map<String, Object>> duplicates = new ArrayList<>();
     final Map<String, List<Map<String, Object>>> rules = new HashMap<>(), groups = new HashMap<>();
@@ -15,6 +38,10 @@ final class PolicyDomainIndex {
     final List<PolicySnapshot> snapshots;
 
     final Map<String, Integer> objectCounts = new LinkedHashMap<>();
+    /** Domain-wide reasons why no stored count in this index can be proven complete. */
+    final List<String> usageGaps;
+    /** Number of passes over the rulebase while building usage; guards the single-pass algorithm. */
+    int rulePasses;
     PolicyDomainIndex(List<CpObjectInventory> inventories, List<PolicySnapshot> snapshots) {
         this(consume -> inventories.forEach(consume), snapshots);
     }
@@ -55,9 +82,15 @@ final class PolicyDomainIndex {
                 object.type(), object.members(), object.values(), object.schedule(), List.of()));
             statuses.put(object.id(), object.status());
         }
-        for (var object : items.values()) for (String member : referencedMembers(object)) {
-            groups.computeIfAbsent(member, k -> new ArrayList<>()).add(Map.of("id", object.id(), "uid", object.uid(), "name", object.name(), "type", object.type()));
+        boolean[] unresolved = {false}, dynamic = {false};
+        for (var object : items.values()) {
+            if ("DYNAMIC".equals(statuses.get(object.uid()))) dynamic[0] = true;
+            for (String member : referencedMembers(object)) {
+                groups.computeIfAbsent(member, k -> new ArrayList<>()).add(Map.of("id", object.id(), "uid", object.uid(), "name", object.name(), "type", object.type()));
+                if (!items.containsKey(aliases.getOrDefault(member, member))) unresolved[0] = true;
+            }
         }
+        rulePasses++;
         for (var snapshot : snapshots) for (var section : snapshot.sections()) for (var rule : section.rules()) {
             var refs = new ArrayDeque<String>();
             for (var cell : List.of(rule.source(), rule.destination(), rule.service(), rule.application())) refs.addAll(cell.refs());
@@ -71,10 +104,26 @@ final class PolicyDomainIndex {
                     "policyId", snapshot.metadata().id(), "policyName", snapshot.metadata().name(),
                     "layerRef", section.id(), "layerName", rule.extras().getOrDefault("layer-name", List.of()).stream().findFirst().orElse(section.name()), "ruleId", rule.id(), "number", rule.number()));
                 var object = items.get(uid);
-                if (object != null) refs.addAll(referencedMembers(object));
-                else if (snapshot.objects().containsKey(id)) refs.addAll(snapshot.objects().get(id).members());
+                if (object != null) {
+                    refs.addAll(referencedMembers(object));
+                    String status = statuses.get(uid);
+                    // Unresolved, unsupported or precedence-UNKNOWN objects may hide members that are never reached.
+                    if ("DYNAMIC".equals(status)) dynamic[0] = true;
+                    else if (status != null && !status.equals("RESOLVED")) unresolved[0] = true;
+                } else if (snapshot.objects().containsKey(id)) refs.addAll(snapshot.objects().get(id).members());
+                else unresolved[0] = true;
             }
         }
+        var gaps = new LinkedHashSet<String>();
+        var vendors = new HashSet<String>();
+        snapshots.forEach(s -> vendors.add(s.metadata().vendor()));
+        if (snapshots.isEmpty()) gaps.add(NO_RULES);
+        if (snapshots.stream().anyMatch(s -> !s.failures().isEmpty())) gaps.add(RULES_INCOMPLETE);
+        if (unresolved[0]) gaps.add(UNRESOLVED);
+        if (dynamic[0]) gaps.add(DYNAMIC);
+        if (vendors.contains("PAN")) { gaps.add(PAN_RULEBASES); gaps.add(PAN_OTHER_GROUPS); }
+        if (vendors.contains("CP") || (snapshots.isEmpty() && !inventoryUids.isEmpty())) gaps.add(CP_OUTSIDE);
+        this.usageGaps = List.copyOf(gaps);
         var byValue = new LinkedHashMap<String, List<CpObjectInventory.Item>>();
         for (var object : items.values()) {
             String normalized = normalized(object);
@@ -93,15 +142,54 @@ final class PolicyDomainIndex {
             row.put("id", object.id()); row.put("uid", object.uid()); row.put("name", object.name()); row.put("type", object.type());
             row.put("values", object.values()); row.put("members", object.members()); row.put("schedule", object.schedule());
             row.put("status", statuses.getOrDefault(object.uid(), "RESOLVED"));
-            row.put("unused", unusedKnown && inventoryUids.contains(object.uid()) ? unused.contains(object.uid()) : null);
+            int ruleCount = rules.getOrDefault(object.uid(), List.of()).size();
+            int groupCount = groups.getOrDefault(object.uid(), List.of()).size();
+            Boolean reported = unusedKnown && inventoryUids.contains(object.uid()) ? unused.contains(object.uid()) : null;
+            var unusedReasons = new ArrayList<String>();
+            if (reported == null) unusedReasons.add(unusedKnown ? NOT_IN_INVENTORY : UNUSED_NOT_COLLECTED);
+            else if (reported && ruleCount + groupCount > 0) { reported = null; unusedReasons.add(CONTRADICTION); }
+            // Only the management's complete unused report, agreeing with zero stored references, proves zero.
+            boolean complete = Boolean.TRUE.equals(reported);
+            var usageReasons = new LinkedHashSet<String>();
+            if (!complete) {
+                if (Boolean.FALSE.equals(reported) && ruleCount + groupCount == 0) usageReasons.add(MANAGEMENT_IN_USE);
+                usageReasons.addAll(unusedReasons);
+                usageReasons.addAll(usageGaps);
+                if (object.type().equals("tag")) usageReasons.add(TAG_REFERENCES);
+            }
+            row.put("unused", reported);
+            row.put("unusedReasons", List.copyOf(unusedReasons));
             boolean group = Set.of("group", "address-group", "service-group", "time-group").contains(object.type());
             row.put("emptyGroup", group && object.members().isEmpty());
             row.put("singleMember", group && new HashSet<>(object.members()).size() == 1);
             row.put("duplicateId", duplicateIds.get(object.uid()));
-            row.put("ruleCount", rules.getOrDefault(object.uid(), List.of()).size());
-            row.put("groupCount", groups.getOrDefault(object.uid(), List.of()).size());
+            row.put("ruleCount", ruleCount);
+            row.put("groupCount", groupCount);
+            row.put("usageComplete", complete);
+            row.put("usageReasons", List.copyOf(usageReasons));
             objects.add(Collections.unmodifiableMap(row));
         }
+    }
+
+    /** Per-viewer search/sort projection, computed once per index instead of once per comparison. */
+    record Views(String[] text, String[] sortKey) {}
+    private final Views[] views = new Views[2];
+    int viewBuilds;
+    synchronized Views views(boolean masked, java.util.function.UnaryOperator<Map<String, Object>> project) {
+        int slot = masked ? 1 : 0;
+        if (views[slot] == null) {
+            viewBuilds++;
+            String[] text = new String[objects.size()], sortKey = new String[objects.size()];
+            for (int i = 0; i < objects.size(); i++) {
+                var row = objects.get(i);
+                var view = project.apply(row);
+                text[i] = (view.getOrDefault("name", "") + " " + view.getOrDefault("policyName", "") + " " + view.getOrDefault("values", ""))
+                    .toLowerCase(Locale.ROOT);
+                sortKey[i] = String.valueOf(view.get("name")) + row.get("id");
+            }
+            views[slot] = new Views(text, sortKey);
+        }
+        return views[slot];
     }
 
     private static Set<String> referencedMembers(CpObjectInventory.Item object) {

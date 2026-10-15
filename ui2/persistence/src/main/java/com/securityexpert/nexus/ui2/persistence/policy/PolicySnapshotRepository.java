@@ -58,6 +58,12 @@ public final class PolicySnapshotRepository {
             .map(row -> row.get("snapshot", String.class) + (row.field("chunk_generation") == null ? "" :
                 "|" + row.get("chunk_generation", String.class) + "|" + row.get("chunk_count", Integer.class))));
     }
+    /** Cheap change marker per stored snapshot; content only changes with a strictly newer collected_at in {@link #save}. */
+    public List<String> domainSnapshotRevisions(String source, String domain) {
+        return transactions.inTransaction(db -> db.fetch("select policy_id || '|' || collected_at::text || '|' || pg_column_size(snapshot)::text as revision "
+                + "from policy_snapshot where metadata->>'sourceId' = {0} and metadata->>'containerId' = {1} order by policy_id", source, domain)
+                .map(row -> row.get("revision", String.class)));
+    }
     public List<String> domainSnapshots(String source, String domain) {
         return transactions.inTransaction(db -> db.fetch("select snapshot::text as snapshot from policy_snapshot "
                 + "where metadata->>'sourceId' = {0} and metadata->>'containerId' = {1} order by policy_id", source, domain)
