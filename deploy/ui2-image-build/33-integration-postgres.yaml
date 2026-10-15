@@ -42,6 +42,8 @@ spec:
           claimName: ui2-integration-gradle-cache
       - name: home
         emptyDir: {}
+      - name: gradle-home
+        emptyDir: {}
       - name: runner-tmp
         emptyDir: {}
       - name: corp-ca
@@ -114,7 +116,7 @@ spec:
         - name: HOME
           value: /home/runner
         - name: GRADLE_USER_HOME
-          value: /workspace/ui2/.gradle-home
+          value: /gradle-home
         - name: UI2_TEST_JDBC_URL
           value: jdbc:postgresql://127.0.0.1:5432/postgres
         - name: UI2_TEST_DB_PASSWORD_FILE
@@ -135,8 +137,13 @@ spec:
         volumeMounts:
         - name: workspace
           mountPath: /workspace
+        # GRADLE_USER_HOME is its own emptyDir root (fsGroup-writable); mounting the
+        # cache inside /workspace made the runtime create /workspace/ui2 root-owned,
+        # so the source archive could not be unpacked.
+        - name: gradle-home
+          mountPath: /gradle-home
         - name: gradle-cache
-          mountPath: /workspace/ui2/.gradle-home/caches
+          mountPath: /gradle-home/caches
         - name: home
           mountPath: /home/runner
         - name: runner-tmp

@@ -750,7 +750,12 @@ def test_integration_job_uses_native_sidecar_and_build_jdk():
     assert "@sha256:" in postgres["image"]
     env = {e["name"]: e["value"] for e in runner["env"]}
     assert env["UI2_TEST_JDBC_URL"] == "jdbc:postgresql://127.0.0.1:5432/postgres"
-    assert env["GRADLE_USER_HOME"] == "/workspace/ui2/.gradle-home"
+    assert env["GRADLE_USER_HOME"] == "/gradle-home"
+    # No volume may be mounted below /workspace: the runtime would create the
+    # parent directories root-owned and the source archive could not be unpacked.
+    mounts = {m["mountPath"]: m["name"] for m in runner["volumeMounts"]}
+    assert not [path for path in mounts if path.startswith("/workspace/")]
+    assert mounts["/gradle-home"] == "gradle-home" and mounts["/gradle-home/caches"] == "gradle-cache"
     assert spec["automountServiceAccountToken"] is False
     assert any(v.get("configMap") == {"name": "corp-ca"} for v in spec["volumes"])
     for container in (postgres, runner):

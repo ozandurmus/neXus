@@ -43,7 +43,7 @@ def test_nightly_full_and_ephemeral_isolation_manifests():
     persistent = [v for v in spec["volumes"] if "persistentVolumeClaim" in v]
     assert persistent == [{"name": "gradle-cache", "persistentVolumeClaim": {
         "claimName": "ui2-integration-gradle-cache"}}]
-    for name in ("data", "workspace", "socket", "tmp", "home", "runner-tmp"):
+    for name in ("data", "workspace", "socket", "tmp", "home", "gradle-home", "runner-tmp"):
         assert next(v for v in spec["volumes"] if v["name"] == name)["emptyDir"] == {}
 
 
