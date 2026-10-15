@@ -204,6 +204,20 @@ public final class AuditPresentationAllowlist {
                     "binding_id", "binding_kind", "created_at", "created_by_actor_fingerprint",
                     "directory_profile_id", "group_reference_key_id", "revoked_at",
                     "revoked_by_actor_fingerprint", "role_token")),
+            // V156: wrapped_data_key, lookup_key and sealed_original are tier-1 redacted.
+            Map.entry("sanitize_job", Set.of(
+                    "counts", "created_at", "created_by", "failure_reason", "file_type", "finished_at",
+                    "input_bytes", "job_id", "key_id", "output_bytes", "output_state", "state",
+                    "vault_entries", "vault_expires_at", "vault_pruned_at")),
+            Map.entry("sanitize_ledger", Set.of(
+                    "actor_fingerprint", "entries", "event", "job_id", "ledger_id", "occurred_at",
+                    "revert_id")),
+            Map.entry("sanitize_revert_job", Set.of(
+                    "counts", "created_at", "created_by", "failure_reason", "file_type", "finished_at",
+                    "input_bytes", "output_bytes", "output_state", "revert_id", "scope", "source_job_id",
+                    "state")),
+            Map.entry("sanitize_vault_entry", Set.of(
+                    "entry_kind", "job_id")),
             Map.entry("secrets_metadata", Set.of(
                     "backend_kind", "component", "created_at", "purpose", "rotated_at",
                     "rotation_policy_ref", "secret_id")),
