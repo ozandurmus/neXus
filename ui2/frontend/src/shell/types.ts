@@ -7,7 +7,8 @@ export type ScreenId =
   | "compliance"
   | "backups"
   | "operations"
-  | "administration";
+  | "administration"
+  | "packet_analysis";
 
 export const SCREEN_IDS: readonly ScreenId[] = [
   "overview",
@@ -18,6 +19,7 @@ export const SCREEN_IDS: readonly ScreenId[] = [
   "backups",
   "operations",
   "administration",
+  "packet_analysis",
 ];
 
 export function isScreenId(value: string | null): value is ScreenId {

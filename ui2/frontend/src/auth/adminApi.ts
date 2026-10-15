@@ -2008,3 +2008,84 @@ export async function downloadPolicyChanges(filters: PolicyChangeFilters) {
   if (!response.ok) throw new Error("Change export failed");
   return response.blob();
 }
+
+// ---- Packet Analysis (PO decision record 2026-10-15) -------------------------------------------------------
+/** What the server says this session may do; the screen renders it and decides nothing itself. */
+export interface PacketAnalysisPermissions { readonly run: boolean; readonly raw_view: boolean; readonly masked: boolean }
+export interface PacketCase {
+  readonly case_id: string; readonly title: string; readonly created_by?: string; readonly created_at: string;
+  readonly expires_at: string; readonly state: "OPEN" | "QUEUED" | "ANALYZING" | "ANALYZED" | "FAILED";
+  readonly total_bytes: number; readonly capture_count: number; readonly payload_zeroing: boolean;
+  readonly latest_job_id: string | null;
+}
+export interface PacketCapture {
+  readonly capture_id: string; readonly display_name: string; readonly format: "pcap" | "pcapng";
+  readonly size_bytes: number; readonly sha256?: string; readonly uploaded_by?: string; readonly uploaded_at: string;
+}
+export interface PacketStageSummary { readonly stage: string; readonly verdict: string; readonly reason?: string }
+export interface PacketRunSummary {
+  readonly verdict?: string; readonly reason?: string; readonly stages?: readonly PacketStageSummary[];
+  readonly capture_count?: number; readonly total_bytes?: number; readonly finding_count?: number;
+}
+export interface PacketRun {
+  readonly job_id: string; readonly case_id: string; readonly state: "REQUESTED" | "RUNNING" | "COMPLETED" | "FAILED";
+  readonly requested_by?: string; readonly requested_at: string; readonly started_at: string | null;
+  readonly finished_at: string | null; readonly engine_version: string | null; readonly failure_reason: string | null;
+  readonly summary: PacketRunSummary | null;
+}
+export interface PacketCaseList {
+  readonly cases: readonly PacketCase[]; readonly permissions: PacketAnalysisPermissions;
+  readonly limits: { readonly max_file_bytes: number; readonly max_store_bytes: number; readonly used_bytes: number; readonly retention_days: number };
+}
+export interface PacketCaseDetail extends PacketCase {
+  readonly captures: readonly PacketCapture[]; readonly runs: readonly PacketRun[]; readonly permissions: PacketAnalysisPermissions;
+}
+export interface PacketReport {
+  readonly job_id: string; readonly case_id: string; readonly projection: "full" | "masked";
+  readonly report?: Record<string, unknown>; readonly summary?: PacketRunSummary | null;
+}
+const PA = "/api/v2/packet-analysis";
+export const listPacketCases = () => call<PacketCaseList>(`${PA}/cases`, "GET");
+export const createPacketCase = (title: string, payloadZeroing: boolean) =>
+  call<PacketCase>(`${PA}/cases`, "POST", { title, payload_zeroing: payloadZeroing });
+export const getPacketCase = (caseId: string) => call<PacketCaseDetail>(`${PA}/cases/${encodeURIComponent(caseId)}`, "GET");
+export const analyzePacketCase = (caseId: string) =>
+  call<{ job_id: string; state: string }>(`${PA}/cases/${encodeURIComponent(caseId)}/analyze`, "POST", {});
+export const getPacketRun = (jobId: string) => call<PacketRun>(`${PA}/runs/${encodeURIComponent(jobId)}`, "GET");
+export const getPacketReport = (jobId: string) => call<PacketReport>(`${PA}/runs/${encodeURIComponent(jobId)}/report`, "GET");
+export async function deletePacketCase(caseId: string): Promise<{ deleted: boolean }> {
+  const token = await csrfToken();
+  const response = await fetchWithTimeout(`${PA}/cases/${encodeURIComponent(caseId)}`, { method: "DELETE", credentials: "include",
+    headers: token ? { "X-CSRF-Token": token } : {} }, 60_000);
+  noteMasking(response);
+  const parsed = await response.json().catch(() => ({}));
+  if (!response.ok) throw { status: response.status, body: parsed } satisfies ApiError;
+  return parsed as { deleted: boolean };
+}
+/** The browser's own download (streamed to disk); the server ledgers it before the first byte. */
+export const packetCaptureDownloadHref = (captureId: string) => `${PA}/captures/${encodeURIComponent(captureId)}/download`;
+/**
+ * Upload one capture with progress. XMLHttpRequest, because fetch reports no upload progress; the file is streamed by
+ * the browser from disk, never read into page memory.
+ */
+export async function uploadPacketCapture(caseId: string, file: File, onProgress: (sent: number, total: number) => void,
+  makeRequest: () => XMLHttpRequest = () => new XMLHttpRequest()): Promise<{ capture_id: string; size_bytes: number; format: string }> {
+  const token = await csrfToken();
+  const body = new FormData();
+  body.append("file", file, file.name);
+  return new Promise((resolve, reject) => {
+    const xhr = makeRequest();
+    xhr.open("POST", `${PA}/cases/${encodeURIComponent(caseId)}/captures`);
+    xhr.withCredentials = true;
+    if (token) xhr.setRequestHeader("X-CSRF-Token", token);
+    xhr.upload.onprogress = event => { if (event.lengthComputable) onProgress(event.loaded, event.total); };
+    xhr.onload = () => {
+      let parsed: Record<string, unknown> = {};
+      try { parsed = JSON.parse(xhr.responseText || "{}"); } catch { parsed = {}; }
+      if (xhr.status >= 200 && xhr.status < 300) resolve(parsed as { capture_id: string; size_bytes: number; format: string });
+      else reject({ status: xhr.status, body: parsed } satisfies ApiError);
+    };
+    xhr.onerror = () => reject({ status: 0, body: { error: "NETWORK" } } satisfies ApiError);
+    xhr.send(body);
+  });
+}
