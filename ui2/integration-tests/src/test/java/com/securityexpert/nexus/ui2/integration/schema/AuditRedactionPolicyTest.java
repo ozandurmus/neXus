@@ -56,6 +56,60 @@ class AuditRedactionPolicyTest {
      * column to an audited table must force a decision in the same change.</p>
      */
     private static final Set<String> AUDITED_IN_FULL = Set.of(
+            // artefact_retention_ledger
+            "artefact_retention_ledger.artefact_id", "artefact_retention_ledger.event",
+            "artefact_retention_ledger.ledger_id", "artefact_retention_ledger.occurred_at",
+            "artefact_retention_ledger.retention_tier",
+            // backup_artefact
+            "backup_artefact.artefact_class", "backup_artefact.artefact_id",
+            "backup_artefact.backup_type", "backup_artefact.ciphertext_bytes",
+            "backup_artefact.ciphertext_sha256", "backup_artefact.created_at",
+            "backup_artefact.deviation_state", "backup_artefact.device_id",
+            "backup_artefact.expires_at", "backup_artefact.key_id",
+            "backup_artefact.plaintext_bytes", "backup_artefact.plaintext_sha256",
+            "backup_artefact.retention_tier", "backup_artefact.software_version",
+            "backup_artefact.validation", "backup_artefact.vendor",
+            // backup_artefact_deletion_request
+            "backup_artefact_deletion_request.artefact_id",
+            "backup_artefact_deletion_request.completed_at",
+            "backup_artefact_deletion_request.outcome",
+            "backup_artefact_deletion_request.requested_at",
+            "backup_artefact_deletion_request.requested_by_actor_fingerprint",
+            // backup_artefact_retrieval
+            "backup_artefact_retrieval.actor_fingerprint", "backup_artefact_retrieval.artefact_id",
+            "backup_artefact_retrieval.retrieval_id", "backup_artefact_retrieval.retrieved_at",
+            // backup_baseline
+            "backup_baseline.artefact_id", "backup_baseline.device_id", "backup_baseline.set_at",
+            // backup_endpoint_ineligibility
+            "backup_endpoint_ineligibility.device_id", "backup_endpoint_ineligibility.marked_at",
+            // backup_policy
+            "backup_policy.backup_retention_days", "backup_policy.created_at",
+            "backup_policy.daily_backup_cron", "backup_policy.last_scheduled_run_at",
+            "backup_policy.major_alert_enabled", "backup_policy.policy_id",
+            "backup_policy.schedule_enabled", "backup_policy.snapshot_retention_depth",
+            "backup_policy.updated_at", "backup_policy.weekly_snapshot_cron",
+            // configuration_artefact
+            "configuration_artefact.artefact_ref", "configuration_artefact.ciphertext_bytes",
+            "configuration_artefact.ciphertext_sha256", "configuration_artefact.compression",
+            "configuration_artefact.created_at", "configuration_artefact.device_id",
+            "configuration_artefact.job_id", "configuration_artefact.key_id",
+            "configuration_artefact.plaintext_bytes", "configuration_artefact.plaintext_sha256",
+            "configuration_artefact.vendor",
+            // configuration_notification
+            "configuration_notification.created_at", "configuration_notification.device_id",
+            "configuration_notification.kind", "configuration_notification.notification_id",
+            "configuration_notification.read_at", "configuration_notification.run_id",
+            // configuration_run_deviation_entry
+            "configuration_run_deviation_entry.entry_id", "configuration_run_deviation_entry.kind",
+            "configuration_run_deviation_entry.new_count",
+            "configuration_run_deviation_entry.old_count",
+            "configuration_run_deviation_entry.section", "configuration_run_deviation_entry.source",
+            "configuration_run_deviation_entry.summary_id",
+            // configuration_run_deviation_summary
+            "configuration_run_deviation_summary.created_at",
+            "configuration_run_deviation_summary.run_id",
+            "configuration_run_deviation_summary.status",
+            "configuration_run_deviation_summary.summary_id",
             // cp_inventory_projection
             "cp_inventory_projection.collected_at", "cp_inventory_projection.device_id",
             "cp_inventory_projection.endpoint_id", "cp_inventory_projection.ha_state",
@@ -64,13 +118,91 @@ class AuditRedactionPolicyTest {
             // credential_references
             "credential_references.created_at", "credential_references.credential_reference_id",
             "credential_references.purpose",
+            // credentials
+            "credentials.allows_check_point", "credentials.allows_palo_alto",
+            "credentials.created_at", "credentials.created_by_actor_fingerprint",
+            "credentials.credential_id", "credentials.envelope_key_id", "credentials.kind",
+            "credentials.secret_set_at", "credentials.snmp_auth_protocol",
+            "credentials.snmp_priv_protocol", "credentials.snmp_security_level",
+            // device_configuration_index
+            "device_configuration_index.entry_count", "device_configuration_index.index_id",
+            "device_configuration_index.run_id", "device_configuration_index.section",
+            "device_configuration_index.source",
+            // device_configuration_override
+            "device_configuration_override.category", "device_configuration_override.override_id",
+            "device_configuration_override.run_id",
+            // device_configuration_run
+            "device_configuration_run.canonical_hash", "device_configuration_run.change_state",
+            "device_configuration_run.collected_at", "device_configuration_run.created_at",
+            "device_configuration_run.device_id", "device_configuration_run.is_primary",
+            "device_configuration_run.job_id", "device_configuration_run.raw_bytes",
+            "device_configuration_run.raw_hash", "device_configuration_run.read_kind",
+            "device_configuration_run.run_id", "device_configuration_run.vendor",
+            "device_configuration_run.withheld_line_count",
+            // device_interface
+            "device_interface.interface_id", "device_interface.kind", "device_interface.run_id",
+            "device_interface.state", "device_interface.vlan_id",
+            // device_interface_address
+            "device_interface_address.address_id", "device_interface_address.family",
+            "device_interface_address.interface_id", "device_interface_address.role",
+            // device_inventory_ha
+            "device_inventory_ha.cluster_mode", "device_inventory_ha.ha_id",
+            "device_inventory_ha.role", "device_inventory_ha.run_id", "device_inventory_ha.source",
+            // device_inventory_run
+            "device_inventory_run.collected_at", "device_inventory_run.context_count",
+            "device_inventory_run.created_at", "device_inventory_run.device_id",
+            "device_inventory_run.job_id", "device_inventory_run.run_id",
+            // device_onboarding
+            "device_onboarding.completed_at", "device_onboarding.device_id",
+            "device_onboarding.skipped", "device_onboarding.source", "device_onboarding.started_at",
+            "device_onboarding.state", "device_onboarding.step", "device_onboarding.step_job_id",
+            "device_onboarding.updated_at",
+            // device_route
+            "device_route.protocol", "device_route.route_id", "device_route.run_id",
+            // device_secret_reference
+            "device_secret_reference.credential_reference_id", "device_secret_reference.device_id",
+            "device_secret_reference.purpose", "device_secret_reference.set_at",
+            "device_secret_reference.set_by_actor_fingerprint",
             // devices
-            "devices.created_at", "devices.credential_reference_id", "devices.device_id",
-            "devices.disabled", "devices.enrollment_state", "devices.is_test_target",
-            "devices.registration_source", "devices.vendor_hint",
+            "devices.backup_target", "devices.created_at", "devices.credential_reference_id",
+            "devices.device_id", "devices.disabled", "devices.enrollment_state",
+            "devices.https_certificate_strict", "devices.identity_mismatch_detected_at",
+            "devices.identity_mismatch_state", "devices.is_test_target", "devices.observed_ha_role",
+            "devices.observed_model", "devices.observed_software_version",
+            "devices.peer_follow_outcome", "devices.recorded_identity_recorded_at",
+            "devices.registration_source", "devices.role", "devices.ssh_identity_unverified",
+            "devices.vendor_hint",
+            // discovery_acknowledgement
+            "discovery_acknowledgement.acknowledged_at",
+            "discovery_acknowledgement.acknowledged_by_actor_fingerprint",
+            "discovery_acknowledgement.discovery_match_key",
             // endpoints
             "endpoints.created_at", "endpoints.device_id", "endpoints.endpoint_id",
             "endpoints.transport_kind",
+            // failover_approval
+            "failover_approval.approval_id", "failover_approval.approved_at",
+            "failover_approval.approved_by", "failover_approval.cluster_ref",
+            "failover_approval.execution_nonce", "failover_approval.initiated_by",
+            "failover_approval.member_set_revision", "failover_approval.operation",
+            "failover_approval.policy", "failover_approval.policy_version",
+            "failover_approval.request_revision", "failover_approval.revoked_at",
+            "failover_approval.revoked_by", "failover_approval.target_member_ids",
+            "failover_approval.unit_ref", "failover_approval.vendor", "failover_approval.vs_id",
+            "failover_approval.warning_confirmed_at", "failover_approval.window_from",
+            "failover_approval.window_until",
+            // failover_check_result
+            "failover_check_result.check_no", "failover_check_result.derived",
+            "failover_check_result.member_ref", "failover_check_result.observed_at",
+            "failover_check_result.phase", "failover_check_result.result_id",
+            "failover_check_result.run_id", "failover_check_result.status",
+            "failover_check_result.vs_id",
+            // failover_run
+            "failover_run.approval_id", "failover_run.cluster_ref", "failover_run.failed_check",
+            "failover_run.finished_at", "failover_run.job_id", "failover_run.mutation_possible",
+            "failover_run.outcome", "failover_run.request_revision", "failover_run.requested_by",
+            "failover_run.run_id", "failover_run.run_kind", "failover_run.scheduled_for",
+            "failover_run.started_at", "failover_run.state", "failover_run.step",
+            "failover_run.target_member_ids", "failover_run.vendor", "failover_run.vs_id",
             // gate_registry
             "gate_registry.action_class", "gate_registry.canonical_command_key",
             "gate_registry.created_at", "gate_registry.gate_id", "gate_registry.max_frequency",
@@ -80,6 +212,10 @@ class AuditRedactionPolicyTest {
             "gate_registry.sign_off_state", "gate_registry.source_document_pointer",
             "gate_registry.timeout_s", "gate_registry.transport_kind",
             "gate_registry.unsupported_behavior_ref", "gate_registry.vendor",
+            // https_endpoint_cert_trust
+            "https_endpoint_cert_trust.authorized_at", "https_endpoint_cert_trust.first_seen_at",
+            "https_endpoint_cert_trust.management_port", "https_endpoint_cert_trust.not_after",
+            "https_endpoint_cert_trust.status", "https_endpoint_cert_trust.trust_entry_id",
             // job_reconciliation
             "job_reconciliation.job_id", "job_reconciliation.reconciled_outcome",
             "job_reconciliation.recorded_at", "job_reconciliation.recorded_by",
@@ -95,35 +231,101 @@ class AuditRedactionPolicyTest {
             // job_steps
             "job_steps.job_id", "job_steps.job_step_id", "job_steps.step_index",
             // jobs
-            "jobs.action_class", "jobs.capability_id", "jobs.finished_at",
-            "jobs.idempotency_key", "jobs.job_id", "jobs.job_type",
-            "jobs.last_heartbeat_at", "jobs.lease_epoch", "jobs.lease_expires_at",
-            "jobs.lease_worker_id", "jobs.outcome", "jobs.precheck_results",
-            "jobs.reconciliation_ref", "jobs.state", "jobs.submitted_at",
-            "jobs.submitted_by_actor_fingerprint", "jobs.target_device_id",
-            "jobs.terminal_reason",
+            "jobs.action_class", "jobs.admission_deferrals", "jobs.admission_not_before",
+            "jobs.cancel_requested", "jobs.capability_id", "jobs.diagnostic_exit_status",
+            "jobs.diagnostic_gate_id", "jobs.diagnostic_gate_revision",
+            "jobs.diagnostic_line_count", "jobs.diagnostic_port", "jobs.diagnostic_shape_id",
+            "jobs.diagnostic_status_token", "jobs.diagnostic_viewed_at",
+            "jobs.diagnostic_viewed_by", "jobs.finished_at", "jobs.idempotency_key", "jobs.job_id",
+            "jobs.job_type", "jobs.last_heartbeat_at", "jobs.lease_epoch", "jobs.lease_expires_at",
+            "jobs.lease_owner_generation", "jobs.lease_worker_id", "jobs.outcome",
+            "jobs.precheck_results", "jobs.reconciliation_ref", "jobs.ssh_identity_unverified",
+            "jobs.state", "jobs.submitted_at", "jobs.submitted_by_actor_fingerprint",
+            "jobs.target_device_id", "jobs.target_kind", "jobs.target_ref", "jobs.terminal_reason",
+            // lifecycle_catalog
+            "lifecycle_catalog.catalog_id", "lifecycle_catalog.end_of_engineering",
+            "lifecycle_catalog.end_of_sale", "lifecycle_catalog.end_of_support",
+            "lifecycle_catalog.imported_at", "lifecycle_catalog.kind", "lifecycle_catalog.product",
+            "lifecycle_catalog.source", "lifecycle_catalog.vendor",
+            // local_credentials
+            "local_credentials.algorithm_id", "local_credentials.created_at",
+            "local_credentials.created_by_actor_fingerprint", "local_credentials.enabled",
+            "local_credentials.failed_attempt_count", "local_credentials.local_identity_id",
+            "local_credentials.locked_until", "local_credentials.memory_cost_kib",
+            "local_credentials.must_change_password", "local_credentials.parallelism",
+            "local_credentials.password_set_at", "local_credentials.time_cost",
+            "local_credentials.updated_at",
+            // management_endpoint_pan_cert_trust
+            "management_endpoint_pan_cert_trust.authorized_at",
+            "management_endpoint_pan_cert_trust.management_port",
+            "management_endpoint_pan_cert_trust.observed_at",
+            "management_endpoint_pan_cert_trust.status",
+            "management_endpoint_pan_cert_trust.superseded_by",
+            "management_endpoint_pan_cert_trust.trust_entry_id",
+            "management_endpoint_pan_cert_trust.vendor",
+            // management_endpoint_ssh_trust
+            "management_endpoint_ssh_trust.authorized_at",
+            "management_endpoint_ssh_trust.key_algorithm",
+            "management_endpoint_ssh_trust.management_port",
+            "management_endpoint_ssh_trust.observed_at", "management_endpoint_ssh_trust.status",
+            "management_endpoint_ssh_trust.superseded_by",
+            "management_endpoint_ssh_trust.trust_entry_id", "management_endpoint_ssh_trust.vendor",
+            // notification_routes
+            "notification_routes.enabled", "notification_routes.last_sent_at",
+            "notification_routes.type", "notification_routes.updated_at",
+            "notification_routes.updated_by", "notification_routes.watermark_audit",
+            "notification_routes.watermark_time",
+            // notification_settings
+            "notification_settings.audit_watermark",
+            "notification_settings.forward_audit_to_syslog",
+            "notification_settings.job_failure_watermark",
+            "notification_settings.notify_job_failure", "notification_settings.settings_id",
+            "notification_settings.smtp_enabled", "notification_settings.smtp_port",
+            "notification_settings.smtp_starttls", "notification_settings.syslog_enabled",
+            "notification_settings.syslog_facility", "notification_settings.syslog_port",
+            "notification_settings.syslog_protocol", "notification_settings.updated_at",
+            "notification_settings.updated_by",
+            // panorama_assignment
+            "panorama_assignment.assignment_id", "panorama_assignment.computed_at",
+            // policy_offline_analysis
+            "policy_offline_analysis.analysis_id", "policy_offline_analysis.created_at",
+            "policy_offline_analysis.policy_id", "policy_offline_analysis.uploader",
             // provenance_records
             "provenance_records.capability_version", "provenance_records.capture_artifact_id",
             "provenance_records.collected_at", "provenance_records.fingerprint_sha256",
             "provenance_records.parser_version", "provenance_records.provenance_id",
             "provenance_records.run_id", "provenance_records.sanitized_fragment",
             "provenance_records.source_location", "provenance_records.step_id",
+            // rbac_permissions
+            "rbac_permissions.action", "rbac_permissions.id",
+            // rbac_role_permissions
+            "rbac_role_permissions.permission_id", "rbac_role_permissions.role_id",
+            // rbac_roles
+            "rbac_roles.id", "rbac_roles.is_system", "rbac_roles.name", "rbac_roles.token_string",
             // role_bindings
-            "role_bindings.binding_id", "role_bindings.created_at",
-            "role_bindings.created_by_actor_fingerprint", "role_bindings.group_reference_key_id",
-            "role_bindings.revoked_at", "role_bindings.revoked_by_actor_fingerprint",
-            "role_bindings.role_token",
+            "role_bindings.binding_id", "role_bindings.binding_kind", "role_bindings.created_at",
+            "role_bindings.created_by_actor_fingerprint", "role_bindings.directory_profile_id",
+            "role_bindings.group_reference_key_id", "role_bindings.revoked_at",
+            "role_bindings.revoked_by_actor_fingerprint", "role_bindings.role_token",
             // secrets_metadata
             "secrets_metadata.backend_kind", "secrets_metadata.component",
             "secrets_metadata.created_at", "secrets_metadata.purpose",
             "secrets_metadata.rotated_at", "secrets_metadata.rotation_policy_ref",
             "secrets_metadata.secret_id",
             // sessions
-            "sessions.absolute_expires_at", "sessions.actor_fingerprint",
-            "sessions.created_at", "sessions.end_reason",
-            "sessions.ended_by_actor_fingerprint", "sessions.idle_deadline_at",
-            "sessions.last_seen_at", "sessions.session_id", "sessions.state",
-            "sessions.superseded_by_session_id");
+            "sessions.absolute_expires_at", "sessions.actor_fingerprint", "sessions.created_at",
+            "sessions.end_reason", "sessions.ended_by_actor_fingerprint",
+            "sessions.idle_deadline_at", "sessions.last_seen_at", "sessions.machine",
+            "sessions.session_id", "sessions.state", "sessions.superseded_by_session_id",
+            // ssh_host_key_observation
+            "ssh_host_key_observation.connection_allowed", "ssh_host_key_observation.device_id",
+            "ssh_host_key_observation.endpoint_id", "ssh_host_key_observation.first_seen",
+            "ssh_host_key_observation.key_algorithm", "ssh_host_key_observation.last_job_id",
+            "ssh_host_key_observation.last_seen", "ssh_host_key_observation.management_port",
+            "ssh_host_key_observation.observation_id", "ssh_host_key_observation.seen_count",
+            "ssh_host_key_observation.status", "ssh_host_key_observation.strict_refusal",
+            // ssh_trust_settings
+            "ssh_trust_settings.mode", "ssh_trust_settings.settings_id");
 
     /**
      * Column-name fragments that mark a value as secret, credential-bearing or
@@ -152,7 +354,20 @@ class AuditRedactionPolicyTest {
             "devices.credential_reference_id",
             // A digest, already non-reversible.
             "job_step_attempt.fingerprint_sha256",
-            "provenance_records.fingerprint_sha256");
+            "provenance_records.fingerprint_sha256",
+            // Identifiers of a credential or credential reference, never the credential.
+            "credentials.credential_id",
+            "device_secret_reference.credential_reference_id",
+            // Timestamps and a flag about a secret, never the secret (the narrow captures keep them).
+            "credentials.secret_set_at",
+            "local_credentials.password_set_at",
+            "local_credentials.must_change_password",
+            // The identifier of an address row, never the address (which is redacted).
+            "device_interface_address.address_id",
+            // A closed status enum (V90: UP/DOWN/OTHER/ABSENT), not a bearer token.
+            "jobs.diagnostic_status_token",
+            // A role name (role:<name>), not a bearer token -- as role_bindings.role_token.
+            "rbac_roles.token_string");
 
     private static Ui2PostgresFixture fixture;
 
@@ -205,6 +420,24 @@ class AuditRedactionPolicyTest {
         }
     }
 
+    /**
+     * V153: the digest is taken over the value's UTF-8 bytes. V5's
+     * {@code text::bytea} cast parsed backslash escapes, so a redacted value
+     * containing a backslash made the audited write itself fail.
+     */
+    @Test
+    void redactedValueWithABackslashIsDigestedOverItsUtf8Bytes() throws Exception {
+        String token = "synthetic\\token-" + Ui2Rows.opaqueId("bs") + "-\u00fc";
+        try (Connection app = fixture.appConnection()) {
+            String sessionId = insertSession(app, "actor-redact-backslash", token);
+            byte[] digest = java.security.MessageDigest.getInstance("SHA-256")
+                    .digest(token.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            assertEquals("sha256:" + java.util.HexFormat.of().formatHex(digest),
+                    auditedValue(app, sessionId, "csrf_secret"),
+                    "the stand-in must be the sha256 of the value's UTF-8 bytes");
+        }
+    }
+
     /** Contract §6.3: a NULL redacted column stays NULL, distinguishably. */
     @Test
     void nullRedactedColumnStaysNullAndIsDistinguishableFromARedactedValue() throws SQLException {
@@ -244,10 +477,87 @@ class AuditRedactionPolicyTest {
             assertEquals(2, tierOf(app, "job_step_attempt", "captured_variables"));
             assertEquals(2, tierOf(app, "job_reconciliation", "evidence"));
 
-            assertEquals(7L, Ui2Rows.count(app, "SELECT count(*) FROM audit_redaction_policy"),
-                    "the policy must hold exactly the seven columns §3 declares; "
-                            + "an extra entry is an undeclared redaction");
+            // Beyond §3's seven: V17, V91, V97, V144 and V153 declared further redactions. The policy
+            // must hold exactly the declared set -- an extra entry is an undeclared redaction, a
+            // missing one an unredacted column.
+            java.util.Map<String, Integer> live = new java.util.TreeMap<>();
+            try (Statement statement = app.createStatement();
+                 ResultSet rs = statement.executeQuery(
+                         "SELECT table_name || '.' || column_name, tier FROM audit_redaction_policy")) {
+                while (rs.next()) {
+                    live.put(rs.getString(1), rs.getInt(2));
+                }
+            }
+            assertEquals(new java.util.TreeMap<>(DECLARED_REDACTIONS), live,
+                    "the policy must hold exactly the declared redactions with their tiers");
         }
+    }
+
+    /** Every declared redaction and its tier: V5 (contract §3), V17, V91, V97, V144, V153. */
+    private static final java.util.Map<String, Integer> DECLARED_REDACTIONS = declaredRedactions(
+            "backup_artefact.hostname_fingerprint", 2, "backup_artefact.recovery_volume_path", 2,
+            "backup_artefact.virtual_system_ref", 2, "backup_artefact.wrapped_data_key", 1,
+            "backup_artefact_deletion_request.reason", 2,
+            "backup_artefact_retrieval.destination_path", 2, "backup_artefact_retrieval.reason", 2,
+            "backup_endpoint_ineligibility.reason", 2, "configuration_notification.override_paths",
+            2, "configuration_notification.summary", 2, "configuration_run_deviation_entry.context",
+            2, "credential_references.backend_pointer", 2, "credentials.display_name", 2,
+            "credentials.encrypted_passphrase", 1, "credentials.encrypted_secret", 1,
+            "credentials.username", 2, "device_configuration_index.context", 2,
+            "device_configuration_override.context", 2,
+            "device_configuration_override.element_path", 2,
+            "device_configuration_override.panorama_source", 2,
+            "device_configuration_run.artefact_ref", 2, "device_configuration_run.sanitized_text",
+            2, "device_interface.context", 2, "device_interface.mac_address", 2,
+            "device_interface.name", 2, "device_interface.parent", 2, "device_interface.zone", 2,
+            "device_interface_address.address", 2, "device_inventory_ha.context", 2,
+            "device_inventory_run.virtual_systems", 2, "device_onboarding.reason", 2,
+            "device_route.context", 2, "device_route.destination", 2, "device_route.interface", 2,
+            "device_route.next_hop", 2, "device_route.route_table", 2, "devices.cluster_member_ref",
+            2, "devices.discovery_match_key", 2, "devices.ha_pair_claim", 2,
+            "devices.ha_unit_token", 2, "devices.identity_mismatch_presented_primary", 2,
+            "devices.identity_mismatch_presented_secondary", 2, "devices.observed_hostname", 2,
+            "devices.peer_follow_reason", 2, "devices.recorded_identity_primary", 2,
+            "devices.recorded_identity_secondary", 2, "devices.virtual_system_ref", 2,
+            "discovery_acknowledgement.reason", 2, "endpoints.address_ref", 2,
+            "failover_approval.reason", 2, "failover_run.message", 2,
+            "https_endpoint_cert_trust.authorized_by", 2,
+            "https_endpoint_cert_trust.fingerprint_sha256", 2,
+            "https_endpoint_cert_trust.issuer_cn", 2,
+            "https_endpoint_cert_trust.management_address", 2,
+            "https_endpoint_cert_trust.subject_cn", 2, "job_reconciliation.evidence", 2,
+            "job_step_attempt.captured_variables", 2, "jobs.diagnostic_command", 2,
+            "jobs.diagnostic_masked_output", 2, "jobs.diagnostic_output_key", 1,
+            "jobs.diagnostic_output_ref", 2, "jobs.transcript_artefact_key", 1,
+            "jobs.transcript_artefact_ref", 2, "lifecycle_catalog.imported_by", 2,
+            "lifecycle_catalog.note", 2, "local_credentials.local_identity_name", 2,
+            "local_credentials.salt", 1, "local_credentials.verifier", 1,
+            "management_endpoint_pan_cert_trust.authorized_by", 2,
+            "management_endpoint_pan_cert_trust.fingerprint_sha256", 2,
+            "management_endpoint_pan_cert_trust.management_address", 2,
+            "management_endpoint_ssh_trust.authorized_by", 2,
+            "management_endpoint_ssh_trust.fingerprint_sha256", 2,
+            "management_endpoint_ssh_trust.management_address", 2, "notification_routes.last_error",
+            2, "notification_routes.recipients", 2, "notification_settings.smtp_credential_ref", 2,
+            "notification_settings.smtp_from", 2, "notification_settings.smtp_host", 2,
+            "notification_settings.smtp_to", 2, "notification_settings.syslog_host", 2,
+            "panorama_assignment.device_groups", 2, "panorama_assignment.device_serial", 2,
+            "panorama_assignment.template_stack", 2, "panorama_assignment.templates", 2,
+            "policy_offline_analysis.aggregates", 2, "policy_offline_analysis.file_name", 2,
+            "rbac_roles.description", 2, "role_bindings.group_reference_encrypted", 1,
+            "secrets_metadata.reference_pointer", 2, "sessions.csrf_secret", 1,
+            "ssh_host_key_observation.expected_fingerprint", 2,
+            "ssh_host_key_observation.management_address", 2,
+            "ssh_host_key_observation.presented_fingerprint", 2);
+
+    private static java.util.Map<String, Integer> declaredRedactions(Object... pairs) {
+        java.util.Map<String, Integer> declared = new java.util.LinkedHashMap<>();
+        for (int i = 0; i < pairs.length; i += 2) {
+            if (declared.put((String) pairs[i], (Integer) pairs[i + 1]) != null) {
+                throw new IllegalStateException("declared twice: " + pairs[i]);
+            }
+        }
+        return java.util.Map.copyOf(declared);
     }
 
     /**

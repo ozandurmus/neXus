@@ -80,6 +80,7 @@ public final class SessionAdminController {
         body.put("end_reason", session.endReason().map(reason -> reason.column()).orElse(null));
         body.put("ended_by_actor_fingerprint", session.endedByActorFingerprint().orElse(null));
         body.put("superseded_by_session_id", session.supersededBySessionId().orElse(null));
+        body.put("machine", session.machine());
         if (!body.keySet().equals(AuditPresentationAllowlist.columnsOf("sessions"))) {
             throw new IllegalStateException("session presentation columns diverged from the audit allowlist");
         }

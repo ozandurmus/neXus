@@ -5,10 +5,13 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 
@@ -50,9 +53,80 @@ class AuditCoverageCompletenessTest {
      * tamper-evidence is the grant and the §4 coverage test rather than a
      * trigger.</p>
      */
-    static final Set<String> AUDIT_TRIGGER_EXCLUSIONS = Set.of(
+    static final Set<String> CONTRACT_EXCLUSIONS = Set.of(
             "audit_log", "authz_decisions", "actor_authz_state", "flyway_schema_history",
             "audit_redaction_policy");
+
+    /**
+     * Tables audited by a purpose-built trigger with its own narrow or
+     * event-specific capture instead of {@code trg_audit_<table>}. Each named
+     * trigger must exist on its table ({@link #everyNamedAuditTriggerExists()}).
+     */
+    static final Map<String, Set<String>> AUDITED_BY_NAMED_TRIGGER = Map.of(
+            "directory_profiles", Set.of("tr_audit_directory_profiles"),               // V26
+            "module_runtime_control", Set.of("module_runtime_control_audit"),          // V128
+            "endpoint_admission", Set.of("endpoint_quarantine_release_audit"),         // V131
+            "runtime_task_lease", Set.of("task_quarantine_release_audit"),             // V131
+            "failover_dispatch_intent", Set.of("failover_dispatch_audit"),             // V138
+            "notification_settings", Set.of("trg_audit_notification_settings_config"), // V100
+            "notification_routes", Set.of("trg_audit_notification_routes_config",      // V100
+                    "trg_audit_notification_routes_row"));
+
+    /**
+     * Tables that are not operator- or configuration-mutation-bearing, each
+     * with the reason its owning migration (or design) records. Collected,
+     * derived and cached rows are written by the product's own jobs, whose
+     * {@code jobs} rows are the audited record.
+     */
+    static final Map<String, String> NOT_MUTATION_BEARING = Map.ofEntries(
+            Map.entry("discovery_run", "V14: discovery result rows carry device identities; the jobs row is audited"),
+            Map.entry("discovery_candidate", "V14: discovery result rows carry device identities; the jobs row is audited"),
+            Map.entry("backup_deviation_record", "V30: derived comparison of two backup artefacts"),
+            Map.entry("backup_artefact_content_listing", "V41: derived cache; backup_artefact is the audited record"),
+            Map.entry("backup_artefact_entry", "V41: derived cache; backup_artefact is the audited record"),
+            Map.entry("cp_device_archive", "V45: product bookkeeping of device-side files; the jobs row is audited"),
+            Map.entry("device_platform_facts", "V46: collected facts, never operator-written; the jobs row is audited"),
+            Map.entry("cluster_member_diff", "V52: server-side recomputed summary of collected texts"),
+            Map.entry("pseudonym_registry", "V53: derived AIView pseudonym claims, keyed by HMAC"),
+            Map.entry("compliance_evaluation", "V59: derived from the configuration run, recomputable"),
+            Map.entry("device_policy_install", "V60: collected nightly read; the jobs row is audited"),
+            Map.entry("grid_member", "V72: collected per inventory run; the jobs row is audited"),
+            Map.entry("infoblox_grid_summary", "V92: collected per inventory run; the jobs row is audited"),
+            Map.entry("policy_snapshot", "V115: latest parsed collected policy; the jobs row is audited"),
+            Map.entry("policy_collection_request", "V116: opaque request references; jobs is the audited admission path"),
+            Map.entry("policy_collection_domain", "V116: collection attempt timestamps"),
+            Map.entry("policy_rule_history", "V120: parsed rule revisions recorded by snapshot publishers"),
+            Map.entry("policy_rule_history_baseline", "V120: parsed rule revisions recorded by snapshot publishers"),
+            Map.entry("cp_policy_object_inventory", "V124: collected policy object inventory"),
+            Map.entry("cp_policy_domain_run", "V125: per-run collected domain snapshots"),
+            Map.entry("cp_policy_json_chunk", "V126: storage chunks of collected policy JSON"),
+            Map.entry("policy_unit_checkpoint", "V128: collection resume checkpoints"),
+            Map.entry("runtime_instance_heartbeat", "V131: process liveness telemetry"),
+            Map.entry("notification_state", "V100: delivery cursors written by the notification router"),
+            Map.entry("root_identity", "V19: insert-once first-boot marker (ui2_app: SELECT/INSERT only); the "
+                    + "root local identity's creation is audited on local_credentials"),
+            Map.entry("failover_schedules", "V31/V135: every transition is appended, in the same transaction, to "
+                    + "the hash-chained failover_schedule_ledger"),
+            Map.entry("failover_schedule_ledger", "V31/V135: append-only hash-chained transition ledger, itself "
+                    + "the audit record of failover_schedules"),
+            Map.entry("failover_grant_consumption", "V31/V135: append-only single-use grant ledger"),
+            Map.entry("failover_quarantine", "V136: failover_incident_guard keeps incidents immutable except the "
+                    + "release, whose operator, approver, time and notes the row itself retains"));
+
+    static final Set<String> AUDIT_TRIGGER_EXCLUSIONS = union(CONTRACT_EXCLUSIONS,
+            AUDITED_BY_NAMED_TRIGGER.keySet(), NOT_MUTATION_BEARING.keySet());
+
+    private static Set<String> union(Set<String> first, Set<String> second, Set<String> third) {
+        Set<String> all = new TreeSet<>(first);
+        for (Set<String> more : List.of(second, third)) {
+            for (String table : more) {
+                if (!all.add(table)) {
+                    throw new IllegalStateException("excluded twice: " + table);
+                }
+            }
+        }
+        return Set.copyOf(all);
+    }
 
     private static Ui2PostgresFixture fixture;
 
@@ -102,6 +176,42 @@ class AuditCoverageCompletenessTest {
             unexpected.retainAll(withTrigger);
             assertEquals(Set.of(), unexpected,
                     "a deliberately excluded table carries an audit trigger; the exclusion list is stale");
+        }
+    }
+
+    @Test
+    void everyNamedAuditTriggerExists() throws SQLException {
+        // A table excluded because a purpose-built trigger audits it must
+        // still carry that trigger -- otherwise the exclusion hides a gap.
+        try (Connection migrate = fixture.migrateConnection()) {
+            Set<String> missing = new TreeSet<>();
+            for (Map.Entry<String, Set<String>> entry : AUDITED_BY_NAMED_TRIGGER.entrySet()) {
+                for (String trigger : entry.getValue()) {
+                    try (PreparedStatement statement = migrate.prepareStatement(
+                            "SELECT count(*) FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid "
+                                    + "WHERE c.relname = ? AND t.tgname = ? AND NOT t.tgisinternal")) {
+                        statement.setString(1, entry.getKey());
+                        statement.setString(2, trigger);
+                        try (ResultSet rows = statement.executeQuery()) {
+                            rows.next();
+                            if (rows.getLong(1) != 1) {
+                                missing.add(entry.getKey() + "/" + trigger);
+                            }
+                        }
+                    }
+                }
+            }
+            assertEquals(Set.of(), missing, "an exclusion names an audit trigger that does not exist");
+        }
+    }
+
+    @Test
+    void everyExcludedTableStillExists() throws SQLException {
+        // A stale exclusion (its table dropped or renamed) must be removed, not carried.
+        try (Connection migrate = fixture.migrateConnection()) {
+            Set<String> stale = new TreeSet<>(AUDIT_TRIGGER_EXCLUSIONS);
+            stale.removeAll(baseTables(migrate));
+            assertEquals(Set.of(), stale, "exclusion list names a table the schema no longer has");
         }
     }
 
