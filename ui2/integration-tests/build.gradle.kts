@@ -26,6 +26,7 @@ dependencies {
     // Testcontainers/container-runtime carrier.
     testImplementation(project(":ldap-adapter"))
     testImplementation(project(":service"))
+    testImplementation(project(":sanitizer"))
 
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.testcontainers)

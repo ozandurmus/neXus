@@ -321,6 +321,19 @@ class AuditRedactionPolicyTest {
             "role_bindings.created_by_actor_fingerprint", "role_bindings.directory_profile_id",
             "role_bindings.group_reference_key_id", "role_bindings.revoked_at",
             "role_bindings.revoked_by_actor_fingerprint", "role_bindings.role_token",
+            // sanitize_* (V156; wrapped_data_key, lookup_key and sealed_original are tier-1 redacted)
+            "sanitize_job.job_id", "sanitize_job.created_by", "sanitize_job.created_at", "sanitize_job.state",
+            "sanitize_job.file_type", "sanitize_job.input_bytes", "sanitize_job.output_bytes", "sanitize_job.counts",
+            "sanitize_job.failure_reason", "sanitize_job.finished_at", "sanitize_job.output_state",
+            "sanitize_job.vault_entries", "sanitize_job.vault_expires_at", "sanitize_job.vault_pruned_at", "sanitize_job.key_id",
+            "sanitize_vault_entry.job_id", "sanitize_vault_entry.entry_kind",
+            "sanitize_revert_job.revert_id", "sanitize_revert_job.created_by", "sanitize_revert_job.created_at",
+            "sanitize_revert_job.scope", "sanitize_revert_job.source_job_id", "sanitize_revert_job.state",
+            "sanitize_revert_job.file_type", "sanitize_revert_job.input_bytes", "sanitize_revert_job.output_bytes",
+            "sanitize_revert_job.counts", "sanitize_revert_job.failure_reason", "sanitize_revert_job.finished_at",
+            "sanitize_revert_job.output_state",
+            "sanitize_ledger.ledger_id", "sanitize_ledger.job_id", "sanitize_ledger.revert_id", "sanitize_ledger.event",
+            "sanitize_ledger.actor_fingerprint", "sanitize_ledger.entries", "sanitize_ledger.occurred_at",
             // secrets_metadata
             "secrets_metadata.backend_kind", "secrets_metadata.component",
             "secrets_metadata.created_at", "secrets_metadata.purpose",
@@ -500,8 +513,12 @@ class AuditRedactionPolicyTest {
             assertEquals(2, tierOf(app, "packet_analysis_capture", "display_name"));
             assertEquals(2, tierOf(app, "packet_analysis_capture", "sha256"));
             assertEquals(2, tierOf(app, "packet_analysis_capture", "storage_key"));
+            // V156: the vault's key material and its two sealed/keyed columns (DATA_SANITIZER_CONTRACT.md §2).
+            assertEquals(1, tierOf(app, "sanitize_job", "wrapped_data_key"));
+            assertEquals(1, tierOf(app, "sanitize_vault_entry", "lookup_key"));
+            assertEquals(1, tierOf(app, "sanitize_vault_entry", "sealed_original"));
 
-            // Beyond §3's seven: V17, V91, V97, V144, V153 and V154 declared further redactions. The policy
+            // Beyond §3's seven: V17, V91, V97, V144, V153, V154 and V156 declared further redactions. The policy
             // must hold exactly the declared set -- an extra entry is an undeclared redaction, a
             // missing one an unredacted column.
             java.util.Map<String, Integer> live = new java.util.TreeMap<>();
@@ -517,7 +534,7 @@ class AuditRedactionPolicyTest {
         }
     }
 
-    /** Every declared redaction and its tier: V5 (contract §3), V17, V91, V97, V144, V153, V154. */
+    /** Every declared redaction and its tier: V5 (contract §3), V17, V91, V97, V144, V153, V154, V156. */
     private static final java.util.Map<String, Integer> DECLARED_REDACTIONS = declaredRedactions(
             "backup_artefact.hostname_fingerprint", 2, "backup_artefact.recovery_volume_path", 2,
             "backup_artefact.virtual_system_ref", 2, "backup_artefact.wrapped_data_key", 1,
@@ -571,6 +588,8 @@ class AuditRedactionPolicyTest {
             "panorama_assignment.template_stack", 2, "panorama_assignment.templates", 2,
             "policy_offline_analysis.aggregates", 2, "policy_offline_analysis.file_name", 2,
             "rbac_roles.description", 2, "role_bindings.group_reference_encrypted", 1,
+            "sanitize_job.wrapped_data_key", 1, "sanitize_vault_entry.lookup_key", 1,
+            "sanitize_vault_entry.sealed_original", 1,
             "secrets_metadata.reference_pointer", 2, "sessions.csrf_secret", 1,
             "ssh_host_key_observation.expected_fingerprint", 2,
             "ssh_host_key_observation.management_address", 2,
