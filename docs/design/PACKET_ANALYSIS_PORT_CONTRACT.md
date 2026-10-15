@@ -36,7 +36,10 @@ once the PacketBreaker handover (`docs/HANDOVER_TO_NEXUS.md` in the frozen Packe
    counts in full (gzip if larger than 256 KB). Everything else is regenerated locally on demand.
 3. `tools/packet_analysis/parity/compare.py`: diff a Java canonical report against the Python one section by section
    and print the first differing paths.
-4. Java generator port with a unit test per scenario asserting the pcap hashes.
+4. The synthetic generators are NOT ported (author's advice): their pcaps, topologies and ground truth are frozen as a
+   corpus archive kept on the dev host, its SHA-256 in the committed manifest. Comparison runs at three levels: L1
+   `packets` row hash, L2 intermediate tables (parquet), L3 canonical report, using PacketBreaker's own golden
+   canonicalization (9 significant digits, sorted lists, parsed JSON strings, masked 32-hex ids and local times).
 
 ## 4. Parity rule for every later phase
 
