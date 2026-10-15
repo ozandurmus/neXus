@@ -17,7 +17,15 @@ dependencies {
     implementation(project(":sanitizer"))
     implementation(project(":packet-analysis"))
 
-    implementation(libs.spring.boot.starter.web)
+    // Spring Boot 4 defaults Spring MVC's JSON conversion to Jackson 3 (tools.jackson). Every DTO,
+    // annotation and JsonNode in this code base is Jackson 2, so the Jackson 3 starter is excluded and
+    // Boot's Jackson 2 module supplies the ObjectMapper and the MappingJackson2HttpMessageConverter
+    // (spring.http.converters.preferred-json-mapper=jackson2 in application.yml). With Jackson 3 absent
+    // the standalone MockMvc tests also keep Spring Framework's Jackson 2 default converter.
+    implementation(libs.spring.boot.starter.webmvc) {
+        exclude(group = "org.springframework.boot", module = "spring-boot-starter-jackson")
+    }
+    implementation(libs.spring.boot.jackson2)
     // Security floor for the embedded server (see libs.versions.toml `tomcat`).
     constraints {
         implementation(libs.tomcat.embed.core)
@@ -53,6 +61,7 @@ dependencies {
 
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.spring.boot.starter.test)
+    testImplementation(libs.spring.boot.webmvc.test)
     testRuntimeOnly(libs.junit.platform.launcher)
 }
 

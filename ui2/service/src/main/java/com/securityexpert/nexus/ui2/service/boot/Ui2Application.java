@@ -2,9 +2,7 @@ package com.securityexpert.nexus.ui2.service.boot;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration;
-import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
-import org.springframework.boot.autoconfigure.jooq.JooqAutoConfiguration;
+import org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.env.Environment;
 
@@ -32,6 +30,14 @@ import org.springframework.core.env.Environment;
  * {@code :persistence}, and Spring would then wire its own jOOQ/transaction
  * integration. `C1` puts transaction boundaries in {@code :persistence}, so
  * the framework must not take them over here.</p>
+ *
+ * <p>Spring Boot 4 moved the jOOQ and Flyway auto-configurations into their own
+ * modules ({@code spring-boot-jooq}, {@code spring-boot-flyway}), which this
+ * service does not depend on, so neither can activate today. They stay excluded
+ * by name so that a later dependency pulling either module in cannot silently
+ * take over the transaction boundary or run migrations outside
+ * {@link MigrationStartupRunner}; an exclusion of a class that is absent from
+ * the classpath is ignored by Spring Boot.</p>
  */
 // The composition root sits in `.boot`, so component scanning is anchored at
 // the service package above it -- otherwise the controllers in
@@ -39,10 +45,10 @@ import org.springframework.core.env.Environment;
 // answers 404 while the process looks healthy.
 @SpringBootApplication(
         scanBasePackages = "com.securityexpert.nexus.ui2.service",
-        exclude = {
-            DataSourceAutoConfiguration.class,
-            JooqAutoConfiguration.class,
-            FlywayAutoConfiguration.class
+        exclude = DataSourceAutoConfiguration.class,
+        excludeName = {
+            "org.springframework.boot.jooq.autoconfigure.JooqAutoConfiguration",
+            "org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration"
         })
 // The `…service.api` controllers were all written before their collaborators
 // were beans; step 1 excluded the whole package deliberately, one movement at

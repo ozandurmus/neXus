@@ -1,7 +1,10 @@
 pluginManagement {
     repositories {
-        gradlePluginPortal()
+        // Maven Central first: the Spring Boot plugin marker POM Central publishes is the one whose sha256 Central
+        // also publishes (the plugin portal serves its own generated marker with a different checksum), so every
+        // entry in gradle/verification-metadata.xml can be cross-checked against Maven Central.
         mavenCentral()
+        gradlePluginPortal()
     }
 }
 
