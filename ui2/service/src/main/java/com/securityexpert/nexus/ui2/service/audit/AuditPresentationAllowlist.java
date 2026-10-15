@@ -173,6 +173,19 @@ public final class AuditPresentationAllowlist {
                     "notify_job_failure", "settings_id", "smtp_enabled", "smtp_port",
                     "smtp_starttls", "syslog_enabled", "syslog_facility", "syslog_port",
                     "syslog_protocol", "updated_at", "updated_by")),
+            // V154: title, display_name, sha256 and storage_key are tier-2 redacted.
+            Map.entry("packet_analysis_capture", Set.of(
+                    "capture_format", "capture_id", "case_id", "size_bytes", "uploaded_at",
+                    "uploaded_by")),
+            Map.entry("packet_analysis_case", Set.of(
+                    "case_id", "created_at", "created_by", "expires_at", "payload_zeroing", "state",
+                    "total_bytes")),
+            Map.entry("packet_analysis_ledger", Set.of(
+                    "actor_fingerprint", "bytes", "capture_id", "case_id", "event", "job_id",
+                    "ledger_id", "occurred_at")),
+            Map.entry("packet_analysis_run", Set.of(
+                    "case_id", "engine_version", "failure_reason", "finished_at", "job_id",
+                    "masked_summary", "requested_at", "requested_by", "started_at", "state")),
             Map.entry("panorama_assignment", Set.of(
                     "assignment_id", "computed_at")),
             Map.entry("policy_offline_analysis", Set.of(
