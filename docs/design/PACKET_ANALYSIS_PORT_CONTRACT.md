@@ -47,6 +47,15 @@ A port stage ships only when, for every golden scenario/variant it covers, the J
 golden ones. Differences that are deliberate (a proven Python bug) are listed in this contract with the scenario, the
 section path and the reason, and the PO is told.
 
+## 4a. Determinism (PO 2026-10-15: "Aynı girdi aynı çıktıyı vermeli")
+
+The reference picks arbitrarily among exactly-equal rows when DuckDB runs on several threads (ties in `ORDER BY ...
+LIMIT`, `arg_min`/`arg_max`; seen to change a chosen stage pair on two topology cases). The Java engine adds explicit
+tie-breaks: stable keys appended after the reference's own ordering, deciding only among rows the reference treats as
+equal. A change to how a decision is made (criterion, threshold, formula) is not a tie-break and goes to the PO
+separately. Parity runs use one DuckDB thread on both sides; every tie-break is listed in
+`ui2/packet-analysis/DETERMINISM.md`, and a test asserts identical output at 1 and at several threads.
+
 ## 5. Containers (PO 2026-10-15: "tek bir yekün container bize sorun çıkarabilir")
 
 - API, upload, case list, results, RBAC, audit, masking: the existing `ui2-service` and frontend — no new container.
