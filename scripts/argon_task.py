@@ -65,8 +65,12 @@ def main() -> int:
     print(f"[argon] worktree={wt} branch={branch} model={a.model} effort={a.effort} log={log}", flush=True)
     with log.open("w", encoding="utf-8") as out:
         rc = subprocess.run(cmd, cwd=wt, stdout=out, stderr=subprocess.STDOUT).returncode
-    tail = log.read_text(encoding="utf-8", errors="replace")[-4000:]
-    print(tail)
+    text = log.read_text(encoding="utf-8", errors="replace")
+    print(text[-4000:])
+    if "no output produced" in text or "auto-denied" in text:
+        print("[argon] FAILED: a permission was auto-denied; extend ~/.gemini/antigravity-cli/settings.json "
+              "(and tools/argon/settings.template.json) and rerun", file=sys.stderr)
+        rc = rc or 3
     print(f"[argon] exit={rc} head={subprocess.run(['git', '-C', str(wt), 'log', '--oneline', '-1'], capture_output=True, text=True).stdout.strip()}")
     return rc
 
