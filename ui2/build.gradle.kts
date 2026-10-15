@@ -24,6 +24,7 @@ val javaProjects = listOf(
     "cli",
     "architecture-tests",
     "integration-tests",
+    "sanitizer",
 )
 
 subprojects {
