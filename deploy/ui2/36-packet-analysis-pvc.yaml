@@ -1,0 +1,23 @@
+# PO decision record 2026-10-15 §5 (PacketBreaker ported into neXus): the analysis volume. Uploaded captures (raw
+# evidence, 7-day retention, 2 GB per file, 100 GB store cap enforced by the service) and the per-case analysis
+# files live here and nowhere else -- never in the database, a browser artefact, a log or a support bundle.
+#
+# Writers: ui2-service writes uploaded captures; ui2-packet-analysis writes run output and the per-case DuckDB file
+# (one writer per case; DuckDB is single-writer, so never NFS/RWX). ReadWriteOnce on the single-node local-path
+# cluster lets both pods mount it. `storageClassName` is omitted so the cluster's default class applies (local-path
+# on k3s), matching 30-database-pvc.yaml and 35-artefact-store-pvc.yaml. The request leaves headroom above the
+# 100 GB capture cap for run output.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ui2-packet-analysis-data
+  namespace: ui2
+  labels:
+    app.kubernetes.io/part-of: nexus-ui2
+    app.kubernetes.io/component: packet-analysis
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 120Gi

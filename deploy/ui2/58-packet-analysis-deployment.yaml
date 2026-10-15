@@ -1,0 +1,183 @@
+# PO decision record 2026-10-15 §4: the Packet Analysis worker -- a dedicated deployment with CPU/memory limits and
+# a lower priority than every other neXus pod, one analysis at a time. Patterned on 57-policy-deployment.yaml.
+#
+# Claims (V154): this pod owns the `packet_analysis` module row and claims `packet_analysis_run` jobs only; no
+# existing module's ownership or claim set changes. Without this pod those jobs wait in REQUESTED; nothing else
+# is affected.
+#
+# It holds no device credential, no credential-store key and no artefact-store key, and has no egress beyond DNS
+# and the database: analysis makes no outbound call.
+#
+# TODO(packet-analysis image split): this runs the shared ui2 service image for now. The analysis image (UBI9 glibc
+# base + JRE 21 + tshark, the only dissector; DuckDB JDBC natives need glibc) replaces it when the engine port lands
+# (PACKET_ANALYSIS_PORT_CONTRACT.md §2, "image build (tshark packaging on UBI9)").
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: ui2-low
+  labels:
+    app.kubernetes.io/part-of: nexus-ui2
+# Below the default priority (0) and far below system-cluster-critical, which every other neXus pod uses: under
+# pressure, analysis is evicted or waits first. It never preempts anything.
+value: -100
+globalDefault: false
+preemptionPolicy: Never
+description: "neXus Packet Analysis worker: lower than device jobs and every other neXus pod (decision record 2026-10-15 §4)."
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ui2-packet-analysis
+  namespace: ui2
+automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ui2-packet-analysis
+  namespace: ui2
+  labels:
+    app.kubernetes.io/part-of: nexus-ui2
+    app.kubernetes.io/component: packet-analysis
+spec:
+  # One analysis at a time per pod, and one pod: the case DuckDB file has a single writer.
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/part-of: nexus-ui2
+      app.kubernetes.io/component: packet-analysis
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/part-of: nexus-ui2
+        app.kubernetes.io/component: packet-analysis
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      priorityClassName: ui2-low
+      # A full case analysis takes 5-8 minutes (handover); the drain waits for the running one.
+      terminationGracePeriodSeconds: 900
+      containers:
+      - name: packet-analysis
+        image: registry.kube-system.svc.cluster.local/nexus-ui2-service@sha256:966cf85b73bc107cc4331f9967f98dfad864e0035d96ea97aa4848fd7deeb136
+        args:
+        - worker
+        - packet_analysis
+        env:
+        - name: UI2_DB_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: ui2-config
+              key: db_host
+        - name: UI2_DB_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: ui2-config
+              key: db_port
+        - name: UI2_DB_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: ui2-config
+              key: db_name
+        - name: UI2_DB_URL
+          value: jdbc:postgresql://$(UI2_DB_HOST):$(UI2_DB_PORT)/$(UI2_DB_NAME)
+        - name: LOGGING_LEVEL_ROOT
+          valueFrom:
+            configMapKeyRef:
+              name: ui2-config
+              key: log_level
+        - name: UI2_DB_APP_USER_FILE
+          value: /run/secrets/ui2-db/app-user
+        - name: UI2_DB_APP_PASSWORD_FILE
+          value: /run/secrets/ui2-db/app-password
+        - name: UI2_PACKET_ANALYSIS_ROOT
+          value: /app/packet-analysis
+        # Expired cases are pruned within this interval of their 7-day expiry.
+        - name: UI2_PACKET_ANALYSIS_PRUNE_INTERVAL_SECONDS
+          value: "3600"
+        - name: JAVA_TOOL_OPTIONS
+          value: -Dui2.db.pool.maximum-pool-size=4 -XX:MaxRAMPercentage=50
+        securityContext:
+          runAsNonRoot: true
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+          seccompProfile:
+            type: RuntimeDefault
+        resources:
+          requests:
+            cpu: 250m
+            memory: 1Gi
+          limits:
+            cpu: "4"
+            memory: 10Gi
+        volumeMounts:
+        - name: tmp
+          mountPath: /app/tmp
+        - name: home
+          mountPath: /app/home
+        - name: db-credentials
+          mountPath: /run/secrets/ui2-db
+          readOnly: true
+        - name: packet-analysis-data
+          mountPath: /app/packet-analysis
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: home
+        emptyDir: {}
+      - name: db-credentials
+        secret:
+          secretName: ui2-db
+          items:
+          - key: app-user
+            path: app-user
+          - key: app-password
+            path: app-password
+          defaultMode: 288
+      - name: packet-analysis-data
+        persistentVolumeClaim:
+          claimName: ui2-packet-analysis-data
+      serviceAccountName: ui2-packet-analysis
+      automountServiceAccountToken: false
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ui2-packet-analysis
+  namespace: ui2
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: packet-analysis
+      app.kubernetes.io/part-of: nexus-ui2
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress: []
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  - to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/component: database
+    ports:
+    - protocol: TCP
+      port: 5432

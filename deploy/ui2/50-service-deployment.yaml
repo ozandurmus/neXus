@@ -136,6 +136,14 @@ spec:
             # durable, so a pseudonym never moves across pod restarts.
             - name: UI2_PRIVACY_HMAC_KEY_FILE
               value: /run/secrets/ui2-privacy-hmac/key
+            # PO decision record 2026-10-15 §5: the service streams uploaded captures into the analysis volume
+            # (36-packet-analysis-pvc.yaml); 2 GB per file, 100 GB store cap.
+            - name: UI2_PACKET_ANALYSIS_ROOT
+              value: /app/packet-analysis
+            - name: UI2_PACKET_ANALYSIS_MAX_FILE_BYTES
+              value: "2147483648"
+            - name: UI2_PACKET_ANALYSIS_MAX_STORE_BYTES
+              value: "107374182400"
           securityContext:
             runAsNonRoot: true
             allowPrivilegeEscalation: false
@@ -201,6 +209,8 @@ spec:
             - name: artefact-store
               mountPath: /app/artefact-store
               readOnly: true
+            - name: packet-analysis-data
+              mountPath: /app/packet-analysis
       volumes:
         - name: tmp
           emptyDir: {}
@@ -232,3 +242,7 @@ spec:
           persistentVolumeClaim:
             claimName: ui2-artefact-store
             readOnly: true
+        # The analysis volume: the service writes uploaded captures; ui2-packet-analysis writes run output.
+        - name: packet-analysis-data
+          persistentVolumeClaim:
+            claimName: ui2-packet-analysis-data

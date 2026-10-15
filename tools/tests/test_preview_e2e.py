@@ -1010,7 +1010,7 @@ def test_generic_worker_discovery_and_rendering_uses_production_args_ports_and_l
     path.write_text(yaml.safe_dump(deployment))
     path.with_name("58-synthetic-service.yaml").write_text(yaml.safe_dump(service))
     workers = preview.worker_templates(ROOT) + preview.worker_templates(tmp_path)
-    assert len(workers) == 5
+    assert len(workers) == 6  # general, configuration, compliance, policy, packet_analysis + synthetic
     before = copy.deepcopy(workers)
     for namespace in ("ui2-preview-first", "ui2-preview-second"):
         monkeypatch.setattr(preview, "NS", namespace)
@@ -1065,7 +1065,7 @@ def test_complete_preview_uses_unique_scopes_all_workers_and_cleanup(monkeypatch
         preview.run(ROOT, COMMIT)
     assert preview.NS == "ui2-preview"
     assert cleanup_scopes == [("ui2-preview-synthetic-owner", "synthetic-owner")]
-    assert len([o for o in objects if o["kind"] == "Deployment"]) == 5
+    assert len([o for o in objects if o["kind"] == "Deployment"]) == 6
     for obj in objects:
         if obj["kind"] != "Namespace":
             assert obj["metadata"]["namespace"] == "ui2-preview-synthetic-owner"
@@ -1293,7 +1293,13 @@ def jobs_ddl_database():
         for match in re.finditer(r'ALTER TABLE jobs\s+(.*?);', sql, re.S):
             operation = match[1].strip()
             if operation.startswith('ADD CONSTRAINT'):
-                declarations.append(operation.removeprefix('ADD '))
+                declarations.append(re.sub(r'\s+NOT VALID$', '', operation.removeprefix('ADD ')))
+            elif operation.startswith('DROP CONSTRAINT'):
+                name = operation.split()[2]
+                declarations = [d for d in declarations if not d.startswith('CONSTRAINT ' + name + ' ')
+                                and not d.startswith('CONSTRAINT ' + name + '\n')]
+            elif operation.startswith('VALIDATE CONSTRAINT'):
+                continue
             elif operation.startswith('ADD COLUMN'):
                 declarations.extend(re.sub(r'^ADD COLUMN\s+(?:IF NOT EXISTS\s+)?', '', part.strip())
                                     for part in re.split(r',\s*(?=ADD COLUMN)', operation))

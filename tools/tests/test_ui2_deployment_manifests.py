@@ -142,6 +142,7 @@ def test_the_rule_checks_below_have_something_to_check():
         "Job/ui2-flyway-bootstrap", "StatefulSet/ui2-db",
         "Deployment/ui2-service", "Deployment/ui2-worker",
         "Deployment/ui2-configuration", "Deployment/ui2-compliance", "Deployment/ui2-policy",
+        "Deployment/ui2-packet-analysis",
         "Job/ui2-e2e", "CronJob/ui2-e2e",
     }
     assert len(_containers()) == len(pod_specs)
@@ -167,9 +168,10 @@ def test_manifest_set_contains_every_kind_the_contract_names():
         "(NXS-LOCAL-0165: 23-secret-artefact-store-key.yaml; "
         "NXS-LOCAL-0170: 24-secret-hostname-fingerprint-key.yaml)"
     )
-    assert kinds.count("PersistentVolumeClaim") == 2, (
-        "§5.2 plus BK-17: the database data claim and the worker-only recovery volume claim "
-        "(NXS-LOCAL-0170: 35-artefact-store-pvc.yaml), and never a third"
+    assert kinds.count("PersistentVolumeClaim") == 3, (
+        "§5.2 plus BK-17: the database data claim, the worker-only recovery volume claim "
+        "(NXS-LOCAL-0170: 35-artefact-store-pvc.yaml) and the Packet Analysis volume "
+        "(PO decision record 2026-10-15 §5: 36-packet-analysis-pvc.yaml), and never a fourth"
     )
 
 
@@ -392,7 +394,7 @@ def test_the_recovery_volume_is_separate_and_only_the_worker_can_write():
     }
     assert "ui2-db-data" in pvc_names, "the database's own data claim must still exist"
     assert "ui2-artefact-store" in pvc_names, "BK-17: the recovery volume claim is missing"
-    assert pvc_names == {"ui2-db-data", "ui2-artefact-store"}, (
+    assert pvc_names == {"ui2-db-data", "ui2-artefact-store", "ui2-packet-analysis-data"}, (
         f"unexpected PersistentVolumeClaim set: {sorted(pvc_names)}"
     )
 
@@ -419,6 +421,51 @@ def test_the_recovery_volume_is_separate_and_only_the_worker_can_write():
                 assert volumes[name]["persistentVolumeClaim"].get("readOnly") is True
         else:
             assert not recovery_volume_names, f"{owner}: unexpected recovery volume"
+
+
+def test_packet_analysis_worker_is_low_priority_bounded_and_isolated():
+    """PO decision record 2026-10-15 §4/§5: a dedicated, limited, lower-priority analysis worker."""
+    documents = load_documents((MANIFEST_DIR / "58-packet-analysis-deployment.yaml").read_text(encoding="utf-8"))
+    priority, = [doc for doc in documents if doc["kind"] == "PriorityClass"]
+    assert priority["metadata"]["name"] == "ui2-low"
+    assert priority["value"] < 0, "below the default priority (0)"
+    assert priority["globalDefault"] is False and priority["preemptionPolicy"] == "Never"
+    deployment, = [doc for doc in documents if doc["kind"] == "Deployment"]
+    spec = deployment["spec"]["template"]["spec"]
+    assert spec["priorityClassName"] == "ui2-low"
+    others = {owner: pod for _, owner, pod in _pod_specs() if owner.startswith("Deployment/")}
+    for owner, pod in others.items():
+        if owner != "Deployment/ui2-packet-analysis":
+            assert pod.get("priorityClassName") != "ui2-low", f"{owner}: only the analysis worker is low priority"
+    container, = spec["containers"]
+    assert container["args"] == ["worker", "packet_analysis"]
+    assert container["resources"]["limits"] == {"cpu": "4", "memory": "10Gi"}
+    assert deployment["spec"]["replicas"] == 1 and deployment["spec"]["strategy"] == {"type": "Recreate"}
+    mounts = {mount["name"]: mount for mount in container["volumeMounts"]}
+    assert mounts["packet-analysis-data"]["mountPath"] == "/app/packet-analysis"
+    assert mounts["packet-analysis-data"].get("readOnly") is not True
+    volumes = {volume["name"]: volume for volume in spec["volumes"]}
+    assert volumes["packet-analysis-data"]["persistentVolumeClaim"]["claimName"] == "ui2-packet-analysis-data"
+    # No device credential, no credential-store or artefact-store key, no recovery volume.
+    secret_names = {(volume.get("secret") or {}).get("secretName") for volume in spec["volumes"]}
+    assert secret_names - {None} == {"ui2-db"}
+    assert all((volume.get("persistentVolumeClaim") or {}).get("claimName") != "ui2-artefact-store" for volume in spec["volumes"])
+    policy, = [doc for doc in documents if doc["kind"] == "NetworkPolicy"]
+    ports = {port["port"] for rule in policy["spec"]["egress"] for port in rule.get("ports", [])}
+    assert ports == {53, 5432}, "analysis makes no outbound call"
+    assert "TODO(packet-analysis image split)" in (MANIFEST_DIR / "58-packet-analysis-deployment.yaml").read_text()
+
+
+def test_only_the_service_and_the_analysis_worker_mount_the_analysis_volume():
+    claim = next(doc for _, doc in _documents(include_openshift=False)
+                 if doc.get("kind") == "PersistentVolumeClaim" and doc["metadata"]["name"] == "ui2-packet-analysis-data")
+    assert claim["spec"]["accessModes"] == ["ReadWriteOnce"], "DuckDB is single-writer: never RWX/NFS"
+    mounted = {owner for _, owner, spec in _pod_specs() for volume in spec.get("volumes") or []
+               if (volume.get("persistentVolumeClaim") or {}).get("claimName") == "ui2-packet-analysis-data"}
+    assert mounted == {"Deployment/ui2-service", "Deployment/ui2-packet-analysis"}
+    env = {entry["name"]: entry.get("value") for entry in _service_container()["env"]}
+    assert env["UI2_PACKET_ANALYSIS_MAX_FILE_BYTES"] == str(2 * 1024 ** 3)
+    assert env["UI2_PACKET_ANALYSIS_MAX_STORE_BYTES"] == str(100 * 1024 ** 3)
 
 
 def _service_pod_spec() -> dict:
