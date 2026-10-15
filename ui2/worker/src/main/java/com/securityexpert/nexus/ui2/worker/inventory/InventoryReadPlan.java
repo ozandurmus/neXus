@@ -70,6 +70,9 @@ public final class InventoryReadPlan {
      * its address, which is the exact thing measured wrong on a VSX cluster member). */
     public static final String CP_IP_ADDR_SHOW_STATE_ONLY = "ip -4 addr show";
     public static final String CP_IP_ROUTE_SHOW = "ip -4 route show table all";
+    /** PO 2026-10-15 (V148, gate {@code cp_inventory_ip_link_show}): each interface's link-layer address, read once
+     * per device per run on the physical context only -- {@code fw getifs} and {@code ip -4 addr show} carry none. */
+    public static final String CP_IP_LINK_SHOW = "ip -o link show";
     public static final String CP_CPHAPROB_STAT = "cphaprob stat";
     /** Product Owner direction (2026-09-21): {@code cphaprob -a if} is the correct command. An earlier trial of
      * this same literal, on four sampled devices, returned zero bytes -- identical to {@code cphaprob -a -m if}
@@ -96,7 +99,7 @@ public final class InventoryReadPlan {
      * ({@code fw getifs}, superseding the old v4/v6 {@code ip addr show} pair), routes, HA state, cluster
      * VIPs, then VSX enumeration. */
     public static final List<String> CHECK_POINT_PHYSICAL_READS = List.of(
-            CP_FW_GETIFS, CP_IP_ADDR_SHOW_STATE_ONLY, CP_IP_ROUTE_SHOW, CP_CPHAPROB_STAT, CP_CPHAPROB_CLUSTER_IF, CP_VSX_STAT);
+            CP_FW_GETIFS, CP_IP_ADDR_SHOW_STATE_ONLY, CP_IP_LINK_SHOW, CP_IP_ROUTE_SHOW, CP_CPHAPROB_STAT, CP_CPHAPROB_CLUSTER_IF, CP_VSX_STAT);
 
     private static final String CP_VSID_ADDR_AND_ROUTE_READS = "fw getifs && ip -4 route show";
 

@@ -441,6 +441,8 @@ export function toClusterContexts(contexts: readonly InventoryContext[], deviceI
       differences: [],
       member_addresses: { [deviceId]: iface.addresses.filter((a) => a.role !== "cluster_virtual") },
       member_states: { [deviceId]: iface.state ?? "unknown" },
+      member_macs: iface.mac_address ? { [deviceId]: iface.mac_address } : {},
+      member_zones: iface.zone ? { [deviceId]: iface.zone } : {},
     })),
     routes: ctx.routes.map((route) => ({
       destination: route.destination,
@@ -499,6 +501,31 @@ function withRoutePrefixes(context: ClusterContext): ClusterContext {
   };
 }
 
+/** V148: the zone(s) the members report for this interface; one value when they agree, "—" when none. */
+function zoneLabel(iface: { readonly member_zones?: Record<string, string> }): string {
+  const zones = Array.from(new Set(Object.values(iface.member_zones ?? {})));
+  return zones.length > 0 ? zones.join(" / ") : "—";
+}
+
+/** V148: each member's own link-layer address; labelled per member only when there is more than one. */
+function macCell(iface: { readonly member_macs?: Record<string, string> },
+                 members: readonly LabeledMember[]): React.ReactNode {
+  const entries = members
+    .map((m) => [m, iface.member_macs?.[m.device_id]] as const)
+    .filter((e): e is readonly [typeof e[0], string] => typeof e[1] === "string");
+  if (entries.length === 0) return <Typography variant="body2" color="text.secondary">—</Typography>;
+  return (
+    <Stack spacing={0.25}>
+      {entries.map(([m, mac]) => (
+        <Typography key={m.device_id} variant="body2" sx={{ fontFamily: "monospace", fontSize: "0.8125rem" }}
+          title={entries.length > 1 ? memberLabel(m, members) : undefined}>
+          {mac}
+        </Typography>
+      ))}
+    </Stack>
+  );
+}
+
 function vlanLabel(iface: { readonly name: string; readonly kind: string; readonly vlan_id?: number | null }): string {
   if (iface.vlan_id !== undefined && iface.vlan_id !== null) return String(iface.vlan_id);
   if (iface.kind === "vlan" && iface.name.includes(".")) return iface.name.slice(iface.name.lastIndexOf(".") + 1);
@@ -545,6 +572,8 @@ function ClusterInterfacesTable({
   // A row carries vsysLabel only in the cluster's merged, all-VS default view; a single
   // selected VS's own table never needs it since every row already shares that context.
   const showVsysColumn = withoutLoopback.some((iface) => iface.vsysLabel !== undefined);
+  const showZoneColumn = withoutLoopback.some((iface) => Object.keys(iface.member_zones ?? {}).length > 0);
+  const showMacColumn = withoutLoopback.some((iface) => Object.keys(iface.member_macs ?? {}).length > 0);
 
   const filtered = withoutLoopback.filter((iface) => {
     if (upOnly) {
@@ -602,6 +631,8 @@ function ClusterInterfacesTable({
             <TableCell sx={{ fontWeight: 600 }}>Interface</TableCell>
             <TableCell sx={{ fontWeight: 600 }}>Kind</TableCell>
             <TableCell sx={{ fontWeight: 600 }}>VLAN</TableCell>
+            {showZoneColumn && <TableCell sx={{ fontWeight: 600 }}>Zone</TableCell>}
+            {showMacColumn && <TableCell sx={{ fontWeight: 600 }}>MAC</TableCell>}
             {oneAddressColumn ? (
               <TableCell sx={{ fontWeight: 600 }}>Address</TableCell>
             ) : (
@@ -657,6 +688,8 @@ function ClusterInterfacesTable({
                 <TableCell sx={{ fontWeight: 600, fontFamily: "monospace" }}>{iface.name}</TableCell>
                 <TableCell>{iface.kind}</TableCell>
                 <TableCell>{vlanLabel(iface)}</TableCell>
+                {showZoneColumn && <TableCell>{zoneLabel(iface)}</TableCell>}
+                {showMacColumn && <TableCell>{macCell(iface, members)}</TableCell>}
                 {oneAddressColumn ? (
                   <TableCell>
                     {(() => {

@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py tools/delivery/project_queue.py render)
-Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-10-13T21:59:12Z
+Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-10-15T09:21:40Z
 
 ## Now
 - NXS-LOCAL-0370 — Infoblox for real, observed facts follow every read, inventory for HTTPS vendors (automated_validated)
@@ -25,13 +25,8 @@ Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-10-13T21:59:12Z
 - P1/in_progress credential_profiles — Credential profile / enterprise vault abstraction (target: 1.0 foundation)
 - P1/in_progress failover_p0_closure_set — Failover plan implementation landed; integration gate and (target: docs/design/PO_DECISION_RECORD_2026_10_0)
 - P1/in_progress https_inventory_collect_radware — Radware Collect: https_inventory_collect for the Cyber Con (target: docs/design/RADWARE_CYBER_CONTROLLER_BAC)
-- P1/in_progress integration_tests_dependency_lock_repair — Main integration-tests compile blocked by dependency lock (target: ui2/integration-tests/gradle.lockfile)
 - P1/in_progress module_per_pod_split — Module runtime landed; policy/configuration/compliance pod (target: docs/design/MODULE_POD_RUNTIME_CONTRACT.)
-- P1/in_progress nspm_change_report_merge — Wave 2 change-report lane written but unmerged (target: sa/policy-change-report-v145; docs/desig)
-- P1/in_progress nspm_offline_analyzer_merge — Wave 3 offline SIEM CSV analyzer lane written but unmerged (target: sa/offline-analyzer-merge; docs/design/P)
-- P1/in_progress nspm_policy_lookup_merge — Wave 3 stored-policy lookup lane written but unmerged (target: sa/policy-lookup-merge2; docs/design/PO_)
 - P1/in_progress nspm_wave1_acceptance — Policy hygiene and V144 lifecycle catalog landed; complian (target: docs/design/PO_DECISION_RECORD_2026_10_0)
-- P1/in_progress per_device_job_serialization_merge — Per-device job serialization lane written but unmerged (target: sa/per-device-job-serialization)
 - P1/in_progress scheduled_fleet_backup_enable_decision — Fleet backups enabled: daily 02:00 Istanbul; 7-day PO rete (target: docs/design/INCIDENT_2026_10_10_BACKUP_F)
 - P1/in_progress ui2_b1_01_skeleton_ci_docker — UI2 B1-1 -- Gradle multi-module skeleton under ui2/, CI jo (target: workflow §5 B1-1)
 - P1/in_progress ui2_b1_03_identity_sessions — UI2 B1-3 -- identity & sessions (UnboundID LDAP bind, sing (target: workflow §5 B1-3)

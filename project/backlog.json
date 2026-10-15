@@ -1199,51 +1199,6 @@
       "note": ""
     },
     {
-      "id": "nspm_change_report_merge",
-      "category": "engineering",
-      "title": "Wave 2 change-report lane written but unmerged",
-      "status": "in_progress",
-      "priority": "P1",
-      "target": "sa/policy-change-report-v145; docs/design/PO_DECISION_RECORD_2026_10_09_NSPM_WAVE1.md",
-      "note": ""
-    },
-    {
-      "id": "nspm_policy_lookup_merge",
-      "category": "engineering",
-      "title": "Wave 3 stored-policy lookup lane written but unmerged",
-      "status": "in_progress",
-      "priority": "P1",
-      "target": "sa/policy-lookup-merge2; docs/design/PO_DECISION_RECORD_2026_10_09_NSPM_WAVE1.md",
-      "note": ""
-    },
-    {
-      "id": "nspm_offline_analyzer_merge",
-      "category": "engineering",
-      "title": "Wave 3 offline SIEM CSV analyzer lane written but unmerged",
-      "status": "in_progress",
-      "priority": "P1",
-      "target": "sa/offline-analyzer-merge; docs/design/PO_DECISION_RECORD_2026_10_09_NSPM_WAVE1.md",
-      "note": ""
-    },
-    {
-      "id": "per_device_job_serialization_merge",
-      "category": "engineering",
-      "title": "Per-device job serialization lane written but unmerged",
-      "status": "in_progress",
-      "priority": "P1",
-      "target": "sa/per-device-job-serialization",
-      "note": ""
-    },
-    {
-      "id": "integration_tests_dependency_lock_repair",
-      "category": "engineering",
-      "title": "Main integration-tests compile blocked by dependency lock state; PO audit finding, not rerun here",
-      "status": "in_progress",
-      "priority": "P1",
-      "target": "ui2/integration-tests/gradle.lockfile",
-      "note": ""
-    },
-    {
       "id": "cve_exception_review_dates",
       "category": "engineering",
       "title": "CVE exception reviews due 2026-10-31, 2026-11-05 and 2026-12-31 by rule/location",

@@ -54,6 +54,18 @@ is Expert (CF-1: reads run as typed, no `clish -c`, no `expert` step).
 | 13 | `bash -lc 'vsenv <VSID> && cphaprob -a -m if'` | CF-3: this read is new against 14C — it is where a virtual system's own cluster addresses are; `<VSID>` validated as digits-only | CLASS_0_READ | Check Point Gaia, `cp_gaia_gateway`, Expert, `ssh_exec` | 30 s | none | once per virtual system per run | one session per device per run | no cluster virtual interfaces for this VS is a result, not an error | none | per-VS cluster VIP counts; never mixed with member addresses |
 | 14 | `bash -lc 'vsenv <VSID> && cphaprob stat'` | CF-3 per-virtual-system HA role read; `<VSID>` validated as digits-only | CLASS_0_READ | Check Point Gaia, `cp_gaia_gateway`, Expert, `ssh_exec` | 30 s | none | once per virtual system per run | one session per device per run | same standalone-result rule as entry 4 | none | per-VS HA role token; not persisted (14C D-4) |
 
+### 2026-10-15 amendment: link-layer addresses (PO "1- ok", V148)
+
+`fw getifs` and `ip -4 addr show` carry no link-layer address. One read is added on the physical context only,
+issued once per device per run, bare on a gateway and through `vsenv 0` on a VSX host, like entries 18/19. Only
+`link/ether` values are kept (`CheckPointIpLinkParser`); loopback, `link/none` and all-zero addresses are absent,
+never guessed. Virtual-system contexts get no link-layer address from this read.
+
+| # | Read | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 21 | `ip -o link show` | each interface's link-layer address for the Inventory interface table (PO 2026-10-15) | CLASS_0_READ | Check Point Gaia, `cp_gaia_gateway`, Expert, `ssh_exec` | 30 s | none | once per device per run | one session per device per run | an interface without a link-layer address is a result, not an error | none | count of link addresses parsed; values persisted per interface (`device_interface.mac_address`), masked to the vendor prefix for aiview |
+| 22 | `bash -lc 'vsenv 0 && ip -o link show'` | entry 21 on a VSX host | CLASS_0_READ | Check Point Gaia, `cp_gaia_gateway`, Expert, `ssh_exec` | 30 s | none | once per device per run | one session per device per run | same as entry 21 | none | same as entry 21 |
+
 ## Executor order (14D §3)
 
 `vsx stat -v` (entry 6) always runs first, bare, to decide VSX by text

@@ -63,10 +63,17 @@ public final class ClusterInventoryMerger {
 
     public record MergedInterface(String name, String kind, List<InventoryAddress> addresses, Presence presence,
             List<Difference> differences, Map<String, List<InventoryAddress>> memberAddresses,
-            Map<String, String> memberStates) {
+            Map<String, String> memberStates, Map<String, String> memberMacs, Map<String, String> memberZones) {
         public MergedInterface(String name, String kind, List<InventoryAddress> addresses, Presence presence,
                 List<Difference> differences) {
             this(name, kind, addresses, presence, differences, Map.of(), Map.of());
+        }
+
+        /** Pre-V148 shape: no member link-layer addresses or zones. */
+        public MergedInterface(String name, String kind, List<InventoryAddress> addresses, Presence presence,
+                List<Difference> differences, Map<String, List<InventoryAddress>> memberAddresses,
+                Map<String, String> memberStates) {
+            this(name, kind, addresses, presence, differences, memberAddresses, memberStates, Map.of(), Map.of());
         }
     }
 
@@ -151,17 +158,23 @@ public final class ClusterInventoryMerger {
             List<InventoryAddress> vips = mergeVirtualAddresses(memberOrder, byDevice);
             Map<String, List<InventoryAddress>> memberAddresses = new LinkedHashMap<>();
             Map<String, String> memberStates = new LinkedHashMap<>();
+            // V148: each member's own link-layer address and zone -- member-specific facts, never merged.
+            Map<String, String> memberMacs = new LinkedHashMap<>();
+            Map<String, String> memberZones = new LinkedHashMap<>();
             for (String deviceId : memberOrder) {
                 InventoryInterface iface = byDevice.get(deviceId);
                 if (iface != null) {
                     memberStates.put(deviceId, iface.state());
+                    iface.macAddress().ifPresent(mac -> memberMacs.put(deviceId, mac));
+                    iface.zone().ifPresent(zone -> memberZones.put(deviceId, zone));
                     List<InventoryAddress> nonVip = iface.addresses().stream()
                             .filter(a -> !"cluster_virtual".equals(a.role()))
                             .toList();
                     memberAddresses.put(deviceId, nonVip);
                 }
             }
-            result.add(new MergedInterface(entry.getKey(), kind, vips, presence, differences, memberAddresses, memberStates));
+            result.add(new MergedInterface(entry.getKey(), kind, vips, presence, differences, memberAddresses, memberStates,
+                    memberMacs, memberZones));
         }
         return result;
     }

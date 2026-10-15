@@ -257,6 +257,8 @@ public final class InventoryController {
         body.put("kind", iface.kind());
         body.put("state", iface.state());
         body.put("vlan_id", iface.vlanId().orElse(null));
+        body.put("mac_address", iface.macAddress().orElse(null));
+        body.put("zone", iface.zone().orElse(null));
         body.put("addresses", iface.addresses().stream().map(InventoryController::toAddressBody).toList());
         return body;
     }
@@ -332,6 +334,8 @@ public final class InventoryController {
         }
         body.put("member_addresses", memberAddrs);
         body.put("member_states", iface.memberStates());
+        body.put("member_macs", iface.memberMacs());
+        body.put("member_zones", iface.memberZones());
         return body;
     }
 

@@ -679,3 +679,33 @@ describe("buildUnifiedContextTabs", () => {
     expect(resolveContext("vsys1")).toBe(contexts[0]);
   });
 });
+
+describe("interface link facts (V148)", () => {
+  it("shows Zone and MAC columns only when the device reported them", async () => {
+    const { InterfacesPanel } = await import("../src/screens/InventoryPanels");
+    const contexts = [{
+      context: "physical", vs_name: null, ha: null, routes: [],
+      interfaces: [
+        { name: "ethernet1/1", parent: null, kind: "physical", state: "up", vlan_id: null,
+          mac_address: "00:1b:17:**:**:**", zone: "ZONE-ALPHA-01",
+          addresses: [{ address: "192.0.2.1/24", family: "ipv4" as const, role: "member" as const }] },
+        { name: "ethernet1/2", parent: null, kind: "physical", state: "up", vlan_id: null, addresses: [] },
+      ],
+    }];
+    render(withTheme(<InterfacesPanel contexts={contexts as never} member={{ device_id: "d1", hostname: "FW-TANGO-04" }} isPaloAlto />));
+    expect(await screen.findByText("Zone")).toBeInTheDocument();
+    expect(screen.getByText("MAC")).toBeInTheDocument();
+    expect(screen.getByText("ZONE-ALPHA-01")).toBeInTheDocument();
+    expect(screen.getByText("00:1b:17:**:**:**")).toBeInTheDocument();
+  });
+
+  it("hides both columns when no interface carries a zone or MAC", async () => {
+    const { InterfacesPanel } = await import("../src/screens/InventoryPanels");
+    const contexts = [{ context: "physical", vs_name: null, ha: null, routes: [],
+      interfaces: [{ name: "eth0", parent: null, kind: "physical", state: "up", vlan_id: null, addresses: [] }] }];
+    render(withTheme(<InterfacesPanel contexts={contexts as never} member={{ device_id: "d1", hostname: "FW-TANGO-04" }} />));
+    expect(await screen.findByText("eth0")).toBeInTheDocument();
+    expect(screen.queryByText("Zone")).toBeNull();
+    expect(screen.queryByText("MAC")).toBeNull();
+  });
+});

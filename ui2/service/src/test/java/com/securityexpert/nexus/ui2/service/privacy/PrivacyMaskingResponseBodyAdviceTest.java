@@ -426,4 +426,26 @@ class PrivacyMaskingResponseBodyAdviceTest {
         assertThat(advice.beforeBodyWrite(later, null, null, null, serverRequest, null)).isEqualTo(later);
     }
 
+
+    /** V148: aiview keeps a link-layer address's vendor prefix only, and sees a stable pseudonym for a zone. */
+    @Test
+    @SuppressWarnings("unchecked")
+    void masksInterfaceMacAddressesAndZonesForTheReplayViewer() {
+        when(httpRequest.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE)).thenReturn(true);
+        Map<String, Object> iface = new LinkedHashMap<>();
+        iface.put("name", "ethernet1/1");
+        iface.put("mac_address", "00:1b:17:00:01:01");
+        iface.put("zone", "synthetic-inside-zone");
+        iface.put("member_macs", Map.of("opaque-member", "00:1c:7f:0a:0b:0c"));
+        iface.put("member_zones", Map.of("opaque-member", "synthetic-inside-zone"));
+        Map<String, Object> result = (Map<String, Object>) advice.beforeBodyWrite(Map.of("interfaces", List.of(iface)),
+                null, null, null, serverRequest, null);
+        var masked = ((List<Map<String, Object>>) result.get("interfaces")).get(0);
+        assertThat(masked.get("mac_address")).isEqualTo("00:1b:17:**:**:**");
+        assertThat(((Map<String, Object>) masked.get("member_macs")).get("opaque-member")).isEqualTo("00:1c:7f:**:**:**");
+        String zone = String.valueOf(masked.get("zone"));
+        assertThat(zone).startsWith("ZONE-").doesNotContain("synthetic-inside-zone");
+        assertThat(((Map<String, Object>) masked.get("member_zones")).get("opaque-member")).isEqualTo(zone);
+        assertThat(PrivacyMaskingResponseBodyAdvice.maskMac("garbage")).isEqualTo("[REDACTED_MAC]");
+    }
 }

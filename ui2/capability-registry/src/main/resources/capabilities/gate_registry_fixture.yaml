@@ -512,6 +512,42 @@ gates:
     safe_telemetry_fields: []
     source_document_pointer: "docs/design/CP_INVENTORY_COMMAND_GATE_ENTRIES.md entry 19 (2026-09-21 amendment)"
 
+  # 2026-10-15 (PO "1- ok"): "fw getifs" and "ip -4 addr show" carry no link-layer address; "ip -o link
+  # show" is read once per device per run for each interface's link/ether value only (V148).
+  - gate_id: cp_inventory_ip_link_show
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "ip -o link show"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once per device per run"
+    session_reuse_rule: "one session per device per run"
+    unsupported_behavior_ref: "an interface without a link-layer address is a result, not an error"
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/CP_INVENTORY_COMMAND_GATE_ENTRIES.md entry 21 (2026-10-15 amendment)"
+
+  - gate_id: cp_inventory_ip_link_show_vsenv0
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "bash -lc 'vsenv 0 && ip -o link show'"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once per device per run"
+    session_reuse_rule: "one session per device per run"
+    unsupported_behavior_ref: "an interface without a link-layer address is a result, not an error"
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/CP_INVENTORY_COMMAND_GATE_ENTRIES.md entry 22 (2026-10-15 amendment)"
+
   - gate_id: cp_inventory_vsid_ip_addr_show_state_only
     vendor: check_point
     platform_role_scope: cp_gaia_gateway

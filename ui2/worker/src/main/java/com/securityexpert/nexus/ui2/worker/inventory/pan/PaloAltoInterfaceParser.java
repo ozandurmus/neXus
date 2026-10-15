@@ -41,6 +41,9 @@ public final class PaloAltoInterfaceParser {
     private static final Pattern IP = tag("ip");
     private static final Pattern TAG = tag("tag");
     private static final Pattern FWD = tag("fwd");
+    private static final Pattern ZONE = tag("zone");
+    private static final Pattern MAC = tag("mac");
+    private static final Pattern MAC_VALUE = Pattern.compile("(?i)^[0-9a-f]{2}(?::[0-9a-f]{2}){5}$");
     private static final Pattern ADDR_BLOCK = Pattern.compile("(?is)<addr>(.*?)</addr>");
     private static final Pattern ADDR6_BLOCK = Pattern.compile("(?is)<addr6>(.*?)</addr6>");
     private static final Pattern ENTRY_NAME_ATTR = Pattern.compile("(?is)<entry\\s+name=\"([^\"]*)\"\\s*/?>");
@@ -57,6 +60,8 @@ public final class PaloAltoInterfaceParser {
         List<ParsedInterface> physicalPorts = new ArrayList<>();
         Map<String, String> interfaceNameToVsys = new LinkedHashMap<>();
         Map<String, String> interfaceNameToVirtualRouter = new LinkedHashMap<>();
+        Map<String, String> interfaceNameToZone = new LinkedHashMap<>();
+        Map<String, String> portNameToMac = new LinkedHashMap<>();
 
         if (responseBody != null && !responseBody.isBlank()) {
             for (String entryBody : topLevelEntries(responseBody, "ifnet")) {
@@ -80,6 +85,11 @@ public final class PaloAltoInterfaceParser {
                         .map(v -> v.substring(VR_PREFIX.length()).trim())
                         .filter(vr -> !vr.isBlank() && !"N/A".equalsIgnoreCase(vr))
                         .ifPresent(vr -> interfaceNameToVirtualRouter.put(name, vr));
+                // V148: the zone the interface is bound to; an empty leaf or "N/A" means none.
+                firstMatch(ZONE, entryBody)
+                        .map(String::trim)
+                        .filter(z -> !z.isBlank() && !"N/A".equalsIgnoreCase(z) && z.length() <= 128)
+                        .ifPresent(z -> interfaceNameToZone.put(name, z));
             }
 
             for (String hwBody : topLevelEntries(responseBody, "hw")) {
@@ -88,6 +98,11 @@ public final class PaloAltoInterfaceParser {
                     continue;
                 }
                 String state = stateOf(hwBody);
+                // V148: the port's own link-layer address; anything not a six-octet colon form is not recorded.
+                firstMatch(MAC, hwBody)
+                        .map(String::trim)
+                        .filter(m -> MAC_VALUE.matcher(m).matches() && !"00:00:00:00:00:00".equals(m))
+                        .ifPresent(m -> portNameToMac.put(name, m.toLowerCase(java.util.Locale.ROOT)));
                 physicalPorts.add(new ParsedInterface(name, Optional.empty(), InventoryInterface.KIND_PHYSICAL, state,
                         List.of(), Optional.empty()));
             }
@@ -120,7 +135,8 @@ public final class PaloAltoInterfaceParser {
             }
         }
 
-        return new PaloAltoInterfaceParseResult(byVsys, physicalPorts, interfaceNameToVsys, interfaceNameToVirtualRouter);
+        return new PaloAltoInterfaceParseResult(byVsys, physicalPorts, interfaceNameToVsys, interfaceNameToVirtualRouter,
+                interfaceNameToZone, portNameToMac);
     }
 
     private static List<ParsedAddress> primaryAndSecondaryAddresses(String entryBody) {

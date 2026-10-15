@@ -167,6 +167,7 @@ public class TopologyNamePseudonymizer {
                 case "service" -> "SVC";
                 case "application" -> "APP";
                 case "tag" -> "TAG";
+                case "zone" -> "ZONE";
                 default -> namespace.startsWith("profile-setting") ? "PROF" : "OBJ";
             };
             int word = (hash[0] & 0xff) % DICTIONARY.size();

@@ -303,9 +303,16 @@ public final class InventoryCapabilityExecutor {
                 }
             }
 
+            // PO 2026-10-15 (V148): link-layer addresses for the physical context's interfaces, one read per run. The gate
+            // covers Gaia gateways (cp_gaia_gateway); a known Quantum Spark model is not read, so it simply has none.
+            Map<String, String> macByName = preferInteractiveShell ? Map.of() : CheckPointIpLinkParser.parse(
+                    execOutput(session, InventoryReadPlan.checkPointPhysicalCommand(InventoryReadPlan.CP_IP_LINK_SHOW, vsxHost), false));
+            LOG.log(System.Logger.Level.INFO, "[INVENTORY_LINK_PARSE] target={0}:{1} link_addresses={2}",
+                    target.host(), target.port(), macByName.size());
+
             List<InventoryContext> contexts = new ArrayList<>();
             contexts.add(new InventoryContext(InventoryContext.PHYSICAL,
-                    toInventoryInterfaces(applyInterfaceStates(mergeVirtualAddresses(physicalInterfaces, physicalVips), physicalStates)),
+                    withMacAddresses(toInventoryInterfaces(applyInterfaceStates(mergeVirtualAddresses(physicalInterfaces, physicalVips), physicalStates)), macByName),
                     toInventoryRoutes(physicalRoutes)));
 
             CheckPointHaStateParser.HaState haState = CheckPointHaStateParser.parse(haStatOutput);
@@ -532,11 +539,12 @@ public final class InventoryCapabilityExecutor {
         }
 
         List<InventoryContext> contexts = new ArrayList<>();
-        contexts.add(new InventoryContext(InventoryContext.PHYSICAL, toInventoryInterfaces(physicalInterfaces),
+        contexts.add(new InventoryContext(InventoryContext.PHYSICAL,
+                withPanLinkFacts(toInventoryInterfaces(physicalInterfaces), parsedInterfaces),
                 toInventoryRoutes(routesByContext.getOrDefault(InventoryContext.PHYSICAL, List.of()))));
         for (String vsys : vsysIds) {
             contexts.add(new InventoryContext(vsys,
-                    toInventoryInterfaces(parsedInterfaces.interfacesByVsys().getOrDefault(vsys, List.of())),
+                    withPanLinkFacts(toInventoryInterfaces(parsedInterfaces.interfacesByVsys().getOrDefault(vsys, List.of())), parsedInterfaces),
                     toInventoryRoutes(routesByContext.getOrDefault(vsys, List.of()))));
         }
 
@@ -1168,6 +1176,24 @@ public final class InventoryCapabilityExecutor {
      * <read>} wrap short-circuits {@code <read>} entirely whenever vsenv fails -- including when vsx-detection
      * misclassifies a plain gateway as VSX, measured live. Mirrors the batch's own already-fault-tolerant
      * {@code vsenv 0 >/dev/null 2>&1 || true; <read>} shape instead. */
+    /** V148: a Palo Alto interface's zone and its port's link-layer address, both by exact vendor interface name. */
+    static List<InventoryInterface> withPanLinkFacts(List<InventoryInterface> interfaces, PaloAltoInterfaceParseResult parsed) {
+        return interfaces.stream()
+                .map(iface -> iface.withLinkFacts(java.util.Optional.ofNullable(parsed.portNameToMac().get(iface.name())),
+                        java.util.Optional.ofNullable(parsed.interfaceNameToZone().get(iface.name()))))
+                .toList();
+    }
+
+    /** Attaches each interface's reported link-layer address by exact interface name; no name match, no address. */
+    static List<InventoryInterface> withMacAddresses(List<InventoryInterface> interfaces, Map<String, String> macByName) {
+        if (macByName.isEmpty()) {
+            return interfaces;
+        }
+        return interfaces.stream()
+                .map(iface -> iface.withLinkFacts(java.util.Optional.ofNullable(macByName.get(iface.name())), java.util.Optional.empty()))
+                .toList();
+    }
+
     private static String faultTolerantVsenv0(String read, boolean vsxHost) {
         return vsxHost ? "bash -lc 'vsenv 0 >/dev/null 2>&1 || true; " + read + "'" : read;
     }

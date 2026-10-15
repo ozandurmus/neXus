@@ -772,6 +772,10 @@ export interface InventoryInterface {
   readonly kind: string;
   readonly state: string;
   readonly vlan_id: number | null;
+  /** V148: the link-layer address the device reported for this interface; masked to its vendor prefix for aiview. */
+  readonly mac_address?: string | null;
+  /** V148: Palo Alto zone the interface is bound to; a pseudonym for aiview. */
+  readonly zone?: string | null;
   readonly addresses: InventoryAddress[];
 }
 
@@ -869,6 +873,10 @@ export interface ClusterInterface {
   readonly differences: ClusterDifference[];
   readonly member_addresses?: Record<string, InventoryAddress[]>;
   readonly member_states?: Record<string, string>;
+  /** V148: each member's own link-layer address (member-specific, never merged). */
+  readonly member_macs?: Record<string, string>;
+  /** V148: each member's zone for this interface. */
+  readonly member_zones?: Record<string, string>;
 }
 
 export interface ClusterRoute {
