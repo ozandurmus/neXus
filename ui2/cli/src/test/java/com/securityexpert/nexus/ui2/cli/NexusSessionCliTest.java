@@ -54,6 +54,32 @@ class NexusSessionCliTest {
     }
 
     @Test
+    void systemLogMeasurementCommandsCallTheScreenRoutes(@TempDir Path home) throws Exception {
+        java.util.List<String> calls = new java.util.concurrent.CopyOnWriteArrayList<>();
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/", exchange -> {
+            calls.add(exchange.getRequestMethod() + " " + exchange.getRequestURI());
+            byte[] out = "{}".getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, out.length);
+            exchange.getResponseBody().write(out);
+            exchange.close();
+        });
+        server.start();
+        try {
+            NexusSessionCli cli = new NexusSessionCli(home);
+            cli.saveSession(new NexusSessionCli.Session("http://127.0.0.1:" + server.getAddress().getPort(), "opaque-cookie", "csrf-9"));
+            assertEquals(0, cli.run(new String[] {"syslog-measure-start"}));
+            assertEquals(0, cli.run(new String[] {"syslog-measurements"}));
+            assertEquals(0, cli.run(new String[] {"syslog-measurements", "dev-1"}));
+            assertEquals(java.util.List.of("POST /api/v2/diagnostics/system-log-measurements/start",
+                    "GET /api/v2/diagnostics/system-log-measurements",
+                    "GET /api/v2/diagnostics/system-log-measurements?device_id=dev-1"), calls);
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
     void withoutASessionEveryCommandRefusesBeforeAnyCall(@TempDir Path home) {
         int exit = new NexusSessionCli(home).run(new String[] {"devices"});
         assertEquals(2, exit);

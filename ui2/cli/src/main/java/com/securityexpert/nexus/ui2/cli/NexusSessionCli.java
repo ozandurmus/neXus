@@ -74,6 +74,8 @@ final class NexusSessionCli {
         System.out.println("  jobs [state=.. job_type=.. device_id=.. since=.. until=.. q=.. page=.. page_size=..]");
         System.out.println("  jobs-export <dest.csv> [same filters]");
         System.out.println("  inventory-collect <deviceId> | configuration-collect <deviceId>");
+        System.out.println("  syslog-measure-start                           measure system/config logs on every enrolled Palo Alto firewall");
+        System.out.println("  syslog-measurements [deviceId]                 the recorded measurement summaries");
     }
 
     /** @return exit code, or -1 when {@code args[0]} is not one of this class's commands */
@@ -145,6 +147,9 @@ final class NexusSessionCli {
                     require(args, 2, "configuration-collect <deviceId>");
                     yield print(call("POST", "/devices/" + args[1] + "/configuration/collect", "{}"));
                 }
+                case "syslog-measure-start" -> print(call("POST", "/api/v2/diagnostics/system-log-measurements/start", "{}"));
+                case "syslog-measurements" -> print(call("GET", "/api/v2/diagnostics/system-log-measurements"
+                        + (args.length > 1 ? queryString(new String[] {args[0], "device_id=" + args[1]}, 1) : ""), null));
                 default -> -1;
             };
         } catch (UsageException e) {

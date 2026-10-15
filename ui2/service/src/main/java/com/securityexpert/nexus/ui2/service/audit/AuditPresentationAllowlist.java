@@ -35,6 +35,9 @@ public final class AuditPresentationAllowlist {
             Map.entry("lifecycle_catalog", Set.of("catalog_id", "vendor", "kind", "product", "end_of_sale",
                     "end_of_support", "end_of_engineering", "source", "imported_at")),
             Map.entry("backup_baseline", Set.of("artefact_id", "device_id", "set_at")),
+            // V151: summaries are counts, field names, formats and enum-like values only -- nothing to redact.
+            Map.entry("system_log_measurement", Set.of("measurement_id", "device_id", "vendor", "source",
+                    "measured_at", "summary", "job_id")),
             Map.entry("backup_policy", Set.of(
                     "backup_retention_days", "created_at", "daily_backup_cron", "last_scheduled_run_at",
                     "major_alert_enabled", "policy_id", "schedule_enabled", "snapshot_retention_depth", "updated_at",
