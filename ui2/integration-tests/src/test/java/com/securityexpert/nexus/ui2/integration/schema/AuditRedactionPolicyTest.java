@@ -325,7 +325,12 @@ class AuditRedactionPolicyTest {
             "ssh_host_key_observation.observation_id", "ssh_host_key_observation.seen_count",
             "ssh_host_key_observation.status", "ssh_host_key_observation.strict_refusal",
             // ssh_trust_settings
-            "ssh_trust_settings.mode", "ssh_trust_settings.settings_id");
+            "ssh_trust_settings.mode", "ssh_trust_settings.settings_id",
+            // system_log_measurement (V151): counts, field names, formats and enum-like values only
+            "system_log_measurement.device_id", "system_log_measurement.job_id",
+            "system_log_measurement.measured_at", "system_log_measurement.measurement_id",
+            "system_log_measurement.source", "system_log_measurement.summary",
+            "system_log_measurement.vendor");
 
     /**
      * Column-name fragments that mark a value as secret, credential-bearing or
