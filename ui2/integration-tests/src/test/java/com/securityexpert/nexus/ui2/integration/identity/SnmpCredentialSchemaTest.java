@@ -40,8 +40,9 @@ class SnmpCredentialSchemaTest {
     }
 
     private String insert(Connection app, String level, boolean auth, boolean privacy) throws SQLException {
-        Ui2Rows.setAuditContext(app, "fixture-actor", "credential_create");
         String id = UUID.randomUUID().toString();
+        // SET LOCAL only takes effect inside the transaction it is issued in.
+        app.setAutoCommit(false);
         try (var insert = app.prepareStatement("insert into credentials (credential_id, display_name, kind, "
                 + "username, encrypted_secret, encrypted_passphrase, envelope_key_id, created_by_actor_fingerprint, "
                 + "snmp_security_level, snmp_auth_protocol, snmp_priv_protocol) "
@@ -52,7 +53,14 @@ class SnmpCredentialSchemaTest {
             insert.setString(4, level);
             insert.setString(5, auth ? "SHA-256" : null);
             insert.setString(6, privacy ? "AES-128" : null);
+            Ui2Rows.setAuditContext(app, "fixture-actor", "credential_create");
             insert.executeUpdate();
+            app.commit();
+        } catch (SQLException e) {
+            app.rollback();
+            throw e;
+        } finally {
+            app.setAutoCommit(true);
         }
         return id;
     }

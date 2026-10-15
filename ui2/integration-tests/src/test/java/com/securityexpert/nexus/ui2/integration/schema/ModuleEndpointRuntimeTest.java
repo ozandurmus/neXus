@@ -117,10 +117,10 @@ class ModuleEndpointRuntimeTest {
                 "update module_runtime_control set effective_owner='policy',fallback_enabled=false where module='policy'");
             var old = new ModuleRuntimeRepository(tx);
             assertTrue(old.heartbeat(role, role + "-old"));
-            var jobs = new JooqJobRecordDao(tx);
+            var jobs = new JooqJobRecordDao(tx, JobWindowTestPolicy.PERMISSIVE);
             jobs.insertRequestedIfAbsentForRun("in-flight", "key-first", "cp_policy_collect", "synthetic-run", "read",
                 "cp_policy_collect", "synthetic-actor", "fixture").orElseThrow();
-            var leases = new JooqJobLeaseDao(tx);
+            var leases = new JooqJobLeaseDao(tx, JobWindowTestPolicy.PERMISSIVE);
             long epoch = leases.claimNext(role + "-old", List.of("cp_policy_collect"), Duration.ofMinutes(10))
                 .orElseThrow().leaseEpoch();
             long generation = old.generation("in-flight", epoch);
@@ -164,10 +164,10 @@ class ModuleEndpointRuntimeTest {
             assertTrue(tx.<Boolean>inTransaction(db -> db.fetchOne("select drain_requested and drain_generation=7 "
                 + "and drain_ack_generation=7 and last_reason='synthetic-release' and last_snapshot_id='synthetic-snapshot' "
                 + "from module_runtime_control where module={0}", role).get(0, Boolean.class)));
-            var jobs = new JooqJobRecordDao(tx);
+            var jobs = new JooqJobRecordDao(tx, JobWindowTestPolicy.PERMISSIVE);
             jobs.insertRequestedIfAbsentForRun("drained-job", "drained-key", "cp_policy_collect", "synthetic-run", "read",
                 "cp_policy_collect", "synthetic-actor", "fixture").orElseThrow();
-            var leases = new JooqJobLeaseDao(tx);
+            var leases = new JooqJobLeaseDao(tx, JobWindowTestPolicy.PERMISSIVE);
             assertTrue(leases.claimNext(role + "-new", List.of("cp_policy_collect"), Duration.ofMinutes(10)).isEmpty());
             String clear = "update module_runtime_control set drain_requested=false,drain_ack_at=null,drain_ack_generation=null,"
                 + "owner_instance=null,owner_heartbeat_at=null where module='" + role + "' and drain_generation=";

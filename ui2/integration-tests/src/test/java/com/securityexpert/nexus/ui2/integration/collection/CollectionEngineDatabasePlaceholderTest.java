@@ -375,7 +375,9 @@ class CollectionEngineDatabasePlaceholderTest {
             migrate.setAutoCommit(false);
             Ui2Rows.setAuditContext(migrate, "general-2", "harness.simulated-reclaim");
             try (Statement statement = migrate.createStatement()) {
-                statement.execute("UPDATE jobs SET lease_epoch = lease_epoch + 1, lease_worker_id = 'worker-2' "
+                // V128 owner fence: the re-claimer must be a worker of the module's effective
+                // owner role ("general-..."), as a real second claim would be.
+                statement.execute("UPDATE jobs SET lease_epoch = lease_epoch + 1, lease_worker_id = 'general-2' "
                         + "WHERE job_id = '" + jobId + "'");
             }
             migrate.commit();
@@ -586,7 +588,8 @@ class CollectionEngineDatabasePlaceholderTest {
         // onward the previous cycle's own race winner claimed with the same
         // zero-second lease, so the job is already CLAIMED-and-expired
         // again by construction.
-        claimWithZeroSecondLease(jobId, capability, "seed-worker-0");
+        // V128 claim fence: the worker id's role prefix must own the module ("general").
+        claimWithZeroSecondLease(jobId, capability, "general-seed-0");
         for (int cycle = 0; cycle < cycles; cycle++) {
             Thread.sleep(50);
             new JobReconciler(leaseRepository).reconcileOnce();

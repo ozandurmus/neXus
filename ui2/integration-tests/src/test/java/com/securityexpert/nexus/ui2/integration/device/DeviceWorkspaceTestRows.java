@@ -61,7 +61,8 @@ final class DeviceWorkspaceTestRows {
     static GroupReferenceCipher newCipher() {
         byte[] key = new byte[32];
         new SecureRandom().nextBytes(key);
-        return GroupReferenceCipher.fromBase64Key(Base64.getEncoder().encodeToString(key));
+        // A key id is required for typed directory ciphertext (7ca608a5, C3C); legacy encrypt ignores it.
+        return GroupReferenceCipher.fromBase64Key(Base64.getEncoder().encodeToString(key), "harness-key");
     }
 
     static Instant now() {

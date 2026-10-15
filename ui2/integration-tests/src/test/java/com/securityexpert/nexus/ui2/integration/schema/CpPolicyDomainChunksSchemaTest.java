@@ -39,8 +39,12 @@ class CpPolicyDomainChunksSchemaTest {
             var request = new PolicyCollectionRepository.Request("source-1", "", false, PolicyCollectionRepository.Mode.CHANGED_ONLY, "job-1", 1);
             assertTrue(collections.saveDomain(request, "domain-1", "COLLECTED", true, "{}", array, 0, null, "synthetic-actor"));
             assertEquals(array, collections.previousDomain("source-1", "domain-1").orElseThrow().snapshotsJson());
-            assertTrue(collections.saveDomain(request, "domain-1", "COLLECTED", false, "{\"uid\":\"must-not-be-published\"}", "[]", 0, null, "synthetic-actor"));
-            assertNull(collections.previousDomain("source-1", "domain-1").orElseThrow().signalJson());
+            // b0be7e5a: an incomplete attempt keeps its published-session signal for resume, but stays
+            // incomplete, so the signal can never enable reuse of the domain.
+            assertTrue(collections.saveDomain(request, "domain-1", "COLLECTED", false, "{\"uid\":\"retained-for-resume\"}", "[]", 0, null, "synthetic-actor"));
+            var incomplete = collections.previousDomain("source-1", "domain-1").orElseThrow();
+            assertFalse(incomplete.complete());
+            assertTrue(incomplete.signalJson().contains("retained-for-resume"));
             assertFalse(collections.saveDomain(request.withLease(2), "domain-1", "REUSED", true, "{}", "[]", 0, null, "synthetic-actor"));
             // An older inventory cannot replace the published generation.
             collections.saveInventory("source-1", "domain-1", "hosts", "2026-10-03T00:00:00Z", "{\"objects\":[]}", "synthetic-actor");

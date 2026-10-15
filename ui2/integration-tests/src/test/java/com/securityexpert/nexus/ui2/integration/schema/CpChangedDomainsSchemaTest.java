@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.jooq.SQLDialect;
 import org.jooq.impl.DSL;
 import com.securityexpert.nexus.ui2.integration.support.Ui2PostgresFixture;
+import com.securityexpert.nexus.ui2.integration.support.Ui2Rows;
 import com.securityexpert.nexus.ui2.persistence.*;
 import com.securityexpert.nexus.ui2.persistence.jobrecords.JooqJobRecordDao;
 import com.securityexpert.nexus.ui2.persistence.policy.PolicyCollectionRepository;
@@ -24,6 +25,10 @@ class CpChangedDomainsSchemaTest {
                     assertEquals("SIGNED_OFF", rows.getString(2)); assertTrue(rows.getString(3).contains("PO 2026-10-05"));
                     assertFalse(rows.next());
                 }
+            }
+            // policy_collection_request.source_id references devices(device_id) since V116.
+            try (var db = fixture.appConnection()) {
+                Ui2Rows.insertDevice(db, "source-1", Ui2Rows.insertCredentialReference(db), "ENROLLED");
             }
             var jobs = new JooqJobRecordDao(tx, JobWindowTestPolicy.PERMISSIVE);
             assertTrue(jobs.insertRequestedIfAbsentForRun("job-1", "key-1", "cp_policy_collect", "run-1", "read",

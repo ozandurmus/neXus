@@ -22,16 +22,19 @@ import org.junit.jupiter.api.Test;
 import com.securityexpert.nexus.ui2.integration.support.Ui2PostgresFixture;
 import com.securityexpert.nexus.ui2.persistence.JooqTransactionBoundary;
 import com.securityexpert.nexus.ui2.persistence.TransactionBoundary;
+import com.securityexpert.nexus.ui2.persistence.identity.ActorAuthzStateRecord;
 import com.securityexpert.nexus.ui2.persistence.identity.ActorAuthzStateRepository;
 import com.securityexpert.nexus.ui2.persistence.identity.AuthzDecisionRepository;
 import com.securityexpert.nexus.ui2.persistence.identity.JooqActorAuthzStateRepository;
 import com.securityexpert.nexus.ui2.persistence.identity.JooqAuthzDecisionRepository;
 import com.securityexpert.nexus.ui2.persistence.identity.JooqRoleBindingRepository;
 import com.securityexpert.nexus.ui2.persistence.identity.JooqSessionRepository;
+import com.securityexpert.nexus.ui2.persistence.identity.RoleBindingRecord;
 import com.securityexpert.nexus.ui2.persistence.identity.RoleBindingRepository;
 import com.securityexpert.nexus.ui2.persistence.identity.SessionRecord;
 import com.securityexpert.nexus.ui2.persistence.identity.SessionRepository;
 import com.securityexpert.nexus.ui2.platform.AuthzOutcome;
+import com.securityexpert.nexus.ui2.platform.DirectoryBindingKind;
 import com.securityexpert.nexus.ui2.platform.GroupReferenceCipher;
 import com.securityexpert.nexus.ui2.platform.RoleToken;
 import com.securityexpert.nexus.ui2.service.device.ActionAffordanceView;
@@ -48,7 +51,7 @@ import com.securityexpert.nexus.ui2.service.security.RbacEvaluator;
  * remain unproven at this layer; see the task report.
  *
  * <p>Proves: test 3's core assertion ({@code RefusedActionIsRecordedNotMerelyDisplayed})
- * -- a refusal renders {@code DENIED}/{@code actor_not_in_required_group}
+ * -- a refusal renders {@code DENIED}/{@code actor_not_in_required_binding}
  * only when a matching {@code authz_decisions} row exists agreeing with it
  * -- and test 4's key-set invariant
  * ({@code RefusedAffordanceStillRendersInPayload}) over the one
@@ -94,23 +97,29 @@ class DeviceWorkspaceAffordanceEvaluatorTest {
         String targetDeviceId = DeviceWorkspaceTestRows.opaqueId("dev-target");
         Instant now = DeviceWorkspaceTestRows.now();
 
-        // A binding exists for the required token, but this actor's
-        // resolved group set does not contain the bound group -- DENIED,
-        // never AUTHZ_NOT_EVALUATED, never a silent permit.
-        roleBindingRepository.create(DeviceWorkspaceTestRows.opaqueId("binding"), RoleToken.ONBOARDING_ADMIN,
-                cipher.encrypt("cn=onboarding-admins,dc=harness"), "harness-key", "harness-admin",
-                "harness.seed.binding");
-        actorAuthzStateRepository.upsert(actor, java.util.Set.of("cn=some-other-group,dc=harness"), now,
-                now.plus(Duration.ofHours(1)));
+        // A typed directory binding exists for the required token, and this actor holds a fresh,
+        // directory-proven group set that does not contain the bound group -- DENIED, never
+        // AUTHZ_NOT_EVALUATED, never a silent permit. Since 7ca608a5 (C3C typed directory principal
+        // bindings) RbacEvaluator only evaluates typed bindings against a directory-proven actor
+        // state; a LEGACY binding or an unproven cache row is directory_binding_not_evaluable.
+        String profile = "harness-directory-profile";
+        roleBindingRepository.createDirectory(new RoleBindingRecord(DeviceWorkspaceTestRows.opaqueId("binding"),
+                RoleToken.ONBOARDING_ADMIN, cipher.encryptDirectory("cn=onboarding-admins,dc=harness", profile,
+                        DirectoryBindingKind.DIRECTORY_GROUP), cipher.keyId(), "harness-admin", now, Optional.empty(),
+                Optional.empty(), DirectoryBindingKind.DIRECTORY_GROUP, profile), "harness.seed.binding");
         SessionRecord session = sessionRepository.createActive(DeviceWorkspaceTestRows.opaqueId("session"), actor,
                 "harness-csrf", now, Duration.ofHours(1), Duration.ofDays(1), "harness.seed.session");
+        actorAuthzStateRepository.upsertDirectory(new ActorAuthzStateRecord(actor,
+                java.util.Set.of("cn=some-other-group,dc=harness"), now, now.plus(Duration.ofHours(1)), profile,
+                cipher.encryptDirectory("uid=harness-actor,dc=harness", profile,
+                        DirectoryBindingKind.DIRECTORY_PRINCIPAL), cipher.keyId()));
 
         Map<String, ActionAffordanceView> affordance = evaluator.evaluate(List.of(ActionRegistry.DEVICE_REGISTER),
                 session.sessionId(), actor, targetDeviceId, now);
 
         ActionAffordanceView rendered = affordance.get(ActionRegistry.DEVICE_REGISTER);
         assertEquals(AuthzOutcome.DENIED, rendered.outcome());
-        assertEquals(Optional.of(RbacEvaluator.REASON_ACTOR_NOT_IN_REQUIRED_GROUP), rendered.reasonCode());
+        assertEquals(Optional.of(RbacEvaluator.REASON_ACTOR_NOT_IN_REQUIRED_BINDING), rendered.reasonCode());
 
         // The matching authz_decisions row -- test 3's own assertion: a
         // rendered label with no row, or a disagreeing row, must fail.

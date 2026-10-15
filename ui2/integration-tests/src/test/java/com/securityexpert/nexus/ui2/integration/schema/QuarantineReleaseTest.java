@@ -50,7 +50,8 @@ class QuarantineReleaseTest {
             assertEquals(2, tx.<Integer>inTransaction(db -> db.fetchOne("select count(*)::int from audit_log "
                 + "where action_id='QUARANTINE_RELEASED_OWNER_GONE' and actor_fingerprint='system:worker' "
                 + "and operation='DELETE' and before_state->>'reason'='QUARANTINE_RELEASED_OWNER_GONE' "
-                + "and not before_state ? 'owner_instance' and not before_state ? 'endpoint_ref'").get(0, Integer.class)));
+                // jOOQ reads a bare ? as a bind marker; ->'key' IS NULL is the key-absent test.
+                + "and before_state->'owner_instance' is null and before_state->'endpoint_ref' is null").get(0, Integer.class)));
             assertEquals(0, audited.<Integer>inTransaction("system:release", "synthetic-drain", db ->
                 db.fetchOne("select ui2_release_orphan_quarantines()").get(0, Integer.class)));
         }

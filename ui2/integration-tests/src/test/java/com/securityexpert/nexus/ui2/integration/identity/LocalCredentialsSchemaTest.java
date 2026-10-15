@@ -21,6 +21,7 @@ import org.junit.jupiter.api.Test;
 
 import com.securityexpert.nexus.ui2.integration.support.Ui2PostgresFixture;
 import com.securityexpert.nexus.ui2.integration.support.Ui2Rows;
+import com.securityexpert.nexus.ui2.platform.SecurityAdminBootstrapPort;
 
 /**
  * C3A contract (docs/design/UI2_0_C3A_LOCAL_AUTHENTICATION_CONTRACT.md,
@@ -58,17 +59,21 @@ class LocalCredentialsSchemaTest {
                 // Test 9: every audit_log row this table's trigger wrote
                 // exposes only the §8 allowlist -- never verifier/salt/
                 // algorithm_id/memory_cost_kib/time_cost/parallelism.
+                // V10 extended the narrow capture by exactly four non-secret columns.
                 Set<String> allowedKeys = Set.of(
-                        "local_identity_id", "failed_attempt_count", "locked_until", "created_at", "updated_at");
+                        "local_identity_id", "failed_attempt_count", "locked_until", "created_at", "updated_at",
+                        "enabled", "created_by_actor_fingerprint", "password_set_at", "must_change_password");
                 assertAuditRowsUseOnlyAllowedKeys(app, nexusadminId, allowedKeys);
                 assertAuditRowsUseOnlyAllowedKeys(app, claudeadminId, allowedKeys);
 
-                // Test 7 (DB half): the two bootstrap identities are
-                // distinct actors -- their INSERT audit rows carry
-                // different actor_fingerprint values.
+                // Both bootstrap creations are attributed to the one reserved
+                // bootstrap actor, as LocalIdentityBootstrap writes them
+                // (SecurityAdminBootstrapPort.BOOTSTRAP_ACTOR) -- the audit row
+                // carries that attribution, not the identity's own name.
                 String nexusadminActor = actorFingerprintOfInsert(app, nexusadminId);
                 String claudeadminActor = actorFingerprintOfInsert(app, claudeadminId);
-                assertNotEquals(nexusadminActor, claudeadminActor);
+                assertEquals(SecurityAdminBootstrapPort.BOOTSTRAP_ACTOR, nexusadminActor);
+                assertEquals(SecurityAdminBootstrapPort.BOOTSTRAP_ACTOR, claudeadminActor);
 
                 // Test 4/5: lockout threshold, effect, and self-expiring clearing.
                 for (int i = 0; i < 4; i++) {
@@ -104,13 +109,17 @@ class LocalCredentialsSchemaTest {
     private static String insertLocalCredential(Connection app, String name, String verifierSeed, String saltSeed)
             throws SQLException {
         String id = "local-" + UUID.randomUUID();
-        Ui2Rows.setAuditContext(app, "system:bootstrap", "local_credential_create");
         boolean previousAutoCommit = app.getAutoCommit();
         app.setAutoCommit(false);
         try {
+            // SET LOCAL only takes effect inside the transaction it is issued in.
+            Ui2Rows.setAuditContext(app, SecurityAdminBootstrapPort.BOOTSTRAP_ACTOR, "local_credential_create");
+            // created_by_actor_fingerprint: NOT NULL since V10.
             try (PreparedStatement statement = app.prepareStatement(
                     "INSERT INTO local_credentials(local_identity_id, local_identity_name, verifier, salt, "
-                            + "algorithm_id, memory_cost_kib, time_cost, parallelism) VALUES (?, ?, ?, ?, 'argon2id', 19456, 2, 1)")) {
+                            + "algorithm_id, memory_cost_kib, time_cost, parallelism, created_by_actor_fingerprint) "
+                            + "VALUES (?, ?, ?, ?, 'argon2id', 19456, 2, 1, '"
+                            + SecurityAdminBootstrapPort.BOOTSTRAP_ACTOR + "')")) {
                 statement.setString(1, id);
                 statement.setString(2, name);
                 statement.setBytes(3, verifierSeed.getBytes());
@@ -128,7 +137,6 @@ class LocalCredentialsSchemaTest {
     }
 
     private static void recordFailedAttempt(Connection app, String id, Instant now) throws SQLException {
-        Ui2Rows.setAuditContext(app, "system:local_login_attempt", "local_login_failure");
         boolean previousAutoCommit = app.getAutoCommit();
         app.setAutoCommit(false);
         try (Statement statement = app.createStatement()) {
