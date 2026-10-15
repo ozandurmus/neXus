@@ -5,7 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 import java.sql.Connection;
 import java.sql.ResultSet;
@@ -30,7 +29,6 @@ import org.jooq.impl.DSL;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import com.securityexpert.nexus.ui2.integration.support.CollectionEngineRows;
@@ -632,27 +630,15 @@ class CollectionEngineDatabasePlaceholderTest {
     }
 
     // -----------------------------------------------------------------
-    // Contract §8 test 11 / AC-10 -- stays disabled.
+    // Contract §8 test 11 / AC-10 (untrusted host key always refused over a
+    // real SSH handshake) was an empty @Disabled placeholder. Its premise is
+    // superseded by the RATIFIED PO decision of 2026-10-14 (ae95549c, V147):
+    // a host-key mismatch is admitted read-only in the default WARN mode and
+    // refused only in STRICT mode. SshExecTransport's JSch HostKeyRepository
+    // wiring for both modes is proved by worker's SshHostKeyWarnModeTest and
+    // HostKeyVerifierTest; a real-handshake proof would need an SSH server
+    // dependency this repository does not carry.
     // -----------------------------------------------------------------
-
-    @Test
-    @Disabled("requires a live container-hosted SSH endpoint to negotiate a real TCP/SSH handshake against; "
-            + "no in-process substitute is reachable without adding a new test dependency, which is out of "
-            + "this build's file scope")
-    void sshExecTrustRuleRejectsUntrustedHostKey() {
-        // Contract §8 test 11 / AC-10. A container-capable host must prove:
-        // SshExecTransport#connect against a container-hosted SSH endpoint
-        // presenting an untrusted host key returns ConnectResult.
-        // HostKeyRejected -- never succeeds, never returns an ambiguous
-        // outcome. The pure trust decision (given a presented fingerprint
-        // and a resolved expected fingerprint, no socket involved) is
-        // proved without a container by
-        // com.securityexpert.nexus.ui2.worker.transport.ssh.
-        // HostKeyVerifierTest (worker) -- what a container adds is proving
-        // SshExecTransport actually wires JSch's HostKeyRepository hook to
-        // that same decision over a real TCP handshake.
-        fail("intentionally disabled -- see @Disabled reason");
-    }
 
     // -----------------------------------------------------------------
     // Small helpers
