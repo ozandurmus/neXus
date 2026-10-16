@@ -24,6 +24,53 @@ class DiagnosticReadTest {
             assertTrue(DiagnosticRead.commands("palo_alto",role,null,gates).stream()
                 .noneMatch(c -> c.gateId().startsWith("pan_policy_")));
     }
+    /** V149 (M1/M2) and V157 (M5): every phase A measurement read is a runnable diagnostic on Gaia gateways only. */
+    @Test void syslogMeasurementReadsAreRunnableOnGaiaGatewaysOnly() {
+        var rows=GateRegistryFixtureLoader.loadFromStream(getClass().getClassLoader().getResourceAsStream("capabilities/gate_registry_fixture.yaml"));
+        GateRegistryPort gates=key -> rows.stream().filter(r -> r.key().equals(key)).toList();
+        var expected=java.util.Map.ofEntries(
+            java.util.Map.entry("cp_syslog_measure_stat","bash -lc 'stat -c \"%i %s %Y\" /var/log/messages /var/log/messages.1 $FWDIR/log/fwd.elg $CPDIR/log/cpd.elg $CPDIR/log/cpwd.elg'"),
+            java.util.Map.entry("cp_syslog_measure_tail_messages","bash -lc 'tail -n 20 /var/log/messages'"),
+            java.util.Map.entry("cp_syslog_measure_tail_fwd","bash -lc 'tail -n 20 $FWDIR/log/fwd.elg'"),
+            java.util.Map.entry("cp_syslog_measure_tail_cpd","bash -lc 'tail -n 20 $CPDIR/log/cpd.elg'"),
+            java.util.Map.entry("cp_syslog_measure_tail_cpwd","bash -lc 'tail -n 20 $CPDIR/log/cpwd.elg'"),
+            java.util.Map.entry("cp_syslog_measure_stat_ext","bash -lc 'stat -c \"%n %s %Y\" $FWDIR/log/fwk.elg $FWDIR/log/mq_mng.elg /var/log/hcp.elg /var/log/spike_detective/spike_detective.log /var/log/spike_detective/spike_detective.csv'"),
+            java.util.Map.entry("cp_syslog_measure_ls_sa","bash -lc 'ls -lgo --time-style=+%s /var/log/sa/'"),
+            java.util.Map.entry("cp_syslog_measure_ls_spike","bash -lc 'ls -lgo --time-style=+%s /var/log/spike_detective/'"),
+            java.util.Map.entry("cp_syslog_measure_ls_hcp","bash -lc 'ls -lgo --time-style=+%s /var/log/hcp/last/'"),
+            java.util.Map.entry("cp_syslog_measure_ls_crash","bash -lc 'ls -lgo --time-style=+%s /var/log/crash/ /var/log/dump/usermode/'"),
+            java.util.Map.entry("cp_syslog_measure_tail_fwk","bash -lc 'tail -n 20 $FWDIR/log/fwk.elg'"),
+            java.util.Map.entry("cp_syslog_measure_tail_spike","bash -lc 'tail -n 20 /var/log/spike_detective/spike_detective.log'"),
+            java.util.Map.entry("cp_syslog_measure_tail_spike_csv","bash -lc 'tail -n 5 /var/log/spike_detective/spike_detective.csv'"),
+            java.util.Map.entry("cp_syslog_measure_head_sar","bash -lc 'head -n 20 /var/log/sa/sar$(date -d yesterday +%d)'"),
+            java.util.Map.entry("cp_syslog_measure_hcp_listing","bash -lc 'f=$(ls -t /var/log/hcp/last/*.tar.gz | head -1); tar -tzvf \"$f\" | head -n 50'"));
+        assertEquals(expected.keySet(),rows.stream().map(GateRow::gateId).filter(id -> id.startsWith("cp_syslog_measure_"))
+            .collect(java.util.stream.Collectors.toSet()));
+        for (var row: rows) {
+            if (!row.gateId().startsWith("cp_syslog_measure_")) continue;
+            assertEquals(expected.get(row.gateId()),row.canonicalCommandKey(),row.gateId());
+            assertEquals("cp_gaia_gateway",row.platformRoleScope(),row.gateId());
+            assertEquals(SignOffState.SIGNED_OFF,row.signOffState(),row.gateId());
+            assertEquals(30,row.timeoutS(),row.gateId());
+            assertEquals("none",row.retryRule(),row.gateId());
+        }
+        var gateway=DiagnosticRead.commands("check_point","gateway","known gaia",gates);
+        var unknownModel=DiagnosticRead.commands("check_point","gateway",null,gates);
+        for (String gateId: expected.keySet()) {
+            assertTrue(gateway.stream().anyMatch(c -> c.gateId().equals(gateId) && c.commandTemplate().equals(expected.get(gateId))),gateId);
+            assertTrue(unknownModel.stream().anyMatch(c -> c.gateId().equals(gateId)),gateId);
+            assertTrue(DiagnosticRead.resolve("check_point","gateway","known gaia",gateId,null,gates).isPresent(),gateId);
+            assertTrue(DiagnosticRead.resolveStored("check_point","gateway","known gaia",gateId,expected.get(gateId),gates).isPresent(),gateId);
+            assertTrue(DiagnosticRead.commands("check_point","management_server",null,gates).stream()
+                .noneMatch(c -> c.gateId().equals(gateId)),gateId);
+            assertTrue(DiagnosticRead.commands("check_point","gateway","1550",gates).stream()
+                .noneMatch(c -> c.gateId().equals(gateId)),gateId);
+            for (String vendor: new String[]{"palo_alto","fortinet","cisco_asa","radware"})
+                for (String role: new String[]{"gateway","management_server"})
+                    assertTrue(DiagnosticRead.commands(vendor,role,null,gates).stream()
+                        .noneMatch(c -> c.gateId().equals(gateId)),gateId);
+        }
+    }
     @Test void exactReviewedReadsOnlyForMatchingDeviceScope() {
         var rows=GateRegistryFixtureLoader.loadFromStream(getClass().getClassLoader().getResourceAsStream("capabilities/gate_registry_fixture.yaml"));
         GateRegistryPort gates=key -> rows.stream().filter(r -> r.key().equals(key)).toList();

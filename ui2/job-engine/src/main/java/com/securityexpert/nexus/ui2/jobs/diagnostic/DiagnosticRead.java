@@ -20,6 +20,11 @@ public final class DiagnosticRead {
         "cp_backup_delete_backup_local", "mds_backup_start", "rdw_cc_backup_create",
         "rdw_cc_backup_export", "rdw_cc_backup_delete", "asa_backup_archive", "asa_delete_archive",
         "pan_backup_export_device_state", "pan_panorama_export_device_state");
+    // Phase A measurement reads whose "%s" is a literal field of the remote command (stat -c "%i %s %Y",
+    // ls --time-style=+%s), not a template placeholder. The placeholder guard in eligible() would otherwise hide them.
+    public static final Set<String> LITERAL_PERCENT_S_GATES = Set.of(
+        "cp_syslog_measure_stat", "cp_syslog_measure_stat_ext", "cp_syslog_measure_ls_sa",
+        "cp_syslog_measure_ls_spike", "cp_syslog_measure_ls_hcp", "cp_syslog_measure_ls_crash");
     private static final List<GateRow> ROWS = GateRegistryFixtureLoader.loadFromStream(
         DiagnosticRead.class.getClassLoader().getResourceAsStream("capabilities/gate_registry_fixture.yaml"));
     public record Command(String gateId, String commandTemplate, int timeoutS) {}
@@ -92,7 +97,8 @@ public final class DiagnosticRead {
         if (!row.vendor().equals(vendor) || !"SSH_EXEC".equals(row.transportKind())
                 || row.actionClass() != ActionClass.CLASS_0_READ || (row.signOffState() != SignOffState.SIGNED_OFF && !CPVIEW_GATE.equals(row.gateId()))
                 || row.gateId().startsWith("cp_policy_") || row.gateId().startsWith("pan_policy_")
-                || DIAGNOSTIC_EXCLUDED.contains(row.gateId()) || row.canonicalCommandKey().contains("%s")) return false;
+                || DIAGNOSTIC_EXCLUDED.contains(row.gateId())
+                || row.canonicalCommandKey().contains("%s") && !LITERAL_PERCENT_S_GATES.contains(row.gateId())) return false;
         if (CPVIEW_GATE.equals(row.gateId()) && (model == null || model.isBlank()
                 || CheckPointSparkModelHint.isKnownSparkModel(Optional.of(model)))) return false;
         String scope = switch (vendor) {

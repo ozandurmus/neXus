@@ -76,6 +76,43 @@ host; one PAN firewall), via the existing diagnostic path, to record:
 
 Output: the measurement record committed next to this contract (rule: measurement record before contract).
 
+### 4.1 Measurement record: M5 (Check Point extra sources, PO approval 2026-10-16)
+
+M1/M2 (V149) cover `messages`, `fwd.elg`, `cpd.elg` and `cpwd.elg`. M5 (V157) covers the remaining Gaia log sources.
+Rules for all ten gates: Check Point Gaia gateways only (`cp_gaia_gateway`, never management servers); Expert shell,
+`SSH_EXEC`, class `read`, `SIGNED_OFF`, 30 s timeout, no retry; run through the existing diagnostic path with its
+masked projection (file names may contain host names and are masked there); at most twice per device, 24 h apart,
+inside a job window; no polling; no raw retention. The registry fixture is
+`ui2/capability-registry/src/main/resources/capabilities/gate_registry_fixture.yaml`; the migration is
+`V157__syslog_measure_m5_gates.sql`. The record below lists the exact commands and which fields to read from each
+output. It holds no real values; measured values go into a separate findings record.
+
+| # | Gate | Exact command (Expert shell) | Fields to read from the output |
+|---|---|---|---|
+| 1 | `cp_syslog_measure_stat_ext` | `bash -lc 'stat -c "%n %s %Y" $FWDIR/log/fwk.elg $FWDIR/log/mq_mng.elg /var/log/hcp.elg /var/log/spike_detective/spike_detective.log /var/log/spike_detective/spike_detective.csv'` | per file: name, size in bytes, last-write epoch seconds; a missing file shows as a `stat` error line (a result, not a failure); daily growth = size delta over the two reads 24 h apart |
+| 2 | `cp_syslog_measure_ls_sa` | `bash -lc 'ls -lgo --time-style=+%s /var/log/sa/'` | file count (retention depth), name pattern (`sa<DD>` and `sar<DD>`), size and mtime per file |
+| 3 | `cp_syslog_measure_ls_spike` | `bash -lc 'ls -lgo --time-style=+%s /var/log/spike_detective/'` | file count, rotation naming and count (suffix form), size and mtime per file |
+| 4 | `cp_syslog_measure_ls_hcp` | `bash -lc 'ls -lgo --time-style=+%s /var/log/hcp/last/'` | archive name pattern, file count, size and mtime of each archive |
+| 5 | `cp_syslog_measure_ls_crash` | `bash -lc 'ls -lgo --time-style=+%s /var/log/crash/ /var/log/dump/usermode/'` | per directory: whether any dump exists, name pattern, size and mtime; a missing directory is a result |
+| 6 | `cp_syslog_measure_tail_fwk` | `bash -lc 'tail -n 20 $FWDIR/log/fwk.elg'` | timestamp form and timezone, line shape, multi-line records |
+| 7 | `cp_syslog_measure_tail_spike` | `bash -lc 'tail -n 20 /var/log/spike_detective/spike_detective.log'` | timestamp form, line shape, event keywords as pattern classes (no values) |
+| 8 | `cp_syslog_measure_tail_spike_csv` | `bash -lc 'tail -n 5 /var/log/spike_detective/spike_detective.csv'` | column count, delimiter, timestamp form, numeric versus text columns |
+| 9 | `cp_syslog_measure_head_sar` | `bash -lc 'head -n 20 /var/log/sa/sar$(date -d yesterday +%d)'` | header line shape (kernel, host, date), column set of the first report, interval between samples |
+| 10 | `cp_syslog_measure_hcp_listing` | `bash -lc 'f=$(ls -t /var/log/hcp/last/*.tar.gz \| head -1); tar -tzvf "$f" \| head -n 50'` | archive member names (the file-name pattern, not host names), member sizes, whether the members are text or JSON/HTML reports |
+
+Notes:
+
+- The `ls` lines use `-lgo` and epoch times, so each line is `mode links size epoch name`; parse by whitespace.
+- Gates 1 to 5 additionally give the rotation facts the parser needs: rotation count and naming, and size-rotation
+  thresholds (compare the size just before a rotation across the two reads).
+- Gate 9 reads yesterday's file, which is complete, so its header and first samples are stable between the two reads.
+- Gate 10 lists only the newest archive; it extracts nothing. Gates 6 to 8 and 10 can show names, so the masked
+  projection is mandatory; output is not retained.
+- Diagnostics exposure: the `%s` in `cp_syslog_measure_stat` (V149), `cp_syslog_measure_stat_ext` and the four `ls`
+  gates is a literal part of the remote command, not a template placeholder. `DiagnosticRead.LITERAL_PERCENT_S_GATES`
+  lists these six gates so the placeholder guard does not hide them. Before that fix `cp_syslog_measure_stat` was
+  missing from the diagnostics targets because its `stat` format string contains `%s`.
+
 ## 5. Storage, privacy, retention (the raw-evidence law exception)
 
 - **Storage.** Raw lines go to the artefact store, encrypted with the existing envelope encryption, in one object
