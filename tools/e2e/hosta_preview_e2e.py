@@ -31,6 +31,9 @@ from zoneinfo import ZoneInfo
 NS = "ui2-preview"
 BUILD_NS = "ui2-build"
 LABEL = "nexus/preview-run"
+# Preview pods are disposable: a long production drain grace only stalls namespace deletion.
+PREVIEW_GRACE_SECONDS = 60
+NAMESPACE_DELETE_SECONDS = 600
 REGISTRY = "registry.kube-system.svc.cluster.local/"
 AUDIT_SELECT = "SELECT * FROM public.audit_log WHERE occurred_at >= now() - interval '7 days'"
 ENTRY_SELECT = """SELECT e.* FROM public.backup_artefact_entry e
@@ -337,6 +340,7 @@ def pod_spec(template):
     for key in ("priorityClassName", "tolerations", "serviceAccountName"):
         spec.pop(key, None)
     spec["automountServiceAccountToken"] = False
+    spec["terminationGracePeriodSeconds"] = min(spec.get("terminationGracePeriodSeconds", 30), PREVIEW_GRACE_SECONDS)
     spec.setdefault("securityContext", {}).setdefault("fsGroup", 0)
     # No production PVC, hostPath or writable state is ever shared.
     for volume in spec.get("volumes", []):
@@ -874,9 +878,15 @@ def setup_service(repo, image, db_ip, endpoints):
 
 
 def reset_preview_runtime():
+    # Runs on the preview copy only. Copied REQUESTED jobs are production's pending work: preview
+    # device workers would otherwise claim them, fill the 10-job claim capacity and make the
+    # synthetic claim assertion return no row (PREVIEW_CLAIM_DENIED). The claim lock serializes
+    # this with any worker claim already running, so no copied job slips into CLAIMED meanwhile.
     sql = """BEGIN;
 SELECT set_config('app.actor_fingerprint','system:preview',true);
 SELECT set_config('app.action_id','preview_runtime_reset',true);
+SELECT pg_advisory_xact_lock(294611);
+UPDATE jobs SET state='CANCELLED',outcome='CANCELLED' WHERE state='REQUESTED';
 DO $$ BEGIN
  IF to_regclass('module_runtime_control') IS NOT NULL THEN
   UPDATE module_runtime_control SET effective_owner='general',fallback_enabled=TRUE,
@@ -987,9 +997,13 @@ def cleanup(owner):
                         continue
                     if ns.get("metadata", {}).get("labels", {}).get(LABEL) != owner:
                         raise RuntimeError("Preview namespace ownership changed")
-                    k(NS, "delete", "namespace", NS, "--wait=true", "--timeout=120s", timeout=130)
-                    if k(NS, "get", "namespace", NS, "--ignore-not-found", "-o", "name").strip():
-                        raise RuntimeError("Preview namespace remains")
+                    # Poll instead of one bounded kubectl wait: pod termination can outlast it.
+                    k(NS, "delete", "namespace", NS, "--wait=false")
+                    deadline = time.monotonic() + NAMESPACE_DELETE_SECONDS
+                    while k(NS, "get", "namespace", NS, "--ignore-not-found", "-o", "name").strip():
+                        if time.monotonic() >= deadline:
+                            raise RuntimeError("Preview namespace remains")
+                        time.sleep(5)
                 else:
                     k(namespace, "delete", kind, "-l", selector, "--ignore-not-found", "--cascade=foreground",
                       "--wait=true", "--timeout=120s", timeout=130)

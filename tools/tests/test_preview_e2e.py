@@ -462,6 +462,8 @@ def test_cleanup_attempts_both_scopes_and_verifies_ownership_and_absence(monkeyp
             return json.dumps({"items": [{}] if failure == "build-remains" else []})
         return ""
     monkeypatch.setattr(preview, "k", fake)
+    monkeypatch.setattr(preview, "NAMESPACE_DELETE_SECONDS", 0)
+    monkeypatch.setattr(preview.time, "sleep", lambda seconds: None)
     if failure:
         with pytest.raises(RuntimeError, match="teardown incomplete"):
             preview.cleanup("owner")
@@ -1293,7 +1295,7 @@ def jobs_ddl_database():
             if operation.startswith('ADD CONSTRAINT'):
                 declarations.append(operation.removeprefix('ADD '))
             elif operation.startswith('ADD COLUMN'):
-                declarations.extend(re.sub(r'^ADD COLUMN\s+', '', part.strip())
+                declarations.extend(re.sub(r'^ADD COLUMN\s+(?:IF NOT EXISTS\s+)?', '', part.strip())
                                     for part in re.split(r',\s*(?=ADD COLUMN)', operation))
             else:
                 column, change = re.fullmatch(r'ALTER COLUMN (\w+) (DROP DEFAULT|DROP NOT NULL)', operation).groups()
@@ -1395,3 +1397,88 @@ def test_preview_claim_rows_satisfy_migration_checks_and_rollback(monkeypatch):
         assert any("capability TEXT := 'fmg_interface_detail'" in sql for sql in statements)
     finally:
         connection.close()
+
+
+def test_preview_reset_cancels_copied_pending_jobs_under_claim_lock(monkeypatch):
+    """Copied production REQUESTED jobs must never reach preview workers or the claim assertion."""
+    statements = []
+    monkeypatch.setattr(preview, 'k', lambda namespace, *args, input=None, **kwargs: statements.append(input) or '')
+    preview.reset_preview_runtime()
+    sql = statements[0]
+    lock = sql.index('pg_advisory_xact_lock(294611)')
+    cancel = re.search(r"UPDATE jobs SET state='CANCELLED'[^;]*;", sql)
+    assert cancel and lock < cancel.start() < sql.index('DO $$')
+    connection = jobs_ddl_database()
+    try:
+        insert = re.sub(r'\bcapability\b', "'cp_inventory_collect'", preview.preview_claim_insert()).replace('::jsonb', '')
+        for job_id, state in (('copied-pending', 'REQUESTED'), ('copied-done', 'COMPLETED'), ('copied-failed', 'FAILED')):
+            connection.execute(insert.replace("'preview-claim-assertion'", "'" + job_id + "'").replace("'REQUESTED'", "'" + state + "'"))
+        connection.execute(cancel[0])
+        rows = dict(connection.execute('SELECT job_id,state FROM jobs').fetchall())
+        assert rows == {'copied-pending': 'CANCELLED', 'copied-done': 'COMPLETED', 'copied-failed': 'FAILED'}
+    finally:
+        connection.close()
+
+
+def test_preview_reset_runs_before_device_workers_and_claim_assertion(monkeypatch):
+    calls = []
+    with monkeypatch.context() as loader_patch:
+        loader_patch.setattr(preview, 'load', local_load)
+        workers = preview.worker_templates(ROOT)
+    device = {w['deployment']['metadata']['name'] for w in workers if not w['ports']}
+    assert device
+    monkeypatch.setattr(preview, 'worker_templates', lambda repo: workers)
+    monkeypatch.setattr(preview, 'create', lambda ns, obj: None)
+    monkeypatch.setattr(preview, 'build_images', lambda *a: [IMAGE, IMAGE])
+    monkeypatch.setattr(preview, 'setup_database', lambda *a: '192.0.2.10')
+    monkeypatch.setattr(preview, 'setup_worker_services', lambda workers: ENDPOINTS)
+    monkeypatch.setattr(preview, 'setup_workload', lambda template, *a: calls.append(template['metadata']['name']))
+    monkeypatch.setattr(preview, 'setup_service', lambda *a: '192.0.2.20')
+    monkeypatch.setattr(preview, 'reset_preview_runtime', lambda: calls.append('reset'))
+    monkeypatch.setattr(preview, 'assert_module_claims', lambda *a: calls.append('claims'))
+    monkeypatch.setattr(preview, 'load', lambda *a: {'items': [template('deploy/ui2/70-e2e-job.yaml', 'Job')]})
+    monkeypatch.setattr(preview, 'copy_secret', lambda *a: None)
+    monkeypatch.setattr(preview, 'wait_job', lambda *a, **kw: None)
+    monkeypatch.setattr(preview, 'cleanup', lambda owner: None)
+    monkeypatch.setattr(preview, 'k', lambda *a, **kw: '')
+    preview.run(ROOT, COMMIT)
+    reset = calls.index('reset')
+    assert all(calls.index(name) > reset for name in device)
+    assert calls.index('claims') > reset
+
+
+def test_preview_pods_cap_production_drain_grace():
+    for path, expected in (('deploy/ui2/52-worker-deployment.yaml', preview.PREVIEW_GRACE_SECONDS),
+                           ('deploy/ui2/57-policy-deployment.yaml', preview.PREVIEW_GRACE_SECONDS),
+                           ('deploy/ui2/55-compliance-deployment.yaml', 15)):
+        source = template(path, 'Deployment')
+        assert preview.pod_spec(source)['terminationGracePeriodSeconds'] == expected
+    assert preview.PREVIEW_GRACE_SECONDS * 5 < preview.NAMESPACE_DELETE_SECONDS
+
+
+@pytest.mark.parametrize('gone_after', [130, None])
+def test_cleanup_waits_past_old_kubectl_bound_for_namespace_deletion(monkeypatch, gone_after):
+    clock = [0.0]
+    deletes = []
+    def fake(ns, *args, **kwargs):
+        if args[:2] == ('delete', 'namespace'):
+            deletes.append(args)
+            return ''
+        if args[:2] == ('get', 'namespace'):
+            if args[-1] == 'json':
+                return json.dumps({'metadata': {'labels': {preview.LABEL: 'owner'}}})
+            return '' if gone_after is not None and clock[0] >= gone_after else 'namespace/ui2-preview'
+        if args[:2] in (('get', 'networkpolicy'), ('get', 'jobs,pods')):
+            return json.dumps({'items': []})
+        return ''
+    monkeypatch.setattr(preview, 'k', fake)
+    monkeypatch.setattr(preview.time, 'monotonic', lambda: clock[0])
+    monkeypatch.setattr(preview.time, 'sleep', lambda seconds: clock.__setitem__(0, clock[0] + seconds))
+    if gone_after is None:
+        with pytest.raises(RuntimeError, match='teardown incomplete'):
+            preview.cleanup('owner')
+        assert clock[0] >= preview.NAMESPACE_DELETE_SECONDS
+    else:
+        preview.cleanup('owner')
+        assert gone_after <= clock[0] < gone_after + 10
+    assert deletes == [('delete', 'namespace', preview.NS, '--wait=false')]
