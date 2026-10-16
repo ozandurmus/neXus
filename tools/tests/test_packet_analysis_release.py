@@ -81,6 +81,27 @@ def test_first_release_applies_the_claim_and_manifest_and_keeps_ownership(monkey
     assert any("owner_instance is not null" in sql and "where module='packet_analysis'" in sql for sql in queries)
 
 
+def test_first_release_does_not_wait_for_its_own_new_pod_to_stop(monkeypatch):
+    # 2026-10-16: the first release created the deployment with the candidate image, then drained the module and
+    # waited 900 s for that same new pod to disappear: "old owner did not stop; drain retained".
+    events = []
+    def run(*args, input=None, timeout=660):
+        events.append((args, input))
+        if args[:5] == ('kubectl', '-n', 'ui2', 'get', 'deployment') and 'ui2-packet-analysis' in args:
+            return ''
+        if 'pods' in args:
+            return json.dumps({'items': [{'metadata': {'uid': 'new-pod-from-first-apply'}}]})
+        return ''
+    monkeypatch.setattr(deploy, 'run', run)
+    queries = []
+    monkeypatch.setattr(deploy, 'query', lambda sql: queries.append(sql) or ('7' if 'returning drain_generation' in sql else 't'))
+    monkeypatch.setattr(deploy, 'module_e2e', lambda commit=None: None)
+    monkeypatch.setattr(deploy.time, 'sleep', lambda seconds: (_ for _ in ()).throw(AssertionError('waited for a pod')))
+    deploy.replace('packet-analysis', IMAGE, 'synthetic-snapshot', 20)
+    assert not any('drain_requested=true' in sql.replace(' ', '') for sql in queries), 'no old owner, no drain'
+    assert any("owner_instance is not null" in sql and "where module='packet_analysis'" in sql for sql in queries)
+
+
 def test_a_failed_release_never_resets_the_module_to_general(monkeypatch):
     events = []
     def run(*args, input=None, timeout=660):
