@@ -1,0 +1,1 @@
+DELETE FROM packets WHERE capture_id=?

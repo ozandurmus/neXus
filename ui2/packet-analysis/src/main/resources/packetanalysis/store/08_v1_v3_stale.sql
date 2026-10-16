@@ -1,0 +1,1 @@
+UPDATE captures SET state='stale',error='Reattach once to validate capture timestamps'

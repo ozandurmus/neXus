@@ -198,6 +198,24 @@ public class TopologyNamePseudonymizer {
     }
 
     /**
+     * A value carried in packet payload (HTTP host or path segment, TLS SNI, SIP Call-ID, DNS question, vendor trailer
+     * text) as a stable keyed token: {@code KIND-} + 10 upper-case hex of the HMAC, like {@link #maskSerial}. No
+     * registry claim: captures can hold many thousands of distinct values, and a 40-bit keyed hash keeps them
+     * distinct without a database round trip per value. The same value always gives the same token.
+     */
+    public String maskPayloadToken(String kind, String raw) {
+        if (raw == null || raw.isEmpty()) {
+            return raw;
+        }
+        byte[] hash = hmacSha256("PAYLOAD:" + kind + ":" + raw);
+        StringBuilder token = new StringBuilder(kind).append('-');
+        for (int i = 0; i < 5; i++) {
+            token.append(String.format("%02X", hash[i]));
+        }
+        return token.toString();
+    }
+
+    /**
      * One compiled alternation of whole name tokens (never short or numeric names), longest first,
      * rebuilt only when the dictionary grew. Measured 2026-09-22: copying and sorting the whole dictionary and replacing name by name for every string field made an aiview /devices response
      * ~4x slower than the same response unmasked.

@@ -1,0 +1,1 @@
+UPDATE captures SET state='stale',error='Phase 1.1 index upgrade: reattach to rebuild frame hashes'

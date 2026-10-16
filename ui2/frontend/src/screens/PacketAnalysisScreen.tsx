@@ -23,43 +23,49 @@ import {
   listPacketCases,
   packetCaptureDownloadHref,
   uploadPacketCapture,
-  type ApiError,
   type PacketCase,
   type PacketCaseDetail,
   type PacketCaseList,
   type PacketReport,
+  type PacketAnalysisWindow,
   type PacketRunSummary,
 } from "../auth/adminApi";
 import { ScreenHeader, ScreenRoot } from "../shell/ScreenLayout";
 import { M3Button, StatusChip } from "../shell/M3Widgets";
 import type { Tone } from "../shell/tone";
 import { m3, MONO } from "../theme/m3Theme";
+import { PacketCaseWorkspace } from "./packetanalysis/PacketCaseWorkspace";
+import { PacketHostTelemetry } from "./packetanalysis/PacketHostTelemetry";
+import { packetBytes, packetError } from "./packetanalysis/packetFormat";
 
-/** Byte counts as an operator reads them (captures run to 2 GB). */
-export function packetBytes(bytes: number): string {
-  if (!Number.isFinite(bytes) || bytes < 0) return "UNKNOWN";
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  let value = bytes, unit = 0;
-  while (value >= 1024 && unit < units.length - 1) { value /= 1024; unit++; }
-  return unit === 0 ? `${bytes} B` : `${value.toFixed(1)} ${units[unit]}`;
-}
+export { packetBytes, packetError };
 
 const STATE_TONE: Record<string, Tone> = {
   OPEN: "neutral", QUEUED: "attn", ANALYZING: "attn", ANALYZED: "ok", FAILED: "bad",
   REQUESTED: "attn", RUNNING: "attn", COMPLETED: "ok",
 };
 const ACTIVE = new Set(["QUEUED", "ANALYZING"]);
+
+/** What a failed run's closed reason code means for the user (the code itself stays visible). */
+export function packetFailureText(reason: string | null | undefined): string | null {
+  switch (reason) {
+    case "ANALYSIS_MEMORY_LIMIT":
+      return "The analysis needs more memory than its budget allows. Narrow the analysis window (start and end time) or analyse fewer or smaller captures, then run it again.";
+    case "ANALYSIS_WINDOW_REQUIRED":
+      return "The capture range is larger than the analysis budget and no bounded window covers at least two capture points. Choose an analysis window (start and end time) that covers the incident, then run it again.";
+    default:
+      return null;
+  }
+}
+
+/** The window the budget guard chose, as one line; null when the whole range was analysed. */
+export function packetWindowText(window: PacketAnalysisWindow | undefined): string | null {
+  if (!window || window.mode !== "guarded" || window.start == null || window.end == null) return null;
+  const seconds = window.seconds ?? window.end - window.start;
+  return `Analysed window: ${new Date(window.start * 1000).toISOString().replace(/\.\d+Z$/, "Z")} + ${seconds} s, reason: budget (more than ${window.max_packets_per_capture ?? "the budgeted"} packets per capture in the full range).`;
+}
 const day = (iso: string) => (iso && iso.length >= 10 ? iso.slice(0, 10) : "UNKNOWN");
 const time = (iso: string | null) => (iso ? iso.replace("T", " ").replace(/\.\d+Z$/, "Z") : "—");
-
-/** The server's refusal, in its own words (closed codes and reasons; never a file name). */
-export function packetError(err: unknown, fallback: string): string {
-  const failure = err as ApiError | undefined;
-  if (failure?.status === 403) return "Your role does not allow this action.";
-  if (failure?.status === 0) return "The request did not complete. Check the connection and retry.";
-  const reason = failure?.body?.reason ?? failure?.body?.error;
-  return typeof reason === "string" && reason ? reason : fallback;
-}
 
 export function PacketAnalysisScreen() {
   const [list, setList] = useState<PacketCaseList | null>(null);
@@ -204,19 +210,32 @@ export function PacketAnalysisScreen() {
             <LinearProgress variant="determinate" value={progress.total ? Math.min(100, (100 * progress.sent) / progress.total) : 0} />
           </Box>}
 
+          <PacketHostTelemetry caseId={detail.case_id} items={detail.telemetry ?? []} permissions={permissions}
+            maxBytes={limits?.max_telemetry_bytes} onChanged={() => loadDetail(detail.case_id)} onError={setError} onNotice={setNotice} />
+
           <Typography variant="subtitle2" sx={{ mt: 2 }}>Analyses</Typography>
           <TableContainer><Table size="small" aria-label="Analyses"><TableHead><TableRow>
             <TableCell>State</TableCell><TableCell>Requested</TableCell><TableCell>Finished</TableCell><TableCell>Verdict</TableCell><TableCell />
           </TableRow></TableHead><TableBody>
             {detail.runs.map(r => <TableRow key={r.job_id}>
-              <TableCell><StatusChip tone={STATE_TONE[r.state] ?? "neutral"} label={r.state} dense />{r.failure_reason && <Typography variant="caption" display="block">{r.failure_reason}</Typography>}</TableCell>
+              <TableCell><StatusChip tone={STATE_TONE[r.state] ?? "neutral"} label={r.state} dense />{r.failure_reason && <Typography variant="caption" display="block">{r.failure_reason}</Typography>}{packetFailureText(r.failure_reason) && <Typography variant="caption" display="block" color="text.secondary">{packetFailureText(r.failure_reason)}</Typography>}</TableCell>
               <TableCell>{time(r.requested_at)}</TableCell><TableCell>{time(r.finished_at)}</TableCell>
-              <TableCell>{r.summary?.verdict ?? "—"}</TableCell>
+              <TableCell>{r.summary?.verdict ?? "—"}{packetWindowText(r.summary?.analysis_window) && <Typography variant="caption" display="block" color="text.secondary">{packetWindowText(r.summary?.analysis_window)}</Typography>}</TableCell>
               <TableCell>{r.state === "COMPLETED" && <M3Button emphasis="text" onClick={() => void showReport(r.job_id)}>View result</M3Button>}</TableCell>
             </TableRow>)}
             {!detail.runs.length && <TableRow><TableCell colSpan={5}>Not analysed yet</TableCell></TableRow>}
           </TableBody></Table></TableContainer>
         </Card>
+      )}
+
+      {detail && !ACTIVE.has(detail.state) && (
+        <PacketCaseWorkspace
+          key={`${detail.case_id}-${detail.latest_job_id ?? detail.state}`}
+          caseId={detail.case_id}
+          permissions={permissions}
+          onError={setError}
+          onNotice={setNotice}
+        />
       )}
 
       {report && <ResultView report={report} />}

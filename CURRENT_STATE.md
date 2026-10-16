@@ -55,11 +55,15 @@ manual manifest-deletion deviation are recorded in the
 ## Packet Analysis (branch, not yet shipped)
 
 `packet_analysis_shell` — **IMPLEMENTED, engine stub, pending ship** (`ship/rel-2-pa-shell`, after `ship/rel-1-integration`; unit and PostgreSQL integration suites green): cases, streamed
+`packet_analysis_shell` — **AUTOMATED_VALIDATED** on `feature/packet-analysis-ui` (S14): cases, streamed
 pcap/pcapng upload (2 GB per file, 100 GB store cap, 7-day retention with an hourly ledgered pruner), RBAC
-(`packet_analysis_run` / `packet_analysis_raw_view` / `packet_analysis_read`, aiview masked only) and a dedicated
-self-owned `ui2-packet-analysis` worker that claims `packet_analysis_run` only (V154). Every stage reports
-`unknown` until the engine port lands. Not REAL_ENV_VALIDATED. Authority:
-[decision record](docs/design/PO_DECISION_RECORD_2026_10_15_PACKETBREAKER_PORTED_INTO_NEXUS.md).
+(`packet_analysis_run` / `packet_analysis_raw_view` / `packet_analysis_read`, aiview masked only), dedicated
+self-owned `ui2-packet-analysis` worker running `RealPacketAnalysisEngine` (ingest -> auto-assemble -> DuckDB engine ->
+`report-<jobId>.json`, `findings-v11.json`, `project.duckdb`), read-only DuckDB detail views in `ui2-service` returning
+`409 ANALYSIS_RUNNING` while queued/analyzing, CLI parity in `ui2/cli`, and operator React 18 workspace screens
+(`echarts` 6.1.0, `@xyflow/react` 12.12.0). Not REAL_ENV_VALIDATED. Authority:
+[decision record](docs/design/PO_DECISION_RECORD_2026_10_15_PACKETBREAKER_PORTED_INTO_NEXUS.md) and
+[port contract](docs/design/PACKET_ANALYSIS_PORT_CONTRACT.md).
 
 ## Data Sanitizer (branch, not yet shipped)
 

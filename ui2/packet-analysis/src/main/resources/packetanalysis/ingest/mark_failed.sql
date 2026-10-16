@@ -1,0 +1,1 @@
+UPDATE captures SET state=?,error=? WHERE id=?

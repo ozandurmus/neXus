@@ -1,0 +1,581 @@
+{
+ "construction": {
+  "kind": "cli",
+  "kwargs": {
+   "ip_id": "increment",
+   "ipv6": false,
+   "rounds": 100
+  },
+  "scenario": "realistic_capture_miss"
+ },
+ "inputs": {
+  "00-client.pcap": "bae8a0b92276af112fee2b20677c02053c6edacdc5a49f067aeacd71f6a8080f",
+  "01-fw-ingress.pcap": "dfae1714b068db566259de4784e2d546d2c865cf96c04f6d321762d628ea5c62",
+  "02-fw-egress.pcap": "377d166c1036c5b2699a3b14405b677c1dd14c5518f98e731c424fc40973fee4",
+  "03-lb-ingress.pcap": "37bc002bbb291cfbbb14d1aa5920de063e6544bb9eb3e6c8d89873dbc42222ea",
+  "04-server.pcap": "2165500d80fde368eea61504dce2a94edf471506e44a663b067f47644461dbaa",
+  "05-return-router.pcapng": "ab1312cac5371187d418fc5ddc9c5b238f3ce7d5ef7324b409317aadf164906e"
+ },
+ "l1": {
+  "00-client.pcap": {
+   "rows": 15231,
+   "sha256": "24bc38db74d6c92635c593f43e1caa17afe3e3c2681403a3664829d71ca8caaf"
+  },
+  "01-fw-ingress.pcap": {
+   "rows": 15181,
+   "sha256": "9d67a2f194f2657445e4084f5cc93c66a753ee5234be666c97499909365656a7"
+  },
+  "02-fw-egress.pcap": {
+   "rows": 15231,
+   "sha256": "ffdfc88b834130cb2f53e2a02b833da0e63c500213eb94726da5d2a55fd13c93"
+  },
+  "03-lb-ingress.pcap": {
+   "rows": 10139,
+   "sha256": "8944faf8eb9c66b21ffa387a58cff9242f4d8a261af76b73073f442021ea0e8e"
+  },
+  "04-server.pcap": {
+   "rows": 15228,
+   "sha256": "23edcf31ee8b8fdcd80987930004e1ea51733e0e6370ba542ecded1720a82065"
+  },
+  "05-return-router.pcapng": {
+   "rows": 5039,
+   "sha256": "e5e444ecc7bb171ae099b92351afc12d5b587139fd321b513a335b0b6f9543fe"
+  }
+ },
+ "l2": {
+  "clock_values": {
+   "columns": [
+    [
+     "capture_id",
+     "VARCHAR"
+    ],
+    [
+     "epoch",
+     "DOUBLE"
+    ],
+    [
+     "offset_s",
+     "DOUBLE"
+    ],
+    [
+     "drift",
+     "DOUBLE"
+    ]
+   ],
+   "rows": 6,
+   "sha256": "da0909aa0ed0a3576eb85b516f3874b5398ca88bf5e1859f863dbe87d6a9aac3",
+   "source": "TEMP snapshot at report write"
+  },
+  "events": {
+   "columns": [
+    [
+     "id",
+     "VARCHAR"
+    ],
+    [
+     "point_a",
+     "VARCHAR"
+    ],
+    [
+     "point_b",
+     "VARCHAR"
+    ],
+    [
+     "direction",
+     "VARCHAR"
+    ],
+    [
+     "kind",
+     "VARCHAR"
+    ],
+    [
+     "reason",
+     "VARCHAR"
+    ],
+    [
+     "packet_key",
+     "VARCHAR"
+    ],
+    [
+     "flow",
+     "VARCHAR"
+    ],
+    [
+     "ts",
+     "DOUBLE"
+    ],
+    [
+     "recovery_ms",
+     "DOUBLE"
+    ],
+    [
+     "recovery_key",
+     "VARCHAR"
+    ],
+    [
+     "support_key",
+     "VARCHAR"
+    ],
+    [
+     "impact_ms",
+     "DOUBLE"
+    ],
+    [
+     "is_data",
+     "BOOLEAN"
+    ],
+    [
+     "missing_bytes",
+     "BIGINT"
+    ],
+    [
+     "byte_ranges",
+     "VARCHAR"
+    ]
+   ],
+   "rows": 103,
+   "sha256": "1764a185994d7f0063b2e4d591ecdf2ca95bd916a47963ff28c901668d7b60fe"
+  },
+  "flow_summary": {
+   "columns": [
+    [
+     "flow",
+     "VARCHAR"
+    ],
+    [
+     "matching_unknown_reason",
+     "VARCHAR"
+    ],
+    [
+     "start",
+     "DOUBLE"
+    ],
+    [
+     "end",
+     "DOUBLE"
+    ],
+    [
+     "points",
+     "BIGINT"
+    ],
+    [
+     "retrans_observations",
+     "BIGINT"
+    ],
+    [
+     "has_reset",
+     "BOOLEAN"
+    ],
+    [
+     "max_rtt_ms",
+     "DOUBLE"
+    ],
+    [
+     "tuple",
+     "VARCHAR"
+    ],
+    [
+     "syns",
+     "BIGINT"
+    ],
+    [
+     "synacks",
+     "BIGINT"
+    ],
+    [
+     "handshake_rtt_ms",
+     "DOUBLE"
+    ],
+    [
+     "reset_origin",
+     "VARCHAR"
+    ],
+    [
+     "bytes",
+     "HUGEINT"
+    ],
+    [
+     "unique_observations",
+     "BIGINT"
+    ],
+    [
+     "impactful_loss",
+     "BIGINT"
+    ],
+    [
+     "recovered_loss",
+     "BIGINT"
+    ],
+    [
+     "capture_miss",
+     "BIGINT"
+    ],
+    [
+     "max_stall_ms",
+     "DOUBLE"
+    ],
+    [
+     "unrecovered_loss",
+     "BIGINT"
+    ],
+    [
+     "handshake_blocked",
+     "BIGINT"
+    ],
+    [
+     "confirmed_device_drop",
+     "BIGINT"
+    ],
+    [
+     "unknown_events",
+     "BIGINT"
+    ],
+    [
+     "handshake_incomplete",
+     "BOOLEAN"
+    ]
+   ],
+   "rows": 54,
+   "sha256": "2ef3998453b3d1fe6ec80b46d6f6934c742585f8ed73fbcfba45fa1133d624a7"
+  },
+  "obs": {
+   "columns": [
+    [
+     "capture_id",
+     "VARCHAR"
+    ],
+    [
+     "frame",
+     "BIGINT"
+    ],
+    [
+     "ts",
+     "DOUBLE"
+    ],
+    [
+     "iface",
+     "INTEGER"
+    ],
+    [
+     "src",
+     "VARCHAR"
+    ],
+    [
+     "dst",
+     "VARCHAR"
+    ],
+    [
+     "sport",
+     "INTEGER"
+    ],
+    [
+     "dport",
+     "INTEGER"
+    ],
+    [
+     "proto",
+     "VARCHAR"
+    ],
+    [
+     "ipid",
+     "BIGINT"
+    ],
+    [
+     "seq",
+     "BIGINT"
+    ],
+    [
+     "ack",
+     "BIGINT"
+    ],
+    [
+     "flags",
+     "INTEGER"
+    ],
+    [
+     "length",
+     "INTEGER"
+    ],
+    [
+     "wirelen",
+     "INTEGER"
+    ],
+    [
+     "caplen",
+     "INTEGER"
+    ],
+    [
+     "prefix",
+     "VARCHAR"
+    ],
+    [
+     "payload_hash",
+     "VARCHAR"
+    ],
+    [
+     "signature",
+     "VARCHAR"
+    ],
+    [
+     "tuple_key",
+     "VARCHAR"
+    ],
+    [
+     "reverse_tuple",
+     "VARCHAR"
+    ],
+    [
+     "stream",
+     "BIGINT"
+    ],
+    [
+     "ttl",
+     "INTEGER"
+    ],
+    [
+     "dscp",
+     "INTEGER"
+    ],
+    [
+     "mss",
+     "INTEGER"
+    ],
+    [
+     "window",
+     "BIGINT"
+    ],
+    [
+     "retrans",
+     "BOOLEAN"
+    ],
+    [
+     "fast_retrans",
+     "BOOLEAN"
+    ],
+    [
+     "spurious",
+     "BOOLEAN"
+    ],
+    [
+     "out_of_order",
+     "BOOLEAN"
+    ],
+    [
+     "acked_unseen",
+     "BOOLEAN"
+    ],
+    [
+     "zero_window",
+     "BOOLEAN"
+    ],
+    [
+     "rtt",
+     "DOUBLE"
+    ],
+    [
+     "unsupported",
+     "VARCHAR"
+    ],
+    [
+     "frame_hash",
+     "VARCHAR"
+    ],
+    [
+     "icmp_id",
+     "INTEGER"
+    ],
+    [
+     "icmp_seq",
+     "INTEGER"
+    ],
+    [
+     "icmp_type",
+     "INTEGER"
+    ],
+    [
+     "dns_id",
+     "INTEGER"
+    ],
+    [
+     "dns_response",
+     "BOOLEAN"
+    ],
+    [
+     "vendor",
+     "VARCHAR"
+    ],
+    [
+     "path_fields",
+     "VARCHAR"
+    ],
+    [
+     "raw_seq",
+     "BIGINT"
+    ],
+    [
+     "raw_ack",
+     "BIGINT"
+    ],
+    [
+     "translation_reason",
+     "VARCHAR"
+    ],
+    [
+     "range_reason",
+     "VARCHAR"
+    ],
+    [
+     "point",
+     "VARCHAR"
+    ],
+    [
+     "canon",
+     "VARCHAR"
+    ],
+    [
+     "corrected",
+     "DOUBLE"
+    ],
+    [
+     "direction",
+     "VARCHAR"
+    ],
+    [
+     "canon_reverse",
+     "VARCHAR"
+    ],
+    [
+     "packet_key",
+     "VARCHAR"
+    ],
+    [
+     "flow",
+     "VARCHAR"
+    ],
+    [
+     "eligible",
+     "BOOLEAN"
+    ],
+    [
+     "base_key",
+     "VARCHAR"
+    ],
+    [
+     "occurrence",
+     "BIGINT"
+    ],
+    [
+     "excluded_reason",
+     "VARCHAR"
+    ]
+   ],
+   "rows": 76049,
+   "sha256": "caa63641d532c263a1446174d92735d1aadb942dcebc146ecf93ae3b4d704a3f"
+  },
+  "observation_matches": {
+   "columns": [
+    [
+     "point_a",
+     "VARCHAR"
+    ],
+    [
+     "point_b",
+     "VARCHAR"
+    ],
+    [
+     "direction",
+     "VARCHAR"
+    ],
+    [
+     "time_a",
+     "DOUBLE"
+    ],
+    [
+     "time_b",
+     "DOUBLE"
+    ],
+    [
+     "key_a",
+     "VARCHAR"
+    ],
+    [
+     "key_b",
+     "VARCHAR"
+    ],
+    [
+     "bytes",
+     "INTEGER"
+    ],
+    [
+     "byte_range",
+     "BOOLEAN"
+    ]
+   ],
+   "rows": 303778,
+   "sha256": "de6e0b4b5fe9ebabf95d3d3bf0486d99c5c16a8ac262daeedc443ab573644865"
+  }
+ },
+ "l3": {
+  "findings_export_sections": {
+   "engine_version": "f0254c7cee31ae6bfaa312d7d592616673cee30889cf938f00d5db2ca6ef1346",
+   "findings": "e32754263482a053798f516bd4af804ce68cf2a7aa4e87dd2a394a0564e36acf",
+   "flow_filters": "ca07571cfdeb8b76f4acae33f5a707f92d2789d42f6cc1e6f28ed4c9d11ddfaf",
+   "report": "2b84495932b5cdcbe067c4252ee5ea9bd0874aa1784d0a850fae2f7709d94b0a",
+   "schema_name": "6850938f52a473e1f33785a2a3e4a33c6d8716bc430b8addc53a40c17f3cba79",
+   "schema_version": "4fc82b26aecb47d2868c4efbe3581732a3e7cbcc6c2efb32062c08170a05eeb8",
+   "timeseries": "3286f8424b5e9422d1591cb229d7621abdc9a421f3e6ecdc0600066760ca364e"
+  },
+  "findings_export_sha256": "28fe1f2ddfdfd1cd4349c3342f8a73c230b7b33281a0bbede431fc1f6b9f1397",
+  "golden_payload_sha256": "0b990d9719c1f4edba58c8ea3de838f3f8b3e49aad872bb68c0a28c0b344f974",
+  "key_sections_file": "cli-realistic_capture_miss.key-sections.json.gz",
+  "key_sections_masked_sha256": "3bf360c6784bfc8941d2dc198f9edc278a5b531a147f19c344baf2c31cbcf1d4",
+  "report_sections": {
+   "analysis_scope": "a1be65050fc8c16da8b2636fab856cc437db8518c1793d6a663d27eb662cf14b",
+   "application_status": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+   "auto_order_suggestion": "d906e329e2d16407ca09cba4dacbd1636b5c7a7b16c4d1626581b00cd0e899a0",
+   "clocks": "416f92ba4a4abc526424dc1bb71b97e54875928ef2f29da27e50da5dac86fc53",
+   "confirmed_device_drop_count": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+   "confirmed_device_drops": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+   "coverage": "35be90b834a59472761c218d5ae87bd78cb9bf32a4280d2563fe9f237f163052",
+   "cycles": "529096a2311bb11b02bf3baf4d2b1f3f0fba500bc9fba5e897c84f813507727c",
+   "delivery": "b7f71683b581ae36cb3253f0c4220bf131e24b5f83c0941d49c8f573f2811e89",
+   "engine_version": "f0254c7cee31ae6bfaa312d7d592616673cee30889cf938f00d5db2ca6ef1346",
+   "f5": "3ed95d065ae5ec2fa0fbd54eea811e40e056a439b0d924790add99c50b97de5a",
+   "finding_count": "4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8a",
+   "findings": "fdc6d23f9f8433c5b2bab321ac4246392f6a5299fd52938af6b5065b1b650d3a",
+   "flow_count": "2fca346db656187102ce806ac732e06a62df0dbb2829e511a770556d398e1a6e",
+   "fragment_points": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+   "host_path": "0e820659c393fbc5f405188ab0fc68c02a85720133799e57dbc42222ede29828",
+   "incident": "587d4274faeab4dabd49d29a8310d81fc42be53c238567fb63144d5622d680b0",
+   "integrity_notes": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+   "limitations": "3d312c95bd4aed2182ec60fe29dd4d26391e1ecdb464d6842be569fa536b1c1e",
+   "microbursts": "399334131e3972a6dfde9749c6ad1c070a705c61147c39b9cf36591096797187",
+   "nat_suggestions": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+   "offload_points": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+   "onsets": "f8b725638a4c39b6e5dab0eee6b36aa28e7b0ade67832b0bcd72b35b85d09883",
+   "prefilter_excluded": "6b1bd3a14d271e901c9fa5377ce658cb1b47c1e56d3ab660617da50c61425da0",
+   "proxies": "5c80c51cc6a292bdf21926061fa1682030b42522f45f332d0ad78c51683dade8",
+   "quality": "3d19337260e7244231de5ac7f0da5e2ef4ea590b0e5ce35a8ae0774172b4c953",
+   "rtp": "da38d9b1f77c9d7d5305a9a9aac187050763a44bf6128faabba5e75ced1b10f6",
+   "schema_version": "d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35",
+   "scope": "2dd9620be52aea959932e423c98a6ca7de18d9e8b62d92e73c710a40454d4d67",
+   "security": "c43a167c60d2ba8792dfe7817714c2713ffaedaa5b36cf5c8c0dfacc46001feb",
+   "segments": "1de40747fadf8033feed6300bf431a84eba6219c62a7c034409e5c6093e302d4",
+   "sequence_translations": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+   "session_events": "98b4c918dfc96151fb973afcae9aa8cc1932205c06f936fa6dc7962eb701896a",
+   "sessions": "4435385c35f498ee01326e0bcb9cc90e4629cc7994c5bb235343f8ab5e9bf9e6",
+   "sip": "34bd2dc3e708f80a440fa927775b11408a7fc8b3fd5e6debf87e5a4cdf1f190e",
+   "timeseries": "9a27226d26727ca5b5c55ba3872e65d5b729cc00ba94ec7591a53f97752e864e",
+   "tls": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+   "tunnel_points": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+   "udp": "f6ca9fec63a15111075a3e590fd48303588df5011829bf8e878892e6957e16f4",
+   "vendor_device_event_count": "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+   "vendor_device_events": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+   "verdict": "ff921f8642a5652d583ff80c778578d31331ff7ffa71d789c095a1fffcfc73fb",
+   "window": "e191e5425339465d17ab025e9fc1f7e15a9c96c5cb81534895abf1cb51c3230a"
+  },
+  "report_sha256": "12ff81da49fa47bbe8e27a4cd1667027d780ef15b5d92194f4a4269b5dfdba86"
+ },
+ "name": "cli-realistic_capture_miss",
+ "tier": 2
+}

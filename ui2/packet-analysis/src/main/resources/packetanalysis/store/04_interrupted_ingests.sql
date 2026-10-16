@@ -1,0 +1,1 @@
+UPDATE captures SET state='cancelled', error='Interrupted; resume available' WHERE state='ingesting'

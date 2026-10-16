@@ -13,6 +13,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.securityexpert.nexus.ui2.jobs.JobState;
 import com.securityexpert.nexus.ui2.jobs.lease.JobLeaseRepository;
 import com.securityexpert.nexus.ui2.jobs.stepattempt.JobStepAttemptRepository;
+import com.securityexpert.nexus.ui2.packetanalysis.store.AnalysisFailure;
 import com.securityexpert.nexus.ui2.persistence.packetanalysis.PacketAnalysisRepository;
 import com.securityexpert.nexus.ui2.platform.PacketAnalysisPaths;
 import com.securityexpert.nexus.ui2.platform.WorkerActor;
@@ -90,9 +91,16 @@ public final class PacketAnalysisJobExecutor {
             return leases.transitionState(jobId, epoch, JobState.EXECUTING, JobState.COMPLETED, ACTOR,
                     "packet_analysis_completed", "COMPLETED") ? JobState.COMPLETED : null;
         } catch (Exception failure) {
-            // The engine's message may quote capture content or paths: record the class of failure only.
-            LOG.log(System.Logger.Level.WARNING, "[PACKET_ANALYSIS] job {0} failed: {1}", jobId, failure.getClass().getSimpleName());
-            return fail(jobId, epoch, attempt, "ENGINE_FAILED");
+            // The engine's message may quote capture content or paths: record the class of failure and a closed
+            // reason only. A run that reached its memory budget (or needs a window) says so, so the user can narrow it.
+            String reason = AnalysisFailure.reasonOf(failure);
+            LOG.log(System.Logger.Level.WARNING, "[PACKET_ANALYSIS] job {0} failed: {1} ({2})", jobId,
+                    failure.getClass().getSimpleName(), reason);
+            return fail(jobId, epoch, attempt, reason);
+        } catch (OutOfMemoryError exhausted) {
+            // The JVM heap is the same budget as DuckDB's: end the run cleanly instead of leaving it leased.
+            LOG.log(System.Logger.Level.WARNING, "[PACKET_ANALYSIS] job {0} failed: heap exhausted", jobId);
+            return fail(jobId, epoch, attempt, AnalysisFailure.MEMORY_LIMIT);
         }
     }
 

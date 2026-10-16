@@ -83,7 +83,26 @@ final class NexusSessionCli {
         System.out.println("  pa-cases | pa-case <caseId>                    Packet Analysis cases (expiry: 7 days)");
         System.out.println("  pa-case-create <title> [--payload-zeroing]");
         System.out.println("  pa-upload <caseId> <capture.pcap|.pcapng>      streamed; 2 GB per file");
+        System.out.println("  pa-telemetry-upload <caseId> <file.txt> [zone=<id>] [offset=<sec>] [start=<local time>]");
+        System.out.println("                                                 host telemetry (sar, vmstat, pidstat, qdisc/softnet, syslog); 200 MB per file");
+        System.out.println("  pa-telemetry-align <telemetryId> [zone=<id>] [offset=<sec>] [start=<yyyy-MM-dd HH:mm:ss>]   (no zone = UTC assumed)");
+        System.out.println("  pa-telemetry-delete <telemetryId>");
         System.out.println("  pa-analyze <caseId> | pa-run <jobId> | pa-report <jobId> [dest.json]");
+        System.out.println("  pa-state <caseId> | pa-flows <caseId> [k=v...] | pa-frames <caseId> [k=v...]");
+        System.out.println("  pa-diagnosis <caseId> [k=v...] | pa-charts <caseId> [k=v...] | pa-ladder <caseId> [k=v...]");
+        System.out.println("  pa-waterfall <caseId> [k=v...] | pa-timeseries <caseId> [k=v...]");
+        System.out.println("  pa-topology-overlay <caseId> [k=v...] | pa-topology-inspect <caseId> [k=v...]");
+        System.out.println("  pa-topology-save <caseId> <jsonBody|@file>");
+        System.out.println("  pa-findings <caseId> [k=v...] | pa-events <caseId> [k=v...] | pa-dns <caseId> [k=v...]");
+        System.out.println("  pa-correlation <caseId>                        neXus inventory & policy correlation");
+        System.out.println("  pa-field-diff <caseId> [k=v...]                security_admin; ledgered");
+        System.out.println("  pa-export-findings <caseId> [dest.json]");
+        System.out.println("  pa-export <caseId> <html|json|csv|xlsx> <dest>  security_admin; ledgered (raw addresses)");
+        System.out.println("  pa-expert-report <caseId> <dest.xlsx> [start=<epoch>] [end=<epoch>] [top=<n>]");
+        System.out.println("                                                 expert workbook; masked unless security_admin; ledgered");
+        System.out.println("  pa-session-evidence <caseId> point=<id> start=<epoch> end=<epoch>");
+        System.out.println("  pa-reference-template <caseId> [dest.json]");
+        System.out.println("  pa-compare <caseId> [--reference <file.json>] [--against <analysis-export.json>]");
         System.out.println("  pa-download <captureId> <destPath>             security_admin; ledgered");
         System.out.println("  pa-delete <caseId>");
         SanitizerCli.printUsage();
@@ -174,6 +193,16 @@ final class NexusSessionCli {
                     yield print(call("POST", PA + "/cases", json(body)));
                 }
                 case "pa-upload" -> packetUpload(args);
+                case "pa-telemetry-upload" -> packetTelemetryUpload(args);
+                case "pa-telemetry-align" -> {
+                    String usage = "pa-telemetry-align <telemetryId> [zone=<id>] [offset=<sec>] [start=<yyyy-MM-dd HH:mm:ss>]";
+                    require(args, 2, usage);
+                    yield print(call("PUT", PA + "/telemetry/" + id(args[1]), alignmentBody(args, 2, usage)));
+                }
+                case "pa-telemetry-delete" -> {
+                    require(args, 2, "pa-telemetry-delete <telemetryId>");
+                    yield print(call("DELETE", PA + "/telemetry/" + id(args[1]), null));
+                }
                 case "pa-analyze" -> {
                     require(args, 2, "pa-analyze <caseId>");
                     yield print(call("POST", PA + "/cases/" + id(args[1]) + "/analyze", "{}"));
@@ -186,6 +215,47 @@ final class NexusSessionCli {
                     require(args, 2, "pa-report <jobId> [dest.json]");
                     var response = call("GET", PA + "/runs/" + id(args[1]) + "/report", null);
                     yield args.length > 2 ? saveTo(response, Path.of(args[2])) : print(response);
+                }
+                case "pa-state" -> packetCaseRead(args, "/state");
+                case "pa-flows" -> packetCaseRead(args, "/flows");
+                case "pa-frames" -> packetCaseRead(args, "/frames");
+                case "pa-diagnosis" -> packetCaseRead(args, "/diagnosis");
+                case "pa-charts" -> packetCaseRead(args, "/charts");
+                case "pa-ladder" -> packetCaseRead(args, "/ladder");
+                case "pa-waterfall" -> packetCaseRead(args, "/waterfall");
+                case "pa-timeseries" -> packetCaseRead(args, "/timeseries");
+                case "pa-topology-overlay" -> packetCaseRead(args, "/topology/overlay");
+                case "pa-topology-inspect" -> packetCaseRead(args, "/topology/inspect");
+                case "pa-findings" -> packetCaseRead(args, "/findings");
+                case "pa-events" -> packetCaseRead(args, "/events");
+                case "pa-dns" -> packetCaseRead(args, "/dns");
+                case "pa-correlation" -> packetCaseRead(args, "/correlation");
+                case "pa-field-diff" -> packetCaseRead(args, "/field-diff");
+                case "pa-export-findings" -> {
+                    require(args, 2, "pa-export-findings <caseId> [dest.json]");
+                    var response = call("GET", PA + "/cases/" + id(args[1]) + "/export/findings", null);
+                    yield args.length > 2 ? saveTo(response, Path.of(args[2])) : print(response);
+                }
+                case "pa-export" -> {
+                    require(args, 4, "pa-export <caseId> <html|json|csv|xlsx> <dest>");
+                    if (!List.of("html", "json", "csv", "xlsx").contains(args[2])) {
+                        throw new UsageException("format must be html, json, csv or xlsx, got: " + args[2]);
+                    }
+                    yield saveTo(call("GET", PA + "/cases/" + id(args[1]) + "/export/download?format=" + args[2], null),
+                            Path.of(args[3]));
+                }
+                case "pa-expert-report" -> packetExpertReport(args);
+                case "pa-session-evidence" -> packetCaseRead(args, "/sessions/evidence");
+                case "pa-reference-template" -> {
+                    require(args, 2, "pa-reference-template <caseId> [dest.json]");
+                    var response = call("GET", PA + "/cases/" + id(args[1]) + "/reference/template", null);
+                    yield args.length > 2 ? saveTo(response, Path.of(args[2])) : print(response);
+                }
+                case "pa-compare" -> packetCompare(args);
+                case "pa-topology-save" -> {
+                    require(args, 3, "pa-topology-save <caseId> <jsonBody|@file>");
+                    String body = args[2].startsWith("@") ? Files.readString(Path.of(args[2].substring(1))) : args[2];
+                    yield print(call("PUT", PA + "/cases/" + id(args[1]) + "/topology", body));
                 }
                 case "pa-download" -> packetDownload(args);
                 case "pa-delete" -> {
@@ -358,6 +428,30 @@ final class NexusSessionCli {
         return value;
     }
 
+    private int packetCaseRead(String[] args, String subPath) throws IOException, InterruptedException {
+        require(args, 2, args[0] + " <caseId> [key=value...]");
+        return print(call("GET", PA + "/cases/" + id(args[1]) + subPath + queryString(args, 2), null));
+    }
+
+    /**
+     * The expert report workbook of a case. The optional {@code start}/{@code end} (epoch seconds) select the event
+     * window explicitly, {@code top} the number of longest transactions; the service decides raw or masked values.
+     */
+    private int packetExpertReport(String[] args) throws IOException, InterruptedException {
+        String usage = "pa-expert-report <caseId> <dest.xlsx> [start=<epoch>] [end=<epoch>] [top=<n>]";
+        require(args, 3, usage);
+        for (int i = 3; i < args.length; i++) {
+            int eq = args[i].indexOf('=');
+            String key = eq > 0 ? args[i].substring(0, eq) : args[i];
+            String value = eq > 0 ? args[i].substring(eq + 1) : "";
+            if (!List.of("start", "end", "top").contains(key) || value.isEmpty() || !value.matches("[0-9]+(\\.[0-9]+)?")) {
+                throw new UsageException(usage);
+            }
+        }
+        return saveTo(call("GET", PA + "/cases/" + id(args[1]) + "/export/expert-report" + queryString(args, 3), null),
+                Path.of(args[2]));
+    }
+
     /** The upload body, streamed from disk: one multipart part named {@code file}, never read into memory. */
     static HttpRequest.BodyPublisher multipartFile(Path file, String boundary) throws IOException {
         String name = file.getFileName().toString().replace("\"", "_").replace("\r", "_").replace("\n", "_");
@@ -366,6 +460,27 @@ final class NexusSessionCli {
                         + name + "\"\r\nContent-Type: application/octet-stream\r\n\r\n", StandardCharsets.UTF_8),
                 HttpRequest.BodyPublishers.ofFile(file),
                 HttpRequest.BodyPublishers.ofString("\r\n--" + boundary + "--\r\n", StandardCharsets.UTF_8));
+    }
+
+    /** Compares the saved report with a reference template and/or a previous analysis export (both JSON files). */
+    private int packetCompare(String[] args) throws IOException, InterruptedException {
+        String usage = "pa-compare <caseId> [--reference <file.json>] [--against <analysis-export.json>]";
+        require(args, 4, usage);
+        StringBuilder body = new StringBuilder("{");
+        boolean reference = false;
+        boolean against = false;
+        for (int i = 2; i < args.length; i += 2) {
+            if (i + 1 >= args.length) throw new UsageException(usage);
+            boolean isReference = "--reference".equals(args[i]);
+            if (!isReference && !"--against".equals(args[i])) throw new UsageException(usage);
+            if (isReference ? reference : against) throw new UsageException(usage);
+            Path file = Path.of(args[i + 1]);
+            if (!Files.isRegularFile(file)) throw new UsageException("no such file: " + file);
+            if (reference || against) body.append(',');
+            body.append(isReference ? "\"reference\":" : "\"against\":").append(Files.readString(file, StandardCharsets.UTF_8));
+            if (isReference) reference = true; else against = true;
+        }
+        return print(call("POST", PA + "/cases/" + id(args[1]) + "/compare", body.append('}').toString()));
     }
 
     private int packetUpload(String[] args) throws IOException, InterruptedException {
@@ -380,6 +495,52 @@ final class NexusSessionCli {
                 .POST(multipartFile(file, boundary)).build();
         System.err.println("uploading " + Files.size(file) + " bytes");
         return print(client.send(request, HttpResponse.BodyHandlers.ofByteArray()));
+    }
+
+    /**
+     * Uploads a host telemetry text file (streamed from disk). The upload itself carries no alignment; when {@code zone},
+     * {@code offset} or {@code start} are given they are set right after, so the file is never left half-described.
+     */
+    private int packetTelemetryUpload(String[] args) throws IOException, InterruptedException {
+        String usage = "pa-telemetry-upload <caseId> <file.txt> [zone=<id>] [offset=<sec>] [start=<yyyy-MM-dd HH:mm:ss>]";
+        require(args, 3, usage);
+        String body = args.length > 3 ? alignmentBody(args, 3, usage) : null;
+        Session session = loadSession().orElseThrow(() -> new UsageException("not logged in"));
+        Path file = Path.of(args[2]);
+        if (!Files.isRegularFile(file)) throw new UsageException("no such file: " + file);
+        String boundary = "nexus-cli-" + java.util.UUID.randomUUID();
+        HttpRequest request = HttpRequest.newBuilder(URI.create(session.baseUrl() + PA + "/cases/" + id(args[1]) + "/telemetry"))
+                .header("Cookie", SESSION_COOKIE + "=" + session.cookie()).header("X-CSRF-Token", session.csrf())
+                .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+                .POST(multipartFile(file, boundary)).build();
+        System.err.println("uploading " + Files.size(file) + " bytes");
+        HttpResponse<byte[]> uploaded = client.send(request, HttpResponse.BodyHandlers.ofByteArray());
+        int status = print(uploaded);
+        if (status != 0 || body == null) return status;
+        String telemetryId = jsonString(new String(uploaded.body(), StandardCharsets.UTF_8), "telemetry_id")
+                .orElseThrow(() -> new IOException("the service did not return a telemetry id"));
+        return print(call("PUT", PA + "/telemetry/" + id(telemetryId), body));
+    }
+
+    /** {@code zone=}, {@code offset=} and {@code start=} as the alignment JSON; anything else is a usage error. */
+    private static String alignmentBody(String[] args, int from, String usage) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        for (int i = from; i < args.length; i++) {
+            int eq = args[i].indexOf('=');
+            String key = eq > 0 ? args[i].substring(0, eq) : args[i];
+            String value = eq > 0 ? args[i].substring(eq + 1) : "";
+            if (value.isEmpty() || body.size() >= 3) throw new UsageException(usage);
+            switch (key) {
+                case "zone" -> body.put("time_zone", value);
+                case "offset" -> {
+                    if (!value.matches("[+-]?[0-9]{1,6}")) throw new UsageException(usage);
+                    body.put("offset_seconds", Integer.parseInt(value.startsWith("+") ? value.substring(1) : value));
+                }
+                case "start" -> body.put("anchor_local", value);
+                default -> throw new UsageException(usage);
+            }
+        }
+        return json(body);
     }
 
     private int packetDownload(String[] args) throws IOException, InterruptedException {

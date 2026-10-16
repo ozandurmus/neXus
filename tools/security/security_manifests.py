@@ -51,7 +51,9 @@ def job(config, mode="daily", image=None, commit=None, gate_name=None):
     settings(config)
     prepare = container(config, "prepare", "semgrep", ["python3", "/tools/security/security_run.py", "prepare"], mode)
     if mode == "gate":
-        if not gate_name and (not image or not re.fullmatch(re.escape(REGISTRY) + r"/[a-z0-9/_-]+@sha256:[a-f0-9]{64}", image)):
+        images = [image] if isinstance(image, str) else list(image or ())
+        if not gate_name and (not images or len(set(images)) != len(images) or not all(
+                re.fullmatch(re.escape(REGISTRY) + r"/[a-z0-9/_-]+@sha256:[a-f0-9]{64}", i) for i in images)):
             raise ValueError("gate requires the freshly built digest")
         if not commit or not re.fullmatch(r"[a-f0-9]{40}", commit):
             raise ValueError("gate requires the built commit")
@@ -61,7 +63,8 @@ def job(config, mode="daily", image=None, commit=None, gate_name=None):
                 raise ValueError("invalid gate name")
             prepare["env"].append(dict(name="WAIT_FOR_IMAGE", value="1"))
         else:
-            prepare["env"].append(dict(name="GATE_IMAGE", value=image))
+            # Space-separated: every image the build produced is scanned in this one gate.
+            prepare["env"].append(dict(name="GATE_IMAGE", value=" ".join(images)))
     stages = [prepare]
     if mode == "dast":
         zap = container(config, "zap", "zap", ["python3", "/tools/security/security_dast.py"], mode)

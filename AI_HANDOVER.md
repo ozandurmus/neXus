@@ -1,38 +1,30 @@
 # NON-AUTHORITATIVE DERIVED SUMMARY — DO NOT USE AS PROJECT-STATE AUTHORITY
 
-## Snapshot (2026-10-14)
-Repository baseline: `origin/main` / `c29079fa`, schema V144; live state not queried.
-Failover plan PRs 1–10 implementation landed: AUTOMATED_VALIDATED; no real trial.
-Policy/configuration/compliance pods exist; full module separation remains open.
-Polling: 00/06/12/18; scheduled full backups: daily 02:00 Europe/Istanbul.
-Retention: PO policy 7 days; see CURRENT_STATE.md and the backup incident record.
-Queue's last period build is still NXS-LOCAL-0370; it is not the release baseline.
+## Snapshot (2026-10-16)
+Branch `feature/packet-analysis-ui` merges `feature/packet-analysis-shell` (V154) and the Java `ui2/packet-analysis` engine.
+Step S14 (`packet_analysis_shell` real engine + detail endpoints + CLI parity + React 18 UI) is **AUTOMATED_VALIDATED**; not REAL_ENV_VALIDATED.
+`RealPacketAnalysisEngine` runs in `ui2-worker` producing `report-<jobId>.json`, `findings-v11.json`, and `project.duckdb`.
+`ui2-service` reads `project.duckdb` via read-only DuckDB connections (`409 ANALYSIS_RUNNING` while queued/analyzing) with `aiview` masking and raw-view audit logging.
+Operator screens (`Overview & Verdict`, `Topology`, `Flows & Ladder`, `Timeseries & Quality`, `DNS`) are wired in `ui2/frontend` (`echarts@6.1.0`, `@xyflow/react@12.12.0`).
+Queue's last period build remains NXS-LOCAL-0370; see `CURRENT_STATE.md`.
 
 ## What changed this session
-- Reconciled the hot checkpoint with Git, V92–V144 and October PO decisions;
-  recorded the disk-full incident, polling/backup outage and manual cleanup deviation.
-- Reconciled tool-managed queue entries and added bounded implementation/open-lane
-  records; preserved historical outcomes and the real-environment evidence boundary.
+- Resolved merge between `feature/packet-analysis-shell` and Java `ui2/packet-analysis` engine branch.
+- Wired `RealPacketAnalysisEngine` in `ui2/worker` (`CaseRunner.runCase`) and kept `StubPacketAnalysisEngine` for unit tests.
+- Added `Engine.openReadOnly`, `CaseQueries`, and 16 case detail/topology endpoints in `PacketAnalysisController` with `aiview` masking (`PrivacyMaskingResponseBodyAdvice`), `PACKET_ANALYSIS_RAW_VIEW` enforcement/auditing on `field-diff` and download, and `409 ANALYSIS_RUNNING` conflict guard.
+- Added full CLI parity in `NexusSessionCli` for all new Packet Analysis case reads and `topology-set`.
+- Ported operator-essential Packet Analysis workspace screens into `ui2/frontend` (React 18, `echarts@6.1.0`, `@xyflow/react@12.12.0`, CSP-safe local bundle).
 
 ## Exact next action
-Engineering owner: repair the main `:integration-tests` dependency lock state in
-its own code lane, run the required container Java gates, then arrange the first
-separately PO-authorized attended failover trial. Review the unmerged change-report,
-policy-lookup, offline-analyzer and per-device-serialization lanes for integration.
-Verify the stored seven-day retention policy and disk capacity before relying on
-scheduled backups. Do not repeat the incident cleanup.
+PO / engineering owner review of `feature/packet-analysis-ui` for merge and deployed preview / real-environment validation with multi-point captures.
 
 ## Test delta
-Governance: `python3 -m pytest -q tools/tests/test_live_project_governance.py` —
-14 passed. `python3 tools/privacy/repository_privacy_check.py` — PASS, zero findings.
-`python3 tools/delivery/project_queue.py check` and `git diff --check` — PASS.
-No tests added; no frontend, Gradle, host or device tests were run.
+- `cd ui2 && ./gradlew test --continue -q -x :integration-tests:test`: 2,199 passed, 0 failed.
+- `cd ui2 && ./gradlew :architecture-tests:test`: 25 passed, 0 failed.
+- `cd ui2/frontend && npx vitest run`: 65 files, 600 passed, 0 failed (12 in `packetAnalysisScreen.test.tsx`).
+- `cd ui2/frontend && npx tsc --noEmit -p .`: PASS (0 errors).
+- `python3 tools/privacy/repository_privacy_check.py` & `python3 -m pytest -q tools/tests/test_live_project_governance.py`: PASS.
 
 ## New risks / period record
-No real failover trial or full Java regression is claimed. CVE reviews are due
-2026-10-31 / 2026-11-05 / 2026-12-31 by rule/location (`security/baseline.yaml`).
-The queue tool's build-add contract requires advancing NOW and writing the generated
-`docs/history/INDEX.md` (and narrative history when a summary is supplied). This
-lane forbids history edits, so no retrospective September–October build-history
-record or roadmap build-pointer advance was made; the engineering owner must
-record the period through the tool in a separately scoped state session.
+- Detail views open short-lived read-only DuckDB connections only when case status is not `QUEUED` or `ANALYZING`; concurrent analysis requests return `409 ANALYSIS_RUNNING`.
+- Not yet `REAL_ENV_VALIDATED` on deployed infrastructure.

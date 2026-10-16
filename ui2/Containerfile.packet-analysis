@@ -1,0 +1,142 @@
+# Packet Analysis engine image -- docs/design/PACKET_ANALYSIS_ENGINE_IMAGE.md.
+#
+# The main neXus image (ui2/Containerfile, built first, by digest) plus tshark
+# 4.6.9 and nothing else, so tshark never enters any other neXus image
+# (PACKET_ANALYSIS_PORT_CONTRACT.md §5). Built FROM the main image's digest:
+# the JRE, the jar, the project files and the hardened filesystem are the
+# main image's own layers, byte for byte, and only the tshark layer differs.
+#
+# Build context: the repository root, as for ui2/Containerfile.
+#   --build-arg=SERVICE_IMAGE=registry.kube-system.svc.cluster.local/nexus-ui2-service@sha256:<digest>
+#
+# Every input is pinned: the build base by digest, its packages to a frozen
+# Rocky Linux 9.7 vault snapshot by exact version, the Wireshark source and
+# the two runtime RPMs by SHA-256. Nothing is downloaded at container runtime.
+
+# A digest reference to the main image built from the same commit (checked below).
+ARG SERVICE_IMAGE
+
+# ---------------------------------------------------------------------------
+# Stage 1 -- tshark from the pinned Wireshark source
+# ---------------------------------------------------------------------------
+# Rocky Linux 9.7 is RHEL 9 binary compatible: the binaries built here run
+# against the RHEL 9 libraries the UBI 9 runtime base already carries. UBI 9
+# repositories carry neither wireshark-cli nor c-ares or flex, and the EL9
+# wireshark-cli package is 3.4.x (the parity reference is 4.6.9).
+FROM quay.io/rockylinux/rockylinux:9.7.20251123@sha256:53f4c6dcb34e1403bd93207351f0af9a593610faeb7165cb8a037346765199b0 AS tshark-build
+USER 0
+
+# Optional corporate CA anchors for this stage's own downloads (as in ui2/Containerfile).
+COPY ui2/.ca/ /tmp/corp-ca/
+RUN if ls /tmp/corp-ca/*.pem >/dev/null 2>&1; then \
+      cp /tmp/corp-ca/*.pem /etc/pki/ca-trust/source/anchors/ && update-ca-trust; \
+    fi
+
+# The 9.7 vault is frozen (9.8 is current): the same versions resolve on every
+# build. The image's own moving repository definitions are removed first, and
+# every package is verified against the Rocky signing key shipped in the base.
+RUN rm -f /etc/yum.repos.d/*.repo \
+ && for r in BaseOS AppStream CRB; do \
+      printf '[vault97-%s]\nname=Rocky Linux 9.7 vault %s\nbaseurl=https://dl.rockylinux.org/vault/rocky/9.7/%s/$basearch/os/\ngpgcheck=1\nrepo_gpgcheck=0\nenabled=1\ngpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-Rocky-9\n' \
+        "$r" "$r" "$r" >> /etc/yum.repos.d/vault-9.7.repo; \
+    done \
+ && dnf -y --nodocs --setopt=install_weak_deps=False install \
+      gcc-11.5.0-11.el9 gcc-c++-11.5.0-11.el9 cmake-3.26.5-3.el9_7 ninja-build-1.10.2-6.el9 \
+      flex-2.6.4-9.el9 xz-5.2.5-8.el9_0 tar-1.34-9.el9_7 \
+      glib2-devel-2.68.4-18.el9_7 libgcrypt-devel-1.10.0-11.el9 c-ares-devel-1.19.1-2.el9_4 \
+      pcre2-devel-10.40-6.el9 libxml2-devel-2.9.13-14.el9_7 zlib-devel-1.2.11-40.el9 \
+      libzstd-devel-1.5.5-1.el9 lz4-devel-1.9.3-5.el9 gnutls-devel-3.8.3-9.el9.0.1 \
+      krb5-devel-1.21.1-9.el9_7 libnghttp2-devel-1.43.0-6.el9_7.1 brotli-devel-1.0.9-9.el9_7 \
+ && dnf clean all
+
+# Wireshark 4.6.9, the parity reference's version. SHA-256 from the signed
+# https://www.wireshark.org/download/src/all-versions/SIGNATURES-4.6.9.txt.
+# tshark only: no GUI, no dumpcap (file reading needs no capture privilege, so
+# there is nothing to setcap or setuid), no extcap tools, no other CLI tools.
+# Optional libraries are enabled exactly where the runtime base already ships
+# the shared library (or one pinned RPM supplies it, below); the rest are off
+# so that nothing silently depends on a library the runtime lacks.
+ENV WIRESHARK_VERSION=4.6.9 \
+    WIRESHARK_SHA256=d062d416a1ab3a49975aafe3a671c882dde0562ccd71b078808ceb59d465fc0f
+RUN curl -fsSL --retry 5 -o /tmp/wireshark.tar.xz \
+      "https://www.wireshark.org/download/src/all-versions/wireshark-${WIRESHARK_VERSION}.tar.xz" \
+ && echo "${WIRESHARK_SHA256}  /tmp/wireshark.tar.xz" | sha256sum -c - \
+ && mkdir -p /tmp/src && tar -xJf /tmp/wireshark.tar.xz -C /tmp/src \
+ && cmake -S "/tmp/src/wireshark-${WIRESHARK_VERSION}" -B /tmp/build -G Ninja \
+      -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+      -DCMAKE_INSTALL_PREFIX=/opt/wireshark -DCMAKE_INSTALL_LIBDIR=lib64 \
+      -DCMAKE_INSTALL_RPATH=/opt/wireshark/lib64 \
+      -DBUILD_wireshark=OFF -DBUILD_stratoshark=OFF -DBUILD_strato=OFF -DBUILD_tshark=ON \
+      -DBUILD_dumpcap=OFF -DBUILD_rawshark=OFF -DBUILD_sharkd=OFF -DBUILD_text2pcap=OFF \
+      -DBUILD_mergecap=OFF -DBUILD_reordercap=OFF -DBUILD_editcap=OFF -DBUILD_capinfos=OFF \
+      -DBUILD_captype=OFF -DBUILD_randpkt=OFF -DBUILD_dftest=OFF -DBUILD_dcerpcidl2wrs=OFF \
+      -DBUILD_androiddump=OFF -DBUILD_sshdump=OFF -DBUILD_ciscodump=OFF -DBUILD_dpauxmon=OFF \
+      -DBUILD_randpktdump=OFF -DBUILD_wifidump=OFF -DBUILD_sdjournal=OFF -DBUILD_udpdump=OFF \
+      -DBUILD_falcodump=OFF -DBUILD_sshdig=OFF -DBUILD_mmdbresolve=OFF -DBUILD_etwdump=OFF \
+      -DENABLE_PCAP=OFF -DENABLE_CAP=OFF -DENABLE_NETLINK=OFF -DENABLE_PLUGINS=ON \
+      -DENABLE_ZLIB=ON -DENABLE_ZLIBNG=OFF -DENABLE_ZSTD=ON -DENABLE_LZ4=ON -DENABLE_BROTLI=ON \
+      -DENABLE_GNUTLS=ON -DENABLE_KERBEROS=ON -DENABLE_NGHTTP2=ON -DENABLE_NGHTTP3=OFF \
+      -DENABLE_SNAPPY=OFF -DENABLE_XXHASH=OFF -DENABLE_MINIZIP=OFF -DENABLE_MINIZIPNG=OFF \
+      -DENABLE_LUA=OFF -DENABLE_SMI=OFF -DENABLE_SINSP=OFF -DENABLE_SBC=OFF -DENABLE_SPANDSP=OFF \
+      -DENABLE_BCG729=OFF -DENABLE_AMRNB=OFF -DENABLE_ILBC=OFF -DENABLE_OPUS=OFF \
+ && cmake --build /tmp/build --parallel 3 \
+ && cmake --install /tmp/build --strip \
+ && rm -rf /opt/wireshark/include /opt/wireshark/lib64/pkgconfig /opt/wireshark/lib64/cmake \
+      /opt/wireshark/share/man /opt/wireshark/share/doc /tmp/build /tmp/src /tmp/wireshark.tar.xz \
+ && test ! -e /opt/wireshark/bin/dumpcap \
+ && test -z "$(find /opt/wireshark -perm /6000)" \
+ && /opt/wireshark/bin/tshark --version | head -1 | grep -E "^TShark \(Wireshark\) ${WIRESHARK_VERSION}([ .]|$)"
+
+# The only two shared libraries tshark needs that the runtime base does not
+# carry, as the vault's own signed RPMs (so the image's package database --
+# and with it every image scan and SBOM -- lists them with their versions).
+RUN mkdir -p /tmp/pa-rpms && cd /tmp/pa-rpms \
+ && curl -fsSL --retry 5 -O https://dl.rockylinux.org/vault/rocky/9.7/BaseOS/x86_64/os/Packages/c/c-ares-1.19.1-2.el9_4.x86_64.rpm \
+ && curl -fsSL --retry 5 -O https://dl.rockylinux.org/vault/rocky/9.7/BaseOS/x86_64/os/Packages/l/libbrotli-1.0.9-9.el9_7.x86_64.rpm \
+ && printf '%s\n' \
+      '64b71af9ade1d43a38a5de98aa46c9f25750b48becdf12397184497e4e4fb532  c-ares-1.19.1-2.el9_4.x86_64.rpm' \
+      'ad9f9d5fe07e9944dbfc6d28b9955c9b220f1887fb46bf45bbedb179373659c6  libbrotli-1.0.9-9.el9_7.x86_64.rpm' \
+    | sha256sum -c - \
+ && rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-Rocky-9 && rpm -K ./*.rpm
+
+# ---------------------------------------------------------------------------
+# Stage 2 -- the main image plus tshark
+# ---------------------------------------------------------------------------
+FROM ${SERVICE_IMAGE}
+ARG SERVICE_IMAGE
+USER 0
+# Fail closed on a moving reference: the base must be the main image by digest.
+RUN case "${SERVICE_IMAGE}" in \
+      registry.kube-system.svc.cluster.local/nexus-ui2-service@sha256:*) ;; \
+      *) echo "SERVICE_IMAGE must be the main image by digest" >&2; exit 1 ;; \
+    esac
+
+COPY --from=tshark-build /tmp/pa-rpms/ /tmp/pa-rpms/
+COPY --from=tshark-build /opt/wireshark/ /opt/wireshark/
+
+# FS-1: read paths are group-0 readable; the image's closed writable set
+# (/app/tmp, /app/home) is unchanged and the hardening sweep of the main image
+# is repeated over the new paths. No setuid/setgid file and no file capability
+# is added: the build stage sets none, and both are checked here.
+RUN rpm -i --nosignature /tmp/pa-rpms/*.rpm \
+ && rm -rf /tmp/pa-rpms \
+ && test -z "$(rpm -q --qf '[%{FILEMODES:perms}\n]' c-ares libbrotli | grep -E '^...[sS]|^......[sS]')" \
+ && chown -R 0:0 /opt/wireshark \
+ && chmod -R u=rwX,go=rX /opt/wireshark \
+ && mkdir -p /usr/local/bin && ln -s /opt/wireshark/bin/tshark /usr/local/bin/tshark \
+ && test "$(command -v tshark)" = /usr/local/bin/tshark \
+ && test -z "$(find /opt/wireshark -perm /6000)" \
+ && find / -xdev \( -path /proc -o -path /sys -o -path /dev -o -path /run \
+      -o -path /var/run -o -path /kaniko -o -path /workspace \) -prune \
+      -o ! -type l -perm -0002 -exec chmod o-w {} + \
+ && find / -xdev \( -path /proc -o -path /sys -o -path /dev -o -path /run \
+      -o -path /var/run -o -path /kaniko -o -path /workspace \) -prune \
+      -o ! -type l -perm -0020 -exec chmod g-w {} + \
+ && chmod 0770 /app/tmp /app/home \
+ && HOME=/app/home tshark --version | head -1 | grep -E "^TShark \(Wireshark\) 4\.6\.9([ .]|$)" \
+ && test "$(HOME=/app/home tshark -G plugins | wc -l)" -gt 0
+
+# The entry point and the role argument are the main image's own (EP-1/EP-3);
+# the deployment passes `worker packet_analysis`.
+# FS-6: numeric, the base family's non-root id.
+USER 185

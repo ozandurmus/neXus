@@ -1,0 +1,1 @@
+UPDATE captures SET checkpoint=? WHERE id=?

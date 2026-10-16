@@ -1,0 +1,79 @@
+{
+ "source": "PacketBreaker tests/test_golden.py _strip_volatile + _canonical at the frozen commit",
+ "capture_names": {
+  "0123456789abcdef0123456789abcdef": "00-client.pcap",
+  "fedcba9876543210fedcba9876543210": "fw in\\b.pcapng"
+ },
+ "payload": {
+  "report": {
+   "generated_at": "2026-10-15T14:22:53.312444+00:00",
+   "engine_version": "0.3.10",
+   "verdict": "Inconclusive",
+   "clocks": {
+    "0123456789abcdef0123456789abcdef": {
+     "offset_ms": 0.1234567891234,
+     "drift_ppm": 20
+    },
+    "fedcba9876543210fedcba9876543210": {
+     "offset_ms": -80.00000000001,
+     "drift_ppm": -12
+    }
+   },
+   "findings": [
+    {
+     "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "summary": "Loss between p2 and p3 at 12:00:00.250+03:00 local",
+     "time": 1700000012.1234567
+    },
+    {
+     "id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+     "summary": "Capture 0123456789abcdef0123456789abcdef misses frames",
+     "time": 1700000001.5
+    }
+   ],
+   "segments": [
+    {
+     "edge": "forward:p1:p2",
+     "loss_percent": 0.3333333333333333
+    },
+    {
+     "edge": "forward:p0:p1",
+     "loss_percent": 0.0
+    }
+   ],
+   "quality": [
+    {
+     "point": "p0",
+     "capture": "fedcba9876543210fedcba9876543210",
+     "notes": [
+      "z",
+      "a",
+      "m"
+     ]
+    }
+   ],
+   "evidence": "{\"frames\": [3, 1, 2], \"capture_id\": \"0123456789abcdef0123456789abcdef\", \"ratio\": 2.718281828459045}",
+   "path": "C:\\captures\\x.pcap",
+   "not_json": "[unbalanced",
+   "unicode": "Grüße — ok",
+   "nested": [
+    [
+     3,
+     2,
+     1
+    ],
+    [
+     1.00000000049,
+     true,
+     null,
+     "x"
+    ]
+   ],
+   "finding_count": 2,
+   "flow_count": 7,
+   "exported_at": "2026-10-15T14:22:54+00:00"
+  }
+ },
+ "expected": "{\"report\":{\"clocks\":{\"<capture:00-client.pcap>\":{\"drift_ppm\":20,\"offset_ms\":0.123456789},\"<capture:fw in\\\\b.pcapng>\":{\"drift_ppm\":-12,\"offset_ms\":-80.0}},\"engine_version\":\"0.3.10\",\"evidence\":{\"capture_id\":\"<capture:00-client.pcap>\",\"frames\":[1,2,3],\"ratio\":2.71828183},\"finding_count\":2,\"findings\":[{\"id\":\"<id>\",\"summary\":\"Capture <capture:00-client.pcap> misses frames\",\"time\":1700000000.0},{\"id\":\"<id>\",\"summary\":\"Loss between p2 and p3 at <local time>\",\"time\":1700000010.0}],\"flow_count\":7,\"nested\":[[\"x\",1.0,null,true],[1,2,3]],\"not_json\":\"[unbalanced\",\"path\":\"C:/captures/x.pcap\",\"quality\":[{\"capture\":\"<capture:fw in/b.pcapng>\",\"notes\":[\"a\",\"m\",\"z\"],\"point\":\"p0\"}],\"segments\":[{\"edge\":\"forward:p0:p1\",\"loss_percent\":0.0},{\"edge\":\"forward:p1:p2\",\"loss_percent\":0.333333333}],\"unicode\":\"Grüße — ok\",\"verdict\":\"Inconclusive\"}}",
+ "expected_sha256": "81d8f1a7338c824462ca453a12b8062db59934ffc40609b9de94f0492b009af8"
+}

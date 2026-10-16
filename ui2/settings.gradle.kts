@@ -27,6 +27,7 @@ include(
     "integration-tests",
     // Data Sanitizer engine (docs/design/DATA_SANITIZER_CONTRACT.md §4).
     "sanitizer",
+    "packet-analysis",
 )
 
 // gradle/libs.versions.toml is auto-detected by Gradle's default version

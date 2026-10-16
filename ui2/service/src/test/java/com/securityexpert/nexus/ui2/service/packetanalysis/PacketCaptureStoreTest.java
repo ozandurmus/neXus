@@ -115,4 +115,57 @@ class PacketCaptureStoreTest {
             assertTrue(files.noneMatch(p -> p.getFileName().toString().startsWith(".partial-")));
         }
     }
+
+    // ---- host telemetry -------------------------------------------------------------------------------------
+
+    private static final String VMSTAT = "procs -----------memory---------- ---swap-- -----io---- -system-- ------cpu-----\n"
+            + " r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st\n"
+            + " 2  0      0 8037584  79200 5978804    0    0     7    23   40   64  1  0 99  0  0\n";
+
+    @Test void streamsATelemetryFileIntoTheCaseTelemetryDirectoryAndSniffsItsContentNotItsName() throws Exception {
+        var store = new PacketCaptureStore(root, 1 << 20, 10 << 20, 1 << 16);
+        byte[] data = VMSTAT.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        var stored = store.writeTelemetry(caseId, new ByteArrayInputStream(data), data.length + 200);
+        assertEquals("vmstat", stored.detectedFormat());
+        assertNull(stored.recognitionNote());
+        assertEquals(stored.telemetryId() + ".txt", stored.storageKey());
+        assertEquals(HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(data)), stored.sha256());
+        Path file = root.resolve("cases").resolve(caseId).resolve("telemetry").resolve(stored.storageKey());
+        assertArrayEquals(data, Files.readAllBytes(file));
+        assertEquals(data.length, store.usedBytes(), "telemetry counts against the same store cap");
+        try (InputStream in = store.openTelemetry(caseId, stored.storageKey())) {
+            assertArrayEquals(data, in.readAllBytes());
+        }
+        var other = store.writeTelemetry(caseId, new ByteArrayInputStream("a,b\n1,2\n".getBytes()), -1);
+        assertEquals("unknown", other.detectedFormat());
+        assertEquals("NO_KNOWN_FORMAT", other.recognitionNote());
+        store.deleteTelemetry(caseId, stored.storageKey());
+        assertFalse(Files.exists(file));
+        assertNoPartialFiles();
+    }
+
+    @Test void refusesBinaryEmptyOversizedAndStoreBreakingTelemetryAndLeavesNothingBehind() throws Exception {
+        var store = new PacketCaptureStore(root, 1 << 20, 10_000, 4096);
+        assertEquals(PacketCaptureStore.NOT_A_TEXT_FILE, assertThrows(PacketCaptureStore.Refusal.class,
+                () -> store.writeTelemetry(caseId, new ByteArrayInputStream(pcap(100)), -1)).code());
+        assertEquals(PacketCaptureStore.NOT_A_TEXT_FILE, assertThrows(PacketCaptureStore.Refusal.class,
+                () -> store.writeTelemetry(caseId, new ByteArrayInputStream(new byte[0]), -1)).code());
+        assertEquals(PacketCaptureStore.TOO_LARGE, assertThrows(PacketCaptureStore.Refusal.class,
+                () -> store.writeTelemetry(caseId, new ByteArrayInputStream("x".repeat(5000).getBytes()), -1)).code());
+        assertEquals(PacketCaptureStore.TOO_LARGE, assertThrows(PacketCaptureStore.Refusal.class,
+                () -> store.writeTelemetry(caseId, new ByteArrayInputStream(new byte[10]), 4096L + (2L << 20))).code(),
+                "a declared length far over the limit is refused before reading");
+        store.writeTelemetry(caseId, new ByteArrayInputStream("y".repeat(4000).getBytes()), -1);
+        store.writeTelemetry(caseId, new ByteArrayInputStream("y".repeat(4000).getBytes()), -1);
+        assertEquals(PacketCaptureStore.STORE_FULL, assertThrows(PacketCaptureStore.Refusal.class,
+                () -> store.writeTelemetry(caseId, new ByteArrayInputStream("z".repeat(4000).getBytes()), -1)).code());
+        assertEquals(8000, store.usedBytes());
+        assertNoPartialFiles();
+        assertEquals(java.nio.file.Files.exists(root.resolve("cases").resolve(caseId).resolve("captures")), false);
+    }
+
+    @Test void theTelemetryLimitDefaultsToTwoHundredMegabytesButNeverAboveTheCaptureLimit() {
+        assertEquals(200L * 1024 * 1024, new PacketCaptureStore(root, 2L << 30, 100L << 30).maxTelemetryBytes());
+        assertEquals(4096, new PacketCaptureStore(root, 4096, 64 * 1024).maxTelemetryBytes());
+    }
 }

@@ -566,6 +566,10 @@ public final class Ui2WorkerMain {
         Path root = Path.of(System.getenv().getOrDefault("UI2_PACKET_ANALYSIS_ROOT", "/app/packet-analysis"));
         long pruneSeconds = Long.parseLong(System.getenv().getOrDefault("UI2_PACKET_ANALYSIS_PRUNE_INTERVAL_SECONDS", "3600"));
         System.setProperty("ui2.db.pool.maximum-pool-size", System.getProperty("ui2.db.pool.maximum-pool-size", "4"));
+        // Memory plan: container = JVM heap (JAVA_TOOL_OPTIONS) + DuckDB limit + reserve; a DuckDB limit that does not fit is lowered.
+        com.securityexpert.nexus.ui2.worker.packetanalysis.PacketAnalysisResources.apply(System.getenv(), System.getProperties());
+        System.getLogger(Ui2WorkerMain.class.getName()).log(System.Logger.Level.INFO,
+                "[PACKET_ANALYSIS] memory plan: " + com.securityexpert.nexus.ui2.worker.packetanalysis.PacketAnalysisResources.plan());
         var pool = WorkerDatabasePool.create(
                 TransactionBoundaryFactory.jdbcDataSource(requireEnv("UI2_DB_URL"), dbUser, dbPassword), System.getProperties());
         TransactionBoundary boundary = TransactionBoundaryFactory.fromDataSource(pool);
@@ -576,9 +580,7 @@ public final class Ui2WorkerMain {
         var leases = new PersistenceJobLeaseRepository(new JooqJobLeaseDao(boundary));
         var attempts = new PersistenceJobStepAttemptRepository(new JooqJobStepAttemptDao(boundary));
         var repository = new com.securityexpert.nexus.ui2.persistence.packetanalysis.PacketAnalysisRepository(boundary);
-        // TODO(packet-analysis engine port): replace the stub with the ui2/packet-analysis engine once a stage
-        // passes its parity gate (PACKET_ANALYSIS_PORT_CONTRACT.md §4).
-        var engine = new com.securityexpert.nexus.ui2.worker.packetanalysis.StubPacketAnalysisEngine();
+        var engine = new com.securityexpert.nexus.ui2.worker.packetanalysis.RealPacketAnalysisEngine();
         var executor = new com.securityexpert.nexus.ui2.worker.packetanalysis.PacketAnalysisJobExecutor(
                 leases, attempts, repository, engine, root);
         var loop = new com.securityexpert.nexus.ui2.worker.packetanalysis.PacketAnalysisClaimLoop(

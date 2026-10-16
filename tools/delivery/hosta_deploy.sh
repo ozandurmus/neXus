@@ -53,6 +53,10 @@ python3 "$REPO/tools/delivery/module_deploy.py" --validate-targets "$TARGETS" ||
   exit 64
 }
 
+# The Packet Analysis engine image is built with every deploy; NEXUS_BUILD_PACKET_ANALYSIS_IMAGE=0 skips it.
+PA_BUILD="${NEXUS_BUILD_PACKET_ANALYSIS_IMAGE:-1}"
+case "$PA_BUILD" in 0|1) ;; *) echo "NEXUS_BUILD_PACKET_ANALYSIS_IMAGE must be 0 or 1" >&2; exit 64 ;; esac
+
 for m in "${APPLY[@]:-}"; do
   [ -n "$m" ] && scp -q "$m" "$HOST:/tmp/$(basename "$m")"
 done
@@ -63,7 +67,7 @@ for m in "${APPLY[@]:-}"; do [ -n "$m" ] && APPLY_NAMES="$APPLY_NAMES /tmp/$(bas
 # repository (~/nexus.git), which ~/nexus (run_build.sh's checkout) pulls from.
 git -C "$(dirname "$0")/../.." push -q "ssh://$HOST/~/nexus.git" main || { echo "STOP: push to the host repository failed" >&2; exit 6; }
 
-ssh -o ConnectTimeout=10 "$HOST" "LIMIT=$LIMIT SKIP_SECURITY_B64='$SKIP_SECURITY_B64' APPLY_NAMES='$APPLY_NAMES' TARGETS='$TARGETS' bash -s" <<'REMOTE'
+ssh -o ConnectTimeout=10 "$HOST" "LIMIT=$LIMIT SKIP_SECURITY_B64='$SKIP_SECURITY_B64' APPLY_NAMES='$APPLY_NAMES' TARGETS='$TARGETS' PA_BUILD='$PA_BUILD' bash -s" <<'REMOTE'
 set -uo pipefail
 export KUBECONFIG=$HOME/.kube/config
 export NEXUS_SKIP_SECURITY_REASON="$(printf '%s' "$SKIP_SECURITY_B64" | base64 --decode)"
@@ -77,6 +81,7 @@ fi
 q() { kubectl -n ui2 exec ui2-db-0 -- sh -c "psql -U \"\$POSTGRES_USER\" -d ui2 -Atc \"$1\""; }
 export NEXUS_DEPLOY_APPLY_FILES="$APPLY_NAMES"
 export NEXUS_DEPLOY_TARGETS="$TARGETS"
+export NEXUS_BUILD_PACKET_ANALYSIS_IMAGE="$PA_BUILD"
 before=$(kubectl -n ui2 get pods --no-headers -o custom-columns=N:.metadata.name | tr '\n' ' ')
 lastbuild=$(kubectl -n ui2-build get pods --no-headers --sort-by=.metadata.creationTimestamp 2>/dev/null | grep -E '^ui2-image-build-' | tail -1 | awk '{print $1}')
 nohup bash ~/run_build.sh > /tmp/nexus_build.log 2>&1 &

@@ -1,0 +1,1 @@
+SELECT id,identity,state,checkpoint,inventory FROM captures WHERE path=?

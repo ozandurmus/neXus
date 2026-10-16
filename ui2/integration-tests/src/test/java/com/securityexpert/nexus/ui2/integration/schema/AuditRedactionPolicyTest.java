@@ -292,6 +292,13 @@ class AuditRedactionPolicyTest {
             "packet_analysis_capture.capture_format", "packet_analysis_capture.capture_id",
             "packet_analysis_capture.case_id", "packet_analysis_capture.size_bytes",
             "packet_analysis_capture.uploaded_at", "packet_analysis_capture.uploaded_by",
+            // packet_analysis_host_telemetry (V158; display_name, sha256, storage_key and anchor_local are tier-2 redacted)
+            "packet_analysis_host_telemetry.aligned_at", "packet_analysis_host_telemetry.aligned_by",
+            "packet_analysis_host_telemetry.case_id", "packet_analysis_host_telemetry.detected_format",
+            "packet_analysis_host_telemetry.offset_seconds", "packet_analysis_host_telemetry.recognition_note",
+            "packet_analysis_host_telemetry.size_bytes", "packet_analysis_host_telemetry.telemetry_id",
+            "packet_analysis_host_telemetry.time_zone", "packet_analysis_host_telemetry.uploaded_at",
+            "packet_analysis_host_telemetry.uploaded_by",
             "packet_analysis_run.case_id", "packet_analysis_run.engine_version", "packet_analysis_run.failure_reason",
             "packet_analysis_run.finished_at", "packet_analysis_run.job_id", "packet_analysis_run.masked_summary",
             "packet_analysis_run.requested_at", "packet_analysis_run.requested_by", "packet_analysis_run.started_at",

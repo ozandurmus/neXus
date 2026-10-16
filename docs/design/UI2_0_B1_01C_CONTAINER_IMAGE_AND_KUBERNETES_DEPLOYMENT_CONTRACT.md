@@ -721,3 +721,20 @@ checks 7-14 require the cluster and are the ones that actually prove the model.
   authorized. A green deployment is not device evidence.
 - The eight `UNKNOWN`s of §10 are open. None of them blocks the structure this
   contract decides, and none of them may be closed by assertion.
+
+#### Amendment 2026-10-15 — `EP-1a`, the Packet Analysis engine image (Product Owner)
+
+Product Owner, 2026-10-15: "ok işleyelim", approving the proposed EP-1 exception after being shown the conflict
+with `PO_DECISION_RECORD_2026_10_15_PACKETBREAKER_PORTED_INTO_NEXUS.md` (a separate engine container whose image
+carries tshark). EP-1 stands for every other workload. The Packet Analysis engine (`ui2-packet-analysis`) alone may run
+a second image, on these terms:
+
+1. **Same artefact.** The image is built `FROM` the main image's digest (`ui2/Containerfile.packet-analysis`); the
+   application jar and runtime layers are the main image's own, byte for byte. Its tag is the main tag plus `-pa`.
+2. **Only difference: tshark.** The added layers hold tshark (built from a pinned, signature-checked Wireshark source,
+   docs/design/PACKET_ANALYSIS_ENGINE_IMAGE.md) and the libraries it needs; no dumpcap, no setuid/setgid or file
+   capabilities, non-root, arbitrary-UID friendly like the main image.
+3. **Same gates.** The security gate scans and inventories it (trivy image + SBOM) on every ship, as it does the main
+   image; a failed build or scan stops the ship.
+4. **Role by argument, as before.** Inside that image the workload role is still selected by the entry point's
+   argument (EP-1's mechanism); no shell-interpreted environment variable selects it.

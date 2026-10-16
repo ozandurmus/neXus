@@ -67,6 +67,46 @@ class PacketAnalysisModuleFenceTest {
             assertTrue(sql.contains("CREATE TRIGGER trg_audit_" + table + "\n"), table + " carries its audit trigger");
     }
 
+    @Test void theHostTelemetryMigrationIsAdditiveAuditedAndKeepsEveryLedgerEvent() throws Exception {
+        Path migration;
+        try (var files = Files.list(MIGRATIONS)) {
+            migration = files.filter(p -> p.getFileName().toString().endsWith("__packet_analysis_host_telemetry.sql")).findFirst().orElseThrow();
+        }
+        String sql = Files.readString(migration);
+        String code = sql.lines().filter(line -> !line.strip().startsWith("--")).collect(java.util.stream.Collectors.joining("\n"));
+        assertEquals(158, migrationVersion(migration), "next free number after V157 on main");
+        // nothing about job routing, module ownership or the job table is touched
+        for (String forbidden : List.of("module_runtime_control", "ui2_job_module", "ALTER TABLE jobs", "chk_jobs_target_shape")) {
+            assertFalse(code.contains(forbidden), forbidden);
+        }
+        assertEquals(1, Pattern.compile("(?i)CREATE TABLE ").matcher(code).results().count(), "one new table");
+        assertTrue(code.contains("CREATE TRIGGER trg_audit_packet_analysis_host_telemetry\n"), "the new table carries its audit trigger");
+        for (String redacted : List.of("'display_name'", "'sha256'", "'storage_key'", "'anchor_local'")) {
+            assertTrue(code.contains("('packet_analysis_host_telemetry', " + redacted), redacted + " is classified for the audit log");
+        }
+        // the ledger's event list: every V154 value is still admitted
+        Path shell;
+        try (var files = Files.list(MIGRATIONS)) {
+            shell = files.filter(p -> p.getFileName().toString().endsWith("__packet_analysis_shell.sql")).findFirst().orElseThrow();
+        }
+        Matcher old = Pattern.compile("event\\s+TEXT\\s+NOT NULL CHECK \\(event IN \\(([^)]*)\\)", Pattern.DOTALL).matcher(Files.readString(shell));
+        assertTrue(old.find());
+        Matcher added = Pattern.compile("ADD CONSTRAINT packet_analysis_ledger_event_check\\s+CHECK \\(event IN \\(([^)]*)\\)", Pattern.DOTALL).matcher(code);
+        assertTrue(added.find());
+        java.util.Set<String> before = events(old.group(1));
+        java.util.Set<String> after = events(added.group(1));
+        assertTrue(after.containsAll(before), "no ledger event is dropped");
+        assertEquals(java.util.Set.of("TELEMETRY_UPLOADED", "TELEMETRY_ALIGNED", "TELEMETRY_DELETED"),
+                after.stream().filter(e -> !before.contains(e)).collect(java.util.stream.Collectors.toSet()));
+    }
+
+    private static java.util.Set<String> events(String list) {
+        java.util.Set<String> out = new java.util.TreeSet<>();
+        Matcher m = Pattern.compile("'([A-Z_]+)'").matcher(list);
+        while (m.find()) out.add(m.group(1));
+        return out;
+    }
+
     @Test void theAnalysisWorkerHasNoDeviceOrCredentialPath() {
         var classes = new ClassFileImporter().withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
                 .importPackages("com.securityexpert.nexus.ui2.worker.packetanalysis");

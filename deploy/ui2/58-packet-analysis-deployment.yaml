@@ -99,8 +99,31 @@ spec:
         # Expired cases are pruned within this interval of their 7-day expiry.
         - name: UI2_PACKET_ANALYSIS_PRUNE_INTERVAL_SECONDS
           value: "3600"
+        # Memory plan (ui2/packet-analysis/README.md, "Memory plan"): pod limit 24 GiB = JVM heap 6 GiB (-Xmx6g)
+        # + DuckDB memory_limit 14 GiB + 4 GiB for native / off-heap memory (metaspace <= 512 MiB, direct buffers
+        # <= 1 GiB, code cache, thread stacks, DuckDB natives outside its buffer manager, the tshark child). The
+        # worker lowers a DuckDB limit that does not fit (container - heap - max(2 GiB, container / 8)). DuckDB spills
+        # to <case>/.spill on the analysis volume. DuckDB's MAX_TEMP_MB is a soft bound (measured up to 4.7x over), so
+        # the spill guard enforces HARD_TEMP_MB (60 GiB of the 120 GiB claim): past it the run's queries are
+        # interrupted and the run ends FAILED with reason ANALYSIS_MEMORY_LIMIT -- the kernel never has to kill the
+        # pod and the volume never fills. HOST-A has 16 cores and 60 GB.
+        - name: UI2_PACKET_ANALYSIS_DUCKDB_MEMORY_MB
+          value: "14336"
+        # The core engine is deterministic across thread counts (DETERMINISM.md); 4 = the CPU limit.
+        - name: UI2_PACKET_ANALYSIS_DUCKDB_THREADS
+          value: "4"
+        - name: UI2_PACKET_ANALYSIS_MAX_TEMP_MB
+          value: "40960"
+        - name: UI2_PACKET_ANALYSIS_HARD_TEMP_MB
+          value: "61440"
+        # Window guard: a range with more packets than this in one capture is analysed in a deterministic bounded
+        # window, recorded with the run (reason: budget). 0 turns the packet budget off.
+        - name: UI2_PACKET_ANALYSIS_MAX_PACKETS_PER_CAPTURE
+          value: "150000"
+        - name: UI2_PACKET_ANALYSIS_MAX_WINDOW_SECONDS
+          value: "0"
         - name: JAVA_TOOL_OPTIONS
-          value: -Dui2.db.pool.maximum-pool-size=4 -XX:MaxRAMPercentage=50
+          value: -Dui2.db.pool.maximum-pool-size=4 -Xms512m -Xmx6g -XX:MaxMetaspaceSize=512m -XX:MaxDirectMemorySize=1g
         securityContext:
           runAsNonRoot: true
           allowPrivilegeEscalation: false
@@ -116,7 +139,7 @@ spec:
             memory: 1Gi
           limits:
             cpu: "4"
-            memory: 10Gi
+            memory: 24Gi
         volumeMounts:
         - name: tmp
           mountPath: /app/tmp

@@ -49,6 +49,7 @@ org.assertj:assertj-core:3.27.7=testCompileClasspath,testRuntimeClasspath
 org.awaitility:awaitility:4.2.2=testCompileClasspath,testRuntimeClasspath
 org.bouncycastle:bcprov-jdk18on:1.86=productionRuntimeClasspath,runtimeClasspath,testRuntimeClasspath
 org.checkerframework:checker-qual:3.55.1=productionRuntimeClasspath,runtimeClasspath,testRuntimeClasspath
+org.duckdb:duckdb_jdbc:1.5.6.0=productionRuntimeClasspath,runtimeClasspath,testRuntimeClasspath
 org.flywaydb:flyway-core:10.17.0=compileClasspath,productionRuntimeClasspath,runtimeClasspath,testCompileClasspath,testRuntimeClasspath
 org.flywaydb:flyway-database-postgresql:10.17.0=productionRuntimeClasspath,runtimeClasspath,testRuntimeClasspath
 org.hamcrest:hamcrest:3.0=testCompileClasspath,testRuntimeClasspath

@@ -14,6 +14,7 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Stream;
 
+import com.securityexpert.nexus.ui2.packetanalysis.telemetry.TelemetryParser;
 import com.securityexpert.nexus.ui2.platform.PacketAnalysisPaths;
 
 /**
@@ -22,6 +23,12 @@ import com.securityexpert.nexus.ui2.platform.PacketAnalysisPaths;
  * per-file limit, a file that is neither pcap nor pcapng by its first bytes (the extension is never consulted), and
  * any upload that would take the store past its cap. Captures live only on this volume: never in a browser
  * artefact, a log or a support bundle.
+ *
+ * <p>Host telemetry text files (sar, vmstat, pidstat, tc/softnet snapshots, syslog) follow the same path with their own
+ * per-file limit (200 MB by default) and live in the case's {@code telemetry} directory: they count against the same store
+ * cap, are removed with the case and by the same retention pruner, and are accepted only when they are text (no NUL byte
+ * in the first 8 KB). What the content is -- or that it is not recognised -- is decided by the telemetry sniffer, not by
+ * the file name.</p>
  */
 public final class PacketCaptureStore {
 
@@ -42,22 +49,36 @@ public final class PacketCaptureStore {
     public static final String TOO_LARGE = "CAPTURE_TOO_LARGE";
     public static final String STORE_FULL = "STORE_FULL";
     public static final String NOT_A_CAPTURE = "NOT_A_CAPTURE";
+    public static final String NOT_A_TEXT_FILE = "NOT_A_TEXT_FILE";
+    public static final long DEFAULT_MAX_TELEMETRY_BYTES = 200L * 1024L * 1024L;
 
     public record Stored(String captureId, String storageKey, String format, long sizeBytes, String sha256) {
     }
 
+    /** A telemetry file as stored: identity plus what the sniffer detected ({@code unknown} comes with a closed reason). */
+    public record StoredTelemetry(String telemetryId, String storageKey, long sizeBytes, String sha256, String detectedFormat,
+            String recognitionNote) {
+    }
+
     private static final int HEADER_BYTES = 24;
+    private static final int TEXT_SNIFF_BYTES = 8192;
 
     private final Path root;
     private final long maxFileBytes;
     private final long maxStoreBytes;
+    private final long maxTelemetryBytes;
     private long reservedBytes;
 
     public PacketCaptureStore(Path root, long maxFileBytes, long maxStoreBytes) {
+        this(root, maxFileBytes, maxStoreBytes, Math.min(DEFAULT_MAX_TELEMETRY_BYTES, maxFileBytes));
+    }
+
+    public PacketCaptureStore(Path root, long maxFileBytes, long maxStoreBytes, long maxTelemetryBytes) {
         this.root = Objects.requireNonNull(root, "root").toAbsolutePath().normalize();
-        if (maxFileBytes <= 0 || maxStoreBytes <= 0) throw new IllegalArgumentException("PACKET_ANALYSIS_LIMITS_INVALID");
+        if (maxFileBytes <= 0 || maxStoreBytes <= 0 || maxTelemetryBytes <= 0) throw new IllegalArgumentException("PACKET_ANALYSIS_LIMITS_INVALID");
         this.maxFileBytes = maxFileBytes;
         this.maxStoreBytes = maxStoreBytes;
+        this.maxTelemetryBytes = maxTelemetryBytes;
     }
 
     public Path root() {
@@ -70,6 +91,10 @@ public final class PacketCaptureStore {
 
     public long maxStoreBytes() {
         return maxStoreBytes;
+    }
+
+    public long maxTelemetryBytes() {
+        return maxTelemetryBytes;
     }
 
     /** Bytes on the analysis volume under this store's root (captures, run output, engine files). */
@@ -137,6 +162,68 @@ public final class PacketCaptureStore {
             release(reservation);
             if (partial != null) Files.deleteIfExists(partial);
         }
+    }
+
+    /**
+     * Stream one host telemetry text file into the case's telemetry directory (same reservation and cap as a capture,
+     * the telemetry file limit per file), then sniff its head so the attachment carries what it was recognised as.
+     */
+    public StoredTelemetry writeTelemetry(String caseId, InputStream in, long declaredBytes) throws Refusal, IOException {
+        if (declaredBytes > maxTelemetryBytes + 1024L * 1024L) throw new Refusal(TOO_LARGE);
+        long reservation = declaredBytes > 0 ? Math.min(declaredBytes, maxTelemetryBytes) : maxTelemetryBytes;
+        reserve(reservation);
+        Path partial = null;
+        try {
+            byte[] head = in.readNBytes(TEXT_SNIFF_BYTES);
+            if (head.length == 0) throw new Refusal(NOT_A_TEXT_FILE);
+            for (byte b : head) {
+                if (b == 0) throw new Refusal(NOT_A_TEXT_FILE);
+            }
+            String telemetryId = UUID.randomUUID().toString();
+            String storageKey = telemetryId + ".txt";
+            Path target = PacketAnalysisPaths.telemetryFile(root, caseId, storageKey);
+            Files.createDirectories(target.getParent());
+            partial = target.resolveSibling(".partial-" + telemetryId);
+            MessageDigest digest = sha256();
+            long written = head.length;
+            if (written > maxTelemetryBytes) throw new Refusal(TOO_LARGE);
+            byte[] buffer = new byte[1 << 16];
+            try (OutputStream out = Files.newOutputStream(partial)) {
+                out.write(head);
+                digest.update(head);
+                int read;
+                while ((read = in.read(buffer)) != -1) {
+                    written += read;
+                    if (written > maxTelemetryBytes) throw new Refusal(TOO_LARGE);
+                    if (written > reservation) {
+                        long grown = Math.min(maxTelemetryBytes, written + (1L << 24));
+                        reserve(grown - reservation);
+                        reservation = grown;
+                    }
+                    out.write(buffer, 0, read);
+                    digest.update(buffer, 0, read);
+                }
+            }
+            Files.move(partial, target, StandardCopyOption.ATOMIC_MOVE);
+            partial = null;
+            TelemetryParser.Detection found;
+            try (InputStream stored = Files.newInputStream(target)) {
+                found = TelemetryParser.detect(stored);
+            }
+            return new StoredTelemetry(telemetryId, storageKey, written, HexFormat.of().formatHex(digest.digest()),
+                    found.format().id(), found.reason());
+        } finally {
+            release(reservation);
+            if (partial != null) Files.deleteIfExists(partial);
+        }
+    }
+
+    public InputStream openTelemetry(String caseId, String storageKey) throws IOException {
+        return Files.newInputStream(PacketAnalysisPaths.telemetryFile(root, caseId, storageKey));
+    }
+
+    public void deleteTelemetry(String caseId, String storageKey) throws IOException {
+        Files.deleteIfExists(PacketAnalysisPaths.telemetryFile(root, caseId, storageKey));
     }
 
     public InputStream open(String caseId, String storageKey) throws IOException {

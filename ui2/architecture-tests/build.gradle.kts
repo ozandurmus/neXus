@@ -12,6 +12,7 @@ dependencies {
     testImplementation(project(":scheduler"))
     testImplementation(project(":cli"))
     testImplementation(project(":sanitizer"))
+    testImplementation(project(":packet-analysis"))
 
     testImplementation(libs.junit.jupiter)
     testImplementation(libs.archunit.junit5)

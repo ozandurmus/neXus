@@ -1,0 +1,1 @@
+INSERT INTO excluded_frames VALUES (?,?,?,?)
