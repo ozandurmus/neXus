@@ -111,13 +111,14 @@ class BackupSchedulerWindowTest {
             }
         }
         assertEquals(expected, store.claims);
-        assertEquals(7 * (targets.size() + 1), submissions.size());
+        // The two MDSs get no Gaia backup (PO 2026-10-16); the measured one gets its MDS export.
+        assertEquals(7 * (targets.size() - 2 + 1), submissions.size());
         assertEquals(submissions.size(), Set.copyOf(submissions).size());
         var expectedTypes = new java.util.HashSet<>(ScheduledBackupWindowPolicy.FLEET_JOB_TYPES);
         expectedTypes.add(ScheduledBackupWindowPolicy.MDS_EXPORT);
         assertEquals(expectedTypes, types);
-        assertEquals(Set.of("cp_gateway_backup", "cp_mds_export"), perDeviceTypes.get("mds-measured"));
-        assertEquals(Set.of("cp_gateway_backup"), perDeviceTypes.get("mds-unmeasured"));
+        assertEquals(Set.of("cp_mds_export"), perDeviceTypes.get("mds-measured"));
+        assertEquals(null, perDeviceTypes.get("mds-unmeasured"));
         assertEquals(Set.of("rdw_cc_config_backup"), perDeviceTypes.get("controller"));
     }
 
@@ -133,7 +134,7 @@ class BackupSchedulerWindowTest {
                 DeviceEnrollmentState.ENROLLED, false, null, true);
     }
 
-    @Test void manualFleetBackupKeepsGaiaSelectionAndDoesNotReadScheduledMdsEligibility() {
+    @Test void manualFleetBackupRefusesTheMdsGaiaBackupAndDoesNotReadScheduledMdsEligibility() {
         var devices = mock(DeviceRepository.class);
         var target = target("mds-measured", "management_server", "check_point");
         when(devices.listAll()).thenReturn(List.of(summary(target)));
@@ -145,11 +146,10 @@ class BackupSchedulerWindowTest {
         var collect = new BackupCollectService(devices, jobs, Set.of(), true,
                 Clock.fixed(at("2026-10-09T06:00:00"), JobWindowPolicy.ZONE_ID))
                 .withMdsExportEligibility(eligibility);
-        assertEquals(new BackupCollectService.BulkOutcome(1, 1, 0),
+        assertEquals(new BackupCollectService.BulkOutcome(1, 0, 1),
                 collect.requestCollectAll("synthetic-operator", "Manual fleet backup"));
         verifyNoInteractions(eligibility);
-        verify(jobs).submit(eq("cp_gateway_backup"), eq("mds-measured"), anyString(),
-                eq("synthetic-operator"), anyString());
+        verifyNoInteractions(jobs);
     }
 
     @Test void scheduledMdsExportUsesTheLastWindowSecondAndNeverReadsEligibilityOutsideIt() {
