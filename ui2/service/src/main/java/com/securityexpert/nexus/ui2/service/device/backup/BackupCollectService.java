@@ -168,6 +168,11 @@ public final class BackupCollectService {
             capabilityId = BackupCapabilityIds.PAN_DEVICE_STATE_BACKUP;
         } else if ("snapshot".equalsIgnoreCase(backupType)) {
             capabilityId = BackupCapabilityIds.CP_GAIA_SNAPSHOT;
+        } else if (checkPointManagement && !gaiaBackupOnManagementEnabled()) {
+            // PO 2026-10-16: the MDS crashed on both nights its scheduled Gaia backup ran (task count 3.8k -> 38k
+            // after 02:00); a Multi-Domain Server is backed up by its MDS export, never by add backup local.
+            return new Outcome.AdmissionRefused("GAIA_BACKUP_DISABLED_ON_MANAGEMENT",
+                    "a Gaia backup is not taken on a Check Point management server; use its MDS export");
         } else if (spark) {
             capabilityId = BackupCapabilityIds.CP_SPARK_SFTP_BACKUP;
         } else {
@@ -184,6 +189,11 @@ public final class BackupCollectService {
             case AdmissionResult.Deduplicated deduplicated -> new Outcome.Admitted(deduplicated.jobId());
             case AdmissionResult.Refused refused -> new Outcome.AdmissionRefused(refused.code(), refused.reason());
         };
+    }
+
+    /** Off unless UI2_CP_MANAGEMENT_GAIA_BACKUP=enabled (PO 2026-10-16: "şimdilik kapalı"). */
+    static boolean gaiaBackupOnManagementEnabled() {
+        return "enabled".equals(System.getenv("UI2_CP_MANAGEMENT_GAIA_BACKUP"));
     }
 
     /** Counts only, so a bulk request does not return a fleet's opaque device identifiers. */
