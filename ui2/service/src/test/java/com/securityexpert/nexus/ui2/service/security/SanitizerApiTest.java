@@ -116,7 +116,7 @@ class SanitizerApiTest {
         }
         Map<String, String> expected = Map.of(
                 "POST " + BASE, ActionRegistry.DATA_SANITIZE_RUN,
-                "GET " + BASE + "/jobs", ActionRegistry.DATA_SANITIZE_RUN,
+                "GET " + BASE + "/jobs", ActionRegistry.DATA_SANITIZE_INFO,
                 "GET " + BASE + "/jobs/*", ActionRegistry.DATA_SANITIZE_RUN,
                 "GET " + BASE + "/jobs/*/download", ActionRegistry.DATA_SANITIZE_RUN,
                 "POST " + BASE + "/revert", ActionRegistry.DATA_SANITIZE_REVERT,
@@ -153,7 +153,12 @@ class SanitizerApiTest {
             mvc.perform(upload(BASE, actor, LOG.getBytes(StandardCharsets.UTF_8), Map.of())).andExpect(status().isForbidden());
             mvc.perform(upload(BASE + "/revert", actor, LOG.getBytes(StandardCharsets.UTF_8), Map.of())).andExpect(status().isForbidden());
             String id = UUID.randomUUID().toString();
-            for (String path : List.of(BASE + "/jobs", BASE + "/jobs/" + id, BASE + "/jobs/" + id + "/download",
+            // The permission summary is readable by every session and grants nothing (e2e: no 403 on the screen).
+            mvc.perform(get(BASE + "/jobs").servletPath(BASE + "/jobs").cookie(cookie(actor))).andExpect(status().isOk())
+                    .andExpect(jsonPath("$.permissions.run").value(false))
+                    .andExpect(jsonPath("$.permissions.revert").value(false))
+                    .andExpect(jsonPath("$.permissions.revert_any_job").value(false));
+            for (String path : List.of(BASE + "/jobs/" + id, BASE + "/jobs/" + id + "/download",
                     BASE + "/reverts/" + id, BASE + "/reverts/" + id + "/download")) {
                 mvc.perform(get(path).servletPath(path).cookie(cookie(actor))).andExpect(status().isForbidden());
             }

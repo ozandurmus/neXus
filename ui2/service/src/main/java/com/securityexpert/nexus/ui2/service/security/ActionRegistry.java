@@ -158,6 +158,8 @@ public final class ActionRegistry {
      */
     public static final String DATA_SANITIZE_RUN = "data_sanitize_run";
     public static final String DATA_SANITIZE_REVERT = "data_sanitize_revert";
+    /** What this session may do on the Data Sanitizer screen (permissions and limits only, no data): every role. */
+    public static final String DATA_SANITIZE_INFO = "data_sanitize_info";
     public static final java.util.Set<String> DATA_SANITIZE_RUN_ROLES =
             java.util.Set.of(RoleToken.OPERATOR, RoleToken.OPERATION_ADMIN, RoleToken.SECURITY_ADMIN);
     public static final java.util.Set<String> DATA_SANITIZE_REVERT_ANY_JOB_ROLES = java.util.Set.of(RoleToken.SECURITY_ADMIN);
@@ -183,6 +185,9 @@ public final class ActionRegistry {
                 java.util.Set.of(RoleToken.OPERATION_ADMIN, RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(DATA_SANITIZE_REVERT, true, Optional.of(RoleToken.SECURITY_ADMIN),
                 java.util.Set.of(RoleToken.OPERATOR, RoleToken.OPERATION_ADMIN)));
+        register(new ActionDescriptor(DATA_SANITIZE_INFO, true, Optional.of(RoleToken.SECURITY_ADMIN),
+                java.util.Set.of(RoleToken.VIEWER, RoleToken.OPERATOR, RoleToken.ONBOARDING_ADMIN, RoleToken.BACKUP_ADMIN,
+                        RoleToken.COMPLIANCE_ADMIN, RoleToken.OPERATION_ADMIN, RoleToken.REPLAY_VIEWER)));
         register(new ActionDescriptor(HTTPS_CERTIFICATE_ACCEPT, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(HTTPS_CERTIFICATE_STRICT, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(ROLE_BINDING_CREATE, true, Optional.of(RoleToken.SECURITY_ADMIN)));

@@ -85,7 +85,7 @@ public final class SanitizerController {
 
     @GetMapping(BASE + "/jobs")
     public ResponseEntity<Map<String, Object>> jobs(HttpServletRequest request) {
-        if (!canRun(request)) return error(HttpStatus.FORBIDDEN, "RUN_ROLE_REQUIRED", "Sanitizer access needs a run role");
+        // Every session reads what it may do (all false for aiview); the screen renders that and decides nothing.
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("permissions", permissions(request));
         Map<String, Object> limits = new LinkedHashMap<>();
