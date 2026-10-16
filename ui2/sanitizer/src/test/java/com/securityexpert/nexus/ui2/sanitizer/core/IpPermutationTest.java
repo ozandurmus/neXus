@@ -22,9 +22,11 @@ class IpPermutationTest {
 
     @Test
     void sharedPrefixLengthIsPreservedExactlyForRandomPairs() {
+        IpPermutation ref = IpPermutation.reference(TestVault.key());
         for (int family : new int[] {4, 16}) {
+            int minSubnetBits = family == 4 ? 8 : 10;
             for (int i = 0; i < 4000; i++) {
-                byte[] a = randomAddress(family);
+                byte[] a = randomUnicastAddress(family);
                 byte[] b = a.clone();
                 int flipFrom = random.nextInt(family * 8);
                 // Keep the first flipFrom bits, flip bit flipFrom, randomise the rest: shared prefix = flipFrom.
@@ -32,10 +34,61 @@ class IpPermutationTest {
                 for (int bit = flipFrom + 1; bit < family * 8; bit++) {
                     if (random.nextBoolean()) b[bit >> 3] ^= (byte) (0x80 >>> (bit & 7));
                 }
-                assertEquals(sharedPrefix(a, b), sharedPrefix(ip.map(a), ip.map(b)),
-                        "shared prefix length must survive exactly (family " + family + ")");
+                assertEquals(sharedPrefix(a, b), sharedPrefix(ref.map(a), ref.map(b)),
+                        "reference mode preserves shared prefix across all bits");
+                if ( isSpecial(b) ) continue;
+                int actual = sharedPrefix(ip.map(a), ip.map(b));
+                if (flipFrom >= minSubnetBits) {
+                    assertEquals(flipFrom, actual,
+                            "nexus mode preserves exact shared subnet prefix length (family " + family + ")");
+                } else {
+                    assertTrue(actual < minSubnetBits,
+                            "addresses in distinct top-level blocks stay in distinct top-level blocks");
+                }
             }
         }
+    }
+
+    @Test
+    void unicastFirstOctetIsUniformlyDistributedAndLeaksNoPrefixBits() {
+        // 1. Across all 222 unicast IPv4 first octets (1..126, 128..223), mapping must be a bijection on /8s
+        //    and must not pin RFC 1918 / classful leading bits.
+        Set<Integer> outputOctets = new HashSet<>();
+        int[] bucketCounts = new int[8]; // 8 buckets across the 256 octet space
+        int samples = 22200;
+        for (int i = 0; i < samples; i++) {
+            byte[] a = randomUnicastAddress(4);
+            byte[] mapped = ip.map(a);
+            int firstOctet = mapped[0] & 0xff;
+            assertFalse(ip.isKept(mapped));
+            outputOctets.add(firstOctet);
+            bucketCounts[firstOctet >>> 5]++;
+        }
+        assertEquals(222, outputOctets.size(), "all 222 unicast first octets must be reachable");
+        // Verify that Class A (bit 0 = 0) can map to >= 128 (bit 0 = 1) and vice versa across keys/prefixes
+        int classAToHigh = 0;
+        int classCToLow = 0;
+        for (int octet = 1; octet <= 126; octet++) {
+            byte[] mapped = ip.map(new byte[] {(byte) octet, 1, 2, 3});
+            if ((mapped[0] & 0x80) != 0) classAToHigh++;
+        }
+        for (int octet = 192; octet <= 223; octet++) {
+            byte[] mapped = ip.map(new byte[] {(byte) octet, (byte) 168, 1, 1});
+            if ((mapped[0] & 0x80) == 0) classCToLow++;
+        }
+        assertTrue(classAToHigh > 20, "Class A (0xxxxxxx) must not be pinned to bit 0 == 0, got " + classAToHigh);
+        assertTrue(classCToLow > 5, "Class C (110xxxxx) must not be pinned to 192..223, got " + classCToLow);
+        // Chi-squared goodness-of-fit against expected unicast octets per 32-octet bucket:
+        // Buckets 0..3 have {31, 32, 32, 31} unicast octets; buckets 4..6 have {32, 32, 32}; bucket 7 (224..255) has 0.
+        int[] validPerBucket = {31, 32, 32, 31, 32, 32, 32, 0};
+        double chiSq = 0.0;
+        for (int b = 0; b < 7; b++) {
+            double expected = samples * (validPerBucket[b] / 222.0);
+            double diff = bucketCounts[b] - expected;
+            chiSq += (diff * diff) / expected;
+        }
+        assertEquals(0, bucketCounts[7], "no unicast address lands in 224..255");
+        assertTrue(chiSq < 24.0, "first octet distribution must be uniform across unicast space, chiSq=" + chiSq);
     }
 
     @Test
@@ -104,6 +157,21 @@ class IpPermutationTest {
         byte[] a = new byte[family];
         random.nextBytes(a);
         return a;
+    }
+
+    private byte[] randomUnicastAddress(int family) {
+        while (true) {
+            byte[] a = randomAddress(family);
+            if (!isSpecial(a)) return a;
+        }
+    }
+
+    private boolean isSpecial(byte[] a) {
+        if (ip.isKept(a)) return true;
+        if (a.length == 4) {
+            return (a[0] & 0xff) == 169 && (a[1] & 0xff) == 254;
+        }
+        return IpPermutation.isV4Mapped(a) || ((a[0] & 0xff) == 0xfe && (a[1] & 0xc0) == 0x80);
     }
 
     private static int sharedPrefix(byte[] a, byte[] b) {

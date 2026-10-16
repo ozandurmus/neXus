@@ -11,7 +11,7 @@ public final class MacText {
 
     public record Style(char separator, boolean upper) {
         public static Style of(String text) {
-            char sep = text.length() == 14 ? '.' : text.charAt(2);
+            char sep = text.indexOf('.') >= 0 ? '.' : (text.indexOf('-') >= 0 ? '-' : ':');
             boolean hasUpper = text.chars().anyMatch(c -> c >= 'A' && c <= 'F');
             boolean hasLower = text.chars().anyMatch(c -> c >= 'a' && c <= 'f');
             return new Style(sep, hasUpper && !hasLower);
@@ -19,9 +19,26 @@ public final class MacText {
     }
 
     public static byte[] parse(String text) {
-        String hex = text.replace(":", "").replace("-", "").replace(".", "");
-        if (hex.length() != 12) throw new IllegalArgumentException("not a MAC");
-        return HexFormat.of().parseHex(hex);
+        if (text.indexOf('.') >= 0) {
+            String hex = text.replace(".", "");
+            if (hex.length() != 12) throw new IllegalArgumentException("not a MAC");
+            return HexFormat.of().parseHex(hex);
+        }
+        String[] parts = text.split("[:-]", -1);
+        if (parts.length != 6) throw new IllegalArgumentException("not a MAC");
+        byte[] out = new byte[6];
+        for (int i = 0; i < 6; i++) {
+            String p = parts[i];
+            if (p.isEmpty() || p.length() > 2) throw new IllegalArgumentException("not a MAC");
+            int val = 0;
+            for (int j = 0; j < p.length(); j++) {
+                int d = Character.digit(p.charAt(j), 16);
+                if (d < 0) throw new IllegalArgumentException("not a MAC");
+                val = (val << 4) | d;
+            }
+            out[i] = (byte) val;
+        }
+        return out;
     }
 
     public static String format(byte[] mac, Style style) {

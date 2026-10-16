@@ -82,19 +82,49 @@ public final class Sanitizer {
 
     private long run(Detection d, Path input, Path output, ValueRewriter rewriter, boolean sanitize, TokenSink sink,
             TokenResolver resolver, Counts counts, java.util.function.Consumer<String> learner) throws IOException {
-        try (OutputStream out = new BufferedOutputStream(Files.newOutputStream(output), 1 << 16)) {
-            if (d.type() == FileType.XLSX) {
-                return XlsxFormat.process(input, out, rewriter, learner);
+        try {
+            try (OutputStream out = new BufferedOutputStream(openPrivateOutput(output), 1 << 16)) {
+                if (d.type() == FileType.XLSX) {
+                    return XlsxFormat.process(input, out, rewriter, learner, sanitize ? counts : null);
+                }
+                try (InputStream in = new BufferedInputStream(Files.newInputStream(input), 1 << 16)) {
+                    return switch (d.type()) {
+                        case PCAP, PCAPNG -> sanitize ? PcapSanitizer.sanitize(in, out, mappers, sink, counts)
+                                : PcapSanitizer.revert(in, out, resolver, counts);
+                        case JSON -> JsonFormat.process(in, out, d.encoding(), rewriter);
+                        case CSV -> CsvFormat.process(in, out, d.encoding(), d.delimiter(), rewriter);
+                        default -> TextFormat.process(in, out, d.encoding(), rewriter);
+                    };
+                }
             }
-            try (InputStream in = new BufferedInputStream(Files.newInputStream(input), 1 << 16)) {
-                return switch (d.type()) {
-                    case PCAP, PCAPNG -> sanitize ? PcapSanitizer.sanitize(in, out, mappers, sink, counts)
-                            : PcapSanitizer.revert(in, out, resolver, counts);
-                    case JSON -> JsonFormat.process(in, out, d.encoding(), rewriter);
-                    case CSV -> CsvFormat.process(in, out, d.encoding(), d.delimiter(), rewriter);
-                    default -> TextFormat.process(in, out, d.encoding(), rewriter);
-                };
+        } catch (IOException | RuntimeException | Error failed) {
+            try {
+                Files.deleteIfExists(output);
+            } catch (IOException ignored) {
+                // preserve original failure
+            }
+            throw failed;
+        }
+    }
+
+    private static OutputStream openPrivateOutput(Path output) throws IOException {
+        Path parent = output.getParent();
+        if (parent != null && !Files.exists(parent)) {
+            Files.createDirectories(parent);
+            try {
+                Files.setPosixFilePermissions(parent,
+                        java.nio.file.attribute.PosixFilePermissions.fromString("rwx------"));
+            } catch (UnsupportedOperationException nonPosix) {
+                // Windows / non-POSIX FS
             }
         }
+        OutputStream stream = Files.newOutputStream(output);
+        try {
+            Files.setPosixFilePermissions(output,
+                    java.nio.file.attribute.PosixFilePermissions.fromString("rw-------"));
+        } catch (UnsupportedOperationException nonPosix) {
+            // Windows / non-POSIX FS
+        }
+        return stream;
     }
 }

@@ -52,6 +52,10 @@ import com.securityexpert.nexus.ui2.sanitizer.core.HostHeaders;
  */
 public final class XlsxFormat {
 
+    public static final String EMBEDDED_OBJECTS_REMOVED = "embedded_objects_removed";
+    static final int MAX_ZIP_ENTRIES = 4096;
+    static final long MAX_TOTAL_UNCOMPRESSED_BYTES = 2L * 1024 * 1024 * 1024;
+
     private static final String MAIN = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
     private static final Pattern FORMULA_STRING = Pattern.compile("\"((?:[^\"]|\"\")*)\"");
     private static final Set<String> NEVER_REWRITTEN_SUFFIXES = Set.of("styles+xml", "theme+xml", "calcChain+xml",
@@ -74,19 +78,30 @@ public final class XlsxFormat {
 
     /** @return the number of text values seen */
     public static long process(Path input, OutputStream out, ValueRewriter rewriter) throws IOException {
-        return process(input, out, rewriter, name -> { });
+        return process(input, out, rewriter, name -> { }, null);
+    }
+
+    public static long process(Path input, OutputStream out, ValueRewriter rewriter,
+            java.util.function.Consumer<String> learner) throws IOException {
+        return process(input, out, rewriter, learner, null);
     }
 
     /**
      * @param learner receives every value found under a host-like header before any part is rewritten, so a host
      *                name that a formula or a note mentions elsewhere in the workbook is replaced there too
+     * @param counts  optional counts to record {@link #EMBEDDED_OBJECTS_REMOVED}
      */
     public static long process(Path input, OutputStream out, ValueRewriter rewriter,
-            java.util.function.Consumer<String> learner) throws IOException {
+            java.util.function.Consumer<String> learner,
+            com.securityexpert.nexus.ui2.sanitizer.core.Counts counts) throws IOException {
         try (ZipSecureFile zip = new ZipSecureFile(input.toFile())) {
+            List<ZipArchiveEntry> allEntries = Collections.list(zip.getEntries());
+            if (allEntries.size() > MAX_ZIP_ENTRIES) {
+                throw new UnsupportedInputException("XLSX_TOO_MANY_ENTRIES", "workbook exceeds maximum zip entry count");
+            }
             Map<String, String> types = contentTypes(zip);
             Map<String, ZipArchiveEntry> byName = new HashMap<>();
-            for (ZipArchiveEntry e : Collections.list(zip.getEntries())) byName.put("/" + e.getName(), e);
+            for (ZipArchiveEntry e : allEntries) byName.put("/" + e.getName(), e);
             String sst = null;
             List<String> sheets = new ArrayList<>();
             for (Map.Entry<String, String> t : types.entrySet()) {
@@ -98,21 +113,33 @@ public final class XlsxFormat {
             headerAnalysis(zip, byName, sst, sheets, hostColumns, hostShared, learner);
 
             long[] seen = {0};
+            long[] totalUncompressed = {0};
             ZipOutputStream zipOut = new ZipOutputStream(new BufferedOutputStream(out, 1 << 16));
             Iterator<ZipArchiveEntry> entries = Collections.list(zip.getEntriesInPhysicalOrder()).iterator();
             while (entries.hasNext()) {
                 ZipArchiveEntry entry = entries.next();
                 String name = "/" + entry.getName();
+                String type = contentType(types, name);
+                boolean isRels = name.endsWith(".rels");
+                boolean isVml = name.endsWith(".vml") || (type != null && type.endsWith("vmlDrawing"));
+                boolean isXml = (type != null && type.endsWith("xml")) || name.endsWith(".xml");
+                if (!entry.isDirectory() && !isRels && !isVml && !isXml) {
+                    if (counts != null) {
+                        counts.add(EMBEDDED_OBJECTS_REMOVED);
+                    }
+                    continue;
+                }
                 ZipEntry copy = new ZipEntry(entry.getName());
                 copy.setTime(entry.getTime());
                 zipOut.putNextEntry(copy);
-                String type = contentType(types, name);
-                try (InputStream in = zip.getInputStream(entry)) {
+                try (InputStream in = new BoundedArchiveStream(zip.getInputStream(entry), totalUncompressed)) {
                     if (entry.isDirectory()) {
                         // nothing to copy
-                    } else if (name.endsWith(".rels")) {
+                    } else if (isRels) {
                         rewritePart(in, zipOut, new RelsPolicy(), rewriter, seen);
-                    } else if (type != null && type.endsWith("xml") && NEVER_REWRITTEN_SUFFIXES.stream().noneMatch(type::endsWith)) {
+                    } else if (isVml) {
+                        rewritePart(in, zipOut, new GenericPolicy(), rewriter, seen);
+                    } else if (type == null || NEVER_REWRITTEN_SUFFIXES.stream().noneMatch(type::endsWith)) {
                         PartPolicy policy = name.equals(sst) ? new SharedStringsPolicy(hostShared)
                                 : sheets.contains(name) ? new SheetPolicy(hostColumns.getOrDefault(name, Set.of()))
                                 : name.equals("/xl/workbook.xml") ? new WorkbookPolicy()
@@ -357,6 +384,11 @@ public final class XlsxFormat {
     private enum TextMode { PLAIN, FORMULA }
 
     private static final class GenericPolicy extends PartPolicy {
+        private static final Set<String> TEXT_ATTRIBUTES = Set.of(
+                "v", "name", "displayName", "userId", "connection", "command", "serverCommand", "url",
+                "ref", "location", "target", "Target", "value", "author", "address", "host", "server",
+                "sourceFile", "ddeService", "ddeTopic");
+
         @Override
         TextMode text(List<String> stack) {
             return stack.isEmpty() ? null : TextMode.PLAIN;
@@ -364,15 +396,7 @@ public final class XlsxFormat {
 
         @Override
         Set<String> attributes(StartElement element) {
-            String local = element.getName().getLocalPart();
-            return switch (local) {
-                case "s" -> Set.of("v");                                // pivot cache shared items and records
-                case "tableColumn" -> Set.of("name");
-                case "person" -> Set.of("displayName", "userId");
-                case "connection", "dbPr" -> Set.of("connection", "command");
-                case "webPr" -> Set.of("url");
-                default -> Set.of();
-            };
+            return TEXT_ATTRIBUTES;
         }
     }
 
@@ -393,6 +417,11 @@ public final class XlsxFormat {
         @Override
         TextMode text(List<String> stack) {
             return !stack.isEmpty() && stack.get(stack.size() - 1).equals("definedName") ? TextMode.FORMULA : null;
+        }
+
+        @Override
+        Set<String> attributes(StartElement element) {
+            return Set.of("comment", "name");
         }
     }
 
@@ -446,9 +475,11 @@ public final class XlsxFormat {
             String local = stack.get(stack.size() - 1);
             boolean inCell = stack.contains("c");
             if (local.equals("f") && inCell) return TextMode.FORMULA;
-            if (local.equals("t") && stack.contains("is")) return TextMode.PLAIN;
-            if (local.equals("v") && inCell && "str".equals(type)) return TextMode.PLAIN;
+            if (local.equals("t") && (stack.contains("is") || inCell)) return TextMode.PLAIN;
+            if (local.equals("v") && inCell && ("str".equals(type) || "inlineStr".equals(type) || "e".equals(type))) return TextMode.PLAIN;
             if (local.equals("formula1") || local.equals("formula2") || local.equals("formula")) return TextMode.FORMULA;
+            if (local.equals("oddHeader") || local.equals("oddFooter") || local.equals("evenHeader")
+                    || local.equals("evenFooter") || local.equals("firstHeader") || local.equals("firstFooter")) return TextMode.PLAIN;
             return null;
         }
 
@@ -459,7 +490,7 @@ public final class XlsxFormat {
 
         @Override
         Set<String> attributes(StartElement element) {
-            return element.getName().getLocalPart().equals("hyperlink") ? Set.of("display") : Set.of();
+            return element.getName().getLocalPart().equals("hyperlink") ? Set.of("display", "location", "tooltip") : Set.of();
         }
     }
 
@@ -543,7 +574,7 @@ public final class XlsxFormat {
                 items.add(new Item(e, null));
             }
             if (batch.size() >= ValueRewriter.BATCH_VALUES || chars >= ValueRewriter.BATCH_CHARS
-                    || (batch.isEmpty() && items.size() >= 4096)) {
+                    || items.size() >= 4096) {
                 flush(items, batch, rewriter, writer, events);
                 chars = 0;
             }
@@ -600,6 +631,38 @@ public final class XlsxFormat {
         factory.setProperty(XMLInputFactory.IS_COALESCING, true);
         factory.setProperty(XMLInputFactory.IS_NAMESPACE_AWARE, true);
         return factory;
+    }
+
+    private static final class BoundedArchiveStream extends java.io.FilterInputStream {
+        private final long[] total;
+
+        BoundedArchiveStream(InputStream in, long[] total) {
+            super(in);
+            this.total = total;
+        }
+
+        @Override
+        public int read() throws IOException {
+            int b = in.read();
+            if (b >= 0 && ++total[0] > MAX_TOTAL_UNCOMPRESSED_BYTES) {
+                throw new UnsupportedInputException("XLSX_UNCOMPRESSED_TOO_LARGE",
+                        "workbook uncompressed size exceeds limit");
+            }
+            return b;
+        }
+
+        @Override
+        public int read(byte[] b, int off, int len) throws IOException {
+            int n = in.read(b, off, len);
+            if (n > 0) {
+                total[0] += n;
+                if (total[0] > MAX_TOTAL_UNCOMPRESSED_BYTES) {
+                    throw new UnsupportedInputException("XLSX_UNCOMPRESSED_TOO_LARGE",
+                            "workbook uncompressed size exceeds limit");
+                }
+            }
+            return n;
+        }
     }
 
     /** The zip stream stays open across parts: closing an XML writer must not close it. */

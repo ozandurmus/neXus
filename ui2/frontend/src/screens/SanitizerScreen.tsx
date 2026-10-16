@@ -45,7 +45,8 @@ export const COUNT_LABELS: Record<string, string> = {
   ipv4: "IPv4 addresses", ipv6: "IPv6 addresses", cidr: "Networks (CIDR)", mac: "MAC addresses",
   hostname: "Host names", fqdn: "Domain names (FQDN)", email: "E-mail addresses", url_host: "URL hosts",
   device_name: "Device names (inventory pseudonyms)", dns_name: "DNS names in packets", packets: "Packets",
-  payload_bytes_zeroed: "Payload bytes zeroed", frames_without_ip: "Frames without IP (zeroed)", reverted: "Tokens reverted",
+  payload_bytes_zeroed: "Payload bytes zeroed", frames_without_ip: "Frames without IP (zeroed)",
+  embedded_objects_removed: "Embedded objects removed", reverted: "Tokens reverted",
 };
 
 const STATE_TONE: Record<SanitizerState, Tone> = { RUNNING: "attn", SUCCEEDED: "ok", FAILED: "bad" };

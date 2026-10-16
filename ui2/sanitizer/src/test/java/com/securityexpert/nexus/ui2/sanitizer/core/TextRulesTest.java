@@ -191,4 +191,72 @@ class TextRulesTest {
         String reverted = reverter.revert(edited);
         assertEquals("Summary: 192.0.2.10 talks to 198.51.100.200 and h-0000000000; www.example.com", reverted);
     }
+
+    @Test
+    void ccTldTwoLabelDomainsAndHyphenatedDomainsAreSanitized() {
+        // F-10: real ccTLDs (.ai, .rs, .pl, .cc, .ms) and hyphenated domains must not be suppressed by FILE_LIKE_TLDS
+        String out = s("DNS query for acme-security.ai and portal.pl and banka.rs and corp.cc and acme-build.sh");
+        assertFalse(out.contains("acme-security"));
+        assertFalse(out.contains("portal.pl"));
+        assertFalse(out.contains("banka.rs"));
+        assertFalse(out.contains("corp.cc"));
+        assertFalse(out.contains("acme-build.sh"));
+    }
+
+    @Test
+    void digitLeadingHostnamesAndLearnedContextHostsAreSanitized() {
+        // F-11: RFC 1123 digit-leading hostnames in syslog, user@host, and keyword context; context hosts are learned
+        String line = "<134>Oct 16 10:00:00 10g-sw01 sshd[100]: user admin@2fa-gw from hostname=3com-fw01; later 3com-fw01 and 10g-sw01 and 2fa-gw reset";
+        String out = s(line);
+        assertFalse(out.contains("10g-sw01"), out);
+        assertFalse(out.contains("2fa-gw"), out);
+        assertFalse(out.contains("3com-fw01"), out);
+    }
+
+    @Test
+    void bracketedNonIpv6UrlsSanitizeSingleLabelHost() {
+        // F-12: [https://fw-tango-04] and [http://fw-tango-04:8443] must not include closing ']' in hostPort
+        String out = s("Portal link: [https://intranet-gw] and [http://intranet-gw:8443]");
+        assertFalse(out.contains("intranet-gw"), out);
+        assertTrue(out.matches("Portal link: \\[https://h-[0-9a-f]{10}\\] and \\[http://h-[0-9a-f]{10}:8443\\]"), out);
+    }
+
+    @Test
+    void bsdSingleHexDigitMacOctetsAreSanitizedAndReverted() {
+        // F-15: BSD/macOS arp -a omits leading zero on single-nibble MAC octets
+        String original = "? (192.0.2.10) at 0:1a:2b:3c:4d:5 on en0 ifscope [ethernet]";
+        String sanitized = s(original);
+        assertFalse(sanitized.contains("0:1a:2b:3c:4d:5"), sanitized);
+        assertFalse(sanitized.contains("3c:4d"), sanitized);
+        TextReverter reverter = new TextReverter(vault, new Counts());
+        assertEquals(original, reverter.revert(sanitized));
+    }
+
+    @Test
+    void ipv6WithZoneAndCidrPrefixRoundTrips() {
+        // F-16: IPv6 network and interface addresses with both %zone and /prefix must revert cleanly
+        String original = "route 2001:db8:1234::%eth0/48 via fe80::1234%eth0/64";
+        String sanitized = s(original);
+        assertFalse(sanitized.contains("2001:db8:1234"), sanitized);
+        assertFalse(sanitized.contains("fe80::1234"), sanitized);
+        TextReverter reverter = new TextReverter(vault, new Counts());
+        assertEquals(original, reverter.revert(sanitized));
+    }
+
+    @Test
+    void revertDoesNotPartiallyResolveSyntheticCompoundTokens() {
+        // F-17: A synthetic ::ffff:<v4token> or <invented-label>.<vault-fqdn> must not resolve interior sub-tokens
+        TestVault localVault = new TestVault();
+        TextSanitizer localSanitizer = new TextSanitizer(mappers, localVault, new Counts());
+        String v4Token = localSanitizer.sanitize("192.0.2.10");
+        String fqdnToken = localSanitizer.sanitize("www.example.com"); // h-xxx.h-yyy.com
+        String domainLabelToken = fqdnToken.substring(fqdnToken.indexOf('.') + 1); // h-yyy.com
+
+        TextReverter reverter = new TextReverter(localVault, new Counts());
+        String syntheticV6 = "::ffff:" + v4Token;
+        assertEquals(syntheticV6, reverter.revert(syntheticV6), "un-vaulted ::ffff:<v4token> must stay as-is");
+
+        String syntheticFqdn = "h-0000000000." + domainLabelToken;
+        assertEquals(syntheticFqdn, reverter.revert(syntheticFqdn), "compound FQDN with unknown label must stay as-is");
+    }
 }

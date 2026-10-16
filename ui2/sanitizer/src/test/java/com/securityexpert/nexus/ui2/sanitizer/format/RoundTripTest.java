@@ -94,8 +94,9 @@ class RoundTripTest {
     }
 
     @Test
-    void jsonKeepsKeysWhitespaceAndEscapes() throws Exception {
-        String json = "{\n  \"hostname\": \"corefw\",\n  \"192.0.2.1\": \"key kept\",\n  \"peers\": [\"198.51.100.2\", "
+    void jsonSanitizesKeysAndValuesWhileKeepingStructureWhitespaceAndEscapes() throws Exception {
+        String json = "{\n  \"hostname\": \"corefw\",\n  \"192.0.2.1\": \"key sanitized\",\n"
+                + "  \"fw01.example.com\": {\"00:1a:2b:3c:4d:5e\": \"eth0\"},\n  \"peers\": [\"198.51.100.2\", "
                 + "\"fw \\u0041 www.example.com\\n\", 42, true, null, {\"mac\": \"00-1A-2B-3C-4D-5E\"}],\n"
                 + "  \"note\": \"slash \\/ and \\\"quotes\\\" around 203.0.113.9\"\n}\n{\"ndjson\": \"192.0.2.77\"}\n";
         byte[] original = json.getBytes(StandardCharsets.UTF_8);
@@ -103,10 +104,13 @@ class RoundTripTest {
         assertEquals(FileType.JSON, Detection.of(in).type());
         byte[] sanitized = sanitizeBytes(original, "x.bin");
         String text = new String(sanitized, StandardCharsets.UTF_8);
-        assertTrue(text.contains("\"192.0.2.1\": \"key kept\""), "keys are structure, not values");
+        assertFalse(text.contains("192.0.2.1"), "IP used as a JSON object key must be sanitized");
+        assertFalse(text.contains("fw01.example.com"), "FQDN used as a JSON object key must be sanitized");
+        assertFalse(text.contains("00:1a:2b:3c:4d:5e"), "MAC used as a JSON object key must be sanitized");
         assertTrue(text.matches("(?s)\\{\n  \"hostname\": \"h-[0-9a-f]{10}\",.*"), text);
         assertTrue(text.contains("\"fw \\u0041 h-"), "raw escapes before the change are kept");
         assertFalse(text.contains("198.51.100.2\""));
+        assertNoOriginal(sanitized);
         assertArrayEquals(original, revertBytes(sanitized));
     }
 
@@ -163,6 +167,121 @@ class RoundTripTest {
             assertTrue(formula.startsWith("IF(A2=\"h-"), formula);
             assertFalse(formula.contains("192.0.2.10"));
         }
+    }
+
+    @Test
+    void xlsxSanitizesVmlCommentsAndConnectionAttributesAndRemovesEmbeddedBinaries() throws Exception {
+        // F-02 & F-13: VML legacy comments and auxiliary XML attributes are sanitized; embedded binary objects are removed and counted
+        Path base = dir.resolve("base.xlsx");
+        try (XSSFWorkbook wb = new XSSFWorkbook()) {
+            Sheet s = wb.createSheet("Sheet1");
+            Row r = s.createRow(0);
+            r.createCell(0).setCellValue("src_hostname");
+            Row r1 = s.createRow(1);
+            r1.createCell(0).setCellValue("corefw");
+            try (OutputStream out = Files.newOutputStream(base)) {
+                wb.write(out);
+            }
+        }
+        Path in = dir.resolve("rich.xlsx");
+        try (ZipInputStream zIn = new ZipInputStream(Files.newInputStream(base));
+             ZipOutputStream zOut = new ZipOutputStream(Files.newOutputStream(in))) {
+            ZipEntry e;
+            while ((e = zIn.getNextEntry()) != null) {
+                byte[] content = zIn.readAllBytes();
+                if (e.getName().equals("[Content_Types].xml")) {
+                    String xml = new String(content, StandardCharsets.UTF_8);
+                    xml = xml.replace("</Types>",
+                            "<Default Extension=\"vml\" ContentType=\"application/vnd.openxmlformats-officedocument.vmlDrawing\"/>"
+                                    + "<Override PartName=\"/xl/connections.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.connections+xml\"/>"
+                                    + "</Types>");
+                    content = xml.getBytes(StandardCharsets.UTF_8);
+                }
+                zOut.putNextEntry(new ZipEntry(e.getName()));
+                zOut.write(content);
+                zOut.closeEntry();
+            }
+            zOut.putNextEntry(new ZipEntry("xl/drawings/vmlDrawing1.vml"));
+            zOut.write(("<xml xmlns:v=\"urn:schemas-microsoft-com:vml\"><v:shape><v:textbox><div>"
+                    + "Firewall 192.0.2.55 on fw01.example.com</div></v:textbox></v:shape></xml>")
+                    .getBytes(StandardCharsets.UTF_8));
+            zOut.closeEntry();
+
+            zOut.putNextEntry(new ZipEntry("xl/connections.xml"));
+            zOut.write(("<connections xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">"
+                    + "<connection id=\"1\" name=\"Prod\"><dbPr connection=\"Server=198.51.100.77;Database=net\" "
+                    + "serverCommand=\"SELECT * FROM 203.0.113.44\"/></connection></connections>")
+                    .getBytes(StandardCharsets.UTF_8));
+            zOut.closeEntry();
+
+            zOut.putNextEntry(new ZipEntry("xl/embeddings/oleObject1.bin"));
+            zOut.write("OLE binary payload 192.0.2.99".getBytes(StandardCharsets.UTF_8));
+            zOut.closeEntry();
+
+            zOut.putNextEntry(new ZipEntry("xl/media/image1.png"));
+            zOut.write(new byte[] {(byte) 0x89, 'P', 'N', 'G', '1', '9', '2', '.', '0', '.', '2', '.', '8', '8'});
+            zOut.closeEntry();
+        }
+        Path out = dir.resolve("rich.sanitized.xlsx");
+        Sanitizer.Result res = sanitizer.sanitize(in, out, vault);
+        assertEquals(2L, res.counts().get("embedded_objects_removed"), "both binary parts must be removed and counted");
+        String unzipped = new String(unzippedText(out), StandardCharsets.UTF_8);
+        assertFalse(unzipped.contains("192.0.2.55"), "VML IP must be sanitized");
+        assertFalse(unzipped.contains("fw01.example.com"), "VML FQDN must be sanitized");
+        assertFalse(unzipped.contains("198.51.100.77"), "connection attribute IP must be sanitized");
+        assertFalse(unzipped.contains("203.0.113.44"), "serverCommand attribute IP must be sanitized");
+        assertFalse(unzipped.contains("192.0.2.99"), "OLE binary must be removed");
+        assertFalse(unzipped.contains("corefw"), "src_hostname header column (F-14) must be sanitized");
+        List<String> outEntries = new ArrayList<>();
+        try (ZipInputStream z = new ZipInputStream(Files.newInputStream(out))) {
+            ZipEntry ze;
+            while ((ze = z.getNextEntry()) != null) outEntries.add(ze.getName());
+        }
+        assertTrue(outEntries.contains("xl/drawings/vmlDrawing1.vml"));
+        assertTrue(outEntries.contains("xl/connections.xml"));
+        assertFalse(outEntries.contains("xl/embeddings/oleObject1.bin"));
+        assertFalse(outEntries.contains("xl/media/image1.png"));
+
+        Path reverted = dir.resolve("rich.reverted.xlsx");
+        sanitizer.revert(out, reverted, vault);
+        String revertedText = new String(unzippedText(reverted), StandardCharsets.UTF_8);
+        assertTrue(revertedText.contains("192.0.2.55") && revertedText.contains("fw01.example.com"));
+        assertTrue(revertedText.contains("198.51.100.77") && revertedText.contains("203.0.113.44"));
+    }
+
+    @Test
+    void outputFileHasRestrictivePermissionsAndIsDeletedOnFailure() throws Exception {
+        // F-03: output file created with 0600 permissions and deleted on any mid-stream failure
+        Path in = write("ok.txt", "hello 192.0.2.10\n".getBytes(StandardCharsets.UTF_8));
+        Path out = dir.resolve("ok.out");
+        sanitizer.sanitize(in, out, vault);
+        try {
+            var perms = Files.getPosixFilePermissions(out);
+            assertEquals(java.nio.file.attribute.PosixFilePermissions.fromString("rw-------"), perms);
+        } catch (UnsupportedOperationException nonPosix) {
+            // Windows / non-POSIX FS
+        }
+        Path failedOut = dir.resolve("failed.out");
+        assertThrows(IllegalStateException.class, () -> sanitizer.sanitize(in, failedOut, (key, original) -> {
+            throw new IllegalStateException("simulated mid-stream sink failure");
+        }));
+        assertFalse(Files.exists(failedOut), "partial output file must not remain on disk after failure");
+    }
+
+    @Test
+    void longLineWithoutUpperHalfWhitespaceDoesNotSplitMidToken() throws Exception {
+        // F-05: 1 MiB line with whitespace only near start and an IP straddling MAX_LINE boundary
+        StringBuilder sb = new StringBuilder(TextFormat.MAX_LINE + 64);
+        sb.append("prefix ");
+        while (sb.length() < TextFormat.MAX_LINE - 5) {
+            sb.append("a,");
+        }
+        sb.append("192.0.2.123,tail\n");
+        byte[] original = sb.toString().getBytes(StandardCharsets.UTF_8);
+        byte[] sanitized = sanitizeBytes(original, "longline.txt");
+        assertFalse(new String(sanitized, StandardCharsets.UTF_8).contains("192.0.2.123"),
+                "IP straddling MAX_LINE must not be split in half");
+        assertArrayEquals(original, revertBytes(sanitized));
     }
 
     @Test

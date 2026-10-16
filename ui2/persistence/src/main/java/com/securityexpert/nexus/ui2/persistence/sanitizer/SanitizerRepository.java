@@ -100,12 +100,20 @@ public final class SanitizerRepository {
     public void finishJob(String jobId, String actor, boolean succeeded, String fileType, long inputBytes,
             long outputBytes, String countsJson, String failureReason, long entries) {
         audited.inTransaction(actor, ACTION_RUN, db -> {
-            db.execute("update sanitize_job set state = {1}, file_type = {2}, input_bytes = {3}, output_bytes = {4}, "
-                    + "counts = {5}::jsonb, failure_reason = {6}, finished_at = now(), vault_entries = {7}, "
-                    + "output_state = {8} where job_id = {0}", jobId, succeeded ? "SUCCEEDED" : "FAILED", fileType,
-                    inputBytes, succeeded ? outputBytes : null, countsJson, failureReason, entries,
-                    succeeded ? "READY" : "NONE");
-            ledger(db, jobId, null, succeeded ? "SANITIZED" : "SANITIZE_FAILED", actor, entries);
+            if (succeeded) {
+                db.execute("update sanitize_job set state = 'SUCCEEDED', file_type = {1}, input_bytes = {2}, output_bytes = {3}, "
+                        + "counts = {4}::jsonb, failure_reason = null, finished_at = now(), vault_entries = {5}, "
+                        + "output_state = 'READY' where job_id = {0}", jobId, fileType, inputBytes, outputBytes, countsJson, entries);
+                ledger(db, jobId, null, "SANITIZED", actor, entries);
+            } else {
+                int deleted = db.execute("delete from sanitize_vault_entry where job_id = {0}", jobId);
+                db.execute("update sanitize_job set state = 'FAILED', file_type = {1}, input_bytes = {2}, output_bytes = null, "
+                        + "counts = {3}::jsonb, failure_reason = {4}, finished_at = now(), vault_entries = 0, "
+                        + "output_state = 'NONE', wrapped_data_key = null, vault_pruned_at = now() where job_id = {0}",
+                        jobId, fileType, inputBytes, countsJson, failureReason);
+                ledger(db, jobId, null, "SANITIZE_FAILED", actor, 0L);
+                ledger(db, jobId, null, "VAULT_PRUNED", actor, (long) deleted);
+            }
             return null;
         });
     }
@@ -174,7 +182,7 @@ public final class SanitizerRepository {
         return transactions.inTransaction(db -> db.connectionResult(c -> {
             try (PreparedStatement ps = c.prepareStatement("select e.job_id, e.lookup_key, e.sealed_original, j.wrapped_data_key, "
                     + "j.key_id from sanitize_vault_entry e join sanitize_job j on j.job_id = e.job_id "
-                    + "where e.lookup_key = any(?::bytea[]) and j.vault_pruned_at is null and j.vault_expires_at > now() "
+                    + "where e.lookup_key = any(?::bytea[]) and j.state = 'SUCCEEDED' and j.vault_pruned_at is null and j.vault_expires_at > now() "
                     + "and (?::text is null or j.created_by = ?) and (?::text is null or j.job_id = ?) "
                     + "order by j.created_at desc, j.job_id")) {
                 ps.setArray(1, c.createArrayOf("bytea", lookupKeys.toArray(new byte[0][])));
@@ -223,8 +231,17 @@ public final class SanitizerRepository {
      */
     public int closeInterrupted() {
         return audited.inTransaction(SYSTEM_ACTOR, ACTION_RUN, db -> {
-            int n = db.execute("update sanitize_job set state = 'FAILED', failure_reason = 'SERVICE_RESTARTED', "
-                    + "finished_at = now(), output_state = 'NONE' where state = 'RUNNING'");
+            List<String> runningJobs = db.fetch("select job_id from sanitize_job where state = 'RUNNING'")
+                    .map(r -> r.get(0, String.class));
+            int n = 0;
+            for (String jobId : runningJobs) {
+                int deleted = db.execute("delete from sanitize_vault_entry where job_id = {0}", jobId);
+                n += db.execute("update sanitize_job set state = 'FAILED', failure_reason = 'SERVICE_RESTARTED', "
+                        + "finished_at = now(), output_state = 'NONE', vault_entries = 0, wrapped_data_key = null, "
+                        + "vault_pruned_at = now() where job_id = {0}", jobId);
+                ledger(db, jobId, null, "SANITIZE_FAILED", SYSTEM_ACTOR, 0L);
+                ledger(db, jobId, null, "VAULT_PRUNED", SYSTEM_ACTOR, (long) deleted);
+            }
             n += db.execute("update sanitize_job set output_state = 'EXPIRED' where output_state = 'READY'");
             n += db.execute("update sanitize_revert_job set state = 'FAILED', failure_reason = 'SERVICE_RESTARTED', "
                     + "finished_at = now(), output_state = 'NONE' where state = 'RUNNING'");

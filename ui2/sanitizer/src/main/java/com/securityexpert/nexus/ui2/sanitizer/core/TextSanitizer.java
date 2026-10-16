@@ -125,7 +125,10 @@ public final class TextSanitizer {
             Matcher m = Patterns.EMAIL.matcher(text);
             while (m.find()) out.add(new Candidate(m.start(), m.end(), Type.EMAIL, new String[] {m.group(1), m.group(2)}));
             m = Patterns.USER_AT_HOST.matcher(text);
-            while (m.find()) out.add(new Candidate(m.start(), m.end(), Type.USER_AT_HOST, new String[] {m.group(1), m.group(2)}));
+            while (m.find()) {
+                learn(m.group(2));
+                out.add(new Candidate(m.start(), m.end(), Type.USER_AT_HOST, new String[] {m.group(1), m.group(2)}));
+            }
         }
         if (colon || text.indexOf('-') >= 0 || dot) {
             Matcher m = Patterns.MAC.matcher(text);
@@ -142,11 +145,15 @@ public final class TextSanitizer {
         }
         Matcher m = Patterns.CONTEXT_HOST.matcher(text);
         while (m.find()) {
+            learn(m.group(1));
             out.add(new Candidate(m.start(1), m.end(1), Type.CONTEXT_HOST, new String[] {m.group(1)}));
         }
         for (var pattern : List.of(Patterns.SYSLOG_3164, Patterns.SYSLOG_5424)) {
             Matcher s = pattern.matcher(text);
-            if (s.find()) out.add(new Candidate(s.start(1), s.end(1), Type.SYSLOG_HOST, new String[] {s.group(1)}));
+            if (s.find()) {
+                learn(s.group(1));
+                out.add(new Candidate(s.start(1), s.end(1), Type.SYSLOG_HOST, new String[] {s.group(1)}));
+            }
         }
         if (mappers.known() != KnownNames.NONE || !learned.isEmpty()) {
             Matcher w = Patterns.WORD.matcher(text);
@@ -207,7 +214,7 @@ public final class TextSanitizer {
     private void urlCandidate(String text, int from, List<Candidate> out) {
         int end = from;
         while (end < text.length() && "/?#\"'<>`\\ \t\r\n,;)]}".indexOf(text.charAt(end)) < 0) end++;
-        if (end < text.length() && text.charAt(end) == ']') end++;
+        if (end < text.length() && text.charAt(end) == ']' && text.substring(from, end).indexOf('[') >= 0) end++;
         String authority = text.substring(from, end);
         int hostStart = from;
         int atIndex = authority.lastIndexOf('@');
@@ -310,10 +317,6 @@ public final class TextSanitizer {
         }
         rendered = Addresses.formatV6(mapped, style);
         sink.record(new VaultKey(VaultKind.ADDRESS, Addresses.formatV6(mapped, Addresses.V6Style.CANONICAL)), address);
-        if (IpPermutation.isV4Mapped(bytes)) {
-            sink.record(new VaultKey(VaultKind.ADDRESS, Addresses.formatV4(java.util.Arrays.copyOfRange(mapped, 12, 16))),
-                    Addresses.formatV4(java.util.Arrays.copyOfRange(bytes, 12, 16)));
-        }
         return rendered + suffix + (prefix == null ? "" : "/" + prefix);
     }
 
@@ -332,7 +335,8 @@ public final class TextSanitizer {
         String[] labels = name.split("\\.", -1);
         int suffix = suffixes.suffixLabels(labels);
         if (suffix == 0 && !anySuffix) return null;
-        if (labels.length == 2 && suffix == 1 && Patterns.FILE_LIKE_TLDS.contains(labels[1].toLowerCase(Locale.ROOT))) {
+        if (labels.length == 2 && suffix == 1 && !labels[0].contains("-")
+                && Patterns.FILE_LIKE_TLDS.contains(labels[1].toLowerCase(Locale.ROOT))) {
             return null;
         }
         if (labels[labels.length - 1].chars().allMatch(Character::isDigit)) return null;

@@ -65,9 +65,19 @@ public final class TextReverter {
 
     private String apply(String text, List<Candidate> candidates, Map<VaultKey, String> originals) {
         if (candidates.isEmpty()) return text;
+        List<Candidate> unresolvedLabels = new ArrayList<>();
+        for (Candidate c : candidates) {
+            if ((c.key().kind() == VaultKind.LABEL || c.key().kind() == VaultKind.DEVICE) && render(c, originals) == null) {
+                unresolvedLabels.add(c);
+            }
+        }
         List<Candidate> found = new ArrayList<>();
         Map<Candidate, String> replacement = new HashMap<>();
         for (Candidate c : candidates) {
+            if ((c.key().kind() == VaultKind.LABEL || c.key().kind() == VaultKind.DEVICE)
+                    && !unresolvedLabels.isEmpty() && taintedByUnresolvedLabel(text, c, unresolvedLabels)) {
+                continue;
+            }
             String value = render(c, originals);
             if (value != null) {
                 found.add(c);
@@ -87,6 +97,24 @@ public final class TextReverter {
         return out.append(text, copied, text.length()).toString();
     }
 
+    private static boolean taintedByUnresolvedLabel(String text, Candidate c, List<Candidate> unresolved) {
+        for (Candidate u : unresolved) {
+            int lo = Math.min(c.end(), u.end());
+            int hi = Math.max(c.start(), u.start());
+            if (lo >= hi) continue;
+            boolean sameDotted = true;
+            for (int i = lo; i < hi; i++) {
+                char ch = text.charAt(i);
+                if (ch != '.' && ch != '-' && !Character.isLetterOrDigit(ch)) {
+                    sameDotted = false;
+                    break;
+                }
+            }
+            if (sameDotted) return true;
+        }
+        return false;
+    }
+
     private static String render(Candidate c, Map<VaultKey, String> originals) {
         String original = originals.get(c.key());
         String suffix = "";
@@ -98,6 +126,9 @@ public final class TextReverter {
         return switch (c.key().kind()) {
             case MAC -> {
                 try {
+                    if (original.length() < 17 && MacText.Style.of(original).equals(MacText.Style.of(c.token()))) {
+                        yield original;
+                    }
                     yield MacText.format(MacText.parse(original), MacText.Style.of(c.token()));
                 } catch (IllegalArgumentException unparsable) {
                     yield original;
@@ -118,12 +149,16 @@ public final class TextReverter {
             address = original.substring(0, slash);
             tail = original.substring(slash);
         }
-        String tokenAddress = token.contains("/") ? token.substring(0, token.indexOf('/')) : token;
+        int tokenSlash = token.indexOf('/');
+        String tokenBeforeSlash = tokenSlash >= 0 ? token.substring(0, tokenSlash) : token;
+        int tokenPercent = tokenBeforeSlash.indexOf('%');
+        String tokenAddress = tokenPercent >= 0 ? tokenBeforeSlash.substring(0, tokenPercent) : tokenBeforeSlash;
+        String tokenZone = tokenPercent >= 0 ? tokenBeforeSlash.substring(tokenPercent) : "";
         if (address.indexOf(':') < 0 || tokenAddress.indexOf(':') < 0) return original;
         Addresses.V6Style want = Addresses.V6Style.of(tokenAddress);
-        if (want.equals(Addresses.V6Style.of(address))) return original;
+        if (want.equals(Addresses.V6Style.of(address))) return address + tokenZone + tail;
         byte[] bytes = Addresses.parseV6(address);
-        return bytes == null ? original : Addresses.formatV6(bytes, want) + tail;
+        return bytes == null ? original : Addresses.formatV6(bytes, want) + tokenZone + tail;
     }
 
     /** A DNS name: letter case follows the token position by position (DNS 0x20 case randomisation). */
@@ -163,9 +198,42 @@ public final class TextReverter {
                 }
             }
         }
+        List<int[]> v6Spans = new ArrayList<>();
+        if (colon) {
+            Matcher m = Patterns.IPV6_RUN.matcher(text);
+            while (m.find()) {
+                int end = m.end();
+                String run = m.group();
+                while (!run.isEmpty() && Addresses.parseV6(run) == null && (run.endsWith(".") || run.endsWith(":"))) {
+                    run = run.substring(0, run.length() - 1);
+                    end--;
+                }
+                byte[] bytes = run.isEmpty() ? null : Addresses.parseV6(run);
+                if (bytes == null) continue;
+                String canonical = Addresses.formatV6(bytes, Addresses.V6Style.CANONICAL);
+                VaultKey addressKey = new VaultKey(VaultKind.ADDRESS, canonical);
+                String zone = "";
+                int stop = end;
+                Matcher z = Patterns.ZONE.matcher(text).region(stop, text.length());
+                if (stop < text.length() && text.charAt(stop) == '%' && z.lookingAt()) {
+                    zone = z.group();
+                    stop = z.end();
+                }
+                Matcher p = Patterns.PREFIX.matcher(text).region(stop, text.length());
+                if (stop < text.length() && text.charAt(stop) == '/' && p.lookingAt() && Integer.parseInt(p.group(1)) <= 128) {
+                    stop = p.end();
+                    out.add(new Candidate(m.start(), stop, new VaultKey(VaultKind.NETWORK, canonical + "/" + p.group(1)),
+                            addressKey, "/" + p.group(1), run + zone + "/" + p.group(1)));
+                } else {
+                    out.add(new Candidate(m.start(), end, addressKey, null, null, run));
+                }
+                v6Spans.add(new int[] {m.start(), stop});
+            }
+        }
         if (dot) {
             Matcher m = Patterns.IPV4.matcher(text);
             while (m.find()) {
+                if (overlapsAny(v6Spans, m.start(), m.end())) continue;
                 byte[] bytes = Addresses.parseV4(m.group(1));
                 if (bytes == null) continue;
                 String address = Addresses.formatV4(bytes);
@@ -183,33 +251,13 @@ public final class TextReverter {
                         null, null, m.group()));
             }
         }
-        if (colon) {
-            Matcher m = Patterns.IPV6_RUN.matcher(text);
-            while (m.find()) {
-                int end = m.end();
-                String run = m.group();
-                while (!run.isEmpty() && Addresses.parseV6(run) == null && (run.endsWith(".") || run.endsWith(":"))) {
-                    run = run.substring(0, run.length() - 1);
-                    end--;
-                }
-                byte[] bytes = run.isEmpty() ? null : Addresses.parseV6(run);
-                if (bytes == null) continue;
-                String canonical = Addresses.formatV6(bytes, Addresses.V6Style.CANONICAL);
-                VaultKey addressKey = new VaultKey(VaultKind.ADDRESS, canonical);
-                Matcher p = Patterns.PREFIX.matcher(text).region(end, text.length());
-                if (end < text.length() && text.charAt(end) == '/' && p.lookingAt() && Integer.parseInt(p.group(1)) <= 128) {
-                    out.add(new Candidate(m.start(), p.end(), new VaultKey(VaultKind.NETWORK, canonical + "/" + p.group(1)),
-                            addressKey, "/" + p.group(1), run + "/" + p.group(1)));
-                } else {
-                    out.add(new Candidate(m.start(), end, addressKey, null, null, run));
-                }
-                if (IpPermutation.isV4Mapped(bytes) && run.indexOf('.') >= 0) {
-                    int tail = m.start() + run.lastIndexOf(':') + 1;
-                    String v4 = text.substring(tail, end);
-                    out.add(new Candidate(tail, end, new VaultKey(VaultKind.ADDRESS, v4), null, null, v4));
-                }
-            }
-        }
         return out;
+    }
+
+    private static boolean overlapsAny(List<int[]> spans, int start, int end) {
+        for (int[] span : spans) {
+            if (start < span[1] && end > span[0]) return true;
+        }
+        return false;
     }
 }

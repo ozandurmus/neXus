@@ -15,10 +15,10 @@ One engine, four input kinds, one consistent mapping:
 
 | Input | Output |
 |---|---|
-| pcap / pcapng | Same capture structure (frames, timing, lengths, TCP/UDP/ICMP headers, flags, seq/ack, IP IDs kept). Addresses rewritten (IPv4, IPv6, ARP, inner tunnel headers where decoded), checksums recomputed, **payload removed**: bytes after the L4 header zeroed (captured length kept, so loss/latency analysis is unaffected). DNS names in DNS packets replaced by their pseudonyms. |
+| pcap / pcapng | Same capture structure (frames, timing, lengths, TCP/UDP/ICMP headers, flags, seq/ack, IP IDs kept). Addresses rewritten (IPv4, IPv6, ARP, IPv4 header options and IPv6 extension header addresses, inner tunnel headers where decoded; unparseable or unknown IPv4/IPv6 options zeroed), checksums recomputed, **payload removed**: bytes after the L4 header zeroed (captured length kept, so loss/latency analysis is unaffected). DNS names in DNS packets (including compression targets) replaced by their pseudonyms, or the DNS payload zeroed fail-closed if unparseable. |
 | Text logs (any line format) | Every IPv4/IPv6 address and CIDR, MAC, FQDN/hostname, e-mail and URL host replaced in place; the rest of the line untouched. |
-| CSV / XLSX | Cell by cell with the text rules; sheet structure, formulas' literal values and formatting kept. |
-| JSON | String values with the text rules; keys and structure kept. |
+| CSV / XLSX | Cell by cell with the text rules; sheet structure, formulas' literal values and formatting kept. In XLSX, VML comment/drawing text (`.vml`) is sanitized with the text rules, and embedded binary objects (OLE packages, images, printer settings, and other non-XML binary parts that cannot be inspected safely) are **removed** from the output archive and counted under `embedded_objects_removed` in the job summary. |
+| JSON | Object keys and string values sanitized with the text rules; structure kept; revert restores both keys and values. |
 
 ## 2. Mapping rules (deterministic, keyed, one-way)
 
@@ -26,7 +26,8 @@ One engine, four input kinds, one consistent mapping:
   masking uses, so a device's pseudonym is identical in the UI, in exports and in sanitized files.
 - **IP addresses:** prefix-preserving keyed permutation (Crypto-PAn construction with HMAC-SHA256 as the PRF), same
   address family. Two addresses sharing an n-bit prefix map to addresses sharing exactly an n-bit prefix, so subnets,
-  routes and "same /24" relationships survive. Loopback, unspecified, multicast and limited broadcast stay as they are.
+  routes and "same /24" relationships survive without leaking original high-order prefix bits. Loopback, unspecified,
+  multicast and limited broadcast stay as they are.
 - **Known device names** (neXus inventory): the existing `TopologyNamePseudonymizer` pseudonym (`FW-TANGO-04`).
 - **Other hostnames / FQDNs:** each label replaced by `h-<10 hex>` from HMAC of the label (public suffix kept), so
   `a.b.example.com`-style hierarchy survives; same label -> same token everywhere.
@@ -43,7 +44,8 @@ One engine, four input kinds, one consistent mapping:
 - **Who:** sanitize — operator, operation_admin, security_admin (`DATA_SANITIZE_RUN`); revert —
   security_admin and the user who ran the sanitize job (`DATA_SANITIZE_REVERT`); aiview neither. Every sanitize and
   revert is audited with counts only. Vault entries expire after 90 days by default (configurable), pruned and
-  ledgered like other retention.
+  ledgered like other retention; failed or interrupted jobs delete their vault entries and wrapped data key immediately
+  (ledgered as `VAULT_PRUNED`).
 - A sanitize job's summary reports counts per type, never originals.
 
 ## 3. Where it is used
@@ -80,15 +82,16 @@ Where the code lives and the choices made inside this contract's latitude. Nothi
 - **IP.** PacketBreaker's Crypto-PAn message (`"ip" || len || n || prefix`) under the `ip` sub-key. Kept point for
   point: `0.0.0.0/8`, `127/8`, `224/4`, `240/4` (covers limited broadcast and netmasks), `::`, `::1`, `ff00::/8`;
   kept as a block with the interior permuted: `169.254/16`, `fe80::/10`, `::ffff:0:0/96` (interior = the IPv4 map).
-  Forcing the tree's flip bits to 0 on the paths into these ranges keeps the map bijective and prefix-preserving, so no
-  ordinary address lands in a kept range; the price is that the leading bits shared with a kept range survive.
+  In the neXus mode, top-prefix cycle walking permutes all non-reserved unicast prefixes across the full unicast space
+  without fixing leading bits, so only prefix relationships (shared prefix length) are preserved while first-octet
+  distributions are uniform across non-reserved `/8`s.
   The contiguous /1 and /2 netmasks (outside the kept ranges) are kept as text. A network (host bits zero) is one token
   (`a.b.c.0/24`); an interface address with a prefix maps the address and keeps the length.
 - **Names.** `h-<10 hex>` of the lower-case punycode label (so a Unicode label and its punycode form agree); an
   all-upper label gives `H-<10 HEX>` with the same digest, a mixed-case label a case-exact digest, so revert is
   byte-exact. Public suffixes come from the JDK's own copy of the Public Suffix List (ICANN rules) plus special-use
-  and common internal suffixes (`test`, `local`, `internal`, `corp`, …). Two-label names whose TLD is usually a file
-  extension (`setup.py`, `notes.md`) are not names. Single-label hosts are replaced after host keywords (`hostname`,
+  and common internal suffixes (`test`, `local`, `internal`, `corp`, …). Two-label names whose TLD is an unambiguous file
+  extension (`setup.py`, `notes.md`, `archive.zip`) are not names. Single-label hosts are replaced after host keywords (`hostname`,
   `devname=`, `host=`, …), in RFC 3164/5424 headers, in `user@host`, in URLs, and under host-like CSV/XLSX headers or
   JSON keys (`hostname`, `device`, `server`, `cihaz`, …); a name learned there is replaced wherever it reappears in
   the same file. Known inventory names use the `TopologyNamePseudonymizer` pseudonym.
@@ -96,26 +99,29 @@ Where the code lives and the choices made inside this contract's latitude. Nothi
   image); parity: all 80 committed reference cases (`pcap-parity/manifest.json`, regenerated by
   `tools/sanitizer/pcap_parity_reference.py`) and the 64 scenario cases are byte-identical. The neXus mode never
   refuses a frame (non-first fragments, non-IP frames and unknown link types are zeroed after the last decoded
-  header), and DNS names are replaced by **same-length** label pseudonyms (`[a-z0-9]`, case per position) because the
-  label length is wire structure; such a name is recorded as one `dns_name` vault entry. A DNS name therefore reads
-  differently in a capture than in a log (`h-…` tokens cannot keep lengths).
-- **XLSX.** POI's `ZipSecureFile` (zip-bomb limits) opens the package; every part is copied entry by entry and only
-  text is rewritten through StAX (shared/inline strings, cached formula strings, formula string literals, defined
-  names, comments, chart and pivot caches, document properties, external hyperlink targets, table column names).
-  This keeps every style, chart and structure byte-identical and streams a million-row sheet in a 256 MB heap;
-  POI's SXSSF is used by the test suite to build that workbook. A full SXSSF rewrite would have dropped charts,
-  pivots and validations, which §1 keeps.
+  header), maps addresses in IPv4 options (Record Route, Loose/Strict Source Route, Internet Timestamp) and IPv6
+  extension headers (Routing Header, Destination/Hop-by-Hop Home Address option) while zeroing unparseable or unknown
+  options, and replaces DNS names (including valid compression targets) by **same-length** label pseudonyms
+  (`[a-z0-9]`, case per position) or zeroes the DNS payload fail-closed if any compression target or record is
+  malformed.
+- **XLSX.** POI's `ZipSecureFile` (zip-bomb limits, plus package-wide caps of 4,096 entries and 2 GiB uncompressed)
+  opens the package; XML, `.rels`, and `.vml` drawing parts are rewritten through StAX (shared/inline strings, cached
+  formula strings, formula string literals, defined names, comments, VML notes/textboxes, chart and pivot caches,
+  document properties, external hyperlink/relationship targets, table column names). Non-XML binary parts (embedded OLE
+  objects, images, printer settings) are removed from the output archive and counted as `embedded_objects_removed`.
 - **Vault.** V156: `sanitize_job` (counts only; the per-job AES-256 data key wrapped by the artefact-store master
   key), `sanitize_vault_entry` (`lookup_key = HMAC(vault sub-key, kind || 0x00 || canonical token)`,
   `sealed_original = AES-256-GCM` with job id and lookup key as associated data), `sanitize_revert_job`,
   `sanitize_ledger`. The vault's audit trigger is statement-level (one `audit_log` row per batch and job with the
-  entry count). Expiry deletes the entries, clears the wrapped key and ledgers `VAULT_PRUNED`.
+  entry count). Expiry (and immediate cleanup on failed or interrupted jobs) deletes the entries, clears the wrapped
+  key and ledgers `VAULT_PRUNED`.
 - **Revert scope.** `data_sanitize_revert` admits operator, operation_admin and security_admin; the service limits a
-  revert to the vaults of the actor's own jobs (or one named job the actor owns); only security_admin may revert
-  against every vault or another user's job.
-- **Temporary files.** `ui2.sanitizer.work-dir` (default under the JVM temporary directory, an emptyDir in the pod):
-  the input is deleted when the job ends; the result after its single download or `output-ttl-minutes` (60); a
-  service start empties the directory and closes interrupted jobs.
+  revert to the vaults of the actor's own `SUCCEEDED` jobs (or one named job the actor owns); only security_admin may
+  revert against every vault or another user's job.
+- **Temporary files.** `ui2.sanitizer.work-dir` (default under the JVM temporary directory, created with `0700`
+  permissions; temporary `.in` and `.out` files created with `0600` permissions): the input is deleted when the job
+  ends, any partial output is deleted on every failure path, and the result is deleted after its single download or
+  `output-ttl-minutes` (60); a service start empties the directory and closes interrupted jobs.
 - **Hook points (off by default, `SanitizerHooks`).** Packet Analysis "anonymize on upload"
   (`ui2.sanitizer.packet-analysis-anonymize-on-upload`): the upload path calls
   `SanitizerService.sanitizeFile(input, output, actor)` on the streamed capture before storing it and stores the
