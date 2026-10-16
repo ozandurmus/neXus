@@ -37,6 +37,7 @@ import os
 import re
 import signal
 import subprocess
+import tempfile
 import sys
 import time
 from pathlib import Path
@@ -472,10 +473,18 @@ def _ship(args: argparse.Namespace) -> int:
         raise SystemExit("ship needs --task or --branch (nothing goes to main without a pull request)")
     if _git("rev-list", "--count", "origin/main.." + branch) == "0":
         raise SystemExit("nothing to ship: the branch has no commits beyond origin/main")
-    gate = subprocess.run([sys.executable, "tools/privacy/repository_privacy_check.py"], cwd=str(REPO_ROOT),
-                          capture_output=True, text=True)
+    # The gate scans the branch being shipped (a detached worktree of it), never the main checkout: on 2026-10-16
+    # a finding passed this gate because it scanned main and was caught only by the HOST-A pre-receive hook.
+    gate_tree = Path(tempfile.mkdtemp(prefix="ship-privacy-"))
+    try:
+        _git("worktree", "add", "-q", "--detach", str(gate_tree), branch)
+        gate = subprocess.run([sys.executable, "tools/privacy/repository_privacy_check.py"], cwd=str(gate_tree),
+                              capture_output=True, text=True)
+    finally:
+        subprocess.run(["git", "worktree", "remove", "--force", str(gate_tree)], cwd=str(REPO_ROOT),
+                       capture_output=True)
     if gate.returncode != 0 or "Gate:                 PASS" not in gate.stdout:
-        raise SystemExit("privacy gate did not pass; nothing pushed")
+        raise SystemExit("privacy gate did not pass on the shipped branch; nothing pushed")
     # Structural/template/worker changes need the same gate as frontend changes.
     if skip_preview is None:
         _preview_e2e(wt if args.task else REPO_ROOT, _git("rev-parse", branch))
