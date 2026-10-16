@@ -13,6 +13,14 @@ public record PolicySnapshot(Metadata metadata, List<Section> sections, Map<Stri
     public record CollectionFailure(String layerRef, String reason, String layerName, int offset) {
         public CollectionFailure(String layerRef, String reason) { this(layerRef, reason, "", 0); }
     }
+    /** The vendor answered with a name-not-unique API error; the part is explicitly UNKNOWN, not missing. */
+    public static final String VENDOR_NAME_NOT_UNIQUE = "VENDOR_NAME_NOT_UNIQUE";
+    /** Fixed list of reasons that mark a readable-but-unanswerable part as UNKNOWN instead of incomplete. */
+    public static final java.util.Set<String> UNKNOWN_PART_REASONS = java.util.Set.of(VENDOR_NAME_NOT_UNIQUE);
+    /** Only the collector's fixed NAT part may carry an UNKNOWN reason; every other failure stays a gap. */
+    public static boolean unknownPart(CollectionFailure failure) {
+        return failure != null && UNKNOWN_PART_REASONS.contains(failure.reason()) && "NAT".equals(failure.layerName());
+    }
     public PolicySnapshot {
         failures = failures == null ? List.of() : List.copyOf(failures);
         sections = List.copyOf(sections);

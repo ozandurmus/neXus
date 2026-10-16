@@ -44,7 +44,13 @@ public class PolicyCollectionService {
             .mapToInt(d -> ((Number) d.get("rules")).intValue()).sum());
         String state = String.valueOf(status.get("state"));
         String reason = String.valueOf(status.get("reason"));
-        boolean gaps = ((Number) status.getOrDefault("gapUnits", 0)).intValue() > 0 || reason.startsWith("PARTIAL_SNAPSHOT");
+        List<?> unitCodes = status.get("unitFailureCodes") instanceof List<?> list ? list : List.of();
+        // Fixed-list UNKNOWN parts (e.g. NAT the vendor cannot address uniquely) are explicit, not missing evidence.
+        long unknownUnits = unitCodes.stream().filter(com.securityexpert.nexus.ui2.policy.PolicySnapshot.UNKNOWN_PART_REASONS::contains).count();
+        boolean incompleteUnits = unitCodes.stream().anyMatch(c -> !com.securityexpert.nexus.ui2.policy.PolicySnapshot.UNKNOWN_PART_REASONS.contains(c));
+        boolean gaps = incompleteUnits || (unitCodes.isEmpty() && reason.startsWith("PARTIAL_SNAPSHOT"));
+        if (unknownUnits > 0) view.put("unknownParts", List.of(Map.of("part", "NAT",
+            "reasonCode", com.securityexpert.nexus.ui2.policy.PolicySnapshot.VENDOR_NAME_NOT_UNIQUE, "units", unknownUnits)));
         view.put("outcome", state.equals("COMPLETED") && gaps ? "PARTIAL"
             : state.equals("COMPLETED") ? "COMPLETED"
             : Set.of("FAILED", "REJECTED", "OUTCOME_UNKNOWN").contains(state) ? "FAILED" : "UNKNOWN");

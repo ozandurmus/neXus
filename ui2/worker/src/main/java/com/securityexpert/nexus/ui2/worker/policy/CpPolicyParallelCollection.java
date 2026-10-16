@@ -77,7 +77,7 @@ final class CpPolicyParallelCollection {
                 if (stopped) pending.clear();
                 while (!stopped && active < safety.limit && !pending.isEmpty()) {
                     Work work = pending.removeFirst();
-                    if (work.layer != null && (work.layer.failure != null || work.gate != work.layer.gate)) continue;
+                    if (work.layer != null && (work.layer.failure != null || stale(work))) continue;
                     if (cancelled.getAsBoolean()) { stopped = true; pending.clear(); break; }
                     collector.checkActive(deadline, lease);
                     completions.submit(PolicyCollectionTrace.worker(() -> execute(work)));
@@ -87,7 +87,7 @@ final class CpPolicyParallelCollection {
                 Result result = completions.take().get(); active--;
                 Work work = result.work;
                 if (work.inventory != null) work.inventory.elapsed = clock.getAsLong() - work.inventory.started;
-                if (work.layer != null && work.gate != work.layer.gate) {
+                if (work.layer != null && stale(work)) {
                     if (result.error != null && PolicyCollectionTrace.fatal(result.error)) throw result.error;
                     continue;
                 }
@@ -103,9 +103,12 @@ final class CpPolicyParallelCollection {
                         else safety.streak = 0;
                     }
                     stopped |= cancelled.getAsBoolean();
-                    if (!stopped && work.layer != null && retryPage(work, result.error)) {
-                        pending.addFirst(new Work(work.command, work.gate, work.layer, work.offset, work.end, 1, work.accept));
+                    if (!stopped && work.layer != null && totalChanged(result.error)) {
+                        restartOrFail(work.layer, result.error, work.offset);
+                    } else if (!stopped && work.layer != null && retryPage(work, result.error)) {
+                        pending.addFirst(work.retry());
                     } else if (!stopped && work.layer != null && work.gate == 3) {
+                        if (nameNotUnique(result.error) != null) work.layer.policy.names.diagnose("access-hits", result.error);
                         fallbackHits(work.layer);
                     } else if (work.layer != null) {
                         fail(work.layer, result.error, work.offset);
@@ -131,8 +134,9 @@ final class CpPolicyParallelCollection {
                                 safety.streak = 0;
                                 if (work.gate >= 1 && work.gate <= 3)
                                     rejectedRulebase(result.page, rejectingCheck(invalid), work.layer.domainType);
-                                if (retryPage(work, invalid))
-                                    pending.addFirst(new Work(work.command, work.gate, work.layer, work.offset, work.end, 1, work.accept));
+                                if (totalChanged(invalid)) restartOrFail(work.layer, invalid, work.offset);
+                                else if (retryPage(work, invalid))
+                                    pending.addFirst(work.retry());
                                 else if (work.gate == 3) fallbackHits(work.layer);
                                 else fail(work.layer, invalid, work.offset);
                             }
@@ -282,7 +286,7 @@ final class CpPolicyParallelCollection {
             List<Target> targets = collector.installationTargets(run, request, domainUid, domain, node);
             var metadata = new Metadata(ref(request.sourceId(), domainUid, uid), request.sourceId(), "MDS " + request.sourceId(),
                 "CP", container, domain, name, Instant.now().toString(), "", targets.stream().distinct().toList());
-            Policy policy = new Policy(metadata, domain);
+            Policy policy = new Policy(metadata, domain, NameContext.of(domain, node, items));
             policies.add(policy);
             Map<String, JsonNode> roots = new LinkedHashMap<>();
             for (JsonNode layer : node.path("access-layers")) {
@@ -359,6 +363,22 @@ final class CpPolicyParallelCollection {
         enqueue(layer, 0, 0);
     }
 
+    /** Pages issued for a discarded pass (other gate or older generation) must never be assembled. */
+    private static boolean stale(Work work) {
+        return work.gate != work.layer.gate || work.generation != work.layer.generation;
+    }
+
+    /** The layer's total changed while paging: re-read it from offset 0 within the per-layer budget, else fail closed. */
+    private void restartOrFail(Layer layer, RuntimeException error, int offset) {
+        if (layer.failure != null) return;
+        if (layer.restarts >= MAX_LAYER_RESTARTS) { fail(layer, error, offset); return; }
+        layer.restarts++;
+        layer.generation++;
+        layer.pages.clear(); layer.rulePages.clear(); layer.total = -1; layer.issued = 0; layer.rulesFetched = 0; layer.done = false;
+        collector.restartLayer(layer.restarts, layer == layer.policy.nat ? "nat" : "access", deadline, lease);
+        enqueue(layer, 0, 0);
+    }
+
     private void enqueueObjects(String domain, String container, String type) {
         if (collector.reuseObjects(request.sourceId(), container, type)) return;
         if (!CheckPointPolicyCollector.collectObjectsEnabled() || type.equals("gateways-and-servers") && domain.equalsIgnoreCase("Global")) {
@@ -380,7 +400,10 @@ final class CpPolicyParallelCollection {
 
     private void fail(Layer layer, RuntimeException error, int offset) {
         if (layer.failure != null) return;
-        layer.failure = new CollectionFailure(layer.ref, PolicyCollectionTrace.reason(error), layer.name, offset);
+        if (layer == layer.policy.nat && nameNotUnique(error) != null) {
+            layer.policy.names.diagnose("nat", error);
+            layer.failure = new CollectionFailure(layer.ref, VENDOR_NAME_NOT_UNIQUE, "NAT", 0);
+        } else layer.failure = new CollectionFailure(layer.ref, PolicyCollectionTrace.reason(error), layer.name, offset);
         layer.pages.clear();
         checkpoint(layer.policy, layer);
     }
@@ -454,7 +477,11 @@ final class CpPolicyParallelCollection {
     }
 
     private record Work(String command, int gate, Layer layer, int offset, int end, int attempt,
-            Consumer<JsonNode> accept, Consumer<RuntimeException> failed, PackagePages inventory) {
+            Consumer<JsonNode> accept, Consumer<RuntimeException> failed, PackagePages inventory, int generation) {
+        Work(String command, int gate, Layer layer, int offset, int end, int attempt,
+                Consumer<JsonNode> accept, Consumer<RuntimeException> failed, PackagePages inventory) {
+            this(command, gate, layer, offset, end, attempt, accept, failed, inventory, layer == null ? 0 : layer.generation);
+        }
         Work(String command, int gate, Layer layer, int offset, int end, int attempt,
                 Consumer<JsonNode> accept, Consumer<RuntimeException> failed) {
             this(command, gate, layer, offset, end, attempt, accept, failed, null);
@@ -462,17 +489,19 @@ final class CpPolicyParallelCollection {
         Work(String command, int gate, Layer layer, int offset, int end, int attempt, Consumer<JsonNode> accept) {
             this(command, gate, layer, offset, end, attempt, accept, null);
         }
+        Work retry() { return new Work(command, gate, layer, offset, end, 1, accept, failed, inventory, generation); }
     }
     private record Result(Work work, JsonNode page, RuntimeException error, long elapsed) {}
     private static final class Policy {
         final Metadata metadata;
         final String domain;
+        final NameContext names;
         final Map<String, Layer> layers = new LinkedHashMap<>();
         final List<CollectionFailure> extra = new ArrayList<>();
         Layer nat;
         PolicySnapshot latest;
         Long lastCheckpoint;
-        Policy(Metadata metadata, String domain) { this.metadata = metadata; this.domain = domain; }
+        Policy(Metadata metadata, String domain, NameContext names) { this.metadata = metadata; this.domain = domain; this.names = names; }
     }
     private static final class Layer {
         final Policy policy;
@@ -482,7 +511,7 @@ final class CpPolicyParallelCollection {
         IntFunction<String> command;
         final TreeMap<Integer, JsonNode> pages = new TreeMap<>();
         final Map<String, Integer> rulePages = new HashMap<>();
-        int total = -1, issued, rulesFetched;
+        int total = -1, issued, rulesFetched, restarts, generation;
         boolean done;
         CollectionFailure failure;
         Layer(Policy policy, String uid, String name, String ref, int gate, IntFunction<String> command) {

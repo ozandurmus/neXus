@@ -72,6 +72,8 @@ final class CpDomainReuse {
                     domain.reused = domain.previous.complete() && domain.snapshots.size() == snapshots.size();
                 }
             } catch (java.io.IOException | RuntimeException invalid) { /* Unproven stored evidence requires a full collection. */ }
+            // Only a resumed request may keep partial previous evidence (e.g. a complete run with UNKNOWN parts).
+            if (!domain.reused && !domain.sameRequest) domain.snapshots.clear();
         }
         if (domain.reused) {
             save(container, domain, "REUSED", true);
@@ -123,13 +125,21 @@ final class CpDomainReuse {
         return snapshot.failures().stream().allMatch(f -> Set.of(
             "POLICY_HITS_UNAVAILABLE", "POLICY_DB_INVENTORY_WRITE_FAILED").contains(f.reason()));
     }
+    /**
+     * Complete for what can be read: explicit UNKNOWN parts (fixed reason list) do not make a domain run incomplete,
+     * but such snapshots are never reused or resumed, so the UNKNOWN part is re-read on the next run.
+     */
+    static boolean completeWithUnknownParts(PolicySnapshot snapshot) {
+        return snapshot.failures().stream().allMatch(f -> PolicySnapshot.unknownPart(f) || Set.of(
+            "POLICY_HITS_UNAVAILABLE", "POLICY_DB_INVENTORY_WRITE_FAILED").contains(f.reason()));
+    }
     private void update(String container, Domain domain) {
         // Publish each terminal domain before inventory collection or a later drain can stop the run.
         boolean terminal = domain.expected >= 0 && domain.snapshots.size() == domain.expected
             && domain.snapshots.values().stream().flatMap(s -> s.failures().stream())
                 .noneMatch(f -> f.reason().equals("COLLECTION_PENDING"));
         boolean complete = terminal && !domain.gap
-            && domain.snapshots.values().stream().allMatch(CpDomainReuse::ruleComplete);
+            && domain.snapshots.values().stream().allMatch(CpDomainReuse::completeWithUnknownParts);
         save(container, domain, terminal ? "COLLECTED" : "COLLECTING", complete);
     }
     void gap(String container) {
@@ -139,7 +149,7 @@ final class CpDomainReuse {
         domains.forEach((container, domain) -> {
             save(container, domain, domain.reused ? "REUSED" : "COLLECTED", !domain.gap
                 && (domain.reused || domain.expected >= 0 && domain.snapshots.size() == domain.expected)
-                && domain.snapshots.values().stream().allMatch(CpDomainReuse::ruleComplete));
+                && domain.snapshots.values().stream().allMatch(CpDomainReuse::completeWithUnknownParts));
         });
     }
     private void save(String container, Domain domain, String status, boolean complete) {

@@ -83,6 +83,14 @@ function failureSentence(reason: string, step?: number, total?: number) {
     : /PARSE|INVALID|RESPONSE|XML/.test(reason) ? "the reply was incomplete" : "the source did not answer";
   return `Last collection ${reason.startsWith("PARTIAL_SNAPSHOT") ? "was incomplete" : "failed"}${scope} — ${problem}`;
 }
+/** Fixed-list UNKNOWN parts: readable evidence is complete; this part is explicitly unknown, never silently missing. */
+export const UNKNOWN_PART_SENTENCE = "NAT: unknown — vendor reported a name that is not unique";
+export const isUnknownPart = (failure: { reason: string }) => failure.reason === "VENDOR_NAME_NOT_UNIQUE";
+export function unknownPartsLine(job: PolicyCollectionStatus) {
+  const units = (job.unknownParts ?? []).filter(p => p.part === "NAT" && p.reasonCode === "VENDOR_NAME_NOT_UNIQUE")
+    .reduce((sum, p) => sum + p.units, 0);
+  return units > 0 ? `${UNKNOWN_PART_SENTENCE} (${plural(units, "package")})` : "";
+}
 function CollectionProgress({ job }: { job: PolicyCollectionStatus }) {
   return <Typography variant="caption" display="block">Collection progress: {job.packagesTotal === undefined ? progress(job.step, job.total) : `${job.packagesDone ?? 0}/${job.packagesTotal} packages`}</Typography>;
 }
@@ -102,12 +110,15 @@ export function collectionSummaryLine(job: PolicyCollectionStatus, partial: bool
   if (domains.length) {
     const by = (status: string) => domains.filter(d => d.status === status).length;
     const states = [[by("REUSED"), "reused"], [by("COLLECTED"), "collected"], [by("COLLECTING"), "collecting"]] as const;
-    parts.push(`${plural(domains.length, "domain")}: ${states.filter(([n]) => n > 0).map(([n, label]) => `${n} ${label}`).join(", ")}`);
+    const incomplete = domains.filter(d => d.status === "COLLECTED" && d.complete === false).length;
+    parts.push(`${plural(domains.length, "domain")}: ${states.filter(([n]) => n > 0).map(([n, label]) => `${n} ${label}`).join(", ")}${incomplete ? ` (${incomplete} incomplete)` : ""}`);
   }
   if (partial) {
-    const codes = job.unitFailureCodes?.length ?? 0;
+    const codes = (job.unitFailureCodes ?? []).filter(code => code !== "VENDOR_NAME_NOT_UNIQUE").length;
     parts.push(codes ? plural(codes, "unit failure") : "unit failures not itemised");
   }
+  const unknown = unknownPartsLine(job);
+  if (unknown) parts.push(unknown);
   return parts.join(" · ");
 }
 /**
@@ -126,7 +137,7 @@ function CollectionDetails({ job, partial, allowed, domainName }: { job: PolicyC
           {job.domains.map(domain => <Typography component="li" key={domain.containerId} variant="caption" display="list-item">
             {domainName(domain.containerId)}: {domain.status === "REUSED"
               ? <>reused · unchanged since <Ts at={domain.publishTime} /> · hits collected at <Ts at={domain.hitsCollectedAt} /></>
-              : domain.status === "COLLECTED" ? "collected" : "collecting"}
+              : domain.status === "COLLECTED" ? (domain.complete === false ? "collected · incomplete" : "collected") : "collecting"}
           </Typography>)}
         </Box>
       </>}
@@ -465,7 +476,7 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
                   </Typography>}
               {running && (job.layers ?? 0) > 0 && job.packagesTotal !== undefined && <Typography variant="caption" display="block">Current package layer {bounded(job.layer ?? 0, job.layers ?? 0)}/{job.layers}</Typography>}
               {running && collectionStalled(job, now) && <Typography role="alert" variant="caption" color="warning.main" display="block">No activity for more than twice the read timeout.</Typography>}
-              {(!!job.domains?.length || outcome === "PARTIAL") && <CollectionDetails job={job} partial={outcome === "PARTIAL"} allowed={canCollect}
+              {(!!job.domains?.length || outcome === "PARTIAL" || !!job.unknownParts?.length) && <CollectionDetails job={job} partial={outcome === "PARTIAL"} allowed={canCollect}
                 domainName={id => displayName(catalog.find(p => p.containerId === id)?.containerName, "Policy domain")} />}
               {outcome === "FAILED" && job.reason && <FailureDetails reason={job.reason} allowed={canCollect} job={job} />}
             </Box>}
@@ -543,8 +554,10 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
         </Box>}
             {selected && !data && !error && <Typography role="status">Loading rules…</Typography>}
             {data && <>
-              {!!data.failures?.length && <Box><Chip color="warning" label="Partial snapshot · incomplete" />
-                {data.failures.map(f => <Box key={f.layerRef} role="alert"><Typography variant="body2">{f.layerName || f.layerRef}{f.offset !== undefined ? ` · offset ${f.offset}` : ""}: {failureSentence(f.reason)}</Typography><FailureDetails reason={f.reason} allowed={canCollect} /></Box>)}</Box>}
+              {!!data.failures?.length && <Box><Chip color="warning" label={data.failures.every(isUnknownPart) ? "Complete · some parts unknown" : "Partial snapshot · incomplete"} />
+                {data.failures.map(f => isUnknownPart(f)
+                  ? <Box key={f.layerRef} role="status"><Typography variant="body2">{UNKNOWN_PART_SENTENCE}</Typography></Box>
+                  : <Box key={f.layerRef} role="alert"><Typography variant="body2">{f.layerName || f.layerRef}{f.offset !== undefined ? ` · offset ${f.offset}` : ""}: {failureSentence(f.reason)}</Typography><FailureDetails reason={f.reason} allowed={canCollect} /></Box>)}</Box>}
               <Stack direction="row" flexWrap="wrap" gap={1} alignItems="center" sx={{ mb: 1 }}>
                 {data.policyKind === "LOCAL_FIREWALL" && <Chip size="small" label="local firewall policy" />}
                 <Chip size="small" title={data.metadata.collectedAt} label={collectedLabel(data.metadata.collectedAt, now)} />
