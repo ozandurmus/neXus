@@ -114,7 +114,7 @@ public final class SanitizerService {
 
     /** Empties the work area and closes jobs a previous process left running (single-replica service). */
     public void start() throws IOException {
-        Files.createDirectories(workDir);
+        ensureWorkDir();
         try (DirectoryStream<Path> files = Files.newDirectoryStream(workDir)) {
             for (Path file : files) Files.deleteIfExists(file);
         }
@@ -152,9 +152,9 @@ public final class SanitizerService {
             vault.flush();
             repository.finishJob(jobId, actor, true, fileType(result), inputBytes, size(out), counts(result.counts()), null,
                     vault.written());
-        } catch (Exception failed) {
+        } catch (Throwable failed) {
             deleteQuietly(out);
-            repository.finishJob(jobId, actor, false, null, inputBytes, 0, "{}", reason(failed), vault.written());
+            repository.finishJob(jobId, actor, false, null, inputBytes, 0, "{}", reason(failed), 0);
         } finally {
             deleteQuietly(in);
         }
@@ -218,7 +218,7 @@ public final class SanitizerService {
             Sanitizer.Result result = engine().revert(in, out, new ScopedResolver(repository, crypto, createdBy, jobId));
             repository.finishRevert(revertId, actor, true, fileType(result), inputBytes, size(out), counts(result.counts()),
                     null, result.counts().getOrDefault("reverted", 0L));
-        } catch (Exception failed) {
+        } catch (Throwable failed) {
             deleteQuietly(out);
             repository.finishRevert(revertId, actor, false, null, inputBytes, 0, "{}", reason(failed), 0);
         } finally {
@@ -260,8 +260,9 @@ public final class SanitizerService {
                     null, vault.written());
             repository.markOutput(jobId, actor, "DOWNLOADED"); // handed to the caller, never served from here
             return result;
-        } catch (IOException | RuntimeException failed) {
-            repository.finishJob(jobId, actor, false, null, size(input), 0, "{}", reason(failed), vault.written());
+        } catch (IOException | RuntimeException | Error failed) {
+            deleteQuietly(output);
+            repository.finishJob(jobId, actor, false, null, size(input), 0, "{}", reason(failed), 0);
             throw failed;
         }
     }
@@ -273,11 +274,16 @@ public final class SanitizerService {
         VaultCrypto.JobKey key = crypto.newJobKey();
         repository.createJob(jobId, actor, key.wrapped(), key.keyId(), retentionDays);
         JobVault vault = new JobVault(repository, crypto, key, jobId, actor);
-        Sanitizer.Result result = engine().sanitizeText(in, out, vault);
-        vault.flush();
-        repository.finishJob(jobId, actor, true, "text", 0, 0, counts(result.counts()), null, vault.written());
-        repository.markOutput(jobId, actor, "DOWNLOADED");
-        return result;
+        try {
+            Sanitizer.Result result = engine().sanitizeText(in, out, vault);
+            vault.flush();
+            repository.finishJob(jobId, actor, true, "text", 0, 0, counts(result.counts()), null, vault.written());
+            repository.markOutput(jobId, actor, "DOWNLOADED");
+            return result;
+        } catch (IOException | RuntimeException | Error failed) {
+            repository.finishJob(jobId, actor, false, null, 0, 0, "{}", reason(failed), 0);
+            throw failed;
+        }
     }
 
     // ---- housekeeping --------------------------------------------------------------------------------------
@@ -310,8 +316,18 @@ public final class SanitizerService {
         return new Sanitizer(new Mappers(SanitizerKey.of(privacyKey), knownNames.get()));
     }
 
+    private void ensureWorkDir() throws IOException {
+        try {
+            var ownerOnlyDir = PosixFilePermissions.fromString("rwx------");
+            Files.createDirectories(workDir, PosixFilePermissions.asFileAttribute(ownerOnlyDir));
+            Files.setPosixFilePermissions(workDir, ownerOnlyDir);
+        } catch (UnsupportedOperationException noPosix) {
+            Files.createDirectories(workDir);
+        }
+    }
+
     private Path receive(String id, InputStream upload) throws IOException {
-        Files.createDirectories(workDir);
+        ensureWorkDir();
         Path in = workDir.resolve(id + ".in");
         try {
             Files.createFile(in, PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------")));

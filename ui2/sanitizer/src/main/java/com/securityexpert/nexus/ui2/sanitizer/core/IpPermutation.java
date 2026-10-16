@@ -93,16 +93,50 @@ public final class IpPermutation {
                 return hit.clone();
             }
         }
-        byte[] result;
-        if (address.length == 16 && mapV4Interior && isV4Mapped(address)) {
-            result = address.clone();
-            byte[] inner = permute(Arrays.copyOfRange(address, 12, 16), v4Ranges);
-            System.arraycopy(inner, 0, result, 12, 4);
-        } else {
-            result = permute(address, address.length == 4 ? v4Ranges : v6Ranges);
-        }
+        byte[] result = compute(address);
         synchronized (cache) {
             cache.put(cacheKey, result.clone());
+        }
+        return result;
+    }
+
+    private byte[] compute(byte[] address) {
+        if (v4Ranges.isEmpty() && v6Ranges.isEmpty()) {
+            return permuteRange(address, 0, address.length * 8);
+        }
+        if (isKept(address)) {
+            return address.clone();
+        }
+        if (address.length == 16 && mapV4Interior && isV4Mapped(address)) {
+            byte[] result = address.clone();
+            byte[] inner = map(Arrays.copyOfRange(address, 12, 16));
+            System.arraycopy(inner, 0, result, 12, 4);
+            return result;
+        }
+        List<Range> ranges = address.length == 4 ? v4Ranges : v6Ranges;
+        for (Range range : ranges) {
+            if (!range.keepInterior() && matches(address, range.prefix(), range.bits())) {
+                return permuteRange(address, range.bits(), address.length * 8);
+            }
+        }
+        if (address.length == 4) {
+            int b0 = address[0] & 0xff;
+            do {
+                b0 = permuteTopBits(4, b0, 8);
+            } while (isReservedFirstOctetV4(b0));
+            byte[] result = permuteRange(address, 8, 32);
+            result[0] = (byte) b0;
+            return result;
+        }
+        int p10 = ((address[0] & 0xff) << 2) | ((address[1] & 0xc0) >>> 6);
+        do {
+            p10 = permuteTopBits(16, p10, 10);
+        } while (isReservedTop10V6(p10));
+        byte[] result = permuteRange(address, 10, 128);
+        result[0] = (byte) (p10 >>> 2);
+        result[1] = (byte) ((result[1] & 0x3f) | ((p10 & 3) << 6));
+        if (isKept(result) || isV4Mapped(result)) {
+            result[0] ^= 0x02;
         }
         return result;
     }
@@ -127,8 +161,8 @@ public final class IpPermutation {
         return (a[10] & 0xff) == 0xff && (a[11] & 0xff) == 0xff;
     }
 
-    private byte[] permute(byte[] original, List<Range> ranges) {
-        int bits = original.length * 8;
+    /** Permutes bits {@code [startBit, endBit)} via Crypto-PAn while keeping {@code [0, startBit)} unchanged. */
+    private byte[] permuteRange(byte[] original, int startBit, int endBit) {
         byte[] prefix = new byte[original.length];
         byte[] result = new byte[original.length];
         byte[] message = new byte[4 + original.length];
@@ -136,10 +170,10 @@ public final class IpPermutation {
         message[1] = 'p';
         message[2] = (byte) original.length;
         Mac m = mac.get();
-        for (int n = 0; n < bits; n++) {
+        for (int n = 0; n < endBit; n++) {
             int bit = (original[n >> 3] >> (7 - (n & 7))) & 1;
             int flip = 0;
-            if (!forced(prefix, n, ranges)) {
+            if (n >= startBit) {
                 message[3] = (byte) n;
                 System.arraycopy(prefix, 0, message, 4, prefix.length);
                 m.update(message);
@@ -155,16 +189,35 @@ public final class IpPermutation {
         return result;
     }
 
-    /** f is forced to 0 on a node whose prefix leads into a kept block, or lies inside a point-kept range. */
-    private static boolean forced(byte[] prefix, int n, List<Range> ranges) {
-        for (Range range : ranges) {
-            if (n < range.bits()) {
-                if (matches(prefix, range.prefix(), n)) return true;
-            } else if (range.keepInterior() && matches(prefix, range.prefix(), range.bits())) {
-                return true;
+    /** Runs one step of the {@code width}-bit Crypto-PAn tree on the top {@code width} bits of an address family. */
+    private int permuteTopBits(int addrBytes, int topBits, int width) {
+        byte[] prefix = new byte[addrBytes];
+        byte[] message = new byte[4 + addrBytes];
+        message[0] = 'i';
+        message[1] = 'p';
+        message[2] = (byte) addrBytes;
+        Mac m = mac.get();
+        int out = 0;
+        for (int n = 0; n < width; n++) {
+            int bit = (topBits >>> (width - 1 - n)) & 1;
+            message[3] = (byte) n;
+            System.arraycopy(prefix, 0, message, 4, prefix.length);
+            m.update(message);
+            int flip = (m.doFinal()[0] & 0xff) >>> 7;
+            out = (out << 1) | (bit ^ flip);
+            if (bit != 0) {
+                prefix[n >> 3] |= (byte) (0x80 >>> (n & 7));
             }
         }
-        return false;
+        return out;
+    }
+
+    private static boolean isReservedFirstOctetV4(int b0) {
+        return b0 == 0 || b0 == 127 || b0 >= 224;
+    }
+
+    private static boolean isReservedTop10V6(int p10) {
+        return (p10 >>> 2) == 0xff || p10 == 0x3fa;
     }
 
     private static boolean matches(byte[] value, byte[] prefix, int bits) {

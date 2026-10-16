@@ -34,21 +34,33 @@ public record TextEncoding(Charset charset, int bomBytes) {
         return new TextEncoding(isValidUtf8(file) ? StandardCharsets.UTF_8 : StandardCharsets.ISO_8859_1, 0);
     }
 
+    private static final long MAX_UTF8_SNIFF = 4L << 20;
+
     static boolean isValidUtf8(Path file) throws IOException {
         CharsetDecoder decoder = StandardCharsets.UTF_8.newDecoder()
                 .onMalformedInput(CodingErrorAction.REPORT).onUnmappableCharacter(CodingErrorAction.REPORT);
         ByteBuffer in = ByteBuffer.allocate(1 << 16);
         CharBuffer out = CharBuffer.allocate(1 << 16);
+        long totalRead = 0;
+        boolean eof = false;
         try (InputStream stream = Files.newInputStream(file)) {
             byte[] chunk = new byte[1 << 15];
-            int n;
-            while ((n = stream.read(chunk)) > 0) {
+            while (totalRead < MAX_UTF8_SNIFF) {
+                int n = stream.read(chunk);
+                if (n < 0) {
+                    eof = true;
+                    break;
+                }
+                totalRead += n;
                 in.put(chunk, 0, n);
                 in.flip();
                 CoderResult result = decoder.decode(in, out, false);
                 if (result.isError()) return false;
                 out.clear();
                 in.compact();
+            }
+            if (!eof) {
+                return true;
             }
             in.flip();
             CoderResult result = decoder.decode(in, out, true);

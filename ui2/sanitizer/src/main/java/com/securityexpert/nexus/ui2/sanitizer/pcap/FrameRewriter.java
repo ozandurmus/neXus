@@ -338,6 +338,14 @@ final class FrameRewriter {
             System.arraycopy(raw, k[0], output, k[0], k[1] - k[0]);
             for (int i = k[0]; i < k[1]; i++) covered[i] = true;
         }
+        for (Layer l : m.layers()) {
+            for (int[] z : l.zeroSpans) {
+                int zFrom = Math.max(0, Math.min(z[0], output.length));
+                int zTo = Math.max(zFrom, Math.min(z[1], output.length));
+                Arrays.fill(output, zFrom, zTo, (byte) 0);
+                for (int i = zFrom; i < zTo; i++) covered[i] = false;
+            }
+        }
         boolean hasIp = false;
         for (Layer l : m.layers()) {
             if (l.isNetwork()) hasIp = true;

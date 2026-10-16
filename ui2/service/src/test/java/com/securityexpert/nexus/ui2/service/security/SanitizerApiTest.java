@@ -66,6 +66,7 @@ class SanitizerApiTest {
     private final List<Object[]> vaultRows = new ArrayList<>(); // jobId, Entry
     private final List<String[]> lookups = new ArrayList<>();    // createdBy, jobId
     private VaultCrypto crypto;
+    private SanitizerService service;
     private MockMvc mvc;
 
     @BeforeEach
@@ -90,7 +91,7 @@ class SanitizerApiTest {
         byte[] privacyKey = new byte[32];
         Arrays.fill(privacyKey, (byte) 7);
         crypto = new VaultCrypto(privacyKey, ArtefactStoreCipher.fromBase64Key(Base64.getEncoder().encodeToString(new byte[32])));
-        var service = new SanitizerService(repository, crypto, privacyKey, () -> KnownNames.of(Map.of("corefw", "FW-TANGO-04")),
+        service = new SanitizerService(repository, crypto, privacyKey, () -> KnownNames.of(Map.of("corefw", "FW-TANGO-04")),
                 work, 64 * 1024, 90, Duration.ofMinutes(60), new DirectExecutor());
         var gate = new GateChain(sessions, new ActionRegistry(), rbac, mock(AuthzDecisionRepository.class));
         var names = new TopologyNamePseudonymizer(new byte[32]);
@@ -263,6 +264,91 @@ class SanitizerApiTest {
         assertThrows(IllegalStateException.class,
                 () -> crypto.unseal(dataKey, UUID.randomUUID().toString(), first.lookupKey(), first.sealedOriginal()),
                 "a sealed value moved to another job's row does not open");
+    }
+
+    @Test
+    void tempDirAndOutputFilesUseOwnerOnlyPermissionsAndCleanUpOnForcedFailures() throws Exception {
+        Path nestedWork = work.resolve("priv-work");
+        byte[] privacyKey = new byte[32];
+        var subService = new SanitizerService(repository, crypto, privacyKey, () -> KnownNames.NONE,
+                nestedWork, 64 * 1024, 90, Duration.ofMinutes(60), new DirectExecutor());
+        subService.start();
+        assertEquals(java.nio.file.attribute.PosixFilePermissions.fromString("rwx------"),
+                Files.getPosixFilePermissions(nestedWork), "workDir must be 0700");
+
+        String jobId = sanitize("synthetic-operator");
+        Path outFile = work.resolve(jobId + ".out");
+        assertTrue(Files.isRegularFile(outFile));
+        assertEquals(java.nio.file.attribute.PosixFilePermissions.fromString("rw-------"),
+                Files.getPosixFilePermissions(outFile), "output file must be 0600");
+
+        // Forced failure in synchronous sanitizeFile must delete any partial output file
+        Path badIn = work.resolve("bad.pcap");
+        Path partialOut = work.resolve("partial.pcap");
+        Files.write(badIn, new byte[] {(byte) 0xd4, (byte) 0xc3, (byte) 0xb2, (byte) 0xa1, 1, 2, 3});
+        Files.writeString(partialOut, "pre-existing partial content");
+        assertThrows(Exception.class, () -> service.sanitizeFile(badIn, partialOut, "synthetic-operator"));
+        assertFalse(Files.exists(partialOut), "partial output must be deleted when sanitizeFile fails");
+    }
+
+    @Test
+    void failedOrInterruptedJobsPruneVaultAndWrappedKeyImmediately() throws Exception {
+        List<String> executedSql = new ArrayList<>();
+        org.jooq.DSLContext dsl = mock(org.jooq.DSLContext.class);
+        when(dsl.execute(anyString(), any(Object[].class))).thenAnswer(call -> {
+            executedSql.add(call.getArgument(0));
+            return 3;
+        });
+        when(dsl. execute(anyString())).thenAnswer(call -> {
+            executedSql.add(call.getArgument(0));
+            return 1;
+        });
+        @SuppressWarnings("unchecked")
+        org.jooq.Result<org.jooq.Record> runningResult = mock(org.jooq.Result.class);
+        when(runningResult.map(any())).thenReturn(List.of("00000000-0000-0000-0000-000000000001"));
+        when(dsl.fetch(contains("from sanitize_job where state = 'RUNNING'"))).thenReturn(runningResult);
+
+        java.sql.Connection conn = mock(java.sql.Connection.class);
+        java.sql.PreparedStatement ps = mock(java.sql.PreparedStatement.class);
+        java.sql.ResultSet rs = mock(java.sql.ResultSet.class);
+        when(conn.prepareStatement(anyString())).thenAnswer(call -> {
+            executedSql.add(call.getArgument(0));
+            return ps;
+        });
+        when(ps.executeQuery()).thenReturn(rs);
+        when(dsl.connectionResult(any())).thenAnswer(call -> {
+            org.jooq.ConnectionCallable<?> callable = call.getArgument(0);
+            return callable.run(conn);
+        });
+
+        com.securityexpert.nexus.ui2.persistence.TransactionBoundary tx = new com.securityexpert.nexus.ui2.persistence.TransactionBoundary() {
+            @Override
+            public <T> T inTransaction(java.util.function.Function<org.jooq.DSLContext, T> work) {
+                return work.apply(dsl);
+            }
+        };
+        var realRepo = new SanitizerRepository(tx);
+
+        // 1. finishJob(..., succeeded=false, ...) must immediately delete vault rows, clear wrapped_data_key, and ledger VAULT_PRUNED
+        realRepo.finishJob("00000000-0000-0000-0000-000000000002", "synthetic-operator", false, null, 128L, 0L, "{}", "MALFORMED_JSON", 5L);
+        assertTrue(executedSql.stream().anyMatch(s -> s.contains("delete from sanitize_vault_entry where job_id")),
+                "failed job must delete vault entries immediately");
+        assertTrue(executedSql.stream().anyMatch(s -> s.contains("wrapped_data_key = null") && s.contains("vault_pruned_at = now()")),
+                "failed job must clear wrapped_data_key and set vault_pruned_at immediately");
+
+        // 2. closeInterrupted() must also delete vault entries and clear wrapped_data_key for interrupted RUNNING jobs
+        executedSql.clear();
+        realRepo.closeInterrupted();
+        assertTrue(executedSql.stream().anyMatch(s -> s.contains("delete from sanitize_vault_entry where job_id")),
+                "interrupted job must delete vault entries immediately");
+        assertTrue(executedSql.stream().anyMatch(s -> s.contains("wrapped_data_key = null") && s.contains("vault_pruned_at = now()")),
+                "interrupted job must clear wrapped_data_key and set vault_pruned_at immediately");
+
+        // 3. lookup() must filter by j.state = 'SUCCEEDED'
+        executedSql.clear();
+        realRepo.lookup(List.of(new byte[32]), "synthetic-operator", null);
+        assertTrue(executedSql.stream().anyMatch(s -> s.contains("j.state = 'SUCCEEDED'")),
+                "vault lookup must restrict to SUCCEEDED jobs");
     }
 
     // ---- helpers -------------------------------------------------------------------------------------------

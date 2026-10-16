@@ -31,6 +31,7 @@ final class Layers {
         int checksum = -1;
         boolean quoted;
         final List<Field> fields = new ArrayList<>();
+        final List<int[]> zeroSpans = new ArrayList<>();
 
         Layer(String name, int pos, int size) {
             this.name = name;
@@ -175,10 +176,19 @@ final class Layers {
         if (h == 6) {
             l.fields.add(new Field("arp.src.hw_mac", pos + 8, 6));
             l.fields.add(new Field("arp.dst.hw_mac", pos + 8 + h + p, 6));
+        } else if (variant == Variant.NEXUS && h > 0) {
+            l.zeroSpans.add(new int[] {pos + 8, Math.min(f.length, pos + 8 + h)});
+            l.zeroSpans.add(new int[] {pos + 8 + h + p, Math.min(f.length, pos + 8 + 2 * h + p)});
         }
         if (p == 4 && ptype == 0x0800) {
             l.fields.add(new Field("arp.src.proto_ipv4", pos + 8 + h, 4));
             l.fields.add(new Field("arp.dst.proto_ipv4", pos + 8 + 2 * h + p, 4));
+        } else if (variant == Variant.NEXUS && p == 16 && ptype == 0x86dd) {
+            l.fields.add(new Field("arp.src.proto_ipv6", pos + 8 + h, 16));
+            l.fields.add(new Field("arp.dst.proto_ipv6", pos + 8 + 2 * h + p, 16));
+        } else if (variant == Variant.NEXUS && p > 0) {
+            l.zeroSpans.add(new int[] {pos + 8 + h, Math.min(f.length, pos + 8 + h + p)});
+            l.zeroSpans.add(new int[] {pos + 8 + 2 * h + p, Math.min(f.length, pos + 8 + 2 * h + 2 * p)});
         }
     }
 
@@ -193,10 +203,60 @@ final class Layers {
         if (has(pos + 12, 4)) l.fields.add(new Field("ip.src", pos + 12, 4));
         if (has(pos + 16, 4)) l.fields.add(new Field("ip.dst", pos + 16, 4));
         if ((u8(pos) >> 4) != 4 || ihl < 20 || !has(pos + 6, 4)) return;
+        if (variant == Variant.NEXUS && ihl > 20) {
+            ipv4Options(l, pos + 20, Math.min(f.length, pos + ihl));
+        }
         int fragmentOffset = ((u8(pos + 6) & 0x1f) << 8) | u8(pos + 7);
         if (fragmentOffset != 0) return;
         int innerLimit = l.ipLen >= ihl ? Math.min(limit, pos + l.ipLen) : limit;
         transport(u8(pos + 9), pos + ihl, innerLimit, quoted);
+    }
+
+    private void ipv4Options(Layer l, int optStart, int optEnd) {
+        int optAt = optStart;
+        while (optAt < optEnd) {
+            int type = u8(optAt);
+            if (type == 0) {
+                if (optAt + 1 < optEnd) l.zeroSpans.add(new int[] {optAt + 1, optEnd});
+                break;
+            }
+            if (type == 1) {
+                optAt++;
+                continue;
+            }
+            if (optAt + 2 > optEnd) {
+                l.zeroSpans.add(new int[] {optAt, optEnd});
+                break;
+            }
+            int optLen = u8(optAt + 1);
+            if (optLen < 2 || optAt + optLen > optEnd) {
+                l.zeroSpans.add(new int[] {optAt, optEnd});
+                break;
+            }
+            if (type == 7 || type == 131 || type == 137) {
+                if (optLen >= 3 && (optLen - 3) % 4 == 0 && u8(optAt + 2) >= 4) {
+                    for (int a = optAt + 3; a + 4 <= optAt + optLen; a += 4) {
+                        l.fields.add(new Field("ip.opt.addr", a, 4));
+                    }
+                } else {
+                    l.zeroSpans.add(new int[] {optAt, optAt + optLen});
+                }
+            } else if (type == 68) {
+                int flag = optLen >= 4 ? (u8(optAt + 3) & 0x0f) : -1;
+                if ((flag == 1 || flag == 3) && optLen >= 4 && (optLen - 4) % 8 == 0 && u8(optAt + 2) >= 5) {
+                    for (int a = optAt + 4; a + 8 <= optAt + optLen; a += 8) {
+                        l.fields.add(new Field("ip.opt.addr", a, 4));
+                    }
+                } else if (flag == 0 && optLen >= 4 && (optLen - 4) % 4 == 0 && u8(optAt + 2) >= 5) {
+                    // timestamps only, no addresses
+                } else {
+                    l.zeroSpans.add(new int[] {optAt, optAt + optLen});
+                }
+            } else {
+                l.zeroSpans.add(new int[] {optAt, optAt + optLen});
+            }
+            optAt += optLen;
+        }
     }
 
     private void ipv6(int pos, int limit, boolean quoted) {
@@ -212,7 +272,10 @@ final class Layers {
         while (true) {
             if (next == 0 || next == 60 || next == 43) {
                 if (!has(at, 2)) {
-                    add(next == 0 ? "ipv6.hopopts" : next == 60 ? "ipv6.dstopts" : "ipv6.routing", at, 8);
+                    Layer ext = add(next == 0 ? "ipv6.hopopts" : next == 60 ? "ipv6.dstopts" : "ipv6.routing", at, 8);
+                    if (variant == Variant.NEXUS && at < f.length) {
+                        ext.zeroSpans.add(new int[] {at, Math.min(f.length, at + 8)});
+                    }
                     return;
                 }
                 int size = (u8(at + 1) + 1) * 8;
@@ -223,6 +286,25 @@ final class Layers {
                     if (first > 0) {
                         for (int a = first; a + 16 <= at + size; a += 16) ext.fields.add(new Field("ipv6.routing.addr", a, 16));
                     }
+                    if (variant == Variant.NEXUS) {
+                        if (!has(at, size) || first < 0 || ((type == 0 || type == 2) && (size - 8) % 16 != 0)) {
+                            ext.fields.clear();
+                            if (at + 4 < f.length) ext.zeroSpans.add(new int[] {at + 4, Math.min(f.length, at + size)});
+                        } else if (type == 4) {
+                            int segEnd = at + 8 + (u8(at + 4) + 1) * 16;
+                            if (segEnd > at + size) {
+                                ext.fields.clear();
+                                ext.zeroSpans.add(new int[] {at + 4, at + size});
+                            } else if (segEnd < at + size) {
+                                ext.fields.removeIf(field -> field.pos() >= segEnd);
+                                ext.zeroSpans.add(new int[] {segEnd, at + size});
+                            }
+                        }
+                    }
+                } else if (next == 43 && variant == Variant.NEXUS && at + 2 < f.length) {
+                    ext.zeroSpans.add(new int[] {at + 2, Math.min(f.length, at + size)});
+                } else if ((next == 0 || next == 60) && variant == Variant.NEXUS) {
+                    ipv6TlvOptions(ext, at + 2, Math.min(f.length, at + size));
                 }
                 next = u8(at);
                 at += size;
@@ -238,6 +320,34 @@ final class Layers {
             }
         }
         transport(next, at, innerLimit, quoted);
+    }
+
+    private void ipv6TlvOptions(Layer ext, int optStart, int optEnd) {
+        int optAt = optStart;
+        while (optAt < optEnd) {
+            int optType = u8(optAt);
+            if (optType == 0) {
+                optAt++;
+                continue;
+            }
+            if (optAt + 2 > optEnd) {
+                ext.zeroSpans.add(new int[] {optAt, optEnd});
+                break;
+            }
+            int optLen = u8(optAt + 1);
+            if (optAt + 2 + optLen > optEnd) {
+                ext.zeroSpans.add(new int[] {optAt, optEnd});
+                break;
+            }
+            if (optType == 1) {
+                if (optLen > 0) ext.zeroSpans.add(new int[] {optAt + 2, optAt + 2 + optLen});
+            } else if (optType == 0xc9 && optLen == 16) {
+                ext.fields.add(new Field("ipv6.dstopts.home_addr", optAt + 2, 16));
+            } else {
+                ext.zeroSpans.add(new int[] {optAt, optAt + 2 + optLen});
+            }
+            optAt += 2 + optLen;
+        }
     }
 
     private void transport(int protocol, int pos, int limit, boolean quoted) {

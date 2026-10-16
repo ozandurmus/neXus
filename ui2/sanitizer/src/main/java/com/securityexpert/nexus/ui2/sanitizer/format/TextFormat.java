@@ -107,10 +107,15 @@ public final class TextFormat {
     }
 
     private static int lastWhitespace(CharSequence s) {
-        for (int i = s.length() - 1; i > s.length() / 2; i--) {
+        int limit = Math.min(s.length(), MAX_LINE);
+        for (int i = limit - 1; i > 0; i--) {
             if (Character.isWhitespace(s.charAt(i))) return i + 1;
         }
-        return s.length();
+        for (int i = limit - 1; i > 0; i--) {
+            char c = s.charAt(i);
+            if (!Character.isLetterOrDigit(c) && "._:-/%@".indexOf(c) < 0) return i + 1;
+        }
+        return limit;
     }
 
     private static void flush(List<Value> batch, List<String> terminators, ValueRewriter rewriter, Writer writer)

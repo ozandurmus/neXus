@@ -199,6 +199,120 @@ class NexusPcapTest {
         assertEquals(19, sanitized, "the neXus mode refuses nothing but a damaged container");
     }
 
+    @Test
+    void dnsCompressionPointerToNonNameOffsetZeroesDnsPayloadFailClosed() throws Exception {
+        // Craft a DNS SOA response where the 20-byte SOA numeric trailer hides a length-prefixed label "\x06secret\x03com\x00"
+        // and a second answer RR's owner name is a compression pointer jumping directly into that SOA trailer.
+        ByteBuffer b = ByteBuffer.allocate(512);
+        b.putShort((short) 0x2222).putShort((short) 0x8180)
+                .putShort((short) 1).putShort((short) 2).putShort((short) 0).putShort((short) 0);
+        b.put(name("ns1.example.com")).putShort((short) 6).putShort((short) 1); // QNAME + QTYPE=SOA + QCLASS=IN
+        // Answer 1: SOA for example.com
+        b.putShort((short) 0xc00c).putShort((short) 6).putShort((short) 1).putInt(300);
+        byte[] mname = name("ns1.example.com");
+        byte[] rname = name("ops.example.com");
+        byte[] trailer = new byte[20];
+        byte[] hidden = name("secret.com");
+        System.arraycopy(hidden, 0, trailer, 4, hidden.length);
+        int rdataLen = mname.length + rname.length + 20;
+        b.putShort((short) rdataLen);
+        int trailerNameOffset = b.position() + mname.length + rname.length + 4;
+        b.put(mname).put(rname).put(trailer);
+        // Answer 2: owner name is a compression pointer to trailerNameOffset (inside SOA 20-byte numeric trailer!)
+        b.putShort((short) (0xc000 | trailerNameOffset)).putShort((short) 1).putShort((short) 1).putInt(300)
+                .putShort((short) 4).put(Addresses.parse("192.0.2.80"));
+        byte[] dnsPayload = Arrays.copyOf(b.array(), b.position());
+        byte[] frame = udpFrame("203.0.113.53", "192.0.2.10", 53, 53000, dnsPayload);
+
+        Path in = dir.resolve("dns-tricky.cap");
+        Path out = dir.resolve("dns-tricky.out");
+        Files.write(in, pcap(List.of(frame)));
+        new Sanitizer(mappers).sanitize(in, out, vault);
+        byte[] sanitized = Files.readAllBytes(out);
+        assertFalse(contains(sanitized, "secret".getBytes(StandardCharsets.US_ASCII)),
+                "compression pointer into non-name SOA trailer must fail closed and zero DNS payload");
+    }
+
+    @Test
+    void ipv4OptionsAndIpv6ExtensionHeaderAddressesAreMappedAndUnknownOptionsZeroed() throws Exception {
+        // 1. IPv4 packet with Record Route (7), Loose Source Route (131), Timestamp+Addr (68 flag 1), and unknown option (99)
+        ByteBuffer opts = ByteBuffer.allocate(36);
+        // Record Route (type 7, len 11, ptr 12, two IPv4 addresses)
+        opts.put((byte) 7).put((byte) 11).put((byte) 12)
+                .put(Addresses.parse("192.0.2.99")).put(Addresses.parse("198.51.100.88"));
+        // Loose Source Route (type 131, len 7, ptr 8, one IPv4 address)
+        opts.put((byte) 131).put((byte) 7).put((byte) 8)
+                .put(Addresses.parse("203.0.113.77"));
+        // Internet Timestamp with address (type 68, len 12, ptr 13, oflw/flag=0x01, addr + ts)
+        opts.put((byte) 68).put((byte) 12).put((byte) 13).put((byte) 0x01)
+                .put(Addresses.parse("192.0.2.66")).putInt(0x11223344);
+        // Unknown option (type 99, len 6, carrying "LEAK")
+        opts.put((byte) 99).put((byte) 6).put("LEAK".getBytes(StandardCharsets.US_ASCII));
+        byte[] optBytes = opts.array(); // 36 bytes -> IHL = (20 + 36) / 4 = 14 (0x4e)
+
+        ByteBuffer udp = ByteBuffer.allocate(8);
+        udp.putShort((short) 12345).putShort((short) 80).putShort((short) 8).putShort((short) 0);
+        int ihl = 20 + optBytes.length;
+        ByteBuffer v4 = ByteBuffer.allocate(14 + ihl + 8);
+        v4.put(eth(0x0800));
+        v4.put((byte) (0x40 | (ihl / 4))).put((byte) 0).putShort((short) (ihl + 8))
+                .putShort((short) 1).putShort((short) 0x4000).put((byte) 64).put((byte) 17).putShort((short) 0)
+                .put(Addresses.parse("192.0.2.10")).put(Addresses.parse("198.51.100.20"))
+                .put(optBytes).put(udp.array());
+        byte[] v4Frame = v4.array();
+        int ipCs = 0xffff & ~sum(v4Frame, 14, 14 + ihl, 0);
+        v4Frame[24] = (byte) (ipCs >> 8);
+        v4Frame[25] = (byte) ipCs;
+
+        // 2. IPv6 packet with Destination Options (60) containing Home Address (0xC9) + unknown TLV, and Routing Header (43)
+        ByteBuffer dstOpt = ByteBuffer.allocate(32);
+        // Next header = 43 (Routing), Hdr Ext Len = 3 (32 bytes total)
+        dstOpt.put((byte) 43).put((byte) 3);
+        // Home Address option: type 0xC9, len 16, 16-byte IPv6 address (18 bytes)
+        dstOpt.put((byte) 0xc9).put((byte) 16).put(Addresses.parse("2001:db8:9::99"));
+        // Unknown option: type 0x1e, len 10, carrying "IPV6-LEAK!" (12 bytes)
+        dstOpt.put((byte) 0x1e).put((byte) 10).put("IPV6-LEAK!".getBytes(StandardCharsets.US_ASCII));
+
+        ByteBuffer rtHdr = ByteBuffer.allocate(24);
+        // Next header = 17 (UDP), Hdr Ext Len = 2 (24 bytes), Routing Type = 0, Segments Left = 1, Reserved = 0
+        rtHdr.put((byte) 17).put((byte) 2).put((byte) 0).put((byte) 1).putInt(0)
+                .put(Addresses.parse("2001:db8:8::88"));
+
+        int plen = 32 + 24 + 8;
+        ByteBuffer v6 = ByteBuffer.allocate(14 + 40 + plen);
+        v6.put(eth(0x86dd)).putInt(0x60000000).putShort((short) plen).put((byte) 60).put((byte) 64)
+                .put(Addresses.parse("2001:db8:1::10")).put(Addresses.parse("2001:db8:2::20"))
+                .put(dstOpt.array()).put(rtHdr.array()).put(udp.array());
+        byte[] v6Frame = v6.array();
+
+        Path in = dir.resolve("opts.cap");
+        Path out = dir.resolve("opts.out");
+        Path back = dir.resolve("opts.back");
+        Files.write(in, pcap(List.of(v4Frame, v6Frame)));
+        Sanitizer sanitizer = new Sanitizer(mappers);
+        sanitizer.sanitize(in, out, vault);
+        byte[] sanitized = Files.readAllBytes(out);
+
+        for (String a : List.of("192.0.2.99", "198.51.100.88", "203.0.113.77", "192.0.2.66",
+                "2001:db8:9::99", "2001:db8:8::88")) {
+            assertFalse(contains(sanitized, Addresses.parse(a)), "option address must be mapped: " + a);
+            assertTrue(contains(sanitized, mappers.ip().map(Addresses.parse(a))), "mapped option address present: " + a);
+        }
+        assertFalse(contains(sanitized, "LEAK".getBytes(StandardCharsets.US_ASCII)), "unknown IPv4 option zeroed");
+        assertFalse(contains(sanitized, "IPV6-LEAK!".getBytes(StandardCharsets.US_ASCII)), "unknown IPv6 option zeroed");
+        List<byte[]> outFrames = records(sanitized);
+        assertEquals(0, 0xffff & ~sum(outFrames.get(0), 14, 14 + ihl, 0), "IPv4 header checksum with options valid");
+
+        sanitizer.revert(out, back, vault);
+        List<byte[]> reverted = records(Files.readAllBytes(back));
+        for (String a : List.of("192.0.2.99", "198.51.100.88", "203.0.113.77", "192.0.2.66")) {
+            assertTrue(contains(reverted.get(0), Addresses.parse(a)), "reverted IPv4 option address: " + a);
+        }
+        for (String a : List.of("2001:db8:9::99", "2001:db8:8::88")) {
+            assertTrue(contains(reverted.get(1), Addresses.parse(a)), "reverted IPv6 option address: " + a);
+        }
+    }
+
     // ---- synthetic frames ----------------------------------------------------------------------------------
 
     static List<byte[]> frames() {

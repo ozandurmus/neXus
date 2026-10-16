@@ -22,8 +22,9 @@ import java.util.Map;
  */
 final class PcapContainer {
 
-    private static final int MAX_RECORD = 64 * 1024 * 1024;
+    private static final int MAX_RECORD = 4 * 1024 * 1024;
     private static final int BATCH = 512;
+    private static final int MAX_BATCH_BYTES = 4 * 1024 * 1024;
 
     private final FrameRewriter frames;
     private final InputStream in;
@@ -32,6 +33,7 @@ final class PcapContainer {
     private final List<Object> queue = new ArrayList<>();
     private final List<byte[]> batchFrames = new ArrayList<>();
     private final List<Integer> batchLinks = new ArrayList<>();
+    private int batchBytes;
     private long count;
 
     /** A packet awaiting its rewrite: everything around the frame bytes, and how to frame the new bytes. */
@@ -167,7 +169,8 @@ final class PcapContainer {
         queue.add(new Pending(batchFrames.size(), pending.order(), pending.kind(), pending.head(), pending.wireLength(), pending.pcapng()));
         batchFrames.add(raw);
         batchLinks.add(linkType);
-        if (batchFrames.size() >= BATCH) flush();
+        batchBytes += raw.length;
+        if (batchFrames.size() >= BATCH || batchBytes >= MAX_BATCH_BYTES) flush();
     }
 
     private void write(byte[] bytes) throws IOException {
@@ -202,6 +205,7 @@ final class PcapContainer {
         queue.clear();
         batchFrames.clear();
         batchLinks.clear();
+        batchBytes = 0;
     }
 
     /** A frame of a link type no decoder exists for: the reference refuses it, the neXus modes zero it. */

@@ -181,13 +181,14 @@ final class DnsRewriter {
             int ns = u16(m, start + 8);
             int ar = u16(m, start + 10);
             int at = start + 12;
+            Set<Integer> validLabelStarts = new java.util.HashSet<>();
             for (int i = 0; i < qd; i++) {
-                at = name(m, start, end, at, v);
+                at = name(m, start, end, at, v, validLabelStarts);
                 if (at < 0 || at + 4 > end) return false;
                 at += 4;
             }
             for (int i = 0; i < an + ns + ar; i++) {
-                at = name(m, start, end, at, v);
+                at = name(m, start, end, at, v, validLabelStarts);
                 if (at < 0 || at + 10 > end) return false;
                 int type = u16(m, at);
                 int rdlength = u16(m, at + 8);
@@ -203,24 +204,25 @@ final class DnsRewriter {
                         else v.opaque(rdata, rdlength);
                     }
                     case 2, 5, 12, 39 -> {
-                        if (name(m, start, rdata + rdlength, rdata, v) != rdata + rdlength) return false;
+                        if (name(m, start, rdata + rdlength, rdata, v, validLabelStarts) != rdata + rdlength) return false;
                     }
                     case 15 -> {
-                        if (rdlength < 3 || name(m, start, rdata + rdlength, rdata + 2, v) != rdata + rdlength) return false;
+                        if (rdlength < 3 || name(m, start, rdata + rdlength, rdata + 2, v, validLabelStarts) != rdata + rdlength) return false;
                     }
                     case 33 -> {
-                        if (rdlength < 7 || name(m, start, rdata + rdlength, rdata + 6, v) != rdata + rdlength) return false;
+                        if (rdlength < 7 || name(m, start, rdata + rdlength, rdata + 6, v, validLabelStarts) != rdata + rdlength) return false;
                     }
                     case 6 -> {
-                        int next = name(m, start, rdata + rdlength, rdata, v);
+                        int next = name(m, start, rdata + rdlength, rdata, v, validLabelStarts);
                         if (next < 0) return false;
-                        next = name(m, start, rdata + rdlength, next, v);
+                        next = name(m, start, rdata + rdlength, next, v, validLabelStarts);
                         if (next < 0 || next + 20 != rdata + rdlength) return false;
                     }
                     default -> v.opaque(rdata, rdlength);
                 }
                 at = rdata + rdlength;
             }
+            if (at < end) v.opaque(at, end - at);
             return true;
         } catch (IndexOutOfBoundsException malformed) {
             return false;
@@ -228,7 +230,7 @@ final class DnsRewriter {
     }
 
     /** Visits the name at {@code at}; returns the offset after it in this occurrence, or -1 when malformed. */
-    private static int name(byte[] m, int start, int end, int at, Visitor v) {
+    private static int name(byte[] m, int start, int end, int at, Visitor v, Set<Integer> validLabelStarts) {
         List<String> labels = new ArrayList<>();
         List<Integer> positions = new ArrayList<>();
         int cursor = at;
@@ -244,21 +246,25 @@ final class DnsRewriter {
                 if (cursor + 1 >= m.length) return -1;
                 int target = start + (((length & 0x3f) << 8) | (m[cursor + 1] & 0xff));
                 if (direct) next = cursor + 2;
-                if (target >= cursor || ++jumps > MAX_JUMPS) return -1;
+                if (target >= cursor || ++jumps > MAX_JUMPS || !validLabelStarts.contains(target)) return -1;
                 direct = false;
                 cursor = target;
                 continue;
             }
             if ((length & 0xc0) != 0) return -1;
             if (length == 0) {
-                if (direct) next = cursor + 1;
+                if (direct) {
+                    validLabelStarts.add(cursor);
+                    next = cursor + 1;
+                }
                 break;
             }
             if (cursor + 1 + length > m.length || (direct && cursor + 1 + length > end)) return -1;
             total += length + 1;
             if (total > 255) return -1;
+            if (direct) validLabelStarts.add(cursor);
             labels.add(new String(m, cursor + 1, length, StandardCharsets.ISO_8859_1));
-            positions.add(direct ? cursor : -1);
+            positions.add(cursor);
             cursor += 1 + length;
         }
         v.name(labels, positions);

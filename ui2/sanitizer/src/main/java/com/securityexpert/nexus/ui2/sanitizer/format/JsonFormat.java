@@ -26,13 +26,13 @@ import com.securityexpert.nexus.ui2.sanitizer.core.HostHeaders;
  */
 public final class JsonFormat {
 
-    static final int MAX_STRING = 64 * 1024 * 1024;
+    static final int MAX_STRING = 4 * 1024 * 1024;
     static final int MAX_DEPTH = 512;
 
     private JsonFormat() {
     }
 
-    /** One decoded string: its value and, per decoded character, where its raw text starts. */
+    /** One decoded string: its value and, per decoded character, where its raw text starts (null when unescaped). */
     record Decoded(String raw, String value, int[] rawStart) {
     }
 
@@ -72,8 +72,10 @@ public final class JsonFormat {
         while (suffix < max - prefix && old.charAt(old.length() - 1 - suffix) == value.charAt(value.length() - 1 - suffix)) suffix++;
         if (suffix > 0 && Character.isLowSurrogate(old.charAt(old.length() - suffix))) suffix--;
         String raw = d.raw(); // without the quotes
-        int rawPrefixEnd = prefix < old.length() ? d.rawStart()[prefix] : raw.length();
-        int rawSuffixStart = old.length() - suffix < old.length() ? d.rawStart()[old.length() - suffix] : raw.length();
+        int[] rawStart = d.rawStart();
+        int rawPrefixEnd = prefix < old.length() ? (rawStart == null ? prefix : rawStart[prefix]) : raw.length();
+        int rawSuffixStart = old.length() - suffix < old.length()
+                ? (rawStart == null ? old.length() - suffix : rawStart[old.length() - suffix]) : raw.length();
         return raw.substring(0, rawPrefixEnd) + escape(value.substring(prefix, value.length() - suffix))
                 + raw.substring(rawSuffixStart);
     }
@@ -108,6 +110,7 @@ public final class JsonFormat {
         private final List<Object> pending = new ArrayList<>(); // String (raw) or Pend (a value awaiting rewrite)
         private final List<Value> batch = new ArrayList<>();
         private long batchChars;
+        private long pendingChars;
         long values;
         private String lastKey;
 
@@ -153,7 +156,7 @@ public final class JsonFormat {
                 case '{' -> object();
                 case '[' -> array();
                 case '"' -> {
-                    Decoded d = string();
+                    Decoded d = string(true);
                     values++;
                     boolean host = lastKey != null && HostHeaders.isHostHeader(lastKey);
                     if (out != null) {
@@ -185,8 +188,13 @@ public final class JsonFormat {
             }
             while (true) {
                 if (c != '"') throw new IOException("key expected");
-                Decoded key = string();
-                emit("\"" + key.raw() + "\"");
+                Decoded key = string(false);
+                if (out != null) {
+                    pending.add(new Pend(key, batch.size()));
+                    batch.add(new Value(key.value(), false));
+                    batchChars += key.value().length();
+                    if (batch.size() >= ValueRewriter.BATCH_VALUES || batchChars >= ValueRewriter.BATCH_CHARS) flush();
+                }
                 c = skipWhitespace();
                 if (c != ':') throw new IOException("colon expected");
                 emit(":");
@@ -257,10 +265,39 @@ public final class JsonFormat {
         }
 
         /** Reads a string after its opening quote; returns raw (without quotes), value and the index map. */
-        private Decoded string() throws IOException {
+        private Decoded string(boolean forValue) throws IOException {
+            if (out == null && forValue) {
+                int rawLen = 0;
+                while (true) {
+                    int c = in.read();
+                    if (c < 0) throw new IOException("unterminated string");
+                    if (c == '"') break;
+                    if (c < 0x20) throw new IOException("control character in string");
+                    if (c == '\\') {
+                        rawLen += 2;
+                        int e = in.read();
+                        if (e < 0) throw new IOException("bad escape");
+                        switch (e) {
+                            case '"', '\\', '/', 'b', 'f', 'n', 'r', 't' -> { }
+                            case 'u' -> {
+                                rawLen += 4;
+                                for (int i = 0; i < 4; i++) {
+                                    int h = in.read();
+                                    if (h < 0 || Character.digit(h, 16) < 0) throw new IOException("bad unicode escape");
+                                }
+                            }
+                            default -> throw new IOException("bad escape");
+                        }
+                    } else {
+                        rawLen++;
+                    }
+                    if (rawLen > MAX_STRING) throw new UnsupportedInputException("JSON_STRING_TOO_LARGE", "a JSON string exceeds 4 M characters");
+                }
+                return new Decoded("", "", null);
+            }
             StringBuilder raw = new StringBuilder();
-            StringBuilder value = new StringBuilder();
-            int[] starts = new int[64];
+            StringBuilder value = null;
+            int[] starts = null;
             while (true) {
                 int c = in.read();
                 if (c < 0) throw new IOException("unterminated string");
@@ -268,6 +305,11 @@ public final class JsonFormat {
                 if (c < 0x20) throw new IOException("control character in string");
                 int rawAt = raw.length();
                 if (c == '\\') {
+                    if (value == null) {
+                        value = new StringBuilder(raw);
+                        starts = new int[Math.max(64, rawAt * 2)];
+                        for (int i = 0; i < rawAt; i++) starts[i] = i;
+                    }
                     raw.append('\\');
                     int e = in.read();
                     if (e < 0) throw new IOException("bad escape");
@@ -299,12 +341,18 @@ public final class JsonFormat {
                     value.append(decoded);
                 } else {
                     raw.append((char) c);
-                    starts = put(starts, value.length(), rawAt);
-                    value.append((char) c);
+                    if (value != null) {
+                        starts = put(starts, value.length(), rawAt);
+                        value.append((char) c);
+                    }
                 }
-                if (raw.length() > MAX_STRING) throw new UnsupportedInputException("JSON_STRING_TOO_LARGE", "a JSON string exceeds 64 M characters");
+                if (raw.length() > MAX_STRING) throw new UnsupportedInputException("JSON_STRING_TOO_LARGE", "a JSON string exceeds 4 M characters");
             }
-            return new Decoded(raw.toString(), value.toString(), java.util.Arrays.copyOf(starts, value.length()));
+            String rawStr = raw.toString();
+            if (value == null) {
+                return new Decoded(rawStr, rawStr, null);
+            }
+            return new Decoded(rawStr, value.toString(), java.util.Arrays.copyOf(starts, value.length()));
         }
 
         private static int[] put(int[] array, int index, int value) {
@@ -315,8 +363,15 @@ public final class JsonFormat {
 
         private void emit(String raw) throws IOException {
             if (out == null) return;
-            if (batch.isEmpty()) out.write(raw);
-            else pending.add(raw);
+            if (batch.isEmpty()) {
+                out.write(raw);
+            } else {
+                pending.add(raw);
+                pendingChars += raw.length();
+                if (pending.size() >= 4096 || pendingChars >= ValueRewriter.BATCH_CHARS) {
+                    flush();
+                }
+            }
         }
 
         void flush() throws IOException {
@@ -336,6 +391,7 @@ public final class JsonFormat {
             pending.clear();
             batch.clear();
             batchChars = 0;
+            pendingChars = 0;
         }
     }
 }

@@ -109,6 +109,17 @@ class SanitizerVaultIntegrationTest {
                     + "and vault_pruned_at is not null"));
             assertEquals(1, count(app, "select count(*) from sanitize_ledger where job_id = '" + jobId + "' and event = 'VAULT_PRUNED' "
                     + "and entries = " + entries));
+
+            // A failed job prunes its vault and shreds its wrapped key immediately (F-04), not after 90 days.
+            String failedJobId = service.startSanitize("synthetic-operator",
+                    new ByteArrayInputStream(new byte[] {(byte) 0xd4, (byte) 0xc3, (byte) 0xb2, (byte) 0xa1, 1}));
+            assertEquals("FAILED", repository.findJob(failedJobId).orElseThrow().state());
+            assertEquals(0, count(app, "select count(*) from sanitize_vault_entry where job_id = '" + failedJobId + "'"));
+            assertEquals(1, count(app, "select count(*) from sanitize_job where job_id = '" + failedJobId
+                    + "' and wrapped_data_key is null and vault_pruned_at is not null"));
+            assertEquals(1, count(app, "select count(*) from sanitize_ledger where job_id = '" + failedJobId
+                    + "' and event = 'VAULT_PRUNED'"));
+
             try (var stillEmpty = Files.list(work)) {
                 assertEquals(0, stillEmpty.count(), "no temporary file survives its job");
             }
