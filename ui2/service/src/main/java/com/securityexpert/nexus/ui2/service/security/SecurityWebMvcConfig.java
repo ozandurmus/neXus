@@ -40,7 +40,7 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("GET /api/v2/packet-analysis/captures/*/download", ActionRegistry.PACKET_ANALYSIS_RAW_VIEW),
             // Data Sanitizer (DATA_SANITIZER_CONTRACT.md §3.1). One id segment per route (single wildcard).
             Map.entry("POST /api/v2/sanitize", ActionRegistry.DATA_SANITIZE_RUN),
-            Map.entry("GET /api/v2/sanitize/jobs", ActionRegistry.DATA_SANITIZE_RUN),
+            Map.entry("GET /api/v2/sanitize/jobs", ActionRegistry.DATA_SANITIZE_INFO),
             Map.entry("GET /api/v2/sanitize/jobs/*", ActionRegistry.DATA_SANITIZE_RUN),
             Map.entry("GET /api/v2/sanitize/jobs/*/download", ActionRegistry.DATA_SANITIZE_RUN),
             Map.entry("POST /api/v2/sanitize/revert", ActionRegistry.DATA_SANITIZE_REVERT),
