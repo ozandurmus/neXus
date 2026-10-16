@@ -244,7 +244,9 @@ def replace(target, image, snapshot, limit=14400, commit=None, authorization=Non
     if old is not None and not re.fullmatch(r".+@sha256:[a-f0-9]{64}", old):
         raise Blocked("old workload digest is not immutable")
     generation = None
-    if target in ROLES:
+    # A first release (ensure_packet_analysis created the deployment with the candidate image: old is None) has no
+    # old owner to drain; draining it would wait for the new pod itself to stop (2026-10-16: drain retained).
+    if target in ROLES and not (target == "packet-analysis" and old is None):
         generation = request_drain(target, snapshot)
         wait_drain(target, generation, limit)
     old_pods = json.loads(run("kubectl", "-n", "ui2", "get", "pods", "-l", "app.kubernetes.io/component=" + TARGETS[target], "-o", "json"))
