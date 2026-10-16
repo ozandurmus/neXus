@@ -40,12 +40,14 @@ CREATE INDEX idx_sanitize_job_vault_expiry ON sanitize_job(vault_expires_at) WHE
 
 -- 2. The vault. lookup_key = HMAC-SHA256(vault sub-key of the privacy key, kind || 0x00 || canonical token);
 -- sealed_original = nonce(12) || AES-256-GCM(job data key, original; AAD = job_id || lookup_key) || tag(16).
+-- entry_id is a surrogate key: lookup_key is redacted, and a redacted column is never a primary key (row_pk guard).
 CREATE TABLE sanitize_vault_entry (
+    entry_id          BIGINT      GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     job_id            TEXT        NOT NULL REFERENCES sanitize_job(job_id) ON DELETE CASCADE,
     lookup_key        BYTEA       NOT NULL CHECK (octet_length(lookup_key) = 32),
     entry_kind        TEXT        NOT NULL CHECK (entry_kind IN ('address', 'network', 'mac', 'label', 'device', 'dns_name')),
     sealed_original   BYTEA       NOT NULL CHECK (octet_length(sealed_original) BETWEEN 29 AND 4124),
-    PRIMARY KEY (job_id, lookup_key)
+    UNIQUE (job_id, lookup_key)
 );
 CREATE INDEX idx_sanitize_vault_entry_lookup ON sanitize_vault_entry(lookup_key);
 
