@@ -3703,6 +3703,186 @@ gates:
     safe_telemetry_fields: ["timestampForm", "lineShape"]
     source_document_pointer: "docs/design/DEVICE_SYSTEM_LOG_PROGRAMME_CONTRACT.md §4; PO chat approval 2026-10-15 for M1/M2 on every enrolled Check Point firewall"
 
+  # M5: name, size and last write time of the fwk, mq_mng, HCP and spike_detective log files, read twice 24 h apart to measure growth (PO 2026-10-16, system-log programme phase A measurement).
+  - gate_id: "cp_syslog_measure_stat_ext"
+    vendor: "check_point"
+    platform_role_scope: "cp_gaia_gateway"
+    shell_context: "expert"
+    transport_kind: "SSH_EXEC"
+    canonical_command_key: "bash -lc 'stat -c \"%n %s %Y\" $FWDIR/log/fwk.elg $FWDIR/log/mq_mng.elg /var/log/hcp.elg /var/log/spike_detective/spike_detective.log /var/log/spike_detective/spike_detective.csv'"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 30
+    retry_rule: "none"
+    max_frequency: "phase A measurement only: at most twice per device, 24 h apart, inside a job window; no polling"
+    session_reuse_rule: "one existing trusted SSH session; non-interactive bash login shell; no retry"
+    unsupported_behavior_ref: "a missing file is a result (stat/ls/tail/head error text), not an error"
+    secret_output_risk: "log lines and file names may carry host names, addresses and user names; in-memory masked projection only; no raw retention"
+    safe_telemetry_fields: ["name", "sizeBytes", "mtime"]
+    source_document_pointer: "docs/design/DEVICE_SYSTEM_LOG_PROGRAMME_CONTRACT.md §4 (M5); PO chat approval 2026-10-16 for the exact M5 commands on Check Point Gaia gateways"
+
+  # M5: sar archive directory listing: retention depth, file naming and per-day size (PO 2026-10-16, system-log programme phase A measurement).
+  - gate_id: "cp_syslog_measure_ls_sa"
+    vendor: "check_point"
+    platform_role_scope: "cp_gaia_gateway"
+    shell_context: "expert"
+    transport_kind: "SSH_EXEC"
+    canonical_command_key: "bash -lc 'ls -lgo --time-style=+%s /var/log/sa/'"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 30
+    retry_rule: "none"
+    max_frequency: "phase A measurement only: at most twice per device, 24 h apart, inside a job window; no polling"
+    session_reuse_rule: "one existing trusted SSH session; non-interactive bash login shell; no retry"
+    unsupported_behavior_ref: "a missing file is a result (stat/ls/tail/head error text), not an error"
+    secret_output_risk: "log lines and file names may carry host names, addresses and user names; in-memory masked projection only; no raw retention"
+    safe_telemetry_fields: ["fileCount", "sizeBytes", "mtime", "namePattern"]
+    source_document_pointer: "docs/design/DEVICE_SYSTEM_LOG_PROGRAMME_CONTRACT.md §4 (M5); PO chat approval 2026-10-16 for the exact M5 commands on Check Point Gaia gateways"
+
+  # M5: spike_detective directory listing: rotation count, naming and sizes (PO 2026-10-16, system-log programme phase A measurement).
+  - gate_id: "cp_syslog_measure_ls_spike"
+    vendor: "check_point"
+    platform_role_scope: "cp_gaia_gateway"
+    shell_context: "expert"
+    transport_kind: "SSH_EXEC"
+    canonical_command_key: "bash -lc 'ls -lgo --time-style=+%s /var/log/spike_detective/'"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 30
+    retry_rule: "none"
+    max_frequency: "phase A measurement only: at most twice per device, 24 h apart, inside a job window; no polling"
+    session_reuse_rule: "one existing trusted SSH session; non-interactive bash login shell; no retry"
+    unsupported_behavior_ref: "a missing file is a result (stat/ls/tail/head error text), not an error"
+    secret_output_risk: "log lines and file names may carry host names, addresses and user names; in-memory masked projection only; no raw retention"
+    safe_telemetry_fields: ["fileCount", "sizeBytes", "mtime", "namePattern"]
+    source_document_pointer: "docs/design/DEVICE_SYSTEM_LOG_PROGRAMME_CONTRACT.md §4 (M5); PO chat approval 2026-10-16 for the exact M5 commands on Check Point Gaia gateways"
+
+  # M5: HCP last-run directory listing: archive naming, count and sizes (PO 2026-10-16, system-log programme phase A measurement).
+  - gate_id: "cp_syslog_measure_ls_hcp"
+    vendor: "check_point"
+    platform_role_scope: "cp_gaia_gateway"
+    shell_context: "expert"
+    transport_kind: "SSH_EXEC"
+    canonical_command_key: "bash -lc 'ls -lgo --time-style=+%s /var/log/hcp/last/'"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 30
+    retry_rule: "none"
+    max_frequency: "phase A measurement only: at most twice per device, 24 h apart, inside a job window; no polling"
+    session_reuse_rule: "one existing trusted SSH session; non-interactive bash login shell; no retry"
+    unsupported_behavior_ref: "a missing file is a result (stat/ls/tail/head error text), not an error"
+    secret_output_risk: "log lines and file names may carry host names, addresses and user names; in-memory masked projection only; no raw retention"
+    safe_telemetry_fields: ["fileCount", "sizeBytes", "mtime", "namePattern"]
+    source_document_pointer: "docs/design/DEVICE_SYSTEM_LOG_PROGRAMME_CONTRACT.md §4 (M5); PO chat approval 2026-10-16 for the exact M5 commands on Check Point Gaia gateways"
+
+  # M5: crash and user-mode dump directory listings: whether dumps exist, their naming, sizes and ages (PO 2026-10-16, system-log programme phase A measurement).
+  - gate_id: "cp_syslog_measure_ls_crash"
+    vendor: "check_point"
+    platform_role_scope: "cp_gaia_gateway"
+    shell_context: "expert"
+    transport_kind: "SSH_EXEC"
+    canonical_command_key: "bash -lc 'ls -lgo --time-style=+%s /var/log/crash/ /var/log/dump/usermode/'"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 30
+    retry_rule: "none"
+    max_frequency: "phase A measurement only: at most twice per device, 24 h apart, inside a job window; no polling"
+    session_reuse_rule: "one existing trusted SSH session; non-interactive bash login shell; no retry"
+    unsupported_behavior_ref: "a missing file is a result (stat/ls/tail/head error text), not an error"
+    secret_output_risk: "log lines and file names may carry host names, addresses and user names; in-memory masked projection only; no raw retention"
+    safe_telemetry_fields: ["fileCount", "sizeBytes", "mtime", "namePattern"]
+    source_document_pointer: "docs/design/DEVICE_SYSTEM_LOG_PROGRAMME_CONTRACT.md §4 (M5); PO chat approval 2026-10-16 for the exact M5 commands on Check Point Gaia gateways"
+
+  # M5: line format of fwk.elg (kernel worker log) (PO 2026-10-16, system-log programme phase A measurement).
+  - gate_id: "cp_syslog_measure_tail_fwk"
+    vendor: "check_point"
+    platform_role_scope: "cp_gaia_gateway"
+    shell_context: "expert"
+    transport_kind: "SSH_EXEC"
+    canonical_command_key: "bash -lc 'tail -n 20 $FWDIR/log/fwk.elg'"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 30
+    retry_rule: "none"
+    max_frequency: "phase A measurement only: at most twice per device, 24 h apart, inside a job window; no polling"
+    session_reuse_rule: "one existing trusted SSH session; non-interactive bash login shell; no retry"
+    unsupported_behavior_ref: "a missing file is a result (stat/ls/tail/head error text), not an error"
+    secret_output_risk: "log lines and file names may carry host names, addresses and user names; in-memory masked projection only; no raw retention"
+    safe_telemetry_fields: ["timestampForm", "lineShape"]
+    source_document_pointer: "docs/design/DEVICE_SYSTEM_LOG_PROGRAMME_CONTRACT.md §4 (M5); PO chat approval 2026-10-16 for the exact M5 commands on Check Point Gaia gateways"
+
+  # M5: line format of spike_detective.log (PO 2026-10-16, system-log programme phase A measurement).
+  - gate_id: "cp_syslog_measure_tail_spike"
+    vendor: "check_point"
+    platform_role_scope: "cp_gaia_gateway"
+    shell_context: "expert"
+    transport_kind: "SSH_EXEC"
+    canonical_command_key: "bash -lc 'tail -n 20 /var/log/spike_detective/spike_detective.log'"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 30
+    retry_rule: "none"
+    max_frequency: "phase A measurement only: at most twice per device, 24 h apart, inside a job window; no polling"
+    session_reuse_rule: "one existing trusted SSH session; non-interactive bash login shell; no retry"
+    unsupported_behavior_ref: "a missing file is a result (stat/ls/tail/head error text), not an error"
+    secret_output_risk: "log lines and file names may carry host names, addresses and user names; in-memory masked projection only; no raw retention"
+    safe_telemetry_fields: ["timestampForm", "lineShape"]
+    source_document_pointer: "docs/design/DEVICE_SYSTEM_LOG_PROGRAMME_CONTRACT.md §4 (M5); PO chat approval 2026-10-16 for the exact M5 commands on Check Point Gaia gateways"
+
+  # M5: row format of spike_detective.csv (column count, timestamp form) (PO 2026-10-16, system-log programme phase A measurement).
+  - gate_id: "cp_syslog_measure_tail_spike_csv"
+    vendor: "check_point"
+    platform_role_scope: "cp_gaia_gateway"
+    shell_context: "expert"
+    transport_kind: "SSH_EXEC"
+    canonical_command_key: "bash -lc 'tail -n 5 /var/log/spike_detective/spike_detective.csv'"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 30
+    retry_rule: "none"
+    max_frequency: "phase A measurement only: at most twice per device, 24 h apart, inside a job window; no polling"
+    session_reuse_rule: "one existing trusted SSH session; non-interactive bash login shell; no retry"
+    unsupported_behavior_ref: "a missing file is a result (stat/ls/tail/head error text), not an error"
+    secret_output_risk: "log lines and file names may carry host names, addresses and user names; in-memory masked projection only; no raw retention"
+    safe_telemetry_fields: ["columnCount", "timestampForm", "lineShape"]
+    source_document_pointer: "docs/design/DEVICE_SYSTEM_LOG_PROGRAMME_CONTRACT.md §4 (M5); PO chat approval 2026-10-16 for the exact M5 commands on Check Point Gaia gateways"
+
+  # M5: header and column layout of yesterday's sar file (PO 2026-10-16, system-log programme phase A measurement).
+  - gate_id: "cp_syslog_measure_head_sar"
+    vendor: "check_point"
+    platform_role_scope: "cp_gaia_gateway"
+    shell_context: "expert"
+    transport_kind: "SSH_EXEC"
+    canonical_command_key: "bash -lc 'head -n 20 /var/log/sa/sar$(date -d yesterday +%d)'"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 30
+    retry_rule: "none"
+    max_frequency: "phase A measurement only: at most twice per device, 24 h apart, inside a job window; no polling"
+    session_reuse_rule: "one existing trusted SSH session; non-interactive bash login shell; no retry"
+    unsupported_behavior_ref: "a missing file is a result (stat/ls/tail/head error text), not an error"
+    secret_output_risk: "log lines and file names may carry host names, addresses and user names; in-memory masked projection only; no raw retention"
+    safe_telemetry_fields: ["headerShape", "lineShape"]
+    source_document_pointer: "docs/design/DEVICE_SYSTEM_LOG_PROGRAMME_CONTRACT.md §4 (M5); PO chat approval 2026-10-16 for the exact M5 commands on Check Point Gaia gateways"
+
+  # M5: member names and sizes inside the newest HCP archive (PO 2026-10-16, system-log programme phase A measurement).
+  - gate_id: "cp_syslog_measure_hcp_listing"
+    vendor: "check_point"
+    platform_role_scope: "cp_gaia_gateway"
+    shell_context: "expert"
+    transport_kind: "SSH_EXEC"
+    canonical_command_key: "bash -lc 'f=$(ls -t /var/log/hcp/last/*.tar.gz | head -1); tar -tzvf \"$f\" | head -n 50'"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 30
+    retry_rule: "none"
+    max_frequency: "phase A measurement only: at most twice per device, 24 h apart, inside a job window; no polling"
+    session_reuse_rule: "one existing trusted SSH session; non-interactive bash login shell; no retry"
+    unsupported_behavior_ref: "a missing file is a result (stat/ls/tail/head error text), not an error"
+    secret_output_risk: "log lines and file names may carry host names, addresses and user names; in-memory masked projection only; no raw retention"
+    safe_telemetry_fields: ["memberNames", "sizeBytes"]
+    source_document_pointer: "docs/design/DEVICE_SYSTEM_LOG_PROGRAMME_CONTRACT.md §4 (M5); PO chat approval 2026-10-16 for the exact M5 commands on Check Point Gaia gateways"
+
 
   # M3: enqueue a system-log query on one enrolled Palo Alto firewall (PO 2026-10-15, system-log programme phase A measurement).
   - gate_id: "pan_syslog_measure_system_enqueue"
