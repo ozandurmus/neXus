@@ -15,13 +15,12 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.securityexpert.nexus.ui2.service.device.diagnostic.SystemLogMeasurementService;
-import com.securityexpert.nexus.ui2.service.privacy.PrivacyMaskingResponseBodyAdvice;
 import com.securityexpert.nexus.ui2.service.security.GateChainInterceptor;
 
 /**
  * System-log programme phase A (M3/M4) measurement summaries. The GET is a {@code policy_read} (aiview reads it
- * through the masking response advice); the start is an administrator action and admits one job per enrolled
- * Palo Alto firewall inside the shared job windows (outside a window: 409 {@code OUTSIDE_JOB_WINDOW}).
+ * through the masking response advice); the start (security_admin, or aiview for this read-only measurement:
+ * PO 2026-10-04 and 2026-10-16) admits one job per enrolled Palo Alto firewall inside the shared job windows (outside a window: 409 {@code OUTSIDE_JOB_WINDOW}).
  */
 @RestController
 public final class SystemLogMeasurementController {
@@ -41,7 +40,7 @@ public final class SystemLogMeasurementController {
     @PostMapping("/api/v2/diagnostics/system-log-measurements/start")
     public ResponseEntity<Map<String, Object>> start(HttpServletRequest request) {
         String actor = (String) request.getAttribute(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE);
-        if (actor == null || PrivacyMaskingResponseBodyAdvice.isReplayViewer(request)) {
+        if (actor == null) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("code", "SYSLOG_MEASURE_NOT_PERMITTED"));
         }
         var outcome = service.startAll(actor);
