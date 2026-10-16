@@ -591,6 +591,8 @@ class AuditRedactionPolicyTest {
             "notification_settings.smtp_to", 2, "notification_settings.syslog_host", 2,
             "packet_analysis_capture.display_name", 2, "packet_analysis_capture.sha256", 2,
             "packet_analysis_capture.storage_key", 2, "packet_analysis_case.title", 2,
+            "packet_analysis_host_telemetry.anchor_local", 2, "packet_analysis_host_telemetry.display_name", 2,
+            "packet_analysis_host_telemetry.sha256", 2, "packet_analysis_host_telemetry.storage_key", 2,
             "panorama_assignment.device_groups", 2, "panorama_assignment.device_serial", 2,
             "panorama_assignment.template_stack", 2, "panorama_assignment.templates", 2,
             "policy_offline_analysis.aggregates", 2, "policy_offline_analysis.file_name", 2,
