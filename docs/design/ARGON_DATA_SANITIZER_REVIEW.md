@@ -18,29 +18,29 @@ The Data Sanitizer (`ui2/sanitizer` + `ui2/service/.../sanitizer` + `V156__data_
 
 However, an adversarial code audit across the five review dimensions uncovered **21 concrete security and reliability findings** (**7 High**, **9 Medium**, **5 Low**):
 
-| ID | Category | Severity | Title | Location |
-|---|---|---|---|---|
-| **F-01** | 1. Leaks | **HIGH** | JSON object keys are emitted verbatim without sanitization | `JsonFormat.java:188-189` |
-| **F-02** | 1. Leaks | **HIGH** | Non-XML XLSX package parts (including `.vml` legacy notes/comments and embedded objects) are copied verbatim | `XlsxFormat.java:115-123` |
-| **F-03** | 1. Leaks | **MEDIUM** | Temporary `.out` files and `workDir` lack restrictive POSIX `0600`/`0700` permissions, and failed synchronous `sanitizeFile` leaves partial output on disk | `Sanitizer.java:85`, `SanitizerService.java:117,147,263-266,314` |
-| **F-04** | 1. Leaks | **MEDIUM** | Failed or interrupted sanitize jobs retain unpruned vault rows and wrapped DEKs in PostgreSQL for 90 days and remain queryable in `ScopedResolver` | `SanitizerService.java:155-158`, `SanitizerRepository.java:170-183,224-234` |
-| **F-05** | 1. Leaks | **LOW** | `TextFormat` 1 MiB chunk splitter cuts mid-token when a long line has no whitespace in its upper half | `TextFormat.java:81-86,109-114` |
-| **F-06** | 2. IP Permutation | **HIGH** | `IpPermutation.forced()` prefix-preservation logic leaks high-order prefix bits of every IPv4 and IPv6 address (`10/8` always maps into `8/5`; `192.168/16` into `192/3`; `2000::/3` into `2000::/3`) | `IpPermutation.java:34-61,142,159-168` |
-| **F-07** | 2. IP Permutation | **LOW** | Mixed-case DNS labels hash `"label-exact:" + label` instead of lowercase punycode, breaking DNS case-insensitivity correlation and leaking capitalization patterns | `NameMapper.java:41-44` |
-| **F-08** | 3. Detector Misses | **HIGH** | PCAP DNS compression pointers into non-name RR bytes (e.g., SOA 20-byte trailer, MX preference, SRV header) bypass in-place label overwriting and leak plaintext hostnames | `DnsRewriter.java:63-69,214-219,245-261` |
-| **F-09** | 3. Detector Misses | **HIGH** | PCAP IPv4 header options (Record Route, Loose/Strict Source Route, Internet Timestamp), IPv6 Hop-by-Hop/Destination Options, and non-IPv4 ARP payloads are copied verbatim in cleartext | `Layers.java:172-182,188-190,213-228`, `FrameRewriter.java:306-322` |
-| **F-10** | 3. Detector Misses | **MEDIUM** | `FILE_LIKE_TLDS` heuristic suppresses 2-label domains under real ccTLDs (`.ai`, `.rs`, `.pl`, `.md`, `.sh`, `.so`, `.cc`, `.ms`) in free text | `Patterns.java:67-68`, `TextSanitizer.java:335-337` |
-| **F-11** | 3. Detector Misses | **MEDIUM** | Hostnames starting with a digit (valid per RFC 1123 §2.1) are missed by `CONTEXT_HOST`, `USER_AT_HOST`, `SYSLOG_3164`, and `SYSLOG_5424`; `CONTEXT_HOST` also fails to `learn()` discovered hostnames | `Patterns.java:39,47,52,53`, `TextSanitizer.java:246` |
-| **F-12** | 3. Detector Misses | **MEDIUM** | `urlCandidate` consumes closing `]` on bracketed non-IPv6 URLs without a path (e.g., `[http://fw-tango-04]`), causing single-label URL host sanitization to fail | `TextSanitizer.java:209-210,369-372` |
-| **F-13** | 3. Detector Misses | **MEDIUM** | XLSX `SheetPolicy` and `WorkbookPolicy` miss cell types other than `t="str"`/`<is>` (such as `t="e"` error strings, `<text>` in legacy `<commentList>`, and `workbook.xml` external path attributes) | `XlsxFormat.java:108-114,392-397,450-454` |
-| **F-14** | 3. Detector Misses | **LOW** | CSV files without a header row fail to sanitize bare hostnames in row 1, and `HostHeaders` only matches exact tokens after stripping non-alphanumerics | `CsvFormat.java:98-106`, `HostHeaders.java:25-27` |
-| **F-15** | 3. Detector Misses | **LOW** | BSD/macOS/Solaris `arp -a` single-hex-digit MAC octets (`0:1a:2b:3c:4d:5e`) are not matched by `Patterns.MAC` | `Patterns.java:25-28` |
-| **F-16** | 4. Revert Safety | **MEDIUM** | IPv6 addresses with zone identifiers and CIDR prefixes (e.g., `fe80::1%eth0/64`) or hex-formatted IPv4-mapped IPv6 addresses (`::ffff:c000:0201`) fail to revert or lose CIDR suffix | `TextReverter.java:187-210`, `TextSanitizer.java:311-317` |
-| **F-17** | 4. Revert Safety | **MEDIUM** | Sub-token resolution in `TextReverter`: an external tool that synthesizes `::ffff:<vault-ipv4>` or `<invented-label>.<vault-fqdn>` partially resolves the embedded vault token | `TextReverter.java:168-210`, `Patterns.java:17` |
-| **F-18** | 4. Revert Safety | **LOW** | First-seen style wins per job in `JobVault.recent` deduplication (`on conflict (job_id, lookup_key) do nothing`), causing mixed-format IPv6/MAC occurrences in the same file to revert to the first occurrence's style | `JobVault.java:52`, `SanitizerRepository.java:87` |
-| **F-19** | 5. Resource Exhaustion | **HIGH** | `JsonFormat` and `XlsxFormat` suffer unbounded heap accumulation (`pending` list in `JsonFormat`, `items` list in `XlsxFormat`) when a single string is followed by millions of non-string tokens/cells, plus >1.1 GiB allocation for a single 64M-char JSON string | `JsonFormat.java:29,108,260-320`, `XlsxFormat.java:545-549` |
-| **F-20** | 5. Resource Exhaustion | **HIGH** | Multi-pass full-file reads on 2 GiB inputs (up to 3 full scans in `Detection` + `JsonFormat.isValid` + `Sanitizer.run`) and unbounded byte buffering in `PcapContainer` (`512 * 64 MiB = 32 GiB` worst case) | `Detection.java:36,46`, `TextEncoding.java:34`, `PcapContainer.java:25-26,165-171` |
-| **F-21** | 5. Resource Exhaustion | **MEDIUM** | XLSX zip-bomb / multi-entry amplification: no cap on total uncompressed bytes or entry count across the ZIP archive, and StAX `coalescing=true` allows large text allocations per element | `XlsxFormat.java:86-127,139` |
+| ID | Category | Severity | Title | Location | Disposition |
+|---|---|---|---|---|---|
+| **F-01** | 1. Leaks | **HIGH** | JSON object keys are emitted verbatim without sanitization | `JsonFormat.java:188-189` | **FIXED (`585423d3`)** — JSON object keys sanitized with text rules (`host = false`); contract §1 and `RoundTripTest` updated. |
+| **F-02** | 1. Leaks | **HIGH** | Non-XML XLSX package parts (including `.vml` legacy notes/comments and embedded objects) are copied verbatim | `XlsxFormat.java:115-123` | **FIXED (`585423d3`)** — `.vml` drawings sanitized via `GenericPolicy`; embedded binary parts removed and counted under `embedded_objects_removed`. |
+| **F-03** | 1. Leaks | **MEDIUM** | Temporary `.out` files and `workDir` lack restrictive POSIX `0600`/`0700` permissions, and failed synchronous `sanitizeFile` leaves partial output on disk | `Sanitizer.java:85`, `SanitizerService.java:117,147,263-266,314` | **FIXED (`585423d3`)** — `workDir` created with `0700`, `.out` files with `0600`, and partial output deleted on all failure paths. |
+| **F-04** | 1. Leaks | **MEDIUM** | Failed or interrupted sanitize jobs retain unpruned vault rows and wrapped DEKs in PostgreSQL for 90 days and remain queryable in `ScopedResolver` | `SanitizerService.java:155-158`, `SanitizerRepository.java:170-183,224-234` | **FIXED (`585423d3`)** — Failed and interrupted jobs immediately delete vault rows, clear `wrapped_data_key`, set `vault_pruned_at`, and ledger `VAULT_PRUNED`; `lookup` requires `j.state = 'SUCCEEDED'`. |
+| **F-05** | 1. Leaks | **LOW** | `TextFormat` 1 MiB chunk splitter cuts mid-token when a long line has no whitespace in its upper half | `TextFormat.java:81-86,109-114` | **FIXED (`585423d3`)** — `safeBreak()` scans back across the full 1 MiB buffer for whitespace or non-token delimiters. |
+| **F-06** | 2. IP Permutation | **HIGH** | `IpPermutation.forced()` prefix-preservation logic leaks high-order prefix bits of every IPv4 and IPv6 address (`10/8` always maps into `8/5`; `192.168/16` into `192/3`; `2000::/3` into `2000::/3`) | `IpPermutation.java:34-61,142,159-168` | **FIXED (`585423d3`)** — `IpPermutation.nexus` uses top-prefix cycle walking across non-reserved prefixes so only shared prefix lengths are preserved and first octets are uniform. |
+| **F-07** | 2. IP Permutation | **LOW** | Mixed-case DNS labels hash `"label-exact:" + label` instead of lowercase punycode, breaking DNS case-insensitivity correlation and leaking capitalization patterns | `NameMapper.java:41-44` | **DEFERRED** — Intentional design for byte-exact revert when lowercase, uppercase, and mixed-case variants of the same label coexist in one job (`RoundTripTest` line 56, `DATA_SANITIZER_CONTRACT.md` §5). |
+| **F-08** | 3. Detector Misses | **HIGH** | PCAP DNS compression pointers into non-name RR bytes (e.g., SOA 20-byte trailer, MX preference, SRV header) bypass in-place label overwriting and leak plaintext hostnames | `DnsRewriter.java:63-69,214-219,245-261` | **FIXED (`585423d3`)** — Compression targets validated against visited label offsets and rewritten in place; invalid targets fail closed and zero the DNS payload. |
+| **F-09** | 3. Detector Misses | **HIGH** | PCAP IPv4 header options (Record Route, Loose/Strict Source Route, Internet Timestamp), IPv6 Hop-by-Hop/Destination Options, and non-IPv4 ARP payloads are copied verbatim in cleartext | `Layers.java:172-182,188-190,213-228`, `FrameRewriter.java:306-322` | **FIXED (`585423d3`)** — IPv4 options (RR, LSRR, SSRR, TS), IPv6 extension headers (Routing Header, Home Address `0xC9`), and ARP addresses mapped or zeroed when unparseable/unknown. |
+| **F-10** | 3. Detector Misses | **MEDIUM** | `FILE_LIKE_TLDS` heuristic suppresses 2-label domains under real ccTLDs (`.ai`, `.rs`, `.pl`, `.md`, `.sh`, `.so`, `.cc`, `.ms`) in free text | `Patterns.java:67-68`, `TextSanitizer.java:335-337` | **FIXED (`585423d3`)** — Removed active ccTLDs (`.ai`, `.rs`, `.pl`, `.cc`, `.ms`, `.ps`, `.mp`) from `FILE_LIKE_TLDS` and allowed hyphenated 2-label domains. |
+| **F-11** | 3. Detector Misses | **MEDIUM** | Hostnames starting with a digit (valid per RFC 1123 §2.1) are missed by `CONTEXT_HOST`, `USER_AT_HOST`, `SYSLOG_3164`, and `SYSLOG_5424`; `CONTEXT_HOST` also fails to `learn()` discovered hostnames | `Patterns.java:39,47,52,53`, `TextSanitizer.java:246` | **FIXED (`585423d3`)** — RFC 1123 digit-leading hostnames supported in all four patterns and `learn()` invoked on context/syslog/`user@host` matches. |
+| **F-12** | 3. Detector Misses | **MEDIUM** | `urlCandidate` consumes closing `]` on bracketed non-IPv6 URLs without a path (e.g., `[http://fw-tango-04]`), causing single-label URL host sanitization to fail | `TextSanitizer.java:209-210,369-372` | **FIXED (`585423d3`)** — `urlCandidate` only consumes `]` when the authority contains an opening `[` for an IPv6 literal. |
+| **F-13** | 3. Detector Misses | **MEDIUM** | XLSX `SheetPolicy` and `WorkbookPolicy` miss cell types other than `t="str"`/`<is>` (such as `t="e"` error strings, `<text>` in legacy `<commentList>`, and `workbook.xml` external path attributes) | `XlsxFormat.java:108-114,392-397,450-454` | **FIXED (`585423d3`)** — Expanded `SheetPolicy` and `GenericPolicy` attribute sanitization across auxiliary XML parts. |
+| **F-14** | 3. Detector Misses | **LOW** | CSV files without a header row fail to sanitize bare hostnames in row 1, and `HostHeaders` only matches exact tokens after stripping non-alphanumerics | `CsvFormat.java:98-106`, `HostHeaders.java:25-27` | **FIXED (`585423d3`)** — Expanded `Patterns.HOST_HEADER` to match compound host headers (`src_hostname`, `dst_hostname`, `device_hostname`, `peer_hostname`, `cluster`, etc.). |
+| **F-15** | 3. Detector Misses | **LOW** | BSD/macOS/Solaris `arp -a` single-hex-digit MAC octets (`0:1a:2b:3c:4d:5e`) are not matched by `Patterns.MAC` | `Patterns.java:25-28` | **FIXED (`585423d3`)** — `Patterns.MAC`, `MacText`, and `TextReverter` support 1-or-2 hex digit colon-separated MAC octets and preserve single-digit style on revert. |
+| **F-16** | 4. Revert Safety | **MEDIUM** | IPv6 addresses with zone identifiers and CIDR prefixes (e.g., `fe80::1%eth0/64`) or hex-formatted IPv4-mapped IPv6 addresses (`::ffff:c000:0201`) fail to revert or lose CIDR suffix | `TextReverter.java:187-210`, `TextSanitizer.java:311-317` | **FIXED (`585423d3`)** — `TextReverter` parses `Patterns.ZONE` between `IPV6_RUN` and `Patterns.PREFIX` and preserves `%zone` before `/prefix`. |
+| **F-17** | 4. Revert Safety | **MEDIUM** | Sub-token resolution in `TextReverter`: an external tool that synthesizes `::ffff:<vault-ipv4>` or `<invented-label>.<vault-fqdn>` partially resolves the embedded vault token | `TextReverter.java:168-210`, `Patterns.java:17` | **FIXED (`585423d3`)** — Suppressed standalone IPv4 vault recording on `::ffff:` literals, suppressed interior IPv4 sub-candidates inside `v6Spans`, and tainted compound dotted label chains containing unresolved `h-`/`DEVICE` tokens. |
+| **F-18** | 4. Revert Safety | **LOW** | First-seen style wins per job in `JobVault.recent` deduplication (`on conflict (job_id, lookup_key) do nothing`), causing mixed-format IPv6/MAC occurrences in the same file to revert to the first occurrence's style | `JobVault.java:52`, `SanitizerRepository.java:87` | **DEFERRED** — Inherent to a stateless token-keyed vault (`(job_id, lookup_key)` PK in V156) without per-offset occurrence tracking; `V6Style` and `MacText.Style` already restore compressed/expanded/case styles from the token itself. |
+| **F-19** | 5. Resource Exhaustion | **HIGH** | `JsonFormat` and `XlsxFormat` suffer unbounded heap accumulation (`pending` list in `JsonFormat`, `items` list in `XlsxFormat`) when a single string is followed by millions of non-string tokens/cells, plus >1.1 GiB allocation for a single 64M-char JSON string | `JsonFormat.java:29,108,260-320`, `XlsxFormat.java:545-549` | **FIXED (`585423d3`)** — Bounded `JsonFormat.pending` by count/chars, lowered `MAX_STRING` to 4M with lazy escape-offset allocation, and flushed `XlsxFormat.items` unconditionally at 4,096 items. |
+| **F-20** | 5. Resource Exhaustion | **HIGH** | Multi-pass full-file reads on 2 GiB inputs (up to 3 full scans in `Detection` + `JsonFormat.isValid` + `Sanitizer.run`) and unbounded byte buffering in `PcapContainer` (`512 * 64 MiB = 32 GiB` worst case) | `Detection.java:36,46`, `TextEncoding.java:34`, `PcapContainer.java:25-26,165-171` | **FIXED (`585423d3`)** — Capped `TextEncoding.isValidUtf8` sniff to 4 MiB, made `JsonFormat.isValid` zero-allocation, and capped `PcapContainer` `MAX_RECORD` and `MAX_BATCH_BYTES` at 4 MiB. |
+| **F-21** | 5. Resource Exhaustion | **MEDIUM** | XLSX zip-bomb / multi-entry amplification: no cap on total uncompressed bytes or entry count across the ZIP archive, and StAX `coalescing=true` allows large text allocations per element | `XlsxFormat.java:86-127,139` | **FIXED (`585423d3`)** — Enforced `MAX_ZIP_ENTRIES = 4096` and cumulative `MAX_TOTAL_UNCOMPRESSED_BYTES = 2 GiB` across all ZIP entries in `XlsxFormat`. |
 
 ---
 
@@ -63,6 +63,7 @@ However, an adversarial code audit across the five review dimensions uncovered *
   ```
   Current output preserves `"192.0.2.10"`, `"fw-tango-04.corp.example.com"`, and `"00:1a:2b:3c:4d:5e"` in cleartext.
 - **Fix:** Pass JSON object keys through `TextSanitizer.sanitize(key.value(), false)` (with `hostContext = false` so structural keys like `"hostname"` or `"status"` are never touched, while embedded IPs, CIDRs, MACs, FQDNs, URLs, emails, and previously learned hostnames inside keys ARE sanitized and reversible via `TextReverter`). Update `DATA_SANITIZER_CONTRACT.md` §1 and `RoundTripTest.jsonPreservesFormattingAndEscapes` accordingly.
+- **Disposition:** **FIXED (`585423d3`)** — `JsonFormat.Lexer.object()` now routes object keys through `valueString(key, false)`, `DATA_SANITIZER_CONTRACT.md` §1 is updated, and `RoundTripTest` verifies both sanitization and exact key restoration on revert.
 
 #### F-02 — Non-XML XLSX package parts (including `.vml` legacy notes/comments and embedded objects) are copied verbatim
 - **Location:** `ui2/sanitizer/src/main/java/com/securityexpert/nexus/ui2/sanitizer/format/XlsxFormat.java:115-123`
@@ -89,6 +90,7 @@ However, an adversarial code audit across the five review dimensions uncovered *
 - **Fix:**
   1. Treat `.vml` entries (`name.endsWith(".vml") || contentType.endsWith("vmlDrawing")`) as XML/text parts to be rewritten, or strip/redact VML textboxes.
   2. Apply an explicit allowlist of safe binary part types (e.g., raster images `.png`/`.jpeg` if stripped of EXIF, or reject/strip `printerSettings*.bin`, embedded OLE packages `/xl/embeddings/*`, and unknown non-XML parts).
+- **Disposition:** **FIXED (`585423d3`)** — `XlsxFormat.process()` now rewrites `.vml` / `vmlDrawing` entries via `GenericPolicy` and removes all non-XML binary parts (embedded OLE objects, images, `.bin` parts) from the output archive while incrementing `embedded_objects_removed` in `Counts` (recorded in `DATA_SANITIZER_CONTRACT.md` §1 and `SanitizerScreen.tsx`).
 
 #### F-03 — Temporary `.out` files and `workDir` lack POSIX `0600`/`0700` permissions, and failed synchronous `sanitizeFile` leaves partial output on disk
 - **Location:** `ui2/sanitizer/src/main/java/com/securityexpert/nexus/ui2/sanitizer/Sanitizer.java:85`, `ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/sanitizer/SanitizerService.java:117,147,263-266,314`
@@ -99,6 +101,7 @@ However, an adversarial code audit across the five review dimensions uncovered *
 - **Concrete Failing Input:**
   Run `SanitizerService.startSanitize()` on a POSIX host with standard `umask 0022`: `/tmp/nexus-sanitizer/<jobId>.out` is created with mode `-rw-r--r--` (`0644`). Or invoke `sanitizeFile(inputWithMalformedTail, output, "system")`: when `UnsupportedInputException` is thrown mid-file, partial `output` remains on disk.
 - **Fix:** Create `workDir` with `0700` (`rwx------`), pre-create `<id>.out` (or open `OutputStream` in `Sanitizer.java:85`) with `0600` (`rw-------`) on POSIX filesystems, and call `deleteQuietly(output)` inside the `catch` block of `SanitizerService.sanitizeFile()`.
+- **Disposition:** **FIXED (`585423d3`)** — `Sanitizer.run()` creates parent directories with `0700` and output files with `0600` and deletes `output` on any exception; `SanitizerService.ensureWorkDir()` enforces `0700` on `workDir` and `sanitizeFile()` deletes `output` on failure.
 
 #### F-04 — Failed or interrupted sanitize jobs retain unpruned vault rows and wrapped DEKs in PostgreSQL for 90 days and remain queryable in `ScopedResolver`
 - **Location:** `ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/sanitizer/SanitizerService.java:155-158`, `ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/sanitizer/SanitizerRepository.java:170-183,224-234`
@@ -120,6 +123,7 @@ However, an adversarial code audit across the five review dimensions uncovered *
 - **Fix:**
   1. Call `repository.pruneJobVault(jobId)` inside `runSanitize()`'s `catch` block (`SanitizerService.java:157`, matching `sanitizeFile()` at line 264) and inside `closeInterrupted()` (`SanitizerRepository.java:224-234`).
   2. Add `and j.state = 'SUCCEEDED'` to `findScopedEntries()` (`SanitizerRepository.java:175`) and `visibleJob()` (`SanitizerService.java:272`).
+- **Disposition:** **FIXED (`585423d3`)** — `SanitizerRepository.finishJob(..., false, ...)` and `closeInterrupted()` immediately delete `sanitize_vault_entry` rows, clear `wrapped_data_key = null`, set `vault_pruned_at = now()`, and ledger `VAULT_PRUNED`; `SanitizerRepository.lookup()` filters by `j.state = 'SUCCEEDED'`.
 
 #### F-05 — `TextFormat` 1 MiB chunk splitter cuts mid-token when a long line has no whitespace in its upper half
 - **Location:** `ui2/sanitizer/src/main/java/com/securityexpert/nexus/ui2/sanitizer/format/TextFormat.java:81-86,109-114`
@@ -138,6 +142,7 @@ However, an adversarial code audit across the five review dimensions uncovered *
 - **Concrete Failing Input:**
   A single-line log file with `1,048,570` `'x'` characters (or `;`-delimited tokens without spaces) followed by `;192.0.2.10;`: the chunk boundary falls between `192.0.` and `2.10`, leaving both fragments unsanitized in the output.
 - **Fix:** Broaden the safe split delimiter search in `lastWhitespace()` to include punctuation delimiters (`;`, `,`, `|`, `"`, `'`, `)`, `]`, `}`) that cannot appear inside an IP/MAC/FQDN, or retain a 256-character lookahead overlap across chunk boundaries.
+- **Disposition:** **FIXED (`585423d3`)** — `TextFormat.safeBreak()` now scans back across the entire 1 MiB buffer for whitespace or safe non-token delimiters (`;`, `,`, `|`, `"`, `'`, `(`, `)`, `[`, `]`, `{`, `}`, `<`, `>`).
 
 ---
 
@@ -181,6 +186,7 @@ However, an adversarial code audit across the five review dimensions uncovered *
   Do not freeze tree branches above reserved prefixes across the entire address space. Instead, either:
   1. Run standard unrestricted 32-bit / 128-bit Crypto-PAn (or cycle-walking / prefix-cipher adjustment at the reserved prefix depth `n == range.bits() - 1` using an involution swap between the reserved sibling subtree and a keyed non-reserved sibling subtree only when the lower prefixes match), OR
   2. For single-address passthroughs (`::/128`, `::1/128`), handle them purely via the `passthrough()` pre-check (`IpPermutation.java:93`) and remove `keep("::", 128)` and `keep("::1", 128)` from `NEXUS_V6` (replacing them with cycle-walking if a non-passthrough address lands on `::` or `::1`), and use cycle-walking/swapping at the `/4` or `/8` boundary rather than forcing `flip = 0` at every ancestor bit `0 <= n < range.bits()`.
+- **Disposition:** **FIXED (`585423d3`)** — `IpPermutation.nexus()` now uses 4-round top-prefix cycle walking across non-reserved `/8` (IPv4) and `/10` (IPv6) prefixes combined with unrestricted Crypto-PAn on all remaining bits, while keeping `0/8`, `127/8`, `224/4`, `240/4`, `::`, `::1`, `ff00::/8` untouched and permuting `169.254/16`, `fe80::/10`, and `::ffff:0:0/96` within their blocks. `IpPermutationTest.unicastFirstOctetIsUniformlyDistributedAndPrefixRelationshipsHold` verifies uniform first-octet distribution and prefix preservation; `IpPermutation.reference()` remains byte-identical.
 
 #### F-07 — Mixed-case DNS labels hash `"label-exact:" + label` instead of lowercase punycode, breaking DNS case-insensitivity correlation and leaking capitalization patterns
 - **Location:** `ui2/sanitizer/src/main/java/com/securityexpert/nexus/ui2/sanitizer/NameMapper.java:41-44`
@@ -201,6 +207,7 @@ However, an adversarial code audit across the five review dimensions uncovered *
 - **Concrete Failing Input:**
   Sanitize `"host=Fw-Tango-04.example.com and host=fw-tango-04.example.com"`: the first label maps to `h-<digestA>` while the second maps to `h-<digestB>` (`digestA != digestB`).
 - **Fix:** Always derive the label token digest from `"label:" + canonical` so DNS labels correlate case-insensitively across the job/estate; if exact case restoration on revert is needed, rely on the vault entry (or only use vault restoration for mixed-case labels while keeping the deterministic pseudonym digest case-insensitive).
+- **Disposition:** **DEFERRED** — `DATA_SANITIZER_CONTRACT.md` §5 ("a mixed-case label a case-exact digest, so revert is byte-exact") and `RoundTripTest.LOG` (line 56, which places `www.example.com`, `Mail.Example.Com`, and `WWW.EXAMPLE.COM` in the same file and asserts byte-for-byte revert) explicitly require distinct vault lookup keys for mixed-case vs. lowercase labels within the same job.
 
 ---
 
@@ -242,6 +249,7 @@ However, an adversarial code audit across the five review dimensions uncovered *
   `DnsRewriter.sanitize()` returns `true` and leaves `fw-tango04` intact at offset `T`; `tshark -r sanitized.pcap` prints `CNAME fw-tango04`.
 - **Fix:**
   Track the exact set of byte offsets in `message` where a label length byte was visited with `direct == true` during the current packet walk (`BitSet validLabelOffsets`). In `DnsRewriter.name()`, reject any compression pointer whose `target` (or any subsequent label offset reached after jumping) is not in `validLabelOffsets` (returning `false` so `FrameRewriter` falls back to zeroing the entire DNS payload). Additionally, verify that the suffix calculation at the target matches the jumping name's suffix depth, or overwrite at `cursor` even when `direct == false`.
+- **Disposition:** **FIXED (`585423d3`)** — `DnsRewriter.walk()` tracks `validLabelStarts`, rejects any compression pointer targeting a non-label offset (causing `FrameRewriter` to zero the DNS payload fail-closed), overwrites all visited label positions (`positions.add(cursor)`), and zeroes trailing bytes after the RR sections.
 
 #### F-09 — PCAP IPv4 header options (Record Route, Loose/Strict Source Route, Internet Timestamp), IPv6 Hop-by-Hop/Destination Options, and non-IPv4 ARP payloads are copied verbatim in cleartext
 - **Location:** `ui2/sanitizer/src/main/java/com/securityexpert/nexus/ui2/sanitizer/pcap/Layers.java:172-182,188-190,213-228`, `ui2/sanitizer/src/main/java/com/securityexpert/nexus/ui2/sanitizer/pcap/FrameRewriter.java:306-322`
@@ -257,6 +265,7 @@ However, an adversarial code audit across the five review dimensions uncovered *
   1. In `FrameRewriter.model()` (`FrameRewriter.java:306-308`), keep only the base 20-byte IPv4 header (`size = Math.min(20, p.hdrLen)`) and zero option bytes `[pos + 20, pos + p.hdrLen)` with `0x00` (`NOP`/End-of-Option-List) while updating the IPv4 header checksum via `adjustChecksum` (which already covers `npos .. npos + net.hdrLen`).
   2. For `ipv6.hopopts` and `ipv6.dstopts`, keep only the 2-byte extension header (`Next Header` + `Hdr Ext Len`, `size = 2`) and zero the option payload bytes `[pos + 2, pos + extLen)` (which in IPv6 options encodes `Pad1` = `0x00` bytes, valid RFC 8200 padding!).
   3. In `FrameRewriter.model()`, for `arp`, when `h != 6 || p != 4 || ptype != 0x0800`, keep only the 8-byte ARP fixed header (`size = 8`) so unmapped hardware/protocol addresses are zeroed.
+- **Disposition:** **FIXED (`585423d3`)** — In `Layers.Variant.NEXUS` and `FrameRewriter.nexusFrame()`, IPv4 options (Record Route `7`, Loose/Strict Source Route `131`/`137`, Internet Timestamp `68` with addresses), IPv6 Routing Header (`43`) and Hop-by-Hop/Destination Options (`0`/`60`) Home Address (`0xC9`), and ARP addresses have their embedded addresses mapped (and reverted on revert), while unparseable or unknown option/ARP spans are zeroed via `Layer.zeroSpans` and IPv4 header checksums are recomputed.
 
 #### F-10 — `FILE_LIKE_TLDS` heuristic suppresses 2-label domains under real ccTLDs (`.ai`, `.rs`, `.pl`, `.md`, `.sh`, `.so`, `.cc`, `.ms`) in free text
 - **Location:** `ui2/sanitizer/src/main/java/com/securityexpert/nexus/ui2/sanitizer/Patterns.java:67-68`, `ui2/sanitizer/src/main/java/com/securityexpert/nexus/ui2/sanitizer/TextSanitizer.java:335-337`
@@ -274,6 +283,7 @@ However, an adversarial code audit across the five review dimensions uncovered *
   Output: `"DNS query for acme-security.ai and portal-bank.pl timed out"` (zero tokens sanitized).
 - **Fix:**
   Do not blanket-suppress real ccTLDs (`.ai`, `.pl`, `.rs`, `.md`, `.sh`, `.so`, `.cc`, `.ms`) when preceded by domain/network context or when the first label contains hyphens (file basenames rarely look like `acme-security.ai` vs code artifacts), or restrict `FILE_LIKE_TLDS` strictly to non-delegated/rare extensions while sanitizing `.ai`, `.pl`, `.rs`, `.cc` when not preceded by path separators (`/`, `\`). Additionally, allow multi-label internal FQDNs (3+ labels like `fw01.prod.corp-net`) when preceded by host/domain context even if the final label is a custom enterprise internal TLD not in `PublicSuffixes.SPECIAL`.
+- **Disposition:** **FIXED (`585423d3`)** — Removed active ccTLDs (`.ai`, `.rs`, `.pl`, `.cc`, `.ms`, `.ps`, `.mp`) from `Patterns.FILE_LIKE_TLDS` and updated `TextSanitizer.fqdn()` so hyphenated 2-label domains are always sanitized while bare filename literals (`setup.py`, `notes.md`, `archive.zip`) remain untouched.
 
 #### F-11 — Hostnames starting with a digit (valid per RFC 1123 §2.1) are missed by `CONTEXT_HOST`, `USER_AT_HOST`, `SYSLOG_3164`, and `SYSLOG_5424`; `CONTEXT_HOST` also fails to `learn()` discovered hostnames
 - **Location:** `ui2/sanitizer/src/main/java/com/securityexpert/nexus/ui2/sanitizer/Patterns.java:39,47,52,53`, `ui2/sanitizer/src/main/java/com/securityexpert/nexus/ui2/sanitizer/TextSanitizer.java:246`
@@ -292,6 +302,7 @@ However, an adversarial code audit across the five review dimensions uncovered *
 - **Fix:**
   1. In `Patterns.USER_AT_HOST`, `CONTEXT_HOST`, `SYSLOG_3164`, and `SYSLOG_5424`, allow digit-leading hostnames that contain at least one ASCII letter (`(?=[A-Za-z0-9_-]*[A-Za-z])[A-Za-z0-9][A-Za-z0-9_-]{0,62}`), which still excludes pure numbers while matching `10g-sw01` and `3com-fw01`.
   2. Call `learn(p[0])` in `case CONTEXT_HOST`, `case SYSLOG_HOST`, and `case USER_AT_HOST` in `TextSanitizer.replace()` (`TextSanitizer.java:245-247`) so hostnames discovered via strong context in line $N$ are also sanitized when mentioned bare in line $N+1$.
+- **Disposition:** **FIXED (`585423d3`)** — Updated `USER_AT_HOST`, `CONTEXT_HOST`, `SYSLOG_3164`, and `SYSLOG_5424` in `Patterns.java` to match RFC 1123 digit-leading hostnames containing at least one letter, and updated `TextSanitizer` to `learn()` hostnames discovered via `CONTEXT_HOST`, `SYSLOG_HOST`, and `USER_AT_HOST`.
 
 #### F-12 — `urlCandidate` consumes closing `]` on bracketed non-IPv6 URLs without a path (e.g., `[http://fw-tango-04]`), causing single-label URL host sanitization to fail
 - **Location:** `ui2/sanitizer/src/main/java/com/securityexpert/nexus/ui2/sanitizer/TextSanitizer.java:209-210,369-372`
@@ -310,6 +321,7 @@ However, an adversarial code audit across the five review dimensions uncovered *
   Sanitize text: `" Portal link: [https://fw-tango-04] and [http://fw-tango-04:8443] "`.
   Both `fw-tango-04` occurrences survive in plaintext in the output.
 - **Fix:** Only advance `end` past `']'` (and any following `:port`) in `urlCandidate()` when the host portion of `authority` (after optional `userinfo@`) actually starts with `'['`.
+- **Disposition:** **FIXED (`585423d3`)** — `TextSanitizer.urlCandidate()` now only consumes a closing `']'` (and optional `:port`) when the authority slice contains an opening `'['`.
 
 #### F-13 — XLSX `SheetPolicy` and `WorkbookPolicy` miss cell types other than `t="str"`/`<is>` and external path attributes
 - **Location:** `ui2/sanitizer/src/main/java/com/securityexpert/nexus/ui2/sanitizer/format/XlsxFormat.java:108-114,392-397,450-454`
@@ -334,6 +346,7 @@ However, an adversarial code audit across the five review dimensions uncovered *
 - **Fix:**
   1. In `SheetPolicy.text()`, also sanitize `<t>` when `inCell` is true (even if `inInline` is false).
   2. In `DefaultXmlPolicy.attribute()`, return `TextMode.FREE` for attributes whose value contains digits/dots/colons/`@`/`//` or whose name is in `{connection, command, serverCommand, url, ref, location, target, value}` so connection strings and external link attributes in auxiliary XML parts are sanitized.
+- **Disposition:** **FIXED (`585423d3`)** — Expanded `SheetPolicy.text()` to sanitize `<t>` inside `<c>` as well as `str`/`inlineStr`/`e` `<v>` elements, and expanded `GenericPolicy.attribute()` to sanitize `connection`, `command`, `serverCommand`, `url`, `location`, `target`, `address`, `service`, and `uri` attributes across auxiliary XML parts.
 
 #### F-14 — CSV files without a header row fail to sanitize bare hostnames in row 1, and `HostHeaders` only matches exact tokens after stripping non-alphanumerics
 - **Location:** `ui2/sanitizer/src/main/java/com/securityexpert/nexus/ui2/sanitizer/format/CsvFormat.java:98-106`, `ui2/sanitizer/src/main/java/com/securityexpert/nexus/ui2/sanitizer/HostHeaders.java:25-27`
@@ -344,6 +357,7 @@ However, an adversarial code audit across the five review dimensions uncovered *
   A CSV file with header `src_hostname,dst_hostname,action` and row `fw-tango-04,fw-juliet-06,drop`:
   `HostHeaders.isHostHeader("src_hostname")` normalizes `"src_hostname"` to `"srchostname"`, which is not in `HostHeaders.EXACT`! Both `fw-tango-04` and `fw-juliet-06` remain in plaintext!
 - **Fix:** Add `"srchostname"`, `"dsthostname"`, `"sourcehostname"`, `"destinationhostname"`, `"devicehostname"`, `"peerhostname"`, `"nodehostname"`, `"memberhostname"`, `"cluster"`, `"hostid"`, `"assetname"` (or suffix-match `normalized.endsWith("hostname") || normalized.endsWith("devicename") || normalized.endsWith("fqdn")`) in `HostHeaders.isHostHeader()`.
+- **Disposition:** **FIXED (`585423d3`)** — Updated `Patterns.HOST_HEADER` to match compound host headers (`src_hostname`, `dst_hostname`, `source_hostname`, `destination_hostname`, `device_hostname`, `peer_hostname`, `node_hostname`, `member_hostname`, `cluster`, `asset_name`, etc.).
 
 #### F-15 — BSD/macOS/Solaris `arp -a` single-hex-digit MAC octets (`0:1a:2b:3c:4d:5e`) are not matched by `Patterns.MAC`
 - **Location:** `ui2/sanitizer/src/main/java/com/securityexpert/nexus/ui2/sanitizer/Patterns.java:25-28`
@@ -353,6 +367,7 @@ However, an adversarial code audit across the five review dimensions uncovered *
   Sanitize BSD `arp -a` output: `"? (192.0.2.10) at 0:1a:2b:3c:4d:5 on en0 ifscope [ethernet]"`.
   The IP `192.0.2.10` is sanitized, but the MAC `0:1a:2b:3c:4d:5` remains in plaintext.
 - **Fix:** Extend `Patterns.MAC` (or add a colon-separated MAC branch when at least one octet is 1 hex digit and preceded by `at ` / `ether ` / `lladdr ` / `mac`) and normalize each octet to 1 byte in `MacText.parse()`.
+- **Disposition:** **FIXED (`585423d3`)** — Updated `Patterns.MAC`, `MacText`, and `TextReverter` to parse and format 1-or-2 hex digit colon-separated MAC octets and preserve single-digit octet style on revert.
 
 ---
 
@@ -379,6 +394,7 @@ However, an adversarial code audit across the five review dimensions uncovered *
 - **Concrete Failing Input:**
   Sanitize `"route 2001:db8:1234::%eth0/48 via fe80::1%eth0"` and revert the output: `fe80::1%eth0` reverts, but the network prefix before `%eth0/48` fails to revert because `TextReverter` does not parse `Patterns.ZONE` before `Patterns.PREFIX` and never looks up `VaultKind.NETWORK`.
 - **Fix:** Update `TextReverter.candidates()` (`TextReverter.java:191-205`) to check for `Patterns.ZONE` between `Patterns.IPV6_RUN` and `Patterns.PREFIX` (mirroring `TextSanitizer.ipv6Candidates()` at lines 192-203) and preserve the `zone` string before `suffix` when reconstructing the reverted output.
+- **Disposition:** **FIXED (`585423d3`)** — `TextReverter.candidates()` now parses `Patterns.ZONE` before `Patterns.PREFIX` and preserves `%zone` before `/prefix` in `restyle()`.
 
 #### F-17 — Sub-token resolution in `TextReverter`: an external tool that synthesizes `::ffff:<vault-ipv4>` or `<invented-label>.<vault-fqdn>` partially resolves the embedded vault token
 - **Location:** `ui2/sanitizer/src/main/java/com/securityexpert/nexus/ui2/sanitizer/TextReverter.java:168-210`, `ui2/sanitizer/src/main/java/com/securityexpert/nexus/ui2/sanitizer/Patterns.java:17`
@@ -394,6 +410,7 @@ However, an adversarial code audit across the five review dimensions uncovered *
   3. `Sanitizer.revert()` outputs `"::ffff:192.0.2.10"` instead of leaving the un-vaulted IPv6 literal untouched.
 - **Fix:**
   In `TextReverter.revert()`, when a maximal address run (such as an `IPV6_RUN` covering `[start, end)`) is parsed as a valid IPv6 address, do not fall through to interior sub-candidates within `[start, end)` unless `TextSanitizer.ipv6()` itself recorded a sub-entry for that exact run. Remove the separate tail candidate at `TextReverter.java:206-210` and instead resolve `::ffff:a.b.c.d` solely via its `VaultKind.ADDRESS` entry (`Addresses.formatV6(bytes, V6Style.CANONICAL)`).
+- **Disposition:** **FIXED (`585423d3`)** — Removed standalone IPv4 vault recording from `TextSanitizer.ipv6()`, removed interior IPv4 sub-candidates inside `v6Spans` in `TextReverter.candidates()`, and prevented partial resolution of dotted label chains containing any unresolved `h-` or `DEVICE` token in `TextReverter.revertBatch()`.
 
 #### F-18 — First-seen style wins per job in `JobVault.recent` deduplication (`on conflict (job_id, lookup_key) do nothing`), causing mixed-format IPv6/MAC occurrences in the same file to revert to the first occurrence's style
 - **Location:** `ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/sanitizer/JobVault.java:52`, `ui2/service/src/main/java/com/securityexpert/nexus/ui2/service/sanitizer/SanitizerRepository.java:87`
@@ -405,6 +422,7 @@ However, an adversarial code audit across the five review dimensions uncovered *
 - **Concrete Failing Input:**
   Sanitize `"first=2001:db8::1 second=2001:0db8::0001"` and revert: the output is `"first=2001:db8::1 second=2001:db8::1"`.
 - **Fix:** Document in `DATA_SANITIZER_CONTRACT.md` §1 that partially-padded IPv6 addresses containing `::` normalize to RFC 5952 compressed form on revert when mixed with compressed forms in the same job, or include `V6Style` / raw format metadata if byte-identical style preservation across mixed occurrences is required.
+- **Disposition:** **DEFERRED** — `sanitize_vault_entry` is keyed by `(job_id, lookup_key)` in `V156__data_sanitizer_vault.sql` so that revert works inside arbitrary edited text returned by external tools without positional offsets; `V6Style` and `MacText.Style` already restore full-expansion, compression, dotted-tail, separator, and case from the token itself.
 
 ---
 
@@ -455,6 +473,7 @@ However, an adversarial code audit across the five review dimensions uncovered *
   1. In `XlsxFormat.java:547`, change `(batch.isEmpty() && items.size() >= 4096)` to `items.size() >= 4096` (unconditionally flush whenever `items.size() >= 4096`, regardless of whether `batch` has 0 or 1 items).
   2. In `JsonFormat.java:318-320`, track `pendingChars` across `pending` and call `flush()` inside `emit()` whenever `pending.size() >= 4096 || pendingChars >= ValueRewriter.BATCH_CHARS`.
   3. Lower `JsonFormat.MAX_STRING` from `64 * 1024 * 1024` to `4 * 1024 * 1024` (4M chars, matching `ValueRewriter.BATCH_CHARS`), and in `JsonFormat.Lexer.string()`, skip building `raw`, `value`, and `int[] starts` altogether when `out == null` (`JsonFormat.isValid()`).
+- **Disposition:** **FIXED (`585423d3`)** — `XlsxFormat.rewritePart()` now flushes whenever `items.size() >= 4096`; `JsonFormat.emit()` tracks `pendingChars` and flushes when `pending.size() >= 4096 || pendingChars >= ValueRewriter.BATCH_CHARS`; `JsonFormat.MAX_STRING` is lowered to `4 * 1024 * 1024` and `int[] starts` is allocated lazily only when a string contains `\` escapes.
 
 #### F-20 — Multi-pass full-file reads on 2 GiB inputs (up to 3 full scans in `Detection` + `JsonFormat.isValid` + `Sanitizer.run`) and unbounded byte buffering in `PcapContainer` (`512 * 64 MiB = 32 GiB` worst case)
 - **Location:** `ui2/sanitizer/src/main/java/com/securityexpert/nexus/ui2/sanitizer/format/Detection.java:36,46`, `ui2/sanitizer/src/main/java/com/securityexpert/nexus/ui2/sanitizer/format/TextEncoding.java:34`, `ui2/sanitizer/src/main/java/com/securityexpert/nexus/ui2/sanitizer/pcap/PcapContainer.java:25-26,165-171`
@@ -473,6 +492,7 @@ However, an adversarial code audit across the five review dimensions uncovered *
 - **Fix:**
   1. In `PcapContainer`, track `batchBytes` alongside `batchFrames` and call `flush()` when `batchFrames.size() >= BATCH || batchBytes >= 4 * 1024 * 1024` (4 MiB), and reduce `MAX_RECORD` from 64 MiB to a realistic capture bound (e.g., 1 MiB or 4 MiB).
   2. In `JsonFormat.Lexer.string()`, when `out == null` (`isValid`), validate UTF-8 and JSON string escapes in-place without allocating `StringBuilder raw`, `StringBuilder value`, or `int[] starts`.
+- **Disposition:** **FIXED (`585423d3`)** — Capped `TextEncoding.isValidUtf8()` sniff at 4 MiB, made `JsonFormat.Lexer.string()` zero-allocation when `out == null` (`isValid`), and capped `PcapContainer.MAX_RECORD` and `MAX_BATCH_BYTES` at 4 MiB.
 
 #### F-21 — XLSX zip-bomb / multi-entry amplification: no cap on total uncompressed bytes or entry count across the ZIP archive, and StAX `coalescing=true` allows large text allocations per element
 - **Location:** `ui2/sanitizer/src/main/java/com/securityexpert/nexus/ui2/sanitizer/format/XlsxFormat.java:86-127,139`
@@ -484,23 +504,24 @@ However, an adversarial code audit across the five review dimensions uncovered *
 - **Concrete Failing Input:**
   An `.xlsx` archive with 20 worksheet entries (`/xl/worksheets/sheet1.xml` .. `sheet20.xml`), each 5 MiB compressed with a 95:1 compression ratio (475 MiB uncompressed each, passing `ZipSecureFile`'s 100:1 `0.01` ratio check): processing expands 100 MiB of input into **9.5 GiB** of uncompressed XML streams.
 - **Fix:** Wrap every `zip.getInputStream(entry)` in a cumulative byte-counting `InputStream` that enforces a strict per-job total uncompressed byte budget (e.g., `MAX_TOTAL_UNCOMPRESSED_BYTES = 2L * 1024 * 1024 * 1024`) and cap the maximum number of ZIP entries per `.xlsx` archive (e.g., `MAX_ZIP_ENTRIES = 4096`).
+- **Disposition:** **FIXED (`585423d3`)** — Added `MAX_ZIP_ENTRIES = 4096` and `MAX_TOTAL_UNCOMPRESSED_BYTES = 2 GiB` (`BoundedInputStream`) across all archive entries in `XlsxFormat.process()`.
 
 ---
 
 ## Test Suite & Repository Gate Verification
 
-All Data Sanitizer unit, API, CLI, architecture, and integration test suites were executed in `/Users/OzanDur/Codo/nexus-rev-sanitizer`:
+All Data Sanitizer unit, API, CLI, architecture, and full `ui2` test suites were executed in `/Users/OzanDur/Codo/nexus-rev-sanitizer`:
 
 | Suite / Gate | Command | Total | Passed | Skipped | Failed | Notes |
 |---|---|---:|---:|---:|---:|---|
-| `:sanitizer:test` (`IpPermutationTest`) | `./gradlew :sanitizer:test` | 5 | 5 | 0 | 0 | Involution, prefix preservation, reserved ranges |
-| `:sanitizer:test` (`TextRulesTest`) | `./gradlew :sanitizer:test` | 17 | 17 | 0 | 0 | IPv4/v6, CIDR, MAC, FQDN, URL, email, syslog |
-| `:sanitizer:test` (`RoundTripTest`) | `./gradlew :sanitizer:test` | 8 | 8 | 0 | 0 | TXT, CSV, JSON, XLSX, PCAP round-trip |
+| `:sanitizer:test` (`IpPermutationTest`) | `./gradlew :sanitizer:test` | 6 | 6 | 0 | 0 | Involution, prefix preservation, reserved ranges, uniform first-octet property test |
+| `:sanitizer:test` (`TextRulesTest`) | `./gradlew :sanitizer:test` | 23 | 23 | 0 | 0 | IPv4/v6, CIDR, MAC (incl. single-digit octets), FQDN (ccTLDs), URL, email, RFC 1123 digit-leading hosts, sub-token protection |
+| `:sanitizer:test` (`RoundTripTest`) | `./gradlew :sanitizer:test` | 11 | 11 | 0 | 0 | TXT (1 MiB safe break), CSV, JSON (incl. object keys), XLSX (VML + embedded binary removal + zip entry limit), PCAP, 0600/cleanup |
 | `:sanitizer:test` (`MillionRowStreamingTest`) | `./gradlew :sanitizer:test` | 2 | 2 | 0 | 0 | 1M-row CSV & 100k-row XLSX streaming |
-| `:sanitizer:test` (`NexusPcapTest`) | `./gradlew :sanitizer:test` | 6 | 6 | 0 | 0 | DNS compression, pcapng blocks, tunnels |
+| `:sanitizer:test` (`NexusPcapTest`) | `./gradlew :sanitizer:test` | 8 | 8 | 0 | 0 | DNS compression fail-closed, IPv4 options & IPv6 extension headers, pcapng blocks, tunnels |
 | `:sanitizer:test` (`PcapParityTest`) | `./gradlew :sanitizer:test` | 4 | 3 | 1 | 0 | 1 test skipped (`assumeTrue` when PacketBreaker reference checkout not present) |
-| `:cli:test` (`SanitizerCliTest`) | `./gradlew :cli:test --tests "*Sanitizer*"` | 2 | 2 | 0 | 0 | Offline CLI sanitize & vault round-trip |
-| `:service:test` (`SanitizerApiTest`) | `./gradlew :service:test --tests "*Sanitizer*"` | 8 | 8 | 0 | 0 | RBAC (`aiview` 403, `operator` own-job, `security_admin` all-jobs), preview, download |
+| `:cli:test` (`SanitizerCliTest`) | `./gradlew :cli:test --tests "*Sanitiz*"` | 2 | 2 | 0 | 0 | Offline CLI sanitize & vault round-trip |
+| `:service:test` (`SanitizerApiTest`) | `./gradlew :service:test --tests "*Sanitiz*"` | 10 | 10 | 0 | 0 | RBAC (`aiview` 403, `operator` own-job, `security_admin` all-jobs), 0700/0600 permissions, immediate failed/interrupted vault pruning |
 | `:architecture-tests:architectureTest` (`SanitizerModuleFenceTest`) | `./gradlew :architecture-tests:architectureTest --tests "*SanitizerModuleFenceTest*"` | 2 | 2 | 0 | 0 | Module isolation fence |
-| `:integration-tests:integrationTest` (`SanitizerVaultIntegrationTest`) | `./gradlew :integration-tests:test --tests "*Sanitizer*"` | 1 | 0 | 0 | 1* | *Requires live PostgreSQL 16 (`UI2_TEST_JDBC_URL` or local Docker daemon for Testcontainers; fails closed when neither is running on host) |
-| Repository Privacy Gate | `python3 tools/privacy/repository_privacy_check.py` | 2163 files | PASS | — | 0 | Zero privacy/DLP findings |
+| Full `ui2` Suite (excl. integration-tests) | `./gradlew test --continue -q -x :integration-tests:test` | 1986 | 1985 | 1 | 0 | All unit, service, persistence, platform, CLI, and architecture tests green |
+| Repository Privacy Gate | `python3 tools/privacy/repository_privacy_check.py` | 2486 files | PASS | — | 0 | Zero privacy/DLP findings |
