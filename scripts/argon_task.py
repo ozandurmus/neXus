@@ -26,7 +26,7 @@ DEFAULT_MODEL = "gemini-4-argon-high"
 WORKER_RULES = """
 ## Standing rules for every Argon task (neXus)
 - Work ONLY in this worktree; commit on its current branch with English messages ending with
-  `Co-Authored-By: Gemini 4 Argon <noreply@google.com>`.
+  `Co-Authored-By: Gemini 4 Argon` (no e-mail address: the repository privacy gate forbids one).
 - Never push, never open a PR, never deploy, never ssh or reach HOST-A or any network device, never print secrets.
 - Read AGENTS.md first; it is the constitution (masking law, raw-evidence law, migrations rules, English artefacts).
 - Run the tests the task names before you finish and report the exact counts; if you cannot make something pass,
