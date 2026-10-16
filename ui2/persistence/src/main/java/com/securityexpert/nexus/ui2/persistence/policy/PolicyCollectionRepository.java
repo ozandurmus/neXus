@@ -168,11 +168,12 @@ public class PolicyCollectionRepository {
     }
 
     public List<Map<String, Object>> domainProgress(String jobId) {
-        return tx.inTransaction(db -> db.fetch("select domain_ref, status, signal->>'publishTime' as publish_time, rules_count, hits_collected_at "
+        return tx.inTransaction(db -> db.fetch("select domain_ref, status, complete, signal->>'publishTime' as publish_time, rules_count, hits_collected_at "
             + "from cp_policy_domain_run where job_id = {0} order by domain_ref", jobId).map(r -> {
                 Map<String, Object> view = new LinkedHashMap<>();
                 view.put("containerId", r.get("domain_ref", String.class));
                 view.put("status", r.get("status", String.class));
+                view.put("complete", Boolean.TRUE.equals(r.get("complete", Boolean.class)));
                 view.put("rules", r.get("rules_count", Integer.class));
                 String published = r.get("publish_time", String.class);
                 if (published != null) view.put("publishTime", published);

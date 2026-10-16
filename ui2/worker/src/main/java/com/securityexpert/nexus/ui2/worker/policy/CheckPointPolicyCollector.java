@@ -18,12 +18,15 @@ import com.securityexpert.nexus.ui2.worker.transport.ssh.PersistedManagementEndp
 /** Trusted MDS sessions; complete sibling layers survive a failed layer. */
 public final class CheckPointPolicyCollector {
     static final int MAX_PAGES = 200;
+    /** A layer whose total changes while it is paged is re-read from offset 0 at most this often per run. */
+    static final int MAX_LAYER_RESTARTS = 2;
     final DeviceTransport transport;
     private final int maxSessions;
     private final GateRegistryPort gates;
     private final PolicyCollectionRepository repository;
     private final Duration jobTimeout;
     private final Duration readTimeout;
+    private final Duration restartBackoff;
     final int packagePageSize;
     private final LongSupplier nanoTime;
     private final ObjectMapper json = new ObjectMapper()
@@ -47,10 +50,82 @@ public final class CheckPointPolicyCollector {
         if (maxSessions < 1 || maxSessions > 4) throw new IllegalArgumentException("POLICY_MAX_SESSIONS_MUST_BE_1_TO_4");
         this.maxSessions = maxSessions;
         this.readTimeout = configuredReadTimeout();
+        this.restartBackoff = configuredRestartBackoff();
         this.packagePageSize = 50;
         if (jobTimeout.isZero() || jobTimeout.isNegative()) throw new IllegalArgumentException("POLICY_DEADLINE_MUST_BE_POSITIVE");
         this.transport = transport; this.gates = gates; this.repository = repository;
         this.jobTimeout = jobTimeout; this.nanoTime = nanoTime;
+    }
+
+    /** Pause before a layer restart, in milliseconds; bounded so a restart can never stall a run. */
+    static Duration configuredRestartBackoff() {
+        Duration backoff = Duration.ofMillis(Long.parseLong(System.getProperty("ui2.policy.cp.layer-restart-backoff-ms",
+            System.getenv().getOrDefault("UI2_POLICY_CP_LAYER_RESTART_BACKOFF_MS", "3000"))));
+        if (backoff.isNegative() || backoff.toMillis() > 60_000)
+            throw new IllegalArgumentException("POLICY_LAYER_RESTART_BACKOFF_OUT_OF_RANGE");
+        return backoff;
+    }
+
+    /** Log one masked restart line, back off briefly, then require the run to still be active. */
+    void restartLayer(int attempt, String kind, long deadline, BooleanSupplier lease) {
+        String note = "[CP_LAYER_RESTART] reason=TOTAL_CHANGED attempt=" + attempt + " kind=" + kind;
+        com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.add("job", "note", note);
+        System.getLogger(CheckPointPolicyCollector.class.getName()).log(System.Logger.Level.WARNING, note);
+        long pause = Math.min(restartBackoff.toNanos(), Math.max(0, deadline - nanoTime.getAsLong()));
+        if (pause > 0) {
+            try { java.util.concurrent.TimeUnit.NANOSECONDS.sleep(pause); }
+            catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                throw PolicyCollectionTrace.failure("INTERRUPTED");
+            }
+        }
+        checkActive(deadline, lease);
+    }
+
+    /** True only for a page whose total differs from the layer's first page in this pass. */
+    static boolean totalChanged(RuntimeException error) {
+        return error instanceof PageRejected rejected && rejected.check.equals("TOTAL_CHANGED")
+            || error instanceof PageFailure failed && "TOTAL_CHANGED".equals(failed.check);
+    }
+
+    /** The vendor's name-not-unique API error, found directly or as the cause of a page failure. */
+    static NameNotUnique nameNotUnique(Throwable error) {
+        for (Throwable cause = error; cause != null; cause = cause.getCause())
+            if (cause instanceof NameNotUnique notUnique) return notUnique;
+        return null;
+    }
+
+    /**
+     * Relationship-only facts for a name-not-unique answer. Values stay in memory; only MATCH/NO and counts are logged.
+     * targetNames are installation-target names already present in the collected show-packages item.
+     */
+    record NameContext(String domain, String packageName, List<String> targetNames, int sameNamePackages) {
+        NameContext { targetNames = List.copyOf(targetNames); }
+        @Override public String toString() { return "NameContext[masked]"; }
+        static NameContext of(String domain, JsonNode policy, List<JsonNode> packages) {
+            String name = policy.path("name").asText("");
+            List<String> targets = new ArrayList<>();
+            JsonNode installation = policy.path("installation-targets");
+            if (installation.isArray()) for (JsonNode target : installation) {
+                String targetName = target.isObject() ? target.path("name").asText("") : "";
+                if (!targetName.isBlank()) targets.add(targetName);
+            }
+            int same = (int) packages.stream().filter(p -> name.equals(p.path("name").asText(null))).count();
+            return new NameContext(domain, name, targets, same);
+        }
+        void diagnose(String kind, Throwable error) {
+            NameNotUnique notUnique = nameNotUnique(error);
+            String message = notUnique == null ? "" : notUnique.apiMessage;
+            long targetMatches = targetNames.stream().distinct().filter(message::contains).count();
+            String note = "[CP_NAME_NOT_UNIQUE] kind=" + kind
+                + " messagePackage=" + (!packageName.isEmpty() && message.contains(packageName) ? "MATCH" : "NO")
+                + " messageDomain=" + (!domain.isEmpty() && message.contains(domain) ? "MATCH" : "NO")
+                + " installTargetNames=" + targetNames.stream().distinct().count()
+                + " installTargetNamesInMessage=" + targetMatches
+                + " packagesWithRequestedName=" + sameNamePackages;
+            com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.add("job", "note", note);
+            System.getLogger(CheckPointPolicyCollector.class.getName()).log(System.Logger.Level.WARNING, note);
+        }
     }
 
     /** Per-command policy read budget, in seconds. */
@@ -187,6 +262,7 @@ public final class CheckPointPolicyCollector {
                     failures.add(new CollectionFailure(natRef, "COLLECTION_PENDING", "NAT", 0));
                     long checkpointInterval = CpPolicyParallelCollection.configuredCheckpointInterval().toNanos();
                     long[] lastCheckpoint = {nanoTime.getAsLong() - checkpointInterval};
+                    NameContext names = NameContext.of(domainName, policy, packages);
                     List<JsonNode> access = access(session, domainName, policy.path("access-layers"), deadline, lease, failures,
                         completed -> {
                             var checkpoint = snapshot(metadata, completed, List.of(), failures);
@@ -195,7 +271,7 @@ public final class CheckPointPolicyCollector {
                             checkPublication(deadline, lease);
                             domainPublish.accept(checkpoint);
                             lastCheckpoint[0] = nanoTime.getAsLong();
-                        });
+                        }, names);
                     List<JsonNode> nat = List.of();
                     try {
                         nat = pages(session, offset -> MgmtCliCommands.showNatRulebase(domainName, name, offset), 2, deadline, lease,
@@ -205,7 +281,7 @@ public final class CheckPointPolicyCollector {
             com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(incomplete);
                         if (PolicyCollectionTrace.fatal(incomplete)) throw incomplete;
                         failures.removeIf(f -> f.layerRef().equals(natRef));
-                        failures.add(new CollectionFailure(natRef, PolicyCollectionTrace.reason(incomplete), "NAT", reached(incomplete)));
+                        failures.add(natFailure(natRef, incomplete, names));
                     }
                     PolicySnapshot snapshot;
                     try { snapshot = snapshot(metadata, access, nat, failures); }
@@ -265,7 +341,7 @@ public final class CheckPointPolicyCollector {
                     offset = listing.to;
                 }
             } catch (RuntimeException fallback) {
-            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(fallback); throw new PageFailure(PolicyCollectionTrace.reason(fallback), offset); }
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(fallback); throw new PageFailure(PolicyCollectionTrace.reason(fallback), offset, null); }
         }
     }
 
@@ -389,8 +465,16 @@ public final class CheckPointPolicyCollector {
 
     private static int reached(RuntimeException error) { return error instanceof PageFailure page ? page.offset : 0; }
 
+    /** NAT that the vendor cannot address uniquely is UNKNOWN (fixed reason); every other NAT failure stays a gap. */
+    static CollectionFailure natFailure(String natRef, RuntimeException error, NameContext names) {
+        if (nameNotUnique(error) == null)
+            return new CollectionFailure(natRef, PolicyCollectionTrace.reason(error), "NAT", reached(error));
+        names.diagnose("nat", error);
+        return new CollectionFailure(natRef, VENDOR_NAME_NOT_UNIQUE, "NAT", 0);
+    }
+
     private List<JsonNode> access(TransportSession session, String domain, JsonNode roots, long deadline, BooleanSupplier lease,
-            List<CollectionFailure> failures, Consumer<List<JsonNode>> publish) {
+            List<CollectionFailure> failures, Consumer<List<JsonNode>> publish, NameContext names) {
         Map<String, JsonNode> pending = new LinkedHashMap<>();
         for (JsonNode root : roots) {
             JsonNode layer = scopedLayer(root);
@@ -418,13 +502,15 @@ public final class CheckPointPolicyCollector {
                     rules[0] = previousRules + count;
                     PolicyCollectionTrace.layer(fetched.size(), fetched.size() + pending.size(), rules[0]);
                 };
+                int[] restarts = {0};
                 try {
                     layer = pages(session, offset -> MgmtCliCommands.showAccessRulebase(domain, uid, name, offset)
-                        + (hits ? " show-hits true" : ""), hits ? 3 : 1, deadline, lease, progress, uid, domainType);
+                        + (hits ? " show-hits true" : ""), hits ? 3 : 1, deadline, lease, progress, uid, domainType, restarts);
                 } catch (RuntimeException unsupportedHits) {
             com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(unsupportedHits);
-                    if (!hits || PolicyCollectionTrace.fatal(unsupportedHits)) throw unsupportedHits;
-                    layer = pages(session, offset -> MgmtCliCommands.showAccessRulebase(domain, uid, name, offset), 1, deadline, lease, progress, uid, domainType);
+                    if (!hits || PolicyCollectionTrace.fatal(unsupportedHits) || totalChanged(unsupportedHits)) throw unsupportedHits;
+                    if (nameNotUnique(unsupportedHits) != null) names.diagnose("access-hits", unsupportedHits);
+                    layer = pages(session, offset -> MgmtCliCommands.showAccessRulebase(domain, uid, name, offset), 1, deadline, lease, progress, uid, domainType, restarts);
                 }
                 for (JsonNode page : layer)
                     for (JsonNode object : page.path("objects-dictionary")) dictionary.put(required(object, "uid"), object);
@@ -496,9 +582,20 @@ public final class CheckPointPolicyCollector {
         return pages(session, command, gate, deadline, lease, count -> {});
     }
     private List<JsonNode> pages(TransportSession session, IntFunction<String> command, int gate, long deadline, BooleanSupplier lease, IntConsumer progress) {
-        return pages(session, command, gate, deadline, lease, progress, null, "ABSENT");
+        return pages(session, command, gate, deadline, lease, progress, null, "ABSENT", new int[1]);
     }
-    private List<JsonNode> pages(TransportSession session, IntFunction<String> command, int gate, long deadline, BooleanSupplier lease, IntConsumer progress, String layerUid, String domainType) {
+    /** A pass whose total changes is discarded and re-read from offset 0, at most MAX_LAYER_RESTARTS times per layer. */
+    private List<JsonNode> pages(TransportSession session, IntFunction<String> command, int gate, long deadline, BooleanSupplier lease,
+            IntConsumer progress, String layerUid, String domainType, int[] restarts) {
+        while (true) {
+            try { return pass(session, command, gate, deadline, lease, progress, layerUid, domainType); }
+            catch (PageFailure incomplete) {
+                if (!totalChanged(incomplete) || restarts[0] >= MAX_LAYER_RESTARTS) throw incomplete;
+                restartLayer(++restarts[0], gate == 2 ? "nat" : "access", deadline, lease);
+            }
+        }
+    }
+    private List<JsonNode> pass(TransportSession session, IntFunction<String> command, int gate, long deadline, BooleanSupplier lease, IntConsumer progress, String layerUid, String domainType) {
         List<JsonNode> pages = new ArrayList<>();
         int offset = 0, total = -1, rules = 0;
         Set<String> seenRules = new HashSet<>();
@@ -507,7 +604,7 @@ public final class CheckPointPolicyCollector {
                 JsonNode page;
                 try { page = read(session, command.apply(offset), gate, deadline, lease, total, domainType); }
                 catch (PolicyCollectionTrace.Failure timedOut) {
-                    if ((gate == 1 || gate == 3) && timedOut.getMessage().endsWith(": INVALID_OR_INCOMPLETE_RESPONSE"))
+                    if ((gate == 1 || gate == 3) && timedOut.getMessage().endsWith(": INVALID_OR_INCOMPLETE_RESPONSE") && !totalChanged(timedOut))
                         page = read(session, command.apply(offset), gate, deadline, lease, total, domainType);
                     else {
                         if (gate != 1 || !timedOut.getMessage().endsWith(": TIMEOUT")) throw timedOut;
@@ -532,7 +629,10 @@ public final class CheckPointPolicyCollector {
             throw failure();
         } catch (RuntimeException incomplete) {
             com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(incomplete);
-            throw new PageFailure(PolicyCollectionTrace.reason(incomplete), offset);
+            PageFailure failed = new PageFailure(PolicyCollectionTrace.reason(incomplete), offset,
+                incomplete instanceof PageRejected rejected ? rejected.check : null);
+            failed.initCause(incomplete);
+            throw failed;
         }
     }
     static int pageTotal(JsonNode page, int offset, int expectedTotal, int gate) {
@@ -581,14 +681,25 @@ public final class CheckPointPolicyCollector {
         }
     }
     static PolicyCollectionTrace.Failure pageRejected(String check) { return new PageRejected(check); }
-    static String rejectingCheck(RuntimeException error) { return error instanceof PageRejected rejected ? rejected.check : "SCHEMA_OR_MAPPING"; }
+    static String rejectingCheck(RuntimeException error) {
+        return error instanceof PageRejected rejected ? rejected.check : error instanceof NameNotUnique ? VENDOR_NAME_NOT_UNIQUE : "SCHEMA_OR_MAPPING";
+    }
     private static final class PageRejected extends PolicyCollectionTrace.Failure {
         final String check;
         PageRejected(String check) { super(PolicyCollectionTrace.failure("INVALID_OR_INCOMPLETE_RESPONSE").getMessage()); this.check = check; }
     }
     private static final class PageFailure extends PolicyCollectionTrace.Failure {
         final int offset;
-        PageFailure(String reason, int offset) { super(reason); this.offset = offset; }
+        final String check;
+        PageFailure(String reason, int offset, String check) { super(reason); this.offset = offset; this.check = check; }
+    }
+    /** The API message is held in memory for local relationship checks only; it is never part of the exception text. */
+    static final class NameNotUnique extends PolicyCollectionTrace.Failure {
+        final transient String apiMessage;
+        NameNotUnique(String apiMessage) {
+            super(PolicyCollectionTrace.failure(VENDOR_NAME_NOT_UNIQUE).getMessage());
+            this.apiMessage = apiMessage == null ? "" : apiMessage;
+        }
     }
 
     void checkActive(long deadline, BooleanSupplier lease) {
@@ -656,6 +767,8 @@ public final class CheckPointPolicyCollector {
                 }
                 if ((gate == 1 || gate == 3) && !uidAccess && "generic_err_object_field_not_unique".equals(code))
                     throw PolicyCollectionTrace.failure("LAYER_NAME_AMBIGUOUS");
+                if (gate >= 1 && gate <= 3 && "generic_err_object_field_not_unique".equals(code))
+                    throw new NameNotUnique(root.path("message").asText(""));
                 String message = (root.path("code").asText("") + " " + root.path("message").asText("")).toLowerCase(Locale.ROOT);
                 if (message.contains("session") || message.contains("lock") || message.contains("too many"))
                     throw PolicyCollectionTrace.failure("API_SESSION_PRESSURE");

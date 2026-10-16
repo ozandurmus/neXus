@@ -256,6 +256,13 @@ it("clearly badges a partial snapshot and its safe layer failure", async () => {
   expect(screen.getByRole("alert")).toHaveTextContent("the time limit was reached");
   expect(screen.queryByText(/access target=/)).toBeNull();
 });
+it("states a NAT part the vendor cannot address uniquely as unknown, not as a failed or missing snapshot", async () => {
+  mockFetch({ ...page, failures: [{ layerRef: "nat-1", layerName: "NAT", offset: 0, reason: "VENDOR_NAME_NOT_UNIQUE" }] }); mount(); await navigate();
+  expect(await screen.findByText("Complete · some parts unknown")).toBeInTheDocument();
+  expect(screen.getByText("NAT: unknown — vendor reported a name that is not unique")).toBeInTheDocument();
+  expect(screen.queryByText("Partial snapshot · incomplete")).toBeNull();
+  expect(screen.queryByRole("alert")).toBeNull();
+});
 
 it("discovers automatic collections and stops all pending polling on unmount", async () => {
   const fetch = vi.fn(async (input: string) => {
@@ -648,6 +655,10 @@ it("folds an MDS card's domains and failure codes into one status line plus Deta
   expect(collectionSummaryLine(job, true)).toBe("3 domains: 1 reused, 2 collected · 2 unit failures");
   expect(collectionSummaryLine({ ...job, domains: undefined, unitFailureCodes: [] }, true)).toBe("unit failures not itemised");
   expect(collectionSummaryLine({ ...job, domains: [{ containerId: "dom-1", status: "COLLECTING", rules: 0 }] }, false)).toBe("1 domain: 1 collecting");
+  const unknown: PolicyCollectionStatus = { ...job, outcome: "COMPLETED", gapUnits: 1, unitFailureCodes: ["VENDOR_NAME_NOT_UNIQUE"],
+    unknownParts: [{ part: "NAT", reasonCode: "VENDOR_NAME_NOT_UNIQUE", units: 1 }],
+    domains: [{ containerId: "dom-2", status: "COLLECTED", complete: true, rules: 12 }, { containerId: "dom-3", status: "COLLECTED", complete: false, rules: 8 }] };
+  expect(collectionSummaryLine(unknown, false)).toBe("2 domains: 2 collected (1 incomplete) · NAT: unknown — vendor reported a name that is not unique (1 package)");
   vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ canCollect: true,
     sources: [{ sourceId: "source-mds", sourceName: "MGR-BRAVO-01", vendor: "CP", collection: job }] }), { status: 200 })));
   mount();
