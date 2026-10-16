@@ -1,0 +1,1 @@
+SELECT count(*) FROM duckdb_tables() WHERE table_name='settings'

@@ -20,6 +20,7 @@ import com.securityexpert.nexus.ui2.persistence.jobrecords.JooqJobLeaseDao;
 import com.securityexpert.nexus.ui2.persistence.packetanalysis.PacketAnalysisRepository;
 import com.securityexpert.nexus.ui2.persistence.packetanalysis.PacketAnalysisRepository.CaptureRow;
 import com.securityexpert.nexus.ui2.persistence.packetanalysis.PacketAnalysisRepository.Outcome;
+import com.securityexpert.nexus.ui2.persistence.packetanalysis.PacketAnalysisRepository.TelemetryRow;
 import com.securityexpert.nexus.ui2.persistence.runtime.ModuleRuntimeRepository;
 import com.securityexpert.nexus.ui2.platform.PacketAnalysisJob;
 
@@ -92,6 +93,62 @@ class PacketAnalysisLifecycleTest {
             assertEquals(0, tx.<Integer>inTransaction(db -> db.fetchOne("select count(*)::int from audit_log where "
                     + "table_name = 'packet_analysis_capture' and after_state::text like '%synthetic.pcap%'").get(0, Integer.class)),
                     "the uploaded file name reaches the audit log as a digest only");
+        }
+    }
+
+    @Test void hostTelemetryIsRecordedAlignedLedgeredAndRemovedWithItsCase() {
+        try (var fixture = Ui2PostgresFixture.createAndMigrate("packet_analysis_telemetry")) {
+            var tx = new JooqTransactionBoundary(DSL.using(fixture.appDataSource(), SQLDialect.POSTGRES));
+            var repository = new PacketAnalysisRepository(tx);
+            String operator = "synthetic-operator";
+            String caseId = UUID.randomUUID().toString();
+            repository.createCase(caseId, "Synthetic telemetry case", operator, false);
+
+            String first = UUID.randomUUID().toString();
+            assertEquals(Outcome.DONE, repository.addTelemetry(new TelemetryRow(first, caseId, "synthetic-vmstat.txt", 321,
+                    "c".repeat(64), first + ".txt", "vmstat", null, null, 0, null, operator, Instant.now(), null, null), operator));
+            String second = UUID.randomUUID().toString();
+            assertEquals(Outcome.DONE, repository.addTelemetry(new TelemetryRow(second, caseId, "synthetic-table.csv", 12,
+                    "d".repeat(64), second + ".txt", "unknown", "NO_KNOWN_FORMAT", null, 0, null, operator, Instant.now(), null, null),
+                    operator));
+            assertEquals(0, repository.findCase(caseId).orElseThrow().totalBytes(), "telemetry is not capture bytes");
+            assertEquals(List.of(first, second), repository.telemetry(caseId).stream().map(TelemetryRow::telemetryId).toList());
+            assertNull(repository.findTelemetry(first).orElseThrow().timeZone(), "unconfirmed until the user says otherwise");
+
+            assertEquals(Outcome.DONE, repository.setTelemetryAlignment(first, "Europe/Istanbul", 5, "2026-10-08 10:00:00", operator));
+            var aligned = repository.findTelemetry(first).orElseThrow();
+            assertEquals("Europe/Istanbul", aligned.timeZone());
+            assertEquals(5, aligned.offsetSeconds());
+            assertEquals("2026-10-08 10:00:00", aligned.anchorLocal());
+            assertNotNull(aligned.alignedAt());
+            assertEquals(Outcome.NOT_FOUND, repository.setTelemetryAlignment(UUID.randomUUID().toString(), null, 0, null, operator));
+            assertThrows(RuntimeException.class, () -> repository.setTelemetryAlignment(first, "not a zone!", 0, null, operator),
+                    "the table refuses a malformed zone even if a caller skipped validation");
+            assertThrows(RuntimeException.class, () -> repository.setTelemetryAlignment(first, null, 999_999, null, operator));
+
+            boolean[] removed = {false};
+            assertEquals(Outcome.DONE, repository.deleteTelemetry(second, operator, () -> removed[0] = true));
+            assertTrue(removed[0], "the file goes first");
+            assertEquals(Outcome.NOT_FOUND, repository.deleteTelemetry(second, operator, () -> fail("already gone")));
+
+            // an analysis in flight does not block telemetry: it changes nothing the analysis reads
+            repository.addCapture(new CaptureRow(UUID.randomUUID().toString(), caseId, "synthetic.pcap", "pcap", 124, "b".repeat(64),
+                    UUID.randomUUID() + ".pcap", operator, Instant.now()), operator);
+            assertEquals(Outcome.DONE, repository.requestAnalysis(caseId, UUID.randomUUID().toString(), operator));
+            assertEquals(Outcome.DONE, repository.setTelemetryAlignment(first, null, 0, null, operator));
+
+            new AuditedTransactionBoundary(tx).inTransaction("synthetic-fixture", "synthetic_expire", db -> db.execute(
+                    "update packet_analysis_case set created_at = now() - interval '8 days', expires_at = now() - interval '1 day' "
+                            + "where case_id = {0}", caseId));
+            assertEquals(Outcome.EXPIRED, repository.setTelemetryAlignment(first, null, 0, null, operator));
+            assertTrue(repository.findTelemetry(first).isEmpty(), "an expired case's telemetry is gone for readers");
+            assertEquals(List.of("TELEMETRY_UPLOADED", "TELEMETRY_UPLOADED", "TELEMETRY_ALIGNED", "TELEMETRY_DELETED", "TELEMETRY_ALIGNED"),
+                    tx.inTransaction(db -> db.fetch("select event from packet_analysis_ledger where case_id = {0} and event like 'TELEMETRY%' "
+                            + "order by occurred_at, ledger_id", caseId).map(r -> r.get("event", String.class))));
+            assertEquals(0, tx.<Integer>inTransaction(db -> db.fetchOne("select count(*)::int from audit_log where "
+                    + "table_name = 'packet_analysis_host_telemetry' and (after_state::text like '%synthetic-vmstat%' or "
+                    + "after_state::text like '%2026-10-08 10:00:00%')")
+                    .get(0, Integer.class)), "file names and the typed start time reach the audit log as digests only");
         }
     }
 

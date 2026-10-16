@@ -180,6 +180,10 @@ public final class AuditPresentationAllowlist {
             Map.entry("packet_analysis_case", Set.of(
                     "case_id", "created_at", "created_by", "expires_at", "payload_zeroing", "state",
                     "total_bytes")),
+            // V158: display_name, sha256, storage_key and anchor_local are tier-2 redacted.
+            Map.entry("packet_analysis_host_telemetry", Set.of(
+                    "aligned_at", "aligned_by", "case_id", "detected_format", "offset_seconds", "recognition_note",
+                    "size_bytes", "telemetry_id", "time_zone", "uploaded_at", "uploaded_by")),
             Map.entry("packet_analysis_ledger", Set.of(
                     "actor_fingerprint", "bytes", "capture_id", "case_id", "event", "job_id",
                     "ledger_id", "occurred_at")),

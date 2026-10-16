@@ -1,0 +1,1 @@
+UPDATE captures SET state='stale',checkpoint=0,error='Reattach to index path integrity fields'

@@ -1,0 +1,1 @@
+SELECT DISTINCT least(src, dst), greatest(src, dst) FROM packets WHERE capture_id = ? AND src IS NOT NULL AND dst IS NOT NULL AND src <> '' AND dst <> ''

@@ -1,0 +1,1 @@
+SELECT json_extract_string(path_fields,'$.tunnel_hint'),count(*) FROM packets WHERE capture_id=? AND unsupported LIKE 'Tunnel encapsulation%' GROUP BY 1

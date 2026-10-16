@@ -257,7 +257,8 @@
     "run_build_sets_configuration_image": "agent_operations",
     "corporate_inspection_ca_verify_with_it": "agent_operations",
     "old_export_copies_disposal": "agent_operations",
-    "cyber_controller_known_hosts_after_hosta_rebuild": "agent_operations"
+    "cyber_controller_known_hosts_after_hosta_rebuild": "agent_operations",
+    "packet_analysis_shell": "java_feature"
   },
   "converted_lessons": [
     {

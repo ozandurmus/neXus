@@ -15,6 +15,8 @@ jsch = "0.1.55"
 jackson = "2.21.7"
 # Data Sanitizer XLSX path (DATA_SANITIZER_CONTRACT.md §4); shared with the Packet Analysis export lane.
 poi = "5.5.1"
+# Packet Analysis store: must equal the DuckDB engine version of the frozen reference (1.5.6).
+duckdb = "1.5.6.0"
 
 [libraries]
 # Already supplied by the service JDBC starter; reused by the worker.
@@ -43,6 +45,7 @@ snakeyaml = { module = "org.yaml:snakeyaml", version.ref = "snakeyaml" }
 jsch = { module = "com.jcraft:jsch", version.ref = "jsch" }
 jackson-databind = { module = "com.fasterxml.jackson.core:jackson-databind" }
 poi-ooxml = { module = "org.apache.poi:poi-ooxml", version.ref = "poi" }
+duckdb-jdbc = { module = "org.duckdb:duckdb_jdbc", version.ref = "duckdb" }
 
 [plugins]
 spring-boot = { id = "org.springframework.boot", version.ref = "springboot" }

@@ -1,0 +1,1074 @@
+{
+ "archive": {
+  "bytes": 397226091,
+  "file": "packet-analysis-parity-corpus.tar.gz",
+  "layout": "run1/<case>/{input,l2,canonical}/...",
+  "sha256": "00f5957f02fd7ec9e7ac6a76f096d16f7ad32b1a8e9aff60059799a9033db42a"
+ },
+ "canonicalization": {
+  "commit_masking": "private/link-local IPv4 literals in key sections -> <ipv4:SHA256_12>",
+  "l1_sql": "WITH r AS (\n  SELECT p.* REPLACE (c.name AS capture_id) FROM packets p JOIN captures c ON c.id = p.capture_id\n)\nSELECT capture_id AS capture, count(*) AS row_count,\n  sha256(string_agg(to_json(r)::VARCHAR, chr(10) ORDER BY frame)) AS sha256\nFROM r GROUP BY capture_id ORDER BY capture_id",
+  "l2_tables": [
+   "obs",
+   "observation_matches",
+   "events",
+   "flow_summary",
+   "clock_values"
+  ],
+  "l3": "tools/packet_analysis/parity/canonical.py (port of PacketBreaker tests/test_golden.py)"
+ },
+ "cases": [
+  {
+   "file": "cases/demo.json",
+   "name": "demo",
+   "tier": 1
+  },
+  {
+   "file": "cases/nat.json",
+   "name": "nat",
+   "tier": 1
+  },
+  {
+   "file": "cases/offload.json",
+   "name": "offload",
+   "tier": 1
+  },
+  {
+   "file": "cases/integrity_all.json",
+   "name": "integrity_all",
+   "tier": 1
+  },
+  {
+   "file": "cases/dns_diagnosis.json",
+   "name": "dns_diagnosis",
+   "tier": 1
+  },
+  {
+   "file": "cases/fifty_flow_replica.json",
+   "name": "fifty_flow_replica",
+   "tier": 1
+  },
+  {
+   "file": "cases/folder_b_replica.json",
+   "name": "folder_b_replica",
+   "tier": 1
+  },
+  {
+   "file": "cases/oct8_replica.json",
+   "name": "oct8_replica",
+   "tier": 1
+  },
+  {
+   "file": "cases/cli-udp_transactions.json",
+   "name": "cli-udp_transactions",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-udp_transactions--ip-id-zero.json",
+   "name": "cli-udp_transactions--ip-id-zero",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-udp_transactions--ip-id-constant.json",
+   "name": "cli-udp_transactions--ip-id-constant",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-udp_transactions--ip-id-random.json",
+   "name": "cli-udp_transactions--ip-id-random",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-udp_transactions--ipv6.json",
+   "name": "cli-udp_transactions--ipv6",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-pilot.json",
+   "name": "cli-pilot",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-pilot--ip-id-zero.json",
+   "name": "cli-pilot--ip-id-zero",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-pilot--ip-id-constant.json",
+   "name": "cli-pilot--ip-id-constant",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-pilot--ipv6.json",
+   "name": "cli-pilot--ipv6",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-real_case_2.json",
+   "name": "cli-real_case_2",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-real_case_2--ip-id-zero.json",
+   "name": "cli-real_case_2--ip-id-zero",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-real_case_2--ip-id-constant.json",
+   "name": "cli-real_case_2--ip-id-constant",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-real_case_2--ipv6.json",
+   "name": "cli-real_case_2--ipv6",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-pilot_healthy.json",
+   "name": "cli-pilot_healthy",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-pilot_healthy--ip-id-zero.json",
+   "name": "cli-pilot_healthy--ip-id-zero",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-pilot_healthy--ip-id-constant.json",
+   "name": "cli-pilot_healthy--ip-id-constant",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-pilot_healthy--ipv6.json",
+   "name": "cli-pilot_healthy--ipv6",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-security.json",
+   "name": "cli-security",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-security--ip-id-zero.json",
+   "name": "cli-security--ip-id-zero",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-security--ip-id-constant.json",
+   "name": "cli-security--ip-id-constant",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-security--ip-id-random.json",
+   "name": "cli-security--ip-id-random",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-security--ipv6.json",
+   "name": "cli-security--ipv6",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-security--rounds-40.json",
+   "name": "cli-security--rounds-40",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-security_reply.json",
+   "name": "cli-security_reply",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-security_reply--ip-id-zero.json",
+   "name": "cli-security_reply--ip-id-zero",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-security_reply--ip-id-constant.json",
+   "name": "cli-security_reply--ip-id-constant",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-security_reply--ip-id-random.json",
+   "name": "cli-security_reply--ip-id-random",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-security_reply--ipv6.json",
+   "name": "cli-security_reply--ipv6",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-security_reply--rounds-40.json",
+   "name": "cli-security_reply--rounds-40",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-diagnostics.json",
+   "name": "cli-diagnostics",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-diagnostics--ip-id-zero.json",
+   "name": "cli-diagnostics--ip-id-zero",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-diagnostics--ipv6.json",
+   "name": "cli-diagnostics--ipv6",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-onset_intermittent_2.json",
+   "name": "cli-onset_intermittent_2",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-onset_intermittent_2--ip-id-zero.json",
+   "name": "cli-onset_intermittent_2--ip-id-zero",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-onset_intermittent_2--ip-id-constant.json",
+   "name": "cli-onset_intermittent_2--ip-id-constant",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-onset_intermittent_2--ip-id-random.json",
+   "name": "cli-onset_intermittent_2--ip-id-random",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-onset_intermittent_2--ipv6.json",
+   "name": "cli-onset_intermittent_2--ipv6",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-onset_intermittent_3.json",
+   "name": "cli-onset_intermittent_3",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-onset_intermittent_3--ip-id-zero.json",
+   "name": "cli-onset_intermittent_3--ip-id-zero",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-onset_intermittent_3--ip-id-constant.json",
+   "name": "cli-onset_intermittent_3--ip-id-constant",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-onset_intermittent_3--ip-id-random.json",
+   "name": "cli-onset_intermittent_3--ip-id-random",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-onset_intermittent_3--ipv6.json",
+   "name": "cli-onset_intermittent_3--ipv6",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-onset_intermittent_4.json",
+   "name": "cli-onset_intermittent_4",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-onset_intermittent_4--ip-id-zero.json",
+   "name": "cli-onset_intermittent_4--ip-id-zero",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-onset_intermittent_4--ip-id-constant.json",
+   "name": "cli-onset_intermittent_4--ip-id-constant",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-onset_intermittent_4--ip-id-random.json",
+   "name": "cli-onset_intermittent_4--ip-id-random",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-onset_intermittent_4--ipv6.json",
+   "name": "cli-onset_intermittent_4--ipv6",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-onset_intermittent_5.json",
+   "name": "cli-onset_intermittent_5",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-onset_intermittent_5--ip-id-zero.json",
+   "name": "cli-onset_intermittent_5--ip-id-zero",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-onset_intermittent_5--ip-id-constant.json",
+   "name": "cli-onset_intermittent_5--ip-id-constant",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-onset_intermittent_5--ip-id-random.json",
+   "name": "cli-onset_intermittent_5--ip-id-random",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-onset_intermittent_5--ipv6.json",
+   "name": "cli-onset_intermittent_5--ipv6",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-onset_random_loss.json",
+   "name": "cli-onset_random_loss",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-onset_random_loss--ip-id-zero.json",
+   "name": "cli-onset_random_loss--ip-id-zero",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-onset_random_loss--ip-id-constant.json",
+   "name": "cli-onset_random_loss--ip-id-constant",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-onset_random_loss--ip-id-random.json",
+   "name": "cli-onset_random_loss--ip-id-random",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-onset_random_loss--ipv6.json",
+   "name": "cli-onset_random_loss--ipv6",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-onset_loss.json",
+   "name": "cli-onset_loss",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-onset_loss--ip-id-zero.json",
+   "name": "cli-onset_loss--ip-id-zero",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-onset_loss--ip-id-constant.json",
+   "name": "cli-onset_loss--ip-id-constant",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-onset_loss--ip-id-random.json",
+   "name": "cli-onset_loss--ip-id-random",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-onset_loss--ipv6.json",
+   "name": "cli-onset_loss--ipv6",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-onset_delay.json",
+   "name": "cli-onset_delay",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-onset_delay--ip-id-zero.json",
+   "name": "cli-onset_delay--ip-id-zero",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-onset_delay--ip-id-constant.json",
+   "name": "cli-onset_delay--ip-id-constant",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-onset_delay--ip-id-random.json",
+   "name": "cli-onset_delay--ip-id-random",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-onset_delay--ipv6.json",
+   "name": "cli-onset_delay--ipv6",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-onset_propagation.json",
+   "name": "cli-onset_propagation",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-onset_propagation--ip-id-zero.json",
+   "name": "cli-onset_propagation--ip-id-zero",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-onset_propagation--ip-id-constant.json",
+   "name": "cli-onset_propagation--ip-id-constant",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-onset_propagation--ip-id-random.json",
+   "name": "cli-onset_propagation--ip-id-random",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-onset_propagation--ipv6.json",
+   "name": "cli-onset_propagation--ipv6",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-onset_capture_miss.json",
+   "name": "cli-onset_capture_miss",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-onset_capture_miss--ip-id-zero.json",
+   "name": "cli-onset_capture_miss--ip-id-zero",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-onset_capture_miss--ip-id-constant.json",
+   "name": "cli-onset_capture_miss--ip-id-constant",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-onset_capture_miss--ip-id-random.json",
+   "name": "cli-onset_capture_miss--ip-id-random",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-onset_capture_miss--ipv6.json",
+   "name": "cli-onset_capture_miss--ipv6",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-offload.json",
+   "name": "cli-offload",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-sequence_randomization.json",
+   "name": "cli-sequence_randomization",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-sequence_randomization--ip-id-zero.json",
+   "name": "cli-sequence_randomization--ip-id-zero",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-sequence_randomization--ip-id-constant.json",
+   "name": "cli-sequence_randomization--ip-id-constant",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-sequence_randomization--ip-id-random.json",
+   "name": "cli-sequence_randomization--ip-id-random",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-sequence_randomization--ipv6.json",
+   "name": "cli-sequence_randomization--ipv6",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-sequence_inconsistent.json",
+   "name": "cli-sequence_inconsistent",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-sequence_inconsistent--ip-id-zero.json",
+   "name": "cli-sequence_inconsistent--ip-id-zero",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-sequence_inconsistent--ip-id-constant.json",
+   "name": "cli-sequence_inconsistent--ip-id-constant",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-sequence_inconsistent--ip-id-random.json",
+   "name": "cli-sequence_inconsistent--ip-id-random",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-sequence_inconsistent--ipv6.json",
+   "name": "cli-sequence_inconsistent--ipv6",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-healthy.json",
+   "name": "cli-healthy",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-healthy--ip-id-zero.json",
+   "name": "cli-healthy--ip-id-zero",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-healthy--ip-id-constant.json",
+   "name": "cli-healthy--ip-id-constant",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-healthy--ip-id-random.json",
+   "name": "cli-healthy--ip-id-random",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-healthy--ipv6.json",
+   "name": "cli-healthy--ipv6",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-healthy--rounds-40.json",
+   "name": "cli-healthy--rounds-40",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-demo.json",
+   "name": "cli-demo",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-demo--ip-id-zero.json",
+   "name": "cli-demo--ip-id-zero",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-demo--ip-id-constant.json",
+   "name": "cli-demo--ip-id-constant",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-demo--ip-id-random.json",
+   "name": "cli-demo--ip-id-random",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-demo--ipv6.json",
+   "name": "cli-demo--ipv6",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-demo--rounds-40.json",
+   "name": "cli-demo--rounds-40",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-demo--confirm-demo-nat.json",
+   "name": "cli-demo--confirm-demo-nat",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-capture_miss.json",
+   "name": "cli-capture_miss",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-capture_miss--ip-id-zero.json",
+   "name": "cli-capture_miss--ip-id-zero",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-capture_miss--ip-id-constant.json",
+   "name": "cli-capture_miss--ip-id-constant",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-capture_miss--ip-id-random.json",
+   "name": "cli-capture_miss--ip-id-random",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-capture_miss--ipv6.json",
+   "name": "cli-capture_miss--ipv6",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-capture_miss--rounds-40.json",
+   "name": "cli-capture_miss--rounds-40",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-recovered_loss.json",
+   "name": "cli-recovered_loss",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-recovered_loss--ip-id-zero.json",
+   "name": "cli-recovered_loss--ip-id-zero",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-recovered_loss--ip-id-constant.json",
+   "name": "cli-recovered_loss--ip-id-constant",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-recovered_loss--ip-id-random.json",
+   "name": "cli-recovered_loss--ip-id-random",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-recovered_loss--ipv6.json",
+   "name": "cli-recovered_loss--ipv6",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-recovered_loss--rounds-40.json",
+   "name": "cli-recovered_loss--rounds-40",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-impactful_loss.json",
+   "name": "cli-impactful_loss",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-impactful_loss--ip-id-zero.json",
+   "name": "cli-impactful_loss--ip-id-zero",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-impactful_loss--ip-id-constant.json",
+   "name": "cli-impactful_loss--ip-id-constant",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-impactful_loss--ip-id-random.json",
+   "name": "cli-impactful_loss--ip-id-random",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-impactful_loss--ipv6.json",
+   "name": "cli-impactful_loss--ipv6",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-impactful_loss--rounds-40.json",
+   "name": "cli-impactful_loss--rounds-40",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-nat.json",
+   "name": "cli-nat",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-nat--ip-id-zero.json",
+   "name": "cli-nat--ip-id-zero",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-nat--ip-id-constant.json",
+   "name": "cli-nat--ip-id-constant",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-nat--ip-id-random.json",
+   "name": "cli-nat--ip-id-random",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-nat--ipv6.json",
+   "name": "cli-nat--ipv6",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-nat--rounds-40.json",
+   "name": "cli-nat--rounds-40",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-nat--confirm-demo-nat.json",
+   "name": "cli-nat--confirm-demo-nat",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-delay.json",
+   "name": "cli-delay",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-delay--ip-id-zero.json",
+   "name": "cli-delay--ip-id-zero",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-delay--ip-id-constant.json",
+   "name": "cli-delay--ip-id-constant",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-delay--ip-id-random.json",
+   "name": "cli-delay--ip-id-random",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-delay--ipv6.json",
+   "name": "cli-delay--ipv6",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-delay--rounds-40.json",
+   "name": "cli-delay--rounds-40",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-truncation.json",
+   "name": "cli-truncation",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-truncation--ip-id-zero.json",
+   "name": "cli-truncation--ip-id-zero",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-truncation--ip-id-constant.json",
+   "name": "cli-truncation--ip-id-constant",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-truncation--ip-id-random.json",
+   "name": "cli-truncation--ip-id-random",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-truncation--ipv6.json",
+   "name": "cli-truncation--ipv6",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-truncation--rounds-40.json",
+   "name": "cli-truncation--rounds-40",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-duplicate.json",
+   "name": "cli-duplicate",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-duplicate--ip-id-zero.json",
+   "name": "cli-duplicate--ip-id-zero",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-duplicate--ip-id-constant.json",
+   "name": "cli-duplicate--ip-id-constant",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-duplicate--ip-id-random.json",
+   "name": "cli-duplicate--ip-id-random",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-duplicate--ipv6.json",
+   "name": "cli-duplicate--ipv6",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-duplicate--rounds-40.json",
+   "name": "cli-duplicate--rounds-40",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-acked_unseen.json",
+   "name": "cli-acked_unseen",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-acked_unseen--ip-id-zero.json",
+   "name": "cli-acked_unseen--ip-id-zero",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-acked_unseen--ip-id-constant.json",
+   "name": "cli-acked_unseen--ip-id-constant",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-acked_unseen--ip-id-random.json",
+   "name": "cli-acked_unseen--ip-id-random",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-acked_unseen--ipv6.json",
+   "name": "cli-acked_unseen--ipv6",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-acked_unseen--rounds-40.json",
+   "name": "cli-acked_unseen--rounds-40",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-syn_blocked.json",
+   "name": "cli-syn_blocked",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-syn_blocked--ip-id-zero.json",
+   "name": "cli-syn_blocked--ip-id-zero",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-syn_blocked--ip-id-constant.json",
+   "name": "cli-syn_blocked--ip-id-constant",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-syn_blocked--ip-id-random.json",
+   "name": "cli-syn_blocked--ip-id-random",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-syn_blocked--ipv6.json",
+   "name": "cli-syn_blocked--ipv6",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-syn_blocked--rounds-40.json",
+   "name": "cli-syn_blocked--rounds-40",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-unrecovered_reset.json",
+   "name": "cli-unrecovered_reset",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-unrecovered_reset--ip-id-zero.json",
+   "name": "cli-unrecovered_reset--ip-id-zero",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-unrecovered_reset--ip-id-constant.json",
+   "name": "cli-unrecovered_reset--ip-id-constant",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-unrecovered_reset--ip-id-random.json",
+   "name": "cli-unrecovered_reset--ip-id-random",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-unrecovered_reset--ipv6.json",
+   "name": "cli-unrecovered_reset--ipv6",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-unrecovered_reset--rounds-40.json",
+   "name": "cli-unrecovered_reset--rounds-40",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-unrecovered_stall.json",
+   "name": "cli-unrecovered_stall",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-unrecovered_stall--ip-id-zero.json",
+   "name": "cli-unrecovered_stall--ip-id-zero",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-unrecovered_stall--ip-id-constant.json",
+   "name": "cli-unrecovered_stall--ip-id-constant",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-unrecovered_stall--ip-id-random.json",
+   "name": "cli-unrecovered_stall--ip-id-random",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-unrecovered_stall--ipv6.json",
+   "name": "cli-unrecovered_stall--ipv6",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-unrecovered_stall--rounds-40.json",
+   "name": "cli-unrecovered_stall--rounds-40",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-control_capture_miss.json",
+   "name": "cli-control_capture_miss",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-control_capture_miss--ip-id-zero.json",
+   "name": "cli-control_capture_miss--ip-id-zero",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-control_capture_miss--ip-id-constant.json",
+   "name": "cli-control_capture_miss--ip-id-constant",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-control_capture_miss--ip-id-random.json",
+   "name": "cli-control_capture_miss--ip-id-random",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-control_capture_miss--ipv6.json",
+   "name": "cli-control_capture_miss--ipv6",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-control_capture_miss--rounds-40.json",
+   "name": "cli-control_capture_miss--rounds-40",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-realistic_healthy.json",
+   "name": "cli-realistic_healthy",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-realistic_healthy--ip-id-zero.json",
+   "name": "cli-realistic_healthy--ip-id-zero",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-realistic_healthy--ip-id-constant.json",
+   "name": "cli-realistic_healthy--ip-id-constant",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-realistic_healthy--ip-id-random.json",
+   "name": "cli-realistic_healthy--ip-id-random",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-realistic_healthy--ipv6.json",
+   "name": "cli-realistic_healthy--ipv6",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-realistic_healthy--rounds-40.json",
+   "name": "cli-realistic_healthy--rounds-40",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-realistic_capture_miss.json",
+   "name": "cli-realistic_capture_miss",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-realistic_capture_miss--ip-id-zero.json",
+   "name": "cli-realistic_capture_miss--ip-id-zero",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-realistic_capture_miss--ip-id-constant.json",
+   "name": "cli-realistic_capture_miss--ip-id-constant",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-realistic_capture_miss--ip-id-random.json",
+   "name": "cli-realistic_capture_miss--ip-id-random",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-realistic_capture_miss--ipv6.json",
+   "name": "cli-realistic_capture_miss--ipv6",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-realistic_capture_miss--rounds-40.json",
+   "name": "cli-realistic_capture_miss--rounds-40",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-realistic_loss.json",
+   "name": "cli-realistic_loss",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-realistic_loss--ip-id-zero.json",
+   "name": "cli-realistic_loss--ip-id-zero",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-realistic_loss--ip-id-constant.json",
+   "name": "cli-realistic_loss--ip-id-constant",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-realistic_loss--ip-id-random.json",
+   "name": "cli-realistic_loss--ip-id-random",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-realistic_loss--ipv6.json",
+   "name": "cli-realistic_loss--ipv6",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-realistic_loss--rounds-40.json",
+   "name": "cli-realistic_loss--rounds-40",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-realistic_syn_blocked.json",
+   "name": "cli-realistic_syn_blocked",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-realistic_syn_blocked--ip-id-zero.json",
+   "name": "cli-realistic_syn_blocked--ip-id-zero",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-realistic_syn_blocked--ip-id-constant.json",
+   "name": "cli-realistic_syn_blocked--ip-id-constant",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-realistic_syn_blocked--ip-id-random.json",
+   "name": "cli-realistic_syn_blocked--ip-id-random",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-realistic_syn_blocked--ipv6.json",
+   "name": "cli-realistic_syn_blocked--ipv6",
+   "tier": 2
+  },
+  {
+   "file": "cases/cli-realistic_syn_blocked--rounds-40.json",
+   "name": "cli-realistic_syn_blocked--rounds-40",
+   "tier": 2
+  }
+ ],
+ "determinism": {
+  "archive_files_differing": [],
+  "archive_files_rule": "input/ and canonical/ byte-identical across runs; l2/*.parquet by content hash",
+  "differing": [],
+  "identical": true,
+  "runs": 2
+ },
+ "reference": {
+  "duckdb": "1.5.6",
+  "duckdb_jdbc": "org.duckdb:duckdb_jdbc:1.5.6.0",
+  "duckdb_threads": 1,
+  "findings_export_schema_version": 11,
+  "packetbreaker_checkout_head": "5b608e64003ee1f20a3f8dc79385fbffee1c84e7",
+  "packetbreaker_commit": "5b608e64003ee1f20a3f8dc79385fbffee1c84e7",
+  "packetbreaker_version": "0.3.10",
+  "parser_version": 13,
+  "reference_runtime": "3.12.8",
+  "tshark": "TShark (Wireshark) 4.6.9 (v4.6.9-0-g2d548b197c75)."
+ },
+ "schema": "nexus.packet_analysis.parity_corpus",
+ "schema_version": 1,
+ "tier1_reproduces_packetbreaker_goldens": true
+}

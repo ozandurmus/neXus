@@ -1,0 +1,1 @@
+UPDATE captures SET state='ready',inventory=?,error=NULL WHERE id=?

@@ -35,6 +35,23 @@ def matching(job, commit):
         return False
 
 
+def job_digest(current, name):
+    """The digest the job's own successful builder pod wrote to its termination message, or None (yet)."""
+    pods = json.loads(kubectl("get", "pods", "-l", "job-name=" + name, "-o", "json"))
+    digests = set()
+    for pod in pods["items"]:
+        if not any(o.get("uid") == current["metadata"]["uid"] for o in pod["metadata"].get("ownerReferences", [])):
+            continue
+        for status in pod.get("status", {}).get("containerStatuses", []):
+            ended = status.get("state", {}).get("terminated", {})
+            digest = ended.get("message", "").strip()
+            if status["name"] == current["spec"]["template"]["spec"]["containers"][0]["name"] and ended.get("exitCode") == 0 and re.fullmatch(r"sha256:[0-9a-f]{64}", digest):
+                digests.add(digest)
+    if len(digests) > 1:
+        raise RuntimeError("image build digest ambiguous")
+    return digests.pop() if digests else None
+
+
 def start(commit, repo):
     if not re.fullmatch(r"[a-f0-9]{40}", commit):
         raise ValueError("invalid commit")
@@ -70,20 +87,9 @@ def ensure(commit, repo, timeout=600, sleep=time.sleep, monotonic=time.monotonic
         if not matching(current, commit) or "Failed" in conditions(current):
             raise RuntimeError("E2E runner build failed or was replaced")
         if "Complete" in conditions(current):
-            pods = json.loads(kubectl("get", "pods", "-l", "job-name=" + NAME, "-o", "json"))
-            digests = set()
-            for pod in pods["items"]:
-                if not any(o.get("uid") == current["metadata"]["uid"] for o in pod["metadata"].get("ownerReferences", [])):
-                    continue
-                for status in pod.get("status", {}).get("containerStatuses", []):
-                    ended = status.get("state", {}).get("terminated", {})
-                    digest = ended.get("message", "").strip()
-                    if status["name"] == current["spec"]["template"]["spec"]["containers"][0]["name"] and ended.get("exitCode") == 0 and re.fullmatch(r"sha256:[0-9a-f]{64}", digest):
-                        digests.add(digest)
-            if len(digests) > 1:
-                raise RuntimeError("E2E runner digest ambiguous")
-            if digests:
-                return digests.pop()
+            digest = job_digest(current, NAME)
+            if digest:
+                return digest
             # Job completion can precede the pod termination message becoming visible.
 
         sleep(5)

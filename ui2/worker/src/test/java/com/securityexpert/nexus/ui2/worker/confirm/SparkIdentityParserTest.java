@@ -26,7 +26,7 @@ class SparkIdentityParserTest {
     @Test
     void revisionIsSeparateFromModelIncludingHardwareVersionFallback() {
         for (String diag : java.util.List.of("Unit model: V0", "Unit model: V1", "HW version: V1",
-                "Unit model: V1590")) {
+                "Unit model: V1580")) {
             assertTrue(SparkIdentityParser.model(diag).isEmpty());
             assertTrue(SparkIdentityParser.sparkRevision(diag).isPresent());
         }

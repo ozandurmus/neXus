@@ -38,6 +38,24 @@ class PacketAnalysisRetentionPrunerTest {
         verify(repository).expiredCases(200);
     }
 
+    @Test void hostTelemetryFilesAreRemovedWithTheCaseByTheSamePass() throws Exception {
+        var repository = mock(PacketAnalysisRepository.class);
+        Path expired = root.resolve("cases").resolve(EXPIRED);
+        Path telemetry = expired.resolve("telemetry").resolve("99999999-8888-4777-8666-555555555555.txt");
+        Files.createDirectories(telemetry.getParent());
+        Files.writeString(telemetry, "synthetic vmstat text");
+        Files.write(expired.resolve("telemetry").resolve(".partial-aaaaaaaa-8888-4777-8666-555555555555"), new byte[5]);
+        when(repository.expiredCases(anyInt())).thenReturn(List.of(EXPIRED));
+        when(repository.prune(eq(EXPIRED), anyString(), any())).thenAnswer(call -> {
+            assertTrue(Files.exists(telemetry), "the telemetry file is still there when the transaction starts");
+            ((Runnable) call.getArgument(2)).run();
+            return true;
+        });
+        assertEquals(1, new PacketAnalysisRetentionPruner(repository, root).runOnce().casesPruned());
+        assertFalse(Files.exists(telemetry));
+        assertFalse(Files.exists(expired), "nothing of the case, telemetry included, is left on the volume");
+    }
+
     @Test void anAlreadyMissingDirectoryStillLetsTheTombstoneLand() {
         var repository = mock(PacketAnalysisRepository.class);
         when(repository.expiredCases(anyInt())).thenReturn(List.of(EXPIRED));

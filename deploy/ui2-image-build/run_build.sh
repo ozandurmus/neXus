@@ -117,11 +117,24 @@ kubectl wait --for=condition=Ready pod/ui2-build-context-loader -n ui2-build --t
 IMAGE_DIGEST="$(kubectl -n ui2-build exec ui2-build-context-loader -- cat /workspace/image-digest.txt)"
 echo "Digest is $IMAGE_DIGEST"
 
+# The Packet Analysis engine image (docs/design/PACKET_ANALYSIS_ENGINE_IMAGE.md): the main image just built, by
+# digest, plus tshark -- so tshark never enters the main image. Same registry repository, tag <commit12>-pa; scanned
+# by the same gate below. NEXUS_BUILD_PACKET_ANALYSIS_IMAGE=0 skips it (nothing deploys it yet).
+PA_IMAGE=""
+if [ "${NEXUS_BUILD_PACKET_ANALYSIS_IMAGE:-1}" != 0 ]; then
+  pa_start=$SECONDS
+  PA_IMAGE="$(python3 "$REPO/tools/delivery/hosta_packet_analysis_image.py" build --commit "$COMMIT_SHA" \
+    --service-image "registry.kube-system.svc.cluster.local/nexus-ui2-service@$IMAGE_DIGEST")"
+  echo "Packet analysis image is $PA_IMAGE"
+  timing packet_analysis_image "$pa_start"
+fi
+
 if [ -z "${NEXUS_SKIP_SECURITY_REASON:-}" ] && [ "$SECURITY_CONFIGURED" = 1 ]; then
   gate_start=$SECONDS
   echo "Running security-gate on the freshly built digest..."
   python3 "$REPO/tools/security/security_host.py" gate --config "$HOME/.config/nexus/security.json" \
-    --image "registry.kube-system.svc.cluster.local/nexus-ui2-service@$IMAGE_DIGEST" --commit "$COMMIT_SHA" --job-name "$SECURITY_JOB"
+    --image "registry.kube-system.svc.cluster.local/nexus-ui2-service@$IMAGE_DIGEST" ${PA_IMAGE:+--image "$PA_IMAGE"} \
+    --commit "$COMMIT_SHA" --job-name "$SECURITY_JOB"
   timing security_gate_wait "$gate_start"
 fi
 

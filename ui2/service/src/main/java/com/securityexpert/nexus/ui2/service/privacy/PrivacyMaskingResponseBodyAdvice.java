@@ -93,9 +93,23 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
                 String key = String.valueOf(entry.getKey());
                 Object val = entry.getValue();
                 if (("address".equals(key) || "destination".equals(key) || "management_ip".equals(key)
-                        || "network".equals(key)) && val instanceof String s) {
+                        || "network".equals(key) || "src".equals(key) || "dst".equals(key)
+                        || "client_ip".equals(key) || "server_ip".equals(key)
+                        || "pre_nat_src".equals(key) || "pre_nat_dst".equals(key)
+                        || "post_nat_src".equals(key) || "post_nat_dst".equals(key)
+                        || "translated_src".equals(key) || "translated_dst".equals(key)) && val instanceof String s) {
                     ipMasker.registerSubnet(s);
-                } else if ("hostname".equals(key) && val instanceof String s) {
+                } else if (("observed_addresses".equals(key) || "matched_addresses".equals(key)
+                        || "interface_addresses".equals(key)) && val instanceof List<?> addrList) {
+                    for (Object item : addrList) {
+                        if (item instanceof String s) ipMasker.registerSubnet(s);
+                    }
+                } else if (("hostname".equals(key) || "device".equals(key) || "file".equals(key)
+                        || "point_label".equals(key) || "capture_name".equals(key))
+                        && val instanceof String s && !s.isBlank()) {
+                    topologyPseudonymizer.maskDeviceName(s, null);
+                } else if ("name".equals(key) && map.containsKey("inventory") && map.containsKey("checkpoint")
+                        && val instanceof String s && !s.isBlank()) {
                     topologyPseudonymizer.maskDeviceName(s, null);
                 } else {
                     preRegisterSubnets(val);
@@ -192,7 +206,38 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
                 case "platform", "hardware_type", "hypervisor", "software_version", "model", "platform_family" -> result.put(key, value);
                 // V148: a link-layer address keeps its vendor prefix (OUI) only; a zone name becomes a stable pseudonym.
                 case "mac_address" -> result.put(key, value instanceof String mac ? maskMac(mac) : value);
-                case "zone" -> result.put(key, value instanceof String zone ? topologyPseudonymizer.maskPolicyName("zone", zone) : value);
+                case "observed_macs" -> {
+                    if (value instanceof List<?> macList) {
+                        List<Object> maskedMacs = new ArrayList<>(macList.size());
+                        for (Object item : macList) {
+                            maskedMacs.add(item instanceof String mac ? maskMac(mac) : item);
+                        }
+                        result.put(key, maskedMacs);
+                    } else {
+                        result.put(key, value);
+                    }
+                }
+                case "zone", "source_zone", "destination_zone", "ingress_zone", "egress_zone" ->
+                    result.put(key, value instanceof String zone ? topologyPseudonymizer.maskPolicyName("zone", zone) : value);
+                case "interface_name", "ingress_interface_name", "egress_interface_name", "vendor_interface" ->
+                    result.put(key, value instanceof String iface ? topologyPseudonymizer.maskPolicyName("interface", iface) : value);
+                case "policy_name", "rule_name", "section_name" ->
+                    result.put(key, value instanceof String r ? topologyPseudonymizer.maskPolicyName("rule", r) : value);
+                case "matched_source_objects", "matched_destination_objects", "matched_service_objects" -> {
+                    if (value instanceof List<?> objList) {
+                        List<Object> maskedObjs = new ArrayList<>(objList.size());
+                        for (Object item : objList) {
+                            if (item instanceof String s && !"any".equalsIgnoreCase(s)) {
+                                maskedObjs.add(topologyPseudonymizer.maskPolicyName("object", s));
+                            } else {
+                                maskedObjs.add(item);
+                            }
+                        }
+                        result.put(key, maskedObjs);
+                    } else {
+                        result.put(key, value);
+                    }
+                }
                 case "member_macs", "member_zones" -> {
                     if (value instanceof Map<?, ?> byMember) {
                         Map<String, Object> masked = new LinkedHashMap<>();
@@ -211,20 +256,51 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
                         result.put(key, value);
                     }
                 }
-                case "hostname", "subject_cn", "issuer_cn" -> {
+                case "hostname", "subject_cn", "issuer_cn", "device", "point_label", "capture_name" -> {
+                    if (value instanceof String s) {
+                        result.put(key, topologyPseudonymizer.maskDeviceName(s, clusterRef));
+                    } else {
+                        result.put(key, maskObject(value, clusterRef));
+                    }
+                }
+                case "domain", "qname", "sni" -> {
+                    if (value instanceof String s && com.securityexpert.nexus.ui2.packetanalysis.privacy.PayloadMasker
+                            .TOKEN.matcher(s).matches()) {
+                        // Already a Packet Analysis payload token: masking it again would break "same host" links.
+                        result.put(key, s);
+                    } else if (value instanceof String s) {
+                        result.put(key, topologyPseudonymizer.maskDomainName(s));
+                    } else {
+                        result.put(key, value);
+                    }
+                }
+                case "file" -> {
                     if (value instanceof String s) {
                         result.put(key, topologyPseudonymizer.maskDeviceName(s, clusterRef));
                     } else {
                         result.put(key, value);
                     }
                 }
-                case "domain" -> {
-                    if (value instanceof String s) {
-                        result.put(key, topologyPseudonymizer.maskDomainName(s));
+                case "prefilter_excluded", "prefilter_excluded_by_file" -> {
+                    if (value instanceof Map<?, ?> byCapture) {
+                        Map<String, Object> masked = new LinkedHashMap<>();
+                        byCapture.forEach((capName, v) -> masked.put(
+                                topologyPseudonymizer.maskDeviceName(String.valueOf(capName), clusterRef),
+                                maskObject(v, clusterRef)));
+                        result.put(key, masked);
                     } else {
-                        result.put(key, value);
+                        result.put(key, maskObject(value, clusterRef));
                     }
                 }
+                case "folder" -> result.put(key, "[REDACTED_PATH]");
+                case "path" -> {
+                    if (map.containsKey("inventory") && map.containsKey("checkpoint")) {
+                        result.put(key, "[REDACTED_PATH]");
+                    } else {
+                        result.put(key, maskObject(value, clusterRef));
+                    }
+                }
+                case "prefix", "payload_hex" -> result.put(key, null);
                 case "virtual_system", "member" -> {
                     if (value instanceof String s) {
                         result.put(key, "member".equals(key) && ("grid".equals(s)
@@ -280,7 +356,11 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
                     }
                 }
                 case "address", "management_ip", "network", "ip_addresses", "destination", "next_hop",
-                        "gateway", "addresses", "secondary_addresses", "alternate_addresses", "ipv6_addresses" ->
+                        "gateway", "addresses", "secondary_addresses", "alternate_addresses", "ipv6_addresses",
+                        "src", "dst", "client_ip", "server_ip", "client_cidrs", "source_cidr", "answers",
+                        "observed_addresses", "matched_addresses", "interface_addresses",
+                        "pre_nat_src", "pre_nat_dst", "post_nat_src", "post_nat_dst",
+                        "translated_src", "translated_dst" ->
                     result.put(key, maskAddressValue(value, clusterRef));
                 case "terminal_reason", "latest_job_terminal_reason", "peer_follow_reason", "observed_value", "observedValue", "message" -> {
                     if (value instanceof String s) {
@@ -290,10 +370,15 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
                     }
                 }
                 case "device_id", "unitId", "unit_id", "clusterId", "cluster_id", "runId", "run_id",
-                        "approvalId", "approval_id", "jobId", "job_id" -> {
+                        "approvalId", "approval_id", "jobId", "job_id",
+                        "case_id", "point_id", "capture_id", "interface_id",
+                        "ingress_interface_id", "egress_interface_id",
+                        "policy_id", "rule_id", "section_id", "nat_point_a", "nat_point_b" -> {
                     // Opaque internal UUIDs preserved for seamless frontend routing
                     result.put(key, value);
                 }
+                case "status", "inventory_status", "policy_status", "action", "proto", "side" ->
+                    result.put(key, value);
                 default -> {
                     result.put(key, maskObject(value, clusterRef));
                 }

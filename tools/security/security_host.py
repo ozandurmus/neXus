@@ -150,17 +150,22 @@ def start_gate(config, commit):
 
 
 def gate(config, image, commit, name=None):
+    """`image` is one digest reference or a list of them (the main image first, then e.g. the analysis image)."""
     split = name is not None
+    images = [image] if isinstance(image, str) else list(image or ())
     # Validate both inputs before publishing a digest or creating a Job.
-    manifest = job(config, "gate", image, commit)
+    manifest = job(config, "gate", images, commit)
     if name:
         if not re.fullmatch(r"security-gate-[a-f0-9]{12}", name):
             raise ValueError("invalid gate name")
         existing = json.loads(kubectl("get", "job", name, "-o", "json"))
         if existing["metadata"].get("annotations", {}).get("nexus/commit") != commit:
             raise ValueError("source/build mismatch")
+        request = dict(image=images[0], commit=commit)
+        if len(images) > 1:
+            request["images"] = images
         kubectl("patch", "configmap", name, "--type=merge", "-p",
-                json.dumps({"immutable": True, "data": {"request": json.dumps(dict(image=image, commit=commit))}}))
+                json.dumps({"immutable": True, "data": {"request": json.dumps(request)}}))
     else:
         import uuid
         name = "security-gate-" + uuid.uuid4().hex[:12]
@@ -181,7 +186,7 @@ if __name__ == "__main__":
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--repo", type=Path, default=Path.cwd())
     parser.add_argument("--rules", type=Path)
-    parser.add_argument("--image")
+    parser.add_argument("--image", action="append", help="repeatable: every image this build produced")
     parser.add_argument("--commit")
     parser.add_argument("--job-name")
     args = parser.parse_args()

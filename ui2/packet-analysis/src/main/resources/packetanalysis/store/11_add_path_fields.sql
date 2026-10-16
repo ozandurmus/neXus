@@ -1,0 +1,1 @@
+ALTER TABLE packets ADD COLUMN IF NOT EXISTS path_fields VARCHAR

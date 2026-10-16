@@ -1,0 +1,1 @@
+INSERT INTO packets SELECT * FROM read_csv(?, header=true, columns={columns}, nullstr=?)

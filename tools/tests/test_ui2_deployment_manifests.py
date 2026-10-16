@@ -439,7 +439,8 @@ def test_packet_analysis_worker_is_low_priority_bounded_and_isolated():
             assert pod.get("priorityClassName") != "ui2-low", f"{owner}: only the analysis worker is low priority"
     container, = spec["containers"]
     assert container["args"] == ["worker", "packet_analysis"]
-    assert container["resources"]["limits"] == {"cpu": "4", "memory": "10Gi"}
+    assert container["resources"]["limits"] == {"cpu": "4", "memory": "24Gi"}
+    _assert_packet_analysis_memory_plan(container)
     assert deployment["spec"]["replicas"] == 1 and deployment["spec"]["strategy"] == {"type": "Recreate"}
     mounts = {mount["name"]: mount for mount in container["volumeMounts"]}
     assert mounts["packet-analysis-data"]["mountPath"] == "/app/packet-analysis"
@@ -454,6 +455,39 @@ def test_packet_analysis_worker_is_low_priority_bounded_and_isolated():
     ports = {port["port"] for rule in policy["spec"]["egress"] for port in rule.get("ports", [])}
     assert ports == {53, 5432}, "analysis makes no outbound call"
     assert "TODO(packet-analysis image split)" in (MANIFEST_DIR / "58-packet-analysis-deployment.yaml").read_text()
+
+
+def _assert_packet_analysis_memory_plan(container: dict) -> None:
+    """Pod limit = JVM heap + DuckDB memory_limit + reserve (ui2/packet-analysis/README.md, "Memory plan").
+
+    DuckDB's limit bounds its buffer manager only; the heap, metaspace, direct buffers, native memory and the tshark
+    child count against the pod limit too, so the three must add up with the reserve the engine itself enforces
+    (max(2 GiB, pod / 8)), and spill must be bounded and fit the analysis volume.
+    """
+    import re
+
+    mib = 1024 ** 2
+    env = {entry["name"]: entry.get("value") for entry in container["env"]}
+    pod = int(container["resources"]["limits"]["memory"].removesuffix("Gi")) * 1024  # MiB
+    options = env["JAVA_TOOL_OPTIONS"]
+    heap = int(re.search(r"-Xmx(\d+)g", options).group(1)) * 1024
+    metaspace = int(re.search(r"-XX:MaxMetaspaceSize=(\d+)m", options).group(1))
+    direct = int(re.search(r"-XX:MaxDirectMemorySize=(\d+)g", options).group(1)) * 1024
+    assert "MaxRAMPercentage" not in options, "the heap is sized explicitly, not as a share of the pod"
+    duckdb = int(env["UI2_PACKET_ANALYSIS_DUCKDB_MEMORY_MB"])
+    reserve = max(2048, pod // 8)
+    assert (pod, heap, duckdb) == (24576, 6144, 14336)
+    assert duckdb + heap + reserve <= pod, "DuckDB + heap + reserve must fit the pod limit"
+    # The 4 GiB left beside heap and DuckDB covers the bounded JVM native areas with margin for the tshark child.
+    assert pod - heap - duckdb >= metaspace + direct + 2048
+    assert int(env["UI2_PACKET_ANALYSIS_DUCKDB_THREADS"]) == 4
+    # Spill goes to the analysis volume (<case>/.spill), bounded below the claim (120Gi, shared with the captures).
+    assert int(env["UI2_PACKET_ANALYSIS_MAX_TEMP_MB"]) == 40 * 1024
+    assert int(env["UI2_PACKET_ANALYSIS_MAX_TEMP_MB"]) * mib < 120 * 1024 ** 3
+    # DuckDB's own spill ceiling is soft; the spill guard's hard limit leaves at least half the claim for captures.
+    assert int(env["UI2_PACKET_ANALYSIS_MAX_TEMP_MB"]) <= int(env["UI2_PACKET_ANALYSIS_HARD_TEMP_MB"]) == 60 * 1024
+    assert int(env["UI2_PACKET_ANALYSIS_HARD_TEMP_MB"]) * mib <= 60 * 1024 ** 3
+    assert int(env["UI2_PACKET_ANALYSIS_MAX_PACKETS_PER_CAPTURE"]) == 150000
 
 
 def test_only_the_service_and_the_analysis_worker_mount_the_analysis_volume():

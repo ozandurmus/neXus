@@ -1,0 +1,1 @@
+SELECT reason,count(*) FROM excluded_frames WHERE capture_id=? GROUP BY reason

@@ -30,7 +30,7 @@ def prepare():
     if age.total_seconds() < 0 or age > timedelta(hours=2):
         raise ValueError("stale deployment inventory")
     waiting = mode == "gate" and os.environ.get("WAIT_FOR_IMAGE") == "1"
-    images = [] if waiting else [os.environ["GATE_IMAGE"]] if mode == "gate" else inventory["images"]
+    images = [] if waiting else os.environ["GATE_IMAGE"].split() if mode == "gate" else inventory["images"]
     if (not images and not waiting) or not all(re.fullmatch(r"registry\.kube-system\.svc\.cluster\.local/[a-z0-9/_-]+@sha256:[a-f0-9]{64}", i) for i in images):
         raise ValueError("images must be local and digest pinned")
     WORK.mkdir(exist_ok=True)
@@ -59,14 +59,21 @@ def await_image(timeout=3000, sleep=time.sleep, monotonic=time.monotonic, image_
     while monotonic() < deadline:
         if image_file.is_file():
             request = json.loads(image_file.read_text())
-            image = request["image"]
-            if request["commit"] != (WORK / "source-commit").read_text() or not re.fullmatch(
-                    r"registry\.kube-system\.svc\.cluster\.local/[a-z0-9/_-]+@sha256:[a-f0-9]{64}", image):
+            # One image (`image`) or every image the build produced (`images`, the first equal to `image`).
+            images = request.get("images", [request["image"]])
+            if (request["commit"] != (WORK / "source-commit").read_text() or type(images) is not list or not images
+                    or images[0] != request["image"] or len(set(images)) != len(images) or not all(
+                        type(i) is str and re.fullmatch(
+                            r"registry\.kube-system\.svc\.cluster\.local/[a-z0-9/_-]+@sha256:[a-f0-9]{64}", i)
+                        for i in images)):
                 raise ValueError("source/build mismatch or invalid digest")
+            # Same order and numbering as prepare(): trivy-image-<i> is line <i> of /work/images.
+            images = sorted(images)
             manifest = json.loads((WORK / "manifest.json").read_text())
-            manifest.append(dict(tool="trivy", file="trivy-image-0.json", target=image.split("@", 1)[0]))
+            manifest += [dict(tool="trivy", file=f"trivy-image-{i}.json", target=image.split("@", 1)[0])
+                         for i, image in enumerate(images)]
             (WORK / "manifest.json").write_text(json.dumps(manifest))
-            (WORK / "images").write_text(image + "\n")
+            (WORK / "images").write_text("\n".join(images) + "\n")
             return
         sleep(2)
     raise ValueError("image build timed out")

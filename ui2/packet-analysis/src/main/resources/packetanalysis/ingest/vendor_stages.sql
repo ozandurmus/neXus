@@ -1,0 +1,1 @@
+SELECT json_extract_string(vendor,'$.stage'),count(*) FROM packets WHERE capture_id=? AND vendor IS NOT NULL GROUP BY 1

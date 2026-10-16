@@ -6,6 +6,7 @@ dependencies {
     api(project(":persistence"))
     api(project(":capability-registry"))
     api(project(":job-engine"))
+    implementation(project(":packet-analysis"))
     // capability-registry is already reachable transitively via job-engine's
     // api(project(":capability-registry")), used directly here for
     // TransportKind/CapabilityRegistry (worker composition/startup wiring).

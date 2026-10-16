@@ -1,0 +1,1 @@
+CREATE TABLE IF NOT EXISTS excluded_frames(capture_id VARCHAR,frame BIGINT,reason VARCHAR,observed_ts DOUBLE,PRIMARY KEY(capture_id,frame))

@@ -172,7 +172,8 @@ def test_scan_shell_runs_only_its_half(tmp_path, mode, expected):
     assert (work / "trivy-image-0.json").exists() == (mode != "trivy-source")
 
 
-@pytest.mark.parametrize("mode", ["pass", "gate-failure", "not-configured", "skip", "invalid-targets"])
+@pytest.mark.parametrize("mode", ["pass", "gate-failure", "not-configured", "skip", "invalid-targets",
+                                  "pa-off", "pa-failure"])
 def test_build_script_refuses_rollout_on_gate_failure_and_preserves_bypasses(tmp_path, mode):
     import os
     import subprocess
@@ -200,6 +201,7 @@ elif name == 'git' and args == ['pull', 'origin', 'main']:
     (delivery / 'release_snapshot.py').write_text('# Synthetic snapshot helper\\n')
     (delivery / 'release_snapshot.sh').write_text(
         'exec python3 tools/delivery/release_snapshot.py snapshot "$@"\\n')
+    (delivery / 'hosta_packet_analysis_image.py').write_text('# Synthetic analysis image builder\\n')
 elif name == 'python3':
     if args[0] == '-c':
         print(json.load(sys.stdin)['snapshot'])
@@ -217,6 +219,12 @@ elif name == 'python3':
         print('security-gate-' + 'b' * 12)
     elif args[:2] == ['tools/security/security_host.py', 'gate']:
         sys.exit(1 if os.environ['TEST_MODE'] == 'gate-failure' else 0)
+    elif args[:2] == ['tools/delivery/hosta_packet_analysis_image.py', 'build']:
+        assert args[2:] == ['--commit', 'a' * 40, '--service-image',
+                            'registry.kube-system.svc.cluster.local/nexus-ui2-service@sha256:' + 'b' * 64], args
+        if os.environ['TEST_MODE'] == 'pa-failure':
+            sys.exit(1)
+        print('registry.kube-system.svc.cluster.local/nexus-ui2-service@sha256:' + 'c' * 64)
     else:
         assert args[:2] in [
             ['tools/delivery/module_deploy.py', '--targets'],
@@ -241,8 +249,9 @@ elif name == 'kubectl':
         "REPO": str(home / "nexus"), "TEST_CALLS": str(calls), "TEST_MODE": mode,
         "NEXUS_DEPLOY_TARGETS": "unknown" if mode == "invalid-targets" else "service worker configuration compliance policy",
         "NEXUS_DEPLOY_APPLY_FILES": "synthetic-manifest.yaml",
-        "NEXUS_SKIP_SECURITY_REASON": "synthetic exercise" if mode == "skip" else ""})
-    assert result.returncode == (2 if mode == "invalid-targets" else 1 if mode == "gate-failure" else 0), result.stderr
+        "NEXUS_SKIP_SECURITY_REASON": "synthetic exercise" if mode == "skip" else "",
+        "NEXUS_BUILD_PACKET_ANALYSIS_IMAGE": "0" if mode == "pa-off" else "1"})
+    assert result.returncode == (2 if mode == "invalid-targets" else 1 if mode in ("gate-failure", "pa-failure") else 0), result.stderr
     executed = [json.loads(line) for line in calls.read_text().splitlines()]
     for call in executed:
         if call[0] == "python3" and Path(call[1]).is_absolute():
@@ -258,7 +267,19 @@ elif name == 'kubectl':
     assert executed[4][:2] == ["git", "rev-parse"]
     assert executed[5][:3] == ["python3", "tools/delivery/release_snapshot.py", "snapshot"]
     rolled = any(c[:3] == ["python3", "tools/delivery/module_deploy.py", "--targets"] for c in executed)
-    assert rolled == (mode != "gate-failure")
+    assert rolled == (mode not in ("gate-failure", "pa-failure"))
     scanned = any(c[:3] == ["python3", "tools/security/security_host.py", "start"] for c in executed)
-    assert scanned == (mode in ("pass", "gate-failure"))
+    assert scanned == (mode in ("pass", "gate-failure", "pa-off", "pa-failure"))
+    # The analysis image is built from the main digest after the main build, and gated with it before any rollout.
+    built = [i for i, c in enumerate(executed) if c[:3] == ["python3", "tools/delivery/hosta_packet_analysis_image.py", "build"]]
+    assert len(built) == (0 if mode == "pa-off" else 1)
+    gates = [c for c in executed if c[:3] == ["python3", "tools/security/security_host.py", "gate"]]
+    if mode in ("pass", "gate-failure", "pa-off"):
+        main_image = "registry.kube-system.svc.cluster.local/nexus-ui2-service@sha256:" + "b" * 64
+        pa_image = "registry.kube-system.svc.cluster.local/nexus-ui2-service@sha256:" + "c" * 64
+        images = [gates[0][i + 1] for i, a in enumerate(gates[0]) if a == "--image"]
+        assert images == ([main_image] if mode == "pa-off" else [main_image, pa_image])
+        assert not built or built[0] < executed.index(gates[0])
+    else:
+        assert gates == []
     assert '"security_gate":"not_configured"' in result.stdout if mode == "not-configured" else True

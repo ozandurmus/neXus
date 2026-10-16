@@ -21,6 +21,11 @@ import com.securityexpert.nexus.ui2.platform.PacketAnalysisJob;
  * upload, analysis request, report view, download and deletion lands one {@code packet_analysis_ledger} row in the
  * same transaction as the change it records.
  *
+ * <p>V158 adds host telemetry attachments (server-side text files uploaded next to the captures): their identity, what
+ * the sniffer detected, and the clock alignment the user confirmed. They change nothing about the analysis itself, so
+ * unlike a capture they may be added, aligned and removed while an analysis runs; they are ledgered, audited, counted
+ * against the same store cap and removed with the case.</p>
+ *
  * <p>Displayed state is derived from {@code jobs.state} as well as from this feature's own rows, so a job the
  * reconciler or an operator ended (cancelled, rejected, failed) never leaves a case looking busy forever.</p>
  */
@@ -32,6 +37,11 @@ public final class PacketAnalysisRepository {
 
     public record CaptureRow(String captureId, String caseId, String displayName, String format, long sizeBytes,
             String sha256, String storageKey, String uploadedBy, Instant uploadedAt) {
+    }
+
+    public record TelemetryRow(String telemetryId, String caseId, String displayName, long sizeBytes, String sha256,
+            String storageKey, String detectedFormat, String recognitionNote, String timeZone, int offsetSeconds,
+            String anchorLocal, String uploadedBy, Instant uploadedAt, String alignedBy, Instant alignedAt) {
     }
 
     public record RunRow(String jobId, String caseId, String state, String requestedBy, Instant requestedAt,
@@ -50,6 +60,9 @@ public final class PacketAnalysisRepository {
     public static final String ACTION_DELETE = "packet_analysis_delete";
     public static final String ACTION_PRUNE = "packet_analysis_prune";
     public static final String ACTION_RUN = "packet_analysis_run_progress";
+    public static final String ACTION_TELEMETRY_UPLOAD = "packet_analysis_telemetry_upload";
+    public static final String ACTION_TELEMETRY_ALIGN = "packet_analysis_telemetry_align";
+    public static final String ACTION_TELEMETRY_DELETE = "packet_analysis_telemetry_delete";
 
     private static final String ACTIVE_JOB = "j.state in ('REQUESTED','CLAIMED','EXECUTING')";
     /** The run's state as an operator should read it: a run whose job ended without the worker finishing is FAILED. */
@@ -136,6 +149,69 @@ public final class PacketAnalysisRepository {
             db.execute("update packet_analysis_case set total_bytes = total_bytes + {1}, state = 'OPEN' where case_id = {0}",
                     capture.caseId(), capture.sizeBytes());
             ledger(db, capture.caseId(), capture.captureId(), null, "CAPTURE_UPLOADED", actor, capture.sizeBytes());
+            return Outcome.DONE;
+        });
+    }
+
+    // ---- host telemetry (V158) -----------------------------------------------------------------------------
+
+    public List<TelemetryRow> telemetry(String caseId) {
+        return transactions.inTransaction(db -> db.fetch("select * from packet_analysis_host_telemetry where case_id = {0} "
+                + "order by uploaded_at, telemetry_id", caseId).map(PacketAnalysisRepository::toTelemetry));
+    }
+
+    public Optional<TelemetryRow> findTelemetry(String telemetryId) {
+        return transactions.inTransaction(db -> db.fetch("select t.* from packet_analysis_host_telemetry t "
+                + "join packet_analysis_case c on c.case_id = t.case_id where t.telemetry_id = {0} and c.expires_at > now()",
+                telemetryId).stream().findFirst().map(PacketAnalysisRepository::toTelemetry));
+    }
+
+    /** Records an uploaded telemetry file. Refused once the case expired; allowed while an analysis runs. */
+    public Outcome addTelemetry(TelemetryRow row, String actor) {
+        return audited.inTransaction(actor, ACTION_TELEMETRY_UPLOAD, db -> {
+            Outcome refusal = lockLive(db, row.caseId());
+            if (refusal != Outcome.DONE) return refusal;
+            db.execute("insert into packet_analysis_host_telemetry(telemetry_id, case_id, display_name, size_bytes, sha256, "
+                    + "storage_key, detected_format, recognition_note, time_zone, offset_seconds, anchor_local, uploaded_by) "
+                    + "values ({0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10}, {11})",
+                    row.telemetryId(), row.caseId(), row.displayName(), row.sizeBytes(), row.sha256(), row.storageKey(),
+                    row.detectedFormat(), row.recognitionNote(), row.timeZone(), row.offsetSeconds(), row.anchorLocal(), actor);
+            ledger(db, row.caseId(), row.telemetryId(), null, "TELEMETRY_UPLOADED", actor, row.sizeBytes());
+            return Outcome.DONE;
+        });
+    }
+
+    /**
+     * Sets the clock alignment of one file: {@code timeZone} {@code null} means "not confirmed" (the report reads the
+     * file as UTC and says so). The values are validated by the caller; the table's checks refuse anything malformed.
+     */
+    public Outcome setTelemetryAlignment(String telemetryId, String timeZone, int offsetSeconds, String anchorLocal, String actor) {
+        return audited.inTransaction(actor, ACTION_TELEMETRY_ALIGN, db -> {
+            var row = db.fetch("select case_id from packet_analysis_host_telemetry where telemetry_id = {0}", telemetryId);
+            if (row.isEmpty()) return Outcome.NOT_FOUND;
+            String caseId = row.get(0).get("case_id", String.class);
+            Outcome refusal = lockLive(db, caseId);
+            if (refusal != Outcome.DONE) return refusal;
+            db.execute("update packet_analysis_host_telemetry set time_zone = {1}, offset_seconds = {2}, anchor_local = {3}, "
+                    + "aligned_by = {4}, aligned_at = now() where telemetry_id = {0}", telemetryId, timeZone, offsetSeconds,
+                    anchorLocal, actor);
+            ledger(db, caseId, telemetryId, null, "TELEMETRY_ALIGNED", actor, null);
+            return Outcome.DONE;
+        });
+    }
+
+    /** Deletes one telemetry file: the file first (under the case lock), then its row and the ledger row. */
+    public Outcome deleteTelemetry(String telemetryId, String actor, Runnable removeFile) {
+        return audited.inTransaction(actor, ACTION_TELEMETRY_DELETE, db -> {
+            var row = db.fetch("select case_id, size_bytes from packet_analysis_host_telemetry where telemetry_id = {0}", telemetryId);
+            if (row.isEmpty()) return Outcome.NOT_FOUND;
+            String caseId = row.get(0).get("case_id", String.class);
+            Long size = row.get(0).get("size_bytes", Long.class);
+            Outcome refusal = lockLive(db, caseId);
+            if (refusal != Outcome.DONE) return refusal;
+            removeFile.run();
+            db.execute("delete from packet_analysis_host_telemetry where telemetry_id = {0}", telemetryId);
+            ledger(db, caseId, telemetryId, null, "TELEMETRY_DELETED", actor, size);
             return Outcome.DONE;
         });
     }
@@ -289,6 +365,13 @@ public final class PacketAnalysisRepository {
         return activeJob(db, caseId) ? Outcome.BUSY : Outcome.DONE;
     }
 
+    /** The case row lock for a change that does not touch the analysis: only existence and expiry are checked. */
+    private static Outcome lockLive(DSLContext db, String caseId) {
+        var row = db.fetch("select expires_at > now() as live from packet_analysis_case where case_id = {0} for update", caseId);
+        if (row.isEmpty()) return Outcome.NOT_FOUND;
+        return Boolean.TRUE.equals(row.get(0).get("live", Boolean.class)) ? Outcome.DONE : Outcome.EXPIRED;
+    }
+
     private static boolean activeJob(DSLContext db, String caseId) {
         return !db.fetch("select 1 from packet_analysis_run r join jobs j on j.job_id = r.job_id where r.case_id = {0} and "
                 + ACTIVE_JOB, caseId).isEmpty();
@@ -296,6 +379,7 @@ public final class PacketAnalysisRepository {
 
     private static long removeRows(DSLContext db, String caseId) {
         Long bytes = db.fetchOne("select total_bytes from packet_analysis_case where case_id = {0}", caseId).get(0, Long.class);
+        db.execute("delete from packet_analysis_host_telemetry where case_id = {0}", caseId);
         db.execute("delete from packet_analysis_run where case_id = {0}", caseId);
         db.execute("delete from packet_analysis_capture where case_id = {0}", caseId);
         db.execute("delete from packet_analysis_case where case_id = {0}", caseId);
@@ -328,6 +412,17 @@ public final class PacketAnalysisRepository {
                 r.get("display_name", String.class), r.get("capture_format", String.class), size == null ? 0 : size,
                 r.get("sha256", String.class), r.get("storage_key", String.class), r.get("uploaded_by", String.class),
                 instant(r, "uploaded_at"));
+    }
+
+    private static TelemetryRow toTelemetry(Record r) {
+        Long size = r.get("size_bytes", Long.class);
+        Integer offset = r.get("offset_seconds", Integer.class);
+        return new TelemetryRow(r.get("telemetry_id", String.class), r.get("case_id", String.class),
+                r.get("display_name", String.class), size == null ? 0 : size, r.get("sha256", String.class),
+                r.get("storage_key", String.class), r.get("detected_format", String.class),
+                r.get("recognition_note", String.class), r.get("time_zone", String.class), offset == null ? 0 : offset,
+                r.get("anchor_local", String.class), r.get("uploaded_by", String.class), instant(r, "uploaded_at"),
+                r.get("aligned_by", String.class), instant(r, "aligned_at"));
     }
 
     private static RunRow toRun(Record r) {
