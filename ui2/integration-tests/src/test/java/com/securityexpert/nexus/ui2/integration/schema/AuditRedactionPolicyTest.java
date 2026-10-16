@@ -326,7 +326,7 @@ class AuditRedactionPolicyTest {
             "sanitize_job.file_type", "sanitize_job.input_bytes", "sanitize_job.output_bytes", "sanitize_job.counts",
             "sanitize_job.failure_reason", "sanitize_job.finished_at", "sanitize_job.output_state",
             "sanitize_job.vault_entries", "sanitize_job.vault_expires_at", "sanitize_job.vault_pruned_at", "sanitize_job.key_id",
-            "sanitize_vault_entry.job_id", "sanitize_vault_entry.entry_kind",
+            "sanitize_vault_entry.entry_id", "sanitize_vault_entry.job_id", "sanitize_vault_entry.entry_kind",
             "sanitize_revert_job.revert_id", "sanitize_revert_job.created_by", "sanitize_revert_job.created_at",
             "sanitize_revert_job.scope", "sanitize_revert_job.source_job_id", "sanitize_revert_job.state",
             "sanitize_revert_job.file_type", "sanitize_revert_job.input_bytes", "sanitize_revert_job.output_bytes",
