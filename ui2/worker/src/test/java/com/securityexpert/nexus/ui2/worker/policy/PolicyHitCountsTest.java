@@ -54,14 +54,24 @@ class PolicyHitCountsTest {
                 .sections().get(0).rules().get(0).hitCounts().hits());
         assertThrows(IllegalArgumentException.class, () -> PolicyHitCounts.pan(PolicyXml.parse("<response status='success'><result/></response>").getDocumentElement(), first, collected));
     }
-    @Test void signedCpAndUnsignedPanFixtureRespectApprovalAndCommandEscapesContext() {
+    @Test void signedCpAndPanFixtureRespectApprovalAndCommandEscapesContext() {
         GateRegistryPort gates = key -> GateRegistryFixtureLoader.loadFromStream(getClass().getResourceAsStream("/capabilities/gate_registry_fixture.yaml"))
                 .stream().filter(row -> row.key().equals(key)).toList();
         CpPolicyGates.requireAll(gates); PanPolicyGates.requireAll(gates);
         assertTrue(PolicyHitGates.enabled(gates, true));
         assertDoesNotThrow(() -> PolicyHitGates.require(gates, true));
-        assertFalse(PolicyHitGates.enabled(gates, false));
-        assertThrows(IllegalStateException.class, () -> PolicyHitGates.require(gates, false));
+        // V155 signs the Palo Alto hit-count read off; the fixture mirrors it.
+        assertTrue(PolicyHitGates.enabled(gates, false));
+        assertDoesNotThrow(() -> PolicyHitGates.require(gates, false));
+        // An unsigned (DRAFTED) Palo Alto row still disables and refuses the read.
+        GateRegistryPort unsignedPan = key -> gates.findByCanonicalKey(key).stream()
+                .map(r -> r.gateId().equals("pan_policy_rule_hit_count")
+                        ? new GateRow(r.gateId(), r.vendor(), r.platformRoleScope(), r.shellContext(), r.transportKind(),
+                                r.canonicalCommandKey(), r.actionClass(), SignOffState.DRAFTED, r.timeoutS(), r.retryRule(),
+                                r.maxFrequency(), r.sessionReuseRule(), r.unsupportedBehaviorRef(), r.secretOutputRisk(),
+                                r.safeTelemetryFields(), r.sourceDocumentPointer()) : r).toList();
+        assertFalse(PolicyHitGates.enabled(unsignedPan, false));
+        assertThrows(IllegalStateException.class, () -> PolicyHitGates.require(unsignedPan, false));
         String context = "vsys'&<>\"";
         var spec = PanoramaPolicyCollector.hitRequest(context, new char[0]);
         var xml = PolicyXml.parse(spec.formParams().get("cmd"));
