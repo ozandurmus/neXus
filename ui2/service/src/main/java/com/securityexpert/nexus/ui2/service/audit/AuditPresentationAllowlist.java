@@ -217,7 +217,7 @@ public final class AuditPresentationAllowlist {
                     "input_bytes", "output_bytes", "output_state", "revert_id", "scope", "source_job_id",
                     "state")),
             Map.entry("sanitize_vault_entry", Set.of(
-                    "entry_kind", "job_id")),
+                    "entry_id", "entry_kind", "job_id")),
             Map.entry("secrets_metadata", Set.of(
                     "backend_kind", "component", "created_at", "purpose", "rotated_at",
                     "rotation_policy_ref", "secret_id")),
