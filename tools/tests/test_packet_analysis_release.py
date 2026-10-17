@@ -7,6 +7,8 @@ hand packet_analysis_run jobs to the general worker, which has no engine.
 import json
 from pathlib import Path
 import re
+import shutil
+import subprocess
 import sys
 
 import pytest
@@ -112,6 +114,7 @@ def test_a_failed_release_never_resets_the_module_to_general(monkeypatch):
             return json.dumps({'items': []})
         return ''
     monkeypatch.setattr(deploy, 'run', run)
+    monkeypatch.setattr(deploy, 'kubectl_diff', lambda manifest: False)
     queries = []
     monkeypatch.setattr(deploy, 'query', lambda sql: queries.append(sql) or ('7' if 'returning drain_generation' in sql else 't'))
     monkeypatch.setattr(deploy, 'module_e2e', lambda commit=None: (_ for _ in ()).throw(deploy.Blocked('masked e2e failed')))
@@ -119,7 +122,153 @@ def test_a_failed_release_never_resets_the_module_to_general(monkeypatch):
         deploy.replace('packet-analysis', IMAGE, 'synthetic-snapshot', 20)
     assert not any("effective_owner='general'" in sql for sql in queries)
     assert not any('--replicas=0' in args for args in events), 'the module keeps its pod; its jobs never move'
-    assert not any('apply' in args for args in events), 'an existing deployment is not re-applied'
+
+
+def existing_deployment_cluster(monkeypatch, differs=True):
+    """An already-released analysis deployment: records kubectl calls, drain queries and the diff checks."""
+    events, queries, diffs = [], [], []
+    def run(*args, input=None, timeout=660):
+        events.append((args, input))
+        if args[:5] == ('kubectl', '-n', 'ui2', 'get', 'deployment') and 'ui2-packet-analysis' in args:
+            return json.dumps({'spec': {'template': {'spec': {'containers': [{'image': OLD}]}}}})
+        if 'pods' in args:
+            return json.dumps({'items': []})
+        return ''
+    monkeypatch.setattr(deploy, 'run', run)
+    monkeypatch.setattr(deploy, 'kubectl_diff', lambda manifest: diffs.append(manifest) or differs)
+    monkeypatch.setattr(deploy, 'query', lambda sql: queries.append(sql) or ('7' if 'returning drain_generation' in sql else 't'))
+    monkeypatch.setattr(deploy, 'module_e2e', lambda commit=None: events.append((('e2e',), None)))
+    return events, queries, diffs
+
+
+def test_a_later_release_applies_the_committed_manifest_with_the_candidate_image_after_the_drain(monkeypatch):
+    events, queries, diffs = existing_deployment_cluster(monkeypatch)
+    deploy.replace('packet-analysis', IMAGE, 'synthetic-snapshot', 20)
+    applied = [(i, payload) for i, (args, payload) in enumerate(events) if 'apply' in args]
+    assert len(applied) == 1, 'only the manifest set; the volume claim is first-release only'
+    index, manifest = applied[0]
+    assert manifest == deploy.render_packet_analysis(IMAGE)
+    assert manifest.count('image: ') == 1 and IMAGE in manifest and 'nexus-ui2-service@' not in manifest
+    assert 'memory: 24Gi' in manifest and '-Xmx6g' in manifest, 'env and resources ship with the code'
+    assert diffs == [manifest], 'the candidate manifest is checked against the cluster before the drain'
+    # The apply restarts the pod, so it happens only after the drain barrier, never before.
+    drain = next(i for i, sql in enumerate(queries) if 'drain_requested=true' in sql.replace(' ', ''))
+    assert drain >= 0 and not any('set' in args and 'image' in args for args, _ in events), 'no separate set image'
+    rollout = next(i for i, (args, _) in enumerate(events) if 'rollout' in args)
+    assert index < rollout
+
+
+def test_the_manifest_is_validated_before_any_drain(monkeypatch):
+    events, queries, diffs = existing_deployment_cluster(monkeypatch)
+    monkeypatch.setattr(deploy, 'kubectl_diff', lambda manifest: (_ for _ in ()).throw(deploy.Blocked('diff failed')))
+    with pytest.raises(deploy.Blocked, match='diff failed'):
+        deploy.replace('packet-analysis', IMAGE, 'synthetic-snapshot', 20)
+    assert not queries and not any('apply' in args for args, _ in events), 'nothing was drained or applied'
+
+
+def test_a_manifest_with_other_than_one_image_line_is_refused(monkeypatch, tmp_path):
+    for text in ('kind: Deployment\n', '  image: a\n  image: b\n'):
+        (tmp_path / 'deploy/ui2').mkdir(parents=True, exist_ok=True)
+        (tmp_path / deploy.PACKET_ANALYSIS_MANIFEST).write_text(text)
+        monkeypatch.setattr(deploy, 'REPO', tmp_path)
+        events, queries, diffs = existing_deployment_cluster(monkeypatch)
+        with pytest.raises(deploy.Blocked, match='exactly one workload image'):
+            deploy.replace('packet-analysis', IMAGE, 'synthetic-snapshot', 20)
+        assert not queries and not any('apply' in args for args, _ in events)
+
+
+def test_a_rollback_restores_only_the_recorded_image(monkeypatch):
+    events, queries, diffs = existing_deployment_cluster(monkeypatch)
+    deploy.replace('packet-analysis', OLD, 'synthetic-snapshot', 20, rollback=True)
+    assert any(args[-1] == 'packet-analysis=' + OLD for args, _ in events if 'set' in args)
+    assert not any('apply' in args for args, _ in events) and not diffs, 'the forward manifest is not re-applied'
+
+
+def test_kubectl_diff_reads_the_exit_code_as_difference(monkeypatch):
+    class Result:
+        def __init__(self, code):
+            self.returncode, self.stdout, self.stderr = code, 'diff text', 'error text'
+    seen = []
+    for code, expected in ((0, False), (1, True)):
+        monkeypatch.setattr(deploy.subprocess, 'run', lambda *a, _c=code, **kw: seen.append((a, kw)) or Result(_c))
+        assert deploy.kubectl_diff('manifest') is expected
+    assert seen[0][0][0] == ('kubectl', '-n', 'ui2', 'diff', '--server-side', '-f', '-')
+    assert seen[0][1]['input'] == 'manifest'
+    monkeypatch.setattr(deploy.subprocess, 'run', lambda *a, **kw: Result(2))
+    with pytest.raises(deploy.Blocked, match='exit 2'):
+        deploy.kubectl_diff('manifest')
+
+
+MAIN = 'registry.example.invalid/main@sha256:' + 'c' * 64
+
+
+def run_main(monkeypatch, tmp_path, argv, capsys):
+    """module_deploy.main against a synthetic snapshot; records which image each target is replaced with."""
+    replaced = []
+    monkeypatch.setattr(deploy, 'replace', lambda target, image, *a, **kw: replaced.append((target, image, kw.get('rollback', False))))
+    monkeypatch.setattr(deploy, 'prepare_policy_public_trust', lambda: None)
+    images = [{'kind': 'Deployment', 'workload': 'ui2-service', 'container': 'service', 'image': OLD},
+              {'kind': 'Deployment', 'workload': 'ui2-packet-analysis', 'container': 'packet-analysis', 'image': IMAGE}]
+    monkeypatch.setattr(snapshot, 'load_snapshot', lambda directory: {'runtime': {'compatible_runtime': True}, 'images': {'ui2': images}})
+    monkeypatch.setattr(sys, 'argv', ['module_deploy.py', '--snapshot', str(tmp_path / 'snap')] + argv)
+    code = 0
+    try:
+        deploy.main()
+    except SystemExit as exit_:
+        code = exit_.code
+    return replaced, code, capsys.readouterr().out
+
+
+def test_the_packet_analysis_target_gets_the_engine_image_never_the_main_one(monkeypatch, tmp_path, capsys):
+    replaced, code, _ = run_main(monkeypatch, tmp_path, ['--targets', 'service packet-analysis', '--image', MAIN,
+                                                         '--packet-analysis-image', IMAGE], capsys)
+    assert code == 0
+    assert replaced == [('service', MAIN, False), ('packet-analysis', IMAGE, False)]
+
+
+def test_a_missing_engine_image_fails_closed_before_any_replacement(monkeypatch, tmp_path, capsys):
+    replaced, code, out = run_main(monkeypatch, tmp_path, ['--targets', 'service packet-analysis', '--image', MAIN], capsys)
+    assert code == 5 and not replaced
+    assert 'requires --packet-analysis-image' in out
+
+
+@pytest.mark.parametrize('engine,message', [('registry.example.invalid/pa:latest', 'must be immutable'), (MAIN, 'must differ')])
+def test_a_bad_engine_image_is_refused(monkeypatch, tmp_path, capsys, engine, message):
+    replaced, code, out = run_main(monkeypatch, tmp_path, ['--targets', 'packet-analysis', '--image', MAIN,
+                                                           '--packet-analysis-image', engine], capsys)
+    assert code == 5 and not replaced and message in out
+
+
+def test_targets_without_the_engine_do_not_need_an_engine_image(monkeypatch, tmp_path, capsys):
+    replaced, code, _ = run_main(monkeypatch, tmp_path, ['--targets', 'service', '--image', MAIN], capsys)
+    assert code == 0 and replaced == [('service', MAIN, False)]
+
+
+def test_a_rollback_uses_the_snapshot_engine_image_and_needs_no_argument(monkeypatch, tmp_path, capsys):
+    replaced, code, _ = run_main(monkeypatch, tmp_path, ['--targets', 'service packet-analysis', '--rollback'], capsys)
+    assert code == 0 and replaced == [('service', OLD, True), ('packet-analysis', IMAGE, True)]
+
+
+def test_the_build_script_rolls_the_engine_image_and_never_the_main_one_to_packet_analysis():
+    source = (ROOT / 'deploy/ui2-image-build/run_build.sh').read_text()
+    assert '${PA_IMAGE:+--packet-analysis-image "$PA_IMAGE"}' in source
+    pruning = source[source.index('if [ -z "$PA_IMAGE" ]'):source.index('echo "Updating selected deployments..."')]
+    assert 'packet-analysis removed from the rollout targets' in pruning
+    assert source.index('if [ -z "$PA_IMAGE" ]') > source.index('PA_IMAGE="$(python3')
+
+
+@pytest.mark.skipif(shutil.which('bash') is None, reason='needs bash')
+@pytest.mark.parametrize('targets,expected', [
+    ('service worker packet-analysis', 'service worker'), ('packet-analysis', ''),
+    ('service,packet-analysis,policy', 'service policy'), ('service', 'service')])
+def test_without_an_engine_image_the_target_list_drops_packet_analysis(targets, expected):
+    source = (ROOT / 'deploy/ui2-image-build/run_build.sh').read_text()
+    block = source[source.index('if [ -z "$PA_IMAGE" ]'):source.index('echo "Updating selected deployments..."')]
+    result = subprocess.run(['bash', '-c', 'set -euo pipefail\nPA_IMAGE=""\nNEXUS_DEPLOY_TARGETS="$1"\n' + block +
+                            'printf "[%s]" "$NEXUS_DEPLOY_TARGETS"', 'x', targets], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.endswith('[' + expected + ']')
+    assert ('NOTE: packet-analysis removed' in result.stdout) == ('packet-analysis' in targets)
 
 
 def test_full_rollback_keeps_packet_analysis_self_owned(monkeypatch):

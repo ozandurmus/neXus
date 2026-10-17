@@ -97,12 +97,15 @@ below compares one decode with the Mac.
 2. The gate: `security_host.py gate --image <main@digest> --image <pa@digest>`; the split-gate request carries
    `images`, `security_run.py await-image` adds a `trivy image` scan and a CycloneDX SBOM for each, one verdict for
    both. Same repository name, so findings and baseline acceptances in the shared layers are the same rows.
-3. Rollout is unchanged (main image only). `NEXUS_BUILD_PACKET_ANALYSIS_IMAGE=0` (also passed by `hosta_deploy.sh`)
-   skips step 1. A failed analysis-image build stops the deploy before the gate and any rollout.
+3. Rollout: `module_deploy.py --targets ... --image <main@digest> --packet-analysis-image <pa@digest>`. The
+   `packet-analysis` target gets only the engine image and fails closed (Blocked) when the argument is missing or equals
+   the main image; `run_build.sh` drops the target (with a note) when `NEXUS_BUILD_PACKET_ANALYSIS_IMAGE=0` (also passed
+   by `hosta_deploy.sh`) skips step 1. Every release renders `deploy/ui2/58-packet-analysis-deployment.yaml` with the
+   engine image, checks it with a server-side diff before the drain and applies it after the drain, so env and resource
+   changes ship with the code. A rollback restores the snapshot's recorded image only. A failed analysis-image build
+   stops the deploy before the gate and any rollout.
 
-Not done here (follow-ups): `module_deploy.py` takes one `--image` for all targets; `ui2-packet-analysis` needs its own
-(`--packet-analysis-image`) when the deployment switches, plus `release_snapshot` recording it. The daily scan picks the
-image up by itself once a Deployment uses it.
+The daily scan picks the image up by itself once a Deployment uses it.
 
 Timing: the first build compiles Wireshark (`UNKNOWN`; estimate 20–40 min at 3 CPUs) — longer than the split gate's
 `await-image` budget (3000 s), so **warm the cache once (§5) before the first deploy after merge**. Later builds reuse
