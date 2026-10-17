@@ -418,21 +418,32 @@ class PanSystemLogCollectJobExecutorTest {
     }
 
     @Test
-    void aSeqnoJumpIsOnlyEverASuspectedGapWithItsSize(@TempDir Path dir) throws Exception {
+    void aSeqnoJumpIsOnlyANeutralCounterNeverAGapOrAnOutcome(@TempDir Path dir) throws Exception {
         var h = new Harness(dir, "gateway", "palo_alto");
         h.cursor("pan_system", ts(2), "103");
         h.cursor("pan_config", ts(2), "103");
         h.page("system", List.of(entry(ts(3), "105"), entry(ts(4), "106"), entry(ts(5), "110")));
         h.run();
         var system = h.write("pan_system");
-        assertEquals("GAP", system.run().outcome());
-        var gap = system.gaps().get(0);
-        assertEquals("SEQ_GAP_SUSPECTED", gap.kind());
-        assertEquals(0, gap.knownLostBytes(), "never a confirmed loss");
-        assertTrue(gap.extentUnknown());
-        @SuppressWarnings("unchecked") Map<String, Object> detail = JSON.readValue(gap.detailJson(), Map.class);
-        assertEquals(Map.of("jumps", 2, "missing_seqnos", 1 + 3, "largest_jump", 3), detail);
+        assertEquals("COLLECTED", system.run().outcome(), "seqno contiguity is UNKNOWN, so a jump claims nothing");
+        assertTrue(system.gaps().isEmpty(), "no SEQ_GAP_SUSPECTED row");
+        assertEquals(2, h.detail("pan_system").get("seqno_jumps"), "103 -> 105 and 106 -> 110");
         assertEquals(3, system.chunk().orElseThrow().lines(), "the entries are stored all the same");
+        assertEquals("COMPLETED", h.finalState);
+    }
+
+    @Test
+    void aFullSeedWithJumpingSeqnosHasOnlyTheInitialBaselineGap(@TempDir Path dir) throws Exception {
+        var h = new Harness(dir, "gateway", "palo_alto");
+        List<String> entries = new ArrayList<>();
+        for (int i = 1999; i >= 0; i--) entries.add(entry(ts(i), String.valueOf(10 + 3 * i)));
+        h.page("system", entries);
+        h.page("config", List.of(entry(ts(1), "7")));
+        h.run();
+        var system = h.write("pan_system");
+        assertEquals(List.of("INITIAL_BASELINE"), system.gaps().stream().map(g -> g.kind()).toList());
+        assertEquals("GAP", system.run().outcome());
+        assertEquals(1999, h.detail("pan_system").get("seqno_jumps"));
     }
 
     // ---------------------------------------------------------------- failures

@@ -340,7 +340,7 @@ public final class CpSystemLogCollectJobExecutor {
                 result = SourceResult.unknown(unknown.code);
             }
             run.outcome(result.outcome, result.reason);
-            recordSource(run, family.sourceKey(), runRow(result.outcome, result.reason, result.detail), result.cursor,
+            recordSource(run, family.sourceKey(), runRow(result.outcome, result.reason, result.detail, result.durationMs), result.cursor,
                     result.gaps);
         }
     }
@@ -348,6 +348,7 @@ public final class CpSystemLogCollectJobExecutor {
     /** What one source leaves for its final, fenced write. */
     private static final class SourceResult {
         String outcome; String reason; Optional<CpCursor> cursor = Optional.empty();
+        long durationMs;
         List<SystemLogCollectionRepository.Gap> gaps = new ArrayList<>(); Map<String, Object> detail = new LinkedHashMap<>();
         static SourceResult of(String outcome, String reason) {
             SourceResult r = new SourceResult(); r.outcome = outcome; r.reason = reason; return r;
@@ -406,6 +407,9 @@ public final class CpSystemLogCollectJobExecutor {
         Map<String, Integer> byRule = new TreeMap<>();
         String failure = null, failureOutcome = "UNKNOWN";
         boolean transportFailure = false;
+        // Elapsed time of this source's reads: first read sent to the last read answered or chunk stored. The stat share
+        // (C1) is before the first read and the listing after the last, so neither is counted.
+        long firstReadAt = -1, lastActivityAt = -1;
         List<ReadAction> actions = plan.reads();
         int i = 0;
         boolean repeat = false;
@@ -427,7 +431,9 @@ public final class CpSystemLogCollectJobExecutor {
             }
             if (r.rangeLength() <= 0) { i++; continue; }
             ByteArrayOutputStream buffer = new ByteArrayOutputStream((int) Math.min(r.rangeLength(), 1 << 20));
+            if (firstReadAt < 0) firstReadAt = clock.millis();
             RangedFetchResult result = rangedRead(run, readFamily, base, printed, r, buffer);
+            lastActivityAt = clock.millis();
             reads++;
             if (!result.bytesUsable()) {
                 failure = "READ_" + result.status().name();
@@ -522,6 +528,7 @@ public final class CpSystemLogCollectJobExecutor {
                     case DUPLICATE -> volume.discard(meta.ref());
                     case STORED -> { chunks++; storedBytes += stored; }
                 }
+                lastActivityAt = clock.millis();
                 lossGapsWritten = true;
                 dirty = false;
                 redactions += redaction.redactionCount();
@@ -580,6 +587,7 @@ public final class CpSystemLogCollectJobExecutor {
             if (pos != null) result.cursor = Optional.of(new CpCursor(pos.inode(), pos.offset(), pos.anchor(), snapshot, epochNow));
         }
         result.detail = detail;
+        result.durationMs = firstReadAt < 0 ? 0 : Math.max(0, lastActivityAt - firstReadAt);
         return result;
     }
 
@@ -698,7 +706,7 @@ public final class CpSystemLogCollectJobExecutor {
         Optional<FileRow> row = Optional.empty();
         List<SystemLogCollectionRepository.Gap> gaps = new ArrayList<>();
         String outcome, reason = null;
-        long bytesRead = 0;
+        long bytesRead = 0, durationMs = 0;
         int reads = 0;
         ArtefactStore.ArtefactMetadata meta = null;
         try {
@@ -735,7 +743,9 @@ public final class CpSystemLogCollectJobExecutor {
                 } else if (volume.freeFraction() < SystemLogArtefactVolume.MIN_FREE_FRACTION) {
                     outcome = "STORAGE_REFUSED"; reason = "ARTEFACT_VOLUME_LOW_SPACE";
                 } else {
+                    long fetchStarted = clock.millis();
                     Fetched fetched = fetch(run, kind, names, candidate);
+                    durationMs = Math.max(0, clock.millis() - fetchStarted);
                     reads++;
                     bytesRead = fetched.received;
                     if (fetched.tooLarge) {
@@ -767,7 +777,7 @@ public final class CpSystemLogCollectJobExecutor {
         }
         run.outcome(outcome, reason);
         if (reason != null) detail.put("reason", reason);
-        var runRow = new SystemLogCollectionRepository.Run(outcome, bytesRead, row.map(FileRow::size).orElse(0L), reads, 0,
+        var runRow = new SystemLogCollectionRepository.Run(outcome, bytesRead, row.map(FileRow::size).orElse(0L), reads, durationMs,
                 detail(detail));
         boolean recorded;
         try {
@@ -913,12 +923,16 @@ public final class CpSystemLogCollectJobExecutor {
     }
 
     private SystemLogCollectionRepository.Run runRow(String outcome, String reason, Map<String, Object> detail) {
+        return runRow(outcome, reason, detail, detail.get("duration_ms") instanceof Number n ? n.longValue() : 0);
+    }
+
+    private SystemLogCollectionRepository.Run runRow(String outcome, String reason, Map<String, Object> detail, long durationMs) {
         Map<String, Object> d = new LinkedHashMap<>(detail);
         if (reason != null) d.put("reason", reason);
         long bytesRead = d.get("payload_bytes") instanceof Number n ? n.longValue() : 0;
         long stored = d.get("stored_bytes") instanceof Number n ? n.longValue() : 0;
         int reads = d.get("reads") instanceof Number n ? n.intValue() : 0;
-        return new SystemLogCollectionRepository.Run(outcome, bytesRead, stored, reads, 0, detail(d));
+        return new SystemLogCollectionRepository.Run(outcome, bytesRead, stored, reads, durationMs, detail(d));
     }
 
     private void finish(String jobId, long epoch, JobState state, String reason) {

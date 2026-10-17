@@ -490,13 +490,17 @@ a bound, then parse.
 - **Seed sizes (RESOLVED).** `pan_system`: `<n> = 2000` newest entries (covers 2.2 h at the busiest firewall, 27 h at
   the median, 62 h at the quietest). `pan_config`: `<n> = 100` (100 entries cover 41 to 107 days on every firewall,
   more than the 30-day retention).
-- **Page time (PENDING).** Every measured request reached `FIN` at the first check after 2.1 to 2.2 s with 100 entries.
-  The time for a 2000-entry page is not measured; the first rollout step records `enqueueToFinMs` per page.
+- **Page time (measured, pilot 2026-10-18).** Every request of the M3/M4 measurement reached `FIN` at the first check
+  after 2.1 to 2.2 s with 100 entries. The first live run measured a 2000-entry `pan_system` seed page at
+  `enqueue_to_fin_ms` 2334 (result 2.33 MB) and a 100-entry `pan_config` seed page at 2175 ms (§11).
 - **Stall.** If a page holds more than `<n>` entries in the same second, paging cannot advance. The run records a
   `PAGE_STALL` gap with `extent_unknown = true` and moves the cursor one second forward.
 - **Loss detection.** Whether `seqno` is contiguous per log type is **UNKNOWN**. It needs vendor documentation or M3
-  evidence before freeze. Until it is confirmed, a seqno jump is recorded as `SEQ_GAP_SUSPECTED` with the jump size,
-  never as a confirmed loss. The PAN log quota overwrite cannot otherwise be proven.
+  evidence before freeze. Until it is confirmed, a seqno jump claims nothing: no gap row and no outcome change. The
+  seqno is probably shared across log types, so jumps are normal (the first live run, §11, showed jumps on the seed of
+  both sources). The executor keeps only a neutral `seqno_jumps` count in the run detail. The PAN log quota overwrite
+  therefore cannot be proven from the seqno; the `INITIAL_BASELINE` gap of a full seed, `PAGE_STALL` and `BACKLOG`
+  remain the only PAN gap kinds.
 - **Storage.** One chunk per log type per run. The entries are kept as JSON Lines, one object per `<entry>`, with
   every child element name → text as received. This is the raw entry; the transformation is lossless for fields.
 - **Config-log detail.** The config-log result fields that can carry configured values were observed as
@@ -722,9 +726,21 @@ stated headroom; a wrong guess fails visibly), **PENDING** (no number; the data 
 | Crash/dump name pattern, hence the process-name parse (§7) | M5 gate 5 | **PENDING** | names masked; fallback `UNKNOWN` applies. Baselines **RESOLVED**: `/var/log/crash/` empty on 53/53; `/var/log/dump/usermode/` 122 files on 39 gateways |
 | Line timestamp forms for `first/last_line_time` (§4.7, §5.2) | M2; M5 gates 6–8 | `messages`, elg, fwk, sar, PAN **RESOLVED**; `mq_mng` not measured and spike `.log`/`.csv` first-field form **PENDING** | shapes inferred from token classes |
 | Leading non-data line on 25 of 53 gateways (§4.2) | all gates | **RESOLVED** | parse by shape |
-| PAN `<n>`, pages per run, seed sizes, poll bound, 8 MiB result cap (§6, P1–P5) | M3/M4 summaries | **RESOLVED**: `<n>` 2000, 4 pages, seeds 2000 (system) and 100 (config), 2 s x 30 polls, 8 MiB cap kept | page time at n=2000 **PENDING** (first rollout) |
+| PAN `<n>`, pages per run, seed sizes, poll bound, 8 MiB result cap (§6, P1–P5) | M3/M4 summaries | **RESOLVED**: `<n>` 2000, 4 pages, seeds 2000 (system) and 100 (config), 2 s x 30 polls, 8 MiB cap kept | page time at n=2000 **measured** 2334 ms (pilot 2026-10-18, below) |
 | PAN config-log redaction fields (§6, §12) | M4 field names | **RESOLVED** | `before-/after-change-preview`, `path`, `full-path`; `-detail` not observed |
 | PAN `seqno` contiguity, `dir=forward`, `query` syntax | official PAN-OS XML API documentation, plus M3 field names | **UNKNOWN** | `seqno` is present on every entry; contiguity is not in the summary (findings R4); needs a documentation citation before freeze |
+
+**Pilot 2026-10-18** (the 00:15 Europe/Istanbul window; numbers only).
+
+- Check Point, one gateway, first run: 8 incremental sources in one session, about 18.6 MB read in total (largest
+  source 8 MiB, the capped first-run baseline); crash listing baseline 2 entries; no alert. Redactions: `cpd.elg` 133,
+  every other source 0.
+- Palo Alto, one PA-5200 class firewall: `pan_system` seed 2000 entries, `enqueue_to_fin_ms` 2334, result 2.33 MB;
+  `pan_config` seed 100 entries, 2175 ms. This sets the n=2000 page time (one firewall; the bounds of §6 stand).
+- Two defects found and fixed after the pilot: the PAN executor recorded `SEQ_GAP_SUSPECTED` and the `GAP` outcome on
+  seqno jumps (now a neutral `seqno_jumps` detail count, §6); the Check Point source runs recorded `duration_ms` 0
+  (now the elapsed time from the first read of the source to its last answered read or stored chunk, the stat share
+  excluded; whole-file sources record their fetch time).
 
 ## 12. Privacy, masking, secrets (the raw-evidence exception)
 
@@ -888,6 +904,10 @@ The existing `syslog-measure-start` and `syslog-measurements` stay for phase A.
    - **`TOO_LARGE`** keeps the job `COMPLETED` (it is reported, §9 does not list it as a failure).
    - **Spike Detective (§3.2 step 4, §8.3) is not built:** no C4/C5 is sent, so the baseline listing does not run yet.
      With `spike_data_enabled` on, `cp_spike_data` is recorded `UNSUPPORTED` (`SPIKE_DATA_NOT_IMPLEMENTED`).
+   - **Run duration.** `system_log_run.duration_ms` of an incremental source is the time from its first read sent to its
+     last read answered or chunk stored (the stat share excluded); a whole-file source records its fetch time; the crash
+     listing records its own duration. A source with no read records 0.
+   - **PAN seqno.** A seqno jump is a neutral `seqno_jumps` count in the run detail, never a gap row or an outcome (§6).
    - **Retention (§5.3)** runs in the worker, which owns the artefact store (`SystemLogRetentionPruner`, checked hourly,
      once a day, whether or not collection is enabled): raw chunks and sar 30 days, HCP 7 days, the per-device cap
      oldest-first with a `RETENTION_SHORTENED_BY_CAP` gap row per source, ledger rows 180 days. The backup vault total
