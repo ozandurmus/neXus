@@ -7,3 +7,7 @@ status: in_progress · target: workflow §5 B1-1
 ## 2026-09-12
 
 Starts when C1-C4 and the authorization/audit rows are frozen. 2026-09-09: contract-first, implementation follows; dispatched NXS-LOCAL-0061 and resumed 2026-09-10 after PO selected B1 as the initial movement. CONTRACT FROZEN -- PRODUCT OWNER APPROVED 2026-09-10 after portability and cold-cache corrections; docs/design/UI2_0_B1_01_SKELETON_CI_DOCKER_CONTRACT.md defines 15 runnable checks. Contract only; no ui2 implementation, Line-1 source, validation.yml, or device contact.
+
+## 2026-10-17 -- project JSON compacted (size budget)
+
+Title (full): UI2 B1-1 -- Gradle multi-module skeleton under ui2/, CI job, Docker image, Testcontainers PostgreSQL, P-1 dependency-graph test

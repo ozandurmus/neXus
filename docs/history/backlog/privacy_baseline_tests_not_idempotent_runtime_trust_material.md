@@ -24,3 +24,7 @@ Proof:
 Cause: both tests deliberately exclude rule 'RUNTIME_DIRECTORY_PRESENT' from the pre-existing-against-origin/main comparison (test_nexus_engineer_tool_gate's own comment anticipates 'an untracked data/ or logs/ directory left by an earlier test run'), but they do NOT exclude 'PRIVATE_OR_TRUST_MATERIAL' for a file located inside that same gitignored runtime directory. So the suite's own artifact is treated as a new tracked finding.
 
 Fix direction (NOT applied -- reporting only, per task scope): the baseline comparison should skip any finding whose path is git-ignored, not just the RUNTIME_DIRECTORY_PRESENT rule. Do not weaken the scanner itself, and do not skip/xfail the tests.
+
+## 2026-10-17 -- project JSON compacted (size budget)
+
+Title (full): Pre-existing: full suite is not idempotent -- a first run creates gitignored data/.support_hmac.key, then AC6/AC1 privacy-baseline tests fail on the second run

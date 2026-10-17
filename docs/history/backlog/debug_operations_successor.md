@@ -11,3 +11,7 @@ Phase 1 local implementation: all-device listing, role-aware device names, maske
 Phase 1 implemented: all-device selector, server-gated typed diagnostic reads (FortiManager, FortiGate and Cisco ASA initial SSH reads), persistent actor/target/command/time/result history and encrypted output through the existing artefact store. Admin sees credential-scrubbed response; AIView gets conservative server masking. V91 live BEGIN/ROLLBACK and job insert passed. No diagnostic device command executed.
 
 PO explicitly approved merge/deploy. Main code 655bc26 deployed via scripts/hosta_deploy.sh; schema 91 successful, site 200, service/worker/configuration ready 1/1, configuration digest matches service, output store readable. Diagnostic job count 0; no real device command executed. Automated validated; first real-command and AIView visual acceptance remain pending.
+
+## 2026-10-17 -- project JSON compacted (size budget)
+
+Title (full): General Debug screen with optional command catalog, PO-approved agent execution, and role-aware output

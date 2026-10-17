@@ -7,3 +7,7 @@ status: in_progress · target: workflow §5 B1-4
 ## 2026-09-12
 
 Sonnet 5 extended (high).
+
+## 2026-10-17 -- project JSON compacted (size budget)
+
+Title (full): UI2 B1-4 -- collection engine core (capability registry, step executor with C2 crash-safe job record, parser framework, evidence writer; SSH exec transport only; PAN XML API / SFTP as interfaces)

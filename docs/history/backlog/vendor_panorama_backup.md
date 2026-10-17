@@ -7,3 +7,7 @@ Product Owner, 2026-09-22: add as P1 with the Backbox trail as the measured refe
 2026-09-22: measurement record written from the Backbox trail -- docs/design/VENDOR_BACKUP_MEASUREMENTS_2026_09_22.md (transport, sequence, artefact, secret risk, neXus fit). Prerequisites before this vendor's contract: Add-device vendor value + endpoint kind, a confirm (identity) capability, the vendor CHECK constraints (V16/V17 allow only check_point/palo_alto), and for HTTPS vendors the generic HTTPS client. Proposed order in the record.
 
 2026-09-22 PO enrolled a Panorama through Add device: confirm read works (model Panorama, version, HA role primary-active), peer follow reports ONE_SIDED_CLAIM (the HA peer is only the local claim until the peer itself is read), but Inventory collect fails with connect_failed: no_interfaces_or_routes_discovered -- the inventory executor requires interface/route rows, which a Panorama does not have. Panorama needs its own inventory shape (managed devices, device groups, templates) before the backup contract; measure first.
+
+## 2026-10-17 -- project JSON compacted (size budget)
+
+Title (full): Palo Alto Panorama: device-bundle export + running config (HTTPS + SSH)

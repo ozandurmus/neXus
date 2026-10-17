@@ -3,3 +3,7 @@
 status: planned · target: Phase 1 step 2-3
 
 2026-09-13 realignment: closed as delivered. The title's premise ('frontend is 2 stub files today') no longer holds: the shell has six routed screens against the M3 frames. Per-screen fidelity continues under ui2_m3_design_transfer_pass, which stays open.
+
+## 2026-10-17 -- project JSON compacted (size budget)
+
+Target (full): DELIVERED -- navigation rail, top app bar and six routed screens exist behind AuthGate; remaining per-screen fidelity is ui2_m3_design_transfer_pass

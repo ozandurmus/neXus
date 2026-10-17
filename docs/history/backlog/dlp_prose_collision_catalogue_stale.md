@@ -28,3 +28,7 @@ Uncatalogued files -- legacy redaction-marker collision:
   utils/repository_privacy.py
 
 Cause: the DEV.0.5B prose-collision catalogue was not extended as these files were added, so the guard reports them as new uncatalogued collisions. Needs a decision per file: catalogue the intentional occurrence, or reword the prose. Do NOT weaken the detector (AGENTS.md: do not weaken security detection to satisfy DLP).
+
+## 2026-10-17 -- project JSON compacted (size budget)
+
+Title (full): Pre-existing: DEV.0.5B prose-collision catalogue is stale, 6 tracked files trip test_repository_text_has_no_known_dlp_assignment_collision / legacy_redaction_collision

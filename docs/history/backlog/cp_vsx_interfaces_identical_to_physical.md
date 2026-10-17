@@ -23,3 +23,7 @@ Deferred, needs a scoped follow-up: PO also asked for a real per-device serial n
 All worker/service/frontend tests green.
 
 Interface State full-coverage fix (2026-09-21), confirmed against real DB evidence the Product Owner surfaced: cphaprob -a if's own 'Interface Name: Status:' table only lists a 'Required interfaces' subset (measured live: 7 of 13 interfaces on a real VS), so switching the physical/per-VSID interface source away from ip addr show (V37/cluster-member cphaprob fix) narrowed state coverage from 'every interface' to 'only the monitored subset' -- confirmed via direct DB query: fleet-wide device_interface rows went from mostly real up/down (older runs, pre-session ip-addr-show-based collector) to mostly 'unknown' (newer runs, post-fw-getifs/cphaprob switch). Fix: ip -4 addr show is now read a second time on both the physical context and each VSID (V38 migration, new gate rows) -- its own address is discarded (that is the value proven wrong on a VSX cluster member), only its <UP,LOWER_UP> flag is used, filling in every interface cphaprob's own table does not cover. All worker/service/capability-registry tests green, including a rewritten end-to-end test proving VSID 5 (which has no cphaprob status row at all in the fixture) still gets a real state via this path. Needs a fresh live re-collect + PO comparison before this item can move to done.
+
+## 2026-10-17 -- project JSON compacted (size budget)
+
+Title (full): Check Point VSX per-VS interface/route reads return the physical member's data, not the virtual system's own

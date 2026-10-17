@@ -7,3 +7,9 @@ status: planned · target: docs/design/RADWARE_CYBER_CONTROLLER_BACKUP_API_GATE_
 2026-09-25 07:24: Cyber Controller Collect real-environment validated -- login, alldevices, logout in 381 ms, 4 managed devices recorded as the controller's inventory names. Measured alldevices field names: children, deleted, deviceVersion, formFactor, highAvailabilityPriorityEnum, managementIp, name, ormId, parentOrmId, status, supportTemplate, treeType, type. Next (same gate, no new read): a DefensePro appliance's Collect takes its version, form factor, status and HA priority from the controller's list entry that names its address.
 
 2026-09-25 ~10:55: the Cyber Controller has a name. Measured: alldevices lists only the 4 DefensePros (types {DefensePro=4}); the controller is absent from its own list. Its name now comes from the TLS certificate it presents on the login connection (first DNS SAN, else CN) -- no new request; recorded by the Collect as the device's observed hostname (31-char FQDN). Managed devices are the tree's nodes with a management address (sites and deleted entries skipped).
+
+## 2026-10-17 -- project JSON compacted (size budget)
+
+Title (full): Radware Collect: https_inventory_collect for the Cyber Controller (managed device list as inventory) and DefensePro (observed facts via the controller's list); DefensePro interfaces/routes/policies need new gated REST reads -- propose to the PO
+
+Target (full): docs/design/RADWARE_CYBER_CONTROLLER_BACKUP_API_GATE_ENTRIES.md

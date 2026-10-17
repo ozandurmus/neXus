@@ -4,28 +4,28 @@
     {
       "id": "orchestrator_tool_gate_hook_cwd_relative_script_path_footgun",
       "category": "Orchestrator / reliability",
-      "title": "scripts/nexus_engineer_tool_gate.py (PreToolUse hook) resolves its own script path relative to CWD -- an accidental cd outside the worktree permanently breaks the engineer session's Bash tool",
+      "title": "scripts/nexus_engineer_tool_gate.py (PreToolUse hook) resolves its own script path...",
       "status": "done",
       "priority": "P1",
-      "target": "RESOLVED 2026-09-09 (commit 624cd68): scripts/orchestrator.py::_spawn_engineer now exports NEXUS_WORKTREE_ROOT into the engineer environment; .claude/nexus-engineer.settings.json's PreToolUse/PostToolUse hook commands resolve against \"${NEXUS_WORKTREE_ROOT:-.}\" instead of a bare relative path. Recurred 3x live before the fix (NXS-LOCAL-0027, 0030, 0031), each losing self-merge/push ability until the Product Owner intervened by hand.",
+      "target": "RESOLVED 2026-09-09 (commit 624cd68)...",
       "note": "see docs/history/backlog/orchestrator_tool_gate_hook_cwd_relative_script_path_footgun.md"
     },
     {
       "id": "ui2_0_architecture_requirements",
       "category": "Product Surface / Platform",
-      "title": "UI 2.0 -- empty-shell, DB-backed, LDAP-authenticated, role-scoped live operator console: requirements-and-tradeoffs draft",
+      "title": "UI 2.0 -- empty-shell, DB-backed, LDAP-authenticated, role-scoped live operator console",
       "status": "done",
       "priority": "P2",
-      "target": "docs/design/UI2_0_ARCHITECTURE_REQUIREMENTS.md -- DRAFT, requirements and tradeoffs only (relay/NXS-LOCAL-0025, 2026-09-09). SUCCEEDED 2026-09-09 by docs/design/UI2_0_ARCHITECTURE_DESIGN.md (backlog id ui2_0_architecture_design, relay/NXS-LOCAL-0047), which resolves every open point this draft left (C-1..C-4, U-1; X-2 recorded). This draft stays the evidentiary base (its section 2 audit and section 7 sketch); it is not a scope decision and not implementation authority. DONE: PR #140 merged 2026-09-08.",
+      "target": "docs/design/UI2_0_ARCHITECTURE_REQUIREMENTS.md",
       "note": "see docs/history/backlog/ui2_0_architecture_requirements.md"
     },
     {
       "id": "ui2_0_architecture_design",
       "category": "Product Surface / Platform",
-      "title": "UI 2.0 -- architecture design: separate Java operator console, LDAP multi-admin sessions, profile-based backup, per-feature port from Line-1",
+      "title": "UI 2.0 -- architecture design: separate Java operator console, LDAP multi-admin sessions",
       "status": "done",
       "priority": "P1",
-      "target": "docs/design/UI2_0_ARCHITECTURE_DESIGN.md -- DRAFT, design resolved, awaiting Product Owner review, external second opinion and a formal DECIDE/freeze episode (relay/NXS-LOCAL-0047, 2026-09-09). Not implementation authority; freezing it authorizes no dispatch by itself. DONE: PR #160 merged 2026-09-09; superseded in part by UI2_0_DEVELOPMENT_WORKFLOW.md (BASELINE rev 2) and UI2_0_BASELINE_CONTRACT.md (FROZEN).",
+      "target": "docs/design/UI2_0_ARCHITECTURE_DESIGN.md -- DRAFT, design resolved",
       "note": "see docs/history/backlog/ui2_0_architecture_design.md"
     },
     {
@@ -34,7 +34,7 @@
       "title": "Real-device -> logical-entity-type classifier, to close P2/P3 at the content level",
       "status": "done",
       "priority": "P2",
-      "target": "RESOLVED (P2 classifier only) -- utils/entity_type_classifier.py::classify_entity_type, follow-up to M11 (relay/NXS-LOCAL-0022). tests/test_navigation_entity_type_classifier.py covers all 8 EntityType values plus fail-closed edge cases (missing PAN HA runtime, unresolved B2 pairing, mixed-source/disagreeing groups, no evidence, unrecognized source), and demonstrates composition with capability_applicability.resolve_d2 + capability_vendor_support.resolve_d3 for the ha_readiness worked example ('a standalone firewall has no HA readiness') for both CP and PAN standalone entity types plus the CP ClusterXL cluster case.",
+      "target": "RESOLVED (P2 classifier only)...",
       "note": "see docs/history/backlog/navigation_entity_type_classifier_for_content_level_p2_p3.md"
     },
     {
@@ -110,7 +110,7 @@
     {
       "id": "op0b_s7_s6_test_order_isolation",
       "category": "Test infrastructure",
-      "title": "OP.0b S7 readiness tests leak state into the S6 PAN preflight collector tests when run out of default order",
+      "title": "OP.0b S7 readiness tests leak state into the S6 PAN preflight collector tests when run...",
       "status": "automated_validated",
       "priority": "P2",
       "target": "OP.0b",
@@ -218,7 +218,7 @@
     {
       "id": "html_render_optimization",
       "category": "Performance",
-      "title": "Optimize HTML render wall-clock time based on the html_render_performance profiling findings",
+      "title": "Optimize HTML render wall-clock time based on the html_render_performance profiling...",
       "status": "automated_validated",
       "priority": "P2",
       "target": "0.6.x polish follow-up",
@@ -227,7 +227,7 @@
     {
       "id": "discovery_fixture_shape_drift",
       "category": "Reliability / Test Infrastructure",
-      "title": "tests/fixtures/uitest/discovery_ui.json entity keys drift from the real discovery_capability_ui builder shape",
+      "title": "tests/fixtures/uitest/discovery_ui.json entity keys drift from the real...",
       "status": "automated_validated",
       "priority": "P2",
       "target": "render harness hardening",
@@ -508,7 +508,7 @@
       "title": "Per-HA-entity operational lock -- the CLASS 2 lock grain does not exist",
       "status": "done",
       "priority": "P0 -- before CLASS 2",
-      "target": "OP.2.B (architecture FROZEN 2026-09-04 in docs/history/phase/OP_2_0_CONTROLLED_HA_OPERATION_ARCHITECTURE.md)",
+      "target": "OP.2.B (architecture FROZEN 2026-09-04 in...",
       "note": "see docs/history/backlog/ha_entity_operational_lock.md"
     },
     {
@@ -532,28 +532,28 @@
     {
       "id": "pcp1_registry_uuid_call_count_test_defect",
       "category": "Test correctness / CI coverage gap",
-      "title": "Two PCP.1 registry tests fail deterministically on main: uuid4 call-count proof also counts the lock's owner token",
+      "title": "Two PCP.1 registry tests fail deterministically on main",
       "status": "done",
       "priority": "P2",
-      "target": "PCP.1 (utils/device_registry.py + tests/test_pcp1_device_registry.py); no product behaviour change expected",
+      "target": "PCP.1 (utils/device_registry.py + tests/test_pcp1_device_registry.py)",
       "note": "see docs/history/backlog/pcp1_registry_uuid_call_count_test_defect.md"
     },
     {
       "id": "m8_3_real_environment_validation",
       "category": "Real-environment validation debt",
-      "title": "M8.3 first-contact identity-evidence producer: real-environment validation deferred by explicit Product Owner decision",
+      "title": "M8.3 first-contact identity-evidence producer",
       "status": "real_env_validated",
       "priority": "P1",
-      "target": "M8.3 (utils/first_contact_producer.py, --identity-first-contact); gated M8.4's own §9 requirement for M7 -- now paid",
+      "target": "M8.3 (utils/first_contact_producer.py, --identity-first-contact)",
       "note": "see docs/history/backlog/m8_3_real_environment_validation.md"
     },
     {
       "id": "m8_evidence_host_key_fingerprint_not_persisted",
       "category": "Correctness gap / follow-up fix needed",
-      "title": "M8.4 finding: CP config evidence snapshot metadata carries no host-key fingerprint, so the M8 trust-currency check can never affirmatively pass against real M8.3 evidence",
+      "title": "M8.4 finding: CP config evidence snapshot metadata carries no host-key fingerprint",
       "status": "automated_validated",
       "priority": "P2",
-      "target": "configuration/checkpoint_config_collector.py::_collect_host (the shared, 'existing unmodified' physical-host collection primitive both the bulk collector and the M8.3 producer reuse)",
+      "target": "configuration/checkpoint_config_collector.py::_collect_host",
       "note": "see docs/history/backlog/m8_evidence_host_key_fingerprint_not_persisted.md"
     },
     {
@@ -562,85 +562,85 @@
       "title": "The two repository-text DLP scanners walk .venv and flag third-party library internals",
       "status": "done",
       "priority": "P2",
-      "target": "DEV.0.5B follow-up / test-infrastructure hygiene; unblocks a clean full regression on any workstation with a project-local virtual environment",
+      "target": "DEV.0.5B follow-up / test-infrastructure hygiene",
       "note": "see docs/history/backlog/dlp_scanner_venv_exclusion.md"
     },
     {
       "id": "dlp_scanner_prose_collision_in_frozen_records",
       "category": "Test infrastructure / hygiene",
-      "title": "The two repository-text DLP scanners' zero-collision assertion is permanently false against frozen historical records, independent of any .venv",
+      "title": "The two repository-text DLP scanners' zero-collision assertion is permanently false...",
       "status": "done",
       "priority": "P2",
-      "target": "Governance decision needed before test-infrastructure follow-up; discovered while resolving dlp_scanner_venv_exclusion",
+      "target": "Governance decision needed before test-infrastructure follow-up",
       "note": "see docs/history/backlog/dlp_scanner_prose_collision_in_frozen_records.md"
     },
     {
       "id": "dlp_scanner_prose_collision_third_relay_scratch_file",
       "category": "Test infrastructure / hygiene",
-      "title": "A third, previously-uncatalogued prose collision in relay/NXS-LOCAL-0012-gov-po-3-ac5-demo-1-scratch.json blocks the same two DLP collision-assertion tests, independent of the two already-decided findings",
+      "title": "A third, previously-uncatalogued prose collision in...",
       "status": "done",
       "priority": "P2",
-      "target": "Governance decision needed, same shape as dlp_scanner_prose_collision_in_frozen_records; discovered while implementing that item's fix",
+      "target": "Governance decision needed, same shape as...",
       "note": "see docs/history/backlog/dlp_scanner_prose_collision_third_relay_scratch_file.md"
     },
     {
       "id": "project_state_wording_drift_reconciliation",
       "category": "Project state / durable record hygiene",
-      "title": "Two verified feature_registry wording drifts contradict build_history and the shipped source",
+      "title": "Two verified feature_registry wording drifts contradict build_history",
       "status": "done",
       "priority": "P3",
-      "target": "A DOCS movement in an engineering session; wording only, no criterion state or feature status change",
+      "target": "A DOCS movement in an engineering session; wording only",
       "note": "see docs/history/backlog/project_state_wording_drift_reconciliation.md"
     },
     {
       "id": "gov_po_3_ci_privacy_gate_baseline_scoping",
       "category": "Governance / CI",
-      "title": "CI's 'Repository privacy gate' step fails unconditionally on every PR -- needs the same baseline-scoping fix already shipped for the local engineer hook",
+      "title": "CI's 'Repository privacy gate' step fails unconditionally on every PR",
       "status": "done",
       "priority": "P0",
-      "target": "Merged PR #135, feature/gov-po-3-ci-privacy-gate-baseline-scoping. Follow-up to relay/NXS-LOCAL-0014 (GOV_PO_3_PUSH_HOOK_BASELINE_SCOPING, merged PR #127).",
+      "target": "Merged PR #135, feature/gov-po-3-ci-privacy-gate-baseline-scoping",
       "note": "see docs/history/backlog/gov_po_3_ci_privacy_gate_baseline_scoping.md"
     },
     {
       "id": "orchestrator_interactive_dashboard_app",
       "category": "Orchestrator / Observability",
-      "title": "Interactive PO + Orchestrator workbench -- human-action inbox, live movement tracking, detail panel, message delivery, authorized command routing, integration visibility (supersedes the earlier read-only-dashboard framing)",
+      "title": "Interactive PO + Orchestrator workbench -- human-action inbox, live movement tracking",
       "status": "done",
       "priority": "P0",
-      "target": "Follow-up to relay/NXS-LOCAL-0013 (GOV_PO_3_ORCHESTRATOR_OBSERVABILITY, merged PR #129, terminal-only 'orchestrator watch'); AMENDED 2026-09-08 per Product Owner-provided design review (external architecture pass, 'Astra') before dispatch; explicitly requested by the Product Owner as the next dispatch once queued",
+      "target": "Follow-up to relay/NXS-LOCAL-0013...",
       "note": "see docs/history/backlog/orchestrator_interactive_dashboard_app.md"
     },
     {
       "id": "orchestrator_background_task_exit_race",
       "category": "Orchestrator / reliability",
-      "title": "An engineer's own claude -p background task can outlive its process's turn, leaving staged-but-uncommitted work when the session exits without waiting",
+      "title": "An engineer's own claude -p background task can outlive its process's turn",
       "status": "automated_validated",
       "priority": "P0",
-      "target": "scripts/orchestrator.py::_spawn_engineer and/or the ENGINEER_PROMPT -- observed live during relay/NXS-LOCAL-0018 (PR #133 merge-conflict completion), 2026-09-08",
+      "target": "scripts/orchestrator.py::_spawn_engineer and/or the ENGINEER_PROMPT",
       "note": "see docs/history/backlog/orchestrator_background_task_exit_race.md"
     },
     {
       "id": "orchestrator_engineer_permission_profile_edit_write_denied",
       "category": "Orchestrator / reliability",
-      "title": ".claude/nexus-engineer.settings.json never actually granted Edit/Write despite claiming default-allow -- every successful movement to date wrote files only via Bash",
+      "title": ".claude/nexus-engineer.settings.json never actually granted Edit/Write despite...",
       "status": "done",
       "priority": "P0",
-      "target": ".claude/nexus-engineer.settings.json -- fixed live 2026-09-08, uncommitted pending a standalone PR",
+      "target": ".claude/nexus-engineer.settings.json -- fixed live 2026-09-08",
       "note": "see docs/history/backlog/orchestrator_engineer_permission_profile_edit_write_denied.md"
     },
     {
       "id": "orchestrator_local_relay_append_relative_file_path_footgun",
       "category": "Orchestrator / reliability",
-      "title": "scripts/local_relay.py append accepts a relative --file path that silently shadows the correct canonical relay file with a new local copy inside the engineer's own worktree",
+      "title": "scripts/local_relay.py append accepts a relative --file path that silently shadows the...",
       "status": "done",
       "priority": "P1",
-      "target": "scripts/local_relay.py::_resolve_relay_file / append CLI -- observed live on NXS-LOCAL-0021 (orchestrator_interactive_dashboard_app), 2026-09-08",
+      "target": "scripts/local_relay.py::_resolve_relay_file / append CLI",
       "note": "see docs/history/backlog/orchestrator_local_relay_append_relative_file_path_footgun.md"
     },
     {
       "category": "UI 2.0 (Java product line)",
       "id": "ui2_b0_baseline_directory",
-      "title": "UI2 B0 -- baseline directory (product objects & navigation, shared screen states UX-D1..D5, feature contribution contract, alarm lifecycle contract, log/audit data classes, SNMP status exposure) with owner document and version per area",
+      "title": "UI2 B0 -- baseline directory (product objects & navigation",
       "priority": "P0 -- UI 2.0 primary",
       "status": "done",
       "note": "see docs/history/backlog/ui2_b0_baseline_directory.md",
@@ -649,16 +649,16 @@
     {
       "category": "UI 2.0 (Java product line)",
       "id": "ui2_b0_extraction_tooling",
-      "title": "UI2 B0 -- extraction tooling (Line-1): run the Private Replay tokenizer over an existing evidence/capture directory and emit a fixture set in the C6 layout; DLP-gated; preserved-property checks",
+      "title": "UI2 B0 -- extraction tooling (Line-1): run the Private Replay tokenizer over an...",
       "priority": "P1 -- UI 2.0",
       "status": "done",
       "note": "see docs/history/backlog/ui2_b0_extraction_tooling.md",
-      "target": "workflow §5 B0-9; PR #171: https://github.com/ozandurmus/neXus/pull/171"
+      "target": "workflow §5 B0-9; PR #171..."
     },
     {
       "category": "UI 2.0 (Java product line)",
       "id": "ui2_b1_02_schema_v1_flyway",
-      "title": "UI2 B1-2 -- schema V1 via Flyway (C1 tables, audit table, projections for the first capability)",
+      "title": "UI2 B1-2 -- schema V1 via Flyway (C1 tables, audit table",
       "priority": "P1 -- UI 2.0",
       "status": "automated_validated",
       "note": "",
@@ -667,7 +667,7 @@
     {
       "category": "UI 2.0 (Java product line)",
       "id": "ui2_b1_05_extract_cp_inventory_subset",
-      "title": "UI2 B1-5 -- extract: CP inventory narrow subset (show version, HA state) -> capability spec + sanitized fixtures; channel-drain recorded UNKNOWN with validation plan",
+      "title": "UI2 B1-5 -- extract: CP inventory narrow subset (show version",
       "priority": "P1 -- UI 2.0",
       "status": "deferred",
       "note": "see docs/history/backlog/ui2_b1_05_extract_cp_inventory_subset.md",
@@ -685,7 +685,7 @@
     {
       "category": "UI 2.0 (Java product line)",
       "id": "ui2_b1_12_deployment_slice",
-      "title": "UI2 B1-12 -- Kubernetes deployment slice: OCI image built in-cluster, plain manifests, empty database",
+      "title": "UI2 B1-12 -- Kubernetes deployment slice: OCI image built in-cluster, plain manifests",
       "priority": "P1 -- UI 2.0",
       "status": "automated_validated",
       "note": "",
@@ -694,7 +694,7 @@
     {
       "category": "UI 2.0 (Java product line)",
       "id": "ui2_b1_13_second_flow_pan_config_export_artefact",
-      "title": "UI2 B1-13 -- second representative flow: PAN configuration export (RB.2 semantics, read class) through the same executor; artefact store, manifest, job/session state; re-estimate the plan afterwards",
+      "title": "UI2 B1-13 -- second representative flow: PAN configuration export (RB.2 semantics",
       "priority": "P1 -- UI 2.0",
       "status": "deferred",
       "note": "see docs/history/backlog/ui2_b1_13_second_flow_pan_config_export_artefact.md",
@@ -703,7 +703,7 @@
     {
       "category": "UI 2.0 (Java product line)",
       "id": "ui2_privacy_doc_amendment",
-      "title": "Amend PRIVACY_AND_DATA_HANDLING.md to name the UI 2.0 (PostgreSQL) database and its data classes",
+      "title": "Amend PRIVACY_AND_DATA_HANDLING.md to name the UI 2.0 (PostgreSQL) database",
       "priority": "P2 -- UI 2.0",
       "status": "done",
       "note": "see docs/history/backlog/ui2_privacy_doc_amendment.md",
@@ -712,16 +712,16 @@
     {
       "id": "project_queue_cannot_write_roadmap_now_next",
       "category": "governance",
-      "title": "scripts/project_queue.py has no write path for roadmap now_next.now / current_build, so 'build add' cannot be used without violating GOV.ORCH.5/8",
+      "title": "scripts/project_queue.py has no write path for roadmap now_next.now / current_build",
       "status": "done",
       "priority": "P2",
-      "target": "A successor to scripts/project_queue.py gains a command that moves roadmap now_next.now/next and current_build in the same transaction as 'build add'",
+      "target": "A successor to scripts/project_queue.py gains a command that moves...",
       "note": ""
     },
     {
       "id": "project_plan_baseline_fixture_partial_regeneration",
       "category": "Project state / durable record hygiene",
-      "title": "Regression: project_plan_payload_baseline.json current_build not regenerated with roadmap.json, test_project_plan_render_equivalence fails",
+      "title": "Regression: project_plan_payload_baseline.json current_build not regenerated with...",
       "status": "done",
       "priority": "P1",
       "target": "",
@@ -739,43 +739,43 @@
     {
       "category": "UI 2.0 (Java product line)",
       "id": "ui2_b0_c1_platform_schema_contract",
-      "title": "UI2 B0/C1 -- platform & schema contract (UI 2.0 schema ownership, Flyway sole migration authority, projection tables, audit from first mutation, per-component secrets, key custody)",
+      "title": "UI2 B0/C1 -- platform & schema contract (UI 2.0 schema ownership",
       "priority": "P0 -- UI 2.0 primary",
       "status": "done",
       "note": "see docs/history/backlog/ui2_b0_c1_platform_schema_contract.md",
-      "target": "workflow §5 B0-1; docs/design/UI2_0_BASELINE_CONTRACT.md (FROZEN 2026-09-09); plan: docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md; produced docs/design/UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md (DRAFT -- FOR PRODUCT OWNER FREEZE). PR #163."
+      "target": "workflow §5 B0-1; docs/design/UI2_0_BASELINE_CONTRACT.md"
     },
     {
       "category": "UI 2.0 (Java product line)",
       "id": "ui2_b0_c2_job_execution_contract",
-      "title": "UI2 B0/C2 -- job execution contract (Java worker; leasing/heartbeat, timeout, worker loss, duplicate detection, OUTCOME_UNKNOWN, owner/approver/execution identity, schedule optimistic concurrency)",
+      "title": "UI2 B0/C2 -- job execution contract (Java worker",
       "priority": "P0 -- UI 2.0 primary",
       "status": "done",
       "note": "see docs/history/backlog/ui2_b0_c2_job_execution_contract.md",
-      "target": "workflow §5 B0-2; docs/design/UI2_0_BASELINE_CONTRACT.md (FROZEN 2026-09-09); plan: docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md; output: docs/design/UI2_0_C2_JOB_EXECUTION_CONTRACT.md"
+      "target": "workflow §5 B0-2; docs/design/UI2_0_BASELINE_CONTRACT.md"
     },
     {
       "category": "UI 2.0 (Java product line)",
       "id": "ui2_b0_c3_identity_sessions_rbac_contract",
-      "title": "UI2 B0/C3 -- identity, sessions and RBAC contract (LDAP bind, single active session per identity, role tokens -> bindings -> AD group refs, E1-E7 on HTTP)",
+      "title": "UI2 B0/C3 -- identity, sessions and RBAC contract (LDAP bind",
       "priority": "P0 -- UI 2.0 primary",
       "status": "done",
       "note": "see docs/history/backlog/ui2_b0_c3_identity_sessions_rbac_contract.md",
-      "target": "workflow §5 B0-3; docs/design/UI2_0_BASELINE_CONTRACT.md (FROZEN 2026-09-09); plan: docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md; output: docs/design/UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md"
+      "target": "workflow §5 B0-3; docs/design/UI2_0_BASELINE_CONTRACT.md"
     },
     {
       "category": "UI 2.0 (Java product line)",
       "id": "ui2_b0_c4_capability_registry_gate_resolution_contract",
-      "title": "UI2 B0/C4 -- capability registry & command-gate resolution contract (runtime form of the capability spec; gate-registry resolution rule K-4; closed step kinds; VSX/ClusterXL rules CP-D6; transport decision CP-D7)",
+      "title": "UI2 B0/C4 -- capability registry & command-gate resolution contract",
       "priority": "P0 -- UI 2.0 primary",
       "status": "done",
       "note": "see docs/history/backlog/ui2_b0_c4_capability_registry_gate_resolution_contract.md",
-      "target": "workflow §5 B0-4; docs/design/UI2_0_BASELINE_CONTRACT.md (FROZEN 2026-09-09); plan: docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md; produced docs/design/UI2_0_C4_CAPABILITY_REGISTRY_GATE_RESOLUTION_CONTRACT.md (DRAFT -- FOR PRODUCT OWNER FREEZE)."
+      "target": "workflow §5 B0-4; docs/design/UI2_0_BASELINE_CONTRACT.md"
     },
     {
       "category": "UI 2.0 (Java product line)",
       "id": "ui2_b0_c5_amendments_bundle",
-      "title": "UI2 B0/C5 -- amendments bundle (CON.0 separate shell; action_taxonomy UI-OPERATIONAL-RUN-NOW; design §6 APPROVAL-MODEL; ladder -> CAP-* states; AG-U2 restated)",
+      "title": "UI2 B0/C5 -- amendments bundle (CON.0 separate shell",
       "priority": "P0 -- UI 2.0 primary",
       "status": "done",
       "note": "see docs/history/backlog/ui2_b0_c5_amendments_bundle.md",
@@ -784,37 +784,37 @@
     {
       "category": "UI 2.0 (Java product line)",
       "id": "ui2_b0_c6_capability_extraction_contract",
-      "title": "UI2 B0/C6 -- capability extraction contract (spec template with KNOWN/UNKNOWN/NOT_APPLICABLE field states, fixture set rules SYNTHETIC/DERIVED, tokenizer preserved-property list) + ordered extraction inventory",
+      "title": "UI2 B0/C6 -- capability extraction contract",
       "priority": "P0 -- UI 2.0 primary",
       "status": "done",
       "note": "see docs/history/backlog/ui2_b0_c6_capability_extraction_contract.md",
-      "target": "workflow §3.1, §4, §5 B0-6; docs/design/UI2_0_BASELINE_CONTRACT.md (FROZEN 2026-09-09); plan: docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md; produced docs/design/UI2_0_C6_CAPABILITY_EXTRACTION_CONTRACT.md (DRAFT -- FOR PRODUCT OWNER FREEZE)."
+      "target": "workflow §3.1, §4, §5 B0-6; docs/design/UI2_0_BASELINE_CONTRACT.md"
     },
     {
       "category": "UI 2.0 (Java product line)",
       "id": "ui2_b0_c7_backup_artefact_restore_engine_contract",
-      "title": "UI2 B0/C7 -- backup, artefact and restore engine contract (profile rules per design §6 as amended; store/manifest/validation/retention/key custody from RB contracts; restore execution: plan, preconditions, execute, verify, failure behaviour; per-operation approval; device/version matrix)",
+      "title": "UI2 B0/C7 -- backup, artefact and restore engine contract",
       "priority": "P0 -- UI 2.0 primary",
       "status": "done",
       "note": "see docs/history/backlog/ui2_b0_c7_backup_artefact_restore_engine_contract.md",
-      "target": "workflow §5 B0-7; docs/design/UI2_0_BASELINE_CONTRACT.md (FROZEN 2026-09-09); plan: docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md; produced docs/design/UI2_0_C7_BACKUP_ARTEFACT_RESTORE_ENGINE_CONTRACT.md (DRAFT -- FOR PRODUCT OWNER FREEZE). PR #170."
+      "target": "workflow §5 B0-7; docs/design/UI2_0_BASELINE_CONTRACT.md"
     },
     {
       "category": "UI 2.0 (Java product line)",
       "id": "ui2_taxonomy_device_write_class_and_step_kind",
-      "title": "Taxonomy-successor movement: a utils/action_taxonomy.py class for a restore/config-apply write, and a C4 device-directed write step kind (sftp_put or equivalent) to carry it",
+      "title": "Taxonomy-successor movement: a utils/action_taxonomy.py class for a...",
       "priority": "P0 -- UI 2.0 primary, HIGH SCRUTINY",
       "status": "done",
       "note": "see docs/history/backlog/ui2_taxonomy_device_write_class_and_step_kind.md",
-      "target": "docs/design/UI2_0_C7_BACKUP_ARTEFACT_RESTORE_ENGINE_CONTRACT.md §9.1-§9.3; docs/design/UI2_0_C4_CAPABILITY_REGISTRY_GATE_RESOLUTION_CONTRACT.md §2.3, §3.3 step 7; utils/action_taxonomy.py"
+      "target": "docs/design/UI2_0_C7_BACKUP_ARTEFACT_RESTORE_ENGINE_CONTRACT.md..."
     },
     {
       "id": "auth_local_mechanism_contract",
       "category": "security",
-      "title": "Local authentication: storage, lockout, role binding for a directory-less identity, bootstrap admin",
+      "title": "Local authentication: storage, lockout, role binding for a directory-less identity",
       "status": "done",
       "priority": "P1",
-      "target": "SUPERSEDED -- UI2_0_C3A_LOCAL_AUTHENTICATION_CONTRACT.md (FROZEN) and UI2_0_C3B (FROZEN) are this contract; implemented and merged 2026-09-13 (PRs 233-236)",
+      "target": "SUPERSEDED -- UI2_0_C3A_LOCAL_AUTHENTICATION_CONTRACT.md (FROZEN)",
       "note": ""
     },
     {
@@ -823,16 +823,16 @@
       "title": "Local-authentication successor contract",
       "status": "done",
       "priority": "P1",
-      "target": "SUPERSEDED -- UI2_0_C3A is the C3 C-2 successor contract, FROZEN 2026-09-13",
+      "target": "SUPERSEDED -- UI2_0_C3A is the C3 C-2 successor contract",
       "note": ""
     },
     {
       "id": "ui2_composition_root_bootable_shell",
       "category": "platform",
-      "title": "Bootable service: Spring entry point, DataSource, Flyway at startup, empty UI shell with menus",
+      "title": "Bootable service: Spring entry point, DataSource, Flyway at startup",
       "status": "done",
       "priority": "P1",
-      "target": "DELIVERED -- ui2 service boots with Flyway at startup, DataSource, AuthGate-protected shell (CURRENT_STATE.md 2026-09-13)",
+      "target": "DELIVERED -- ui2 service boots with Flyway at startup, DataSource",
       "note": ""
     },
     {
@@ -841,7 +841,7 @@
       "title": "Frontend screens: login, menu, device list, device add; frontend is 2 stub files today",
       "status": "done",
       "priority": "P1",
-      "target": "DELIVERED -- navigation rail, top app bar and six routed screens exist behind AuthGate; remaining per-screen fidelity is ui2_m3_design_transfer_pass",
+      "target": "DELIVERED -- navigation rail, top app bar and six routed screens...",
       "note": ""
     },
     {
@@ -850,7 +850,7 @@
       "title": "Restore the PO+O dispatch loop, or decide direct authoring",
       "status": "done",
       "priority": "P1",
-      "target": "DELIVERED -- the PO+O dispatch loop is restored (GOV.ORCH.9/10/10-A/11; roles/PO.md; 20 PRs merged through it on 2026-09-13)",
+      "target": "DELIVERED -- the PO+O dispatch loop is restored (GOV.ORCH.9/10/10-A/11",
       "note": ""
     },
     {
@@ -859,7 +859,7 @@
       "title": "DEPLOY.1 contract freeze and server-arrival execution gate",
       "status": "done",
       "priority": "P0",
-      "target": "SUPERSEDED -- UI2_0_B1_01C_CONTAINER_IMAGE_AND_KUBERNETES_DEPLOYMENT_CONTRACT.md (FROZEN, PO approved) and PO_DECISION_RECORD_2026_09_13D",
+      "target": "SUPERSEDED...",
       "note": "see docs/history/backlog/deploy1_contract_freeze.md"
     },
     {
@@ -868,7 +868,7 @@
       "title": "Publish reports through a report-only viewer volume",
       "status": "done",
       "priority": "P0",
-      "target": "SUPERSEDED -- a Python HTML report volume; UI 2.0 has no report-file publication surface (B1_01C)",
+      "target": "SUPERSEDED -- a Python HTML report volume; UI 2.0 has no...",
       "note": "see docs/history/backlog/deploy1_report_volume_isolation.md"
     },
     {
@@ -877,7 +877,7 @@
       "title": "Least-privilege worker and viewer runtime",
       "status": "done",
       "priority": "P0",
-      "target": "SUPERSEDED -- UI2_0_B1_01C: arbitrary UID / group 0, no host toolchain, in-cluster build (ui2_b1_12_deployment_slice AUTOMATED_VALIDATED)",
+      "target": "SUPERSEDED -- UI2_0_B1_01C: arbitrary UID / group 0",
       "note": "see docs/history/backlog/deploy1_least_privilege_runtime.md"
     },
     {
@@ -886,7 +886,7 @@
       "title": "On-hardware validation of the 0.6.3 -> 0.6.6B + DEV.2.1 line",
       "status": "done",
       "priority": "P0",
-      "target": "SUPERSEDED -- validation of the Python 0.6.3 -> 0.6.6B + DEV.2.1 line; no further Python release is planned",
+      "target": "SUPERSEDED -- validation of the Python 0.6.3 -> 0.6.6B + DEV.2.1 line",
       "note": "see docs/history/backlog/on_hardware_real_env_validation.md"
     },
     {
@@ -895,7 +895,7 @@
       "title": "Discovery: Panorama/MDS enumeration then operator multi-select import of found devices",
       "status": "done",
       "priority": "P2",
-      "target": "DUPLICATE -- ui2_device_add_discovery_and_manual + cp_discovery_java_implementation + PAN_DISCOVERY_CONTRACT.md",
+      "target": "DUPLICATE -- ui2_device_add_discovery_and_manual +...",
       "note": ""
     },
     {
@@ -904,43 +904,43 @@
       "title": "Manual device add: IP + vendor + transport method (SSH/API/SNMP) selection",
       "status": "done",
       "priority": "P2",
-      "target": "DUPLICATE -- UI2_0_B1_04B_DEVICE_MODEL_AND_ONBOARDING_CONTRACT.md section 6 and 13C section 3 (Individual Device type)",
+      "target": "DUPLICATE -- UI2_0_B1_04B_DEVICE_MODEL_AND_ONBOARDING_CONTRACT.md...",
       "note": ""
     },
     {
       "id": "m14_local_ldap_d7_authorization_architecture",
       "category": "Architecture / Security",
-      "title": "Local LDAP / Active-Directory group-membership authorization producer for D7, decoupled from the DEPLOY.1A server track",
+      "title": "Local LDAP / Active-Directory group-membership authorization producer for D7",
       "status": "done",
       "priority": "P2",
-      "target": "SUPERSEDED -- UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md (FROZEN): LDAP group-backed role bindings",
+      "target": "SUPERSEDED -- UI2_0_C3_IDENTITY_SESSIONS_RBAC_CONTRACT.md (FROZEN)",
       "note": "see docs/history/backlog/m14_local_ldap_d7_authorization_architecture.md"
     },
     {
       "id": "pcp_storage_engine_decision",
       "category": "Storage / Architecture",
-      "title": "Storage-engine decision for the Device Registry and typed job plane (criteria recorded, engine deferred)",
+      "title": "Storage-engine decision for the Device Registry and typed job plane (criteria recorded",
       "status": "done",
       "priority": "P1",
-      "target": "SUPERSEDED -- UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md (FROZEN): PostgreSQL 16 with Flyway as sole migration authority",
+      "target": "SUPERSEDED -- UI2_0_C1_PLATFORM_SCHEMA_CONTRACT.md (FROZEN)",
       "note": "see docs/history/backlog/pcp_storage_engine_decision.md"
     },
     {
       "id": "overview_eos_release_guidance",
       "category": "Inventory UX",
-      "title": "Overview: static EOS/EOL date + suggested-next-release guidance by model family (Increment 2)",
+      "title": "Overview: static EOS/EOL date + suggested-next-release guidance by model family",
       "status": "done",
       "priority": "P2",
-      "target": "SUPERSEDED -- a Python Overview screen increment (0.6.1C); UI 2.0 screens are specified per B1 row",
+      "target": "SUPERSEDED -- a Python Overview screen increment (0.6.1C)",
       "note": "see docs/history/backlog/overview_eos_release_guidance.md"
     },
     {
       "id": "pan_auth_transport_convergence",
       "category": "Security",
-      "title": "PAN Authentication Transport Convergence -- URGENT: older runtime path sends credentials as URL query parameters",
+      "title": "PAN Authentication Transport Convergence -- URGENT",
       "status": "done",
       "priority": "P0",
-      "target": "SUPERSEDED -- Python runtime defect; the rule is carried into ui2_pan_transport_no_credentials_in_url (new, P1)",
+      "target": "SUPERSEDED -- Python runtime defect; the rule is carried into...",
       "note": "see docs/history/backlog/pan_auth_transport_convergence.md"
     },
     {
@@ -949,7 +949,7 @@
       "title": "CP SSH host-key trust: mandatory strict enforcement for production/container runtime",
       "status": "done",
       "priority": "P0 -- production-blocking before production deployment / CLASS 2",
-      "target": "SUPERSEDED -- Python SSH path; carried into ui2_ssh_strict_host_key_trust_in_production (new, P0)",
+      "target": "SUPERSEDED -- Python SSH path; carried into...",
       "note": "see docs/history/backlog/cp_production_ssh_host_key_trust_hardening.md"
     },
     {
@@ -958,7 +958,7 @@
       "title": "CP SSH strict host-key R2 validation on production server",
       "status": "done",
       "priority": "P1",
-      "target": "SUPERSEDED -- merged into ui2_ssh_strict_host_key_trust_in_production (new, P0)",
+      "target": "SUPERSEDED -- merged into...",
       "note": "see docs/history/backlog/cp_ssh_trust_r2_prod_server.md"
     },
     {
@@ -967,7 +967,7 @@
       "title": "One SSH session per device reused for every command; probe opens a channel per command",
       "status": "done",
       "priority": "P1",
-      "target": "SUPERSEDED -- Python collector rule; carried into ui2_device_session_one_per_device (new, P1). CP discovery transport already obeys it (contract T-1)",
+      "target": "SUPERSEDED -- Python collector rule; carried into...",
       "note": ""
     },
     {
@@ -976,7 +976,7 @@
       "title": "Database migrations and least-privilege runtime roles",
       "status": "done",
       "priority": "P1",
-      "target": "SUPERSEDED -- Flyway is C1's; the role split is 13D's DATA-OWNERSHIP question, carried into ui2_database_roles_and_data_ownership (new, P1)",
+      "target": "SUPERSEDED -- Flyway is C1's; the role split is 13D's...",
       "note": "see docs/history/backlog/deploy1_database_migrations_and_roles.md"
     },
     {
@@ -985,7 +985,7 @@
       "title": "DEPLOY.1A — Authenticated Read-Only Viewer Boundary",
       "status": "deferred",
       "priority": "P0",
-      "target": "RESERVE -- the Python read-only viewer boundary is not built; the UI 2.0 question is 13D AUTH-PLACEMENT, carried as ui2_auth_placement_second_authenticated_surface (new, P1)",
+      "target": "RESERVE -- the Python read-only viewer boundary is not built",
       "note": "see docs/history/backlog/deploy1_oidc_viewer.md"
     },
     {
@@ -994,7 +994,7 @@
       "title": "Reproducible release assurance",
       "status": "done",
       "priority": "P0",
-      "target": "SUPERSEDED -- carried into ui2_reproducible_in_cluster_image_build (new, P1)",
+      "target": "SUPERSEDED -- carried into ui2_reproducible_in_cluster_image_build",
       "note": "see docs/history/backlog/deploy1_release_assurance.md"
     },
     {
@@ -1003,7 +1003,7 @@
       "title": "Inventory Exclusions add/restore/reason/audit workflows (write phase, DEPLOY.1A-adjacent)",
       "status": "deferred",
       "priority": "P2",
-      "target": "RESERVE -- product intent kept; implementation is a UI 2.0 device-workspace write flow after AUTH-PLACEMENT",
+      "target": "RESERVE -- product intent kept; implementation is a UI 2.0...",
       "note": "see docs/history/backlog/inventory_exclusions_management_ui.md"
     },
     {
@@ -1012,7 +1012,7 @@
       "title": "External Change Signal Intake & Bounded Evidence Trigger",
       "status": "deferred",
       "priority": "P1",
-      "target": "RESERVE -- 0.8.x Python integration; product intent kept for a UI 2.0 service after discovery/import/collection exist",
+      "target": "RESERVE -- 0.8.x Python integration; product intent kept for a UI...",
       "note": "see docs/history/backlog/event_signal_intake.md"
     },
     {
@@ -1030,7 +1030,7 @@
       "title": "Policy rule hygiene and path-based placement (original feature brief, umbrella)",
       "status": "deferred",
       "priority": "P2",
-      "target": "RESERVE -- umbrella product intent; any implementation is UI 2.0 and behind the collection gate",
+      "target": "RESERVE -- umbrella product intent; any implementation is UI 2.0",
       "note": "see docs/history/backlog/policy_rule_hygiene_and_path_placement_brief.md"
     },
     {
@@ -1039,7 +1039,7 @@
       "title": "Vendor-native backup and restore-readiness foundation",
       "status": "deferred",
       "priority": "P1",
-      "target": "RESERVE -- RB.x Python backup foundation; UI2_0_C7_BACKUP_ARTEFACT_RESTORE_ENGINE_CONTRACT.md (FROZEN) owns backup/restore in UI 2.0; RB.3b's watched real run stays owed as know-how evidence",
+      "target": "RESERVE -- RB.x Python backup foundation...",
       "note": "see docs/history/backlog/native_backup.md"
     },
     {
@@ -1048,7 +1048,7 @@
       "title": "OP.0 - HA Readiness / Failover-Safety Assessment (read-only)",
       "status": "deferred",
       "priority": "P1",
-      "target": "RESERVE -- OP.0 Python implementation; the Product Owner's readiness semantics stay open as failover_readiness_check_contract and the four failover_* rule items",
+      "target": "RESERVE -- OP.0 Python implementation; the Product Owner's...",
       "note": "see docs/history/backlog/failover_readiness_assessment.md"
     },
     {
@@ -1057,70 +1057,70 @@
       "title": "CON.x - Operator Console: authenticated local control plane over the existing engine",
       "status": "deferred",
       "priority": "P1",
-      "target": "RESERVE -- CON.x Python control plane; the UI 2.0 service under C3 is the authenticated control plane",
+      "target": "RESERVE -- CON.x Python control plane; the UI 2.0 service under C3...",
       "note": "see docs/history/backlog/operator_console.md"
     },
     {
       "id": "pcp_collector_target_selection_seams",
       "category": "Architecture / Collection",
-      "title": "Collector target-selection seams for registry-keyed typed jobs (CP inventory is plane-wide today)",
+      "title": "Collector target-selection seams for registry-keyed typed jobs",
       "status": "deferred",
       "priority": "P1",
-      "target": "RESERVE -- PCP.6 Python collector seams; UI 2.0 capability registry / typed jobs (C4, C6) own target selection",
+      "target": "RESERVE -- PCP.6 Python collector seams; UI 2.0 capability...",
       "note": "see docs/history/backlog/pcp_collector_target_selection_seams.md"
     },
     {
       "id": "cp_preflight_ccp_tablestat_evidence",
       "category": "Failover readiness / evidence surface",
-      "title": "CP preflight: add `cphaprob tablestat` (CCP unique-IP table) as an extra split-brain / control-link evidence source",
+      "title": "CP preflight: add `cphaprob tablestat` (CCP unique-IP table) as an extra split-brain /...",
       "status": "deferred",
       "priority": "P1 -- valuable evidence, requires a new command-gate row + readiness-contract mapping before implementation",
-      "target": "RESERVE -- Python preflight surface; the command-gate row it needs stays active as cp_cphaprob_command_gate / cp_failover_command_gate_batch",
+      "target": "RESERVE -- Python preflight surface; the command-gate row it needs...",
       "note": "see docs/history/backlog/cp_preflight_ccp_tablestat_evidence.md"
     },
     {
       "id": "gov_orch_resume_after_relay_question",
       "category": "governance",
-      "title": "Orchestrator: a worker that parks a RELAY_QUESTION and exits is recorded failed (relay_not_closed) and cannot be resumed after the RELAY_DECISION; run refuses because the worktree exists",
+      "title": "Orchestrator: a worker that parks a RELAY_QUESTION and exits is recorded failed",
       "status": "done",
       "priority": "P1",
-      "target": "scripts/orchestrator.py decide_start -- add a resume path when the relay's last marker is RELAY_DECISION and next_actor is engineer (GOV.ORCH successor); observed on NXS-LOCAL-0147, 2026-09-13",
+      "target": "scripts/orchestrator.py decide_start -- add a resume path when the...",
       "note": ""
     },
     {
       "id": "cp_discovery_java_implementation",
       "category": "ui2",
-      "title": "CP discovery in Java: management-plane candidate enumeration under the frozen discovery contract",
+      "title": "CP discovery in Java: management-plane candidate enumeration under the frozen...",
       "status": "done",
       "priority": "P0",
-      "target": "CP_AND_VSX_DISCOVERY_CONTRACT.md; gate lifted 2026-09-13 for discovery only",
+      "target": "CP_AND_VSX_DISCOVERY_CONTRACT.md; gate lifted 2026-09-13 for...",
       "note": ""
     },
     {
       "id": "pan_discovery_java_implementation",
       "category": "ui2",
-      "title": "PAN discovery in Java: Panorama candidate enumeration under the frozen discovery contract (domain core, then transport)",
+      "title": "PAN discovery in Java: Panorama candidate enumeration under the frozen discovery...",
       "status": "done",
       "priority": "P0",
-      "target": "PAN_DISCOVERY_CONTRACT.md; gate lifted 2026-09-13 for two methods; domain core in flight as NXS-LOCAL-0146",
+      "target": "PAN_DISCOVERY_CONTRACT.md; gate lifted 2026-09-13 for two methods",
       "note": ""
     },
     {
       "id": "cp_collection_contract_from_measurement",
       "category": "collection",
-      "title": "CP collection contract: write from Product Owner measurement (CP_COLLECTION_MEASUREMENT_BRIEF)",
+      "title": "CP collection contract: write from Product Owner measurement",
       "status": "done",
       "priority": "P0",
-      "target": "docs/design/CP_COLLECTION_MEASUREMENT_BRIEF_2026_09_13.md; blocked on the PO running its §3/§5 command list",
+      "target": "docs/design/CP_COLLECTION_MEASUREMENT_BRIEF_2026_09_13.md",
       "note": ""
     },
     {
       "id": "device_import_enrollment_contract_implementation",
       "category": "Architecture / Import-Enrollment",
-      "title": "Implement device import/enrollment (candidate to devices row, cluster/VS modifiers, enrollment confirm first contact) once DEVICE_IMPORT_AND_ENROLLMENT_CONTRACT.md is Product-Owner frozen",
+      "title": "Implement device import/enrollment (candidate to devices row, cluster/VS modifiers",
       "status": "done",
       "priority": "P1",
-      "target": "docs/design/DEVICE_IMPORT_AND_ENROLLMENT_CONTRACT.md (DRAFT -- FOR PRODUCT OWNER FREEZE)",
+      "target": "docs/design/DEVICE_IMPORT_AND_ENROLLMENT_CONTRACT.md (DRAFT",
       "note": ""
     },
     {
@@ -1135,7 +1135,7 @@
     {
       "category": "UI 2.0 (Java product line)",
       "id": "ui2_b1_04b_minimal_device_model_onboarding",
-      "title": "UI2 B1-4b -- minimal Device / Endpoint / CredentialReference model, authorised manual registration flow, test-target flag (no hard-coded CP object)",
+      "title": "UI2 B1-4b -- minimal Device / Endpoint / CredentialReference model",
       "priority": "P1 -- UI 2.0",
       "status": "done",
       "note": "",
@@ -1153,7 +1153,7 @@
     {
       "id": "project_plan_build_history_archive_split_lookup",
       "category": "Project state / durable record hygiene",
-      "title": "Pre-existing: build_history archive split removed build 0.6.1B.1.1 from the live payload, test_project_plan_payload_is_data_driven_and_percentages_are_bounded fails",
+      "title": "Pre-existing: build_history archive split removed build 0.6.1B.1.1 from the live payload",
       "status": "done",
       "priority": "P2",
       "target": "",
@@ -1162,7 +1162,7 @@
     {
       "id": "dlp_prose_collision_catalogue_stale",
       "category": "Governance / CI",
-      "title": "Pre-existing: DEV.0.5B prose-collision catalogue is stale, 6 tracked files trip test_repository_text_has_no_known_dlp_assignment_collision / legacy_redaction_collision",
+      "title": "Pre-existing: DEV.0.5B prose-collision catalogue is stale",
       "status": "done",
       "priority": "P2",
       "target": "",
@@ -1207,16 +1207,16 @@
     {
       "id": "backup_retrieval_audit_fail_closed_and_reason_persists",
       "category": "security",
-      "title": "Backup retrieval must be fail-closed on its audit row, and the reason and role must survive to execution",
+      "title": "Backup retrieval must be fail-closed on its audit row, and the reason",
       "status": "done",
       "priority": "P0",
-      "target": "BACKUP_LINE_IMPLEMENTATION_AUDIT_2026_09_15.md Tier 1: OR-3, BK-12, BW-4",
+      "target": "BACKUP_LINE_IMPLEMENTATION_AUDIT_2026_09_15.md Tier 1: OR-3, BK-12",
       "note": ""
     },
     {
       "id": "jobs_screen_history_filter_pagination_export",
       "category": "ui2",
-      "title": "Jobs screen: full history (not only recent), top filters (state/type/device/time), numbered pagination, export",
+      "title": "Jobs screen: full history (not only recent), top filters (state/type/device/time)",
       "status": "automated_validated",
       "priority": "P0",
       "target": "PO directive 2026-09-22, after the backup pass",
@@ -1225,7 +1225,7 @@
     {
       "id": "pan_backup_include_set_format_config",
       "category": "backup",
-      "title": "PAN backup bundle: add the SSH 'show' (set-format) running configuration alongside the device-state export",
+      "title": "PAN backup bundle: add the SSH 'show' (set-format) running configuration alongside the...",
       "status": "automated_validated",
       "priority": "P0",
       "target": "",
@@ -1243,10 +1243,10 @@
     {
       "id": "cp_backup_stale_device_archives_cleanup",
       "category": "backup",
-      "title": "CP backup: remove device-side archives left by interrupted runs (show backups / delete backup <old>, gated), as Backbox does",
+      "title": "CP backup: remove device-side archives left by interrupted runs",
       "status": "automated_validated",
       "priority": "P1",
-      "target": "measured 2026-09-22: three requeued runs each ran 'add backup local' without reaching 'delete backup'",
+      "target": "measured 2026-09-22: three requeued runs each ran 'add backup...",
       "note": ""
     },
     {
@@ -1261,25 +1261,25 @@
     {
       "id": "overview_exception_and_evidence_screen",
       "category": "ui2",
-      "title": "Next major build (PO 2026-09-22): Overview rebuilt as an exception-and-evidence screen per the design council (Astra + Fable agree): attention strip, evidence freshness, morning exceptions, compliance with coverage/gaps, recovery posture, platform spread, neXus health",
+      "title": "Next major build (PO 2026-09-22): Overview rebuilt as an exception-and-evidence screen...",
       "status": "automated_validated",
       "priority": "P0",
-      "target": "docs/design/OVERVIEW_COUNCIL_2026_09_22_ASTRA.md, _FABLE.md; first release uses stored evidence only",
+      "target": "docs/design/OVERVIEW_COUNCIL_2026_09_22_ASTRA.md, _FABLE.md",
       "note": ""
     },
     {
       "id": "service_view_screen",
       "category": "ui2",
-      "title": "Service view: every neXus pod, its state, restarts, CPU and memory use (top-like), version, last rollout -- read-only, Administration; CLI counterpart",
+      "title": "Service view: every neXus pod, its state, restarts, CPU and memory use (top-like)",
       "status": "automated_validated",
       "priority": "P1",
-      "target": "PO 2026-09-22; needs a read-only metrics path from the service to the cluster (no kubectl in the browser)",
+      "target": "PO 2026-09-22; needs a read-only metrics path from the service",
       "note": ""
     },
     {
       "id": "storage_usage_view",
       "category": "ui2",
-      "title": "Show how much space backups and configuration evidence take: artefact store bytes per vendor/device/kind, database size, trend; Backups and Configuration screens + CLI",
+      "title": "Show how much space backups and configuration evidence take",
       "status": "automated_validated",
       "priority": "P1",
       "target": "PO 2026-09-22",
@@ -1288,19 +1288,19 @@
     {
       "id": "ui2_pod_memory_limits_2gi",
       "category": "ui2",
-      "title": "Raise ui2-service and ui2-worker memory limits from 1 GiB to 2 GiB (requests stay 512 MiB); node has 62 GiB, neXus limits total 4 GiB",
+      "title": "Raise ui2-service and ui2-worker memory limits from 1 GiB to 2 GiB (requests stay 512 MiB)",
       "status": "automated_validated",
       "priority": "P1",
-      "target": "deploy/ui2/50-service-deployment.yaml, 52-worker-deployment.yaml; PO 2026-09-22",
+      "target": "deploy/ui2/50-service-deployment.yaml, 52-worker-deployment.yaml",
       "note": ""
     },
     {
       "id": "operations_readiness_panel_ignores_enrolled_clusters",
       "category": "ui2",
-      "title": "Operations › HA & readiness says 'No HA pair or cluster enrolled' while 38 clusters exist (seen in the aiview tour 2026-09-22); the readiness panel reads a different source than the inventory clusters",
+      "title": "Operations › HA & readiness says 'No HA pair or cluster enrolled' while 38 clusters...",
       "status": "done",
       "priority": "P2",
-      "target": "Point the readiness panel at the inventory's cluster list or state plainly what it needs",
+      "target": "Point the readiness panel at the inventory's cluster list or state...",
       "note": ""
     },
     {
@@ -1324,7 +1324,7 @@
     {
       "id": "infoblox_grid_member_discovery",
       "category": "collection",
-      "title": "Infoblox: enumerate grid members (GET /wapi/v<ver>/member) so the Grid Manager's members appear under it; needs a gate entry and a discovery-tree mapping; the grid backup already covers the whole grid database",
+      "title": "Infoblox: enumerate grid members (GET /wapi/v<ver>/member) so the Grid Manager's...",
       "status": "real_env_validated",
       "priority": "P2",
       "target": "docs/design/VENDOR_BACKUP_CONTRACTS_2026_09_22.md",
@@ -1333,25 +1333,25 @@
     {
       "id": "backup_jobs_only_back_up",
       "category": "collection",
-      "title": "Backup jobs carry no inventory side effects (PO 2026-09-25: backup is backup, config and inventory are separate): remove the Infoblox member sink from the backup path once https_inventory_collect exists; audit Radware for the same",
+      "title": "Backup jobs carry no inventory side effects",
       "status": "done",
       "priority": "P1",
-      "target": "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/backup/https/HttpsVendorExecutor.java",
+      "target": "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/backup/https/HttpsVendorExecutor.jav...",
       "note": ""
     },
     {
       "id": "observed_facts_refresh_every_read",
       "category": "collection",
-      "title": "Observed device facts follow every completed read: hostname, model, software version (and hotfix/platform facts) are refreshed by confirm, inventory and configuration runs whenever they differ -- the fill-if-absent rule is removed (PO 2026-09-25: an MDS upgrade was not reflected)",
+      "title": "Observed device facts follow every completed read: hostname, model, software version",
       "status": "real_env_validated",
       "priority": "P0",
-      "target": "ui2/persistence/src/main/java/com/securityexpert/nexus/ui2/persistence/device/DeviceRepository.java",
+      "target": "ui2/persistence/src/main/java/com/securityexpert/nexus/ui2/persistence/device/DeviceRepository.jav...",
       "note": ""
     },
     {
       "id": "https_inventory_collect_infoblox",
       "category": "collection",
-      "title": "Infoblox Collect: a real https_inventory_collect job (Collect now + 23:00 schedule) reads grid members, each member's interfaces (LAN VIP, MGMT, LAN2, additional IPs) and static routes into inventory runs; member reads leave the confirm and backup paths (backup only backs up)",
+      "title": "Infoblox Collect: a real https_inventory_collect job",
       "status": "real_env_validated",
       "priority": "P0",
       "target": "docs/design/VENDOR_BACKUP_CONTRACTS_2026_09_22.md",
@@ -1360,16 +1360,16 @@
     {
       "id": "device_name_from_read_never_fingerprint",
       "category": "collection",
-      "title": "Device names: the Check Point presented SSH identity is a host-key fingerprint on this estate and had been stored as the MDS hostname; inventory now reads show hostname (fixed 2026-09-25) -- audit the confirm path for the same and any device row still carrying a fingerprint as its name",
+      "title": "Device names: the Check Point presented SSH identity is a host-key fingerprint on this...",
       "status": "done",
       "priority": "P1",
-      "target": "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/confirm/ConfirmJobExecutor.java",
+      "target": "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/confirm/ConfirmJobExecutor.jav...",
       "note": ""
     },
     {
       "id": "bluecoat_proxysg_via_management_center",
       "category": "collection",
-      "title": "Blue Coat ProxySG via Symantec Management Center (PO 2026-09-25): MC REST on 8082 (basic or X-Auth-Token), GET /devices lists 4 ProxySG (SGOS 7.4.15.1), a Reporter and 2 WSS entries; the on-box API guide /help/api needs a login; backup through MC's own device backup or SSH show configuration -- decide after reading the on-box guide; first target the test proxy",
+      "title": "Blue Coat ProxySG via Symantec Management Center",
       "status": "real_env_validated",
       "priority": "P1",
       "target": "docs/design/VENDOR_BACKUP_CONTRACTS_2026_09_22.md",
@@ -1378,7 +1378,7 @@
     {
       "id": "bluecoat_proxysg_backup_path",
       "category": "collection",
-      "title": "ProxySG backup (PO 2026-09-25): Management Center measured (fwadm, GET /api/devices: 4 ProxySG sgos6x, 1 Reporter, 2 WSS; fields incl. uuid, osVersion, build, serialNumber, managementStatus, deploymentStatus). Choose: MC device-backup job + backup retrieval (paths from the on-box guide, needs an MC web session) or SSH show configuration per ProxySG (gate rows in VENDOR_BACKUP_CONTRACTS §8). First target: the test proxy",
+      "title": "ProxySG backup (PO 2026-09-25): Management Center measured (fwadm, GET /api/devices",
       "status": "real_env_validated",
       "priority": "P1",
       "target": "docs/design/VENDOR_BACKUP_CONTRACTS_2026_09_22.md",
@@ -1387,7 +1387,7 @@
     {
       "id": "device_onboarding_flow",
       "category": "product",
-      "title": "Add device = one flow of separate jobs (PO 2026-09-25: half-filled devices are not acceptable): identity (confirm) -> inventory (Collect) -> configuration where the vendor has one; one progress view, stop at the failing step with its reason, retry that step only; discovery imports use the same flow; backup never in the flow (a write; offered as an opt-in at the end). Acceptance: minutes after adding, no Unknown field without a stated reason. Design note first, PO approval, then code (~1 day)",
+      "title": "Add device = one flow of separate jobs (PO 2026-09-25",
       "status": "automated_validated",
       "priority": "P1",
       "target": "ui2/frontend/src/shell/AddDeviceDialog.tsx",
@@ -1432,7 +1432,7 @@
     {
       "id": "debug_operations_successor",
       "category": "operations",
-      "title": "General Debug screen with optional command catalog, PO-approved agent execution, and role-aware output",
+      "title": "General Debug screen with optional command catalog, PO-approved agent execution",
       "status": "automated_validated",
       "priority": "P1",
       "target": "docs/design/DEBUG_OPERATIONS_SUCCESSOR_DECISION_2026_09_26.md",
@@ -1450,7 +1450,7 @@
     {
       "id": "BK-CP-STATUS-EMPTY",
       "category": "backup",
-      "title": "Check Point: two gateways answer 'Creating backup package' but show backup status stays empty (even via login shell) -- inspect /var/log/CPbackup/backups on the device; also two gateways out of space in that folder",
+      "title": "Check Point: two gateways answer 'Creating backup package' but show backup status...",
       "status": "deferred",
       "priority": "P3",
       "target": "",
@@ -1471,7 +1471,7 @@
       "title": "Wave 2 change-report lane written but unmerged",
       "status": "done",
       "priority": "P1",
-      "target": "sa/policy-change-report-v145; docs/design/PO_DECISION_RECORD_2026_10_09_NSPM_WAVE1.md",
+      "target": "sa/policy-change-report-v145...",
       "note": ""
     },
     {
@@ -1480,7 +1480,7 @@
       "title": "Wave 3 stored-policy lookup lane written but unmerged",
       "status": "done",
       "priority": "P1",
-      "target": "sa/policy-lookup-merge2; docs/design/PO_DECISION_RECORD_2026_10_09_NSPM_WAVE1.md",
+      "target": "sa/policy-lookup-merge2...",
       "note": ""
     },
     {
@@ -1489,7 +1489,7 @@
       "title": "Wave 3 offline SIEM CSV analyzer lane written but unmerged",
       "status": "done",
       "priority": "P1",
-      "target": "sa/offline-analyzer-merge; docs/design/PO_DECISION_RECORD_2026_10_09_NSPM_WAVE1.md",
+      "target": "sa/offline-analyzer-merge...",
       "note": ""
     },
     {
@@ -1504,7 +1504,7 @@
     {
       "id": "integration_tests_dependency_lock_repair",
       "category": "engineering",
-      "title": "Main integration-tests compile blocked by dependency lock state; PO audit finding, not rerun here",
+      "title": "Main integration-tests compile blocked by dependency lock state",
       "status": "done",
       "priority": "P1",
       "target": "ui2/integration-tests/gradle.lockfile",
