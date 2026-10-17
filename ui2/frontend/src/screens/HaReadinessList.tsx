@@ -1,6 +1,5 @@
 import { JobButton } from "../shell/JobWindow";
 import { Fragment, useEffect, useState } from "react";
-import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Checkbox from "@mui/material/Checkbox";
@@ -185,11 +184,13 @@ export function HaReadinessList({ clusters, rows, running, busy, progress, error
   };
   return <Box className="ha-readiness-full-width" sx={{ width: "100%", minWidth: 0 }}>
     <Typography variant="subtitle1" sx={{ mb: 1 }}>{clusters.length} clusters enrolled</Typography>
-    {mostlyStale && <Alert severity="warning" sx={{ mb: 1.5 }}>
+    {/* A notice, not an Alert: the status values are unchanged and nothing failed to load. */}
+    {mostlyStale && <Box role="status" data-readiness-stale-notice sx={{ mb: 1.5, px: 1.5, py: 1, borderRadius: 1,
+      bgcolor: m3.warningContainer, color: m3.onWarningContainer, fontSize: 14 }}>
       {staleAts.length === evaluatedAts.length
         ? `Readiness was last evaluated ${relativeAge(newestStale, now)}; run a readiness check before relying on Ready.`
         : `${staleAts.length} of ${evaluatedAts.length} readiness evaluations are older than 24 h (the newest of them ${relativeAge(newestStale, now)}); run a readiness check before relying on Ready.`}
-    </Alert>}
+    </Box>}
     <Box aria-label="Readiness summary" sx={{ display: "flex", flexWrap: "wrap", gap: 1, mb: 1.5 }}>
       {(Object.keys(statuses) as Status[]).map(status => {
         const s = statuses[status];
