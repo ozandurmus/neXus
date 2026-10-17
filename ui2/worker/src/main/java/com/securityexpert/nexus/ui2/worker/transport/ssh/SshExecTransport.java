@@ -34,6 +34,9 @@ import com.securityexpert.nexus.ui2.jobs.transport.ExecSpec;
 import com.securityexpert.nexus.ui2.jobs.transport.FetchResult;
 import com.securityexpert.nexus.ui2.jobs.transport.FetchSpec;
 import com.securityexpert.nexus.ui2.jobs.transport.FetchStreamResult;
+import com.securityexpert.nexus.ui2.jobs.transport.RangedFetchResult;
+import com.securityexpert.nexus.ui2.jobs.transport.RangedFetchSpec;
+import com.securityexpert.nexus.ui2.jobs.transport.RangedFetchStatus;
 import com.securityexpert.nexus.ui2.jobs.transport.TransportNotImplementedException;
 import com.securityexpert.nexus.ui2.jobs.transport.TransportSession;
 import com.securityexpert.nexus.ui2.jobs.transport.XmlApiResult;
@@ -563,6 +566,186 @@ public final class SshExecTransport implements DeviceTransport {
             if (channel != null) {
                 channel.disconnect();
             }
+        }
+    }
+
+    /** Read buffer of the ranged read: the range is streamed through this, never held whole (phase B §4.3). */
+    static final int RANGE_BUFFER_BYTES = 32 * 1024;
+
+    private static final java.util.regex.Pattern RANGE_PATH = java.util.regex.Pattern.compile("/[A-Za-z0-9._/-]{1,510}");
+
+    private static final java.util.concurrent.ScheduledExecutorService RANGE_WATCHDOG =
+            java.util.concurrent.Executors.newSingleThreadScheduledExecutor(task -> {
+                Thread thread = new Thread(task, "sftp-range-watchdog");
+                thread.setDaemon(true);
+                return thread;
+            });
+
+    /**
+     * C4 §2.3 amendment A-2 / phase B contract §4.3: an SFTP ranged read on the run's existing session. One SFTP
+     * subsystem channel is opened on that session (no new connection, no exec channel, no shell), the file is opened
+     * read-only, at most {@code spec.maxBytes()} bytes are read from {@code spec.startOffset()} and the file and
+     * channel are closed. Nothing is written, renamed, removed or setstat'ed on the device. Bytes go straight to
+     * {@code sink} through a {@value #RANGE_BUFFER_BYTES}-byte buffer; bytes the server sends past the requested
+     * length (request-ahead) are dropped by the library's close and never reach the sink or the count. The timeout
+     * bounds the whole call: on expiry the channel is closed and the result is {@code TIMEOUT}. No path, server
+     * message or file content reaches the log or the result; the transcript records the file's base name only.
+     */
+    @Override
+    public RangedFetchResult fetchRange(TransportSession session, RangedFetchSpec spec, Duration timeout,
+            OutputStream sink) {
+        checkAdmission(session);
+        com.securityexpert.nexus.ui2.worker.JobCancellationScope.check();
+        long started = System.nanoTime();
+        RangedFetchResult result = fetchRangeRaw(session, spec, timeout, sink);
+        if (JobTranscriptScope.current() != null) {
+            JobTranscriptScope.add("sftp", "transfer", "range read file=" + baseName(spec.remotePath())
+                    + " start=" + result.startOffset() + " requested=" + result.bytesRequested()
+                    + " received=" + result.bytesReceived()
+                    + " sizeAtOpen=" + (result.sizeAtOpen().isPresent() ? result.sizeAtOpen().getAsLong() : "-")
+                    + " eof=" + result.eofReached() + " status=" + result.status()
+                    + (result.reasonCode().isEmpty() ? "" : " reason=" + result.reasonCode())
+                    + " durationMs=" + (System.nanoTime() - started) / 1_000_000);
+        }
+        if (!result.bytesUsable()) {
+            LOG.log(System.Logger.Level.WARNING, "[SFTP_RANGE_READ_FAILED] status={0} reason={1} start={2} requested={3} received={4}",
+                    result.status(), result.reasonCode(), result.startOffset(), result.bytesRequested(),
+                    result.bytesReceived());
+        }
+        return result;
+    }
+
+    private RangedFetchResult fetchRangeRaw(TransportSession session, RangedFetchSpec spec, Duration timeout,
+            OutputStream sink) {
+        long start = spec.startOffset();
+        long requested = spec.maxBytes();
+        if (!(session instanceof SshTransportSession sshSession)) {
+            return RangedFetchResult.refused(start, "NOT_AN_SSH_SESSION");
+        }
+        if (!isRangePath(spec.remotePath())) {
+            // Second line behind CpSyslogRangedRead: an absolute, glob-free, traversal-free path only, so the
+            // library never lists a directory to expand a pattern.
+            return RangedFetchResult.refused(start, "PATH_UNSAFE");
+        }
+        if (timeout == null || timeout.isNegative() || timeout.isZero()) {
+            return RangedFetchResult.refused(start, "TIMEOUT_INVALID");
+        }
+        java.util.concurrent.atomic.AtomicBoolean timedOut = new java.util.concurrent.atomic.AtomicBoolean();
+        ChannelSftp channel;
+        try {
+            channel = (ChannelSftp) sshSession.jschSession().openChannel("sftp");
+            channel.connect((int) Math.max(1, Math.min(Integer.MAX_VALUE, timeout.toMillis())));
+        } catch (JSchException | RuntimeException e) {
+            return rangeResult(RangedFetchStatus.SUBSYSTEM_UNAVAILABLE, start, requested, 0,
+                    java.util.OptionalLong.empty(), false, e.getClass().getSimpleName());
+        }
+        final ChannelSftp openChannel = channel;
+        java.util.concurrent.ScheduledFuture<?> watchdog = RANGE_WATCHDOG.schedule(() -> {
+            timedOut.set(true);
+            openChannel.disconnect();
+        }, timeout.toMillis(), java.util.concurrent.TimeUnit.MILLISECONDS);
+        SizeAtOpenMonitor monitor = new SizeAtOpenMonitor();
+        long received = 0;
+        boolean eof = false;
+        try {
+            try (InputStream in = channel.get(spec.remotePath(), monitor, start)) {
+                byte[] buffer = new byte[(int) Math.min(RANGE_BUFFER_BYTES, requested)];
+                while (received < requested) {
+                    int want = (int) Math.min(buffer.length, requested - received);
+                    int n = in.read(buffer, 0, want);
+                    if (n < 0) {
+                        eof = true;
+                        break;
+                    }
+                    try {
+                        sink.write(buffer, 0, n);
+                    } catch (IOException | RuntimeException sinkFailure) {
+                        return rangeResult(RangedFetchStatus.SINK_FAILED, start, requested, received,
+                                monitor.size(), false, sinkFailure.getClass().getSimpleName());
+                    }
+                    received += n;
+                }
+            }
+        } catch (SftpException e) {
+            RangedFetchStatus status = timedOut.get() ? RangedFetchStatus.TIMEOUT : switch (e.id) {
+                case ChannelSftp.SSH_FX_NO_SUCH_FILE -> RangedFetchStatus.FILE_MISSING;
+                case ChannelSftp.SSH_FX_PERMISSION_DENIED -> RangedFetchStatus.PERMISSION_DENIED;
+                case ChannelSftp.SSH_FX_OP_UNSUPPORTED -> RangedFetchStatus.SUBSYSTEM_UNAVAILABLE;
+                default -> RangedFetchStatus.TRANSPORT_FAILED;
+            };
+            // The server's status message is device text: only the numeric status id is kept.
+            return rangeResult(status, start, requested, received, monitor.size(), eof, "SFTP_STATUS_" + e.id);
+        } catch (IOException | RuntimeException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
+            return rangeResult(timedOut.get() ? RangedFetchStatus.TIMEOUT : RangedFetchStatus.TRANSPORT_FAILED,
+                    start, requested, received, monitor.size(), eof, e.getClass().getSimpleName());
+        } finally {
+            watchdog.cancel(false);
+            channel.disconnect();
+        }
+        if (timedOut.get()) {
+            return rangeResult(RangedFetchStatus.TIMEOUT, start, requested, received, monitor.size(), eof, "DEADLINE");
+        }
+        java.util.OptionalLong size = monitor.size();
+        if (size.isPresent() && size.getAsLong() < start) {
+            return rangeResult(RangedFetchStatus.SIZE_BELOW_OFFSET, start, requested, received, size, eof, "");
+        }
+        if (!eof) {
+            return rangeResult(RangedFetchStatus.CAP_REACHED, start, requested, received, size, false, "");
+        }
+        if (size.isPresent() && received < Math.min(requested, size.getAsLong() - start)) {
+            return rangeResult(RangedFetchStatus.SHORT_READ, start, requested, received, size, true, "");
+        }
+        return rangeResult(RangedFetchStatus.END_OF_FILE, start, requested, received, size, true, "");
+    }
+
+    private static RangedFetchResult rangeResult(RangedFetchStatus status, long start, long requested, long received,
+            java.util.OptionalLong size, boolean eof, String reason) {
+        return new RangedFetchResult(status, start, requested, received, size, eof, reason);
+    }
+
+    private static boolean isRangePath(String path) {
+        if (path == null || !RANGE_PATH.matcher(path).matches() || path.endsWith("/") || path.contains("//")) {
+            return false;
+        }
+        for (String segment : path.substring(1).split("/")) {
+            if (segment.equals(".") || segment.equals("..")) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static String baseName(String path) {
+        String name = path == null ? "" : path.substring(path.lastIndexOf('/') + 1);
+        return name.matches("[A-Za-z0-9._-]{1,64}") ? name : "-";
+    }
+
+    /**
+     * Captures the size JSch reports for the path: {@code ChannelSftp.get(String, SftpProgressMonitor, long)} stats
+     * the path and calls {@link #init} with its size before it sends {@code SSH_FXP_OPEN}. JSch 0.1.55 exposes no
+     * handle-level {@code fstat}, so this is the closest observation to the open the library offers.
+     */
+    private static final class SizeAtOpenMonitor implements com.jcraft.jsch.SftpProgressMonitor {
+        private volatile long size = -1;
+
+        @Override
+        public void init(int op, String src, String dest, long max) {
+            size = max;
+        }
+
+        @Override
+        public boolean count(long count) {
+            return true;
+        }
+
+        @Override
+        public void end() {
+        }
+
+        java.util.OptionalLong size() {
+            long observed = size;
+            return observed < 0 ? java.util.OptionalLong.empty() : java.util.OptionalLong.of(observed);
         }
     }
 

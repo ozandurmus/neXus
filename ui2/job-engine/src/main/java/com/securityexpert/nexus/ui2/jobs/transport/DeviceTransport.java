@@ -76,6 +76,22 @@ public interface DeviceTransport {
         throw new TransportNotImplementedException("sftp_get_streaming");
     }
 
+    /**
+     * The ranged form of {@link #fetchStreaming} (C4 §2.3 amendment A-2; phase B contract §4.3): over the SFTP
+     * subsystem of the already open, trusted {@code session} (no new connection, no shell command), open
+     * {@code spec.remotePath()} read-only, read at most {@code spec.maxBytes()} bytes from
+     * {@code spec.startOffset()}, close. Bytes stream into {@code sink} through a bounded buffer; the range is never
+     * held whole in memory. Every expected device-side outcome is a {@link RangedFetchStatus}, never an exception
+     * carrying device text. Callers reach this only through the system-log gate check
+     * ({@code com.securityexpert.nexus.ui2.jobs.systemlog.CpSyslogRangedRead}), which refuses an ineligible path
+     * before any I/O. A default method, as {@link #fetchStreaming}, so every existing implementor and test double
+     * keeps compiling unchanged.
+     */
+    default RangedFetchResult fetchRange(TransportSession session, RangedFetchSpec spec, Duration timeout,
+            OutputStream sink) {
+        throw new TransportNotImplementedException("sftp_get_range");
+    }
+
     /** PAN XML API -- declared, not implemented at this movement. */
     XmlApiResult xmlApiCall(ApiTarget target, XmlApiSpec spec, Duration timeout);
 
