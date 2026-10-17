@@ -115,6 +115,8 @@ class CpSystemLogCollectJobExecutorTest {
         boolean connectFails;
         int connects;
         RangedFetchStatus failRangeWith;
+        /** Called when a ranged read arrives; the harness uses it to move the test clock. */
+        Runnable onRangeRead;
 
         void put(String path, String content, long inode) { files.put(path, new RemoteFile(content, inode, epoch - 60)); }
 
@@ -144,6 +146,7 @@ class CpSystemLogCollectJobExecutorTest {
 
         @Override public RangedFetchResult fetchRange(TransportSession session, RangedFetchSpec spec, Duration timeout, OutputStream sink) {
             rangeReads.add(spec.remotePath() + "@" + spec.startOffset() + "+" + spec.maxBytes());
+            if (onRangeRead != null) onRangeRead.run();
             if (failRangeWith != null) return new RangedFetchResult(failRangeWith, spec.startOffset(), spec.maxBytes(), 0, OptionalLong.empty(), false, "SYNTH");
             RemoteFile file = files.get(spec.remotePath());
             if (file == null) return new RangedFetchResult(RangedFetchStatus.FILE_MISSING, spec.startOffset(), spec.maxBytes(), 0, OptionalLong.empty(), false, "SFTP_STATUS_2");
@@ -298,6 +301,9 @@ class CpSystemLogCollectJobExecutorTest {
             device.epoch = now.getEpochSecond();
         }
 
+        /** Every ranged read takes this long on the test clock. */
+        void readTakes(long millis) { device.onRangeRead = () -> now = now.plusMillis(millis); }
+
         void at(Instant instant) { now = instant; device.epoch = instant.getEpochSecond(); }
 
         void run() {
@@ -382,6 +388,20 @@ class CpSystemLogCollectJobExecutorTest {
         assertEquals(0, h.repo.chunks.get(0).chunk().redactionCount(), "no secret in these lines");
         assertEquals(LogRedactor.RULE_SET_ID, h.repo.chunks.get(0).redactionRuleSet());
         h.assertNoDeviceTextInRecords();
+    }
+
+    @Test
+    void aSourceRunRecordsTheRealElapsedTimeOfItsReadsNotZero(@TempDir Path dir) throws Exception {
+        var h = new Harness(dir, "gateway");
+        h.config = PlannerConfig.defaults();
+        h.device.put(MESSAGES, lines("timed", 0, 5), 10);
+        h.readTakes(250);
+        h.run();
+
+        assertEquals("COLLECTED", h.repo.outcome("cp_messages"));
+        assertEquals(1, h.repo.runs.get("cp_messages").readsIssued());
+        assertEquals(250, h.repo.runs.get("cp_messages").durationMs(), "first read sent to last chunk stored, one 250 ms read");
+        assertEquals(0, h.repo.runs.get("cp_fwd_elg").durationMs(), "a source with no read has no elapsed time");
     }
 
     @Test

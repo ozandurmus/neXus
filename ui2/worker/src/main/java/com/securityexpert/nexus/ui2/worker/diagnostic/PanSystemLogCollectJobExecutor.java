@@ -335,7 +335,7 @@ public final class PanSystemLogCollectJobExecutor {
         }
 
         fresh.sort(Comparator.comparing(PanLogPage.Entry::receiveTime).thenComparing(PanLogPage.Entry::seqno, SEQNO_ORDER));
-        seqnoJumps(fresh, previousSeqno).ifPresent(gaps::add);
+        long seqnoJumps = seqnoJumps(fresh, previousSeqno);
 
         Optional<SystemLogCollectionRepository.Chunk> chunk = Optional.empty();
         int redactions = 0;
@@ -355,6 +355,8 @@ public final class PanSystemLogCollectJobExecutor {
         detail.put("seed", seed);
         detail.put("pages", stats.stream().map(PageStat::toMap).toList());
         detail.put("new_entries", fresh.size());
+        // Neutral counter only: seqno contiguity is UNKNOWN (section 6), so a jump never becomes a gap or an outcome.
+        detail.put("seqno_jumps", seqnoJumps);
         detail.put("redactions", redactions);
         if (chunk.isPresent()) {
             // system_log_chunk has no column or detail for it (V160), so the rule-set id and the per-rule counts of the
@@ -464,28 +466,21 @@ public final class PanSystemLogCollectJobExecutor {
     }
 
     /**
-     * Section 6 "Loss detection": whether seqno is contiguous is UNKNOWN, so a jump is only ever
-     * {@code SEQ_GAP_SUSPECTED} with its size, never a confirmed loss. One aggregated row per source per run.
+     * Counts the places where the seqno of consecutive stored entries is not contiguous. Section 6 "Loss detection":
+     * whether seqno is contiguous per log type is UNKNOWN (it is probably shared across log types, so jumps are
+     * normal), so the count is a neutral run-detail figure. It never produces a gap row or changes the outcome.
      */
-    private Optional<Gap> seqnoJumps(List<PanLogPage.Entry> sorted, String previousSeqno) {
+    private static long seqnoJumps(List<PanLogPage.Entry> sorted, String previousSeqno) {
         Long previous = previousSeqno == null ? null : seq(previousSeqno);
-        long jumps = 0, missing = 0, largest = 0;
+        long jumps = 0;
         for (PanLogPage.Entry e : sorted) {
             Long parsed = seq(e.seqno());
             if (parsed == null) continue;
             long seq = parsed;
-            if (previous != null && seq > previous + 1) {
-                long jump = seq - previous - 1;
-                jumps++; missing += jump; largest = Math.max(largest, jump);
-            }
+            if (previous != null && seq > previous + 1) jumps++;
             previous = previous == null ? seq : Math.max(previous, seq);
         }
-        if (jumps == 0) return Optional.empty();
-        Map<String, Object> detail = new LinkedHashMap<>();
-        detail.put("jumps", jumps);
-        detail.put("missing_seqnos", missing);
-        detail.put("largest_jump", largest);
-        return Optional.of(new Gap("SEQ_GAP_SUSPECTED", 0, 0, true, null, null, detail(detail)));
+        return jumps;
     }
 
     /** The newest receive_time of the entries and the seqnos stored at exactly that second. */
