@@ -365,7 +365,7 @@ preliminary section with an attributed synthesis. Recommended NEW SESSION for th
 independent review; architecture / High reasoning. No implementation or pilot is
 authorized by this artifact. Project state remains owned by the engineering session.
 
-### SESSION CLOSE
+### Closing record
 
 Documentation outcome: partial, external council BLOCKED. Only this document is
 changed. No tests added; runtime/UI behavior, dependencies, gates, migrations,
