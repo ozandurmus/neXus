@@ -30,6 +30,7 @@ import org.springframework.stereotype.Service;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.securityexpert.nexus.ui2.persistence.TransactionBoundary;
+import com.securityexpert.nexus.ui2.persistence.artefact.JooqRetentionQueries;
 
 /**
  * Administration › System (Product Owner, 2026-09-22: "a service view -- which pods, their states, what they
@@ -275,6 +276,7 @@ public class SystemStatusService {
         return JSON.readTree(response.body());
     }
 
+    /** Stored artefacts only: a pruned artefact keeps its manifest row, so every backup_artefact read here is live-filtered. */
     public Map<String, Object> storage() {
         // Names as the device list serves them (observed hostname, else the discovery name) -- F21, 2026-09-23.
         Map<String, com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord> summaries = new HashMap<>();
@@ -285,8 +287,9 @@ public class SystemStatusService {
             List<Map<String, Object>> backups = new ArrayList<>();
             for (Record r : dsl.fetch("select vendor, artefact_class, count(*) as artefacts, count(distinct device_id) as devices, "
                     + "coalesce(sum(ciphertext_bytes), 0) as stored_bytes, coalesce(sum(plaintext_bytes), 0) as original_bytes, "
-                    + "min(created_at) as oldest, max(created_at) as newest from backup_artefact "
-                    + "group by vendor, artefact_class order by vendor, artefact_class")) {
+                    + "min(created_at) as oldest, max(created_at) as newest from backup_artefact a where true"
+                    + JooqRetentionQueries.andNotRemoved("a")
+                    + " group by vendor, artefact_class order by vendor, artefact_class")) {
                 Map<String, Object> row = new LinkedHashMap<>();
                 row.put("vendor", r.get("vendor", String.class));
                 row.put("class", r.get("artefact_class", String.class));
@@ -302,7 +305,8 @@ public class SystemStatusService {
             List<Map<String, Object>> top = new ArrayList<>();
             for (Record r : dsl.fetch("select b.device_id, d.observed_hostname as hostname, d.cluster_member_ref, count(*) as artefacts, "
                     + "sum(b.ciphertext_bytes) as stored_bytes from backup_artefact b left join devices d on d.device_id = b.device_id "
-                    + "group by b.device_id, d.observed_hostname, d.cluster_member_ref order by stored_bytes desc limit 10")) {
+                    + "where true" + JooqRetentionQueries.andNotRemoved("b")
+                    + " group by b.device_id, d.observed_hostname, d.cluster_member_ref order by stored_bytes desc limit 10")) {
                 Map<String, Object> row = new LinkedHashMap<>();
                 row.put("device_id", r.get("device_id", String.class));
                 var summary = summaries.get(r.get("device_id", String.class));

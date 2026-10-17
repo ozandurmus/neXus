@@ -19,12 +19,28 @@ public final class JooqRetentionQueries {
             String retentionTier, String backupType) {
     }
 
-    private static final String NOT_REMOVED =
-            " and not exists (select 1 from artefact_retention_ledger l where l.artefact_id = a.artefact_id and l.event = 'removed')";
+    private static final java.util.regex.Pattern SQL_ALIAS = java.util.regex.Pattern.compile("[a-z_][a-z0-9_]*");
+
+    private static final String NOT_REMOVED = andNotRemoved("a");
     private static final String NOT_BASELINE =
             " and not exists (select 1 from backup_baseline b where b.artefact_id = a.artefact_id)";
     private static final String COLUMNS =
             "select a.artefact_id, a.device_id, a.recovery_volume_path, a.ciphertext_bytes, a.retention_tier, coalesce(a.backup_type, 'standard') as backup_type ";
+
+    /**
+     * The liveness predicate, with its leading {@code " and "}: true while the {@code backup_artefact} row under
+     * {@code alias} has no {@code removed} ledger row. A pruned artefact keeps its manifest row, so every read that
+     * counts, sums or lists stored artefacts must carry this predicate; without it a screen reports bytes that are no
+     * longer on the volume (2026-10-18: the System storage panel showed 887 GB for a 240 GB store).
+     */
+    public static String andNotRemoved(String alias) {
+        // "l" is the ledger's own alias inside the predicate; an outer "l" would be shadowed and match itself.
+        if (alias == null || !SQL_ALIAS.matcher(alias).matches() || "l".equals(alias)) {
+            throw new IllegalArgumentException("alias must be a plain SQL identifier other than l");
+        }
+        return " and not exists (select 1 from artefact_retention_ledger l where l.artefact_id = " + alias
+                + ".artefact_id and l.event = 'removed')";
+    }
 
     private final TransactionBoundary transactionBoundary;
     private final AuditedTransactionBoundary audited;
