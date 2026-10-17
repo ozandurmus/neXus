@@ -128,6 +128,8 @@ class TextRulesTest {
         assertTrue(s("hostname corefw").matches("hostname h-[0-9a-f]{10}"));
         assertTrue(s("devname=\"branchfw\" level=info").matches("devname=\"h-[0-9a-f]{10}\" level=info"));
         assertTrue(s("Oct 16 12:00:01 edgebox sshd[42]: ok").matches("Oct 16 12:00:01 h-[0-9a-f]{10} sshd\\[42\\]: ok"));
+        assertTrue(s("Oct 16 12:00:01 2026 edgebox sshd[42]: ok").matches("Oct 16 12:00:01 2026 h-[0-9a-f]{10} sshd\\[42\\]: ok"),
+                "Gaia /var/log/messages prints the year after the time");
         assertTrue(s("<34>1 2026-10-16T12:00:01Z gwbox app - - msg").matches("<34>1 2026-10-16T12:00:01Z h-[0-9a-f]{10} app - - msg"));
         assertTrue(s("admin@corefw:~$ ls").matches("h-[0-9a-f]{10}@h-[0-9a-f]{10}:~\\$ ls"));
         assertEquals("host is down", s("host is down"), "free text after 'host' is not a name without = or :");

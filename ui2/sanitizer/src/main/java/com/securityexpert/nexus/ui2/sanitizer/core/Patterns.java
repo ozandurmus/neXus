@@ -49,9 +49,9 @@ final class Patterns {
                     + "\\s*[=:]?\\s*|(?:host|server|node|dvc|shost|dhost|src_host|dst_host|srchost|dsthost)\\s*[=:]\\s*)"
                     + "[\"']?(" + SINGLE_HOST + ")(?![A-Za-z0-9_.-]*[A-Za-z0-9_])");
 
-    /** RFC 3164 ({@code Oct 16 12:00:00 fw01 ...}) and RFC 5424 ({@code <34>1 2026-... fw01 ...}) header hosts. */
+    /** RFC 3164 ({@code Oct 16 12:00:00 fw01 ...}, or with the year Gaia prints: {@code Oct 16 12:00:00 2026 fw01 ...}) and RFC 5424 ({@code <34>1 2026-... fw01 ...}) header hosts. */
     static final Pattern SYSLOG_3164 = Pattern.compile(
-            "^(?:<\\d{1,3}>)?(?:[A-Z][a-z]{2} [ 0-3]\\d \\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?|\\d{4}-\\d{2}-\\d{2}T\\S+) "
+            "^(?:<\\d{1,3}>)?(?:[A-Z][a-z]{2} [ 0-3]\\d \\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?: \\d{4})?|\\d{4}-\\d{2}-\\d{2}T\\S+) "
                     + "(" + SINGLE_HOST + ")(?= )");
     static final Pattern SYSLOG_5424 = Pattern.compile("^<\\d{1,3}>\\d{1,2} \\S+ (" + SINGLE_HOST + ")(?= )");
 
