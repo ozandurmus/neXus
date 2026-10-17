@@ -206,18 +206,44 @@ class CpPolicyParallelCollectionTest {
         catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); throw new AssertionError(interrupted); }
     }
 
+    /**
+     * Deterministic choreography, no sleeps and no reliance on thread scheduling. The adaptive limit starts at two, so
+     * after the first page the in-flight access reads are offsets 100 and 200 and offset 300 is only submitted once the
+     * coordinator has accepted a completion. Offset 200 waits until offset 100 is inside the transport (so the two reads
+     * provably overlap), and offset 100 is held until offset 300 starts (so offset 200 provably completed and was
+     * assembled first). The latches only gate the order; their time limit is a deadlock guard, not a tuning value.
+     */
     @Test void outOfOrderPagesAreAssembledByOffsetAndPublishedIncrementally() {
-        var later = new CountDownLatch(1);
+        var firstInFlight = new CountDownLatch(1);
+        var thirdStarted = new CountDownLatch(1);
+        List<Integer> completionOrder = new CopyOnWriteArrayList<>();
         var collector = setup(4, command -> {
-            if (command.contains("show-access-rulebase") && offset(command) == 100) await(later);
-            if (command.contains("show-access-rulebase") && offset(command) == 200) later.countDown();
-            return answer(command);
+            if (!command.contains("show-access-rulebase")) return answer(command);
+            int offset = offset(command);
+            if (offset == 100) { firstInFlight.countDown(); await(thirdStarted); }
+            if (offset == 200) await(firstInFlight);
+            if (offset == 300) thirdStarted.countDown();
+            var page = answer(command);
+            completionOrder.add(offset);
+            return page;
         });
-        List<PolicySnapshot> checkpoints = new ArrayList<>();
+        List<PolicySnapshot> checkpoints = new CopyOnWriteArrayList<>();
         var snapshots = collector.collect(run, request, () -> true, checkpoints::add);
+        // The scenario really happened: page 200 finished reading before page 100, and the reads overlapped.
+        assertTrue(completionOrder.indexOf(200) >= 0 && completionOrder.indexOf(100) >= 0, completionOrder::toString);
+        assertTrue(completionOrder.indexOf(200) < completionOrder.indexOf(100), completionOrder::toString);
+        assertTrue(peak.get() >= 2, () -> "peak=" + peak.get());
+        // Assembly is by offset, not by arrival order.
         assertEquals(java.util.stream.IntStream.range(0, 400).mapToObj(i -> "r" + i).toList(), rules(snapshots.get(0)));
         assertTrue(snapshots.get(0).failures().isEmpty());
-        assertTrue(checkpoints.size() >= 2); assertTrue(peak.get() >= 2); cleanup();
+        // Incremental publication: NAT finishes first (offset 100 is held), so an earlier checkpoint carries the access
+        // layer as pending with none of its rules, and the last checkpoint is the complete policy.
+        assertTrue(checkpoints.size() >= 2, () -> "checkpoints=" + checkpoints.size());
+        var first = checkpoints.get(0);
+        assertTrue(rules(first).isEmpty(), () -> "rules in first checkpoint=" + rules(first).size());
+        assertTrue(first.failures().stream().anyMatch(f -> f.reason().equals("COLLECTION_PENDING")), () -> "failures=" + first.failures());
+        assertEquals(snapshots.get(0), checkpoints.get(checkpoints.size() - 1));
+        cleanup();
     }
 
     @Test void schedulerActuallyReachesFourWithoutSharingSessions() {
