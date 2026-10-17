@@ -5,6 +5,7 @@ import { m3Theme } from "../src/theme/m3Theme";
 import { PolicyScreen, collectionOutcome, progress, csvCell, collectedLabel, sourceStatusLabel, collectionStalled, runningLabel, collectionSummaryLine } from "../src/screens/PolicyScreen";
 import { PolicyRuleTable, RULE_ROW_HEIGHT } from "../src/screens/PolicyRuleViewer";
 import { loadErrorText } from "../e2e/safety";
+import { findButtonByText, findByAria, getFieldByLabel } from "./fastQueries";
 import type { PolicyMetadata, PolicyPage, PolicyRule, PolicyCollectionStatus } from "../src/auth/adminApi";
 
 const metadata: PolicyMetadata = { id: "policy-1", sourceId: "source-1", sourceName: "MGR-BRAVO-01", vendor: "PAN", containerId: "container-1",
@@ -38,9 +39,9 @@ function mockFetch(result: PolicyPage = page) {
 }
 function mount() { return render(<ThemeProvider theme={m3Theme}><PolicyScreen /></ThemeProvider>); }
 async function navigate() {
-  fireEvent.click(await screen.findByRole("button", { name: metadata.sourceName }));
-  fireEvent.click(await screen.findByRole("button", { name: metadata.containerName }));
-  fireEvent.click(await screen.findByRole("button", { name: `Policy ${metadata.name}` }));
+  fireEvent.click(await findButtonByText(metadata.sourceName));
+  fireEvent.click(await findButtonByText(metadata.containerName));
+  fireEvent.click(await findByAria(`Policy ${metadata.name}`));
 }
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); window.history.replaceState(null, "", "/"); });
 
@@ -595,13 +596,13 @@ it("selects all matching rules across API pages and clears the active query chip
     return new Response(JSON.stringify(body), { status: 200 });
   });
   vi.stubGlobal("fetch", fetch); mount(); await navigate();
-  const all = await screen.findByRole("checkbox", { name: "Select all" }); fireEvent.click(all);
+  const all = await findByAria("Select all"); fireEvent.click(all);
   expect(await screen.findByText("201 selected")).toBeInTheDocument();
   expect(fetch.mock.calls.some(([url]) => url.includes("page=1"))).toBe(true);
-  fireEvent.change(screen.getByLabelText("Rule query"), { target: { value: "action='accept' AND enabled=true" } });
+  fireEvent.change(getFieldByLabel("Rule query"), { target: { value: "action='accept' AND enabled=true" } });
   expect(await screen.findByText("action='accept'")).toBeInTheDocument(); expect(screen.getByText("enabled=true")).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Clear" }));
-  await waitFor(() => expect(screen.getByLabelText("Rule query")).toHaveValue(""));
+  fireEvent.click(screen.getByText("Clear", { selector: "button" }));
+  await waitFor(() => expect(getFieldByLabel("Rule query")).toHaveValue(""));
 });
 
 it("maps each source job and formats collection time in the display timezone", () => {
