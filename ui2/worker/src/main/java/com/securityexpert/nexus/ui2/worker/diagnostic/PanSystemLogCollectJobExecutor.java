@@ -340,10 +340,12 @@ public final class PanSystemLogCollectJobExecutor {
         Optional<SystemLogCollectionRepository.Chunk> chunk = Optional.empty();
         int redactions = 0;
         long storedBytes = 0, ciphertextBytes = 0;
+        Map<String, Integer> redactionsByRule = Map.of();
         if (!fresh.isEmpty()) {
             Stored written = store(run, source, fresh, retentionDays, hostnameSource);
             chunk = Optional.of(written.chunk());
             redactions = written.chunk().redactionCount();
+            redactionsByRule = written.redactionsByRule();
             storedBytes = written.chunk().bytes();
             ciphertextBytes = written.chunk().manifest().ciphertextBytes();
         }
@@ -354,22 +356,30 @@ public final class PanSystemLogCollectJobExecutor {
         detail.put("pages", stats.stream().map(PageStat::toMap).toList());
         detail.put("new_entries", fresh.size());
         detail.put("redactions", redactions);
+        if (chunk.isPresent()) {
+            // system_log_chunk has no column or detail for it (V160), so the rule-set id and the per-rule counts of the
+            // chunk are kept in this run's detail, next to the redaction total.
+            detail.put("redaction_rule_set", PanLogRedactor.RULE_SET_ID);
+            detail.put("redaction_by_rule", redactionsByRule);
+        }
         detail.put("ciphertext_bytes", ciphertextBytes);
         return new SourceResult(new SystemLogCollectionRepository.SourceWrite(new SystemLogCollectionRepository.Run(outcome,
                 bytesRead[0], storedBytes, run.reads, elapsed(started), detail(detail)), chunk, newCursor, gaps), outcome, outcome);
     }
 
-    private record Stored(SystemLogCollectionRepository.Chunk chunk) {
+    private record Stored(SystemLogCollectionRepository.Chunk chunk, Map<String, Integer> redactionsByRule) {
     }
 
     /** Redacts, serializes as JSON Lines, and writes one compressed, encrypted system_log artefact. */
     private Stored store(Run run, String source, List<PanLogPage.Entry> entries, int retentionDays, String hostnameSource) {
         int redactions = 0;
+        Map<String, Integer> byRule = new java.util.TreeMap<>();
         java.io.ByteArrayOutputStream plain = new java.io.ByteArrayOutputStream();
         try {
             for (PanLogPage.Entry entry : entries) {
                 PanLogRedactor.Result redacted = PanLogRedactor.redact(source, entry.fields());
                 redactions += redacted.redactions();
+                redacted.countsByRule().forEach((rule, n) -> byRule.merge(rule, n, Integer::sum));
                 plain.write(json.writeValueAsBytes(redacted.fields()));
                 plain.write('\n');
             }
@@ -397,7 +407,7 @@ public final class PanSystemLogCollectJobExecutor {
                 meta.plaintextBytes(), entries.size(), sqlTime(first), sqlTime(last), redactions, List.of(),
                 fingerprint.ofContent(SystemLogCollectionRepository.CHUNK_CONTENT_DOMAIN, plain.toByteArray(), 0, plain.size()),
                 manifest);
-        return new Stored(chunk);
+        return new Stored(chunk, Map.copyOf(byRule));
     }
 
     /** One page: enqueue, bounded poll to FIN, parse. The numbers of the page are appended to {@code stats}. */

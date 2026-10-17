@@ -597,6 +597,11 @@ class PanSystemLogCollectJobExecutorTest {
         int count = h.write("pan_config").chunk().orElseThrow().redactionCount();
         assertEquals(2 + 1 + 1 + 1, count);
         assertEquals(count, ((Number) h.detail("pan_config").get("redactions")).intValue());
+        assertEquals("pan-config-v2", h.detail("pan_config").get("redaction_rule_set"));
+        @SuppressWarnings("unchecked")
+        Map<String, Number> byRule = (Map<String, Number>) h.detail("pan_config").get("redaction_by_rule");
+        assertEquals(count, byRule.values().stream().mapToInt(Number::intValue).sum());
+        assertEquals(2, byRule.get("secret_path_body").intValue());
     }
 
     // ---------------------------------------------------------------- admission of the job itself
