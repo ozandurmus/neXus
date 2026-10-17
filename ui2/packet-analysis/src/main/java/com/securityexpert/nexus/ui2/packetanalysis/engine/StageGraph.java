@@ -46,7 +46,8 @@ public final class StageGraph {
                 .add("canonical_tuples", "analysis.matching._canonicalize_tuples", List.of("obs", "f5_connections"),
                         List.of("tuple_lookup", "obs"), null, Preparation::canonicalizeTuples)
                 .add("index_scope", "analysis.selection.restrict_index_scope", List.of("obs", "analysis_scope"),
-                        List.of("client_tuples", "scoped_flows", "index_scope", "obs"), null, Preparation::restrictIndexScope)
+                        List.of("client_tuples", "scoped_flows", "scope_excluded", "scope_single_point", "index_scope", "obs"), null,
+                        Preparation::restrictIndexScope)
                 .add("sequence_translation", "translation.normalize_sequences", List.of("obs"),
                         List.of("sequence_models", "translation_links", "sequence_map", "obs"), null,
                         Preparation::normalizeSequences)
@@ -102,7 +103,7 @@ public final class StageGraph {
                 .add("segments", "analysis.segments.build_segments + analysis.classification",
                         List.of("obs", "observation_matches", "nat_point_tuples", "tuple_lookup", "fragment_groups", "byte_flows",
                                 "byte_missing", "byte_missing_atoms", "byte_obs", "byte_recoveries", "events", "device_proofs"),
-                        List.of("missing", "byte_later", "recoveries", "retry_counts", "acked", "failures", "events",
+                        List.of("hop_scope", "missing", "byte_later", "recoveries", "retry_counts", "acked", "failures", "events",
                                 "device_assignments", "device_proofs"), null,
                         Segments::buildSegments)
                 .add("device_unplaced", "device_drops.add_unplaced",
@@ -113,10 +114,10 @@ public final class StageGraph {
                         Segments::buildFlowSummaryAndQuality)
                 .add("rank_findings", "report._run_secondary_detectors (severity/time sort)", List.of(), List.of(), null,
                         CoreReport::rankFindings)
-                .add("headlines", "headlines.add_headlines", List.of("events", "obs"), List.of(), "core",
+                .add("headlines", "headlines.add_headlines", List.of("events", "obs", "hop_scope"), List.of(), "core",
                         Headlines::addHeadlines)
                 .add("timeseries", "timeseries.build_timeseries",
-                        List.of("obs", "observation_matches", "events"), List.of("segment_buckets", "bucket_obs"), null,
+                        List.of("obs", "observation_matches", "events", "hop_scope"), List.of("segment_buckets", "bucket_obs"), null,
                         Timeseries::build)
                 .add("lifecycle", "security.build_lifecycle",
                         List.of("obs", "events"),

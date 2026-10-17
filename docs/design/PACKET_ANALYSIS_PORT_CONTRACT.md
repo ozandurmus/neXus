@@ -47,6 +47,12 @@ A port stage ships only when, for every golden scenario/variant it covers, the J
 golden ones. Differences that are deliberate (a proven Python bug) are listed in this contract with the scenario, the
 section path and the reason, and the PO is told.
 
+Deliberate differences (mechanics in `ui2/packet-analysis/README.md` "Intentional divergences from the reference"):
+
+| Since | Scenario | Section path | Reason |
+|---|---|---|---|
+| 2026-10-17 | none in the corpus (all 206 cases unchanged); real case: a full server-side capture next to captures filtered to one flow | `analysis_scope[*].excluded_single_point_*`, `quality[*].index_scope`, `segments[*]` (`classes`, `eligible_packets`, `loss_percent`, new `scope_excluded_flows` / `scope_excluded_packets`, `quality_notes`), `findings`, `limitations`, `flow_count`, `verdict` | The reference compares a hop's points also for flows the neighbour's capture never saw (kept because they touch a client CIDR), reporting them as capture misses and high-severity impactful loss. A flow the neighbour never observed, with packets proving it crossed the neighbour, is now outside that hop's scope and counted as an excluded single-point flow; blocked handshakes (no reply) stay in scope. |
+
 ## 4a. Determinism (PO 2026-10-15: "Aynı girdi aynı çıktıyı vermeli")
 
 The reference picks arbitrarily among exactly-equal rows when DuckDB runs on several threads (ties in `ORDER BY ...

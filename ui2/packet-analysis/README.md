@@ -554,6 +554,43 @@ Corpus parity (all 206 cases, L1/L2/L3, threads 1 vs 4, accepted tie-breaks in `
 `tools/packet_analysis/parity/corpus_run.py --archive .../packet-analysis-parity-corpus.tar.gz --work SCRATCH
 [--jobs 5] [--timing 5]`, run with the frozen reference interpreter (see the script header).
 
+## Intentional divergences from the reference
+
+Unlike the tie-breaks of `DETERMINISM.md`, these change what the engine concludes, because the reference is wrong on
+inputs the synthetic corpus does not contain. Each is listed in `docs/design/PACKET_ANALYSIS_PORT_CONTRACT.md` §4 and
+in `DETERMINISM.md` ("Intentional divergences"), runs only on the inputs it is about, and leaves every corpus case
+unchanged (the corpus gate stays strict: no acceptance rule was added for them, so a corpus difference they caused
+would show as `DIFF`).
+
+**Neighbour capture scope** (`engine/NeighbourScope`, `sql/neighbour_scope.sql`). The reference keeps every flow
+that touches a client CIDR, even when only one capture point saw it (`selection.restrict_index_scope`: `HAVING
+count(DISTINCT point)>=2 OR <client tuple>`), so that a handshake blocked at the first boundary stays visible. When
+one point captures much more than its neighbour (a full server-side capture next to captures filtered to one flow),
+every extra flow of the wide point is then compared with a neighbour that never captured it: its packets become
+capture misses and, through the later stall/retry rules, high-severity impactful loss, and `analysis_scope` still
+reports no excluded flow. The engine now treats a flow that a hop's neighbour B never observed (no packet of it in
+either direction; flow identity as canonicalized, so confirmed NAT mappings apply) as outside B's capture scope when
+other packets prove the flow crossed B: a packet of the same direction at a point after B, or reply traffic of the
+other direction at a point after B on the reply path that is not a reset and carries payload or an ACK without SYN.
+
+- Index scope: a single-point client flow that is out of scope on every hop that would assess it leaves the index
+  scope like the reference's other single-point flows; it is counted in `analysis_scope` (frames and
+  `excluded_single_point_flows`) and `quality[].index_scope`. `excluded_single_point_flows` is now taken from the same
+  index scope as the frames (the reference updated only the frames, so restrict-stage flows were never counted; on
+  the corpus the two are equal).
+- Per hop: a flow seen at several points but never at one hop's neighbour is left out of that hop's events and of
+  its denominators (`eligible_packets`, `loss_percent`, `eligible_bytes`, the headline denominator, the time-series
+  buckets); the segment gets `scope_excluded_flows`, `scope_excluded_packets` and a `quality_notes` line.
+  `endpoint_quality` still describes every packet of each endpoint.
+- Either way the report adds one `limitations` line. Delay is unaffected: it is computed from matched pairs only.
+- Not applied (the reference behaviour stays): without the proof (a SYN with no reply, one-way traffic), on a hop
+  with a full-proxy or vendor evidence point, an unconfirmed NAT suggestion, undecided or mismatched tunnel matching
+  layers, or a `nat` hop except for flows carrying one of its confirmed mapping tuples.
+
+Tests: `NeighbourScopeTest` (one-way and blocked-handshake flows stay in scope, unconfirmed NAT never compares
+identity, extra flows at the server point are excluded single-point flows, a flow missing only at the neighbour is
+out of that hop, genuine loss on the shared flow is unchanged).
+
 ## Masked projection of payload-derived text (`com.securityexpert.nexus.ui2.packetanalysis.privacy`)
 
 Every session without the `packet_analysis_raw_view` action (the replay viewer / aiview, and run roles that do not

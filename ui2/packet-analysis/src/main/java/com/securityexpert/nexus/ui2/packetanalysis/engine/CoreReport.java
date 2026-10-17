@@ -294,7 +294,11 @@ final class CoreReport {
         r.put("findings", new ArrayList<>(ctx.findings.subList(0, Math.min(200, ctx.findings.size()))));
         r.put("finding_count", totalFindings);
         r.put("flow_count", db.count(Sql.get("report", "flow_count")));
-        r.put("limitations", new ArrayList<>(LIMITATIONS));
+        List<String> limitations = new ArrayList<>(LIMITATIONS);
+        if (ctx.scopeExcludedSinglePointFlows > 0 || !ctx.hopScope.isEmpty()) {
+            limitations.add(NeighbourScope.LIMITATION);  // not in the reference (NeighbourScope)
+        }
+        r.put("limitations", limitations);
         leadDegradation(r, ctx.findings);
         r.put("unknown_sections", new LinkedHashMap<>(ctx.unknownSections));
         r.put("engine_notes", new ArrayList<>(ctx.engineNotes));

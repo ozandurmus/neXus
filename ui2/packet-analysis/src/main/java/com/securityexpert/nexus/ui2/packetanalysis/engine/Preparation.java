@@ -306,12 +306,7 @@ final class Preparation {
     static void restrictIndexScope(EngineContext ctx) {
         Db db = ctx.db;
         Topology topology = ctx.topology;
-        List<String> evidencePoints = new ArrayList<>();
-        for (Point p : topology.points) {
-            if (p.translation().equals("full_proxy") || List.of("f5", "paloalto", "checkpoint").contains(p.vendor())) {
-                evidencePoints.add(p.id());
-            }
-        }
+        List<String> evidencePoints = NeighbourScope.evidencePoints(topology);
         List<Tuples.Network> nets = Tuples.networks(topology.clientCidrs);
         List<Object[]> selected = new ArrayList<>();
         for (Object[] r : db.tuples(Sql.get("selection", "distinct_canon"))) {
@@ -341,10 +336,13 @@ final class Preparation {
         db.exec(Sql.get("selection", "client_tuples"));
         db.execMany(Sql.get("selection", "client_tuples_insert"), selected);
         db.exec(Sql.get("selection", "scoped_flows"));
+        // Not in the reference (NeighbourScope): single-point client flows outside their neighbours' capture scope.
+        ctx.scopeExcludedSinglePointFlows = NeighbourScope.restrictSinglePointFlows(ctx, evidencePoints);
         db.exec(Sql.get("selection", "index_scope"), evidencePoints, evidencePoints);
         db.exec(Sql.get("selection", "index_scope_update"));
         db.exec(Sql.get("selection", "restrict_obs"), evidencePoints);
-        db.exec(Sql.get("selection", "analysis_scope_update"));
+        // The reference statement plus excluded_single_point_flows (identical whenever restrict drops no flow).
+        db.exec(Sql.get("neighbour_scope", "analysis_scope_update"));
     }
 
     // ------------------------------------------------------------------ translation.py

@@ -124,7 +124,10 @@ final class Timeseries {
             Object left = ca != null && cb != null ? PyOps.max(ca.get("start"), cb.get("start")) : null;
             Object right = ca != null && cb != null ? PyOps.min(ca.get("end"), cb.get("end")) : null;
             Map<Object, Row> aggregate = new LinkedHashMap<>();
-            for (Row r : db.rows(Sql.get("timeseries", "aggregate"), a, d)) {
+            List<Row> aggregateRows = NeighbourScope.excludes(ctx, a, b, d)
+                    ? db.rows(Sql.get("neighbour_scope", "aggregate_scoped"), a, d, a, b, d)
+                    : db.rows(Sql.get("timeseries", "aggregate"), a, d);
+            for (Row r : aggregateRows) {
                 aggregate.put(r.get("bucket"), r);
             }
             Map<Object, Object> downstreamQuality = new LinkedHashMap<>();
