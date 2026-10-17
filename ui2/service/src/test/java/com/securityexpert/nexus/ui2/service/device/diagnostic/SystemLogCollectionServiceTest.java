@@ -115,6 +115,8 @@ class SystemLogCollectionServiceTest {
         when(devices.find("fw-1")).thenReturn(Optional.of(record("fw-1", "gateway", "palo_alto")));
         when(devices.find("pano-1")).thenReturn(Optional.of(record("pano-1", "management_server", "palo_alto")));
         when(devices.find("cp-1")).thenReturn(Optional.of(record("cp-1", "gateway", "check_point")));
+        when(devices.find("mds-1")).thenReturn(Optional.of(record("mds-1", "management_server", "check_point")));
+        when(devices.find("fgt-1")).thenReturn(Optional.of(record("fgt-1", "gateway", "fortinet")));
         var admission = mock(JobAdmissionService.class);
         when(admission.submit(anyString(), anyString(), anyString(), anyString(), anyString()))
                 .thenReturn(new AdmissionResult.Admitted("job-1"));
@@ -126,13 +128,19 @@ class SystemLogCollectionServiceTest {
                 eq("syslog-collect:fw-1:" + java.time.ZonedDateTime.ofInstant(WINDOW_START, JobWindowPolicy.ZONE_ID).toEpochSecond()),
                 eq("synthetic-admin"), eq(ActionRegistry.SYSTEM_LOG_COLLECT_START));
         assertEquals(List.of("SYSTEM_LOG_DISABLED_ON_MANAGEMENT"), service.start(Optional.of("pano-1"), "a").refusalCodes());
-        assertEquals(List.of("SYSTEM_LOG_VENDOR_UNSUPPORTED"), service.start(Optional.of("cp-1"), "a").refusalCodes());
+        assertEquals(1, service.start(Optional.of("cp-1"), "a").admitted());
+        verify(admission).submit(eq(com.securityexpert.nexus.ui2.jobs.systemlog.CpSystemLogCollect.CAPABILITY), eq("cp-1"),
+                anyString(), eq("a"), eq(ActionRegistry.SYSTEM_LOG_COLLECT_START));
+        assertEquals(List.of("SYSTEM_LOG_DISABLED_ON_MANAGEMENT"), service.start(Optional.of("mds-1"), "a").refusalCodes());
+        assertEquals(List.of("SYSTEM_LOG_VENDOR_UNSUPPORTED"), service.start(Optional.of("fgt-1"), "a").refusalCodes());
         assertEquals(List.of("DEVICE_NOT_FOUND"), service.start(Optional.of("missing"), "a").refusalCodes());
-        verify(admission, times(1)).submit(anyString(), anyString(), anyString(), anyString(), anyString());
+        verify(admission, times(2)).submit(anyString(), anyString(), anyString(), anyString(), anyString());
 
+        when(devices.listReadCollectionTargets("ssh_exec")).thenReturn(List.of(summary("cp-1", "gateway", "check_point"),
+                summary("mds-1", "management_server", "check_point"), summary("fgt-1", "gateway", "fortinet")));
         var all = service.start(Optional.empty(), "synthetic-admin");
-        assertEquals(2, all.targets(), "Panorama is never a system-log source");
-        assertEquals(2, all.admitted());
+        assertEquals(3, all.targets(), "Panorama, an MDS and other vendors are never system-log sources");
+        assertEquals(3, all.admitted());
     }
 
     @Test
@@ -168,9 +176,15 @@ class SystemLogCollectionServiceTest {
         var capabilities = new DeviceCompositionConfiguration().deviceCapabilityRegistry(key -> rows.stream()
                 .filter(row -> row.key().equals(key)).toList());
         assertTrue(capabilities.find(PanSystemLogCollect.CAPABILITY).orElseThrow().executionEligible());
+        assertTrue(capabilities.find(com.securityexpert.nexus.ui2.jobs.systemlog.CpSystemLogCollect.CAPABILITY).orElseThrow()
+                .executionEligible());
         var onlyMeasurement = new DeviceCompositionConfiguration().deviceCapabilityRegistry(key -> rows.stream()
                 .filter(row -> row.key().equals(key) && row.gateId().startsWith("pan_syslog_measure")).toList());
         assertFalse(onlyMeasurement.find(PanSystemLogCollect.CAPABILITY).orElseThrow().executionEligible(),
                 "the V151 measurement rows never authorize collection");
+        var cpMeasurement = new DeviceCompositionConfiguration().deviceCapabilityRegistry(key -> rows.stream()
+                .filter(row -> row.key().equals(key) && row.gateId().startsWith("cp_syslog_measure")).toList());
+        assertFalse(cpMeasurement.find(com.securityexpert.nexus.ui2.jobs.systemlog.CpSystemLogCollect.CAPABILITY).orElseThrow()
+                .executionEligible(), "the V149/V157 measurement rows never authorize collection");
     }
 }

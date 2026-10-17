@@ -394,7 +394,9 @@ public final class PanSystemLogCollectJobExecutor {
         String first = entries.get(0).receiveTime(), last = entries.get(entries.size() - 1).receiveTime();
         var chunk = new SystemLogCollectionRepository.Chunk(UUID.randomUUID().toString(),
                 now.atZone(JobWindowPolicy.ZONE_ID).toLocalDate(), fingerprint.of(source), 0, meta.plaintextBytes(),
-                meta.plaintextBytes(), entries.size(), sqlTime(first), sqlTime(last), redactions, List.of(), manifest);
+                meta.plaintextBytes(), entries.size(), sqlTime(first), sqlTime(last), redactions, List.of(),
+                fingerprint.ofContent(SystemLogCollectionRepository.CHUNK_CONTENT_DOMAIN, plain.toByteArray(), 0, plain.size()),
+                manifest);
         return new Stored(chunk);
     }
 

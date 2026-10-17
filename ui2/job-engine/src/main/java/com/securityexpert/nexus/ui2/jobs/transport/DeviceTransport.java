@@ -92,6 +92,19 @@ public interface DeviceTransport {
         throw new TransportNotImplementedException("sftp_get_range");
     }
 
+    /**
+     * A bounded whole-file {@code sftp_get} for the system-log programme (phase B contract §8, §10.1 C8): the same
+     * read-only SFTP open/read/close on the run's session as {@link #fetchRange} from byte 0, with the caller's
+     * timeout enforced on the whole transfer, at most {@code spec.maxBytes()} bytes, and a job transcript that names
+     * only {@code nameClass} (a fixed source key such as {@code cp_hcp_report}), never the remote path or file name
+     * (an HCP archive name carries the host name). {@link #fetchStreaming} is left unchanged for its backup callers.
+     * Default: not implemented, as for {@link #fetchRange}.
+     */
+    default RangedFetchResult fetchBounded(TransportSession session, RangedFetchSpec spec, Duration timeout,
+            OutputStream sink, String nameClass) {
+        throw new TransportNotImplementedException("sftp_get_bounded");
+    }
+
     /** PAN XML API -- declared, not implemented at this movement. */
     XmlApiResult xmlApiCall(ApiTarget target, XmlApiSpec spec, Duration timeout);
 

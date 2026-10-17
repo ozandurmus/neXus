@@ -325,6 +325,29 @@ class SshRangedFetchTest {
         assertEquals(64, sink.size());
     }
 
+    @Test
+    void theBoundedWholeFileFetchNamesOnlyItsClassAndKeepsTheBound() throws Exception {
+        byte[] content = file(300);
+        serve(content, 300, Long.MAX_VALUE);
+        JobTranscript transcript = new JobTranscript();
+        ByteArrayOutputStream sink = new ByteArrayOutputStream();
+        RangedFetchResult whole, capped;
+        try (JobTranscriptScope ignored = JobTranscriptScope.open(transcript)) {
+            whole = transport.fetchBounded(new SshTransportSession("synthetic", session), new RangedFetchSpec(PATH, 0, 1_000),
+                    TIMEOUT, sink, "cp_hcp_report");
+            capped = transport.fetchBounded(new SshTransportSession("synthetic", session), new RangedFetchSpec(PATH, 0, 101),
+                    TIMEOUT, new ByteArrayOutputStream(), "cp_hcp_report");
+        }
+        assertEquals(RangedFetchStatus.END_OF_FILE, whole.status());
+        assertArrayEquals(content, sink.toByteArray());
+        assertEquals(RangedFetchStatus.CAP_REACHED, capped.status(), "a file past the bound is never cut silently");
+        assertEquals(101, capped.bytesReceived());
+        String text = transcriptText(transcript);
+        assertTrue(text.contains("bounded fetch class=cp_hcp_report"));
+        assertFalse(text.contains("fwd.elg"), "no file name");
+        assertFalse(text.contains("synthetic-host-fw01"), "no path");
+    }
+
     private static String transcriptText(JobTranscript transcript) throws IOException {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         transcript.writeTo(out);

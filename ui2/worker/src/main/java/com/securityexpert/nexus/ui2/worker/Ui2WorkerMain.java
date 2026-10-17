@@ -357,6 +357,15 @@ public final class Ui2WorkerMain {
                 new com.securityexpert.nexus.ui2.persistence.diagnostic.JooqSystemLogCollectionRepository(transactionBoundary),
                 artefactStore, new com.securityexpert.nexus.ui2.worker.diagnostic.SystemLogArtefactVolume.FileSystem(artefactStoreRoot),
                 hostnameFingerprint);
+        // System-log programme phase B (Check Point): one trusted SSH session per device, C1/C2/C3 every window, the
+        // daily sar and HCP files in the 06:00 window. Lines are redacted (LogRedactor, rule set cp-text-v1) before encryption.
+        var systemLogRepository = new com.securityexpert.nexus.ui2.persistence.diagnostic.JooqSystemLogCollectionRepository(transactionBoundary);
+        var systemLogVolume = new com.securityexpert.nexus.ui2.worker.diagnostic.SystemLogArtefactVolume.FileSystem(artefactStoreRoot);
+        var cpSystemLogCollectExecutor = new com.securityexpert.nexus.ui2.worker.diagnostic.CpSystemLogCollectJobExecutor(
+                leaseRepository, attemptRepository, deviceRepository, strictFailoverSsh, gateRegistry, systemLogRepository,
+                artefactStore, systemLogVolume, hostnameFingerprint, platformFactsRepository,
+                com.securityexpert.nexus.ui2.worker.diagnostic.ChunkRedactor.of(
+                        new com.securityexpert.nexus.ui2.worker.systemlog.redaction.LogRedactor()));
         java.util.concurrent.ExecutorService executor = java.util.concurrent.Executors.newFixedThreadPool(10);
         java.util.List<WorkerClaimLoop> claimLoops = new java.util.ArrayList<>();
         var failoverRecovery = new com.securityexpert.nexus.ui2.persistence.JooqCpFailoverRepository(transactionBoundary);
@@ -384,6 +393,7 @@ public final class Ui2WorkerMain {
                     .withDiagnosticReads(genericDiagnosticExecutor)
                     .withPanSyslogMeasure(panSyslogMeasureExecutor)
                     .withPanSystemLogCollect(panSystemLogCollectExecutor)
+                    .withCpSystemLogCollect(cpSystemLogCollectExecutor)
                     .withPolicyCollection(policyCollectionExecutor)
                     .withRole(role, policyFallback)
                     .withRuntimeAdmission(endpointAdmission, moduleRuntime);
@@ -496,6 +506,21 @@ public final class Ui2WorkerMain {
                         .log(System.Logger.Level.WARNING, "Retention pruning error: " + t.getMessage(), t);
             }
         }, 120, 3600, java.util.concurrent.TimeUnit.SECONDS);
+
+        // System-log retention (phase B contract section 5.3): checked hourly, run once a day, whether or not
+        // collection is enabled -- raw 30 days, HCP 7 days, the per-device cap with ledgered early deletion, ledger rows.
+        var systemLogPruner = new com.securityexpert.nexus.ui2.worker.diagnostic.SystemLogRetentionPruner(
+                new com.securityexpert.nexus.ui2.persistence.diagnostic.JooqSystemLogRetentionRepository(transactionBoundary),
+                new com.securityexpert.nexus.ui2.persistence.diagnostic.JooqSystemLogCollectionRepository(transactionBoundary)::settings,
+                artefactStoreRoot, java.time.Clock.systemUTC());
+        reconcilerExecutor.scheduleWithFixedDelay(() -> {
+            try {
+                moduleRuntime.runTask(role, instance, "SystemLogRetentionPruner.runIfDue", systemLogPruner::runIfDue);
+            } catch (Throwable t) {
+                System.getLogger(Ui2WorkerMain.class.getName())
+                        .log(System.Logger.Level.WARNING, "System-log retention error: " + t.getClass().getSimpleName());
+            }
+        }, 300, 3600, java.util.concurrent.TimeUnit.SECONDS);
     }
 
     static String resolveRole(String[] args, String environment) {

@@ -615,6 +615,37 @@ public final class SshExecTransport implements DeviceTransport {
         return result;
     }
 
+    private static final java.util.regex.Pattern NAME_CLASS = java.util.regex.Pattern.compile("[a-z][a-z0-9_]{0,63}");
+
+    /**
+     * Phase B contract §10.1 C8: a bounded whole-file fetch. It is {@link #fetchRange}'s read-only SFTP open/read/close
+     * from the requested start (0 for a whole file) on the run's session, with the caller's timeout on the whole
+     * transfer and at most {@code spec.maxBytes()} bytes. The transcript and the log name only {@code nameClass} (a
+     * fixed source key); the remote path and file name never appear (an HCP archive name carries the host name).
+     * {@link #fetchStreaming} and its backup callers are unchanged.
+     */
+    @Override
+    public RangedFetchResult fetchBounded(TransportSession session, RangedFetchSpec spec, Duration timeout,
+            OutputStream sink, String nameClass) {
+        checkAdmission(session);
+        com.securityexpert.nexus.ui2.worker.JobCancellationScope.check();
+        String label = nameClass != null && NAME_CLASS.matcher(nameClass).matches() ? nameClass : "-";
+        long started = System.nanoTime();
+        RangedFetchResult result = fetchRangeRaw(session, spec, timeout, sink);
+        if (JobTranscriptScope.current() != null) {
+            JobTranscriptScope.add("sftp", "transfer", "bounded fetch class=" + label
+                    + " requested=" + result.bytesRequested() + " received=" + result.bytesReceived()
+                    + " eof=" + result.eofReached() + " status=" + result.status()
+                    + (result.reasonCode().isEmpty() ? "" : " reason=" + result.reasonCode())
+                    + " durationMs=" + (System.nanoTime() - started) / 1_000_000);
+        }
+        if (!result.bytesUsable()) {
+            LOG.log(System.Logger.Level.WARNING, "[SFTP_BOUNDED_FETCH_FAILED] class={0} status={1} reason={2} received={3}",
+                    label, result.status(), result.reasonCode(), result.bytesReceived());
+        }
+        return result;
+    }
+
     private RangedFetchResult fetchRangeRaw(TransportSession session, RangedFetchSpec spec, Duration timeout,
             OutputStream sink) {
         long start = spec.startOffset();

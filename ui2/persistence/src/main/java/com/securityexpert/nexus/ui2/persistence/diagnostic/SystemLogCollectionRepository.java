@@ -29,20 +29,42 @@ public interface SystemLogCollectionRepository {
         }
     }
 
-    /** The typed settings row (section 5.3): raw retention and the management-server switch. */
-    record Settings(int rawRetentionDays, boolean includeManagementServers) {
+    /**
+     * The typed settings row (sections 5.3, 2.3, 8.3): retention days, per-device caps, the management-server switch and
+     * the spike-data switch. The two-value constructor keeps the other columns at their V160 defaults.
+     */
+    record Settings(int rawRetentionDays, boolean includeManagementServers, long deviceCapBytes, int hcpRetentionDays,
+            int spikeDataRetentionDays, long spikeDataCapBytes, int ledgerRetentionDays, boolean spikeDataEnabled) {
+        public static final long DEFAULT_DEVICE_CAP_BYTES = 2L * 1024 * 1024 * 1024;
+        public static final long DEFAULT_SPIKE_DATA_CAP_BYTES = 512L * 1024 * 1024;
         public static final Settings DEFAULTS = new Settings(30, false);
+
+        public Settings(int rawRetentionDays, boolean includeManagementServers) {
+            this(rawRetentionDays, includeManagementServers, DEFAULT_DEVICE_CAP_BYTES, 7, 30, DEFAULT_SPIKE_DATA_CAP_BYTES,
+                    180, false);
+        }
     }
 
     /**
      * One stored chunk. {@code manifest} is the backup_artefact row of the encrypted chunk; the chunk row reuses its
-     * artefact id, wrapped data key, plaintext digest and ciphertext size. Times are device-local wall clock
+     * artefact id, wrapped data key and ciphertext size. {@code plaintextHmac} is the chunk's keyed content identity
+     * (V161: HMAC-SHA256 of the stored, redacted plaintext under the keyed-fingerprint secret, domain
+     * {@value #CHUNK_CONTENT_DOMAIN}; never a bare hash, contract section 12). Times are device-local wall clock
      * ({@code yyyy-MM-dd HH:mm:ss}), never converted, or null.
      */
     record Chunk(String chunkId, java.time.LocalDate logDay, String fileNameHmac, long startOffset, long endOffset,
             long bytes, long lines, String firstLineTime, String lastLineTime, int redactionCount, List<String> flags,
-            BackupArtefactManifestRecord manifest) {
+            String plaintextHmac, BackupArtefactManifestRecord manifest) {
+        public Chunk {
+            if (plaintextHmac == null || !plaintextHmac.matches("[0-9a-f]{64}"))
+                throw new IllegalArgumentException("chunk content hmac shape");
+        }
     }
+
+    /** The HMAC domain of a chunk's content identity (V161 {@code system_log_chunk.plaintext_hmac}). */
+    String CHUNK_CONTENT_DOMAIN = "system-log-chunk-content";
+    /** The HMAC domain of a whole file's content identity (V161 {@code system_log_file.content_hmac}). */
+    String FILE_CONTENT_DOMAIN = "system-log-file-content";
 
     record Gap(String kind, long knownLostBytes, long pendingBytes, boolean extentUnknown, Long windowStartEpoch,
             Long windowEndEpoch, String detailJson) {

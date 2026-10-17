@@ -55,4 +55,21 @@ class HostnameFingerprintTest {
 
         assertNotEquals(fingerprint.of("gw-edge-01.example.internal"), fingerprint.of("gw-edge-02.example.internal"));
     }
+
+    @Test
+    void contentDigestsAreKeyedDomainSeparatedAndIncremental() throws Exception {
+        HostnameFingerprint a = HostnameFingerprint.fromBase64Key(randomKey());
+        HostnameFingerprint b = HostnameFingerprint.fromBase64Key(randomKey());
+        byte[] data = "synthetic log line\n\u00ff".getBytes(java.nio.charset.StandardCharsets.ISO_8859_1);
+        String oneShot = a.ofContent("chunk", data, 0, data.length);
+        var incremental = a.content("chunk");
+        incremental.update(data, 0, 5);
+        incremental.update(data, 5, data.length - 5);
+        assertEquals(oneShot, incremental.finish());
+        assertTrue(oneShot.matches("[0-9a-f]{64}"));
+        assertNotEquals(oneShot, a.ofContent("anchor", data, 0, data.length), "each use has its own domain");
+        assertNotEquals(oneShot, b.ofContent("chunk", data, 0, data.length), "keyed: another key, another digest");
+        String bare = java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(data));
+        assertNotEquals(bare, oneShot, "never the bare hash");
+    }
 }

@@ -53,7 +53,7 @@ class SystemLogCollectionRepositoryTest {
                     ArtefactValidation.reachedWithoutRestore(ArtefactValidation.V1), "standard",
                     Optional.of(Instant.now().plusSeconds(86400)), "palo_alto/" + device + "/x.enc", Optional.empty());
             var chunk = new Chunk("chunk-1", LocalDate.of(2026, 10, 17), HEX, 0, 120, 120, 4, "2026-10-15 10:00:00",
-                    "2026-10-15 10:00:02", 1, List.of(), manifest);
+                    "2026-10-15 10:00:02", 1, List.of(), HEX, manifest);
             var write = new SourceWrite(new Run("GAP", 500, 120, 2, 4000, "{\"seed\":true,\"pages\":[]}"), Optional.of(chunk),
                     Optional.of(new PanCursor("2026/10/15 10:00:02", List.of("103", "104"))),
                     List.of(new Gap("INITIAL_BASELINE", 0, 0, true, null, null, "{\"seed_entries\":2000}")));

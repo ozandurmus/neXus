@@ -45,6 +45,7 @@ public final class WorkerClaimLoop {
             com.securityexpert.nexus.ui2.jobs.diagnostic.DiagnosticRead.CAPABILITY,
             com.securityexpert.nexus.ui2.jobs.diagnostic.PanSyslogMeasure.CAPABILITY,
             com.securityexpert.nexus.ui2.jobs.diagnostic.PanSystemLogCollect.CAPABILITY,
+            com.securityexpert.nexus.ui2.jobs.systemlog.CpSystemLogCollect.CAPABILITY,
             ConfirmCapabilityIds.DEVICE_CONFIRM_CHECK_POINT, ConfirmCapabilityIds.DEVICE_CONFIRM_PALO_ALTO,
             ConfirmCapabilityIds.DEVICE_CONFIRM_HTTPS, BackupCapabilityIds.HTTPS_VENDOR_BACKUP,
             ConfirmCapabilityIds.DEVICE_CONFIRM_CISCO_ASA, InventoryCapabilityIds.ASA_INVENTORY_COLLECT, BackupCapabilityIds.ASA_CONFIG_BACKUP,
@@ -130,6 +131,11 @@ public final class WorkerClaimLoop {
     /** System-log programme phase B: the Palo Alto incremental system/config log collection. */
     public WorkerClaimLoop withPanSystemLogCollect(com.securityexpert.nexus.ui2.worker.diagnostic.PanSystemLogCollectJobExecutor executor) {
         this.panSystemLogCollectExecutor=executor; return this;
+    }
+    private com.securityexpert.nexus.ui2.worker.diagnostic.CpSystemLogCollectJobExecutor cpSystemLogCollectExecutor;
+    /** System-log programme phase B: the Check Point incremental log, crash listing and daily file collection. */
+    public WorkerClaimLoop withCpSystemLogCollect(com.securityexpert.nexus.ui2.worker.diagnostic.CpSystemLogCollectJobExecutor executor) {
+        this.cpSystemLogCollectExecutor=executor; return this;
     }
     private com.securityexpert.nexus.ui2.worker.backup.fortinet.FortiManagerDiagnosticJobExecutor diagnosticJobExecutor;
 
@@ -242,7 +248,8 @@ public final class WorkerClaimLoop {
             : capability.contains("failover") ? "FAILOVER_EXECUTION"
             : capability.equals("diagnostic_read") || capability.equals("fmg_interface_detail")
                 || capability.equals(com.securityexpert.nexus.ui2.jobs.diagnostic.PanSyslogMeasure.CAPABILITY)
-                || capability.equals(com.securityexpert.nexus.ui2.jobs.diagnostic.PanSystemLogCollect.CAPABILITY) ? "DIAGNOSTIC" : "INVENTORY";
+                || capability.equals(com.securityexpert.nexus.ui2.jobs.diagnostic.PanSystemLogCollect.CAPABILITY)
+                || capability.equals(com.securityexpert.nexus.ui2.jobs.systemlog.CpSystemLogCollect.CAPABILITY) ? "DIAGNOSTIC" : "INVENTORY";
         return com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.open(
             new com.securityexpert.nexus.ui2.persistence.runtime.EndpointAdmissionRepository.Owner(
                 claim.jobId(), claim.leaseEpoch(), null, 0, workerId.startsWith("policy-") ? "policy" : "general",
@@ -464,6 +471,16 @@ public final class WorkerClaimLoop {
                     leaseRepository.transitionState(claimed.jobId(),claimed.leaseEpoch(),com.securityexpert.nexus.ui2.jobs.JobState.CLAIMED,
                         com.securityexpert.nexus.ui2.jobs.JobState.REJECTED,"system:worker","syslog_measure_claim_check","EXECUTOR_UNAVAILABLE");
                 } else panSyslogMeasureExecutor.execute(claimed.jobId(),claimed.leaseEpoch(),job.targetDeviceId());
+                return true;
+            }
+            if (com.securityexpert.nexus.ui2.jobs.systemlog.CpSystemLogCollect.CAPABILITY.equals(job.capabilityId())) {
+                if (cpSystemLogCollectExecutor == null) {
+                    leaseRepository.transitionState(claimed.jobId(),claimed.leaseEpoch(),com.securityexpert.nexus.ui2.jobs.JobState.CLAIMED,
+                        com.securityexpert.nexus.ui2.jobs.JobState.REJECTED,"system:worker","syslog_collect_claim_check","EXECUTOR_UNAVAILABLE");
+                } else {
+                    cpSystemLogCollectExecutor.execute(claimed.jobId(),claimed.leaseEpoch(),job.targetDeviceId(),
+                        hostOf(endpoint.addressRef()),portOf(endpoint.addressRef()),device.credentialReferenceId());
+                }
                 return true;
             }
             if (com.securityexpert.nexus.ui2.jobs.diagnostic.PanSystemLogCollect.CAPABILITY.equals(job.capabilityId())) {

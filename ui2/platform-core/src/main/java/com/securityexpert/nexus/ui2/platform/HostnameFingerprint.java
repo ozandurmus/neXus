@@ -57,4 +57,49 @@ public final class HostnameFingerprint {
             throw new IllegalStateException("hostname fingerprint could not be computed", e);
         }
     }
+
+    /**
+     * An incremental keyed content digest (system-log phase B contract section 12: content-derived identifiers are
+     * keyed, never bare hashes): HMAC-SHA256 under this instance's key of {@code UTF-8(domain) || 0x00 || content}, as
+     * lowercase hex. The domain separates the uses of the one key (anchors, chunk and file content identities).
+     */
+    public final class Keyed {
+        private final Mac mac;
+
+        private Keyed(String domain) {
+            try {
+                mac = Mac.getInstance(ALGORITHM);
+                mac.init(key);
+            } catch (GeneralSecurityException e) {
+                throw new IllegalStateException("content fingerprint could not be computed", e);
+            }
+            mac.update(domain.getBytes(StandardCharsets.UTF_8));
+            mac.update((byte) 0);
+        }
+
+        public void update(byte[] data, int offset, int length) {
+            mac.update(data, offset, length);
+        }
+
+        public String finish() {
+            byte[] digest = mac.doFinal();
+            StringBuilder hex = new StringBuilder(digest.length * 2);
+            for (byte b : digest) hex.append(String.format("%02x", b));
+            return hex.toString();
+        }
+    }
+
+    /** Starts an incremental keyed digest of content under {@code domain}. */
+    public Keyed content(String domain) {
+        if (domain == null || domain.isEmpty() || domain.indexOf('\0') >= 0)
+            throw new IllegalArgumentException("content fingerprint domain");
+        return new Keyed(domain);
+    }
+
+    /** The keyed digest of {@code data[offset, offset + length)} under {@code domain}; see {@link Keyed}. */
+    public String ofContent(String domain, byte[] data, int offset, int length) {
+        Keyed keyed = content(domain);
+        keyed.update(data, offset, length);
+        return keyed.finish();
+    }
 }
