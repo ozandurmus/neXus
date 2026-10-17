@@ -744,6 +744,9 @@ stated headroom; a wrong guess fails visibly), **PENDING** (no number; the data 
 
   Each redaction replaces the value with `<redacted>` and counts it (`redaction_count`). The rules are tested with
   synthetic lines only.
+  The Palo Alto rule set is versioned (`pan-config-v2`): the rule-set id and the per-rule counts are stored in the
+  `detail` of the source's `system_log_run` row beside the total (`system_log_chunk` has no column for them; V160 is
+  unchanged). Redacting twice equals redacting once, counts included.
 - **Archives are not redacted.** HCP archives and spike data cannot be redacted without unpacking. They are stored
   as received, encrypted, with access limited to `operation_admin` and `security_admin`, and are never served raw to
   aiview (aiview sees the masked member listing only).
