@@ -19,7 +19,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 final class NotificationMailRouter {
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final String[] TITLES = {"Administration changes", "Sign-in and access", "Backup failures",
-            "Other job failures", "Configuration changes", "Compliance regressions", "Device reachability", "Security scans"};
+            "Other job failures", "Configuration changes", "Compliance regressions", "Device reachability", "Security scans",
+            "Device crash and dump files"};
     private static final String ADMIN_ACTIONS = "'local_credential_create', 'local_password_change', "
             + "'local_credential_admin_password_reset', "
             + "'local_credential_enable', 'local_credential_disable', 'role_binding_create', 'role_binding_revoke', "
@@ -133,6 +134,21 @@ final class NotificationMailRouter {
                     lines.add(at(r, "created_at") + "  " + safe(r.get("device_name", String.class)) + "  "
                             + r.get("kind", String.class) + ": " + safe(r.get("summary", String.class))
                             + "  (notification " + r.get("notification_id", String.class) + ")");
+                }
+            }
+            case "device_crash_file" -> {
+                // One alert row per (device, run, process); the route watermark is the alert creation time (contract §7).
+                rows = dsl.fetch("select a.alert_id, a.process, a.file_count, a.newest_mtime, a.job_id, a.created_at, "
+                        + "coalesce(d.observed_hostname, a.device_id) as device_name "
+                        + "from device_crash_alert a left join devices d on d.device_id = a.device_id "
+                        + "where a.created_at > {0} order by a.created_at, a.alert_id", Timestamp.from(from));
+                for (Record r : rows) {
+                    newestTime = max(newestTime, at(r, "created_at"));
+                    lines.add(at(r, "created_at") + "  " + safe(r.get("device_name", String.class)) + "  "
+                            + r.get("file_count", Integer.class) + " new crash/dump file(s), process "
+                            + safe(r.get("process", String.class)) + ", newest at device time "
+                            + Instant.ofEpochSecond(r.get("newest_mtime", Long.class))
+                            + "  /operations/jobs/" + r.get("job_id", String.class));
                 }
             }
             case "compliance_regression" -> {

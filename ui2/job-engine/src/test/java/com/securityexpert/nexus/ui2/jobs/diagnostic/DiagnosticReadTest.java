@@ -71,6 +71,23 @@ class DiagnosticReadTest {
                         .noneMatch(c -> c.gateId().equals(gateId)),gateId);
         }
     }
+    /** V160: the phase B collection reads (own rows, own terms) are never operator diagnostics, and no registry key is ambiguous. */
+    @Test void syslogCollectionReadsAreNeverDiagnosticsAndKeepEveryRegistryKeyUnique() {
+        var rows=GateRegistryFixtureLoader.loadFromStream(getClass().getClassLoader().getResourceAsStream("capabilities/gate_registry_fixture.yaml"));
+        GateRegistryPort gates=key -> rows.stream().filter(r -> r.key().equals(key)).toList();
+        var collect=rows.stream().filter(row -> row.gateId().contains("_syslog_collect_")).toList();
+        assertEquals(13,collect.size());
+        for (var row: collect) assertEquals(1,gates.findByCanonicalKey(row.key()).size(),row.gateId());
+        assertEquals(rows.size(),rows.stream().map(GateRow::key).distinct().count(),"two gate rows share one canonical key");
+        for (String role: new String[]{"gateway","management_server"})
+            for (String vendor: new String[]{"check_point","palo_alto"})
+                for (String model: new String[]{null,"known gaia"})
+                    for (var row: collect) {
+                        assertTrue(DiagnosticRead.commands(vendor,role,model,gates).stream()
+                            .noneMatch(c -> c.gateId().equals(row.gateId())),row.gateId());
+                        assertTrue(DiagnosticRead.resolve(vendor,role,model,row.gateId(),null,gates).isEmpty(),row.gateId());
+                    }
+    }
     @Test void exactReviewedReadsOnlyForMatchingDeviceScope() {
         var rows=GateRegistryFixtureLoader.loadFromStream(getClass().getClassLoader().getResourceAsStream("capabilities/gate_registry_fixture.yaml"));
         GateRegistryPort gates=key -> rows.stream().filter(r -> r.key().equals(key)).toList();

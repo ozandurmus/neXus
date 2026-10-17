@@ -63,3 +63,31 @@ ve tanımlarının yapılacağı ekrandan emin ol. Bildirim için tipleri belirl
 
 ## 6. Out of scope
 SMTP authentication, per-type syslog, SMS/Teams/webhooks, per-device subscriptions.
+
+## 7. Amendment 2026-10-17 -- notification type `device_crash_file` (PO: system-log phase B, Q5)
+Authority: `DEVICE_SYSTEM_LOG_PHASE_B_CONTRACT.md` §7 and §13 Q5, approved by the Product Owner on 2026-10-17
+(`PO_DECISION_RECORD_2026_10_17_SYSTEM_LOG_PHASE_B.md`, Q5: "the notification type `device_crash_file` is added (amends the
+FROZEN notification routing contract and its V100 check)"). Nothing else in §1-§6 changes; the digest, watermark, leader and
+recipient rules of §4 apply to the new type unchanged. Migration `V160__system_log_phase_b.sql` carries the data change and
+is dry-run before deploy like V100.
+
+Type added to the §2 table:
+
+| Type key | Title (UI) | Source | Event |
+| --- | --- | --- | --- |
+| `device_crash_file` | Device crash and dump files | `device_crash_alert` | one new row per (device, collection run, process): new files in `/var/log/crash` or `/var/log/dump/usermode` on a Check Point gateway, with the parsed process name (`UNKNOWN` when the name does not match the measured pattern), the number of new files and the newest file time. Listing only; no file content is read or sent. |
+
+- **Which files alert.** A name not seen in the previous listing, or the same name with a changed size or time (matched by
+  name digest and time). A device's first listing is a baseline ("present before monitoring"): its existing files raise no
+  alert. A removed file raises no alert.
+- **What does not alert.** Rotation-loss gaps of the system-log collector (`ROTATED_AWAY`, `TRUNCATED`) never notify; they
+  show on the Logs screen and in the daily summary (phase B contract §4.5, §13 Q5).
+- **Watermark.** The route's `watermark_time` against `device_crash_alert.created_at`. A mail line is: time UTC, device name,
+  count and process, newest file time, job link.
+- **Type set.** §2 and §3 list seven types and the V100 check allowed seven. V113 later added `security_scan` without an
+  amendment here; the check now allows nine: the seven of §2, `security_scan` and `device_crash_file`. V160 replaces the
+  check (`notification_routes_type_check`) with the nine-type list and seeds `device_crash_file` disabled, with its
+  watermark at "now", so nothing historical is sent. The type list in the service (`NotificationRoute.TYPES`) and the
+  Notifications screen row follow.
+- **Data.** `device_crash_alert(alert_id, device_id, process, file_count, newest_mtime, job_id, created_at, notified_at)`,
+  unique per (device, job, process), created by V160.

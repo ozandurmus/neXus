@@ -360,6 +360,51 @@ class AuditRedactionPolicyTest {
             "ssh_host_key_observation.status", "ssh_host_key_observation.strict_refusal",
             // ssh_trust_settings
             "ssh_trust_settings.mode", "ssh_trust_settings.settings_id",
+            // device_crash_alert (V160)
+            "device_crash_alert.alert_id", "device_crash_alert.created_at", "device_crash_alert.device_id",
+            "device_crash_alert.file_count", "device_crash_alert.job_id", "device_crash_alert.newest_mtime",
+            "device_crash_alert.notified_at",
+            // device_crash_entry (V160)
+            "device_crash_entry.baseline", "device_crash_entry.device_id", "device_crash_entry.directory",
+            "device_crash_entry.entry_id", "device_crash_entry.first_seen_at", "device_crash_entry.first_seen_job",
+            "device_crash_entry.last_seen_job", "device_crash_entry.mtime", "device_crash_entry.removed_at",
+            "device_crash_entry.size",
+            // system_log_chunk (V160)
+            "system_log_chunk.bytes", "system_log_chunk.chunk_id", "system_log_chunk.ciphertext_bytes",
+            "system_log_chunk.collected_at", "system_log_chunk.device_id", "system_log_chunk.end_offset",
+            "system_log_chunk.first_line_time", "system_log_chunk.flags", "system_log_chunk.inode",
+            "system_log_chunk.job_id", "system_log_chunk.last_line_time", "system_log_chunk.line_time_basis",
+            "system_log_chunk.lines", "system_log_chunk.log_day", "system_log_chunk.plaintext_sha256",
+            "system_log_chunk.prune_reason", "system_log_chunk.pruned_at", "system_log_chunk.redaction_count",
+            "system_log_chunk.source_key", "system_log_chunk.start_offset",
+            // system_log_cursor (V160)
+            "system_log_cursor.cursor_key", "system_log_cursor.device_epoch_at_read", "system_log_cursor.device_id",
+            "system_log_cursor.fast_rotating", "system_log_cursor.inode", "system_log_cursor.offset_bytes",
+            "system_log_cursor.pan_boundary_seqnos", "system_log_cursor.pan_last_receive_time",
+            "system_log_cursor.retention_horizon_seconds", "system_log_cursor.source_key",
+            "system_log_cursor.updated_at", "system_log_cursor.updated_job_id",
+            // system_log_file (V160)
+            "system_log_file.ciphertext_bytes", "system_log_file.collected_at", "system_log_file.device_id",
+            "system_log_file.expires_at", "system_log_file.file_id", "system_log_file.flags",
+            "system_log_file.job_id", "system_log_file.kind", "system_log_file.mtime", "system_log_file.name_time",
+            "system_log_file.pruned_at", "system_log_file.sha256", "system_log_file.size", "system_log_file.status",
+            // system_log_gap (V160)
+            "system_log_gap.created_at", "system_log_gap.device_id", "system_log_gap.extent_unknown",
+            "system_log_gap.gap_id", "system_log_gap.job_id", "system_log_gap.kind",
+            "system_log_gap.known_lost_bytes", "system_log_gap.pending_bytes", "system_log_gap.source_key",
+            "system_log_gap.window_end_epoch", "system_log_gap.window_start_epoch",
+            // system_log_run (V160)
+            "system_log_run.bytes_read", "system_log_run.bytes_stored", "system_log_run.created_at",
+            "system_log_run.device_id", "system_log_run.duration_ms", "system_log_run.job_id",
+            "system_log_run.outcome", "system_log_run.reads_issued", "system_log_run.run_id",
+            "system_log_run.source_key",
+            // system_log_settings (V160)
+            "system_log_settings.device_cap_bytes", "system_log_settings.hcp_retention_days",
+            "system_log_settings.include_management_servers", "system_log_settings.ledger_retention_days",
+            "system_log_settings.raw_retention_days", "system_log_settings.settings_id",
+            "system_log_settings.spike_data_cap_bytes", "system_log_settings.spike_data_enabled",
+            "system_log_settings.spike_data_retention_days", "system_log_settings.updated_at",
+            "system_log_settings.updated_by",
             // system_log_measurement (V151): counts, field names, formats and enum-like values only
             "system_log_measurement.device_id", "system_log_measurement.job_id",
             "system_log_measurement.measured_at", "system_log_measurement.measurement_id",
@@ -524,6 +569,10 @@ class AuditRedactionPolicyTest {
             assertEquals(1, tierOf(app, "sanitize_job", "wrapped_data_key"));
             assertEquals(1, tierOf(app, "sanitize_vault_entry", "lookup_key"));
             assertEquals(1, tierOf(app, "sanitize_vault_entry", "sealed_original"));
+            // V160: the system-log chunk and file keys are wrapped key material; names and bytes are digests.
+            assertEquals(1, tierOf(app, "system_log_chunk", "wrapped_data_key"));
+            assertEquals(1, tierOf(app, "system_log_file", "wrapped_data_key"));
+            assertEquals(2, tierOf(app, "system_log_cursor", "anchor_hmac"));
 
             // Beyond §3's seven: V17, V91, V97, V144, V153, V154 and V156 declared further redactions. The policy
             // must hold exactly the declared set -- an extra entry is an undeclared redaction, a
@@ -602,7 +651,14 @@ class AuditRedactionPolicyTest {
             "secrets_metadata.reference_pointer", 2, "sessions.csrf_secret", 1,
             "ssh_host_key_observation.expected_fingerprint", 2,
             "ssh_host_key_observation.management_address", 2,
-            "ssh_host_key_observation.presented_fingerprint", 2);
+            "ssh_host_key_observation.presented_fingerprint", 2,
+            // V160 (system-log phase B): name and log-byte digests, wrapped keys, artefact locations, device detail.
+            "system_log_cursor.anchor_hmac", 2, "system_log_cursor.family_snapshot", 2,
+            "system_log_chunk.file_name_hmac", 2, "system_log_chunk.artefact_ref", 2,
+            "system_log_chunk.wrapped_data_key", 1, "system_log_gap.detail", 2,
+            "system_log_file.remote_name_hmac", 2, "system_log_file.artefact_ref", 2,
+            "system_log_file.wrapped_data_key", 1, "device_crash_entry.name_hmac", 2,
+            "device_crash_entry.process", 2, "device_crash_alert.process", 2, "system_log_run.detail", 2);
 
     private static java.util.Map<String, Integer> declaredRedactions(Object... pairs) {
         java.util.Map<String, Integer> declared = new java.util.LinkedHashMap<>();
