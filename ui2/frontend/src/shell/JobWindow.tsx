@@ -1,6 +1,8 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import Button, { type ButtonProps } from "@mui/material/Button";
 import { getJobWindow } from "../auth/adminApi";
+import { ROLE_LOCK_LABEL, useRoleAllows } from "./actionAccess";
+import { DISABLED_STYLE } from "./disabledStyle";
 
 export interface JobWindowStatus {
   open: boolean;
@@ -44,7 +46,18 @@ export function JobWindowProvider({ children }: { children: ReactNode }) {
 }
 
 export function useJobWindow() { return useContext(JobWindowContext); }
-export function JobButton({ disabled, children, ...props }: ButtonProps) {
+
+/**
+ * A window-gated device-job button. With `plane`, a session that does not hold that plane sees it locked with the
+ * role reason instead of "Next window" (which would wrongly promise the action opens up at that time).
+ */
+export function JobButton({ disabled, children, plane, sx, ...props }: ButtonProps & { readonly plane?: string }) {
   const window = useJobWindow();
-  return <Button {...props} disabled={disabled || !window.open}>{children}{window.label && ` · ${window.label}`}</Button>;
+  const roleAllowed = useRoleAllows(plane);
+  const note = !roleAllowed ? ROLE_LOCK_LABEL : window.label;
+  return (
+    <Button {...props} sx={[DISABLED_STYLE, ...(Array.isArray(sx) ? sx : [sx])]} disabled={disabled || !roleAllowed || !window.open}>
+      {children}{note && ` · ${note}`}
+    </Button>
+  );
 }

@@ -16,6 +16,7 @@ import Typography from "@mui/material/Typography";
 import { EmptyPanel } from "../shell/ScreenLayout";
 import type { Tone } from "../shell/tone";
 import { M3Button, M3Tabs, StatusChip } from "../shell/M3Widgets";
+import { PLANE_OPERATIONS, ROLE_REFUSAL, useRoleAllows } from "../shell/actionAccess";
 import { deviceNameLabel, jobPhaseLabel, isTerminalJobState, enrollmentStateLabel, onboardingChip } from "../shell/deviceCopy";
 import { MONO, m3 } from "../theme/m3Theme";
 import { RoleChip, Ts, VendorBadge, vendorDisplayName } from "../shell/States";
@@ -518,7 +519,7 @@ function macCell(iface: { readonly member_macs?: Record<string, string> },
   return (
     <Stack spacing={0.25}>
       {entries.map(([m, mac]) => (
-        <Typography key={m.device_id} variant="body2" sx={{ fontFamily: "monospace", fontSize: "0.8125rem" }}
+        <Typography key={m.device_id} variant="body2" sx={{ fontFamily: "monospace", fontSize: "0.75rem" }}
           title={entries.length > 1 ? memberLabel(m, members) : undefined}>
           {mac}
         </Typography>
@@ -614,7 +615,7 @@ function ClusterInterfacesTable({
             placeholder="Filter interfaces..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            sx={{ "& .MuiInputBase-root": { height: 32, fontSize: "0.8125rem", borderRadius: "8px" } }}
+            sx={{ "& .MuiInputBase-root": { height: 32, fontSize: "0.75rem", borderRadius: "8px" } }}
           />
           <M3Button
             emphasis={upOnly ? "filled" : "outlined"}
@@ -625,7 +626,10 @@ function ClusterInterfacesTable({
         </Stack>
       </Box>
 
-      <Table size="small">
+      {/* Horizontal scroll is the fallback; the cells below keep an address, a zone or a network on one line so a
+          value is never wrapped into a column of fragments or cut at the pane edge (review 2026-10-17, 1440 px). */}
+      <TableContainer sx={{ maxWidth: "100%", overflowX: "auto" }}>
+      <Table size="small" sx={{ "& th, & td": { px: 0.75 }, "& th": { whiteSpace: "nowrap" } }}>
         <TableHead>
           <TableRow>
             {showVsysColumn && <TableCell sx={{ fontWeight: 600 }}>VSYS</TableCell>}
@@ -686,13 +690,13 @@ function ClusterInterfacesTable({
                     <StatusChip tone="neutral" label={iface.vsysLabel ?? "Physical"} dense />
                   </TableCell>
                 )}
-                <TableCell sx={{ fontWeight: 600, fontFamily: "monospace" }}>{iface.name}</TableCell>
+                <TableCell sx={{ fontWeight: 600, fontFamily: "monospace", whiteSpace: "nowrap" }}>{iface.name}</TableCell>
                 <TableCell>{iface.kind}</TableCell>
                 <TableCell>{vlanLabel(iface)}</TableCell>
-                {showZoneColumn && <TableCell>{zoneLabel(iface)}</TableCell>}
-                {showMacColumn && <TableCell>{macCell(iface, members)}</TableCell>}
+                {showZoneColumn && <TableCell sx={{ whiteSpace: "nowrap" }}>{zoneLabel(iface)}</TableCell>}
+                {showMacColumn && <TableCell sx={{ whiteSpace: "nowrap" }}>{macCell(iface, members)}</TableCell>}
                 {oneAddressColumn ? (
-                  <TableCell>
+                  <TableCell sx={{ whiteSpace: "nowrap" }}>
                     {(() => {
                       const firstMember = members[0]?.device_id;
                       const agreed = firstMember ? (iface.member_addresses?.[firstMember] ?? []) : [];
@@ -703,13 +707,13 @@ function ClusterInterfacesTable({
                       return shown.length > 0 || vips.length > 0 ? (
                         <Stack spacing={0.25}>
                           {shown.map((a) => (
-                            <Typography key={a.address} variant="body2" sx={{ fontFamily: "monospace", fontSize: "0.8125rem" }}>
+                            <Typography key={a.address} variant="body2" sx={{ fontFamily: "monospace", fontSize: "0.75rem" }}>
                               {a.address}
                             </Typography>
                           ))}
                           {vips.map((a) => (
                             <Stack key={a.address} direction="row" spacing={0.75} alignItems="center">
-                              <Typography variant="body2" sx={{ fontFamily: "monospace", fontSize: "0.8125rem" }}>{a.address}</Typography>
+                              <Typography variant="body2" sx={{ fontFamily: "monospace", fontSize: "0.75rem" }}>{a.address}</Typography>
                               <StatusChip tone="mem" label="VIP" dense />
                             </Stack>
                           ))}
@@ -721,10 +725,10 @@ function ClusterInterfacesTable({
                   </TableCell>
                 ) : (
                   <>
-                    {showVipColumn && <TableCell>
+                    {showVipColumn && <TableCell sx={{ whiteSpace: "nowrap" }}>
                       {vips.length > 0 ? (
                         <Stack direction="row" spacing={0.75} alignItems="center">
-                          <Typography variant="body2" sx={{ fontFamily: "monospace", fontSize: "0.8125rem" }}>
+                          <Typography variant="body2" sx={{ fontFamily: "monospace", fontSize: "0.75rem" }}>
                             {vips.map((a) => a.address).join(", ")}
                           </Typography>
                           <StatusChip tone="mem" label="VIP" dense />
@@ -737,12 +741,12 @@ function ClusterInterfacesTable({
                       const mAddrs = iface.member_addresses?.[m.device_id] ?? [];
                       const mState = iface.member_states?.[m.device_id];
                       return (
-                        <TableCell key={m.device_id}>
+                        <TableCell key={m.device_id} sx={{ whiteSpace: "nowrap" }}>
                           {mAddrs.length > 0 ? (
                             // Review §3: the coloured dot after the address carried the member's link state by colour
                             // alone; the word is now on hover here and, when members differ, in the State column.
                             <Typography variant="body2" title={mState ? `${memberLabel(m, members)} link state: ${mState}` : undefined}
-                              sx={{ fontFamily: MONO, fontSize: "0.8125rem" }}>
+                              sx={{ fontFamily: MONO, fontSize: "0.75rem" }}>
                               {mAddrs.map((a) => a.address).join(", ")}
                             </Typography>
                           ) : (
@@ -753,7 +757,7 @@ function ClusterInterfacesTable({
                     })}
                   </>
                 )}
-                <TableCell sx={{ fontFamily: "monospace", fontSize: "0.8125rem" }}>
+                <TableCell sx={{ fontFamily: "monospace", fontSize: "0.75rem", whiteSpace: "nowrap" }}>
                   {network}
                 </TableCell>
                 <TableCell>
@@ -786,6 +790,7 @@ function ClusterInterfacesTable({
           })}
         </TableBody>
       </Table>
+      </TableContainer>
     </Stack>
   );
 }
@@ -2262,6 +2267,7 @@ const BACKUP_REASON_MIN = 8;
  * completes. Nothing here offers a restore, a download, or a decrypt.
  */
 function RequestBackupControl({ deviceId, onAdmitted }: { readonly deviceId: string; readonly onAdmitted: () => void }) {
+  const roleAllowed = useRoleAllows(PLANE_OPERATIONS);
   const [reason, setReason] = useState("");
   const [phase, setPhase] = useState<"idle" | "submitting" | "admitted" | "refused" | "error">("idle");
   const [serverMessage, setServerMessage] = useState<string | null>(null);
@@ -2308,10 +2314,10 @@ function RequestBackupControl({ deviceId, onAdmitted }: { readonly deviceId: str
           }}
           size="small"
           sx={{ minWidth: 320 }}
-          disabled={phase === "submitting"}
+          disabled={phase === "submitting" || !roleAllowed}
           inputProps={{ "aria-label": "Backup reason" }}
         />
-        <M3Button deviceJob
+        <M3Button deviceJob plane={PLANE_OPERATIONS}
           emphasis="tonal"
           onClick={handleSubmit}
           disabled={tooShort || phase === "submitting"}
@@ -2319,6 +2325,9 @@ function RequestBackupControl({ deviceId, onAdmitted }: { readonly deviceId: str
           Request backup
         </M3Button>
       </Stack>
+      {!roleAllowed && (
+        <Typography role="status" variant="body2" color="text.secondary">{ROLE_REFUSAL}</Typography>
+      )}
       {tooShort && reason.length > 0 && (
         <Typography variant="body2" color="text.secondary">
           Reason must be at least {BACKUP_REASON_MIN} characters (after trimming).

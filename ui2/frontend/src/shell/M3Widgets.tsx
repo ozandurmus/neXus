@@ -1,4 +1,6 @@
 import { useJobWindow } from "./JobWindow";
+import { ROLE_LOCK_LABEL, useRoleAllows } from "./actionAccess";
+import { DISABLED_STYLE } from "./disabledStyle";
 import { useState } from "react";
 import type { ReactNode } from "react";
 import Box from "@mui/material/Box";
@@ -25,6 +27,8 @@ import { Icon, type IconName } from "./Icon";
 export function M3Button({
   emphasis,
   deviceJob = false,
+  plane,
+  lockedReason,
   icon,
   children,
   onClick,
@@ -32,6 +36,10 @@ export function M3Button({
   disabled,
 }: {
   readonly deviceJob?: boolean;
+  /** The product plane this action belongs to; a session without it sees the button locked with a role reason. */
+  readonly plane?: string;
+  /** A fixed reason the action cannot run for anyone (shown in the label instead of a window or role note). */
+  readonly lockedReason?: string;
   readonly emphasis: "filled" | "tonal" | "outlined" | "text";
   readonly icon?: IconName;
   readonly children: ReactNode;
@@ -40,6 +48,9 @@ export function M3Button({
   readonly disabled?: boolean;
 }) {
   const jobWindow = useJobWindow();
+  const roleAllowed = useRoleAllows(plane);
+  const lockNote = lockedReason ?? (roleAllowed ? null : ROLE_LOCK_LABEL);
+  const isDisabled = Boolean(disabled) || lockNote !== null || (deviceJob && !jobWindow.open);
   const byEmphasis = {
     filled: { bgcolor: m3.primary, color: m3.onPrimary, "&:hover": { bgcolor: m3.primary } },
     tonal: { bgcolor: m3.secondaryContainer, color: m3.onSecondaryContainer, "&:hover": { bgcolor: m3.secondaryContainer } },
@@ -48,9 +59,9 @@ export function M3Button({
   } as const;
   return (
     <Button
-      href={href}
+      href={lockNote !== null ? undefined : href}
       onClick={onClick}
-      disabled={disabled || (deviceJob && !jobWindow.open)}
+      disabled={isDisabled}
       startIcon={icon ? <Icon name={icon} size={20} /> : undefined}
       sx={{
         height: 40,
@@ -62,9 +73,12 @@ export function M3Button({
         textTransform: "none",
         whiteSpace: "nowrap",
         ...byEmphasis[emphasis],
+        // The one disabled style, whatever the emphasis: the filled fill and the tonal tint kept their colour while
+        // MUI greyed the text, which left dark text on a dark blue fill (review 2026-10-17).
+        ...DISABLED_STYLE,
       }}
     >
-      {children}{deviceJob && jobWindow.label && ` · ${jobWindow.label}`}
+      {children}{lockNote !== null ? ` · ${lockNote}` : deviceJob && jobWindow.label && ` · ${jobWindow.label}`}
     </Button>
   );
 }

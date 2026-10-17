@@ -151,7 +151,7 @@ export function SanitizerScreen() {
   return (
     <ScreenRoot>
       <ScreenHeader title="Data Sanitizer"
-        subtitle="Veri Anonimleştirme · pcap/pcapng, logs, CSV, XLSX and JSON: addresses, MACs, names and e-mails replaced by keyed tokens" />
+        subtitle="Data Anonymization · pcap/pcapng, logs, CSV, XLSX and JSON: addresses, MACs, names and e-mails replaced by keyed tokens" />
       {error && <Alert severity="error">{error}</Alert>}
       {!info && !error && <Typography role="status">Loading…</Typography>}
       {limits && !limits.vault_available && <Alert severity="warning">

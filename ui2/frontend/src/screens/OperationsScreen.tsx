@@ -179,7 +179,7 @@ export function OperationsScreen() {
       <ScreenHeader
         title="Operations"
         subtitle="Inspect observed HA roles, readiness evaluations and jobs."
-        actions={<M3Button emphasis="filled">Schedule collection</M3Button>}
+        actions={<M3Button emphasis="filled" lockedReason="Schedule authoring is not available yet">Schedule collection</M3Button>}
       />
       <MetricGrid>
         {/* One window with the Overview: jobs FINISHED in 24 h, every terminal state counted (review 2026-09-23). */}

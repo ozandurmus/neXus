@@ -73,10 +73,10 @@ export function LifecycleScreen() {
 export function DeviceLifecycleLine({ deviceId }: { deviceId: string }) {
   const data = useFetchOnMount(() => getDeviceLifecycle(deviceId), lifecycleError);
   return <Typography variant="body2" color="text.secondary">Lifecycle: {data.error ? "Unavailable" : data.data?.risk ?? "UNKNOWN"}
+    {data.data?.status === "NO_LIFECYCLE_DATA" && " (no lifecycle data imported)"}
     {data.data?.hardware?.catalog?.end_of_support && ` · Hardware support: ${data.data.hardware.catalog.end_of_support}`}
     {data.data?.software?.catalog?.end_of_support && ` · Software support: ${data.data.software.catalog.end_of_support}`}
     {data.data?.nearest_license?.expiry && ` · License expiry: ${data.data.nearest_license.expiry}`}
-    {data.data?.status === "NO_LIFECYCLE_DATA" && " · NO_LIFECYCLE_DATA"}
     {data.error && ` · ${data.error}`}
   </Typography>;
 }
