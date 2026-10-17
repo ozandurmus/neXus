@@ -176,6 +176,7 @@ class JooqCpFailoverRepositoryTest {
         var dsl = DSL.using(new MockConnection(query -> {
             String sql = query.sql();
             if (sql.startsWith("SET LOCAL")) return new MockResult[] {new MockResult(0)};
+            if (sql.startsWith("update failover_run r set state='STOPPED'")) return new MockResult[] {new MockResult(0)};
             assertTrue(sql.startsWith("select run_id from failover_run"), "No admission writes for an active unit");
             assertTrue(sql.contains("cluster_ref=?"));
             assertTrue(sql.contains("vs_id is not distinct from ?"));
@@ -194,5 +195,82 @@ class JooqCpFailoverRepositoryTest {
         var decision = repository.requestReadiness("CLS-TEST-01", null, "actor-1", "FW-TEST-01", "check_point");
         assertEquals("RUN_ALREADY_ACTIVE", decision.code());
         assertNull(decision.runId());
+    }
+
+    private static final class ReadinessAdmissionDatabase implements TransactionBoundary {
+        final java.util.List<String> statements = new java.util.ArrayList<>();
+        final java.util.List<Object[]> bindings = new java.util.ArrayList<>();
+        int orphansClosed;
+        boolean activeAfterClose;
+        final DSLContext dsl = DSL.using(new MockConnection(query -> {
+            String sql = query.sql();
+            if (sql.startsWith("SET LOCAL")) return new MockResult[] {new MockResult(0)};
+            statements.add(sql);
+            bindings.add(query.bindings());
+            if (sql.startsWith("update failover_run r set state='STOPPED'")) return new MockResult[] {new MockResult(orphansClosed)};
+            if (sql.startsWith("select run_id from failover_run")) {
+                var records = DSL.using(SQLDialect.POSTGRES);
+                var runId = DSL.field("run_id", String.class);
+                var result = records.newResult(runId);
+                if (activeAfterClose) result.add(records.newRecord(runId).value1("synthetic-live-run"));
+                return new MockResult[] {new MockResult(result.size(), result)};
+            }
+            return new MockResult[] {new MockResult(1)};
+        }), SQLDialect.POSTGRES);
+        @Override public <T> T inTransaction(Function<DSLContext,T> work) { return work.apply(dsl); }
+        JooqCpFailoverRepository repository() {
+            return new JooqCpFailoverRepository(this, false, new com.securityexpert.nexus.ui2.platform.JobWindowPolicy(
+                java.time.Clock.fixed(java.time.Instant.parse("2026-10-08T09:00:00Z"), java.time.ZoneOffset.UTC), 60));
+        }
+    }
+
+    @org.junit.jupiter.api.Test
+    void readinessAdmissionClosesThisUnitsOrphanBeforeTheActiveCheckThenAdmits() {
+        var db = new ReadinessAdmissionDatabase();
+        db.orphansClosed = 1;
+        var decision = db.repository().requestReadiness("CLS-TEST-01", "2", "actor-1", "FW-TEST-01", "palo_alto");
+        assertEquals("ADMITTED", decision.code());
+        String close = db.statements.get(0);
+        assertTrue(close.contains("r.run_kind='READINESS'"), "Execution runs are never closed by readiness admission");
+        assertTrue(close.contains("j.job_id=r.job_id"));
+        assertTrue(close.contains("j.state in ('COMPLETED','FAILED','REJECTED','CANCELLED','OUTCOME_UNKNOWN','RECONCILED')"));
+        assertTrue(close.contains("r.state not in ('DONE','STOPPED')"));
+        assertTrue(close.contains("state='STOPPED',outcome='UNKNOWN'"));
+        assertArrayEquals(new Object[] {JooqCpFailoverRepository.JOB_ENDED_WITHOUT_RESULT, "CLS-TEST-01",
+            "CLS-TEST-01", "2", "palo_alto"}, db.bindings.get(0));
+        assertTrue(db.statements.get(1).startsWith("select run_id from failover_run"));
+        assertTrue(db.statements.stream().anyMatch(sql -> sql.startsWith("insert into failover_run")));
+        assertTrue(db.statements.stream().anyMatch(sql -> sql.startsWith("insert into jobs")));
+    }
+
+    @org.junit.jupiter.api.Test
+    void aLiveRunStillRefusesReadinessAfterTheOrphanClose() {
+        var db = new ReadinessAdmissionDatabase();
+        db.activeAfterClose = true;
+        assertEquals("RUN_ALREADY_ACTIVE",
+            db.repository().requestReadiness("CLS-TEST-01", null, "actor-1", "FW-TEST-01", "check_point").code());
+        assertTrue(db.statements.stream().noneMatch(sql -> sql.startsWith("insert")));
+    }
+
+    @org.junit.jupiter.api.Test
+    void sweepClosesOrphansForEveryUnitUnderTheSchedulerAuditContext() {
+        var audit = new java.util.ArrayList<String>();
+        var writes = new java.util.ArrayList<Object[]>();
+        var dsl = DSL.using(new MockConnection(query -> {
+            if (query.sql().startsWith("SET LOCAL")) { audit.add(query.sql()); return new MockResult[] {new MockResult(0)}; }
+            assertTrue(query.sql().startsWith("update failover_run r set state='STOPPED'"));
+            assertTrue(query.sql().contains("r.run_kind='READINESS'"));
+            writes.add(query.bindings());
+            return new MockResult[] {new MockResult(3)};
+        }), SQLDialect.POSTGRES);
+        var repository = new JooqCpFailoverRepository(new TransactionBoundary() {
+            @Override public <T> T inTransaction(Function<DSLContext,T> work) { return work.apply(dsl); }
+        }, false);
+        assertEquals(3, repository.closeOrphanReadinessRuns());
+        assertEquals(1, writes.size());
+        assertArrayEquals(new Object[] {JooqCpFailoverRepository.JOB_ENDED_WITHOUT_RESULT, null, null, null, null},
+            writes.get(0), "A null unit selects every unit");
+        assertTrue(audit.contains("SET LOCAL app.actor_fingerprint = 'system:failover-readiness-scheduler'"));
+        assertTrue(audit.contains("SET LOCAL app.action_id = 'failover_readiness_orphan_close'"));
     }
 }

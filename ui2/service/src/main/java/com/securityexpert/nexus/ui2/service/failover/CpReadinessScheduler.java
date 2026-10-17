@@ -49,6 +49,14 @@ public final class CpReadinessScheduler {
     @Scheduled(cron = JobWindowPolicy.CRON, zone = JobWindowPolicy.ZONE)
     public void beginPass() {
         if (!windows.isOpen() || targets != null) return;
+        try {
+            // A run whose job ended without a result would otherwise refuse its unit forever.
+            int closed = store.closeOrphanReadinessRuns();
+            if (closed > 0) LOG.warn("Closed {} readiness run(s) whose job ended without a result", closed);
+        } catch (RuntimeException sweepFailed) {
+            // Admission still closes a unit's own orphan; the pass is not skipped for the sweep.
+            LOG.warn("Readiness orphan sweep failed; admission closes orphans per unit");
+        }
         targets = service.readinessTargets().iterator();
         nextUnitAt = clock.instant();
         run();
