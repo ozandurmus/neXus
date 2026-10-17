@@ -87,6 +87,12 @@ Where the code lives and the choices made inside this contract's latitude. Nothi
   distributions are uniform across non-reserved `/8`s.
   The contiguous /1 and /2 netmasks (outside the kept ranges) are kept as text. A network (host bits zero) is one token
   (`a.b.c.0/24`); an interface address with a prefix maps the address and keeps the length.
+- **Revert and spelling.** The vault keeps one original per token (`(job_id, lookup_key)`), so a revert returns every
+  occurrence of a token in the spelling of the first one the job saw, adjusted by what the token itself shows (IPv6
+  letter case when the token has hex letters, IPv4-mapped dotted tail, MAC separator and case). What a token cannot
+  show is not restored: the same IPv6 address written compressed (`2001:db8::1`), partially padded
+  (`2001:0db8::0001`) and fully expanded in one job reverts all three as the first spelling. Revert is byte-exact for
+  every address written one way, which is the normal case; ARGON review F-18 records the residual.
 - **Names.** `h-<10 hex>` of the lower-case punycode label (so a Unicode label and its punycode form agree); an
   all-upper label gives `H-<10 HEX>` with the same digest, a mixed-case label a case-exact digest, so revert is
   byte-exact. Public suffixes come from the JDK's own copy of the Public Suffix List (ICANN rules) plus special-use

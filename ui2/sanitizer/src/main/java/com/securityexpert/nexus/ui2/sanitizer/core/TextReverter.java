@@ -155,8 +155,17 @@ public final class TextReverter {
         String tokenAddress = tokenPercent >= 0 ? tokenBeforeSlash.substring(0, tokenPercent) : tokenBeforeSlash;
         String tokenZone = tokenPercent >= 0 ? tokenBeforeSlash.substring(tokenPercent) : "";
         if (address.indexOf(':') < 0 || tokenAddress.indexOf(':') < 0) return original;
-        Addresses.V6Style want = Addresses.V6Style.of(tokenAddress);
-        if (want.equals(Addresses.V6Style.of(address))) return address + tokenZone + tail;
+        Addresses.V6Style have = Addresses.V6Style.of(address);
+        Addresses.V6Style read = Addresses.V6Style.of(tokenAddress);
+        // A token is a keyed random address rendered in the original's style, so two of the style flags are only
+        // readable from it when it shows them: "expanded" looks the same as a plain address whose eight groups all
+        // happen to have four digits (about 60 % of random tokens), and a token without a letter says nothing about
+        // case. Where the token is silent the stored original's own style stands; reading it as "expanded" or
+        // "lower-case" anyway rewrote most compressed IPv6 originals on revert.
+        boolean letters = tokenAddress.chars().anyMatch(c -> (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'));
+        Addresses.V6Style want = new Addresses.V6Style(letters ? read.upper() : have.upper(),
+                read.expanded() ? have.expanded() : false, read.dottedTail());
+        if (want.equals(have)) return address + tokenZone + tail;
         byte[] bytes = Addresses.parseV6(address);
         return bytes == null ? original : Addresses.formatV6(bytes, want) + tokenZone + tail;
     }
