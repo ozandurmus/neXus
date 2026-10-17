@@ -483,6 +483,14 @@
       "reason": "Synthetic secret-shaped test line used to prove log redaction/masking; no operational credential. Exact path and rule only in .gitleaks.toml (system-log phase B, PO mandate 2026-10-15).",
       "owner": "PO",
       "review_date": "2026-12-31"
+    },
+    {
+      "tool": "gitleaks",
+      "rule": "generic-api-key",
+      "location": "ui2/service/src/test/java/com/securityexpert/nexus/ui2/service/systemlog/SystemLogReadFixture.java",
+      "reason": "Synthetic masking key and cipher key in the system-log read test fixture (literal '-test-key' and an all-zero key); no operational credential. Exact path and rule only in .gitleaks.toml (system-log phase B, PO mandate 2026-10-15).",
+      "owner": "PO",
+      "review_date": "2026-12-31"
     }
   ]
 }

@@ -808,6 +808,7 @@ def test_gitleaks_allowlists_only_the_approved_commit_and_seven_exact_test_paths
     syslog_paths = {
         "ui2/worker/src/test/java/com/securityexpert/nexus/ui2/worker/systemlog/redaction/LogRedactorTest.java",
         "ui2/service/src/test/java/com/securityexpert/nexus/ui2/service/systemlog/LogMaskingTest.java",
+        "ui2/service/src/test/java/com/securityexpert/nexus/ui2/service/systemlog/SystemLogReadFixture.java",
     }
     assert syslog["targetRules"] == ["generic-api-key", "private-key"]
     assert not {"commits", "regexes", "stopwords", "regexTarget"} & syslog.keys()
@@ -817,7 +818,8 @@ def test_gitleaks_allowlists_only_the_approved_commit_and_seven_exact_test_paths
         for unrelated in ("prefix/" + path, path + ".bak", path.replace("/src/test/", "/src/main/")):
             assert not any(re.search(pattern, unrelated) for pattern in syslog["paths"])
     syslog_entries = {(e["rule"], e["location"]) for e in entries if e["location"] in syslog_paths}
-    assert syslog_entries == {("generic-api-key", p) for p in syslog_paths} | {("private-key", sorted(syslog_paths)[1])}
+    redactor = "ui2/worker/src/test/java/com/securityexpert/nexus/ui2/worker/systemlog/redaction/LogRedactorTest.java"
+    assert syslog_entries == {("generic-api-key", p) for p in syslog_paths} | {("private-key", redactor)}
     paths = {entry["location"] for entry in entries if entry["rule"] == "generic-api-key" and "commit" not in entry
              and entry["location"] not in syslog_paths}
     assert len(paths) == len(fixtures["paths"]) == 7
