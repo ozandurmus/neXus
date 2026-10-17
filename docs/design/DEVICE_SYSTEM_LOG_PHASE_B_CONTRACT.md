@@ -4,15 +4,22 @@
 record before implementation freezes them.** The PO approved all 13 commands in §10 exactly as written (C2 as the
 SFTP ranged read) and settled every question in §13; the record is
 [PO_DECISION_RECORD_2026_10_17_SYSTEM_LOG_PHASE_B.md](PO_DECISION_RECORD_2026_10_17_SYSTEM_LOG_PHASE_B.md). The
-parameters marked `PENDING-M1`/`PENDING-M5`/`PENDING-M3M4` in §11 are **not** decided: they are filled from the M1/M5
-findings record and the M3/M4 findings record (committed next to the phase A contract) before implementation freezes
-them. No number is invented here, and the PAN vendor-semantics items in §11 (`seqno` contiguity, `dir=forward`,
-`query` syntax) stay **UNKNOWN** until an official documentation citation is recorded.
+findings record
+[DEVICE_SYSTEM_LOG_MEASUREMENT_FINDINGS_2026_10_17.md](DEVICE_SYSTEM_LOG_MEASUREMENT_FINDINGS_2026_10_17.md) is now
+committed. §11 gives each parameter one status: **RESOLVED** (the findings determine the value, which is now in the
+text), **PROVISIONAL** (a number is proposed from the findings with its headroom, and a wrong guess fails visibly as
+`BACKLOG` or `TOO_LARGE`, never silently), **PENDING** (no number: it needs the second M1/M5 read, a numeric
+Check Point measurement summary, or the first rollout) or **UNKNOWN** (vendor semantics: the PAN `seqno` contiguity,
+`dir=forward` and `query` syntax stay **UNKNOWN** until an official documentation citation is recorded). The
+Check Point sizes of 100,000 B or more, all mtimes and all file names were masked in the measurement text, so growth
+rates, rotation timing and name patterns are not in the record (findings §2).
 
 Authority and inputs:
 
 - [PO_DECISION_RECORD_2026_10_15_INTERFACE_MAC_ZONE_AND_SYSTEM_LOGS.md](PO_DECISION_RECORD_2026_10_15_INTERFACE_MAC_ZONE_AND_SYSTEM_LOGS.md)
   §3 (phase B approved in direction; raw-evidence law exception for the system-log programme).
+- [DEVICE_SYSTEM_LOG_MEASUREMENT_FINDINGS_2026_10_17.md](DEVICE_SYSTEM_LOG_MEASUREMENT_FINDINGS_2026_10_17.md): the
+  measurement record (M1 first read, M2, M3/M4, M5) that sets the §11 parameters.
 - [DEVICE_SYSTEM_LOG_PROGRAMME_CONTRACT.md](DEVICE_SYSTEM_LOG_PROGRAMME_CONTRACT.md) (phase A): sources §2, read
   shapes L1–L5 §3, measurements M1–M5 §4/§4.1, storage/privacy §5, PO answers §7 (30-day raw retention, PAN config
   logs included, every enrolled firewall, 6-hour interval).
@@ -40,7 +47,7 @@ pencerelerinde.
 2. Büyüyen her dosyanın yalnızca yeni baytları okunur. Okuma bir SFTP aralıklı okumasıdır: dosya, zaten açık olan
    SSH oturumunun SFTP alt sistemi üzerinden açılır, kayıtlı bayt ofsetinden tavana kadar okunur ve kapatılır.
    Cihazda okuma için hiçbir komut çalışmaz (`tail`/`head` yok, kabuk süreci yok). Satır sınırına kırpma, parmak izi
-   kontrolü ve rotasyon mantığı neXus tarafında yapılır. Tek okuma en fazla 8 MiB'tır (öneri; M1 sonrası kesinleşir).
+   kontrolü ve rotasyon mantığı neXus tarafında yapılır. Tek okuma en fazla 8 MiB'tır (geçici; bkz. §3.4).
 3. Dosya döndürüldüyse (inode değiştiyse) önce eski dosyanın okunmamış kalanı okunur, sonra yeni dosya baştan
    okunur.
 4. Bazı satırlar biz okuyamadan silindiyse, bunu sessizce geçmiyoruz. Ekranda ve kayıtta "boşluk" olarak, bayt
@@ -64,8 +71,10 @@ alınır.
 - Bir koşuda cihaz başına en fazla 64 MiB okunur.
 - Sıkıştırma neXus tarafında yapılır.
 
-**Ne kadar veri.** Gerçek sayılar bu gece/yarın tamamlanacak M1 ve M5 ölçümlerinden gelecek. Önerilen tavanlar
-şunlar:
+**Ne kadar veri.** Ölçüm bulgu kaydı işlendi (§11). Palo Alto ve HCP sayıları kesinleşti: HCP raporu en çok
+16 MiB, Palo Alto sayfası 2.000 kayıt. Check Point'te büyük dosyaların boyutu ve günlük büyümesi aiview maskesi
+yüzünden ölçülemedi; bu sayılar bekliyor ve okuma tavanları "geçici" duruyor. Tavan yetmezse veri sessizce
+kaybolmaz, ekranda `BACKLOG` olarak görünür. Önerilen tavanlar şunlar:
 
 - Ham loglar 30 gün saklanır.
 - Cihaz başına en fazla 2 GiB tutulur (sıkıştırılmış).
@@ -92,8 +101,10 @@ onayın parçası değil.
    destekleyene kadar kapalı; PAN config-log ayrıntıları gizli bilgi maskelenerek saklanır; VSX için yalnızca VS0;
    `.gz` döndürülmüş dosyanın okunmamış kalanı raporlanan boşluk olur; operatör maskesiz satırı görebilir (her
    görüntüleme denetim kaydına yazılır), aiview her zaman maskelenmiş görür.
-4. Hâlâ sayı beklenen parametreler (okuma tavanı, bütçeler, 2 GiB cihaz tavanı, rotasyon biçimi, PAN sayfa
-   boyutu) M1/M5 ve M3/M4 bulgu kaydından gelecek; o zamana kadar öneri olarak duruyor, kesinleşmiş değil.
+4. Bulgu kaydı geldi (§11). Kesinleşenler: PAN sayfa boyutu ve sayfa sayısı, HCP üst sınırı, satır zaman biçimleri.
+   Hâlâ sayı beklenenler: okuma tavanı ve bütçeler (geçici), 2 GiB cihaz tavanı (Check Point tarafı), rotasyon biçimi
+   ve büyüme hızı. Bunlar için Check Point ölçümünün sunucu tarafında sayısal özete çevrilmesi öneriliyor
+   (bulgu kaydı R1); bu ek ölçüm okuması sizin onayınızı gerektirir.
 
 ---
 
@@ -119,22 +130,22 @@ Incremental text sources. Each is a *file family*: the live file plus its rotate
 
 | Source key | Base path (expanded by the login shell) | Family glob | Notes |
 |---|---|---|---|
-| `cp_messages` | `/var/log/messages` | `/var/log/messages*` | rotation mode `PENDING-M1` (rename vs copytruncate) |
-| `cp_fwd_elg` | `$FWDIR/log/fwd.elg` | `$FWDIR/log/fwd.elg*` | size-rotated; naming `PENDING-M1` |
-| `cp_cpd_elg` | `$CPDIR/log/cpd.elg` | `$CPDIR/log/cpd.elg*` | |
-| `cp_cpwd_elg` | `$CPDIR/log/cpwd.elg` | `$CPDIR/log/cpwd.elg*` | process restarts; high signal |
-| `cp_fwk_elg` | `$FWDIR/log/fwk.elg` | `$FWDIR/log/fwk.elg*` | VSX/USFW only; absent elsewhere = `ABSENT` (§9) |
-| `cp_mq_mng_elg` | `$FWDIR/log/mq_mng.elg` | `$FWDIR/log/mq_mng.elg*` | |
+| `cp_messages` | `/var/log/messages` | `/var/log/messages*` | `messages.1` exists as a plain sibling on 53/53 gateways. Rotation mode (rename vs copytruncate) `PENDING` (needs the second M1 read, §11) |
+| `cp_fwd_elg` | `$FWDIR/log/fwd.elg` | `$FWDIR/log/fwd.elg*` | size-rotated; sibling naming `PENDING` (first C1 run). Empty (size 0) on 8 of 53 gateways; most lines carry no timestamp (§4.7) |
+| `cp_cpd_elg` | `$CPDIR/log/cpd.elg` | `$CPDIR/log/cpd.elg*` | multi-line records (at least 17 % of lines are continuations) |
+| `cp_cpwd_elg` | `$CPDIR/log/cpwd.elg` | `$CPDIR/log/cpwd.elg*` | process restarts; high signal. Empty (size 0) on 13 of 53 gateways |
+| `cp_fwk_elg` | `$FWDIR/log/fwk.elg` | `$FWDIR/log/fwk.elg*` | present on 53/53 measured gateways, not VSX/USFW only; a missing file = `ABSENT` (§9). 15 % of the last-20 lines contain secret-vocabulary words (§12) |
+| `cp_mq_mng_elg` | `$FWDIR/log/mq_mng.elg` | `$FWDIR/log/mq_mng.elg*` | present on 53/53 measured gateways; line form not measured (no tail gate) |
 | `cp_spike_log` | `/var/log/spike_detective/spike_detective.log` | `…/spike_detective.log*` | |
-| `cp_spike_csv` | `/var/log/spike_detective/spike_detective.csv` | `…/spike_detective.csv*` | |
+| `cp_spike_csv` | `/var/log/spike_detective/spike_detective.csv` | `…/spike_detective.csv*` | 8 comma-separated columns; measured size 1,661 to 23,678 B on 53/53 (46 within 17.6 to 23.7 kB: size-bounded) |
 
 Whole-file sources are fetched once, when they are complete:
 
 | Source key | What | When | Retention |
 |---|---|---|---|
-| `cp_sar_daily` | yesterday's `/var/log/sa/sar<DD>` (text, written by the device at 23:53) | 06:00 window, once a day | 30 days |
-| `cp_hcp_report` | newest `/var/log/hcp/last/hcp_report_<host>_<dd_mm_yy_HH_MM>.tar.gz` (device nightly run, ~03:00) | 06:00 window, once a day | 7 days (PO) |
-| `cp_spike_data` | files of each new, settled Spike Detective data directory: `perf_cpu_N.log`, `profiling_summary.elg` (layout `PENDING-M5`, gate 3) | any window, once per directory | 30 days |
+| `cp_sar_daily` | yesterday's `/var/log/sa/sar<DD>` (text, written by the device at 23:53). `/var/log/sa/` holds 59 to 60 files (30 days x binary and text); every file is 100,000 B or more | 06:00 window, once a day | 30 days |
+| `cp_hcp_report` | newest `*.tar.gz` in `/var/log/hcp/last/` (found on 52/53 gateways; usual form `hcp_report_<host>_<dd_mm_yy_HH_MM>.tar.gz` is not verified, §8.1). The device's run time is about 03:00 on 36/52 gateways and elsewhere on the others | 06:00 window, once a day | 7 days (PO) |
+| `cp_spike_data` | files of each new, settled Spike Detective data directory: `perf_cpu_N.log`, `profiling_summary.elg` (the directory contents are **not measured**: gate 3 lists the parent only; off by default until one directory listing has been reviewed, §8.3) | any window, once per directory | 30 days |
 
 Listing-only sources (metadata, never content):
 
@@ -205,18 +216,20 @@ MDS / management servers (`cp_multi_domain_server`) are excluded:
 
 Everything is serial per firewall.
 
-### 3.4 Device-load bounds (all `PENDING-M1` unless stated)
+### 3.4 Device-load bounds (status per row; basis in the findings record)
 
-| Bound | Proposed default | Why |
+| Bound | Default | Status and basis |
 |---|---|---|
-| Sessions per device per run | 1 (SSH; every SFTP read and fetch uses a subsystem channel on the same session) | D6 |
-| Concurrency on one device | 1 command at a time | D6 |
-| Bytes per read (`<cap>`; the SFTP read stops here) | 8 MiB | bounded single transfer |
-| Bytes per source per run | 32 MiB | one noisy file cannot starve the others |
-| Bytes per device per run (all sources, excluding HCP) | 64 MiB | device and link load |
-| HCP archive max | 64 MiB (`PENDING-M5`, gate 4) | refuse larger, report `TOO_LARGE` |
-| Spike data per directory | 16 MiB (`PENDING-M5`, gate 3) | |
-| Wall-clock budget per device job | 15 min | inside the 60-minute window |
+| Sessions per device per run | 1 (SSH; every SFTP read and fetch uses a subsystem channel on the same session) | design (D6) |
+| Concurrency on one device | 1 command at a time | design (D6) |
+| Bytes per read (`<cap>`; the SFTP read stops here) | 8 MiB | **PROVISIONAL.** No live file size of 100,000 B or more was measurable (findings §2), so the cap can be neither confirmed nor refuted. Safe because an undersized cap only produces `BACKLOG`. Fits the first-run baseline: 8 live incremental sources x 8 MiB = 64 MiB |
+| Bytes per source per run | 32 MiB | **PROVISIONAL**, same basis (4 reads of the cap) |
+| Bytes per device per run (all sources, excluding HCP) | 64 MiB | **PROVISIONAL**, same basis. The first-run baseline of 8 live files can reach this on its own, so a first run in the 06:00 window may leave `cp_sar_daily` as `BACKLOG` (reported; the next window continues) |
+| HCP archive max | **16 MiB** | **RESOLVED.** Every device's whole `/var/log/hcp/last/` directory is at most 4,840 KiB (4.73 MiB; n=52, median 3.23 MiB), so any archive is at most 4.73 MiB. 16 MiB is 3.4 times that bound. Larger = `TOO_LARGE` |
+| sar file max (`sar<DD>` text) | **32 MiB** | **PROVISIONAL.** Every sar file is 100,000 B or more and the 6 to 16 CPU devices show 61 to 96 MiB per 60 files; linear extrapolation to the 15 devices with 128 CPUs gives about 8 MiB per file on average and at most about 16.3 MiB for a text file. 32 MiB is 2 times that worst case (low confidence, 7 devices). Larger = `TOO_LARGE`, reported |
+| Spike data per directory | 16 MiB | **PENDING.** The data directories were not listed (findings §4.2); no size is known |
+| Spike data directories per run | 16 | **PROVISIONAL.** Devices hold 0 to 3,631 data directories (median 14, p90 93). The first listing is a baseline, never fetched (§8.3). New directories beyond 16 per run are `BACKLOG`. The rate of new directories is unknown (the second M5 read gives it) |
+| Wall-clock budget per device job | 15 min | not measured; PAN needs about 2.2 s per request (findings §5) |
 | Device-side work | `stat` and `ls` over exec; SFTP ranged reads and whole-file SFTP fetches. No shell process for reading (no `tail`/`head`), no compression, no `find`, no archive creation on the device | D6, PO 2026-10-17 |
 
 When a budget is exhausted the run stops reading that source and records `BACKLOG` with exact byte counts (§9). It
@@ -255,6 +268,11 @@ bash -lc 'date +%s; stat -c "%n %i %s %Y" /var/log/messages* $FWDIR/log/fwd.elg*
   compares device mtimes with its own clock.
 - Rotated siblings are ordered by name suffix and cross-checked by mtime. A `.gz` sibling is listed but never read
   (§4.6).
+- **Leading lines.** 25 of 53 measured gateways print one extra line before the output of every command (the
+  `bash -lc` login shell; content not observed). The parser locates the device-clock line as the first line that
+  matches `^[0-9]{9,11}$` and each `stat` line by the shape `^/\S+ [0-9]+ [0-9]+ [0-9]+$`, and ignores every other
+  line. It never assumes line 1. The same rule applies to the `ls` outputs of C3, C4, C5, C6 and C7 (findings §3.2).
+  A C1 output with no device-clock line is `UNKNOWN`.
 
 ### 4.3 The read (SFTP ranged read; PO 2026-10-17)
 
@@ -267,8 +285,10 @@ is therefore an **SFTP ranged read**, not a shell command:
 3. Close the file.
 
 - **Same path rule as C1.** `<path>` must be one of the absolute paths that this run's stat output (C1) printed. Its
-  basename must match the source's family pattern (base name plus optional `.<1–2 digits>` suffix, exact form
-  `PENDING-M1`) and its directory must equal the directory of the family's base file. `<pos>` and `<cap>` are computed
+  basename must match the source's read-eligible family pattern `^<base>(\.[0-9]{1,2})?$` (RESOLVED as a
+  proposal from the findings: `messages.1` exists as a plain name on 53/53 gateways; the sibling names of the `.elg`
+  families are not yet observed, so every other suffix, including `.gz`, `.old` and dated names, is listed in
+  `family_snapshot` and never read) and its directory must equal the directory of the family's base file. `<pos>` and `<cap>` are computed
   by neXus from the cursor and the budget. They are never operator input and never come from a device response.
 - **What the device does.** The SFTP server answers read requests for the requested region of one file. It starts
   no shell, runs no `tail`, `head` or pipe, and compresses nothing. neXus sends no write, no `setstat`, no rename and
@@ -366,6 +386,23 @@ If M1 or M5 shows rotated siblings stored compressed (`*.gz`), the remainder of 
 without decompressing on the device. Decompression on the device is not proposed (D6). The remainder is recorded
 as `ROTATED_AWAY` with its observed compressed size and `extent_unknown = true`, and §13 Q9 records the PO's choice (accept the reported gap).
 
+### 4.7 Line timestamp forms (measured; findings §3.3 and §4.1)
+
+`first_line_time` and `last_line_time` of a chunk (§5.2) are the time of the first and the last *timestamped* line of
+the chunk, never of a continuation line. No source prints a time zone, so every parsed time is stored as the device's
+local wall-clock text with the basis `DEVICE_LOCAL` and is never converted (the same rule as the PAN cursor).
+
+| Source | Form (shape; token classes inferred from the masked output) | Year | Rule |
+|---|---|---|---|
+| `cp_messages` | leading `<Mon> <DD> <HH:MM:SS> <YYYY> <host> <prog>[<pid>]:`; all 1,060 sampled lines match; 0 continuation lines | printed | parse; an unrecognised month token (spelling not observable) = time unknown |
+| `cp_fwd_elg` | elg header `[<proc> <pid> <tid>]@<host>[<DD> <Mon> <HH:MM:SS>] <text>` on only 3.2 % of sampled lines; 96.8 % carry no timestamp | not printed | a chunk with no timestamped line has both times null |
+| `cp_cpd_elg`, `cp_cpwd_elg` | same elg header; 57.7 % (cpd) and 95.9 % (cpwd) of sampled lines carry a timestamp; cpd has multi-line records | not printed | year taken from `device_epoch_at_read`: the latest date not after the device clock with that day and month |
+| `cp_fwk_elg` | leading `[<DD> <Mon> <HH:MM:SS>][<instance>];[<cpu>];` on 625 of 901 visible sampled lines; 249 have no timestamp | not printed | as the elg rule |
+| `cp_mq_mng_elg` | not measured (no tail gate) | unknown | both times null until measured |
+| `cp_spike_log`, `cp_spike_csv` | first field is one whitespace-free token whose form is not observable; `.log` has 8 comma-separated segments after it, `.csv` 8 columns | unknown | both times null until measured (`PENDING`) |
+| `cp_sar_daily` | `HH:MM:SS` in 24-hour form at the start of each row (no AM/PM token); the date is in the header line | in the header | the file covers one day; times are not parsed per row in phase B |
+| `pan_system`, `pan_config` | `receive_time` `yyyy/MM/dd HH:mm:ss` (all 78 summaries, 0 unparsed) | printed | kept verbatim as the cursor |
+
 ## 5. Storage model
 
 ### 5.1 Artefacts
@@ -400,24 +437,33 @@ run before deploy and audit triggers like V151. None is created by this document
 File names can carry host names (HCP names do). They are stored only as an HMAC for identity, plus the parsed safe
 fields. The clear name exists only inside the encrypted artefact, in its manifest header.
 
-### 5.3 Retention and caps (defaults; PO-settable in Settings; numbers marked `PENDING` are set from the findings record)
+### 5.3 Retention and caps (defaults; PO-settable in Settings; `PENDING` numbers need the data named in §11)
 
 | Class | Retention | Per-device cap |
 |---|---|---|
-| Incremental raw chunks (CP and PAN) | 30 days (PO, phase A §7.1) | 2 GiB stored, compressed (`PENDING-M1`) |
+| Incremental raw chunks (CP and PAN) | 30 days (PO, phase A §7.1) | 2 GiB stored, compressed. **PAN: not binding** (largest firewall about 0.79 GB raw per 30 days, before compression). **CP: `PENDING`** (growth rates not measurable, findings §2) |
 | `cp_sar_daily` | 30 days | within the 2 GiB |
-| `cp_spike_data` | 30 days | 512 MiB |
-| `cp_hcp_report` | 7 days (PO) | 7 archives |
+| `cp_spike_data` | 30 days | 512 MiB (`PENDING`: data-directory layout and sizes not measured) |
+| `cp_hcp_report` | 7 days (PO) | 7 archives, at most 7 x 4.73 MiB = 33 MiB per device (**RESOLVED** bound from the findings, §3.4) |
 | Gap, run, crash entry and crash alert rows | 180 days (same as the parsed index in phase A §7.1) | — |
 
 When a device reaches its cap before the retention ends, its oldest chunks are pruned early. The pruning is
 ledgered and shown as `RETENTION_SHORTENED_BY_CAP`; new data is never refused for the cap. The alternative is
 §13 Q4 (not chosen).
 
-**Fleet estimate (formula; numbers `PENDING-M1`/`PENDING-M3M4`).**
+**Fleet estimate (formula; PAN and HCP terms measured, Check Point terms `PENDING`).**
 
 `stored ≈ Σ_devices Σ_sources growth_per_day × 30 / r + Σ HCP sizes × 7`, where `r` is the gzip ratio. Plain-text
 syslog typically compresses about 8–10×; this is to be confirmed on the first week of chunks.
+
+Measured terms (findings §4.3 and §5):
+
+- **PAN.** About 106,600 `pan_system` entries and 125 MB per day over the 39 firewalls, plus about 60 KB per day of
+  `pan_config`: about 3.76 GB raw per 30 days for the fleet before compression (extrapolated from the newest 100
+  entries per firewall, XML result bytes as the proxy for stored bytes; the estimate is burst-biased).
+- **HCP.** At most 52 x 7 x 4.73 MiB = 1.68 GiB for the fleet (upper bound, from the directory totals; the archives
+  are already compressed).
+- **Check Point incremental sources and sar.** `PENDING`: the sizes are masked in the measurement (findings §2).
 
 The engineering report on the M1 findings gives this number before rollout, along with the artefact volume's free
 space.
@@ -434,8 +480,18 @@ a bound, then parse.
 - **Each later page.** The forward query uses `receive_time geq '<cursor>'` and `dir=forward` (oldest first). Entries
   whose `seqno` is in `pan_boundary_seqnos` at the boundary second are dropped. If a page returns exactly `<n>`
   entries, the next page starts at that page's last `receive_time`.
-- **Bounds.** At most 4 pages per log type per run, `<n> = 5000` (the PAN maximum; `PENDING-M3M4` for the real
-  volume). If the bound is reached, the run records `BACKLOG`. Under the default settings that never means skipping.
+- **Bounds (RESOLVED from the M3/M4 summaries; findings §5).** At most 4 pages per log type per run, page size
+  `<n> = 2000`. Basis: the extrapolated 6-hour volume of `pan_system` is 192 / 443 / 1,067 / 5,496 entries
+  (min / median / p90 / max over 39 firewalls); 4 x 2000 = 8,000 entries is 1.46 times the maximum and 7.5 times the p90,
+  and only 2 firewalls exceed one page. A 2000-entry page is at most 2000 x 1,227 B = 2.5 MB (the measured maximum
+  per entry), 3.4 times under the 8 MiB result cap, which is kept. The PAN maximum of 5000 (not verified against
+  vendor documentation) would be 6.1 MB, only 1.3 times under the cap. If the bound is reached, the run records
+  `BACKLOG`. Under the default settings that never means skipping.
+- **Seed sizes (RESOLVED).** `pan_system`: `<n> = 2000` newest entries (covers 2.2 h at the busiest firewall, 27 h at
+  the median, 62 h at the quietest). `pan_config`: `<n> = 100` (100 entries cover 41 to 107 days on every firewall,
+  more than the 30-day retention).
+- **Page time (PENDING).** Every measured request reached `FIN` at the first check after 2.1 to 2.2 s with 100 entries.
+  The time for a 2000-entry page is not measured; the first rollout step records `enqueueToFinMs` per page.
 - **Stall.** If a page holds more than `<n>` entries in the same second, paging cannot advance. The run records a
   `PAGE_STALL` gap with `extent_unknown = true` and moves the cursor one second forward.
 - **Loss detection.** Whether `seqno` is contiguous per log type is **UNKNOWN**. It needs vendor documentation or M3
@@ -443,10 +499,13 @@ a bound, then parse.
   never as a confirmed loss. The PAN log quota overwrite cannot otherwise be proven.
 - **Storage.** One chunk per log type per run. The entries are kept as JSON Lines, one object per `<entry>`, with
   every child element name → text as received. This is the raw entry; the transformation is lossless for fields.
-- **Config-log detail.** `before-change-detail` and `after-change-detail` can carry configured values. They are
+- **Config-log detail.** The config-log result fields that can carry configured values were observed as
+  `before-change-preview`, `after-change-preview`, `path` and `full-path` (on 5 to 6 of 39 firewalls within the newest
+  100 entries); the names `before-change-detail`/`after-change-detail` were **not observed**. All six names are
   redacted on write by the secret rules (§12). The PO kept them with redaction (§13 Q7), not dropped.
 - **Polling.** The `action=get` checks are the PAN API's own asynchronous job pattern. They are bounded: 2 s
-  interval, at most 30 checks per page, as in V151. This is the only repeated request in the design.
+  interval, at most 30 checks per page, as in V151 (kept: 60 s against 2.2 s observed at 100 entries). This is the
+  only repeated request in the design.
 - `dir=forward` and the `query` filter syntax need an official PAN-OS XML API documentation citation recorded before
   freeze (vendor semantics law).
 
@@ -458,9 +517,13 @@ a bound, then parse.
   matched by `name_hmac` and mtime.
 - **First listing.** The first listing for a device is a baseline. Pre-existing files are recorded with
   `first_seen_job` set and raise no alert. They are shown as "present before monitoring".
-- **Process name.** It is parsed from the file name with the pattern measured by M5 gate 5 (`PENDING-M5`). Entries
-  under `/var/log/crash/` are `kernel`. A name that does not match is `UNKNOWN`, which is still alerted, with the
-  process `UNKNOWN`.
+- **Process name.** It is parsed from the file name. The name pattern is **`PENDING`**: the M5 gate 5 names were
+  masked, so the pattern is not in the record (findings §4.4). Until it is measured the parse has no pattern and
+  every entry's process is `UNKNOWN`, which is the specified fallback and is still alerted. Entries under
+  `/var/log/crash/` are `kernel`.
+- **Measured baseline (findings §4.4).** `/var/log/crash/` is empty on all 53 gateways. `/var/log/dump/usermode/`
+  holds 122 files on 39 gateways (14 empty; per device median 2, p90 4, max 36); 118 of them are 100,000 B or more. All
+  of these are `present before monitoring` on the first listing and raise no alert.
 - **Alert.** One alert per (device, run, process): process, count of new files, newest mtime (device time, shown in
   Europe/Istanbul). It goes through a new notification type `device_crash_file` ("Device crash and dump files").
   This is an amendment to the FROZEN `NOTIFICATION_ROUTING_CONTRACT.md` §2 and to its V100 type check. The PO
@@ -477,8 +540,17 @@ file is `TOO_LARGE` and is not fetched.
 
 ### 8.1 HCP report (06:00 window)
 
-- The listing is `cp_syslog_collect_ls_hcp`. The candidate is the newest name matching
-  `^hcp_report_[A-Za-z0-9._-]+_[0-9]{2}_[0-9]{2}_[0-9]{2}_[0-9]{2}_[0-9]{2}\.tar\.gz$` (form `PENDING-M5`, gate 4).
+- The listing is `cp_syslog_collect_ls_hcp`. The candidate is the newest file (by the device's mtime from the
+  listing) whose name matches the safe form `^[A-Za-z0-9._-]+\.tar\.gz$`. The measurement used exactly this
+  selection (`*.tar.gz`, newest first) and it found an archive on 52 of 53 gateways; the file names were masked,
+  so the stricter form `^hcp_report_[A-Za-z0-9._-]+_[0-9]{2}_[0-9]{2}_[0-9]{2}_[0-9]{2}_[0-9]{2}\.tar\.gz$` is **not
+  verified**. A candidate that matches the safe form but not the strict form is fetched and flagged
+  `NAME_SHAPE_UNEXPECTED` (a naming mismatch must never turn into a silent `ABSENT`). The name is stored as an HMAC
+  plus the parsed time when the strict form matches (§5.2).
+- Shape of the archive (findings §4.3): 2 to 5 members (median 3), at most 4.73 MiB, an integrity check on neXus (below)
+  needs no size beyond the 16 MiB bound of §3.4. The device's own run time is about 03:00 on 36 of 52 gateways, but
+  16 gateways show other times (00:16 to 05:54, and 06:08 to 06:12 on 4): a 06:00-window fetch can meet an archive
+  that is not yet 10 minutes old, which the settling rule below defers to the next day.
 - It is fetched only when the file is not already stored and has settled: mtime at least 10 min older than the
   device clock from the stat.
 - Integrity is checked on neXus: the gzip and tar structure must be readable. The device does no `tar -t`. A broken
@@ -488,22 +560,49 @@ file is `TOO_LARGE` and is not fetched.
 
 ### 8.2 sar (06:00 window)
 
-- The listing is `cp_syslog_collect_ls_sa`. The candidate is `sar<DD>` whose mtime falls in the 30 h before the
-  device clock and whose `DD` is the day before the device's date.
+- The listing is `cp_syslog_collect_ls_sa`. The candidate is the text file `sar<DD>` (proposed pattern
+  `^sar(0[1-9]|[12][0-9]|3[01])$`; the binary `^sa(0[1-9]|[12][0-9]|3[01])$` is never fetched) whose mtime falls in
+  the 30 h before the device clock and whose `DD` is the day before the device's date. The directory holds 59 or 60
+  files on every gateway (30 days of both kinds), so the listing is about 61 lines and needs no more than the 64 KiB
+  bound. The file names were masked in the measurement, so the two patterns are taken from the phase A contract and
+  are consistent with the 2 x 30 count, not verified by name.
+- Size: every file is 100,000 B or more; the bound is 32 MiB (`PROVISIONAL`, §3.4); a larger file is `TOO_LARGE` and
+  reported. The first row of a sar file has the shape `Linux <kernel> (<host>)<TAB><date><TAB><arch> (<N> CPU)` and the
+  header has 12 columns in 24-hour form (findings §4.1).
 - It is fetched once; the `(name_hmac, mtime)` uniqueness prevents a second fetch.
 - The binary `sa<DD>` is not fetched.
 
 ### 8.3 Spike Detective data
 
-- The listing is `cp_syslog_collect_ls_spike`. A data directory is a subdirectory whose name matches the measured
-  pattern (`PENDING-M5`, gate 3).
+- The listing is `cp_syslog_collect_ls_spike`. A data directory is an entry with link count 2 (all 6,334
+  measured data directories have link count 2; the plain files `spike_detective.log`/`.csv` and their rotated copies have
+  link count 1). The directory **name pattern is `PENDING`** (masked in the measurement), so the collector takes the
+  entry class (directory) and not a name regex, and stores the name only as an HMAC.
+- **Population (findings §4.2).** 0 to 3,631 data directories per gateway (median 14, p90 93); 6 gateways have 100 or
+  more entries, one has 3,631 directories.
+- **First listing is a baseline.** All directories present in a device's first listing are recorded as
+  `present before monitoring` and are **never fetched**. Only directories that appear later are candidates.
+- **Per run.** At most 16 new directories per run (§3.4); the rest is `BACKLOG`.
+- **Listing bound.** The C4 output bound is 256 KiB. The largest measured listing (3,638 lines) is about 189 KB with
+  19-character names and exceeds 256 KiB once names exceed about 39 characters, which cannot be checked (names masked).
+  A listing that reaches the bound is `UNKNOWN` for the source in that run (never processed partially). Raising the
+  bound is a change to an approved row and needs the PO (§13, open items).
+- **Layout is not measured.** Gate 3 lists only the parent directory. The contents of a data directory
+  (`perf_cpu_<N>.log`, `profiling_summary.elg`) are unverified, so fetching spike data is **off by default**
+  (`system_log.spike_data_enabled`, default `false`, security_admin). It is switched on after one `cp_syslog_collect_ls_spike_dir`
+  listing of one gateway's directory has been reviewed in the findings record. Until then the source still runs the
+  baseline listing.
 - A data directory is new when its name is not yet stored, and settled when its mtime is at least 10 min older than
   the device clock.
 - For each new, settled directory the run does one `cp_syslog_collect_ls_spike_dir` and then one `sftp_get` per file
   named `perf_cpu_<N>.log` or `profiling_summary.elg`, up to 16 MiB per directory. Other members are listed in the
   manifest but not fetched.
-- If M5 shows the data files are not in subdirectories, the `_dir` gate is dropped and the files are taken from the
-  top-level listing.
+- M5 gate 3 shows the data entries are subdirectories (6,334 across 53 gateways), so the `_dir` gate stays.
+  `<dir>` must also match the safe form `^[A-Za-z0-9._-]{1,128}$` because the real name pattern is not measured; a
+  name outside it is skipped and counted as `NAME_REJECTED`. This tightens the C5 path rule from "the measured
+  pattern" to a safe character form and is listed under the open items of §13 for the PO's acknowledgement. The one
+  review listing (first rollout, one gateway, the newest settled directory) is run under the aiview mentality and its
+  member-name classes and sizes are recorded in the findings record before `spike_data_enabled` is turned on.
 - `spike_detective.log` and `.csv` are incremental sources (§4).
 
 ## 9. Outcomes and failure semantics
@@ -534,8 +633,8 @@ failure.
 
 All rows: action class `read`. **All 13 are APPROVED (PO 2026-10-17)** exactly as written, with C2 as the SFTP ranged
 read (§4.3). They are inserted with `sign_off_state = SIGNED_OFF` by the implementation migration together with the
-fixture rows. The approval covers the command shapes and terms below. The bounds marked `PENDING-M1`/`PENDING-M5` (byte caps and
-similar) are set from the findings record. A change to a command's shape, path rule, frequency or transport needs a
+fixture rows. The approval covers the command shapes and terms below. The bounds that were marked `PENDING-M1`/`PENDING-M5` (byte caps and
+similar) are set from the findings record, with the status shown in §3.4 and §11. A change to a command's shape, path rule, frequency or transport needs a
 new PO approval. Field names follow `gate_registry` and the
 protocol's ten gate fields.
 
@@ -547,10 +646,10 @@ protocol's ten gate fields.
 | C2 | `cp_syslog_collect_read` | SFTP ranged read (C4 `sftp_get` step with a byte range; subsystem on the same SSH session; gate `NOT_APPLICABLE` per C4 §2.3 as amended in §4.3) | no shell command. Read-only SFTP open of `<path>`, read `[<pos>, <pos> + <cap>)`, close. `<pos>`, `<cap>` non-negative integers computed by neXus, `<cap> ≤ 8388672`; `<path>` = an absolute path printed by C1 in the same run, basename in the source's family pattern, directory equal to the family base directory | 60 | none | per source per run, until the per-source (32 MiB) or per-device (64 MiB) budget; only inside the job window | same session (SFTP channel); sequential; never concurrent with another command or transfer | `<cap>` (8 MiB + 64 B anchor) | missing file at read time (rotation race) or a short anchor read = `UNKNOWN` for this source in this run, cursor unchanged, re-planned next run; SFTP unavailable = `UNKNOWN` | raw log lines: user names, addresses, host names, clish command audit lines that can carry `password-hash`/secret values; redacted on write (§12), stored encrypted, masked for aiview | `["startOffset", "bytesRead", "lines", "anchorMatch", "lineSplit"]` | NEW; replaces the phase A L2/L3 `tail`/`head` shape by PO decision of 2026-10-17: the cutting runs in neXus, nothing runs on the device for reading. Needs the C4 amendment in §4.3 |
 | C3 | `cp_syslog_collect_ls_crash` | `SSH_EXEC` | `bash -lc 'ls -lgo --time-style=+%s /var/log/crash/ /var/log/dump/usermode/'` | 30 | none | once per device per job window | same session | 256 KiB | a missing directory is a result (`ABSENT`) | file names may carry process names, addresses (kernel crash directory names) or host names; names stored as HMAC plus the parsed process; masked in aiview | `["fileCount", "sizeBytes", "mtime", "process"]` | NEW; string identical to the approved V157 `cp_syslog_measure_ls_crash` (measurement-only frequency) |
 | C4 | `cp_syslog_collect_ls_spike` | `SSH_EXEC` | `bash -lc 'ls -lgo --time-style=+%s /var/log/spike_detective/'` | 30 | none | once per device per job window | same session | 256 KiB | missing directory = `ABSENT` | names only | `["fileCount", "sizeBytes", "mtime", "namePattern"]` | NEW; string identical to V157 `cp_syslog_measure_ls_spike` |
-| C5 | `cp_syslog_collect_ls_spike_dir` | `SSH_EXEC` | `bash -lc 'ls -lgo --time-style=+%s /var/log/spike_detective/<dir>/'`; `<dir>` = a name printed by C4 in the same run, matching the measured data-directory pattern | 30 | none | once per new, settled data directory | same session | 64 KiB | missing = `ABSENT` | names only | `["fileCount", "sizeBytes", "mtime"]` | NEW; **conditional**: dropped if M5 gate 3 shows no subdirectories |
+| C5 | `cp_syslog_collect_ls_spike_dir` | `SSH_EXEC` | `bash -lc 'ls -lgo --time-style=+%s /var/log/spike_detective/<dir>/'`; `<dir>` = a name printed by C4 in the same run, matching the safe name form of §8.3 (the data-directory name pattern is not measured) | 30 | none | once per new, settled data directory | same session | 64 KiB | missing = `ABSENT` | names only | `["fileCount", "sizeBytes", "mtime"]` | NEW; **conditional**: dropped if M5 gate 3 shows no subdirectories. Gate 3 shows 6,334 subdirectories on 53 gateways, so the condition is not met and C5 stays. Used once on one device in the first rollout to review the layout (§8.3) |
 | C6 | `cp_syslog_collect_ls_sa` | `SSH_EXEC` | `bash -lc 'ls -lgo --time-style=+%s /var/log/sa/'` | 30 | none | once per device per day (06:00 window) | same session | 64 KiB | missing = `ABSENT` | names only | `["fileCount", "sizeBytes", "mtime", "namePattern"]` | NEW; string identical to V157 `cp_syslog_measure_ls_sa` |
 | C7 | `cp_syslog_collect_ls_hcp` | `SSH_EXEC` | `bash -lc 'ls -lgo --time-style=+%s /var/log/hcp/last/'` | 30 | none | once per device per day (06:00 window) | same session | 64 KiB | missing = `ABSENT` | archive names carry the host name; stored as HMAC plus the parsed time; masked | `["fileCount", "sizeBytes", "mtime", "namePattern"]` | NEW; string identical to V157 `cp_syslog_measure_ls_hcp` |
-| C8 | (`sftp_get`; gate `NOT_APPLICABLE` per C4 §2.3) | `sftp_get` subsystem on the same SSH session | fetch one absolute path printed by C4/C5 (spike data), C6 (`sar<DD>`) or C7 (HCP archive) in the same run; no other path | 120 (sar, spike), 300 (HCP) | none | HCP and sar: once per device per day; spike: once per new directory | same session (SFTP channel) | HCP 64 MiB, sar 16 MiB, spike 16 MiB per directory (`PENDING-M5`) | SFTP unavailable or path gone = `UNKNOWN`/`ABSENT`; over bound = `TOO_LARGE`, not fetched | HCP archives contain device diagnostics that may include configuration fragments and names: stored encrypted as received, never shown raw to aiview (§12); sar and spike data are counters and process names | `["sizeBytes", "sha256", "kind"]` | NEW; the existing whole-file streaming fetch used by `cp_gateway_backup` |
+| C8 | (`sftp_get`; gate `NOT_APPLICABLE` per C4 §2.3) | `sftp_get` subsystem on the same SSH session | fetch one absolute path printed by C4/C5 (spike data), C6 (`sar<DD>`) or C7 (HCP archive) in the same run; no other path | 120 (sar, spike), 300 (HCP) | none | HCP and sar: once per device per day; spike: once per new directory | same session (SFTP channel) | HCP 16 MiB (RESOLVED, §3.4), sar 32 MiB (PROVISIONAL, §3.4), spike 16 MiB per directory (`PENDING`, layout not measured) | SFTP unavailable or path gone = `UNKNOWN`/`ABSENT`; over bound = `TOO_LARGE`, not fetched | HCP archives contain device diagnostics that may include configuration fragments and names: stored encrypted as received, never shown raw to aiview (§12); sar and spike data are counters and process names | `["sizeBytes", "sha256", "kind"]` | NEW; the existing whole-file streaming fetch used by `cp_gateway_backup` |
 
 ### 10.2 New — Palo Alto (`palo_alto`, `pan_firewall`, shell `not_applicable`, transport `PAN_XML_API`) — APPROVED (PO 2026-10-17)
 
@@ -597,24 +696,35 @@ Not requested: MDS-scoped rows (§2.3). The `tail | head` form of C2 from the ea
 
 ## 11. How the measurements feed the parameters
 
-As of 2026-10-17 no findings record for M1, M2, M3/M4 or M5 is committed. The M1 second read and both M5 reads run
-in the coming windows (tonight's / tomorrow's). Every value below stays a placeholder until the findings record lands.
-The PO's approval of 2026-10-17 does not set any of these numbers; it approves the commands and the design, and the
-values are set from the findings record before implementation freezes them.
+The findings record
+[DEVICE_SYSTEM_LOG_MEASUREMENT_FINDINGS_2026_10_17.md](DEVICE_SYSTEM_LOG_MEASUREMENT_FINDINGS_2026_10_17.md) holds M1's
+first read, M2, M3/M4 and M5. The Check Point outputs reached it only through the aiview projection, which hides every
+integer of 6 or more digits (all sizes of 100,000 B or more, all mtimes), every file name and every `HH:MM:SS` time
+(findings §2). The PAN figures are exact (computed in the product). The PO's approval of 2026-10-17 does not set
+these numbers; each status below is the engineering result of the findings.
 
-| Parameter (this document) | Source measurement | Status |
-|---|---|---|
-| Per-read cap, per-source and per-device budgets (§3.4); 2 GiB device cap (§5.3) | M1: `messages`, `fwd`, `cpd`, `cpwd` growth per day (V149 `cp_syslog_measure_stat`, two reads 24 h apart); M5 gate 1 for `fwk`, `mq_mng`, spike log/csv | `PENDING-M1` (second read), `PENDING-M5` |
-| Rotation mode per family (rename vs copytruncate), sibling naming, rotate count (§4.4, family patterns in §2.1 and C2) | M1 inode/size across the two reads (an inode change = rename; same inode with a smaller size = copytruncate); M5 gate 1 | `PENDING-M1`, `PENDING-M5` |
-| `.elg` size-rotation threshold, hence the retention horizon and `FAST_ROTATING` (§4.6) | M1 + M5 gate 1 (size before and after the rotation) | `PENDING-M1`, `PENDING-M5` |
-| Whether rotated siblings are `.gz` (§4.6, Q9) | M1 family listing (the V149 stat covers only `messages` and `messages.1`), so C1's first run is the first full family view | partly `PENDING`; confirmed only by C1's first run |
-| sar naming, retention depth, size (§8.2, C8 bound) | M5 gates 2 and 9 | `PENDING-M5` |
-| Spike directory layout and sizes (§8.3, C5 conditional) | M5 gates 3 and 7–8 | `PENDING-M5` |
-| HCP name pattern, count, size, creation time (§8.1, C8 64 MiB bound) | M5 gates 4 and 10 | `PENDING-M5` |
-| Crash/dump name pattern, hence the process-name parse (§7) | M5 gate 5 | `PENDING-M5` |
-| Line timestamp forms for `first/last_line_time` (§5.2) | M2 (V149 tail gates); M5 gates 6–8 | `PENDING` (no M2 findings record committed) |
-| PAN `<n>`, pages per run, poll bound, 8 MiB result cap (§6, P1–P5) | M3/M4 summaries in `system_log_measurement` (entries, span, resultBytes, enqueueToFinMs) | `PENDING-M3M4` (findings record not committed) |
-| PAN `seqno` contiguity, `dir=forward`, `query` syntax | official PAN-OS XML API documentation, plus M3 field names | **UNKNOWN**; needs a documentation citation before freeze |
+Status words: **RESOLVED** (the findings determine it; the value is in the text), **PROVISIONAL** (proposed number with
+stated headroom; a wrong guess fails visibly), **PENDING** (no number; the data named is missing), **UNKNOWN**
+(vendor semantics).
+
+| Parameter (this document) | Source measurement | Status | Value or reason |
+|---|---|---|---|
+| Per-read cap 8 MiB, per-source 32 MiB, per-device 64 MiB (§3.4) | M1 growth per day; M5 gate 1 | **PROVISIONAL** | no size of 100,000 B or more is measurable; kept as safe bounds (only `BACKLOG` if too small); fits the first-run baseline (8 x 8 MiB). Closing needs numeric sizes (findings R1) |
+| 2 GiB per-device cap (§5.3) | M1 and M5 growth; M3/M4 volume | PAN **RESOLVED** (not binding, 0.79 GB raw per 30 days at the largest firewall); CP **PENDING** | CP growth not measurable |
+| Rotation mode per family (rename vs copytruncate) (§4.4) | M1 inode and size across two reads | **PENDING** | one read only. The second M1 read gives inode equality (rename if the inode changed; same inode with a changed size suggests copytruncate). 23 of 53 gateways show the same `messages` inode value, which does not decide it |
+| Sibling naming, rotate count, read-eligible regex (§4.3, §2.1, C2) | M1 stat; C1's first run | `messages.1` plain on 53/53 **RESOLVED**; regex `^<base>(\.[0-9]{1,2})?$` **PROVISIONAL**; siblings beyond `.1` and the `.elg` siblings **PENDING** | the first stat covered `messages.1` only; names masked |
+| `.elg` size-rotation threshold, retention horizon, `FAST_ROTATING` (§4.6) | M1 + M5 gate 1 (size across a rotation) | **PENDING** | needs sizes and growth. The Spike Detective `.csv` (size visible, 17.6 to 23.7 kB on 46 of 53) is the only source whose rotation the second M5 read will show |
+| Whether rotated siblings are `.gz` (§4.6, Q9) | M1 family listing | **PENDING** | `.1` is plain; `.2` and later not observed. The design handles `.gz` as a reported gap either way |
+| `fwk.elg` / `mq_mng.elg` presence (§2.1) | M5 gate 1 | **RESOLVED** | present on 53/53; `ABSENT` is the exception |
+| sar retention depth, naming, size, header (§8.2, C8) | M5 gates 2 and 9 | depth **RESOLVED** (59 to 60 files = 30 days x 2); header shape **RESOLVED**; names **PROVISIONAL** (masked); size bound **PROVISIONAL** 32 MiB | see §3.4 and §8.2 |
+| Spike directory layout and sizes (§8.3, C5) | M5 gates 3 and 7–8 | C5 kept **RESOLVED**; population **RESOLVED** (0 to 3,631, median 14, p90 93); data-directory name pattern, layout and sizes **PENDING**; per-run count 16 **PROVISIONAL**; fetch off by default | gate 3 lists the parent only |
+| HCP name pattern, count, size, creation time (§8.1, C8) | M5 gates 4 and 10 | size bound 16 MiB **RESOLVED**; selection rule (`*.tar.gz`, newest) **RESOLVED**; strict `hcp_report_...` name **PENDING** (masked); creation time about 03:00 on 36/52, otherwise 00:16 to 06:12 **RESOLVED** | one gateway has no HCP directory (`ABSENT`) |
+| Crash/dump name pattern, hence the process-name parse (§7) | M5 gate 5 | **PENDING** | names masked; fallback `UNKNOWN` applies. Baselines **RESOLVED**: `/var/log/crash/` empty on 53/53; `/var/log/dump/usermode/` 122 files on 39 gateways |
+| Line timestamp forms for `first/last_line_time` (§4.7, §5.2) | M2; M5 gates 6–8 | `messages`, elg, fwk, sar, PAN **RESOLVED**; `mq_mng` not measured and spike `.log`/`.csv` first-field form **PENDING** | shapes inferred from token classes |
+| Leading non-data line on 25 of 53 gateways (§4.2) | all gates | **RESOLVED** | parse by shape |
+| PAN `<n>`, pages per run, seed sizes, poll bound, 8 MiB result cap (§6, P1–P5) | M3/M4 summaries | **RESOLVED**: `<n>` 2000, 4 pages, seeds 2000 (system) and 100 (config), 2 s x 30 polls, 8 MiB cap kept | page time at n=2000 **PENDING** (first rollout) |
+| PAN config-log redaction fields (§6, §12) | M4 field names | **RESOLVED** | `before-/after-change-preview`, `path`, `full-path`; `-detail` not observed |
+| PAN `seqno` contiguity, `dir=forward`, `query` syntax | official PAN-OS XML API documentation, plus M3 field names | **UNKNOWN** | `seqno` is present on every entry; contiguity is not in the summary (findings R4); needs a documentation citation before freeze |
 
 ## 12. Privacy, masking, secrets (the raw-evidence exception)
 
@@ -626,7 +736,11 @@ values are set from the findings record before implementation freezes them.
   - RADIUS/TACACS `secret`/`key`;
   - `password=`, `passwd`, `key=`;
   - base64 blobs after auth keywords;
-  - PAN config-log `before-/after-change-detail` values for secret-bearing paths.
+  - PAN config-log values in `before-change-preview`, `after-change-preview`, `path` and `full-path` (the observed
+    names; any `before-/after-change-detail` field if one appears) for secret-bearing paths;
+  - Check Point `fwk.elg` text: 15 % of the sampled lines (9 of 53 gateways, all 20 lines on 5) contain
+    secret-vocabulary words, so the rules must be tuned to redact the value and not the whole line, or the pool would
+    lose most of that source.
 
   Each redaction replaces the value with `<redacted>` and counts it (`redaction_count`). The rules are tested with
   synthetic lines only.
@@ -673,8 +787,17 @@ takes this document's own recommendation). The full interpretation is in the PO 
 10. **Operator view — DECIDED (recommendation).** `operation_admin`/`security_admin` may view unmasked lines inside the
     product, audited per view. aiview is always masked.
 
-Still open, and not PO questions: the `PENDING-M1`/`PENDING-M5`/`PENDING-M3M4` values of §11, and the PAN
-vendor-documentation citation for `seqno` contiguity, `dir=forward` and the `query` syntax.
+Still open, and not PO questions: the `PENDING` values of §11, and the PAN vendor-documentation citation for `seqno`
+contiguity, `dir=forward` and the `query` syntax.
+
+For the PO's acknowledgement (not decided here; each follows from the findings record):
+
+1. The C5 `<dir>` rule moves from "the measured pattern" to a safe name form (§8.3), because the name pattern could
+   not be measured.
+2. The C4 output bound of 256 KiB can be reached by the largest Spike Detective listing (3,638 entries). Reaching it is
+   `UNKNOWN`. Raising the bound would change an approved row (§8.3).
+3. Extra measurement reads: a numeric Check Point measurement summary (findings R1) needs more than the "at most twice
+   per device" reads of the M5 rule if it is to give growth rates.
 
 ## 14. CLI parity (every UI action has a CLI command)
 
@@ -710,4 +833,6 @@ The existing `syslog-measure-start` and `syslog-measurements` stay for phase A.
 5. Redaction rules and the masking projection, with synthetic-line tests.
 6. Logs screen and CLI (§14); effectiveness review at the end.
 7. Architecture tests and Java lane tests before ship. The first rollout goes to one device per vendor in one
-   window, and the run outcomes are checked before fleet enablement.
+   window, and the run outcomes are checked before fleet enablement. The rollout also closes three measured gaps:
+   the PAN page time at n=2000 (`enqueueToFinMs` per page), the first full Check Point family listing from C1
+   (sibling names, `.gz`), and the one Spike Detective data-directory listing (§8.3).

@@ -74,7 +74,8 @@ host; one PAN firewall), via the existing diagnostic path, to record:
 - Line format per file (timestamp form, timezone, multi-line records), to define the parser.
 - PAN: system-log volume per day, and the job's latency and result-size limits.
 
-Output: the measurement record committed next to this contract (rule: measurement record before contract).
+Output: the measurement record committed next to this contract (rule: measurement record before contract). Recorded in
+[DEVICE_SYSTEM_LOG_MEASUREMENT_FINDINGS_2026_10_17.md](DEVICE_SYSTEM_LOG_MEASUREMENT_FINDINGS_2026_10_17.md).
 
 ### 4.1 Measurement record: M5 (Check Point extra sources, PO approval 2026-10-16)
 
