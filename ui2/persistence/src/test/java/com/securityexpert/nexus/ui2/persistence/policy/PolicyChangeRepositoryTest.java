@@ -52,8 +52,8 @@ class PolicyChangeRepositoryTest {
         sql.clear(); bindings.clear();
         var summary = repository.summary(new PolicyChangeRepository.Filter(from, to, "", "", "", "", false), 100);
         // Counts come from real changes only, while the hidden initial captures are counted in the same scan.
-        assertTrue(sql.get(0).contains("filter (where not h.initial_capture)"));
-        assertTrue(sql.get(0).contains("count(*) filter (where h.initial_capture)"));
+        assertTrue(sql.get(0).contains("filter (where not h.initial_capture and not coalesce(h.change_type = 'added'"));
+        assertTrue(sql.get(0).contains("count(*) filter (where " + PolicyChangeRepository.EFFECTIVE_INITIAL + ")"));
         assertFalse(sql.get(0).contains("and not h.initial_capture"));
         assertEquals(4L, summary.get("total")); assertEquals(3500L, summary.get("initialCaptures"));
         assertEquals(false, summary.get("initialCapturesIncluded"));
@@ -83,5 +83,38 @@ class PolicyChangeRepositoryTest {
                 .forEach(n -> assertTrue(versions.add(Integer.valueOf(n.substring(1, n.indexOf("__")))), n));
         }
         assertTrue(versions.contains(149));
+    }
+
+    // First appearance of a Palo Alto NAT/default section kind (SQL shape; semantics run in PolicyChangeReportSchemaTest).
+    private static final Instant FROM = Instant.parse("2026-10-08T00:00:00Z"), TO = Instant.parse("2026-10-09T00:00:00Z");
+
+    private List<String> run(java.util.function.Consumer<PolicyChangeRepository> action) {
+        var statements = new ArrayList<String>();
+        var db = DSL.using(new MockConnection(context -> {
+            statements.add(context.sql());
+            return new MockResult[] { new MockResult(0, DSL.using(SQLDialect.POSTGRES).newResult()) };
+        }), SQLDialect.POSTGRES);
+        try { action.accept(new PolicyChangeRepository(new JooqTransactionBoundary(db))); } catch (RuntimeException expectedForEmptyMock) { /* only the SQL matters */ }
+        return statements;
+    }
+
+    @Test void defaultReportExcludesFirstAppearanceOfPanNatAndDefaultSectionsAndKeepsTheIndexablePredicate() {
+        var filter = new PolicyChangeRepository.Filter(FROM, TO, "", "", "", "", false);
+        for (String sql : run(repository -> { repository.rows(filter, 1, null); repository.summary(filter, 1); })) {
+            if (!sql.contains("policy_rule_history")) continue;
+            assertTrue(sql.contains("not h.initial_capture and not coalesce(h.change_type = 'added'"), sql);
+            for (String name : List.of("Pre NAT rules", "Post NAT rules", "Pre default rules", "Post default rules"))
+                assertTrue(sql.contains("'" + name + "'"), name);
+            assertTrue(sql.contains("s.metadata->>'vendor' = 'PAN'"), "Check Point section names are never classified");
+            assertTrue(sql.contains("e.collected_at < h.collected_at"), "only an earlier batch makes a later addition a change");
+        }
+    }
+
+    @Test void theInitialFlagOfEveryRowAndTheInitialCountUseTheSameDefinition() {
+        var filter = new PolicyChangeRepository.Filter(FROM, TO, "", "", "", "", true);
+        var sql = String.join("\n", run(repository -> { repository.rows(filter, 1, null); repository.summary(filter, 1); }));
+        assertTrue(sql.contains(PolicyChangeRepository.EFFECTIVE_INITIAL + " as initial_capture"));
+        assertTrue(sql.contains("filter (where " + PolicyChangeRepository.EFFECTIVE_INITIAL + ")::bigint as initial_captures"));
+        assertFalse(sql.contains("not h.initial_capture"), "including initial captures adds no exclusion");
     }
 }

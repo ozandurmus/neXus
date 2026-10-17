@@ -71,6 +71,62 @@ class PolicyChangeReportSchemaTest {
             }
         }
     }
+    private static String natRule(String id) {
+        return "{\"id\":\"" + id + "\",\"uuid\":\"" + id + "\",\"name\":\"OBJ-RULE-" + id + "\",\"number\":1,\"enabled\":true,"
+            + "\"source\":{\"refs\":[],\"negated\":false},\"destination\":{\"refs\":[],\"negated\":false},\"service\":{\"refs\":[],\"negated\":false},"
+            + "\"application\":{\"refs\":[],\"negated\":false},\"action\":\"source-nat\",\"log\":\"\",\"comment\":\"\",\"extras\":{}}";
+    }
+    private static String section(String name, String... ids) {
+        return "{\"source\":\"Shared\",\"name\":\"" + name + "\",\"rules\":[" + String.join(",", Arrays.stream(ids).map(PolicyChangeReportSchemaTest::natRule).toList()) + "]}";
+    }
+    private static void publish(java.sql.Connection db, String policy, String vendor, int hour, String... sections) throws Exception {
+        try (var statement = db.prepareStatement("insert into policy_snapshot values (?, ?::timestamptz, ?::jsonb, ?::jsonb) "
+                + "on conflict (policy_id) do update set collected_at=excluded.collected_at, metadata=excluded.metadata, snapshot=excluded.snapshot "
+                + "where policy_snapshot.collected_at < excluded.collected_at")) {
+            statement.setString(1, policy); statement.setString(2, "2026-10-02T" + String.format("%02d", hour) + ":00:00Z");
+            statement.setString(3, "{\"vendor\":\"" + vendor + "\",\"name\":\"POL-ALPHA-01\",\"targets\":[]}");
+            statement.setString(4, "{\"sections\":[" + String.join(",", sections) + "],\"objects\":{},\"failures\":[]}");
+            statement.executeUpdate();
+        }
+    }
+    @Test void firstAppearanceOfPanNatAndDefaultSectionsIsInitialCaptureAndLaterAdditionsDiffNormally() throws Exception {
+        try (var fixture = Ui2PostgresFixture.create("policy_changes_nat_first")) {
+            fixture.runFlyway();
+            try (var db = fixture.appConnection()) {
+                var repository = new PolicyChangeRepository(new JooqTransactionBoundary(DSL.using(db, SQLDialect.POSTGRES)));
+                Instant from = Instant.parse("2026-10-02T00:00:00Z"), to = Instant.parse("2026-10-03T00:00:00Z");
+                var real = new PolicyChangeRepository.Filter(from, to, "", "", "", "", false);
+                var all = new PolicyChangeRepository.Filter(from, to, "", "", "", "", true);
+                // Security rules only: the policy's own initial capture (V150).
+                publish(db, "p-pan", "PAN", 1, section("Pre rules", "r1"));
+                // The release that parses NAT and default rules: the next snapshot carries three new sections' rules.
+                publish(db, "p-pan", "PAN", 2, section("Pre rules", "r1"), section("Pre NAT rules", "n1", "n2"), section("Post default rules", "d1"));
+                long ceiling = repository.ceiling();
+                assertEquals(0, repository.rows(real, ceiling, null).size(), "first capture of a section kind yields no added event");
+                var summary = repository.summary(real, ceiling);
+                assertEquals(0L, summary.get("total")); assertEquals(0L, ((Map<?, ?>) summary.get("counts")).get("added"));
+                assertEquals(4L, summary.get("initialCaptures"), "r1 plus the three first-appearance rules are all counted as initial");
+                assertEquals(4, repository.rows(all, ceiling, null).stream().filter(PolicyChangeRepository.Row::initialCapture).count());
+                // The next capture adds one NAT rule to a kind that already exists: exactly one event.
+                publish(db, "p-pan", "PAN", 3, section("Pre rules", "r1"), section("Pre NAT rules", "n1", "n2", "n3"), section("Post default rules", "d1"));
+                ceiling = repository.ceiling();
+                var rows = repository.rows(real, ceiling, null);
+                assertEquals(1, rows.size()); assertEquals("added", rows.get(0).changeType()); assertEquals("uuid:n3", rows.get(0).ruleKey());
+                assertFalse(rows.get(0).initialCapture());
+                summary = repository.summary(real, ceiling);
+                assertEquals(1L, summary.get("total")); assertEquals(1L, ((Map<?, ?>) summary.get("counts")).get("added"));
+                assertEquals(4L, summary.get("initialCaptures"));
+                // A security rule added in the same release window is an ordinary change.
+                publish(db, "p-pan", "PAN", 4, section("Pre rules", "r1", "r2"), section("Pre NAT rules", "n1", "n2", "n3"), section("Post default rules", "d1"));
+                assertEquals(2, repository.rows(real, repository.ceiling(), null).size());
+                // A Check Point policy never gets the Palo Alto classification, whatever its section is called.
+                publish(db, "p-cp", "CP", 1, section("Pre NAT rules", "c1"));
+                publish(db, "p-cp", "CP", 2, section("Pre NAT rules", "c1", "c2"));
+                var cp = repository.rows(new PolicyChangeRepository.Filter(from, to, "p-cp", "", "", "", false), repository.ceiling(), null);
+                assertEquals(1, cp.size()); assertEquals("uuid:c2", cp.get(0).ruleKey());
+            }
+        }
+    }
     @Test void indexMigrationIsIdempotentAndRollbackSafe() throws Exception {
         try (var fixture = Ui2PostgresFixture.create("policy_changes_rollback")) {
             fixture.runFlyway();
