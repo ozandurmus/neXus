@@ -73,11 +73,14 @@ class NexusSessionCliTest {
             assertEquals(0, cli.run(new String[] {"syslog-measurements", "dev-1"}));
             assertEquals(0, cli.run(new String[] {"syslog-measurements", "vendor=check_point", "source=cp_syslog_measure_ls_sa", "limit=50"}));
             assertEquals(0, cli.run(new String[] {"syslog-measurements", "dev-1", "vendor=check_point"}));
+            assertEquals(0, cli.run(new String[] {"syslog-collect-start"}));
+            assertEquals(0, cli.run(new String[] {"syslog-collect-start", "dev-1"}));
             assertEquals(java.util.List.of("POST /api/v2/diagnostics/system-log-measurements/start",
                     "GET /api/v2/diagnostics/system-log-measurements",
                     "GET /api/v2/diagnostics/system-log-measurements?device_id=dev-1",
                     "GET /api/v2/diagnostics/system-log-measurements?vendor=check_point&source=cp_syslog_measure_ls_sa&limit=50",
-                    "GET /api/v2/diagnostics/system-log-measurements?device_id=dev-1&vendor=check_point"), calls);
+                    "GET /api/v2/diagnostics/system-log-measurements?device_id=dev-1&vendor=check_point",
+                    "POST /api/v2/system-logs/collect", "POST /api/v2/system-logs/collect"), calls);
         } finally {
             server.stop(0);
         }

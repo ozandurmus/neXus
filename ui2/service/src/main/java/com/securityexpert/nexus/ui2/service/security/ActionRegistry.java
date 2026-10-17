@@ -41,6 +41,8 @@ public final class ActionRegistry {
     public static final String FMG_DIAGNOSTIC_RUN = "fmg_diagnostic_run";
     /** System-log programme phase A (M3/M4): admits one Palo Alto log measurement job per enrolled firewall; administrators only. */
     public static final String SYSTEM_LOG_MEASURE_START = "system_log_measure_start";
+    /** System-log programme phase B (DEVICE_SYSTEM_LOG_PHASE_B_CONTRACT.md section 14): admits the incremental collection job; operation_admin and security_admin, window-gated. */
+    public static final String SYSTEM_LOG_COLLECT_START = "system_log_collect_start";
     /** NXS-LOCAL-0165 "Routes": {@code POST /devices/{id}/configuration/collect} -- same gate as {@link #DEVICE_INVENTORY_COLLECT}. */
     public static final String DEVICE_CONFIGURATION_COLLECT = "device_configuration_collect";
     /** NXS-LOCAL-0165 "Routes": {@code GET /devices/{id}/configuration/text} -- the sanitized Check Point view; a gated read, {@code role:onboarding_admin} only (it names section/entry structure of a device's own configuration). */
@@ -212,6 +214,8 @@ public final class ActionRegistry {
         // A read-only diagnostic measurement: aiview may start it, like CLASS_0 diagnostic reads (PO 2026-10-04).
         register(new ActionDescriptor(SYSTEM_LOG_MEASURE_START, true, Optional.of(RoleToken.SECURITY_ADMIN),
                 java.util.Set.of(RoleToken.REPLAY_VIEWER)));
+        register(new ActionDescriptor(SYSTEM_LOG_COLLECT_START, true, Optional.of(RoleToken.OPERATION_ADMIN),
+                java.util.Set.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(DEVICE_CONFIGURATION_COLLECT, true, Optional.of(RoleToken.ONBOARDING_ADMIN)));
         register(new ActionDescriptor(DEVICE_CONFIGURATION_TEXT_READ, true, Optional.of(RoleToken.ONBOARDING_ADMIN)));
         register(new ActionDescriptor(NOTIFICATIONS_READ, true, Optional.empty()));

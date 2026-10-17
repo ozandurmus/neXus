@@ -208,6 +208,7 @@ public class DeviceCompositionConfiguration {
                 confirmCapability(com.securityexpert.nexus.ui2.jobs.diagnostic.DiagnosticRead.CAPABILITY,
                         "diagnostic", "reviewed_read", TransportKind.SSH_EXEC),
                 com.securityexpert.nexus.ui2.jobs.diagnostic.PanSyslogMeasure.capability(gateRegistryPort),
+                com.securityexpert.nexus.ui2.jobs.diagnostic.PanSystemLogCollect.capability(gateRegistryPort),
                 checkPointInventoryCapability(gateRegistryPort),
                 paloAltoInventoryCapability(gateRegistryPort),
                 checkPointConfigurationCapability(gateRegistryPort),
