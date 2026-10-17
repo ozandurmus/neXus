@@ -13,6 +13,8 @@ public final class PolicyPrivacy {
             "COLLECTION_FAILED", "host", "network", "address-range", "group-with-exclusion", "service-tcp", "service-udp", "service-icmp", "service-icmp6", "service-other", "service-sctp", "service-dce-rpc", "service-rpc", "access-role", "dynamic-object", "dns-domain", "security-zone",
             "times", "time-groups", "gateways-and-servers", "hosts", "networks", "groups", "groups-with-exclusion", "address-ranges", "services-tcp", "services-udp", "services-icmp", "services-icmp6", "services-other", "services-sctp", "services-dce-rpc", "services-rpc", "service-groups", "access-roles", "dynamic-objects", "dns-domains", "security-zones", "unused-objects",
             "LOCAL_FIREWALL", "MANAGEMENT", "application-group", "tag", "time", "time-group", "schedule", "unresolved", "UNRESOLVED", "UNSUPPORTED", "RESOLVED", "DYNAMIC", "CYCLE", "LIMIT", "UNKNOWN",
+            "application", "application-filter", "external-list", "region", "dynamic-user-group", "profile-group",
+            "source-nat", "destination-nat", "source-and-destination-nat", "no-nat",
             "MATCH", "MISMATCH", "IN_SYNC", "OUT_OF_SYNC", "PENDING", "Accept", "Drop", "Reject", "allow", "deny", "drop", "reject", "reset-client", "reset-server", "reset-both", "Apply Layer", "Log", "None", "Alert");
     private static final Set<String> HYGIENE_REASONS = Set.of(
         "analysis budget", "unsupported rulebase", "negated selector", "missing selector", "enabled state is unknown",
@@ -46,7 +48,7 @@ public final class PolicyPrivacy {
             Map<String, Object> out = new LinkedHashMap<>();
             extras.forEach((k, v) -> {
                 String field = String.valueOf(k);
-                if (Set.of("time", "schedule", "install-on", "vpn", "content", "inline-layer").contains(field)) out.put(field, mask(v, "refs", names, ips));
+                if (Set.of("time", "schedule", "install-on", "vpn", "content", "inline-layer", "translated-source", "translated-destination", "translated-service", "translated-source-fallback", "translated-destination-dynamic").contains(field)) out.put(field, mask(v, "refs", names, ips));
                 else if (field.equals("last-modified")) out.put(field, mask(v, "changedOn", names, ips));
                 else if (Set.of("from", "to", "source-user", "category", "tag", "last-modifier", "layer-name", "target-selectors", "log-setting", "profile-setting/group", "profile-setting/profiles/virus", "profile-setting/profiles/spyware", "profile-setting/profiles/vulnerability", "profile-setting/profiles/url-filtering", "profile-setting/profiles/file-blocking", "profile-setting/profiles/wildfire-analysis").contains(field))
                     out.put(field, mask(v, field, names, ips));
@@ -68,7 +70,7 @@ public final class PolicyPrivacy {
                 String field = String.valueOf(k);
                 if (field.equals("name") && "UNKNOWN".equals(v) && map.containsKey("ruleId")) out.put(field, "UNKNOWN");
                 else if (field.equals("name") && "any".equals(map.get("type"))) out.put(field, "ANY");
-                else if (field.equals("name") && map.containsKey("rules") && Set.of("Pre rules", "Post rules", "Local rules", "Inline layer unavailable").contains(v)) out.put(field, mask(v, "refs", names, ips));
+                else if (field.equals("name") && map.containsKey("rules") && Set.of("Pre rules", "Post rules", "Local rules", "Inline layer unavailable", "Pre NAT rules", "Post NAT rules", "Pre default rules", "Post default rules").contains(v)) out.put(field, mask(v, "refs", names, ips));
                 else if (field.equals("name") && map.containsKey("deviceId")) out.put(field, names.maskDeviceName((String) v, null));
                 else if (field.equals("name") && v instanceof String text) out.put(field, names.maskPolicyName(
                     map.containsKey("sourceId") ? "policy" : map.containsKey("number") ? "rule"

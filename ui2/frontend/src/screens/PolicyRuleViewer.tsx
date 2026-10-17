@@ -29,15 +29,25 @@ export function scheduleLabel(s: PolicySchedule) {
   const dayNames = ["", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
   return `${s.start ? `From ${date(s.start)} · ` : ""}${s.windows.map(w => `${w.months?.length ? `Months ${w.months.join(", ")} · ` : ""}${w.days.join(",") === "1,2,3,4,5" ? "Weekdays" : w.days.length ? w.days.map(d => dayNames[d]).join(", ") : w.monthDays.length ? `Days ${w.monthDays.join(", ")} of month` : "Daily"} ${w.start}–${w.end}`).join("; ")}${s.end ? ` · Until ${date(s.end)}` : ""} · ${zone}`;
 }
+/** Palo Alto sections other than plain security rules: the mapper's fixed names for NAT and overridden default rules. */
+const PAN_KINDS: Record<string, { phase: "Pre" | "Post"; kind: string }> = {
+  "Pre rules": { phase: "Pre", kind: "" }, "Post rules": { phase: "Post", kind: "" },
+  "Pre NAT rules": { phase: "Pre", kind: "NAT" }, "Post NAT rules": { phase: "Post", kind: "NAT" },
+  "Pre default rules": { phase: "Pre", kind: "default" }, "Post default rules": { phase: "Post", kind: "default" },
+};
 export function containerLabel(metadata: PolicyMetadata, section: PolicySection, rule: PolicyRule) {
   if (metadata.vendor === "CP") return `${section.parentRuleId ? "Inline layer" : "Access layer"}: ${rule.extras["layer-name"]?.[0] ?? section.name}`;
-  if (metadata.vendor === "PAN") return section.name === "Local rules" ? `Local firewall: ${section.source}`
-    : `${section.source === "Shared" ? "Shared" : `Device group: ${section.source}`} (${section.name === "Post rules" ? "Post" : "Pre"})`;
+  if (metadata.vendor === "PAN") {
+    if (section.name === "Local rules") return `Local firewall: ${section.source}`;
+    const kind = PAN_KINDS[section.name] ?? { phase: "Pre", kind: "" };
+    return `${section.source === "Shared" ? "Shared" : `Device group: ${section.source}`} (${kind.phase}${kind.kind ? ` ${kind.kind}` : ""})`;
+  }
   return section.source;
 }
 export function sectionLabel(metadata: PolicyMetadata, section: PolicySection) {
-  if (metadata.vendor !== "PAN" || !["Pre rules", "Post rules"].includes(section.name)) return section.name;
-  return `${section.source === "Shared" ? "Shared" : "Device-group"} ${section.name === "Pre rules" ? "pre" : "post"}-rules`;
+  const kind = PAN_KINDS[section.name];
+  if (metadata.vendor !== "PAN" || !kind) return section.name;
+  return `${section.source === "Shared" ? "Shared" : "Device-group"} ${kind.phase.toLowerCase()}-${kind.kind ? `${kind.kind} ` : ""}rules`;
 }
 function CellEntries({ cell, objects, openObject, limit = 4 }: { cell: PolicyCell; objects: Map<string, PolicyObject>; openObject: (id: string) => void; limit?: number }) {
   const [expanded, setExpanded] = useState(false);
@@ -51,7 +61,14 @@ function CellEntries({ cell, objects, openObject, limit = 4 }: { cell: PolicyCel
       {expanded ? "▴ Less" : `+${cell.refs.length - limit} ▾`}</Button>}
   </Box>;
 }
-const fieldLabels: Record<string, string> = { "source-user": "Source user", category: "URL category", from: "From", to: "To", "rule-type": "Type", "install-on": "Install on", "target-selectors": "Targets", vpn: "VPN", "time": "Time", schedule: "Schedule", "tag": "Tags", "layer-name": "Layer", "last-modified": "Last modified", "last-modifier": "Changed by" };
+const fieldLabels: Record<string, string> = { "source-user": "Source user", category: "URL category", from: "From", to: "To", "rule-type": "Type", "install-on": "Install on", "target-selectors": "Targets", vpn: "VPN", "time": "Time", schedule: "Schedule", "tag": "Tags", "layer-name": "Layer", "last-modified": "Last modified", "last-modifier": "Changed by",
+  "nat-type": "NAT type", "to-interface": "To interface", "source-translation-type": "Source translation", "translated-source": "Translated source",
+  "source-translation-interface": "Translation interface", "source-translation-interface-ip": "Interface IP", "source-translation-interface-floating-ip": "Interface floating IP",
+  "source-translation-bi-directional": "Bi-directional", "source-translation-fallback-type": "Fallback type", "translated-source-fallback": "Fallback translated source",
+  "source-translation-fallback-interface": "Fallback interface", "source-translation-fallback-ip": "Fallback IP", "source-translation-fallback-floating-ip": "Fallback floating IP",
+  "translated-destination": "Translated destination", "translated-destination-port": "Translated port", "destination-dns-rewrite": "DNS rewrite",
+  "translated-destination-dynamic": "Dynamic translated destination", "translated-destination-dynamic-port": "Dynamic translated port",
+  "destination-dynamic-distribution": "Distribution", "translated-service": "Translated service", "auto-generated": "Auto-generated" };
 function Extra({ name, values, objects, openObject }: { name: string; values: string[]; objects: Map<string, PolicyObject>; openObject: (id: string) => void }) {
   const [expanded, setExpanded] = useState(false);
   return <Box sx={{ fontSize: 12, overflowWrap: "anywhere" }}><strong>{fieldLabels[name] ?? name}: </strong>
@@ -100,8 +117,9 @@ export function RuleFields({ rule, objects, openObject }: { rule: PolicyRule; ob
 }
 
 const allowAction = /^(accept|allow)$/i, denyAction = /^(deny|drop|reject|reset-client|reset-server|reset-both)$/i;
+const natAction = /^(source-nat|destination-nat|source-and-destination-nat|no-nat)$/;
 function actionColor(action: string) { return allowAction.test(action) ? m3.success : denyAction.test(action) ? m3.error : m3.onSurfaceVar; }
-function actionGlyph(action: string) { return allowAction.test(action) ? "✓" : /reject|reset/i.test(action) ? "⊘" : /^(deny|drop)$/i.test(action) ? "✕" : "?"; }
+function actionGlyph(action: string) { return allowAction.test(action) ? "✓" : /reject|reset/i.test(action) ? "⊘" : /^(deny|drop)$/i.test(action) ? "✕" : natAction.test(action) ? "⇄" : "?"; }
 
 /** Table geometry: rule rows have a fixed height so the window of rendered rows can be computed without measuring. */
 export const RULE_ROW_HEIGHT = 40;

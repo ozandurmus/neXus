@@ -54,6 +54,20 @@ class PolicyHitCountsTest {
                 .sections().get(0).rules().get(0).hitCounts().hits());
         assertThrows(IllegalArgumentException.class, () -> PolicyHitCounts.pan(PolicyXml.parse("<response status='success'><result/></response>").getDocumentElement(), first, collected));
     }
+    @Test void panNatAndDefaultSectionsNeitherReceiveSecurityCountersNorMakeSecurityNamesAmbiguous() {
+        var meta = snapshot(List.of()).metadata();
+        var natRule = new Rule("nat-1", "uuid-n", 1, "OBJ-RULE-01", true, rule().source(), rule().destination(), rule().service(), rule().application(), "source-nat", "", "", Map.of());
+        var sections = List.of(new Section("section-1", "Pre rules", "Shared", null, List.of(rule())),
+            new Section("section-2", PAN_PRE_NAT, "Shared", null, List.of(natRule)),
+            new Section("section-3", PAN_POST_DEFAULT, "Shared", null, List.of(natRule)));
+        var result = PolicyHitCounts.aggregate(new PolicySnapshot(meta, sections, Map.of()), List.of(pan(first, "2", "100"), pan(second, "3", "200")));
+        assertEquals(5L, result.sections().get(0).rules().get(0).hitCounts().hits(), "same-named NAT rule is not an ambiguity");
+        assertNull(result.sections().get(1).rules().get(0).hitCounts());
+        assertNull(result.sections().get(2).rules().get(0).hitCounts());
+        // A CP section is never classified by its (user-controlled) name.
+        var cpMeta = new Metadata("p", "m", "n", "CP", "c", "c", "p", collected, "", List.of());
+        assertFalse(PolicySnapshot.panNonSecurity(cpMeta, new Section("s", PAN_PRE_NAT, "CP access layer", null, List.of())));
+    }
     @Test void signedCpAndPanFixtureRespectApprovalAndCommandEscapesContext() {
         GateRegistryPort gates = key -> GateRegistryFixtureLoader.loadFromStream(getClass().getResourceAsStream("/capabilities/gate_registry_fixture.yaml"))
                 .stream().filter(row -> row.key().equals(key)).toList();

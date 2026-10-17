@@ -25,6 +25,17 @@ public final class PolicyHygiene {
         List<Match> earlier = new ArrayList<>();
         boolean earlierUnknown = false;
         for (Section section : snapshot.sections()) {
+            if (PolicySnapshot.panNonSecurity(snapshot.metadata(), section)) {
+                // Palo Alto NAT and default-rule sections are stored, not analysed: no shadowing, permissiveness or
+                // hit-based finding is invented for them, and they do not disturb the security rule ordering.
+                for (Rule rule : section.rules()) {
+                    List<Finding> findings = Boolean.FALSE.equals(rule.enabled()) ? List.of(finding("disabled", "LOW", "Rule is disabled.")) : List.of();
+                    results.put(rule.id(), new Assessment("UNKNOWN", "unsupported rulebase", null, findings,
+                        Map.of("level", "Unknown", "reasons", List.of(), "score", 0), "unknown", false,
+                        "Counter window unknown.", "UNKNOWN", null));
+                }
+                continue;
+            }
             if (!scope.advance(section)) {
                 earlier.clear();
                 earlierUnknown = false;

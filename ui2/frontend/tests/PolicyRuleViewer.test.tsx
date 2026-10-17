@@ -157,6 +157,23 @@ it("uses vendor container terminology and labels timezone uncertainty", () => {
   expect(scheduleLabel({ ...schedule, kind: "recurring", end: null, windows: [{ days: [1,2,3,4,5], monthDays: [], start: "08:00", end: "18:00" }] })).toContain("Weekdays 08:00–18:00");
 });
 
+it("shows Palo Alto NAT and default-rule sections in the same rule table with their own labels, action and NAT fields", () => {
+  const meta = { ...metadata, vendor: "PAN", name: "POL-ALPHA-01" };
+  const named = (name: string, source: string) => ({ ...section, id: `${source}-${name}`, name, source });
+  expect(["Pre NAT rules", "Post NAT rules", "Pre default rules", "Post default rules"].map(name => sectionLabel(meta, named(name, "Shared"))))
+    .toEqual(["Shared pre-NAT rules", "Shared post-NAT rules", "Shared pre-default rules", "Shared post-default rules"]);
+  expect(sectionLabel(meta, named("Post NAT rules", "DOM-TANGO-01"))).toBe("Device-group post-NAT rules");
+  expect(containerLabel(meta, named("Pre NAT rules", "Shared"), rule)).toBe("Shared (Pre NAT)");
+  expect(containerLabel(meta, named("Post default rules", "DOM-TANGO-01"), rule)).toBe("Device group: DOM-TANGO-01 (Post default)");
+  // The CP NAT section keeps its own name; only the fixed PAN names are relabelled.
+  expect(sectionLabel(metadata, named("Pre NAT rules", "CP NAT rulebase"))).toBe("Pre NAT rules");
+  const natRule = { ...rule, name: "RULE-NAT-01", uuid: "RULE-TANGO-09", action: "source-and-destination-nat",
+    extras: { "source-translation-type": ["dynamic-ip-and-port"], "translated-destination-port": ["8443"] } };
+  const { container } = mount(ruleTable({ sections: [{ ...named("Pre NAT rules", "Shared"), total: 1, rules: [natRule] }], objects, metadata: meta }));
+  expect(screen.getByRole("button", { name: /Shared pre-NAT rules · 1/ })).toHaveAttribute("aria-expanded", "true");
+  expect(screen.getByText("source-and-destination-nat")).toBeInTheDocument();
+  expect(container.textContent).toContain("⇄");
+});
 it("labels PAN sections precisely, collapses empty sections into one row and keeps masked group headers in the table", () => {
   const meta = { ...metadata, vendor: "PAN", name: "POL-ALPHA-01" };
   const sections = ["Pre rules", "Post rules"].flatMap(name => ["Shared", "DOM-TANGO-01"].map(source => ({ ...section, id: `${source}-${name}`, name, source })));

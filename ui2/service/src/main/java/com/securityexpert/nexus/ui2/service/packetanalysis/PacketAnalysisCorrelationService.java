@@ -1151,7 +1151,7 @@ public final class PacketAnalysisCorrelationService {
         String incompleteReason = null;
 
         for (Section section : snapshot.sections()) {
-            if ("CP NAT rulebase".equals(section.source())) {
+            if (PolicySnapshot.outsideSecurityEvaluation(snapshot.metadata(), section)) {
                 continue;
             }
             for (Rule rule : section.rules()) {

@@ -110,7 +110,7 @@ final class PolicyNormalization {
     }
     static Match normalize(PolicySnapshot snapshot, Section section, Rule rule, Resolver resolver, boolean lookup) {
         try {
-            if (!Set.of("CP", "PAN").contains(snapshot.metadata().vendor()) || section.source().equals("CP NAT rulebase"))
+            if (!Set.of("CP", "PAN").contains(snapshot.metadata().vendor()) || PolicySnapshot.outsideSecurityEvaluation(snapshot.metadata(), section))
                 throw new Unknown("unsupported rulebase");
             List<Selector> cells = List.of(resolver.cell(rule.source(), "address"), resolver.cell(rule.destination(), "address"),
                 resolver.cell(rule.service(), "service"), snapshot.metadata().vendor().equals("CP") && rule.application().refs().isEmpty()

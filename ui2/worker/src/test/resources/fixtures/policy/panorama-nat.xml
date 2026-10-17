@@ -1,0 +1,97 @@
+<config>
+  <shared>
+    <address>
+      <entry name="Synthetic inside"><ip-netmask>192.0.2.8/32</ip-netmask></entry>
+      <entry name="Synthetic translated"><ip-netmask>192.0.2.50/32</ip-netmask></entry>
+    </address>
+    <service><entry name="Synthetic HTTPS"><protocol><tcp><port>443</port></tcp></protocol></entry></service>
+    <application>
+      <entry name="Synthetic custom app">
+        <category>business-systems</category><subcategory>general-business</subcategory><technology>client-server</technology>
+        <risk>3</risk><parent-app>synthetic-parent</parent-app>
+        <default><port><member>tcp/8080</member><member>udp/5353</member></port></default>
+      </entry>
+    </application>
+    <application-filter>
+      <entry name="Synthetic app filter">
+        <category><member>networking</member></category><risk><member>4</member><member>5</member></risk>
+        <evasive>yes</evasive><tagging><tag><member>Synthetic tag</member></tag></tagging>
+      </entry>
+    </application-filter>
+    <application-group><entry name="Synthetic app group"><members><member>Synthetic custom app</member><member>Synthetic app filter</member></members></entry></application-group>
+    <external-list>
+      <entry name="Synthetic edl">
+        <type><ip>
+          <url>https://edl.example.invalid:8443/lists/ip.txt?x=1#frag</url>
+          <recurring><daily><at>03</at></daily></recurring>
+          <auth><username>synthetic-edl-user</username></auth>
+        </ip></type>
+      </entry>
+    </external-list>
+    <region>
+      <entry name="Synthetic region"><address><member>198.51.100.0/24</member></address><geo-location><latitude>10.5</latitude><longitude>20.5</longitude></geo-location></entry>
+    </region>
+    <dynamic-user-group><entry name="Synthetic dug"><filter>'Synthetic tag' and 'Synthetic other'</filter></entry></dynamic-user-group>
+    <profile-group>
+      <entry name="Synthetic profile group"><virus><member>Synthetic av</member></virus><spyware><member>Synthetic as</member></spyware><url-filtering><member>Synthetic url</member></url-filtering></entry>
+    </profile-group>
+    <tag><entry name="Synthetic tag"><color>color1</color></entry></tag>
+    <pre-rulebase>
+      <security><rules><entry name="Synthetic shared sec" uuid="uuid-s1"><action>allow</action></entry></rules></security>
+      <nat><rules>
+        <entry name="Synthetic shared nat pre" uuid="uuid-n1">
+          <from><member>Synthetic zone in</member></from><to><member>Synthetic zone out</member></to>
+          <source><member>Synthetic inside</member></source><destination><member>any</member></destination>
+          <service>any</service><nat-type>ipv4</nat-type><to-interface>ethernet1/1</to-interface>
+          <source-translation><dynamic-ip-and-port><interface-address><interface>ethernet1/1</interface><ip>192.0.2.1/24</ip></interface-address></dynamic-ip-and-port></source-translation>
+          <description>Synthetic NAT comment</description>
+        </entry>
+      </rules></nat>
+    </pre-rulebase>
+    <post-rulebase>
+      <security><rules><entry name="Synthetic shared sec post" uuid="uuid-s2"><action>deny</action></entry></rules></security>
+      <default-security-rules><rules>
+        <entry name="intrazone-default"><action>allow</action><log-end>yes</log-end></entry>
+      </rules></default-security-rules>
+      <nat><rules>
+        <entry name="Synthetic shared nat post" uuid="uuid-n2">
+          <source><member>Synthetic inside</member></source><destination><member>any</member></destination><service>any</service>
+          <source-translation><static-ip><translated-address>192.0.2.60</translated-address><bi-directional>yes</bi-directional></static-ip></source-translation>
+        </entry>
+      </rules></nat>
+    </post-rulebase>
+  </shared>
+  <devices><entry name="localhost.localdomain">
+    <device-group>
+      <entry name="Synthetic parent">
+        <pre-rulebase><nat><rules>
+          <entry name="Synthetic parent nat pre" uuid="uuid-n3">
+            <source><member>any</member></source><destination><member>Synthetic edl</member></destination><service>Synthetic HTTPS</service>
+            <destination-translation><translated-address>Synthetic translated</translated-address><translated-port>8443</translated-port><dns-rewrite><direction>reverse</direction></dns-rewrite></destination-translation>
+          </entry>
+        </rules></nat></pre-rulebase>
+        <post-rulebase>
+          <default-security-rules><rules><entry name="interzone-default"><action>deny</action><log-start>no</log-start><log-end>yes</log-end></entry></rules></default-security-rules>
+        </post-rulebase>
+      </entry>
+      <entry name="Synthetic child">
+        <pre-rulebase><nat><rules>
+          <entry name="Synthetic child nat pre" uuid="uuid-n4">
+            <source><member>Synthetic region</member></source><destination><member>Synthetic inside</member></destination><service>any</service>
+            <source-translation><dynamic-ip><translated-address><member>Synthetic translated</member><member>192.0.2.70</member></translated-address>
+              <fallback><interface-address><interface>ethernet1/2</interface><floating-ip>192.0.2.2</floating-ip></interface-address></fallback></dynamic-ip></source-translation>
+            <dynamic-destination-translation><translated-address>192.0.2.80</translated-address><translated-port>9000</translated-port><distribution>round-robin</distribution></dynamic-destination-translation>
+            <disabled>yes</disabled><target><negate>yes</negate><devices><entry name="SYNTHETIC-SERIAL-01"/></devices></target>
+          </entry>
+        </rules></nat></pre-rulebase>
+        <post-rulebase>
+          <security><rules><entry name="Synthetic child sec" uuid="uuid-s3"><action>allow</action></entry></rules></security>
+          <nat><rules>
+            <entry name="Synthetic child nat post" uuid="uuid-n5"><source><member>any</member></source><destination><member>any</member></destination><service>any</service></entry>
+          </rules></nat>
+        </post-rulebase>
+      </entry>
+      <entry name="Synthetic empty"><pre-rulebase><nat><rules/></nat></pre-rulebase></entry>
+    </device-group>
+  </entry></devices>
+</config>
