@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import sys
 import tempfile
 from pathlib import Path
@@ -28,6 +29,20 @@ def _clear_ambient_relay_env(monkeypatch):
     state, exactly as it does in CI, where neither variable is ever set."""
     monkeypatch.delenv("NEXUS_RELAY_FILE", raising=False)
     monkeypatch.delenv("NEXUS_CANONICAL_RELAY_DIR", raising=False)
+
+
+@pytest.fixture(autouse=True)
+def _hermetic_process_umask():
+    """tools/delivery/release_snapshot.py and tools/security/security_*.py call
+    os.umask(0o077) from main(); a test that runs one in-process left every
+    later test creating 0600 files (test_workbench_companion's mode check then
+    saw a private file where it builds a deliberately public one). Start each
+    test from the usual 022 and restore whatever the invoking process had."""
+    previous = os.umask(0o022)
+    try:
+        yield
+    finally:
+        os.umask(previous)
 
 
 @pytest.fixture
