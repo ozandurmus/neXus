@@ -7,7 +7,7 @@ import { SCREEN_HEADINGS as headings } from "../src/shell/tabCoverage";
 async function screenHasData(page: Page, screen: ScreenId, settleReads: () => Promise<void>) {
   switch (screen) {
     case "overview":
-      await expect(page.getByText(/Estate assurance · [1-9]\d* devices/)).toBeVisible();
+      await expect(page.getByText(/Estate assurance · [1-9]\d* (enrolled )?devices/)).toBeVisible();
       break;
     case "inventory":
     case "configuration":
