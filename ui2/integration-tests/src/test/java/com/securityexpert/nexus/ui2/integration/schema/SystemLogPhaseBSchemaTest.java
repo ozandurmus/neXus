@@ -58,11 +58,11 @@ class SystemLogPhaseBSchemaTest {
             "system_log_chunk", Set.of("chunk_id", "device_id", "source_key", "job_id", "collected_at", "log_day",
                     "file_name_hmac", "inode", "start_offset", "end_offset", "bytes", "lines", "first_line_time",
                     "last_line_time", "line_time_basis", "redaction_count", "flags", "artefact_ref", "wrapped_data_key",
-                    "plaintext_sha256", "ciphertext_bytes", "pruned_at", "prune_reason"),
+                    "plaintext_hmac", "ciphertext_bytes", "pruned_at", "prune_reason", "redaction_rule_set"),
             "system_log_gap", Set.of("gap_id", "device_id", "source_key", "job_id", "kind", "known_lost_bytes",
                     "pending_bytes", "extent_unknown", "window_start_epoch", "window_end_epoch", "detail", "created_at"),
             "system_log_file", Set.of("file_id", "device_id", "kind", "job_id", "remote_name_hmac", "name_time", "size",
-                    "mtime", "status", "flags", "artefact_ref", "wrapped_data_key", "sha256", "ciphertext_bytes",
+                    "mtime", "status", "flags", "artefact_ref", "wrapped_data_key", "content_hmac", "ciphertext_bytes",
                     "collected_at", "expires_at", "pruned_at"),
             "device_crash_entry", Set.of("entry_id", "device_id", "directory", "name_hmac", "process", "size", "mtime",
                     "baseline", "first_seen_job", "last_seen_job", "first_seen_at", "removed_at"),
@@ -210,7 +210,7 @@ class SystemLogPhaseBSchemaTest {
 
         // Chunk: unique (device, source, inode, start_offset); one PAN chunk per run; flags and prune state are closed.
         String chunk = "insert into system_log_chunk(chunk_id, device_id, source_key, job_id, log_day, file_name_hmac, inode, "
-                + "start_offset, end_offset, bytes, lines, flags, artefact_ref, wrapped_data_key, plaintext_sha256, ciphertext_bytes";
+                + "start_offset, end_offset, bytes, lines, flags, artefact_ref, wrapped_data_key, plaintext_hmac, ciphertext_bytes";
         audited(chunk + ") values ('c1', '" + device + "', 'cp_messages', 'job-1', date '2026-10-17', '" + HEX
                 + "', '77', 0, 100, 100, 3, array['LINE_SPLIT'], 'pb-artefact-1', convert_to('synthetic-wrapped-key-marker', 'UTF8'), '"
                 + HEX + "', 10)");
@@ -250,7 +250,7 @@ class SystemLogPhaseBSchemaTest {
 
         // Whole-file fetches: three kinds, unique by remote name digest and mtime.
         String file = "insert into system_log_file(file_id, device_id, kind, job_id, remote_name_hmac, name_time, size, mtime, flags, "
-                + "artefact_ref, wrapped_data_key, sha256, ciphertext_bytes, expires_at";
+                + "artefact_ref, wrapped_data_key, content_hmac, ciphertext_bytes, expires_at";
         audited(file + ") values ('f1', '" + device + "', 'cp_hcp_report', 'job-1', '" + HEX + "', timestamp '2026-10-17 03:00:00', "
                 + "4000000, 1790000000, array['NAME_SHAPE_UNEXPECTED'], 'pb-artefact-1', convert_to('x', 'UTF8'), '" + HEX
                 + "', 3900000, now() + interval '7 days')");
@@ -294,17 +294,17 @@ class SystemLogPhaseBSchemaTest {
         audited("insert into system_log_cursor(device_id, source_key, anchor_hmac, family_snapshot, updated_job_id) values "
                 + "('dev-pb-audit', 'cp_cpwd_elg', '" + HEX + "', '[{\"name\":\"synthetic-file-marker\"}]'::jsonb, 'job-9')");
         audited("insert into system_log_chunk(chunk_id, device_id, source_key, job_id, log_day, file_name_hmac, inode, start_offset, "
-                + "end_offset, bytes, lines, artefact_ref, wrapped_data_key, plaintext_sha256, ciphertext_bytes) values "
+                + "end_offset, bytes, lines, artefact_ref, wrapped_data_key, plaintext_hmac, ciphertext_bytes) values "
                 + "('c-audit', 'dev-pb-audit', 'cp_cpwd_elg', 'job-9', date '2026-10-17', '" + HEX + "', '9', 0, 5, 5, 1, "
                 + "'synthetic-artefact-location', convert_to('" + marker + "', 'UTF8'), '" + HEX2 + "', 5)");
         try (var db = fixture.migrateConnection()) {
             assertEquals("system_log_cursor", scalar(db, "select table_name from audit_log where row_pk='dev-pb-audit/cp_cpwd_elg'"));
             String after = scalar(db, "select after_state::text from audit_log where table_name='system_log_chunk' and row_pk='c-audit'");
             assertNotNull(after);
-            for (String leaked : List.of(marker, "synthetic-artefact-location", HEX))
+            // V161: the keyed content identity (plaintext_hmac) is redacted like the anchors and name digests.
+            for (String leaked : List.of(marker, "synthetic-artefact-location", HEX, HEX2))
                 assertFalse(after.contains(leaked), "a redacted value reached audit_log");
             assertTrue(after.contains("sha256:"));
-            assertTrue(after.contains(HEX2), "the content digest is audited in full");
             String cursor = scalar(db, "select after_state::text from audit_log where table_name='system_log_cursor' "
                     + "and row_pk='dev-pb-audit/cp_cpwd_elg'");
             assertFalse(cursor.contains("synthetic-file-marker"));

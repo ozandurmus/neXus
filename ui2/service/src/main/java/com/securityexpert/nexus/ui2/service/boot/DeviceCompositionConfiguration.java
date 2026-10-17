@@ -209,6 +209,7 @@ public class DeviceCompositionConfiguration {
                         "diagnostic", "reviewed_read", TransportKind.SSH_EXEC),
                 com.securityexpert.nexus.ui2.jobs.diagnostic.PanSyslogMeasure.capability(gateRegistryPort),
                 com.securityexpert.nexus.ui2.jobs.diagnostic.PanSystemLogCollect.capability(gateRegistryPort),
+                com.securityexpert.nexus.ui2.jobs.systemlog.CpSystemLogCollect.capability(gateRegistryPort),
                 checkPointInventoryCapability(gateRegistryPort),
                 paloAltoInventoryCapability(gateRegistryPort),
                 checkPointConfigurationCapability(gateRegistryPort),

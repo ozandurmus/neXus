@@ -68,9 +68,15 @@ public final class JooqRetentionQueries {
         return others == null ? 0 : others;
     }
 
+    /**
+     * Live bytes of the backup vault: backup and configuration artefacts. System-log artefacts (V160 class
+     * {@code system_log}) share the table but have their own retention and per-device cap (phase B contract section
+     * 5.3, {@code SystemLogRetentionPruner}); counting them here would let log volume eat the backup budget.
+     */
     public long liveCiphertextBytes() {
         Long sum = transactionBoundary.inTransaction(dsl -> dsl.fetchOne(
-                "select coalesce(sum(a.ciphertext_bytes), 0) from backup_artefact a where true" + NOT_REMOVED).get(0, Long.class));
+                "select coalesce(sum(a.ciphertext_bytes), 0) from backup_artefact a where a.artefact_class <> 'system_log'"
+                        + NOT_REMOVED).get(0, Long.class));
         return sum == null ? 0L : sum;
     }
 

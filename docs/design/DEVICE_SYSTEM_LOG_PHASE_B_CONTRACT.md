@@ -851,6 +851,48 @@ The existing `syslog-measure-start` and `syslog-measurements` stay for phase A.
 3. Planner (§4.4) as a pure function over (cursor, stat), with exhaustive unit tests for every row of the decision
    table and every gap kind.
 4. Executors, scheduler trigger and staggering, retention pruning, the free-space guard.
+
+   **Check Point half implemented (`CpSystemLogCollectJobExecutor`, step 4 record).** One trusted SSH session per
+   device, strictly sequential: C1, the planner, C2 reads only through `CpSyslogRangedRead`, C3, then C6/C7 + C8 in the
+   06:00 window. It shares the PAN storage path (artefact store, free-space guard, fenced audited transactions,
+   `SystemLogCollectionService`, the disabled scheduler, `syslog-collect-start`). Points the text above does not
+   settle, and how they were resolved:
+
+   - **One chunk per read**, not per (device, source, run) (§5.1): §3.2 stores each read before the next is sent and
+     §4.1 advances the cursor in the chunk's transaction, and a chunk row names one inode and one offset range.
+   - **Chunk identity (`V161__system_log_chunk_identity.sql`; approved in principle 2026-10-17).** The §4.1 key
+     (device, source, inode, start_offset) cannot hold two honest chunks that share it: a file system reuses inode
+     numbers after a rotated file is deleted, and an `ANCHOR_MISMATCH` restart re-reads the same inode from 0. V161 adds
+     the chunk's content identity to the key, so a true duplicate (an at-least-once re-read) is still refused and a
+     reused inode is not. The identity is keyed, never a bare hash (§12): `system_log_chunk.plaintext_sha256` is
+     replaced by `plaintext_hmac`, HMAC-SHA256 of the stored (redacted) plaintext under the keyed-fingerprint secret
+     (`UI2_HOSTNAME_FINGERPRINT_KEY_FILE`), the same key as the anchors and the file-name HMACs, separated by domain
+     (`system-log-chunk-content`; anchors `cp-syslog-anchor`), as 64 lowercase hex characters. The same rule replaces
+     `system_log_file.sha256` with `content_hmac` (domain `system-log-file-content`, over the file as received). Both
+     columns are audit-redacted like the anchors. A Check Point chunk must carry its identity; rows from before V161
+     (PAN only) keep NULL, since a keyed digest cannot be derived from a bare one. The artefact manifest
+     (`backup_artefact.plaintext_sha256`) keeps the store's own integrity digest, as for every artefact class. V161 also
+     adds `system_log_chunk.redaction_rule_set` (§12: the rule-set id, `cp-text-v1`, stored with each chunk). V161 runs
+     twice inside one BEGIN/ROLLBACK and needs that dry run on the live database before deploy.
+   - **Redaction is fail closed.** Without a wired redactor no C2 read is sent and the source is `UNKNOWN`
+     (`REDACTOR_MISSING`); the worker wires `LogRedactor`. sar text and HCP archives are stored as received (§12 lists
+     line rules for the incremental sources; sar holds counters).
+   - **Process names (§7, pattern `PENDING`).** Only a `<daemon>.<pid>.core[.gz]` name whose daemon is on a fixed list
+     of Check Point and system daemons is named; every other usermode entry is `UNKNOWN` (still alerted).
+   - **sar day.** The device time zone is not printed: the candidate's `DD` must be yesterday in UTC or in
+     Europe/Istanbul, with the 30 h mtime rule. A sar left `BACKLOG` by the device budget is retried in the next window
+     of the same day (§3.4 "the next window continues"); HCP stays a 06:00-only item.
+   - **`TOO_LARGE`** keeps the job `COMPLETED` (it is reported, §9 does not list it as a failure).
+   - **Spike Detective (§3.2 step 4, §8.3) is not built:** no C4/C5 is sent, so the baseline listing does not run yet.
+     With `spike_data_enabled` on, `cp_spike_data` is recorded `UNSUPPORTED` (`SPIKE_DATA_NOT_IMPLEMENTED`).
+   - **Retention (§5.3)** runs in the worker, which owns the artefact store (`SystemLogRetentionPruner`, checked hourly,
+     once a day, whether or not collection is enabled): raw chunks and sar 30 days, HCP 7 days, the per-device cap
+     oldest-first with a `RETENTION_SHORTENED_BY_CAP` gap row per source, ledger rows 180 days. The backup vault total
+     (`JooqRetentionQueries.liveCiphertextBytes`) and the overview's backup freshness no longer count `system_log`.
+   - **C8 transport.** The whole-file fetch uses `DeviceTransport.fetchBounded`: the read-only SFTP open/read/close of
+     the ranged read from byte 0, the shorter of the gate row's and the kind's timeout (120 s sar, 300 s HCP), one byte
+     past the bound so growth is detected, and a transcript that names only the source key. `fetchStreaming` and its
+     backup callers are unchanged.
 5. Redaction rules and the masking projection, with synthetic-line tests.
 6. Logs screen and CLI (§14); effectiveness review at the end.
 7. Architecture tests and Java lane tests before ship. The first rollout goes to one device per vendor in one

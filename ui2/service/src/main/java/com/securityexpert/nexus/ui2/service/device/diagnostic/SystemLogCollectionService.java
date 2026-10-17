@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import com.securityexpert.nexus.ui2.jobs.admission.AdmissionResult;
 import com.securityexpert.nexus.ui2.jobs.admission.JobAdmissionService;
 import com.securityexpert.nexus.ui2.jobs.diagnostic.PanSystemLogCollect;
+import com.securityexpert.nexus.ui2.jobs.systemlog.CpSystemLogCollect;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRecord;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord;
@@ -20,7 +21,8 @@ import com.securityexpert.nexus.ui2.service.security.ActionRegistry;
 
 /**
  * System-log programme phase B admission (DEVICE_SYSTEM_LOG_PHASE_B_CONTRACT.md sections 3.1 and 14): admits one
- * {@code pan_system_log_collect} job per enrolled Palo Alto firewall (never Panorama) through the shared job windows.
+ * collection job per enrolled Palo Alto firewall ({@code pan_system_log_collect}, never Panorama) and per enrolled
+ * Check Point gateway ({@code cp_system_log_collect}, never a management server) through the shared job windows.
  *
  * <ul>
  *   <li><b>Manual start</b> ({@link #start}): one device or every supported device, only inside a window
@@ -30,8 +32,8 @@ import com.securityexpert.nexus.ui2.service.security.ActionRegistry;
  * </ul>
  *
  * Both use the idempotency key {@code syslog-collect:<device>:<slot>}, so a window holds at most one collection job per
- * device whichever way it starts (the P3/P4 gate rows allow at most 4 pages per firewall per window). Check Point is
- * added here as a second entry of {@link #CAPABILITY_BY_VENDOR} by its own lane.
+ * device whichever way it starts (the P3/P4 gate rows allow at most 4 pages per firewall per window; C1 and C3 at most
+ * once per device per window).
  */
 @Service
 public final class SystemLogCollectionService {
@@ -40,8 +42,9 @@ public final class SystemLogCollectionService {
 
     /** Section 3.1: the start of a device inside its window is offset by hash(device_id) mod this many minutes. */
     public static final int STAGGER_MINUTES = 40;
-    /** Vendor to collection capability. Palo Alto only until the Check Point executor lands. */
-    static final Map<String, String> CAPABILITY_BY_VENDOR = Map.of("palo_alto", PanSystemLogCollect.CAPABILITY);
+    /** Vendor to collection capability. */
+    static final Map<String, String> CAPABILITY_BY_VENDOR = Map.of("palo_alto", PanSystemLogCollect.CAPABILITY,
+            "check_point", CpSystemLogCollect.CAPABILITY);
 
     private final DeviceRepository devices;
     private final JobAdmissionService admission;
@@ -56,10 +59,17 @@ public final class SystemLogCollectionService {
         this.devices = devices; this.admission = admission; this.windows = windows;
     }
 
-    /** Every enrolled, enabled Palo Alto firewall reached over the XML API (Panorama is a management server and never listed). */
+    /**
+     * Every enrolled, enabled Palo Alto firewall reached over the XML API and every Check Point gateway reached over SSH
+     * (management servers -- Panorama, MDS -- are never listed; a Gaia Embedded device is admitted and its executor
+     * records UNSUPPORTED, so the outcome stays visible).
+     */
     List<DeviceSummaryRecord> targets() {
-        return devices.listReadCollectionTargets("pan_xml_api").stream()
-                .filter(d -> "palo_alto".equals(d.vendorHint()) && "gateway".equals(d.role())).toList();
+        var pan = devices.listReadCollectionTargets("pan_xml_api").stream()
+                .filter(d -> "palo_alto".equals(d.vendorHint()) && "gateway".equals(d.role()));
+        var cp = devices.listReadCollectionTargets("ssh_exec").stream()
+                .filter(d -> "check_point".equals(d.vendorHint()) && "gateway".equals(d.role()));
+        return java.util.stream.Stream.concat(pan, cp).toList();
     }
 
     /** Minutes into the window at which a device is due; never at or beyond the end of a short window. */
@@ -81,7 +91,7 @@ public final class SystemLogCollectionService {
             return tally(1, List.of(submit(capability, id, now, actor)));
         }
         var targets = targets();
-        return tally(targets.size(), targets.stream().map(d -> submit(PanSystemLogCollect.CAPABILITY, d.deviceId(), now, actor)).toList());
+        return tally(targets.size(), targets.stream().map(d -> submit(CAPABILITY_BY_VENDOR.get(d.vendorHint()), d.deviceId(), now, actor)).toList());
     }
 
     /**
@@ -93,7 +103,7 @@ public final class SystemLogCollectionService {
         long minutesIn = Duration.between(windows.slotStart(now).toInstant(), now).toMinutes();
         var due = targets().stream()
                 .filter(d -> staggerMinute(d.deviceId(), windows.windowMinutes()) <= minutesIn).toList();
-        return tally(due.size(), due.stream().map(d -> submit(PanSystemLogCollect.CAPABILITY, d.deviceId(), now, actor)).toList());
+        return tally(due.size(), due.stream().map(d -> submit(CAPABILITY_BY_VENDOR.get(d.vendorHint()), d.deviceId(), now, actor)).toList());
     }
 
     private AdmissionResult submit(String capability, String deviceId, Instant now, String actor) {

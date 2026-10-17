@@ -197,7 +197,7 @@ public class OverviewService {
         Record r = q(dsl -> dsl.fetchOne("select "
                 + "(select max(collected_at) from device_inventory_run) as inventory, "
                 + "(select max(collected_at) from device_configuration_run) as configuration, "
-                + "(select max(created_at) from backup_artefact) as backup, "
+                + "(select max(created_at) from backup_artefact where artefact_class <> 'system_log') as backup, "
                 + "(select max(finished_at) from jobs where state in ('COMPLETED','FAILED')) as jobs, "
                 + "(select max(observed_at) from device_platform_facts) as platform_facts"));
         Map<String, Object> e = new LinkedHashMap<>();

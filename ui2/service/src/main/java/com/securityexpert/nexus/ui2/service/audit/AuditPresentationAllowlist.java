@@ -245,15 +245,15 @@ public final class AuditPresentationAllowlist {
             Map.entry("system_log_chunk", Set.of(
                     "bytes", "chunk_id", "ciphertext_bytes", "collected_at", "device_id", "end_offset",
                     "first_line_time", "flags", "inode", "job_id", "last_line_time", "line_time_basis", "lines",
-                    "log_day", "plaintext_sha256", "prune_reason", "pruned_at", "redaction_count", "source_key",
-                    "start_offset")),
+                    "log_day", "prune_reason", "pruned_at", "redaction_count",
+                    "redaction_rule_set", "source_key", "start_offset")),
             Map.entry("system_log_cursor", Set.of(
                     "cursor_key", "device_epoch_at_read", "device_id", "fast_rotating", "inode", "offset_bytes",
                     "pan_boundary_seqnos", "pan_last_receive_time", "retention_horizon_seconds", "source_key",
                     "updated_at", "updated_job_id")),
             Map.entry("system_log_file", Set.of(
                     "ciphertext_bytes", "collected_at", "device_id", "expires_at", "file_id", "flags", "job_id",
-                    "kind", "mtime", "name_time", "pruned_at", "sha256", "size", "status")),
+                    "kind", "mtime", "name_time", "pruned_at", "size", "status")),
             Map.entry("system_log_gap", Set.of(
                     "created_at", "device_id", "extent_unknown", "gap_id", "job_id", "kind", "known_lost_bytes",
                     "pending_bytes", "source_key", "window_end_epoch", "window_start_epoch")),

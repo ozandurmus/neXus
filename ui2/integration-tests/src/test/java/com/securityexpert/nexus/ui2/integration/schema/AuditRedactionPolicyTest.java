@@ -374,8 +374,9 @@ class AuditRedactionPolicyTest {
             "system_log_chunk.collected_at", "system_log_chunk.device_id", "system_log_chunk.end_offset",
             "system_log_chunk.first_line_time", "system_log_chunk.flags", "system_log_chunk.inode",
             "system_log_chunk.job_id", "system_log_chunk.last_line_time", "system_log_chunk.line_time_basis",
-            "system_log_chunk.lines", "system_log_chunk.log_day", "system_log_chunk.plaintext_sha256",
+            "system_log_chunk.lines", "system_log_chunk.log_day",
             "system_log_chunk.prune_reason", "system_log_chunk.pruned_at", "system_log_chunk.redaction_count",
+            "system_log_chunk.redaction_rule_set", // V161
             "system_log_chunk.source_key", "system_log_chunk.start_offset",
             // system_log_cursor (V160)
             "system_log_cursor.cursor_key", "system_log_cursor.device_epoch_at_read", "system_log_cursor.device_id",
@@ -387,7 +388,7 @@ class AuditRedactionPolicyTest {
             "system_log_file.ciphertext_bytes", "system_log_file.collected_at", "system_log_file.device_id",
             "system_log_file.expires_at", "system_log_file.file_id", "system_log_file.flags",
             "system_log_file.job_id", "system_log_file.kind", "system_log_file.mtime", "system_log_file.name_time",
-            "system_log_file.pruned_at", "system_log_file.sha256", "system_log_file.size", "system_log_file.status",
+            "system_log_file.pruned_at", "system_log_file.size", "system_log_file.status",
             // system_log_gap (V160)
             "system_log_gap.created_at", "system_log_gap.device_id", "system_log_gap.extent_unknown",
             "system_log_gap.gap_id", "system_log_gap.job_id", "system_log_gap.kind",
@@ -658,7 +659,9 @@ class AuditRedactionPolicyTest {
             "system_log_chunk.wrapped_data_key", 1, "system_log_gap.detail", 2,
             "system_log_file.remote_name_hmac", 2, "system_log_file.artefact_ref", 2,
             "system_log_file.wrapped_data_key", 1, "device_crash_entry.name_hmac", 2,
-            "device_crash_entry.process", 2, "device_crash_alert.process", 2, "system_log_run.detail", 2);
+            "device_crash_entry.process", 2, "device_crash_alert.process", 2, "system_log_run.detail", 2,
+            // V161: keyed content identities are redacted like the anchors.
+            "system_log_chunk.plaintext_hmac", 2, "system_log_file.content_hmac", 2);
 
     private static java.util.Map<String, Integer> declaredRedactions(Object... pairs) {
         java.util.Map<String, Integer> declared = new java.util.LinkedHashMap<>();

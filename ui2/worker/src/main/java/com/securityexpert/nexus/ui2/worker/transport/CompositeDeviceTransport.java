@@ -107,6 +107,16 @@ public final class CompositeDeviceTransport implements DeviceTransport {
     }
 
     @Override
+    public com.securityexpert.nexus.ui2.jobs.transport.RangedFetchResult fetchBounded(TransportSession session,
+            com.securityexpert.nexus.ui2.jobs.transport.RangedFetchSpec spec, Duration timeout, java.io.OutputStream sink,
+            String nameClass) {
+        return registry.find(TransportKind.SSH_EXEC)
+                .map(transport -> transport.fetchBounded(session, spec, timeout, sink, nameClass))
+                .orElseGet(() -> com.securityexpert.nexus.ui2.jobs.transport.RangedFetchResult.refused(
+                        spec.startOffset(), "NO_SSH_EXEC_ADAPTER"));
+    }
+
+    @Override
     public XmlApiResult xmlApiCall(ApiTarget target, XmlApiSpec spec, Duration timeout) {
         return registry.find(TransportKind.PAN_XML_API)
                 .map(transport -> transport.xmlApiCall(target, spec, timeout))
