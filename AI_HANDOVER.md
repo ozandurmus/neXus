@@ -9,7 +9,6 @@ Operator screens (`Overview & Verdict`, `Topology`, `Flows & Ladder`, `Timeserie
 Queue's last period build remains NXS-LOCAL-0370; see `CURRENT_STATE.md`.
 
 ## What changed this session
-- Resolved merge between `feature/packet-analysis-shell` and Java `ui2/packet-analysis` engine branch.
 - Wired `RealPacketAnalysisEngine` in `ui2/worker` (`CaseRunner.runCase`) and kept `StubPacketAnalysisEngine` for unit tests.
 - Added `Engine.openReadOnly`, `CaseQueries`, and 16 case detail/topology endpoints in `PacketAnalysisController` with `aiview` masking (`PrivacyMaskingResponseBodyAdvice`), `PACKET_ANALYSIS_RAW_VIEW` enforcement/auditing on `field-diff` and download, and `409 ANALYSIS_RUNNING` conflict guard.
 - Added full CLI parity in `NexusSessionCli` for all new Packet Analysis case reads and `topology-set`.
