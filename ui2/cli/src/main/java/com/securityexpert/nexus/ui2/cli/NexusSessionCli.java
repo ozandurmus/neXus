@@ -79,6 +79,7 @@ final class NexusSessionCli {
         System.out.println("  jobs-export <dest.csv> [same filters]");
         System.out.println("  inventory-collect <deviceId> | configuration-collect <deviceId>");
         System.out.println("  syslog-measure-start                           measure system/config logs on every enrolled Palo Alto firewall");
+        System.out.println("  syslog-collect-start [deviceId]                start the incremental system-log collection (one device, or every supported device)");
         System.out.println("  syslog-measurements [deviceId] [vendor=..] [source=..] [limit=..]   recorded measurement summaries");
         System.out.println("                                                 (Palo Alto and the numeric Check Point summaries)");
         System.out.println("  pa-cases | pa-case <caseId>                    Packet Analysis cases (expiry: 7 days)");
@@ -179,6 +180,8 @@ final class NexusSessionCli {
                     yield print(call("POST", "/devices/" + args[1] + "/configuration/collect", "{}"));
                 }
                 case "syslog-measure-start" -> print(call("POST", "/api/v2/diagnostics/system-log-measurements/start", "{}"));
+                case "syslog-collect-start" -> print(call("POST", "/api/v2/system-logs/collect",
+                        args.length > 1 ? json(Map.of("device_id", args[1])) : "{}"));
                 case "syslog-measurements" -> print(call("GET", "/api/v2/diagnostics/system-log-measurements"
                         + queryString(measurementFilters(args), 0), null));
                 case "pa-cases" -> print(call("GET", PA + "/cases", null));

@@ -35,29 +35,38 @@ public final class JooqBackupArtefactManifestRepository implements BackupArtefac
     @Override
     public void record(BackupArtefactManifestRecord manifest, String actorFingerprint, String actionId) {
         auditedTransactionBoundary.inTransaction(actorFingerprint, actionId, dsl -> {
-            dsl.execute("insert into backup_artefact(artefact_id, device_id, virtual_system_ref, artefact_class, "
-                    + "vendor, software_version, hostname_fingerprint, plaintext_sha256, plaintext_bytes, "
-                    + "ciphertext_sha256, ciphertext_bytes, key_id, wrapped_data_key, validation, retention_tier, "
-                    + "expires_at, recovery_volume_path, deviation_state) "
-                    + "values ({0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10}, {11}, {12}, {13}::jsonb, "
-                    + "{14}, {15}, {16}, {17})",
-                    manifest.artefactId(), manifest.deviceId(), manifest.virtualSystemRef().orElse(null),
-                    manifest.artefactClass(), manifest.vendor(), manifest.softwareVersion().orElse(null),
-                    manifest.hostnameFingerprint(), manifest.plaintextSha256(), manifest.plaintextBytes(),
-                    manifest.ciphertextSha256(), manifest.ciphertextBytes(), manifest.keyId(),
-                    manifest.wrappedDataKey(), manifest.validation().toJson(), manifest.retentionTier(),
-                    manifest.expiresAt().map(Timestamp::from).orElse(null), manifest.recoveryVolumePath(),
-                    manifest.deviationState().orElse(null));
-
-            // BK-18: the ledger is written whenever an artefact is created.
-            dsl.execute("insert into artefact_retention_ledger(ledger_id, artefact_id, event, retention_tier) "
-                    + "values ({0}, {1}, {2}, {3})",
-                    UUID.randomUUID().toString(), manifest.artefactId(), "created", manifest.retentionTier());
+            insert(dsl, manifest);
             return null;
         });
         if (manifest.expiresAt().isEmpty()) {
             LOG.warning("[BACKUP_RETENTION] new_artefact_expires_at_null=true; expiry-based retention cannot apply");
         }
+    }
+
+    /**
+     * The manifest row and its retention-ledger {@code created} event (BK-18), inside a transaction the caller already
+     * opened with an audit context. The system-log collector records them in the same transaction as its chunk row and
+     * cursor (DEVICE_SYSTEM_LOG_PHASE_B_CONTRACT.md section 4.1: the cursor moves only with the chunk).
+     */
+    public static void insert(org.jooq.DSLContext dsl, BackupArtefactManifestRecord manifest) {
+        dsl.execute("insert into backup_artefact(artefact_id, device_id, virtual_system_ref, artefact_class, "
+                + "vendor, software_version, hostname_fingerprint, plaintext_sha256, plaintext_bytes, "
+                + "ciphertext_sha256, ciphertext_bytes, key_id, wrapped_data_key, validation, retention_tier, "
+                + "expires_at, recovery_volume_path, deviation_state) "
+                + "values ({0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10}, {11}, {12}, {13}::jsonb, "
+                + "{14}, {15}, {16}, {17})",
+                manifest.artefactId(), manifest.deviceId(), manifest.virtualSystemRef().orElse(null),
+                manifest.artefactClass(), manifest.vendor(), manifest.softwareVersion().orElse(null),
+                manifest.hostnameFingerprint(), manifest.plaintextSha256(), manifest.plaintextBytes(),
+                manifest.ciphertextSha256(), manifest.ciphertextBytes(), manifest.keyId(),
+                manifest.wrappedDataKey(), manifest.validation().toJson(), manifest.retentionTier(),
+                manifest.expiresAt().map(Timestamp::from).orElse(null), manifest.recoveryVolumePath(),
+                manifest.deviationState().orElse(null));
+
+        // BK-18: the ledger is written whenever an artefact is created.
+        dsl.execute("insert into artefact_retention_ledger(ledger_id, artefact_id, event, retention_tier) "
+                + "values ({0}, {1}, {2}, {3})",
+                UUID.randomUUID().toString(), manifest.artefactId(), "created", manifest.retentionTier());
     }
 
     @Override

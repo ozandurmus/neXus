@@ -351,6 +351,12 @@ public final class Ui2WorkerMain {
         var panSyslogMeasureExecutor = new com.securityexpert.nexus.ui2.worker.diagnostic.PanSyslogMeasureJobExecutor(
                 leaseRepository, attemptRepository, deviceRepository, panTransport, panCredentialResolver, gateRegistry,
                 new com.securityexpert.nexus.ui2.persistence.diagnostic.JooqSystemLogMeasurementRepository(transactionBoundary));
+        // System-log programme phase B (Palo Alto): incremental system/config log collection into the encrypted artefact store.
+        var panSystemLogCollectExecutor = new com.securityexpert.nexus.ui2.worker.diagnostic.PanSystemLogCollectJobExecutor(
+                leaseRepository, attemptRepository, deviceRepository, panTransport, panCredentialResolver, gateRegistry,
+                new com.securityexpert.nexus.ui2.persistence.diagnostic.JooqSystemLogCollectionRepository(transactionBoundary),
+                artefactStore, new com.securityexpert.nexus.ui2.worker.diagnostic.SystemLogArtefactVolume.FileSystem(artefactStoreRoot),
+                hostnameFingerprint);
         java.util.concurrent.ExecutorService executor = java.util.concurrent.Executors.newFixedThreadPool(10);
         java.util.List<WorkerClaimLoop> claimLoops = new java.util.ArrayList<>();
         var failoverRecovery = new com.securityexpert.nexus.ui2.persistence.JooqCpFailoverRepository(transactionBoundary);
@@ -377,6 +383,7 @@ public final class Ui2WorkerMain {
                     .withPanFailover(panFailoverExecutor)
                     .withDiagnosticReads(genericDiagnosticExecutor)
                     .withPanSyslogMeasure(panSyslogMeasureExecutor)
+                    .withPanSystemLogCollect(panSystemLogCollectExecutor)
                     .withPolicyCollection(policyCollectionExecutor)
                     .withRole(role, policyFallback)
                     .withRuntimeAdmission(endpointAdmission, moduleRuntime);
