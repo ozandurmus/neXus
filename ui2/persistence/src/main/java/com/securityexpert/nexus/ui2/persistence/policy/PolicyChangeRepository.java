@@ -1,6 +1,7 @@
 package com.securityexpert.nexus.ui2.persistence.policy;
 
 import com.securityexpert.nexus.ui2.persistence.TransactionBoundary;
+import com.securityexpert.nexus.ui2.policy.PolicySnapshot;
 import java.time.Instant;
 import java.util.*;
 
@@ -21,6 +22,26 @@ public final class PolicyChangeRepository {
             this(revision, policy, ruleId, ruleKey, changeType, time, observed, actor, changes, metadata, name, number, currentLabel, time, false);
         }
     }
+    /**
+     * First appearance of a Palo Alto NAT or default-rules section kind in a policy (device group). The history trigger
+     * has no way to tell "the rule was added" from "the collector began parsing this rulebase", so every NAT and
+     * default rule would otherwise be reported as added once, after the release that started parsing them. An 'added'
+     * revision of such a section is treated as initial capture when no earlier revision of the same policy carries that
+     * section name. A later addition finds the earlier batch and is reported normally. Section names are fixed by the
+     * mapper and only trusted on Palo Alto policies; a Check Point section name is user text and is never classified.
+     * Evaluated at read time, so no history row is rewritten and no migration is needed. Never null.
+     */
+    static final String FIRST_KIND_APPEARANCE;
+    static {
+        String kind = "(select c->>'after' from jsonb_array_elements(h.changes) c where c->>'field' = 'section' limit 1)";
+        String names = String.join(", ", java.util.stream.Stream.of(PolicySnapshot.PAN_PRE_NAT, PolicySnapshot.PAN_POST_NAT,
+            PolicySnapshot.PAN_PRE_DEFAULT, PolicySnapshot.PAN_POST_DEFAULT).map(n -> "'" + n + "'").toList());
+        FIRST_KIND_APPEARANCE = "coalesce(h.change_type = 'added' and s.metadata->>'vendor' = 'PAN' and " + kind + " in (" + names + ") "
+            + "and not exists (select 1 from policy_rule_history e where e.policy_id = h.policy_id and e.collected_at < h.collected_at "
+            + "and e.changes @> jsonb_build_array(jsonb_build_object('field'::text, 'section'::text, 'after', " + kind + "))), false)";
+    }
+    /** The stored V150 marker, or a first appearance of a NAT/default section kind. */
+    static final String EFFECTIVE_INITIAL = "(h.initial_capture or " + FIRST_KIND_APPEARANCE + ")";
     private static final String UTC_ISO = " at time zone 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"')";
     private final TransactionBoundary transactions;
     public PolicyChangeRepository(TransactionBoundary transactions) { this.transactions = transactions; }
@@ -34,7 +55,7 @@ public final class PolicyChangeRepository {
             + where + " order by coalesce(fn_policy_change_time(h.changed_on), h.collected_at) desc, h.revision_id desc limit 500) "
             + "select h.revision_id, h.policy_id, h.rule_id, h.rule_key, h.change_type, "
             + "to_char(coalesce(fn_policy_change_time(h.changed_on), h.collected_at)" + UTC_ISO + " as time, "
-            + "to_char(h.collected_at" + UTC_ISO + " as collected_at, h.initial_capture, "
+            + "to_char(h.collected_at" + UTC_ISO + " as collected_at, " + EFFECTIVE_INITIAL + " as initial_capture, "
             + "fn_policy_change_time(h.changed_on) is null as observed, h.changed_by, h.changes::text as changes, s.metadata::text as metadata, "
             + "coalesce(labels.name, current_rule.rule->>'name') as name, coalesce(labels.number, current_rule.rule->'number')::text as number, (labels.name is null or labels.number is null) and current_rule.rule is not null as current_label from page h join policy_snapshot s on s.policy_id=h.policy_id "
             + "left join lateral (select "
@@ -54,7 +75,8 @@ public final class PolicyChangeRepository {
         var args = new ArrayList<Object>();
         // One scan: counted rows honour includeInitial; initial captures are always counted so the report can say what it hides.
         var where = predicates(filter, ceiling, null, args, false);
-        String counted = filter.includeInitial() ? "true" : "not h.initial_capture";
+        // "not h.initial_capture" stays a separate conjunct so the partial index on that predicate still applies.
+        String counted = filter.includeInitial() ? "true" : "not h.initial_capture and not " + FIRST_KIND_APPEARANCE;
         return transactions.inTransaction(db -> {
             var r = db.fetchOne("select count(*) filter (where " + counted + ")::bigint as total, "
                 + "count(distinct case when h.changed_by !~ '^[[:space:]]*$' then h.changed_by end) filter (where " + counted + ")::bigint as actors, "
@@ -62,7 +84,7 @@ public final class PolicyChangeRepository {
                 + "count(*) filter (where " + counted + " and h.change_type='added')::bigint as added, "
                 + "count(*) filter (where " + counted + " and h.change_type='modified')::bigint as modified, "
                 + "count(*) filter (where " + counted + " and h.change_type='removed')::bigint as removed, "
-                + "count(*) filter (where h.initial_capture)::bigint as initial_captures "
+                + "count(*) filter (where " + EFFECTIVE_INITIAL + ")::bigint as initial_captures "
                 + "from policy_rule_history h join policy_snapshot s on s.policy_id=h.policy_id where " + where, args.toArray());
             return Map.of("total", r.get("total", Long.class), "actors", r.get("actors", Long.class), "rules", r.get("rules", Long.class),
                 "counts", Map.of("added", r.get("added", Long.class), "modified", r.get("modified", Long.class), "removed", r.get("removed", Long.class)),
@@ -79,7 +101,7 @@ public final class PolicyChangeRepository {
         if (!filter.policy().isEmpty()) add(where, args, "h.policy_id = {%d}", filter.policy());
         if (!filter.device().isEmpty()) add(where, args, "s.metadata->'targets' @> jsonb_build_array(jsonb_build_object('deviceId', {%d}::text))", filter.device());
         if (!filter.changeType().isEmpty()) add(where, args, "h.change_type = {%d}", filter.changeType());
-        if (applyInitial && !filter.includeInitial()) where.append(" and not h.initial_capture");
+        if (applyInitial && !filter.includeInitial()) where.append(" and not h.initial_capture and not ").append(FIRST_KIND_APPEARANCE);
         if (!filter.field().isEmpty()) add(where, args, "h.changes @> jsonb_build_array(jsonb_build_object('field', {%d}::text))", filter.field());
         if (position != null) {
             int n = args.size(); args.add(position.time().toString()); args.add(position.revision());
