@@ -483,6 +483,14 @@
       "reason": "util-linux libraries in the Red Hat UBI9 openjdk-21-runtime base: no fixed package is published yet; the 2026-10-12 base digest (PR #584) still ships it, and the build cannot reach the UBI package repos to update it. The service is a JVM process (TLS via JSSE, XML via the JDK parser), so these OS libraries are not on the request path. Accepted alongside CVE-2026-53613 under the PO's 2026-10-15 delegation; remove when Red Hat rebuilds the base image.",
       "owner": "PO",
       "review_date": "2026-10-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "CVE-2026-69184",
+      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: c-ares",
+      "reason": "c-ares in the Packet Analysis engine image (the pinned Rocky 9.7 c-ares-1.19.1-2.el9_4 runtime package tshark 4.6.9 links): no fixed package is published for EL9 yet (BaseOS and the 9.7 vault carry only 1.19.1-2). c-ares is tshark's DNS resolver and every tshark run in the engine passes -n (no name resolution) on offline capture files, so the resolver is not on the execution path. Accepted under the PO's 2026-10-15 delegation, the same way as CVE-2026-53613/53615; remove when Rocky ships a fixed c-ares.",
+      "owner": "PO",
+      "review_date": "2026-10-31"
     }
   ]
 }
