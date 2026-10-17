@@ -165,8 +165,10 @@ public final class GlobalSearchService {
                     if (out.size() == limit) break;
                 }
             }
-            for (Record r : dsl.fetch("select artefact_id from backup_artefact where artefact_class = 'backup' "
-                    + "order by created_at desc")) {
+            // A pruned artefact keeps its manifest row; search offers only artefacts still on the volume.
+            for (Record r : dsl.fetch("select a.artefact_id from backup_artefact a where a.artefact_class = 'backup'"
+                    + com.securityexpert.nexus.ui2.persistence.artefact.JooqRetentionQueries.andNotRemoved("a")
+                    + " order by a.created_at desc")) {
                 if (out.size() >= limit) break;
                 String id = r.get("artefact_id", String.class);
                 if (contains(id, term)) out.add(Map.of("kind", "backup", "label", id,

@@ -35,10 +35,11 @@ public class OverviewService {
     private static final long DAY_S = 24 * 3600;
     /**
      * A stored archive is one the retention ledger has not removed -- the Backups screen's listing predicate
-     * (JooqBackupArtefactManifestRepository.findAll). The manifest row of a pruned or purged archive stays.
+     * (JooqBackupArtefactManifestRepository.findAll). The manifest row of a pruned or purged archive stays, so
+     * coverage counts only archives still on the volume. One shared predicate, applied once per query.
      */
-    static final String NOT_REMOVED =
-            " and not exists (select 1 from artefact_retention_ledger l where l.artefact_id = a.artefact_id and l.event = 'removed')";
+    private static final String LIVE_ARTEFACT =
+            com.securityexpert.nexus.ui2.persistence.artefact.JooqRetentionQueries.andNotRemoved("a");
 
     private final TransactionBoundary tx;
     private final DeviceRepository deviceRepository;
@@ -365,11 +366,11 @@ public class OverviewService {
 
         // 5. backup targets without an archive
         List<String> targets = fleet.active().stream().filter(DeviceSummaryRecord::backupTarget).map(DeviceSummaryRecord::deviceId).toList();
-        List<String> withArchive = q(dsl -> dsl.fetch("select distinct device_id from backup_artefact a where artefact_class = 'backup'" + NOT_REMOVED
-                + " and device_id = any({0})", (Object) targets.toArray(String[]::new)).map(r -> r.get(0, String.class)));
+        List<String> withArchive = q(dsl -> dsl.fetch("select distinct a.device_id from backup_artefact a where a.artefact_class = 'backup' "
+                + "and a.device_id = any({0})" + LIVE_ARTEFACT, (Object) targets.toArray(String[]::new)).map(r -> r.get(0, String.class)));
         long missing = targets.stream().filter(t -> !withArchive.contains(t)).count();
-        List<String> withArchiveDayAgo = q(dsl -> dsl.fetch("select distinct device_id from backup_artefact a where artefact_class = 'backup'"
-                + " and created_at < now() - interval '24 hours' and device_id = any({0})", (Object) targets.toArray(String[]::new)).map(r -> r.get(0, String.class)));
+        List<String> withArchiveDayAgo = q(dsl -> dsl.fetch("select distinct a.device_id from backup_artefact a where a.artefact_class = 'backup' "
+                + "and a.created_at < now() - interval '24 hours' and a.device_id = any({0})" + LIVE_ARTEFACT, (Object) targets.toArray(String[]::new)).map(r -> r.get(0, String.class)));
         Map<String, Object> backupTile = new LinkedHashMap<>();
         backupTile.put("count", missing);
         backupTile.put("of", targets.size());
@@ -474,7 +475,8 @@ public class OverviewService {
     private Object estate(Fleet fleet, Instant now) {
         Map<String, Instant> lastRead = latestInventoryAll();
         java.util.Set<String> withArchive = new java.util.HashSet<>(q(dsl -> dsl.fetch(
-                "select distinct device_id from backup_artefact a where artefact_class = 'backup'" + NOT_REMOVED).getValues(0, String.class)));
+                "select distinct a.device_id from backup_artefact a where a.artefact_class = 'backup'" + LIVE_ARTEFACT)
+                .getValues(0, String.class)));
         boolean complianceWarm = complianceService.isEvaluationCacheWarm();
         Map<String, ComplianceService.DeviceCriticals> criticals = complianceWarm ? complianceService.criticalsByDevice() : Map.of();
         List<Map<String, Object>> devices = new ArrayList<>();
