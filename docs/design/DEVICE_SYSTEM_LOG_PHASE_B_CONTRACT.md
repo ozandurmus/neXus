@@ -1,9 +1,13 @@
 # Device system-log programme — phase B contract (incremental collection and storage)
 
-**Status: DRAFT — pending PO command approval.** No command in §10 is approved by this document. It becomes
-FROZEN only after (1) the M1/M5 findings record and the M3/M4 findings record are committed next to the phase A
-contract, (2) the parameters marked `PENDING-M1`/`PENDING-M5`/`PENDING-M3M4` in §11 are filled from them, and
-(3) the PO approves each exact command in §10 and answers §13.
+**Status: APPROVED — PO 2026-10-17; parameters marked PENDING-M1/M5/M3M4 are set from the measurement findings
+record before implementation freezes them.** The PO approved all 13 commands in §10 exactly as written (C2 as the
+SFTP ranged read) and settled every question in §13; the record is
+[PO_DECISION_RECORD_2026_10_17_SYSTEM_LOG_PHASE_B.md](PO_DECISION_RECORD_2026_10_17_SYSTEM_LOG_PHASE_B.md). The
+parameters marked `PENDING-M1`/`PENDING-M5`/`PENDING-M3M4` in §11 are **not** decided: they are filled from the M1/M5
+findings record and the M3/M4 findings record (committed next to the phase A contract) before implementation freezes
+them. No number is invented here, and the PAN vendor-semantics items in §11 (`seqno` contiguity, `dir=forward`,
+`query` syntax) stay **UNKNOWN** until an official documentation citation is recorded.
 
 Authority and inputs:
 
@@ -12,7 +16,7 @@ Authority and inputs:
 - [DEVICE_SYSTEM_LOG_PROGRAMME_CONTRACT.md](DEVICE_SYSTEM_LOG_PROGRAMME_CONTRACT.md) (phase A): sources §2, read
   shapes L1–L5 §3, measurements M1–M5 §4/§4.1, storage/privacy §5, PO answers §7 (30-day raw retention, PAN config
   logs included, every enrolled firewall, 6-hour interval).
-- PO decisions in chat, 2026-10-15/16 (§1 below).
+- PO decisions in chat, 2026-10-15/16 (§1 below) and 2026-10-17 (§13; the record named in the status line).
 - `AGENTS.md`: network-device command gate, raw-evidence law, UNKNOWN/fail-closed law, aiview masking law.
 - `docs/AI_DEVELOPMENT_PROTOCOL.md` §"Network-device command gate" (the ten gate fields).
 - `UI2_0_C4_CAPABILITY_REGISTRY_GATE_RESOLUTION_CONTRACT.md` §2.3 (`sftp_get` gate applicability).
@@ -33,8 +37,10 @@ pencerelerinde.
 1. Tek bir `stat` komutu çalışır. Bu komut her log dosyasının kimliğini (inode), boyutunu ve son yazma zamanını
    verir. Kapsanan dosyalar: messages, fwd, cpd, cpwd, fwk, mq_mng, spike_detective.log/.csv ve bunların döndürülmüş
    kopyaları.
-2. Büyüyen her dosyanın yalnızca yeni baytları okunur, `tail -c +<ofset> | head -c <tavan>` ile. Tek okuma en fazla
-   8 MiB'tır.
+2. Büyüyen her dosyanın yalnızca yeni baytları okunur. Okuma bir SFTP aralıklı okumasıdır: dosya, zaten açık olan
+   SSH oturumunun SFTP alt sistemi üzerinden açılır, kayıtlı bayt ofsetinden tavana kadar okunur ve kapatılır.
+   Cihazda okuma için hiçbir komut çalışmaz (`tail`/`head` yok, kabuk süreci yok). Satır sınırına kırpma, parmak izi
+   kontrolü ve rotasyon mantığı neXus tarafında yapılır. Tek okuma en fazla 8 MiB'tır (öneri; M1 sonrası kesinleşir).
 3. Dosya döndürüldüyse (inode değiştiyse) önce eski dosyanın okunmamış kalanı okunur, sonra yeni dosya baştan
    okunur.
 4. Bazı satırlar biz okuyamadan silindiyse, bunu sessizce geçmiyoruz. Ekranda ve kayıtta "boşluk" olarak, bayt
@@ -52,7 +58,7 @@ alınır.
 **Cihaz yükü.**
 
 - Cihazda sıkıştırma yapılmaz.
-- `find` kullanılmaz.
+- Okuma için cihazda kabuk komutu çalışmaz; `find` kullanılmaz.
 - Polling yapılmaz. Tek istisna, PAN'ın kendi log işinin bitişini sınırlı sayıda kontrol etmektir.
 - Cihaz başına bir oturum açılır ve komutlar sırayla çalışır.
 - Bir koşuda cihaz başına en fazla 64 MiB okunur.
@@ -71,12 +77,23 @@ alınır.
 **Management server (MDS).** Şimdilik kapalı. Tasarım ileride açılmasına izin veriyor, ama varsayılan kapalı ve bu
 onayın parçası değil.
 
-**Onayınız gerekenler.**
+**Onay durumu (PO, 2026-10-17).**
 
-1. §10'daki 13 yeni komut: Check Point için 8, Palo Alto için 5. Faz A'da onaylanmış 18 ölçüm komutu (V149, V151,
-   V157) toplamada kullanılmıyor. Onlar yalnızca ölçüm içindi, ham veri saklamıyorlardı.
-2. §13'teki sorular: okuma yöntemi, yeni bildirim tipi, ilk koşuda geriye dönük okuma miktarı, depolama tavanı
-   dolunca ne olacağı, HCP raporunun dışa aktarımı ve operatörün maskesiz görüp göremeyeceği.
+1. §10'daki 13 yeni komutun tamamı onaylandı: Check Point için 8, Palo Alto için 5. Check Point'te C2, SFTP
+   aralıklı okuma olarak onaylandı; bu, C4 sözleşmesinin SFTP kullanımına küçük bir ek gerektiriyor (§4.3). Faz A'da
+   onaylanmış 18 ölçüm komutu (V149, V151, V157) toplamada kullanılmıyor. Onlar yalnızca ölçüm içindi, ham veri
+   saklamıyorlardı.
+2. Okuma yöntemi sizin önerinizle belirlendi: kesme işi neXus tarafında yapılır, cihazda okuma için komut
+   çalışmaz. Dosyayı her seferinde baştan kopyalamak aktarımı katlardı. Bu yüzden yalnızca kayıtlı ofsetten sonrası
+   okunuyor.
+3. §13'teki diğer sorular belgenin kendi önerileriyle kapandı: ilk koşuda her canlı dosyanın son 8 MiB'ı (rotasyon
+   geçmişi yok); tavan dolunca en eski parçalar erken silinir (kayıtlı ve görünür); `device_crash_file` bildirimi
+   eklenir, rotasyon kayıpları yalnızca ekranda ve günlük özette görünür; HCP dışa aktarımı Sanitizer arşivleri
+   destekleyene kadar kapalı; PAN config-log ayrıntıları gizli bilgi maskelenerek saklanır; VSX için yalnızca VS0;
+   `.gz` döndürülmüş dosyanın okunmamış kalanı raporlanan boşluk olur; operatör maskesiz satırı görebilir (her
+   görüntüleme denetim kaydına yazılır), aiview her zaman maskelenmiş görür.
+4. Hâlâ sayı beklenen parametreler (okuma tavanı, bütçeler, 2 GiB cihaz tavanı, rotasyon biçimi, PAN sayfa
+   boyutu) M1/M5 ve M3/M4 bulgu kaydından gelecek; o zamana kadar öneri olarak duruyor, kesinleşmiş değil.
 
 ---
 
@@ -192,15 +209,15 @@ Everything is serial per firewall.
 
 | Bound | Proposed default | Why |
 |---|---|---|
-| Sessions per device per run | 1 (SSH; SFTP fetches use a subsystem channel on the same session) | D6 |
+| Sessions per device per run | 1 (SSH; every SFTP read and fetch uses a subsystem channel on the same session) | D6 |
 | Concurrency on one device | 1 command at a time | D6 |
-| Bytes per read (`<cap>`) | 8 MiB | bounded single transfer |
+| Bytes per read (`<cap>`; the SFTP read stops here) | 8 MiB | bounded single transfer |
 | Bytes per source per run | 32 MiB | one noisy file cannot starve the others |
 | Bytes per device per run (all sources, excluding HCP) | 64 MiB | device and link load |
 | HCP archive max | 64 MiB (`PENDING-M5`, gate 4) | refuse larger, report `TOO_LARGE` |
 | Spike data per directory | 16 MiB (`PENDING-M5`, gate 3) | |
 | Wall-clock budget per device job | 15 min | inside the 60-minute window |
-| Device-side work | `stat`, `ls`, `tail`/`head` with a seek, SFTP read; no compression, no `find`, no archive creation on the device | D6 |
+| Device-side work | `stat` and `ls` over exec; SFTP ranged reads and whole-file SFTP fetches. No shell process for reading (no `tail`/`head`), no compression, no `find`, no archive creation on the device | D6, PO 2026-10-17 |
 
 When a budget is exhausted the run stops reading that source and records `BACKLOG` with exact byte counts (§9). It
 does not skip ahead. The next run continues from the cursor.
@@ -239,35 +256,56 @@ bash -lc 'date +%s; stat -c "%n %i %s %Y" /var/log/messages* $FWDIR/log/fwd.elg*
 - Rotated siblings are ordered by name suffix and cross-checked by mtime. A `.gz` sibling is listed but never read
   (§4.6).
 
-### 4.3 The read
+### 4.3 The read (SFTP ranged read; PO 2026-10-17)
 
-```
-bash -lc 'tail -c +<start> -- <path> | head -c <cap>'
-```
+The PO chose to do the cutting on the neXus side and to run nothing for reading on the device. The incremental read
+is therefore an **SFTP ranged read**, not a shell command:
 
-- `<path>` must be one of the absolute paths that this run's stat output printed. Its basename must match the
-  source's family pattern (base name plus optional `.<1–2 digits>` suffix, exact form `PENDING-M1`) and its
-  directory must equal the directory of the family's base file.
-- `<start> = offset − K + 1` (1-based), so the first `K` bytes received are the anchor region. `<cap> = K + budget`.
-  Both are digits only.
-- GNU `tail -c +N` on a regular file seeks; it does not read the skipped bytes. `head -c` stops after `<cap>` and ends
-  the pipe.
-- **Anchor check.** The HMAC of the first `K` received bytes must equal `anchor_hmac`. On a mismatch the content at
-  `offset` is not what was read before (inode reuse, file replaced, truncate-and-regrow). The source is handled as
-  `ANCHOR_MISMATCH` (§4.5).
-- **Line trim.** The stored chunk ends at the last `\n` received, and the cursor moves there. A partial final line is
-  read again next run. If a full-cap read contains no `\n`, the cap is stored as is and the chunk is flagged
-  `LINE_SPLIT`.
-- **Byte exactness (implementation requirement).** Offsets count bytes. The current `ExecResult.Completed(String
-  output, …)` combines stdout and stderr as text. That is unusable here: invalid UTF-8 or interleaved stderr would
-  corrupt offsets. The read needs an exec mode that streams **stdout only, as bytes**, into the artefact sink, counts
-  the bytes received, and captures stderr separately for the error classification. This is a `ExecSpec`/transport
-  extension. It is not a new C4 step kind.
+1. Open `<path>` read-only through the SFTP subsystem on the run's one SSH session (no second session).
+2. Read from the 0-based byte position `<pos> = offset − K` for `<cap> = K + budget` bytes at most, or until end of
+   file. `K = min(64, offset)`, so the first `K` bytes received are the anchor region.
+3. Close the file.
 
-Alternative (§13 Q1): an SFTP ranged read (JSch `ChannelSftp.get(path, out, monitor, RESUME, skip)`) moves the bytes
-without a shell process on the device. It still needs the stat for inodes, because SFTP v3 attributes carry no inode.
-It requires a C4 amendment, since today's `sftp_get` kind fetches a whole file. The recommendation is the
-`tail | head` read above: it is gate-registered, it is phase A's L2/L3 shape, and it is what the PO named.
+- **Same path rule as C1.** `<path>` must be one of the absolute paths that this run's stat output (C1) printed. Its
+  basename must match the source's family pattern (base name plus optional `.<1–2 digits>` suffix, exact form
+  `PENDING-M1`) and its directory must equal the directory of the family's base file. `<pos>` and `<cap>` are computed
+  by neXus from the cursor and the budget. They are never operator input and never come from a device response.
+- **What the device does.** The SFTP server answers read requests for the requested region of one file. It starts
+  no shell, runs no `tail`, `head` or pipe, and compresses nothing. neXus sends no write, no `setstat`, no rename and
+  no remove. A request-ahead inside the SFTP window can make the device serve a little past `<cap>`. Those bytes are
+  discarded: never stored, never counted against the cursor or the budgets. The read is bounded, not open-ended.
+- **Why the transport issue goes away.** Earlier drafts piped `tail | head` through the exec channel, whose result
+  combines stdout and stderr as text, so offsets could be corrupted by invalid UTF-8 or interleaved stderr. An SFTP
+  data stream carries file bytes only. Errors arrive as SFTP status codes and are classified separately, and nothing
+  passes through the text `ExecResult`. The implementation streams the bytes into the artefact sink and counts
+  exactly what it received. No new exec mode is needed.
+- **Identity.** SFTP v3 attributes carry no inode, so inodes come only from C1. A rename between C1 and the open can
+  put a different file at `<path>`. The anchor check below catches it. A path that no longer exists, or a read that
+  returns fewer than `K` bytes when `K > 0`, is `UNKNOWN` for this source in this run. The cursor does not move, so
+  nothing is lost.
+- **Anchor check (fingerprint).** The HMAC of the first `K` received bytes must equal `anchor_hmac`. On a mismatch the
+  content at `offset` is not what was read before (inode reuse, file replaced, truncate-and-regrow). The source is
+  handled as `ANCHOR_MISMATCH` (§4.5). This runs in neXus.
+- **Line trim.** Done in neXus. The stored chunk ends at the last `\n` received, and the cursor moves there. A partial
+  final line is read again next run. If a full-cap read contains no `\n`, the cap is stored as is and the chunk is
+  flagged `LINE_SPLIT`.
+- **Rotation logic** (§4.4) runs in neXus over the C1 stat. Nothing about it needs the device.
+
+**C4 amendment this decision requires (named part of the PO decision of 2026-10-17).**
+`UI2_0_C4_CAPABILITY_REGISTRY_GATE_RESOLUTION_CONTRACT.md` §2.3 describes `sftp_get` as fetching one remote path into
+the staging area. The ranged read uses the SFTP subsystem for more than that whole-file fetch. The amendment, as the
+PO approved it:
+
+- The existing `sftp_get` step kind gains an optional read-only byte range `{start_offset, max_bytes}`. Both values
+  are non-negative integers computed by neXus. `max_bytes` is bounded by the step's size bound.
+- The step-kind set stays closed. No new kind is added, and `sftp_put` stays refused.
+- The gate-reference rule is unchanged: the path was produced by a gated prior step (C1), so the fetch is
+  `NOT_APPLICABLE` under the same sentence of §2.3. The range itself sends no device command.
+- The PO approval of C2 in §10.1 is the approval of this use. It covers this one purpose (system-log incremental
+  reads) and extends to no other source or capability.
+
+This document records the amendment. The text of the FROZEN C4 contract is edited by the implementation PR, under C4's
+own amendment procedure, and that PR cites the PO record named in the status line.
 
 ### 4.4 Planning per source (decision table)
 
@@ -275,7 +313,7 @@ Let `C` be the stored cursor and `F` this run's family stat (name → inode, siz
 
 | Case | Detection | Reads, in order | Record |
 |---|---|---|---|
-| First run (no cursor) | no row | current file from `max(0, size − backfill)` (backfill: §13 Q3, default 8 MiB) | `INITIAL_BASELINE` gap with the exact skipped byte count (`size − backfill`, when positive) |
+| First run (no cursor) | no row | current file from `max(0, size − backfill)` (backfill: §13 Q3, 8 MiB) | `INITIAL_BASELINE` gap with the exact skipped byte count (`size − backfill`, when positive) |
 | No change | `C.inode` is the current file, `size == offset` | none | `NO_NEW_DATA` |
 | Growth | `C.inode` is the current file, `size > offset` | current `[offset, size)`, capped | `COLLECTED` or `BACKLOG` |
 | Rename rotation | `C.inode` found as sibling `S` | `S` from `offset` to `S.size`, then every sibling newer than `S` whole (oldest first), then the current file from 0 | `COLLECTED`, `ROTATION_FOLLOWED` |
@@ -308,7 +346,7 @@ A gap is a byte range the pool will never hold. Each gap row carries:
 | `COLLECTION_FAILED` | 0 | the window is reported; any loss shows up in the next run |
 
 A gap is never silent. It appears in the run result, on the Logs screen for that device and day, through CLI
-`syslog-gaps`, and in the daily summary. Whether a gap also sends a notification is §13 Q5.
+`syslog-gaps`, and in the daily summary. Rotation-loss gaps do not send a notification (§13 Q5); they show on screen and in the daily summary.
 
 ### 4.6 Fast rotation and compressed rotations
 
@@ -326,7 +364,7 @@ The PO decides per source from the measurement (phase A §7.4).
 
 If M1 or M5 shows rotated siblings stored compressed (`*.gz`), the remainder of the rotated file is not readable
 without decompressing on the device. Decompression on the device is not proposed (D6). The remainder is recorded
-as `ROTATED_AWAY` with its observed compressed size and `extent_unknown = true`, and §13 Q9 asks the PO.
+as `ROTATED_AWAY` with its observed compressed size and `extent_unknown = true`, and §13 Q9 records the PO's choice (accept the reported gap).
 
 ## 5. Storage model
 
@@ -362,7 +400,7 @@ run before deploy and audit triggers like V151. None is created by this document
 File names can carry host names (HCP names do). They are stored only as an HMAC for identity, plus the parsed safe
 fields. The clear name exists only inside the encrypted artefact, in its manifest header.
 
-### 5.3 Retention and caps (proposed defaults; PO-settable in Settings)
+### 5.3 Retention and caps (defaults; PO-settable in Settings; numbers marked `PENDING` are set from the findings record)
 
 | Class | Retention | Per-device cap |
 |---|---|---|
@@ -374,7 +412,7 @@ fields. The clear name exists only inside the encrypted artefact, in its manifes
 
 When a device reaches its cap before the retention ends, its oldest chunks are pruned early. The pruning is
 ledgered and shown as `RETENTION_SHORTENED_BY_CAP`; new data is never refused for the cap. The alternative is
-§13 Q4.
+§13 Q4 (not chosen).
 
 **Fleet estimate (formula; numbers `PENDING-M1`/`PENDING-M3M4`).**
 
@@ -406,7 +444,7 @@ a bound, then parse.
 - **Storage.** One chunk per log type per run. The entries are kept as JSON Lines, one object per `<entry>`, with
   every child element name → text as received. This is the raw entry; the transformation is lossless for fields.
 - **Config-log detail.** `before-change-detail` and `after-change-detail` can carry configured values. They are
-  redacted on write by the secret rules (§12), and §13 Q7 asks whether to drop them entirely.
+  redacted on write by the secret rules (§12). The PO kept them with redaction (§13 Q7), not dropped.
 - **Polling.** The `action=get` checks are the PAN API's own asynchronous job pattern. They are bounded: 2 s
   interval, at most 30 checks per page, as in V151. This is the only repeated request in the design.
 - `dir=forward` and the `query` filter syntax need an official PAN-OS XML API documentation citation recorded before
@@ -425,9 +463,9 @@ a bound, then parse.
   process `UNKNOWN`.
 - **Alert.** One alert per (device, run, process): process, count of new files, newest mtime (device time, shown in
   Europe/Istanbul). It goes through a new notification type `device_crash_file` ("Device crash and dump files").
-  This is an amendment to the FROZEN `NOTIFICATION_ROUTING_CONTRACT.md` §2 and to its V100 type check, needs the PO's
-  OK (§13 Q5), and follows that contract's digest, watermark and leader rules. Device names in mail follow the
-  routing contract; aiview sees pseudonyms.
+  This is an amendment to the FROZEN `NOTIFICATION_ROUTING_CONTRACT.md` §2 and to its V100 type check. The PO
+  approved it (§13 Q5). It follows that contract's digest, watermark and leader rules. Device names in mail follow
+  the routing contract; aiview sees pseudonyms.
 - **Removed file.** A file that disappears gets `removed_at` set. That is informational and raises no alert.
 
 ## 8. Whole-file fetches
@@ -494,24 +532,27 @@ failure.
 
 ## 10. Command table for PO approval
 
-All rows: action class `read`. They are proposed with `sign_off_state = SIGNED_OFF` after the PO's OK, and they are
-inserted by the implementation migration together with the fixture rows. Field names follow `gate_registry` and the
+All rows: action class `read`. **All 13 are APPROVED (PO 2026-10-17)** exactly as written, with C2 as the SFTP ranged
+read (§4.3). They are inserted with `sign_off_state = SIGNED_OFF` by the implementation migration together with the
+fixture rows. The approval covers the command shapes and terms below. The bounds marked `PENDING-M1`/`PENDING-M5` (byte caps and
+similar) are set from the findings record. A change to a command's shape, path rule, frequency or transport needs a
+new PO approval. Field names follow `gate_registry` and the
 protocol's ten gate fields.
 
-### 10.1 New — Check Point Gaia gateway (`check_point`, `cp_gaia_gateway`, shell `expert`)
+### 10.1 New — Check Point Gaia gateway (`check_point`, `cp_gaia_gateway`, shell `expert`) — APPROVED (PO 2026-10-17)
 
 | # | gate_id | Transport | canonical_command_key | timeout_s | retry | max_frequency | session_reuse_rule | Max bytes | unsupported_behavior_ref | secret_output_risk | safe_telemetry_fields | Relation to approved |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
 | C1 | `cp_syslog_collect_stat` | `SSH_EXEC` | `bash -lc 'date +%s; stat -c "%n %i %s %Y" /var/log/messages* $FWDIR/log/fwd.elg* $CPDIR/log/cpd.elg* $CPDIR/log/cpwd.elg* $FWDIR/log/fwk.elg* $FWDIR/log/mq_mng.elg* /var/log/spike_detective/spike_detective.log* /var/log/spike_detective/spike_detective.csv*'` | 30 | none | once per device per job window (≤ 4/day) | the run's one existing trusted SSH session; non-interactive bash login shell; sequential | 64 KiB output | an unmatched glob or missing file is a `stat` error line = `ABSENT`, not a failure | file paths may contain host-specific install paths; no content; paths masked in aiview projections | `["deviceEpoch", "name", "inode", "sizeBytes", "mtime"]` | NEW; combines V149 `cp_syslog_measure_stat` (`%i %s %Y`) and V157 `cp_syslog_measure_stat_ext` (`%n`) over the PO's source list, with family globs |
-| C2 | `cp_syslog_collect_read` | `SSH_EXEC` (stdout-only, byte-exact, §4.3) | `bash -lc 'tail -c +<start> -- <path> \| head -c <cap>'`; `<start>`, `<cap>` digits only, `<cap> ≤ 8388672`; `<path>` = an absolute path printed by C1 in the same run, basename in the source's family pattern | 60 | none | per source per run, until the per-source (32 MiB) or per-device (64 MiB) budget; only inside the job window | same session; sequential; never concurrent with another command | `<cap>` (8 MiB + 64 B anchor) | missing file at read time (rotation race) = re-plan next run; `UNKNOWN` for this run | raw log lines: user names, addresses, host names, clish command audit lines that can carry `password-hash`/secret values; redacted on write (§12), stored encrypted, masked for aiview | `["startOffset", "bytesRead", "lines", "anchorMatch", "lineSplit"]` | NEW; phase A L2/L3 shape. Alternative to this row: §13 Q1 (SFTP ranged read) |
+| C2 | `cp_syslog_collect_read` | SFTP ranged read (C4 `sftp_get` step with a byte range; subsystem on the same SSH session; gate `NOT_APPLICABLE` per C4 §2.3 as amended in §4.3) | no shell command. Read-only SFTP open of `<path>`, read `[<pos>, <pos> + <cap>)`, close. `<pos>`, `<cap>` non-negative integers computed by neXus, `<cap> ≤ 8388672`; `<path>` = an absolute path printed by C1 in the same run, basename in the source's family pattern, directory equal to the family base directory | 60 | none | per source per run, until the per-source (32 MiB) or per-device (64 MiB) budget; only inside the job window | same session (SFTP channel); sequential; never concurrent with another command or transfer | `<cap>` (8 MiB + 64 B anchor) | missing file at read time (rotation race) or a short anchor read = `UNKNOWN` for this source in this run, cursor unchanged, re-planned next run; SFTP unavailable = `UNKNOWN` | raw log lines: user names, addresses, host names, clish command audit lines that can carry `password-hash`/secret values; redacted on write (§12), stored encrypted, masked for aiview | `["startOffset", "bytesRead", "lines", "anchorMatch", "lineSplit"]` | NEW; replaces the phase A L2/L3 `tail`/`head` shape by PO decision of 2026-10-17: the cutting runs in neXus, nothing runs on the device for reading. Needs the C4 amendment in §4.3 |
 | C3 | `cp_syslog_collect_ls_crash` | `SSH_EXEC` | `bash -lc 'ls -lgo --time-style=+%s /var/log/crash/ /var/log/dump/usermode/'` | 30 | none | once per device per job window | same session | 256 KiB | a missing directory is a result (`ABSENT`) | file names may carry process names, addresses (kernel crash directory names) or host names; names stored as HMAC plus the parsed process; masked in aiview | `["fileCount", "sizeBytes", "mtime", "process"]` | NEW; string identical to the approved V157 `cp_syslog_measure_ls_crash` (measurement-only frequency) |
 | C4 | `cp_syslog_collect_ls_spike` | `SSH_EXEC` | `bash -lc 'ls -lgo --time-style=+%s /var/log/spike_detective/'` | 30 | none | once per device per job window | same session | 256 KiB | missing directory = `ABSENT` | names only | `["fileCount", "sizeBytes", "mtime", "namePattern"]` | NEW; string identical to V157 `cp_syslog_measure_ls_spike` |
 | C5 | `cp_syslog_collect_ls_spike_dir` | `SSH_EXEC` | `bash -lc 'ls -lgo --time-style=+%s /var/log/spike_detective/<dir>/'`; `<dir>` = a name printed by C4 in the same run, matching the measured data-directory pattern | 30 | none | once per new, settled data directory | same session | 64 KiB | missing = `ABSENT` | names only | `["fileCount", "sizeBytes", "mtime"]` | NEW; **conditional**: dropped if M5 gate 3 shows no subdirectories |
 | C6 | `cp_syslog_collect_ls_sa` | `SSH_EXEC` | `bash -lc 'ls -lgo --time-style=+%s /var/log/sa/'` | 30 | none | once per device per day (06:00 window) | same session | 64 KiB | missing = `ABSENT` | names only | `["fileCount", "sizeBytes", "mtime", "namePattern"]` | NEW; string identical to V157 `cp_syslog_measure_ls_sa` |
 | C7 | `cp_syslog_collect_ls_hcp` | `SSH_EXEC` | `bash -lc 'ls -lgo --time-style=+%s /var/log/hcp/last/'` | 30 | none | once per device per day (06:00 window) | same session | 64 KiB | missing = `ABSENT` | archive names carry the host name; stored as HMAC plus the parsed time; masked | `["fileCount", "sizeBytes", "mtime", "namePattern"]` | NEW; string identical to V157 `cp_syslog_measure_ls_hcp` |
-| C8 | (`sftp_get`; gate `NOT_APPLICABLE` per C4 §2.3) | `sftp_get` subsystem on the same SSH session | fetch one absolute path printed by C4/C5 (spike data), C6 (`sar<DD>`) or C7 (HCP archive) in the same run; no other path | 120 (sar, spike), 300 (HCP) | none | HCP and sar: once per device per day; spike: once per new directory | same session (SFTP channel) | HCP 64 MiB, sar 16 MiB, spike 16 MiB per directory (`PENDING-M5`) | SFTP unavailable or path gone = `UNKNOWN`/`ABSENT`; over bound = `TOO_LARGE`, not fetched | HCP archives contain device diagnostics that may include configuration fragments and names: stored encrypted as received, never shown raw to aiview (§12); sar and spike data are counters and process names | `["sizeBytes", "sha256", "kind"]` | NEW; the existing streaming fetch used by `cp_gateway_backup` |
+| C8 | (`sftp_get`; gate `NOT_APPLICABLE` per C4 §2.3) | `sftp_get` subsystem on the same SSH session | fetch one absolute path printed by C4/C5 (spike data), C6 (`sar<DD>`) or C7 (HCP archive) in the same run; no other path | 120 (sar, spike), 300 (HCP) | none | HCP and sar: once per device per day; spike: once per new directory | same session (SFTP channel) | HCP 64 MiB, sar 16 MiB, spike 16 MiB per directory (`PENDING-M5`) | SFTP unavailable or path gone = `UNKNOWN`/`ABSENT`; over bound = `TOO_LARGE`, not fetched | HCP archives contain device diagnostics that may include configuration fragments and names: stored encrypted as received, never shown raw to aiview (§12); sar and spike data are counters and process names | `["sizeBytes", "sha256", "kind"]` | NEW; the existing whole-file streaming fetch used by `cp_gateway_backup` |
 
-### 10.2 New — Palo Alto (`palo_alto`, `pan_firewall`, shell `not_applicable`, transport `PAN_XML_API`)
+### 10.2 New — Palo Alto (`palo_alto`, `pan_firewall`, shell `not_applicable`, transport `PAN_XML_API`) — APPROVED (PO 2026-10-17)
 
 | # | gate_id | canonical_command_key | timeout_s | retry | max_frequency | session_reuse_rule | Max bytes | unsupported_behavior_ref | secret_output_risk | safe_telemetry_fields | Relation to approved |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -538,13 +579,13 @@ its own row. This is a new purpose, not a parse-scope extension.
 
 | | Check Point | Palo Alto | Total |
 |---|---|---|---|
-| New, for approval | 8 (C1–C8: 7 gate rows plus the `sftp_get` fetch; C5 conditional) | 5 (P1–P5) | **13** |
+| New, **APPROVED (PO 2026-10-17)** | 8 (C1–C8: 6 `SSH_EXEC` gate rows, plus the two `sftp_get` steps C2 (ranged read) and C8 (whole file); C5 conditional) | 5 (P1–P5) | **13** |
 | Already approved, measurement-only, not reused | 15 | 3 | 18 |
 
 Per Check Point device, a typical run issues:
 
 - C1;
-- about 6–8 C2 reads (one per growing source, more after a rotation);
+- about 6–8 C2 SFTP ranged reads (one per growing source, more after a rotation);
 - C3;
 - C4.
 
@@ -552,12 +593,14 @@ The 06:00 run adds C6, C7 and two C8 fetches.
 
 Per Palo Alto firewall, a typical run issues 2 enqueues (P3, P4) and their P5 checks.
 
-Not requested: MDS-scoped rows (§2.3), and the SFTP ranged-read alternative to C2 (§13 Q1).
+Not requested: MDS-scoped rows (§2.3). The `tail | head` form of C2 from the earlier draft is withdrawn; no `tail` or `head` command is requested.
 
 ## 11. How the measurements feed the parameters
 
 As of 2026-10-17 no findings record for M1, M2, M3/M4 or M5 is committed. The M1 second read and both M5 reads run
-in the coming windows (tonight's / tomorrow's). Every value below is a placeholder until the findings record lands.
+in the coming windows (tonight's / tomorrow's). Every value below stays a placeholder until the findings record lands.
+The PO's approval of 2026-10-17 does not set any of these numbers; it approves the commands and the design, and the
+values are set from the findings record before implementation freezes them.
 
 | Parameter (this document) | Source measurement | Status |
 |---|---|---|
@@ -600,28 +643,38 @@ in the coming windows (tonight's / tomorrow's). Every value below is a placehold
   read raw chunks.
 - **Database.** No table holds raw log text (§5.2). Anchors and file names are stored as HMACs.
 
-## 13. Open questions for the PO
+## 13. PO questions and answers (decided 2026-10-17)
 
-1. **Read method.** The recommendation is C2, `tail -c +<start> | head -c <cap>` over SSH. The alternative is an
-   SFTP ranged read, which runs no shell process on the device but needs a C4 contract amendment. Which one?
-2. **Command approval.** Do you approve the 13 commands in §10.1/§10.2 exactly as written? C5 is conditional on M5.
-3. **First run backfill.** How much existing data should the first run take? The proposal is the last 8 MiB of each
-   live file only, with no rotated history, recorded as `INITIAL_BASELINE`. The alternative is to also take the
-   rotated siblings within the per-device budget.
-4. **Cap reached.** When a device reaches its cap (2 GiB), should the oldest chunks be pruned early (the proposal,
-   ledgered and shown), or should new collection stop?
-5. **Notifications.** May a new notification type `device_crash_file` be added? It amends the FROZEN notification
-   routing contract and its V100 check. Should rotation-loss gaps (`ROTATED_AWAY`/`TRUNCATED`) also notify, or only
-   show on screen and in the daily summary (the proposal)?
-6. **HCP export.** HCP archives cannot be sanitized today. Should their export stay blocked (the proposal) until
-   the sanitizer handles tar.gz?
-7. **PAN config-log details.** Should the `before-/after-change-detail` fields be stored with secret redaction (the
-   proposal), or dropped entirely?
-8. **VSX.** Is VS0 enough, or should the per-virtual-system `fwd`/`fwk` logs be measured and added later?
-9. **Compressed rotations.** If M1 shows `.gz` rotated files, should their unread remainder be accepted as a
-   reported gap (the proposal), or decompressed on the device (more device CPU)?
-10. **Operator view.** Inside the product, may `operation_admin`/`security_admin` view unmasked lines? The proposal
-    is yes, audited per view. aiview is always masked.
+The PO's chat answer was: "Okuma kısmı, sunucuya çekip tail head orda yapsak nolur daha verimli olur bence. Komutlar
+ok. Diğer konularda önerilerin ok". Q1 and Q2 follow from the first two sentences, and Q3–Q10 from the third (each
+takes this document's own recommendation). The full interpretation is in the PO record named in the status line.
+
+1. **Read method — DECIDED: SFTP ranged read.** The PO wanted the cutting done on the neXus side with nothing run on
+   the device for reading. The first reading of that idea, copying whole files each run, would have multiplied the
+   transfer, so it was refined to a ranged read from the stored byte offset. C2 is the SFTP ranged read (§4.3,
+   §10.1). Line trimming, fingerprint checks and rotation logic run in neXus. This needs the C4 §2.3 `sftp_get`
+   amendment of §4.3, which is named as part of this decision.
+2. **Command approval — DECIDED: all 13 approved** as written in §10.1/§10.2, with C2 as the SFTP ranged read. C5 stays
+   conditional on M5 gate 3.
+3. **First run backfill — DECIDED (recommendation).** The last 8 MiB of each live file only, no rotated history,
+   recorded as `INITIAL_BASELINE`.
+4. **Cap reached — DECIDED (recommendation).** The oldest chunks are pruned early, ledgered and shown as
+   `RETENTION_SHORTENED_BY_CAP`. New collection does not stop.
+5. **Notifications — DECIDED (recommendation).** The new type `device_crash_file` is added (amends the FROZEN
+   notification routing contract and its V100 check, §7). Rotation-loss gaps (`ROTATED_AWAY`/`TRUNCATED`) do not
+   notify. They show on screen and in the daily summary.
+6. **HCP export — DECIDED (recommendation).** Export stays blocked until the Data Sanitizer handles tar.gz.
+7. **PAN config-log details — DECIDED (recommendation).** `before-/after-change-detail` is stored with secret
+   redaction. It is not dropped.
+8. **VSX — DECIDED (recommendation).** VS0 only. Per-virtual-system `fwd`/`fwk` logs are measured and added later,
+   not now.
+9. **Compressed rotations — DECIDED (recommendation).** If M1 shows `.gz` rotated files, the unread remainder is
+   accepted as a reported gap (§4.6). Nothing is decompressed on the device.
+10. **Operator view — DECIDED (recommendation).** `operation_admin`/`security_admin` may view unmasked lines inside the
+    product, audited per view. aiview is always masked.
+
+Still open, and not PO questions: the `PENDING-M1`/`PENDING-M5`/`PENDING-M3M4` values of §11, and the PAN
+vendor-documentation citation for `seqno` contiguity, `dir=forward` and the `query` syntax.
 
 ## 14. CLI parity (every UI action has a CLI command)
 
@@ -630,7 +683,7 @@ in the coming windows (tonight's / tomorrow's). Every value below is a placehold
 | `syslog-collect-start [deviceId]` | `POST /api/v2/system-logs/collect` | `system_log_collect_start` | operation_admin, security_admin (window-gated) |
 | `syslog-sources <deviceId>` | `GET /api/v2/system-logs/{deviceId}/sources` (cursor state, horizon, `FAST_ROTATING`, last outcome) | `system_log_read` | operator and above; aiview masked |
 | `syslog-chunks <deviceId> [source] [day]` | `GET …/{deviceId}/chunks` | `system_log_read` | same |
-| `syslog-view <chunkId>` | `GET …/chunks/{chunkId}/text` (masked for aiview; unmasked per Q10, audited) | `system_log_read` / `system_log_read_unmasked` | Q10 |
+| `syslog-view <chunkId>` | `GET …/chunks/{chunkId}/text` (masked for aiview; unmasked per Q10, audited) | `system_log_read` / `system_log_read_unmasked` | operation_admin, security_admin (unmasked, audited); others and aiview masked (Q10) |
 | `syslog-gaps [deviceId]` | `GET /api/v2/system-logs/gaps` | `system_log_read` | operator and above |
 | `syslog-export <deviceId> <source> <day> <reason> <destPath>` | `POST …/export` (Data Sanitizer text path only) | `system_log_export` | operation_admin, security_admin |
 | `syslog-crash-files [deviceId]` | `GET /api/v2/system-logs/crash-files` | `system_log_read` | operator and above |
@@ -639,17 +692,18 @@ in the coming windows (tonight's / tomorrow's). Every value below is a placehold
 
 The existing `syslog-measure-start` and `syslog-measurements` stay for phase A.
 
-## 15. Implementation outline (after freeze; not authorised by this DRAFT)
+## 15. Implementation outline (after the PENDING parameters are set from the findings record)
 
 1. Migration:
    - the gate rows of §10;
    - the tables of §5.2;
    - `ArtefactClass.SYSTEM_LOG`;
    - the `ui2_job_module` mapping;
-   - the notification type (if Q5 is approved).
+   - the notification type (Q5, approved).
 
    It gets the BEGIN/ROLLBACK dry run on the live database before deploy.
-2. Transport: stdout-only, byte-exact streaming exec (§4.3).
+2. Transport: the ranged streaming SFTP read (§4.3): offset and length on the existing `sftp_get` fetch, bytes into
+   the artefact sink, exact byte counting. Plus the C4 §2.3 amendment text (§4.3), edited in the same PR.
 3. Planner (§4.4) as a pure function over (cursor, stat), with exhaustive unit tests for every row of the decision
    table and every gap kind.
 4. Executors, scheduler trigger and staggering, retention pruning, the free-space guard.

@@ -131,8 +131,8 @@ Notes:
 
 - **B.** Daily incremental collector job (`*_system_log_collect`) and the Logs screen: per device, per day,
   filter by source, severity and pattern; masked.
-  Designed in [DEVICE_SYSTEM_LOG_PHASE_B_CONTRACT.md](DEVICE_SYSTEM_LOG_PHASE_B_CONTRACT.md) (DRAFT, pending PO
-  command approval).
+  Designed in [DEVICE_SYSTEM_LOG_PHASE_B_CONTRACT.md](DEVICE_SYSTEM_LOG_PHASE_B_CONTRACT.md) (APPROVED — PO
+  2026-10-17; its PENDING parameters are set from the measurement findings record).
 - **C.** Pattern catalog and priority mapping. AI-assisted first pass to classify the patterns seen into
   critical / warning / info; editable by the operator.
 - **D.** Knowledge links (curated pattern-to-SK/KB table) and an optional advisory agent.
