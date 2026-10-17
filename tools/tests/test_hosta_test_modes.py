@@ -165,6 +165,10 @@ def test_junit_summary_is_bounded_and_sanitized(tmp_path, kind, expected):
 
 @pytest.fixture(scope="module")
 def synthetic_ca_store(tmp_path_factory):
+    # macOS ships a /usr/bin/keytool stub that fails without an installed JDK; CI has one.
+    probe = subprocess.run(["keytool", "-help"], capture_output=True) if shutil.which("keytool") else None
+    if probe is None or probe.returncode != 0:
+        pytest.skip("no usable JDK keytool on this machine")
     directory = tmp_path_factory.mktemp("synthetic-ca")
     for name in ("existing", "added"):
         subprocess.run([
