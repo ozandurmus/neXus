@@ -36,3 +36,14 @@ paths = [
     '''^ui2/worker/src/test/java/com/securityexpert/nexus/ui2/worker/discovery/pan/PanFixtures\.java$''',
     '''^ui2/worker/src/test/java/com/securityexpert/nexus/ui2/worker/discovery/pan/StoreBackedPanCredentialResolverTest\.java$''',
 ]
+
+# Redaction and masking tests must contain secret-shaped synthetic lines (PEM blocks, key=value, bearer blobs) to
+# prove they are redacted; none is an operational credential. Exact paths, these two rules only.
+# System-log phase B, orchestrator under the PO mandate of 2026-10-15; review 2026-12-31.
+[[allowlists]]
+description = "Synthetic secret-shaped lines in the system-log redaction and masking tests; review 2026-12-31"
+targetRules = ["generic-api-key", "private-key"]
+paths = [
+    '''^ui2/worker/src/test/java/com/securityexpert/nexus/ui2/worker/systemlog/redaction/LogRedactorTest\.java$''',
+    '''^ui2/service/src/test/java/com/securityexpert/nexus/ui2/service/systemlog/LogMaskingTest\.java$''',
+]

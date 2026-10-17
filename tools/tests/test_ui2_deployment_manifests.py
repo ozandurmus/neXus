@@ -785,7 +785,7 @@ def test_gitleaks_allowlists_only_the_approved_commit_and_seven_exact_test_paths
     config = tomllib.loads((REPO_ROOT / ".gitleaks.toml").read_text())
     assert config["extend"] == {"useDefault": True}
     assert "rules" not in config, "Keep the default detection rules intact"
-    synthetic, history, fixtures = config["allowlists"]
+    synthetic, history, fixtures, syslog = config["allowlists"]
     assert synthetic["targetRules"] == ["generic-api-key"]
     assert synthetic["regexTarget"] == "secret"
     assert synthetic["regexes"] == [
@@ -804,7 +804,22 @@ def test_gitleaks_allowlists_only_the_approved_commit_and_seven_exact_test_paths
     assert fixtures["targetRules"] == ["generic-api-key"]
     assert not {"commits", "regexes", "stopwords"} & fixtures.keys()
     entries = yaml.safe_load((REPO_ROOT / "security/baseline.yaml").read_text())["accepted"]
-    paths = {entry["location"] for entry in entries if entry["rule"] == "generic-api-key" and "commit" not in entry}
+    # System-log redaction/masking tests (phase B): two exact paths, two rules, no other exemption.
+    syslog_paths = {
+        "ui2/worker/src/test/java/com/securityexpert/nexus/ui2/worker/systemlog/redaction/LogRedactorTest.java",
+        "ui2/service/src/test/java/com/securityexpert/nexus/ui2/service/systemlog/LogMaskingTest.java",
+    }
+    assert syslog["targetRules"] == ["generic-api-key", "private-key"]
+    assert not {"commits", "regexes", "stopwords", "regexTarget"} & syslog.keys()
+    assert set(syslog["paths"]) == {"^" + re.escape(path).replace(r"\-", "-") + "$" for path in syslog_paths}
+    for path in syslog_paths:
+        assert (REPO_ROOT / path).is_file()
+        for unrelated in ("prefix/" + path, path + ".bak", path.replace("/src/test/", "/src/main/")):
+            assert not any(re.search(pattern, unrelated) for pattern in syslog["paths"])
+    syslog_entries = {(e["rule"], e["location"]) for e in entries if e["location"] in syslog_paths}
+    assert syslog_entries == {("generic-api-key", p) for p in syslog_paths} | {("private-key", sorted(syslog_paths)[1])}
+    paths = {entry["location"] for entry in entries if entry["rule"] == "generic-api-key" and "commit" not in entry
+             and entry["location"] not in syslog_paths}
     assert len(paths) == len(fixtures["paths"]) == 7
     assert set(fixtures["paths"]) == {"^" + re.escape(path).replace(r"\-", "-") + "$" for path in paths}
     for path in paths:
