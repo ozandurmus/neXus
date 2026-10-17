@@ -37,7 +37,7 @@ public final class OfflineAnalysis {
         var engine = PolicyLookup.prepare(snapshot, WORK);
         var traffic = new LinkedHashMap<String, Traffic>(); var names = new HashMap<String, Set<String>>();
         for (Section section : snapshot.sections()) {
-            if (section.source().equals("CP NAT rulebase")) continue;
+            if (PolicySnapshot.outsideSecurityEvaluation(snapshot.metadata(), section)) continue;
             for (Rule rule : section.rules()) {
                 if (traffic.putIfAbsent(rule.id(), new Traffic(section, rule)) != null)
                     throw new IllegalArgumentException("SNAPSHOT_IDENTITY: duplicate rule identifiers");

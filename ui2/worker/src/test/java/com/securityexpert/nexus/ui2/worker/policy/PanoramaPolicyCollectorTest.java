@@ -289,6 +289,38 @@ class PanoramaPolicyCollectorTest {
         assertTrue(failures.get(0).reason().endsWith(": SIZE_LIMIT"));
     }
 
+    @Test void natAndDefaultRulesComeFromTheSameApprovedReadsWithNoExtraCommand() throws Exception {
+        List<XmlApiSpec> sent = new ArrayList<>();
+        var snapshots = collector(responses("panorama-nat.xml"), sent, new char[0]).collect(run, scope, () -> true);
+        var child = snapshots.stream().filter(s -> s.metadata().containerName().equals("Synthetic child")).findFirst().orElseThrow();
+        assertEquals(List.of("uuid-n1", "uuid-n3", "uuid-n4", "uuid-n5", "uuid-n2"), child.sections().stream()
+                .filter(s -> List.of(PolicySnapshot.PAN_PRE_NAT, PolicySnapshot.PAN_POST_NAT).contains(s.name()))
+                .flatMap(s -> s.rules().stream()).map(PolicySnapshot.Rule::uuid).toList());
+        assertTrue(child.sections().stream().anyMatch(s -> s.name().equals(PolicySnapshot.PAN_POST_DEFAULT)));
+        assertTrue(child.objects().values().stream().anyMatch(o -> o.type().equals("external-list")));
+        // Same four Panorama reads as before: keygen, device groups, hierarchy, shared, then one read per device group.
+        assertEquals(List.of("keygen", "op", "op", "config"), sent.subList(0, 4).stream().map(XmlApiSpec::type).toList());
+        assertEquals(6, sent.size());
+    }
+    @Test void natRuleCountHasItsOwnBoundAndDoesNotCountAgainstTheSecurityBound() throws Exception {
+        var replies = responses("panorama-nat.xml");
+        replies.set(2, success("<dg-hierarchy><dg name='Synthetic parent'/><dg name='Synthetic child'/></dg-hierarchy>"));
+        replies.set(4, success("<entry name='Synthetic parent'><pre-rulebase><security><rules>"
+                + "<entry name='Synthetic rule'><action>allow</action></entry>".repeat(49_990)
+                + "</rules></security><nat><rules>"
+                + "<entry name='Synthetic nat'><source><member>any</member></source></entry>".repeat(49_990)
+                + "</rules></nat></pre-rulebase></entry>"));
+        List<PolicySnapshot> published = new ArrayList<>();
+        var failures = collector(replies, new ArrayList<>(), new char[0]).collect(run, scope, () -> true, published::add);
+        assertEquals(2, published.size(), "99,980 stored rules fit because each kind is bounded separately");
+        assertTrue(failures.isEmpty());
+        replies.set(4, success("<entry name='Synthetic parent'><pre-rulebase><nat><rules>"
+                + "<entry name='Synthetic nat'><source><member>any</member></source></entry>".repeat(50_001) + "</rules></nat></pre-rulebase></entry>"));
+        published.clear();
+        failures = collector(replies, new ArrayList<>(), new char[0]).collect(run, scope, () -> true, published::add);
+        assertEquals(1, published.size());
+        assertTrue(failures.get(0).reason().endsWith(": SIZE_LIMIT"));
+    }
     @Test void deadlineStopsFurtherReadsAfterCompletedGroupPublication() throws Exception {
         var replies = responses();
         var transport = mock(DeviceTransport.class);
@@ -365,9 +397,10 @@ class PanoramaPolicyCollectorTest {
         }).when(transport).xmlApiCallStreaming(any(), any(), any(), any());
         return new PanoramaPolicyCollector(transport, gates, ref -> new PanCredentialMaterial("synthetic-user", password), repository);
     }
-    private List<String> responses() throws Exception {
+    private List<String> responses() throws Exception { return responses("panorama.xml"); }
+    private List<String> responses(String fixtureName) throws Exception {
         String fixture;
-        try (var input = getClass().getResourceAsStream("/fixtures/policy/panorama.xml")) {
+        try (var input = getClass().getResourceAsStream("/fixtures/policy/" + fixtureName)) {
             fixture = new String(Objects.requireNonNull(input).readAllBytes(), StandardCharsets.UTF_8);
         }
         Element config = PolicyXml.parse(fixture).getDocumentElement();

@@ -21,6 +21,23 @@ public record PolicySnapshot(Metadata metadata, List<Section> sections, Map<Stri
     public static boolean unknownPart(CollectionFailure failure) {
         return failure != null && UNKNOWN_PART_REASONS.contains(failure.reason()) && "NAT".equals(failure.layerName());
     }
+    /** Section names the Panorama mapper gives to rulebases that are not security rules. */
+    public static final String PAN_PRE_NAT = "Pre NAT rules", PAN_POST_NAT = "Post NAT rules",
+            PAN_PRE_DEFAULT = "Pre default rules", PAN_POST_DEFAULT = "Post default rules";
+    private static final java.util.Set<String> PAN_NON_SECURITY_SECTIONS =
+            java.util.Set.of(PAN_PRE_NAT, PAN_POST_NAT, PAN_PRE_DEFAULT, PAN_POST_DEFAULT);
+    /**
+     * True for a Palo Alto NAT or default-rules section. These are stored beside the security sections but are never
+     * part of security evaluation (lookup, shadowing, hit joins). Only the vendor-fixed names of PAN sections count;
+     * a Check Point section name is user-controlled and must never be classified by name.
+     */
+    public static boolean panNonSecurity(Metadata metadata, Section section) {
+        return metadata != null && "PAN".equals(metadata.vendor()) && PAN_NON_SECURITY_SECTIONS.contains(section.name());
+    }
+    /** True for a Check Point NAT rulebase section or a Palo Alto NAT/default section: not a security rulebase. */
+    public static boolean outsideSecurityEvaluation(Metadata metadata, Section section) {
+        return "CP NAT rulebase".equals(section.source()) || panNonSecurity(metadata, section);
+    }
     public PolicySnapshot {
         failures = failures == null ? List.of() : List.copyOf(failures);
         sections = List.copyOf(sections);

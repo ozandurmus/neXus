@@ -161,12 +161,17 @@ public final class PanoramaPolicyCollector {
                             name, name, collectedAt, "", targets(run, scope.sourceId(), members.get(name)));
                     var snapshot = new PanoramaPolicyMapper().mapUnverifiedPrecedence(metadata, config, name, parents);
                     long rules = snapshot.sections().stream().mapToLong(section -> section.rules().size()).sum();
+                    // NAT and default-rule sections do not count against the security-rule bound that existed before
+                    // they were parsed; they get a bound of their own, so adding them cannot fail a DG that fitted.
+                    long securityRules = snapshot.sections().stream().filter(section -> !panNonSecurity(metadata, section))
+                            .mapToLong(section -> section.rules().size()).sum();
+                    long otherRules = rules - securityRules;
                     long objects = snapshot.objects().size();
                     rulesFetched += (int) rules;
                     PolicyCollectionTrace.layer(0, 0, rulesFetched);
-                    if (rules > 50_000 || objects > 200_000) {
+                    if (securityRules > 50_000 || otherRules > 50_000 || objects > 200_000) {
                         com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.add("job", "note",
-                                "DG_SIZE bytes=" + (bytes[0] - before) + " rules=" + rules + " objects=" + objects);
+                                "DG_SIZE bytes=" + (bytes[0] - before) + " rules=" + rules + " nonSecurityRules=" + otherRules + " objects=" + objects);
                         throw PolicyCollectionTrace.failure("SIZE_LIMIT");
                     }
                     snapshot = collectHits(snapshot, timer, deadline, bytes, lease, hitCache, scope.throttledAutomatic(), failures);

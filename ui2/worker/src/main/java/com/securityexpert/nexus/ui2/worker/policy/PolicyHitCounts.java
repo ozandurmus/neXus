@@ -2,6 +2,7 @@ package com.securityexpert.nexus.ui2.worker.policy;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.securityexpert.nexus.ui2.policy.*;
+import com.securityexpert.nexus.ui2.policy.PolicySnapshot;
 import static com.securityexpert.nexus.ui2.policy.PolicySnapshot.*;
 import java.time.Instant;
 import java.util.*;
@@ -56,8 +57,12 @@ final class PolicyHitCounts {
     private static String text(Element e, String path) { return PolicyXml.firstRelativeText(e, path).orElse(""); }
     static PolicySnapshot aggregate(PolicySnapshot snapshot, List<Map<String, FirewallHits>> members) {
         var occurrences = new HashMap<String, Integer>();
-        snapshot.sections().forEach(s -> s.rules().forEach(r -> occurrences.merge(r.name(), 1, Integer::sum)));
-        var sections = snapshot.sections().stream().map(s -> new Section(s.id(), s.name(), s.source(), s.parentRuleId(),
+        // Security rules only: the firewall hit read is the security rulebase, so NAT and default-rule sections must
+        // neither receive a counter by name nor make a security rule name look ambiguous.
+        snapshot.sections().stream().filter(s -> !PolicySnapshot.panNonSecurity(snapshot.metadata(), s))
+                .forEach(s -> s.rules().forEach(r -> occurrences.merge(r.name(), 1, Integer::sum)));
+        var sections = snapshot.sections().stream().map(s -> PolicySnapshot.panNonSecurity(snapshot.metadata(), s) ? s
+            : new Section(s.id(), s.name(), s.source(), s.parentRuleId(),
             s.rules().stream().map(r -> {
                 // The proposed op returns rule names; ambiguous inherited names cannot be joined.
                 if (occurrences.get(r.name()) != 1) return r;

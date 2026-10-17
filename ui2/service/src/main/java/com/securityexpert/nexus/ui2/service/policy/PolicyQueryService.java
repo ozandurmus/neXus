@@ -11,6 +11,9 @@ import java.util.*;
 
 @Service
 public final class PolicyQueryService {
+    /** Rule extras whose values are object references the viewer must be able to resolve (NAT translations included). */
+    private static final List<String> REF_EXTRAS = List.of("time", "schedule", "install-on", "vpn", "content",
+            "translated-source", "translated-destination", "translated-service", "translated-source-fallback", "translated-destination-dynamic");
     private final TransactionBoundary transactionsForSearch;
     private final PolicySnapshotRepository repository;
     private final ObjectMapper mapper;
@@ -410,7 +413,7 @@ public final class PolicyQueryService {
         for (var section : snapshot.sections()) for (var rule : section.rules()) if (rule.id().equals(id)) {
             var refs = new LinkedHashSet<String>();
             for (var cell : List.of(rule.source(), rule.destination(), rule.service(), rule.application())) refs.addAll(cell.refs());
-            for (String key : List.of("time", "schedule", "install-on", "vpn", "content")) refs.addAll(rule.extras().getOrDefault(key, List.of()));
+            for (String key : REF_EXTRAS) refs.addAll(rule.extras().getOrDefault(key, List.of()));
             var objects = refs.stream().filter(snapshot.objects()::containsKey).map(ref -> {
                 var o = snapshot.objects().get(ref);
                 return map(new PolicyObject(o.id(), o.name(), o.type(), List.of(), List.of(), o.status(), o.schedule()));
@@ -482,7 +485,7 @@ public final class PolicyQueryService {
             List<Rule> rules = section.rules().stream().filter(r -> ids.contains(r.id())).toList();
             for (Rule rule : rules) for (Cell cell : List.of(rule.source(), rule.destination(), rule.service(), rule.application()))
                 objectIds.addAll(cell.refs());
-            for (Rule rule : rules) for (String key : List.of("time", "schedule", "install-on", "vpn", "content"))
+            for (Rule rule : rules) for (String key : REF_EXTRAS)
                 objectIds.addAll(rule.extras().getOrDefault(key, List.of()));
             Map<String, Object> view = map(new Section(section.id(), section.name(), section.source(), section.parentRuleId(), rules));
             view.put("rules", rules.stream().map(r -> ruleView(r, snapshot, hygiene)).toList());

@@ -117,7 +117,7 @@ public final class PolicyLookup {
         Set<String> inlineParents = new HashSet<>();
         for (Section section : snapshot.sections()) {
             budget.spend();
-            if (section.source().equals("CP NAT rulebase")) continue;
+            if (PolicySnapshot.outsideSecurityEvaluation(snapshot.metadata(), section)) continue;
             if (!sectionIds.add(section.id())) throw new Unknown("unsupported evaluation scope");
             int layer = -1;
             if (snapshot.metadata().vendor().equals("PAN")) {
