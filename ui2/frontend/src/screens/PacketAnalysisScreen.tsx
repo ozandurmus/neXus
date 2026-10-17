@@ -150,7 +150,7 @@ export function PacketAnalysisScreen() {
       <ScreenHeader title="Packet Analysis"
         subtitle={`Offline pcap/pcapng analysis · captures are deleted ${limits?.retention_days ?? 7} days after the case is created`}
         actions={permissions?.masked ? <StatusChip tone="mem" label="Masked view" /> : undefined} />
-      <Alert severity="info">The analysis engine is still being ported. Every stage reports unknown, with the reason, until it lands.</Alert>
+      <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>Results are evidence-led: a stage that cannot be established is reported as unknown, with the reason.</Typography>
       {error && <Alert severity="error">{error}</Alert>}
       {notice && <Alert severity="success">{notice}</Alert>}
       {!list && !error && <Typography role="status">Loading cases…</Typography>}
@@ -164,7 +164,7 @@ export function PacketAnalysisScreen() {
           <Stack direction="row" spacing={2} alignItems="center" sx={{ flexWrap: "wrap", gap: 1, mt: 1 }}>
             <TextField label="Case title" size="small" value={title} inputProps={{ maxLength: 120 }}
               onChange={e => setTitle(e.target.value)} disabled={busy} />
-            <FormControlLabel label="Payload zeroing (applied by the engine once ported)"
+            <FormControlLabel label="Payload zeroing"
               control={<Checkbox checked={zeroing} onChange={e => setZeroing(e.target.checked)} disabled={busy} />} />
             <M3Button emphasis="filled" disabled={busy || !title.trim()} onClick={() => void create()}>Create case</M3Button>
           </Stack>

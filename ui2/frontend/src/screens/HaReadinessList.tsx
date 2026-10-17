@@ -1,5 +1,6 @@
 import { JobButton } from "../shell/JobWindow";
 import { Fragment, useEffect, useState } from "react";
+import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Checkbox from "@mui/material/Checkbox";
@@ -32,6 +33,19 @@ const statuses: Record<Status, { label: string; icon: IconName; bg: string; ink:
   UNKNOWN: { label: "Unknown", icon: "info", bg: m3.scHigh, ink: m3.onSurfaceVar, order: 1 },
   UNSUPPORTED: { label: "Not supported", icon: "lock", bg: m3.scLow, ink: m3.onSurfaceVar, order: 3 },
 };
+
+/**
+ * A readiness evaluation older than this is flagged as stale. The repo defines no readiness freshness
+ * constant elsewhere; the Overview's 24 h job window is the closest existing convention. Presentation only:
+ * the status value itself is never changed by age.
+ */
+export const READINESS_STALE_AFTER_MS = 24 * 3600_000;
+
+function evaluationAgeMs(at: string | null | undefined, now: Date): number | null {
+  if (!at) return null;
+  const t = new Date(at).getTime();
+  return Number.isNaN(t) ? null : Math.max(0, now.getTime() - t);
+}
 
 /** Shared by the list and KPI: virtual systems never count as extra clusters. */
 export function haReadinessItems(clusters: readonly Cluster[], rows: Record<string, CpFailoverSummary[]>) {
@@ -82,6 +96,12 @@ export function HaReadinessList({ clusters, rows, running, busy, progress, error
     && [cluster.title, ...cluster.members.map(m => m.hostname ?? ""), ...units.map(row => row.virtual_system ?? "")]
       .some(name => name.toLowerCase().includes(query)))
     .sort((a, b) => statuses[a.status].order - statuses[b.status].order || a.cluster.title.localeCompare(b.cluster.title));
+  const evaluatedAts = items.filter(item => item.status !== "UNSUPPORTED")
+    .map(item => item.base?.readiness?.observedAt)
+    .filter((at): at is string => evaluationAgeMs(at, now) !== null);
+  const staleAts = evaluatedAts.filter(at => evaluationAgeMs(at, now)! > READINESS_STALE_AFTER_MS);
+  const mostlyStale = staleAts.length > 0 && staleAts.length * 2 > evaluatedAts.length;
+  const newestStale = staleAts.slice().sort().at(-1);
   const supported = visible.filter(item => item.status !== "UNSUPPORTED");
   const unsupported = visible.filter(item => item.status === "UNSUPPORTED");
   const selectable = items.filter(item => item.status !== "UNSUPPORTED").flatMap(item => item.units).filter(canRunReadiness);
@@ -132,13 +152,19 @@ export function HaReadinessList({ clusters, rows, running, busy, progress, error
           {!nested && children.length > 0 && <IconButton size="small" aria-label={`Virtual systems in ${cluster.title}`} aria-expanded={openVs.has(cluster.ref)}
             onClick={event => { event.stopPropagation(); setOpenVs(current => toggle(current, cluster.ref)); }}><span aria-hidden>{openVs.has(cluster.ref) ? "▾" : "▸"}</span></IconButton>}
           <Box component="span" sx={{ fontWeight: 600, mr: 1 }}>{title}</Box><VendorBadge vendor={vendor} />
-          <Typography variant="caption">Mode: {row?.mode ?? "UNKNOWN"}</Typography>
+          <Typography variant="caption" component="div" title={`Mode: ${row?.mode ?? "UNKNOWN"}`}
+            sx={{ whiteSpace: "nowrap", overflowWrap: "normal", overflow: "hidden", textOverflow: "ellipsis" }}>Mode: {row?.mode ?? "UNKNOWN"}</Typography>
         </TableCell>
         <TableCell title={`Roles observed: ${rolesAt ? `${formatTime(rolesAt)} ${DISPLAY_TZ_LABEL}` : "Not observed"}`}>
           Active: {roleNames(["active"])} <span aria-hidden>↔</span> Standby: {roleNames(["standby", "passive"])}
         </TableCell>
         <TableCell title={primaryReason(row)}>{primaryReason(row)}</TableCell>
-        <TableCell>{at ? <Box component="time" dateTime={at} title={`${formatTime(at)} ${DISPLAY_TZ_LABEL} · ${at}`}>{relativeAge(at, now)}</Box> : "Not evaluated"}</TableCell>
+        <TableCell>{at ? <>
+          <Box component="time" dateTime={at} title={`${formatTime(at)} ${DISPLAY_TZ_LABEL} · ${at}`}>{relativeAge(at, now)}</Box>
+          {(evaluationAgeMs(at, now) ?? 0) > READINESS_STALE_AFTER_MS && <Tooltip title="Evaluated more than 24 h ago; the status may no longer hold">
+            <Chip size="small" label="Stale" data-stale-evaluation sx={{ ml: 0.75, height: 20, fontSize: 11, bgcolor: m3.warningContainer, color: m3.onWarningContainer }} />
+          </Tooltip>}
+        </> : "Not evaluated"}</TableCell>
         {hasActions && <TableCell onClick={event => event.stopPropagation()}>
           {row && canRunReadiness(row) && <Tooltip title="Run pre-checks"><span><JobButton size="small" aria-label="Run pre-checks" aria-busy={running === row.unitId} disabled={busy}
             onClick={() => onRun(row)} sx={{ color: m3.primary }}>
@@ -159,6 +185,11 @@ export function HaReadinessList({ clusters, rows, running, busy, progress, error
   };
   return <Box className="ha-readiness-full-width" sx={{ width: "100%", minWidth: 0 }}>
     <Typography variant="subtitle1" sx={{ mb: 1 }}>{clusters.length} clusters enrolled</Typography>
+    {mostlyStale && <Alert severity="warning" sx={{ mb: 1.5 }}>
+      {staleAts.length === evaluatedAts.length
+        ? `Readiness was last evaluated ${relativeAge(newestStale, now)}; run a readiness check before relying on Ready.`
+        : `${staleAts.length} of ${evaluatedAts.length} readiness evaluations are older than 24 h (the newest of them ${relativeAge(newestStale, now)}); run a readiness check before relying on Ready.`}
+    </Alert>}
     <Box aria-label="Readiness summary" sx={{ display: "flex", flexWrap: "wrap", gap: 1, mb: 1.5 }}>
       {(Object.keys(statuses) as Status[]).map(status => {
         const s = statuses[status];

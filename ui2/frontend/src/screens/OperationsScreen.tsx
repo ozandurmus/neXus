@@ -198,7 +198,9 @@ export function OperationsScreen() {
         />
         <MetricCard
           title="Readiness checks"
-          value={clusters ? `${readinessCounts.ready} ready · ${readinessCounts.notReady} not ready · ${readinessCounts.unknown} unknown` : null}
+          value={clusters ? readinessCounts.ready : null}
+          unit={clusters ? `ready of ${clusters.length} clusters` : undefined}
+          detail={clusters ? `${readinessCounts.notReady} not ready · ${readinessCounts.unknown} unknown` : undefined}
           note={clusters ? `${clusters.length} clusters enrolled · ${evaluatedCount} readiness records · ${readinessCounts.unsupported} not supported` : "reading enrolled clusters"}
         />
         <Card sx={{ bgcolor: m3.scLowest, boxShadow: "none", border: `1px solid ${m3.outlineVar}`, borderRadius: "10px", p: 2.25,
