@@ -56,13 +56,17 @@ RUN rm -f /etc/yum.repos.d/*.repo \
 # Optional libraries are enabled exactly where the runtime base already ships
 # the shared library (or one pinned RPM supplies it, below); the rest are off
 # so that nothing silently depends on a library the runtime lacks.
+# Under the Kaniko executor RUN steps see no PATH variable: the shell falls back to its default search, but CMake's
+# own lookups (its root, Ninja, the compilers) fail (first HOST-A build 2026-10-17). PATH is set explicitly and cmake
+# is called by its absolute path.
+ENV PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ENV WIRESHARK_VERSION=4.6.9 \
     WIRESHARK_SHA256=d062d416a1ab3a49975aafe3a671c882dde0562ccd71b078808ceb59d465fc0f
 RUN curl -fsSL --retry 5 -o /tmp/wireshark.tar.xz \
       "https://www.wireshark.org/download/src/all-versions/wireshark-${WIRESHARK_VERSION}.tar.xz" \
  && echo "${WIRESHARK_SHA256}  /tmp/wireshark.tar.xz" | sha256sum -c - \
  && mkdir -p /tmp/src && tar -xJf /tmp/wireshark.tar.xz -C /tmp/src \
- && cmake -S "/tmp/src/wireshark-${WIRESHARK_VERSION}" -B /tmp/build -G Ninja \
+ && /usr/bin/cmake -S "/tmp/src/wireshark-${WIRESHARK_VERSION}" -B /tmp/build -G Ninja \
       -DCMAKE_BUILD_TYPE=RelWithDebInfo \
       -DCMAKE_INSTALL_PREFIX=/opt/wireshark -DCMAKE_INSTALL_LIBDIR=lib64 \
       -DCMAKE_INSTALL_RPATH=/opt/wireshark/lib64 \
@@ -79,8 +83,8 @@ RUN curl -fsSL --retry 5 -o /tmp/wireshark.tar.xz \
       -DENABLE_SNAPPY=OFF -DENABLE_XXHASH=OFF -DENABLE_MINIZIP=OFF -DENABLE_MINIZIPNG=OFF \
       -DENABLE_LUA=OFF -DENABLE_SMI=OFF -DENABLE_SINSP=OFF -DENABLE_SBC=OFF -DENABLE_SPANDSP=OFF \
       -DENABLE_BCG729=OFF -DENABLE_AMRNB=OFF -DENABLE_ILBC=OFF -DENABLE_OPUS=OFF \
- && cmake --build /tmp/build --parallel 3 \
- && cmake --install /tmp/build --strip \
+ && /usr/bin/cmake --build /tmp/build --parallel 3 \
+ && /usr/bin/cmake --install /tmp/build --strip \
  && rm -rf /opt/wireshark/include /opt/wireshark/lib64/pkgconfig /opt/wireshark/lib64/cmake \
       /opt/wireshark/share/man /opt/wireshark/share/doc /tmp/build /tmp/src /tmp/wireshark.tar.xz \
  && test ! -e /opt/wireshark/bin/dumpcap \
