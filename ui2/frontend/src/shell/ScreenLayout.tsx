@@ -36,9 +36,13 @@ export function ScreenHeader({
  * read failed or nothing is evidenced, `NOT EVALUATED` when the evaluation has not run -- never "0" or "—"
  * standing in for either.
  */
-export function MetricCard({ title, value, note, state, reason }: {
+export function MetricCard({ title, value, unit, detail, note, state, reason }: {
   readonly title: string;
   readonly value?: number | string | null;
+  /** Small words beside the headline figure (for example "ready of 40 clusters"); shown only with a figure. */
+  readonly unit?: string;
+  /** A secondary line under the figure, in body size, for the counts that do not fit the big font. */
+  readonly detail?: string;
   readonly note: string;
   readonly state?: "ok" | "unknown" | "not_evaluated";
   readonly reason?: string;
@@ -50,7 +54,13 @@ export function MetricCard({ title, value, note, state, reason }: {
       <Typography sx={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase", color: m3.onSurfaceVar }}>{title}</Typography>
       {word
         ? <Typography title={reason} sx={{ fontSize: 22, lineHeight: "32px", fontWeight: 650, color: m3.neutralInk, letterSpacing: "0.02em" }}>{word}</Typography>
-        : <Typography variant="h1">{value}</Typography>}
+        : unit
+          ? <Box sx={{ display: "flex", alignItems: "baseline", flexWrap: "wrap", columnGap: 1 }}>
+              <Typography variant="h1">{value}</Typography>
+              <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>{unit}</Typography>
+            </Box>
+          : <Typography variant="h1">{value}</Typography>}
+      {detail && !word && <Typography variant="body2" sx={{ color: m3.neutralInk }}>{detail}</Typography>}
       <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>{note}</Typography>
     </Card>
   );

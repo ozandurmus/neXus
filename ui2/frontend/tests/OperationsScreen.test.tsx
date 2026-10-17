@@ -146,7 +146,8 @@ describe("OperationsScreen tabs", () => {
     stubFetch(MEMBERS, null);
     render(withTheme(<OperationsScreen />));
     await screen.findByText("1 clusters enrolled · 0 readiness records · 0 not supported");
-    expect(screen.getByText("0 ready · 0 not ready · 1 unknown")).toBeInTheDocument();
+    expect(screen.getByText("ready of 1 clusters")).toBeInTheDocument();
+    expect(screen.getByText("0 not ready · 1 unknown")).toBeInTheDocument();
     expect(screen.getAllByText("Unknown").length).toBeGreaterThan(0);
   });
 
@@ -334,11 +335,14 @@ it("summarizes the same cluster readiness counts in the KPI and chips without do
     { ...READY_SUMMARY[0], unitId: "opaque-vs", virtual_system: "VS-ROMEO-07" },
     { ...READY_SUMMARY[0], clusterId: "unsupported", unitId: "unsupported", cluster_member_ref: "CLS-CHARLIE-04" }]);
   render(withTheme(<OperationsScreen />));
-  expect(await screen.findByText("1 ready · 1 not ready · 1 unknown")).toBeInTheDocument();
+  expect(await screen.findByText("1 not ready · 1 unknown")).toBeInTheDocument();
+  const card = screen.getByText("Readiness checks", { selector: "p" }).parentElement as HTMLElement;
+  expect(within(card).getByRole("heading", { level: 1 })).toHaveTextContent(/^1$/);
+  expect(within(card).getByText("ready of 4 clusters")).toBeInTheDocument();
   for (const name of ["Ready", "Not ready", "Unknown", "Not supported"]) expect(screen.getByRole("button", { name: `${name}: 1 clusters` })).toBeInTheDocument();
   expect(screen.queryByText("NOT EVALUATED")).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "Ready: 1 clusters" }));
-  expect(screen.getByText("1 ready · 1 not ready · 1 unknown")).toBeInTheDocument();
+  expect(screen.getByText("1 not ready · 1 unknown")).toBeInTheDocument();
 });
 
 it("offers aiview inspection with no readiness or bulk actions", async () => {

@@ -210,3 +210,51 @@ it.each(["UNSUPPORTED_MODE", "IDENTITY_NOT_RECORDED", "OPEN_INCIDENT"])("shows t
   expect(within(row("CLS-ALPHA-01")).getByText(refusalReason)).toBeInTheDocument();
   expect(within(row("CLS-ALPHA-01")).getByText("Mode: HA")).toBeInTheDocument();
 });
+
+const NOW = new Date("2026-10-17T12:00:00Z");
+const hoursAgo = (h: number) => new Date(NOW.getTime() - h * 3600_000).toISOString();
+const evaluated = (ref: string, status: "READY" | "NOT_READY", observedAt: string): CpFailoverSummary => ({
+  ...summary(ref, status), readiness: { status, observedAt, failedCheck: "", checks: [] },
+});
+const withNow = () => { vi.useFakeTimers(); vi.setSystemTime(NOW); };
+
+it("flags a stale evaluation per row and warns above the list, without changing Ready", () => {
+  withNow();
+  const stale = hoursAgo(8 * 24);
+  setup({ rows: { "CLS-ALPHA-01": [evaluated("CLS-ALPHA-01", "READY", stale)], "CLS-BRAVO-02": [evaluated("CLS-BRAVO-02", "NOT_READY", stale)] } });
+  expect(screen.getByText("Readiness was last evaluated 8 d ago; run a readiness check before relying on Ready.")).toBeInTheDocument();
+  expect(within(row("CLS-ALPHA-01")).getByText("Stale")).toBeInTheDocument();
+  expect(within(row("CLS-ALPHA-01")).getByText("8 d ago")).toBeInTheDocument();
+  expect(within(row("CLS-ALPHA-01")).getByText("Ready")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Ready: 1 clusters" })).toBeInTheDocument();
+});
+
+it("shows no staleness signal when evaluations are recent", () => {
+  withNow();
+  setup({ rows: { "CLS-ALPHA-01": [evaluated("CLS-ALPHA-01", "READY", hoursAgo(23))], "CLS-BRAVO-02": [evaluated("CLS-BRAVO-02", "NOT_READY", hoursAgo(2))] } });
+  expect(screen.queryByText("Stale")).toBeNull();
+  expect(screen.queryByText(/run a readiness check before relying on Ready/)).toBeNull();
+});
+
+it("flags only the old row and states the share when most, not all, evaluations are stale", () => {
+  withNow();
+  const third = { ...evaluated("CLS-CHARLIE-03", "READY", hoursAgo(50)) };
+  setup({ rows: { "CLS-ALPHA-01": [evaluated("CLS-ALPHA-01", "READY", hoursAgo(30))], "CLS-BRAVO-02": [evaluated("CLS-BRAVO-02", "NOT_READY", hoursAgo(1))], "CLS-CHARLIE-03": [third] } });
+  expect(screen.getByText(/2 of 3 readiness evaluations are older than 24 h .*run a readiness check before relying on Ready\./)).toBeInTheDocument();
+  expect(within(row("CLS-ALPHA-01")).getByText("Stale")).toBeInTheDocument();
+  expect(within(row("CLS-BRAVO-02")).queryByText("Stale")).toBeNull();
+});
+
+it("does not warn when only a minority of evaluations is stale", () => {
+  withNow();
+  setup({ rows: { "CLS-ALPHA-01": [evaluated("CLS-ALPHA-01", "READY", hoursAgo(30))], "CLS-BRAVO-02": [evaluated("CLS-BRAVO-02", "NOT_READY", hoursAgo(1))], "CLS-CHARLIE-03": [evaluated("CLS-CHARLIE-03", "READY", hoursAgo(2))] } });
+  expect(screen.queryByText(/run a readiness check before relying on Ready/)).toBeNull();
+  expect(within(row("CLS-ALPHA-01")).getByText("Stale")).toBeInTheDocument();
+});
+
+it("keeps the mode on its own line without splitting its words", () => {
+  setup({ rows: { "CLS-ALPHA-01": [{ ...rows["CLS-ALPHA-01"][0], mode: "active-passive" }] } });
+  const mode = within(row("CLS-ALPHA-01")).getByText("Mode: active-passive");
+  expect(mode.tagName).toBe("DIV");
+  expect(mode).toHaveStyle({ whiteSpace: "nowrap" });
+});
