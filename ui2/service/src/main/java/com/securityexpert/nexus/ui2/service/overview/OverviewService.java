@@ -33,6 +33,12 @@ import com.securityexpert.nexus.ui2.service.compliance.ComplianceService;
 public class OverviewService {
 
     private static final long DAY_S = 24 * 3600;
+    /**
+     * A stored archive is one the retention ledger has not removed -- the Backups screen's listing predicate
+     * (JooqBackupArtefactManifestRepository.findAll). The manifest row of a pruned or purged archive stays.
+     */
+    static final String NOT_REMOVED =
+            " and not exists (select 1 from artefact_retention_ledger l where l.artefact_id = a.artefact_id and l.event = 'removed')";
 
     private final TransactionBoundary tx;
     private final DeviceRepository deviceRepository;
@@ -359,11 +365,11 @@ public class OverviewService {
 
         // 5. backup targets without an archive
         List<String> targets = fleet.active().stream().filter(DeviceSummaryRecord::backupTarget).map(DeviceSummaryRecord::deviceId).toList();
-        List<String> withArchive = q(dsl -> dsl.fetch("select distinct device_id from backup_artefact where artefact_class = 'backup' "
-                + "and device_id = any({0})", (Object) targets.toArray(String[]::new)).map(r -> r.get(0, String.class)));
+        List<String> withArchive = q(dsl -> dsl.fetch("select distinct device_id from backup_artefact a where artefact_class = 'backup'" + NOT_REMOVED
+                + " and device_id = any({0})", (Object) targets.toArray(String[]::new)).map(r -> r.get(0, String.class)));
         long missing = targets.stream().filter(t -> !withArchive.contains(t)).count();
-        List<String> withArchiveDayAgo = q(dsl -> dsl.fetch("select distinct device_id from backup_artefact where artefact_class = 'backup' "
-                + "and created_at < now() - interval '24 hours' and device_id = any({0})", (Object) targets.toArray(String[]::new)).map(r -> r.get(0, String.class)));
+        List<String> withArchiveDayAgo = q(dsl -> dsl.fetch("select distinct device_id from backup_artefact a where artefact_class = 'backup'"
+                + " and created_at < now() - interval '24 hours' and device_id = any({0})", (Object) targets.toArray(String[]::new)).map(r -> r.get(0, String.class)));
         Map<String, Object> backupTile = new LinkedHashMap<>();
         backupTile.put("count", missing);
         backupTile.put("of", targets.size());
@@ -432,17 +438,43 @@ public class OverviewService {
         return detail.isEmpty() ? code : code + ": " + detail;
     }
 
-    /** Every device's newest inventory run, for the device list ({@code inventory_collected_at}). */
+    /**
+     * One estate-map cell, first matching rule wins (EXEC_OVERVIEW_DESIGN_2026_09_25_FABLE.md §2, with "zero is
+     * neutral, never green"): critical (a critical check fails); ageing (no read in 24 h); not assessed (no compliance
+     * evaluation, or one in which no check of any severity has evidence); partly assessed (a critical check not
+     * evidenced, none failing); not assessed (no critical control applies, so no critical check was demonstrated);
+     * clear (at least one critical check passes, none fails, none lacks evidence).
+     *
+     * <p>2026-10-17: clear used to be "no critical check failing or unavailable", which a device with no critical
+     * check at all satisfies vacuously -- the 12 Cisco ASA (every check "evidence not collected") and the 9 FortiGate
+     * (no critical control in their catalog, a high-severity check failing on all nine) rendered green.
+     */
+    static String estateCondition(ComplianceService.DeviceCriticals cr, boolean readInLast24h) {
+        if (cr != null && cr.criticalFail() > 0) return "critical";
+        if (!readInLast24h) return "ageing";
+        if (cr == null || cr.evidencedChecks() == 0) return "not_assessed";
+        if (cr.criticalUnavailable() > 0) return "partly_assessed";
+        if (cr.criticalPass() == 0) return "not_assessed";
+        return "clear";
+    }
+
+    /** Why a cell is not assessed: {@code not_evaluated}, {@code no_evidence} or {@code no_critical_control}; else null. */
+    static String estateConditionReason(ComplianceService.DeviceCriticals cr, String condition) {
+        if (!"not_assessed".equals(condition)) return null;
+        if (cr == null) return "not_evaluated";
+        if (cr.evidencedChecks() == 0) return "no_evidence";
+        return "no_critical_control";
+    }
+
     /**
      * The executive estate map (EXEC_OVERVIEW_DESIGN_2026_09_25_FABLE.md §2): every active device with the worst
-     * condition neXus can evidence -- critical (a critical check fails), ageing (no read in 24 h), partly assessed
-     * (a critical check not evidenced, none failing), not assessed (no compliance evaluation), clear -- and, apart,
-     * whether a backup target lacks an archive. Plus the three hero facts over their own populations.
+     * condition neXus can evidence ({@link #estateCondition}) and, apart, whether a backup target lacks a stored
+     * archive. Plus the three hero facts over their own populations.
      */
     private Object estate(Fleet fleet, Instant now) {
         Map<String, Instant> lastRead = latestInventoryAll();
         java.util.Set<String> withArchive = new java.util.HashSet<>(q(dsl -> dsl.fetch(
-                "select distinct device_id from backup_artefact where artefact_class = 'backup'").getValues(0, String.class)));
+                "select distinct device_id from backup_artefact a where artefact_class = 'backup'" + NOT_REMOVED).getValues(0, String.class)));
         boolean complianceWarm = complianceService.isEvaluationCacheWarm();
         Map<String, ComplianceService.DeviceCriticals> criticals = complianceWarm ? complianceService.criticalsByDevice() : Map.of();
         List<Map<String, Object>> devices = new ArrayList<>();
@@ -461,18 +493,9 @@ public class OverviewService {
             if (recent) readRecent++;
             if (read == null) neverRead++;
             ComplianceService.DeviceCriticals cr = criticals.get(d.deviceId());
-            String condition;
-            if (cr != null && cr.criticalFail() > 0) {
-                condition = "critical";
+            String condition = estateCondition(cr, recent);
+            if ("critical".equals(condition)) {
                 criticalDevices++;
-            } else if (!recent) {
-                condition = "ageing";
-            } else if (cr != null && cr.criticalUnavailable() > 0) {
-                condition = "partly_assessed";
-            } else if (cr == null) {
-                condition = "not_assessed";
-            } else {
-                condition = "clear";
             }
             counts.merge(condition, 1, Integer::sum);
             boolean missing = d.backupTarget() && !withArchive.contains(d.deviceId());
@@ -484,6 +507,7 @@ public class OverviewService {
             row.put("vendor", d.vendorHint());
             row.put("model", d.observedModel().orElse(null));
             row.put("condition", condition);
+            row.put("condition_reason", estateConditionReason(cr, condition));
             row.put("no_archive", missing);
             row.put("critical_fail", cr == null ? null : cr.criticalFail());
             row.put("last_read_at", read == null ? null : read.toString());
@@ -502,6 +526,7 @@ public class OverviewService {
         return out;
     }
 
+    /** Every device's newest inventory run, for the device list ({@code inventory_collected_at}). */
     public Map<String, Instant> latestInventoryAll() {
         Map<String, Instant> out = new HashMap<>();
         for (Record r : q(dsl -> dsl.fetch("select device_id, max(collected_at) as at from device_inventory_run group by device_id"))) {

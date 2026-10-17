@@ -70,7 +70,8 @@ describe("InventoryScreen device list", () => {
 
     await waitFor(() => expect(screen.getByText("fw-edge-1")).toBeInTheDocument());
     expect(screen.getByText("Registered, not confirmed")).toBeInTheDocument();
-    expect(screen.getByText("1 device enrolled")).toBeInTheDocument();
+    // a DRAFT device is registered, not enrolled (it read "1 device enrolled" until 2026-10-17)
+    expect(screen.getByText("1 device registered · 0 enrolled")).toBeInTheDocument();
   });
 
   it("sorts the device list by name and by vendor via the sort control", async () => {

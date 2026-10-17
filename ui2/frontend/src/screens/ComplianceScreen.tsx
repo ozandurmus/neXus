@@ -315,6 +315,9 @@ export function ComplianceScreen() {
       ? "CIS Benchmark · PCI-DSS v4.0.1 · NIST SP 800-53 · Financial Baseline"
       : "No framework assigned · nothing assessed yet";
 
+  const scopeChecks = controls.reduce((n, c) => n + c.pass_count + c.fail_count + c.data_unavailable_count, 0);
+  const cisChecks = overview?.frameworks.find((f) => f.framework === "CIS Benchmark")?.total_controls ?? null;
+
   return (
     <ScreenRoot>
       <ScreenHeader
@@ -339,11 +342,12 @@ export function ComplianceScreen() {
       {/* 4 Top KPI Cards */}
       {/* Evaluation scope (Astra review 2026-09-23): the headline is every control on every evaluated firewall, not one
           framework; every control maps to CIS, which is why the CIS card carries the same totals. */}
+      {/* Said only when it is true: the CIS total is computed separately (UI review 2026-10-17, 2515 against 2523). */}
       {overview && overview.evaluated_firewalls > 0 && (
         <Typography variant="body2" sx={{ color: m3.onSurfaceVar, mt: -1 }}>
           Scope: all {controls.length} controls on {overview.evaluated_firewalls} of {overview.total_firewalls} evaluated firewalls
-          {" · "}{controls.reduce((n, c) => n + c.pass_count + c.fail_count + c.data_unavailable_count, 0)} control checks (one control on one firewall)
-          {" · "}every control maps to CIS, so the CIS card shows the same totals.
+          {" · "}{scopeChecks} control checks (one control on one firewall)
+          {scopeChecks === cisChecks ? " · every control maps to CIS, so the CIS card shows the same totals." : "."}
           {(overview.pending_reevaluation ?? 0) > 0 && ` · ${overview.pending_reevaluation} firewall(s) shown with their previous evaluation while being re-evaluated`}
         </Typography>
       )}

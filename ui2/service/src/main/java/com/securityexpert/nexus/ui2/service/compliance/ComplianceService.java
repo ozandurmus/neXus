@@ -157,87 +157,20 @@ public final class ComplianceService {
             return emptyOverview(totalDevices);
         }
 
-        double totalAssured = 0.0;
-        double totalCoverage = 0.0;
-        double totalObserved = 0.0;
-        int criticalDeficiencies = 0;
-        int dataGaps = 0;
-
-        // Framework accumulators: [total, pass, fail, unavail]
-        Map<String, int[]> frameworkStats = new LinkedHashMap<>();
-        frameworkStats.put("CIS Benchmark", new int[]{0, 0, 0, 0});
-        frameworkStats.put("PCI-DSS v4.0.1", new int[]{0, 0, 0, 0});
-        frameworkStats.put("NIST SP 800-53", new int[]{0, 0, 0, 0});
-        frameworkStats.put("Financial Baseline", new int[]{0, 0, 0, 0});
-
         int[] pending = {0};
         Map<String, Map<String, Object>> evaluations = evaluateAll(evaluated, false, pending);
+        List<Map<String, Object>> answered = new ArrayList<>();
         for (var dev : evaluated) {
             Map<String, Object> eval = evaluations.get(dev.deviceId());
-            if (eval == null || eval.containsKey("error")) {
-                continue;
+            if (eval != null && !eval.containsKey("error")) {
+                answered.add(eval);
             }
-
-            totalAssured += getDouble(eval, "assuredCompliance", 0.0);
-            totalCoverage += getDouble(eval, "evidenceCoverage", 0.0);
-            totalObserved += getDouble(eval, "observedCompliance", 0.0);
-            dataGaps += getInt(eval, "dataUnavailableCount", 0);
-
-            List<Map<String, Object>> items = getItems(eval);
-            for (Map<String, Object> item : items) {
-                String status = String.valueOf(item.get("displayStatus"));
-                String severity = String.valueOf(item.get("severity"));
-
-                if ("FAIL".equalsIgnoreCase(status) && "CRITICAL".equalsIgnoreCase(severity)) {
-                    criticalDeficiencies++;
-                }
-
-                List<Map<String, Object>> frameworks = getFrameworks(item);
-                for (Map<String, Object> fw : frameworks) {
-                    String name = mapFrameworkName(String.valueOf(fw.get("framework")));
-                    int[] stats = frameworkStats.get(name);
-                    if (stats != null) {
-                        stats[0]++; // total
-                        if ("PASS".equalsIgnoreCase(status)) stats[1]++;
-                        else if ("FAIL".equalsIgnoreCase(status)) stats[2]++;
-                        else if ("DATA_UNAVAILABLE".equalsIgnoreCase(status)) stats[3]++;
-                    }
-                }
-            }
-        }
-
-        double avgAssured = Math.round((totalAssured / evaluatedCount) * 10.0) / 10.0;
-        double avgCoverage = Math.round((totalCoverage / evaluatedCount) * 10.0) / 10.0;
-        double avgObserved = Math.round((totalObserved / evaluatedCount) * 10.0) / 10.0;
-
-        List<Map<String, Object>> frameworkCards = new ArrayList<>();
-        for (var entry : frameworkStats.entrySet()) {
-            int[] s = entry.getValue();
-            int total = s[0];
-            int pass = s[1];
-            int fail = s[2];
-            int unavail = s[3];
-            double score = total > 0 ? Math.round((pass * 100.0 / total) * 10.0) / 10.0 : 0.0;
-
-            Map<String, Object> card = new LinkedHashMap<>();
-            card.put("framework", entry.getKey());
-            card.put("score_pct", score);
-            card.put("total_controls", total);
-            card.put("pass_count", pass);
-            card.put("fail_count", fail);
-            card.put("data_unavailable_count", unavail);
-            frameworkCards.add(card);
         }
 
         Map<String, Object> overview = new LinkedHashMap<>();
         overview.put("total_firewalls", totalDevices);
         overview.put("evaluated_firewalls", evaluatedCount);
-        overview.put("assured_compliance_pct", avgAssured);
-        overview.put("evidence_coverage_pct", avgCoverage);
-        overview.put("observed_compliance_pct", avgObserved);
-        overview.put("critical_deficiencies", criticalDeficiencies);
-        overview.put("data_gaps", dataGaps);
-        overview.put("frameworks", frameworkCards);
+        overview.putAll(aggregateChecks(answered));
         // Devices shown with their previous evaluation while the background re-evaluates a changed configuration
         // or a changed rule set (at most a minute): the figures are complete, one step behind for these devices.
         overview.put("pending_reevaluation", pending[0]);
@@ -245,11 +178,102 @@ public final class ComplianceService {
         return overview;
     }
 
-    /** One compliance target's critical checks, for the executive estate map (PO 2026-09-25). */
-    public record DeviceCriticals(int criticalFail, int criticalUnavailable, int criticalPass) {
+    /** The outcome of one control on one firewall, as every figure on the Overview and Compliance screens counts it. */
+    enum CheckOutcome { PASS, FAIL, UNAVAILABLE }
+
+    /**
+     * {@code null} for NOT_APPLICABLE: the control does not apply to this firewall, so it is not a control check at all
+     * and is counted nowhere (2026-10-17: it was counted in each framework's total but in none of its parts, so the
+     * CIS, PCI and NIST cards were 8 checks larger than pass + fail + unavailable, and every score was computed over
+     * that larger total). Any status other than PASS or FAIL is not evidence and counts as unavailable.
+     */
+    static CheckOutcome checkOutcome(Object displayStatus) {
+        String st = String.valueOf(displayStatus);
+        if ("NOT_APPLICABLE".equalsIgnoreCase(st)) return null;
+        if ("PASS".equalsIgnoreCase(st)) return CheckOutcome.PASS;
+        if ("FAIL".equalsIgnoreCase(st)) return CheckOutcome.FAIL;
+        return CheckOutcome.UNAVAILABLE;
     }
 
-    /** Per evaluated device: its critical checks failing, not evidenced and passing (latest stored evaluation). */
+    /** One decimal, the same rounding the Overview screen applies ({@code Math.round(1000 * n / d) / 10}). */
+    static double pct1(long numerator, long denominator) {
+        return denominator == 0 ? 0.0 : Math.round(numerator * 1000.0 / denominator) / 10.0;
+    }
+
+    /**
+     * Fleet figures over control checks (one control on one firewall), from the answered evaluations' items: every
+     * total is the sum of its pass, fail and unavailable parts, the fleet percentages are pooled over the same checks
+     * (not a mean of per-firewall percentages, which weighted a 9-check firewall like a 59-check one and was labelled
+     * as a share of checks), data gaps are the unavailable checks, and an item counts once per framework however many
+     * references it carries to that framework.
+     */
+    static Map<String, Object> aggregateChecks(List<Map<String, Object>> evaluations) {
+        long pass = 0;
+        long fail = 0;
+        long unavailable = 0;
+        int criticalDeficiencies = 0;
+        // Framework accumulators: [pass, fail, unavailable]
+        Map<String, long[]> frameworkStats = new LinkedHashMap<>();
+        for (String name : List.of("CIS Benchmark", "PCI-DSS v4.0.1", "NIST SP 800-53", "Financial Baseline")) {
+            frameworkStats.put(name, new long[]{0, 0, 0});
+        }
+        for (Map<String, Object> eval : evaluations) {
+            for (Map<String, Object> item : getItems(eval)) {
+                CheckOutcome outcome = checkOutcome(item.get("displayStatus"));
+                if (outcome == null) {
+                    continue;
+                }
+                switch (outcome) {
+                    case PASS -> pass++;
+                    case FAIL -> fail++;
+                    case UNAVAILABLE -> unavailable++;
+                }
+                if (outcome == CheckOutcome.FAIL && "CRITICAL".equalsIgnoreCase(String.valueOf(item.get("severity")))) {
+                    criticalDeficiencies++;
+                }
+                java.util.Set<String> counted = new java.util.HashSet<>();
+                for (Map<String, Object> fw : getFrameworks(item)) {
+                    String name = mapFrameworkName(String.valueOf(fw.get("framework")));
+                    long[] stats = frameworkStats.get(name);
+                    if (stats != null && counted.add(name)) {
+                        stats[outcome.ordinal()]++;
+                    }
+                }
+            }
+        }
+        long checks = pass + fail + unavailable;
+        List<Map<String, Object>> frameworkCards = new ArrayList<>();
+        for (var entry : frameworkStats.entrySet()) {
+            long[] s = entry.getValue();
+            long total = s[0] + s[1] + s[2];
+            Map<String, Object> card = new LinkedHashMap<>();
+            card.put("framework", entry.getKey());
+            card.put("score_pct", pct1(s[0], total));
+            card.put("total_controls", total);
+            card.put("pass_count", s[0]);
+            card.put("fail_count", s[1]);
+            card.put("data_unavailable_count", s[2]);
+            frameworkCards.add(card);
+        }
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("assured_compliance_pct", pct1(pass, checks));
+        out.put("evidence_coverage_pct", pct1(pass + fail, checks));
+        out.put("observed_compliance_pct", pct1(pass, pass + fail));
+        out.put("critical_deficiencies", criticalDeficiencies);
+        out.put("data_gaps", unavailable);
+        out.put("control_checks", checks);
+        out.put("frameworks", frameworkCards);
+        return out;
+    }
+
+    /** One compliance target's critical checks, for the executive estate map (PO 2026-09-25). */
+    public record DeviceCriticals(int criticalFail, int criticalUnavailable, int criticalPass, int evidencedChecks) {
+    }
+
+    /**
+     * Per evaluated device: its critical checks failing, not evidenced and passing, and its checks of any severity
+     * with evidence (pass or fail) -- latest stored evaluation.
+     */
     public Map<String, DeviceCriticals> criticalsByDevice() {
         List<Target> evaluated = evaluable(allDevices());
         Map<String, DeviceCriticals> out = new LinkedHashMap<>();
@@ -257,21 +281,30 @@ public final class ComplianceService {
             if (eval == null || eval.containsKey("error")) {
                 return;
             }
-            int fail = 0;
-            int unavailable = 0;
-            int pass = 0;
-            for (Map<String, Object> item : getItems(eval)) {
-                if (!"CRITICAL".equalsIgnoreCase(String.valueOf(item.get("severity")))) {
-                    continue;
-                }
-                String st = String.valueOf(item.get("displayStatus"));
-                if ("FAIL".equalsIgnoreCase(st)) fail++;
-                else if ("DATA_UNAVAILABLE".equalsIgnoreCase(st)) unavailable++;
-                else if ("PASS".equalsIgnoreCase(st)) pass++;
-            }
-            out.put(id, new DeviceCriticals(fail, unavailable, pass));
+            out.put(id, deviceCriticals(eval));
         });
         return out;
+    }
+
+    /** One evaluation's critical checks failing, not evidenced and passing, and its checks with evidence. */
+    static DeviceCriticals deviceCriticals(Map<String, Object> eval) {
+        int fail = 0;
+        int unavailable = 0;
+        int pass = 0;
+        int evidenced = 0;
+        for (Map<String, Object> item : getItems(eval)) {
+            CheckOutcome outcome = checkOutcome(item.get("displayStatus"));
+            if (outcome == CheckOutcome.PASS || outcome == CheckOutcome.FAIL) evidenced++;
+            if (outcome == null || !"CRITICAL".equalsIgnoreCase(String.valueOf(item.get("severity")))) {
+                continue;
+            }
+            switch (outcome) {
+                case FAIL -> fail++;
+                case UNAVAILABLE -> unavailable++;
+                case PASS -> pass++;
+            }
+        }
+        return new DeviceCriticals(fail, unavailable, pass, evidenced);
     }
 
     /**
@@ -485,22 +518,24 @@ public final class ComplianceService {
                 List<Map<String, Object>> items = getItems(eval);
                 for (Map<String, Object> item : items) {
                     if (controlId.equals(item.get("controlId"))) {
-                        String st = String.valueOf(item.get("displayStatus"));
-                        if ("NOT_APPLICABLE".equalsIgnoreCase(st)) {
+                        CheckOutcome outcome = checkOutcome(item.get("displayStatus"));
+                        if (outcome == null) {
                             // Control does not apply to this device's vendor platform
                             break;
                         }
                         targetDevices++;
                         vendors.add(dev.vendor());
-                        if ("PASS".equalsIgnoreCase(st)) {
-                            passCount++;
-                        } else if ("FAIL".equalsIgnoreCase(st)) {
-                            failCount++;
-                            dev.hostname().ifPresent(affectedDevices::add);
-                        } else if ("DATA_UNAVAILABLE".equalsIgnoreCase(st)) {
-                            unavailCount++;
-                            if (missingReason == null && item.get("message") != null) {
-                                missingReason = String.valueOf(item.get("message"));
+                        switch (outcome) {
+                            case PASS -> passCount++;
+                            case FAIL -> {
+                                failCount++;
+                                dev.hostname().ifPresent(affectedDevices::add);
+                            }
+                            case UNAVAILABLE -> {
+                                unavailCount++;
+                                if (missingReason == null && item.get("message") != null) {
+                                    missingReason = String.valueOf(item.get("message"));
+                                }
                             }
                         }
                         break;
@@ -771,13 +806,15 @@ public final class ComplianceService {
         return List.of();
     }
 
+    /** The four framework cards; any other framework (or none) is on no card rather than folded into one. */
     private static String mapFrameworkName(String raw) {
-        if (raw == null) return "Financial Baseline";
+        if (raw == null) return null;
         return switch (raw.toUpperCase(Locale.ROOT)) {
             case "CIS" -> "CIS Benchmark";
             case "PCI_DSS" -> "PCI-DSS v4.0.1";
             case "NIST_800_53" -> "NIST SP 800-53";
-            default -> "Financial Baseline";
+            case "FINANCIAL_BASELINE" -> "Financial Baseline";
+            default -> null;
         };
     }
 
@@ -790,12 +827,9 @@ public final class ComplianceService {
         overview.put("observed_compliance_pct", 0.0);
         overview.put("critical_deficiencies", 0);
         overview.put("data_gaps", 0);
-        overview.put("frameworks", List.of(
-                Map.of("framework", "CIS Benchmark", "score_pct", 0.0, "total_controls", 24, "pass_count", 0, "fail_count", 0, "data_unavailable_count", 24),
-                Map.of("framework", "PCI-DSS v4.0.1", "score_pct", 0.0, "total_controls", 16, "pass_count", 0, "fail_count", 0, "data_unavailable_count", 16),
-                Map.of("framework", "NIST SP 800-53", "score_pct", 0.0, "total_controls", 20, "pass_count", 0, "fail_count", 0, "data_unavailable_count", 20),
-                Map.of("framework", "Financial Baseline", "score_pct", 0.0, "total_controls", 10, "pass_count", 0, "fail_count", 0, "data_unavailable_count", 10)
-        ));
+        overview.put("control_checks", 0);
+        // No evaluation: every framework has no check at all (it used to report 24/16/20/10 invented checks).
+        overview.put("frameworks", aggregateChecks(List.of()).get("frameworks"));
         return overview;
     }
 
@@ -811,15 +845,4 @@ public final class ComplianceService {
         return fw instanceof List ? (List<Map<String, Object>>) fw : List.of();
     }
 
-    private static double getDouble(Map<String, Object> map, String key, double defaultVal) {
-        Object val = map.get(key);
-        if (val instanceof Number n) return n.doubleValue();
-        return defaultVal;
-    }
-
-    private static int getInt(Map<String, Object> map, String key, int defaultVal) {
-        Object val = map.get(key);
-        if (val instanceof Number n) return n.intValue();
-        return defaultVal;
-    }
 }

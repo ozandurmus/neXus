@@ -874,6 +874,16 @@ function FlatDeviceList({
   );
 }
 
+/**
+ * "N devices enrolled" counted every registered device, drafts included, while the Overview counts the enrolled ones
+ * (135 against 133, UI review 2026-10-17): the header now names both when they differ.
+ */
+export function registeredLabel(devices: ReadonlyArray<{ enrollment_state: string }>): string {
+  const enrolled = devices.filter((d) => d.enrollment_state === "ENROLLED").length;
+  const plural = (n: number) => `${n} device${n === 1 ? "" : "s"}`;
+  return enrolled === devices.length ? `${plural(enrolled)} enrolled` : `${plural(devices.length)} registered · ${enrolled} enrolled`;
+}
+
 export function InventoryScreen() {
   const [lifecycleView, setLifecycleView] = useState(() => urlParam("view") === "lifecycle");
   const { data, error, refresh } = useFetchOnMount(
@@ -1056,7 +1066,7 @@ export function InventoryScreen() {
     <ScreenRoot>
       <ScreenHeader
         title="Devices"
-        subtitle={devices === null ? "Loading…" : `${total} device${total === 1 ? "" : "s"} enrolled`}
+        subtitle={devices === null ? "Loading…" : registeredLabel(devices)}
         actions={
           <>
             <M3Button emphasis="tonal" onClick={() => setLifecycleView(true)}>Lifecycle</M3Button>

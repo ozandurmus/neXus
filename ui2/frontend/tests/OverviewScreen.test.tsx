@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { OverviewScreen, relativeAge } from "../src/screens/OverviewScreen";
+import { OverviewScreen, estateDevicesLabel, relativeAge } from "../src/screens/OverviewScreen";
 import type { OverviewView } from "../src/auth/adminApi";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -144,3 +144,24 @@ describe("display time zone", () => {
     expect(utcHourToLocal(2)).toBe("05:00 GMT+3");
   });
 });
+
+describe("Overview counts reconcile (UI review 2026-10-17)", () => {
+  it("counts the devices on the map in the header and names registered drafts apart", () => {
+    expect(estateDevicesLabel({ active_devices: 133, enrolled_devices: 135 })).toBe("133 enrolled devices (2 more registered, not enrolled)");
+    expect(estateDevicesLabel({ active_devices: 133, enrolled_devices: 133 })).toBe("133 enrolled devices");
+    expect(estateDevicesLabel({ active_devices: 105 })).toBe("105 enrolled devices");
+  });
+
+  it("shows the same framework percentage the Compliance card computes from the same parts", async () => {
+    // 749 / (749 + 1266 + 500) = 29.78 % -> 29.8; the Compliance card's score_pct uses the same total and rounding
+    stubWithControls(overview({ estate: ESTATE, compliance: { state: "OK", reason: null, evaluated: 119, of_firewalls: 123, observed_pct: 37.2,
+      assured_pct: 29.8, coverage_pct: 80.1, critical_deficiencies: 166, data_gaps: 500,
+      frameworks: [{ name: "CIS Benchmark", pass: 749, fail: 1266, unavailable: 500, total: 2515, score_pct: 29.8 }] } } as Partial<OverviewView>));
+    render(<OverviewScreen />);
+    expect(await screen.findByText("Compliance by framework")).toBeInTheDocument();
+    const line = screen.getByText(/demonstrated pass/).textContent ?? "";
+    expect(line).toContain("29.8% demonstrated pass");
+    expect(line).toContain("80.1% assessed");
+  });
+});
+

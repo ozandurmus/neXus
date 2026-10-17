@@ -47,6 +47,7 @@ import {
   type BackupPolicy,
 } from "../auth/adminApi";
 import { ScreenHeader, MetricGrid, MetricCard, ScreenRoot } from "../shell/ScreenLayout";
+import { backupFleetCounts, isBackupFleetRow, retentionNote } from "./backupCounts";
 import { M3Button, StatusChip } from "../shell/M3Widgets";
 import { Ts, VendorBadge } from "../shell/States";
 
@@ -160,6 +161,8 @@ export function BackupScreen() {
   // backup is the most dangerous error this screen can make, so an empty store now
   // renders as empty and a failed read renders as a failed read.
   const [devices, setDevices] = useState<BackupDeviceItem[]>([]);
+  // The device list behind the target counts; null when it could not be read (the card then says UNKNOWN).
+  const [fleetDevices, setFleetDevices] = useState<DeviceSummary[] | null>(null);
   const [listError, setListError] = useState<string | null>(null);
   const [listLoaded, setListLoaded] = useState(false);
 
@@ -193,10 +196,12 @@ export function BackupScreen() {
 
   const loadFleet = useCallback(async () => {
     try {
-      const [response, names] = await Promise.all([
+      const [response, deviceList] = await Promise.all([
         listFleetBackups(),
-        listDevices().then((r) => new Map(r.devices.map((d) => [d.device_id, d.hostname ?? d.device_id] as const))).catch(() => new Map<string, string>()),
+        listDevices().then((r) => r.devices).catch(() => null),
       ]);
+      const names = new Map((deviceList ?? []).map((d) => [d.device_id, d.hostname ?? d.device_id] as const));
+      setFleetDevices(deviceList);
       setDevices(toFleetRows(response.backups ?? [], names));
       setBaselines(response.baselines ?? {});
       setListError(null);
@@ -430,6 +435,10 @@ export function BackupScreen() {
     validationLevel: artefact.validation_level || "UNKNOWN",
   });
 
+  // The same target and archive definitions as the fleet table's chips and the Overview (backupCounts.ts).
+  const storeCounts = listLoaded && !listError && fleetDevices
+    ? backupFleetCounts(fleetDevices, new Set(devices.map((d) => d.deviceId))) : null;
+
   return (
     <ScreenRoot>
       <ScreenHeader
@@ -509,8 +518,12 @@ export function BackupScreen() {
 
       {/* Metric Cards, below the table (PO, 2026-09-24: at the top they pulled the eye from the work): a figure or the word for why there is none (UI review 2026-09-23) */}
       <MetricGrid>
-        <MetricCard title="Devices with a stored backup" value={listLoaded && !listError ? devices.length : null}
-          state={listLoaded && !listError ? "ok" : "unknown"} reason={listError ?? undefined}
+        <MetricCard title="Targets with a stored backup" value={storeCounts ? storeCounts.targetsWithArchive : null}
+          unit={storeCounts ? `of ${storeCounts.targets} targets` : undefined}
+          detail={storeCounts && storeCounts.archivedNotTarget > 0
+            ? `${storeCounts.archivedDevices} devices hold a stored backup: ${storeCounts.archivedNotTarget} of them ${storeCounts.archivedNotTarget === 1 ? "is" : "are"} not a backup target`
+            : undefined}
+          state={storeCounts ? "ok" : "unknown"} reason={listError ?? (listLoaded && !fleetDevices ? "The device list could not be read" : undefined)}
           note={listError ? "Store unreadable" : "Counted from the artefact store, not from inventory"} />
         <Card sx={{ p: 2.25, borderRadius: "10px", bgcolor: m3.scLowest, border: `1px solid ${m3.outlineVar}`, boxShadow: "none", display: "flex", flexDirection: "column", gap: 1 }}>
           <Typography sx={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase", color: m3.onSurfaceVar }}>Scheduled fleet backup</Typography>
@@ -532,7 +545,7 @@ export function BackupScreen() {
           </Typography>
         </Card>
         <MetricCard title="Retention policy" value={policy ? `${policy.backup_retention_days} days` : null} state={policy ? "ok" : "unknown"}
-          note={policy ? `Snapshot depth: ${policy.snapshot_retention_depth} retained` : "Policy unavailable"} />
+          note={policy ? retentionNote(policy) : "Policy unavailable"} />
         {/* Zero deviations found and zero comparisons run look identical and mean opposite things. */}
         <MetricCard title="Active major deviations"
           value={deviations && deviations.total_deviations_checked > 0 ? deviations.active_major_deviations.length : null}
@@ -1004,15 +1017,8 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
     listDevices()
       .then((r) => {
         if (!cancelled) {
-          setDevices(r.devices.filter((d) => d.enrollment_state === "ENROLLED" && (d.role === undefined || d.role === "gateway" || d.role === "firewall"
-            // a Check Point management server (MDS) takes the Gaia backup too
-            || (d.role === "management_server" && (d.vendor_hint === "check_point" || d.vendor_hint === "radware"
-              // a Symantec Management Center backs up its ProxySGs (without it the row read "not enrolled" with Delete)
-              || d.vendor_hint === "bluecoat"
-              // a Panorama: device-state, else its running configuration XML (PO 2026-09-25)
-              || d.vendor_hint === "palo_alto"))
-            // V64: appliances backed up over HTTPS
-            || d.role === "appliance")));
+          // every device: the counts need the enrolled targets of any role, the rows are isBackupFleetRow
+          setDevices(r.devices);
           setError(null);
         }
       })
@@ -1034,15 +1040,17 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
   };
 
   const byId = new Map(fleet.map((f) => [f.deviceId, f] as const));
-  // Every enrolled gateway, plus any device the store holds an archive for that is not in that list.
-  const summaries = devices ?? [];
+  // Every enrolled device neXus can back up (and any enrolled target), plus any device the store holds an archive
+  // for that is not in that list.
+  const summaries = (devices ?? []).filter(isBackupFleetRow);
+  const counts = backupFleetCounts(devices ?? [], new Set(byId.keys()));
   const known = new Set(summaries.map((d) => d.device_id));
   const rows: Array<{ summary: DeviceSummary | null; item: BackupDeviceItem | null; id: string }> = [
     ...summaries.map((d) => ({ summary: d, item: byId.get(d.device_id) ?? null, id: d.device_id })),
     ...fleet.filter((f) => !known.has(f.deviceId)).map((f) => ({ summary: null, item: f, id: f.deviceId })),
   ];
-  const targetCount = summaries.filter((d) => d.backup_target).length;
-  const withoutArchive = summaries.filter((d) => d.backup_target && !byId.has(d.device_id)).length;
+  const targetCount = counts.targets;
+  const withoutArchive = counts.targetsWithoutArchive;
   const q = search.trim().toLowerCase();
   const shown = rows.filter(({ summary, item }) => {
     if (show === "targets" && !summary?.backup_target) return false;
@@ -1052,8 +1060,8 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
       .some((f) => (f ?? "").toLowerCase().includes(q));
   }).sort((a, b) => (a.summary?.hostname ?? a.item?.name ?? "").localeCompare(b.summary?.hostname ?? b.item?.name ?? ""));
 
-  const chip = (value: Show, label: string, count: number) => (
-    <Chip key={value} clickable size="small" label={`${label} · ${count}`} onClick={() => setShow(value)}
+  const chip = (value: Show, label: string, count: number, title?: string) => (
+    <Chip key={value} clickable size="small" label={`${label} · ${count}`} onClick={() => setShow(value)} title={title}
       sx={{ bgcolor: show === value ? m3.primaryContainer : m3.scLow, color: show === value ? m3.onPrimaryContainer : m3.onSurface,
             fontWeight: show === value ? 600 : 400, border: `1px solid ${m3.outlineVar}` }} />
   );
@@ -1069,7 +1077,9 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
         </Box>
         <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: "wrap", gap: 1 }}>
           <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>Show:</Typography>
-          {chip("all", "All enrolled", summaries.length)}
+          {chip("all", "Backup-capable", summaries.length, counts.enrolled > counts.backupCapable
+            ? `Enrolled devices neXus can back up: ${counts.enrolled - counts.backupCapable} of ${counts.enrolled} enrolled devices have no backup method`
+            : `Every enrolled device (${counts.enrolled}) can be backed up`)}
           {chip("targets", "Targets", targetCount)}
           {chip("without_archive", "Targets without archive", withoutArchive)}
           <TextField size="small" placeholder="Filter devices, clusters, models…" value={search} onChange={(e) => setSearch(e.target.value)}

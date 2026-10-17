@@ -3,7 +3,7 @@ import Link from "@mui/material/Link";
 import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 
-import type { EstateCondition, EstateView } from "../../auth/adminApi";
+import type { EstateCondition, EstateConditionReason, EstateView } from "../../auth/adminApi";
 import { STATUS, UNKNOWN_HATCH_CSS } from "../../shell/Charts";
 import { vendorDisplayName } from "../../shell/States";
 import { relativeAge } from "../../shell/time";
@@ -41,12 +41,28 @@ function cellBg(d: { condition: EstateCondition; critical_fail: number | null })
   return n >= 3 ? CRITICAL_SHADES[2].bg : n === 2 ? CRITICAL_SHADES[1].bg : CRITICAL_SHADES[0].bg;
 }
 
+/** The tooltip line that says why a cell is not assessed: never green, never silent. */
+export const NOT_ASSESSED_REASON: Record<EstateConditionReason, string> = {
+  not_evaluated: "No compliance evaluation for this device",
+  no_evidence: "No check has evidence yet (evidence not collected)",
+  no_critical_control: "No critical control applies to this device, so no critical check was demonstrated",
+};
+
+/**
+ * The "No archive" marker: a red dot with a white ring and a dark hairline in the cell's top-right corner, visible on
+ * every fill (the earlier outer ring all but vanished against the pink and red critical shades).
+ */
+export const NO_ARCHIVE_MARK = {
+  width: 9, height: 9, borderRadius: "50%", bgcolor: STATUS.critical, border: "2px solid #fff",
+  boxShadow: "0 0 0 1px rgba(0, 0, 0, 0.6)", boxSizing: "content-box" as const,
+};
+
 const VENDOR_ORDER = ["check_point", "palo_alto", "fortinet", "cisco_asa", "infoblox", "radware", "bluecoat"];
 const q = (params: Record<string, string>) => `?${new URLSearchParams(params).toString()}`;
 
 /**
  * Every device as one square, grouped by vendor in the vendor's own name and sorted by condition so colours form
- * blocks; a backup target without an archive carries a red ring. Hover names the device; a click opens it.
+ * blocks; a backup target without an archive carries the corner marker. Hover names the device; a click opens it.
  */
 export function EstateMap({ estate, cell = 20 }: { readonly estate: EstateView; readonly cell?: number }) {
   const groups = new Map<string, EstateView["devices"][number][]>();
@@ -79,14 +95,18 @@ export function EstateMap({ estate, cell = 20 }: { readonly estate: EstateView; 
                       <b>{d.hostname ?? d.device_id.slice(0, 8)}</b><br />
                       {vendorDisplayName(d.vendor)}{d.model ? ` · ${d.model}` : ""}<br />
                       {CONDITION[d.condition].label}{d.critical_fail ? ` · ${d.critical_fail} critical checks failing` : ""}<br />
-                      {d.no_archive ? "Backup target without a stored archive" : ""}{d.no_archive ? <br /> : null}
+                      {d.condition === "not_assessed" && d.condition_reason ? <>{NOT_ASSESSED_REASON[d.condition_reason]}<br /></> : null}
+                      {d.no_archive ? <>Backup target without a stored archive<br /></> : null}
                       Last read {d.last_read_at ? relativeAge(d.last_read_at) : "never"}
                     </Box>}>
                     <Box component="a" href={q({ screen: "inventory", device_id: d.device_id })}
-                      aria-label={`${d.hostname ?? d.device_id}: ${CONDITION[d.condition].label}`}
-                      sx={{ width: cell, height: cell, borderRadius: "3px", display: "block", background: cellBg(d),
-                        boxShadow: d.no_archive ? `0 0 0 2px ${m3.scLowest}, 0 0 0 4px ${EXEC.red}` : "none",
-                        transition: "transform 120ms", "&:hover": { transform: "scale(1.35)" } }} />
+                      data-condition={d.condition} data-no-archive={d.no_archive ? "true" : undefined}
+                      aria-label={`${d.hostname ?? d.device_id}: ${CONDITION[d.condition].label}${d.no_archive ? ", no stored archive" : ""}`}
+                      sx={{ width: cell, height: cell, borderRadius: "3px", display: "block", position: "relative", background: cellBg(d),
+                        transition: "transform 120ms", "&:hover": { transform: "scale(1.35)" } }}>
+                      {d.no_archive && <Box data-testid="no-archive-mark" component="span"
+                        sx={{ ...NO_ARCHIVE_MARK, position: "absolute", top: -3, right: -3, display: "block" }} />}
+                    </Box>
                   </Tooltip>
                 ))}
               </Box>
@@ -112,7 +132,7 @@ export function EstateMap({ estate, cell = 20 }: { readonly estate: EstateView; 
         ))}
         {estate.no_archive > 0 && (
           <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
-            <Box sx={{ width: 10, height: 10, borderRadius: "3px", boxShadow: `0 0 0 2px ${EXEC.red}` }} />
+            <Box component="span" sx={{ ...NO_ARCHIVE_MARK, display: "inline-block" }} />
             <Link href={q({ screen: "backups", artefact: "none" })} underline="hover" sx={{ fontSize: 12.5, color: m3.onSurfaceVar }}>
               No archive <b style={{ color: m3.onSurface }}>{estate.no_archive}</b></Link>
           </Box>
