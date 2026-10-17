@@ -357,11 +357,42 @@ public class JooqCpFailoverRepository {
         });
     }
 
-    /** Admission without a failover approval; shares the active-unit uniqueness fence. */
+    /** Job states after which no worker will ever record a readiness result (JobState#isTerminal). */
+    static final String TERMINAL_JOB_STATES =
+        "('COMPLETED','FAILED','REJECTED','CANCELLED','OUTCOME_UNKNOWN','RECONCILED')";
+    /** Message on a readiness run closed because its job ended first; V162 writes the same code. */
+    public static final String JOB_ENDED_WITHOUT_RESULT = "JOB_ENDED_WITHOUT_RESULT";
+
+    /**
+     * Close open readiness runs whose job is already terminal: STOPPED (the run ended before its
+     * procedure finished), outcome UNKNOWN (no result), ended when the job ended. Execution runs are
+     * never touched here. docs/operations/sql/2026_10_18_close_orphan_readiness_runs.sql is the same
+     * statement for rows orphaned before V162.
+     * A null cluster closes such runs for every unit (the sweep); otherwise only for one unit.
+     */
+    private static int closeOrphanReadiness(DSLContext dsl, String cluster, String vsId, String vendor) {
+        return dsl.execute("update failover_run r set state='STOPPED',outcome='UNKNOWN',message={0},"
+            + "finished_at=coalesce(j.finished_at,now()) from jobs j where j.job_id=r.job_id and r.run_kind='READINESS' "
+            + "and r.state not in ('DONE','STOPPED') and j.state in " + TERMINAL_JOB_STATES + " "
+            + "and ({1}::text is null or (r.cluster_ref={1} and r.vs_id is not distinct from {2} and r.vendor={3}))",
+            JOB_ENDED_WITHOUT_RESULT, cluster, vsId, vendor);
+    }
+
+    /** Sweep for readiness runs orphaned by a terminal job; returns how many were closed. */
+    public int closeOrphanReadinessRuns() {
+        return audited.inTransaction("system:failover-readiness-scheduler", "failover_readiness_orphan_close",
+            dsl -> closeOrphanReadiness(dsl, null, null, null));
+    }
+
+    /**
+     * Admission without a failover approval; shares the active-unit uniqueness fence. A readiness run
+     * whose job is terminal is closed first, in this transaction, so one orphan never blocks a unit.
+     */
     public Decision requestReadiness(String cluster, String vsId, String actor, String targetDeviceId,
             String vendor) {
         windows.requireOpen();
         return audited.inTransaction(actor, "failover_readiness_request", dsl -> {
+            closeOrphanReadiness(dsl, cluster, vsId, vendor);
             Record active = dsl.fetchOne("select run_id from failover_run where cluster_ref={0} "
                 + "and vs_id is not distinct from {1} and vendor={2} and state not in ('DONE','STOPPED') limit 1",
                 cluster, vsId, vendor);

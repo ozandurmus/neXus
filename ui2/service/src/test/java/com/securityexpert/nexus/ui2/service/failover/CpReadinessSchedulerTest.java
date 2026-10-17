@@ -47,7 +47,8 @@ class CpReadinessSchedulerTest {
         scheduler.beginPass();
         tick(3600);
         verify(service, never()).requestScheduledReadiness(second);
-        verifyNoInteractions(store);
+        verify(store).closeOrphanReadinessRuns();
+        verifyNoMoreInteractions(store);
         tick(21600);
         verify(service).readinessTargets();
     }
@@ -73,5 +74,18 @@ class CpReadinessSchedulerTest {
         verify(service, never()).requestScheduledReadiness(second);
         tick(2);
         verify(service).requestScheduledReadiness(second);
+    }
+    @Test void eachPassFirstClosesReadinessRunsWhoseJobEndedWithoutAResult() {
+        when(store.closeOrphanReadinessRuns()).thenReturn(2);
+        scheduler.beginPass();
+        var order = inOrder(store, service);
+        order.verify(store).closeOrphanReadinessRuns();
+        order.verify(service).readinessTargets();
+        order.verify(service).requestScheduledReadiness(first);
+    }
+    @Test void aFailedSweepDoesNotSkipThePass() {
+        when(store.closeOrphanReadinessRuns()).thenThrow(new IllegalStateException("SYNTHETIC_SWEEP_FAILURE"));
+        scheduler.beginPass();
+        verify(service).requestScheduledReadiness(first);
     }
 }
