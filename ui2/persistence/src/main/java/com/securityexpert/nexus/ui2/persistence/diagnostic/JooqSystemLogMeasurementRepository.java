@@ -31,13 +31,14 @@ public final class JooqSystemLogMeasurementRepository implements SystemLogMeasur
     }
 
     @Override
-    public List<Measurement> list(Optional<String> deviceId, int limit) {
+    public List<Measurement> list(Optional<String> deviceId, Optional<String> vendor, Optional<String> source, int limit) {
         int bounded = Math.max(1, Math.min(limit, 1000));
         return transactions.inTransaction(dsl -> dsl.fetch(
                 "select measurement_id, device_id, vendor, source, measured_at, summary::text as summary, job_id "
                         + "from system_log_measurement where (cast({0} as text) is null or device_id = {0}) "
-                        + "order by measured_at desc, measurement_id limit {1}",
-                deviceId.orElse(null), bounded).stream()
+                        + "and (cast({1} as text) is null or vendor = {1}) and (cast({2} as text) is null or source = {2}) "
+                        + "order by measured_at desc, measurement_id limit {3}",
+                deviceId.orElse(null), vendor.orElse(null), source.orElse(null), bounded).stream()
                 .map(row -> new Measurement(row.get("measurement_id", String.class), row.get("device_id", String.class),
                         row.get("vendor", String.class), row.get("source", String.class),
                         row.get("measured_at", OffsetDateTime.class).toInstant(), row.get("summary", String.class),

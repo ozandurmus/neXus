@@ -80,6 +80,46 @@ class SystemLogMeasurementSchemaTest {
         }
     }
 
+    /** V159: Check Point numeric summaries join the table; a vendor can only carry its own sources. */
+    @Test
+    void checkPointNumericSummariesAreAcceptedOnlyForCheckPointGateSources() throws Exception {
+        try (var fixture = Ui2PostgresFixture.create("system_log_measurement_cp")) {
+            fixture.runFlyway();
+            try (var resource = getClass().getResourceAsStream("/db/migration/V159__syslog_measurement_check_point.sql")) {
+                assertNotNull(resource);
+                String sql = new String(resource.readAllBytes(), StandardCharsets.UTF_8);
+                try (var db = fixture.migrateConnection(); var statement = db.createStatement()) {
+                    db.setAutoCommit(false); statement.execute(sql); statement.execute(sql); db.rollback();
+                }
+            }
+            String device, job;
+            try (var db = fixture.migrateConnection()) {
+                device = Ui2Rows.insertDevice(db, Ui2Rows.insertCredentialReference(db), "ENROLLED");
+                job = CollectionEngineRows.insertJobWithCapability(db, device, "diagnostic_read");
+                audited(db, "update jobs set state='CLAIMED', lease_worker_id='general-synthetic', lease_epoch=1, "
+                        + "lease_expires_at=now()+interval '10 minutes' where job_id='" + job + "'");
+                audited(db, "update jobs set state='EXECUTING' where job_id='" + job + "'");
+            }
+            var repository = new JooqSystemLogMeasurementRepository(
+                    new JooqTransactionBoundary(DSL.using(fixture.appDataSource(), SQLDialect.POSTGRES)));
+            String summary = "{\"status\":\"MEASURED\",\"schema\":\"cp_syslog_numeric_v1\",\"kind\":\"stat\","
+                    + "\"files\":[{\"class\":\"messages\",\"present\":true,\"sizeBytes\":48210123,\"mtimeEpoch\":1760699400}]}";
+            assertTrue(repository.record(job, 1, device, "check_point", "cp_syslog_measure_stat", summary));
+            assertFalse(repository.record(job, 1, device, "check_point", "cp_syslog_measure_stat", summary), "one row per job and source");
+            assertThrows(RuntimeException.class, () -> repository.record(job, 1, device, "check_point", "pan_system", summary),
+                    "a Check Point row cannot carry a Palo Alto source");
+            assertThrows(RuntimeException.class, () -> repository.record(job, 1, device, "palo_alto", "cp_syslog_measure_ls_sa", summary),
+                    "a Palo Alto row cannot carry a Check Point source");
+            assertThrows(RuntimeException.class, () -> repository.record(job, 1, device, "check_point", "cp_syslog_measure_made_up", summary));
+            assertThrows(RuntimeException.class, () -> repository.record(job, 1, device, "check_point", "cp_syslog_measure_ls_sa",
+                    "{\"status\":\"MEASURED\",\"lines\":[\"synthetic-raw-marker\"]}"), "a raw body is refused by the schema");
+            var rows = repository.list(Optional.of(device), Optional.of("check_point"), Optional.of("cp_syslog_measure_stat"), 10);
+            assertEquals(1, rows.size());
+            assertTrue(rows.get(0).summaryJson().contains("48210123"));
+            assertTrue(repository.list(Optional.of(device), Optional.of("palo_alto"), Optional.empty(), 10).isEmpty());
+        }
+    }
+
     private static String scalar(Connection db, String sql) throws SQLException {
         try (var statement = db.createStatement(); var result = statement.executeQuery(sql)) {
             assertTrue(result.next());

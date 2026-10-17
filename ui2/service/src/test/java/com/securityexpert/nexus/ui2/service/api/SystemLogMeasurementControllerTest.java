@@ -40,4 +40,17 @@ class SystemLogMeasurementControllerTest {
         assertEquals(3, body.get("admitted"));
         verify(service).startAll("aiview-fp");
     }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void theListPassesTheDeviceVendorAndSourceFilters() {
+        var service = mock(SystemLogMeasurementService.class);
+        when(service.list(java.util.Optional.of("dev-1"), java.util.Optional.of("check_point"),
+                java.util.Optional.of("cp_syslog_measure_ls_sa"), 25)).thenReturn(List.of(Map.of("measurement_id", "m-1")));
+        var response = new SystemLogMeasurementController(service).list("dev-1", "check_point", "cp_syslog_measure_ls_sa", 25);
+        assertEquals(200, response.getStatusCode().value());
+        assertEquals(List.of(Map.of("measurement_id", "m-1")), response.getBody().get("measurements"));
+        new SystemLogMeasurementController(service).list(null, null, null, 200);
+        verify(service).list(java.util.Optional.empty(), java.util.Optional.empty(), java.util.Optional.empty(), 200);
+    }
 }

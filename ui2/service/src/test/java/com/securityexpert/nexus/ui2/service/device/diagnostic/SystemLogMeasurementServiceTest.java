@@ -105,7 +105,7 @@ class SystemLogMeasurementServiceTest {
         var devices = mock(DeviceRepository.class);
         when(devices.listAll()).thenReturn(List.of(device("fw-1", "gateway", "palo_alto", "edge-lab-01", "lab-cluster-01")));
         var store = mock(SystemLogMeasurementRepository.class);
-        when(store.list(Optional.empty(), 200)).thenReturn(List.of(new SystemLogMeasurementRepository.Measurement(
+        when(store.list(Optional.empty(), Optional.empty(), Optional.empty(), 200)).thenReturn(List.of(new SystemLogMeasurementRepository.Measurement(
                 "m-1", "fw-1", "palo_alto", "pan_system", Instant.parse("2026-10-15T03:12:00Z"),
                 "{\"status\":\"MEASURED\",\"entries\":100,\"fieldNames\":[\"receive_time\",\"eventid\"],"
                         + "\"receiveTimeFormat\":\"yyyy/MM/dd HH:mm:ss\",\"eventidTopCounts\":{\"general\":60,\"auth-fail\":40}}",
@@ -135,5 +135,39 @@ class SystemLogMeasurementServiceTest {
         when(http.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE)).thenReturn(false);
         assertSame(body, advice.beforeBodyWrite(body, null, null, null, request, null));
         assertEquals("edge-lab-01", ((List<Map<String, Object>>) body.get("measurements")).get(0).get("hostname"));
+    }
+
+    /** R1: a Check Point numeric summary keeps every size, mtime and count exact through the aiview masking. */
+    @Test
+    @SuppressWarnings("unchecked")
+    void checkPointNumericSummariesKeepLargeNumbersAndAreFilteredByVendorAndSource() {
+        var devices = mock(DeviceRepository.class);
+        when(devices.listAll()).thenReturn(List.of(device("gw-1", "gateway", "check_point", "edge-lab-02", null)));
+        var store = mock(SystemLogMeasurementRepository.class);
+        when(store.list(Optional.empty(), Optional.of("check_point"), Optional.of("cp_syslog_measure_stat"), 50)).thenReturn(List.of(
+                new SystemLogMeasurementRepository.Measurement("m-2", "gw-1", "check_point", "cp_syslog_measure_stat",
+                        Instant.parse("2026-10-17T03:05:00Z"),
+                        "{\"status\":\"MEASURED\",\"kind\":\"stat\",\"files\":[{\"class\":\"messages.1\","
+                                + "\"present\":true,\"inode\":\"i_0123456789abcdef\",\"sizeBytes\":20971520,"
+                                + "\"mtimeEpoch\":1760650000}]}", "job-2")));
+        var service = new SystemLogMeasurementService(devices, mock(JobAdmissionService.class), store, window(IN_WINDOW));
+        Map<String, Object> body = Map.of("measurements",
+                service.list(Optional.empty(), Optional.of("check_point"), Optional.of("cp_syslog_measure_stat"), 50));
+
+        byte[] key = "01234567890123456789012345678901".getBytes(StandardCharsets.UTF_8);
+        var advice = new PrivacyMaskingResponseBodyAdvice(new SubnetPreservingIpMasker(key), new TopologyNamePseudonymizer(key));
+        var http = mock(HttpServletRequest.class);
+        var request = mock(ServletServerHttpRequest.class);
+        when(request.getServletRequest()).thenReturn(http);
+        when(http.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE)).thenReturn(true);
+        var masked = (Map<String, Object>) advice.beforeBodyWrite(body, null, null, null, request, null);
+        var row = ((List<Map<String, Object>>) masked.get("measurements")).get(0);
+        assertNotEquals("edge-lab-02", row.get("hostname"));
+        var file = ((List<Map<String, Object>>) ((Map<String, Object>) row.get("summary")).get("files")).get(0);
+        assertEquals(20971520, file.get("sizeBytes"));
+        assertEquals(1760650000, file.get("mtimeEpoch"));
+        assertEquals("messages.1", file.get("class"));
+        assertEquals("i_0123456789abcdef", file.get("inode"));
+        assertEquals("cp_syslog_measure_stat", row.get("source"));
     }
 }
