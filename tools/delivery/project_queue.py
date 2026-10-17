@@ -416,7 +416,7 @@ def render_queue_md(
             item.get("id", ""),
         )
 
-    # P0/P1 render in full; P2/P3 carry id and status only. A cold start acts
+    # P0 renders in full, in-progress P1 as id and title, the rest as id and status only. A cold start acts
     # on the top of the queue -- a P2's title and target are looked up in its
     # own note when it is reached, and spending the 1500-word budget
     # (GOV.ORCH.5 2.1) on fifty of them crowds out the rows being worked. Every
@@ -426,10 +426,18 @@ def render_queue_md(
         priority = _priority_label(item.get("priority"))
         status = item.get("status", "")
         item_id = item.get("id", "")
-        if _priority_rank(item.get("priority")) <= 1:
+        rank = _priority_rank(item.get("priority"))
+        if rank == 0:
             title = _truncate(item.get("title", ""), TITLE_TRUNCATE)
             target = _truncate(item.get("target", ""), TARGET_TRUNCATE)
             lines.append(f"- {priority}/{status} {item_id} — {title} (target: {target})")
+        elif rank == 1 and status == "in_progress":
+            # 2026-10-17: only P0 rows carry title and target, and a P1 row
+            # only while it is being worked; a P1 that is still planned is
+            # listed by id like P2/P3 (ids are readable names, and the title
+            # and target are in the item when the row is reached).
+            title = _truncate(item.get("title", ""), TITLE_TRUNCATE)
+            lines.append(f"- {priority}/{status} {item_id} — {title}")
         else:
             lines.append(f"- {priority}/{status} {item_id}")
 

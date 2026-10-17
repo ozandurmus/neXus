@@ -20,3 +20,7 @@ It PASSES in a working tree where an earlier suite run has populated data/derive
   'python3 -m pytest tests/test_html_export_placeholder_integrity.py -q' -> 5 passed
 
 So the sentinel-as-data proof depends on gitignored runtime state rather than on the render contract alone. A clean CI checkout is the failing case -- the test is therefore effectively broken on CI and only green on a warmed-up developer/agent tree. Needs investigation against the placeholder-integrity contract; resolve the state dependency, do not adjust the assertion to match whichever state is convenient.
+
+## 2026-10-17 -- project JSON compacted (size budget)
+
+Title (full): Pre-existing: projectPlanData no longer carries __CRYPTO_JSON_PLACEHOLDER__ verbatim, test_project_plan_keeps_the_sentinel_token_as_data fails

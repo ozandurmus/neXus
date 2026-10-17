@@ -9,3 +9,7 @@ Product Owner, 2026-09-22 (with Backbox screenshots as the reference shape): an 
 2026-09-22: contract FROZEN on PO directive 'write the contracts' with the recommendation as the design (packs imported through an audited route, read-only steps, no local steps); see docs/design/TASK_EXECUTOR_AUTOMATION_CONTRACT.md section 4 for the alternatives that would need a decision record.
 
 2026-09-22 PO: steps are authored in the product under Operations (Backbox-style, step by step); decision record PO_DECISION_RECORD_2026_09_22_AUTOMATION_EDITOR_AND_SCRIPT_EXECUTION.md -- the editor chooses registered gated commands and fills their variable positions; read-only first; saved as the signed pack.
+
+## 2026-10-17 -- project JSON compacted (size budget)
+
+Title (full): Task Executor / Automation module: operator-authored, ordered command runbooks per firewall (Backbox-style)

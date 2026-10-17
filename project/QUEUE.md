@@ -1,99 +1,99 @@
 # Project queue (generated — do not edit; run: py tools/delivery/project_queue.py render)
-Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-10-15T22:47:48Z
+Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-10-17T01:41:40Z
 
 ## Now
 - NXS-LOCAL-0370 — Infoblox for real, observed facts follow every read, inventory for HTTPS vendors (automated_validated)
 ## Next
 - overview_acceptance_and_member_specific_tuning — Overview acceptance under aiview, and per-member settings not counted as drift (38 of 39 clusters show DIFF today) (planned)
 ## Open backlog (P1 first, then P2, then P3; in_progress before planned)
-- P0/in_progress cyber_controller_known_hosts_after_hosta_rebuild — Cyber Controller SFTP push to HOST-A fails after the reins (target: docs/design/HOST_A_REBUILD_RUNBOOK.md)
-- P0/in_progress hosta_rebuild_real_env_acceptance — HOST-A rebuilt 2026-09-25: PO browser acceptance under aiv (target: docs/design/HOST_A_REBUILD_RUNBOOK.md se)
-- P0/in_progress pan_serial_representation_identity_evidence_closure — PAN HA runtime peer-serial representation mismatch on one (target: Pre-CLASS-2 (OP.0b/OP.2), independent of)
-- P0/in_progress pan_tls_trust_rejects_corporate_ca — Palo Alto discovery cannot reach a Panorama fronted by a c (target: PanXmlApiTransport certificate verificat)
-- P0/in_progress private_replay_agent_operated_test_environment — Private Replay -- agent-operated privacy-filtered test env (target: docs/design/PRIVATE_REPLAY_ARCHITECTURE.)
+- P0/in_progress cyber_controller_known_hosts_after_hosta_rebuild — Cyber Controller SFTP push to HOST-A fails after the... (target: docs/design/HOST_A_REBUILD_RUNBOOK.md)
+- P0/in_progress hosta_rebuild_real_env_acceptance — HOST-A rebuilt 2026-09-25: PO browser acceptance under... (target: docs/design/HOST_A_REBUILD_RUNBOOK.md se)
+- P0/in_progress pan_serial_representation_identity_evidence_closure — PAN HA runtime peer-serial representation mismatch on... (target: Pre-CLASS-2 (OP.0b/OP.2), independent of)
+- P0/in_progress pan_tls_trust_rejects_corporate_ca — Palo Alto discovery cannot reach a Panorama fronted by a.. (target: PanXmlApiTransport certificate verificat)
+- P0/in_progress private_replay_agent_operated_test_environment — Private Replay -- agent-operated privacy-filtered test... (target: docs/design/PRIVATE_REPLAY_ARCHITECTURE.)
 - P0/in_progress recovery_offhost_key_custody — Off-host recovery artifacts and encryption-key custody (target: DEPLOY.1; blocks reliance on RB.3b recov)
-- P0/planned aiview_masking_manufactures_names_from_any_string — The AIView pseudonymizer turns any non-blank string into a (target: TopologyNamePseudonymizer.computeDeviceN)
-- P0/planned cluster_membership_lost_at_enrollment — Cluster membership is known at discovery but does not reac (target: enrollment/confirm path writing devices.)
+- P0/planned aiview_masking_manufactures_names_from_any_string — The AIView pseudonymizer turns any non-blank string into.. (target: TopologyNamePseudonymizer.computeDeviceN)
+- P0/planned cluster_membership_lost_at_enrollment — Cluster membership is known at discovery but does not... (target: enrollment/confirm path writing...)
 - P0/planned deploy1_evidence_egress_policy — DEPLOY.1 â€” Evidence Egress & Sharing Policy (target: DEPLOY.1)
-- P0/planned discovery_lateral_join_drops_cluster_members — Device display falls back to the management IP for every c (target: JooqDeviceRepository DEVICE_SELECT later)
-- P0/planned job_failure_reason_is_never_recorded — A FAILED job records no reason: outcome, terminal_reason a (target: jobs.outcome/terminal_reason/finished_at)
-- P0/planned ui2_microservices_deployment_split — Split K3s deployment into true independent microservices ( (target: )
-- P0/planned ui2_service_cannot_bootstrap_an_empty_database — The service cannot start against an empty database: a bean (target: MigrationStartupRunner vs DeviceComposit)
-- P0/planned ui2_ssh_strict_host_key_trust_in_production — UI2 SSH host-key trust: on mismatch connect, warn with the (target: ui2 worker HostKeyVerifier / TrustRuleRe)
-- P1/in_progress backup_screen_backbox_model — Backup screen on the Backbox model: per-device history, sc (target: PO directive 2026-09-22 (Backbox standar)
-- P1/in_progress cp_management_server_collect_duration — Check Point management server Collect took 243 s: vsx stat (target: ui2/worker/src/main/java/com/securityexp)
-- P1/in_progress credential_profiles — Credential profile / enterprise vault abstraction (target: 1.0 foundation)
-- P1/in_progress data_sanitizer — Data Sanitizer IMPLEMENTED: keyed anonymization of pcap/pc (target: docs/design/DATA_SANITIZER_CONTRACT.md)
-- P1/in_progress failover_p0_closure_set — Failover plan implementation landed; integration gate and (target: docs/design/PO_DECISION_RECORD_2026_10_0)
-- P1/in_progress https_inventory_collect_radware — Radware Collect: https_inventory_collect for the Cyber Con (target: docs/design/RADWARE_CYBER_CONTROLLER_BAC)
-- P1/in_progress module_per_pod_split — Module runtime landed; policy/configuration/compliance pod (target: docs/design/MODULE_POD_RUNTIME_CONTRACT.)
-- P1/in_progress nspm_wave1_acceptance — Policy hygiene and V144 lifecycle catalog landed; complian (target: docs/design/PO_DECISION_RECORD_2026_10_0)
-- P1/in_progress packet_analysis_shell — Packet Analysis shell IMPLEMENTED (engine stub): cases, st (target: docs/design/PO_DECISION_RECORD_2026_10_1)
-- P1/in_progress scheduled_fleet_backup_enable_decision — Fleet backups enabled: daily 02:00 Istanbul; 7-day PO rete (target: docs/design/INCIDENT_2026_10_10_BACKUP_F)
-- P1/in_progress ui2_b1_01_skeleton_ci_docker — UI2 B1-1 -- Gradle multi-module skeleton under ui2/, CI jo (target: workflow §5 B1-1)
-- P1/in_progress ui2_b1_03_identity_sessions — UI2 B1-3 -- identity & sessions (UnboundID LDAP bind, sing (target: workflow §5 B1-3)
-- P1/in_progress ui2_b1_04_collection_engine_core — UI2 B1-4 -- collection engine core (capability registry, s (target: workflow §5 B1-4)
-- P1/in_progress ui2_b1_07_jobs_screen_run_now_read — UI2 B1-7 -- Jobs screen + Run Now (read class) + step log (target: workflow §5 B1-7)
-- P1/in_progress vendor_radware_defensepro_backup — Radware DefensePro: configuration backup (HTTPS) (target: )
-- P1/planned aiview_masked_readonly_admin — aiview as a masked read-only administrator (PO 2026-09-23) (target: )
-- P1/planned aiview_masking_leak_audit — Masking leak audit: compare aiview responses against the r (target: PO 2026-09-22 proposal (separate masked)
-- P1/planned asa_fortinet_cluster_view — Cluster view for Cisco ASA failover pairs and FortiGate HA (target: )
-- P1/planned asa_fortinet_configuration_plane — Configuration plane for Cisco ASA and FortiGate (sections, (target: )
-- P1/planned backup_plane_separate_service — Deliver the backup plane as the independent service the re (target: docs/design/ASTRA_BACKUP_ENGINE_ARCHITEC)
-- P1/planned c7_c2_contract_shape_guard — Contract-shape guard for C7 §5.3 and C2 §6 admission batte (target: successor to the test PR #180 carried)
-- P1/planned cluster_diff_member_specific_tuning — Cluster DIFF: 38 of 39 clusters show member differences (2 (target: Overview contract; configurationProjecti)
-- P1/planned cluster_member_model_needs_second_query — Cluster members carry no hardware field in the gateway enu (target: Check Point management plane enumeration)
-- P1/planned cp_backup_empty_status_poll_loop — Check Point backup polls an empty 'show backup status' unt (target: BackupCapabilityExecutor status poll)
-- P1/planned cp_backup_free_space_parse_refusal — Check Point backup refused on 7 gateways (2026-09-22): nei (target: )
-- P1/planned cp_cphaprob_command_gate — Command gate: cphaprob stat, -a if, tablestat (target: AI_DEVELOPMENT_PROTOCOL)
-- P1/planned cp_failover_command_gate_batch — Command gate: cphaprob stat, cphaprob -a if, cphaprob tabl (target: PO request 2026-09-12; network-device co)
-- P1/planned cp_platform_facts_empty_on_nine_gateways — Check Point platform facts: 9 of 62 gateways have a facts (target: )
-- P1/planned cp_spark_backup_settings_sftp — Quantum Spark (Gaia Embedded) backup: 'backup settings to (target: docs/design/VENDOR_BACKUP_CONTRACTS_2026)
-- P1/planned cve_exception_review_dates — CVE exception reviews due 2026-10-31, 2026-11-05 and 2026- (target: security/baseline.yaml)
-- P1/planned discovery_connection_state_never_populated — Check Point discovery never records the management plane's (target: MgmtCliEnumerationAdapter candidate cons)
-- P1/planned discovery_failure_summary_stores_certificate_subject — A failed Palo Alto discovery stores the presented certific (target: PanXmlApiTransport certificate exception)
-- P1/planned failover_peer_reciprocal_agreement_check — Eighth stop-condition: both members must agree reciprocall (target: PO rule 2026-09-12; _pan_reciprocal_corr)
-- P1/planned failover_pilot_fence_is_compiled_in — Failover pilot allowlist is hardcoded in a constructor and (target: FailoverPilotAllowlist)
-- P1/planned failover_readiness_check_contract — Failover readiness contract carrying the PO's four semanti (target: PO_DECISION_RECORD 3)
-- P1/planned failover_recheck_on_request — A failover request must re-run every readiness check at th (target: PO rule 2026-09-12; OP.2 contract)
-- P1/planned failover_vsx_vsls_mentality_contract — VSX/VSLS semantics: CP per-VS state independent of chassis (target: PO statement 2026-09-12; needs vendor-se)
-- P1/planned github_open_pr_triage — Decide the 21 open GitHub PRs (2026-09-15..17): close 15 s (target: docs/operations/OPEN_PR_TRIAGE_2026_09_2)
-- P1/planned gov_orch_budget_ceiling_not_persisted_or_enforced — The dispatch budget ceiling is neither recorded nor enforc (target: GOV.ORCH.13 DL-3 budget column; scripts/)
-- P1/planned https_configuration_collect — Configuration reads for HTTPS vendors, separate from backu (target: docs/design/VENDOR_BACKUP_CONTRACTS_2026)
-- P1/planned inventory_row_does_not_say_why_a_device_is_unconfirmed — The inventory row shows Registered, not confirmed without (target: InventoryScreen row rendering; jobs.term)
-- P1/planned ldap_tls_trust_store_pin_and_format — LDAP TLS trust store cannot be given a PIN or format; a pr (target: docs/design/LDAP_TLS_TRUST_STORE_PIN_GAP)
-- P1/planned legacy_python_separation — Separate the legacy Python product from the neXus reposito (target: docs/design/LEGACY_PYTHON_SEPARATION_PLA)
-- P1/planned pan_active_active_not_excluded_as_failover_unit — PAN active/active is not excluded as a failover unit (CP l (target: docs/design/PAN_ACTIVE_ACTIVE_FAILOVER_U)
-- P1/planned pan_collection_contract_from_measurement — Write the Palo Alto collection contract from the PAN_COLLE (target: docs/design/PAN_COLLECTION_MEASUREMENT_B)
-- P1/planned platform_identity_facts_on_configuration — PO 2026-09-22 'kesinlikle': serial number, software versio (target: Contract docs/design/PLATFORM_IDENTITY_F)
-- P1/planned radware_defensepro_getcfg_measurement — Measure DefensePro backup through the Cyber Controller (ge (target: RADWARE_CYBER_CONTROLLER_BACKUP_API_GATE)
-- P1/planned relay_id_reuse_when_record_uncommitted — local_relay _next_id reissues an id whose JSON was never c (target: GOV.ORCH successor or scripts/local_rela)
-- P1/planned script_execution_module — Script Execution: operator scripts (.sh/.py/.jar or inline (target: PO decision record 2026-09-22 (automatio)
-- P1/planned spring_boot_4_spring_security_migration — Migrate to Spring Boot 4 / Spring Framework 7.0.9+ and Spr (target: 2026-11-05: CVE-2026-47884 baseline exce)
-- P1/planned task_executor_automation_module — Task Executor / Automation module: operator-authored, orde (target: )
-- P1/planned top_app_bar_search_is_not_an_input — The top app bar search is a styled box containing static t (target: ui2/frontend/src/shell/TopAppBar.tsx)
-- P1/planned transcript_per_run_listing — Jobs/Backups/Policy: list every run separately with type, (target: )
-- P1/planned ui2_audit_logging — Audit logging for device and user management (target: ui2)
-- P1/planned ui2_auth_placement_second_authenticated_surface — UI2 AUTH-PLACEMENT: where session and RBAC enforcement liv (target: PO_DECISION_RECORD_2026_09_13D section 3)
-- P1/planned ui2_b1_08_audit_logs_screen — UI2 B1-8 -- audit & logs screen (every mutation since B1-2 (target: workflow §5 B1-8)
-- P1/planned ui2_b1_09_device_workspace_first_read_screen — UI2 B1-9 -- device workspace: first read screen; RBAC visi (target: workflow §5 B1-9)
-- P1/planned ui2_b1_10_acceptance_scenario_concurrent_admins — UI2 B1-10 -- acceptance scenario A: three admins on one de (target: workflow §5 B1-10)
-- P1/planned ui2_b1_11_acceptance_scenario_worker_loss — UI2 B1-11 -- acceptance scenario B: worker killed mid-step (target: workflow §5 B1-11)
-- P1/planned ui2_database_roles_and_data_ownership — UI2 database roles: least-privilege runtime roles per serv (target: PO_DECISION_RECORD_2026_09_13D section 3)
-- P1/planned ui2_device_session_one_per_device — UI2 transport rule: one SSH session per device per run, a (target: PO rule 2026-09-12; CP discovery already)
-- P1/planned ui2_inventory_and_configuration_design_language — Apply the inventory and configuration design language: clu (target: docs/design/UI2_INVENTORY_AND_CONFIGURAT)
-- P1/planned ui2_ldap_config — LDAP Configuration Screen (target: ui2)
-- P1/planned ui2_networkpolicy_in_cluster_db_reach — NetworkPolicy restricting in-cluster reach to PostgreSQL (target: UI2_0_B1_01C successor)
-- P1/planned ui2_pan_transport_no_credentials_in_url — UI2 Palo Alto transport: no credential ever appears in a U (target: PAN_DISCOVERY_CONTRACT.md T-1/T-5; the P)
-- P1/planned ui2_private_play_and_mockup_view — Private Play & Mockup View integration (target: )
-- P1/planned ui2_reproducible_in_cluster_image_build — UI2 reproducible in-cluster image build and release assura (target: UI2_0_B1_01C in-cluster OCI build; 13D B)
-- P1/planned ui_effectiveness_review_after_refresh — After the UI review refresh is deployed and working: usabi (target: )
-- P1/planned vault_has_no_enforced_quota_on_a_shared_host — The artefact/recovery store has no enforced quota: local-p (target: deploy/ui2/35-artefact-store-pvc.yaml; s)
-- P1/planned vendor_bluecoat_proxysg_backup — Blue Coat / Symantec ProxySG: configuration backup (target: )
-- P1/planned vendor_cisco_asa_backup — Cisco ASA: running/startup config + native backup tar over (target: )
-- P1/planned vendor_fortinet_fortigate_backup — Fortinet FortiGate: full configuration backup over SSH inc (target: )
-- P1/planned vendor_panorama_backup — Palo Alto Panorama: device-bundle export + running config (target: )
-- P1/planned version_advisory_exposure — Security advisories and critical bugs for the versions the (target: )
+- P0/planned discovery_lateral_join_drops_cluster_members — Device display falls back to the management IP for every.. (target: JooqDeviceRepository DEVICE_SELECT later)
+- P0/planned job_failure_reason_is_never_recorded — A FAILED job records no reason: outcome, terminal_reason.. (target: jobs.outcome/terminal_reason/finished_at)
+- P0/planned ui2_microservices_deployment_split — Split K3s deployment into true independent microservices (target: )
+- P0/planned ui2_service_cannot_bootstrap_an_empty_database — The service cannot start against an empty database (target: MigrationStartupRunner vs...)
+- P0/planned ui2_ssh_strict_host_key_trust_in_production — UI2 SSH host-key trust: on mismatch connect (target: ui2 worker HostKeyVerifier / TrustRuleRe)
+- P1/in_progress backup_screen_backbox_model — Backup screen on the Backbox model: per-device history
+- P1/in_progress cp_management_server_collect_duration — Check Point management server Collect took 243 s: vsx stat
+- P1/in_progress credential_profiles — Credential profile / enterprise vault abstraction
+- P1/in_progress data_sanitizer — Data Sanitizer IMPLEMENTED: keyed anonymization of...
+- P1/in_progress failover_p0_closure_set — Failover plan implementation landed; integration gate
+- P1/in_progress https_inventory_collect_radware — Radware Collect: https_inventory_collect for the Cyber...
+- P1/in_progress module_per_pod_split — Module runtime landed; policy/configuration/compliance...
+- P1/in_progress nspm_wave1_acceptance — Policy hygiene and V144 lifecycle catalog landed
+- P1/in_progress packet_analysis_shell — Packet Analysis shell IMPLEMENTED (engine stub): cases
+- P1/in_progress scheduled_fleet_backup_enable_decision — Fleet backups enabled: daily 02:00 Istanbul
+- P1/in_progress ui2_b1_01_skeleton_ci_docker — UI2 B1-1 -- Gradle multi-module skeleton under ui2/
+- P1/in_progress ui2_b1_03_identity_sessions — UI2 B1-3 -- identity & sessions (UnboundID LDAP bind
+- P1/in_progress ui2_b1_04_collection_engine_core — UI2 B1-4 -- collection engine core (capability registry
+- P1/in_progress ui2_b1_07_jobs_screen_run_now_read — UI2 B1-7 -- Jobs screen + Run Now (read class) + step log
+- P1/in_progress vendor_radware_defensepro_backup — Radware DefensePro: configuration backup (HTTPS)
+- P1/planned aiview_masked_readonly_admin
+- P1/planned aiview_masking_leak_audit
+- P1/planned asa_fortinet_cluster_view
+- P1/planned asa_fortinet_configuration_plane
+- P1/planned backup_plane_separate_service
+- P1/planned c7_c2_contract_shape_guard
+- P1/planned cluster_diff_member_specific_tuning
+- P1/planned cluster_member_model_needs_second_query
+- P1/planned cp_backup_empty_status_poll_loop
+- P1/planned cp_backup_free_space_parse_refusal
+- P1/planned cp_cphaprob_command_gate
+- P1/planned cp_failover_command_gate_batch
+- P1/planned cp_platform_facts_empty_on_nine_gateways
+- P1/planned cp_spark_backup_settings_sftp
+- P1/planned cve_exception_review_dates
+- P1/planned discovery_connection_state_never_populated
+- P1/planned discovery_failure_summary_stores_certificate_subject
+- P1/planned failover_peer_reciprocal_agreement_check
+- P1/planned failover_pilot_fence_is_compiled_in
+- P1/planned failover_readiness_check_contract
+- P1/planned failover_recheck_on_request
+- P1/planned failover_vsx_vsls_mentality_contract
+- P1/planned github_open_pr_triage
+- P1/planned gov_orch_budget_ceiling_not_persisted_or_enforced
+- P1/planned https_configuration_collect
+- P1/planned inventory_row_does_not_say_why_a_device_is_unconfirmed
+- P1/planned ldap_tls_trust_store_pin_and_format
+- P1/planned legacy_python_separation
+- P1/planned pan_active_active_not_excluded_as_failover_unit
+- P1/planned pan_collection_contract_from_measurement
+- P1/planned platform_identity_facts_on_configuration
+- P1/planned radware_defensepro_getcfg_measurement
+- P1/planned relay_id_reuse_when_record_uncommitted
+- P1/planned script_execution_module
+- P1/planned spring_boot_4_spring_security_migration
+- P1/planned task_executor_automation_module
+- P1/planned top_app_bar_search_is_not_an_input
+- P1/planned transcript_per_run_listing
+- P1/planned ui2_audit_logging
+- P1/planned ui2_auth_placement_second_authenticated_surface
+- P1/planned ui2_b1_08_audit_logs_screen
+- P1/planned ui2_b1_09_device_workspace_first_read_screen
+- P1/planned ui2_b1_10_acceptance_scenario_concurrent_admins
+- P1/planned ui2_b1_11_acceptance_scenario_worker_loss
+- P1/planned ui2_database_roles_and_data_ownership
+- P1/planned ui2_device_session_one_per_device
+- P1/planned ui2_inventory_and_configuration_design_language
+- P1/planned ui2_ldap_config
+- P1/planned ui2_networkpolicy_in_cluster_db_reach
+- P1/planned ui2_pan_transport_no_credentials_in_url
+- P1/planned ui2_private_play_and_mockup_view
+- P1/planned ui2_reproducible_in_cluster_image_build
+- P1/planned ui_effectiveness_review_after_refresh
+- P1/planned vault_has_no_enforced_quota_on_a_shared_host
+- P1/planned vendor_bluecoat_proxysg_backup
+- P1/planned vendor_cisco_asa_backup
+- P1/planned vendor_fortinet_fortigate_backup
+- P1/planned vendor_panorama_backup
+- P1/planned version_advisory_exposure
 - P2/in_progress cp_policy_chunked_hits_acceptance
 - P2/in_progress cp_spark_exec_channel_rejected
 - P2/in_progress cp_vsx_interfaces_identical_to_physical

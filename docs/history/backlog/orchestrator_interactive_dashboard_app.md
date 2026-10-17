@@ -70,3 +70,9 @@ DEFERRED, explicitly out of scope for this dispatch (their own future backlog it
 - Any true live-session message channel (would require the orchestrator to persist and reconnect to a real claude session id -- a separate, larger movement if ever pursued; NOT bundled here).
 
 This boundary is the final word for a first dispatch; the implementing engineer session should treat 'IN SCOPE' as build-it and 'DEFERRED' as report-if-tempted-to-build-it-anyway-via-RELAY_QUESTION, not as open questions requiring another Product Owner design round.
+
+## 2026-10-17 -- project JSON compacted (size budget)
+
+Title (full): Interactive PO + Orchestrator workbench -- human-action inbox, live movement tracking, detail panel, message delivery, authorized command routing, integration visibility (supersedes the earlier read-only-dashboard framing)
+
+Target (full): Follow-up to relay/NXS-LOCAL-0013 (GOV_PO_3_ORCHESTRATOR_OBSERVABILITY, merged PR #129, terminal-only 'orchestrator watch'); AMENDED 2026-09-08 per Product Owner-provided design review (external architecture pass, 'Astra') before dispatch; explicitly requested by the Product Owner as the next dispatch once queued

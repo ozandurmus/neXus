@@ -17,3 +17,7 @@ Fixture: tests/fixtures/project_plan_payload_baseline.json current_build == 'ui2
 Fix direction (NOT applied -- reporting only, per task scope): regenerate the baseline fixture from the live payload rather than hand-patching selected keys.
 
 Resolved 2026-09-12, but NOT by regenerating the fixture. The fixture's value is that it predates the GOV.ORCH.8 move; regenerating it from the live payload would compare the payload to itself. The real defect was in the test: it asserted equality on current_build, backlog_counts, the progress percentages, track progress, completed_feature_ids and backlog_ids against a frozen pre-move capture, i.e. it asserted that project state never changes -- which scripts/project_queue.py exists to change. Measured before changing anything: no baseline build id was lost (194 baseline ids, all reachable across live plus archive), and the two new ids are today's recorded builds. The test now pins the permanent invariant instead -- nothing recorded before the move may become unreachable, the archive must account for itself, and backlog/feature ids only accrue -- and was proven to fail by name when a lost id is injected.
+
+## 2026-10-17 -- project JSON compacted (size budget)
+
+Title (full): Regression: project_plan_payload_baseline.json current_build not regenerated with roadmap.json, test_project_plan_render_equivalence fails

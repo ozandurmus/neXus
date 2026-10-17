@@ -9,3 +9,7 @@ Correction: 'Şu an için bu ekranlar ok' approved the five Overview facts (not 
 Overview done (estate map, Fable spec). Next: merge Devices and Config into one device screen (approved).
 
 2026-09-25: one device screen shipped -- Configuration is a tab of Devices (device and cluster, Check Point and Palo Alto only), the Config nav item is gone, old ?screen=configuration links land on Devices with the tab open; Devices list takes change_state=changed and cluster_diff=present; 'Read configuration, all' in the Devices toolbar.
+
+## 2026-10-17 -- project JSON compacted (size budget)
+
+Title (full): UI: one device screen, one count vocabulary, executive Overview (5 facts)

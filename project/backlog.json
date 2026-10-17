@@ -4,16 +4,16 @@
     {
       "id": "cp_cphaprob_peer_observation_corroboration",
       "category": "Identity / additional validation",
-      "title": "Extract peer-member rows from cphaprob stat for additional cluster-identity corroboration",
+      "title": "Extract peer-member rows from cphaprob stat for...",
       "status": "planned",
       "priority": "P3",
-      "target": "Follow-up to OP.0a.P7 (PAN HA peer-pairing identity closure)",
+      "target": "Follow-up to OP.0a.P7 (PAN HA peer-pairing...",
       "note": "see docs/history/backlog/cp_cphaprob_peer_observation_corroboration.md"
     },
     {
       "id": "pan_ha_serial_identity_hardening",
       "category": "Identity / architecture",
-      "title": "PAN HA pair operational identity should consider serial, not just hostname",
+      "title": "PAN HA pair operational identity should consider serial",
       "status": "planned",
       "priority": "P2",
       "target": "Pre-CLASS-2 (OP.0b/OP.2) architecture decision",
@@ -49,34 +49,34 @@
     {
       "id": "pan_serial_representation_identity_evidence_closure",
       "category": "Identity / architecture",
-      "title": "PAN HA runtime peer-serial representation mismatch on one member -- root cause unknown",
+      "title": "PAN HA runtime peer-serial representation mismatch on...",
       "status": "in_progress",
       "priority": "P0",
-      "target": "Pre-CLASS-2 (OP.0b/OP.2), independent of OP.0b.0 vendor-semantics confirmation",
+      "target": "Pre-CLASS-2 (OP.0b/OP.2), independent of...",
       "note": "see docs/history/backlog/pan_serial_representation_identity_evidence_closure.md"
     },
     {
       "id": "pytest_xdist_privacy_scan_scratch_file_race",
       "category": "Test infrastructure / hygiene",
-      "title": "tests/test_gov_po_3_ci_privacy_gate_baseline.py's transient scratch fixture can crash a concurrently-running full-repository privacy scan under pytest-xdist",
+      "title": "tests/test_gov_po_3_ci_privacy_gate_baseline.py's...",
       "status": "planned",
       "priority": "P3",
-      "target": "Test-infrastructure follow-up; discovered incidentally while validating dlp_scanner_prose_collision_in_frozen_records",
+      "target": "Test-infrastructure follow-up; discovered...",
       "note": "see docs/history/backlog/pytest_xdist_privacy_scan_scratch_file_race.md"
     },
     {
       "id": "private_replay_agent_operated_test_environment",
       "category": "Architecture / Testing / Security",
-      "title": "Private Replay -- agent-operated privacy-filtered test environment derived from real collection, for the coding agent to exercise the product UI/workflows without seeing real device data",
+      "title": "Private Replay -- agent-operated privacy-filtered test...",
       "status": "in_progress",
       "priority": "P0",
-      "target": "docs/design/PRIVATE_REPLAY_ARCHITECTURE.md -- FROZEN -- PRODUCT OWNER APPROVED, 2026-09-08, Phase A only (offline exporter + PRIVATE_REPLAY + SYNTHETIC_SCENARIO). Phase B (LIVE_PRIVATE, agent-mediated real collection) stays explicitly deferred/unauthorized within that same document. Delivery slice 1 (dependency inventory + typed privacy/fidelity policy + isolated replay provider design) DELIVERED 2026-09-09 (relay/NXS-LOCAL-0027) -- see updated note. Next dispatchable unit: delivery slice 2 (Phase A exporter -- the offline typed exporter, package validator and relationship checks, extending utils/support_bundle.py's primitives, using synthetic inputs first).",
+      "target": "docs/design/PRIVATE_REPLAY_ARCHITECTURE.md",
       "note": "see docs/history/backlog/private_replay_agent_operated_test_environment.md"
     },
     {
       "category": "UI 2.0 (Java product line)",
       "id": "ui2_b1_01_skeleton_ci_docker",
-      "title": "UI2 B1-1 -- Gradle multi-module skeleton under ui2/, CI job, Docker image, Testcontainers PostgreSQL, P-1 dependency-graph test",
+      "title": "UI2 B1-1 -- Gradle multi-module skeleton under ui2/",
       "priority": "P1 -- UI 2.0",
       "status": "in_progress",
       "note": "see docs/history/backlog/ui2_b1_01_skeleton_ci_docker.md",
@@ -85,7 +85,7 @@
     {
       "category": "UI 2.0 (Java product line)",
       "id": "ui2_b1_03_identity_sessions",
-      "title": "UI2 B1-3 -- identity & sessions (UnboundID LDAP bind, single-active-session table as tests, role bindings, E1-E7 on HTTP)",
+      "title": "UI2 B1-3 -- identity & sessions (UnboundID LDAP bind",
       "priority": "P1 -- UI 2.0",
       "status": "in_progress",
       "note": "see docs/history/backlog/ui2_b1_03_identity_sessions.md",
@@ -94,7 +94,7 @@
     {
       "category": "UI 2.0 (Java product line)",
       "id": "ui2_b1_04_collection_engine_core",
-      "title": "UI2 B1-4 -- collection engine core (capability registry, step executor with C2 crash-safe job record, parser framework, evidence writer; SSH exec transport only; PAN XML API / SFTP as interfaces)",
+      "title": "UI2 B1-4 -- collection engine core (capability registry",
       "priority": "P1 -- UI 2.0",
       "status": "in_progress",
       "note": "see docs/history/backlog/ui2_b1_04_collection_engine_core.md",
@@ -112,7 +112,7 @@
     {
       "category": "UI 2.0 (Java product line)",
       "id": "ui2_b1_08_audit_logs_screen",
-      "title": "UI2 B1-8 -- audit & logs screen (every mutation since B1-2 visible)",
+      "title": "UI2 B1-8 -- audit & logs screen (every mutation since...",
       "priority": "P1 -- UI 2.0",
       "status": "planned",
       "note": "",
@@ -121,7 +121,7 @@
     {
       "category": "UI 2.0 (Java product line)",
       "id": "ui2_b1_09_device_workspace_first_read_screen",
-      "title": "UI2 B1-9 -- device workspace: first read screen; RBAC visible-but-refused proven",
+      "title": "UI2 B1-9 -- device workspace: first read screen",
       "priority": "P1 -- UI 2.0",
       "status": "planned",
       "note": "",
@@ -130,7 +130,7 @@
     {
       "category": "UI 2.0 (Java product line)",
       "id": "ui2_b1_10_acceptance_scenario_concurrent_admins",
-      "title": "UI2 B1-10 -- acceptance scenario A: three admins on one device, single-session takeover/refuse, correct state throughout",
+      "title": "UI2 B1-10 -- acceptance scenario A: three admins on one...",
       "priority": "P1 -- UI 2.0",
       "status": "planned",
       "note": "",
@@ -139,7 +139,7 @@
     {
       "category": "UI 2.0 (Java product line)",
       "id": "ui2_b1_11_acceptance_scenario_worker_loss",
-      "title": "UI2 B1-11 -- acceptance scenario B: worker killed mid-step -> OUTCOME_UNKNOWN, no duplicate device contact, recovery path visible",
+      "title": "UI2 B1-11 -- acceptance scenario B: worker killed...",
       "priority": "P1 -- UI 2.0",
       "status": "planned",
       "note": "see docs/history/backlog/ui2_b1_11_acceptance_scenario_worker_loss.md",
@@ -148,16 +148,16 @@
     {
       "id": "pan_active_active_not_excluded_as_failover_unit",
       "category": "safety",
-      "title": "PAN active/active is not excluded as a failover unit (CP load-sharing is)",
+      "title": "PAN active/active is not excluded as a failover unit",
       "status": "planned",
       "priority": "P1",
-      "target": "docs/design/PAN_ACTIVE_ACTIVE_FAILOVER_UNIT_GAP_2026_09_12.md; blocked on open decision op_aa_vsls_scope",
+      "target": "docs/design/PAN_ACTIVE_ACTIVE_FAILOVER_UNIT_GAP_2026_09_12.md; blocked on open decision op_aa_vsls_scop...",
       "note": ""
     },
     {
       "id": "project_plan_crypto_placeholder_sentinel_lost",
       "category": "Test correctness / CI coverage gap",
-      "title": "Pre-existing: projectPlanData no longer carries __CRYPTO_JSON_PLACEHOLDER__ verbatim, test_project_plan_keeps_the_sentinel_token_as_data fails",
+      "title": "Pre-existing: projectPlanData no longer carries...",
       "status": "planned",
       "priority": "P2",
       "target": "",
@@ -166,7 +166,7 @@
     {
       "id": "privacy_baseline_tests_not_idempotent_runtime_trust_material",
       "category": "Reliability / Test Infrastructure",
-      "title": "Pre-existing: full suite is not idempotent -- a first run creates gitignored data/.support_hmac.key, then AC6/AC1 privacy-baseline tests fail on the second run",
+      "title": "Pre-existing: full suite is not idempotent",
       "status": "planned",
       "priority": "P2",
       "target": "",
@@ -175,10 +175,10 @@
     {
       "id": "ldap_tls_trust_store_pin_and_format",
       "category": "security",
-      "title": "LDAP TLS trust store cannot be given a PIN or format; a protected PKCS12 loads empty",
+      "title": "LDAP TLS trust store cannot be given a PIN or format",
       "status": "planned",
       "priority": "P1",
-      "target": "docs/design/LDAP_TLS_TRUST_STORE_PIN_GAP_2026_09_12.md",
+      "target": "docs/design/LDAP_TLS_TRUST_STORE_PIN_GAP_2026_09_12.m...",
       "note": ""
     },
     {
@@ -202,34 +202,34 @@
     {
       "id": "cp_failover_command_gate_batch",
       "category": "evidence",
-      "title": "Command gate: cphaprob stat, cphaprob -a if, cphaprob tablestat for failover checks",
+      "title": "Command gate: cphaprob stat, cphaprob -a if",
       "status": "planned",
       "priority": "P1",
-      "target": "PO request 2026-09-12; network-device command gate required",
+      "target": "PO request 2026-09-12; network-device...",
       "note": ""
     },
     {
       "id": "failover_peer_reciprocal_agreement_check",
       "category": "safety",
-      "title": "Eighth stop-condition: both members must agree reciprocally on local/peer roles in one pass",
+      "title": "Eighth stop-condition: both members must agree...",
       "status": "planned",
       "priority": "P1",
-      "target": "PO rule 2026-09-12; _pan_reciprocal_correspondence exists but is not a stop-condition",
+      "target": "PO rule 2026-09-12...",
       "note": ""
     },
     {
       "id": "failover_vsx_vsls_mentality_contract",
       "category": "evidence",
-      "title": "VSX/VSLS semantics: CP per-VS state independent of chassis, VSLS off, static assignment; PAN vsys chassis-bound",
+      "title": "VSX/VSLS semantics: CP per-VS state independent of chassis",
       "status": "planned",
       "priority": "P1",
-      "target": "PO statement 2026-09-12; needs vendor-semantic contract",
+      "target": "PO statement 2026-09-12; needs...",
       "note": ""
     },
     {
       "id": "failover_recheck_on_request",
       "category": "safety",
-      "title": "A failover request must re-run every readiness check at that moment; an earlier green never authorizes",
+      "title": "A failover request must re-run every readiness check at...",
       "status": "planned",
       "priority": "P1",
       "target": "PO rule 2026-09-12; OP.2 contract",
@@ -265,7 +265,7 @@
     {
       "id": "c7_c2_contract_shape_guard",
       "category": "governance",
-      "title": "Contract-shape guard for C7 §5.3 and C2 §6 admission batteries",
+      "title": "Contract-shape guard for C7 §5.3 and C2 §6 admission...",
       "status": "planned",
       "priority": "P1",
       "target": "successor to the test PR #180 carried",
@@ -283,7 +283,7 @@
     {
       "id": "relay_id_reuse_when_record_uncommitted",
       "category": "governance",
-      "title": "local_relay _next_id reissues an id whose JSON was never committed",
+      "title": "local_relay _next_id reissues an id whose JSON was never...",
       "status": "planned",
       "priority": "P1",
       "target": "GOV.ORCH successor or scripts/local_relay.py",
@@ -292,79 +292,79 @@
     {
       "id": "ui2_pan_transport_no_credentials_in_url",
       "category": "security",
-      "title": "UI2 Palo Alto transport: no credential ever appears in a URL, query string, log line or exception (successor to pan_auth_transport_convergence)",
+      "title": "UI2 Palo Alto transport: no credential ever appears in a...",
       "status": "planned",
       "priority": "P1",
-      "target": "PAN_DISCOVERY_CONTRACT.md T-1/T-5; the PAN discovery transport movement carries this as an invariant with a test",
+      "target": "PAN_DISCOVERY_CONTRACT.md T-1/T-5; the PAN...",
       "note": ""
     },
     {
       "id": "ui2_ssh_strict_host_key_trust_in_production",
       "category": "Security / Deployment",
-      "title": "UI2 SSH host-key trust: on mismatch connect, warn with the MDS view alongside, audit -- strict refusal is a configurable production option, off by default (PO 2026-09-13, record 13F)",
+      "title": "UI2 SSH host-key trust: on mismatch connect",
       "status": "planned",
       "priority": "P0 -- production-blocking before production deployment",
-      "target": "ui2 worker HostKeyVerifier / TrustRuleResolver; successor to cp_production_ssh_host_key_trust_hardening + cp_ssh_trust_r2_prod_server",
+      "target": "ui2 worker HostKeyVerifier / TrustRuleResolver",
       "note": ""
     },
     {
       "id": "ui2_device_session_one_per_device",
       "category": "evidence",
-      "title": "UI2 transport rule: one SSH session per device per run, a channel per command; a probe never opens a second session",
+      "title": "UI2 transport rule: one SSH session per device per run",
       "status": "planned",
       "priority": "P1",
-      "target": "PO rule 2026-09-12; CP discovery already obeys it (CP_AND_VSX_DISCOVERY_CONTRACT.md T-1); collection transports must too",
+      "target": "PO rule 2026-09-12; CP discovery already...",
       "note": ""
     },
     {
       "id": "ui2_database_roles_and_data_ownership",
       "category": "Data Plane / Security",
-      "title": "UI2 database roles: least-privilege runtime roles per service, decided together with 13D DATA-OWNERSHIP (one schema vs. one per service)",
+      "title": "UI2 database roles: least-privilege runtime roles per...",
       "status": "planned",
       "priority": "P1",
-      "target": "PO_DECISION_RECORD_2026_09_13D section 3 DATA-OWNERSHIP; UI2_0_C1 (Flyway sole authority, audit trigger)",
+      "target": "PO_DECISION_RECORD_2026_09_13D section 3...",
       "note": ""
     },
     {
       "id": "ui2_auth_placement_second_authenticated_surface",
       "category": "identity",
-      "title": "UI2 AUTH-PLACEMENT: where session and RBAC enforcement live once a second deployable service exists (per-service, or one gateway in front)",
+      "title": "UI2 AUTH-PLACEMENT: where session and RBAC enforcement...",
       "status": "planned",
       "priority": "P1",
-      "target": "PO_DECISION_RECORD_2026_09_13D section 3; blocks any second authenticated surface, not the discovery transport",
+      "target": "PO_DECISION_RECORD_2026_09_13D section 3...",
       "note": ""
     },
     {
       "id": "ui2_reproducible_in_cluster_image_build",
       "category": "Supply Chain / Validation",
-      "title": "UI2 reproducible in-cluster image build and release assurance, per service (successor to deploy1_release_assurance)",
+      "title": "UI2 reproducible in-cluster image build and release...",
       "status": "planned",
       "priority": "P1",
-      "target": "UI2_0_B1_01C in-cluster OCI build; 13D BUILD-AND-RELEASE",
+      "target": "UI2_0_B1_01C in-cluster OCI build; 13D...",
       "note": ""
     },
     {
       "id": "pan_collection_contract_from_measurement",
       "category": "collection",
-      "title": "Write the Palo Alto collection contract from the PAN_COLLECTION_MEASUREMENT_BRIEF_2026_09_13 measurement run, blocked until the Product Owner executes it",
+      "title": "Write the Palo Alto collection contract from the...",
       "status": "planned",
       "priority": "P1",
-      "target": "docs/design/PAN_COLLECTION_MEASUREMENT_BRIEF_2026_09_13.md",
+      "target": "docs/design/PAN_COLLECTION_MEASUREMENT_BRIEF_2026_09_13.m...",
       "note": ""
     },
     {
       "id": "ui2_password_policy_configurable",
       "category": "identity",
-      "title": "UI2 local password policy, configurable and off by default: minimum/maximum length, character classes, not equal to the username, optional expiry and history -- a production posture switch, never a development obligation (PO 2026-09-14)",
+      "title": "UI2 local password policy, configurable and off by default",
       "status": "planned",
       "priority": "P2",
-      "target": "PasswordChangeService and LocalIdentityAdministration set-password paths; application.yml ui2.local-auth.*; frontend shows the active rules on the change screen",
+      "target": "PasswordChangeService and...",
       "note": ""
     },
     {
       "id": "device_admin_accounts_and_privileges",
       "category": "collection",
-      "title": "Device administrator accounts and their privileges, collected and shown per device",
+      "title": "Device administrator accounts and their privileges",
       "status": "planned",
       "priority": "P2",
       "target": "",
@@ -373,7 +373,7 @@
     {
       "id": "antigravity_provider_adapter",
       "category": "governance",
-      "title": "Antigravity as a third engineer provider: probe, contract, adapter",
+      "title": "Antigravity as a third engineer provider: probe, contract",
       "status": "planned",
       "priority": "P2",
       "target": "",
@@ -382,25 +382,25 @@
     {
       "id": "gov_orch_budget_ceiling_not_persisted_or_enforced",
       "category": "governance",
-      "title": "The dispatch budget ceiling is neither recorded nor enforceable for the default provider",
+      "title": "The dispatch budget ceiling is neither recorded nor...",
       "status": "planned",
       "priority": "P1",
-      "target": "GOV.ORCH.13 DL-3 budget column; scripts/orchestrator.py state record",
+      "target": "GOV.ORCH.13 DL-3 budget column...",
       "note": ""
     },
     {
       "id": "gov_orch_turn_counter_blind_to_codex_stream",
       "category": "governance",
-      "title": "The turn counter reads one turn for a whole multi-million-token default-provider dispatch",
+      "title": "The turn counter reads one turn for a whole...",
       "status": "planned",
       "priority": "P2",
-      "target": "GOV.ORCH.4 section 3.1; scripts/orchestrator_usage.py",
+      "target": "GOV.ORCH.4 section 3.1...",
       "note": ""
     },
     {
       "id": "workbench_borrow_from_agent_orchestration_tools",
       "category": "governance",
-      "title": "Workbench: borrow the features that make a fleet of agents followable",
+      "title": "Workbench: borrow the features that make a fleet of...",
       "status": "planned",
       "priority": "P3",
       "target": "GOV.ORCH.4 workbench successor",
@@ -409,7 +409,7 @@
     {
       "id": "device_role_vocabulary_declared_twice",
       "category": "governance",
-      "title": "The device-role vocabulary is a string literal in Java and again in the CHECK constraint",
+      "title": "The device-role vocabulary is a string literal in Java",
       "status": "planned",
       "priority": "P3",
       "target": "14I MS-1 successor",
@@ -418,28 +418,28 @@
     {
       "id": "waf_fortiweb_capability_scope_and_measurement",
       "category": "collection",
-      "title": "WAF (FortiWeb): decide scope, then measurement record and command gate before any implementation",
+      "title": "WAF (FortiWeb): decide scope, then measurement record",
       "status": "planned",
       "priority": "P3",
-      "target": "docs/reference/WAF_FORTIWEB_EXTERNAL_SOURCE_SURVEY_2026_09_15.md; blocked on AUTH-PLACEMENT (13D section 3)",
+      "target": "docs/reference/WAF_FORTIWEB_EXTERNAL_SOURCE_SURVEY_2026_09_15.md; blocked on AUTH-PLACEMENT (13D section 3...",
       "note": ""
     },
     {
       "id": "ui2_service_cannot_bootstrap_an_empty_database",
       "category": "UI 2.0 (Java product line)",
-      "title": "The service cannot start against an empty database: a bean reads gate_registry during context refresh, before the ApplicationRunner that runs Flyway",
+      "title": "The service cannot start against an empty database",
       "status": "planned",
       "priority": "P0",
-      "target": "MigrationStartupRunner vs DeviceCompositionConfiguration.deviceCapabilityRegistry; observed HOST-A 2026-09-15",
+      "target": "MigrationStartupRunner vs...",
       "note": ""
     },
     {
       "id": "job_failure_reason_is_never_recorded",
       "category": "evidence",
-      "title": "A FAILED job records no reason: outcome, terminal_reason and finished_at stay empty and the run summary is circular",
+      "title": "A FAILED job records no reason: outcome, terminal_reason...",
       "status": "planned",
       "priority": "P0",
-      "target": "jobs.outcome/terminal_reason/finished_at; blocks ui2_b1_07 and ui2_b1_08 being useful",
+      "target": "jobs.outcome/terminal_reason/finished_at...",
       "note": ""
     },
     {
@@ -481,7 +481,7 @@
     {
       "id": "ui2_microservices_deployment_split",
       "category": "Architecture",
-      "title": "Split K3s deployment into true independent microservices (ui2-frontend, ui2-service, ui2-worker) without full rollout",
+      "title": "Split K3s deployment into true independent microservices",
       "status": "planned",
       "priority": "P0",
       "target": "",
@@ -499,25 +499,25 @@
     {
       "id": "failover_p0_closure_set",
       "category": "failover",
-      "title": "Failover plan implementation landed; integration gate and attended real trial pending",
+      "title": "Failover plan implementation landed; integration gate",
       "status": "in_progress",
       "priority": "P1",
-      "target": "docs/design/PO_DECISION_RECORD_2026_10_06_FAILOVER_EXECUTION_ESTATE.md",
+      "target": "docs/design/PO_DECISION_RECORD_2026_10_06_FAILOVER_EXECUTION_ESTATE.m...",
       "note": ""
     },
     {
       "id": "failover_phase_d_has_no_build_record",
       "category": "failover",
-      "title": "Failover Engine Phase D was implemented and externally reviewed but carries no build_history record",
+      "title": "Failover Engine Phase D was implemented and externally...",
       "status": "planned",
       "priority": "P2",
-      "target": "ui2 job-engine failover schedule package; CLAUDE_FAILOVER_PHASE_D_REVIEW.md and CODEX_FAILOVER_PHASE_D_REVIEW.md",
+      "target": "ui2 job-engine failover schedule package...",
       "note": ""
     },
     {
       "id": "failover_pilot_fence_is_compiled_in",
       "category": "failover",
-      "title": "Failover pilot allowlist is hardcoded in a constructor and seeds AIView pseudonyms of real fleet devices instead of being recorded configuration",
+      "title": "Failover pilot allowlist is hardcoded in a constructor",
       "status": "planned",
       "priority": "P1",
       "target": "FailoverPilotAllowlist",
@@ -526,7 +526,7 @@
     {
       "id": "java_product_plan_build_selection_is_stale",
       "category": "project_state",
-      "title": "java_product_plan.json product_build_ids stops at NXS-LOCAL-0165 and omits every UI2 build since, so the Administration project-plan payload under-reports the Java product",
+      "title": "java_product_plan.json product_build_ids stops at...",
       "status": "planned",
       "priority": "P2",
       "target": "project/java_product_plan.json product_build_ids",
@@ -535,97 +535,97 @@
     {
       "id": "backup_plane_separate_service",
       "category": "backup",
-      "title": "Deliver the backup plane as the independent service the reviewed architecture specifies (own port, own vault volume, ui2-service forwards to it), then re-run the security review against the built system",
+      "title": "Deliver the backup plane as the independent service the...",
       "status": "planned",
       "priority": "P1",
-      "target": "docs/design/ASTRA_BACKUP_ENGINE_ARCHITECTURE_REVIEW.md; PO decision 2026-09-20 relay NXS-LOCAL-0347 seq 5",
+      "target": "docs/design/ASTRA_BACKUP_ENGINE_ARCHITECTURE_REVIEW.md; PO decision 2026-09-20 relay NXS-LOCAL-0347 seq...",
       "note": ""
     },
     {
       "id": "vault_has_no_enforced_quota_on_a_shared_host",
       "category": "backup",
-      "title": "The artefact/recovery store has no enforced quota: local-path ignores the PVC size, evidence and recovery planes share one directory tree, and the host also carries another product's production workload",
+      "title": "The artefact/recovery store has no enforced quota",
       "status": "planned",
       "priority": "P1",
-      "target": "deploy/ui2/35-artefact-store-pvc.yaml; storage class local-path; PO decision needed on storage class or filesystem quota",
+      "target": "deploy/ui2/35-artefact-store-pvc.yaml...",
       "note": ""
     },
     {
       "id": "discovery_lateral_join_drops_cluster_members",
       "category": "discovery",
-      "title": "Device display falls back to the management IP for every cluster member: the discovery lateral join excludes any candidate that has a parent, so name, model and cluster reference are all lost",
+      "title": "Device display falls back to the management IP for every...",
       "status": "planned",
       "priority": "P0",
-      "target": "JooqDeviceRepository DEVICE_SELECT lateral join; regression from 9f46cc0 (NXS-LOCAL-0346)",
+      "target": "JooqDeviceRepository DEVICE_SELECT lateral join",
       "note": ""
     },
     {
       "id": "cluster_membership_lost_at_enrollment",
       "category": "discovery",
-      "title": "Cluster membership is known at discovery but does not reach enrolled devices: 48 member candidates carry a cluster reference while only 6 device rows do, and no ENROLLED device has one",
+      "title": "Cluster membership is known at discovery but does not...",
       "status": "planned",
       "priority": "P0",
-      "target": "enrollment/confirm path writing devices.cluster_member_ref",
+      "target": "enrollment/confirm path writing...",
       "note": ""
     },
     {
       "id": "discovery_connection_state_never_populated",
       "category": "discovery",
-      "title": "Check Point discovery never records the management plane's own connection state: the adapter passes an empty optional although the enumeration response carries it",
+      "title": "Check Point discovery never records the management...",
       "status": "planned",
       "priority": "P1",
-      "target": "MgmtCliEnumerationAdapter candidate construction; discovery_candidate.connection_state",
+      "target": "MgmtCliEnumerationAdapter candidate construction",
       "note": ""
     },
     {
       "id": "cluster_member_model_needs_second_query",
       "category": "discovery",
-      "title": "Cluster members carry no hardware field in the gateway enumeration, so model and appliance type stay unknown for them unless a second management-plane query supplies it",
+      "title": "Cluster members carry no hardware field in the gateway...",
       "status": "planned",
       "priority": "P1",
-      "target": "Check Point management plane enumeration; measured against two real exports",
+      "target": "Check Point management plane enumeration...",
       "note": ""
     },
     {
       "id": "aiview_masking_manufactures_names_from_any_string",
       "category": "privacy",
-      "title": "The AIView pseudonymizer turns any non-blank string into a convincing hostname, so a fallback management address renders as a healthy device name and hides the data gap from the one persona the constitution mandates for verification",
+      "title": "The AIView pseudonymizer turns any non-blank string into...",
       "status": "planned",
       "priority": "P0",
-      "target": "TopologyNamePseudonymizer.computeDeviceName; interacts with discovery_lateral_join_drops_cluster_members",
+      "target": "TopologyNamePseudonymizer.computeDeviceName",
       "note": ""
     },
     {
       "id": "ui2_inventory_and_configuration_design_language",
       "category": "ui",
-      "title": "Apply the inventory and configuration design language: cluster as the unit with virtual systems beneath it, agreement rendered once and difference rendered explicitly, stated identity, freshness, coverage counters and provenance",
+      "title": "Apply the inventory and configuration design language",
       "status": "planned",
       "priority": "P1",
-      "target": "docs/design/UI2_INVENTORY_AND_CONFIGURATION_DESIGN_LANGUAGE.md (DRAFT, needs freeze with D-UI1 and D-UI2 answered)",
+      "target": "docs/design/UI2_INVENTORY_AND_CONFIGURATION_DESIGN_LANGUAGE.md (DRAFT, needs freeze with D-UI1 and D-UI2 answered...",
       "note": ""
     },
     {
       "id": "cp_vsx_config_collected_without_vs_context",
       "category": "configuration",
-      "title": "Check Point configuration collection runs without a virtual system context, so for VSX the interfaces and routing sections hold the member's view rather than each virtual system's",
+      "title": "Check Point configuration collection runs without a...",
       "status": "planned",
       "priority": "P2",
-      "target": "ConfigurationReadPlan CP read plan; CheckPointGaiaConfigParser section list",
+      "target": "ConfigurationReadPlan CP read plan...",
       "note": ""
     },
     {
       "id": "inventory_row_does_not_say_why_a_device_is_unconfirmed",
       "category": "ui",
-      "title": "The inventory row shows Registered, not confirmed without saying why: 47 of 107 devices failed on connect_failed and the reason is only visible by opening each device",
+      "title": "The inventory row shows Registered, not confirmed...",
       "status": "planned",
       "priority": "P1",
-      "target": "InventoryScreen row rendering; jobs.terminal_reason",
+      "target": "InventoryScreen row rendering...",
       "note": ""
     },
     {
       "id": "top_app_bar_search_is_not_an_input",
       "category": "ui",
-      "title": "The top app bar search is a styled box containing static text, not an input: it has no field, no state and no handler, so it looks like a search and can never search",
+      "title": "The top app bar search is a styled box containing static...",
       "status": "planned",
       "priority": "P1",
       "target": "ui2/frontend/src/shell/TopAppBar.tsx",
@@ -634,34 +634,34 @@
     {
       "id": "regression_mapping_backend_trees_unmapped",
       "category": "ci",
-      "title": "The regression mapping still leaves the backend trees unnamed: worker, job-engine and capability-registry paths block, so each will cost a round the first time it is touched",
+      "title": "The regression mapping still leaves the backend trees...",
       "status": "planned",
       "priority": "P2",
-      "target": "scripts/ci_regression_scope.py; follow-on to the frontend coverage closed by NXS-LOCAL-0355",
+      "target": "scripts/ci_regression_scope.py; follow-on to...",
       "note": ""
     },
     {
       "id": "pan_tls_trust_rejects_corporate_ca",
       "category": "discovery",
-      "title": "Palo Alto discovery cannot reach a Panorama fronted by a corporate CA certificate: without a pinned fingerprint the transport accepts only certificates carrying O=Palo Alto Networks",
+      "title": "Palo Alto discovery cannot reach a Panorama fronted by a...",
       "status": "in_progress",
       "priority": "P0",
-      "target": "PanXmlApiTransport certificate verification; EnvironmentPanTrustRuleResolver",
+      "target": "PanXmlApiTransport certificate verification",
       "note": ""
     },
     {
       "id": "discovery_failure_summary_stores_certificate_subject",
       "category": "privacy",
-      "title": "A failed Palo Alto discovery stores the presented certificate's full subject distinguished name in the run's outcome summary, putting a real hostname and organisation into a durable record and onto the screen",
+      "title": "A failed Palo Alto discovery stores the presented...",
       "status": "planned",
       "priority": "P1",
-      "target": "PanXmlApiTransport certificate exception message; discovery_run.outcome_summary",
+      "target": "PanXmlApiTransport certificate exception message",
       "note": ""
     },
     {
       "id": "orchestrator_worktree_lacks_frontend_dependencies",
       "category": "tooling",
-      "title": "Orchestrator worktrees carry no frontend node_modules, so every UI dispatch reports BLOCKED",
+      "title": "Orchestrator worktrees carry no frontend node_modules",
       "status": "planned",
       "priority": "P2",
       "target": "",
@@ -670,7 +670,7 @@
     {
       "id": "cp_cluster_vip_never_observed_in_fleet",
       "category": "discovery",
-      "title": "Check Point cluster VIP (role=cluster_virtual) has never been observed anywhere in the fleet",
+      "title": "Check Point cluster VIP (role=cluster_virtual) has never...",
       "status": "planned",
       "priority": "P2",
       "target": "",
@@ -679,7 +679,7 @@
     {
       "id": "cp_vsx_interfaces_identical_to_physical",
       "category": "discovery",
-      "title": "Check Point VSX per-VS interface/route reads return the physical member's data, not the virtual system's own",
+      "title": "Check Point VSX per-VS interface/route reads return the...",
       "status": "in_progress",
       "priority": "P2",
       "target": "",
@@ -688,7 +688,7 @@
     {
       "id": "cp_spark_exec_channel_rejected",
       "category": "confirm",
-      "title": "Check Point Gaia Embedded/Quantum Spark: exec channel rejected outright, needs interactive shell",
+      "title": "Check Point Gaia Embedded/Quantum Spark: exec channel...",
       "status": "in_progress",
       "priority": "P2",
       "target": "",
@@ -697,7 +697,7 @@
     {
       "id": "task_executor_automation_module",
       "category": "UI 2.0 (Java product line)",
-      "title": "Task Executor / Automation module: operator-authored, ordered command runbooks per firewall (Backbox-style)",
+      "title": "Task Executor / Automation module: operator-authored",
       "status": "planned",
       "priority": "P1",
       "target": "",
@@ -715,7 +715,7 @@
     {
       "id": "vendor_panorama_backup",
       "category": "collection",
-      "title": "Palo Alto Panorama: device-bundle export + running config (HTTPS + SSH)",
+      "title": "Palo Alto Panorama: device-bundle export + running config",
       "status": "planned",
       "priority": "P1",
       "target": "",
@@ -724,7 +724,7 @@
     {
       "id": "vendor_fortinet_fortigate_backup",
       "category": "collection",
-      "title": "Fortinet FortiGate: full configuration backup over SSH incl. VDOMs",
+      "title": "Fortinet FortiGate: full configuration backup over SSH incl",
       "status": "planned",
       "priority": "P1",
       "target": "",
@@ -733,7 +733,7 @@
     {
       "id": "vendor_cisco_asa_backup",
       "category": "collection",
-      "title": "Cisco ASA: running/startup config + native backup tar over SSH/SCP (priv 15)",
+      "title": "Cisco ASA: running/startup config + native backup tar...",
       "status": "planned",
       "priority": "P1",
       "target": "",
@@ -751,34 +751,34 @@
     {
       "id": "backup_screen_backbox_model",
       "category": "ui2",
-      "title": "Backup screen on the Backbox model: per-device history, schedule, baseline, run-now, download, compare in one view",
+      "title": "Backup screen on the Backbox model: per-device history",
       "status": "in_progress",
       "priority": "P1",
-      "target": "PO directive 2026-09-22 (Backbox standard); download/contents/compare shipped 2026-09-22, history/schedule/baseline remain",
+      "target": "PO directive 2026-09-22 (Backbox standard)",
       "note": ""
     },
     {
       "id": "script_execution_module",
       "category": "ui2",
-      "title": "Script Execution: operator scripts (.sh/.py/.jar or inline) on a cron schedule in an isolated runner; report on Jobs, notify via syslog/SMTP relay",
+      "title": "Script Execution: operator scripts (.sh/.py/.jar or...",
       "status": "planned",
       "priority": "P1",
-      "target": "PO decision record 2026-09-22 (automation editor and script execution); contract SCRIPT_EXECUTION_CONTRACT.md to write first",
+      "target": "PO decision record 2026-09-22 (automation...",
       "note": ""
     },
     {
       "id": "cp_backup_sftp_fetch_failed_on_cluster_member",
       "category": "ui2",
-      "title": "PARKED (PO 2026-09-22 'bu dursun kenarda'): Check Point cluster member backup fails at the artefact-store SFTP fetch step ('sftp fetch failed'); reproduce on the member, read the SftpException id, fix the fetch or the fallback",
+      "title": "PARKED (PO 2026-09-22 'bu dursun kenarda')",
       "status": "planned",
       "priority": "P2",
-      "target": "PO reported twice on 2026-09-22 (a CP cluster; job 80eec289-...); parked by the PO",
+      "target": "PO reported twice on 2026-09-22 (a CP cluster",
       "note": ""
     },
     {
       "id": "module_per_pod_split",
       "category": "ui2",
-      "title": "Module runtime landed; policy/configuration/compliance pods split, remaining roles pending",
+      "title": "Module runtime landed; policy/configuration/compliance...",
       "status": "in_progress",
       "priority": "P1",
       "target": "docs/design/MODULE_POD_RUNTIME_CONTRACT.md",
@@ -787,43 +787,43 @@
     {
       "id": "platform_identity_facts_on_configuration",
       "category": "ui2",
-      "title": "PO 2026-09-22 'kesinlikle': serial number, software version, hotfix / jumbo take, content versions, uptime on the Configuration screen -- what industry-leading tools collect",
+      "title": "PO 2026-09-22 'kesinlikle': serial number, software...",
       "status": "planned",
       "priority": "P1",
-      "target": "Contract docs/design/PLATFORM_IDENTITY_FACTS_CONTRACT.md. PAN: parse-scope extension of the already-gated show system info (serial, sw-version, app/threat/av/wildfire/url versions, uptime, family). CP: new gate rows needed (show asset system for serial; jumbo take), PO sign-off before real-device use. Serial shown in the clear per PO; masked for the aiview persona.",
+      "target": "Contract...",
       "note": ""
     },
     {
       "id": "aiview_masking_leak_audit",
       "category": "ui2",
-      "title": "Masking leak audit: compare aiview responses against the raw tables (hostnames, addresses, serials) and report any raw value that survives masking; consider a masked read-model/schema with a separate DB role for aiview",
+      "title": "Masking leak audit: compare aiview responses against the...",
       "status": "planned",
       "priority": "P1",
-      "target": "PO 2026-09-22 proposal (separate masked table read by aiview)",
+      "target": "PO 2026-09-22 proposal (separate masked...",
       "note": ""
     },
     {
       "id": "cluster_diff_member_specific_tuning",
       "category": "ui2",
-      "title": "Cluster DIFF: 38 of 39 clusters show member differences (264 settings); find the settings that are per-member by nature (e.g. PAN HA device priority, CP per-NIC settings) and exempt them in both the browser and the Java projection",
+      "title": "Cluster DIFF: 38 of 39 clusters show member differences",
       "status": "planned",
       "priority": "P1",
-      "target": "Overview contract; configurationProjection.ts + ConfigurationProjection.java parity",
+      "target": "Overview contract...",
       "note": ""
     },
     {
       "id": "legacy_python_separation",
       "category": "governance",
-      "title": "Separate the legacy Python product from the neXus repository: delete root clutter, move the action taxonomy to the Java registry (AGENTS.md amendment), keep governance tooling, archive the rest to a private repository",
+      "title": "Separate the legacy Python product from the neXus...",
       "status": "planned",
       "priority": "P1",
-      "target": "docs/design/LEGACY_PYTHON_SEPARATION_PLAN.md -- four PO decisions",
+      "target": "docs/design/LEGACY_PYTHON_SEPARATION_PLAN.md",
       "note": ""
     },
     {
       "id": "github_open_pr_triage",
       "category": "governance",
-      "title": "Decide the 21 open GitHub PRs (2026-09-15..17): close 15 superseded, review 3, re-implement 3 hardening items on main (DB role ownership, PostgreSQL network isolation, backup claim authorization)",
+      "title": "Decide the 21 open GitHub PRs (2026-09-15..17)",
       "status": "planned",
       "priority": "P1",
       "target": "docs/operations/OPEN_PR_TRIAGE_2026_09_23.md",
@@ -832,7 +832,7 @@
     {
       "id": "cp_platform_facts_empty_on_nine_gateways",
       "category": "inventory",
-      "title": "Check Point platform facts: 9 of 62 gateways have a facts row but no jumbo take (7 of them no appliance family or serial either) -- find why the read parses nothing on these (Clish-landing shell, VSX context, or no jumbo installed) and say UNKNOWN with a reason",
+      "title": "Check Point platform facts: 9 of 62 gateways have a...",
       "status": "planned",
       "priority": "P1",
       "target": "",
@@ -841,7 +841,7 @@
     {
       "id": "cp_backup_free_space_parse_refusal",
       "category": "backup",
-      "title": "Check Point backup refused on 7 gateways (2026-09-22): neither 'show diskspace' nor 'df -P /var/log' parsed to a free-space value, so the fail-closed precheck refused -- measure the real output shape on one of them and extend the parser; likely part of the 19 targets without an archive",
+      "title": "Check Point backup refused on 7 gateways (2026-09-22)",
       "status": "planned",
       "priority": "P1",
       "target": "",
@@ -850,7 +850,7 @@
     {
       "id": "pan_keygen_no_usable_key_under_load",
       "category": "inventory",
-      "title": "Palo Alto keygen returned no usable key after ~8 s on 3 devices in the same minute (2026-09-22 bulk collect) -- check whether it follows concurrency; retry once with backoff before failing the inventory job",
+      "title": "Palo Alto keygen returned no usable key after ~8 s on 3...",
       "status": "planned",
       "priority": "P2",
       "target": "",
@@ -859,7 +859,7 @@
     {
       "id": "ui_effectiveness_review_after_refresh",
       "category": "ui2",
-      "title": "After the UI review refresh is deployed and working: usability and effectiveness analysis of every screen by Codex (Astra, scripts/consult_codex_*.py), confirmed by Fable (scripts/consult_fable_*.py) -- does each screen serve its purpose for its user (GMY, manager, operator, auditor), what is effective, what is only a feature; outputs unaltered in docs/design/",
+      "title": "After the UI review refresh is deployed and working",
       "status": "planned",
       "priority": "P1",
       "target": "",
@@ -868,7 +868,7 @@
     {
       "id": "test_fixture_realistic_names_cleanup",
       "category": "ui2",
-      "title": "Frontend test fixtures still carry device-like hostnames and non-documentation IPv4 addresses (AddDeviceDialog, AdministrationScreen, ConfigurationPanels, ConfigurationScreen, InventoryPanels, InventoryScreen tests; locations in the Codex dark-mode worker report): replace with aiview pseudonyms and 192.0.2.x, and extend tests/previewMasking.test.ts to scan tests too",
+      "title": "Frontend test fixtures still carry device-like hostnames...",
       "status": "planned",
       "priority": "P2",
       "target": "",
@@ -877,7 +877,7 @@
     {
       "id": "aiview_masked_readonly_admin",
       "category": "security",
-      "title": "aiview as a masked read-only administrator (PO 2026-09-23): first extend server-side masking to principals (usernames, audit actors, LDAP bind DN and group names, e-mail addresses, credential usernames) with per-endpoint aiview tests; then grant role:replay_viewer the READ actions of Credentials, Local identities, Sessions, Roles & Permissions, LDAP, Notifications and Audit Logs (every write action stays denied); record the RBAC change as a PO decision record",
+      "title": "aiview as a masked read-only administrator",
       "status": "planned",
       "priority": "P1",
       "target": "",
@@ -886,7 +886,7 @@
     {
       "id": "m3_design_alignment_review",
       "category": "ui2",
-      "title": "Compare the live UI with the PO's Material 3 design study and choose a direction (faithful M3: tonal surfaces, 16 px radii, elevation, M3 colour roles / the current flat-neutral direction / a mix), then apply it at token level. The UI review took the Palette study's neutrals and hairlines, so the product drifted from M3. Screenshots before/after and the redacted artboards: local archive nexus-design-archive/2026-09-23 (outside the repo); canvas https://claude.ai/artifact/4jajwA6oP7dx57exfNtKf3",
+      "title": "Compare the live UI with the PO's Material 3 design...",
       "status": "planned",
       "priority": "P2",
       "target": "",
@@ -895,7 +895,7 @@
     {
       "id": "version_advisory_exposure",
       "category": "ui2",
-      "title": "Security advisories and critical bugs for the versions the estate runs (PO 2026-09-23): deterministic match of each device's observed version / jumbo take / PAN-OS version against vendor advisory feeds (Palo Alto security advisories with affected version ranges, Check Point sk / jumbo resolved-issues, NVD CVE, CISA KEV) -- evidence-based (advisory id, affected range, source, fetch time), never an AI verdict; optional one-time AI summary per advisory, cached; online feed fetch or offline file import depending on HOST-A egress (UNKNOWN). Needs its own contract (the Overview contract excludes 'outdated' judgements).",
+      "title": "Security advisories and critical bugs for the versions...",
       "status": "planned",
       "priority": "P1",
       "target": "",
@@ -904,7 +904,7 @@
     {
       "id": "hosta_rebuild_real_env_acceptance",
       "category": "ui2",
-      "title": "HOST-A rebuilt 2026-09-25: PO browser acceptance under aiview -- pseudonyms unchanged, CP+PAN collect decrypts credentials, an old backup opens, Cyber Controller backup completes",
+      "title": "HOST-A rebuilt 2026-09-25: PO browser acceptance under...",
       "status": "in_progress",
       "priority": "P0",
       "target": "docs/design/HOST_A_REBUILD_RUNBOOK.md section 5",
@@ -913,16 +913,16 @@
     {
       "id": "scheduled_fleet_backup_enable_decision",
       "category": "backup",
-      "title": "Fleet backups enabled: daily 02:00 Istanbul; 7-day PO retention, capacity verification pending",
+      "title": "Fleet backups enabled: daily 02:00 Istanbul",
       "status": "in_progress",
       "priority": "P1",
-      "target": "docs/design/INCIDENT_2026_10_10_BACKUP_FREQUENCY_DISK_FULL.md",
+      "target": "docs/design/INCIDENT_2026_10_10_BACKUP_FREQUENCY_DISK_FULL.m...",
       "note": ""
     },
     {
       "id": "cp_backup_empty_status_poll_loop",
       "category": "backup",
-      "title": "Check Point backup polls an empty 'show backup status' until its 30-minute deadline instead of failing fast",
+      "title": "Check Point backup polls an empty 'show backup status'...",
       "status": "planned",
       "priority": "P1",
       "target": "BackupCapabilityExecutor status poll",
@@ -931,16 +931,16 @@
     {
       "id": "radware_defensepro_getcfg_measurement",
       "category": "backup",
-      "title": "Measure DefensePro backup through the Cyber Controller (getcfg) on a live Backup Now; record content type and size",
+      "title": "Measure DefensePro backup through the Cyber Controller",
       "status": "planned",
       "priority": "P1",
-      "target": "RADWARE_CYBER_CONTROLLER_BACKUP_API_GATE_ENTRIES.md MEASURE FIRST 3",
+      "target": "RADWARE_CYBER_CONTROLLER_BACKUP_API_GATE_ENTRIES.md MEASURE FIRST...",
       "note": ""
     },
     {
       "id": "radware_cc_identity_and_defensepro_reads",
       "category": "collection",
-      "title": "Radware: name/version for the Cyber Controller (no documented REST identity call) and gate DefensePro reads -- policies rsIDSNewRulesTable, protection profiles and actions, signature DB version via /monitor",
+      "title": "Radware: name/version for the Cyber Controller",
       "status": "planned",
       "priority": "P2",
       "target": "research 2026-09-24; new gate document",
@@ -949,7 +949,7 @@
     {
       "id": "mds_ha_second_mds_read",
       "category": "discovery",
-      "title": "MDS HA: read the second MDS / HA state (mdsstat or an MDS-level query) -- needs a gate entry",
+      "title": "MDS HA: read the second MDS / HA state (mdsstat or an...",
       "status": "planned",
       "priority": "P2",
       "target": "CP management plane",
@@ -958,7 +958,7 @@
     {
       "id": "backup_remaining_vendors",
       "category": "backup",
-      "title": "Backup for the remaining contracted vendors: FortiGate, Panorama, Pulse Secure, Cisco ASA, Blue Coat",
+      "title": "Backup for the remaining contracted vendors: FortiGate",
       "status": "planned",
       "priority": "P2",
       "target": "VENDOR_BACKUP_CONTRACTS_2026_09_22.md",
@@ -967,7 +967,7 @@
     {
       "id": "hosta_export_include_build_namespace",
       "category": "ui2",
-      "title": "hosta_export_all.sh does not export the ui2-build namespace (corp-ca ConfigMap) nor list the git-ignored ui2/.ca and Gradle zip",
+      "title": "hosta_export_all.sh does not export the ui2-build...",
       "status": "planned",
       "priority": "P2",
       "target": "scripts/hosta_export_all.sh",
@@ -976,7 +976,7 @@
     {
       "id": "deploy_manifest_tests_eight_failures",
       "category": "ui2",
-      "title": "tests/test_ui2_deployment_manifests.py: 8 pre-existing failures on the configuration/compliance manifests (:latest, runAsNonRoot, workload count, BK-17)",
+      "title": "tests/test_ui2_deployment_manifests.py: 8 pre-existing...",
       "status": "planned",
       "priority": "P2",
       "target": "deploy/ui2/54-*, 55-*",
@@ -985,7 +985,7 @@
     {
       "id": "run_build_sets_configuration_image",
       "category": "ui2",
-      "title": "run_build.sh does not set the ui2-configuration image; it stays on :latest until set by hand",
+      "title": "run_build.sh does not set the ui2-configuration image",
       "status": "planned",
       "priority": "P3",
       "target": "deploy/ui2-image-build/run_build.sh",
@@ -994,7 +994,7 @@
     {
       "id": "corporate_inspection_ca_verify_with_it",
       "category": "security",
-      "title": "The corporate inspection CA in ui2/.ca was taken from the chain the firewall presents; confirm it against the CA IT publishes",
+      "title": "The corporate inspection CA in ui2/.ca was taken from...",
       "status": "planned",
       "priority": "P3",
       "target": "HOST_A_REBUILD_RUNBOOK.md section 6",
@@ -1003,7 +1003,7 @@
     {
       "id": "old_export_copies_disposal",
       "category": "security",
-      "title": "The 98 GB pre-reinstall export (keys included) sits on HOST-A and on the PO's transfer server; PO decides when to delete",
+      "title": "The 98 GB pre-reinstall export (keys included) sits on...",
       "status": "planned",
       "priority": "P3",
       "target": "/home/aiadmin/nexus-export-20260924T2026Z",
@@ -1012,7 +1012,7 @@
     {
       "id": "cyber_controller_known_hosts_after_hosta_rebuild",
       "category": "operations",
-      "title": "Cyber Controller SFTP push to HOST-A fails after the reinstall: stale known_hosts entry on the controller disables password auth; clear it (case with Radware) or switch the receiver address spelling; then delete leftover backup nexus-4ae0578d8cd2c6c4 and re-run Backup Now",
+      "title": "Cyber Controller SFTP push to HOST-A fails after the...",
       "status": "in_progress",
       "priority": "P0",
       "target": "docs/design/HOST_A_REBUILD_RUNBOOK.md",
@@ -1021,52 +1021,52 @@
     {
       "id": "infoblox_member_facts",
       "category": "collection",
-      "title": "Infoblox: make the grid member list meaningful -- platform/model, grid master vs candidate, HA pairing, DNS/DHCP service status per member (wider _return_fields on the existing member read, member detail under the Grid Manager); and give the Grid Manager an honest Collect state (no HTTPS inventory job exists: hide or implement)",
+      "title": "Infoblox: make the grid member list meaningful",
       "status": "planned",
       "priority": "P2",
-      "target": "docs/design/VENDOR_BACKUP_CONTRACTS_2026_09_22.md",
+      "target": "docs/design/VENDOR_BACKUP_CONTRACTS_2026_09_22.m...",
       "note": ""
     },
     {
       "id": "https_inventory_collect_radware",
       "category": "collection",
-      "title": "Radware Collect: https_inventory_collect for the Cyber Controller (managed device list as inventory) and DefensePro (observed facts via the controller's list); DefensePro interfaces/routes/policies need new gated REST reads -- propose to the PO",
+      "title": "Radware Collect: https_inventory_collect for the Cyber...",
       "status": "in_progress",
       "priority": "P1",
-      "target": "docs/design/RADWARE_CYBER_CONTROLLER_BACKUP_API_GATE_ENTRIES.md",
+      "target": "docs/design/RADWARE_CYBER_CONTROLLER_BACKUP_API_GATE_ENTRIES.m...",
       "note": ""
     },
     {
       "id": "https_configuration_collect",
       "category": "collection",
-      "title": "Configuration reads for HTTPS vendors, separate from backup: DefensePro getcfg text as a configuration run (Configuration screen, deviation) while backup stays backup; Infoblox grid/member configuration via WAPI reads to be measured",
+      "title": "Configuration reads for HTTPS vendors, separate from...",
       "status": "planned",
       "priority": "P1",
-      "target": "docs/design/VENDOR_BACKUP_CONTRACTS_2026_09_22.md",
+      "target": "docs/design/VENDOR_BACKUP_CONTRACTS_2026_09_22.m...",
       "note": ""
     },
     {
       "id": "cp_management_server_collect_duration",
       "category": "collection",
-      "title": "Check Point management server Collect took 243 s: vsx stat, cphaprob stat/-a if and the batched read hang until their 30 s timeout on an SMS/MDS (measured 2026-09-25); skipped for role management_server since deploy 10; cpinfo -y all also hangs on the R82 MDS (30 s, no jumbo line) -- measure whether cpinfo needs another form on R82",
+      "title": "Check Point management server Collect took 243 s: vsx stat",
       "status": "in_progress",
       "priority": "P1",
-      "target": "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/inventory/InventoryCapabilityExecutor.java",
+      "target": "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/inventory/InventoryCapabilityExecutor.jav...",
       "note": ""
     },
     {
       "id": "cp_spark_backup_settings_sftp",
       "category": "collection",
-      "title": "Quantum Spark (Gaia Embedded) backup: 'backup settings to sftp server <HOST-A> filename <f> file-encryption on password <p> username <u> password <p>' pushed to a HOST-A SFTP receiver (Cyber Controller model); needs gate entries, a receiver Match block for the Spark addresses, and a first measured run -- 5 Spark gateways are backup targets without an archive",
+      "title": "Quantum Spark (Gaia Embedded) backup: 'backup settings",
       "status": "planned",
       "priority": "P1",
-      "target": "docs/design/VENDOR_BACKUP_CONTRACTS_2026_09_22.md",
+      "target": "docs/design/VENDOR_BACKUP_CONTRACTS_2026_09_22.m...",
       "note": ""
     },
     {
       "id": "ui_device_workspace_and_overview",
       "category": "ui",
-      "title": "UI: one device screen, one count vocabulary, executive Overview (5 facts)",
+      "title": "UI: one device screen, one count vocabulary",
       "status": "in_progress",
       "priority": "P2",
       "target": "",
@@ -1075,7 +1075,7 @@
     {
       "id": "asa_fortinet_cluster_view",
       "category": "vendor",
-      "title": "Cluster view for Cisco ASA failover pairs and FortiGate HA clusters",
+      "title": "Cluster view for Cisco ASA failover pairs and FortiGate...",
       "status": "planned",
       "priority": "P1",
       "target": "",
@@ -1084,7 +1084,7 @@
     {
       "id": "asa_fortinet_configuration_plane",
       "category": "vendor",
-      "title": "Configuration plane for Cisco ASA and FortiGate (sections, settings, compliance input)",
+      "title": "Configuration plane for Cisco ASA and FortiGate (sections",
       "status": "planned",
       "priority": "P1",
       "target": "",
@@ -1093,7 +1093,7 @@
     {
       "id": "fmg_link_state_diagnose_nic",
       "category": "vendor",
-      "title": "FortiManager physical link state: diagnose hardware info nic per port (gate + read)",
+      "title": "FortiManager physical link state: diagnose hardware info...",
       "status": "in_progress",
       "priority": "P2",
       "target": "docs/design/FORTINET_CONTRACT.md",
@@ -1102,7 +1102,7 @@
     {
       "id": "tufin_access_query_tab",
       "category": "UI 2.0 (Java product line)",
-      "title": "Policy > Access query sub-tab backed by Tufin SecureTrack topology path API (src/dst/service -> verdict, hops, rules, path image; masked JSON for aiview, image admin-only)",
+      "title": "Policy > Access query sub-tab backed by Tufin...",
       "status": "planned",
       "priority": "P2",
       "target": "",
@@ -1111,7 +1111,7 @@
     {
       "id": "network_topology_path_analysis",
       "category": "UI 2.0 (Java product line)",
-      "title": "Own L3 topology + path analysis (switches/routers, F5/Citrix, ACI via APIC) Tufin/Opinnate style; phased: L3 map -> path query -> ADC hops -> ACI contracts",
+      "title": "Own L3 topology + path analysis (switches/routers",
       "status": "planned",
       "priority": "P3",
       "target": "",
@@ -1120,7 +1120,7 @@
     {
       "id": "transcript_per_run_listing",
       "category": "UI 2.0 (Java product line)",
-      "title": "Jobs/Backups/Policy: list every run separately with type, time, outcome and its own transcript button (transcripts are already stored per job)",
+      "title": "Jobs/Backups/Policy: list every run separately with type",
       "status": "planned",
       "priority": "P1",
       "target": "",
@@ -1129,34 +1129,34 @@
     {
       "id": "ubi9_base_image_refresh",
       "category": "Security",
-      "title": "Refresh the pinned UBI9 base image digests when Red Hat ships fixed gnutls/expat/krb5-libs; then remove the time-boxed OS-library exceptions",
+      "title": "Refresh the pinned UBI9 base image digests when Red Hat...",
       "status": "planned",
       "priority": "P2",
-      "target": "2026-10-31: OS-library baseline exception review date",
+      "target": "2026-10-31: OS-library baseline exception...",
       "note": ""
     },
     {
       "id": "spring_boot_4_spring_security_migration",
       "category": "Security",
-      "title": "Migrate to Spring Boot 4 / Spring Framework 7.0.9+ and Spring Security authentication/authorization; preserve RBAC",
+      "title": "Migrate to Spring Boot 4 / Spring Framework 7.0.9+",
       "status": "planned",
       "priority": "P1",
-      "target": "2026-11-05: CVE-2026-47884 baseline exception review deadline",
+      "target": "2026-11-05: CVE-2026-47884 baseline...",
       "note": ""
     },
     {
       "id": "enterprise_platform_conformance",
       "category": "Architecture",
-      "title": "Parked: Maven; Bitbucket/Jenkins S2I/ArgoCD/Artifactory; OpenShift manifests (random UID, Routes, Nginx); SAML SSO; CyberArk device credentials; Instana Java agent/EUM; Axios instead of fetch; MapStruct for new mappers; assess Spring Data JDBC versus jOOQ",
+      "title": "Parked: Maven; Bitbucket/Jenkins S2I/ArgoCD/Artifactory",
       "status": "planned",
       "priority": "Parked",
-      "target": "Only if a move to the corporate platform is decided",
+      "target": "Only if a move to the corporate platform is...",
       "note": ""
     },
     {
       "id": "module_e2e_fail_fast",
       "category": "Delivery",
-      "title": "module_e2e: wait for Complete or Failed and fail fast; Complete-only wait hangs for 900 s on Failed e2e",
+      "title": "module_e2e: wait for Complete or Failed and fail fast",
       "status": "planned",
       "priority": "P2",
       "target": "tools/delivery/module_deploy.py",
@@ -1165,7 +1165,7 @@
     {
       "id": "machine_session_probe_isolation",
       "category": "Testing / Authentication",
-      "title": "Probes displace the e2e runner's machine session (one session per token): use a separate probe machine identity or allow concurrent machine sessions",
+      "title": "Probes displace the e2e runner's machine session",
       "status": "planned",
       "priority": "P2",
       "target": "",
@@ -1174,34 +1174,34 @@
     {
       "id": "cp_policy_chunked_hits_acceptance",
       "category": "engineering",
-      "title": "CP chunked policy and hits landed; real-environment acceptance remains separate",
+      "title": "CP chunked policy and hits landed; real-environment...",
       "status": "in_progress",
       "priority": "P2",
-      "target": "docs/design/PO_DECISION_RECORD_2026_10_02_CP_POLICY_PARALLEL_SESSIONS.md",
+      "target": "docs/design/PO_DECISION_RECORD_2026_10_02_CP_POLICY_PARALLEL_SESSIONS.m...",
       "note": ""
     },
     {
       "id": "nspm_wave1_acceptance",
       "category": "engineering",
-      "title": "Policy hygiene and V144 lifecycle catalog landed; compliance guidance landed, Java/live acceptance pending",
+      "title": "Policy hygiene and V144 lifecycle catalog landed",
       "status": "in_progress",
       "priority": "P1",
-      "target": "docs/design/PO_DECISION_RECORD_2026_10_09_NSPM_WAVE1.md",
+      "target": "docs/design/PO_DECISION_RECORD_2026_10_09_NSPM_WAVE1.m...",
       "note": ""
     },
     {
       "id": "release_snapshot_preview_acceptance",
       "category": "engineering",
-      "title": "Release snapshots and isolated pre-merge masked preview e2e landed; operational verification separate",
+      "title": "Release snapshots and isolated pre-merge masked preview...",
       "status": "in_progress",
       "priority": "P2",
-      "target": "tools/delivery/release_snapshot.py; tools/e2e/hosta_preview_e2e.py",
+      "target": "tools/delivery/release_snapshot.py...",
       "note": ""
     },
     {
       "id": "cve_exception_review_dates",
       "category": "engineering",
-      "title": "CVE exception reviews due 2026-10-31, 2026-11-05 and 2026-12-31 by rule/location",
+      "title": "CVE exception reviews due 2026-10-31, 2026-11-05",
       "status": "planned",
       "priority": "P1",
       "target": "security/baseline.yaml",
@@ -1210,16 +1210,16 @@
     {
       "id": "packet_analysis_shell",
       "category": "ui2",
-      "title": "Packet Analysis shell IMPLEMENTED (engine stub): cases, streamed pcap upload, RBAC/aiview masking, 7-day retention, ui2-packet-analysis worker (V154); engine port pending",
+      "title": "Packet Analysis shell IMPLEMENTED (engine stub): cases",
       "status": "in_progress",
       "priority": "P1",
-      "target": "docs/design/PO_DECISION_RECORD_2026_10_15_PACKETBREAKER_PORTED_INTO_NEXUS.md",
+      "target": "docs/design/PO_DECISION_RECORD_2026_10_15_PACKETBREAKER_PORTED_INTO_NEXUS.m...",
       "note": ""
     },
     {
       "id": "data_sanitizer",
       "category": "ui2",
-      "title": "Data Sanitizer IMPLEMENTED: keyed anonymization of pcap/pcapng, text logs, CSV/XLSX and JSON with a reversible encrypted vault (V156), /api/v2/sanitize, CLI parity, Sanitize screen; hook points off by default",
+      "title": "Data Sanitizer IMPLEMENTED: keyed anonymization of...",
       "status": "in_progress",
       "priority": "P1",
       "target": "docs/design/DATA_SANITIZER_CONTRACT.md",

@@ -7,3 +7,9 @@ status: planned · target: Contract docs/design/PLATFORM_IDENTITY_FACTS_CONTRACT
 2026-09-22 slice 2 (Check Point): PO ran cpinfo -y all and uptime by hand on an R81.20 management server and supplied the output (CP_PLATFORM_IDENTITY_MEASUREMENTS.md); gates cp_identity_cpinfo_hotfixes and cp_identity_uptime seeded (V47, fixture yaml); the inventory job reads both on its session and records hotfix level ('R81.20 Jumbo Take 122' shape) and uptime. Serial (show asset system) still pending a gateway measurement. Also fixed from the aiview tour: Overview/Operations metric cards showed a literal 0; PAN cluster counted hostname/management/HA-link addresses as DIFF (now MEMBER); PAN effective-running now stores sanitized text (<=32 MiB) so Panorama-pushed values project.
 
 2026-09-22 slice 3: PO supplied show asset system output from a Smart-1 appliance (serial withheld); gate cp_identity_show_asset_system seeded (V48); the inventory job records serial number and 'Model (Platform)' family. Contract FROZEN in full. Remaining: real-env validation on a gateway and a VSX member after the next Bulk Collect.
+
+## 2026-10-17 -- project JSON compacted (size budget)
+
+Title (full): PO 2026-09-22 'kesinlikle': serial number, software version, hotfix / jumbo take, content versions, uptime on the Configuration screen -- what industry-leading tools collect
+
+Target (full): Contract docs/design/PLATFORM_IDENTITY_FACTS_CONTRACT.md. PAN: parse-scope extension of the already-gated show system info (serial, sw-version, app/threat/av/wildfire/url versions, uptime, family). CP: new gate rows needed (show asset system for serial; jumbo take), PO sign-off before real-device use. Serial shown in the clear per PO; masked for the aiview persona.

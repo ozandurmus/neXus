@@ -7,3 +7,7 @@ status: in_progress · target: workflow §5 B1-3
 ## 2026-09-12
 
 Sonnet 5 extended (high). D-6-gated parts stay disabled.
+
+## 2026-10-17 -- project JSON compacted (size budget)
+
+Title (full): UI2 B1-3 -- identity & sessions (UnboundID LDAP bind, single-active-session table as tests, role bindings, E1-E7 on HTTP)
