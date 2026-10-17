@@ -1606,7 +1606,7 @@ export interface NotificationSettingsView {
 }
 
 export interface NotificationRouteView {
-  type: "admin_event" | "login_security" | "backup_failure" | "job_failure" | "config_change" | "compliance_regression" | "device_health" | "security_scan";
+  type: "admin_event" | "login_security" | "backup_failure" | "job_failure" | "config_change" | "compliance_regression" | "device_health" | "security_scan" | "device_crash_file";
   enabled: boolean;
   recipients: string | null;
   last_sent_at: string | null;

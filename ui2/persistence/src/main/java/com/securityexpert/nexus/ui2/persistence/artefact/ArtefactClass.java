@@ -5,6 +5,8 @@ public final class ArtefactClass {
 
     public static final String CONFIGURATION = "configuration";
     public static final String BACKUP = "backup";
+    /** Device system-log chunks and whole-file fetches (phase B, V160). */
+    public static final String SYSTEM_LOG = "system_log";
 
     private ArtefactClass() {
     }

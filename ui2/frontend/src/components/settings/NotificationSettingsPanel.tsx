@@ -30,6 +30,7 @@ const TYPES: { type: NotificationRouteView["type"]; title: string; description: 
   { type: "compliance_regression", title: "Compliance regressions", description: "Controls changing from PASS to FAIL" },
   { type: "device_health", title: "Device reachability", description: "Unreachable, reachable again and host-key mismatch" },
   { type: "security_scan", title: "Security scans", description: "Daily and weekly security findings: new, fixed and accepted counts" },
+  { type: "device_crash_file", title: "Device crash and dump files", description: "New crash or process-dump files on a managed gateway: process, count and time" },
 ];
 
 function problemsOf(err: unknown): string {

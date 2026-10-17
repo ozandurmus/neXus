@@ -19,7 +19,10 @@ public final class DiagnosticRead {
         "rb3b_add_backup_local", "rb3b_delete_backup_local", "cp_backup_add_backup_local",
         "cp_backup_delete_backup_local", "mds_backup_start", "rdw_cc_backup_create",
         "rdw_cc_backup_export", "rdw_cc_backup_delete", "asa_backup_archive", "asa_delete_archive",
-        "pan_backup_export_device_state", "pan_panorama_export_device_state");
+        "pan_backup_export_device_state", "pan_panorama_export_device_state",
+        // Phase B collection reads (V160): once per job window with raw retention; only the collection job issues them.
+        "cp_syslog_collect_stat", "cp_syslog_collect_ls_crash", "cp_syslog_collect_ls_spike",
+        "cp_syslog_collect_ls_spike_dir", "cp_syslog_collect_ls_sa", "cp_syslog_collect_ls_hcp");
     // Phase A measurement reads whose "%s" is a literal field of the remote command (stat -c "%i %s %Y",
     // ls --time-style=+%s), not a template placeholder. The placeholder guard in eligible() would otherwise hide them.
     public static final Set<String> LITERAL_PERCENT_S_GATES = Set.of(

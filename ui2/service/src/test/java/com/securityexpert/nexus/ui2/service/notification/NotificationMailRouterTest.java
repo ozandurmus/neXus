@@ -51,6 +51,9 @@ class NotificationMailRouterTest {
             } else if (sql.contains("configuration_notification n")) {
                 result = rows(create, new String[] { "notification_id", "kind", "summary", "created_at", "device_name" },
                         new String[] { "config-1", "configuration_override_detected", "safe summary", AT, "FW-TANGO-04" });
+            } else if (sql.contains("from device_crash_alert a")) {
+                result = rows(create, new String[] { "alert_id", "process", "file_count", "newest_mtime", "job_id", "created_at", "device_name" },
+                        new String[] { "alert-1", "fwk", "2", "1790000000", "job-5", AT, "FW-TANGO-04" });
             } else if (sql.contains("compliance_evaluation e")) {
                 result = rows(create, new String[] { "device_id", "evaluated_at", "result", "device_name" },
                         new String[] { "device-a", AT,
@@ -99,6 +102,10 @@ class NotificationMailRouterTest {
             NotificationMailRouter.Batch batch = NotificationMailRouter.collect(dsl, type, 10, FROM);
             assertFalse(batch.lines().isEmpty(), type);
         }
+        String crash = NotificationMailRouter.collect(dsl, "device_crash_file", 10, FROM).lines().getFirst();
+        assertTrue(crash.contains("FW-TANGO-04") && crash.contains("2 new crash/dump file(s), process fwk")
+                && crash.contains("/operations/jobs/job-5"), crash);
+        assertTrue(NotificationMailRouter.subject("device_crash_file", 1).contains("Device crash and dump files"));
         assertEquals(11, NotificationMailRouter.collect(dsl, "admin_event", 10, FROM).audit());
         assertEquals("FAIL", NotificationMailRouter.collect(dsl, "compliance_regression", 10, FROM)
                 .state().get("c:device-a:CTRL-1"));

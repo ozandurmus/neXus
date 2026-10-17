@@ -235,6 +235,35 @@ public final class AuditPresentationAllowlist {
                     "status", "strict_refusal")),
             Map.entry("ssh_trust_settings", Set.of(
                     "mode", "settings_id")),
+            // V160 (system-log phase B): identifiers, enums, counters, timestamps and content digests. Name and
+            // log-byte digests, wrapped keys, artefact locations and device-derived detail are in audit_redaction_policy.
+            Map.entry("device_crash_alert", Set.of(
+                    "alert_id", "created_at", "device_id", "file_count", "job_id", "newest_mtime", "notified_at")),
+            Map.entry("device_crash_entry", Set.of(
+                    "baseline", "device_id", "directory", "entry_id", "first_seen_at", "first_seen_job",
+                    "last_seen_job", "mtime", "removed_at", "size")),
+            Map.entry("system_log_chunk", Set.of(
+                    "bytes", "chunk_id", "ciphertext_bytes", "collected_at", "device_id", "end_offset",
+                    "first_line_time", "flags", "inode", "job_id", "last_line_time", "line_time_basis", "lines",
+                    "log_day", "plaintext_sha256", "prune_reason", "pruned_at", "redaction_count", "source_key",
+                    "start_offset")),
+            Map.entry("system_log_cursor", Set.of(
+                    "cursor_key", "device_epoch_at_read", "device_id", "fast_rotating", "inode", "offset_bytes",
+                    "pan_boundary_seqnos", "pan_last_receive_time", "retention_horizon_seconds", "source_key",
+                    "updated_at", "updated_job_id")),
+            Map.entry("system_log_file", Set.of(
+                    "ciphertext_bytes", "collected_at", "device_id", "expires_at", "file_id", "flags", "job_id",
+                    "kind", "mtime", "name_time", "pruned_at", "sha256", "size", "status")),
+            Map.entry("system_log_gap", Set.of(
+                    "created_at", "device_id", "extent_unknown", "gap_id", "job_id", "kind", "known_lost_bytes",
+                    "pending_bytes", "source_key", "window_end_epoch", "window_start_epoch")),
+            Map.entry("system_log_run", Set.of(
+                    "bytes_read", "bytes_stored", "created_at", "device_id", "duration_ms", "job_id", "outcome",
+                    "reads_issued", "run_id", "source_key")),
+            Map.entry("system_log_settings", Set.of(
+                    "device_cap_bytes", "hcp_retention_days", "include_management_servers", "ledger_retention_days",
+                    "raw_retention_days", "settings_id", "spike_data_cap_bytes", "spike_data_enabled",
+                    "spike_data_retention_days", "updated_at", "updated_by")),
             // V151: summaries are counts, field names, formats and enum-like values only -- nothing to redact.
             Map.entry("system_log_measurement", Set.of(
                     "device_id", "job_id", "measured_at", "measurement_id", "source", "summary",

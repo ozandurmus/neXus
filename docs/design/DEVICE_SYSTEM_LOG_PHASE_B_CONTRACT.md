@@ -825,6 +825,27 @@ The existing `syslog-measure-start` and `syslog-measurements` stay for phase A.
    - the notification type (Q5, approved).
 
    It gets the BEGIN/ROLLBACK dry run on the live database before deploy.
+
+   **Implemented as `V160__system_log_phase_b.sql` (step 1 record).** It adds these gate ids, tables and settings:
+
+   - **Gate rows.** All 13 of §10, in the migration and in `gate_registry_fixture.yaml`, with the command text unchanged
+     (checked against this section by `tools/tests/test_system_log_collect_gate_contract.py`). Three points were not
+     written in §10:
+     - C8 has no gate id there; it is registered as `cp_syslog_collect_fetch`.
+     - C2 and C8 are SFTP steps (`gate NOT_APPLICABLE`). Their rows are for the record only: `transport_kind` `SFTP_GET`,
+       `shell_context` `not_applicable`, and the key is the step description of §10.1.
+     - C3, C4, C6, C7 and P5 repeat the command text of an approved measurement row (V157, V151). C4 §3.3 step 6 makes two
+       rows with one key a hard error. The key is therefore narrowed with `shell_context` (`expert_collect` for the four
+       Check Point rows, `not_applicable_collect` for P5); the command text is byte-identical. A capability spec step
+       for these five commands declares that `shell_context`. This is the only way found to keep the §10.3 rule ("the
+       collector gets its own row") without breaking the measurement reads.
+   - **Tables.** The seven of §5.2 plus `system_log_settings` (§5.3, §2.3, §8.3: retention days, device caps,
+     `include_management_servers`, `spike_data_enabled`). Inodes are stored as digits-only text (identity law). Gap and run
+     `detail` refuses name and path keys, so §4.5's "affected file names" are carried as digests and suffix classes
+     (§5.2 says no names in clear).
+   - **Wiring.** `ArtefactClass.SYSTEM_LOG` and the `backup_artefact` class check; `ui2_job_module` maps both collection
+     capabilities to `diagnostics`; the `device_crash_file` notification type (service type list, router query, route
+     seeded disabled) with the amendment in `NOTIFICATION_ROUTING_CONTRACT.md` §7.
 2. Transport: the ranged streaming SFTP read (§4.3): offset and length on the existing `sftp_get` fetch, bytes into
    the artefact sink, exact byte counting. Plus the C4 §2.3 amendment text (§4.3), edited in the same PR.
 3. Planner (§4.4) as a pure function over (cursor, stat), with exhaustive unit tests for every row of the decision
