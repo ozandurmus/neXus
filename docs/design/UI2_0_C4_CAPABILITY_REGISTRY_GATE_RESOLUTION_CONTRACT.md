@@ -2,7 +2,7 @@
 
 ## Status
 
-**FROZEN — PRODUCT OWNER APPROVED, 2026-09-09; OPTION A AMENDMENT APPLIED, 2026-09-10** (platform contract freeze (C1–C6 + baseline directory), per `UI2_0_BASELINE_CONTRACT.md` §2 `FREEZE-SLICING`; amendment limited to the D1 controlled-restore step kind and static sign-off rule). Open items listed in this document's own open-items section are deferred to the movements they name; they do not reopen this freeze. Previous status: DRAFT — FOR PRODUCT OWNER FREEZE. Written under
+**FROZEN — PRODUCT OWNER APPROVED, 2026-09-09; OPTION A AMENDMENT APPLIED, 2026-09-10; AMENDMENT A-2 APPLIED, 2026-10-17** (platform contract freeze (C1–C6 + baseline directory), per `UI2_0_BASELINE_CONTRACT.md` §2 `FREEZE-SLICING`; amendment limited to the D1 controlled-restore step kind and static sign-off rule; A-2 limited to an optional read-only byte range on the existing `sftp_get` step kind for the system-log incremental read). Open items listed in this document's own open-items section are deferred to the movements they name; they do not reopen this freeze. Previous status: DRAFT — FOR PRODUCT OWNER FREEZE. Written under
 `docs/design/UI2_0_BASELINE_CONTRACT.md` (FROZEN — PRODUCT OWNER APPROVED,
 2026-09-09) and `docs/design/UI2_0_DEVELOPMENT_WORKFLOW.md` §3.1–§3.2 (BASELINE,
 revision 2). Direct inputs: council items `K-3`, `K-4`, `CP-D6`, `CP-D7`
@@ -156,7 +156,7 @@ free-form step definition.
 | `connect` | opens the transport session (SSH or, for `xml_api_call`-only capabilities, the API key/session per §7.1's existing reuse pattern) through the trust preflight | for `ssh_exec` (§5's default): authentication success + optional banner match — never a shell-prompt regex (`CP-D7`); for `ssh_interactive` (gated, §5.3): login banner/prompt must match `expect.regex` within `timeout_s` | `NOT_APPLICABLE` — no device command is sent |
 | `exec` | sends one command/call, reads the response | `ssh_exec`: response evaluated against `expect.regex` over the one-shot `exec_command` channel's output until process exit; `ssh_interactive`: response evaluated by reading a persistent shell until `expect.regex`/timeout; optional `fail_on.regex` short-circuits to failure | `KNOWN`/`UNKNOWN` per §3 — every `exec` step names a gate reference |
 | `poll` | repeats `send` every `interval_s` until `until.regex`/`fail_on.regex`/`timeout_s` | as design §6.3's rule 2–4 | `KNOWN`/`UNKNOWN` per §3 |
-| `sftp_get` / `scp_get` | fetches one remote path into the recovery/evidence store's staging area (streamed, never to a database) | size bounds; transfer integrity | `NOT_APPLICABLE` if the fetch path/name was itself produced by a gated prior step (the fetch operation is not a new command, per `AGENTS.md`'s parse-scope-extension rule); otherwise `KNOWN`/`UNKNOWN` |
+| `sftp_get` / `scp_get` | fetches one remote path into the recovery/evidence store's staging area (streamed, never to a database); an `sftp_get` step may carry an optional read-only byte range `{start_offset, max_bytes}` (Amendment A-2) | size bounds (with a range: `max_bytes` bounded by the step's size bound); transfer integrity | `NOT_APPLICABLE` if the fetch path/name was itself produced by a gated prior step (the fetch operation is not a new command, per `AGENTS.md`'s parse-scope-extension rule); otherwise `KNOWN`/`UNKNOWN`. A byte range sends no device command and does not change this rule |
 | `sftp_put` | reserved, refused at spec-validation time — no capability may push bytes to a device at current maturity | — | — |
 | `restore_push` | pushes one previously-fetched, manifest-bound backup artefact (identified only by its `backup_artefact.artefact_id`, never a free-form path or operator-supplied byte stream) to the device for the vendor's subsequent restore/apply command; legal only when the resolved `action_class` is `controlled-restore-write` | transfer integrity (size/digest match against the artefact's recorded digest per C7 §3.2), never merely bytes sent | `KNOWN`/`UNKNOWN` per §3; same resolution algorithm, no bypass |
 | `xml_api_call` | sends one PAN HTTPS XML API request (`{http_method, type, category, target_scope: direct_firewall\|panorama}`), reads the response | HTTP status + `min_bytes`/`max_bytes`/`content_type` per §7.1/§7.2's shape | `KNOWN`/`UNKNOWN` per §3 |
@@ -820,3 +820,45 @@ only for a capability whose resolved `action_class` is
 `controlled-restore-write`; `sftp_put` remains reserved and refused
 unconditionally; §3.3 step 7's eligibility is a static, spec-time predicate
 that never, alone, authorizes device contact.
+
+---
+
+## Amendment A-2 (2026-10-17) — optional byte range on `sftp_get` (system-log incremental read)
+
+The Product Owner approved this amendment on 2026-10-17 as a named part of the system-log phase B read decision.
+The record is `docs/design/PO_DECISION_RECORD_2026_10_17_SYSTEM_LOG_PHASE_B.md` §4; the approved wording is
+`docs/design/DEVICE_SYSTEM_LOG_PHASE_B_CONTRACT.md` §4.3, and the approved command is row C2
+(`cp_syslog_collect_read`) of that contract's §10.1. §2.3's `sftp_get` row above carries the change; this section
+is its record.
+
+**What changes.** The existing `sftp_get` step kind gains an optional read-only byte range
+`{start_offset, max_bytes}`:
+
+- Both values are non-negative integers computed by neXus (from the stored cursor and the run's budget). They are
+  never operator input and never taken from a device response.
+- `max_bytes` is bounded by the step's size bound. For C2 that bound is 8,388,672 bytes (8 MiB plus the 64-byte
+  anchor region).
+- The ranged step opens the path read-only through the SFTP subsystem of the run's existing session, reads at most
+  `max_bytes` bytes from `start_offset`, and closes the file. It sends no write, no `setstat`, no rename and no
+  remove. It starts no shell and runs no command on the device. Bytes the server serves past `max_bytes`
+  (request-ahead) are discarded: they are never stored and never counted.
+
+**What does not change.**
+
+- The step-kind set stays closed. No kind is added, and `sftp_put` stays reserved and refused.
+- The gate-reference rule is unchanged. The path of a ranged read was produced by a gated prior step (C1,
+  `cp_syslog_collect_stat`, in the same run), so the fetch is `NOT_APPLICABLE` under the same sentence of §2.3.
+  The range itself sends no device command.
+- A whole-file `sftp_get` without a range behaves exactly as before.
+
+**Scope of the approval.** The approval of C2 covers this one purpose, the system-log incremental read of the
+Check Point Gaia gateway file families of the phase B contract §2.1, and extends to no other source, capability or
+vendor. Any other use of the byte range needs its own Product Owner approval.
+
+**Implementation note (stricter than the rule, not a change to it).** The implementation
+(`ui2/job-engine/src/main/java/com/securityexpert/nexus/ui2/jobs/systemlog/CpSyslogRangedRead.java`, transport
+`DeviceTransport.fetchRange`) additionally resolves the C2 gate row `cp_syslog_collect_read` (registered by V160:
+`check_point`, `cp_gaia_gateway`, shell `not_applicable`, transport `SFTP_GET`, with the §10.1 C2 cell text as its
+canonical command key) through §3.3 on every read, and refuses the read before any I/O unless it resolves `KNOWN`
+as `read`. It also applies the phase B §4.3 path rule (a path printed by this run's C1 stat, in the family's base
+directory, with a read-eligible name). This narrows when the ranged read may run; it widens nothing.
