@@ -382,7 +382,7 @@ def split_rollback(manifest, snapshot, apply):
     # Restore the compatible general owner first, so fallback recovery has a live executor.
     for target, image in images.items():
         if target != "policy" or not fallback:
-            module_deploy.replace(target, image, snapshot, authorization="snapshot-rollback")
+            module_deploy.replace(target, image, snapshot, authorization="snapshot-rollback", rollback=True)
     if fallback:
         module_deploy.return_policy_to_general(snapshot, "snapshot-rollback")
         if "policy" in images:

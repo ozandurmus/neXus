@@ -157,18 +157,50 @@ def ensure_policy(image):
     return None
 
 
-def ensure_packet_analysis(image):
-    """First release of the analysis worker: apply its volume claim and its manifest set with the candidate image."""
-    existing = run("kubectl", "-n", "ui2", "get", "deployment", "ui2-packet-analysis",
-                   "--ignore-not-found", "-o", "json")
-    if existing:
-        return json.loads(existing)["spec"]["template"]["spec"]["containers"][0]["image"]
-    run("kubectl", "-n", "ui2", "apply", "-f", "-", input=(REPO / "deploy/ui2/36-packet-analysis-pvc.yaml").read_text())
-    manifest = (REPO / "deploy/ui2/58-packet-analysis-deployment.yaml").read_text()
+IMMUTABLE_IMAGE = r".+@sha256:[a-f0-9]{64}"
+PACKET_ANALYSIS_MANIFEST = "deploy/ui2/58-packet-analysis-deployment.yaml"
+
+
+def render_packet_analysis(image):
+    """The engine's manifest set with the candidate engine image; exactly one workload image line."""
+    manifest = (REPO / PACKET_ANALYSIS_MANIFEST).read_text()
     manifest, count = re.subn(r"(?m)^(\s*image: )\S+$", lambda match: match[1] + image, manifest)
     if count != 1:
         raise Blocked("packet-analysis template must contain exactly one workload image")
-    run("kubectl", "-n", "ui2", "apply", "-f", "-", input=manifest)
+    return manifest
+
+
+def kubectl_diff(manifest):
+    """Server-side diff of a manifest against the cluster: True when it differs, False when in sync.
+
+    `kubectl diff` exits 0 for no difference, 1 for a difference and above 1 for an error. Read-only."""
+    try:
+        result = subprocess.run(("kubectl", "-n", "ui2", "diff", "--server-side", "-f", "-"), input=manifest,
+                                capture_output=True, text=True, timeout=120)
+    except (OSError, subprocess.TimeoutExpired):
+        raise Blocked("release command unavailable or timed out") from None
+    if result.returncode > 1:
+        sys.path.insert(0, str(REPO / "tools/e2e"))
+        from hosta_preview_e2e import masked_error
+        raise Blocked("release command failed (exit " + str(result.returncode) + "): " + masked_error(result.stderr))
+    return result.returncode == 1
+
+
+def ensure_packet_analysis(image, check_manifest=True):
+    """First release of the analysis worker: apply its volume claim and its manifest set with the candidate image.
+
+    Later releases change nothing here (the pod must be drained before it restarts); they only check, read-only,
+    that the candidate manifest is acceptable to the cluster. replace_image applies it after the drain."""
+    existing = run("kubectl", "-n", "ui2", "get", "deployment", "ui2-packet-analysis",
+                   "--ignore-not-found", "-o", "json")
+    if existing:
+        if check_manifest:
+            manifest = render_packet_analysis(image)
+            print("packet-analysis manifest: " + ("differs from the cluster; applied after the drain" if kubectl_diff(manifest)
+                                                  else "already in sync"), flush=True)
+        return json.loads(existing)["spec"]["template"]["spec"]["containers"][0]["image"]
+    run("kubectl", "-n", "ui2", "apply", "-f", "-", input=(REPO / "deploy/ui2/36-packet-analysis-pvc.yaml").read_text())
+    run("kubectl", "-n", "ui2", "apply", "-f", "-", input=render_packet_analysis(image))
     return None
 
 
@@ -214,7 +246,12 @@ def reset_to_general(snapshot, module, generation, authorization="automatic-roll
         raise Blocked("recovery retained ownership fence: generation changed or active or uncertain work")
 
 
-def replace_image(target, image):
+def replace_image(target, image, sync_manifest=False):
+    if target == "packet-analysis" and sync_manifest:
+        # One pod-template update installs the engine image together with the committed env and resources
+        # (memory plan, JAVA_TOOL_OPTIONS), so manifest changes ship with the code. Called only after the drain.
+        run("kubectl", "-n", "ui2", "apply", "-f", "-", input=render_packet_analysis(image))
+        return
     if target != "worker":
         run("kubectl", "-n", "ui2", "set", "image", "deployment/ui2-" + target, TARGETS[target] + "=" + image)
         return
@@ -232,16 +269,16 @@ def replace_image(target, image):
     run("kubectl", "-n", "ui2", "patch", "deployment/ui2-worker", "--type=strategic", "-p", json.dumps(patch))
 
 
-def replace(target, image, snapshot, limit=14400, commit=None, authorization=None):
+def replace(target, image, snapshot, limit=14400, commit=None, authorization=None, rollback=False):
     if target == "policy" and query("select (owner_heartbeat_at>now()-interval '60 seconds') from module_runtime_control where module='general'") != "t":
         raise Blocked("compatible general worker bootstrap required before policy cutover")
     fallback = target == "policy" and query("select fallback_enabled from module_runtime_control where module='policy'") == "t"
     if fallback and (not authorization or not re.fullmatch(r"[A-Za-z0-9_.:/-]{1,160}", authorization)):
         raise Blocked("policy ownership transfer requires an opaque PO authorization reference")
-    old = (ensure_policy(image) if target == "policy" else ensure_packet_analysis(image) if target == "packet-analysis"
+    old = (ensure_policy(image) if target == "policy" else ensure_packet_analysis(image, not rollback) if target == "packet-analysis"
            else run("kubectl", "-n", "ui2", "get", "deployment/ui2-" + target,
                     "-o", "jsonpath={.spec.template.spec.containers[0].image}"))
-    if old is not None and not re.fullmatch(r".+@sha256:[a-f0-9]{64}", old):
+    if old is not None and not re.fullmatch(IMMUTABLE_IMAGE, old):
         raise Blocked("old workload digest is not immutable")
     generation = None
     # A first release (ensure_packet_analysis created the deployment with the candidate image: old is None) has no
@@ -252,7 +289,8 @@ def replace(target, image, snapshot, limit=14400, commit=None, authorization=Non
     old_pods = json.loads(run("kubectl", "-n", "ui2", "get", "pods", "-l", "app.kubernetes.io/component=" + TARGETS[target], "-o", "json"))
     old_uids = {pod["metadata"]["uid"] for pod in old_pods["items"]}
     try:
-        replace_image(target, image)
+        # A rollback restores the recorded digest only; the committed manifest belongs to the forward release.
+        replace_image(target, image, sync_manifest=target == "packet-analysis" and old is not None and not rollback)
         if generation is not None:
             deadline = time.monotonic() + 900
             while old_uids:
@@ -322,6 +360,8 @@ def main():
     selection.add_argument("--targets")
     selection.add_argument("--validate-targets", metavar="TARGETS")
     parser.add_argument("--image")
+    parser.add_argument("--packet-analysis-image", help="digest-pinned Packet Analysis engine image (main image plus "
+                        "tshark); required when packet-analysis is a target, never defaults to --image")
     parser.add_argument("--commit")
     parser.add_argument("--rollback", action="store_true")
     parser.add_argument("--allow-newer-schema", action="store_true")
@@ -337,8 +377,16 @@ def main():
             validate_targets(args.validate_targets)
             return
         targets = validate_targets(args.targets)
-        if not args.rollback and not args.return_policy_to_general and (args.image is None or not re.fullmatch(r".+@sha256:[a-f0-9]{64}", args.image)):
+        if not args.rollback and not args.return_policy_to_general and (args.image is None or not re.fullmatch(IMMUTABLE_IMAGE, args.image)):
             raise Blocked("candidate image must be immutable")
+        if args.packet_analysis_image is not None and not re.fullmatch(IMMUTABLE_IMAGE, args.packet_analysis_image):
+            raise Blocked("packet-analysis image must be immutable")
+        if not args.rollback and not args.return_policy_to_general and "packet-analysis" in targets:
+            # The engine needs tshark, which the main service image does not have: fail closed, never fall back.
+            if args.packet_analysis_image is None:
+                raise Blocked("packet-analysis target requires --packet-analysis-image; the main image has no tshark")
+            if args.packet_analysis_image == args.image:
+                raise Blocked("packet-analysis image must differ from the main service image")
         from release_snapshot import load_snapshot
         directory = Path(args.snapshot).expanduser().resolve()
         manifest = load_snapshot(directory)  # Complete checksum verification before any drain/mutation.
@@ -358,7 +406,10 @@ def main():
         failures = []
         for target in targets:
             try:
-                replace(target, rollback_image(manifest, target) if args.rollback else args.image, directory.name, args.wait_limit, args.commit, args.authorization_ref)
+                image = (rollback_image(manifest, target) if args.rollback else
+                         args.packet_analysis_image if target == "packet-analysis" else args.image)
+                replace(target, image, directory.name, args.wait_limit, args.commit, args.authorization_ref,
+                        rollback=args.rollback)
             except Blocked as error:
                 failures.append(target)
                 print(json.dumps({"module": target, "status": "BLOCKED", "reason": str(error)}), flush=True)

@@ -119,7 +119,8 @@ echo "Digest is $IMAGE_DIGEST"
 
 # The Packet Analysis engine image (docs/design/PACKET_ANALYSIS_ENGINE_IMAGE.md): the main image just built, by
 # digest, plus tshark -- so tshark never enters the main image. Same registry repository, tag <commit12>-pa; scanned
-# by the same gate below. NEXUS_BUILD_PACKET_ANALYSIS_IMAGE=0 skips it (nothing deploys it yet).
+# by the same gate below, and rolled out to ui2-packet-analysis only (module_deploy.py --packet-analysis-image; the main
+# image has no tshark). NEXUS_BUILD_PACKET_ANALYSIS_IMAGE=0 skips it and drops packet-analysis from the rollout.
 PA_IMAGE=""
 if [ "${NEXUS_BUILD_PACKET_ANALYSIS_IMAGE:-1}" != 0 ]; then
   pa_start=$SECONDS
@@ -140,12 +141,31 @@ fi
 
 python3 "$REPO/tools/e2e/hosta_e2e_image.py" ensure --commit "$COMMIT_SHA" >/dev/null
 rollout_start=$SECONDS
+# Without an engine image (NEXUS_BUILD_PACKET_ANALYSIS_IMAGE=0) the packet-analysis target is dropped: it must never
+# be rolled to the main image, which has no tshark.
+if [ -z "$PA_IMAGE" ]; then
+  KEPT_TARGETS=""
+  for target in ${NEXUS_DEPLOY_TARGETS//,/ }; do
+    if [ "$target" = packet-analysis ]; then
+      echo "NOTE: packet-analysis removed from the rollout targets: no Packet Analysis engine image was built" \
+           "(NEXUS_BUILD_PACKET_ANALYSIS_IMAGE=0); ui2-packet-analysis keeps running its current image."
+    else
+      KEPT_TARGETS="${KEPT_TARGETS:+$KEPT_TARGETS }$target"
+    fi
+  done
+  NEXUS_DEPLOY_TARGETS="$KEPT_TARGETS"
+fi
 echo "Updating selected deployments..."
 SNAPSHOT_ID=$(printf '%s\n' "$RELEASE_SNAPSHOT" | python3 -c 'import json,sys; print(json.load(sys.stdin)["snapshot"])')
-python3 "$REPO/tools/delivery/module_deploy.py" --targets "$NEXUS_DEPLOY_TARGETS" \
-  --image "registry.kube-system.svc.cluster.local/nexus-ui2-service@$IMAGE_DIGEST" \
-  --snapshot "$HOME/release-snapshots/$SNAPSHOT_ID" --commit "$COMMIT_SHA" --wait-limit "${WORKER_WAIT_LIMIT_S:-14400}" \
-  --authorization-ref "${NEXUS_MODULE_AUTHORIZATION_REF:-}"
+if [ -z "$NEXUS_DEPLOY_TARGETS" ]; then
+  echo "No deployment targets left after dropping packet-analysis; nothing to roll out."
+else
+  python3 "$REPO/tools/delivery/module_deploy.py" --targets "$NEXUS_DEPLOY_TARGETS" \
+    --image "registry.kube-system.svc.cluster.local/nexus-ui2-service@$IMAGE_DIGEST" \
+    ${PA_IMAGE:+--packet-analysis-image "$PA_IMAGE"} \
+    --snapshot "$HOME/release-snapshots/$SNAPSHOT_ID" --commit "$COMMIT_SHA" --wait-limit "${WORKER_WAIT_LIMIT_S:-14400}" \
+    --authorization-ref "${NEXUS_MODULE_AUTHORIZATION_REF:-}"
+fi
 
 timing rollout "$rollout_start"
 python3 "$REPO/tools/e2e/hosta_e2e_image.py" ensure --commit "$COMMIT_SHA" >/dev/null
