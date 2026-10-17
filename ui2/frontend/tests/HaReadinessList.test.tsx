@@ -223,6 +223,9 @@ it("flags a stale evaluation per row and warns above the list, without changing 
   const stale = hoursAgo(8 * 24);
   setup({ rows: { "CLS-ALPHA-01": [evaluated("CLS-ALPHA-01", "READY", stale)], "CLS-BRAVO-02": [evaluated("CLS-BRAVO-02", "NOT_READY", stale)] } });
   expect(screen.getByText("Readiness was last evaluated 8 d ago; run a readiness check before relying on Ready.")).toBeInTheDocument();
+  // The e2e safety fixture reads any non-info/success Alert as a loading error; the notice is a status, not an alert.
+  expect(screen.queryByRole("alert")).toBeNull();
+  expect(screen.getByRole("status")).toHaveTextContent("run a readiness check before relying on Ready");
   expect(within(row("CLS-ALPHA-01")).getByText("Stale")).toBeInTheDocument();
   expect(within(row("CLS-ALPHA-01")).getByText("8 d ago")).toBeInTheDocument();
   expect(within(row("CLS-ALPHA-01")).getByText("Ready")).toBeInTheDocument();
