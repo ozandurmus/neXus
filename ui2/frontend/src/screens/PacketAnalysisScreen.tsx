@@ -32,6 +32,7 @@ import {
 } from "../auth/adminApi";
 import { ScreenHeader, ScreenRoot } from "../shell/ScreenLayout";
 import { M3Button, StatusChip } from "../shell/M3Widgets";
+import { ROLE_REFUSAL } from "../shell/actionAccess";
 import type { Tone } from "../shell/tone";
 import { m3, MONO } from "../theme/m3Theme";
 import { PacketCaseWorkspace } from "./packetanalysis/PacketCaseWorkspace";
@@ -148,8 +149,7 @@ export function PacketAnalysisScreen() {
   return (
     <ScreenRoot>
       <ScreenHeader title="Packet Analysis"
-        subtitle={`Offline pcap/pcapng analysis · captures are deleted ${limits?.retention_days ?? 7} days after the case is created`}
-        actions={permissions?.masked ? <StatusChip tone="mem" label="Masked view" /> : undefined} />
+        subtitle={`Offline pcap/pcapng analysis · captures are deleted ${limits?.retention_days ?? 7} days after the case is created`} />
       <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>Results are evidence-led: a stage that cannot be established is reported as unknown, with the reason.</Typography>
       {error && <Alert severity="error">{error}</Alert>}
       {notice && <Alert severity="success">{notice}</Alert>}
@@ -167,6 +167,15 @@ export function PacketAnalysisScreen() {
             <FormControlLabel label="Payload zeroing"
               control={<Checkbox checked={zeroing} onChange={e => setZeroing(e.target.checked)} disabled={busy} />} />
             <M3Button emphasis="filled" disabled={busy || !title.trim()} onClick={() => void create()}>Create case</M3Button>
+          </Stack>
+        </Card>
+      )}
+
+      {permissions && !permissions.run && (
+        <Card sx={{ p: 2, boxShadow: "none", border: `1px solid ${m3.outlineVar}` }}>
+          <Stack direction="row" spacing={2} alignItems="center" sx={{ flexWrap: "wrap", gap: 1 }}>
+            <M3Button emphasis="filled" icon="plus" disabled>New case</M3Button>
+            <Typography role="status" variant="body2" sx={{ color: m3.onSurfaceVar }}>{ROLE_REFUSAL}</Typography>
           </Stack>
         </Card>
       )}

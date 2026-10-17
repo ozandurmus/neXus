@@ -10,6 +10,7 @@ import Typography from "@mui/material/Typography";
 import { ScreenHeader, ListDetail, EmptyPanel, ScreenRoot } from "../shell/ScreenLayout";
 import { Icon } from "../shell/Icon";
 import { M3Button, StatusChip } from "../shell/M3Widgets";
+import { PLANE_ADMIN } from "../shell/actionAccess";
 import { MONO, m3 } from "../theme/m3Theme";
 import { RoleChip } from "../shell/States";
 import { FilterBar, FilterRow, ListSettingsMenu, contentVersionText, downloadText, isDeviceLive, toCsv } from "./DeviceShared";
@@ -1080,7 +1081,7 @@ export function InventoryScreen() {
             <M3Button deviceJob emphasis="tonal" icon="config" disabled={configBulkBusy} onClick={handleConfigBulk}>
               {configBulkBusy ? "Starting..." : "Read configuration, all"}
             </M3Button>
-            <M3Button emphasis="filled" icon="plus" href="?screen=administration">Add device</M3Button>
+            <M3Button emphasis="filled" icon="plus" href="?screen=administration" plane={PLANE_ADMIN}>Add device</M3Button>
           </>
         }
       />

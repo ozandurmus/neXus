@@ -33,12 +33,26 @@ function requiredBackupDisposition(err: unknown): number | null {
     : null;
 }
 
+/**
+ * One column template for the registry header and every row, so the headings can never drift off their cells or run
+ * into each other (review 2026-10-17: "DEVICE / HOSTNAMEENROLMENT STATE"). The hostname column keeps a floor wide enough
+ * for a full name; if the card is ever narrower than the floors add up to, the list scrolls sideways instead.
+ */
+const REGISTRY_GRID = {
+  display: "grid",
+  gridTemplateColumns: "28px 52px minmax(170px, 1fr) 128px minmax(196px, 220px) 36px",
+  columnGap: 1.25,
+  alignItems: "center",
+  px: 1.5,
+} as const;
+const REGISTRY_MIN_WIDTH = 28 + 52 + 170 + 128 + 196 + 36 + 5 * 10 + 26;
+
 /** The device/hostname cell: the plain name, or "UNKNOWN hostname" with a chip naming why (review §3). */
 function HostnameCell({ device }: { readonly device: DeviceSummary }) {
   const hostname = device.hostname?.trim();
   if (hostname) {
     return (
-      <Typography variant="body2" sx={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 500 }}>
+      <Typography variant="body2" title={hostname} sx={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 500 }}>
         {hostname}
       </Typography>
     );
@@ -154,7 +168,7 @@ export function DeviceManagementPane() {
           <M3Button emphasis="filled" onClick={() => confirmBackupDisposition("REMOVE")}>Remove artefacts</M3Button>
         </DialogActions>
       </Dialog>
-      <Box sx={{ flex: 1, minHeight: 0, display: "grid", gridTemplateColumns: "minmax(0, 1fr) 320px", gap: 2 }}>
+      <Box sx={{ flex: 1, minHeight: 0, display: "grid", gridTemplateColumns: "minmax(0, 1fr) 288px", gap: 2 }}>
       <DeviceRegistryCard
         devices={devices}
         deleteError={deleteError}
@@ -363,8 +377,9 @@ function DeviceRegistryCard({
         </Box>
       )}
       {total > 0 && (
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, mt: 1 }}>
-          <Box sx={{ display: "grid", gridTemplateColumns: "36px 64px minmax(0, 1fr) 140px 230px 40px", px: 2, py: 0.5, color: "text.secondary", fontSize: "0.75rem", fontWeight: 600, alignItems: "center" }}>
+        <Box sx={{ overflowX: "auto", mt: 1 }}>
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, minWidth: REGISTRY_MIN_WIDTH }}>
+          <Box sx={{ ...REGISTRY_GRID, border: "1px solid transparent", py: 0.5, color: "text.secondary", fontSize: "0.75rem", fontWeight: 600, whiteSpace: "nowrap" }}>
             <Box>
               <Checkbox
                 checked={isAllSelected}
@@ -377,7 +392,7 @@ function DeviceRegistryCard({
             </Box>
             <Box>VENDOR</Box>
             <Box>DEVICE / HOSTNAME</Box>
-            <Box>ENROLMENT STATE</Box>
+            <Box>ENROLLMENT STATE</Box>
             <Box>LAST COLLECTION</Box>
             <Box sx={{ textAlign: "right" }}>&nbsp;</Box>
           </Box>
@@ -386,11 +401,7 @@ function DeviceRegistryCard({
               <Box
                 key={device.device_id}
                 sx={{
-                  display: "grid",
-                  gridTemplateColumns: "36px 64px minmax(0, 1fr) 140px 230px 40px",
-                  alignItems: "center",
-                  gap: 1,
-                  px: 2,
+                  ...REGISTRY_GRID,
                   py: 1.25,
                   border: "1px solid",
                   borderColor: selectedIds.has(device.device_id) ? "primary.main" : "divider",
@@ -431,6 +442,7 @@ function DeviceRegistryCard({
               </Box>
             ))}
           </Stack>
+        </Box>
         </Box>
       )}
     </EmptyPanel>

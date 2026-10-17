@@ -23,6 +23,7 @@ import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 import { m3 } from "../theme/m3Theme";
 import { CreateCredentialDialog } from "../screens/CredentialsPanel";
 import { M3Button, StatusChip } from "./M3Widgets";
+import { PLANE_ADMIN } from "./actionAccess";
 import { useFetchOnMount } from "./useFetchOnMount";
 import {
   addDeviceSingle,
@@ -150,7 +151,7 @@ export function AddDeviceDialogTrigger() {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <M3Button emphasis="filled" icon="plus" onClick={() => setOpen(true)}>
+      <M3Button emphasis="filled" icon="plus" plane={PLANE_ADMIN} onClick={() => setOpen(true)}>
         Add device
       </M3Button>
       {open && <AddDeviceDialogContent onClose={() => setOpen(false)} />}
@@ -169,7 +170,7 @@ export function ImportFromManagerTrigger() {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <M3Button emphasis="outlined" onClick={() => setOpen(true)}>
+      <M3Button emphasis="outlined" plane={PLANE_ADMIN} onClick={() => setOpen(true)}>
         Import from manager
       </M3Button>
       {open && <AddDeviceDialogContent initialMode="discovery" onClose={() => setOpen(false)} />}

@@ -40,7 +40,8 @@ describe("Data Sanitizer screen", () => {
     expect(await screen.findByText(/At most 2.0 GB per file/)).toBeInTheDocument();
     expect(screen.getByText(/after one download or 60 minutes/)).toBeInTheDocument();
     expect(screen.getByText(/for 90 days, encrypted/)).toBeInTheDocument();
-    expect(screen.getByText(/Veri Anonimleştirme/)).toBeInTheDocument();
+    expect(screen.getByText(/Data Anonymization/)).toBeInTheDocument();
+    expect(screen.queryByText(/Veri Anonimleştirme/)).toBeNull();
   });
 
   it("sanitizes a dropped file with progress, follows the job and offers one download", async () => {

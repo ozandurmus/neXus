@@ -324,7 +324,9 @@ describe("Packet Analysis screen", () => {
     vi.mocked(api.getPacketCase).mockResolvedValue(detail(aiview));
     vi.mocked(api.getPacketReport).mockResolvedValue({ job_id: JOB, case_id: CASE, projection: "masked", summary });
     themed();
-    expect(await screen.findByText("Masked view")).toBeInTheDocument();
+    // The top bar already says the session is masked; the page does not repeat it, and shows the refused action instead.
+    expect(await screen.findByRole("button", { name: "New case" })).toBeDisabled();
+    expect(screen.queryByText("Masked view")).toBeNull();
     expect(screen.queryByLabelText("Case title")).toBeNull();
     fireEvent.click(await screen.findByRole("button", { name: "OBJ-TANGO-04" }));
     const card = await screen.findByLabelText("Case detail");

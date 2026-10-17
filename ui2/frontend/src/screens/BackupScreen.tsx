@@ -49,6 +49,7 @@ import {
 import { ScreenHeader, MetricGrid, MetricCard, ScreenRoot } from "../shell/ScreenLayout";
 import { backupFleetCounts, isBackupFleetRow, retentionNote } from "./backupCounts";
 import { M3Button, StatusChip } from "../shell/M3Widgets";
+import { PLANE_OPERATIONS, ROLE_REFUSAL, useRoleAllows } from "../shell/actionAccess";
 import { Ts, VendorBadge } from "../shell/States";
 
 
@@ -114,6 +115,7 @@ export function toFleetRows(artefacts: readonly BackupArtefact[], nameByDeviceId
 }
 
 export function BackupScreen() {
+  const roleAllowed = useRoleAllows(PLANE_OPERATIONS);
   const [loading, setLoading] = useState(false);
   const [triggeringId, setTriggeringId] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -449,7 +451,7 @@ export function BackupScreen() {
             <M3Button emphasis="outlined" onClick={() => setPolicyOpen(true)}>
               Retention & Policies
             </M3Button>
-            <M3Button deviceJob emphasis="filled" onClick={() => setFleetOpen(true)}>
+            <M3Button deviceJob plane={PLANE_OPERATIONS} emphasis="filled" onClick={() => setFleetOpen(true)}>
               Run Fleet Backup
             </M3Button>
           </Stack>
@@ -487,13 +489,15 @@ export function BackupScreen() {
               onChange={(e) => setFleetReason(e.target.value)}
               fullWidth
               size="small"
+              disabled={!roleAllowed}
+              helperText={roleAllowed ? undefined : ROLE_REFUSAL}
             />
             {fleetError && <Alert severity="error">{fleetError}</Alert>}
           </Stack>
         </DialogContent>
         <DialogActions>
           <M3Button emphasis="text" onClick={() => setFleetOpen(false)} disabled={fleetBusy}>Cancel</M3Button>
-          <M3Button deviceJob emphasis="filled" onClick={handleFleetBackup} disabled={fleetBusy || fleetReason.trim().length < 8}>
+          <M3Button deviceJob plane={PLANE_OPERATIONS} emphasis="filled" onClick={handleFleetBackup} disabled={fleetBusy || fleetReason.trim().length < 8}>
             {fleetBusy ? "Requesting…" : "Run"}
           </M3Button>
         </DialogActions>
@@ -1005,6 +1009,7 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
   /** V70: a device no longer in neXus -- its backups can be removed, with a reason. */
   readonly onDeleteOrphan: (d: BackupDeviceItem) => void;
 }) {
+  const roleAllowed = useRoleAllows(PLANE_OPERATIONS);
   const [devices, setDevices] = useState<DeviceSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -1086,6 +1091,11 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
             inputProps={{ "aria-label": "Filter the backup fleet" }} />
         </Stack>
       </Box>
+      {!roleAllowed && (
+        <Typography role="status" variant="caption" sx={{ display: "block", color: m3.onSurfaceVar, px: 2, pb: 1.5 }}>
+          Backup targets and backup requests are locked for your role. {ROLE_REFUSAL}
+        </Typography>
+      )}
       {(error || fleetError) && <Alert severity="warning" sx={{ mx: 2, mb: 1.5 }}>{error ?? fleetError}</Alert>}
       {devices === null && !error ? (
         <Typography variant="body2" sx={{ color: m3.onSurfaceVar, px: 2, pb: 2 }}>Reading the devices…</Typography>
@@ -1096,7 +1106,7 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
             : "No device matches the filter."}
         </Typography>
       ) : (
-        <TableContainer sx={{ maxHeight: 640 }}>
+        <TableContainer sx={{ maxHeight: 640, overflowX: "auto" }}>
           <Table size="small" stickyHeader sx={{ "& td, & th": { px: 1 }, "& td:first-of-type, & th:first-of-type": { pl: 2 }, "& td:last-of-type, & th:last-of-type": { pr: 2 } }}>
             <TableHead>
               <TableRow>
@@ -1130,12 +1140,12 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
                     <TableCell sx={{ fontFamily: MONO, fontSize: 12, color: m3.onSurfaceVar, whiteSpace: "nowrap" }}>{summary?.cluster_member_ref ?? "standalone"}</TableCell>
                     <TableCell align="center">
                       {summary ? (
-                        <Switch size="small" checked={Boolean(summary.backup_target)} disabled={busyId === id}
+                        <Switch size="small" checked={Boolean(summary.backup_target)} disabled={busyId === id || !roleAllowed}
                           onChange={(e) => void toggle(summary, e.target.checked)}
                           inputProps={{ "aria-label": `Backup target ${name}` }} />
                       ) : <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>Not a backup target</Typography>}
                     </TableCell>
-                    <TableCell sx={{ fontSize: 12.5, whiteSpace: "nowrap" }}>
+                    <TableCell sx={{ fontSize: 12.5 }}>
                       {item ? <Ts at={item.lastBackupTime} relative />
                         : summary?.backup_target ? <StatusChip tone="warn" label="No archive" dense />
                         : <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>No archive</Typography>}
@@ -1143,24 +1153,26 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
                     <TableCell align="right" sx={{ fontSize: 12.5, whiteSpace: "nowrap" }}>{item ? formatBytes(item.sizeBytes) : ""}</TableCell>
                     <TableCell>{item ? <ValidationChip level={item.validationLevel} /> : null}</TableCell>
                     <TableCell>{item ? <DeviationChip state={item.deviationState} /> : null}</TableCell>
-                    <TableCell align="right">
+                    <TableCell align="right" sx={{ minWidth: 260 }}>
                       <BackupAttempts deviceId={id} latestOnly version={version} />
-                      {/* Compact actions: all six stay visible in the row (the full-size buttons clipped Compare and Download). */}
-                      <Stack direction="row" spacing={0} justifyContent="flex-end" alignItems="center" sx={{ whiteSpace: "nowrap",
+                      {/* Compact actions: all six stay visible in the row. They wrap inside the cell instead of forcing the
+                          table wider than its card (the unbroken row clipped "Latest attempt" and "Backup Now" at 1440 px). */}
+                      <Stack direction="row" spacing={0} useFlexGap justifyContent="flex-end" alignItems="center" flexWrap="wrap" sx={{
+                        rowGap: 0.25,
                         "& .MuiButton-root": { minWidth: 0, px: 0.9, py: 0.25, fontSize: 12.5, textTransform: "none", borderRadius: "6px" } }}>
                         {item || summary?.backup_target ? (
-                          <Tooltip title="Take a configuration and state backup of this device now (needs it switched on as a backup target)"><span><JobButton size="small" variant="contained" disableElevation disabled={busy || !summary?.backup_target}
+                          <Tooltip title="Take a configuration and state backup of this device now (needs it switched on as a backup target)"><span><JobButton plane={PLANE_OPERATIONS} size="small" variant="contained" disableElevation disabled={busy || !summary?.backup_target}
                             sx={{ bgcolor: m3.secondaryContainer, color: m3.onSecondaryContainer, "&:hover": { bgcolor: m3.secondaryContainer }, mr: 0.5 }}
                             onClick={() => onBackupNow(item ?? { deviceId: id, name, ip: "", vendor: vendor ?? "unknown", role: "", lastBackupTime: "", backupType: "standard", validationLevel: "UNKNOWN", deviationState: "NOT EVALUATED", sizeBytes: 0, artefactId: "" }, "standard")}>
                             {busy ? <CircularProgress size={12} /> : "Backup Now"}
                           </JobButton></span></Tooltip>
                         ) : null}
                         {vendor === "check_point" && summary?.role === "management_server" && summary?.backup_target ? (
-                          <Tooltip title="Multi-Domain Server export: one mds_backup of the whole server and every domain. Locks the MDS database while it runs; after an operator-watched export, used as the daily 02:00 Europe/Istanbul backup."><span><JobButton size="small" disabled={busy}
+                          <Tooltip title="Multi-Domain Server export: one mds_backup of the whole server and every domain. Locks the MDS database while it runs; after an operator-watched export, used as the daily 02:00 Europe/Istanbul backup."><span><JobButton plane={PLANE_OPERATIONS} size="small" disabled={busy}
                             onClick={() => onBackupNow(item ?? { deviceId: id, name, ip: "", vendor: vendor ?? "unknown", role: "management_server", lastBackupTime: "", backupType: "standard", validationLevel: "UNKNOWN", deviationState: "NOT EVALUATED", sizeBytes: 0, artefactId: "" }, "mds_export")}>MDS export</JobButton></span></Tooltip>
                         ) : null}
                         {vendor === "check_point" && item ? (
-                          <Tooltip title="Check Point only: a full Gaia OS snapshot, in addition to the configuration backup. Palo Alto has no equivalent here."><span><JobButton size="small" disabled={busy} onClick={() => onBackupNow(item, "snapshot")}>Snapshot</JobButton></span></Tooltip>
+                          <Tooltip title="Check Point only: a full Gaia OS snapshot, in addition to the configuration backup. Palo Alto has no equivalent here."><span><JobButton plane={PLANE_OPERATIONS} size="small" disabled={busy} onClick={() => onBackupNow(item, "snapshot")}>Snapshot</JobButton></span></Tooltip>
                         ) : null}
                         <Tooltip title={baselines[id] ? "Every backup of this device; ★ = a baseline archive is set for comparison" : "Every backup of this device"}><span><Button size="small" onClick={() => onHistory(item ?? { deviceId: id, name, ip: "", vendor: vendor ?? "unknown", role: "", lastBackupTime: "", backupType: "standard", validationLevel: "UNKNOWN", deviationState: "NOT EVALUATED", sizeBytes: 0, artefactId: "" })}>History{baselines[id] ? " ★" : ""}</Button></span></Tooltip>
                         <Button size="small" disabled={!item?.artefactId} onClick={() => item && onContents(item)}>Contents</Button>

@@ -5,7 +5,7 @@ import { ScreenHeader, ScreenRoot } from "../shell/ScreenLayout";
 export function SanitizerPreview() {
   return (
     <ScreenRoot>
-      <ScreenHeader title="Data Sanitizer" subtitle="Veri Anonimleştirme · synthetic preview" />
+      <ScreenHeader title="Data Sanitizer" subtitle="Data Anonymization · synthetic preview" />
       <OutcomeView downloaded={false} onDownload={() => undefined} outcome={{
         mode: "sanitize", id: "00000000-0000-4000-8000-000000000000", state: "SUCCEEDED", fileType: "text",
         inputBytes: 48 * 1024 * 1024, outputBytes: 49 * 1024 * 1024, failure: null, outputState: "READY",
