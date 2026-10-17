@@ -134,4 +134,36 @@ describe("the Backups screen (UI review 2026-09-23)", () => {
     expect(screen.getByText("FW-ROMEO-01-M1")).toBeInTheDocument();
     expect(screen.queryByText("FW-BRAVO-02")).toBeNull();
   });
+
+  it("states targets with a stored backup over the Overview's population and names an archived non-target (UI review 2026-10-17)", async () => {
+    // d1 is a target with an archive, d2 a target without, d3 not a target but holding an archive
+    stub({ schedule_enabled: true, daily_backup_cron: "0 2 * * *", backup_retention_days: 7, snapshot_retention_depth: 1 },
+      { active_major_deviations: [], total_deviations_checked: 0 }, [
+        ...backups,
+        { artefact_id: "a3", device_id: "d3", collected_at: "2026-09-20T11:43:28Z", size_bytes: 2048, digest_prefix: "z", validation_level: "V1", deviation_state: null, vendor: "palo_alto" },
+      ]);
+    render(<BackupScreen />);
+    await screen.findByText("FW-TANGO-04-M1");
+    const card = (await screen.findByText("Targets with a stored backup")).parentElement!;
+    expect(card.textContent).toContain("1");
+    expect(card.textContent).toContain("of 2 targets");
+    expect(card.textContent).toContain("2 devices hold a stored backup: 1 of them is not a backup target");
+    expect(screen.getByText("Targets · 2")).toBeInTheDocument();
+    expect(screen.getByText("Targets without archive · 1")).toBeInTheDocument();
+    expect(screen.getByText("Backup-capable · 3")).toBeInTheDocument();
+    const retention = screen.getByText("Retention policy").parentElement!;
+    expect(retention.textContent).toContain("Gaia snapshots: newest 1 kept per gateway");
+    expect(retention.textContent).not.toContain("Snapshot depth: 1 retained");
+  });
+
+  it("says UNKNOWN for the target count when the device list cannot be read", async () => {
+    vi.stubGlobal("fetch", vi.fn((url: string) => {
+      if (url.startsWith("/devices")) return Promise.resolve(new Response("{}", { status: 500 }));
+      const body = url.startsWith("/backups") ? { backups, baselines: {} } : {};
+      return Promise.resolve(new Response(JSON.stringify(body), { status: 200 }));
+    }));
+    render(<BackupScreen />);
+    const card = (await screen.findByText("Targets with a stored backup")).parentElement!;
+    expect(card.textContent).toContain("UNKNOWN");
+  });
 });

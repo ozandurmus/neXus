@@ -146,3 +146,33 @@ describe("control families", () => {
     expect(familyOf({ ...base, category: null, frameworks: [{ framework: "CIS", reference: "2.1.1" }] } as never)).toBe("Unmapped");
   });
 });
+
+describe("Compliance -- counts reconcile (UI review 2026-10-17)", () => {
+  function stubCounts(cisTotal: number) {
+    vi.stubGlobal("fetch", vi.fn((url: string) => Promise.resolve(new Response(JSON.stringify(
+      url.includes("/compliance/overview") ? {
+        ...OVERVIEW, data_gaps: 62, control_checks: 186,
+        frameworks: [{ framework: "CIS Benchmark", score_pct: 54.3, total_controls: cisTotal, pass_count: 102, fail_count: 22, data_unavailable_count: 62 }],
+      } : { controls: [
+        control("c1", "Authentication", "FAIL", [40, 22, 0], ["FW-TANGO-04"]),
+        control("c2", "Authentication", "PASS", [62, 0, 0]),
+        control("c3", "Logging", "DATA_UNAVAILABLE", [0, 0, 62]),
+      ] }), { status: 200 }))));
+  }
+
+  it("claims the CIS card carries the same totals only when it does", async () => {
+    stubCounts(186);
+    render(<ComplianceScreen />);
+    expect(await screen.findByText(/186 control checks \(one control on one firewall\)/)).toBeInTheDocument();
+    expect(screen.getByText(/every control maps to CIS, so the CIS card shows the same totals/)).toBeInTheDocument();
+    expect(screen.getByText("186 control checks (control × firewall)")).toBeInTheDocument();
+  });
+
+  it("drops the claim when the totals differ", async () => {
+    stubCounts(194);
+    render(<ComplianceScreen />);
+    expect(await screen.findByText(/186 control checks \(one control on one firewall\)/)).toBeInTheDocument();
+    expect(screen.queryByText(/so the CIS card shows the same totals/)).toBeNull();
+  });
+});
+

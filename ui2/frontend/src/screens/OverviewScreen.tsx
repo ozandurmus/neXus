@@ -380,6 +380,17 @@ function ListCard<T>({ icon, title, total, rows, empty, cells, rowHref, allHref 
   );
 }
 
+/**
+ * The devices in the header are the devices on the map: the enrolled ones (`active_devices`). The backend's
+ * `enrolled_devices` counts every registered device, drafts included (135 against 133 tiles, UI review 2026-10-17),
+ * so the difference is named instead of folded in.
+ */
+export function estateDevicesLabel(d: { active_devices: number; enrolled_devices?: number }): string {
+  const registered = d.enrolled_devices ?? d.active_devices;
+  const notEnrolled = Math.max(0, registered - d.active_devices);
+  return `${d.active_devices} enrolled devices${notEnrolled > 0 ? ` (${notEnrolled} more registered, not enrolled)` : ""}`;
+}
+
 export function OverviewScreen() {
   const [data, setData] = useState<OverviewView | null>(null);
   const [error, setError] = useState<{ message: string; restricted: boolean } | null>(null);
@@ -511,7 +522,6 @@ export function OverviewScreen() {
     );
   }
 
-  const enrolled = d.enrolled_devices ?? d.active_devices;
   const clustersEnrolled = d.clusters_enrolled ?? d.clusters;
 
   // Executive Overview (EXEC_OVERVIEW_DESIGN_2026_09_25_FABLE.md): the estate map with three facts beside it, then
@@ -564,7 +574,7 @@ export function OverviewScreen() {
     <ScreenRoot>
       <ScreenHeader
         title="Overview"
-        subtitle={`Estate assurance · ${enrolled} devices · ${clustersEnrolled} clusters · as of ${formatUtc(data.generated_at, false)} ${DISPLAY_TZ_LABEL}`}
+        subtitle={`Estate assurance · ${estateDevicesLabel(d)} · ${clustersEnrolled} clusters · as of ${formatUtc(data.generated_at, false)} ${DISPLAY_TZ_LABEL}`}
         actions={ev ? (
           <Link href={q({ screen: "inventory", inventory_age: "stale" })} underline="none" sx={{ fontSize: 13, color: m3.onSurface,
             border: `1px solid ${m3.outlineVar}`, borderRadius: "999px", px: 1.5, py: 0.75, bgcolor: m3.scLowest, whiteSpace: "nowrap" }}>

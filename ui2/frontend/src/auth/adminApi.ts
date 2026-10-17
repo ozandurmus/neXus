@@ -1466,6 +1466,8 @@ export interface ComplianceOverview {
   readonly observed_compliance_pct: number;
   readonly critical_deficiencies: number;
   readonly data_gaps: number;
+  /** pass + fail + unavailable over every control on every evaluated firewall; NOT_APPLICABLE is not a check. */
+  readonly control_checks?: number;
   /** Devices shown with their previous evaluation while the background re-evaluates a changed configuration or rule set. */
   readonly pending_reevaluation?: number;
   readonly frameworks: readonly {
@@ -1720,9 +1722,12 @@ export interface OverviewView {
 }
 
 export type EstateCondition = "critical" | "ageing" | "partly_assessed" | "not_assessed" | "clear";
+/** Why a cell is not assessed (OverviewService.estateConditionReason); absent from older payloads. */
+export type EstateConditionReason = "not_evaluated" | "no_evidence" | "no_critical_control";
 export interface EstateView {
   readonly devices: ReadonlyArray<{ device_id: string; hostname: string | null; vendor: string; model: string | null;
-    condition: EstateCondition; no_archive: boolean; critical_fail: number | null; last_read_at: string | null }>;
+    condition: EstateCondition; condition_reason?: EstateConditionReason | null; no_archive: boolean; critical_fail: number | null;
+    last_read_at: string | null }>;
   readonly counts: Readonly<Record<EstateCondition, number>>;
   readonly no_archive: number;
   readonly compliance_state: EvidenceState;
