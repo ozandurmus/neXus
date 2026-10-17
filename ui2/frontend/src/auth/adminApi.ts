@@ -3073,3 +3073,187 @@ export interface PacketCompareResult {
 export const comparePacketCase = (caseId: string, input: { reference?: unknown; against?: unknown }) =>
   call<PacketCompareResult>(`${PA}/cases/${encodeURIComponent(caseId)}/compare`, "POST", input);
 
+
+// ---------------------------------------------------------------------------------------------------------------
+// System logs, phase B read side (DEVICE_SYSTEM_LOG_PHASE_B_CONTRACT.md section 14). The server decides what a session
+// may see: `can_view_unmasked` is a flag the server computes, and every text page says whether it was masked.
+// ---------------------------------------------------------------------------------------------------------------
+
+export interface SystemLogSource {
+  readonly source_key: string;
+  /** OK, BACKLOG, GAP, UNKNOWN, or another outcome word (ABSENT, UNSUPPORTED, TOO_LARGE, STORAGE_REFUSED). */
+  readonly status: string;
+  readonly last_outcome: string | null;
+  readonly last_run_at: string | null;
+  readonly last_job_id: string | null;
+  readonly last_bytes_read: number | null;
+  readonly last_bytes_stored: number | null;
+  readonly pending_bytes: number;
+  readonly fast_rotating: boolean;
+  readonly retention_horizon_seconds: number | null;
+  readonly cursor: { readonly offset_bytes: number | null; readonly device_epoch_at_read: number | null; readonly pan_last_receive_time: string | null; readonly updated_at: string | null } | null;
+  readonly stored: { readonly chunks: number; readonly bytes: number; readonly lines: number; readonly newest_chunk_at: string | null };
+}
+
+export interface SystemLogSources {
+  readonly device_id: string;
+  readonly collection_state: "NO_COLLECTION_YET" | "COLLECTED";
+  readonly can_view_unmasked: boolean;
+  readonly default_page_bytes: number;
+  readonly max_page_bytes: number;
+  readonly last_job: {
+    readonly job_id: string;
+    readonly at: string | null;
+    readonly outcomes: Record<string, number>;
+    readonly window_from: string | null;
+    readonly window_to: string | null;
+    readonly window_time_basis: string;
+  } | null;
+  readonly sources: readonly SystemLogSource[];
+}
+
+export interface SystemLogChunk {
+  readonly chunk_id: string;
+  readonly source_key: string;
+  readonly job_id: string;
+  readonly collected_at: string | null;
+  readonly log_day: string;
+  readonly start_offset: number;
+  readonly end_offset: number;
+  readonly bytes: number;
+  readonly lines: number;
+  readonly first_line_time: string | null;
+  readonly last_line_time: string | null;
+  readonly line_time_basis: string;
+  readonly redaction_count: number;
+  readonly redaction_rule_set: string | null;
+  readonly flags: readonly string[];
+  readonly stored_bytes: number;
+  readonly outcome: string | null;
+  readonly pruned: boolean;
+  readonly prune_reason: string | null;
+}
+
+export interface SystemLogChunks {
+  readonly device_id: string;
+  readonly source: string | null;
+  readonly day: string | null;
+  readonly truncated: boolean;
+  readonly chunks: readonly SystemLogChunk[];
+}
+
+export interface SystemLogGap {
+  readonly gap_id: string;
+  readonly device_id: string;
+  readonly source_key: string;
+  readonly job_id: string;
+  readonly kind: string;
+  readonly known_lost_bytes: number;
+  readonly pending_bytes: number;
+  readonly extent_unknown: boolean;
+  readonly window_start_epoch: number | null;
+  readonly window_end_epoch: number | null;
+  readonly recorded_at: string | null;
+}
+
+export interface SystemLogCrashFile {
+  readonly entry_id: string;
+  readonly device_id: string;
+  readonly directory: string;
+  readonly process: string;
+  readonly size: number;
+  readonly mtime_epoch: number;
+  readonly state: "NEW" | "PRESENT" | "PRESENT_BEFORE_MONITORING" | "REMOVED";
+  readonly first_seen_at: string | null;
+  readonly removed_at: string | null;
+}
+
+export interface SystemLogCrashFiles {
+  readonly device_id: string | null;
+  readonly new_window_days: number;
+  readonly counts: Record<string, number>;
+  readonly truncated: boolean;
+  readonly files: readonly SystemLogCrashFile[];
+  readonly alerts: readonly { readonly alert_id: string; readonly process: string; readonly file_count: number; readonly newest_mtime_epoch: number; readonly recorded_at: string | null }[];
+}
+
+export interface SystemLogHcpFile {
+  readonly file_id: string;
+  readonly name_time: string | null;
+  readonly size: number;
+  readonly mtime_epoch: number;
+  readonly status: string;
+  readonly flags: readonly string[];
+  readonly collected_at: string | null;
+  readonly expires_at: string | null;
+  readonly pruned: boolean;
+  readonly stored_bytes: number;
+}
+
+export interface SystemLogHcp {
+  readonly device_id: string;
+  /** NOT_AVAILABLE until the service can list archive members behind the masking projection. */
+  readonly member_listing: string;
+  readonly files: readonly SystemLogHcpFile[];
+}
+
+export interface SystemLogTextPage {
+  readonly text: string;
+  /** What the server did, from its own header: never what the browser asked for. */
+  readonly masked: boolean;
+  readonly source: string;
+  readonly offset: number;
+  readonly next_offset: number;
+  readonly eof: boolean;
+  readonly lines: number;
+}
+
+const syslogBase = (deviceId: string) => `/api/v2/system-logs/${encodeURIComponent(deviceId)}`;
+
+export const getSystemLogSources = (deviceId: string) => call<SystemLogSources>(`${syslogBase(deviceId)}/sources`, "GET");
+
+export function getSystemLogChunks(deviceId: string, source?: string, day?: string): Promise<SystemLogChunks> {
+  const q = new URLSearchParams();
+  if (source) q.set("source", source);
+  if (day) q.set("day", day);
+  const qs = q.toString();
+  return call<SystemLogChunks>(`${syslogBase(deviceId)}/chunks${qs ? `?${qs}` : ""}`, "GET");
+}
+
+export const getSystemLogGaps = (deviceId: string) =>
+  call<{ readonly device_id: string | null; readonly truncated: boolean; readonly gaps: readonly SystemLogGap[] }>(
+    `/api/v2/system-logs/gaps?deviceId=${encodeURIComponent(deviceId)}`, "GET");
+
+export const getSystemLogCrashFiles = (deviceId: string) =>
+  call<SystemLogCrashFiles>(`/api/v2/system-logs/crash-files?deviceId=${encodeURIComponent(deviceId)}`, "GET");
+
+export const getSystemLogHcp = (deviceId: string) => call<SystemLogHcp>(`${syslogBase(deviceId)}/hcp`, "GET");
+
+/**
+ * One page of a chunk's text. The page is `text/plain` with its paging facts in `X-Syslog-*` headers; a response
+ * without them (a proxy that stripped them, a truncated body) is an error, never an empty page that reads as the end.
+ */
+export async function getSystemLogText(chunkId: string, options: { readonly offset?: number; readonly limit?: number; readonly unmasked?: boolean } = {}): Promise<SystemLogTextPage> {
+  const q = new URLSearchParams({ offset: String(options.offset ?? 0) });
+  if (options.limit) q.set("limit", String(options.limit));
+  if (options.unmasked) q.set("unmasked", "true");
+  const response = await fetchWithTimeout(`/api/v2/system-logs/chunks/${encodeURIComponent(chunkId)}/text?${q.toString()}`,
+    { method: "GET", credentials: "include" }, 30_000);
+  noteMasking(response);
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    const error: ApiError = { status: response.status, body };
+    throw error;
+  }
+  const text = await response.text();
+  const h = (name: string) => response.headers.get(name);
+  const next = Number(h("X-Syslog-Next-Offset"));
+  const masked = h("X-Syslog-Masked");
+  if (h("X-Syslog-Eof") === null || masked === null || !Number.isFinite(next)) {
+    throw { status: 200, body: { error: "SYSTEM_LOG_TEXT_HEADERS_MISSING" } } satisfies ApiError;
+  }
+  return {
+    text, masked: masked === "true", source: h("X-Syslog-Source") ?? "", offset: Number(h("X-Syslog-Offset") ?? options.offset ?? 0),
+    next_offset: next, eof: h("X-Syslog-Eof") === "true", lines: Number(h("X-Syslog-Lines") ?? 0),
+  };
+}

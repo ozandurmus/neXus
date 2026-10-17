@@ -158,6 +158,14 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("POST /api/v2/diagnostics/system-log-measurements/start", ActionRegistry.SYSTEM_LOG_MEASURE_START),
             // System-log programme phase B: the manual start of the incremental collection (operation_admin, security_admin).
             Map.entry("POST /api/v2/system-logs/collect", ActionRegistry.SYSTEM_LOG_COLLECT_START),
+            // Phase B read side (section 14). system_log_read_unmasked is not a route of its own: the text route is a
+            // system_log_read, and the controller checks the second action when the caller asks for unmasked text.
+            Map.entry("GET /api/v2/system-logs/*/sources", ActionRegistry.SYSTEM_LOG_READ),
+            Map.entry("GET /api/v2/system-logs/*/chunks", ActionRegistry.SYSTEM_LOG_READ),
+            Map.entry("GET /api/v2/system-logs/chunks/*/text", ActionRegistry.SYSTEM_LOG_READ),
+            Map.entry("GET /api/v2/system-logs/gaps", ActionRegistry.SYSTEM_LOG_READ),
+            Map.entry("GET /api/v2/system-logs/crash-files", ActionRegistry.SYSTEM_LOG_READ),
+            Map.entry("GET /api/v2/system-logs/*/hcp", ActionRegistry.SYSTEM_LOG_READ),
             Map.entry("POST /devices/inventory/collect-all", ActionRegistry.DEVICE_INVENTORY_COLLECT),
             Map.entry("GET /clusters/*/inventory", ActionRegistry.DEVICE_READ),
             // NXS-LOCAL-0165 "Routes": same wildcard shapes as the inventory

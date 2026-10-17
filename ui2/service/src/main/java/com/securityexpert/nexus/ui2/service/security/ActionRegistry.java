@@ -43,6 +43,10 @@ public final class ActionRegistry {
     public static final String SYSTEM_LOG_MEASURE_START = "system_log_measure_start";
     /** System-log programme phase B (DEVICE_SYSTEM_LOG_PHASE_B_CONTRACT.md section 14): admits the incremental collection job; operation_admin and security_admin, window-gated. */
     public static final String SYSTEM_LOG_COLLECT_START = "system_log_collect_start";
+    /** System-log programme phase B read side (section 14): sources, chunks, masked line text, gaps, crash files, HCP metadata; operator and above, aiview included (always masked). */
+    public static final String SYSTEM_LOG_READ = "system_log_read";
+    /** Section 13 Q10: the unmasked (redacted-only) line view inside the product; operation_admin and security_admin, audited per view; never aiview. */
+    public static final String SYSTEM_LOG_READ_UNMASKED = "system_log_read_unmasked";
     /** NXS-LOCAL-0165 "Routes": {@code POST /devices/{id}/configuration/collect} -- same gate as {@link #DEVICE_INVENTORY_COLLECT}. */
     public static final String DEVICE_CONFIGURATION_COLLECT = "device_configuration_collect";
     /** NXS-LOCAL-0165 "Routes": {@code GET /devices/{id}/configuration/text} -- the sanitized Check Point view; a gated read, {@code role:onboarding_admin} only (it names section/entry structure of a device's own configuration). */
@@ -215,6 +219,10 @@ public final class ActionRegistry {
         register(new ActionDescriptor(SYSTEM_LOG_MEASURE_START, true, Optional.of(RoleToken.SECURITY_ADMIN),
                 java.util.Set.of(RoleToken.REPLAY_VIEWER)));
         register(new ActionDescriptor(SYSTEM_LOG_COLLECT_START, true, Optional.of(RoleToken.OPERATION_ADMIN),
+                java.util.Set.of(RoleToken.SECURITY_ADMIN)));
+        register(new ActionDescriptor(SYSTEM_LOG_READ, true, Optional.of(RoleToken.OPERATOR),
+                java.util.Set.of(RoleToken.OPERATION_ADMIN, RoleToken.SECURITY_ADMIN, RoleToken.REPLAY_VIEWER)));
+        register(new ActionDescriptor(SYSTEM_LOG_READ_UNMASKED, true, Optional.of(RoleToken.OPERATION_ADMIN),
                 java.util.Set.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(DEVICE_CONFIGURATION_COLLECT, true, Optional.of(RoleToken.ONBOARDING_ADMIN)));
         register(new ActionDescriptor(DEVICE_CONFIGURATION_TEXT_READ, true, Optional.of(RoleToken.ONBOARDING_ADMIN)));

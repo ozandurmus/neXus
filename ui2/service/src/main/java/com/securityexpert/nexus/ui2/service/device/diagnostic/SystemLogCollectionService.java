@@ -46,6 +46,11 @@ public final class SystemLogCollectionService {
     static final Map<String, String> CAPABILITY_BY_VENDOR = Map.of("palo_alto", PanSystemLogCollect.CAPABILITY,
             "check_point", CpSystemLogCollect.CAPABILITY);
 
+    /** True for a vendor whose gateways the collection covers (the read routes refuse the others with the same words). */
+    public static boolean isSupportedVendor(String vendorHint) {
+        return vendorHint != null && CAPABILITY_BY_VENDOR.containsKey(vendorHint);
+    }
+
     private final DeviceRepository devices;
     private final JobAdmissionService admission;
     private final JobWindowPolicy windows;
