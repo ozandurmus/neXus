@@ -20,6 +20,7 @@ final class CpDomainReuse {
         PolicyCollectionRepository.DomainRun previous;
         Signal signal;
         boolean reused, gap, databaseFailed, sameRequest;
+        String name;
         int expected = -1;
         /** Why the domain was reused or read; fixed vocabulary, recorded per run for the changed-only trial. */
         String decision = "READ";
@@ -41,8 +42,11 @@ final class CpDomainReuse {
     boolean changedOnly(String container) {
         return request.mode() == PolicyCollectionRepository.Mode.CHANGED_ONLY && (!request.scheduled() || changedOnly.includes(container));
     }
-    void begin(String container) {
+    void begin(String container) { begin(container, null); }
+    /** The domain name is kept in memory only, for the optional change reader (C-1 needs it as the -d argument). */
+    void begin(String container, String domainName) {
         Domain domain = new Domain();
+        domain.name = domainName;
         // Read before recording the current pending attempt, including empty complete domains.
         var current = repository.domainForRequest(request, container);
         domain.sameRequest = current.isPresent();
@@ -195,6 +199,33 @@ final class CpDomainReuse {
     void record() {
         domains.forEach((container, domain) -> PolicyCollectionTrace.domainDecision(container, domain.decision,
             domain.reused ? domain.snapshots.size() : 0, domain.reused ? 0 : Math.max(domain.expected, 0)));
+    }
+    /**
+     * Hands one observation per domain to the completeness coordinator: the published-session marker, the collector's own
+     * earlier marker (only for a fresh request, never for a resumed one that compares against itself), and whether the run
+     * was complete. Observation never changes what is collected, stored or reused.
+     */
+    void observe(PolicyObservations sink) {
+        domains.forEach((container, domain) -> {
+            boolean complete = !domain.gap && (domain.reused || domain.expected >= 0 && domain.snapshots.size() == domain.expected)
+                && domain.snapshots.values().stream().allMatch(CpDomainReuse::completeWithUnknownParts);
+            int rules = domain.snapshots.values().stream().flatMap(s -> s.sections().stream()).mapToInt(s -> s.rules().size()).sum();
+            String previous = null;
+            if (!domain.sameRequest && domain.previous != null && domain.previous.signalJson() != null) {
+                try { previous = marker(JSON.readValue(domain.previous.signalJson(), Signal.class)); }
+                catch (java.io.IOException | RuntimeException unreadable) { previous = null; }
+            }
+            sink.add(new PolicyObservations.Cp(container, domain.name, marker(domain.signal), previous, domain.reused, complete, rules));
+        });
+    }
+    /** The opaque revision marker of a published session: its uid and publish time, as the vendor printed them. */
+    static String marker(Signal signal) {
+        if (signal == null) return null;
+        try {
+            var node = JSON.createObjectNode();
+            node.put("uid", signal.uid()); node.put("publish_time", signal.iso8601()); node.put("posix", signal.posix());
+            return JSON.writeValueAsString(node);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException impossible) { return null; }
     }
     private void save(String container, Domain domain, String status, boolean complete) {
         // Direct offline collector tests have no ledger job. Production requests always carry a lease.

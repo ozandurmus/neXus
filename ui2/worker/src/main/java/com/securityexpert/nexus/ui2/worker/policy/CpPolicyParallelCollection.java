@@ -238,7 +238,7 @@ final class CpPolicyParallelCollection {
             found = true;
             domainOrder.putIfAbsent(container, domainOrder.size());
             if (repository.beginDomain(request, container)) {
-                reuse.begin(container);
+                reuse.begin(container, name);
                 if (request.mode() == PolicyCollectionRepository.Mode.FULL && request.jobId().isEmpty()) domainSignal(uid, name, container, null);
                 else pending.add(new Work(MgmtCliCommands.showLastPublishedSession(name), CpPolicyGates.LAST_PUBLISHED_SESSION,
                     null, 0, 0, 0, page -> domainSignal(uid, name, container, page),
