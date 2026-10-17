@@ -193,6 +193,37 @@ class TextRulesTest {
     }
 
     @Test
+    void ipv6RevertKeepsTheSpellingOfTheOriginalWhateverTheTokenLooksLike() {
+        // A token is a keyed random address; one whose eight groups all have four digits (most of them) reads as
+        // "expanded", and one with no hex letter reads as lower-case. Neither may rewrite the stored original.
+        // 200 distinct addresses in each spelling make the all-four-digit token a certainty, not a possibility.
+        for (int i = 1; i <= 200; i++) {
+            String n = Integer.toHexString(i);
+            for (String original : List.of(
+                    "x=2001:db8:" + n + "::" + (i + 1) + " y=2001:db8::" + n,
+                    "x=2001:DB8:" + n + "::" + (i + 1),
+                    "x=2001:db8:" + n + ":0:0:0:0:" + (i + 1),
+                    "x=2001:0db8:" + String.format("%04x", i) + ":0000:0000:0000:0000:" + String.format("%04x", i + 1),
+                    "x=[2001:db8:" + n + "::" + (i + 1) + "]:443 z=2001:db8:" + n + "::/48")) {
+                TestVault own = new TestVault();
+                String sanitized = new TextSanitizer(mappers, own, new Counts()).sanitize(original);
+                assertFalse(sanitized.contains("2001:"), sanitized);
+                assertEquals(original, new TextReverter(own, new Counts()).revert(sanitized), sanitized);
+            }
+        }
+    }
+
+    @Test
+    void sameIpv6AddressInTwoCasesRevertsEachCase() {
+        // The token carries letter case, so this pair survives revert (the style flags the token cannot carry are
+        // documented in DATA_SANITIZER_CONTRACT.md section 5: first-seen spelling wins for those).
+        String original = "a=2001:db8:5::7 b=2001:DB8:5::7";
+        TestVault own = new TestVault();
+        String sanitized = new TextSanitizer(mappers, own, new Counts()).sanitize(original);
+        assertEquals(original, new TextReverter(own, new Counts()).revert(sanitized), sanitized);
+    }
+
+    @Test
     void ccTldTwoLabelDomainsAndHyphenatedDomainsAreSanitized() {
         // F-10: real ccTLDs (.ai, .rs, .pl, .cc, .ms) and hyphenated domains must not be suppressed by FILE_LIKE_TLDS
         String out = s("DNS query for acme-security.ai and portal.pl and banka.rs and corp.cc and acme-build.sh");
