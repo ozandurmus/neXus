@@ -1,6 +1,6 @@
-import { JobButton } from "../shell/JobWindow";
+import { JobButton, useJobWindow } from "../shell/JobWindow";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Box, Button, Tabs, Tab, Checkbox, Chip, Drawer, IconButton, InputAdornment, Tooltip, FormControl, InputLabel, MenuItem, Select, Stack, TextField, Typography } from "@mui/material";
+import { Box, Button, Tabs, Tab, Checkbox, Chip, Drawer, IconButton, InputAdornment, Menu, MenuItem, type MenuItemProps, Table, TableBody, TableCell, TableHead, TableRow, Tooltip, FormControl, InputLabel, Select, Stack, TextField, Typography } from "@mui/material";
 import { ScreenRoot, ScreenHeader, EmptyPanel } from "../shell/ScreenLayout";
 import { Ts, VendorBadge } from "../shell/States";
 import { Icon } from "../shell/Icon";
@@ -148,12 +148,104 @@ function CollectionDetails({ job, partial, allowed, domainName }: { job: PolicyC
   </Box>;
 }
 
+/** Disclosure arrow for a tree node; the owning button carries aria-expanded, so the glyph is decorative. */
+function Chevron({ open }: { open: boolean }) {
+  return <Box component="span" aria-hidden="true" data-chevron={open ? "open" : "closed"}
+    sx={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 16, height: 16, flexShrink: 0, mr: 0.5, transform: open ? "rotate(90deg)" : "none", transition: "transform 120ms" }}>
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M9 5l7 7-7 7" /></svg>
+  </Box>;
+}
+/** A menu entry for an action that is only allowed inside the device job window; mirrors JobButton. */
+function JobMenuItem({ disabled, children, ...props }: MenuItemProps) {
+  const window = useJobWindow();
+  return <MenuItem {...props} disabled={disabled || !window.open}>{children}{window.label && ` · ${window.label}`}</MenuItem>;
+}
+/** The per-source / per-domain collection actions behind one compact trigger, so they do not crowd the tree. */
+function CollectMenu({ name, disabled, onCollect }: { name: string; disabled: boolean; onCollect: (mode: PolicyCollectionMode) => void }) {
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  const run = (mode: PolicyCollectionMode) => { setAnchor(null); onCollect(mode); };
+  return <>
+    <IconButton size="small" aria-label={`Collection actions for ${name}`} aria-haspopup="menu" aria-expanded={anchor ? true : undefined}
+      onClick={event => setAnchor(event.currentTarget)} sx={{ ml: "auto", flexShrink: 0 }}><Icon name="more" size={18} /></IconButton>
+    <Menu anchorEl={anchor} open={!!anchor} onClose={() => setAnchor(null)} MenuListProps={{ "aria-label": `Collection actions for ${name}` }}>
+      <JobMenuItem disabled={disabled} onClick={() => run("CHANGED_ONLY")}>Collect changes</JobMenuItem>
+      <JobMenuItem disabled={disabled} onClick={() => run("FULL")}>Full refresh (incl. hit counts)</JobMenuItem>
+    </Menu>
+  </>;
+}
+/** Batch actions for the ticked policies behind one trigger; every action stays reachable, none takes a row of the narrow tree pane. */
+function SelectionMenu({ canCollect, collectDisabled, exporting, nothingSelected, onCollect, onExport }:
+  { canCollect: boolean; collectDisabled: boolean; exporting: boolean; nothingSelected: boolean; onCollect: () => void; onExport: () => void }) {
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  return <>
+    <Button size="small" aria-label="Selection actions" aria-haspopup="menu" aria-expanded={anchor ? true : undefined}
+      onClick={event => setAnchor(event.currentTarget)} endIcon={<Box component="span" aria-hidden="true" sx={{ fontSize: 10 }}>▾</Box>}>Actions</Button>
+    <Menu anchorEl={anchor} open={!!anchor} onClose={() => setAnchor(null)} MenuListProps={{ "aria-label": "Selection actions" }}>
+      {canCollect && <JobMenuItem disabled={collectDisabled} title="PAN collects the source; CP collects selected domains sequentially"
+        onClick={() => { setAnchor(null); onCollect(); }}>Collect selected</JobMenuItem>}
+      <MenuItem disabled={exporting || nothingSelected} onClick={() => { setAnchor(null); onExport(); }}>Export selected rules (CSV)</MenuItem>
+    </Menu>
+  </>;
+}
+/** One stored container (Panorama device group / MDS domain) as the summary table shows it; built from the catalog already loaded. */
+export interface ContainerSummary {
+  key: string; sourceId: string; sourceName: string; vendor: string; containerId: string; containerName: string;
+  policyIds: string[]; rules?: number; gateways: string[]; collectedAt: string;
+}
+export function summarizeContainers(policies: PolicyMetadata[]): ContainerSummary[] {
+  const groups = new Map<string, PolicyMetadata[]>();
+  policies.forEach(p => {
+    const key = JSON.stringify([p.sourceId, p.containerId]);
+    groups.set(key, [...(groups.get(key) ?? []), p]);
+  });
+  return [...groups.entries()].map(([key, items]) => {
+    const stamps = items.map(p => Date.parse(p.collectedAt)).filter(Number.isFinite);
+    const gateways = [...new Map(items.flatMap(p => p.targets).map(t => [t.deviceId, displayName(t.name, "Device")])).values()];
+    return { key, sourceId: items[0].sourceId, sourceName: items[0].sourceName, vendor: items[0].vendor, containerId: items[0].containerId,
+      containerName: items[0].containerName, policyIds: items.map(p => p.id), gateways,
+      rules: items.every(p => p.ruleCount !== undefined) ? items.reduce((sum, p) => sum + p.ruleCount!, 0) : undefined,
+      collectedAt: stamps.length ? new Date(Math.max(...stamps)).toISOString() : "" };
+  });
+}
+const GATEWAYS_SHOWN = 3;
+const vendorLabel = (vendor: string) => vendor === "PAN" ? "Panorama" : vendor === "CP" ? "MDS" : "Management server";
+function ContainerSummaryTable({ rows, sourceCount, now, open }: { rows: ContainerSummary[]; sourceCount: number; now: Date; open: (row: ContainerSummary) => void }) {
+  return <Box component="section" aria-label="Stored policy containers">
+    <Typography variant="body2" sx={{ color: m3.onSurfaceVar, mb: 1 }}>
+      {plural(rows.length, "stored container")} from {plural(sourceCount, "source")}. Open one to browse its rules; nothing is collected from here.
+    </Typography>
+    <Box sx={{ overflowX: "auto" }}>
+      <Table size="small" aria-label="Stored policy containers" sx={{ "& td, & th": { px: 1, py: 0.75, overflowWrap: "anywhere" } }}>
+        <TableHead><TableRow>
+          {["Container", "Source", "Policies", "Rules", "Assigned gateways", "Last collected", ""].map((label, index) => <TableCell key={index} scope="col">{label}</TableCell>)}
+        </TableRow></TableHead>
+        <TableBody>
+          {rows.map(row => {
+            const name = displayName(row.containerName, "Policy container");
+            return <TableRow key={row.key} hover>
+              <TableCell scope="row">{name}</TableCell>
+              <TableCell>{displayName(row.sourceName, "Management server")}<Typography variant="caption" display="block" sx={{ color: m3.onSurfaceVar }}>{vendorLabel(row.vendor)}</Typography></TableCell>
+              <TableCell>{row.policyIds.length}</TableCell>
+              <TableCell>{row.rules ?? "UNKNOWN"}</TableCell>
+              <TableCell>{row.gateways.length === 0 ? "Unassigned"
+                : <Tooltip title={row.gateways.join(", ")}><span>{row.gateways.slice(0, GATEWAYS_SHOWN).join(", ")}{row.gateways.length > GATEWAYS_SHOWN ? ` +${row.gateways.length - GATEWAYS_SHOWN} more` : ""}</span></Tooltip>}</TableCell>
+              <TableCell title={row.collectedAt}>{row.collectedAt ? relativeAge(row.collectedAt, now) : "UNKNOWN"}</TableCell>
+              <TableCell align="right"><Button size="small" aria-label={`Open ${name}`} onClick={() => open(row)}>Open</Button></TableCell>
+            </TableRow>;
+          })}
+        </TableBody>
+      </Table>
+    </Box>
+  </Box>;
+}
+
 export function PolicyScreen({ preview = false }: { preview?: boolean }) {
   const [catalog, setCatalog] = useState<PolicyMetadata[]>([]);
   const [sources, setSources] = useState<PolicyCollectionSource[]>([]);
   const [expandedSources, setExpandedSources] = useState<Set<string>>(new Set());
   const [expandedContainers, setExpandedContainers] = useState<Set<string>>(new Set());
   const [loadingTree, setLoadingTree] = useState(false);
+  const firstSourceOpened = useRef(false);
   const [jobs, setJobs] = useState<(PolicyCollectionStatus & { sourceId: string })[]>([]);
   const [targets, setTargets] = useState<PolicyTarget[]>([]);
   const [scrollTop, setScrollTop] = useState(0);
@@ -212,6 +304,12 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
         });
       });
       setSources([...allSources.values()]);
+      // Open the first source once so its containers are visible without hunting for the toggle; later refreshes keep the user's choice.
+      const [first] = allSources.keys();
+      if (first !== undefined && !firstSourceOpened.current) {
+        firstSourceOpened.current = true;
+        setExpandedSources(current => new Set(current).add(first));
+      }
       setCatalog(policies);
       setTargets(stored.devices ?? []);
       setCanCollect(admission.canCollect === true);
@@ -317,6 +415,11 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
     const next = new Set(set); next.has(id) ? next.delete(id) : next.add(id); return next;
   };
   const expandSource = (source: string) => setExpandedSources(current => toggle(current, source));
+  // Show a policy in the tree: open its source and container (never collapse), without changing the selection.
+  const reveal = (policy: PolicyMetadata) => {
+    setExpandedSources(current => new Set(current).add(policy.sourceId));
+    setExpandedContainers(current => new Set(current).add(JSON.stringify([policy.sourceId, policy.containerId])));
+  };
   const expandContainer = (key: string) => setExpandedContainers(current => toggle(current, key));
   const selectPolicies = (ids: string[], value: boolean) => setChecked(current => {
     const next = new Set(current); ids.forEach(id => value ? next.add(id) : next.delete(id)); return next;
@@ -327,6 +430,15 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
       disabled={ids.length === 0} inputProps={{ "aria-label": `Select ${name}` }} onChange={(_, value) => selectPolicies(ids, value)} sx={{ p: 0.5 }} />;
   };
   const selectedPolicies = catalog.filter(policy => checked.has(policy.id));
+  const treeTerm = treeSearch.trim().toLowerCase();
+  // The summary follows the same device scope and tree search as the tree, so the two never disagree.
+  const summaries = useMemo(() => summarizeContainers(visible.filter(p => !treeTerm
+    || [p.sourceName, p.containerName, p.name].some(text => text.toLowerCase().includes(treeTerm)))), [visible, treeTerm]);
+  const openContainer = (row: ContainerSummary) => {
+    const first = catalog.find(p => p.id === row.policyIds[0]);
+    if (!first) return;
+    reveal(first); setSelected(first.id); setPage(0); setCollapsed(new Set());
+  };
   const selectedMetadata = catalog.find(policy => policy.id === selected);
   const [linkedDomain] = useState(() => {
     const params = new URLSearchParams(window.location.search);
@@ -410,11 +522,9 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
       setCollectionStatus("Job cancellation could not be requested.");
     }
   };
-  const collectButton = (source: string, domain = "") => canCollect && eligibleSources.has(source)
-    ? <Stack direction="row" flexWrap="wrap" gap={1}>
-      <JobButton size="small" variant="outlined" disabled={collecting || activeJobs.length > 0 || bulkQueue.length > 0} onClick={() => void collect(source, domain)}>Collect changes</JobButton>
-      <JobButton size="small" disabled={collecting || activeJobs.length > 0 || bulkQueue.length > 0} onClick={() => void collect(source, domain, "FULL")}>Full refresh (incl. hit counts)</JobButton>
-    </Stack> : null;
+  const collectMenu = (source: string, name: string, domain = "") => canCollect && eligibleSources.has(source)
+    ? <CollectMenu name={name} disabled={collecting || activeJobs.length > 0 || bulkQueue.length > 0} onCollect={mode => void collect(source, domain, mode)} />
+    : null;
   useEffect(() => {
     if (!canCollect || collecting || loadingTree || activeJobIds || !bulkQueue.length) return;
     const [next, ...rest] = bulkQueue; setBulkQueue(rest);
@@ -436,19 +546,22 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
     <Box sx={{ mt: 2, flex: 1, minHeight: 0, display: "grid", gridTemplateColumns: { xs: "minmax(0, 1fr)", md: "270px minmax(0, 1fr)" }, gap: 2, alignItems: "stretch" }}>
       <Box component="nav" aria-label="Management policies" sx={{ bgcolor: m3.scLow, borderRadius: 3, p: 2, minWidth: 0, overflowWrap: "anywhere", border: `1px solid ${m3.outlineVar}` }}>
         <Typography variant="subtitle2">Sources · {sources.length}</Typography>
-        <TextField label="Search sources, containers and policies" size="small" fullWidth value={treeSearch} onChange={e => setTreeSearch(e.target.value)} sx={{ my: 1 }} />
-        <Stack spacing={0.5} sx={{ mb: 1 }}>
+        <TextField label="Search containers, policies" size="small" fullWidth value={treeSearch} onChange={e => setTreeSearch(e.target.value)}
+          inputProps={{ title: "Search sources, containers and policies" }}
+          sx={{ my: 1, "& .MuiInputLabel-root": { maxWidth: "calc(100% - 32px)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }} />
+        <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
           <Typography variant="caption">{selectedPolicies.length} policies selected</Typography>
-          {canCollect && <JobButton size="small" variant="outlined" disabled={collecting || !!activeJobIds || !!bulkQueue.length || !selectedPolicies.some(p => eligibleSources.has(p.sourceId))}
-            title="PAN collects the source; CP collects selected domains sequentially" onClick={collectSelected}>Collect selected</JobButton>}
-          <Button size="small" disabled={exporting || !selectedPolicies.length} onClick={() => void exportSelected()}>Export selected rules (CSV)</Button>
-          {!!bulkQueue.length && <Typography role="status" variant="caption">{bulkQueue.length} collection scopes waiting</Typography>}
+          <SelectionMenu
+            canCollect={canCollect} exporting={exporting} nothingSelected={!selectedPolicies.length}
+            collectDisabled={collecting || !!activeJobIds || !!bulkQueue.length || !selectedPolicies.some(p => eligibleSources.has(p.sourceId))}
+            onCollect={collectSelected} onExport={() => void exportSelected()} />
         </Stack>
+        {!!bulkQueue.length && <Typography role="status" variant="caption" display="block" sx={{ mb: 1 }}>{bulkQueue.length} collection scopes waiting</Typography>}
         <Box sx={{ overflowY: "auto", maxHeight: { md: "calc(100vh - 360px)" } }}>
         {sources.map(source => {
           const policies = visible.filter(p => p.sourceId === source.sourceId);
           const nodes = [...new Map(policies.map(p => [p.containerId, { containerId: p.containerId, containerName: p.containerName }])).values()];
-          const term = treeSearch.trim().toLowerCase();
+          const term = treeTerm;
           const matches = (name: string) => name.toLowerCase().includes(term);
           const sourceMatches = matches(source.sourceName);
           const filtered = nodes.filter(node => sourceMatches || matches(node.containerName) || policies.some(p => p.containerId === node.containerId && matches(p.name)));
@@ -463,8 +576,9 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
               <Box component="span" aria-label={running ? "Collecting" : outcome === "FAILED" ? "Collection needs attention" : outcome === "PARTIAL" ? "Partial collection" : outcome === "COMPLETED" ? "Collected" : "Not collected"}
                 sx={{ width: 8, height: 8, flexShrink: 0, borderRadius: "50%", bgcolor: dot }} />
               <Button aria-expanded={expandedSources.has(source.sourceId) || !!term} onClick={() => expandSource(source.sourceId)} sx={{ minWidth: 0, textAlign: "left", textTransform: "none", justifyContent: "flex-start" }}>
-                {displayName(source.sourceName, "Management server")}
+                <Chevron open={expandedSources.has(source.sourceId) || !!term} />{displayName(source.sourceName, "Management server")}
               </Button>
+              {collectMenu(source.sourceId, displayName(source.sourceName, "Management server"))}
             </Stack>
             <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>
               {source.vendor === "PAN" ? "Panorama" : source.vendor === "CP" ? "MDS" : "Management server"} · {nodes.length} containers
@@ -484,7 +598,6 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
               disabled={job.cancelRequested || cancelling.includes(job.jobId)} onClick={() => void cancel(job.jobId)}>
               {job.cancelRequested || cancelling.includes(job.jobId) ? "Cancel requested" : "Cancel"}
             </Button>}
-            {collectButton(source.sourceId)}
             {(expandedSources.has(source.sourceId) || !!term) && nodes.length === 0
               && <Typography variant="caption" display="block">No policy containers in this snapshot.</Typography>}
             {(expandedSources.has(source.sourceId) || !!term) && filtered.map(container => {
@@ -494,13 +607,14 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
               return <Box key={key} role="group" aria-label="Policy container" sx={{ pl: 1, mt: 0.5, borderLeft: `1px solid ${m3.outlineVar}` }}>
                 <Stack direction="row" alignItems="center">
                   {selection(children, displayName(container.containerName, "Policy container"))}
-                  <Button aria-label={displayName(container.containerName, "Policy container")} aria-expanded={expandedContainers.has(key) || !!term} onClick={() => expandContainer(key)} sx={{ textTransform: "none", textAlign: "left", justifyContent: "flex-start" }}>
+                  <Button aria-label={displayName(container.containerName, "Policy container")} aria-expanded={expandedContainers.has(key) || !!term} onClick={() => expandContainer(key)} sx={{ textTransform: "none", textAlign: "left", justifyContent: "flex-start", minWidth: 0 }}>
+                    <Chevron open={expandedContainers.has(key) || !!term} />
                     <Box component="span" aria-label="Stored snapshot" sx={{ width: 6, height: 6, borderRadius: "50%", bgcolor: m3.success, mr: 1, flexShrink: 0 }} />
                     {displayName(container.containerName, "Policy container")}
                   </Button>
+                  {source.vendor === "CP" && collectMenu(source.sourceId, displayName(container.containerName, "Policy container"), container.containerId)}
                 </Stack>
                 <Typography variant="caption" display="block" sx={{ pl: 4 }}>{children.length} policies · {count ?? "UNKNOWN"} rules</Typography>
-                {source.vendor === "CP" && collectButton(source.sourceId, container.containerId)}
                 {(expandedContainers.has(key) || !!term) && children.filter(p => !term || sourceMatches || matches(container.containerName) || matches(p.name)).map(policy =>
                   <Box key={policy.id} sx={{ pl: 1 }}><Stack direction="row" alignItems="center">
                     {selection([policy], displayName(policy.name, "Policy"))}
@@ -522,7 +636,9 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
             <InputLabel id="policy-device-label">Jump to device's policy</InputLabel>
             <Select labelId="policy-device-label" label="Jump to device's policy" value={device} onChange={e => {
               const next = e.target.value; setDevice(next); setPage(0);
-              setSelected(catalog.find(p => !next || p.targets.some(t => t.deviceId === next))?.id ?? "");
+              const target = catalog.find(p => !next || p.targets.some(t => t.deviceId === next));
+              if (target) reveal(target);
+              setSelected(target?.id ?? "");
             }}>
               <MenuItem value="">All management policies</MenuItem>
               {targets.map(t => <MenuItem key={t.deviceId} value={t.deviceId}>{displayName(t.name, "Device")}</MenuItem>)}
@@ -547,11 +663,19 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
         <Box role="tabpanel" aria-label="Rules" hidden={tab !== "Rules"} sx={{ display: tab === "Rules" ? "contents" : "none" }}>
         {error && <Box data-error-code={errorCode}><EmptyPanel title="Policy unavailable" body={error}><Button onClick={() => setRevision(n => n + 1)}>Retry</Button></EmptyPanel></Box>}
         {loadingTree && !error && <Typography role="status">Loading policies…</Typography>}
-        {!selected && !loadingTree && !error && <Box role="status" aria-label={sources.length ? "No collected policy" : "No policy snapshot"} sx={{ textAlign: "center", py: 3, color: m3.onSurfaceVar }}>
-          <Icon name="rows" size={32} />
-          <Typography variant="h6" sx={{ mt: 2 }}>{sources.length ? "No assigned policy snapshot" : "No policy snapshot"}</Typography>
-          <Typography variant="body2">{sources.length ? "Select a source and container to browse stored policies." : "No management policy has been collected yet."}</Typography>
-        </Box>}
+        {!selected && !loadingTree && !error && (sources.length === 0
+          ? <Box role="status" aria-label="No policy snapshot" sx={{ textAlign: "center", py: 3, color: m3.onSurfaceVar }}>
+            <Icon name="rows" size={32} />
+            <Typography variant="h6" sx={{ mt: 2 }}>No policy snapshot</Typography>
+            <Typography variant="body2">No management policy has been collected yet.</Typography>
+          </Box>
+          : summaries.length > 0
+            ? <ContainerSummaryTable rows={summaries} sourceCount={new Set(summaries.map(row => row.sourceId)).size} now={now} open={openContainer} />
+            : <Box role="status" aria-label={treeTerm ? "No matching container" : device ? "No assigned policy snapshot" : "No collected policy"} sx={{ textAlign: "center", py: 3, color: m3.onSurfaceVar }}>
+              <Icon name="rows" size={32} />
+              <Typography variant="h6" sx={{ mt: 2 }}>{treeTerm ? "No stored container matches the search" : device ? "No assigned policy snapshot" : "No policy collected yet"}</Typography>
+              <Typography variant="body2">{treeTerm ? "Clear the search to list every stored container." : device ? "This device has no stored policy snapshot." : "Sources are listed, but nothing has been collected from them yet."}</Typography>
+            </Box>)}
             {selected && !data && !error && <Typography role="status">Loading rules…</Typography>}
             {data && <>
               {!!data.failures?.length && <Box><Chip color="warning" label={data.failures.every(isUnknownPart) ? "Complete · some parts unknown" : "Partial snapshot · incomplete"} />

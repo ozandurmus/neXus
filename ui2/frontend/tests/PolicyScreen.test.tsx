@@ -5,7 +5,7 @@ import { m3Theme } from "../src/theme/m3Theme";
 import { PolicyScreen, collectionOutcome, progress, csvCell, collectedLabel, sourceStatusLabel, collectionStalled, runningLabel, collectionSummaryLine } from "../src/screens/PolicyScreen";
 import { PolicyRuleTable, RULE_ROW_HEIGHT } from "../src/screens/PolicyRuleViewer";
 import { loadErrorText } from "../e2e/safety";
-import { findButtonByText, findByAria, getFieldByLabel } from "./fastQueries";
+import { expandByText, findButtonByText, findByAria, getFieldByLabel } from "./fastQueries";
 import type { PolicyMetadata, PolicyPage, PolicyRule, PolicyCollectionStatus } from "../src/auth/adminApi";
 
 const metadata: PolicyMetadata = { id: "policy-1", sourceId: "source-1", sourceName: "MGR-BRAVO-01", vendor: "PAN", containerId: "container-1",
@@ -38,11 +38,18 @@ function mockFetch(result: PolicyPage = page) {
   return fetch;
 }
 function mount() { return render(<ThemeProvider theme={m3Theme}><PolicyScreen /></ThemeProvider>); }
+// The first source opens on its own, so navigation starts at the container.
 async function navigate() {
-  fireEvent.click(await findButtonByText(metadata.sourceName));
+  await expandByText(metadata.sourceName);
   fireEvent.click(await findButtonByText(metadata.containerName));
   fireEvent.click(await findByAria(`Policy ${metadata.name}`));
 }
+// Collection and batch actions live behind compact menus: open the trigger, then pick the item.
+async function pickItem(trigger: HTMLElement, name: string) {
+  fireEvent.click(trigger);
+  fireEvent.click(await screen.findByRole("menuitem", { name }));
+}
+const collectTrigger = (name: string) => screen.findByRole("button", { name: `Collection actions for ${name}` });
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); window.history.replaceState(null, "", "/"); });
 
 it("renders masked management navigation, assignments, section collapse, negation and disabled rules", async () => {
@@ -109,9 +116,9 @@ it("sends only the name/comment search and resets pagination", async () => {
 it("keeps an unassigned policy navigable and a device jump scoped to its assignments", async () => {
   window.history.replaceState(null, "", "?screen=policy&device_id=missing-device");
   mockFetch(); mount();
-  await screen.findByRole("button", { name: metadata.sourceName });
-  fireEvent.click(screen.getByRole("button", { name: metadata.sourceName }));
+  await screen.findByRole("button", { name: metadata.sourceName, expanded: true });
   expect(await screen.findByText("No policy containers in this snapshot.")).toBeInTheDocument();
+  expect(screen.getByRole("status", { name: "No assigned policy snapshot" })).toHaveTextContent("This device has no stored policy snapshot.");
   expect(screen.queryByRole("region", { name: "Policy rulebase" })).toBeNull();
 });
 it("shows empty and failed reads distinctly", async () => {
@@ -131,7 +138,7 @@ it("offers first collection on an empty MDS and sends only opaque scope with CSR
     return new Response(JSON.stringify(body), { status: init?.method === "POST" ? 202 : 200 });
   });
   vi.stubGlobal("fetch", fetch); mount();
-  fireEvent.click(await screen.findByRole("button", { name: "Collect changes" }));
+  await pickItem(await collectTrigger("MGR-BRAVO-01"), "Collect changes");
   await screen.findByText("Collecting · 0 steps");
   const call = fetch.mock.calls.find(([url]) => url.endsWith("/collect"));
   expect(call?.[0]).toBe("/api/v2/policy/sources/mds-1/collect");
@@ -142,7 +149,10 @@ it("offers first collection on an empty MDS and sends only opaque scope with CSR
 it("uses server authorization and exposes no collection action to AIView", async () => {
   mockFetch(); mount(); await navigate();
   await screen.findByRole("region", { name: "Policy rulebase" });
-  expect(screen.queryByRole("button", { name: "Collect changes" })).toBeNull();
+  expect(screen.queryByRole("button", { name: /^Collection actions for / })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Selection actions" }));
+  expect(screen.queryByRole("menuitem", { name: "Collect selected" })).toBeNull();
+  expect(screen.getByRole("menuitem", { name: "Export selected rules (CSV)" })).toBeInTheDocument();
 });
 it("offers domain collection with its opaque reference and reports queue refusal", async () => {
   vi.stubGlobal("fetch", vi.fn(async (input: string, init?: RequestInit) => {
@@ -153,9 +163,10 @@ it("offers domain collection with its opaque reference and reports queue refusal
   }));
   mount(); await navigate();
   await screen.findByRole("region", { name: "Policy rulebase" });
-  const actions = screen.getAllByRole("button", { name: "Collect changes" });
+  const actions = screen.getAllByRole("button", { name: /^Collection actions for / });
   expect(actions).toHaveLength(2);
-  fireEvent.click(actions[1]);
+  expect(actions[1]).toHaveAccessibleName(`Collection actions for ${metadata.containerName}`);
+  await pickItem(actions[1], "Collect changes");
   await screen.findByText(/collection is temporarily unavailable/);
   const fetch = vi.mocked(window.fetch);
   expect(fetch.mock.calls.some(([url, init]) => String(url).endsWith("/collect") && JSON.parse(init?.body as string).domainRef === metadata.containerId)).toBe(true);
@@ -172,8 +183,8 @@ it("queues Panorama node collection with opaque intent and hides DG-specific act
   });
   vi.stubGlobal("fetch", fetch); mount(); await navigate();
   await screen.findByRole("region", { name: "Policy rulebase" });
-  const actions = screen.getAllByRole("button", { name: "Collect changes" });
-  expect(actions).toHaveLength(1); fireEvent.click(actions[0]);
+  const actions = screen.getAllByRole("button", { name: /^Collection actions for / });
+  expect(actions).toHaveLength(1); await pickItem(actions[0], "Collect changes");
   await screen.findByText("Collecting · 0 steps");
   const call = fetch.mock.calls.find(([url]) => url.endsWith("/collect"));
   expect(call?.[0]).toBe(`/api/v2/policy/sources/${metadata.sourceId}/collect`);
@@ -185,17 +196,17 @@ it("badges the stored local firewall policy under AIView", async () => {
   expect(screen.getByText(/Stored local configuration/)).toBeInTheDocument();
 });
 
-it("loads catalog counts before expanding each navigation level", async () => {
+it("loads catalog counts and shows the first source's containers without any click, then expands each level on request", async () => {
   const fetch = mockFetch(); mount();
   const tree = await screen.findByRole("navigation", { name: "Management policies" });
   expect(within(tree).getByRole("group", { name: "Policy source" })).toBeInTheDocument();
   expect(fetch.mock.calls).toHaveLength(2);
-  expect(screen.queryByText(metadata.containerName)).toBeNull();
   expect(screen.queryByRole("region", { name: "Policy rulebase" })).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: metadata.sourceName }));
-  await screen.findByRole("button", { name: metadata.containerName });
-  expect(screen.queryByText(metadata.name)).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: metadata.containerName }));
+  const source = within(tree).getByRole("button", { name: metadata.sourceName });
+  expect(source).toHaveAttribute("aria-expanded", "true");
+  await within(tree).findByRole("button", { name: metadata.containerName });
+  expect(within(tree).queryByText(metadata.name)).toBeNull();
+  fireEvent.click(within(tree).getByRole("button", { name: metadata.containerName }));
   const container = await screen.findByRole("group", { name: "Policy container" });
   const toggle = within(container).getByRole("button", { name: metadata.containerName });
   const policy = await within(container).findByRole("button", { name: /^Policy / });
@@ -208,6 +219,102 @@ it("loads catalog counts before expanding each navigation level", async () => {
   expect(policy).toHaveAttribute("aria-pressed", "true");
   expect(toggle).toHaveAttribute("aria-expanded", "true");
   expect(toggle).not.toHaveAttribute("aria-pressed");
+});
+
+// Two sources: the first Panorama-like with two containers, the second a Check Point-like one with one container and no gateways.
+const second = { ...metadata, id: "policy-3", sourceId: "source-2", sourceName: "MGR-ROMEO-02", vendor: "CP", containerId: "container-3",
+  containerName: "DOM-ROMEO-03", name: "OBJ-POLICY-03", ruleCount: 7, targets: [], collectedAt: "2026-10-01T09:00:00Z" };
+const firstTwo = [metadata, { ...metadata, id: "policy-2", containerId: "container-2", containerName: "DOM-TANGO-02", name: "OBJ-POLICY-02", ruleCount: 4 }];
+function mockTwoSources() {
+  const fetch = vi.fn(async (input: string) => new Response(JSON.stringify(input === "/api/v2/policy/sources"
+    ? { canCollect: false, sources: [{ sourceId: "source-1", sourceName: "MGR-BRAVO-01", vendor: "PAN" }, { sourceId: "source-2", sourceName: "MGR-ROMEO-02", vendor: "CP" }] }
+    : input === "/api/v2/policy/devices" ? { policies: [...firstTwo, second], devices: metadata.targets } : page), { status: 200, headers: { "X-Nexus-Masked": "true" } }));
+  vi.stubGlobal("fetch", fetch); return fetch;
+}
+it("auto-expands only the first source and toggles each source with an explicit chevron", async () => {
+  mockTwoSources(); mount();
+  const tree = await screen.findByRole("navigation", { name: "Management policies" });
+  const [one, two] = await waitFor(() => { const groups = within(tree).getAllByRole("group", { name: "Policy source" }); expect(groups).toHaveLength(2); return groups; });
+  const first = within(one).getByRole("button", { name: "MGR-BRAVO-01" }), other = within(two).getByRole("button", { name: "MGR-ROMEO-02" });
+  expect(first).toHaveAttribute("aria-expanded", "true");
+  expect(first.querySelector("[data-chevron]")).toHaveAttribute("data-chevron", "open");
+  expect(within(one).getAllByRole("group", { name: "Policy container" })).toHaveLength(2);
+  expect(other).toHaveAttribute("aria-expanded", "false");
+  expect(other.querySelector("[data-chevron]")).toHaveAttribute("data-chevron", "closed");
+  expect(within(two).queryByRole("group", { name: "Policy container" })).toBeNull();
+  fireEvent.click(other);
+  expect(other).toHaveAttribute("aria-expanded", "true");
+  expect(other.querySelector("[data-chevron]")).toHaveAttribute("data-chevron", "open");
+  expect(within(two).getAllByRole("group", { name: "Policy container" })).toHaveLength(1);
+  fireEvent.click(first);
+  expect(first).toHaveAttribute("aria-expanded", "false");
+  expect(within(one).queryByRole("group", { name: "Policy container" })).toBeNull();
+  // A refresh must not re-open what the user closed.
+  fireEvent.click(screen.getByRole("button", { name: "Refresh snapshots" }));
+  await waitFor(() => expect(screen.getAllByRole("button", { name: /^Refresh/ })).toHaveLength(1));
+  expect(within(tree).getByRole("button", { name: "MGR-BRAVO-01" })).toHaveAttribute("aria-expanded", "false");
+});
+it("summarizes every stored container until one is opened, using only loaded data", async () => {
+  vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(new Date("2026-10-01T15:00:00Z"));
+  mockTwoSources(); mount();
+  const summary = await screen.findByRole("region", { name: "Stored policy containers" });
+  vi.useRealTimers();
+  expect(screen.queryByText("No assigned policy snapshot")).toBeNull();
+  expect(screen.queryByRole("status", { name: /policy snapshot|collected policy/i })).toBeNull();
+  expect(within(summary).getByText("3 stored containers from 2 sources. Open one to browse its rules; nothing is collected from here.")).toBeInTheDocument();
+  expect(within(summary).getAllByRole("columnheader").map(cell => cell.textContent)).toEqual(["Container", "Source", "Policies", "Rules", "Assigned gateways", "Last collected", ""]);
+  const rows = within(summary).getAllByRole("row").slice(1);
+  expect(rows).toHaveLength(3);
+  expect(rows[0]).toHaveTextContent("DOM-TANGO-01MGR-BRAVO-01Panorama11FW-TANGO-04");
+  expect(rows[0]).toHaveTextContent(/3 h ago/);
+  expect(rows[2]).toHaveTextContent("DOM-ROMEO-03MGR-ROMEO-02MDS17Unassigned6 h ago");
+  fireEvent.click(within(summary).getByRole("button", { name: "Open DOM-TANGO-02" }));
+  expect(await screen.findByRole("region", { name: "Policy rulebase" })).toBeInTheDocument();
+  expect(screen.queryByRole("region", { name: "Stored policy containers" })).toBeNull();
+  // The tree follows the click-through: its container is open and the policy is the pressed one.
+  const tree = screen.getByRole("navigation", { name: "Management policies" });
+  expect(within(tree).getByRole("button", { name: "DOM-TANGO-02" })).toHaveAttribute("aria-expanded", "true");
+  expect(within(tree).getByRole("button", { name: "Policy OBJ-POLICY-02", pressed: true })).toBeInTheDocument();
+  expect(screen.queryByRole("status", { name: "No assigned policy snapshot" })).toBeNull();
+});
+it("states unknown rule counts and many gateways honestly in the summary", async () => {
+  const many = { ...metadata, ruleCount: undefined, targets: ["a", "b", "c", "d", "e"].map(n => ({ deviceId: `dev-${n}`, name: `FW-SYNTH-${n}`, context: "", syncStatus: "UNKNOWN" })) };
+  vi.stubGlobal("fetch", vi.fn(async (input: string) => new Response(JSON.stringify(input === "/api/v2/policy/sources"
+    ? { canCollect: false, sources: [{ sourceId: "source-1", sourceName: "MGR-BRAVO-01", vendor: "PAN" }] } : { policies: [many], devices: [] }), { status: 200 })));
+  mount();
+  const row = within(await screen.findByRole("region", { name: "Stored policy containers" })).getAllByRole("row")[1];
+  expect(row).toHaveTextContent("UNKNOWN");
+  expect(row).toHaveTextContent("FW-SYNTH-a, FW-SYNTH-b, FW-SYNTH-c +2 more");
+});
+it("filters the summary with the tree search and says so when nothing matches", async () => {
+  mockTwoSources(); mount();
+  const summary = await screen.findByRole("region", { name: "Stored policy containers" });
+  fireEvent.change(screen.getByLabelText("Search containers, policies"), { target: { value: "ROMEO-03" } });
+  expect(within(summary).getAllByRole("row")).toHaveLength(2);
+  fireEvent.change(screen.getByLabelText("Search containers, policies"), { target: { value: "no-such-thing" } });
+  expect(screen.queryByRole("region", { name: "Stored policy containers" })).toBeNull();
+  expect(screen.getByRole("status", { name: "No matching container" })).toHaveTextContent("Clear the search");
+});
+it("keeps batch and collection actions out of the tree pane until a menu is opened, with every action reachable", async () => {
+  vi.stubGlobal("fetch", vi.fn(async (input: string) => new Response(JSON.stringify(input === "/api/v2/policy/sources"
+    ? { canCollect: true, sources: [{ sourceId: "source-1", sourceName: "MGR-BRAVO-01", vendor: "PAN" }] } : { policies: [metadata], devices: metadata.targets }), { status: 200 })));
+  mount();
+  const tree = await screen.findByRole("navigation", { name: "Management policies" });
+  await within(tree).findByRole("button", { name: "Collection actions for MGR-BRAVO-01" });
+  for (const name of ["Collect selected", "Export selected rules (CSV)", "Collect changes", "Full refresh (incl. hit counts)"]) {
+    expect(within(tree).queryByRole("button", { name })).toBeNull();
+    expect(within(tree).queryByRole("menuitem", { name })).toBeNull();
+  }
+  expect(within(tree).getByRole("button", { name: "Selection actions" })).toHaveAttribute("aria-haspopup", "menu");
+  fireEvent.click(within(tree).getByRole("button", { name: "Selection actions" }));
+  const batch = within(await screen.findByRole("menu", { name: "Selection actions" }));
+  expect(batch.getAllByRole("menuitem").map(item => item.textContent)).toEqual(["Collect selected", "Export selected rules (CSV)"]);
+  expect(batch.getAllByRole("menuitem").every(item => item.getAttribute("aria-disabled") === "true")).toBe(true);
+  fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
+  await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
+  fireEvent.click(within(tree).getByRole("button", { name: "Collection actions for MGR-BRAVO-01" }));
+  const source = within(await screen.findByRole("menu", { name: "Collection actions for MGR-BRAVO-01" }));
+  expect(source.getAllByRole("menuitem").map(item => item.textContent)).toEqual(["Collect changes", "Full refresh (incl. hit counts)"]);
 });
 it("virtualizes a 5000-rule response and reaches the final row on scroll", async () => {
   const rules = Array.from({ length: 5000 }, (_, i) => ({ ...rule, id: `rule-${i}`, name: `OBJ-RULE-${i}`, number: i + 1 }));
@@ -232,7 +339,9 @@ it("backs off polling, suspends while hidden and stops on the precise terminal r
     return new Response(JSON.stringify(body), { status: init?.method === "POST" ? 202 : 200 });
   }));
   const view = mount();
-  const action = await screen.findByRole("button", { name: "Collect changes" });
+  const trigger = await collectTrigger("MGR-BRAVO-01");
+  fireEvent.click(trigger);
+  const action = await screen.findByRole("menuitem", { name: "Collect changes" });
   vi.useFakeTimers();
   await act(async () => { fireEvent.click(action); });
   const advance = async (ms: number) => { await act(async () => { await vi.advanceTimersByTimeAsync(ms); }); };
@@ -277,7 +386,7 @@ it("discovers automatic collections and stops all pending polling on unmount", a
   let view: ReturnType<typeof mount> | undefined;
   await act(async () => { view = mount(); });
   expect(screen.getByText("Collecting · 4/8")).toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: "Collect changes" })).toBeNull();
+  expect(screen.queryByRole("button", { name: /^Collection actions for / })).toBeNull();
   view!.unmount();
   await act(async () => { await vi.advanceTimersByTimeAsync(60000); });
   expect(fetch.mock.calls.some(([url]) => url.includes("/collections/"))).toBe(false);
@@ -289,9 +398,10 @@ it("keeps an uncollected source navigable with an accessible empty state without
     : { sources: [], containers: [] }), { status: 200 }));
   vi.stubGlobal("fetch", fetch); mount();
   const tree = await screen.findByRole("navigation", { name: "Management policies" });
-  fireEvent.click(within(tree).getByRole("button", { expanded: false }));
   await waitFor(() => expect(fetch.mock.calls).toHaveLength(2));
-  expect(screen.getByRole("status", { name: "No collected policy" })).toHaveTextContent("Select a source and container");
+  expect(within(tree).getByRole("button", { expanded: true, name: metadata.sourceName })).toBeInTheDocument();
+  expect(screen.getByRole("status", { name: "No collected policy" })).toHaveTextContent("nothing has been collected from them yet");
+  expect(screen.queryByRole("region", { name: "Stored policy containers" })).toBeNull();
   expect(within(tree).queryByRole("button", { pressed: false })).toBeNull();
   expect(screen.queryByRole("region", { name: "Policy rulebase" })).toBeNull();
   expect(fetch.mock.calls.some(([url]) => url.endsWith("/collect"))).toBe(false);
@@ -474,13 +584,13 @@ it("reaches all 54 catalog containers even when the collection source is ineligi
     ? { sources: [], canCollect: false } : { policies, devices: metadata.targets }), { status: 200 })));
   mount();
   await screen.findByText("Panorama · 54 containers");
-  fireEvent.click(screen.getByRole("button", { name: metadata.sourceName }));
   expect(screen.getAllByRole("group", { name: "Policy container" })).toHaveLength(54);
   expect(screen.getByText("1 policies · 54 rules")).toBeInTheDocument();
-  fireEvent.change(screen.getByLabelText("Search sources, containers and policies"), { target: { value: "OBJ-POLICY-53" } });
+  fireEvent.change(screen.getByLabelText("Search containers, policies"), { target: { value: "OBJ-POLICY-53" } });
   expect(screen.getAllByRole("group", { name: "Policy container" })).toHaveLength(1);
   expect(screen.getByRole("button", { name: "Policy OBJ-POLICY-53" })).toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: "Collect selected" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Selection actions" }));
+  expect(screen.queryByRole("menuitem", { name: "Collect selected" })).toBeNull();
 });
 
 it("shows the latest source job after refresh without leaking previous totals", async () => {
@@ -509,12 +619,13 @@ it("selects containers and policies and exports all masked pages without collect
   const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
   mount(); await navigate();
   await screen.findByRole("region", { name: "Policy rulebase" });
-  const action = screen.getByRole("button", { name: "Export selected rules (CSV)" });
-  expect(action).toBeDisabled();
+  const menu = screen.getByRole("button", { name: "Selection actions" });
+  fireEvent.click(menu);
+  expect(await screen.findByRole("menuitem", { name: "Export selected rules (CSV)" })).toHaveAttribute("aria-disabled", "true");
+  fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
   fireEvent.click(screen.getByRole("checkbox", { name: `Select ${metadata.containerName}` }));
   expect(screen.getByRole("checkbox", { name: `Select ${metadata.name}` })).toBeChecked();
-  expect(action).toBeEnabled();
-  fireEvent.click(action);
+  await pickItem(menu, "Export selected rules (CSV)");
   await screen.findByText("Exported 2 rules.");
   expect(fetch.mock.calls.some(([url]) => url.includes("page=1&q="))).toBe(true);
   expect(blob).toHaveBeenCalledOnce();
@@ -524,7 +635,8 @@ it("selects containers and policies and exports all masked pages without collect
   expect(click).toHaveBeenCalledOnce();
   expect(fetch.mock.calls.some(([url]) => url.endsWith("/collect"))).toBe(false);
   fireEvent.click(screen.getByRole("checkbox", { name: `Select ${metadata.name}` }));
-  expect(action).toBeDisabled();
+  fireEvent.click(menu);
+  expect(await screen.findByRole("menuitem", { name: "Export selected rules (CSV)" })).toHaveAttribute("aria-disabled", "true");
 });
 
 it("deduplicates selected PAN policies into one authorized source collection", async () => {
@@ -534,11 +646,12 @@ it("deduplicates selected PAN policies into one authorized source collection", a
     : input === "/session/status" ? { csrf_token: "synthetic-csrf" }
     : init?.method === "POST" ? { jobId: "job-selected" } : page), { status: init?.method === "POST" ? 202 : 200 }));
   vi.stubGlobal("fetch", fetch); mount();
-  fireEvent.click(await screen.findByRole("button", { name: metadata.sourceName }));
-  const action = screen.getByRole("button", { name: "Collect selected" });
-  expect(action).toBeDisabled();
-  fireEvent.click(screen.getByRole("checkbox", { name: `Select ${metadata.containerName}` }));
-  fireEvent.click(action);
+  const menu = await screen.findByRole("button", { name: "Selection actions" });
+  fireEvent.click(menu);
+  expect(await screen.findByRole("menuitem", { name: "Collect selected" })).toHaveAttribute("aria-disabled", "true");
+  fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
+  fireEvent.click(await screen.findByRole("checkbox", { name: `Select ${metadata.containerName}` }));
+  await pickItem(menu, "Collect selected");
   await screen.findByText("Collecting · 0 steps");
   const posts = fetch.mock.calls.filter(([, init]) => init?.method === "POST");
   expect(posts).toHaveLength(1);
@@ -562,11 +675,12 @@ it("collects selected CP domains sequentially and refreshes after each completio
     return new Response(JSON.stringify(body), { status: init?.method === "POST" ? 202 : 200 });
   });
   vi.stubGlobal("fetch", fetch); mount();
-  fireEvent.click(await screen.findByRole("button", { name: metadata.sourceName }));
-  fireEvent.click(screen.getByRole("checkbox", { name: `Select ${metadata.containerName}` }));
+  fireEvent.click(await screen.findByRole("checkbox", { name: `Select ${metadata.containerName}` }));
   fireEvent.click(screen.getByRole("checkbox", { name: "Select DOM-ROMEO-02" }));
+  fireEvent.click(screen.getByRole("button", { name: "Selection actions" }));
+  const collectSelected = await screen.findByRole("menuitem", { name: "Collect selected" });
   vi.useFakeTimers();
-  await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Collect selected" })); });
+  await act(async () => { fireEvent.click(collectSelected); });
   expect(posts).toEqual([metadata.containerId]);
   await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
   expect(posts).toEqual([metadata.containerId, second.containerId]);
@@ -715,7 +829,7 @@ it("full refresh submits FULL and reused-domain progress retains the original hi
   expect(within(domain).getByLabelText("2026-10-03T00:00:00Z (UTC reference)")).toBeInTheDocument();
   expect(within(domain).getByLabelText("2026-10-04T00:00:00Z (UTC reference)")).toBeInTheDocument();
   expect(within(card).queryByText(/2026-10-03T00:00:00Z/)).toBeNull();
-  fireEvent.click(await screen.findByRole("button", { name: "Full refresh (incl. hit counts)" }));
+  await pickItem(await collectTrigger("MGR-BRAVO-01"), "Full refresh (incl. hit counts)");
   await waitFor(() => expect(fetch.mock.calls.some(([url]) => url.endsWith("/collect"))).toBe(true));
   const call = fetch.mock.calls.find(([url]) => url.endsWith("/collect"));
   expect(JSON.parse(call?.[1]?.body as string)).toEqual({ domainRef: "", mode: "FULL" });
