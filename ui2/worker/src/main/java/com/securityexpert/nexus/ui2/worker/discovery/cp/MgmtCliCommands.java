@@ -62,6 +62,30 @@ public final class MgmtCliCommands {
             + (type.equals("groups") || type.equals("service-groups") ? " dereference-group-members false" : "");
     }
 
+    /**
+     * C-1 (policy completeness, PO approval 2026-10-18): {@code from-date}/{@code to-date} are ISO 8601 publish times the
+     * vendor printed; the offset is a multiple of the approved {@code limit 10}.
+     */
+    public static String showChanges(String domain, String from, String to, int offset) {
+        if (offset < 0 || offset % com.securityexpert.nexus.ui2.jobs.policy.PolicyCompletenessGates.CP_SHOW_CHANGES_LIMIT != 0
+                || offset >= com.securityexpert.nexus.ui2.jobs.policy.PolicyCompletenessGates.CP_SHOW_CHANGES_LIMIT
+                    * com.securityexpert.nexus.ui2.jobs.policy.PolicyCompletenessGates.CP_SHOW_CHANGES_MAX_OFFSETS
+                || from == null || to == null
+                || !com.securityexpert.nexus.ui2.jobs.policy.PolicyCompletenessGates.CP_ISO_TIME.matcher(from).matches()
+                || !com.securityexpert.nexus.ui2.jobs.policy.PolicyCompletenessGates.CP_ISO_TIME.matcher(to).matches())
+            throw new IllegalArgumentException("Invalid show-changes window");
+        return "mgmt_cli -r true -d " + quote(domain) + " -f json show-changes from-date " + quote(from) + " to-date " + quote(to)
+                + " limit " + com.securityexpert.nexus.ui2.jobs.policy.PolicyCompletenessGates.CP_SHOW_CHANGES_LIMIT
+                + " offset " + quote(Integer.toString(offset));
+    }
+
+    /** C-2: {@code <UID>} is the task id the C-1 answer returned. */
+    public static String showTask(String domain, String taskId) {
+        if (taskId == null || !com.securityexpert.nexus.ui2.jobs.policy.PolicyCompletenessGates.CP_TASK_ID.matcher(taskId).matches())
+            throw new IllegalArgumentException("Invalid task id");
+        return "mgmt_cli -r true -d " + quote(domain) + " -f json show-task task-id " + quote(taskId) + " details-level full";
+    }
+
     private static String quote(String value) {
         if (value == null || value.isBlank() || value.chars().anyMatch(Character::isISOControl))
             throw new IllegalArgumentException("Invalid management argument");

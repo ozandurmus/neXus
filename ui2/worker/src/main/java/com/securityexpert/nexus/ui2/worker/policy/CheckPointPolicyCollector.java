@@ -174,6 +174,15 @@ public final class CheckPointPolicyCollector {
 
     public List<PolicySnapshot> collect(DiscoveryRun run, PolicyCollectionRepository.Request request, BooleanSupplier lease,
             Consumer<PolicySnapshot> publish, Consumer<CollectionFailure> domainFailure) {
+        return collect(run, request, lease, publish, domainFailure, new PolicyObservations());
+    }
+
+    /**
+     * As above, and every domain's published-session marker is handed to {@code observations} (also when the run fails
+     * part-way), so the completeness coordinator can write the revision rows. Collection itself is unchanged.
+     */
+    public List<PolicySnapshot> collect(DiscoveryRun run, PolicyCollectionRepository.Request request, BooleanSupplier lease,
+            Consumer<PolicySnapshot> publish, Consumer<CollectionFailure> domainFailure, PolicyObservations observations) {
         var reuse = new CpDomainReuse(repository, request, changedOnly, System::currentTimeMillis).onDatabaseGap(domainFailure);
         Consumer<PolicySnapshot> domainPublish = snapshot -> {
             try { publish.accept(snapshot); reuse.snapshot(snapshot); }
@@ -196,7 +205,7 @@ public final class CheckPointPolicyCollector {
         if (maxSessions > 1) {
             try { return new CpPolicyParallelCollection(this, repository, maxSessions, nanoTime,
                 run, request, deadline, lease, domainPublish, domainGap, reuse).collect(); }
-            finally { reuse.record(); PolicyCollectionTrace.elapsed(nanoTime.getAsLong() - started); }
+            finally { reuse.record(); PolicyCollectionTrace.elapsed(nanoTime.getAsLong() - started); reuse.observe(observations); }
         }
         TransportSession session = connect(run, deadline, lease);
         try {
@@ -216,7 +225,7 @@ public final class CheckPointPolicyCollector {
                     domainFailure.accept(new CollectionFailure(container, "THROTTLED"));
                     PolicyCollectionTrace.packages(0); continue;
                 }
-                reuse.begin(container);
+                reuse.begin(container, domainName);
                 if (session == null) session = connect(run, deadline, lease);
                 JsonNode signal = null;
                 if (request.mode() == PolicyCollectionRepository.Mode.CHANGED_ONLY || !request.jobId().isEmpty()) {
@@ -313,8 +322,12 @@ public final class CheckPointPolicyCollector {
             if (session != null) transport.disconnect(session);
             reuse.record();
             PolicyCollectionTrace.elapsed(nanoTime.getAsLong() - started);
+            reuse.observe(observations);
         }
     }
+
+    /** A fresh, trusted MDS session for the optional change reader; the caller disconnects it through {@link #transport}. */
+    TransportSession openSession(DiscoveryRun run, long deadline, BooleanSupplier lease) { return connect(run, deadline, lease); }
 
     static PolicySnapshot snapshot(Metadata metadata, List<JsonNode> access, List<JsonNode> nat, List<CollectionFailure> failures) {
         // Refresh the publication timestamp so each completed layer can replace its earlier checkpoint.

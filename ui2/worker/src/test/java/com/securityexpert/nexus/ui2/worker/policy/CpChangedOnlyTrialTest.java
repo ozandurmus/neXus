@@ -173,7 +173,7 @@ class CpChangedOnlyTrialTest {
             PolicyCollectionTrace.domainDecision(TRIAL, "REUSED", 2, 0);
             PolicyCollectionTrace.domainDecision(OTHER, "READ_NOT_IN_CHANGED_ONLY_SET", 0, 21);
             return List.of();
-        }).when(cp).collect(any(), any(), any(), any(), any());
+        }).when(cp).collect(any(), any(), any(), any(), any(), any());
         var executor = new PolicyCollectionJobExecutor(leases, attempts, runs, repository, cp, key -> List.of());
         assertInstanceOf(JobOutcome.Completed.class, executor.execute("job-1", 1, "run-1"));
         verify(attempts).insertPreContact(eq("job-1"), eq(1L), eq(PolicyCollectionJobExecutor.RUN_RECORD_STEP - 1),

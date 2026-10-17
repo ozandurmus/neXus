@@ -24,6 +24,9 @@ public final class PolicyCollectionJobExecutor {
     private final GateRegistryPort gates;
     private PanoramaPolicyCollector panorama;
     public PolicyCollectionJobExecutor withPanorama(PanoramaPolicyCollector collector) { this.panorama = collector; return this; }
+    private PolicyCompletenessCoordinator completeness;
+    /** Writes the per-container revision rows and runs the approved, off-by-default change readers (PO approval 2026-10-18). */
+    public PolicyCollectionJobExecutor withCompleteness(PolicyCompletenessCoordinator coordinator) { this.completeness = coordinator; return this; }
     private com.securityexpert.nexus.ui2.persistence.artefact.ArtefactStore transcriptStore;
     private com.securityexpert.nexus.ui2.persistence.jobrecords.JobRecordDao transcriptJobs;
     public PolicyCollectionJobExecutor withTranscript(com.securityexpert.nexus.ui2.persistence.artefact.ArtefactStore store,
@@ -138,6 +141,9 @@ public final class PolicyCollectionJobExecutor {
         String attempt = attempts.insertPreContact(jobId, epoch, 0, "palo_alto".equals(run.get().vendor()) ? "PAN_POLICY_READ" : "CP_POLICY_READ", "read", 1);
         if (attempt == null) return new JobOutcome.ZombieStopped();
         long runStarted = System.nanoTime();
+        var observations = new PolicyObservations();
+        java.time.Instant jobStart = completeness == null ? java.time.Instant.now() : completeness.now();
+        java.util.function.BooleanSupplier lease = () -> leases.heartbeat(jobId, epoch, Duration.ofMinutes(10));
         PolicySnapshotRepository.Stored[] latest = {null};
         java.util.function.Consumer<com.securityexpert.nexus.ui2.policy.PolicySnapshot> publish = snapshot -> {
             com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.checkPublication();
@@ -148,14 +154,13 @@ public final class PolicyCollectionJobExecutor {
         try {
             List<com.securityexpert.nexus.ui2.policy.PolicySnapshot.CollectionFailure> failures;
             if ("palo_alto".equals(run.get().vendor())) {
-                failures = panorama.collect(run.get(), request.get().withLease(epoch),
-                    () -> leases.heartbeat(jobId, epoch, Duration.ofMinutes(10)), publish);
+                failures = panorama.collect(run.get(), request.get().withLease(epoch), lease, publish, observations);
             } else {
                 failures = new java.util.ArrayList<>();
-                var snapshots = collector.collect(run.get(), request.get().withLease(epoch),
-                    () -> leases.heartbeat(jobId, epoch, Duration.ofMinutes(10)), publish, failures::add);
+                var snapshots = collector.collect(run.get(), request.get().withLease(epoch), lease, publish, failures::add, observations);
                 failures.addAll(snapshots.stream().flatMap(snapshot -> snapshot.failures().stream()).toList());
             }
+            if (completeness != null) completeness.afterCollection(run.get(), request.get().withLease(epoch), observations, jobStart, lease, true);
             recordGaps(jobId, epoch, failures);
             recordRun(jobId, epoch, request.get(), run.get().vendor(), runStarted);
             String reason = failures.stream().map(f -> f.layerRef() + ": " + f.reason()).findFirst().orElse("");
@@ -168,6 +173,11 @@ public final class PolicyCollectionJobExecutor {
             catch (RuntimeException unrecorded) {
                 com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(unrecorded);
                 System.getLogger(getClass().getName()).log(System.Logger.Level.WARNING, "POLICY_RUN_RECORD_NOT_WRITTEN");
+            }
+            // Revision rows for what was observed before the failure; no device read after a failed collection.
+            if (completeness != null && !reason.endsWith(": CANCELLED")) {
+                try { completeness.afterCollection(run.get(), request.get().withLease(epoch), observations, jobStart, lease, false); }
+                catch (RuntimeException ignored) { com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(ignored); }
             }
             return finish(jobId, epoch, attempt, latest[0], reason, PolicyCollectionTrace.fatal(incomplete));
         }

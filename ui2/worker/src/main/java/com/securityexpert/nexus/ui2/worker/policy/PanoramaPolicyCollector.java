@@ -9,6 +9,7 @@ import java.util.function.Consumer;
 import org.w3c.dom.Element;
 import com.securityexpert.nexus.ui2.capability.GateRegistryPort;
 import com.securityexpert.nexus.ui2.jobs.policy.PanPolicyGates;
+import com.securityexpert.nexus.ui2.jobs.policy.PolicyCompletenessGates;
 import com.securityexpert.nexus.ui2.jobs.policy.PolicyHitGates;
 import com.securityexpert.nexus.ui2.jobs.transport.*;
 import com.securityexpert.nexus.ui2.persistence.discovery.DiscoveryRun;
@@ -30,6 +31,16 @@ public final class PanoramaPolicyCollector {
     private final GateRegistryPort gates;
     private final PanCredentialResolver credentials;
     private final PolicyCollectionRepository repository;
+    // Policy completeness readers (PO approval 2026-10-18): OFF unless a setting names the one trial target.
+    private PolicyCompletenessSettings completeness = PolicyCompletenessSettings.OFF;
+    private com.securityexpert.nexus.ui2.platform.JobWindowPolicy windows = com.securityexpert.nexus.ui2.platform.JobWindowPolicy.SYSTEM;
+    private com.securityexpert.nexus.ui2.worker.diagnostic.PanoramaConfigLogReader configLog;
+
+    /** Switches the completeness readers on for their trial targets: P-1 (firewall NAT hit measurement) and P-2/P-3/P-4 (config log). */
+    public PanoramaPolicyCollector withCompleteness(PolicyCompletenessSettings settings, com.securityexpert.nexus.ui2.platform.JobWindowPolicy windows,
+            com.securityexpert.nexus.ui2.worker.diagnostic.PanoramaConfigLogReader configLog) {
+        this.completeness = settings; this.windows = windows; this.configLog = configLog; return this;
+    }
 
     public PanoramaPolicyCollector(DeviceTransport transport, GateRegistryPort gates,
             PanCredentialResolver credentials, PolicyCollectionRepository repository) {
@@ -78,6 +89,16 @@ public final class PanoramaPolicyCollector {
     /** Production path publishes immediately; only lineage XML is retained, never sibling snapshots. */
     public List<CollectionFailure> collect(DiscoveryRun run, PolicyCollectionRepository.Request scope,
             BooleanSupplier lease, Consumer<PolicySnapshot> publish) {
+        return collect(run, scope, lease, publish, new PolicyObservations());
+    }
+
+    /**
+     * As above; each device group's lineage content version (or the failure code) is handed to {@code observations} so the
+     * completeness coordinator can write the revision rows. Collection itself is unchanged.
+     */
+    public List<CollectionFailure> collect(DiscoveryRun run, PolicyCollectionRepository.Request scope,
+            BooleanSupplier lease, Consumer<PolicySnapshot> publish, PolicyObservations observations) {
+        Instant jobStart = windows.now();
         PolicyCollectionTrace.step("PANORAMA_TARGET", scope.sourceId());
         if (!"palo_alto".equals(run.vendor()) || run.managementAddress() == null || run.managementAddress().isBlank())
             throw PolicyCollectionTrace.failure("PANORAMA_TARGET_NOT_FOUND");
@@ -133,12 +154,14 @@ public final class PanoramaPolicyCollector {
                 || scope.domainRef().equals(ref(scope.sourceId(), "device-group", name))).count());
             String collectedAt = Instant.now().toString();
             Map<String, Map<String, FirewallHits>> hitCache = new HashMap<>();
+            Target[] natTrial = {null};
             int published = 0, rulesFetched = 0;
             for (int i = 0; i < order.size(); i++) {
                 String name = order.get(i);
                 String container = ref(scope.sourceId(), "device-group", name);
                 long before = bytes[0];
                 boolean unitFinished = false;
+                String observedVersion = null;
                 PolicyCollectionTrace.unit("pan-groups");
                 PolicyCollectionTrace.layer(0, 0, rulesFetched);
                 try {
@@ -150,12 +173,16 @@ public final class PanoramaPolicyCollector {
                     if (clock.getAsLong() >= deadline) throw PolicyCollectionTrace.failure("JOB_DEADLINE");
                     PolicyCollectionTrace.step("device group " + container + " mapping", scope.sourceId());
                     String version = contentVersion(document, members.toString(), parents.toString());
+                    observedVersion = lineageVersion(config, parents, name);
                     var resumed = repository.resumedUnit(scope, container, version);
                     if (resumed.isPresent()) {
                         var previous = checkpoint(resumed.get());
                         if (!previous.metadata().sourceId().equals(scope.sourceId()) || !previous.metadata().containerId().equals(container))
                             throw PolicyCollectionTrace.failure("CHECKPOINT_IDENTITY_MISMATCH");
-                        publish.accept(previous); published++; unitFinished = true; continue;
+                        publish.accept(previous); published++; unitFinished = true;
+                        observations.add(new PolicyObservations.Pan(container, observedVersion, previous.failures().isEmpty(), null,
+                            (int) previous.sections().stream().mapToLong(section -> section.rules().size()).sum()));
+                        continue;
                     }
                     var metadata = new Metadata(ref(container, "policy"), scope.sourceId(), "Panorama " + scope.sourceId(), "PAN", container,
                             name, name, collectedAt, "", targets(run, scope.sourceId(), members.get(name)));
@@ -174,6 +201,9 @@ public final class PanoramaPolicyCollector {
                                 "DG_SIZE bytes=" + (bytes[0] - before) + " rules=" + rules + " nonSecurityRules=" + otherRules + " objects=" + objects);
                         throw PolicyCollectionTrace.failure("SIZE_LIMIT");
                     }
+                    if (natTrial[0] == null && completeness.panNatHitsTrialFirewall().isPresent())
+                        for (Target candidate : snapshot.metadata().targets())
+                            if (natTrial[0] == null && completeness.panNatHitsTargets(candidate.deviceId())) natTrial[0] = candidate;
                     snapshot = collectHits(snapshot, timer, deadline, bytes, lease, hitCache, scope.throttledAutomatic(), failures);
                     if (!lease.getAsBoolean()) throw PolicyCollectionTrace.failure("LEASE_LOST");
                     if (clock.getAsLong() >= deadline) throw PolicyCollectionTrace.failure("JOB_DEADLINE");
@@ -183,12 +213,14 @@ public final class PanoramaPolicyCollector {
                         throw PolicyCollectionTrace.failure("LEASE_LOST");
                     published++;
                     unitFinished = true;
+                    observations.add(new PolicyObservations.Pan(container, observedVersion, snapshot.failures().isEmpty(), null, (int) rules));
                 } catch (IllegalArgumentException | PolicyCollectionTrace.Failure invalid) {
                     if (invalid instanceof PolicyCollectionTrace.Failure traced && PolicyCollectionTrace.fatal(traced)) throw traced;
                     unitFinished = true;
                     String reason = PolicyCollectionTrace.reason(invalid);
                     if (reason.endsWith(": SIZE_LIMIT")) reason = "bytes=" + (bytes[0] - before) + " " + reason;
                     failures.add(new CollectionFailure(container, reason));
+                    observations.add(new PolicyObservations.Pan(container, observedVersion, false, failureCode(reason), 0));
                     com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.add("job", "note",
                             "INCOMPLETE_DG " + container + " " + reason);
                 } finally {
@@ -207,6 +239,7 @@ public final class PanoramaPolicyCollector {
             if (clock.getAsLong() >= deadline) throw PolicyCollectionTrace.failure("JOB_DEADLINE");
             if (Thread.currentThread().isInterrupted()) throw PolicyCollectionTrace.failure("INTERRUPTED");
             if ((!scope.domainRef().isEmpty() || !members.isEmpty()) && published == 0) throw failure();
+            completenessReaders(scope, target, key, lease, timer, deadline, bytes, jobStart, natTrial[0]);
             return List.copyOf(failures);
         } finally {
             timer.shutdownNow();
@@ -214,6 +247,101 @@ public final class PanoramaPolicyCollector {
             Arrays.fill(credential.password(), '\0');
         }
     }
+    /** The fixed code at the end of a traced failure reason ("step: CODE"), or a generic one. */
+    static String failureCode(String reason) {
+        String code = reason.contains(": ") ? reason.substring(reason.lastIndexOf(": ") + 2) : reason;
+        return code.matches("[A-Za-z][A-Za-z0-9_]{0,79}") ? code.toUpperCase(Locale.ROOT) : "COLLECTION_FAILED";
+    }
+
+    /**
+     * The approved, off-by-default completeness reads (PO approval 2026-10-18, partial-first): P-2/P-3/P-4 for the one
+     * Panorama named by the setting, and one P-1 measurement call on the one firewall named by the setting. Neither can fail
+     * the policy collection: only cancellation, a lost lease, the job deadline or an interrupt propagate.
+     */
+    private void completenessReaders(PolicyCollectionRepository.Request scope, ApiTarget target, char[] key, BooleanSupplier lease,
+            ScheduledExecutorService timer, long deadline, long[] bytes, Instant jobStart, Target natTrial) {
+        if (configLog != null && completeness.panConfigLogTargets(scope.sourceId())) {
+            try {
+                if (clock.getAsLong() < deadline)
+                    configLog.read(scope.sourceId(), scope.jobId(), scope.throttledAutomatic(), jobStart, target, key, lease);
+            } catch (RuntimeException unavailable) {
+                com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(unavailable);
+                if (completenessFatal(unavailable)) throw unavailable;
+                com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.add("job", "note", "PAN_CONFIG_LOG outcome=UNKNOWN reason=READER_FAILED");
+            }
+        }
+        if (natTrial != null && clock.getAsLong() < deadline) measureNatHits(natTrial, scope, timer, deadline, bytes, lease, jobStart);
+    }
+
+    private static boolean completenessFatal(RuntimeException error) {
+        String reason = PolicyCollectionTrace.reason(error);
+        // A lost gate is not fatal here (the readers are optional); the security hit read treats it as fatal, these do not.
+        return Set.of("CANCELLED", "LEASE_LOST", "JOB_DEADLINE", "INTERRUPTED")
+            .stream().anyMatch(code -> reason.endsWith(": " + code));
+    }
+
+    /**
+     * P-1, one measurement: one firewall (the trial setting), its first VSYS context, one call. The answer is reduced to a
+     * sanitized summary in the job transcript; nothing is stored on a snapshot (the NAT hit element is UNKNOWN until measured).
+     */
+    private void measureNatHits(Target firewall, PolicyCollectionRepository.Request scope, ScheduledExecutorService timer,
+            long deadline, long[] bytes, BooleanSupplier lease, Instant jobStart) {
+        String reason = null, note = null;
+        char[] key = null;
+        com.securityexpert.nexus.ui2.worker.transport.xmlapi.PanCredentialMaterial credential = null;
+        try {
+            if (!windows.isOpen(jobStart)) reason = "OUTSIDE_JOB_WINDOW";
+            else if (!PolicyCompletenessGates.enabled(gates, PolicyCompletenessGates.P1_NAT_HIT_COUNTS)) reason = "POLICY_GATE_UNAVAILABLE";
+            else {
+                natHitRequest(firewall.context(), new char[0]);
+                var endpoint = repository.panFirewall(firewall.deviceId());
+                if (endpoint.isEmpty()) reason = "FIREWALL_ENDPOINT_UNAVAILABLE";
+                else if (!repository.beginDomain(firewall.deviceId(), ref("rule-hit-count-nat", firewall.context()), scope.throttledAutomatic()))
+                    reason = "THROTTLED";
+                else {
+                    checkNatRead(lease);
+                    credential = credentials.resolve(endpoint.get().credentialReferenceId());
+                    if (credential == null || credential.username() == null || credential.username().isBlank() || credential.password() == null)
+                        reason = "CREDENTIAL_UNUSABLE";
+                    else {
+                        var api = new ApiTarget(firewall.deviceId(), endpoint.get().address());
+                        var auth = read(api, PanoramaApiRoutes.keyGeneration(credential.username(), credential.password()), timer, deadline, bytes);
+                        key = PolicyXml.firstRelativeText(auth, "result/key").filter(k -> !k.isBlank()).orElseThrow(PanoramaPolicyCollector::failure).toCharArray();
+                        checkNatRead(lease);
+                        var response = read(api, natHitRequest(firewall.context(), key), timer, deadline, bytes);
+                        note = PanNatHitMeasure.summarize(response).map(PanNatHitMeasure.Summary::note).orElse(null);
+                        if (note == null) reason = "RESPONSE_NOT_EVALUABLE";
+                    }
+                }
+            }
+        } catch (RuntimeException unavailable) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(unavailable);
+            if (completenessFatal(unavailable)) throw unavailable;
+            reason = failureCode(PolicyCollectionTrace.reason(unavailable));
+        } finally {
+            if (key != null) Arrays.fill(key, '\0');
+            if (credential != null && credential.password() != null) Arrays.fill(credential.password(), '\0');
+        }
+        com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.add("job", "note",
+            note != null ? note : "PAN_NAT_HIT_MEASURE outcome=UNKNOWN reason=" + reason);
+    }
+
+    private void checkNatRead(BooleanSupplier lease) {
+        com.securityexpert.nexus.ui2.worker.JobCancellationScope.check();
+        if (!lease.getAsBoolean()) throw PolicyCollectionTrace.failure("LEASE_LOST");
+        PolicyCompletenessGates.require(gates, PolicyCompletenessGates.P1_NAT_HIT_COUNTS);
+    }
+
+    /** P-1: the approved text with the stored VSYS context substituted (XML-escaped), the key in the header. */
+    static XmlApiSpec natHitRequest(String context, char[] key) {
+        if (context == null || context.isBlank() || context.length() > 255 || context.chars().anyMatch(c -> c < 32)) throw failure();
+        String escaped = context.replace("&", "&amp;").replace("'", "&apos;").replace("\"", "&quot;")
+                .replace("<", "&lt;").replace(">", "&gt;");
+        return new XmlApiSpec("POST", "op", "not_applicable", "no_target",
+                Map.of("cmd", PolicyCompletenessGates.P1_NAT_HIT_COUNTS.text().substring("type=op&cmd=".length()).replace("<VSYS>", escaped)),
+                Map.of(PanoramaApiRoutes.KEY_HEADER_NAME, new String(key)));
+    }
+
     static XmlApiSpec hitRequest(String context, char[] key) {
         if (context == null || context.isBlank() || context.length() > 255 || context.chars().anyMatch(c -> c < 32)) throw failure();
         String escaped = context.replace("&", "&amp;").replace("'", "&apos;").replace("\"", "&quot;")
@@ -277,6 +405,44 @@ public final class PanoramaPolicyCollector {
         try { return SNAPSHOTS.writeValueAsString(snapshot); }
         catch (IOException invalid) { throw PolicyCollectionTrace.failure("CHECKPOINT_NOT_EVALUABLE"); }
     }
+    /**
+     * The revision marker of one device group (V163 {@code policy_revision}, PAN_CONTENT_VERSION): the SHA-256 of exactly
+     * what this group's rules and objects are made of, the {@code shared} XML and each device group from the root down to
+     * this one, in that order, each with its name. Unlike {@link #contentVersion} (a within-job resume token) it holds no
+     * other group's content and no group membership list, so a change elsewhere does not move it. Hit counts are not part
+     * of it: they are attached after the mapping and are never XML here. A different token means the lineage XML changed,
+     * not that a rule changed (rule counts come from the history trigger); UNKNOWN whether the device-group answer is
+     * stable for an unchanged configuration (the first measurement is the second consecutive run).
+     */
+    static String lineageVersion(Element config, Map<String, String> parents, String name) {
+        try {
+            var digest = java.security.MessageDigest.getInstance("SHA-256");
+            var transformer = javax.xml.transform.TransformerFactory.newInstance().newTransformer();
+            transformer.setOutputProperty(javax.xml.transform.OutputKeys.OMIT_XML_DECLARATION, "yes");
+            var shared = PolicyXml.selectRelative(config, "shared");
+            var groups = PolicyXml.selectRelative(config, "devices/entry/device-group");
+            if (shared.size() != 1 || groups.size() != 1) throw PolicyCollectionTrace.failure("CHECKPOINT_VERSION_NOT_EVALUABLE");
+            List<String> chain = new ArrayList<>();
+            for (String group = name; group != null && !group.isEmpty(); group = parents.get(group)) {
+                if (chain.size() > 32) throw PolicyCollectionTrace.failure("CHECKPOINT_VERSION_NOT_EVALUABLE");
+                chain.add(0, group);
+            }
+            try (var output = new java.security.DigestOutputStream(java.io.OutputStream.nullOutputStream(), digest)) {
+                transformer.transform(new javax.xml.transform.dom.DOMSource(shared.get(0)), new javax.xml.transform.stream.StreamResult(output));
+                for (String group : chain) {
+                    output.write(("\n" + group.length() + ":" + group + "\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                    Element entry = PolicyXml.selectRelative(groups.get(0), "entry").stream()
+                        .filter(e -> group.equals(e.getAttribute("name"))).findFirst()
+                        .orElseThrow(() -> PolicyCollectionTrace.failure("CHECKPOINT_VERSION_NOT_EVALUABLE"));
+                    transformer.transform(new javax.xml.transform.dom.DOMSource(entry), new javax.xml.transform.stream.StreamResult(output));
+                }
+            }
+            return java.util.HexFormat.of().formatHex(digest.digest());
+        } catch (java.security.GeneralSecurityException | javax.xml.transform.TransformerException | IOException invalid) {
+            throw PolicyCollectionTrace.failure("CHECKPOINT_VERSION_NOT_EVALUABLE");
+        }
+    }
+
     static String contentVersion(org.w3c.dom.Document document, String members, String parents) {
         try {
             // Only an opaque content token persists; formatting changes force recollection.
@@ -308,10 +474,11 @@ public final class PanoramaPolicyCollector {
     }
     private Element read(ApiTarget target, XmlApiSpec spec, ScheduledExecutorService timer, long deadline, long[] bytes, String group) {
         boolean hits = spec.formParams().getOrDefault("cmd", "").startsWith("<show><rule-hit-count>");
-        String step = hits ? "rule hit counts" : "keygen".equals(spec.type()) ? "authentication" : spec.formParams().containsKey("xpath")
+        boolean nat = hits && spec.formParams().get("cmd").contains("<entry name='nat'>");
+        String step = nat ? "nat rule hit counts" : hits ? "rule hit counts" : "keygen".equals(spec.type()) ? "authentication" : spec.formParams().containsKey("xpath")
             ? ("/config/shared".equals(spec.formParams().get("xpath")) ? "shared" : "device group " + ref(spec.formParams().get("xpath")))
             : "<show><devicegroups/></show>".equals(spec.formParams().get("cmd")) ? "show devicegroups" : "show dg-hierarchy";
-        String template = hits ? PolicyHitGates.PAN_COMMAND : "keygen".equals(spec.type()) ? "type=keygen" : spec.formParams().containsKey("xpath")
+        String template = nat ? PolicyCompletenessGates.P1_NAT_HIT_COUNTS.text() : hits ? PolicyHitGates.PAN_COMMAND : "keygen".equals(spec.type()) ? "type=keygen" : spec.formParams().containsKey("xpath")
             ? PanPolicyGates.COMMANDS.get("/config/shared".equals(spec.formParams().get("xpath")) ? 0 : 1)
             : PanPolicyGates.COMMANDS.get("<show><devicegroups/></show>".equals(spec.formParams().get("cmd")) ? 2 : 3);
         PolicyCollectionTrace.step(step + " " + template, target.endpointId());
