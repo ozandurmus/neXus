@@ -80,6 +80,11 @@ final class NexusSessionCli {
         System.out.println("  inventory-collect <deviceId> | configuration-collect <deviceId>");
         System.out.println("  syslog-measure-start                           measure system/config logs on every enrolled Palo Alto firewall");
         System.out.println("  syslog-collect-start [deviceId]                start the incremental system-log collection (one device, or every supported device)");
+        System.out.println("  syslog-sources <deviceId>                      per source: cursor, last outcome and run, FAST_ROTATING, horizon, BACKLOG/GAP/UNKNOWN");
+        System.out.println("  syslog-chunks <deviceId> [source] [yyyy-MM-dd]  stored chunks: sizes, lines, line times, redactions, outcome");
+        System.out.println("  syslog-view <chunkId> [offset=N] [limit=N] [unmasked] [all]   one page (or all pages) of a chunk, masked by default;");
+        System.out.println("                                                 unmasked needs system_log_read_unmasked and is on the audit ledger per page");
+        System.out.println("  syslog-gaps [deviceId] | syslog-crash-files [deviceId] | syslog-hcp <deviceId>");
         System.out.println("  syslog-measurements [deviceId] [vendor=..] [source=..] [limit=..]   recorded measurement summaries");
         System.out.println("                                                 (Palo Alto and the numeric Check Point summaries)");
         System.out.println("  pa-cases | pa-case <caseId>                    Packet Analysis cases (expiry: 7 days)");
@@ -184,6 +189,21 @@ final class NexusSessionCli {
                         args.length > 1 ? json(Map.of("device_id", args[1])) : "{}"));
                 case "syslog-measurements" -> print(call("GET", "/api/v2/diagnostics/system-log-measurements"
                         + queryString(measurementFilters(args), 0), null));
+                case "syslog-sources" -> {
+                    require(args, 2, "syslog-sources <deviceId>");
+                    yield print(call("GET", SYSLOG + "/" + opaque(args[1]) + "/sources", null));
+                }
+                case "syslog-chunks" -> {
+                    require(args, 2, "syslog-chunks <deviceId> [source] [yyyy-MM-dd]");
+                    yield print(call("GET", SYSLOG + "/" + opaque(args[1]) + "/chunks" + chunkFilters(args), null));
+                }
+                case "syslog-view" -> syslogView(args);
+                case "syslog-gaps" -> print(call("GET", SYSLOG + "/gaps" + optionalDevice(args), null));
+                case "syslog-crash-files" -> print(call("GET", SYSLOG + "/crash-files" + optionalDevice(args), null));
+                case "syslog-hcp" -> {
+                    require(args, 2, "syslog-hcp <deviceId>");
+                    yield print(call("GET", SYSLOG + "/" + opaque(args[1]) + "/hcp", null));
+                }
                 case "pa-cases" -> print(call("GET", PA + "/cases", null));
                 case "pa-case" -> {
                     require(args, 2, "pa-case <caseId>");
@@ -584,6 +604,77 @@ final class NexusSessionCli {
         }
         Files.write(dest, response.body());
         System.out.println("wrote " + response.body().length + " bytes to " + dest);
+        return 0;
+    }
+
+    // ---- system logs, phase B read side (DEVICE_SYSTEM_LOG_PHASE_B_CONTRACT.md section 14) ---------------------------------
+
+    static final String SYSLOG = "/api/v2/system-logs";
+    private static final Pattern OPAQUE_TOKEN = Pattern.compile("[A-Za-z0-9_.:-]{1,128}");
+    private static final Pattern DAY = Pattern.compile("[0-9]{4}-[0-9]{2}-[0-9]{2}");
+    /** {@code syslog-view ... all} stops after this many pages (256 KiB each at most): a runaway guard, not a limit of the route. */
+    private static final int SYSLOG_ALL_PAGE_CAP = 400;
+
+    static String opaque(String value) {
+        if (!OPAQUE_TOKEN.matcher(value).matches()) throw new UsageException("identifiers are opaque tokens (letters, digits, _ . : -), got: " + value);
+        return value;
+    }
+
+    /** {@code ?deviceId=..} for the lists that take an optional device. */
+    static String optionalDevice(String[] args) {
+        return args.length > 1 ? "?deviceId=" + java.net.URLEncoder.encode(opaque(args[1]), StandardCharsets.UTF_8) : "";
+    }
+
+    /** {@code syslog-chunks <deviceId> [source] [day]}: a word shaped yyyy-MM-dd is the day, any other word the source. */
+    static String chunkFilters(String[] args) {
+        String source = null, day = null;
+        for (int i = 2; i < args.length; i++) {
+            if (DAY.matcher(args[i]).matches() && day == null) day = args[i];
+            else if (source == null && OPAQUE_TOKEN.matcher(args[i]).matches() && !DAY.matcher(args[i]).matches()) source = args[i];
+            else throw new UsageException("syslog-chunks <deviceId> [source] [yyyy-MM-dd], got: " + args[i]);
+        }
+        List<String> pairs = new ArrayList<>();
+        if (source != null) pairs.add("source=" + source);
+        if (day != null) pairs.add("day=" + day);
+        return pairs.isEmpty() ? "" : "?" + String.join("&", pairs);
+    }
+
+    /**
+     * {@code syslog-view <chunkId> [offset=N] [limit=N] [unmasked] [all]}: the page text goes to standard output (so it can
+     * be piped), the paging facts to standard error. Masked unless {@code unmasked} is given; the route refuses an
+     * unmasked request from a session without the right, and writes a ledger row for every unmasked page.
+     */
+    private int syslogView(String[] args) throws IOException, InterruptedException {
+        String usage = "syslog-view <chunkId> [offset=N] [limit=N] [unmasked] [all]";
+        require(args, 2, usage);
+        String chunk = opaque(args[1]);
+        long offset = 0;
+        String limit = null;
+        boolean unmasked = false, all = false;
+        for (int i = 2; i < args.length; i++) {
+            if ("unmasked".equals(args[i])) unmasked = true;
+            else if ("all".equals(args[i])) all = true;
+            else if (args[i].startsWith("offset=") && args[i].substring(7).matches("[0-9]{1,18}")) offset = Long.parseLong(args[i].substring(7));
+            else if (args[i].startsWith("limit=") && args[i].substring(6).matches("[0-9]{1,9}")) limit = args[i].substring(6);
+            else throw new UsageException(usage + ", got: " + args[i]);
+        }
+        if (unmasked) System.err.println("NOTICE: unmasked view; every page is recorded on the audit ledger.");
+        for (int page = 1; page <= (all ? SYSLOG_ALL_PAGE_CAP : 1); page++) {
+            String query = "?offset=" + offset + (limit == null ? "" : "&limit=" + limit) + (unmasked ? "&unmasked=true" : "");
+            HttpResponse<byte[]> response = call("GET", SYSLOG + "/chunks/" + chunk + "/text" + query, null);
+            if (response.statusCode() / 100 != 2) return print(response);
+            System.out.write(response.body(), 0, response.body().length);
+            System.out.flush();
+            String next = response.headers().firstValue("X-Syslog-Next-Offset").orElse("");
+            boolean eof = "true".equals(response.headers().firstValue("X-Syslog-Eof").orElse("true"));
+            System.err.println("-- masked=" + response.headers().firstValue("X-Syslog-Masked").orElse("?")
+                    + " offset=" + offset + " next_offset=" + next + " lines=" + response.headers().firstValue("X-Syslog-Lines").orElse("?")
+                    + " eof=" + eof);
+            if (eof || !next.matches("[0-9]{1,18}") || Long.parseLong(next) <= offset) return 0;
+            if (!all) return 0;
+            offset = Long.parseLong(next);
+        }
+        System.err.println("-- stopped after " + SYSLOG_ALL_PAGE_CAP + " pages; continue with offset=" + offset);
         return 0;
     }
 

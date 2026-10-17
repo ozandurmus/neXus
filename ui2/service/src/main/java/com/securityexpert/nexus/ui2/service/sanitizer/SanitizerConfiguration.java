@@ -76,7 +76,7 @@ public class SanitizerConfiguration {
      * The inventory's device and cluster names with the pseudonyms the UI shows for them, read once per job (so a
      * device registered a minute ago is already covered). Names that are addresses are left to the address rules.
      */
-    static Supplier<KnownNames> knownNames(DeviceRepository devices, TopologyNamePseudonymizer names) {
+    public static Supplier<KnownNames> knownNames(DeviceRepository devices, TopologyNamePseudonymizer names) {
         if (devices == null) return () -> KnownNames.NONE;
         return () -> {
             Map<String, String> map = new HashMap<>();

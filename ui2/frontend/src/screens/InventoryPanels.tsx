@@ -48,6 +48,7 @@ import {
 } from "../auth/adminApi";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { BackupAttempts } from "./BackupAttempts";
+import { DeviceLogsPanel } from "./DeviceLogsPanel";
 import { CpFailoverPanel } from "./CpFailoverPanel";
 
 const POLL_INTERVAL_MS = 1750;
@@ -1956,6 +1957,12 @@ export function DeviceInventoryPanels({
             label: "Backup",
             panel: <BackupPanel deviceId={device.device_id} />,
           },
+          // System logs are collected from Check Point and Palo Alto devices only (phase B contract section 2); a
+          // management server of those vendors gets the tab too, with the "collection disabled" state.
+          ...((device.vendor_hint === "check_point" || device.vendor_hint === "palo_alto") ? [{
+            label: "Logs",
+            panel: <DeviceLogsPanel key={device.device_id} deviceId={device.device_id} />,
+          }] : []),
           {
             label: "Identity",
             panel: (
