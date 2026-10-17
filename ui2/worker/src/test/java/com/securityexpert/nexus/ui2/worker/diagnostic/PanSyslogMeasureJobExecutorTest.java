@@ -111,7 +111,7 @@ class PanSyslogMeasureJobExecutorTest {
                     recorded.add(new String[] {jobId, deviceId, vendor, source, summary});
                     return true;
                 }
-                @Override public List<Measurement> list(Optional<String> deviceId, int limit) { return List.of(); }
+                @Override public List<Measurement> list(Optional<String> deviceId, Optional<String> vendor, Optional<String> source, int limit) { return List.of(); }
             };
             var rows = GateRegistryFixtureLoader.loadFromStream(getClass().getClassLoader()
                     .getResourceAsStream("capabilities/gate_registry_fixture.yaml"));

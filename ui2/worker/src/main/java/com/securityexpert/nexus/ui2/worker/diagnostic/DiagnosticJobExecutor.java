@@ -27,6 +27,10 @@ public final class DiagnosticJobExecutor {
     private final ArtefactStore store;
     private final com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFactsRepository platformFacts;
     private final com.securityexpert.nexus.ui2.persistence.device.inventory.DeviceInventoryRepository inventory;
+    private com.securityexpert.nexus.ui2.persistence.diagnostic.SystemLogMeasurementRepository measurements;
+    private com.securityexpert.nexus.ui2.platform.HostnameFingerprint tokenKey;
+    private java.time.Clock clock = java.time.Clock.systemUTC();
+    private final com.fasterxml.jackson.databind.ObjectMapper json = new com.fasterxml.jackson.databind.ObjectMapper();
     public DiagnosticJobExecutor(JobLeaseRepository leases, JobStepAttemptRepository attempts, DeviceRepository devices,
             JobRecordDao jobs, DeviceTransport ssh, GateRegistryPort gates, ArtefactStore store) {
         this(leases, attempts, devices, jobs, ssh, gates, store,
@@ -44,6 +48,22 @@ public final class DiagnosticJobExecutor {
         this.leases=leases; this.attempts=attempts; this.devices=devices; this.jobs=jobs; this.ssh=ssh; this.gates=gates; this.store=store;
         this.platformFacts=platformFacts;
         this.inventory = inventory;
+    }
+    /**
+     * System-log programme phase A (R1): a finished {@code cp_syslog_measure_*} read also records a NUMERIC summary
+     * ({@link CpSyslogMeasurementSummary}) computed from the raw output before masking. {@code tokenKey} is the
+     * existing keyed-fingerprint secret; it only seals inode and process-name tokens.
+     */
+    public DiagnosticJobExecutor withSyslogMeasurement(
+            com.securityexpert.nexus.ui2.persistence.diagnostic.SystemLogMeasurementRepository measurements,
+            com.securityexpert.nexus.ui2.platform.HostnameFingerprint tokenKey) {
+        return withSyslogMeasurement(measurements, tokenKey, java.time.Clock.systemUTC());
+    }
+    DiagnosticJobExecutor withSyslogMeasurement(
+            com.securityexpert.nexus.ui2.persistence.diagnostic.SystemLogMeasurementRepository measurements,
+            com.securityexpert.nexus.ui2.platform.HostnameFingerprint tokenKey, java.time.Clock clock) {
+        this.measurements = measurements; this.tokenKey = tokenKey; this.clock = clock;
+        return this;
     }
     public void execute(String jobId, long epoch, String deviceId, String host, int port, String credentialRef) {
         var device=devices.find(deviceId);
@@ -114,11 +134,31 @@ public final class DiagnosticJobExecutor {
             if (!attempts.writeOutcome(attempt,epoch,ok?"MATCHED":"EXPECTATION_UNMET",ok?null:"COMMAND_EXIT_NONZERO",ok,null,(long)bytes.length,null)) {
                 finish(jobId,epoch,JobState.OUTCOME_UNKNOWN,"ATTEMPT_RECORD_FAILED"); return;
             }
+            if (measurements!=null && tokenKey!=null && "check_point".equals(device.get().vendorHint())
+                    && CpSyslogMeasurementSummary.handles(read.get().gateId())) {
+                // The summary comes from the raw output (not the scrubbed text stored above) and holds numbers and
+                // name classes only; it is the only thing of this read that survives the aiview masking.
+                var summary=CpSyslogMeasurementSummary.summarize(read.get().gateId(),completed.output(),completed.exitStatus(),
+                    clock.instant().getEpochSecond(),keyedTokens(deviceId));
+                if (!measurements.record(jobId,epoch,deviceId,"check_point",read.get().gateId(),json.writeValueAsString(summary))) {
+                    finish(jobId,epoch,JobState.FAILED,"MEASUREMENT_NOT_RECORDED"); return;
+                }
+            }
             finish(jobId,epoch,ok?JobState.COMPLETED:JobState.FAILED,ok?"OUTPUT_RECORDED":"COMMAND_EXIT_NONZERO");
         } catch (Exception failure) {
             com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(failure);
             finish(jobId,epoch,JobState.OUTCOME_UNKNOWN,"DIAGNOSTIC_OUTCOME_UNCERTAIN");
         } finally { if (session!=null) ssh.disconnect(session); }
+    }
+    private CpSyslogMeasurementSummary.KeyedTokens keyedTokens(String deviceId) {
+        return new CpSyslogMeasurementSummary.KeyedTokens() {
+            @Override public String inode(long inode) {
+                return "i_"+tokenKey.of("cp-syslog-inode|"+deviceId+"|"+inode).substring(0,16);
+            }
+            @Override public String word(String lowerWord) {
+                return tokenKey.of("cp-syslog-word|"+lowerWord).substring(0,10);
+            }
+        };
     }
     private void finish(String id,long epoch,JobState state,String reason) {
         leases.transitionState(id,epoch,JobState.EXECUTING,state,"system:worker","diagnostic_finished",reason);

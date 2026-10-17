@@ -345,7 +345,9 @@ public final class Ui2WorkerMain {
                 jobRecordDao, fortiManagerExecutor, gateRegistry);
         var genericDiagnosticExecutor = new com.securityexpert.nexus.ui2.worker.diagnostic.DiagnosticJobExecutor(
                 leaseRepository, attemptRepository, deviceRepository, jobRecordDao, strictFailoverSsh, gateRegistry, artefactStore,
-                platformFactsRepository, deviceInventoryRepository);
+                platformFactsRepository, deviceInventoryRepository)
+                .withSyslogMeasurement(new com.securityexpert.nexus.ui2.persistence.diagnostic.JooqSystemLogMeasurementRepository(
+                        transactionBoundary), hostnameFingerprint);
         var panSyslogMeasureExecutor = new com.securityexpert.nexus.ui2.worker.diagnostic.PanSyslogMeasureJobExecutor(
                 leaseRepository, attemptRepository, deviceRepository, panTransport, panCredentialResolver, gateRegistry,
                 new com.securityexpert.nexus.ui2.persistence.diagnostic.JooqSystemLogMeasurementRepository(transactionBoundary));

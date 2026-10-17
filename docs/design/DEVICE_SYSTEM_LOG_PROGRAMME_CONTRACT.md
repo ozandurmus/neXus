@@ -114,6 +114,41 @@ Notes:
   lists these six gates so the placeholder guard does not hide them. Before that fix `cp_syslog_measure_stat` was
   missing from the diagnostics targets because its `stat` format string contains `%s`.
 
+### 4.2 Numeric summaries of the Check Point measurement reads (R1, PO approval 2026-10-17)
+
+The aiview masked projection hides every integer of 6 or more digits, all mtimes, `HH:MM:SS` times and file names, so
+sizes of 100,000 B and above, mtimes, rotation timing and growth cannot be measured from the masked text. Like the Palo
+Alto job (V151), the diagnostic worker therefore derives a numeric summary from the raw output of each
+`cp_syslog_measure_*` read (V149, V157) in memory, before masking, and stores it in `system_log_measurement`
+(`vendor = check_point`, `source` = the gate id; migration V159 widens the vendor/source check, the `summary` jsonb is
+reused). This parses the output of already approved commands: no command, session, timeout or frequency changes. The
+raw output is handled exactly as before (masked projection, retention unchanged).
+
+What a summary holds, per gate kind (`ui2/worker/.../diagnostic/CpSyslogMeasurementSummary.java`, schema
+`cp_syslog_numeric_v1`):
+
+- **stat** (`cp_syslog_measure_stat`, `_stat_ext`): per file a path class (`messages`, `messages.1`, `fwd.elg`, ...;
+  never the path), present or absent, size in bytes, mtime epoch, age against the device clock when a bare `date +%s`
+  line is printed, else against the neXus clock; `cp_syslog_measure_stat` also an opaque per-device keyed inode token
+  (equal inode on the same device, equal token; the number is never stored).
+- **ls** (`_ls_sa`, `_ls_spike`, `_ls_hcp`, `_ls_crash`): per listed directory (`sa`, `spike_detective`, `hcp_last`,
+  `crash`, `usermode`): entry, file, directory and link counts, `total` blocks, summed, min, max and median file bytes,
+  oldest and newest mtime, name classes with per-class statistics, rotation families (files, rotated, gz) and
+  whether any sibling is `.gz`.
+- **tail / head** (`_tail_*`, `_head_sar`): line count, blank and error line counts, longest line, timestamp-shape
+  counts; comma-field counts and first-token shape for the Spike Detective gates; CPU count, header column count and
+  sample rows for `head_sar`.
+- **tar listing** (`_hcp_listing`): member count, summed, min, max and median member bytes, oldest and newest member
+  time (as printed, read as if UTC), member name classes.
+
+Name classes come from a closed vocabulary: known stem words stay, digit runs become `N`, `NN`, `YYYYMMDD` or `EPOCH`,
+every other word becomes `X`; a core-dump process name is an allowlisted daemon name or a keyed token. A leading banner
+line (25 of 53 gateways print one) is skipped by shape. No raw line, path, file name, host name or address is stored. An
+output the parser cannot map (for example a wrong `stat` line count) is a typed `UNKNOWN` summary, never a number. The
+rows are read through `GET /api/v2/diagnostics/system-log-measurements` (optional `vendor` and `source` filters) and the
+CLI `syslog-measurements [deviceId] [vendor=..] [source=..] [limit=..]`; aiview may read them, the masking advice still
+applies to the device fields.
+
 ## 5. Storage, privacy, retention (the raw-evidence law exception)
 
 - **Storage.** Raw lines go to the artefact store, encrypted with the existing envelope encryption, in one object

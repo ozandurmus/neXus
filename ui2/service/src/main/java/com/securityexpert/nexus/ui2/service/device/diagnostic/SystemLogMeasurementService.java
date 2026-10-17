@@ -21,7 +21,8 @@ import com.securityexpert.nexus.ui2.service.security.ActionRegistry;
 /**
  * System-log programme phase A, M3/M4 (DEVICE_SYSTEM_LOG_PROGRAMME_CONTRACT.md §4; PO chat approval 2026-10-15):
  * admits one {@code pan_syslog_measure} job per enrolled Palo Alto firewall (never Panorama) and reads back the
- * recorded summaries. Admission goes through the shared job windows; a second start in the same window resolves to
+ * recorded summaries (Palo Alto from {@code pan_syslog_measure}, Check Point from the numeric summary of each
+ * {@code cp_syslog_measure_*} diagnostic read). Admission goes through the shared job windows; a second start in the same window resolves to
  * the job already admitted for that firewall.
  */
 @Service
@@ -74,9 +75,16 @@ public final class SystemLogMeasurementService {
 
     /** Newest first. Hostnames and cluster references go out raw here and are masked for aiview by the response advice. */
     public List<Map<String, Object>> list(Optional<String> deviceId, int limit) {
+        return list(deviceId, Optional.empty(), Optional.empty(), limit);
+    }
+
+    /** Check Point rows are numeric summaries (sizes, times, counts, name classes): no identity beyond the device row. */
+    public List<Map<String, Object>> list(Optional<String> deviceId, Optional<String> vendor, Optional<String> source,
+            int limit) {
         Map<String, DeviceSummaryRecord> byId = new java.util.HashMap<>();
         devices.listAll().forEach(d -> byId.put(d.deviceId(), d));
-        return measurements.list(deviceId.filter(id -> !id.isBlank()), limit).stream().map(m -> {
+        return measurements.list(deviceId.filter(id -> !id.isBlank()), vendor.filter(v -> !v.isBlank()),
+                source.filter(v -> !v.isBlank()), limit).stream().map(m -> {
             Map<String, Object> row = new LinkedHashMap<>();
             var device = Optional.ofNullable(byId.get(m.deviceId()));
             row.put("measurement_id", m.measurementId());

@@ -79,7 +79,8 @@ final class NexusSessionCli {
         System.out.println("  jobs-export <dest.csv> [same filters]");
         System.out.println("  inventory-collect <deviceId> | configuration-collect <deviceId>");
         System.out.println("  syslog-measure-start                           measure system/config logs on every enrolled Palo Alto firewall");
-        System.out.println("  syslog-measurements [deviceId]                 the recorded measurement summaries");
+        System.out.println("  syslog-measurements [deviceId] [vendor=..] [source=..] [limit=..]   recorded measurement summaries");
+        System.out.println("                                                 (Palo Alto and the numeric Check Point summaries)");
         System.out.println("  pa-cases | pa-case <caseId>                    Packet Analysis cases (expiry: 7 days)");
         System.out.println("  pa-case-create <title> [--payload-zeroing]");
         System.out.println("  pa-upload <caseId> <capture.pcap|.pcapng>      streamed; 2 GB per file");
@@ -179,7 +180,7 @@ final class NexusSessionCli {
                 }
                 case "syslog-measure-start" -> print(call("POST", "/api/v2/diagnostics/system-log-measurements/start", "{}"));
                 case "syslog-measurements" -> print(call("GET", "/api/v2/diagnostics/system-log-measurements"
-                        + (args.length > 1 ? queryString(new String[] {args[0], "device_id=" + args[1]}, 1) : ""), null));
+                        + queryString(measurementFilters(args), 0), null));
                 case "pa-cases" -> print(call("GET", PA + "/cases", null));
                 case "pa-case" -> {
                     require(args, 2, "pa-case <caseId>");
@@ -581,6 +582,21 @@ final class NexusSessionCli {
         Files.write(dest, response.body());
         System.out.println("wrote " + response.body().length + " bytes to " + dest);
         return 0;
+    }
+
+    /** {@code syslog-measurements [deviceId] [vendor=..] [source=..] [limit=..]}: a bare word is the device id. */
+    static String[] measurementFilters(String[] args) {
+        List<String> filters = new ArrayList<>();
+        for (int i = 1; i < args.length; i++) {
+            if (args[i].indexOf('=') > 0) {
+                filters.add(args[i]);
+            } else if (filters.stream().noneMatch(f -> f.startsWith("device_id="))) {
+                filters.add("device_id=" + args[i]);
+            } else {
+                throw new UsageException("syslog-measurements [deviceId] [vendor=..] [source=..] [limit=..], got: " + args[i]);
+            }
+        }
+        return filters.toArray(new String[0]);
     }
 
     static String queryString(String[] args, int from) {
