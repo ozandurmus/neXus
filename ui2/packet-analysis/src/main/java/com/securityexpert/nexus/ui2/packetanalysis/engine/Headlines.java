@@ -127,7 +127,11 @@ public final class Headlines {
                     long quick = (Long) counts[1];
                     long stalls = (Long) counts[2];
                     Object maxStall = counts[3];
-                    long denominator = db.count(Sql.get("headlines", "denominator"), a, direction, firstTs, end, end);
+                    Object[] denominatorParams = {a, direction, firstTs, end, end};
+                    long denominator = NeighbourScope.excludes(ctx, a, b, direction)
+                            ? db.count(NeighbourScope.filtered(Sql.get("headlines", "denominator")),
+                                    NeighbourScope.params(denominatorParams, a, b, direction))
+                            : db.count(Sql.get("headlines", "denominator"), denominatorParams);
                     Double rate = denominator != 0 && s.get("loss_percent") != null
                             ? PyMath.trueDivide(100 * lost, denominator) : null;
                     List<String> path = topology.path(direction);

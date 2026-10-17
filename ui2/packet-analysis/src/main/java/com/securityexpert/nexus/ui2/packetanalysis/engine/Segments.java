@@ -37,6 +37,24 @@ final class Segments {
 
     private static boolean hasPendingNat(EngineContext ctx, Point pa, Point pb, String a, String b) {
         Topology topology = ctx.topology;
+        boolean pending = pendingSuggestion(ctx, a, b);
+        if (pa.device().equals(pb.device()) && (pa.translation().equals("nat") || pb.translation().equals("nat"))) {
+            List<String> confirmed = new ArrayList<>();
+            for (NatMapping m : topology.natMappings) {
+                if (Set.of(m.pointA(), m.pointB()).equals(Set.of(a, b))) {
+                    confirmed.addAll(List.of(m.tupleA(), m.tupleB(), Tuples.reverseTuple(m.tupleA()),
+                            Tuples.reverseTuple(m.tupleB())));
+                }
+            }
+            long unresolved = ctx.db.count(Sql.get("segments", "unresolved_nat"), a, b, a, b, confirmed);
+            pending = pending || unresolved > 0;
+        }
+        return pending;
+    }
+
+    /** A NAT suggestion between a and b that no confirmed mapping covers (first part of {@code _has_pending_nat}). */
+    static boolean pendingSuggestion(EngineContext ctx, String a, String b) {
+        Topology topology = ctx.topology;
         boolean pending = false;
         for (Map<String, Object> x : ctx.suggestions) {
             if (!(Matching.equalsAny(x.get("point_a"), a, b) && Matching.equalsAny(x.get("point_b"), a, b))) {
@@ -57,17 +75,6 @@ final class Segments {
                 pending = true;
                 break;
             }
-        }
-        if (pa.device().equals(pb.device()) && (pa.translation().equals("nat") || pb.translation().equals("nat"))) {
-            List<String> confirmed = new ArrayList<>();
-            for (NatMapping m : topology.natMappings) {
-                if (Set.of(m.pointA(), m.pointB()).equals(Set.of(a, b))) {
-                    confirmed.addAll(List.of(m.tupleA(), m.tupleB(), Tuples.reverseTuple(m.tupleA()),
-                            Tuples.reverseTuple(m.tupleB())));
-                }
-            }
-            long unresolved = ctx.db.count(Sql.get("segments", "unresolved_nat"), a, b, a, b, confirmed);
-            pending = pending || unresolved > 0;
         }
         return pending;
     }
@@ -258,6 +265,7 @@ final class Segments {
         for (Object[] r : db.tuples(Sql.get("segments", "unselected_points"))) {
             unselected.add((String) r[0]);
         }
+        db.exec(Sql.get("neighbour_scope", "hop_scope"));
         for (String direction : List.of("forward", "reverse")) {
             List<String> path = direction.equals("forward") ? ctx.topology.forward
                     : ctx.topology.reverse.isEmpty() ? Topology.reversed(ctx.topology.forward) : ctx.topology.reverse;
@@ -268,7 +276,20 @@ final class Segments {
                 @SuppressWarnings("unchecked")
                 Map<String, Object> segment = (Map<String, Object>) built[0];
                 List<String> downstream = new ArrayList<>(path.subList(Math.min(idx + 2, path.size()), path.size()));
+                // Not in the reference (NeighbourScope): flows out of this hop's capture scope.
+                long[] scope = NeighbourScope.prepareHop(ctx, a, b, direction, outer, unselected);
+                if (scope[0] > 0) {
+                    ctx.hopScope.put((String) built[1], scope);
+                }
                 classifySegmentLosses(ctx, segment, (String) built[1], a, b, direction, downstream, (String) built[2]);
+                if (scope[0] > 0) {
+                    segment.put("scope_excluded_flows", scope[0]);
+                    segment.put("scope_excluded_packets", scope[1]);
+                    @SuppressWarnings("unchecked")
+                    List<Object> notes = (List<Object>) segment.get("quality_notes");
+                    notes.add(String.format(java.util.Locale.ROOT, NeighbourScope.SEGMENT_NOTE, ctx.points.get(b).label(),
+                            scope[0], scope[1], ctx.points.get(a).label()));
+                }
                 ctx.segments.add(segment);
             }
         }
@@ -283,6 +304,9 @@ final class Segments {
         if (ctx.byteActive) {
             missingCondition = Sql.fmt("classification", "missing_condition_bytes", "range_condition",
                     Matching.rangeCondition("a"), "missing_condition", missingCondition, "b", b);
+        }
+        if (NeighbourScope.excludes(ctx, a, b, direction)) {
+            missingCondition = NeighbourScope.missingCondition(missingCondition, a, b, direction);
         }
         db.exec(Sql.fmt("classification", "missing", "missing_condition", missingCondition), downstream, a, direction, b,
                 ctx.start, ctx.start, ctx.end, ctx.end);
@@ -363,8 +387,11 @@ final class Segments {
             ctx.findings.add(finding);
         }
         if (ctx.byteActive) {
-            long byteCount = db.count(Sql.get("classification", "byte_count"), a, direction, ctx.start, ctx.start, ctx.end,
-                    ctx.end);
+            Object[] byteParams = {a, direction, ctx.start, ctx.start, ctx.end, ctx.end};
+            long byteCount = NeighbourScope.excludes(ctx, a, b, direction)
+                    ? db.count(NeighbourScope.filtered(Sql.get("classification", "byte_count")),
+                            NeighbourScope.params(byteParams, a, b, direction))
+                    : db.count(Sql.get("classification", "byte_count"), byteParams);
             PyNum lost = new PyInt(0);
             for (Row x : classes) {
                 if (List.of("recovered_loss", "impactful_loss", "unrecovered_loss").contains(x.str("kind"))) {
@@ -388,7 +415,11 @@ final class Segments {
         Point pb = ctx.points.get(b);
         prepareMissingAndRecoveries(ctx, a, b, direction, downstream);
         insertSegmentEvents(ctx, segmentId, a, b, direction, classificationReason);
-        long total = db.count(Sql.get("classification", "total"), a, direction, ctx.start, ctx.start, ctx.end, ctx.end);
+        Object[] totalParams = {a, direction, ctx.start, ctx.start, ctx.end, ctx.end};
+        long total = NeighbourScope.excludes(ctx, a, b, direction)
+                ? db.count(NeighbourScope.filtered(Sql.get("classification", "total")),
+                        NeighbourScope.params(totalParams, a, b, direction))
+                : db.count(Sql.get("classification", "total"), totalParams);
         List<Row> classes = db.rows(Sql.get("classification", "classes"), a, b, direction);
         segment.put("eligible_packets", total);
         Map<String, Object> counts = new LinkedHashMap<>();

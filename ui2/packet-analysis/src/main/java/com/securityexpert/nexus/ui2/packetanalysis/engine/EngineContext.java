@@ -29,6 +29,10 @@ public final class EngineContext {
     public Map<String, Map<String, Object>> inventories = new LinkedHashMap<>();
     public Map<String, String> captureNames = new LinkedHashMap<>();
     public boolean hasDeviceProofs;
+    /** Not in the reference ({@link NeighbourScope}): single-point flows dropped from the index scope. */
+    public long scopeExcludedSinglePointFlows;
+    /** Not in the reference ({@link NeighbourScope}): segment id to {flows, packets} out of that hop's scope. */
+    public final Map<String, long[]> hopScope = new LinkedHashMap<>();
     public List<Map<String, Object>> segments = new ArrayList<>();
     public List<Map<String, Object>> findings = new ArrayList<>();
     public List<Map<String, Object>> quality = new ArrayList<>();

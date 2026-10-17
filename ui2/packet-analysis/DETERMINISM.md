@@ -141,6 +141,18 @@ intermediate table (`flow_filter_metadata`, `sequence_found` rows, `point_sessio
 
 All are choices between rows or set elements the reference treats as equal; no verdict, count, class or metric differs.
 
+## Intentional divergences (behaviour, not ties)
+
+These are not tie-breaks: they change a criterion because the reference is wrong on inputs the corpus does not
+contain (`docs/design/PACKET_ANALYSIS_PORT_CONTRACT.md` §4, README "Intentional divergences from the reference").
+Each one runs only on such inputs; every corpus case runs the reference statements unchanged, so `corpus_run.py`
+needs no acceptance rule and still reports any difference as `DIFF`.
+
+| Where | Reference | Java | Corpus |
+|---|---|---|---|
+| `NeighbourScope`, `sql/neighbour_scope.sql` (called from `Preparation.restrictIndexScope`, `Segments`, `Headlines`, `Timeseries`, `CoreReport`) | a client-tuple flow seen at one capture point stays in the index scope, and every hop compares all packets of A with B, also for flows B's capture never saw (they become capture misses and impactful/unrecovered loss) | a flow B never observed, with packets proving it crossed B (same direction after B, or non-reset payload/ACK replies after B on the reply path), is outside B's capture scope: dropped from the index scope when single-point and out of scope on every hop that assesses it, otherwise left out of that hop's events and denominators; deterministic (flows ordered, `hop_unobserved ... ORDER BY a.flow`) | no case changed status (run 2026-10-17, 206 cases, threads 1 and 4) |
+| `neighbour_scope.sql` `analysis_scope_update` | `selection.analysis_scope_update` updates `retained_frames` / `excluded_single_point_frames` only; `excluded_single_point_flows` keeps the host-scope count | `excluded_single_point_flows = index_scope.input_flows - retained_flows`, consistent with the frames | identical on every case (restrict excludes no flow there) |
+
 ## Time and event detectors (lane A)
 
 Scope: `timeseries.sql`, `security.sql`, `onset.sql`, `microbursts.sql`, `host_path.sql`, `cycles.sql`,
