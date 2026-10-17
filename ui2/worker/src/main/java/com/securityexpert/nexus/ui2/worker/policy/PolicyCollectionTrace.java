@@ -9,7 +9,11 @@ final class PolicyCollectionTrace implements AutoCloseable {
     record Measurement(long bytes, String outcome) {}
     record LayerProgress(int step, int layer, int layers, int rules, int packagesDone, int packagesTotal,
             long readTimeoutSeconds, long lastActivity, int domainsDone, int domainsTotal) {}
+    /** One domain's changed-only outcome in this run: decision vocabulary from CpDomainReuse, package counts only. */
+    record DomainDecision(String decision, int packagesReused, int packagesRead) {}
     private static final class Counters {
+        final java.util.Map<String, DomainDecision> decisions = new java.util.LinkedHashMap<>();
+        final java.util.concurrent.atomic.AtomicLong bytes = new java.util.concurrent.atomic.AtomicLong();
         final java.util.Map<String, Integer> rules = new java.util.HashMap<>();
         final java.util.Set<String> completed = new java.util.HashSet<>();
         int packagesTotal, domainsDone, domainsTotal, layer, layers;
@@ -87,6 +91,7 @@ final class PolicyCollectionTrace implements AutoCloseable {
             trace.emit();
         }
     }
+    static PolicyCollectionTrace current() { return ACTIVE.get(); }
     static void unit(String unit) { var trace = ACTIVE.get(); if (trace != null) trace.unit = unit; }
     static void done(String unit) {
         var trace = ACTIVE.get();
@@ -117,9 +122,24 @@ final class PolicyCollectionTrace implements AutoCloseable {
         JobTranscriptScope.add("job", "request", request);
         System.getLogger(PolicyCollectionTrace.class.getName()).log(System.Logger.Level.INFO, request);
     }
+    static void domainDecision(String container, String decision, int packagesReused, int packagesRead) {
+        var trace = ACTIVE.get();
+        if (trace != null) synchronized (trace.counters) {
+            trace.counters.decisions.put(container, new DomainDecision(decision, packagesReused, packagesRead));
+        }
+        JobTranscriptScope.add("job", "note", "[CP_DOMAIN_DECISION] decision=" + decision + " packagesReused=" + packagesReused
+            + " packagesRead=" + packagesRead);
+    }
+    /** Decisions recorded so far, in domain order. */
+    java.util.Map<String, DomainDecision> decisions() {
+        synchronized (counters) { return new java.util.LinkedHashMap<>(counters.decisions); }
+    }
+    /** Response bytes of every completed read in this run (all worker threads). */
+    long responseBytes() { return counters.bytes.get(); }
     static void result(long started, long bytes, String outcome) {
         var trace = ACTIVE.get();
         if (trace != null) {
+            if (bytes > 0) trace.counters.bytes.addAndGet(bytes);
             trace.measured.accept(new Measurement(bytes, outcome));
             if (outcome.equals("Completed")) synchronized (trace.counters) {
                 trace.counters.lastActivity = System.currentTimeMillis(); trace.emit();

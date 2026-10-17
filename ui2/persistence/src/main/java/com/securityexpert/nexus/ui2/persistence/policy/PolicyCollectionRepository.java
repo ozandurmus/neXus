@@ -11,12 +11,21 @@ public class PolicyCollectionRepository {
         public Source(String sourceId, String runId) { this(sourceId, runId, "check_point"); }
     }
     public enum Mode { CHANGED_ONLY, FULL }
-    public record Request(String sourceId, String domainRef, boolean automatic, Mode mode, String jobId, long epoch) {
+    /** Actor of the 00/06/12/18 discovery refresh; its policy jobs are the scheduled automatic runs. */
+    public static final String SCHEDULED_REFRESH_ACTOR = "system:discovery-refresh";
+    /**
+     * scheduled: an automatic request queued by the scheduled discovery refresh (one per job window). It runs once per
+     * window by construction, so the six-hour allowance for other automatic requests does not apply to it.
+     */
+    public record Request(String sourceId, String domainRef, boolean automatic, Mode mode, String jobId, long epoch, boolean scheduled) {
         public Request(String sourceId, String domainRef, boolean automatic) {
             this(sourceId, domainRef, automatic, Mode.CHANGED_ONLY, "", 0);
         }
-        public boolean throttledAutomatic() { return automatic && mode == Mode.CHANGED_ONLY; }
-        public Request withLease(long epoch) { return new Request(sourceId, domainRef, automatic, mode, jobId, epoch); }
+        public Request(String sourceId, String domainRef, boolean automatic, Mode mode, String jobId, long epoch) {
+            this(sourceId, domainRef, automatic, mode, jobId, epoch, false);
+        }
+        public boolean throttledAutomatic() { return automatic && mode == Mode.CHANGED_ONLY && !scheduled; }
+        public Request withLease(long epoch) { return new Request(sourceId, domainRef, automatic, mode, jobId, epoch, scheduled); }
     }
     public record DomainRun(boolean complete, String signalJson, String snapshotsJson) {}
     public record FirewallEndpoint(String address, String credentialReferenceId) {}
@@ -48,8 +57,13 @@ public class PolicyCollectionRepository {
     }
 
     public Optional<Request> request(String jobId) {
-        return tx.inTransaction(db -> db.fetch("select source_id, domain_ref, automatic, mode from policy_collection_request where job_id = {0}", jobId)
-            .stream().findFirst().map(r -> new Request(r.get("source_id", String.class), r.get("domain_ref", String.class), r.get("automatic", Boolean.class), Mode.valueOf(r.get("mode", String.class)), jobId, 0)));
+        // The job targets its discovery run; a run started by the scheduled refresh makes the automatic request scheduled.
+        return tx.inTransaction(db -> db.fetch("select p.source_id, p.domain_ref, p.automatic, p.mode, "
+                + "coalesce(p.automatic and r.requested_by_actor_fingerprint = {1}, false) as scheduled "
+                + "from policy_collection_request p left join jobs j on j.job_id = p.job_id and j.target_kind = 'discovery_run' "
+                + "left join discovery_run r on r.run_id = j.target_ref where p.job_id = {0}", jobId, SCHEDULED_REFRESH_ACTOR)
+            .stream().findFirst().map(r -> new Request(r.get("source_id", String.class), r.get("domain_ref", String.class), r.get("automatic", Boolean.class),
+                Mode.valueOf(r.get("mode", String.class)), jobId, 0, Boolean.TRUE.equals(r.get("scheduled", Boolean.class)))));
     }
 
     /** Serialize admission per MDS, including requests against different discovery runs. */

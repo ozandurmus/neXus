@@ -37,6 +37,37 @@ class PolicyCollectionRepositoryTest {
                 sql.get(sql.size() - 1).contains("attempted_at <= now() - interval '6 hours'"));
         }
     }
+    @Test void scheduledRefreshChangedOnlyBypassesTheThrottleAndIsDerivedFromTheJobsDiscoveryRun() {
+        List<String> sql = new ArrayList<>();
+        List<Object[]> bindings = new ArrayList<>();
+        var create = DSL.using(SQLDialect.POSTGRES);
+        var repository = new PolicyCollectionRepository(new JooqTransactionBoundary(DSL.using(new MockConnection(context -> {
+            sql.add(context.sql()); bindings.add(context.bindings());
+            if (context.sql().contains("from policy_collection_request")) {
+                var fields = new Field<?>[]{DSL.field("source_id", String.class), DSL.field("domain_ref", String.class),
+                    DSL.field("automatic", Boolean.class), DSL.field("mode", String.class), DSL.field("scheduled", Boolean.class)};
+                var rows = create.newResult(fields);
+                var row = create.newRecord(fields);
+                row.set(DSL.field("source_id", String.class), "source-1"); row.set(DSL.field("domain_ref", String.class), "");
+                row.set(DSL.field("automatic", Boolean.class), true); row.set(DSL.field("mode", String.class), "CHANGED_ONLY");
+                row.set(DSL.field("scheduled", Boolean.class), true);
+                rows.add(row);
+                return new MockResult[] { new MockResult(1, rows) };
+            }
+            return new MockResult[] { new MockResult(1, null) };
+        }), SQLDialect.POSTGRES)));
+        var request = repository.request("job-1").orElseThrow();
+        assertTrue(request.scheduled()); assertTrue(request.automatic());
+        assertEquals(PolicyCollectionRepository.Mode.CHANGED_ONLY, request.mode());
+        assertTrue(sql.get(0).contains("join discovery_run r on r.run_id = j.target_ref"), sql.get(0));
+        assertTrue(sql.get(0).contains("j.target_kind = 'discovery_run'"));
+        assertTrue(Arrays.asList(bindings.get(0)).contains(PolicyCollectionRepository.SCHEDULED_REFRESH_ACTOR));
+        assertTrue(repository.beginDomain(request, "domain-01"));
+        assertFalse(sql.get(sql.size() - 1).contains("interval '6 hours'"), "one scheduled run per window is not throttled");
+        assertTrue(repository.beginDomain(new PolicyCollectionRepository.Request("source-1", "", true,
+            PolicyCollectionRepository.Mode.CHANGED_ONLY, "", 0), "domain-01"));
+        assertTrue(sql.get(sql.size() - 1).contains("interval '6 hours'"), "other automatic changed-only requests keep the allowance");
+    }
     @Test void expiredLeaseCannotPublishEvenAnOtherwiseCompleteSnapshot() {
         List<String> sql = new ArrayList<>();
         var create = DSL.using(SQLDialect.POSTGRES);

@@ -12,7 +12,7 @@ public final class PolicyPrivacy {
             "simple-gateway", "simple-cluster", "cluster", "gateway", "checkpoint-host", "vsx-cluster", "vsx-gateway", "vsx-cluster-member", "CpmiGatewayCluster", "CpmiVsClusterNetobj", "CpmiVsxClusterNetobj", "CpmiVsxNetobj", "CpmiVsxClusterMember",
             "COLLECTION_FAILED", "host", "network", "address-range", "group-with-exclusion", "service-tcp", "service-udp", "service-icmp", "service-icmp6", "service-other", "service-sctp", "service-dce-rpc", "service-rpc", "access-role", "dynamic-object", "dns-domain", "security-zone",
             "times", "time-groups", "gateways-and-servers", "hosts", "networks", "groups", "groups-with-exclusion", "address-ranges", "services-tcp", "services-udp", "services-icmp", "services-icmp6", "services-other", "services-sctp", "services-dce-rpc", "services-rpc", "service-groups", "access-roles", "dynamic-objects", "dns-domains", "security-zones", "unused-objects",
-            "LOCAL_FIREWALL", "MANAGEMENT", "application-group", "tag", "time", "time-group", "schedule", "unresolved", "UNRESOLVED", "UNSUPPORTED", "RESOLVED", "DYNAMIC", "CYCLE", "LIMIT", "UNKNOWN",
+            "LOCAL_FIREWALL", "MANAGEMENT", "application-group", "action", "track", "updatable-object", "tag", "time", "time-group", "schedule", "unresolved", "UNRESOLVED", "UNSUPPORTED", "RESOLVED", "DYNAMIC", "CYCLE", "LIMIT", "UNKNOWN",
             "application", "application-filter", "external-list", "region", "dynamic-user-group", "profile-group",
             "source-nat", "destination-nat", "source-and-destination-nat", "no-nat",
             "MATCH", "MISMATCH", "IN_SYNC", "OUT_OF_SYNC", "PENDING", "Accept", "Drop", "Reject", "allow", "deny", "drop", "reject", "reset-client", "reset-server", "reset-both", "Apply Layer", "Log", "None", "Alert");
@@ -83,6 +83,7 @@ public final class PolicyPrivacy {
         if (!(value instanceof String text)) return "Withheld in AIView";
         if (text.isEmpty()) return text;
         if (Set.of("usageReasons", "unusedReasons", "usageGaps").contains(key)) return PolicyDomainIndex.REASONS.contains(text) ? text : "UNKNOWN";
+        if (key.equals("resolution")) return text.equals("DOMAIN_INVENTORY") ? text : "UNKNOWN";
         if (key.equals("memberStatus")) return Set.of("RESOLVED", "UNKNOWN").contains(text) ? text : "UNKNOWN";
         if (key.equals("memberId")) return names.maskPolicyName("member", text);
         if (key.equals("dimension")) return Set.of("source", "destination", "service").contains(text) ? text : "UNKNOWN";
@@ -161,7 +162,8 @@ public final class PolicyPrivacy {
             return ENUMS.contains(text) ? text : "UNKNOWN";
         if (key.equals("log")) return ENUMS.contains(text) || text.matches("start=(yes|no|UNKNOWN), end=(yes|no|UNKNOWN)") ? text : "UNKNOWN";
         if (key.equals("values") && (text.matches("(?:port|source-port|icmp-type|icmp-code|protocol/(?:tcp|udp)/(?:port|source-port)): [0-9,<>*:/ -]+")
-                || text.matches("protocol: (tcp|udp|icmp|icmp6|sctp|other|dce-rpc|rpc|[0-9]{1,3})") || text.matches("mask-length[46]: [0-9]{1,3}") || text.matches("color: color[0-9]+"))) return text;
+                || text.matches("protocol: (tcp|udp|icmp|icmp6|sctp|other|dce-rpc|rpc|[0-9]{1,3})")
+                || text.matches("native-type: [A-Za-z][A-Za-z0-9_-]{0,63}") || text.matches("mask-length[46]: [0-9]{1,3}") || text.matches("color: color[0-9]+"))) return text;
         if (key.equals("values") && text.matches("(?:(?:ipv4-address|ipv4-address-first|ipv4-address-last|subnet4|subnet-mask|ip-netmask|ip-range|ip-address-first|ip-address-last): )?[0-9./ -]+"))
             return ips.maskText(text);
         return names.maskPolicyName(key, text);

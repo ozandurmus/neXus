@@ -38,6 +38,21 @@ public final class PolicyCollectionJobExecutor {
         this.collector = collector; this.gates = gates;
     }
 
+    /**
+     * Mode of the automatic job queued after a finished discovery. The scheduled refresh reads Palo Alto fully every
+     * window. For Check Point it reads fully in the 00:00 window (hit counts refreshed once a day) and changed-only at
+     * 06/12/18; which domains may then be reused is the collector's changed-only setting. Any other discovery queues
+     * the throttled CHANGED_ONLY request, as before.
+     */
+    static PolicyCollectionRepository.Mode automaticMode(DiscoveryRun run, java.time.Instant now) {
+        if (!PolicyCollectionRepository.SCHEDULED_REFRESH_ACTOR.equals(run.requestedByActorFingerprint()))
+            return PolicyCollectionRepository.Mode.CHANGED_ONLY;
+        if (!"check_point".equals(run.vendor())) return PolicyCollectionRepository.Mode.FULL;
+        var started = run.startedAt().orElse(now);
+        return com.securityexpert.nexus.ui2.platform.JobWindowPolicy.SYSTEM.slotStart(started).getHour() == 0
+            ? PolicyCollectionRepository.Mode.FULL : PolicyCollectionRepository.Mode.CHANGED_ONLY;
+    }
+
     /** Discovery has already closed its session; this only queues a separate ledgered job. */
     public void afterDiscovery(DiscoveryRun run) {
         if (!Set.of("check_point", "palo_alto").contains(run.vendor())) return;
@@ -45,9 +60,7 @@ public final class PolicyCollectionJobExecutor {
             if ("palo_alto".equals(run.vendor())) PanPolicyGates.requireAll(gates);
             else CpPolicyGates.requireAll(gates);
             for (var source : repository.sources()) if (source.runId().equals(run.runId()))
-                repository.enqueue(source.sourceId(), "", true, ACTOR,
-                    "system:discovery-refresh".equals(run.requestedByActorFingerprint())
-                        ? PolicyCollectionRepository.Mode.FULL : PolicyCollectionRepository.Mode.CHANGED_ONLY);
+                repository.enqueue(source.sourceId(), "", true, ACTOR, automaticMode(run, java.time.Instant.now()));
         } catch (RuntimeException unavailable) {
             com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(unavailable);
             System.getLogger(getClass().getName()).log(System.Logger.Level.WARNING, "POLICY_AUTOMATIC_ADMISSION_FAILED");
@@ -124,6 +137,7 @@ public final class PolicyCollectionJobExecutor {
             return new JobOutcome.ZombieStopped();
         String attempt = attempts.insertPreContact(jobId, epoch, 0, "palo_alto".equals(run.get().vendor()) ? "PAN_POLICY_READ" : "CP_POLICY_READ", "read", 1);
         if (attempt == null) return new JobOutcome.ZombieStopped();
+        long runStarted = System.nanoTime();
         PolicySnapshotRepository.Stored[] latest = {null};
         java.util.function.Consumer<com.securityexpert.nexus.ui2.policy.PolicySnapshot> publish = snapshot -> {
             com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.checkPublication();
@@ -143,14 +157,58 @@ public final class PolicyCollectionJobExecutor {
                 failures.addAll(snapshots.stream().flatMap(snapshot -> snapshot.failures().stream()).toList());
             }
             recordGaps(jobId, epoch, failures);
+            recordRun(jobId, epoch, request.get(), run.get().vendor(), runStarted);
             String reason = failures.stream().map(f -> f.layerRef() + ": " + f.reason()).findFirst().orElse("");
             return finish(jobId, epoch, attempt, latest[0], reason, false);
         } catch (Exception incomplete) {
             com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(incomplete);
             String reason = PolicyCollectionTrace.reason(incomplete);
             if (reason.endsWith(": LEASE_LOST")) return new JobOutcome.ZombieStopped();
+            try { recordRun(jobId, epoch, request.get(), run.get().vendor(), runStarted); }
+            catch (RuntimeException unrecorded) {
+                com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(unrecorded);
+                System.getLogger(getClass().getName()).log(System.Logger.Level.WARNING, "POLICY_RUN_RECORD_NOT_WRITTEN");
+            }
             return finish(jobId, epoch, attempt, latest[0], reason, PolicyCollectionTrace.fatal(incomplete));
         }
+    }
+
+    static final int RUN_RECORD_STEP = -10_000;
+
+    /**
+     * Durable per-run record for judging the changed-only trial, as ledgered step rows (no schema change):
+     * POLICY_RUN_<mode>_<origin>_<domainsReused>_<domainsRead>_<packagesReused>_<packagesRead>_<seconds> with the run's
+     * total response bytes in output_bytes, and one POLICY_DOMAIN_<domainRef>_<decision>_<packagesReused>_<packagesRead>
+     * row per domain. Only opaque references, fixed words and counts.
+     */
+    private void recordRun(String jobId, long epoch, PolicyCollectionRepository.Request request, String vendor, long started) {
+        if (!"check_point".equals(vendor)) return;
+        var trace = PolicyCollectionTrace.current();
+        if (trace == null) return;
+        var decisions = trace.decisions();
+        int domainsReused = 0, domainsRead = 0, packagesReused = 0, packagesRead = 0, index = RUN_RECORD_STEP - 1;
+        for (var entry : decisions.entrySet()) {
+            var decision = entry.getValue();
+            if (decision.decision().equals("REUSED")) domainsReused++; else domainsRead++;
+            packagesReused += decision.packagesReused(); packagesRead += decision.packagesRead();
+            String domain = entry.getKey().matches("[A-Za-z0-9-]{1,64}") ? entry.getKey() : "UNKNOWN";
+            step(jobId, epoch, index--, "POLICY_DOMAIN_" + domain + "_" + decision.decision() + "_" + decision.packagesReused()
+                + "_" + decision.packagesRead(), null);
+        }
+        String origin = request.scheduled() ? "SCHEDULED" : request.automatic() ? "AUTOMATIC" : "MANUAL";
+        long seconds = (System.nanoTime() - started) / 1_000_000_000L;
+        String summary = "POLICY_RUN_" + request.mode() + "_" + origin + "_" + domainsReused + "_" + domainsRead
+            + "_" + packagesReused + "_" + packagesRead + "_" + seconds;
+        step(jobId, epoch, RUN_RECORD_STEP, summary, trace.responseBytes());
+        com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.add("job", "note", "[CP_POLICY_RUN] mode=" + request.mode()
+            + " origin=" + origin + " domainsReused=" + domainsReused + " domainsRead=" + domainsRead + " packagesReused=" + packagesReused
+            + " packagesRead=" + packagesRead + " bytes=" + trace.responseBytes() + " seconds=" + seconds);
+    }
+
+    private void step(String jobId, long epoch, int index, String kind, Long bytes) {
+        String id = attempts.insertPreContact(jobId, epoch, index, kind, "read", 1);
+        if (id == null || !attempts.writeOutcome(id, epoch, "MATCHED", null, true, bytes, null, null))
+            throw PolicyCollectionTrace.failure("LEASE_LOST");
     }
 
     private void recordGaps(String jobId, long epoch,

@@ -21,10 +21,25 @@ final class CpDomainReuse {
         Signal signal;
         boolean reused, gap, databaseFailed, sameRequest;
         int expected = -1;
+        /** Why the domain was reused or read; fixed vocabulary, recorded per run for the changed-only trial. */
+        String decision = "READ";
         final Map<String, PolicySnapshot> snapshots = new LinkedHashMap<>();
     }
+    private final CpChangedOnlyDomains changedOnly;
+    private final java.util.function.LongSupplier clock;
     CpDomainReuse(PolicyCollectionRepository repository, PolicyCollectionRepository.Request request) {
-        this.repository = repository; this.request = request;
+        this(repository, request, CpChangedOnlyDomains.configured(), System::currentTimeMillis);
+    }
+    CpDomainReuse(PolicyCollectionRepository repository, PolicyCollectionRepository.Request request,
+            CpChangedOnlyDomains changedOnly, java.util.function.LongSupplier clockMillis) {
+        this.repository = repository; this.request = request; this.changedOnly = changedOnly; this.clock = clockMillis;
+    }
+    /**
+     * Changed-only applies to manual and other automatic CHANGED_ONLY requests as before; a scheduled run (00/06/12/18
+     * refresh) uses it only for the domains in the changed-only setting and reads every other domain fully.
+     */
+    boolean changedOnly(String container) {
+        return request.mode() == PolicyCollectionRepository.Mode.CHANGED_ONLY && (!request.scheduled() || changedOnly.includes(container));
     }
     void begin(String container) {
         Domain domain = new Domain();
@@ -58,7 +73,13 @@ final class CpDomainReuse {
                     throw PolicyCollectionTrace.failure("CHECKPOINT_SOURCE_VERSION_NOT_EVALUABLE");
             } catch (java.io.IOException invalid) { throw PolicyCollectionTrace.failure("CHECKPOINT_SOURCE_VERSION_NOT_EVALUABLE"); }
         }
-        if (!domain.databaseFailed && (request.mode() == PolicyCollectionRepository.Mode.CHANGED_ONLY || domain.sameRequest) && domain.signal != null
+        boolean changedOnly = changedOnly(container);
+        domain.decision = domain.sameRequest ? "RESUMED" : request.mode() == PolicyCollectionRepository.Mode.FULL ? "READ_FULL_MODE"
+            : !changedOnly ? "READ_NOT_IN_CHANGED_ONLY_SET" : domain.databaseFailed ? "READ_DATABASE_GAP"
+            : domain.signal == null ? "READ_NO_SIGNAL"
+            : domain.previous == null || !domain.previous.complete() || domain.previous.signalJson() == null ? "READ_NO_COMPLETE_PREVIOUS"
+            : "READ_SIGNAL_CHANGED";
+        if (!domain.databaseFailed && (changedOnly || domain.sameRequest) && domain.signal != null
                 && domain.previous != null && (domain.previous.complete() || domain.sameRequest) && domain.previous.signalJson() != null) {
             try {
                 Signal previous = JSON.readValue(domain.previous.signalJson(), Signal.class);
@@ -70,11 +91,20 @@ final class CpDomainReuse {
                     snapshots.stream().filter(CpDomainReuse::ruleComplete)
                         .forEach(snapshot -> domain.snapshots.put(snapshot.metadata().id(), snapshot));
                     domain.reused = domain.previous.complete() && domain.snapshots.size() == snapshots.size();
-                }
-            } catch (java.io.IOException | RuntimeException invalid) { /* Unproven stored evidence requires a full collection. */ }
+                    if (!domain.reused && !domain.sameRequest) domain.decision = "READ_PREVIOUS_NOT_REUSABLE";
+                    // A scheduled run never republishes evidence (and its hit counts) older than the configured age.
+                    if (domain.reused && request.scheduled() && !domain.sameRequest && !fresh(snapshots)) {
+                        domain.reused = false; domain.decision = "READ_EVIDENCE_TOO_OLD";
+                    }
+                } else if (!domain.sameRequest) domain.decision = identity ? "READ_SIGNAL_CHANGED" : "READ_PREVIOUS_NOT_REUSABLE";
+            } catch (java.io.IOException | RuntimeException invalid) {
+                /* Unproven stored evidence requires a full collection. */
+                if (!domain.sameRequest) domain.decision = "READ_PREVIOUS_NOT_REUSABLE";
+            }
             // Only a resumed request may keep partial previous evidence (e.g. a complete run with UNKNOWN parts).
             if (!domain.reused && !domain.sameRequest) domain.snapshots.clear();
         }
+        if (domain.reused) domain.decision = "REUSED";
         if (domain.reused) {
             save(container, domain, "REUSED", true);
             PolicyCollectionTrace.packages(domain.snapshots.size());
@@ -83,6 +113,15 @@ final class CpDomainReuse {
         }
         save(container, domain, "COLLECTING", false);
         return null;
+    }
+    /** Every reused snapshot was read within the max age; an unparseable time is not fresh. A domain without packages has nothing to age. */
+    private boolean fresh(List<PolicySnapshot> snapshots) {
+        long cutoff = clock.getAsLong() - changedOnly.maxAge().toMillis();
+        for (PolicySnapshot snapshot : snapshots) {
+            try { if (Instant.parse(snapshot.metadata().collectedAt()).toEpochMilli() < cutoff) return false; }
+            catch (RuntimeException invalid) { return false; }
+        }
+        return true;
     }
     PolicySnapshot resumedPackage(String container, String policy) {
         Domain domain = domains.get(container);
@@ -151,6 +190,11 @@ final class CpDomainReuse {
                 && (domain.reused || domain.expected >= 0 && domain.snapshots.size() == domain.expected)
                 && domain.snapshots.values().stream().allMatch(CpDomainReuse::completeWithUnknownParts));
         });
+    }
+    /** Per-domain decision for the run record; the collectors call this on every exit, including a stopped run. */
+    void record() {
+        domains.forEach((container, domain) -> PolicyCollectionTrace.domainDecision(container, domain.decision,
+            domain.reused ? domain.snapshots.size() : 0, domain.reused ? 0 : Math.max(domain.expected, 0)));
     }
     private void save(String container, Domain domain, String status, boolean complete) {
         // Direct offline collector tests have no ledger job. Production requests always carry a lease.
