@@ -517,10 +517,29 @@ public final class PolicyQueryService {
                 .map(json -> read(json, Map.class)).toList(), "page", page));
     }
     public PolicyResponse object(PolicySnapshot snapshot, String id) {
-        return new PolicyResponse(Map.of("object", expand(snapshot, id, new HashSet<>(), new int[]{500}, 0)));
+        return object(snapshot, id, inventoryIndex(snapshot));
     }
-    private Map<String, Object> expand(PolicySnapshot snapshot, String id, Set<String> path, int[] budget, int depth) {
+    PolicyResponse object(PolicySnapshot snapshot, String id, PolicyDomainIndex index) {
+        return new PolicyResponse(Map.of("object", expand(snapshot, index, id, new HashSet<>(), new int[]{500}, 0)));
+    }
+    /** CP group members missing from the rulebase dictionary are resolved against the same domain's stored inventory. */
+    private PolicyDomainIndex inventoryIndex(PolicySnapshot snapshot) {
+        if (!"CP".equals(snapshot.metadata().vendor()) || repository == null) return null;
+        try { return domainIndex(snapshot.metadata().sourceId(), snapshot.metadata().containerId()); }
+        catch (RuntimeException unavailable) {
+            // The snapshot-only expansion stays available; members then remain UNRESOLVED as before.
+            System.getLogger(PolicyQueryService.class.getName()).log(System.Logger.Level.WARNING,
+                "POLICY_OBJECT_INVENTORY_UNAVAILABLE " + unavailable.getClass().getSimpleName());
+            return null;
+        }
+    }
+    private Map<String, Object> expand(PolicySnapshot snapshot, PolicyDomainIndex index, String id, Set<String> path, int[] budget, int depth) {
         PolicyObject object = snapshot.objects().get(id);
+        if ((object == null || "UNRESOLVED".equals(object.status())) && index != null) {
+            var row = index.inventoryObject(object == null ? id : object.name());
+            if (row == null && object != null) row = index.inventoryObject(id);
+            if (row != null) return expandInventory(index, row, path, budget, depth);
+        }
         if (object == null) return Map.of("id", id, "status", "UNRESOLVED");
         Map<String, Object> out = map(object);
         if (object.members().size() > 500) {
@@ -533,7 +552,29 @@ public final class PolicyQueryService {
         List<Map<String, Object>> children = new ArrayList<>();
         for (String member : object.members()) {
             if (budget[0] <= 0) { out.put("status", "LIMIT"); break; }
-            children.add(expand(snapshot, member, path, budget, depth + 1));
+            children.add(expand(snapshot, index, member, path, budget, depth + 1));
+        }
+        path.remove(id);
+        out.put("children", children);
+        return out;
+    }
+    /** Expansion of a domain-inventory row; members are vendor uids resolved within the same inventory. */
+    private Map<String, Object> expandInventory(PolicyDomainIndex index, Map<String, Object> row, Set<String> path, int[] budget, int depth) {
+        String id = (String) row.get("id");
+        Map<String, Object> out = new LinkedHashMap<>();
+        for (String field : List.of("id", "name", "type", "values", "status", "schedule")) if (row.get(field) != null) out.put(field, row.get(field));
+        out.put("resolution", "DOMAIN_INVENTORY");
+        @SuppressWarnings("unchecked") List<String> members = (List<String>) row.getOrDefault("members", List.of());
+        out.put("members", members.size() > 500 ? members.subList(0, 500) : members);
+        if (members.size() > 500) out.put("totalMembers", members.size());
+        if (path.contains(id)) { out.put("status", "CYCLE"); return out; }
+        if (depth >= 32 || budget[0]-- <= 0) { out.put("status", "LIMIT"); return out; }
+        path.add(id);
+        List<Map<String, Object>> children = new ArrayList<>();
+        for (String member : members) {
+            if (budget[0] <= 0) { out.put("status", "LIMIT"); break; }
+            var child = index.inventoryObject(member);
+            children.add(child == null ? Map.of("id", member, "status", "UNRESOLVED") : expandInventory(index, child, path, budget, depth + 1));
         }
         path.remove(id);
         out.put("children", children);

@@ -24,6 +24,8 @@ public final class CheckPointPolicyCollector {
     private final int maxSessions;
     private final GateRegistryPort gates;
     private final PolicyCollectionRepository repository;
+    /** Domains a scheduled run may collect changed-only; read once so an invalid setting fails at construction. */
+    final CpChangedOnlyDomains changedOnly;
     private final Duration jobTimeout;
     private final Duration readTimeout;
     private final Duration restartBackoff;
@@ -52,6 +54,7 @@ public final class CheckPointPolicyCollector {
         this.readTimeout = configuredReadTimeout();
         this.restartBackoff = configuredRestartBackoff();
         this.packagePageSize = 50;
+        this.changedOnly = CpChangedOnlyDomains.configured();
         if (jobTimeout.isZero() || jobTimeout.isNegative()) throw new IllegalArgumentException("POLICY_DEADLINE_MUST_BE_POSITIVE");
         this.transport = transport; this.gates = gates; this.repository = repository;
         this.jobTimeout = jobTimeout; this.nanoTime = nanoTime;
@@ -171,7 +174,7 @@ public final class CheckPointPolicyCollector {
 
     public List<PolicySnapshot> collect(DiscoveryRun run, PolicyCollectionRepository.Request request, BooleanSupplier lease,
             Consumer<PolicySnapshot> publish, Consumer<CollectionFailure> domainFailure) {
-        var reuse = new CpDomainReuse(repository, request).onDatabaseGap(domainFailure);
+        var reuse = new CpDomainReuse(repository, request, changedOnly, System::currentTimeMillis).onDatabaseGap(domainFailure);
         Consumer<PolicySnapshot> domainPublish = snapshot -> {
             try { publish.accept(snapshot); reuse.snapshot(snapshot); }
             catch (com.securityexpert.nexus.ui2.persistence.policy.PolicyDatabaseFailure unavailable) {
@@ -193,7 +196,7 @@ public final class CheckPointPolicyCollector {
         if (maxSessions > 1) {
             try { return new CpPolicyParallelCollection(this, repository, maxSessions, nanoTime,
                 run, request, deadline, lease, domainPublish, domainGap, reuse).collect(); }
-            finally { PolicyCollectionTrace.elapsed(nanoTime.getAsLong() - started); }
+            finally { reuse.record(); PolicyCollectionTrace.elapsed(nanoTime.getAsLong() - started); }
         }
         TransportSession session = connect(run, deadline, lease);
         try {
@@ -308,6 +311,7 @@ public final class CheckPointPolicyCollector {
             return List.copyOf(snapshots);
         } finally {
             if (session != null) transport.disconnect(session);
+            reuse.record();
             PolicyCollectionTrace.elapsed(nanoTime.getAsLong() - started);
         }
     }
@@ -364,8 +368,9 @@ public final class CheckPointPolicyCollector {
 
     void storeIncompleteObjects(String source, String container, String type, PackagePages listing,
             long elapsed, RuntimeException gap, long deadline, BooleanSupplier lease) {
-        storeObjects(source, container, type, listing.items, listing.count, elapsed, "TYPE_INCOMPLETE",
+        storeObjects(source, container, type, listing.items, listing.pagesRead(), elapsed, "TYPE_INCOMPLETE",
             "TYPE_INCOMPLETE fetched=" + listing.items.size() + " total=" + (listing.total < 0 ? "UNKNOWN" : listing.total)
+                + (gap instanceof ListingRejected rejected ? " check=" + rejected.check + " restarts=" + listing.restarts : "")
                 + " " + PolicyCollectionTrace.reason(gap), deadline, lease);
     }
 
@@ -378,16 +383,20 @@ public final class CheckPointPolicyCollector {
                 continue;
             }
             long started = nanoTime.getAsLong();
-            PackagePages listing = new PackagePages(50, "objects");
+            PackagePages listing = new PackagePages(50, "objects").begin(started);
             int offset = 0;
             try {
                 while (true) {
                     JsonNode page = read(session, MgmtCliCommands.showPolicyObjects(domain, type, offset),
                         CpPolicyGates.OBJECT_BASE + CpPolicyGates.OBJECT_TYPES.indexOf(type), deadline, lease);
-                    if (listing.add(page, offset)) break;
+                    try { if (listing.add(page, offset)) break; }
+                    catch (ListingRejected rejected) {
+                        if (!restartListing(type, listing, rejected, deadline, lease)) throw rejected;
+                        offset = 0; continue;
+                    }
                     offset = listing.to;
                 }
-                storeObjects(source, container, type, listing.items, listing.count, nanoTime.getAsLong() - started,
+                storeObjects(source, container, type, listing.items, listing.pagesRead(), nanoTime.getAsLong() - started,
                     "RESOLVED", "", deadline, lease);
             } catch (RuntimeException gap) {
             com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(gap);
@@ -420,47 +429,112 @@ public final class CheckPointPolicyCollector {
         long elapsed;
         int count;
         int to;
+        /** Pages read in earlier, discarded passes of this listing (restarts after a concurrent change). */
+        int pagesBefore;
+        int restarts;
+        long passStarted;
         PackagePages(int limit) { this(limit, "packages"); }
         PackagePages(int limit, String field) { this.limit = limit; this.field = field; }
+        PackagePages begin(long now) { passStarted = now; return this; }
+        int pagesRead() { return pagesBefore + count; }
+        /** Discard the current pass; the next page must be offset 0 again. */
+        void restart(long now) {
+            pagesBefore += count; restarts++;
+            items.clear(); seen.clear(); total = -1; count = 0; to = 0; passStarted = now;
+        }
         int pageCap(int total) {
             return field.equals("objects") ? (int) Math.min(2000L, (total + (long) limit - 1) / limit + 2) : MAX_PAGES;
         }
         boolean add(JsonNode page, int offset) {
             if (field.equals("packages")) validatePreflight(page, field);
             else if (!page.path(field).isArray() || !page.path("total").isIntegralNumber()
-                    || !page.path("total").canConvertToInt() || page.path("total").intValue() < 0) throw failure();
+                    || !page.path("total").canConvertToInt() || page.path("total").intValue() < 0) throw new ListingRejected("PAGE_SCHEMA");
             int nextTotal = page.path("total").intValue();
             int cap = pageCap(nextTotal);
-            if (++count > cap || offset != to || (total != -1 && total != nextTotal)) throw failure();
+            if (++count > cap) throw new ListingRejected("PAGE_CAP");
+            if (offset != to) throw new ListingRejected("OFFSET");
+            // A changed total means the listing moved while it was paged (an object was added or deleted).
+            if (total != -1 && total != nextTotal) throw new ListingRejected("TOTAL_CHANGED");
             total = nextTotal;
-            if (!page.path("from").isIntegralNumber() || !page.path("from").canConvertToInt()
-                    || !page.path("to").isIntegralNumber() || !page.path("to").canConvertToInt()) throw failure();
             if (total == 0) {
-                if (offset != 0 || (page.path("from").intValue() != 0 && page.path("from").intValue() != 1) || page.path("to").intValue() != 0 || !page.path(field).isEmpty()) throw failure();
+                // The management API omits from/to on an empty list: {"objects":[],"total":0} (36-byte answers on the live MDS).
+                if (offset != 0 || !(emptyCounter(page, "from", 0) || emptyCounter(page, "from", 1)) || !emptyCounter(page, "to", 0)
+                        || !page.path(field).isEmpty()) throw new ListingRejected("EMPTY_PAGE_RANGE");
                 return true;
             }
             if (!page.path("from").isIntegralNumber() || !page.path("from").canConvertToInt() || page.path("from").asLong() != offset + 1L
-                    || !page.path("to").isIntegralNumber() || !page.path("to").canConvertToInt()) throw failure();
+                    || !page.path("to").isIntegralNumber() || !page.path("to").canConvertToInt()) throw new ListingRejected("PAGE_FROM");
             int nextTo = page.path("to").intValue();
-            if (nextTo <= offset || nextTo > total || nextTo - offset > limit || nextTo - offset != page.path(field).size()) throw failure();
-            if (nextTo < total && nextTo - offset != limit) throw failure();
+            if (nextTo <= offset || nextTo > total || nextTo - offset > limit || nextTo - offset != page.path(field).size())
+                throw new ListingRejected("PAGE_TO");
+            // A short page before the end: the listing shrank between the total and this page.
+            if (nextTo < total && nextTo - offset != limit) throw new ListingRejected("SHORT_PAGE");
             Set<String> pageSeen = new HashSet<>();
             int index = 0;
             for (JsonNode item : page.path(field)) {
-                String uid = required(item, "uid");
-                if (seen.contains(uid) || !pageSeen.add(uid)) {
+                String uid;
+                try { uid = required(item, "uid"); }
+                catch (PolicyCollectionTrace.Failure invalid) {
+                    if (field.equals("packages")) throw invalid;
+                    throw new ListingRejected("ITEM_UID");
+                }
+                if (!pageSeen.add(uid)) {
                     if (field.equals("packages")) throw invalidPackage(index, "uid", item.path("uid"));
-                    throw failure();
+                    throw new ListingRejected("DUPLICATE_IN_PAGE");
+                }
+                // An item already returned on an earlier page: the listing shifted while it was paged.
+                if (seen.contains(uid)) {
+                    if (field.equals("packages")) throw invalidPackage(index, "uid", item.path("uid"));
+                    throw new ListingRejected("DUPLICATE_UID");
                 }
                 index++;
             }
             seen.addAll(pageSeen);
             page.path(field).forEach(items::add);
             to = nextTo;
-            if (to < total && count == cap) throw failure();
-            if (to == total && items.size() != total) throw failure();
+            if (to < total && count == cap) throw new ListingRejected("PAGE_CAP");
+            if (to == total && items.size() != total) throw new ListingRejected("COUNT");
             return to == total;
         }
+    }
+
+    /** Fixed vocabulary: a paged object listing rejected one page; the check names the failed rule, never a value. */
+    static final class ListingRejected extends PolicyCollectionTrace.Failure {
+        /** Checks that prove only that the listing moved while it was paged; a fresh pass from offset 0 may succeed. */
+        static final Set<String> CONCURRENT = Set.of("TOTAL_CHANGED", "SHORT_PAGE", "DUPLICATE_UID");
+        final String check;
+        ListingRejected(String check) { super(PolicyCollectionTrace.failure("INVALID_OR_INCOMPLETE_RESPONSE").getMessage()); this.check = check; }
+    }
+
+    static final int MAX_LISTING_RESTARTS = 2;
+
+    /**
+     * Restart an object listing from offset 0 after a concurrent change (bounded per listing, masked note, short back-off).
+     * A restart is refused when the estimated full pass cannot finish before the run deadline: the gap then stays explicit.
+     */
+    boolean restartListing(String type, PackagePages listing, RuntimeException error, long deadline, BooleanSupplier lease) {
+        if (!(error instanceof ListingRejected rejected) || !ListingRejected.CONCURRENT.contains(rejected.check)) return false;
+        long now = nanoTime.getAsLong();
+        long pagesNeeded = Math.max(1, (Math.max(listing.total, 0) + 49L) / 50);
+        long estimate = (now - listing.passStarted) / Math.max(1, listing.count) * pagesNeeded;
+        boolean fits = now + estimate + restartBackoff.toNanos() < deadline;
+        String note = "[CP_OBJECT_LISTING_" + (listing.restarts < MAX_LISTING_RESTARTS && fits ? "RESTART" : "REJECTED")
+            + "] type=" + type + " check=" + rejected.check + " attempt=" + (listing.restarts + 1)
+            + " fetched=" + listing.items.size() + " total=" + listing.total + " pages=" + listing.count;
+        com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope.add("job", "note", note);
+        System.getLogger(CheckPointPolicyCollector.class.getName()).log(System.Logger.Level.WARNING, note);
+        if (listing.restarts >= MAX_LISTING_RESTARTS || !fits) return false;
+        long pause = Math.min(restartBackoff.toNanos(), Math.max(0, deadline - now));
+        if (pause > 0) {
+            try { java.util.concurrent.TimeUnit.NANOSECONDS.sleep(pause); }
+            catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                throw PolicyCollectionTrace.failure("INTERRUPTED");
+            }
+        }
+        checkActive(deadline, lease);
+        listing.restart(nanoTime.getAsLong());
+        return true;
     }
 
     private static int reached(RuntimeException error) { return error instanceof PageFailure page ? page.offset : 0; }
@@ -642,7 +716,8 @@ public final class CheckPointPolicyCollector {
         if (!page.path("rulebase").isArray()
                 || !page.path("total").canConvertToInt() || !page.path("total").isIntegralNumber()) throw pageRejected("PAGE_SCHEMA");
         boolean empty = offset == 0 && page.path("total").intValue() == 0 && page.path("rulebase").isEmpty();
-        if (!page.path("objects-dictionary").isArray() && !(empty && (gate == 1 || gate == 3) && !page.has("objects-dictionary")))
+        // An empty access or NAT rulebase may omit the dictionary (empty access layers do on the live MDS).
+        if (!page.path("objects-dictionary").isArray() && !(empty && !page.has("objects-dictionary")))
             throw pageRejected("PAGE_SCHEMA");
         if ((gate == 1 || gate == 3) && layerUid != null && !layerUid.equals(required(page, "uid")))
             throw pageRejected("LAYER_UID");
@@ -772,6 +847,10 @@ public final class CheckPointPolicyCollector {
                 String message = (root.path("code").asText("") + " " + root.path("message").asText("")).toLowerCase(Locale.ROOT);
                 if (message.contains("session") || message.contains("lock") || message.contains("too many"))
                     throw PolicyCollectionTrace.failure("API_SESSION_PRESSURE");
+                // NAT and object reads have no retry: name a vendor error answer apart from a malformed page, so the
+                // stored gap (not only the transcript) shows which one it was. Access reads keep their retry contract.
+                if (gate == 2 || gate >= CpPolicyGates.OBJECT_BASE && gate < CpPolicyGates.LAST_PUBLISHED_SESSION)
+                    throw PolicyCollectionTrace.failure("API_RESPONSE_ERROR");
                 throw failure();
             }
             if (completed.exitStatus() != 0) throw PolicyCollectionTrace.failure("EXIT_" + completed.exitStatus());

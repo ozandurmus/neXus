@@ -35,7 +35,7 @@ class PolicyCollectionJobExecutorTest {
             when(repository.eligible("synthetic-manager", "synthetic-run")).thenReturn(true);
             when(leases.transitionState(anyString(), anyLong(), any(), any(), anyString(), anyString())).thenReturn(true);
             when(attempts.insertPreContact(anyString(), anyLong(), anyInt(), anyString(), anyString(), anyInt())).thenReturn("synthetic-attempt");
-            when(attempts.writeOutcome(anyString(), anyLong(), anyString(), isNull(), anyBoolean(), isNull(), isNull(), isNull())).thenReturn(true);
+            when(attempts.writeOutcome(anyString(), anyLong(), anyString(), isNull(), anyBoolean(), nullable(Long.class), isNull(), isNull())).thenReturn(true);
             when(repository.publish(anyString(), anyLong(), anyList(), anyString())).thenReturn(true);
             org.mockito.stubbing.Answer<Object> collect = call -> {
                 var channel = vendor.equals("check_point") ? "ssh" : "https";
@@ -58,10 +58,13 @@ class PolicyCollectionJobExecutorTest {
                 var entries = lines.lines().map(line -> {
                     try { return json.readTree(line); } catch (java.io.IOException invalid) { throw new AssertionError(invalid); }
                 }).toList();
-                assertEquals(3, entries.size(), jobType);
+                // Check Point runs add the masked [CP_POLICY_RUN] record note before the verdict.
+                assertEquals(vendor.equals("check_point") ? 4 : 3, entries.size(), jobType);
                 assertEquals("synthetic response", entries.get(1).get("text").asText());
-                assertEquals("Completed", entries.get(2).get("text").asText());
-                assertEquals("verdict", entries.get(2).get("kind").asText());
+                if (vendor.equals("check_point")) assertTrue(entries.get(2).get("text").asText().startsWith("[CP_POLICY_RUN] mode=CHANGED_ONLY origin=MANUAL "));
+                var verdict = entries.get(entries.size() - 1);
+                assertEquals("Completed", verdict.get("text").asText());
+                assertEquals("verdict", verdict.get("kind").asText());
             }
         }
     }
@@ -148,7 +151,7 @@ class PolicyCollectionJobExecutorTest {
         when(leases.transitionState(anyString(), anyLong(), any(), any(), anyString(), anyString(), anyString())).thenReturn(true);
         when(leases.cancellationRequested("job-1", 1)).thenAnswer(call -> cancelled.get());
         when(attempts.insertPreContact(anyString(), anyLong(), anyInt(), anyString(), anyString(), anyInt())).thenReturn("attempt-1");
-        when(attempts.writeOutcome(anyString(), anyLong(), anyString(), isNull(), anyBoolean(), isNull(), isNull(), isNull())).thenReturn(true);
+        when(attempts.writeOutcome(anyString(), anyLong(), anyString(), isNull(), anyBoolean(), nullable(Long.class), isNull(), isNull())).thenReturn(true);
         when(repository.checkpoint(anyString(), anyLong(), any(), anyString())).thenReturn(true);
         var metadata = new com.securityexpert.nexus.ui2.policy.PolicySnapshot.Metadata("policy-1", "mds-1", "MGR-BRAVO-01", "CP",
             "domain-1", "DOM-TANGO-01", "OBJ-POLICY-01", "2026-10-02T00:00:00Z", "", List.of());
@@ -180,7 +183,7 @@ class PolicyCollectionJobExecutorTest {
         when(repository.eligible("mds-1", "run-1")).thenReturn(true);
         when(leases.transitionState(anyString(), anyLong(), any(), any(), anyString(), anyString())).thenReturn(true);
         when(attempts.insertPreContact(anyString(), anyLong(), anyInt(), anyString(), anyString(), anyInt())).thenReturn("attempt-1");
-        when(attempts.writeOutcome(anyString(), anyLong(), anyString(), isNull(), anyBoolean(), isNull(), isNull(), isNull())).thenReturn(true);
+        when(attempts.writeOutcome(anyString(), anyLong(), anyString(), isNull(), anyBoolean(), nullable(Long.class), isNull(), isNull())).thenReturn(true);
         when(repository.publish(anyString(), anyLong(), anyList(), anyString(), anyString())).thenReturn(true);
         when(collector.collect(any(), any(), any(), any(), any())).thenThrow(new IllegalStateException("synthetic private detail"));
         var executor = new PolicyCollectionJobExecutor(leases, attempts, runs, repository, collector, key -> List.of());
@@ -220,7 +223,7 @@ class PolicyCollectionJobExecutorTest {
         when(repository.sources()).thenReturn(List.of(new PolicyCollectionRepository.Source("pan-1", "run-pan", "palo_alto")));
         when(leases.transitionState(anyString(), anyLong(), any(), any(), anyString(), anyString())).thenReturn(true);
         when(attempts.insertPreContact(anyString(), anyLong(), anyInt(), anyString(), anyString(), anyInt())).thenReturn("attempt-pan");
-        when(attempts.writeOutcome(anyString(), anyLong(), anyString(), isNull(), anyBoolean(), isNull(), isNull(), isNull())).thenReturn(true);
+        when(attempts.writeOutcome(anyString(), anyLong(), anyString(), isNull(), anyBoolean(), nullable(Long.class), isNull(), isNull())).thenReturn(true);
         when(repository.publish(anyString(), anyLong(), anyList(), anyString(), anyString())).thenReturn(true);
         when(collector.collect(any(), any(), any(), any())).thenThrow(new IllegalStateException("synthetic incomplete page"));
         GateRegistryPort gates = key -> GateRegistryFixtureLoader.loadFromStream(getClass().getResourceAsStream("/capabilities/gate_registry_fixture.yaml"))
@@ -247,7 +250,7 @@ class PolicyCollectionJobExecutorTest {
             when(repository.eligible("manager-1", "run-1")).thenReturn(true);
             when(leases.transitionState(anyString(), anyLong(), any(), any(), anyString(), anyString())).thenReturn(true);
             when(attempts.insertPreContact(anyString(), anyLong(), anyInt(), anyString(), anyString(), anyInt())).thenReturn("attempt-1");
-            when(attempts.writeOutcome(anyString(), anyLong(), anyString(), isNull(), anyBoolean(), isNull(), isNull(), isNull())).thenReturn(true);
+            when(attempts.writeOutcome(anyString(), anyLong(), anyString(), isNull(), anyBoolean(), nullable(Long.class), isNull(), isNull())).thenReturn(true);
             when(repository.checkpoint(anyString(), anyLong(), any(), anyString())).thenReturn(true);
             when(repository.publishWithWarnings(anyString(), anyLong(), anyList(), anyString(), anyString())).thenReturn(true);
             when(repository.publish(anyString(), anyLong(), anyList(), anyString())).thenReturn(true);
@@ -304,15 +307,36 @@ class PolicyCollectionJobExecutorTest {
             assertInstanceOf(JobOutcome.ZombieStopped.class, executor.execute("job-1", 1, "run-1"));
         }
     }
+    private static DiscoveryRun refresh(String vendor, String actor, String startedAt) {
+        return new DiscoveryRun("run-1", vendor, "192.0.2.10", "synthetic-ref", actor, DiscoveryRunState.FINISHED, Optional.empty(),
+            Optional.ofNullable(startedAt).map(java.time.Instant::parse), Optional.empty(), Optional.empty());
+    }
     @Test void nightlyDiscoveryQueuesFullWhileDaytimeKeepsChangedOnly() {
         var repository = mock(PolicyCollectionRepository.class);
         when(repository.sources()).thenReturn(List.of(new PolicyCollectionRepository.Source("mds-1", "run-1")));
         GateRegistryPort gates = key -> GateRegistryFixtureLoader.loadFromStream(getClass().getResourceAsStream("/capabilities/gate_registry_fixture.yaml"))
             .stream().filter(row -> row.key().equals(key)).toList();
         var executor = new PolicyCollectionJobExecutor(null, null, null, repository, null, gates);
-        var run = new DiscoveryRun("run-1", "check_point", "192.0.2.10", "synthetic-ref", "system:discovery-refresh",
-            DiscoveryRunState.FINISHED, Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
-        executor.afterDiscovery(run);
+        // 00:02 Europe/Istanbul (UTC+3) is the daily full window.
+        executor.afterDiscovery(refresh("check_point", "system:discovery-refresh", "2026-10-18T21:02:00Z"));
         verify(repository).enqueue(eq("mds-1"), eq(""), eq(true), anyString(), eq(PolicyCollectionRepository.Mode.FULL));
+        // 06:03 is a changed-only window for the scheduled Check Point run.
+        executor.afterDiscovery(refresh("check_point", "system:discovery-refresh", "2026-10-19T03:03:00Z"));
+        verify(repository).enqueue(eq("mds-1"), eq(""), eq(true), anyString(), eq(PolicyCollectionRepository.Mode.CHANGED_ONLY));
+    }
+    @Test void automaticModeIsFullAtMidnightChangedOnlyOtherwiseAndPanoramaAlwaysFull() {
+        var now = java.time.Instant.parse("2026-10-19T09:00:00Z");
+        String refresh = PolicyCollectionRepository.SCHEDULED_REFRESH_ACTOR;
+        // Slot starts in Europe/Istanbul: 00, 06, 12, 18 (UTC+3: 21, 03, 09, 15 UTC).
+        assertEquals(PolicyCollectionRepository.Mode.FULL, PolicyCollectionJobExecutor.automaticMode(refresh("check_point", refresh, "2026-10-18T21:00:00Z"), now));
+        assertEquals(PolicyCollectionRepository.Mode.FULL, PolicyCollectionJobExecutor.automaticMode(refresh("check_point", refresh, "2026-10-19T02:59:00Z"), now));
+        for (String started : List.of("2026-10-19T03:00:00Z", "2026-10-19T09:05:00Z", "2026-10-19T15:10:00Z", "2026-10-19T20:59:00Z"))
+            assertEquals(PolicyCollectionRepository.Mode.CHANGED_ONLY, PolicyCollectionJobExecutor.automaticMode(refresh("check_point", refresh, started), now), started);
+        // Without a start time the admission time decides (09:00 UTC = 12:00 Istanbul).
+        assertEquals(PolicyCollectionRepository.Mode.CHANGED_ONLY, PolicyCollectionJobExecutor.automaticMode(refresh("check_point", refresh, null), now));
+        assertEquals(PolicyCollectionRepository.Mode.FULL, PolicyCollectionJobExecutor.automaticMode(refresh("palo_alto", refresh, "2026-10-19T09:05:00Z"), now));
+        // Any other discovery keeps the throttled changed-only request.
+        assertEquals(PolicyCollectionRepository.Mode.CHANGED_ONLY, PolicyCollectionJobExecutor.automaticMode(refresh("check_point", "operator-1", "2026-10-18T21:00:00Z"), now));
+        assertEquals(PolicyCollectionRepository.Mode.CHANGED_ONLY, PolicyCollectionJobExecutor.automaticMode(refresh("palo_alto", "operator-1", "2026-10-18T21:00:00Z"), now));
     }
 }

@@ -180,15 +180,7 @@ public final class CheckPointPolicyMapper {
             return id;
         }
         String nativeType = node.path("type").asText();
-        String type = switch (nativeType) {
-            case "CpmiAnyObject" -> "any";
-            case "host", "network", "address-range" -> "address";
-            case "group", "group-with-exclusion" -> "group";
-            case "service-tcp", "service-udp", "service-icmp" -> "service";
-            case "service-group" -> "service-group";
-            case "time", "time-group" -> nativeType;
-            default -> "unresolved";
-        };
+        String type = type(nativeType);
         String name = type.equals("any") ? "ANY" : node.path("name").asText(uid);
         objects.put(id, new PolicyObject(id, name, type, List.of(), List.of(), "UNRESOLVED")); // cycle guard
         List<String> members = texts(node.path("members")).stream().map(member -> object(meta, member, dict, objects, depth + 1)).toList();
@@ -197,9 +189,38 @@ public final class CheckPointPolicyMapper {
             values.add("protocol: " + nativeType.substring("service-".length()));
         for (String field : List.of("ipv4-address", "ipv6-address", "subnet4", "mask-length4", "subnet6", "mask-length6", "port", "icmp-type", "icmp-code", "ip-address-first", "ip-address-last"))
             if (node.has(field)) values.add(field + ": " + node.path(field).asText());
-        String status = type.equals("unresolved") || nativeType.equals("group-with-exclusion") ? "UNSUPPORTED" : "RESOLVED";
+        String status = type.equals("unresolved") || nativeType.equals("group-with-exclusion") ? "UNSUPPORTED"
+            : DYNAMIC_TYPES.contains(nativeType) ? "DYNAMIC" : "RESOLVED";
+        // Keep the vendor class of an unmodelled object so the remaining gap can be counted by type (no names, no values).
+        if (status.equals("UNSUPPORTED") && type.equals("unresolved"))
+            values.add("native-type: " + (nativeType.matches("[A-Za-z][A-Za-z0-9_-]{0,63}") ? nativeType : "UNKNOWN"));
         objects.put(id, new PolicyObject(id, name, type, members, values, status, nativeType.equals("time") ? CheckPointSchedule.parse(node) : null));
         return id;
+    }
+    /** Membership decided at enforcement time (identity, DNS, feeds, topology); never evaluated as static content. */
+    static final Set<String> DYNAMIC_TYPES = Set.of("access-role", "dynamic-object", "dns-domain", "security-zone", "updatable-object");
+    /** Management and gateway object classes returned by show-gateways-and-servers. */
+    static final Set<String> GATEWAY_TYPES = Set.of("simple-gateway", "simple-cluster", "checkpoint-host", "cluster-member",
+        "CpmiGatewayCluster", "CpmiClusterMember", "CpmiHostCkp", "CpmiGatewayPlain", "CpmiGatewayCkp", "CpmiVsClusterNetobj",
+        "CpmiVsxClusterNetobj", "CpmiVsxClusterMember", "CpmiVsxNetobj", "CpmiVsNetobj");
+    /** Native dictionary type to the viewer's object class; anything else stays UNSUPPORTED (fail closed). */
+    static String type(String nativeType) {
+        if (GATEWAY_TYPES.contains(nativeType)) return "gateway";
+        return switch (nativeType) {
+            case "CpmiAnyObject" -> "any";
+            case "host", "network", "address-range" -> "address";
+            case "group", "group-with-exclusion" -> "group";
+            case "service-tcp", "service-udp", "service-icmp", "service-icmp6", "service-other", "service-sctp",
+                 "service-dce-rpc", "service-rpc" -> "service";
+            case "service-group" -> "service-group";
+            case "time", "time-group" -> nativeType;
+            case "access-role", "dynamic-object", "dns-domain", "security-zone", "updatable-object" -> nativeType;
+            case "application-site", "application-site-category" -> "application";
+            case "application-site-group" -> "application-group";
+            case "RulebaseAction" -> "action";
+            case "Track" -> "track";
+            default -> "unresolved";
+        };
     }
     private static String resolve(JsonNode node, Map<String, JsonNode> dict) {
         if (node.isObject()) return node.path("name").asText("UNKNOWN");

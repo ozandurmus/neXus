@@ -384,15 +384,23 @@ final class CpPolicyParallelCollection {
         if (!CheckPointPolicyCollector.collectObjectsEnabled() || type.equals("gateways-and-servers") && domain.equalsIgnoreCase("Global")) {
             collector.storeObjects(request.sourceId(), container, type, List.of(), 0, 0,
                 "UNSUPPORTED", "COLLECTION_SKIPPED", deadline, lease);
-        } else enqueueObjectPage(domain, container, type, new PackagePages(50, "objects"), 0);
+        } else enqueueObjectPage(domain, container, type, new PackagePages(50, "objects").begin(clock.getAsLong()), 0);
     }
 
     private void enqueueObjectPage(String domain, String container, String type, PackagePages listing, int offset) {
         int gate = CpPolicyGates.OBJECT_BASE + CpPolicyGates.OBJECT_TYPES.indexOf(type);
         pending.add(new Work(MgmtCliCommands.showPolicyObjects(domain, type, offset), gate, null, offset, 0, 0,
             page -> {
-                if (listing.add(page, offset)) collector.storeObjects(request.sourceId(), container, type,
-                    listing.items, listing.count, listing.elapsed, "RESOLVED", "", deadline, lease);
+                boolean done;
+                try { done = listing.add(page, offset); }
+                catch (ListingRejected rejected) {
+                    // A listing that moved while it was paged is re-read from offset 0, bounded; otherwise the gap stays explicit.
+                    if (!collector.restartListing(type, listing, rejected, deadline, lease)) throw rejected;
+                    enqueueObjectPage(domain, container, type, listing, 0);
+                    return;
+                }
+                if (done) collector.storeObjects(request.sourceId(), container, type,
+                    listing.items, listing.pagesRead(), listing.elapsed, "RESOLVED", "", deadline, lease);
                 else enqueueObjectPage(domain, container, type, listing, listing.to);
             }, error -> collector.storeIncompleteObjects(request.sourceId(), container, type, listing,
                 listing.elapsed, error, deadline, lease), listing));

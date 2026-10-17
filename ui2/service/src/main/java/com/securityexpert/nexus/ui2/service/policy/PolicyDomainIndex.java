@@ -34,6 +34,8 @@ final class PolicyDomainIndex {
     final List<Map<String, Object>> duplicates = new ArrayList<>();
     final Map<String, List<Map<String, Object>>> rules = new HashMap<>(), groups = new HashMap<>();
     final Map<String, String> aliases = new HashMap<>();
+    /** Domain-inventory rows by vendor uid (excluding snapshot-only objects), for resolving dictionary misses. */
+    private final Map<String, Map<String, Object>> inventoryRows = new HashMap<>();
     final List<CpObjectInventory> inventories;
     final List<PolicySnapshot> snapshots;
 
@@ -169,6 +171,17 @@ final class PolicyDomainIndex {
             row.put("usageReasons", List.copyOf(usageReasons));
             objects.add(Collections.unmodifiableMap(row));
         }
+        for (var row : objects) if (inventoryUids.contains((String) row.get("uid"))) inventoryRows.put((String) row.get("uid"), row);
+    }
+
+    /**
+     * The domain-inventory row a package-snapshot reference (object id or vendor uid) resolves to, or null.
+     * Group members that the rulebase dictionary did not carry are resolved here; the inventory is the same domain's
+     * management listing, collected separately, so callers label the result with its provenance.
+     */
+    Map<String, Object> inventoryObject(String reference) {
+        String uid = aliases.get(reference);
+        return uid == null ? null : inventoryRows.get(uid);
     }
 
     /** Per-viewer search/sort projection, computed once per index instead of once per comparison. */

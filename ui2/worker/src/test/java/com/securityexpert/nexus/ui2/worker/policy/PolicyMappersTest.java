@@ -47,6 +47,54 @@ class PolicyMappersTest {
         assertNotEquals(ref("x", "01"), ref("x", "1"));
         assertNotEquals(ref("a:b", "c"), ref("a", "b:c"));
     }
+    /** G5: dictionary classes the approved reads already return are typed; the rest keep their vendor class, fail closed. */
+    @Test void checkpointTypesApprovedDictionaryClassesAndKeepsTheVendorClassOfTheRest() throws Exception {
+        var page = new ObjectMapper().readTree("""
+            {"uid":"layer-01","name":"Synthetic access","from":1,"to":1,"total":1,
+             "objects-dictionary":[
+               {"uid":"svc-icmp6","type":"service-icmp6","name":"Synthetic echo6","icmp-type":128},
+               {"uid":"svc-other","type":"service-other","name":"Synthetic other"},
+               {"uid":"svc-sctp","type":"service-sctp","name":"Synthetic sctp","port":"2905"},
+               {"uid":"svc-dce","type":"service-dce-rpc","name":"Synthetic dce"},
+               {"uid":"svc-rpc","type":"service-rpc","name":"Synthetic rpc"},
+               {"uid":"gw-1","type":"simple-gateway","name":"GW-TANGO-01","ipv4-address":"192.0.2.1"},
+               {"uid":"cl-1","type":"CpmiGatewayCluster","name":"CLS-ROMEO-01","ipv4-address":"192.0.2.2"},
+               {"uid":"role-1","type":"access-role","name":"Synthetic role"},
+               {"uid":"dyn-1","type":"dynamic-object","name":"Synthetic dynamic"},
+               {"uid":"dns-1","type":"dns-domain","name":".example.test"},
+               {"uid":"zone-1","type":"security-zone","name":"Synthetic zone"},
+               {"uid":"upd-1","type":"updatable-object","name":"Synthetic feed"},
+               {"uid":"app-1","type":"application-site","name":"Synthetic app"},
+               {"uid":"cat-1","type":"application-site-category","name":"Synthetic category"},
+               {"uid":"appg-1","type":"application-site-group","name":"Synthetic apps","members":["app-1","cat-1"]},
+               {"uid":"accept-01","type":"RulebaseAction","name":"Accept"},
+               {"uid":"log-01","type":"Track","name":"Log"},
+               {"uid":"targets-01","type":"Global","name":"Policy Targets"},
+               {"uid":"odd-1","type":"CpmiSyntheticFuture","name":"Synthetic future"},
+               {"uid":"bad-1","type":"bad type;","name":"Synthetic malformed"}],
+             "rulebase":[{"uid":"rule-001","type":"access-rule","rule-number":1,"source":["role-1"],"destination":["gw-1"],
+               "service":["appg-1"],"action":"accept-01","track":{"type":"log-01"},"install-on":["targets-01"]}]}
+            """);
+        var objects = new CheckPointPolicyMapper().map(metadata("CP"), List.of(page)).objects();
+        java.util.function.Function<String, PolicyObject> object = uid -> objects.get(ref("policy-1", "object", uid));
+        for (String uid : List.of("svc-icmp6", "svc-other", "svc-sctp", "svc-dce", "svc-rpc")) {
+            assertEquals("service", object.apply(uid).type(), uid); assertEquals("RESOLVED", object.apply(uid).status(), uid);
+        }
+        assertEquals(List.of("protocol: sctp", "port: 2905"), object.apply("svc-sctp").values());
+        for (String uid : List.of("gw-1", "cl-1")) { assertEquals("gateway", object.apply(uid).type()); assertEquals("RESOLVED", object.apply(uid).status()); }
+        for (String uid : List.of("role-1", "dyn-1", "dns-1", "zone-1", "upd-1")) assertEquals("DYNAMIC", object.apply(uid).status(), uid);
+        assertEquals("access-role", object.apply("role-1").type()); assertEquals("security-zone", object.apply("zone-1").type());
+        assertEquals("application", object.apply("app-1").type()); assertEquals("application", object.apply("cat-1").type());
+        assertEquals("application-group", object.apply("appg-1").type()); assertEquals(2, object.apply("appg-1").members().size());
+        assertEquals("action", object.apply("accept-01").type()); assertEquals("track", object.apply("log-01").type());
+        // Policy Targets ("Global") means every package target: it is not an atomic target, so it stays unsupported.
+        for (String uid : List.of("targets-01", "odd-1", "bad-1")) {
+            assertEquals("unresolved", object.apply(uid).type(), uid); assertEquals("UNSUPPORTED", object.apply(uid).status(), uid);
+        }
+        assertEquals(List.of("native-type: Global"), object.apply("targets-01").values());
+        assertEquals(List.of("native-type: CpmiSyntheticFuture"), object.apply("odd-1").values());
+        assertEquals(List.of("native-type: UNKNOWN"), object.apply("bad-1").values());
+    }
     @Test void checkpointRejectsMissingPagesAndRetainsRepeatedInlineOccurrences() throws Exception {
         var json = new ObjectMapper().readTree(fixture("check-point.json"));
         var first = (com.fasterxml.jackson.databind.node.ObjectNode) json.get(0);
