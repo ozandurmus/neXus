@@ -4,6 +4,7 @@ import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
 import { PolicyScreen } from "../src/screens/PolicyScreen";
 import { reportPolicyLoadError } from "../src/screens/PolicyRuleViewer";
+import { findButtonByText, findByAria, getByAria } from "./fastQueries";
 import responses from "./fixtures/policy-live/aiview-responses.json";
 
 const page = JSON.parse(responses["/api/v2/policy/policies/{id}?page=0&q="]);
@@ -32,28 +33,29 @@ function mountLive(override?: (path: string) => Response | undefined) {
 }
 
 async function navigate() {
-  fireEvent.click(await screen.findByRole("button", { name: sources.sources.find((source: { sourceId: string }) => source.sourceId === page.metadata.sourceId).sourceName }));
-  fireEvent.click(await screen.findByRole("button", { name: page.metadata.containerName }));
-  fireEvent.click(await screen.findByRole("button", { name: `Policy ${page.metadata.name}` }));
+  fireEvent.click(await findButtonByText(sources.sources.find((source: { sourceId: string }) => source.sourceId === page.metadata.sourceId).sourceName));
+  fireEvent.click(await findButtonByText(page.metadata.containerName));
+  fireEvent.click(await findByAria(`Policy ${page.metadata.name}`));
 }
 
 it("renders the masked live policy page, rule details and empty history without load errors", async () => {
   const { fetch, debug, container } = mountLive();
   await navigate();
-  const rulebase = await screen.findByRole("region", { name: "Policy rulebase" });
+  const rulebase = await findByAria("Policy rulebase");
   expect(rulebase.querySelectorAll("[data-policy-rule]").length).toBeGreaterThan(0);
-  expect(within(rulebase).getByRole("button", { name: "▾ Device-group post-rules · 866" })).toHaveAttribute("aria-expanded", "true");
+  expect(within(rulebase).getByText("▾ Device-group post-rules · 866", { selector: "button" })).toHaveAttribute("aria-expanded", "true");
   expect(within(rulebase).getByText("5 empty sections")).toBeInTheDocument();
-  expect(within(rulebase).getByRole("columnheader", { name: "Application" })).toBeInTheDocument();
+  expect(within(rulebase).getByText("Application", { selector: "th" })).toBeInTheDocument();
   expect(screen.getByText("Page 1 of 5 · 866 rules")).toBeInTheDocument();
   expect(container.textContent).not.toMatch(/could not be loaded/i);
-  const row = within(rulebase).getByRole("row", { name: `Rule ${rule.number}: ${rule.name}` });
+  const row = getByAria(rulebase, `Rule ${rule.number}: ${rule.name}`);
+  expect(row.tagName).toBe("TR");
   expect(row.querySelector('[data-column="permissiveness"]')).toHaveTextContent("High");
   expect(row.querySelector('[data-column="hygiene"]')).toHaveTextContent("UNKNOWN");
   fireEvent.click(row);
-  const drawer = within(rulebase).getByRole("region", { name: `Rule ${rule.number} details` });
+  const drawer = getByAria(rulebase, `Rule ${rule.number} details`);
   expect(within(drawer).getByText("Enabled: UNKNOWN")).toBeInTheDocument();
-  fireEvent.click(within(drawer).getByRole("button", { name: "Rule history" }));
+  fireEvent.click(within(drawer).getByText("Rule history", { selector: "button" }));
   expect(await within(drawer).findByText("No recorded changes.")).toBeInTheDocument();
   expect(fetch.mock.calls.some(([url]) => url.includes(`history?rule=${rule.id}&page=0`))).toBe(true);
   expect(document.body.textContent).not.toMatch(/could not be loaded/i);
@@ -73,11 +75,11 @@ it.each([
     ? new Response(JSON.stringify({ error: "Withheld in AIView" }), { status: Number(status) }) : undefined);
   if (scope !== "snapshots") await navigate();
   if (scope === "object" || scope === "history") {
-    const rulebase = await screen.findByRole("region", { name: "Policy rulebase" });
-    fireEvent.click(within(rulebase).getByRole("row", { name: `Rule ${rule.number}: ${rule.name}` }));
-    const drawer = within(rulebase).getByRole("region", { name: `Rule ${rule.number} details` });
-    fireEvent.click(within(drawer).getByRole("button", { name: scope === "object" ? "Objects" : "Rule history" }));
-    if (scope === "object") fireEvent.click(within(drawer).getAllByRole("button").find(button => button.textContent === page.objects[0].name)!);
+    const rulebase = await findByAria("Policy rulebase");
+    fireEvent.click(getByAria(rulebase, `Rule ${rule.number}: ${rule.name}`));
+    const drawer = getByAria(rulebase, `Rule ${rule.number} details`);
+    fireEvent.click(within(drawer).getByText(scope === "object" ? "Objects" : "Rule history", { selector: "button" }));
+    if (scope === "object") fireEvent.click(within(drawer).getByText(page.objects[0].name, { selector: "button" }));
   }
   const error = await screen.findByText(String(message));
   const code = status === 200 ? "INVALID_RESPONSE_SHAPE" : "HTTP_503";
