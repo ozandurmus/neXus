@@ -4,7 +4,7 @@ import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
 import { PolicyScreen } from "../src/screens/PolicyScreen";
 import { reportPolicyLoadError } from "../src/screens/PolicyRuleViewer";
-import { findButtonByText, findByAria, getByAria } from "./fastQueries";
+import { expandByText, findButtonByText, findByAria, getByAria } from "./fastQueries";
 import responses from "./fixtures/policy-live/aiview-responses.json";
 
 const page = JSON.parse(responses["/api/v2/policy/policies/{id}?page=0&q="]);
@@ -33,7 +33,7 @@ function mountLive(override?: (path: string) => Response | undefined) {
 }
 
 async function navigate() {
-  fireEvent.click(await findButtonByText(sources.sources.find((source: { sourceId: string }) => source.sourceId === page.metadata.sourceId).sourceName));
+  await expandByText(sources.sources.find((source: { sourceId: string }) => source.sourceId === page.metadata.sourceId).sourceName);
   fireEvent.click(await findButtonByText(page.metadata.containerName));
   fireEvent.click(await findByAria(`Policy ${page.metadata.name}`));
 }

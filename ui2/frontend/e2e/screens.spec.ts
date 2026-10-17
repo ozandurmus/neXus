@@ -26,8 +26,10 @@ async function screenHasData(page: Page, screen: ScreenId, settleReads: () => Pr
       let selected = false;
       for (let s = 0; s < await sources.count() && !selected; s++) {
         const source = sources.nth(s);
-        await source.getByRole("button", { expanded: false }).first().click();
-        await settleReads();
+        // The first source opens on its own; the source header is always the first button in its group.
+        const header = source.getByRole("button").first();
+        if (await header.getAttribute("aria-expanded") === "false") { await header.click(); await settleReads(); }
+        await expect(header).toHaveAttribute("aria-expanded", "true");
         const containers = source.getByRole("group", { name: "Policy container", exact: true });
         if (await containers.count() === 0) {
           await expect(source.getByText("No policy containers in this snapshot.", { exact: true })).toBeVisible();

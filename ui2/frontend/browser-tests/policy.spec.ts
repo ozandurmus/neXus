@@ -47,13 +47,15 @@ test("policy local: 54 containers, three tabs, rule table with inline details, r
   await page.goto("/?screen=policy");
   await expect(page.getByText("Panorama · 54 containers")).toBeVisible();
   await expect(page.getByText("Collected · 2 h ago")).toBeVisible();
-  await page.getByRole("button", { name: "MGR-BRAVO-01" }).click();
+  // The first source opens on its own and the right pane lists every stored container until one is opened.
+  await expect(page.getByRole("button", { name: "MGR-BRAVO-01" })).toHaveAttribute("aria-expanded", "true");
   await expect(page.getByRole("group", { name: "Policy container", exact: true })).toHaveCount(54);
+  await expect(page.getByRole("region", { name: "Stored policy containers", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "DOM-TANGO-53", exact: true }).click();
   await page.getByRole("button", { name: "Policy POL-ALPHA-53", exact: true }).click();
   await expect(page.getByRole("region", { name: "Policy content", exact: true })
     .getByRole("region", { name: "Policy rulebase", exact: true })).toBeVisible();
-  await page.getByRole("textbox", { name: "Search sources, containers and policies" }).fill("POL-ALPHA-53");
+  await page.getByRole("textbox", { name: "Search containers, policies" }).fill("POL-ALPHA-53");
   await expect(page.getByRole("group", { name: "Policy container", exact: true })).toHaveCount(1);
   await page.getByRole("button", { name: "Policy POL-ALPHA-53", exact: true }).click();
   await expect(page.getByRole("region", { name: "Policy rulebase" })).toBeVisible();
@@ -94,9 +96,10 @@ test("policy local: 54 containers, three tabs, rule table with inline details, r
   await page.getByRole("tab", { name: "Rules", exact: true }).click();
   await expect(page.getByRole("region", { name: "Policy rulebase" })).toBeVisible();
   await page.getByRole("checkbox", { name: "Select DOM-TANGO-53" }).check();
-  await expect(page.getByRole("button", { name: "Collect selected" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Selection actions" }).click();
+  await expect(page.getByRole("menuitem", { name: "Collect selected" })).toHaveCount(0);
   const download = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Export selected rules (CSV)" }).click();
+  await page.getByRole("menuitem", { name: "Export selected rules (CSV)" }).click();
   expect((await download).suggestedFilename()).toBe("selected-policy-rules.csv");
   await expect(page.getByText("Exported 1 rules.")).toBeVisible();
   expect(loadErrorText.test(await page.locator("body").innerText())).toBe(false);

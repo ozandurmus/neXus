@@ -30,7 +30,7 @@ it("opens all three tabs, retains Rules and sends hit filters alongside the exis
     return new Response(JSON.stringify(body), { status: 200, headers: { "X-Nexus-Masked": "true" } });
   });
   vi.stubGlobal("fetch", request); mount(<PolicyScreen />);
-  fireEvent.click(await screen.findByRole("button", { name: metadata.sourceName }));
+  await screen.findByRole("button", { name: metadata.sourceName, expanded: true });
   fireEvent.click(screen.getByRole("button", { name: metadata.containerName }));
   fireEvent.click(screen.getByRole("button", { name: `Policy ${metadata.name}` }));
   await screen.findByRole("region", { name: "Policy rulebase" });

@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 
 /**
  * Lookups that stay cheap on a large page. jsdom has no layout, but Testing Library's role-with-name and label queries
@@ -19,6 +19,13 @@ export function findByAria(label: string, root: ParentNode = document.body): Pro
 /** A button identified by its own text (not its aria-label). */
 export function findButtonByText(text: string): Promise<HTMLElement> {
   return screen.findByText(text, { selector: "button" });
+}
+
+/** Ensure a tree node button (source or container) is expanded: opens it only when it is collapsed, so auto-expanded nodes are not toggled shut. */
+export async function expandByText(text: string): Promise<HTMLElement> {
+  const button = await findButtonByText(text);
+  if (button.getAttribute("aria-expanded") === "false") fireEvent.click(button);
+  return button;
 }
 
 /** A form field named by a visible <label> (e.g. an MUI TextField label), resolved through the label's `for` id. */
