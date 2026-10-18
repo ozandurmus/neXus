@@ -22,6 +22,7 @@ const mount = (contexts: unknown[], vsys: string[] = ["vsys1", "vsys2"]) => rend
     <InterfacesPanel contexts={contexts as never} virtualSystems={vsys} member={{ device_id: "pa-1", hostname: "FW-SYNTH-PA" }} isPaloAlto />
   </ThemeProvider>);
 const group = (label: string) => document.querySelector(`[data-vsys-group="${label}"]`) as HTMLElement;
+void render;
 
 describe("grouped by VSYS", () => {
   it("has one header row per VSYS with its counts, and no VSYS column", () => {
@@ -63,6 +64,32 @@ describe("grouped by VSYS", () => {
   it("does not collapse a physical group that is the only group", () => {
     mount([physical], []);
     expect(screen.getByText("ethernet1/1")).toBeInTheDocument();
+  });
+
+  it("lets the group header's name span the row instead of cutting it (post-release review 2026-10-18, R18)", () => {
+    const long = ctx("VS-BRAVO-07-82-WITH-A-LONG-NAME", [iface("ethernet9/1", "203.0.113.1/24")]);
+    mount([physical, long], ["VS-BRAVO-07-82-WITH-A-LONG-NAME"]);
+    const header = group("VS: VS-BRAVO-07-82-WITH-A-LONG-NAME");
+    expect(header.querySelector("td")).toHaveAttribute("colspan");
+    const tag = header.querySelector('[data-scope-tag="full"]') as HTMLElement;
+    expect(tag).toHaveTextContent("VS-BRAVO-07-82-WITH-A-LONG-NAME");
+    expect(getComputedStyle(tag).maxWidth).toBe("none");
+  });
+});
+
+describe("FortiGate VDOMs grouped the same way (post-release review 2026-10-18, 1.8)", () => {
+  const vdom = (name: string, interfaces: ReturnType<typeof iface>[]) => ({ context: name, vs_name: null, ha: null, routes: [], interfaces });
+  it("has one header row per VDOM, every row reachable, and no Physical group when every context is a VDOM", () => {
+    render(
+      <ThemeProvider theme={m3Theme}>
+        <InterfacesPanel contexts={[vdom("root", [iface("port1", "192.0.2.1/24"), iface("port2")]), vdom("dmz", [iface("port3", "198.51.100.1/24")])] as never}
+          virtualSystems={["root", "dmz"]} member={{ device_id: "fg-1", hostname: "FW-SYNTH-FG" }} groupByContext />
+      </ThemeProvider>);
+    expect(group("VDOM: root")).toHaveTextContent("2 interfaces · 1 with an address");
+    expect(group("VDOM: dmz")).toHaveTextContent("1 interface · 1 with an address");
+    expect(group("Physical / VS0")).toBeNull();
+    for (const name of ["port1", "port2", "port3"]) expect(screen.getByText(name)).toBeInTheDocument();
+    expect(screen.getByText("Interfaces · 3 of 3 shown · Active only")).toBeInTheDocument();
   });
 });
 

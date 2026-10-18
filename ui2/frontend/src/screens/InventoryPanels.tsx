@@ -22,13 +22,13 @@ import type { Tone } from "../shell/tone";
 import { M3Button, M3Tabs, StatusChip } from "../shell/M3Widgets";
 import { PLANE_COLLECT, PLANE_OPERATIONS, ROLE_REFUSAL, useRoleAllows } from "../shell/actionAccess";
 import { bytesTitle, formatBytes } from "../shell/bytes";
-import { formatUtc, relativeAge } from "../shell/time";
+import { formatStamp, relativeAge } from "../shell/time";
 import { plural } from "../shell/plural";
 import { deviceNameLabel, jobPhaseLabel, isTerminalJobState, enrollmentStateLabel, onboardingChip } from "../shell/deviceCopy";
 import { MONO, m3 } from "../theme/m3Theme";
 import { RoleChip, Ts, VendorBadge, vendorDisplayName } from "../shell/States";
-import { ReferenceCell, clusterContextLinks, DeviceIdentityTable, deviceLiveWithInventory, orderMembers, vsListOf } from "./DeviceShared";
-import { JobStatusIndicator } from "../shell/JobStatusIndicator";
+import { ReferenceCell, clusterContextLinks, DeviceIdentityTable, deviceLiveWithInventory, knownHaRole, liveBasis, orderMembers, vsListOf } from "./DeviceShared";
+import { JobStatusIndicator, latestJobSentence } from "../shell/JobStatusIndicator";
 import {
   getDevice,
   getDeviceInventory,
@@ -301,7 +301,7 @@ const IDENTITY_TRANSPORT_WORDS: Readonly<Record<string, string>> = {
 export function identityBadge(device: { readonly vendor_hint?: string; readonly identity_check?: IdentityCheckView }):
   { readonly tone: Tone; readonly label: string; readonly title: string } {
   const check = device.identity_check;
-  const when = check?.checked_at ? ` (${formatUtc(check.checked_at, false)} GMT+3)` : "";
+  const when = check?.checked_at ? ` (${formatStamp(check.checked_at)})` : "";
   const what = IDENTITY_TRANSPORT_WORDS[check?.basis ?? ""] ?? "pinned identity";
   if (check?.state === "VERIFIED") {
     return { tone: "ok", label: "✓ Identity verified", title: `The last connection presented the pinned ${what}${when}.` };
@@ -611,12 +611,16 @@ const PHYSICAL_GROUP_LABEL = "Physical / VS0";
 /** The routing tables page at this many routes. */
 export const ROUTES_PAGE_SIZE = 50;
 
-/** A virtual system / VDOM scope in a table cell: the name only (the column header says VSYS), cut with an ellipsis, full text on hover. */
-function ScopeTag({ label }: { readonly label: string }) {
+/**
+ * A virtual system / VDOM scope in a table cell: the name only (the column header says VSYS), cut with an ellipsis, full
+ * text on hover. `full` is for a group header row that spans the table (post-release review 2026-10-18, R18): there the
+ * name has the whole row and is never cut.
+ */
+function ScopeTag({ label, full = false }: { readonly label: string; readonly full?: boolean }) {
   const name = label.replace(/^(?:VSYS|VS|VDOM):\s*/i, "");
   return (
-    <Box component="span" title={label}
-      sx={{ display: "inline-block", maxWidth: 132, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", verticalAlign: "middle",
+    <Box component="span" title={label} data-scope-tag={full ? "full" : "cell"}
+      sx={{ display: "inline-block", maxWidth: full ? "none" : 132, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", verticalAlign: "middle",
             px: 1, height: 22, lineHeight: "22px", borderRadius: "8px", fontSize: 11, fontWeight: 500, bgcolor: m3.scHigh, color: m3.onSurface }}>
       {name}
     </Box>
@@ -912,7 +916,7 @@ function ClusterInterfacesTable({
                       sx={{ all: "unset", boxSizing: "border-box", width: "100%", display: "flex", alignItems: "center", gap: 1, px: 1, py: 0.75, cursor: "pointer",
                         "&:focus-visible": { outline: `2px solid ${m3.primary}`, outlineOffset: -2 } }}>
                       <Box component="span" aria-hidden sx={{ color: m3.onSurfaceVar, width: 12 }}>{open ? "▾" : "▸"}</Box>
-                      <ScopeTag label={group.label} />
+                      <ScopeTag label={group.label} full />
                       <Typography component="span" variant="body2" sx={{ color: m3.onSurfaceVar }}>
                         {plural(group.rows.length, "interface")} · {withAddress} with an address{!open ? " · collapsed" : ""}
                       </Typography>
@@ -1068,7 +1072,7 @@ function ClusterRoutesTable({
         <Table size="small">
           <TableHead>
             <TableRow>
-              {showVsysColumn && <TableCell sx={{ fontWeight: 600 }}>VSYS</TableCell>}
+              {showVsysColumn && <TableCell sx={{ fontWeight: 600 }}>{routes.some((r) => r.vsysLabel?.startsWith("VDOM:")) ? "VDOM" : "VSYS"}</TableCell>}
               <TableCell sx={{ fontWeight: 600 }}>Destination</TableCell>
               <TableCell sx={{ fontWeight: 600 }}>Next hop</TableCell>
               <TableCell sx={{ fontWeight: 600 }}>Interface</TableCell>
@@ -1344,12 +1348,28 @@ export function buildUnifiedContextTabs<T extends { context: string; vs_name?: s
   return { tabs, resolveContext };
 }
 
+/**
+ * The group label of a merged, all-context table: the unified tab label for a virtual system (`VSYS: vsys1`,
+ * `Physical / VS0`), `VDOM: root` for a FortiGate VDOM, whose contexts are the VDOM names themselves.
+ */
+function scopeGroupLabel(tabLabel: string, isPaloAlto: boolean): string {
+  if (isPaloAlto || tabLabel === PHYSICAL_GROUP_LABEL) return tabLabel;
+  return `VDOM: ${tabLabel.replace(/^(?:VSYS|VS|VSID):\s*/, "")}`;
+}
+
+/** A FortiGate's `root` VDOM leads the grouped table (it is the management VDOM); the unified tabs otherwise sort by name. */
+function rootFirst<T extends { readonly context: string }>(tabs: readonly T[], groupByContext: boolean): readonly T[] {
+  if (!groupByContext) return tabs;
+  return [...tabs].sort((a, b) => Number(b.context.toLowerCase() === "root") - Number(a.context.toLowerCase() === "root"));
+}
+
 export function InterfacesPanel({
   contexts,
   virtualSystems,
   activeContext,
   onSelectContext,
   isPaloAlto = false,
+  groupByContext = false,
   member,
   headerHaRole,
 }: {
@@ -1358,6 +1378,8 @@ export function InterfacesPanel({
   readonly activeContext?: string | null;
   readonly onSelectContext?: (ctx: string) => void;
   readonly isPaloAlto?: boolean;
+  /** Fortinet (post-release review 2026-10-18, 1.8): every VDOM in one table, grouped by VDOM like Palo Alto's virtual systems. */
+  readonly groupByContext?: boolean;
   readonly member: { readonly device_id: string; readonly hostname?: string | null };
   /** The HA role the device header already states, so the per-context line does not repeat it. */
   readonly headerHaRole?: string | null;
@@ -1371,6 +1393,7 @@ export function InterfacesPanel({
       />
     );
   }
+  const grouped = isPaloAlto || groupByContext;
   const vsList = Array.isArray(virtualSystems)
     ? virtualSystems
     : typeof virtualSystems === "string"
@@ -1387,7 +1410,7 @@ export function InterfacesPanel({
   // tab-strip chrome here for either vendor: the left sidebar's own VS/VSYS sub-navigation already
   // sets activeContext for this device (DeviceList), so a second selector in the panel would just
   // duplicate it.
-  if (!isPaloAlto) {
+  if (!grouped) {
     // A device whose contexts are its members (an Infoblox grid, V72) has no "physical" context: show the first one
     // until the sidebar selects a member.
     const context = resolveContext(activeContext ?? "physical") ?? (activeContext ? undefined : contexts[0]);
@@ -1402,10 +1425,10 @@ export function InterfacesPanel({
   }
 
   if (!activeContext) {
-    const merged = tabs.flatMap((tab) => {
+    const merged = rootFirst(tabs, groupByContext).flatMap((tab) => {
       const found = resolveContext(tab.context);
       if (!found) return [];
-      return toClusterContexts([found], member.device_id)[0].interfaces.map((iface) => ({ ...iface, vsysLabel: tab.label }));
+      return toClusterContexts([found], member.device_id)[0].interfaces.map((iface) => ({ ...iface, vsysLabel: scopeGroupLabel(tab.label, isPaloAlto) }));
     });
     return (
       <Stack spacing={1}>
@@ -1428,6 +1451,7 @@ export function RoutesPanel({
   activeContext,
   onSelectContext,
   isPaloAlto = false,
+  groupByContext = false,
   member,
 }: {
   readonly contexts: readonly InventoryContext[];
@@ -1435,6 +1459,8 @@ export function RoutesPanel({
   readonly activeContext?: string | null;
   readonly onSelectContext?: (ctx: string) => void;
   readonly isPaloAlto?: boolean;
+  /** Fortinet: every VDOM's routes in one table with a VDOM column, as the header's route count is their sum (1.8). */
+  readonly groupByContext?: boolean;
   readonly member: { readonly device_id: string; readonly hostname?: string | null };
 }) {
   const members = [member];
@@ -1446,6 +1472,7 @@ export function RoutesPanel({
       />
     );
   }
+  const grouped = isPaloAlto || groupByContext;
   const vsList = Array.isArray(virtualSystems)
     ? virtualSystems
     : typeof virtualSystems === "string"
@@ -1456,7 +1483,7 @@ export function RoutesPanel({
     [contexts, vsList]
   );
 
-  if (!isPaloAlto) {
+  if (!grouped) {
     // A device whose contexts are its members (an Infoblox grid, V72) has no "physical" context: show the first one
     // until the sidebar selects a member.
     const context = resolveContext(activeContext ?? "physical") ?? (activeContext ? undefined : contexts[0]);
@@ -1464,10 +1491,10 @@ export function RoutesPanel({
   }
 
   if (!activeContext) {
-    const merged = tabs.flatMap((tab) => {
+    const merged = rootFirst(tabs, groupByContext).flatMap((tab) => {
       const found = resolveContext(tab.context);
       if (!found) return [];
-      return toClusterContexts([found], member.device_id)[0].routes.map((route) => ({ ...route, vsysLabel: tab.label }));
+      return toClusterContexts([found], member.device_id)[0].routes.map((route) => ({ ...route, vsysLabel: scopeGroupLabel(tab.label, isPaloAlto) }));
     });
     return <ClusterRoutesTable routes={merged} members={members} />;
   }
@@ -1852,11 +1879,14 @@ const SCOPE_NOUN: Readonly<Record<string, string>> = {
  * is counted.
  */
 export function interfaceRouteCounts(contexts: readonly CountedContext[], vendorHint: string | null | undefined, scope?: CountedContext | null):
-  { readonly interfaces: number; readonly elsewhere: number; readonly routes: number } {
+  { readonly interfaces: number; readonly elsewhere: number; readonly routes: number; readonly scopes?: number } {
   const listed = (c: CountedContext) => c.interfaces.filter((i) => i.kind !== "loopback").length;
   if (scope) return { interfaces: listed(scope), elsewhere: 0, routes: scope.routes.length };
-  if (vendorHint === "palo_alto") {
-    return { interfaces: contexts.reduce((n, c) => n + listed(c), 0), elsewhere: 0, routes: contexts.reduce((n, c) => n + c.routes.length, 0) };
+  // Palo Alto's and Fortinet's tabs open on every virtual system / VDOM grouped in one table (F-19; post-release review
+  // 2026-10-18, 1.8), so the headline is the sum and the number of scopes is said beside it.
+  if (vendorHint === "palo_alto" || vendorHint === "fortinet") {
+    return { interfaces: contexts.reduce((n, c) => n + listed(c), 0), elsewhere: 0, routes: contexts.reduce((n, c) => n + c.routes.length, 0),
+      scopes: vendorHint === "fortinet" && contexts.length > 1 ? contexts.length : undefined };
   }
   const first = contexts.find((c) => c.context.toLowerCase() === "physical" || c.context === "0") ?? contexts[0];
   const elsewhere = contexts.filter((c) => c !== first).reduce((n, c) => n + listed(c), 0);
@@ -1865,21 +1895,51 @@ export function interfaceRouteCounts(contexts: readonly CountedContext[], vendor
 
 export function interfaceRouteLabel(counts: ReturnType<typeof interfaceRouteCounts>, vendorHint: string | null | undefined): string {
   const where = counts.elsewhere > 0 ? ` · ${counts.elsewhere} in ${SCOPE_NOUN[vendorHint ?? ""] ?? "other contexts"}` : "";
-  return `${plural(counts.interfaces, "interface")}${where} · ${plural(counts.routes, "route")}`;
+  const scopes = counts.scopes ? ` · in ${counts.scopes} ${SCOPE_NOUN[vendorHint ?? ""] ?? "contexts"}` : "";
+  return `${plural(counts.interfaces, "interface")}${where}${scopes} · ${plural(counts.routes, "route")}`;
 }
 
 /**
  * One HA statement per device (UI review 2026-10-18, P0-5B): a named but unconfirmed peer and the observed role read as
  * one sentence instead of three pills (`Standalone`, `HA peer named, not confirmed`, `PRIMARY`). A management server
- * has no HA role to show (PO decision 3: data a device does not have is not shown).
+ * has no HA role to show (PO decision 3: data a device does not have is not shown), and a gateway outside a cluster
+ * whose collector wrote UNKNOWN or STANDALONE has none either (post-release review 2026-10-18, R9): the form pill
+ * already says `Standalone`.
  */
 export function haStatement(device: { readonly ha_peer_unconfirmed?: boolean; readonly ha_role: string | null; readonly cluster_member_ref: string | null; readonly role?: string }):
   { readonly kind: "statement"; readonly text: string } | { readonly kind: "role"; readonly role: string } | null {
   if (device.role === "management_server") return null;
+  const role = knownHaRole(device);
   if (device.ha_peer_unconfirmed && !device.cluster_member_ref) {
-    return { kind: "statement", text: device.ha_role ? `HA: peer named, not confirmed · observed role ${device.ha_role.trim().toUpperCase()}` : "HA: peer named, not confirmed" };
+    return { kind: "statement", text: role ? `HA: peer named, not confirmed · observed role ${role}` : "HA: peer named, not confirmed" };
   }
+  if (!device.cluster_member_ref) return role ? { kind: "role", role: device.ha_role! } : null;
   return device.ha_role ? { kind: "role", role: device.ha_role } : null;
+}
+
+/**
+ * One platform pill (R13): `Quantum 29200 · R81.20 · Gaia` instead of a model pill and a version pill. Nothing is
+ * dropped; the two facts share a pill. Null when neither is known (the Identity grid then says Not read yet).
+ */
+export function platformPillLabel(device: Pick<DeviceSummary, "vendor_hint" | "model" | "platform_family" | "software_version">): string | null {
+  const os = device.vendor_hint === "palo_alto" ? " · PAN-OS" : device.vendor_hint === "check_point" ? " · Gaia" : "";
+  const parts = [device.model || device.platform_family || null, device.software_version ? `${device.software_version}${os}` : null].filter((p): p is string => Boolean(p));
+  return parts.length > 0 ? parts.join(" · ") : null;
+}
+
+/** The vendors whose policy the Policy screen collects (its sources are MDS and Panorama). */
+const POLICY_VENDORS: ReadonlySet<string> = new Set(["check_point", "palo_alto"]);
+
+/**
+ * The header's policy link (post-release review 2026-10-18, R10): `Open assigned policy` on a firewall or member whose
+ * vendor's policy neXus collects, `Open policies this server manages →` on its management server, and nothing on an
+ * appliance or a vendor without a policy source -- a link that leads to an empty screen is noise, not capability.
+ */
+export function policyLink(device: { readonly device_id: string; readonly vendor_hint: string; readonly role?: string | null }, href: string | undefined):
+  { readonly href: string; readonly label: string } | null {
+  if (!href || !POLICY_VENDORS.has(device.vendor_hint) || device.role === "appliance") return null;
+  if (device.role === "management_server") return { href, label: "Open policies this server manages →" };
+  return { href, label: "Open assigned policy" };
 }
 
 /**
@@ -1965,10 +2025,12 @@ export function InventoryEntityHeader({
         boxShadow: "none",
       }}
     >
+      {/* The title block takes the width and wraps its pills inside; the action (Collect now) keeps the right edge of the
+          title row instead of dropping to a row of its own (R13: tab content closer to the top). */}
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 2, flexWrap: "wrap" }}>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, minWidth: 0 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, minWidth: 0, flex: "1 1 420px" }}>
           <VendorAvatar vendorHint={vendorHint} model={model} hostname={title} />
-          <Box sx={{ minWidth: 0 }}>
+          <Box sx={{ minWidth: 0, flex: "1 1 auto" }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
               <Typography variant="h5" sx={{ fontWeight: 700, color: m3.onSurface }}>
                 {breadcrumb ?? <>{titlePrefix ? `${titlePrefix} ` : ""}{title}</>}
@@ -2011,27 +2073,44 @@ export function HeaderPillLink({ href, onClick, title, children }: {
 /** A configuration read this much older than the platform read is flagged amber (UI review 2026-10-18, P1-1B). */
 const CONFIG_STALE_AFTER_MS = 24 * 3_600_000;
 
-/** How long ago the platform facts and the configuration were read; the exact times stay in the Platform identity grid. */
-export function HeaderReadAges({ platformAt, config }: {
+/** One member's read times, for the cluster header's read ages (the oldest member is the headline, each member on hover). */
+export interface MemberReadAges { readonly label: string; readonly platformAt: string | null | undefined; readonly configAt?: string | null }
+
+/** The oldest of the given times; null when any of them is missing (an unread member makes the unit unread). */
+export function oldestRead(times: ReadonlyArray<string | null | undefined>): string | null {
+  if (times.length === 0 || times.some((t) => !t)) return null;
+  return times.reduce<string>((oldest, t) => (new Date(t!).getTime() < new Date(oldest).getTime() ? t! : oldest), times[0]!);
+}
+
+/**
+ * How long ago the platform facts and the configuration were read, the exact `YYYY-MM-DD HH:MM GMT+3` on hover (R15);
+ * the full stamps stay in the Platform identity grid. With `members` (a cluster, post-release review 2026-10-18, R13)
+ * the headline is the oldest member's read and the hover lists every member.
+ */
+export function HeaderReadAges({ platformAt, config, members }: {
   readonly platformAt: string | null | undefined;
   /** Omitted when the vendor has no configuration read, or the read could not be fetched (no claim is made then). */
   readonly config?: { readonly at: string | null };
+  readonly members?: readonly MemberReadAges[];
 }) {
-  const stamp = (at: string) => `${formatUtc(at, false)} GMT+3 (exact times are in the Platform identity grid)`;
+  const perMember = (pick: (m: MemberReadAges) => string | null | undefined) =>
+    members && members.length > 0 ? ` · ${members.map((m) => `${m.label} ${pick(m) ? formatStamp(pick(m)) : "not read yet"}`).join(" · ")}` : "";
+  const stamp = (at: string, pick: (m: MemberReadAges) => string | null | undefined) =>
+    `${formatStamp(at)}${members && members.length > 0 ? ` (oldest member)${perMember(pick)}` : " (exact times are in the Platform identity grid)"}`;
   // A configuration read more than a day older than the latest platform read is flagged (P1-1B): the platform moved on, the configuration did not.
   const configBehind = Boolean(config?.at && platformAt) && new Date(platformAt!).getTime() - new Date(config!.at!).getTime() >= CONFIG_STALE_AFTER_MS;
   return (
     <Typography component="div" variant="body2" data-testid="header-read-ages"
       sx={{ color: m3.onSurfaceVar, display: "flex", alignItems: "center", columnGap: 1, rowGap: 0.5, flexWrap: "wrap" }}>
       {platformAt
-        ? <Tooltip title={stamp(platformAt)}><span>Platform read {relativeAge(platformAt)}</span></Tooltip>
-        : <span>Platform not read yet</span>}
+        ? <Tooltip title={stamp(platformAt, (m) => m.platformAt)}><span>Platform read {relativeAge(platformAt)}</span></Tooltip>
+        : <Tooltip title={members && members.length > 0 ? `Not every member has a platform read${perMember((m) => m.platformAt)}` : ""}><span>Platform not read yet</span></Tooltip>}
       {config && <Box component="span" aria-hidden sx={{ color: m3.outline }}>·</Box>}
       {config && (config.at
         ? configBehind
-          ? <Tooltip title={stamp(config.at)}><span><StatusChip tone="warn" label={`Config read ${relativeAge(config.at)}`} dense /></span></Tooltip>
-          : <Tooltip title={stamp(config.at)}><span>Config read {relativeAge(config.at)}</span></Tooltip>
-        : <span>Config not read yet</span>)}
+          ? <Tooltip title={stamp(config.at, (m) => m.configAt)}><span><StatusChip tone="warn" label={`Config read ${relativeAge(config.at)}`} dense /></span></Tooltip>
+          : <Tooltip title={stamp(config.at, (m) => m.configAt)}><span>Config read {relativeAge(config.at)}</span></Tooltip>
+        : <Tooltip title={members && members.length > 0 ? `Not every member has a configuration read${perMember((m) => m.configAt)}` : ""}><span>Config not read yet</span></Tooltip>)}
     </Typography>
   );
 }
@@ -2187,6 +2266,8 @@ export function DeviceInventoryPanels({
 }) {
   const isCluster = device.cluster_member_ref !== null;
   const isPaloAlto = device.vendor_hint === "palo_alto";
+  // A FortiGate's VDOMs are grouped in one table like Palo Alto's virtual systems (post-release review 2026-10-18, 1.8).
+  const isFortinet = device.vendor_hint === "fortinet";
   const hasManagedDevices = device.role === "management_server" &&
     (device.vendor_hint === "bluecoat" || device.vendor_hint === "fortinet");
   // All five manager types (MDS, Panorama, FortiManager, Blue Coat MC, Radware Cyber Controller) show what they manage as
@@ -2285,6 +2366,10 @@ export function DeviceInventoryPanels({
         breadcrumb={scopedName ? <ScopeBreadcrumb parent={deviceNameLabel(device.hostname)} scope={scopedName}
           onParent={() => { setActiveContext(null); onSelectVs?.(null); }} /> : undefined}
         chips={
+          // Two pill rows at most (post-release review 2026-10-18, R13): this identity row -- state word, identity badge,
+          // form (cluster link or vendor · mode), HA, one platform pill, counts -- and the state row below. The job tick,
+          // the member marker and the `Members:` line are gone from here: the latest job is a sentence on the Live
+          // chip's hover, and the members are the cluster page's own cards, one click away through the cluster pill.
           <>
             {scopedName && <VsSwitcher scope={scopedName} scopes={vsNames} onSelect={(next) => { setActiveContext(next); onSelectVs?.(next); }} />}
             <JobStatusIndicator
@@ -2298,54 +2383,54 @@ export function DeviceInventoryPanels({
                 <StatusChip tone={onboardingChip(device.onboarding)!.tone} label={onboardingChip(device.onboarding)!.label} dense />
               </span>
             ) : (
-              <StatusChip
-                tone={isLiveDevice ? "ok" : "warn"}
-                label={!isEnrolledDevice ? enrollmentStateLabel(device.enrollment_state) : isLiveDevice ? "Live" : "Confirmed · Not collected"}
-                dense
-              />
+              <span title={isLiveDevice ? liveBasis(latestJobSentence(device.latest_job_state, device.latest_job_type)) : undefined}>
+                <StatusChip
+                  tone={isLiveDevice ? "ok" : "warn"}
+                  label={!isEnrolledDevice ? enrollmentStateLabel(device.enrollment_state) : isLiveDevice ? "Live" : "Confirmed · Not collected"}
+                  dense
+                />
+              </span>
             )}
             {(() => {
               const badge = identityBadge(device);
               return <span title={badge.title}><StatusChip tone={badge.tone} label={badge.label} dense /></span>;
             })()}
-            {device.cluster_member_ref ? (
-              // The member's way to its parent (roadmap 2.2): the cluster page holds Cluster members, Failover and the side-by-side configuration.
-              <HeaderPillLink title="Open the cluster: its members, failover and the members' configuration side by side"
-                {...(onOpenCluster ? { onClick: () => onOpenCluster(device.cluster_member_ref!) } : { href: `?screen=inventory&cluster_ref=${encodeURIComponent(device.cluster_member_ref)}` })}>
-                {clusterVendorLabel(device.vendor_hint)} · {device.cluster_member_ref}
-              </HeaderPillLink>
-            ) : (
-              <StatusChip
-                tone="neutral"
-                label={`${isPaloAlto ? "Palo Alto" : vendorDisplayName(device.vendor_hint)} · ${device.role === "management_server" ? "Management server"
-                  : device.role === "appliance" ? "Appliance" : "Standalone"}`}
-                dense
-              />
-            )}
             {(() => {
               const ha = haStatement(device);
-              return ha === null ? null : ha.kind === "statement" ? <StatusChip tone="neutral" label={ha.text} dense /> : <RoleChip role={ha.role} dense />;
+              return (
+                <>
+                  {device.cluster_member_ref ? (
+                    // The member's way to its parent (roadmap 2.2): the cluster page holds Cluster members, Failover and the side-by-side configuration.
+                    <HeaderPillLink title="Open the cluster: its members, failover and the members' configuration side by side"
+                      {...(onOpenCluster ? { onClick: () => onOpenCluster(device.cluster_member_ref!) } : { href: `?screen=inventory&cluster_ref=${encodeURIComponent(device.cluster_member_ref)}` })}>
+                      {clusterVendorLabel(device.vendor_hint)} · {device.cluster_member_ref}
+                    </HeaderPillLink>
+                  ) : (
+                    // One HA statement per device (R16): a gateway with a named peer is not called Standalone beside its HA sentence.
+                    <StatusChip
+                      tone="neutral"
+                      label={`${isPaloAlto ? "Palo Alto" : vendorDisplayName(device.vendor_hint)}${device.role === "management_server" ? " · Management server"
+                        : device.role === "appliance" ? " · Appliance" : ha?.kind === "statement" ? "" : " · Standalone"}`}
+                      dense
+                    />
+                  )}
+                  {ha === null ? null : ha.kind === "statement" ? <StatusChip tone="neutral" label={ha.text} dense /> : <RoleChip role={ha.role} dense />}
+                </>
+              );
             })()}
-            {device.software_version && (
-              <StatusChip tone="neutral" label={`${device.software_version}${isPaloAlto ? " · PAN-OS" : device.vendor_hint === "check_point" ? " · Gaia" : ""}`} dense />
-            )}
-            {(device.model || device.platform_family) && <StatusChip tone="neutral" label={(device.model || device.platform_family)!} dense />}
+            {platformPillLabel(device) && <StatusChip tone="neutral" label={platformPillLabel(device)!} dense />}
             {!singleDeviceHasNoNetworkEvidence && <StatusChip tone="neutral" label={interfaceRouteLabel(headerCounts, device.vendor_hint)} dense />}
-            {isCluster && clusterInventory && <ClusterMembersMarker inventory={clusterInventory} />}
           </>
         }
         action={<CollectNowButton deviceId={device.device_id} onCollected={refresh} enrollmentState={device.enrollment_state} />}
         readAges={<HeaderReadAges platformAt={device.platform_facts_observed_at}
           config={configuration && configReadFetch.data ? { at: configReadFetch.data.collected_at } : undefined} />}
         state={<HeaderStateRow facts={stateFacts} trailing={<CertificateStatePill view={certificateFetch.data} />} />}
-        link={policyHref ? <HeaderPillLink href={policyHref}>Open assigned policy</HeaderPillLink> : undefined}
-      >
-        {isCluster && clusterInventory && clusterInventory.members.length > 0 ? (
-          <Typography variant="caption" color="text.secondary">
-            Members: {orderMembers(clusterInventory.members).map((m) => memberLabel(m, clusterInventory.members)).join(" · ")}
-          </Typography>
-        ) : null}
-      </InventoryEntityHeader>
+        link={(() => {
+          const link = policyLink(device, policyHref);
+          return link ? <HeaderPillLink href={link.href}>{link.label}</HeaderPillLink> : undefined;
+        })()}
+      />
 
       <DetailTabs
         ariaLabel="Device detail"
@@ -2364,12 +2449,12 @@ export function DeviceInventoryPanels({
             label: "Interfaces",
             panel: isCluster
               ? <ClusterInterfacesPanel contexts={clusterInventory?.contexts ?? []} members={clusterInventory ? orderMembers(clusterInventory.members) : undefined} virtualSystems={clusterInventory?.virtual_systems} activeContext={activeContext} onSelectContext={setActiveContext} isPaloAlto={isPaloAlto} />
-              : <InterfacesPanel contexts={deviceInventory?.contexts ?? []} virtualSystems={deviceInventory?.virtual_systems ?? device.virtual_systems} activeContext={activeContext} onSelectContext={setActiveContext} isPaloAlto={isPaloAlto} member={device} headerHaRole={device.ha_role} />,
+              : <InterfacesPanel contexts={deviceInventory?.contexts ?? []} virtualSystems={deviceInventory?.virtual_systems ?? device.virtual_systems} activeContext={activeContext} onSelectContext={setActiveContext} isPaloAlto={isPaloAlto} groupByContext={isFortinet} member={device} headerHaRole={device.ha_role} />,
           }, {
             label: "Routing",
             panel: isCluster
               ? <ClusterRoutesPanel contexts={clusterInventory?.contexts ?? []} members={clusterInventory ? orderMembers(clusterInventory.members) : undefined} virtualSystems={clusterInventory?.virtual_systems} activeContext={activeContext} onSelectContext={setActiveContext} isPaloAlto={isPaloAlto} />
-              : <RoutesPanel contexts={deviceInventory?.contexts ?? []} virtualSystems={deviceInventory?.virtual_systems ?? device.virtual_systems} activeContext={activeContext} onSelectContext={setActiveContext} isPaloAlto={isPaloAlto} member={device} />,
+              : <RoutesPanel contexts={deviceInventory?.contexts ?? []} virtualSystems={deviceInventory?.virtual_systems ?? device.virtual_systems} activeContext={activeContext} onSelectContext={setActiveContext} isPaloAlto={isPaloAlto} groupByContext={isFortinet} member={device} />,
           }] : []),
           // The Cluster members tab is a cluster-level fact and lives on the cluster page only (roadmap 2.2); the member's
           // header links there. An Infoblox Grid Manager keeps its own Grid members tab.
@@ -2563,24 +2648,30 @@ export function ClusterDetailPanels({
         chips={
           <>
             {scopedName && <VsSwitcher scope={scopedName} scopes={virtualSystems} onSelect={chooseVs} />}
-            <StatusChip
-              tone={isLive ? "ok" : "warn"}
-              label={!isEnrolled ? "Not enrolled" : isLive ? "Live" : "Confirmed · Not collected"}
-              dense
-            />
+            <span title={isLive ? liveBasis(null) : undefined}>
+              <StatusChip
+                tone={isLive ? "ok" : "warn"}
+                label={!isEnrolled ? "Not enrolled" : isLive ? "Live" : "Confirmed · Not collected"}
+                dense
+              />
+            </span>
             <StatusChip
               tone="neutral"
               label={clusterVendorLabel(firstMember?.vendor_hint)}
               dense
             />
-            {firstMember?.software_version && (
-              <StatusChip tone="neutral" label={`${firstMember.software_version} · ${firstMember?.vendor_hint === "palo_alto" ? "PAN-OS" : "Gaia"}`} dense />
-            )}
-            {(firstMember?.model || firstMember?.platform_family) && <StatusChip tone="neutral" label={(firstMember?.model || firstMember?.platform_family)!} dense />}
+            {firstMember && platformPillLabel(firstMember) && <StatusChip tone="neutral" label={platformPillLabel(firstMember)!} dense />}
             <StatusChip tone="neutral" label={interfaceRouteLabel(headerCounts, firstMember?.vendor_hint)} dense />
           </>
         }
         action={<ClusterCollectNow members={orderedMembers} onCollected={() => { refresh(); setReadsVersion((v) => v + 1); }} />}
+        // The cluster header's read ages (R13 / 2.1): the oldest member's platform and configuration read, each member on hover.
+        readAges={<HeaderReadAges
+          platformAt={oldestRead(orderedMembers.map((m) => m.platform_facts_observed_at))}
+          // No claim about the configuration unless every member's read came back (a refused read on one member is not "not read yet").
+          config={configuration && memberReads.loaded && orderedMembers.every((m) => memberReads.configuration[m.device_id])
+            ? { at: oldestRead(orderedMembers.map((m) => memberReads.configuration[m.device_id]!.collected_at)) } : undefined}
+          members={labelled.map((f) => ({ label: f.label, platformAt: f.member.platform_facts_observed_at, configAt: memberReads.configuration[f.id]?.collected_at ?? null }))} />}
         state={(
           // The "This cluster in:" strip is gone (UI review 2026-10-18, F-21): its links are the state pills themselves.
           <HeaderStateRow facts={clusterFacts}

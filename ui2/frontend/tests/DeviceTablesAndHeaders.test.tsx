@@ -98,9 +98,19 @@ describe("F-5: columns that must not clip", () => {
     // F-19: the merged view is grouped by VSYS, so the group header carries the name and the column is gone
     expect(headers).toEqual(["Interface", "Kind", "VLAN", "Zone", "Address", "Network", "State", "MAC"]);
     expect(parseFloat(getComputedStyle(screen.getByRole("columnheader", { name: "Network" })).minWidth)).toBeGreaterThanOrEqual(100);
-    // the scope tag shows the name only (the column says VSYS), cut by an ellipsis rather than pushing NETWORK off
+    // the group header's scope tag spans the row and is never cut (post-release review 2026-10-18, R18)
     const tag = screen.getAllByText("vsys1")[0];
     expect(tag).toHaveAttribute("title", "VSYS: vsys1");
+    expect(tag).toHaveAttribute("data-scope-tag", "full");
+    expect(getComputedStyle(tag).maxWidth).toBe("none");
+  });
+
+  it("keeps the routes table's scope cell short, cut by an ellipsis with the full name on hover", () => {
+    const route = { destination: "0.0.0.0/0", next_hop: "192.0.2.1", interface: "ethernet1/1", protocol: "static", table: null };
+    const ctx = (name: string) => ({ context: name, vs_name: name, ha: null, interfaces: [], routes: [route] }) as unknown as InventoryContext;
+    render(as(null, <RoutesPanel contexts={[ctx("vsys1"), ctx("vsys2")]} virtualSystems={["vsys1", "vsys2"]} member={{ device_id: "pa-1", hostname: "FW-SYNTH-PA" }} isPaloAlto />));
+    const tag = screen.getAllByText("vsys1")[0];
+    expect(tag).toHaveAttribute("data-scope-tag", "cell");
     expect(getComputedStyle(tag).textOverflow).toBe("ellipsis");
     expect(getComputedStyle(tag).maxWidth).toBe("132px");
   });
@@ -111,7 +121,10 @@ describe("P0-5B: one denominator, one HA statement, plural counts", () => {
 
   it("states both the headline and the interfaces that live in other contexts, never a folded total", () => {
     const contexts = [ctx("root", Array.from({ length: 36 }, (_, i) => `port${i}`), 24), ctx("VS-SEC-62", Array.from({ length: 14 }, (_, i) => `v${i}`), 3), ctx("VS-SEC-38", Array.from({ length: 10 }, (_, i) => `w${i}`), 1)];
-    expect(interfaceRouteLabel(interfaceRouteCounts(contexts, "fortinet"), "fortinet")).toBe("36 interfaces · 24 in VDOMs · 24 routes");
+    // Fortinet's tab groups every VDOM in one table (post-release review 2026-10-18, 1.8), so its denominator is the sum too,
+    // with the number of VDOMs said beside it; a single-VDOM device names no scopes.
+    expect(interfaceRouteLabel(interfaceRouteCounts(contexts, "fortinet"), "fortinet")).toBe("60 interfaces · in 3 VDOMs · 28 routes");
+    expect(interfaceRouteLabel(interfaceRouteCounts([contexts[0]], "fortinet"), "fortinet")).toBe("36 interfaces · 24 routes");
     expect(interfaceRouteLabel(interfaceRouteCounts(contexts, "check_point"), "check_point")).toBe("36 interfaces · 24 in virtual systems · 24 routes");
     // Palo Alto's tab merges every virtual system, so one denominator is the whole sum
     expect(interfaceRouteLabel(interfaceRouteCounts(contexts, "palo_alto"), "palo_alto")).toBe("60 interfaces · 28 routes");
@@ -150,12 +163,27 @@ describe("P0-5B: one denominator, one HA statement, plural counts", () => {
         { context: "VS-SEC-62", vs_name: "VS-SEC-62", ha: null, interfaces: [iface("vdom-a"), iface("vdom-b")], routes: [] }] })
       : json({})));
     render(as(adminPlanes, <DeviceInventoryPanels device={fg} />));
-    expect(await screen.findByText("4 interfaces · 2 in VDOMs · 1 route")).toBeInTheDocument();
+    expect(await screen.findByText("6 interfaces · in 2 VDOMs · 1 route")).toBeInTheDocument();
     expect(screen.getAllByText(/observed role PRIMARY/)).toHaveLength(1);
     expect(screen.queryByText("HA peer named, not confirmed")).toBeNull();
     expect(document.querySelector('[data-role="PRIMARY"]')).toBeNull();
     // the per-context "HA role:" line repeats the header: it is gone
     expect(screen.queryByText("HA role:")).toBeNull();
+    // R16: one HA statement -- the form pill does not also call the device Standalone beside its HA sentence
+    expect(screen.queryByText("Fortinet · Standalone")).toBeNull();
+    expect(screen.getByText("Fortinet")).toBeInTheDocument();
+    // 1.8: the Interfaces tab groups the VDOMs, one header row each, and the header's count is their sum
+    expect(document.querySelector('[data-vsys-group="VDOM: root"]')).toHaveTextContent("4 interfaces");
+    expect(document.querySelector('[data-vsys-group="VDOM: VS-SEC-62"]')).toHaveTextContent("2 interfaces");
+    expect(screen.getByText("Interfaces · 6 of 6 shown · Active only")).toBeInTheDocument();
+  });
+
+  it("says Standalone once for a gateway outside a cluster whose collector wrote an UNKNOWN or STANDALONE role (R9)", () => {
+    expect(haStatement({ ha_role: "UNKNOWN", cluster_member_ref: null })).toBeNull();
+    expect(haStatement({ ha_role: "STANDALONE", cluster_member_ref: null })).toBeNull();
+    expect(haStatement({ ha_role: "UNKNOWN", cluster_member_ref: null, ha_peer_unconfirmed: true })).toEqual({ kind: "statement", text: "HA: peer named, not confirmed" });
+    // a cluster member whose role was not read keeps the word: UNKNOWN is the honest state of a member
+    expect(haStatement({ ha_role: "UNKNOWN", cluster_member_ref: "CLS-SYNTH-01" })).toEqual({ kind: "role", role: "UNKNOWN" });
   });
 });
 

@@ -8,7 +8,7 @@ import { RoleChip, Ts, Unknown } from "../shell/States";
 import { vendorLabel } from "../shell/presenters";
 import { MONO, m3 } from "../theme/m3Theme";
 import type { DeviceSummary } from "../auth/adminApi";
-import { ContentVersions, PLATFORM_IDENTITY_GRID_ID, ReferenceCell, vsListOf } from "./DeviceShared";
+import { ContentVersions, PLATFORM_IDENTITY_GRID_ID, ReferenceCell, knownHaRole, vsListOf } from "./DeviceShared";
 import { LifecycleCell } from "./LifecycleScreen";
 import { useDetailTabs } from "./InventoryPanels";
 
@@ -65,7 +65,9 @@ export function identityTiles(device: DeviceSummary, collectedAt: string | null,
     { label: "Lifecycle", value: <LifecycleCell deviceId={device.device_id} /> },
     { label: "Reference", value: <ReferenceCell value={device.device_id} />, mono: true },
   ];
-  const haRole: IdentityTile = { label: "HA role", value: device.ha_role ? <RoleChip role={device.ha_role} dense /> : device.cluster_member_ref ? null : "Standalone",
+  // One HA-role rule (R9): a management server's own HA and a collector's UNKNOWN / STANDALONE token are not roles.
+  const role = knownHaRole(device);
+  const haRole: IdentityTile = { label: "HA role", value: role ? <RoleChip role={role} dense /> : device.cluster_member_ref ? null : device.role === "management_server" ? null : "Standalone",
     absent: device.role === "management_server" ? "not read -- MDS high availability needs its own read" : device.cluster_member_ref ? "not reported" : undefined,
     absentWord: device.role === "management_server" ? "Not read yet" : undefined };
   if (device.vendor_hint === "fortinet") return [
@@ -153,8 +155,9 @@ export function IdentityCard({ title, tiles }: { readonly title: string; readonl
 
 /** The one-line fact strip the grid collapses to on the Configuration tab: the first facts, and the way to the full grid. */
 export function identitySummaryLine(device: DeviceSummary): string {
+  // No HA token on a management server or for a collector's UNKNOWN (post-release review 2026-10-18, R9).
   const parts = [vendorLabel(device.vendor_hint), device.model || device.platform_family || null, device.software_version,
-    device.serial_number ? "serial read" : null, device.ha_role ? device.ha_role.trim().toUpperCase() : null].filter((p): p is string => Boolean(p));
+    device.serial_number ? "serial read" : null, knownHaRole(device)].filter((p): p is string => Boolean(p));
   return parts.join(" · ");
 }
 
