@@ -329,6 +329,9 @@ contract's own test obligations at UI 2.0 scope (§8), not re-derived.
 
 ### 3.2 `backup_artefact` — the manifest, as a Postgres table (`AC-3`)
 
+> **Amended by A-2 (2026-10-18):** the `expires_at` column and the `daily`/`weekly`/`monthly` values of `retention_tier`
+> below are superseded; retention does not read them. See Amendment A-2.
+
 BRC §3's `manifest.json` is "the only recovery-plane object any other
 subsystem may read." On the UI 2.0 line, that object becomes a Flyway-owned
 table, field-for-field, so it can be queried by the readiness/overview
@@ -452,6 +455,10 @@ inspects `validation` with a `jsonb` operator; every read is whole-value,
 through the evidence-read path.
 
 ### 3.5 Retention, carried forward verbatim with a UI 2.0-native approval path (`AC-3`)
+
+> **Amended by A-2 (2026-10-18):** the GFS counts and the operator-confirmed `backup_retention_apply` intent below
+> are superseded by automatic, policy-driven pruning. The floor (a device's last archive is kept) and the append-only
+> ledger stand. See Amendment A-2.
 
 BRC §8's GFS policy shape (`daily`/`weekly`/`monthly` counts), its absolute
 floor ("retention may never drive a device to zero held artefacts, and may
@@ -1311,3 +1318,47 @@ class-scoped ledger read). Nothing becomes console-submittable —
 `CLASS_1B_CONTROLLED_RESTORE_WRITE.console_submittable` is `False` — no
 `RB.x` gate is weakened, and §5's restore engine (§5.2–§5.7, §6.2) is
 otherwise untouched. Restore remains disabled in Java per the D-8 row.
+
+---
+
+## Amendment A-2 (2026-10-18) — retention follows the live design
+
+**Authority.** Product Owner decision of 2026-10-18 (recorded in the engineering chat through a question form, and
+recorded here as the durable repository record). It aligns this FROZEN contract with the retention the system has run
+since migration V44 (2026-09-22, Backbox-model backup screen), and extends it to configuration archives (V164). The
+Product Owner chose the design that exists over the one this contract described.
+
+**What the design is now.**
+
+- **Retention is automatic.** The worker runs `RetentionPruningService.prune` hourly. A standard backup is pruned once
+  its `created_at` is older than `backup_policy.backup_retention_days` (V44; 7 days at the time of this amendment). A
+  weekly snapshot is pruned once it falls beyond `backup_policy.snapshot_retention_depth` for its device. The days are
+  read from the policy row on every run; no component carries its own horizon.
+- **Configuration archives are kept 30 days.** A `configuration`-class artefact is pruned once its `created_at` is older
+  than `backup_policy.configuration_retention_days` (V164; default 30, range 1 to 3650, changeable through the audited
+  `PUT /api/v2/backups/policies`, where the field is optional). Until this amendment configuration archives were never
+  pruned (954 rows were older than 7 days on 2026-10-18).
+- **The last archive and the baseline are always kept.** A device's last archive of the class being pruned, and the
+  artefact named in `backup_baseline` for the device, are never offered for pruning (the §3.5 floor, now enforced by
+  the pruner instead of by an operator-confirmed intent). For configuration archives the rule is "no newer live
+  archive of the same device exists"; where the store cannot answer, the archive is kept.
+- **Removal is a ledger row; the artefact row stays.** A removal is an append-only `removed` row in
+  `artefact_retention_ledger` (V17), written only after the file was actually removed and only for a path inside the
+  artefact store root. The `backup_artefact` row stays as the recovery record. A stored archive is one without a
+  `removed` ledger row; every read that lists, counts or sums stored archives carries the one shared predicate
+  `JooqRetentionQueries.andNotRemoved`.
+
+**What this supersedes in the contract text.**
+
+| Clause | Status |
+| --- | --- |
+| §3.2 `expires_at` (and `retention_policy_ref`) | Superseded. Retention does not read `expires_at`; the column may stay `NULL`. The `[BACKUP_RETENTION] new_artefact_expires_at_null` warning was removed because expiry is not the design. |
+| §3.2 `retention_tier` values `daily`/`weekly`/`monthly` | Superseded. The tier is a label (`standard`); no tier drives deletion. |
+| §3.5 GFS policy counts (`daily`/`weekly`/`monthly`) | Superseded by `backup_retention_days`, `snapshot_retention_depth` and `configuration_retention_days`. |
+| §3.5 operator-confirmed typed intent `backup_retention_apply` and its dry-run-by-default rule | Superseded. No operator step precedes a prune. Every removal is ledgered and attributable to the worker; the policy values that drive it are changed only through the audited policy PUT. |
+| §3.5 floor ("never zero held artefacts") and append-only ledger | Unchanged. |
+| §9.6 (retention-deletion approval's typed-intent shape) | Moot for the same reason as `backup_retention_apply`. |
+
+**Mutation boundary: not widened.** Pruning deletes only neXus's own encrypted archive files on its own volume. It
+issues no device command and touches no device state. It cannot reach outside the artefact store root, cannot remove a
+device's last archive of a class, and cannot remove a baseline.

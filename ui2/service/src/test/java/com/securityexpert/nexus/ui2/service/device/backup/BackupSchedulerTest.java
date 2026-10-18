@@ -43,10 +43,17 @@ class BackupSchedulerTest {
 
     @Test
     void policyValidationRefusesABadCronAndOutOfRangeRetention() {
-        assertTrue(BackupPolicyController.validate(new BackupPolicyController.UpdateRequest(true, "0 2 * * *", 14, 4)).isEmpty());
-        assertTrue(BackupPolicyController.validate(new BackupPolicyController.UpdateRequest(true, "every night", 14, 4)).isPresent());
-        assertTrue(BackupPolicyController.validate(new BackupPolicyController.UpdateRequest(true, "0 2 * * *", 0, 4)).isPresent());
-        assertTrue(BackupPolicyController.validate(new BackupPolicyController.UpdateRequest(null, "0 2 * * *", 14, 4)).isPresent());
+        assertTrue(BackupPolicyController.validate(new BackupPolicyController.UpdateRequest(true, "0 2 * * *", 14, 4, null)).isEmpty());
+        assertTrue(BackupPolicyController.validate(new BackupPolicyController.UpdateRequest(true, "every night", 14, 4, null)).isPresent());
+        assertTrue(BackupPolicyController.validate(new BackupPolicyController.UpdateRequest(true, "0 2 * * *", 0, 4, null)).isPresent());
+        assertTrue(BackupPolicyController.validate(new BackupPolicyController.UpdateRequest(null, "0 2 * * *", 14, 4, null)).isPresent());
         assertFalse(BackupScheduleDue.isValidCron("0 2 * *"));
+    }
+
+    @Test
+    void configurationRetentionDaysAreOptionalAndRangeChecked() {
+        assertTrue(BackupPolicyController.validate(new BackupPolicyController.UpdateRequest(true, "0 2 * * *", 7, 4, 30)).isEmpty());
+        assertTrue(BackupPolicyController.validate(new BackupPolicyController.UpdateRequest(true, "0 2 * * *", 7, 4, 0)).isPresent());
+        assertTrue(BackupPolicyController.validate(new BackupPolicyController.UpdateRequest(true, "0 2 * * *", 7, 4, 3651)).isPresent());
     }
 }

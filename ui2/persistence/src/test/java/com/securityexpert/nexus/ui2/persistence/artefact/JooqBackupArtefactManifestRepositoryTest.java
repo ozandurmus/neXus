@@ -43,7 +43,7 @@ class JooqBackupArtefactManifestRepositoryTest {
     }
 
     @Test
-    void missingExpiryWarnsWithoutIdentitiesAndExplicitExpiryDoesNotWarn() {
+    void aNewArtefactWithoutExpiryWritesNoRetentionWarning() {
         var messages = new ArrayList<String>();
         var logger = Logger.getLogger(JooqBackupArtefactManifestRepository.class.getName());
         var handler = new Handler() {
@@ -58,8 +58,8 @@ class JooqBackupArtefactManifestRepositoryTest {
             repository.record(sampleRecord("palo_alto", Optional.empty()), "system:worker", "backup_artefact_recorded");
             repository.record(sampleRecord("palo_alto", Optional.empty(), Optional.of(Instant.parse("2026-10-20T00:00:00Z"))),
                     "system:worker", "backup_artefact_recorded");
-            assertEquals(List.of("[BACKUP_RETENTION] new_artefact_expires_at_null=true; expiry-based retention cannot apply"),
-                    messages);
+            // Retention follows the policy row, not expires_at (C7 Amendment A-2, PO decision 2026-10-18).
+            assertEquals(List.of(), messages);
         } finally {
             logger.removeHandler(handler);
         }

@@ -114,7 +114,6 @@ public final class BackupJobExecutor {
     }
     private final com.securityexpert.nexus.ui2.worker.backup.pan.PaloAltoBackupExecutor panBackupExecutor;
     private final com.securityexpert.nexus.ui2.worker.backup.diff.SemanticDeviationEngine deviationEngine;
-    private final com.securityexpert.nexus.ui2.worker.backup.retention.RetentionPruningService retentionPruningService;
     private final BackupArtefactManifestRepository manifestRepository;
     private final BackupEndpointEligibilityRepository eligibilityRepository;
     private final HostnameFingerprint hostnameFingerprint;
@@ -136,7 +135,7 @@ public final class BackupJobExecutor {
             BackupEndpointEligibilityRepository eligibilityRepository, HostnameFingerprint hostnameFingerprint,
             String recoveryVolumePath) {
         this(leaseRepository, attemptRepository, deviceEnrollmentReadPort, deviceRepository,
-                backupExecutor, null, null, null, null, manifestRepository, eligibilityRepository,
+                backupExecutor, null, null, null, manifestRepository, eligibilityRepository,
                 hostnameFingerprint, recoveryVolumePath, null);
     }
 
@@ -146,12 +145,11 @@ public final class BackupJobExecutor {
             com.securityexpert.nexus.ui2.worker.backup.cp.CheckPointSnapshotExecutor snapshotExecutor,
             com.securityexpert.nexus.ui2.worker.backup.pan.PaloAltoBackupExecutor panBackupExecutor,
             com.securityexpert.nexus.ui2.worker.backup.diff.SemanticDeviationEngine deviationEngine,
-            com.securityexpert.nexus.ui2.worker.backup.retention.RetentionPruningService retentionPruningService,
             BackupArtefactManifestRepository manifestRepository,
             BackupEndpointEligibilityRepository eligibilityRepository, HostnameFingerprint hostnameFingerprint,
             String recoveryVolumePath) {
         this(leaseRepository, attemptRepository, deviceEnrollmentReadPort, deviceRepository, backupExecutor,
-                snapshotExecutor, panBackupExecutor, deviationEngine, retentionPruningService, manifestRepository,
+                snapshotExecutor, panBackupExecutor, deviationEngine, manifestRepository,
                 eligibilityRepository, hostnameFingerprint, recoveryVolumePath, null);
     }
 
@@ -161,7 +159,6 @@ public final class BackupJobExecutor {
             com.securityexpert.nexus.ui2.worker.backup.cp.CheckPointSnapshotExecutor snapshotExecutor,
             com.securityexpert.nexus.ui2.worker.backup.pan.PaloAltoBackupExecutor panBackupExecutor,
             com.securityexpert.nexus.ui2.worker.backup.diff.SemanticDeviationEngine deviationEngine,
-            com.securityexpert.nexus.ui2.worker.backup.retention.RetentionPruningService retentionPruningService,
             BackupArtefactManifestRepository manifestRepository,
             BackupEndpointEligibilityRepository eligibilityRepository, HostnameFingerprint hostnameFingerprint,
             String recoveryVolumePath,
@@ -175,7 +172,6 @@ public final class BackupJobExecutor {
         this.snapshotExecutor = snapshotExecutor;
         this.panBackupExecutor = panBackupExecutor;
         this.deviationEngine = deviationEngine;
-        this.retentionPruningService = retentionPruningService;
         this.manifestRepository = Objects.requireNonNull(manifestRepository, "manifestRepository");
         this.eligibilityRepository = Objects.requireNonNull(eligibilityRepository, "eligibilityRepository");
         this.hostnameFingerprint = Objects.requireNonNull(hostnameFingerprint, "hostnameFingerprint");
@@ -474,13 +470,8 @@ public final class BackupJobExecutor {
                     Optional.empty(), artefact.ref().value(), Optional.of(deviationState));
             manifestRepository.record(manifest, ACTOR, ACTION_MANIFEST_RECORDED);
 
-            if (retentionPruningService != null) {
-                try {
-                    retentionPruningService.prune(com.securityexpert.nexus.ui2.worker.backup.retention.RetentionPruningService.PruningPolicy.DEFAULT);
-                } catch (Exception ignored) {
-            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(ignored);
-                }
-            }
+            // Retention is not run here. The worker's hourly RetentionPruningService.prune reads the backup_policy row
+            // (PO decision 2026-10-18; C7 contract Amendment A-2); a fixed in-line horizon here could ignore that row.
             return Optional.of(artefactId);
         } catch (IllegalStateException versionUnresolvable) {
             com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(versionUnresolvable);

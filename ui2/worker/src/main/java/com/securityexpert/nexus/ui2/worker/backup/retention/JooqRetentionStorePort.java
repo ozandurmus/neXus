@@ -15,7 +15,7 @@ import com.securityexpert.nexus.ui2.platform.WorkerActor;
  * {@link JooqRetentionQueries} and the artefact volume (V44 wires retention to
  * the policy for the first time; until then the executor was composed with
  * {@code null} and nothing was ever pruned). Never prunes a device's sole
- * remaining backup or its baseline.
+ * remaining backup, a device's latest configuration archive, or its baseline.
  */
 public final class JooqRetentionStorePort implements RetentionPruningService.RetentionStorePort {
 
@@ -37,6 +37,16 @@ public final class JooqRetentionStorePort implements RetentionPruningService.Ret
     @Override
     public List<RetentionPruningService.ArtefactRecord> findExpiredSnapshots(int depth) {
         return queries.snapshotsBeyondDepth(depth).stream().map(JooqRetentionStorePort::toRecord).toList();
+    }
+
+    @Override
+    public List<RetentionPruningService.ArtefactRecord> findExpiredConfigurationArchives(int days) {
+        return queries.expiredConfigurationArchives(days).stream().map(JooqRetentionStorePort::toRecord).toList();
+    }
+
+    @Override
+    public boolean isLatestConfigurationArchive(String artefactId) {
+        return queries.isLatestLiveConfigurationArchive(artefactId);
     }
 
     @Override

@@ -46,7 +46,7 @@ class BackupSchedulerWindowTest {
 
         @Override public Optional<BackupPolicy> find() {
             return Optional.of(staleRead != null ? staleRead : new BackupPolicy("default", enabled, cron,
-                    10, 4, last, Instant.EPOCH));
+                    10, 4, 30, last, Instant.EPOCH));
         }
 
         @Override public boolean claimScheduledRun(Instant dueSince, Instant runAt, String actor, String action) {
@@ -56,7 +56,7 @@ class BackupSchedulerWindowTest {
             return true;
         }
 
-        @Override public boolean update(boolean enabled, String cron, int days, int depth, String actor, String action) {
+        @Override public boolean update(boolean enabled, String cron, int days, int depth, Integer configurationDays, String actor, String action) {
             throw new UnsupportedOperationException();
         }
     }

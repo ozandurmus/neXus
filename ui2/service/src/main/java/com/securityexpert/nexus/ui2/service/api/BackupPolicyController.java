@@ -32,7 +32,8 @@ public final class BackupPolicyController {
             @JsonProperty("schedule_enabled") Boolean scheduleEnabled,
             @JsonProperty("daily_backup_cron") String dailyBackupCron,
             @JsonProperty("backup_retention_days") Integer backupRetentionDays,
-            @JsonProperty("snapshot_retention_depth") Integer snapshotRetentionDepth) {
+            @JsonProperty("snapshot_retention_depth") Integer snapshotRetentionDepth,
+            @JsonProperty("configuration_retention_days") Integer configurationRetentionDays) {
     }
 
     private final BackupPolicyRepository policyRepository;
@@ -66,7 +67,7 @@ public final class BackupPolicyController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
         }
         boolean updated = policyRepository.update(request.scheduleEnabled(), request.dailyBackupCron().strip(),
-                request.backupRetentionDays(), request.snapshotRetentionDepth(), actor, ActionRegistry.DEVICE_BACKUP_POLICY_SET);
+                request.backupRetentionDays(), request.snapshotRetentionDepth(), request.configurationRetentionDays(), actor, ActionRegistry.DEVICE_BACKUP_POLICY_SET);
         if (!updated) {
             body.put("error", "POLICY_NOT_SEEDED");
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(body);
@@ -90,6 +91,11 @@ public final class BackupPolicyController {
         if (request.snapshotRetentionDepth() == null || request.snapshotRetentionDepth() < 1 || request.snapshotRetentionDepth() > 100) {
             return Optional.of("snapshot_retention_depth must be between 1 and 100");
         }
+        // Optional: absent leaves the stored configuration horizon (V164, default 30) unchanged.
+        if (request.configurationRetentionDays() != null
+                && (request.configurationRetentionDays() < 1 || request.configurationRetentionDays() > 3650)) {
+            return Optional.of("configuration_retention_days must be between 1 and 3650");
+        }
         return Optional.empty();
     }
 
@@ -100,6 +106,7 @@ public final class BackupPolicyController {
         body.put("daily_backup_cron", policy.dailyBackupCron());
         body.put("backup_retention_days", policy.backupRetentionDays());
         body.put("snapshot_retention_depth", policy.snapshotRetentionDepth());
+        body.put("configuration_retention_days", policy.configurationRetentionDays());
         body.put("last_scheduled_run_at", policy.lastScheduledRunAt().map(Object::toString).orElse(null));
         body.put("updated_at", policy.updatedAt().toString());
         return body;
