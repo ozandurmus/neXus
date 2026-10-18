@@ -1330,6 +1330,10 @@ export function InventoryScreen() {
                     />
                   ) : undefined}
                   onDeviceStateChange={refresh}
+                  onOpenCluster={(ref) => {
+                    const members = (devices ?? []).filter((x) => x.cluster_member_ref === ref);
+                    if (members.length > 0) { setSelectedDevice(null); setSelectedDeviceVs(null); setSelectedCluster({ ref, members }); }
+                  }}
                   initialTab={initialTab}
                   configuration={CONFIGURATION_VENDORS.has(selectedDevice.vendor_hint)
                     && (selectedDevice.vendor_hint !== "bluecoat" || selectedDevice.role === "gateway")

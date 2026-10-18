@@ -190,7 +190,7 @@ describe("F-7: one suffix rule and one Collect now per device", () => {
     expect(screen.getByRole("button", { name: "Read configuration, all · Role: not permitted" })).toBeDisabled();
   });
 
-  it("keeps one Collect now per cluster member: on the member card, with the last read age in the Cluster members tab", async () => {
+  it("keeps one Collect now per cluster page: in the header with M1 / M2 pills, the last read age in the Cluster members tab", async () => {
     const members: DeviceSummary[] = ["m1", "m2"].map((id, i) => ({ ...cp, device_id: id, hostname: `FW-SYNTH-0${i + 1}`, ha_role: i ? "STANDBY" : "ACTIVE", cluster_member_ref: "CLS-SYNTH-01",
       inventory_collected_at: "2026-10-18T03:00:00Z" }));
     vi.stubGlobal("fetch", vi.fn((url: string) => url.includes("/clusters/CLS-SYNTH-01/inventory")
@@ -198,9 +198,16 @@ describe("F-7: one suffix rule and one Collect now per device", () => {
       : json({})));
     render(as(adminPlanes, <ClusterDetailPanels clusterRef="CLS-SYNTH-01" members={members} />));
     await screen.findByRole("tablist", { name: "Cluster detail" });
-    expect(screen.getAllByRole("button", { name: "Collect now" })).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: "Collect now" })).toHaveLength(1);
+    const pills = within(screen.getByTestId("entity-header")).getByRole("group", { name: "Collect from member" });
+    const [m1, m2] = within(pills).getAllByRole("button");
+    expect([m1.textContent, m2.textContent]).toEqual(["M1", "M2"]);
+    expect(m1).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(m2);
+    expect(m2).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getAllByRole("button", { name: "Collect now" })).toHaveLength(1);
     fireEvent.click(screen.getByRole("tab", { name: "Cluster members" }));
-    expect(screen.getAllByRole("button", { name: "Collect now" })).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: "Collect now" })).toHaveLength(1);
     expect(screen.getByRole("columnheader", { name: "Last read" })).toBeInTheDocument();
     expect(screen.queryByRole("columnheader", { name: "Action" })).toBeNull();
   });

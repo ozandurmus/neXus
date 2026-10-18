@@ -86,7 +86,8 @@ describe("Devices screen after the Fable review", () => {
 
     // F-21: the "This cluster in:" strip is gone; Backups and Readiness are pills in the header card.
     expect(screen.queryByRole("navigation", { name: "This cluster on other screens" })).toBeNull();
-    const header = screen.getByRole("heading", { name: "CLS-ROMEO-01" }).closest("div[class*=MuiBox-root]")!.parentElement!.parentElement!.parentElement as HTMLElement;
+    // The reads behind the state pills are refused here (404), so the plain links stand in for them (roadmap 2.1).
+    const header = screen.getByTestId("entity-header");
     const hrefs = within(header).getAllByRole("link").map((a) => [a.textContent, a.getAttribute("href")]);
     expect(hrefs).toEqual([
       ["Backups", "?screen=backups&q=CLS-ROMEO-01"],
@@ -133,7 +134,7 @@ describe("Devices screen after the Fable review", () => {
     expect(screen.queryByText("Select a device or cluster")).toBeNull();
     expect(screen.queryByText("bravo-02")).toBeNull();
     fireEvent.click(screen.getByRole("tab", { name: "Identity" }));
-    const deviceReference = screen.getByText("Reference").parentElement as HTMLElement;
+    const deviceReference = screen.getByText("REFERENCE").parentElement as HTMLElement;
     expect(within(deviceReference).getByText("bravo-02")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Copy" })).toBeInTheDocument();
   });

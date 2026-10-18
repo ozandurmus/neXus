@@ -42,11 +42,12 @@ it("hides Cluster members for a standalone device and restores its collect-now e
   expect(screen.queryByRole('tab',{name:'Cluster members'})).toBeNull();
   expect(await screen.findByText("This device has not been collected yet. Use Collect now to read its interfaces.")).toBeInTheDocument();
 });
-it("keeps Cluster members for a cluster member",()=>{
-  const clusterMember={...manager,device_id:"member",vendor_hint:"check_point",cluster_member_ref:"cluster-opaque"} as DeviceSummary;
+it("sends a cluster member to its cluster from the header instead of a Cluster members tab (roadmap 2.2)",()=>{
+  const clusterMember={...manager,device_id:"member",vendor_hint:"check_point",role:"gateway",cluster_member_ref:"cluster-opaque"} as DeviceSummary;
   vi.stubGlobal("fetch",vi.fn(async()=>new Response(JSON.stringify({device_id:"member",members:[],contexts:[]}))));
   render(<ThemeProvider theme={m3Theme}><DeviceInventoryPanels device={clusterMember}/></ThemeProvider>);
-  expect(screen.getByRole('tab',{name:'Cluster members'})).toBeInTheDocument();
+  expect(screen.queryByRole('tab',{name:'Cluster members'})).toBeNull();
+  expect(screen.getByRole('link',{name:'Check Point ClusterXL · cluster-opaque'})).toHaveAttribute('href','?screen=inventory&cluster_ref=cluster-opaque');
 });
 it("passes the selected listed child from the manager sidebar",async()=>{
   vi.stubGlobal("fetch",vi.fn(async()=>new Response(JSON.stringify({device_id:"smc",vendor:"bluecoat",run_id:null,domains:[],counts:{}}))));

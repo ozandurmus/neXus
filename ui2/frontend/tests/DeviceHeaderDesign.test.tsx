@@ -137,7 +137,7 @@ describe("the header card", () => {
     expect(within(header).getByTestId("header-read-ages")).toBeInTheDocument();
   });
 
-  it("drops the loose Lifecycle line when the Platform identity grid holds the cell, and keeps it when there is no grid", async () => {
+  it("has no loose Lifecycle line on any device: the cell is in the Identity tab's grid, for a device without a configuration read too", async () => {
     const withConfig = device();
     stub({ ...base(withConfig), "/devices/dev-1/configuration": () => json(configuration(ago(H))) });
     const first = mount(withGrid(withConfig));
@@ -147,21 +147,38 @@ describe("the header card", () => {
     const appliance = device({ vendor_hint: "infoblox", role: "appliance" });
     stub(base(appliance));
     mount(<DeviceInventoryPanels device={appliance} />);
-    expect(await screen.findByText(/^Lifecycle: LOW/)).toBeInTheDocument();
+    await screen.findByTestId("entity-header");
+    expect(screen.queryByText(/^Lifecycle:/)).toBeNull();
+    fireEvent.click(screen.getByRole("tab", { name: "Identity" }));
+    const lifecycle = (await screen.findByText("LIFECYCLE")).parentElement as HTMLElement;
+    await waitFor(() => expect(lifecycle).toHaveTextContent("LOW · Hardware support: 2031-01-01"));
+    // a vendor with no configuration read has no "Last configuration read" tile: absent, not "never"
+    expect(screen.queryByText("LAST CONFIGURATION READ")).toBeNull();
   });
 });
 
-describe("the Platform identity grid carries Lifecycle and Reference", () => {
-  it("has a Lifecycle cell and a Reference cell with Copy", async () => {
+describe("the Identity tab holds the Platform identity grid (roadmap 2.6)", () => {
+  const openIdentity = async () => fireEvent.click(await screen.findByRole("tab", { name: "Identity" }));
+
+  it("has a Lifecycle cell and a Reference cell with Copy, after the certificate and the badge's basis come", async () => {
     const d = device();
     stub({ ...base(d), "/devices/dev-1/configuration": () => json(configuration(ago(H))) });
-    mount(<DeviceConfigurationDetail device={d} embedded />);
+    mount(withGrid(d));
+    await openIdentity();
     const lifecycle = (await screen.findByText("LIFECYCLE")).parentElement as HTMLElement;
     await waitFor(() => expect(lifecycle).toHaveTextContent("LOW · Hardware support: 2031-01-01"));
     const reference = screen.getByText("REFERENCE").parentElement as HTMLElement;
     expect(within(reference).getByText("dev-1")).toBeInTheDocument();
     expect(within(reference).getByRole("button", { name: "Copy" })).toBeInTheDocument();
     expect(identityTiles(d, null).map((t) => t.label).slice(-2)).toEqual(["Lifecycle", "Reference"]);
+    // the two columns only the old identity table carried are grid cells now
+    expect(screen.getByText("LAST INVENTORY READ")).toBeInTheDocument();
+    expect(screen.getByText("EVIDENCE SOURCE")).toBeInTheDocument();
+    expect(screen.queryByRole("table", { name: "Device identity" })).toBeNull();
+    const basis = screen.getByText(IDENTITY_VERIFIED_BASIS);
+    expect(reference.compareDocumentPosition(basis) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // the badge word appears twice: in the header, and beside its explanation on the Identity tab
+    expect(screen.getAllByText("Not verified yet")).toHaveLength(2);
   });
 
   it("uses three words: Not applicable, Not read yet, and UNKNOWN only where a read was attempted", () => {
@@ -171,41 +188,45 @@ describe("the Platform identity grid carries Lifecycle and Reference", () => {
     expect(word("Serial number")?.absentWord).toBe("Not read yet");
     expect(word("Platform facts read")?.absentWord).toBe("Not read yet");
     expect(word("Software version")?.absentWord).toBeUndefined();
+    expect(identityTiles(device(), null, { configurationRead: false }).some((t) => t.label === "Last configuration read")).toBe(false);
+    expect(identityTiles(device(), null).some((t) => t.label === "Last configuration read")).toBe(true);
   });
 
   it("shows those words in the grid, and UNKNOWN for a value that was attempted and is unknown", async () => {
     const d = device({ software_version: null });
     stub({ ...base(d), "/devices/dev-1/configuration": () => json(configuration(null)) });
-    mount(<DeviceConfigurationDetail device={d} embedded />);
+    mount(withGrid(d));
+    await openIdentity();
     const serial = (await screen.findByText("SERIAL NUMBER")).parentElement as HTMLElement;
     expect(within(serial).getByText("Not read yet")).toBeInTheDocument();
     const software = screen.getByText("SOFTWARE VERSION").parentElement as HTMLElement;
     expect(within(software).getByText("UNKNOWN")).toBeInTheDocument();
   });
-});
 
-describe("the Identity tab leads to the grid", () => {
-  it("opens the Configuration tab and scrolls to the Platform identity grid, and the tab keeps the certificate and the basis", async () => {
+  it("collapses the grid to one line on the Configuration tab, whose link opens the Identity tab on the grid", async () => {
     const scroll = vi.fn();
     window.HTMLElement.prototype.scrollIntoView = scroll;
-    const d = device({ identity_check: check("VERIFIED") });
+    const d = device({ identity_check: check("VERIFIED"), serial_number: "SN-SYNTH-01" });
     stub({ ...base(d), "/devices/dev-1/configuration": () => json(configuration(ago(H))) });
     mount(withGrid(d));
-    fireEvent.click(await screen.findByRole("tab", { name: "Identity" }));
-    expect(await screen.findByText(IDENTITY_VERIFIED_BASIS)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /Platform identity grid on the Configuration tab/ }));
-    expect(await screen.findByRole("tab", { name: "Configuration", selected: true })).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("tab", { name: "Configuration" }));
+    const line = await screen.findByTestId("platform-identity-summary");
+    expect(line).toHaveTextContent("Check Point · Quantum · R81.20 · serial read");
+    expect(screen.queryByText("LIFECYCLE")).toBeNull();
+    fireEvent.click(within(line).getByRole("button", { name: /Full grid in Identity/ }));
+    expect(await screen.findByRole("tab", { name: "Identity", selected: true })).toBeInTheDocument();
     await waitFor(() => expect(scroll).toHaveBeenCalled());
     expect((scroll.mock.contexts[0] as HTMLElement).id).toBe("platform-identity-grid");
+    expect(screen.getByText("LIFECYCLE")).toBeInTheDocument();
+    expect(screen.getByText(IDENTITY_VERIFIED_BASIS)).toBeInTheDocument();
   });
 
-  it("offers no link where there is no grid", async () => {
-    const d = device({ vendor_hint: "infoblox", role: "appliance" });
-    stub(base(d));
-    mount(<DeviceInventoryPanels device={d} />);
-    fireEvent.click(await screen.findByRole("tab", { name: "Identity" }));
-    await screen.findByText(IDENTITY_VERIFIED_BASIS);
-    expect(screen.queryByRole("button", { name: /Platform identity grid/ })).toBeNull();
+  it("keeps the full grid on the standalone configuration view, which has no Identity tab to lead to", async () => {
+    const d = device();
+    stub({ ...base(d), "/devices/dev-1/configuration": () => json(configuration(ago(H))) });
+    mount(<DeviceConfigurationDetail device={d} />);
+    expect(await screen.findByText("LIFECYCLE")).toBeInTheDocument();
+    expect(screen.queryByTestId("platform-identity-summary")).toBeNull();
   });
 });
 
