@@ -100,7 +100,7 @@ describe("the Backups screen (UI review 2026-09-23)", () => {
       expect(screen.getByRole("menuitem", { name: action })).toBeInTheDocument();
     }
     // validation is an evidence grade (neutral); a byte change stays neutral until a comparison has run
-    expect(within(row).getByText("Checked")).toBeInTheDocument();
+    expect(within(row).getByText("Checked (V1)")).toBeInTheDocument();
     expect(within(row).getByText("Bytes changed")).toBeInTheDocument();
     // a target without an archive says so
     expect(within((await screen.findByText("FW-ROMEO-01-M1")).closest("tr")!).getByText("No archive")).toBeInTheDocument();
@@ -113,7 +113,7 @@ describe("the Backups screen (UI review 2026-09-23)", () => {
       { artefact_id: "a3", device_id: "d3", collected_at: "2026-09-20T11:43:28Z", size_bytes: 2048, digest_prefix: "z", validation_level: "V1", deviation_state: "major deviation", vendor: "palo_alto" },
     ]);
     render(<BackupScreen />);
-    expect((await screen.findAllByText("Checked")).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText("Checked (V1)")).length).toBeGreaterThan(0);
     expect(screen.getByText("Bytes changed")).toBeInTheDocument();
     expect(screen.getByText("First backup")).toBeInTheDocument();
     expect(screen.getByText("Major change")).toBeInTheDocument();
