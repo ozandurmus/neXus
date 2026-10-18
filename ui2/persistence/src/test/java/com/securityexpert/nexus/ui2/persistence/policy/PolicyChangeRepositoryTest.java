@@ -125,14 +125,20 @@ class PolicyChangeRepositoryTest {
         }
     }
 
-    @Test void labelsAndSnapshotExpansionAreComputedOnlyForThePageRowsAfterTheLimit() {
+    @Test void labelsAndSnapshotExpansionAreComputedOnlyForThePageRowsAndOncePerPolicy() {
         var filter = new PolicyChangeRepository.Filter(FROM, TO, "", "", "", "", false);
         String sql = String.join("\n", run(repository -> repository.rows(filter, 1, null)));
-        int limit = sql.indexOf("limit 500"), labels = sql.indexOf("left join lateral (select (select coalesce(c->>'after'");
+        int limit = sql.indexOf("limit 500"), labels = sql.indexOf("lab as materialized");
         assertTrue(limit > 0 && labels > limit, "the page is limited before any label lookup");
         assertEquals(1, sql.split("limit 500", -1).length - 1);
-        assertTrue(sql.contains("fn_policy_history_rules(case when labels.name is null or labels.number is null then s.snapshot end)"),
-            "the snapshot is expanded only for a row whose label is missing");
+        // The snapshot is expanded in one CTE, for the distinct policies of the page rows that still lack a label, and
+        // only the wanted rule keys are kept; it is never expanded per row.
+        assertEquals(1, sql.split("fn_policy_history_rules", -1).length - 1, sql);
+        assertTrue(sql.contains("from (select distinct policy_id from missing) m join policy_snapshot ps"), sql);
+        assertTrue(sql.contains("where name is null or number is null"), sql);
+        assertTrue(sql.contains("where x.rule_key = any(k.keys)"), "only the wanted rule keys are kept");
+        assertTrue(sql.contains("order by m.policy_id, x.rule_key, x.ordinal"), "the first rule in expansion order wins");
+        assertFalse(sql.contains("lateral (select rule from fn_policy_history_rules"));
     }
 
     @Test void theInitialFlagOfEveryRowAndTheInitialCountUseTheSameDefinition() {
