@@ -28,7 +28,9 @@ const JOB = "bbbbbbbb-cccc-4ddd-8eee-ffffffffffff";
 const stages = ["ingest", "core_flow_loss"].map(stage => ({ stage, verdict: "unknown", reason: "engine not yet ported" }));
 const summary = { verdict: "unknown", reason: "engine not yet ported", stages, capture_count: 1 };
 const operator = { run: true, raw_view: false, masked: false };
-const aiview = { run: false, raw_view: false, masked: true };
+// PO decision 2026-10-18: aiview holds the run action (create, upload, analyze); the view stays masked, no raw view.
+const aiview = { run: true, raw_view: false, masked: true };
+const maskedReadOnly = { run: false, raw_view: false, masked: true };
 
 const SYNTHETIC_REF: PacketRef = {
   point: "p1",
@@ -319,12 +321,32 @@ describe("Packet Analysis screen", () => {
     expect(api.uploadPacketCapture).not.toHaveBeenCalled();
   });
 
-  it("renders the masked aiview projection with no write or raw affordance", async () => {
+  it("renders the masked aiview projection with the run controls but no raw affordance", async () => {
     vi.mocked(api.listPacketCases).mockResolvedValue(listing(aiview));
     vi.mocked(api.getPacketCase).mockResolvedValue(detail(aiview));
     vi.mocked(api.getPacketReport).mockResolvedValue({ job_id: JOB, case_id: CASE, projection: "masked", summary });
     themed();
-    // The top bar already says the session is masked; the page does not repeat it, and shows the refused action instead.
+    // aiview now runs analyses: the case form is offered, the locked New case button and the role note are not.
+    expect(await screen.findByLabelText("Case title")).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "New case" })).toBeNull();
+    expect(screen.queryByText("Masked view")).toBeNull();
+    fireEvent.click(await screen.findByRole("button", { name: "OBJ-TANGO-04" }));
+    const card = await screen.findByLabelText("Case detail");
+    expect(within(card).getByText("OBJ-JULIET-06")).toBeInTheDocument();
+    expect(within(card).queryByText(/sha256/)).toBeNull();
+    expect(screen.getByRole("button", { name: "Upload capture" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Analyze" })).toBeEnabled();
+    expect(screen.queryByRole("link", { name: "Download" })).toBeNull();
+    expect(screen.queryByRole("columnheader", { name: "Raw" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "View result" }));
+    expect(await screen.findByText("Masked summary")).toBeInTheDocument();
+  });
+
+  it("renders a masked reader without the run flag with no write or raw affordance", async () => {
+    vi.mocked(api.listPacketCases).mockResolvedValue(listing(maskedReadOnly));
+    vi.mocked(api.getPacketCase).mockResolvedValue(detail(maskedReadOnly));
+    vi.mocked(api.getPacketReport).mockResolvedValue({ job_id: JOB, case_id: CASE, projection: "masked", summary });
+    themed();
     expect(await screen.findByRole("button", { name: "New case" })).toBeDisabled();
     expect(screen.queryByText("Masked view")).toBeNull();
     expect(screen.queryByLabelText("Case title")).toBeNull();

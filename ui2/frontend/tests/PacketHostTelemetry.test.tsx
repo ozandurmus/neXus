@@ -17,7 +17,9 @@ const CASE = "11111111-2222-4333-8444-555555555555";
 const T1 = "99999999-8888-4777-8666-555555555555";
 const T2 = "99999999-8888-4777-8666-666666666666";
 const operator = { run: true, raw_view: false, masked: false };
-const aiview = { run: false, raw_view: false, masked: true };
+const maskedReadOnly = { run: false, raw_view: false, masked: true };
+// PO decision 2026-10-18: aiview holds the run flag, with the masked projection and no raw view.
+const aiview = { run: true, raw_view: false, masked: true };
 
 const vmstat: PacketTelemetry = {
   telemetry_id: T1, display_name: "srv-vmstat.txt", size_bytes: 2048, detected_format: "vmstat", recognized: true,
@@ -125,8 +127,15 @@ describe("Host telemetry panel", () => {
     await waitFor(() => expect(props.onError).toHaveBeenLastCalledWith("No telemetry file with that id"));
   });
 
-  it("offers no write control to a reader without the run role", () => {
+  it("offers aiview the write controls on its masked names, with no digest", () => {
     renderPanel({ permissions: aiview, items: [{ ...vmstat, display_name: "FILE-JULIET-01", sha256: undefined, uploaded_by: undefined }] });
+    expect(screen.getByText("FILE-JULIET-01")).toBeInTheDocument();
+    expect(screen.queryByText(/sha256/)).toBeNull();
+    expect(screen.getByLabelText("Host telemetry file")).toBeInTheDocument();
+  });
+
+  it("offers no write control to a reader without the run role", () => {
+    renderPanel({ permissions: maskedReadOnly, items: [{ ...vmstat, display_name: "FILE-JULIET-01", sha256: undefined, uploaded_by: undefined }] });
     expect(screen.getByText("FILE-JULIET-01")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Add host telemetry" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Set clock" })).toBeNull();

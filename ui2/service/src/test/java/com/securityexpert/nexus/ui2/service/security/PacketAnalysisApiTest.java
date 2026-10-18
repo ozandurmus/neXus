@@ -45,6 +45,9 @@ class PacketAnalysisApiTest {
     private static final String CAPTURE = "66666666-7777-4888-9999-aaaaaaaaaaaa";
     private static final String JOB = "bbbbbbbb-cccc-4ddd-8eee-ffffffffffff";
     private static final String TELEMETRY = "99999999-8888-4777-8666-555555555555";
+    /** A case and a telemetry file that the replay viewer created itself (it may change only those). */
+    private static final String AIVIEW_CASE = "22222222-3333-4444-8555-666666666666";
+    private static final String AIVIEW_TELEMETRY = "77777777-6666-4555-8444-333333333333";
     private static final String PRIVATE_TELEMETRY = "synthetic-customer-core-srv-vmstat.txt";
     private static final String BASE = "/api/v2/packet-analysis";
     private static final String PRIVATE_TITLE = "synthetic-customer-site-outage";
@@ -59,7 +62,8 @@ class PacketAnalysisApiTest {
             "synthetic-secadmin", Set.of(RoleToken.SECURITY_ADMIN),
             "synthetic-operator-and-secadmin", Set.of(RoleToken.OPERATOR, RoleToken.SECURITY_ADMIN),
             "synthetic-viewer", Set.of(RoleToken.VIEWER),
-            "synthetic-aiview", Set.of(RoleToken.REPLAY_VIEWER));
+            "synthetic-aiview", Set.of(RoleToken.REPLAY_VIEWER),
+            "synthetic-aiview-and-secadmin", Set.of(RoleToken.REPLAY_VIEWER, RoleToken.SECURITY_ADMIN));
     private PacketCaptureStore store;
     private MockMvc mvc;
 
@@ -107,23 +111,35 @@ class PacketAnalysisApiTest {
         when(repository.addCapture(any(), anyString())).thenReturn(Outcome.DONE);
         when(repository.addTelemetry(any(), anyString())).thenReturn(Outcome.DONE);
         when(repository.requestAnalysis(eq(CASE), anyString(), anyString())).thenReturn(Outcome.DONE);
+        // the case aiview created itself
+        when(repository.findCase(AIVIEW_CASE)).thenReturn(Optional.of(new CaseRow(AIVIEW_CASE, PRIVATE_TITLE, "synthetic-aiview",
+                now, now.plusSeconds(7 * 86400), "OPEN", 0, false, 0, null)));
+        when(repository.requestAnalysis(eq(AIVIEW_CASE), anyString(), anyString())).thenReturn(Outcome.DONE);
+        when(repository.findTelemetry(AIVIEW_TELEMETRY)).thenReturn(Optional.of(new TelemetryRow(AIVIEW_TELEMETRY, AIVIEW_CASE,
+                PRIVATE_TELEMETRY, 10, "e".repeat(64), AIVIEW_TELEMETRY + ".txt", "vmstat", null, null, 0, null, "synthetic-aiview",
+                now, null, null)));
     }
 
     // ---- route map and grants ------------------------------------------------------------------------------
 
-    @Test void actionsGrantRunToOperatorLevelRawToSecurityAdminAndOnlyReadToAiview() {
+    @Test void actionsGrantRunAndReadToAiviewAndRawViewToSecurityAdminOnly() {
         var registry = new ActionRegistry();
-        assertEquals(Set.of(RoleToken.OPERATOR, RoleToken.OPERATION_ADMIN, RoleToken.SECURITY_ADMIN),
+        // PO decision 2026-10-18: aiview holds run (create, upload, analyze) and read; never raw view.
+        assertEquals(Set.of(RoleToken.OPERATOR, RoleToken.OPERATION_ADMIN, RoleToken.SECURITY_ADMIN, RoleToken.REPLAY_VIEWER),
+                registry.find(ActionRegistry.PACKET_ANALYSIS_RUN).orElseThrow().requiredRoleTokens());
+        assertEquals(ActionRegistry.PACKET_ANALYSIS_RUN_ROLES,
                 registry.find(ActionRegistry.PACKET_ANALYSIS_RUN).orElseThrow().requiredRoleTokens());
         assertEquals(Set.of(RoleToken.SECURITY_ADMIN),
                 registry.find(ActionRegistry.PACKET_ANALYSIS_RAW_VIEW).orElseThrow().requiredRoleTokens());
         assertEquals(Set.of(RoleToken.OPERATOR, RoleToken.OPERATION_ADMIN, RoleToken.SECURITY_ADMIN, RoleToken.REPLAY_VIEWER),
                 registry.find(ActionRegistry.PACKET_ANALYSIS_READ).orElseThrow().requiredRoleTokens());
-        for (String write : List.of(ActionRegistry.PACKET_ANALYSIS_RUN, ActionRegistry.PACKET_ANALYSIS_RAW_VIEW)) {
-            var tokens = registry.find(write).orElseThrow().requiredRoleTokens();
-            assertFalse(tokens.contains(RoleToken.REPLAY_VIEWER), write);
-            assertFalse(tokens.contains(RoleToken.VIEWER), write);
+        for (String action : List.of(ActionRegistry.PACKET_ANALYSIS_RUN, ActionRegistry.PACKET_ANALYSIS_RAW_VIEW,
+                ActionRegistry.PACKET_ANALYSIS_READ)) {
+            assertFalse(registry.find(action).orElseThrow().requiredRoleTokens().contains(RoleToken.VIEWER), action);
         }
+        assertFalse(registry.find(ActionRegistry.PACKET_ANALYSIS_RAW_VIEW).orElseThrow().requiredRoleTokens()
+                .contains(RoleToken.REPLAY_VIEWER));
+        assertFalse(ActionRegistry.PACKET_ANALYSIS_RAW_ROLES.contains(RoleToken.REPLAY_VIEWER));
         Map<String, String> expected = Map.ofEntries(
                 Map.entry("GET " + BASE + "/cases", ActionRegistry.PACKET_ANALYSIS_READ),
                 Map.entry("POST " + BASE + "/cases", ActionRegistry.PACKET_ANALYSIS_RUN),
@@ -165,6 +181,32 @@ class PacketAnalysisApiTest {
                     assertTrue(expected.containsKey(route), "unlisted packet-analysis route " + route);
                     assertTrue(route.chars().filter(c -> c == '*').count() <= 1, route);
                 });
+    }
+
+    @Test void aiviewReachesExactlyTheRunAndReadRoutesAndNoRawViewRoute() {
+        var registry = new ActionRegistry();
+        Set<String> reachable = new java.util.TreeSet<>();
+        Set<String> refused = new java.util.TreeSet<>();
+        SecurityWebMvcConfig.ACTION_ID_BY_ROUTE.forEach((route, action) -> {
+            if (!route.contains("/packet-analysis/")) return;
+            (registry.find(action).orElseThrow().requiredRoleTokens().contains(RoleToken.REPLAY_VIEWER) ? reachable : refused)
+                    .add(route);
+        });
+        assertEquals(Set.of(
+                "GET " + BASE + "/captures/*/download",
+                "GET " + BASE + "/cases/*/export/download",
+                "GET " + BASE + "/cases/*/field-diff"), refused, "only the three raw-view routes stay closed to aiview");
+        for (String route : refused) {
+            assertEquals(ActionRegistry.PACKET_ANALYSIS_RAW_VIEW, SecurityWebMvcConfig.ACTION_ID_BY_ROUTE.get(route), route);
+        }
+        Set<String> runOrRead = new java.util.TreeSet<>();
+        SecurityWebMvcConfig.ACTION_ID_BY_ROUTE.forEach((route, action) -> {
+            if (route.contains("/packet-analysis/") && (ActionRegistry.PACKET_ANALYSIS_RUN.equals(action)
+                    || ActionRegistry.PACKET_ANALYSIS_READ.equals(action))) runOrRead.add(route);
+        });
+        assertEquals(runOrRead, reachable, "aiview reaches exactly the run routes and the read routes");
+        assertTrue(reachable.contains("POST " + BASE + "/cases") && reachable.contains("POST " + BASE + "/cases/*/captures")
+                && reachable.contains("POST " + BASE + "/cases/*/analyze") && reachable.contains("GET " + BASE + "/cases"));
     }
 
     @Test void uploadGateNeverInvokesContainerMultipartParsingOrReadsTheBody() throws Exception {
@@ -256,7 +298,8 @@ class PacketAnalysisApiTest {
     @Test void aiviewListsAndReadsOnlyTheMaskedProjection() throws Exception {
         String list = mvc.perform(get(BASE + "/cases").servletPath(BASE + "/cases").cookie(cookie("synthetic-aiview")))
                 .andExpect(status().isOk()).andExpect(header().string("X-Nexus-Masked", "true"))
-                .andExpect(jsonPath("$.permissions.run").value(false)).andExpect(jsonPath("$.permissions.raw_view").value(false))
+                .andExpect(jsonPath("$.permissions.run").value(true)).andExpect(jsonPath("$.permissions.raw_view").value(false))
+                .andExpect(jsonPath("$.permissions.masked").value(true))
                 .andExpect(jsonPath("$.cases[0].expires_at").exists())
                 .andReturn().getResponse().getContentAsString();
         assertFalse(list.contains(PRIVATE_TITLE));
@@ -283,19 +326,136 @@ class PacketAnalysisApiTest {
         verify(repository, never()).recordAccess(anyString(), any(), any(), eq("REPORT_VIEWED"), anyString(), any());
     }
 
-    @Test void aiviewIsRefusedEveryWriteRawViewAndDownload() throws Exception {
-        mvc.perform(write("POST", BASE + "/cases", "synthetic-aiview").contentType("application/json")
-                .content("{\"title\":\"x\"}")).andExpect(status().isForbidden());
-        mvc.perform(upload("synthetic-aiview", "x.pcap", pcap(100))).andExpect(status().isForbidden());
-        mvc.perform(write("POST", BASE + "/cases/" + CASE + "/analyze", "synthetic-aiview")).andExpect(status().isForbidden());
-        mvc.perform(write("DELETE", BASE + "/cases/" + CASE, "synthetic-aiview")).andExpect(status().isForbidden());
-        String download = BASE + "/captures/" + CAPTURE + "/download";
-        mvc.perform(get(download).servletPath(download).cookie(cookie("synthetic-aiview"))).andExpect(status().isForbidden());
-        verify(repository, never()).createCase(anyString(), anyString(), anyString(), anyBoolean());
+    @Test void aiviewCreatesUploadsAndAnalysesItsOwnCaseAndEveryAcknowledgementIsMasked() throws Exception {
+        // create: the acknowledgement is the masked case view -- pseudonymous title, no creator
+        String created = mvc.perform(write("POST", BASE + "/cases", "synthetic-aiview").contentType("application/json")
+                .content("{\"title\":\"" + PRIVATE_TITLE + "\",\"payload_zeroing\":false}"))
+                .andExpect(status().isCreated()).andExpect(header().string("X-Nexus-Masked", "true"))
+                .andExpect(jsonPath("$.title").value(org.hamcrest.Matchers.not(PRIVATE_TITLE)))
+                .andExpect(jsonPath("$.created_by").doesNotExist())
+                .andReturn().getResponse().getContentAsString();
+        assertFalse(created.contains(PRIVATE_TITLE), "the case title is masked in the create acknowledgement");
+        assertFalse(created.contains("synthetic-aiview"), "the creator is withheld");
+        verify(repository).createCase(anyString(), eq(PRIVATE_TITLE), eq("synthetic-aiview"), eq(false));
+
+        // upload: format and size only, never the digest
+        byte[] capture = pcap(2000);
+        String uploaded = mvc.perform(upload("synthetic-aiview", AIVIEW_CASE, "C:\\captures\\" + PRIVATE_FILE, capture))
+                .andExpect(status().isCreated()).andExpect(header().string("X-Nexus-Masked", "true"))
+                .andExpect(jsonPath("$.format").value("pcap")).andExpect(jsonPath("$.size_bytes").value(capture.length))
+                .andExpect(jsonPath("$.sha256").doesNotExist())
+                .andReturn().getResponse().getContentAsString();
+        assertFalse(uploaded.contains(PRIVATE_FILE));
+        verify(repository).addCapture(argThat(row -> row.displayName().equals(PRIVATE_FILE) && row.caseId().equals(AIVIEW_CASE)
+                && row.uploadedBy().equals("synthetic-aiview")), eq("synthetic-aiview"));
+
+        // host telemetry: pseudonymous name, no digest, no uploader
+        String telemetry = mvc.perform(telemetryUpload("synthetic-aiview", AIVIEW_CASE, "C:\\logs\\" + PRIVATE_TELEMETRY,
+                        VMSTAT_TEXT.getBytes(StandardCharsets.UTF_8)))
+                .andExpect(status().isCreated()).andExpect(header().string("X-Nexus-Masked", "true"))
+                .andExpect(jsonPath("$.detected_format").value("vmstat")).andExpect(jsonPath("$.sha256").doesNotExist())
+                .andExpect(jsonPath("$.uploaded_by").doesNotExist())
+                .andReturn().getResponse().getContentAsString();
+        assertFalse(telemetry.contains(PRIVATE_TELEMETRY), "the telemetry file name is masked in the upload acknowledgement");
+        assertFalse(telemetry.contains("synthetic-aiview"));
+        verify(repository).addTelemetry(argThat(row -> row.displayName().equals(PRIVATE_TELEMETRY)), eq("synthetic-aiview"));
+
+        // clock alignment of its own telemetry file: the masked telemetry view comes back
+        when(repository.setTelemetryAlignment(eq(AIVIEW_TELEMETRY), any(), anyInt(), any(), anyString())).thenReturn(Outcome.DONE);
+        String aligned = mvc.perform(write("PUT", BASE + "/telemetry/" + AIVIEW_TELEMETRY, "synthetic-aiview")
+                        .contentType("application/json").content("{\"time_zone\":\"UTC\"}"))
+                .andExpect(status().isOk()).andExpect(header().string("X-Nexus-Masked", "true"))
+                .andExpect(jsonPath("$.zone_confirmed").value(false)) // the stubbed row is read back unchanged
+                .andReturn().getResponse().getContentAsString();
+        assertFalse(aligned.contains(PRIVATE_TELEMETRY));
+        assertFalse(aligned.contains("e".repeat(64)));
+        assertFalse(aligned.contains("synthetic-aiview"));
+
+        // analysis request: opaque ids only
+        String analysis = mvc.perform(write("POST", BASE + "/cases/" + AIVIEW_CASE + "/analyze", "synthetic-aiview"))
+                .andExpect(status().isAccepted()).andExpect(jsonPath("$.state").value("QUEUED"))
+                .andReturn().getResponse().getContentAsString();
+        assertFalse(analysis.contains("synthetic-aiview") || analysis.contains(PRIVATE_TITLE));
+        verify(repository).requestAnalysis(eq(AIVIEW_CASE), anyString(), eq("synthetic-aiview"));
+
+        // deleting a telemetry file and the case it created: owner-scoped, never the unscoped security_admin deletion
+        when(repository.deleteTelemetry(eq(AIVIEW_TELEMETRY), anyString(), any())).thenReturn(Outcome.DONE);
+        mvc.perform(write("DELETE", BASE + "/telemetry/" + AIVIEW_TELEMETRY, "synthetic-aiview")).andExpect(status().isOk());
+        when(repository.deleteCase(eq(AIVIEW_CASE), anyString(), any(), any())).thenReturn(Outcome.DONE);
+        mvc.perform(write("DELETE", BASE + "/cases/" + AIVIEW_CASE, "synthetic-aiview")).andExpect(status().isOk());
+        verify(repository).deleteCase(eq(AIVIEW_CASE), eq("synthetic-aiview"), eq("synthetic-aiview"), any());
+        verify(repository, never()).deleteCase(anyString(), anyString(), isNull(), any());
+    }
+
+    @Test void aiviewResultsOfItsOwnRunStayMaskedOnTheListDetailRunReportAndExpertReport() throws Exception {
+        // the read side of the same flow; the content-level masking is asserted in depth by the detail/export tests below
+        for (String path : List.of(BASE + "/cases", BASE + "/cases/" + CASE, BASE + "/runs/" + JOB)) {
+            String body = mvc.perform(get(path).servletPath(path).cookie(cookie("synthetic-aiview")))
+                    .andExpect(status().isOk()).andExpect(header().string("X-Nexus-Masked", "true"))
+                    .andReturn().getResponse().getContentAsString();
+            assertFalse(body.contains(PRIVATE_TITLE) || body.contains(PRIVATE_FILE) || body.contains("a".repeat(64))
+                    || body.contains("synthetic-operator"), path);
+        }
+        // run authority never turns the report into the full one for the replay viewer
+        Path report = root.resolve("cases").resolve(CASE).resolve("runs").resolve(JOB).resolve("report.json");
+        Files.createDirectories(report.getParent());
+        Files.writeString(report, "{\"raw\":\"192.0.2.44\"}");
+        String reportPath = BASE + "/runs/" + JOB + "/report";
+        String masked = mvc.perform(get(reportPath).servletPath(reportPath).cookie(cookie("synthetic-aiview")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.projection").value("masked"))
+                .andExpect(jsonPath("$.report").doesNotExist()).andReturn().getResponse().getContentAsString();
+        assertFalse(masked.contains("192.0.2.44"));
+        verify(repository, never()).recordAccess(anyString(), any(), any(), eq("REPORT_VIEWED"), eq("synthetic-aiview"), any());
+        verify(repository, never()).recordAccess(anyString(), any(), any(), eq("RAW_VIEWED"), anyString(), any());
+    }
+
+    @Test void aiviewChangesOnlyTheCasesItCreated() throws Exception {
+        String foreign = BASE + "/cases/" + CASE;
+        mvc.perform(upload("synthetic-aiview", CASE, "x.pcap", pcap(100)))
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.error").value("NOT_CASE_OWNER"));
+        mvc.perform(telemetryUpload("synthetic-aiview", CASE, "x.txt", VMSTAT_TEXT.getBytes(StandardCharsets.UTF_8)))
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.error").value("NOT_CASE_OWNER"));
+        mvc.perform(write("POST", foreign + "/analyze", "synthetic-aiview"))
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.error").value("NOT_CASE_OWNER"));
+        mvc.perform(write("PUT", foreign + "/topology", "synthetic-aiview").contentType("application/json").content("{}"))
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.error").value("NOT_CASE_OWNER"));
+        when(repository.findTelemetry(TELEMETRY)).thenReturn(Optional.of(telemetryRow(null, 0))); // the operator's file
+        mvc.perform(write("PUT", BASE + "/telemetry/" + TELEMETRY, "synthetic-aiview").contentType("application/json").content("{}"))
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.error").value("NOT_CASE_OWNER"));
+        mvc.perform(write("DELETE", BASE + "/telemetry/" + TELEMETRY, "synthetic-aiview"))
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.error").value("NOT_CASE_OWNER"));
+        // the repository's own owner check is asked for with the actor, so the deletion of another's case is refused there
+        when(repository.deleteCase(eq(CASE), eq("synthetic-aiview"), eq("synthetic-aiview"), any())).thenReturn(Outcome.FORBIDDEN);
+        mvc.perform(write("DELETE", foreign, "synthetic-aiview"))
+                .andExpect(status().isForbidden()).andExpect(jsonPath("$.error").value("NOT_CASE_OWNER"));
         verify(repository, never()).addCapture(any(), anyString());
-        verify(repository, never()).requestAnalysis(anyString(), anyString(), anyString());
-        verify(repository, never()).deleteCase(anyString(), anyString(), any(), any());
+        verify(repository, never()).addTelemetry(any(), anyString());
+        verify(repository, never()).requestAnalysis(eq(CASE), anyString(), anyString());
+        verify(repository, never()).setTelemetryAlignment(anyString(), any(), anyInt(), any(), anyString());
+        verify(repository, never()).deleteTelemetry(anyString(), anyString(), any());
+        try (var files = Files.walk(root)) {
+            assertTrue(files.noneMatch(p -> p.toString().endsWith(".pcap") || p.toString().endsWith(".txt")), "nothing was stored");
+        }
+    }
+
+    @Test void aiviewIsRefusedEveryRawViewDownloadAndExportEvenWhenAlsoBoundToSecurityAdmin() throws Exception {
+        String download = BASE + "/captures/" + CAPTURE + "/download";
+        String exportDownload = BASE + "/cases/" + CASE + "/export/download";
+        String fieldDiff = BASE + "/cases/" + CASE + "/field-diff";
+        for (String actor : List.of("synthetic-aiview", "synthetic-aiview-and-secadmin")) {
+            var captureResult = mvc.perform(get(download).servletPath(download).cookie(cookie(actor))).andReturn();
+            assertEquals(403, captureResult.getResponse().getStatus(), actor);
+            mvc.perform(get(exportDownload).param("format", "html").servletPath(exportDownload).cookie(cookie(actor)))
+                    .andExpect(status().isForbidden());
+            mvc.perform(get(fieldDiff).servletPath(fieldDiff).cookie(cookie(actor))).andExpect(status().isForbidden());
+        }
         verify(repository, never()).recordAccess(anyString(), any(), any(), anyString(), anyString(), any());
+        // masked and run-capable, never raw
+        String list = mvc.perform(get(BASE + "/cases").servletPath(BASE + "/cases").cookie(cookie("synthetic-aiview-and-secadmin")))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.permissions.raw_view").value(false))
+                .andExpect(jsonPath("$.permissions.run").value(true)).andExpect(jsonPath("$.permissions.masked").value(true))
+                .andReturn().getResponse().getContentAsString();
+        assertFalse(list.contains(PRIVATE_TITLE));
     }
 
     @Test void viewerHasNoPacketAnalysisAccess() throws Exception {
@@ -761,12 +921,16 @@ class PacketAnalysisApiTest {
             + " 9  0      0 8037584  79200 5978804    0    0     7    23   40   64  1 30 69  0  0 2023-11-14 22:13:21\n";
 
     private MockHttpServletRequestBuilder telemetryUpload(String actor, String fileName, byte[] content) throws Exception {
+        return telemetryUpload(actor, CASE, fileName, content);
+    }
+
+    private MockHttpServletRequestBuilder telemetryUpload(String actor, String caseId, String fileName, byte[] content) throws Exception {
         var body = new ByteArrayOutputStream();
         body.write(("--SyntheticBoundary\r\nContent-Disposition: form-data; name=\"file\"; filename=\"" + fileName
                 + "\"\r\nContent-Type: text/plain\r\n\r\n").getBytes(StandardCharsets.UTF_8));
         body.write(content);
         body.write("\r\n--SyntheticBoundary--\r\n".getBytes(StandardCharsets.UTF_8));
-        return write("POST", BASE + "/cases/" + CASE + "/telemetry", actor)
+        return write("POST", BASE + "/cases/" + caseId + "/telemetry", actor)
                 .contentType("multipart/form-data; boundary=SyntheticBoundary").content(body.toByteArray());
     }
 
@@ -808,7 +972,7 @@ class PacketAnalysisApiTest {
 
     @Test void telemetryUploadAlignmentAndDeleteAreRefusedToEveryRoleWithoutRunAuthority() throws Exception {
         byte[] text = VMSTAT_TEXT.getBytes(StandardCharsets.UTF_8);
-        for (String actor : List.of("synthetic-aiview", "synthetic-viewer")) {
+        for (String actor : List.of("synthetic-viewer")) {
             mvc.perform(telemetryUpload(actor, "x.txt", text)).andExpect(status().isForbidden());
             mvc.perform(write("PUT", BASE + "/telemetry/" + TELEMETRY, actor).contentType("application/json").content("{\"time_zone\":\"UTC\"}"))
                     .andExpect(status().isForbidden());
@@ -912,12 +1076,16 @@ class PacketAnalysisApiTest {
     }
 
     private MockHttpServletRequestBuilder upload(String actor, String fileName, byte[] content) throws Exception {
+        return upload(actor, CASE, fileName, content);
+    }
+
+    private MockHttpServletRequestBuilder upload(String actor, String caseId, String fileName, byte[] content) throws Exception {
         var body = new ByteArrayOutputStream();
         body.write(("--SyntheticBoundary\r\nContent-Disposition: form-data; name=\"file\"; filename=\"" + fileName
                 + "\"\r\nContent-Type: application/octet-stream\r\n\r\n").getBytes(StandardCharsets.UTF_8));
         body.write(content);
         body.write("\r\n--SyntheticBoundary--\r\n".getBytes(StandardCharsets.UTF_8));
-        return write("POST", BASE + "/cases/" + CASE + "/captures", actor)
+        return write("POST", BASE + "/cases/" + caseId + "/captures", actor)
                 .contentType("multipart/form-data; boundary=SyntheticBoundary").content(body.toByteArray());
     }
 

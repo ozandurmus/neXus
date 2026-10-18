@@ -147,13 +147,17 @@ public final class ActionRegistry {
      * PO decision record 2026-10-15 §6 (PacketBreaker ported into neXus): create a case, upload captures, request an
      * analysis and delete one's own case -- operator-level roles and above. Raw packet details and capture download
      * are {@link #PACKET_ANALYSIS_RAW_VIEW} (security_admin by default). {@link #PACKET_ANALYSIS_READ} lists cases and
-     * reads results; the replay viewer (aiview) holds only that one and always receives the masked projection.
+     * reads results.
+     *
+     * <p>PO decision 2026-10-18: the replay viewer (aiview) also holds {@link #PACKET_ANALYSIS_RUN}, so the orchestrator
+     * can run a first analysis itself, and {@link #PACKET_ANALYSIS_READ}; never {@link #PACKET_ANALYSIS_RAW_VIEW}. It
+     * always receives the masked projection and may change only cases it created (the controller enforces both).</p>
      */
     public static final String PACKET_ANALYSIS_RUN = "packet_analysis_run";
     public static final String PACKET_ANALYSIS_RAW_VIEW = "packet_analysis_raw_view";
     public static final String PACKET_ANALYSIS_READ = "packet_analysis_read";
     public static final java.util.Set<String> PACKET_ANALYSIS_RUN_ROLES =
-            java.util.Set.of(RoleToken.OPERATOR, RoleToken.OPERATION_ADMIN, RoleToken.SECURITY_ADMIN);
+            java.util.Set.of(RoleToken.OPERATOR, RoleToken.OPERATION_ADMIN, RoleToken.SECURITY_ADMIN, RoleToken.REPLAY_VIEWER);
     public static final java.util.Set<String> PACKET_ANALYSIS_RAW_ROLES = java.util.Set.of(RoleToken.SECURITY_ADMIN);
 
     /**
@@ -289,8 +293,9 @@ public final class ActionRegistry {
         // Viewers see failover units, windows and runs (read-only); approving and starting stay with their roles.
         register(new ActionDescriptor(CP_FAILOVER_READ, true, Optional.of(RoleToken.OPERATOR),
                 java.util.Set.of(RoleToken.SECURITY_ADMIN, RoleToken.OPERATION_ADMIN, RoleToken.VIEWER, RoleToken.REPLAY_VIEWER)));
+        // aiview may run Packet Analysis on uploaded captures (PO 2026-10-18); the view stays masked, no raw view.
         register(new ActionDescriptor(PACKET_ANALYSIS_RUN, true, Optional.of(RoleToken.OPERATOR),
-                java.util.Set.of(RoleToken.OPERATION_ADMIN, RoleToken.SECURITY_ADMIN)));
+                java.util.Set.of(RoleToken.OPERATION_ADMIN, RoleToken.SECURITY_ADMIN, RoleToken.REPLAY_VIEWER)));
         register(new ActionDescriptor(PACKET_ANALYSIS_RAW_VIEW, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(PACKET_ANALYSIS_READ, true, Optional.of(RoleToken.OPERATOR),
                 java.util.Set.of(RoleToken.OPERATION_ADMIN, RoleToken.SECURITY_ADMIN, RoleToken.REPLAY_VIEWER)));

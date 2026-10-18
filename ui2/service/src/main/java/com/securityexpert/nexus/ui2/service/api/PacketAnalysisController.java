@@ -69,8 +69,11 @@ import com.securityexpert.nexus.ui2.service.security.RbacEvaluator;
  *
  * <ul>
  *   <li>the replay viewer (aiview) always gets the masked projection -- pseudonymous case and capture names, no
- *       digest, no creator, and the engine's masked summary instead of the report -- whatever else it holds;</li>
- *   <li>run and raw-view roles get the full case view and the full report; only raw-view roles download.</li>
+ *       digest, no creator, and the engine's masked summary instead of the report -- whatever else it holds, and
+ *       on every route including the acknowledgements of the writes it may now make (PO decision 2026-10-18: aiview
+ *       holds the run action, never the raw view);</li>
+ *   <li>run and raw-view roles get the full case view and the full report; only raw-view roles download;</li>
+ *   <li>a replay viewer changes (uploads to, analyses, edits, deletes) only cases it created itself.</li>
  * </ul>
  *
  * <p>Uploads stream into the analysis volume after the gates (the multipart resolver and the interceptor never
@@ -161,7 +164,7 @@ public final class PacketAnalysisController {
             return error(HttpStatus.BAD_REQUEST, "TITLE_INVALID", "A title of 1 to 120 printable characters is required");
         boolean zeroing = input.payload_zeroing() != null && input.payload_zeroing();
         CaseRow row = repository.createCase(UUID.randomUUID().toString(), title, actor(request), zeroing);
-        return ResponseEntity.status(HttpStatus.CREATED).cacheControl(CacheControl.noStore()).body(caseView(row, false));
+        return ResponseEntity.status(HttpStatus.CREATED).cacheControl(CacheControl.noStore()).body(caseView(row, masked(request)));
     }
 
     @GetMapping(BASE + "/cases/{caseId}")
@@ -217,6 +220,7 @@ public final class PacketAnalysisController {
         if (!canRun(request)) return error(HttpStatus.FORBIDDEN, "RUN_ROLE_REQUIRED", "Uploading needs an operator-level role");
         Optional<CaseRow> row = repository.findCase(caseId);
         if (row.isEmpty()) return caseNotFound();
+        if (!mayChange(request, row.get())) return notCaseOwner();
         if (Set.of("QUEUED", "ANALYZING").contains(row.get().state()))
             return error(HttpStatus.CONFLICT, "ANALYSIS_ACTIVE", "Wait until the queued or running analysis finishes");
         if (!uploads.tryAcquire()) return error(HttpStatus.TOO_MANY_REQUESTS, "UPLOAD_BUSY", "Two uploads are already running; retry when one finishes");
@@ -257,7 +261,7 @@ public final class PacketAnalysisController {
             body.put("capture_id", stored.captureId());
             body.put("format", stored.format());
             body.put("size_bytes", stored.sizeBytes());
-            body.put("sha256", stored.sha256());
+            if (!masked(request)) body.put("sha256", stored.sha256());
             return ResponseEntity.status(HttpStatus.CREATED).cacheControl(CacheControl.noStore()).body(body);
         } catch (PacketCaptureStore.Refusal refusal) {
             return switch (refusal.code()) {
@@ -292,7 +296,9 @@ public final class PacketAnalysisController {
     public ResponseEntity<Map<String, Object>> uploadTelemetry(@PathVariable String caseId, HttpServletRequest request) {
         if (!PacketAnalysisPaths.isId(caseId)) return invalidId();
         if (!canRun(request)) return error(HttpStatus.FORBIDDEN, "RUN_ROLE_REQUIRED", "Uploading needs an operator-level role");
-        if (repository.findCase(caseId).isEmpty()) return caseNotFound();
+        Optional<CaseRow> telemetryCase = repository.findCase(caseId);
+        if (telemetryCase.isEmpty()) return caseNotFound();
+        if (!mayChange(request, telemetryCase.get())) return notCaseOwner();
         if (!uploads.tryAcquire()) return error(HttpStatus.TOO_MANY_REQUESTS, "UPLOAD_BUSY", "Two uploads are already running; retry when one finishes");
         PacketCaptureStore.StoredTelemetry stored = null;
         try {
@@ -327,7 +333,7 @@ public final class PacketAnalysisController {
                 store.deleteTelemetry(caseId, stored.storageKey());
                 return caseNotFound();
             }
-            return ResponseEntity.status(HttpStatus.CREATED).cacheControl(CacheControl.noStore()).body(telemetryView(row, false));
+            return ResponseEntity.status(HttpStatus.CREATED).cacheControl(CacheControl.noStore()).body(telemetryView(row, masked(request)));
         } catch (PacketCaptureStore.Refusal refusal) {
             return switch (refusal.code()) {
                 case PacketCaptureStore.TOO_LARGE -> error(HttpStatus.PAYLOAD_TOO_LARGE, refusal.code(),
@@ -354,6 +360,7 @@ public final class PacketAnalysisController {
             @RequestBody(required = false) TelemetryAlignment input, HttpServletRequest request) {
         if (!PacketAnalysisPaths.isId(telemetryId)) return invalidId();
         if (!canRun(request)) return error(HttpStatus.FORBIDDEN, "RUN_ROLE_REQUIRED", "Changing the alignment needs an operator-level role");
+        if (!mayChangeTelemetry(request, telemetryId)) return notCaseOwner();
         if (input == null) return error(HttpStatus.BAD_REQUEST, "ALIGNMENT_INVALID", "Send time_zone, offset_seconds and anchor_local");
         Alignment alignment;
         try {
@@ -364,7 +371,7 @@ public final class PacketAnalysisController {
         Outcome outcome = repository.setTelemetryAlignment(telemetryId, alignment.zoneConfirmed() ? alignment.zone().getId() : null,
                 alignment.offsetSeconds(), alignment.anchorLocal(), actor(request));
         if (outcome != Outcome.DONE) return telemetryNotFound();
-        return repository.findTelemetry(telemetryId).map(row -> ok(telemetryView(row, false))).orElseGet(PacketAnalysisController::telemetryNotFound);
+        return repository.findTelemetry(telemetryId).map(row -> ok(telemetryView(row, masked(request)))).orElseGet(PacketAnalysisController::telemetryNotFound);
     }
 
     @DeleteMapping(BASE + "/telemetry/{telemetryId}")
@@ -373,6 +380,7 @@ public final class PacketAnalysisController {
         if (!canRun(request)) return error(HttpStatus.FORBIDDEN, "RUN_ROLE_REQUIRED", "Deleting a telemetry file needs an operator-level role");
         Optional<TelemetryRow> found = repository.findTelemetry(telemetryId);
         if (found.isEmpty()) return telemetryNotFound();
+        if (!mayChangeTelemetry(request, telemetryId)) return notCaseOwner();
         TelemetryRow row = found.get();
         Outcome outcome;
         try {
@@ -424,6 +432,8 @@ public final class PacketAnalysisController {
     public ResponseEntity<Map<String, Object>> analyze(@PathVariable String caseId, HttpServletRequest request) {
         if (!PacketAnalysisPaths.isId(caseId)) return invalidId();
         if (!canRun(request)) return error(HttpStatus.FORBIDDEN, "RUN_ROLE_REQUIRED", "Requesting an analysis needs an operator-level role");
+        Optional<CaseRow> target = repository.findCase(caseId);
+        if (target.isPresent() && !mayChange(request, target.get())) return notCaseOwner();
         String jobId = UUID.randomUUID().toString();
         Outcome outcome = repository.requestAnalysis(caseId, jobId, actor(request));
         return switch (outcome) {
@@ -911,6 +921,7 @@ public final class PacketAnalysisController {
         if (!canRun(request)) return error(HttpStatus.FORBIDDEN, "RUN_ROLE_REQUIRED", "Updating topology needs an operator-level role");
         Optional<CaseRow> found = repository.findCase(caseId);
         if (found.isEmpty()) return caseNotFound();
+        if (!mayChange(request, found.get())) return notCaseOwner();
         if (isCaseAnalyzing(found.get())) {
             return error(HttpStatus.CONFLICT, "ANALYSIS_RUNNING",
                     "Case is currently being analysed; topology cannot be modified while a writer is active");
@@ -1132,19 +1143,36 @@ public final class PacketAnalysisController {
         return PrivacyMaskingResponseBodyAdvice.isReplayViewer(request);
     }
 
+    /** Run authority (PO decision 2026-10-18: the replay viewer holds it too; its view stays masked). */
     private boolean canRun(HttpServletRequest request) {
         return holds(request, ActionRegistry.PACKET_ANALYSIS_RUN_ROLES);
     }
 
+    /** Raw authority: never the replay viewer, even if it were also bound to a raw-view role. */
     private boolean canRaw(HttpServletRequest request) {
-        return holds(request, ActionRegistry.PACKET_ANALYSIS_RAW_ROLES);
+        return !masked(request) && holds(request, ActionRegistry.PACKET_ANALYSIS_RAW_ROLES);
     }
 
-    /** The replay viewer never holds a run or raw authority here, even if it were also bound to such a role. */
     private boolean holds(HttpServletRequest request, Set<String> roles) {
         String actor = actor(request);
-        return actor != null && !masked(request)
-                && rbac.evaluateAny(actor, roles, Instant.now()).outcome() == AuthzOutcome.PERMITTED;
+        return actor != null && rbac.evaluateAny(actor, roles, Instant.now()).outcome() == AuthzOutcome.PERMITTED;
+    }
+
+    /** A replay viewer changes only the cases it created; every other session with run authority is unrestricted here. */
+    private static boolean mayChange(HttpServletRequest request, CaseRow row) {
+        return !masked(request) || (actor(request) != null && actor(request).equals(row.createdBy()));
+    }
+
+    private boolean mayChangeTelemetry(HttpServletRequest request, String telemetryId) {
+        if (!masked(request)) return true;
+        Optional<TelemetryRow> file = repository.findTelemetry(telemetryId);
+        if (file.isEmpty()) return true;
+        Optional<CaseRow> owner = repository.findCase(file.get().caseId());
+        return owner.isEmpty() || mayChange(request, owner.get());
+    }
+
+    private static ResponseEntity<Map<String, Object>> notCaseOwner() {
+        return error(HttpStatus.FORBIDDEN, "NOT_CASE_OWNER", "A masked session may change only the cases it created");
     }
 
     private static String actor(HttpServletRequest request) {

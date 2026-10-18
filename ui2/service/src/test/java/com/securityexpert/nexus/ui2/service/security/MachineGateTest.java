@@ -72,4 +72,33 @@ class MachineGateTest {
         }
         assertTrue(gate.machineWriteRefusal(Optional.of(cookie), "DELETE", now, ActionRegistry.FMG_DIAGNOSTIC_RUN).isPresent());
     }
+
+    @Test
+    void packetAnalysisRunPostsPassTheMachineGuardButItsPutAndDeleteRoutesDoNot() {
+        // PO decision 2026-10-18: the aiview machine session may create a case, upload and request an analysis (POST);
+        // changing a case afterwards (PUT) and deleting (DELETE) stay human-session actions.
+        String cookie = "synthetic-cookie";
+        Instant now = Instant.parse("2026-10-18T10:00:00Z");
+        var sessions = mock(SessionRepository.class);
+        var rbac = mock(RbacEvaluator.class);
+        var decisions = mock(com.securityexpert.nexus.ui2.persistence.identity.AuthzDecisionRepository.class);
+        var machine = new SessionRecord(SessionHasher.hash(cookie), "synthetic-actor", "synthetic-csrf",
+                SessionState.ACTIVE, now.minusSeconds(10), now.minusSeconds(10), now.plusSeconds(600),
+                now.plusSeconds(1800), Optional.empty(), Optional.empty(), Optional.empty(), true);
+        when(sessions.findBySessionId(anyString(), eq(now))).thenReturn(Optional.of(machine));
+        var gate = new GateChain(sessions, new ActionRegistry(), rbac, decisions);
+        assertTrue(gate.machineWriteRefusal(Optional.of(cookie), "POST", now, ActionRegistry.PACKET_ANALYSIS_RUN).isEmpty());
+        assertTrue(gate.machineWriteRefusal(Optional.of(cookie), "PUT", now, ActionRegistry.PACKET_ANALYSIS_RUN).isPresent());
+        assertTrue(gate.machineWriteRefusal(Optional.of(cookie), "DELETE", now, ActionRegistry.PACKET_ANALYSIS_RUN).isPresent());
+        // the raw-view action is a read method (GET) only, and no other POST action is opened by this grant
+        assertTrue(gate.machineWriteRefusal(Optional.of(cookie), "POST", now, ActionRegistry.PACKET_ANALYSIS_RAW_VIEW).isPresent());
+        assertTrue(gate.machineWriteRefusal(Optional.of(cookie), "POST", now, ActionRegistry.DATA_SANITIZE_RUN).isPresent());
+        // the gate chain itself: CSRF is still required, then RBAC decides
+        var missingCsrf = new GateRequest("POST", Optional.of(cookie), Optional.empty(), Optional.of("https://example.invalid"),
+                ActionRegistry.PACKET_ANALYSIS_RUN, Optional.empty());
+        assertEquals(401, ((GateOutcome.Refused) gate.evaluate(missingCsrf, now)).httpStatus());
+        var put = new GateRequest("PUT", Optional.of(cookie), Optional.of("synthetic-csrf"), Optional.of("https://example.invalid"),
+                ActionRegistry.PACKET_ANALYSIS_RUN, Optional.empty());
+        assertEquals("MACHINE_SESSION_READ_ONLY", ((GateOutcome.Refused) gate.evaluate(put, now)).body().get("error"));
+    }
 }
