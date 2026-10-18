@@ -35,7 +35,7 @@ public final class PolicyCompletenessCoordinator {
         this.settings = settings; this.windows = windows; this.recorder = recorder; this.cpReader = cpReader;
     }
 
-    /** @param fingerprint the product HMAC key holder, or null (the admin identity is then stored masked) */
+    /** @param fingerprint the product HMAC key holder, or null in tests (the admin identity is then stored masked); the policy pod always passes it (PO 2026-10-18) */
     public static PolicyCompletenessCoordinator create(PolicyCompletenessSettings settings, JobWindowPolicy windows,
             CheckPointPolicyCollector collector, GateRegistryPort gates, PolicyChangeEvidenceRepository evidence,
             PolicyCollectionRepository policies, PolicyRevisionRecorder recorder, HostnameFingerprint fingerprint) {

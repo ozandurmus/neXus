@@ -55,7 +55,7 @@ import com.securityexpert.nexus.ui2.worker.transcript.JobTranscriptScope;
  *       unchanged and nothing stored; the next window is the retry. The reader never throws for those, so the policy
  *       collection is not affected.</li>
  *   <li><b>What is stored.</b> Per entry: the seqno, the receive time (device-local, never converted), the admin as an HMAC
- *       (or {@code masked:<length>} when no fingerprint key is mounted), a shape-checked command class and result class, an
+ *       (or {@code masked:<length>} when a composition passes no key, which the policy pod no longer does), a shape-checked command class and result class, an
  *       HMAC of the path, the opaque device-group ref when the path names one, and the redaction count.
  *       {@code before-/after-change-detail}, names and raw text are never stored.</li>
  * </ul>
@@ -109,7 +109,7 @@ public final class PanoramaConfigLogReader {
     private final HostnameFingerprint fingerprint;
     private final Pause pause;
 
-    /** @param fingerprint the product HMAC key holder, or null when the policy pod has no key: the admin is then masked. */
+    /** @param fingerprint the product HMAC key holder, or null (tests, compositions without a key): the admin is then masked. The policy pod always passes it (PO 2026-10-18). */
     public PanoramaConfigLogReader(DeviceTransport transport, GateRegistryPort gates, PolicyChangeEvidenceRepository evidence,
             PolicyCollectionRepository policies, PolicyCompletenessSettings settings, JobWindowPolicy windows,
             HostnameFingerprint fingerprint) {

@@ -119,7 +119,18 @@ def test_policy_manifest_has_only_its_required_dependencies_and_starts_disabled(
     assert container["resources"] == {"requests": {"cpu": "250m", "memory": "512Mi"}, "limits": {"memory": "8Gi"}}
     assert "-Dui2.db.pool.maximum-pool-size=6" in next(e["value"] for e in container["env"] if e["name"] == "JAVA_TOOL_OPTIONS")
     assert not any("hostPath" in volume for volume in spec["volumes"])
-    assert {v["name"] for v in spec["volumes"]} == {"tmp", "home", "db-credentials", "credential-store-key", "artefact-store-key", "artefact-store", "corp-ca"}
+    assert {v["name"] for v in spec["volumes"]} == {"tmp", "home", "db-credentials", "credential-store-key", "artefact-store-key", "hostname-fingerprint-key", "artefact-store", "corp-ca"}
+    # PO decision 2026-10-18: the policy pod mounts the existing fingerprint key exactly like the worker pod (no new Secret)
+    worker = next(d for d in yaml.safe_load_all((ROOT / "deploy/ui2/52-worker-deployment.yaml").read_text()) if d["kind"] == "Deployment")
+    worker_spec = worker["spec"]["template"]["spec"]
+    worker_container = next(c for c in worker_spec["containers"] if c["name"] == "worker")
+    def key_wiring(pod, ctr):
+        env = next(e for e in ctr["env"] if e["name"] == "UI2_HOSTNAME_FINGERPRINT_KEY_FILE")
+        mount = next(m for m in ctr["volumeMounts"] if m["name"] == "hostname-fingerprint-key")
+        volume = next(v for v in pod["volumes"] if v["name"] == "hostname-fingerprint-key")
+        return env, mount, volume
+    assert key_wiring(spec, container) == key_wiring(worker_spec, worker_container)
+    assert key_wiring(spec, container)[2]["secret"]["secretName"] == "ui2-hostname-fingerprint-key"
     policy = next(d for d in documents if d["kind"] == "NetworkPolicy")
     assert policy["spec"]["ingress"] == []
     assert policy["spec"]["policyTypes"] == ["Ingress", "Egress"]

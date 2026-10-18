@@ -128,7 +128,10 @@ public final class Ui2WorkerMain {
         String artefactStoreKeyBase64 =
                 SecretFile.readRequired(Path.of(requireEnv("UI2_ARTEFACT_STORE_KEY_FILE")), "artefact_store_key");
         Path artefactStoreRoot = Path.of(System.getenv().getOrDefault("UI2_ARTEFACT_STORE_ROOT", "/var/lib/ui2/artefacts"));
-        String hostnameFingerprintKeyBase64 = "policy".equals(role) ? null : SecretFile.readRequired(
+        // Every role, the policy pod included (PO decision 2026-10-18), needs the product fingerprint key: a missing
+        // variable, file or empty value stops the pod at start (fail closed). The policy change evidence stores
+        // admin identities as HMACs under this key, never as a masked length.
+        String hostnameFingerprintKeyBase64 = SecretFile.readRequired(
                 Path.of(requireEnv("UI2_HOSTNAME_FINGERPRINT_KEY_FILE")), "hostname_fingerprint_key");
         String checkPointTrustRuleRef = System.getenv().getOrDefault("UI2_CP_TRUST_RULE_REF", "utils.cp_ssh_trust");
         String paloAltoTrustRuleRef =
@@ -176,7 +179,8 @@ public final class Ui2WorkerMain {
             if (!moduleRuntime.compatibleGeneralLive()) throw new IllegalStateException("COMPATIBLE_GENERAL_BOOTSTRAP_REQUIRED");
             startPolicy(transactionBoundary, databasePool, moduleRuntime, endpointAdmission, instance, leaseRepository,
                 attemptRepository, deviceRepository, strictFailoverSsh, panTransport, panCredentialResolverFor(resolverComponents),
-                artefactStoreRoot, artefactStoreKeyBase64, checkPointTrustRuleRef, paloAltoTrustRuleRef, policyFallback);
+                artefactStoreRoot, artefactStoreKeyBase64, HostnameFingerprint.fromBase64Key(hostnameFingerprintKeyBase64),
+                checkPointTrustRuleRef, paloAltoTrustRuleRef, policyFallback);
             return;
         }
 
@@ -576,22 +580,12 @@ public final class Ui2WorkerMain {
                 new com.securityexpert.nexus.ui2.persistence.policy.PolicyRevisionRepository(boundary)), fingerprint);
     }
 
-    /**
-     * The product fingerprint key holder, when this pod mounts the key (the policy pod does not by default): change evidence
-     * then stores the admin identity as an HMAC; without it the identity is stored masked (a length only).
-     */
-    private static HostnameFingerprint optionalFingerprint() {
-        String file = System.getenv("UI2_HOSTNAME_FINGERPRINT_KEY_FILE");
-        if (file == null || file.isBlank() || !java.nio.file.Files.isReadable(Path.of(file))) return null;
-        return HostnameFingerprint.fromBase64Key(SecretFile.readRequired(Path.of(file), "hostname_fingerprint_key"));
-    }
-
     private static void startPolicy(TransactionBoundary boundary, com.zaxxer.hikari.HikariDataSource pool,
             com.securityexpert.nexus.ui2.persistence.runtime.ModuleRuntimeRepository runtime,
             com.securityexpert.nexus.ui2.persistence.runtime.EndpointAdmissionRepository admission, String instance,
             JobLeaseRepository leases, JobStepAttemptRepository attempts, JooqDeviceRepository devices,
             SshExecTransport ssh, PanXmlApiTransport pan, StoreBackedPanCredentialResolver credentials,
-            Path root, String key, String cpTrust, String panTrust, boolean fallback) {
+            Path root, String key, HostnameFingerprint fingerprint, String cpTrust, String panTrust, boolean fallback) {
         var gates = new PersistenceGateRegistryPort(new JooqGateRegistryDao(boundary));
         var runs = new JooqDiscoveryRunRepository(boundary);
         var policies = new com.securityexpert.nexus.ui2.persistence.policy.PolicyCollectionRepository(boundary);
@@ -602,7 +596,6 @@ public final class Ui2WorkerMain {
         var cpCollector = new com.securityexpert.nexus.ui2.worker.policy.CheckPointPolicyCollector(ssh, gates, policies, deadline);
         var completenessSettings = com.securityexpert.nexus.ui2.worker.policy.PolicyCompletenessSettings.fromEnvironment();
         var completenessEvidence = new com.securityexpert.nexus.ui2.persistence.policy.PolicyChangeEvidenceRepository(boundary);
-        var fingerprint = optionalFingerprint();
         var policy = new com.securityexpert.nexus.ui2.worker.policy.PolicyCollectionJobExecutor(leases, attempts, runs, policies, cpCollector, gates)
             .withPanorama(policyPanorama(transport, gates, credentials, policies, deadline, completenessSettings, completenessEvidence, fingerprint))
             .withCompleteness(policyCompleteness(boundary, completenessSettings, cpCollector, gates, completenessEvidence, policies, fingerprint))

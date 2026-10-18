@@ -87,6 +87,10 @@ spec:
           value: /run/secrets/ui2-artefact-store/key
         - name: UI2_ARTEFACT_STORE_ROOT
           value: /app/artefact-store
+        # PO decision 2026-10-18: the existing product fingerprint key (same Secret and path as the worker). The policy
+        # change evidence stores admin identities as HMACs under it; the pod does not start without it.
+        - name: UI2_HOSTNAME_FINGERPRINT_KEY_FILE
+          value: /run/secrets/ui2-hostname-fingerprint/key
         - name: JAVA_TOOL_OPTIONS
           value: -Dui2.db.pool.maximum-pool-size=6
         securityContext:
@@ -118,6 +122,9 @@ spec:
         - name: artefact-store-key
           mountPath: /run/secrets/ui2-artefact-store
           readOnly: true
+        - name: hostname-fingerprint-key
+          mountPath: /run/secrets/ui2-hostname-fingerprint
+          readOnly: true
         - name: artefact-store
           mountPath: /app/artefact-store
         - name: corp-ca
@@ -144,6 +151,10 @@ spec:
       - name: artefact-store-key
         secret:
           secretName: ui2-artefact-store-key
+          defaultMode: 288
+      - name: hostname-fingerprint-key
+        secret:
+          secretName: ui2-hostname-fingerprint-key
           defaultMode: 288
       - name: artefact-store
         persistentVolumeClaim:
