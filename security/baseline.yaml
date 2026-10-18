@@ -470,6 +470,14 @@
     },
     {
       "tool": "gitleaks",
+      "rule": "generic-api-key",
+      "location": "ui2/service/src/test/java/com/securityexpert/nexus/ui2/service/systemlog/LogMaskingIdentityTest.java",
+      "reason": "Synthetic secret-shaped test line used to prove log redaction/masking; no operational credential. Exact path and rule only in .gitleaks.toml (system-log phase B, PO mandate 2026-10-15; masked-view identity fix 2026-10-18).",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "gitleaks",
       "rule": "private-key",
       "location": "ui2/worker/src/test/java/com/securityexpert/nexus/ui2/worker/systemlog/redaction/LogRedactorTest.java",
       "reason": "Synthetic secret-shaped test line used to prove log redaction/masking; no operational credential. Exact path and rule only in .gitleaks.toml (system-log phase B, PO mandate 2026-10-15).",

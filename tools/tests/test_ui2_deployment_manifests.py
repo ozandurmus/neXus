@@ -833,11 +833,12 @@ def test_gitleaks_allowlists_only_the_approved_commit_and_seven_exact_test_paths
     assert fixtures["targetRules"] == ["generic-api-key"]
     assert not {"commits", "regexes", "stopwords"} & fixtures.keys()
     entries = yaml.safe_load((REPO_ROOT / "security/baseline.yaml").read_text())["accepted"]
-    # System-log redaction/masking tests (phase B): two exact paths, two rules, no other exemption.
+    # System-log redaction/masking tests (phase B): four exact paths, two rules, no other exemption.
     syslog_paths = {
         "ui2/worker/src/test/java/com/securityexpert/nexus/ui2/worker/systemlog/redaction/LogRedactorTest.java",
         "ui2/service/src/test/java/com/securityexpert/nexus/ui2/service/systemlog/LogMaskingTest.java",
         "ui2/service/src/test/java/com/securityexpert/nexus/ui2/service/systemlog/SystemLogReadFixture.java",
+        "ui2/service/src/test/java/com/securityexpert/nexus/ui2/service/systemlog/LogMaskingIdentityTest.java",
     }
     assert syslog["targetRules"] == ["generic-api-key", "private-key"]
     assert not {"commits", "regexes", "stopwords", "regexTarget"} & syslog.keys()
