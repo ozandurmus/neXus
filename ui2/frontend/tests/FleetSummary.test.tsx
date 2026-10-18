@@ -6,7 +6,7 @@ import { m3Theme } from "../src/theme/m3Theme";
 import { FleetSummary } from "../src/screens/FleetSummary";
 import { InventoryScreen } from "../src/screens/InventoryScreen";
 import { OverviewScreen } from "../src/screens/OverviewScreen";
-import type { OverviewView } from "../src/auth/adminApi";
+import type { DeviceSummary, OverviewView } from "../src/auth/adminApi";
 
 /**
  * The Devices landing (UI review 2026-10-18, P1-1): the estate inventory summary where the empty "Select a device or
@@ -44,6 +44,32 @@ const rows = [
   { device_id: "d1", vendor_hint: "check_point", enrollment_state: "ENROLLED", hostname: "FW-SYNTH-01", model: "Quantum", software_version: "R81.20", ha_role: null, cluster_member_ref: null, role: "gateway" },
   { device_id: "d2", vendor_hint: "palo_alto", enrollment_state: "ENROLLED", hostname: "FW-SYNTH-02", model: "PA-440", software_version: "10.2.7", ha_role: null, cluster_member_ref: null, role: "gateway" },
 ];
+
+describe("the other vendors' versions (post-release review 2026-10-18, 1.5)", () => {
+  it("adds one bar per vendor from the device list already loaded, each slice opening the filtered list; none without such devices", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => json(overview())));
+    const fleet = [
+      ...rows,
+      { device_id: "d3", vendor_hint: "fortinet", enrollment_state: "ENROLLED", hostname: "FW-SYNTH-03", model: "FortiGate-100F", software_version: "v7.4.12 build2902", ha_role: null, cluster_member_ref: null, role: "gateway" },
+      { device_id: "d4", vendor_hint: "fortinet", enrollment_state: "ENROLLED", hostname: "FW-SYNTH-04", model: "FMG-VM64", software_version: "v7.4.11-build2804", ha_role: null, cluster_member_ref: null, role: "management_server" },
+      { device_id: "d5", vendor_hint: "cisco_asa", enrollment_state: "ENROLLED", hostname: "FW-SYNTH-05", model: "ASA 5516", software_version: null, ha_role: null, cluster_member_ref: null, role: "gateway" },
+      { device_id: "d6", vendor_hint: "radware", enrollment_state: "REGISTERED", hostname: "FW-SYNTH-06", model: "DefensePro", software_version: "8.32", ha_role: null, cluster_member_ref: null, role: "appliance" },
+    ] as unknown as DeviceSummary[];
+    const { unmount } = mount(<FleetSummary countLabel="6 registered · 5 enrolled" fleet={fleet} />);
+    const card = (await screen.findByText("Other vendors · version as reported")).closest("[data-reported-versions]") as HTMLElement;
+    expect(within(card).getByText("Fortinet · 2 devices")).toBeInTheDocument();
+    expect(within(card).getByText("Cisco ASA · 1 device")).toBeInTheDocument();
+    // a device that is not enrolled is not in service: no Radware bar; vendors with no device get none either
+    expect(within(card).queryByText(/^Radware/)).toBeNull();
+    expect(within(card).queryByText(/^Blue Coat|^Infoblox/)).toBeNull();
+    const hrefs = within(card).getAllByRole("link").map((a) => a.getAttribute("href"));
+    expect(hrefs).toContain("?screen=inventory&vendor=fortinet&sw_version=v7.4.12+build2902");
+    unmount();
+    mount(<FleetSummary countLabel="2 registered · 2 enrolled" fleet={rows as unknown as DeviceSummary[]} />);
+    await screen.findByText("Policy installed");
+    expect(screen.queryByText("Other vendors · version as reported")).toBeNull();
+  });
+});
 
 describe("the summary itself", () => {
   it("shows the count sentence, the guidance and the Overview's estate details: policy installed, hardware models, software versions, evidence age", async () => {

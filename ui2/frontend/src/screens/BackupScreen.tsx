@@ -1023,6 +1023,11 @@ function RowMenu({ name, children }: { readonly name: string; readonly children:
 
 const HIDDEN = { position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap" } as const;
 const ONE_LINE = { whiteSpace: "nowrap" } as const;
+/** The fleet table's columns and their share of the width (R3): percentages, so the table fills the card at 1440 and scrolls below 1100. */
+export const FLEET_COLUMNS: ReadonlyArray<readonly [string, string]> = [
+  ["Device", "16%"], ["Model · version", "13%"], ["Cluster", "10%"], ["Target", "9%"], ["Latest archive", "9%"], ["Size", "7%"],
+  ["Validation", "10%"], ["Deviation", "10%"], ["Latest attempt", "13%"], ["Actions", "3%"],
+];
 
 /**
  * Backups (Product Owner, 2026-09-22; merged per the UI review 2026-09-23; one-line rows per the UI review 2026-10-18):
@@ -1157,7 +1162,12 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
       ) : (
         <>
         <TableContainer sx={{ maxHeight: "70vh", overflowX: "auto" }}>
-          <Table size="small" stickyHeader sx={{ "& td, & th": { px: 1, ...ONE_LINE }, "& td:first-of-type, & th:first-of-type": { pl: 2 }, "& td:last-of-type, & th:last-of-type": { pr: 1 } }}>
+          {/* Fixed column widths (post-release review 2026-10-18, R3): LATEST ATTEMPT keeps its room, a long value clips
+              inside its own cell with the full text on hover, and the two time columns show the age with the exact stamp on hover. */}
+          <Table size="small" stickyHeader data-backup-fleet sx={{ tableLayout: "fixed", minWidth: 1100, "& td, & th": { px: 1, overflow: "hidden", textOverflow: "ellipsis", ...ONE_LINE }, "& td:first-of-type, & th:first-of-type": { pl: 2 }, "& td:last-of-type, & th:last-of-type": { pr: 1 } }}>
+            <colgroup>
+              {FLEET_COLUMNS.map(([name, width]) => <col key={name} style={{ width }} />)}
+            </colgroup>
             <TableHead>
               <TableRow>
                 <TableCell>Device</TableCell>
@@ -1169,7 +1179,7 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
                 <TableCell>Validation</TableCell>
                 <TableCell>Deviation</TableCell>
                 <TableCell>Latest attempt</TableCell>
-                <TableCell align="right" sx={{ width: 48, position: "relative", overflow: "hidden" }}><Box component="span" sx={HIDDEN}>Actions</Box></TableCell>
+                <TableCell align="right" sx={{ position: "relative", overflow: "hidden" }}><Box component="span" sx={HIDDEN}>Actions</Box></TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
@@ -1185,11 +1195,11 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
                     <TableCell>
                       <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                         <VendorBadge vendor={vendor} size={24} />
-                        <Typography sx={{ fontFamily: MONO, fontSize: 12.5, fontWeight: 600, whiteSpace: "nowrap" }}>{name}</Typography>
+                        <Typography title={name} sx={{ fontFamily: MONO, fontSize: 12.5, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{name}</Typography>
                       </Box>
                     </TableCell>
-                    <TableCell sx={{ color: m3.onSurfaceVar, fontSize: 12, maxWidth: 170, overflow: "hidden", textOverflow: "ellipsis" }} title={modelVersion}>{modelVersion}</TableCell>
-                    <TableCell sx={{ fontFamily: MONO, fontSize: 12, color: m3.onSurfaceVar, maxWidth: 130, overflow: "hidden", textOverflow: "ellipsis" }}
+                    <TableCell sx={{ color: m3.onSurfaceVar, fontSize: 12 }} title={modelVersion}>{modelVersion}</TableCell>
+                    <TableCell sx={{ fontFamily: MONO, fontSize: 12, color: m3.onSurfaceVar }}
                       title={summary?.cluster_member_ref ?? "standalone"}>{summary?.cluster_member_ref ?? "standalone"}</TableCell>
                     <TableCell align="center">
                       {summary ? (
@@ -1201,13 +1211,14 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
                           // A role that cannot change the target sees the fact as a read-only pill, not a switch that looks live.
                           <Box component="span" role="img" aria-label={`Backup target ${name}: ${target ? "on" : "off"}, locked for your role`}
                             title={`Backup target: ${target ? "on" : "off"}. Locked · ${ROLE_LOCK_LABEL}`}>
-                            <StatusChip tone={target ? "ok" : "neutral"} label={target ? "Target · locked" : "Not a target · locked"} dense />
+                            {/* A neutral fact, not an achievement (R11): the pill is grey either way; the word carries the state. */}
+                            <StatusChip tone="neutral" label={target ? "Target · locked" : "Not a target · locked"} dense />
                           </Box>
                         )
                       ) : <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>Not a backup target</Typography>}
                     </TableCell>
                     <TableCell sx={{ fontSize: 12.5 }}>
-                      {item ? <Stamp at={item.lastBackupTime} />
+                      {item ? <Stamp at={item.lastBackupTime} compact />
                         : target ? <StatusChip tone="warn" label="No archive" dense />
                         : <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>No archive</Typography>}
                     </TableCell>

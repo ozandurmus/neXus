@@ -103,7 +103,8 @@ describe("RESULT words and the transcript column (P1-4B)", () => {
     render(<JobLogsPanel />);
     const table = await screen.findByRole("table", { name: "Job logs" });
     const cells = within(table).getAllByRole("cell").filter((c) => c.hasAttribute("data-result")).map((c) => c.textContent);
-    expect(cells).toEqual(["Not ready", "Partial", "—", "Collection failedCOLLECTION_FAILED"]);
+    // the raw reason code is on hover, not in the text (post-release review 2026-10-18, R8)
+    expect(cells).toEqual(["Not ready", "Partial", "—", "Collection failed"]);
     expect(within(table).queryByRole("columnheader", { name: "Transcript" })).toBeNull();
     expect(within(table).getByRole("columnheader", { name: "Result" })).toBeInTheDocument();
   });

@@ -1,7 +1,7 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { OverviewScreen, haReadinessSentence, reportedVersions } from "../src/screens/OverviewScreen";
+import { EstateDetails, OverviewScreen, haReadinessSentence, reportedVersions } from "../src/screens/OverviewScreen";
 import type { DeviceSummary, OverviewView } from "../src/auth/adminApi";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -118,19 +118,22 @@ describe("Overview Software in service: Fortinet and Cisco ASA", () => {
     expect(rows.reduce((n, r) => n + r.count, 0)).toBe(4);
   });
 
-  it("shows the two vendors as rows next to Check Point and Palo Alto, with no outdated judgement", async () => {
-    stub([dev("a", "fortinet", "7.2.8"), dev("b", "cisco_asa", "9.18(3)"), dev("c", "cisco_asa", null)], []);
-    render(<OverviewScreen />);
-    expect(await screen.findByText("Fortinet · Version as reported")).toBeInTheDocument();
-    expect(screen.getByText("Cisco ASA · Version as reported")).toBeInTheDocument();
-    await waitFor(() => expect(screen.getAllByText("Unknown").length).toBeGreaterThan(0));
-    expect(document.body.textContent).not.toMatch(/outdated|behind|newest|end of life/i);
+  it("shows the vendors as rows next to Check Point and Palo Alto on the Fleet summary, with no outdated judgement (3.5 / 1.5)", async () => {
+    render(<EstateDetails data={overview()} onDevicesScreen fleet={[dev("a", "fortinet", "7.2.8"), dev("b", "cisco_asa", "9.18(3)"), dev("c", "cisco_asa", null)]} />);
+    const card = (await screen.findByText("Fortinet · 1 device")).closest("[data-reported-versions]") as HTMLElement;
+    expect(within(card).getByText("Cisco ASA · 2 devices")).toBeInTheDocument();
+    await waitFor(() => expect(within(card).getAllByText("Unknown").length).toBeGreaterThan(0));
+    expect(card.textContent).not.toMatch(/outdated|behind|newest|end of life/i);
   });
 
-  it("draws no row for a vendor with no devices", async () => {
+  it("draws no row for a vendor with no devices, and the Overview itself keeps only the one-line link", async () => {
+    const { unmount } = render(<EstateDetails data={overview()} onDevicesScreen fleet={[dev("a", "fortinet", "7.2.8")]} />);
+    expect(await screen.findByText("Fortinet · 1 device")).toBeInTheDocument();
+    expect(screen.queryByText(/^Cisco ASA/)).toBeNull();
+    unmount();
     stub([dev("a", "fortinet", "7.2.8")], []);
     render(<OverviewScreen />);
-    expect(await screen.findByText("Fortinet · Version as reported")).toBeInTheDocument();
-    expect(screen.queryByText("Cisco ASA · Version as reported")).toBeNull();
+    expect(await screen.findByRole("link", { name: "Devices › Fleet summary →" })).toHaveAttribute("href", "?screen=inventory");
+    expect(screen.queryByText(/^Fortinet ·/)).toBeNull();
   });
 });

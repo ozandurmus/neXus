@@ -50,6 +50,8 @@ const GROUPS: readonly AdminGroupDef[] = [
       { slug: "device-management", label: "Device management", panel: <DeviceManagementPane /> },
       { slug: "inventory-exclusions", label: "Inventory exclusions", panel: <InventoryExclusionsPanel /> },
       { slug: "credentials", administratorOnly: true, label: "Credentials", panel: <CredentialsPanel /> },
+      // A per-device trust setting belongs with the registry, not with access control (UI review 2026-10-18, 2.7); the route is unchanged.
+      { slug: "ssh-trust", label: "SSH trust", panel: <SshHostKeyPanel settings /> },
     ],
   },
   {
@@ -59,7 +61,6 @@ const GROUPS: readonly AdminGroupDef[] = [
       { slug: "local-identities", administratorOnly: true, label: "Local identities", panel: <LocalIdentitiesPanel /> },
       { slug: "sessions", administratorOnly: true, label: "Sessions", panel: <SessionsPanel /> },
       { slug: "roles-permissions", administratorOnly: true, label: "Roles & Permissions", panel: <CustomRolesPanel /> },
-      { slug: "ssh-trust", label: "SSH trust", panel: <SshHostKeyPanel settings /> },
       { slug: "ldap-settings", administratorOnly: true, label: "LDAP Settings", panel: <DirectorySettingsPanel /> },
     ],
   },

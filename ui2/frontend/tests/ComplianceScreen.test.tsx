@@ -177,3 +177,20 @@ describe("Compliance -- counts reconcile (UI review 2026-10-17)", () => {
   });
 });
 
+
+describe("KPI badges state facts, not judgements (post-release review 2026-10-18, R12)", () => {
+  it("says the share of all checks and the critical failures with the firewalls they fall on; no 'Improvement needed' or 'Immediate action'", async () => {
+    vi.stubGlobal("fetch", vi.fn((url: string) => Promise.resolve(new Response(JSON.stringify(
+      url.includes("/compliance/overview") ? { ...OVERVIEW, control_checks: 2448 } : {
+        controls: [
+          { ...control("c1", "Authentication", "FAIL", [40, 22, 0], ["FW-TANGO-04", "FW-JULIET-06"]), severity: "CRITICAL" },
+          { ...control("c2", "Authentication", "FAIL", [50, 12, 0], ["FW-JULIET-06", "FW-BRAVO-02"]), severity: "CRITICAL" },
+          control("c3", "Logging", "FAIL", [10, 5, 0], ["FW-OSCAR-04"]),
+        ],
+      }), { status: 200 }))));
+    render(<ComplianceScreen />);
+    expect(await screen.findByText("28.9 % of 2,448 checks")).toBeInTheDocument();
+    expect(screen.getByText("172 critical · 3 firewalls")).toBeInTheDocument();
+    expect(screen.queryByText(/Improvement Needed|High Assurance|Immediate Action|Zero Critical/)).toBeNull();
+  });
+});

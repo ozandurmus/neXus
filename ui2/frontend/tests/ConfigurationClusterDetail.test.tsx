@@ -57,7 +57,7 @@ describe("Configuration cluster detail after the Fable review", () => {
   it.each([false, undefined])("does not request standalone text without a true affordance (%s)", async (textReadable) => {
     stubConfigs({ text_readable: textReadable });
     render(withTheme(<DeviceConfigurationDetail device={member("m1", { cluster_member_ref: null })} />));
-    expect(await screen.findByText("The configuration text is visible to onboarding administrators.")).toBeInTheDocument();
+    expect(await screen.findByText(/Configuration settings are shown to onboarding administrators and security administrators/)).toBeInTheDocument();
     expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).endsWith("/configuration/text"))).toBe(false);
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
@@ -65,7 +65,7 @@ describe("Configuration cluster detail after the Fable review", () => {
   it("does not request cluster member text when the affordance is false", async () => {
     stubConfigs({ text_readable: false });
     render(withTheme(<ClusterConfigurationDetail clusterRef="CLS-ROMEO-01" members={MEMBERS} />));
-    expect(await screen.findByText("The configuration text is visible to onboarding administrators.")).toBeInTheDocument();
+    expect(await screen.findByText(/Configuration settings are shown to onboarding administrators and security administrators/)).toBeInTheDocument();
     expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).endsWith("/configuration/text"))).toBe(false);
     expect(screen.queryByText("Members agree")).not.toBeInTheDocument();
   });

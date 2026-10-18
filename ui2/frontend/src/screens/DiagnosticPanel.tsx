@@ -3,9 +3,9 @@ import { useEffect, useRef, useState } from "react";
 import { Alert, Box, Button, Chip, Divider, List, ListItemButton, ListItemText, ListSubheader,
   Paper, Stack, Step, StepLabel, Stepper, Table, TableBody, TableCell, TableContainer, TableHead,
   TablePagination, TableRow, TextField, Typography } from "@mui/material";
-import { Stamp } from "../shell/PresentedText";
+import { Presented, Stamp } from "../shell/PresentedText";
 import { formatDuration, formatStamp } from "../shell/time";
-import { jobStateWord, vendorLabel } from "../shell/presenters";
+import { actorLabel, jobStateWord, vendorLabel } from "../shell/presenters";
 import { getFmgDiagnostic, listFmgDiagnosticTargets, diagnosticHistory, runDiagnostic,
   type DiagnosticTarget, type DiagnosticResult, type DiagnosticHistoryRow, type ApiError } from "../auth/adminApi";
 
@@ -30,6 +30,12 @@ const failureReason = (result: DiagnosticResult) => {
 function StatusChip({ state }: { state: string }) {
   return <Chip size="small" label={statusLabel(state)} color={state === "COMPLETED" ? "success"
     : TERMINAL.has(state) ? "error" : "info"} variant="outlined" />;
+}
+
+/** The actor in words (R8): a service actor as `service · neXus <name>`, a masked session actor as `Masked actor` with its stable token beside it. */
+function ActorCell({ actor }: { readonly actor: string }) {
+  const a = actorLabel(actor);
+  return <Presented label={a.label} raw={a.raw} suffix={a.label === "Masked actor"} />;
 }
 
 export function DiagnosticPanel() {
@@ -236,7 +242,7 @@ export function DiagnosticPanel() {
         <TableContainer><Table size="small" aria-label="Execution history">
           <TableHead><TableRow>{["Time", "Actor", ...(!deviceId ? ["Device"] : []), "Command", "Status", "Duration", "Output"].map(label => <TableCell key={label}>{label}</TableCell>)}</TableRow></TableHead>
           <TableBody>{history.filter(row => !deviceId || row.targetDeviceId === deviceId).map(row => <TableRow key={row.jobId} hover>
-            <TableCell sx={{ whiteSpace: "nowrap" }}><Stamp at={row.submittedAt} /></TableCell><TableCell>{row.actor}</TableCell>
+            <TableCell sx={{ whiteSpace: "nowrap" }}><Stamp at={row.submittedAt} /></TableCell><TableCell><ActorCell actor={row.actor} /></TableCell>
             {!deviceId && <TableCell>{row.target}</TableCell>}<TableCell sx={{ maxWidth: 400, overflowWrap: "anywhere" }}>{row.description ?? row.command}</TableCell>
             <TableCell><StatusChip state={row.state} /></TableCell><TableCell sx={{ whiteSpace: "nowrap" }}>{duration(row.durationMs)}</TableCell>
             <TableCell><Button disabled={busy} onClick={() => openRun(row.jobId)}>View</Button></TableCell>

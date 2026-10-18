@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import type { CpFailoverSummary, DeviceSummary } from "../src/auth/adminApi";
 import { HaReadinessList } from "../src/screens/HaReadinessList";
+import { JobWindowContext } from "../src/shell/JobWindow";
 const at = "2026-10-02T09:00:00Z";
 const cluster = (title: string, vendor = "check_point") => ({ ref: title, title, members: [
   { device_id: `${title}-m1`, hostname: `FW-${title}-M1`, vendor_hint: vendor, ha_role: "active", inventory_collected_at: at },
@@ -217,7 +218,7 @@ it.each([["UNSUPPORTED_MODE", "Cluster mode not supported"], ["IDENTITY_NOT_RECO
 });
 it("writes the Unknown-versus-Not-ready rule on screen and drops a mode line that says nothing", () => {
   setup({ rows: { ...rows, "CLS-ALPHA-01": [{ ...rows["CLS-ALPHA-01"][0], mode: "UNKNOWN" }] } });
-  expect(document.querySelector("[data-readiness-rule]")).toHaveTextContent(/Not ready: a pre-check found a blocking condition\. Unknown: readiness could not be established/);
+  expect(document.querySelector("[data-readiness-rule]")).toHaveTextContent(/Not ready: a pre-check found a blocking condition · Unknown: readiness could not be established/);
   expect(within(row("CLS-ALPHA-01")).queryByText(/^Mode:/)).toBeNull();
 });
 it("puts Run readiness check on the toolbar and the staleness notice, asking once before a multi-cluster run", () => {
@@ -291,4 +292,18 @@ it("keeps the mode on its own line without splitting its words", () => {
   const mode = within(row("CLS-ALPHA-01")).getByText("Mode: active-passive");
   expect(mode.tagName).toBe("DIV");
   expect(mode).toHaveStyle({ whiteSpace: "nowrap" });
+});
+
+it("shows no row action and no Actions column outside the job window; the header button carries the window (R6)", () => {
+  const onRun = vi.fn();
+  render(<JobWindowContext.Provider value={{ open: false, label: "Next window: 18:00" }}>
+    <HaReadinessList clusters={clusters} rows={rows} running={null} busy={false} progress={{}} error={null} onOpen={vi.fn()} onRun={onRun} onBulkRun={vi.fn()} />
+  </JobWindowContext.Provider>);
+  expect(within(table()).queryByRole("columnheader", { name: "Actions" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Run pre-checks" })).toBeNull();
+  expect(screen.getByTestId("toolbar-run-readiness")).toHaveTextContent("Run readiness check (2 clusters) · Next window: 18:00");
+  expect(screen.getByTestId("toolbar-run-readiness")).toBeDisabled();
+  // the legend is one line: the four counts and the rule sit in the same row
+  const rule = document.querySelector("[data-readiness-rule]")!;
+  expect(rule.parentElement).toContainElement(screen.getByLabelText("Readiness summary"));
 });

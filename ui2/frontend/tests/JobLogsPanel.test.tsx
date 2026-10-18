@@ -61,7 +61,8 @@ it("keeps job and device UUIDs in the expandable details", async () => {
   render(<JobLogsPanel />);
   await screen.findByText("Unknown device");
   expect(screen.getByText("Cisco ASA inventory read")).toBeInTheDocument();
-  expect(screen.getByText("COLLECTION_FAILED")).toBeInTheDocument();
+  // the reason in words, the raw code on hover (post-release review 2026-10-18, R8)
+  expect(screen.getByText("Collection failed")).toHaveAttribute("data-raw", "COLLECTION_FAILED");
   expect(screen.queryByText(jobId)).toBeNull();
   expect(screen.queryByText(deviceId)).toBeNull();
   fireEvent.click(screen.getByText("Unknown device").closest("tr")!);

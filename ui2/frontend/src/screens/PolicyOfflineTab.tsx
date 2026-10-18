@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Alert, Box, Button, Checkbox, CircularProgress, FormControlLabel, MenuItem, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography } from "@mui/material";
 import { deleteOfflineAnalysis, getOfflineAnalysis, listOfflineAnalyses, uploadOfflineAnalysis, type OfflineAnalysisResult, type OfflineAnalysisSummary, type OfflineRule } from "../auth/adminApi";
 import { detectMapping, fields, parsePreview, required, type CsvField } from "./offlineCsv";
-import { ROLE_LOCK_LABEL } from "../shell/actionAccess";
+import { PLANE_ADMIN, ROLE_LOCK_LABEL, useRoleAllows } from "../shell/actionAccess";
 import { plural } from "../shell/plural";
 
 const labels: Record<CsvField, string> = { source: "Source IP", destination: "Destination IP", port: "Destination port", protocol: "Protocol",
@@ -75,18 +75,26 @@ export function PolicyOfflineTab({ policy, openRule }: { policy: string; openRul
     const link = document.createElement("a"); link.href = url; link.download = "offline-analysis.csv"; link.click(); URL.revokeObjectURL(url);
   };
   const validMapping = required.every(f => mapping[f]) && new Set(Object.values(mapping).filter(Boolean)).size === Object.values(mapping).filter(Boolean).length;
+  // Before a policy is chosen the server has not said who may upload; the session's plane list already says a role
+  // without Admin never can (post-release review 2026-10-18, 2.5), so the locked dropzone is there from the first look.
+  const roleMayUpload = useRoleAllows(PLANE_ADMIN);
+  const lockedReason = !policy ? (roleMayUpload ? "Select a stored policy first" : ROLE_LOCK_LABEL) : ROLE_LOCK_LABEL;
+  const storedCount = policy ? analyses.length : 0;
   const rules = result?.rules.filter(rule => filter === "all" || filter === "zero" && rule.flowCount === 0 || filter === "members" && (rule.unseenMembers.length > 0 || rule.memberStatus === "UNKNOWN") || filter === "narrowing" && rule.narrowing.memberStatus) ?? [];
   return <Box role="tabpanel" aria-label="Offline analysis">
     <Typography variant="h6">Offline analysis</Typography>
     <Typography variant="body2">Analyze an operator-exported SIEM CSV for one firewall and period against this stored policy snapshot. No live ingestion or device changes. Files and raw rows are never saved.</Typography>
-    {!policy && <Typography>Select a stored policy first.</Typography>}
     {loading && <Typography role="status">Loading stored analyses…</Typography>}
     {error && <Alert severity="error">{error}</Alert>}
-    {/* A role that cannot upload still sees where the upload goes, locked and saying why (UI review 2026-10-18, P0-4B). */}
-    {policy && !loading && !canManage && <Box role="group" aria-label="SIEM CSV upload" aria-disabled="true"
+    {/* A role that cannot upload still sees where the upload goes, locked and saying why (UI review 2026-10-18, P0-4B);
+        the same zone before a policy is chosen, so the tab never opens on an empty form. */}
+    {!loading && (!policy || !canManage) && <Box role="group" aria-label="SIEM CSV upload" aria-disabled="true"
       sx={{ my: 2, p: 2.5, border: "2px dashed", borderColor: "divider", borderRadius: 2, textAlign: "center", color: "text.disabled", bgcolor: "action.disabledBackground" }}>
-      <Typography>Drop a SIEM CSV here · {ROLE_LOCK_LABEL}</Typography>
-      <Typography variant="caption" display="block">{analyses.length === 0 ? "No stored analysis for this policy." : `${plural(analyses.length, "stored analysis", "stored analyses")} for this policy; choose one below to read it.`}</Typography>
+      <Typography>Drop a SIEM CSV here · {lockedReason}</Typography>
+      <Typography variant="caption" display="block">
+        {!policy ? `${plural(storedCount, "stored analysis", "stored analyses")} · select a stored policy to list its analyses.`
+          : analyses.length === 0 ? "No stored analysis for this policy." : `${plural(analyses.length, "stored analysis", "stored analyses")} for this policy; choose one below to read it.`}
+      </Typography>
     </Box>}
     {canManage && <Box sx={{ my: 2 }}>
       <Button component="label" disabled={busy}>Choose SIEM CSV<input aria-label="SIEM CSV file" type="file" accept=".csv,text/csv" hidden onChange={e => { void selectFile(e.target.files?.[0]); e.target.value = ""; }} /></Button>

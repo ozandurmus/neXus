@@ -282,7 +282,7 @@ export function ManagementTreePanel({ deviceId, onOpenDevice, onOpenCluster }: {
         <Typography variant="overline" sx={{ color: m3.onSurfaceVar, letterSpacing: "0.08em" }}>Managed estate · from discovery</Typography>
         <Typography variant="h6" sx={{ fontWeight: 600, mt: -0.5 }}>{t.vendor === "palo_alto" ? "Firewalls and HA pairs" : t.vendor === "radware" ? "Sites and managed devices" : "Domains, clusters and gateways"}</Typography>
         <Typography variant="body2" sx={{ color: m3.onSurfaceVar, mt: 0.5 }}>
-          {t.vendor === "radware" ? `${plural(c.domains ?? 0, "site")} · ${plural(c.gateways ?? 0, "device")}`
+          {t.vendor === "radware" ? `${plural(c.domains ?? 0, "site")} · ${plural(c.gateways ?? 0, "appliance")}`
             : <>{t.vendor === "palo_alto" ? "" : `${plural(c.domains ?? 0, "domain")} · `}{plural(c.clusters ?? 0, "cluster")} · {plural(c.gateways ?? 0, "gateway")} · {plural(c.virtual_systems ?? 0, "virtual system")}</>}
           {c.management_appliances ? ` · ${plural(c.management_appliances, "management / log server")}` : ""} · {c.imported ?? 0} in neXus ·
           discovered <Ts at={t.discovered_at} relative />
@@ -328,7 +328,9 @@ export function ManagementTreePanel({ deviceId, onOpenDevice, onOpenCluster }: {
               <Box component="span" sx={{ fontWeight: 600, fontSize: 13.5, flex: 1 }}>{d.domain ?? (t.vendor === "palo_alto" ? "Managed firewalls" : t.vendor === "radware" ? "Managed devices" : "No domain")}</Box>
               {dc.missing > 0 && <StatusChip tone="warn" label={`${dc.missing} not in neXus`} dense />}
               <Box component="span" sx={{ fontSize: 12, color: m3.onSurfaceVar, fontVariantNumeric: "tabular-nums" }}>
-                {plural(dc.clusters, "cluster")} · {plural(dc.gateways, "gateway")}{dc.vs > 0 ? ` · ${plural(dc.vs, "virtual system")}` : ""}
+                {/* A Radware controller manages appliances, not clusters of gateways (P2-1B): one count in the right word. */}
+                {t.vendor === "radware" ? plural(dc.gateways, "appliance")
+                  : <>{plural(dc.clusters, "cluster")} · {plural(dc.gateways, "gateway")}{dc.vs > 0 ? ` · ${plural(dc.vs, "virtual system")}` : ""}</>}
               </Box>
             </Box>
             {expanded && (

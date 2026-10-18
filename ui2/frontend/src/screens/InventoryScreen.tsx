@@ -1352,7 +1352,7 @@ export function InventoryScreen() {
             ) : (
               // The landing (P1-1): the estate inventory summary where the empty "Select a device" pane was; the detail tabs
               // (Interfaces, Routing, Cluster members, Backup, Identity) appear once a device or cluster is chosen.
-              <FleetSummary countLabel={registeredLabel(devices ?? [])} />
+              <FleetSummary countLabel={registeredLabel(devices ?? [])} fleet={devices ?? []} />
             )}
           </Box>
         }

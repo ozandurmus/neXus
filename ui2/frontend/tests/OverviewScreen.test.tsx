@@ -112,14 +112,17 @@ describe("Overview -- executive (EXEC_OVERVIEW_DESIGN_2026_09_25_FABLE.md)", () 
     expect(screen.getByText("Technical checks. Not an audit certification.")).toBeInTheDocument();
   });
 
-  it("shows software in each vendor's own terms without 'behind' language", async () => {
+  it("keeps Software in service as one line that leads to the Devices Fleet summary, without 'behind' language (post-release review 2026-10-18, 3.5)", async () => {
     stubWithControls(overview({ estate: ESTATE, platform: { ...overview().platform, versions: {
       check_point: { major: [{ label: "R81.20", count: 36 }], minor: [{ label: "R81.20 Jumbo Take 119", count: 30 }, { label: null, count: 6 }] },
       palo_alto: { major: [{ label: "11.1", count: 40 }], minor: [{ label: "11.1.10-h7", count: 21 }] },
     } } } as Partial<OverviewView>));
     render(<OverviewScreen />);
-    expect(await screen.findByText("Check Point · Jumbo Hotfix take")).toBeInTheDocument();
-    expect(screen.getByText("Palo Alto · PAN-OS version")).toBeInTheDocument();
+    expect(await screen.findByText("Software in service")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Devices › Fleet summary →" })).toHaveAttribute("href", "?screen=inventory");
+    // the version charts have one home now: the Fleet summary (the Overview's own disclosure still carries them)
+    expect(screen.queryByText("Check Point · Jumbo Hotfix take")).toBeNull();
+    expect(screen.queryByText("Palo Alto · PAN-OS version")).toBeNull();
     expect(document.body.textContent).not.toMatch(/behind|on newest/i);
   });
 

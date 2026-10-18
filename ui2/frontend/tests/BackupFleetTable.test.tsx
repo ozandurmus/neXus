@@ -3,9 +3,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@mui/material/styles";
 
 import { m3Theme } from "../src/theme/m3Theme";
+import { TONE_COLORS } from "../src/shell/tone";
 import { SessionContext, type SessionInfo } from "../src/auth/SessionContext";
 import { JobWindowContext } from "../src/shell/JobWindow";
-import { BACKUP_PAGE_SIZE, BackupScreen } from "../src/screens/BackupScreen";
+import { BACKUP_PAGE_SIZE, BackupScreen, FLEET_COLUMNS } from "../src/screens/BackupScreen";
 
 /**
  * Backups fleet table (UI review 2026-10-18, F-4): one line per row, LATEST ATTEMPT as its own column, every action in
@@ -186,5 +187,26 @@ describe("the target toggle, the deviation pill and the KPI cards", () => {
     const table = screen.getByRole("table");
     // eslint-disable-next-line no-bitwise
     expect(card.compareDocumentPosition(table) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+});
+
+describe("fixed column widths (post-release review 2026-10-18, R3 / R11)", () => {
+  it("lays the fleet table out with fixed columns so LATEST ATTEMPT keeps its room, ages with the exact stamp on hover, neutral locked pill", async () => {
+    stub([device(1)], [artefact(1)]);
+    render(as(viewerPlanes, <BackupScreen />));
+    const row = (await screen.findByText("FW-SYNTH-001")).closest("tr")!;
+    const table = row.closest("table")!;
+    expect(table).toHaveStyle({ tableLayout: "fixed" });
+    expect(Array.from(table.querySelectorAll("colgroup col")).map((col) => (col as HTMLElement).style.width)).toEqual(FLEET_COLUMNS.map(([, width]) => width));
+    expect(FLEET_COLUMNS.map(([, width]) => Number.parseFloat(width)).reduce((n, w) => n + w, 0)).toBe(100);
+    // the archive and the attempt cells show the age; the exact GMT+3 stamp and the UTC value are on hover
+    const ages = within(row).getAllByText(/ago$|^just now$/);
+    expect(ages.length).toBeGreaterThanOrEqual(1);
+    for (const age of ages) expect(age).toHaveAttribute("title", expect.stringMatching(/^2026-10-18 \d\d:\d\d GMT\+3 · 2026-10-18T/));
+    expect(await within(row).findByText("Completed")).toBeInTheDocument();
+    // "Target · locked" is a neutral fact, never green (R11)
+    const locked = screen.getByText("Target · locked").closest(".MuiChip-root") as HTMLElement;
+    expect(locked).toHaveStyle({ backgroundColor: TONE_COLORS.neutral.bg });
+    expect(locked).not.toHaveStyle({ backgroundColor: TONE_COLORS.ok.bg });
   });
 });

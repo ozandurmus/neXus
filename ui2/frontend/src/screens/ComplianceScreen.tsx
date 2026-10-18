@@ -376,6 +376,11 @@ export function ComplianceScreen() {
   const scopeChecks = controls.reduce((n, c) => n + c.pass_count + c.fail_count + c.data_unavailable_count, 0);
   const subtitle = complianceHeadline(overview, scopeChecks, loading && !overview ? "loading" : loadError ? "failed" : "loaded");
   const cisChecks = overview?.frameworks.find((f) => f.framework === "CIS Benchmark")?.total_controls ?? null;
+  // KPI badges state facts, not judgements (post-release review 2026-10-18, R12): the share of all checks, and the
+  // critical failures with the number of distinct firewalls they fall on (from the controls' failing-device lists).
+  const totalChecks = overview?.control_checks ?? (controls.length > 0 ? scopeChecks : null);
+  const criticalFirewalls = controls.length > 0
+    ? new Set(controls.filter((c) => c.severity === "CRITICAL" && c.fail_count > 0).flatMap((c) => c.affected_devices ?? [])).size : null;
 
   return (
     <ScreenRoot>
@@ -415,8 +420,8 @@ export function ComplianceScreen() {
           title="Checks passing"
           count={overview ? `${overview.assured_compliance_pct}%` : null}
           badge={{
-            label: !overview ? "UNKNOWN" : overview.assured_compliance_pct >= 70 ? "High Assurance" : "Improvement Needed",
-            tone: !overview ? "neutral" : overview.assured_compliance_pct >= 70 ? "ok" : "warn",
+            label: !overview ? "UNKNOWN" : totalChecks !== null ? `${overview.assured_compliance_pct} % of ${totalChecks.toLocaleString("en-US")} checks` : `${overview.assured_compliance_pct} % of all checks`,
+            tone: "neutral",
           }}
           note="Passing checks among all assigned checks (a check without evidence counts against)"
         />
@@ -433,7 +438,9 @@ export function ComplianceScreen() {
           title="Critical failing checks"
           count={overview ? String(overview.critical_deficiencies) : null}
           badge={{
-            label: !overview ? "UNKNOWN" : overview.critical_deficiencies === 0 ? "Zero Critical" : "Immediate Action",
+            label: !overview ? "UNKNOWN"
+              : `${overview.critical_deficiencies} critical${criticalFirewalls !== null && overview.critical_deficiencies > 0 ? ` · ${criticalFirewalls} ${criticalFirewalls === 1 ? "firewall" : "firewalls"}` : ""}`,
+            // Zero is neutral, never green; a count above zero keeps the critical colour with its word.
             tone: !overview || overview.critical_deficiencies === 0 ? "neutral" : "bad",
           }}
           note="Checks of a critical-severity control that failed (one control on one firewall counts once)"

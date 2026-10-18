@@ -140,7 +140,9 @@ describe("summary strip, source pills and side panel", () => {
     const strip = await screen.findByRole("region", { name: "Log summary" });
     const sentence = within(strip).getByTestId("last-collection");
     expect(sentence).toHaveTextContent("Last collection");
-    expect(sentence).toHaveTextContent("COMPLETED");
+    // the state in sentence case (R7), the raw state on hover
+    expect(sentence).toHaveTextContent("Completed");
+    expect(sentence).not.toHaveTextContent("COMPLETED");
     // the window of the newest lines, device time, as a short range
     expect(sentence).toHaveTextContent("window 08:00–08:59 device time");
     expect(within(strip).getByText("collected 2")).toBeInTheDocument();
@@ -160,9 +162,9 @@ describe("summary strip, source pills and side panel", () => {
     render(<DeviceLogsPanel deviceId={DEVICE} />);
     const group = await screen.findByRole("group", { name: "Log sources" });
     const messages = within(group).getByRole("button", { name: /messages/ });
-    expect(within(messages).getByText("BACKLOG")).toBeInTheDocument();
+    expect(within(messages).getByText("Backlog")).toBeInTheDocument();
     expect(within(messages).getByText("fast rotating")).toBeInTheDocument();
-    expect(within(within(group).getByRole("button", { name: /fwk\.elg/ })).getByText("GAP")).toBeInTheDocument();
+    expect(within(within(group).getByRole("button", { name: /fwk\.elg/ })).getByText("Gap")).toBeInTheDocument();
     expect(within(within(group).getByRole("button", { name: /cpwd\.elg/ })).getByText("UNKNOWN")).toBeInTheDocument();
     // a whole-file source is not a line source: it is listed in the side panel, not as a viewer chip
     expect(within(group).queryByRole("button", { name: /sar/ })).toBeNull();
@@ -333,7 +335,7 @@ describe("filled state, summary first (UI review 2026-10-18, F-8)", () => {
     stub({ summary: panSummary(), job: { state: "COMPLETED" } });
     render(<DeviceLogsPanel deviceId={DEVICE} vendorHint="palo_alto" />);
     const sentence = await screen.findByTestId("last-collection");
-    expect(sentence).toHaveTextContent(/^Last collection2026-10-18 06:13· .+ ago· COMPLETED· window 00:15–06:11 device time$/);
+    expect(sentence).toHaveTextContent(/^Last collection2026-10-18 06:13· .+ ago· Completed· window 00:15–06:11 device time$/);
   });
 
   it("says the job state is UNKNOWN when the Jobs list has none, and never invents COMPLETED", async () => {
@@ -342,12 +344,14 @@ describe("filled state, summary first (UI review 2026-10-18, F-8)", () => {
     expect(await screen.findByTestId("last-collection")).toHaveTextContent("job state UNKNOWN");
   });
 
-  it("gives each line source its status word and stored line count, counts in grey and only OK in green", async () => {
+  it("gives each line source its status word and stored line count once, on the selector (R7): counts in grey and only OK in green", async () => {
     stub({ summary: panSummary(), job: { state: "COMPLETED" } });
     render(<DeviceLogsPanel deviceId={DEVICE} vendorHint="palo_alto" />);
-    const list = await screen.findByRole("list", { name: "Lines stored per source" });
-    const config = within(list).getByLabelText("config · OK · 13 lines");
-    const system = within(list).getByLabelText("system · OK · 0 lines");
+    const strip = await screen.findByRole("region", { name: "Log summary" });
+    expect(within(strip).queryByRole("list", { name: "Lines stored per source" })).toBeNull();
+    const group = screen.getByRole("group", { name: "Log sources" });
+    const config = within(group).getByRole("button", { name: "config · OK · 13 lines" });
+    const system = within(group).getByRole("button", { name: "system · OK · 0 lines" });
     expect(within(config).getByText("OK").closest(".MuiChip-root")).toHaveStyle({ backgroundColor: m3.successContainer });
     // a count, and a zero count, are neutral grey: zero is never green
     expect(within(config).getByText("13 lines").closest(".MuiChip-root")).toHaveStyle({ backgroundColor: m3.scHigh });
@@ -477,6 +481,10 @@ describe("lineDeviceTime and windowWords", () => {
     expect(lineDeviceTime("receive_time=2026-10-18T06:11:02 type=SYSTEM")).toBe("2026-10-18 06:11:02");
     expect(lineDeviceTime("Oct  7 08:00:01 gw-1 kernel: synthetic")).toBe("Oct 7 08:00:01");
     expect(lineDeviceTime("2026-10-17 08:00:00 synthetic")).toBe("2026-10-17 08:00:00");
+    // a Check Point daemon log line: the stamp sits in brackets after the process tag; a dumped object line has none
+    expect(lineDeviceTime("[cpd 4321 140000]@FW-TANGO-04[18 Oct 11:13:23] synthetic message")).toBe("18 Oct 11:13:23");
+    expect(lineDeviceTime("[18 Oct 2026 11:13:23] synthetic message")).toBe("18 Oct 2026 11:13:23");
+    expect(lineDeviceTime("                :dlp_blob_retry_interval (180)")).toBeNull();
     expect(lineDeviceTime("    at synthetic.frame(Synthetic.java:1)")).toBeNull();
     expect(lineDeviceTime("")).toBeNull();
   });

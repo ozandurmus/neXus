@@ -38,8 +38,9 @@ export function SshHostKeyPanel({ deviceId, settings = false }: { deviceId?: str
     {error && <Alert severity="error">{error}</Alert>}
     {settings && view && <Box>
       <Typography variant="h6">SSH host-key trust</Typography>
-      <Typography>WARN allows only read jobs after an audited mismatch. Writes and failover execution always refuse. Missing trust is unchanged.</Typography>
-      <TextField select label="Trust mode" value={mode} onChange={e => setMode(e.target.value as "WARN" | "STRICT")} disabled={!canManage || busy}>
+      <Typography sx={{ mb: 2 }}>WARN allows only read jobs after an audited mismatch. Writes and failover execution always refuse. Missing trust is unchanged.</Typography>
+      {/* Room above the field (R14): the floating label sat on the sentence. */}
+      <TextField select size="small" label="Trust mode" value={mode} onChange={e => setMode(e.target.value as "WARN" | "STRICT")} disabled={!canManage || busy} sx={{ minWidth: 220, mr: 2 }}>
         <MenuItem value="WARN">WARN</MenuItem><MenuItem value="STRICT">STRICT</MenuItem>
       </TextField>
       {canManage && <M3Button emphasis="outlined" disabled={busy || mode === view.mode} onClick={() => void perform(() => setSshTrustMode(mode))}>Save trust mode</M3Button>}

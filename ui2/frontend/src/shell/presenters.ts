@@ -7,7 +7,7 @@
  * rewritten (AGENTS.md "UNKNOWN / fail-closed law"): it stays the word UNKNOWN.
  *
  * Exported for the device screens too: `vendorLabel`, `jobTypeLabel`, `readinessReasonLabel`, `jobStateWord`,
- * `outcomeLine`, `presentRaw`.
+ * `outcomeLine`, `presentRaw`, `completedReasonOutcome`, `actorLabel`.
  */
 import { DISPLAY_TZ, formatDuration, formatStamp } from "./time";
 
@@ -194,11 +194,58 @@ const REASON_LABELS: Readonly<Record<string, string>> = {
   WRONG_ROLE: "Member holds the wrong role",
 };
 
-/** A readiness or refusal reason code in words; a sentence the server already wrote, or an unknown code, passes through. */
+/** `READ_SIZE_BELOW_OFFSET` as plain words, `read size below offset`; only for codes a prefix already names. */
+function codeWords(code: string): string {
+  return code.trim().replace(/_/g, " ").toLowerCase();
+}
+
+/**
+ * A readiness or refusal reason code in words; a sentence the server already wrote, or an unknown code, passes through.
+ * A `partial:<CODE>` outcome of a log collection (one source failed, the others were stored) reads `Partial — <code words>`;
+ * the raw code stays on hover through `<Presented>`.
+ */
 export function readinessReasonLabel(code: string | null | undefined): string {
   const value = (code ?? "").trim();
   if (!value) return "UNKNOWN";
+  const partial = /^partial:([A-Z0-9_]+)$/.exec(value);
+  if (partial) return `Partial \u2014 ${codeWords(partial[1])}`;
   return REASON_LABELS[value] ?? value;
+}
+
+/**
+ * The terminal reasons that are really the outcome word of a completed job: a readiness check records READY / NOT_READY /
+ * UNKNOWN there (the worker writes it as the terminal reason, not the outcome column), a log collection records that it
+ * collected. Anything else on a completed job (`COMPLETED`, `completed in 8038ms`) says nothing and stays hidden.
+ */
+const COMPLETED_REASON_OUTCOMES: Readonly<Record<string, string>> = {
+  READY: "Ready", NOT_READY: "Not ready", UNKNOWN: "UNKNOWN", PASS: "Pass", FAIL: "Fail",
+  SYSTEM_LOG_COLLECTED: "Collected", SYSTEM_LOG_UNSUPPORTED_PLATFORM: "Platform not supported", OUTPUT_RECORDED: "Output recorded",
+};
+
+/** The outcome word a completed job's terminal reason carries, or null when the reason only repeats the state. */
+export function completedReasonOutcome(reason: string | null | undefined): string | null {
+  const value = (reason ?? "").trim();
+  if (!value) return null;
+  return COMPLETED_REASON_OUTCOMES[value.toUpperCase()] ?? null;
+}
+
+// -------------------------------------------------------------------------------------------------------------------
+// Actors
+// -------------------------------------------------------------------------------------------------------------------
+
+/**
+ * An actor token in words. A service actor (`system:cp-failover-worker`, `system:scheduler`) reads `service · neXus
+ * <name>`; a masked session actor (the `SN-` pseudonym the masked view gives every user) reads `Masked actor` with the
+ * stable token kept beside it, so two rows by the same actor still compare. A plain user name passes through; nothing
+ * here can unmask anybody -- the raw value is only what the server already sent.
+ */
+export function actorLabel(actor: string | null | undefined): PresentedValue {
+  const value = (actor ?? "").trim();
+  if (!value) return { label: "UNKNOWN", raw: null, known: false };
+  const service = /^system:([a-z0-9-]+)$/i.exec(value);
+  if (service) return { label: `service \u00b7 neXus ${service[1].replace(/-/g, " ")}`, raw: value, known: true };
+  if (/^SN-[0-9A-F]{10}$/.test(value)) return { label: "Masked actor", raw: value, known: true };
+  return { label: value, raw: null, known: false };
 }
 
 // -------------------------------------------------------------------------------------------------------------------

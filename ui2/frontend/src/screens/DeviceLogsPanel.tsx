@@ -18,6 +18,7 @@ import { useJobWindow } from "../shell/JobWindow";
 import type { Tone } from "../shell/tone";
 import { formatTime, relativeAge } from "../shell/time";
 import { lineDeviceTime, windowWords } from "./logLineTime";
+import { jobStateWord } from "../shell/presenters";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { MONO, m3 } from "../theme/m3Theme";
 
@@ -56,6 +57,15 @@ export function formatBytes(n: number): string {
   let i = 0;
   while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
   return `${v.toFixed(v < 10 ? 1 : 0)} ${units[i]}`;
+}
+
+/** A source status in sentence case (R7): `GAP` becomes "Gap", `TOO_LARGE` "Too large"; `OK` and `UNKNOWN` stay the words they are. */
+export function sourceStatusWord(status: string): string {
+  const value = (status ?? "").trim();
+  if (!value) return "UNKNOWN";
+  if (value === "OK" || value === "UNKNOWN") return value;
+  const words = value.replace(/_/g, " ").toLowerCase();
+  return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
 export function statusTone(status: string): Tone {
@@ -225,7 +235,7 @@ function CollectionStateCard({ state, data, latest, onRefresh }: {
     return (
       // A failed collection is a finding about the device, not a failed screen: announced as a status, never as an alert.
       <StatePanel variant="error" announce="status" title={`Collection failed · ${state.reason}`}
-        body={<>Last collection {lastAt ? <Ts at={lastAt} relative /> : "time UNKNOWN"}{latest ? ` · ${latest.state}` : ""}: nothing was stored from it. The next window retries. {zone}</>}
+        body={<>Last collection {lastAt ? <Ts at={lastAt} relative /> : "time UNKNOWN"}{latest ? ` · ${jobStateWord(latest.state)}` : ""}: nothing was stored from it. The next window retries. {zone}</>}
         action={refresh} />
     );
   }
@@ -233,7 +243,7 @@ function CollectionStateCard({ state, data, latest, onRefresh }: {
     <StatePanel variant="empty" title="Collected · 0 lines"
       body={state.unrecorded
         ? <>A collection job completed {latest ? <Ts at={latest.at} relative /> : null} but left no source record under this device, so no line is stored for it. If the job names a similar device (a cluster and its member carry different names), open that one. {zone}</>
-        : <>Last collection {lastAt ? <Ts at={lastAt} relative /> : "time UNKNOWN"}{latest ? ` · ${latest.state}` : ""}: the device had no new log lines to read, so none is stored. The run is recorded; sources and gaps are below. {zone}</>}
+        : <>Last collection {lastAt ? <Ts at={lastAt} relative /> : "time UNKNOWN"}{latest ? ` · ${jobStateWord(latest.state)}` : ""}: the device had no new log lines to read, so none is stored. The run is recorded; sources and gaps are below. {zone}</>}
       action={refresh} />
   );
 }
@@ -311,7 +321,7 @@ function LogsBody({ deviceId, data, latest, onRefresh, emptyState }: {
         </Typography>
         <M3Button emphasis="text" onClick={onRefresh}>Refresh</M3Button>
       </Box>
-      <SummaryStrip data={data} latest={latest} lineSources={lineSources} />
+      <SummaryStrip data={data} latest={latest} />
       <AttentionLine gaps={gaps} crash={crash} />
       <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: "minmax(0, 1fr)", alignItems: "start",
         "@container (min-width: 980px)": { gridTemplateColumns: "minmax(0, 2fr) minmax(280px, 1fr)" } }}>
@@ -365,7 +375,7 @@ function LogsBody({ deviceId, data, latest, onRefresh, emptyState }: {
                 {otherSources.map((s) => (
                   <Box key={s.source_key} sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                     <Typography variant="body2" sx={{ minWidth: 110 }}>{sourceLabel(s.source_key)}</Typography>
-                    <StatusChip tone={statusTone(s.status)} label={s.status} dense />
+                    <StatusChip tone={statusTone(s.status)} label={sourceStatusWord(s.status)} dense />
                     <Typography variant="caption" color="text.secondary">{s.last_run_at ? <Ts at={s.last_run_at} relative seconds={false} /> : "never run"}</Typography>
                   </Box>
                 ))}
@@ -452,8 +462,8 @@ function AttentionLine({ gaps, crash }: {
  * device-time window it covered, and for each source what its newest run said and how many lines are stored. Counts come
  * from the sources route (its per-source stored totals); severity is deliberately absent: no parsed severity exists.
  */
-function SummaryStrip({ data, latest, lineSources }: {
-  readonly data: SystemLogSources; readonly latest: LatestCollection | null; readonly lineSources: readonly SystemLogSource[];
+function SummaryStrip({ data, latest }: {
+  readonly data: SystemLogSources; readonly latest: LatestCollection | null;
 }) {
   const job = data.last_job;
   const totals = data.sources.reduce((acc, s) => ({ chunks: acc.chunks + s.stored.chunks, bytes: acc.bytes + s.stored.bytes, lines: acc.lines + s.stored.lines }), { chunks: 0, bytes: 0, lines: 0 });
@@ -466,21 +476,10 @@ function SummaryStrip({ data, latest, lineSources }: {
         {job?.at
           ? <><Ts at={job.at} seconds={false} /><Box component="span" sx={{ color: m3.onSurfaceVar }}>· {relativeAge(job.at)}</Box></>
           : <Unknown reason="No collection time is recorded for the newest run." />}
-        <Box component="span" sx={{ color: m3.onSurfaceVar }}>· {latest ? latest.state : "job state UNKNOWN"}</Box>
+        <Box component="span" sx={{ color: m3.onSurfaceVar }} title={latest?.state}>· {latest ? jobStateWord(latest.state) : "job state UNKNOWN"}</Box>
         <Box component="span" sx={{ color: m3.onSurfaceVar }}>· {window ? `window ${window} device time` : "window of the newest lines not known"}</Box>
       </Typography>
-      {lineSources.length > 0 && (
-        <Box component="ul" aria-label="Lines stored per source" sx={{ listStyle: "none", m: 0, p: 0, display: "flex", flexWrap: "wrap", gap: 1 }}>
-          {lineSources.map((s) => (
-            <Box component="li" key={s.source_key} aria-label={`${sourceLabel(s.source_key)} · ${s.status} · ${s.stored.lines.toLocaleString("en-US")} lines`}
-              sx={{ display: "inline-flex", alignItems: "center", gap: 0.75 }}>
-              <Typography variant="body2" sx={{ fontWeight: 500 }}>{sourceLabel(s.source_key)}</Typography>
-              <StatusChip tone={statusTone(s.status)} label={s.status} dense />
-              <StatusChip tone="neutral" label={`${s.stored.lines.toLocaleString("en-US")} lines`} dense />
-            </Box>
-          ))}
-        </Box>
-      )}
+      {/* The per-source chips live once, on the run selector below (R7): the strip keeps the sentence and the counts. */}
       <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", columnGap: 2, rowGap: 0.75 }}>
         <Box sx={{ display: "inline-flex", alignItems: "center", gap: 0.75, flexWrap: "wrap" }}>
           <Typography variant="caption" color="text.secondary">Sources in that run</Typography>
@@ -617,9 +616,11 @@ function LogViewer({ deviceId, sources, canViewUnmasked, maxPageBytes }: {
 
   return (
     <Box sx={{ bgcolor: m3.scLow, border: `1px solid ${m3.outlineVar}`, borderRadius: "10px", p: 2, display: "flex", flexDirection: "column", gap: 1.5, minWidth: 0 }}>
+      {/* The one source chip row (R7): each chip names the source, its status word and how many lines are stored. */}
       <Box role="group" aria-label="Log sources" sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
         {sources.map((s) => (
           <Box key={s.source_key} component="button" type="button" aria-pressed={s.source_key === source}
+            aria-label={`${sourceLabel(s.source_key)} · ${sourceStatusWord(s.status)} · ${s.stored.lines.toLocaleString("en-US")} lines`}
             onClick={() => setSource(s.source_key)}
             sx={{
               display: "inline-flex", alignItems: "center", gap: 0.75, cursor: "pointer", font: "inherit", fontSize: 13,
@@ -628,7 +629,8 @@ function LogViewer({ deviceId, sources, canViewUnmasked, maxPageBytes }: {
               bgcolor: s.source_key === source ? m3.secondaryContainer : "transparent",
             }}>
             {sourceLabel(s.source_key)}
-            <StatusChip tone={statusTone(s.status)} label={s.status} dense />
+            <StatusChip tone={statusTone(s.status)} label={sourceStatusWord(s.status)} dense />
+            <StatusChip tone="neutral" label={`${s.stored.lines.toLocaleString("en-US")} lines`} dense />
             {s.fast_rotating && (
               <span title={`The device keeps about ${s.retention_horizon_seconds === null ? "an unknown amount" : `${(s.retention_horizon_seconds / 3600).toFixed(1)} h`} of this log, less than the collection interval allows for; gaps are likely.`}>
                 <StatusChip tone="warn" label="fast rotating" dense />

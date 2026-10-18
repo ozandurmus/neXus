@@ -2,7 +2,7 @@ import Box from "@mui/material/Box";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 
-import { getOverview, type OverviewView } from "../auth/adminApi";
+import { getOverview, type DeviceSummary, type OverviewView } from "../auth/adminApi";
 import { RestrictedPanel, StatePanel, isRestricted } from "../shell/States";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { m3 } from "../theme/m3Theme";
@@ -14,7 +14,9 @@ import { EstateDetails } from "./OverviewScreen";
  * It is the Overview's "Estate details" itself ({@link EstateDetails}, same stored-evidence read), so the two screens can not
  * disagree and every slice keeps its link to the filtered device list. {@code countLabel} is the screen's one count sentence.
  */
-export function FleetSummary({ countLabel }: { readonly countLabel: string }) {
+export function FleetSummary({ countLabel, fleet }: { readonly countLabel: string;
+  /** The Devices screen's own device list: the other vendors' version slices are read from it, no second request (1.5). */
+  readonly fleet?: readonly DeviceSummary[] }) {
   const overview = useFetchOnMount<OverviewView>(getOverview, (err) => {
     const e = err as { status?: number; message?: string };
     return e?.message ?? `status ${e?.status ?? "unknown"}`;
@@ -29,7 +31,7 @@ export function FleetSummary({ countLabel }: { readonly countLabel: string }) {
         </Typography>
       </Box>
       {overview.data && overview.data.platform && overview.data.nexus
-        ? <EstateDetails data={overview.data} onDevicesScreen />
+        ? <EstateDetails data={overview.data} onDevicesScreen fleet={fleet} />
         : overview.error
           ? isRestricted(overview.rawError)
             ? <RestrictedPanel area="Estate summary" />
