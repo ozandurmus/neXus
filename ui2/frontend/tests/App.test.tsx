@@ -12,7 +12,8 @@ const PRODUCT_MARKERS: Record<string, string> = {
   inventory: "No device to show",
   // One device screen (PO 2026-09-25): ?screen=configuration lands on Devices.
   configuration: "No device to show",
-  compliance: "No framework assigned · nothing assessed yet",
+  // Without a store the overview read fails: the headline writes UNKNOWN for every figure, never a claim (review 4.3).
+  compliance: "checks UNKNOWN · firewalls UNKNOWN · critical failing UNKNOWN · data gaps UNKNOWN",
   operations: "No HA pair or cluster enrolled",
   administration: "Administration",
 };
