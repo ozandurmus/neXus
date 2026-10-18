@@ -476,10 +476,11 @@ describe("BackupPanel", () => {
     await waitFor(() => expect(screen.getByText("abcd123")).toBeInTheDocument());
     expect(screen.getByText("9876xyz")).toBeInTheDocument();
 
-    expect(screen.getByText("not evaluated")).toBeInTheDocument();
-    expect(screen.getByText("changed")).toBeInTheDocument();
-    expect(screen.getByText("unchanged")).toBeInTheDocument();
-    expect(screen.getByText("first")).toBeInTheDocument();
+    // the same words as the fleet table; a byte change is neutral "Bytes changed" until a comparison has run
+    expect(screen.getByText("Not evaluated")).toBeInTheDocument();
+    expect(screen.getByText("Bytes changed")).toBeInTheDocument();
+    expect(screen.getByText("Unchanged")).toBeInTheDocument();
+    expect(screen.getByText("First backup")).toBeInTheDocument();
     expect(screen.getByText(/Backup archives are compared by digest only/)).toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });

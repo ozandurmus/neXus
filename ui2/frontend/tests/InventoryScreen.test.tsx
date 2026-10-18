@@ -291,7 +291,8 @@ describe("InventoryScreen device list", () => {
 
     // Clicking the Virtual System selects the cluster and displays the VS details
     fireEvent.click(screen.getByText("ExamplebankBetaAA"));
-    await waitFor(() => expect(screen.getByText(/CLS > FW-CKP-EXAMPLEBANKDMZAPP-CLS-AA/)).toBeInTheDocument());
+    // The pane header names the parent and the selected virtual system (UI review 2026-10-18, P0-3B)
+    expect(await screen.findByRole("heading", { name: "FW-CKP-EXAMPLEBANKDMZAPP-CLS-AA › ExamplebankBetaAA" })).toBeInTheDocument();
     expect(screen.getAllByText("ExamplebankBetaAA").length).toBeGreaterThanOrEqual(2);
   });
 
@@ -688,7 +689,9 @@ describe("InventoryScreen device list", () => {
     // no second, redundant place names it now that the old per-VS tab strip is gone.
     fireEvent.click(screen.getByText("CorpNet (vsys2)"));
     await waitFor(() => expect(screen.getByText("No interface evidence")).toBeInTheDocument());
-    expect(screen.getAllByText(/CorpNet \(vsys2\)/)).toHaveLength(1);
+    // The old per-VS tab strip stays gone; the pane header now names the device and the virtual system (P0-3B).
+    expect(screen.getByRole("heading", { name: "PA-STANDALONE › CorpNet (vsys2)" })).toBeInTheDocument();
+    expect(screen.queryByRole("tablist", { name: "Inventory context" })).toBeNull();
   });
 
   it("shows an error state with a retry action when the fetch fails", async () => {

@@ -7,13 +7,14 @@ import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 
 import {
-  getSystemLogChunks, getSystemLogCrashFiles, getSystemLogGaps, getSystemLogHcp, getSystemLogSources, getSystemLogText,
+  getSystemLogChunks, getSystemLogCrashFiles, getSystemLogGaps, getSystemLogHcp, getSystemLogSources, getSystemLogText, listJobs,
   type ApiError, type SystemLogChunk, type SystemLogCrashFiles, type SystemLogGap, type SystemLogHcp, type SystemLogSource,
   type SystemLogSources,
 } from "../auth/adminApi";
 import { EmptyPanel } from "../shell/ScreenLayout";
 import { M3Button, StatusChip } from "../shell/M3Widgets";
 import { RestrictedPanel, StatePanel, Ts, isRestricted } from "../shell/States";
+import { useJobWindow } from "../shell/JobWindow";
 import type { Tone } from "../shell/tone";
 import { formatTime } from "../shell/time";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
@@ -107,8 +108,111 @@ function epochIso(epoch: number): string {
   return new Date(epoch * 1000).toISOString();
 }
 
-export function DeviceLogsPanel({ deviceId }: { readonly deviceId: string }) {
+/** The newest system-log collection job of the device as the Jobs list records it (state, when, why it ended). */
+export interface LatestCollection {
+  readonly state: string;
+  readonly at: string;
+  readonly reason: string | null;
+}
+
+const COLLECT_JOB_TYPES: Readonly<Record<string, readonly string[]>> = {
+  check_point: ["cp_system_log_collect"], palo_alto: ["pan_system_log_collect"],
+};
+
+/** Read from the same role-gated Jobs list as every other screen; a failed read is "unknown", never an error banner. */
+async function latestCollection(deviceId: string, vendorHint: string | null | undefined): Promise<LatestCollection | null> {
+  const types = COLLECT_JOB_TYPES[vendorHint ?? ""] ?? ["cp_system_log_collect", "pan_system_log_collect"];
+  const pages = await Promise.all(types.map((type) => listJobs({ device_id: deviceId, job_type: type, page: 1, page_size: 1 }).catch(() => null)));
+  const newest = pages.flatMap((page) => page?.items ?? []).sort((a, b) => b.submitted_at.localeCompare(a.submitted_at))[0];
+  return newest ? { state: newest.state, at: newest.finished_at ?? newest.submitted_at, reason: newest.terminal_reason ?? null } : null;
+}
+
+/** A source whose newest run did not end cleanly: nothing could be read from it. */
+const FAILED_SOURCE_STATUSES: ReadonlySet<string> = new Set(["UNKNOWN", "STORAGE_REFUSED"]);
+const FAILED_JOB_STATES: ReadonlySet<string> = new Set(["FAILED", "REJECTED", "OUTCOME_UNKNOWN", "CANCELLED"]);
+
+export type CollectionSubState =
+  /** No run on record for this device and no collection job either. */
+  | { readonly kind: "none" }
+  /** A run (or a completed job) is on record and stored no line. `unrecorded`: the job completed but left no source row for this device. */
+  | { readonly kind: "zero"; readonly unrecorded: boolean }
+  | { readonly kind: "failed"; readonly reason: string }
+  | { readonly kind: "stored" };
+
+/** `partial:CONNECTION_FAILED` and the like, without the `partial:` echo. */
+function jobReason(reason: string | null | undefined): string | null {
+  const text = (reason ?? "").replace(/^partial:\s*/i, "").trim();
+  return text.length > 0 ? text : null;
+}
+
+/**
+ * The Logs tab's three empty sub-states (UI review 2026-10-18, F-6): no collection yet, collected with 0 lines, and
+ * collection failed with its reason; anything else has lines to show. The decision uses only what the read routes and
+ * the Jobs list already say. A completed collection job for THIS device with no stored run row is shown as
+ * "collected, nothing recorded" rather than "No collection yet", so a run that happened is never denied.
+ */
+export function classifyCollection(data: SystemLogSources, latest: LatestCollection | null): CollectionSubState {
+  const failedJob = latest !== null && FAILED_JOB_STATES.has(latest.state);
+  if (data.collection_state === "NO_COLLECTION_YET") {
+    if (latest === null) return { kind: "none" };
+    if (failedJob) return { kind: "failed", reason: jobReason(latest.reason) ?? latest.state.toLowerCase().replace(/_/g, " ") };
+    return latest.state === "COMPLETED" ? { kind: "zero", unrecorded: true } : { kind: "none" };
+  }
+  const lines = data.sources.reduce((n, source) => n + source.stored.lines, 0);
+  if (lines > 0) return { kind: "stored" };
+  const everySourceFailed = data.sources.length > 0 && data.sources.every((source) => FAILED_SOURCE_STATUSES.has(source.status));
+  if (everySourceFailed || failedJob) {
+    return { kind: "failed", reason: jobReason(latest?.reason) ?? (everySourceFailed ? "no source could be read" : "the collection job did not complete") };
+  }
+  return { kind: "zero", unrecorded: false };
+}
+
+/** `Next window: 12:00` as the title tail `next window 12:00`; null when the window is open or unknown. */
+function nextWindowWords(label: string | null): string | null {
+  const time = label?.match(/(\d{2}:\d{2})/)?.[1];
+  return time ? `next window ${time}` : null;
+}
+
+function CollectionStateCard({ state, data, latest, onRefresh }: {
+  readonly state: Exclude<CollectionSubState, { kind: "stored" }>;
+  readonly data: SystemLogSources;
+  readonly latest: LatestCollection | null;
+  readonly onRefresh: () => void;
+}) {
+  const window = useJobWindow();
+  const refresh = <M3Button emphasis="outlined" onClick={onRefresh}>Refresh</M3Button>;
+  const lastAt = data.last_job?.at ?? latest?.at ?? null;
+  const zone = "Times are Europe/Istanbul (GMT+3).";
+  if (state.kind === "none") {
+    const next = nextWindowWords(window.label);
+    return (
+      <StatePanel variant="empty" title={`No collection yet${next ? ` · ${next}` : ""}`}
+        body="No system log has been collected from this device yet. Collection runs in the shared job windows (00:00, 06:00, 12:00 and 18:00 Europe/Istanbul); this tab fills in after the first run."
+        action={refresh} />
+    );
+  }
+  if (state.kind === "failed") {
+    return (
+      // A failed collection is a finding about the device, not a failed screen: announced as a status, never as an alert.
+      <StatePanel variant="error" announce="status" title={`Collection failed · ${state.reason}`}
+        body={<>Last collection {lastAt ? <Ts at={lastAt} relative /> : "time UNKNOWN"}{latest ? ` · ${latest.state}` : ""}: nothing was stored from it. The next window retries. {zone}</>}
+        action={refresh} />
+    );
+  }
+  return (
+    <StatePanel variant="empty" title="Collected · 0 lines"
+      body={state.unrecorded
+        ? <>A collection job completed {latest ? <Ts at={latest.at} relative /> : null} but left no source record under this device, so no line is stored for it. If the job names a similar device (a cluster and its member carry different names), open that one. {zone}</>
+        : <>Last collection {lastAt ? <Ts at={lastAt} relative /> : "time UNKNOWN"}{latest ? ` · ${latest.state}` : ""}: the device had no new log lines to read, so none is stored. The run is recorded; sources and gaps are below. {zone}</>}
+      action={refresh} />
+  );
+}
+
+export function DeviceLogsPanel({ deviceId, vendorHint }: { readonly deviceId: string; readonly vendorHint?: string | null }) {
   const sources = useFetchOnMount<SystemLogSources>(() => getSystemLogSources(deviceId), describe);
+  // Wrapped so "no job on record" (null) is told apart from "not read yet" (no data).
+  const latestJob = useFetchOnMount<{ readonly job: LatestCollection | null }>(() => latestCollection(deviceId, vendorHint).then((job) => ({ job })), describe);
+  const refreshAll = () => { sources.refresh(); latestJob.refresh(); };
 
   if (sources.error) {
     const r = refusalOf(sources.rawError);
@@ -128,18 +232,22 @@ export function DeviceLogsPanel({ deviceId }: { readonly deviceId: string }) {
         action={<M3Button emphasis="outlined" onClick={sources.refresh}>Retry</M3Button>} />
     );
   }
-  if (!sources.data) return <EmptyPanel title="Logs" body="Loading…" />;
-  if (sources.data.collection_state === "NO_COLLECTION_YET") {
-    return (
-      <StatePanel variant="empty" title="No collection yet"
-        body="No system log has been collected from this device yet. Collection runs in the shared job windows (00:00, 06:00, 12:00 and 18:00 Europe/Istanbul); this tab fills in after the first run."
-        action={<M3Button emphasis="outlined" onClick={sources.refresh}>Refresh</M3Button>} />
-    );
+  // The latest job read has no say until it has landed or failed (a failed read is unknown, not an error banner).
+  if (!sources.data || (latestJob.data === null && latestJob.error === null)) return <EmptyPanel title="Logs" body="Loading…" />;
+  const latest = latestJob.data?.job ?? null;
+  const sub = classifyCollection(sources.data, latest);
+  if (sub.kind !== "stored" && sources.data.collection_state === "NO_COLLECTION_YET") {
+    return <CollectionStateCard state={sub} data={sources.data} latest={latest} onRefresh={refreshAll} />;
   }
-  return <LogsBody key={deviceId} deviceId={deviceId} data={sources.data} onRefresh={sources.refresh} />;
+  return <LogsBody key={deviceId} deviceId={deviceId} data={sources.data} onRefresh={refreshAll}
+    emptyState={sub.kind === "stored" ? undefined : <CollectionStateCard state={sub} data={sources.data} latest={latest} onRefresh={refreshAll} />} />;
 }
 
-function LogsBody({ deviceId, data, onRefresh }: { readonly deviceId: string; readonly data: SystemLogSources; readonly onRefresh: () => void }) {
+function LogsBody({ deviceId, data, onRefresh, emptyState }: {
+  readonly deviceId: string; readonly data: SystemLogSources; readonly onRefresh: () => void;
+  /** Collected but nothing stored, or every source failed: this card takes the place of the line viewer. */
+  readonly emptyState?: React.ReactNode;
+}) {
   const gaps = useFetchOnMount(() => getSystemLogGaps(deviceId), describe);
   const crash = useFetchOnMount<SystemLogCrashFiles>(() => getSystemLogCrashFiles(deviceId), describe);
   const hcp = useFetchOnMount<SystemLogHcp>(() => getSystemLogHcp(deviceId), describe);
@@ -156,7 +264,7 @@ function LogsBody({ deviceId, data, onRefresh }: { readonly deviceId: string; re
       </Box>
       <SummaryStrip data={data} crash={crash.data} crashFailed={Boolean(crash.error)} />
       <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "1fr", lg: "minmax(0, 2fr) minmax(280px, 1fr)" }, alignItems: "start" }}>
-        <LogViewer deviceId={deviceId} sources={lineSources} canViewUnmasked={data.can_view_unmasked} maxPageBytes={data.max_page_bytes} />
+        {emptyState ?? <LogViewer deviceId={deviceId} sources={lineSources} canViewUnmasked={data.can_view_unmasked} maxPageBytes={data.max_page_bytes} />}
         <Stack spacing={2}>
           <SidePanel title="Gaps">
             {gaps.error ? <Typography variant="body2" color="text.secondary">Gaps unavailable ({gaps.error}).</Typography>

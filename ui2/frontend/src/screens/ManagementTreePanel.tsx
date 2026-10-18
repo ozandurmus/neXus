@@ -17,6 +17,7 @@ import {
 import { StatusChip } from "../shell/M3Widgets";
 import { RoleChip, StatePanel, Ts, Unknown } from "../shell/States";
 import { m3 } from "../theme/m3Theme";
+import { plural } from "../shell/plural";
 
 const CARD = { borderRadius: "10px", bgcolor: m3.scLowest, border: `1px solid ${m3.outlineVar}`, boxShadow: "none" } as const;
 
@@ -45,6 +46,12 @@ export const KIND_LABEL: Readonly<Record<string, string>> = {
   RADWARE_DEFENSEPRO: "DefensePro",
   PALO_ALTO_VIRTUAL_SYSTEM: "Virtual system (VSYS)",
 };
+
+/** The row type in the operator's words; a Smart-1 or other management / log server is never called a gateway. */
+export function rowType(n: ManagementTreeNode): string {
+  const kind = n.category === "management_appliance" ? "Management / log server" : KIND_LABEL[n.kind] ?? n.kind;
+  return `${kind}${n.model && n.category !== "cluster" ? ` · ${n.model}` : ""}`;
+}
 
 function nameOf(n: ManagementTreeNode): string {
   return n.cluster_member_ref ?? n.hostname ?? n.virtual_system ?? "UNKNOWN";
@@ -118,7 +125,8 @@ function AckControl({ node, actions }: { readonly node: ManagementTreeNode; read
 function MemberState({ node, actions }: { readonly node: ManagementTreeNode; readonly actions: RowActions }) {
   // A virtual system is a context of its gateway, never enrolled on its own: nothing to flag.
   if (node.category === "virtual_system") return null;
-  if (node.category === "management_appliance") return <StatusChip tone="neutral" label="Management / log server" dense />;
+  // The row type already says "Management / log server" (once, UI review 2026-10-18 P0-5B): no second pill here.
+  if (node.category === "management_appliance" && !node.imported) return null;
   if (!node.imported) {
     return (
       <Box component="span" sx={{ display: "inline-flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
@@ -166,7 +174,7 @@ function NodeRow({ node, depth, onOpenDevice, onOpenCluster, actions }: {
             : <Typography sx={{ fontWeight: 600, fontSize: 13 }}>{name}</Typography>}
         </Box>
         <Typography sx={{ fontSize: 12, color: m3.onSurfaceVar }}>
-          {KIND_LABEL[node.kind] ?? node.kind}{node.model && node.category !== "cluster" ? ` · ${node.model}` : ""}
+          {rowType(node)}
         </Typography>
         <Box>{isCluster ? <Typography sx={{ fontSize: 12, color: m3.onSurfaceVar }}>{node.children.length} member{node.children.length === 1 ? "" : "s"}</Typography> : <MemberState node={node} actions={actions} />}</Box>
       </Box>
@@ -258,9 +266,9 @@ export function ManagementTreePanel({ deviceId, onOpenDevice, onOpenCluster }: {
         <Typography variant="overline" sx={{ color: m3.onSurfaceVar, letterSpacing: "0.08em" }}>Managed estate · from discovery</Typography>
         <Typography variant="h6" sx={{ fontWeight: 600, mt: -0.5 }}>{t.vendor === "palo_alto" ? "Firewalls and HA pairs" : t.vendor === "radware" ? "Sites and managed devices" : "Domains, clusters and gateways"}</Typography>
         <Typography variant="body2" sx={{ color: m3.onSurfaceVar, mt: 0.5 }}>
-          {t.vendor === "radware" ? `${c.domains ?? 0} sites · ${c.gateways ?? 0} devices`
-            : <>{t.vendor === "palo_alto" ? "" : `${c.domains ?? 0} domains · `}{c.clusters ?? 0} clusters · {c.gateways ?? 0} gateways · {c.virtual_systems ?? 0} virtual systems</>}
-          {c.management_appliances ? ` · ${c.management_appliances} management / log servers` : ""} · {c.imported ?? 0} in neXus ·
+          {t.vendor === "radware" ? `${plural(c.domains ?? 0, "site")} · ${plural(c.gateways ?? 0, "device")}`
+            : <>{t.vendor === "palo_alto" ? "" : `${plural(c.domains ?? 0, "domain")} · `}{plural(c.clusters ?? 0, "cluster")} · {plural(c.gateways ?? 0, "gateway")} · {plural(c.virtual_systems ?? 0, "virtual system")}</>}
+          {c.management_appliances ? ` · ${plural(c.management_appliances, "management / log server")}` : ""} · {c.imported ?? 0} in neXus ·
           discovered <Ts at={t.discovered_at} relative />
         </Typography>
         {missing > 0 && (
@@ -304,7 +312,7 @@ export function ManagementTreePanel({ deviceId, onOpenDevice, onOpenCluster }: {
               <Box component="span" sx={{ fontWeight: 600, fontSize: 13.5, flex: 1 }}>{d.domain ?? (t.vendor === "palo_alto" ? "Managed firewalls" : t.vendor === "radware" ? "Managed devices" : "No domain")}</Box>
               {dc.missing > 0 && <StatusChip tone="warn" label={`${dc.missing} not in neXus`} dense />}
               <Box component="span" sx={{ fontSize: 12, color: m3.onSurfaceVar, fontVariantNumeric: "tabular-nums" }}>
-                {dc.clusters} clusters · {dc.gateways} gateways{dc.vs > 0 ? ` · ${dc.vs} virtual systems` : ""}
+                {plural(dc.clusters, "cluster")} · {plural(dc.gateways, "gateway")}{dc.vs > 0 ? ` · ${plural(dc.vs, "virtual system")}` : ""}
               </Box>
             </Box>
             {expanded && (

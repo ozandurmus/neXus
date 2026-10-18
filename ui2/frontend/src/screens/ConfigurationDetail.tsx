@@ -17,6 +17,7 @@ import { EmptyPanel } from "../shell/ScreenLayout";
 import { Icon } from "../shell/Icon";
 import { M3Button, M3Tabs, StatusChip } from "../shell/M3Widgets";
 import { RoleChip, Ts, Unknown } from "../shell/States";
+import { plural } from "../shell/plural";
 import { MONO, m3 } from "../theme/m3Theme";
 import {
   getDeviceConfiguration,
@@ -25,7 +26,7 @@ import {
   type DeviceSummary,
 } from "../auth/adminApi";
 import { InventoryEntityHeader, deriveClusterTitle } from "./InventoryPanels";
-import { DeviceConfigurationPanels, ConfigurationCollectNowButton } from "./ConfigurationPanels";
+import { DeviceConfigurationPanels } from "./ConfigurationPanels";
 import {
   ClusterContextStrip,
   ContentVersions,
@@ -393,7 +394,11 @@ export function DeviceConfigurationDetail({ device, embedded = false }: { readon
           <Typography variant="h6" sx={{ fontWeight: 600, mt: -0.5 }}>Device configuration</Typography>
         </Box>
         <FilterBox value={query} onChange={setQuery} />
-        <ConfigurationCollectNowButton deviceId={device.device_id} onCollected={refresh} />
+        {/* The duplicate "Collect now" is gone (UI review 2026-10-18, F-7): the header's button is the one; here the age of
+            the last configuration read, and the separate "Read configuration" action lives under Details. */}
+        <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
+          Last configuration read {collectedAt ? <Ts at={collectedAt} relative /> : <Unknown word="NOT EVALUATED" reason="never read" />}
+        </Typography>
       </Box>
       <IdentityCard title={device.hostname ?? device.device_id} tiles={identityTiles(device, collectedAt)} />
       {error && <EmptyPanel title="Configuration unavailable" body={error} />}
@@ -403,7 +408,7 @@ export function DeviceConfigurationDetail({ device, embedded = false }: { readon
           body="The configuration text is visible to onboarding administrators." />
       )}
       {!error && !loading && !projection && !textForbidden && (
-        <EmptyPanel title="No configuration read yet" body="Use Collect now to read this device's configuration." />
+        <EmptyPanel title="No configuration read yet" body="Use Read configuration (under Details) to read this device's configuration." />
       )}
       {projection && (
         <>
@@ -635,7 +640,7 @@ export function ClusterConfigurationDetail({ clusterRef, members: unorderedMembe
         }
         chips={
           <>
-            <StatusChip tone="neutral" label={`${members.length} members`} dense />
+            <StatusChip tone="neutral" label={plural(members.length, "member")} dense />
             {members.map((m) => (
               <Box key={m.device_id} component="span" data-member-chip={m.device_id}
                 sx={{ display: "inline-flex", alignItems: "center", gap: 0.5, fontSize: 12, fontWeight: 600 }}>
@@ -686,7 +691,7 @@ export function ClusterConfigurationDetail({ clusterRef, members: unorderedMembe
         <>
           <Card sx={{ px: 2, py: 1.25, ...CARD, display: "flex", gap: 2, alignItems: "center", flexWrap: "wrap" }}>
             <StatusChip tone="neutral" label="OBSERVED" dense />
-            <Typography variant="body2" sx={{ fontWeight: 600 }}>{cluster.settingCount} distinct settings compared across {cluster.memberIds.length} members</Typography>
+            <Typography variant="body2" sx={{ fontWeight: 600 }}>{cluster.settingCount} distinct settings compared across {plural(cluster.memberIds.length, "member")}</Typography>
             <Typography variant="body2" sx={{ color: cluster.diffCount > 0 ? m3.criticalInk : m3.onSurfaceVar, fontWeight: 600 }}>
               {cluster.diffCount === 0 ? "no differences" : `${cluster.diffCount} difference${cluster.diffCount === 1 ? "" : "s"}`}
             </Typography>

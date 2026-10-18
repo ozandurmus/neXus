@@ -1,7 +1,9 @@
-import { JobButton } from "../shell/JobWindow";
+import { useGate } from "../shell/JobWindow";
 import { BackupAttempts } from "./BackupAttempts";
+import { DeviationChip, ValidationChip, deviationState } from "./backupWords";
+import { bytesTitle, formatBytes } from "../shell/bytes";
 import { urlParam } from "../shell/urlParams";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Card from "@mui/material/Card";
@@ -17,6 +19,10 @@ import TableCell from "@mui/material/TableCell";
 import TableContainer from "@mui/material/TableContainer";
 import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
+import TablePagination from "@mui/material/TablePagination";
+import IconButton from "@mui/material/IconButton";
+import Menu from "@mui/material/Menu";
+import MenuItem from "@mui/material/MenuItem";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import Alert from "@mui/material/Alert";
@@ -49,19 +55,15 @@ import {
 import { ScreenHeader, MetricGrid, MetricCard, ScreenRoot } from "../shell/ScreenLayout";
 import { backupFleetCounts, isBackupFleetRow, retentionNote } from "./backupCounts";
 import { M3Button, StatusChip } from "../shell/M3Widgets";
-import { PLANE_OPERATIONS, ROLE_REFUSAL, useRoleAllows } from "../shell/actionAccess";
+import { PLANE_OPERATIONS, ROLE_LOCK_LABEL, ROLE_REFUSAL, useRoleAllows } from "../shell/actionAccess";
+import { Icon } from "../shell/Icon";
+import { plural } from "../shell/plural";
 import { Ts, VendorBadge } from "../shell/States";
 
 
-import Tooltip from "@mui/material/Tooltip";
 import { MONO, m3 } from "../theme/m3Theme";
 
-export function formatBytes(bytes: number): string {
-  if (!Number.isFinite(bytes) || bytes < 0) return "unknown size";
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
+export { formatBytes };
 
 export interface BackupDeviceItem {
   readonly deviceId: string;
@@ -108,7 +110,7 @@ export function toFleetRows(artefacts: readonly BackupArtefact[], nameByDeviceId
       lastBackupTime: artefact.collected_at,
       backupType: "standard" as const,
       validationLevel: artefact.validation_level || "UNKNOWN",
-      deviationState: artefact.deviation_state ? artefact.deviation_state.toUpperCase() : "NOT EVALUATED",
+      deviationState: deviationState(artefact.deviation_state),
       sizeBytes: artefact.size_bytes,
       artefactId: artefact.artefact_id,
     }));
@@ -503,24 +505,7 @@ export function BackupScreen() {
         </DialogActions>
       </Dialog>
 
-      {/* One table per device (UI review 2026-09-23): target switch, latest archive, validation, deviation, every action. */}
-      <BackupFleetTable
-        version={targetsVersion}
-        onTargetChanged={() => setTargetsVersion((v) => v + 1)}
-        fleet={devices}
-        fleetLoaded={listLoaded}
-        fleetError={listError}
-        baselines={baselines}
-        busyDeviceId={loading ? triggeringId : null}
-        onBackupNow={(d, type) => void handleBackupNow(d, type)}
-        onHistory={(d) => void openHistory(d)}
-        onContents={(d) => void openContents(d)}
-        onCompare={(d) => void openCompare(d)}
-        onDownload={(d) => { setExportError(null); setSelectedDeviceExport(d); }}
-        onDeleteOrphan={(d) => { setOrphanFor(d); setOrphanReason(""); setOrphanError(null); }}
-      />
-
-      {/* Metric Cards, below the table (PO, 2026-09-24: at the top they pulled the eye from the work): a figure or the word for why there is none (UI review 2026-09-23) */}
+      {/* Metric Cards, above the table (UI review 2026-10-18, F-4: the totals frame the list, they are read before it; the PO's 2026-09-24 placement below the table is superseded): a figure or the word for why there is none (UI review 2026-09-23) */}
       <MetricGrid>
         <MetricCard title="Targets with a stored backup" value={storeCounts ? storeCounts.targetsWithArchive : null}
           unit={storeCounts ? `of ${storeCounts.targets} targets` : undefined}
@@ -557,6 +542,25 @@ export function BackupScreen() {
           reason="No comparison has run, so no deviation can be claimed or ruled out"
           note={deviations ? `${deviations.total_deviations_checked} comparison${deviations.total_deviations_checked === 1 ? "" : "s"} run` : "Deviation state unavailable"} />
       </MetricGrid>
+
+      {/* One table per device (UI review 2026-09-23): target switch, latest archive, validation, deviation, latest attempt, every action in the row menu. */}
+      <BackupFleetTable
+        version={targetsVersion}
+        onTargetChanged={() => setTargetsVersion((v) => v + 1)}
+        fleet={devices}
+        fleetLoaded={listLoaded}
+        fleetError={listError}
+        baselines={baselines}
+        busyDeviceId={loading ? triggeringId : null}
+        comparisonRun={Boolean(deviations && deviations.total_deviations_checked > 0)}
+        onBackupNow={(d, type) => void handleBackupNow(d, type)}
+        onHistory={(d) => void openHistory(d)}
+        onContents={(d) => void openContents(d)}
+        onCompare={(d) => void openCompare(d)}
+        onDownload={(d) => { setExportError(null); setSelectedDeviceExport(d); }}
+        onDeleteOrphan={(d) => { setOrphanFor(d); setOrphanReason(""); setOrphanError(null); }}
+      />
+
 
       {/* V70: remove the backups of a device that is no longer in neXus */}
       <Dialog open={orphanFor !== null} onClose={() => !orphanBusy && setOrphanFor(null)} fullWidth maxWidth="sm">
@@ -704,7 +708,7 @@ export function BackupScreen() {
               <Alert
                 severity="info"
                 action={
-                  <M3Button deviceJob emphasis="tonal" disabled={relistBusy} onClick={() => void relistNow(contentsFor)}>
+                  <M3Button deviceJob plane={PLANE_OPERATIONS} emphasis="tonal" disabled={relistBusy} onClick={() => void relistNow(contentsFor)}>
                     {relistBusy ? <CircularProgress size={16} /> : "List now"}
                   </M3Button>
                 }
@@ -951,48 +955,69 @@ export function BackupScreen() {
 }
 
 
-/** The deviation word: CHANGED is a signal (attention), FIRST / UNCHANGED neutral, MAJOR a fault, NOT EVALUATED neutral. */
-const DEVIATION_MEANING: Record<string, string> = {
-  FIRST: "The first archive of this device: nothing earlier to compare with",
-  CHANGED: "Contents differ from the previous archive of this device",
-  UNCHANGED: "Contents match the previous archive of this device",
-  "MAJOR DEVIATION": "A semantic comparison found a major deviation",
-  "NOT EVALUATED": "No comparison has run for this archive",
-};
-
-function backupDisplayWord(value: string): string {
-  return ({ V1: "Checked", FIRST: "First backup", CHANGED: "Changed since last", "MAJOR DEVIATION": "Major change" } as Record<string, string>)[value] ?? value;
-}
-
-function DeviationChip({ state }: { readonly state: string }) {
-  const tone = state === "MAJOR DEVIATION" ? "bad" : state === "CHANGED" ? "attn" : "neutral";
-  return (
-    <Tooltip title={DEVIATION_MEANING[state] ?? state}>
-      <Box component="span"><StatusChip tone={tone} label={backupDisplayWord(state)} dense /></Box>
-    </Tooltip>
-  );
-}
-
-/** The validation level remains an evidence grade; the UI uses a plain display word and a neutral tone. */
-function ValidationChip({ level }: { readonly level: string }) {
-  const label = backupDisplayWord(level);
-  return (
-    <Tooltip title={`Backup check: ${label}`}>
-      <Box component="span"><StatusChip tone="neutral" label={label} dense /></Box>
-    </Tooltip>
-  );
-}
-
 type Show = "all" | "targets" | "without_archive";
 
+/** The fleet table pages at this many rows (UI review 2026-10-18, F-4: 131 targets were one scrolling block). */
+export const BACKUP_PAGE_SIZE = 50;
+
+const blankItem = (id: string, name: string, vendor: string | null | undefined, role = ""): BackupDeviceItem => ({
+  deviceId: id, name, ip: "", vendor: vendor ?? "unknown", role, lastBackupTime: "", backupType: "standard",
+  validationLevel: "UNKNOWN", deviationState: "NOT EVALUATED", sizeBytes: 0, artefactId: "",
+});
+
 /**
- * Backups (Product Owner, 2026-09-22; merged per the UI review 2026-09-23): the devices the product may back up and
- * what the store holds for each, in one table. Every enrolled gateway is listed; the switch is an audited devices
- * UPDATE; a device appears with its newest archive, or "No archive". Nothing is inferred from inventory: the archive
- * columns come from the artefact store only. The five per-device actions (Backup Now, History, Contents, Compare,
- * Download, plus Snapshot Now on Check Point) are all kept.
+ * One row-menu entry under the one suffix rule: the label ends with "Role: not permitted" or "Next window: HH:MM" when
+ * the control is refused, and an entry that cannot run for a data reason (no archive yet) says so the same way.
  */
-function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetError, baselines, busyDeviceId,
+function GateMenuItem({ plane, deviceJob = false, disabled = false, note, destructive = false, children, ...props }: {
+  readonly plane?: string;
+  readonly deviceJob?: boolean;
+  readonly disabled?: boolean;
+  /** Why the entry is disabled when the role and the window are not the reason (for example "No archive"). */
+  readonly note?: string;
+  readonly destructive?: boolean;
+  readonly children: string;
+  readonly onClick?: () => void;
+  readonly title?: string;
+}) {
+  const gate = useGate(plane, { deviceJob });
+  const suffix = gate.suffix ?? (disabled ? note ?? null : null);
+  return (
+    <MenuItem {...props} disabled={disabled || gate.locked} sx={{ fontSize: 14, minWidth: 220, color: destructive ? m3.criticalInk : undefined }}>
+      {suffix ? `${children} · ${suffix}` : children}
+    </MenuItem>
+  );
+}
+
+function RowMenu({ name, children }: { readonly name: string; readonly children: ReactNode }) {
+  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
+  return (
+    <>
+      <IconButton size="small" aria-label={`Actions for ${name}`} aria-haspopup="menu" aria-expanded={anchor ? true : undefined}
+        onClick={(e) => setAnchor(e.currentTarget)} sx={{ color: m3.onSurfaceVar }}>
+        <Icon name="more" size={20} />
+      </IconButton>
+      <Menu anchorEl={anchor} open={Boolean(anchor)} onClose={() => setAnchor(null)} onClick={() => setAnchor(null)}
+        MenuListProps={{ "aria-label": `Actions for ${name}` }}>
+        {children}
+      </Menu>
+    </>
+  );
+}
+
+const HIDDEN = { position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap" } as const;
+const ONE_LINE = { whiteSpace: "nowrap" } as const;
+
+/**
+ * Backups (Product Owner, 2026-09-22; merged per the UI review 2026-09-23; one-line rows per the UI review 2026-10-18):
+ * the devices the product may back up and what the store holds for each, in one table. Every enrolled gateway is
+ * listed; the switch is an audited devices UPDATE (a read-only pill for a role that cannot change it); a device appears
+ * with its newest archive, or "No archive". Nothing is inferred from inventory: the archive columns come from the
+ * artefact store only. Every row action (Backup Now, MDS export and Snapshot where the vendor has them, History,
+ * Contents, Compare, Download, and Delete for a removed device) sits in the row's ⋮ menu, a refused one disabled with
+ * its suffix, so a row stays one line and the table pages at {@link BACKUP_PAGE_SIZE}.
+ */
+function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetError, baselines, busyDeviceId, comparisonRun,
   onBackupNow, onHistory, onContents, onCompare, onDownload, onDeleteOrphan }: {
   readonly version: number;
   readonly onTargetChanged: () => void;
@@ -1001,6 +1026,8 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
   readonly fleetError: string | null;
   readonly baselines: Record<string, string>;
   readonly busyDeviceId: string | null;
+  /** True once at least one comparison has run: a byte change is then an attention word, before that it is neutral. */
+  readonly comparisonRun: boolean;
   readonly onBackupNow: (d: BackupDeviceItem, type: "standard" | "snapshot" | "mds_export") => void;
   readonly onHistory: (d: BackupDeviceItem) => void;
   readonly onContents: (d: BackupDeviceItem) => void;
@@ -1016,6 +1043,8 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
   // `q` carries a filter from other screens (the cluster context strip); `artefact=none` from the Overview tile.
   const [search, setSearch] = useState(() => urlParam("q") ?? "");
   const [show, setShow] = useState<Show>(() => (urlParam("artefact") === "none" ? "without_archive" : "all"));
+  const [page, setPage] = useState(0);
+  useEffect(() => { setPage(0); }, [search, show]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1065,6 +1094,10 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
       .some((f) => (f ?? "").toLowerCase().includes(q));
   }).sort((a, b) => (a.summary?.hostname ?? a.item?.name ?? "").localeCompare(b.summary?.hostname ?? b.item?.name ?? ""));
 
+  const pageCount = Math.max(1, Math.ceil(shown.length / BACKUP_PAGE_SIZE));
+  const safePage = Math.min(page, pageCount - 1);
+  const pageRows = shown.slice(safePage * BACKUP_PAGE_SIZE, (safePage + 1) * BACKUP_PAGE_SIZE);
+
   const chip = (value: Show, label: string, count: number, title?: string) => (
     <Chip key={value} clickable size="small" label={`${label} · ${count}`} onClick={() => setShow(value)} title={title}
       sx={{ bgcolor: show === value ? m3.primaryContainer : m3.scLow, color: show === value ? m3.onPrimaryContainer : m3.onSurface,
@@ -1075,7 +1108,7 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
     <Card sx={{ borderRadius: "10px", bgcolor: m3.scLowest, border: `1px solid ${m3.outlineVar}`, boxShadow: "none", overflow: "hidden" }}>
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 1.5, p: 2, pb: 1.5 }}>
         <Box>
-          <Typography sx={{ fontSize: 16, fontWeight: 600, color: m3.onSurface }}>Backup fleet · {targetCount} targets</Typography>
+          <Typography sx={{ fontSize: 16, fontWeight: 600, color: m3.onSurface }}>Backup fleet · {plural(targetCount, "target")}</Typography>
           <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>
             Only devices switched on as a backup target are ever backed up; each change is audited. Archive columns come from the artefact store.
           </Typography>
@@ -1106,8 +1139,9 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
             : "No device matches the filter."}
         </Typography>
       ) : (
-        <TableContainer sx={{ maxHeight: 640, overflowX: "auto" }}>
-          <Table size="small" stickyHeader sx={{ "& td, & th": { px: 1 }, "& td:first-of-type, & th:first-of-type": { pl: 2 }, "& td:last-of-type, & th:last-of-type": { pr: 2 } }}>
+        <>
+        <TableContainer sx={{ maxHeight: "70vh", overflowX: "auto" }}>
+          <Table size="small" stickyHeader sx={{ "& td, & th": { px: 1, ...ONE_LINE }, "& td:first-of-type, & th:first-of-type": { pl: 2 }, "& td:last-of-type, & th:last-of-type": { pr: 1 } }}>
             <TableHead>
               <TableRow>
                 <TableCell>Device</TableCell>
@@ -1118,14 +1152,18 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
                 <TableCell align="right">Size</TableCell>
                 <TableCell>Validation</TableCell>
                 <TableCell>Deviation</TableCell>
-                <TableCell align="right">Actions</TableCell>
+                <TableCell>Latest attempt</TableCell>
+                <TableCell align="right" sx={{ width: 48, position: "relative", overflow: "hidden" }}><Box component="span" sx={HIDDEN}>Actions</Box></TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {shown.map(({ summary, item, id }) => {
+              {pageRows.map(({ summary, item, id }) => {
                 const name = summary?.hostname ?? item?.name ?? id.slice(0, 8);
                 const vendor = summary?.vendor_hint ?? item?.vendor;
                 const busy = busyDeviceId === id;
+                const target = Boolean(summary?.backup_target);
+                const modelVersion = summary
+                  ? [(summary.model ?? "UNKNOWN").replace(/^Check Point\s+/, ""), summary.software_version].filter(Boolean).join(" · ") : "UNKNOWN";
                 return (
                   <TableRow key={id} hover>
                     <TableCell>
@@ -1134,56 +1172,60 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
                         <Typography sx={{ fontFamily: MONO, fontSize: 12.5, fontWeight: 600, whiteSpace: "nowrap" }}>{name}</Typography>
                       </Box>
                     </TableCell>
-                    <TableCell sx={{ color: m3.onSurfaceVar, fontSize: 12, lineHeight: 1.3 }}>
-                      {summary ? <><Box component="span" sx={{ whiteSpace: "nowrap" }}>{(summary.model ?? "UNKNOWN").replace(/^Check Point\s+/, "")}</Box><br />{summary.software_version ?? ""}</> : "UNKNOWN"}
-                    </TableCell>
-                    <TableCell sx={{ fontFamily: MONO, fontSize: 12, color: m3.onSurfaceVar, whiteSpace: "nowrap" }}>{summary?.cluster_member_ref ?? "standalone"}</TableCell>
+                    <TableCell sx={{ color: m3.onSurfaceVar, fontSize: 12, maxWidth: 170, overflow: "hidden", textOverflow: "ellipsis" }} title={modelVersion}>{modelVersion}</TableCell>
+                    <TableCell sx={{ fontFamily: MONO, fontSize: 12, color: m3.onSurfaceVar, maxWidth: 130, overflow: "hidden", textOverflow: "ellipsis" }}
+                      title={summary?.cluster_member_ref ?? "standalone"}>{summary?.cluster_member_ref ?? "standalone"}</TableCell>
                     <TableCell align="center">
                       {summary ? (
-                        <Switch size="small" checked={Boolean(summary.backup_target)} disabled={busyId === id || !roleAllowed}
-                          onChange={(e) => void toggle(summary, e.target.checked)}
-                          inputProps={{ "aria-label": `Backup target ${name}` }} />
+                        roleAllowed ? (
+                          <Switch size="small" checked={target} disabled={busyId === id}
+                            onChange={(e) => void toggle(summary, e.target.checked)}
+                            inputProps={{ "aria-label": `Backup target ${name}` }} />
+                        ) : (
+                          // A role that cannot change the target sees the fact as a read-only pill, not a switch that looks live.
+                          <Box component="span" role="img" aria-label={`Backup target ${name}: ${target ? "on" : "off"}, locked for your role`}
+                            title={`Backup target: ${target ? "on" : "off"}. Locked · ${ROLE_LOCK_LABEL}`}>
+                            <StatusChip tone={target ? "ok" : "neutral"} label={target ? "Target · locked" : "Not a target · locked"} dense />
+                          </Box>
+                        )
                       ) : <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>Not a backup target</Typography>}
                     </TableCell>
                     <TableCell sx={{ fontSize: 12.5 }}>
-                      {item ? <Ts at={item.lastBackupTime} relative />
-                        : summary?.backup_target ? <StatusChip tone="warn" label="No archive" dense />
+                      {item ? <Ts at={item.lastBackupTime} relative seconds={false} />
+                        : target ? <StatusChip tone="warn" label="No archive" dense />
                         : <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>No archive</Typography>}
                     </TableCell>
-                    <TableCell align="right" sx={{ fontSize: 12.5, whiteSpace: "nowrap" }}>{item ? formatBytes(item.sizeBytes) : ""}</TableCell>
+                    <TableCell align="right" sx={{ fontSize: 12.5 }} title={item ? bytesTitle(item.sizeBytes) : undefined}>{item ? formatBytes(item.sizeBytes) : ""}</TableCell>
                     <TableCell>{item ? <ValidationChip level={item.validationLevel} /> : null}</TableCell>
-                    <TableCell>{item ? <DeviationChip state={item.deviationState} /> : null}</TableCell>
-                    <TableCell align="right" sx={{ minWidth: 260 }}>
-                      <BackupAttempts deviceId={id} latestOnly version={version} />
-                      {/* Compact actions: all six stay visible in the row. They wrap inside the cell instead of forcing the
-                          table wider than its card (the unbroken row clipped "Latest attempt" and "Backup Now" at 1440 px). */}
-                      <Stack direction="row" spacing={0} useFlexGap justifyContent="flex-end" alignItems="center" flexWrap="wrap" sx={{
-                        rowGap: 0.25,
-                        "& .MuiButton-root": { minWidth: 0, px: 0.9, py: 0.25, fontSize: 12.5, textTransform: "none", borderRadius: "6px" } }}>
-                        {item || summary?.backup_target ? (
-                          <Tooltip title="Take a configuration and state backup of this device now (needs it switched on as a backup target)"><span><JobButton plane={PLANE_OPERATIONS} size="small" variant="contained" disableElevation disabled={busy || !summary?.backup_target}
-                            sx={{ bgcolor: m3.secondaryContainer, color: m3.onSecondaryContainer, "&:hover": { bgcolor: m3.secondaryContainer }, mr: 0.5 }}
-                            onClick={() => onBackupNow(item ?? { deviceId: id, name, ip: "", vendor: vendor ?? "unknown", role: "", lastBackupTime: "", backupType: "standard", validationLevel: "UNKNOWN", deviationState: "NOT EVALUATED", sizeBytes: 0, artefactId: "" }, "standard")}>
-                            {busy ? <CircularProgress size={12} /> : "Backup Now"}
-                          </JobButton></span></Tooltip>
+                    <TableCell>{item ? <DeviationChip state={item.deviationState} comparisonRun={comparisonRun} /> : null}</TableCell>
+                    <TableCell sx={{ fontSize: 12.5 }}><BackupAttempts deviceId={id} latestOnly version={version} /></TableCell>
+                    <TableCell align="right">
+                      <RowMenu name={name}>
+                        {item || target ? (
+                          <GateMenuItem plane={PLANE_OPERATIONS} deviceJob disabled={busy || !target} note="Not a backup target"
+                            title="Take a configuration and state backup of this device now (needs it switched on as a backup target)"
+                            onClick={() => onBackupNow(item ?? blankItem(id, name, vendor), "standard")}>Backup Now</GateMenuItem>
                         ) : null}
-                        {vendor === "check_point" && summary?.role === "management_server" && summary?.backup_target ? (
-                          <Tooltip title="Multi-Domain Server export: one mds_backup of the whole server and every domain. Locks the MDS database while it runs; after an operator-watched export, used as the daily 02:00 Europe/Istanbul backup."><span><JobButton plane={PLANE_OPERATIONS} size="small" disabled={busy}
-                            onClick={() => onBackupNow(item ?? { deviceId: id, name, ip: "", vendor: vendor ?? "unknown", role: "management_server", lastBackupTime: "", backupType: "standard", validationLevel: "UNKNOWN", deviationState: "NOT EVALUATED", sizeBytes: 0, artefactId: "" }, "mds_export")}>MDS export</JobButton></span></Tooltip>
+                        {vendor === "check_point" && summary?.role === "management_server" && target ? (
+                          <GateMenuItem plane={PLANE_OPERATIONS} deviceJob disabled={busy}
+                            title="Multi-Domain Server export: one mds_backup of the whole server and every domain. Locks the MDS database while it runs; after an operator-watched export, used as the daily 02:00 Europe/Istanbul backup."
+                            onClick={() => onBackupNow(item ?? blankItem(id, name, vendor, "management_server"), "mds_export")}>MDS export</GateMenuItem>
                         ) : null}
                         {vendor === "check_point" && item ? (
-                          <Tooltip title="Check Point only: a full Gaia OS snapshot, in addition to the configuration backup. Palo Alto has no equivalent here."><span><JobButton plane={PLANE_OPERATIONS} size="small" disabled={busy} onClick={() => onBackupNow(item, "snapshot")}>Snapshot</JobButton></span></Tooltip>
+                          <GateMenuItem plane={PLANE_OPERATIONS} deviceJob disabled={busy}
+                            title="Check Point only: a full Gaia OS snapshot, in addition to the configuration backup. Palo Alto has no equivalent here."
+                            onClick={() => onBackupNow(item, "snapshot")}>Snapshot</GateMenuItem>
                         ) : null}
-                        <Tooltip title={baselines[id] ? "Every backup of this device; ★ = a baseline archive is set for comparison" : "Every backup of this device"}><span><Button size="small" onClick={() => onHistory(item ?? { deviceId: id, name, ip: "", vendor: vendor ?? "unknown", role: "", lastBackupTime: "", backupType: "standard", validationLevel: "UNKNOWN", deviationState: "NOT EVALUATED", sizeBytes: 0, artefactId: "" })}>History{baselines[id] ? " ★" : ""}</Button></span></Tooltip>
-                        <Button size="small" disabled={!item?.artefactId} onClick={() => item && onContents(item)}>Contents</Button>
-                        <Button size="small" disabled={!item?.artefactId} onClick={() => item && onCompare(item)}>Compare</Button>
-                        <Button size="small" disabled={!item?.artefactId} onClick={() => item && onDownload(item)}>Download</Button>
+                        <GateMenuItem title={baselines[id] ? "Every backup of this device; ★ = a baseline archive is set for comparison" : "Every backup of this device"}
+                          onClick={() => onHistory(item ?? blankItem(id, name, vendor))}>{`History${baselines[id] ? " ★" : ""}`}</GateMenuItem>
+                        <GateMenuItem disabled={!item?.artefactId} note="No archive" onClick={() => item && onContents(item)}>Contents</GateMenuItem>
+                        <GateMenuItem disabled={!item?.artefactId} note="No archive" onClick={() => item && onCompare(item)}>Compare</GateMenuItem>
+                        <GateMenuItem disabled={!item?.artefactId} note="No archive" onClick={() => item && onDownload(item)}>Download</GateMenuItem>
                         {!summary && item ? (
-                          <Tooltip title="This device is no longer in neXus: remove its stored backups (asks for a reason; audited)"><span>
-                            <Button size="small" color="error" onClick={() => onDeleteOrphan(item)}>Delete</Button>
-                          </span></Tooltip>
+                          <GateMenuItem destructive title="This device is no longer in neXus: remove its stored backups (asks for a reason; audited)"
+                            onClick={() => onDeleteOrphan(item)}>Delete</GateMenuItem>
                         ) : null}
-                      </Stack>
+                      </RowMenu>
                     </TableCell>
                   </TableRow>
                 );
@@ -1191,6 +1233,9 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
             </TableBody>
           </Table>
         </TableContainer>
+        <TablePagination component="div" count={shown.length} page={safePage} rowsPerPage={BACKUP_PAGE_SIZE} rowsPerPageOptions={[]}
+          onPageChange={(_, next) => setPage(next)} aria-label="Backup fleet pages" />
+        </>
       )}
     </Card>
   );

@@ -29,16 +29,18 @@ const VARIANT: Record<StateVariant, { icon: "info" | "clock" | "lock" | "warning
  * Restricted: an RBAC refusal -- intended behaviour, so it never looks like a fault and never offers Retry.
  * Error: a transient failure, a human sentence with the code in mono beneath, and Retry.
  */
-export function StatePanel({ variant, title, body, code, action }: {
+export function StatePanel({ variant, title, body, code, action, announce }: {
   readonly variant: StateVariant;
   readonly title: string;
   readonly body?: ReactNode;
   readonly code?: string | null;
   readonly action?: ReactNode;
+  /** The live-region role; an error is announced as an alert unless the caller says the finding is a state, not a failed screen. */
+  readonly announce?: "alert" | "status";
 }) {
   const v = VARIANT[variant];
   return (
-    <Card role={variant === "error" ? "alert" : "status"} data-state={variant}
+    <Card role={announce ?? (variant === "error" ? "alert" : "status")} data-state={variant}
       sx={{ bgcolor: v.bg, border: `1px solid ${m3.outlineVar}`, boxShadow: "none", borderRadius: "10px", p: 2,
             display: "flex", gap: 1.5, alignItems: "flex-start" }}>
       <Box sx={{ color: v.ink, display: "flex", pt: 0.25 }}><Icon name={v.icon} size={20} /></Box>

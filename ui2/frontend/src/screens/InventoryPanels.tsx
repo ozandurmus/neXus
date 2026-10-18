@@ -2,6 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Chip from "@mui/material/Chip";
+import Link from "@mui/material/Link";
+import MenuItem from "@mui/material/MenuItem";
+import Select from "@mui/material/Select";
 import Stack from "@mui/material/Stack";
 import Table from "@mui/material/Table";
 import { DeviceLifecycleLine } from "./LifecycleScreen";
@@ -10,17 +13,20 @@ import TableCell from "@mui/material/TableCell";
 import TableContainer from "@mui/material/TableContainer";
 import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
+import TablePagination from "@mui/material/TablePagination";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 
 import { EmptyPanel } from "../shell/ScreenLayout";
 import type { Tone } from "../shell/tone";
 import { M3Button, M3Tabs, StatusChip } from "../shell/M3Widgets";
-import { PLANE_OPERATIONS, ROLE_REFUSAL, useRoleAllows } from "../shell/actionAccess";
+import { PLANE_COLLECT, PLANE_OPERATIONS, ROLE_REFUSAL, useRoleAllows } from "../shell/actionAccess";
+import { bytesTitle, formatBytes } from "../shell/bytes";
+import { plural } from "../shell/plural";
 import { deviceNameLabel, jobPhaseLabel, isTerminalJobState, enrollmentStateLabel, onboardingChip } from "../shell/deviceCopy";
 import { MONO, m3 } from "../theme/m3Theme";
 import { RoleChip, Ts, VendorBadge, vendorDisplayName } from "../shell/States";
-import { ClusterContextStrip, DeviceIdentityTable, deviceLiveWithInventory, orderMembers } from "./DeviceShared";
+import { ClusterContextStrip, DeviceIdentityTable, deviceLiveWithInventory, orderMembers, vsListOf } from "./DeviceShared";
 import { JobStatusIndicator } from "../shell/JobStatusIndicator";
 import {
   getDevice,
@@ -46,10 +52,12 @@ import {
   type InventoryRoute,
   type Presence,
   type BackupArtefact,
+  getBackupPolicy,
   listDeviceBackups,
 } from "../auth/adminApi";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { BackupAttempts } from "./BackupAttempts";
+import { DeviationChip, ValidationChip, deviationState } from "./backupWords";
 import { DeviceLogsPanel } from "./DeviceLogsPanel";
 import { CpFailoverPanel } from "./CpFailoverPanel";
 import { CertificateStatePill, HttpsCertificateCard } from "./HttpsCertificatePanel";
@@ -125,7 +133,7 @@ export function GridMembersPanel({ members, summary }: { readonly members: reado
       </Stack>}
       {members.length > 0 && <>
       <Typography variant="caption" color="text.secondary">
-        {members.length} members · {members.filter((m) => m.grid_master).length} Grid Master ·{" "}
+        {plural(members.length, "member")} · {members.filter((m) => m.grid_master).length} Grid Master ·{" "}
         {members.filter((m) => m.master_candidate && !m.grid_master).length} master candidates ·{" "}
         {members.filter((m) => m.ha_enabled).length} HA pairs · read from the Grid Manager, nothing inferred
       </Typography>
@@ -215,7 +223,7 @@ function ManagedDevicesPanel({ members, selected, onSelect }: {
   return (
     <Stack spacing={1.5}>
       <Typography variant="caption" color="text.secondary">
-        {members.length} devices · manager-reported inventory
+        {plural(members.length, "device")} · manager-reported inventory
       </Typography>
       {selectedMember && <Stack direction="row" spacing={2} alignItems="center">
         <Typography variant="h6">{selectedMember.virtual_system}</Typography>
@@ -383,9 +391,12 @@ export function VendorAvatar({
 }
 
 /** device_inventory_ha (migration V17): the selected context's own HA role, shown above its interfaces. */
-function ContextHaBadge({ context }: { readonly context: InventoryContext | undefined }) {
+function ContextHaBadge({ context, headerRole, scoped = false }: { readonly context: InventoryContext | undefined; readonly headerRole?: string | null; readonly scoped?: boolean }) {
   const ha = context?.ha;
   if (!ha) return null;
+  // One HA statement per device (UI review 2026-10-18, P0-5B): the header already says the role. This line stays only
+  // for a selected virtual system, or when it adds something the header does not (a different role, the cluster mode).
+  if (!scoped && !ha.cluster_mode && (headerRole ?? "").trim().toUpperCase() === ha.role.trim().toUpperCase()) return null;
   return (
     <Stack direction="row" spacing={1} alignItems="center">
       <Typography variant="body2" color="text.secondary">HA role:</Typography>
@@ -546,6 +557,21 @@ function vlanLabel(iface: { readonly name: string; readonly kind: string; readon
   return "—";
 }
 
+/** The routing tables page at this many routes. */
+export const ROUTES_PAGE_SIZE = 50;
+
+/** A virtual system / VDOM scope in a table cell: the name only (the column header says VSYS), cut with an ellipsis, full text on hover. */
+function ScopeTag({ label }: { readonly label: string }) {
+  const name = label.replace(/^(?:VSYS|VS|VDOM):\s*/i, "");
+  return (
+    <Box component="span" title={label}
+      sx={{ display: "inline-block", maxWidth: 132, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", verticalAlign: "middle",
+            px: 1, height: 22, lineHeight: "22px", borderRadius: "8px", fontSize: 11, fontWeight: 500, bgcolor: m3.scHigh, color: m3.onSurface }}>
+      {name}
+    </Box>
+  );
+}
+
 function ClusterInterfacesTable({
   interfaces,
   members = [],
@@ -639,7 +665,9 @@ function ClusterInterfacesTable({
       </Box>
 
       {/* Horizontal scroll is the fallback; the cells below keep an address, a zone or a network on one line so a
-          value is never wrapped into a column of fragments or cut at the pane edge (review 2026-10-17, 1440 px). */}
+          value is never wrapped into a column of fragments or cut at the pane edge (review 2026-10-17, 1440 px).
+          NETWORK and STATE come straight after the addresses and the MAC column closes the row (UI review 2026-10-18,
+          F-5: NETWORK was the column the pane edge cut), and the scope tag is shortened to its name. */}
       <TableContainer sx={{ maxWidth: "100%", overflowX: "auto" }}>
       <Table size="small" sx={{ "& th, & td": { px: 0.75 }, "& th": { whiteSpace: "nowrap" } }}>
         <TableHead>
@@ -649,7 +677,6 @@ function ClusterInterfacesTable({
             <TableCell sx={{ fontWeight: 600 }}>Kind</TableCell>
             <TableCell sx={{ fontWeight: 600 }}>VLAN</TableCell>
             {showZoneColumn && <TableCell sx={{ fontWeight: 600 }}>Zone</TableCell>}
-            {showMacColumn && <TableCell sx={{ fontWeight: 600 }}>MAC</TableCell>}
             {oneAddressColumn ? (
               <TableCell sx={{ fontWeight: 600 }}>Address</TableCell>
             ) : (
@@ -662,8 +689,9 @@ function ClusterInterfacesTable({
                 ))}
               </>
             )}
-            <TableCell sx={{ fontWeight: 600 }}>Network</TableCell>
+            <TableCell sx={{ fontWeight: 600, minWidth: 112 }}>Network</TableCell>
             <TableCell sx={{ fontWeight: 600 }}>State</TableCell>
+            {showMacColumn && <TableCell sx={{ fontWeight: 600 }}>MAC</TableCell>}
           </TableRow>
         </TableHead>
         <TableBody>
@@ -699,14 +727,13 @@ function ClusterInterfacesTable({
               <TableRow key={`${iface.vsysLabel ?? ""}:${iface.name}`} hover>
                 {showVsysColumn && (
                   <TableCell>
-                    <StatusChip tone="neutral" label={iface.vsysLabel ?? "Physical"} dense />
+                    <ScopeTag label={iface.vsysLabel ?? "Physical"} />
                   </TableCell>
                 )}
                 <TableCell sx={{ fontWeight: 600, fontFamily: "monospace", whiteSpace: "nowrap" }}>{iface.name}</TableCell>
                 <TableCell>{iface.kind}</TableCell>
                 <TableCell>{vlanLabel(iface)}</TableCell>
                 {showZoneColumn && <TableCell sx={{ whiteSpace: "nowrap" }}>{zoneLabel(iface)}</TableCell>}
-                {showMacColumn && <TableCell sx={{ whiteSpace: "nowrap" }}>{macCell(iface, members)}</TableCell>}
                 {oneAddressColumn ? (
                   <TableCell sx={{ whiteSpace: "nowrap" }}>
                     {(() => {
@@ -769,7 +796,7 @@ function ClusterInterfacesTable({
                     })}
                   </>
                 )}
-                <TableCell sx={{ fontFamily: "monospace", fontSize: "0.75rem", whiteSpace: "nowrap" }}>
+                <TableCell sx={{ fontFamily: "monospace", fontSize: "0.75rem", whiteSpace: "nowrap", minWidth: 112 }}>
                   {network}
                 </TableCell>
                 <TableCell>
@@ -797,6 +824,7 @@ function ClusterInterfacesTable({
                     )}
                   </Stack>
                 </TableCell>
+                {showMacColumn && <TableCell sx={{ whiteSpace: "nowrap" }}>{macCell(iface, members)}</TableCell>}
               </TableRow>
             );
           })}
@@ -816,6 +844,8 @@ function ClusterRoutesTable({
 }) {
   const [diffOnly, setDiffOnly] = useState<boolean>(false);
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(0);
+  useEffect(() => { setPage(0); }, [diffOnly, search, routes.length]);
 
   if (routes.length === 0) {
     return <EmptyPanel title="No routing evidence" body="This context has no collected routes yet." />;
@@ -846,12 +876,19 @@ function ClusterRoutesTable({
   const memberNameById = new Map<string, string>();
   members.forEach((m) => memberNameById.set(m.device_id, memberLabel(m, members)));
 
+  // 371 routes were one 16,915 px page (UI review 2026-10-18, F-15): the table pages at ROUTES_PAGE_SIZE, the filter
+  // and the differences switch still run over every route and the page counter follows the filtered list.
+  const pageCount = Math.max(1, Math.ceil(displayedRoutes.length / ROUTES_PAGE_SIZE));
+  const safePage = Math.min(page, pageCount - 1);
+  const pageRoutes = displayedRoutes.slice(safePage * ROUTES_PAGE_SIZE, (safePage + 1) * ROUTES_PAGE_SIZE);
+
   return (
     <Stack spacing={1.5}>
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
           <Typography variant="body2" sx={{ fontWeight: 600 }}>
-            {singleMember ? "Routing table" : "Unified Routing Table"} · {routes.length} routes
+            {singleMember ? "Routing table" : "Unified Routing Table"} · {plural(routes.length, "route")}
+            {displayedRoutes.length !== routes.length ? ` · ${displayedRoutes.length} match` : ""}
           </Typography>
           {!singleMember && <Stack direction="row" spacing={0.5} sx={{ bgcolor: m3.scLow, p: 0.5, borderRadius: "10px" }}>
             <Box
@@ -932,6 +969,7 @@ function ClusterRoutesTable({
       ) : displayedRoutes.length === 0 ? (
         <EmptyPanel title="No matching routes" body="No routes match the current filter." />
       ) : (
+        <>
         <Table size="small">
           <TableHead>
             <TableRow>
@@ -944,7 +982,8 @@ function ClusterRoutesTable({
             </TableRow>
           </TableHead>
           <TableBody>
-            {displayedRoutes.map((route, index) => {
+            {pageRoutes.map((route, rowIndex) => {
+              const index = safePage * ROUTES_PAGE_SIZE + rowIndex;
               const isShared = route.presence === "all";
               const isDiff = !isShared || route.differences.length > 0;
               let diffLabel = null;
@@ -965,7 +1004,7 @@ function ClusterRoutesTable({
                 >
                   {showVsysColumn && (
                     <TableCell>
-                      <StatusChip tone="neutral" label={route.vsysLabel ?? "Physical"} dense />
+                      <ScopeTag label={route.vsysLabel ?? "Physical"} />
                     </TableCell>
                   )}
                   <TableCell sx={{ fontFamily: "monospace", fontWeight: 600, fontSize: "0.8125rem" }}>
@@ -1017,6 +1056,9 @@ function ClusterRoutesTable({
             })}
           </TableBody>
         </Table>
+        <TablePagination component="div" count={displayedRoutes.length} page={safePage} rowsPerPage={ROUTES_PAGE_SIZE} rowsPerPageOptions={[]}
+          onPageChange={(_, next) => setPage(next)} aria-label="Routes pages" />
+        </>
       )}
     </Stack>
   );
@@ -1214,6 +1256,7 @@ export function InterfacesPanel({
   onSelectContext,
   isPaloAlto = false,
   member,
+  headerHaRole,
 }: {
   readonly contexts: readonly InventoryContext[];
   readonly virtualSystems?: readonly string[] | string | null;
@@ -1221,6 +1264,8 @@ export function InterfacesPanel({
   readonly onSelectContext?: (ctx: string) => void;
   readonly isPaloAlto?: boolean;
   readonly member: { readonly device_id: string; readonly hostname?: string | null };
+  /** The HA role the device header already states, so the per-context line does not repeat it. */
+  readonly headerHaRole?: string | null;
 }) {
   const members = [member];
   if (contexts.length === 0) {
@@ -1251,9 +1296,11 @@ export function InterfacesPanel({
     // A device whose contexts are its members (an Infoblox grid, V72) has no "physical" context: show the first one
     // until the sidebar selects a member.
     const context = resolveContext(activeContext ?? "physical") ?? (activeContext ? undefined : contexts[0]);
+    // One HA statement per device (UI review 2026-10-18, P0-5B): the header carries it; the per-context line is only
+    // for a selected virtual system, whose own role can differ from the chassis.
     return (
       <Stack spacing={1}>
-        <ContextHaBadge context={context} />
+        <ContextHaBadge context={context} headerRole={headerHaRole} scoped={Boolean(activeContext)} />
         <ClusterInterfacesTable interfaces={context ? toClusterContexts([context], member.device_id)[0].interfaces : []} members={members} />
       </Stack>
     );
@@ -1267,7 +1314,6 @@ export function InterfacesPanel({
     });
     return (
       <Stack spacing={1}>
-        <ContextHaBadge context={resolveContext("physical")} />
         <ClusterInterfacesTable interfaces={merged} members={members} />
       </Stack>
     );
@@ -1275,7 +1321,7 @@ export function InterfacesPanel({
   const context = resolveContext(activeContext);
   return (
     <Stack spacing={1}>
-      <ContextHaBadge context={context} />
+      <ContextHaBadge context={context} headerRole={headerHaRole} scoped />
       <ClusterInterfacesTable interfaces={context ? toClusterContexts([context], member.device_id)[0].interfaces : []} members={members} />
     </Stack>
   );
@@ -1670,7 +1716,7 @@ export function CollectNowButton({ deviceId, onCollected, enrollmentState }: { r
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5, alignItems: "flex-start" }}>
-      <M3Button deviceJob
+      <M3Button deviceJob plane={PLANE_COLLECT}
         emphasis="outlined"
         icon="download"
         onClick={handleClick}
@@ -1692,6 +1738,85 @@ export function CollectNowButton({ deviceId, onCollected, enrollmentState }: { r
   );
 }
 
+interface CountedContext {
+  readonly context: string;
+  readonly interfaces: readonly { readonly kind: string }[];
+  readonly routes: readonly unknown[];
+}
+
+const SCOPE_NOUN: Readonly<Record<string, string>> = {
+  fortinet: "VDOMs", check_point: "virtual systems", palo_alto: "virtual systems", cisco_asa: "contexts",
+};
+
+/**
+ * The header's interface and route counts, on the same denominator the Interfaces and Routing tabs open with (UI
+ * review 2026-10-18, P0-5B: "60 interfaces" in the header against "31 of 36 shown" in the tab). Palo Alto's tab merges every
+ * virtual system, so its count is the sum; every other vendor opens on the first context (Physical / root), so that
+ * count is the headline and the interfaces that live in the other contexts are stated beside it, never folded in.
+ * Loopbacks are left out because the table leaves them out. With `scope` (a selected virtual system) only that context
+ * is counted.
+ */
+export function interfaceRouteCounts(contexts: readonly CountedContext[], vendorHint: string | null | undefined, scope?: CountedContext | null):
+  { readonly interfaces: number; readonly elsewhere: number; readonly routes: number } {
+  const listed = (c: CountedContext) => c.interfaces.filter((i) => i.kind !== "loopback").length;
+  if (scope) return { interfaces: listed(scope), elsewhere: 0, routes: scope.routes.length };
+  if (vendorHint === "palo_alto") {
+    return { interfaces: contexts.reduce((n, c) => n + listed(c), 0), elsewhere: 0, routes: contexts.reduce((n, c) => n + c.routes.length, 0) };
+  }
+  const first = contexts.find((c) => c.context.toLowerCase() === "physical" || c.context === "0") ?? contexts[0];
+  const elsewhere = contexts.filter((c) => c !== first).reduce((n, c) => n + listed(c), 0);
+  return { interfaces: first ? listed(first) : 0, elsewhere, routes: first ? first.routes.length : 0 };
+}
+
+export function interfaceRouteLabel(counts: ReturnType<typeof interfaceRouteCounts>, vendorHint: string | null | undefined): string {
+  const where = counts.elsewhere > 0 ? ` · ${counts.elsewhere} in ${SCOPE_NOUN[vendorHint ?? ""] ?? "other contexts"}` : "";
+  return `${plural(counts.interfaces, "interface")}${where} · ${plural(counts.routes, "route")}`;
+}
+
+/**
+ * One HA statement per device (UI review 2026-10-18, P0-5B): a named but unconfirmed peer and the observed role read as
+ * one sentence instead of three pills (`Standalone`, `HA peer named, not confirmed`, `PRIMARY`). A management server
+ * has no HA role to show (PO decision 3: data a device does not have is not shown).
+ */
+export function haStatement(device: { readonly ha_peer_unconfirmed?: boolean; readonly ha_role: string | null; readonly cluster_member_ref: string | null; readonly role?: string }):
+  { readonly kind: "statement"; readonly text: string } | { readonly kind: "role"; readonly role: string } | null {
+  if (device.role === "management_server") return null;
+  if (device.ha_peer_unconfirmed && !device.cluster_member_ref) {
+    return { kind: "statement", text: device.ha_role ? `HA: peer named, not confirmed · observed role ${device.ha_role.trim().toUpperCase()}` : "HA: peer named, not confirmed" };
+  }
+  return device.ha_role ? { kind: "role", role: device.ha_role } : null;
+}
+
+/**
+ * The pane header of a selected virtual system: `CLS-ALPHA-01 › VS-ALPHA-01-13` (UI review 2026-10-18, P0-3B). The
+ * parent is a link back to the unscoped pane, whose Cluster members, Configuration, Identity and Failover tabs stay
+ * there; the switcher moves between sibling virtual systems without going through the sidebar.
+ */
+function ScopeBreadcrumb({ parent, scope, onParent }: {
+  readonly parent: string;
+  readonly scope: string;
+  readonly onParent: () => void;
+}) {
+  return (
+    <Box component="span" sx={{ display: "inline-flex", alignItems: "baseline", gap: 1, flexWrap: "wrap" }}>
+      <Link component="button" type="button" underline="hover" color="inherit" onClick={onParent} title={`Back to ${parent}`}
+        sx={{ font: "inherit", color: m3.primary, verticalAlign: "baseline" }}>{parent}</Link>
+      <Box component="span" sx={{ color: m3.outline }}>›</Box>
+      <Box component="span">{scope}</Box>
+    </Box>
+  );
+}
+
+function VsSwitcher({ scope, scopes, onSelect }: { readonly scope: string; readonly scopes: readonly string[]; readonly onSelect: (scope: string) => void }) {
+  const options = scopes.includes(scope) ? scopes : [scope, ...scopes];
+  return (
+    <Select size="small" value={scope} onChange={(e) => onSelect(String(e.target.value))} inputProps={{ "aria-label": "Switch virtual system" }}
+      sx={{ minWidth: 200, height: 32, fontSize: 13, fontFamily: MONO }}>
+      {options.map((name) => <MenuItem key={name} value={name} sx={{ fontSize: 13, fontFamily: MONO }}>{name}</MenuItem>)}
+    </Select>
+  );
+}
+
 /**
  * The detail panels for one selected device (WORKER.md "Frontend"):
  * fetches `GET /devices/{id}/inventory`, or the cluster view when the
@@ -1707,6 +1832,7 @@ export function InventoryEntityHeader({
   model,
   titlePrefix,
   title,
+  breadcrumb,
   chips,
   action,
   children,
@@ -1715,6 +1841,8 @@ export function InventoryEntityHeader({
   readonly model?: string | null;
   readonly titlePrefix?: string;
   readonly title: string;
+  /** Replaces the title text (a selected virtual system: parent link, `›`, scope name); `title` still names the avatar. */
+  readonly breadcrumb?: React.ReactNode;
   readonly chips: React.ReactNode;
   readonly action?: React.ReactNode;
   readonly children?: React.ReactNode;
@@ -1738,7 +1866,7 @@ export function InventoryEntityHeader({
           <Box sx={{ minWidth: 0 }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
               <Typography variant="h5" sx={{ fontWeight: 700, color: m3.onSurface }}>
-                {titlePrefix ? `${titlePrefix} ` : ""}{title}
+                {breadcrumb ?? <>{titlePrefix ? `${titlePrefix} ` : ""}{title}</>}
               </Typography>
               {chips}
             </Box>
@@ -1762,14 +1890,16 @@ function IdentityReference({ value }: { readonly value: string }) {
 }
 
 /** The detail tabs of the one device screen: the Configuration tab only when the vendor has a configuration read. */
-function DetailTabs({ ariaLabel, tabs, configuration, initialTab, selectionKey }: {
+function DetailTabs({ ariaLabel, tabs, configuration, initialTab, selectionKey, onlyTabs }: {
   readonly ariaLabel: string;
   readonly tabs: ReadonlyArray<{ label: string; panel: React.ReactNode }>;
   readonly configuration?: React.ReactNode;
   readonly initialTab?: string | null;
   readonly selectionKey?: string | null;
+  /** A selected virtual system shows only its own data: these tabs and no others (the parent link leads back to the rest). */
+  readonly onlyTabs?: readonly string[];
 }) {
-  const shown = tabs.filter((t) => t.label !== "Configuration" || Boolean(configuration));
+  const shown = tabs.filter((t) => (!onlyTabs || onlyTabs.includes(t.label)) && (t.label !== "Configuration" || Boolean(configuration)));
   const wanted = initialTab ? shown.findIndex((t) => t.label.toLowerCase() === initialTab.toLowerCase()) : -1;
   return <M3Tabs key={`${wanted}:${selectionKey ?? ""}`} ariaLabel={ariaLabel} initial={Math.max(0, wanted)} tabs={shown} />;
 }
@@ -1778,12 +1908,21 @@ export function DeviceInventoryPanels({
   device,
   initialVs,
   onDeviceStateChange,
+  onSelectVs,
+  managedEstate,
+  belowHeader,
   configuration,
   initialTab,
 }: {
   readonly device: DeviceSummary;
   readonly initialVs?: string;
   readonly onDeviceStateChange?: () => void;
+  /** A selected virtual system moved (switcher) or was left (parent link, null): the caller keeps the sidebar's selection in step. */
+  readonly onSelectVs?: (vs: string | null) => void;
+  /** The management server's discovery content (domains, clusters, gateways ...), shown as the "Managed estate" tab. */
+  readonly managedEstate?: React.ReactNode;
+  /** Links and notes that belong to the device but come after its header (the device header is always the first thing on the pane). */
+  readonly belowHeader?: React.ReactNode;
   /** One device screen (PO 2026-09-25): the configuration tab's content, when the vendor has a configuration read. */
   readonly configuration?: React.ReactNode;
   /** "configuration" opens that tab (old Config links land here). */
@@ -1793,6 +1932,10 @@ export function DeviceInventoryPanels({
   const isPaloAlto = device.vendor_hint === "palo_alto";
   const hasManagedDevices = device.role === "management_server" &&
     (device.vendor_hint === "bluecoat" || device.vendor_hint === "fortinet");
+  // All five manager types (MDS, Panorama, FortiManager, Blue Coat MC, Radware Cyber Controller) show what they manage as
+  // one "Managed estate" tab under the device header (UI review 2026-10-18, P0-2B).
+  const isManager = device.role === "management_server" &&
+    ["check_point", "palo_alto", "radware", "fortinet", "bluecoat"].includes(device.vendor_hint);
   const [activeContext, setActiveContext] = useState<string | null>(initialVs ?? null);
 
   // Re-clicking the device's own row (not a VS) sends initialVs=undefined -- that must clear
@@ -1833,6 +1976,16 @@ export function DeviceInventoryPanels({
   }
 
   const deviceContexts = deviceInventory?.contexts ?? [];
+  // A selected virtual system scopes the whole pane to it (P0-3B); only Check Point VSX and Palo Alto VSYS have them.
+  const vsNames = (() => {
+    const fromInventory = Array.isArray(deviceInventory?.virtual_systems) ? deviceInventory!.virtual_systems as readonly string[]
+      : typeof deviceInventory?.virtual_systems === "string" ? deviceInventory.virtual_systems.split(/,\s*/).filter(Boolean) : [];
+    return Array.from(new Set([...fromInventory, ...vsListOf(device)]));
+  })();
+  const scopedName = activeContext && !isCluster && !isManager && (device.vendor_hint === "check_point" || device.vendor_hint === "palo_alto")
+    ? activeContext : null;
+  const scopedContext = scopedName ? buildUnifiedContextTabs(deviceContexts, vsNames).resolveContext(scopedName) ?? null : null;
+  const headerCounts = interfaceRouteCounts(deviceContexts, device.vendor_hint, scopedName ? scopedContext ?? { context: scopedName, interfaces: [], routes: [] } : null);
   const deviceIfaceCount = deviceContexts.reduce((acc, c) => acc + c.interfaces.length, 0);
   const deviceRouteCount = deviceContexts.reduce((acc, c) => acc + c.routes.length, 0);
   // PO 2026-09-25 (decision 3): data a device does not have is not shown. A single device whose completed inventory
@@ -1851,8 +2004,11 @@ export function DeviceInventoryPanels({
         vendorHint={device.vendor_hint}
         model={device.model}
         title={deviceNameLabel(device.hostname)}
+        breadcrumb={scopedName ? <ScopeBreadcrumb parent={deviceNameLabel(device.hostname)} scope={scopedName}
+          onParent={() => { setActiveContext(null); onSelectVs?.(null); }} /> : undefined}
         chips={
           <>
+            {scopedName && <VsSwitcher scope={scopedName} scopes={vsNames} onSelect={(next) => { setActiveContext(next); onSelectVs?.(next); }} />}
             <JobStatusIndicator
               state={device.latest_job_state}
               type={device.latest_job_type}
@@ -1882,14 +2038,15 @@ export function DeviceInventoryPanels({
               }
               dense
             />
-            {device.ha_peer_unconfirmed && !device.cluster_member_ref &&
-              <StatusChip tone="neutral" label="HA peer named, not confirmed" dense />}
+            {(() => {
+              const ha = haStatement(device);
+              return ha === null ? null : ha.kind === "statement" ? <StatusChip tone="neutral" label={ha.text} dense /> : <RoleChip role={ha.role} dense />;
+            })()}
             {device.software_version && (
               <StatusChip tone="neutral" label={`${device.software_version}${isPaloAlto ? " · PAN-OS" : device.vendor_hint === "check_point" ? " · Gaia" : ""}`} dense />
             )}
             {(device.model || device.platform_family) && <StatusChip tone="neutral" label={(device.model || device.platform_family)!} dense />}
-            {device.ha_role && <RoleChip role={device.ha_role} dense />}
-            {!singleDeviceHasNoNetworkEvidence && <StatusChip tone="neutral" label={`${deviceIfaceCount} interfaces · ${deviceRouteCount} routes`} dense />}
+            {!singleDeviceHasNoNetworkEvidence && <StatusChip tone="neutral" label={interfaceRouteLabel(headerCounts, device.vendor_hint)} dense />}
             {isCluster && clusterInventory && <ClusterMembersMarker inventory={clusterInventory} />}
           </>
         }
@@ -1902,31 +2059,36 @@ export function DeviceInventoryPanels({
         ) : null}
       </InventoryEntityHeader>
 
+      {belowHeader}
       <DeviceLifecycleLine key={device.device_id} deviceId={device.device_id} />
       <DetailTabs
         ariaLabel="Device detail"
         configuration={configuration}
-        initialTab={hasManagedDevices ? (initialVs ? "managed devices" : initialTab ?? "managed devices") : initialTab}
-        selectionKey={hasManagedDevices ? initialVs : undefined}
+        initialTab={isManager ? (initialVs ? "managed estate" : initialTab ?? "managed estate") : initialTab}
+        selectionKey={scopedName ?? (isManager ? initialVs : undefined)}
+        onlyTabs={scopedName ? ["Interfaces", "Routing"] : undefined}
         tabs={[
+          ...(isManager ? [{
+            label: "Managed estate",
+            panel: hasManagedDevices
+              ? <ManagedDevicesPanel members={deviceInventory?.grid_members ?? []} selected={activeContext} onSelect={setActiveContext} />
+              : managedEstate ?? <EmptyPanel title="Managed estate" body="What this management server manages is read by discovery; open Administration to run Import from manager." />,
+          }] : []),
           ...(!singleDeviceHasNoNetworkEvidence ? [{
             label: "Interfaces",
             panel: isCluster
               ? <ClusterInterfacesPanel contexts={clusterInventory?.contexts ?? []} members={clusterInventory ? orderMembers(clusterInventory.members) : undefined} virtualSystems={clusterInventory?.virtual_systems} activeContext={activeContext} onSelectContext={setActiveContext} isPaloAlto={isPaloAlto} />
-              : <InterfacesPanel contexts={deviceInventory?.contexts ?? []} virtualSystems={deviceInventory?.virtual_systems ?? device.virtual_systems} activeContext={activeContext} onSelectContext={setActiveContext} isPaloAlto={isPaloAlto} member={device} />,
+              : <InterfacesPanel contexts={deviceInventory?.contexts ?? []} virtualSystems={deviceInventory?.virtual_systems ?? device.virtual_systems} activeContext={activeContext} onSelectContext={setActiveContext} isPaloAlto={isPaloAlto} member={device} headerHaRole={device.ha_role} />,
           }, {
             label: "Routing",
             panel: isCluster
               ? <ClusterRoutesPanel contexts={clusterInventory?.contexts ?? []} members={clusterInventory ? orderMembers(clusterInventory.members) : undefined} virtualSystems={clusterInventory?.virtual_systems} activeContext={activeContext} onSelectContext={setActiveContext} isPaloAlto={isPaloAlto} />
               : <RoutesPanel contexts={deviceInventory?.contexts ?? []} virtualSystems={deviceInventory?.virtual_systems ?? device.virtual_systems} activeContext={activeContext} onSelectContext={setActiveContext} isPaloAlto={isPaloAlto} member={device} />,
           }] : []),
-          ...((isCluster || device.vendor_hint === "infoblox" || hasManagedDevices) ? [{
-            label: device.vendor_hint === "infoblox" ? "Grid members"
-              : (device.vendor_hint === "bluecoat" || device.vendor_hint === "fortinet") && device.role === "management_server" ? "Managed devices" : "Cluster members",
+          ...((isCluster || device.vendor_hint === "infoblox") && !hasManagedDevices ? [{
+            label: device.vendor_hint === "infoblox" ? "Grid members" : "Cluster members",
             panel: device.vendor_hint === "infoblox"
               ? <GridMembersPanel members={deviceInventory?.grid_members ?? []} summary={deviceInventory?.grid_summary} />
-              : (device.vendor_hint === "bluecoat" || device.vendor_hint === "fortinet") && device.role === "management_server"
-              ? <ManagedDevicesPanel members={deviceInventory?.grid_members ?? []} selected={activeContext} onSelect={setActiveContext} />
               : isCluster && clusterInventory
               ? (
                 <Stack spacing={2}>
@@ -1976,13 +2138,13 @@ export function DeviceInventoryPanels({
           },
           {
             label: "Backup",
-            panel: <BackupPanel deviceId={device.device_id} />,
+            panel: <BackupPanel deviceId={device.device_id} vendorHint={device.vendor_hint} />,
           },
           // System logs are collected from Check Point and Palo Alto devices only (phase B contract section 2); a
           // management server of those vendors gets the tab too, with the "collection disabled" state.
           ...((device.vendor_hint === "check_point" || device.vendor_hint === "palo_alto") ? [{
             label: "Logs",
-            panel: <DeviceLogsPanel key={device.device_id} deviceId={device.device_id} />,
+            panel: <DeviceLogsPanel key={device.device_id} deviceId={device.device_id} vendorHint={device.vendor_hint} />,
           }] : []),
           {
             label: "Identity",
@@ -2009,6 +2171,7 @@ export function ClusterDetailPanels({
   clusterRef,
   members,
   initialVs,
+  onSelectVs,
   cache,
   onCacheUpdate,
   configuration,
@@ -2017,6 +2180,8 @@ export function ClusterDetailPanels({
   readonly clusterRef: string;
   readonly members: readonly DeviceSummary[];
   readonly initialVs?: string | null;
+  /** A selected virtual system moved (switcher) or was left (parent link, null): the caller keeps the sidebar's selection in step. */
+  readonly onSelectVs?: (vs: string | null) => void;
   /** One device screen (PO 2026-09-25): the members' configuration side by side, as a tab. */
   readonly configuration?: React.ReactNode;
   readonly initialTab?: string | null;
@@ -2077,7 +2242,6 @@ export function ClusterDetailPanels({
   const isPaloAlto = firstMember?.vendor_hint === "palo_alto";
   const allContexts = clusterInventory?.contexts ?? [];
   const ifaceCount = allContexts.reduce((acc, c) => acc + c.interfaces.length, 0);
-  const routeCount = allContexts.reduce((acc, c) => acc + c.routes.length, 0);
   const isEnrolled = members.some((m) => m.enrollment_state === "ENROLLED");
   const isLive = isEnrolled && ifaceCount > 0;
   const clusterTitle = deriveClusterTitle(clusterRef, members);
@@ -2097,6 +2261,14 @@ export function ClusterDetailPanels({
     }
   }
   const virtualSystems = Array.from(vsSet).sort();
+  // A selected virtual system scopes the whole pane to it (UI review 2026-10-18, P0-3B): header `CLS-ALPHA-01 › VS-ALPHA-01-13`
+  // with a switcher, only that VS's Interfaces and Routing tabs, and the cluster's own tabs behind the parent link.
+  const scopedName = activeVsContext;
+  const scopedContext = scopedName ? buildUnifiedContextTabs(allContexts, virtualSystems).resolveContext(scopedName) ?? null : null;
+  const headerCounts = interfaceRouteCounts(allContexts, firstMember?.vendor_hint,
+    scopedName ? scopedContext ?? { context: scopedName, interfaces: [], routes: [] } : null);
+  const leaveVs = () => { setActiveVsContext(null); onSelectVs?.(null); };
+  const chooseVs = (next: string) => { setActiveVsContext(next); onSelectVs?.(next); };
 
   return (
     <Stack spacing={2}>
@@ -2105,8 +2277,10 @@ export function ClusterDetailPanels({
         model={firstMember?.model}
         titlePrefix="CLS >"
         title={clusterTitle}
+        breadcrumb={scopedName ? <ScopeBreadcrumb parent={clusterTitle} scope={scopedName} onParent={leaveVs} /> : undefined}
         chips={
           <>
+            {scopedName && <VsSwitcher scope={scopedName} scopes={virtualSystems} onSelect={chooseVs} />}
             <StatusChip
               tone={isLive ? "ok" : "warn"}
               label={!isEnrolled ? "Not enrolled" : isLive ? "Live" : "Confirmed · Not collected"}
@@ -2121,7 +2295,7 @@ export function ClusterDetailPanels({
               <StatusChip tone="neutral" label={`${firstMember.software_version} · ${firstMember?.vendor_hint === "palo_alto" ? "PAN-OS" : "Gaia"}`} dense />
             )}
             {(firstMember?.model || firstMember?.platform_family) && <StatusChip tone="neutral" label={(firstMember?.model || firstMember?.platform_family)!} dense />}
-            <StatusChip tone="neutral" label={`${ifaceCount} interfaces · ${routeCount} routes`} dense />
+            <StatusChip tone="neutral" label={interfaceRouteLabel(headerCounts, firstMember?.vendor_hint)} dense />
           </>
         }
       >
@@ -2163,7 +2337,16 @@ export function ClusterDetailPanels({
                   </Typography>
                   <CollectNowButton deviceId={m.device_id} onCollected={refresh} enrollmentState={m.enrollment_state} />
                 </Box>
-                {isPaloAlto && m.virtual_systems && <Typography variant="caption" color="text.secondary">VSYS: {m.virtual_systems}</Typography>}
+                {isPaloAlto && m.virtual_systems && (
+                  <Typography variant="caption" color="text.secondary">
+                    VSYS: {m.virtual_systems.split(/,\s*/).filter(Boolean).map((name, index) => (
+                      <Box component="span" key={name}>
+                        {index > 0 ? ", " : ""}
+                        <Box component="span" sx={name === scopedName ? { fontWeight: 700, color: m3.onSurface } : undefined}>{name}</Box>
+                      </Box>
+                    ))}
+                  </Typography>
+                )}
               </Box>
             );
           })}
@@ -2179,6 +2362,8 @@ export function ClusterDetailPanels({
         ariaLabel="Cluster detail"
         configuration={configuration}
         initialTab={initialTab}
+        selectionKey={scopedName}
+        onlyTabs={scopedName ? ["Interfaces", "Routing"] : undefined}
         tabs={[
           {
             label: "Interfaces",
@@ -2220,7 +2405,7 @@ export function ClusterDetailPanels({
                       <TableCell sx={{ fontWeight: 600 }}>HA Role</TableCell>
                       <TableCell sx={{ fontWeight: 600 }}>Model / Version</TableCell>
                       <TableCell sx={{ fontWeight: 600 }}>Status</TableCell>
-                      <TableCell sx={{ fontWeight: 600 }} align="right">Action</TableCell>
+                      <TableCell sx={{ fontWeight: 600 }}>Last read</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -2238,9 +2423,8 @@ export function ClusterDetailPanels({
                             <JobStatusIndicator state={m.latest_job_state} type={m.latest_job_type} terminalReason={m.latest_job_terminal_reason} />
                           </Stack>
                         </TableCell>
-                        <TableCell align="right">
-                          <CollectNowButton deviceId={m.device_id} onCollected={refresh} enrollmentState={m.enrollment_state} />
-                        </TableCell>
+                        {/* One Collect now per device: the member card in the header carries it; this tab shows how fresh the read is. */}
+                        <TableCell><Ts at={m.inventory_collected_at} relative seconds={false} /></TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -2258,7 +2442,7 @@ export function ClusterDetailPanels({
               <Stack spacing={1}>
                 <IdentityReference value={clusterRef} />
                 <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>
-                  {orderedMembers.length} members · {clusterVendorLabel(firstMember?.vendor_hint)}
+                  {plural(orderedMembers.length, "member")} · {clusterVendorLabel(firstMember?.vendor_hint)}
                   {virtualSystems.length > 0 ? ` · ${virtualSystems.length} ${isPaloAlto ? "VSYS" : "VSX"}: ${virtualSystems.join(", ")}` : ""}
                   {" "}· each value is read from that member itself; a value not read is UNKNOWN.
                 </Typography>
@@ -2366,12 +2550,29 @@ function RequestBackupControl({ deviceId, onAdmitted }: { readonly deviceId: str
   );
 }
 
-export function BackupPanel({ deviceId }: { readonly deviceId: string }) {
+/** The ASA backup is the configuration text, not an image archive (PO decision 4, council 2026-09-25). */
+export const ASA_BACKUP_LABEL = "Configuration text (running + startup) — certificates, VPN images and profiles not included · secret-bearing";
+
+/** How many backup attempts the Backup tab shows before "Show all". */
+export const BACKUP_ATTEMPTS_SHOWN = 5;
+
+/**
+ * A device's Backup tab (UI review 2026-10-18, F-16 / P1-2B): the request control, then the stored archives under their
+ * own title (sizes in MB, exact bytes on hover, `Checked (V1)`), then the attempts, newest five first with "Show all".
+ */
+export function BackupPanel({ deviceId, vendorHint }: { readonly deviceId: string; readonly vendorHint?: string | null }) {
   const [attemptsVersion, setAttemptsVersion] = useState(0);
+  const [retentionDays, setRetentionDays] = useState<number | null>(null);
   const fetcher = useFetchOnMount<{ backups: BackupArtefact[] }>(
     () => listDeviceBackups(deviceId),
     describeApiError,
   );
+  useEffect(() => {
+    let cancelled = false;
+    getBackupPolicy().then((policy) => { if (!cancelled && Number.isFinite(policy.backup_retention_days)) setRetentionDays(policy.backup_retention_days); })
+      .catch(() => { /* the title then omits the retention; nothing is guessed */ });
+    return () => { cancelled = true; };
+  }, []);
 
   if (fetcher.error) {
     return (
@@ -2393,49 +2594,51 @@ export function BackupPanel({ deviceId }: { readonly deviceId: string }) {
     <Stack spacing={2.5}>
       <RequestBackupControl deviceId={deviceId} onAdmitted={() => { fetcher.refresh(); setAttemptsVersion((v) => v + 1); }} />
       <Box>
-        <Typography variant="subtitle2" sx={{ mb: 1 }}>Backup attempts</Typography>
-        <BackupAttempts key={deviceId} deviceId={deviceId} version={attemptsVersion} />
-      </Box>
-      {backups.length === 0 ? (
-        <EmptyPanel
-          title="No backups"
-          body="No backup has been retained for this device."
-        />
-      ) : (
-        <>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>Collected time</TableCell>
-                <TableCell>Size</TableCell>
-                <TableCell>Digest prefix</TableCell>
-                <TableCell>Validation level</TableCell>
-                <TableCell>Deviation state</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {backups.map((b) => (
-                <TableRow key={b.artefact_id}>
-                  <TableCell><Ts at={b.collected_at} /></TableCell>
-                  <TableCell>{b.size_bytes}</TableCell>
-                  <TableCell>{b.digest_prefix}</TableCell>
-                  <TableCell>{b.validation_level}</TableCell>
-                  <TableCell>
-                    {b.deviation_state === null ? (
-                      <StatusChip tone="neutral" label="not evaluated" dense />
-                    ) : (
-                      <StatusChip tone="neutral" label={b.deviation_state} dense />
-                    )}
-                  </TableCell>
+        <Typography variant="subtitle2" sx={{ mb: 1 }}>
+          Stored archives ({backups.length}){retentionDays !== null ? ` · retention ${retentionDays} d` : ""}
+        </Typography>
+        {vendorHint === "cisco_asa" && (
+          <Typography variant="body2" sx={{ color: m3.onSurfaceVar, mb: 1 }}>{ASA_BACKUP_LABEL}</Typography>
+        )}
+        {backups.length === 0 ? (
+          <EmptyPanel
+            title="No backups"
+            body="No backup has been retained for this device."
+          />
+        ) : (
+          <>
+            <Table size="small" aria-label="Stored archives">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Collected time</TableCell>
+                  <TableCell>Size</TableCell>
+                  <TableCell>Digest prefix</TableCell>
+                  <TableCell>Validation level</TableCell>
+                  <TableCell>Deviation state</TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-          <Typography variant="body2" color="text.secondary">
-            Backup archives are compared by digest only: unchanged means identical bytes and changed means different bytes, not archive contents.
-          </Typography>
-        </>
-      )}
+              </TableHead>
+              <TableBody>
+                {backups.map((b) => (
+                  <TableRow key={b.artefact_id}>
+                    <TableCell><Ts at={b.collected_at} /></TableCell>
+                    <TableCell title={bytesTitle(b.size_bytes)} sx={{ whiteSpace: "nowrap" }}>{formatBytes(b.size_bytes)}</TableCell>
+                    <TableCell>{b.digest_prefix}</TableCell>
+                    <TableCell><ValidationChip level={b.validation_level || "UNKNOWN"} withLevel /></TableCell>
+                    <TableCell><DeviationChip state={deviationState(b.deviation_state)} /></TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+              Backup archives are compared by digest only: unchanged means identical bytes and changed means different bytes, not archive contents.
+            </Typography>
+          </>
+        )}
+      </Box>
+      <Box>
+        <Typography variant="subtitle2" sx={{ mb: 1 }}>Backup attempts</Typography>
+        <BackupAttempts key={deviceId} deviceId={deviceId} version={attemptsVersion} collapseTo={BACKUP_ATTEMPTS_SHOWN} />
+      </Box>
     </Stack>
   );
 }

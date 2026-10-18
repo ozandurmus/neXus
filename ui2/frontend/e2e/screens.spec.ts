@@ -61,7 +61,8 @@ async function screenHasData(page: Page, screen: ScreenId, settleReads: () => Pr
       break;
     }
     case "backups":
-      await expect(page.getByRole("checkbox", { name: /^Backup target / }).first()).toBeVisible();
+      // Switch for a role that can change the target, read-only pill for one that cannot.
+      await expect(page.getByRole("checkbox", { name: /^Backup target / }).or(page.getByRole("img", { name: /^Backup target / })).first()).toBeVisible();
       break;
     case "operations": {
       await expect(page.getByLabel("Readiness summary").getByRole("button")).toHaveCount(4);

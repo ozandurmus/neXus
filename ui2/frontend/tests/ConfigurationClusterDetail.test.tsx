@@ -192,7 +192,9 @@ describe("Configuration device detail", () => {
     }} />));
     expect((await screen.findAllByText("Cisco ASA")).length).toBeGreaterThan(0);
     expect(screen.getAllByText("ACTIVE").some((element) => element.getAttribute("data-role") === "ACTIVE")).toBe(true);
-    expect(await screen.findByText("2026-09-23 01:57:54")).toBeInTheDocument();
+    // the run time appears in the identity tile and, as an age, beside the filter (the tab's Collect now is gone: F-7)
+    expect(await screen.findAllByText("2026-09-23 01:57:54")).toHaveLength(2);
+    expect(screen.queryByRole("button", { name: "Collect now" })).toBeNull();
     expect(screen.queryByText("HOTFIX / JUMBO TAKE")).toBeNull();
     expect(screen.queryByText("VIRTUAL SYSTEMS (VSX)")).toBeNull();
     expect(screen.queryByText("POLICY INSTALLED")).toBeNull();

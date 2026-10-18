@@ -186,7 +186,8 @@ export function ContentVersions({ versions }: { readonly versions: Readonly<Reco
   return (
     <Box component="span" sx={{ display: "inline-flex", flexWrap: "wrap", columnGap: 1, rowGap: 0.25 }}>
       {parts.map((p) => (
-        <Box component="span" key={p.key} sx={{ whiteSpace: "nowrap" }}>
+        // A part may wrap at its spaces: "URL filtering 0000.00.00.000 (as reported)" was cut at the card edge (UI review 2026-10-18, F-5).
+        <Box component="span" key={p.key} sx={{ whiteSpace: "normal", overflowWrap: "anywhere" }}>
           <Box component="span" sx={{ color: m3.onSurfaceVar }}>{p.label} </Box>
           <Box component="span" sx={{ fontFamily: MONO }}>{p.value}</Box>
           {p.reportedZero && (
@@ -257,7 +258,10 @@ export function VirtualSystemsCell({ vs, clusterVs }: { readonly vs: readonly st
 // Per-member identity table
 // ---------------------------------------------------------------------------------------------------------------
 
-const HEAD = { fontSize: 11, letterSpacing: "0.04em", whiteSpace: "nowrap" } as const;
+// Headers may wrap onto two lines so the table is narrower; the columns whose values must never be cut get a floor
+// (UI review 2026-10-18, F-5: MANAGEMENT ADDRESS clipped at 1440 px, CONTENT VERSIONS one long line, MODEL four lines).
+const HEAD = { fontSize: 11, letterSpacing: "0.04em", whiteSpace: "normal", lineHeight: 1.25, verticalAlign: "bottom" } as const;
+const COLUMN_MIN_WIDTH: Readonly<Record<string, number>> = { MODEL: 96, "MANAGEMENT ADDRESS": 108, "CONTENT VERSIONS": 168, "HOTFIX / JUMBO": 100, "HOTFIX / CONTENT": 168 };
 
 /**
  * The per-member identity table (review §3 Devices › Identity, and Configuration's member table):
@@ -285,23 +289,23 @@ export function DeviceIdentityTable({ devices, ariaLabel = "Member identity" }: 
     vsHeader, "ENROLLMENT", "PLATFORM FACTS OBSERVED", "LAST INVENTORY READ", "EVIDENCE SOURCE"];
   return (
     <TableContainer sx={{ overflowX: "auto", "& th:first-of-type, & td:first-of-type": { position: "sticky", left: 0, zIndex: 1, bgcolor: m3.scLowest, boxShadow: `1px 0 0 ${m3.outlineVar}` } }}>
-      <Table size="small" aria-label={ariaLabel}>
+      <Table size="small" aria-label={ariaLabel} sx={{ "& th, & td": { px: 1 } }}>
         <TableHead>
-          <TableRow>{headers.map((h) => <TableCell key={h} sx={HEAD}>{h}</TableCell>)}</TableRow>
+          <TableRow>{headers.map((h) => <TableCell key={h} sx={{ ...HEAD, minWidth: COLUMN_MIN_WIDTH[h] }}>{h}</TableCell>)}</TableRow>
         </TableHead>
         <TableBody>
           {ordered.map((m) => (
             <TableRow key={m.device_id} hover sx={{ verticalAlign: "top" }}>
               <TableCell sx={{ fontWeight: 600, fontSize: 12.5, whiteSpace: "nowrap" }}>{deviceNameLabel(m.hostname)}</TableCell>
               <TableCell sx={{ fontFamily: MONO, fontSize: 12 }}>{m.serial_number ?? <Unknown reason={gated} />}</TableCell>
-              <TableCell>{m.model || m.platform_family || <Unknown reason="Not read yet." />}</TableCell>
+              <TableCell sx={{ minWidth: COLUMN_MIN_WIDTH.MODEL, fontSize: 12.5 }}>{m.model || m.platform_family || <Unknown reason="Not read yet." />}</TableCell>
               <TableCell sx={{ fontFamily: MONO, fontSize: 12, bgcolor: versionDiff ? m3.errorContainer : undefined }}>
                 <Box sx={{ display: "flex", gap: 0.75, alignItems: "center" }}>
                   {m.software_version ?? <Unknown reason="Not read at first contact." />}
                   {versionDiff && <StatusChip tone="bad" label="DIFF" dense />}
                 </Box>
               </TableCell>
-              <TableCell sx={{ fontSize: 12, bgcolor: levelDiff ? m3.errorContainer : undefined }}>
+              <TableCell sx={{ fontSize: 12, bgcolor: levelDiff ? m3.errorContainer : undefined, minWidth: isPaloAlto || isMixed ? COLUMN_MIN_WIDTH["CONTENT VERSIONS"] : undefined }}>
                 <Box sx={{ display: "flex", gap: 0.75, alignItems: "center" }}>
                   {m.vendor_hint === "palo_alto"
                     ? <ContentVersions versions={m.content_versions} />
@@ -309,9 +313,9 @@ export function DeviceIdentityTable({ devices, ariaLabel = "Member identity" }: 
                   {levelDiff && <StatusChip tone="bad" label="DIFF" dense />}
                 </Box>
               </TableCell>
-              <TableCell sx={{ whiteSpace: "nowrap" }}>{m.uptime_text ?? <Unknown reason={gated} />}</TableCell>
+              <TableCell sx={{ fontSize: 12.5 }}>{m.uptime_text ?? <Unknown reason={gated} />}</TableCell>
               <TableCell><RoleChip role={m.ha_role} dense /></TableCell>
-              <TableCell sx={{ fontFamily: MONO, fontSize: 12 }}>{m.management_ip ?? <Unknown reason="No management address recorded." />}</TableCell>
+              <TableCell sx={{ fontFamily: MONO, fontSize: 12, whiteSpace: "nowrap", minWidth: COLUMN_MIN_WIDTH["MANAGEMENT ADDRESS"] }}>{m.management_ip ?? <Unknown reason="No management address recorded." />}</TableCell>
               <TableCell><VirtualSystemsCell vs={vsListOf(m)} clusterVs={clusterVs} /></TableCell>
               <TableCell sx={{ fontSize: 12 }}>{m.enrollment_state || <Unknown />}</TableCell>
               <TableCell><Ts at={m.platform_facts_observed_at} /></TableCell>

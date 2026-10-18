@@ -19,7 +19,7 @@ test("Inventory: opens a device and every available detail tab including Interfa
   const names = await tabs.getByRole("tab").allTextContents();
   for (const name of names) {
     // These are navigation tabs only; no action inside a panel is clicked.
-    expect(["Interfaces", "Routing", "Cluster members", "Configuration", "Backup", "Identity"].includes(name)).toBe(true);
+    expect(["Interfaces", "Routing", "Managed estate", "Cluster members", "Configuration", "Backup", "Logs", "Identity"].includes(name)).toBe(true);
     await test.step(`Read ${name} tab`, async () => {
       await tabs.getByRole("tab", { name, exact: true }).click();
       await expect(page.getByRole("tabpanel", { name, exact: true })).toBeVisible();
@@ -83,7 +83,10 @@ test("Operations Jobs: lists at least one job", async ({ page, safety }) => {
 test("Backups: lists at least one enabled backup target", async ({ page, safety }) => {
   await visit(page, "screen=backups", "Backups");
   await page.getByRole("button", { name: /^Targets · \d+$/ }).click();
-  await expect(page.getByRole("checkbox", { name: /^Backup target / }).first()).toBeChecked();
+  // A role that cannot change the target (aiview) sees a read-only pill; a role that can sees the switch (UI review 2026-10-18, F-4).
+  const pill = page.getByRole("img", { name: /^Backup target .*: on, locked for your role$/ });
+  const toggle = page.getByRole("checkbox", { name: /^Backup target /, checked: true });
+  await expect(pill.or(toggle).first()).toBeVisible();
   await safety.checkpoint();
 });
 

@@ -36,7 +36,10 @@ it("lists domains with clusters, members' own HA roles, management servers apart
   expect(screen.getAllByText("1 not in neXus").length).toBeGreaterThan(0);
   expect(screen.getByText("ACTIVE")).toBeTruthy();
   expect(screen.getByText("STANDBY")).toBeTruthy();
-  expect(screen.getByText("Management / log server")).toBeTruthy();
+  // one row type for a management / log server -- never "Gateway" beside a second pill (UI review 2026-10-18, P0-5B)
+  expect(screen.getAllByText("Management / log server · Smart-1")).toHaveLength(1);
+  expect(screen.queryByText("Management / log server")).toBeNull();
+  expect(screen.queryByText("Gateway · Smart-1")).toBeNull();
   fireEvent.click(screen.getByText("CLS-ROMEO-01"));
   expect(openCluster).toHaveBeenCalledWith("CLS-ROMEO-01");
   fireEvent.click(screen.getByText("FW-ROMEO-01-M1"));
