@@ -325,16 +325,29 @@ def cmd_clean(args: argparse.Namespace) -> int:
     return 0
 
 
+def _registry_fetch_failed(deploy_log: str) -> bool:
+    """True when the image build stopped only because a registry download failed (a transient network fault)."""
+    return "STOP: build failed" in deploy_log and re.search(r'error building image: Get "https://', deploy_log) is not None
+
+
 def _deploy(skip_security: str | None = None) -> None:
     """tools/delivery/hosta_deploy.sh with its exit-4 retry (a job in flight), then ui2-configuration set to the service image."""
     log = STATE_DIR / "last_deploy.log"
     STATE_DIR.mkdir(parents=True, exist_ok=True)
+    registry_retries = 2
     for _ in range(30):
         with open(log, "w") as out:
             command = ["bash", "tools/delivery/hosta_deploy.sh"]
             if skip_security is not None:
                 command += ["--skip-security", skip_security]
             rc = subprocess.run(command, cwd=str(REPO_ROOT), stdout=out, stderr=subprocess.STDOUT).returncode
+        if rc == 1 and registry_retries and _registry_fetch_failed(log.read_text(errors="replace")):
+            # The image build could not download a base-image layer (2026-10-18: the quay.io CDN failed the same
+            # nodejs base layer on two deploys). Nothing was rolled out; the build is retried as is.
+            registry_retries -= 1
+            print(json.dumps({"deploy": "retry", "reason": "base image layer download failed"}), flush=True)
+            time.sleep(60)
+            continue
         if rc != 4:
             break
         time.sleep(25)
