@@ -12,10 +12,12 @@ import org.springframework.stereotype.Component;
  * admits the devices that have reached their {@code hash(device_id) mod 40} offset inside the current 00/06/12/18
  * window, through {@link SystemLogCollectionService#admitDue}.
  *
- * <p><b>Off by default.</b> The bean exists only when {@code ui2.system-log.scheduled-collection.enabled=true}
- * ({@code UI2_SYSTEM_LOG_SCHEDULED_COLLECTION_ENABLED}). Fleet enablement waits for the one-device pilot (section 15
- * item 7); until then collection runs only from the manual {@code syslog-collect-start}. The shared
- * {@code ui2.scheduling.enabled} switch applies on top of it.</p>
+ * <p><b>Off in the code, on in the deployment.</b> The bean exists only when
+ * {@code ui2.system-log.scheduled-collection.enabled=true} ({@code UI2_SYSTEM_LOG_SCHEDULED_COLLECTION_ENABLED}); the
+ * code default is {@code false}. PO decision 2026-10-18 (after the pilot and the small test, section 15 item 7):
+ * {@code deploy/ui2/50-service-deployment.yaml} sets it to {@code true}, because this bean lives in the service process
+ * only. Manual {@code syslog-collect-start} works either way. The shared {@code ui2.scheduling.enabled} switch applies
+ * on top of it (a preview candidate runs with scheduling off).</p>
  */
 @Component
 @ConditionalOnProperty(name = "ui2.system-log.scheduled-collection.enabled", havingValue = "true", matchIfMissing = false)

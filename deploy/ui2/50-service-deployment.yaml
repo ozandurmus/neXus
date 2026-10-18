@@ -60,6 +60,11 @@ spec:
             # PO 2026-10-08: failover mutation enabled; set to "false" to disable writes (restart required)
             - name: NEXUS_FAILOVER_MUTATION_ENABLED
               value: "true"
+            # PO decision 2026-10-18: scheduled system-log collection for the fleet (DEVICE_SYSTEM_LOG_PHASE_B_CONTRACT.md
+            # section 15 item 7; the small test of the 06:05 window passed). SystemLogCollectionScheduler is a bean of this
+            # process only; the code default (application.yml) stays "false". Set to "false" to stop it (restart required).
+            - name: UI2_SYSTEM_LOG_SCHEDULED_COLLECTION_ENABLED
+              value: "true"
             # BK-11: the distinct backup credential (Admin > Credentials: Backup-User-LDAP), never the collection credential.
             - name: UI2_CP_BACKUP_CREDENTIAL_REF
               value: "a5c22471-26af-4cb1-a13e-090311c88c96"

@@ -922,3 +922,21 @@ The existing `syslog-measure-start` and `syslog-measurements` stay for phase A.
    window, and the run outcomes are checked before fleet enablement. The rollout also closes three measured gaps:
    the PAN page time at n=2000 (`enqueueToFinMs` per page), the first full Check Point family listing from C1
    (sibling names, `.gz`), and the one Spike Detective data-directory listing (§8.3).
+
+   **Rollout record (step 7).**
+
+   - **Pilot (2026-10-18, 00:15 window):** recorded in §11 (one Check Point gateway, one Palo Alto firewall; two defects
+     found and fixed afterwards).
+   - **Small test (2026-10-18, the 06:05 window), result reported to the Product Owner in chat:** three Check Point and
+     two Palo Alto devices ran; each second run was incremental (cursors resumed, no re-read from the start); sar and HCP
+     were fetched on the Check Point devices; no false gap was recorded. Counts and sizes of this run are not repeated
+     here, and no device identity is.
+   - **Fleet enablement (PO decision 2026-10-18).** `UI2_SYSTEM_LOG_SCHEDULED_COLLECTION_ENABLED=true` is set in
+     `deploy/ui2/50-service-deployment.yaml`. `SystemLogCollectionScheduler` is a Spring bean of the service process
+     (`@ConditionalOnProperty`, once a minute through `SystemLogCollectionService.admitDue`), so the service deployment
+     is the only one that carries the switch; the worker, configuration, compliance, policy and packet-analysis pods run
+     no scheduler of this kind. The default in `application.yml` stays `false`, so a process started without the
+     manifest (a developer run, a test, a preview candidate with `UI2_SCHEDULING_ENABLED=false`) schedules nothing.
+     Collection stays inside the 00/06/12/18 Europe/Istanbul windows (§3.1), and the staggering, free-space guard and
+     retention above apply unchanged. To stop it, set the variable to `"false"` and restart the service.
+     `tools/tests/test_ui2_deployment_manifests.py` pins both facts.

@@ -130,6 +130,35 @@ def test_failover_mutation_is_enabled_live_and_disabled_in_preview(monkeypatch, 
         assert entries == [{"name": "NEXUS_FAILOVER_MUTATION_ENABLED", "value": expected}]
 
 
+def test_scheduled_system_log_collection_is_enabled_for_the_fleet_in_the_service_only(monkeypatch):
+    """PO decision 2026-10-18: SystemLogCollectionScheduler is a Spring bean of the service process, so only the service
+    deployment carries the switch; the code default stays off and a preview candidate never schedules (scheduling off)."""
+    monkeypatch.syspath_prepend(str(REPO_ROOT / "tools" / "e2e"))
+    import hosta_preview_e2e as preview
+
+    name = "UI2_SYSTEM_LOG_SCHEDULED_COLLECTION_ENABLED"
+    for path, owner, spec in _pod_specs():
+        for container in spec.get("containers") or []:
+            entries = [e for e in container.get("env") or [] if e["name"] == name]
+            if owner == "Deployment/ui2-service":
+                assert entries == [{"name": name, "value": "true"}], f"{owner}: scheduled collection must be on"
+            else:
+                assert not entries, f"{owner}: the scheduler does not run here; the switch belongs to the service only"
+
+    service = next(doc for doc in load_documents((MANIFEST_DIR / "50-service-deployment.yaml").read_text())
+                   if doc["kind"] == "Deployment")
+    candidate = preview.workload_manifest(service, "registry.example.invalid/candidate@sha256:" + "a" * 64,
+                                          "192.0.2.10", {
+                                              "ui2-compliance": "http://192.0.2.30:8085",
+                                              "ui2-configuration": "http://192.0.2.40:8084",
+                                          })
+    container = next(c for c in candidate["spec"]["template"]["spec"]["containers"] if c["name"] == "service")
+    assert {"name": "UI2_SCHEDULING_ENABLED", "value": "false"} in container["env"]
+
+    application = (REPO_ROOT / "ui2/service/src/main/resources/application.yml").read_text(encoding="utf-8")
+    assert "enabled: ${" + name + ":false}" in application, "the code default stays false"
+
+
 def test_the_rule_checks_below_have_something_to_check():
     """A rule asserted over an empty list passes without proving anything.
 
