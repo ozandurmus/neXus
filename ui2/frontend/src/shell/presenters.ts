@@ -218,6 +218,28 @@ export function jobStateWord(state: string | null | undefined): string {
   return STATE_WORDS[value.toUpperCase()] ?? value;
 }
 
+/** Job outcome words as the worker records them (readiness, log collection): the word the operator reads. */
+const OUTCOME_WORDS: Readonly<Record<string, string>> = {
+  READY: "Ready", NOT_READY: "Not ready", PASS: "Pass", FAIL: "Fail", PARTIAL: "Partial", SUCCESS: "Completed",
+  SUCCEEDED: "Completed", COMPLETED: "Completed", FAILURE: "Failed", FAILED: "Failed", UNKNOWN: "UNKNOWN", NOT_EVALUATED: "Not evaluated",
+};
+
+/**
+ * The outcome a job record carries, in one word (`NOT_READY` becomes "Not ready"); an unknown outcome is returned as it
+ * came, an absent one is null -- the caller decides what an empty cell says, this never invents a word.
+ */
+export function jobOutcomeWord(outcome: string | null | undefined): string | null {
+  const value = (outcome ?? "").trim();
+  if (!value) return null;
+  return OUTCOME_WORDS[value.toUpperCase()] ?? value;
+}
+
+/** True when the outcome merely repeats the terminal state (SUCCESS on COMPLETED, FAILURE on FAILED) and says nothing new. */
+export function outcomeEchoesState(outcome: string | null | undefined, state: string | null | undefined): boolean {
+  const word = jobOutcomeWord(outcome);
+  return word !== null && word === jobStateWord(state);
+}
+
 const ZONED_DAY = new Intl.DateTimeFormat("sv-SE", { timeZone: DISPLAY_TZ, year: "numeric", month: "2-digit", day: "2-digit" });
 const ZONED_CLOCK = new Intl.DateTimeFormat("sv-SE", { timeZone: DISPLAY_TZ, hour: "2-digit", minute: "2-digit", hour12: false });
 

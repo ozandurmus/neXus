@@ -6,12 +6,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 
 import com.securityexpert.nexus.ui2.service.audit.JobLogQueryService.JobEvent;
 import com.securityexpert.nexus.ui2.service.audit.JobLogQueryService.JobQuery;
+import com.securityexpert.nexus.ui2.service.audit.JobLogQueryService.Stats;
 import com.securityexpert.nexus.ui2.service.audit.JobLogQueryService.Where;
 
 class JobLogQueryServiceTest {
@@ -71,5 +73,26 @@ class JobLogQueryServiceTest {
         assertEquals("job-1,cp_gateway_backup,FW-TANGO-01,dev-1,FAILED,FAILURE,2026-09-22T11:43:23Z,2026-09-22T11:44:46Z,83000,"
                 + "\"sftp fetch failed: SftpException id=4, \"\"no message\"\"\"", lines[1]);
         assertEquals("job-2,pan_device_state_backup,,dev-2,COMPLETED,,2026-09-22T11:43:23Z,,,\"'=HYPERLINK(\"\"x\"\")\"", lines[2]);
+    }
+
+    @Test
+    void perStateCountsAreUpperCasedSummedAndKeepTheirOrder() {
+        Map<String, Long> byState = JobLogQueryService.byStateOf(List.of(
+                Map.entry("COMPLETED", 870L), Map.entry(" failed ", 20L), Map.entry("FAILED", 7L),
+                Map.entry("", 3L), Map.entry("EXECUTING", 1L)));
+
+        assertEquals(List.of("COMPLETED", "FAILED", "EXECUTING"), List.copyOf(byState.keySet()));
+        assertEquals(27L, byState.get("FAILED"));
+        assertEquals(870L, byState.get("COMPLETED"));
+    }
+
+    @Test
+    void statsSerialiseThePerStateCountsUnderByState() throws Exception {
+        Stats stats = new Stats(898, 879, 852, 27, 0, 0, 0, 879, 0,
+                JobLogQueryService.byStateOf(List.of(Map.entry("COMPLETED", 870L), Map.entry("FAILED", 28L))));
+
+        String json = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(stats);
+        assertTrue(json.contains("\"by_state\":{\"COMPLETED\":870,\"FAILED\":28}"), json);
+        assertTrue(json.contains("\"total_24h\":879"), json);
     }
 }
