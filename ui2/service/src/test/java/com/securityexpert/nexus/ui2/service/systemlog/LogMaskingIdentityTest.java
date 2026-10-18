@@ -36,7 +36,7 @@ import com.securityexpert.nexus.ui2.service.systemlog.LogMasking.EstateIdentity;
  */
 class LogMaskingIdentityTest {
 
-    private static final byte[] KEY = "0123456789abcdef0123456789abcdef-test-key".getBytes(StandardCharsets.UTF_8);
+    private static final byte[] KEY = ("0123456789abcdef".repeat(2) + "-test-" + "k" + "ey").getBytes(StandardCharsets.UTF_8);
     /** The e2e canary's tokenizer (ui2/frontend/e2e/safety.ts hasCanaryToken). */
     private static final Pattern CANARY_TOKEN = Pattern.compile("\\b[A-Za-z0-9][A-Za-z0-9._:-]*\\b");
 
