@@ -283,3 +283,17 @@ elif name == 'kubectl':
     else:
         assert gates == []
     assert '"security_gate":"not_configured"' in result.stdout if mode == "not-configured" else True
+
+
+def test_deploy_retries_only_a_base_image_download_failure():
+    sys.path.insert(0, str(ROOT))
+    from tools.delivery.standalone_orchestrate import _registry_fetch_failed
+    fetch = ('time="x" level=info msg="Retrieving image registry.access.redhat.com/ubi9/nodejs-22-minimal"\n'
+             't=122s build=Error new=[;]\nSTOP: build failed\n'
+             'error building image: Get "https://cdn01.quay.io/quayio-production-s3/sha256/59/abc?X-Amz-Algorithm=REDACTED"\n')
+    assert _registry_fetch_failed(fetch)
+    compile_error = 't=90s build=Error new=[;]\nSTOP: build failed\n[ERROR] COMPILATION ERROR : Foo.java\n'
+    assert not _registry_fetch_failed(compile_error)
+    assert not _registry_fetch_failed('error building image: Get "https://x" but the build went on\nDone.\n')
+    source = (ROOT / "tools/delivery/standalone_orchestrate.py").read_text()
+    assert "registry_retries = 2" in source
