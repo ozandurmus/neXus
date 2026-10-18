@@ -79,7 +79,7 @@ async function screenHasData(page: Page, screen: ScreenId, settleReads: () => Pr
       // aiview may start read-only readiness (AGENTS.md, PO decision 2026-10-04) when the server grants it, so the controls
       // are offered -- or locked with the role reason -- and this read-only run never clicks them (a POST is blocked anyway).
       await expect(page.getByTestId("toolbar-run-readiness")).toBeVisible();
-      await expect(page.getByText(/Not ready: a pre-check found a blocking condition\./)).toBeVisible();
+      await expect(page.getByText(/Not ready: a pre-check found a blocking condition/)).toBeVisible();
       await expect(page.getByRole("toolbar", { name: "Bulk readiness actions" })).toHaveCount(0);
       const before = page.url();
       await expect(row.getByRole("checkbox")).toBeVisible();
