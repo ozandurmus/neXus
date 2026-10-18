@@ -125,6 +125,142 @@ public class TopologyNamePseudonymizer {
         return masked;
     }
 
+    /**
+     * The device's own pseudonym, unique per device. {@link #maskDeviceName(String, String)} derives a name from the
+     * hostname and cluster reference alone, so two devices with the same inputs share it: a Cisco ASA failover pair
+     * replicates one hostname onto both units, and a member's {@code -M1}/{@code -M2} ordinal is read from the
+     * hostname suffix (or a keyed hash of it). With the device ID and a {@link MaskingDeviceDirectory}, the oldest
+     * device of such a group keeps the shared name and every later one gets a deterministic disambiguator: the
+     * lowest member ordinal free in its cluster, or the next free standalone name from the keyed registry walk. A
+     * device whose name was already unique keeps it unchanged; so does any call without a device ID.
+     */
+    public String maskDeviceName(String rawDeviceName, String clusterMemberRef, String deviceId) {
+        String base = maskDeviceName(rawDeviceName, clusterMemberRef);
+        if (deviceId == null || deviceId.isBlank() || deviceDirectory == null || base == null || "Unknown".equals(base)) {
+            return base;
+        }
+        DeviceNameOverride override = disambiguation().get(deviceId.trim());
+        // The override belongs to the device's own hostname only: a certificate CN or any other name beside the
+        // same device ID keeps its own pseudonym.
+        return override != null && override.hostname().equals(rawDeviceName.trim()) ? override.pseudonym() : base;
+    }
+
+    /**
+     * A device a manager lists but neXus does not hold (a FortiManager's FortiGates, a Management Center's ProxySGs,
+     * an Infoblox grid's members) as {@code MD-WORD-0n}: its own prefix family, so it never reads as a virtual
+     * system ({@code VS-...}). Keyed, deterministic and unique like device names (UI review 2026-10-18, P2-3B).
+     */
+    public String maskManagedDeviceName(String rawName) {
+        if (rawName == null || rawName.isBlank()) {
+            return rawName;
+        }
+        String trimmed = rawName.trim();
+        String masked = managedCache.computeIfAbsent(trimmed.toUpperCase(java.util.Locale.ROOT), upper -> {
+            byte[] hash = hmacSha256("MANAGED:" + upper);
+            int dictIndex = (hash[0] & 0xFF) % DICTIONARY.size();
+            int suffixNum = ((hash[1] & 0xFF) % 9) + 1;
+            // The registry's 'domain' kind already holds arbitrary presentation labels in keyed namespaces
+            // (policy labels do the same); the MD- prefix keeps these apart from DOM- names.
+            return registry.claim("domain", "managed:" + rawKey("managed", trimmed), candidates("MD", dictIndex, suffixNum));
+        });
+        registerTextName(trimmed, masked);
+        return masked;
+    }
+
+    private final Map<String, String> managedCache = new ConcurrentHashMap<>();
+
+    /** Device IDs and the hostnames they show, oldest registration first; none in tests or without a database. */
+    private volatile MaskingDeviceDirectory deviceDirectory;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setDeviceDirectory(MaskingDeviceDirectory deviceDirectory) {
+        this.deviceDirectory = deviceDirectory;
+        this.disambiguationAt = null;
+    }
+
+    private record DeviceNameOverride(String hostname, String pseudonym) {
+    }
+
+    /** A new or renamed device is seen within this long; one directory read serves every response meanwhile. */
+    private static final java.time.Duration DIRECTORY_TTL = java.time.Duration.ofSeconds(60);
+    private volatile Map<String, DeviceNameOverride> disambiguation = Map.of();
+    private volatile java.time.Instant disambiguationAt;
+
+    private Map<String, DeviceNameOverride> disambiguation() {
+        java.time.Instant at = disambiguationAt;
+        java.time.Instant now = java.time.Instant.now();
+        if (at != null && at.plus(DIRECTORY_TTL).isAfter(now)) {
+            return disambiguation;
+        }
+        synchronized (this) {
+            if (disambiguationAt != null && disambiguationAt.plus(DIRECTORY_TTL).isAfter(now)) {
+                return disambiguation;
+            }
+            MaskingDeviceDirectory directory = deviceDirectory;
+            List<MaskingDeviceDirectory.Entry> entries;
+            try {
+                entries = directory == null ? List.of() : directory.devices();
+            } catch (RuntimeException unavailable) {
+                // Without the directory a shared name stays shared (the state before this table existed); retry later.
+                disambiguationAt = now.minus(DIRECTORY_TTL).plusSeconds(5);
+                return disambiguation;
+            }
+            disambiguation = computeDisambiguation(entries);
+            disambiguationAt = now;
+            return disambiguation;
+        }
+    }
+
+    private static final Pattern MEMBER_PSEUDONYM = Pattern.compile("^(FW-.+-M)(\\d+)$");
+
+    private Map<String, DeviceNameOverride> computeDisambiguation(List<MaskingDeviceDirectory.Entry> entries) {
+        Map<String, List<MaskingDeviceDirectory.Entry>> byBase = new java.util.LinkedHashMap<>();
+        for (MaskingDeviceDirectory.Entry entry : entries) {
+            if (entry == null || entry.deviceId() == null || entry.hostname() == null || entry.hostname().isBlank()) {
+                continue;
+            }
+            String base = maskDeviceName(entry.hostname(), entry.clusterRef());
+            if (base == null || "Unknown".equals(base)) {
+                continue;
+            }
+            byBase.computeIfAbsent(base, ignored -> new java.util.ArrayList<>()).add(entry);
+        }
+        java.util.Set<String> used = new java.util.HashSet<>(byBase.keySet());
+        Map<String, DeviceNameOverride> overrides = new java.util.HashMap<>();
+        byBase.forEach((base, group) -> {
+            if (group.size() < 2) {
+                return;
+            }
+            for (int rank = 0; rank < group.size(); rank++) {
+                MaskingDeviceDirectory.Entry entry = group.get(rank);
+                String pseudonym = rank == 0 ? base : disambiguate(base, entry.hostname().trim(), rank, used);
+                used.add(pseudonym);
+                // Every device of the group is listed, the oldest too: a response that masks its hostname without
+                // the cluster reference would otherwise give both the same standalone name.
+                overrides.put(entry.deviceId().trim(), new DeviceNameOverride(entry.hostname().trim(), pseudonym));
+            }
+        });
+        return Map.copyOf(overrides);
+    }
+
+    private String disambiguate(String base, String hostname, int rank, java.util.Set<String> used) {
+        Matcher member = MEMBER_PSEUDONYM.matcher(base);
+        if (member.matches()) {
+            for (int ordinal = 1; ordinal < 100; ordinal++) {
+                String candidate = member.group(1) + ordinal;
+                if (!used.contains(candidate)) {
+                    return candidate;
+                }
+            }
+        }
+        String key = hostname.toUpperCase(java.util.Locale.ROOT) + "#" + rank;
+        byte[] hash = hmacSha256("DEVICE:" + key);
+        int dictIndex = (hash[0] & 0xFF) % DICTIONARY.size();
+        int suffixNum = ((hash[1] & 0xFF) % 9) + 1;
+        List<String> walk = candidates("FW", dictIndex, suffixNum).stream().filter(c -> !used.contains(c)).toList();
+        return registry.claim("device", rawKey("device", key), walk.isEmpty() ? List.of(base + "-" + (rank + 1)) : walk);
+    }
+
     /** A management domain (CMA) name as a stable, unique pseudonym ({@code DOM-TANGO-04}). */
     public String maskDomainName(String rawDomainName) {
         if (rawDomainName == null || rawDomainName.isBlank()) {

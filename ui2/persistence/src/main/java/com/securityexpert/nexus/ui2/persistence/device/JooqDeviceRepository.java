@@ -376,6 +376,39 @@ public final class JooqDeviceRepository implements DeviceRepository {
         });
     }
 
+    /**
+     * The hostname and cluster reference exactly as {@link #DEVICE_SUMMARY_SELECT} coalesces them (the device's own
+     * confirmed fact, else its discovery candidate's), without the summary's job, inventory and address joins.
+     */
+    private static final String NAME_IDENTITY_QUERY = "select d.device_id, "
+            + "coalesce(d.observed_hostname, dc.display_name) as observed_hostname, "
+            + "coalesce(c_parent.display_name, d.cluster_member_ref, dc.cluster_reference) as cluster_member_ref "
+            + "from devices d "
+            + "left join lateral ( "
+            + "    select display_name, cluster_reference, parent_candidate_id from discovery_candidate c "
+            + "    where ((c.vendor || '|' || coalesce(c.owning_domain, '') || '|' || c.stable_identifier) = d.discovery_match_key "
+            + "       or (c.vendor || '|' || c.stable_identifier) = d.discovery_match_key "
+            + "       or c.stable_identifier = d.recorded_identity_primary) "
+            + "    order by (c.parent_candidate_id is null) desc "
+            + "    limit 1 "
+            + ") dc on true "
+            + "left join lateral ( "
+            + "    select display_name from discovery_candidate c2 "
+            + "    where c2.candidate_id = dc.parent_candidate_id "
+            + "       or c2.stable_identifier = coalesce(d.cluster_member_ref, dc.cluster_reference) "
+            + "    limit 1 "
+            + ") c_parent on true "
+            + "order by d.created_at asc, d.device_id";
+
+    @Override
+    public List<NameIdentity> listNameIdentities() {
+        return transactionBoundary.inTransaction(dsl -> dsl.fetch(NAME_IDENTITY_QUERY).stream()
+                .map(r -> new NameIdentity(r.get("device_id", String.class),
+                        Optional.ofNullable(r.get("observed_hostname", String.class)),
+                        Optional.ofNullable(r.get("cluster_member_ref", String.class))))
+                .toList());
+    }
+
     @Override
     public List<DeviceSummaryRecord> listAll() {
         return transactionBoundary.inTransaction(dsl -> dsl.fetch(DEVICE_SUMMARY_QUERY)

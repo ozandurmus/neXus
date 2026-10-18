@@ -150,7 +150,7 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
                     jobEvent.jobId(),
                     jobEvent.jobType(),
                     jobEvent.targetDeviceId(),
-                    topologyPseudonymizer.maskDeviceName(jobEvent.deviceName(), null),
+                    topologyPseudonymizer.maskDeviceName(jobEvent.deviceName(), null, jobEvent.targetDeviceId()),
                     jobEvent.state(),
                     jobEvent.outcome(),
                     maskedReason,
@@ -189,6 +189,13 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
             detectedClusterRef = s;
         }
         final String clusterRef = detectedClusterRef;
+        // A device row's own hostname is masked with its device ID, so two devices with the same name (an ASA
+        // failover pair) never share a pseudonym (UI review 2026-10-18, F-1).
+        final String rowDeviceId = map.get("device_id") instanceof String id && !id.isBlank() ? id : null;
+        // Rows a manager lists (FortiManager FortiGates, Management Center ProxySGs, Infoblox grid members) and a
+        // manager's list of them are devices, never virtual systems: MD-, not VS- (P2-3B).
+        final boolean managedDeviceRow = map.containsKey("grid_master") && map.containsKey("services");
+        final boolean managerListing = managedDeviceRow || isManagerListing(map);
 
         for (Map.Entry<?, ?> entry : map.entrySet()) {
             String key = String.valueOf(entry.getKey());
@@ -257,7 +264,9 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
                     }
                 }
                 case "hostname", "subject_cn", "issuer_cn", "device", "point_label", "capture_name" -> {
-                    if (value instanceof String s) {
+                    if (value instanceof String s && "hostname".equals(key) && rowDeviceId != null) {
+                        result.put(key, topologyPseudonymizer.maskDeviceName(s, clusterRef, rowDeviceId));
+                    } else if (value instanceof String s) {
                         result.put(key, topologyPseudonymizer.maskDeviceName(s, clusterRef));
                     } else {
                         result.put(key, maskObject(value, clusterRef));
@@ -302,7 +311,14 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
                 }
                 case "prefix", "payload_hex" -> result.put(key, null);
                 case "virtual_system", "member" -> {
-                    if (value instanceof String s) {
+                    if (value instanceof String s && "virtual_system".equals(key) && managedDeviceRow) {
+                        result.put(key, topologyPseudonymizer.maskManagedDeviceName(s));
+                    } else if (value instanceof String s && "member".equals(key) && !"grid".equals(s)
+                            && (map.containsKey("expiry_date") || map.containsKey("days_remaining"))) {
+                        // An Infoblox license row (grid summary, or its Lifecycle projection) names the grid member it
+                        // is bound to: the same MD- name as the grid member row, so the two can be matched on screen.
+                        result.put(key, topologyPseudonymizer.maskManagedDeviceName(s));
+                    } else if (value instanceof String s) {
                         result.put(key, "member".equals(key) && ("grid".equals(s)
                                 || map.containsKey("checkNo") && s.matches("Member [12]")) ? s
                                 : topologyPseudonymizer.maskVirtualSystem(s, clusterRef));
@@ -335,7 +351,13 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
                     }
                 }
                 case "virtual_systems" -> {
-                    if (value instanceof String s) {
+                    if (managerListing && value instanceof String s) {
+                        result.put(key, Arrays.stream(s.split(",\\s*")).filter(item -> !item.isBlank())
+                                .map(topologyPseudonymizer::maskManagedDeviceName).collect(Collectors.joining(", ")));
+                    } else if (managerListing && value instanceof List<?> listed) {
+                        result.put(key, listed.stream().map(item -> item instanceof String name
+                                ? topologyPseudonymizer.maskManagedDeviceName(name) : String.valueOf(item)).toList());
+                    } else if (value instanceof String s) {
                         String masked = Arrays.stream(s.split(",\\s*"))
                                 .filter(item -> !item.isBlank())
                                 .map(vs -> topologyPseudonymizer.maskVirtualSystem(vs, clusterRef))
@@ -385,6 +407,22 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
             }
         }
         return result;
+    }
+
+    /**
+     * A device row whose {@code virtual_systems} are the devices it manages, not virtual systems: an Infoblox grid
+     * master, a FortiManager, a Symantec Management Center (the same vendors the device tree labels "Grid members",
+     * "Managed FortiGates" and "Managed devices"), or any body that carries manager-listed {@code grid_members}.
+     */
+    static boolean isManagerListing(Map<?, ?> map) {
+        Object vendor = map.get("vendor_hint");
+        if ("infoblox".equals(vendor)) {
+            return true;
+        }
+        if ("management_server".equals(map.get("role")) && ("fortinet".equals(vendor) || "bluecoat".equals(vendor))) {
+            return true;
+        }
+        return map.get("grid_members") instanceof List<?> members && !members.isEmpty();
     }
 
     /** {@code aa:bb:cc:dd:ee:ff} to {@code aa:bb:cc:**:**:**}; anything else is withheld entirely. */

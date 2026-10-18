@@ -102,7 +102,7 @@ public final class CpFailoverController {
             String cluster=u.members().get(0).clusterMemberRef().orElseThrow();
             view.put("maskedName",u.vsId()==null ? names.maskClusterName(cluster) : names.maskVirtualSystem(u.label(),cluster));
             view.put("maskedMembers",u.members().stream().map(member -> Map.of(
-                "device_id",member.deviceId(),"maskedLabel",names.maskDeviceName(member.observedHostname().orElse("Unknown"),cluster),
+                "device_id",member.deviceId(),"maskedLabel",names.maskDeviceName(member.observedHostname().orElse("Unknown"),cluster,member.deviceId()),
                 "ha_role",member.observedHaRole().orElse("UNKNOWN"))).toList());
         }
         if (readiness!=null) try {

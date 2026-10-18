@@ -111,6 +111,43 @@ class PolicyQueryServiceTest {
         assertTrue(sql.get(0).contains("jsonb_array_length(s->'rules')"));
     }
 
+    /** UI review 2026-10-18 F-2: the tree (collection sources) and the container table (catalog) name a source alike. */
+    @Test void policySourceNameIsTheSourceDevicesHostnameOnTreeTableAndSnapshot() throws Exception {
+        var meta = new Metadata("policy-1", "source-1", "Panorama source-1", "PAN", "dg-1", "Synthetic group",
+                "Synthetic policy", "2026-10-01T12:00:00Z", "artifact-1", List.of());
+        String metadata = mapper.writeValueAsString(meta);
+        var create = org.jooq.impl.DSL.using(org.jooq.SQLDialect.POSTGRES);
+        var tx = new com.securityexpert.nexus.ui2.persistence.JooqTransactionBoundary(org.jooq.impl.DSL.using(
+            new org.jooq.tools.jdbc.MockConnection(context -> new org.jooq.tools.jdbc.MockResult[]{new org.jooq.tools.jdbc.MockResult(1,
+                context.sql().contains("rule_count")
+                    ? create.fetchFromStringData(new String[]{"metadata", "rule_count"}, new String[]{metadata, "3"})
+                    : create.fetchFromStringData(new String[]{"metadata"}, new String[]{metadata}))}),
+            org.jooq.SQLDialect.POSTGRES));
+        var devices = mock(com.securityexpert.nexus.ui2.persistence.device.DeviceRepository.class);
+        org.mockito.Mockito.when(devices.listNameIdentities()).thenReturn(List.of(
+            new com.securityexpert.nexus.ui2.persistence.device.DeviceRepository.NameIdentity("source-1",
+                Optional.of("synthetic-panorama"), Optional.empty())));
+        var service = new PolicyQueryService(tx, mapper, names);
+        service.setDeviceRepository(devices);
+
+        var table = service.catalogViews();
+        assertEquals("synthetic-panorama", table.get(0).get("sourceName"));
+        var ips = new com.securityexpert.nexus.ui2.service.privacy.SubnetPreservingIpMasker(new byte[32]);
+        var maskedTable = mapper.valueToTree(PolicyPrivacy.mask(Map.of("policies", table), "", names, ips));
+        // The tree's source row as PolicyCollectionService builds it.
+        var tree = Map.of("sources", List.of(Map.of("sourceId", "source-1",
+            "sourceName", PolicySources.displayName(Optional.of("synthetic-panorama")), "vendor", "PAN")));
+        var maskedTree = mapper.valueToTree(PolicyPrivacy.mask(tree, "", names, ips));
+        String masked = maskedTree.path("sources").get(0).path("sourceName").asText();
+        assertEquals(masked, maskedTable.path("policies").get(0).path("sourceName").asText());
+        assertEquals(names.maskDeviceName("synthetic-panorama", null, "source-1"), masked);
+        assertNotEquals(names.maskDeviceName("Panorama source-1", null), masked);
+        // A device without a hostname reads as the tree's own fallback, never the stored "Panorama <id>" label.
+        org.mockito.Mockito.when(devices.listNameIdentities()).thenReturn(List.of());
+        service.setDeviceRepository(devices);
+        assertEquals(PolicySources.UNNAMED, service.catalog().get(0).sourceName());
+    }
+
     @Test void structuredAIViewQueryCannotProbeRawNamesIpsUsersOrZones() {
         var ips = new com.securityexpert.nexus.ui2.service.privacy.SubnetPreservingIpMasker(new byte[32]);
         var query = new PolicyQueryService(mock(TransactionBoundary.class), mapper, names, null, ips);

@@ -26,6 +26,7 @@ import {
   getDevice,
   getDeviceInventory,
   getClusterInventory,
+  getHttpsCertificate,
   requestInventoryCollect,
   retryDeviceConfirm,
   collectDeviceBackup,
@@ -51,6 +52,7 @@ import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { BackupAttempts } from "./BackupAttempts";
 import { DeviceLogsPanel } from "./DeviceLogsPanel";
 import { CpFailoverPanel } from "./CpFailoverPanel";
+import { CertificateStatePill, HttpsCertificateCard } from "./HttpsCertificatePanel";
 
 const POLL_INTERVAL_MS = 1750;
 
@@ -252,6 +254,16 @@ function ManagedDevicesPanel({ members, selected, onSelect }: {
     </Stack>
   );
 }
+
+/**
+ * What the header's "Identity verified" rests on, as the code decides it: the chip shows for an ENROLLED device, and
+ * a device becomes ENROLLED only through its first-contact confirm read (recordConfirmSuccess), which records its
+ * identity baseline; the SSH host key and the HTTPS certificate are pinned on first use and compared by fingerprint
+ * on every later contact. Expiry is in neither check (PO 2026-10-18: it stays that way; the certificate pill says it).
+ */
+export const IDENTITY_VERIFIED_BASIS = "Identity verified means the device passed its enrollment confirm read, which "
+  + "recorded its identity; later connections are compared with the pinned SSH host key or HTTPS certificate "
+  + "fingerprint, and certificate expiry is not part of either check.";
 
 function describeApiError(err: unknown): string {
   const apiErr = err as Partial<ApiError>;
@@ -1798,6 +1810,9 @@ export function DeviceInventoryPanels({
     describeApiError,
   );
 
+  // P0-1B (UI review 2026-10-18): one certificate read feeds the header state pill and the Identity tab card.
+  const certificateFetch = useFetchOnMount(() => getHttpsCertificate(device.device_id), () => "Certificate details unavailable.");
+
   const deviceInventory = deviceInventoryFetch.data;
   const clusterInventory = clusterInventoryFetch.data;
   const error = isCluster ? clusterInventoryFetch.error : deviceInventoryFetch.error;
@@ -1856,6 +1871,7 @@ export function DeviceInventoryPanels({
               />
             )}
             {isEnrolledDevice && <StatusChip tone="ok" label="✓ Identity verified" dense />}
+            <CertificateStatePill view={certificateFetch.data} />
             <StatusChip
               tone="neutral"
               label={
@@ -1972,6 +1988,9 @@ export function DeviceInventoryPanels({
             label: "Identity",
             panel: (
               <Stack spacing={1}>
+                <HttpsCertificateCard deviceId={device.device_id} data={certificateFetch.data}
+                  error={certificateFetch.error} refresh={certificateFetch.refresh} />
+                <Typography variant="body2">{IDENTITY_VERIFIED_BASIS}</Typography>
                 <IdentityReference value={device.device_id} />
                 <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>
                   Platform identity as read from the device itself; a value not read is UNKNOWN.

@@ -71,7 +71,11 @@ public final class PolicyPrivacy {
                 if (field.equals("name") && "UNKNOWN".equals(v) && map.containsKey("ruleId")) out.put(field, "UNKNOWN");
                 else if (field.equals("name") && "any".equals(map.get("type"))) out.put(field, "ANY");
                 else if (field.equals("name") && map.containsKey("rules") && Set.of("Pre rules", "Post rules", "Local rules", "Inline layer unavailable", "Pre NAT rules", "Post NAT rules", "Pre default rules", "Post default rules").contains(v)) out.put(field, mask(v, "refs", names, ips));
-                else if (field.equals("name") && map.containsKey("deviceId")) out.put(field, names.maskDeviceName((String) v, null));
+                else if (field.equals("name") && map.containsKey("deviceId")) out.put(field, names.maskDeviceName((String) v, null, map.get("deviceId") instanceof String id ? id : null));
+                // One canonical field per source (UI review 2026-10-18, F-2): the tree and the container table both
+                // carry the source device's own hostname, masked with its device ID like the Devices screen does.
+                else if (field.equals("sourceName") && v instanceof String text && !text.isEmpty() && map.get("sourceId") instanceof String id)
+                    out.put(field, names.maskDeviceName(text, null, id));
                 else if (field.equals("name") && v instanceof String text) out.put(field, names.maskPolicyName(
                     map.containsKey("sourceId") ? "policy" : map.containsKey("number") ? "rule"
                         : map.containsKey("type") ? objectNameType(String.valueOf(map.get("type"))) : "name", text));
