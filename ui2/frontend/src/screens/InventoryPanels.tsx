@@ -8,7 +8,6 @@ import Select from "@mui/material/Select";
 import Stack from "@mui/material/Stack";
 import Table from "@mui/material/Table";
 import Tooltip from "@mui/material/Tooltip";
-import { DeviceLifecycleLine } from "./LifecycleScreen";
 import TableBody from "@mui/material/TableBody";
 import TableCell from "@mui/material/TableCell";
 import TableContainer from "@mui/material/TableContainer";
@@ -28,7 +27,7 @@ import { plural } from "../shell/plural";
 import { deviceNameLabel, jobPhaseLabel, isTerminalJobState, enrollmentStateLabel, onboardingChip } from "../shell/deviceCopy";
 import { MONO, m3 } from "../theme/m3Theme";
 import { RoleChip, Ts, VendorBadge, vendorDisplayName } from "../shell/States";
-import { PLATFORM_IDENTITY_GRID_ID, ReferenceCell, clusterContextLinks, DeviceIdentityTable, deviceLiveWithInventory, orderMembers, vsListOf } from "./DeviceShared";
+import { ReferenceCell, clusterContextLinks, DeviceIdentityTable, deviceLiveWithInventory, orderMembers, vsListOf } from "./DeviceShared";
 import { JobStatusIndicator } from "../shell/JobStatusIndicator";
 import {
   getDevice,
@@ -36,6 +35,8 @@ import {
   getClusterInventory,
   getHttpsCertificate,
   getDeviceConfiguration,
+  getDeviceCompliance,
+  listCpFailoverSummary,
   requestInventoryCollect,
   retryDeviceConfirm,
   collectDeviceBackup,
@@ -46,6 +47,8 @@ import {
   type ClusterInventory,
   type ClusterRoute,
   type DeviceConfiguration,
+  type DeviceComplianceResult,
+  type CpFailoverSummary,
   type DeviceInventory,
   type GridMemberView,
   type GridSummaryView,
@@ -66,6 +69,11 @@ import { DeviationChip, ValidationChip, deviationState } from "./backupWords";
 import { DeviceLogsPanel } from "./DeviceLogsPanel";
 import { CpFailoverPanel } from "./CpFailoverPanel";
 import { CertificateStatePill, HttpsCertificateCard } from "./HttpsCertificatePanel";
+import { IdentityCard, identityTiles } from "./PlatformIdentity";
+import {
+  HeaderStateRow, READINESS_VENDORS, backupFact, backupsHref, clusterComplianceFact, clusterConfigChangedFact, complianceFact,
+  configChangedFact, readinessFact, useMemberHeaderReads,
+} from "./HeaderStatePills";
 
 const POLL_INTERVAL_MS = 1750;
 
@@ -1918,6 +1926,7 @@ export function InventoryEntityHeader({
   chips,
   action,
   readAges,
+  state,
   link,
   children,
 }: {
@@ -1931,6 +1940,8 @@ export function InventoryEntityHeader({
   readonly action?: React.ReactNode;
   /** "Platform read 4 h ago · Config read 22 h ago" (UI review 2026-10-18, F-9): the header's own row, left. */
   readonly readAges?: React.ReactNode;
+  /** The state row's pills in plane order (Compliance · Config changed · Backup · Readiness · Certificate), after the read ages. */
+  readonly state?: React.ReactNode;
   /** A pill-shaped link that belongs to the entity ("Open assigned policy"), right-aligned inside the card. */
   readonly link?: React.ReactNode;
   readonly children?: React.ReactNode;
@@ -1963,9 +1974,12 @@ export function InventoryEntityHeader({
         </Box>
         {action}
       </Box>
-      {(readAges || link) && (
+      {(readAges || state || link) && (
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 2, flexWrap: "wrap" }}>
-          <Box sx={{ minWidth: 0 }}>{readAges}</Box>
+          <Box sx={{ minWidth: 0, display: "flex", alignItems: "center", columnGap: 1.5, rowGap: 0.75, flexWrap: "wrap" }}>
+            {readAges}
+            {state}
+          </Box>
           {link}
         </Box>
       )}
@@ -1975,15 +1989,18 @@ export function InventoryEntityHeader({
 }
 
 /** A link shaped as a pill, for a header: it sits on the right of the card, not floating above it. */
-export function HeaderPillLink({ href, children }: { readonly href: string; readonly children: React.ReactNode }) {
-  return (
-    <Box component="a" href={href}
-      sx={{ display: "inline-flex", alignItems: "center", height: 26, px: 1.5, borderRadius: "13px", border: `1px solid ${m3.outline}`,
-        color: m3.primary, fontSize: 12.5, fontWeight: 500, textDecoration: "none", whiteSpace: "nowrap",
-        "&:hover": { bgcolor: m3.secondaryContainer }, "&:focus-visible": { outline: `2px solid ${m3.primary}`, outlineOffset: 2 } }}>
-      {children}
-    </Box>
-  );
+export function HeaderPillLink({ href, onClick, title, children }: {
+  readonly href?: string;
+  /** Given instead of `href`: the pill is a button that acts in place (no page load). */
+  readonly onClick?: () => void;
+  readonly title?: string;
+  readonly children: React.ReactNode;
+}) {
+  const sx = { display: "inline-flex", alignItems: "center", height: 26, px: 1.5, borderRadius: "13px", border: `1px solid ${m3.outline}`,
+    color: m3.primary, fontSize: 12.5, fontWeight: 500, textDecoration: "none", whiteSpace: "nowrap", bgcolor: "transparent", font: "inherit", cursor: "pointer",
+    "&:hover": { bgcolor: m3.secondaryContainer }, "&:focus-visible": { outline: `2px solid ${m3.primary}`, outlineOffset: 2 } } as const;
+  if (onClick && !href) return <Box component="button" type="button" onClick={onClick} title={title} sx={sx}>{children}</Box>;
+  return <Box component="a" href={href} title={title} sx={sx}>{children}</Box>;
 }
 
 /** A configuration read this much older than the platform read is flagged amber (UI review 2026-10-18, P1-1B). */
@@ -2069,19 +2086,70 @@ function DetailTabsBody({ ariaLabel, tabs, initial }: {
   );
 }
 
+/** The tab strip's navigation for a panel inside it (the Configuration tab's identity line opens the Identity tab's grid). */
+export function useDetailTabs() {
+  return useContext(DetailTabsContext);
+}
+
 /**
- * The Identity tab's way to the Platform identity grid (UI review 2026-10-18, F-9): the grid on the Configuration tab now
- * holds the reference and the lifecycle too. The tab keeps what the grid does not carry (the certificate, what the
- * identity badge rests on, the per-member evidence source), so nothing is moved out of reach.
+ * What the identity badge rests on, stated once on the Identity tab (UI review 2026-10-18, P0-1B; roadmap 2.6), next to
+ * the badge itself.
  */
-function PlatformIdentityGridLink() {
-  const nav = useContext(DetailTabsContext);
-  if (!nav?.has("Configuration")) return null;
+function IdentityBasisCard({ device }: { readonly device: DeviceSummary }) {
+  const badge = identityBadge(device);
   return (
-    <Link component="button" type="button" underline="hover" onClick={() => nav.open("Configuration", PLATFORM_IDENTITY_GRID_ID)}
-      sx={{ alignSelf: "flex-start", color: m3.primary, font: "inherit", fontSize: 13 }}>
-      Platform identity grid on the Configuration tab: vendor, model, serial, versions, lifecycle, reference →
-    </Link>
+    <Box sx={{ p: 2, borderRadius: "10px", bgcolor: m3.scLowest, border: `1px solid ${m3.outlineVar}`, display: "flex", flexDirection: "column", gap: 1 }}>
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+        <Typography variant="overline" sx={{ color: m3.onSurfaceVar, letterSpacing: "0.08em" }}>Identity badge</Typography>
+        <span title={badge.title}><StatusChip tone={badge.tone} label={badge.label} dense /></span>
+      </Box>
+      <Typography variant="body2">{IDENTITY_VERIFIED_BASIS}</Typography>
+    </Box>
+  );
+}
+
+/** M1 / M2 pills that pick one member of a cluster (the Logs tab, the header's Collect now). */
+function MemberPills({ members, allMembers, selected, onSelect, ariaLabel, caption = true }: {
+  readonly members: readonly DeviceSummary[];
+  readonly allMembers: readonly LabeledMember[];
+  readonly selected: DeviceSummary;
+  readonly onSelect: (index: number) => void;
+  readonly ariaLabel: string;
+  readonly caption?: boolean;
+}) {
+  return (
+    <Box role="group" aria-label={ariaLabel} sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+      {members.map((m, i) => (
+        <Box key={m.device_id} component="button" type="button" aria-pressed={m.device_id === selected.device_id}
+          title={memberLabel(m, allMembers)} onClick={() => onSelect(i)}
+          sx={{ cursor: "pointer", font: "inherit", fontSize: 13, fontWeight: 600, px: 1.5, py: 0.4, borderRadius: "14px", color: m3.onSurface,
+            border: `1px solid ${m.device_id === selected.device_id ? m3.primary : m3.outline}`,
+            bgcolor: m.device_id === selected.device_id ? m3.secondaryContainer : "transparent" }}>
+          M{i + 1}
+        </Box>
+      ))}
+      {caption && (
+        <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
+          {memberLabel(selected, allMembers)}{selected.ha_role ? ` · ${selected.ha_role.trim().toUpperCase()}` : ""}
+        </Typography>
+      )}
+    </Box>
+  );
+}
+
+/**
+ * One Collect now per page (UI product review 2026-10-18, phase 1.3): the cluster header carries it, with M1 / M2 pills
+ * choosing which member's inventory is read. The member cards and the Cluster members tab carry none.
+ */
+function ClusterCollectNow({ members, onCollected }: { readonly members: readonly DeviceSummary[]; readonly onCollected: () => void }) {
+  const [selected, setSelected] = useState(0);
+  const member = members[Math.min(selected, members.length - 1)];
+  if (!member) return null;
+  return (
+    <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 0.75 }}>
+      <MemberPills members={members} allMembers={members} selected={member} onSelect={setSelected} ariaLabel="Collect from member" caption={false} />
+      <CollectNowButton key={member.device_id} deviceId={member.device_id} onCollected={onCollected} enrollmentState={member.enrollment_state} />
+    </Box>
   );
 }
 
@@ -2094,9 +2162,12 @@ export function DeviceInventoryPanels({
   policyHref,
   configuration,
   initialTab,
+  onOpenCluster,
 }: {
   readonly device: DeviceSummary;
   readonly initialVs?: string;
+  /** A cluster member's header links to its parent; given, the cluster pane opens in place, else the link reloads with `?cluster_ref=`. */
+  readonly onOpenCluster?: (clusterRef: string) => void;
   readonly onDeviceStateChange?: () => void;
   /** A selected virtual system moved (switcher) or was left (parent link, null): the caller keeps the sidebar's selection in step. */
   readonly onSelectVs?: (vs: string | null) => void;
@@ -2140,6 +2211,16 @@ export function DeviceInventoryPanels({
   // refused or failed read makes no claim at all (the exact time stays in the Platform identity grid).
   const configReadFetch = useFetchOnMount<DeviceConfiguration | null>(
     () => (configuration ? getDeviceConfiguration(device.device_id) : Promise.resolve(null)), () => "Configuration read unavailable.");
+  // The header state row (roadmap 2.1): compliance only where the fleet assesses it (a vendor with a configuration read,
+  // never a management server), readiness only for a member of a Check Point or Palo Alto cluster, the backup for every
+  // device. A refused or failed read makes no claim: that pill is simply absent.
+  const assessed = Boolean(configuration) && device.role !== "management_server";
+  const readinessRead = isCluster && READINESS_VENDORS.has(device.vendor_hint);
+  const backupsFetch = useFetchOnMount(() => listDeviceBackups(device.device_id), () => "Backups unavailable.");
+  const complianceFetch = useFetchOnMount<DeviceComplianceResult | null>(
+    () => (assessed ? getDeviceCompliance(device.device_id) : Promise.resolve(null)), () => "Compliance unavailable.");
+  const readinessFetch = useFetchOnMount<CpFailoverSummary[] | null>(
+    () => (readinessRead ? listCpFailoverSummary() : Promise.resolve(null)), () => "Readiness unavailable.");
 
   const deviceInventory = deviceInventoryFetch.data;
   const clusterInventory = clusterInventoryFetch.data;
@@ -2182,6 +2263,13 @@ export function DeviceInventoryPanels({
   // evidence is members / managed devices, not interfaces) a completed inventory run.
   const isLiveDevice = deviceLiveWithInventory(device, deviceInventory?.collected_at);
   const isEnrolledDevice = device.enrollment_state === "ENROLLED";
+  const configRead = configuration ? configReadFetch.data : null;
+  const stateFacts = [
+    assessed ? complianceFact(complianceFetch.data, { configurationRead: Boolean(configRead?.collected_at), vendor: device.vendor_hint }) : null,
+    configChangedFact(configRead),
+    backupFact(backupsFetch.data?.backups, device, backupsHref(device.cluster_member_ref ?? device.device_id)),
+    readinessRead && device.cluster_member_ref ? readinessFact(readinessFetch.data, device.cluster_member_ref) : null,
+  ];
 
   return (
     <Stack spacing={2}>
@@ -2215,17 +2303,20 @@ export function DeviceInventoryPanels({
               const badge = identityBadge(device);
               return <span title={badge.title}><StatusChip tone={badge.tone} label={badge.label} dense /></span>;
             })()}
-            <CertificateStatePill view={certificateFetch.data} />
-            <StatusChip
-              tone="neutral"
-              label={
-                device.cluster_member_ref
-                  ? `${clusterVendorLabel(device.vendor_hint)} · ${device.cluster_member_ref}`
-                  : `${isPaloAlto ? "Palo Alto" : vendorDisplayName(device.vendor_hint)} · ${device.role === "management_server" ? "Management server"
-                    : device.role === "appliance" ? "Appliance" : "Standalone"}`
-              }
-              dense
-            />
+            {device.cluster_member_ref ? (
+              // The member's way to its parent (roadmap 2.2): the cluster page holds Cluster members, Failover and the side-by-side configuration.
+              <HeaderPillLink title="Open the cluster: its members, failover and the members' configuration side by side"
+                {...(onOpenCluster ? { onClick: () => onOpenCluster(device.cluster_member_ref!) } : { href: `?screen=inventory&cluster_ref=${encodeURIComponent(device.cluster_member_ref)}` })}>
+                {clusterVendorLabel(device.vendor_hint)} · {device.cluster_member_ref}
+              </HeaderPillLink>
+            ) : (
+              <StatusChip
+                tone="neutral"
+                label={`${isPaloAlto ? "Palo Alto" : vendorDisplayName(device.vendor_hint)} · ${device.role === "management_server" ? "Management server"
+                  : device.role === "appliance" ? "Appliance" : "Standalone"}`}
+                dense
+              />
+            )}
             {(() => {
               const ha = haStatement(device);
               return ha === null ? null : ha.kind === "statement" ? <StatusChip tone="neutral" label={ha.text} dense /> : <RoleChip role={ha.role} dense />;
@@ -2241,6 +2332,7 @@ export function DeviceInventoryPanels({
         action={<CollectNowButton deviceId={device.device_id} onCollected={refresh} enrollmentState={device.enrollment_state} />}
         readAges={<HeaderReadAges platformAt={device.platform_facts_observed_at}
           config={configuration && configReadFetch.data ? { at: configReadFetch.data.collected_at } : undefined} />}
+        state={<HeaderStateRow facts={stateFacts} trailing={<CertificateStatePill view={certificateFetch.data} />} />}
         link={policyHref ? <HeaderPillLink href={policyHref}>Open assigned policy</HeaderPillLink> : undefined}
       >
         {isCluster && clusterInventory && clusterInventory.members.length > 0 ? (
@@ -2250,8 +2342,6 @@ export function DeviceInventoryPanels({
         ) : null}
       </InventoryEntityHeader>
 
-      {/* The lifecycle is a cell of the Platform identity grid on the Configuration tab; a device with no such tab keeps the line. */}
-      {!configuration && <DeviceLifecycleLine key={device.device_id} deviceId={device.device_id} />}
       <DetailTabs
         ariaLabel="Device detail"
         configuration={configuration}
@@ -2276,52 +2366,11 @@ export function DeviceInventoryPanels({
               ? <ClusterRoutesPanel contexts={clusterInventory?.contexts ?? []} members={clusterInventory ? orderMembers(clusterInventory.members) : undefined} virtualSystems={clusterInventory?.virtual_systems} activeContext={activeContext} onSelectContext={setActiveContext} isPaloAlto={isPaloAlto} />
               : <RoutesPanel contexts={deviceInventory?.contexts ?? []} virtualSystems={deviceInventory?.virtual_systems ?? device.virtual_systems} activeContext={activeContext} onSelectContext={setActiveContext} isPaloAlto={isPaloAlto} member={device} />,
           }] : []),
-          ...((isCluster || device.vendor_hint === "infoblox") && !hasManagedDevices ? [{
-            label: device.vendor_hint === "infoblox" ? "Grid members" : "Cluster members",
-            panel: device.vendor_hint === "infoblox"
-              ? <GridMembersPanel members={deviceInventory?.grid_members ?? []} summary={deviceInventory?.grid_summary} />
-              : isCluster && clusterInventory
-              ? (
-                <Stack spacing={2}>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>Hostname / Member</TableCell>
-                        <TableCell>Device ID</TableCell>
-                        <TableCell>Latest Job Status</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {orderMembers(clusterInventory.members).map((member) => (
-                        <TableRow key={member.device_id}>
-                          <TableCell sx={{ fontWeight: 500 }}>{memberLabel(member, clusterInventory.members)}</TableCell>
-                          <TableCell sx={{ fontFamily: MONO, fontSize: 12 }}>{member.device_id}</TableCell>
-                          <TableCell>
-                            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                              <JobStatusIndicator
-                                state={member.latest_job_state}
-                                type={member.latest_job_type}
-                                terminalReason={member.latest_job_terminal_reason}
-                              />
-                              <Typography variant="caption">
-                                {member.latest_job_state ?? "No recent jobs"}
-                                {member.latest_job_terminal_reason ? ` (${member.latest_job_terminal_reason})` : ""}
-                              </Typography>
-                            </Box>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </Stack>
-              )
-              : (
-                <EmptyPanel
-                  title="No cluster membership evidence"
-                  body="Membership needs an identity-verified read from each peer; none has been collected
-                        yet."
-                />
-              ),
+          // The Cluster members tab is a cluster-level fact and lives on the cluster page only (roadmap 2.2); the member's
+          // header links there. An Infoblox Grid Manager keeps its own Grid members tab.
+          ...(device.vendor_hint === "infoblox" && !hasManagedDevices ? [{
+            label: "Grid members",
+            panel: <GridMembersPanel members={deviceInventory?.grid_members ?? []} summary={deviceInventory?.grid_summary} />,
           }] : []),
           {
             label: "Configuration",
@@ -2339,17 +2388,13 @@ export function DeviceInventoryPanels({
           }] : []),
           {
             label: "Identity",
+            // Roadmap 2.6: the audit grid (with reference and lifecycle), the certificate block and what the badge rests on, in one place.
             panel: (
-              <Stack spacing={1}>
-                <PlatformIdentityGridLink />
+              <Stack spacing={1.5}>
+                <IdentityCard title={deviceNameLabel(device.hostname)} tiles={identityTiles(device, configRead?.collected_at ?? null, { configurationRead: Boolean(configuration) })} />
                 <HttpsCertificateCard deviceId={device.device_id} data={certificateFetch.data}
                   error={certificateFetch.error} refresh={certificateFetch.refresh} />
-                <Typography variant="body2">{IDENTITY_VERIFIED_BASIS}</Typography>
-                <IdentityReference value={device.device_id} />
-                <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>
-                  Platform identity as read from the device itself; a value not read is UNKNOWN.
-                </Typography>
-                <DeviceIdentityTable devices={[device]} ariaLabel="Device identity" />
+                <IdentityBasisCard device={device} />
               </Stack>
             ),
           },
@@ -2373,20 +2418,7 @@ export function ClusterLogsPanel({ members, allMembers, vendorHint }: {
   if (!member) return <EmptyPanel title="No members" body="This cluster has no member whose logs can be read." />;
   return (
     <Stack spacing={1.5}>
-      <Box role="group" aria-label="Cluster member" sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
-        {members.map((m, i) => (
-          <Box key={m.device_id} component="button" type="button" aria-pressed={m.device_id === member.device_id}
-            title={memberLabel(m, allMembers)} onClick={() => setSelected(i)}
-            sx={{ cursor: "pointer", font: "inherit", fontSize: 13, fontWeight: 600, px: 1.5, py: 0.4, borderRadius: "14px", color: m3.onSurface,
-              border: `1px solid ${m.device_id === member.device_id ? m3.primary : m3.outline}`,
-              bgcolor: m.device_id === member.device_id ? m3.secondaryContainer : "transparent" }}>
-            M{i + 1}
-          </Box>
-        ))}
-        <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
-          {memberLabel(member, allMembers)}{member.ha_role ? ` · ${member.ha_role.trim().toUpperCase()}` : ""}
-        </Typography>
-      </Box>
+      <MemberPills members={members} allMembers={allMembers} selected={member} onSelect={setSelected} ariaLabel="Cluster member" />
       <DeviceLogsPanel key={member.device_id} deviceId={member.device_id} vendorHint={vendorHint} />
     </Stack>
   );
@@ -2495,6 +2527,27 @@ export function ClusterDetailPanels({
   const leaveVs = () => { setActiveVsContext(null); onSelectVs?.(null); };
   const chooseVs = (next: string) => { setActiveVsContext(next); onSelectVs?.(next); };
 
+  // The cluster header's state row (roadmap 2.1 / 2.2): readiness for the cluster, compliance pooled over the members,
+  // the members that changed configuration, one backup pill per member. The plain Backups / Readiness links stay only
+  // while the pill that would carry them is absent (a refused or failed read), so both ways in are always there.
+  const [readsVersion, setReadsVersion] = useState(0);
+  const vendor = firstMember?.vendor_hint ?? null;
+  const readinessRead = Boolean(vendor && READINESS_VENDORS.has(vendor));
+  const memberReads = useMemberHeaderReads(orderedMembers, { configuration: Boolean(configuration), assessed: Boolean(configuration), version: readsVersion });
+  const readinessFetch = useFetchOnMount<CpFailoverSummary[] | null>(() => (readinessRead ? listCpFailoverSummary() : Promise.resolve(null)), () => "Readiness unavailable.");
+  const labelled = orderedMembers.map((m, i) => ({ id: m.device_id, label: `M${i + 1}`, member: m }));
+  const backupFacts = labelled.map((f) => backupFact(memberReads.backups[f.id], f.member, backupsHref(clusterRef), f.label));
+  const readiness = readinessRead ? readinessFact(readinessFetch.data, clusterRef) : null;
+  const clusterFacts = [
+    configuration ? clusterComplianceFact(labelled.map((f) => ({ label: f.label, result: memberReads.compliance[f.id] ?? null,
+      configurationRead: Boolean(memberReads.configuration[f.id]?.collected_at) })), vendor) : null,
+    clusterConfigChangedFact(labelled.map((f) => ({ label: f.label, configuration: memberReads.configuration[f.id] ?? null }))),
+    ...backupFacts,
+    readiness,
+  ];
+  const fallbackLinks = clusterContextLinks(clusterRef).filter((l) =>
+    (l.id === "backups" && backupFacts.every((f) => f === null)) || (l.id === "readiness" && readiness === null));
+
   return (
     <Stack spacing={2}>
       <InventoryEntityHeader
@@ -2520,13 +2573,14 @@ export function ClusterDetailPanels({
             )}
             {(firstMember?.model || firstMember?.platform_family) && <StatusChip tone="neutral" label={(firstMember?.model || firstMember?.platform_family)!} dense />}
             <StatusChip tone="neutral" label={interfaceRouteLabel(headerCounts, firstMember?.vendor_hint)} dense />
-            {/* The "This cluster in:" strip is gone (UI review 2026-10-18, F-21): its two links are header pills, the third
-                ("Device screen") pointed at this very screen. */}
-            {clusterContextLinks(clusterRef).filter((l) => l.id !== "inventory").map((l) => (
-              <HeaderPillLink key={l.id} href={l.href}>{l.label}</HeaderPillLink>
-            ))}
           </>
         }
+        action={<ClusterCollectNow members={orderedMembers} onCollected={() => { refresh(); setReadsVersion((v) => v + 1); }} />}
+        state={(
+          // The "This cluster in:" strip is gone (UI review 2026-10-18, F-21): its links are the state pills themselves.
+          <HeaderStateRow facts={clusterFacts}
+            trailing={fallbackLinks.map((l) => <HeaderPillLink key={l.id} href={l.href}>{l.label}</HeaderPillLink>)} />
+        )}
       >
         {/* 2 Member Cards Sub-row */}
         <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 1.5, pt: 0.5 }}>
@@ -2560,10 +2614,10 @@ export function ClusterDetailPanels({
                   <RoleChip role={m.ha_role} dense />
                 </Box>
                 <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1 }}>
+                  {/* One Collect now per page (phase 1.3): the header's, with the M1 / M2 pills; the card no longer repeats it. */}
                   <Typography variant="caption" color="text.secondary" sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {m.model ?? "Unknown model"} · {m.software_version ?? "Unknown version"}
                   </Typography>
-                  <CollectNowButton deviceId={m.device_id} onCollected={refresh} enrollmentState={m.enrollment_state} />
                 </Box>
                 {isPaloAlto && m.virtual_systems && (
                   <Typography variant="caption" color="text.secondary">
@@ -2651,7 +2705,7 @@ export function ClusterDetailPanels({
                             <JobStatusIndicator state={m.latest_job_state} type={m.latest_job_type} terminalReason={m.latest_job_terminal_reason} />
                           </Stack>
                         </TableCell>
-                        {/* One Collect now per device: the member card in the header carries it; this tab shows how fresh the read is. */}
+                        {/* One Collect now per page: the header carries it; this tab shows how fresh each member's read is. */}
                         <TableCell><Ts at={m.inventory_collected_at} relative seconds={false} /></TableCell>
                       </TableRow>
                     ))}

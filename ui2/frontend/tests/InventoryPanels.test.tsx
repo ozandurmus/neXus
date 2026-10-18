@@ -91,11 +91,13 @@ describe("InventoryScreen device selection and panels", () => {
       render(withTheme(<InventoryScreen />));
       fireEvent.click(await screen.findByText("FW-TANGO-04"));
       await screen.findByRole("tablist", { name: "Device detail" });
-      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(7));
-      // The lifecycle is a cell of the Platform identity grid (Configuration tab), so the header no longer reads it; the
-      // header's "Config read" age asks the small configuration summary route instead (F-9).
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(9));
+      // The lifecycle is a cell of the Platform identity grid (Identity tab), so the header no longer reads it; the
+      // header's "Config read" age asks the small configuration summary route (F-9), and the state row (roadmap 2.1)
+      // reads the backups and, for an assessed vendor, the device's compliance. No cluster inventory, no readiness.
       expect(fetchMock.mock.calls.map(([url]) => url).sort()).toEqual([
-        "/api/v2/overview", "/api/v2/ssh-trust?device_id=dev-1", "/devices", "/devices/dev-1", "/devices/dev-1/configuration", "/devices/dev-1/https-certificate", "/devices/dev-1/inventory",
+        "/api/v2/overview", "/api/v2/ssh-trust?device_id=dev-1", "/devices", "/devices/dev-1", "/devices/dev-1/backups", "/devices/dev-1/compliance",
+        "/devices/dev-1/configuration", "/devices/dev-1/https-certificate", "/devices/dev-1/inventory",
       ]);
       expect(screen.getByText("This device has not been collected yet. Use Collect now to read its interfaces.")).toBeInTheDocument();
       expect(screen.queryByText("Inventory unavailable")).toBeNull();
@@ -130,8 +132,9 @@ describe("InventoryScreen device selection and panels", () => {
     expect(within(card).getByText(/^SHA-256:/)).toBeInTheDocument();
     expect(within(card).getByText("Strict mode: Off")).toBeInTheDocument();
     expect(screen.getByText(/^Identity verified means the last connection compared the SSH host key or HTTPS certificate fingerprint/)).toBeInTheDocument();
-    const reference = screen.getByText("Reference");
-    expect(card.compareDocumentPosition(reference) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // Roadmap 2.6: the grid (with the reference) comes first, then the certificate block, then the badge's basis.
+    const reference = screen.getByText("REFERENCE");
+    expect(reference.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("fetches and renders a selected standalone device's interfaces and routes", async () => {
@@ -180,7 +183,7 @@ describe("InventoryScreen device selection and panels", () => {
     expect(screen.queryByText("dev-1")).toBeNull();
 
     fireEvent.click(screen.getByRole("tab", { name: "Identity" }));
-    const reference = screen.getByText("Reference").parentElement as HTMLElement;
+    const reference = screen.getByText("REFERENCE").parentElement as HTMLElement;
     expect(within(reference).getByText("dev-1")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("tab", { name: "Routing" }));
