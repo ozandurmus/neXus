@@ -80,7 +80,7 @@ def run(name):
             if summary.startswith("INTEGRATION: PASS") and "Complete" not in conditions:
                 raise ValueError("summary contradicts Job status")
             print(summary)
-            for line in re.findall(r"^FAILED [A-Za-z_$][A-Za-z0-9_$]*\.[A-Za-z_$][A-Za-z0-9_$]*$", logs, re.M)[:20]:
+            for line in re.findall(r"^FAILED [A-Za-z_$][A-Za-z0-9_$]*\.[A-Za-z_$][A-Za-z0-9_$]*(?= \||$)", logs, re.M)[:20]:
                 print(line)
             return 0 if "Complete" in conditions and summary.startswith("INTEGRATION: PASS") else 1
         time.sleep(2)
