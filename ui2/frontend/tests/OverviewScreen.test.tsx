@@ -119,7 +119,7 @@ describe("Overview -- executive (EXEC_OVERVIEW_DESIGN_2026_09_25_FABLE.md)", () 
     } } } as Partial<OverviewView>));
     render(<OverviewScreen />);
     expect(await screen.findByText("Check Point · Jumbo Hotfix take")).toBeInTheDocument();
-    expect(screen.getByText("Palo Alto Networks · PAN-OS version")).toBeInTheDocument();
+    expect(screen.getByText("Palo Alto · PAN-OS version")).toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/behind|on newest/i);
   });
 

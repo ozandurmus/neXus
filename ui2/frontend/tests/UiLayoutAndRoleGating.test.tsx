@@ -184,24 +184,20 @@ describe("tables do not clip at 1440 px", () => {
     ha_role: null, cluster_member_ref: null, inventory_collected_at: "2026-10-17T15:01:33Z",
   }));
 
-  it("gives the device registry one shared column template, a hostname floor and the standard spelling", async () => {
+  it("lists the device registry as a plain table with headings that cannot collide, and the standard spelling", async () => {
     vi.stubGlobal("fetch", vi.fn((url: string) => url.startsWith("/devices") ? jsonResponse(200, { devices }) : jsonResponse(200, {})));
     render(as(null, <DeviceManagementPane />));
     const first = await screen.findByText("FW-FOXTROT-01");
     expect(screen.getByText("ENROLLMENT STATE")).toBeInTheDocument();
     expect(screen.queryByText(/ENROLMENT/i)).toBeNull();
 
-    const header = screen.getByText("ENROLLMENT STATE").parentElement!;
-    const row = first.parentElement!;
-    const headerColumns = getComputedStyle(header).gridTemplateColumns;
-    expect(headerColumns).toBe(getComputedStyle(row).gridTemplateColumns);
-    // the hostname track has a pixel floor (never 0) and every track is separated by a gap, so headings cannot collide
-    expect(headerColumns).toMatch(/minmax\(170px, 1fr\)/);
-    expect(parseFloat(getComputedStyle(header).columnGap)).toBeGreaterThan(0);
-    // the whole list scrolls sideways when the card is narrower than the column floors
-    expect(getComputedStyle(header.parentElement!.parentElement!).overflowX).toBe("auto");
+    const table = screen.getByRole("table", { name: "Device registry" });
+    expect(within(table).getAllByRole("columnheader").map((cell) => cell.textContent?.trim()).filter(Boolean))
+      .toEqual(["VENDOR", "DEVICE / HOSTNAME", "ENROLLMENT STATE", "LAST COLLECTION"]);
+    expect(within(table).getAllByRole("row")).toHaveLength(3);
     expect(first).toHaveAttribute("title", "FW-FOXTROT-01");
   });
+
 });
 
 describe("Packet Analysis and Sanitizer", () => {

@@ -36,6 +36,12 @@ export interface RailDestination {
   readonly requiredPlane?: string;
 }
 
+/**
+ * The pinned rail (UI review 2026-10-18, F-17). Operations and Backups are pinned for every session: the screens read
+ * for a read-only role too and say what they refuse themselves, so the rail no longer hides them (the review saw no
+ * active item on either screen). Sanitize and Admin live in the drawer; the collapsed rail shows one of them only
+ * while it is the open screen, so every screen has an active item.
+ */
 export const DESTINATIONS: readonly RailDestination[] = [
   { id: "overview", label: "Overview", icon: "grid", screen: "overview" },
   { id: "devices", label: "Devices", icon: "devices", screen: "inventory", requiredPlane: "Devices" },
@@ -45,10 +51,14 @@ export const DESTINATIONS: readonly RailDestination[] = [
   // outright, and RECOVER is its own stage of the product axis rather than a leaf of
   // another plane. The "backup" icon was already defined and unused, so the rail was
   // drawn for this destination before it was dropped.
-  { id: "backups", label: "Backups", icon: "backup", screen: "backups", requiredPlane: "Operations" },
-  { id: "operations", label: "Operations", icon: "operations", screen: "operations", requiredPlane: "Operations" },
+  { id: "operations", label: "Operations", icon: "operations", screen: "operations" },
+  { id: "backups", label: "Backups", icon: "backup", screen: "backups" },
   // PO decision record 2026-10-15: PacketBreaker ported into neXus as Packet Analysis (offline pcap analysis).
   { id: "packet-analysis", label: "Packets", icon: "rows", screen: "packet_analysis", requiredPlane: "PacketAnalysis" },
+];
+
+/** Reached from the drawer; the collapsed rail shows the open one so the active screen is never unmarked. */
+export const DRAWER_ONLY_DESTINATIONS: readonly RailDestination[] = [
   // Data Sanitizer (DATA_SANITIZER_CONTRACT.md §3.1, data anonymization): files in, sanitized or reverted files out.
   { id: "sanitizer", label: "Sanitize", icon: "lock", screen: "sanitizer", requiredPlane: "Sanitizer" },
   { id: "admin", label: "Admin", icon: "admin", screen: "administration", requiredPlane: "Admin" },
@@ -86,11 +96,10 @@ export const DRAWER_GROUPS: readonly DrawerGroup[] = [
   {
     header: "Operations",
     screen: "operations",
-    requiredPlane: "Operations",
     leaves: [
-      { label: "HA & readiness", screen: "operations", requiredPlane: "Operations" },
-      { label: "Backups & Recovery", screen: "backups", requiredPlane: "Operations" },
-      { label: "Jobs", requiredPlane: "Operations" },
+      { label: "HA & readiness", screen: "operations" },
+      { label: "Backups & Recovery", screen: "backups" },
+      { label: "Jobs" },
       { label: "Data Sanitizer", screen: "sanitizer", requiredPlane: "Sanitizer" },
     ],
   },
@@ -114,18 +123,19 @@ export function NavigationRail({ active }: { readonly active: ScreenId }) {
   const session = useSession();
   const permissions = session?.permissions;
 
-  const allowedDestinations = permissions && permissions.length > 0
-    ? DESTINATIONS.filter((d) => !d.requiredPlane || permissions.includes(d.requiredPlane))
-    : DESTINATIONS;
+  const restricted = Boolean(permissions && permissions.length > 0);
+  // The open screen always keeps its item (and so its active state), whatever the plane list says: the server decides
+  // what the screen may show, the rail never leaves the reader without a "you are here".
+  const granted = (plane: string | undefined, screen: ScreenId | undefined) =>
+    !restricted || !plane || permissions!.includes(plane) || (screen !== undefined && screen === active);
 
-  const allowedDrawerGroups = permissions && permissions.length > 0
-    ? DRAWER_GROUPS.filter((g) => !g.requiredPlane || permissions.includes(g.requiredPlane))
-        .map((g) => ({
-          ...g,
-          leaves: g.leaves.filter((l) => !l.requiredPlane || permissions.includes(l.requiredPlane)),
-        }))
-        .filter((g) => g.screen || g.leaves.length > 0)
-    : DRAWER_GROUPS;
+  const allowedDestinations = [...DESTINATIONS, ...DRAWER_ONLY_DESTINATIONS.filter((d) => d.screen === active)]
+    .filter((d) => granted(d.requiredPlane, d.screen));
+
+  const allowedDrawerGroups = DRAWER_GROUPS
+    .filter((g) => granted(g.requiredPlane, g.screen))
+    .map((g) => ({ ...g, leaves: g.leaves.filter((l) => granted(l.requiredPlane, l.screen)) }))
+    .filter((g) => g.screen || g.leaves.length > 0);
 
   if (!expanded) {
     return (
@@ -146,7 +156,7 @@ export function NavigationRail({ active }: { readonly active: ScreenId }) {
         <Box sx={{ mb: 1 }}>
           <NexusMark size={44} />
         </Box>
-        <Tooltip title="Expand navigation: every screen and its sections" placement="right">
+        <Tooltip title="Expand navigation: every screen and its sections, including Sanitize and Admin" placement="right">
           <IconButton
             aria-label="Expand navigation"
             onClick={() => setExpanded(true)}
@@ -213,7 +223,8 @@ export function NavigationRail({ active }: { readonly active: ScreenId }) {
             <DrawerItem
               key={leaf.label}
               label={leaf.label}
-              on={active === leaf.screen}
+              // A leaf that opens the same screen as its group header is not marked a second time.
+              on={active === leaf.screen && g.screen !== leaf.screen}
               navHref={href(leaf.screen)}
               disabled={!leaf.screen}
             />

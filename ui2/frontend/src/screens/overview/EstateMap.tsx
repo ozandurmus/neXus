@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import Box from "@mui/material/Box";
 import Link from "@mui/material/Link";
 import Tooltip from "@mui/material/Tooltip";
@@ -142,23 +143,52 @@ export function EstateMap({ estate, cell = 20 }: { readonly estate: EstateView; 
   );
 }
 
-/** One hero fact: a big numeral with its population, one proportional bar, one plain sentence, one link. */
-export function HeroFact({ label, value, of, unit, bad, color, sentence, href }: {
+/**
+ * One hero fact: a big numeral with its population, one proportional bar, one plain sentence, one link.
+ *
+ * The bar keeps its meaning (only the shortfall is drawn, so a long bar is never a good sign) and now names it: each
+ * sliver has an in-line label under the bar ("7 without an archive"), so the colour is never the only signal
+ * (UI review 2026-10-18, F-13). A fact with nothing to name draws no sliver and no label.
+ */
+export function HeroFact({ label, value, of, unit, bad, color, sentence, href, sliverLabel, segments, unknownWord = "n/a", aside, ariaLabel }: {
   readonly label: string; readonly value: number | null; readonly of: number | null; readonly unit: string;
   readonly bad: number; readonly color: string; readonly sentence: string; readonly href: string;
+  /** What the sliver counts, for example "without an archive"; printed after the count under the bar. */
+  readonly sliverLabel?: string;
+  /** Several named slivers instead of the single `bad` one (HA readiness: not ready, unknown). */
+  readonly segments?: ReadonlyArray<{ readonly count: number; readonly color: string; readonly label: string }>;
+  /** The word shown instead of the numeral when the figure is not known. */
+  readonly unknownWord?: string;
+  /** A marker beside the label (for example a Stale chip). */
+  readonly aside?: ReactNode;
+  readonly ariaLabel?: string;
 }) {
   const known = value !== null && of !== null && of > 0;
+  const slivers = (segments ?? (bad > 0 ? [{ count: bad, color, label: sliverLabel ?? "" }] : [])).filter((x) => x.count > 0);
   return (
-    <Box component="a" href={href} sx={{ display: "block", textDecoration: "none", color: "inherit", p: 1.5, borderRadius: "10px",
+    <Box component="a" href={href} aria-label={ariaLabel} sx={{ display: "block", textDecoration: "none", color: "inherit", p: 1.5, borderRadius: "10px",
       "&:hover": { bgcolor: m3.scLow } }}>
-      <Typography sx={{ fontSize: 12.5, fontWeight: 700, letterSpacing: "0.06em", color: m3.onSurfaceVar, textTransform: "uppercase" }}>{label}</Typography>
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+        <Typography sx={{ fontSize: 12.5, fontWeight: 700, letterSpacing: "0.06em", color: m3.onSurfaceVar, textTransform: "uppercase" }}>{label}</Typography>
+        {aside}
+      </Box>
       <Box sx={{ display: "flex", alignItems: "baseline", gap: 1, mt: 0.25 }}>
-        <Typography sx={{ fontSize: 44, fontWeight: 700, lineHeight: 1.05, color: m3.onSurface }}>{known ? value : "n/a"}</Typography>
+        <Typography sx={{ fontSize: known ? 44 : 28, fontWeight: 700, lineHeight: 1.05, color: known ? m3.onSurface : m3.neutralInk }}>{known ? value : unknownWord}</Typography>
         {known && <Typography sx={{ fontSize: 16, color: m3.onSurfaceVar }}>of {of} {unit}</Typography>}
       </Box>
       {known && (
         <Box sx={{ display: "flex", height: 8, borderRadius: 4, overflow: "hidden", bgcolor: m3.sc, my: 1 }}>
-          <Box sx={{ width: `${(100 * bad) / (of ?? 1)}%`, bgcolor: color }} />
+          {slivers.map((x) => <Box key={x.label || x.color} sx={{ width: `${(100 * x.count) / (of ?? 1)}%`, background: x.color }} />)}
+        </Box>
+      )}
+      {known && slivers.some((x) => x.label) && (
+        <Box sx={{ display: "flex", flexWrap: "wrap", columnGap: 1.5, mb: 0.5 }}>
+          {slivers.filter((x) => x.label).map((x) => (
+            <Box key={x.label} sx={{ display: "flex", alignItems: "center", gap: 0.6 }}>
+              <Box sx={{ width: 9, height: 9, borderRadius: "2px", background: x.color, flex: "none" }} />
+              <Typography sx={{ fontSize: 12.5, color: m3.onSurface }}><b>{x.count}</b> {x.label}</Typography>
+            </Box>
+          ))}
         </Box>
       )}
       <Typography sx={{ fontSize: 14, color: m3.onSurfaceVar }}>{sentence}</Typography>

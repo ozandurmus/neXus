@@ -18,6 +18,38 @@ export function formatUtc(iso: string | null | undefined, withSeconds = true): s
 }
 export const formatTime = formatUtc;
 
+/**
+ * The product's one display stamp (UI review 2026-10-18): `2026-10-18 06:49 GMT+3`, minutes precision, the zone written
+ * once with the value. `UNKNOWN` when the value is absent; an unparseable value is returned as it came. The relative age
+ * is a separate muted suffix (`relativeAge`), shown by `<Stamp>`.
+ */
+export function formatStamp(iso: string | null | undefined): string {
+  if (!iso) return "UNKNOWN";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return `${FMT_M.format(d).replace("T", " ")} ${DISPLAY_TZ_LABEL}`;
+}
+
+/**
+ * Turkey has kept a fixed UTC+3 offset since 2016, so a picker value entered in display time converts without a
+ * timezone database. These two helpers replace the browser-local and UTC pickers (Policy Changes).
+ */
+const DISPLAY_OFFSET = "+03:00";
+
+/** A `datetime-local` value (`2026-10-18T06:49`) typed in display time to the ISO instant the API expects. */
+export function displayInputToIso(value: string): string | undefined {
+  if (!value) return undefined;
+  const date = new Date(`${value.length === 16 ? `${value}:00` : value}${DISPLAY_OFFSET}`);
+  return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
+}
+
+/** The inverse: an ISO instant as a `datetime-local` value in display time. */
+export function isoToDisplayInput(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? "" : FMT_M.format(d).replace(" ", "T");
+}
+
 /** "02:00 UTC" cron hour → "05:00 GMT+3", for labels next to a server-side (UTC) schedule. */
 export function utcHourToLocal(hour: number, minute = 0): string {
   const d = new Date(Date.UTC(2026, 0, 15, hour, minute));

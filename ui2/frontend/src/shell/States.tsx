@@ -6,6 +6,7 @@ import Typography from "@mui/material/Typography";
 
 import { MONO, m3 } from "../theme/m3Theme";
 import { Icon } from "./Icon";
+import { vendorLabel } from "./presenters";
 import { formatUtc, relativeAge } from "./time";
 
 /**
@@ -108,17 +109,7 @@ export function RoleChip({ role, dense = false }: { readonly role: string | null
 
 /** The vendor's display name; the raw hint when the product does not know it (never guessed as Check Point). */
 export function vendorDisplayName(vendor: string | null | undefined): string {
-  switch (vendor) {
-    case "check_point": return "Check Point";
-    case "palo_alto": return "Palo Alto Networks";
-    case "radware": return "Radware";
-    case "infoblox": return "Infoblox";
-    case "bluecoat": return "Blue Coat";
-    case "cisco_asa": return "Cisco ASA";
-    case "fortinet": return "Fortinet";
-    case "pulse_secure": return "Pulse Secure";
-    default: return vendor ? vendor : "Vendor UNKNOWN";
-  }
+  return vendor ? vendorLabel(vendor) : "Vendor UNKNOWN";
 }
 
 export type VendorKind = "check_point" | "palo_alto" | "vsx" | string | null | undefined;

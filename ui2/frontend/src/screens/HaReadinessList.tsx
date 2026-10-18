@@ -1,4 +1,12 @@
 import { JobButton } from "../shell/JobWindow";
+import { ROLE_LOCK_LABEL } from "../shell/actionAccess";
+import { DISABLED_STYLE } from "../shell/disabledStyle";
+import { Presented } from "../shell/PresentedText";
+import { readinessReasonLabel } from "../shell/presenters";
+import Dialog from "@mui/material/Dialog";
+import DialogActions from "@mui/material/DialogActions";
+import DialogContent from "@mui/material/DialogContent";
+import DialogTitle from "@mui/material/DialogTitle";
 import { Fragment, useEffect, useState } from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
@@ -19,7 +27,7 @@ import Typography from "@mui/material/Typography";
 import type { CpFailoverSummary, DeviceSummary } from "../auth/adminApi";
 import { Icon, type IconName } from "../shell/Icon";
 import { StatePanel, VendorBadge, vendorDisplayName } from "../shell/States";
-import { formatTime, relativeAge, DISPLAY_TZ_LABEL } from "../shell/time";
+import { formatStamp, relativeAge } from "../shell/time";
 import { m3 } from "../theme/m3Theme";
 import { ReadinessChecksTable, readinessStopReason } from "./ReadinessChecksTable";
 
@@ -58,10 +66,48 @@ export function haReadinessItems(clusters: readonly Cluster[], rows: Record<stri
   });
 }
 
-/** The API's masked flag identifies replay-viewer responses; this view offers inspection only. */
-export function canRunReadiness(row?: CpFailoverSummary) {
-  return row?.canRunReadiness === true && row.masked !== true;
+/** The enrolled clusters from the device list (cluster reference -> members); the grouping the Operations screen and the Overview share. */
+export function groupClusters(devices: readonly DeviceSummary[]): Cluster[] {
+  const byRef = new Map<string, DeviceSummary[]>();
+  for (const d of devices) if (d.cluster_member_ref) byRef.set(d.cluster_member_ref, [...(byRef.get(d.cluster_member_ref) ?? []), d]);
+  return [...byRef.entries()].map(([ref, members]) => ({ ref, title: ref, members }));
 }
+
+/** Counts per readiness word over the shared items; every cluster lands in exactly one, so the parts add up to the whole. */
+export function readinessCounts(items: ReadonlyArray<{ status: Status }>) {
+  const counts = { total: items.length, ready: 0, notReady: 0, unknown: 0, unsupported: 0 };
+  for (const item of items) {
+    if (item.status === "READY") counts.ready++;
+    else if (item.status === "NOT_READY") counts.notReady++;
+    else if (item.status === "UNSUPPORTED") counts.unsupported++;
+    else counts.unknown++;
+  }
+  return counts;
+}
+
+/**
+ * How old the evaluations are (presentation only; a status is never changed by age). `mostlyStale` is the list's own
+ * rule for its warning: more than half of the evaluated clusters were last evaluated over 24 h ago.
+ */
+export function readinessFreshness(items: ReturnType<typeof haReadinessItems>, now: Date) {
+  const evaluatedAts = items.filter(item => item.status !== "UNSUPPORTED")
+    .map(item => item.base?.readiness?.observedAt)
+    .filter((at): at is string => evaluationAgeMs(at, now) !== null);
+  const staleAts = evaluatedAts.filter(at => evaluationAgeMs(at, now)! > READINESS_STALE_AFTER_MS);
+  return { evaluatedAts, staleAts, mostlyStale: staleAts.length > 0 && staleAts.length * 2 > evaluatedAts.length, newestStale: staleAts.slice().sort().at(-1) };
+}
+
+/**
+ * Whether this session may start a readiness run for the unit. The server decides (`canRunReadiness` is computed from the
+ * caller's role): readiness is read-only and the aiview persona may start it (AGENTS.md, PO decision 2026-10-04), so the
+ * masked flag no longer hides the control. Failover execution, approvals and schedules are not offered here at all.
+ */
+export function canRunReadiness(row?: CpFailoverSummary) {
+  return row?.canRunReadiness === true;
+}
+
+/** The one-line rule that tells the three non-ready words apart (UI review 2026-10-18, F-12). */
+export const READINESS_RULE = "Not ready: a pre-check found a blocking condition. Unknown: readiness could not be established either way (no result, or not enough evidence). Neither is Ready.";
 
 function primaryReason(row?: CpFailoverSummary) {
   if (!row) return "INSUFFICIENT_EVIDENCE";
@@ -83,6 +129,7 @@ export function HaReadinessList({ clusters, rows, running, busy, progress, error
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [openVs, setOpenVs] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [confirmRun, setConfirmRun] = useState(false);
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 60_000);
@@ -95,16 +142,25 @@ export function HaReadinessList({ clusters, rows, running, busy, progress, error
     && [cluster.title, ...cluster.members.map(m => m.hostname ?? ""), ...units.map(row => row.virtual_system ?? "")]
       .some(name => name.toLowerCase().includes(query)))
     .sort((a, b) => statuses[a.status].order - statuses[b.status].order || a.cluster.title.localeCompare(b.cluster.title));
-  const evaluatedAts = items.filter(item => item.status !== "UNSUPPORTED")
-    .map(item => item.base?.readiness?.observedAt)
-    .filter((at): at is string => evaluationAgeMs(at, now) !== null);
-  const staleAts = evaluatedAts.filter(at => evaluationAgeMs(at, now)! > READINESS_STALE_AFTER_MS);
-  const mostlyStale = staleAts.length > 0 && staleAts.length * 2 > evaluatedAts.length;
-  const newestStale = staleAts.slice().sort().at(-1);
+  const { evaluatedAts, staleAts, mostlyStale, newestStale } = readinessFreshness(items, now);
   const supported = visible.filter(item => item.status !== "UNSUPPORTED");
   const unsupported = visible.filter(item => item.status === "UNSUPPORTED");
   const selectable = items.filter(item => item.status !== "UNSUPPORTED").flatMap(item => item.units).filter(canRunReadiness);
   const hasActions = selectable.length > 0;
+  // "Run readiness check" targets the clusters in view (the base unit of each, not their virtual systems), so narrowing
+  // the filters narrows the run. The server decides who may start one (`canRunReadiness`); a role it refuses sees the
+  // button locked with the reason instead of no button at all.
+  const runnableVisible = supported.map(item => item.base).filter((row): row is CpFailoverSummary => canRunReadiness(row));
+  const mayRun = selectable.length > 0;
+  const runCheck = () => {
+    if (runnableVisible.length === 0 || busy) return;
+    if (runnableVisible.length > 1) setConfirmRun(true); else onBulkRun(runnableVisible);
+  };
+  const runCheckButton = (testId: string) => mayRun
+    ? <JobButton size="small" variant="outlined" data-testid={testId} disabled={busy || runnableVisible.length === 0} onClick={runCheck}
+        sx={{ textTransform: "none", whiteSpace: "nowrap" }}>Run readiness check{runnableVisible.length > 1 ? ` (${runnableVisible.length} clusters)` : ""}</JobButton>
+    : items.length > 0 && <Button size="small" variant="outlined" disabled data-testid={testId} sx={[DISABLED_STYLE, { textTransform: "none", whiteSpace: "nowrap" }]}>
+        Run readiness check · {ROLE_LOCK_LABEL}</Button>;
   const selectedRows = selectable.filter(row => selected.has(row.unitId));
   const visibleSelectable = supported.flatMap(item => item.units.filter(row => row.unitId === row.clusterId || openVs.has(item.cluster.ref))).filter(canRunReadiness);
   const allVisibleSelected = visibleSelectable.length > 0 && visibleSelectable.every(row => selected.has(row.unitId));
@@ -151,15 +207,16 @@ export function HaReadinessList({ clusters, rows, running, busy, progress, error
           {!nested && children.length > 0 && <IconButton size="small" aria-label={`Virtual systems in ${cluster.title}`} aria-expanded={openVs.has(cluster.ref)}
             onClick={event => { event.stopPropagation(); setOpenVs(current => toggle(current, cluster.ref)); }}><span aria-hidden>{openVs.has(cluster.ref) ? "▾" : "▸"}</span></IconButton>}
           <Box component="span" sx={{ fontWeight: 600, mr: 1 }}>{title}</Box><VendorBadge vendor={vendor} />
-          <Typography variant="caption" component="div" title={`Mode: ${row?.mode ?? "UNKNOWN"}`}
-            sx={{ whiteSpace: "nowrap", overflowWrap: "normal", overflow: "hidden", textOverflow: "ellipsis" }}>Mode: {row?.mode ?? "UNKNOWN"}</Typography>
+          {/* The mode line only when it adds information: "Mode: UNKNOWN" next to a known role says nothing. */}
+          {row?.mode && row.mode !== "UNKNOWN" && <Typography variant="caption" component="div" title={`Mode: ${row.mode}`}
+            sx={{ whiteSpace: "nowrap", overflowWrap: "normal", overflow: "hidden", textOverflow: "ellipsis" }}>Mode: {row.mode}</Typography>}
         </TableCell>
-        <TableCell title={`Roles observed: ${rolesAt ? `${formatTime(rolesAt)} ${DISPLAY_TZ_LABEL}` : "Not observed"}`}>
+        <TableCell title={`Roles observed: ${rolesAt ? formatStamp(rolesAt) : "Not observed"}`}>
           Active: {roleNames(["active"])} <span aria-hidden>↔</span> Standby: {roleNames(["standby", "passive"])}
         </TableCell>
-        <TableCell title={primaryReason(row)}>{primaryReason(row)}</TableCell>
+        <TableCell><Presented label={readinessReasonLabel(primaryReason(row))} raw={primaryReason(row)} /></TableCell>
         <TableCell>{at ? <>
-          <Box component="time" dateTime={at} title={`${formatTime(at)} ${DISPLAY_TZ_LABEL} · ${at}`}>{relativeAge(at, now)}</Box>
+          <Box component="time" dateTime={at} title={`${formatStamp(at)} · ${at}`}>{relativeAge(at, now)}</Box>
           {(evaluationAgeMs(at, now) ?? 0) > READINESS_STALE_AFTER_MS && <Tooltip title="Evaluated more than 24 h ago; the status may no longer hold">
             <Chip size="small" label="Stale" data-stale-evaluation sx={{ ml: 0.75, height: 20, fontSize: 11, bgcolor: m3.warningContainer, color: m3.onWarningContainer }} />
           </Tooltip>}
@@ -190,6 +247,7 @@ export function HaReadinessList({ clusters, rows, running, busy, progress, error
       {staleAts.length === evaluatedAts.length
         ? `Readiness was last evaluated ${relativeAge(newestStale, now)}; run a readiness check before relying on Ready.`
         : `${staleAts.length} of ${evaluatedAts.length} readiness evaluations are older than 24 h (the newest of them ${relativeAge(newestStale, now)}); run a readiness check before relying on Ready.`}
+      <Box component="span" sx={{ ml: 1.5, display: "inline-block" }}>{runCheckButton("stale-run-readiness")}</Box>
     </Box>}
     <Box aria-label="Readiness summary" sx={{ display: "flex", flexWrap: "wrap", gap: 1, mb: 1.5 }}>
       {(Object.keys(statuses) as Status[]).map(status => {
@@ -200,20 +258,37 @@ export function HaReadinessList({ clusters, rows, running, busy, progress, error
         return <Tooltip key={status} title={[...vendors].map(([name, count]) => `${name} ${count}`).join(" · ") || "No clusters"}>
           <Button size="small" aria-label={`${s.label}: ${matches.length} clusters`} aria-pressed={filter === status}
             onClick={() => setFilter(filter === status ? null : status)}
-            sx={{ bgcolor: s.bg, color: s.ink, border: `1px solid ${filter === status ? s.ink : 'transparent'}`, px: 1.5, borderRadius: 2 }}>
+            // Zero is neutral, never green (or red): a status word with no cluster behind it carries no status colour.
+            sx={{ bgcolor: matches.length === 0 ? m3.scHigh : s.bg, color: matches.length === 0 ? m3.onSurfaceVar : s.ink,
+              border: `1px solid ${filter === status ? s.ink : 'transparent'}`, px: 1.5, borderRadius: 2 }}>
             <Icon name={s.icon} size={16} /><Box component="span" sx={{ ml: 0.75 }}>{s.label} · {matches.length}</Box>
           </Button>
         </Tooltip>;
       })}
     </Box>
-    <Box role="toolbar" aria-label="Readiness filters" sx={{ display: "flex", gap: 1.5, mb: 1.5, flexWrap: "wrap" }}>
+    <Typography variant="body2" data-readiness-rule sx={{ color: m3.onSurfaceVar, mb: 1.5 }}>{READINESS_RULE}</Typography>
+    <Box role="toolbar" aria-label="Readiness filters" sx={{ display: "flex", gap: 1.5, mb: 1.5, flexWrap: "wrap", alignItems: "center" }}>
       <TextField label="Search cluster or member" size="small" value={search} onChange={e => setSearch(e.target.value)} sx={{ flex: "1 1 280px" }} />
       <TextField select label="Vendor" size="small" value={vendorFilter} onChange={e => setVendorFilter(e.target.value)} sx={{ minWidth: 190 }}>
         <MenuItem value="">All vendors</MenuItem>
         {[...new Set(items.map(item => item.vendor).filter(Boolean))].map(vendor => <MenuItem key={vendor} value={vendor}>{vendorDisplayName(vendor)}</MenuItem>)}
       </TextField>
+      <Box sx={{ ml: "auto" }}>{runCheckButton("toolbar-run-readiness")}</Box>
     </Box>
-    {selectedRows.length > 0 && <Box role="toolbar" aria-label="Bulk readiness actions" sx={{ position: "sticky", top: 0, zIndex: 2, display: "flex", gap: 1, p: 1, mb: 1, bgcolor: m3.primaryContainer, borderRadius: 2 }}>
+    <Dialog open={confirmRun} onClose={() => setConfirmRun(false)} aria-labelledby="run-readiness-title">
+      <DialogTitle id="run-readiness-title">Run readiness check on {runnableVisible.length} clusters?</DialogTitle>
+      <DialogContent>
+        <Typography variant="body2">
+          A read-only pre-check, one cluster at a time, inside the job window. Each result replaces the previous one for that cluster; nothing is changed on a device.
+        </Typography>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={() => setConfirmRun(false)}>Cancel</Button>
+        <Button variant="contained" onClick={() => { setConfirmRun(false); onBulkRun(runnableVisible); }}>Run readiness check</Button>
+      </DialogActions>
+    </Dialog>
+    {selectedRows.length > 0 && <Box role="toolbar" aria-label="Bulk readiness actions" sx={{ position: "sticky", top: 0, zIndex: 2, display: "flex", gap: 1, alignItems: "center", p: 1, mb: 1, bgcolor: m3.primaryContainer, borderRadius: 2 }}>
+      <Typography variant="body2" sx={{ fontWeight: 600, px: 1 }}>{selectedRows.length} of {selectable.length} selected</Typography>
       <JobButton disabled={busy} onClick={() => onBulkRun(selectedRows)}>Run pre-checks ({selectedRows.length})</JobButton>
       <Button disabled={busy} onClick={() => setSelected(new Set())}>Clear selection</Button>
     </Box>}
@@ -238,7 +313,7 @@ export function HaReadinessList({ clusters, rows, running, busy, progress, error
     {unsupported.length > 0 && <Box component="details" open={showUnsupported || filter === "UNSUPPORTED"} onToggle={e => setShowUnsupported(e.currentTarget.open)} sx={{ mt: 1.5, border: `1px solid ${m3.outlineVar}`, borderRadius: 2, p: 1.5, bgcolor: m3.scLow }}>
       <Box component="summary" sx={{ cursor: "pointer", color: m3.onSurfaceVar, fontWeight: 600 }}>Not supported · {unsupported.length} clusters</Box>
       <Typography variant="body2" sx={{ color: m3.onSurfaceVar, my: 1 }}>Readiness pre-checks are not supported for these vendors; enrolled clusters are shown for inventory context.</Typography>
-      <Box component="ul" sx={{ listStyle: "none", m: 0, p: 0 }}>{unsupported.map(({ cluster, vendor }) => <Box component="li" key={cluster.ref} sx={{ display: "flex", gap: 1, alignItems: "center", py: 0.75 }}><Typography variant="body2">{cluster.title}</Typography><VendorBadge vendor={vendor} /><Typography variant="caption">UNSUPPORTED_MODE · Readiness: not evaluated</Typography></Box>)}</Box>
+      <Box component="ul" sx={{ listStyle: "none", m: 0, p: 0 }}>{unsupported.map(({ cluster, vendor }) => <Box component="li" key={cluster.ref} sx={{ display: "flex", gap: 1, alignItems: "center", py: 0.75 }}><Typography variant="body2">{cluster.title}</Typography><VendorBadge vendor={vendor} /><Typography variant="caption" title="UNSUPPORTED_MODE"><Presented label={readinessReasonLabel("UNSUPPORTED_MODE")} raw="UNSUPPORTED_MODE" /> · Readiness: not evaluated</Typography></Box>)}</Box>
     </Box>}
     {visible.length === 0 && <StatePanel variant="empty" title="No clusters match these filters" />}
   </Box>;

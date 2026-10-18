@@ -58,7 +58,9 @@ import { M3Button, StatusChip } from "../shell/M3Widgets";
 import { PLANE_OPERATIONS, ROLE_LOCK_LABEL, ROLE_REFUSAL, useRoleAllows } from "../shell/actionAccess";
 import { Icon } from "../shell/Icon";
 import { plural } from "../shell/plural";
-import { Ts, VendorBadge } from "../shell/States";
+import { VendorBadge } from "../shell/States";
+import { Stamp } from "../shell/PresentedText";
+import { vendorLabel } from "../shell/presenters";
 
 
 import { MONO, m3 } from "../theme/m3Theme";
@@ -384,7 +386,7 @@ export function BackupScreen() {
       setPolicy(saved);
       setPolicyOpen(false);
       setSuccessMessage(saved.schedule_enabled
-        ? `Policy saved: fleet backup daily at 02:00 Europe/Istanbul, ${saved.backup_retention_days}-day retention.`
+        ? `Policy saved: fleet backup daily at 02:00 GMT+3, ${saved.backup_retention_days}-day retention.`
         : `Policy saved: schedule off, ${saved.backup_retention_days}-day retention.`);
       setTimeout(() => setSuccessMessage(null), 8000);
     } catch (error) {
@@ -528,7 +530,7 @@ export function BackupScreen() {
           <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
             {policy
               ? policy.schedule_enabled
-                ? <>Europe/Istanbul · last run {policy.last_scheduled_run_at ? <Ts at={policy.last_scheduled_run_at} seconds={false} /> : "never"}</>
+                ? <>GMT+3 · last run {policy.last_scheduled_run_at ? <Stamp at={policy.last_scheduled_run_at} /> : "never"}</>
                 : "No backup runs on its own. Enable the schedule under Retention & Policies."
               : "Policy unavailable"}
           </Typography>
@@ -640,7 +642,7 @@ export function BackupScreen() {
                   {compareHistory.map((a) => (
                     <option key={a.artefact_id} value={a.artefact_id}>
                       {baselines[selectedDeviceDiff.deviceId] === a.artefact_id ? "★ baseline · " : ""}
-                      <Ts at={a.collected_at} /> · {formatBytes(a.size_bytes)} · {a.artefact_id.slice(0, 8)}
+                      <Stamp at={a.collected_at} /> · {formatBytes(a.size_bytes)} · {a.artefact_id.slice(0, 8)}
                     </option>
                   ))}
                 </TextField>
@@ -661,8 +663,8 @@ export function BackupScreen() {
                     : `${compareResult.changed.length} changed · ${compareResult.added.length} added · ${compareResult.removed.length} removed · ${compareResult.unchanged} unchanged`}
                 </Typography>
                 <Typography variant="caption" sx={{ color: m3.onSurfaceVar, display: "block", mb: 1 }}>
-                  <Ts at={compareResult.left.collected_at} /> ({formatBytes(compareResult.left.size_bytes)}) →{" "}
-                  <Ts at={compareResult.right.collected_at} /> ({formatBytes(compareResult.right.size_bytes)})
+                  <Stamp at={compareResult.left.collected_at} /> ({formatBytes(compareResult.left.size_bytes)}) →{" "}
+                  <Stamp at={compareResult.right.collected_at} /> ({formatBytes(compareResult.right.size_bytes)})
                 </Typography>
                 {(
                   [
@@ -790,8 +792,8 @@ export function BackupScreen() {
               Artefact ID: <code>{selectedDeviceExport.artefactId}</code>
             </Typography>
             <Typography variant="body2" sx={{ mb: 1.5, color: m3.onSurfaceVar }}>
-              {selectedDeviceExport.vendor} · {formatBytes(selectedDeviceExport.sizeBytes)} · collected{" "}
-              <Ts at={selectedDeviceExport.lastBackupTime} />
+              {vendorLabel(selectedDeviceExport.vendor)} · {formatBytes(selectedDeviceExport.sizeBytes)} · collected{" "}
+              <Stamp at={selectedDeviceExport.lastBackupTime} />
             </Typography>
 
             <TextField
@@ -860,7 +862,7 @@ export function BackupScreen() {
                       const isBaseline = baselines[historyFor.deviceId] === a.artefact_id;
                       return (
                         <TableRow key={a.artefact_id} hover selected={isBaseline}>
-                          <TableCell sx={{ whiteSpace: "nowrap" }}><Ts at={a.collected_at} /></TableCell>
+                          <TableCell sx={{ whiteSpace: "nowrap" }}><Stamp at={a.collected_at} /></TableCell>
                           <TableCell align="right">{formatBytes(a.size_bytes)}</TableCell>
                           <TableCell>{a.validation_level || "UNKNOWN"}</TableCell>
                           <TableCell>{a.deviation_state ? a.deviation_state.toUpperCase() : "NOT EVALUATED"}</TableCell>
@@ -916,10 +918,10 @@ export function BackupScreen() {
             <Stack direction="row" spacing={1.5} alignItems="center">
               <Switch checked={scheduleEnabled} onChange={(e) => setScheduleEnabled(e.target.checked)} disabled={policyBusy} />
               <Typography variant="body2">
-                {scheduleEnabled ? "Scheduled fleet backup is ON: every backup target runs once a day at 02:00 Europe/Istanbul." : "Scheduled fleet backup is OFF: backups run only from this screen."}
+                {scheduleEnabled ? "Scheduled fleet backup is ON: every backup target runs once a day at 02:00 GMT+3." : "Scheduled fleet backup is OFF: backups run only from this screen."}
               </Typography>
             </Stack>
-            <Typography>Fleet backup schedule: daily at 02:00 Europe/Istanbul; starts allowed until 02:59.</Typography>
+            <Typography>Fleet backup schedule: daily at 02:00 GMT+3; starts allowed until 02:59.</Typography>
             <TextField
               label="Backup retention (days)"
               type="number"
@@ -1191,7 +1193,7 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
                       ) : <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>Not a backup target</Typography>}
                     </TableCell>
                     <TableCell sx={{ fontSize: 12.5 }}>
-                      {item ? <Ts at={item.lastBackupTime} relative seconds={false} />
+                      {item ? <Stamp at={item.lastBackupTime} />
                         : target ? <StatusChip tone="warn" label="No archive" dense />
                         : <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>No archive</Typography>}
                     </TableCell>
@@ -1208,7 +1210,7 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
                         ) : null}
                         {vendor === "check_point" && summary?.role === "management_server" && target ? (
                           <GateMenuItem plane={PLANE_OPERATIONS} deviceJob disabled={busy}
-                            title="Multi-Domain Server export: one mds_backup of the whole server and every domain. Locks the MDS database while it runs; after an operator-watched export, used as the daily 02:00 Europe/Istanbul backup."
+                            title="Multi-Domain Server export: one mds_backup of the whole server and every domain. Locks the MDS database while it runs; after an operator-watched export, used as the daily 02:00 GMT+3 backup."
                             onClick={() => onBackupNow(item ?? blankItem(id, name, vendor, "management_server"), "mds_export")}>MDS export</GateMenuItem>
                         ) : null}
                         {vendor === "check_point" && item ? (

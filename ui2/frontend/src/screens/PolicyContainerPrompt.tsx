@@ -15,13 +15,14 @@ const GATEWAYS_SHOWN = 3;
  * the reported installation per package appears once a container is open.
  */
 export function PolicyContainerPrompt({ tab, rows, now, open }: {
-  readonly tab: "Objects" | "Installation";
+  readonly tab: "Objects" | "Installation" | "Hygiene";
   /** Rows with their display names already resolved by the caller. */
   readonly rows: readonly ContainerSummary[];
   readonly now: Date;
   readonly open: (row: ContainerSummary) => void;
 }) {
-  const title = tab === "Installation" ? "Select a policy container to see where its packages are installed" : "Select a policy container to see its objects";
+  const title = tab === "Installation" ? "Select a policy container to see where its packages are installed"
+    : tab === "Hygiene" ? "Select a policy container to see its hygiene findings" : "Select a policy container to see its objects";
   if (rows.length === 0) {
     return <StatePanel variant="empty" title={title}
       body="No stored policy container matches yet. Collect a management source from the tree on the left; its containers are listed here." />;
@@ -32,7 +33,9 @@ export function PolicyContainerPrompt({ tab, rows, now, open }: {
       <StatePanel variant="empty" title={title}
         body={installation
           ? "Open a container to see each package's installation targets and what the management server reports as installed. The gateways below are package intent, not runtime enforcement."
-          : "Open a container to search its objects and see where each is used."} />
+          : tab === "Hygiene"
+            ? "Open a container to check its rules for shadowed, conflicting, disabled, unused, expired and broad rules. Where the stored evidence is insufficient the finding is UNKNOWN."
+            : "Open a container to search its objects and see where each is used."} />
       <Typography variant="body2" sx={{ color: m3.onSurfaceVar, my: 1 }}>{plural(rows.length, "stored container")}.</Typography>
       <Box sx={{ overflowX: "auto" }}>
         <Table size="small" aria-label={installation ? "Containers and installation targets" : "Containers"} sx={{ "& td, & th": { px: 1, py: 0.75, overflowWrap: "anywhere" } }}>

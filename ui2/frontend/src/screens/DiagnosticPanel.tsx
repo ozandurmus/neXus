@@ -3,15 +3,17 @@ import { useEffect, useRef, useState } from "react";
 import { Alert, Box, Button, Chip, Divider, List, ListItemButton, ListItemText, ListSubheader,
   Paper, Stack, Step, StepLabel, Stepper, Table, TableBody, TableCell, TableContainer, TableHead,
   TablePagination, TableRow, TextField, Typography } from "@mui/material";
+import { Stamp } from "../shell/PresentedText";
+import { formatDuration, formatStamp } from "../shell/time";
+import { jobStateWord, vendorLabel } from "../shell/presenters";
 import { getFmgDiagnostic, listFmgDiagnosticTargets, diagnosticHistory, runDiagnostic,
   type DiagnosticTarget, type DiagnosticResult, type DiagnosticHistoryRow, type ApiError } from "../auth/adminApi";
 
 const TERMINAL = new Set(["COMPLETED", "FAILED", "REJECTED", "CANCELLED", "OUTCOME_UNKNOWN", "RECONCILED"]);
-const statusLabel = (state: string) => state === "REQUESTED" ? "Queued"
-  : state === "CLAIMED" || state === "EXECUTING" ? "Running" : state === "COMPLETED" ? "Done"
-  : state === "CANCELLED" ? "Cancelled" : state === "OUTCOME_UNKNOWN" || state === "RECONCILED" ? "Outcome unknown" : "Failed";
-const duration = (ms?: number | null) => ms == null ? "—" : `${(ms / 1000).toFixed(1)} s`;
-const time = (value?: string | null) => value ? new Date(value).toLocaleString() : "Not started";
+/** One state vocabulary with Jobs and History (shared presenter); a claimed job reads as Running here. */
+const statusLabel = (state: string) => state === "CLAIMED" ? "Running" : TERMINAL.has(state) || state === "REQUESTED" || state === "EXECUTING" ? jobStateWord(state) : "Failed";
+const duration = (ms?: number | null) => formatDuration(ms);
+const time = (value?: string | null) => value ? formatStamp(value) : "Not started";
 const failureReason = (result: DiagnosticResult) => {
   const reasons: Record<string, string> = {
     DIAGNOSTIC_READ_FAILED: "The device read failed.", DIAGNOSTIC_TARGET_UNAVAILABLE: "The device is unavailable for this read.",
@@ -57,7 +59,7 @@ export function DiagnosticPanel() {
   const validParameter = !needsParameter || (needsVs ? device?.virtualSystems?.includes(parameter)
     : /^[A-Za-z0-9_.-]{1,31}$/.test(parameter));
   const visibleDevices = devices.filter(d => (!vendor || d.vendor === vendor)
-    && `${d.target} ${d.vendor}`.toLowerCase().includes(search.trim().toLowerCase()))
+    && `${d.target} ${d.vendor} ${vendorLabel(d.vendor)}`.toLowerCase().includes(search.trim().toLowerCase()))
     .sort((a, b) => (a.cluster ?? "Unclustered").localeCompare(b.cluster ?? "Unclustered") || a.target.localeCompare(b.target));
   const groups = [...new Set(visibleDevices.map(d => d.cluster ?? "Unclustered"))];
   const failed = result && TERMINAL.has(result.state) && result.state !== "COMPLETED";
@@ -143,7 +145,7 @@ export function DiagnosticPanel() {
             <Typography variant="h6">Devices</Typography><Chip size="small" label={`${visibleDevices.length} / ${devices.length}`} /></Stack>
           <TextField fullWidth size="small" label="Search devices" placeholder="Name or vendor" value={search} onChange={e => setSearch(e.target.value)} />
           <Stack direction="row" useFlexGap flexWrap="wrap" gap={0.75} sx={{ my: 1.5 }}>
-            {["", ...[...new Set(devices.map(d => d.vendor))].sort()].map(v => <Chip key={v} label={v || "All vendors"} size="small"
+            {["", ...[...new Set(devices.map(d => d.vendor))].sort((a, b) => vendorLabel(a).localeCompare(vendorLabel(b)))].map(v => <Chip key={v} label={v ? vendorLabel(v) : "All vendors"} title={v || undefined} size="small"
               color={vendor === v ? "primary" : "default"} aria-pressed={vendor === v} onClick={() => setVendor(v)} />)}
           </Stack>
           <Button size="small" disabled={!deviceId || busy} onClick={() => selectDevice("")}>All devices history</Button>
@@ -153,7 +155,7 @@ export function DiagnosticPanel() {
               {visibleDevices.filter(d => (d.cluster ?? "Unclustered") === group).map(d => <Box key={d.deviceId} component="li">
                 <ListItemButton selected={deviceId === d.deviceId} disabled={busy} aria-label={d.target} aria-pressed={deviceId === d.deviceId}
                   onClick={() => selectDevice(d.deviceId)} sx={{ borderRadius: 1 }}>
-                  <ListItemText primary={d.target} secondary={d.vendor} primaryTypographyProps={{ sx: { overflowWrap: "anywhere" } }} />
+                  <ListItemText primary={d.target} secondary={vendorLabel(d.vendor)} primaryTypographyProps={{ sx: { overflowWrap: "anywhere" } }} />
                 </ListItemButton>
                 {d.virtualSystems?.map(vs => <ListItemButton key={vs} disabled={busy} sx={{ pl: 4, borderRadius: 1 }}
                   aria-label={`${d.target} VS ${vs}`} selected={deviceId === d.deviceId && parameter === vs}
@@ -234,7 +236,7 @@ export function DiagnosticPanel() {
         <TableContainer><Table size="small" aria-label="Execution history">
           <TableHead><TableRow>{["Time", "Actor", ...(!deviceId ? ["Device"] : []), "Command", "Status", "Duration", "Output"].map(label => <TableCell key={label}>{label}</TableCell>)}</TableRow></TableHead>
           <TableBody>{history.filter(row => !deviceId || row.targetDeviceId === deviceId).map(row => <TableRow key={row.jobId} hover>
-            <TableCell sx={{ whiteSpace: "nowrap" }}>{time(row.submittedAt)}</TableCell><TableCell>{row.actor}</TableCell>
+            <TableCell sx={{ whiteSpace: "nowrap" }}><Stamp at={row.submittedAt} /></TableCell><TableCell>{row.actor}</TableCell>
             {!deviceId && <TableCell>{row.target}</TableCell>}<TableCell sx={{ maxWidth: 400, overflowWrap: "anywhere" }}>{row.description ?? row.command}</TableCell>
             <TableCell><StatusChip state={row.state} /></TableCell><TableCell sx={{ whiteSpace: "nowrap" }}>{duration(row.durationMs)}</TableCell>
             <TableCell><Button disabled={busy} onClick={() => openRun(row.jobId)}>View</Button></TableCell>

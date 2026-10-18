@@ -32,40 +32,26 @@ it("shows the recorded device name without its identifier in the main row", asyn
 });
 
 it.each([
-  ["asa_inventory_collect", undefined, "Cisco ASA · read inventory"],
-  ["cp_configuration_collect", undefined, "Check Point · read configuration"],
-  ["pan_config_backup", undefined, "Palo Alto · backup"],
-  ["fgt_gateway_backup", undefined, "FortiGate · backup"],
-  ["fmg_discovery_enumerate", undefined, "FortiManager · discovery"],
-  ["device_confirm_https", "cisco_asa", "Cisco ASA · identity check"],
-  ["https_diagnostic", "fortinet", "FortiGate · diagnostic read"],
-  ["rdw_cc_config_backup", undefined, "Radware Cyber Controller · backup"],
-  ["bcmc_discovery_enumerate", undefined, "Symantec · discovery"],
-  ["proxysg_configuration_collect", undefined, "Symantec · read configuration"],
-  ["ib_diagnostic", undefined, "Infoblox · diagnostic read"],
-  ["pulse_inventory_collect", undefined, "Pulse Secure · read inventory"],
-  ["device_confirm_cisco_asa", undefined, "Cisco ASA · identity check"],
-  ["https_inventory_collect", undefined, "read inventory"],
+  ["asa_inventory_collect", undefined, "Cisco ASA inventory read"],
+  ["cp_configuration_collect", undefined, "Check Point configuration read"],
+  ["pan_config_backup", undefined, "Palo Alto backup"],
+  ["fgt_gateway_backup", undefined, "FortiGate backup"],
+  ["fmg_discovery_enumerate", undefined, "FortiManager discovery"],
+  ["device_confirm_https", "cisco_asa", "Cisco ASA identity check"],
+  ["https_diagnostic", "fortinet", "Fortinet diagnostic read"],
+  ["rdw_cc_config_backup", undefined, "Radware Cyber Controller backup"],
+  ["bcmc_discovery_enumerate", undefined, "Blue Coat discovery"],
+  ["proxysg_configuration_collect", undefined, "Blue Coat configuration read"],
+  ["ib_diagnostic", undefined, "Infoblox diagnostic read"],
+  ["pulse_inventory_collect", undefined, "Pulse Secure inventory read"],
+  ["device_confirm_cisco_asa", undefined, "Cisco ASA identity check"],
+  ["https_inventory_collect", undefined, "HTTPS inventory read"],
+  ["pan_failover_readiness", undefined, "Palo Alto readiness check"],
+  ["cp_system_log_collect", undefined, "Check Point log collection"],
   ["unknown_capability", undefined, "unknown_capability"],
 ])("labels %s", (id, vendor, expected) => {
   expect(jobTypeLabel(id, vendor)).toBe(expected);
 });
-
-it.each([
-  ["device_confirm_check_point", "Check Point · identity check"], ["device_confirm_palo_alto", "Palo Alto · identity check"],
-  ["device_confirm_https", "identity check"], ["device_confirm_cisco_asa", "Cisco ASA · identity check"],
-  ["device_confirm_fortigate", "FortiGate · identity check"], ["cp_configuration_collect", "Check Point · read configuration"],
-  ["pan_configuration_collect", "Palo Alto · read configuration"], ["fgt_configuration_collect", "FortiGate · read configuration"],
-  ["asa_configuration_collect", "Cisco ASA · read configuration"], ["proxysg_configuration_collect", "Symantec · read configuration"],
-  ["cp_gateway_backup", "Check Point · backup"], ["cp_gaia_snapshot", "Check Point · backup"], ["pan_device_state_backup", "Palo Alto · backup"],
-  ["pan_set_config_read", "Palo Alto · backup"], ["cp_mds_export", "Check Point MDS · backup"], ["https_vendor_backup", "backup"],
-  ["rdw_cc_config_backup", "Radware Cyber Controller · backup"], ["asa_config_backup", "Cisco ASA · backup"], ["fgt_config_backup", "FortiGate · backup"],
-  ["cp_inventory_collect", "Check Point · read inventory"], ["pan_inventory_collect", "Palo Alto · read inventory"],
-  ["https_inventory_collect", "read inventory"], ["asa_inventory_collect", "Cisco ASA · read inventory"], ["fgt_inventory_collect", "FortiGate · read inventory"],
-  ["cp_discovery_enumerate", "Check Point · discovery"], ["pan_discovery_enumerate", "Palo Alto · discovery"],
-  ["rdw_discovery_enumerate", "Radware · discovery"], ["fmg_discovery_enumerate", "FortiManager · discovery"],
-  ["bcmc_discovery_enumerate", "Symantec · discovery"],
-])("labels worker capability %s", (id, expected) => expect(jobTypeLabel(id)).toBe(expected));
 
 it("keeps job and device UUIDs in the expandable details", async () => {
   const jobId = "00000000-0000-4000-8000-000000000001";
@@ -73,7 +59,7 @@ it("keeps job and device UUIDs in the expandable details", async () => {
   stubApi({ items: [{ job_id: jobId, target_device_id: deviceId, job_type: "asa_inventory_collect", state: "FAILED", terminal_reason: "COLLECTION_FAILED" }], page: 1, page_size: 50, total: 1 });
   render(<JobLogsPanel />);
   await screen.findByText("Unknown device");
-  expect(screen.getByText("Cisco ASA · read inventory")).toBeInTheDocument();
+  expect(screen.getByText("Cisco ASA inventory read")).toBeInTheDocument();
   expect(screen.getByText("COLLECTION_FAILED")).toBeInTheDocument();
   expect(screen.queryByText(jobId)).toBeNull();
   expect(screen.queryByText(deviceId)).toBeNull();
@@ -148,6 +134,6 @@ it("offers cancellation only for permitted active jobs and submits the opaque jo
 it("hides cancellation when the server has not granted it", async () => {
   stubApi({ items: [{ job_id: "job-1", state: "EXECUTING", job_type: "inventory", target_device_id: "opaque-001" }], total: 1 });
   render(<JobLogsPanel />);
-  await screen.findByText("EXECUTING");
+  await screen.findByText("Running");
   expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
 });

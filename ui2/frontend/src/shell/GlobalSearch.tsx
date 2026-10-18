@@ -48,6 +48,14 @@ function hits(devices: readonly DeviceSummary[], term: string): Hit[] {
   return out.filter((h) => (seen.has(h.kind + h.label) ? false : (seen.add(h.kind + h.label), true))).slice(0, 10);
 }
 
+/** How many devices in the loaded list match the term, by the same fields the device hits use. */
+export function matchingDeviceCount(devices: readonly DeviceSummary[], term: string): number {
+  const t = term.trim().toLowerCase();
+  if (!t) return 0;
+  return devices.filter((d) => [d.hostname, d.serial_number, d.model, d.software_version, d.management_ip, d.cluster_member_ref, d.platform_family]
+    .some((f) => f && String(f).toLowerCase().includes(t))).length;
+}
+
 function emphasis(value: string, term: string) {
   const at = value.toLocaleLowerCase().indexOf(term.trim().toLocaleLowerCase());
   if (at < 0 || !term.trim()) return value;
@@ -117,6 +125,7 @@ export function GlobalSearch() {
   }, []);
   const results = useMemo(() => hits(devices ?? [], term), [devices, term]);
   const entries = useMemo(() => grouped(results, remote), [results, remote]);
+  const deviceTotal = useMemo(() => matchingDeviceCount(devices ?? [], term), [devices, term]);
   useEffect(() => { setSelected(0); }, [term, remote]);
   const showMore = async (group: IpSearchGroup) => {
     if (!remote || loadingGroup) return;
@@ -190,13 +199,21 @@ export function GlobalSearch() {
                 <Typography noWrap variant="caption" sx={{ color: m3.onSurfaceVar, display: "block" }}>{emphasis(h.sub, term)}</Typography>
               </Box>
             </Link>)}
+              {group === "Devices" && deviceTotal > 0 && (
+                <Link href={`?screen=inventory&device_search=${encodeURIComponent(term.trim())}`} underline="none" data-see-all-devices
+                  onClick={(e) => { if (filtersList) { e.preventDefault(); setOpen(false); } }}
+                  sx={{ display: "block", px: 1.5, py: 0.75, fontSize: 13, fontWeight: 600, color: m3.primary, "&:hover": { bgcolor: m3.sc } }}>
+                  See all {deviceTotal} {deviceTotal === 1 ? "device" : "devices"}
+                </Link>
+              )}
               {key && count !== undefined && items.length < count && items.length <= 10000 && <Button
                 aria-label={`Show more ${group.toLowerCase()}`} disabled={loadingGroup !== null}
                 onClick={() => void showMore(key)}>{loadingGroup === key ? "Loading…" : "Show more"}</Button>}
             </Box> : null;
           })}
           {remoteError !== null && (isRestricted(remoteError)
-            ? <StatePanel variant="restricted" title="Search results are restricted" />
+            ? <StatePanel variant="restricted" title="Routes, addresses and policy are not searchable for the Viewer role"
+                body="Devices and screens are still matched from the loaded device list." />
             : <StatePanel variant="error" title="Search failed" action={<Button onClick={() => setRetry(n => n + 1)}>Retry</Button>} />)}
         </Paper>
       )}

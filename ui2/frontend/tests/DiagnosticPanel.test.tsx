@@ -69,7 +69,7 @@ it("searches masked names and vendors and groups sorted devices with vendor filt
   expect(screen.getByRole("button", { name: "FW-BRAVO-02" })).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "FW-TANGO-04" })).not.toBeInTheDocument();
   fireEvent.change(screen.getByLabelText("Search devices"), { target: { value: "" } });
-  fireEvent.click(screen.getByRole("button", { name: "fortinet" }));
+  fireEvent.click(screen.getByRole("button", { name: "Fortinet" }));
   expect(screen.queryByRole("button", { name: "FW-BRAVO-02" })).not.toBeInTheDocument();
 });
 it("uses inventoried VS identifiers without normalizing them and never shows a free parameter for vsenv", async () => {

@@ -171,8 +171,8 @@ it("keeps Lookup inputs and results when switching to Changes and Offline analys
   fireEvent.click(screen.getByRole("tab", { name: "Lookup" }));
   fireEvent.mouseDown(screen.getByLabelText(/Lookup policy/));
   fireEvent.click(await screen.findByRole("option", { name: metadata.name }));
-  fireEvent.change(screen.getByLabelText(/Source IPv4 or CIDR/), { target: { value: lookup.query.querySource } });
-  fireEvent.change(screen.getByLabelText(/Destination IPv4 or CIDR/), { target: { value: lookup.query.queryDestination } });
+  fireEvent.change(screen.getByLabelText(/^Source\s*\*?$/), { target: { value: lookup.query.querySource } });
+  fireEvent.change(screen.getByLabelText(/^Destination\s*\*?$/), { target: { value: lookup.query.queryDestination } });
   fireEvent.click(screen.getByRole("button", { name: "Look up policy intent" }));
   expect(await screen.findByLabelText("Lookup result 1")).toHaveTextContent("DENIED");
   fireEvent.click(screen.getByRole("tab", { name: "Changes" }));
@@ -182,7 +182,7 @@ it("keeps Lookup inputs and results when switching to Changes and Offline analys
   await waitFor(() => expect(request).toHaveBeenCalledWith(expect.stringContaining("/policy/policies/policy-1/offline-analyses?page=0"), expect.anything()));
   expect(screen.getByLabelText("Lookup result 1")).not.toBeVisible();
   fireEvent.click(screen.getByRole("tab", { name: "Lookup" }));
-  expect(screen.getByLabelText(/Source IPv4 or CIDR/)).toHaveValue(lookup.query.querySource);
+  expect(screen.getByLabelText(/^Source\s*\*?$/)).toHaveValue(lookup.query.querySource);
   expect(screen.getByLabelText("Lookup result 1")).toBeVisible();
   expect(request.mock.calls.filter(([url]) => url.endsWith("/lookup"))).toHaveLength(1);
 });

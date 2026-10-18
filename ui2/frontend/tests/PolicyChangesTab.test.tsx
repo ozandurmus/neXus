@@ -35,9 +35,9 @@ it("formats times in GMT+3 with the raw ISO on hover and never prints raw ISO", 
   await screen.findByText("Observed at collection");
   const table = screen.getByRole("table", { name: "Policy changes" });
   expect(within(table).queryByText(/2026-10-09T12:00:00Z/)).toBeNull();
-  expect(within(table).getAllByText("2026-10-09 15:00:00").length).toBeGreaterThan(0);
+  expect(within(table).getAllByText("2026-10-09 15:00 GMT+3").length).toBeGreaterThan(0);
   expect(within(table).getAllByLabelText("2026-10-09T12:00:00Z (UTC reference)").length).toBeGreaterThan(0);
-  expect(screen.getByText(/2026-09-09 15:00:00 — 2026-10-09 15:00:00 GMT\+3/)).toBeInTheDocument();
+  expect(screen.getByText("2026-09-09 15:00 GMT+3 — 2026-10-09 15:00 GMT+3")).toBeInTheDocument();
   expect(screen.getByLabelText("2026-09-09T12:00:00Z — 2026-10-09T12:00:00Z (UTC reference)")).toBeInTheDocument();
 });
 it("groups rows by collection, collapses initial captures and toggles them on request", async () => {
@@ -50,12 +50,12 @@ it("groups rows by collection, collapses initial captures and toggles them on re
   ] };
   const fetcher = vi.fn(async (_url: string) => response(grouped));
   vi.stubGlobal("fetch", fetcher); mount();
-  const first = await screen.findByRole("button", { name: "Collection 2026-10-09 15:00:00 POL-ALPHA-01" });
+  const first = await screen.findByRole("button", { name: "Collection 2026-10-09 15:00 GMT+3 POL-ALPHA-01" });
   expect(first).toHaveAttribute("aria-expanded", "true");
   expect(screen.getByText("2 changes (2 modified)")).toBeInTheDocument();
   expect(screen.getByText("Position only")).toBeInTheDocument();
   // Initial-capture collection starts collapsed; its rows render on demand.
-  const initial = screen.getByRole("button", { name: "Collection 2026-10-01 09:00:00 POL-ALPHA-01" });
+  const initial = screen.getByRole("button", { name: "Collection 2026-10-01 09:00 GMT+3 POL-ALPHA-01" });
   expect(initial).toHaveAttribute("aria-expanded", "false");
   expect(screen.queryByRole("button", { name: "1 · RULE-DELTA-04" })).toBeNull();
   fireEvent.click(initial);
@@ -82,11 +82,11 @@ it("applies combined filters, resets pagination and pins the first page period",
   expect(fetcher.mock.calls.at(-1)?.[0]).toContain("from=2026-09-09T12%3A00%3A00Z");
   fireEvent.change(screen.getByLabelText("Actor"), { target: { value: "UNKNOWN" } });
   fireEvent.change(screen.getByLabelText("Rule name or number"), { target: { value: "7" } });
-  fireEvent.change(screen.getByLabelText("From (UTC)"), { target: { value: "2026-10-01T09:30" } });
+  fireEvent.change(screen.getByLabelText("From (GMT+3)"), { target: { value: "2026-10-01T09:30" } });
   fireEvent.click(screen.getByText("Apply change filters"));
   await waitFor(() => expect(fetcher.mock.calls.at(-1)?.[0]).toContain("actor=UNKNOWN"));
   expect(fetcher.mock.calls.at(-1)?.[0]).toContain("q=7");
-  expect(fetcher.mock.calls.at(-1)?.[0]).toContain("from=2026-10-01T09%3A30%3A00.000Z");
+  expect(fetcher.mock.calls.at(-1)?.[0]).toContain("from=2026-10-01T06%3A30%3A00.000Z");
   expect(screen.getByText("Previous changes page")).toBeDisabled();
 });
 it("reports read/export failures, retries and exports all matching pages with the active period", async () => {

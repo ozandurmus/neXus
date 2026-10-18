@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { Box, Button, Chip, MenuItem, Stack, TextField, Typography } from "@mui/material";
+import { DISABLED_STYLE } from "../shell/disabledStyle";
 import { lookupPolicy, type PolicyMetadata, type PolicyLookupQuery, type PolicyLookupResult, type PolicyLookupDecision } from "../auth/adminApi";
 
 export function PolicyLookupTab({ policies, policy, selectPolicy, openRule }: {
@@ -21,21 +22,32 @@ export function PolicyLookupTab({ policies, policy, selectPolicy, openRule }: {
         : "Lookup could not be completed. Check the inputs and try again.");
     } finally { inFlight.current = false; setBusy(false); }
   };
+  // What the button is waiting for, in the order the fields appear; the button says it instead of just going grey.
+  const missing = [!policy && "a policy", !query.source && "a source", !query.destination && "a destination", !query.service && "a service"].filter(Boolean) as string[];
+  const reason = missing.length ? `Needs ${missing.join(", ")}` : null;
   return <Box role="tabpanel" aria-label="Lookup">
     <Typography variant="h6">Policy intent lookup</Typography>
     <Typography variant="body2">NAT, routing and anti-spoofing are not evaluated; IPv6 is unsupported. This is not observed traffic. Use addresses and zones as displayed in the rule viewer.</Typography>
     <Box component="form" onSubmit={event => void submit(event)} sx={{ my: 2 }}>
-      <Stack direction="row" gap={2} flexWrap="wrap">
-        <TextField select label="Lookup policy" value={policies.some(p => p.id === policy) ? policy : ""} required sx={{ minWidth: 220 }} onChange={e => selectPolicy(e.target.value)}>
+      {/* Short labels above the fields (a label that sits in the border never truncates); what each field takes goes in the
+          help line under it, so "(optional)" and the format are not squeezed into the label (UI review 2026-10-18). */}
+      <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))", alignItems: "start" }}>
+        <TextField select label="Lookup policy" value={policies.some(p => p.id === policy) ? policy : ""} required fullWidth helperText="The stored snapshot to look up in"
+          onChange={e => selectPolicy(e.target.value)}>
           {policies.map(p => <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>)}
         </TextField>
-        {([['source', 'Source IPv4 or CIDR'], ['destination', 'Destination IPv4 or CIDR'], ['service', 'Service'],
-          ['sourceZone', 'Source zone/interface (optional)'], ['destinationZone', 'Destination zone/interface (optional)'],
-          ['target', 'Install-on target reference (optional)'], ['context', 'Device context (optional)']] as const).map(([field, label]) =>
-          <TextField key={field} label={label} value={query[field] ?? ""} required={["source", "destination", "service"].includes(field)}
-            helperText={field === "service" ? "tcp/443, udp/53 or any" : undefined} inputProps={{ maxLength: 200 }}
+        {([['source', 'Source', 'IPv4 or CIDR'], ['destination', 'Destination', 'IPv4 or CIDR'], ['service', 'Service', 'tcp/443, udp/53 or any'],
+          ['sourceZone', 'Source zone', 'Optional · zone or interface'], ['destinationZone', 'Destination zone', 'Optional · zone or interface'],
+          ['target', 'Install-on target', 'Optional · target reference'], ['context', 'Device context', 'Optional']] as const).map(([field, label, help]) =>
+          <TextField key={field} label={label} value={query[field] ?? ""} required={["source", "destination", "service"].includes(field)} fullWidth
+            helperText={help} inputProps={{ maxLength: 200 }}
             onChange={e => setQuery(previous => ({ ...previous, [field]: e.target.value }))} />)}
-        <Button type="submit" disabled={busy || !policy || !query.source || !query.destination || !query.service}>{busy ? "Looking up…" : "Look up policy intent"}</Button>
+      </Box>
+      <Stack direction="row" gap={1.5} alignItems="center" flexWrap="wrap" sx={{ mt: 2 }}>
+        {/* A real button even when it cannot run, with its reason beside the label (the suffix rule used on every gated control). */}
+        <Button type="submit" variant="contained" disableElevation disabled={busy || reason !== null} sx={[{ textTransform: "none", borderRadius: "20px", px: 3 }, DISABLED_STYLE]}>
+          {busy ? "Looking up…" : reason ? `Look up policy intent · ${reason}` : "Look up policy intent"}
+        </Button>
       </Stack>
     </Box>
     {error && <Typography role="alert">{error}</Typography>}

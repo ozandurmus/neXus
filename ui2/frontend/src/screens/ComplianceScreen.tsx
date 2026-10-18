@@ -33,6 +33,8 @@ import { M3Button } from "../shell/M3Widgets";
 import { StackedBar, STATUS } from "../shell/Charts";
 import { StatePanel, isRestricted } from "../shell/States";
 import { formatUtc } from "../shell/time";
+import { Presented } from "../shell/PresentedText";
+import { vendorLabel } from "../shell/presenters";
 import { MONO, m3 } from "../theme/m3Theme";
 import { responsesAreMasked } from "../auth/adminApi";
 import {
@@ -47,6 +49,23 @@ import {
 } from "../auth/adminApi";
 
 type StatusFilter = "ALL" | "FAILING" | "UNAVAILABLE" | "PASSING";
+type SortMode = "SEVERITY" | "ID";
+
+const SEVERITY_RANK: Record<string, number> = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
+const STATUS_RANK: Record<string, number> = { FAIL: 0, DATA_UNAVAILABLE: 1, PASS: 2 };
+
+/**
+ * The default order of the control list (UI review 2026-10-18, F-14): non-compliant first and, inside each outcome,
+ * the most severe first, so a non-compliant critical control opens the list; then the most firewalls failing, then the
+ * control id so two renders agree. Control-ID order stays one choice away.
+ */
+export function compareControls(a: ComplianceControlItem, b: ComplianceControlItem, mode: SortMode = "SEVERITY"): number {
+  if (mode === "ID") return a.control_id.localeCompare(b.control_id);
+  return (STATUS_RANK[a.status] ?? 3) - (STATUS_RANK[b.status] ?? 3)
+    || (SEVERITY_RANK[a.severity] ?? 4) - (SEVERITY_RANK[b.severity] ?? 4)
+    || b.fail_count - a.fail_count
+    || a.control_id.localeCompare(b.control_id);
+}
 
 /** NIST SP 800-53 Rev. 5 control families. */
 const NIST_FAMILIES: Record<string, string> = {
@@ -145,6 +164,8 @@ export function ComplianceScreen() {
   const [exportError, setExportError] = useState(false);
   const [deviceFilter, setDeviceFilter] = useState("ALL");
   const [familyFilter, setFamilyFilter] = useState(() => urlParam("family") ?? "");
+  const [vendorFilter, setVendorFilter] = useState(() => urlParam("vendor") ?? "ALL");
+  const [sortMode, setSortMode] = useState<SortMode>("SEVERITY");
   const controlsRef = useRef<HTMLDivElement>(null);
   const [loadError, setLoadError] = useState<{ message: string; restricted: boolean } | null>(null);
 
@@ -248,6 +269,9 @@ export function ComplianceScreen() {
       // Severity
       if (severityFilter !== "ALL" && c.severity !== severityFilter) return false;
 
+      // Vendor: a control with no recorded vendor cannot be shown to apply to the chosen one
+      if (vendorFilter !== "ALL" && !(c.vendors ?? []).includes(vendorFilter)) return false;
+
       // Framework
       if (frameworkFilter !== "ALL") {
         const hasFw = c.frameworks?.some((f) => f.framework.toUpperCase().includes(frameworkFilter));
@@ -255,8 +279,16 @@ export function ComplianceScreen() {
       }
 
       return true;
-    });
-  }, [controls, searchQuery, statusFilter, severityFilter, frameworkFilter, familyFilter]);
+    }).sort((a, b) => compareControls(a, b, sortMode));
+  }, [controls, searchQuery, statusFilter, severityFilter, frameworkFilter, familyFilter, vendorFilter, sortMode]);
+
+  /** The vendors the controls were evaluated on, with how many controls each covers (the order a reader expects). */
+  const vendorOptions = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const c of controls) for (const v of c.vendors ?? []) counts.set(v, (counts.get(v) ?? 0) + 1);
+    const order = ["check_point", "palo_alto"];
+    return [...counts.entries()].sort(([a], [b]) => (order.indexOf(a) < 0 ? 9 : order.indexOf(a)) - (order.indexOf(b) < 0 ? 9 : order.indexOf(b)) || vendorLabel(a).localeCompare(vendorLabel(b)));
+  }, [controls]);
 
   const failingCount = useMemo(() => controls.filter((c) => c.status === "FAIL").length, [controls]);
   const unavailCount = useMemo(() => controls.filter((c) => c.status === "DATA_UNAVAILABLE").length, [controls]);
@@ -383,8 +415,9 @@ export function ComplianceScreen() {
           title="Data Gaps"
           count={overview ? String(overview.data_gaps) : null}
           badge={{
-            label: !overview ? "UNKNOWN" : overview.data_gaps > 0 ? "Evidence not collected" : "Full Coverage",
-            tone: !overview ? "neutral" : overview.data_gaps > 0 ? "warn" : "ok",
+            // Zero is neutral, never green: no gap is an absence, not an achievement.
+            label: !overview ? "UNKNOWN" : overview.data_gaps > 0 ? "Evidence not collected" : "No data gaps",
+            tone: !overview ? "neutral" : overview.data_gaps > 0 ? "warn" : "neutral",
           }}
           note="Checks awaiting evidence: the command a control needs is not in the collection scope yet"
         />
@@ -459,9 +492,13 @@ export function ComplianceScreen() {
         </Card>
       )}
 
-      {/* Filter and Search Bar */}
+      {/* Filter and Search Bar: sticky, so the filters stay in reach on a 64-control page (UI review 2026-10-18, F-14) */}
       <Card
+        data-sticky-filter-bar
         sx={{
+          position: "sticky",
+          top: 0,
+          zIndex: 3,
           bgcolor: m3.scLowest,
           borderRadius: "10px",
           p: 2,
@@ -545,6 +582,24 @@ export function ComplianceScreen() {
                 <option value="NIST">NIST SP 800-53</option>
                 <option value="FINANCIAL">Financial Baseline</option>
               </select>
+
+              <select
+                aria-label="Sort controls"
+                value={sortMode}
+                onChange={(e) => setSortMode(e.target.value as SortMode)}
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: "8px",
+                  border: `1px solid ${m3.outlineVar}`,
+                  backgroundColor: m3.scLow,
+                  fontSize: 13,
+                  fontWeight: 500,
+                  color: m3.onSurface,
+                }}
+              >
+                <option value="SEVERITY">Sort: non-compliant, most severe first</option>
+                <option value="ID">Sort: control ID</option>
+              </select>
             </Stack>
           </Stack>
 
@@ -591,6 +646,18 @@ export function ComplianceScreen() {
                 fontWeight: statusFilter === "PASSING" ? 600 : 400,
               }}
             />
+            {/* Vendor pills beside the outcome pills: neutral, they are identity, not status */}
+            {vendorOptions.length > 0 && <Box component="span" aria-hidden sx={{ width: "1px", alignSelf: "stretch", bgcolor: m3.outlineVar, mx: 0.5 }} />}
+            {vendorOptions.length > 0 && (
+              <Stack direction="row" spacing={1} role="group" aria-label="Vendor filter" sx={{ flexWrap: "wrap", gap: 1 }}>
+                <Chip clickable label="All vendors" aria-pressed={vendorFilter === "ALL"} onClick={() => setVendorFilter("ALL")}
+                  sx={{ bgcolor: vendorFilter === "ALL" ? m3.secondaryContainer : m3.scLow, fontWeight: vendorFilter === "ALL" ? 600 : 400 }} />
+                {vendorOptions.map(([v, n]) => (
+                  <Chip key={v} clickable label={`${vendorLabel(v)} · ${n}`} title={v} aria-pressed={vendorFilter === v} onClick={() => setVendorFilter(v)}
+                    sx={{ bgcolor: vendorFilter === v ? m3.secondaryContainer : m3.scLow, fontWeight: vendorFilter === v ? 600 : 400 }} />
+                ))}
+              </Stack>
+            )}
           </Stack>
         </Stack>
       </Card>
@@ -652,6 +719,10 @@ export function ComplianceScreen() {
                           <Typography variant="body2" sx={{ fontFamily: MONO, color: m3.onSurfaceVar, fontSize: 11.5 }}>
                             {c.control_id}
                           </Typography>
+                          {(c.vendors ?? []).map((v) => (
+                            <Chip key={v} size="small" variant="outlined" label={vendorLabel(v)} title={v}
+                              sx={{ height: 20, fontSize: 10.5, color: m3.onSurfaceVar, borderColor: m3.outlineVar }} />
+                          ))}
                           {c.frameworks?.slice(0, 3).map((f, idx) => (
                             <Chip
                               key={f.reference || f.clauseId || idx}
@@ -769,7 +840,7 @@ export function ComplianceScreen() {
         onClose={() => setSelectedControl(null)}
         PaperProps={{
           sx: {
-            width: { xs: "100%", md: 540 },
+            width: { xs: "100%", md: 560 },
             p: 3,
             bgcolor: m3.surface,
           },
@@ -811,12 +882,13 @@ export function ComplianceScreen() {
                 }}
               />
               <Chip
+                title={selectedControl.status}
                 label={
                   selectedControl.status === "PASS"
-                    ? "Compliant (PASS)"
+                    ? "Compliant"
                     : selectedControl.status === "FAIL"
-                    ? "Non-Compliant (FAIL)"
-                    : "Data Unavailable (DATA_UNAVAILABLE)"
+                    ? "Non-Compliant"
+                    : "Evidence not collected"
                 }
                 sx={{
                   fontWeight: 600,
@@ -841,7 +913,7 @@ export function ComplianceScreen() {
             {detail?.rationale && <Card sx={{ p: 2 }}><Typography sx={{ fontWeight: 600 }}>Why it matters</Typography><Typography>{detail.rationale}</Typography></Card>}
             {detail && <Card sx={{ p: 2 }}>
               <Typography sx={{ fontWeight: 600 }}>What it should be</Typography>
-              {detail.expected.map((line, i) => <Typography key={i}>{line.vendor}: {line.text}</Typography>)}
+              {detail.expected.map((line, i) => <Typography key={i}>{vendorLabel(line.vendor)}: {line.text}</Typography>)}
             </Card>}
             {detail && <Card sx={{ p: 2 }}>
               <Typography sx={{ fontWeight: 600, mb: 1 }}>Devices</Typography>
@@ -854,7 +926,7 @@ export function ComplianceScreen() {
                 <TableCell>Device</TableCell><TableCell>Vendor</TableCell><TableCell>Status</TableCell><TableCell>Observed</TableCell><TableCell>Message</TableCell>
               </TableRow></TableHead><TableBody>
                 {detail.devices.filter((d) => deviceFilter === "ALL" || d.status === deviceFilter).map((d) => <Fragment key={d.device_id}><TableRow>
-                  <TableCell>{d.hostname ?? d.device_id}</TableCell><TableCell>{d.vendor}</TableCell>
+                  <TableCell>{d.hostname ?? d.device_id}</TableCell><TableCell><Presented label={vendorLabel(d.vendor)} raw={d.vendor} /></TableCell>
                   <TableCell><Chip size="small" label={d.status === "FAIL" ? "Fail" : d.status === "PASS" ? "Pass" : "Not yet checked"} /></TableCell>
                   <TableCell>{d.message === "Evidence withheld" ? "withheld" : observedValue(d.observed_value)}</TableCell><TableCell>{d.message ?? "—"}</TableCell>
                 </TableRow><TableRow><TableCell colSpan={5}>

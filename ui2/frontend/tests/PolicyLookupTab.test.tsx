@@ -10,8 +10,8 @@ const result: PolicyLookupResult = { policyId: "p1", collectedAt: policy.collect
   limitations: "Policy intent only. NAT, routing and anti-spoofing are not evaluated; IPv6 is unsupported." };
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 function fill() {
-  fireEvent.change(screen.getByLabelText(/Source IPv4/), { target: { value: "192.0.2.8" } });
-  fireEvent.change(screen.getByLabelText(/Destination IPv4/), { target: { value: "198.51.100.8" } });
+  fireEvent.change(screen.getByLabelText(/^Source\s*\*?$/), { target: { value: "192.0.2.8" } });
+  fireEvent.change(screen.getByLabelText(/^Destination\s*\*?$/), { target: { value: "198.51.100.8" } });
 }
 it("submits a lookup, shows uncertainty and first proven match, links rules and keeps session history", async () => {
   const fetcher = vi.fn(async () => new Response(JSON.stringify(result), { status: 200 })); vi.stubGlobal("fetch", fetcher);

@@ -77,7 +77,12 @@ const GROUPS: readonly AdminGroupDef[] = [
     label: "Records",
     tabs: [
       { slug: "audit-logs", administratorOnly: true, label: "Audit Logs", panel: <AuditLogsPanel /> },
-      { slug: "job-logs", label: "Job Logs", panel: <JobLogsPanel /> },
+      { slug: "job-logs", label: "Job Logs", panel: (
+        <>
+          <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>Same records as Operations › Jobs.</Typography>
+          <JobLogsPanel />
+        </>
+      ) },
     ],
   },
 ];

@@ -345,14 +345,25 @@ it("summarizes the same cluster readiness counts in the KPI and chips without do
   expect(screen.getByText("1 not ready · 1 unknown")).toBeInTheDocument();
 });
 
-it("offers aiview inspection with no readiness or bulk actions", async () => {
+it("lets aiview start read-only readiness when the server allows it, and locks the controls when it does not", async () => {
   stubFetch(MEMBERS, READY_SUMMARY.map(unit => ({ ...unit, masked: true, canRunReadiness: true })));
-  render(withTheme(<OperationsScreen />));
+  const first = render(withTheme(<OperationsScreen />));
   fireEvent.click(await screen.findByRole("row", { name: "CLS-ROMEO-01" }));
   expect(screen.getByRole("region", { name: "Checks for CLS-ROMEO-01" })).toBeInTheDocument();
+  expect(screen.getByRole("checkbox", { name: "Select all visible" })).toBeEnabled();
+  expect(screen.getAllByRole("button", { name: /^Run pre-checks/ }).length).toBeGreaterThan(0);
+  expect(screen.getByTestId("toolbar-run-readiness")).toHaveTextContent("Run readiness check");
+  first.unmount();
+
+  stubFetch(MEMBERS, READY_SUMMARY.map(unit => ({ ...unit, masked: true, canRunReadiness: false })));
+  render(withTheme(<OperationsScreen />));
+  fireEvent.click(await screen.findByRole("row", { name: "CLS-ROMEO-01" }));
   expect(screen.getByRole("checkbox", { name: "Select all visible" })).toBeDisabled();
   expect(screen.queryByRole("toolbar", { name: "Bulk readiness actions" })).toBeNull();
-  expect(screen.queryByRole("button", { name: "Run pre-checks" })).toBeNull();
+  expect(screen.queryByRole("button", { name: /^Run pre-checks/ })).toBeNull();
+  expect(screen.getByTestId("toolbar-run-readiness")).toBeDisabled();
+  expect(screen.getByTestId("toolbar-run-readiness")).toHaveTextContent("Run readiness check · Role: not permitted");
   fireEvent.click(screen.getByRole("button", { name: "Open full detail" }));
-  expect(screen.queryByRole("button", { name: "Run pre-checks" })).toBeNull();
+  expect(screen.queryByRole("button", { name: /^Run pre-checks/ })).toBeNull();
 });
+

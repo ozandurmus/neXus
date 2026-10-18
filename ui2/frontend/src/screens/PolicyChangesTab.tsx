@@ -2,8 +2,8 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import { Box, Button, Chip, FormControlLabel, MenuItem, Stack, Switch, Table, TableBody, TableCell, TableHead, TableRow, TextField, Tooltip, Typography } from "@mui/material";
 import { downloadPolicyChanges, getPolicyChanges, type PolicyChangeFilters, type PolicyChangeRow, type PolicyChangesPage, type PolicyMetadata, type PolicyTarget } from "../auth/adminApi";
 import { m3 } from "../theme/m3Theme";
-import { Ts } from "../shell/States";
-import { DISPLAY_TZ_LABEL, formatUtc } from "../shell/time";
+import { Stamp } from "../shell/PresentedText";
+import { DISPLAY_TZ_LABEL, displayInputToIso, formatStamp, isoToDisplayInput } from "../shell/time";
 
 const fields = ["name", "number", "enabled", "source", "destination", "service", "application", "action", "log", "comment", "extras", "container", "section", "parentRuleId"];
 const initialFilters: PolicyChangeFilters = { from: "", to: "", policy: "", device: "", actor: "", changeType: "", field: "", q: "", includeInitial: false };
@@ -65,17 +65,21 @@ export function PolicyChangesTab({ policies, devices, openRule }: { policies: Po
     <Typography variant="body2">Estate-wide stored rule revisions. Default period: last 30 days. Missing actors are UNKNOWN; collection observations do not prove the change time.
       {" "}A policy's first complete collection records every rule as added; these initial captures are not changes and are left out unless included.</Typography>
     <Stack direction="row" gap={1} flexWrap="wrap" sx={{ my: 2 }}>
+      {/* Loading… while the read is in flight, then the number; UNKNOWN when the read failed. Never a dash. */}
       {[["Changes in period", data?.summary.total], ["Distinct actors", data?.summary.actors], ["Distinct rules", data?.summary.rules],
         ...["added", "modified", "removed"].map(type => [type, data?.summary.counts[type]]),
         ...(hidden === undefined ? [] : [[filters.includeInitial ? "Initial captures (included)" : "Initial captures (not shown)", hidden]])].map(([label, value]) =>
         <Box key={label} sx={{ bgcolor: m3.scLow, border: `1px solid ${m3.outlineVar}`, borderRadius: 2, px: 2, py: 1 }}>
-          <Typography variant="caption">{label}</Typography><Typography variant="h6">{value ?? "—"}</Typography>
+          <Typography variant="caption">{label}</Typography>
+          {value !== undefined && value !== null ? <Typography variant="h6">{value}</Typography>
+            : <Typography variant="h6" role="status" sx={{ fontSize: 16, color: m3.neutralInk }}>{error ? "UNKNOWN" : "Loading…"}</Typography>}
         </Box>)}
     </Stack>
     <Box component="form" onSubmit={event => { event.preventDefault(); range.current = null; setFilters({ ...draft }); setCursors([""]); }}>
       <Stack direction="row" gap={1} flexWrap="wrap" alignItems="center" sx={{ mb: 2 }}>
-        {(["from", "to"] as const).map(field => <TextField key={field} size="small" label={field === "from" ? "From (UTC)" : "Until (UTC, exclusive)"} type="datetime-local"
-          InputLabelProps={{ shrink: true }} value={draft[field].replace(/Z$/, "")} onChange={e => update(field, e.target.value ? new Date(`${e.target.value}Z`).toISOString() : "")} />)}
+        {/* Display time like the rest of the product (UI review 2026-10-18): typed and shown in GMT+3, sent as the UTC instant. */}
+        {(["from", "to"] as const).map(field => <TextField key={field} size="small" label={field === "from" ? `From (${DISPLAY_TZ_LABEL})` : `Until (${DISPLAY_TZ_LABEL}, exclusive)`} type="datetime-local"
+          InputLabelProps={{ shrink: true }} value={isoToDisplayInput(draft[field])} onChange={e => update(field, displayInputToIso(e.target.value) ?? "")} />)}
         <TextField select label="Policy" size="small" value={draft.policy} sx={{ minWidth: 160 }} onChange={e => update("policy", e.target.value)}>
           <MenuItem value="">All policies</MenuItem>{policies.map(p => <MenuItem key={p.id} value={p.id}>{p.name}</MenuItem>)}
         </TextField>
@@ -97,7 +101,7 @@ export function PolicyChangesTab({ policies, devices, openRule }: { policies: Po
     {error && <Box role="alert">{error}<Button onClick={() => setRevision(n => n + 1)}>Retry changes</Button></Box>}
     {!data && !error && <Typography role="status">Loading changes…</Typography>}
     {data && <Typography variant="caption">
-      <Tooltip title={`${data.rangeStart} — ${data.rangeEnd} (UTC reference)`}><span>{formatUtc(data.rangeStart)} — {formatUtc(data.rangeEnd)} {DISPLAY_TZ_LABEL}</span></Tooltip>
+      <Tooltip title={`${data.rangeStart} — ${data.rangeEnd} (UTC reference)`}><span>{formatStamp(data.rangeStart)} — {formatStamp(data.rangeEnd)}</span></Tooltip>
       {" "}· {data.summary.total} matching changes{!filters.includeInitial && !!hidden && ` · ${hidden} initial-capture rows not shown`}</Typography>}
     {data && data.rows.length === 0 && <Typography role="status">No rule changes match these filters.</Typography>}
     {!!data?.rows.length && <Box sx={{ overflowX: "auto" }}><Table size="small" aria-label="Policy changes">
@@ -106,18 +110,18 @@ export function PolicyChangesTab({ policies, devices, openRule }: { policies: Po
         <TableRow sx={{ bgcolor: m3.scLow }}>
           <TableCell colSpan={columns.length} sx={{ py: 0.5 }}>
             <Stack direction="row" alignItems="center" gap={1} flexWrap="wrap">
-              <Button size="small" aria-expanded={open(group)} aria-label={`Collection ${formatUtc(group.collectedAt)} ${group.policyName}`}
+              <Button size="small" aria-expanded={open(group)} aria-label={`Collection ${formatStamp(group.collectedAt)} ${group.policyName}`}
                 onClick={() => setToggled(previous => new Map(previous).set(group.key, !open(group)))} sx={{ textTransform: "none", minWidth: 0 }}>
                 {open(group) ? "▾" : "▸"}
               </Button>
-              <Typography variant="body2" component="span">Collection <Ts at={group.collectedAt} /> · {group.policyName}</Typography>
+              <Typography variant="body2" component="span">Collection <Stamp at={group.collectedAt} age={false} /> · {group.policyName}</Typography>
               <Typography variant="caption" component="span">{groupLabel(group)}</Typography>
               {group.initialCapture && <Chip size="small" variant="outlined" label="Initial capture" />}
             </Stack>
           </TableCell>
         </TableRow>
         {open(group) && group.rows.map(row => <TableRow key={row.revision}>
-          <TableCell><Ts at={row.changedOn} />{row.observedAtCollection && <Typography variant="caption" display="block">Observed at collection</Typography>}</TableCell>
+          <TableCell><Stamp at={row.changedOn} />{row.observedAtCollection && <Typography variant="caption" display="block">Observed at collection</Typography>}</TableCell>
           <TableCell>{row.policyName}<Typography variant="caption" display="block">{row.targets.map(t => t.name).join(", ") || "Unassigned"}</Typography></TableCell>
           <TableCell><Button onClick={() => openRule(row.policyId, row.ruleId)}>{row.number ?? "?"} · {row.name || "Unnamed rule"}</Button>
             {row.currentSnapshotLabel && <Typography variant="caption" display="block">Current snapshot label; historical label unavailable</Typography>}

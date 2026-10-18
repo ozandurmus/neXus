@@ -47,7 +47,7 @@ it("shows Restricted without Retry on a 403", async () => {
   const input = screen.getByRole("textbox", { name: "Search devices, settings and evidence" });
   fireEvent.focus(input);
   fireEvent.change(input, { target: { value: "FW" } });
-  await waitFor(() => expect(screen.getByText("Search results are restricted")).toBeInTheDocument());
+  await waitFor(() => expect(screen.getByText("Routes, addresses and policy are not searchable for the Viewer role")).toBeInTheDocument());
   expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
 });
 
