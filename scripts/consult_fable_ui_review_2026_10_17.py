@@ -41,8 +41,12 @@ admins (daily work), compliance/audit reviewers.
    File names give the screen: overview, devices list, a cluster, a Check Point cluster member (interfaces,
    configuration, backup, logs tabs), a Palo Alto standalone firewall, configuration, policy, compliance, backups,
    operations, administration, packet analysis, sanitizer. Most are full-page captures at 1440 px width.
-2. {inputs}/context: the 2026-09-25 UI effectiveness council synthesis. Use it to say which of its recommendations
-   are visible in the product now, which are not, and whether any made things worse.
+2. {inputs}/context: the 2026-09-25 UI effectiveness council synthesis, and Argon's review of the same live UI written
+   earlier tonight (UI_REVIEW_2026_10_17_ARGON.md). The screenshots were taken AFTER a fix release that acted on
+   Argon's P0 list (estate-map green rule, cross-screen counts, clipped tables, disabled-button contrast, role-locked
+   controls, Policy containers, stale banners, readiness staleness). The Product Owner wants your review ON TOP OF
+   Argon's: verify which Argon findings are now fixed in the screenshots, say where you disagree with Argon and why,
+   and add what Argon missed. Do not repeat Argon's text; reference its IDs (P0-1, P1-3, ...) instead.
 
 ## Hard constraint: no loss of capability
 No recommendation may reduce what the product can do or show today: keep every data field, every click-through,
@@ -59,7 +63,8 @@ a screen, say exactly where it now lives.
    consistency across screens. Each finding names the screen and the element and gives a concrete fix.
 4. The new Logs tab: judge the empty state and the tab's place on the device page; say what its filled state should
    prioritise for an operator (summary first, then detail) without inventing data the product does not have.
-5. Progress since 2026-09-25: table of the council's recommendations: done / partly / not done / regressed.
+5. Argon cross-check: table of Argon's P0/P1/P2 items: fixed in these screenshots / partly / not fixed / disagree
+   (with your reason). Then a short table of the 2026-09-25 council items that are still open.
 6. A prioritised list (P0/P1/P2) of changes, each with the screen, effort (S/M/L) and the capability it preserves.
 Mark anything you cannot judge from the screenshots as UNKNOWN rather than guessing.
 """
