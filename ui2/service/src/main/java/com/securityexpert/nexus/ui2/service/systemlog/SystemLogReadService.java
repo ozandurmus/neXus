@@ -374,7 +374,14 @@ public final class SystemLogReadService {
                     e.getClass().getSimpleName());
             return refusedText(500, "SYSTEM_LOG_CHUNK_UNREADABLE", "The chunk could not be decrypted.");
         }
-        byte[] shown = masked ? masking.session().maskChunk(window.bytes) : window.bytes;
+        byte[] shown;
+        try {
+            shown = masked ? masking.session().maskChunk(window.bytes) : window.bytes;
+        } catch (LogMasking.MaskingUnavailableException e) {
+            // Fail closed: without the estate dictionary no masked page is served.
+            return refusedText(503, "SYSTEM_LOG_MASKING_UNAVAILABLE",
+                    "The masked view is unavailable because the identity dictionary could not be read.");
+        }
         byte[] utf8 = toUtf8(shown);
         if (utf8.length > MAX_RESPONSE_BYTES) {
             return refusedText(500, "SYSTEM_LOG_PAGE_TOO_LARGE", "The page exceeded the response bound after masking.");

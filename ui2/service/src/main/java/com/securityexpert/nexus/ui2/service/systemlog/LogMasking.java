@@ -9,10 +9,22 @@ import java.nio.charset.CharacterCodingException;
 import java.nio.charset.Charset;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Supplier;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 
 import com.securityexpert.nexus.ui2.sanitizer.core.Counts;
 import com.securityexpert.nexus.ui2.sanitizer.core.KnownNames;
@@ -23,6 +35,7 @@ import com.securityexpert.nexus.ui2.sanitizer.core.TokenSink;
 import com.securityexpert.nexus.ui2.sanitizer.format.TextEncoding;
 import com.securityexpert.nexus.ui2.sanitizer.format.TextFormat;
 import com.securityexpert.nexus.ui2.sanitizer.format.ValueRewriter;
+import com.securityexpert.nexus.ui2.service.privacy.TopologyNamePseudonymizer;
 
 /**
  * The aiview masking projection of stored system-log text (DEVICE_SYSTEM_LOG_PHASE_B_CONTRACT.md section 12:
@@ -37,6 +50,25 @@ import com.securityexpert.nexus.ui2.sanitizer.format.ValueRewriter;
  * <p><b>Why this is in the service.</b> The sanitizer module may be used by the service only
  * ({@code SanitizerModuleFenceTest}), so the worker cannot call it and the read side lives here.</p>
  *
+ * <p><b>Two passes beyond the text rules (2026-10-18 privacy fix).</b> The Data Sanitizer text rules have no serial
+ * rule, so the {@code serial} field that every Palo Alto {@code pan_system} / {@code pan_config} JSON Lines entry
+ * carries reached aiview unmasked (the in-cluster e2e canary found a 12-digit serial on every line of the "config"
+ * source). Each line therefore goes through, in this order:</p>
+ * <ol>
+ *   <li>the <b>serial field rule</b>: the value of a JSON key {@code serial}, {@code serial_number}, {@code serialno},
+ *       {@code sn} (any case, {@code -}/{@code _} spelling, quoted or a bare number) and of a {@code serial=V} /
+ *       {@code serial: V} pair becomes {@link TopologyNamePseudonymizer#maskSerial}'s {@code SN-} token, the same token
+ *       the inventory screens show for that serial. Fail closed: a JSON serial value is masked whatever its form;</li>
+ *   <li>the Data Sanitizer text rules (unchanged);</li>
+ *   <li>the <b>estate dictionary</b>: any token (or {@code . _ : -}-delimited part of one) equal to an identity value
+ *       the service knows (device serials and recorded identities, management and interface addresses, host and
+ *       cluster names) is replaced by its masked form, so an unknown future format cannot leak a known identity. The
+ *       dictionary holds only keyed digests (HMAC under the privacy key) and the masked forms; the raw values are
+ *       read, digested and dropped when it is built, and nothing about them is logged.</li>
+ * </ol>
+ * <p>If the dictionary cannot be built and no earlier one is cached, {@link #session()} throws
+ * {@link MaskingUnavailableException}: a masked page is refused rather than served with one pass missing.</p>
+ *
  * <p>Use one {@link Session} per read request: it takes one snapshot of the inventory names, and the host names it
  * learns from host contexts in earlier lines carry to later lines of the same request. Sessions are not
  * thread-safe; this object is.</p>
@@ -46,23 +78,133 @@ public final class LogMasking {
     private static final java.util.Set<String> EXTENSIONS = java.util.Set.of("tar", "gz", "tgz", "zip", "txt", "log", "csv",
             "elg", "json", "pcap", "pcapng", "bz2", "xz");
 
-    private final Mappers base;
-    private final Supplier<KnownNames> knownNames;
+    /** How an estate identity value's masked form is made. */
+    public enum IdentityKind {
+        /** A serial or a recorded device identity: {@code SN-} + 10 hex ({@link TopologyNamePseudonymizer#maskSerial}). */
+        SERIAL,
+        /** A management or interface address (or a host name used as one): the text rules' own replacement. */
+        ADDRESS,
+        /** A device or cluster name: its UI pseudonym ({@code FW-...}, {@code CLS-...}). */
+        NAME
+    }
 
     /**
+     * One identity value the service knows, handed to the dictionary builder and dropped after it. {@code pseudonym}
+     * is the UI pseudonym of a {@link IdentityKind#NAME} (null for the other kinds). {@link #toString()} never prints
+     * the value.
+     */
+    public record EstateIdentity(IdentityKind kind, String value, String pseudonym) {
+        public EstateIdentity {
+            Objects.requireNonNull(kind, "kind");
+        }
+
+        public static EstateIdentity serial(String value) {
+            return new EstateIdentity(IdentityKind.SERIAL, value, null);
+        }
+
+        public static EstateIdentity address(String value) {
+            return new EstateIdentity(IdentityKind.ADDRESS, value, null);
+        }
+
+        public static EstateIdentity name(String value, String pseudonym) {
+            return new EstateIdentity(IdentityKind.NAME, value, pseudonym);
+        }
+
+        @Override
+        public String toString() {
+            return "EstateIdentity[" + kind + "]";
+        }
+    }
+
+    /** The estate dictionary could not be built and no earlier one is cached: no masked page may be served. */
+    public static final class MaskingUnavailableException extends IllegalStateException {
+        MaskingUnavailableException(Throwable cause) {
+            super("the estate identity dictionary is unavailable (" + cause.getClass().getSimpleName() + ")", null);
+        }
+    }
+
+    private static final System.Logger LOG = System.getLogger(LogMasking.class.getName());
+
+    private final Mappers base;
+    private final Supplier<KnownNames> knownNames;
+    private final Supplier<? extends List<EstateIdentity>> estate;
+    private final long estateTtlNanos;
+    private final byte[] digestKey;
+    private final TopologyNamePseudonymizer pseudonyms;
+    private volatile EstateDictionary dictionary;
+    private volatile long dictionaryExpiresAtNanos;
+
+    /**
+     * Without an estate dictionary (tests, and wiring that has no device tables); the serial field rule still applies.
+     *
      * @param privacyKey the product's privacy HMAC key ({@code HmacKeyProvider#getSecretKey()})
      * @param knownNames the inventory's device names with their pseudonyms, read once per session; the service
      *        passes the same supplier the Data Sanitizer uses
      */
     public LogMasking(byte[] privacyKey, Supplier<KnownNames> knownNames) {
-        this.base = new Mappers(SanitizerKey.of(Objects.requireNonNull(privacyKey, "privacyKey")), KnownNames.NONE);
-        this.knownNames = knownNames == null ? () -> KnownNames.NONE : knownNames;
+        this(privacyKey, knownNames, List::of, Duration.ofDays(1));
     }
 
-    /** A projection for one read request. */
+    /**
+     * @param estate the identity values the service knows (serials, addresses, names), read at most once per
+     *        {@code estateTtl}; only their keyed digests are kept
+     */
+    public LogMasking(byte[] privacyKey, Supplier<KnownNames> knownNames, Supplier<? extends List<EstateIdentity>> estate,
+            Duration estateTtl) {
+        Objects.requireNonNull(privacyKey, "privacyKey");
+        this.base = new Mappers(SanitizerKey.of(privacyKey), KnownNames.NONE);
+        this.knownNames = knownNames == null ? () -> KnownNames.NONE : knownNames;
+        this.estate = estate == null ? List::of : estate;
+        this.estateTtlNanos = Objects.requireNonNull(estateTtl, "estateTtl").toNanos();
+        this.digestKey = privacyKey.clone();
+        this.pseudonyms = new TopologyNamePseudonymizer(privacyKey);
+    }
+
+    /**
+     * A projection for one read request.
+     *
+     * @throws MaskingUnavailableException when the estate dictionary cannot be built and none is cached
+     */
     public Session session() {
+        EstateDictionary estateDictionary = dictionary();
         KnownNames known = knownNames.get();
-        return new Session(new Mappers(base.ip(), base.mac(), base.names(), known == null ? KnownNames.NONE : known), known);
+        return new Session(new Mappers(base.ip(), base.mac(), base.names(), known == null ? KnownNames.NONE : known), known,
+                pseudonyms, estateDictionary, newMac(digestKey));
+    }
+
+    private EstateDictionary dictionary() {
+        EstateDictionary current = dictionary;
+        long now = System.nanoTime();
+        if (current != null && now - dictionaryExpiresAtNanos < 0) return current;
+        synchronized (this) {
+            current = dictionary;
+            if (current != null && now - dictionaryExpiresAtNanos < 0) return current;
+            try {
+                EstateDictionary fresh = EstateDictionary.build(estate.get(), base, pseudonyms, newMac(digestKey));
+                dictionary = fresh;
+                dictionaryExpiresAtNanos = System.nanoTime() + estateTtlNanos;
+                return fresh;
+            } catch (RuntimeException e) {
+                if (current != null) {
+                    // Keep serving with the previous dictionary; the next request tries again.
+                    LOG.log(System.Logger.Level.WARNING, "system-log estate dictionary refresh failed, previous one kept cause={0}",
+                            e.getClass().getSimpleName());
+                    return current;
+                }
+                LOG.log(System.Logger.Level.ERROR, "system-log estate dictionary unavailable cause={0}", e.getClass().getSimpleName());
+                throw new MaskingUnavailableException(e);
+            }
+        }
+    }
+
+    private static Mac newMac(byte[] key) {
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(new SecretKeySpec(key, "HmacSHA256"));
+            return mac;
+        } catch (java.security.GeneralSecurityException e) {
+            throw new IllegalStateException("HmacSHA256 unavailable", e);
+        }
     }
 
     /** One request's projection. */
@@ -71,16 +213,37 @@ public final class LogMasking {
         private final KnownNames known;
         private final Counts counts = new Counts();
         private final TextSanitizer text;
+        private final TopologyNamePseudonymizer pseudonyms;
+        private final EstateDictionary estate;
+        private final Mac mac;
 
-        private Session(Mappers mappers, KnownNames known) {
+        private Session(Mappers mappers, KnownNames known, TopologyNamePseudonymizer pseudonyms, EstateDictionary estate,
+                Mac mac) {
             this.mappers = mappers;
             this.known = known == null ? KnownNames.NONE : known;
             this.text = new TextSanitizer(mappers, TokenSink.DISCARD, counts);
+            this.pseudonyms = pseudonyms;
+            this.estate = estate;
+            this.mac = mac;
         }
 
         /** One line (without its terminator). */
         public String maskLine(String line) {
-            return line == null ? null : text.sanitize(line);
+            return line == null ? null : mask(line, false);
+        }
+
+        /** The three passes over one value: serial fields, the text rules, the estate dictionary. */
+        private String mask(String value, boolean hostContext) {
+            String serialsMasked = SerialFields.mask(value, pseudonyms, counts);
+            return estate.replace(text.sanitize(serialsMasked, hostContext), mac, counts);
+        }
+
+        private ValueRewriter rewriter() {
+            return values -> {
+                List<String> out = new ArrayList<>(values.size());
+                for (var v : values) out.add(mask(v.text(), v.hostContext()));
+                return out;
+            };
         }
 
         /**
@@ -93,8 +256,7 @@ public final class LogMasking {
             Charset charset = isValidUtf8(chunk) ? StandardCharsets.UTF_8 : StandardCharsets.ISO_8859_1;
             ByteArrayOutputStream out = new ByteArrayOutputStream(chunk.length + 64);
             try {
-                TextFormat.process(new ByteArrayInputStream(chunk), out, new TextEncoding(charset, 0),
-                        ValueRewriter.sanitizing(text));
+                TextFormat.process(new ByteArrayInputStream(chunk), out, new TextEncoding(charset, 0), rewriter());
             } catch (IOException e) {
                 throw new UncheckedIOException(e); // in-memory streams: not reachable
             }
@@ -121,7 +283,7 @@ public final class LogMasking {
                     end = masked.length();
                 }
                 String token = masked.substring(start, end);
-                out.append(pseudonymOrSelf(text.sanitize(token)));
+                out.append(estate.replace(pseudonymOrSelf(text.sanitize(SerialFields.mask(token, pseudonyms, counts))), mac, counts));
                 if (end < masked.length()) {
                     out.append('_');
                 }
@@ -174,6 +336,238 @@ public final class LogMasking {
         @Override
         public String toString() {
             return "LogMasking.Session[" + mappers.getClass().getSimpleName() + "]";
+        }
+    }
+
+    /**
+     * The serial field rule. Palo Alto log entries are stored as JSON Lines with a {@code "serial"} key on every entry
+     * (findings record 2026-10-17: always present in {@code pan_system} and {@code pan_config}); other formats write
+     * {@code serial=V} or {@code Serial Number: V}. The value becomes the inventory's {@code SN-} token.
+     */
+    static final class SerialFields {
+        /** Count category of a serial replacement. */
+        static final String SERIAL = "serial";
+
+        private static final String KEY = "(?:serial(?:[-_ ]?(?:number|num|no))?|sn)";
+        /** {@code "serial":"V"} or {@code "serial": 1234} (any case, an {@code @} attribute prefix allowed). */
+        private static final Pattern JSON = Pattern.compile(
+                "(?i)\"@?" + KEY + "\"\\s*:\\s*(?:\"((?:[^\"\\\\]|\\\\.)*)\"|(-?[0-9][0-9.eE+-]*))");
+        /** {@code serial=V}, {@code serial: V}, {@code Serial Number = "V"}: the value must carry a digit. */
+        private static final Pattern TEXT = Pattern.compile(
+                "(?i)(?<![A-Za-z0-9_])" + KEY + "\\s*[=:]\\s*([\"']?)([A-Za-z0-9][A-Za-z0-9._/:-]*)");
+        private static final Pattern TOKEN = Pattern.compile("SN-[0-9A-F]{10}");
+        private static final Pattern HAS_DIGIT = Pattern.compile(".*[0-9].*");
+
+        private SerialFields() {
+        }
+
+        static String mask(String text, TopologyNamePseudonymizer pseudonyms, Counts counts) {
+            if (text == null || text.length() < 4) return text;
+            String lower = text.toLowerCase(Locale.ROOT);
+            if (!lower.contains("serial") && !lower.contains("sn")) return text;
+            return text(json(text, pseudonyms, counts), pseudonyms, counts);
+        }
+
+        private static String json(String text, TopologyNamePseudonymizer pseudonyms, Counts counts) {
+            Matcher m = JSON.matcher(text);
+            StringBuilder out = null;
+            int copied = 0;
+            while (m.find()) {
+                boolean quoted = m.start(1) >= 0;
+                int start = quoted ? m.start(1) : m.start(2);
+                int end = quoted ? m.end(1) : m.end(2);
+                String value = text.substring(start, end).strip();
+                // Fail closed: a JSON serial is masked whatever its form; only an empty or already masked value stays.
+                if (value.isEmpty() || isMasked(value)) continue;
+                if (out == null) out = new StringBuilder(text.length() + 16);
+                String token = pseudonyms.maskSerial(value);
+                out.append(text, copied, start).append(quoted ? token : "\"" + token + "\"");
+                copied = end;
+                counts.add(SERIAL);
+            }
+            return out == null ? text : out.append(text, copied, text.length()).toString();
+        }
+
+        private static String text(String text, TopologyNamePseudonymizer pseudonyms, Counts counts) {
+            Matcher m = TEXT.matcher(text);
+            StringBuilder out = null;
+            int copied = 0;
+            while (m.find()) {
+                int start = m.start(2);
+                int end = m.end(2);
+                while (end > start && ".:/-".indexOf(text.charAt(end - 1)) >= 0) end--;
+                String value = text.substring(start, end);
+                if (start < copied || value.isEmpty() || isMasked(value) || !HAS_DIGIT.matcher(value).matches()) continue;
+                if (out == null) out = new StringBuilder(text.length() + 16);
+                out.append(text, copied, start).append(pseudonyms.maskSerial(value));
+                copied = end;
+                counts.add(SERIAL);
+            }
+            return out == null ? text : out.append(text, copied, text.length()).toString();
+        }
+
+        private static boolean isMasked(String value) {
+            return TOKEN.matcher(value).matches() || value.contains("<redacted>");
+        }
+    }
+
+    /**
+     * The estate dictionary: keyed digests of the identity values the service knows, each with its masked form. Raw
+     * values are never kept: a token is digested and looked up. Immutable; the {@link Mac} is the caller's.
+     */
+    static final class EstateDictionary {
+        /** Count category of a dictionary replacement. */
+        static final String ESTATE_IDENTITY = "estate_identity";
+        static final EstateDictionary EMPTY = new EstateDictionary(Map.of(), Set.of(), Integer.MAX_VALUE, 0);
+
+        private static final int MIN_LENGTH = 4;
+        /** At most this many delimited parts are joined into one candidate (an IPv6 address has eight). */
+        private static final int MAX_PARTS = 16;
+        private static final byte[] DOMAIN = "LOGMASK-ESTATE:".getBytes(StandardCharsets.UTF_8);
+        private static final Set<String> STOPWORDS = Set.of("unknown", "none", "null", "localhost", "default", "n/a");
+        private static final Pattern PREFIX_LENGTH = Pattern.compile("/[0-9]{1,3}$");
+        private static final Pattern ADDRESS_LITERAL = Pattern.compile("[0-9]{1,3}(?:\\.[0-9]{1,3}){3}|[0-9A-Fa-f:.]*:[0-9A-Fa-f:.]*");
+
+        private final Map<Long, String> masked;
+        /** Length and first/last character of each value: a cheap filter before a token is digested. */
+        private final Set<Integer> shapes;
+        private final int minLength;
+        private final int maxLength;
+
+        private EstateDictionary(Map<Long, String> masked, Set<Integer> shapes, int minLength, int maxLength) {
+            this.masked = masked;
+            this.shapes = shapes;
+            this.minLength = minLength;
+            this.maxLength = maxLength;
+        }
+
+        int size() {
+            return masked.size();
+        }
+
+        static EstateDictionary build(List<EstateIdentity> values, Mappers base, TopologyNamePseudonymizer pseudonyms, Mac mac) {
+            if (values == null || values.isEmpty()) return EMPTY;
+            TextSanitizer rules = new TextSanitizer(base, TokenSink.DISCARD, new Counts());
+            Map<Long, String> masked = new HashMap<>();
+            Set<Integer> shapes = new HashSet<>();
+            int min = Integer.MAX_VALUE;
+            int max = 0;
+            // A value known as several kinds keeps the most specific masked form: a name, then an address, then a serial.
+            for (IdentityKind kind : List.of(IdentityKind.NAME, IdentityKind.ADDRESS, IdentityKind.SERIAL)) {
+                for (EstateIdentity identity : values) {
+                    if (identity == null || identity.kind() != kind || identity.value() == null) continue;
+                    String value = identity.value().strip();
+                    if (kind == IdentityKind.ADDRESS) value = PREFIX_LENGTH.matcher(value).replaceFirst("");
+                    if (!eligible(value)) continue;
+                    String form = maskedForm(kind, value, identity.pseudonym(), rules, pseudonyms);
+                    if (form == null || form.equals(value)) continue;
+                    // Exact and case-sensitive, like the UI's own masking: identifiers are opaque (AGENTS.md identity law).
+                    if (masked.putIfAbsent(digest(mac, value), form) == null) {
+                        shapes.add(shape(value, 0, value.length()));
+                        min = Math.min(min, value.length());
+                        max = Math.max(max, value.length());
+                    }
+                }
+            }
+            return masked.isEmpty() ? EMPTY : new EstateDictionary(Map.copyOf(masked), Set.copyOf(shapes), min, max);
+        }
+
+        private static boolean eligible(String value) {
+            if (value.length() < MIN_LENGTH || STOPWORDS.contains(value.toLowerCase(Locale.ROOT))) return false;
+            if (value.chars().allMatch(Character::isDigit) && value.length() < 6) return false; // a port, a count
+            if (!Character.isLetterOrDigit(value.charAt(0)) || !Character.isLetterOrDigit(value.charAt(value.length() - 1))) return false;
+            return value.chars().allMatch(c -> isRunChar((char) c));
+        }
+
+        private static String maskedForm(IdentityKind kind, String value, String pseudonym, TextSanitizer rules,
+                TopologyNamePseudonymizer pseudonyms) {
+            switch (kind) {
+                case SERIAL:
+                    return pseudonyms.maskSerial(value);
+                case NAME: {
+                    if (pseudonym != null && !pseudonym.isBlank() && !"Unknown".equals(pseudonym)) return pseudonym;
+                    String host = rules.sanitize(value, true);
+                    return host.equals(value) ? pseudonyms.maskPayloadToken("ID", value) : host;
+                }
+                default: {
+                    String address = rules.sanitize(value, false);
+                    if (!address.equals(value)) return address;
+                    // An address the text rules pass through (loopback, unspecified, multicast ...) is no identity.
+                    if (ADDRESS_LITERAL.matcher(value).matches()) return null;
+                    String host = rules.sanitize(value, true);
+                    return host.equals(value) ? pseudonyms.maskPayloadToken("ID", value) : host;
+                }
+            }
+        }
+
+        /** Replaces every token or delimited part of a token that is a known identity value, longest match first. */
+        String replace(String line, Mac mac, Counts counts) {
+            if (masked.isEmpty() || line == null || line.length() < minLength) return line;
+            StringBuilder out = null;
+            int copied = 0;
+            int n = line.length();
+            int i = 0;
+            List<Integer> starts = new ArrayList<>();
+            List<Integer> ends = new ArrayList<>();
+            while (i < n) {
+                if (!isRunChar(line.charAt(i))) {
+                    i++;
+                    continue;
+                }
+                int runStart = i;
+                while (i < n && isRunChar(line.charAt(i))) i++;
+                int runEnd = i;
+                if (runEnd - runStart < minLength) continue;
+                starts.clear();
+                ends.clear();
+                for (int p = runStart; p < runEnd; p++) {
+                    if (Character.isLetterOrDigit(line.charAt(p)) && (p == runStart || !Character.isLetterOrDigit(line.charAt(p - 1))
+                            && isSeparator(line.charAt(p - 1)))) starts.add(p);
+                    int q = p + 1;
+                    if (Character.isLetterOrDigit(line.charAt(p)) && (q == runEnd || isSeparator(line.charAt(q)))) ends.add(q);
+                }
+                int cursor = runStart;
+                int firstEnd = 0;
+                for (int s : starts) {
+                    if (s < cursor) continue;
+                    while (firstEnd < ends.size() && ends.get(firstEnd) <= s) firstEnd++;
+                    int lastEnd = Math.min(ends.size(), firstEnd + MAX_PARTS) - 1;
+                    for (int k = lastEnd; k >= firstEnd; k--) {
+                        int e = ends.get(k);
+                        int length = e - s;
+                        if (length < minLength || length > maxLength || !shapes.contains(shape(line, s, e))) continue;
+                        String form = masked.get(digest(mac, line.substring(s, e)));
+                        if (form == null) continue;
+                        if (out == null) out = new StringBuilder(n + 32);
+                        out.append(line, copied, s).append(form);
+                        copied = e;
+                        cursor = e;
+                        counts.add(ESTATE_IDENTITY);
+                        break;
+                    }
+                }
+            }
+            return out == null ? line : out.append(line, copied, n).toString();
+        }
+
+        private static boolean isRunChar(char c) {
+            return Character.isLetterOrDigit(c) || isSeparator(c);
+        }
+
+        private static boolean isSeparator(char c) {
+            return c == '.' || c == '_' || c == ':' || c == '-';
+        }
+
+        private static int shape(CharSequence s, int start, int end) {
+            return ((end - start) << 16) | ((s.charAt(start) & 0xFF) << 8) | (s.charAt(end - 1) & 0xFF);
+        }
+
+        private static long digest(Mac mac, String value) {
+            mac.update(DOMAIN);
+            byte[] h = mac.doFinal(value.getBytes(StandardCharsets.UTF_8));
+            long v = 0;
+            for (int b = 0; b < 8; b++) v = (v << 8) | (h[b] & 0xFF);
+            return v;
         }
     }
 

@@ -68,7 +68,7 @@ public final class SystemLogReadFixture {
     public final DeviceRepository devices = mock(DeviceRepository.class);
     public final List<LedgerRow> ledgerRows = new ArrayList<>();
     public boolean ledgerFails;
-    public final LogMasking masking = new LogMasking(PRIVACY_KEY, () -> KnownNames.of(Map.of("edge-fw-01", "FW-TANGO-04")));
+    public LogMasking masking = new LogMasking(PRIVACY_KEY, () -> KnownNames.of(Map.of("edge-fw-01", "FW-TANGO-04")));
     public final BackupArtefactRetrievalRepository ledger = (id, artefact, reason, destination, actor, action) -> {
         if (ledgerFails) throw new IllegalStateException("ledger unavailable");
         ledgerRows.add(new LedgerRow(id, artefact, reason, destination, actor, action));

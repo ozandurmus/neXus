@@ -74,6 +74,41 @@ class SystemLogReadServiceTest {
         assertTrue(fx.ledgerRows.isEmpty(), "a masked view is not an unmasked view");
     }
 
+    /** A serial-shaped 12-digit value built at runtime (no identity-shaped literal in the source). */
+    private static String syntheticSerial(long seed) {
+        java.util.Random random = new java.util.Random(seed);
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < 12; i++) sb.append((char) ('0' + random.nextInt(10)));
+        return sb.toString();
+    }
+
+    @Test
+    void aMaskedPanConfigPageNeverCarriesTheEntrySerialAndTheUnmaskedViewIsUnchanged() throws Exception {
+        String serial = syntheticSerial(21);
+        String line = "{\"receive_time\":\"2026/10/17 10:00:00\",\"serial\":\"" + serial
+                + "\",\"seqno\":\"77\",\"device_name\":\"edge-fw-01\",\"host\":\"192.0.2.10\",\"cmd\":\"edit\"}\n";
+        fx.chunk(CHUNK, bytes(line + line));
+
+        String shown = text(fx.service().text(masked(CHUNK, 0, 0)));
+        assertFalse(shown.contains(serial), "the serial is in the masked page (value withheld)");
+        assertTrue(shown.contains("\"serial\":\"SN-"), "the SN- token takes its place");
+
+        assertEquals(line + line, text(fx.service().text(unmasked(CHUNK, 0, 0, true))), "the unmasked view is the stored text");
+    }
+
+    @Test
+    void aMaskedPageIsRefusedWhenTheIdentityDictionaryCannotBeRead() throws Exception {
+        fx.chunk(CHUNK, bytes("drop src 192.0.2.17\n"));
+        fx.masking = new LogMasking(SystemLogReadFixture.PRIVACY_KEY, () -> com.securityexpert.nexus.ui2.sanitizer.core.KnownNames.NONE,
+                () -> { throw new IllegalStateException("database down"); }, java.time.Duration.ofMinutes(1));
+
+        var page = fx.service().text(masked(CHUNK, 0, 0));
+
+        assertEquals(503, page.refusal().status());
+        assertEquals("SYSTEM_LOG_MASKING_UNAVAILABLE", page.refusal().code());
+        assertTrue(page.page() == null, "no text is served");
+    }
+
     @Test
     void anUnmaskedViewByAPermittedCallerShowsTheStoredTextAndWritesOneLedgerRowFirst() throws Exception {
         var ref = fx.chunk(CHUNK, bytes("drop src 192.0.2.17\nsecond 198.51.100.5\n"));
