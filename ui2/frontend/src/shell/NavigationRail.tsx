@@ -66,7 +66,13 @@ export const RAIL_ENTRIES: readonly RailEntry[] = [
   { id: "tools", label: "Tools", icon: "tools", group: "OPERATE", destinations: [PACKETS, SANITIZER] },
 ];
 
-export const ADMINISTRATION: RailEntry = { id: "admin", label: "Administration", icon: "admin", group: null, screen: "administration", requiredPlane: "Admin" };
+/**
+ * Administration is on every route for every session (post-release review 2026-10-18, R4): it used to be gated on the
+ * Admin plane, so a read-only session saw it only while already there and reached it from elsewhere only through `≡`.
+ * The screen itself decides what a role may see (its registry, exclusions, trust and job-log tabs are readable); the
+ * rail only has to say where it is. Its deep links in the drawer keep their plane gate.
+ */
+export const ADMINISTRATION: RailEntry = { id: "admin", label: "Administration", icon: "admin", group: null, screen: "administration" };
 
 /** Kept for callers that list the rail's single destinations (tests, the shell): every entry with its own screen, Administration last. */
 export const DESTINATIONS: readonly RailDestination[] = [
@@ -112,7 +118,7 @@ export const DRAWER_GROUPS: readonly DrawerGroup[] = [
     { label: "Packets", screen: "packet_analysis", href: "?screen=packet_analysis", requiredPlane: "PacketAnalysis" },
     { label: "Sanitizer", screen: "sanitizer", href: "?screen=sanitizer", requiredPlane: "Sanitizer" },
   ] },
-  { header: "Administration", screen: "administration", requiredPlane: "Admin", leaves: [
+  { header: "Administration", screen: "administration", leaves: [
     { label: "Device management", href: "?screen=administration&tab=device-management", screen: "administration", requiredPlane: "Admin" },
     { label: "Inventory exclusions", href: "?screen=administration&tab=inventory-exclusions", screen: "administration", requiredPlane: "Admin" },
     { label: "SSH trust", href: "?screen=administration&tab=ssh-trust", screen: "administration", requiredPlane: "Admin" },
@@ -145,7 +151,7 @@ export function NavigationRail({ active }: { readonly active: ScreenId }) {
   const entryActive = (e: RailEntry) => e.destinations ? e.destinations.some((d) => d.screen === active) : e.screen === active;
 
   const entries = RAIL_ENTRIES.filter(entryShown);
-  const admin = entryShown(ADMINISTRATION) ? ADMINISTRATION : null;
+  const admin = ADMINISTRATION;
   const toolsDestinations = (RAIL_ENTRIES.find((e) => e.id === "tools")?.destinations ?? []).filter((d) => granted(d.requiredPlane, d.screen));
 
   const allowedDrawerGroups = DRAWER_GROUPS
@@ -203,7 +209,10 @@ export function NavigationRail({ active }: { readonly active: ScreenId }) {
       <Box
         component="nav"
         aria-label="Primary"
-        sx={{ width: wide ? 88 : 56, flex: "none", bgcolor: m3.surface, py: 2, display: "flex", flexDirection: "column", alignItems: "center", gap: 1.25 }}
+        // The rail stays in view on a long page (sticky, one viewport tall) so Administration, pinned at its bottom edge,
+        // is always one click away (R4); a viewport shorter than the list scrolls the rail itself.
+        sx={{ width: wide ? 88 : 56, flex: "none", bgcolor: m3.surface, pt: 2, display: "flex", flexDirection: "column", alignItems: "center", gap: 1.25,
+              position: "sticky", top: 0, alignSelf: "flex-start", height: "100vh", boxSizing: "border-box", overflowY: "auto", overflowX: "hidden" }}
       >
         <Box sx={{ mb: 1 }}>
           <NexusMark size={wide ? 44 : 36} />
@@ -217,11 +226,10 @@ export function NavigationRail({ active }: { readonly active: ScreenId }) {
           </Tooltip>
         )}
         {items}
-        {admin && (
-          <Box sx={{ mt: "auto", pt: 2, display: "flex", flexDirection: "column", alignItems: "center" }}>
-            {railItem(admin)}
-          </Box>
-        )}
+        <Box data-testid="rail-administration" sx={{ mt: "auto", pt: 2, pb: 2, width: "100%", display: "flex", flexDirection: "column", alignItems: "center",
+                   position: "sticky", bottom: 0, bgcolor: m3.surface }}>
+          {railItem(admin)}
+        </Box>
       </Box>
 
       <Menu anchorEl={toolsAnchor} open={Boolean(toolsAnchor)} onClose={() => setToolsAnchor(null)}

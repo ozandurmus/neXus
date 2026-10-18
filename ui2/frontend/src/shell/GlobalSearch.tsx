@@ -142,8 +142,9 @@ export function GlobalSearch() {
     } catch (error) { if (version === requestVersion.current) setRemoteError(error); }
     finally { if (version === requestVersion.current) setLoadingGroup(null); }
   };
+  // Narrower between 900 and 1200 px so the top bar's right block keeps its place (post-release review 2026-10-18, 1000 px check).
   return (
-    <Box ref={box} sx={{ position: "relative", width: { xs: 180, md: 320 } }}>
+    <Box ref={box} sx={{ position: "relative", width: { xs: 180, md: 220, lg: 320 } }}>
       <Box sx={{ display: "flex", alignItems: "center", gap: 1, height: 36, px: 1.5, borderRadius: "8px",
                  border: `1px solid ${m3.outlineVar}`, bgcolor: m3.scLowest, color: m3.onSurfaceVar }}>
         <Icon name="search" size={18} />
