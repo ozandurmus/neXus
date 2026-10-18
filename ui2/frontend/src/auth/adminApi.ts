@@ -1452,6 +1452,8 @@ export interface JobStatsView {
   readonly cancelled_24h?: number;
   readonly submitted_24h?: number;
   readonly running: number;
+  /** Every job ever recorded, by upper-case state word (the Jobs screen's state pills count from this, all time). */
+  readonly by_state?: Readonly<Record<string, number>>;
 }
 
 /** The headline job counts in one request. */

@@ -3,7 +3,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { JobLogsPanel, localInputToIso } from "../src/screens/JobLogsPanel";
 import { jobTypeLabel } from "../src/jobs/jobTypeLabel";
 
-afterEach(() => vi.unstubAllGlobals());
+// The panel writes `?job=<id>` when a row opens; jsdom keeps the URL between tests, so it is reset here.
+afterEach(() => { vi.unstubAllGlobals(); window.history.replaceState(null, "", "/"); });
 
 function stubApi(jobsPage: unknown, calls: string[] = []) {
   vi.stubGlobal("fetch", vi.fn().mockImplementation((input: RequestInfo | URL) => {

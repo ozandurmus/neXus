@@ -19,13 +19,15 @@ import Switch from "@mui/material/Switch";
 import { StatePanel, RestrictedPanel, isRestricted } from "../shell/States";
 import { Presented, Stamp } from "../shell/PresentedText";
 import { displayInputToIso, formatDuration, isoToDisplayInput, DISPLAY_TZ_LABEL } from "../shell/time";
-import { jobStateWord, outcomeLine } from "../shell/presenters";
+import { jobOutcomeWord, jobStateWord, outcomeEchoesState, outcomeLine, readinessReasonLabel } from "../shell/presenters";
+import { urlParam, useUrlParamSync, writeUrlParams } from "../shell/urlParams";
 import { MONO, m3 } from "../theme/m3Theme";
 import { jobTypeLabel } from "../jobs/jobTypeLabel";
 import { JobTranscriptDrawer } from "./JobTranscriptDrawer";
 import {
   cancelJob,
   downloadJobsCsv,
+  getJobStats,
   jobFacets,
   listDevices,
   listJobs,
@@ -61,6 +63,44 @@ const PAGE_SIZES = [25, 50, 100, 200] as const;
 export { jobTypeLabel } from "../jobs/jobTypeLabel";
 
 /**
+ * The state pills above the job table (UI review 2026-10-18, roadmap 2.4): the old Queue and History tabs as presets
+ * of the one table. Each pill is a comma-separated state set the server already accepts; `all` is no state filter.
+ * "Other outcome" keeps the sum honest: a job that neither completed nor failed (outcome unknown, rejected, cancelled)
+ * is in All and in this pill, never hidden.
+ */
+export type JobPill = "all" | "active" | "finished" | "failed" | "other";
+export const JOB_PILLS: ReadonlyArray<{ readonly id: JobPill; readonly label: string; readonly states: string }> = [
+  { id: "all", label: "All", states: "" },
+  { id: "active", label: "Queued / Running", states: "REQUESTED,CLAIMED,EXECUTING" },
+  { id: "finished", label: "Finished", states: "COMPLETED" },
+  { id: "failed", label: "Failed", states: "FAILED" },
+  { id: "other", label: "Other outcome", states: "OUTCOME_UNKNOWN,REJECTED,CANCELLED" },
+];
+
+/** The pill whose state set is exactly the current filter, if any (the State dropdown can also name a single state). */
+export function pillForState(state: string): JobPill | null {
+  return JOB_PILLS.find((p) => p.states === state)?.id ?? null;
+}
+
+/** A pill's count from the per-state totals; null when the totals have not been read (the pill then shows no number). */
+export function pillCount(byState: Readonly<Record<string, number>> | null, pill: JobPill): number | null {
+  if (!byState) return null;
+  const def = JOB_PILLS.find((p) => p.id === pill)!;
+  if (def.id === "all") return Object.values(byState).reduce((n, c) => n + c, 0);
+  return def.states.split(",").reduce((n, s) => n + (byState[s] ?? 0), 0);
+}
+
+/** The RESULT cell's words: the recorded outcome when it says more than the state, then the reason where there is one. */
+export function resultWords(job: Pick<JobEventView, "state" | "outcome" | "terminal_reason">): { outcome: string | null; reason: string | null } {
+  const outcome = jobOutcomeWord(job.outcome);
+  const showOutcome = outcome !== null && !outcomeEchoesState(job.outcome, job.state);
+  // The API's terminal_reason repeats the terminal state on a clean run (review §3); a completed job has nothing to
+  // explain, so the reason is kept only where it is one -- a failure, rejection or unknown outcome.
+  const reason = job.state === "COMPLETED" ? null : (job.terminal_reason || null);
+  return { outcome: showOutcome ? outcome : null, reason };
+}
+
+/**
  * Jobs screen (Product Owner P0, 2026-09-22): the whole history, not the last
  * 50; filters on the server (state, type, device, time window, free text);
  * numbered pages; CSV export of the current filter. Live polling refreshes
@@ -71,6 +111,12 @@ function hoursAgoLocal(hours: number): string {
   return isoToDisplayInput(new Date(Date.now() - hours * 3600 * 1000).toISOString());
 }
 
+/** Compact list mode (UI review 2026-10-18 §6): 32 px one-line rows, machine values in mono. */
+const COMPACT_TABLE = {
+  "& th, & td": { height: 32, py: 0.25, px: 1.25, whiteSpace: "nowrap", fontSize: 13, lineHeight: "18px" },
+  "& th": { fontWeight: 600 },
+} as const;
+
 export function JobLogsPanel({
   initialState = "",
   initialJobType = "",
@@ -78,6 +124,7 @@ export function JobLogsPanel({
   initialText = "",
   emptyTitle,
   emptyBody,
+  pillRequest,
 }: {
   readonly initialState?: string;
   readonly initialJobType?: string;
@@ -88,22 +135,27 @@ export function JobLogsPanel({
       once the viewer narrows the filter further, since the breakdown would no longer be provably zero. */
   readonly emptyTitle?: string;
   readonly emptyBody?: string;
+  /** A pill the owner asks for (a KPI card link, an old `tab=queue` route); `seq` lets the same pill be asked twice. */
+  readonly pillRequest?: { readonly pill: JobPill; readonly seq: number } | null;
 } = {}) {
+  // `?job=<id>` is the addressable job detail (roadmap 3.6): the row is fetched by its id and opened on load.
+  const [linkedJob] = useState(() => urlParam("job"));
   const [page, setPage] = useState<{ items: readonly JobEventView[]; total: number; canCancel: boolean } | null>(null);
   const [devices, setDevices] = useState<Record<string, { name: string; vendor: string }>>({});
   const [facets, setFacets] = useState<JobFacetsView>({ states: [], job_types: [] });
+  const [byState, setByState] = useState<Readonly<Record<string, number>> | null | "failed">(null);
   const [error, setError] = useState<ApiError | string | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
-  const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
+  const [expandedJobId, setExpandedJobId] = useState<string | null>(linkedJob);
   const [cancelling, setCancelling] = useState<string[]>([]);
   const [exportBusy, setExportBusy] = useState(false);
 
-  const [state, setState] = useState(initialState);
+  const [state, setState] = useState(pillRequest ? JOB_PILLS.find((p) => p.id === pillRequest.pill)!.states : initialState);
   const [jobType, setJobType] = useState(initialJobType);
   const [deviceId, setDeviceId] = useState("");
   const [sinceLocal, setSinceLocal] = useState(initialSinceHours ? hoursAgoLocal(initialSinceHours) : "");
   const [untilLocal, setUntilLocal] = useState("");
-  const [text, setText] = useState(initialText);
+  const [text, setText] = useState(linkedJob ?? initialText);
   const [pageNumber, setPageNumber] = useState(1);
   const [pageSize, setPageSize] = useState<number>(50);
 
@@ -127,6 +179,8 @@ export function JobLogsPanel({
         setError(null);
       })
       .catch((err: ApiError) => setError(err));
+    // The pill counts come from the same store at the same moment as the page; a failed read says UNKNOWN, never 0.
+    getJobStats().then((s) => setByState(s.by_state ?? "failed")).catch(() => setByState("failed"));
   }, [paramsKey]);
 
   const fetchDeviceNames = useCallback(() => {
@@ -158,6 +212,21 @@ export function JobLogsPanel({
   }, [fetchJobs, autoRefresh]);
 
   const resetToFirstPage = () => setPageNumber(1);
+
+  // The owner asked for a pill after mount (a KPI card, a route): the filter follows; the first request is the initial state.
+  useEffect(() => {
+    if (!pillRequest || pillRequest.seq === 0) return;
+    setState(JOB_PILLS.find((p) => p.id === pillRequest.pill)!.states);
+    setPageNumber(1);
+  }, [pillRequest?.pill, pillRequest?.seq]);
+
+  // Back / Forward re-open or close the job detail the URL names.
+  useUrlParamSync("job", useCallback((value: string | null) => setExpandedJobId(value), []));
+  const toggleJob = (id: string) => {
+    const next = expandedJobId === id ? null : id;
+    setExpandedJobId(next);
+    writeUrlParams({ job: next }, next ? "push" : "replace");
+  };
 
   const handleExport = async () => {
     setExportBusy(true);
@@ -209,9 +278,28 @@ export function JobLogsPanel({
   const pageCount = Math.max(1, Math.ceil(page.total / pageSize));
   const deviceOptions = Object.entries(devices).sort((a, b) => a[1].name.localeCompare(b[1].name));
   const isDefaultFilter = state === initialState && !jobType && !deviceId && !sinceLocal && !untilLocal && !text.trim();
+  const activePill = pillForState(state);
+  const counts = byState === "failed" ? null : byState;
+  // The column exists only while a row on this page can open a transcript (P1-4B): an empty column says nothing.
+  const transcriptColumn = page.items.some((job) => /backup|snapshot|export/i.test(job.job_type) && job.has_transcript);
+  const columnCount = 6 + (transcriptColumn ? 1 : 0) + (page.canCancel ? 1 : 0);
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+      <Stack role="group" aria-label="Job state" direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+        {JOB_PILLS.map((pill) => {
+          const selected = activePill === pill.id;
+          const count = pillCount(counts, pill.id);
+          const countText = byState === "failed" ? "UNKNOWN" : count === null ? null : count.toLocaleString("en-US");
+          return <Chip key={pill.id} clickable role="button" aria-pressed={selected} data-pill={pill.id}
+            label={countText === null ? pill.label : `${pill.label} · ${countText}`}
+            onClick={() => { setState(pill.states); resetToFirstPage(); }}
+            sx={{ borderRadius: "8px", height: 28, fontSize: 13, fontWeight: 500,
+              bgcolor: selected ? m3.primary : m3.scHigh, color: selected ? m3.onPrimary : m3.onSurface,
+              "&:hover": { bgcolor: selected ? m3.primary : m3.scHighest } }} />;
+        })}
+        {byState !== null && <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>counts: every recorded job</Typography>}
+      </Stack>
       <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" useFlexGap>
         <TextField
           select
@@ -224,7 +312,7 @@ export function JobLogsPanel({
           sx={{ minWidth: 150 }}
         >
           <option value="">Any</option>
-          {initialState.includes(",") && <option value={initialState} title={initialState}>{initialState.split(",").map(jobStateWord).join(" | ")}</option>}
+          {state.includes(",") && <option value={state} title={state}>{state.split(",").map(jobStateWord).join(" | ")}</option>}
           {facets.states.map((s) => <option key={s} value={s}>{jobStateWord(s)}</option>)}
         </TextField>
         <TextField
@@ -309,21 +397,23 @@ export function JobLogsPanel({
       {page.items.length === 0 ? (
         emptyTitle && isDefaultFilter
           ? <StatePanel variant="empty" title={emptyTitle} body={emptyBody} />
-          : <StatePanel variant="empty" title="No jobs match this filter" body="No background job matched the current filter." />
+          : activePill === "active" && isDefaultFilter
+            ? <StatePanel variant="empty" title="Queue empty" body="0 queued · 0 claimed · 0 running" />
+            : <StatePanel variant="empty" title="No jobs match this filter" body="No background job matched the current filter." />
       ) : (
         <>
           <TableContainer component={Paper} variant="outlined">
-            <Table size="small" aria-label="Job logs">
+            <Table size="small" aria-label="Job logs" sx={COMPACT_TABLE}>
               <TableHead>
                 <TableRow sx={{ bgcolor: "action.hover" }}>
-                  <TableCell sx={{ fontWeight: 600 }}>Target Device</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Type</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>State</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Duration</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Result</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Submitted At</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Transcript</TableCell>
-                  {page.canCancel && <TableCell sx={{ fontWeight: 600 }}>Actions</TableCell>}
+                  <TableCell>Target Device</TableCell>
+                  <TableCell>Type</TableCell>
+                  <TableCell>State</TableCell>
+                  <TableCell>Duration</TableCell>
+                  <TableCell>Result</TableCell>
+                  <TableCell>Submitted At</TableCell>
+                  {transcriptColumn && <TableCell>Transcript</TableCell>}
+                  {page.canCancel && <TableCell>Actions</TableCell>}
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -331,46 +421,49 @@ export function JobLogsPanel({
                   const isExpanded = expandedJobId === job.job_id;
                   const vendor = devices[job.target_device_id]?.vendor;
                   const isBackupJob = /backup|snapshot|export/i.test(job.job_type);
-                  // The API's terminal_reason repeats the terminal state on a clean run (review §3); a
-                  // completed job has nothing to explain, so the column reads "--" there and keeps the
-                  // reason only where it is one -- a failure, rejection or unknown outcome.
-                  const reasonText = job.state === "COMPLETED" ? "—" : (job.terminal_reason || "—");
+                  const result = resultWords(job);
                   return (
                     <Fragment key={job.job_id}>
                     <TableRow
                       hover
-                      onClick={() => setExpandedJobId(isExpanded ? null : job.job_id)}
+                      onClick={() => toggleJob(job.job_id)}
                       sx={{ cursor: "pointer" }}
                       aria-expanded={isExpanded}
+                      data-job-id={job.job_id}
                     >
                       <TableCell sx={{ fontWeight: 500 }}>
                         {job.device_name ?? devices[job.target_device_id]?.name ?? "Unknown device"}
                       </TableCell>
-                      <TableCell sx={{ fontSize: "0.8rem" }}><Presented label={jobTypeLabel(job.job_type, vendor)} raw={job.job_type} /></TableCell>
+                      <TableCell><Presented label={jobTypeLabel(job.job_type, vendor)} raw={job.job_type} /></TableCell>
                       <TableCell>
-                        <Chip label={jobStateWord(job.state)} title={job.state} size="small" color={stateColor(job.state)} variant="outlined" />
+                        <Chip label={jobStateWord(job.state)} title={job.state} size="small" color={stateColor(job.state)} variant="outlined" sx={{ height: 22 }} />
                       </TableCell>
                       {/* Duration is neutral -- never red; red is reserved for the state word, shown in the
                           State column above (review §3 "Duration is red on every completed job"). */}
                       <TableCell sx={{ fontFamily: MONO, fontVariantNumeric: "tabular-nums", color: m3.onSurface }}>
                         {formatDuration(job.duration_ms)}
                       </TableCell>
+                      {/* The outcome word the record carries (readiness: Ready / Not ready; log collection: Partial), then the
+                          reason where there is one (P1-4B); the raw code stays visible as a muted suffix. */}
                       <TableCell
+                        data-result
                         sx={{
                           maxWidth: 360,
                           overflow: "hidden",
                           textOverflow: "ellipsis",
                           whiteSpace: isExpanded ? "normal" : "nowrap",
                           color: job.state === "FAILED" ? "error.main" : "text.secondary",
-                          fontSize: "0.8rem",
                         }}
                       >
-                        {reasonText}
+                        {result.outcome && <Presented label={result.outcome} raw={job.outcome} />}
+                        {result.outcome && result.reason && " · "}
+                        {result.reason && <Presented label={readinessReasonLabel(result.reason)} raw={result.reason} suffix />}
+                        {!result.outcome && !result.reason && "—"}
                       </TableCell>
-                      <TableCell sx={{ whiteSpace: "nowrap" }}>
+                      <TableCell sx={{ fontFamily: MONO }}>
                         <Stamp at={job.submitted_at} />
                       </TableCell>
-                      <TableCell><JobTranscriptDrawer jobId={job.job_id} hasTranscript={isBackupJob && job.has_transcript} /></TableCell>
+                      {transcriptColumn && <TableCell><JobTranscriptDrawer jobId={job.job_id} hasTranscript={isBackupJob && job.has_transcript} /></TableCell>}
                       {page.canCancel && <TableCell>
                         {["REQUESTED", "CLAIMED", "EXECUTING"].includes(job.state) && <Button size="small"
                           disabled={cancelling.includes(job.job_id)} onClick={event => {
@@ -378,15 +471,15 @@ export function JobLogsPanel({
                           }}>{cancelling.includes(job.job_id) ? "Cancel requested" : "Cancel"}</Button>}
                       </TableCell>}
                     </TableRow>
-                    {isExpanded && <TableRow key={`${job.job_id}-details`}>
-                      <TableCell colSpan={page.canCancel ? 8 : 7}>
+                    {isExpanded && <TableRow key={`${job.job_id}-details`} data-job-detail={job.job_id}>
+                      <TableCell colSpan={columnCount} sx={{ height: "auto !important", whiteSpace: "normal !important", py: "12px !important" }}>
                         <Typography variant="body2" sx={{ mb: 0.75 }} data-outcome-line>
                           {outcomeLine({ state: job.state, durationMs: job.duration_ms, at: job.finished_at ?? job.submitted_at })}
                           <Box component="span" sx={{ ml: 1, color: m3.onSurfaceVar }}>
                             <Presented label={jobTypeLabel(job.job_type, vendor)} raw={job.job_type} suffix />
                           </Box>
                         </Typography>
-                        <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap>
+                        <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap alignItems="center">
                           {([["Job ID", job.job_id], ["Device ID", job.target_device_id]] as const).map(([label, value]) => (
                             <Stack key={label} direction="row" spacing={0.5} alignItems="center">
                               <Typography variant="caption">{label}: <span style={{ fontFamily: MONO }}>{value}</span></Typography>
@@ -396,6 +489,10 @@ export function JobLogsPanel({
                               }}>⧉</IconButton>
                             </Stack>
                           ))}
+                          <Button size="small" sx={{ textTransform: "none" }} onClick={(event) => {
+                            event.stopPropagation();
+                            void navigator.clipboard.writeText(window.location.href);
+                          }}>Copy link to this job</Button>
                         </Stack>
                       </TableCell>
                     </TableRow>}

@@ -4,7 +4,7 @@ import type { ScreenId } from "./types";
 // this list with the actual tab definitions; the full E2E suite consumes it.
 export const TAB_COVERAGE: readonly { screen: ScreenId; tabList: string; labels: readonly string[] }[] = [
   { screen: "inventory", tabList: "Lifecycle view", labels: ["Fleet", "Catalog"] },
-  { screen: "operations", tabList: "Operations sections", labels: ["HA & readiness", "Jobs", "Queue", "History", "Diagnostics"] },
+  { screen: "operations", tabList: "Operations sections", labels: ["HA & readiness", "Jobs", "Diagnostics"] },
   { screen: "administration", tabList: "Registry", labels: ["Device management", "Inventory exclusions", "Credentials"] },
   { screen: "administration", tabList: "Access", labels: ["Local identities", "Sessions", "Roles & Permissions", "SSH trust", "LDAP Settings"] },
   { screen: "administration", tabList: "Platform", labels: ["System", "Notifications", "Delivery plan"] },

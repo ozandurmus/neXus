@@ -36,13 +36,11 @@ function stubFetch(devices: unknown[], summary: unknown | null) {
   }));
 }
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.unstubAllGlobals(); window.history.replaceState(null, "", "/"); });
 
 const TABS = [
   { label: "HA & readiness", marker: "No HA pair or cluster enrolled" },
   { label: "Jobs", marker: "All jobs" },
-  { label: "Queue", marker: "Queued and running jobs" },
-  { label: "History", marker: "Finished jobs" },
   { label: "Diagnostics", marker: "Diagnostics could not be loaded or access is unavailable." },
 ];
 
@@ -151,13 +149,17 @@ describe("OperationsScreen tabs", () => {
     expect(screen.getAllByText("Unknown").length).toBeGreaterThan(0);
   });
 
-  it("moves the Job history action into the Failed jobs KPI card and switches to the History tab", async () => {
+  it("links the Failed jobs KPI card to the Jobs table with its Failed pill pressed (roadmap 2.4)", async () => {
     stubFetch(MEMBERS, null);
     render(withTheme(<OperationsScreen />));
-    // Exactly one "Job history" control: the header no longer duplicates the History tab with its own button.
-    expect(await screen.findAllByText("Job history")).toHaveLength(1);
-    fireEvent.click(screen.getByText("Job history"));
-    expect(await screen.findByText("Finished jobs")).toBeInTheDocument();
+    // Exactly one link: the header no longer duplicates the job table with its own button.
+    expect(await screen.findAllByText("Open failed jobs")).toHaveLength(1);
+    fireEvent.click(screen.getByText("Open failed jobs"));
+    expect(await screen.findByText("All jobs")).toBeInTheDocument();
+    const pills = await screen.findByRole("group", { name: "Job state" });
+    await waitFor(() => expect(within(pills).getByRole("button", { name: /^Failed/ })).toHaveAttribute("aria-pressed", "true"));
+    expect(within(pills).getByRole("button", { name: /^All/ })).toHaveAttribute("aria-pressed", "false");
+    expect(new URLSearchParams(window.location.search).get("tab")).toBe("jobs");
   });
 });
 

@@ -3,7 +3,9 @@ package com.securityexpert.nexus.ui2.service.audit;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -93,11 +95,30 @@ public final class JobLogQueryService {
             @JsonProperty("completed_24h") long completed24h, @JsonProperty("failed_24h") long failed24h,
             @JsonProperty("outcome_unknown_24h") long outcomeUnknown24h, @JsonProperty("rejected_24h") long rejected24h,
             @JsonProperty("cancelled_24h") long cancelled24h, @JsonProperty("submitted_24h") long submitted24h,
-            @JsonProperty("running") long running) {
+            @JsonProperty("running") long running,
+            /** Every job ever recorded, by state (upper-case state word to count); the Jobs screen's state pills read
+             *  their counts here, so a pill never shows a number from a different window than the list it filters. */
+            @JsonProperty("by_state") Map<String, Long> byState) {
+    }
+
+    /**
+     * Per-state counts as the pills need them: the state word upper-cased and trimmed, blank or null states dropped,
+     * duplicates (two spellings of one state) summed, in the order they arrived. Pure, so it is unit-tested without a store.
+     */
+    static Map<String, Long> byStateOf(List<Map.Entry<String, Long>> rows) {
+        Map<String, Long> out = new LinkedHashMap<>();
+        for (var row : rows) {
+            String state = row.getKey() == null ? "" : row.getKey().strip().toUpperCase(java.util.Locale.ROOT);
+            if (state.isEmpty()) continue;
+            out.merge(state, row.getValue() == null ? 0L : row.getValue(), Long::sum);
+        }
+        return java.util.Collections.unmodifiableMap(out);
     }
 
     public Stats stats() {
         return transactionBoundary.inTransaction(dsl -> {
+            List<Map.Entry<String, Long>> byState = dsl.fetch("select state, count(*) as n from jobs group by state order by state")
+                    .map(row -> Map.entry(String.valueOf(row.get("state", String.class)), row.get("n", Long.class)));
             var r = dsl.fetchOne("select count(*) as total, "
                     + "count(*) filter (where state in ('COMPLETED','FAILED','OUTCOME_UNKNOWN','REJECTED','CANCELLED') "
                     + "and finished_at >= now() - interval '24 hours') as total_24h, "
@@ -110,7 +131,8 @@ public final class JobLogQueryService {
                     + "count(*) filter (where state in ('REQUESTED', 'CLAIMED', 'EXECUTING')) as running from jobs");
             return new Stats(r.get("total", Long.class), r.get("total_24h", Long.class), r.get("completed_24h", Long.class),
                     r.get("failed_24h", Long.class), r.get("outcome_unknown_24h", Long.class), r.get("rejected_24h", Long.class),
-                    r.get("cancelled_24h", Long.class), r.get("submitted_24h", Long.class), r.get("running", Long.class));
+                    r.get("cancelled_24h", Long.class), r.get("submitted_24h", Long.class), r.get("running", Long.class),
+                    byStateOf(byState));
         });
     }
 

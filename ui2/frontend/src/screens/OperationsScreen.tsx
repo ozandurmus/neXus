@@ -12,17 +12,51 @@ import { ScreenHeader, MetricGrid, MetricCard, ScreenRoot } from "../shell/Scree
 import { M3Button, M3Tabs } from "../shell/M3Widgets";
 import { StatePanel } from "../shell/States";
 import { m3 } from "../theme/m3Theme";
-import { JobLogsPanel } from "./JobLogsPanel";
+import { JobLogsPanel, type JobPill } from "./JobLogsPanel";
 import { DiagnosticPanel } from "./DiagnosticPanel";
-import { urlParam } from "../shell/urlParams";
+import { urlParam, writeUrlParams } from "../shell/urlParams";
+import { useJobWindow } from "../shell/JobWindow";
 import { getJobStats, getCpFailoverRun, listDevices, listCpFailoverSummary, runCpFailoverReadiness, type CpFailoverSummary, type DeviceSummary } from "../auth/adminApi";
 import { deriveClusterTitle } from "./InventoryPanels";
 import { readinessReasonLabel } from "../shell/presenters";
+
+/** The three Operations tabs; Queue and History (roadmap 2.4) are state pills on Jobs, their old routes still land there. */
+const TAB_SLUGS = ["ha", "jobs", "diagnostics"] as const;
+/** `?tab=<slug>` to a tab index and, for the retired Queue / History routes, the pill that stands for them. */
+export function tabFromUrl(slug: string | null): { readonly tab: number; readonly pill: JobPill | null } {
+  switch (slug) {
+    case "jobs": return { tab: 1, pill: null };
+    case "queue": return { tab: 1, pill: "active" };
+    case "history": return { tab: 1, pill: "finished" };
+    case "diagnostics": return { tab: 2, pill: null };
+    default: return { tab: 0, pill: null };
+  }
+}
+
+/**
+ * The one-line headline under the title (UI review 2026-10-18 §4.3): number · noun · denominator · age, from what the
+ * screen already loads. A part whose read failed is written UNKNOWN, never 0; a part not yet read is left out.
+ */
+export function operationsHeadline(input: {
+  readonly stats: { readonly failed24h: number; readonly total24h: number } | null | "failed";
+  readonly clusters: number | null;
+  readonly ready: number;
+  readonly unknown: number;
+  readonly window: { readonly open: boolean; readonly label: string | null };
+}): string {
+  const parts: string[] = [];
+  if (input.stats === "failed") parts.push("failed jobs UNKNOWN", "finished jobs UNKNOWN");
+  else if (input.stats) parts.push(`${input.stats.failed24h} failed`, `${input.stats.total24h} finished (24 h)`);
+  if (input.clusters !== null) parts.push(`${input.ready} of ${input.clusters} clusters ready`, `${input.unknown} unknown`);
+  parts.push(input.window.open ? "job window open now" : (input.window.label ?? "job window UNKNOWN").replace(/^Next window: /, "next window "));
+  return parts.join(" · ");
+}
 
 /** Operations screen for observed HA state, on-demand readiness and jobs. */
 export function OperationsScreen() {
   // Counted from /api/v2/jobs (the same reads the Jobs screen makes); a failed read says so, never 0.
   const [jobStats, setJobStats] = useState<{ total24h: number; completed24h: number; failed24h: number; otherTerminal24h: number; otherLabel: string; running: number } | null>(null);
+  const [jobStatsFailed, setJobStatsFailed] = useState(false);
   useEffect(() => {
     getJobStats()
       .then((s) => {
@@ -30,9 +64,11 @@ export function OperationsScreen() {
         setJobStats({ total24h: s.total_24h, completed24h: s.completed_24h, failed24h: s.failed_24h,
           otherTerminal24h: others.reduce((n, [, c]) => n + c, 0),
           otherLabel: others.filter(([, c]) => c > 0).map(([w, c]) => `${c} ${w}`).join(" · "), running: s.running });
+        setJobStatsFailed(false);
       })
-      .catch(() => setJobStats(null));
+      .catch(() => { setJobStats(null); setJobStatsFailed(true); });
   }, []);
+  const jobWindow = useJobWindow();
 
   const [selectedCluster, setSelectedCluster] = useState<string | null>(null);
   // The enrolled clusters, from the device list (cluster reference -> members). Replaces two hardcoded
@@ -83,7 +119,13 @@ export function OperationsScreen() {
   const selectedReadinessRow = selectedReadinessRows.find(row => row.unitId === expandedUnit)
     ?? selectedReadinessRows.find(row => row.unitId === row.clusterId);
 
-  const [tab, setTab] = useState(urlParam("tab") === "diagnostics" ? 4 : urlParam("tab") === "jobs" ? 1 : 0);
+  const [initialRoute] = useState(() => tabFromUrl(urlParam("tab")));
+  const [tab, setTabState] = useState(initialRoute.tab);
+  // A pill the screen asks of the Jobs table: the retired Queue / History routes on load, the Failed card's link later.
+  const [pillRequest, setPillRequest] = useState<{ pill: JobPill; seq: number } | null>(initialRoute.pill ? { pill: initialRoute.pill, seq: 0 } : null);
+  // The tab is part of the address (a job link needs `tab=jobs` beside `job=<id>`); replaced, never pushed.
+  const setTab = (next: number) => { setTabState(next); writeUrlParams({ tab: next === 0 ? null : TAB_SLUGS[next] }); };
+  const openJobs = (pill: JobPill) => { setTab(1); setPillRequest((current) => ({ pill, seq: (current?.seq ?? 0) + 1 })); };
 
   // A cluster header elsewhere in the product links here as ?screen=operations&cluster_ref=<ref>; preselect it.
   useEffect(() => {
@@ -179,7 +221,8 @@ export function OperationsScreen() {
       <SshHostKeyPanel />
       <ScreenHeader
         title="Operations"
-        subtitle="Inspect observed HA roles, readiness evaluations and jobs."
+        subtitle={operationsHeadline({ stats: jobStatsFailed ? "failed" : jobStats, clusters: clusters ? clusters.length : null,
+          ready: readinessCounts.ready, unknown: readinessCounts.unknown, window: jobWindow })}
         actions={<M3Button emphasis="filled" lockedReason="Schedule authoring is not available yet">Schedule collection</M3Button>}
       />
       <MetricGrid>
@@ -209,10 +252,10 @@ export function OperationsScreen() {
           <Typography sx={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase", color: m3.onSurfaceVar }}>Failed (24 h)</Typography>
           <Typography variant="h1">{jobStats ? jobStats.failed24h : "—"}</Typography>
           <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>{jobStats ? (jobStats.failed24h === 0 ? "none" : `${jobStats.failed24h} failed jobs`) : "read failed"}</Typography>
-          {/* The header's "Job history" button duplicated the History tab (review §3); it lives here instead. */}
-          <Box component="button" onClick={() => setTab(3)}
+          {/* The card's one link opens the Jobs table on its Failed pill (review §5: the team lead's shift triage). */}
+          <Box component="button" onClick={() => openJobs("failed")}
             sx={{ all: "unset", cursor: "pointer", color: m3.primary, fontSize: 13, fontWeight: 500 }}>
-            Job history
+            Open failed jobs
           </Box>
         </Card>
       </MetricGrid>
@@ -227,9 +270,8 @@ export function OperationsScreen() {
           },
           { label: "Jobs", panel: <Box><Typography variant="subtitle2" sx={{ mb: 1 }}>All jobs</Typography><JobLogsPanel
             initialState={urlParam("state") ?? ""} initialJobType={urlParam("job_type") ?? ""}
-            initialSinceHours={urlParam("since_hours") ? Number(urlParam("since_hours")) : undefined} initialText={urlParam("q") ?? ""} /></Box> },
-          { label: "Queue", panel: <Box><Typography variant="subtitle2" sx={{ mb: 1 }}>Queued and running jobs</Typography><JobLogsPanel initialState="REQUESTED,CLAIMED,EXECUTING" emptyTitle="Queue empty" emptyBody="0 requested · 0 claimed · 0 executing" /></Box> },
-          { label: "History", panel: <Box><Typography variant="subtitle2" sx={{ mb: 1 }}>Finished jobs</Typography><JobLogsPanel initialState="COMPLETED,FAILED,OUTCOME_UNKNOWN,REJECTED" /></Box> },
+            initialSinceHours={urlParam("since_hours") ? Number(urlParam("since_hours")) : undefined} initialText={urlParam("q") ?? ""}
+            pillRequest={pillRequest} /></Box> },
           { label: "Diagnostics", panel: <DiagnosticPanel /> },
         ]}
       />
