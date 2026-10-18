@@ -38,8 +38,8 @@ ui2:
   scheduling:
     enabled: ${UI2_SCHEDULING_ENABLED:true}
   system-log:
-    # Scheduled system-log collection (DEVICE_SYSTEM_LOG_PHASE_B_CONTRACT.md section 3.1). OFF by default: fleet
-    # enablement waits for the one-device pilot; the manual syslog-collect-start works regardless.
+    # Scheduled system-log collection (DEVICE_SYSTEM_LOG_PHASE_B_CONTRACT.md section 3.1). OFF by default in the code;
+    # the service deployment manifest turns it on for the fleet (PO 2026-10-18). Manual syslog-collect-start works regardless.
     scheduled-collection:
       enabled: ${UI2_SYSTEM_LOG_SCHEDULED_COLLECTION_ENABLED:false}
   db:
