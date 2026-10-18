@@ -90,6 +90,7 @@ class AuditCoverageCompletenessTest {
             Map.entry("pseudonym_registry", "V53: derived AIView pseudonym claims, keyed by HMAC"),
             Map.entry("compliance_evaluation", "V59: derived from the configuration run, recomputable"),
             Map.entry("device_policy_install", "V60: collected nightly read; the jobs row is audited"),
+            Map.entry("device_identity_check", "V165: verdict of the worker's last pinned-identity comparison, no fingerprint; the jobs row is audited"),
             Map.entry("grid_member", "V72: collected per inventory run; the jobs row is audited"),
             Map.entry("infoblox_grid_summary", "V92: collected per inventory run; the jobs row is audited"),
             Map.entry("policy_snapshot", "V115: latest parsed collected policy; the jobs row is audited"),

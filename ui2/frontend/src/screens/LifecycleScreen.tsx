@@ -70,13 +70,24 @@ export function LifecycleScreen() {
   return <Box sx={{ px: 3, pb: 3 }}><M3Tabs ariaLabel="Lifecycle view" tabs={[{ label: "Fleet", panel: panel }, { label: "Catalog", panel: <LifecycleCatalogPanel onChanged={fleet.refresh} /> }]} /></Box>;
 }
 
+/** The one lifecycle sentence of a device: its risk word, then the support dates and licence expiry that explain it. */
+export function lifecycleSentence(data: LifecycleDevice | null | undefined, error: string | null): string {
+  return `${error ? "Unavailable" : data?.risk ?? "UNKNOWN"}`
+    + `${data?.status === "NO_LIFECYCLE_DATA" ? " (no lifecycle data imported)" : ""}`
+    + `${data?.hardware?.catalog?.end_of_support ? ` · Hardware support: ${data.hardware.catalog.end_of_support}` : ""}`
+    + `${data?.software?.catalog?.end_of_support ? ` · Software support: ${data.software.catalog.end_of_support}` : ""}`
+    + `${data?.nearest_license?.expiry ? ` · License expiry: ${data.nearest_license.expiry}` : ""}`
+    + `${error ? ` · ${error}` : ""}`;
+}
+
+/** The loose line, for a device whose screen has no Platform identity grid to hold the cell (no Configuration tab). */
 export function DeviceLifecycleLine({ deviceId }: { deviceId: string }) {
   const data = useFetchOnMount(() => getDeviceLifecycle(deviceId), lifecycleError);
-  return <Typography variant="body2" color="text.secondary">Lifecycle: {data.error ? "Unavailable" : data.data?.risk ?? "UNKNOWN"}
-    {data.data?.status === "NO_LIFECYCLE_DATA" && " (no lifecycle data imported)"}
-    {data.data?.hardware?.catalog?.end_of_support && ` · Hardware support: ${data.data.hardware.catalog.end_of_support}`}
-    {data.data?.software?.catalog?.end_of_support && ` · Software support: ${data.data.software.catalog.end_of_support}`}
-    {data.data?.nearest_license?.expiry && ` · License expiry: ${data.data.nearest_license.expiry}`}
-    {data.error && ` · ${data.error}`}
-  </Typography>;
+  return <Typography variant="body2" color="text.secondary">Lifecycle: {lifecycleSentence(data.data, data.error)}</Typography>;
+}
+
+/** The same sentence as a cell of the Platform identity grid (UI review 2026-10-18, F-9). */
+export function LifecycleCell({ deviceId }: { deviceId: string }) {
+  const data = useFetchOnMount(() => getDeviceLifecycle(deviceId), lifecycleError);
+  return <>{data.data === null && data.error === null ? "Loading…" : lifecycleSentence(data.data, data.error)}</>;
 }

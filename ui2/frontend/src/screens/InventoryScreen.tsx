@@ -14,7 +14,7 @@ import { PLANE_ADMIN, PLANE_COLLECT } from "../shell/actionAccess";
 import { plural } from "../shell/plural";
 import { MONO, m3 } from "../theme/m3Theme";
 import { RoleChip } from "../shell/States";
-import { FilterBar, FilterRow, ListSettingsMenu, contentVersionText, downloadText, isDeviceLive, toCsv } from "./DeviceShared";
+import { FilterBar, FilterRow, ListSettingsMenu, contentVersionText, downloadText, isDeviceLive, orderMembers, toCsv } from "./DeviceShared";
 export { isDeviceLive } from "./DeviceShared";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { useListSearch } from "../shell/listSearch";
@@ -24,6 +24,7 @@ import { JobStatusIndicator } from "../shell/JobStatusIndicator";
 import { DeviceInventoryPanels, ClusterDetailPanels, VendorAvatar, deriveClusterTitle } from "./InventoryPanels";
 import { ClusterConfigurationDetail, DeviceConfigurationDetail } from "./ConfigurationDetail";
 import { LifecycleScreen } from "./LifecycleScreen";
+import { FleetSummary } from "./FleetSummary";
 
 function describeApiError(err: unknown): string {
   const apiErr = err as Partial<ApiError>;
@@ -150,6 +151,11 @@ function DeviceRow({
   // sense a reader would expect from that word (Product Owner, 2026-09-22: "Live gözüküyor ama
   // cihazdan veri çekemiyorum" -- confirmed but never collected read as fully live).
   const isLive = isDeviceLive(device);
+  // The tree follows the open device (UI review 2026-10-18, F-18): a selected row scrolls into view, only as far as needed.
+  const rowRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (selected) rowRef.current?.scrollIntoView?.({ block: "nearest" });
+  }, [selected]);
 
   // Review §3/§4: 44 px rows (two compact lines), the state chip only when the device is not Live -- when all
   // are Live the chip is noise; the list caption carries the Live count.
@@ -166,6 +172,8 @@ function DeviceRow({
           : undefined
       }
       data-row="device"
+      data-selected={selected ? "true" : undefined}
+      ref={rowRef}
       sx={{
         display: "flex",
         alignItems: "center",
@@ -356,6 +364,27 @@ export function DeviceList(props: DeviceListProps) {
     return () => { cancelled = true; clearTimeout(timer); };
   }, [groupByManager, managerKey]);
 
+  // By manager, the open device's manager and domain open, so the tree can scroll to it (F-18).
+  const { selectedDeviceId: openDeviceId, selectedClusterRef: openClusterRef } = rest;
+  useEffect(() => {
+    if (!groupByManager || (!openDeviceId && !openClusterRef)) return;
+    const clusterMembers = new Set(openClusterRef ? devices.filter((d) => d.cluster_member_ref === openClusterRef).map((d) => d.device_id) : []);
+    setOpen((prev) => {
+      const next = new Set(prev);
+      for (const manager of treeManagers) {
+        const tree = trees.get(manager.device_id);
+        if (!tree) continue;
+        managerGroups(tree).forEach((g, i) => {
+          if ((openDeviceId && g.deviceIds.has(openDeviceId)) || [...clusterMembers].some((id) => g.deviceIds.has(id))) {
+            next.add(manager.device_id);
+            next.add(`${manager.device_id}|${g.domain ?? i}`);
+          }
+        });
+      }
+      return next.size === prev.size ? prev : next;
+    });
+  }, [groupByManager, openDeviceId, openClusterRef, trees]);
+
   if (!groupByManager || managers.length === 0 || (treeManagers.length > 0 && trees.size === 0)) return <FlatDeviceList devices={devices} {...rest} />;
   const byId = new Map(devices.map((d) => [d.device_id, d]));
   const placed = new Set<string>();
@@ -474,6 +503,7 @@ function FlatDeviceList({
   selectedVs = null,
   clusterOnly = false,
   showVirtualSystems = true,
+  showMembers = true,
   onSelectDevice,
   onSelectCluster,
 }: {
@@ -484,9 +514,13 @@ function FlatDeviceList({
   readonly clusterOnly?: boolean;
   /** False (Configuration): virtual systems are not tree nodes; the entity's own detail lists them. */
   readonly showVirtualSystems?: boolean;
+  /** Member rows under a cluster that has no virtual systems (UI review 2026-10-18, F-18); a VSX cluster lists its virtual systems instead. */
+  readonly showMembers?: boolean;
   readonly onSelectDevice: (device: DeviceSummary, selectedVs?: string) => void;
   readonly onSelectCluster: (ref: string, members: DeviceSummary[], selectedVs?: string) => void;
 }) {
+  const [openMembers, setOpenMembers] = useState<ReadonlySet<string>>(new Set());
+  const listRef = useRef<HTMLDivElement>(null);
   const [expandedRefs, setExpandedRefs] = useState<ReadonlySet<string>>(new Set());
   const [collapsedRefs, setCollapsedRefs] = useState<ReadonlySet<string>>(new Set());
   const [expandedStandaloneRefs, setExpandedStandaloneRefs] = useState<ReadonlySet<string>>(new Set());
@@ -502,6 +536,24 @@ function FlatDeviceList({
       standalone.push(device);
     }
   }
+
+  // Opening a member (from the tree, a link, the global search) opens its cluster's member rows so the open device is visible.
+  const selectedClusterOfDevice = selectedDeviceId
+    ? [...groups.entries()].find(([, members]) => members.some((m) => m.device_id === selectedDeviceId))?.[0] ?? null : null;
+  useEffect(() => {
+    if (selectedClusterOfDevice) setOpenMembers((prev) => (prev.has(selectedClusterOfDevice) ? prev : new Set(prev).add(selectedClusterOfDevice)));
+  }, [selectedClusterOfDevice]);
+  // The open cluster or virtual system scrolls into view too; the member rows are mounted by then (the effect follows openMembers).
+  useEffect(() => {
+    if (!selectedClusterRef) return;
+    const marked = listRef.current?.querySelectorAll('[data-selected="true"]');
+    marked?.[marked.length - 1]?.scrollIntoView?.({ block: "nearest" });
+  }, [selectedClusterRef, selectedVs]);
+  const toggleMembers = (ref: string) => setOpenMembers((prev) => {
+    const next = new Set(prev);
+    if (next.has(ref)) next.delete(ref); else next.add(ref);
+    return next;
+  });
 
   const toggle = (ref: string) => {
     if (clusterOnly) {
@@ -528,12 +580,14 @@ function FlatDeviceList({
   });
 
   return (
-    <Stack spacing={1.25}>
+    <Stack spacing={1.25} ref={listRef}>
       {[...groups.entries()].map(([ref, members]) => {
         const isCollapsed = clusterOnly ? !expandedRefs.has(ref) : collapsedRefs.has(ref);
         const firstMember = members[0];
         const isPaloAlto = firstMember?.vendor_hint === "palo_alto";
         const isSelected = selectedClusterRef === ref;
+        // F-18: the cluster stays highlighted while one of its members is open (the member row carries the stronger mark).
+        const holdsSelectedDevice = !isSelected && members.some((m) => m.device_id === selectedDeviceId);
         const clusterTitle = deriveClusterTitle(ref, members);
         const clusterVsList = Array.from(
           new Set(
@@ -542,6 +596,10 @@ function FlatDeviceList({
             )
           )
         ).filter(Boolean).sort();
+        // A cluster with virtual systems lists those; one without lists its members (F-18). Either way the chevron opens something.
+        const memberMode = showMembers && clusterVsList.length === 0;
+        const membersOpen = openMembers.has(ref);
+        const hasChevron = memberMode || (showVirtualSystems && clusterVsList.length > 0);
 
         return (
           <Box key={ref} sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
@@ -563,6 +621,8 @@ function FlatDeviceList({
                 }
               }}
               data-row="cluster"
+              data-selected={isSelected ? "true" : undefined}
+              data-holds-selected={holdsSelectedDevice ? "true" : undefined}
               sx={{
                 display: "flex",
                 alignItems: "center",
@@ -571,10 +631,10 @@ function FlatDeviceList({
                 boxSizing: "border-box",
                 px: 1,
                 cursor: "pointer",
-                bgcolor: isSelected ? m3.primaryContainer : m3.scLow,
+                bgcolor: isSelected ? m3.primaryContainer : holdsSelectedDevice ? m3.secondaryContainer : m3.scLow,
                 borderRadius: "8px",
                 border: "1px solid",
-                borderColor: isSelected ? m3.primary : m3.outlineVar,
+                borderColor: isSelected || holdsSelectedDevice ? m3.primary : m3.outlineVar,
                 "&:hover": { borderColor: m3.primary },
               }}
             >
@@ -600,12 +660,21 @@ function FlatDeviceList({
                       dense
                     />
                   )}
-                  {showVirtualSystems && (
+                  {hasChevron && (
                   <Box
                     component="span"
+                    role="button"
+                    tabIndex={0}
+                    aria-expanded={memberMode ? membersOpen : !isCollapsed}
                     onClick={(e) => {
                       e.stopPropagation();
-                      toggle(ref);
+                      if (memberMode) toggleMembers(ref); else toggle(ref);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.stopPropagation();
+                        if (memberMode) toggleMembers(ref); else toggle(ref);
+                      }
                     }}
                     sx={{
                       cursor: "pointer",
@@ -614,9 +683,11 @@ function FlatDeviceList({
                       fontSize: "0.875rem",
                       "&:hover": { color: m3.primary },
                     }}
-                    title={isCollapsed ? "Expand virtual systems" : "Collapse virtual systems"}
+                    title={memberMode
+                      ? (membersOpen ? "Collapse members" : "Expand members")
+                      : (isCollapsed ? "Expand virtual systems" : "Collapse virtual systems")}
                   >
-                    {isCollapsed ? "▼" : "▲"}
+                    {(memberMode ? !membersOpen : isCollapsed) ? "▼" : "▲"}
                   </Box>
                   )}
                 </Box>
@@ -657,6 +728,7 @@ function FlatDeviceList({
                         return (
                           <Box
                             key={vsName}
+                            data-selected={isVsSelected ? "true" : undefined}
                             role="button"
                             tabIndex={0}
                             onClick={(e) => {
@@ -718,6 +790,21 @@ function FlatDeviceList({
                     </Stack>
                   </Box>
                 )}
+              </Stack>
+            )}
+            {memberMode && membersOpen && (
+              // F-18: the members of a cluster with no virtual systems, M1 then M2, each opening its own device screen. The
+              // cluster row above stays highlighted while one of them is open.
+              <Stack spacing={0.75} data-members={ref}>
+                {orderMembers(members).map((member) => (
+                  <DeviceRow
+                    key={member.device_id}
+                    device={member}
+                    indented
+                    selected={member.device_id === selectedDeviceId && !selectedVs}
+                    onSelect={(dev) => onSelectDevice(dev)}
+                  />
+                ))}
               </Stack>
             )}
           </Box>
@@ -1202,6 +1289,10 @@ export function InventoryScreen() {
         }
         detail={
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, minHeight: 0 }}>
+            {(selectedCluster || selectedDevice) && (
+              // Back to the landing without picking another row (P1-1); nothing is lost, the list keeps its filters.
+              <Box><M3Button emphasis="text" onClick={() => { setSelectedDevice(null); setSelectedCluster(null); setSelectedDeviceVs(null); }}>← Fleet summary</M3Button></Box>
+            )}
             {selectedCluster ? (
               <ClusterDetailPanels
                 key={selectedCluster.ref}
@@ -1224,7 +1315,7 @@ export function InventoryScreen() {
                   device={selectedDevice}
                   initialVs={selectedDeviceVs ?? undefined}
                   onSelectVs={(vs) => setSelectedDeviceVs(vs)}
-                  belowHeader={<Box component="a" href={`?screen=policy&device_id=${encodeURIComponent(selectedDevice.device_id)}`} sx={{ color: m3.primary, alignSelf: "flex-start" }}>Open assigned policy</Box>}
+                  policyHref={`?screen=policy&device_id=${encodeURIComponent(selectedDevice.device_id)}`}
                   managedEstate={selectedDevice.role === "management_server" && selectedDevice.vendor_hint !== "bluecoat" && selectedDevice.vendor_hint !== "fortinet" ? (
                     <ManagementTreePanel
                       deviceId={selectedDevice.device_id}
@@ -1246,15 +1337,15 @@ export function InventoryScreen() {
                     : undefined}
                 />
               </Stack>
-            ) : (
-              // Review §3: the detail tabs (Interfaces, Routing, Cluster members, Backup, Identity)
-              // appear once a device or cluster is chosen; before that there is nothing for them to show.
+            ) : (devices?.length ?? 0) === 0 ? (
               <EmptyPanel
-                title={(devices?.length ?? 0) === 0 ? "No device to show" : "Select a device or cluster"}
-                body={(devices?.length ?? 0) === 0
-                  ? "Enrol a device from Administration; its interfaces, routing, cluster members and identity appear here once it is read."
-                  : `${registeredLabel(devices ?? [])}. Choose one on the left to see its interfaces, routing, cluster members, configuration, backup, logs and identity. Interface evidence is read over SSH or HTTPS; values are observed, never written.`}
+                title="No device to show"
+                body="Enrol a device from Administration; its interfaces, routing, cluster members and identity appear here once it is read."
               />
+            ) : (
+              // The landing (P1-1): the estate inventory summary where the empty "Select a device" pane was; the detail tabs
+              // (Interfaces, Routing, Cluster members, Backup, Identity) appear once a device or cluster is chosen.
+              <FleetSummary countLabel={registeredLabel(devices ?? [])} />
             )}
           </Box>
         }

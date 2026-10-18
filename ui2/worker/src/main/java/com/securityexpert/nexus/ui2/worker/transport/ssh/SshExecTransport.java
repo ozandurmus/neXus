@@ -970,6 +970,23 @@ public final class SshExecTransport implements DeviceTransport {
         }
     }
 
+    /** True when a fingerprint was already pinned for this endpoint before the check (so a match is a comparison, not a first use). */
+    private boolean pinnedBefore(String ref, ConnectionTarget target, String algorithm) {
+        try {
+            return trustRuleResolver.resolveExpectedFingerprint(ref, target.host(), target.port(), algorithm)
+                    .filter(fingerprint -> !fingerprint.isBlank()).isPresent();
+        } catch (RuntimeException unresolved) {
+            return false;
+        }
+    }
+
+    /** The "Identity verified" badge follows this (PO decision 2026-10-18); it records the outcome and never alters it. */
+    private void recordPinnedComparison(ConnectionTarget target, boolean pinnedBefore) {
+        var owner = com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.owner();
+        if (hostKeyPolicy == null || owner == null) return;
+        hostKeyPolicy.recordPinnedComparison(owner.jobId(), owner.jobEpoch(), target.endpointId(), !pinnedBefore);
+    }
+
     HostKeyRepository trustedOnlyRepository(String trustRuleRef, ConnectionTarget target,
             String[] trustFailure, boolean[] trusted) {
         HostKeyVerifier verifier = new HostKeyVerifier(trustRuleResolver);
@@ -979,8 +996,10 @@ public final class SshExecTransport implements DeviceTransport {
                 String presented = fingerprintOf(key);
                 try {
                     String algorithm = new HostKey(host, key).getType();
+                    boolean pinnedBefore = pinnedBefore(trustRuleRef, target, algorithm);
                     var decision = verifier.verify(trustRuleRef, target.host(), target.port(), algorithm, presented);
                     trusted[0] = decision == HostKeyVerifier.Decision.MATCH;
+                    if (trusted[0]) recordPinnedComparison(target, pinnedBefore);
                     trustFailure[0] = switch (decision) {
                         case MATCH -> null;
                         case MISSING -> "TRUST_ENTRY_MISSING";

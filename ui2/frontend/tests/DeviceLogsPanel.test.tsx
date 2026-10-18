@@ -1,6 +1,8 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { DeviceLogsPanel, formatBytes, gapWords, MAX_LOADED_LINES } from "../src/screens/DeviceLogsPanel";
+import { DeviceLogsPanel, formatBytes, gapKindLabel, gapTone, gapWords, MAX_LOADED_LINES } from "../src/screens/DeviceLogsPanel";
+import { lineDeviceTime, windowWords } from "../src/screens/logLineTime";
+import { m3 } from "../src/theme/m3Theme";
 import type { SystemLogChunk, SystemLogGap, SystemLogSource, SystemLogSources } from "../src/auth/adminApi";
 
 // Synthetic data only: documentation addresses and example names.
@@ -49,6 +51,9 @@ interface Setup {
   pages?: Record<string, { text: string; next: number; eof: boolean; masked?: boolean }[]>;
   textFailure?: { status: number; body: unknown };
   crashNew?: number;
+  gaps?: SystemLogGap[];
+  /** The newest collection job the Jobs list reports. */
+  job?: { state: string };
 }
 
 function stub(setup: Setup = {}) {
@@ -73,7 +78,11 @@ function stub(setup: Setup = {}) {
         "X-Syslog-Masked": String(page.masked ?? !unmasked), "X-Syslog-Offset": String(offset), "X-Syslog-Next-Offset": String(page.next),
         "X-Syslog-Eof": String(page.eof), "X-Syslog-Lines": "3", "X-Syslog-Source": "cp_messages" } }));
     }
-    if (url.startsWith(`${BASE}/gaps`)) return Promise.resolve(json({ device_id: DEVICE, truncated: false, gaps: [GAP] }));
+    if (url.startsWith("/api/v2/jobs")) {
+      const items = setup.job ? [{ job_id: "job-1", job_type: "cp_system_log_collect", target_device_id: DEVICE, submitted_at: "2026-10-17T08:59:50Z", finished_at: "2026-10-17T09:00:00Z", state: setup.job.state, has_transcript: false }] : [];
+      return Promise.resolve(json({ items, total: items.length, page: 1, page_size: 1 }));
+    }
+    if (url.startsWith(`${BASE}/gaps`)) return Promise.resolve(json({ device_id: DEVICE, truncated: false, gaps: setup.gaps ?? [GAP] }));
     if (url.startsWith(`${BASE}/crash-files`)) {
       const n = setup.crashNew ?? 1;
       return Promise.resolve(json({ device_id: DEVICE, new_window_days: 7, counts: { NEW: n, PRESENT: 0, PRESENT_BEFORE_MONITORING: 1, REMOVED: 0 }, truncated: false,
@@ -126,20 +135,24 @@ describe("empty, disabled and refused states", () => {
 
 describe("summary strip, source pills and side panel", () => {
   it("shows the last collection, its window, the run outcomes and a crash-file alarm", async () => {
-    stub();
+    stub({ job: { state: "COMPLETED" } });
     render(<DeviceLogsPanel deviceId={DEVICE} />);
     const strip = await screen.findByRole("region", { name: "Log summary" });
-    expect(within(strip).getByText("Last collection")).toBeInTheDocument();
-    expect(within(strip).getByText(/Window 2026-10-17 08:00:00 to 2026-10-17 08:59:59 \(device time\)/)).toBeInTheDocument();
+    const sentence = within(strip).getByTestId("last-collection");
+    expect(sentence).toHaveTextContent("Last collection");
+    expect(sentence).toHaveTextContent("COMPLETED");
+    // the window of the newest lines, device time, as a short range
+    expect(sentence).toHaveTextContent("window 08:00–08:59 device time");
     expect(within(strip).getByText("collected 2")).toBeInTheDocument();
     expect(within(strip).getByText("backlog 1")).toBeInTheDocument();
-    expect(await within(strip).findByText("1 new crash or dump file")).toBeInTheDocument();
+    expect(await screen.findByText("1 new crash or dump file")).toBeInTheDocument();
   });
 
   it("shows no alarm when there are no new crash files", async () => {
     stub({ crashNew: 0 });
     render(<DeviceLogsPanel deviceId={DEVICE} />);
-    expect(await screen.findByText("no new crash or dump files")).toBeInTheDocument();
+    expect(await screen.findByText("No new crash or dump files")).toBeInTheDocument();
+    expect(screen.queryByText(/new crash or dump file$/)).toBeNull();
   });
 
   it("puts a BACKLOG, GAP or UNKNOWN pill on each source and says what a fast-rotating source means", async () => {
@@ -297,5 +310,188 @@ describe("the unmasked control", () => {
     // the server answered masked: the chip must say masked even though the switch is on
     await waitFor(() => expect(screen.getByText("Masked view")).toBeInTheDocument());
     expect(screen.queryByText("Unmasked view · recorded on the audit ledger")).toBeNull();
+  });
+});
+
+
+const PAN_LINES = [
+  '{"receive_time": "2026/10/18 06:11:02", "type": "SYSTEM", "eventid": "synthetic", "opaque": "synthetic text that is long"}',
+  '{"receive_time": "2026/10/18 06:11:09", "type": "CONFIG", "cmd": "synthetic"}',
+  "    continuation line without a time",
+].join("\n") + "\n";
+
+function panSummary(): SystemLogSources {
+  return summary({
+    last_job: { job_id: "job-1", at: "2026-10-18T03:13:03Z", outcomes: { COLLECTED: 2 }, window_from: "2026-10-18 00:15:00", window_to: "2026-10-18 06:11:00", window_time_basis: "DEVICE_LOCAL" },
+    sources: [source("pan_config", { status: "OK", stored: { chunks: 4, bytes: 7680, lines: 13, newest_chunk_at: "2026-10-18T03:13:03Z" } }),
+      source("pan_system", { status: "OK", stored: { chunks: 4, bytes: 2048, lines: 0, newest_chunk_at: null } })],
+  });
+}
+
+describe("filled state, summary first (UI review 2026-10-18, F-8)", () => {
+  it("reads the last collection as one sentence: when, how long ago, how it ended, the device-time window", async () => {
+    stub({ summary: panSummary(), job: { state: "COMPLETED" } });
+    render(<DeviceLogsPanel deviceId={DEVICE} vendorHint="palo_alto" />);
+    const sentence = await screen.findByTestId("last-collection");
+    expect(sentence).toHaveTextContent(/^Last collection2026-10-18 06:13· .+ ago· COMPLETED· window 00:15–06:11 device time$/);
+  });
+
+  it("says the job state is UNKNOWN when the Jobs list has none, and never invents COMPLETED", async () => {
+    stub({ summary: panSummary() });
+    render(<DeviceLogsPanel deviceId={DEVICE} vendorHint="palo_alto" />);
+    expect(await screen.findByTestId("last-collection")).toHaveTextContent("job state UNKNOWN");
+  });
+
+  it("gives each line source its status word and stored line count, counts in grey and only OK in green", async () => {
+    stub({ summary: panSummary(), job: { state: "COMPLETED" } });
+    render(<DeviceLogsPanel deviceId={DEVICE} vendorHint="palo_alto" />);
+    const list = await screen.findByRole("list", { name: "Lines stored per source" });
+    const config = within(list).getByLabelText("config · OK · 13 lines");
+    const system = within(list).getByLabelText("system · OK · 0 lines");
+    expect(within(config).getByText("OK").closest(".MuiChip-root")).toHaveStyle({ backgroundColor: m3.successContainer });
+    // a count, and a zero count, are neutral grey: zero is never green
+    expect(within(config).getByText("13 lines").closest(".MuiChip-root")).toHaveStyle({ backgroundColor: m3.scHigh });
+    expect(within(system).getByText("0 lines").closest(".MuiChip-root")).toHaveStyle({ backgroundColor: m3.scHigh });
+  });
+
+  it("counts of sources in the run are grey; a source that did not end cleanly keeps its state word and colour", async () => {
+    stub({ summary: summary(), job: { state: "COMPLETED" } });
+    render(<DeviceLogsPanel deviceId={DEVICE} />);
+    const strip = await screen.findByRole("region", { name: "Log summary" });
+    expect(within(strip).getByText("collected 2").closest(".MuiChip-root")).toHaveStyle({ backgroundColor: m3.scHigh });
+    expect(within(strip).getByText("backlog 1").closest(".MuiChip-root")).not.toHaveStyle({ backgroundColor: m3.scHigh });
+  });
+
+  it("puts gaps and the crash check in one grey sentence, each a link to its panel, in plain words", async () => {
+    const seq: SystemLogGap = { ...GAP, gap_id: "g-2", kind: "SEQ_GAP_SUSPECTED", source_key: "cp_fwk_elg", recorded_at: "2026-10-17T21:15:00Z" };
+    const first: SystemLogGap = { ...GAP, gap_id: "g-3", kind: "INITIAL_BASELINE", source_key: "cp_messages", recorded_at: "2026-10-17T21:15:00Z" };
+    stub({ gaps: [seq, first], crashNew: 0 });
+    render(<DeviceLogsPanel deviceId={DEVICE} />);
+    const line = await screen.findByRole("region", { name: "Attention" });
+    const gapLink = await within(line).findByRole("button", { name: /Sequence gap suspected \(fwk\.elg 00:15\)/ });
+    expect(within(line).getByRole("button", { name: /First collection: older content not fetched \(messages 00:15\)/ })).toBeInTheDocument();
+    expect(within(line).getByRole("button", { name: "No new crash or dump files" })).toBeInTheDocument();
+    // jargon and red-tinted "initial baseline" pills are gone
+    expect(screen.queryByText(/initial baseline/i)).toBeNull();
+    expect(screen.queryByText(/seq gap suspected/)).toBeNull();
+    const scroll = vi.fn();
+    const panel = document.getElementById("logs-gaps") as HTMLElement;
+    panel.scrollIntoView = scroll;
+    fireEvent.click(gapLink);
+    expect(scroll).toHaveBeenCalled();
+    // the first collection pill in the panel is grey; the suspected gap is amber, not red-tinted
+    expect(within(panel).getByText("First collection: older content not fetched").closest(".MuiChip-root")).toHaveStyle({ backgroundColor: m3.scHigh });
+    expect(within(panel).getByText("Sequence gap suspected").closest(".MuiChip-root")).toHaveStyle({ backgroundColor: m3.warningContainer });
+  });
+
+  it("repeats a kind once with its count, and raises a red word only for a NEW crash or dump file", async () => {
+    const a: SystemLogGap = { ...GAP, gap_id: "g-4", kind: "SEQ_GAP_SUSPECTED", source_key: "cp_messages", recorded_at: "2026-10-17T21:15:00Z" };
+    const b: SystemLogGap = { ...a, gap_id: "g-5", source_key: "cp_fwk_elg" };
+    stub({ gaps: [a, b], crashNew: 2 });
+    render(<DeviceLogsPanel deviceId={DEVICE} />);
+    const line = await screen.findByRole("region", { name: "Attention" });
+    expect(await within(line).findByRole("button", { name: /Sequence gap suspected ×2 \(messages 00:15, fwk\.elg 00:15\)/ })).toBeInTheDocument();
+    expect(within(line).getByText("2 new crash or dump files").closest(".MuiChip-root")).toHaveStyle({ backgroundColor: m3.errorContainer });
+  });
+
+  it("is honest while the gaps and the crash check are loading or unavailable", async () => {
+    const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
+    vi.stubGlobal("fetch", vi.fn((input: string) => {
+      const url = String(input);
+      if (url === `${BASE}/${DEVICE}/sources`) return Promise.resolve(json(summary()));
+      if (url.startsWith("/api/v2/jobs")) return Promise.resolve(json({ items: [], total: 0, page: 1, page_size: 1 }));
+      if (url.startsWith(`${BASE}/${DEVICE}/chunks`)) return Promise.resolve(json({ device_id: DEVICE, source: "cp_messages", day: null, truncated: false, chunks: [] }));
+      if (url.startsWith(`${BASE}/${DEVICE}/hcp`)) return Promise.resolve(json({ device_id: DEVICE, member_listing: "NOT_AVAILABLE", files: [] }));
+      return Promise.resolve(json({ code: "BOOM" }, 500));
+    }));
+    render(<DeviceLogsPanel deviceId={DEVICE} />);
+    const line = await screen.findByRole("region", { name: "Attention" });
+    await waitFor(() => expect(line).toHaveTextContent("Gaps unavailable"));
+    expect(line).toHaveTextContent("Crash and dump check unavailable");
+    expect(line).not.toHaveTextContent("No new crash");
+  });
+
+  it("reads the day and chunk pickers as a sentence", async () => {
+    stub();
+    render(<DeviceLogsPanel deviceId={DEVICE} />);
+    const sentence = await screen.findByTestId("picker-sentence");
+    expect(sentence).toHaveTextContent("Day 2026-10-17 · run 2 of 2 · 12:00 · 3 lines · 100 B");
+    const run = screen.getByRole("combobox", { name: "Run" });
+    expect(within(run).getByRole("option", { name: /^1 of 2 · 09:00 · 3 lines · 100 B/ })).toBeInTheDocument();
+  });
+
+  it("shows the masked pill beside the line filter", async () => {
+    stub();
+    render(<DeviceLogsPanel deviceId={DEVICE} />);
+    const filter = await screen.findByRole("textbox", { name: "Filter lines" });
+    const pill = await screen.findByText("Masked view");
+    // the filter field and the pill share one row
+    expect(filter.closest(".MuiFormControl-root")?.parentElement).toBe(pill.closest(".MuiChip-root")?.parentElement);
+  });
+
+  it("keeps a fixed device-time column on the raw lines and the whole line behind a click", async () => {
+    stub({ summary: panSummary(), chunks: [chunk("c-1", "2026-10-18T03:13:03Z", { source_key: "pan_config", log_day: "2026-10-18" })],
+      pages: { "c-1": [{ text: PAN_LINES, next: 300, eof: true }] } });
+    render(<DeviceLogsPanel deviceId={DEVICE} vendorHint="palo_alto" />);
+    const rows = await screen.findAllByTestId("log-line");
+    expect(rows).toHaveLength(3);
+    const times = rows.map((r) => within(r).getByTestId("log-line-time").textContent);
+    expect(times).toEqual(["2026/10/18 06:11:02", "2026/10/18 06:11:09", ""]);
+    // a line with no time of its own gets an empty cell and says so on hover; nothing is invented
+    expect(within(rows[2]).getByTestId("log-line-time")).toHaveAttribute("title", "No device time on this line");
+    expect(rows[0]).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(rows[0]);
+    expect(rows[0]).toHaveAttribute("aria-expanded", "true");
+    expect(rows[0]).toHaveTextContent("synthetic text that is long");
+    // the filter still sees the whole line, time included
+    fireEvent.change(screen.getByRole("textbox", { name: "Filter lines" }), { target: { value: "06:11:09" } });
+    expect(screen.getAllByTestId("log-line")).toHaveLength(1);
+  });
+
+  it("invents no severity: no severity chip or count anywhere", async () => {
+    stub({ summary: panSummary(), job: { state: "COMPLETED" } });
+    render(<DeviceLogsPanel deviceId={DEVICE} vendorHint="palo_alto" />);
+    await screen.findByTestId("last-collection");
+    await screen.findAllByTestId("log-line");
+    expect(screen.queryByText(/severity|critical|informational/i)).toBeNull();
+  });
+
+  it("lays out Check Point and Palo Alto the same: summary, attention line, viewer, then the side panels", async () => {
+    for (const [vendor, data] of [["check_point", summary()], ["palo_alto", panSummary()]] as const) {
+      stub({ summary: data, job: { state: "COMPLETED" } });
+      const { unmount } = render(<DeviceLogsPanel deviceId={DEVICE} vendorHint={vendor} />);
+      const root = await screen.findByTestId("device-logs");
+      const order = ["Log summary", "Attention"].map((name) => within(root).getByRole("region", { name }));
+      expect(order[0].compareDocumentPosition(order[1]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(await within(root).findByRole("group", { name: "Log sources" })).toBeInTheDocument();
+      for (const title of ["Gaps", "Crash and dump files", "HCP reports"]) expect(within(root).getByText(title)).toBeInTheDocument();
+      unmount();
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
+describe("lineDeviceTime and windowWords", () => {
+  it("takes the time a line itself carries, in the device's own format", () => {
+    expect(lineDeviceTime('{"receive_time":"2026/10/18 06:11:02","x":1}')).toBe("2026/10/18 06:11:02");
+    expect(lineDeviceTime("receive_time=2026-10-18T06:11:02 type=SYSTEM")).toBe("2026-10-18 06:11:02");
+    expect(lineDeviceTime("Oct  7 08:00:01 gw-1 kernel: synthetic")).toBe("Oct 7 08:00:01");
+    expect(lineDeviceTime("2026-10-17 08:00:00 synthetic")).toBe("2026-10-17 08:00:00");
+    expect(lineDeviceTime("    at synthetic.frame(Synthetic.java:1)")).toBeNull();
+    expect(lineDeviceTime("")).toBeNull();
+  });
+
+  it("writes a one-day window as a short range and a multi-day one in full", () => {
+    expect(windowWords("2026-10-18 00:15:00", "2026-10-18 06:11:59")).toBe("00:15–06:11");
+    expect(windowWords("2026-10-17 23:00:00", "2026-10-18 06:11:59")).toBe("2026-10-17 23:00 – 2026-10-18 06:11");
+    expect(windowWords(null, "2026-10-18 06:11:59")).toBeNull();
+    expect(windowWords("unparsed", "alsoUnparsed")).toBe("unparsed to alsoUnparsed");
+  });
+
+  it("words every gap kind and gives each a tone: grey for the first run, amber for a suspected gap", () => {
+    expect(gapKindLabel("SEQ_GAP_SUSPECTED")).toBe("Sequence gap suspected");
+    expect(gapKindLabel("INITIAL_BASELINE")).toBe("First collection: older content not fetched");
+    expect(gapKindLabel("SOMETHING_NEW")).toBe("Something new");
+    expect([gapTone("INITIAL_BASELINE"), gapTone("SEQ_GAP_SUSPECTED"), gapTone("BACKLOG"), gapTone("ROTATED_AWAY")]).toEqual(["neutral", "warn", "warn", "attn"]);
   });
 });
