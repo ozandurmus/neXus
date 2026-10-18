@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Chip from "@mui/material/Chip";
@@ -7,6 +7,7 @@ import MenuItem from "@mui/material/MenuItem";
 import Select from "@mui/material/Select";
 import Stack from "@mui/material/Stack";
 import Table from "@mui/material/Table";
+import Tooltip from "@mui/material/Tooltip";
 import { DeviceLifecycleLine } from "./LifecycleScreen";
 import TableBody from "@mui/material/TableBody";
 import TableCell from "@mui/material/TableCell";
@@ -22,17 +23,19 @@ import type { Tone } from "../shell/tone";
 import { M3Button, M3Tabs, StatusChip } from "../shell/M3Widgets";
 import { PLANE_COLLECT, PLANE_OPERATIONS, ROLE_REFUSAL, useRoleAllows } from "../shell/actionAccess";
 import { bytesTitle, formatBytes } from "../shell/bytes";
+import { formatUtc, relativeAge } from "../shell/time";
 import { plural } from "../shell/plural";
 import { deviceNameLabel, jobPhaseLabel, isTerminalJobState, enrollmentStateLabel, onboardingChip } from "../shell/deviceCopy";
 import { MONO, m3 } from "../theme/m3Theme";
 import { RoleChip, Ts, VendorBadge, vendorDisplayName } from "../shell/States";
-import { ClusterContextStrip, DeviceIdentityTable, deviceLiveWithInventory, orderMembers, vsListOf } from "./DeviceShared";
+import { PLATFORM_IDENTITY_GRID_ID, ReferenceCell, clusterContextLinks, DeviceIdentityTable, deviceLiveWithInventory, orderMembers, vsListOf } from "./DeviceShared";
 import { JobStatusIndicator } from "../shell/JobStatusIndicator";
 import {
   getDevice,
   getDeviceInventory,
   getClusterInventory,
   getHttpsCertificate,
+  getDeviceConfiguration,
   requestInventoryCollect,
   retryDeviceConfirm,
   collectDeviceBackup,
@@ -42,10 +45,12 @@ import {
   type ClusterInterface,
   type ClusterInventory,
   type ClusterRoute,
+  type DeviceConfiguration,
   type DeviceInventory,
   type GridMemberView,
   type GridSummaryView,
   type DeviceSummary,
+  type IdentityCheckView,
   type InventoryAddress,
   type InventoryContext,
   type InventoryInterface,
@@ -264,14 +269,41 @@ function ManagedDevicesPanel({ members, selected, onSelect }: {
 }
 
 /**
- * What the header's "Identity verified" rests on, as the code decides it: the chip shows for an ENROLLED device, and
- * a device becomes ENROLLED only through its first-contact confirm read (recordConfirmSuccess), which records its
- * identity baseline; the SSH host key and the HTTPS certificate are pinned on first use and compared by fingerprint
- * on every later contact. Expiry is in neither check (PO 2026-10-18: it stays that way; the certificate pill says it).
+ * What the header's identity badge rests on (PO decision 2026-10-18; it used to mean only "enrolled"): the worker's LAST
+ * comparison of the SSH host key or HTTPS certificate the device presented with the fingerprint pinned for it
+ * (`device_identity_check`, V165), and the open first-contact identity conflict if there is one. Expiry is in neither
+ * check (PO 2026-10-18: it stays that way; the certificate pill says it).
  */
-export const IDENTITY_VERIFIED_BASIS = "Identity verified means the device passed its enrollment confirm read, which "
-  + "recorded its identity; later connections are compared with the pinned SSH host key or HTTPS certificate "
-  + "fingerprint, and certificate expiry is not part of either check.";
+export const IDENTITY_VERIFIED_BASIS = "Identity verified means the last connection compared the SSH host key or HTTPS "
+  + "certificate fingerprint the device presented with the pinned one and they were equal. Identity mismatch means they "
+  + "were not equal, or the identity the device presented differs from the one recorded at enrollment. Not verified yet "
+  + "means no comparison is on record: the device has not connected since this check began, the fingerprint was pinned "
+  + "by the newest connection, or the transport has no pin. Certificate expiry is not part of the check.";
+
+const IDENTITY_TRANSPORT_WORDS: Readonly<Record<string, string>> = {
+  SSH_HOST_KEY: "SSH host key", HTTPS_CERTIFICATE: "HTTPS certificate fingerprint",
+};
+
+/** The three header states of the identity badge, each a word with its colour: green verified, red mismatch, grey not verified yet. */
+export function identityBadge(device: { readonly vendor_hint?: string; readonly identity_check?: IdentityCheckView }):
+  { readonly tone: Tone; readonly label: string; readonly title: string } {
+  const check = device.identity_check;
+  const when = check?.checked_at ? ` (${formatUtc(check.checked_at, false)} GMT+3)` : "";
+  const what = IDENTITY_TRANSPORT_WORDS[check?.basis ?? ""] ?? "pinned identity";
+  if (check?.state === "VERIFIED") {
+    return { tone: "ok", label: "✓ Identity verified", title: `The last connection presented the pinned ${what}${when}.` };
+  }
+  if (check?.state === "MISMATCH") {
+    return { tone: "bad", label: "Identity mismatch", title: check.basis === "RECORDED_IDENTITY"
+      ? "The identity the device presented differs from the identity recorded at enrollment."
+      : `The ${what} the device presented did not match the pinned one${when}.` };
+  }
+  return { tone: "neutral", label: "Not verified yet", title: check?.first_use
+    ? "The newest connection pinned the fingerprint itself; no later connection has been compared with it yet."
+    : device.vendor_hint === "palo_alto"
+      ? "Palo Alto connections have no pinned fingerprint (certificate verification is off for this deployment, PO decision 2026-09-21)."
+      : "No comparison of a pinned SSH host key or HTTPS certificate fingerprint is on record yet." };
+}
 
 function describeApiError(err: unknown): string {
   const apiErr = err as Partial<ApiError>;
@@ -394,9 +426,12 @@ export function VendorAvatar({
 function ContextHaBadge({ context, headerRole, scoped = false }: { readonly context: InventoryContext | undefined; readonly headerRole?: string | null; readonly scoped?: boolean }) {
   const ha = context?.ha;
   if (!ha) return null;
-  // One HA statement per device (UI review 2026-10-18, P0-5B): the header already says the role. This line stays only
-  // for a selected virtual system, or when it adds something the header does not (a different role, the cluster mode).
-  if (!scoped && !ha.cluster_mode && (headerRole ?? "").trim().toUpperCase() === ha.role.trim().toUpperCase()) return null;
+  // One HA statement per device (UI review 2026-10-18, P0-5B and F-9): the header badge and the identity grid already say
+  // the role. The "HA role:" line stays only for a selected virtual system, or when it differs from the header's; when the
+  // role is the same, only what is new (the cluster mode) remains, without the repeated role.
+  if (!scoped && (headerRole ?? "").trim().toUpperCase() === ha.role.trim().toUpperCase()) {
+    return ha.cluster_mode ? <Typography variant="body2" color="text.secondary">Cluster mode: {ha.cluster_mode}</Typography> : null;
+  }
   return (
     <Stack direction="row" spacing={1} alignItems="center">
       <Typography variant="body2" color="text.secondary">HA role:</Typography>
@@ -557,6 +592,9 @@ function vlanLabel(iface: { readonly name: string; readonly kind: string; readon
   return "—";
 }
 
+/** The label the unified context tabs give the chassis's own interfaces (see buildUnifiedContextTabs). */
+const PHYSICAL_GROUP_LABEL = "Physical / VS0";
+
 /** The routing tables page at this many routes. */
 export const ROUTES_PAGE_SIZE = 50;
 
@@ -586,7 +624,10 @@ function ClusterInterfacesTable({
   readonly sharedAddressOnly?: boolean;
 }) {
   const [upOnly, setUpOnly] = useState(true);
+  const [addressOnly, setAddressOnly] = useState(false);
   const [search, setSearch] = useState("");
+  // Groups the operator flipped away from their default (physical collapsed, every virtual system open).
+  const [flipped, setFlipped] = useState<ReadonlySet<string>>(new Set());
   // A standalone device (toClusterContexts) is a one-member cluster: its one address column is
   // simply "Addresses", and a cluster-virtual address can only ever appear on a real cluster.
   const singleMember = members.length <= 1;
@@ -610,12 +651,16 @@ function ClusterInterfacesTable({
   }
 
   // A row carries vsysLabel only in the cluster's merged, all-VS default view; a single
-  // selected VS's own table never needs it since every row already shares that context.
-  const showVsysColumn = withoutLoopback.some((iface) => iface.vsysLabel !== undefined);
+  // selected VS's own table never needs it since every row already shares that context. That view is grouped by VSYS,
+  // the physical group collapsed by default (UI review 2026-10-18, F-19): 18 rows of dashes no longer lead the table.
+  const grouped = withoutLoopback.some((iface) => iface.vsysLabel !== undefined);
   const showZoneColumn = withoutLoopback.some((iface) => Object.keys(iface.member_zones ?? {}).length > 0);
   const showMacColumn = withoutLoopback.some((iface) => Object.keys(iface.member_macs ?? {}).length > 0);
 
+  const hasAddress = (iface: ClusterInterface) =>
+    iface.addresses.length > 0 || Object.values(iface.member_addresses ?? {}).some((list) => list.length > 0);
   const filtered = withoutLoopback.filter((iface) => {
+    if (addressOnly && !hasAddress(iface)) return false;
     if (upOnly) {
       const memberStates = members.map((m) => iface.member_states?.[m.device_id]).filter((v): v is string => typeof v === "string");
       const allDown = memberStates.length > 0 && memberStates.every((s) => s.toLowerCase() === "down");
@@ -645,7 +690,7 @@ function ClusterInterfacesTable({
     <Stack spacing={1.5}>
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
         <Typography variant="body2" sx={{ fontWeight: 600 }}>
-          Interfaces · {filtered.length} of {withoutLoopback.length} shown{upOnly ? " · Active only" : ""}
+          Interfaces · {filtered.length} of {withoutLoopback.length} shown{upOnly ? " · Active only" : ""}{addressOnly ? " · With address only" : ""}
         </Typography>
         <Stack direction="row" spacing={1} alignItems="center">
           <TextField
@@ -661,6 +706,11 @@ function ClusterInterfacesTable({
           >
             {upOnly ? "✓ Active only" : "All ports"}
           </M3Button>
+          <Box component="button" type="button" aria-pressed={addressOnly} onClick={() => setAddressOnly(!addressOnly)}
+            sx={{ cursor: "pointer", font: "inherit", fontSize: 13, px: 1.5, height: 32, borderRadius: "16px", color: m3.onSurface,
+              border: `1px solid ${addressOnly ? m3.primary : m3.outline}`, bgcolor: addressOnly ? m3.secondaryContainer : "transparent" }}>
+            With address only
+          </Box>
         </Stack>
       </Box>
 
@@ -672,7 +722,6 @@ function ClusterInterfacesTable({
       <Table size="small" sx={{ "& th, & td": { px: 0.75 }, "& th": { whiteSpace: "nowrap" } }}>
         <TableHead>
           <TableRow>
-            {showVsysColumn && <TableCell sx={{ fontWeight: 600 }}>VSYS</TableCell>}
             <TableCell sx={{ fontWeight: 600 }}>Interface</TableCell>
             <TableCell sx={{ fontWeight: 600 }}>Kind</TableCell>
             <TableCell sx={{ fontWeight: 600 }}>VLAN</TableCell>
@@ -695,7 +744,8 @@ function ClusterInterfacesTable({
           </TableRow>
         </TableHead>
         <TableBody>
-          {filtered.map((iface) => {
+          {(() => {
+            const renderRow = (iface: (typeof filtered)[number]) => {
             const vips = iface.addresses.filter((a) => a.role === "cluster_virtual");
             let cidrAddress: string | undefined;
             if (iface.member_addresses) {
@@ -725,11 +775,6 @@ function ClusterInterfacesTable({
 
             return (
               <TableRow key={`${iface.vsysLabel ?? ""}:${iface.name}`} hover>
-                {showVsysColumn && (
-                  <TableCell>
-                    <ScopeTag label={iface.vsysLabel ?? "Physical"} />
-                  </TableCell>
-                )}
                 <TableCell sx={{ fontWeight: 600, fontFamily: "monospace", whiteSpace: "nowrap" }}>{iface.name}</TableCell>
                 <TableCell>{iface.kind}</TableCell>
                 <TableCell>{vlanLabel(iface)}</TableCell>
@@ -827,7 +872,44 @@ function ClusterInterfacesTable({
                 {showMacColumn && <TableCell sx={{ whiteSpace: "nowrap" }}>{macCell(iface, members)}</TableCell>}
               </TableRow>
             );
-          })}
+            };
+            if (!grouped) return filtered.map(renderRow);
+            // Group by VSYS in the order the contexts came; a group with no row left after the filters disappears with them.
+            const groups: { label: string; rows: typeof filtered }[] = [];
+            for (const iface of filtered) {
+              const label = iface.vsysLabel ?? "Physical";
+              const group = groups.find((g) => g.label === label);
+              if (group) group.rows.push(iface); else groups.push({ label, rows: [iface] });
+            }
+            const columns = 4 + (showZoneColumn ? 1 : 0) + (oneAddressColumn ? 1 : (showVipColumn ? 1 : 0) + members.length) + (showMacColumn ? 1 : 0);
+            return groups.flatMap((group) => {
+              // The physical group starts collapsed when virtual systems follow it; on its own there is nothing to make way for.
+              const physical = group.label === PHYSICAL_GROUP_LABEL && groups.length > 1;
+              // A search or the address chip is asking for rows: a group that holds them opens, whatever its default.
+              const open = search.trim() !== "" || addressOnly ? true : physical === flipped.has(group.label);
+              const withAddress = group.rows.filter(hasAddress).length;
+              return [
+                <TableRow key={`group:${group.label}`} data-vsys-group={group.label}>
+                  <TableCell colSpan={columns} sx={{ p: 0, bgcolor: m3.scLow }}>
+                    <Box component="button" type="button" aria-expanded={open} onClick={() => setFlipped((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(group.label)) next.delete(group.label); else next.add(group.label);
+                        return next;
+                      })}
+                      sx={{ all: "unset", boxSizing: "border-box", width: "100%", display: "flex", alignItems: "center", gap: 1, px: 1, py: 0.75, cursor: "pointer",
+                        "&:focus-visible": { outline: `2px solid ${m3.primary}`, outlineOffset: -2 } }}>
+                      <Box component="span" aria-hidden sx={{ color: m3.onSurfaceVar, width: 12 }}>{open ? "▾" : "▸"}</Box>
+                      <ScopeTag label={group.label} />
+                      <Typography component="span" variant="body2" sx={{ color: m3.onSurfaceVar }}>
+                        {plural(group.rows.length, "interface")} · {withAddress} with an address{!open ? " · collapsed" : ""}
+                      </Typography>
+                    </Box>
+                  </TableCell>
+                </TableRow>,
+                ...(open ? group.rows.map(renderRow) : []),
+              ];
+            });
+          })()}
         </TableBody>
       </Table>
       </TableContainer>
@@ -1835,6 +1917,8 @@ export function InventoryEntityHeader({
   breadcrumb,
   chips,
   action,
+  readAges,
+  link,
   children,
 }: {
   readonly vendorHint: string;
@@ -1845,10 +1929,15 @@ export function InventoryEntityHeader({
   readonly breadcrumb?: React.ReactNode;
   readonly chips: React.ReactNode;
   readonly action?: React.ReactNode;
+  /** "Platform read 4 h ago · Config read 22 h ago" (UI review 2026-10-18, F-9): the header's own row, left. */
+  readonly readAges?: React.ReactNode;
+  /** A pill-shaped link that belongs to the entity ("Open assigned policy"), right-aligned inside the card. */
+  readonly link?: React.ReactNode;
   readonly children?: React.ReactNode;
 }) {
   return (
     <Box
+      data-testid="entity-header"
       sx={{
         display: "flex",
         flexDirection: "column",
@@ -1874,8 +1963,54 @@ export function InventoryEntityHeader({
         </Box>
         {action}
       </Box>
+      {(readAges || link) && (
+        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 2, flexWrap: "wrap" }}>
+          <Box sx={{ minWidth: 0 }}>{readAges}</Box>
+          {link}
+        </Box>
+      )}
       {children}
     </Box>
+  );
+}
+
+/** A link shaped as a pill, for a header: it sits on the right of the card, not floating above it. */
+export function HeaderPillLink({ href, children }: { readonly href: string; readonly children: React.ReactNode }) {
+  return (
+    <Box component="a" href={href}
+      sx={{ display: "inline-flex", alignItems: "center", height: 26, px: 1.5, borderRadius: "13px", border: `1px solid ${m3.outline}`,
+        color: m3.primary, fontSize: 12.5, fontWeight: 500, textDecoration: "none", whiteSpace: "nowrap",
+        "&:hover": { bgcolor: m3.secondaryContainer }, "&:focus-visible": { outline: `2px solid ${m3.primary}`, outlineOffset: 2 } }}>
+      {children}
+    </Box>
+  );
+}
+
+/** A configuration read this much older than the platform read is flagged amber (UI review 2026-10-18, P1-1B). */
+const CONFIG_STALE_AFTER_MS = 24 * 3_600_000;
+
+/** How long ago the platform facts and the configuration were read; the exact times stay in the Platform identity grid. */
+export function HeaderReadAges({ platformAt, config }: {
+  readonly platformAt: string | null | undefined;
+  /** Omitted when the vendor has no configuration read, or the read could not be fetched (no claim is made then). */
+  readonly config?: { readonly at: string | null };
+}) {
+  const stamp = (at: string) => `${formatUtc(at, false)} GMT+3 (exact times are in the Platform identity grid)`;
+  // A configuration read more than a day older than the latest platform read is flagged (P1-1B): the platform moved on, the configuration did not.
+  const configBehind = Boolean(config?.at && platformAt) && new Date(platformAt!).getTime() - new Date(config!.at!).getTime() >= CONFIG_STALE_AFTER_MS;
+  return (
+    <Typography component="div" variant="body2" data-testid="header-read-ages"
+      sx={{ color: m3.onSurfaceVar, display: "flex", alignItems: "center", columnGap: 1, rowGap: 0.5, flexWrap: "wrap" }}>
+      {platformAt
+        ? <Tooltip title={stamp(platformAt)}><span>Platform read {relativeAge(platformAt)}</span></Tooltip>
+        : <span>Platform not read yet</span>}
+      {config && <Box component="span" aria-hidden sx={{ color: m3.outline }}>·</Box>}
+      {config && (config.at
+        ? configBehind
+          ? <Tooltip title={stamp(config.at)}><span><StatusChip tone="warn" label={`Config read ${relativeAge(config.at)}`} dense /></span></Tooltip>
+          : <Tooltip title={stamp(config.at)}><span>Config read {relativeAge(config.at)}</span></Tooltip>
+        : <span>Config not read yet</span>)}
+    </Typography>
   );
 }
 
@@ -1883,11 +2018,13 @@ function IdentityReference({ value }: { readonly value: string }) {
   return (
     <Stack direction="row" spacing={1} alignItems="center">
       <Typography variant="caption">Reference</Typography>
-      <Typography variant="body2" sx={{ fontFamily: MONO }}>{value}</Typography>
-      <Button size="small" onClick={() => { void navigator.clipboard?.writeText(value).catch(() => undefined); }}>Copy</Button>
+      <ReferenceCell value={value} />
     </Stack>
   );
 }
+
+/** Lets a panel inside the tab strip open another tab and land on an anchor in it (the Identity tab's link to the grid). */
+const DetailTabsContext = createContext<{ readonly has: (label: string) => boolean; readonly open: (label: string, anchorId?: string) => void } | null>(null);
 
 /** The detail tabs of the one device screen: the Configuration tab only when the vendor has a configuration read. */
 function DetailTabs({ ariaLabel, tabs, configuration, initialTab, selectionKey, onlyTabs }: {
@@ -1901,7 +2038,51 @@ function DetailTabs({ ariaLabel, tabs, configuration, initialTab, selectionKey, 
 }) {
   const shown = tabs.filter((t) => (!onlyTabs || onlyTabs.includes(t.label)) && (t.label !== "Configuration" || Boolean(configuration)));
   const wanted = initialTab ? shown.findIndex((t) => t.label.toLowerCase() === initialTab.toLowerCase()) : -1;
-  return <M3Tabs key={`${wanted}:${selectionKey ?? ""}`} ariaLabel={ariaLabel} initial={Math.max(0, wanted)} tabs={shown} />;
+  return <DetailTabsBody key={`${wanted}:${selectionKey ?? ""}`} ariaLabel={ariaLabel} tabs={shown} initial={Math.max(0, wanted)} />;
+}
+
+function DetailTabsBody({ ariaLabel, tabs, initial }: {
+  readonly ariaLabel: string;
+  readonly tabs: ReadonlyArray<{ label: string; panel: React.ReactNode }>;
+  readonly initial: number;
+}) {
+  const [value, setValue] = useState(initial);
+  const [anchor, setAnchor] = useState<string | null>(null);
+  useEffect(() => {
+    if (!anchor) return;
+    document.getElementById(anchor)?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+    setAnchor(null);
+  }, [anchor, value]);
+  const nav = useMemo(() => ({
+    has: (label: string) => tabs.some((t) => t.label === label),
+    open: (label: string, anchorId?: string) => {
+      const index = tabs.findIndex((t) => t.label === label);
+      if (index < 0) return;
+      setValue(index);
+      if (anchorId) setAnchor(anchorId);
+    },
+  }), [tabs]);
+  return (
+    <DetailTabsContext.Provider value={nav}>
+      <M3Tabs ariaLabel={ariaLabel} tabs={tabs} value={value} onChange={setValue} />
+    </DetailTabsContext.Provider>
+  );
+}
+
+/**
+ * The Identity tab's way to the Platform identity grid (UI review 2026-10-18, F-9): the grid on the Configuration tab now
+ * holds the reference and the lifecycle too. The tab keeps what the grid does not carry (the certificate, what the
+ * identity badge rests on, the per-member evidence source), so nothing is moved out of reach.
+ */
+function PlatformIdentityGridLink() {
+  const nav = useContext(DetailTabsContext);
+  if (!nav?.has("Configuration")) return null;
+  return (
+    <Link component="button" type="button" underline="hover" onClick={() => nav.open("Configuration", PLATFORM_IDENTITY_GRID_ID)}
+      sx={{ alignSelf: "flex-start", color: m3.primary, font: "inherit", fontSize: 13 }}>
+      Platform identity grid on the Configuration tab: vendor, model, serial, versions, lifecycle, reference →
+    </Link>
+  );
 }
 
 export function DeviceInventoryPanels({
@@ -1910,7 +2091,7 @@ export function DeviceInventoryPanels({
   onDeviceStateChange,
   onSelectVs,
   managedEstate,
-  belowHeader,
+  policyHref,
   configuration,
   initialTab,
 }: {
@@ -1921,8 +2102,8 @@ export function DeviceInventoryPanels({
   readonly onSelectVs?: (vs: string | null) => void;
   /** The management server's discovery content (domains, clusters, gateways ...), shown as the "Managed estate" tab. */
   readonly managedEstate?: React.ReactNode;
-  /** Links and notes that belong to the device but come after its header (the device header is always the first thing on the pane). */
-  readonly belowHeader?: React.ReactNode;
+  /** Where "Open assigned policy" leads; shown as a pill on the right of the header card (UI review 2026-10-18, F-9). */
+  readonly policyHref?: string;
   /** One device screen (PO 2026-09-25): the configuration tab's content, when the vendor has a configuration read. */
   readonly configuration?: React.ReactNode;
   /** "configuration" opens that tab (old Config links land here). */
@@ -1955,6 +2136,10 @@ export function DeviceInventoryPanels({
 
   // P0-1B (UI review 2026-10-18): one certificate read feeds the header state pill and the Identity tab card.
   const certificateFetch = useFetchOnMount(() => getHttpsCertificate(device.device_id), () => "Certificate details unavailable.");
+  // F-9: the header says how long ago the configuration was read; only a vendor with a configuration read is asked, and a
+  // refused or failed read makes no claim at all (the exact time stays in the Platform identity grid).
+  const configReadFetch = useFetchOnMount<DeviceConfiguration | null>(
+    () => (configuration ? getDeviceConfiguration(device.device_id) : Promise.resolve(null)), () => "Configuration read unavailable.");
 
   const deviceInventory = deviceInventoryFetch.data;
   const clusterInventory = clusterInventoryFetch.data;
@@ -2026,7 +2211,10 @@ export function DeviceInventoryPanels({
                 dense
               />
             )}
-            {isEnrolledDevice && <StatusChip tone="ok" label="✓ Identity verified" dense />}
+            {(() => {
+              const badge = identityBadge(device);
+              return <span title={badge.title}><StatusChip tone={badge.tone} label={badge.label} dense /></span>;
+            })()}
             <CertificateStatePill view={certificateFetch.data} />
             <StatusChip
               tone="neutral"
@@ -2051,6 +2239,9 @@ export function DeviceInventoryPanels({
           </>
         }
         action={<CollectNowButton deviceId={device.device_id} onCollected={refresh} enrollmentState={device.enrollment_state} />}
+        readAges={<HeaderReadAges platformAt={device.platform_facts_observed_at}
+          config={configuration && configReadFetch.data ? { at: configReadFetch.data.collected_at } : undefined} />}
+        link={policyHref ? <HeaderPillLink href={policyHref}>Open assigned policy</HeaderPillLink> : undefined}
       >
         {isCluster && clusterInventory && clusterInventory.members.length > 0 ? (
           <Typography variant="caption" color="text.secondary">
@@ -2059,8 +2250,8 @@ export function DeviceInventoryPanels({
         ) : null}
       </InventoryEntityHeader>
 
-      {belowHeader}
-      <DeviceLifecycleLine key={device.device_id} deviceId={device.device_id} />
+      {/* The lifecycle is a cell of the Platform identity grid on the Configuration tab; a device with no such tab keeps the line. */}
+      {!configuration && <DeviceLifecycleLine key={device.device_id} deviceId={device.device_id} />}
       <DetailTabs
         ariaLabel="Device detail"
         configuration={configuration}
@@ -2150,6 +2341,7 @@ export function DeviceInventoryPanels({
             label: "Identity",
             panel: (
               <Stack spacing={1}>
+                <PlatformIdentityGridLink />
                 <HttpsCertificateCard deviceId={device.device_id} data={certificateFetch.data}
                   error={certificateFetch.error} refresh={certificateFetch.refresh} />
                 <Typography variant="body2">{IDENTITY_VERIFIED_BASIS}</Typography>
@@ -2163,6 +2355,39 @@ export function DeviceInventoryPanels({
           },
         ]}
       />
+    </Stack>
+  );
+}
+
+/**
+ * The cluster pane's Logs tab (UI review 2026-10-18, F-21): the member Logs panel, one member at a time, chosen with the
+ * M1 / M2 pills the member cards already use. The per-member stores stay as they are; this only picks which one to read.
+ */
+export function ClusterLogsPanel({ members, allMembers, vendorHint }: {
+  readonly members: readonly DeviceSummary[];
+  readonly allMembers: readonly LabeledMember[];
+  readonly vendorHint: string;
+}) {
+  const [selected, setSelected] = useState(0);
+  const member = members[Math.min(selected, members.length - 1)];
+  if (!member) return <EmptyPanel title="No members" body="This cluster has no member whose logs can be read." />;
+  return (
+    <Stack spacing={1.5}>
+      <Box role="group" aria-label="Cluster member" sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+        {members.map((m, i) => (
+          <Box key={m.device_id} component="button" type="button" aria-pressed={m.device_id === member.device_id}
+            title={memberLabel(m, allMembers)} onClick={() => setSelected(i)}
+            sx={{ cursor: "pointer", font: "inherit", fontSize: 13, fontWeight: 600, px: 1.5, py: 0.4, borderRadius: "14px", color: m3.onSurface,
+              border: `1px solid ${m.device_id === member.device_id ? m3.primary : m3.outline}`,
+              bgcolor: m.device_id === member.device_id ? m3.secondaryContainer : "transparent" }}>
+            M{i + 1}
+          </Box>
+        ))}
+        <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
+          {memberLabel(member, allMembers)}{member.ha_role ? ` · ${member.ha_role.trim().toUpperCase()}` : ""}
+        </Typography>
+      </Box>
+      <DeviceLogsPanel key={member.device_id} deviceId={member.device_id} vendorHint={vendorHint} />
     </Stack>
   );
 }
@@ -2275,7 +2500,6 @@ export function ClusterDetailPanels({
       <InventoryEntityHeader
         vendorHint={firstMember?.vendor_hint ?? "check_point"}
         model={firstMember?.model}
-        titlePrefix="CLS >"
         title={clusterTitle}
         breadcrumb={scopedName ? <ScopeBreadcrumb parent={clusterTitle} scope={scopedName} onParent={leaveVs} /> : undefined}
         chips={
@@ -2296,11 +2520,15 @@ export function ClusterDetailPanels({
             )}
             {(firstMember?.model || firstMember?.platform_family) && <StatusChip tone="neutral" label={(firstMember?.model || firstMember?.platform_family)!} dense />}
             <StatusChip tone="neutral" label={interfaceRouteLabel(headerCounts, firstMember?.vendor_hint)} dense />
+            {/* The "This cluster in:" strip is gone (UI review 2026-10-18, F-21): its two links are header pills, the third
+                ("Device screen") pointed at this very screen. */}
+            {clusterContextLinks(clusterRef).filter((l) => l.id !== "inventory").map((l) => (
+              <HeaderPillLink key={l.id} href={l.href}>{l.label}</HeaderPillLink>
+            ))}
           </>
         }
       >
         {/* 2 Member Cards Sub-row */}
-        <ClusterContextStrip clusterRef={clusterRef} current="inventory" />
         <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 1.5, pt: 0.5 }}>
           {orderedMembers.map((m) => {
             return (
@@ -2436,6 +2664,11 @@ export function ClusterDetailPanels({
             label: "Configuration",
             panel: configuration,
           },
+          // Logs are stored per member; the cluster pane picks the member with the M1 / M2 pills (F-21).
+          ...(firstMember && (firstMember.vendor_hint === "check_point" || firstMember.vendor_hint === "palo_alto") ? [{
+            label: "Logs",
+            panel: <ClusterLogsPanel members={orderedMembers} allMembers={orderedMembers} vendorHint={firstMember.vendor_hint} />,
+          }] : []),
           {
             label: "Identity",
             panel: (

@@ -9,6 +9,7 @@ import org.jooq.DSLContext;
 import org.jooq.Record;
 import com.securityexpert.nexus.ui2.persistence.AuditedTransactionBoundary;
 import com.securityexpert.nexus.ui2.persistence.TransactionBoundary;
+import com.securityexpert.nexus.ui2.persistence.device.DeviceIdentityCheckRecorder;
 
 /** Endpoint-scoped TOFU shared by discovery and enrolled devices. No certificate bytes leave the TLS callback. */
 public final class HttpsCertificateTrustRepository {
@@ -53,7 +54,7 @@ public final class HttpsCertificateTrustRepository {
     }
 
     public Decision observe(String address, int port, Certificate certificate) {
-        return audited.inTransaction("system:worker", "https_certificate_observe", dsl -> {
+        Decision decision = audited.inTransaction("system:worker", "https_certificate_observe", dsl -> {
             lock(dsl, address, port);
             var active = dsl.fetchOne("SELECT fingerprint_sha256 FROM https_endpoint_cert_trust "
                     + "WHERE management_address = ? AND management_port = ? AND status = 'ACTIVE'", address, port);
@@ -72,6 +73,38 @@ public final class HttpsCertificateTrustRepository {
                     .anyMatch(e -> e.address().equals(address) && e.port() == port && e.strict());
             return strict ? Decision.REFUSE : Decision.WARN;
         });
+        recordIdentityCheck(address, port, switch (decision) {
+            case FIRST_USE -> DeviceIdentityCheckRecorder.FIRST_USE;
+            case MATCH -> DeviceIdentityCheckRecorder.MATCH;
+            case WARN, REFUSE -> DeviceIdentityCheckRecorder.MISMATCH;
+        });
+        return decision;
+    }
+
+    /**
+     * The device header's "Identity verified" follows the last comparison (PO decision 2026-10-18, V165): the verdict is
+     * written for every enrolled device that uses this endpoint. It runs after, and apart from, the trust decision, so a
+     * failed write (the table not migrated yet, a lock) can never change what the connection does. Palo Alto devices
+     * have no certificate pin (verification is off by PO decision 2026-09-21).
+     */
+    private void recordIdentityCheck(String address, int port, String verdict) {
+        try {
+            transactions.inTransaction(dsl -> {
+                for (Record row : dsl.fetch("SELECT e.device_id, e.address_ref, d.https_certificate_strict, "
+                        + "CASE WHEN d.vendor_hint = 'bluecoat' AND d.role = 'management_server' THEN 8082 ELSE 443 END AS default_port "
+                        + "FROM endpoints e JOIN devices d ON d.device_id = e.device_id "
+                        + "WHERE d.vendor_hint <> 'palo_alto' AND e.address_ref IN (?, ?)", address, address + ":" + port)) {
+                    Endpoint endpoint = endpoint(row);
+                    if (endpoint.address().equals(address) && endpoint.port() == port) {
+                        DeviceIdentityCheckRecorder.forDevice(dsl, row.get("device_id", String.class),
+                                DeviceIdentityCheckRecorder.HTTPS_CERTIFICATE, verdict);
+                    }
+                }
+                return null;
+            });
+        } catch (RuntimeException unavailable) {
+            // The comparison already happened and decided; a missing record leaves the screen at "Not verified yet".
+        }
     }
 
     public List<Entry> entries(String address, int port) {

@@ -626,6 +626,21 @@ export interface DeviceDetail {
   readonly job: JobView | null;
   /** null for a device added before the flow existed (treated as onboarded). */
   readonly onboarding?: OnboardingView | null;
+  readonly identity_check?: IdentityCheckView;
+}
+
+/**
+ * What "Identity verified" rests on (PO decision 2026-10-18): the worker's last comparison of the SSH host key or HTTPS
+ * certificate the device presented with the fingerprint pinned for it. VERIFIED matched; MISMATCH did not match (or the
+ * device's recorded first-contact identity is in conflict); NOT_VERIFIED means no comparison is on record (never
+ * compared, pinned on first use, or a transport with no pin). A verdict and a time, never a fingerprint.
+ */
+export interface IdentityCheckView {
+  readonly state: "VERIFIED" | "MISMATCH" | "NOT_VERIFIED";
+  readonly basis: "SSH_HOST_KEY" | "HTTPS_CERTIFICATE" | "RECORDED_IDENTITY" | "NONE";
+  /** The newest connection pinned the fingerprint itself, so there was nothing to compare yet. */
+  readonly first_use: boolean;
+  readonly checked_at: string | null;
 }
 
 export interface DeviceSummary {
@@ -665,6 +680,8 @@ export interface DeviceSummary {
   readonly inventory_collected_at?: string | null;
   /** Present only while the device's onboarding flow is RUNNING or STOPPED. */
   readonly onboarding?: OnboardingView | null;
+  /** The last pinned-identity comparison (PO decision 2026-10-18); absent from an older service, read as NOT_VERIFIED. */
+  readonly identity_check?: IdentityCheckView;
 }
 
 export type DeviceRole = "gateway" | "management_server" | "appliance";

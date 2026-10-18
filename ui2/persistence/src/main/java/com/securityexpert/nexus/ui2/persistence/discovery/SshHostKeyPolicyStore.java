@@ -9,6 +9,7 @@ import java.util.function.Function;
 
 import org.jooq.DSLContext;
 import com.securityexpert.nexus.ui2.persistence.AuditedTransactionBoundary;
+import com.securityexpert.nexus.ui2.persistence.device.DeviceIdentityCheckRecorder;
 import com.securityexpert.nexus.ui2.persistence.TransactionBoundary;
 
 /** Mismatch admission and its durable warning commit before credentials are sent. */
@@ -49,19 +50,17 @@ public final class SshHostKeyPolicyStore {
 
     public boolean observe(String jobId, long epoch, boolean failover, String endpointId,
             String host, int port, String algorithm, String presented, String expected) {
-        return audited.inTransaction("system:worker", "ssh_host_key_mismatch", db -> {
+        String[] observedDevice = new String[1];
+        boolean allowed = audited.inTransaction("system:worker", "ssh_host_key_mismatch", db -> {
             String mode = lock(db);
             var job = db.fetchOne("SELECT target_device_id, action_class, job_type FROM jobs "
                     + "WHERE job_id = ? AND lease_epoch = ? AND state IN ('CLAIMED', 'EXECUTING')", jobId, epoch);
-            String deviceId = job == null ? null : job.get("target_device_id", String.class);
-            if (deviceId == null) {
-                var endpoint = db.fetchOne("SELECT device_id FROM endpoints WHERE endpoint_id = ?", endpointId);
-                if (endpoint != null) deviceId = endpoint.get(0, String.class);
-            }
+            String deviceId = deviceOf(db, job, endpointId);
+            observedDevice[0] = deviceId;
             boolean rejected = !db.fetch("SELECT 1 FROM ssh_host_key_observation "
                     + "WHERE strict_refusal AND (device_id = ? OR (management_address = ? AND management_port = ?))",
                     deviceId, host, port).isEmpty();
-            boolean allowed = permits(mode, job == null ? null : job.get("action_class", String.class), rejected,
+            boolean allowedHere = permits(mode, job == null ? null : job.get("action_class", String.class), rejected,
                     failover);
             db.execute("INSERT INTO ssh_host_key_observation(observation_id, device_id, endpoint_id, management_address, "
                     + "management_port, key_algorithm, presented_fingerprint, expected_fingerprint, last_job_id, connection_allowed) "
@@ -70,13 +69,53 @@ public final class SshHostKeyPolicyStore {
                     + "DO UPDATE SET last_seen = now(), seen_count = ssh_host_key_observation.seen_count + 1, "
                     + "last_job_id = EXCLUDED.last_job_id, connection_allowed = EXCLUDED.connection_allowed, "
                     + "status = CASE WHEN ssh_host_key_observation.status = 'ACCEPTED' THEN 'OPEN' ELSE ssh_host_key_observation.status END",
-                    UUID.randomUUID().toString(), deviceId, endpointId, host, port, algorithm, presented, expected, jobId, allowed);
-            if (allowed) {
+                    UUID.randomUUID().toString(), deviceId, endpointId, host, port, algorithm, presented, expected, jobId, allowedHere);
+            if (allowedHere) {
                 db.execute("UPDATE jobs SET ssh_identity_unverified = true WHERE job_id = ? AND lease_epoch = ?", jobId, epoch);
                 if (deviceId != null) db.execute("UPDATE devices SET ssh_identity_unverified = true WHERE device_id = ?", deviceId);
             }
-            return allowed;
+            return allowedHere;
         });
+        recordVerdict(observedDevice[0], DeviceIdentityCheckRecorder.MISMATCH);
+        return allowed;
+    }
+
+    /** The device a job's connection belongs to: the job's target, else the owner of the endpoint it dialled. */
+    private static String deviceOf(DSLContext db, org.jooq.Record job, String endpointId) {
+        String deviceId = job == null ? null : job.get("target_device_id", String.class);
+        if (deviceId == null) {
+            var endpoint = db.fetchOne("SELECT device_id FROM endpoints WHERE endpoint_id = ?", endpointId);
+            if (endpoint != null) deviceId = endpoint.get(0, String.class);
+        }
+        return deviceId;
+    }
+
+    /**
+     * The presented host key equalled the pinned one ({@code firstUse} false) or was pinned by this very connection
+     * ({@code firstUse} true: nothing to compare yet, so it is not a match). Written apart from the trust decision, so
+     * a failed write can never change what the connection does (PO decision 2026-10-18, V165).
+     */
+    public void recordPinnedComparison(String jobId, long epoch, String endpointId, boolean firstUse) {
+        try {
+            String deviceId = transactions.inTransaction(db -> deviceOf(db, db.fetchOne(
+                    "SELECT target_device_id FROM jobs WHERE job_id = ? AND lease_epoch = ? AND state IN ('CLAIMED', 'EXECUTING')",
+                    jobId, epoch), endpointId));
+            recordVerdict(deviceId, firstUse ? DeviceIdentityCheckRecorder.FIRST_USE : DeviceIdentityCheckRecorder.MATCH);
+        } catch (RuntimeException unavailable) {
+            // A missing record leaves the screen at "Not verified yet".
+        }
+    }
+
+    private void recordVerdict(String deviceId, String verdict) {
+        if (deviceId == null) return;
+        try {
+            transactions.inTransaction(db -> {
+                DeviceIdentityCheckRecorder.forDevice(db, deviceId, DeviceIdentityCheckRecorder.SSH_HOST_KEY, verdict);
+                return null;
+            });
+        } catch (RuntimeException unavailable) {
+            // A missing record leaves the screen at "Not verified yet".
+        }
     }
 
     /** Existing discovery candidates are management-plane evidence; direct facts are not substituted. */

@@ -77,6 +77,36 @@ public final class DeviceRegistrationController {
         body.put("policy_read_at", p.flatMap(com.securityexpert.nexus.ui2.persistence.device.DevicePolicyInstall::observedAt)
                 .map(Object::toString).orElse(null));
     }
+    private com.securityexpert.nexus.ui2.persistence.device.DeviceIdentityCheckRepository identityCheckRepository =
+            com.securityexpert.nexus.ui2.persistence.device.DeviceIdentityCheckRepository.NONE;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setIdentityCheckRepository(com.securityexpert.nexus.ui2.persistence.device.DeviceIdentityCheckRepository repository) {
+        this.identityCheckRepository = repository;
+    }
+
+    /**
+     * "Identity verified" on the device header follows the worker's last pinned-identity comparison (PO decision
+     * 2026-10-18, V165), never enrollment alone: VERIFIED (it matched), MISMATCH (it did not, or the recorded
+     * first-contact identity is in conflict), NOT_VERIFIED (never compared, first use, or a transport with no pin).
+     * Only verdict words and a time: no fingerprint, key or address.
+     */
+    static Map<String, Object> toIdentityCheckBody(
+            com.securityexpert.nexus.ui2.persistence.device.DeviceIdentityCheck check) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("state", check.state().name());
+        body.put("basis", check.basis());
+        body.put("first_use", check.verdict().filter("FIRST_USE"::equals).isPresent());
+        body.put("checked_at", check.checkedAt().map(Object::toString).orElse(null));
+        return body;
+    }
+
+    private Map<String, Object> identityCheckBody(String deviceId,
+            Map<String, com.securityexpert.nexus.ui2.persistence.device.DeviceIdentityCheck> all) {
+        return toIdentityCheckBody(all.getOrDefault(deviceId,
+                com.securityexpert.nexus.ui2.persistence.device.DeviceIdentityCheck.none(deviceId)));
+    }
+
     private com.securityexpert.nexus.ui2.service.overview.OverviewService overviewService;
 
     /** V77: the onboarding flow (docs/design/DEVICE_ONBOARDING_FLOW_CONTRACT.md). */
@@ -270,6 +300,8 @@ public final class DeviceRegistrationController {
                 platformFacts.flatMap(DevicePlatformFacts::platformFamily));
         putPlatformFacts(body, platformFacts);
         putPolicyInstall(body, policyInstallRepository.find(deviceId));
+        body.put("identity_check", toIdentityCheckBody(identityCheckRepository.find(deviceId)
+                .orElse(com.securityexpert.nexus.ui2.persistence.device.DeviceIdentityCheck.none(deviceId))));
         body.put("onboarding", toOnboardingBody(onboardingRepository.find(deviceId).orElse(null)));
         return ResponseEntity.ok(body);
     }
@@ -278,6 +310,7 @@ public final class DeviceRegistrationController {
     public ResponseEntity<Map<String, Object>> listDevices() {
         Map<String, DevicePlatformFacts> platformFacts = platformFactsRepository.findAll();
         Map<String, com.securityexpert.nexus.ui2.persistence.device.DevicePolicyInstall> policies = policyInstallRepository.findAll();
+        Map<String, com.securityexpert.nexus.ui2.persistence.device.DeviceIdentityCheck> identityChecks = identityCheckRepository.findAll();
         Map<String, java.time.Instant> inventoryAt = overviewService == null ? Map.of() : overviewService.latestInventoryAll();
         Map<String, com.securityexpert.nexus.ui2.persistence.device.DeviceOnboarding> openFlows = new java.util.HashMap<>();
         onboardingRepository.findOpen().forEach(flow -> openFlows.put(flow.deviceId(), flow));
@@ -289,6 +322,7 @@ public final class DeviceRegistrationController {
                     putPolicyInstall(body, Optional.ofNullable(policies.get(summary.deviceId())));
                     java.time.Instant inv = inventoryAt.get(summary.deviceId());
                     body.put("inventory_collected_at", inv == null ? null : inv.toString());
+                    body.put("identity_check", identityCheckBody(summary.deviceId(), identityChecks));
                     body.put("onboarding", toOnboardingBody(openFlows.get(summary.deviceId())));
                     return body;
                 })

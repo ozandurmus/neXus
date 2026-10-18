@@ -76,17 +76,19 @@ describe("Devices screen after the Fable review", () => {
     window.history.replaceState({}, "", "/?screen=inventory&cluster_ref=CLS-ROMEO-01");
     stubFleet();
     const { container } = render(withTheme(<InventoryScreen />));
-    await waitFor(() => expect(screen.getByText(/CLS > /)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("heading", { name: "CLS-ROMEO-01" })).toBeInTheDocument());
+    expect(screen.queryByText(/CLS > /)).toBeNull();
 
     const cards = [...container.querySelectorAll("[data-member-card]")].map((el) => el.getAttribute("data-member-card"));
     expect(cards).toEqual(["tango-01", "tango-02"]);
     const card1 = container.querySelector('[data-member-card="tango-01"]') as HTMLElement;
     expect(within(card1).getByText("STANDBY")).toHaveAttribute("data-role", "STANDBY");
 
-    const strip = screen.getByRole("navigation", { name: "This cluster on other screens" });
-    const hrefs = within(strip).getAllByRole("link").map((a) => [a.textContent, a.getAttribute("href")]);
+    // F-21: the "This cluster in:" strip is gone; Backups and Readiness are pills in the header card.
+    expect(screen.queryByRole("navigation", { name: "This cluster on other screens" })).toBeNull();
+    const header = screen.getByRole("heading", { name: "CLS-ROMEO-01" }).closest("div[class*=MuiBox-root]")!.parentElement!.parentElement!.parentElement as HTMLElement;
+    const hrefs = within(header).getAllByRole("link").map((a) => [a.textContent, a.getAttribute("href")]);
     expect(hrefs).toEqual([
-      ["Device screen", "?screen=inventory&cluster_ref=CLS-ROMEO-01"],
       ["Backups", "?screen=backups&q=CLS-ROMEO-01"],
       ["Readiness", "?screen=operations&cluster_ref=CLS-ROMEO-01"],
     ]);

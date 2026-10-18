@@ -91,9 +91,11 @@ describe("InventoryScreen device selection and panels", () => {
       render(withTheme(<InventoryScreen />));
       fireEvent.click(await screen.findByText("FW-TANGO-04"));
       await screen.findByRole("tablist", { name: "Device detail" });
-      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(6));
+      await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(7));
+      // The lifecycle is a cell of the Platform identity grid (Configuration tab), so the header no longer reads it; the
+      // header's "Config read" age asks the small configuration summary route instead (F-9).
       expect(fetchMock.mock.calls.map(([url]) => url).sort()).toEqual([
-        "/api/v2/ssh-trust?device_id=dev-1", "/devices", "/devices/dev-1", "/devices/dev-1/https-certificate", "/devices/dev-1/inventory", "/devices/dev-1/lifecycle",
+        "/api/v2/overview", "/api/v2/ssh-trust?device_id=dev-1", "/devices", "/devices/dev-1", "/devices/dev-1/configuration", "/devices/dev-1/https-certificate", "/devices/dev-1/inventory",
       ]);
       expect(screen.getByText("This device has not been collected yet. Use Collect now to read its interfaces.")).toBeInTheDocument();
       expect(screen.queryByText("Inventory unavailable")).toBeNull();
@@ -103,7 +105,8 @@ describe("InventoryScreen device selection and panels", () => {
 
   it("pairs Identity verified with a red certificate pill and moves the certificate block into the Identity tab", async () => {
     const DAY = 86_400_000;
-    const device = { ...STANDALONE_DEVICE, role: "appliance", vendor_hint: "infoblox", hostname: "FW-NOVEMBER-02" };
+    const device = { ...STANDALONE_DEVICE, role: "appliance", vendor_hint: "infoblox", hostname: "FW-NOVEMBER-02",
+      identity_check: { state: "VERIFIED", basis: "HTTPS_CERTIFICATE", first_use: false, checked_at: "2026-10-18T03:00:00Z" } };
     const bodies: Record<string, unknown> = {
       "/devices": { devices: [device] },
       "/devices/dev-1": { ...device, job: null },
@@ -126,7 +129,7 @@ describe("InventoryScreen device selection and panels", () => {
     const card = await screen.findByLabelText("HTTPS certificate");
     expect(within(card).getByText(/^SHA-256:/)).toBeInTheDocument();
     expect(within(card).getByText("Strict mode: Off")).toBeInTheDocument();
-    expect(screen.getByText(/^Identity verified means the device passed its enrollment confirm read/)).toBeInTheDocument();
+    expect(screen.getByText(/^Identity verified means the last connection compared the SSH host key or HTTPS certificate fingerprint/)).toBeInTheDocument();
     const reference = screen.getByText("Reference");
     expect(card.compareDocumentPosition(reference) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });

@@ -31,11 +31,14 @@ import {
   ClusterContextStrip,
   ContentVersions,
   DeviceIdentityTable,
+  PLATFORM_IDENTITY_GRID_ID,
+  ReferenceCell,
   downloadText,
   orderMembers,
   toCsv,
   vsListOf,
 } from "./DeviceShared";
+import { LifecycleCell } from "./LifecycleScreen";
 import {
   filterProjection,
   projectCheckPoint,
@@ -52,7 +55,7 @@ export { contentVersionText } from "./DeviceShared";
 
 function vendorLabel(vendorHint: string | null | undefined): string {
   if (vendorHint === "check_point") return "Check Point";
-  if (vendorHint === "palo_alto") return "Palo Alto Networks";
+  if (vendorHint === "palo_alto") return "Palo Alto";
   if (vendorHint === "cisco_asa") return "Cisco ASA";
   if (vendorHint === "infoblox") return "Infoblox";
   if (vendorHint === "radware") return "Radware";
@@ -230,6 +233,11 @@ interface IdentityTile {
   readonly value: ReactNode | null;
   /** Shown when the value is null: why it is not there. */
   readonly absent?: string;
+  /**
+   * Three words for three states (UI review 2026-10-18, P1-1B): UNKNOWN keeps its rule (a read was attempted and the value
+   * is unknown, the default), "Not read yet" is a read that has not happened, "Not applicable" a value this device cannot have.
+   */
+  readonly absentWord?: "Not read yet" | "Not applicable";
   readonly mono?: boolean;
 }
 
@@ -244,15 +252,21 @@ export function identityTiles(device: DeviceSummary, collectedAt: string | null)
   const isPaloAlto = device.vendor_hint === "palo_alto";
   const common: IdentityTile[] = [
     { label: "Vendor", value: vendorLabel(device.vendor_hint) },
-    { label: "Model", value: device.model || device.platform_family || null, absent: "not read yet" },
+    { label: "Model", value: device.model || device.platform_family || null, absent: "not read yet", absentWord: "Not read yet" },
   ];
   const tail: IdentityTile[] = [
     { label: "Management address", value: device.management_ip ?? null, absent: "not recorded", mono: true },
     { label: "Enrollment", value: device.enrollment_state || null, absent: "not recorded" },
-    { label: "Last configuration read", value: collectedAt ? <Ts at={collectedAt} /> : null, absent: "never" },
+    { label: "Last configuration read", value: collectedAt ? <Ts at={collectedAt} /> : null, absent: "never", absentWord: "Not read yet" },
+  ];
+  // The Lifecycle and Reference cells of the grid (UI review 2026-10-18, F-9): they used to be a loose line and the Identity tab.
+  const cells: IdentityTile[] = [
+    { label: "Lifecycle", value: <LifecycleCell deviceId={device.device_id} /> },
+    { label: "Reference", value: <ReferenceCell value={device.device_id} />, mono: true },
   ];
   const haRole: IdentityTile = { label: "HA role", value: device.ha_role ? <RoleChip role={device.ha_role} dense /> : device.cluster_member_ref ? null : "Standalone",
-    absent: device.role === "management_server" ? "not read -- MDS high availability needs its own read" : device.cluster_member_ref ? "not reported" : undefined };
+    absent: device.role === "management_server" ? "not read -- MDS high availability needs its own read" : device.cluster_member_ref ? "not reported" : undefined,
+    absentWord: device.role === "management_server" ? "Not read yet" : undefined };
   if (device.vendor_hint === "fortinet") return [
     ...common,
     ...(device.serial_number ? [{ label: "Serial number", value: device.serial_number, mono: true } satisfies IdentityTile] : []),
@@ -261,6 +275,7 @@ export function identityTiles(device: DeviceSummary, collectedAt: string | null)
     haRole,
     ...(vs.length ? [{ label: "VDOMs", value: `${vs.length} · ${vs.join(", ")}` } satisfies IdentityTile] : []),
     ...tail,
+    ...cells,
   ];
   if (device.vendor_hint === "cisco_asa") return [
     ...common,
@@ -268,21 +283,23 @@ export function identityTiles(device: DeviceSummary, collectedAt: string | null)
     { label: "Software version", value: device.software_version, absent: "not read at first contact" },
     haRole,
     ...tail,
+    ...cells,
   ];
   if (!isPaloAlto && device.vendor_hint !== "check_point") return [
     ...common,
     { label: "Software version", value: device.software_version, absent: "not read at first contact" },
     ...tail,
+    ...cells,
   ];
   const needsGate = "not collected -- needs its own gated read";
   return [
     ...common,
-    { label: "Serial number", value: device.serial_number ?? null, absent: isPaloAlto ? "not read yet -- run Inventory collect" : needsGate, mono: true },
+    { label: "Serial number", value: device.serial_number ?? null, absent: isPaloAlto ? "not read yet -- run Inventory collect" : needsGate, absentWord: "Not read yet", mono: true },
     { label: "Software version", value: device.software_version, absent: "not read at first contact" },
     isPaloAlto
-      ? { label: "Content versions", value: device.content_versions ? <ContentVersions versions={device.content_versions} /> : null, absent: "not read yet -- run Inventory collect" }
-      : { label: "Hotfix / Jumbo take", value: device.hotfix_level ?? null, absent: needsGate },
-    { label: "Uptime", value: device.uptime_text ?? null, absent: isPaloAlto ? "not read yet -- run Inventory collect" : needsGate },
+      ? { label: "Content versions", value: device.content_versions ? <ContentVersions versions={device.content_versions} /> : null, absent: "not read yet -- run Inventory collect", absentWord: "Not read yet" }
+      : { label: "Hotfix / Jumbo take", value: device.hotfix_level ?? null, absent: needsGate, absentWord: "Not read yet" },
+    { label: "Uptime", value: device.uptime_text ?? null, absent: isPaloAlto ? "not read yet -- run Inventory collect" : needsGate, absentWord: "Not read yet" },
     haRole,
     { label: isPaloAlto ? "Virtual systems (VSYS)" : "Virtual systems (VSX)", value: vs.length > 0 ? `${vs.length} · ${vs.join(", ")}` : "none" },
     ...tail.slice(0, 2),
@@ -294,15 +311,17 @@ export function identityTiles(device: DeviceSummary, collectedAt: string | null)
       absent: device.role === "management_server"
         ? "not applicable -- a management server installs policy on gateways, it has none of its own"
         : "not read yet -- read every evening at 23:00",
+      absentWord: device.role === "management_server" ? "Not applicable" : "Not read yet",
     },
-    { label: "Platform facts read", value: device.platform_facts_observed_at ? <Ts at={device.platform_facts_observed_at} /> : null, absent: "never" },
+    { label: "Platform facts read", value: device.platform_facts_observed_at ? <Ts at={device.platform_facts_observed_at} /> : null, absent: "never", absentWord: "Not read yet" },
     tail[2],
+    ...cells,
   ];
 }
 
 function IdentityCard({ title, tiles }: { readonly title: string; readonly tiles: readonly IdentityTile[] }) {
   return (
-    <Card sx={{ p: 2, ...CARD }}>
+    <Card id={PLATFORM_IDENTITY_GRID_ID} sx={{ p: 2, ...CARD, scrollMarginTop: 16 }}>
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", mb: 1.5 }}>
         <Box>
           <Typography variant="overline" sx={{ color: m3.onSurfaceVar, letterSpacing: "0.08em" }}>Platform identity</Typography>
@@ -318,7 +337,9 @@ function IdentityCard({ title, tiles }: { readonly title: string; readonly tiles
               <Typography component="div" variant="body2" sx={{ fontWeight: 600, fontFamily: tile.mono ? MONO : undefined, wordBreak: "break-word" }}>{tile.value}</Typography>
             ) : (
               <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, flexWrap: "wrap" }}>
-                <Unknown />
+                {tile.absentWord
+                  ? <Box component="span" sx={{ color: m3.neutralInk, fontWeight: 600, letterSpacing: "0.02em" }}>{tile.absentWord}</Box>
+                  : <Unknown />}
                 <Typography variant="caption" color="text.secondary">{tile.absent}</Typography>
               </Box>
             )}

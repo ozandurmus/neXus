@@ -311,14 +311,14 @@ function FailedJobsCard({ total, reasons, rows, allHref, latest = true }: {
  * When each active gateway last had a policy installed, as the gateway reports it (read every evening at 23:00):
  * counts per calendar day and the oldest date. Dates only -- no threshold, no "outdated" word (PO, 2026-09-23).
  */
-function PolicyInstallCard({ p }: { readonly p: OverviewView["policy_install"] }) {
+function PolicyInstallCard({ p, hideOpenLink = false }: { readonly p: OverviewView["policy_install"]; readonly hideOpenLink?: boolean }) {
   const buckets: Array<[string, number | undefined]> = [
     ["Today", p?.today], ["Yesterday", p?.yesterday], ["2–7 days ago", p?.days_2_7], ["Earlier", p?.older], ["Not read yet", p?.unknown],
   ];
   return (
     <Card sx={CARD}>
       <SectionTitle icon="config" title="Policy installed" hint={`as each gateway reports it · read every evening 23:00${p?.last_read_at ? ` · last read ${relativeAge(p.last_read_at)}` : ""}`}
-        right={<Link href="?screen=inventory" sx={{ fontSize: 13 }}>Open Configuration</Link>} />
+        right={hideOpenLink ? undefined : <Link href="?screen=inventory" sx={{ fontSize: 13 }}>Open Configuration</Link>} />
       {!p || p.state !== "OK" ? (
         <StatePanel variant="not_evaluated" title="Not read yet" body="The first read runs at 23:00 with the nightly inventory collection." />
       ) : (
@@ -413,6 +413,55 @@ export function estateDevicesLabel(d: { active_devices: number; enrolled_devices
   const registered = d.enrolled_devices ?? d.active_devices;
   const notEnrolled = Math.max(0, registered - d.active_devices);
   return `${d.active_devices} enrolled devices${notEnrolled > 0 ? ` (${notEnrolled} more registered, not enrolled)` : ""}`;
+}
+
+/**
+ * "Estate details": policy installed, software and hardware per vendor, inventory evidence age. One component for the
+ * Overview's disclosure and the Devices landing (UI review 2026-10-18, P1-1), so the two can not drift; every slice and
+ * bucket keeps its link to the filtered device list. {@code onDevicesScreen} drops the one link that would lead back to
+ * the screen it is on.
+ */
+export function EstateDetails({ data, onDevicesScreen = false }: { readonly data: OverviewView; readonly onDevicesScreen?: boolean }) {
+  const age = data.inventory_age;
+  const p = data.platform;
+  const n = data.nexus;
+  const neverRead = age?.never ?? 0;
+  return (
+      <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+      <PolicyInstallCard p={data.policy_install} hideOpenLink={onDevicesScreen} />
+
+      {/* Row E -- inventory facts, below the fold */}
+      <Box>
+        <SectionTitle icon="grid" title="Software and hardware" hint={`Per vendor, from the latest reads · facts ${relativeAge(p.evidence_at)} · each slice opens the device list`} />
+        <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "1fr", lg: "1fr 1fr" } }}>
+          <VendorVersions vendor="check_point" name={vendorDisplayName("check_point")} majorTitle="Major version" minorTitle="Jumbo hotfix"
+            modelTitle="Appliance" versions={p.versions?.check_point} fallbackMinor={p.hotfix_levels} total={p.check_point ?? 0} />
+          <VendorVersions vendor="palo_alto" name={vendorDisplayName("palo_alto")} majorTitle="PAN-OS major" minorTitle="Exact version"
+            modelTitle="Model" versions={p.versions?.palo_alto} total={p.palo_alto ?? 0} />
+        </Box>
+      </Box>
+
+      {/* evidence age (the change and cluster lists are the facts above) */}
+      <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" } }}>
+        <Card sx={CARD}>
+          <SectionTitle icon="devices" title="Inventory evidence age" hint={`${age?.of ?? 0} active devices · newest read per device`} />
+          <Donut title="Last successful inventory" centerLabel="devices" slices={[
+            { label: "under 24 h", display: "under 24 h", count: age?.lt24h ?? 0, color: STATUS.good, href: q({ screen: "inventory", inventory_age: "lt24h" }) },
+            { label: "24–72 h", display: "24–72 h", count: age?.h24_72 ?? 0, color: STATUS.warning, href: q({ screen: "inventory", inventory_age: "24h_72h" }) },
+            { label: "over 72 h", display: "over 72 h", count: age?.gt72h ?? 0, color: STATUS.critical, href: q({ screen: "inventory", inventory_age: "gt72h" }) },
+            { label: "never", display: "never", count: neverRead, color: STATUS.neutral, href: q({ screen: "inventory", inventory_age: "never" }) },
+          ].filter((s) => s.count > 0)} />
+          <Box sx={{ mt: 2, pt: 1.5, borderTop: `1px solid ${m3.outlineVar}` }}>
+            <Typography sx={{ fontSize: 12.5, color: m3.onSurfaceVar }}>
+              <Link href={q({ screen: "operations", tab: "jobs" })} underline="hover">neXus</Link>: completed 24 h <b>{n.completed_24h ?? "UNKNOWN"}</b> · running <b>{n.running ?? "UNKNOWN"}</b> ·
+              oldest running {n.oldest_running_submitted_at ? `${relativeAge(n.oldest_running_submitted_at)} (since submitted)` : "none"} ·
+              last inventory: Check Point {relativeAge(n.last_inventory?.check_point)} · Palo Alto {relativeAge(n.last_inventory?.palo_alto)}
+            </Typography>
+          </Box>
+        </Card>
+      </Box>
+      </Box>
+  );
 }
 
 export function OverviewScreen() {
@@ -794,40 +843,7 @@ export function OverviewScreen() {
         </Link>
       </Box>
       <Collapse in={details} unmountOnExit>
-      <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-      <PolicyInstallCard p={data.policy_install} />
-
-      {/* Row E -- inventory facts, below the fold */}
-      <Box>
-        <SectionTitle icon="grid" title="Software and hardware" hint={`Per vendor, from the latest reads · facts ${relativeAge(p.evidence_at)} · each slice opens the device list`} />
-        <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "1fr", lg: "1fr 1fr" } }}>
-          <VendorVersions vendor="check_point" name={vendorDisplayName("check_point")} majorTitle="Major version" minorTitle="Jumbo hotfix"
-            modelTitle="Appliance" versions={p.versions?.check_point} fallbackMinor={p.hotfix_levels} total={p.check_point ?? 0} />
-          <VendorVersions vendor="palo_alto" name={vendorDisplayName("palo_alto")} majorTitle="PAN-OS major" minorTitle="Exact version"
-            modelTitle="Model" versions={p.versions?.palo_alto} total={p.palo_alto ?? 0} />
-        </Box>
-      </Box>
-
-      {/* evidence age (the change and cluster lists are the facts above) */}
-      <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" } }}>
-        <Card sx={CARD}>
-          <SectionTitle icon="devices" title="Inventory evidence age" hint={`${age?.of ?? 0} active devices · newest read per device`} />
-          <Donut title="Last successful inventory" centerLabel="devices" slices={[
-            { label: "under 24 h", display: "under 24 h", count: age?.lt24h ?? 0, color: STATUS.good, href: q({ screen: "inventory", inventory_age: "lt24h" }) },
-            { label: "24–72 h", display: "24–72 h", count: age?.h24_72 ?? 0, color: STATUS.warning, href: q({ screen: "inventory", inventory_age: "24h_72h" }) },
-            { label: "over 72 h", display: "over 72 h", count: age?.gt72h ?? 0, color: STATUS.critical, href: q({ screen: "inventory", inventory_age: "gt72h" }) },
-            { label: "never", display: "never", count: neverRead, color: STATUS.neutral, href: q({ screen: "inventory", inventory_age: "never" }) },
-          ].filter((s) => s.count > 0)} />
-          <Box sx={{ mt: 2, pt: 1.5, borderTop: `1px solid ${m3.outlineVar}` }}>
-            <Typography sx={{ fontSize: 12.5, color: m3.onSurfaceVar }}>
-              <Link href={q({ screen: "operations", tab: "jobs" })} underline="hover">neXus</Link>: completed 24 h <b>{n.completed_24h ?? "UNKNOWN"}</b> · running <b>{n.running ?? "UNKNOWN"}</b> ·
-              oldest running {n.oldest_running_submitted_at ? `${relativeAge(n.oldest_running_submitted_at)} (since submitted)` : "none"} ·
-              last inventory: Check Point {relativeAge(n.last_inventory?.check_point)} · Palo Alto {relativeAge(n.last_inventory?.palo_alto)}
-            </Typography>
-          </Box>
-        </Card>
-      </Box>
-      </Box>
+        <EstateDetails data={data} />
       </Collapse>
     </ScreenRoot>
   );

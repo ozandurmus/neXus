@@ -3,6 +3,7 @@ import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
 import ListSubheader from "@mui/material/ListSubheader";
 import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
 import Link from "@mui/material/Link";
 import Table from "@mui/material/Table";
 import TableBody from "@mui/material/TableBody";
@@ -330,6 +331,23 @@ export function DeviceIdentityTable({ devices, ariaLabel = "Member identity" }: 
         </TableBody>
       </Table>
     </TableContainer>
+  );
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Reference (the neXus id of an entity)
+// ---------------------------------------------------------------------------------------------------------------
+
+/** The anchor the Identity tab's link scrolls to: the Platform identity grid on the Configuration tab. */
+export const PLATFORM_IDENTITY_GRID_ID = "platform-identity-grid";
+
+/** The neXus reference of a device or cluster, with Copy: one cell in the Platform identity grid and a row on the Identity tab. */
+export function ReferenceCell({ value }: { readonly value: string }) {
+  return (
+    <Box component="span" sx={{ display: "inline-flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+      <Box component="span" sx={{ fontFamily: MONO, fontSize: 12.5, wordBreak: "break-all" }}>{value}</Box>
+      <Button size="small" onClick={() => { void navigator.clipboard?.writeText(value).catch(() => undefined); }}>Copy</Button>
+    </Box>
   );
 }
 

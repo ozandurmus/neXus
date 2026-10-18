@@ -95,7 +95,8 @@ describe("F-5: columns that must not clip", () => {
     const ctx = (name: string) => ({ context: name, vs_name: name, ha: null, routes: [], interfaces: [{ ...iface("ethernet1/1"), mac_address: "94:56:41:aa:bb:01", zone: "ZONE-SYNTH" }] }) as unknown as InventoryContext;
     render(as(null, <InterfacesPanel contexts={[ctx("vsys1"), ctx("vsys2")]} virtualSystems={["vsys1", "vsys2"]} member={{ device_id: "pa-1", hostname: "FW-SYNTH-PA" }} isPaloAlto />));
     const headers = screen.getAllByRole("columnheader").map((h) => h.textContent);
-    expect(headers).toEqual(["VSYS", "Interface", "Kind", "VLAN", "Zone", "Address", "Network", "State", "MAC"]);
+    // F-19: the merged view is grouped by VSYS, so the group header carries the name and the column is gone
+    expect(headers).toEqual(["Interface", "Kind", "VLAN", "Zone", "Address", "Network", "State", "MAC"]);
     expect(parseFloat(getComputedStyle(screen.getByRole("columnheader", { name: "Network" })).minWidth)).toBeGreaterThanOrEqual(100);
     // the scope tag shows the name only (the column says VSYS), cut by an ellipsis rather than pushing NETWORK off
     const tag = screen.getAllByText("vsys1")[0];
@@ -239,8 +240,9 @@ describe("P0-3B: a selected virtual system scopes the pane", () => {
     render(as(adminPlanes, <ClusterDetailPanels clusterRef="CLS-SYNTH-01" members={members} initialVs="VS-SYNTH-13" onSelectVs={onSelectVs} />));
     fireEvent.click(await screen.findByRole("button", { name: "CLS-SYNTH-01" }));
     expect(onSelectVs).toHaveBeenCalledWith(null);
-    expect(await screen.findByRole("heading", { name: "CLS > CLS-SYNTH-01" })).toBeInTheDocument();
-    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Interfaces", "Routing", "Cluster members", "Configuration", "Identity", "Failover"].filter((name) => name !== "Configuration"));
+    // F-21: the title is the cluster's name, without the `CLS >` prefix; the badge and tree keep the kind.
+    expect(await screen.findByRole("heading", { name: "CLS-SYNTH-01" })).toBeInTheDocument();
+    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Interfaces", "Routing", "Cluster members", "Configuration", "Logs", "Identity", "Failover"].filter((name) => name !== "Configuration"));
     expect(screen.queryByRole("combobox", { name: "Switch virtual system" })).toBeNull();
   });
 

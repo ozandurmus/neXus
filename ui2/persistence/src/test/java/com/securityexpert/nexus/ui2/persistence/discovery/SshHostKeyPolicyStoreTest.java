@@ -43,6 +43,31 @@ class SshHostKeyPolicyStoreTest {
         assertFalse(fixture.sql.stream().anyMatch(s -> s.contains("UPDATE jobs")));
     }
 
+    @Test void aMismatchIsRecordedAsTheDevicesLastComparison() {
+        var fixture = new Fixture();
+        fixture.store.observe("job-fixture", 1, false, "endpoint-fixture", "192.0.2.10", 22,
+                "ssh-ed25519", "1".repeat(64), "0".repeat(64));
+        assertEquals(List.of(List.of("SSH_HOST_KEY", "MISMATCH", "device-fixture")), fixture.identityChecks);
+        assertTrue(fixture.identityChecks.stream().flatMap(List::stream).noneMatch(b -> b.contains("1".repeat(64))),
+                "no fingerprint is stored with the verdict");
+    }
+
+    @Test void aMatchedOrFirstUseConnectionIsRecordedAndNeverFromTheTrustDecision() {
+        var fixture = new Fixture();
+        fixture.store.recordPinnedComparison("job-fixture", 1, "endpoint-fixture", false);
+        fixture.store.recordPinnedComparison("job-fixture", 1, "endpoint-fixture", true);
+        assertEquals(List.of(List.of("SSH_HOST_KEY", "MATCH", "device-fixture"),
+                List.of("SSH_HOST_KEY", "FIRST_USE", "device-fixture")), fixture.identityChecks,
+                "a key pinned by this very connection had nothing to be compared with, so it is not a match");
+    }
+
+    @Test void aFailedRecordingIsSwallowedSoTheConnectionIsUnaffected() {
+        var fixture = new Fixture(); fixture.failIdentityRecording = true;
+        assertDoesNotThrow(() -> fixture.store.recordPinnedComparison("job-fixture", 1, "endpoint-fixture", false));
+        assertTrue(fixture.store.observe("job-fixture", 1, false, "endpoint-fixture", "192.0.2.10", 22,
+                "ssh-ed25519", "1".repeat(64), "0".repeat(64)), "WARN mode still admits a read after a failed record");
+    }
+
     @Test void settingsAreValidatedPersistedAndAudited() {
         var fixture = new Fixture();
         fixture.store.mode("STRICT", "actor-fixture");
@@ -53,7 +78,8 @@ class SshHostKeyPolicyStoreTest {
 
     static final class Fixture {
         final List<String> sql = new ArrayList<>();
-        boolean rejected, failObservation;
+        boolean rejected, failObservation, failIdentityRecording;
+        final List<List<String>> identityChecks = new ArrayList<>();
         final SshHostKeyPolicyStore store;
         Fixture() {
             DSLContext db = DSL.using(new MockConnection(ctx -> {
@@ -64,6 +90,11 @@ class SshHostKeyPolicyStoreTest {
                 if (query.startsWith("SELECT 1")) return rejected ? row(new String[]{"exists"}, new Object[]{1})
                         : new MockResult[]{new MockResult(0, DSL.using(SQLDialect.POSTGRES).newResult(DSL.field("exists", Integer.class)))};
                 if (failObservation && query.startsWith("INSERT INTO ssh_host_key_observation")) throw new java.sql.SQLException("synthetic audit failure");
+                if (query.startsWith("INSERT INTO device_identity_check")) {
+                    if (failIdentityRecording) throw new java.sql.SQLException("synthetic: table missing");
+                    identityChecks.add(Arrays.stream(ctx.bindings()).map(String::valueOf).toList());
+                }
+                if (query.startsWith("SELECT target_device_id FROM jobs")) return row(new String[]{"target_device_id"}, new Object[]{"device-fixture"});
                 return new MockResult[]{new MockResult(1, null)};
             }), SQLDialect.POSTGRES);
             store = new SshHostKeyPolicyStore(new TransactionBoundary() {
