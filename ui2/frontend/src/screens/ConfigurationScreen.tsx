@@ -7,6 +7,7 @@ import Typography from "@mui/material/Typography";
 
 import { ScreenHeader, ListDetail, EmptyPanel, ScreenRoot } from "../shell/ScreenLayout";
 import { M3Button, StatusChip } from "../shell/M3Widgets";
+import { PLANE_COLLECT } from "../shell/actionAccess";
 import { m3 } from "../theme/m3Theme";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { listConfigurations, listDevices, requestBulkConfigurationCollect, type ApiError, type ConfigurationDeviceListEntry, type DeviceSummary } from "../auth/adminApi";
@@ -159,7 +160,7 @@ export function ConfigurationScreen() {
         subtitle={devices === null ? "Loading…" : `${collectedCount} device${collectedCount === 1 ? "" : "s"} collected${uncollectedCount > 0 ? ` · ${uncollectedCount} not collected` : ""}`}
         actions={
           <Stack direction="row" spacing={1.5}>
-            <M3Button deviceJob emphasis="tonal" icon="operations" disabled={bulkBusy} onClick={handleBulkCollect}>
+            <M3Button deviceJob plane={PLANE_COLLECT} emphasis="tonal" icon="operations" disabled={bulkBusy} onClick={handleBulkCollect}>
               {bulkBusy ? "Starting..." : "Collect All"}
             </M3Button>
           </Stack>

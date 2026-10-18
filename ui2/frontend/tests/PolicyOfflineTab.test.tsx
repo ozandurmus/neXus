@@ -81,3 +81,31 @@ it("invalid mapping stays disabled and failed uploads never show a fabricated re
   fireEvent.click(screen.getByLabelText(/I confirm the mapping/)); fireEvent.click(screen.getByRole("button", { name: "Upload and analyze" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("CSV_ROW_LIMIT"); expect(screen.queryByText("Sample summary")).not.toBeInTheDocument();
 });
+it("viewer gets a disabled dropzone that says Role: not permitted and counts the stored analyses (UI review 2026-10-18, P0-4B)", async () => {
+  render(<PolicyOfflineTab policy="p1" openRule={vi.fn()} />);
+  const zone = await screen.findByRole("group", { name: "SIEM CSV upload" });
+  expect(zone).toHaveAttribute("aria-disabled", "true");
+  expect(zone).toHaveTextContent("Drop a SIEM CSV here · Role: not permitted");
+  expect(zone).toHaveTextContent("1 stored analysis for this policy");
+  expect(screen.queryByLabelText("SIEM CSV file")).not.toBeInTheDocument();
+});
+it("says there is no stored analysis when the viewer's list is empty, and shows no dropzone to an administrator", async () => {
+  vi.mocked(listOfflineAnalyses).mockResolvedValue({ analyses: [], canManage: false });
+  const { unmount } = render(<PolicyOfflineTab policy="p1" openRule={vi.fn()} />);
+  expect(await screen.findByText("No stored analysis for this policy.")).toBeInTheDocument();
+  unmount();
+  vi.mocked(listOfflineAnalyses).mockResolvedValue({ analyses: [result], canManage: true });
+  render(<PolicyOfflineTab policy="p1" openRule={vi.fn()} />);
+  await screen.findByLabelText("SIEM CSV file");
+  expect(screen.queryByRole("group", { name: "SIEM CSV upload" })).not.toBeInTheDocument();
+});
+it("shows no dropzone before a policy is chosen or while the list is loading", async () => {
+  const { unmount } = render(<PolicyOfflineTab policy="" openRule={vi.fn()} />);
+  expect(screen.getByText("Select a stored policy first.")).toBeInTheDocument();
+  expect(screen.queryByRole("group", { name: "SIEM CSV upload" })).not.toBeInTheDocument();
+  unmount();
+  vi.mocked(listOfflineAnalyses).mockReturnValue(new Promise(() => undefined));
+  render(<PolicyOfflineTab policy="p1" openRule={vi.fn()} />);
+  expect(screen.getByRole("status")).toHaveTextContent("Loading stored analyses");
+  expect(screen.queryByRole("group", { name: "SIEM CSV upload" })).not.toBeInTheDocument();
+});

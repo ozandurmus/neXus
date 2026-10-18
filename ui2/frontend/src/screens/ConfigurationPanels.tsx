@@ -13,6 +13,7 @@ import { M3Button, M3Tabs, StatusChip } from "../shell/M3Widgets";
 import { jobPhaseLabel, isTerminalJobState } from "../shell/deviceCopy";
 import { MONO, m3 } from "../theme/m3Theme";
 import { RoleChip } from "../shell/States";
+import { PLANE_COLLECT } from "../shell/actionAccess";
 import { formatUtc } from "../shell/time";
 import {
   getDevice,
@@ -233,8 +234,10 @@ export function ConfigurationCollectNowButton({
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5, alignItems: "flex-start" }}>
-      <M3Button deviceJob emphasis="filled" icon="download" onClick={handleClick} disabled={phase === "submitting" || phase === "polling"}>
-        {phase === "polling" ? jobPhaseLabel(jobState ?? "REQUESTED") : "Collect now"}
+      {/* One "Collect now" per device (UI review 2026-10-18, F-7): the device header carries it (it reads the inventory).
+          This one starts the separate configuration read, so it keeps its own name and a quieter emphasis. */}
+      <M3Button deviceJob plane={PLANE_COLLECT} emphasis="tonal" icon="download" onClick={handleClick} disabled={phase === "submitting" || phase === "polling"}>
+        {phase === "polling" ? jobPhaseLabel(jobState ?? "REQUESTED") : "Read configuration"}
       </M3Button>
       {error && (
         <Typography variant="body2" color="error">
@@ -359,7 +362,7 @@ export function DeviceConfigurationPanels({
                 <IndexTable
                   index={index}
                   emptyTitle="No configuration index"
-                  emptyBody="This device has not been collected yet. Use Collect now to read its configuration."
+                  emptyBody="This device has not been collected yet. Use Read configuration to read its configuration."
                 />
               </Stack>
             ),

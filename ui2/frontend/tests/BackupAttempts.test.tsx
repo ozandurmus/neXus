@@ -33,9 +33,9 @@ describe("backup attempt transcript entry points", () => {
     const allowed = role === "backup_admin" || role === "security_admin";
     stubJobs([attempt("COMPLETED", allowed), attempt("FAILED", allowed)]);
     render(<BackupAttempts deviceId="device-synthetic" />);
-    await screen.findByText("COMPLETED");
+    await screen.findByText("Completed");
     expect(screen.queryAllByRole("button", { name: "Transcript" })).toHaveLength(allowed ? 2 : 0);
-    const failure = screen.getByText("FAILED: Synthetic collection failure").parentElement!;
+    const failure = screen.getByText("Failed · Synthetic collection failure").parentElement!;
     expect(within(failure).queryByRole("button", { name: "Transcript" }) !== null).toBe(allowed);
   });
 
@@ -60,18 +60,21 @@ describe("backup attempt transcript entry points", () => {
     stubJobs([attempt(state, allowed)]);
     render(<BackupScreen />);
     const row = (await screen.findByText("FW-TANGO-04")).closest("tr")!;
-    await within(row).findByText(state === "FAILED" ? "FAILED: Synthetic collection failure" : state);
+    const word = state === "FAILED" ? "Failed · Synthetic collection failure" : "Completed";
+    await within(row).findByText(word);
     expect(within(row).queryAllByRole("button", { name: "Transcript" })).toHaveLength(allowed ? 1 : 0);
-    fireEvent.click(within(row).getByRole("button", { name: "History" }));
+    // The row actions live in the row's menu (UI review 2026-10-18, F-4); History is always reachable, even without an archive.
+    fireEvent.click(within(row).getByRole("button", { name: "Actions for FW-TANGO-04" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "History" }));
     const dialog = await screen.findByRole("dialog");
-    await within(dialog).findByText(state === "FAILED" ? "FAILED: Synthetic collection failure" : state);
+    await within(dialog).findByText(word);
     expect(within(dialog).queryAllByRole("button", { name: "Transcript" })).toHaveLength(allowed ? 1 : 0);
   });
 
   it.each([true, false])("Inventory uses the server affordance (%s) for both outcomes", async (allowed) => {
     stubJobs([attempt("COMPLETED", allowed), attempt("FAILED", allowed)]);
     render(<BackupPanel deviceId="device-synthetic" />);
-    await screen.findByText("COMPLETED");
+    await screen.findByText("Completed");
     expect(screen.queryAllByRole("button", { name: "Transcript" })).toHaveLength(allowed ? 2 : 0);
   });
 

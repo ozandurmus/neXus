@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
@@ -137,10 +137,15 @@ describe("read-only roles see locked controls with a role reason", () => {
       stub();
       render(as(viewerPlanes, <JobWindowContext.Provider value={closedWindow}><BackupScreen /></JobWindowContext.Provider>));
       const row = (await screen.findByText("FW-TANGO-04-M1")).closest("tr")!;
-      expect(within(row).getByRole("checkbox", { name: "Backup target FW-TANGO-04-M1" })).toBeDisabled();
-      expect(within(row).getByRole("button", { name: "Backup Now · Role: not permitted" })).toBeDisabled();
       expect(screen.getByRole("button", { name: "Run Fleet Backup · Role: not permitted" })).toBeDisabled();
       expect(screen.getByRole("status")).toHaveTextContent(ROLE_REFUSAL);
+      // A role that cannot change the target sees a read-only pill, not a switch that looks live (F-4); no checkbox at all.
+      expect(within(row).queryByRole("checkbox")).toBeNull();
+      expect(within(row).getByRole("img", { name: "Backup target FW-TANGO-04-M1: on, locked for your role" })).toBeInTheDocument();
+      expect(within(row).getByText("Target · locked")).toBeInTheDocument();
+      // Backup Now stays in the row menu, disabled, with the role suffix and never the window wording.
+      fireEvent.click(within(row).getByRole("button", { name: "Actions for FW-TANGO-04-M1" }));
+      expect(await screen.findByRole("menuitem", { name: "Backup Now · Role: not permitted" })).toHaveAttribute("aria-disabled", "true");
       expect(screen.queryByText(/Next window/)).toBeNull();
     });
 

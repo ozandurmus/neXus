@@ -16,6 +16,7 @@ import { PolicyLookupTab } from "./PolicyLookupTab";
 import { PolicyChangesTab } from "./PolicyChangesTab";
 import { PolicyHygieneTab } from "./PolicyHygieneTab";
 import { PolicyDomainTab } from "./PolicyDomainTabs";
+import { PolicyContainerPrompt } from "./PolicyContainerPrompt";
 
 // The policy page API returns a fixed 200 rules per page (PolicyQueryService.page); the client does not choose it.
 const RULE_PAGE_SIZE = 200;
@@ -653,6 +654,8 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
         {(tab === "Objects" || tab === "Installation") && objectMetadata && <PolicyDomainTab
           key={`${tab}:${objectMetadata.sourceId}:${objectMetadata.containerId}:${revision}`}
           tab={tab} metadata={objectMetadata} policies={catalog} />}
+        {(tab === "Objects" || tab === "Installation") && !objectMetadata && !loadingTree && !error && <PolicyContainerPrompt tab={tab} now={now} open={openContainer}
+          rows={summaries.map(row => ({ ...row, containerName: displayName(row.containerName, "Policy container"), sourceName: displayName(row.sourceName, "Management server") }))} />}
         <Box hidden={tab !== "Lookup"}>
           <PolicyLookupTab policies={catalog} policy={selected} selectPolicy={setSelected}
             openRule={(policy, rule) => { setSelected(policy); setLookupRule({ policy, rule }); }} />

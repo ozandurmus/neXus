@@ -92,13 +92,16 @@ describe("the Backups screen (UI review 2026-09-23)", () => {
     render(<BackupScreen />);
     const row = (await screen.findByText("FW-TANGO-04-M1")).closest("tr")!;
     expect(within(row).getByRole("checkbox", { name: "Backup target FW-TANGO-04-M1" })).toBeChecked();
-    expect(within(row).getByText("2026-09-22 14:43:28")).toBeInTheDocument();
+    expect(within(row).getByText("2026-09-22 14:43")).toBeInTheDocument();
+    // every action moved into the row's menu (F-4): the row itself carries no action button but the menu trigger
+    expect(within(row).queryByRole("button", { name: "Backup Now" })).toBeNull();
+    fireEvent.click(within(row).getByRole("button", { name: "Actions for FW-TANGO-04-M1" }));
     for (const action of ["Backup Now", "Snapshot", "History", "Contents", "Compare", "Download"]) {
-      expect(within(row).getByRole("button", { name: action })).toBeInTheDocument();
+      expect(screen.getByRole("menuitem", { name: action })).toBeInTheDocument();
     }
-    // validation is an evidence grade (neutral), CHANGED an attention word
+    // validation is an evidence grade (neutral); a byte change stays neutral until a comparison has run
     expect(within(row).getByText("Checked")).toBeInTheDocument();
-    expect(within(row).getByText("Changed since last")).toBeInTheDocument();
+    expect(within(row).getByText("Bytes changed")).toBeInTheDocument();
     // a target without an archive says so
     expect(within((await screen.findByText("FW-ROMEO-01-M1")).closest("tr")!).getByText("No archive")).toBeInTheDocument();
   });
@@ -111,7 +114,7 @@ describe("the Backups screen (UI review 2026-09-23)", () => {
     ]);
     render(<BackupScreen />);
     expect((await screen.findAllByText("Checked")).length).toBeGreaterThan(0);
-    expect(screen.getByText("Changed since last")).toBeInTheDocument();
+    expect(screen.getByText("Bytes changed")).toBeInTheDocument();
     expect(screen.getByText("First backup")).toBeInTheDocument();
     expect(screen.getByText("Major change")).toBeInTheDocument();
   });

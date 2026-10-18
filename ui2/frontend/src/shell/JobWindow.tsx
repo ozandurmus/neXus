@@ -48,16 +48,41 @@ export function JobWindowProvider({ children }: { children: ReactNode }) {
 export function useJobWindow() { return useContext(JobWindowContext); }
 
 /**
+ * The one suffix rule for every gated control (UI review 2026-10-18, F-7): a control a role may not use ends with
+ * "Role: not permitted"; a device-job control outside its window ends with "Next window: HH:MM". Buttons render it as
+ * " · <suffix>" after the label, menu items the same way, so the same fact reads the same everywhere. The role reason
+ * wins over the window (the window would wrongly promise the action opens up at that time).
+ */
+export interface Gate {
+  /** True when the control must not be used right now (role refused, a fixed reason, or the device-job window is closed). */
+  readonly locked: boolean;
+  /** The words after the label ("Role: not permitted", "Next window: 12:00", a fixed reason), or null when usable. */
+  readonly suffix: string | null;
+}
+
+export function useGate(plane?: string | readonly string[], options: { readonly deviceJob?: boolean; readonly lockedReason?: string } = {}): Gate {
+  const jobWindow = useJobWindow();
+  const roleAllowed = useRoleAllows(plane);
+  if (options.lockedReason) return { locked: true, suffix: options.lockedReason };
+  if (!roleAllowed) return { locked: true, suffix: ROLE_LOCK_LABEL };
+  if (options.deviceJob && !jobWindow.open) return { locked: true, suffix: jobWindow.label };
+  return { locked: false, suffix: null };
+}
+
+/** `label · suffix`, or the bare label when the control is usable. */
+export function withGateSuffix(label: string, gate: Gate): string {
+  return gate.suffix ? `${label} · ${gate.suffix}` : label;
+}
+
+/**
  * A window-gated device-job button. With `plane`, a session that does not hold that plane sees it locked with the
  * role reason instead of "Next window" (which would wrongly promise the action opens up at that time).
  */
-export function JobButton({ disabled, children, plane, sx, ...props }: ButtonProps & { readonly plane?: string }) {
-  const window = useJobWindow();
-  const roleAllowed = useRoleAllows(plane);
-  const note = !roleAllowed ? ROLE_LOCK_LABEL : window.label;
+export function JobButton({ disabled, children, plane, sx, ...props }: ButtonProps & { readonly plane?: string | readonly string[] }) {
+  const gate = useGate(plane, { deviceJob: true });
   return (
-    <Button {...props} sx={[DISABLED_STYLE, ...(Array.isArray(sx) ? sx : [sx])]} disabled={disabled || !roleAllowed || !window.open}>
-      {children}{note && ` · ${note}`}
+    <Button {...props} sx={[DISABLED_STYLE, ...(Array.isArray(sx) ? sx : [sx])]} disabled={disabled || gate.locked}>
+      {children}{gate.suffix && ` · ${gate.suffix}`}
     </Button>
   );
 }

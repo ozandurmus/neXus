@@ -154,7 +154,7 @@ describe("ConfigurationScreen device selection and panels", () => {
     expect(screen.getByText(/address\/addr-2/)).toBeInTheDocument();
   });
 
-  it("Collect now submits, polls the device, and refreshes the configuration once the job is terminal", async () => {
+  it("Read configuration submits, polls the device, and refreshes the configuration once the job is terminal", async () => {
     let devicePollCount = 0;
     const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
@@ -211,7 +211,7 @@ describe("ConfigurationScreen device selection and panels", () => {
     fireEvent.click(screen.getByText("fw-edge-1"));
     fireEvent.click(await screen.findByRole("tab", { name: "Details" }));
 
-    const collectButton = await screen.findByRole("button", { name: "Collect now" });
+    const collectButton = await screen.findByRole("button", { name: "Read configuration" });
     fireEvent.click(collectButton);
 
     await waitFor(() =>

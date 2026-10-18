@@ -10,7 +10,8 @@ import Typography from "@mui/material/Typography";
 import { ScreenHeader, ListDetail, EmptyPanel, ScreenRoot } from "../shell/ScreenLayout";
 import { Icon } from "../shell/Icon";
 import { M3Button, StatusChip } from "../shell/M3Widgets";
-import { PLANE_ADMIN } from "../shell/actionAccess";
+import { PLANE_ADMIN, PLANE_COLLECT } from "../shell/actionAccess";
+import { plural } from "../shell/plural";
 import { MONO, m3 } from "../theme/m3Theme";
 import { RoleChip } from "../shell/States";
 import { FilterBar, FilterRow, ListSettingsMenu, contentVersionText, downloadText, isDeviceLive, toCsv } from "./DeviceShared";
@@ -410,7 +411,7 @@ export function DeviceList(props: DeviceListProps) {
               </Box>
               {/* Listed manager inventory is external; Infoblox rows count their listed grid members. */}
               {manager.vendor_hint === "infoblox" ? (
-                <StatusChip tone="neutral" label={`${listed.length} members`} dense />
+                <StatusChip tone="neutral" label={plural(listed.length, "member")} dense />
               ) : (total > 0 || manager.vendor_hint === "check_point" || manager.vendor_hint === "palo_alto") && (
                 <StatusChip tone="neutral" label={`${total} managed`} dense />
               )}
@@ -1077,10 +1078,10 @@ export function InventoryScreen() {
               onClick={() => downloadText(`devices-${new Date().toISOString().replace(/[:.]/g, "-")}.csv`, inventoryCsv(sortedDevices))}>
               Export inventory
             </M3Button>
-            <M3Button deviceJob emphasis="tonal" icon="operations" disabled={bulkBusy} onClick={handleBulkCollect}>
+            <M3Button deviceJob plane={PLANE_COLLECT} emphasis="tonal" icon="operations" disabled={bulkBusy} onClick={handleBulkCollect}>
               {bulkBusy ? "Starting..." : "Bulk Collect"}
             </M3Button>
-            <M3Button deviceJob emphasis="tonal" icon="config" disabled={configBulkBusy} onClick={handleConfigBulk}>
+            <M3Button deviceJob plane={PLANE_COLLECT} emphasis="tonal" icon="config" disabled={configBulkBusy} onClick={handleConfigBulk}>
               {configBulkBusy ? "Starting..." : "Read configuration, all"}
             </M3Button>
             <M3Button emphasis="filled" icon="plus" href="?screen=administration" plane={PLANE_ADMIN}>Add device</M3Button>
@@ -1207,6 +1208,7 @@ export function InventoryScreen() {
                 clusterRef={selectedCluster.ref}
                 members={selectedCluster.members}
                 initialVs={selectedCluster.initialVs}
+                onSelectVs={(vs) => setSelectedCluster((current) => current ? { ...current, initialVs: vs ?? undefined } : current)}
                 cache={clusterCacheRef.current}
                 onCacheUpdate={(ref, inv) => clusterCacheRef.current.set(ref, inv)}
                 initialTab={initialTab}
@@ -1217,24 +1219,25 @@ export function InventoryScreen() {
             ) : selectedDevice ? (
               <Stack spacing={2}>
                 <SshHostKeyPanel key={selectedDevice.device_id} deviceId={selectedDevice.device_id} />
-                {selectedDevice.role === "management_server" && selectedDevice.vendor_hint !== "bluecoat" && selectedDevice.vendor_hint !== "fortinet" && (
-                  <ManagementTreePanel
-                    deviceId={selectedDevice.device_id}
-                    onOpenDevice={(id) => {
-                      const d = devices?.find((x) => x.device_id === id);
-                      if (d) { setSelectedCluster(null); setSelectedDeviceVs(null); setSelectedDevice(d); }
-                    }}
-                    onOpenCluster={(ref) => {
-                      const members = (devices ?? []).filter((x) => x.cluster_member_ref === ref);
-                      if (members.length > 0) { setSelectedDevice(null); setSelectedCluster({ ref, members }); }
-                    }}
-                  />
-                )}
-                <Box component="a" href={`?screen=policy&device_id=${encodeURIComponent(selectedDevice.device_id)}`} sx={{ color: m3.primary }}>Open assigned policy</Box>
                 <DeviceInventoryPanels
                   key={selectedDevice.device_id}
                   device={selectedDevice}
                   initialVs={selectedDeviceVs ?? undefined}
+                  onSelectVs={(vs) => setSelectedDeviceVs(vs)}
+                  belowHeader={<Box component="a" href={`?screen=policy&device_id=${encodeURIComponent(selectedDevice.device_id)}`} sx={{ color: m3.primary, alignSelf: "flex-start" }}>Open assigned policy</Box>}
+                  managedEstate={selectedDevice.role === "management_server" && selectedDevice.vendor_hint !== "bluecoat" && selectedDevice.vendor_hint !== "fortinet" ? (
+                    <ManagementTreePanel
+                      deviceId={selectedDevice.device_id}
+                      onOpenDevice={(id) => {
+                        const d = devices?.find((x) => x.device_id === id);
+                        if (d) { setSelectedCluster(null); setSelectedDeviceVs(null); setSelectedDevice(d); }
+                      }}
+                      onOpenCluster={(ref) => {
+                        const members = (devices ?? []).filter((x) => x.cluster_member_ref === ref);
+                        if (members.length > 0) { setSelectedDevice(null); setSelectedCluster({ ref, members }); }
+                      }}
+                    />
+                  ) : undefined}
                   onDeviceStateChange={refresh}
                   initialTab={initialTab}
                   configuration={CONFIGURATION_VENDORS.has(selectedDevice.vendor_hint)

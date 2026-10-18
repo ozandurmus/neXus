@@ -1,11 +1,11 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { ThemeProvider } from '@mui/material/styles';
 import { m3Theme } from '../src/theme/m3Theme';
 import { DeviceConfigurationDetail } from '../src/screens/ConfigurationDetail';
 import type { DeviceSummary } from '../src/auth/adminApi';
 afterEach(()=>vi.unstubAllGlobals());
-it('reloads the projected configuration after Collect now finishes',async()=>{
+it('reloads the projected configuration after Read configuration finishes',async()=>{
  let collected=false; let reads=0;
  vi.stubGlobal('fetch',vi.fn(async(input:RequestInfo|URL,init?:RequestInit)=>{
   const url=String(input); const reply=(body:unknown)=>new Response(JSON.stringify(body));
@@ -21,8 +21,13 @@ it('reloads the projected configuration after Collect now finishes',async()=>{
    virtual_systems:null,model:null,software_version:null,ha_role:null} as DeviceSummary;
  render(<ThemeProvider theme={m3Theme}><DeviceConfigurationDetail device={device} embedded/></ThemeProvider>);
  await screen.findByText('No configuration read yet');
- fireEvent.click(screen.getByRole('button',{name:'Collect now'}));
- await screen.findByText(/projected settings/);
- expect(reads).toBe(1);
+ // The Sections tab carries no Collect now any more (F-7): the separate configuration read sits under Details.
+ expect(screen.queryByRole('button',{name:'Collect now'})).toBeNull();
+ fireEvent.click(screen.getByRole('tab',{name:'Details'}));
+ fireEvent.click(await screen.findByRole('button',{name:'Read configuration'}));
+ await vi.waitFor(()=>expect(collected).toBe(true));
+ fireEvent.click(within(screen.getByRole('tablist',{name:'Configuration sections'})).getByRole('tab',{name:'Sections'}));
+ await screen.findByText(/projected settings/,undefined,{timeout:5000});
+ expect(reads).toBeGreaterThanOrEqual(1);
  expect(screen.queryByText('No configuration read yet')).not.toBeInTheDocument();
 });

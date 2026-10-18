@@ -17,7 +17,7 @@ it("opens SMC on collected managed devices and selects the clicked child with it
     ? {device_id:"smc",collected_at:"2026-09-26T10:00:00Z",contexts:[],grid_members:members,job:null} : {}))));
   const view=render(<ThemeProvider theme={m3Theme}><DeviceInventoryPanels device={manager}/></ThemeProvider>);
   const child=await screen.findByRole('button',{name:'FW-TANGO-04'});
-  expect(screen.getByRole('tab',{name:'Managed devices'})).toHaveAttribute('aria-selected','true');
+  expect(screen.getByRole('tab',{name:'Managed estate'})).toHaveAttribute('aria-selected','true');
   expect(screen.queryByRole('tab',{name:'Interfaces'})).toBeNull();
   expect(screen.queryByRole('tab',{name:'Routing'})).toBeNull();
   expect(screen.queryByText(/interfaces · routes/)).toBeNull();
@@ -27,7 +27,7 @@ it("opens SMC on collected managed devices and selects the clicked child with it
   fireEvent.click(screen.getByRole('button',{name:'All managed devices'}));
   expect(screen.getByRole('button',{name:'FW-BRAVO-02'})).toBeInTheDocument();
   view.rerender(<ThemeProvider theme={m3Theme}><DeviceInventoryPanels device={manager} initialVs="FW-BRAVO-02"/></ThemeProvider>);
-  expect(screen.getByRole('tab',{name:'Managed devices'})).toHaveAttribute('aria-selected','true');
+  expect(screen.getByRole('tab',{name:'Managed estate'})).toHaveAttribute('aria-selected','true');
   expect(within(screen.getByRole('table')).getByText('192.0.2.2')).toBeInTheDocument();
 });
 it("keeps Interfaces for a management server with interface evidence",async()=>{

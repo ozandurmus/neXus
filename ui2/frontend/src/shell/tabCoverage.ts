@@ -9,7 +9,7 @@ export const TAB_COVERAGE: readonly { screen: ScreenId; tabList: string; labels:
   { screen: "administration", tabList: "Access", labels: ["Local identities", "Sessions", "Roles & Permissions", "SSH trust", "LDAP Settings"] },
   { screen: "administration", tabList: "Platform", labels: ["System", "Notifications", "Delivery plan"] },
   { screen: "administration", tabList: "Records", labels: ["Audit Logs", "Job Logs"] },
-  { screen: "inventory", tabList: "Device detail", labels: ["Interfaces", "Routing", "Grid members", "Managed devices", "Cluster members", "Configuration", "Backup", "Logs", "Identity"] },
+  { screen: "inventory", tabList: "Device detail", labels: ["Interfaces", "Routing", "Grid members", "Managed estate", "Cluster members", "Configuration", "Backup", "Logs", "Identity"] },
   { screen: "inventory", tabList: "Cluster detail", labels: ["Interfaces", "Routing", "Cluster members", "Configuration", "Identity", "Failover"] },
   { screen: "inventory", tabList: "Configuration sections", labels: ["Sections", "Configuration", "Details"] },
   { screen: "inventory", tabList: "Configuration detail", labels: ["Sections", "Changes", "Overrides", "XML Configuration", "Sanitized text", "Alignment"] },

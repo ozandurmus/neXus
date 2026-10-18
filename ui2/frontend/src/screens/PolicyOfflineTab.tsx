@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { Alert, Box, Button, Checkbox, CircularProgress, FormControlLabel, MenuItem, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography } from "@mui/material";
 import { deleteOfflineAnalysis, getOfflineAnalysis, listOfflineAnalyses, uploadOfflineAnalysis, type OfflineAnalysisResult, type OfflineAnalysisSummary, type OfflineRule } from "../auth/adminApi";
 import { detectMapping, fields, parsePreview, required, type CsvField } from "./offlineCsv";
+import { ROLE_LOCK_LABEL } from "../shell/actionAccess";
+import { plural } from "../shell/plural";
 
 const labels: Record<CsvField, string> = { source: "Source IP", destination: "Destination IP", port: "Destination port", protocol: "Protocol",
   time: "Time", action: "Action", sourceZone: "Source zone", destinationZone: "Destination zone", rule: "SIEM rule ID/name", count: "Count" };
@@ -80,6 +82,12 @@ export function PolicyOfflineTab({ policy, openRule }: { policy: string; openRul
     {!policy && <Typography>Select a stored policy first.</Typography>}
     {loading && <Typography role="status">Loading stored analyses…</Typography>}
     {error && <Alert severity="error">{error}</Alert>}
+    {/* A role that cannot upload still sees where the upload goes, locked and saying why (UI review 2026-10-18, P0-4B). */}
+    {policy && !loading && !canManage && <Box role="group" aria-label="SIEM CSV upload" aria-disabled="true"
+      sx={{ my: 2, p: 2.5, border: "2px dashed", borderColor: "divider", borderRadius: 2, textAlign: "center", color: "text.disabled", bgcolor: "action.disabledBackground" }}>
+      <Typography>Drop a SIEM CSV here · {ROLE_LOCK_LABEL}</Typography>
+      <Typography variant="caption" display="block">{analyses.length === 0 ? "No stored analysis for this policy." : `${plural(analyses.length, "stored analysis", "stored analyses")} for this policy; choose one below to read it.`}</Typography>
+    </Box>}
     {canManage && <Box sx={{ my: 2 }}>
       <Button component="label" disabled={busy}>Choose SIEM CSV<input aria-label="SIEM CSV file" type="file" accept=".csv,text/csv" hidden onChange={e => { void selectFile(e.target.files?.[0]); e.target.value = ""; }} /></Button>
       <Typography variant="caption" display="block">UTF-8 CSV, up to 100 MB and 2,000,000 rows. Maximum 256 columns and 65536 characters per record. Count: 1–1,000,000,000. Time: ISO-8601 UTC or epoch seconds/milliseconds. TCP/UDP IPv4 attribution; other protocols and IPv6 remain UNKNOWN. Large samples may require splitting at 500,000 distinct rule/value aggregates.</Typography>

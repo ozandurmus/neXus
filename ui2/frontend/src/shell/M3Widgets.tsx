@@ -1,5 +1,4 @@
-import { useJobWindow } from "./JobWindow";
-import { ROLE_LOCK_LABEL, useRoleAllows } from "./actionAccess";
+import { useGate } from "./JobWindow";
 import { DISABLED_STYLE } from "./disabledStyle";
 import { useState } from "react";
 import type { ReactNode } from "react";
@@ -37,7 +36,7 @@ export function M3Button({
 }: {
   readonly deviceJob?: boolean;
   /** The product plane this action belongs to; a session without it sees the button locked with a role reason. */
-  readonly plane?: string;
+  readonly plane?: string | readonly string[];
   /** A fixed reason the action cannot run for anyone (shown in the label instead of a window or role note). */
   readonly lockedReason?: string;
   readonly emphasis: "filled" | "tonal" | "outlined" | "text";
@@ -47,10 +46,8 @@ export function M3Button({
   readonly href?: string;
   readonly disabled?: boolean;
 }) {
-  const jobWindow = useJobWindow();
-  const roleAllowed = useRoleAllows(plane);
-  const lockNote = lockedReason ?? (roleAllowed ? null : ROLE_LOCK_LABEL);
-  const isDisabled = Boolean(disabled) || lockNote !== null || (deviceJob && !jobWindow.open);
+  const gate = useGate(plane, { deviceJob, lockedReason });
+  const isDisabled = Boolean(disabled) || gate.locked;
   const byEmphasis = {
     filled: { bgcolor: m3.primary, color: m3.onPrimary, "&:hover": { bgcolor: m3.primary } },
     tonal: { bgcolor: m3.secondaryContainer, color: m3.onSecondaryContainer, "&:hover": { bgcolor: m3.secondaryContainer } },
@@ -59,7 +56,7 @@ export function M3Button({
   } as const;
   return (
     <Button
-      href={lockNote !== null ? undefined : href}
+      href={gate.locked ? undefined : href}
       onClick={onClick}
       disabled={isDisabled}
       startIcon={icon ? <Icon name={icon} size={20} /> : undefined}
@@ -78,7 +75,7 @@ export function M3Button({
         ...DISABLED_STYLE,
       }}
     >
-      {children}{lockNote !== null ? ` · ${lockNote}` : deviceJob && jobWindow.label && ` · ${jobWindow.label}`}
+      {children}{gate.suffix && ` · ${gate.suffix}`}
     </Button>
   );
 }
