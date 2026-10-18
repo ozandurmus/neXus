@@ -118,6 +118,44 @@ public final class ReadPlanner {
         return b.finish(family, view.all, seed);
     }
 
+    // ---------------------------------------------------------------- restart after a read-time shrink
+
+    /**
+     * The reads that restart one live file from byte 0 on a <em>first run</em> (no cursor) whose baseline read found the
+     * file smaller than the baseline start (truncated between the stat and the read). Nothing was read before, so
+     * nothing is lost and no anchor is needed. The file is read for the {@code sizeNow} bytes the server reported at
+     * that read, split at the per-read cap and cut at {@code budgetLeft}; what the budget leaves is the exact
+     * {@code pendingBytes}. With a cursor the executor does not use this: it defers the source and the next run's stat
+     * decides (section 4.4, "Truncation detected at read time").
+     *
+     * @param sizeNow the size the server reported for the path when the failed read opened it
+     * @param budgetLeft payload bytes the source and the device may still read in this run
+     */
+    public static Restart restartFromStart(String path, long inode, long sizeNow, long budgetLeft,
+            PlannerConfig config) {
+        Objects.requireNonNull(path, "path");
+        Objects.requireNonNull(config, "config");
+        long wanted = Math.max(0, sizeNow);
+        long allowed = Math.min(wanted, Math.max(0, budgetLeft));
+        List<ReadAction> reads = new ArrayList<>();
+        long position = 0;
+        while (position < allowed) {
+            long length = Math.min(config.readCapBytes(), allowed - position);
+            reads.add(new ReadAction(path, inode, position, length, 0, null, ReadPurpose.CURRENT_FROM_START,
+                    position > 0, false));
+            position += length;
+        }
+        return new Restart(reads, allowed, wanted - allowed);
+    }
+
+    /** The result of {@link #restartFromStart}: reads in order, their payload bytes, and the bytes left pending. */
+    public record Restart(List<ReadAction> reads, long plannedBytes, long pendingBytes) {
+
+        public Restart {
+            reads = List.copyOf(reads);
+        }
+    }
+
     // ---------------------------------------------------------------- first run
 
     private static Long firstRun(Builder b, View view, PlannerConfig config) {
