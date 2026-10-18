@@ -216,11 +216,14 @@ export function TopAppBar() {
         </Box>
         <NexusWordmark height={26} color={m3.onSurface} />
       </Box>
-      <Box sx={{ ml: 3 }}><GlobalSearch /></Box>
-      <Box sx={{ ml: "auto", display: "flex", alignItems: "center", gap: 2, color: m3.onSurfaceVar }}>
+      <Box sx={{ ml: 3, minWidth: 0, flex: "0 1 auto" }}><GlobalSearch /></Box>
+      {/* At 1000 px the bar used to run past the viewport (post-release review 2026-10-18, R1 check): the right block
+          now shrinks with the window and the two informational chips fold away below 1200 px; the zone is still stated
+          beside every time on hover and the build in Administration › System. */}
+      <Box sx={{ ml: "auto", display: "flex", alignItems: "center", gap: { xs: 1, lg: 2 }, color: m3.onSurfaceVar, minWidth: 0, flex: "0 1 auto" }}>
         <MaskChip />
-        <Tooltip title="Every time on every screen is Turkey time (Europe/Istanbul). Hover a time for the UTC value; exports carry UTC."><Typography variant="caption" sx={{ color: m3.onSurfaceVar, whiteSpace: "nowrap" }}>Times in {DISPLAY_TZ_LABEL}</Typography></Tooltip>
-        <BuildBadge />
+        <Tooltip title="Every time on every screen is Turkey time (Europe/Istanbul). Hover a time for the UTC value; exports carry UTC."><Typography variant="caption" sx={{ color: m3.onSurfaceVar, whiteSpace: "nowrap", display: { xs: "none", lg: "block" } }}>Times in {DISPLAY_TZ_LABEL}</Typography></Tooltip>
+        <Box sx={{ display: { xs: "none", lg: "inline-flex" } }}><BuildBadge /></Box>
         <DisplayControls />
         <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
           <Icon name="bell" size={20} />
@@ -245,12 +248,12 @@ export function TopAppBar() {
             >
               {userInitials}
             </Box>
-            <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-end", lineHeight: 1.2 }}>
+            <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-end", lineHeight: 1.2, whiteSpace: "nowrap" }}>
               <Typography variant="body1" sx={{ fontWeight: 500, color: m3.onSurface }}>
                 {session.displayName}
               </Typography>
               <Tooltip title={displayedRoles.join(", ")}>
-                <Typography variant="body2" sx={{ cursor: "default" }}>
+                <Typography variant="body2" sx={{ cursor: "default", whiteSpace: "nowrap" }}>
                   {displayedRoles.length > 0
                     ? displayedRoles[0].replace("role:", "").replace("_", " ").replace(/\b\w/g, l => l.toUpperCase())
                     : "No Role"}

@@ -4,7 +4,7 @@ import { ThemeProvider } from "@mui/material/styles";
 
 import { m3Theme } from "../src/theme/m3Theme";
 import { packetContract, PacketAnalysisScreen } from "../src/screens/PacketAnalysisScreen";
-import { SANITIZER_CONTRACT, SanitizerScreen } from "../src/screens/SanitizerScreen";
+import { SANITIZER_CONTRACT, SANITIZER_ROLE_REFUSAL, SanitizerScreen } from "../src/screens/SanitizerScreen";
 import { ManagementTreePanel } from "../src/screens/ManagementTreePanel";
 import { ROLE_REFUSAL } from "../src/shell/actionAccess";
 import type { ManagementTree, ManagementTreeNode } from "../src/auth/adminApi";
@@ -46,12 +46,28 @@ describe("tool pages lead with a two-sentence contract (review §3, roadmap 3.3)
     expect(screen.getByRole("table", { name: "Packet analysis cases" }).compareDocumentPosition(input) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
   });
 
+  it("lets the contract wrap under the title instead of running past the viewport (post-release review 2026-10-18, R1)", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => json({ permissions: { run: false, revert: false, revert_any_job: false },
+      limits: { max_file_bytes: 2 * 1024 ** 3, vault_retention_days: 90, output_ttl_minutes: 60, vault_available: true } })));
+    themed(<SanitizerScreen />);
+    const subtitle = await screen.findByText(SANITIZER_CONTRACT);
+    expect(getComputedStyle(subtitle).whiteSpace).toBe("normal");
+    const block = screen.getByTestId("screen-header-title");
+    const style = getComputedStyle(block);
+    expect(style.minWidth).toMatch(/^0(px)?$/);
+    expect(style.maxWidth).toBe("880px");
+    expect(style.flexShrink).toBe("1");
+  });
+
   it("Data Sanitizer keeps the limits line inside the input region, under the locked drop zone", async () => {
     vi.stubGlobal("fetch", vi.fn(() => json({ permissions: { run: false, revert: false, revert_any_job: false },
       limits: { max_file_bytes: 2 * 1024 ** 3, vault_retention_days: 90, output_ttl_minutes: 60, vault_available: true } })));
     themed(<SanitizerScreen />);
     const input = await screen.findByRole("region", { name: "Sanitizer input" });
-    expect(within(input).getByText(ROLE_REFUSAL)).toBeInTheDocument();
+    // The refusal names the roles (review 3.3): the drop zone says who may sanitize and who may revert.
+    expect(within(input).getByRole("status")).toHaveTextContent(SANITIZER_ROLE_REFUSAL);
+    expect(SANITIZER_ROLE_REFUSAL).toBe("Your role does not allow this action · sanitize: Operator, Operation admin, Security admin · revert: Security admin (Operator and Operation admin on their own jobs)");
+    expect(within(input).queryByText(ROLE_REFUSAL)).toBeNull();
     expect(within(input).getByText(/At most 2.0 GB per file/)).toBeInTheDocument();
     expect(screen.getByText(SANITIZER_CONTRACT)).toBeInTheDocument();
   });

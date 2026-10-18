@@ -51,6 +51,14 @@ export const COUNT_LABELS: Record<string, string> = {
 
 const STATE_TONE: Record<SanitizerState, Tone> = { RUNNING: "attn", SUCCEEDED: "ok", FAILED: "bad" };
 
+/**
+ * The refusal names the roles (post-release review 2026-10-18, 3.3; the roles are ActionRegistry's DATA_SANITIZE_RUN /
+ * DATA_SANITIZE_REVERT: sanitize -- operator, operation_admin, security_admin; revert -- security_admin, and the user who
+ * ran the sanitize job). The sentence is the same whichever mode is locked, so a reader learns both at once.
+ */
+export const SANITIZER_ROLE_REFUSAL = "Your role does not allow this action · sanitize: Operator, Operation admin, Security admin · "
+  + "revert: Security admin (Operator and Operation admin on their own jobs)";
+
 /** The tool's contract under the title (review §3 "Tool page"): sentence one what it does, sentence two what it never does. */
 export const SANITIZER_CONTRACT = "Replaces addresses, MAC addresses, host and domain names and e-mails in pcap/pcapng, log, CSV, XLSX and JSON files "
   + "with keyed tokens, and reverts a sanitized file that comes back. "
@@ -190,8 +198,8 @@ export function SanitizerScreen() {
             onDragOver={e => { e.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={onDrop}
             sx={{ mt: 2, p: 4, textAlign: "center", borderRadius: 2, cursor: busy || !allowed ? "default" : "pointer",
               border: `2px dashed ${dragging ? m3.primary : m3.outlineVar}`, bgcolor: dragging ? m3.scLow : "transparent" }}>
-            <Typography>{allowed ? (mode === "sanitize" ? "Drop a file to sanitize, or click to choose one" : "Drop a returned file to revert, or click to choose one")
-              : "Your role does not allow this action."}</Typography>
+            <Typography role={allowed ? undefined : "status"}>{allowed ? (mode === "sanitize" ? "Drop a file to sanitize, or click to choose one" : "Drop a returned file to revert, or click to choose one")
+              : SANITIZER_ROLE_REFUSAL}</Typography>
           </Box>
           <input id="sanitizer-file" aria-label="File" type="file" accept={ACCEPT} hidden
             onChange={e => { void submit(e.target.files?.[0]); e.target.value = ""; }} />

@@ -64,12 +64,12 @@ describe("the rail (UI product review 2026-10-18, §2.3 / roadmap 1.1)", () => {
     expect(items[0]).not.toHaveAttribute("aria-current");
   });
 
-  it("keeps Operations and Backups for a read-only session whose plane list does not hold them, and hides Tools entries it may not use", () => {
+  it("keeps Operations, Backups and Administration for a read-only session whose plane list does not hold them, and hides Tools entries it may not use", () => {
     rail("operations", viewer);
     expect(within(nav()).getByText("Operations")).toBeInTheDocument();
     expect(within(nav()).getByText("Backups")).toBeInTheDocument();
     expect(within(nav()).queryByText("Devices")).toBeNull();
-    expect(within(nav()).queryByText("Administration")).toBeNull();
+    expect(within(nav()).getByRole("link", { name: "Administration" })).toHaveAttribute("href", "?screen=administration");
     fireEvent.click(within(nav()).getByRole("button", { name: "Tools" }));
     expect(within(screen.getByRole("menu", { name: "Tools" })).getAllByRole("menuitem").map((i) => i.textContent)).toEqual(["Packets"]);
   });
@@ -78,6 +78,35 @@ describe("the rail (UI product review 2026-10-18, §2.3 / roadmap 1.1)", () => {
     rail("administration", viewer);
     expect(current()).toHaveLength(1);
     expect(current()[0]).toHaveTextContent("Administration");
+  });
+
+  // Post-release review 2026-10-18, R4: Administration was rendered only on Administration routes.
+  it.each<ScreenId>(["overview", "inventory", "packet_analysis", "sanitizer", "compliance"])("has Administration on %s, last in the rail, pinned to its bottom edge", (screenId) => {
+    rail(screenId, viewer);
+    const admin = within(nav()).getByRole("link", { name: "Administration" });
+    expect(admin).toHaveAttribute("href", "?screen=administration");
+    expect(admin).not.toHaveAttribute("aria-current");
+    expect((nav().textContent ?? "").trim().endsWith("Administration")).toBe(true);
+    expect(screen.getByTestId("rail-administration")).toHaveStyle({ position: "sticky", bottom: "0px" });
+    // the rail itself stays in view on a long page, so its bottom edge is the viewport's
+    expect(nav()).toHaveStyle({ position: "sticky", top: "0px" });
+  });
+
+  it("offers Tools as a real button with its two destinations as menu links, so the keyboard reaches both", () => {
+    rail("overview");
+    const tools = within(nav()).getByRole("button", { name: "Tools" });
+    expect(tools.tagName).toBe("BUTTON");
+    expect(tools).toHaveAttribute("aria-haspopup", "menu");
+    expect(tools.tabIndex).toBeGreaterThanOrEqual(0);
+    tools.focus();
+    fireEvent.click(tools);
+    const menu = screen.getByRole("menu", { name: "Tools" });
+    expect(tools).toHaveAttribute("aria-expanded", "true");
+    const items = within(menu).getAllByRole("menuitem");
+    expect(items.map((i) => i.textContent)).toEqual(["Packets", "Sanitizer"]);
+    for (const item of items) expect(item.tagName).toBe("A");
+    // the menu takes focus when it opens, so Arrow keys and Enter move between and follow the links
+    expect(menu.contains(document.activeElement)).toBe(true);
   });
 
   it(`shrinks to icons below ${DRAWER_BELOW_PX} px, keeps the active item, and opens the drawer from the ≡ button`, () => {

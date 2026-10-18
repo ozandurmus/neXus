@@ -21,12 +21,15 @@ export function ScreenHeader({
 }) {
   return (
     <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", columnGap: 3, rowGap: 1.5, px: 0.5, pb: 0.5 }}>
-      <Stack spacing={0.75} sx={{ flex: "none" }}>
+      {/* The title block shrinks and its subtitle wraps (post-release review 2026-10-18, R1): a two-sentence tool contract
+          used to run unbroken past the viewport and scroll the whole page sideways at 1440 px. */}
+      <Stack data-testid="screen-header-title" spacing={0.75} sx={{ flex: "0 1 auto", minWidth: 0, maxWidth: 880 }}>
         <Typography variant="h2">{title}</Typography>
-        <Typography variant="body1" sx={{ color: m3.onSurfaceVar }}>{subtitle}</Typography>
+        <Typography variant="body1" sx={{ color: m3.onSurfaceVar, whiteSpace: "normal", overflowWrap: "anywhere" }}>{subtitle}</Typography>
       </Stack>
       {filters ? <Box sx={{ flex: "1 1 520px", minWidth: 0, maxWidth: 760 }}>{filters}</Box> : null}
-      {actions ? <Box sx={{ display: "flex", gap: 1.25, alignItems: "center", flex: "none" }}>{actions}</Box> : null}
+      {/* The action buttons wrap at 1000 px instead of widening the page (post-release review 2026-10-18, R1 check). */}
+      {actions ? <Box sx={{ display: "flex", gap: 1.25, alignItems: "center", flexWrap: "wrap", flex: "0 1 auto", minWidth: 0, justifyContent: "flex-end" }}>{actions}</Box> : null}
     </Box>
   );
 }

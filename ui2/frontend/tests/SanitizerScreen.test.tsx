@@ -112,6 +112,6 @@ describe("Data Sanitizer screen", () => {
       limits: { ...limits, vault_available: false } });
     themed();
     expect(await screen.findByText(/mapping vault is not available/)).toBeInTheDocument();
-    expect(screen.getByText("Your role does not allow this action.")).toBeInTheDocument();
+    expect(screen.getByText(/^Your role does not allow this action · sanitize: Operator, Operation admin, Security admin · revert: Security admin/)).toBeInTheDocument();
   });
 });
