@@ -549,8 +549,11 @@ a policy collection: an error becomes a fixed-code note in the job transcript.
 The firewall P-1 call measures only: the answer is reduced to counts, presence booleans and a capped list of element names
 (`PAN_NAT_HIT_MEASURE` in the job transcript); rule names and hit values are discarded in memory. The Panorama reader stores
 evidence rows only (below). Both transport the policy job's own Panorama API key. `UI2_HOSTNAME_FINGERPRINT_KEY_FILE` is not
-mounted in the policy pod today: without it the admin identity of the evidence is stored masked (`masked:<length>`); mounting
-the existing key (a deployment change not made here) switches it to an HMAC.
+mounted in the policy pod at the time of the plan: without it the admin identity of the evidence is stored masked
+(`masked:<length>`). **Update, PO decision 2026-10-18:** `deploy/ui2/57-policy-deployment.yaml` now mounts the existing
+`ui2-hostname-fingerprint-key` Secret exactly as the worker deployment does, the policy role requires the key at start (a
+missing variable, file or empty value stops the pod; no silent fallback to the masked form), and the evidence stores the
+admin identity as an HMAC.
 
 Relation to the Check Point changed-only trial (`UI2_POLICY_CP_CHANGED_ONLY_DOMAINS`, 24 h age limit): the two settings are
 independent. `CpDomainReuse` is the single source of truth for domain reuse: the changed-only decision, the `POLICY_RUN_` and
