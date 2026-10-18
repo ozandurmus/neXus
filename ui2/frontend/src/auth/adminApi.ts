@@ -3121,7 +3121,14 @@ export interface SystemLogSource {
 
 export interface SystemLogSources {
   readonly device_id: string;
-  readonly collection_state: "NO_COLLECTION_YET" | "COLLECTED";
+  /**
+   * `DISABLED_ON_MANAGEMENT` and `VENDOR_UNSUPPORTED` are answers (200, no sources, with `code` and `message`), not
+   * errors: the device is not one the collection covers. A GET never answers 409 for that.
+   */
+  readonly collection_state: "NO_COLLECTION_YET" | "COLLECTED" | "DISABLED_ON_MANAGEMENT" | "VENDOR_UNSUPPORTED";
+  /** Present with the two "does not apply" states: the stable code and a sentence. */
+  readonly code?: string;
+  readonly message?: string;
   readonly can_view_unmasked: boolean;
   readonly default_page_bytes: number;
   readonly max_page_bytes: number;

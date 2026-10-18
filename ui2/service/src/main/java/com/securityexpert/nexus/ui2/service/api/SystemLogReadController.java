@@ -33,6 +33,11 @@ import com.securityexpert.nexus.ui2.service.systemlog.SystemLogReadService;
  * <p>The text route answers {@code text/plain} (the page) with the paging facts in {@code X-Syslog-*} headers, so a
  * command line can pipe it and the masking response advice (which works on objects) never sees it twice. Every other
  * route answers JSON.</p>
+ *
+ * <p>A GET never answers 409 for "does not apply": a management server while {@code include_management_servers} is off,
+ * or a vendor outside Check Point and Palo Alto, is answered 200 with the route's shape empty and an explicit
+ * {@code collection_state} ({@code DISABLED_ON_MANAGEMENT}, {@code VENDOR_UNSUPPORTED}); a bad id is 400, an unknown
+ * device 404.</p>
  */
 @RestController
 public final class SystemLogReadController {

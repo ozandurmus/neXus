@@ -22,6 +22,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
@@ -52,8 +53,12 @@ import com.securityexpert.nexus.ui2.service.security.ActionRegistry;
  *   <li><b>Bounds.</b> One response carries at most {@link #MAX_PAGE_BYTES} bytes of stored text. A page always ends on
  *       a line boundary and starts on one, so no token is split between two masked pages; a line longer than the hard
  *       maximum cannot be paged and is refused.</li>
- *   <li><b>Management servers</b> answer with {@code SYSTEM_LOG_DISABLED_ON_MANAGEMENT} while
- *       {@code include_management_servers} is off (section 2.3).</li>
+ *   <li><b>Management servers</b> are not collected while {@code include_management_servers} is off (section 2.3), and
+ *       a vendor outside Check Point and Palo Alto is never collected. Neither is an error of the read: a device read
+ *       answers <em>200</em> with the route's usual shape empty and an explicit {@code collection_state}
+ *       ({@code DISABLED_ON_MANAGEMENT} or {@code VENDOR_UNSUPPORTED}) with the stable {@code code} and a sentence. A
+ *       GET never answers 409 for "does not apply"; a bad id stays 400 and an unknown device 404. The text of a chunk of
+ *       such a device (stored while the setting was on) is 404 with the same code.</li>
  * </ul>
  */
 public final class SystemLogReadService {
@@ -135,23 +140,40 @@ public final class SystemLogReadService {
 
     // ---------------------------------------------------------------- the device gate
 
-    /** The refusal for a device the read routes do not serve, or empty. */
-    Optional<Refusal> deviceGate(String deviceId) {
-        if (deviceId == null || !DEVICE_ID.matcher(deviceId).matches()) {
-            return Optional.of(new Refusal(400, "DEVICE_ID_INVALID", "The device id is not a valid opaque identifier."));
-        }
-        Optional<DeviceRecord> device = devices.find(deviceId);
-        if (device.isEmpty()) return Optional.of(new Refusal(404, "DEVICE_NOT_FOUND", "No such device."));
-        return managementGate(device.get());
+    /** Why a device is not read for system logs although it exists: a state, its stable code and a sentence. */
+    record NotApplicable(String state, String code, String message) {
     }
 
-    private Optional<Refusal> managementGate(DeviceRecord device) {
+    /**
+     * The answer for a device the read routes do not serve, or empty when the device is read normally: 400 for a bad id,
+     * 404 for an unknown device, and, for a device where collection does not apply, a 200 body made of
+     * {@code emptyShape} (the route's usual fields, empty) plus {@code collection_state}, {@code code} and
+     * {@code message}.
+     */
+    private Optional<Read> deviceGate(String deviceId, Consumer<Map<String, Object>> emptyShape) {
+        if (deviceId == null || !DEVICE_ID.matcher(deviceId).matches()) {
+            return Optional.of(Read.refused(400, "DEVICE_ID_INVALID", "The device id is not a valid opaque identifier."));
+        }
+        Optional<DeviceRecord> device = devices.find(deviceId);
+        if (device.isEmpty()) return Optional.of(Read.refused(404, "DEVICE_NOT_FOUND", "No such device."));
+        return notApplicable(device.get()).map(na -> {
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("device_id", deviceId);
+            emptyShape.accept(body);
+            body.put("collection_state", na.state());
+            body.put("code", na.code());
+            body.put("message", na.message());
+            return Read.ok(body);
+        });
+    }
+
+    private Optional<NotApplicable> notApplicable(DeviceRecord device) {
         if ("management_server".equals(device.role()) && !settings.settings().includeManagementServers()) {
-            return Optional.of(new Refusal(409, "SYSTEM_LOG_DISABLED_ON_MANAGEMENT",
+            return Optional.of(new NotApplicable("DISABLED_ON_MANAGEMENT", "SYSTEM_LOG_DISABLED_ON_MANAGEMENT",
                     "System-log collection is disabled on management servers (setting system_log.include_management_servers is off)."));
         }
         if (!SystemLogCollectionService.isSupportedVendor(device.vendorHint())) {
-            return Optional.of(new Refusal(409, "SYSTEM_LOG_VENDOR_UNSUPPORTED",
+            return Optional.of(new NotApplicable("VENDOR_UNSUPPORTED", "SYSTEM_LOG_VENDOR_UNSUPPORTED",
                     "System-log collection covers Check Point and Palo Alto gateways only."));
         }
         return Optional.empty();
@@ -160,8 +182,14 @@ public final class SystemLogReadService {
     // ---------------------------------------------------------------- sources
 
     public Read sources(String deviceId, boolean canViewUnmasked) {
-        var refusal = deviceGate(deviceId);
-        if (refusal.isPresent()) return Read.refused(refusal.get());
+        var gate = deviceGate(deviceId, body -> {
+            body.put("can_view_unmasked", canViewUnmasked);
+            body.put("default_page_bytes", DEFAULT_PAGE_BYTES);
+            body.put("max_page_bytes", MAX_PAGE_BYTES);
+            body.put("last_job", null);
+            body.put("sources", List.of());
+        });
+        if (gate.isPresent()) return gate.get();
         var rows = repository.sources(deviceId);
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("device_id", deviceId);
@@ -226,8 +254,13 @@ public final class SystemLogReadService {
     // ---------------------------------------------------------------- chunks
 
     public Read chunks(String deviceId, String source, String day, int limit) {
-        var refusal = deviceGate(deviceId);
-        if (refusal.isPresent()) return Read.refused(refusal.get());
+        var gate = deviceGate(deviceId, body -> {
+            body.put("source", null);
+            body.put("day", null);
+            body.put("truncated", false);
+            body.put("chunks", List.of());
+        });
+        if (gate.isPresent()) return gate.get();
         String sourceKey = source == null || source.isBlank() ? null : source;
         if (sourceKey != null && !CHUNK_SOURCES.contains(sourceKey)) {
             return Read.refused(400, "SOURCE_INVALID", "Unknown source key.");
@@ -300,8 +333,9 @@ public final class SystemLogReadService {
         ChunkRef chunk = found.get();
         Optional<DeviceRecord> device = devices.find(chunk.deviceId());
         if (device.isPresent()) {
-            var refusal = managementGate(device.get());
-            if (refusal.isPresent()) return new Text(null, refusal.get());
+            var na = notApplicable(device.get());
+            // The chunk belongs to a device that is no longer read: it is not served, and a GET does not answer 409 for that.
+            if (na.isPresent()) return refusedText(404, na.get().code(), na.get().message());
         }
         if (chunk.prunedAt() != null) {
             return refusedText(410, "SYSTEM_LOG_CHUNK_PRUNED", "The chunk's bytes were removed by retention.");
@@ -447,8 +481,11 @@ public final class SystemLogReadService {
     public Read gaps(String deviceId, int limit) {
         Optional<String> device = Optional.ofNullable(deviceId).filter(id -> !id.isBlank());
         if (device.isPresent()) {
-            var refusal = deviceGate(device.get());
-            if (refusal.isPresent()) return Read.refused(refusal.get());
+            var gate = deviceGate(device.get(), body -> {
+                body.put("truncated", false);
+                body.put("gaps", List.of());
+            });
+            if (gate.isPresent()) return gate.get();
         }
         int bounded = Math.max(1, Math.min(limit, 1000));
         List<Map<String, Object>> gaps = new ArrayList<>();
@@ -479,8 +516,16 @@ public final class SystemLogReadService {
     public Read crashFiles(String deviceId, int limit, Instant now) {
         Optional<String> device = Optional.ofNullable(deviceId).filter(id -> !id.isBlank());
         if (device.isPresent()) {
-            var refusal = deviceGate(device.get());
-            if (refusal.isPresent()) return Read.refused(refusal.get());
+            var gate = deviceGate(device.get(), body -> {
+                Map<String, Integer> none = new LinkedHashMap<>();
+                for (String state : List.of("NEW", "PRESENT", "PRESENT_BEFORE_MONITORING", "REMOVED")) none.put(state, 0);
+                body.put("new_window_days", NEW_CRASH_WINDOW_DAYS);
+                body.put("counts", none);
+                body.put("truncated", false);
+                body.put("files", List.of());
+                body.put("alerts", List.of());
+            });
+            if (gate.isPresent()) return gate.get();
         }
         int bounded = Math.max(1, Math.min(limit, 1000));
         Instant newSince = now.minus(Duration.ofDays(NEW_CRASH_WINDOW_DAYS));
@@ -536,8 +581,11 @@ public final class SystemLogReadService {
      * artefact); neither exists in the service yet, so the listing is reported as {@code NOT_AVAILABLE}.
      */
     public Read hcp(String deviceId) {
-        var refusal = deviceGate(deviceId);
-        if (refusal.isPresent()) return Read.refused(refusal.get());
+        var gate = deviceGate(deviceId, body -> {
+            body.put("member_listing", "NOT_AVAILABLE");
+            body.put("files", List.of());
+        });
+        if (gate.isPresent()) return gate.get();
         List<Map<String, Object>> files = new ArrayList<>();
         for (var row : repository.hcpFiles(deviceId, 50)) {
             Map<String, Object> m = new LinkedHashMap<>();
