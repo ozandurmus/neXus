@@ -148,35 +148,31 @@ export function PacketAnalysisScreen() {
 
   return (
     <ScreenRoot>
-      <ScreenHeader title="Packet Analysis"
-        subtitle={`Offline pcap/pcapng analysis · captures are deleted ${limits?.retention_days ?? 7} days after the case is created`} />
-      <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>Results are evidence-led: a stage that cannot be established is reported as unknown, with the reason.</Typography>
+      {/* Tool page (UI review 2026-10-18 §3, roadmap 3.3): the contract in two sentences -- what it does, what it never does. */}
+      <ScreenHeader title="Packet Analysis" subtitle={packetContract(limits?.retention_days ?? 7)} />
       {error && <Alert severity="error">{error}</Alert>}
       {notice && <Alert severity="success">{notice}</Alert>}
       {!list && !error && <Typography role="status">Loading cases…</Typography>}
-      {limits && <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
-        Store: {packetBytes(limits.used_bytes)} of {packetBytes(limits.max_store_bytes)} used · at most {packetBytes(limits.max_file_bytes)} per capture
-      </Typography>}
 
-      {permissions?.run && (
-        <Card sx={{ p: 2, boxShadow: "none", border: `1px solid ${m3.outlineVar}` }}>
-          <Typography variant="h6">New case</Typography>
-          <Stack direction="row" spacing={2} alignItems="center" sx={{ flexWrap: "wrap", gap: 1, mt: 1 }}>
-            <TextField label="Case title" size="small" value={title} inputProps={{ maxLength: 120 }}
-              onChange={e => setTitle(e.target.value)} disabled={busy} />
-            <FormControlLabel label="Payload zeroing"
-              control={<Checkbox checked={zeroing} onChange={e => setZeroing(e.target.checked)} disabled={busy} />} />
-            <M3Button emphasis="filled" disabled={busy || !title.trim()} onClick={() => void create()}>Create case</M3Button>
-          </Stack>
-        </Card>
-      )}
-
-      {permissions && !permissions.run && (
-        <Card sx={{ p: 2, boxShadow: "none", border: `1px solid ${m3.outlineVar}` }}>
-          <Stack direction="row" spacing={2} alignItems="center" sx={{ flexWrap: "wrap", gap: 1 }}>
+      {/* One input region: the case form, or the same form locked with its refusal reason inline; the store limits beneath it. */}
+      {permissions && (
+        <Card component="section" aria-label="New case" sx={{ p: 2, boxShadow: "none", border: `1px solid ${m3.outlineVar}` }}>
+          {permissions.run ? <>
+            <Typography variant="h6">New case</Typography>
+            <Stack direction="row" spacing={2} alignItems="center" sx={{ flexWrap: "wrap", gap: 1, mt: 1 }}>
+              <TextField label="Case title" size="small" value={title} inputProps={{ maxLength: 120 }}
+                onChange={e => setTitle(e.target.value)} disabled={busy} />
+              <FormControlLabel label="Payload zeroing"
+                control={<Checkbox checked={zeroing} onChange={e => setZeroing(e.target.checked)} disabled={busy} />} />
+              <M3Button emphasis="filled" disabled={busy || !title.trim()} onClick={() => void create()}>Create case</M3Button>
+            </Stack>
+          </> : <Stack direction="row" spacing={2} alignItems="center" sx={{ flexWrap: "wrap", gap: 1 }}>
             <M3Button emphasis="filled" icon="plus" disabled>New case</M3Button>
             <Typography role="status" variant="body2" sx={{ color: m3.onSurfaceVar }}>{ROLE_REFUSAL}</Typography>
-          </Stack>
+          </Stack>}
+          {limits && <Typography variant="caption" sx={{ display: "block", mt: 1.5, color: m3.onSurfaceVar }}>
+            Store: {packetBytes(limits.used_bytes)} of {packetBytes(limits.max_store_bytes)} used · at most {packetBytes(limits.max_file_bytes)} per capture
+          </Typography>}
         </Card>
       )}
 
@@ -250,6 +246,13 @@ export function PacketAnalysisScreen() {
       {report && <ResultView report={report} />}
     </ScreenRoot>
   );
+}
+
+/** The tool's contract under the title (review §3 "Tool page"): sentence one what it does, sentence two what it never does. */
+export function packetContract(retentionDays: number): string {
+  return "Analyses uploaded pcap or pcapng captures offline and reports what the frames prove, stage by stage; results are evidence-led: "
+    + "a stage that cannot be established is reported as unknown, with the reason. "
+    + `It never reads a device or live traffic and never changes anything; captures are deleted ${retentionDays} days after the case is created.`;
 }
 
 /** The empty state: what a case is and the three steps, in two sentences, instead of a dead table row (UI review 2026-10-18). */

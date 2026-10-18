@@ -90,6 +90,11 @@ describe("Managed estate is a tab under the device header", () => {
     expect(await screen.findByRole("tab", { name: "Managed estate" })).toHaveAttribute("aria-selected", "true");
     expect(screen.queryByRole("tab", { name: "Managed devices" })).toBeNull();
     expect(await screen.findByRole("button", { name: "FW-SYNTH-01" })).toBeInTheDocument();
+    // Fixed column widths (UI review 2026-10-18, P2-1B / roadmap 3.4): a long value clips in its cell, never the Deployment column.
+    const table = document.querySelector("table[data-managed-devices]") as HTMLTableElement;
+    expect(table).toHaveStyle({ tableLayout: "fixed" });
+    expect(table.querySelectorAll("colgroup col")).toHaveLength(7);
+    expect(screen.getByRole("columnheader", { name: "Deployment" })).toBeInTheDocument();
   });
 
   it("gives a gateway no Managed estate tab", async () => {

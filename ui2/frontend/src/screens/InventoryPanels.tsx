@@ -243,7 +243,12 @@ function ManagedDevicesPanel({ members, selected, onSelect }: {
         <Button onClick={() => onSelect?.(null)}>All managed devices</Button>
       </Stack>}
       <TableContainer>
-        <Table size="small">
+        {/* Fixed column widths at 1440 (UI review 2026-10-18, P2-1B / roadmap 3.4): a long value clips inside its own cell
+            with the full text on hover, instead of pushing the Deployment column out of the card. */}
+        <Table size="small" data-managed-devices sx={{ tableLayout: "fixed", "& td, & th": { overflow: "hidden", textOverflow: "ellipsis" } }}>
+          <colgroup>
+            {["20%", "14%", "12%", "14%", "14%", "14%", "12%"].map((width, i) => <col key={i} style={{ width }} />)}
+          </colgroup>
           <TableHead>
             <TableRow>
               <TableCell>Device</TableCell>
@@ -261,10 +266,10 @@ function ManagedDevicesPanel({ members, selected, onSelect }: {
                 <TableCell sx={{ fontWeight: 600, whiteSpace: "nowrap" }}>
                   <Button onClick={() => onSelect?.(m.virtual_system)}>{m.virtual_system}</Button>
                 </TableCell>
-                <TableCell>{m.address ?? "UNKNOWN"}</TableCell>
-                <TableCell>{m.platform ?? "\u2014"}</TableCell>
-                <TableCell>{m.hardware_type ?? "\u2014"}</TableCell>
-                <TableCell sx={{ whiteSpace: "nowrap" }}>{m.hypervisor ?? "\u2014"}</TableCell>
+                <TableCell title={m.address ?? undefined}>{m.address ?? "UNKNOWN"}</TableCell>
+                <TableCell title={m.platform ?? undefined}>{m.platform ?? "\u2014"}</TableCell>
+                <TableCell title={m.hardware_type ?? undefined}>{m.hardware_type ?? "\u2014"}</TableCell>
+                <TableCell sx={{ whiteSpace: "nowrap" }} title={m.hypervisor ?? undefined}>{m.hypervisor ?? "\u2014"}</TableCell>
                 <TableCell>{m.node_status ? <StatusChip tone={/MANAGED$/.test(m.node_status) && !/UNMANAGED/.test(m.node_status) ? "ok" : "warn"} label={m.node_status.replace("_", " ")} dense /> : "\u2014"}</TableCell>
                 <TableCell>{deployment(m) ?? "\u2014"}</TableCell>
               </TableRow>
