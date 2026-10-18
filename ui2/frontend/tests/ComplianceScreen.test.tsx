@@ -3,7 +3,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ComplianceScreen } from "../src/screens/ComplianceScreen";
 
-afterEach(() => vi.unstubAllGlobals());
+// The control drawer writes `?control=<id>`; jsdom keeps the URL between tests, so it is reset here.
+afterEach(() => { vi.unstubAllGlobals(); window.history.replaceState(null, "", "/"); });
 
 const GUIDANCE = { summary: "Review password policy", steps: ["Open vendor settings", "Set the approved minimum"], cli: null, references: ["Vendor administration guide"], caution: "Review account access" };
 

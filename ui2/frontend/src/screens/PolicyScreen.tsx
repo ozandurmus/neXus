@@ -193,7 +193,7 @@ export interface ContainerSummary {
   key: string; sourceId: string; sourceName: string; vendor: string; containerId: string; containerName: string;
   policyIds: string[]; rules?: number; gateways: string[]; collectedAt: string;
 }
-export function summarizeContainers(policies: PolicyMetadata[]): ContainerSummary[] {
+export function summarizeContainers(policies: readonly PolicyMetadata[]): ContainerSummary[] {
   const groups = new Map<string, PolicyMetadata[]>();
   policies.forEach(p => {
     const key = JSON.stringify([p.sourceId, p.containerId]);
@@ -210,6 +210,32 @@ export function summarizeContainers(policies: PolicyMetadata[]): ContainerSummar
 }
 const GATEWAYS_SHOWN = 3;
 const vendorLabel = (vendor: string) => vendor === "PAN" ? "Panorama" : vendor === "CP" ? "MDS" : "Management server";
+
+type PolicyTab = "Rules" | "Objects" | "Installation" | "Hygiene" | "Changes" | "Lookup" | "Offline analysis";
+/**
+ * The seven tabs in their four kinds (UI review 2026-10-18 §2.1, roadmap 2.5): browse the stored policy, judge it,
+ * trace its changes, ask it a question. A visual grouping only -- every tab, filter and route stays as it was.
+ */
+export const POLICY_TAB_GROUPS: ReadonlyArray<{ readonly group: string; readonly tabs: readonly PolicyTab[] }> = [
+  { group: "Browse", tabs: ["Rules", "Objects", "Installation"] },
+  { group: "Judge", tabs: ["Hygiene"] },
+  { group: "Trace", tabs: ["Changes"] },
+  { group: "Ask", tabs: ["Lookup", "Offline analysis"] },
+];
+
+/**
+ * The one-line headline under the title (review §4.3): `59 containers · 2 sources · 69,000 rules · collected 4 h ago`,
+ * from the catalog the screen already loads. The rule total is UNKNOWN while any stored policy has no recorded count;
+ * the age is UNKNOWN when nothing carries a collection time. Nothing here is invented.
+ */
+export function policyHeadline(input: { readonly catalog: readonly PolicyMetadata[]; readonly sources: number; readonly loading: boolean; readonly now: Date }): string {
+  if (input.loading && input.catalog.length === 0) return "Reading stored policy snapshots…";
+  const containers = summarizeContainers(input.catalog);
+  const rules = input.catalog.every(p => p.ruleCount !== undefined) ? input.catalog.reduce((sum, p) => sum + p.ruleCount!, 0).toLocaleString("en-US") : "UNKNOWN";
+  const stamps = input.catalog.map(p => Date.parse(p.collectedAt)).filter(Number.isFinite);
+  const age = stamps.length ? relativeAge(new Date(Math.max(...stamps)).toISOString(), input.now) : "UNKNOWN";
+  return `${plural(containers.length, "container")} · ${plural(input.sources, "source")} · ${rules} rules · collected ${age}`;
+}
 function ContainerSummaryTable({ rows, sourceCount, now, open }: { rows: ContainerSummary[]; sourceCount: number; now: Date; open: (row: ContainerSummary) => void }) {
   return <Box component="section" aria-label="Stored policy containers">
     <Typography variant="body2" sx={{ color: m3.onSurfaceVar, mb: 1 }}>
@@ -267,7 +293,7 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
   const [collectionStatus, setCollectionStatus] = useState("");
   const [selected, setSelected] = useState(() => new URLSearchParams(window.location.search).get("policy_id") ?? "");
   const [device, setDevice] = useState(() => new URLSearchParams(window.location.search).get("device_id") ?? "");
-  const [tab, setTab] = useState<"Rules" | "Objects" | "Installation" | "Hygiene" | "Changes" | "Lookup" | "Offline analysis">(() => new URLSearchParams(window.location.search).get("tab") === "objects" ? "Objects" : "Rules");
+  const [tab, setTab] = useState<PolicyTab>(() => new URLSearchParams(window.location.search).get("tab") === "objects" ? "Objects" : "Rules");
   const [hitFilter, setHitFilter] = useState("");
   const [hitDays, setHitDays] = useState(90);
   const [page, setPage] = useState(0);
@@ -542,7 +568,7 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
   const close = () => { drawerRequest.current++; setDrawer(null); };
   return <ScreenRoot>
     <Box sx={{ width: "100%", height: "calc(100dvh - 116px)", minHeight: 0, display: "flex", flexDirection: "column" }}>
-    <ScreenHeader title="Policy" subtitle="Management policy · configured intent" actions={!preview &&
+    <ScreenHeader title="Policy" subtitle={policyHeadline({ catalog, sources: sources.length, loading: loadingTree, now })} actions={!preview &&
       <Tooltip title="Refresh snapshots"><IconButton aria-label="Refresh snapshots" onClick={() => setRevision(n => n + 1)}><Box component="span" aria-hidden="true" sx={{ fontSize: 26, lineHeight: 1 }}>↻</Box></IconButton></Tooltip>} />
     <Box sx={{ mt: 2, flex: 1, minHeight: 0, display: "grid", gridTemplateColumns: { xs: "minmax(0, 1fr)", md: "270px minmax(0, 1fr)" }, gap: 2, alignItems: "stretch" }}>
       <Box component="nav" aria-label="Management policies" sx={{ bgcolor: m3.scLow, borderRadius: 3, p: 2, minWidth: 0, overflowWrap: "anywhere", border: `1px solid ${m3.outlineVar}` }}>
@@ -648,8 +674,15 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
           </FormControl>
         </Stack>
         {collectionStatus && <Typography role="status" sx={{ mb: 1 }}>{collectionStatus}</Typography>}
-        {<Tabs value={tab} onChange={(_, value) => { setTab(value); setDrawer(null); drawerRequest.current++; }} aria-label="Policy tabs" sx={{ mb: 2 }}>
-          {["Rules", "Objects", "Installation", "Hygiene", "Changes", "Lookup", "Offline analysis"].map(label => <Tab key={label} label={label} value={label} />)}
+        {/* Grouped tab bar (roadmap 2.5): the group word sits above the first tab of its group behind a hairline; the
+            accessible name of every tab stays its own label. */}
+        {<Tabs value={tab} onChange={(_, value) => { setTab(value); setDrawer(null); drawerRequest.current++; }} aria-label="Policy tabs" sx={{ mb: 2, minHeight: 56 }}>
+          {POLICY_TAB_GROUPS.flatMap((g, gi) => g.tabs.map((label, ti) => <Tab key={label} value={label} aria-label={label} data-tab-group={g.group}
+            sx={{ minHeight: 56, alignItems: "flex-start", pt: 0.75, ...(ti === 0 && gi > 0 ? { ml: 1.5, borderLeft: `1px solid ${m3.outlineVar}`, pl: 2 } : {}) }}
+            label={<Box component="span" sx={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 0.25 }}>
+              <Box component="span" aria-hidden="true" sx={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: m3.onSurfaceVar, minHeight: 12, lineHeight: "12px" }}>{ti === 0 ? g.group : ""}</Box>
+              <Box component="span">{label}</Box>
+            </Box>} />))}
         </Tabs>}
         {(tab === "Objects" || tab === "Installation") && objectMetadata && <PolicyDomainTab
           key={`${tab}:${objectMetadata.sourceId}:${objectMetadata.containerId}:${revision}`}
