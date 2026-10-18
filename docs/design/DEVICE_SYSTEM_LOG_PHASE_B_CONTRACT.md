@@ -346,6 +346,18 @@ Let `C` be the stored cursor and `F` this run's family stat (name → inode, siz
 The rotated sibling `S` no longer grows, so its end is its stat size. If it grew after the stat (a race), the next
 run reads the remainder.
 
+**Truncation detected at read time.** If a file is found smaller than the start of a C2 read between the stat and the read
+(`RangedFetchStatus.SIZE_BELOW_OFFSET`), the file changed under the plan. SFTP v3 carries no inode (§4.3 Identity), so the
+run cannot tell an in-place truncation from a rename followed by a new file, and it does not guess. With a cursor the
+source is **deferred for this run**: the cursor, the anchor and the family snapshot stay as they were, no gap is recorded,
+the bytes of the failed read are discarded, and the source ends `BACKLOG` with the reason `FILE_CHANGED_DURING_READ` and
+`pending_bytes_unknown = true` in the run detail (the unread amount is not known; it is not 0). `BACKLOG` is not a
+failure (§9), so this alone leaves the job `COMPLETED`. The next run reads a fresh C1 stat and its planner decides, by the
+table above: `TRUNCATED` (Copytruncate row) or a followed rotation (Rename rotation row), reading from byte 0 where the
+table says so. Chunks stored earlier in the same run stay stored and their cursor advance stands. On a **first run** (no
+cursor) nothing was read before, so the whole smaller file is read in the same run inside the budgets and no gap is
+recorded. The same C2 read is used and no command, timeout, retry or frequency changes.
+
 ### 4.5 Gaps are always reported, with byte counts
 
 A gap is a byte range the pool will never hold. Each gap row carries:

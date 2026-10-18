@@ -14,7 +14,12 @@ public enum RangedFetchStatus {
     END_OF_FILE(true),
     /** End of file came before the size the server reported when the file was opened: the file shrank during the read. */
     SHORT_READ(false),
-    /** The size the server reported when the file was opened is below {@code startOffset} (truncated or replaced since the stat). */
+    /**
+     * The size the server reported when the file was opened is below {@code startOffset} (truncated or replaced since the
+     * stat). The Check Point system-log collector does not fail the source for it: with a cursor it defers the source
+     * ({@code BACKLOG}, reason {@code FILE_CHANGED_DURING_READ}, cursor untouched, no gap) and the next run's stat decides;
+     * on a first run it reads the whole smaller file (phase B contract section 4.4, "Truncation detected at read time").
+     */
     SIZE_BELOW_OFFSET(false),
     /** SFTP status {@code SSH_FX_NO_SUCH_FILE}: the path is gone (rotation race). */
     FILE_MISSING(false),

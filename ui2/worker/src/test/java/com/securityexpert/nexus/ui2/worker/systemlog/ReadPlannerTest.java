@@ -725,4 +725,40 @@ class ReadPlannerTest {
         assertEquals(total, p.plannedBytes());
         assertEquals(45 * MIB - 32 * MIB, p.pendingBytes());
     }
+
+    // ------------------------------------------------------------------ restart after a read-time shrink
+
+    @Nested
+    class RestartAfterShrink {
+        @Test
+        void readsTheShrunkFileFromZeroInCapSizedReadsAndKeepsTheContinuationChain() {
+            PlannerConfig c = PlannerConfig.defaults();
+            ReadPlanner.Restart r = ReadPlanner.restartFromStart(MESSAGES, 10, 20 * MIB, 64 * MIB, c);
+            assertEquals(3, r.reads().size());
+            assertRead(r.reads().get(0), MESSAGES, 0, 8 * MIB, ReadPurpose.CURRENT_FROM_START);
+            assertRead(r.reads().get(2), MESSAGES, 16 * MIB, 4 * MIB, ReadPurpose.CURRENT_FROM_START);
+            assertFalse(r.reads().get(0).continuation());
+            assertTrue(r.reads().get(1).continuation());
+            assertEquals(0, r.reads().get(0).leadIn());
+            assertNull(r.reads().get(0).expectedAnchor());
+            assertEquals(20 * MIB, r.plannedBytes());
+            assertEquals(0, r.pendingBytes());
+        }
+
+        @Test
+        void aBudgetCutsTheReadsAndLeavesTheExactPendingBytes() {
+            ReadPlanner.Restart r = ReadPlanner.restartFromStart(MESSAGES, 10, 20 * MIB, 10 * MIB, PlannerConfig.defaults());
+            assertEquals(10 * MIB, r.plannedBytes());
+            assertEquals(10 * MIB, r.pendingBytes());
+            assertEquals(2, r.reads().size());
+        }
+
+        @Test
+        void anEmptyFileOrNoBudgetPlansNoRead() {
+            assertTrue(ReadPlanner.restartFromStart(MESSAGES, 10, 0, MIB, PlannerConfig.defaults()).reads().isEmpty());
+            ReadPlanner.Restart none = ReadPlanner.restartFromStart(MESSAGES, 10, MIB, 0, PlannerConfig.defaults());
+            assertTrue(none.reads().isEmpty());
+            assertEquals(MIB, none.pendingBytes());
+        }
+    }
 }

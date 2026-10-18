@@ -401,6 +401,11 @@ public final class CpSystemLogCollectJobExecutor {
         Position pos = storedCursor == null ? null
                 : new Position(storedCursor.inode(), storedCursor.offsetBytes(), storedCursor.anchorHmac());
         boolean dirty = false, touchedBase = false, noBaseline = false, lineSplitAny = false;
+        // A file found smaller than a read's start (changed between this run's stat and the read). With a cursor the source is
+        // deferred (see below); only a first run, which holds nothing yet, restarts the file from byte 0 inside this run.
+        Set<String> shrinkRestarts = new HashSet<>();
+        boolean shrinkVoidsBaseline = false;
+        long shrinkPending = 0;
         long payloadRead = 0, discarded = 0, storedBytes = 0, carriedAtStop = 0;
         int reads = 0, chunks = 0, replans = 0, redactions = 0;
         String ruleSet = null;
@@ -435,6 +440,36 @@ public final class CpSystemLogCollectJobExecutor {
             RangedFetchResult result = rangedRead(run, readFamily, base, printed, r, buffer);
             lastActivityAt = clock.millis();
             reads++;
+            if (result.status() == RangedFetchStatus.SIZE_BELOW_OFFSET && result.sizeAtOpen().isPresent()) {
+                if (pos == null && r.purpose() == ReadPurpose.INITIAL_BASELINE && r.path().equals(base.path())
+                        && shrinkRestarts.add(r.path())) {
+                    // First run, nothing read before: nothing is lost. The whole (now smaller) file replaces the baseline,
+                    // under the same budgets; the failed read's prefix is discarded and nothing was stored for it.
+                    lossGaps = new ArrayList<>(lossGaps);
+                    lossGaps.removeIf(g -> g.kind() == GapKind.INITIAL_BASELINE);
+                    shrinkVoidsBaseline = true;
+                    long sourceLeft = config.sourceBudgetBytes() - (run.deviceSpent - spentBeforeSource);
+                    long deviceLeft = config.deviceBudgetBytes() - run.deviceSpent;
+                    ReadPlanner.Restart restart = ReadPlanner.restartFromStart(r.path(), r.inode(),
+                            result.sizeAtOpen().getAsLong(), Math.min(sourceLeft, deviceLeft), config);
+                    shrinkPending += restart.pendingBytes();
+                    List<ReadAction> rebuilt = new ArrayList<>(actions.subList(0, i));
+                    rebuilt.addAll(restart.reads());
+                    for (int j = i + 1; j < actions.size(); j++)
+                        if (!actions.get(j).path().equals(r.path())) rebuilt.add(actions.get(j));
+                    actions = rebuilt;
+                    pos = new Position(Long.toString(r.inode()), 0, null);
+                    dirty = true;
+                    repeat = false;
+                    continue readLoop;
+                }
+                // With a cursor the file changed under the plan (truncated, or renamed and replaced; SFTP v3 cannot tell
+                // which). Not a collection failure and nothing to guess: the cursor, the anchor and the gaps stay as they
+                // are, the source is deferred, and the next run's stat decides TRUNCATED or rotation (section 4.4).
+                failure = "FILE_CHANGED_DURING_READ";
+                failureOutcome = "BACKLOG";
+                break;
+            }
             if (!result.bytesUsable()) {
                 failure = "READ_" + result.status().name();
                 transportFailure = result.status() != RangedFetchStatus.REFUSED;
@@ -558,28 +593,39 @@ public final class CpSystemLogCollectJobExecutor {
         detail.put("rotation_followed", plan.rotationFollowed());
         detail.put("fast_rotation", plan.fastRotation());
         detail.put("rotations_since_last_read", plan.rotationsSinceLastRead());
+        if (!shrinkRestarts.isEmpty()) detail.put("shrink_restarts", shrinkRestarts.size());
+        if ("BACKLOG".equals(failureOutcome)) detail.put("pending_bytes_unknown", true);
+        // The plan's pending bytes sat in the file that shrank when its BACKLOG row names only that file: they are gone.
+        Gap planBacklog = plan.gap(GapKind.BACKLOG);
+        long planPending = !shrinkRestarts.isEmpty() && planBacklog != null
+                && planBacklog.affectedPaths().equals(List.of(base.path())) ? 0 : plan.pendingBytes();
+        long pendingTotal = planPending + shrinkPending;
         if (failure != null) {
-            result = "STORAGE_REFUSED".equals(failureOutcome) ? SourceResult.of("STORAGE_REFUSED", failure) : SourceResult.unknown(failure);
+            result = "STORAGE_REFUSED".equals(failureOutcome) || "BACKLOG".equals(failureOutcome)
+                    ? SourceResult.of(failureOutcome, failure) : SourceResult.unknown(failure);
             if (transportFailure) result.gaps.add(row(Gap.collectionFailed(cursor == null ? epochNow : cursor.deviceEpochAtRead(),
                     epochNow), run.deviceId));
         } else if (noBaseline) {
             result = SourceResult.of("NO_NEW_DATA", null);
             detail.put("partial_line_only", true);
         } else {
-            boolean completed = plan.pendingBytes() == 0;
+            boolean completed = pendingTotal == 0;
             if (completed && !touchedBase && base.size() == 0 && (pos == null || !pos.inode().equals(Long.toString(base.inode()))
                     || plan.gaps().stream().anyMatch(Gap::isLoss))) {
                 // The chain ends in an empty live file (restart after a rotation or truncation): the cursor moves to it.
                 pos = new Position(Long.toString(base.inode()), 0, null);
                 dirty = true;
             }
-            boolean loss = plan.gaps().stream().anyMatch(Gap::isLoss);
-            String outcome = plan.pendingBytes() > 0 ? "BACKLOG" : loss ? "GAP" : chunks > 0 ? "COLLECTED" : "NO_NEW_DATA";
+            final boolean baselineVoided = shrinkVoidsBaseline;
+            boolean loss = plan.gaps().stream()
+                    .anyMatch(g -> g.isLoss() && !(baselineVoided && g.kind() == GapKind.INITIAL_BASELINE));
+            String outcome = pendingTotal > 0 ? "BACKLOG" : loss ? "GAP" : chunks > 0 ? "COLLECTED" : "NO_NEW_DATA";
             result = SourceResult.of(outcome, null);
             if (!lossGapsWritten) result.gaps.addAll(toRows(lossGaps, run.deviceId));
-            Gap backlog = plan.gap(GapKind.BACKLOG);
+            Gap backlog = pendingTotal > 0 ? (planBacklog != null ? planBacklog : Gap.backlog(0,
+                    cursor == null ? epochNow : cursor.deviceEpochAtRead(), epochNow, List.of(base.path()))) : null;
             if (backlog != null) {
-                long pending = plan.pendingBytes() + carriedAtStop;
+                long pending = pendingTotal + carriedAtStop;
                 detail.put("pending_bytes", pending);
                 result.gaps.add(row(new Gap(GapKind.BACKLOG, 0, false, pending, false, backlog.windowStartEpoch(),
                         backlog.windowEndEpoch(), backlog.affectedPaths(), 0, 0), run.deviceId));
