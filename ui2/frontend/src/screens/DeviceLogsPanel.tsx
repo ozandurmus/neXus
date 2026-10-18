@@ -258,7 +258,7 @@ function LogsBody({ deviceId, data, onRefresh, emptyState }: {
     <Stack spacing={2} data-testid="device-logs">
       <Box sx={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 2 }}>
         <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
-          Loglar · system logs collected from the device, stored encrypted and masked on screen by default.
+          Logs · system logs collected from the device, stored encrypted and masked on screen by default.
         </Typography>
         <M3Button emphasis="text" onClick={onRefresh}>Refresh</M3Button>
       </Box>

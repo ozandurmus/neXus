@@ -1196,7 +1196,7 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
                         : <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>No archive</Typography>}
                     </TableCell>
                     <TableCell align="right" sx={{ fontSize: 12.5 }} title={item ? bytesTitle(item.sizeBytes) : undefined}>{item ? formatBytes(item.sizeBytes) : ""}</TableCell>
-                    <TableCell>{item ? <ValidationChip level={item.validationLevel} /> : null}</TableCell>
+                    <TableCell>{item ? <ValidationChip level={item.validationLevel} withLevel /> : null}</TableCell>
                     <TableCell>{item ? <DeviationChip state={item.deviationState} comparisonRun={comparisonRun} /> : null}</TableCell>
                     <TableCell sx={{ fontSize: 12.5 }}><BackupAttempts deviceId={id} latestOnly version={version} /></TableCell>
                     <TableCell align="right">
