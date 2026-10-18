@@ -214,7 +214,7 @@ describe("Java product provenance", () => {
     await waitFor(() => expect(screen.getByText(/Source revision: snapshot-1/)).toBeInTheDocument());
     expect(screen.getByText(/Freshness: STALE/)).toBeInTheDocument();
     expect(screen.getByText(/Deployed software version: UNKNOWN/)).toBeInTheDocument();
-    expect(screen.getByText(provenanceFixture.converted_lessons_heading)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: provenanceFixture.converted_lessons_heading })).toBeInTheDocument();
     expect(screen.getByText("Verify opaque identity in Java")).toBeInTheDocument();
     expect(screen.getByLabelText("Open backlog count")).toHaveTextContent("1");
     fireEvent.click(screen.getByRole("button", { name: "Refresh project plan" }));

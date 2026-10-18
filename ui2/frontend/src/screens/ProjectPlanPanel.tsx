@@ -7,7 +7,8 @@ import Typography from "@mui/material/Typography";
 
 import { EmptyPanel } from "../shell/ScreenLayout";
 import { M3Button, StatusChip } from "../shell/M3Widgets";
-import { RestrictedPanel, StatePanel, Ts, isRestricted } from "../shell/States";
+import { RestrictedPanel, StatePanel, isRestricted } from "../shell/States";
+import { Stamp } from "../shell/PresentedText";
 import { m3 } from "../theme/m3Theme";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 import {
@@ -79,9 +80,33 @@ function ProgressBar({ value }: { readonly value: number | null | undefined }) {
   );
 }
 
+/** The plan is a long page (UI review 2026-10-18, F-20): every section has an anchor and the index above jumps to it. */
+const sectionId = (title: string) => `plan-section-${title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
+const PLAN_SECTIONS = [
+  "Java UI2 product roadmap", "Now / Next / Upcoming", "Major tracks", "Java feature backlog",
+  "Java technical debt, security & release gates", "Converted Python lessons — historical / derived", "Completed features", "Java product build history",
+] as const;
+
+function SectionIndex() {
+  return (
+    <Box component="nav" aria-label="Delivery plan sections"
+      sx={{ position: "sticky", top: 0, zIndex: 2, display: "flex", flexWrap: "wrap", alignItems: "center", gap: 0.75, px: 1.5, py: 1,
+        bgcolor: m3.scLowest, border: `1px solid ${m3.outlineVar}`, borderRadius: "10px" }}>
+      <Typography variant="caption" sx={{ color: m3.onSurfaceVar, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", mr: 0.5 }}>On this page</Typography>
+      {PLAN_SECTIONS.map((title) => (
+        <Box key={title} component="button" type="button" onClick={() => document.getElementById(sectionId(title))?.scrollIntoView?.({ behavior: "smooth", block: "start" })}
+          sx={{ border: "none", cursor: "pointer", font: "inherit", fontSize: 13, color: m3.primary, bgcolor: "transparent", px: 1, py: 0.25, borderRadius: "6px",
+            "&:hover": { bgcolor: m3.scLow } }}>
+          {title}
+        </Box>
+      ))}
+    </Box>
+  );
+}
+
 function Section({ title, children }: { readonly title: string; readonly children: ReactNode }) {
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", gap: 1.25 }}>
+    <Box id={sectionId(title)} sx={{ display: "flex", flexDirection: "column", gap: 1.25, scrollMarginTop: 64 }}>
       <Typography variant="h3">{title}</Typography>
       {children}
     </Box>
@@ -483,9 +508,10 @@ export function ProjectPlanPanel() {
 
   return (
     <Stack spacing={3}>
+      <SectionIndex />
       <Section title="Java UI2 product roadmap">
-        <Typography variant="body2" component="div">Current recorded product build: {plan.current_product_build ?? "UNKNOWN"}. Deployed software version: {plan.deployed_commit ? <>{plan.deployed_commit.slice(0, 12)}{plan.deployed_at ? <> · deployed <Ts at={plan.deployed_at} /></> : null}</> : "UNKNOWN"}.</Typography>
-        <Typography variant="body2" component="div">Source review: <Ts at={plan.source_metadata?.reviewed_at} /> · Freshness: {plan.source_metadata?.freshness ?? "UNKNOWN"}</Typography>
+        <Typography variant="body2" component="div">Current recorded product build: {plan.current_product_build ?? "UNKNOWN"}. Deployed software version: {plan.deployed_commit ? <>{plan.deployed_commit.slice(0, 12)}{plan.deployed_at ? <> · deployed <Stamp at={plan.deployed_at} /></> : null}</> : "UNKNOWN"}.</Typography>
+        <Typography variant="body2" component="div">Source review: <Stamp at={plan.source_metadata?.reviewed_at} /> · Freshness: {plan.source_metadata?.freshness ?? "UNKNOWN"}</Typography>
         <Typography variant="body2" sx={{ overflowWrap: "anywhere" }}>Source revision: {plan.source_metadata?.revision ?? "UNKNOWN"}</Typography>
         <Typography variant="body2">{plan.source_metadata?.update_policy}</Typography>
         <Box sx={{ alignSelf: "flex-start" }}><M3Button emphasis="outlined" onClick={refresh}>Refresh project plan</M3Button></Box>

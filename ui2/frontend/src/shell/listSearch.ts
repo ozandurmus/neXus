@@ -5,7 +5,16 @@ import { useEffect, useSyncExternalStore } from "react";
  * shows one (Devices, Configuration). The top bar writes the term here; a list screen reads it with
  * {@link useListSearch}, which also tells the top bar that the term is filtering a list right now.
  */
-let term = "";
+/**
+ * A link from the global search's "See all N devices" row opens Devices with the term already in the box
+ * (`?screen=inventory&device_search=<term>`); every other page starts with an empty box.
+ */
+function initialTerm(): string {
+  if (typeof window === "undefined") return "";
+  const params = new URLSearchParams(window.location.search);
+  return params.get("screen") === "inventory" ? (params.get("device_search") ?? "").slice(0, 100) : "";
+}
+let term = initialTerm();
 let listScreens = 0;
 const listeners = new Set<() => void>();
 

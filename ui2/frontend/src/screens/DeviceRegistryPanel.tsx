@@ -6,13 +6,24 @@ import Dialog from "@mui/material/Dialog";
 import DialogActions from "@mui/material/DialogActions";
 import DialogContent from "@mui/material/DialogContent";
 import DialogTitle from "@mui/material/DialogTitle";
+import InputBase from "@mui/material/InputBase";
 import Stack from "@mui/material/Stack";
+import Table from "@mui/material/Table";
+import TableBody from "@mui/material/TableBody";
+import TableCell from "@mui/material/TableCell";
+import TableContainer from "@mui/material/TableContainer";
+import TableHead from "@mui/material/TableHead";
+import TablePagination from "@mui/material/TablePagination";
+import TableRow from "@mui/material/TableRow";
 import Typography from "@mui/material/Typography";
 
 import { EmptyPanel } from "../shell/ScreenLayout";
 import { CapabilityMenu, M3Button, StatusChip } from "../shell/M3Widgets";
 import { ChangeCredentialsDialog } from "../shell/ChangeCredentialsDialog";
-import { RestrictedPanel, StatePanel, Ts, VendorBadge, isRestricted } from "../shell/States";
+import { RestrictedPanel, StatePanel, VendorBadge, isRestricted } from "../shell/States";
+import { Stamp } from "../shell/PresentedText";
+import { Icon } from "../shell/Icon";
+import { vendorLabel } from "../shell/presenters";
 import { m3 } from "../theme/m3Theme";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { deleteDevice, listDevices, type ApiError, type BackupDisposition, type DeviceSummary } from "../auth/adminApi";
@@ -34,18 +45,26 @@ function requiredBackupDisposition(err: unknown): number | null {
 }
 
 /**
- * One column template for the registry header and every row, so the headings can never drift off their cells or run
- * into each other (review 2026-10-17: "DEVICE / HOSTNAMEENROLMENT STATE"). The hostname column keeps a floor wide enough
- * for a full name; if the card is ever narrower than the floors add up to, the list scrolls sideways instead.
+ * The registry filters behind the Enrollment card (UI review 2026-10-18, F-22). Each count in the card is a filter;
+ * the predicates are the ones the counts use, so a number and the list it opens always agree.
  */
-const REGISTRY_GRID = {
-  display: "grid",
-  gridTemplateColumns: "28px 52px minmax(170px, 1fr) 128px minmax(196px, 220px) 36px",
-  columnGap: 1.25,
-  alignItems: "center",
-  px: 1.5,
-} as const;
-const REGISTRY_MIN_WIDTH = 28 + 52 + 170 + 128 + 196 + 36 + 5 * 10 + 26;
+export type RegistryFilter = "ALL" | "ENROLLED" | "LAST_FAILED" | "DRAFT";
+
+/** Enrolled devices whose most recent collection failed, or that the store itself marked degraded or unreachable. */
+const lastCollectionFailed = (d: DeviceSummary) => d.enrollment_state === "DEGRADED" || d.enrollment_state === "UNREACHABLE"
+  || (d.enrollment_state === "ENROLLED" && d.latest_job_state === "FAILED");
+
+export function registryMatches(d: DeviceSummary, filter: RegistryFilter, search: string): boolean {
+  if (filter === "ENROLLED" && d.enrollment_state !== "ENROLLED") return false;
+  if (filter === "LAST_FAILED" && !lastCollectionFailed(d)) return false;
+  if (filter === "DRAFT" && d.enrollment_state !== "DRAFT") return false;
+  const needle = search.trim().toLowerCase();
+  if (!needle) return true;
+  return [d.hostname ?? "", d.vendor_hint, vendorLabel(d.vendor_hint), d.enrollment_state, enrollmentStateLabel(d.enrollment_state), d.model ?? ""]
+    .some((text) => text.toLowerCase().includes(needle));
+}
+
+const PAGE_SIZES = [25, 50, 100] as const;
 
 /** The device/hostname cell: the plain name, or "UNKNOWN hostname" with a chip naming why (review §3). */
 function HostnameCell({ device }: { readonly device: DeviceSummary }) {
@@ -78,6 +97,8 @@ export function DeviceManagementPane() {
     describeApiError,
   );
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [filter, setFilter] = useState<RegistryFilter>("ALL");
+  const [search, setSearch] = useState("");
   const [pendingDelete, setPendingDelete] = useState<{ deviceId: string; artefactCount: number } | null>(null);
 
   const onDelete = async (deviceId: string) => {
@@ -147,8 +168,7 @@ export function DeviceManagementPane() {
   // (drafts included) with `latest_job_state === "FAILED""; here only an already-ENROLLED device counts, plus a
   // device the store itself marked DEGRADED/UNREACHABLE. The two figures answer different questions and can
   // legitimately differ -- see the final report for the exact predicates.
-  const degradedCount = devices?.filter((d) => d.enrollment_state === "DEGRADED" || d.enrollment_state === "UNREACHABLE"
-    || (d.enrollment_state === "ENROLLED" && d.latest_job_state === "FAILED")).length ?? 0;
+  const degradedCount = devices?.filter(lastCollectionFailed).length ?? 0;
   const backupTargetCount = devices?.filter((d) => d.backup_target).length ?? 0;
   const draftCount = devices?.filter((d) => d.enrollment_state === "DRAFT").length ?? 0;
 
@@ -168,7 +188,7 @@ export function DeviceManagementPane() {
           <M3Button emphasis="filled" onClick={() => confirmBackupDisposition("REMOVE")}>Remove artefacts</M3Button>
         </DialogActions>
       </Dialog>
-      <Box sx={{ flex: 1, minHeight: 0, display: "grid", gridTemplateColumns: "minmax(0, 1fr) 288px", gap: 2 }}>
+      <Box sx={{ flex: 1, minHeight: 0, display: "grid", gridTemplateColumns: "minmax(0, 1fr) 260px", gap: 2 }}>
       <DeviceRegistryCard
         devices={devices}
         deleteError={deleteError}
@@ -176,22 +196,29 @@ export function DeviceManagementPane() {
         onBulkDelete={onBulkDelete}
         onChanged={refresh}
         total={total}
+        filter={filter}
+        search={search}
+        onSearch={setSearch}
+        onFilter={setFilter}
       />
       <Stack spacing={2}>
-        <EmptyPanel title="Enrollment" body="Enrolling a device grants read collection only.">
-          <Stack spacing={1}>
-            <Box sx={{ display: "flex", justifyContent: "space-between" }}>
-              <Typography variant="body2">Enrolled</Typography>
-              <StatusChip tone="ok" label={`${enrolledCount} device${enrolledCount === 1 ? "" : "s"}`} dense />
-            </Box>
-            <Box sx={{ display: "flex", justifyContent: "space-between" }}>
-              <Typography variant="body2">Last collection failed (enrolled)</Typography>
-              <StatusChip tone={degradedCount === 0 ? "neutral" : "warn"} label={`${degradedCount} device${degradedCount === 1 ? "" : "s"}`} dense />
-            </Box>
-            <Box sx={{ display: "flex", justifyContent: "space-between" }}>
-              <Typography variant="body2">Draft · not collected</Typography>
-              <StatusChip tone="neutral" label={`${draftCount} device${draftCount === 1 ? "" : "s"}`} dense />
-            </Box>
+        <EmptyPanel title="Enrollment" body="Enrolling a device grants read collection only. Each count filters the registry.">
+          <Stack spacing={0.5} role="group" aria-label="Registry filters">
+            {([
+              ["ENROLLED", "Enrolled", enrolledCount, "ok"],
+              ["LAST_FAILED", "Last collection failed (enrolled)", degradedCount, "warn"],
+              ["DRAFT", "Draft · not collected", draftCount, "neutral"],
+            ] as const).map(([key, label, count, tone]) => (
+              <Box key={key} component="button" type="button" aria-pressed={filter === key} onClick={() => setFilter(filter === key ? "ALL" : key)}
+                sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1, width: "100%", textAlign: "left", cursor: "pointer",
+                  font: "inherit", color: "inherit", px: 1, py: 0.75, borderRadius: "8px", border: "1px solid",
+                  borderColor: filter === key ? m3.primary : "transparent", bgcolor: filter === key ? m3.secondaryContainer : "transparent",
+                  "&:hover": { bgcolor: filter === key ? m3.secondaryContainer : m3.scLow } }}>
+                <Typography variant="body2" component="span">{label}</Typography>
+                {/* Zero is neutral, never green: an empty count carries no status colour. */}
+                <StatusChip tone={count === 0 ? "neutral" : tone} label={`${count} device${count === 1 ? "" : "s"}`} dense />
+              </Box>
+            ))}
           </Stack>
         </EmptyPanel>
         <EmptyPanel
@@ -246,6 +273,10 @@ function DeviceRegistryCard({
   onBulkDelete,
   onChanged,
   total,
+  filter,
+  search,
+  onSearch,
+  onFilter,
 }: {
   readonly devices: DeviceSummary[] | null;
   readonly deleteError: string | null;
@@ -253,6 +284,10 @@ function DeviceRegistryCard({
   readonly onBulkDelete: (deviceIds: string[]) => Promise<boolean>;
   readonly onChanged: () => void;
   readonly total: number;
+  readonly filter: RegistryFilter;
+  readonly search: string;
+  readonly onSearch: (value: string) => void;
+  readonly onFilter: (filter: RegistryFilter) => void;
 }) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isDeleting, setIsDeleting] = useState(false);
@@ -261,20 +296,28 @@ function DeviceRegistryCard({
   // stray tap can no longer trigger moved off the row (review "shows a filled Delete button on every row").
   const [confirmIds, setConfirmIds] = useState<string[] | null>(null);
   const [credentialsFor, setCredentialsFor] = useState<DeviceSummary | null>(null);
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState<number>(50);
 
   if (devices === null) {
     return <StatePanel variant="empty" title="Device registry" body="Loading…" />;
   }
 
-  const isAllSelected = total > 0 && selectedIds.size === total;
-  const isSomeSelected = selectedIds.size > 0 && selectedIds.size < total;
+  // The list the filters leave, then the page of it in view. "Select all" selects what the filters leave, not the whole
+  // registry, so a bulk Delete never reaches a row the reader cannot see.
+  const matching = devices.filter((d) => registryMatches(d, filter, search));
+  const lastPage = Math.max(0, Math.ceil(matching.length / pageSize) - 1);
+  const shownPage = Math.min(page, lastPage);
+  const pageRows = matching.slice(shownPage * pageSize, shownPage * pageSize + pageSize);
+  const matchingSelected = matching.filter((d) => selectedIds.has(d.device_id)).length;
+  const isAllSelected = matching.length > 0 && matchingSelected === matching.length;
+  const isSomeSelected = matchingSelected > 0 && matchingSelected < matching.length;
 
   const handleToggleAll = () => {
-    if (!devices) return;
-    if (selectedIds.size === devices.length) {
-      setSelectedIds(new Set());
+    if (isAllSelected) {
+      setSelectedIds((prev) => { const next = new Set(prev); matching.forEach((d) => next.delete(d.device_id)); return next; });
     } else {
-      setSelectedIds(new Set(devices.map((d) => d.device_id)));
+      setSelectedIds((prev) => { const next = new Set(prev); matching.forEach((d) => next.add(d.device_id)); return next; });
     }
   };
 
@@ -377,73 +420,90 @@ function DeviceRegistryCard({
         </Box>
       )}
       {total > 0 && (
-        <Box sx={{ overflowX: "auto", mt: 1 }}>
-        <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, minWidth: REGISTRY_MIN_WIDTH }}>
-          <Box sx={{ ...REGISTRY_GRID, border: "1px solid transparent", py: 0.5, color: "text.secondary", fontSize: "0.75rem", fontWeight: 600, whiteSpace: "nowrap" }}>
-            <Box>
-              <Checkbox
-                checked={isAllSelected}
-                indeterminate={isSomeSelected}
-                onChange={handleToggleAll}
-                size="small"
-                sx={{ p: 0 }}
-                inputProps={{ "aria-label": "Select all devices" }}
-              />
-            </Box>
-            <Box>VENDOR</Box>
-            <Box>DEVICE / HOSTNAME</Box>
-            <Box>ENROLLMENT STATE</Box>
-            <Box>LAST COLLECTION</Box>
-            <Box sx={{ textAlign: "right" }}>&nbsp;</Box>
+        <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
+          <Box sx={{ flex: "1 1 260px", display: "flex", alignItems: "center", gap: 1, px: 1.5, py: 0.5, bgcolor: m3.scLow, border: "1px solid",
+            borderColor: m3.outlineVar, borderRadius: "10px" }}>
+            <Icon name="search" size={18} />
+            <InputBase fullWidth placeholder="Search by hostname, vendor or state" value={search} onChange={(e) => { onSearch(e.target.value); setPage(0); }}
+              inputProps={{ "aria-label": "Search registry" }} sx={{ fontSize: 14 }} />
           </Box>
-          <Stack spacing={1} sx={{ maxHeight: "calc(100vh - 340px)", overflowY: "auto", pr: 0.5 }}>
-            {devices.map((device) => (
-              <Box
-                key={device.device_id}
-                sx={{
-                  ...REGISTRY_GRID,
-                  py: 1.25,
-                  border: "1px solid",
-                  borderColor: selectedIds.has(device.device_id) ? "primary.main" : "divider",
-                  borderRadius: 1.5,
-                  bgcolor: selectedIds.has(device.device_id) ? "action.selected" : "background.paper",
-                  "&:hover": { borderColor: "primary.main" },
-                }}
-              >
-                <Box>
+          {(filter !== "ALL" || search.trim()) && (
+            <M3Button emphasis="text" onClick={() => { onFilter("ALL"); onSearch(""); setPage(0); }}>Clear filters</M3Button>
+          )}
+          <Typography variant="body2" color="text.secondary" role="status">
+            {matching.length === total ? `${total} of ${total}` : `${matching.length} of ${total} match`}
+          </Typography>
+        </Stack>
+      )}
+      {total > 0 && (
+        <TableContainer sx={{ mt: 1, border: "1px solid", borderColor: m3.outlineVar, borderRadius: "10px" }}>
+          <Table size="small" aria-label="Device registry" sx={{ tableLayout: "fixed", "& td, & th": { px: 1 } }}>
+            <TableHead>
+              <TableRow sx={{ "& th": { color: "text.secondary", fontSize: "0.75rem", fontWeight: 600, whiteSpace: "nowrap" } }}>
+                <TableCell padding="checkbox" sx={{ width: 44 }}>
                   <Checkbox
-                    checked={selectedIds.has(device.device_id)}
-                    onChange={() => handleToggleRow(device.device_id)}
+                    checked={isAllSelected}
+                    indeterminate={isSomeSelected}
+                    onChange={handleToggleAll}
                     size="small"
-                    sx={{ p: 0 }}
-                    inputProps={{ "aria-label": `Select ${deviceNameLabel(device.hostname)}` }}
+                    inputProps={{ "aria-label": "Select all devices" }}
                   />
-                </Box>
-                <VendorBadge vendor={device.vendor_hint} size={24} />
-                <HostnameCell device={device} />
-                <Box>
-                  {(() => {
-                    const chip = onboardingChip(device.onboarding);
-                    return chip
-                      ? <span title={chip.title}><StatusChip tone={chip.tone} label={chip.label} dense /></span>
-                      : <StatusChip tone={enrollmentStateTone(device.enrollment_state)} label={enrollmentStateLabel(device.enrollment_state)} dense />;
-                  })()}
-                </Box>
-                <Ts at={device.inventory_collected_at} relative />
-                <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
-                  <CapabilityMenu
-                    ariaLabel={`${deviceNameLabel(device.hostname)} actions`}
-                    items={[
-                      { label: "Change credentials…", onSelect: () => setCredentialsFor(device) },
-                      { label: "Delete", destructive: true, dividerBefore: true, onSelect: () => setConfirmIds([device.device_id]) },
-                    ]}
-                  />
-                </Box>
-              </Box>
-            ))}
-          </Stack>
-        </Box>
-        </Box>
+                </TableCell>
+                <TableCell sx={{ width: 130 }}>VENDOR</TableCell>
+                <TableCell>DEVICE / HOSTNAME</TableCell>
+                <TableCell sx={{ width: 150 }}>ENROLLMENT STATE</TableCell>
+                <TableCell sx={{ width: 170 }}>LAST COLLECTION</TableCell>
+                <TableCell sx={{ width: 48 }} align="right">&nbsp;</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {pageRows.map((device) => (
+                <TableRow key={device.device_id} hover selected={selectedIds.has(device.device_id)}>
+                  <TableCell padding="checkbox">
+                    <Checkbox
+                      checked={selectedIds.has(device.device_id)}
+                      onChange={() => handleToggleRow(device.device_id)}
+                      size="small"
+                      inputProps={{ "aria-label": `Select ${deviceNameLabel(device.hostname)}` }}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <VendorBadge vendor={device.vendor_hint} size={24} />
+                      <Typography variant="body2" title={device.vendor_hint} sx={{ whiteSpace: "nowrap" }}>{vendorLabel(device.vendor_hint)}</Typography>
+                    </Stack>
+                  </TableCell>
+                  <TableCell><HostnameCell device={device} /></TableCell>
+                  <TableCell>
+                    {(() => {
+                      const chip = onboardingChip(device.onboarding);
+                      return chip
+                        ? <span title={chip.title}><StatusChip tone={chip.tone} label={chip.label} dense /></span>
+                        : <StatusChip tone={enrollmentStateTone(device.enrollment_state)} label={enrollmentStateLabel(device.enrollment_state)} dense />;
+                    })()}
+                  </TableCell>
+                  <TableCell sx={{ whiteSpace: "nowrap" }}><Stamp at={device.inventory_collected_at} stacked /></TableCell>
+                  <TableCell align="right">
+                    <CapabilityMenu
+                      ariaLabel={`${deviceNameLabel(device.hostname)} actions`}
+                      items={[
+                        { label: "Change credentials…", onSelect: () => setCredentialsFor(device) },
+                        { label: "Delete", destructive: true, dividerBefore: true, onSelect: () => setConfirmIds([device.device_id]) },
+                      ]}
+                    />
+                  </TableCell>
+                </TableRow>
+              ))}
+              {pageRows.length === 0 && (
+                <TableRow><TableCell colSpan={6}><Typography variant="body2" color="text.secondary" sx={{ py: 1 }}>No device matches these filters.</Typography></TableCell></TableRow>
+              )}
+            </TableBody>
+          </Table>
+          <TablePagination component="div" count={matching.length} page={shownPage} rowsPerPage={pageSize} rowsPerPageOptions={PAGE_SIZES as unknown as number[]}
+            onPageChange={(_event, value) => setPage(value)}
+            onRowsPerPageChange={(event) => { setPageSize(Number(event.target.value)); setPage(0); }}
+            labelRowsPerPage="Per page" />
+        </TableContainer>
       )}
     </EmptyPanel>
   );

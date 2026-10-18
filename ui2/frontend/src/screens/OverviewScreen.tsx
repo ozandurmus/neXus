@@ -12,12 +12,14 @@ import { StatusChip } from "../shell/M3Widgets";
 import { Donut, STATUS, STATUS_INK, StackedBar, foldSlices } from "../shell/Charts";
 import { StatePanel, Ts, isRestricted } from "../shell/States";
 import { useDisplayMode } from "../shell/displayMode";
-import { DISPLAY_TZ_LABEL, formatUtc, relativeAge } from "../shell/time";
+import { DISPLAY_TZ_LABEL, formatStamp, formatUtc, relativeAge } from "../shell/time";
 import { MONO, m3 } from "../theme/m3Theme";
-import { getComplianceControls, getOverview, type ComplianceControlItem, type CountTile, type EvidenceChip, type FailureReason, type OverviewView, type VersionSlice } from "../auth/adminApi";
+import { getComplianceControls, getOverview, listCpFailoverSummary, listDevices, type ComplianceControlItem, type DeviceSummary, type CountTile, type EvidenceChip, type FailureReason, type OverviewView, type VersionSlice } from "../auth/adminApi";
 import { EXEC, EstateMap, HeroFact, PopulationBar } from "./overview/EstateMap";
 import { SERIES } from "../shell/Charts";
 import { vendorDisplayName } from "../shell/States";
+import { jobTypeLabel } from "../shell/presenters";
+import { groupClusters, haReadinessItems, readinessCounts, readinessFreshness } from "./HaReadinessList";
 
 export { relativeAge } from "../shell/time";
 
@@ -37,6 +39,28 @@ export { relativeAge } from "../shell/time";
 const CARD = { borderRadius: "10px", bgcolor: m3.scLowest, border: `1px solid ${m3.outlineVar}`, p: 2.25, boxShadow: "none" } as const;
 const q = (params: Record<string, string>) => `?${new URLSearchParams(params).toString()}`;
 const pct = (a: number, b: number) => (b > 0 ? Math.round((100 * a) / b) : 0);
+
+interface HaOverview { total: number; ready: number; notReady: number; unknown: number; unsupported: number; evaluated: number; stale: number; mostlyStale: boolean }
+
+/** The row text, for the page and for the link's accessible name: "20 ready of 45 clusters · 4 not ready · 16 unknown". */
+export function haReadinessSentence(h: Pick<HaOverview, "total" | "ready" | "notReady" | "unknown" | "unsupported">): string {
+  return `${h.ready} ready of ${h.total} clusters · ${h.notReady} not ready · ${h.unknown} unknown${h.unsupported > 0 ? ` · ${h.unsupported} not supported` : ""}`;
+}
+
+/**
+ * Software versions of a vendor the overview payload carries no version breakdown for (Fortinet, Cisco ASA), read
+ * from the device list exactly as the devices report them: no recommended build, no judgement of age. A device that
+ * reports no version is counted as Unknown. A management server (FortiManager) runs a different product and is left out.
+ */
+export function reportedVersions(devices: readonly DeviceSummary[], vendor: string): Array<{ label: string | null; count: number }> {
+  const counts = new Map<string | null, number>();
+  for (const d of devices) {
+    if (d.vendor_hint !== vendor || d.enrollment_state !== "ENROLLED" || d.role === "management_server") continue;
+    const label = d.software_version?.trim() || null;
+    counts.set(label, (counts.get(label) ?? 0) + 1);
+  }
+  return [...counts.entries()].map(([label, count]) => ({ label, count }));
+}
 
 function ageTone(iso: string | null | undefined): keyof typeof STATUS {
   if (!iso) return "neutral";
@@ -258,7 +282,7 @@ function FailedJobsCard({ total, reasons, rows, allHref, latest = true }: {
                 <Box sx={{ width: `${(100 * r.count) / max}%`, minWidth: 4, height: "100%", borderRadius: "3px", bgcolor: STATUS.critical }} />
               </Box>
               <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>
-                {r.devices} device{r.devices === 1 ? "" : "s"} · {r.job_types.join(", ")} · last {relativeAge(r.last_at)}
+                {r.devices} device{r.devices === 1 ? "" : "s"} · {r.job_types.map((t) => jobTypeLabel(t)).join(", ")} · last {relativeAge(r.last_at)}
               </Typography>
             </Link>
           ))}
@@ -269,7 +293,7 @@ function FailedJobsCard({ total, reasons, rows, allHref, latest = true }: {
                 <Link key={r.job_id} href={q({ screen: "operations", tab: "jobs", q: r.job_id })} underline="none"
                   sx={{ color: "inherit", display: "block", py: 0.75, borderTop: `1px solid ${m3.outlineVar}` }}>
                   <Box sx={{ display: "flex", justifyContent: "space-between", gap: 1 }}>
-                    <Typography sx={{ fontSize: 12.5, fontWeight: 600 }}>{r.label ?? r.device_id.slice(0, 8)} <Box component="span" sx={{ fontWeight: 400, color: m3.onSurfaceVar }}>· {r.job_type}</Box></Typography>
+                    <Typography sx={{ fontSize: 12.5, fontWeight: 600 }}>{r.label ?? r.device_id.slice(0, 8)} <Box component="span" title={r.job_type} sx={{ fontWeight: 400, color: m3.onSurfaceVar }}>· {jobTypeLabel(r.job_type)}</Box></Typography>
                     <Typography sx={{ fontSize: 12 }}><Ts at={r.finished_at} seconds={false} /></Typography>
                   </Box>
                   <Typography noWrap title={r.terminal_reason ?? ""} sx={{ fontSize: 11.5, color: m3.onSurfaceVar }}>{r.terminal_reason ?? "—"}</Typography>
@@ -397,6 +421,24 @@ export function OverviewScreen() {
   const [controls, setControls] = useState<readonly ComplianceControlItem[] | null>(null);
   const [details, setDetails] = useState(false);
   const { wall } = useDisplayMode();
+  // HA readiness and the Fortinet / Cisco ASA versions come from the same reads the Operations and Devices screens make.
+  // A failed read says UNKNOWN; it is never drawn as zero.
+  const [ha, setHa] = useState<HaOverview | "loading" | "unknown">("loading");
+  const [fleet, setFleet] = useState<readonly DeviceSummary[] | null>(null);
+  useEffect(() => {
+    let active = true;
+    Promise.all([listDevices(), listCpFailoverSummary()]).then(([{ devices }, rows]) => {
+      if (!active) return;
+      if (!Array.isArray(devices) || !Array.isArray(rows)) { setHa("unknown"); setFleet(Array.isArray(devices) ? devices : null); return; }
+      setFleet(devices);
+      const byRef: Record<string, typeof rows> = {};
+      for (const row of rows) (byRef[row.cluster_member_ref] ??= []).push(row);
+      const items = haReadinessItems(groupClusters(devices), byRef);
+      const fresh = readinessFreshness(items, new Date());
+      setHa({ ...readinessCounts(items), evaluated: fresh.evaluatedAts.length, stale: fresh.staleAts.length, mostlyStale: fresh.mostlyStale });
+    }).catch(() => { if (active) { setHa("unknown"); setFleet(null); } });
+    return () => { active = false; };
+  }, []);
 
   const load = useCallback(() => {
     getOverview().then((d) => {
@@ -550,6 +592,25 @@ export function OverviewScreen() {
       {children}
     </Card>
   );
+  /** Fortinet and Cisco ASA: one bar of the versions the devices report, shown only when the device list has such devices. */
+  const reportedBar = (vendorKey: "fortinet" | "cisco_asa", title: string) => {
+    const slices = fleet ? reportedVersions(fleet, vendorKey) : [];
+    if (slices.length === 0) return null;
+    const named = slices.filter((x) => x.label).sort((x, y) => y.count - x.count);
+    const unknown = slices.filter((x) => !x.label).reduce((n, x) => n + x.count, 0);
+    const other = named.slice(5).reduce((n, x) => n + x.count, 0);
+    const parts = [
+      ...named.slice(0, 5).map((x, i) => ({ name: x.label ?? "", count: x.count, bg: SERIES[i % SERIES.length] })),
+      ...(other ? [{ name: "Other", count: other, bg: "#b4b2aa" }] : []),
+      ...(unknown ? [{ name: "Unknown", count: unknown, bg: EXEC.hatch }] : []),
+    ];
+    return (
+      <Box key={vendorKey}>
+        <Typography sx={{ fontSize: 13, fontWeight: 600, mb: 0.75 }}>{vendorDisplayName(vendorKey)} · {title}</Typography>
+        <PopulationBar parts={parts} height={12} />
+      </Box>
+    );
+  };
   const softwareBars = (vendorKey: "check_point" | "palo_alto", kind: "major" | "minor", title: string) => {
     const slices = p.versions?.[vendorKey]?.[kind] ?? [];
     if (slices.length === 0) return null;
@@ -593,13 +654,31 @@ export function OverviewScreen() {
             </Box>
             <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5, borderLeft: { lg: `1px solid ${m3.outlineVar}` }, pl: { lg: 2.5 } }}>
               <HeroFact label="Critical failures" value={crit?.k ?? null} of={crit?.n ?? null} unit="firewalls" bad={crit?.k ?? 0} color={EXEC.red}
+                sliverLabel="failing" unknownWord="UNKNOWN"
                 sentence={crit?.n ? "firewalls with at least one critical check failing" : "No firewalls are assessed yet"}
                 href={q({ screen: "compliance", severity: "critical", result: "fail" })} />
               <HeroFact label="Backups" value={bk ? bk.a : null} of={bk ? bk.b : null} unit="targets" bad={bk ? bk.b - bk.a : 0} color={EXEC.red}
+                sliverLabel="without an archive" unknownWord="UNKNOWN"
                 sentence={bk && bk.b - bk.a > 0 ? `${bk.b - bk.a} backup targets have no stored archive` : "Every backup target holds a stored archive"}
                 href={q({ screen: "backups", artefact: "none" })} />
               <HeroFact label="Evidence" value={ev ? ev.r : null} of={ev ? ev.d : null} unit="devices" bad={ev ? ev.d - ev.r : 0} color={EXEC.amber}
+                sliverLabel="not read in 24 h" unknownWord="UNKNOWN"
                 sentence={`read in the last 24 h${ev?.never ? ` · ${ev.never} never read` : ""}`} href={q({ screen: "inventory", inventory_age: "stale" })} />
+              {/* HA readiness (UI review 2026-10-18, F-13): the same counts as Operations, with the age of the evaluations. */}
+              <HeroFact label="HA readiness" unit="clusters ready" unknownWord={ha === "loading" ? "Loading…" : ha === "unknown" ? "UNKNOWN" : "No clusters"}
+                value={typeof ha === "object" && ha.total > 0 ? ha.ready : null} of={typeof ha === "object" ? ha.total : null}
+                bad={0} color={EXEC.red} href={q({ screen: "operations" })}
+                ariaLabel={typeof ha === "object" ? `HA readiness: ${haReadinessSentence(ha)}` : `HA readiness: ${ha === "loading" ? "Loading" : "UNKNOWN"}`}
+                segments={typeof ha === "object" ? [
+                  { count: ha.notReady, color: EXEC.red, label: "not ready" },
+                  { count: ha.unknown, color: EXEC.hatch, label: "unknown" },
+                ] : undefined}
+                aside={typeof ha === "object" && ha.mostlyStale ? (
+                  <Tooltip title={`${ha.stale} of ${ha.evaluated} readiness evaluations are older than 24 h; the counts may no longer hold`}>
+                    <Box component="span" data-stale-evaluation sx={{ px: 0.9, py: 0.1, borderRadius: "6px", fontSize: 11, fontWeight: 700,
+                      bgcolor: m3.warningContainer, color: m3.onWarningContainer }}>Stale</Box>
+                  </Tooltip>) : undefined}
+                sentence={typeof ha === "object" ? haReadinessSentence(ha) : ha === "loading" ? "Reading the clusters and their readiness…" : "UNKNOWN: the clusters or their readiness were not available."} />
             </Box>
           </Box>
         </Card>
@@ -704,6 +783,8 @@ export function OverviewScreen() {
             {softwareBars("check_point", "major", "Major version")}
             {softwareBars("check_point", "minor", "Jumbo Hotfix take")}
             {softwareBars("palo_alto", "minor", "PAN-OS version")}
+            {reportedBar("fortinet", "Version as reported")}
+            {reportedBar("cisco_asa", "Version as reported")}
           </Box>)}
       </Box>
 
@@ -720,9 +801,9 @@ export function OverviewScreen() {
       <Box>
         <SectionTitle icon="grid" title="Software and hardware" hint={`Per vendor, from the latest reads · facts ${relativeAge(p.evidence_at)} · each slice opens the device list`} />
         <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "1fr", lg: "1fr 1fr" } }}>
-          <VendorVersions vendor="check_point" name="Check Point" majorTitle="Major version" minorTitle="Jumbo hotfix"
+          <VendorVersions vendor="check_point" name={vendorDisplayName("check_point")} majorTitle="Major version" minorTitle="Jumbo hotfix"
             modelTitle="Appliance" versions={p.versions?.check_point} fallbackMinor={p.hotfix_levels} total={p.check_point ?? 0} />
-          <VendorVersions vendor="palo_alto" name="Palo Alto Networks" majorTitle="PAN-OS major" minorTitle="Exact version"
+          <VendorVersions vendor="palo_alto" name={vendorDisplayName("palo_alto")} majorTitle="PAN-OS major" minorTitle="Exact version"
             modelTitle="Model" versions={p.versions?.palo_alto} total={p.palo_alto ?? 0} />
         </Box>
       </Box>

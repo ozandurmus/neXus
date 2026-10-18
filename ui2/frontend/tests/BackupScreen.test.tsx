@@ -83,8 +83,8 @@ describe("the Backups screen (UI review 2026-09-23)", () => {
     expect(screen.getByText("02:00 daily")).toBeInTheDocument();
     expect(screen.queryByText("00 / 06 / 12 / 18")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Retention/i }));
-    expect(await screen.findByText("Fleet backup schedule: daily at 02:00 Europe/Istanbul; starts allowed until 02:59.")).toBeInTheDocument();
-    expect(screen.getByText(/every backup target runs once a day at 02:00 Europe\/Istanbul/)).toBeInTheDocument();
+    expect(await screen.findByText("Fleet backup schedule: daily at 02:00 GMT+3; starts allowed until 02:59.")).toBeInTheDocument();
+    expect(screen.getByText(/every backup target runs once a day at 02:00 GMT\+3/)).toBeInTheDocument();
   });
 
   it("shows one row per device with the target switch, the latest archive and every action", async () => {
@@ -92,7 +92,7 @@ describe("the Backups screen (UI review 2026-09-23)", () => {
     render(<BackupScreen />);
     const row = (await screen.findByText("FW-TANGO-04-M1")).closest("tr")!;
     expect(within(row).getByRole("checkbox", { name: "Backup target FW-TANGO-04-M1" })).toBeChecked();
-    expect(within(row).getByText("2026-09-22 14:43")).toBeInTheDocument();
+    expect(within(row).getByText("2026-09-22 14:43 GMT+3")).toBeInTheDocument();
     // every action moved into the row's menu (F-4): the row itself carries no action button but the menu trigger
     expect(within(row).queryByRole("button", { name: "Backup Now" })).toBeNull();
     fireEvent.click(within(row).getByRole("button", { name: "Actions for FW-TANGO-04-M1" }));

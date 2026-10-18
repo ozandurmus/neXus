@@ -33,7 +33,8 @@ export function PolicyHygieneTab({ policy, openRule, openObject }: { policy: str
   return <Box role="tabpanel" aria-label="Hygiene">
     <Typography variant="body2">Stored-snapshot analysis. Counts are rules per class; UNKNOWN means evidence is insufficient.</Typography>
     <Stack direction="row" gap={1} flexWrap="wrap" sx={{ my: 2 }}>
-      {classes.map(cls => <Chip key={cls} label={`${cls}: ${data?.counts[cls] ?? "—"}`} onClick={() => { setClass(cls); setPage(0); }} />)}
+      {/* Loading… while the read is in flight, then the count; UNKNOWN when the read failed. Never a dash. */}
+      {classes.map(cls => <Chip key={cls} label={`${cls}: ${data ? data.counts[cls] ?? "UNKNOWN" : error ? "UNKNOWN" : "Loading…"}`} onClick={() => { setClass(cls); setPage(0); }} />)}
     </Stack>
     <Stack direction="row" gap={2} flexWrap="wrap" sx={{ mb: 2 }}>
       <TextField select size="small" label="Finding class" value={findingClass} onChange={e => { setClass(e.target.value); setPage(0); }} sx={{ minWidth: 170 }}>

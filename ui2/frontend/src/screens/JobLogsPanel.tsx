@@ -14,8 +14,12 @@ import Button from "@mui/material/Button";
 import Paper from "@mui/material/Paper";
 import IconButton from "@mui/material/IconButton";
 import Pagination from "@mui/material/Pagination";
-import { StatePanel, RestrictedPanel, isRestricted, Ts } from "../shell/States";
-import { formatDuration } from "../shell/time";
+import FormControlLabel from "@mui/material/FormControlLabel";
+import Switch from "@mui/material/Switch";
+import { StatePanel, RestrictedPanel, isRestricted } from "../shell/States";
+import { Presented, Stamp } from "../shell/PresentedText";
+import { displayInputToIso, formatDuration, isoToDisplayInput, DISPLAY_TZ_LABEL } from "../shell/time";
+import { jobStateWord, outcomeLine } from "../shell/presenters";
 import { MONO, m3 } from "../theme/m3Theme";
 import { jobTypeLabel } from "../jobs/jobTypeLabel";
 import { JobTranscriptDrawer } from "./JobTranscriptDrawer";
@@ -47,11 +51,9 @@ function stateColor(state: string): "default" | "primary" | "secondary" | "error
   }
 }
 
-/** A datetime-local input value (local time, no zone) to the ISO instant the API expects; empty stays empty. */
+/** A datetime-local input value, typed in display time (GMT+3), to the ISO instant the API expects; empty stays empty. */
 export function localInputToIso(value: string): string | undefined {
-  if (!value) return undefined;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
+  return displayInputToIso(value);
 }
 
 const PAGE_SIZES = [25, 50, 100, 200] as const;
@@ -64,11 +66,9 @@ export { jobTypeLabel } from "../jobs/jobTypeLabel";
  * numbered pages; CSV export of the current filter. Live polling refreshes
  * the page being looked at and never resets the filters.
  */
-/** Local "datetime-local" input value for a moment {@code hours} ago. */
+/** "datetime-local" input value, in display time (GMT+3), for a moment {@code hours} ago. */
 function hoursAgoLocal(hours: number): string {
-  const d = new Date(Date.now() - hours * 3600 * 1000);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return isoToDisplayInput(new Date(Date.now() - hours * 3600 * 1000).toISOString());
 }
 
 export function JobLogsPanel({
@@ -224,8 +224,8 @@ export function JobLogsPanel({
           sx={{ minWidth: 150 }}
         >
           <option value="">Any</option>
-          {initialState.includes(",") && <option value={initialState}>{initialState.replaceAll(",", " | ")}</option>}
-          {facets.states.map((s) => <option key={s} value={s}>{s}</option>)}
+          {initialState.includes(",") && <option value={initialState} title={initialState}>{initialState.split(",").map(jobStateWord).join(" | ")}</option>}
+          {facets.states.map((s) => <option key={s} value={s}>{jobStateWord(s)}</option>)}
         </TextField>
         <TextField
           select
@@ -239,7 +239,10 @@ export function JobLogsPanel({
         >
           <option value="">Any</option>
           {initialJobType && !facets.job_types.includes(initialJobType) && <option value={initialJobType}>any *_{initialJobType}</option>}
-          {facets.job_types.map((t) => <option key={t} value={t}>{jobTypeLabel(t)}</option>)}
+          {facets.job_types.map((t) => {
+            const label = jobTypeLabel(t);
+            return <option key={t} value={t}>{label === t ? t : `${label} · ${t}`}</option>;
+          })}
         </TextField>
         <TextField
           select
@@ -257,7 +260,7 @@ export function JobLogsPanel({
         <TextField
           size="small"
           type="datetime-local"
-          label="From"
+          label={`From (${DISPLAY_TZ_LABEL})`}
           value={sinceLocal}
           onChange={(e) => { setSinceLocal(e.target.value); resetToFirstPage(); }}
           InputLabelProps={{ shrink: true }}
@@ -265,7 +268,7 @@ export function JobLogsPanel({
         <TextField
           size="small"
           type="datetime-local"
-          label="To"
+          label={`To (${DISPLAY_TZ_LABEL})`}
           value={untilLocal}
           onChange={(e) => { setUntilLocal(e.target.value); resetToFirstPage(); }}
           InputLabelProps={{ shrink: true }}
@@ -288,14 +291,12 @@ export function JobLogsPanel({
         <Button size="small" variant="outlined" disabled={exportBusy} onClick={() => void handleExport()} sx={{ textTransform: "none" }}>
           {exportBusy ? "Exporting…" : "Export CSV"}
         </Button>
-        <Button
-          size="small"
-          variant={autoRefresh ? "contained" : "outlined"}
-          onClick={() => setAutoRefresh((v) => !v)}
-          sx={{ textTransform: "none" }}
-        >
-          {autoRefresh ? "Live polling: ON" : "Live polling: OFF"}
-        </Button>
+        {/* A state, not a call to action: a labelled switch, so it never outranks Refresh and Export CSV. */}
+        <FormControlLabel
+          control={<Switch size="small" checked={autoRefresh} onChange={(_event, checked) => setAutoRefresh(checked)} />}
+          label={<Typography variant="body2">Live polling</Typography>}
+          sx={{ m: 0 }}
+        />
       </Stack>
 
       {error && (
@@ -345,9 +346,9 @@ export function JobLogsPanel({
                       <TableCell sx={{ fontWeight: 500 }}>
                         {job.device_name ?? devices[job.target_device_id]?.name ?? "Unknown device"}
                       </TableCell>
-                      <TableCell sx={{ fontSize: "0.8rem" }} title={job.job_type}>{jobTypeLabel(job.job_type, vendor)}</TableCell>
+                      <TableCell sx={{ fontSize: "0.8rem" }}><Presented label={jobTypeLabel(job.job_type, vendor)} raw={job.job_type} /></TableCell>
                       <TableCell>
-                        <Chip label={job.state} size="small" color={stateColor(job.state)} variant="outlined" />
+                        <Chip label={jobStateWord(job.state)} title={job.state} size="small" color={stateColor(job.state)} variant="outlined" />
                       </TableCell>
                       {/* Duration is neutral -- never red; red is reserved for the state word, shown in the
                           State column above (review §3 "Duration is red on every completed job"). */}
@@ -367,7 +368,7 @@ export function JobLogsPanel({
                         {reasonText}
                       </TableCell>
                       <TableCell sx={{ whiteSpace: "nowrap" }}>
-                        <Ts at={job.submitted_at} />
+                        <Stamp at={job.submitted_at} />
                       </TableCell>
                       <TableCell><JobTranscriptDrawer jobId={job.job_id} hasTranscript={isBackupJob && job.has_transcript} /></TableCell>
                       {page.canCancel && <TableCell>
@@ -379,6 +380,12 @@ export function JobLogsPanel({
                     </TableRow>
                     {isExpanded && <TableRow key={`${job.job_id}-details`}>
                       <TableCell colSpan={page.canCancel ? 8 : 7}>
+                        <Typography variant="body2" sx={{ mb: 0.75 }} data-outcome-line>
+                          {outcomeLine({ state: job.state, durationMs: job.duration_ms, at: job.finished_at ?? job.submitted_at })}
+                          <Box component="span" sx={{ ml: 1, color: m3.onSurfaceVar }}>
+                            <Presented label={jobTypeLabel(job.job_type, vendor)} raw={job.job_type} suffix />
+                          </Box>
+                        </Typography>
                         <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap>
                           {([["Job ID", job.job_id], ["Device ID", job.target_device_id]] as const).map(([label, value]) => (
                             <Stack key={label} direction="row" spacing={0.5} alignItems="center">

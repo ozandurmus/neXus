@@ -14,6 +14,7 @@ import { useEffect, useRef, useState } from "react";
 import { Icon } from "../shell/Icon";
 import type { ReadinessCheck, ReadinessMember } from "../auth/adminApi";
 import { M3Button } from "../shell/M3Widgets";
+import { readinessReasonLabel } from "../shell/presenters";
 import { m3 } from "../theme/m3Theme";
 
 function checkRows(checks: ReadinessCheck[], labels: ReadinessMember[] = []) {
@@ -76,7 +77,7 @@ function CheckMessage({ text }: { text: string }) {
 }
 
 export function readinessStopReason(stopCode?: string | null) {
-  return stopCode === "COMMAND_UNAVAILABLE" ? "Command not available on device (login environment)" : null;
+  return stopCode === "COMMAND_UNAVAILABLE" ? readinessReasonLabel(stopCode) : null;
 }
 
 export function ReadinessCard({ checks, members, status, cluster, vendor, observedAt, masked = false, running = false, disabled = false, canRun, onRun, error, stopCode }: {

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import Collapse from "@mui/material/Collapse";
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Card from "@mui/material/Card";
@@ -12,8 +13,9 @@ import TableRow from "@mui/material/TableRow";
 import Typography from "@mui/material/Typography";
 
 import { M3Button, StatusChip } from "../shell/M3Widgets";
-import { Ts } from "../shell/States";
-import { DISPLAY_TZ_LABEL, formatUtc } from "../shell/time";
+import { Stamp } from "../shell/PresentedText";
+import { artefactClassLabel, vendorLabel } from "../shell/presenters";
+import { formatStamp } from "../shell/time";
 import { m3 } from "../theme/m3Theme";
 import { getSystemPods, getSystemStorage, type PodsView, type StorageView } from "../auth/adminApi";
 
@@ -56,6 +58,8 @@ export function SystemStatusPanel() {
   const [pods, setPods] = useState<PodsView | null>(null);
   const [storage, setStorage] = useState<StorageView | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Storage first; the pod table is engineering detail, so it sits behind a disclosure (UI review 2026-10-18, F-20).
+  const [podsOpen, setPodsOpen] = useState(false);
 
   const load = useCallback(() => {
     Promise.all([getSystemPods(), getSystemStorage()])
@@ -78,47 +82,6 @@ export function SystemStatusPanel() {
 
   return (
     <Stack spacing={2}>
-      <Card sx={{ p: 2, borderRadius: "16px", bgcolor: m3.scLowest, border: `1px solid ${m3.outlineVar}` }}>
-        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", mb: 1 }}>
-          <Box>
-            <Typography variant="overline" sx={{ color: m3.onSurfaceVar }}>Service view · observed {observedAt ? formatUtc(observedAt) : "UNKNOWN"} {DISPLAY_TZ_LABEL} · refreshes every 15 s</Typography>
-            <Typography variant="h6" sx={{ fontWeight: 600, mt: -0.5 }}>Pods</Typography>
-          </Box>
-          <M3Button emphasis="text" onClick={load}>Refresh</M3Button>
-        </Box>
-        {!pods.available && <Alert severity="warning">{pods.reason}</Alert>}
-        {(pods.quarantined_by_role ?? pods.modules ?? []).filter((row, index, rows) => row.quarantined_permits > 0
-          && rows.findIndex((other) => other.owner === row.owner) === index).map((row) => (
-          <Alert key={row.owner} severity="warning" sx={{ mb: 1 }}>
-            {row.owner}: {row.quarantined_permits} quarantined permits or task leases. Collection and deployment drain may be blocked.
-          </Alert>
-        ))}
-        {pods.metrics_note && <Alert severity="info" sx={{ mb: 1 }}>{pods.metrics_note}</Alert>}
-        {pods.available && (
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                {["POD", "STATE", "READY", "RESTARTS", "AGE", "CPU", "MEMORY", "IMAGE"].map((h) => <TableCell key={h} sx={{ fontSize: 11, letterSpacing: "0.06em" }}>{h}</TableCell>)}
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {pods.pods.map((p) => (
-                <TableRow key={p.name} hover>
-                  <TableCell sx={{ fontWeight: 600, fontSize: 12.5 }}>{p.name}</TableCell>
-                  <TableCell><StatusChip tone={p.state === "Running" ? "ok" : p.state === "Succeeded" ? "neutral" : "bad"} label={p.state} dense /></TableCell>
-                  <TableCell>{p.ready}</TableCell>
-                  <TableCell>{p.restarts > 0 ? <StatusChip tone="warn" label={String(p.restarts)} dense /> : "0"}</TableCell>
-                  <TableCell>{age(p.started_at)}</TableCell>
-                  <TableCell><Usage used={p.cpu_millicores} limit={p.cpu_limit_millicores} format={(n) => (n > 0 && n < 1 ? "<1m" : n === 0 ? "<1m" : `${n}m`)} /></TableCell>
-                  <TableCell><Usage used={p.memory_bytes} limit={p.memory_limit_bytes} format={formatBytes} /></TableCell>
-                  <TableCell sx={{ fontFamily: "monospace", fontSize: 11, color: m3.onSurfaceVar }}>{p.image_digest ?? "—"}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-      </Card>
-
       <Card sx={{ p: 2, borderRadius: "16px", bgcolor: m3.scLowest, border: `1px solid ${m3.outlineVar}` }}>
         <Typography variant="overline" sx={{ color: m3.onSurfaceVar }}>Storage</Typography>
         <Typography variant="h6" sx={{ fontWeight: 600, mt: -0.5, mb: 1.5 }}>What the evidence takes</Typography>
@@ -143,14 +106,14 @@ export function SystemStatusPanel() {
           <TableBody>
             {storage.backups.map((b) => (
               <TableRow key={`${b.vendor}-${b.class}`}>
-                <TableCell>{b.vendor === "check_point" ? "Check Point" : b.vendor === "palo_alto" ? "Palo Alto" : b.vendor}</TableCell>
-                <TableCell>{b.class}</TableCell>
+                <TableCell title={b.vendor}>{vendorLabel(b.vendor)}</TableCell>
+                <TableCell title={b.class}>{artefactClassLabel(b.class)}</TableCell>
                 <TableCell>{b.artefacts}</TableCell>
                 <TableCell>{b.devices}</TableCell>
                 <TableCell sx={{ fontFamily: "monospace" }}>{formatBytes(b.stored_bytes)}</TableCell>
                 <TableCell sx={{ fontFamily: "monospace" }}>{formatBytes(b.original_bytes)}</TableCell>
-                <TableCell><Ts at={b.oldest} /></TableCell>
-                <TableCell><Ts at={b.newest} /></TableCell>
+                <TableCell><Stamp at={b.oldest} age={false} /></TableCell>
+                <TableCell><Stamp at={b.newest} age={false} /></TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -172,6 +135,53 @@ export function SystemStatusPanel() {
           </>
         )}
       </Card>
+      <Card sx={{ p: 2, borderRadius: "16px", bgcolor: m3.scLowest, border: `1px solid ${m3.outlineVar}` }}>
+        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", mb: 1 }}>
+          <Box>
+            <Typography variant="overline" sx={{ color: m3.onSurfaceVar }}>Service view · observed {observedAt ? formatStamp(observedAt) : "UNKNOWN"} · refreshes every 15 s</Typography>
+            <Typography variant="h6" sx={{ fontWeight: 600, mt: -0.5 }}>Service pods ({pods.available ? pods.pods.length : "UNKNOWN"})</Typography>
+          </Box>
+          <Box sx={{ display: "flex", gap: 1 }}>
+            <M3Button emphasis="text" onClick={load}>Refresh</M3Button>
+            {pods.available && <M3Button emphasis="outlined" onClick={() => setPodsOpen((open) => !open)}>
+              {podsOpen ? "Hide service pods" : `Show service pods (${pods.pods.length})`}</M3Button>}
+          </Box>
+        </Box>
+        {!pods.available && <Alert severity="warning">{pods.reason}</Alert>}
+        {(pods.quarantined_by_role ?? pods.modules ?? []).filter((row, index, rows) => row.quarantined_permits > 0
+          && rows.findIndex((other) => other.owner === row.owner) === index).map((row) => (
+          <Alert key={row.owner} severity="warning" sx={{ mb: 1 }}>
+            {row.owner}: {row.quarantined_permits} quarantined permits or task leases. Collection and deployment drain may be blocked.
+          </Alert>
+        ))}
+        {pods.metrics_note && <Alert severity="info" sx={{ mb: 1 }}>{pods.metrics_note}</Alert>}
+        {pods.available && (
+          <Collapse in={podsOpen} unmountOnExit>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                {["POD", "STATE", "READY", "RESTARTS", "AGE", "CPU", "MEMORY", "IMAGE"].map((h) => <TableCell key={h} sx={{ fontSize: 11, letterSpacing: "0.06em" }}>{h}</TableCell>)}
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {pods.pods.map((p) => (
+                <TableRow key={p.name} hover>
+                  <TableCell sx={{ fontWeight: 600, fontSize: 12.5 }}>{p.name}</TableCell>
+                  <TableCell><StatusChip tone={p.state === "Running" ? "ok" : p.state === "Succeeded" ? "neutral" : "bad"} label={p.state} dense /></TableCell>
+                  <TableCell>{p.ready}</TableCell>
+                  <TableCell>{p.restarts > 0 ? <StatusChip tone="warn" label={String(p.restarts)} dense /> : "0"}</TableCell>
+                  <TableCell>{age(p.started_at)}</TableCell>
+                  <TableCell><Usage used={p.cpu_millicores} limit={p.cpu_limit_millicores} format={(n) => (n > 0 && n < 1 ? "<1m" : n === 0 ? "<1m" : `${n}m`)} /></TableCell>
+                  <TableCell><Usage used={p.memory_bytes} limit={p.memory_limit_bytes} format={formatBytes} /></TableCell>
+                  <TableCell sx={{ fontFamily: "monospace", fontSize: 11, color: m3.onSurfaceVar }}>{p.image_digest ?? "—"}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+          </Collapse>
+        )}
+      </Card>
+
     </Stack>
   );
 }

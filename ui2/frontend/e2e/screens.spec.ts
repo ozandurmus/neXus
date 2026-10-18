@@ -76,10 +76,13 @@ async function screenHasData(page: Page, screen: ScreenId, settleReads: () => Pr
       const identity = await firstRow.getAttribute("data-readiness-row");
       expect(identity).not.toBeNull();
       const row = table.locator(`tbody tr[data-readiness-row=${JSON.stringify(identity)}]`);
-      await expect(page.getByRole("checkbox", { name: "Select all visible" })).toBeDisabled();
+      // aiview may start read-only readiness (AGENTS.md, PO decision 2026-10-04) when the server grants it, so the controls
+      // are offered -- or locked with the role reason -- and this read-only run never clicks them (a POST is blocked anyway).
+      await expect(page.getByTestId("toolbar-run-readiness")).toBeVisible();
+      await expect(page.getByText(/Not ready: a pre-check found a blocking condition\./)).toBeVisible();
       await expect(page.getByRole("toolbar", { name: "Bulk readiness actions" })).toHaveCount(0);
       const before = page.url();
-      await expect(row.getByRole("checkbox")).toBeDisabled();
+      await expect(row.getByRole("checkbox")).toBeVisible();
       await expect(row).toHaveAttribute("aria-expanded", "false");
       await row.getByRole("button", { name: /^Checks for / }).click();
       await expect(row).toHaveAttribute("aria-expanded", "true");

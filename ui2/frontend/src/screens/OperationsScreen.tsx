@@ -17,6 +17,7 @@ import { DiagnosticPanel } from "./DiagnosticPanel";
 import { urlParam } from "../shell/urlParams";
 import { getJobStats, getCpFailoverRun, listDevices, listCpFailoverSummary, runCpFailoverReadiness, type CpFailoverSummary, type DeviceSummary } from "../auth/adminApi";
 import { deriveClusterTitle } from "./InventoryPanels";
+import { readinessReasonLabel } from "../shell/presenters";
 
 /** Operations screen for observed HA state, on-demand readiness and jobs. */
 export function OperationsScreen() {
@@ -168,7 +169,7 @@ export function OperationsScreen() {
         {selected?.members[0] && ["check_point", "palo_alto"].includes(selected.members[0].vendor_hint) ?
           <CpFailoverPanel key={selectedCluster} memberDeviceId={selected.members[0].device_id}
             vendor={selected.members[0].vendor_hint as "check_point" | "palo_alto"} initialUnitId={expandedUnit} />
-          : <StatePanel variant="empty" title="UNSUPPORTED_MODE" />}
+          : <StatePanel variant="empty" title={readinessReasonLabel("UNSUPPORTED_MODE")} body="Failover and readiness detail are offered for Check Point and Palo Alto clusters only." code="UNSUPPORTED_MODE" />}
       </>}
     </Drawer>
   </>;

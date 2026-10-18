@@ -252,7 +252,21 @@ export function PacketAnalysisScreen() {
   );
 }
 
+/** The empty state: what a case is and the three steps, in two sentences, instead of a dead table row (UI review 2026-10-18). */
+export const PACKET_WORKFLOW_SENTENCES = [
+  "A case holds packet captures (pcap or pcapng) and optional host telemetry for one investigation; create a case, upload a capture, then run Analyze.",
+  "Each stage the capture cannot establish is reported as UNKNOWN with the reason, and the capture is deleted after the retention period.",
+] as const;
+
 function CaseTable({ cases, selected, onSelect }: { readonly cases: readonly PacketCase[]; readonly selected: string | null; readonly onSelect: (id: string) => void }) {
+  if (cases.length === 0) {
+    return (
+      <Card component="section" aria-label="How Packet Analysis works" sx={{ p: 2, boxShadow: "none", border: `1px solid ${m3.outlineVar}`, bgcolor: m3.scLow }}>
+        <Typography variant="subtitle2">No case yet</Typography>
+        <Typography variant="body2" sx={{ color: m3.onSurfaceVar, mt: 0.5, maxWidth: 760 }}>{PACKET_WORKFLOW_SENTENCES.join(" ")}</Typography>
+      </Card>
+    );
+  }
   return (
     <TableContainer><Table size="small" aria-label="Packet analysis cases"><TableHead><TableRow>
       <TableCell>Case</TableCell><TableCell>State</TableCell><TableCell>Captures</TableCell><TableCell>Size</TableCell>
@@ -265,7 +279,6 @@ function CaseTable({ cases, selected, onSelect }: { readonly cases: readonly Pac
         <TableCell>{c.capture_count}</TableCell><TableCell>{packetBytes(c.total_bytes)}</TableCell>
         <TableCell>{day(c.created_at)}</TableCell><TableCell>{day(c.expires_at)}</TableCell>
       </TableRow>)}
-      {!cases.length && <TableRow><TableCell colSpan={6}>No case yet</TableCell></TableRow>}
     </TableBody></Table></TableContainer>
   );
 }

@@ -79,7 +79,7 @@ it("combines summary filters with cluster/member search and vendor filter", () =
   expect(row("CLS-ALPHA-01")).toBeInTheDocument();
   expect(screen.queryByRole("row", { name: "CLS-BRAVO-02" })).toBeNull();
   fireEvent.mouseDown(screen.getByRole("combobox", { name: "Vendor" }));
-  fireEvent.click(screen.getByRole("option", { name: "Palo Alto Networks" }));
+  fireEvent.click(screen.getByRole("option", { name: "Palo Alto" }));
   expect(screen.getByText("No clusters match these filters")).toBeInTheDocument();
 });
 it("collapses unsupported vendors with no run actions and opens them via their filter", () => {
@@ -123,7 +123,7 @@ it("shows relative time and hover-only absolute and roles-observed times", () =>
   const item = row("CLS-BRAVO-02");
   expect(within(item).getByText("35 min ago")).toHaveAttribute("datetime", at);
   expect(within(item).getByText("35 min ago")).toHaveAttribute("title", expect.stringContaining(at));
-  expect(item.querySelector('[title^="Roles observed:"]')).toHaveAttribute("title", "Roles observed: 2026-10-02 12:00:00 GMT+3");
+  expect(item.querySelector('[title^="Roles observed:"]')).toHaveAttribute("title", "Roles observed: 2026-10-02 12:00 GMT+3");
   act(() => vi.advanceTimersByTime(60_000));
   expect(within(item).getByText("36 min ago")).toBeInTheDocument();
 });
@@ -155,11 +155,15 @@ it("selects and deselects only filtered visible authorized rows, retaining other
   fireEvent.click(selectAll);
   expect(screen.getByRole("button", { name: "Run pre-checks (1)" })).toBeInTheDocument();
 });
-it("hides bulk and run actions for aiview and reacts to permission removal", () => {
+it("offers run actions to aiview when the server grants them, and hides them when it refuses", () => {
   const { rerender } = setup();
   fireEvent.click(screen.getByRole("checkbox", { name: "Select all visible" }));
-  const readonlyRows = Object.fromEntries(Object.entries(rows).map(([ref, units]) => [ref, units.map(unit => ({ ...unit, masked: true, canRunReadiness: true }))]));
-  rerender(<HaReadinessList clusters={clusters} rows={readonlyRows} running={null} busy={false} progress={{}} error={null} onOpen={vi.fn()} onRun={vi.fn()} onBulkRun={vi.fn()} />);
+  const aiviewRows = Object.fromEntries(Object.entries(rows).map(([ref, units]) => [ref, units.map(unit => ({ ...unit, masked: true, canRunReadiness: true }))]));
+  rerender(<HaReadinessList clusters={clusters} rows={aiviewRows} running={null} busy={false} progress={{}} error={null} onOpen={vi.fn()} onRun={vi.fn()} onBulkRun={vi.fn()} />);
+  expect(screen.getAllByRole("button", { name: "Run pre-checks" }).length).toBeGreaterThan(0);
+  expect(screen.getByRole("checkbox", { name: "Select all visible" })).toBeEnabled();
+  const refused = Object.fromEntries(Object.entries(rows).map(([ref, units]) => [ref, units.map(unit => ({ ...unit, masked: true, canRunReadiness: false }))]));
+  rerender(<HaReadinessList clusters={clusters} rows={refused} running={null} busy={false} progress={{}} error={null} onOpen={vi.fn()} onRun={vi.fn()} onBulkRun={vi.fn()} />);
   expect(screen.queryByRole("toolbar", { name: "Bulk readiness actions" })).toBeNull();
   expect(screen.queryByRole("button", { name: "Run pre-checks" })).toBeNull();
   expect(within(table()).queryByRole("columnheader", { name: "Actions" })).toBeNull();
@@ -168,6 +172,7 @@ it("hides bulk and run actions for aiview and reacts to permission removal", () 
   fireEvent.keyDown(row("CLS-ALPHA-01"), { key: " " });
   expect(screen.queryByRole("toolbar", { name: "Bulk readiness actions" })).toBeNull();
 });
+
 it("shows both observed members in inline details and wraps long messages", () => {
   const cluster = clusters[0];
   const checks = cluster.members.map((member, index) => ({ checkNo: 2, title: "Cluster IP table", device_id: member.device_id,
@@ -205,11 +210,37 @@ it("shows the stored login-environment stop reason for unknown base and virtual 
   expect(within(row("Virtual System VS-ALPHA-07")).getByText("Command not available on device (login environment)")).toBeInTheDocument();
 });
 
-it.each(["UNSUPPORTED_MODE", "IDENTITY_NOT_RECORDED", "OPEN_INCIDENT"])("shows the exact failover refusal %s with mode and age", refusalReason => {
+it.each([["UNSUPPORTED_MODE", "Cluster mode not supported"], ["IDENTITY_NOT_RECORDED", "Device identity not recorded"], ["OPEN_INCIDENT", "Open failover incident"]])("shows the failover refusal %s in words, the code on hover, with mode", (refusalReason, words) => {
   setup({ rows: { ...rows, "CLS-ALPHA-01": [{ ...rows["CLS-ALPHA-01"][0], refusalReason, mode: "HA" }] } });
-  expect(within(row("CLS-ALPHA-01")).getByText(refusalReason)).toBeInTheDocument();
+  expect(within(row("CLS-ALPHA-01")).getByText(words)).toHaveAttribute("data-raw", refusalReason);
   expect(within(row("CLS-ALPHA-01")).getByText("Mode: HA")).toBeInTheDocument();
 });
+it("writes the Unknown-versus-Not-ready rule on screen and drops a mode line that says nothing", () => {
+  setup({ rows: { ...rows, "CLS-ALPHA-01": [{ ...rows["CLS-ALPHA-01"][0], mode: "UNKNOWN" }] } });
+  expect(document.querySelector("[data-readiness-rule]")).toHaveTextContent(/Not ready: a pre-check found a blocking condition\. Unknown: readiness could not be established/);
+  expect(within(row("CLS-ALPHA-01")).queryByText(/^Mode:/)).toBeNull();
+});
+it("puts Run readiness check on the toolbar and the staleness notice, asking once before a multi-cluster run", () => {
+  vi.useFakeTimers(); vi.setSystemTime(new Date("2026-10-17T12:00:00Z"));
+  const stale = new Date("2026-10-09T12:00:00Z").toISOString();
+  const staleRows = { "CLS-ALPHA-01": [{ ...summary("CLS-ALPHA-01", "READY"), readiness: { status: "READY" as const, observedAt: stale, failedCheck: "", checks: [] } }],
+    "CLS-BRAVO-02": [{ ...summary("CLS-BRAVO-02", "NOT_READY"), readiness: { status: "NOT_READY" as const, observedAt: stale, failedCheck: "", checks: [] } }] };
+  const { onBulkRun } = setup({ rows: staleRows });
+  expect(screen.getByTestId("toolbar-run-readiness")).toHaveTextContent("Run readiness check (2 clusters)");
+  expect(within(screen.getByRole("status")).getByTestId("stale-run-readiness")).toBeInTheDocument();
+  fireEvent.click(screen.getByTestId("stale-run-readiness"));
+  expect(onBulkRun).not.toHaveBeenCalled();
+  expect(screen.getByRole("dialog", { name: "Run readiness check on 2 clusters?" })).toBeInTheDocument();
+  fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Run readiness check" }));
+  expect(onBulkRun).toHaveBeenCalledWith([staleRows["CLS-BRAVO-02"][0], staleRows["CLS-ALPHA-01"][0]]);
+});
+it("locks the toolbar button with the role reason when the server grants nobody a run", () => {
+  const refused = Object.fromEntries(Object.entries(rows).map(([ref, units]) => [ref, units.map(unit => ({ ...unit, canRunReadiness: false }))]));
+  setup({ rows: refused });
+  expect(screen.getByTestId("toolbar-run-readiness")).toBeDisabled();
+  expect(screen.getByTestId("toolbar-run-readiness")).toHaveTextContent("Run readiness check · Role: not permitted");
+});
+
 
 const NOW = new Date("2026-10-17T12:00:00Z");
 const hoursAgo = (h: number) => new Date(NOW.getTime() - h * 3600_000).toISOString();
