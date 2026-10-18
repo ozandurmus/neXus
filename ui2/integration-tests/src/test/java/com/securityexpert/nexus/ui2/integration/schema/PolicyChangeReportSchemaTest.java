@@ -221,6 +221,16 @@ class PolicyChangeReportSchemaTest {
                     + "('p-pan','uuid:n1','n1',false,'modified','2026-10-06T00:00:00Z',null,'  ','[{\"field\":\"name\",\"before\":\"A\",\"after\":\"B\"},{\"field\":\"number\",\"before\":1,\"after\":9}]'),"
                     + "('p-cp','uuid:c1','c1',false,'removed','2026-10-07T00:00:00Z','not a time',null,'[{\"field\":\"source\"}]'),"
                     + "('p-other','uuid:ghost','ghost',false,'modified','2026-10-08T00:00:00Z',null,'Other actor','[{\"field\":\"comment\"}]')");
+                // Several rows that lack a label in their own history share one current snapshot (p-pan: r1, r3, d2; p-other: o1, o2),
+                // so the fallback expands each snapshot once for all of them; ghost has no rule in the snapshot at all.
+                sql.execute("delete from policy_rule_history where change_type = 'added' and ((policy_id = 'p-pan' and rule_key in ('uuid:r1','uuid:r3','uuid:d2')) "
+                    + "or (policy_id = 'p-other' and rule_key in ('uuid:o1','uuid:o2')))");
+                sql.execute("insert into policy_rule_history(policy_id,rule_key,rule_id,identity_fallback,change_type,collected_at,changed_by,changes) values "
+                    + "('p-pan','uuid:r3','r3',false,'modified','2026-10-09T00:00:00Z','A','[{\"field\":\"action\",\"before\":\"a\",\"after\":\"b\"}]'),"
+                    + "('p-pan','uuid:d2','d2',false,'modified','2026-10-09T00:01:00Z','A','[{\"field\":\"log\",\"before\":\"a\",\"after\":\"b\"}]'),"
+                    + "('p-pan','uuid:d2','d2',false,'modified','2026-10-09T00:02:00Z','A','[{\"field\":\"comment\",\"before\":\"a\",\"after\":\"b\"}]'),"
+                    + "('p-other','uuid:o1','o1',false,'modified','2026-10-09T00:03:00Z','B','[{\"field\":\"action\",\"before\":\"a\",\"after\":\"b\"}]'),"
+                    + "('p-other','uuid:o2','o2',false,'modified','2026-10-09T00:04:00Z','B','[{\"field\":\"action\",\"before\":\"a\",\"after\":\"b\"}]')");
                 // Many initial captures, as after the estate's first complete collections: most of the history in range.
                 sql.execute("insert into policy_rule_history(policy_id,rule_key,rule_id,identity_fallback,change_type,collected_at,changes,initial_capture) "
                     + "select (array['p-pan','p-cp','p-other'])[1 + g % 3], 'uuid:bulk' || g, 'bulk' || g, false, 'added', timestamptz '2026-10-03T00:00:00Z' + (g % 50) * interval '1 minute', "
@@ -264,6 +274,10 @@ class PolicyChangeReportSchemaTest {
                     }
                 }
                 // The default view must really leave the bulk out, so the comparison above exercised the interesting shape.
+                var shared = repository.rows(new PolicyChangeRepository.Filter(from, to, "", "", "modified", "", true), ceiling, null);
+                assertTrue(shared.stream().filter(PolicyChangeRepository.Row::currentLabel).map(PolicyChangeRepository.Row::policy).distinct().count() >= 2);
+                assertTrue(shared.stream().filter(r -> r.currentLabel() && r.policy().equals("p-pan")).count() >= 3, "several missing labels filled from one snapshot");
+                assertTrue(shared.stream().anyMatch(r -> r.ruleKey().equals("uuid:ghost") && !r.currentLabel() && r.name() == null));
                 var real = new PolicyChangeRepository.Filter(from, to, "", "", "", "", false);
                 assertTrue(((Number) repository.summary(real, ceiling).get("initialCaptures")).longValue() >= 3000);
                 assertTrue(repository.rows(real, ceiling, null).stream().noneMatch(PolicyChangeRepository.Row::initialCapture));

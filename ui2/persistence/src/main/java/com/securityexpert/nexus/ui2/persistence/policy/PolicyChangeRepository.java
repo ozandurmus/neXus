@@ -85,23 +85,32 @@ public final class PolicyChangeRepository {
             initial = "false";
             firstJoin = "";
         }
-        // Labels, and the whole-snapshot expansion for a missing label, are computed for the page's rows only (after the limit).
-        String sql = "with " + selection
-            + "select h.revision_id, h.policy_id, h.rule_id, h.rule_key, h.change_type, "
-            + "to_char(" + TIME + UTC_ISO + " as time, "
-            + "to_char(h.collected_at" + UTC_ISO + " as collected_at, " + initial + " as initial_capture, "
-            + "fn_policy_change_time(h.changed_on) is null as observed, h.changed_by, h.changes::text as changes, s.metadata::text as metadata, "
-            + "coalesce(labels.name, current_rule.rule->>'name') as name, coalesce(labels.number, current_rule.rule->'number')::text as number, (labels.name is null or labels.number is null) and current_rule.rule is not null as current_label "
-            + "from page p join policy_rule_history h on h.revision_id = p.revision_id join policy_snapshot s on s.policy_id=h.policy_id " + firstJoin
+        // Labels come from the rule's own history, for the page's rows only (after the limit). A row still missing a label falls
+        // back to the policy's current snapshot; the snapshot is expanded once per policy on the page (not once per row), keeping
+        // only the wanted rule keys, and the first rule in expansion order wins exactly as "limit 1" over the expansion did.
+        String sql = "with " + selection + ", "
+            + "lab as materialized (select p.ts, h.revision_id, h.policy_id, h.rule_key, labels.name, labels.number from page p "
+            + "join policy_rule_history h on h.revision_id = p.revision_id "
             + "left join lateral (select "
             + "(select coalesce(c->>'after', c->>'before') from policy_rule_history r, jsonb_array_elements(r.changes) c "
             + "where r.policy_id=h.policy_id and r.rule_key=h.rule_key and r.revision_id<=h.revision_id and c->>'field'='name' order by r.revision_id desc limit 1) as name, "
             + "(select coalesce(nullif(c->'after', 'null'::jsonb), c->'before') from policy_rule_history r, jsonb_array_elements(r.changes) c "
-            + "where r.policy_id=h.policy_id and r.rule_key=h.rule_key and r.revision_id<=h.revision_id and c->>'field'='number' order by r.revision_id desc limit 1) as number) labels on true "
-            // The snapshot is only handed to the expanding function when a label is missing.
-            + "left join lateral (select rule from fn_policy_history_rules(case when labels.name is null or labels.number is null then s.snapshot end) "
-            + "where rule_key=h.rule_key and (labels.name is null or labels.number is null) limit 1) current_rule on true "
-            + "order by p.ts desc, h.revision_id desc";
+            + "where r.policy_id=h.policy_id and r.rule_key=h.rule_key and r.revision_id<=h.revision_id and c->>'field'='number' order by r.revision_id desc limit 1) as number) labels on true), "
+            + "missing as materialized (select distinct policy_id, rule_key from lab where name is null or number is null), "
+            + "expanded as materialized (select distinct on (m.policy_id, x.rule_key) m.policy_id, x.rule_key, x.rule "
+            + "from (select distinct policy_id from missing) m join policy_snapshot ps on ps.policy_id = m.policy_id "
+            + "cross join lateral (select array_agg(w.rule_key) as keys from missing w where w.policy_id = m.policy_id) k "
+            + "cross join lateral fn_policy_history_rules(ps.snapshot) with ordinality as x(rule_key, rule, ordinal) "
+            + "where x.rule_key = any(k.keys) "
+            + "order by m.policy_id, x.rule_key, x.ordinal) "
+            + "select h.revision_id, h.policy_id, h.rule_id, h.rule_key, h.change_type, "
+            + "to_char(" + TIME + UTC_ISO + " as time, "
+            + "to_char(h.collected_at" + UTC_ISO + " as collected_at, " + initial + " as initial_capture, "
+            + "fn_policy_change_time(h.changed_on) is null as observed, h.changed_by, h.changes::text as changes, s.metadata::text as metadata, "
+            + "coalesce(l.name, current_rule.rule->>'name') as name, coalesce(l.number, current_rule.rule->'number')::text as number, (l.name is null or l.number is null) and current_rule.rule is not null as current_label "
+            + "from lab l join policy_rule_history h on h.revision_id = l.revision_id join policy_snapshot s on s.policy_id=h.policy_id " + firstJoin
+            + "left join expanded current_rule on current_rule.policy_id = h.policy_id and current_rule.rule_key = h.rule_key and (l.name is null or l.number is null) "
+            + "order by l.ts desc, h.revision_id desc";
         return transactions.inTransaction(db -> db.fetch(sql, args.toArray()).map(r -> new Row(
             r.get("revision_id", Long.class), r.get("policy_id", String.class), r.get("rule_id", String.class), r.get("rule_key", String.class),
             r.get("change_type", String.class), r.get("time", String.class), r.get("observed", Boolean.class), r.get("changed_by", String.class),
