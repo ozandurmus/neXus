@@ -20,7 +20,6 @@ import { useListSearch } from "../shell/listSearch";
 import { requestBulkInventoryCollect, requestBulkConfigurationCollect, listConfigurations, getOverview, listDevices, getManagementTree, type ApiError, type DeviceSummary, type ClusterInventory, type ManagementTree, type ManagementTreeNode } from "../auth/adminApi";
 import { deviceNameLabel, enrollmentStateLabel, enrollmentStateTone } from "../shell/deviceCopy";
 import { JobStatusIndicator } from "../shell/JobStatusIndicator";
-import { HttpsCertificatePanel } from "./HttpsCertificatePanel";
 import { DeviceInventoryPanels, ClusterDetailPanels, VendorAvatar, deriveClusterTitle } from "./InventoryPanels";
 import { ClusterConfigurationDetail, DeviceConfigurationDetail } from "./ConfigurationDetail";
 import { LifecycleScreen } from "./LifecycleScreen";
@@ -876,13 +875,16 @@ function FlatDeviceList({
 }
 
 /**
- * "N devices enrolled" counted every registered device, drafts included, while the Overview counts the enrolled ones
- * (135 against 133, UI review 2026-10-17): the header now names both when they differ.
+ * The Devices screen's one count sentence, from the one /devices list, for both the header and the landing text
+ * (UI review 2026-10-18, F-3: the landing said "135 devices are enrolled" under a header saying 133 enrolled).
+ * Enrolled means ENROLLED, as on the Overview ({@link estateDevicesLabel}: "133 enrolled devices"); every other
+ * registered device (drafts included) is named, never folded in.
  */
 export function registeredLabel(devices: ReadonlyArray<{ enrollment_state: string }>): string {
   const enrolled = devices.filter((d) => d.enrollment_state === "ENROLLED").length;
-  const plural = (n: number) => `${n} device${n === 1 ? "" : "s"}`;
-  return enrolled === devices.length ? `${plural(enrolled)} enrolled` : `${plural(devices.length)} registered · ${enrolled} enrolled`;
+  return enrolled === devices.length
+    ? `${enrolled} enrolled device${enrolled === 1 ? "" : "s"}`
+    : `${devices.length} registered · ${enrolled} enrolled`;
 }
 
 export function InventoryScreen() {
@@ -1229,7 +1231,6 @@ export function InventoryScreen() {
                   />
                 )}
                 <Box component="a" href={`?screen=policy&device_id=${encodeURIComponent(selectedDevice.device_id)}`} sx={{ color: m3.primary }}>Open assigned policy</Box>
-                <HttpsCertificatePanel key={`certificate-${selectedDevice.device_id}`} deviceId={selectedDevice.device_id} />
                 <DeviceInventoryPanels
                   key={selectedDevice.device_id}
                   device={selectedDevice}
@@ -1249,7 +1250,7 @@ export function InventoryScreen() {
                 title={(devices?.length ?? 0) === 0 ? "No device to show" : "Select a device or cluster"}
                 body={(devices?.length ?? 0) === 0
                   ? "Enrol a device from Administration; its interfaces, routing, cluster members and identity appear here once it is read."
-                  : `${devices?.length ?? 0} devices are enrolled. Choose one on the left to see its interfaces, routing, cluster members, backups and identity. Interface evidence is read over SSH or HTTPS; values are observed, never written.`}
+                  : `${registeredLabel(devices ?? [])}. Choose one on the left to see its interfaces, routing, cluster members, configuration, backup, logs and identity. Interface evidence is read over SSH or HTTPS; values are observed, never written.`}
               />
             )}
           </Box>

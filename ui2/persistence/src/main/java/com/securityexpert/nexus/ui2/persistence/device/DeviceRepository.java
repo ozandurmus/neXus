@@ -126,6 +126,21 @@ public interface DeviceRepository {
     /** GET /devices (DeviceSummary rows), newest first -- every device, its vendor and its observed facts. */
     List<DeviceSummaryRecord> listAll();
 
+    /** One device's ID with the hostname and cluster reference {@link #listAll()} shows for it. */
+    record NameIdentity(String deviceId, Optional<String> hostname, Optional<String> clusterMemberRef) {
+    }
+
+    /**
+     * Every device's {@link NameIdentity}, oldest registration first (ties by device ID) -- the masking layer's
+     * input for keeping device pseudonyms unique. The default reverses {@link #listAll()}'s newest-first order.
+     */
+    default List<NameIdentity> listNameIdentities() {
+        List<NameIdentity> out = new java.util.ArrayList<>(listAll().stream()
+                .map(d -> new NameIdentity(d.deviceId(), d.observedHostname(), d.clusterMemberRef())).toList());
+        java.util.Collections.reverse(out);
+        return out;
+    }
+
     /** Read-eligible devices whose first endpoint uses the requested transport. */
     default List<DeviceSummaryRecord> listReadCollectionTargets(String transport) {
         return listAll().stream().filter(d -> find(d.deviceId()).filter(DeviceRecord::permitsReadCollection).isPresent()

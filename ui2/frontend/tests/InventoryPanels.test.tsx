@@ -101,6 +101,36 @@ describe("InventoryScreen device selection and panels", () => {
     },
   );
 
+  it("pairs Identity verified with a red certificate pill and moves the certificate block into the Identity tab", async () => {
+    const DAY = 86_400_000;
+    const device = { ...STANDALONE_DEVICE, role: "appliance", vendor_hint: "infoblox", hostname: "FW-NOVEMBER-02" };
+    const bodies: Record<string, unknown> = {
+      "/devices": { devices: [device] },
+      "/devices/dev-1": { ...device, job: null },
+      "/devices/dev-1/https-certificate": { available: true, strict: false, certificate_changed: false, can_accept: false,
+        can_set_strict: false, certificates: [{ trust_entry_id: "t-1", status: "ACTIVE", fingerprint_sha256: "f".repeat(64),
+          subject_cn: "FW-NOVEMBER-02", issuer_cn: "FW-NOVEMBER-02", not_after: new Date(Date.now() - 7 * DAY - 3_600_000).toISOString() }] },
+      "/devices/dev-1/inventory": { device_id: "dev-1", collected_at: null, contexts: [], grid_members: [] },
+    };
+    vi.stubGlobal("fetch", vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      return Promise.resolve(jsonResponse(url in bodies ? 200 : 404, bodies[url] ?? { error: "NOT_FOUND" }));
+    }));
+    render(withTheme(<InventoryScreen />));
+    fireEvent.click(await screen.findByText("FW-NOVEMBER-02"));
+    expect(await screen.findByText("Certificate expired 7 d ago")).toBeInTheDocument();
+    expect(screen.getByText("✓ Identity verified")).toBeInTheDocument();
+    // Not above the header any more: the block is the Identity tab's first card.
+    expect(screen.queryByText(/^SHA-256:/)).toBeNull();
+    fireEvent.click(screen.getByRole("tab", { name: "Identity" }));
+    const card = await screen.findByLabelText("HTTPS certificate");
+    expect(within(card).getByText(/^SHA-256:/)).toBeInTheDocument();
+    expect(within(card).getByText("Strict mode: Off")).toBeInTheDocument();
+    expect(screen.getByText(/^Identity verified means the device passed its enrollment confirm read/)).toBeInTheDocument();
+    const reference = screen.getByText("Reference");
+    expect(card.compareDocumentPosition(reference) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("fetches and renders a selected standalone device's interfaces and routes", async () => {
     const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
       const url = String(input);

@@ -26,8 +26,7 @@ public class PolicyCollectionService {
     public List<Map<String, Object>> sources() {
         return repository.sources().stream().map(s -> {
             Map<String, Object> view = new LinkedHashMap<>(Map.of("sourceId", s.sourceId(),
-                "sourceName", devices.findSummary(s.sourceId()).flatMap(device -> device.observedHostname())
-                    .filter(name -> !name.isBlank()).orElse("Management server"),
+                "sourceName", PolicySources.displayName(devices.findSummary(s.sourceId()).flatMap(device -> device.observedHostname())),
                 "vendor", "palo_alto".equals(s.vendor()) ? "PAN" : "CP"));
             repository.latestStatus(s.sourceId()).ifPresent(status -> view.put("collection", presentation(status)));
             return view;

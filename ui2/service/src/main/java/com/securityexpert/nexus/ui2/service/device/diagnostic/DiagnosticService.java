@@ -159,7 +159,7 @@ public final class DiagnosticService {
         var device = devices.findSummary(job.targetDeviceId());
         String target=device.flatMap(d->d.observedHostname()).orElse("Unknown");
         result.put("jobId",job.jobId()); result.put("targetDeviceId",job.targetDeviceId());
-        result.put("target",masked ? names.maskDeviceName(target,device.flatMap(d->d.clusterMemberRef()).orElse(null)) : target);
+        result.put("target",masked ? names.maskDeviceName(target,device.flatMap(d->d.clusterMemberRef()).orElse(null),job.targetDeviceId()) : target);
         result.put("command",job.command()); result.put("state",job.state()); result.put("submittedAt",job.submittedAt());
         result.put("gateId",job.gateId());
         result.put("description",description(job.gateId(),job.command()));
@@ -287,7 +287,7 @@ public final class DiagnosticService {
                             device, Optional.of(d), inventory.findLatestRun(d.deviceId()))).isPresent())
                         commands = commands.stream().filter(c -> !com.securityexpert.nexus.ui2.jobs.diagnostic.DiagnosticRead.CPVIEW_GATE.equals(c.get("gate_id"))).toList();
                     return new TargetOption(d.deviceId(), d.observedHostname()
-                            .map(name -> masked ? names.maskDeviceName(name, d.clusterMemberRef().orElse(null)) : name)
+                            .map(name -> masked ? names.maskDeviceName(name, d.clusterMemberRef().orElse(null), d.deviceId()) : name)
                             .orElse("Unknown"), d.vendorHint(),
                             d.clusterMemberRef().map(ref -> masked ? names.maskClusterName(ref) : ref).orElse(null),
                             virtualSystems, commands);

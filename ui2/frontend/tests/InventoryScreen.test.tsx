@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
-import { InventoryScreen } from "../src/screens/InventoryScreen";
+import { InventoryScreen, registeredLabel } from "../src/screens/InventoryScreen";
 import { deriveClusterTitle } from "../src/screens/InventoryPanels";
 import { GlobalSearch } from "../src/shell/GlobalSearch";
 import { setListSearchTerm } from "../src/shell/listSearch";
@@ -71,7 +71,17 @@ describe("InventoryScreen device list", () => {
     await waitFor(() => expect(screen.getByText("fw-edge-1")).toBeInTheDocument());
     expect(screen.getByText("Registered, not confirmed")).toBeInTheDocument();
     // a DRAFT device is registered, not enrolled (it read "1 device enrolled" until 2026-10-17)
-    expect(screen.getByText("1 device registered · 0 enrolled")).toBeInTheDocument();
+    expect(screen.getByText("1 registered · 0 enrolled")).toBeInTheDocument();
+    // F-3 (UI review 2026-10-18): the landing sentence carries the header's count, from the same list.
+    expect(screen.getByText(/^1 registered · 0 enrolled\. Choose one on the left to see its interfaces, routing, cluster members, configuration, backup, logs and identity\./)).toBeInTheDocument();
+  });
+
+  it("names registered and enrolled devices in one sentence, worded like the Overview", () => {
+    const rows = (states: string[]) => states.map((enrollment_state) => ({ enrollment_state }));
+    expect(registeredLabel(rows([...Array(133).fill("ENROLLED"), "DRAFT", "DRAFT"]))).toBe("135 registered · 133 enrolled");
+    expect(registeredLabel(rows(Array(133).fill("ENROLLED")))).toBe("133 enrolled devices");
+    expect(registeredLabel(rows(["ENROLLED"]))).toBe("1 enrolled device");
+    expect(registeredLabel(rows(["ENROLLED", "DEGRADED"]))).toBe("2 registered · 1 enrolled");
   });
 
   it("sorts the device list by name and by vendor via the sort control", async () => {

@@ -37,6 +37,43 @@ public final class PolicyQueryService {
         this.mapper = mapper;
         this.names = names;
     }
+    /**
+     * The source device's hostnames by device ID: a stored snapshot names its source "Panorama &lt;id&gt;" or "MDS &lt;id&gt;"
+     * while the collection sources name it by the device's hostname, so the Policy tree and the container table
+     * showed the same Panorama under two pseudonyms (UI review 2026-10-18, F-2). Every policy view now carries
+     * {@link PolicySources#displayName} of the device's own hostname. Absent in unit tests that do not set it.
+     */
+    private volatile com.securityexpert.nexus.ui2.persistence.device.DeviceRepository devices;
+    private volatile Map<String, String> sourceHostnames;
+    private volatile java.time.Instant sourceHostnamesAt;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setDeviceRepository(com.securityexpert.nexus.ui2.persistence.device.DeviceRepository devices) {
+        this.devices = devices;
+        this.sourceHostnamesAt = null;
+    }
+
+    private Map<String, String> sourceHostnames() {
+        var repository = devices;
+        if (repository == null) return null;
+        var at = sourceHostnamesAt;
+        var now = java.time.Instant.now();
+        if (at != null && at.plusSeconds(30).isAfter(now)) return sourceHostnames;
+        Map<String, String> names = new HashMap<>();
+        repository.listNameIdentities().forEach(d -> d.hostname().filter(h -> !h.isBlank()).ifPresent(h -> names.put(d.deviceId(), h)));
+        sourceHostnames = Map.copyOf(names);
+        sourceHostnamesAt = now;
+        return sourceHostnames;
+    }
+
+    private Metadata canonical(Metadata metadata, Map<String, String> hostnames) {
+        if (hostnames == null || metadata.sourceId() == null) return metadata;
+        String name = PolicySources.displayName(Optional.ofNullable(hostnames.get(metadata.sourceId())));
+        return name.equals(metadata.sourceName()) ? metadata : new Metadata(metadata.id(), metadata.sourceId(), name,
+            metadata.vendor(), metadata.containerId(), metadata.containerName(), metadata.name(), metadata.collectedAt(),
+            metadata.artefactRef(), metadata.targets());
+    }
+
     /** Independent type gaps remain visible even when there are no policy packages. */
     public Optional<PolicyResponse> domainInventory(String source, String domain, String view, int page) {
         var states = new LinkedHashMap<String, Map<String, Object>>();
@@ -341,16 +378,18 @@ public final class PolicyQueryService {
     public List<Metadata> catalog() {
         var catalog = new ArrayList<>(repository.catalog().stream().map(json -> read(json, Metadata.class)).toList());
         if (local != null) local.snapshots().forEach(snapshot -> catalog.add(snapshot.metadata()));
-        return catalog;
+        var hostnames = sourceHostnames();
+        return hostnames == null ? catalog : new ArrayList<>(catalog.stream().map(m -> canonical(m, hostnames)).toList());
     }
     public List<Map<String, Object>> catalogViews() {
+        var hostnames = sourceHostnames();
         var views = new ArrayList<>(repository.catalogEntries().stream().map(entry -> {
-            var view = metadata(read(entry.metadataJson(), Metadata.class));
+            var view = metadata(canonical(read(entry.metadataJson(), Metadata.class), hostnames));
             view.put("ruleCount", entry.ruleCount());
             return view;
         }).toList());
         if (local != null) local.snapshots().forEach(snapshot -> {
-            var view = metadata(snapshot.metadata());
+            var view = metadata(canonical(snapshot.metadata(), hostnames));
             view.put("ruleCount", snapshot.sections().stream().mapToInt(s -> s.rules().size()).sum());
             views.add(view);
         });
@@ -379,7 +418,12 @@ public final class PolicyQueryService {
 
     public Optional<PolicySnapshot> find(String id) {
         var stored = repository.find(id).map(json -> read(json, PolicySnapshot.class));
-        return stored.isPresent() || local == null ? stored : local.snapshots().stream().filter(s -> s.metadata().id().equals(id)).findFirst();
+        var found = stored.isPresent() || local == null ? stored : local.snapshots().stream().filter(s -> s.metadata().id().equals(id)).findFirst();
+        var hostnames = found.isPresent() ? sourceHostnames() : null;
+        return hostnames == null ? found : found.map(s -> {
+            var metadata = canonical(s.metadata(), hostnames);
+            return metadata == s.metadata() ? s : new PolicySnapshot(metadata, s.sections(), s.objects(), s.failures());
+        });
     }
     private <T> T read(String json, Class<T> type) {
         try { return mapper.readValue(json, type); }

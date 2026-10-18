@@ -129,6 +129,16 @@ public class DeviceCompositionConfiguration {
         return new com.securityexpert.nexus.ui2.persistence.JooqCpFailoverRepository(transactionBoundary);
     }
 
+    /** Device IDs and their hostnames for the masking layer, so two devices never share a pseudonym (F-1, 2026-10-18). */
+    @Bean
+    public com.securityexpert.nexus.ui2.service.privacy.MaskingDeviceDirectory maskingDeviceDirectory(
+            DeviceRepository deviceRepository) {
+        return () -> deviceRepository.listNameIdentities().stream()
+                .map(d -> new com.securityexpert.nexus.ui2.service.privacy.MaskingDeviceDirectory.Entry(
+                        d.deviceId(), d.hostname().orElse(null), d.clusterMemberRef().orElse(null)))
+                .toList();
+    }
+
     @Bean
     public com.securityexpert.nexus.ui2.service.privacy.PseudonymRegistry pseudonymRegistry(TransactionBoundary transactionBoundary) {
         return new com.securityexpert.nexus.ui2.service.privacy.JooqPseudonymRegistry(transactionBoundary);

@@ -204,7 +204,7 @@ public class PreflightService {
     ) {
         String rawHostname = member.observedHostname().orElse(member.deviceId());
         String maskedName = pseudonymizer != null
-            ? pseudonymizer.maskDeviceName(rawHostname, clusterRef)
+            ? pseudonymizer.maskDeviceName(rawHostname, clusterRef, member.deviceId())
             : rawHostname;
 
         boolean observed = run.isPresent();

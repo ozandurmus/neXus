@@ -18,3 +18,5 @@ Trust on first use, the same model as SSH host keys:
    in by neXus, as for SSH keys).
 3. An optional strict mode (per device, off by default) refuses on mismatch.
 4. Palo Alto keeps its own 2026-09-21 decision; it may move to this model later on the PO's word.
+
+**Amendment 2026-10-18 (PO, chat):** certificate expiry does not change identity verification -- "Identity verified" stays while the pinned fingerprint matches, the device header shows a separate red "Certificate expired N d ago" pill, and collection is unchanged.
