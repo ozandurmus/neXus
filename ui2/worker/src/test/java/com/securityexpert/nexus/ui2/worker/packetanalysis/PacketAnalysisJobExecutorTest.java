@@ -106,7 +106,9 @@ class PacketAnalysisJobExecutorTest {
         };
         assertEquals(JobState.FAILED, executor(broken).execute(JOB, 1, CASE));
         verify(repository).fail(JOB, 1, "ENGINE_FAILED", "system:worker");
-        verify(leases).transitionState(JOB, 1, JobState.EXECUTING, JobState.FAILED, "system:worker", "packet_analysis_failed", "ENGINE_FAILED");
+        // the job's terminal reason names the failure's class, never its message
+        verify(leases).transitionState(JOB, 1, JobState.EXECUTING, JobState.FAILED, "system:worker", "packet_analysis_failed",
+                "ENGINE_FAILED: IllegalStateException");
     }
 
     @Test void aRunThatReachesTheDuckDbMemoryLimitFailsCleanlyWithItsReason() {

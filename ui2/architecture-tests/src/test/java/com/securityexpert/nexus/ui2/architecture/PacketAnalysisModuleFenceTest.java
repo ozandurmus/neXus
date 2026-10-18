@@ -100,6 +100,43 @@ class PacketAnalysisModuleFenceTest {
                 after.stream().filter(e -> !before.contains(e)).collect(java.util.stream.Collectors.toSet()));
     }
 
+    /**
+     * The first production run (2026-10-18) finished in the engine and then failed as ENGINE_FAILED: the engine version
+     * it stored broke {@code packet_analysis_run_engine_version_check}. Every value the worker stores in a CHECKed run
+     * column is admitted by the latest definition of that CHECK.
+     */
+    @Test void everyValueTheWorkerStoresInTheRunRowIsAdmittedByTheRunTable() throws Exception {
+        String enginePattern = null;
+        String reasonPattern = null;
+        List<Path> files;
+        try (var list = Files.list(MIGRATIONS)) {
+            files = list.filter(p -> migrationVersion(p) >= 0)
+                    .sorted(java.util.Comparator.comparingInt(PacketAnalysisModuleFenceTest::migrationVersion)).toList();
+        }
+        for (Path file : files) {
+            String sql = Files.readString(file);
+            if (!sql.contains("packet_analysis_run")) continue;
+            Matcher engine = Pattern.compile("engine_version ~ '([^']+)'").matcher(sql);
+            while (engine.find()) enginePattern = engine.group(1);
+            Matcher reason = Pattern.compile("failure_reason ~ '([^']+)'").matcher(sql);
+            while (reason.find()) reasonPattern = reason.group(1);
+        }
+        assertNotNull(enginePattern);
+        assertNotNull(reasonPattern);
+        Pattern engine = Pattern.compile(enginePattern);
+        for (String version : List.of(new com.securityexpert.nexus.ui2.worker.packetanalysis.RealPacketAnalysisEngine().version(),
+                new com.securityexpert.nexus.ui2.worker.packetanalysis.StubPacketAnalysisEngine().version())) {
+            assertTrue(engine.matcher(version).find(), version + " is refused by packet_analysis_run.engine_version");
+        }
+        Pattern reason = Pattern.compile(reasonPattern);
+        for (String code : List.of(com.securityexpert.nexus.ui2.packetanalysis.store.AnalysisFailure.ENGINE_FAILED,
+                com.securityexpert.nexus.ui2.packetanalysis.store.AnalysisFailure.MEMORY_LIMIT,
+                com.securityexpert.nexus.ui2.packetanalysis.store.AnalysisFailure.WINDOW_REQUIRED,
+                "CAPTURE_MISSING", "NO_CAPTURES", "CANCELLED")) {
+            assertTrue(reason.matcher(code).find(), code + " is refused by packet_analysis_run.failure_reason");
+        }
+    }
+
     private static java.util.Set<String> events(String list) {
         java.util.Set<String> out = new java.util.TreeSet<>();
         Matcher m = Pattern.compile("'([A-Z_]+)'").matcher(list);

@@ -20,6 +20,11 @@ import java.util.function.BiConsumer;
 /** Runs the core {@link StageGraph} on a reference-ingested project database and returns the report tree. */
 public final class Engine {
     public static final String VERSION = "nexus-packet-analysis-core 0.1 (reference 0.3.10)";
+    /**
+     * {@link #VERSION} as a token: what a run row stores ({@code packet_analysis_run.engine_version} admits
+     * {@code ^[A-Za-z0-9._-]{1,40}$} only). The report keeps {@link #VERSION} unchanged.
+     */
+    public static final String VERSION_ID = "nexus-pa-core-0.1-ref-0.3.10";
 
     /** Tables materialized into the parity database after the stage with the same snapshot name. */
     public static final Map<String, List<String>> SNAPSHOTS = new LinkedHashMap<>();
