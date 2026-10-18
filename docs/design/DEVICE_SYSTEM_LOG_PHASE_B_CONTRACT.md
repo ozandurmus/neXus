@@ -358,6 +358,22 @@ table says so. Chunks stored earlier in the same run stay stored and their curso
 cursor) nothing was read before, so the whole smaller file is read in the same run inside the budgets and no gap is
 recorded. The same C2 read is used and no command, timeout, retry or frequency changes.
 
+The same rule covers two neighbours of that event. (1) The file ends *inside* the anchor region (`offset − K ≤ size <
+offset`): the read opens, but fewer than `K` anchor bytes can arrive because the file is shorter than the cursor offset.
+That is the same shrink at a smaller distance, so it is deferred as above (reason `FILE_CHANGED_DURING_READ`) when the
+server's size at open is below the offset, and read whole on a first run. A short anchor read with the size at or above the
+offset stays `UNKNOWN` (§9: anchor region not received). (2) **Content changed during the run.** If the anchor check fails
+on a read that is not the first of its source in the run (a continuation, or after a chunk was stored or a position
+moved), the file changed after this run began reading it (rotated, truncated or replaced). The source ends `BACKLOG` with
+the reason `CONTENT_CHANGED_DURING_RUN` and `pending_bytes_unknown = true`, and no gap is recorded. Everything already
+stored in the run stays stored, and the persisted cursor stays where the last stored chunk left it, because a chunk and its
+cursor advance are one transaction (§4.1); when nothing was stored it is the cursor the run started with. A position
+that was only held in memory (a read that stored no whole line) is dropped, and loss gaps the plan had not yet written are
+dropped with it: the next run plans from the persisted cursor and a fresh stat and records them once. No stored byte is
+read again and no unread byte is skipped, because the cursor never passes bytes that are not stored. The next run's
+planner and anchor check decide between a followed rotation, `TRUNCATED` and `ANCHOR_MISMATCH` (§4.4). The first read of a
+source whose anchor does not match is unchanged: it re-plans inside the run as `ANCHOR_MISMATCH`.
+
 ### 4.5 Gaps are always reported, with byte counts
 
 A gap is a byte range the pool will never hold. Each gap row carries:

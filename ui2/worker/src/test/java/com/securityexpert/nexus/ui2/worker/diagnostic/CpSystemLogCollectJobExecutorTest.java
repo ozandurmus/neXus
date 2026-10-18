@@ -669,6 +669,94 @@ class CpSystemLogCollectJobExecutorTest {
         assertTrue(h.repo.gapKinds("cp_messages").isEmpty());
     }
 
+    /** The file is replaced by {@code content} when the {@code nth} ranged read of the run arrives. */
+    private static void changeOnRead(Harness h, int nth, String path, String content, long inode) {
+        int[] seen = {0};
+        h.device.onRangeRead = () -> { if (++seen[0] == nth) { h.device.onRangeRead = null; h.device.put(path, content, inode); } };
+    }
+
+    @Test
+    void aFileThatEndsInsideTheAnchorRegionDefersTheSourceAndTheNextRunsStatBooksTheTruncation(@TempDir Path dir) throws Exception {
+        var h = new Harness(dir, "gateway");
+        h.config = PlannerConfig.defaults();                       // 64 B anchor region
+        String old = lines("old", 0, 4);
+        h.device.put(MESSAGES, old, 10);
+        h.run();
+        var before = h.repo.cursors.get("cp_messages");
+        h.device.put(MESSAGES, old + lines("grown", 0, 2), 10);
+        // offset - 64 <= size < offset: the read opens fine, the file ends before the anchor region is complete
+        shrinkOnNextRead(h, MESSAGES, lines("cut", 0, 10).substring(0, old.length() - 30), 10);
+        h.run();
+
+        assertEquals("COMPLETED", h.finalState, h.finalReason);
+        assertEquals("BACKLOG", h.repo.outcome("cp_messages"));
+        assertEquals("FILE_CHANGED_DURING_READ", h.repo.detail("cp_messages").get("reason"));
+        assertEquals(Boolean.TRUE, h.repo.detail("cp_messages").get("pending_bytes_unknown"));
+        assertEquals(before, h.repo.cursors.get("cp_messages"));
+        assertTrue(h.repo.gapKinds("cp_messages").isEmpty());
+        assertEquals(1, h.repo.chunks.size());
+
+        String fresh = lines("fresh", 0, 2);                      // the next stat shows a smaller file
+        h.device.put(MESSAGES, fresh, 10);
+        h.run();
+        assertEquals("GAP", h.repo.outcome("cp_messages"));
+        assertEquals(old.length(), h.repo.gap("cp_messages", "TRUNCATED").knownLostBytes());
+        assertEquals(old + fresh, messagesOnly(h));
+        assertEquals(fresh.length(), h.repo.cursors.get("cp_messages").offsetBytes());
+    }
+
+    @Test
+    void aFirstRunWhoseFileEndsInsideTheBaselineAnchorRegionReadsTheWholeFileWithoutAnyGap(@TempDir Path dir) throws Exception {
+        var h = new Harness(dir, "gateway");                       // SMALL: 512 B backfill, 16 B anchor region
+        String big = lines("x", 0, 30);
+        h.device.put(MESSAGES, big, 10);
+        int start = big.length() - 512;                            // where the baseline read begins
+        String shrunk = lines("fresh", 0, 30).substring(0, start - 8);   // start - 16 <= size < start
+        shrinkOnNextRead(h, MESSAGES, shrunk, 10);
+        h.run();
+
+        assertEquals("COMPLETED", h.finalState, h.finalReason);
+        assertTrue(h.repo.gapKinds("cp_messages").stream().noneMatch(k -> k.equals("INITIAL_BASELINE") || k.equals("TRUNCATED")));
+        assertTrue(h.device.rangeReads.get(1).startsWith(MESSAGES + "@0+"), "the smaller file is read from 0");
+        String whole = shrunk.substring(0, shrunk.lastIndexOf('\n') + 1);
+        assertEquals(whole, messagesOnly(h), "whole lines of the smaller file, once");
+        assertEquals(whole.length(), h.repo.cursors.get("cp_messages").offsetBytes());
+    }
+
+    @Test
+    void aFileChangedAfterTheRunStoredAChunkKeepsTheChunkDefersTheSourceAndTheNextRunReplans(@TempDir Path dir) throws Exception {
+        var h = new Harness(dir, "gateway");                       // SMALL: 256 B reads, 16 B anchor, 1024 B per source
+        String old = lines("old", 0, 4);
+        h.device.put(MESSAGES, old, 10);
+        h.run();
+        String grown = old + lines("grown", 0, 10);                // 560 B of growth: several reads
+        h.device.put(MESSAGES, grown, 10);
+        String changed = lines("other", 0, 12);                    // same name and inode, other bytes
+        changeOnRead(h, 2, MESSAGES, changed, 10);
+        h.run();
+
+        assertEquals("COMPLETED", h.finalState, h.finalReason);
+        assertEquals("SYSTEM_LOG_COLLECTED", h.finalReason, "a deferred source does not fail the job");
+        assertEquals("BACKLOG", h.repo.outcome("cp_messages"));
+        assertEquals("CONTENT_CHANGED_DURING_RUN", h.repo.detail("cp_messages").get("reason"));
+        assertEquals(Boolean.TRUE, h.repo.detail("cp_messages").get("pending_bytes_unknown"));
+        assertEquals(2, h.repo.chunks.size(), "the chunk read before the change stays stored");
+        var kept = h.repo.chunks.get(1);
+        String stored = messagesOnly(h);
+        assertTrue(grown.startsWith(stored), "only bytes of the file as it was when read, each once");
+        assertEquals(stored.length(), h.repo.cursors.get("cp_messages").offsetBytes(), "cursor at the last stored byte");
+        assertEquals(kept.chunk().endOffset(), h.repo.cursors.get("cp_messages").offsetBytes());
+        assertTrue(h.repo.gapKinds("cp_messages").isEmpty(), "no guessed gap and no COLLECTION_FAILED window");
+        h.assertNoDeviceTextInRecords();
+
+        h.run();                                                   // the next run: fresh stat, anchor check, planner decides
+        assertEquals("COMPLETED", h.finalState, h.finalReason);
+        assertEquals("GAP", h.repo.outcome("cp_messages"));
+        assertTrue(h.repo.gapKinds("cp_messages").contains("ANCHOR_MISMATCH"));
+        assertEquals(changed.length(), h.repo.cursors.get("cp_messages").offsetBytes());
+        assertTrue(messagesOnly(h).endsWith(changed), "the changed file is read from 0 once");
+    }
+
     @Test
     void aCursorFileThatRotatedAwayIsAReportedGapWithItsKnownLostBytes(@TempDir Path dir) throws Exception {
         var h = new Harness(dir, "gateway");

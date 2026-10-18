@@ -440,7 +440,7 @@ public final class CpSystemLogCollectJobExecutor {
             RangedFetchResult result = rangedRead(run, readFamily, base, printed, r, buffer);
             lastActivityAt = clock.millis();
             reads++;
-            if (result.status() == RangedFetchStatus.SIZE_BELOW_OFFSET && result.sizeAtOpen().isPresent()) {
+            if (fileSmallerThanOffset(result, r)) {
                 if (pos == null && r.purpose() == ReadPurpose.INITIAL_BASELINE && r.path().equals(base.path())
                         && shrinkRestarts.add(r.path())) {
                     // First run, nothing read before: nothing is lost. The whole (now smaller) file replaces the baseline,
@@ -465,7 +465,9 @@ public final class CpSystemLogCollectJobExecutor {
                 }
                 // With a cursor the file changed under the plan (truncated, or renamed and replaced; SFTP v3 cannot tell
                 // which). Not a collection failure and nothing to guess: the cursor, the anchor and the gaps stay as they
-                // are, the source is deferred, and the next run's stat decides TRUNCATED or rotation (section 4.4).
+                // are, the source is deferred, and the next run's stat decides TRUNCATED or rotation (section 4.4). This
+                // covers both a size below the read's start and a size inside the anchor region (offset-K <= size < offset),
+                // where fewer than K anchor bytes arrive because the file ended.
                 failure = "FILE_CHANGED_DURING_READ";
                 failureOutcome = "BACKLOG";
                 break;
@@ -486,7 +488,17 @@ public final class CpSystemLogCollectJobExecutor {
                 Fingerprint.Result check = Fingerprint.verify(anchors, data, received, leadIn, r.expectedAnchor());
                 if (check == Fingerprint.Result.SHORT_READ) { failure = "ANCHOR_REGION_NOT_RECEIVED"; break; }
                 if (check == Fingerprint.Result.MISMATCH) {
-                    if (r.continuation() || chunks > 0 || dirty) { failure = "CONTENT_CHANGED_DURING_RUN"; break; }
+                    if (r.continuation() || chunks > 0 || dirty) {
+                        // The file changed under the plan after this run began reading it (rotated, truncated, replaced).
+                        // Everything already stored stays stored, and its chunk write already moved the persisted cursor to
+                        // the last stored position (unchanged when nothing was stored; an in-memory position that was never
+                        // stored is dropped with the run). Loss gaps not yet written are dropped too: the next run plans from
+                        // that cursor and a fresh stat, so it records them once. Nothing is guessed; the source is deferred.
+                        discarded += payload;
+                        failure = "CONTENT_CHANGED_DURING_RUN";
+                        failureOutcome = "BACKLOG";
+                        break;
+                    }
                     if (++replans > MAX_REPLANS) { failure = "ANCHOR_REPLAN_LIMIT"; break; }
                     discarded += payload;
                     mismatches.add(r.path());
@@ -635,6 +647,17 @@ public final class CpSystemLogCollectJobExecutor {
         result.detail = detail;
         result.durationMs = firstReadAt < 0 ? 0 : Math.max(0, lastActivityAt - firstReadAt);
         return result;
+    }
+
+    /**
+     * True when the read shows that the file is now smaller than the read's cursor offset: the server's size is below the
+     * range start ({@code SIZE_BELOW_OFFSET}), or the file ended inside the anchor region (usable bytes, size below the
+     * offset, fewer than K lead-in bytes received). Both are the same event seen at different sizes.
+     */
+    private static boolean fileSmallerThanOffset(RangedFetchResult result, ReadAction r) {
+        if (result.sizeAtOpen().isEmpty()) return false;
+        if (result.status() == RangedFetchStatus.SIZE_BELOW_OFFSET) return true;
+        return result.bytesUsable() && result.sizeAtOpen().getAsLong() < r.offset() && result.bytesReceived() < r.leadIn();
     }
 
     /** One C2 read: gated and path-checked by {@link CpSyslogRangedRead}, ledgered like every device step. */
