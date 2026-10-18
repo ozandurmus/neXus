@@ -29,7 +29,9 @@ class PolicyChangeRepositoryTest {
         repository.rows(new PolicyChangeRepository.Filter(Instant.parse("2026-10-01T00:00:00Z"), Instant.parse("2026-10-09T00:00:00Z"), "", "", "", ""), 100, null);
         assertFalse(sql.get(0).contains("h.change_type = ?")); assertFalse(sql.get(0).contains("h.policy_id = ?"));
         assertEquals(3, bindings.size());
-        assertFalse(sql.get(0).contains("not h.initial_capture"));
+        // Including initial captures adds no exclusion to the page selection (the marker is only read for the page's own rows).
+        assertFalse(sql.get(0).substring(0, sql.get(0).indexOf("cand as")).contains("initial_capture"));
+        assertTrue(sql.get(0).contains("(h.initial_capture or fr.revision_id is not null) as initial_capture"));
     }
     @Test void initialCapturesAreExcludedFromRowsAndCountsButStillReportedAsHidden() {
         var sql = new ArrayList<String>(); var bindings = new ArrayList<Object>();
@@ -45,22 +47,23 @@ class PolicyChangeRepositoryTest {
         }), SQLDialect.POSTGRES)));
         var from = Instant.parse("2026-10-01T00:00:00Z"); var to = Instant.parse("2026-10-09T00:00:00Z");
         repository.rows(new PolicyChangeRepository.Filter(from, to, "", "", "", "", false), 100, null);
-        assertTrue(sql.get(0).contains("not h.initial_capture"));
-        assertTrue(sql.get(0).contains("h.initial_capture"));
+        // Initial captures are cut by the stored marker (the partial index predicate) before any per-row work.
+        assertTrue(sql.get(0).contains(" and not h.initial_capture), "));
+        assertTrue(sql.get(0).contains("false as initial_capture"));
         assertTrue(sql.get(0).contains("as collected_at"));
         assertEquals(3, bindings.size()); // The marker is a constant predicate, never a bound user value.
         sql.clear(); bindings.clear();
         var summary = repository.summary(new PolicyChangeRepository.Filter(from, to, "", "", "", "", false), 100);
-        // Counts come from real changes only, while the hidden initial captures are counted in the same scan.
-        assertTrue(sql.get(0).contains("filter (where not h.initial_capture and not coalesce(h.change_type = 'added'"));
-        assertTrue(sql.get(0).contains("count(*) filter (where " + PolicyChangeRepository.EFFECTIVE_INITIAL + ")"));
-        assertFalse(sql.get(0).contains("and not h.initial_capture"));
+        // Counts come from real changes only, while the hidden initial captures are counted by one plain count of the marked rows.
+        assertTrue(sql.get(0).contains("count(*) filter (where fr.revision_id is null)::bigint as total"));
+        assertTrue(sql.get(0).contains("and h.initial_capture))::bigint as initial_captures"));
+        assertEquals(6, bindings.size()); // The same predicates run for the real changes and for the initial-capture count.
         assertEquals(4L, summary.get("total")); assertEquals(3500L, summary.get("initialCaptures"));
         assertEquals(false, summary.get("initialCapturesIncluded"));
         sql.clear();
         repository.summary(new PolicyChangeRepository.Filter(from, to, "", "", "", "", true), 100);
-        assertFalse(sql.get(0).contains("not h.initial_capture"));
-        assertTrue(sql.get(0).contains("filter (where true)"));
+        assertTrue(sql.get(0).contains("count(*)::bigint as total"));
+        assertTrue(sql.get(0).contains("count(*) filter (where h.initial_capture or fr.revision_id is not null)::bigint as initial_captures"));
     }
     @Test void v149MarkerAndRenumberFilterAreIdempotentTransactionalAndKeepHistory() throws Exception {
         String sql = java.nio.file.Files.readString(java.nio.file.Path.of(
@@ -102,19 +105,41 @@ class PolicyChangeRepositoryTest {
         var filter = new PolicyChangeRepository.Filter(FROM, TO, "", "", "", "", false);
         for (String sql : run(repository -> { repository.rows(filter, 1, null); repository.summary(filter, 1); })) {
             if (!sql.contains("policy_rule_history")) continue;
-            assertTrue(sql.contains("not h.initial_capture and not coalesce(h.change_type = 'added'"), sql);
+            assertTrue(sql.contains("and not h.initial_capture)"), sql); // the partial-index predicate stays a separate conjunct
             for (String name : List.of("Pre NAT rules", "Post NAT rules", "Pre default rules", "Post default rules"))
                 assertTrue(sql.contains("'" + name + "'"), name);
             assertTrue(sql.contains("s.metadata->>'vendor' = 'PAN'"), "Check Point section names are never classified");
-            assertTrue(sql.contains("e.collected_at < h.collected_at"), "only an earlier batch makes a later addition a change");
+            assertTrue(sql.contains("e.collected_at < t.collected_at"), "only an earlier batch makes a later addition a change");
         }
+    }
+
+    @Test void firstAppearanceIsProbedOncePerPolicyBatchAndKindAndOnlyForCandidateRows() {
+        var filter = new PolicyChangeRepository.Filter(FROM, TO, "", "", "", "", false);
+        for (String sql : run(repository -> { repository.rows(filter, 1, null); repository.summary(filter, 1); })) {
+            if (!sql.contains("policy_rule_history")) continue;
+            // The jsonb section kind is extracted only for 'added' revisions of Palo Alto policies; every other row gets null.
+            assertTrue(sql.contains("case when h.change_type = 'added' and s.metadata->>'vendor' = 'PAN' then (select c->>'after'"), sql);
+            // One existence probe per distinct (policy, batch, kind), not one per row.
+            assertTrue(sql.contains("(select distinct policy_id, collected_at, kind from cand where kind in ("), sql);
+            assertEquals(1, sql.split("select 1 as earlier from policy_rule_history e", -1).length - 1, sql);
+        }
+    }
+
+    @Test void labelsAndSnapshotExpansionAreComputedOnlyForThePageRowsAfterTheLimit() {
+        var filter = new PolicyChangeRepository.Filter(FROM, TO, "", "", "", "", false);
+        String sql = String.join("\n", run(repository -> repository.rows(filter, 1, null)));
+        int limit = sql.indexOf("limit 500"), labels = sql.indexOf("left join lateral (select (select coalesce(c->>'after'");
+        assertTrue(limit > 0 && labels > limit, "the page is limited before any label lookup");
+        assertEquals(1, sql.split("limit 500", -1).length - 1);
+        assertTrue(sql.contains("fn_policy_history_rules(case when labels.name is null or labels.number is null then s.snapshot end)"),
+            "the snapshot is expanded only for a row whose label is missing");
     }
 
     @Test void theInitialFlagOfEveryRowAndTheInitialCountUseTheSameDefinition() {
         var filter = new PolicyChangeRepository.Filter(FROM, TO, "", "", "", "", true);
         var sql = String.join("\n", run(repository -> { repository.rows(filter, 1, null); repository.summary(filter, 1); }));
-        assertTrue(sql.contains(PolicyChangeRepository.EFFECTIVE_INITIAL + " as initial_capture"));
-        assertTrue(sql.contains("filter (where " + PolicyChangeRepository.EFFECTIVE_INITIAL + ")::bigint as initial_captures"));
-        assertFalse(sql.contains("not h.initial_capture"), "including initial captures adds no exclusion");
+        assertTrue(sql.contains("(h.initial_capture or fr.revision_id is not null) as initial_capture"));
+        assertTrue(sql.contains("filter (where h.initial_capture or fr.revision_id is not null)::bigint as initial_captures"));
+        assertEquals(2, sql.split("first_rev as materialized", -1).length - 1, "the same first-appearance definition serves rows and summary");
     }
 }
