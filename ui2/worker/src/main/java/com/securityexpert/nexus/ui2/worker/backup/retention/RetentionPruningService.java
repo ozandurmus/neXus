@@ -9,34 +9,47 @@ import java.util.Objects;
 import java.util.UUID;
 
 /**
- * Retention and Pruning Engine for the neXus Backup Engine.
+ * Retention and Pruning Engine for the neXus Backup Engine (PO decision 2026-10-18; C7 contract Amendment A-2).
  *
- * <p>Enforces the Product Owner's retention contract:
  * <ul>
- *   <li>Daily backups retained for 30 days (1 month). Expired backups pruned daily.</li>
- *   <li>Weekly Gaia snapshots retained with depth 2 (older than 2 deleted).</li>
- *   <li>All deletions write append-only cryptographic tombstones to {@code artefact_retention_ledger}.</li>
+ *   <li>Retention is automatic and runs hourly from the worker: a standard backup is pruned once its
+ *       {@code created_at} is older than the policy's {@code backup_retention_days} (V44 {@code backup_policy}).</li>
+ *   <li>Weekly snapshots beyond the policy's depth are pruned.</li>
+ *   <li>A configuration archive is pruned once older than the policy's {@code configuration_retention_days}
+ *       (V164, default 30).</li>
+ *   <li>A device's last archive (of the class being pruned) and its baseline are always kept.</li>
+ *   <li>A removal is a {@code removed} row in {@code artefact_retention_ledger}; the {@code backup_artefact} row stays.
+ *       {@code expires_at} plays no part.</li>
  * </ul>
+ * The days always come from the policy row; this class has no built-in horizon.
  */
 public final class RetentionPruningService {
 
     public record PruningPolicy(
             int backupRetentionDays,
             int snapshotRetentionDepth,
+            int configurationRetentionDays,
             long maxStorageBudgetBytes
     ) {
-        // PO Requirements: 400 GB total budget, 14-day retention (1 month is too long), snapshot depth 4
+        /** Matches the V164 column default; used when a caller supplies no configuration horizon. */
+        public static final int DEFAULT_CONFIGURATION_RETENTION_DAYS = 30;
+        // PO requirement: 400 GiB total vault budget.
         public static final long DEFAULT_STORAGE_BUDGET_BYTES = 400L * 1024L * 1024L * 1024L; // 400 GiB
-        public static final PruningPolicy DEFAULT = new PruningPolicy(14, 4, DEFAULT_STORAGE_BUDGET_BYTES);
+
+        public PruningPolicy(int backupRetentionDays, int snapshotRetentionDepth, int configurationRetentionDays) {
+            this(backupRetentionDays, snapshotRetentionDepth, configurationRetentionDays, DEFAULT_STORAGE_BUDGET_BYTES);
+        }
 
         public PruningPolicy(int backupRetentionDays, int snapshotRetentionDepth) {
-            this(backupRetentionDays, snapshotRetentionDepth, DEFAULT_STORAGE_BUDGET_BYTES);
+            this(backupRetentionDays, snapshotRetentionDepth, DEFAULT_CONFIGURATION_RETENTION_DAYS,
+                    DEFAULT_STORAGE_BUDGET_BYTES);
         }
     }
 
     public record PruningSummary(
             int backupsPruned,
             int snapshotsPruned,
+            int configurationsPruned,
             long bytesReclaimed,
             List<String> prunedArtefactIds
     ) {}
@@ -44,6 +57,11 @@ public final class RetentionPruningService {
     public interface RetentionStorePort {
         List<ArtefactRecord> findExpiredStandardBackups(int days);
         List<ArtefactRecord> findExpiredSnapshots(int depth);
+
+        /** Configuration archives older than {@code days}; the default (none) keeps stores that predate V164 working. */
+        default List<ArtefactRecord> findExpiredConfigurationArchives(int days) {
+            return List.of();
+        }
         void recordTombstone(String ledgerId, String artefactId, String retentionTier);
 
         /** Store-owned deletion abstraction ensuring filesystem paths are never manipulated directly by callers. */
@@ -61,6 +79,14 @@ public final class RetentionPruningService {
         /** Gate ensuring the sole remaining valid recovery point for a device is never pruned. */
         default boolean isSoleRemainingBackupForDevice(String deviceId, String artefactId) {
             return false;
+        }
+
+        /**
+         * Gate ensuring a device's latest live configuration archive is never pruned. The default answer is "yes, it is
+         * the latest": a store that cannot tell keeps the archive.
+         */
+        default boolean isLatestConfigurationArchive(String artefactId) {
+            return true;
         }
 
         /** Returns current total consumed storage bytes on the recovery vault volume. */
@@ -95,6 +121,7 @@ public final class RetentionPruningService {
     public PruningSummary prune(PruningPolicy policy) {
         int backupsPruned = 0;
         int snapshotsPruned = 0;
+        int configurationsPruned = 0;
         long bytesReclaimed = 0;
         List<String> prunedIds = new ArrayList<>();
 
@@ -132,6 +159,22 @@ public final class RetentionPruningService {
             }
         }
 
-        return new PruningSummary(backupsPruned, snapshotsPruned, bytesReclaimed, prunedIds);
+        // 3. Configuration archives older than the policy's configuration horizon; the latest per device stays.
+        // Asked per row (not once up front): after one archive is removed the next one may have become the latest.
+        for (ArtefactRecord rec : storePort.findExpiredConfigurationArchives(policy.configurationRetentionDays())) {
+            if (storePort.isLatestConfigurationArchive(rec.artefactId())) {
+                continue;
+            }
+
+            boolean removed = storePort.deleteArtefact(rec);
+            if (removed) {
+                bytesReclaimed += rec.ciphertextBytes();
+                storePort.recordTombstone(UUID.randomUUID().toString(), rec.artefactId(), rec.retentionTier());
+                configurationsPruned++;
+                prunedIds.add(rec.artefactId());
+            }
+        }
+
+        return new PruningSummary(backupsPruned, snapshotsPruned, configurationsPruned, bytesReclaimed, prunedIds);
     }
 }

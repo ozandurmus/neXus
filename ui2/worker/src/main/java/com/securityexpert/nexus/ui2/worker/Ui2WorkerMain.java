@@ -268,7 +268,7 @@ public final class Ui2WorkerMain {
                                 transactionBoundary));
         BackupJobExecutor backupJobExecutor = new BackupJobExecutor(leaseRepository, attemptRepository,
                 deviceEnrollmentReadPort, deviceRepository, backupCapabilityExecutor, snapshotExecutor,
-                paloAltoBackupExecutor, deviationEngine, null, backupArtefactManifestRepository,
+                paloAltoBackupExecutor, deviationEngine, backupArtefactManifestRepository,
                 backupEndpointEligibilityRepository, hostnameFingerprint, artefactStoreRoot.toString(), contentListing);
         backupJobExecutor.withPlatformFacts(platformFactsRepository);
         // V64: vendors backed up over HTTPS (Infoblox, Radware) -- credentials resolved like the PAN API password.
@@ -483,8 +483,8 @@ public final class Ui2WorkerMain {
             }
         }, 20, 60, java.util.concurrent.TimeUnit.SECONDS);
 
-        // V44: retention pruning against the operator's policy row, hourly. Until now the executor was
-        // composed with a null pruning service, so the 14-day horizon the screen showed never ran.
+        // V44: retention pruning against the operator's policy row, hourly (PO decision 2026-10-18: the policy row is
+        // the only source of the days; backup days, snapshot depth, and from V164 the configuration days).
         com.securityexpert.nexus.ui2.persistence.artefact.BackupPolicyRepository backupPolicyRepository =
                 new com.securityexpert.nexus.ui2.persistence.artefact.JooqBackupPolicyRepository(transactionBoundary);
         com.securityexpert.nexus.ui2.worker.backup.retention.RetentionPruningService pruningService =
@@ -497,12 +497,15 @@ public final class Ui2WorkerMain {
                 moduleRuntime.runTask(role, instance, "RetentionPruningService.prune", () -> backupPolicyRepository.find().ifPresent(policy -> {
                     var summary = pruningService.prune(
                             new com.securityexpert.nexus.ui2.worker.backup.retention.RetentionPruningService.PruningPolicy(
-                                    policy.backupRetentionDays(), policy.snapshotRetentionDepth()));
-                    if (summary.backupsPruned() > 0 || summary.snapshotsPruned() > 0) {
+                                    policy.backupRetentionDays(), policy.snapshotRetentionDepth(),
+                                    policy.configurationRetentionDays()));
+                    if (summary.backupsPruned() > 0 || summary.snapshotsPruned() > 0 || summary.configurationsPruned() > 0) {
                         System.getLogger(Ui2WorkerMain.class.getName()).log(System.Logger.Level.INFO,
                                 "[RETENTION] pruned backups=" + summary.backupsPruned() + " snapshots=" + summary.snapshotsPruned()
+                                        + " configurations=" + summary.configurationsPruned()
                                         + " bytes=" + summary.bytesReclaimed() + " (retention " + policy.backupRetentionDays()
-                                        + " d, depth " + policy.snapshotRetentionDepth() + ")");
+                                        + " d, depth " + policy.snapshotRetentionDepth() + ", configuration "
+                                        + policy.configurationRetentionDays() + " d)");
                     }
                 }));
             } catch (Throwable t) {

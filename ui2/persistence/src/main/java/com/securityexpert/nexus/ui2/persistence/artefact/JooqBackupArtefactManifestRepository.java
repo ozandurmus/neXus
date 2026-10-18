@@ -5,7 +5,6 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.logging.Logger;
 
 import org.jooq.Record;
 
@@ -23,7 +22,6 @@ import com.securityexpert.nexus.ui2.persistence.TransactionBoundary;
  */
 public final class JooqBackupArtefactManifestRepository implements BackupArtefactManifestRepository {
 
-    private static final Logger LOG = Logger.getLogger(JooqBackupArtefactManifestRepository.class.getName());
     private final TransactionBoundary transactionBoundary;
     private final AuditedTransactionBoundary auditedTransactionBoundary;
 
@@ -38,9 +36,6 @@ public final class JooqBackupArtefactManifestRepository implements BackupArtefac
             insert(dsl, manifest);
             return null;
         });
-        if (manifest.expiresAt().isEmpty()) {
-            LOG.warning("[BACKUP_RETENTION] new_artefact_expires_at_null=true; expiry-based retention cannot apply");
-        }
     }
 
     /**

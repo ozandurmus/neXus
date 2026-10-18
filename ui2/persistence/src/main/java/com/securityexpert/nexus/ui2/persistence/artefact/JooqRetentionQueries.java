@@ -8,7 +8,7 @@ import com.securityexpert.nexus.ui2.persistence.TransactionBoundary;
 
 /**
  * V44: the retention pruner's reads and the tombstone write over the real
- * tables. An artefact is "removed" when its ledger carries a {@code removed}
+ * tables (V164 adds the configuration archive class). An artefact is "removed" when its ledger carries a {@code removed}
  * row; the manifest row stays (append-only recovery record) and every listing
  * excludes removed artefacts. A device's baseline ({@code backup_baseline}) is
  * never offered for pruning.
@@ -57,11 +57,36 @@ public final class JooqRetentionQueries {
                 + " order by a.created_at", String.valueOf(days)).map(JooqRetentionQueries::toCandidate));
     }
 
+    /**
+     * Configuration archives older than {@code days} (PO decision 2026-10-18: 30 days), by {@code created_at}. The
+     * device's latest configuration archive is excluded by {@link #isLatestLiveConfigurationArchive}, which the
+     * pruner asks again per row, not here: a list read once could go stale between rows.
+     */
+    public List<Candidate> expiredConfigurationArchives(int days) {
+        return transactionBoundary.inTransaction(dsl -> dsl.fetch(COLUMNS
+                + "from backup_artefact a where a.artefact_class = 'configuration' "
+                + "and a.created_at < now() - ({0} || ' days')::interval" + NOT_REMOVED + NOT_BASELINE
+                + " order by a.created_at, a.artefact_id", String.valueOf(days)).map(JooqRetentionQueries::toCandidate));
+    }
+
+    /**
+     * True when no live configuration archive of the same device is newer than this one (ties broken by id), or when
+     * the row is unknown: the answer errs towards keeping. Unlike counting "other live archives", this stays true for
+     * the newest archive even if an older one could not be deleted.
+     */
+    public boolean isLatestLiveConfigurationArchive(String artefactId) {
+        return transactionBoundary.inTransaction(dsl -> dsl.fetchOptional(
+                "select not exists (select 1 from backup_artefact n where n.device_id = a.device_id "
+                        + "and n.artefact_class = 'configuration' and (n.created_at, n.artefact_id) > (a.created_at, a.artefact_id)"
+                        + andNotRemoved("n") + ") from backup_artefact a where a.artefact_id = {0} and a.artefact_class = 'configuration'",
+                artefactId).map(row -> Boolean.TRUE.equals(row.get(0, Boolean.class))).orElse(true));
+    }
+
     public List<Candidate> snapshotsBeyondDepth(int depth) {
         return transactionBoundary.inTransaction(dsl -> dsl.fetch(COLUMNS
                 + "from (select *, row_number() over (partition by device_id order by created_at desc) as rank "
-                + "      from backup_artefact x where x.artefact_class = 'backup' and coalesce(x.backup_type, 'standard') = 'snapshot' "
-                + "      and not exists (select 1 from artefact_retention_ledger l where l.artefact_id = x.artefact_id and l.event = 'removed')) a "
+                + "      from backup_artefact x where x.artefact_class = 'backup' and coalesce(x.backup_type, 'standard') = 'snapshot'"
+                + andNotRemoved("x") + ") a "
                 + "where a.rank > {0}" + NOT_BASELINE + " order by a.created_at", depth)
                 .map(JooqRetentionQueries::toCandidate));
     }

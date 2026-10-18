@@ -7,14 +7,18 @@ import java.util.Optional;
 public interface BackupPolicyRepository {
 
     record BackupPolicy(String policyId, boolean scheduleEnabled, String dailyBackupCron, int backupRetentionDays,
-            int snapshotRetentionDepth, Optional<Instant> lastScheduledRunAt, Instant updatedAt) {
+            int snapshotRetentionDepth, int configurationRetentionDays, Optional<Instant> lastScheduledRunAt,
+            Instant updatedAt) {
     }
 
     Optional<BackupPolicy> find();
 
-    /** Audited UPDATE of the operator-set fields; false when the row is absent. */
+    /**
+     * Audited UPDATE of the operator-set fields; false when the row is absent. {@code configurationRetentionDays}
+     * (V164) is optional: {@code null} leaves the stored value as it is.
+     */
     boolean update(boolean scheduleEnabled, String dailyBackupCron, int backupRetentionDays, int snapshotRetentionDepth,
-            String actorFingerprint, String actionId);
+            Integer configurationRetentionDays, String actorFingerprint, String actionId);
 
     /**
      * Claims one scheduled run: sets {@code last_scheduled_run_at = runAt} only if the stored value is
