@@ -242,7 +242,7 @@ describe("Packet Analysis screen", () => {
     expect(screen.getByText(/at most 2.0 GB per capture/)).toBeInTheDocument();
     expect(screen.queryByText(/still being ported/)).toBeNull();
     expect(screen.queryByRole("alert")).toBeNull();
-    expect(screen.getByText(/Results are evidence-led: a stage that cannot be established is reported as unknown, with the reason/)).toBeInTheDocument();
+    expect(screen.getByText(/results are evidence-led: a stage that cannot be established is reported as unknown, with the reason/)).toBeInTheDocument();
   });
 
   it("explains a run that stopped at the memory budget and names the window the budget chose", async () => {

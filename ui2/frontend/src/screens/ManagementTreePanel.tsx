@@ -179,18 +179,34 @@ function NodeRow({ node, depth, onOpenDevice, onOpenCluster, actions }: {
         <Box>{isCluster ? <Typography sx={{ fontSize: 12, color: m3.onSurfaceVar }}>{node.children.length} member{node.children.length === 1 ? "" : "s"}</Typography> : <MemberState node={node} actions={actions} />}</Box>
       </Box>
       {node.category !== "cluster" && node.children.length > 0 && node.children.every((k) => k.category === "virtual_system") ? (
-        // A gateway's virtual systems as one line (Panorama lists every VSYS under each HA member).
-        <Box sx={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 170px minmax(0,1.3fr)", gap: 1.5, alignItems: "center",
-          minHeight: 34, px: 2, pl: 2 + (depth + 1) * 2.5, borderTop: `1px solid ${m3.outlineVar}` }}>
-          <Typography sx={{ fontSize: 12.5, color: m3.onSurfaceVar, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-            title={node.children.map(nameOf).join(", ")}>
-            └ {node.children.map(nameOf).join(", ")}
-          </Typography>
-          <Typography sx={{ fontSize: 12, color: m3.onSurfaceVar }}>{node.children.length} virtual system{node.children.length === 1 ? "" : "s"}</Typography>
-          <Box />
-        </Box>
+        <VirtualSystemsLine owner={name} names={node.children.map(nameOf)} depth={depth + 1} />
       ) : node.children.map((k, i) => <NodeRow key={`${nameOf(k)}-${i}`} node={k} depth={depth + 1} onOpenDevice={onOpenDevice} onOpenCluster={onOpenCluster} actions={actions} />)}
     </>
+  );
+}
+
+/**
+ * A gateway's virtual systems as one disclosure line, `7 virtual systems ›` (UI review 2026-10-18, P2-5B / roadmap 3.4):
+ * Panorama lists every VSYS under each HA member, so the names open on demand instead of a truncated list; every name
+ * stays reachable. The grid columns are the row's fixed template, so a long name clips inside its cell, never the row.
+ */
+function VirtualSystemsLine({ owner, names, depth }: { readonly owner: string; readonly names: readonly string[]; readonly depth: number }) {
+  const [open, setOpen] = useState(false);
+  const label = plural(names.length, "virtual system");
+  return (
+    <Box data-virtual-systems={names.length} sx={{ borderTop: `1px solid ${m3.outlineVar}`, px: 2, pl: 2 + depth * 2.5 }}>
+      <Box component="button" type="button" aria-expanded={open} aria-label={`${label} in ${owner}`} onClick={() => setOpen((v) => !v)}
+        sx={{ all: "unset", cursor: "pointer", display: "flex", alignItems: "center", gap: 0.75, minHeight: 34, fontSize: 12.5, color: m3.primary, font: "inherit" }}>
+        <Box component="span" sx={{ color: m3.outline }}>└</Box>
+        <Box component="span" sx={{ fontSize: 12.5, fontWeight: 500 }}>{label}</Box>
+        <Box component="span" aria-hidden="true" sx={{ fontSize: 12, transform: open ? "rotate(90deg)" : "none", transition: "transform 120ms" }}>›</Box>
+      </Box>
+      {open && (
+        <Box component="ul" aria-label={`Virtual systems of ${owner}`} sx={{ m: 0, mb: 1, pl: 3, display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", columnGap: 2, rowGap: 0.25 }}>
+          {names.map((n, i) => <Box component="li" key={`${n}-${i}`} sx={{ fontSize: 12.5, color: m3.onSurface, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", listStyle: "none" }} title={n}>{n}</Box>)}
+        </Box>
+      )}
+    </Box>
   );
 }
 

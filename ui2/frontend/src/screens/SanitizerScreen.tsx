@@ -50,6 +50,11 @@ export const COUNT_LABELS: Record<string, string> = {
 };
 
 const STATE_TONE: Record<SanitizerState, Tone> = { RUNNING: "attn", SUCCEEDED: "ok", FAILED: "bad" };
+
+/** The tool's contract under the title (review §3 "Tool page"): sentence one what it does, sentence two what it never does. */
+export const SANITIZER_CONTRACT = "Replaces addresses, MAC addresses, host and domain names and e-mails in pcap/pcapng, log, CSV, XLSX and JSON files "
+  + "with keyed tokens, and reverts a sanitized file that comes back. "
+  + "It never keeps a file: the upload is deleted when the job ends and the result after one download; only the encrypted token vault stays inside neXus.";
 const ACCEPT = ".pcap,.pcapng,.cap,.log,.txt,.csv,.xlsx,.json,.ndjson";
 
 /** The server's refusal, in its own words (closed codes and reasons; never a file name or value). */
@@ -150,21 +155,17 @@ export function SanitizerScreen() {
 
   return (
     <ScreenRoot>
-      <ScreenHeader title="Data Sanitizer"
-        subtitle="Data Anonymization · pcap/pcapng, logs, CSV, XLSX and JSON: addresses, MACs, names and e-mails replaced by keyed tokens" />
+      {/* Tool page (UI review 2026-10-18 §3, roadmap 3.3): the contract in two sentences -- what it does, what it never does. */}
+      <ScreenHeader title="Data Sanitizer" subtitle={SANITIZER_CONTRACT} />
       {error && <Alert severity="error">{error}</Alert>}
       {!info && !error && <Typography role="status">Loading…</Typography>}
       {limits && !limits.vault_available && <Alert severity="warning">
         The mapping vault is not available on this service (no artefact-store key), so files cannot be sanitized or reverted.
       </Alert>}
-      {limits && <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
-        At most {sanitizerBytes(limits.max_file_bytes)} per file · the type is read from the content · uploads are deleted when
-        the job ends, results after one download or {limits.output_ttl_minutes} minutes · the token-to-original vault is kept
-        inside neXus for {limits.vault_retention_days} days, encrypted
-      </Typography>}
 
+      {/* One input region: mode, the drop zone (locked with its reason inline), and the limits beneath it. */}
       {permissions && (
-        <Card sx={{ p: 2, boxShadow: "none", border: `1px solid ${m3.outlineVar}` }}>
+        <Card component="section" aria-label="Sanitizer input" sx={{ p: 2, boxShadow: "none", border: `1px solid ${m3.outlineVar}` }}>
           <Stack direction="row" spacing={2} alignItems="center" sx={{ flexWrap: "wrap", gap: 1 }}>
             <ToggleButtonGroup exclusive size="small" value={mode} aria-label="Sanitizer mode"
               onChange={(_e, value: Mode | null) => { if (value) { setMode(value); setOutcome(null); setError(null); } }}>
@@ -194,6 +195,11 @@ export function SanitizerScreen() {
           </Box>
           <input id="sanitizer-file" aria-label="File" type="file" accept={ACCEPT} hidden
             onChange={e => { void submit(e.target.files?.[0]); e.target.value = ""; }} />
+          {limits && <Typography variant="caption" sx={{ display: "block", mt: 1.5, color: m3.onSurfaceVar }}>
+            At most {sanitizerBytes(limits.max_file_bytes)} per file · the type is read from the content · uploads are deleted when
+            the job ends, results after one download or {limits.output_ttl_minutes} minutes · the token-to-original vault is kept
+            inside neXus for {limits.vault_retention_days} days, encrypted
+          </Typography>}
           {progress && <Box role="status" aria-label="Upload progress" sx={{ mt: 1 }}>
             <Typography variant="body2">Uploading {progress.name}: {sanitizerBytes(progress.sent)} of {sanitizerBytes(progress.total)}</Typography>
             <LinearProgress variant="determinate" value={progress.total ? Math.min(100, (100 * progress.sent) / progress.total) : 0} />

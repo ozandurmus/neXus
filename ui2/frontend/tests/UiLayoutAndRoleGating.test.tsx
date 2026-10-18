@@ -240,7 +240,7 @@ describe("Packet Analysis and Sanitizer", () => {
   it("writes the Sanitizer subtitle in English", async () => {
     vi.stubGlobal("fetch", vi.fn(() => jsonResponse(200, {})));
     render(as(null, <SanitizerScreen />));
-    expect(await screen.findByText(/^Data Anonymization · pcap\/pcapng/)).toBeInTheDocument();
+    expect(await screen.findByText(/^Replaces addresses, MAC addresses, host and domain names/)).toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/Veri Anonim/);
   });
 });
