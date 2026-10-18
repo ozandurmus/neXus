@@ -21,8 +21,9 @@ import java.util.TreeSet;
 /**
  * Computes the expert report content from a finished case database: the stored report (settings.report), the stored
  * topology and the engine's own tables ({@code observation_matches}, {@code cycle_*}, {@code adjacent_match_rates},
- * {@code obs}, {@code events}, {@code flow_summary}). Nothing is estimated here and no threshold is introduced: every
- * number is a count, a sum, a mean or a maximum of engine rows, taken over exact integer sums (DETERMINISM.md).
+ * {@code obs}, {@code events}, {@code flow_summary}). Nothing is estimated here: every number is a count, a sum, a mean,
+ * a median or a maximum of engine rows, taken over exact integer values (DETERMINISM.md). The only thresholds are the
+ * hop marker rule's fixed values ({@link HopVerdict}, PO decision 2026-10-18), applied to those numbers.
  */
 final class ExpertReportBuilder {
     static final List<String> LOSS_KINDS = List.of("recovered_loss", "impactful_loss", "unrecovered_loss",
@@ -90,6 +91,7 @@ final class ExpertReportBuilder {
             readTimeline();
             readTopCycles();
             readLadder();
+            readHopMarks();
         }
         if (!options.telemetry().isEmpty()) {
             data.host = HostCorrelationBuilder.build(data, options, this::name);
@@ -210,16 +212,19 @@ final class ExpertReportBuilder {
     private void readChain() {
         String currentDevice = null;
         List<String> captions = new ArrayList<>();
+        List<String> ids = new ArrayList<>();
         for (Pt p : data.points) {
             if (currentDevice != null && !currentDevice.equals(p.device())) {
-                data.chain.add(new Box(currentDevice, List.copyOf(captions)));
+                data.chain.add(new Box(currentDevice, List.copyOf(captions), List.copyOf(ids)));
                 captions = new ArrayList<>();
+                ids = new ArrayList<>();
             }
             currentDevice = p.device();
             captions.add(caption(p));
+            ids.add(p.id());
         }
         if (currentDevice != null) {
-            data.chain.add(new Box(currentDevice, List.copyOf(captions)));
+            data.chain.add(new Box(currentDevice, List.copyOf(captions), List.copyOf(ids)));
         }
     }
 
@@ -697,6 +702,155 @@ final class ExpertReportBuilder {
                 }
             }
         }
+    }
+
+    // ------------------------------------------------------------------------------------------------ hop markers
+
+    /** Twice the X and Z distances of {@link HopVerdict}, in integer units (the median is kept doubled, see below). */
+    private static long twice(double ms, double unit) {
+        return Math.round(2 * ms * unit);
+    }
+
+    /**
+     * Late-sample counts per signal and period: samples at least X and at least Z ms above the median of the signal's own
+     * before window. The median is exact: twice the median is the sum of the two middle values of the sorted integer
+     * samples (one value twice for an odd count), so every comparison is between integers and the result never depends
+     * on the order DuckDB's threads see the rows in. {@code valueSql} selects the keys, the integer sample {@code x} and
+     * the period {@code p}.
+     */
+    private Map<String, long[][]> lateCounts(String keys, String valueSql, List<Object> params, double unit) {
+        String sql = "WITH w AS (SELECT * FROM (" + valueSql + ") WHERE p IS NOT NULL AND x IS NOT NULL),"
+                + " r AS (SELECT " + keys + ",x,2*(row_number() OVER(PARTITION BY " + keys + " ORDER BY x)-1) AS i2,"
+                + " count(*) OVER(PARTITION BY " + keys + ") AS n FROM w WHERE p=0),"
+                + " med AS (SELECT " + keys + ",max(x) FILTER(WHERE i2=n-1 OR i2=n-2)+max(x) FILTER(WHERE i2=n-1 OR i2=n) AS m2"
+                + " FROM r GROUP BY ALL)"
+                + " SELECT " + keys + ",p,count(*) FILTER(WHERE 2*x>=m2+?)::BIGINT AS late_x,"
+                + "count(*) FILTER(WHERE 2*x>=m2+?)::BIGINT AS late_z FROM w JOIN med USING(" + keys + ")"
+                + " GROUP BY ALL ORDER BY ALL";
+        List<Object> bound = new ArrayList<>(params);
+        bound.add(twice(HopVerdict.DELAY_MS, unit));
+        bound.add(twice(HopVerdict.CLEAN_MS, unit));
+        Map<String, long[][]> out = new LinkedHashMap<>();
+        String[] names = keys.split(",");
+        for (Row r : db.rows(sql, bound.toArray())) {
+            StringBuilder key = new StringBuilder();
+            for (String name : names) {
+                key.append(r.str(name)).append('|');
+            }
+            long[][] counts = out.computeIfAbsent(key.toString(), k -> new long[2][2]);
+            int p = r.lng("p").intValue();
+            counts[0][p] = r.lng("late_x");
+            counts[1][p] = r.lng("late_z");
+        }
+        return out;
+    }
+
+    /**
+     * One marker per hop (adjacent point pair, both directions) under the approved rule. Signals per hop: the transit of
+     * each direction ({@code observation_matches}, the same rows and periods as section A of the hop sheet) and the RX/TX
+     * cycle components of each segment ({@code cycle_pairs}, as section C). The hop's clock uncertainty is the segment's
+     * {@code latency_uncertainty_ms}, for its transit and its cycle component alike.
+     */
+    private void readHopMarks() {
+        if (data.segments.isEmpty()) {
+            return;
+        }
+        boolean split = data.split();
+        Map<String, long[][]> transitLate = Map.of();
+        Map<String, long[][]> cycleLate = Map.of();
+        if (split && hasTable("observation_matches")) {
+            List<Object> bound = new ArrayList<>();
+            String period = periodCase("m.time_a", bound);
+            List<String> ids = pointIds(data.segments);
+            String marks = marks(ids.size());
+            bound.addAll(ids);
+            bound.addAll(ids);
+            String cond = segmentCondition(data.segments, bound, "m.");
+            transitLate = lateCounts("point_a,point_b,direction", "SELECT m.point_a,m.point_b,m.direction," + period
+                    + " AS p,round((m.time_b-m.time_a)*1e9)::BIGINT AS x FROM observation_matches m WHERE m.point_a IN ("
+                    + marks + ") AND m.point_b IN (" + marks + ") AND (" + cond + ")", bound, NS_PER_MS);
+        }
+        if (split && hasTable("cycle_pairs")) {
+            List<Object> bound = new ArrayList<>();
+            String period = periodCase("time", bound);
+            cycleLate = lateCounts("hop,component", "SELECT hop,component,round(added_ms*1000)::BIGINT AS x," + period
+                    + " AS p FROM cycle_pairs WHERE reason IS NULL AND added_ms IS NOT NULL", bound, US_PER_MS);
+        }
+        // hops in path order: forward segments first, then hops seen only in the reverse direction
+        Map<String, List<Seg>> hops = new LinkedHashMap<>();
+        List<Seg> ordered = new ArrayList<>();
+        for (Seg s : data.segments) {
+            if ("forward".equals(s.direction())) {
+                ordered.add(s);
+            }
+        }
+        for (Seg s : data.segments) {
+            if (!"forward".equals(s.direction())) {
+                ordered.add(s);
+            }
+        }
+        for (Seg s : ordered) {
+            String a = s.pointA().compareTo(s.pointB()) <= 0 ? s.pointA() : s.pointB();
+            String b = a.equals(s.pointA()) ? s.pointB() : s.pointA();
+            hops.computeIfAbsent(a + "|" + b, k -> new ArrayList<>()).add(s);
+        }
+        for (List<Seg> segs : hops.values()) {
+            List<HopVerdict.Signal> signals = new ArrayList<>();
+            long[] observations = new long[2];
+            long[] unmatched = new long[2];
+            boolean coverage = false;
+            for (Seg s : segs) {
+                boolean forward = "forward".equals(s.direction());
+                signals.add(signal(forward ? HopVerdict.Kind.FORWARD_TRANSIT : HopVerdict.Kind.REVERSE_TRANSIT,
+                        data.hopTransit.get(s.id()), transitLate.get(s.pointA() + "|" + s.pointB() + "|" + s.direction() + "|"),
+                        NS_PER_MS, s.uncertaintyMs()));
+                for (CycleHop ch : data.cycleHops) {
+                    if (ch.hopId().equals(s.id())) {
+                        signals.add(signal("RX".equals(ch.component()) ? HopVerdict.Kind.RX : HopVerdict.Kind.TX, ch.byPeriod(),
+                                cycleLate.get(ch.hopId() + "|" + ch.component() + "|"), US_PER_MS, s.uncertaintyMs()));
+                    }
+                }
+                for (MatchRow m : data.matchRows) {
+                    if (split && m.segmentId().equals(s.id())) {
+                        coverage = true;
+                        for (int i = 0; i < 2; i++) {
+                            observations[i] += m.observations()[i];
+                            unmatched[i] += m.dropped()[i] + m.captureMisses()[i] + m.unknown()[i];
+                        }
+                    }
+                }
+            }
+            // transit and cycle components in display order: forward transit, RX, reverse transit, TX
+            signals.sort(Comparator.comparingInt(sig -> switch (sig.kind()) {
+                case FORWARD_TRANSIT -> 0;
+                case RX -> 1;
+                case REVERSE_TRANSIT -> 2;
+                case TX -> 3;
+            }));
+            double[] share = coverage && observations[0] > 0 && observations[1] > 0
+                    ? new double[] {unmatched[0] / (double) observations[0], unmatched[1] / (double) observations[1]} : null;
+            HopVerdict.Result result = HopVerdict.hop(signals, split, share);
+            Seg first = segs.get(0);
+            Seg forward = segs.stream().filter(x -> "forward".equals(x.direction())).findFirst().orElse(null);
+            String pointA = forward != null ? forward.pointA() : first.pointB();
+            String pointB = forward != null ? forward.pointB() : first.pointA();
+            String label = forward != null ? forward.label()
+                    : data.point(pointA).label() + " → " + data.point(pointB).label();
+            data.hopMarks.add(new HopMark(label, segs.stream().anyMatch(Seg::deviceHop), pointA, pointB, result.mark(),
+                    result.text()));
+        }
+    }
+
+    /** A signal over the report's periods: two windows when split, otherwise the whole capture as window 0. */
+    private HopVerdict.Signal signal(HopVerdict.Kind kind, Stat[] stats, long[][] late, double unit, Double uncertaintyMs) {
+        long[] n = new long[2];
+        long[] sum = new long[2];
+        for (int i = 0; stats != null && i < Math.min(2, stats.length); i++) {
+            n[i] = stats[i].n();
+            sum[i] = stats[i].sum();
+        }
+        long[][] counts = late == null ? new long[2][2] : late;
+        return new HopVerdict.Signal(kind, unit, n, sum, counts[0], counts[1], uncertaintyMs);
     }
 
     private final Map<String, Integer> flowOrdinals = new HashMap<>();

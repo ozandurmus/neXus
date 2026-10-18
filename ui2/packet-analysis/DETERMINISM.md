@@ -146,12 +146,15 @@ All are choices between rows or set elements the reference treats as equal; no v
 These are not tie-breaks: they change a criterion because the reference is wrong on inputs the corpus does not
 contain (`docs/design/PACKET_ANALYSIS_PORT_CONTRACT.md` §4, README "Intentional divergences from the reference").
 Each one runs only on such inputs; every corpus case runs the reference statements unchanged, so `corpus_run.py`
-needs no acceptance rule and still reports any difference as `DIFF`.
+needs no acceptance rule and still reports any difference as `DIFF`. The hop markers are a PO method decision rather
+than a reference bug; they live in the expert report, which the reference does not have and the corpus gate does not
+compare.
 
 | Where | Reference | Java | Corpus |
 |---|---|---|---|
 | `NeighbourScope`, `sql/neighbour_scope.sql` (called from `Preparation.restrictIndexScope`, `Segments`, `Headlines`, `Timeseries`, `CoreReport`) | a client-tuple flow seen at one capture point stays in the index scope, and every hop compares all packets of A with B, also for flows B's capture never saw (they become capture misses and impactful/unrecovered loss) | a flow B never observed, with packets proving it crossed B (same direction after B, or non-reset payload/ACK replies after B on the reply path), is outside B's capture scope: dropped from the index scope when single-point and out of scope on every hop that assesses it, otherwise left out of that hop's events and denominators; deterministic (flows ordered, `hop_unobserved ... ORDER BY a.flow`) | no case changed status (run 2026-10-17, 206 cases, threads 1 and 4) |
 | `neighbour_scope.sql` `analysis_scope_update` | `selection.analysis_scope_update` updates `retained_frames` / `excluded_single_point_frames` only; `excluded_single_point_flows` keeps the host-scope count | `excluded_single_point_flows = index_scope.input_flows - retained_flows`, consistent with the frames | identical on every case (restrict excludes no flow there) |
+| `export/HopVerdict`, `ExpertReportBuilder.readHopMarks` (expert report only; PO decision 2026-10-18) | no expert report and no hop verdict at all | hop markers `gecikme burada` / `temiz` by the approved rule; the before-window median and the late-sample counts are integer queries (twice the median = the sum of the two middle integer samples, compared with `2 x sample`), every mean, ratio and share comparison is exact integer arithmetic, so the workbook is byte-identical across DuckDB threads | report and FindingsExport identical on every case (run 2026-10-18, 206 cases, threads 1 and 4); the markers are outside the compared sections and are evaluated against ground truth instead (README "Intentional divergences") |
 
 ## Time and event detectors (lane A)
 

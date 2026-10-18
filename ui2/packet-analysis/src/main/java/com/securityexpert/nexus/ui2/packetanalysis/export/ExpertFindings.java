@@ -8,8 +8,10 @@ import java.util.Map;
 
 /**
  * The numbered findings of the summary sheet. Each one is a fixed Turkish template filled with computed values, and a
- * template is emitted only when the data it needs exists. There is no free text, no threshold and no verdict: a
- * finding states what was measured, before and after the compared window.
+ * template is emitted only when the data it needs exists. There is no free text: a finding states what was measured,
+ * before and after the compared window. The only classification is the hop marker ({@code hop-mark}), which repeats the
+ * words the approved rule put on each hop ({@link HopVerdict}, PO decision 2026-10-18); no other template applies a
+ * threshold of its own.
  */
 final class ExpertFindings {
     static final Map<String, String> KIND_TR = Map.of(
@@ -51,6 +53,7 @@ final class ExpertFindings {
             return out;
         }
         add(out, "hop-delta", hopDelta(d));
+        add(out, "hop-mark", hopMarks(d));
         add(out, "hop-forward", hops(d, "forward"));
         add(out, "hop-reverse", hops(d, "reverse"));
         add(out, "rtt", rtt(d));
@@ -178,6 +181,44 @@ final class ExpertFindings {
         }
         return "Önce→sonra hiçbir hop bileşeninin ortalaması artmadı; en büyük değişim " + best.label() + " " + best.component()
                 + " bileşeninde: " + signedMs(bestDelta) + " ms" + otherText + ".";
+    }
+
+    /**
+     * The hops the approved rule marked, by word, with the window the words belong to; emitted only when at least one hop
+     * carries a word. The reasons are in the hop sheet.
+     */
+    private static String hopMarks(ExpertReportData d) {
+        if (!d.split()) {
+            return null;
+        }
+        List<String> delayed = new ArrayList<>();
+        List<String> clean = new ArrayList<>();
+        List<String> unmarked = new ArrayList<>();
+        for (HopMark m : d.hopMarks) {
+            String label = m.label() + (m.deviceHop() ? " (cihaz içi)" : "");
+            switch (m.mark()) {
+                case DELAY -> delayed.add(label);
+                case CLEAN -> clean.add(label);
+                default -> unmarked.add(label);
+            }
+        }
+        if (delayed.isEmpty() && clean.isEmpty()) {
+            return null;
+        }
+        List<String> parts = new ArrayList<>();
+        if (!delayed.isEmpty()) {
+            parts.add("gecikme burada: " + String.join(", ", delayed));
+        }
+        if (!clean.isEmpty()) {
+            parts.add("temiz: " + String.join(", ", clean));
+        }
+        if (!unmarked.isEmpty()) {
+            parts.add("işaretsiz (belirsiz veya ölçüm yok): " + String.join(", ", unmarked));
+        }
+        return "Hop işaretleri (Yöntem ve Veri sayfasındaki sabit eşiklerle; önce " + TrFormat.number(Math.max(0,
+                d.window.periods().get(0).seconds()), 1) + " sn / sonra " + TrFormat.number(Math.max(0,
+                d.window.periods().get(1).seconds()), 1) + " sn): " + String.join("; ", parts)
+                + ". Bir işaret kök neden değildir; \"temiz\" yalnız gecikme içindir, gerekçeler Hop Analizi sayfasındadır.";
     }
 
     private static String signedMs(double v) {
