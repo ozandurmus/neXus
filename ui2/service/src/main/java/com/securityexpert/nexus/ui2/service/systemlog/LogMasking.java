@@ -59,7 +59,13 @@ import com.securityexpert.nexus.ui2.service.privacy.TopologyNamePseudonymizer;
  *       {@code sn} (any case, {@code -}/{@code _} spelling, quoted or a bare number) and of a {@code serial=V} /
  *       {@code serial: V} pair becomes {@link TopologyNamePseudonymizer#maskSerial}'s {@code SN-} token, the same token
  *       the inventory screens show for that serial. Fail closed: a JSON serial value is masked whatever its form;</li>
- *   <li>the Data Sanitizer text rules (unchanged);</li>
+ *   <li>the <b>JSON identity field rule</b>: the string value of a host key ({@code device_name}, {@code host},
+ *       {@code hostname}, any case and {@code -}/{@code _} spelling) becomes the inventory pseudonym when known,
+ *       otherwise the text rules' host-context replacement (an address, host or FQDN label tokens), otherwise the
+ *       generic {@code h-} host label token; the value of a principal key ({@code admin}, {@code admin_name},
+ *       {@code user}, {@code username}) becomes a stable keyed user token {@code USR-} + 10 hex
+ *       ({@link TopologyNamePseudonymizer#maskPayloadToken}), one way. Each such value is masked once, by its key;</li>
+ *   <li>the Data Sanitizer text rules (unchanged) on all other text;</li>
  *   <li>the <b>estate dictionary</b>: any token (or {@code . _ : -}-delimited part of one) equal to an identity value
  *       the service knows (device serials and recorded identities, management and interface addresses, host and
  *       cluster names) is replaced by its masked form, so an unknown future format cannot leak a known identity. The
@@ -232,10 +238,62 @@ public final class LogMasking {
             return line == null ? null : mask(line, false);
         }
 
-        /** The three passes over one value: serial fields, the text rules, the estate dictionary. */
+        /**
+         * The passes over one value: serial fields; JSON host and principal fields (each value masked once, by its
+         * key) with the text rules on everything between them; the estate dictionary.
+         */
         private String mask(String value, boolean hostContext) {
             String serialsMasked = SerialFields.mask(value, pseudonyms, counts);
-            return estate.replace(text.sanitize(serialsMasked, hostContext), mac, counts);
+            return estate.replace(identityFields(serialsMasked, hostContext), mac, counts);
+        }
+
+        private String identityFields(String line, boolean hostContext) {
+            Matcher m = IdentityFields.matcher(line);
+            if (m == null) return text.sanitize(line, hostContext);
+            StringBuilder out = new StringBuilder(line.length() + 32);
+            int copied = 0;
+            while (m.find()) {
+                IdentityFields.Kind kind = IdentityFields.kind(m.group(1));
+                if (kind == null) continue;
+                String value = m.group(2);
+                String masked = kind == IdentityFields.Kind.HOST ? hostValue(value) : principalValue(value);
+                if (masked.equals(value)) continue;
+                // Text between identity values goes through the text rules; the value itself is masked once, by its key.
+                out.append(text.sanitize(line.substring(copied, m.start(2)), false)).append(masked);
+                copied = m.end(2);
+            }
+            if (copied == 0) return text.sanitize(line, hostContext);
+            return out.append(text.sanitize(line.substring(copied), false)).toString();
+        }
+
+        /**
+         * A value under a host key, masked whatever it is: the inventory pseudonym when known, else the text rules in
+         * host context (an address, a host or FQDN label token), else the generic host label token. Only an address
+         * the text rules pass through (loopback, unspecified ...) and an empty value stay.
+         */
+        private String hostValue(String value) {
+            String trimmed = value.strip();
+            if (trimmed.isEmpty() || trimmed.contains("<redacted>")) return value;
+            Optional<String> pseudonym = known.pseudonymFor(trimmed);
+            if (pseudonym.isPresent()) {
+                counts.add(TextSanitizer.DEVICE_NAME);
+                return pseudonym.get();
+            }
+            String masked = text.sanitize(trimmed, true);
+            if (!masked.equals(trimmed)) return masked;
+            if (IdentityFields.ADDRESS_LITERAL.matcher(trimmed).matches()) return value;
+            counts.add(TextSanitizer.HOSTNAME);
+            return mappers.names().label(trimmed);
+        }
+
+        /** A value under a principal key: a stable keyed user token ({@code USR-} + 10 hex), never reversible here. */
+        private String principalValue(String value) {
+            String trimmed = value.strip();
+            if (trimmed.isEmpty() || trimmed.contains("<redacted>") || IdentityFields.USER_TOKEN.matcher(trimmed).matches()) {
+                return value;
+            }
+            counts.add(IdentityFields.PRINCIPAL);
+            return pseudonyms.maskPayloadToken(IdentityFields.USER_KIND, trimmed);
         }
 
         private ValueRewriter rewriter() {
@@ -412,6 +470,44 @@ public final class LogMasking {
     }
 
     /**
+     * JSON keys whose string value is an identity, in the Palo Alto JSON Lines entries (findings record 2026-10-17:
+     * {@code device_name} and {@code host} are host fields, {@code admin} the principal of a {@code pan_config}
+     * entry). Keys are compared ignoring case, {@code -}, {@code _} and an {@code @} attribute prefix. Free text and
+     * every other key keep the unchanged text rules.
+     */
+    static final class IdentityFields {
+        enum Kind { HOST, PRINCIPAL }
+
+        /** Count category of a principal replacement. */
+        static final String PRINCIPAL = "principal";
+        /** The {@link TopologyNamePseudonymizer#maskPayloadToken} kind of a user token. */
+        static final String USER_KIND = "USR";
+
+        private static final Set<String> HOST_KEYS = Set.of("devicename", "hostname", "host");
+        private static final Set<String> PRINCIPAL_KEYS = Set.of("admin", "adminname", "user", "username");
+        private static final Pattern FIELD = Pattern.compile("\"@?([A-Za-z0-9_-]{3,20})\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"");
+        private static final Pattern PREFILTER = Pattern.compile("(?i)\"@?(?:device[-_]?name|host(?:[-_]?name)?|admin(?:[-_]?name)?|user(?:[-_]?name)?)\"");
+        static final Pattern ADDRESS_LITERAL = Pattern.compile("[0-9]{1,3}(?:\\.[0-9]{1,3}){3}|[0-9A-Fa-f:.]*:[0-9A-Fa-f:.]*");
+        static final Pattern USER_TOKEN = Pattern.compile(USER_KIND + "-[0-9A-F]{10}");
+
+        private IdentityFields() {
+        }
+
+        /** A matcher over the line's JSON string fields, or null when the line has no identity key at all. */
+        static Matcher matcher(String line) {
+            if (line == null || line.indexOf('"') < 0 || !PREFILTER.matcher(line).find()) return null;
+            return FIELD.matcher(line);
+        }
+
+        static Kind kind(String key) {
+            String normalized = key.toLowerCase(Locale.ROOT).replace("-", "").replace("_", "");
+            if (HOST_KEYS.contains(normalized)) return Kind.HOST;
+            if (PRINCIPAL_KEYS.contains(normalized)) return Kind.PRINCIPAL;
+            return null;
+        }
+    }
+
+    /**
      * The estate dictionary: keyed digests of the identity values the service knows, each with its masked form. Raw
      * values are never kept: a token is digested and looked up. Immutable; the {@link Mac} is the caller's.
      */
@@ -426,7 +522,7 @@ public final class LogMasking {
         private static final byte[] DOMAIN = "LOGMASK-ESTATE:".getBytes(StandardCharsets.UTF_8);
         private static final Set<String> STOPWORDS = Set.of("unknown", "none", "null", "localhost", "default", "n/a");
         private static final Pattern PREFIX_LENGTH = Pattern.compile("/[0-9]{1,3}$");
-        private static final Pattern ADDRESS_LITERAL = Pattern.compile("[0-9]{1,3}(?:\\.[0-9]{1,3}){3}|[0-9A-Fa-f:.]*:[0-9A-Fa-f:.]*");
+        private static final Pattern ADDRESS_LITERAL = IdentityFields.ADDRESS_LITERAL;
 
         private final Map<Long, String> masked;
         /** Length and first/last character of each value: a cheap filter before a token is digested. */

@@ -184,6 +184,95 @@ class LogMaskingIdentityTest {
         }
     }
 
+    // ------------------------------------------------------------------ JSON host and principal fields
+
+    /** A lower-case synthetic word of {@code length} letters, different per seed, never a literal in the source. */
+    private static String letters(int length, long seed) {
+        Random random = new Random(seed);
+        StringBuilder sb = new StringBuilder(length);
+        for (int i = 0; i < length; i++) sb.append((char) ('a' + random.nextInt(26)));
+        return sb.toString();
+    }
+
+    @Test
+    void anUnknownDeviceNameInAPanEntryBecomesTheGenericHostToken() {
+        String unknown = letters(5, 20) + "-fw-" + digits(2, 21);
+        String shown = masking().session().maskLine(panConfigLine(digits(12, 22), 4, unknown));
+        assertFalse(hasCanaryToken(shown, digestsOf(unknown)), "a visible token is the device name (value withheld)");
+        assertFalse(shown.contains(unknown), "the device name occurs in the masked text (value withheld)");
+        assertTrue(shown.matches(".*\"device_name\":\"h-[0-9a-f]{10}\".*"), "the generic host label token");
+    }
+
+    @Test
+    void hostKeysAreMaskedWhateverTheValue() {
+        String label = letters(6, 23);
+        String spaced = "Site " + letters(4, 24) + " FW";
+        String numeric = digits(8, 25);
+        String fqdn = letters(4, 26) + ".corp.example.com";
+        LogMasking.Session s = masking().session();
+        String[] lines = {
+            "{\"devicename\":\"" + label + "\"}",
+            "{\"Device-Name\":\"" + spaced + "\"}",
+            "{\"hostname\":\"" + numeric + "\"}",
+            "{\"@host\":\"" + fqdn + "\"}",
+            "{\"host_name\":\"" + label + "\",\"cmd\":\"edit\"}",
+        };
+        StringBuilder all = new StringBuilder();
+        for (String line : lines) all.append(s.maskLine(line)).append('\n');
+        String shown = all.toString();
+        assertFalse(hasCanaryToken(shown, digestsOf(label, numeric, fqdn)), "a host value is visible (value withheld)");
+        assertFalse(containsAny(shown, label, spaced, numeric, fqdn), "a host value occurs in the masked text (value withheld)");
+        assertTrue(shown.matches("(?s).*\\{\"@host\":\"h-[0-9a-f]{10}(\\.[A-Za-z0-9-]+)*\\.com\"\\}.*"),
+                "an FQDN becomes label tokens and keeps its public suffix, as the text rules do");
+        assertTrue(shown.contains("\"cmd\":\"edit\""), "other keys are untouched");
+        assertEquals("{\"device_name\":\"FW-TANGO-04\"}", s.maskLine("{\"device_name\":\"edge-fw-01\"}"), "a known name gets its pseudonym");
+    }
+
+    @Test
+    void aHostAddressGetsTheAddressRuleAndAPassThroughAddressStays() {
+        String viaRules = masking().session().maskLine("src 192.0.2.10");
+        String masked = masking().session().maskLine("{\"host\":\"192.0.2.10\"}");
+        assertFalse(masked.contains("192.0.2.10"));
+        assertEquals("{\"host\":\"" + viaRules.substring(4) + "\"}", masked, "the same masked address as in free text");
+        assertEquals("{\"host\":\"127.0.0.1\"}", masking().session().maskLine("{\"host\":\"127.0.0.1\"}"));
+    }
+
+    @Test
+    void principalKeysBecomeAStableKeyedUserToken() {
+        String user = letters(7, 27);
+        String other = letters(7, 28) + "." + letters(3, 29);
+        LogMasking.Session s = masking().session();
+        String entry = s.maskLine(panConfigLine(digits(12, 30), 5, "edge-fw-01").replace("\"admin\":\"admin\"", "\"admin\":\"" + user + "\""));
+        String[] lines = {
+            "{\"user\":\"" + user + "\"}",
+            "{\"Username\":\"" + other + "\"}",
+            "{\"admin_name\":\"" + other + "\"}",
+        };
+        StringBuilder all = new StringBuilder(entry).append('\n');
+        for (String line : lines) all.append(s.maskLine(line)).append('\n');
+        String shown = all.toString();
+        assertFalse(hasCanaryToken(shown, digestsOf(user, other)), "a principal is visible (value withheld)");
+        assertFalse(containsAny(shown, user, other), "a principal occurs in the masked text (value withheld)");
+        String token = pseudonyms.maskPayloadToken("USR", user);
+        assertTrue(token.matches("USR-[0-9A-F]{10}"));
+        assertTrue(entry.contains("\"admin\":\"" + token + "\""), "the pan_config admin gets the user token");
+        assertEquals("{\"user\":\"" + token + "\"}", masking().session().maskLine("{\"user\":\"" + user + "\"}"),
+                "the same user reads the same in every session and under every principal key");
+        assertFalse(token.equals(pseudonyms.maskPayloadToken("USR", other)), "different users stay distinct");
+        assertEquals("{\"admin\":\"" + token + "\"}", s.maskLine("{\"admin\":\"" + token + "\"}"), "a user token is not re-masked");
+        assertTrue(entry.contains("\"client\":\"Web\""), "the client kind is no principal");
+        assertEquals(4L, s.counts().get(LogMasking.IdentityFields.PRINCIPAL));
+    }
+
+    @Test
+    void freeTextMentionsOfPrincipalAndHostWordsKeepTheTextRules() {
+        LogMasking.Session s = masking().session();
+        for (String line : new String[] {"admin login ok", "{\"opaque\":\"host table rebuilt\"}", "{\"admin\":\"\"}",
+                "{\"user\":\"<redacted>\"}", "{\"hostile\":\"value\"}"}) {
+            assertEquals(line, s.maskLine(line));
+        }
+    }
+
     // ------------------------------------------------------------------ the estate dictionary
 
     private static final String MGMT = "198.51.100.23";
