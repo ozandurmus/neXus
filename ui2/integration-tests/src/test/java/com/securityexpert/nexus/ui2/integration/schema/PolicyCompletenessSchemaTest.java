@@ -94,7 +94,7 @@ class PolicyCompletenessSchemaTest {
                 }
                 assertEquals(new TreeSet<>(entry.getValue()), live, entry.getKey());
                 for (String privilege : new String[] {"SELECT", "INSERT", "UPDATE", "DELETE"})
-                    assertEquals("true", scalar(db, "select has_table_privilege('ui2_app', '" + entry.getKey() + "', '" + privilege + "')"), entry.getKey() + " " + privilege);
+                    assertEquals("true", scalar(db, "select has_table_privilege('ui2_app', '" + entry.getKey() + "', '" + privilege + "')::text"), entry.getKey() + " " + privilege);
             }
             // No free-text column: nothing named after a log line, change detail, user or object name.
             assertEquals("0", scalar(db, "select count(*) from information_schema.columns where table_schema='public' and table_name in "

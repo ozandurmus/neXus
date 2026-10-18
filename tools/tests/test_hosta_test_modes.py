@@ -79,7 +79,7 @@ from pathlib import Path
 if sys.argv[1]=='rev-parse': print('synthetic-commit')
 elif sys.argv[1]=='show': print(Path(os.environ['TEST_MANIFEST']).read_text())
 elif sys.argv[1]=='archive':
-    assert sys.argv[2:] == ['synthetic-commit','ui2','tools/delivery/integration_runner.sh','tools/delivery/IntegrationSummary.java']
+    assert sys.argv[2:] == ['synthetic-commit','ui2','docs/operations/sql','tools/delivery/integration_runner.sh','tools/delivery/IntegrationSummary.java']
     if os.environ['TEST_FAILURE']=='archive': sys.exit(1)
     print('synthetic archive')
 else: sys.exit(99)

@@ -62,7 +62,8 @@ def run(name):
     if not pod:
         raise TimeoutError()
     # Only committed source crosses into the emptyDir; no host-local config/cache/secret.
-    with subprocess.Popen(["git", "archive", commit, "ui2", "tools/delivery/integration_runner.sh", "tools/delivery/IntegrationSummary.java"], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL) as archive:
+    # docs/operations/sql: ReadinessOrphanCloseTest reads the one-time repair SQL the operator will run.
+    with subprocess.Popen(["git", "archive", commit, "ui2", "docs/operations/sql", "tools/delivery/integration_runner.sh", "tools/delivery/IntegrationSummary.java"], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL) as archive:
         subprocess.run(["kubectl", "-n", "ui2-build", "exec", "-i", pod, "-c", "runner", "--", "tar", "-xf", "-", "-C", "/workspace"], stdin=archive.stdout, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True, timeout=max(1, deadline - time.monotonic()))
         archive.stdout.close()
         if archive.wait(timeout=60) != 0:

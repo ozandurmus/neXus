@@ -83,7 +83,8 @@ class AuditRedactionPolicyTest {
             // backup_endpoint_ineligibility
             "backup_endpoint_ineligibility.device_id", "backup_endpoint_ineligibility.marked_at",
             // backup_policy
-            "backup_policy.backup_retention_days", "backup_policy.created_at",
+            "backup_policy.backup_retention_days", "backup_policy.configuration_retention_days", // V164
+            "backup_policy.created_at",
             "backup_policy.daily_backup_cron", "backup_policy.last_scheduled_run_at",
             "backup_policy.major_alert_enabled", "backup_policy.policy_id",
             "backup_policy.schedule_enabled", "backup_policy.snapshot_retention_depth",

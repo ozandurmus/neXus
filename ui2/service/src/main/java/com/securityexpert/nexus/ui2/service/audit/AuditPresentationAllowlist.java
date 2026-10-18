@@ -51,7 +51,7 @@ public final class AuditPresentationAllowlist {
             Map.entry("backup_endpoint_ineligibility", Set.of(
                     "device_id", "marked_at")),
             Map.entry("backup_policy", Set.of(
-                    "backup_retention_days", "created_at", "daily_backup_cron",
+                    "backup_retention_days", "configuration_retention_days", "created_at", "daily_backup_cron",
                     "last_scheduled_run_at", "major_alert_enabled", "policy_id", "schedule_enabled",
                     "snapshot_retention_depth", "updated_at", "weekly_snapshot_cron")),
             Map.entry("configuration_artefact", Set.of(
