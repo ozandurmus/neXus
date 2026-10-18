@@ -255,22 +255,22 @@ export function DeviceLogsPanel({ deviceId, vendorHint }: { readonly deviceId: s
   const refreshAll = () => { sources.refresh(); latestJob.refresh(); };
 
   if (sources.error) {
-    const r = refusalOf(sources.rawError);
-    if (r.code === "SYSTEM_LOG_DISABLED_ON_MANAGEMENT") {
-      return (
-        <StatePanel variant="empty" title="Collection disabled for management servers"
-          body="System logs are not collected from management servers (the setting that allows it is off). Gateways managed by this server are collected on their own."
-          code={r.code} />
-      );
-    }
-    if (r.code === "SYSTEM_LOG_VENDOR_UNSUPPORTED") {
-      return <StatePanel variant="empty" title="Logs are not collected for this device" body="System-log collection covers Check Point and Palo Alto gateways." code={r.code} />;
-    }
     if (isRestricted(sources.rawError)) return <RestrictedPanel area="System logs" />;
     return (
       <StatePanel variant="error" title="Logs unavailable" body="The log summary could not be read." code={sources.error}
         action={<M3Button emphasis="outlined" onClick={sources.refresh}>Retry</M3Button>} />
     );
+  }
+  // A device the collection does not cover is an answer of the read (200 with a state), not a refusal.
+  if (sources.data?.collection_state === "DISABLED_ON_MANAGEMENT") {
+    return (
+      <StatePanel variant="empty" title="Collection disabled for management servers"
+        body="System logs are not collected from management servers (the setting that allows it is off). Gateways managed by this server are collected on their own."
+        code="SYSTEM_LOG_DISABLED_ON_MANAGEMENT" />
+    );
+  }
+  if (sources.data?.collection_state === "VENDOR_UNSUPPORTED") {
+    return <StatePanel variant="empty" title="Logs are not collected for this device" body="System-log collection covers Check Point and Palo Alto gateways." code="SYSTEM_LOG_VENDOR_UNSUPPORTED" />;
   }
   // The latest job read has no say until it has landed or failed (a failed read is unknown, not an error banner).
   if (!sources.data || (latestJob.data === null && latestJob.error === null)) return <EmptyPanel title="Logs" body="Loading…" />;

@@ -151,15 +151,35 @@ class SystemLogReadControllerTest {
     }
 
     @Test
-    void aManagementServerRefusalIsAConflictWithTheDisabledReason() {
+    void aManagementServerIsAnsweredWithAnExplicitStateNeverAConflict() {
         fx.device("mgmt-1", "management_server", "check_point");
-        var response = controller.hcp("mgmt-1");
-        assertEquals(409, response.getStatusCode().value());
-        assertEquals("SYSTEM_LOG_DISABLED_ON_MANAGEMENT", response.getBody().get("code"));
-        assertTrue(String.valueOf(response.getBody().get("message")).contains("management servers"));
-        assertEquals(409, controller.chunks("mgmt-1", null, null, 10).getStatusCode().value());
-        assertEquals(409, controller.gaps("mgmt-1", 10).getStatusCode().value());
-        assertEquals(409, controller.crashFiles("mgmt-1", 10).getStatusCode().value());
+        var hcp = controller.hcp("mgmt-1");
+        assertEquals(200, hcp.getStatusCode().value());
+        assertEquals("DISABLED_ON_MANAGEMENT", hcp.getBody().get("collection_state"));
+        assertEquals("SYSTEM_LOG_DISABLED_ON_MANAGEMENT", hcp.getBody().get("code"));
+        assertTrue(String.valueOf(hcp.getBody().get("message")).contains("management servers"));
+        assertEquals(List.of(), hcp.getBody().get("files"));
+        var chunks = controller.chunks("mgmt-1", null, null, 10);
+        assertEquals(200, chunks.getStatusCode().value());
+        assertEquals("DISABLED_ON_MANAGEMENT", chunks.getBody().get("collection_state"));
+        assertEquals(List.of(), chunks.getBody().get("chunks"));
+        var gaps = controller.gaps("mgmt-1", 10);
+        assertEquals(200, gaps.getStatusCode().value());
+        assertEquals(List.of(), gaps.getBody().get("gaps"));
+        var crash = controller.crashFiles("mgmt-1", 10);
+        assertEquals(200, crash.getStatusCode().value());
+        assertEquals(List.of(), crash.getBody().get("files"));
+        assertEquals("DISABLED_ON_MANAGEMENT", crash.getBody().get("collection_state"));
+    }
+
+    @Test
+    void theSourcesOfAManagementServerAreAnEmptyOkAnswerEvenForTheReplayViewer() {
+        fx.device("mgmt-1", "management_server", "check_point");
+        var response = controller.sources("mgmt-1", request(RoleToken.REPLAY_VIEWER, true));
+        assertEquals(200, response.getStatusCode().value());
+        assertEquals("DISABLED_ON_MANAGEMENT", response.getBody().get("collection_state"));
+        assertEquals(List.of(), response.getBody().get("sources"));
+        assertEquals(false, response.getBody().get("can_view_unmasked"));
     }
 
     @Test

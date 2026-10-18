@@ -111,10 +111,17 @@ describe("empty, disabled and refused states", () => {
   });
 
   it("shows the disabled reason for a management server", async () => {
-    stub({ summary: { status: 409, body: { code: "SYSTEM_LOG_DISABLED_ON_MANAGEMENT", message: "disabled" } } });
+    stub({ summary: summary({ collection_state: "DISABLED_ON_MANAGEMENT", sources: [], last_job: null, code: "SYSTEM_LOG_DISABLED_ON_MANAGEMENT", message: "disabled" }) });
     render(<DeviceLogsPanel deviceId={DEVICE} />);
     expect(await screen.findByText("Collection disabled for management servers")).toBeInTheDocument();
     expect(screen.getByText("SYSTEM_LOG_DISABLED_ON_MANAGEMENT")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
+  });
+
+  it("shows the unsupported-vendor state as an answer, not a fault", async () => {
+    stub({ summary: summary({ collection_state: "VENDOR_UNSUPPORTED", sources: [], last_job: null, code: "SYSTEM_LOG_VENDOR_UNSUPPORTED", message: "unsupported" }) });
+    render(<DeviceLogsPanel deviceId={DEVICE} />);
+    expect(await screen.findByText("Logs are not collected for this device")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
   });
 

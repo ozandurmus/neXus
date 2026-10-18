@@ -257,20 +257,29 @@ class SystemLogReadServiceTest {
     }
 
     @Test
-    void aManagementServerAnswersTheDisabledReasonOnEveryRouteWhileTheSettingIsOff() throws Exception {
+    void aManagementServerAnswersTheDisabledStateOnEveryRouteWhileTheSettingIsOff() throws Exception {
         fx.device("mgmt-1", "management_server", "check_point");
         var service = fx.service();
         for (var read : List.of(service.sources("mgmt-1", false), service.chunks("mgmt-1", null, null, 10),
                 service.hcp("mgmt-1"), service.gaps("mgmt-1", 10), service.crashFiles("mgmt-1", 10, Instant.now()))) {
-            assertFalse(read.isOk());
-            assertEquals(409, read.refusal().status());
-            assertEquals("SYSTEM_LOG_DISABLED_ON_MANAGEMENT", read.refusal().code());
+            assertTrue(read.isOk(), "a GET never refuses with a conflict for a device where collection does not apply");
+            assertEquals("DISABLED_ON_MANAGEMENT", read.body().get("collection_state"));
+            assertEquals("SYSTEM_LOG_DISABLED_ON_MANAGEMENT", read.body().get("code"));
+            assertEquals("mgmt-1", read.body().get("device_id"));
         }
-        // A chunk stored while the setting was on is not served while it is off.
+        // The route's own list is present and empty, so a client reads it like any other answer.
+        assertEquals(List.of(), service.sources("mgmt-1", false).body().get("sources"));
+        assertEquals(List.of(), service.chunks("mgmt-1", null, null, 10).body().get("chunks"));
+        assertEquals(List.of(), service.gaps("mgmt-1", 10).body().get("gaps"));
+        assertEquals(List.of(), service.crashFiles("mgmt-1", 10, Instant.now()).body().get("files"));
+        assertEquals(List.of(), service.hcp("mgmt-1").body().get("files"));
+        // A chunk stored while the setting was on is not served while it is off: absent (404), not a conflict.
         var ref = fx.chunk("mgmt-chunk", bytes("x\n"));
         when(fx.repository.findChunk("mgmt-chunk")).thenReturn(Optional.of(new SystemLogReadRepository.ChunkRef("mgmt-chunk",
                 "mgmt-1", "cp_messages", 2, 1, null, ref.artefactId(), ref.artefactRef(), ref.wrappedDataKey())));
-        assertEquals("SYSTEM_LOG_DISABLED_ON_MANAGEMENT", service.text(masked("mgmt-chunk", 0, 0)).refusal().code());
+        var text = service.text(masked("mgmt-chunk", 0, 0));
+        assertEquals(404, text.refusal().status());
+        assertEquals("SYSTEM_LOG_DISABLED_ON_MANAGEMENT", text.refusal().code());
         // The fleet-wide lists are not device reads and carry no management rows.
         assertTrue(service.gaps(null, 10).isOk());
         assertEquals(0, fx.store.retrievals.get() - 0, "nothing of the management server was decrypted");
@@ -285,11 +294,15 @@ class SystemLogReadServiceTest {
     }
 
     @Test
-    void anUnknownDeviceAndAnUnsupportedVendorAreRefused() {
+    void anUnknownDeviceIsRefusedAndAnUnsupportedVendorIsAnExplicitState() {
         fx.device("ib-1", "gateway", "infoblox");
         var service = fx.service();
         assertEquals(404, service.sources("ghost", false).refusal().status());
-        assertEquals("SYSTEM_LOG_VENDOR_UNSUPPORTED", service.sources("ib-1", false).refusal().code());
+        var unsupported = service.sources("ib-1", false);
+        assertTrue(unsupported.isOk());
+        assertEquals("VENDOR_UNSUPPORTED", unsupported.body().get("collection_state"));
+        assertEquals("SYSTEM_LOG_VENDOR_UNSUPPORTED", unsupported.body().get("code"));
+        assertEquals(List.of(), unsupported.body().get("sources"));
         assertEquals(400, service.sources("bad id", false).refusal().status());
     }
 
