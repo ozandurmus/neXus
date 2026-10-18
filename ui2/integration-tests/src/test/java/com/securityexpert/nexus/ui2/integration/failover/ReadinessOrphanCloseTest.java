@@ -67,7 +67,7 @@ class ReadinessOrphanCloseTest {
         assertEquals("UNKNOWN", run.outcome());
         assertEquals(JooqCpFailoverRepository.JOB_ENDED_WITHOUT_RESULT, run.message());
         assertNull(run.failedCheck());
-        try (var admin = u.fixture().adminConnection()) {
+        try (var admin = u.fixture().migrateConnection()) {
             assertEquals(Boolean.TRUE, one(admin, "select r.finished_at = j.finished_at from failover_run r "
                 + "join jobs j on j.job_id=r.job_id where r.run_id='" + runId + "'"), "The run ends when its job ended");
         }
@@ -75,7 +75,7 @@ class ReadinessOrphanCloseTest {
 
     /** Pre-V162 orphan: the job is cancelled with the trigger off, as the 2026-10-12 direct SQL left it. */
     private static void cancelWithoutTrigger(Unit u, String jobId) throws Exception {
-        try (var admin = u.fixture().adminConnection()) {
+        try (var admin = u.fixture().migrateConnection()) {
             admin.setAutoCommit(false);
             try (var statement = admin.createStatement()) {
                 statement.execute("alter table jobs disable trigger failover_readiness_job_terminal");
@@ -102,7 +102,7 @@ class ReadinessOrphanCloseTest {
             assertEquals("CANCELLED", u.cancellation().request(jobOf(u, first.runId()), ACTOR).orElseThrow());
             assertTrue(u.repository().finished(first.runId()));
             assertClosedWithoutResult(u, first.runId());
-            try (var admin = fixture.adminConnection()) {
+            try (var admin = fixture.migrateConnection()) {
                 assertEquals("job_cancel", one(admin, "select action_id from audit_log where table_name='failover_run' "
                     + "and row_pk='" + first.runId() + "' order by audit_id desc limit 1"),
                     "The run's audit row carries the job transition's own action");
@@ -123,7 +123,7 @@ class ReadinessOrphanCloseTest {
             for (String terminal : new String[] {"FAILED", "REJECTED", "OUTCOME_UNKNOWN", "RECONCILED", "COMPLETED"}) {
                 var run = u.repository().requestReadiness(CLUSTER, null, ACTOR, u.device(), "check_point");
                 assertEquals("ADMITTED", run.code(), terminal);
-                try (var admin = fixture.adminConnection()) {
+                try (var admin = fixture.migrateConnection()) {
                     admin.setAutoCommit(false);
                     Ui2Rows.setAuditContext(admin, ACTOR, "synthetic_terminal_" + terminal.toLowerCase());
                     try (var statement = admin.createStatement()) {
@@ -136,7 +136,7 @@ class ReadinessOrphanCloseTest {
             }
             var done = u.repository().requestReadiness(CLUSTER, null, ACTOR, u.device(), "check_point");
             u.repository().state(done.runId(), "DONE", "DONE", "READY", null, "READY");
-            try (var admin = fixture.adminConnection()) {
+            try (var admin = fixture.migrateConnection()) {
                 admin.setAutoCommit(false);
                 Ui2Rows.setAuditContext(admin, ACTOR, "synthetic_terminal_completed");
                 try (var statement = admin.createStatement()) {
@@ -201,7 +201,7 @@ class ReadinessOrphanCloseTest {
             cancelWithoutTrigger(u, jobOf(u, orphan.runId()));
             var live = u.repository().requestReadiness(CLUSTER, "3", ACTOR, u.device(), "check_point");
             for (int pass = 1; pass <= 2; pass++) {
-                try (var admin = fixture.adminConnection()) {
+                try (var admin = fixture.migrateConnection()) {
                     admin.setAutoCommit(false);
                     try (var statement = admin.createStatement()) { statement.execute(sql); }
                     admin.commit();
@@ -209,7 +209,7 @@ class ReadinessOrphanCloseTest {
                 assertClosedWithoutResult(u, orphan.runId());
                 assertFalse(u.repository().finished(live.runId()), "A queued job's run is not an orphan");
             }
-            try (var admin = fixture.adminConnection()) {
+            try (var admin = fixture.migrateConnection()) {
                 assertEquals(1L, one(admin, "select count(*) from audit_log where table_name='failover_run' "
                     + "and action_id='failover_readiness_orphan_repair' and row_pk='" + orphan.runId() + "'"),
                     "The second pass changed nothing");
@@ -224,7 +224,7 @@ class ReadinessOrphanCloseTest {
             var u = unit(fixture);
             var orphan = u.repository().requestReadiness(CLUSTER, null, ACTOR, u.device(), "check_point");
             cancelWithoutTrigger(u, jobOf(u, orphan.runId()));
-            try (var admin = fixture.adminConnection(); var statement = admin.createStatement()) {
+            try (var admin = fixture.migrateConnection(); var statement = admin.createStatement()) {
                 admin.setAutoCommit(true);
                 // One multi-statement execute is one implicit transaction in PostgreSQL's simple protocol, so
                 // run statement by statement as psql does without BEGIN.
