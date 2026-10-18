@@ -73,17 +73,20 @@ def test_missing_heartbeat_cannot_handover(monkeypatch):
         deploy.wait_heartbeat('policy', 4, clock=lambda: now[0], sleep=lambda delay: now.__setitem__(0, now[0] + delay))
 
 
-@pytest.mark.parametrize('failure', ['set', 'rollout', 'heartbeat', 'e2e', 'handover'])
+@pytest.mark.parametrize('failure', ['apply', 'rollout', 'heartbeat', 'e2e', 'handover'])
 def test_failed_policy_rollout_stops_pod_then_returns_ownership(monkeypatch, failure):
     events = []
     def run(*args, **kwargs):
         events.append(args)
-        if failure in {'set', 'rollout'} and failure in args:
+        if failure in {'apply', 'rollout'} and failure in args:
             raise deploy.Blocked('synthetic rollout failure')
         if 'pods' in args:
             return '{"items":[]}'
+        if any('jsonpath={.spec.replicas}' == a for a in args):
+            return '1'
         return ''
     monkeypatch.setattr(deploy, 'run', run)
+    monkeypatch.setattr(deploy, 'kubectl_diff', lambda manifest: False)
     monkeypatch.setattr(deploy, 'query', lambda sql: 't')
     monkeypatch.setattr(deploy, 'ensure_policy', lambda image: IMAGE)
     monkeypatch.setattr(deploy, 'request_drain', lambda *a: events.append(('drain',)) or 1)

@@ -1224,6 +1224,15 @@
       "priority": "P1",
       "target": "docs/design/DATA_SANITIZER_CONTRACT.md",
       "note": ""
+    },
+    {
+      "id": "manifest_drift_service_worker_configuration_policy",
+      "category": "ui2",
+      "title": "Release applies the committed manifest of service/configuration/compliance/policy; worker still image+fallback patch only",
+      "status": "in_progress",
+      "priority": "P1",
+      "target": "tools/delivery/module_deploy.py (SYNCED_MANIFESTS)",
+      "note": ""
     }
   ]
 }

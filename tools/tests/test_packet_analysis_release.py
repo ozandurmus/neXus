@@ -192,7 +192,7 @@ def test_kubectl_diff_reads_the_exit_code_as_difference(monkeypatch):
     for code, expected in ((0, False), (1, True)):
         monkeypatch.setattr(deploy.subprocess, 'run', lambda *a, _c=code, **kw: seen.append((a, kw)) or Result(_c))
         assert deploy.kubectl_diff('manifest') is expected
-    assert seen[0][0][0] == ('kubectl', '-n', 'ui2', 'diff', '--server-side', '-f', '-')
+    assert seen[0][0][0] == ('kubectl', '-n', 'ui2', 'diff', '--server-side', '--force-conflicts', '-f', '-')
     assert seen[0][1]['input'] == 'manifest'
     monkeypatch.setattr(deploy.subprocess, 'run', lambda *a, **kw: Result(2))
     with pytest.raises(deploy.Blocked, match='exit 2'):

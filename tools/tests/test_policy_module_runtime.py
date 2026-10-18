@@ -68,17 +68,20 @@ def test_release_tool_bumps_drain_generation_and_requires_it_to_clear(monkeypatc
 
 def test_replace_waits_for_old_pod_deletion_before_clearing_the_claim_fence(monkeypatch):
     events = []
-    def run(*args):
+    def run(*args, input=None):
         events.append(args)
         if "jsonpath={.spec.template.spec.containers[0].image}" in args:
             return OLD
+        if "jsonpath={.spec.replicas}" in args:
+            return "1"
         if "pods" in args:
-            uid = "old-owner" if not any("set" in event for event in events) else "new-owner"
+            uid = "old-owner" if not any("apply" in event for event in events) else "new-owner"
             return json.dumps({"items": [{"metadata": {"uid": uid}}]})
         return ""
     monkeypatch.setattr(deploy, "query", lambda sql: "f" if "fallback_enabled" in sql else "t")
     monkeypatch.setattr(deploy, "run", run)
     monkeypatch.setattr(deploy, "ensure_policy", lambda *args: OLD)
+    monkeypatch.setattr(deploy, "kubectl_diff", lambda manifest: False)
     monkeypatch.setattr(deploy, "wait_heartbeat", lambda *args: events.append(("heartbeat",)))
     monkeypatch.setattr(deploy, "handover_policy", lambda *args: events.append(("handover",)))
     monkeypatch.setattr(deploy, "request_drain", lambda *args: events.append(("drain",)) or 7)
@@ -88,7 +91,7 @@ def test_replace_waits_for_old_pod_deletion_before_clearing_the_claim_fence(monk
     monkeypatch.setattr(deploy, "module_e2e", lambda *args: events.append(("e2e",)))
     deploy.replace("policy", IMAGE, "synthetic-snapshot")
     assert events.index(("drain",)) < events.index(("barrier",))
-    changed = next(i for i, event in enumerate(events) if "set" in event)
+    changed = next(i for i, event in enumerate(events) if "apply" in event)
     cleared = events.index(("clear",))
     assert changed < cleared
     assert any("pods" in event for event in events[changed + 1:cleared])

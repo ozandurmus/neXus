@@ -149,16 +149,54 @@ def ensure_policy(image):
         return json.loads(existing)["spec"]["template"]["spec"]["containers"][0]["image"]
     # Apply the ServiceAccount and NetworkPolicy together with the disabled Deployment.
     prepare_policy_public_trust()
-    manifest = (REPO / "deploy/ui2/57-policy-deployment.yaml").read_text()
-    manifest, count = re.subn(r"(?m)^(\s*image: )\S+$", lambda match: match[1] + image, manifest)
-    if count != 1:
-        raise Blocked("policy template must contain exactly one workload image")
-    run("kubectl", "-n", "ui2", "apply", "-f", "-", input=manifest)
+    run("kubectl", "-n", "ui2", "apply", "-f", "-", input=render_manifest("policy", image))
     return None
 
 
 IMMUTABLE_IMAGE = r".+@sha256:[a-f0-9]{64}"
 PACKET_ANALYSIS_MANIFEST = "deploy/ui2/58-packet-analysis-deployment.yaml"
+
+
+# Deployments whose committed manifest is rendered with the candidate image, diffed before the drain and applied after
+# it on every forward release, so env, mounts and resources ship together with the code that requires them
+# (2026-10-18: the policy pod crashed on the old manifest because a release only swapped its image). The worker is not
+# here: its JAVA_TOOL_OPTIONS carry a fallback flag the release adds at run time (see replace_image).
+SYNCED_MANIFESTS = {"service": "deploy/ui2/50-service-deployment.yaml",
+                    "configuration": "deploy/ui2/54-configuration-deployment.yaml",
+                    "compliance": "deploy/ui2/55-compliance-deployment.yaml",
+                    "policy": "deploy/ui2/57-policy-deployment.yaml"}
+
+
+def render_manifest(target, image, replicas=None):
+    """A target's committed manifest set with the candidate image; exactly one workload image line.
+
+    The manifest's replica count is only a first-release value (the policy deployment is committed at 0 and the
+    release scales it). With `replicas` the Deployment's own `replicas:` line is set to that live count, so applying
+    the manifest never changes a running replica count; client-side apply would otherwise reset it to the committed
+    value, or drop the field (default 1) when the manifest lacks it."""
+    manifest = (REPO / SYNCED_MANIFESTS[target]).read_text()
+    manifest, count = re.subn(r"(?m)^(\s*image: )\S+$", lambda match: match[1] + image, manifest)
+    if count != 1:
+        raise Blocked(target + " template must contain exactly one workload image")
+    if replicas is not None:
+        manifest, count = re.subn(r"(?m)^  replicas: \d+$", "  replicas: " + str(replicas), manifest)
+        if count != 1:
+            raise Blocked(target + " template must contain exactly one replica count")
+    return manifest
+
+
+def live_replicas(target):
+    value = run("kubectl", "-n", "ui2", "get", "deployment/ui2-" + target, "-o", "jsonpath={.spec.replicas}")
+    if not value.isdigit():
+        raise Blocked("live replica count of " + target + " unavailable")
+    return int(value)
+
+
+def check_synced_manifest(target, image):
+    """Read-only, before any drain: does the candidate manifest differ from the cluster? Applied after the drain."""
+    print(target + " manifest: " + ("differs from the cluster; applied after the drain"
+                                    if kubectl_diff(render_manifest(target, image, live_replicas(target)))
+                                    else "already in sync"), flush=True)
 
 
 def render_packet_analysis(image):
@@ -173,9 +211,11 @@ def render_packet_analysis(image):
 def kubectl_diff(manifest):
     """Server-side diff of a manifest against the cluster: True when it differs, False when in sync.
 
-    `kubectl diff` exits 0 for no difference, 1 for a difference and above 1 for an error. Read-only."""
+    `kubectl diff` exits 0 for no difference, 1 for a difference and above 1 for an error. Read-only: the diff is a
+    dry run, and --force-conflicts only stops fields last written by another field manager (kubectl set image,
+    scale) from failing it."""
     try:
-        result = subprocess.run(("kubectl", "-n", "ui2", "diff", "--server-side", "-f", "-"), input=manifest,
+        result = subprocess.run(("kubectl", "-n", "ui2", "diff", "--server-side", "--force-conflicts", "-f", "-"), input=manifest,
                                 capture_output=True, text=True, timeout=120)
     except (OSError, subprocess.TimeoutExpired):
         raise Blocked("release command unavailable or timed out") from None
@@ -252,6 +292,11 @@ def replace_image(target, image, sync_manifest=False):
         # (memory plan, JAVA_TOOL_OPTIONS), so manifest changes ship with the code. Called only after the drain.
         run("kubectl", "-n", "ui2", "apply", "-f", "-", input=render_packet_analysis(image))
         return
+    if target in SYNCED_MANIFESTS and sync_manifest:
+        # One pod-template update installs the image together with the committed env, mounts and resources. The
+        # live replica count is kept (the policy release scales the pod itself). Called only after the drain.
+        run("kubectl", "-n", "ui2", "apply", "-f", "-", input=render_manifest(target, image, live_replicas(target)))
+        return
     if target != "worker":
         run("kubectl", "-n", "ui2", "set", "image", "deployment/ui2-" + target, TARGETS[target] + "=" + image)
         return
@@ -280,6 +325,8 @@ def replace(target, image, snapshot, limit=14400, commit=None, authorization=Non
                     "-o", "jsonpath={.spec.template.spec.containers[0].image}"))
     if old is not None and not re.fullmatch(IMMUTABLE_IMAGE, old):
         raise Blocked("old workload digest is not immutable")
+    if target in SYNCED_MANIFESTS and old is not None and not rollback:
+        check_synced_manifest(target, image)
     generation = None
     # A first release (ensure_packet_analysis created the deployment with the candidate image: old is None) has no
     # old owner to drain; draining it would wait for the new pod itself to stop (2026-10-16: drain retained).
@@ -290,7 +337,8 @@ def replace(target, image, snapshot, limit=14400, commit=None, authorization=Non
     old_uids = {pod["metadata"]["uid"] for pod in old_pods["items"]}
     try:
         # A rollback restores the recorded digest only; the committed manifest belongs to the forward release.
-        replace_image(target, image, sync_manifest=target == "packet-analysis" and old is not None and not rollback)
+        replace_image(target, image, sync_manifest=(target == "packet-analysis" or target in SYNCED_MANIFESTS)
+                      and old is not None and not rollback)
         if generation is not None:
             deadline = time.monotonic() + 900
             while old_uids:
