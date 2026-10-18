@@ -3,12 +3,14 @@
  * converted or guessed: the text is the one the line itself carries, in the device's own clock and format.
  *
  *  - a Palo Alto line carries a `receive_time` field (JSON `"receive_time": "2026/10/18 06:11:02"` or `receive_time=...`);
- *  - a Check Point / Gaia line starts with the syslog stamp (`Oct 17 08:00:01`) or an ISO stamp;
+ *  - a Check Point / Gaia line starts with the syslog stamp (`Oct 17 08:00:01`) or an ISO stamp; a Check Point daemon log
+ *    (`cpd.elg`, `fwd.elg`) carries it in brackets after the process tag, `[cpd 1234 5678]@FW-X[18 Oct 11:13:23]`;
  *  - a line with neither (a continuation line, a stack trace) has no time: `null`, shown as an empty cell, never invented.
  */
 const RECEIVE_TIME = /"?receive_time"?\s*[:=]\s*"?(\d{4}[/-]\d{2}[/-]\d{2}[T ]\d{2}:\d{2}:\d{2})/;
 const SYSLOG_STAMP = /^\s*([A-Z][a-z]{2}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})\b/;
 const ISO_STAMP = /^\s*(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2})/;
+const ELG_STAMP = /^[^\n]{0,80}?\[(\d{1,2} [A-Z][a-z]{2}(?: \d{4})? \d{2}:\d{2}:\d{2})\]/;
 
 export function lineDeviceTime(line: string): string | null {
   const field = RECEIVE_TIME.exec(line);
@@ -16,7 +18,9 @@ export function lineDeviceTime(line: string): string | null {
   const syslog = SYSLOG_STAMP.exec(line);
   if (syslog) return syslog[1].replace(/\s+/g, " ");
   const iso = ISO_STAMP.exec(line);
-  return iso ? iso[1].replace("T", " ") : null;
+  if (iso) return iso[1].replace("T", " ");
+  const elg = ELG_STAMP.exec(line);
+  return elg ? elg[1] : null;
 }
 
 /** `00:15–06:11` for a window inside one day, the two full stamps otherwise; the device's own clock, never converted. */

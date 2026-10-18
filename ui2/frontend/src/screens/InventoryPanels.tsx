@@ -27,6 +27,7 @@ import { plural } from "../shell/plural";
 import { deviceNameLabel, jobPhaseLabel, isTerminalJobState, enrollmentStateLabel, onboardingChip } from "../shell/deviceCopy";
 import { MONO, m3 } from "../theme/m3Theme";
 import { RoleChip, Ts, VendorBadge, vendorDisplayName } from "../shell/States";
+import { Stamp } from "../shell/PresentedText";
 import { ReferenceCell, clusterContextLinks, DeviceIdentityTable, deviceLiveWithInventory, knownHaRole, liveBasis, orderMembers, vsListOf } from "./DeviceShared";
 import { JobStatusIndicator, latestJobSentence } from "../shell/JobStatusIndicator";
 import {
@@ -221,6 +222,22 @@ export function GridMembersPanel({ members, summary }: { readonly members: reado
   );
 }
 
+/**
+ * A manager's word for a managed device's management state, in sentence case (`FULLY_MANAGED` → "Fully managed",
+ * FortiManager's `UP` → "Up"); `UNKNOWN` stays UNKNOWN. The expected states are neutral grey (P2-1B: `UP` was amber);
+ * a device the manager calls unmanaged, down or unknown keeps the amber word.
+ */
+export function managementWord(status: string): string {
+  const value = status.trim();
+  if (!value) return "UNKNOWN";
+  if (value === "UNKNOWN") return value;
+  const words = value.replace(/_/g, " ").toLowerCase();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+export function managementTone(status: string): Tone {
+  return /^(UP|MANAGED|FULLY_MANAGED|CONNECTED)$/.test(status.trim()) ? "neutral" : "warn";
+}
+
 /** A Symantec Management Center's managed devices (ProxySG, Reporter, WSS) as it lists them; values read, never inferred. */
 function ManagedDevicesPanel({ members, selected, onSelect }: {
   readonly members: readonly GridMemberView[];
@@ -231,6 +248,9 @@ function ManagedDevicesPanel({ members, selected, onSelect }: {
     return <EmptyPanel title="No managed-device evidence" body="Collect reads the Management Center's device list; none has been recorded yet." />;
   }
   const deployment = (m: GridMemberView) => m.services.find((s) => s.service === "DEPLOYMENT")?.status ?? null;
+  // The Deployment column only when some device reports one (R17): a column of dashes says nothing and cost the header its room.
+  const hasDeployment = members.some((m) => deployment(m) !== null);
+  const widths = hasDeployment ? ["20%", "14%", "12%", "14%", "14%", "14%", "12%"] : ["22%", "16%", "13%", "16%", "16%", "17%"];
   const selectedMember = members.find(m => m.virtual_system === selected);
   const shown = selectedMember ? [selectedMember] : members;
   return (
@@ -245,9 +265,9 @@ function ManagedDevicesPanel({ members, selected, onSelect }: {
       <TableContainer>
         {/* Fixed column widths at 1440 (UI review 2026-10-18, P2-1B / roadmap 3.4): a long value clips inside its own cell
             with the full text on hover, instead of pushing the Deployment column out of the card. */}
-        <Table size="small" data-managed-devices sx={{ tableLayout: "fixed", "& td, & th": { overflow: "hidden", textOverflow: "ellipsis" } }}>
+        <Table size="small" data-managed-devices sx={{ tableLayout: "fixed", "& td, & th": { overflow: "hidden", textOverflow: "ellipsis" }, "& th": { whiteSpace: "normal", lineHeight: 1.3 } }}>
           <colgroup>
-            {["20%", "14%", "12%", "14%", "14%", "14%", "12%"].map((width, i) => <col key={i} style={{ width }} />)}
+            {widths.map((width, i) => <col key={i} style={{ width }} />)}
           </colgroup>
           <TableHead>
             <TableRow>
@@ -257,7 +277,7 @@ function ManagedDevicesPanel({ members, selected, onSelect }: {
               <TableCell>Model</TableCell>
               <TableCell>OS version</TableCell>
               <TableCell>Management</TableCell>
-              <TableCell>Deployment</TableCell>
+              {hasDeployment && <TableCell>Deployment</TableCell>}
             </TableRow>
           </TableHead>
           <TableBody>
@@ -270,8 +290,8 @@ function ManagedDevicesPanel({ members, selected, onSelect }: {
                 <TableCell title={m.platform ?? undefined}>{m.platform ?? "\u2014"}</TableCell>
                 <TableCell title={m.hardware_type ?? undefined}>{m.hardware_type ?? "\u2014"}</TableCell>
                 <TableCell sx={{ whiteSpace: "nowrap" }} title={m.hypervisor ?? undefined}>{m.hypervisor ?? "\u2014"}</TableCell>
-                <TableCell>{m.node_status ? <StatusChip tone={/MANAGED$/.test(m.node_status) && !/UNMANAGED/.test(m.node_status) ? "ok" : "warn"} label={m.node_status.replace("_", " ")} dense /> : "\u2014"}</TableCell>
-                <TableCell>{deployment(m) ?? "\u2014"}</TableCell>
+                <TableCell>{m.node_status ? <StatusChip tone={managementTone(m.node_status)} label={managementWord(m.node_status)} dense /> : "\u2014"}</TableCell>
+                {hasDeployment && <TableCell>{deployment(m) ?? "\u2014"}</TableCell>}
               </TableRow>
             ))}
           </TableBody>
@@ -1143,11 +1163,8 @@ function ClusterRoutesTable({
                         )}
                       </Stack>
                     ) : (
-                      <StatusChip
-                        tone="ok"
-                        label="✓ Shared"
-                        dense
-                      />
+                      // A route both members carry is the expected case (R11): plain text; colour only where they differ.
+                      <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>Shared</Typography>
                     )}
                   </TableCell>}
                 </TableRow>
@@ -2468,7 +2485,7 @@ export function DeviceInventoryPanels({
           },
           {
             label: "Backup",
-            panel: <BackupPanel deviceId={device.device_id} vendorHint={device.vendor_hint} />,
+            panel: <BackupPanel deviceId={device.device_id} vendorHint={device.vendor_hint} backupTarget={device.backup_target} />,
           },
           // System logs are collected from Check Point and Palo Alto devices only (phase B contract section 2); a
           // management server of those vendors gets the tab too, with the "collection disabled" state.
@@ -2943,7 +2960,9 @@ export const BACKUP_ATTEMPTS_SHOWN = 5;
  * A device's Backup tab (UI review 2026-10-18, F-16 / P1-2B): the request control, then the stored archives under their
  * own title (sizes in MB, exact bytes on hover, `Checked (V1)`), then the attempts, newest five first with "Show all".
  */
-export function BackupPanel({ deviceId, vendorHint }: { readonly deviceId: string; readonly vendorHint?: string | null }) {
+export function BackupPanel({ deviceId, vendorHint, backupTarget }: { readonly deviceId: string; readonly vendorHint?: string | null;
+  /** The device's backup-target switch as the device list reports it; `false` with no archive is one empty state (3.3). */
+  readonly backupTarget?: boolean }) {
   const [attemptsVersion, setAttemptsVersion] = useState(0);
   const [retentionDays, setRetentionDays] = useState<number | null>(null);
   const fetcher = useFetchOnMount<{ backups: BackupArtefact[] }>(
@@ -2972,6 +2991,20 @@ export function BackupPanel({ deviceId, vendorHint }: { readonly deviceId: strin
   }
 
   const backups = fetcher.data.backups;
+
+  // Not a backup target and nothing stored (post-release review 2026-10-18, 3.3): one state that says why the tab is
+  // empty, instead of "No backups" under "Stored archives (0)" and "No backup attempts" under it. Attempts, if any
+  // exist from before the switch was turned off, still list below it.
+  if (backups.length === 0 && backupTarget === false) {
+    return (
+      <Stack spacing={2.5}>
+        <RequestBackupControl deviceId={deviceId} onAdmitted={() => { fetcher.refresh(); setAttemptsVersion((v) => v + 1); }} />
+        <EmptyPanel title="Not a backup target"
+          body="This device is not switched on as a backup target, so neXus keeps no archive for it and schedules no backup. The switch is on the Backups screen; a switched-on device is backed up at the next 02:00 GMT+3 run." />
+        <BackupAttempts key={deviceId} deviceId={deviceId} version={attemptsVersion} collapseTo={BACKUP_ATTEMPTS_SHOWN} quietWhenEmpty />
+      </Stack>
+    );
+  }
 
   return (
     <Stack spacing={2.5}>
@@ -3003,7 +3036,8 @@ export function BackupPanel({ deviceId, vendorHint }: { readonly deviceId: strin
               <TableBody>
                 {backups.map((b) => (
                   <TableRow key={b.artefact_id}>
-                    <TableCell><Ts at={b.collected_at} /></TableCell>
+                    {/* The one timestamp component (R15): `2026-10-18 02:04 GMT+3 · 14 h ago`, the UTC value on hover. */}
+                    <TableCell><Stamp at={b.collected_at} /></TableCell>
                     <TableCell title={bytesTitle(b.size_bytes)} sx={{ whiteSpace: "nowrap" }}>{formatBytes(b.size_bytes)}</TableCell>
                     <TableCell>{b.digest_prefix}</TableCell>
                     <TableCell><ValidationChip level={b.validation_level || "UNKNOWN"} withLevel /></TableCell>

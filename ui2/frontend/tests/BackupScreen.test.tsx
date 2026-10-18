@@ -92,7 +92,8 @@ describe("the Backups screen (UI review 2026-09-23)", () => {
     render(<BackupScreen />);
     const row = (await screen.findByText("FW-TANGO-04-M1")).closest("tr")!;
     expect(within(row).getByRole("checkbox", { name: "Backup target FW-TANGO-04-M1" })).toBeChecked();
-    expect(within(row).getByText("2026-09-22 14:43 GMT+3")).toBeInTheDocument();
+    // the fleet column shows the age; the exact stamp is on hover (post-release review 2026-10-18, R3)
+    expect(within(row).getByText(/ago$|^just now$/)).toHaveAttribute("title", expect.stringContaining("2026-09-22 14:43 GMT+3"));
     // every action moved into the row's menu (F-4): the row itself carries no action button but the menu trigger
     expect(within(row).queryByRole("button", { name: "Backup Now" })).toBeNull();
     fireEvent.click(within(row).getByRole("button", { name: "Actions for FW-TANGO-04-M1" }));

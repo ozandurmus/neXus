@@ -1,4 +1,4 @@
-import { JobButton } from "../shell/JobWindow";
+import { JobButton, useJobWindow } from "../shell/JobWindow";
 import { ROLE_LOCK_LABEL } from "../shell/actionAccess";
 import { DISABLED_STYLE } from "../shell/disabledStyle";
 import { Presented } from "../shell/PresentedText";
@@ -107,7 +107,7 @@ export function canRunReadiness(row?: CpFailoverSummary) {
 }
 
 /** The one-line rule that tells the three non-ready words apart (UI review 2026-10-18, F-12). */
-export const READINESS_RULE = "Not ready: a pre-check found a blocking condition. Unknown: readiness could not be established either way (no result, or not enough evidence). Neither is Ready.";
+export const READINESS_RULE = "Not ready: a pre-check found a blocking condition · Unknown: readiness could not be established (no result, or not enough evidence) · neither is Ready.";
 
 function primaryReason(row?: CpFailoverSummary) {
   if (!row) return "INSUFFICIENT_EVIDENCE";
@@ -146,7 +146,10 @@ export function HaReadinessList({ clusters, rows, running, busy, progress, error
   const supported = visible.filter(item => item.status !== "UNSUPPORTED");
   const unsupported = visible.filter(item => item.status === "UNSUPPORTED");
   const selectable = items.filter(item => item.status !== "UNSUPPORTED").flatMap(item => item.units).filter(canRunReadiness);
-  const hasActions = selectable.length > 0;
+  // A row action only when it can run now, for this role and inside the window (post-release review 2026-10-18, R6):
+  // forty identical locked buttons say nothing the header button does not already say with its "Next window" suffix.
+  const jobWindow = useJobWindow();
+  const hasActions = selectable.length > 0 && jobWindow.open;
   // "Run readiness check" targets the clusters in view (the base unit of each, not their virtual systems), so narrowing
   // the filters narrows the run. The server decides who may start one (`canRunReadiness`); a role it refuses sees the
   // button locked with the reason instead of no button at all.
@@ -249,7 +252,9 @@ export function HaReadinessList({ clusters, rows, running, busy, progress, error
         : `${staleAts.length} of ${evaluatedAts.length} readiness evaluations are older than 24 h (the newest of them ${relativeAge(newestStale, now)}); run a readiness check before relying on Ready.`}
       <Box component="span" sx={{ ml: 1.5, display: "inline-block" }}>{runCheckButton("stale-run-readiness")}</Box>
     </Box>}
-    <Box aria-label="Readiness summary" sx={{ display: "flex", flexWrap: "wrap", gap: 1, mb: 1.5 }}>
+    {/* One legend line (R6): the four status counts and the rule that tells the words apart, side by side. */}
+    <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", columnGap: 2, rowGap: 1, mb: 1.5 }}>
+    <Box aria-label="Readiness summary" sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
       {(Object.keys(statuses) as Status[]).map(status => {
         const s = statuses[status];
         const matches = items.filter(item => item.status === status);
@@ -266,7 +271,8 @@ export function HaReadinessList({ clusters, rows, running, busy, progress, error
         </Tooltip>;
       })}
     </Box>
-    <Typography variant="body2" data-readiness-rule sx={{ color: m3.onSurfaceVar, mb: 1.5 }}>{READINESS_RULE}</Typography>
+    <Typography variant="caption" data-readiness-rule sx={{ color: m3.onSurfaceVar }}>{READINESS_RULE}</Typography>
+    </Box>
     <Box role="toolbar" aria-label="Readiness filters" sx={{ display: "flex", gap: 1.5, mb: 1.5, flexWrap: "wrap", alignItems: "center" }}>
       <TextField label="Search cluster or member" size="small" value={search} onChange={e => setSearch(e.target.value)} sx={{ flex: "1 1 280px" }} />
       <TextField select label="Vendor" size="small" value={vendorFilter} onChange={e => setVendorFilter(e.target.value)} sx={{ minWidth: 190 }}>

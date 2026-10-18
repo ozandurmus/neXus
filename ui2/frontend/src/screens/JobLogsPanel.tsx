@@ -19,7 +19,7 @@ import Switch from "@mui/material/Switch";
 import { StatePanel, RestrictedPanel, isRestricted } from "../shell/States";
 import { Presented, Stamp } from "../shell/PresentedText";
 import { displayInputToIso, formatDuration, isoToDisplayInput, DISPLAY_TZ_LABEL } from "../shell/time";
-import { jobOutcomeWord, jobStateWord, outcomeEchoesState, outcomeLine, readinessReasonLabel } from "../shell/presenters";
+import { completedReasonOutcome, jobOutcomeWord, jobStateWord, outcomeEchoesState, outcomeLine, readinessReasonLabel } from "../shell/presenters";
 import { urlParam, useUrlParamSync, writeUrlParams } from "../shell/urlParams";
 import { MONO, m3 } from "../theme/m3Theme";
 import { jobTypeLabel } from "../jobs/jobTypeLabel";
@@ -92,12 +92,16 @@ export function pillCount(byState: Readonly<Record<string, number>> | null, pill
 
 /** The RESULT cell's words: the recorded outcome when it says more than the state, then the reason where there is one. */
 export function resultWords(job: Pick<JobEventView, "state" | "outcome" | "terminal_reason">): { outcome: string | null; reason: string | null } {
-  const outcome = jobOutcomeWord(job.outcome);
-  const showOutcome = outcome !== null && !outcomeEchoesState(job.outcome, job.state);
+  const recorded = jobOutcomeWord(job.outcome);
+  const showOutcome = recorded !== null && !outcomeEchoesState(job.outcome, job.state);
   // The API's terminal_reason repeats the terminal state on a clean run (review §3); a completed job has nothing to
-  // explain, so the reason is kept only where it is one -- a failure, rejection or unknown outcome.
-  const reason = job.state === "COMPLETED" ? null : (job.terminal_reason || null);
-  return { outcome: showOutcome ? outcome : null, reason };
+  // explain, so the reason is kept only where it is one -- a failure, rejection or unknown outcome. The exception is a
+  // reason that IS the outcome: a readiness check writes READY / NOT_READY / UNKNOWN there and a log collection writes
+  // that it collected (post-release review 2026-10-18, 2.4) -- that word goes in the outcome slot, never hidden.
+  const completed = job.state === "COMPLETED";
+  const fromReason = completed && !showOutcome ? completedReasonOutcome(job.terminal_reason) : null;
+  const reason = completed ? null : (job.terminal_reason || null);
+  return { outcome: showOutcome ? recorded : fromReason, reason };
 }
 
 /**
@@ -443,8 +447,8 @@ export function JobLogsPanel({
                       <TableCell sx={{ fontFamily: MONO, fontVariantNumeric: "tabular-nums", color: m3.onSurface }}>
                         {formatDuration(job.duration_ms)}
                       </TableCell>
-                      {/* The outcome word the record carries (readiness: Ready / Not ready; log collection: Partial), then the
-                          reason where there is one (P1-4B); the raw code stays visible as a muted suffix. */}
+                      {/* The outcome word the record carries (readiness: Ready / Not ready; log collection: Collected / Partial),
+                          then the reason where there is one (P1-4B); the raw code is on hover (R8). */}
                       <TableCell
                         data-result
                         sx={{
@@ -455,9 +459,9 @@ export function JobLogsPanel({
                           color: job.state === "FAILED" ? "error.main" : "text.secondary",
                         }}
                       >
-                        {result.outcome && <Presented label={result.outcome} raw={job.outcome} />}
+                        {result.outcome && <Presented label={result.outcome} raw={job.outcome ?? job.terminal_reason} />}
                         {result.outcome && result.reason && " · "}
-                        {result.reason && <Presented label={readinessReasonLabel(result.reason)} raw={result.reason} suffix />}
+                        {result.reason && <Presented label={readinessReasonLabel(result.reason)} raw={result.reason} />}
                         {!result.outcome && !result.reason && "—"}
                       </TableCell>
                       <TableCell sx={{ fontFamily: MONO }}>

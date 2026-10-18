@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
-import { LifecycleScreen, DeviceLifecycleLine, lifecycleCsv } from "../src/screens/LifecycleScreen";
+import { LIFECYCLE_PAGE, LifecycleScreen, DeviceLifecycleLine, lifecycleCsv } from "../src/screens/LifecycleScreen";
 import { LifecycleCatalogPanel } from "../src/screens/LifecycleCatalogPanel";
 import * as api from "../src/auth/adminApi";
 import type { LifecycleDevice } from "../src/auth/adminApi";
@@ -77,6 +77,21 @@ describe("fleet lifecycle", () => {
     expect(await screen.findByText(/End of sale: 2025-01-01 · End of engineering: 2029-01-01/)).toBeInTheDocument();
     expect(lifecycleCsv([device])).toContain("Hardware end of engineering");
     expect(lifecycleCsv([device])).toContain("2025-01-01,2029-01-01");
+  });
+  it("pages the fleet at 50 with '+N more' and keeps every row reachable (post-release review 2026-10-18, 1.7)", async () => {
+    const many = Array.from({ length: LIFECYCLE_PAGE + 12 }, (_, i) => ({ ...row(`member-${i}`), hostname: `FW-SYNTH-${String(i).padStart(3, "0")}` }));
+    vi.mocked(api.getLifecycle).mockResolvedValue({ as_of: "2026-10-09", summary: {}, devices: many });
+    themed(<LifecycleScreen />);
+    const table = await screen.findByRole("table", { name: "Fleet lifecycle" });
+    expect(within(table).getAllByRole("row")).toHaveLength(LIFECYCLE_PAGE + 1);
+    expect(document.querySelector("[data-lifecycle-page]")).toHaveTextContent(`1–${LIFECYCLE_PAGE} of ${LIFECYCLE_PAGE + 12} · +12 more`);
+    fireEvent.click(screen.getByRole("button", { name: "Show next 12" }));
+    expect(within(table).getAllByRole("row")).toHaveLength(LIFECYCLE_PAGE + 13);
+    expect(document.querySelector("[data-lifecycle-page]")).toHaveTextContent(`1–${LIFECYCLE_PAGE + 12} of ${LIFECYCLE_PAGE + 12}`);
+    expect(screen.queryByRole("button", { name: /^Show next/ })).toBeNull();
+    // a new filter starts again at the first page
+    fireEvent.change(screen.getByLabelText("Search lifecycle"), { target: { value: "FW-SYNTH-0" } });
+    expect(within(table).getAllByRole("row")).toHaveLength(LIFECYCLE_PAGE + 1);
   });
   it("shows empty and failed reads without fabricating data", async () => {
     vi.mocked(api.getLifecycle).mockRejectedValue({ status: 503, body: { error: "UNAVAILABLE" } });

@@ -137,11 +137,17 @@ function useProjection(device: DeviceSummary | null, revision = 0): Loaded & { l
   return state;
 }
 
-function FilterBox({ value, onChange }: { readonly value: string; readonly onChange: (v: string) => void }) {
+/** Who may read the configuration text (ActionRegistry.DEVICE_CONFIGURATION_TEXT_READ): named in the refusal (P1-7B). */
+export const CONFIGURATION_TEXT_ROLES_NOTE = "Configuration settings are shown to onboarding administrators and security administrators. Your role sees the read time and the platform identity.";
+
+function FilterBox({ value, onChange, disabled = false }: { readonly value: string; readonly onChange: (v: string) => void; readonly disabled?: boolean }) {
   return (
-    <Box sx={{ height: 36, display: "flex", alignItems: "center", gap: 1, px: 1.5, borderRadius: "18px", bgcolor: m3.scHigh, color: m3.onSurfaceVar, minWidth: 260 }}>
+    // Disabled when there is nothing to filter (P1-7B): a live filter box over hidden settings promised a search that could not happen.
+    <Box title={disabled ? "No settings to filter: they are not shown for your role" : undefined}
+      sx={{ height: 36, display: "flex", alignItems: "center", gap: 1, px: 1.5, borderRadius: "18px", bgcolor: m3.scHigh, color: m3.onSurfaceVar, minWidth: 260, opacity: disabled ? 0.55 : 1 }}>
       <Icon name="search" size={18} />
-      <InputBase placeholder="Filter setting or value…" value={value} onChange={(e) => onChange(e.target.value)} sx={{ flex: 1, fontSize: 13, color: "inherit" }} />
+      <InputBase placeholder="Filter setting or value…" value={value} disabled={disabled} inputProps={{ "aria-label": "Filter setting or value" }}
+        onChange={(e) => onChange(e.target.value)} sx={{ flex: 1, fontSize: 13, color: "inherit" }} />
     </Box>
   );
 }
@@ -293,7 +299,7 @@ export function DeviceConfigurationDetail({ device, embedded = false }: { readon
           <Typography variant="overline" sx={{ color: m3.onSurfaceVar, letterSpacing: "0.08em" }}>Observed configuration</Typography>
           <Typography variant="h6" sx={{ fontWeight: 600, mt: -0.5 }}>Device configuration</Typography>
         </Box>
-        <FilterBox value={query} onChange={setQuery} />
+        <FilterBox value={query} onChange={setQuery} disabled={textForbidden && !projection} />
         {/* The duplicate "Collect now" is gone (UI review 2026-10-18, F-7): the header's button is the one; here the age of
             the last configuration read, and the separate "Read configuration" action lives under Details. */}
         <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
@@ -306,8 +312,7 @@ export function DeviceConfigurationDetail({ device, embedded = false }: { readon
       {error && <EmptyPanel title="Configuration unavailable" body={error} />}
       {!error && loading && <EmptyPanel title="Configuration" body="Reading the device's configuration…" />}
       {!error && !loading && !projection && textForbidden && (
-        <EmptyPanel title="Configuration settings not shown for your role"
-          body="The configuration text is visible to onboarding administrators." />
+        <EmptyPanel title="Configuration settings not shown for your role" body={CONFIGURATION_TEXT_ROLES_NOTE} />
       )}
       {!error && !loading && !projection && !textForbidden && (
         <EmptyPanel title="No configuration read yet" body="Use Read configuration (under Details) to read this device's configuration." />
@@ -574,14 +579,14 @@ export function ClusterConfigurationDetail({ clusterRef, members: unorderedMembe
             <Switch size="small" checked={diffOnly} onChange={(e) => setDiffOnly(e.target.checked)} inputProps={{ "aria-label": "Differences only" }} />
             <Typography variant="body2">Differences only</Typography>
           </Stack>
-          <FilterBox value={query} onChange={setQuery} />
+          <FilterBox value={query} onChange={setQuery} disabled={state.textForbidden && !cluster} />
           {embedded && (
             <M3Button emphasis="tonal" icon="download" disabled={!cluster} onClick={exportCsv}>Export evidence (CSV)</M3Button>
           )}
         </Stack>
       </Box>
       {!embedded && <ClusterMembersCard members={members} />}
-      {state.textForbidden && <EmptyPanel title="Configuration text" body="The configuration text is visible to onboarding administrators." />}
+      {state.textForbidden && <EmptyPanel title="Configuration settings not shown for your role" body={CONFIGURATION_TEXT_ROLES_NOTE} />}
       {state.missing.length > 0 && (
         <EmptyPanel
           title={cluster ? "One side has no configuration read" : "No member has a configuration read"}

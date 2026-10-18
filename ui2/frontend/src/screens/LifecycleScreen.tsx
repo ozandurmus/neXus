@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Alert, Box, MenuItem, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography } from "@mui/material";
 import { getLifecycle, getDeviceLifecycle, type LifecycleDevice } from "../auth/adminApi";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
@@ -9,6 +9,8 @@ import { LifecycleCatalogPanel, lifecycleError } from "./LifecycleCatalogPanel";
 const cards = [["devices", "Devices"], ["past_end_of_support", "Past end of support"], ["within_180_days", "Within 180 days"], ["within_365_days", "Within 365 days"], ["no_lifecycle_data", "No lifecycle data"], ["licenses_within_60_days", "Licenses within 60 days"]];
 const headings = ["Device / cluster", "Vendor", "Model", "Version", "Hardware end of support", "Software end of support", "Next milestone", "Nearest license expiry", "Risk", "Match basis"];
 const shown = (value: string | null | undefined) => value || "UNKNOWN";
+/** Rows shown before "+N more" (post-release review 2026-10-18, 1.7): the page was 22,000 px as one table. */
+export const LIFECYCLE_PAGE = 50;
 export function lifecycleCells(d: LifecycleDevice): string[] {
   return [shown(d.hostname) + (d.cluster_member_ref ? ` · ${d.cluster_member_ref}` : ""), d.vendor, shown(d.model), shown(d.software_version),
     shown(d.hardware.catalog?.end_of_support), shown(d.software.catalog?.end_of_support),
@@ -33,6 +35,11 @@ export function LifecycleScreen() {
   const rows = fleet.data?.devices ?? [];
   const filtered = rows.filter(d => (vendor === "all" || d.vendor === vendor) && (risk === "all" || d.risk === risk)
     && (missing === "all" || d.status === "NO_LIFECYCLE_DATA") && lifecycleCells(d).join(" ").toLowerCase().includes(search.toLowerCase()));
+  // Paged at 50 with "+N more" (1.7): every row stays reachable, the CSV export still takes the whole filtered set.
+  const [limit, setLimit] = useState(LIFECYCLE_PAGE);
+  useEffect(() => { setLimit(LIFECYCLE_PAGE); }, [search, vendor, risk, missing]);
+  const visible = filtered.slice(0, limit);
+  const remaining = filtered.length - visible.length;
   const panel = <Stack spacing={2}>
     {fleet.error && <Alert severity="error">{fleet.error}<M3Button emphasis="tonal" onClick={fleet.refresh}>Retry</M3Button></Alert>}
     {!fleet.data && !fleet.error && <Typography>Loading lifecycle…</Typography>}
@@ -49,7 +56,7 @@ export function LifecycleScreen() {
       </Stack>
       <Typography variant="caption">Risk uses the earliest known hardware/software end of support: EXPIRED before today, HIGH under 180 days, MEDIUM under 365 days. LOW requires both support dates; missing dates remain UNKNOWN. End of sale and engineering are separate milestones.</Typography>
       <TableContainer><Table size="small" aria-label="Fleet lifecycle"><TableHead><TableRow>{headings.map(h => <TableCell key={h}>{h}</TableCell>)}</TableRow></TableHead><TableBody>
-        {filtered.map(d => <TableRow key={d.device_id}>{lifecycleCells(d).map((cell, i) => <TableCell key={i}>
+        {visible.map(d => <TableRow key={d.device_id}>{lifecycleCells(d).map((cell, i) => <TableCell key={i}>
           {i === 0 ? <><a href={`?screen=inventory&device_id=${encodeURIComponent(d.device_id)}`}>{shown(d.hostname)}</a>{d.cluster_member_ref && <Typography variant="caption" display="block">{d.cluster_member_ref}</Typography>}</> : cell}
           {(i === 4 || i === 5) && <Typography variant="caption" display="block">
             End of sale: {shown((i === 4 ? d.hardware : d.software).catalog?.end_of_sale)}
@@ -65,6 +72,11 @@ export function LifecycleScreen() {
         </TableCell>)}</TableRow>)}
         {!filtered.length && <TableRow><TableCell colSpan={headings.length}>No devices match these filters</TableCell></TableRow>}
       </TableBody></Table></TableContainer>
+      {filtered.length > 0 && <Stack direction="row" spacing={2} alignItems="center">
+        <Typography variant="caption" data-lifecycle-page>{`1–${visible.length} of ${filtered.length}${remaining > 0 ? ` · +${remaining} more` : ""}`}</Typography>
+        {remaining > 0 && <M3Button emphasis="tonal" onClick={() => setLimit(n => n + LIFECYCLE_PAGE)}>Show next {Math.min(LIFECYCLE_PAGE, remaining)}</M3Button>}
+        {remaining > 0 && <M3Button emphasis="text" onClick={() => setLimit(filtered.length)}>Show all {filtered.length}</M3Button>}
+      </Stack>}
     </>}
   </Stack>;
   return <Box sx={{ px: 3, pb: 3 }}><M3Tabs ariaLabel="Lifecycle view" tabs={[{ label: "Fleet", panel: panel }, { label: "Catalog", panel: <LifecycleCatalogPanel onChanged={fleet.refresh} /> }]} /></Box>;

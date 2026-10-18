@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { PolicyOfflineTab, offlineResultsCsv } from "../src/screens/PolicyOfflineTab";
+import { SessionContext, type SessionInfo } from "../src/auth/SessionContext";
 import { detectMapping, parsePreview } from "../src/screens/offlineCsv";
 import { deleteOfflineAnalysis, getOfflineAnalysis, listOfflineAnalyses, uploadOfflineAnalysis, type OfflineAnalysisResult } from "../src/auth/adminApi";
 vi.mock("../src/auth/adminApi", () => ({ deleteOfflineAnalysis: vi.fn(), getOfflineAnalysis: vi.fn(), listOfflineAnalyses: vi.fn(), uploadOfflineAnalysis: vi.fn() }));
@@ -99,11 +100,19 @@ it("says there is no stored analysis when the viewer's list is empty, and shows 
   await screen.findByLabelText("SIEM CSV file");
   expect(screen.queryByRole("group", { name: "SIEM CSV upload" })).not.toBeInTheDocument();
 });
-it("shows no dropzone before a policy is chosen or while the list is loading", async () => {
-  const { unmount } = render(<PolicyOfflineTab policy="" openRule={vi.fn()} />);
-  expect(screen.getByText("Select a stored policy first.")).toBeInTheDocument();
-  expect(screen.queryByRole("group", { name: "SIEM CSV upload" })).not.toBeInTheDocument();
+it("shows the locked dropzone before a policy is chosen -- Role: not permitted for a Viewer, 0 stored analyses -- and none while the list is loading (post-release review 2026-10-18, 2.5)", async () => {
+  const viewer: SessionInfo = { displayName: "Synthetic viewer", roleTokens: [], permissions: ["Devices", "Config", "Compliance"], onSignOut: () => {} };
+  const { unmount } = render(<SessionContext.Provider value={viewer}><PolicyOfflineTab policy="" openRule={vi.fn()} /></SessionContext.Provider>);
+  const zone = screen.getByRole("group", { name: "SIEM CSV upload" });
+  expect(zone).toHaveAttribute("aria-disabled", "true");
+  expect(zone).toHaveTextContent("Drop a SIEM CSV here · Role: not permitted");
+  expect(zone).toHaveTextContent("0 stored analyses · select a stored policy to list its analyses.");
+  expect(listOfflineAnalyses).not.toHaveBeenCalled();
   unmount();
+  // a role that may upload is told what it still needs: a policy
+  const second = render(<PolicyOfflineTab policy="" openRule={vi.fn()} />);
+  expect(screen.getByRole("group", { name: "SIEM CSV upload" })).toHaveTextContent("Drop a SIEM CSV here · Select a stored policy first");
+  second.unmount();
   vi.mocked(listOfflineAnalyses).mockReturnValue(new Promise(() => undefined));
   render(<PolicyOfflineTab policy="p1" openRule={vi.fn()} />);
   expect(screen.getByRole("status")).toHaveTextContent("Loading stored analyses");

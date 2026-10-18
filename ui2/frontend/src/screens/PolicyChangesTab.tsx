@@ -8,6 +8,8 @@ import { DISPLAY_TZ_LABEL, displayInputToIso, formatStamp, isoToDisplayInput } f
 const fields = ["name", "number", "enabled", "source", "destination", "service", "application", "action", "log", "comment", "extras", "container", "section", "parentRuleId"];
 const initialFilters: PolicyChangeFilters = { from: "", to: "", policy: "", device: "", actor: "", changeType: "", field: "", q: "", includeInitial: false };
 const columns = ["When", "Policy / device", "Rule", "Change", "Actor", "Before / after"];
+/** After this long the loading line says the estate-wide read is still running (it is given up at the 20 s client timeout). */
+export const SLOW_AFTER_MS = 5_000;
 
 /** One collection of one policy: the rows a single snapshot publication recorded, in page order. */
 export interface ChangeGroup { key: string; policyName: string; collectedAt: string; rows: PolicyChangeRow[]; initialCapture: boolean }
@@ -36,13 +38,20 @@ export function PolicyChangesTab({ policies, devices, openRule }: { policies: Po
   const [toggled, setToggled] = useState<Map<string, boolean>>(new Map());
   const range = useRef<{ from: string; to: string } | null>(null);
   const cursor = cursors[cursors.length - 1];
+  // The read has a 20 s client timeout (`call`), so "Loading…" can never be permanent (post-release review 2026-10-18,
+  // R5): a slow or failed read ends in the error line with Retry, and after a few seconds the wait says it is still a wait.
+  const [slow, setSlow] = useState(false);
   useEffect(() => {
-    let active = true; setData(null); setError("");
+    let active = true; setData(null); setError(""); setSlow(false);
+    const slowTimer = window.setTimeout(() => { if (active) setSlow(true); }, SLOW_AFTER_MS);
     getPolicyChanges({ ...filters, ...range.current }, cursor).then(result => {
       if (!Array.isArray(result.rows) || !result.summary) throw new Error("Invalid changes response");
       if (active) { range.current = { from: result.rangeStart, to: result.rangeEnd }; setData(result); }
-    }).catch(() => { if (active) setError("Changes could not be loaded."); });
-    return () => { active = false; };
+    }).catch((failure: { status?: number; name?: string }) => {
+      const timedOut = failure?.status === 0 || failure?.name === "AbortError";
+      if (active) setError(timedOut ? "Could not load changes · the read timed out after 20 s" : "Could not load changes");
+    }).finally(() => { window.clearTimeout(slowTimer); if (active) setSlow(false); });
+    return () => { active = false; window.clearTimeout(slowTimer); };
   }, [filters, cursor, revision]);
   const update = (field: keyof PolicyChangeFilters, value: string) => setDraft(previous => ({ ...previous, [field]: value }));
   const includeInitial = (value: boolean) => {
@@ -98,8 +107,8 @@ export function PolicyChangesTab({ policies, devices, openRule }: { policies: Po
         <Button type="submit">Apply change filters</Button><Button disabled={!data || exporting} onClick={() => void exportCsv()}>{exporting ? "Exporting…" : "Export changes CSV"}</Button>
       </Stack>
     </Box>
-    {error && <Box role="alert">{error}<Button onClick={() => setRevision(n => n + 1)}>Retry changes</Button></Box>}
-    {!data && !error && <Typography role="status">Loading changes…</Typography>}
+    {error && <Box role="alert" sx={{ display: "flex", alignItems: "center", gap: 1, color: m3.criticalInk }}>{error}<Button onClick={() => setRevision(n => n + 1)}>Retry</Button></Box>}
+    {!data && !error && <Typography role="status">{slow ? "Loading changes… the estate-wide read of the period is still running (given up after 20 s)." : "Loading changes…"}</Typography>}
     {data && <Typography variant="caption">
       <Tooltip title={`${data.rangeStart} — ${data.rangeEnd} (UTC reference)`}><span>{formatStamp(data.rangeStart)} — {formatStamp(data.rangeEnd)}</span></Tooltip>
       {" "}· {data.summary.total} matching changes{!filters.includeInitial && !!hidden && ` · ${hidden} initial-capture rows not shown`}</Typography>}

@@ -52,10 +52,10 @@ export function haReadinessSentence(h: Pick<HaOverview, "total" | "ready" | "not
  * from the device list exactly as the devices report them: no recommended build, no judgement of age. A device that
  * reports no version is counted as Unknown. A management server (FortiManager) runs a different product and is left out.
  */
-export function reportedVersions(devices: readonly DeviceSummary[], vendor: string): Array<{ label: string | null; count: number }> {
+export function reportedVersions(devices: readonly DeviceSummary[], vendor: string, includeManagers = false): Array<{ label: string | null; count: number }> {
   const counts = new Map<string | null, number>();
   for (const d of devices) {
-    if (d.vendor_hint !== vendor || d.enrollment_state !== "ENROLLED" || d.role === "management_server") continue;
+    if (d.vendor_hint !== vendor || d.enrollment_state !== "ENROLLED" || (!includeManagers && d.role === "management_server")) continue;
     const label = d.software_version?.trim() || null;
     counts.set(label, (counts.get(label) ?? 0) + 1);
   }
@@ -421,7 +421,39 @@ export function estateDevicesLabel(d: { active_devices: number; enrolled_devices
  * bucket keeps its link to the filtered device list. {@code onDevicesScreen} drops the one link that would lead back to
  * the screen it is on.
  */
-export function EstateDetails({ data, onDevicesScreen = false }: { readonly data: OverviewView; readonly onDevicesScreen?: boolean }) {
+/** The vendors whose versions come only from the device list (no platform donut): one bar each on the Fleet summary (1.5). */
+export const REPORTED_VERSION_VENDORS = ["fortinet", "cisco_asa", "bluecoat", "radware", "infoblox"] as const;
+
+/** One population bar per vendor of the versions its enrolled devices report (managers included: a FortiManager is in service too). */
+function ReportedVersionBars({ fleet }: { readonly fleet: readonly DeviceSummary[] }) {
+  const bars = REPORTED_VERSION_VENDORS.map((vendor) => ({ vendor, slices: reportedVersions(fleet, vendor, true) })).filter((b) => b.slices.length > 0);
+  if (bars.length === 0) return null;
+  return (
+    <Card sx={{ ...CARD, display: "flex", flexDirection: "column", gap: 1.75 }} data-reported-versions>
+      <SectionTitle icon="grid" title="Other vendors · version as reported" hint="From the device list · enrolled devices · each slice opens the device list" />
+      {bars.map(({ vendor, slices }) => {
+        const named = slices.filter((x) => x.label).sort((x, y) => y.count - x.count);
+        const unknown = slices.filter((x) => !x.label).reduce((n, x) => n + x.count, 0);
+        const other = named.slice(5).reduce((n, x) => n + x.count, 0);
+        const total = slices.reduce((n, x) => n + x.count, 0);
+        return (
+          <Box key={vendor}>
+            <Typography sx={{ fontSize: 13, fontWeight: 600, mb: 0.75 }}>{vendorDisplayName(vendor)} · {total} {total === 1 ? "device" : "devices"}</Typography>
+            <PopulationBar height={12} parts={[
+              ...named.slice(0, 5).map((x, i) => ({ name: x.label ?? "", count: x.count, bg: SERIES[i % SERIES.length], href: q({ screen: "inventory", vendor, sw_version: x.label ?? "" }) })),
+              ...(other ? [{ name: "Other", count: other, bg: "#b4b2aa", href: q({ screen: "inventory", vendor }) }] : []),
+              ...(unknown ? [{ name: "Unknown", count: unknown, bg: EXEC.hatch, href: q({ screen: "inventory", vendor }) }] : []),
+            ]} />
+          </Box>
+        );
+      })}
+    </Card>
+  );
+}
+
+export function EstateDetails({ data, onDevicesScreen = false, fleet }: { readonly data: OverviewView; readonly onDevicesScreen?: boolean;
+  /** The device list the Devices screen already holds: the other vendors' version slices come from it (1.5). */
+  readonly fleet?: readonly DeviceSummary[] }) {
   const age = data.inventory_age;
   const p = data.platform;
   const n = data.nexus;
@@ -440,13 +472,15 @@ export function EstateDetails({ data, onDevicesScreen = false }: { readonly data
             modelTitle="Model" versions={p.versions?.palo_alto} total={p.palo_alto ?? 0} />
         </Box>
       </Box>
+      {fleet && <ReportedVersionBars fleet={fleet} />}
 
       {/* evidence age (the change and cluster lists are the facts above) */}
       <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" } }}>
         <Card sx={CARD}>
           <SectionTitle icon="devices" title="Inventory evidence age" hint={`${age?.of ?? 0} active devices · newest read per device`} />
+          {/* A count is not an achievement (R11): the fresh bucket is slate, the stale ones keep amber and red, never is grey. */}
           <Donut title="Last successful inventory" centerLabel="devices" slices={[
-            { label: "under 24 h", display: "under 24 h", count: age?.lt24h ?? 0, color: STATUS.good, href: q({ screen: "inventory", inventory_age: "lt24h" }) },
+            { label: "under 24 h", display: "under 24 h", count: age?.lt24h ?? 0, color: EXEC.pale, href: q({ screen: "inventory", inventory_age: "lt24h" }) },
             { label: "24–72 h", display: "24–72 h", count: age?.h24_72 ?? 0, color: STATUS.warning, href: q({ screen: "inventory", inventory_age: "24h_72h" }) },
             { label: "over 72 h", display: "over 72 h", count: age?.gt72h ?? 0, color: STATUS.critical, href: q({ screen: "inventory", inventory_age: "gt72h" }) },
             { label: "never", display: "never", count: neverRead, color: STATUS.neutral, href: q({ screen: "inventory", inventory_age: "never" }) },
@@ -641,45 +675,6 @@ export function OverviewScreen() {
       {children}
     </Card>
   );
-  /** Fortinet and Cisco ASA: one bar of the versions the devices report, shown only when the device list has such devices. */
-  const reportedBar = (vendorKey: "fortinet" | "cisco_asa", title: string) => {
-    const slices = fleet ? reportedVersions(fleet, vendorKey) : [];
-    if (slices.length === 0) return null;
-    const named = slices.filter((x) => x.label).sort((x, y) => y.count - x.count);
-    const unknown = slices.filter((x) => !x.label).reduce((n, x) => n + x.count, 0);
-    const other = named.slice(5).reduce((n, x) => n + x.count, 0);
-    const parts = [
-      ...named.slice(0, 5).map((x, i) => ({ name: x.label ?? "", count: x.count, bg: SERIES[i % SERIES.length] })),
-      ...(other ? [{ name: "Other", count: other, bg: "#b4b2aa" }] : []),
-      ...(unknown ? [{ name: "Unknown", count: unknown, bg: EXEC.hatch }] : []),
-    ];
-    return (
-      <Box key={vendorKey}>
-        <Typography sx={{ fontSize: 13, fontWeight: 600, mb: 0.75 }}>{vendorDisplayName(vendorKey)} · {title}</Typography>
-        <PopulationBar parts={parts} height={12} />
-      </Box>
-    );
-  };
-  const softwareBars = (vendorKey: "check_point" | "palo_alto", kind: "major" | "minor", title: string) => {
-    const slices = p.versions?.[vendorKey]?.[kind] ?? [];
-    if (slices.length === 0) return null;
-    const named = slices.filter((x) => x.label).sort((x, y) => y.count - x.count);
-    const unknown = slices.filter((x) => !x.label).reduce((n, x) => n + x.count, 0);
-    const top = named.slice(0, 5);
-    const other = named.slice(5).reduce((n, x) => n + x.count, 0);
-    const parts = [
-      ...top.map((x, i) => ({ name: shortLabel(vendorKey, kind, x.label ?? ""), count: x.count, bg: SERIES[i % SERIES.length] })),
-      ...(other ? [{ name: "Other", count: other, bg: "#b4b2aa" }] : []),
-      ...(unknown ? [{ name: "Unknown", count: unknown, bg: EXEC.hatch }] : []),
-    ];
-    return (
-      <Box key={`${vendorKey}-${kind}`}>
-        <Typography sx={{ fontSize: 13, fontWeight: 600, mb: 0.75 }}>{vendorDisplayName(vendorKey)} · {title}</Typography>
-        <PopulationBar parts={parts} height={12} />
-      </Box>
-    );
-  };
-
   return (
     <ScreenRoot>
       <ScreenHeader
@@ -827,14 +822,12 @@ export function OverviewScreen() {
               ))}
             </Box>
           ) : <Typography sx={{ color: m3.onSurfaceVar }}>No cluster has two compared members yet</Typography>)}
-        {block("Software in service", "Vendor-recommended build: not configured", { href: q({ screen: "inventory" }), label: "Devices" },
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 1.75 }}>
-            {softwareBars("check_point", "major", "Major version")}
-            {softwareBars("check_point", "minor", "Jumbo Hotfix take")}
-            {softwareBars("palo_alto", "minor", "PAN-OS version")}
-            {reportedBar("fortinet", "Version as reported")}
-            {reportedBar("cisco_asa", "Version as reported")}
-          </Box>)}
+        {/* One home for the version charts (post-release review 2026-10-18, 3.5): the Devices Fleet summary. Here one line. */}
+        {block("Software in service", null, null,
+          <Typography data-software-link sx={{ fontSize: 13.5, color: m3.onSurfaceVar }}>
+            Versions per vendor, as the devices report them{p.evidence_at ? ` · facts ${relativeAge(p.evidence_at)}` : ""}:{" "}
+            <Link href={q({ screen: "inventory" })} underline="hover">Devices › Fleet summary →</Link>
+          </Typography>)}
       </Box>
 
       <Box>

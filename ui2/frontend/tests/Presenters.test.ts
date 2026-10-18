@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
-  artefactClassLabel, formatClock, jobStateWord, jobTypeLabel, outcomeLine, presentRaw, readinessReasonLabel, vendorLabel,
+  actorLabel, artefactClassLabel, completedReasonOutcome, formatClock, jobStateWord, jobTypeLabel, outcomeLine, presentRaw,
+  readinessReasonLabel, vendorLabel,
 } from "../src/shell/presenters";
+import { resultWords } from "../src/screens/JobLogsPanel";
 import { displayInputToIso, formatStamp, isoToDisplayInput } from "../src/shell/time";
 
 describe("vendor labels", () => {
@@ -107,5 +109,32 @@ describe("the one display stamp", () => {
     expect(isoToDisplayInput("2026-10-18T03:49:00.000Z")).toBe("2026-10-18T06:49");
     expect(displayInputToIso("")).toBeUndefined();
     expect(isoToDisplayInput(null)).toBe("");
+  });
+});
+
+describe("RESULT words and actors (post-release review 2026-10-18, 2.4 / R8)", () => {
+  it("reads a partial log-collection code as words with the raw code kept", () => {
+    expect(readinessReasonLabel("partial:READ_SIZE_BELOW_OFFSET")).toBe("Partial \u2014 read size below offset");
+    expect(presentRaw("partial:READ_SIZE_BELOW_OFFSET", readinessReasonLabel).raw).toBe("partial:READ_SIZE_BELOW_OFFSET");
+  });
+  it("takes the outcome word of a completed job from the terminal reason the worker wrote there", () => {
+    expect(completedReasonOutcome("READY")).toBe("Ready");
+    expect(completedReasonOutcome("NOT_READY")).toBe("Not ready");
+    expect(completedReasonOutcome("UNKNOWN")).toBe("UNKNOWN");
+    expect(completedReasonOutcome("SYSTEM_LOG_COLLECTED")).toBe("Collected");
+    expect(completedReasonOutcome("COMPLETED")).toBeNull();
+    expect(completedReasonOutcome("completed in 8038ms")).toBeNull();
+    expect(resultWords({ state: "COMPLETED", outcome: null, terminal_reason: "NOT_READY" })).toEqual({ outcome: "Not ready", reason: null });
+    expect(resultWords({ state: "COMPLETED", outcome: null, terminal_reason: "SYSTEM_LOG_COLLECTED" })).toEqual({ outcome: "Collected", reason: null });
+    // a recorded outcome wins over the reason; a reason that only repeats the state stays hidden
+    expect(resultWords({ state: "COMPLETED", outcome: "PARTIAL", terminal_reason: "SYSTEM_LOG_COLLECTED" })).toEqual({ outcome: "Partial", reason: null });
+    expect(resultWords({ state: "COMPLETED", outcome: "SUCCESS", terminal_reason: "COMPLETED" })).toEqual({ outcome: null, reason: null });
+    expect(resultWords({ state: "FAILED", outcome: null, terminal_reason: "partial:READ_SIZE_BELOW_OFFSET" })).toEqual({ outcome: null, reason: "partial:READ_SIZE_BELOW_OFFSET" });
+  });
+  it("names a service actor, keeps a masked session token beside its label and never rewrites a user", () => {
+    expect(actorLabel("system:cp-failover-worker")).toEqual({ label: "service \u00b7 neXus cp failover worker", raw: "system:cp-failover-worker", known: true });
+    expect(actorLabel("SN-2D0959634B")).toEqual({ label: "Masked actor", raw: "SN-2D0959634B", known: true });
+    expect(actorLabel("ACTOR-01")).toEqual({ label: "ACTOR-01", raw: null, known: false });
+    expect(actorLabel("")).toEqual({ label: "UNKNOWN", raw: null, known: false });
   });
 });

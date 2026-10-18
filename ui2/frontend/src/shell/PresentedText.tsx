@@ -35,13 +35,22 @@ export function Presented({ label, raw, suffix = false }: {
  * The product's display stamp, `2026-10-18 06:49 GMT+3`, with the relative age as a muted suffix; the UTC reference
  * value is on hover. Absent value: the word UNKNOWN.
  */
-export function Stamp({ at, age = true, now, stacked = false }: {
+export function Stamp({ at, age = true, now, stacked = false, compact = false }: {
   readonly at: string | null | undefined; readonly age?: boolean; readonly now?: Date;
   /** Put the relative age on a second line, for a narrow table column. */
   readonly stacked?: boolean;
+  /** Only the relative age (`14 h ago`), the exact GMT+3 stamp and the UTC value on hover: for a fixed-width fleet column. */
+  readonly compact?: boolean;
 }) {
   if (!at) return <Box component="span" sx={{ color: m3.neutralInk }}>UNKNOWN</Box>;
   const stamp = formatStamp(at);
+  if (compact) {
+    return (
+      <Box component="time" dateTime={at} title={`${stamp} · ${at} (UTC reference)`} data-stamp={stamp} sx={{ whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
+        {stamp === at ? stamp : relativeAge(at, now)}
+      </Box>
+    );
+  }
   return (
     <Tooltip title={`${at} (UTC reference)`}>
       <Box component="time" dateTime={at} sx={{ whiteSpace: "nowrap" }}>

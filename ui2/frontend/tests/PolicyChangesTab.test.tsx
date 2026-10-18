@@ -1,8 +1,8 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
-import { PolicyChangesTab } from "../src/screens/PolicyChangesTab";
+import { PolicyChangesTab, SLOW_AFTER_MS } from "../src/screens/PolicyChangesTab";
 import type { PolicyChangesPage } from "../src/auth/adminApi";
 const page: PolicyChangesPage = {
   rows: [{ revision: "2", policyId: "p1", policyName: "POL-ALPHA-01", targets: [{ deviceId: "d1", name: "FW-TANGO-04", context: "", syncStatus: "UNKNOWN" }],
@@ -92,8 +92,8 @@ it("applies combined filters, resets pagination and pins the first page period",
 it("reports read/export failures, retries and exports all matching pages with the active period", async () => {
   const fetcher = vi.fn().mockResolvedValueOnce(new Response("{}", { status: 500 })).mockImplementation(async (url: string) => url.includes(".csv") ? new Response("Time,Rule\n2026-10-09,RULE-BRAVO-02") : response(page));
   vi.stubGlobal("fetch", fetcher); mount();
-  expect(await screen.findByRole("alert")).toHaveTextContent("Changes could not be loaded.");
-  fireEvent.click(screen.getByText("Retry changes")); await screen.findByText("Observed at collection");
+  expect(await screen.findByRole("alert")).toHaveTextContent("Could not load changes");
+  fireEvent.click(screen.getByRole("button", { name: "Retry" })); await screen.findByText("Observed at collection");
   const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
   Object.defineProperty(URL, "createObjectURL", { configurable: true, value: vi.fn(() => "blob:synthetic") });
   Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: vi.fn() });
@@ -102,4 +102,21 @@ it("reports read/export failures, retries and exports all matching pages with th
   fetcher.mockResolvedValueOnce(new Response("{}", { status: 500 }));
   fireEvent.click(screen.getByText("Export changes CSV"));
   expect(await screen.findByRole("alert")).toHaveTextContent("Changes CSV could not be exported.");
+});
+
+it("never leaves Loading… standing: a timed-out read ends in 'Could not load changes · Retry' and UNKNOWN cards, a slow one says so (R5)", async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  try {
+    let reject!: (reason: unknown) => void;
+    vi.stubGlobal("fetch", vi.fn(() => new Promise((_, r) => { reject = r; })));
+    render(<ThemeProvider theme={m3Theme}><PolicyChangesTab policies={[]} devices={[]} openRule={vi.fn()} /></ThemeProvider>);
+    expect(screen.getByText("Loading changes…")).toBeInTheDocument();
+    await act(async () => { vi.advanceTimersByTime(SLOW_AFTER_MS + 10); });
+    expect(screen.getByText(/Loading changes… the estate-wide read of the period is still running/)).toBeInTheDocument();
+    await act(async () => { reject({ status: 0, body: { error: "TIMEOUT" } }); });
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not load changes · the read timed out after 20 s");
+    expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+    expect(screen.queryByText(/Loading/)).toBeNull();
+    expect(screen.getAllByText("UNKNOWN")).toHaveLength(6);
+  } finally { vi.useRealTimers(); }
 });

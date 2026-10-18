@@ -2,7 +2,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@mui/material/styles";
 
-import { m3Theme } from "../src/theme/m3Theme";
+import { m3, m3Theme } from "../src/theme/m3Theme";
 import { DeviceInventoryPanels } from "../src/screens/InventoryPanels";
 import { InventoryScreen } from "../src/screens/InventoryScreen";
 import type { DeviceSummary, ManagementTree } from "../src/auth/adminApi";
@@ -90,11 +90,30 @@ describe("Managed estate is a tab under the device header", () => {
     expect(await screen.findByRole("tab", { name: "Managed estate" })).toHaveAttribute("aria-selected", "true");
     expect(screen.queryByRole("tab", { name: "Managed devices" })).toBeNull();
     expect(await screen.findByRole("button", { name: "FW-SYNTH-01" })).toBeInTheDocument();
-    // Fixed column widths (UI review 2026-10-18, P2-1B / roadmap 3.4): a long value clips in its cell, never the Deployment column.
+    // Fixed column widths (UI review 2026-10-18, P2-1B / roadmap 3.4): a long value clips in its cell. The Deployment
+    // column is left out when no device reports one (post-release review 2026-10-18, R17): a column of dashes said nothing.
     const table = document.querySelector("table[data-managed-devices]") as HTMLTableElement;
     expect(table).toHaveStyle({ tableLayout: "fixed" });
-    expect(table.querySelectorAll("colgroup col")).toHaveLength(7);
+    expect(table.querySelectorAll("colgroup col")).toHaveLength(6);
+    expect(screen.queryByRole("columnheader", { name: "Deployment" })).toBeNull();
+    // the management state in sentence case and neutral grey: an expected state is not an alarm
+    expect(screen.getByText("Fully managed").closest(".MuiChip-root")).toHaveStyle({ backgroundColor: m3.scHigh });
+  });
+
+  it("keeps the Deployment column when a device reports one, and words FortiManager's UP neutrally (P2-1B)", async () => {
+    const members = [
+      { virtual_system: "MD-SYNTH-01", address: "192.0.2.1", platform: "FortiGate-100F", hardware_type: "FortiGate-100F", hypervisor: "v7.4.12", node_status: "UP",
+        services: [{ service: "DEPLOYMENT", status: "HA primary" }], grid_master: false, master_candidate: false, ha_enabled: false },
+      { virtual_system: "MD-SYNTH-02", address: "192.0.2.2", platform: "FortiGate-100F", hardware_type: "FortiGate-100F", hypervisor: "v7.4.12", node_status: "DOWN",
+        services: [], grid_master: false, master_candidate: false, ha_enabled: false },
+    ];
+    vi.stubGlobal("fetch", vi.fn(() => json({ device_id: "x", collected_at: "2026-10-18T03:00:00Z", contexts: [], grid_members: members, job: null })));
+    render(<ThemeProvider theme={m3Theme}><DeviceInventoryPanels device={manager("fortinet")} /></ThemeProvider>);
+    await screen.findByRole("button", { name: "MD-SYNTH-01" });
     expect(screen.getByRole("columnheader", { name: "Deployment" })).toBeInTheDocument();
+    expect(screen.getByText("HA primary")).toBeInTheDocument();
+    expect(screen.getByText("Up").closest(".MuiChip-root")).toHaveStyle({ backgroundColor: m3.scHigh });
+    expect(screen.getByText("Down").closest(".MuiChip-root")).toHaveStyle({ backgroundColor: m3.warningContainer });
   });
 
   it("gives a gateway no Managed estate tab", async () => {
