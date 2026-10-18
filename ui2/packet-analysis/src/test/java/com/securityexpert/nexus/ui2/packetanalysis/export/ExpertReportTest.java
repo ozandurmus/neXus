@@ -191,8 +191,8 @@ class ExpertReportTest {
         try (Db read = new Db(Engine.openReadOnly(db, 1))) {
             full = ids(ExpertReportBuilder.build(read, ExpertReportOptions.defaults()));
         }
-        assertEquals(List.of("window", "hop-delta", "hop-forward", "hop-reverse", "rtt", "rtt-first", "cycles", "match", "loss",
-                "retransmission", "rate", "clock", "longest", "ladder"), full);
+        assertEquals(List.of("window", "hop-delta", "hop-mark", "hop-forward", "hop-reverse", "rtt", "rtt-first", "cycles", "match",
+                "loss", "retransmission", "rate", "clock", "longest", "ladder"), full);
         // remove the cycle tables and the flow summary: the templates that need them disappear, the others stay
         try (Db write = new Db(Engine.open(db, 1))) {
             write.exec("DROP VIEW cycle_details");
@@ -232,17 +232,154 @@ class ExpertReportTest {
     }
 
     @Test
-    void theReportCarriesNoVerdictMarkerAndNoNewThreshold() throws Exception {
+    void theOnlyWordsOnAHopAreTheApprovedMarkersAndTheColourScalesKeepNoFixedThreshold() throws Exception {
         Path db = ExpertReportFixtures.analysed(ONSET_FIXTURE, tmp, "v.duckdb", 1);
         byte[] xlsx = ExpertReport.generate(db, ExpertReportOptions.defaults(), 1);
         String text = String.join("\n", sheetNames(xlsx).stream().map(n -> sheetText(xlsx, n)).toList()).toLowerCase(new Locale("tr"));
-        for (String forbidden : List.of("temiz", "gecikme burada", "▲", "etken değil", "sorunlu", "kök neden", "suspect")) {
+        for (String forbidden : List.of("▲", "etken değil", "sorunlu", "suspect", "rapor bir hüküm veya sınıflandırma içermez")) {
             assertFalse(text.contains(forbidden), forbidden);
+        }
+        assertTrue(text.contains("hop işaretleri (temiz / gecikme burada) yalnız yöntem sayfasındaki sabit eşiklerle üretilir; kök neden, "
+                + "kayıp veya yeniden iletim hükmü değildir."), "the reworded limitation");
+        // the decision column holds the four approved words only
+        try (XSSFWorkbook wb = new XSSFWorkbook(new ByteArrayInputStream(xlsx))) {
+            XSSFSheet hop = wb.getSheet("Hop Analizi");
+            int header = rowOf(hop, "Hop", "Tür", "Karar");
+            List<String> words = new ArrayList<>();
+            for (int r = header + 1; hop.getRow(r) != null && hop.getRow(r).getCell(2) != null
+                    && hop.getRow(r).getCell(2).getCellType() == org.apache.poi.ss.usermodel.CellType.STRING; r++) {
+                words.add(hop.getRow(r).getCell(2).getStringCellValue());
+            }
+            assertEquals(List.of("temiz", "gecikme burada", "belirsiz", "belirsiz"), words);
         }
         // colour scales use the data's own minimum and maximum only
         for (String sheet : List.of("xl/worksheets/sheet2.xml", "xl/worksheets/sheet3.xml")) {
             String xml = part(xlsx, sheet);
             assertFalse(xml.contains("cfvo type=\"num\""), "no fixed numeric thresholds in " + sheet);
+        }
+    }
+
+    // ------------------------------------------------------------------------------------------ hop markers
+
+    private static List<HopVerdict.Mark> marks(ExpertReportData data) {
+        return data.hopMarks.stream().map(ExpertReportData.HopMark::mark).toList();
+    }
+
+    @Test
+    void eachHopOfTheOnsetFixtureGetsTheMarkerOfTheApprovedRule() throws Exception {
+        Path db = ExpertReportFixtures.analysed(ONSET_FIXTURE, tmp, "mk.duckdb", 1);
+        try (Db read = new Db(Engine.openReadOnly(db, 1))) {
+            ExpertReportData data = ExpertReportBuilder.build(read, ExpertReportOptions.defaults());
+            // P1 -> P2 recovers the injected loss by retransmission: its request RX component grows by 13 ms for a third
+            // of the cycles (a delay at the hop, not a root cause); the hops behind it have 5 and 7 ms clock uncertainty
+            assertEquals(List.of(HopVerdict.Mark.CLEAN, HopVerdict.Mark.DELAY, HopVerdict.Mark.UNDECIDED, HopVerdict.Mark.UNDECIDED),
+                    marks(data));
+            ExpertReportData.HopMark delayed = data.hopMarks.get(1);
+            assertEquals("p1", delayed.pointA());
+            assertEquals("p2", delayed.pointB());
+            assertTrue(delayed.reason().startsWith("gecikme burada (istek RX bileşeni): ortalama 1,00 → 14,38 ms (+13,38 ms, 14×); "
+                    + "önceki ortancadan 5 ms fazla geç kalan paketler önce %0,0, sonra %33,5 (94 paket); örnek sayısı 119 / 281; "
+                    + "hop saat belirsizliği ±3,00 ms."), delayed.reason());
+            assertTrue(data.hopMarks.get(0).reason().startsWith("temiz (ileri ve geri yön geçiş süresi, istek RX ve cevap TX bileşeni)"),
+                    data.hopMarks.get(0).reason());
+            assertTrue(data.hopMarks.get(2).reason().startsWith("belirsiz: saat belirsizliği ±5,0 ms; 2× = 10,0 ms"),
+                    data.hopMarks.get(2).reason());
+            String finding = data.findings.stream().filter(f -> f.id().equals("hop-mark")).findFirst().orElseThrow().text();
+            assertTrue(finding.contains("önce 12,0 sn / sonra 28,5 sn): gecikme burada: Point 1 → Point 2; temiz: Point 0 → Point 1; "
+                    + "işaretsiz (belirsiz veya ölçüm yok): Point 2 → Point 3, Point 3 → Point 4."), finding);
+        }
+        byte[] xlsx = ExpertReport.generate(db, ExpertReportOptions.defaults(), 1);
+        try (XSSFWorkbook wb = new XSSFWorkbook(new ByteArrayInputStream(xlsx))) {
+            // the strip: the word under the arrow between the two devices, nothing under a belirsiz hop
+            XSSFSheet summary = wb.getSheet("Özet");
+            int boxes = rowOf(summary, "Zincir ve kayıt noktaları") + 1;
+            org.apache.poi.ss.usermodel.Row markers = summary.getRow(boxes + 2);
+            assertEquals("temiz", markers.getCell(2).getStringCellValue());
+            assertEquals("gecikme burada", markers.getCell(4).getStringCellValue());
+            assertTrue(markers.getCell(6) == null || markers.getCell(6).getCellType() == org.apache.poi.ss.usermodel.CellType.BLANK);
+            assertTrue(summary.getRow(boxes + 3).getCell(1).getStringCellValue()
+                    .startsWith("Hop işaretleri: Pencere: önce 12,0 sn / sonra 28,5 sn."));
+            // the hop sheet: Karar, Gerekçe and the window on every row
+            XSSFSheet hop = wb.getSheet("Hop Analizi");
+            int header = rowOf(hop, "Hop", "Tür", "Karar");
+            assertEquals("Gerekçe", hop.getRow(header).getCell(3).getStringCellValue());
+            assertEquals("Pencere", hop.getRow(header).getCell(11).getStringCellValue());
+            assertEquals("Point 1 → Point 2", hop.getRow(header + 2).getCell(0).getStringCellValue());
+            assertTrue(hop.getRow(header + 2).getCell(3).getStringCellValue().startsWith("gecikme burada (istek RX bileşeni)"));
+            assertEquals("Pencere: önce 12,0 sn / sonra 28,5 sn", hop.getRow(header + 2).getCell(11).getStringCellValue());
+            // the method sheet: the six values and the rule sentence
+            String method = sheetText(xlsx, "Yöntem ve Veri");
+            assertTrue(method.contains("C. Hop işaretleri: sabit eşikler (PO kararı 2026-10-18)"), method);
+            for (String value : List.of("5 ms", "2×", "10", "1 puan", "1 ms")) {
+                assertTrue(method.contains(value), value);
+            }
+            assertTrue(method.contains("\"gecikme burada\" = ortalama geçiş süresi en az 5 ms ve 2 kat arttı"), method);
+        }
+    }
+
+    /**
+     * Makes forward packets that left point {@code a} at or after {@code from} arrive {@code seconds} later at every point
+     * behind it (the engine's own {@code obs} rows), so only the hop {@code a -> next} sees the change; {@code limit}
+     * packets at most, the earliest first.
+     */
+    private static void delayBehind(Path db, String a, List<String> behind, double from, double seconds, int limit) throws Exception {
+        String marks = String.join(",", java.util.Collections.nCopies(behind.size(), "?"));
+        List<Object> params = new ArrayList<>(List.of(seconds));
+        params.addAll(behind);
+        params.addAll(List.of(a, from, (long) limit));
+        try (Db write = new Db(Engine.open(db, 1))) {
+            write.exec("UPDATE obs SET corrected=corrected+? WHERE direction='forward' AND point IN (" + marks + ") AND packet_key IN ("
+                    + "SELECT packet_key FROM obs WHERE point=? AND direction='forward' AND corrected>=? ORDER BY corrected,frame LIMIT ?)",
+                    params.toArray());
+        }
+    }
+
+    @Test
+    void aStepDelayOnOneHopIsMarkedThereWhileAFewHugeSpikesOnAnotherAreNot() throws Exception {
+        Path db = ExpertReportFixtures.analysed("det_a_security", tmp, "step.duckdb", 1);
+        double split;
+        try (Db read = new Db(Engine.openReadOnly(db, 1))) {
+            ExpertReportData data = ExpertReportBuilder.build(read, ExpertReportOptions.defaults());
+            split = data.window.split();
+            assertEquals(List.of(HopVerdict.Mark.CLEAN, HopVerdict.Mark.CLEAN, HopVerdict.Mark.CLEAN, HopVerdict.Mark.CLEAN,
+                    HopVerdict.Mark.UNDECIDED), marks(data), "before the change");
+        }
+        // every later packet 20 ms slower between FW1 and FW2; three later packets 500 ms late between the client and FW1
+        delayBehind(db, "fw1_out", List.of("fw2_in", "fw2_out", "server"), split, 0.020, 1_000_000);
+        delayBehind(db, "client", List.of("fw1_in", "fw1_out", "fw2_in", "fw2_out", "server"), split, 0.500, 3);
+        try (Db read = new Db(Engine.openReadOnly(db, 1))) {
+            ExpertReportData data = ExpertReportBuilder.build(read, ExpertReportOptions.defaults());
+            assertEquals(List.of(HopVerdict.Mark.UNDECIDED, HopVerdict.Mark.CLEAN, HopVerdict.Mark.DELAY, HopVerdict.Mark.CLEAN,
+                    HopVerdict.Mark.UNDECIDED), marks(data));
+            assertTrue(data.hopMarks.get(2).reason().startsWith("gecikme burada (ileri yön geçiş süresi): ortalama 0,30 → 20,30 ms"),
+                    data.hopMarks.get(2).reason());
+            String spikes = data.hopMarks.get(0).reason();
+            assertTrue(spikes.startsWith("belirsiz: ortalama +6,00 ms arttı ama yalnız 3 paket"), spikes);
+            assertTrue(spikes.contains("en az 10 paket ve payın 1 puan artması gerekir."), spikes);
+        }
+        byte[] a = ExpertReport.generate(db, ExpertReportOptions.defaults(), 1);
+        assertArrayEquals(a, ExpertReport.generate(db, ExpertReportOptions.defaults(), 4), "medians and late counts at threads 1 and 4");
+    }
+
+    @Test
+    void withoutABeforeAfterSplitNoHopGetsAWord() throws Exception {
+        Path db = ExpertReportFixtures.analysed("healthy", tmp, "nw.duckdb", 1);
+        try (Db read = new Db(Engine.openReadOnly(db, 1))) {
+            ExpertReportData data = ExpertReportBuilder.build(read, ExpertReportOptions.defaults());
+            assertEquals(4, data.hopMarks.size());
+            for (ExpertReportData.HopMark m : data.hopMarks) {
+                assertEquals(HopVerdict.Mark.UNDECIDED, m.mark());
+                assertEquals("belirsiz: önce/sonra karşılaştırması yok (pencere verilmedi, motor olay başlangıcı bulamadı).", m.reason());
+            }
+            assertFalse(ids(data).contains("hop-mark"));
+        }
+        byte[] xlsx = ExpertReport.generate(db, ExpertReportOptions.defaults(), 1);
+        String summary = sheetText(xlsx, "Özet");
+        assertFalse(summary.contains("temiz") || summary.contains("gecikme burada") || summary.contains("Hop işaretleri:"), summary);
+        // an explicit window gives the same hops a comparison
+        try (Db read = new Db(Engine.openReadOnly(db, 1))) {
+            ExpertReportData data = ExpertReportBuilder.build(read, ExpertReportOptions.defaults().withWindow(1700000010.0, null));
+            assertTrue(data.hopMarks.stream().noneMatch(m -> m.reason().startsWith("belirsiz: önce/sonra karşılaştırması yok")));
         }
     }
 
@@ -364,7 +501,7 @@ class ExpertReportTest {
         try (XSSFWorkbook wb = new XSSFWorkbook(new ByteArrayInputStream(xlsx))) {
             XSSFSheet hop = wb.getSheet("Hop Analizi");
             // A: matched packets are counts, means are milliseconds, the before-after difference is signed milliseconds
-            int header = rowOf(hop, "Hop");
+            int header = rowOf(hop, "Hop", "Yön", "Tür");
             org.apache.poi.ss.usermodel.Row first = hop.getRow(header + 1);
             assertEquals("#,##0", first.getCell(3).getCellStyle().getDataFormatString());
             assertEquals("0.000", first.getCell(5).getCellStyle().getDataFormatString());
@@ -698,8 +835,13 @@ class ExpertReportTest {
         try (XSSFWorkbook a = new XSSFWorkbook(new ByteArrayInputStream(raw));
                 XSSFWorkbook b = new XSSFWorkbook(new ByteArrayInputStream(masked))) {
             assertEquals(a.getSheet("Zaman Çizelgesi").getLastRowNum(), b.getSheet("Zaman Çizelgesi").getLastRowNum());
-            assertEquals(a.getSheet("Hop Analizi").getRow(5).getCell(5).getNumericCellValue(),
-                    b.getSheet("Hop Analizi").getRow(5).getCell(5).getNumericCellValue());
+            int rowA = rowOf(a.getSheet("Hop Analizi"), "Hop", "Yön", "Tür") + 1;
+            assertEquals(rowA, rowOf(b.getSheet("Hop Analizi"), "Hop", "Yön", "Tür") + 1);
+            assertEquals(a.getSheet("Hop Analizi").getRow(rowA).getCell(5).getNumericCellValue(),
+                    b.getSheet("Hop Analizi").getRow(rowA).getCell(5).getNumericCellValue());
+            int marks = rowOf(a.getSheet("Hop Analizi"), "Hop", "Tür", "Karar") + 1;
+            assertEquals(a.getSheet("Hop Analizi").getRow(marks).getCell(2).getStringCellValue(),
+                    b.getSheet("Hop Analizi").getRow(marks).getCell(2).getStringCellValue(), "the marker does not depend on the projection");
         }
     }
 

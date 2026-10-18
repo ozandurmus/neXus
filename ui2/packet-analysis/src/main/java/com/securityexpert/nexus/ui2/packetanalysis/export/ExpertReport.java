@@ -10,7 +10,8 @@ import java.sql.SQLException;
  * The Packet Analysis expert report: an Excel workbook (Özet, Zaman Çizelgesi, Hop Analizi, Örnek Olaylar, Yöntem ve
  * Veri) generated deterministically from a finished case database. The same case and options give the same bytes,
  * whatever the DuckDB thread count. No free text is generated: findings are fixed templates filled with computed values
- * ({@link ExpertFindings}), and the report states numbers, never a verdict.
+ * ({@link ExpertFindings}), and the report states numbers; the only words it puts on a hop are the markers of the
+ * approved hop rule ({@link HopVerdict}: "gecikme burada", "temiz"), each printed with its reason and window.
  */
 public final class ExpertReport {
     public static final String CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";

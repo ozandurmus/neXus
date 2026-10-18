@@ -54,8 +54,8 @@ final class ExpertReportData {
             Double p50, Double p95, Double max, Double uncertaintyMs, Double lossPercent) {
     }
 
-    /** Consecutive capture points on one device, as one box of the chain strip. */
-    record Box(String device, List<String> captions) {
+    /** Consecutive capture points on one device, as one box of the chain strip ({@code pointIds} in path order). */
+    record Box(String device, List<String> captions, List<String> pointIds) {
     }
 
     /** RTT of the request/response cycles observed at one capture point. */
@@ -106,6 +106,13 @@ final class ExpertReportData {
     }
 
     record Finding(String id, String text) {
+    }
+
+    /**
+     * The marker of one hop (an adjacent capture-point pair, both directions) under the approved rule
+     * ({@link HopVerdict}): {@code pointA}/{@code pointB} in forward path order, the reason line the rule produced.
+     */
+    record HopMark(String label, boolean deviceHop, String pointA, String pointB, HopVerdict.Mark mark, String reason) {
     }
 
     /** One attached host telemetry file: what it is, how its clock was aligned, and what became of its lines. */
@@ -188,6 +195,8 @@ final class ExpertReportData {
     List<String> limitations = new ArrayList<>();
     String verdict;
     List<Finding> findings = new ArrayList<>();
+    /** One entry per hop, in path order; empty when the case has no segments. */
+    List<HopMark> hopMarks = new ArrayList<>();
     /** Short reasons why a section has no data (printed as one line in the workbook). */
     java.util.Map<String, String> absent = new java.util.LinkedHashMap<>();
 

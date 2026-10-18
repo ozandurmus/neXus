@@ -322,26 +322,28 @@ JUnit: `ReferenceCompareTest` and `ExportAndFieldDiffTest` (negative cases first
 
 An Excel workbook for one analysed case, built only from what the engine stored (`settings.report`, the topology and the
 `obs`, `observation_matches`, `cycle_*`, `adjacent_match_rates`, `events`, `flow_summary` tables). Turkish text, the
-reference report's palette and fonts, native Excel charts, values as constants (no formulas). It states numbers and
-never a verdict: no "clean / delay here" marker and no threshold of its own; a method decision on that is pending.
+reference report's palette and fonts, native Excel charts, values as constants (no formulas). It states numbers; the
+only words it puts on a hop are the markers `gecikme burada` / `temiz` of the rule the PO approved on 2026-10-18
+("Hop markers" below), each with its reason line and window.
 
 | Sheet | Content (engine fields) |
 |---|---|
-| Özet | heading `<case title>: N kayıt noktası, <capture date>` (the case title as the caller projected it: the masked pseudonym for a masked reader; `Paket analizi` when none is given), chain strip (topology devices and points in `forward` order), at most five numbered findings in a fixed order (`window`, `hop-delta`, `loss`, `retransmission`, `rtt-first`), before/after KPI table with separate `Fark (sonra − önce)` and `Oran (sonra/önce)` columns (the ratio is empty where the earlier value is zero), the remaining findings as a smaller `Diğer gözlemler` block below the table, two bar charts (hop transit, per-point RTT) and three line charts on one time axis |
+| Özet | heading `<case title>: N kayıt noktası, <capture date>` (the case title as the caller projected it: the masked pseudonym for a masked reader; `Paket analizi` when none is given), chain strip (topology devices and points in `forward` order, a marker row under it: the word of a hop between two devices under its arrow, of a hop inside one device in that device's box, and the window line), at most five numbered findings in a fixed order (`window`, `hop-delta`, `loss`, `retransmission`, `rtt-first`), before/after KPI table with separate `Fark (sonra − önce)` and `Oran (sonra/önce)` columns (the ratio is empty where the earlier value is zero), the remaining findings as a smaller `Diğer gözlemler` block below the table, two bar charts (hop transit, per-point RTT) and three line charts on one time axis |
 | Zaman Çizelgesi | one row per second bucket (`timeseries` origin/width): first-point packets, measured cycles, RTT, retransmission flags, loss events, and per forward hop the mean/maximum matched-packet transit; the engine's onsets (`onsets.items`) to the right |
-| Hop Analizi | A hop table (matched packets of `observation_matches` per hop, mean/maximum per period, `segments` p50/p95/uncertainty), B per-point RTT (`cycle_points`), C cycle RX/TX per hop (`cycle_pairs`), D match coverage with colour scales (`adjacent_match_rates`), E per-point packets and retransmission flags (`obs`) |
+| Hop Analizi | hop markers (one row per hop: `Karar`, `Gerekçe`, `Pencere`), A hop table (matched packets of `observation_matches` per hop, mean/maximum per period, `segments` p50/p95/uncertainty), B per-point RTT (`cycle_points`), C cycle RX/TX per hop (`cycle_pairs`), D match coverage with colour scales (`adjacent_match_rates`), E per-point packets and retransmission flags (`obs`) |
 | Örnek Olaylar | A the longest N cycles (`cycle_points`, N = `top`, default 25) split into adjacent-point RTT differences (stacked bar), B the retransmission ladder of the flow with most retransmissions (`flow_summary`, copies of one data segment per point in `obs`); a missing section is one line saying so |
-| Yöntem ve Veri | capture points, glossary (project term to standard term, definition, limit), limits (host-side logs were not part of the analysis, unless host telemetry is attached), engine limitations, source capture SHA-256 values, parameters |
+| Yöntem ve Veri | capture points, glossary (project term to standard term, definition, limit), the hop marker thresholds and the rule in one sentence, limits (host-side logs were not part of the analysis, unless host telemetry is attached), engine limitations, source capture SHA-256 values, parameters |
 
 Before/after: by default the split is the earliest onset of the engine (segment and host-boundary scopes first, as the
 engine's own cycle periods; any scope when there is none). Without any onset the report says that no event window was
 found and shows whole-capture figures. `start`/`end` (epoch seconds) override it: Önce is the compared range up to
 `start`, Sonra is `start` to `end` (default the end of the common window). Second buckets are assigned by their start.
 
-Finding templates (each emitted only when its data exists): `window`, `hop-delta`, `hop-forward`, `hop-reverse`, `rtt`,
+Finding templates (each emitted only when its data exists): `window`, `hop-delta`, `hop-mark`, `hop-forward`, `hop-reverse`, `rtt`,
 `rtt-first`, `cycles`, `match`, `loss`, `retransmission`, `rate`, `clock`, `longest`, `ladder` (`ExpertFindings`). `hop-delta`
 names the hop component (RX or TX of one adjacent point pair, `cycle_pairs`) whose mean added time grew most from before to
-after and the largest change among the other hops: numbers only, no cause and no threshold. Those of `window`, `hop-delta`, `loss`,
+after and the largest change among the other hops: numbers only, no cause and no threshold. `hop-mark` lists the hops by
+marker (only when a split exists and at least one hop has a word). Those of `window`, `hop-delta`, `loss`,
 `retransmission`, `rtt-first` that exist form the Özet block, in that order; the others are "other observations".
 
 Number formats: every numeric cell has an explicit format by kind (`ExpertReportTest.everyNumericCellOfTheWorkbookHasAnExplicitNumberFormat`
@@ -365,6 +367,57 @@ address or a payload field in either projection. Service route
 `security_admin` (raw view) gets the raw projection and a `RAW_VIEWED` ledger row, every other reader the masked one
 (`REPORT_VIEWED`). CLI: `pa-expert-report <caseId> <dest.xlsx> [start=<epoch>] [end=<epoch>] [top=<n>]`; on a local project,
 `ExpertReportCli --project DIR --output FILE.xlsx [--window-start E --window-end E --top N --threads N --title T]`.
+
+### Hop markers (`export/HopVerdict`, PO decision 2026-10-18)
+
+Authority: `docs/design/PACKET_ANALYSIS_HOP_VERDICT_PROPOSAL.md` (APPROVED) and
+`docs/design/PO_DECISION_RECORD_2026_10_18_PACKET_ANALYSIS_HOP_VERDICT.md`. The rule is the proposal's family C
+("breadth") with its recommended values, judged on the **mean** (not the p95 or the median); the median only sets
+where a packet counts as late.
+
+- **Hop**: one adjacent capture-point pair, both directions (a forward segment and the reverse segment of the same
+  pair). **Signals** of a hop: forward transit and reverse transit (`observation_matches`, `time_b - time_a`, period by
+  `time_a`: the rows of section A), and the cycle components of each of its segments, request RX and response TX
+  (`cycle_pairs.added_ms`, `reason IS NULL`, period by `time`: the rows of section C). **Clock uncertainty**: the
+  segment's `latency_uncertainty_ms`, for its transit and its cycle component.
+- **Windows**: the report's own before/after split (the engine's first onset, or the explicit `start`/`end`). Without
+  a split no hop gets a word (`belirsiz`, line 1; proposal decision 4: no markers).
+- A signal is **judged** only with at least 10 samples in each window; the others are ignored. **Baseline** = the same
+  signal's before window: its mean, and its exact median (the middle value, or the mean of the two middle values).
+  A sample is **late** at X when it is at least `median_before + X`.
+- **gecikme burada** (any judged signal): `mean_after - mean_before >= 5 ms`, `mean_after >= 2 x max(mean_before,
+  0.1 ms)`, the increase `> 2 x` the hop's clock uncertainty, at least 10 late (5 ms) samples in the after window, and
+  the late share grew by at least 1 percentage point.
+- **temiz** (every judged signal): `|mean_after - mean_before| < 1 ms`, `2 x uncertainty < 5 ms` (a 5 ms change was
+  visible), and the share of samples at least 1 ms above the before median grew by less than 1 point.
+- **belirsiz**: everything else, with the first matching reason line of the proposal's section 8 (no window, too few
+  samples, clock floor, between the margins, too few late packets, decrease of at least 5 ms, increase not above
+  `2 x uncertainty`); **ölçüm yok**: no matched packet and no cycle sample at all. Neither prints a word on the strip.
+
+Choices the proposal left open, taken conservatively and listed here:
+
+1. Unknown clock uncertainty (the engine gives none for the hop): never a word (`belirsiz`, an added reason line next
+   to line 3), neither `gecikme burada` nor `temiz`.
+2. An increase of at least 5 ms whose ratio is below 2x, and a mean inside the 1 ms margin whose 1 ms late share grew
+   by a point or more: `belirsiz` with their own added reason lines (next to lines 5 and 4); the proposal names the
+   conditions but no line for them.
+3. Line 6 ("önceki pencerede gecikme vardı") only for a decrease of at least 5 ms; a smaller decrease is line 4.
+4. The ratio floor 0.1 ms is the value of the proposal's own evaluation tooling (`R0`), not stated in the document;
+   with the 5 ms increase required it can only make the safety-net ratio easier to meet, never create a delay word.
+5. Boundaries as written: `>= 5 ms`, `>= 2x`, `>= 10` samples and late packets, `>= 1` point, increase strictly
+   above `2 x u`, clean strictly below 1 ms, `2 x u` strictly below 5 ms; every mean and share comparison is exact
+   integer arithmetic on the engine's integer sums (nanoseconds for transit, microseconds for cycles).
+6. The `temiz` reason line shows the signal whose mean moved most and its sample counts, and the unmatched share of
+   the hop's match-coverage rows (both directions); a belirsiz hop shows the lowest-numbered line of its signals.
+
+Determinism: the median and the late counts are integer queries (twice the median as the sum of the two middle
+integer values, compared with `2 x value`), so the workbook stays byte-identical across DuckDB threads
+(`ExpertReportTest.aStepDelayOnOneHopIsMarkedThereWhileAFewHugeSpikesOnAnotherAreNot` checks threads 1 and 4).
+
+Tests: `HopVerdictTest` (every boundary: 4.9 vs 5.0 ms, 1.9x vs 2.0x, 9 vs 10 samples and late packets, the
+1-point share growth, the clock floor for a delay and for a clean hop, unknown uncertainty, the 1 ms clean margin, the
+decrease line, hop combination and the exact reason lines), `ExpertReportTest` (the onset fixture's four hops, a step
+delay injected on one hop and three 500 ms spikes on another, no split -> no word, the four approved words only).
 
 ## Host telemetry and the Sunucu Korelasyonu sheet (`...packetanalysis.telemetry`, expert report stage B)
 
@@ -590,6 +643,20 @@ other direction at a point after B on the reply path that is not a reset and car
 Tests: `NeighbourScopeTest` (one-way and blocked-handshake flows stay in scope, unconfirmed NAT never compares
 identity, extra flows at the server point are excluded single-point flows, a flow missing only at the neighbour is
 out of that hop, genuine loss on the shared flow is unchanged).
+
+**Hop markers in the expert report** (`export/HopVerdict`, PO decision 2026-10-18; "Hop markers" above). Not a
+reference bug but an approved method decision: the reference never puts a verdict on a hop, so every `gecikme burada` /
+`temiz` is new behaviour rather than a changed reference value. It lives only in the expert report, which has no
+counterpart in the reference; `report.json` and the FindingsExport, the sections the corpus gate compares, are
+untouched, so the gate needed no acceptance rule and every corpus case still runs strict (L1/L2/L3 and threads 1 vs
+4). What the markers say on the corpus is measured separately against the generator's ground truth (926 hops): with
+the report's default window (the engine's first onset) 107 of the 206 cases now carry at least one hop word and the
+99 cases without an engine onset carry none; 39 hops in 33 cases are `gecikme burada`: the 21 of 24 injected delay
+hops the proposal predicted, 15 hops whose injected loss was recovered by retransmission (the request took longer
+there: a location, not a cause, proposal section 6.1), and 3 hops of the replicas without ground truth; no hop without
+an injected fault and no delayed hop is `temiz` (the other 3 delay hops, `real_case_2` variants, stay `belirsiz`).
+With a window split at the known fault start: the same 21/24, 0 false `gecikme burada` of 745, 336 `temiz` (proposal
+section 6.1: identical).
 
 ## Masked projection of payload-derived text (`com.securityexpert.nexus.ui2.packetanalysis.privacy`)
 

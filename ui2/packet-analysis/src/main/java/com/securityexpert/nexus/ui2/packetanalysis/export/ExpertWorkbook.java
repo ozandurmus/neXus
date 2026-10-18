@@ -338,9 +338,10 @@ final class ExpertWorkbook {
         }
         p.title("Hop analizi: fark hangi iki kayıt noktası arasında oluşuyor?",
                 "Her satır komşu iki kayıt noktası arasındaki farktır. Aynı paket iki noktada ölçüldüğü için sabit saat ofseti "
-                        + "iptal olur; değerler cihaz işleme + hat gecikmesini birlikte kapsar. Rakamlar bir hüküm değildir. "
-                        + windowSentence(), 12);
+                        + "iptal olur; değerler cihaz işleme + hat gecikmesini birlikte kapsar. Hop işaretleri yalnız Yöntem ve Veri "
+                        + "sayfasındaki sabit eşiklerle üretilir; kök neden hükmü değildir. " + windowSentence(), 12);
         int r = 3;
+        r = writeHopMarks(p, r);
         p.section(r++, "A. Komşu noktalar arası fark (ms; eşleşmiş paket sayısıyla ağırlıklı ortalama)");
         if (d.absent.containsKey("hop")) {
             p.note(r++, 0, 11, d.absent.get("hop"), true);
@@ -1019,7 +1020,9 @@ final class ExpertWorkbook {
         }
         r++;
 
-        p.section(r++, "C. Sınırlar ve dikkat noktaları");
+        r = writeMarkerThresholds(p, r);
+
+        p.section(r++, "D. Sınırlar ve dikkat noktaları");
         for (String limit : LIMITS) {
             if (d.host != null && limit.startsWith("Sunucu (host) tarafı günlükleri")) {
                 continue; // the case carries host telemetry: the Sunucu Korelasyonu sheet says what was used and how
@@ -1039,7 +1042,7 @@ final class ExpertWorkbook {
         }
         r++;
 
-        p.section(r++, "D. Kaynak dosya bütünlüğü (SHA-256)");
+        p.section(r++, "E. Kaynak dosya bütünlüğü (SHA-256)");
         List<Source> listed = new ArrayList<>(d.sources);
         if (d.host != null) {
             for (HostFile f : d.host.files) {
@@ -1062,7 +1065,7 @@ final class ExpertWorkbook {
         }
         r++;
 
-        p.section(r++, "E. Rapor parametreleri");
+        p.section(r++, "F. Rapor parametreleri");
         String[][] params = {
             {"Motor sürümü", d.engineVersion == null ? DASH : d.engineVersion},
             {"Motorun kendi özeti (değiştirilmemiş)", d.verdict == null ? DASH : d.verdict},
@@ -1078,6 +1081,44 @@ final class ExpertWorkbook {
             p.merge(r, 2, r, 3, param[1], cell().wrap());
             r++;
         }
+    }
+
+    /** The marker rule's fixed values, one row each, and the rule in one sentence (proposal section 8). */
+    private int writeMarkerThresholds(XlsxPage p, int r) {
+        p.section(r++, "C. Hop işaretleri: sabit eşikler (PO kararı 2026-10-18)");
+        headers(p, r++, 1, List.of("Değer", "Eşik", "Anlamı"), null);
+        String[][] rows = {
+            {"Gecikme eşiği", TrFormat.number(HopVerdict.DELAY_MS, 0) + " ms",
+                "Ortalama en az bu kadar artmalı; önceki pencerenin ortancasından en az bu kadar sonra gelen paket \"geç kalan\" sayılır."},
+            {"Oran", HopVerdict.RATIO + "×",
+                "Sonraki ortalama önceki ortalamanın en az bu katı olmalı (önceki ortalama " + TrFormat.number(HopVerdict.RATIO_FLOOR_MS, 1)
+                        + " ms'den küçükse " + TrFormat.number(HopVerdict.RATIO_FLOOR_MS, 1) + " ms alınır)."},
+            {"Örnek sayısı", Long.toString(HopVerdict.MIN_SAMPLES),
+                "Bir sinyal her iki pencerede en az bu kadar örnekle değerlendirilir; gecikme için sonraki pencerede en az bu kadar geç kalan paket gerekir."},
+            {"Geç kalan payının artışı", HopVerdict.SHARE_GROWTH_PER_HUNDRED + " puan",
+                "Gecikme için geç kalan paketlerin payı en az bu kadar artmalı; temiz için bu artış bunun altında kalmalı."},
+            {"Saat çarpanı", TrFormat.number(HopVerdict.CLOCK_FACTOR, 0) + "×",
+                "Artış hop saat belirsizliğinin bu katından büyük olmalı; temiz için bu kat " + TrFormat.number(HopVerdict.DELAY_MS, 0)
+                        + " ms'den küçük olmalı (aksi halde belirsiz)."},
+            {"Temiz sınırı", TrFormat.number(HopVerdict.CLEAN_MS, 0) + " ms",
+                "Temiz için ortalama fark ±bu değerin içinde kalmalı ve önceki ortancanın bu kadar üstüne çıkan paketlerin payı artmamalı."},
+        };
+        for (String[] row : rows) {
+            p.put(r, 1, row[0], cell().bold());
+            p.put(r, 2, row[1], cell());
+            p.put(r, 3, row[2], cell().wrap());
+            p.height(r, Math.max(16, XlsxPage.wrappedHeight(row[2], 44, 13)));
+            r++;
+        }
+        p.note(r++, 0, 4, "\"gecikme burada\" = ortalama geçiş süresi en az 5 ms ve 2 kat arttı, artış hop'un saat belirsizliğinin 2 "
+                + "katından büyük, en az 10 paket önceki ortancanın 5 ms üstüne çıktı ve bu paketlerin payı en az 1 puan arttı. "
+                + "\"temiz\" = ortalama fark ±1 ms içinde, geç kalan paket payı artmadı ve ölçüm 5 ms'lik bir değişimi görebilecek "
+                + "hassasiyette. Diğer her durum belirsizdir.", false);
+        p.note(r++, 0, 4, "Sinyaller: ileri ve geri yön geçiş süresi (aynı paketin iki komşu noktadaki zaman farkı) ile istek RX / "
+                + "cevap TX döngü bileşenleri. Bir sinyal gecikme gösterirse hop \"gecikme burada\" olur; \"temiz\" için "
+                + "değerlendirilen her sinyal temiz olmalıdır; yeterli örneği olmayan sinyal değerlendirilmez. Ortanca, önceki "
+                + "pencerenin örneklerinin tam ortancasıdır; ortalamalar tam sayı toplamlarıyla hesaplanır.", false);
+        return r + 1;
     }
 
     private String modeText() {
@@ -1146,8 +1187,128 @@ final class ExpertWorkbook {
         "SPAN düşüşü/aşırı abonelik sayaçları ve zaman damgasının üretildiği yer (NIC veya çekirdek) bilinmemektedir; farklar bu etkileri birlikte kapsar.",
         "Sunucu (host) tarafı günlükleri (CPU, süreç, kuyruk sayaçları) bu analize dahil edilmemiştir; rapor yalnız paket yakalamalarından türetilmiştir.",
         "Rapor yalnız başlık ve zaman alanlarından üretilmiştir; paket içeriği (payload) rapora alınmamıştır.",
-        "Rakamlar sayı ve ortalamalardır; rapor bir hüküm veya sınıflandırma içermez.",
+        "Hop işaretleri (temiz / gecikme burada) yalnız Yöntem sayfasındaki sabit eşiklerle üretilir; kök neden, kayıp veya yeniden iletim hükmü değildir.",
+        "\"temiz\" ölçülen bir gecikme artışı olmadığını söyler; kayıp, engellenen bağlantı veya yakalama kaçırması olmadığını söylemez. Bir işaret karşılaştırılan pencereye bağlıdır ve pencereyle birlikte okunur.",
+        "Bir saat sıçraması (NTP adımı, sanal makine duraklaması) gecikme gibi görünür ve saat belirsizliği kuralıyla ayrılamaz; eşikler sentetik yakalamalarla seçilmiş, gerçek olaylarla doğrulanmamıştır.",
     };
+
+    // ------------------------------------------------------------------------------------------------ hop markers
+
+    /** "Pencere: önce 12,0 sn / sonra 28,0 sn": the window every marker was computed for. */
+    private String markerWindowText() {
+        if (!d.split()) {
+            return "Pencere: önce/sonra karşılaştırması yok";
+        }
+        return "Pencere: önce " + TrFormat.number(Math.max(0, d.window.periods().get(0).seconds()), 1) + " sn / sonra "
+                + TrFormat.number(Math.max(0, d.window.periods().get(1).seconds()), 1) + " sn";
+    }
+
+    private static St markStyle(HopVerdict.Mark mark) {
+        St st = St.base().size(9).bold().center().wrap();
+        return mark == HopVerdict.Mark.DELAY ? st.color(XlsxStyle.RED) : st.color(XlsxStyle.GREEN);
+    }
+
+    private int boxOf(String pointId) {
+        for (int j = 0; j < d.chain.size(); j++) {
+            if (d.chain.get(j).pointIds().contains(pointId)) {
+                return j;
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * The marker row under the chain strip: the word of a hop between two devices under its arrow, the words of hops
+     * inside one device ("cihaz içi") in that device's box, and one line with the window and where the reasons are.
+     * belirsiz and ölçüm yok print no word. Returns whether anything was written.
+     */
+    private boolean writeChainMarkers(XlsxPage p, int row, int lastCol) {
+        String[] arrow = new String[d.chain.size()];
+        HopVerdict.Mark[] arrowMark = new HopVerdict.Mark[d.chain.size()];
+        List<List<String>> inside = new ArrayList<>();
+        List<HopVerdict.Mark> insideMark = new ArrayList<>();
+        for (int j = 0; j < d.chain.size(); j++) {
+            inside.add(new ArrayList<>());
+            insideMark.add(null);
+        }
+        boolean any = false;
+        for (HopMark m : d.hopMarks) {
+            String word = m.mark().stripWord();
+            int a = boxOf(m.pointA());
+            int b = boxOf(m.pointB());
+            if (word == null || a < 0 || b < 0) {
+                continue;
+            }
+            if (a == b) {
+                Pt pa = d.point(m.pointA());
+                Pt pb = d.point(m.pointB());
+                inside.get(a).add(pa.code() + "→" + pb.code() + " " + word);
+                // one box, one colour: a delay inside the device outranks a clean hop next to it
+                if (insideMark.get(a) != HopVerdict.Mark.DELAY) {
+                    insideMark.set(a, m.mark());
+                }
+                any = true;
+            } else if (b == a + 1 && arrow[a] == null) {
+                arrow[a] = word;
+                arrowMark[a] = m.mark();
+                any = true;
+            }
+        }
+        if (!any) {
+            return false;
+        }
+        for (int j = 0; j < d.chain.size(); j++) {
+            if (!inside.get(j).isEmpty()) {
+                p.put(row, 1 + 2 * j, String.join(" · ", inside.get(j)), markStyle(insideMark.get(j)));
+            }
+            if (arrow[j] != null) {
+                p.width(2 + 2 * j, 10);
+                p.put(row, 2 + 2 * j, arrow[j], markStyle(arrowMark[j]));
+            }
+        }
+        p.height(row, 26);
+        p.note(row + 1, 1, lastCol, "Hop işaretleri: " + markerWindowText() + ". Yalnız Yöntem ve Veri sayfasındaki sabit "
+                + "eşiklerle üretilir; işaretsiz hop belirsizdir veya ölçümü yoktur, gerekçe Hop Analizi sayfasındadır.", false);
+        return true;
+    }
+
+    /** The hop decision table at the top of the hop sheet: one row per hop with Karar, Gerekçe and the window. */
+    private int writeHopMarks(XlsxPage p, int r) {
+        p.section(r++, "Hop işaretleri (temiz / gecikme burada)");
+        if (d.hopMarks.isEmpty()) {
+            p.note(r++, 0, 11, "Komşu kayıt noktası çifti olmadığı için hop işareti yok.", true);
+            return r + 1;
+        }
+        p.put(r, 0, "Hop", header());
+        p.put(r, 1, "Tür", header());
+        p.put(r, 2, "Karar", header());
+        p.merge(r, 3, r, 10, "Gerekçe", header());
+        p.merge(r, 11, r, 12, "Pencere", header());
+        p.height(r, 30);
+        r++;
+        String window = markerWindowText();
+        for (HopMark m : d.hopMarks) {
+            p.put(r, 0, m.label(), cell().wrap());
+            p.put(r, 1, m.deviceHop() ? "Cihaz içi" : "Hat / komşu", cell());
+            St word = cell().bold().center();
+            if (m.mark() == HopVerdict.Mark.DELAY) {
+                word = word.color(XlsxStyle.RED);
+            } else if (m.mark() == HopVerdict.Mark.CLEAN) {
+                word = word.color(XlsxStyle.GREEN);
+            }
+            p.put(r, 2, m.mark().word, word);
+            p.merge(r, 3, r, 10, m.reason(), cell().wrap());
+            p.merge(r, 11, r, 12, window, cell().wrap());
+            p.height(r, Math.max(XlsxPage.wrappedHeight(m.reason(), p.spanWidth(3, 10), 13),
+                    XlsxPage.wrappedHeight(m.label(), p.spanWidth(0, 0), 13)));
+            r++;
+        }
+        p.note(r++, 0, 12, "Karar yalnız Yöntem ve Veri sayfasındaki sabit eşiklerle üretilir (bölüm C); kök neden, kayıp veya "
+                + "yeniden iletim hükmü değildir. \"temiz\" yalnız gecikme içindir: ölçülen bir gecikme artışı olmadığını söyler, "
+                + "kayıp, engellenen bağlantı veya yakalama kaçırması olmadığını söylemez; eşleşme ve kayıp rakamları bu "
+                + "sayfanın D bölümündedir. Belirsiz ve ölçümü olmayan hop'lar zincir şeridinde işaretsizdir.", false);
+        return r + 1;
+    }
 
     // ------------------------------------------------------------------------------------------------ Özet
 
@@ -1182,7 +1343,7 @@ final class ExpertWorkbook {
             }
             p.height(r, 30);
             p.height(r + 1, 30);
-            r += 3;
+            r += writeChainMarkers(p, r + 2, lastCol) ? 5 : 3;
         }
         p.section(r++, "Bulgular");
         // at most five on this page, in a fixed order; the rest sit below the indicator table
