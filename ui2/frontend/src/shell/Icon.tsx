@@ -28,6 +28,8 @@ export type IconName =
   | "moon"
   | "sun"
   | "rows"
+  | "policy"
+  | "tools"
   | "close"
   | "external";
 
@@ -188,6 +190,20 @@ export function Icon({ name, size = 20 }: { readonly name: IconName; readonly si
       return (
         <svg {...props}>
           <path d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+        </svg>
+      );
+    case "policy":
+      return (
+        <svg {...props}>
+          <path d="M6 3h9l4 4v14H6z" />
+          <path d="M15 3v4h4M9 12h7M9 16h7" />
+        </svg>
+      );
+    case "tools":
+      return (
+        <svg {...props}>
+          <path d="M14.5 6.5a4 4 0 0 0 5 5L9 22l-3-3z" />
+          <path d="M14.5 6.5L17 4a4 4 0 0 1 3 3l-2.5 2.5" />
         </svg>
       );
     case "close":

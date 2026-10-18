@@ -1,69 +1,122 @@
 import { render, screen, within, fireEvent } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
-import { NavigationRail, DESTINATIONS, DRAWER_ONLY_DESTINATIONS } from "../src/shell/NavigationRail";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { NavigationRail, DESTINATIONS, RAIL_ENTRIES, ADMINISTRATION, DRAWER_GROUPS, DRAWER_BELOW_PX } from "../src/shell/NavigationRail";
 import { SessionContext, type SessionInfo } from "../src/auth/SessionContext";
-import type { ScreenId } from "../src/shell/types";
+import { SCREEN_IDS, type ScreenId } from "../src/shell/types";
 
 const viewer: SessionInfo = { displayName: "aiview", roleTokens: [], permissions: ["Policy", "PacketAnalysis"], onSignOut: () => {} };
 const rail = (active: ScreenId, session: SessionInfo | null = null) => render(
   <SessionContext.Provider value={session}><NavigationRail active={active} /></SessionContext.Provider>);
-const current = () => screen.getByRole("navigation", { name: "Primary" }).querySelectorAll('[aria-current="page"]');
+const nav = () => screen.getByRole("navigation", { name: "Primary" });
+const current = () => nav().querySelectorAll('[aria-current="page"]');
 
-describe("the rail (UI review 2026-10-18, F-17)", () => {
-  it("pins Operations and Backups, and keeps Sanitize and Admin out of the collapsed rail", () => {
+/** jsdom has no matchMedia: stub one that answers the rail's min-width query for a given viewport width. */
+function viewport(width: number) {
+  vi.stubGlobal("matchMedia", (query: string) => {
+    const min = Number(/min-width:\s*(\d+)px/.exec(query)?.[1] ?? 0);
+    return { matches: width >= min, media: query, onchange: null, addListener: () => {}, removeListener: () => {},
+      addEventListener: () => {}, removeEventListener: () => {}, dispatchEvent: () => false };
+  });
+}
+afterEach(() => vi.unstubAllGlobals());
+
+describe("the rail (UI product review 2026-10-18, §2.3 / roadmap 1.1)", () => {
+  it("reads Overview · SEE Devices · VERIFY Compliance, Policy · RECOVER Backups · OPERATE Operations, Tools, with Administration last", () => {
     rail("overview");
-    const nav = screen.getByRole("navigation", { name: "Primary" });
-    expect(DESTINATIONS.map((d) => d.label)).toEqual(["Overview", "Devices", "Policy", "Compliance", "Operations", "Backups", "Packets"]);
-    expect(within(nav).getByText("Operations")).toBeInTheDocument();
-    expect(within(nav).getByText("Backups")).toBeInTheDocument();
-    expect(within(nav).queryByText("Sanitize")).toBeNull();
-    expect(within(nav).queryByText("Admin")).toBeNull();
-    expect(DRAWER_ONLY_DESTINATIONS.map((d) => d.label)).toEqual(["Sanitize", "Admin"]);
+    expect(RAIL_ENTRIES.map((e) => [e.group, e.label])).toEqual([
+      [null, "Overview"], ["SEE", "Devices"], ["VERIFY", "Compliance"], ["VERIFY", "Policy"], ["RECOVER", "Backups"], ["OPERATE", "Operations"], ["OPERATE", "Tools"],
+    ]);
+    expect(ADMINISTRATION.label).toBe("Administration");
+    const text = nav().textContent ?? "";
+    for (const word of ["SEE", "VERIFY", "RECOVER", "OPERATE"]) expect(text).toContain(word);
+    expect(text.indexOf("SEE")).toBeLessThan(text.indexOf("Devices"));
+    expect(text.indexOf("VERIFY")).toBeLessThan(text.indexOf("Compliance"));
+    expect(text.indexOf("RECOVER")).toBeLessThan(text.indexOf("Backups"));
+    expect(text.indexOf("OPERATE")).toBeLessThan(text.indexOf("Operations"));
+    expect(text.trim().endsWith("Administration")).toBe(true);
+    // the wide rail has no drawer button: the rail itself is the navigation
+    expect(screen.queryByRole("button", { name: /navigation/ })).toBeNull();
   });
 
-  it("still pins Operations and Backups for a read-only session whose plane list does not hold them", () => {
-    rail("operations", viewer);
-    const nav = screen.getByRole("navigation", { name: "Primary" });
-    expect(within(nav).getByText("Operations")).toBeInTheDocument();
-    expect(within(nav).getByText("Backups")).toBeInTheDocument();
+  it("lists every screen as a destination exactly once (configuration is a tab of Devices, not a rail item)", () => {
+    const screens = DESTINATIONS.map((d) => d.screen);
+    expect(new Set(screens).size).toBe(screens.length);
+    expect([...screens].sort()).toEqual(SCREEN_IDS.filter((s) => s !== "configuration").sort());
   });
 
   it.each<[ScreenId, string]>([
-    ["overview", "Overview"], ["inventory", "Devices"], ["policy", "Policy"], ["compliance", "Compliance"],
-    ["operations", "Operations"], ["backups", "Backups"], ["packet_analysis", "Packets"],
-  ])("marks %s as the active item", (screenId, label) => {
+    ["overview", "Overview"], ["inventory", "Devices"], ["compliance", "Compliance"], ["policy", "Policy"], ["backups", "Backups"],
+    ["operations", "Operations"], ["packet_analysis", "Tools"], ["sanitizer", "Tools"], ["administration", "Administration"],
+  ])("marks exactly one active item for %s", (screenId, label) => {
     rail(screenId);
     const active = current();
     expect(active).toHaveLength(1);
     expect(active[0]).toHaveTextContent(label);
   });
 
-  it.each<[ScreenId, string]>([["sanitizer", "Sanitize"], ["administration", "Admin"]])(
-    "shows %s in the collapsed rail only while it is open, active, even for a session without that plane", (screenId, label) => {
-      rail(screenId, viewer);
-      const active = current();
-      expect(active).toHaveLength(1);
-      expect(active[0]).toHaveTextContent(label);
-    });
-
-  it("marks Sanitizer and Administration active in the expanded drawer, and an operations leaf once", () => {
-    const { unmount } = rail("sanitizer");
-    fireEvent.click(screen.getByRole("button", { name: "Expand navigation" }));
-    expect(current()[0]).toHaveTextContent("Data Sanitizer");
-    unmount();
-    const second = rail("administration");
-    fireEvent.click(screen.getByRole("button", { name: "Expand navigation" }));
-    expect(current()[0]).toHaveTextContent("Administration");
-    second.unmount();
-    rail("operations");
-    fireEvent.click(screen.getByRole("button", { name: "Expand navigation" }));
-    expect(current()).toHaveLength(1);
-    expect(current()[0]).toHaveTextContent("Operations");
+  it("opens Packets and Sanitizer from the one Tools entry, marking the open one", () => {
+    rail("sanitizer");
+    fireEvent.click(within(nav()).getByRole("button", { name: "Tools" }));
+    const menu = screen.getByRole("menu", { name: "Tools" });
+    const items = within(menu).getAllByRole("menuitem");
+    expect(items.map((i) => [i.textContent, i.getAttribute("href")])).toEqual([["Packets", "?screen=packet_analysis"], ["Sanitizer", "?screen=sanitizer"]]);
+    expect(items[1]).toHaveAttribute("aria-current", "page");
+    expect(items[0]).not.toHaveAttribute("aria-current");
   });
 
-  it("marks Backups & Recovery active in the drawer when Backups is open", () => {
+  it("keeps Operations and Backups for a read-only session whose plane list does not hold them, and hides Tools entries it may not use", () => {
+    rail("operations", viewer);
+    expect(within(nav()).getByText("Operations")).toBeInTheDocument();
+    expect(within(nav()).getByText("Backups")).toBeInTheDocument();
+    expect(within(nav()).queryByText("Devices")).toBeNull();
+    expect(within(nav()).queryByText("Administration")).toBeNull();
+    fireEvent.click(within(nav()).getByRole("button", { name: "Tools" }));
+    expect(within(screen.getByRole("menu", { name: "Tools" })).getAllByRole("menuitem").map((i) => i.textContent)).toEqual(["Packets"]);
+  });
+
+  it("still shows Administration, active, while it is the open screen for a session without that plane", () => {
+    rail("administration", viewer);
+    expect(current()).toHaveLength(1);
+    expect(current()[0]).toHaveTextContent("Administration");
+  });
+
+  it(`shrinks to icons below ${DRAWER_BELOW_PX} px, keeps the active item, and opens the drawer from the ≡ button`, () => {
+    viewport(DRAWER_BELOW_PX - 1);
     rail("backups");
-    fireEvent.click(screen.getByRole("button", { name: "Expand navigation" }));
-    expect(current()[0]).toHaveTextContent("Backups & Recovery");
+    expect(within(nav()).queryByText("Backups")).toBeNull();
+    expect(current()).toHaveLength(1);
+    expect(within(nav()).queryByText("RECOVER")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Open navigation" }));
+    const drawer = screen.getByRole("navigation", { name: "Primary navigation drawer" });
+    for (const g of DRAWER_GROUPS) {
+      expect(within(drawer).getByText(g.header)).toBeInTheDocument();
+      for (const leaf of g.leaves) expect(within(drawer).getByText(leaf.label)).toBeInTheDocument();
+    }
+    expect(within(drawer).getByText("Backups").closest("a")).toHaveAttribute("aria-current", "page");
+    expect(within(drawer).getAllByRole("link").filter((a) => a.getAttribute("aria-current") === "page")).toHaveLength(1);
+  });
+
+  it("re-homes what the old drawer held: Jobs, Device management and Inventory exclusions are deep links; Discovery stays a disabled leaf", () => {
+    const leaves = DRAWER_GROUPS.flatMap((g) => g.leaves);
+    const by = (label: string) => leaves.find((l) => l.label === label);
+    expect(by("Jobs")?.href).toBe("?screen=operations&tab=jobs");
+    expect(by("Device management")?.href).toBe("?screen=administration&tab=device-management");
+    expect(by("Inventory exclusions")?.href).toBe("?screen=administration&tab=inventory-exclusions");
+    expect(by("Packets")?.href).toBe("?screen=packet_analysis");
+    expect(by("Sanitizer")?.href).toBe("?screen=sanitizer");
+    expect(by("Backups")?.href).toBe("?screen=backups");
+    expect(by("Discovery")?.href).toBeUndefined();
+    viewport(900);
+    rail("overview");
+    fireEvent.click(screen.getByRole("button", { name: "Open navigation" }));
+    const drawer = screen.getByRole("navigation", { name: "Primary navigation drawer" });
+    expect(within(drawer).getByText("Discovery").closest("[aria-disabled]")).not.toBeNull();
+  });
+
+  it(`shows the wide rail from ${DRAWER_BELOW_PX} px with no drawer button`, () => {
+    viewport(DRAWER_BELOW_PX);
+    rail("overview");
+    expect(within(nav()).getByText("Devices")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Open navigation" })).toBeNull();
   });
 });

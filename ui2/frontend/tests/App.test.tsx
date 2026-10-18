@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "../src/App";
 import { DESTINATIONS, DRAWER_GROUPS } from "../src/shell/NavigationRail";
 
@@ -27,6 +27,13 @@ const PREVIEW_MARKERS: Record<string, string> = {
   administration: "FW-JULIET-06-M2",
 };
 
+/** jsdom has no matchMedia; this one says the viewport is narrower than the rail's drawer rule. */
+function narrow() {
+  vi.stubGlobal("matchMedia", (query: string) => ({ matches: false, media: query, onchange: null, addListener: () => {}, removeListener: () => {},
+    addEventListener: () => {}, removeEventListener: () => {}, dispatchEvent: () => false }));
+}
+afterEach(() => vi.unstubAllGlobals());
+
 describe("the UI 2.0 shell navigation", () => {
   it.each(["", "/devices/synthetic-device"])("exposes exactly one content landmark at %s", pathname => {
     render(<App pathname={pathname} />);
@@ -38,25 +45,26 @@ describe("the UI 2.0 shell navigation", () => {
     expect(screen.queryByText(/Search devices, settings, evidence/)).toBeNull();
   });
 
-  it("renders every collapsed rail destination from the design canvas, in order", () => {
+  it("renders the five-verb rail in order, Administration last", () => {
     render(<App />);
     const rail = screen.getByRole("navigation", { name: "Primary" });
-    const labels = DESTINATIONS.map((d) => d.label);
-    expect(labels).toEqual(["Overview", "Devices", "Policy", "Compliance", "Operations", "Backups", "Packets"]);
-    for (const d of DESTINATIONS) {
-      expect(within(rail).getByText(d.label)).toBeInTheDocument();
+    expect(DESTINATIONS.map((d) => d.label)).toEqual(["Overview", "Devices", "Compliance", "Policy", "Backups", "Operations", "Packets", "Sanitizer", "Administration"]);
+    for (const label of ["Overview", "Devices", "Compliance", "Policy", "Backups", "Operations", "Tools", "Administration"]) {
+      expect(within(rail).getByText(label)).toBeInTheDocument();
     }
+    // Packets and Sanitizer live behind the one Tools entry; the wide rail has no drawer
+    expect(within(rail).queryByText("Packets")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Open navigation" })).toBeNull();
   });
 
-  it("expands to the M3Components drawer and back", () => {
+  it("opens the drawer only below the width rule, with every group and leaf, and closes it again", () => {
+    narrow();
     render(<App />);
     const rail = screen.getByRole("navigation", { name: "Primary" });
-
     expect(within(rail).getByAltText("neXus")).toBeInTheDocument();
-    fireEvent.click(within(rail).getByRole("button", { name: "Expand navigation" }));
+    fireEvent.click(within(rail).getByRole("button", { name: "Open navigation" }));
 
-    const drawer = screen.getByRole("navigation", { name: "Primary" });
-    expect(within(drawer).getByAltText("neXus")).toBeInTheDocument();
+    const drawer = screen.getByRole("navigation", { name: "Primary navigation drawer" });
     expect(within(drawer).getByText("Overview")).toBeInTheDocument();
     for (const g of DRAWER_GROUPS) {
       expect(within(drawer).getByText(g.header)).toBeInTheDocument();
@@ -64,18 +72,17 @@ describe("the UI 2.0 shell navigation", () => {
         expect(within(drawer).getByText(leaf.label)).toBeInTheDocument();
       }
     }
-
-    fireEvent.click(within(drawer).getByRole("button", { name: "Collapse navigation" }));
-    const collapsedRail = screen.getByRole("navigation", { name: "Primary" });
-    expect(within(collapsedRail).getByAltText("neXus")).toBeInTheDocument();
+    fireEvent.click(within(drawer).getByRole("button", { name: "Close navigation" }));
+    expect(screen.getByRole("navigation", { name: "Primary" })).toBeInTheDocument();
   });
 
   it("marks a leaf the shell cannot yet serve as disabled rather than hiding it", () => {
+    narrow();
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: "Expand navigation" }));
-    const drawer = screen.getByRole("navigation", { name: "Primary" });
+    fireEvent.click(screen.getByRole("button", { name: "Open navigation" }));
+    const drawer = screen.getByRole("navigation", { name: "Primary navigation drawer" });
 
-    const unbuilt = DRAWER_GROUPS.flatMap((g) => g.leaves).filter((l) => !l.screen);
+    const unbuilt = DRAWER_GROUPS.flatMap((g) => g.leaves).filter((l) => !l.href);
     expect(unbuilt.length).toBeGreaterThan(0);
     for (const leaf of unbuilt) {
       const item = within(drawer).getByText(leaf.label).closest("[aria-disabled]");
