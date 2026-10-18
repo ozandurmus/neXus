@@ -21,7 +21,7 @@ public final class RealPacketAnalysisEngine implements PacketAnalysisEngine {
 
     @Override
     public String version() {
-        return Engine.VERSION;
+        return Engine.VERSION_ID;
     }
 
     @Override
@@ -73,7 +73,7 @@ public final class RealPacketAnalysisEngine implements PacketAnalysisEngine {
         }
 
         String reportJson = PyJsonWriter.dumps(report, false);
-        return new Result(Engine.VERSION, reportJson, summary);
+        return new Result(Engine.VERSION_ID, reportJson, summary);
     }
 
     /** The masked projection of the guard's decision: mode, reason, window bounds and the budget. */
