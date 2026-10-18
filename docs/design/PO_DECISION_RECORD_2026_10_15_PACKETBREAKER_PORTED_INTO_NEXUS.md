@@ -36,6 +36,8 @@ Supersedes `HOST_A_PACKETBREAKER_COLOCATION_PLAN.md` (a separate product on HOST
      by default.
    - `aiview` (`role:replay_viewer`): masked findings and summaries only — addresses and names pass through the
      masked projection; no raw packet view, no download.
+     *Amended 2026-10-18: aiview also holds `PACKET_ANALYSIS_RUN` (create, upload, analyse), still masked and with no raw
+     view — see `PO_DECISION_RECORD_2026_10_18_AIVIEW_PACKET_ANALYSIS_RUN.md`.*
    - Every upload, analysis, raw view, download and deletion is audited.
 7. **Phases.** (1) ingest + core flow/loss analysis; (2) topology and path integrity; (3) application and security
    hints; (4) UI and neXus correlation (firewall, interface, MAC, zone and matching rule on the path). Each phase ships

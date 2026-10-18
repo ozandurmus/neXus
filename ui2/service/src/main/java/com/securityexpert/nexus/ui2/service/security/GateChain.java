@@ -187,8 +187,14 @@ public final class GateChain {
                 });
     }
 
+    /**
+     * The POST actions a machine session (aiview) may still send. Packet Analysis run is here (PO 2026-10-18): create a
+     * case, upload a capture or telemetry file, request an analysis. Its PUT and DELETE routes stay refused to a machine
+     * session, which is read-only for every other method.
+     */
     private static boolean isReadOnlyPost(String method, String actionId) {
         return "POST".equalsIgnoreCase(method) && (ActionRegistry.FMG_DIAGNOSTIC_RUN.equals(actionId)
+                || ActionRegistry.PACKET_ANALYSIS_RUN.equals(actionId)
                 || ActionRegistry.CP_READINESS_START.equals(actionId)
                 || ActionRegistry.POLICY_COLLECT.equals(actionId)
                 || ActionRegistry.SYSTEM_LOG_MEASURE_START.equals(actionId)

@@ -57,7 +57,7 @@ manual manifest-deletion deviation are recorded in the
 `packet_analysis_shell` — **IMPLEMENTED, engine stub, pending ship** (`ship/rel-2-pa-shell`, after `ship/rel-1-integration`; unit and PostgreSQL integration suites green): cases, streamed
 `packet_analysis_shell` — **AUTOMATED_VALIDATED** on `feature/packet-analysis-ui` (S14): cases, streamed
 pcap/pcapng upload (2 GB per file, 100 GB store cap, 7-day retention with an hourly ledgered pruner), RBAC
-(`packet_analysis_run` / `packet_analysis_raw_view` / `packet_analysis_read`, aiview masked only), dedicated
+(`packet_analysis_run` / `packet_analysis_raw_view` / `packet_analysis_read`; aiview masked, run since 2026-10-18, never raw), dedicated
 self-owned `ui2-packet-analysis` worker running `RealPacketAnalysisEngine` (ingest -> auto-assemble -> DuckDB engine ->
 `report-<jobId>.json`, `findings-v11.json`, `project.duckdb`), read-only DuckDB detail views in `ui2-service` returning
 `409 ANALYSIS_RUNNING` while queued/analyzing, CLI parity in `ui2/cli`, and operator React 18 workspace screens

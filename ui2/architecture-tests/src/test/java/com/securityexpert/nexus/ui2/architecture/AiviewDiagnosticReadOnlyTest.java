@@ -37,4 +37,35 @@ class AiviewDiagnosticReadOnlyTest {
             }
         }
     }
+
+    /**
+     * PO decision 2026-10-18: aiview may run Packet Analysis (create a case, upload captures, request an analysis) next
+     * to the actions it already held; the raw view stays out of reach. This is an exact allow-list: a new action that
+     * names the replay viewer fails here until a decision record adds it on purpose.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void replayViewerHoldsExactlyTheDecidedActionsAndPacketAnalysisRunNeverRawView() throws Exception {
+        var registry = new ActionRegistry();
+        var field = ActionRegistry.class.getDeclaredField("actions");
+        field.setAccessible(true);
+        var all = (java.util.Map<String, com.securityexpert.nexus.ui2.service.security.ActionDescriptor>) field.get(registry);
+        Set<String> held = new java.util.TreeSet<>();
+        all.forEach((id, descriptor) -> {
+            if (descriptor.requiredRoleTokens().contains(RoleToken.REPLAY_VIEWER)) held.add(id);
+        });
+        assertEquals(new java.util.TreeSet<>(Set.of(
+                // read-only measurements and reads decided on 2026-10-04 and earlier
+                ActionRegistry.POLICY_COLLECT, ActionRegistry.POLICY_READ, ActionRegistry.DATA_SANITIZE_INFO,
+                ActionRegistry.FMG_DIAGNOSTIC_RUN, ActionRegistry.SYSTEM_LOG_MEASURE_START, ActionRegistry.SYSTEM_LOG_READ,
+                ActionRegistry.CP_READINESS_START, ActionRegistry.CP_FAILOVER_READ,
+                // Packet Analysis: read, and run (PO decision 2026-10-18)
+                ActionRegistry.PACKET_ANALYSIS_READ, ActionRegistry.PACKET_ANALYSIS_RUN)), held);
+        assertFalse(all.get(ActionRegistry.PACKET_ANALYSIS_RAW_VIEW).requiredRoleTokens().contains(RoleToken.REPLAY_VIEWER));
+        assertFalse(ActionRegistry.PACKET_ANALYSIS_RAW_ROLES.contains(RoleToken.REPLAY_VIEWER));
+        assertTrue(ActionRegistry.PACKET_ANALYSIS_RUN_ROLES.contains(RoleToken.REPLAY_VIEWER));
+        // the data sanitizer (a different run action) stays closed to the replay viewer
+        assertFalse(all.get(ActionRegistry.DATA_SANITIZE_RUN).requiredRoleTokens().contains(RoleToken.REPLAY_VIEWER));
+        assertFalse(all.get(ActionRegistry.DATA_SANITIZE_REVERT).requiredRoleTokens().contains(RoleToken.REPLAY_VIEWER));
+    }
 }

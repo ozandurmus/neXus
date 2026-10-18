@@ -205,12 +205,27 @@ describe("tables do not clip at 1440 px", () => {
 });
 
 describe("Packet Analysis and Sanitizer", () => {
-  const aiview = { run: false, raw_view: false, masked: true };
+  // PO decision 2026-10-18: the server grants aiview the run flag; the view stays masked and has no raw view.
+  const aiview = { run: true, raw_view: false, masked: true };
+  const readOnly = { run: false, raw_view: false, masked: true };
   const limits = { retention_days: 7, max_file_bytes: 1024, max_store_bytes: 4096, used_bytes: 0, max_telemetry_bytes: 1024 };
 
-  it("shows a disabled New case with the role note, and no in-page Masked view pill", async () => {
+  it("offers aiview the New case form, with no role note and no in-page Masked view pill", async () => {
     vi.stubGlobal("fetch", vi.fn((url: string) => url.startsWith("/api/v2/packet-analysis/cases")
       ? jsonResponse(200, { cases: [], permissions: aiview, limits }) : jsonResponse(200, {})));
+    render(as(viewerPlanes, <PacketAnalysisScreen />));
+    expect(await screen.findByText("New case")).toBeInTheDocument();
+    expect(screen.getByLabelText("Case title")).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Create case" })).toBeDisabled(); // until a title is typed
+    fireEvent.change(screen.getByLabelText("Case title"), { target: { value: "Synthetic case" } });
+    expect(screen.getByRole("button", { name: "Create case" })).toBeEnabled();
+    expect(screen.queryByText(ROLE_REFUSAL)).toBeNull();
+    expect(screen.queryByText("Masked view")).toBeNull();
+  });
+
+  it("still shows a disabled New case with the role note when the server withholds the run flag", async () => {
+    vi.stubGlobal("fetch", vi.fn((url: string) => url.startsWith("/api/v2/packet-analysis/cases")
+      ? jsonResponse(200, { cases: [], permissions: readOnly, limits }) : jsonResponse(200, {})));
     render(as(viewerPlanes, <PacketAnalysisScreen />));
     const button = await screen.findByRole("button", { name: "New case" });
     expect(button).toBeDisabled();

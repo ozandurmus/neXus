@@ -205,7 +205,7 @@ location + classification**, never the matched value.
 
 ## Mandatory AIView inspection & post-parsing masking law
 
-The aiview persona, including its machine session, may run approved CLASS_0 diagnostic reads (PO decision 2026-10-04); never CLASS_1/2. Output always passes through the masked projection. aiview may also start readiness runs (read-only) and policy collection (read-only) -- PO decision 2026-10-04; never failover execution, approvals or schedules.
+The aiview persona, including its machine session, may run approved CLASS_0 diagnostic reads (PO decision 2026-10-04); never CLASS_1/2. Output always passes through the masked projection. aiview may also start readiness runs (read-only) and policy collection (read-only) -- PO decision 2026-10-04; never failover execution, approvals or schedules. aiview may also run Packet Analysis on uploaded captures -- create a case, upload captures and request an analysis, on cases it created itself (PO decision 2026-10-18, `docs/design/PO_DECISION_RECORD_2026_10_18_AIVIEW_PACKET_ANALYSIS_RUN.md`); the view stays masked and aiview never gets the raw view (`PACKET_ANALYSIS_RAW_VIEW` stays security_admin only).
 
 For all active fleet devices, clusters, virtual systems, and operational planes (inventory, configuration, compliance, backup & recovery):
 
