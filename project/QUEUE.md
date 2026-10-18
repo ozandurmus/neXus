@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py tools/delivery/project_queue.py render)
-Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-10-17T01:41:40Z
+Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-10-18T05:04:30Z
 
 ## Now
 - NXS-LOCAL-0370 — Infoblox for real, observed facts follow every read, inventory for HTTPS vendors (automated_validated)
@@ -26,6 +26,7 @@ Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-10-17T01:41:40Z
 - P1/in_progress data_sanitizer — Data Sanitizer IMPLEMENTED: keyed anonymization of...
 - P1/in_progress failover_p0_closure_set — Failover plan implementation landed; integration gate
 - P1/in_progress https_inventory_collect_radware — Radware Collect: https_inventory_collect for the Cyber...
+- P1/in_progress manifest_drift_service_worker_configuration_policy — Release applies the committed manifest of service/configur
 - P1/in_progress module_per_pod_split — Module runtime landed; policy/configuration/compliance...
 - P1/in_progress nspm_wave1_acceptance — Policy hygiene and V144 lifecycle catalog landed
 - P1/in_progress packet_analysis_shell — Packet Analysis shell IMPLEMENTED (engine stub): cases
