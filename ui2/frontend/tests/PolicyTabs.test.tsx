@@ -35,6 +35,10 @@ it("opens all three tabs, retains Rules and sends hit filters alongside the exis
   fireEvent.click(screen.getByRole("button", { name: `Policy ${metadata.name}` }));
   await screen.findByRole("region", { name: "Policy rulebase" });
   expect(screen.getByRole("tab", { name: "Rules" })).toHaveAttribute("aria-selected", "true");
+  // Grouped tab bar (roadmap 2.5): seven tabs, each still named by its own label, grouped Browse · Judge · Trace · Ask.
+  const tabs = within(screen.getByRole("tablist", { name: "Policy tabs" })).getAllByRole("tab");
+  expect(tabs.map(t => t.getAttribute("aria-label"))).toEqual(["Rules", "Objects", "Installation", "Hygiene", "Changes", "Lookup", "Offline analysis"]);
+  expect(tabs.map(t => t.getAttribute("data-tab-group"))).toEqual(["Browse", "Browse", "Browse", "Judge", "Trace", "Ask", "Ask"]);
   fireEvent.mouseDown(screen.getByLabelText("Hit filter")); fireEvent.click(await screen.findByRole("option", { name: "Never hit" }));
   await waitFor(() => expect(request.mock.calls.some(([url]) => url.includes("hitFilter=never"))).toBe(true));
   fireEvent.mouseDown(screen.getByLabelText("Hit filter")); fireEvent.click(await screen.findByRole("option", { name: "No hits in N days" }));

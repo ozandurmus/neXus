@@ -1,7 +1,22 @@
 import { Fragment, useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { ComplianceGuidance, observedValue } from "./ComplianceGuidance";
 import { downloadRemediationReport } from "./complianceReport";
-import { urlParam } from "../shell/urlParams";
+import { urlParam, useUrlParamSync, writeUrlParams } from "../shell/urlParams";
+
+/**
+ * The one-line headline under the title (UI review 2026-10-18 §4.3): `2491 checks · 118 of 123 firewalls · 164 critical
+ * failing · 496 data gaps`, from the overview the screen already loads. The service records no evaluation time, so the
+ * age the review asked for is stated as not recorded rather than invented. A failed read says UNKNOWN, never 0.
+ */
+export function complianceHeadline(overview: { readonly evaluated_firewalls: number; readonly total_firewalls: number; readonly critical_deficiencies: number;
+  readonly data_gaps: number; readonly control_checks?: number } | null, checksFromControls: number, state: "loading" | "failed" | "loaded"): string {
+  if (state === "loading") return "Reading the compliance evaluation…";
+  if (state === "failed" || !overview) return "checks UNKNOWN · firewalls UNKNOWN · critical failing UNKNOWN · data gaps UNKNOWN";
+  if (overview.evaluated_firewalls === 0) return "No framework assigned · nothing assessed yet";
+  const checks = overview.control_checks ?? checksFromControls;
+  return `${checks.toLocaleString("en-US")} checks · ${overview.evaluated_firewalls} of ${overview.total_firewalls} firewalls · `
+    + `${overview.critical_deficiencies} critical failing · ${overview.data_gaps} data gaps · re-check time not recorded`;
+}
 
 /** Overview link values -> this screen's filter values (framework names are matched by keyword). */
 function frameworkFromUrl(name: string | null): string {
@@ -191,6 +206,22 @@ export function ComplianceScreen() {
     loadData();
   }, [loadData]);
 
+  // The control drawer is addressable (roadmap 3.6): `?control=<id>` opens it once the controls are read; opening pushes
+  // the id, closing replaces it away, and the browser's Back closes the drawer.
+  const linkedControlApplied = useRef(false);
+  useEffect(() => {
+    if (linkedControlApplied.current || controls.length === 0) return;
+    linkedControlApplied.current = true;
+    const id = urlParam("control");
+    const linked = id ? controls.find((c) => c.control_id === id) : undefined;
+    if (linked) setSelectedControl(linked);
+  }, [controls]);
+  const openControl = (c: ComplianceControlItem) => { setSelectedControl(c); writeUrlParams({ control: c.control_id }, "push"); };
+  const closeControl = () => { setSelectedControl(null); writeUrlParams({ control: null }); };
+  useUrlParamSync("control", useCallback((id: string | null) => {
+    setSelectedControl((current) => id === null ? null : current?.control_id === id ? current : (controls.find((c) => c.control_id === id) ?? current));
+  }, [controls]));
+
   useEffect(() => {
     if (!selectedControl) { setDetail(null); return; }
     let active = true;
@@ -342,12 +373,8 @@ export function ComplianceScreen() {
     URL.revokeObjectURL(url);
   };
 
-  const subtitle =
-    overview && overview.evaluated_firewalls > 0
-      ? "CIS Benchmark · PCI-DSS v4.0.1 · NIST SP 800-53 · Financial Baseline"
-      : "No framework assigned · nothing assessed yet";
-
   const scopeChecks = controls.reduce((n, c) => n + c.pass_count + c.fail_count + c.data_unavailable_count, 0);
+  const subtitle = complianceHeadline(overview, scopeChecks, loading && !overview ? "loading" : loadError ? "failed" : "loaded");
   const cisChecks = overview?.frameworks.find((f) => f.framework === "CIS Benchmark")?.total_controls ?? null;
 
   return (
@@ -707,7 +734,7 @@ export function ComplianceScreen() {
                   <TableRow
                     key={c.control_id}
                     hover
-                    onClick={() => setSelectedControl(c)}
+                    onClick={() => openControl(c)}
                     sx={{ cursor: "pointer" }}
                   >
                     <TableCell>
@@ -821,7 +848,7 @@ export function ComplianceScreen() {
                     </TableCell>
 
                     <TableCell align="right">
-                      <IconButton size="small" onClick={() => setSelectedControl(c)}>
+                      <IconButton size="small" onClick={() => openControl(c)}>
                         →
                       </IconButton>
                     </TableCell>
@@ -837,7 +864,7 @@ export function ComplianceScreen() {
       <Drawer
         anchor="right"
         open={Boolean(selectedControl)}
-        onClose={() => setSelectedControl(null)}
+        onClose={closeControl}
         PaperProps={{
           sx: {
             width: { xs: "100%", md: 560 },
@@ -857,9 +884,12 @@ export function ComplianceScreen() {
                   {selectedControl.control_id}
                 </Typography>
               </Stack>
-              <IconButton onClick={() => setSelectedControl(null)}>
-                ✕
-              </IconButton>
+              <Stack direction="row" spacing={0.5} alignItems="center">
+                <M3Button emphasis="text" onClick={() => { void navigator.clipboard.writeText(window.location.href); }}>Copy link</M3Button>
+                <IconButton aria-label="Close control detail" onClick={closeControl}>
+                  ✕
+                </IconButton>
+              </Stack>
             </Stack>
 
             <Stack direction="row" spacing={1.5} alignItems="center">

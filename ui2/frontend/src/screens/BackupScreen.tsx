@@ -53,7 +53,7 @@ import {
   type BackupPolicy,
 } from "../auth/adminApi";
 import { ScreenHeader, MetricGrid, MetricCard, ScreenRoot } from "../shell/ScreenLayout";
-import { backupFleetCounts, isBackupFleetRow, retentionNote } from "./backupCounts";
+import { backupFleetCounts, isBackupFleetRow, retentionNote, type BackupFleetCounts } from "./backupCounts";
 import { M3Button, StatusChip } from "../shell/M3Widgets";
 import { PLANE_OPERATIONS, ROLE_LOCK_LABEL, ROLE_REFUSAL, useRoleAllows } from "../shell/actionAccess";
 import { Icon } from "../shell/Icon";
@@ -116,6 +116,20 @@ export function toFleetRows(artefacts: readonly BackupArtefact[], nameByDeviceId
       sizeBytes: artefact.size_bytes,
       artefactId: artefact.artefact_id,
     }));
+}
+
+/**
+ * The one-line headline under the title (UI review 2026-10-18 §4.3): `123 of 130 targets with a stored backup · 02:00
+ * daily · 7 without archive · retention 7 d`, from the store counts and the policy the screen already reads; a part
+ * not read is UNKNOWN, never 0.
+ */
+export function backupsHeadline(counts: Pick<BackupFleetCounts, "targets" | "targetsWithArchive" | "targetsWithoutArchive"> | null,
+  policy: { readonly schedule_enabled: boolean; readonly backup_retention_days: number } | null): string {
+  const targets = counts ? `${counts.targetsWithArchive} of ${counts.targets} targets with a stored backup` : "targets with a stored backup UNKNOWN";
+  const schedule = policy ? (policy.schedule_enabled ? "02:00 daily" : "not scheduled") : "schedule UNKNOWN";
+  const without = counts ? `${counts.targetsWithoutArchive} without archive` : "without archive UNKNOWN";
+  const retention = policy ? `retention ${policy.backup_retention_days} d` : "retention UNKNOWN";
+  return `${targets} · ${schedule} · ${without} · ${retention}`;
 }
 
 export function BackupScreen() {
@@ -449,7 +463,7 @@ export function BackupScreen() {
     <ScreenRoot>
       <ScreenHeader
         title="Backups"
-        subtitle="Fleet backups, Gaia snapshots, and AST semantic deviation analysis. Every figure on this screen is read from the artefact store or the backup policy; nothing is inferred from inventory."
+        subtitle={backupsHeadline(storeCounts, policy)}
         actions={
           <Stack direction="row" spacing={1.5}>
             <M3Button emphasis="outlined" onClick={() => setPolicyOpen(true)}>
