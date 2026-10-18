@@ -91,6 +91,11 @@ spec:
         # change evidence stores admin identities as HMACs under it; the pod does not start without it.
         - name: UI2_HOSTNAME_FINGERPRINT_KEY_FILE
           value: /run/secrets/ui2-hostname-fingerprint/key
+        # PO decision 2026-10-18 (policy completeness plan): after two clean trial runs on one domain (06:12 full
+        # baseline, 12:12 reused unchanged), scheduled Check Point runs collect changed-only on every domain. Manual
+        # requests stay full; a domain is reused only within UI2_POLICY_CP_CHANGED_ONLY_MAX_AGE_HOURS (default 24).
+        - name: UI2_POLICY_CP_CHANGED_ONLY_DOMAINS
+          value: "*"
         - name: JAVA_TOOL_OPTIONS
           value: -Dui2.db.pool.maximum-pool-size=6
         securityContext:
