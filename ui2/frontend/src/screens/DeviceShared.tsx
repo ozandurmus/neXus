@@ -38,6 +38,29 @@ export function deviceLiveWithInventory(device: DeviceSummary, inventoryCollecte
   );
 }
 
+/** Role tokens a collector writes when it found no HA role: none of them is a role worth a pill. */
+const NO_ROLE_TOKENS: ReadonlySet<string> = new Set(["", "UNKNOWN", "STANDALONE", "NONE", "N/A"]);
+
+/**
+ * One HA-role rule for every place a role is shown (post-release review 2026-10-18, R9, council decision 3): a management
+ * server has no HA role to show (its own high availability is a separate read), and a token that says "no role" --
+ * UNKNOWN, STANDALONE, NONE -- is not a role. What remains is the role the device itself reported, in upper case.
+ */
+export function knownHaRole(device: { readonly ha_role?: string | null; readonly role?: string | null }): string | null {
+  if (device.role === "management_server") return null;
+  const word = (device.ha_role ?? "").trim().toUpperCase();
+  return NO_ROLE_TOKENS.has(word) ? null : word;
+}
+
+/**
+ * What "Live" rests on, for the chip's hover text (R: the green tick): the enrollment and the evidence read, and the
+ * device's latest job when there is one. It never speaks of identity, which the identity badge owns.
+ */
+export function liveBasis(latestJobSentence: string | null): string {
+  return "Live means neXus confirmed this device and has read evidence from it (interface addresses or a completed inventory run). "
+    + `It is not an identity check; the identity badge says that.${latestJobSentence ? ` ${latestJobSentence}` : ""}`;
+}
+
 /**
  * Pieces the Devices and Configuration screens share (UI_VISUAL_REVIEW_2026_09_23_FABLE.md §3, §6): the labelled
  * filter row, the fixed member order, the per-member identity table, the cluster context strip and the CSV

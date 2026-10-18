@@ -69,8 +69,8 @@ describe("Managed estate is a tab under the device header", () => {
     expect(within(card).getByText(/1 domain · 1 cluster · 3 gateways · 0 virtual systems · 1 management \/ log server/)).toBeInTheDocument();
     // no HA pill on a management server (PO decision 3)
     expect(document.querySelector('[data-role="UNKNOWN"]')).toBeNull();
-    // the link to the policies is below the header, not above it
-    const link = screen.getByRole("link", { name: "Open assigned policy" });
+    // the link to the policies is below the header, not above it, and worded for a management server (R10)
+    const link = screen.getByRole("link", { name: "Open policies this server manages →" });
     // eslint-disable-next-line no-bitwise
     expect(header.compareDocumentPosition(link) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });

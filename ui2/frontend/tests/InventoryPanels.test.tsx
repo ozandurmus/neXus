@@ -175,10 +175,12 @@ describe("InventoryScreen device selection and panels", () => {
     render(withTheme(<InventoryScreen />));
 
     await waitFor(() => expect(screen.getByText("fw-edge-1")).toBeInTheDocument());
-    expect(screen.getAllByText("HA peer named, not confirmed").length).toBeGreaterThan(0);
+    // R2: the tree row carries no HA sentence; the header states it once the device is open
+    expect(screen.queryByText(/peer named, not confirmed/)).toBeNull();
     fireEvent.click(screen.getByText("fw-edge-1"));
 
     await waitFor(() => expect(screen.getByText("eth0")).toBeInTheDocument());
+    expect(screen.getAllByText(/^HA: peer named, not confirmed/)).toHaveLength(1);
     expect(screen.getByText("198.51.100.5/24")).toBeInTheDocument();
     expect(screen.queryByText("dev-1")).toBeNull();
 

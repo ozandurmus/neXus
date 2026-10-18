@@ -142,7 +142,50 @@ describe("on the Devices screen", () => {
     mount(<InventoryScreen />);
     expect(await screen.findByRole("heading", { name: "FW-ROMEO-01-M2" })).toBeInTheDocument();
     expect(clusterRow("CLS-ROMEO-01")).toHaveAttribute("data-holds-selected", "true");
-    expect(screen.getAllByText("FW-ROMEO-01-M2").length).toBeGreaterThan(1);
+    // the member rows open under the cluster and the open member's row is marked
+    await waitFor(() => expect(screen.getAllByText("FW-ROMEO-01-M2").length).toBeGreaterThan(1));
+    expect(screen.getAllByText("FW-ROMEO-01-M2").map((el) => el.closest('[data-row="device"]')).filter(Boolean)[0]).toHaveAttribute("data-selected", "true");
     window.history.replaceState({}, "", "/");
+  });
+});
+
+describe("tree rows (post-release review 2026-10-18, R2)", () => {
+  const fortigate = dev("fg", "FW-SYNTH-FORTIGATE-WITH-A-LONG-NAME-07", { vendor_hint: "fortinet", ha_role: "PRIMARY", ha_peer_unconfirmed: true, virtual_systems: "root, dmz, guest" } as Partial<DeviceSummary>);
+  const panStandalone = dev("pa", "FW-SYNTH-PA-01", { vendor_hint: "palo_alto", ha_role: "STANDALONE", virtual_systems: "vsys1, vsys2" });
+  const mdsUnknown = dev("mds", "FW-MDS-UNKNOWN", { role: "management_server", ha_role: "UNKNOWN" });
+  const rowOf = (name: string) => screen.getByText(name).closest('[data-row="device"]') as HTMLElement;
+
+  it("gives the name its own line and never cuts it, even on a selected row full of pills", () => {
+    mount(<DeviceList devices={[fortigate, panStandalone, mdsUnknown]} {...props} selectedDeviceId="fg" />);
+    const name = screen.getByText("FW-SYNTH-FORTIGATE-WITH-A-LONG-NAME-07");
+    expect(name).toHaveAttribute("data-device-name");
+    expect(getComputedStyle(name).whiteSpace).toBe("normal");
+    expect(getComputedStyle(name).textOverflow).not.toBe("ellipsis");
+    expect(rowOf("FW-SYNTH-FORTIGATE-WITH-A-LONG-NAME-07")).toHaveAttribute("data-selected", "true");
+    // the VDOM pill is on the second line, which wraps, beside vendor · model · version
+    const row = rowOf("FW-SYNTH-FORTIGATE-WITH-A-LONG-NAME-07");
+    let line: HTMLElement | null = within(row).getByText("3 VDOM");
+    while (line && line !== row && getComputedStyle(line).flexWrap !== "wrap") line = line.parentElement;
+    expect(line).not.toBe(row);
+    expect(line).toHaveTextContent("Fortinet · Quantum · R81.20");
+    expect(line).not.toHaveTextContent("FW-SYNTH-FORTIGATE-WITH-A-LONG-NAME-07");
+  });
+
+  it("carries no HA sentence and no role pill outside a cluster: STANDALONE, UNKNOWN and a named peer belong to the header", () => {
+    mount(<DeviceList devices={[fortigate, panStandalone, mdsUnknown, ...devices]} {...props} />);
+    expect(screen.queryByText(/peer named/)).toBeNull();
+    expect(document.querySelector('[data-role="STANDALONE"]')).toBeNull();
+    expect(document.querySelector('[data-role="UNKNOWN"]')).toBeNull();
+    expect(document.querySelector('[data-role="PRIMARY"]')).toBeNull();
+    // a cluster member keeps its role pill
+    fireEvent.click(within(clusterRow("CLS-ROMEO-01")).getByTitle("Expand members"));
+    expect(within(rowOf("FW-ROMEO-01-M1")).getByText("ACTIVE")).toHaveAttribute("data-role", "ACTIVE");
+    expect(within(rowOf("FW-ROMEO-01-M2")).getByText("STANDBY")).toHaveAttribute("data-role", "STANDBY");
+  });
+
+  it("shows no green tick: a completed latest job is no glyph in the tree", () => {
+    mount(<DeviceList devices={[dev("done", "FW-SYNTH-DONE", { latest_job_state: "COMPLETED", latest_job_type: "cp_inventory_collect" })]} {...props} />);
+    expect(screen.queryByText("✓")).toBeNull();
+    expect(rowOf("FW-SYNTH-DONE")).toHaveTextContent("FW-SYNTH-DONE");
   });
 });

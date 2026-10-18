@@ -14,7 +14,7 @@ import { PLANE_ADMIN, PLANE_COLLECT } from "../shell/actionAccess";
 import { plural } from "../shell/plural";
 import { MONO, m3 } from "../theme/m3Theme";
 import { RoleChip } from "../shell/States";
-import { FilterBar, FilterRow, ListSettingsMenu, contentVersionText, downloadText, isDeviceLive, orderMembers, toCsv } from "./DeviceShared";
+import { FilterBar, FilterRow, ListSettingsMenu, contentVersionText, downloadText, isDeviceLive, knownHaRole, orderMembers, toCsv } from "./DeviceShared";
 export { isDeviceLive } from "./DeviceShared";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { useListSearch } from "../shell/listSearch";
@@ -157,8 +157,11 @@ function DeviceRow({
     if (selected) rowRef.current?.scrollIntoView?.({ block: "nearest" });
   }, [selected]);
 
-  // Review §3/§4: 44 px rows (two compact lines), the state chip only when the device is not Live -- when all
-  // are Live the chip is noise; the list caption carries the Live count.
+  // Review §3/§4: compact two-line rows, the state chip only when the device is not Live -- when all are Live the chip
+  // is noise; the list caption carries the Live count. Post-release review 2026-10-18, R2: the name has the first line
+  // to itself and is never cut; the pills share the second line with vendor · model · version and wrap there. The tree
+  // carries no HA sentence and no role outside a cluster (the header says both); a cluster member keeps its role pill.
+  const treeRole = device.cluster_member_ref ? knownHaRole(device) : null;
   return (
     <Box
       role={onSelect ? "button" : undefined}
@@ -178,9 +181,10 @@ function DeviceRow({
         display: "flex",
         alignItems: "center",
         gap: 1,
-        height: 44,
+        minHeight: 44,
         boxSizing: "border-box",
         px: 1,
+        py: 0.5,
         ml: indented ? 2.5 : 0,
         bgcolor: selected ? m3.primaryContainer : m3.scLowest,
         border: "1px solid",
@@ -192,39 +196,38 @@ function DeviceRow({
     >
       <VendorAvatar vendorHint={device.vendor_hint} model={device.model} hostname={device.hostname} />
 
-      <Box sx={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center" }}>
-        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1, minHeight: 20 }}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, minWidth: 0 }}>
-            <Typography
-              variant="body2"
-              sx={{ fontWeight: 600, fontSize: 13, lineHeight: "18px", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: m3.onSurface }}
-            >
-              {deviceNameLabel(device.hostname)}
-            </Typography>
-            <JobStatusIndicator
-              state={device.latest_job_state}
-              type={device.latest_job_type}
-              terminalReason={device.latest_job_terminal_reason}
-            />
-          </Box>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, flexShrink: 0 }}>
-            {device.ha_role && <RoleChip role={device.ha_role} dense />}
-            {device.ha_peer_unconfirmed && !device.cluster_member_ref &&
-              <StatusChip tone="neutral" label="HA peer named, not confirmed" dense />}
-            {!isLive && (
-              <StatusChip
-                tone={isEnrolled ? "neutral" : enrollmentStateTone(device.enrollment_state)}
-                label={isEnrolled ? "Confirmed · Not collected" : enrollmentStateLabel(device.enrollment_state)}
-                dense
-              />
-            )}
-            {trailingExtra}
-          </Box>
+      <Box sx={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "center", gap: "2px" }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 0.75, minWidth: 0, minHeight: 18 }}>
+          <Typography
+            component="span"
+            data-device-name
+            variant="body2"
+            sx={{ fontWeight: 600, fontSize: 13, lineHeight: "18px", minWidth: 0, whiteSpace: "normal", overflowWrap: "anywhere", color: m3.onSurface }}
+          >
+            {deviceNameLabel(device.hostname)}
+          </Typography>
+          <JobStatusIndicator
+            state={device.latest_job_state}
+            type={device.latest_job_type}
+            terminalReason={device.latest_job_terminal_reason}
+          />
         </Box>
-        <Typography variant="caption" sx={{ fontSize: 11, lineHeight: "15px", color: m3.onSurfaceVar, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {[collectionFailure(device), device.role === "management_server" ? "Management server" : vendorLabel(device.vendor_hint), device.model, device.software_version]
-            .filter(Boolean).join(" · ")}
-        </Typography>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, flexWrap: "wrap", minWidth: 0 }}>
+          <Typography component="span" variant="caption"
+            sx={{ fontSize: 11, lineHeight: "15px", color: m3.onSurfaceVar, flex: "1 1 auto", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {[collectionFailure(device), device.role === "management_server" ? "Management server" : vendorLabel(device.vendor_hint), device.model, device.software_version]
+              .filter(Boolean).join(" · ")}
+          </Typography>
+          {treeRole && <RoleChip role={treeRole} dense />}
+          {!isLive && (
+            <StatusChip
+              tone={isEnrolled ? "neutral" : enrollmentStateTone(device.enrollment_state)}
+              label={isEnrolled ? "Confirmed · Not collected" : enrollmentStateLabel(device.enrollment_state)}
+              dense
+            />
+          )}
+          {trailingExtra}
+        </Box>
       </Box>
     </Box>
   );

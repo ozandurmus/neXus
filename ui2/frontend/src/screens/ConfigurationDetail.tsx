@@ -16,7 +16,7 @@ import Typography from "@mui/material/Typography";
 import { EmptyPanel } from "../shell/ScreenLayout";
 import { Icon } from "../shell/Icon";
 import { M3Button, M3Tabs, StatusChip } from "../shell/M3Widgets";
-import { RoleChip, Ts, Unknown } from "../shell/States";
+import { RoleChip, Ts } from "../shell/States";
 import { plural } from "../shell/plural";
 import { MONO, m3 } from "../theme/m3Theme";
 import {
@@ -297,7 +297,8 @@ export function DeviceConfigurationDetail({ device, embedded = false }: { readon
         {/* The duplicate "Collect now" is gone (UI review 2026-10-18, F-7): the header's button is the one; here the age of
             the last configuration read, and the separate "Read configuration" action lives under Details. */}
         <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
-          Last configuration read {collectedAt ? <Ts at={collectedAt} relative /> : <Unknown word="NOT EVALUATED" reason="never read" />}
+          {/* Three words for three states (post-release review 2026-10-18, R9): a read that has not happened is "Not read yet", not NOT EVALUATED. */}
+          Last configuration read {collectedAt ? <Ts at={collectedAt} relative /> : <Box component="span" title="No configuration read has run for this device yet." sx={{ color: m3.neutralInk, fontWeight: 600, letterSpacing: "0.02em" }}>Not read yet</Box>}
         </Typography>
       </Box>
       {/* The grid lives on the Identity tab (roadmap 2.6); the device tab strip shows it as one line that leads there. */}
