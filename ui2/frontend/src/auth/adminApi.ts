@@ -3237,6 +3237,8 @@ export interface SystemLogTextPage {
   readonly next_offset: number;
   readonly eof: boolean;
   readonly lines: number;
+  /** The masking rule set a masked page went through (`X-Syslog-Mask-Rules`, e.g. `logmask-v3`); null when unmasked or not sent. */
+  readonly mask_rules: string | null;
 }
 
 const syslogBase = (deviceId: string) => `/api/v2/system-logs/${encodeURIComponent(deviceId)}`;
@@ -3286,5 +3288,6 @@ export async function getSystemLogText(chunkId: string, options: { readonly offs
   return {
     text, masked: masked === "true", source: h("X-Syslog-Source") ?? "", offset: Number(h("X-Syslog-Offset") ?? options.offset ?? 0),
     next_offset: next, eof: h("X-Syslog-Eof") === "true", lines: Number(h("X-Syslog-Lines") ?? 0),
+    mask_rules: h("X-Syslog-Mask-Rules"),
   };
 }

@@ -161,7 +161,9 @@ class LogMaskingTest {
     @Test
     void anInventoryReadFailureIsNotSilentlyIgnoredButANullSnapshotIsTolerated() {
         LogMasking nullSnapshot = new LogMasking(KEY, () -> null);
-        assertEquals("x edge-fw-01 y", nullSnapshot.session().maskLine("x edge-fw-01 y"));
+        // No pseudonym without an inventory snapshot; since logmask-v3 the heuristic pass still masks the
+        // hostname-shaped token, so the name is not shown in clear either.
+        assertTrue(nullSnapshot.session().maskLine("x edge-fw-01 y").matches("x h-[0-9a-f]{10} y"));
     }
 
     @Test

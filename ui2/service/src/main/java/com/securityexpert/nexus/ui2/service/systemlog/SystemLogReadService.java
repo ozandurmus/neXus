@@ -109,9 +109,12 @@ public final class SystemLogReadService {
             String actor) {
     }
 
-    /** One page of text and what a client needs to ask for the next one. */
+    /**
+     * One page of text and what a client needs to ask for the next one. {@code maskRuleSet} names the masking rules a
+     * masked page went through ({@link LogMasking#RULE_SET}); null for an unmasked page.
+     */
     public record TextPage(byte[] text, boolean masked, String sourceKey, long offset, long nextOffset, boolean eof,
-            long lines, long chunkBytes, int pageLimit) {
+            long lines, long chunkBytes, int pageLimit, String maskRuleSet) {
     }
 
     /** The answer to a text request. */
@@ -375,8 +378,15 @@ public final class SystemLogReadService {
             return refusedText(500, "SYSTEM_LOG_CHUNK_UNREADABLE", "The chunk could not be decrypted.");
         }
         byte[] shown;
+        String ruleSet = null;
         try {
-            shown = masked ? masking.session().maskChunk(window.bytes) : window.bytes;
+            if (masked) {
+                LogMasking.Session session = masking.session();
+                shown = session.maskChunk(window.bytes);
+                ruleSet = session.ruleSet();
+            } else {
+                shown = window.bytes;
+            }
         } catch (LogMasking.MaskingUnavailableException e) {
             // Fail closed: without the estate dictionary no masked page is served.
             return refusedText(503, "SYSTEM_LOG_MASKING_UNAVAILABLE",
@@ -387,7 +397,7 @@ public final class SystemLogReadService {
             return refusedText(500, "SYSTEM_LOG_PAGE_TOO_LARGE", "The page exceeded the response bound after masking.");
         }
         return new Text(new TextPage(utf8, masked, chunk.sourceKey(), request.offset(), request.offset() + window.bytes.length,
-                window.eof, countLines(window.bytes), chunk.bytes(), limit), null);
+                window.eof, countLines(window.bytes), chunk.bytes(), limit, ruleSet), null);
     }
 
     private static Text refusedText(int status, String code, String message) {

@@ -23,7 +23,9 @@ import org.junit.jupiter.api.Test;
 
 import com.securityexpert.nexus.ui2.sanitizer.core.KnownNames;
 import com.securityexpert.nexus.ui2.service.privacy.TopologyNamePseudonymizer;
-import com.securityexpert.nexus.ui2.service.systemlog.LogMasking.EstateIdentity;
+import com.securityexpert.nexus.ui2.sanitizer.core.EstateDictionary;
+import com.securityexpert.nexus.ui2.sanitizer.core.EstateIdentity;
+import com.securityexpert.nexus.ui2.sanitizer.core.SerialRule;
 
 /**
  * The masked projection never shows a device serial or another known estate identity (2026-10-18 privacy fix: the
@@ -135,7 +137,7 @@ class LogMaskingIdentityTest {
         assertFalse(containsAny(a + b, hardware, virtual), "a serial occurs in the masked text (value withheld)");
         assertTrue(a.contains(pseudonyms.maskSerial(hardware)));
         assertTrue(b.contains(pseudonyms.maskSerial(virtual)));
-        assertEquals(2L, s.counts().get(LogMasking.SerialFields.SERIAL));
+        assertEquals(2L, s.counts().get(SerialRule.SERIAL));
     }
 
     @Test
@@ -318,7 +320,7 @@ class LogMaskingIdentityTest {
         assertTrue(shown.contains("unit " + pseudonyms.maskSerial(serial) + " joined"), "a serial gets its SN- token");
         assertTrue(shown.contains("[FW-BRAVO-02] sync ok"), "a name gets its UI pseudonym");
         assertTrue(shown.contains("member CLS-ROMEO-01 standby"));
-        assertTrue(s.counts().get(LogMasking.EstateDictionary.ESTATE_IDENTITY) > 0);
+        assertTrue(s.counts().get(EstateDictionary.ESTATE_IDENTITY) > 0);
     }
 
     @Test
@@ -335,7 +337,11 @@ class LogMaskingIdentityTest {
         LogMasking.Session s = withEstate(serial, "CP" + digits(10, 12)).session();
         String longer = serial + "7";
         assertEquals("seq " + longer + " ok", s.maskLine("seq " + longer + " ok"), "a longer number is not the serial");
-        assertEquals("edge-fw-010 up", s.maskLine("edge-fw-010 up"), "a longer name is not the name");
+        // A longer name is not the name: the dictionary does not give it FW-TANGO-04. Since logmask-v3 the heuristic
+        // pass masks it as a hostname-shaped token instead (letters, digits and hyphens).
+        String longerName = s.maskLine("edge-fw-010 up");
+        assertFalse(longerName.contains("FW-TANGO-04"), "a longer name is not the name");
+        assertTrue(longerName.matches("h-[0-9a-f]{10} up"), "the heuristic host token");
         assertEquals("firmware v1.2.3.4 installed", s.maskLine("firmware v1.2.3.4 installed"));
     }
 

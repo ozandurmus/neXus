@@ -54,6 +54,8 @@ interface Setup {
   gaps?: SystemLogGap[];
   /** The newest collection job the Jobs list reports. */
   job?: { state: string };
+  /** The masking rule set the server names on a masked page (`X-Syslog-Mask-Rules`). */
+  maskRules?: string;
 }
 
 function stub(setup: Setup = {}) {
@@ -76,7 +78,8 @@ function stub(setup: Setup = {}) {
       const page = list.find((_, i) => (i === 0 ? offset === 0 : offset === list[i - 1].next)) ?? list[0];
       return Promise.resolve(new Response(page.text, { headers: {
         "X-Syslog-Masked": String(page.masked ?? !unmasked), "X-Syslog-Offset": String(offset), "X-Syslog-Next-Offset": String(page.next),
-        "X-Syslog-Eof": String(page.eof), "X-Syslog-Lines": "3", "X-Syslog-Source": "cp_messages" } }));
+        "X-Syslog-Eof": String(page.eof), "X-Syslog-Lines": "3", "X-Syslog-Source": "cp_messages",
+        ...(setup.maskRules && !unmasked ? { "X-Syslog-Mask-Rules": setup.maskRules } : {}) } }));
     }
     if (url.startsWith("/api/v2/jobs")) {
       const items = setup.job ? [{ job_id: "job-1", job_type: "cp_system_log_collect", target_device_id: DEVICE, submitted_at: "2026-10-17T08:59:50Z", finished_at: "2026-10-17T09:00:00Z", state: setup.job.state, has_transcript: false }] : [];
@@ -218,6 +221,13 @@ describe("line viewer", () => {
     expect(screen.getByText("Masked view")).toBeInTheDocument();
     expect(calls).toContain(`${BASE}/chunks/c-2/text?offset=0`);
     expect(calls.some((u) => u.includes("unmasked"))).toBe(false);
+  });
+
+  it("names the masking rule set the server applied on the Masked view chip", async () => {
+    stub({ maskRules: "logmask-v3" });
+    render(<DeviceLogsPanel deviceId={DEVICE} />);
+    expect(await screen.findAllByTestId("log-line")).toHaveLength(3);
+    expect(screen.getByText("Masked view · rules logmask-v3")).toBeInTheDocument();
   });
 
   it("filters the loaded lines and reports how many match", async () => {

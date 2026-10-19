@@ -674,6 +674,7 @@ final class NexusSessionCli {
             String next = response.headers().firstValue("X-Syslog-Next-Offset").orElse("");
             boolean eof = "true".equals(response.headers().firstValue("X-Syslog-Eof").orElse("true"));
             System.err.println("-- masked=" + response.headers().firstValue("X-Syslog-Masked").orElse("?")
+                    + response.headers().firstValue("X-Syslog-Mask-Rules").map(r -> " rules=" + r).orElse("")
                     + " offset=" + offset + " next_offset=" + next + " lines=" + response.headers().firstValue("X-Syslog-Lines").orElse("?")
                     + " eof=" + eof);
             if (eof || !next.matches("[0-9]{1,18}") || Long.parseLong(next) <= offset) return 0;

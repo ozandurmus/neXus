@@ -24,15 +24,18 @@ import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
 import com.securityexpert.nexus.ui2.persistence.sanitizer.SanitizerRepository;
 import com.securityexpert.nexus.ui2.platform.ArtefactStoreCipher;
 import com.securityexpert.nexus.ui2.platform.SecretFile;
+import com.securityexpert.nexus.ui2.sanitizer.core.EstateDictionary;
 import com.securityexpert.nexus.ui2.sanitizer.core.KnownNames;
+import com.securityexpert.nexus.ui2.service.privacy.EstateDictionarySource;
 import com.securityexpert.nexus.ui2.service.privacy.HmacKeyProvider;
 import com.securityexpert.nexus.ui2.service.privacy.TopologyNamePseudonymizer;
 
 /**
  * Wires the Data Sanitizer (DATA_SANITIZER_CONTRACT.md §3): the engine keyed with the privacy HMAC key, the vault
  * sealed under the artefact-store envelope key ({@code UI2_ARTEFACT_STORE_KEY_FILE}; without it sanitize and revert
- * are refused rather than run without a vault), the inventory's device pseudonyms, the work area, limits and the
- * housekeeping that deletes expired results and prunes expired vaults.
+ * are refused rather than run without a vault), the inventory's device pseudonyms, the estate dictionary of the
+ * masked system-log view (its known-identity pass runs on every sanitized value; without that bean, none), the work
+ * area, limits and the housekeeping that deletes expired results and prunes expired vaults.
  */
 @Configuration(proxyBeanMethods = false)
 public class SanitizerConfiguration {
@@ -46,7 +49,7 @@ public class SanitizerConfiguration {
 
     @Bean(destroyMethod = "")
     public SanitizerService sanitizerService(SanitizerRepository repository, HmacKeyProvider keys,
-            Optional<DeviceRepository> devices, TopologyNamePseudonymizer names,
+            Optional<DeviceRepository> devices, TopologyNamePseudonymizer names, Optional<EstateDictionarySource> estate,
             @Value("${ui2.sanitizer.work-dir:${java.io.tmpdir}/nexus-sanitizer}") String workDir,
             @Value("${ui2.sanitizer.max-file-bytes:2147483648}") long maxBytes,
             @Value("${ui2.sanitizer.vault-retention-days:90}") int retentionDays,
@@ -62,6 +65,7 @@ public class SanitizerConfiguration {
                     return t;
                 });
         return new SanitizerService(repository, crypto, keys.getSecretKey(), knownNames(devices.orElse(null), names),
+                estate.<Supplier<EstateDictionary>>map(source -> source).orElse(() -> EstateDictionary.EMPTY),
                 Path.of(workDir), maxBytes, retentionDays, Duration.ofMinutes(outputTtlMinutes), executor);
     }
 

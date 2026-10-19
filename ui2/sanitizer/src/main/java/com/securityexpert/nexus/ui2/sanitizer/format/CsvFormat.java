@@ -14,13 +14,15 @@ import java.util.BitSet;
 import java.util.List;
 
 import com.securityexpert.nexus.ui2.sanitizer.core.HostHeaders;
+import com.securityexpert.nexus.ui2.sanitizer.core.SerialRule;
 
 /**
  * CSV, record by record in bounded memory (DATA_SANITIZER_CONTRACT.md §1 "CSV / XLSX: cell by cell"). Quoted fields
  * may hold delimiters, doubled quotes and line breaks. A field whose value the rules leave unchanged is written back
  * byte for byte; a changed one is written with the quoting it had (quoted fields stay quoted, an unquoted field is
  * quoted only if its new value needs it). Delimiters and record terminators are copied exactly. A header cell such
- * as {@code hostname} or {@code device} makes the bare values of its column host names.
+ * as {@code hostname} or {@code device} makes the bare values of its column host names; one such as {@code serial}
+ * or {@code S/N} makes every value of its column a serial ({@code SerialRule}).
  */
 public final class CsvFormat {
 
@@ -86,6 +88,7 @@ public final class CsvFormat {
         List<List<Field>> records = new ArrayList<>();
         List<String> terminators = new ArrayList<>();
         BitSet hostColumns = null;
+        BitSet serialColumns = new BitSet();
         long chars = 0;
         long count = 0;
         Parser parser = new Parser(reader, delimiter);
@@ -99,27 +102,30 @@ public final class CsvFormat {
                 hostColumns = new BitSet();
                 for (int i = 0; i < record.size(); i++) {
                     if (HostHeaders.isHostHeader(record.get(i).value())) hostColumns.set(i);
+                    if (SerialRule.isSerialKey(record.get(i).value())) serialColumns.set(i);
                 }
-                flush(records, terminators, rewriter, writer, delimiter, new BitSet());
+                flush(records, terminators, rewriter, writer, delimiter, new BitSet(), new BitSet());
                 chars = 0;
                 continue;
             }
             if (records.size() >= ValueRewriter.BATCH_VALUES / 4 || chars >= ValueRewriter.BATCH_CHARS) {
-                flush(records, terminators, rewriter, writer, delimiter, hostColumns);
+                flush(records, terminators, rewriter, writer, delimiter, hostColumns, serialColumns);
                 chars = 0;
             }
         }
-        flush(records, terminators, rewriter, writer, delimiter, hostColumns == null ? new BitSet() : hostColumns);
+        flush(records, terminators, rewriter, writer, delimiter, hostColumns == null ? new BitSet() : hostColumns, serialColumns);
         writer.flush();
         return count;
     }
 
     private static void flush(List<List<Field>> records, List<String> terminators, ValueRewriter rewriter, Writer writer,
-            char delimiter, BitSet hostColumns) throws IOException {
+            char delimiter, BitSet hostColumns, BitSet serialColumns) throws IOException {
         if (records.isEmpty()) return;
         List<Value> values = new ArrayList<>();
         for (List<Field> record : records) {
-            for (int i = 0; i < record.size(); i++) values.add(new Value(record.get(i).value(), hostColumns.get(i)));
+            for (int i = 0; i < record.size(); i++) {
+                values.add(new Value(record.get(i).value(), hostColumns.get(i), serialColumns.get(i)));
+            }
         }
         List<String> rewritten = rewriter.rewrite(values);
         int k = 0;

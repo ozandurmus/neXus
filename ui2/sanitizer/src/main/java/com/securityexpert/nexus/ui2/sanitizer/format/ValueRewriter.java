@@ -3,6 +3,8 @@ package com.securityexpert.nexus.ui2.sanitizer.format;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.securityexpert.nexus.ui2.sanitizer.core.Counts;
+import com.securityexpert.nexus.ui2.sanitizer.core.EstateDictionary;
 import com.securityexpert.nexus.ui2.sanitizer.core.TextReverter;
 import com.securityexpert.nexus.ui2.sanitizer.core.TextSanitizer;
 
@@ -19,9 +21,22 @@ public interface ValueRewriter {
     List<String> rewrite(List<Value> values);
 
     static ValueRewriter sanitizing(TextSanitizer sanitizer) {
+        return sanitizing(sanitizer, EstateDictionary.EMPTY);
+    }
+
+    /**
+     * The text rules on every value (a value under a serial key: its serial token), then the known-identity pass of
+     * {@code estate} on the result.
+     */
+    static ValueRewriter sanitizing(TextSanitizer sanitizer, EstateDictionary estate) {
+        EstateDictionary.Replacer replacer = estate.replacer();
+        Counts counts = sanitizer.counts();
         return values -> {
             List<String> out = new ArrayList<>(values.size());
-            for (Value v : values) out.add(sanitizer.sanitize(v.text(), v.hostContext()));
+            for (Value v : values) {
+                String text = v.serialContext() ? sanitizer.serialValue(v.text()) : sanitizer.sanitize(v.text(), v.hostContext());
+                out.add(replacer.replace(text, counts));
+            }
             return out;
         };
     }

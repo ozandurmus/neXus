@@ -504,12 +504,14 @@ interface TextState {
   readonly nextOffset: number;
   readonly eof: boolean;
   readonly masked: boolean | null;
+  /** The masking rule set of the last masked page (`logmask-v3`); null when unknown. */
+  readonly maskRules: string | null;
   readonly loading: boolean;
   readonly error: string | null;
   readonly capped: boolean;
 }
 
-const EMPTY_TEXT: TextState = { chunkId: null, lines: [], nextOffset: 0, eof: false, masked: null, loading: false, error: null, capped: false };
+const EMPTY_TEXT: TextState = { chunkId: null, lines: [], nextOffset: 0, eof: false, masked: null, maskRules: null, loading: false, error: null, capped: false };
 
 function splitLines(text: string): string[] {
   if (text === "") return [];
@@ -588,7 +590,7 @@ function LogViewer({ deviceId, sources, canViewUnmasked, maxPageBytes }: {
         setText((prev) => {
           const merged = [...(replace ? [] : prev.lines), ...splitLines(page.text)];
           const capped = merged.length >= MAX_LOADED_LINES;
-          return { chunkId: target.chunk_id, lines: merged, nextOffset: page.next_offset, eof: page.eof, masked: page.masked, loading: false, error: null, capped };
+          return { chunkId: target.chunk_id, lines: merged, nextOffset: page.next_offset, eof: page.eof, masked: page.masked, maskRules: page.mask_rules, loading: false, error: null, capped };
         });
       })
       .catch((err: unknown) => {
@@ -664,7 +666,7 @@ function LogViewer({ deviceId, sources, canViewUnmasked, maxPageBytes }: {
         <TextField size="small" label="Filter lines" value={filter} onChange={(e) => setFilter(e.target.value)} sx={{ minWidth: 200, flex: 1 }}
           inputProps={{ "aria-label": "Filter lines" }} />
         {chunk && text.masked !== null && (text.masked
-          ? <StatusChip tone="neutral" label="Masked view" dense />
+          ? <StatusChip tone="neutral" label={text.maskRules ? `Masked view · rules ${text.maskRules}` : "Masked view"} dense />
           : <StatusChip tone="warn" label="Unmasked view · recorded on the audit ledger" dense />)}
       </Box>
       {chunk && day && (

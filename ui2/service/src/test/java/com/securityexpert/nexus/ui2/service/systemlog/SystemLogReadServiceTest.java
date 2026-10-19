@@ -96,6 +96,36 @@ class SystemLogReadServiceTest {
         assertEquals(line + line, text(fx.service().text(unmasked(CHUNK, 0, 0, true))), "the unmasked view is the stored text");
     }
 
+    /** A lower-case synthetic word built at runtime (no identity-shaped literal in the source). */
+    private static String syntheticWord(int length, long seed) {
+        java.util.Random random = new java.util.Random(seed);
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < length; i++) sb.append((char) ('a' + random.nextInt(26)));
+        return sb.toString();
+    }
+
+    @Test
+    void aMaskedPageGetsTheHeuristicPassAndNamesItsRuleSetWhileTheUnmaskedViewIsTheStoredText() throws Exception {
+        String host = syntheticWord(5, 31) + "-fw-" + syntheticSerial(32).substring(0, 2);
+        String fqdn = syntheticWord(4, 33) + "." + syntheticWord(5, 34) + ".lan";
+        String user = syntheticWord(7, 35);
+        String serial = syntheticSerial(36);
+        String stored = "{\"opaque\":\"HA peer " + host + " lost; config changed by " + user + "\"}\n"
+                + "cpd: unit " + serial + " reached " + fqdn + "\n";
+        fx.chunk(CHUNK, bytes(stored));
+
+        var masked = fx.service().text(masked(CHUNK, 0, 0));
+        String shown = text(masked);
+        for (String value : new String[] {host, fqdn, user, serial, fqdn.substring(0, fqdn.indexOf('.'))}) {
+            assertFalse(shown.contains(value), "a free-text identity is in the masked page (value withheld)");
+        }
+        assertEquals(LogMasking.RULE_SET, masked.page().maskRuleSet(), "a masked page names the rules it went through");
+
+        var unmasked = fx.service().text(unmasked(CHUNK, 0, 0, true));
+        assertEquals(stored, text(unmasked), "the unmasked view is the stored text, byte for byte");
+        assertTrue(unmasked.page().maskRuleSet() == null, "an unmasked page names no masking rules");
+    }
+
     @Test
     void aMaskedPageIsRefusedWhenTheIdentityDictionaryCannotBeRead() throws Exception {
         fx.chunk(CHUNK, bytes("drop src 192.0.2.17\n"));

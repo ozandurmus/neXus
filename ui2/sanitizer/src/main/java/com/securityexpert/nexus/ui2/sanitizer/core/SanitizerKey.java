@@ -37,6 +37,11 @@ public final class SanitizerKey {
         return hmac(key, (DOMAIN + family).getBytes(StandardCharsets.UTF_8));
     }
 
+    /** The inventory's one-way identity tokens ({@code SN-}, {@code USR-}) under this same key. */
+    public IdentityTokens identityTokens() {
+        return new IdentityTokens(key);
+    }
+
     /** A fresh HMAC-SHA256 instance keyed with {@code key}; callers keep one per thread. */
     public static Mac mac(byte[] key) {
         try {

@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.Objects;
 
 import com.securityexpert.nexus.ui2.sanitizer.core.Counts;
+import com.securityexpert.nexus.ui2.sanitizer.core.EstateDictionary;
 import com.securityexpert.nexus.ui2.sanitizer.core.KnownNames;
 import com.securityexpert.nexus.ui2.sanitizer.core.Mappers;
 import com.securityexpert.nexus.ui2.sanitizer.core.SanitizerKey;
@@ -35,6 +36,11 @@ import com.securityexpert.nexus.ui2.sanitizer.pcap.PcapSanitizer;
  * offers every token it emits to a {@link TokenSink} (the mapping vault); {@link #revert} streams a file that came
  * back and replaces the tokens a {@link TokenResolver} knows. Neither keeps any input in memory beyond one batch,
  * and neither writes anywhere but the given output.
+ *
+ * <p>Sanitize runs, on every value of a text, CSV, JSON or XLSX input: the serial rule and the text rules
+ * ({@link TextSanitizer}), then the known-identity pass of the {@link EstateDictionary} the service hands in (the same
+ * pass and the same dictionary as the masked system-log view). A capture's packets get the address and name rules of
+ * {@link PcapSanitizer} only.</p>
  */
 public final class Sanitizer {
 
@@ -43,9 +49,16 @@ public final class Sanitizer {
     }
 
     private final Mappers mappers;
+    private final EstateDictionary estate;
 
     public Sanitizer(Mappers mappers) {
+        this(mappers, EstateDictionary.EMPTY);
+    }
+
+    /** @param estate the known estate identities ({@link EstateDictionary#EMPTY} when the caller has none) */
+    public Sanitizer(Mappers mappers, EstateDictionary estate) {
         this.mappers = Objects.requireNonNull(mappers, "mappers");
+        this.estate = Objects.requireNonNull(estate, "estate");
     }
 
     public Sanitizer(byte[] privacyKey, KnownNames knownNames) {
@@ -56,7 +69,7 @@ public final class Sanitizer {
         Detection detection = Detection.of(input);
         Counts counts = new Counts();
         TextSanitizer text = new TextSanitizer(mappers, sink, counts);
-        long units = run(detection, input, output, ValueRewriter.sanitizing(text), true, sink, null, counts, text::learn);
+        long units = run(detection, input, output, ValueRewriter.sanitizing(text, estate), true, sink, null, counts, text::learn);
         return new Result(detection.type(), units, counts.asMap());
     }
 
@@ -75,7 +88,7 @@ public final class Sanitizer {
     public Result sanitizeText(InputStream in, OutputStream out, TokenSink sink) throws IOException {
         Counts counts = new Counts();
         long lines = TextFormat.process(in, out, new TextEncoding(StandardCharsets.UTF_8, 0),
-                ValueRewriter.sanitizing(new TextSanitizer(mappers, sink, counts)));
+                ValueRewriter.sanitizing(new TextSanitizer(mappers, sink, counts), estate));
         out.flush();
         return new Result(FileType.TEXT, lines, counts.asMap());
     }

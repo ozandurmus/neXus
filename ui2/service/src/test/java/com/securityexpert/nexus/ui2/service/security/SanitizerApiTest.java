@@ -271,6 +271,48 @@ class SanitizerApiTest {
                 "a sealed value moved to another job's row does not open");
     }
 
+    /** A serial-shaped digit string built at runtime (no identity-shaped literal in the source). */
+    private static String syntheticDigits(int length, long seed) {
+        Random random = new Random(seed);
+        StringBuilder sb = new StringBuilder(length);
+        for (int i = 0; i < length; i++) sb.append((char) ('0' + random.nextInt(10)));
+        return sb.toString();
+    }
+
+    @Test
+    void theLogExportPathRunsTheSerialRuleAndTheSharedEstateDictionaryAndFailsClosedWithoutIt() throws Exception {
+        byte[] privacyKey = new byte[32];
+        Arrays.fill(privacyKey, (byte) 7);
+        String serial = syntheticDigits(12, 41);
+        String keyed = syntheticDigits(12, 42);
+        String name = "site" + syntheticDigits(3, 43) + "-gw";
+        var estate = new EstateDictionarySource(privacyKey, () -> List.of(
+                com.securityexpert.nexus.ui2.sanitizer.core.EstateIdentity.serial(serial),
+                com.securityexpert.nexus.ui2.sanitizer.core.EstateIdentity.name(name, "FW-BRAVO-02")), Duration.ofMinutes(1));
+        var export = new SanitizerService(repository, crypto, privacyKey, () -> KnownNames.NONE, estate, work, 64 * 1024, 90,
+                Duration.ofMinutes(60), new DirectExecutor());
+        String lines = "unit " + serial + " joined\n[" + name + "] sync ok\n{\"serial\":\"" + keyed + "\",\"type\":\"SYSTEM\"}\n";
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        export.sanitizeLogExport(new java.io.ByteArrayInputStream(lines.getBytes(StandardCharsets.UTF_8)), out, "synthetic-operator");
+        String shown = out.toString(StandardCharsets.UTF_8);
+        assertFalse(shown.contains(serial) || shown.contains(keyed) || shown.contains(name), "an identity survived (value withheld)");
+        var inventory = new TopologyNamePseudonymizer(privacyKey);
+        assertTrue(shown.contains("unit " + inventory.maskSerial(serial) + " joined"), "the inventory screens' SN- token");
+        assertTrue(shown.contains("{\"serial\":\"" + inventory.maskSerial(keyed) + "\""), "the serial key rule");
+        assertTrue(shown.contains("[FW-BRAVO-02] sync ok"), "a known name gets its UI pseudonym");
+
+        var broken = new SanitizerService(repository, crypto, privacyKey, () -> KnownNames.NONE,
+                new EstateDictionarySource(privacyKey, () -> {
+                    throw new IllegalStateException("database down");
+                }, Duration.ofMinutes(1)), work, 64 * 1024, 90, Duration.ofMinutes(60), new DirectExecutor());
+        ByteArrayOutputStream none = new ByteArrayOutputStream();
+        assertThrows(EstateDictionarySource.UnavailableException.class, () -> broken.sanitizeLogExport(
+                new java.io.ByteArrayInputStream(lines.getBytes(StandardCharsets.UTF_8)), none, "synthetic-operator"));
+        assertEquals(0, none.size(), "no output without the known-identity pass");
+        assertTrue(jobs.values().stream().anyMatch(j -> SanitizerService.IDENTITY_DICTIONARY_UNAVAILABLE.equals(j.failureReason())),
+                "the job is recorded as failed with its reason");
+    }
+
     @Test
     void tempDirAndOutputFilesUseOwnerOnlyPermissionsAndCleanUpOnForcedFailures() throws Exception {
         Path nestedWork = work.resolve("priv-work");
