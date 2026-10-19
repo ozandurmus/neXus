@@ -1,3 +1,5 @@
+> Repository note: the reviewer's text is unaltered except that every IPv4 literal (all were aiview keyed pseudo-addresses) is replaced by <masked-address> so the repository privacy gate passes (2026-10-19).
+
 <!-- Argon consultation 2026-10-17T19:54:32Z, model gemini-4-argon-high, effort high; unaltered output -->
 
 # neXus Live UI Effectiveness & Visual Quality Review (Argon)
@@ -69,7 +71,7 @@
 * **Who uses it and when:** Operators and Team Leads (daily network verification, pre-maintenance HA checks, interface/VIP lookup).
 * **Serves purpose?** **Partly.**
   * *Evidence:*
-    1. **Right-edge table clipping:** In the `Interfaces` table, the rightmost column (`NETWORK`) is clipped off the viewport (`251.89.158.0/2...`, `249.61.160.0/3...`).
+    1. **Right-edge table clipping:** In the `Interfaces` table, the rightmost column (`NETWORK`) is clipped off the viewport (`<masked-address>...`, `<masked-address>...`).
     2. **Unlabelled dual MAC addresses:** Every row in `MAC` stacks two identical-looking masked lines (`00:1c:7f:**:**:**` / `00:1c:7f:**:**:**`) without indicating whether line 1 is `M1` and line 2 is `M2`.
     3. **Oversized disabled member buttons & missing read timestamps:** Inside the `FW-APOLLO-01-M1` and `FW-APOLLO-01-M2` cards, the disabled `↓ Collect now · Next window: 00:00` button occupies over half of each card, while **last collection timestamp / evidence age is completely absent** from both the cluster header and member cards.
     4. **Half-migrated cross-link strip:** `This cluster in: Device screen · Backups · Readiness` still appears inside the header (`Device screen` is plain bold text for the current screen; `Backups` and `Readiness` are links).
@@ -148,7 +150,7 @@
   * *Evidence:*
     1. **18 address-less physical trunk rows push all Layer-3 interfaces below the fold:** On a multi-VSYS PA-5260, `Physical / VS0` holds the physical parent ports (`ethernet1/1`..`ethernet1/18`, `vlan`, `loopback`, `tunnel`) which have `—` for `VLAN`, `ADDRESS`, and `NETWORK`, while the actual Layer-3 subinterfaces (`ethernet1/13.2603`, etc.) live in `VS-SEC-97 (VSID 1)`, `VS-SEC-33 (VSID 2)`, etc. Rendering 56 rows flat with `Physical / VS0` first forces operators to scroll past 18 rows of `—` before seeing any IP address.
     2. **No `VSYS` or `Zone` filter controls:** On a firewall with 7+ virtual systems and dozens of security zones, there is only a plain text box (`Filter interfaces...`) and `✓ Active only`—no `VSYS` dropdown or group-by-VSYS collapse.
-    3. **Awkward 3-line Zone wrapping & right-edge Network clipping:** `ZONE` wraps narrow hyphenated tokens across 3 lines (`ZONE-\nBEACON-\n5793`), doubling row height, while `NETWORK` clips on the right (`244.222.176.0/2...`).
+    3. **Awkward 3-line Zone wrapping & right-edge Network clipping:** `ZONE` wraps narrow hyphenated tokens across 3 lines (`ZONE-\nBEACON-\n5793`), doubling row height, while `NETWORK` clips on the right (`<masked-address>...`).
     4. **Left tree loses scroll position:** `FW-HELIOS-02` is open on the right, but the left tree is scrolled to the top (`CLS-ALPHA-01`..`CLS-BRAVO-08`), so the active device is not visible in the tree.
     5. **Redundant `HA role: STANDALONE` badge:** Rendered below the tab bar even though `Palo Alto · Standalone` and `STANDALONE` are already in the header card above.
 * **Concrete fix:**
@@ -289,9 +291,9 @@
 ### 3.2 Density, Alignment & Viewport Clipping (1440 px)
 * **Right-edge table clipping on 4 screens:**
   * *Finding:* At 1440 px width:
-    1. `02-03-device-cluster.png` (`Interfaces` table): `NETWORK` column clips (`251.89.158.0/2...`).
-    2. `03-04-device-member-interfaces.png` (`Interfaces` table): `NETWORK` column clips (`251.89.158.0...`).
-    3. `07-08-pan-device.png` (`Interfaces` table): `NETWORK` column clips (`244.222.176.0/2...`) while `ZONE` wraps to 3 lines.
+    1. `02-03-device-cluster.png` (`Interfaces` table): `NETWORK` column clips (`<masked-address>...`).
+    2. `03-04-device-member-interfaces.png` (`Interfaces` table): `NETWORK` column clips (`<masked-address>...`).
+    3. `07-08-pan-device.png` (`Interfaces` table): `NETWORK` column clips (`<masked-address>...`) while `ZONE` wraps to 3 lines.
     4. `11-12-backups.png` (`Backup fleet` table): rightmost column (`Latest attempt ...` / `Backup Now · Next window: 0...`) clips off the card border on every row.
   * *Concrete fix:* Enforce `box-sizing: border-box` and responsive table column proportions (`table-layout: fixed` or horizontal scroll wrapper `overflow-x: auto` as a fallback, plus tighter padding on `KIND`, `VLAN`, and `MAC` columns) so all columns fit cleanly within `1440 px` without clipping masks (`/24`) or timestamps.
 * **Header collision & hostname ellipsis truncation on `Administration` (`13-14`):**
