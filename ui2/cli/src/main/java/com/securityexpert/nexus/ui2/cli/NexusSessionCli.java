@@ -80,6 +80,7 @@ final class NexusSessionCli {
         System.out.println("  inventory-collect <deviceId> | configuration-collect <deviceId>");
         System.out.println("  syslog-measure-start                           measure system/config logs on every enrolled Palo Alto firewall");
         System.out.println("  syslog-collect-start [deviceId]                start the incremental system-log collection (one device, or every supported device)");
+        System.out.println("  syslog-spike-review <deviceId>                 one-off Spike Detective layout review of one Check Point gateway (summary in syslog-measurements)");
         System.out.println("  syslog-sources <deviceId>                      per source: cursor, last outcome and run, FAST_ROTATING, horizon, BACKLOG/GAP/UNKNOWN");
         System.out.println("  syslog-chunks <deviceId> [source] [yyyy-MM-dd]  stored chunks: sizes, lines, line times, redactions, outcome");
         System.out.println("  syslog-view <chunkId> [offset=N] [limit=N] [unmasked] [all]   one page (or all pages) of a chunk, masked by default;");
@@ -187,6 +188,11 @@ final class NexusSessionCli {
                 case "syslog-measure-start" -> print(call("POST", "/api/v2/diagnostics/system-log-measurements/start", "{}"));
                 case "syslog-collect-start" -> print(call("POST", "/api/v2/system-logs/collect",
                         args.length > 1 ? json(Map.of("device_id", args[1])) : "{}"));
+                case "syslog-spike-review" -> {
+                    require(args, 2, "syslog-spike-review <deviceId>");
+                    yield print(call("POST", "/api/v2/diagnostics/system-log-measurements/spike-layout-review",
+                            json(Map.of("device_id", args[1]))));
+                }
                 case "syslog-measurements" -> print(call("GET", "/api/v2/diagnostics/system-log-measurements"
                         + queryString(measurementFilters(args), 0), null));
                 case "syslog-sources" -> {

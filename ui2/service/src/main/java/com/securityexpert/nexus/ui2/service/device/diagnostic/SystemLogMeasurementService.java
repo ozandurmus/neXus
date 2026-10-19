@@ -12,6 +12,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.securityexpert.nexus.ui2.jobs.admission.AdmissionResult;
 import com.securityexpert.nexus.ui2.jobs.admission.JobAdmissionService;
 import com.securityexpert.nexus.ui2.jobs.diagnostic.PanSyslogMeasure;
+import com.securityexpert.nexus.ui2.jobs.systemlog.CpSpikeLayoutReview;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord;
 import com.securityexpert.nexus.ui2.persistence.diagnostic.SystemLogMeasurementRepository;
@@ -71,6 +72,40 @@ public final class SystemLogMeasurementService {
         }
         return new BulkOutcome(targets.size(), admitted, deduplicated, targets.size() - admitted - deduplicated,
                 List.copyOf(refusals));
+    }
+
+    /** The admission of one Spike Detective layout review: {@code ADMITTED}/{@code DEDUPLICATED} with a job, or a refusal code. */
+    public record ReviewOutcome(String outcome, String jobId, String code) {
+        static ReviewOutcome refused(String code) { return new ReviewOutcome("REFUSED", null, code); }
+    }
+
+    /**
+     * The one-off Spike Detective layout review (DEVICE_SYSTEM_LOG_PHASE_B_CONTRACT.md section 8.3; PO approval
+     * 2026-10-19): admits ONE {@code cp_spike_layout_review} job for one Check Point gateway, chosen by its opaque
+     * device id, inside a job window ({@link JobWindowPolicy.OutsideWindow} otherwise). The idempotency key
+     * {@code spike-layout-review:<device>:<slot>} holds a window to one job per device; a device that already has a
+     * MEASURED review row is refused ({@code SPIKE_LAYOUT_ALREADY_REVIEWED}), so a successful review is never repeated.
+     */
+    public ReviewOutcome startSpikeLayoutReview(String deviceId, String actor) {
+        windows.requireOpen();
+        if (deviceId == null || deviceId.isBlank()) return ReviewOutcome.refused("DEVICE_ID_REQUIRED");
+        var device = devices.find(deviceId);
+        if (device.isEmpty()) return ReviewOutcome.refused("DEVICE_NOT_FOUND");
+        if (!"check_point".equals(device.get().vendorHint())) return ReviewOutcome.refused("SPIKE_REVIEW_VENDOR_UNSUPPORTED");
+        if ("management_server".equals(device.get().role())) return ReviewOutcome.refused("SYSTEM_LOG_DISABLED_ON_MANAGEMENT");
+        if (!"gateway".equals(device.get().role())) return ReviewOutcome.refused("SPIKE_REVIEW_VENDOR_UNSUPPORTED");
+        boolean reviewed = measurements.list(Optional.of(deviceId), Optional.of("check_point"),
+                Optional.of(CpSpikeLayoutReview.SOURCE), 1000).stream()
+                .anyMatch(m -> "MEASURED".equals(summary(m.summaryJson()).get("status")));
+        if (reviewed) return ReviewOutcome.refused("SPIKE_LAYOUT_ALREADY_REVIEWED");
+        String slot = String.valueOf(windows.slotStart(windows.now()).toEpochSecond());
+        AdmissionResult result = admission.submit(CpSpikeLayoutReview.CAPABILITY, deviceId,
+                "spike-layout-review:" + deviceId + ":" + slot, actor, ActionRegistry.SYSTEM_LOG_MEASURE_START);
+        return switch (result) {
+            case AdmissionResult.Admitted admitted -> new ReviewOutcome("ADMITTED", admitted.jobId(), null);
+            case AdmissionResult.Deduplicated deduplicated -> new ReviewOutcome("DEDUPLICATED", deduplicated.jobId(), null);
+            case AdmissionResult.Refused refused -> ReviewOutcome.refused(refused.code());
+        };
     }
 
     /** Newest first. Hostnames and cluster references go out raw here and are masked for aiview by the response advice. */

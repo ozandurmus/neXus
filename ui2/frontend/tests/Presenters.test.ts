@@ -23,6 +23,7 @@ describe("job type labels", () => {
   it.each([
     ["pan_failover_readiness", "Palo Alto readiness check"], ["cp_failover_readiness", "Check Point readiness check"],
     ["cp_system_log_collect", "Check Point log collection"], ["pan_system_log_collect", "Palo Alto log collection"],
+    ["cp_spike_layout_review", "Check Point Spike Detective layout review"],
     ["cp_inventory_collect", "Check Point inventory read"], ["fgt_configuration_collect", "FortiGate configuration read"],
     ["cp_gateway_backup", "Check Point backup"], ["cp_mds_export", "Check Point MDS export"], ["cp_gaia_snapshot", "Check Point Gaia snapshot"],
     ["asa_config_backup", "Cisco ASA backup"], ["rdw_discovery_enumerate", "Radware discovery"], ["bcmc_discovery_enumerate", "Blue Coat discovery"],

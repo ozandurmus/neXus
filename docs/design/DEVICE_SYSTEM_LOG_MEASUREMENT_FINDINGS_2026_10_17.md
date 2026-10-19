@@ -333,3 +333,9 @@ and the number now in the contract. In short:
   pre-existing) and HCP archives must be recorded as baseline, not fetched or alerted.
 - **R4. PAN summary statistics.** Add `seqno` min, max, distinct count and monotonic flag per page to the PAN
   summary, so contiguity can be judged without storing entries.
+
+## 10. Follow-up record (appended 2026-10-19)
+
+- The one C5 layout listing that §8 lists as "what closes it" for the Spike data directory names, layout and sizes is
+  run by the `cp_spike_layout_review` job (PO approval 2026-10-19); its procedure and result are recorded in
+  [SPIKE_DETECTIVE_LAYOUT_REVIEW_2026_10_19.md](SPIKE_DETECTIVE_LAYOUT_REVIEW_2026_10_19.md).
