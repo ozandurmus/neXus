@@ -137,7 +137,8 @@ describe("the device header's state row", () => {
     mount(<DeviceInventoryPanels device={d} configuration={<DeviceConfigurationDetail device={d} embedded />} />);
     const r = await row();
     await waitFor(() => expect(pillTexts(r)).toEqual(["Compliance 3 critical failing · 59 checked", "Config changed · 2 sections", "Backup 8 h ago · Checked"]));
-    expect(within(r).getByRole("link", { name: /^Compliance/ })).toHaveAttribute("href", "?screen=compliance&result=fail&severity=critical&vendor=check_point");
+    // the device has checks, so its pill lands on the Compliance screen filtered to that device (Phase 2 follow-up)
+    expect(within(r).getByRole("link", { name: /^Compliance/ })).toHaveAttribute("href", "?screen=compliance&device=dev-1");
     expect(within(r).getByRole("link", { name: /^Config changed/ })).toHaveAttribute("href", "?screen=inventory&change_state=changed");
     expect(within(r).getByRole("link", { name: /^Backup/ })).toHaveAttribute("href", "?screen=backups&q=dev-1");
     expect(within(r).getByText(/^Compliance/)).toHaveStyle({ backgroundColor: m3.errorContainer });

@@ -14,6 +14,7 @@ import {
   type CpFailoverSummary,
   type DeviceComplianceResult,
   type DeviceConfiguration,
+  type OverviewView,
 } from "../auth/adminApi";
 
 /**
@@ -41,6 +42,8 @@ export const READINESS_VENDORS: ReadonlySet<string> = new Set(["check_point", "p
 
 export const complianceHref = (vendor: string | null | undefined) =>
   `?screen=compliance&result=fail&severity=critical${vendor ? `&vendor=${encodeURIComponent(vendor)}` : ""}`;
+/** The Compliance screen filtered to one device's checks (`?device=<opaque id>`; the screen names the device itself). */
+export const complianceDeviceHref = (deviceId: string) => `?screen=compliance&device=${encodeURIComponent(deviceId)}`;
 export const configChangedHref = () => "?screen=inventory&change_state=changed";
 export const backupsHref = (q: string) => `?screen=backups&q=${encodeURIComponent(q)}`;
 export const readinessHref = (clusterRef: string) => `?screen=operations&cluster_ref=${encodeURIComponent(clusterRef)}`;
@@ -69,20 +72,22 @@ export function complianceCounts(result: Pick<DeviceComplianceResult, "items">):
 /**
  * `Compliance 3 critical failing · 59 checked`. With no items the device was not evaluated: `Not read yet` when its
  * configuration was never read (nothing to assess), `Not assessed` when it was read and still nothing came back.
+ * With a `deviceId` the pill lands on the Compliance screen filtered to that device's checks; a device with no checks
+ * keeps the vendor's critical-failures list as the fallback (there is nothing of its own to land on).
  */
-export function complianceFact(result: Pick<DeviceComplianceResult, "items"> | null, options: { readonly configurationRead: boolean; readonly vendor?: string | null; readonly href?: string }): HeaderFact | null {
+export function complianceFact(result: Pick<DeviceComplianceResult, "items"> | null, options: { readonly configurationRead: boolean; readonly vendor?: string | null; readonly href?: string; readonly deviceId?: string }): HeaderFact | null {
   if (!result) return null;
-  const href = options.href ?? complianceHref(options.vendor);
+  const fallback = options.href ?? complianceHref(options.vendor);
   const counts = complianceCounts(result);
   if (counts.checked === 0) {
-    return { key: "compliance", label: `Compliance · ${options.configurationRead ? "Not assessed" : "Not read yet"}`, tone: "neutral", href,
+    return { key: "compliance", label: `Compliance · ${options.configurationRead ? "Not assessed" : "Not read yet"}`, tone: "neutral", href: fallback,
       title: options.configurationRead ? "The configuration was read but no control check came back for this device." : "No configuration has been read yet, so no control was checked." };
   }
   return {
     key: "compliance",
     label: `Compliance ${counts.critical} critical failing · ${counts.checked} checked`,
     tone: counts.critical > 0 ? "bad" : "neutral",
-    href,
+    href: options.deviceId ? complianceDeviceHref(options.deviceId) : fallback,
     title: `${counts.pass} passing · ${counts.fail} failing · ${counts.unavailable} without evidence`,
   };
 }
@@ -156,6 +161,48 @@ export function clusterConfigChangedFact(members: ReadonlyArray<{ readonly label
   });
   return { key: "config-changed", label: `Config changed · ${parts.join(" · ")}`, tone: "neutral", href: configChangedHref(),
     title: changed.map((m) => `${m.label}: ${changedSections(m.configuration!).slice(0, 6).join(", ") || "sections not summarised"}`).join(" · ") };
+}
+
+// -------------------------------------------------------------------------------------------------------------------
+// Members compared (TRACE): the cluster member comparison the Overview already carries
+// -------------------------------------------------------------------------------------------------------------------
+
+export const clusterCompareHref = (clusterRef: string) => `?screen=inventory&cluster_ref=${encodeURIComponent(clusterRef)}&tab=configuration`;
+
+type ClusterDiffOverview = Pick<OverviewView, "exceptions" | "attention">;
+
+/**
+ * `Members compared · 7 settings differ` for a cluster the Overview's member comparison lists (sections and the
+ * comparison time on hover); `· differ` when the Overview names it among the differing clusters without its count
+ * (it carries the count for the five most different only); `· no differences` only when every cluster was comparable,
+ * so a cluster the Overview does not name is known to agree. A cluster that could be the not-comparable one, or a
+ * failed Overview read, gets no pill: nothing is claimed. A difference is a review signal, not a fault: grey.
+ */
+export function clusterCompareFact(overview: ClusterDiffOverview | null | undefined, clusterRef: string): HeaderFact | null {
+  const diff = overview?.exceptions?.cluster_diff;
+  if (!diff) return null;
+  const href = clusterCompareHref(clusterRef);
+  const row = (diff.rows ?? []).find((r) => r.cluster_ref === clusterRef);
+  if (row) {
+    const n = row.diff_setting_count;
+    return {
+      key: "members-compared",
+      label: `Members compared · ${n} ${n === 1 ? "setting differs" : "settings differ"}`,
+      tone: "neutral",
+      href,
+      title: `${row.diff_section_count} ${row.diff_section_count === 1 ? "section" : "sections"}: ${(row.diff_sections ?? []).join(" · ") || "not listed"} · compared ${formatStamp(row.computed_at)}`,
+    };
+  }
+  if ((diff.all_refs ?? []).includes(clusterRef)) {
+    return { key: "members-compared", label: "Members compared · differ", tone: "neutral", href,
+      title: "The members' newest configuration reads differ; the setting count is listed for the five most different clusters only. The Configuration tab compares the members side by side." };
+  }
+  const tile = overview?.attention?.cluster_diff;
+  if (tile?.state === "OK" && (diff.unknown ?? 1) === 0) {
+    return { key: "members-compared", label: "Members compared · no differences", tone: "neutral", href,
+      title: "The members' newest configuration reads agree on every compared setting." };
+  }
+  return null;
 }
 
 // -------------------------------------------------------------------------------------------------------------------

@@ -22,14 +22,18 @@ import { readinessReasonLabel } from "../shell/presenters";
 
 /** The three Operations tabs; Queue and History (roadmap 2.4) are state pills on Jobs, their old routes still land there. */
 const TAB_SLUGS = ["ha", "jobs", "diagnostics"] as const;
-/** `?tab=<slug>` to a tab index and, for the retired Queue / History routes, the pill that stands for them. */
-export function tabFromUrl(slug: string | null): { readonly tab: number; readonly pill: JobPill | null } {
+/**
+ * `?tab=<slug>` to a tab index and, for the retired Queue / History routes, the pill that stands for them. A job link
+ * that names only `?job=<id>` (roadmap 3.6) lands on Jobs, where the id is opened; the tab slug wins when both are given.
+ */
+export function tabFromUrl(slug: string | null, jobId: string | null = null): { readonly tab: number; readonly pill: JobPill | null } {
   switch (slug) {
     case "jobs": return { tab: 1, pill: null };
     case "queue": return { tab: 1, pill: "active" };
     case "history": return { tab: 1, pill: "finished" };
     case "diagnostics": return { tab: 2, pill: null };
-    default: return { tab: 0, pill: null };
+    case "ha": return { tab: 0, pill: null };
+    default: return jobId ? { tab: 1, pill: null } : { tab: 0, pill: null };
   }
 }
 
@@ -119,7 +123,7 @@ export function OperationsScreen() {
   const selectedReadinessRow = selectedReadinessRows.find(row => row.unitId === expandedUnit)
     ?? selectedReadinessRows.find(row => row.unitId === row.clusterId);
 
-  const [initialRoute] = useState(() => tabFromUrl(urlParam("tab")));
+  const [initialRoute] = useState(() => tabFromUrl(urlParam("tab"), urlParam("job")));
   const [tab, setTabState] = useState(initialRoute.tab);
   // A pill the screen asks of the Jobs table: the retired Queue / History routes on load, the Failed card's link later.
   const [pillRequest, setPillRequest] = useState<{ pill: JobPill; seq: number } | null>(initialRoute.pill ? { pill: initialRoute.pill, seq: 0 } : null);

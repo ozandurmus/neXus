@@ -44,12 +44,22 @@ export function HttpsCertificatePanel({ deviceId }: { readonly deviceId: string 
   return <HttpsCertificateCard deviceId={deviceId} {...fetched} />;
 }
 
-/** SHA-256, Subject CN, Issuer CN, Expires and Strict mode, with the accept and strict-mode actions. */
-export function HttpsCertificateCard({ deviceId, data, error, refresh }: {
+/** True when the service holds a certificate record (pinned or pending) for the device. */
+export function hasCertificateRecord(view: HttpsCertificateView | null | undefined): boolean {
+  return Boolean(view?.available) && (view?.certificates?.length ?? 0) > 0;
+}
+
+/**
+ * SHA-256, Subject CN, Issuer CN, Expires and Strict mode, with the accept and strict-mode actions. On a management
+ * server (`manager`, Phase 2 follow-up 2.6) the block is shown when a certificate record exists and otherwise says
+ * `No certificate on record` instead of vanishing: a manager's Identity tab must state the fact either way.
+ */
+export function HttpsCertificateCard({ deviceId, data, error, refresh, manager = false }: {
   readonly deviceId: string;
   readonly data: HttpsCertificateView | null;
   readonly error: string | null;
   readonly refresh: () => void;
+  readonly manager?: boolean;
 }) {
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
@@ -61,6 +71,16 @@ export function HttpsCertificateCard({ deviceId, data, error, refresh }: {
     finally { setBusy(false); }
   }
   if (error) return <Alert severity="error">{error}</Alert>;
+  if (manager && data && !hasCertificateRecord(data)) {
+    return <Stack spacing={0.5} aria-label="HTTPS certificate">
+      <Typography variant="subtitle1">HTTPS certificate</Typography>
+      <Typography role="status">No certificate on record</Typography>
+      <Typography variant="caption" color="text.secondary">
+        {data.available ? "The management server has an HTTPS endpoint, but no certificate has been observed and pinned for it yet."
+          : "No HTTPS certificate is recorded for this management server; its connections are not verified by a pinned certificate."}
+      </Typography>
+    </Stack>;
+  }
   if (!data?.available) return null;
   return <Stack spacing={2} aria-label="HTTPS certificate">
     <Typography variant="subtitle1">HTTPS certificate</Typography>

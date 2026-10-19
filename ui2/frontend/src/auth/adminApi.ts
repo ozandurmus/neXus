@@ -1378,6 +1378,8 @@ export interface JobEventView {
   readonly finished_at?: string;
   readonly duration_ms?: number;
   readonly has_transcript: boolean;
+  /** Log lines a system-log collection run stored (its chunk ledger); absent or null for other jobs and for a run without a chunk row. */
+  readonly lines_stored?: number | null;
 }
 
 export interface JobTranscriptEntry {

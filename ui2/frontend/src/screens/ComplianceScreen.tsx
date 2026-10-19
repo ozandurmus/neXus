@@ -18,6 +18,27 @@ export function complianceHeadline(overview: { readonly evaluated_firewalls: num
     + `${overview.critical_deficiencies} critical failing · ${overview.data_gaps} data gaps · re-check time not recorded`;
 }
 
+/**
+ * One device's checks as the control list needs them (`?device=<opaque id>`, from the device header's Compliance pill):
+ * the masked name the service answered with, and each control's status on that device. NOT_APPLICABLE is not a check
+ * (the header pill counts the same way); anything but PASS / FAIL is a check without evidence.
+ */
+export interface DeviceScope {
+  readonly id: string;
+  readonly name: string;
+  readonly statuses: ReadonlyMap<string, ComplianceControlItem["status"]>;
+}
+
+export function deviceScopeOf(id: string, result: Pick<DeviceComplianceResult, "hostname" | "items">): DeviceScope {
+  const statuses = new Map<string, ComplianceControlItem["status"]>();
+  for (const item of result.items ?? []) {
+    const status = String(item.displayStatus ?? "").toUpperCase();
+    if (status === "NOT_APPLICABLE") continue;
+    statuses.set(item.controlId, status === "PASS" ? "PASS" : status === "FAIL" ? "FAIL" : "DATA_UNAVAILABLE");
+  }
+  return { id, name: result.hostname || "name UNKNOWN", statuses };
+}
+
 /** Overview link values -> this screen's filter values (framework names are matched by keyword). */
 function frameworkFromUrl(name: string | null): string {
   const n = (name ?? "").toUpperCase();
@@ -63,6 +84,7 @@ import {
   type ComplianceOverview,
   type ComplianceControlItem,
   type ComplianceControlDetail,
+  type DeviceComplianceResult,
 } from "../auth/adminApi";
 
 type StatusFilter = "ALL" | "FAILING" | "UNAVAILABLE" | "PASSING";
@@ -137,6 +159,20 @@ export function ComplianceScreen() {
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState(false);
   const [deviceFilter, setDeviceFilter] = useState("ALL");
+  // `?device=<opaque id>` narrows the list to one device's checks (the device header's Compliance pill lands here).
+  const [deviceParam, setDeviceParam] = useState<string | null>(() => urlParam("device"));
+  const [deviceScope, setDeviceScope] = useState<{ readonly id: string; readonly state: "loading" } | { readonly id: string; readonly state: "failed" } | (DeviceScope & { readonly state: "loaded" }) | null>(null);
+  useUrlParamSync("device", useCallback((id: string | null) => setDeviceParam(id), []));
+  useEffect(() => {
+    if (!deviceParam) { setDeviceScope(null); return; }
+    let active = true;
+    setDeviceScope({ id: deviceParam, state: "loading" });
+    getDeviceCompliance(deviceParam)
+      .then((result) => { if (active) setDeviceScope({ ...deviceScopeOf(deviceParam, result), state: "loaded" }); })
+      .catch(() => { if (active) setDeviceScope({ id: deviceParam, state: "failed" }); });
+    return () => { active = false; };
+  }, [deviceParam]);
+  const clearDevice = () => { setDeviceParam(null); writeUrlParams({ device: null }); };
   const [familyFilter, setFamilyFilter] = useState(() => urlParam("family") ?? "");
   const [vendorFilter, setVendorFilter] = useState(() => urlParam("vendor") ?? "ALL");
   const [sortMode, setSortMode] = useState<SortMode>("SEVERITY");
@@ -234,8 +270,18 @@ export function ComplianceScreen() {
     }
   };
 
+  // With a device in scope the list holds that device's checks and every outcome word is the device's own; the fleet
+  // counts in each row stay (they are the control's). A scope still loading or failed shows no row rather than the fleet.
+  const scoped = useMemo(() => {
+    if (!deviceScope) return { controls, statusOf: (c: ComplianceControlItem) => c.status };
+    if (deviceScope.state !== "loaded") return { controls: [] as readonly ComplianceControlItem[], statusOf: (c: ComplianceControlItem) => c.status };
+    const statuses = deviceScope.statuses;
+    return { controls: controls.filter((c) => statuses.has(c.control_id)), statusOf: (c: ComplianceControlItem) => statuses.get(c.control_id) ?? c.status };
+  }, [controls, deviceScope]);
+  const statusOf = scoped.statusOf;
+
   const filteredControls = useMemo(() => {
-    return controls.filter((c) => {
+    return scoped.controls.filter((c) => {
       if (familyFilter && familyOf(c).split(" · ")[0] !== familyFilter) return false;
       // Search
       const q = searchQuery.toLowerCase().trim();
@@ -251,10 +297,11 @@ export function ComplianceScreen() {
         if (!inTitle && !inId && !inDesc && !inFw) return false;
       }
 
-      // Status
-      if (statusFilter === "FAILING" && c.status !== "FAIL") return false;
-      if (statusFilter === "UNAVAILABLE" && c.status !== "DATA_UNAVAILABLE") return false;
-      if (statusFilter === "PASSING" && c.status !== "PASS") return false;
+      // Status (the device's own when one is in scope)
+      const status = statusOf(c);
+      if (statusFilter === "FAILING" && status !== "FAIL") return false;
+      if (statusFilter === "UNAVAILABLE" && status !== "DATA_UNAVAILABLE") return false;
+      if (statusFilter === "PASSING" && status !== "PASS") return false;
 
       // Severity
       if (severityFilter !== "ALL" && c.severity !== severityFilter) return false;
@@ -269,8 +316,8 @@ export function ComplianceScreen() {
       }
 
       return true;
-    }).sort((a, b) => compareControls(a, b, sortMode));
-  }, [controls, searchQuery, statusFilter, severityFilter, frameworkFilter, familyFilter, vendorFilter, sortMode]);
+    }).sort((a, b) => compareControls(deviceScope ? { ...a, status: statusOf(a) } : a, deviceScope ? { ...b, status: statusOf(b) } : b, sortMode));
+  }, [scoped, statusOf, deviceScope, searchQuery, statusFilter, severityFilter, frameworkFilter, familyFilter, vendorFilter, sortMode]);
 
   /** The vendors the controls were evaluated on, with how many controls each covers (the order a reader expects). */
   const vendorOptions = useMemo(() => {
@@ -280,9 +327,9 @@ export function ComplianceScreen() {
     return [...counts.entries()].sort(([a], [b]) => (order.indexOf(a) < 0 ? 9 : order.indexOf(a)) - (order.indexOf(b) < 0 ? 9 : order.indexOf(b)) || vendorLabel(a).localeCompare(vendorLabel(b)));
   }, [controls]);
 
-  const failingCount = useMemo(() => controls.filter((c) => c.status === "FAIL").length, [controls]);
-  const unavailCount = useMemo(() => controls.filter((c) => c.status === "DATA_UNAVAILABLE").length, [controls]);
-  const passingCount = useMemo(() => controls.filter((c) => c.status === "PASS").length, [controls]);
+  const failingCount = useMemo(() => scoped.controls.filter((c) => statusOf(c) === "FAIL").length, [scoped, statusOf]);
+  const unavailCount = useMemo(() => scoped.controls.filter((c) => statusOf(c) === "DATA_UNAVAILABLE").length, [scoped, statusOf]);
+  const passingCount = useMemo(() => scoped.controls.filter((c) => statusOf(c) === "PASS").length, [scoped, statusOf]);
 
   /**
    * Control families (review §3): the NIST SP 800-53 family of each control's NIST mapping (AC, IA, AU, ...), the
@@ -598,10 +645,17 @@ export function ComplianceScreen() {
 
           {/* Status Filter Pills */}
           <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", gap: 1 }}>
+            {/* One device's checks (the device header's Compliance pill): named by its masked name, removable here. */}
+            {deviceScope && (
+              <Chip data-testid="device-filter-chip" color="primary" variant="outlined"
+                label={deviceScope.state === "loaded" ? `Device: ${deviceScope.name} · ${scoped.controls.length} checks`
+                  : deviceScope.state === "loading" ? "Device: reading its checks…" : "Device: UNKNOWN · its checks could not be read"}
+                onDelete={clearDevice} deleteIcon={<span aria-label="Remove device filter" role="img">✕</span>} />
+            )}
             {familyFilter && <Chip label={`Family: ${familyFilter} · ${NIST_FAMILIES[familyFilter] ?? "Unmapped"}`} onDelete={() => selectFamily("")} />}
             <Chip
               clickable
-              label={`All · ${controls.length}`}
+              label={`All · ${scoped.controls.length}`}
               onClick={() => setStatusFilter("ALL")}
               sx={{
                 bgcolor: statusFilter === "ALL" ? m3.primaryContainer : m3.scLow,
@@ -690,8 +744,10 @@ export function ComplianceScreen() {
               ) : filteredControls.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} align="center" sx={{ py: 6 }}>
-                    <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
-                      No controls matching filter criteria.
+                    <Typography variant="body2" role="status" sx={{ color: m3.onSurfaceVar }}>
+                      {deviceScope?.state === "loading" ? "Reading the device's checks…"
+                        : deviceScope?.state === "failed" ? "The device's checks could not be read. Remove the device filter, or reload to try again."
+                        : "No controls matching filter criteria."}
                     </Typography>
                   </TableCell>
                 </TableRow>
@@ -785,32 +841,39 @@ export function ComplianceScreen() {
                     </TableCell>
 
                     <TableCell>
-                      <Chip
-                        size="small"
-                        label={
-                          c.status === "PASS"
-                            ? "Compliant"
-                            : c.status === "FAIL"
-                            ? "Non-Compliant"
-                            : "Evidence not collected"
-                        }
-                        sx={{
-                          fontWeight: 600,
-                          fontSize: 12,
-                          bgcolor:
-                            c.status === "PASS"
-                              ? m3.successContainer
-                              : c.status === "FAIL"
-                              ? m3.errorContainer
-                              : m3.scHigh,
-                          color:
-                            c.status === "PASS"
-                              ? m3.onSuccessContainer
-                              : c.status === "FAIL"
-                              ? m3.onErrorContainer
-                              : m3.neutralInk,
-                        }}
-                      />
+                      {/* The device's own outcome when one is in scope (its name on hover); the control's otherwise. */}
+                      {(() => {
+                        const status = statusOf(c);
+                        return (
+                          <Chip
+                            size="small"
+                            title={deviceScope?.state === "loaded" ? `${deviceScope.name}: ${status}` : c.status}
+                            label={
+                              status === "PASS"
+                                ? "Compliant"
+                                : status === "FAIL"
+                                ? "Non-Compliant"
+                                : "Evidence not collected"
+                            }
+                            sx={{
+                              fontWeight: 600,
+                              fontSize: 12,
+                              bgcolor:
+                                status === "PASS"
+                                  ? m3.successContainer
+                                  : status === "FAIL"
+                                  ? m3.errorContainer
+                                  : m3.scHigh,
+                              color:
+                                status === "PASS"
+                                  ? m3.onSuccessContainer
+                                  : status === "FAIL"
+                                  ? m3.onErrorContainer
+                                  : m3.neutralInk,
+                            }}
+                          />
+                        );
+                      })()}
                     </TableCell>
 
                     <TableCell align="right">

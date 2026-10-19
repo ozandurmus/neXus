@@ -64,7 +64,9 @@ import {
   type Presence,
   type BackupArtefact,
   getBackupPolicy,
+  getOverview,
   listDeviceBackups,
+  type OverviewView,
 } from "../auth/adminApi";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { BackupAttempts } from "./BackupAttempts";
@@ -74,7 +76,7 @@ import { CpFailoverPanel } from "./CpFailoverPanel";
 import { CertificateStatePill, HttpsCertificateCard } from "./HttpsCertificatePanel";
 import { IdentityCard, identityTiles } from "./PlatformIdentity";
 import {
-  HeaderStateRow, READINESS_VENDORS, backupFact, backupsHref, clusterComplianceFact, clusterConfigChangedFact, complianceFact,
+  HeaderStateRow, READINESS_VENDORS, backupFact, backupsHref, clusterCompareFact, clusterComplianceFact, clusterConfigChangedFact, complianceFact,
   configChangedFact, readinessFact, useMemberHeaderReads,
 } from "./HeaderStatePills";
 
@@ -2343,7 +2345,7 @@ export function DeviceInventoryPanels({
   const isEnrolledDevice = device.enrollment_state === "ENROLLED";
   const configRead = configuration ? configReadFetch.data : null;
   const stateFacts = [
-    assessed ? complianceFact(complianceFetch.data, { configurationRead: Boolean(configRead?.collected_at), vendor: device.vendor_hint }) : null,
+    assessed ? complianceFact(complianceFetch.data, { configurationRead: Boolean(configRead?.collected_at), vendor: device.vendor_hint, deviceId: device.device_id }) : null,
     configChangedFact(configRead),
     backupFact(backupsFetch.data?.backups, device, backupsHref(device.cluster_member_ref ?? device.device_id)),
     readinessRead && device.cluster_member_ref ? readinessFact(readinessFetch.data, device.cluster_member_ref) : null,
@@ -2475,7 +2477,7 @@ export function DeviceInventoryPanels({
               <Stack spacing={1.5}>
                 <IdentityCard title={deviceNameLabel(device.hostname)} tiles={identityTiles(device, configRead?.collected_at ?? null, { configurationRead: Boolean(configuration) })} />
                 <HttpsCertificateCard deviceId={device.device_id} data={certificateFetch.data}
-                  error={certificateFetch.error} refresh={certificateFetch.refresh} />
+                  error={certificateFetch.error} refresh={certificateFetch.refresh} manager={device.role === "management_server"} />
                 <IdentityBasisCard device={device} />
               </Stack>
             ),
@@ -2617,6 +2619,9 @@ export function ClusterDetailPanels({
   const readinessRead = Boolean(vendor && READINESS_VENDORS.has(vendor));
   const memberReads = useMemberHeaderReads(orderedMembers, { configuration: Boolean(configuration), assessed: Boolean(configuration), version: readsVersion });
   const readinessFetch = useFetchOnMount<CpFailoverSummary[] | null>(() => (readinessRead ? listCpFailoverSummary() : Promise.resolve(null)), () => "Readiness unavailable.");
+  // The member comparison (Phase 2 follow-up): the Overview's cluster_member_diff summary, the same read the Fleet summary
+  // makes; only a vendor with a configuration read is compared. A failed read makes no claim (no pill).
+  const overviewFetch = useFetchOnMount<OverviewView | null>(() => (configuration ? getOverview() : Promise.resolve(null)), () => "Overview unavailable.");
   const labelled = orderedMembers.map((m, i) => ({ id: m.device_id, label: `M${i + 1}`, member: m }));
   const backupFacts = labelled.map((f) => backupFact(memberReads.backups[f.id], f.member, backupsHref(clusterRef), f.label));
   const readiness = readinessRead ? readinessFact(readinessFetch.data, clusterRef) : null;
@@ -2624,6 +2629,7 @@ export function ClusterDetailPanels({
     configuration ? clusterComplianceFact(labelled.map((f) => ({ label: f.label, result: memberReads.compliance[f.id] ?? null,
       configurationRead: Boolean(memberReads.configuration[f.id]?.collected_at) })), vendor) : null,
     clusterConfigChangedFact(labelled.map((f) => ({ label: f.label, configuration: memberReads.configuration[f.id] ?? null }))),
+    configuration ? clusterCompareFact(overviewFetch.data, clusterRef) : null,
     ...backupFacts,
     readiness,
   ];
@@ -2670,45 +2676,44 @@ export function ClusterDetailPanels({
             trailing={fallbackLinks.map((l) => <HeaderPillLink key={l.id} href={l.href}>{l.label}</HeaderPillLink>)} />
         )}
       >
-        {/* 2 Member Cards Sub-row */}
-        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 1.5, pt: 0.5 }}>
+        {/* The two member cards as one compact row (R13: tab content within ~420 px): name, job state, role, model ·
+            version and the VSYS list on one line each; the full per-member facts are the Cluster members tab. */}
+        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 1.5 }}>
           {orderedMembers.map((m) => {
             return (
               <Box
                 key={m.device_id}
                 data-member-card={m.device_id}
                 sx={{
-                  p: 1.5,
+                  px: 1.5,
+                  py: 0.5,
                   borderRadius: "10px",
                   bgcolor: m3.scLow,
                   border: "1px solid",
                   borderColor: m3.outlineVar,
                   display: "flex",
-                  flexDirection: "column",
-                  gap: 0.75,
+                  alignItems: "center",
+                  columnGap: 1,
+                  rowGap: 0.25,
+                  flexWrap: "wrap",
+                  minHeight: 34,
                 }}
               >
-                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
-                    <Typography variant="body2" sx={{ fontWeight: 700, color: m3.onSurface }}>
-                      {memberLabel(m, orderedMembers)}
-                    </Typography>
-                    <JobStatusIndicator
-                      state={m.latest_job_state}
-                      type={m.latest_job_type}
-                      terminalReason={m.latest_job_terminal_reason}
-                    />
-                  </Box>
-                  <RoleChip role={m.ha_role} dense />
-                </Box>
-                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1 }}>
-                  {/* One Collect now per page (phase 1.3): the header's, with the M1 / M2 pills; the card no longer repeats it. */}
-                  <Typography variant="caption" color="text.secondary" sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {m.model ?? "Unknown model"} · {m.software_version ?? "Unknown version"}
-                  </Typography>
-                </Box>
+                <Typography variant="body2" sx={{ fontWeight: 700, color: m3.onSurface, whiteSpace: "nowrap" }}>
+                  {memberLabel(m, orderedMembers)}
+                </Typography>
+                <JobStatusIndicator
+                  state={m.latest_job_state}
+                  type={m.latest_job_type}
+                  terminalReason={m.latest_job_terminal_reason}
+                />
+                <RoleChip role={m.ha_role} dense />
+                {/* One Collect now per page (phase 1.3): the header's, with the M1 / M2 pills; the card no longer repeats it. */}
+                <Typography variant="caption" color="text.secondary" sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
+                  {m.model ?? "Unknown model"} · {m.software_version ?? "Unknown version"}
+                </Typography>
                 {isPaloAlto && m.virtual_systems && (
-                  <Typography variant="caption" color="text.secondary">
+                  <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: "nowrap" }}>
                     VSYS: {m.virtual_systems.split(/,\s*/).filter(Boolean).map((name, index) => (
                       <Box component="span" key={name}>
                         {index > 0 ? ", " : ""}
