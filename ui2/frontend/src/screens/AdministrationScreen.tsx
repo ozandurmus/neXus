@@ -126,7 +126,7 @@ export function AdministrationScreen() {
   };
 
   return (
-    <ScreenRoot>
+    <ScreenRoot screenType="list">
       <ScreenHeader
         title="Administration"
         subtitle="Device registry, collection scope and delivery plan. Enrollment is the one place a device enters the product."

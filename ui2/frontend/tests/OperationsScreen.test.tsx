@@ -338,8 +338,8 @@ it("summarizes the same cluster readiness counts in the KPI and chips without do
     { ...READY_SUMMARY[0], clusterId: "unsupported", unitId: "unsupported", cluster_member_ref: "CLS-CHARLIE-04" }]);
   render(withTheme(<OperationsScreen />));
   expect(await screen.findByText("1 not ready · 1 unknown")).toBeInTheDocument();
-  const card = screen.getByText("Readiness checks", { selector: "p" }).parentElement as HTMLElement;
-  expect(within(card).getByRole("heading", { level: 1 })).toHaveTextContent(/^1$/);
+  const card = screen.getByText("Readiness checks", { selector: "p" }).closest("[data-kpi]") as HTMLElement;
+  expect(card.querySelector("[data-kpi-figure]")).toHaveTextContent(/^1$/);
   expect(within(card).getByText("ready of 4 clusters")).toBeInTheDocument();
   for (const name of ["Ready", "Not ready", "Unknown", "Not supported"]) expect(screen.getByRole("button", { name: `${name}: 1 clusters` })).toBeInTheDocument();
   expect(screen.queryByText("NOT EVALUATED")).toBeNull();

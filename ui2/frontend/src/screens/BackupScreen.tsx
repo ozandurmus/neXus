@@ -19,7 +19,6 @@ import TableCell from "@mui/material/TableCell";
 import TableContainer from "@mui/material/TableContainer";
 import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
-import TablePagination from "@mui/material/TablePagination";
 import IconButton from "@mui/material/IconButton";
 import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
@@ -60,7 +59,8 @@ import { Icon } from "../shell/Icon";
 import { plural } from "../shell/plural";
 import { VendorBadge } from "../shell/States";
 import { Stamp } from "../shell/PresentedText";
-import { vendorLabel } from "../shell/presenters";
+import { statusWord, vendorLabel } from "../shell/presenters";
+import { PaginationFooter } from "../shell/DataTable";
 
 
 import { MONO, m3 } from "../theme/m3Theme";
@@ -460,7 +460,7 @@ export function BackupScreen() {
     ? backupFleetCounts(fleetDevices, new Set(devices.map((d) => d.deviceId))) : null;
 
   return (
-    <ScreenRoot>
+    <ScreenRoot screenType="list">
       <ScreenHeader
         title="Backups"
         subtitle={backupsHeadline(storeCounts, policy)}
@@ -879,7 +879,7 @@ export function BackupScreen() {
                           <TableCell sx={{ whiteSpace: "nowrap" }}><Stamp at={a.collected_at} /></TableCell>
                           <TableCell align="right">{formatBytes(a.size_bytes)}</TableCell>
                           <TableCell>{a.validation_level || "UNKNOWN"}</TableCell>
-                          <TableCell>{a.deviation_state ? a.deviation_state.toUpperCase() : "NOT EVALUATED"}</TableCell>
+                          <TableCell>{statusWord(a.deviation_state ? a.deviation_state.toUpperCase() : "NOT EVALUATED")}</TableCell>
                           <TableCell>
                             {isBaseline ? (
                               <Chip size="small" label="★ baseline" sx={{ bgcolor: m3.primaryContainer, color: m3.onPrimaryContainer, fontWeight: 700 }} />
@@ -1260,8 +1260,9 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
             </TableBody>
           </Table>
         </TableContainer>
-        <TablePagination component="div" count={shown.length} page={safePage} rowsPerPage={BACKUP_PAGE_SIZE} rowsPerPageOptions={[]}
-          onPageChange={(_, next) => setPage(next)} aria-label="Backup fleet pages" />
+        <Box component="nav" aria-label="Backup fleet pages" sx={{ display: "flex", px: 1, py: 0.5 }}>
+          <PaginationFooter offset={safePage * BACKUP_PAGE_SIZE} size={BACKUP_PAGE_SIZE} total={shown.length} onPage={(offset) => setPage(Math.floor(offset / BACKUP_PAGE_SIZE))} />
+        </Box>
         </>
       )}
     </Card>

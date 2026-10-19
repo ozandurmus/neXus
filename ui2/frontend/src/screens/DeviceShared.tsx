@@ -19,6 +19,7 @@ import { RoleChip, Ts, Unknown } from "../shell/States";
 import { StatusChip } from "../shell/M3Widgets";
 import { Icon } from "../shell/Icon";
 import { deviceNameLabel } from "../shell/deviceCopy";
+import { statusWord } from "../shell/presenters";
 import type { DeviceSummary } from "../auth/adminApi";
 
 /**
@@ -341,7 +342,7 @@ export function DeviceIdentityTable({ devices, ariaLabel = "Member identity" }: 
               <TableCell><RoleChip role={m.ha_role} dense /></TableCell>
               <TableCell sx={{ fontFamily: MONO, fontSize: 12, whiteSpace: "nowrap", minWidth: COLUMN_MIN_WIDTH["MANAGEMENT ADDRESS"] }}>{m.management_ip ?? <Unknown reason="No management address recorded." />}</TableCell>
               <TableCell><VirtualSystemsCell vs={vsListOf(m)} clusterVs={clusterVs} /></TableCell>
-              <TableCell sx={{ fontSize: 12 }}>{m.enrollment_state || <Unknown />}</TableCell>
+              <TableCell sx={{ fontSize: 12 }}>{m.enrollment_state ? statusWord(m.enrollment_state) : <Unknown />}</TableCell>
               <TableCell><Ts at={m.platform_facts_observed_at} /></TableCell>
               <TableCell><Ts at={m.inventory_collected_at} /></TableCell>
               <TableCell>

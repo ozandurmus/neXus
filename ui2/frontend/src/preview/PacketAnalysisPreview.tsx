@@ -7,7 +7,7 @@ export function PacketAnalysisPreview() {
   const stages = ["ingest", "core_flow_loss", "topology", "path_integrity", "application_security_hints", "nexus_correlation"]
     .map(stage => ({ stage, verdict: "unknown", reason: "engine not yet ported" }));
   return (
-    <ScreenRoot>
+    <ScreenRoot screenType="tool">
       <ScreenHeader title="Packet Analysis" subtitle="OBJ-TANGO-04 · 2 captures · expires 2026-10-22"
         actions={<StatusChip tone="mem" label="Masked view" />} />
       <ResultView report={{ job_id: "preview", case_id: "preview", projection: "masked",

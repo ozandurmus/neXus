@@ -43,6 +43,8 @@ import TableRow from "@mui/material/TableRow";
 import Typography from "@mui/material/Typography";
 
 import { ScreenHeader, MetricGrid, ScreenRoot } from "../shell/ScreenLayout";
+import { KpiCard } from "../shell/KpiCard";
+import { StatusPill } from "../shell/StatusPill";
 import { Icon } from "../shell/Icon";
 import { M3Button } from "../shell/M3Widgets";
 import { StackedBar, STATUS } from "../shell/Charts";
@@ -113,52 +115,9 @@ function ComplianceMetricCard({
   readonly note: string;
   readonly badge?: { readonly label: string; readonly tone: "ok" | "warn" | "bad" | "neutral" };
 }) {
-  const badgeBg =
-    badge?.tone === "ok"
-      ? m3.successContainer
-      : badge?.tone === "warn"
-      ? m3.warningContainer
-      : badge?.tone === "bad"
-      ? m3.errorContainer
-      : m3.scHigh;
-  const badgeFg =
-    badge?.tone === "ok"
-      ? m3.onSuccessContainer
-      : badge?.tone === "warn"
-      ? m3.onWarningContainer
-      : badge?.tone === "bad"
-      ? m3.onErrorContainer
-      : m3.onSurfaceVar;
-
   return (
-    <Card
-      sx={{
-        bgcolor: m3.scLowest,
-        boxShadow: "none",
-        borderRadius: "10px",
-        p: 2.25,
-        display: "flex",
-        flexDirection: "column",
-        gap: 1,
-        border: "1px solid",
-        borderColor: m3.outlineVar,
-      }}
-    >
-      <Stack direction="row" justifyContent="space-between" alignItems="center">
-        <Typography sx={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase", color: m3.onSurfaceVar }}>{title}</Typography>
-        {badge && (
-          <Chip
-            size="small"
-            label={badge.label}
-            sx={{ bgcolor: badgeBg, color: badgeFg, fontWeight: 600, fontSize: 11, height: 22 }}
-          />
-        )}
-      </Stack>
-      {count === null
-        ? <Typography sx={{ fontSize: 22, lineHeight: "40px", fontWeight: 650, color: m3.neutralInk }}>UNKNOWN</Typography>
-        : <Typography variant="h1" sx={{ color: m3.onSurface }}>{count}</Typography>}
-      <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>{note}</Typography>
-    </Card>
+    <KpiCard label={title} value={count} state={count === null ? "unknown" : undefined} sentence={note}
+      badge={badge ? <StatusPill tone={badge.tone} word={badge.label} /> : undefined} />
   );
 }
 
@@ -383,7 +342,7 @@ export function ComplianceScreen() {
     ? new Set(controls.filter((c) => c.severity === "CRITICAL" && c.fail_count > 0).flatMap((c) => c.affected_devices ?? [])).size : null;
 
   return (
-    <ScreenRoot>
+    <ScreenRoot screenType="list">
       <ScreenHeader
         title="Compliance"
         subtitle={subtitle}

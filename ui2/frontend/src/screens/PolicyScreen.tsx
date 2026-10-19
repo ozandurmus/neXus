@@ -566,7 +566,7 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
     setBulkQueue([...scopes.values()]);
   };
   const close = () => { drawerRequest.current++; setDrawer(null); };
-  return <ScreenRoot>
+  return <ScreenRoot screenType="list">
     <Box sx={{ width: "100%", height: "calc(100dvh - 116px)", minHeight: 0, display: "flex", flexDirection: "column" }}>
     <ScreenHeader title="Policy" subtitle={policyHeadline({ catalog, sources: sources.length, loading: loadingTree, now })} actions={!preview &&
       <Tooltip title="Refresh snapshots"><IconButton aria-label="Refresh snapshots" onClick={() => setRevision(n => n + 1)}><Box component="span" aria-hidden="true" sx={{ fontSize: 26, lineHeight: 1 }}>↻</Box></IconButton></Tooltip>} />

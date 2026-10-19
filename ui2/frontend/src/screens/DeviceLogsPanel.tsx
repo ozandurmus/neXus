@@ -474,7 +474,7 @@ function SummaryStrip({ data, latest }: {
       <Typography variant="body2" data-testid="last-collection" sx={{ display: "flex", flexWrap: "wrap", columnGap: 1, alignItems: "baseline" }}>
         <Box component="span" sx={{ fontWeight: 600 }}>Last collection</Box>
         {job?.at
-          ? <><Ts at={job.at} seconds={false} /><Box component="span" sx={{ color: m3.onSurfaceVar }}>· {relativeAge(job.at)}</Box></>
+          ? <Ts at={job.at} />
           : <Unknown reason="No collection time is recorded for the newest run." />}
         <Box component="span" sx={{ color: m3.onSurfaceVar }} title={latest?.state}>· {latest ? jobStateWord(latest.state) : "job state UNKNOWN"}</Box>
         <Box component="span" sx={{ color: m3.onSurfaceVar }}>· {window ? `window ${window} device time` : "window of the newest lines not known"}</Box>

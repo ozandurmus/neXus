@@ -41,7 +41,7 @@ export function AuditLogPanel() {
       <TableBody>
         {data.map((event) => (
           <TableRow key={event.id}>
-            <TableCell>{event.id}</TableCell><TableCell><Ts at={event.occurred_at} /></TableCell><TableCell>{event.actor}</TableCell>
+            <TableCell>{event.id}</TableCell><TableCell><Ts at={event.occurred_at} seconds relative={false} /></TableCell><TableCell>{event.actor}</TableCell>
             <TableCell>{event.action}</TableCell><TableCell>{event.outcome}</TableCell><TableCell>{event.target}</TableCell>
           </TableRow>
         ))}

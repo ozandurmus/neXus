@@ -83,7 +83,7 @@ export function DeviceWorkspaceScreen({ deviceId }: { readonly deviceId: string 
   };
 
   return (
-    <ScreenRoot>
+    <ScreenRoot screenType="object">
       <SshHostKeyPanel deviceId={deviceId} />
       <ScreenHeader
         title="Device Workspace"

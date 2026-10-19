@@ -1150,14 +1150,14 @@ export function InventoryScreen() {
     }
   };
 
-  if (lifecycleView) return <ScreenRoot>
+  if (lifecycleView) return <ScreenRoot screenType="list">
     <ScreenHeader title="Devices" subtitle="Lifecycle, end of support and licenses"
       actions={<M3Button emphasis="tonal" onClick={() => setLifecycleView(false)}>Back to inventory</M3Button>} />
     <LifecycleScreen />
   </ScreenRoot>;
 
   return (
-    <ScreenRoot>
+    <ScreenRoot screenType="object">
       <ScreenHeader
         title="Devices"
         subtitle={devices === null ? "Loading…" : registeredLabel(devices)}

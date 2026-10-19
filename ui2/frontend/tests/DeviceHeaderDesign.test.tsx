@@ -49,7 +49,7 @@ describe("read ages in the header", () => {
     const ages = await screen.findByTestId("header-read-ages");
     await waitFor(() => expect(ages).toHaveTextContent("Platform read 4 h ago·Config read 22 h ago"));
     // 18 hours behind the platform read is not flagged: the configuration is read less often than the platform facts
-    expect(within(ages).queryByText(/Config read/)?.closest(".MuiChip-root")).toBeNull();
+    expect(within(ages).queryByText(/Config read/)?.closest("[data-pill]")).toBeNull();
     // R15: the hover carries the product's one stamp, `YYYY-MM-DD HH:MM GMT+3`
     fireEvent.mouseOver(within(ages).getByText(/^Platform read/));
     expect(await screen.findByText(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2} GMT\+3 \(exact times are in the Platform identity grid\)$/)).toBeInTheDocument();
@@ -86,7 +86,7 @@ describe("read ages in the header", () => {
     stub({ ...base(d), "/devices/dev-1/configuration": () => json(configuration(ago(23 * 24 * H))) });
     mount(withGrid(d));
     const pill = await screen.findByText("Config read 23 d ago");
-    expect(pill.closest(".MuiChip-root")).toHaveStyle({ backgroundColor: m3.warningContainer });
+    expect(pill.closest("[data-pill]")).toHaveStyle({ backgroundColor: m3.warningContainer });
   });
 
   it("makes no claim about the configuration when its read is refused, and says never read for a null time", async () => {
@@ -122,7 +122,7 @@ describe("the identity badge follows the real match", () => {
     const d = device({ identity_check: check(state) });
     stub(base(d));
     mount(<DeviceInventoryPanels device={d} />);
-    const chip = (await screen.findByText(label)).closest(".MuiChip-root");
+    const chip = (await screen.findByText(label)).closest("[data-pill]");
     expect(chip).toHaveStyle({ backgroundColor: background });
     // exactly one of the three, never the enrollment-only claim
     for (const other of ["✓ Identity verified", "Identity mismatch", "Not verified yet"].filter((x) => x !== label)) expect(screen.queryByText(other)).toBeNull();
@@ -236,12 +236,12 @@ describe("the header card", () => {
     await waitFor(() => expect(within(header).getByText(/^Readiness Ready/)).toBeInTheDocument());
     // the identity row: Live · badge · cluster link · role · one platform pill · counts; the state row: four facts
     const identityRow = within(header).getByRole("heading", { name: "FW-SYNTH-01" }).parentElement as HTMLElement;
-    const identityPills = Array.from(identityRow.querySelectorAll(".MuiChip-root, [data-role], a, button")).map((p) => p.textContent);
+    const identityPills = Array.from(identityRow.querySelectorAll("[data-pill], [data-role], a, button")).map((p) => p.textContent);
     expect(identityPills).toEqual(["Live", "Not verified yet", "Check Point ClusterXL · CLS-SYNTH-01", "ACTIVE", "Quantum 29200 · R81.20 · Gaia", "0 interfaces · 0 routes"]);
     const statePills = Array.from(within(header).getByTestId("header-state-row").querySelectorAll("[data-fact]")).map((p) => p.textContent);
     expect(statePills).toEqual(["Compliance 1 critical failing · 1 checked", "Config unchanged", "Backup 14 h ago · Checked", "Readiness Ready · 3 h ago"]);
     expect(identityPills.length + statePills.length).toBeLessThanOrEqual(10);
-    expect(header.querySelectorAll(".MuiChip-root").length).toBeLessThanOrEqual(10);
+    expect(header.querySelectorAll("[data-pill]").length).toBeLessThanOrEqual(10);
     // no Members: line, no separate model and version pills, no completed-job tick
     expect(within(header).queryByText(/^Members:/)).toBeNull();
     expect(within(header).queryByText("R81.20 · Gaia")).toBeNull();

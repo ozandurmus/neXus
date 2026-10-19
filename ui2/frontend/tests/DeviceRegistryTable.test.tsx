@@ -104,7 +104,7 @@ describe("Administration device registry (UI review 2026-10-18, F-22)", () => {
     mount([device(1, { enrollment_state: "DRAFT" })]);
     await screen.findByText("FW-ALPHA-001");
     const enrolled = within(screen.getByRole("group", { name: "Registry filters" })).getByRole("button", { name: /^Enrolled/ });
-    const chip = within(enrolled).getByText("0 devices").closest(".MuiChip-root") as HTMLElement;
+    const chip = within(enrolled).getByText("0 devices").closest("[data-pill]") as HTMLElement;
     const css = [...document.querySelectorAll("style")].map((node) => [...((node as HTMLStyleElement).sheet?.cssRules ?? [])].map((r) => r.cssText).join(" ")).join(" ");
     const className = [...chip.classList].find((c) => c.startsWith("css-"))!;
     const rule = css.match(new RegExp(`\\.${className}\\s*\\{[^}]*\\}`))?.[0] ?? "";

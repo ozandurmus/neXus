@@ -4,7 +4,7 @@ import { ScreenHeader, ScreenRoot } from "../shell/ScreenLayout";
 /** Synthetic: the summary a sanitized firewall log produces -- counts per kind only, never a value. */
 export function SanitizerPreview() {
   return (
-    <ScreenRoot>
+    <ScreenRoot screenType="tool">
       <ScreenHeader title="Data Sanitizer" subtitle="Data Anonymization · synthetic preview" />
       <OutcomeView downloaded={false} onDownload={() => undefined} outcome={{
         mode: "sanitize", id: "00000000-0000-4000-8000-000000000000", state: "SUCCEEDED", fileType: "text",
