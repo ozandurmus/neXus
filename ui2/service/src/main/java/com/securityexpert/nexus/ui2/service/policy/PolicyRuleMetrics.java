@@ -64,6 +64,10 @@ final class PolicyRuleMetrics {
     static final String CYCLE = "Unresolved: group cycle or depth limit";
     static final String PORT = "Unresolved: unsupported port expression";
     static final String DYNAMIC = "Unresolved: dynamic membership";
+    /** PO 2026-10-20: a named Palo Alto predefined App-ID or service is a specific selection, 0 breadth points. */
+    static final String PREDEFINED = "Predefined App-ID/service, ports not collected";
+    /** PO 2026-10-20: application any adds no point when the service is specific (including application-default). */
+    static final String ANY_APPLICATION_SPECIFIC_SERVICE = "Any application (0 points: service is specific)";
     static final Map<String, String> DYNAMIC_BY_TYPE = Map.of(
         "access-role", "Unresolved: access role", "dynamic-object", "Unresolved: dynamic object",
         "dns-domain", "Unresolved: DNS domain", "security-zone", "Unresolved: security zone",
@@ -74,7 +78,7 @@ final class PolicyRuleMetrics {
     static {
         var all = new LinkedHashSet<>(List.of(BUDGET, NO_BROAD, INVENTORY, NOT_COLLECTED, APPLICATION_NOT_COLLECTED,
             SERVICE_NOT_COLLECTED, PRECEDENCE, EXCLUSION, UNSUPPORTED, REGION, FQDN, EMPTY_GROUP, NO_VALUES, EMPTY_SELECTOR,
-            CYCLE, PORT, DYNAMIC, "Broad service range", "Service: application default ports"));
+            CYCLE, PORT, DYNAMIC, PREDEFINED, ANY_APPLICATION_SPECIFIC_SERVICE, "Broad service range", "Service: application default ports"));
         all.addAll(DYNAMIC_BY_TYPE.values());
         FIXED_REASONS = Set.copyOf(all);
     }
@@ -82,14 +86,20 @@ final class PolicyRuleMetrics {
         "address-group", "service", "service-tcp", "service-udp", "service-group", "application-group", "application", "gateway");
 
     static Map<String, Object> permissiveness(Rule r, Map<String, PolicyObject> objects) {
-        return permissiveness(r, objects, new int[]{RULE_BUDGET});
+        return permissiveness(r, objects, new int[]{RULE_BUDGET}, "");
+    }
+    static Map<String, Object> permissiveness(Rule r, Map<String, PolicyObject> objects, int[] budget) {
+        return permissiveness(r, objects, budget, "");
     }
     /**
-     * Scoring as documented in POLICY_HYGIENE_W1_A_NOTES.md: each distinct Any selector 2 points, each Large CIDR (IPv4
-     * prefix <= 16) or Broad service range (>= 1024 ports) 1 point; 0 Low, 1-3 Medium, >= 4 High; any unassessable selector
-     * makes the verdict Unknown irrespective of the score, and the Unknown names its causes.
+     * Scoring per PO_DECISION_RECORD_2026_10_20_POLICY_PERMISSIVENESS_SCORING.md (documented in
+     * POLICY_HYGIENE_W1_A_NOTES.md): Any source, Any destination and Any service 3 points each; Any application 1 point,
+     * but 0 when the service is specific or application-default; each Large CIDR (IPv4 prefix <= 16) or Broad service
+     * range (>= 1024 ports) 1 point; 0 Low, 1-3 Medium, >= 4 High. Any unassessable selector makes the verdict Unknown
+     * irrespective of the score, and the Unknown names its causes. {@code vendor} "PAN" enables the predefined rule.
      */
-    static Map<String, Object> permissiveness(Rule r, Map<String, PolicyObject> objects, int[] budget) {
+    static Map<String, Object> permissiveness(Rule r, Map<String, PolicyObject> objects, int[] budget, String vendor) {
+        boolean pan = "PAN".equals(vendor);
         Set<String> reasons = new LinkedHashSet<>(), gaps = new LinkedHashSet<>(); boolean known = true;
         for (var entry : List.of(Map.entry("source", r.source()), Map.entry("destination", r.destination()), Map.entry("service", r.service()), Map.entry("application", r.application()))) {
             if (entry.getKey().equals("application") && entry.getValue().refs().isEmpty() && !entry.getValue().negated()) continue;
@@ -98,18 +108,24 @@ final class PolicyRuleMetrics {
             if (cell.refs().isEmpty()) { gaps.add(EMPTY_SELECTOR); known = false; }
             for (String id : cell.refs()) {
                 if (budget[0] <= 0) { gaps.add(BUDGET); known = false; break; }
-                known &= breadth(id, entry.getKey(), objects, reasons, gaps, new HashSet<>(), budget);
+                known &= breadth(id, entry.getKey(), objects, reasons, gaps, new HashSet<>(), budget, pan);
             }
         }
-        long any = reasons.stream().filter(s -> s.startsWith("Any ")).count();
-        int score = (int) any * 2 + (int) reasons.stream().filter(s -> s.startsWith("Large ") || s.startsWith("Broad ")).count();
-        if (known && score == 0) reasons.add(NO_BROAD);
+        if (reasons.contains("Any application") && !reasons.contains("Any service")) {
+            var ordered = new ArrayList<>(reasons); ordered.set(ordered.indexOf("Any application"), ANY_APPLICATION_SPECIFIC_SERVICE);
+            reasons = new LinkedHashSet<>(ordered);
+        }
+        int score = 0;
+        for (String field : List.of("source", "destination", "service")) if (reasons.contains("Any " + field)) score += 3;
+        if (reasons.contains("Any application")) score += 1;
+        score += (int) reasons.stream().filter(s -> s.startsWith("Large ") || s.startsWith("Broad ")).count();
+        if (known && score == 0 && !reasons.contains(ANY_APPLICATION_SPECIFIC_SERVICE)) reasons.add(NO_BROAD);
         reasons.addAll(gaps);
         return Map.of("level", !known ? "Unknown" : score >= 4 ? "High" : score >= 1 ? "Medium" : "Low", "reasons", List.copyOf(reasons), "score", score);
     }
     private static boolean fail(Set<String> gaps, String reason) { gaps.add(reason); return false; }
     private static boolean breadth(String id, String field, Map<String, PolicyObject> objects, Set<String> reasons, Set<String> gaps,
-            Set<String> path, int[] budget) {
+            Set<String> path, int[] budget, boolean pan) {
         if (--budget[0] < 0) return fail(gaps, BUDGET);
         var o = objects.get(id);
         if (o == null) return fail(gaps, NOT_COLLECTED);
@@ -119,6 +135,15 @@ final class PolicyRuleMetrics {
             case "DYNAMIC" -> { return fail(gaps, DYNAMIC_BY_TYPE.getOrDefault(o.type(), DYNAMIC)); }
             case "UNKNOWN" -> { return fail(gaps, PRECEDENCE); }
             case "UNSUPPORTED" -> { return fail(gaps, o.type().equals("group") ? EXCLUSION : UNSUPPORTED); }
+            case "UNRESOLVED" -> {
+                // A Palo Alto rule names an App-ID or service that is not in the collected configuration: a predefined
+                // (vendor content) object. PO 2026-10-20: a specific selection, 0 breadth points ("any" is never this).
+                if (pan && o.type().equals("unresolved") && (field.equals("application") || field.equals("service"))) {
+                    reasons.add(PREDEFINED); path.remove(id); return true;
+                }
+                return fail(gaps, field.equals("application") ? APPLICATION_NOT_COLLECTED
+                    : field.equals("service") ? SERVICE_NOT_COLLECTED : NOT_COLLECTED);
+            }
             default -> { return fail(gaps, field.equals("application") ? APPLICATION_NOT_COLLECTED
                 : field.equals("service") ? SERVICE_NOT_COLLECTED : NOT_COLLECTED); }
         }
@@ -150,7 +175,7 @@ final class PolicyRuleMetrics {
         boolean known = true;
         for (String child : o.members()) {
             if (budget[0] <= 0) return fail(gaps, BUDGET);
-            known &= breadth(child, field, objects, reasons, gaps, path, budget);
+            known &= breadth(child, field, objects, reasons, gaps, path, budget, pan);
         }
         path.remove(id); return known;
     }

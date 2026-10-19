@@ -88,11 +88,12 @@ class PolicyPermissivenessCausesTest {
         assertEquals("Low", cp.get("level"));
         assertTrue(reasons(cp).contains("No broad selectors in resolved objects"));
         assertEquals("Low", PolicyRuleMetrics.permissiveness(rule("gw", "https", "apps"), objects).get("level"));
-        // Palo Alto: application any on application-default ports is the documented Medium (Any application = 2 points).
+        // Palo Alto: application any on application-default ports scores 0 (PO 2026-10-20).
         var pan = PolicyRuleMetrics.permissiveness(rule("host", "appdefault", "any"), objects);
-        assertEquals("Medium", pan.get("level"));
-        assertEquals(2, pan.get("score"));
-        assertTrue(reasons(pan).containsAll(List.of("Any application", "Service: application default ports")));
+        assertEquals("Low", pan.get("level"));
+        assertEquals(0, pan.get("score"));
+        assertTrue(reasons(pan).containsAll(List.of("Any application (0 points: service is specific)", "Service: application default ports")));
+        assertFalse(reasons(pan).contains("No broad selectors in resolved objects"));
         // A user object named like the keyword but carrying ports is an ordinary service.
         objects.put("named", object("named", "application-default", "service", "RESOLVED", List.of(), "protocol/tcp/port: 1-65535"));
         assertTrue(reasons(PolicyRuleMetrics.permissiveness(rule("host", "named", "any"), objects)).contains("Broad service range"));
@@ -100,7 +101,7 @@ class PolicyPermissivenessCausesTest {
 
     @Test void shadowingBudgetNoLongerBlanksPermissivenessOrSchedule() {
         var second = rule("host", "https", "any");
-        var rules = List.of(rule("any", "https", "any"), new Rule("r2", "uuid-r2", 2, "OBJ-RULE-02", true, second.source(),
+        var rules = List.of(rule("any", "any", "any"), new Rule("r2", "uuid-r2", 2, "OBJ-RULE-02", true, second.source(),
             second.destination(), second.service(), second.application(), "allow", "Log", "", Map.of()));
         var snapshot = new PolicySnapshot(new Metadata("p1", "s1", "MGR-BRAVO-01", "PAN", "c1", "DOM-TANGO-01", "POL-ALPHA-01",
             "2026-10-09T12:00:00Z", "a1", List.of()), List.of(new Section("s1", "Pre rules", "Shared", null, rules)), base());
@@ -108,8 +109,61 @@ class PolicyPermissivenessCausesTest {
         assertTrue(result.budgetReached());
         result.rules().values().forEach(a -> assertEquals("analysis budget", a.shadowReason()));
         assertEquals("High", result.rules().get("r1").permissiveness().get("level"));
-        assertEquals("Medium", result.rules().get("r2").permissiveness().get("level"));
+        assertEquals("Low", result.rules().get("r2").permissiveness().get("level"));
         assertFalse(reasons(result.rules().get("r1").permissiveness()).contains("Analysis budget reached"));
+    }
+
+    /** PO_DECISION_RECORD_2026_10_20_POLICY_PERMISSIVENESS_SCORING.md, decision 1. */
+    @Test void scoringTableFollowsThePoDecision() {
+        var objects = base();
+        objects.put("big", object("big", "OBJ-ADDRESS-03", "address", "RESOLVED", List.of(), "ip-netmask: 198.51.100.0/16"));
+        objects.put("range", object("range", "OBJ-SERVICE-03", "service", "RESOLVED", List.of(), "protocol/tcp/port: 1-65535"));
+        Map<Rule, List<Object>> expected = new LinkedHashMap<>();
+        // Application any alone, with a specific service: 0 points, Low.
+        expected.put(rule("host", "https", "any"), List.of(0, "Low"));
+        // Application any with Any service: 3 + 1.
+        expected.put(rule("host", "any", "any"), List.of(4, "High"));
+        // Any source alone: 3, Medium; Any source and Any service: 6, High.
+        expected.put(rule("any", "https", null), List.of(3, "Medium"));
+        expected.put(rule("any", "any", null), List.of(6, "High"));
+        // Large CIDR 1, Broad service range 1.
+        expected.put(rule("big", "https", null), List.of(1, "Medium"));
+        expected.put(rule("big", "range", null), List.of(2, "Medium"));
+        expected.put(rule("host", "https", null), List.of(0, "Low"));
+        expected.forEach((rule, want) -> {
+            var verdict = PolicyRuleMetrics.permissiveness(rule, objects, new int[]{PolicyRuleMetrics.RULE_BUDGET}, "PAN");
+            assertEquals(want.get(0), verdict.get("score"), reasons(verdict).toString());
+            assertEquals(want.get(1), verdict.get("level"), reasons(verdict).toString());
+        });
+        var destination = new Rule("r1", "uuid-r1", 1, "OBJ-RULE-01", true, new Cell(List.of("host"), false), new Cell(List.of("any"), false),
+            new Cell(List.of("https"), false), EMPTY, "allow", "Log", "", Map.of());
+        assertEquals(3, PolicyRuleMetrics.permissiveness(destination, objects).get("score"));
+    }
+
+    /** Decision 2: a Palo Alto predefined App-ID or service is a specific selection with its own reason. */
+    @Test void paloAltoPredefinedApplicationsAndServicesAreSpecific() {
+        var objects = base();
+        objects.put("ssl", object("ssl", "ssl", "unresolved", "UNRESOLVED", List.of()));
+        objects.put("svc-https", object("svc-https", "service-https", "unresolved", "UNRESOLVED", List.of()));
+        objects.put("apps", object("apps", "OBJ-APPGROUP-01", "application-group", "RESOLVED", List.of("ssl")));
+        objects.put("addr", object("addr", "OBJ-ADDRESS-09", "unresolved", "UNRESOLVED", List.of()));
+        int[] budget = {PolicyRuleMetrics.RULE_BUDGET};
+        for (Rule rule : List.of(rule("host", "https", "ssl"), rule("host", "svc-https", "ssl"), rule("host", "svc-https", "apps"))) {
+            var verdict = PolicyRuleMetrics.permissiveness(rule, objects, new int[]{PolicyRuleMetrics.RULE_BUDGET}, "PAN");
+            assertEquals("Low", verdict.get("level"), reasons(verdict).toString());
+            assertEquals(0, verdict.get("score"));
+            assertTrue(reasons(verdict).contains("Predefined App-ID/service, ports not collected"));
+        }
+        // Application any on a predefined service: the service is specific, so 0 points.
+        var anyApp = PolicyRuleMetrics.permissiveness(rule("host", "svc-https", "any"), objects, budget, "PAN");
+        assertEquals(0, anyApp.get("score"));
+        assertTrue(reasons(anyApp).contains("Any application (0 points: service is specific)"));
+        // An unresolved address is not covered by the decision; a Check Point dictionary miss is not a predefined object.
+        assertEquals("Unknown", PolicyRuleMetrics.permissiveness(rule("addr", "https", null), objects, new int[]{2048}, "PAN").get("level"));
+        var cp = PolicyRuleMetrics.permissiveness(rule("host", "svc-https", null), objects, new int[]{2048}, "CP");
+        assertEquals("Unknown", cp.get("level"));
+        assertTrue(reasons(cp).contains("Unresolved: service not in collected configuration"));
+        assertTrue(PolicyRuleMetrics.FIXED_REASONS.contains("Predefined App-ID/service, ports not collected"));
     }
 
     private static CpObjectInventory.Item item(String uid, String type, List<String> members, String... values) {

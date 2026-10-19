@@ -272,7 +272,7 @@ class PolicyHygieneTest {
     @Test void expiredAndAnyAcceptHaveDocumentedSeverityAndScore() {
         var any = rule("r1", "any", "any", "allow", true);
         var result = analyze(List.of(any), objects()).rules().get("r1");
-        assertEquals(8, result.permissiveness().get("score"));
+        assertEquals(10, result.permissiveness().get("score"));
         assertTrue(result.findings().stream().anyMatch(f -> f.findingClass().equals("broad") && f.severity().equals("HIGH")));
         var objects = objects(); objects.put("time", new PolicyObject("time", "OBJ-TIME-01", "schedule", List.of(), List.of(), "RESOLVED",
             new PolicySchedule("one-time", null, "2026-01-01T00:00", List.of(), "UTC", true)));
