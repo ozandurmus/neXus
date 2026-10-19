@@ -217,7 +217,7 @@ export function OperationsScreen() {
   </>;
 
   return (
-    <ScreenRoot>
+    <ScreenRoot screenType="list">
       <SshHostKeyPanel />
       <ScreenHeader
         title="Operations"

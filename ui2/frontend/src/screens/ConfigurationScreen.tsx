@@ -154,7 +154,7 @@ export function ConfigurationScreen() {
   const vendorCount = (vendor: string) => summaries?.filter((d) => d.vendor_hint === vendor).length ?? 0;
 
   return (
-    <ScreenRoot>
+    <ScreenRoot screenType="object">
       <ScreenHeader
         title="Configuration"
         subtitle={devices === null ? "Loading…" : `${collectedCount} device${collectedCount === 1 ? "" : "s"} collected${uncollectedCount > 0 ? ` · ${uncollectedCount} not collected` : ""}`}

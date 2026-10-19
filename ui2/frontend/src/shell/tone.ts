@@ -1,22 +1,16 @@
-import { m3 } from "../theme/m3Theme";
+import { ROLE_COLORS, type StateRole } from "../theme/tokens";
 
 /**
- * The canvas's chip-colour vocabulary (`M3Components`' "State vocabulary"
- * card): one tone per state class, shared so every screen and preview picks
- * a colour from the same table instead of redefining it per file. Red
- * (`bad`) is reserved for real fault, unsafe drift, out-of-sync and failure;
- * an expected member difference or an intentional override never uses it.
+ * The product's state vocabulary is the colour-role table in `theme/tokens.ts` (design language 2026-10-19): one
+ * role per state class, shared so every screen and preview picks a colour from the same table instead of redefining
+ * it per file. Red (`bad`) is reserved for real fault, unsafe drift, out-of-sync and failure; an expected member
+ * difference or an intentional override never uses it. `Tone` is the older name of the same union.
  */
-export type Tone = "neutral" | "ok" | "mem" | "warn" | "attn" | "bad";
+export type Tone = StateRole;
 
-export const TONE_COLORS: Record<Tone, { readonly bg: string; readonly fg: string }> = {
-  neutral: { bg: m3.scHigh, fg: m3.onSurfaceVar },
-  ok: { bg: m3.successContainer, fg: m3.onSuccessContainer },
-  mem: { bg: m3.memberContainer, fg: m3.onMemberContainer },
-  warn: { bg: m3.warningContainer, fg: m3.onWarningContainer },
-  attn: { bg: m3.attentionContainer, fg: m3.onAttentionContainer },
-  bad: { bg: m3.errorContainer, fg: m3.onErrorContainer },
-};
+export const TONE_COLORS: Record<Tone, { readonly bg: string; readonly fg: string }> = Object.fromEntries(
+  (Object.keys(ROLE_COLORS) as StateRole[]).map((role) => [role, { bg: ROLE_COLORS[role].bg, fg: ROLE_COLORS[role].fg }]),
+) as Record<Tone, { readonly bg: string; readonly fg: string }>;
 
 /** The alignment classification from the Overview and Configuration frames. */
 export type AlignmentState =

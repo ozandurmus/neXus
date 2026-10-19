@@ -171,13 +171,13 @@ describe("the target toggle, the deviation pill and the KPI cards", () => {
     const { unmount } = render(as(adminPlanes, <BackupScreen />));
     const neutral = await screen.findByText("Bytes changed");
     expect(screen.queryByText("Changed since last")).toBeNull();
-    const neutralBackground = getComputedStyle(neutral.closest(".MuiChip-root")!).backgroundColor;
+    const neutralBackground = getComputedStyle(neutral.closest("[data-pill]")!).backgroundColor;
     unmount();
     stub([device(1)], [artefact(1)], { active_major_deviations: [], total_deviations_checked: 3 });
     render(as(adminPlanes, <BackupScreen />));
     const attention = await screen.findByText("Changed since last");
     expect(screen.queryByText("Bytes changed")).toBeNull();
-    expect(getComputedStyle(attention.closest(".MuiChip-root")!).backgroundColor).not.toBe(neutralBackground);
+    expect(getComputedStyle(attention.closest("[data-pill]")!).backgroundColor).not.toBe(neutralBackground);
   });
 
   it("puts the KPI cards above the fleet table", async () => {
@@ -205,7 +205,7 @@ describe("fixed column widths (post-release review 2026-10-18, R3 / R11)", () =>
     for (const age of ages) expect(age).toHaveAttribute("title", expect.stringMatching(/^2026-10-18 \d\d:\d\d GMT\+3 · 2026-10-18T/));
     expect(await within(row).findByText("Completed")).toBeInTheDocument();
     // "Target · locked" is a neutral fact, never green (R11)
-    const locked = screen.getByText("Target · locked").closest(".MuiChip-root") as HTMLElement;
+    const locked = screen.getByText("Target · locked").closest("[data-pill]") as HTMLElement;
     expect(locked).toHaveStyle({ backgroundColor: TONE_COLORS.neutral.bg });
     expect(locked).not.toHaveStyle({ backgroundColor: TONE_COLORS.ok.bg });
   });

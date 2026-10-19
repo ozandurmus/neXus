@@ -13,11 +13,11 @@ import TableBody from "@mui/material/TableBody";
 import TableCell from "@mui/material/TableCell";
 import TableContainer from "@mui/material/TableContainer";
 import TableHead from "@mui/material/TableHead";
-import TablePagination from "@mui/material/TablePagination";
 import TableRow from "@mui/material/TableRow";
 import Typography from "@mui/material/Typography";
 
 import { EmptyPanel } from "../shell/ScreenLayout";
+import { PaginationFooter } from "../shell/DataTable";
 import { CapabilityMenu, M3Button, StatusChip } from "../shell/M3Widgets";
 import { ChangeCredentialsDialog } from "../shell/ChangeCredentialsDialog";
 import { RestrictedPanel, StatePanel, VendorBadge, isRestricted } from "../shell/States";
@@ -499,10 +499,10 @@ function DeviceRegistryCard({
               )}
             </TableBody>
           </Table>
-          <TablePagination component="div" count={matching.length} page={shownPage} rowsPerPage={pageSize} rowsPerPageOptions={PAGE_SIZES as unknown as number[]}
-            onPageChange={(_event, value) => setPage(value)}
-            onRowsPerPageChange={(event) => { setPageSize(Number(event.target.value)); setPage(0); }}
-            labelRowsPerPage="Per page" />
+          <Box sx={{ display: "flex", px: 1, py: 0.5, borderTop: "1px solid", borderColor: m3.outlineVar }}>
+            <PaginationFooter offset={shownPage * pageSize} size={pageSize} total={matching.length} onPage={(offset) => setPage(Math.floor(offset / pageSize))}
+              sizes={PAGE_SIZES} onSize={(size) => { setPageSize(size); setPage(0); }} />
+          </Box>
         </TableContainer>
       )}
     </EmptyPanel>

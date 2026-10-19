@@ -584,7 +584,7 @@ export function OverviewScreen() {
   evidence.push(`Evidence read in 24 h for ${age?.lt24h ?? 0} of ${age?.of ?? d.active_devices} active devices${neverRead ? `; ${neverRead} never read` : ""}.`);
   evidence.push(c.state === "OK"
     ? `Compliance evidence covers ${c.coverage_pct}% of control checks: ${c.critical_deficiencies} critical failing checks, ${c.data_gaps} data gaps.`
-    : "Compliance NOT EVALUATED.");
+    : "Compliance not evaluated.");
 
   const headline = (
     <Card sx={{ ...CARD, p: { xs: 2, md: 2.5 }, bgcolor: m3.scLowest }}>

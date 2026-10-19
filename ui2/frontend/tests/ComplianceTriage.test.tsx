@@ -117,7 +117,7 @@ describe("Compliance triage (UI review 2026-10-18, F-14)", () => {
     stub();
     render(<ComplianceScreen />);
     const badge = await screen.findByText("No data gaps");
-    const chip = badge.closest(".MuiChip-root") as HTMLElement;
+    const chip = badge.closest("[data-pill]") as HTMLElement;
     const css = [...document.querySelectorAll("style")].map((node) => [...((node as HTMLStyleElement).sheet?.cssRules ?? [])].map((r) => r.cssText).join(" ")).join(" ");
     const className = [...chip.classList].find((c) => c.startsWith("css-"))!;
     const rule = css.match(new RegExp(`\\.${className}\\s*\\{[^}]*\\}`))?.[0] ?? "";

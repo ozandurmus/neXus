@@ -66,10 +66,10 @@ export function SessionsPanel() {
                 <TableCell>
                   {data.identity_labels[session.session_id] ?? "Identity unavailable"} · {counts[session.actor_fingerprint]} active
                 </TableCell>
-                <TableCell><Ts at={session.created_at} /></TableCell>
-                <TableCell><Ts at={session.last_seen_at} /></TableCell>
-                <TableCell><Ts at={session.idle_deadline_at} /></TableCell>
-                <TableCell><Ts at={session.absolute_expires_at} /></TableCell>
+                <TableCell><Ts at={session.created_at} seconds relative={false} /></TableCell>
+                <TableCell><Ts at={session.last_seen_at} seconds relative={false} /></TableCell>
+                <TableCell><Ts at={session.idle_deadline_at} seconds relative={false} /></TableCell>
+                <TableCell><Ts at={session.absolute_expires_at} seconds relative={false} /></TableCell>
                 <TableCell align="right">
                   <Button size="small" color="error" onClick={() => revokeSession(session.session_id).then(refresh)}>
                     Revoke

@@ -1,11 +1,14 @@
 import type { ReactNode } from "react";
 import Box from "@mui/material/Box";
-import Card from "@mui/material/Card";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import { m3 } from "../theme/m3Theme";
+import { TYPE, type Density, type ScreenType } from "../theme/tokens";
+import { DensityScope } from "./displayMode";
+import { KpiCard, KpiRow, type KpiCardProps } from "./KpiCard";
+import { StatePanel } from "./States";
 
-/** Shared building blocks the six product screens use for their empty state. */
+/** Shared building blocks the product screens use: the screen header, the root, and the older names of the unified components. */
 
 export function ScreenHeader({
   title,
@@ -24,7 +27,7 @@ export function ScreenHeader({
       {/* The title block shrinks and its subtitle wraps (post-release review 2026-10-18, R1): a two-sentence tool contract
           used to run unbroken past the viewport and scroll the whole page sideways at 1440 px. */}
       <Stack data-testid="screen-header-title" spacing={0.75} sx={{ flex: "0 1 auto", minWidth: 0, maxWidth: 880 }}>
-        <Typography variant="h2">{title}</Typography>
+        <Typography variant="h2" sx={{ ...TYPE.pageTitle }}>{title}</Typography>
         <Typography variant="body1" sx={{ color: m3.onSurfaceVar, whiteSpace: "normal", overflowWrap: "anywhere" }}>{subtitle}</Typography>
       </Stack>
       {filters ? <Box sx={{ flex: "1 1 520px", minWidth: 0, maxWidth: 760 }}>{filters}</Box> : null}
@@ -35,40 +38,17 @@ export function ScreenHeader({
 }
 
 /**
- * A headline figure. What the caller counted, or the word for why there is none (review §3): `UNKNOWN` when the
- * read failed or nothing is evidenced, `NOT EVALUATED` when the evaluation has not run -- never "0" or "—"
- * standing in for either.
+ * A headline figure under its older name: the one `KpiCard`. `title` is the card's label, `note` its denominator
+ * sentence; `UNKNOWN` when the read failed or nothing is evidenced, `Not evaluated` when the evaluation has not run.
  */
-export function MetricCard({ title, value, unit, detail, note, state, reason }: {
-  readonly title: string;
-  readonly value?: number | string | null;
-  /** Small words beside the headline figure (for example "ready of 40 clusters"); shown only with a figure. */
-  readonly unit?: string;
-  /** A secondary line under the figure, in body size, for the counts that do not fit the big font. */
-  readonly detail?: string;
-  readonly note: string;
-  readonly state?: "ok" | "unknown" | "not_evaluated";
-  readonly reason?: string;
-}) {
-  const word = state === "not_evaluated" ? "NOT EVALUATED" : (state === "unknown" || value === null || value === undefined) ? "UNKNOWN" : null;
-  return (
-    <Card sx={{ bgcolor: m3.scLowest, boxShadow: "none", border: `1px solid ${m3.outlineVar}`, borderRadius: "10px", p: 2.25,
-                display: "flex", flexDirection: "column", gap: 1 }}>
-      <Typography sx={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.04em", textTransform: "uppercase", color: m3.onSurfaceVar }}>{title}</Typography>
-      {word
-        ? <Typography title={reason} sx={{ fontSize: 22, lineHeight: "32px", fontWeight: 650, color: m3.neutralInk, letterSpacing: "0.02em" }}>{word}</Typography>
-        : unit
-          ? <Box sx={{ display: "flex", alignItems: "baseline", flexWrap: "wrap", columnGap: 1 }}>
-              <Typography variant="h1">{value}</Typography>
-              <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>{unit}</Typography>
-            </Box>
-          : <Typography variant="h1">{value}</Typography>}
-      {detail && !word && <Typography variant="body2" sx={{ color: m3.neutralInk }}>{detail}</Typography>}
-      <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>{note}</Typography>
-    </Card>
-  );
+export function MetricCard({ title, note, ...rest }: Omit<KpiCardProps, "label" | "sentence"> & { readonly title: string; readonly note: string }) {
+  return <KpiCard label={title} sentence={note} {...rest} />;
 }
 
+/**
+ * A state card under its older name: the one `StatePanel`, empty variant, with a heading-level title (a screen's own
+ * empty state) and anything the caller puts inside it below the sentence.
+ */
 export function EmptyPanel({
   title,
   body,
@@ -78,22 +58,12 @@ export function EmptyPanel({
   readonly body: string;
   readonly children?: ReactNode;
 }) {
-  return (
-    <Card sx={{ bgcolor: m3.scLow, borderRadius: "10px", p: 2.25, boxShadow: "none",
-                border: `1px solid ${m3.outlineVar}`, display: "flex", flexDirection: "column", gap: 1 }}>
-      <Typography variant="h4">{title}</Typography>
-      <Typography variant="body2" sx={{ maxWidth: 640 }}>{body}</Typography>
-      {children}
-    </Card>
-  );
+  return <StatePanel variant="empty" title={title} body={body} titleAs="h4" announce="none">{children}</StatePanel>;
 }
 
+/** The KPI row under its older name. */
 export function MetricGrid({ children }: { readonly children: ReactNode }) {
-  return (
-    <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))" }}>
-      {children}
-    </Box>
-  );
+  return <KpiRow>{children}</KpiRow>;
 }
 
 /** The canvas's list-plus-detail split (Inventory, Configuration, Administration). */
@@ -106,10 +76,16 @@ export function ListDetail({ list, detail }: { readonly list: ReactNode; readonl
   );
 }
 
-export function ScreenRoot({ children }: { readonly children: ReactNode }) {
+/**
+ * The root of one screen. Its density follows the screen type (design language 2026-10-19): a list screen is
+ * compact, a summary, object or tool page comfortable; a caller may name the density outright. Default: comfortable.
+ */
+export function ScreenRoot({ children, screenType, density }: { readonly children: ReactNode; readonly screenType?: ScreenType; readonly density?: Density }) {
   return (
-    <Box sx={{ p: 4, pt: 1, flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 3 }}>
-      {children}
-    </Box>
+    <DensityScope screenType={screenType ?? "summary"} density={density}>
+      <Box sx={{ p: 4, pt: 1, flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 3 }}>
+        {children}
+      </Box>
+    </DensityScope>
   );
 }

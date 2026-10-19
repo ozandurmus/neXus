@@ -97,7 +97,7 @@ describe("Managed estate is a tab under the device header", () => {
     expect(table.querySelectorAll("colgroup col")).toHaveLength(6);
     expect(screen.queryByRole("columnheader", { name: "Deployment" })).toBeNull();
     // the management state in sentence case and neutral grey: an expected state is not an alarm
-    expect(screen.getByText("Fully managed").closest(".MuiChip-root")).toHaveStyle({ backgroundColor: m3.scHigh });
+    expect(screen.getByText("Fully managed").closest("[data-pill]")).toHaveStyle({ backgroundColor: m3.scHigh });
   });
 
   it("keeps the Deployment column when a device reports one, and words FortiManager's UP neutrally (P2-1B)", async () => {
@@ -112,8 +112,8 @@ describe("Managed estate is a tab under the device header", () => {
     await screen.findByRole("button", { name: "MD-SYNTH-01" });
     expect(screen.getByRole("columnheader", { name: "Deployment" })).toBeInTheDocument();
     expect(screen.getByText("HA primary")).toBeInTheDocument();
-    expect(screen.getByText("Up").closest(".MuiChip-root")).toHaveStyle({ backgroundColor: m3.scHigh });
-    expect(screen.getByText("Down").closest(".MuiChip-root")).toHaveStyle({ backgroundColor: m3.warningContainer });
+    expect(screen.getByText("Up").closest("[data-pill]")).toHaveStyle({ backgroundColor: m3.scHigh });
+    expect(screen.getByText("Down").closest("[data-pill]")).toHaveStyle({ backgroundColor: m3.warningContainer });
   });
 
   it("gives a gateway no Managed estate tab", async () => {

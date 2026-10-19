@@ -1,11 +1,10 @@
 import { useEffect, useState } from "react";
 import Box from "@mui/material/Box";
-import Tooltip from "@mui/material/Tooltip";
 
-import { TONE_COLORS, type Tone } from "../shell/tone";
+import type { Tone } from "../shell/tone";
+import { StatusPill } from "../shell/StatusPill";
 import { formatStamp, relativeAge } from "../shell/time";
 import { readinessReasonLabel } from "../shell/presenters";
-import { m3 } from "../theme/m3Theme";
 import { backupDisplayWord } from "./backupWords";
 import {
   getDeviceCompliance,
@@ -228,19 +227,9 @@ export function readinessFact(rows: readonly CpFailoverSummary[] | null | undefi
 // Rendering
 // -------------------------------------------------------------------------------------------------------------------
 
-/** One state pill: word (+ count, + age), tone by the colour-role table, a link to the filtered fleet screen. */
+/** One state pill: word (+ count, + age), tone by the colour-role table, a link to the filtered fleet screen. The one `StatusPill`. */
 export function StatePill({ fact }: { readonly fact: HeaderFact }) {
-  const colors = TONE_COLORS[fact.tone];
-  const sx = {
-    display: "inline-flex", alignItems: "center", height: 22, px: 1, borderRadius: "8px", whiteSpace: "nowrap",
-    bgcolor: colors.bg, color: colors.fg, fontSize: 11, fontWeight: 500, textDecoration: "none",
-    "&:hover": { textDecoration: fact.href ? "underline" : "none" },
-    "&:focus-visible": { outline: `2px solid ${m3.primary}`, outlineOffset: 2 },
-  } as const;
-  const body = fact.href
-    ? <Box component="a" href={fact.href} data-fact={fact.key} sx={sx}>{fact.label}</Box>
-    : <Box component="span" data-fact={fact.key} sx={sx}>{fact.label}</Box>;
-  return fact.title ? <Tooltip title={fact.title}><Box component="span" sx={{ display: "inline-flex" }}>{body}</Box></Tooltip> : body;
+  return <StatusPill tone={fact.tone} word={fact.label} href={fact.href} title={fact.title} fact={fact.key} />;
 }
 
 /** The pills in their fixed plane order; `null` facts (absent pills) are simply left out. */

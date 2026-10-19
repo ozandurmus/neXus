@@ -24,7 +24,7 @@ describe("<Stamp>", () => {
   it("writes the one format with a muted relative age and the UTC reference on hover", () => {
     render(<Stamp at="2026-10-18T03:49:00Z" now={new Date("2026-10-18T05:49:00Z")} />);
     expect(screen.getByText("2026-10-18 06:49 GMT+3")).toBeInTheDocument();
-    expect(screen.getByText("2 h ago")).toBeInTheDocument();
+    expect(screen.getByText("· 2 h ago")).toBeInTheDocument();
     expect(screen.getByLabelText("2026-10-18T03:49:00Z (UTC reference)")).toHaveAttribute("datetime", "2026-10-18T03:49:00Z");
   });
 

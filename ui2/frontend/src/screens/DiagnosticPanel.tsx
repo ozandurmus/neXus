@@ -2,7 +2,8 @@ import { JobButton } from "../shell/JobWindow";
 import { useEffect, useRef, useState } from "react";
 import { Alert, Box, Button, Chip, Divider, List, ListItemButton, ListItemText, ListSubheader,
   Paper, Stack, Step, StepLabel, Stepper, Table, TableBody, TableCell, TableContainer, TableHead,
-  TablePagination, TableRow, TextField, Typography } from "@mui/material";
+  TableRow, TextField, Typography } from "@mui/material";
+import { PaginationFooter } from "../shell/DataTable";
 import { Presented, Stamp } from "../shell/PresentedText";
 import { formatDuration, formatStamp } from "../shell/time";
 import { actorLabel, jobStateWord, vendorLabel } from "../shell/presenters";
@@ -249,8 +250,10 @@ export function DiagnosticPanel() {
           </TableRow>)}</TableBody>
         </Table></TableContainer>
         {history.length === 0 && <Typography color="text.secondary" sx={{ p: 2 }}>No diagnostic runs on this page.</Typography>}
-        <TablePagination component="div" count={-1} page={page} rowsPerPage={50} rowsPerPageOptions={[50]}
-          onPageChange={(_, value) => { setPage(value); setHistory([]); }} nextIconButtonProps={{ disabled: history.length < 50 }} />
+        <Box sx={{ display: "flex", px: 1, py: 0.5 }}>
+          <PaginationFooter offset={page * 50} size={50} total={null} shown={history.length} hasMore={history.length >= 50}
+            onPage={(offset) => { setPage(Math.floor(offset / 50)); setHistory([]); }} />
+        </Box>
       </Paper>
     </>}
   </Box>;

@@ -147,7 +147,11 @@ export type Density = "comfortable" | "compact";
 /**
  * The MUI theme for one mode and density. MUI computes contrast and hover shades from real colours, so the
  * palette takes the hex values; everything a screen writes in `sx` goes through `m3` (the variables).
- * Type scale (review §4): display 32/40, headline 22/28, title 16/24, body 13/20, label 11/16, mono 12/18.
+ *
+ * Type scale (design language 2026-10-19, `theme/tokens.ts` TYPE -- the numbers are repeated here because this file
+ * is what `tokens.ts` imports): page title 22/28 semibold (h2, h5), section 16/22 semibold (h3, h4, h6), body 14/20
+ * (body1), label 12/16 (body2, caption, table heads uppercase-tracked), mono 13/18; h1 is the KPI figure. Density:
+ * comfortable 44 px rows with 8 px cell padding, compact 32 px one-line rows with 4 px (`tokens.ts` DENSITY).
  */
 export function m3ThemeFor(mode: ColorMode = "light", density: Density = "comfortable"): Theme {
   const t = mode === "dark" ? DARK : LIGHT;
@@ -166,15 +170,19 @@ export function m3ThemeFor(mode: ColorMode = "light", density: Density = "comfor
     shape: { borderRadius: 10 },
     typography: {
       fontFamily: ['Roboto', '"Helvetica Neue"', 'Arial', 'sans-serif'].join(","),
-      fontSize: 13,
-      h1: { fontSize: 32, lineHeight: "40px", fontWeight: 600, letterSpacing: 0 },
-      h2: { fontSize: 22, lineHeight: "28px", fontWeight: 500, letterSpacing: 0 },
-      h3: { fontSize: 18, fontWeight: 500, letterSpacing: 0 },
-      h4: { fontSize: 16, lineHeight: "24px", fontWeight: 500, letterSpacing: 0 },
-      body1: { fontSize: 13, lineHeight: "20px" },
-      body2: { fontSize: 12, lineHeight: "18px", letterSpacing: "0.2px" },
-      caption: { fontSize: 11, lineHeight: "16px" },
-      button: { fontSize: 13, fontWeight: 500, letterSpacing: "0.1px", textTransform: "none" },
+      fontSize: 14,
+      h1: { fontSize: 28, lineHeight: "32px", fontWeight: 600, letterSpacing: 0, fontVariantNumeric: "tabular-nums" },
+      h2: { fontSize: 22, lineHeight: "28px", fontWeight: 600, letterSpacing: 0 },
+      h3: { fontSize: 16, lineHeight: "22px", fontWeight: 600, letterSpacing: 0 },
+      h4: { fontSize: 16, lineHeight: "22px", fontWeight: 600, letterSpacing: 0 },
+      h5: { fontSize: 22, lineHeight: "28px", fontWeight: 600, letterSpacing: 0 },
+      h6: { fontSize: 16, lineHeight: "22px", fontWeight: 600, letterSpacing: 0 },
+      subtitle1: { fontSize: 16, lineHeight: "22px", fontWeight: 600, letterSpacing: 0 },
+      subtitle2: { fontSize: 14, lineHeight: "20px", fontWeight: 600, letterSpacing: 0 },
+      body1: { fontSize: 14, lineHeight: "20px" },
+      body2: { fontSize: 12, lineHeight: "16px", letterSpacing: "0.1px" },
+      caption: { fontSize: 12, lineHeight: "16px" },
+      button: { fontSize: 14, fontWeight: 500, letterSpacing: "0.1px", textTransform: "none" },
     },
     components: {
       MuiCssBaseline: { styleOverrides: { body: { fontVariantNumeric: "tabular-nums" } } },
@@ -187,11 +195,11 @@ export function m3ThemeFor(mode: ColorMode = "light", density: Density = "comfor
       } },
       MuiTableCell: {
         styleOverrides: {
-          root: { borderColor: t.outlineVar, paddingTop: compact ? 4 : 8, paddingBottom: compact ? 4 : 8 },
-          head: { fontSize: 11, lineHeight: "16px", letterSpacing: "0.04em", textTransform: "uppercase", fontWeight: 600, color: t.onSurfaceVar },
+          root: { borderColor: t.outlineVar, paddingTop: compact ? 4 : 8, paddingBottom: compact ? 4 : 8, fontSize: 13, lineHeight: "18px" },
+          head: { fontSize: 12, lineHeight: "16px", letterSpacing: "0.04em", textTransform: "uppercase", fontWeight: 600, color: t.onSurfaceVar },
         },
       },
-      MuiTableRow: { styleOverrides: { root: { height: compact ? 36 : 44 } } },
+      MuiTableRow: { styleOverrides: { root: { height: compact ? 32 : 44 } } },
     },
   });
 }

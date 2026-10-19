@@ -253,6 +253,40 @@ export function actorLabel(actor: string | null | undefined): PresentedValue {
 // Status words
 // -------------------------------------------------------------------------------------------------------------------
 
+/**
+ * Tokens that keep their upper case: `UNKNOWN` is written UNKNOWN (fail-closed law), HA roles are identity and stay as
+ * the device reported them (`ACTIVE`, `STANDBY`, `PRIMARY`, `PASSIVE`, `MASTER`, `BACKUP`), `DIFF` is a finding marker.
+ */
+const KEEP_UPPER: ReadonlySet<string> = new Set(["UNKNOWN", "ACTIVE", "STANDBY", "PRIMARY", "PASSIVE", "MASTER", "BACKUP", "DIFF", "N/A", "OK"]);
+
+/** Whole-token spellings a plain sentence-case rule would get wrong. */
+const STATUS_WORDS: Readonly<Record<string, string>> = {
+  NOT_EVALUATED: "Not evaluated", NOT_READY: "Not ready", NOT_APPLICABLE: "Not applicable", NOT_ASSESSED: "Not assessed",
+  NOT_EVIDENCED: "Not evidenced", NOT_COLLECTED: "Not collected", NOT_CONFIRMED: "Not confirmed", NOT_READ: "Not read yet",
+  NOT_ENROLLED: "Not enrolled", NOT_SUPPORTED: "Not supported", PENDING_CONFIRMATION: "Pending confirmation",
+  IN_PROGRESS: "In progress", OUTCOME_UNKNOWN: "Outcome UNKNOWN", INSUFFICIENT_EVIDENCE: "Insufficient evidence",
+  COLLECTION_FAILED: "Collection failed", NON_COMPLIANT: "Non-compliant", COMPLIANT: "Compliant",
+};
+
+/**
+ * The sentence-case rule for an upper-case status token (design language 2026-10-19, label map): `COMPLETED` becomes
+ * `Completed`, `ENROLLED` becomes `Enrolled`, `NOT EVALUATED` and `NOT_EVALUATED` become `Not evaluated`. `UNKNOWN`
+ * stays UNKNOWN and an HA role stays upper case; a value that is not an upper-case token (a sentence the server wrote,
+ * a hostname) passes through unchanged; an absent value is UNKNOWN.
+ */
+export function statusWord(raw: string | null | undefined): string {
+  const value = (raw ?? "").trim();
+  if (!value) return "UNKNOWN";
+  if (KEEP_UPPER.has(value)) return value;
+  if (!/^[A-Z]+(?:[ _][A-Z]+)*$/.test(value)) return value; // not an upper-case status token (a sentence, a hostname, a code with digits)
+  const token = value.replace(/\s+/g, "_");
+  const known = STATUS_WORDS[token] ?? STATE_WORDS[token] ?? OUTCOME_WORDS[token];
+  if (known) return known;
+  const words = token.toLowerCase().split("_").filter(Boolean);
+  if (words.length === 0) return value;
+  return words[0].charAt(0).toUpperCase() + words[0].slice(1) + (words.length > 1 ? ` ${words.slice(1).join(" ")}` : "");
+}
+
 const STATE_WORDS: Readonly<Record<string, string>> = {
   COMPLETED: "Completed", SUCCEEDED: "Completed", FAILED: "Failed", CANCELLED: "Cancelled", REJECTED: "Rejected",
   REQUESTED: "Queued", CLAIMED: "Claimed", EXECUTING: "Running", OUTCOME_UNKNOWN: "Outcome UNKNOWN", RECONCILED: "Outcome UNKNOWN",

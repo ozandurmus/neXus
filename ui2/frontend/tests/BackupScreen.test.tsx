@@ -124,7 +124,7 @@ describe("the Backups screen (UI review 2026-09-23)", () => {
     stub({ schedule_enabled: false, daily_backup_cron: "0 2 * * *", backup_retention_days: 14, snapshot_retention_depth: 1 }, { active_major_deviations: [], total_deviations_checked: 0 });
     render(<BackupScreen />);
     expect(await screen.findByText("Not scheduled")).toBeInTheDocument();
-    const card = screen.getByText("Active major deviations").parentElement!;
+    const card = screen.getByText("Active major deviations").closest("[data-kpi]")!;
     expect(card.textContent).toContain("UNKNOWN");
     expect(card.textContent).toContain("0 comparisons run");
   });
@@ -148,14 +148,14 @@ describe("the Backups screen (UI review 2026-09-23)", () => {
       ]);
     render(<BackupScreen />);
     await screen.findByText("FW-TANGO-04-M1");
-    const card = (await screen.findByText("Targets with a stored backup")).parentElement!;
+    const card = (await screen.findByText("Targets with a stored backup")).closest("[data-kpi]")!;
     expect(card.textContent).toContain("1");
     expect(card.textContent).toContain("of 2 targets");
     expect(card.textContent).toContain("2 devices hold a stored backup: 1 of them is not a backup target");
     expect(screen.getByText("Targets · 2")).toBeInTheDocument();
     expect(screen.getByText("Targets without archive · 1")).toBeInTheDocument();
     expect(screen.getByText("Backup-capable · 3")).toBeInTheDocument();
-    const retention = screen.getByText("Retention policy").parentElement!;
+    const retention = screen.getByText("Retention policy").closest("[data-kpi]")!;
     expect(retention.textContent).toContain("Gaia snapshots: newest 1 kept per gateway");
     expect(retention.textContent).not.toContain("Snapshot depth: 1 retained");
   });
@@ -167,7 +167,7 @@ describe("the Backups screen (UI review 2026-09-23)", () => {
       return Promise.resolve(new Response(JSON.stringify(body), { status: 200 }));
     }));
     render(<BackupScreen />);
-    const card = (await screen.findByText("Targets with a stored backup")).parentElement!;
+    const card = (await screen.findByText("Targets with a stored backup")).closest("[data-kpi]")!;
     expect(card.textContent).toContain("UNKNOWN");
   });
 });

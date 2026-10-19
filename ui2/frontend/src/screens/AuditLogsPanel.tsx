@@ -1,14 +1,15 @@
-import React, { useState } from "react";
+import { useState } from "react";
+import Box from "@mui/material/Box";
 import Table from "@mui/material/Table";
 import TableBody from "@mui/material/TableBody";
 import TableCell from "@mui/material/TableCell";
 import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
-import TablePagination from "@mui/material/TablePagination";
 import Paper from "@mui/material/Paper";
 import TableContainer from "@mui/material/TableContainer";
 
 import { EmptyPanel } from "../shell/ScreenLayout";
+import { PaginationFooter } from "../shell/DataTable";
 import { M3Button } from "../shell/M3Widgets";
 import { RestrictedPanel, StatePanel, Ts, isRestricted } from "../shell/States";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
@@ -29,11 +30,6 @@ export function AuditLogsPanel() {
 
   const handleChangePage = (event: unknown, newPage: number) => {
     setPage(newPage);
-  };
-
-  const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setRowsPerPage(parseInt(event.target.value, 10));
-    setPage(0);
   };
 
   if (error && data === null) {
@@ -63,7 +59,7 @@ export function AuditLogsPanel() {
           <TableBody>
             {displayedRows.map((event) => (
               <TableRow key={event.id} hover>
-                <TableCell><Ts at={event.occurred_at} /></TableCell>
+                <TableCell><Ts at={event.occurred_at} seconds relative={false} /></TableCell>
                 <TableCell>{event.actor}</TableCell>
                 <TableCell>{event.action}</TableCell>
                 <TableCell>{event.target}</TableCell>
@@ -73,15 +69,10 @@ export function AuditLogsPanel() {
           </TableBody>
         </Table>
       </TableContainer>
-      <TablePagination
-        rowsPerPageOptions={[10, 25, 50]}
-        component="div"
-        count={data.length}
-        rowsPerPage={rowsPerPage}
-        page={page}
-        onPageChange={handleChangePage}
-        onRowsPerPageChange={handleChangeRowsPerPage}
-      />
+      <Box sx={{ display: "flex", px: 1, py: 0.5 }}>
+        <PaginationFooter offset={page * rowsPerPage} size={rowsPerPage} total={data.length} onPage={(offset) => handleChangePage(null, Math.floor(offset / rowsPerPage))}
+          sizes={[10, 25, 50]} onSize={(size) => { setRowsPerPage(size); setPage(0); }} />
+      </Box>
     </Paper>
   );
 }

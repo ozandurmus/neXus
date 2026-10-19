@@ -352,7 +352,7 @@ describe("filled state, summary first (UI review 2026-10-18, F-8)", () => {
     stub({ summary: panSummary(), job: { state: "COMPLETED" } });
     render(<DeviceLogsPanel deviceId={DEVICE} vendorHint="palo_alto" />);
     const sentence = await screen.findByTestId("last-collection");
-    expect(sentence).toHaveTextContent(/^Last collection2026-10-18 06:13· .+ ago· Completed· window 00:15–06:11 device time$/);
+    expect(sentence).toHaveTextContent(/^Last collection2026-10-18 06:13 GMT\+3· .+ ago· Completed· window 00:15–06:11 device time$/);
   });
 
   it("says the job state is UNKNOWN when the Jobs list has none, and never invents COMPLETED", async () => {
@@ -369,18 +369,18 @@ describe("filled state, summary first (UI review 2026-10-18, F-8)", () => {
     const group = screen.getByRole("group", { name: "Log sources" });
     const config = within(group).getByRole("button", { name: "config · OK · 13 lines" });
     const system = within(group).getByRole("button", { name: "system · OK · 0 lines" });
-    expect(within(config).getByText("OK").closest(".MuiChip-root")).toHaveStyle({ backgroundColor: m3.successContainer });
+    expect(within(config).getByText("OK").closest("[data-pill]")).toHaveStyle({ backgroundColor: m3.successContainer });
     // a count, and a zero count, are neutral grey: zero is never green
-    expect(within(config).getByText("13 lines").closest(".MuiChip-root")).toHaveStyle({ backgroundColor: m3.scHigh });
-    expect(within(system).getByText("0 lines").closest(".MuiChip-root")).toHaveStyle({ backgroundColor: m3.scHigh });
+    expect(within(config).getByText("13 lines").closest("[data-pill]")).toHaveStyle({ backgroundColor: m3.scHigh });
+    expect(within(system).getByText("0 lines").closest("[data-pill]")).toHaveStyle({ backgroundColor: m3.scHigh });
   });
 
   it("counts of sources in the run are grey; a source that did not end cleanly keeps its state word and colour", async () => {
     stub({ summary: summary(), job: { state: "COMPLETED" } });
     render(<DeviceLogsPanel deviceId={DEVICE} />);
     const strip = await screen.findByRole("region", { name: "Log summary" });
-    expect(within(strip).getByText("collected 2").closest(".MuiChip-root")).toHaveStyle({ backgroundColor: m3.scHigh });
-    expect(within(strip).getByText("backlog 1").closest(".MuiChip-root")).not.toHaveStyle({ backgroundColor: m3.scHigh });
+    expect(within(strip).getByText("collected 2").closest("[data-pill]")).toHaveStyle({ backgroundColor: m3.scHigh });
+    expect(within(strip).getByText("backlog 1").closest("[data-pill]")).not.toHaveStyle({ backgroundColor: m3.scHigh });
   });
 
   it("puts gaps and the crash check in one grey sentence, each a link to its panel, in plain words", async () => {
@@ -401,8 +401,8 @@ describe("filled state, summary first (UI review 2026-10-18, F-8)", () => {
     fireEvent.click(gapLink);
     expect(scroll).toHaveBeenCalled();
     // the first collection pill in the panel is grey; the suspected gap is amber, not red-tinted
-    expect(within(panel).getByText("First collection: older content not fetched").closest(".MuiChip-root")).toHaveStyle({ backgroundColor: m3.scHigh });
-    expect(within(panel).getByText("Sequence gap suspected").closest(".MuiChip-root")).toHaveStyle({ backgroundColor: m3.warningContainer });
+    expect(within(panel).getByText("First collection: older content not fetched").closest("[data-pill]")).toHaveStyle({ backgroundColor: m3.scHigh });
+    expect(within(panel).getByText("Sequence gap suspected").closest("[data-pill]")).toHaveStyle({ backgroundColor: m3.warningContainer });
   });
 
   it("repeats a kind once with its count, and raises a red word only for a NEW crash or dump file", async () => {
@@ -412,7 +412,7 @@ describe("filled state, summary first (UI review 2026-10-18, F-8)", () => {
     render(<DeviceLogsPanel deviceId={DEVICE} />);
     const line = await screen.findByRole("region", { name: "Attention" });
     expect(await within(line).findByRole("button", { name: /Sequence gap suspected ×2 \(messages 00:15, fwk\.elg 00:15\)/ })).toBeInTheDocument();
-    expect(within(line).getByText("2 new crash or dump files").closest(".MuiChip-root")).toHaveStyle({ backgroundColor: m3.errorContainer });
+    expect(within(line).getByText("2 new crash or dump files").closest("[data-pill]")).toHaveStyle({ backgroundColor: m3.errorContainer });
   });
 
   it("is honest while the gaps and the crash check are loading or unavailable", async () => {
@@ -447,7 +447,7 @@ describe("filled state, summary first (UI review 2026-10-18, F-8)", () => {
     const filter = await screen.findByRole("textbox", { name: "Filter lines" });
     const pill = await screen.findByText("Masked view");
     // the filter field and the pill share one row
-    expect(filter.closest(".MuiFormControl-root")?.parentElement).toBe(pill.closest(".MuiChip-root")?.parentElement);
+    expect(filter.closest(".MuiFormControl-root")?.parentElement).toBe(pill.closest("[data-pill]")?.parentElement);
   });
 
   it("keeps a fixed device-time column on the raw lines and the whole line behind a click", async () => {

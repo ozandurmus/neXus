@@ -825,7 +825,7 @@ it("full refresh submits FULL and reused-domain progress retains the original hi
   fireEvent.click(within(card).getByText("Details"));
   expect(within(disclosure).getByText(/Domains: 1 reused · 0 collected · Rules: 1 reused · 0 fetched/)).toBeInTheDocument();
   const domain = within(within(disclosure).getByRole("list", { name: "Collection domains" })).getByRole("listitem");
-  expect(domain).toHaveTextContent(/reused · unchanged since 2026-10-03 03:00:00 · hits collected at 2026-10-04 03:00:00/);
+  expect(domain).toHaveTextContent(/reused · unchanged since 2026-10-03 03:00 GMT\+3· .+ ago · hits collected at 2026-10-04 03:00 GMT\+3· .+ ago/);
   expect(within(domain).getByLabelText("2026-10-03T00:00:00Z (UTC reference)")).toBeInTheDocument();
   expect(within(domain).getByLabelText("2026-10-04T00:00:00Z (UTC reference)")).toBeInTheDocument();
   expect(within(card).queryByText(/2026-10-03T00:00:00Z/)).toBeNull();

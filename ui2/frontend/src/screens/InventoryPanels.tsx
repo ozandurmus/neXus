@@ -13,11 +13,13 @@ import TableCell from "@mui/material/TableCell";
 import TableContainer from "@mui/material/TableContainer";
 import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
-import TablePagination from "@mui/material/TablePagination";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 
 import { EmptyPanel } from "../shell/ScreenLayout";
+import { ObjectHeader } from "../shell/ObjectHeader";
+import { PaginationFooter } from "../shell/DataTable";
+import { statusWord } from "../shell/presenters";
 import type { Tone } from "../shell/tone";
 import { M3Button, M3Tabs, StatusChip } from "../shell/M3Widgets";
 import { PLANE_COLLECT, PLANE_OPERATIONS, ROLE_REFUSAL, useRoleAllows } from "../shell/actionAccess";
@@ -1172,8 +1174,9 @@ function ClusterRoutesTable({
             })}
           </TableBody>
         </Table>
-        <TablePagination component="div" count={displayedRoutes.length} page={safePage} rowsPerPage={ROUTES_PAGE_SIZE} rowsPerPageOptions={[]}
-          onPageChange={(_, next) => setPage(next)} aria-label="Routes pages" />
+        <Box component="nav" aria-label="Routes pages" sx={{ display: "flex", px: 1, py: 0.5 }}>
+          <PaginationFooter offset={safePage * ROUTES_PAGE_SIZE} size={ROUTES_PAGE_SIZE} total={displayedRoutes.length} onPage={(offset) => setPage(Math.floor(offset / ROUTES_PAGE_SIZE))} />
+        </Box>
         </>
       )}
     </Stack>
@@ -2029,46 +2032,18 @@ export function InventoryEntityHeader({
   readonly children?: React.ReactNode;
 }) {
   return (
-    <Box
-      data-testid="entity-header"
-      sx={{
-        display: "flex",
-        flexDirection: "column",
-        gap: 1.5,
-        p: 2,
-        bgcolor: m3.scLowest,
-        borderRadius: "10px",
-        border: `1px solid ${m3.outlineVar}`,
-        boxShadow: "none",
-      }}
+    <ObjectHeader
+      avatar={<VendorAvatar vendorHint={vendorHint} model={model} hostname={title} />}
+      title={<>{titlePrefix ? `${titlePrefix} ` : ""}{title}</>}
+      breadcrumb={breadcrumb}
+      badges={chips}
+      action={action}
+      readAges={readAges}
+      state={state}
+      link={link}
     >
-      {/* The title block takes the width and wraps its pills inside; the action (Collect now) keeps the right edge of the
-          title row instead of dropping to a row of its own (R13: tab content closer to the top). */}
-      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 2, flexWrap: "wrap" }}>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, minWidth: 0, flex: "1 1 420px" }}>
-          <VendorAvatar vendorHint={vendorHint} model={model} hostname={title} />
-          <Box sx={{ minWidth: 0, flex: "1 1 auto" }}>
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
-              <Typography variant="h5" sx={{ fontWeight: 700, color: m3.onSurface }}>
-                {breadcrumb ?? <>{titlePrefix ? `${titlePrefix} ` : ""}{title}</>}
-              </Typography>
-              {chips}
-            </Box>
-          </Box>
-        </Box>
-        {action}
-      </Box>
-      {(readAges || state || link) && (
-        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 2, flexWrap: "wrap" }}>
-          <Box sx={{ minWidth: 0, display: "flex", alignItems: "center", columnGap: 1.5, rowGap: 0.75, flexWrap: "wrap" }}>
-            {readAges}
-            {state}
-          </Box>
-          {link}
-        </Box>
-      )}
       {children}
-    </Box>
+    </ObjectHeader>
   );
 }
 
@@ -2814,7 +2789,7 @@ export function ClusterDetailPanels({
                         <TableCell>{m.model ?? "UNKNOWN"} · {m.software_version ?? "UNKNOWN"}</TableCell>
                         <TableCell>
                           <Stack direction="row" spacing={1} alignItems="center">
-                            <StatusChip tone={m.enrollment_state === "ENROLLED" ? "ok" : "warn"} label={m.enrollment_state} dense />
+                            <StatusChip tone={m.enrollment_state === "ENROLLED" ? "ok" : "warn"} label={statusWord(m.enrollment_state)} dense />
                             <JobStatusIndicator state={m.latest_job_state} type={m.latest_job_type} terminalReason={m.latest_job_terminal_reason} />
                           </Stack>
                         </TableCell>

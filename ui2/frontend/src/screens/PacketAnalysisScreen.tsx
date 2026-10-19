@@ -147,7 +147,7 @@ export function PacketAnalysisScreen() {
   };
 
   return (
-    <ScreenRoot>
+    <ScreenRoot screenType="tool">
       {/* Tool page (UI review 2026-10-18 §3, roadmap 3.3): the contract in two sentences -- what it does, what it never does. */}
       <ScreenHeader title="Packet Analysis" subtitle={packetContract(limits?.retention_days ?? 7)} />
       {error && <Alert severity="error">{error}</Alert>}

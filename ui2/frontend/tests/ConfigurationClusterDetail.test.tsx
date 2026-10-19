@@ -177,7 +177,7 @@ describe("Configuration device detail", () => {
       content_versions: { threat: "0", url: "0000.00.00.000" }, platform_facts_observed_at: "2026-09-22T22:57:54.123456Z",
     }} />));
     await waitFor(() => expect(screen.getAllByText("(as reported)")).toHaveLength(2));
-    expect(screen.getByText("2026-09-23 01:57:54")).toBeInTheDocument();
+    expect(screen.getByText("2026-09-23 01:57 GMT+3")).toBeInTheDocument();
     expect(screen.getAllByText("ACTIVE")[0]).toHaveAttribute("data-role", "ACTIVE");
   });
 
@@ -193,7 +193,7 @@ describe("Configuration device detail", () => {
     expect((await screen.findAllByText("Cisco ASA")).length).toBeGreaterThan(0);
     expect(screen.getAllByText("ACTIVE").some((element) => element.getAttribute("data-role") === "ACTIVE")).toBe(true);
     // the run time appears in the identity tile and, as an age, beside the filter (the tab's Collect now is gone: F-7)
-    expect(await screen.findAllByText("2026-09-23 01:57:54")).toHaveLength(2);
+    expect(await screen.findAllByText("2026-09-23 01:57 GMT+3")).toHaveLength(2);
     expect(screen.queryByRole("button", { name: "Collect now" })).toBeNull();
     expect(screen.queryByText("HOTFIX / JUMBO TAKE")).toBeNull();
     expect(screen.queryByText("VIRTUAL SYSTEMS (VSX)")).toBeNull();

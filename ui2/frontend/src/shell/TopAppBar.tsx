@@ -114,9 +114,9 @@ function AsOfClock() {
   return <Typography sx={{ fontFamily: MONO, fontSize: 15, color: m3.onSurface }}>as of {formatUtc(now.toISOString(), false)} {DISPLAY_TZ_LABEL}</Typography>;
 }
 
-/** Colour mode, density and wall display -- per-viewer preferences only. */
+/** Colour mode and wall display -- per-viewer preferences only (density is per screen type, not a toggle). */
 function DisplayControls() {
-  const { mode, density, setMode, setDensity } = useDisplayMode();
+  const { mode, setMode } = useDisplayMode();
   const wallHref = (() => {
     if (typeof window === "undefined") return "?screen=overview&wall=1";
     const p = new URLSearchParams(window.location.search);
@@ -130,13 +130,6 @@ function DisplayControls() {
         <IconButton aria-label={mode === "dark" ? "Switch to light mode" : "Switch to dark mode"} size="small"
           onClick={() => setMode(mode === "dark" ? "light" : "dark")} sx={{ color: m3.onSurfaceVar }}>
           <Icon name={mode === "dark" ? "sun" : "moon"} size={18} />
-        </IconButton>
-      </Tooltip>
-      <Tooltip title={density === "compact" ? "Comfortable rows" : "Compact rows"}>
-        <IconButton aria-label={density === "compact" ? "Switch to comfortable rows" : "Switch to compact rows"} size="small"
-          aria-pressed={density === "compact"} onClick={() => setDensity(density === "compact" ? "comfortable" : "compact")}
-          sx={{ color: density === "compact" ? m3.primary : m3.onSurfaceVar }}>
-          <Icon name="rows" size={18} />
         </IconButton>
       </Tooltip>
       <Tooltip title="Wall display: the Overview for an unattended screen, dark, refreshed every 60 s">

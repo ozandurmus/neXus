@@ -31,7 +31,9 @@ export type IconName =
   | "policy"
   | "tools"
   | "close"
-  | "external";
+  | "external"
+  | "chevron-left"
+  | "chevron-right";
 
 const common: SVGProps<SVGSVGElement> = {
   viewBox: "0 0 24 24",
@@ -210,6 +212,18 @@ export function Icon({ name, size = 20 }: { readonly name: IconName; readonly si
       return (
         <svg {...props}>
           <path d="M6 6l12 12M18 6L6 18" />
+        </svg>
+      );
+    case "chevron-left":
+      return (
+        <svg {...props}>
+          <path d="M15 5l-7 7 7 7" />
+        </svg>
+      );
+    case "chevron-right":
+      return (
+        <svg {...props}>
+          <path d="M9 5l7 7-7 7" />
         </svg>
       );
     case "external":

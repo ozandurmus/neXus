@@ -165,7 +165,7 @@ describe("the device header's state row", () => {
     expect(within(r).getByRole("link", { name: /^Readiness/ })).toHaveAttribute("href", "?screen=operations&cluster_ref=CLS-SYNTH-01");
     expect(within(r).getByRole("link", { name: /^Backup/ })).toHaveAttribute("href", "?screen=backups&q=CLS-SYNTH-01");
     // the certificate state is the last pill of the row, not an identity chip
-    const chips = Array.from(r.querySelectorAll(".MuiChip-root")).map((c) => c.textContent);
+    const chips = Array.from(r.querySelectorAll("[data-pill]")).map((c) => c.textContent);
     expect(chips.some((c) => /^Certificate expires in/.test(c ?? ""))).toBe(true);
     expect(within(screen.getByTestId("entity-header")).getAllByText(/^Certificate expires in/)).toHaveLength(1);
     expect(fetchMock.mock.calls.some(([u]) => u === "/api/v2/cp-failover/summary")).toBe(true);

@@ -4,7 +4,6 @@ import { useState } from "react";
 import type { ReactNode } from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
-import Chip from "@mui/material/Chip";
 import IconButton from "@mui/material/IconButton";
 import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
@@ -15,7 +14,8 @@ import Tabs from "@mui/material/Tabs";
 import Typography from "@mui/material/Typography";
 
 import { m3 } from "../theme/m3Theme";
-import { TONE_COLORS, type Tone } from "./tone";
+import type { Tone } from "./tone";
+import { StatusPill } from "./StatusPill";
 import { Icon, type IconName } from "./Icon";
 
 /**
@@ -92,30 +92,19 @@ export function M3Button({
  * explained, never a bare greyed control" rule.
  */
 
+/** The older name of the status pill: a word with a tone. One implementation (`StatusPill`), two names. */
 export function StatusChip({
   tone,
   label,
   dense = false,
+  title,
 }: {
   readonly tone: Tone;
   readonly label: string;
   readonly dense?: boolean;
+  readonly title?: string;
 }) {
-  const colors = TONE_COLORS[tone];
-  return (
-    <Chip
-      size="small"
-      label={label}
-      sx={{
-        bgcolor: colors.bg,
-        color: colors.fg,
-        borderRadius: "8px",
-        height: dense ? 22 : 26,
-        fontSize: dense ? 11 : 12,
-        fontWeight: 500,
-      }}
-    />
-  );
+  return <StatusPill tone={tone} word={label} dense={dense} title={title} />;
 }
 
 export interface M3TabDef {
