@@ -374,6 +374,12 @@ public final class Ui2WorkerMain {
                 artefactStore, systemLogVolume, hostnameFingerprint, platformFactsRepository,
                 com.securityexpert.nexus.ui2.worker.diagnostic.ChunkRedactor.of(
                         new com.securityexpert.nexus.ui2.worker.systemlog.redaction.LogRedactor()));
+        // The one-off Spike Detective layout review (contract section 8.3; PO approval 2026-10-19): C4 and one C5 on the
+        // same trusted SSH session; only a numeric, name-class summary is stored (system_log_measurement).
+        var cpSpikeLayoutReviewExecutor = new com.securityexpert.nexus.ui2.worker.diagnostic.CpSpikeLayoutReviewJobExecutor(
+                leaseRepository, attemptRepository, deviceRepository, strictFailoverSsh, gateRegistry,
+                new com.securityexpert.nexus.ui2.persistence.diagnostic.JooqSystemLogMeasurementRepository(transactionBoundary),
+                hostnameFingerprint, platformFactsRepository);
         java.util.concurrent.ExecutorService executor = java.util.concurrent.Executors.newFixedThreadPool(10);
         java.util.List<WorkerClaimLoop> claimLoops = new java.util.ArrayList<>();
         var failoverRecovery = new com.securityexpert.nexus.ui2.persistence.JooqCpFailoverRepository(transactionBoundary);
@@ -402,6 +408,7 @@ public final class Ui2WorkerMain {
                     .withPanSyslogMeasure(panSyslogMeasureExecutor)
                     .withPanSystemLogCollect(panSystemLogCollectExecutor)
                     .withCpSystemLogCollect(cpSystemLogCollectExecutor)
+                    .withCpSpikeLayoutReview(cpSpikeLayoutReviewExecutor)
                     .withPolicyCollection(policyCollectionExecutor)
                     .withRole(role, policyFallback)
                     .withRuntimeAdmission(endpointAdmission, moduleRuntime);

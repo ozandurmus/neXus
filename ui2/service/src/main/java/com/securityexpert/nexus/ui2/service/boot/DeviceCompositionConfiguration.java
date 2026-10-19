@@ -226,6 +226,7 @@ public class DeviceCompositionConfiguration {
                 com.securityexpert.nexus.ui2.jobs.diagnostic.PanSyslogMeasure.capability(gateRegistryPort),
                 com.securityexpert.nexus.ui2.jobs.diagnostic.PanSystemLogCollect.capability(gateRegistryPort),
                 com.securityexpert.nexus.ui2.jobs.systemlog.CpSystemLogCollect.capability(gateRegistryPort),
+                com.securityexpert.nexus.ui2.jobs.systemlog.CpSpikeLayoutReview.capability(gateRegistryPort),
                 checkPointInventoryCapability(gateRegistryPort),
                 paloAltoInventoryCapability(gateRegistryPort),
                 checkPointConfigurationCapability(gateRegistryPort),

@@ -120,6 +120,41 @@ class SystemLogMeasurementSchemaTest {
         }
     }
 
+    /** V166: the Spike Detective layout review is a diagnostics job and its one summary row is a Check Point source. */
+    @Test
+    void theSpikeLayoutReviewIsADiagnosticsJobWhoseSummaryIsACheckPointSource() throws Exception {
+        try (var fixture = Ui2PostgresFixture.create("system_log_measurement_spike")) {
+            fixture.runFlyway();
+            try (var resource = getClass().getResourceAsStream("/db/migration/V166__spike_layout_review.sql")) {
+                assertNotNull(resource);
+                String sql = new String(resource.readAllBytes(), StandardCharsets.UTF_8);
+                try (var db = fixture.migrateConnection(); var statement = db.createStatement()) {
+                    db.setAutoCommit(false); statement.execute(sql); statement.execute(sql); db.rollback();
+                }
+            }
+            String device, job;
+            try (var db = fixture.migrateConnection()) {
+                assertEquals("diagnostics", scalar(db, "select ui2_job_module('cp_spike_layout_review')"));
+                assertEquals("diagnostics", scalar(db, "select ui2_job_module('cp_system_log_collect')"));
+                assertEquals("packet_analysis", scalar(db, "select ui2_job_module('packet_analysis_run')"));
+                assertEquals("policy", scalar(db, "select ui2_job_module('cp_policy_collect')"));
+                device = Ui2Rows.insertDevice(db, Ui2Rows.insertCredentialReference(db), "ENROLLED");
+                job = CollectionEngineRows.insertJobWithCapability(db, device, "cp_spike_layout_review");
+                audited(db, "update jobs set state='CLAIMED', lease_worker_id='general-synthetic', lease_epoch=1, "
+                        + "lease_expires_at=now()+interval '10 minutes' where job_id='" + job + "'");
+                audited(db, "update jobs set state='EXECUTING' where job_id='" + job + "'");
+            }
+            var repository = new JooqSystemLogMeasurementRepository(
+                    new JooqTransactionBoundary(DSL.using(fixture.appDataSource(), SQLDialect.POSTGRES)));
+            String summary = "{\"status\":\"MEASURED\",\"schema\":\"cp_spike_layout_review_v1\",\"outcome\":\"REVIEWED\"}";
+            assertThrows(RuntimeException.class, () -> repository.record(job, 1, device, "palo_alto", "cp_spike_layout_review", summary));
+            assertTrue(repository.record(job, 1, device, "check_point", "cp_spike_layout_review", summary));
+            assertFalse(repository.record(job, 1, device, "check_point", "cp_spike_layout_review", summary), "one row per job");
+            assertEquals(1, repository.list(Optional.of(device), Optional.of("check_point"),
+                    Optional.of("cp_spike_layout_review"), 10).size());
+        }
+    }
+
     private static String scalar(Connection db, String sql) throws SQLException {
         try (var statement = db.createStatement(); var result = statement.executeQuery(sql)) {
             assertTrue(result.next());

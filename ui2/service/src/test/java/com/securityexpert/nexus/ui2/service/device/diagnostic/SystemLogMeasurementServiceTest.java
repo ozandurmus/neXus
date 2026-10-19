@@ -22,6 +22,7 @@ import com.securityexpert.nexus.ui2.capability.GateRegistryFixtureLoader;
 import com.securityexpert.nexus.ui2.jobs.admission.AdmissionResult;
 import com.securityexpert.nexus.ui2.jobs.admission.JobAdmissionService;
 import com.securityexpert.nexus.ui2.jobs.diagnostic.PanSyslogMeasure;
+import com.securityexpert.nexus.ui2.jobs.systemlog.CpSpikeLayoutReview;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord;
 import com.securityexpert.nexus.ui2.persistence.diagnostic.SystemLogMeasurementRepository;
@@ -169,5 +170,102 @@ class SystemLogMeasurementServiceTest {
         assertEquals("messages.1", file.get("class"));
         assertEquals("i_0123456789abcdef", file.get("inode"));
         assertEquals("cp_syslog_measure_stat", row.get("source"));
+    }
+
+    // ------------------------------------------------------------------ the Spike Detective layout review (2026-10-19)
+
+    private static DeviceRepository oneDevice(String id, String role, String vendor) {
+        var devices = mock(DeviceRepository.class);
+        when(devices.find(id)).thenReturn(Optional.of(new com.securityexpert.nexus.ui2.persistence.device.DeviceRecord(id, role,
+                vendor, "manual", Instant.now(), false, DeviceEnrollmentState.ENROLLED, false, "credential-ref")));
+        return devices;
+    }
+
+    private static SystemLogMeasurementRepository.Measurement review(String status) {
+        return new SystemLogMeasurementRepository.Measurement("m-9", "gw-1", "check_point", CpSpikeLayoutReview.SOURCE,
+                Instant.parse("2026-10-15T03:12:00Z"), "{\"status\":\"" + status + "\",\"outcome\":\"REVIEWED\"}", "job-9");
+    }
+
+    @Test
+    void theLayoutReviewAdmitsOneJobForOneCheckPointGatewayUnderTheReadOnlyMeasurementAction() {
+        var devices = oneDevice("gw-1", "gateway", "check_point");
+        var admission = mock(JobAdmissionService.class);
+        var store = mock(SystemLogMeasurementRepository.class);
+        when(store.list(Optional.of("gw-1"), Optional.of("check_point"), Optional.of(CpSpikeLayoutReview.SOURCE), 1000))
+                .thenReturn(List.of(review("UNKNOWN")));
+        String slot = String.valueOf(window(IN_WINDOW).slotStart(IN_WINDOW).toEpochSecond());
+        when(admission.submit(CpSpikeLayoutReview.CAPABILITY, "gw-1", "spike-layout-review:gw-1:" + slot, "synthetic-aiview",
+                ActionRegistry.SYSTEM_LOG_MEASURE_START)).thenReturn(new AdmissionResult.Admitted("job-1"),
+                new AdmissionResult.Deduplicated("job-1"));
+        var service = new SystemLogMeasurementService(devices, admission, store, window(IN_WINDOW));
+        assertEquals(new SystemLogMeasurementService.ReviewOutcome("ADMITTED", "job-1", null),
+                service.startSpikeLayoutReview("gw-1", "synthetic-aiview"), "an earlier UNKNOWN review does not block a retry");
+        assertEquals(new SystemLogMeasurementService.ReviewOutcome("DEDUPLICATED", "job-1", null),
+                service.startSpikeLayoutReview("gw-1", "synthetic-aiview"), "one job per device per window");
+        verify(admission, times(2)).submit(anyString(), anyString(), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void theLayoutReviewIsRefusedForAReviewedDeviceAnotherVendorOrAManagementServerAndOutsideAWindow() {
+        var store = mock(SystemLogMeasurementRepository.class);
+        when(store.list(Optional.of("gw-1"), Optional.of("check_point"), Optional.of(CpSpikeLayoutReview.SOURCE), 1000))
+                .thenReturn(List.of(review("MEASURED")));
+        var admission = mock(JobAdmissionService.class);
+        assertEquals("SPIKE_LAYOUT_ALREADY_REVIEWED", new SystemLogMeasurementService(oneDevice("gw-1", "gateway", "check_point"),
+                admission, store, window(IN_WINDOW)).startSpikeLayoutReview("gw-1", "a").code());
+        assertEquals("SPIKE_REVIEW_VENDOR_UNSUPPORTED", new SystemLogMeasurementService(oneDevice("gw-1", "gateway", "palo_alto"),
+                admission, store, window(IN_WINDOW)).startSpikeLayoutReview("gw-1", "a").code());
+        assertEquals("SYSTEM_LOG_DISABLED_ON_MANAGEMENT", new SystemLogMeasurementService(
+                oneDevice("gw-1", "management_server", "check_point"), admission, store, window(IN_WINDOW))
+                .startSpikeLayoutReview("gw-1", "a").code());
+        assertEquals("DEVICE_NOT_FOUND", new SystemLogMeasurementService(mock(DeviceRepository.class), admission, store,
+                window(IN_WINDOW)).startSpikeLayoutReview("gw-1", "a").code());
+        assertThrows(JobWindowPolicy.OutsideWindow.class, () -> new SystemLogMeasurementService(
+                oneDevice("gw-1", "gateway", "check_point"), admission, store, window(OUTSIDE_WINDOW))
+                .startSpikeLayoutReview("gw-1", "a"));
+        verifyNoInteractions(admission);
+    }
+
+    @Test
+    void theLayoutReviewCapabilityIsAdmissibleOnlyWithBothSignedOffGates() {
+        var rows = GateRegistryFixtureLoader.loadFromStream(getClass().getClassLoader()
+                .getResourceAsStream("capabilities/gate_registry_fixture.yaml"));
+        var capabilities = new DeviceCompositionConfiguration().deviceCapabilityRegistry(key -> rows.stream()
+                .filter(row -> row.key().equals(key)).toList());
+        assertTrue(capabilities.find(CpSpikeLayoutReview.CAPABILITY).orElseThrow().executionEligible());
+        var withoutC5 = new DeviceCompositionConfiguration().deviceCapabilityRegistry(key -> rows.stream()
+                .filter(row -> row.key().equals(key) && !row.gateId().equals(CpSpikeLayoutReview.LS_SPIKE_DIR_GATE)).toList());
+        assertFalse(withoutC5.find(CpSpikeLayoutReview.CAPABILITY).orElseThrow().executionEligible());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void theLayoutReviewSummaryKeepsItsClassesAndNumbersThroughTheAiviewMasking() {
+        var devices = mock(DeviceRepository.class);
+        when(devices.listAll()).thenReturn(List.of(device("gw-1", "gateway", "check_point", "edge-lab-02", null)));
+        var store = mock(SystemLogMeasurementRepository.class);
+        when(store.list(Optional.of("gw-1"), Optional.of("check_point"), Optional.of(CpSpikeLayoutReview.SOURCE), 10)).thenReturn(List.of(
+                new SystemLogMeasurementRepository.Measurement("m-3", "gw-1", "check_point", CpSpikeLayoutReview.SOURCE,
+                        Instant.parse("2026-10-19T09:12:00Z"),
+                        "{\"status\":\"MEASURED\",\"outcome\":\"REVIEWED\",\"directory\":{\"nameClass\":\"X_YYYYMMDD_NNN\","
+                                + "\"ageClass\":\"10M_TO_1H\",\"memberCount\":3,\"nameClasses\":{\"perf_cpu_NN.log\":"
+                                + "{\"count\":2,\"minBytes\":400000,\"maxBytes\":7000000,\"bytes\":7400000}}}}", "job-3")));
+        var service = new SystemLogMeasurementService(devices, mock(JobAdmissionService.class), store, window(IN_WINDOW));
+        Map<String, Object> body = Map.of("measurements", service.list(Optional.of("gw-1"), Optional.of("check_point"),
+                Optional.of(CpSpikeLayoutReview.SOURCE), 10));
+        byte[] key = "01234567890123456789012345678901".getBytes(StandardCharsets.UTF_8);
+        var advice = new PrivacyMaskingResponseBodyAdvice(new SubnetPreservingIpMasker(key), new TopologyNamePseudonymizer(key));
+        var http = mock(HttpServletRequest.class);
+        var request = mock(ServletServerHttpRequest.class);
+        when(request.getServletRequest()).thenReturn(http);
+        when(http.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE)).thenReturn(true);
+        var masked = (Map<String, Object>) advice.beforeBodyWrite(body, null, null, null, request, null);
+        var row = ((List<Map<String, Object>>) masked.get("measurements")).get(0);
+        var directory = (Map<String, Object>) ((Map<String, Object>) row.get("summary")).get("directory");
+        assertEquals("X_YYYYMMDD_NNN", directory.get("nameClass"));
+        assertEquals("10M_TO_1H", directory.get("ageClass"));
+        var perf = (Map<String, Object>) ((Map<String, Object>) directory.get("nameClasses")).get("perf_cpu_NN.log");
+        assertEquals(7400000, perf.get("bytes"));
+        assertEquals(400000, perf.get("minBytes"));
     }
 }

@@ -156,6 +156,9 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             // the measurement for every enrolled Palo Alto firewall is an administrator action.
             Map.entry("GET /api/v2/diagnostics/system-log-measurements", ActionRegistry.POLICY_READ),
             Map.entry("POST /api/v2/diagnostics/system-log-measurements/start", ActionRegistry.SYSTEM_LOG_MEASURE_START),
+            // The one-off Spike Detective layout review (phase B contract section 8.3; PO approval 2026-10-19): one Check
+            // Point gateway, two read-only listings, a summary row only -- the same read-only measurement action.
+            Map.entry("POST /api/v2/diagnostics/system-log-measurements/spike-layout-review", ActionRegistry.SYSTEM_LOG_MEASURE_START),
             // System-log programme phase B: the manual start of the incremental collection (operation_admin, security_admin).
             Map.entry("POST /api/v2/system-logs/collect", ActionRegistry.SYSTEM_LOG_COLLECT_START),
             // Phase B read side (section 14). system_log_read_unmasked is not a route of its own: the text route is a

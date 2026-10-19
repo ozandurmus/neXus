@@ -21,6 +21,8 @@ import com.securityexpert.nexus.ui2.platform.RoleToken;
 class SystemLogMeasurementSecurityRouteTest {
     private static final String LIST = "/api/v2/diagnostics/system-log-measurements";
     private static final String START = "/api/v2/diagnostics/system-log-measurements/start";
+    /** The one-off Spike Detective layout review (PO 2026-10-19): the same read-only measurement action. */
+    private static final String REVIEW = "/api/v2/diagnostics/system-log-measurements/spike-layout-review";
 
     @Test
     void readIsPolicyReadAndStartIsARegisteredActionWithoutWildcards() {
@@ -33,7 +35,7 @@ class SystemLogMeasurementSecurityRouteTest {
         assertTrue(actions.find(ActionRegistry.POLICY_READ).orElseThrow().requiredRoleTokens().contains(RoleToken.REPLAY_VIEWER));
         var routes = SecurityWebMvcConfig.ACTION_ID_BY_ROUTE.entrySet().stream()
                 .filter(e -> ActionRegistry.SYSTEM_LOG_MEASURE_START.equals(e.getValue())).map(java.util.Map.Entry::getKey).toList();
-        assertEquals(java.util.List.of("POST " + START), routes);
+        assertEquals(java.util.Set.of("POST " + START, "POST " + REVIEW), java.util.Set.copyOf(routes));
     }
 
     @Test
@@ -45,6 +47,9 @@ class SystemLogMeasurementSecurityRouteTest {
             assertEquals(true, read.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE));
             var start = request("POST", START);
             assertTrue(interceptor.preHandle(start, new MockHttpServletResponse(), new Object()));
+            var review = request("POST", REVIEW);
+            assertTrue(interceptor.preHandle(review, new MockHttpServletResponse(), new Object()),
+                    "aiview (also its machine session) may start the read-only layout review");
         }
     }
 
@@ -56,6 +61,12 @@ class SystemLogMeasurementSecurityRouteTest {
         var response = new MockHttpServletResponse();
         assertFalse(interceptor(RoleToken.OPERATOR, false).preHandle(operator, response, new Object()));
         assertEquals(403, response.getStatus());
+        var operatorReview = request("POST", REVIEW);
+        var reviewResponse = new MockHttpServletResponse();
+        assertFalse(interceptor(RoleToken.OPERATOR, false).preHandle(operatorReview, reviewResponse, new Object()));
+        assertEquals(403, reviewResponse.getStatus());
+        assertTrue(interceptor(RoleToken.SECURITY_ADMIN, false).preHandle(request("POST", REVIEW), new MockHttpServletResponse(),
+                new Object()));
     }
 
     private static MockHttpServletRequest request(String method, String path) {
