@@ -62,7 +62,7 @@ public final class PolicyPrivacy {
             List<?> reasons = metric.get("reasons") instanceof List<?> list ? list : List.of();
             return Map.of("score", metric.get("score") instanceof Number n ? n : 0, "level", Set.of("Low", "Medium", "High", "Unknown").contains(level) ? level : "Unknown",
                     "reasons", reasons.stream().filter(r -> r instanceof String s && (s.matches("(?:Any |Large CIDR in |Negated )(source|destination|service|application)(?: needs analysis)?")
-                            || s.equals("Analysis budget reached") || s.equals("Broad service range") || s.equals("No broad selectors in resolved objects") || s.equals("Incomplete objects; assessment requires analysis"))).toList());
+                            || PolicyRuleMetrics.FIXED_REASONS.contains(s))).toList());
         }
         if (value instanceof Map<?, ?> map) {
             Map<String, Object> out = new LinkedHashMap<>();
