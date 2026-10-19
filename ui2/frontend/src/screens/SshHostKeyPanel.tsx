@@ -34,6 +34,8 @@ export function SshHostKeyPanel({ deviceId, settings = false }: { deviceId?: str
     finally { setBusy(false); }
   };
   const observations = view?.observations.filter(o => settings || deviceId || o.status !== "ACCEPTED") ?? [];
+  // On a device page with nothing to say (no observation, no error) the panel takes no room at all (R13).
+  if (!settings && !error && observations.length === 0) return null;
   return <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
     {error && <Alert severity="error">{error}</Alert>}
     {settings && view && <Box>

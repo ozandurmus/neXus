@@ -112,7 +112,8 @@ function writeTabToUrl(slug: string) {
 /** M3Administration with an empty registry. Enrollment is the one place a device enters the product. */
 export function AdministrationScreen() {
   const session = useSession();
-  const initial = findBySlug(urlParam("tab")) ?? { group: GROUPS[0], tab: GROUPS[0].tabs[0] };
+  // A job link that names only `?job=<id>` (roadmap 3.6) lands on Job Logs, where the id is opened; `?tab=` wins when given.
+  const initial = findBySlug(urlParam("tab")) ?? (urlParam("job") ? findBySlug("job-logs") : null) ?? { group: GROUPS[0], tab: GROUPS[0].tabs[0] };
   const [activeGroupId, setActiveGroupId] = useState(initial.group.id);
   const [activeSlug, setActiveSlug] = useState(initial.tab.slug);
 

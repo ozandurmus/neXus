@@ -3,6 +3,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { urlParam } from "../shell/urlParams";
 import Box from "@mui/material/Box";
 import Chip from "@mui/material/Chip";
+import Popover from "@mui/material/Popover";
 import Stack from "@mui/material/Stack";
 import { ManagementTreePanel } from "./ManagementTreePanel";
 import Typography from "@mui/material/Typography";
@@ -978,6 +979,55 @@ export function registeredLabel(devices: ReadonlyArray<{ enrollment_state: strin
     : `${devices.length} registered · ${enrolled} enrolled`;
 }
 
+/**
+ * The Devices screen's one-row header while an object is open (local helper; a candidate for ScreenLayout once the
+ * design language settles): the way back, the title with its count beside it, and the unchanged fleet controls.
+ */
+function CompactScreenHeader({ title, subtitle, back, actions }: { readonly title: string; readonly subtitle: string; readonly back: React.ReactNode; readonly actions: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const anchorRef = useRef<HTMLDivElement>(null);
+  return (
+    <Box data-testid="compact-screen-header" sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", columnGap: 2, rowGap: 1, px: 0.5, minHeight: 40 }}>
+      {back}
+      <Box sx={{ display: "flex", alignItems: "baseline", columnGap: 1.25, minWidth: 0 }}>
+        <Typography variant="h4" component="h2" sx={{ whiteSpace: "nowrap" }}>{title}</Typography>
+        <Typography variant="body2" sx={{ color: m3.onSurfaceVar, whiteSpace: "nowrap" }}>{subtitle}</Typography>
+      </Box>
+      {/* The five fleet controls, unchanged (names, gating, order), behind one button while an object has the room. */}
+      <Box ref={anchorRef} sx={{ ml: "auto" }}>
+        <M3Button emphasis="outlined" icon="operations" onClick={() => setOpen(true)}>Fleet actions</M3Button>
+      </Box>
+      <Popover open={open} anchorEl={anchorRef.current} onClose={() => setOpen(false)}
+        anchorOrigin={{ vertical: "bottom", horizontal: "right" }} transformOrigin={{ vertical: "top", horizontal: "right" }}>
+        <Box role="group" aria-label="Fleet actions" sx={{ display: "flex", flexDirection: "column", alignItems: "stretch", gap: 1, p: 1.5, minWidth: 260 }}
+          onClick={(e) => { if ((e.target as HTMLElement).closest("button, a")) setOpen(false); }}>
+          {actions}
+        </Box>
+      </Popover>
+    </Box>
+  );
+}
+
+export type FormFilter = "all" | "cluster" | "standalone" | "manager" | "appliance";
+const FORM_FILTERS: readonly FormFilter[] = ["all", "cluster", "standalone", "manager", "appliance"];
+
+/** `?form=cluster|standalone|manager|appliance` (the Fleet summary's Form chips); the older `?scope=cluster` still lands on clusters. */
+export function formFromUrl(form: string | null, scope: string | null): FormFilter {
+  if (form && (FORM_FILTERS as readonly string[]).includes(form)) return form as FormFilter;
+  return scope === "cluster" ? "cluster" : "all";
+}
+
+/** One device's form: a cluster member, a management server, an appliance, else a standalone gateway. */
+export function matchesForm(device: Pick<DeviceSummary, "cluster_member_ref" | "role">, form: FormFilter): boolean {
+  switch (form) {
+    case "cluster": return Boolean(device.cluster_member_ref);
+    case "manager": return device.role === "management_server";
+    case "appliance": return device.role === "appliance";
+    case "standalone": return !device.cluster_member_ref && device.role !== "management_server" && device.role !== "appliance";
+    default: return true;
+  }
+}
+
 export function InventoryScreen() {
   const [lifecycleView, setLifecycleView] = useState(() => urlParam("view") === "lifecycle");
   const { data, error, refresh } = useFetchOnMount(
@@ -995,7 +1045,8 @@ export function InventoryScreen() {
   // Review §4: one chip row per filter dimension, each labelled; the dimensions combine.
   const [vendorFilter, setVendorFilter] = useState<string>(
     () => urlParam("vendor") || "all");
-  const [scopeFilter, setScopeFilter] = useState<"all" | "cluster">("all");
+  // Form (Fleet summary quick filters): clusters, standalone gateways, management servers, appliances; `?form=` carries it.
+  const [scopeFilter, setScopeFilter] = useState<FormFilter>(() => formFromUrl(urlParam("form"), urlParam("scope")));
   const [stateFilter, setStateFilter] = useState<"all" | "draft" | "failed" | "stale">("all");
   // Cross-screen links (global search, cluster context strip): preselect a cluster or a device once the list is in.
   const [pendingClusterRef, setPendingClusterRef] = useState<string | null>(() => urlParam("cluster_ref"));
@@ -1101,8 +1152,13 @@ export function InventoryScreen() {
     }
   }, [devices, pendingClusterRef, pendingDeviceId]);
 
+  const formCounts = {
+    standalone: devices?.filter((d) => matchesForm(d, "standalone")).length ?? 0,
+    manager: devices?.filter((d) => matchesForm(d, "manager")).length ?? 0,
+    appliance: devices?.filter((d) => matchesForm(d, "appliance")).length ?? 0,
+  };
   const filteredDevices = (devices ?? []).filter((device) => {
-    if (scopeFilter === "cluster" && !device.cluster_member_ref) return false;
+    if (!matchesForm(device, scopeFilter)) return false;
     if (vendorFilter !== "all" && device.vendor_hint !== vendorFilter) return false;
     if (stateFilter === "draft" && device.enrollment_state !== "DRAFT") return false;
     if (stateFilter === "failed" && !hasFailedCollection(device)) return false;
@@ -1156,28 +1212,35 @@ export function InventoryScreen() {
     <LifecycleScreen />
   </ScreenRoot>;
 
+  const objectOpen = Boolean(selectedCluster || selectedDevice);
+  const closeObject = () => { setSelectedDevice(null); setSelectedCluster(null); setSelectedDeviceVs(null); };
+  const subtitle = devices === null ? "Loading…" : registeredLabel(devices);
+  // The same five fleet controls whether the landing or an object is open; only the chrome around them changes.
+  const actions = (
+    <>
+      <M3Button emphasis="tonal" onClick={() => setLifecycleView(true)}>Lifecycle</M3Button>
+      <M3Button emphasis="tonal" icon="download" disabled={!devices || devices.length === 0}
+        onClick={() => downloadText(`devices-${new Date().toISOString().replace(/[:.]/g, "-")}.csv`, inventoryCsv(sortedDevices))}>
+        Export inventory
+      </M3Button>
+      <M3Button deviceJob plane={PLANE_COLLECT} emphasis="tonal" icon="operations" disabled={bulkBusy} onClick={handleBulkCollect}>
+        {bulkBusy ? "Starting..." : "Bulk Collect"}
+      </M3Button>
+      <M3Button deviceJob plane={PLANE_COLLECT} emphasis="tonal" icon="config" disabled={configBulkBusy} onClick={handleConfigBulk}>
+        {configBulkBusy ? "Starting..." : "Read configuration, all"}
+      </M3Button>
+      <M3Button emphasis="filled" icon="plus" href="?screen=administration" plane={PLANE_ADMIN}>Add device</M3Button>
+    </>
+  );
+
   return (
     <ScreenRoot screenType="object">
-      <ScreenHeader
-        title="Devices"
-        subtitle={devices === null ? "Loading…" : registeredLabel(devices)}
-        actions={
-          <>
-            <M3Button emphasis="tonal" onClick={() => setLifecycleView(true)}>Lifecycle</M3Button>
-            <M3Button emphasis="tonal" icon="download" disabled={!devices || devices.length === 0}
-              onClick={() => downloadText(`devices-${new Date().toISOString().replace(/[:.]/g, "-")}.csv`, inventoryCsv(sortedDevices))}>
-              Export inventory
-            </M3Button>
-            <M3Button deviceJob plane={PLANE_COLLECT} emphasis="tonal" icon="operations" disabled={bulkBusy} onClick={handleBulkCollect}>
-              {bulkBusy ? "Starting..." : "Bulk Collect"}
-            </M3Button>
-            <M3Button deviceJob plane={PLANE_COLLECT} emphasis="tonal" icon="config" disabled={configBulkBusy} onClick={handleConfigBulk}>
-              {configBulkBusy ? "Starting..." : "Read configuration, all"}
-            </M3Button>
-            <M3Button emphasis="filled" icon="plus" href="?screen=administration" plane={PLANE_ADMIN}>Add device</M3Button>
-          </>
-        }
-      />
+      {objectOpen
+        // An open object gets the room (post-release review 2026-10-18, R13: tab content within ~420 px at 1440 × 900):
+        // the title, its count, the way back to the landing and the five fleet controls share one 40 px row.
+        ? <CompactScreenHeader title="Devices" subtitle={subtitle} actions={actions}
+            back={<M3Button emphasis="text" onClick={closeObject}>← Fleet summary</M3Button>} />
+        : <ScreenHeader title="Devices" subtitle={subtitle} actions={actions} />}
       {bulkResult && (
         <Box sx={{ px: 3, pb: 2 }}>
           <Typography variant="body2" sx={{ color: m3.primary }}>
@@ -1234,6 +1297,9 @@ export function InventoryScreen() {
               options={[
                 { value: "all", label: "All", count: total },
                 { value: "cluster", label: "Clusters", count: `${clusters.enrolled} enrolled · ${clusters.active} active` },
+                { value: "standalone", label: "Standalone gateways", count: formCounts.standalone },
+                { value: "manager", label: "Management servers", count: formCounts.manager },
+                { value: "appliance", label: "Appliances", count: formCounts.appliance },
               ]}
             />
             <FilterRow
@@ -1292,10 +1358,7 @@ export function InventoryScreen() {
         }
         detail={
           <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, minHeight: 0 }}>
-            {(selectedCluster || selectedDevice) && (
-              // Back to the landing without picking another row (P1-1); nothing is lost, the list keeps its filters.
-              <Box><M3Button emphasis="text" onClick={() => { setSelectedDevice(null); setSelectedCluster(null); setSelectedDeviceVs(null); }}>← Fleet summary</M3Button></Box>
-            )}
+            {/* The way back to the landing (P1-1) is in the compact header row above while an object is open. */}
             {selectedCluster ? (
               <ClusterDetailPanels
                 key={selectedCluster.ref}

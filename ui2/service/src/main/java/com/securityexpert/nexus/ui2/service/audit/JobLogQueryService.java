@@ -42,16 +42,27 @@ public final class JobLogQueryService {
             @JsonProperty("submitted_at") Instant submittedAt,
             @JsonProperty("finished_at") Instant finishedAt,
             @JsonProperty("duration_ms") Long durationMs,
-            @JsonProperty("has_transcript") boolean hasTranscript) {
+            @JsonProperty("has_transcript") boolean hasTranscript,
+            /** Log lines a system-log collection run stored, summed over its chunk ledger rows (read-only addition,
+             *  Phase 2 follow-up: the RESULT cell says {@code Collected · 1,234 lines}). Null for every other job type,
+             *  and for a collection run that left no chunk row -- never 0 in place of "not recorded". */
+            @JsonProperty("lines_stored") Long linesStored) {
 
         public JobEvent(String jobId, String jobType, String targetDeviceId, String state, String terminalReason, Instant submittedAt) {
-            this(jobId, jobType, targetDeviceId, null, state, null, terminalReason, submittedAt, null, null, false);
+            this(jobId, jobType, targetDeviceId, null, state, null, terminalReason, submittedAt, null, null, false, null);
         }
 
         public JobEvent(String jobId, String jobType, String targetDeviceId, String deviceName, String state,
                 String outcome, String terminalReason, Instant submittedAt, Instant finishedAt, Long durationMs) {
             this(jobId, jobType, targetDeviceId, deviceName, state, outcome, terminalReason, submittedAt,
-                    finishedAt, durationMs, false);
+                    finishedAt, durationMs, false, null);
+        }
+
+        public JobEvent(String jobId, String jobType, String targetDeviceId, String deviceName, String state,
+                String outcome, String terminalReason, Instant submittedAt, Instant finishedAt, Long durationMs,
+                boolean hasTranscript) {
+            this(jobId, jobType, targetDeviceId, deviceName, state, outcome, terminalReason, submittedAt,
+                    finishedAt, durationMs, hasTranscript, null);
         }
     }
 
@@ -81,7 +92,7 @@ public final class JobLogQueryService {
             if (allowed) return this;
             return new JobPage(items.stream().map(event -> new JobEvent(event.jobId(), event.jobType(),
                     event.targetDeviceId(), event.deviceName(), event.state(), event.outcome(), event.terminalReason(),
-                    event.submittedAt(), event.finishedAt(), event.durationMs(), false)).toList(), page, pageSize, total, canCancel);
+                    event.submittedAt(), event.finishedAt(), event.durationMs(), false, event.linesStored())).toList(), page, pageSize, total, canCancel);
         }
     }
 
@@ -145,11 +156,18 @@ public final class JobLogQueryService {
 
     /** Jobs joined to their device for the name; the join is outer so a job whose device was removed still lists. */
     private static final String FROM = " from jobs j left join devices d on d.device_id = j.target_device_id";
+    /** The job types whose run stores log chunks; only their rows carry {@code lines_stored} (the CASE keeps the subquery off every other row). */
+    static final List<String> LOG_COLLECT_JOB_TYPES = List.of("cp_system_log_collect", "pan_system_log_collect");
+    /** Lines stored by one collection run: its chunk ledger rows (kept after pruning), by the device index the table has. */
+    static final String LINES_STORED_SQL = "case when j.job_type in ('cp_system_log_collect', 'pan_system_log_collect') "
+            + "then (select sum(c.lines) from system_log_chunk c where c.device_id = j.target_device_id and c.job_id = j.job_id) "
+            + "else null end as lines_stored";
     private static final String SELECT = "select j.job_id, j.job_type, j.target_device_id, d.observed_hostname as device_name, "
             + "j.state, j.outcome, CASE WHEN j.ssh_identity_unverified THEN concat_ws('; ', nullif(j.terminal_reason, ''), 'host_key_mismatch_warned: collected under an unverified identity') ELSE j.terminal_reason END AS terminal_reason, j.submitted_at, j.finished_at, "
             + "j.transcript_artefact_ref is not null as has_transcript, "
             + "case when j.finished_at is not null then extract(epoch from (j.finished_at - j.submitted_at)) * 1000 "
-            + "     else extract(epoch from (now() - j.submitted_at)) * 1000 end as duration_ms" + FROM;
+            + "     else extract(epoch from (now() - j.submitted_at)) * 1000 end as duration_ms, "
+            + LINES_STORED_SQL + FROM;
 
     private final TransactionBoundary transactionBoundary;
 
@@ -276,11 +294,13 @@ public final class JobLogQueryService {
         return v;
     }
 
-    private static JobEvent toEvent(Record row) {
+    static JobEvent toEvent(Record row) {
         Number durNum = row.get("duration_ms", Number.class);
         Long dur = durNum != null ? durNum.longValue() : null;
         Timestamp subTs = row.get("submitted_at", Timestamp.class);
         Timestamp finTs = row.get("finished_at", Timestamp.class);
+        // Absent from an older row shape (a caller selecting without the column): no claim, not 0.
+        Number linesNum = row.field("lines_stored") == null ? null : row.get("lines_stored", Number.class);
         return new JobEvent(
                 row.get("job_id", String.class),
                 row.get("job_type", String.class),
@@ -292,6 +312,7 @@ public final class JobLogQueryService {
                 subTs != null ? subTs.toInstant() : null,
                 finTs != null ? finTs.toInstant() : null,
                 dur,
-                row.get("has_transcript", Boolean.class));
+                row.get("has_transcript", Boolean.class),
+                linesNum == null ? null : linesNum.longValue());
     }
 }

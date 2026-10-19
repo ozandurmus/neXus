@@ -40,7 +40,7 @@ export function ObjectHeader({ avatar, title, breadcrumb, badges, identity, read
   const gutter = `${DENSITY.comfortable.gutter}px`;
   return (
     <Box data-testid={testId} data-density="comfortable"
-      sx={{ display: "flex", flexDirection: "column", gap: 1.5, p: gutter, bgcolor: m3.scLowest, borderRadius: `${RADIUS.card}px`,
+      sx={{ display: "flex", flexDirection: "column", gap: 1, px: gutter, py: 1.25, bgcolor: m3.scLowest, borderRadius: `${RADIUS.card}px`,
             border: `1px solid ${m3.outlineVar}`, boxShadow: "none" }}>
       {/* Title row: the title block takes the width and wraps its badges inside; the action keeps the right edge of the
           title row instead of dropping to a row of its own (R13: tab content closer to the top). */}
@@ -60,12 +60,12 @@ export function ObjectHeader({ avatar, title, breadcrumb, badges, identity, read
         {action ? <Box data-testid="object-action" sx={{ flex: "none" }}>{action}</Box> : null}
       </Box>
       {(readAges || state || link) ? (
-        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 2, flexWrap: "wrap" }}>
-          <Box data-testid="object-state-row" sx={{ minWidth: 0, display: "flex", alignItems: "center", columnGap: 1.5, rowGap: 0.75, flexWrap: "wrap" }}>
-            {readAges}
-            {state}
-          </Box>
-          {link}
+        // One wrapping row: the link keeps the right edge while there is room and only then takes a row of its own
+        // (P4-B: reserving its width pushed the pills onto a second row and the tabs down).
+        <Box data-testid="object-state-row" sx={{ minWidth: 0, display: "flex", alignItems: "center", columnGap: 1.5, rowGap: 0.75, flexWrap: "wrap" }}>
+          {readAges}
+          {state}
+          {link ? <Box sx={{ ml: "auto" }}>{link}</Box> : null}
         </Box>
       ) : null}
       {children}

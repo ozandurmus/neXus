@@ -93,8 +93,17 @@ export function pillCount(byState: Readonly<Record<string, number>> | null, pill
   return def.states.split(",").reduce((n, s) => n + (byState[s] ?? 0), 0);
 }
 
-/** The RESULT cell's words: the recorded outcome when it says more than the state, then the reason where there is one. */
-export function resultWords(job: Pick<JobEventView, "state" | "outcome" | "terminal_reason">): { outcome: string | null; reason: string | null } {
+/**
+ * The RESULT cell's words: the recorded outcome when it says more than the state, then the reason where there is one,
+ * and for a log collection the lines its run stored (`Collected · 1,234 lines`; absent when the run has no chunk row).
+ */
+export function resultWords(job: Pick<JobEventView, "state" | "outcome" | "terminal_reason" | "lines_stored">): { outcome: string | null; reason: string | null; lines?: string } {
+  const lines = typeof job.lines_stored === "number" ? `${job.lines_stored.toLocaleString("en-US")} ${job.lines_stored === 1 ? "line" : "lines"}` : undefined;
+  const base = resultOutcomeWords(job);
+  return lines === undefined ? base : { ...base, lines };
+}
+
+function resultOutcomeWords(job: Pick<JobEventView, "state" | "outcome" | "terminal_reason">): { outcome: string | null; reason: string | null } {
   const recorded = jobOutcomeWord(job.outcome);
   const showOutcome = recorded !== null && !outcomeEchoesState(job.outcome, job.state);
   // The API's terminal_reason repeats the terminal state on a clean run (review §3); a completed job has nothing to
@@ -465,7 +474,9 @@ export function JobLogsPanel({
                         {result.outcome && <Presented label={result.outcome} raw={job.outcome ?? job.terminal_reason} />}
                         {result.outcome && result.reason && " · "}
                         {result.reason && <Presented label={readinessReasonLabel(result.reason)} raw={result.reason} />}
-                        {!result.outcome && !result.reason && "—"}
+                        {result.lines && (result.outcome || result.reason) && " · "}
+                        {result.lines && <span title="Log lines this run stored, from its chunk ledger">{result.lines}</span>}
+                        {!result.outcome && !result.reason && !result.lines && "—"}
                       </TableCell>
                       <TableCell sx={{ fontFamily: MONO }}>
                         <Stamp at={job.submitted_at} />

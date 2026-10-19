@@ -303,6 +303,22 @@ class PrivacyMaskingResponseBodyAdviceTest {
     }
 
     @Test
+    void keepsTheStoredLineCountOfAMaskedJobEvent() {
+        when(httpRequest.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE)).thenReturn(true);
+        JobEvent event = new JobEvent("job-2", "cp_system_log_collect", "148bd45b-e5b4-490b-95c5-54862e2d63d0",
+                "real-gateway-name-7", "COMPLETED", "PARTIAL", "COLLECTED", Instant.now(), Instant.now(), 1_000L, true, 1234L);
+        var page = new com.securityexpert.nexus.ui2.service.audit.JobLogQueryService.JobPage(List.of(event), 1, 50, 1);
+
+        var result = (com.securityexpert.nexus.ui2.service.audit.JobLogQueryService.JobPage)
+                advice.beforeBodyWrite(page, null, null, null, serverRequest, null);
+
+        // A count is not an identity: it passes through the mask unchanged, while the transcript flag is stripped.
+        assertThat(result.items().get(0).linesStored()).isEqualTo(1234L);
+        assertThat(result.items().get(0).hasTranscript()).isFalse();
+        assertThat(result.items().get(0).deviceName()).isNotEqualTo("real-gateway-name-7");
+    }
+
+    @Test
     void masksJobEventsForReplayViewer() {
         when(httpRequest.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE)).thenReturn(true);
 

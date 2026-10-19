@@ -86,6 +86,69 @@ class JobLogQueryServiceTest {
         assertEquals(870L, byState.get("COMPLETED"));
     }
 
+    private static org.jooq.Record jobRow(String jobType, Long linesStored, boolean withLinesColumn) {
+        var ctx = org.jooq.impl.DSL.using(org.jooq.SQLDialect.POSTGRES);
+        var jobId = org.jooq.impl.DSL.field("job_id", String.class);
+        var type = org.jooq.impl.DSL.field("job_type", String.class);
+        var device = org.jooq.impl.DSL.field("target_device_id", String.class);
+        var name = org.jooq.impl.DSL.field("device_name", String.class);
+        var state = org.jooq.impl.DSL.field("state", String.class);
+        var outcome = org.jooq.impl.DSL.field("outcome", String.class);
+        var reason = org.jooq.impl.DSL.field("terminal_reason", String.class);
+        var submitted = org.jooq.impl.DSL.field("submitted_at", Timestamp.class);
+        var finished = org.jooq.impl.DSL.field("finished_at", Timestamp.class);
+        var transcript = org.jooq.impl.DSL.field("has_transcript", Boolean.class);
+        var duration = org.jooq.impl.DSL.field("duration_ms", Double.class);
+        var lines = org.jooq.impl.DSL.field("lines_stored", java.math.BigDecimal.class);
+        org.jooq.Record row = withLinesColumn
+                ? ctx.newRecord(jobId, type, device, name, state, outcome, reason, submitted, finished, transcript, duration, lines)
+                : ctx.newRecord(jobId, type, device, name, state, outcome, reason, submitted, finished, transcript, duration);
+        row.set(jobId, "job-1");
+        row.set(type, jobType);
+        row.set(device, "dev-1");
+        row.set(name, "FW-TANGO-04");
+        row.set(state, "COMPLETED");
+        row.set(outcome, "SUCCESS");
+        row.set(reason, "COLLECTED");
+        row.set(submitted, Timestamp.from(Instant.parse("2026-10-18T03:05:00Z")));
+        row.set(finished, Timestamp.from(Instant.parse("2026-10-18T03:06:00Z")));
+        row.set(transcript, false);
+        row.set(duration, 60_000.0);
+        if (withLinesColumn) row.set(lines, linesStored == null ? null : java.math.BigDecimal.valueOf(linesStored));
+        return row;
+    }
+
+    @Test
+    void linesStoredIsReadFromTheRowAndSerialisedAsLinesStored() throws Exception {
+        JobEvent event = JobLogQueryService.toEvent(jobRow("cp_system_log_collect", 1234L, true));
+
+        assertEquals(1234L, event.linesStored());
+        assertEquals(60_000L, event.durationMs());
+        String json = new com.fasterxml.jackson.databind.ObjectMapper().findAndRegisterModules().writeValueAsString(event);
+        assertTrue(json.contains("\"lines_stored\":1234"), json);
+    }
+
+    @Test
+    void linesStoredIsNullNotZeroWhenTheRunHasNoChunkRowOrTheColumnIsAbsent() {
+        assertEquals(null, JobLogQueryService.toEvent(jobRow("cp_system_log_collect", null, true)).linesStored());
+        assertEquals(null, JobLogQueryService.toEvent(jobRow("cp_inventory_collect", null, true)).linesStored());
+        assertEquals(null, JobLogQueryService.toEvent(jobRow("cp_system_log_collect", 9L, false)).linesStored());
+    }
+
+    @Test
+    void linesStoredIsSummedOnlyForTheLogCollectJobTypesAndSurvivesTheTranscriptStrip() {
+        // The CASE keeps the chunk subquery off every other row; the subquery is keyed by the device index the table has.
+        assertTrue(JobLogQueryService.LINES_STORED_SQL.startsWith("case when j.job_type in ('cp_system_log_collect', 'pan_system_log_collect') then (select sum(c.lines) from system_log_chunk c "), JobLogQueryService.LINES_STORED_SQL);
+        assertTrue(JobLogQueryService.LINES_STORED_SQL.contains("c.device_id = j.target_device_id and c.job_id = j.job_id"), JobLogQueryService.LINES_STORED_SQL);
+        assertEquals(List.of("cp_system_log_collect", "pan_system_log_collect"), JobLogQueryService.LOG_COLLECT_JOB_TYPES);
+
+        var withLines = new JobEvent("job-1", "cp_system_log_collect", "dev-1", "FW-TANGO-04", "COMPLETED", "PARTIAL", "COLLECTED",
+                Instant.parse("2026-10-18T03:05:00Z"), Instant.parse("2026-10-18T03:06:00Z"), 60_000L, true, 1234L);
+        var stripped = new JobLogQueryService.JobPage(List.of(withLines), 1, 50, 1).withTranscriptAccess(false).items().get(0);
+        assertEquals(false, stripped.hasTranscript());
+        assertEquals(1234L, stripped.linesStored());
+    }
+
     @Test
     void statsSerialiseThePerStateCountsUnderByState() throws Exception {
         Stats stats = new Stats(898, 879, 852, 27, 0, 0, 0, 879, 0,
