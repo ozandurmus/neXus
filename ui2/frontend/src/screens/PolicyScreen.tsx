@@ -11,6 +11,19 @@ import { cancelJob, listPolicies, getPolicyCollectionStatus, type PolicyCollecti
 
 import { PolicyRuleTable, RuleDetailPanel, RuleHistory, scheduleLabel, sectionLabel, reportPolicyLoadError } from "./PolicyRuleViewer";
 
+/**
+ * Usage presets over the existing hit filter and query grammar (frontend only): `unused90` and `inactive` are the server's
+ * `hitFilter=inactive`, `never` is `hitFilter=never`, `recent30` is the query clause `lasthit.days<30` ANDed to the typed
+ * query. Rules without hit evidence never match a preset (the server answers UNKNOWN, not a guess).
+ */
+export type UsagePreset = "" | "unused90" | "inactive" | "never" | "recent30";
+export function usageRequest(preset: UsagePreset, days: number, query: string): { hitFilter: string; days: number; q: string } {
+  if (preset === "unused90") return { hitFilter: "inactive", days: 90, q: query };
+  if (preset === "inactive" || preset === "never") return { hitFilter: preset, days, q: query };
+  if (preset === "recent30") return { hitFilter: "", days, q: query.trim() ? `(${query.trim()}) AND lasthit.days<30` : "lasthit.days<30" };
+  return { hitFilter: "", days, q: query };
+}
+
 import { PolicyOfflineTab } from "./PolicyOfflineTab";
 import { PolicyLookupTab } from "./PolicyLookupTab";
 import { PolicyChangesTab } from "./PolicyChangesTab";
@@ -294,8 +307,9 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
   const [selected, setSelected] = useState(() => new URLSearchParams(window.location.search).get("policy_id") ?? "");
   const [device, setDevice] = useState(() => new URLSearchParams(window.location.search).get("device_id") ?? "");
   const [tab, setTab] = useState<PolicyTab>(() => new URLSearchParams(window.location.search).get("tab") === "objects" ? "Objects" : "Rules");
-  const [hitFilter, setHitFilter] = useState("");
+  const [usage, setUsage] = useState<UsagePreset>("");
   const [hitDays, setHitDays] = useState(90);
+  const [hygieneClass, setHygieneClass] = useState("");
   const [page, setPage] = useState(0);
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
@@ -361,20 +375,22 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
     let active = true;
     policyRequest.current++;
     setScrollTop(0); if (content.current) content.current.scrollTop = 0; setData(null); setDrawer(null); drawerRequest.current++; setError(""); setErrorCode("");
-    if (selected) getPolicy(selected, page, query, hitFilter, hitDays).then(result => {
+    const request = usageRequest(usage, hitDays, query);
+    if (selected) getPolicy(selected, page, request.q, request.hitFilter, request.days).then(result => {
       if (!result?.metadata || !Array.isArray(result.sections)) throw new Error("Empty policy response");
       if (active) setData(result);
     })
       .catch(error => { if (active) { setErrorCode(reportPolicyLoadError("rules", error)); setError("Policy rules could not be loaded."); } });
     return () => { active = false; };
-  }, [selected, page, query, revision, hitFilter, hitDays]);
+  }, [selected, page, query, revision, usage, hitDays]);
   useEffect(() => () => { drawerRequest.current++; }, []);
   const scheduleMinute = Math.floor(now.getTime() / 60000);
   // Refresh derived schedule status from stored evidence; never triggers collection.
   useEffect(() => {
     if (!selected || !data) return;
     const request = policyRequest.current; let active = true;
-    getPolicy(selected, page, query, hitFilter, hitDays).then(result => {
+    const usageQuery = usageRequest(usage, hitDays, query);
+    getPolicy(selected, page, usageQuery.q, usageQuery.hitFilter, usageQuery.days).then(result => {
       if (active && request === policyRequest.current) setData(result);
     }).catch(() => { /* Retain the last stored projection on a transient read failure. */ });
     return () => { active = false; };
@@ -399,7 +415,7 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
   }, [hasData, tab]);
 
   const ruleSelectionRequest = useRef(0);
-  useEffect(() => { ruleSelectionRequest.current++; setSelectedRules(new Set()); }, [selected, query, revision, hitFilter, hitDays]);
+  useEffect(() => { ruleSelectionRequest.current++; setSelectedRules(new Set()); }, [selected, query, revision, usage, hitDays]);
   const selectAllRules = async (value: boolean) => {
     const request = ++ruleSelectionRequest.current;
     if (!value || !data) { setSelectedRules(new Set()); return; }
@@ -407,7 +423,8 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
     try {
       const ids = new Set<string>();
       for (let index = 0; index * data.pageSize < data.total; index++) {
-        const result = index === page ? data : await getPolicy(selected, index, query, hitFilter, hitDays);
+        const usageQuery = usageRequest(usage, hitDays, query);
+        const result = index === page ? data : await getPolicy(selected, index, usageQuery.q, usageQuery.hitFilter, usageQuery.days);
         if (request !== ruleSelectionRequest.current) return;
         result.sections.forEach(section => section.rules.forEach(rule => ids.add(rule.id)));
       }
@@ -696,7 +713,7 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
         {tab === "Changes" && <PolicyChangesTab key={revision} policies={catalog} devices={targets} openRule={(policy, rule) => void openRuleId(rule, 90, policy)} />}
         {tab === "Offline analysis" && <PolicyOfflineTab key={selected} policy={selected} openRule={id => void openRuleId(id, 90)} />}
         {tab === "Hygiene" && (selected || loadingTree || error
-          ? <PolicyHygieneTab key={`${selected}:${revision}`} policy={selected} openRule={(id, days) => void openRuleId(id, days)} openObject={openObject} />
+          ? <PolicyHygieneTab key={`${selected}:${revision}:${hygieneClass}`} policy={selected} initialClass={hygieneClass} openRule={(id, days) => void openRuleId(id, days)} openObject={openObject} />
           : <PolicyContainerPrompt tab="Hygiene" now={now} open={openContainer}
             rows={summaries.map(row => ({ ...row, containerName: displayName(row.containerName, "Policy container"), sourceName: displayName(row.sourceName, "Management server") }))} />)}
         <Box role="tabpanel" aria-label="Rules" hidden={tab !== "Rules"} sx={{ display: tab === "Rules" ? "contents" : "none" }}>
@@ -730,10 +747,11 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
               </Stack>
             </>}
             {selected && <Stack direction="row" flexWrap="wrap" gap={1} alignItems="flex-start">
-              <TextField select label="Hit filter" size="small" value={hitFilter} sx={{ minWidth: 190, flex: "none" }} onChange={e => { setHitFilter(e.target.value); setPage(0); }}>
-                <MenuItem value="">All hit evidence</MenuItem><MenuItem value="inactive">No hits in N days</MenuItem><MenuItem value="never">Never hit</MenuItem>
+              <TextField select label="Usage filter" size="small" value={usage} sx={{ minWidth: 200, flex: "none" }} onChange={e => { setUsage(e.target.value as UsagePreset); setPage(0); }}>
+                <MenuItem value="">All usage evidence</MenuItem><MenuItem value="unused90">Unused 90 d</MenuItem><MenuItem value="inactive">Unused N days</MenuItem>
+                <MenuItem value="never">Never hit</MenuItem><MenuItem value="recent30">Hit in last 30 d</MenuItem>
               </TextField>
-              {hitFilter === "inactive" && <TextField label="Days without hits" type="number" size="small" value={hitDays} inputProps={{ min: 1, max: 36500 }} sx={{ width: 150, flex: "none" }}
+              {usage === "inactive" && <TextField label="Days without hits" type="number" size="small" value={hitDays} inputProps={{ min: 1, max: 36500 }} sx={{ width: 150, flex: "none" }}
                 onChange={e => { const n = Number(e.target.value); if (Number.isInteger(n) && n >= 1 && n <= 36500) { setHitDays(n); setPage(0); } }} />}
               <TextField label="Rule query" size="small" value={search} sx={{ flex: "1 1 320px", minWidth: 0 }}
                 placeholder="source.ip='192.0.2.10' AND service='tcp/443'"
@@ -758,7 +776,8 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
               {/* Not a scroll container itself: sticky headers need the pane to be the nearest scrolling ancestor. */}
               <Box role="region" aria-label="Policy rulebase" ref={rulebase} sx={{ flexShrink: 0, minWidth: 0 }}>
                 <PolicyRuleTable key={data.metadata.id} sections={data.sections} collapsed={collapsed} scrollTop={scrollTop} viewportHeight={viewport} stickyTop={stickyTop}
-                  metadata={data.metadata} objects={objects} openObject={openObject} openRuleId={id => void openRuleId(id)}
+                  metadata={data.metadata} objects={objects} openObject={openObject} openRuleId={id => void openRuleId(id)} now={now}
+                  openHygiene={findingClass => { setHygieneClass(findingClass); setTab("Hygiene"); setDrawer(null); drawerRequest.current++; }}
                   selected={selectedRules} onSelect={id => setSelectedRules(previous => toggle(previous, id))}
                   toggle={id => setCollapsed(previous => toggle(previous, id))}
                   headerSelect={<Checkbox size="small" inputProps={{ "aria-label": "Select all" }} checked={data.total > 0 && selectedRules.size === data.total}
@@ -780,7 +799,8 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
         {drawer?.history && <RuleHistory policy={selected} />}
         {drawer?.rule && (drawer.detail || data) && <RuleDetailPanel key={drawer.rule.id} rule={drawer.rule} metadata={drawer.detail?.metadata ?? data!.metadata}
           section={drawer.detail?.section ?? data!.sections.find(section => section.rules.some(rule => rule.id === drawer.rule?.id))!}
-          objects={drawer.detail ? new Map(drawer.detail.objects.map(o => [o.id, o])) : objects} openObject={id => void openObject(id, drawer.detail?.metadata.id ?? selected)} openRuleId={id => void openRuleId(id, 90, drawer.detail?.metadata.id ?? selected)} />}
+          objects={drawer.detail ? new Map(drawer.detail.objects.map(o => [o.id, o])) : objects} openObject={id => void openObject(id, drawer.detail?.metadata.id ?? selected)} openRuleId={id => void openRuleId(id, 90, drawer.detail?.metadata.id ?? selected)}
+          openHygiene={findingClass => { setHygieneClass(findingClass); setTab("Hygiene"); setDrawer(null); drawerRequest.current++; }} now={now} />}
       </Box>
     </Drawer>
   </ScreenRoot>;

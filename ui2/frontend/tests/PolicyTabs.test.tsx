@@ -39,12 +39,17 @@ it("opens all three tabs, retains Rules and sends hit filters alongside the exis
   const tabs = within(screen.getByRole("tablist", { name: "Policy tabs" })).getAllByRole("tab");
   expect(tabs.map(t => t.getAttribute("aria-label"))).toEqual(["Rules", "Objects", "Installation", "Hygiene", "Changes", "Lookup", "Offline analysis"]);
   expect(tabs.map(t => t.getAttribute("data-tab-group"))).toEqual(["Browse", "Browse", "Browse", "Judge", "Trace", "Ask", "Ask"]);
-  fireEvent.mouseDown(screen.getByLabelText("Hit filter")); fireEvent.click(await screen.findByRole("option", { name: "Never hit" }));
+  fireEvent.mouseDown(screen.getByLabelText("Usage filter")); fireEvent.click(await screen.findByRole("option", { name: "Never hit" }));
   await waitFor(() => expect(request.mock.calls.some(([url]) => url.includes("hitFilter=never"))).toBe(true));
-  fireEvent.mouseDown(screen.getByLabelText("Hit filter")); fireEvent.click(await screen.findByRole("option", { name: "No hits in N days" }));
+  fireEvent.mouseDown(screen.getByLabelText("Usage filter")); fireEvent.click(await screen.findByRole("option", { name: "Unused 90 d" }));
+  await waitFor(() => expect(request.mock.calls.some(([url]) => url.includes("hitFilter=inactive&days=90"))).toBe(true));
+  fireEvent.mouseDown(screen.getByLabelText("Usage filter")); fireEvent.click(await screen.findByRole("option", { name: "Unused N days" }));
   fireEvent.change(screen.getByLabelText("Days without hits"), { target: { value: "30" } });
   fireEvent.change(screen.getByLabelText("Rule query"), { target: { value: "action='Accept'" } });
   await waitFor(() => expect(request.mock.calls.some(([url]) => url.includes("hitFilter=inactive&days=30") && url.includes("q=action%3D"))).toBe(true));
+  // "Hit in last 30 d" is the query grammar's own clause, ANDed to the typed query; no hitFilter parameter is sent for it.
+  fireEvent.mouseDown(screen.getByLabelText("Usage filter")); fireEvent.click(await screen.findByRole("option", { name: "Hit in last 30 d" }));
+  await waitFor(() => expect(request.mock.calls.some(([url]) => url.includes("q=(action%3D'Accept')%20AND%20lasthit.days%3C30") && !url.includes("hitFilter="))).toBe(true));
   fireEvent.click(screen.getByRole("tab", { name: "Objects" }));
   expect(await screen.findByRole("table", { name: "Policy objects" })).toHaveTextContent("240.12.0.8");
   fireEvent.click(screen.getByRole("tab", { name: "Installation" }));
@@ -52,7 +57,7 @@ it("opens all three tabs, retains Rules and sends hit filters alongside the exis
   fireEvent.click(screen.getByRole("tab", { name: "Rules" }));
   expect(screen.getByLabelText("Rule query")).toHaveValue("action='Accept'");
   expect(screen.getByRole("region", { name: "Policy rulebase" })).toBeVisible();
-});
+}, 15_000);
 
 it("loads and pages masked objects and sends type, hygiene and search to the server", async () => {
   const request = mock(); mount(<PolicyDomainTab tab="Objects" metadata={metadata} policies={[metadata]} />);

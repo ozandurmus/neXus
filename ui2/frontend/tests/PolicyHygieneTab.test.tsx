@@ -62,10 +62,21 @@ it("fills rule metrics with conflict link, violations and inline scoring explana
   const openRule = vi.fn(); mount(<RuleMetrics rule={detail.rule} openRuleId={openRule} />);
   expect(screen.getByText("CONFLICT")).toBeInTheDocument();
   fireEvent.click(screen.getByText("Covering rule")); expect(openRule).toHaveBeenCalledWith("r1");
-  expect(screen.getByText(/Why this level: Any destination · Score 2/)).toBeInTheDocument();
+  expect(screen.getByText("Why this level · score 2")).toBeInTheDocument();
+  expect(within(screen.getByRole("list", { name: "Reasons" })).getByText("Any destination")).toBeInTheDocument();
   expect(screen.getByText(/HIGH · conflict/)).toBeInTheDocument();
 });
 it("does not show missing analysis as a clean rule", () => {
   mount(<RuleMetrics rule={{ ...detail.rule, hygiene: undefined }} />);
   expect(screen.getByText("UNKNOWN because analysis not available")).toBeInTheDocument();
+});
+
+it("opens with the finding class a rule flag linked to, and ignores a class it does not know", async () => {
+  const fetcher = vi.fn(async () => response(page)); vi.stubGlobal("fetch", fetcher);
+  const { unmount } = mount(<PolicyHygieneTab openObject={vi.fn()} policy="p1" openRule={vi.fn()} initialClass="broad" />);
+  await waitFor(() => expect(fetcher).toHaveBeenCalledWith(expect.stringContaining("findingClass=broad"), expect.anything()));
+  expect(screen.getByLabelText("Finding class")).toHaveTextContent("broad");
+  unmount(); fetcher.mockClear();
+  mount(<PolicyHygieneTab openObject={vi.fn()} policy="p1" openRule={vi.fn()} initialClass="not-a-class" />);
+  await waitFor(() => expect(fetcher).toHaveBeenCalledWith(expect.stringContaining("findingClass=&"), expect.anything()));
 });

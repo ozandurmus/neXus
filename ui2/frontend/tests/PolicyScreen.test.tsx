@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { afterEach, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
-import { PolicyScreen, collectionOutcome, progress, csvCell, collectedLabel, sourceStatusLabel, collectionStalled, runningLabel, collectionSummaryLine } from "../src/screens/PolicyScreen";
+import { PolicyScreen, collectionOutcome, progress, csvCell, collectedLabel, sourceStatusLabel, collectionStalled, runningLabel, collectionSummaryLine, usageRequest } from "../src/screens/PolicyScreen";
 import { PolicyRuleTable, RULE_ROW_HEIGHT } from "../src/screens/PolicyRuleViewer";
 import { loadErrorText } from "../e2e/safety";
 import { expandByText, findButtonByText, findByAria, getFieldByLabel } from "./fastQueries";
@@ -81,7 +81,7 @@ it("opens recursive object members with cycle status and complete rule details",
   const details = screen.getByRole("region", { name: "Rule 1 details" });
   expect(within(details).getByText("UUID: uuid-1")).toBeInTheDocument();
   expect(within(details).getByText("Enabled: false")).toBeInTheDocument();
-  expect(within(details).getByText("withheld:").parentElement).toHaveTextContent("withheld: Withheld in AIView");
+  expect(within(details).getByText("withheld").closest("li")).toHaveTextContent("Withheld in AIView");
   expect(screen.queryByRole("dialog", { name: "Rule details" })).toBeNull();
 });
 it("renders only a 200-rule page from a 5000-rule policy and requests the next page", async () => {
@@ -845,4 +845,13 @@ it("opens the Policy Objects tab from a global search link", async () => {
   mount();
   await waitFor(() => expect(screen.getByRole("tab", { name: "Objects" })).toHaveAttribute("aria-selected", "true"));
   await waitFor(() => expect(fetch.mock.calls.some(([path]) => path.includes(`/domains/${metadata.containerId}/objects`))).toBe(true));
+});
+
+it("maps usage presets onto the server hit filter and the query grammar without inventing a third path", () => {
+  expect(usageRequest("", 30, "name='x'")).toEqual({ hitFilter: "", days: 30, q: "name='x'" });
+  expect(usageRequest("unused90", 30, "")).toEqual({ hitFilter: "inactive", days: 90, q: "" });
+  expect(usageRequest("inactive", 30, "")).toEqual({ hitFilter: "inactive", days: 30, q: "" });
+  expect(usageRequest("never", 30, "name='x'")).toEqual({ hitFilter: "never", days: 30, q: "name='x'" });
+  expect(usageRequest("recent30", 30, "")).toEqual({ hitFilter: "", days: 30, q: "lasthit.days<30" });
+  expect(usageRequest("recent30", 30, " action='Accept' ")).toEqual({ hitFilter: "", days: 30, q: "(action='Accept') AND lasthit.days<30" });
 });

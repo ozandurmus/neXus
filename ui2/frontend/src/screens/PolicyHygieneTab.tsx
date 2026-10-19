@@ -5,9 +5,9 @@ import { RuleFields } from "./PolicyRuleViewer";
 import { m3 } from "../theme/m3Theme";
 
 const classes = ["shadowed", "conflict", "disabled", "unused", "expired", "broad", "unknown"];
-export function PolicyHygieneTab({ policy, openRule, openObject }: { policy: string; openRule: (id: string, days: number) => void; openObject: (id: string) => void }) {
+export function PolicyHygieneTab({ policy, openRule, openObject, initialClass = "" }: { policy: string; openRule: (id: string, days: number) => void; openObject: (id: string) => void; initialClass?: string }) {
   const [data, setData] = useState<PolicyHygienePage | null>(null), [error, setError] = useState("");
-  const [findingClass, setClass] = useState(""), [severity, setSeverity] = useState(""), [days, setDays] = useState(90), [page, setPage] = useState(0);
+  const [findingClass, setClass] = useState(classes.includes(initialClass) ? initialClass : ""), [severity, setSeverity] = useState(""), [days, setDays] = useState(90), [page, setPage] = useState(0);
   const [revision, setRevision] = useState(0), [exporting, setExporting] = useState(false);
   const [pair, setPair] = useState<{ covered: string; covering: string } | null>(null);
   const validDays = Number.isInteger(days) && days >= 1 && days <= 36500;

@@ -2,8 +2,8 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
-import { PolicyRuleTable, RuleDetailPanel, RuleHistory, RuleMetrics, RULE_ROW_HEIGHT, containerLabel, hygieneBadges, scheduleLabel, sectionLabel } from "../src/screens/PolicyRuleViewer";
-import type { PolicyHygieneAssessment, PolicyMetadata, PolicyRule, PolicySchedule, PolicySection } from "../src/auth/adminApi";
+import { PolicyRuleTable, RuleDetailPanel, RuleHistory, RuleMetrics, RULE_ROW_HEIGHT, actionWord, containerLabel, documentationEntries, hygieneBadges, objectKind, permissivenessWords, scheduleLabel, sectionLabel, usageWords } from "../src/screens/PolicyRuleViewer";
+import type { PolicyHygieneAssessment, PolicyMetadata, PolicyObject, PolicyRule, PolicySchedule, PolicySection } from "../src/auth/adminApi";
 
 const metadata: PolicyMetadata = { id: "policy-1", name: "OBJ-POLICY-01", sourceId: "source-1", sourceName: "MGR-BRAVO-01", vendor: "CP", containerId: "domain-1", containerName: "DOM-TANGO-01", collectedAt: "2026-10-02T00:00:00Z", artefactRef: "artifact-1", targets: [] };
 const objects = new Map(Array.from({ length: 6 }, (_, i) => [String(i), { id: String(i), name: `OBJ-ADDRESS-0${i}`, type: "address", status: "RESOLVED" }]));
@@ -14,15 +14,44 @@ const section: PolicySection = { id: "section-1", name: "OBJ-SECTION-01", source
 function mount(element: React.ReactNode) { return render(<ThemeProvider theme={m3Theme}>{element}</ThemeProvider>); }
 const ruleTable = (props: Partial<React.ComponentProps<typeof PolicyRuleTable>> = {}) => <PolicyRuleTable sections={[section]} collapsed={new Set()} scrollTop={0} toggle={vi.fn()} objects={objects} metadata={metadata}
   openObject={vi.fn()} selected={new Set()} onSelect={vi.fn()} {...props} />;
-const column = (row: HTMLElement, key: string) => row.querySelector<HTMLElement>(`[data-column="${key}"]`)!;
+const column = (row: HTMLElement, key: string) => row.querySelector<HTMLElement>(`[data-column="${key}"], [data-field="${key}"]`)!;
+// The usage cell carries its state and hover detail on the box inside the td.
+const usageBox = (row: HTMLElement) => column(row, "usage").firstElementChild!;
 const expand = (number = 1) => { fireEvent.click(screen.getByRole("row", { name: new RegExp(`^Rule ${number}:`) })); return screen.getByRole("region", { name: `Rule ${number} details` }); };
 afterEach(() => { vi.unstubAllGlobals(); });
-it("explains disabled hit collection without showing a zero", async () => {
+it("explains missing hit evidence without showing a zero", async () => {
   mount(<RuleMetrics rule={rule} />);
   const tile = screen.getByText("Last hit").parentElement!;
   expect(tile).toHaveTextContent("UNKNOWN");
   fireEvent.mouseOver(tile);
-  expect(await screen.findByRole("tooltip")).toHaveTextContent("Last hit unknown");
+  expect(await screen.findByRole("tooltip")).toHaveTextContent("Hit evidence is missing from this snapshot.");
+});
+it("words usage honestly: UNKNOWN when missing, Not collected when null, Never at zero, partial without a time, stale and recent by age", () => {
+  const now = new Date("2026-10-19T12:00:00Z");
+  const base = { hits: 12, firstHit: null, lastHit: "2026-10-16T12:00:00Z", source: "device" as const, collectedAt: "2026-10-19T00:00:00Z", firewalls: [] };
+  expect(usageWords({}, now)).toMatchObject({ hits: "UNKNOWN", lastHit: "UNKNOWN", state: "unknown" });
+  expect(usageWords({ hitCounts: null }, now)).toMatchObject({ hits: "Not collected", lastHit: "Not collected", state: "not-collected" });
+  expect(usageWords({ hitCounts: { ...base, hits: 0, lastHit: null } }, now)).toMatchObject({ hits: "0", lastHit: "Never", state: "never" });
+  expect(usageWords({ hitCounts: { ...base, lastHit: null } }, now)).toMatchObject({ hits: "12", lastHit: "UNKNOWN", state: "partial" });
+  expect(usageWords({ hitCounts: { ...base, hits: null, lastHit: null } }, now)).toMatchObject({ hits: "UNKNOWN", lastHit: "UNKNOWN", state: "partial" });
+  expect(usageWords({ hitCounts: { ...base, hits: 1234567 } }, now)).toMatchObject({ hits: "1,234,567", lastHit: "3 d ago", state: "recent" });
+  const stale = usageWords({ hitCounts: { ...base, lastHit: "2026-05-01T00:00:00Z", source: "mds" } }, now);
+  expect(stale.state).toBe("stale"); expect(stale.detail).toContain("2026-05-01T00:00:00Z"); expect(stale.detail).toContain("Management server counters");
+  expect(usageWords({ hitCounts: { ...base, lastHit: "not-a-time" } }, now)).toMatchObject({ lastHit: "UNKNOWN", state: "partial" });
+});
+it("words permissiveness with reasons and never a dash, reads object kinds and action words, and finds documentation fields", () => {
+  expect(permissivenessWords({})).toEqual({ level: "Unknown", word: "UNKNOWN", reasons: ["Not assessed in this snapshot"], known: false });
+  expect(permissivenessWords({ permissiveness: { level: "Unknown", reasons: ["Incomplete objects; assessment requires analysis"] } })).toMatchObject({ word: "UNKNOWN", reasons: ["Incomplete objects; assessment requires analysis"] });
+  expect(permissivenessWords({ permissiveness: { level: "Low", reasons: [] } })).toMatchObject({ word: "Low", reasons: ["No broad element found"], known: true });
+  expect(permissivenessWords({ permissiveness: { level: "High", reasons: ["Any source", "Any service"] } })).toMatchObject({ word: "High", reasons: ["Any source", "Any service"] });
+  const object = (type: string, values: string[] = [], members: string[] = []) => ({ id: "o", name: "OBJ", type, status: "RESOLVED", values, members });
+  expect(objectKind(undefined)).toBe("unresolved"); expect(objectKind(object("any"))).toBe("any"); expect(objectKind(object("address-group"))).toBe("group");
+  expect(objectKind(object("service-tcp"))).toBe("service"); expect(objectKind(object("application"))).toBe("application"); expect(objectKind(object("security-zone"))).toBe("zone");
+  expect(objectKind(object("address", ["192.0.2.0/24"]))).toBe("network"); expect(objectKind(object("address", ["192.0.2.8/32"]))).toBe("host");
+  expect(objectKind(object("address", ["192.0.2.10-192.0.2.20"]))).toBe("range"); expect(objectKind(object("address-range"))).toBe("range");
+  expect(objectKind(object("host"))).toBe("host"); expect(objectKind(object("network"))).toBe("network"); expect(objectKind(object("time"))).toBe("time"); expect(objectKind(object("tag"))).toBe("other");
+  expect(["allow", "Accept", "deny", "reset-client", "source-and-destination-nat", "no-nat", ""].map(actionWord)).toEqual(["Allow", "Accept", "Deny", "Reset client", "Source and destination NAT", "No NAT", "UNKNOWN"]);
+  expect(documentationEntries({ "rule-owner": ["OWNER-ALPHA-01"], tag: ["x"], "ticket-id": ["T-1"] }).map(([key]) => key)).toEqual(["rule-owner", "ticket-id"]);
 });
 it("shows collected last hit in table rows and per-firewall counters and timestamps in the drawer", () => {
   const collectedAt = "2026-10-02T12:00:00Z", lastHit = "2026-07-01T12:00:00Z";
@@ -32,7 +61,7 @@ it("shows collected last hit in table rows and per-firewall counters and timesta
   const { unmount } = mount(ruleTable({ sections: [{ ...section, rules: [counted] }] }));
   const row = screen.getByRole("row", { name: "Rule 1: OBJ-RULE-01" });
   expect(column(row, "lastHit")).toHaveTextContent(/d ago/);
-  expect(column(row, "hits")).toHaveTextContent("5");
+  expect(column(row, "hits")).toHaveTextContent("5 hits");
   const details = expand();
   expect(within(details.querySelector<HTMLElement>(".policy-rule-metrics")!).getByText("First hit").parentElement).toHaveTextContent("UNKNOWN");
   unmount();
@@ -46,34 +75,64 @@ it("shows collected last hit in table rows and per-firewall counters and timesta
   expect(within(table).getByText("2026-01-01T00:00:00Z")).toBeInTheDocument();
   expect(screen.getByText(/Hits: 5/)).toHaveTextContent("Source: device");
 });
-it("renders compact rows with +N more, negation, disabled, expired and unavailable metrics and expands every member inline", () => {
-  const openObject = vi.fn(), onSelect = vi.fn();
-  mount(ruleTable({ openObject, onSelect }));
+it("renders rule rows as chips with +N, negation, a Disabled word, expired and unavailable evidence, and lists every member in the details", () => {
+  const openObject = vi.fn(), onSelect = vi.fn(), openHygiene = vi.fn();
+  mount(ruleTable({ openObject, onSelect, openHygiene }));
   const row = screen.getByRole("row", { name: "Rule 1: OBJ-RULE-01" });
   expect(row).toHaveAttribute("aria-expanded", "false");
   expect(within(row).getByText("NOT")).toBeInTheDocument();
-  expect(column(row, "hygiene")).toHaveTextContent("Disabled"); expect(column(row, "hygiene")).toHaveTextContent("Expired");
-  expect(column(row, "source")).toHaveTextContent("OBJ-ADDRESS-00, OBJ-ADDRESS-01+4 more");
+  // The disabled word sits next to the name; the flags column keeps the other findings and does not repeat it.
+  expect(column(row, "name")).toHaveTextContent("Disabled"); expect(column(row, "name")).toHaveTextContent("Withheld in AIView");
+  expect(column(row, "hygiene")).toHaveTextContent("Expired"); expect(column(row, "hygiene")).not.toHaveTextContent("Disabled");
+  const chips = within(column(row, "source")).getAllByRole("button");
+  expect(chips.map(chip => chip.textContent)).toEqual(["OBJ-ADDRESS-00", "OBJ-ADDRESS-01", "+4"]);
+  expect(chips[0]).toHaveAttribute("data-object-kind", "host"); expect(chips[0]).toHaveAttribute("title", expect.stringContaining("Host"));
   expect(screen.queryByText("OBJ-ADDRESS-05")).toBeNull();
   fireEvent.click(within(row).getByText("OBJ-ADDRESS-01")); expect(openObject).toHaveBeenCalledWith("1");
   fireEvent.click(within(row).getByRole("checkbox")); expect(onSelect).toHaveBeenCalledWith("rule-1");
   expect(row).toHaveAttribute("aria-expanded", "false");
-  expect(column(row, "permissiveness")).toHaveTextContent("High");
-  expect(column(row, "lastHit")).toHaveTextContent("UNKNOWN");
-  expect(column(row, "action")).toHaveTextContent("✕Drop");
-  const details = expand();
+  expect(column(row, "permissiveness")).toHaveTextContent("High"); expect(column(row, "permissiveness")).toHaveTextContent("Any service · Any destination");
+  expect(column(row, "lastHit")).toHaveTextContent("UNKNOWN"); expect(column(row, "hits")).toHaveTextContent("UNKNOWN");
+  expect(column(row, "action")).toHaveTextContent("✕Drop"); expect(column(row, "action").firstElementChild).toHaveAttribute("data-action-tone", "deny");
+  fireEvent.click(within(row).getByRole("button", { name: "4 more objects" }));
+  const details = screen.getByRole("region", { name: "Rule 1 details" });
   expect(row).toHaveAttribute("aria-expanded", "true");
   expect(within(details).getByText("Access layer: OBJ-LAYER-01", { exact: false })).toBeInTheDocument();
   expect(within(details).getByText("Disabled")).toBeInTheDocument(); expect(within(details).getByText("Expired")).toBeInTheDocument();
-  fireEvent.click(within(details).getByRole("button", { name: "+2 ▾" })); expect(within(details).getByText("OBJ-ADDRESS-05")).toBeInTheDocument();
-  fireEvent.click(within(details).getByText("OBJ-ADDRESS-05")); expect(openObject).toHaveBeenCalledWith("5");
-  expect(within(details).getByText("Why this level: Any service; Any destination")).toBeInTheDocument();
+  const sentence = within(details).getByRole("group", { name: "Rule sentence" });
+  expect(within(sentence).getAllByRole("button").map(chip => chip.textContent).slice(0, 6)).toEqual(["OBJ-ADDRESS-00", "OBJ-ADDRESS-01", "OBJ-ADDRESS-02", "OBJ-ADDRESS-03", "OBJ-ADDRESS-04", "OBJ-ADDRESS-05"]);
+  fireEvent.click(within(sentence).getByText("OBJ-ADDRESS-05")); expect(openObject).toHaveBeenCalledWith("5");
+  expect(within(details).getByText("Why this level")).toBeInTheDocument();
+  expect(within(within(details).getByRole("list", { name: "Reasons" })).getAllByRole("listitem").map(li => li.textContent)).toEqual(["Any service", "Any destination"]);
   expect(within(details).getByText("Withheld in AIView")).toBeInTheDocument();
-  expect(within(details).getByText("Log/track: Log")).toBeInTheDocument();
-  expect(within(details).getByText(/Until 1 Oct 2026 23:59/)).toBeInTheDocument();
+  expect(within(details).getByText("Log/track").closest("li")).toHaveTextContent("Log");
+  expect(within(details).getAllByText(/Until 1 Oct 2026 23:59/).length).toBeGreaterThan(0);
+  expect(within(details).getByText(/Owner, ticket and expiry are not recorded/)).toBeInTheDocument();
   expect(within(details).getByRole("button", { name: "Rule history" })).toBeInTheDocument();
+  fireEvent.click(within(details).getByRole("button", { name: "Open in Hygiene" })); expect(openHygiene).toHaveBeenCalledWith("");
   fireEvent.click(row);
   expect(screen.queryByRole("region", { name: "Rule 1 details" })).toBeNull();
+});
+it("shows Never and Not collected in the row and links flags to the Hygiene tab", () => {
+  const openHygiene = vi.fn();
+  const never: PolicyRule = { ...rule, id: "never", number: 1, enabled: true, timeStatus: "always", hitCounts: { hits: 0, firstHit: null, lastHit: null, source: "mds", collectedAt: "2026-10-02T00:00:00Z", firewalls: [] },
+    permissiveness: { level: "Unknown", reasons: ["Incomplete objects; assessment requires analysis"] },
+    hygiene: { shadowStatus: "NOT_SHADOWED", shadowReason: null, coveringRuleId: null, timeStatus: "always", expiring: false, counterWindow: "90 d", hitSource: "mds", hitsCollectedAt: "2026-10-02T00:00:00Z",
+      permissiveness: { level: "Unknown", reasons: ["Incomplete objects; assessment requires analysis"] }, findings: [{ findingClass: "unused", severity: "MEDIUM", evidence: "No hits in 90 days." }] } };
+  const uncollected: PolicyRule = { ...rule, id: "uncollected", number: 2, enabled: null, hitCounts: null, permissiveness: undefined, source: { refs: ["0"], negated: false } };
+  mount(ruleTable({ openHygiene, sections: [{ ...section, total: 2, rules: [never, uncollected] }], objects: new Map<string, PolicyObject>([...objects, ["0", { id: "0", name: "GRP-ALPHA-01", type: "address-group", status: "RESOLVED", members: ["1", "2", "3"] }]]) }));
+  const first = screen.getByRole("row", { name: "Rule 1: OBJ-RULE-01" }), second = screen.getByRole("row", { name: "Rule 2: OBJ-RULE-01" });
+  expect(column(first, "hits")).toHaveTextContent("0 hits"); expect(column(first, "lastHit")).toHaveTextContent("Never hit");
+  expect(usageBox(first)).toHaveAttribute("data-usage-state", "never");
+  expect(column(first, "permissiveness")).toHaveTextContent("UNKNOWN"); expect(column(first, "permissiveness")).toHaveTextContent("Incomplete objects; assessment requires analysis");
+  fireEvent.click(within(column(first, "hygiene")).getByRole("button", { name: "Unused" })); expect(openHygiene).toHaveBeenCalledWith("unused");
+  expect(column(second, "hits")).toHaveTextContent("Not collected"); expect(column(second, "lastHit")).toHaveTextContent("Not collected");
+  expect(usageBox(second)).toHaveAttribute("title", expect.stringContaining("full refresh"));
+  expect(column(second, "permissiveness")).toHaveTextContent("UNKNOWNNot assessed in this snapshot");
+  expect(column(second, "name")).toHaveTextContent("Enabled UNKNOWN");
+  const group = within(column(second, "source")).getByRole("button", { name: /GRP-ALPHA-01/ });
+  expect(group).toHaveAttribute("data-object-kind", "group"); expect(group).toHaveTextContent("GRP-ALPHA-013"); expect(group).toHaveAttribute("title", expect.stringContaining("3 members"));
+  expect(screen.queryByText("0", { exact: true })).toBeNull();
 });
 it("toggles details with Enter on a focused row, moves with arrow keys and ignores keys from inner controls", () => {
   const second: PolicyRule = { ...rule, id: "rule-2", number: 2, name: "OBJ-RULE-02" };
@@ -109,7 +168,7 @@ it("badges hygiene only from stored findings and rule state, and says UNKNOWN wh
 it("shows the application column only for vendors or pages that carry applications", () => {
   const { unmount } = mount(ruleTable());
   expect(screen.queryByRole("columnheader", { name: "Application" })).toBeNull();
-  expect(screen.getAllByRole("columnheader").map(h => h.textContent)).toEqual(["", "#", "Name", "Source", "Destination", "Service", "Action", "Hits", "Last hit", "Permissiveness", "Hygiene"]);
+  expect(screen.getAllByRole("columnheader").map(h => h.textContent)).toEqual(["", "#", "Rule", "Source", "Destination", "Service", "Action", "Usage", "Permissiveness", "Flags"]);
   unmount();
   mount(ruleTable({ metadata: { ...metadata, vendor: "PAN" }, headerSelect: <input type="checkbox" aria-label="Select all" /> }));
   expect(screen.getByRole("columnheader", { name: "Application" })).toBeInTheDocument();
@@ -170,8 +229,9 @@ it("shows Palo Alto NAT and default-rule sections in the same rule table with th
   const natRule = { ...rule, name: "RULE-NAT-01", uuid: "RULE-TANGO-09", action: "source-and-destination-nat",
     extras: { "source-translation-type": ["dynamic-ip-and-port"], "translated-destination-port": ["8443"] } };
   const { container } = mount(ruleTable({ sections: [{ ...named("Pre NAT rules", "Shared"), total: 1, rules: [natRule] }], objects, metadata: meta }));
-  expect(screen.getByRole("button", { name: /Shared pre-NAT rules · 1/ })).toHaveAttribute("aria-expanded", "true");
-  expect(screen.getByText("source-and-destination-nat")).toBeInTheDocument();
+  const group = screen.getByRole("button", { name: /Shared pre-NAT rules/ });
+  expect(group).toHaveAttribute("aria-expanded", "true"); expect(group).toHaveTextContent("1");
+  expect(screen.getByText("Source and destination NAT")).toBeInTheDocument();
   expect(container.textContent).toContain("⇄");
 });
 it("labels PAN sections precisely, collapses empty sections into one row and keeps masked group headers in the table", () => {
@@ -181,16 +241,16 @@ it("labels PAN sections precisely, collapses empty sections into one row and kee
   expect(sectionLabel(metadata, section)).toBe("OBJ-SECTION-01");
   const { container } = mount(ruleTable({ sections: sections.map((s, i) => ({ ...s, total: i ? 0 : 1, rules: i ? [] : [{ ...rule, name: "RULE-BRAVO-12", uuid: "RULE-TANGO-01" }] })), objects: new Map([...objects].map(([id, object]) => [id, { ...object, name: `ADDR-ALPHA-0${id}` }])), metadata: meta }));
   expect(screen.getByText("3 empty sections")).toBeInTheDocument();
-  const group = screen.getByRole("button", { name: /Shared pre-rules · 1/ });
-  expect(group).toHaveAttribute("aria-expanded", "true");
+  const group = screen.getByRole("button", { name: /Shared pre-rules/ });
+  expect(group).toHaveAttribute("aria-expanded", "true"); expect(group).toHaveTextContent("1");
   expect(container.querySelectorAll("[data-policy-section]")).toHaveLength(1);
   expect(screen.getByRole("table", { name: "Policy rules" })).toHaveClass("MuiTable-stickyHeader");
   expect(screen.getByRole("columnheader", { name: "Application" })).toBeInTheDocument();
   const details = expand();
   expect(within(details).getByText(/Section: Shared pre-rules/)).toBeInTheDocument();
-  expect(within(details).getByText("UID on device: RULE-TANGO-01")).toBeInTheDocument();
+  expect(within(details).getByText("UID on device").closest("li")).toHaveTextContent("RULE-TANGO-01");
   expect(container.querySelector(".policy-rule-fields")).toBeInTheDocument();
-  expect(container.querySelector(".policy-rule-metrics")).toHaveStyle({ width: "220px", gridTemplateColumns: "repeat(2, minmax(0, 1fr))" });
+  expect(container.querySelector(".policy-rule-metrics")).toBeInTheDocument();
   expect(container.textContent).not.toMatch(/[a-f0-9]{32}/i);
 });
 
@@ -200,14 +260,15 @@ it("shows hit timestamps with relative last-hit and absolute title plus the full
     schedules: [{ kind: "recurring", start: null, end: null, windows: [{ days: [1, 2, 3, 4, 5], monthDays: [], start: "08:00", end: "17:00" }], timezone: "UTC", timezoneKnown: true }] };
   mount(ruleTable({ sections: [{ ...section, rules: [counted] }] }));
   const row = screen.getByRole("row", { name: "Rule 1: OBJ-RULE-01" });
-  expect(column(row, "lastHit")).toHaveTextContent("1 h ago");
-  expect(column(row, "lastHit").firstElementChild).toHaveAttribute("title", expect.stringContaining(lastHit));
-  expect(column(row, "hits")).toHaveTextContent("7");
+  expect(column(row, "lastHit")).toHaveTextContent("last 1 h ago");
+  expect(usageBox(row)).toHaveAttribute("title", expect.stringContaining(lastHit));
+  expect(usageBox(row)).toHaveAttribute("data-usage-state", "recent");
+  expect(column(row, "hits")).toHaveTextContent("7 hits");
   const details = expand();
-  expect(within(details).getByText("First hit").parentElement).toHaveTextContent("2026-01-01 03:00:00");
+  expect(within(details).getByText("First hit").parentElement).toHaveTextContent("2026-01-01 03:00 GMT+3");
   const tile = within(details).getByText("Last hit").parentElement!;
   fireEvent.mouseOver(tile);
   expect(await screen.findByRole("tooltip")).toHaveTextContent(lastHit);
-  const schedule = within(details).getByText("Weekdays 08:00–17:00 · UTC");
+  const [schedule] = within(details).getAllByText("Weekdays 08:00–17:00 · UTC");
   expect(schedule).toBeVisible();
 });

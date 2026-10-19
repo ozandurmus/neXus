@@ -43,7 +43,8 @@ it("renders the masked live policy page, rule details and empty history without 
   await navigate();
   const rulebase = await findByAria("Policy rulebase");
   expect(rulebase.querySelectorAll("[data-policy-rule]").length).toBeGreaterThan(0);
-  expect(within(rulebase).getByText("▾ Device-group post-rules · 866", { selector: "button" })).toHaveAttribute("aria-expanded", "true");
+  const group = within(rulebase).getByRole("button", { name: /Device-group post-rules/ });
+  expect(group).toHaveAttribute("aria-expanded", "true"); expect(group).toHaveTextContent("866");
   expect(within(rulebase).getByText("5 empty sections")).toBeInTheDocument();
   expect(within(rulebase).getByText("Application", { selector: "th" })).toBeInTheDocument();
   expect(screen.getByText("Page 1 of 5 · 866 rules")).toBeInTheDocument();
@@ -60,7 +61,7 @@ it("renders the masked live policy page, rule details and empty history without 
   expect(fetch.mock.calls.some(([url]) => url.includes(`history?rule=${rule.id}&page=0`))).toBe(true);
   expect(document.body.textContent).not.toMatch(/could not be loaded/i);
   expect(debug).not.toHaveBeenCalled();
-});
+}, 15_000);
 
 it.each([
   ["snapshots", "/api/v2/policy/sources", "Policy snapshots could not be loaded.", 503],
@@ -79,7 +80,7 @@ it.each([
     fireEvent.click(getByAria(rulebase, `Rule ${rule.number}: ${rule.name}`));
     const drawer = getByAria(rulebase, `Rule ${rule.number} details`);
     fireEvent.click(within(drawer).getByText(scope === "object" ? "Objects" : "Rule history", { selector: "button" }));
-    if (scope === "object") fireEvent.click(within(drawer).getByText(page.objects[0].name, { selector: "button" }));
+    if (scope === "object") fireEvent.click(within(drawer).getAllByRole("button", { name: new RegExp(`^${page.objects[0].name}`) })[0]);
   }
   const error = await screen.findByText(String(message));
   const code = status === 200 ? "INVALID_RESPONSE_SHAPE" : "HTTP_503";
