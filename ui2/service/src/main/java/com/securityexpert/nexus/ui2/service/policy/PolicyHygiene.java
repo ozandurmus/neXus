@@ -17,6 +17,16 @@ public final class PolicyHygiene {
             String counterWindow, String hitSource, String hitsCollectedAt) {}
     public record Result(Map<String, Assessment> rules, boolean budgetReached) {}
     public static Result analyze(PolicySnapshot snapshot, int days, Instant now, int workLimit) {
+        return analyze(snapshot, days, now, workLimit, snapshot.objects());
+    }
+    /**
+     * {@code breadthObjects} is the object map the permissiveness verdict reads: the snapshot objects, optionally with
+     * Check Point group members the rulebase dictionary did not carry joined from the same domain's object inventory.
+     * Shadowing keeps reading the snapshot objects only (the inventory is collected separately and may be newer).
+     * Permissiveness and schedule status are per-rule properties with their own per-rule budget, so the snapshot-wide
+     * shadowing budget can no longer turn them into "Analysis budget reached".
+     */
+    public static Result analyze(PolicySnapshot snapshot, int days, Instant now, int workLimit, Map<String, PolicyObject> breadthObjects) {
         if (days < 1 || days > 36500 || workLimit < 0) throw new IllegalArgumentException("Invalid hygiene limits");
         Budget budget = new Budget(workLimit);
         var resolver = new Resolver(snapshot.objects(), budget);
@@ -43,29 +53,31 @@ public final class PolicyHygiene {
             for (Rule rule : section.rules()) {
                 List<Finding> findings = new ArrayList<>();
                 String status = "UNKNOWN", reason = "analysis budget", covering = null;
-                Map<String, Object> broad = Map.of("level", "Unknown", "reasons", List.of("Analysis budget reached"), "score", 0);
-                String timeStatus = "unknown"; boolean expiring = false;
                 if (Boolean.FALSE.equals(rule.enabled())) findings.add(finding("disabled", "LOW", "Rule is disabled."));
                 else if (rule.enabled() == null) findings.add(unknown("Enabled state is unknown."));
+                Map<String, Object> broad = PolicyRuleMetrics.permissiveness(rule, breadthObjects, new int[]{PolicyRuleMetrics.RULE_BUDGET});
+                if (breadthObjects != snapshot.objects() && joined(rule, snapshot.objects(), breadthObjects)) {
+                    var reasons = new ArrayList<Object>((List<?>) broad.get("reasons")); reasons.add(PolicyRuleMetrics.INVENTORY);
+                    broad = Map.of("level", broad.get("level"), "reasons", List.copyOf(reasons), "score", broad.get("score"));
+                }
+                var time = PolicyRuleMetrics.time(rule, snapshot.objects(), now, snapshot.metadata().vendor(), new int[]{PolicyRuleMetrics.RULE_BUDGET});
+                String timeStatus = time.status(); boolean expiring = time.expiring();
+                if (timeStatus.equals("expired")) findings.add(finding("expired", "LOW", "Stored schedule has expired."));
+                else if (expiring) findings.add(finding("expired", "LOW", "Stored schedule expires within 14 days."));
+                else if (timeStatus.equals("unknown")) findings.add(unknown("Schedule evidence is incomplete."));
+                if (broad.get("level").equals("Unknown")) findings.add(unknown("Permissiveness cannot be established from resolved selectors."));
+                else if (!broad.get("level").equals("Low")) {
+                    var reasons = (List<?>) broad.get("reasons");
+                    boolean anyAccept = accepting(rule.action()) && reasons.containsAll(List.of("Any source", "Any destination", "Any service"))
+                        && (reasons.contains("Any application") || snapshot.metadata().vendor().equals("CP") && rule.application().refs().isEmpty());
+                    findings.add(finding("broad", anyAccept ? "HIGH" : "MEDIUM", anyAccept
+                        ? "Accept rule matches any source, destination, service and application."
+                        : "Broad selectors are present; see permissiveness reasons."));
+                }
                 try {
                     budget.spend();
                     Match match = normalize(snapshot, section, rule, resolver);
-                    broad = PolicyRuleMetrics.permissiveness(rule, snapshot.objects(), budget.left);
-                    var time = PolicyRuleMetrics.time(rule, snapshot.objects(), now, snapshot.metadata().vendor(), budget.left);
                     budget.spend();
-                    timeStatus = time.status(); expiring = time.expiring();
-                    if (timeStatus.equals("expired")) findings.add(finding("expired", "LOW", "Stored schedule has expired."));
-                    else if (expiring) findings.add(finding("expired", "LOW", "Stored schedule expires within 14 days."));
-                    else if (timeStatus.equals("unknown")) findings.add(unknown("Schedule evidence is incomplete."));
-                    if (broad.get("level").equals("Unknown")) findings.add(unknown("Permissiveness cannot be established from resolved selectors."));
-                    else if (!broad.get("level").equals("Low")) {
-                        var reasons = (List<?>) broad.get("reasons");
-                        boolean anyAccept = accepting(rule.action()) && reasons.containsAll(List.of("Any source", "Any destination", "Any service"))
-                            && (reasons.contains("Any application") || snapshot.metadata().vendor().equals("CP") && rule.application().refs().isEmpty());
-                        findings.add(finding("broad", anyAccept ? "HIGH" : "MEDIUM", anyAccept
-                            ? "Accept rule matches any source, destination, service and application."
-                            : "Broad selectors are present; see permissiveness reasons."));
-                    }
                     reason = match.problem();
                     if (scope.unproven) reason = "earlier sections not analysed";
                     if (reason == null) {
@@ -104,6 +116,21 @@ public final class PolicyHygiene {
             }
         }
         return new Result(Collections.unmodifiableMap(results), budget.left[0] < 0);
+    }
+    /** True when a selector of this rule reaches an object only the inventory join supplied or changed. */
+    private static boolean joined(Rule rule, Map<String, PolicyObject> snapshotObjects, Map<String, PolicyObject> breadthObjects) {
+        var pending = new ArrayDeque<String>();
+        for (var cell : List.of(rule.source(), rule.destination(), rule.service(), rule.application())) pending.addAll(cell.refs());
+        var seen = new HashSet<String>();
+        while (!pending.isEmpty() && seen.size() < PolicyRuleMetrics.RULE_BUDGET) {
+            String id = pending.removeFirst();
+            if (!seen.add(id)) continue;
+            var object = breadthObjects.get(id);
+            if (object == null) continue;
+            if (!object.equals(snapshotObjects.get(id))) return true;
+            pending.addAll(object.members());
+        }
+        return false;
     }
     private static Finding finding(String cls, String severity, String evidence) { return new Finding(cls, severity, evidence); }
     private static Finding unknown(String evidence) { return finding("unknown", "LOW", evidence); }

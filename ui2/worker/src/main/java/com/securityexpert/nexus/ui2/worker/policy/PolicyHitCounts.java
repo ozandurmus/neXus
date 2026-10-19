@@ -24,8 +24,33 @@ final class PolicyHitCounts {
             return Instant.parse(value).toString();
         } catch (RuntimeException invalid) { return null; }
     }
-    private static String cpDate(JsonNode node) {
-        return timestamp(node.isObject() ? node.path("iso-8601").asText("") : node.asText(""));
+    /**
+     * A Check Point hit date. show-access-rulebase (show-hits true) returns hits.first-date / hits.last-date as the same
+     * time object the API uses for meta-info and publish-time: {posix (epoch milliseconds), iso-8601 (minute precision,
+     * offset without a colon, e.g. 2026-10-18T06:00+0300)} (CheckPointPolicyMapper.modifiedTime, CpDomainReuse.signal).
+     * Instant.parse rejects that ISO text, which left every collected CP last/first hit null. posix wins when both parse
+     * and agree within the ISO minute; a disagreement, a non-positive posix or an unparseable value stays null (UNKNOWN).
+     * A plain ISO instant or epoch-seconds text is still accepted.
+     */
+    static String cpDate(JsonNode node) {
+        if (node == null || node.isMissingNode() || node.isNull()) return null;
+        if (!node.isObject()) return node.isNumber() && node.asLong() <= 0 ? null : timestamp(node.asText(""));
+        Instant fromIso = cpIso(node.path("iso-8601").asText(""));
+        JsonNode posix = node.path("posix");
+        if (posix.isIntegralNumber() && posix.canConvertToLong()) {
+            if (posix.longValue() <= 0) return null;
+            Instant fromPosix = Instant.ofEpochMilli(posix.longValue());
+            if (fromIso != null && Math.abs(java.time.Duration.between(fromIso, fromPosix).toSeconds()) >= 60) return null;
+            return fromPosix.toString();
+        }
+        return fromIso == null ? null : fromIso.toString();
+    }
+    private static Instant cpIso(String iso) {
+        if (iso.isBlank()) return null;
+        try { return java.time.OffsetDateTime.parse(iso.replaceFirst("([+-][0-9]{2})([0-9]{2})$", "$1:$2")).toInstant(); }
+        catch (RuntimeException notOffset) {
+            try { return Instant.parse(iso); } catch (RuntimeException invalid) { return null; }
+        }
     }
     static HitCounts checkPoint(JsonNode node, String collectedAt) {
         if (!node.isObject()) return null;

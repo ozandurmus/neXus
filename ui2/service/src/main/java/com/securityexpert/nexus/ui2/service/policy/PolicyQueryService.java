@@ -439,7 +439,7 @@ public final class PolicyQueryService {
         var now = java.time.Instant.now();
         var cached = hygieneCache.get(snapshot.metadata().id());
         if (cached != null && cached.days() == days && cached.at().plusSeconds(30).isAfter(now) && cached.snapshot().equals(snapshot)) return cached.result();
-        var result = PolicyHygiene.analyze(snapshot, days, now, 250_000);
+        var result = PolicyHygiene.analyze(snapshot, days, now, 250_000, breadthObjects(snapshot, inventoryIndex(snapshot)));
         hygieneCache.put(snapshot.metadata().id(), new CachedHygiene(snapshot, days, now, result));
         if (hygieneCache.size() > 4) hygieneCache.remove(hygieneCache.keySet().iterator().next());
         return result;
@@ -565,6 +565,47 @@ public final class PolicyQueryService {
     }
     PolicyResponse object(PolicySnapshot snapshot, String id, PolicyDomainIndex index) {
         return new PolicyResponse(Map.of("object", expand(snapshot, index, id, new HashSet<>(), new int[]{500}, 0)));
+    }
+    /**
+     * The objects the permissiveness verdict reads. For Check Point, objects the rulebase dictionary left UNRESOLVED (group
+     * members the dictionary did not carry) are joined from the same domain's stored object inventory, exactly as the
+     * object viewer resolves them, and their members are followed within that inventory. Inventory rows are classified
+     * with the same native-type table as the package mapper; a reference absent from both stays UNRESOLVED. Shadowing
+     * does not read this map. Without an index (PAN, no repository, inventory unavailable) the snapshot objects are used.
+     */
+    static Map<String, PolicyObject> breadthObjects(PolicySnapshot snapshot, PolicyDomainIndex index) {
+        if (index == null) return snapshot.objects();
+        Map<String, PolicyObject> out = new HashMap<>(snapshot.objects());
+        var pending = new ArrayDeque<String>();
+        snapshot.objects().forEach((id, object) -> { if ("UNRESOLVED".equals(object.status())) pending.add(id); });
+        boolean changed = false;
+        int visits = 0;
+        while (!pending.isEmpty() && visits++ < 200_000) {
+            String id = pending.removeFirst();
+            PolicyObject current = out.get(id);
+            if (current != null && !"UNRESOLVED".equals(current.status())) continue;
+            var row = current == null ? null : index.inventoryObject(current.name());
+            if (row == null) row = index.inventoryObject(id);
+            if (row == null) continue;
+            String nativeType = String.valueOf(row.get("type"));
+            @SuppressWarnings("unchecked") List<String> uids = (List<String>) row.getOrDefault("members", List.of());
+            @SuppressWarnings("unchecked") List<String> values = (List<String>) row.getOrDefault("values", List.of());
+            List<String> members = new ArrayList<>();
+            for (String uid : uids) {
+                String memberId = ref(snapshot.metadata().id(), "object", uid);
+                members.add(memberId);
+                if (!out.containsKey(memberId)) {
+                    out.put(memberId, new PolicyObject(memberId, uid, "unresolved", List.of(), List.of(), "UNRESOLVED"));
+                    pending.add(memberId);
+                }
+            }
+            String type = com.securityexpert.nexus.ui2.policy.CpObjectTypes.type(nativeType);
+            String name = type.equals("any") ? "ANY" : String.valueOf(row.getOrDefault("name", id));
+            out.put(id, new PolicyObject(id, name, type, members, values,
+                com.securityexpert.nexus.ui2.policy.CpObjectTypes.status(nativeType)));
+            changed = true;
+        }
+        return changed ? Collections.unmodifiableMap(out) : snapshot.objects();
     }
     /** CP group members missing from the rulebase dictionary are resolved against the same domain's stored inventory. */
     private PolicyDomainIndex inventoryIndex(PolicySnapshot snapshot) {

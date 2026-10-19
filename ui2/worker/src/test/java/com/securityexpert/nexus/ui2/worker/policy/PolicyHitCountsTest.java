@@ -38,6 +38,32 @@ class PolicyHitCountsTest {
         assertEquals("2026-06-01T12:00:00Z", hits.firstHit());
         assertNull(PolicyHitCounts.checkPoint(json.readTree("{\"value\":-1}"), collected).hits());
     }
+    /**
+     * The shape Check Point returns for hits.first-date / hits.last-date: the API time object {posix (epoch ms), iso-8601
+     * (minute precision, offset without a colon)}, as also recorded for meta-info and publish-time in this repository.
+     * Before the fix every such date was dropped because Instant.parse rejects the ISO text.
+     */
+    @Test void cpHitDatesUseTheVendorTimeObjectWithMinutePrecisionIso() throws Exception {
+        var json = new ObjectMapper();
+        var hits = PolicyHitCounts.checkPoint(json.readTree("{\"percentage\":\"22%\",\"level\":\"medium\",\"value\":3809,"
+                + "\"first-date\":{\"posix\":1781085600000,\"iso-8601\":\"2026-06-10T13:00+0300\"},"
+                + "\"last-date\":{\"posix\":1792303200000,\"iso-8601\":\"2026-10-18T09:00+0300\"}}"), collected);
+        assertEquals(3809L, hits.hits());
+        assertEquals("2026-06-10T10:00:00Z", hits.firstHit());
+        assertEquals("2026-10-18T06:00:00Z", hits.lastHit());
+        assertEquals("medium", hits.level());
+        // ISO alone (minute precision, with or without the offset colon) is enough.
+        assertEquals("2026-10-18T06:00:00Z", PolicyHitCounts.cpDate(json.readTree("{\"iso-8601\":\"2026-10-18T09:00+0300\"}")));
+        assertEquals("2026-10-18T06:00:00Z", PolicyHitCounts.cpDate(json.readTree("{\"iso-8601\":\"2026-10-18T09:00+03:00\"}")));
+        assertEquals("2026-10-18T06:00:00Z", PolicyHitCounts.cpDate(json.readTree("{\"iso-8601\":\"2026-10-18T06:00Z\"}")));
+        // posix and ISO that disagree by a minute or more, a zero posix, or garbage stay UNKNOWN.
+        assertNull(PolicyHitCounts.cpDate(json.readTree("{\"posix\":1792303200000,\"iso-8601\":\"2026-10-18T10:00+0300\"}")));
+        assertNull(PolicyHitCounts.cpDate(json.readTree("{\"posix\":0,\"iso-8601\":\"\"}")));
+        assertNull(PolicyHitCounts.cpDate(json.readTree("{\"iso-8601\":\"yesterday\"}")));
+        // A zero-hit rule carries no dates.
+        var never = PolicyHitCounts.checkPoint(json.readTree("{\"percentage\":\"0%\",\"level\":\"zero\",\"value\":0}"), collected);
+        assertEquals(0L, never.hits()); assertNull(never.firstHit()); assertNull(never.lastHit());
+    }
     @Test void panAggregatesMembersAndPreservesUnknownPartialAndAmbiguousNames() {
         var a = pan(first, "2", "100");
         var b = pan(second, "3", "200");
