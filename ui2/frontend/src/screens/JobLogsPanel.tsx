@@ -17,6 +17,8 @@ import Pagination from "@mui/material/Pagination";
 import FormControlLabel from "@mui/material/FormControlLabel";
 import Switch from "@mui/material/Switch";
 import { StatePanel, RestrictedPanel, isRestricted } from "../shell/States";
+import { StatusPill } from "../shell/StatusPill";
+import type { Tone } from "../shell/tone";
 import { Presented, Stamp } from "../shell/PresentedText";
 import { displayInputToIso, formatDuration, isoToDisplayInput, DISPLAY_TZ_LABEL } from "../shell/time";
 import { completedReasonOutcome, jobOutcomeWord, jobStateWord, outcomeEchoesState, outcomeLine, readinessReasonLabel } from "../shell/presenters";
@@ -37,19 +39,20 @@ import {
   type JobQueryParams,
 } from "../auth/adminApi";
 
-function stateColor(state: string): "default" | "primary" | "secondary" | "error" | "info" | "success" | "warning" {
+/** The state word's colour from the role table: Completed green, Failed red, Running brand, queued or claimed amber, anything else neutral. */
+function stateTone(state: string): Tone {
   switch (state) {
     case "COMPLETED":
-      return "success";
+      return "ok";
     case "FAILED":
-      return "error";
+      return "bad";
     case "EXECUTING":
-      return "info";
+      return "brand";
     case "CLAIMED":
     case "REQUESTED":
-      return "warning";
+      return "warn";
     default:
-      return "default";
+      return "neutral";
   }
 }
 
@@ -440,7 +443,7 @@ export function JobLogsPanel({
                       </TableCell>
                       <TableCell><Presented label={jobTypeLabel(job.job_type, vendor)} raw={job.job_type} /></TableCell>
                       <TableCell>
-                        <Chip label={jobStateWord(job.state)} title={job.state} size="small" color={stateColor(job.state)} variant="outlined" sx={{ height: 22 }} />
+                        <StatusPill tone={stateTone(job.state)} word={jobStateWord(job.state)} title={job.state} />
                       </TableCell>
                       {/* Duration is neutral -- never red; red is reserved for the state word, shown in the
                           State column above (review §3 "Duration is red on every completed job"). */}

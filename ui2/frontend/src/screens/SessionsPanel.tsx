@@ -1,16 +1,10 @@
 import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
-import Paper from "@mui/material/Paper";
 import Stack from "@mui/material/Stack";
-import Table from "@mui/material/Table";
-import TableBody from "@mui/material/TableBody";
-import TableCell from "@mui/material/TableCell";
-import TableContainer from "@mui/material/TableContainer";
-import TableHead from "@mui/material/TableHead";
-import TableRow from "@mui/material/TableRow";
 import Typography from "@mui/material/Typography";
 
-import { listSessions, revokeSession, type ApiError } from "../auth/adminApi";
+import { listSessions, revokeSession, type ApiError, type SessionView } from "../auth/adminApi";
+import { DataTable } from "../shell/DataTable";
+import { Timestamp } from "../shell/Timestamp";
 import { M3Button } from "../shell/M3Widgets";
 import { RestrictedPanel, StatePanel, Ts, isRestricted } from "../shell/States";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
@@ -48,43 +42,21 @@ export function SessionsPanel() {
         <Typography>Idle timeout: {duration(data.idle_timeout_seconds)}</Typography>
         <Typography>Absolute lifetime: {duration(data.absolute_lifetime_seconds)}</Typography>
       </Stack>
-      <TableContainer component={Paper} variant="outlined">
-        <Table size="small" aria-label="Active sessions">
-          <TableHead>
-            <TableRow sx={{ bgcolor: "action.hover" }}>
-              <TableCell>Identity</TableCell>
-              <TableCell>Created</TableCell>
-              <TableCell>Last seen</TableCell>
-              <TableCell>Idle deadline</TableCell>
-              <TableCell>Absolute expiry</TableCell>
-              <TableCell align="right">Action</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {data.sessions.map((session) => (
-              <TableRow key={session.session_id}>
-                <TableCell>
-                  {data.identity_labels[session.session_id] ?? "Identity unavailable"} · {counts[session.actor_fingerprint]} active
-                </TableCell>
-                <TableCell><Ts at={session.created_at} seconds relative={false} /></TableCell>
-                <TableCell><Ts at={session.last_seen_at} seconds relative={false} /></TableCell>
-                <TableCell><Ts at={session.idle_deadline_at} seconds relative={false} /></TableCell>
-                <TableCell><Ts at={session.absolute_expires_at} seconds relative={false} /></TableCell>
-                <TableCell align="right">
-                  <Button size="small" color="error" onClick={() => revokeSession(session.session_id).then(refresh)}>
-                    Revoke
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
-            {data.sessions.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={6} align="center">No active sessions</TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
+      <DataTable<SessionView>
+        ariaLabel="Active sessions"
+        columns={[
+          { key: "identity", header: "Identity", render: (session) => `${data.identity_labels[session.session_id] ?? "Identity unavailable"} · ${counts[session.actor_fingerprint]} active` },
+          // the two past instants as ages (exact on hover), the two deadlines as minute stamps: the identity column keeps the room
+          { key: "created", header: "Created", width: 120, mono: true, render: (session) => <Timestamp at={session.created_at} compact />, title: (session) => session.created_at },
+          { key: "seen", header: "Last seen", width: 120, mono: true, render: (session) => <Timestamp at={session.last_seen_at} compact />, title: (session) => session.last_seen_at },
+          { key: "idle", header: "Idle deadline", width: 200, mono: true, render: (session) => <Ts at={session.idle_deadline_at} relative={false} />, title: (session) => session.idle_deadline_at },
+          { key: "expiry", header: "Absolute expiry", width: 200, mono: true, render: (session) => <Ts at={session.absolute_expires_at} relative={false} />, title: (session) => session.absolute_expires_at },
+        ]}
+        rows={data.sessions}
+        rowKey={(session) => session.session_id}
+        emptyText="No active sessions"
+        actions={(session) => [{ label: "Revoke", destructive: true, onSelect: () => { void revokeSession(session.session_id).then(refresh); } }]}
+      />
     </Box>
   );
 }

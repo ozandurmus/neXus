@@ -205,18 +205,18 @@ export function DeviceManagementPane() {
         <EmptyPanel title="Enrollment" body="Enrolling a device grants read collection only. Each count filters the registry.">
           <Stack spacing={0.5} role="group" aria-label="Registry filters">
             {([
-              ["ENROLLED", "Enrolled", enrolledCount, "ok"],
-              ["LAST_FAILED", "Last collection failed (enrolled)", degradedCount, "warn"],
-              ["DRAFT", "Draft · not collected", draftCount, "neutral"],
-            ] as const).map(([key, label, count, tone]) => (
+              ["ENROLLED", "Enrolled", enrolledCount],
+              ["LAST_FAILED", "Last collection failed (enrolled)", degradedCount],
+              ["DRAFT", "Draft · not collected", draftCount],
+            ] as const).map(([key, label, count]) => (
               <Box key={key} component="button" type="button" aria-pressed={filter === key} onClick={() => setFilter(filter === key ? "ALL" : key)}
                 sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 1, width: "100%", textAlign: "left", cursor: "pointer",
                   font: "inherit", color: "inherit", px: 1, py: 0.75, borderRadius: "8px", border: "1px solid",
                   borderColor: filter === key ? m3.primary : "transparent", bgcolor: filter === key ? m3.secondaryContainer : "transparent",
                   "&:hover": { bgcolor: filter === key ? m3.secondaryContainer : m3.scLow } }}>
                 <Typography variant="body2" component="span">{label}</Typography>
-                {/* Zero is neutral, never green: an empty count carries no status colour. */}
-                <StatusChip tone={count === 0 ? "neutral" : tone} label={`${count} device${count === 1 ? "" : "s"}`} dense />
+                {/* A count is neutral, never green or red (colour-role table): the filter's label carries the meaning. */}
+                <StatusChip tone="neutral" label={`${count} device${count === 1 ? "" : "s"}`} dense />
               </Box>
             ))}
           </Stack>
@@ -436,8 +436,8 @@ function DeviceRegistryCard({
         </Stack>
       )}
       {total > 0 && (
-        <TableContainer sx={{ mt: 1, border: "1px solid", borderColor: m3.outlineVar, borderRadius: "10px" }}>
-          <Table size="small" aria-label="Device registry" sx={{ tableLayout: "fixed", "& td, & th": { px: 1 } }}>
+        <TableContainer sx={{ mt: 1, border: "1px solid", borderColor: m3.outlineVar, borderRadius: "10px", overflowX: "auto" }}>
+          <Table size="small" aria-label="Device registry" sx={{ tableLayout: "fixed", minWidth: 620, "& td, & th": { px: 1 } }}>
             <TableHead>
               <TableRow sx={{ "& th": { color: "text.secondary", fontSize: "0.75rem", fontWeight: 600, whiteSpace: "nowrap" } }}>
                 <TableCell padding="checkbox" sx={{ width: 44 }}>
@@ -446,6 +446,7 @@ function DeviceRegistryCard({
                     indeterminate={isSomeSelected}
                     onChange={handleToggleAll}
                     size="small"
+                    sx={{ p: 0.5 }}
                     inputProps={{ "aria-label": "Select all devices" }}
                   />
                 </TableCell>
@@ -464,6 +465,7 @@ function DeviceRegistryCard({
                       checked={selectedIds.has(device.device_id)}
                       onChange={() => handleToggleRow(device.device_id)}
                       size="small"
+                      sx={{ p: 0.5 }}
                       inputProps={{ "aria-label": `Select ${deviceNameLabel(device.hostname)}` }}
                     />
                   </TableCell>

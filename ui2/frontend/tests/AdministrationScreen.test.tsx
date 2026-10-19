@@ -470,7 +470,8 @@ describe("AdministrationScreen Sessions tab", () => {
     expect(screen.getByText("Idle timeout: 30 minutes")).toBeInTheDocument();
     expect(screen.getByText("Absolute lifetime: 10 hours")).toBeInTheDocument();
 
-    fireEvent.click(screen.getAllByRole("button", { name: "Revoke" })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: /^Actions for row / })[0]);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Revoke" }));
     await waitFor(() => expect(revokeBodies).toEqual([{ sessionId: "session-1" }]));
     await waitFor(() => expect(listCalls).toBe(2));
   });

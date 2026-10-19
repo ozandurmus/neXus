@@ -1,36 +1,27 @@
 import { useState } from "react";
-import Box from "@mui/material/Box";
-import Table from "@mui/material/Table";
-import TableBody from "@mui/material/TableBody";
-import TableCell from "@mui/material/TableCell";
-import TableHead from "@mui/material/TableHead";
-import TableRow from "@mui/material/TableRow";
-import Paper from "@mui/material/Paper";
-import TableContainer from "@mui/material/TableContainer";
 
 import { EmptyPanel } from "../shell/ScreenLayout";
-import { PaginationFooter } from "../shell/DataTable";
+import { DataTable } from "../shell/DataTable";
 import { M3Button } from "../shell/M3Widgets";
 import { RestrictedPanel, StatePanel, Ts, isRestricted } from "../shell/States";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
-import { listAuditEvents, type ApiError } from "../auth/adminApi";
+import { listAuditEvents, type ApiError, type AuditEventView } from "../auth/adminApi";
 
 function describeError(err: ApiError): string {
   return typeof err.body?.error === "string" ? err.body.error : `request failed (status ${err.status})`;
 }
 
+const PAGE_SIZES = [10, 25, 50] as const;
+
+/** The audit trail as the one data table: compact rows, the stamp with seconds (an audit row keeps them), `1–10 of N`. */
 export function AuditLogsPanel() {
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [offset, setOffset] = useState(0);
+  const [pageSize, setPageSize] = useState<number>(10);
 
   const { data, error, rawError, refresh } = useFetchOnMount(
     () => listAuditEvents().then((result) => result.events ?? []),
     (err) => describeError(err as ApiError),
   );
-
-  const handleChangePage = (event: unknown, newPage: number) => {
-    setPage(newPage);
-  };
 
   if (error && data === null) {
     return isRestricted(rawError)
@@ -41,38 +32,24 @@ export function AuditLogsPanel() {
   if (data === null) return <StatePanel variant="empty" title="Audit logs" body="Loading…" />;
   if (data.length === 0) return <EmptyPanel title="No audit events" body="No audited management action has been recorded." />;
 
-  const displayedRows = data.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+  const safeOffset = Math.min(offset, Math.max(0, Math.floor((data.length - 1) / pageSize) * pageSize));
+  const rows = data.slice(safeOffset, safeOffset + pageSize);
 
   return (
-    <Paper sx={{ width: '100%', overflow: 'hidden' }}>
-      <TableContainer sx={{ maxHeight: 600 }}>
-        <Table stickyHeader size="small" aria-label="Audit logs table">
-          <TableHead>
-            <TableRow>
-              <TableCell>Timestamp</TableCell>
-              <TableCell>Actor</TableCell>
-              <TableCell>Action</TableCell>
-              <TableCell>Target</TableCell>
-              <TableCell>Reason / Outcome</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {displayedRows.map((event) => (
-              <TableRow key={event.id} hover>
-                <TableCell><Ts at={event.occurred_at} seconds relative={false} /></TableCell>
-                <TableCell>{event.actor}</TableCell>
-                <TableCell>{event.action}</TableCell>
-                <TableCell>{event.target}</TableCell>
-                <TableCell>{event.outcome}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
-      <Box sx={{ display: "flex", px: 1, py: 0.5 }}>
-        <PaginationFooter offset={page * rowsPerPage} size={rowsPerPage} total={data.length} onPage={(offset) => handleChangePage(null, Math.floor(offset / rowsPerPage))}
-          sizes={[10, 25, 50]} onSize={(size) => { setRowsPerPage(size); setPage(0); }} />
-      </Box>
-    </Paper>
+    <DataTable<AuditEventView>
+      ariaLabel="Audit logs table"
+      columns={[
+        { key: "at", header: "Timestamp", width: 230, mono: true, render: (e) => <Ts at={e.occurred_at} seconds relative={false} />, title: (e) => e.occurred_at },
+        { key: "actor", header: "Actor", width: 180, render: (e) => e.actor },
+        { key: "action", header: "Action", width: 220, mono: true, render: (e) => e.action },
+        { key: "target", header: "Target", width: 220, mono: true, render: (e) => e.target },
+        // one line per row: a long refusal sentence is cut with an ellipsis and read whole on hover
+        { key: "outcome", header: "Reason / Outcome", render: (e) => e.outcome },
+      ]}
+      rows={rows}
+      rowKey={(e) => String(e.id)}
+      maxHeight={600}
+      page={{ offset: safeOffset, size: pageSize, total: data.length, onPage: setOffset, sizes: PAGE_SIZES, onSize: (size) => { setPageSize(size); setOffset(0); } }}
+    />
   );
 }
