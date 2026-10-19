@@ -55,7 +55,7 @@ public final class PolicyHygiene {
                 String status = "UNKNOWN", reason = "analysis budget", covering = null;
                 if (Boolean.FALSE.equals(rule.enabled())) findings.add(finding("disabled", "LOW", "Rule is disabled."));
                 else if (rule.enabled() == null) findings.add(unknown("Enabled state is unknown."));
-                Map<String, Object> broad = PolicyRuleMetrics.permissiveness(rule, breadthObjects, new int[]{PolicyRuleMetrics.RULE_BUDGET});
+                Map<String, Object> broad = PolicyRuleMetrics.permissiveness(rule, breadthObjects, new int[]{PolicyRuleMetrics.RULE_BUDGET}, snapshot.metadata().vendor());
                 if (breadthObjects != snapshot.objects() && joined(rule, snapshot.objects(), breadthObjects)) {
                     var reasons = new ArrayList<Object>((List<?>) broad.get("reasons")); reasons.add(PolicyRuleMetrics.INVENTORY);
                     broad = Map.of("level", broad.get("level"), "reasons", List.copyOf(reasons), "score", broad.get("score"));
