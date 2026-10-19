@@ -20,11 +20,12 @@ import com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord;
 import com.securityexpert.nexus.ui2.persistence.diagnostic.JooqSystemLogCollectionRepository;
 import com.securityexpert.nexus.ui2.persistence.diagnostic.JooqSystemLogReadRepository;
 import com.securityexpert.nexus.ui2.persistence.diagnostic.SystemLogReadRepository;
+import com.securityexpert.nexus.ui2.sanitizer.core.EstateIdentity;
 import com.securityexpert.nexus.ui2.sanitizer.core.KnownNames;
 import com.securityexpert.nexus.ui2.service.boot.DeviceCompositionConfiguration.ArtefactStoreAccess;
+import com.securityexpert.nexus.ui2.service.privacy.EstateDictionarySource;
 import com.securityexpert.nexus.ui2.service.privacy.HmacKeyProvider;
 import com.securityexpert.nexus.ui2.service.privacy.TopologyNamePseudonymizer;
-import com.securityexpert.nexus.ui2.service.systemlog.LogMasking.EstateIdentity;
 import com.securityexpert.nexus.ui2.service.sanitizer.SanitizerConfiguration;
 
 /**
@@ -42,11 +43,17 @@ public class SystemLogReadConfiguration {
         return new JooqSystemLogReadRepository(transactions);
     }
 
+    /** The estate dictionary the masked view and the Data Sanitizer share (one read of the device tables per TTL). */
     @Bean
-    public LogMasking logMasking(HmacKeyProvider keys, DeviceRepository devices, DevicePlatformFactsRepository platformFacts,
-            TopologyNamePseudonymizer names) {
-        return new LogMasking(keys.getSecretKey(), cached(SanitizerConfiguration.knownNames(devices, names), NAMES_TTL),
-                estateIdentities(devices, platformFacts, names), NAMES_TTL);
+    public EstateDictionarySource estateDictionarySource(HmacKeyProvider keys, DeviceRepository devices,
+            DevicePlatformFactsRepository platformFacts, TopologyNamePseudonymizer names) {
+        return new EstateDictionarySource(keys.getSecretKey(), estateIdentities(devices, platformFacts, names), NAMES_TTL);
+    }
+
+    @Bean
+    public LogMasking logMasking(HmacKeyProvider keys, DeviceRepository devices, TopologyNamePseudonymizer names,
+            EstateDictionarySource estate) {
+        return new LogMasking(keys.getSecretKey(), cached(SanitizerConfiguration.knownNames(devices, names), NAMES_TTL), estate);
     }
 
     /**

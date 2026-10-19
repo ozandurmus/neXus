@@ -15,6 +15,11 @@ import java.util.regex.Matcher;
  * <p>Detection collects candidates from every detector, then keeps a non-overlapping set: earliest start first, the
  * longer candidate on a tie, then the higher-priority kind. A candidate whose mapping declines (a kept range, a
  * version string, a file name) is not replaced.</p>
+ *
+ * <p><b>Serial rule (2026-10-19).</b> When the mappers carry {@link IdentityTokens} (every installation keyed through
+ * {@link SanitizerKey}), the {@link SerialRule} runs first on every piece of text: a serial pair becomes the
+ * inventory's one-way {@code SN-} token. Serial tokens are not offered to the {@link TokenSink} (the vault has no
+ * serial kind), so a revert leaves them as they are, like the inventory screens.</p>
  */
 public final class TextSanitizer {
 
@@ -28,6 +33,7 @@ public final class TextSanitizer {
     public static final String EMAIL = "email";
     public static final String URL_HOST = "url_host";
     public static final String DEVICE_NAME = "device_name";
+    public static final String SERIAL = SerialRule.SERIAL;
 
     private enum Type {
         URL(90), EMAIL(80), USER_AT_HOST(75), MAC(70), IPV6(65), IPV4(60), KNOWN(55), FQDN(50), LEARNED(45), CONTEXT_HOST(40),
@@ -90,6 +96,7 @@ public final class TextSanitizer {
      */
     public String sanitize(String text, boolean hostContext) {
         if (text == null || text.isEmpty()) return text;
+        if (mappers.identity() != null) text = SerialRule.mask(text, mappers.identity(), counts);
         List<Candidate> candidates = new ArrayList<>();
         collect(text, hostContext, candidates);
         if (candidates.isEmpty()) return text;
@@ -109,6 +116,15 @@ public final class TextSanitizer {
         if (out == null) return text;
         out.append(text, copied, text.length());
         return out.toString();
+    }
+
+    /**
+     * A whole value under a serial-like JSON key or column header ({@link SerialRule#isSerialKey}): its {@code SN-}
+     * token whatever its form. Without identity tokens the value gets the ordinary text rules.
+     */
+    public String serialValue(String value) {
+        if (mappers.identity() == null) return sanitize(value, false);
+        return SerialRule.value(value, mappers.identity(), counts);
     }
 
     // ---- detection -----------------------------------------------------------------------------------------

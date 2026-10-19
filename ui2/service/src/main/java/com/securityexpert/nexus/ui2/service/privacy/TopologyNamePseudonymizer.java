@@ -11,6 +11,8 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.springframework.stereotype.Component;
 
+import com.securityexpert.nexus.ui2.sanitizer.core.IdentityTokens;
+
 /**
  * Deterministically pseudonymizes Cluster, Firewall, and Virtual System names
  * while preserving parent-child topology and cross-referencing (PRIVATE_REPLAY_ARCHITECTURE §150).
@@ -30,6 +32,7 @@ public class TopologyNamePseudonymizer {
     private static final Pattern IPV4_PATTERN = Pattern.compile("^(?:\\d{1,3}\\.){3}\\d{1,3}(?:/\\d{1,2})?$");
 
     private final byte[] secretKey;
+    private final IdentityTokens identityTokens;
     private final Map<String, String> clusterCache = new ConcurrentHashMap<>();
     private final Map<String, String> deviceCache = new ConcurrentHashMap<>();
     private final Map<String, String> vsCache = new ConcurrentHashMap<>();
@@ -41,6 +44,12 @@ public class TopologyNamePseudonymizer {
 
     public TopologyNamePseudonymizer(byte[] secretKey) {
         this.secretKey = Objects.requireNonNull(secretKey, "secretKey").clone();
+        this.identityTokens = new IdentityTokens(this.secretKey);
+    }
+
+    /** The one-way {@code SN-} / {@code KIND-} tokens under the same key ({@link #maskSerial}, {@link #maskPayloadToken}). */
+    public IdentityTokens identityTokens() {
+        return identityTokens;
     }
 
     /** Uniqueness of cluster and standalone-device pseudonyms (V53); process-local until a database registry is set. */
@@ -321,16 +330,9 @@ public class TopologyNamePseudonymizer {
 
     private final Map<String, String> policyCache = new ConcurrentHashMap<>();
 
+    /** {@code SN-} + 10 hex: the single implementation is {@link IdentityTokens#serial}, shared with the Data Sanitizer. */
     public String maskSerial(String rawSerial) {
-        if (rawSerial == null || rawSerial.isBlank()) {
-            return rawSerial;
-        }
-        byte[] hash = hmacSha256("SERIAL:" + rawSerial.strip());
-        StringBuilder hex = new StringBuilder("SN-");
-        for (int i = 0; i < 5; i++) {
-            hex.append(String.format("%02X", hash[i]));
-        }
-        return hex.toString();
+        return identityTokens.serial(rawSerial);
     }
 
     /**
@@ -340,15 +342,7 @@ public class TopologyNamePseudonymizer {
      * distinct without a database round trip per value. The same value always gives the same token.
      */
     public String maskPayloadToken(String kind, String raw) {
-        if (raw == null || raw.isEmpty()) {
-            return raw;
-        }
-        byte[] hash = hmacSha256("PAYLOAD:" + kind + ":" + raw);
-        StringBuilder token = new StringBuilder(kind).append('-');
-        for (int i = 0; i < 5; i++) {
-            token.append(String.format("%02X", hash[i]));
-        }
-        return token.toString();
+        return identityTokens.payload(kind, raw);
     }
 
     /**

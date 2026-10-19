@@ -152,6 +152,7 @@ class NexusSessionCliTest {
             boolean second = uri.contains("offset=6");
             byte[] out = (second ? "page two\n" : "page 1\n").getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().add("X-Syslog-Masked", String.valueOf(!unmasked));
+            if (!unmasked) exchange.getResponseHeaders().add("X-Syslog-Mask-Rules", "logmask-v3");
             exchange.getResponseHeaders().add("X-Syslog-Next-Offset", second ? "15" : "6");
             exchange.getResponseHeaders().add("X-Syslog-Eof", String.valueOf(second));
             exchange.getResponseHeaders().add("X-Syslog-Lines", "1");
@@ -171,6 +172,7 @@ class NexusSessionCliTest {
             assertEquals(0, cli.run(new String[] {"syslog-view", "chunk-1"}));
             assertEquals("page 1\n", out.toString(StandardCharsets.UTF_8));
             assertTrue(err.toString(StandardCharsets.UTF_8).contains("masked=true") && err.toString(StandardCharsets.UTF_8).contains("next_offset=6"));
+            assertTrue(err.toString(StandardCharsets.UTF_8).contains("masked=true rules=logmask-v3"), "the CLI names the masking rule set");
             assertEquals(java.util.List.of("/api/v2/system-logs/chunks/chunk-1/text?offset=0"), calls);
 
             out.reset(); err.reset(); calls.clear();

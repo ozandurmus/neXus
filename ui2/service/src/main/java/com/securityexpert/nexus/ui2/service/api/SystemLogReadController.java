@@ -77,7 +77,10 @@ public final class SystemLogReadController {
                 mayViewUnmasked(request), actor));
         if (!result.isOk()) return error(result.refusal());
         var page = result.page();
-        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+        var response = ResponseEntity.ok();
+        // Which masking rules a masked page went through, so the "Masked view" chip can name them.
+        if (page.maskRuleSet() != null) response.header("X-Syslog-Mask-Rules", page.maskRuleSet());
+        return response.cacheControl(CacheControl.noStore())
                 .contentType(new MediaType("text", "plain", java.nio.charset.StandardCharsets.UTF_8))
                 .header("X-Content-Type-Options", "nosniff")
                 .header("X-Syslog-Masked", String.valueOf(page.masked()))

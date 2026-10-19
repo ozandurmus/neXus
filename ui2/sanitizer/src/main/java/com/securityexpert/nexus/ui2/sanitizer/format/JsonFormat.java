@@ -16,13 +16,16 @@ import java.util.Deque;
 import java.util.List;
 
 import com.securityexpert.nexus.ui2.sanitizer.core.HostHeaders;
+import com.securityexpert.nexus.ui2.sanitizer.core.SerialRule;
 
 /**
  * JSON (one document, or several back to back as in NDJSON), streamed (DATA_SANITIZER_CONTRACT.md §1 "JSON: string
  * values with the text rules; keys and structure kept"). A strict lexer copies every byte outside string values
  * verbatim -- whitespace, numbers, keys, punctuation -- so an unchanged document is byte-identical. A string value
  * the rules change keeps its raw text up to the first and from the last changed character; only the changed middle
- * is re-escaped. A value under a host-like key ({@code "hostname"}, {@code "device"}) is a host name when bare.
+ * is re-escaped. A value under a host-like key ({@code "hostname"}, {@code "device"}) is a host name when bare. A
+ * value under a serial-like key ({@code "serial"}, {@code "sn"}) is a serial whatever its form; a bare number there
+ * becomes a quoted token (the one place a value's JSON type changes: a serial is opaque, never a number).
  */
 public final class JsonFormat {
 
@@ -114,7 +117,8 @@ public final class JsonFormat {
         long values;
         private String lastKey;
 
-        private record Pend(Decoded decoded, int index) {
+        /** {@code bare}: a number under a serial key, written back unquoted when the rules leave it unchanged. */
+        private record Pend(Decoded decoded, int index, boolean bare) {
         }
 
         Lexer(Reader in, Writer out, ValueRewriter rewriter) {
@@ -159,9 +163,10 @@ public final class JsonFormat {
                     Decoded d = string(true);
                     values++;
                     boolean host = lastKey != null && HostHeaders.isHostHeader(lastKey);
+                    boolean serial = lastKey != null && SerialRule.isSerialKey(lastKey);
                     if (out != null) {
-                        pending.add(new Pend(d, batch.size()));
-                        batch.add(new Value(d.value(), host));
+                        pending.add(new Pend(d, batch.size(), false));
+                        batch.add(new Value(d.value(), host, serial));
                         batchChars += d.value().length();
                         if (batch.size() >= ValueRewriter.BATCH_VALUES || batchChars >= ValueRewriter.BATCH_CHARS) flush();
                     }
@@ -190,7 +195,7 @@ public final class JsonFormat {
                 if (c != '"') throw new IOException("key expected");
                 Decoded key = string(false);
                 if (out != null) {
-                    pending.add(new Pend(key, batch.size()));
+                    pending.add(new Pend(key, batch.size(), false));
                     batch.add(new Value(key.value(), false));
                     batchChars += key.value().length();
                     if (batch.size() >= ValueRewriter.BATCH_VALUES || batchChars >= ValueRewriter.BATCH_CHARS) flush();
@@ -261,6 +266,14 @@ public final class JsonFormat {
             }
             if (c >= 0) in.unread(c);
             if (!b.toString().matches("-?(?:0|[1-9]\\d*)(?:\\.\\d+)?(?:[eE][+-]?\\d+)?")) throw new IOException("bad number");
+            if (out != null && lastKey != null && SerialRule.isSerialKey(lastKey)) {
+                String number = b.toString();
+                pending.add(new Pend(new Decoded(number, number, null), batch.size(), true));
+                batch.add(new Value(number, false, true));
+                batchChars += number.length();
+                if (batch.size() >= ValueRewriter.BATCH_VALUES || batchChars >= ValueRewriter.BATCH_CHARS) flush();
+                return;
+            }
             emit(b.toString());
         }
 
@@ -383,6 +396,10 @@ public final class JsonFormat {
                 } else {
                     Pend p = (Pend) item;
                     String value = rewritten.get(p.index());
+                    if (p.bare() && value.equals(p.decoded().value())) {
+                        out.write(value);
+                        continue;
+                    }
                     out.write('"');
                     out.write(value.equals(p.decoded().value()) ? p.decoded().raw() : reencode(p.decoded(), value));
                     out.write('"');

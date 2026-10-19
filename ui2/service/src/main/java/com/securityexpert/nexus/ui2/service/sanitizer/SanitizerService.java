@@ -23,11 +23,13 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.securityexpert.nexus.ui2.persistence.sanitizer.SanitizerRepository;
 import com.securityexpert.nexus.ui2.sanitizer.Sanitizer;
+import com.securityexpert.nexus.ui2.sanitizer.core.EstateDictionary;
 import com.securityexpert.nexus.ui2.sanitizer.core.KnownNames;
 import com.securityexpert.nexus.ui2.sanitizer.core.Mappers;
 import com.securityexpert.nexus.ui2.sanitizer.core.SanitizerKey;
 import com.securityexpert.nexus.ui2.sanitizer.format.UnsupportedInputException;
 import com.securityexpert.nexus.ui2.sanitizer.pcap.PcapException;
+import com.securityexpert.nexus.ui2.service.privacy.EstateDictionarySource;
 
 /**
  * The Data Sanitizer inside neXus (docs/design/DATA_SANITIZER_CONTRACT.md §3): sanitize and revert jobs over the
@@ -68,6 +70,8 @@ public final class SanitizerService {
     public static final String NOT_FOUND = "JOB_NOT_FOUND";
     public static final String NOT_OWNER = "NOT_JOB_OWNER";
     public static final String OUTPUT_GONE = "OUTPUT_GONE";
+    /** The estate dictionary could not be built: no sanitized output without the known-identity pass. */
+    public static final String IDENTITY_DICTIONARY_UNAVAILABLE = "IDENTITY_DICTIONARY_UNAVAILABLE";
 
     public enum Scope { OWN_JOBS, ALL_JOBS, ONE_JOB }
 
@@ -75,6 +79,7 @@ public final class SanitizerService {
     private final VaultCrypto crypto;
     private final byte[] privacyKey;
     private final Supplier<KnownNames> knownNames;
+    private final Supplier<EstateDictionary> estate;
     private final Path workDir;
     private final long maxBytes;
     private final int retentionDays;
@@ -85,10 +90,22 @@ public final class SanitizerService {
     public SanitizerService(SanitizerRepository repository, VaultCrypto crypto, byte[] privacyKey,
             Supplier<KnownNames> knownNames, Path workDir, long maxBytes, int retentionDays, Duration outputTtl,
             ExecutorService executor) {
+        this(repository, crypto, privacyKey, knownNames, () -> EstateDictionary.EMPTY, workDir, maxBytes, retentionDays,
+                outputTtl, executor);
+    }
+
+    /**
+     * @param estate the estate dictionary (the masked system-log view's); read once per job. When it throws (it
+     *        cannot be built and none is cached) the job fails rather than run without the known-identity pass.
+     */
+    public SanitizerService(SanitizerRepository repository, VaultCrypto crypto, byte[] privacyKey,
+            Supplier<KnownNames> knownNames, Supplier<EstateDictionary> estate, Path workDir, long maxBytes,
+            int retentionDays, Duration outputTtl, ExecutorService executor) {
         this.repository = Objects.requireNonNull(repository, "repository");
         this.crypto = crypto;
         this.privacyKey = privacyKey.clone();
         this.knownNames = knownNames == null ? () -> KnownNames.NONE : knownNames;
+        this.estate = estate == null ? () -> EstateDictionary.EMPTY : estate;
         this.workDir = workDir;
         this.maxBytes = maxBytes;
         this.retentionDays = retentionDays;
@@ -215,7 +232,7 @@ public final class SanitizerService {
         Path out = output(revertId);
         long inputBytes = size(in);
         try {
-            Sanitizer.Result result = engine().revert(in, out, new ScopedResolver(repository, crypto, createdBy, jobId));
+            Sanitizer.Result result = revertEngine().revert(in, out, new ScopedResolver(repository, crypto, createdBy, jobId));
             repository.finishRevert(revertId, actor, true, fileType(result), inputBytes, size(out), counts(result.counts()),
                     null, result.counts().getOrDefault("reverted", 0L));
         } catch (Throwable failed) {
@@ -312,8 +329,13 @@ public final class SanitizerService {
 
     // ---- helpers -------------------------------------------------------------------------------------------
 
-    private Sanitizer engine() {
+    /** A revert needs no estate dictionary: it only resolves tokens through the vault. */
+    private Sanitizer revertEngine() {
         return new Sanitizer(new Mappers(SanitizerKey.of(privacyKey), knownNames.get()));
+    }
+
+    private Sanitizer engine() {
+        return new Sanitizer(new Mappers(SanitizerKey.of(privacyKey), knownNames.get()), estate.get());
     }
 
     private void ensureWorkDir() throws IOException {
@@ -389,6 +411,7 @@ public final class SanitizerService {
         if (failed instanceof UnsupportedInputException unsupported) return unsupported.code();
         if (failed instanceof PcapException) return "PCAP_REFUSED";
         if (failed instanceof Refusal refusal) return refusal.code();
+        if (failed instanceof EstateDictionarySource.UnavailableException) return IDENTITY_DICTIONARY_UNAVAILABLE;
         if (failed instanceof UncheckedIOException || failed instanceof IOException) return "PROCESSING_IO_FAILED";
         if (failed instanceof OutOfMemoryError) return "OUT_OF_MEMORY";
         return "PROCESSING_FAILED";
