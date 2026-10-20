@@ -74,6 +74,25 @@ The same calls over HTTP: `POST /api/v2/diagnostics/system-log-measurements/spik
 
 ## 4. Result
 
-**PENDING — not run yet.** To be filled from the stored summary: job id (opaque), outcome, `commandsSent`, the parent
-counts, the chosen directory's name class and age class, member count, the member name classes with count and size
-min/max/sum, the contract-form counts, and whether the layout matches §8.3 (`MATCH` / `MISMATCH` / `NOT_EVALUABLE`).
+Run 2026-10-20, 12:00 window, one gateway (masked FW-UNIFORM-02-M1), submitted once as aiview (machine session).
+Job admitted (202), outcome `REVIEWED`, status `MEASURED`, `commandsSent` 2 (C4 then one C5), age basis `NEXUS_CLOCK`.
+
+| Item | Value |
+|---|---|
+| Parent entries (C4) | 77: 71 data directories (link count 2), 6 plain files (link count 1), 0 other; 0 unsettled, 0 ahead of the clock; 1 banner line ignored |
+| Chosen directory | name class `X_spike_X_NNN_NNN-NN-NN_NN-NN-NN`, age class `6H_TO_24H`, state `PRESENT` |
+| Members (C5) | 2 files, 0 subdirectories, 10,937 B in total |
+| Member name classes | `perf_X_NNN.log`: 1 file, 10,851 B; `profiling_summary.elg`: 1 file, 86 B |
+| Contract forms (§8.3) | `profiling_summary.elg` 1 (86 B); `perf_cpu_<N>.log` **0**; other members 1 |
+| Within the 16 MiB per-directory bound | yes (86 B of contract-form files; 10,937 B for the whole directory) |
+
+**Verdict: `MISMATCH` (partial).** The directory layout (one flat data directory per event, a few small files) and the
+size bound match §8.3, and `profiling_summary.elg` is present as specified. The CPU sample file does not match the
+contract's `perf_cpu_<N>.log` form: its name class is `perf_X_NNN.log` (the middle word is outside the closed vocabulary,
+so it is not `cpu`). With `system_log.spike_data_enabled` switched on as the contract stands, only the 86 B
+`profiling_summary.elg` would be fetched and the 10,851 B performance sample would be listed but skipped.
+The data-directory name pattern (PENDING in §8.3) is now observed as the class `X_spike_X_NNN_NNN-NN-NN_NN-NN-NN`
+(a date-time stamped directory), which fits the safe name form.
+
+Next step needs the PO: amend the §8.3 fetch list to `perf_<word>_<N>.log` (the observed class) before enabling, or
+enable as-is (profiling summary only).
