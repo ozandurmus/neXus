@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Box from "@mui/material/Box";
 import FormControlLabel from "@mui/material/FormControlLabel";
+import IconButton from "@mui/material/IconButton";
 import Stack from "@mui/material/Stack";
 import Switch from "@mui/material/Switch";
 import TextField from "@mui/material/TextField";
+import Tooltip from "@mui/material/Tooltip";
 import Typography from "@mui/material/Typography";
 
 import {
@@ -12,12 +14,14 @@ import {
   type SystemLogSource, type SystemLogSources, type SystemLogSpikeData,
 } from "../auth/adminApi";
 import { EmptyPanel } from "../shell/ScreenLayout";
-import { M3Button, StatusChip } from "../shell/M3Widgets";
+import { Icon } from "../shell/Icon";
+import { M3Button, M3Tabs, StatusChip } from "../shell/M3Widgets";
+import { usePreferenceFlag } from "../shell/preference";
 import { RestrictedPanel, StatePanel, Ts, Unknown, isRestricted } from "../shell/States";
 import { useJobWindow } from "../shell/JobWindow";
 import type { Tone } from "../shell/tone";
-import { formatTime, relativeAge } from "../shell/time";
-import { lineDeviceTime, windowWords } from "./logLineTime";
+import { formatTime } from "../shell/time";
+import { lineDeviceTime, lineSeverity, windowWords } from "./logLineTime";
 import { jobStateWord } from "../shell/presenters";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { MONO, m3 } from "../theme/m3Theme";
@@ -285,16 +289,38 @@ export function DeviceLogsPanel({ deviceId, vendorHint }: { readonly deviceId: s
 
 const SIDE_ID = { gaps: "logs-gaps", crash: "logs-crash", hcp: "logs-hcp", spike: "logs-spike" } as const;
 
+/** The Logs view tabs, by position: the line viewer first, the collection health panels beside it. */
+const VIEW = { lines: 0, health: 1 } as const;
+
 function jumpTo(id: string): void {
   document.getElementById(id)?.scrollIntoView?.({ behavior: "smooth", block: "start" });
 }
 
-/** A phrase that is also the way to the panel it talks about. */
-function JumpLink({ target, children }: { readonly target: string; readonly children: React.ReactNode }) {
+/** A phrase that is also the way to the panel it talks about: it opens Collection health and scrolls to that panel. */
+function JumpLink({ target, onJump, children }: { readonly target: string; readonly onJump: (id: string) => void; readonly children: React.ReactNode }) {
   return (
-    <Box component="button" type="button" onClick={() => jumpTo(target)}
+    <Box component="button" type="button" onClick={() => onJump(target)}
       sx={{ all: "unset", cursor: "pointer", color: "inherit", textDecoration: "underline", textDecorationColor: m3.outline, textUnderlineOffset: 3,
         "&:hover": { color: m3.primary }, "&:focus-visible": { outline: `2px solid ${m3.primary}`, outlineOffset: 2 } }}>
+      {children}
+    </Box>
+  );
+}
+
+/** A small text control that opens or hides something on the same card (`Run details`, `Wrap`). */
+function TextToggle({ pressed, label, onClick, expands = false, children }: {
+  readonly pressed: boolean; readonly label?: string; readonly onClick: () => void;
+  /** True when the control discloses content below it (aria-expanded) rather than switching a mode (aria-pressed). */
+  readonly expands?: boolean; readonly children: React.ReactNode;
+}) {
+  const state = expands ? { "aria-expanded": pressed } : { "aria-pressed": pressed };
+  return (
+    <Box component="button" type="button" aria-label={label} onClick={onClick} {...state}
+      sx={{ all: "unset", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 0.5, fontSize: 13, fontWeight: 500, lineHeight: "20px",
+        px: 1, py: "3px", borderRadius: "8px", color: pressed && !expands ? m3.onSecondaryContainer : m3.primary,
+        bgcolor: pressed && !expands ? m3.secondaryContainer : "transparent", border: `1px solid ${pressed && !expands ? m3.secondaryContainer : "transparent"}`,
+        whiteSpace: "nowrap", "&:hover": { bgcolor: pressed && !expands ? m3.secondaryContainer : m3.scHigh },
+        "&:focus-visible": { outline: `2px solid ${m3.primary}`, outlineOffset: 1 } }}>
       {children}
     </Box>
   );
@@ -310,82 +336,101 @@ function LogsBody({ deviceId, data, latest, onRefresh, emptyState }: {
   const hcp = useFetchOnMount<SystemLogHcp>(() => getSystemLogHcp(deviceId), describe);
   const otherSources = data.sources.filter((s) => !(LINE_SOURCES as readonly string[]).includes(s.source_key));
   const lineSources = data.sources.filter((s) => (LINE_SOURCES as readonly string[]).includes(s.source_key));
+  // The viewer's state lives here, above the tabs, so a look at Collection health and back costs no reload and loses no filter.
+  const vm = useLogViewer(deviceId, lineSources);
+  const [view, setView] = useState<number>(VIEW.lines);
+  const [jumpReq, setJumpReq] = useState<{ readonly id: string; readonly seq: number } | null>(null);
+  const jump = useCallback((id: string) => {
+    setView(VIEW.health);
+    setJumpReq((prev) => ({ id, seq: (prev?.seq ?? 0) + 1 }));
+  }, []);
+  useEffect(() => {
+    if (jumpReq && view === VIEW.health) jumpTo(jumpReq.id);
+  }, [jumpReq, view]);
 
   return (
-    // One layout for Check Point and Palo Alto (the source set is the only difference). The side cards sit beside the
-    // lines only when the PANE is wide: a container query, not the browser width (UI review 2026-10-18, F-8).
-    <Stack spacing={2} data-testid="device-logs" sx={{ containerType: "inline-size", minWidth: 0 }}>
-      <Box sx={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 2 }}>
-        <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
-          Logs · system logs collected from the device, stored encrypted and masked on screen by default.
-        </Typography>
-        <M3Button emphasis="text" onClick={onRefresh}>Refresh</M3Button>
-      </Box>
-      <SummaryStrip data={data} latest={latest} />
-      <AttentionLine gaps={gaps} crash={crash} />
-      <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: "minmax(0, 1fr)", alignItems: "start",
-        "@container (min-width: 980px)": { gridTemplateColumns: "minmax(0, 2fr) minmax(280px, 1fr)" } }}>
-        {emptyState ?? <LogViewer deviceId={deviceId} sources={lineSources} canViewUnmasked={data.can_view_unmasked} maxPageBytes={data.max_page_bytes} />}
-        <Stack spacing={2}>
-          <SidePanel id={SIDE_ID.gaps} title="Gaps">
-            {gaps.error ? <Typography variant="body2" color="text.secondary">Gaps unavailable ({gaps.error}).</Typography>
-              : !gaps.data ? <Typography variant="body2">Loading…</Typography>
-              : gaps.data.gaps.length === 0 ? <Typography variant="body2" color="text.secondary">No gaps recorded.</Typography>
-              : <Stack spacing={1.25}>{gaps.data.gaps.map((g) => <GapRow key={g.gap_id} gap={g} />)}</Stack>}
-            {gaps.data?.truncated && <Typography variant="caption" color="text.secondary">Showing the newest gaps only.</Typography>}
-          </SidePanel>
-          <SidePanel id={SIDE_ID.crash} title="Crash and dump files">
-            {crash.error ? <Typography variant="body2" color="text.secondary">Crash files unavailable ({crash.error}).</Typography>
-              : !crash.data ? <Typography variant="body2">Loading…</Typography>
-              : crash.data.files.length === 0 ? <Typography variant="body2" color="text.secondary">No crash or dump files listed.</Typography>
-              : <Stack spacing={1}>{crash.data.files.map((f) => (
-                  <Box key={f.entry_id} sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
-                    <StatusChip tone={f.state === "NEW" ? "bad" : "neutral"} label={CRASH_STATE_LABELS[f.state] ?? f.state} dense />
-                    <Typography variant="body2" sx={{ fontWeight: 500 }}>{f.process === "UNKNOWN" ? "Unknown process" : f.process}</Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {DIRECTORY_LABELS[f.directory] ?? f.directory} · {formatBytes(f.size)} · <Ts at={epochIso(f.mtime_epoch)} seconds={false} />
-                    </Typography>
-                  </Box>
-                ))}</Stack>}
-            <Typography variant="caption" color="text.secondary">
-              Files are listed by process and size only; the product never reads their content. Files present before monitoring began raise no alert.
-            </Typography>
-          </SidePanel>
-          <SidePanel id={SIDE_ID.hcp} title="HCP reports">
-            {hcp.error ? <Typography variant="body2" color="text.secondary">HCP reports unavailable ({hcp.error}).</Typography>
-              : !hcp.data ? <Typography variant="body2">Loading…</Typography>
-              : hcp.data.files.length === 0 ? <Typography variant="body2" color="text.secondary">No HCP report has been collected.</Typography>
-              : <Stack spacing={1}>{hcp.data.files.map((f) => (
-                  <Box key={f.file_id} sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
-                    <StatusChip tone={f.status === "STORED" ? "neutral" : "bad"} label={f.status === "STORED" ? "Stored" : f.status === "CORRUPT" ? "Unreadable archive" : f.status} dense />
-                    {f.flags.includes("NAME_SHAPE_UNEXPECTED") && <StatusChip tone="warn" label="Unexpected file name" dense />}
-                    {f.pruned && <StatusChip tone="neutral" label="Removed by retention" dense />}
-                    <Typography variant="caption" color="text.secondary">
-                      {f.name_time ? `${f.name_time} (device time)` : "time unknown"} · {formatBytes(f.size)}
-                    </Typography>
-                  </Box>
-                ))}</Stack>}
-            <Typography variant="caption" color="text.secondary">
-              Archives are kept encrypted and are not served from this screen. The member listing is not available yet.
-            </Typography>
-          </SidePanel>
-          {data.sources.some((s) => s.source_key === "cp_spike_data") && <SpikeDataPanel deviceId={deviceId} />}
-          {otherSources.length > 0 && (
-            <SidePanel title="Other collection">
-              <Stack spacing={0.75}>
-                {otherSources.map((s) => (
-                  <Box key={s.source_key} sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                    <Typography variant="body2" sx={{ minWidth: 110 }}>{sourceLabel(s.source_key)}</Typography>
-                    <StatusChip tone={statusTone(s.status)} label={sourceStatusWord(s.status)} dense />
-                    <Typography variant="caption" color="text.secondary">{s.last_run_at ? <Ts at={s.last_run_at} relative seconds={false} /> : "never run"}</Typography>
-                  </Box>
-                ))}
-              </Stack>
-            </SidePanel>
-          )}
-        </Stack>
-      </Box>
+    // One layout for Check Point and Palo Alto (the source set is the only difference). The lines are the content
+    // (PO 2026-10-20): one summary line, one attention sentence, then the viewer on its own tab with the room; the
+    // gaps, crash files, HCP reports and other collection sit on the Collection health tab and never squeeze it.
+    <Stack spacing={1.5} data-testid="device-logs" sx={{ containerType: "inline-size", minWidth: 0, flex: 1, minHeight: 0 }}>
+      <SummaryLine data={data} latest={latest} onRefresh={onRefresh} />
+      <AttentionLine gaps={gaps} crash={crash} onJump={jump} />
+      <M3Tabs ariaLabel="Logs view" value={view} onChange={setView} tabs={[
+        { label: "Lines", panel: emptyState ?? <LogViewer vm={vm} sources={lineSources} canViewUnmasked={data.can_view_unmasked} maxPageBytes={data.max_page_bytes} gaps={gaps.data?.gaps ?? []} onJump={jump} /> },
+        { label: "Collection health", panel: <CollectionHealth deviceId={deviceId} data={data} gaps={gaps} crash={crash} hcp={hcp} otherSources={otherSources} /> },
+      ]} />
     </Stack>
+  );
+}
+
+/** The gaps, crash files, HCP reports, Spike data and whole-file sources: two columns when the pane is wide, one otherwise. */
+function CollectionHealth({ deviceId, data, gaps, crash, hcp, otherSources }: {
+  readonly deviceId: string; readonly data: SystemLogSources;
+  readonly gaps: { readonly data: { readonly gaps: readonly SystemLogGap[]; readonly truncated: boolean } | null; readonly error: string | null };
+  readonly crash: { readonly data: SystemLogCrashFiles | null; readonly error: string | null };
+  readonly hcp: { readonly data: SystemLogHcp | null; readonly error: string | null };
+  readonly otherSources: readonly SystemLogSource[];
+}) {
+  return (
+    <Box data-testid="collection-health" sx={{ display: "grid", gap: 2, gridTemplateColumns: "minmax(0, 1fr)", alignItems: "start",
+      "@container (min-width: 900px)": { gridTemplateColumns: "repeat(2, minmax(0, 1fr))" } }}>
+      <SidePanel id={SIDE_ID.gaps} title="Gaps">
+        {gaps.error ? <Typography variant="body2" color="text.secondary">Gaps unavailable ({gaps.error}).</Typography>
+          : !gaps.data ? <Typography variant="body2">Loading…</Typography>
+          : gaps.data.gaps.length === 0 ? <Typography variant="body2" color="text.secondary">No gaps recorded.</Typography>
+          : <Stack spacing={1.25}>{gaps.data.gaps.map((g) => <GapRow key={g.gap_id} gap={g} />)}</Stack>}
+        {gaps.data?.truncated && <Typography variant="caption" color="text.secondary">Showing the newest gaps only.</Typography>}
+      </SidePanel>
+      <SidePanel id={SIDE_ID.crash} title="Crash and dump files">
+        {crash.error ? <Typography variant="body2" color="text.secondary">Crash files unavailable ({crash.error}).</Typography>
+          : !crash.data ? <Typography variant="body2">Loading…</Typography>
+          : crash.data.files.length === 0 ? <Typography variant="body2" color="text.secondary">No crash or dump files listed.</Typography>
+          : <Stack spacing={1}>{crash.data.files.map((f) => (
+              <Box key={f.entry_id} sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+                <StatusChip tone={f.state === "NEW" ? "bad" : "neutral"} label={CRASH_STATE_LABELS[f.state] ?? f.state} dense />
+                <Typography variant="body2" sx={{ fontWeight: 500 }}>{f.process === "UNKNOWN" ? "Unknown process" : f.process}</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {DIRECTORY_LABELS[f.directory] ?? f.directory} · {formatBytes(f.size)} · <Ts at={epochIso(f.mtime_epoch)} seconds={false} />
+                </Typography>
+              </Box>
+            ))}</Stack>}
+        <Typography variant="caption" color="text.secondary">
+          Files are listed by process and size only; the product never reads their content. Files present before monitoring began raise no alert.
+        </Typography>
+      </SidePanel>
+      <SidePanel id={SIDE_ID.hcp} title="HCP reports">
+        {hcp.error ? <Typography variant="body2" color="text.secondary">HCP reports unavailable ({hcp.error}).</Typography>
+          : !hcp.data ? <Typography variant="body2">Loading…</Typography>
+          : hcp.data.files.length === 0 ? <Typography variant="body2" color="text.secondary">No HCP report has been collected.</Typography>
+          : <Stack spacing={1}>{hcp.data.files.map((f) => (
+              <Box key={f.file_id} sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+                <StatusChip tone={f.status === "STORED" ? "neutral" : "bad"} label={f.status === "STORED" ? "Stored" : f.status === "CORRUPT" ? "Unreadable archive" : f.status} dense />
+                {f.flags.includes("NAME_SHAPE_UNEXPECTED") && <StatusChip tone="warn" label="Unexpected file name" dense />}
+                {f.pruned && <StatusChip tone="neutral" label="Removed by retention" dense />}
+                <Typography variant="caption" color="text.secondary">
+                  {f.name_time ? `${f.name_time} (device time)` : "time unknown"} · {formatBytes(f.size)}
+                </Typography>
+              </Box>
+            ))}</Stack>}
+        <Typography variant="caption" color="text.secondary">
+          Archives are kept encrypted and are not served from this screen. The member listing is not available yet.
+        </Typography>
+      </SidePanel>
+      {data.sources.some((s) => s.source_key === "cp_spike_data") && <SpikeDataPanel deviceId={deviceId} />}
+      {otherSources.length > 0 && (
+        <SidePanel title="Other collection">
+          <Stack spacing={0.75}>
+            {otherSources.map((s) => (
+              <Box key={s.source_key} sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <Typography variant="body2" sx={{ minWidth: 110 }}>{sourceLabel(s.source_key)}</Typography>
+                <StatusChip tone={statusTone(s.status)} label={sourceStatusWord(s.status)} dense />
+                <Typography variant="caption" color="text.secondary">{s.last_run_at ? <Ts at={s.last_run_at} relative seconds={false} /> : "never run"}</Typography>
+              </Box>
+            ))}
+          </Stack>
+        </SidePanel>
+      )}
+    </Box>
   );
 }
 
@@ -433,7 +478,7 @@ function SpikeDataPanel({ deviceId }: { readonly deviceId: string }) {
 
 function SidePanel({ title, id, children }: { readonly title: string; readonly id?: string; readonly children: React.ReactNode }) {
   return (
-    <Box id={id} sx={{ bgcolor: m3.scLow, border: `1px solid ${m3.outlineVar}`, borderRadius: "10px", p: 2, display: "flex", flexDirection: "column", gap: 1.25, scrollMarginTop: 16 }}>
+    <Box id={id} sx={{ bgcolor: m3.scLow, border: `1px solid ${m3.outlineVar}`, borderRadius: "10px", p: 2, display: "flex", flexDirection: "column", gap: 1.25, scrollMarginTop: 16, minWidth: 0 }}>
       <Typography variant="subtitle2">{title}</Typography>
       {children}
     </Box>
@@ -458,13 +503,14 @@ function clock(at: string | null | undefined): string {
 }
 
 /**
- * Gaps and the crash check as one neutral sentence, each part a link to its panel below (UI review 2026-10-18, F-8).
- * Grey on purpose: a first collection or a quiet crash directory is not an alarm. Only a NEW crash or dump file adds a
- * red word, because that is a finding about the device.
+ * Gaps and the crash check as one neutral sentence, each part a link to its panel on Collection health (UI review
+ * 2026-10-18, F-8). Grey on purpose: a first collection or a quiet crash directory is not an alarm. Only a NEW crash or
+ * dump file adds a red word, because that is a finding about the device.
  */
-function AttentionLine({ gaps, crash }: {
+function AttentionLine({ gaps, crash, onJump }: {
   readonly gaps: { readonly data: { readonly gaps: readonly SystemLogGap[] } | null; readonly error: string | null };
   readonly crash: { readonly data: SystemLogCrashFiles | null; readonly error: string | null };
+  readonly onJump: (id: string) => void;
 }) {
   const kinds = new Map<string, SystemLogGap[]>();
   for (const g of gaps.data?.gaps ?? []) kinds.set(g.kind, [...(kinds.get(g.kind) ?? []), g]);
@@ -472,18 +518,18 @@ function AttentionLine({ gaps, crash }: {
   const parts: React.ReactNode[] = [];
   if (gaps.error) parts.push(<span key="g">Gaps unavailable</span>);
   else if (!gaps.data) parts.push(<span key="g">Gaps loading…</span>);
-  else if (kinds.size === 0) parts.push(<JumpLink key="g" target={SIDE_ID.gaps}>No gaps recorded</JumpLink>);
+  else if (kinds.size === 0) parts.push(<JumpLink key="g" target={SIDE_ID.gaps} onJump={onJump}>No gaps recorded</JumpLink>);
   else {
     for (const [kind, list] of kinds) {
       const where = list.map((g) => `${sourceLabel(g.source_key)} ${clock(g.recorded_at)}`).join(", ");
-      parts.push(<JumpLink key={kind} target={SIDE_ID.gaps}>{gapKindLabel(kind)}{list.length > 1 ? ` ×${list.length}` : ""} ({where})</JumpLink>);
+      parts.push(<JumpLink key={kind} target={SIDE_ID.gaps} onJump={onJump}>{gapKindLabel(kind)}{list.length > 1 ? ` ×${list.length}` : ""} ({where})</JumpLink>);
     }
   }
   if (crash.error) parts.push(<span key="c">Crash and dump check unavailable</span>);
   else if (!crash.data) parts.push(<span key="c">Crash and dump check loading…</span>);
-  else if (newCrash === 0) parts.push(<JumpLink key="c" target={SIDE_ID.crash}>No new crash or dump files</JumpLink>);
+  else if (newCrash === 0) parts.push(<JumpLink key="c" target={SIDE_ID.crash} onJump={onJump}>No new crash or dump files</JumpLink>);
   return (
-    <Box role="region" aria-label="Attention" sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", columnGap: 1, rowGap: 0.5, color: m3.onSurfaceVar, fontSize: 13.5 }}>
+    <Box role="region" aria-label="Attention" sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", columnGap: 1, rowGap: 0.5, color: m3.onSurfaceVar, fontSize: 13.5, px: 0.5 }}>
       {parts.map((part, i) => (
         <Box component="span" key={i} sx={{ display: "inline-flex", alignItems: "center", columnGap: 1 }}>
           {i > 0 && <Box component="span" aria-hidden sx={{ color: m3.outline }}>·</Box>}
@@ -493,7 +539,7 @@ function AttentionLine({ gaps, crash }: {
       {newCrash > 0 && (
         <Box component="span" sx={{ display: "inline-flex", alignItems: "center", columnGap: 1 }}>
           {parts.length > 0 && <Box component="span" aria-hidden sx={{ color: m3.outline }}>·</Box>}
-          <JumpLink target={SIDE_ID.crash}><StatusChip tone="bad" label={`${newCrash} new crash or dump file${newCrash === 1 ? "" : "s"}`} dense /></JumpLink>
+          <JumpLink target={SIDE_ID.crash} onJump={onJump}><StatusChip tone="bad" label={`${newCrash} new crash or dump file${newCrash === 1 ? "" : "s"}`} dense /></JumpLink>
         </Box>
       )}
     </Box>
@@ -501,42 +547,76 @@ function AttentionLine({ gaps, crash }: {
 }
 
 /**
- * The first thing an operator needs (UI review 2026-10-18, F-8): when the last collection ran and how it ended, the
- * device-time window it covered, and for each source what its newest run said and how many lines are stored. Counts come
- * from the sources route (its per-source stored totals); severity is deliberately absent: no parsed severity exists.
+ * The first thing an operator needs (UI review 2026-10-18, F-8), on one line (PO 2026-10-20): when the last collection
+ * ran and how it ended, the device-time window it covered, and what is stored now. `Run details` opens what the run
+ * said per source: the outcome counts and a row per source with its state word, stored lines and last run. Severity is
+ * deliberately absent: no parsed severity exists.
  */
-function SummaryStrip({ data, latest }: {
-  readonly data: SystemLogSources; readonly latest: LatestCollection | null;
+function SummaryLine({ data, latest, onRefresh }: {
+  readonly data: SystemLogSources; readonly latest: LatestCollection | null; readonly onRefresh: () => void;
 }) {
+  const [open, setOpen] = useState(false);
   const job = data.last_job;
   const totals = data.sources.reduce((acc, s) => ({ chunks: acc.chunks + s.stored.chunks, bytes: acc.bytes + s.stored.bytes, lines: acc.lines + s.stored.lines }), { chunks: 0, bytes: 0, lines: 0 });
   const window = windowWords(job?.window_from, job?.window_to);
   const outcomes = job ? Object.entries(job.outcomes) : [];
   return (
-    <Box role="region" aria-label="Log summary" sx={{ display: "flex", flexDirection: "column", gap: 1.25, bgcolor: m3.scLow, border: `1px solid ${m3.outlineVar}`, borderRadius: "10px", p: 2 }}>
-      <Typography variant="body2" data-testid="last-collection" sx={{ display: "flex", flexWrap: "wrap", columnGap: 1, alignItems: "baseline" }}>
-        <Box component="span" sx={{ fontWeight: 600 }}>Last collection</Box>
-        {job?.at
-          ? <Ts at={job.at} />
-          : <Unknown reason="No collection time is recorded for the newest run." />}
-        <Box component="span" sx={{ color: m3.onSurfaceVar }} title={latest?.state}>· {latest ? jobStateWord(latest.state) : "job state UNKNOWN"}</Box>
-        <Box component="span" sx={{ color: m3.onSurfaceVar }}>· {window ? `window ${window} device time` : "window of the newest lines not known"}</Box>
-      </Typography>
-      {/* The per-source chips live once, on the run selector below (R7): the strip keeps the sentence and the counts. */}
-      <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", columnGap: 2, rowGap: 0.75 }}>
-        <Box sx={{ display: "inline-flex", alignItems: "center", gap: 0.75, flexWrap: "wrap" }}>
-          <Typography variant="caption" color="text.secondary">Sources in that run</Typography>
-          {outcomes.length > 0
-            // a count is grey; a source that did not end cleanly keeps its state colour and its word
-            ? outcomes.map(([outcome, n]) => (
-                <StatusChip key={outcome} tone={outcome === "COLLECTED" || outcome === "NO_NEW_DATA" ? "neutral" : statusTone(outcome)}
-                  label={`${outcome.replace(/_/g, " ").toLowerCase()} ${n}`} dense />))
-            : <Typography variant="body2">UNKNOWN</Typography>}
-        </Box>
-        <Typography variant="caption" color="text.secondary">
-          Stored now · {totals.chunks} chunks · {totals.lines.toLocaleString("en-US")} lines · {formatBytes(totals.bytes)}
+    <Box role="region" aria-label="Log summary" sx={{ display: "flex", flexDirection: "column", gap: 1, bgcolor: m3.scLow, border: `1px solid ${m3.outlineVar}`, borderRadius: "10px", px: 2, py: 1 }}>
+      <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", columnGap: 1, rowGap: 0.5 }}>
+        <Typography variant="body2" data-testid="last-collection" sx={{ display: "flex", flexWrap: "wrap", columnGap: 1, alignItems: "baseline" }}>
+          <Box component="span" sx={{ fontWeight: 600 }}>Last collection</Box>
+          {job?.at
+            ? <Ts at={job.at} />
+            : <Unknown reason="No collection time is recorded for the newest run." />}
+          <Box component="span" sx={{ color: m3.onSurfaceVar }} title={latest?.state}>· {latest ? jobStateWord(latest.state) : "job state UNKNOWN"}</Box>
+          <Box component="span" sx={{ color: m3.onSurfaceVar }}>· {window ? `window ${window} device time` : "window of the newest lines not known"}</Box>
         </Typography>
+        <Typography variant="body2" data-testid="stored-now" sx={{ color: m3.onSurfaceVar }}>
+          · Stored {totals.chunks} chunks · {totals.lines.toLocaleString("en-US")} lines · {formatBytes(totals.bytes)}
+        </Typography>
+        <Box sx={{ ml: "auto", display: "flex", alignItems: "center", gap: 0.5 }}>
+          <TextToggle pressed={open} expands onClick={() => setOpen((v) => !v)}>Run details <Icon name={open ? "chevron-left" : "chevron-right"} size={14} /></TextToggle>
+          <M3Button emphasis="text" onClick={onRefresh}>Refresh</M3Button>
+        </Box>
       </Box>
+      {open && (
+        <Box data-testid="run-details" sx={{ display: "flex", flexDirection: "column", gap: 1, pt: 0.5, borderTop: `1px solid ${m3.outlineVar}` }}>
+          <Box sx={{ display: "inline-flex", alignItems: "center", gap: 0.75, flexWrap: "wrap" }}>
+            <Typography variant="caption" color="text.secondary">Sources in that run</Typography>
+            {outcomes.length > 0
+              // a count is grey; a source that did not end cleanly keeps its state colour and its word
+              ? outcomes.map(([outcome, n]) => (
+                  <StatusChip key={outcome} tone={outcome === "COLLECTED" || outcome === "NO_NEW_DATA" ? "neutral" : statusTone(outcome)}
+                    label={`${outcome.replace(/_/g, " ").toLowerCase()} ${n}`} dense />))
+              : <Typography variant="body2">UNKNOWN</Typography>}
+          </Box>
+          <Box component="table" aria-label="Sources" sx={{ borderCollapse: "collapse", fontSize: 13, "& td, & th": { textAlign: "left", py: 0.375, pr: 2, verticalAlign: "middle", whiteSpace: "nowrap" },
+            "& th": { color: m3.onSurfaceVar, fontWeight: 500, fontSize: 12 } }}>
+            <thead><tr><th>Source</th><th>State</th><th>Stored</th><th>Last run</th><th>Note</th></tr></thead>
+            <tbody>
+              {data.sources.map((s) => (
+                <tr key={s.source_key}>
+                  <td>{sourceLabel(s.source_key)}</td>
+                  <td><StatusChip tone={statusTone(s.status)} label={sourceStatusWord(s.status)} dense /></td>
+                  <td><StatusChip tone="neutral" label={`${s.stored.lines.toLocaleString("en-US")} lines`} dense /> <Box component="span" sx={{ color: m3.onSurfaceVar }}>· {s.stored.chunks} chunks · {formatBytes(s.stored.bytes)}</Box></td>
+                  <td>{s.last_run_at ? <Ts at={s.last_run_at} relative seconds={false} /> : "never run"}</td>
+                  <td>
+                    <Box sx={{ display: "inline-flex", alignItems: "center", gap: 0.75, flexWrap: "wrap", color: m3.onSurfaceVar }}>
+                      {s.fast_rotating && (
+                        <span title={`The device keeps about ${s.retention_horizon_seconds === null ? "an unknown amount" : `${(s.retention_horizon_seconds / 3600).toFixed(1)} h`} of this log, less than the collection interval allows for; gaps are likely.`}>
+                          <StatusChip tone="warn" label="fast rotating" dense />
+                        </span>
+                      )}
+                      {s.pending_bytes > 0 ? `${formatBytes(s.pending_bytes)} still waiting on the device` : ""}
+                      {s.retention_horizon_seconds !== null ? `device keeps about ${(s.retention_horizon_seconds / 3600).toFixed(1)} h` : ""}
+                    </Box>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </Box>
+        </Box>
+      )}
     </Box>
   );
 }
@@ -563,28 +643,20 @@ function splitLines(text: string): string[] {
   return lines;
 }
 
-/** One raw line: the device time in a fixed column, the line itself on one row, the whole line on click (nothing is cut away). */
-function RawLine({ line }: { readonly line: string }) {
-  const [open, setOpen] = useState(false);
-  const time = lineDeviceTime(line);
-  return (
-    <Box data-testid="log-line" role="button" tabIndex={0} aria-expanded={open} onClick={() => setOpen((v) => !v)}
-      onKeyDown={(e: React.KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen((v) => !v); } }}
-      sx={{ display: "grid", gridTemplateColumns: "150px minmax(0, 1fr)", columnGap: 1.5, cursor: "pointer", borderRadius: "4px", px: 0.5,
-        "&:hover": { bgcolor: m3.scHighest }, "&:focus-visible": { outline: `2px solid ${m3.primary}` } }}>
-      <Box component="span" data-testid="log-line-time" title={time ? "Device time of this line" : "No device time on this line"}
-        sx={{ color: m3.onSurfaceVar, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{time ?? ""}</Box>
-      <Box component="span" sx={open ? { whiteSpace: "pre-wrap", overflowWrap: "anywhere" } : { whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{line}</Box>
-    </Box>
-  );
+/** Everything the viewer holds: the chosen source, day and run, the filter, the masked/unmasked choice and the loaded page. */
+interface LogViewerModel {
+  readonly source: string | null; readonly setSource: (key: string) => void;
+  readonly chunks: readonly SystemLogChunk[] | null; readonly chunksError: string | null;
+  readonly day: string | null; readonly setDay: (day: string | null) => void; readonly days: readonly string[];
+  readonly dayChunks: readonly SystemLogChunk[]; readonly chunkId: string | null; readonly setChunkId: (id: string | null) => void;
+  readonly chunk: SystemLogChunk | null; readonly chunkIndex: number;
+  readonly filter: string; readonly setFilter: (value: string) => void;
+  readonly unmasked: boolean; readonly setUnmasked: (on: boolean) => void;
+  readonly text: TextState;
+  readonly loadPage: (target: SystemLogChunk, offset: number, replace: boolean) => void;
 }
 
-function LogViewer({ deviceId, sources, canViewUnmasked, maxPageBytes }: {
-  readonly deviceId: string;
-  readonly sources: readonly SystemLogSource[];
-  readonly canViewUnmasked: boolean;
-  readonly maxPageBytes: number;
-}) {
+function useLogViewer(deviceId: string, sources: readonly SystemLogSource[]): LogViewerModel {
   const [source, setSource] = useState<string | null>(() => (sources.find((s) => s.stored.chunks > 0) ?? sources[0])?.source_key ?? null);
   const [chunks, setChunks] = useState<readonly SystemLogChunk[] | null>(null);
   const [chunksError, setChunksError] = useState<string | null>(null);
@@ -651,54 +723,155 @@ function LogViewer({ deviceId, sources, canViewUnmasked, maxPageBytes }: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chunk?.chunk_id, chunk?.pruned, loadPage]);
 
+  return {
+    source, setSource, chunks, chunksError, day, setDay, days, dayChunks, chunkId, setChunkId, chunk,
+    chunkIndex: dayChunks.findIndex((c) => c.chunk_id === chunkId), filter, setFilter, unmasked, setUnmasked, text, loadPage,
+  };
+}
+
+/** The text with every filter match wrapped in a `mark`, case-insensitively; the text itself is never changed. */
+function highlight(text: string, needle: string, keyBase: string): React.ReactNode[] {
+  if (!needle) return [text];
+  const out: React.ReactNode[] = [];
+  const lower = text.toLowerCase();
+  let from = 0;
+  let n = 0;
+  for (let at = lower.indexOf(needle, from); at >= 0; at = lower.indexOf(needle, from)) {
+    if (at > from) out.push(text.slice(from, at));
+    out.push(<Box component="mark" key={`${keyBase}-${n++}`} sx={{ bgcolor: m3.primaryContainer, color: m3.onPrimaryContainer, borderRadius: "2px" }}>{text.slice(at, at + needle.length)}</Box>);
+    from = at + needle.length;
+  }
+  if (from < text.length) out.push(text.slice(from));
+  return out;
+}
+
+/**
+ * One raw line: the device time in a fixed column, then the line, wrapped (default) or on one row that scrolls sideways.
+ * Nothing is cut away. A severity the line itself writes gets its colour on that word alone (design language: a state
+ * is a word with a colour); a filter match is marked. Neither is ever invented.
+ */
+function RawLine({ line, needle, wrap }: { readonly line: string; readonly needle: string; readonly wrap: boolean }) {
+  const time = lineDeviceTime(line);
+  const severity = lineSeverity(line);
+  let body: React.ReactNode[];
+  if (severity && severity.tone) {
+    const end = severity.index + severity.token.length;
+    body = [
+      ...highlight(line.slice(0, severity.index), needle, "a"),
+      <Box component="span" key="sev" data-severity={severity.token} title="Severity as the line writes it"
+        sx={{ color: severity.tone === "bad" ? m3.criticalInk : m3.warningInk, fontWeight: 600 }}>{highlight(severity.token, needle, "s")}</Box>,
+      ...highlight(line.slice(end), needle, "b"),
+    ];
+  } else {
+    body = highlight(line, needle, "l");
+  }
+  return (
+    <Box data-testid="log-line" data-wrap={wrap ? "on" : "off"}
+      sx={{ display: "grid", gridTemplateColumns: wrap ? "150px minmax(0, 1fr)" : "150px max-content", columnGap: 1.5, borderRadius: "4px", px: 0.5,
+        width: wrap ? "auto" : "max-content", minWidth: "100%", boxSizing: "border-box", "&:hover": { bgcolor: m3.scHighest } }}>
+      <Box component="span" data-testid="log-line-time" title={time ? "Device time of this line" : "No device time on this line"}
+        sx={{ color: m3.onSurfaceVar, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{time ?? ""}</Box>
+      <Box component="span" sx={wrap ? { whiteSpace: "pre-wrap", overflowWrap: "anywhere" } : { whiteSpace: "pre" }}>{body}</Box>
+    </Box>
+  );
+}
+
+/**
+ * A gap of this source recorded by the run that stored this chunk, shown in the stream where it belongs: before the
+ * lines for content lost before they were read, after them for a backlog still waiting on the device. A gap whose
+ * place in the stream is not known stays on Collection health only.
+ */
+function GapMarker({ gap, where, onJump }: { readonly gap: SystemLogGap; readonly where: "before" | "after"; readonly onJump: (id: string) => void }) {
+  const tone = gapTone(gap.kind);
+  return (
+    <Box role="note" data-testid="gap-marker" data-where={where}
+      sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", columnGap: 1, rowGap: 0.5, my: 0.5, px: 1, py: 0.5, borderRadius: "6px", fontSize: 12.5, lineHeight: 1.4,
+        fontFamily: (t) => t.typography.fontFamily, color: m3.onSurface, bgcolor: m3.scLow,
+        border: `1px dashed ${tone === "attn" ? m3.attention : tone === "warn" ? m3.warning : m3.outline}` }}>
+      <Box component="span" sx={{ fontWeight: 600 }}>{where === "before" ? "Gap before these lines" : "Backlog after these lines"}</Box>
+      <StatusChip tone={tone} label={gapKindLabel(gap.kind)} dense />
+      <Box component="span" sx={{ color: m3.onSurfaceVar }}>{gapWords(gap)}</Box>
+      <JumpLink target={SIDE_ID.gaps} onJump={onJump}>Collection health</JumpLink>
+    </Box>
+  );
+}
+
+/** The one-line selects of the run header share this look. */
+const SELECT_SX = { minWidth: 0, "& .MuiInputBase-root": { fontSize: 13 }, "& .MuiInputLabel-root": { fontSize: 13 } } as const;
+
+function LogViewer({ vm, sources, canViewUnmasked, maxPageBytes, gaps, onJump }: {
+  readonly vm: LogViewerModel;
+  readonly sources: readonly SystemLogSource[];
+  readonly canViewUnmasked: boolean;
+  readonly maxPageBytes: number;
+  readonly gaps: readonly SystemLogGap[];
+  readonly onJump: (id: string) => void;
+}) {
+  const { source, setSource, chunks, chunksError, day, setDay, days, dayChunks, chunkId, setChunkId, chunk, chunkIndex, filter, setFilter, unmasked, setUnmasked, text, loadPage } = vm;
+  const [wrap, setWrap] = usePreferenceFlag("nx.logs.wrap", true);
+  const [fullscreen, setFullscreen] = useState(false);
+  const linesRef = useRef<HTMLDivElement>(null);
+  // The viewer takes the rest of the viewport: its own top edge on the page decides how much that is.
+  const [top, setTop] = useState(0);
+  useLayoutEffect(() => {
+    const measure = () => {
+      const rect = linesRef.current?.getBoundingClientRect();
+      if (rect) setTop(Math.max(0, Math.round(rect.top + window.scrollY)));
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [fullscreen, canViewUnmasked, chunk?.chunk_id]);
+  useEffect(() => {
+    if (!fullscreen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setFullscreen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [fullscreen]);
+
   const needle = filter.trim().toLowerCase();
   const shown = needle ? text.lines.filter((l) => l.toLowerCase().includes(needle)) : text.lines;
-  const chunkIndex = dayChunks.findIndex((c) => c.chunk_id === chunkId);
+  const selected = sources.find((s) => s.source_key === source) ?? null;
+  // Gaps recorded by the run that stored this chunk, for this source: their place in the stream is known.
+  const chunkGaps = chunk ? gaps.filter((g) => g.source_key === source && g.job_id === chunk.job_id) : [];
+  const before = chunkGaps.filter((g) => g.kind !== "BACKLOG");
+  const after = chunkGaps.filter((g) => g.kind === "BACKLOG");
 
   if (sources.length === 0) {
     return <EmptyPanel title="No line sources" body="This device has no source whose lines can be viewed here." />;
   }
 
   return (
-    <Box sx={{ bgcolor: m3.scLow, border: `1px solid ${m3.outlineVar}`, borderRadius: "10px", p: 2, display: "flex", flexDirection: "column", gap: 1.5, minWidth: 0 }}>
-      {/* The one source chip row (R7): each chip names the source, its status word and how many lines are stored. */}
-      <Box role="group" aria-label="Log sources" sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
-        {sources.map((s) => (
-          <Box key={s.source_key} component="button" type="button" aria-pressed={s.source_key === source}
-            aria-label={`${sourceLabel(s.source_key)} · ${sourceStatusWord(s.status)} · ${s.stored.lines.toLocaleString("en-US")} lines`}
-            onClick={() => setSource(s.source_key)}
-            sx={{
-              display: "inline-flex", alignItems: "center", gap: 0.75, cursor: "pointer", font: "inherit", fontSize: 13,
-              px: 1.25, py: 0.5, borderRadius: "16px", color: m3.onSurface,
-              border: `1px solid ${s.source_key === source ? m3.primary : m3.outline}`,
-              bgcolor: s.source_key === source ? m3.secondaryContainer : "transparent",
-            }}>
-            {sourceLabel(s.source_key)}
-            <StatusChip tone={statusTone(s.status)} label={sourceStatusWord(s.status)} dense />
-            <StatusChip tone="neutral" label={`${s.stored.lines.toLocaleString("en-US")} lines`} dense />
-            {s.fast_rotating && (
-              <span title={`The device keeps about ${s.retention_horizon_seconds === null ? "an unknown amount" : `${(s.retention_horizon_seconds / 3600).toFixed(1)} h`} of this log, less than the collection interval allows for; gaps are likely.`}>
+    <Box data-testid="log-viewer" data-fullscreen={fullscreen ? "true" : "false"}
+      sx={fullscreen
+        ? { position: "fixed", inset: 0, zIndex: 1300, bgcolor: m3.surface, p: 2, display: "flex", flexDirection: "column", gap: 1, minWidth: 0, overflow: "hidden" }
+        : { bgcolor: m3.scLow, border: `1px solid ${m3.outlineVar}`, borderRadius: "10px", p: 1.5, display: "flex", flexDirection: "column", gap: 1, minWidth: 0 }}>
+      {/* The run header (PO 2026-10-20): source, day, run, filter and the masked state on one line that wraps when narrow. */}
+      <Box data-testid="run-header" sx={{ display: "flex", gap: 1, flexWrap: "wrap", alignItems: "center" }}>
+        <TextField select size="small" label="Source" value={source ?? ""} SelectProps={{ native: true }} sx={{ ...SELECT_SX, minWidth: 170 }}
+          onChange={(e) => setSource(e.target.value)}>
+          {sources.map((s) => (
+            <option key={s.source_key} value={s.source_key}>
+              {`${sourceLabel(s.source_key)} · ${sourceStatusWord(s.status)} · ${s.stored.lines.toLocaleString("en-US")} lines`}
+            </option>
+          ))}
+        </TextField>
+        {selected && (
+          <Box data-testid="source-state" sx={{ display: "inline-flex", alignItems: "center", gap: 0.75 }}>
+            <StatusChip tone={statusTone(selected.status)} label={sourceStatusWord(selected.status)} dense
+              title={selected.last_run_at ? `Last run ${formatTime(selected.last_run_at, false)}${selected.pending_bytes > 0 ? ` · ${formatBytes(selected.pending_bytes)} still waiting on the device` : ""}` : "Never run"} />
+            {selected.fast_rotating && (
+              <span title={`The device keeps about ${selected.retention_horizon_seconds === null ? "an unknown amount" : `${(selected.retention_horizon_seconds / 3600).toFixed(1)} h`} of this log, less than the collection interval allows for; gaps are likely.`}>
                 <StatusChip tone="warn" label="fast rotating" dense />
               </span>
             )}
           </Box>
-        ))}
-      </Box>
-      {sources.filter((s) => s.source_key === source).map((s) => (
-        <Typography key={s.source_key} variant="caption" color="text.secondary">
-          {s.last_run_at ? <>Last run <Ts at={s.last_run_at} relative seconds={false} /></> : "Never run"}
-          {s.pending_bytes > 0 ? ` · ${formatBytes(s.pending_bytes)} still waiting on the device` : ""}
-          {s.retention_horizon_seconds !== null ? ` · device keeps about ${(s.retention_horizon_seconds / 3600).toFixed(1)} h` : ""}
-        </Typography>
-      ))}
-
-      {/* The pickers read as one sentence: "Day 2026-10-18 · run 2 of 4 · 06:13 · 13 lines · 7.5 KiB" (F-8). */}
-      <Box sx={{ display: "flex", gap: 1.5, flexWrap: "wrap", alignItems: "flex-end" }}>
-        <TextField select size="small" label="Day" value={day ?? ""} SelectProps={{ native: true }} sx={{ minWidth: 150 }}
+        )}
+        <TextField select size="small" label="Day" value={day ?? ""} SelectProps={{ native: true }} sx={{ ...SELECT_SX, minWidth: 130 }}
           onChange={(e) => { setDay(e.target.value || null); setChunkId(null); }} disabled={days.length === 0}>
           {days.length === 0 ? <option value="">No chunks</option> : days.map((d) => <option key={d} value={d}>{d}</option>)}
         </TextField>
-        <TextField select size="small" label="Run" value={chunkId ?? ""} SelectProps={{ native: true }} sx={{ minWidth: 260 }}
+        <TextField select size="small" label="Run" value={chunkId ?? ""} SelectProps={{ native: true }} sx={{ ...SELECT_SX, minWidth: 220 }}
           onChange={(e) => setChunkId(e.target.value || null)} disabled={dayChunks.length === 0}>
           {dayChunks.length === 0 ? <option value="">No chunks</option> : dayChunks.map((c, i) => (
             <option key={c.chunk_id} value={c.chunk_id}>
@@ -706,23 +879,37 @@ function LogViewer({ deviceId, sources, canViewUnmasked, maxPageBytes }: {
             </option>
           ))}
         </TextField>
-        <TextField size="small" label="Filter lines" value={filter} onChange={(e) => setFilter(e.target.value)} sx={{ minWidth: 200, flex: 1 }}
+        <TextField size="small" label="Filter lines" value={filter} onChange={(e) => setFilter(e.target.value)} sx={{ ...SELECT_SX, minWidth: 160, flex: "1 1 160px" }}
           inputProps={{ "aria-label": "Filter lines" }} />
         {chunk && text.masked !== null && (text.masked
           ? <StatusChip tone="neutral" label={text.maskRules ? `Masked view · rules ${text.maskRules}` : "Masked view"} dense />
           : <StatusChip tone="warn" label="Unmasked view · recorded on the audit ledger" dense />)}
+        <Box sx={{ display: "inline-flex", alignItems: "center", gap: 0.5, ml: "auto" }}>
+          <TextToggle pressed={wrap} label="Wrap lines" onClick={() => setWrap(!wrap)}>Wrap</TextToggle>
+          <Tooltip title={fullscreen ? "Exit full screen (Esc)" : "Expand the viewer to the whole window"}>
+            <IconButton size="small" aria-label={fullscreen ? "Exit full screen" : "Expand viewer"} aria-pressed={fullscreen} onClick={() => setFullscreen((v) => !v)}
+              sx={{ color: m3.primary, borderRadius: "8px" }}>
+              <Icon name={fullscreen ? "collapse" : "expand"} size={18} />
+            </IconButton>
+          </Tooltip>
+        </Box>
       </Box>
       {chunk && day && (
-        <Typography variant="body2" data-testid="picker-sentence" sx={{ color: m3.onSurfaceVar }}>
+        <Typography variant="caption" data-testid="picker-sentence" sx={{ color: m3.onSurfaceVar, px: 0.5 }}>
           Day {day} · run {chunkIndex + 1} of {dayChunks.length} · {clock(chunk.collected_at)} · {chunk.lines.toLocaleString("en-US")} lines · {formatBytes(chunk.bytes)}
+          {` · ${chunk.redaction_count} secret value${chunk.redaction_count === 1 ? "" : "s"} redacted`}
+          {chunk.first_line_time && chunk.last_line_time ? ` · lines ${chunk.first_line_time} to ${chunk.last_line_time} (device time)` : ""}
+          {chunk.flags.includes("LINE_SPLIT") ? " · begins or ends inside a line" : ""}
         </Typography>
       )}
 
       {canViewUnmasked && (
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap" }}>
-          <FormControlLabel
-            control={<Switch checked={unmasked} onChange={(e) => setUnmasked(e.target.checked)} inputProps={{ "aria-label": "Show unmasked" }} />}
+        // The audit warning stays, on one line with its icon; the switch is still the only way to an unmasked page.
+        <Box data-testid="unmasked-control" sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap", px: 0.5 }}>
+          <FormControlLabel sx={{ mr: 0, "& .MuiFormControlLabel-label": { fontSize: 13 } }}
+            control={<Switch size="small" checked={unmasked} onChange={(e) => setUnmasked(e.target.checked)} inputProps={{ "aria-label": "Show unmasked" }} />}
             label="Show unmasked" />
+          <Box component="span" aria-hidden sx={{ display: "inline-flex", color: m3.warningInk }}><Icon name="warning" size={16} /></Box>
           <Typography variant="caption" color="text.secondary">
             Unmasked lines show real addresses and names. Every page you load this way is recorded on the audit ledger.
           </Typography>
@@ -733,27 +920,22 @@ function LogViewer({ deviceId, sources, canViewUnmasked, maxPageBytes }: {
       {chunks && chunks.length === 0 && !chunksError && (
         <StatePanel variant="empty" title="Nothing stored for this source" body="No chunk is stored for this source yet, or retention removed them all." />
       )}
-      {chunk && (
-        <Typography variant="caption" color="text.secondary">
-          {chunk.redaction_count} secret value{chunk.redaction_count === 1 ? "" : "s"} redacted
-          {chunk.first_line_time && chunk.last_line_time ? ` · lines ${chunk.first_line_time} to ${chunk.last_line_time} (device time)` : ""}
-          {chunk.flags.includes("LINE_SPLIT") ? " · begins or ends inside a line" : ""}
-        </Typography>
-      )}
       {chunk?.pruned && <StatePanel variant="empty" title="Removed by retention" body="The bytes of this chunk were removed. Its index row is kept as the record." />}
       {text.error && <StatePanel variant="error" title="Lines unavailable" body="The lines of this chunk could not be read." code={text.error}
         action={chunk ? <M3Button emphasis="outlined" onClick={() => loadPage(chunk, text.lines.length === 0 ? 0 : text.nextOffset, text.lines.length === 0)}>Retry</M3Button> : undefined} />}
 
       {chunk && !chunk.pruned && !text.error && (
-        <Box>
-          <Box data-testid="log-lines" role="log" aria-label="Log lines" sx={{
-            fontFamily: MONO, fontSize: 12, lineHeight: 1.5, bgcolor: m3.scHigh, borderRadius: "8px", p: 1.25, maxHeight: 460, overflow: "auto",
-            minHeight: 60,
+        <>
+          <Box ref={linesRef} data-testid="log-lines" data-fill={fullscreen ? "screen" : "viewport"} data-wrap={wrap ? "on" : "off"} role="log" aria-label="Log lines" sx={{
+            fontFamily: MONO, fontSize: 12.5, lineHeight: 1.6, bgcolor: m3.scHigh, borderRadius: "8px", p: 1.25, overflow: "auto", minWidth: 0,
+            ...(fullscreen ? { flex: "1 1 auto", minHeight: 0 } : { height: `calc(100vh - ${top}px - 88px)`, minHeight: 320 }),
           }}>
+            {before.map((g) => <GapMarker key={g.gap_id} gap={g} where="before" onJump={onJump} />)}
             {text.loading && text.lines.length === 0 ? "Loading…" : shown.length === 0 ? (needle ? "No loaded line matches the filter." : "This chunk holds no lines.") :
-              shown.map((line, i) => <RawLine key={`${chunk.chunk_id}:${i}`} line={line} />)}
+              shown.map((line, i) => <RawLine key={`${chunk.chunk_id}:${i}`} line={line} needle={needle} wrap={wrap} />)}
+            {after.map((g) => <GapMarker key={g.gap_id} gap={g} where="after" onJump={onJump} />)}
           </Box>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, pt: 1, flexWrap: "wrap" }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap", px: 0.5 }}>
             <Typography variant="caption" color="text.secondary">
               {needle ? `${shown.length} of ${text.lines.length} loaded lines match` : `${text.lines.length.toLocaleString("en-US")} lines loaded`}
               {text.capped ? ` (stopped at ${MAX_LOADED_LINES.toLocaleString("en-US")}; filter, or open another chunk)` : ""}
@@ -769,7 +951,7 @@ function LogViewer({ deviceId, sources, canViewUnmasked, maxPageBytes }: {
             {text.eof && <Typography variant="caption" color="text.secondary">End of chunk</Typography>}
             <Typography variant="caption" color="text.secondary">Pages are at most {formatBytes(maxPageBytes)}.</Typography>
           </Box>
-        </Box>
+        </>
       )}
     </Box>
   );

@@ -103,7 +103,8 @@ describe("the Logs tab renders each sub-state", () => {
     expect(screen.queryByText("No collection yet")).toBeNull();
     // the run's own facts stay: the summary strip and the side panels
     expect(screen.getByRole("region", { name: "Log summary" })).toBeInTheDocument();
-    expect(screen.getByText("Gaps")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Collection health" }));
+    expect(await screen.findByText("Gaps")).toBeInTheDocument();
   });
 
   it("collection failed, with its reason", async () => {

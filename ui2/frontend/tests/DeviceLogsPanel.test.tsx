@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DeviceLogsPanel, formatBytes, gapKindLabel, gapTone, gapWords, MAX_LOADED_LINES } from "../src/screens/DeviceLogsPanel";
-import { lineDeviceTime, windowWords } from "../src/screens/logLineTime";
+import { lineDeviceTime, lineSeverity, windowWords } from "../src/screens/logLineTime";
 import { m3 } from "../src/theme/m3Theme";
 import type { SystemLogChunk, SystemLogGap, SystemLogSource, SystemLogSources } from "../src/auth/adminApi";
 
@@ -116,6 +116,17 @@ function stub(setup: Setup = {}) {
 
 afterEach(() => vi.unstubAllGlobals());
 
+/** The Collection health view: the gaps, crash files, HCP reports and other collection moved off the line viewer (PO 2026-10-20). */
+async function openHealth() {
+  fireEvent.click(await screen.findByRole("tab", { name: "Collection health" }));
+  return screen.findByTestId("collection-health");
+}
+/** The one-line summary's disclosure: what the run said per source. */
+async function openRunDetails() {
+  fireEvent.click(await screen.findByRole("button", { name: /Run details/ }));
+  return screen.findByTestId("run-details");
+}
+
 describe("empty, disabled and refused states", () => {
   it("says there is no collection yet for a device that was never collected", async () => {
     stub({ summary: summary({ collection_state: "NO_COLLECTION_YET", sources: [], last_job: null }) });
@@ -166,8 +177,12 @@ describe("summary strip, source pills and side panel", () => {
     expect(sentence).not.toHaveTextContent("COMPLETED");
     // the window of the newest lines, device time, as a short range
     expect(sentence).toHaveTextContent("window 08:00–08:59 device time");
-    expect(within(strip).getByText("collected 2")).toBeInTheDocument();
-    expect(within(strip).getByText("backlog 1")).toBeInTheDocument();
+    // what is stored now sits on the same line; the run's per-source outcomes open on demand
+    expect(within(strip).getByTestId("stored-now")).toHaveTextContent("Stored 8 chunks · 320 lines · 32 KiB");
+    expect(within(strip).queryByText("collected 2")).toBeNull();
+    const details = await openRunDetails();
+    expect(within(details).getByText("collected 2")).toBeInTheDocument();
+    expect(within(details).getByText("backlog 1")).toBeInTheDocument();
     expect(await screen.findByText("1 new crash or dump file")).toBeInTheDocument();
   });
 
@@ -178,23 +193,31 @@ describe("summary strip, source pills and side panel", () => {
     expect(screen.queryByText(/new crash or dump file$/)).toBeNull();
   });
 
-  it("puts a BACKLOG, GAP or UNKNOWN pill on each source and says what a fast-rotating source means", async () => {
+  it("names each source with its state word and line count in the Source select, and says what a fast-rotating source means", async () => {
     stub();
     render(<DeviceLogsPanel deviceId={DEVICE} />);
-    const group = await screen.findByRole("group", { name: "Log sources" });
-    const messages = within(group).getByRole("button", { name: /messages/ });
-    expect(within(messages).getByText("Backlog")).toBeInTheDocument();
-    expect(within(messages).getByText("fast rotating")).toBeInTheDocument();
-    expect(within(within(group).getByRole("button", { name: /fwk\.elg/ })).getByText("Gap")).toBeInTheDocument();
-    expect(within(within(group).getByRole("button", { name: /cpwd\.elg/ })).getByText("UNKNOWN")).toBeInTheDocument();
-    // a whole-file source is not a line source: it is listed in the side panel, not as a viewer chip
-    expect(within(group).queryByRole("button", { name: /sar/ })).toBeNull();
-    expect(await screen.findByText("sar (daily)")).toBeInTheDocument();
+    const select = await screen.findByRole("combobox", { name: "Source" });
+    expect(within(select).getAllByRole("option").map((o) => o.textContent)).toEqual(["messages · Backlog · 80 lines", "fwk.elg · Gap · 80 lines", "cpwd.elg · UNKNOWN · 80 lines"]);
+    // the selected source's state word, in colour, beside the select; the fast-rotating note on hover
+    const state = screen.getByTestId("source-state");
+    expect(within(state).getByText("Backlog").closest("[data-pill]")).toHaveStyle({ backgroundColor: m3.warningContainer });
+    expect(within(state).getByText("fast rotating").closest("span[title]")).toHaveAttribute("title", expect.stringContaining("6.0 h"));
+    // every source with its word, on Run details
+    const details = await openRunDetails();
+    const rows = within(details).getAllByRole("row").slice(1);
+    expect(rows.map((r) => within(r).getAllByRole("cell")[0].textContent)).toEqual(["messages", "fwk.elg", "cpwd.elg", "sar (daily)"]);
+    expect(within(rows[1]).getByText("Gap")).toBeInTheDocument();
+    expect(within(rows[2]).getByText("UNKNOWN")).toBeInTheDocument();
+    // a whole-file source is not a line source: it is not in the select; Collection health lists it
+    expect(within(select).queryByRole("option", { name: /sar/ })).toBeNull();
+    const health = await openHealth();
+    expect(within(health).getByText("sar (daily)")).toBeInTheDocument();
   });
 
-  it("lists gaps in plain words with their byte counts, crash files and HCP reports as metadata", async () => {
+  it("lists gaps in plain words with their byte counts, crash files and HCP reports as metadata, on Collection health", async () => {
     stub();
     render(<DeviceLogsPanel deviceId={DEVICE} />);
+    await openHealth();
     expect(await screen.findByText(/Rotated away on the device before it was read: 1\.0 MiB lost\. More may be missing\./)).toBeInTheDocument();
     expect(await screen.findByText("fwd")).toBeInTheDocument();
     expect(screen.getByText("New")).toBeInTheDocument();
@@ -208,6 +231,7 @@ describe("summary strip, source pills and side panel", () => {
   it("shows Spike Detective data as name classes, device time and sizes only when the source is collected", async () => {
     const { calls } = stub({ summary: summary({ sources: [...summary().sources, source("cp_spike_data", { cursor: null })] }) });
     render(<DeviceLogsPanel deviceId={DEVICE} />);
+    await openHealth();
     expect(await screen.findByText("Spike Detective data")).toBeInTheDocument();
     expect(await screen.findByText("Collected")).toBeInTheDocument();
     expect(screen.getByText("Too large, not fetched")).toBeInTheDocument();
@@ -219,6 +243,7 @@ describe("summary strip, source pills and side panel", () => {
   it("does not ask for Spike Detective data while the source has never run", async () => {
     const { calls } = stub();
     render(<DeviceLogsPanel deviceId={DEVICE} />);
+    await openHealth();
     expect(await screen.findByText("HCP reports")).toBeInTheDocument();
     expect(screen.queryByText("Spike Detective data")).toBeNull();
     expect(calls.some((u) => u.includes("/spike-data"))).toBe(false);
@@ -287,12 +312,13 @@ describe("line viewer", () => {
     expect(screen.getByText("End of chunk")).toBeInTheDocument();
   });
 
-  it("switches source from the chips and reloads the chunks of that source", async () => {
+  it("switches source from the select and reloads the chunks of that source", async () => {
     const { calls } = stub();
     render(<DeviceLogsPanel deviceId={DEVICE} />);
     await screen.findAllByTestId("log-line");
-    fireEvent.click(within(screen.getByRole("group", { name: "Log sources" })).getByRole("button", { name: /fwk\.elg/ }));
+    fireEvent.change(screen.getByRole("combobox", { name: "Source" }), { target: { value: "cp_fwk_elg" } });
     await waitFor(() => expect(calls).toContain(`${BASE}/${DEVICE}/chunks?source=cp_fwk_elg`));
+    expect(within(screen.getByTestId("source-state")).getByText("Gap")).toBeInTheDocument();
   });
 
   it("does not request the text of a chunk that retention removed", async () => {
@@ -396,9 +422,11 @@ describe("filled state, summary first (UI review 2026-10-18, F-8)", () => {
     render(<DeviceLogsPanel deviceId={DEVICE} vendorHint="palo_alto" />);
     const strip = await screen.findByRole("region", { name: "Log summary" });
     expect(within(strip).queryByRole("list", { name: "Lines stored per source" })).toBeNull();
-    const group = screen.getByRole("group", { name: "Log sources" });
-    const config = within(group).getByRole("button", { name: "config · OK · 13 lines" });
-    const system = within(group).getByRole("button", { name: "system · OK · 0 lines" });
+    const select = screen.getByRole("combobox", { name: "Source" });
+    expect(within(select).getByRole("option", { name: "config · OK · 13 lines" })).toBeInTheDocument();
+    expect(within(select).getByRole("option", { name: "system · OK · 0 lines" })).toBeInTheDocument();
+    const details = await openRunDetails();
+    const [config, system] = within(details).getAllByRole("row").slice(1);
     expect(within(config).getByText("OK").closest("[data-pill]")).toHaveStyle({ backgroundColor: m3.successContainer });
     // a count, and a zero count, are neutral grey: zero is never green
     expect(within(config).getByText("13 lines").closest("[data-pill]")).toHaveStyle({ backgroundColor: m3.scHigh });
@@ -408,7 +436,8 @@ describe("filled state, summary first (UI review 2026-10-18, F-8)", () => {
   it("counts of sources in the run are grey; a source that did not end cleanly keeps its state word and colour", async () => {
     stub({ summary: summary(), job: { state: "COMPLETED" } });
     render(<DeviceLogsPanel deviceId={DEVICE} />);
-    const strip = await screen.findByRole("region", { name: "Log summary" });
+    await screen.findByRole("region", { name: "Log summary" });
+    const strip = await openRunDetails();
     expect(within(strip).getByText("collected 2").closest("[data-pill]")).toHaveStyle({ backgroundColor: m3.scHigh });
     expect(within(strip).getByText("backlog 1").closest("[data-pill]")).not.toHaveStyle({ backgroundColor: m3.scHigh });
   });
@@ -425,10 +454,14 @@ describe("filled state, summary first (UI review 2026-10-18, F-8)", () => {
     // jargon and red-tinted "initial baseline" pills are gone
     expect(screen.queryByText(/initial baseline/i)).toBeNull();
     expect(screen.queryByText(/seq gap suspected/)).toBeNull();
+    // the panels live on Collection health: the link opens that view and scrolls to the panel
+    expect(document.getElementById("logs-gaps")).toBeNull();
     const scroll = vi.fn();
-    const panel = document.getElementById("logs-gaps") as HTMLElement;
-    panel.scrollIntoView = scroll;
+    Element.prototype.scrollIntoView = scroll;
     fireEvent.click(gapLink);
+    expect(screen.getByRole("tab", { name: "Collection health" })).toHaveAttribute("aria-selected", "true");
+    const panel = document.getElementById("logs-gaps") as HTMLElement;
+    expect(panel).not.toBeNull();
     expect(scroll).toHaveBeenCalled();
     // the first collection pill in the panel is grey; the suspected gap is amber, not red-tinted
     expect(within(panel).getByText("First collection: older content not fetched").closest("[data-pill]")).toHaveStyle({ backgroundColor: m3.scHigh });
@@ -490,9 +523,8 @@ describe("filled state, summary first (UI review 2026-10-18, F-8)", () => {
     expect(times).toEqual(["2026/10/18 06:11:02", "2026/10/18 06:11:09", ""]);
     // a line with no time of its own gets an empty cell and says so on hover; nothing is invented
     expect(within(rows[2]).getByTestId("log-line-time")).toHaveAttribute("title", "No device time on this line");
-    expect(rows[0]).toHaveAttribute("aria-expanded", "false");
-    fireEvent.click(rows[0]);
-    expect(rows[0]).toHaveAttribute("aria-expanded", "true");
+    // the whole line is on screen, wrapped: nothing is cut away and nothing has to be clicked open
+    expect(rows[0]).toHaveAttribute("data-wrap", "on");
     expect(rows[0]).toHaveTextContent("synthetic text that is long");
     // the filter still sees the whole line, time included
     fireEvent.change(screen.getByRole("textbox", { name: "Filter lines" }), { target: { value: "06:11:09" } });
@@ -507,14 +539,16 @@ describe("filled state, summary first (UI review 2026-10-18, F-8)", () => {
     expect(screen.queryByText(/severity|critical|informational/i)).toBeNull();
   });
 
-  it("lays out Check Point and Palo Alto the same: summary, attention line, viewer, then the side panels", async () => {
+  it("lays out Check Point and Palo Alto the same: summary, attention line, then the Lines and Collection health views", async () => {
     for (const [vendor, data] of [["check_point", summary()], ["palo_alto", panSummary()]] as const) {
       stub({ summary: data, job: { state: "COMPLETED" } });
       const { unmount } = render(<DeviceLogsPanel deviceId={DEVICE} vendorHint={vendor} />);
       const root = await screen.findByTestId("device-logs");
       const order = ["Log summary", "Attention"].map((name) => within(root).getByRole("region", { name }));
       expect(order[0].compareDocumentPosition(order[1]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-      expect(await within(root).findByRole("group", { name: "Log sources" })).toBeInTheDocument();
+      expect(within(within(root).getByRole("tablist", { name: "Logs view" })).getAllByRole("tab").map((t) => t.textContent)).toEqual(["Lines", "Collection health"]);
+      expect(await within(root).findByRole("combobox", { name: "Source" })).toBeInTheDocument();
+      await openHealth();
       for (const title of ["Gaps", "Crash and dump files", "HCP reports"]) expect(within(root).getByText(title)).toBeInTheDocument();
       unmount();
       vi.unstubAllGlobals();
@@ -548,5 +582,181 @@ describe("lineDeviceTime and windowWords", () => {
     expect(gapKindLabel("INITIAL_BASELINE")).toBe("First collection: older content not fetched");
     expect(gapKindLabel("SOMETHING_NEW")).toBe("Something new");
     expect([gapTone("INITIAL_BASELINE"), gapTone("SEQ_GAP_SUSPECTED"), gapTone("BACKLOG"), gapTone("ROTATED_AWAY")]).toEqual(["neutral", "warn", "warn", "attn"]);
+  });
+});
+
+// Synthetic lines: a Palo Alto record with a severity field, a daemon line with a delimited level, a plain line.
+const SEVERITY_LINES = [
+  '{"receive_time": "2026/10/18 06:11:02", "severity": "high", "type": "SYSTEM", "opaque": "synthetic"}',
+  "Oct 18 06:11:09 FW-TANGO-04 fwd[4321]: ERROR: synthetic failure text",
+  "Oct 18 06:11:10 FW-TANGO-04 kernel: synthetic line with the word error inside a sentence",
+  '{"receive_time": "2026/10/18 06:11:12", "severity": "informational", "type": "SYSTEM"}',
+].join("\n") + "\n";
+
+describe("the lines are the content (PO 2026-10-20)", () => {
+  it("gives the viewer the rest of the viewport and a full-screen mode that Escape leaves", async () => {
+    stub();
+    render(<DeviceLogsPanel deviceId={DEVICE} />);
+    await screen.findAllByTestId("log-line");
+    const lines = screen.getByTestId("log-lines");
+    expect(lines).toHaveAttribute("data-fill", "viewport");
+    expect(getComputedStyle(lines).height).toContain("100vh");
+    const viewer = screen.getByTestId("log-viewer");
+    expect(viewer).toHaveAttribute("data-fullscreen", "false");
+    fireEvent.click(screen.getByRole("button", { name: "Expand viewer" }));
+    expect(viewer).toHaveAttribute("data-fullscreen", "true");
+    expect(lines).toHaveAttribute("data-fill", "screen");
+    expect(screen.getByRole("button", { name: "Exit full screen" })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(viewer).toHaveAttribute("data-fullscreen", "false");
+    // the viewer keeps its lines and its header through both modes
+    expect(screen.getAllByTestId("log-line")).toHaveLength(3);
+    expect(screen.getByRole("textbox", { name: "Filter lines" })).toBeInTheDocument();
+  });
+
+  it("wraps long lines by default, scrolls them sideways when wrapping is off, and remembers the choice per viewer", async () => {
+    window.localStorage.removeItem("nx.logs.wrap");
+    stub();
+    render(<DeviceLogsPanel deviceId={DEVICE} />);
+    const rows = await screen.findAllByTestId("log-line");
+    const wrapToggle = screen.getByRole("button", { name: "Wrap lines" });
+    expect(wrapToggle).toHaveAttribute("aria-pressed", "true");
+    expect(rows[0]).toHaveAttribute("data-wrap", "on");
+    expect(getComputedStyle(rows[0].lastElementChild as Element).whiteSpace).toBe("pre-wrap");
+    fireEvent.click(wrapToggle);
+    expect(wrapToggle).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getAllByTestId("log-line")[0]).toHaveAttribute("data-wrap", "off");
+    expect(getComputedStyle(screen.getAllByTestId("log-line")[0].lastElementChild as Element).whiteSpace).toBe("pre");
+    expect(screen.getByTestId("log-lines")).toHaveAttribute("data-wrap", "off");
+    expect(window.localStorage.getItem("nx.logs.wrap")).toBe("0");
+    window.localStorage.removeItem("nx.logs.wrap");
+  });
+
+  it("renders with wrapping on when the browser store is unusable", async () => {
+    const store = Object.getOwnPropertyDescriptor(window, "localStorage")!;
+    Object.defineProperty(window, "localStorage", { configurable: true, get() { throw new Error("blocked"); } });
+    try {
+      stub();
+      render(<DeviceLogsPanel deviceId={DEVICE} />);
+      await screen.findAllByTestId("log-line");
+      const wrapToggle = screen.getByRole("button", { name: "Wrap lines" });
+      expect(wrapToggle).toHaveAttribute("aria-pressed", "true");
+      fireEvent.click(wrapToggle);
+      expect(wrapToggle).toHaveAttribute("aria-pressed", "false");
+    } finally {
+      Object.defineProperty(window, "localStorage", store);
+    }
+  });
+
+  it("marks every filter match inside the line and keeps the device-time column", async () => {
+    stub();
+    render(<DeviceLogsPanel deviceId={DEVICE} />);
+    await screen.findAllByTestId("log-line");
+    fireEvent.change(screen.getByRole("textbox", { name: "Filter lines" }), { target: { value: "LINE" } });
+    const rows = screen.getAllByTestId("log-line");
+    expect(rows).toHaveLength(3);
+    for (const row of rows) {
+      const marks = row.querySelectorAll("mark");
+      expect(marks).toHaveLength(1);
+      expect(marks[0].textContent).toBe("line");
+      // these synthetic lines carry no full stamp: the time cell stays, empty and honest
+      expect(within(row).getByTestId("log-line-time")).toHaveAttribute("title", "No device time on this line");
+    }
+    expect(screen.getByText("3 of 3 loaded lines match")).toBeInTheDocument();
+  });
+
+  it("colours a severity word only where the line itself writes one, and invents none", async () => {
+    stub({ summary: panSummary(), chunks: [chunk("c-1", "2026-10-18T03:13:03Z", { source_key: "pan_system", log_day: "2026-10-18" })],
+      pages: { "c-1": [{ text: SEVERITY_LINES, next: 400, eof: true }] } });
+    render(<DeviceLogsPanel deviceId={DEVICE} vendorHint="palo_alto" />);
+    const rows = await screen.findAllByTestId("log-line");
+    expect(rows).toHaveLength(4);
+    const high = rows[0].querySelector("[data-severity]") as HTMLElement;
+    expect(high).toHaveAttribute("data-severity", "high");
+    expect(high).toHaveTextContent("high");
+    expect(high).toHaveStyle({ color: m3.criticalInk });
+    const error = rows[1].querySelector("[data-severity]") as HTMLElement;
+    expect(error).toHaveAttribute("data-severity", "ERROR");
+    expect(error).toHaveTextContent("ERROR");
+    // "error" inside a sentence is not a level the line carries; an informational record gets no colour
+    expect(rows[2].querySelector("[data-severity]")).toBeNull();
+    expect(rows[3].querySelector("[data-severity]")).toBeNull();
+    // no severity chip, column or count anywhere
+    expect(screen.queryByText(/^severity$/i)).toBeNull();
+  });
+
+  it("marks a gap in the stream where its place is known: before the lines for lost content, after them for a backlog", async () => {
+    const backlog: SystemLogGap = { ...GAP, gap_id: "g-b", kind: "BACKLOG", pending_bytes: 2048, known_lost_bytes: 0, extent_unknown: false };
+    const otherRun: SystemLogGap = { ...GAP, gap_id: "g-o", job_id: "job-0", kind: "TRUNCATED" };
+    const otherSource: SystemLogGap = { ...GAP, gap_id: "g-s", source_key: "cp_fwk_elg", kind: "TRUNCATED" };
+    stub({ gaps: [GAP, backlog, otherRun, otherSource] });
+    render(<DeviceLogsPanel deviceId={DEVICE} />);
+    await screen.findAllByTestId("log-line");
+    const lines = screen.getByTestId("log-lines");
+    const markers = await within(lines).findAllByTestId("gap-marker");
+    expect(markers.map((m) => m.getAttribute("data-where"))).toEqual(["before", "after"]);
+    expect(markers[0]).toHaveTextContent("Gap before these lines");
+    expect(markers[0]).toHaveTextContent("Rotated away on the device");
+    expect(markers[0]).toHaveTextContent("1.0 MiB lost");
+    expect(markers[1]).toHaveTextContent("Backlog after these lines");
+    expect(markers[1]).toHaveTextContent("2.0 KiB left to read");
+    // the marker sits above the first line, the backlog below the last
+    const rows = within(lines).getAllByTestId("log-line");
+    expect(markers[0].compareDocumentPosition(rows[0]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(rows[2].compareDocumentPosition(markers[1]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // a gap of another run or another source has no known place in this stream: Collection health only
+    expect(within(lines).queryByText(/truncated/i)).toBeNull();
+    Element.prototype.scrollIntoView = vi.fn();
+    fireEvent.click(within(markers[0]).getByRole("button", { name: "Collection health" }));
+    expect(screen.getByRole("tab", { name: "Collection health" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getAllByText(/Rotated away on the device before it was read/)).toHaveLength(1);
+  });
+
+  it("keeps the viewer's source, run and filter while Collection health is open, and never squeezes the viewer with it", async () => {
+    const { calls } = stub();
+    render(<DeviceLogsPanel deviceId={DEVICE} />);
+    await screen.findAllByTestId("log-line");
+    fireEvent.change(screen.getByRole("textbox", { name: "Filter lines" }), { target: { value: "second" } });
+    expect(screen.getAllByTestId("log-line")).toHaveLength(1);
+    const textReads = calls.filter((u) => u.includes("/text")).length;
+    const health = await openHealth();
+    expect(screen.queryByTestId("log-viewer")).toBeNull();
+    for (const title of ["Gaps", "Crash and dump files", "HCP reports", "Other collection"]) expect(within(health).getByText(title)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Lines" }));
+    expect(screen.getByRole("textbox", { name: "Filter lines" })).toHaveValue("second");
+    expect(screen.getAllByTestId("log-line")).toHaveLength(1);
+    expect(calls.filter((u) => u.includes("/text")).length).toBe(textReads);
+    expect(screen.queryByTestId("collection-health")).toBeNull();
+  });
+
+  it("keeps the unmasked control one compact line with its audit warning, only when the server grants it", async () => {
+    stub({ summary: summary({ can_view_unmasked: true }) });
+    render(<DeviceLogsPanel deviceId={DEVICE} />);
+    await screen.findAllByTestId("log-line");
+    const control = screen.getByTestId("unmasked-control");
+    expect(within(control).getByLabelText("Show unmasked")).not.toBeChecked();
+    expect(control).toHaveTextContent("Every page you load this way is recorded on the audit ledger.");
+    expect(control.querySelector("svg")).not.toBeNull();
+  });
+
+  it("reads the picker sentence with the redaction count and the device-time span on one caption line", async () => {
+    stub();
+    render(<DeviceLogsPanel deviceId={DEVICE} />);
+    const sentence = await screen.findByTestId("picker-sentence");
+    expect(sentence).toHaveTextContent("Day 2026-10-17 · run 2 of 2 · 12:00 · 3 lines · 100 B · 2 secret values redacted · lines 2026-10-17 08:00:00 to 2026-10-17 08:59:59 (device time)");
+  });
+});
+
+describe("lineSeverity", () => {
+  it("takes a Palo Alto severity field or a delimited level token, and nothing from the middle of a sentence", () => {
+    expect(lineSeverity('{"severity": "critical", "x": 1}')).toEqual({ token: "critical", index: 14, tone: "bad" });
+    expect(lineSeverity("severity=medium type=SYSTEM")?.tone).toBe("warn");
+    expect(lineSeverity('"severity":"low"')?.tone).toBeNull();
+    expect(lineSeverity("fwd[1]: ERROR: synthetic")).toEqual({ token: "ERROR", index: 8, tone: "bad" });
+    expect(lineSeverity("[WARNING] synthetic")).toEqual({ token: "WARNING", index: 1, tone: "warn" });
+    expect(lineSeverity("<CRIT> synthetic")?.tone).toBe("bad");
+    expect(lineSeverity("synthetic: an error occurred")).toBeNull();
+    expect(lineSeverity("Oct 18 06:11:10 gw kernel: Error: lower case is not a level")).toBeNull();
+    expect(lineSeverity("")).toBeNull();
   });
 });

@@ -13,6 +13,8 @@ export const TAB_COVERAGE: readonly { screen: ScreenId; tabList: string; labels:
   // Cluster members is a cluster-page tab only (roadmap 2.2); a member page links to its cluster from the header.
   { screen: "inventory", tabList: "Device detail", labels: ["Interfaces", "Routing", "Grid members", "Managed estate", "Configuration", "Backup", "Logs", "Identity"] },
   { screen: "inventory", tabList: "Cluster detail", labels: ["Interfaces", "Routing", "Cluster members", "Configuration", "Logs", "Identity", "Failover"] },
+  // The Logs tab's own two views (PO 2026-10-20): the line viewer with the room, and the collection health panels beside it.
+  { screen: "inventory", tabList: "Logs view", labels: ["Lines", "Collection health"] },
   { screen: "inventory", tabList: "Configuration sections", labels: ["Sections", "Configuration", "Details"] },
   { screen: "inventory", tabList: "Configuration detail", labels: ["Sections", "Changes", "Overrides", "XML Configuration", "Sanitized text", "Alignment"] },
 ];
