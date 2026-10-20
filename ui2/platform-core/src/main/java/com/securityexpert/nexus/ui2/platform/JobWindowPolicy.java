@@ -11,8 +11,8 @@ import java.util.Set;
  *
  * <p>PO decision 2026-10-20: an administrator's manual submission (a {@link ManualAdmission.Grant} open on the
  * request thread) is never refused for the window; inside {@link BusinessHours} it needs the acknowledgement
- * instead. {@link #requireOpen(Instant)} (an explicit time, e.g. a scheduled failover's start) and every
- * {@link #isOpen} read used by the schedulers ignore grants: scheduled and automatic work keeps the windows.</p>
+ * instead. {@link #requireOpen()}, {@link #requireOpen(Instant)} (an explicit time, e.g. a scheduled failover's start)
+ * and every {@link #isOpen} read used by the schedulers ignore grants: scheduled and automatic work keeps the windows.</p>
  */
 public final class JobWindowPolicy {
     public static final String ZONE = "Europe/Istanbul";
@@ -73,16 +73,21 @@ public final class JobWindowPolicy {
         return INTERNAL_TASKS.contains(task) || isOpen(instant);
     }
     /**
-     * Manual device-job admission now. With an administrator's grant open on this thread: never a window refusal, but
-     * {@link ManualAdmission.BusinessHoursConfirmRequired} inside business hours without the acknowledgement.
-     * Without one (operator, aiview, every scheduler and worker): {@link OutsideWindow} outside a window, as before.
+     * The window now, for every caller: {@link OutsideWindow} outside a window. It never consults a
+     * {@link ManualAdmission.Grant} -- it has no actor to match one against (Argon review 2026-10-20 P2-2), so a grant
+     * open on the request thread can never let another actor's or a {@code system:*} job past the window through it.
+     * A grant-aware admission names its actor: {@link #requireOpenFor}, {@link #requireOpenUnlessAdmin} or
+     * {@link #requireDeviceJobOpen}.
      */
     public void requireOpen() {
-        var grant = ManualAdmission.current();
-        if (grant.isPresent()) requireAcknowledged(grant.get());
-        else requireOpen(now());
+        requireOpen(now());
     }
-    /** {@link #requireOpen()}, but only a grant held by {@code actor} counts: a job submitted for another actor never rides on it. */
+    /**
+     * Manual device-job admission now for {@code actor}. With that actor's administrator grant open on this thread:
+     * never a window refusal, but {@link ManualAdmission.BusinessHoursConfirmRequired} inside business hours without
+     * the acknowledgement. Without one (operator, aiview, every scheduler and worker, or a grant held by another
+     * actor): {@link OutsideWindow} outside a window, as before.
+     */
     public void requireOpenFor(String actor) {
         var grant = ManualAdmission.currentFor(actor);
         if (grant.isPresent()) requireAcknowledged(grant.get());

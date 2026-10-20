@@ -10,7 +10,8 @@ import java.util.function.Supplier;
  *
  * <p>The service opens a grant for the duration of one HTTP request whose authenticated actor holds
  * {@code security_admin} or {@code operation_admin} (never a replay viewer). While it is open on the request thread,
- * {@link JobWindowPolicy#requireOpen()} and {@link JobWindowPolicy#requireDeviceJobOpen} do not refuse for the job
+ * {@link JobWindowPolicy#requireOpenFor} and {@link JobWindowPolicy#requireDeviceJobOpen} (for the grant's own actor
+ * only) do not refuse for the job
  * window; inside {@link BusinessHours} they refuse with {@link BusinessHoursConfirmRequired} unless the grant carries
  * the acknowledgement. Schedulers, workers and every other thread never see a grant (a thread-local is not inherited),
  * so scheduled and automatic jobs keep the windows exactly as before; operator and aiview requests never get one.</p>

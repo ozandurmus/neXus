@@ -1,10 +1,12 @@
 package com.securityexpert.nexus.ui2.persistence.jobrecords;
 
 import com.securityexpert.nexus.ui2.platform.JobWindowPolicy;
+import com.securityexpert.nexus.ui2.platform.ManualAdmission;
 import com.securityexpert.nexus.ui2.platform.ScheduledBackupWindowPolicy;
 import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 import org.jooq.Record;
 import org.jooq.Result;
@@ -137,10 +139,40 @@ public final class JooqJobLeaseDao implements JobLeaseDao {
                     backupStart.toOffsetDateTime(), backupStart.plusHours(1).toOffsetDateTime(),
                     String.join(",", ScheduledBackupWindowPolicy.FLEET_JOB_TYPES), ScheduledBackupWindowPolicy.ACTOR,
                     ScheduledBackupWindowPolicy.MDS_ACTOR, ScheduledBackupWindowPolicy.MDS_EXPORT);
-            return rows.stream().findFirst()
+            var claimed = rows.stream().findFirst()
                     .map(row -> new ClaimedJobRow(row.get("job_id", String.class), row.get("lease_epoch", Long.class)));
+            // Argon review 2026-10-20 P2-1: an administrator's job submitted outside business hours carries no
+            // acknowledgement; claimed once business hours have begun, it does not run. It ends REJECTED with
+            // BUSINESS_HOURS_CONFIRM_REQUIRED in this same claim transaction (the established claim-check refusal), so
+            // no executor ever sees it; the administrator submits it again and confirms.
+            if (claimed.isPresent() && !storedData && windows.insideBusinessHours()
+                    && dsl.execute(BUSINESS_HOURS_UNACKNOWLEDGED_REFUSAL_SQL, claimed.get().jobId(),
+                            claimed.get().leaseEpoch(), String.join(",", BUSINESS_HOURS_CLAIM_EXEMPT)) == 1) {
+                return Optional.empty();
+            }
+            return claimed;
         });
     }
+
+    /**
+     * Not refused at claim: a failover execution job, whose run's own fence ({@code mutationAdmission}) rechecks
+     * business hours before its first device write and stops the run (and its job) through the run's lifecycle; and
+     * stored-data work, which sends nothing to a device.
+     */
+    static final List<String> BUSINESS_HOURS_CLAIM_EXEMPT = Stream.concat(
+            Stream.of("cp_cluster_failover", "pan_cluster_failover"), JobWindowPolicy.STORED_DATA_JOB_TYPES.stream())
+            .sorted().toList();
+
+    /**
+     * The claim-time business-hours refusal of one just-claimed job ({0} job, {1} lease epoch): a window-bypass job
+     * submitted outside business hours without the acknowledgement (V168 columns). Same terminal shape as every
+     * claim-check refusal ({@code transitionState(..., CLAIMED, REJECTED, ...)}); audited by the claim transaction.
+     */
+    static final String BUSINESS_HOURS_UNACKNOWLEDGED_REFUSAL_SQL = "update jobs set state = 'REJECTED', "
+            + "outcome = 'REJECTED', terminal_reason = '" + ManualAdmission.CONFIRM_CODE + "', finished_at = now() "
+            + "where job_id = {0} and lease_epoch = {1} and state = 'CLAIMED' and window_bypass_role is not null "
+            + "and submitted_in_business_hours is not true and business_hours_ack_at is null "
+            + "and capability_id <> all(string_to_array({2}, ','))";
 
     /** A cheap read (partial index jobs_window_bypass_requested), never a claim: the claim stays the one statement. */
     static final String BYPASS_QUEUED_SQL = "select 1 as queued from jobs where state = 'REQUESTED' "

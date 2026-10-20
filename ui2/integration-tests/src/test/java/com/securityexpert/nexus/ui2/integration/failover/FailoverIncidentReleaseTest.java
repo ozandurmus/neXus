@@ -113,6 +113,13 @@ class FailoverIncidentReleaseTest {
             assertEquals(List.of(down.nonce()), listed.get(0).unresolvedDispatchRefs());
 
             assertEquals(JooqCpFailoverRepository.INCIDENT_RELEASED, repo.releaseIncident(e.run(), ADMIN, REASON));
+            // Argon review 2026-10-20 P2-3: the incident row was already inactive, so the reason lands on the job's
+            // reconciliation row (audited), as still unknown.
+            var reconciliation = mutate(fixture, dsl -> dsl.fetchOne("select evidence,recorded_by,reconciled_outcome "
+                + "from job_reconciliation where job_id={0}", e.job()));
+            assertEquals(REASON, reconciliation.get("evidence", String.class));
+            assertEquals(ADMIN, reconciliation.get("recorded_by", String.class));
+            assertEquals("RECONCILED_STILL_UNKNOWN", reconciliation.get("reconciled_outcome", String.class));
             assertEquals("OUTCOME_UNKNOWN", mutate(fixture, dsl -> dsl.fetchOne(
                 "select observation from failover_dispatch_intent where nonce={0}", down.nonce()).get(0, String.class)));
             assertEquals("OUTCOME_UNKNOWN", mutate(fixture, dsl -> dsl.fetchOne("select a.outcome from job_step_attempt a "

@@ -112,34 +112,46 @@ function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit, timeoutMs
 /**
  * PO decision 2026-10-20: an administrator's manual device job inside business hours answers 409
  * BUSINESS_HOURS_CONFIRM_REQUIRED and admits nothing. {@link call} then asks the registered confirmation (the
- * BusinessHoursConfirmProvider dialog) and, on "Continue", repeats the same request once with the acknowledgement
- * header. A "Continue" covers the requests of the next minute, so a bulk run asks once, not once per cluster.
+ * BusinessHoursConfirmProvider dialog) and, on "Continue", repeats that same request once with the acknowledgement
+ * header. The answer belongs to that one request only (Argon review 2026-10-20 P1-2): nothing is remembered, so a later
+ * request -- a failover start above all -- asks again. The single exception is explicit: a bulk action creates a
+ * {@link BusinessHoursAckScope} and passes it to its own requests; one "Continue" then covers that scope's requests and
+ * no others.
  */
 export const BUSINESS_HOURS_CONFIRM_REQUIRED = "BUSINESS_HOURS_CONFIRM_REQUIRED";
 export const BUSINESS_HOURS_ACK_HEADER = "X-Nexus-Business-Hours-Ack";
 export const BUSINESS_HOURS_DEFAULT_MESSAGE = "Business hours (08:00\u201320:00 GMT+3). This sends commands to the device. Continue?";
-const BUSINESS_HOURS_ACK_REMEMBER_MS = 60_000;
 type BusinessHoursConfirm = (message: string) => Promise<boolean>;
 let businessHoursConfirm: BusinessHoursConfirm | null = null;
-let businessHoursPrompt: Promise<boolean> | null = null;
-let businessHoursAckUntil = 0;
+/** Dialogs are shown one at a time; each request waits for its own answer. */
+let businessHoursQueue: Promise<unknown> = Promise.resolve();
 /** Registers the dialog that asks; returns the unregister function. Without one, the 409 is reported as an error. */
 export function setBusinessHoursConfirm(confirm: BusinessHoursConfirm | null): () => void {
   businessHoursConfirm = confirm;
-  businessHoursAckUntil = 0;
   return () => { if (businessHoursConfirm === confirm) businessHoursConfirm = null; };
 }
-async function confirmBusinessHours(message: string): Promise<boolean> {
-  if (Date.now() < businessHoursAckUntil) return true;
-  if (!businessHoursConfirm) return false;
-  // Concurrent requests share one dialog.
-  businessHoursPrompt ??= businessHoursConfirm(message).finally(() => { businessHoursPrompt = null; });
-  const confirmed = await businessHoursPrompt;
-  if (confirmed) businessHoursAckUntil = Date.now() + BUSINESS_HOURS_ACK_REMEMBER_MS;
-  return confirmed;
+/**
+ * One bulk action's confirmation (the bulk HA readiness run): created by that action, passed only to its own requests,
+ * discarded when it ends. Never pass one to a failover start.
+ */
+export interface BusinessHoursAckScope { answer: Promise<boolean> | null }
+export function newBusinessHoursAckScope(): BusinessHoursAckScope {
+  return { answer: null };
+}
+function askBusinessHours(message: string): Promise<boolean> {
+  if (!businessHoursConfirm) return Promise.resolve(false);
+  const answer = businessHoursQueue.then(() => businessHoursConfirm ? businessHoursConfirm(message) : false);
+  businessHoursQueue = answer.catch(() => false);
+  return answer.catch(() => false);
+}
+function confirmBusinessHours(message: string, scope?: BusinessHoursAckScope): Promise<boolean> {
+  if (!scope) return askBusinessHours(message);
+  scope.answer ??= askBusinessHours(message);
+  return scope.answer;
 }
 
-async function call<T>(path: string, method: "GET" | "POST" | "PUT", body?: unknown, businessHoursAck = false): Promise<T> {
+async function call<T>(path: string, method: "GET" | "POST" | "PUT", body?: unknown,
+    scope?: BusinessHoursAckScope, businessHoursAck = false): Promise<T> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (method !== "GET") {
     const token = await csrfToken();
@@ -156,8 +168,8 @@ async function call<T>(path: string, method: "GET" | "POST" | "PUT", body?: unkn
   const parsed = await response.json().catch(() => ({}));
   if (!response.ok) {
     if (response.status === 409 && parsed.code === BUSINESS_HOURS_CONFIRM_REQUIRED && method !== "GET" && !businessHoursAck) {
-      if (await confirmBusinessHours(typeof parsed.message === "string" ? parsed.message : BUSINESS_HOURS_DEFAULT_MESSAGE)) {
-        return call<T>(path, method, body, true);
+      if (await confirmBusinessHours(typeof parsed.message === "string" ? parsed.message : BUSINESS_HOURS_DEFAULT_MESSAGE, scope)) {
+        return call<T>(path, method, body, scope, true);
       }
       parsed.message = "Not started: business hours were not confirmed.";
     }
@@ -1834,9 +1846,10 @@ export const secondApproveCpFailover = (unit: CpFailoverUnit, requestId: string,
 export const revokeCpFailover = (approvalId: string, vendor?: string) => call<{ revoked: boolean }>(`${failoverPath(vendor)}/approvals/${encodeURIComponent(approvalId)}/revoke`, "POST");
 export const startCpFailover = (unit: CpFailoverUnit, binding: { requestId: string; revision: number; executionNonce: string; warningConfirmed: true }) =>
   call<{ runId: string }>(`${failoverPath(unit.vendor)}/runs`, "POST", { clusterId: unit.clusterId, unitId: unit.unitId, scheduledFor: null, ...binding });
-export const runCpFailoverReadiness = (unit: Pick<CpFailoverUnit, "clusterId" | "unitId" | "vendor">) =>
+/** {@code scope}: only the bulk readiness run passes one, so its units share one business-hours confirmation. */
+export const runCpFailoverReadiness = (unit: Pick<CpFailoverUnit, "clusterId" | "unitId" | "vendor">, scope?: BusinessHoursAckScope) =>
   call<{ runId: string }>(`${failoverPath(unit.vendor)}/units/${encodeURIComponent(unit.unitId)}/readiness`, "POST",
-    { clusterId: unit.clusterId, unitId: unit.unitId });
+    { clusterId: unit.clusterId, unitId: unit.unitId }, scope);
 /** One open failover incident, or a stopped run whose unresolved send blocks every failover in the estate. */
 export interface FailoverIncident {
   incidentRef: string; clusterId: string; unitId: string; cluster_member_ref: string; maskedName?: string;

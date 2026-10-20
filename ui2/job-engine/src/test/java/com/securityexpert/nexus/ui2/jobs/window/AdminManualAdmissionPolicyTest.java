@@ -83,7 +83,6 @@ class AdminManualAdmissionPolicyTest {
         assertEquals(insideBusinessHours, policy.insideBusinessHours());
         List<Runnable> gates = List.of(
                 () -> policy.requireOpenFor(ACTOR),
-                () -> policy.requireOpen(),
                 () -> policy.requireDeviceJobOpen("cp_inventory_collect", "cp_inventory_collect", ACTOR));
         for (Runnable gate : gates) {
             if (role.bypass().isPresent()) {
@@ -114,6 +113,28 @@ class AdminManualAdmissionPolicyTest {
                     "cp_gateway_backup", "cp_gateway_backup", ScheduledBackupWindowPolicy.ACTOR));
             return null;
         });
+    }
+
+    /**
+     * Argon review 2026-10-20 P2-2: the no-arg form has no actor to match a grant against, so it never consults one --
+     * not even the grant of the actor whose request is on this thread. It is the plain window, for every caller.
+     */
+    @Test void theNoArgumentWindowCheckNeverHonoursAGrant() {
+        var outside = policyAt("2026-10-08T13:00:00");
+        var insideWindowInBusinessHours = policyAt("2026-10-08T12:10:00");
+        for (String role : List.of(ManualAdmission.SECURITY_ADMIN, ManualAdmission.OPERATION_ADMIN)) {
+            for (String holder : List.of(ACTOR, "another-actor", "system:worker")) {
+                ManualAdmission.under(new ManualAdmission.Grant(holder, role, true), () -> {
+                    assertThrows(JobWindowPolicy.OutsideWindow.class, () -> outside.requireOpen());
+                    return null;
+                });
+                // Nor does it ask for the business-hours acknowledgement: inside a window it simply admits.
+                ManualAdmission.under(new ManualAdmission.Grant(holder, role, false), () -> {
+                    assertDoesNotThrow(() -> insideWindowInBusinessHours.requireOpen());
+                    return null;
+                });
+            }
+        }
     }
 
     @Test void aGrantForAnotherActorNeverApplies() {
