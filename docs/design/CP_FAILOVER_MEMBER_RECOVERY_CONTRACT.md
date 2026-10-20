@@ -1,6 +1,6 @@
 # Check Point failover: resume the return step of a stopped run
 
-**Status: DRAFT — for Product Owner approval.** No code, migration, gate row or device command is approved by this
+**Status: RATIFIED — PO approval 2026-10-20 (relayed by the orchestrator, AskUserQuestion: "Hepsini onaylıyorum").** The framing (resume the same run's return step), the two field amendments (Q2 session rule on cp_failover_up, Q2b cphaprob stat read allowance), Q3 (resume allowed after a failed post-switch check), Q4 (30 min request expiry), Q5 (classic ClusterXL only), Q6 (incident release stays manual, security_admin with a reason) are approved as written below. Earlier text: No code, migration, gate row or device command is approved by this
 document. It changes no runtime behaviour.
 
 Trigger: PO decision 2026-10-20 ("Önce kurtarma eylemi yazılsın"). Before the pilot, neXus must be able to bring
