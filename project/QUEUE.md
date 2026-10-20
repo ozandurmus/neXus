@@ -1,8 +1,8 @@
 # Project queue (generated — do not edit; run: py tools/delivery/project_queue.py render)
-Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-10-18T05:04:30Z
+Build: NXS-LOCAL-0374 · Track: PCP.x · Generated: 2026-10-20T18:44:57Z
 
 ## Now
-- NXS-LOCAL-0370 — Infoblox for real, observed facts follow every read, inventory for HTTPS vendors (automated_validated)
+- NXS-LOCAL-0374 — System logs phase B: collectors, masked view, settings route, Spike Detective data (in_progress)
 ## Next
 - overview_acceptance_and_member_specific_tuning — Overview acceptance under aiview, and per-member settings not counted as drift (38 of 39 clusters show DIFF today) (planned)
 ## Open backlog (P1 first, then P2, then P3; in_progress before planned)
@@ -23,13 +23,12 @@ Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-10-18T05:04:30Z
 - P1/in_progress backup_screen_backbox_model — Backup screen on the Backbox model: per-device history
 - P1/in_progress cp_management_server_collect_duration — Check Point management server Collect took 243 s: vsx stat
 - P1/in_progress credential_profiles — Credential profile / enterprise vault abstraction
-- P1/in_progress data_sanitizer — Data Sanitizer IMPLEMENTED: keyed anonymization of...
 - P1/in_progress failover_p0_closure_set — Failover plan implementation landed; integration gate
+- P1/in_progress failover_pilot_preparation — Failover pilot preparation (status doc lane)
 - P1/in_progress https_inventory_collect_radware — Radware Collect: https_inventory_collect for the Cyber...
 - P1/in_progress manifest_drift_service_worker_configuration_policy — Release applies the committed manifest of service/configur
 - P1/in_progress module_per_pod_split — Module runtime landed; policy/configuration/compliance...
 - P1/in_progress nspm_wave1_acceptance — Policy hygiene and V144 lifecycle catalog landed
-- P1/in_progress packet_analysis_shell — Packet Analysis shell IMPLEMENTED (engine stub): cases
 - P1/in_progress scheduled_fleet_backup_enable_decision — Fleet backups enabled: daily 02:00 Istanbul
 - P1/in_progress ui2_b1_01_skeleton_ci_docker — UI2 B1-1 -- Gradle multi-module skeleton under ui2/
 - P1/in_progress ui2_b1_03_identity_sessions — UI2 B1-3 -- identity & sessions (UnboundID LDAP bind
@@ -64,12 +63,14 @@ Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-10-18T05:04:30Z
 - P1/planned inventory_row_does_not_say_why_a_device_is_unconfirmed
 - P1/planned ldap_tls_trust_store_pin_and_format
 - P1/planned legacy_python_separation
+- P1/planned masking_residual_gaps_system_log_and_sanitizer
 - P1/planned pan_active_active_not_excluded_as_failover_unit
 - P1/planned pan_collection_contract_from_measurement
 - P1/planned platform_identity_facts_on_configuration
 - P1/planned radware_defensepro_getcfg_measurement
 - P1/planned relay_id_reuse_when_record_uncommitted
 - P1/planned script_execution_module
+- P1/planned spike_data_cap_not_enforced_by_pruner
 - P1/planned spring_boot_4_spring_security_migration
 - P1/planned task_executor_automation_module
 - P1/planned top_app_bar_search_is_not_an_input
@@ -88,7 +89,6 @@ Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-10-18T05:04:30Z
 - P1/planned ui2_pan_transport_no_credentials_in_url
 - P1/planned ui2_private_play_and_mockup_view
 - P1/planned ui2_reproducible_in_cluster_image_build
-- P1/planned ui_effectiveness_review_after_refresh
 - P1/planned vault_has_no_enforced_quota_on_a_shared_host
 - P1/planned vendor_bluecoat_proxysg_backup
 - P1/planned vendor_cisco_asa_backup
@@ -106,6 +106,7 @@ Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-10-18T05:04:30Z
 - P2/planned auth_radius_mechanism
 - P2/planned auth_tacacs_mechanism
 - P2/planned backup_remaining_vendors
+- P2/planned cp_aiview_readiness_script_client_error
 - P2/planned cp_backup_sftp_fetch_failed_on_cluster_member
 - P2/planned cp_cluster_vip_never_observed_in_fleet
 - P2/planned cp_vsx_config_collected_without_vs_context
@@ -123,6 +124,7 @@ Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-10-18T05:04:30Z
 - P2/planned orchestrator_worktree_lacks_frontend_dependencies
 - P2/planned pan_ha_serial_identity_hardening
 - P2/planned pan_keygen_no_usable_key_under_load
+- P2/planned pan_object_precedence_for_permissiveness
 - P2/planned privacy_baseline_tests_not_idempotent_runtime_trust_material
 - P2/planned project_plan_crypto_placeholder_sentinel_lost
 - P2/planned radware_cc_identity_and_defensepro_reads
@@ -189,8 +191,8 @@ Build: NXS-LOCAL-0370 · Track: PCP.x · Generated: 2026-10-18T05:04:30Z
 - pcp_server_enrollment_exposure — May console enrollment (manual or candidate-based) be exposed in non-loo
 - po_ldap_tls_trust_policy — LDAP TLS trust: CA bundle format and whether the product pins the direct
 ## Recent builds
+- NXS-LOCAL-0374 (in_progress)
+- NXS-LOCAL-0373 (automated_validated)
+- NXS-LOCAL-0372 (automated_validated)
+- NXS-LOCAL-0371 (automated_validated)
 - NXS-LOCAL-0370 (automated_validated)
-- NXS-LOCAL-0369 (automated_validated)
-- NXS-LOCAL-0368 (automated_validated)
-- NXS-LOCAL-0367 (automated_validated)
-- NXS-LOCAL-0366 (automated_validated)

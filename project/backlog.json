@@ -857,15 +857,6 @@
       "note": ""
     },
     {
-      "id": "ui_effectiveness_review_after_refresh",
-      "category": "ui2",
-      "title": "After the UI review refresh is deployed and working",
-      "status": "planned",
-      "priority": "P1",
-      "target": "",
-      "note": ""
-    },
-    {
       "id": "test_fixture_realistic_names_cleanup",
       "category": "ui2",
       "title": "Frontend test fixtures still carry device-like hostnames...",
@@ -1208,30 +1199,57 @@
       "note": ""
     },
     {
-      "id": "packet_analysis_shell",
-      "category": "ui2",
-      "title": "Packet Analysis shell IMPLEMENTED (engine stub): cases",
-      "status": "in_progress",
-      "priority": "P1",
-      "target": "docs/design/PO_DECISION_RECORD_2026_10_15_PACKETBREAKER_PORTED_INTO_NEXUS.m...",
-      "note": ""
-    },
-    {
-      "id": "data_sanitizer",
-      "category": "ui2",
-      "title": "Data Sanitizer IMPLEMENTED: keyed anonymization of...",
-      "status": "in_progress",
-      "priority": "P1",
-      "target": "docs/design/DATA_SANITIZER_CONTRACT.md",
-      "note": ""
-    },
-    {
       "id": "manifest_drift_service_worker_configuration_policy",
       "category": "ui2",
       "title": "Release applies the committed manifest of service/configuration/compliance/policy; worker still image+fallback patch only",
       "status": "in_progress",
       "priority": "P1",
       "target": "tools/delivery/module_deploy.py (SYNCED_MANIFESTS)",
+      "note": ""
+    },
+    {
+      "id": "masking_residual_gaps_system_log_and_sanitizer",
+      "category": "privacy",
+      "title": "Masking residual gaps after logmask-v3 (see note)",
+      "status": "planned",
+      "priority": "P1",
+      "target": "docs/design/DEVICE_SYSTEM_LOG_PHASE_B_CONTRACT.md",
+      "note": ""
+    },
+    {
+      "id": "cp_aiview_readiness_script_client_error",
+      "category": "diagnostics",
+      "title": "CP aiview readiness script client error",
+      "status": "planned",
+      "priority": "P2",
+      "target": "",
+      "note": ""
+    },
+    {
+      "id": "pan_object_precedence_for_permissiveness",
+      "category": "policy",
+      "title": "PAN object precedence for permissiveness",
+      "status": "planned",
+      "priority": "P2",
+      "target": "docs/design/PO_DECISION_RECORD_2026_10_20_POLICY_PERMISSIVENESS_SCORING.md",
+      "note": ""
+    },
+    {
+      "id": "spike_data_cap_not_enforced_by_pruner",
+      "category": "reliability",
+      "title": "512 MiB spike data cap not enforced by the pruner",
+      "status": "planned",
+      "priority": "P1",
+      "target": "docs/design/DEVICE_SYSTEM_LOG_PHASE_B_CONTRACT.md",
+      "note": ""
+    },
+    {
+      "id": "failover_pilot_preparation",
+      "category": "failover",
+      "title": "Failover pilot preparation (status doc lane)",
+      "status": "in_progress",
+      "priority": "P1",
+      "target": "docs/design/FAILOVER_EXECUTION_PLAN.md",
       "note": ""
     }
   ]

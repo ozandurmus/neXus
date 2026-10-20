@@ -13,3 +13,5 @@ status: planned · target: PO 2026-09-22 proposal (separate masked table read by
 Title (full): Masking leak audit: compare aiview responses against the raw tables (hostnames, addresses, serials) and report any raw value that survives masking; consider a masked read-model/schema with a separate DB role for aiview
 
 Target (full): PO 2026-09-22 proposal (separate masked table read by aiview)
+
+2026-10-20: a first leak was found and fixed by the in-cluster e2e canary, not by this audit: the masked system-log view returned the Palo Alto serial field unmasked (fixed 2026-10-18; the masked view now runs serial, estate-dictionary and heuristic passes, rule set logmask-v3, fail closed with 503 SYSTEM_LOG_MASKING_UNAVAILABLE). The systematic audit of every aiview response against raw tables is still open.

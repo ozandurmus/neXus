@@ -1509,6 +1509,33 @@
       "priority": "P1",
       "target": "ui2/integration-tests/gradle.lockfile",
       "note": ""
+    },
+    {
+      "id": "packet_analysis_shell",
+      "category": "ui2",
+      "title": "Packet Analysis shell IMPLEMENTED (engine stub): cases",
+      "status": "automated_validated",
+      "priority": "P1",
+      "target": "docs/design/PO_DECISION_RECORD_2026_10_15_PACKETBREAKER_PORTED_INTO_NEXUS.m...",
+      "note": ""
+    },
+    {
+      "id": "data_sanitizer",
+      "category": "ui2",
+      "title": "Data Sanitizer IMPLEMENTED: keyed anonymization of...",
+      "status": "automated_validated",
+      "priority": "P1",
+      "target": "docs/design/DATA_SANITIZER_CONTRACT.md",
+      "note": ""
+    },
+    {
+      "id": "ui_effectiveness_review_after_refresh",
+      "category": "ui2",
+      "title": "After the UI review refresh is deployed and working",
+      "status": "done",
+      "priority": "P1",
+      "target": "",
+      "note": ""
     }
   ]
 }

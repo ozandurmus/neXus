@@ -1,7 +1,7 @@
 {
   "schema_version": "1.0",
-  "reviewed_at": "2026-09-27",
-  "reviewed_current_build": "NXS-LOCAL-0370",
+  "reviewed_at": "2026-10-20",
+  "reviewed_current_build": "NXS-LOCAL-0374",
   "authority": [
     "docs/design/UI2_0_BASELINE_CONTRACT.md",
     "docs/design/UI2_0_ARCHITECTURE_CONTRACT.md"
@@ -78,6 +78,10 @@
     }
   ],
   "product_build_ids": [
+    "NXS-LOCAL-0374",
+    "NXS-LOCAL-0373",
+    "NXS-LOCAL-0372",
+    "NXS-LOCAL-0371",
     "NXS-LOCAL-0368",
     "NXS-LOCAL-0367",
     "NXS-LOCAL-0366",
@@ -100,6 +104,11 @@
     "NXS-LOCAL-0158"
   ],
   "backlog_classifications": {
+    "masking_residual_gaps_system_log_and_sanitizer": "java_debt",
+    "cp_aiview_readiness_script_client_error": "agent_operations",
+    "pan_object_precedence_for_permissiveness": "java_feature",
+    "spike_data_cap_not_enforced_by_pruner": "java_debt",
+    "failover_pilot_preparation": "java_feature",
     "manifest_drift_service_worker_configuration_policy": "agent_operations",
     "data_sanitizer": "java_feature",
     "packet_analysis_shell": "java_feature",

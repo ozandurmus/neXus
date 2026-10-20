@@ -873,7 +873,7 @@
       "status": "automated_validated",
       "introduced": "NXS-LOCAL-0176",
       "weight": 2,
-      "summary": "Local sign-in, sessions, roles and the aiview replay persona are in daily use; LDAP/AD sign-in works in code (LDAPS/StartTLS) but has never bound against a real directory.",
+      "summary": "Local sign-in, sessions, roles and the aiview replay persona are in daily use; LDAP/AD sign-in works in code (LDAPS/StartTLS) but has never bound against a real directory. The device identity badge follows the real key comparison (V165).",
       "evidence": "docs/history/builds/NXS-LOCAL-0366.md",
       "criteria": [
         {"id": "local_signin", "state": "done", "weight": 1, "label": "Local sign-in and sessions (real env)"},
@@ -1100,7 +1100,7 @@
       "status": "in_progress",
       "introduced": "NXS-LOCAL-0367",
       "weight": 1,
-      "summary": "2 GiB limits, watched deploys and collision-free pseudonyms are in; every module its own pod and the masking leak audit are open.",
+      "summary": "2 GiB limits, watched deploys and collision-free pseudonyms and the logmask-v3 masked log view are in; every module its own pod and the masking leak audit are open.",
       "evidence": "docs/history/builds/NXS-LOCAL-0368.md",
       "criteria": [
         {"id": "resource_limits", "state": "done", "weight": 1},
