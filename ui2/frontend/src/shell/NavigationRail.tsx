@@ -119,6 +119,8 @@ export const DRAWER_GROUPS: readonly DrawerGroup[] = [
     { label: "Operations", screen: "operations", href: "?screen=operations" },
     { label: "Jobs", href: "?screen=operations&tab=jobs", screen: "operations" },
     { label: "System health", href: "?screen=operations&tab=health", screen: "operations" },
+    // Who changed what, when (mockup 2026-10-17 screen 3, PO 2026-10-20): the Change feed tab of Operations.
+    { label: "Change feed", href: "?screen=operations&tab=changes", screen: "operations" },
     { label: "Packets", screen: "packet_analysis", href: "?screen=packet_analysis", requiredPlane: "PacketAnalysis" },
     { label: "Sanitizer", screen: "sanitizer", href: "?screen=sanitizer", requiredPlane: "Sanitizer" },
   ] },

@@ -151,6 +151,7 @@ describe("Operations routes and headline", () => {
     expect(tabFromUrl("jobs")).toEqual({ tab: 1, pill: null });
     expect(tabFromUrl("diagnostics")).toEqual({ tab: 2, pill: null });
     expect(tabFromUrl("health")).toEqual({ tab: 3, pill: null });
+    expect(tabFromUrl("changes")).toEqual({ tab: 4, pill: null });
     expect(tabFromUrl(null)).toEqual({ tab: 0, pill: null });
   });
 
