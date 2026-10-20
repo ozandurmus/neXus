@@ -28,6 +28,7 @@ export function runStep(state: CpFailoverState, step: string): number {
 }
 const errorText = (error: unknown) => {
   const body = (error as { body?: { code?: string; message?: string } })?.body;
+  if (body?.code === "BUSINESS_HOURS_CONFIRM_REQUIRED") return body.message ?? "Not started: business hours were not confirmed.";
   return body?.code === "OUTSIDE_JOB_WINDOW" ? body.message ?? "Device jobs are outside the scheduled window." : body?.code ?? "Request failed";
 };
 type Draft = { requestId: string; from: string; until: string; reason: string; confirmedRevision?: number };

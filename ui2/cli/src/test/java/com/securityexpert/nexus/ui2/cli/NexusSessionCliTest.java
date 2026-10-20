@@ -53,6 +53,53 @@ class NexusSessionCliTest {
         }
     }
 
+    /** PO 2026-10-20: the CLI's acknowledgement is the same header the screen sends after its confirm dialog. */
+    @Test
+    void businessHoursAcknowledgementFlagSendsTheHeaderAndTheRefusalIsPrintedPlainly(@TempDir Path home) throws Exception {
+        java.util.List<String> calls = new java.util.concurrent.CopyOnWriteArrayList<>();
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/", exchange -> {
+            String ack = exchange.getRequestHeaders().getFirst("X-Nexus-Business-Hours-Ack");
+            calls.add(exchange.getRequestMethod() + " " + exchange.getRequestURI() + " ack=" + ack + " "
+                    + new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            boolean confirmed = "true".equals(ack);
+            byte[] out = (confirmed ? "{\"job_id\":\"j-1\"}" : "{\"code\":\"BUSINESS_HOURS_CONFIRM_REQUIRED\","
+                    + "\"message\":\"Business hours (08:00-20:00 GMT+3). This sends commands to the device. Continue?\"}")
+                    .getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(confirmed ? 202 : 409, out.length);
+            exchange.getResponseBody().write(out);
+            exchange.close();
+        });
+        server.start();
+        java.io.PrintStream err = System.err;
+        var captured = new java.io.ByteArrayOutputStream();
+        try {
+            NexusSessionCli cli = new NexusSessionCli(home);
+            cli.saveSession(new NexusSessionCli.Session("http://127.0.0.1:" + server.getAddress().getPort(), "opaque-cookie", "csrf-9"));
+            System.setErr(new java.io.PrintStream(captured, true, StandardCharsets.UTF_8));
+            assertEquals(1, cli.run(new String[] {"inventory-collect", "dev-1"}));
+            String printed = captured.toString(StandardCharsets.UTF_8);
+            assertTrue(printed.startsWith("BUSINESS_HOURS_CONFIRM_REQUIRED: Business hours"), printed);
+            assertTrue(printed.contains("--business-hours-ack"), printed);
+
+            NexusSessionCli acknowledged = new NexusSessionCli(home);
+            assertEquals(0, acknowledged.run(new String[] {"--business-hours-ack", "inventory-collect", "dev-1"}));
+            assertEquals(0, acknowledged.run(new String[] {"readiness-run", "3f2a1b4c-0000-4000-8000-000000000001",
+                    "3f2a1b4c-0000-4000-8000-000000000002", "palo_alto", "--business-hours-ack"}));
+            assertEquals(0, acknowledged.run(new String[] {"policy-collect", "source-1", "FULL", "--business-hours-ack"}));
+            assertTrue(acknowledged.businessHoursAck());
+            assertEquals("POST /devices/dev-1/inventory/collect ack=null {}", calls.get(0));
+            assertEquals("POST /devices/dev-1/inventory/collect ack=true {}", calls.get(1));
+            assertEquals("POST /api/v2/pan-failover/units/3f2a1b4c-0000-4000-8000-000000000002/readiness ack=true "
+                    + "{\"clusterId\":\"3f2a1b4c-0000-4000-8000-000000000001\",\"unitId\":\"3f2a1b4c-0000-4000-8000-000000000002\"}",
+                    calls.get(2));
+            assertEquals("POST /api/v2/policy/sources/source-1/collect ack=true {\"mode\":\"FULL\"}", calls.get(3));
+        } finally {
+            System.setErr(err);
+            server.stop(0);
+        }
+    }
+
     @Test
     void systemLogMeasurementCommandsCallTheScreenRoutes(@TempDir Path home) throws Exception {
         java.util.List<String> calls = new java.util.concurrent.CopyOnWriteArrayList<>();

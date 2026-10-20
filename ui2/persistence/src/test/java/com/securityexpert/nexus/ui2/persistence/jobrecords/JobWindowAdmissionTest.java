@@ -87,8 +87,18 @@ class JobWindowAdmissionTest {
         if (!closeWindowAtLock) assertTrue(queries.indexOf(claims.getFirst()) > lock);
     }
     @Test void queuedJobsWaitButClaimedAndExecutingJobsKeepTheirHeartbeat() {
-        var leases = new JooqJobLeaseDao(noDatabase, outside);
+        List<String> reads = new ArrayList<>();
+        var empty = DSL.using(new MockConnection(query -> {
+            reads.add(query.sql());
+            return new MockResult[] { new MockResult(0, DSL.using(SQLDialect.POSTGRES).newResult(DSL.field("queued", Integer.class))) };
+        }), SQLDialect.POSTGRES);
+        var leases = new JooqJobLeaseDao(new TransactionBoundary() {
+            @Override public <T> T inTransaction(Function<DSLContext, T> work) { return work.apply(empty); }
+        }, outside);
         assertTrue(leases.claimNext("worker", List.of("diagnostic_read"), Duration.ofMinutes(5)).isEmpty());
+        // Outside the window: only the bypass-queued read, never the claim statement (PO 2026-10-20).
+        assertEquals(1, reads.size());
+        assertTrue(reads.getFirst().startsWith("select 1 as queued from jobs"));
         List<String> queries = new ArrayList<>();
         var sql = DSL.using(new MockConnection(query -> {
             queries.add(query.sql());

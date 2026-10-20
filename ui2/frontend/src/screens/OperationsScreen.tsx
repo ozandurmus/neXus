@@ -170,7 +170,7 @@ export function OperationsScreen() {
       return state === "DONE";
     } catch (error) {
       const body = (error as { body?: { code?: string; message?: string } })?.body;
-      setReadinessError(body?.code === "OUTSIDE_JOB_WINDOW"
+      setReadinessError(body?.code === "OUTSIDE_JOB_WINDOW" || body?.code === "BUSINESS_HOURS_CONFIRM_REQUIRED"
         ? body.message ?? "Device jobs are outside the scheduled window."
         : "Could not start or refresh the readiness run.");
       return false;

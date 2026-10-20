@@ -52,6 +52,7 @@ public final class JooqJobLeaseDao implements JobLeaseDao {
                     AND clock_timestamp() < CAST({5} AS timestamptz)
                     AND submitted_at >= CAST({4} AS timestamptz)
                     AND submitted_at < CAST({5} AS timestamptz)
+                  WHEN window_bypass_role IS NOT NULL THEN true
                   ELSE clock_timestamp() < CAST({3} AS timestamptz) END
                   AND capability_id = ANY(string_to_array({2}, ','))
                   AND job_type = ANY(string_to_array({2}, ','))
@@ -106,8 +107,7 @@ public final class JooqJobLeaseDao implements JobLeaseDao {
             Duration leaseDuration) {
         // A stored-data worker (packet analysis) claims only stored-data job types, so no device job can ride on it.
         boolean storedData = JobWindowPolicy.storedDataOnly(eligibleCapabilityIds);
-        if ((!storedData && !windows.isOpen() && !ScheduledBackupWindowPolicy.isOpen(windows.now()))
-                || eligibleCapabilityIds.isEmpty()) {
+        if (eligibleCapabilityIds.isEmpty()) {
             // Never issues the statement against an empty eligible set --
             // string_to_array('', ',') would produce a one-element array
             // containing the empty string, a silent near-miss rather than
@@ -115,12 +115,19 @@ public final class JooqJobLeaseDao implements JobLeaseDao {
             return Optional.empty();
         }
         String joined = String.join(",", eligibleCapabilityIds);
+        // Outside every window only an administrator's manual job (PO 2026-10-20, window_bypass_role) is claimable;
+        // with none queued the claim statement is not issued at all.
+        if (!storedData && !windows.isOpen() && !ScheduledBackupWindowPolicy.isOpen(windows.now())
+                && !transactionBoundary.inTransaction(dsl -> bypassQueued(dsl, joined))) {
+            return Optional.empty();
+        }
         return auditedTransactionBoundary.inTransaction("system:worker", "job_claim", dsl -> {
             // Acquire before the claim statement so a waiting worker gets a fresh snapshot.
             dsl.execute("SET TRANSACTION ISOLATION LEVEL READ COMMITTED");
             dsl.execute("SELECT pg_advisory_xact_lock(294611)");
             var now = windows.now();
-            if (!storedData && !windows.isOpen(now) && !ScheduledBackupWindowPolicy.isOpen(now)) return Optional.empty();
+            if (!storedData && !windows.isOpen(now) && !ScheduledBackupWindowPolicy.isOpen(now)
+                    && !bypassQueued(dsl, joined)) return Optional.empty();
             var backupStart = ScheduledBackupWindowPolicy.start(now);
             // Same statement; for stored-data work the window end is simply never reached during this claim.
             var windowEnd = storedData ? now.atZone(JobWindowPolicy.ZONE_ID).plusDays(1)
@@ -133,6 +140,14 @@ public final class JooqJobLeaseDao implements JobLeaseDao {
             return rows.stream().findFirst()
                     .map(row -> new ClaimedJobRow(row.get("job_id", String.class), row.get("lease_epoch", Long.class)));
         });
+    }
+
+    /** A cheap read (partial index jobs_window_bypass_requested), never a claim: the claim stays the one statement. */
+    static final String BYPASS_QUEUED_SQL = "select 1 as queued from jobs where state = 'REQUESTED' "
+            + "and window_bypass_role is not null and capability_id = any(string_to_array({0}, ',')) limit 1";
+
+    private static boolean bypassQueued(org.jooq.DSLContext dsl, String joined) {
+        return dsl.fetchOne(BYPASS_QUEUED_SQL, joined) != null;
     }
 
     @Override

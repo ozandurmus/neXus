@@ -9,8 +9,16 @@ export interface JobWindowStatus {
   server_time: string;
   window_end: string;
   next_window_start: string;
+  /** PO 2026-10-20: every day, Europe/Istanbul; inside them an administrator confirms a manual device job. */
+  business_hours?: { start: string; end: string; inside: boolean };
+  /** PO 2026-10-20: this session's manual device jobs are not held to the window (security_admin / operation_admin). */
+  admin_window_bypass?: boolean;
 }
-export interface WindowView { open: boolean; label: string | null }
+/**
+ * `open`/`label` always describe the shared window itself (texts such as "next window 12:00" keep reading it);
+ * `adminBypass` says this session's manual device-job controls stay usable outside it (PO decision 2026-10-20).
+ */
+export interface WindowView { open: boolean; label: string | null; adminBypass?: boolean }
 // Standalone previews have no live provider. The authenticated app always mounts the provider.
 export const JobWindowContext = createContext<WindowView>({ open: true, label: null });
 const unavailable: WindowView = { open: false, label: "Window status unavailable" };
@@ -20,7 +28,13 @@ const timeLabel = (iso: string) => new Intl.DateTimeFormat("en-GB", {
 
 export function windowView(status: JobWindowStatus, elapsedMs: number): WindowView {
   const open = status.open && Date.parse(status.server_time) + elapsedMs < Date.parse(status.window_end);
-  return { open, label: open ? null : `Next window: ${timeLabel(status.next_window_start)}` };
+  const view: WindowView = { open, label: open ? null : `Next window: ${timeLabel(status.next_window_start)}` };
+  return status.admin_window_bypass === true ? { ...view, adminBypass: true } : view;
+}
+
+/** Whether a manual device-job control may be used now: inside the window, or for an administrator at any time. */
+export function jobWindowUsable(view: WindowView): boolean {
+  return view.open || view.adminBypass === true;
 }
 
 export function JobWindowProvider({ children }: { children: ReactNode }) {
@@ -49,7 +63,9 @@ export function useJobWindow() { return useContext(JobWindowContext); }
 
 /**
  * The one suffix rule for every gated control (UI review 2026-10-18, F-7): a control a role may not use ends with
- * "Role: not permitted"; a device-job control outside its window ends with "Next window: HH:MM". Buttons render it as
+ * "Role: not permitted"; a device-job control outside its window ends with "Next window: HH:MM" -- except for an
+ * administrator (security_admin / operation_admin), whose manual device jobs are never held to the window (PO decision
+ * 2026-10-20; inside business hours the server asks for a confirmation instead). Buttons render it as
  * " · <suffix>" after the label, menu items the same way, so the same fact reads the same everywhere. The role reason
  * wins over the window (the window would wrongly promise the action opens up at that time).
  */
@@ -65,7 +81,7 @@ export function useGate(plane?: string | readonly string[], options: { readonly 
   const roleAllowed = useRoleAllows(plane);
   if (options.lockedReason) return { locked: true, suffix: options.lockedReason };
   if (!roleAllowed) return { locked: true, suffix: ROLE_LOCK_LABEL };
-  if (options.deviceJob && !jobWindow.open) return { locked: true, suffix: jobWindow.label };
+  if (options.deviceJob && !jobWindowUsable(jobWindow)) return { locked: true, suffix: jobWindow.label };
   return { locked: false, suffix: null };
 }
 

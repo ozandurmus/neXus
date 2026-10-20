@@ -85,10 +85,17 @@ public class RbacConfiguration {
                 localCredentialsRepository, enforcePasswordChangeOnFirstLogin);
     }
 
+    /** PO 2026-10-20: security_admin / operation_admin manual submissions are not held to the job windows. */
+    @Bean
+    public com.securityexpert.nexus.ui2.service.security.AdminWindowBypass adminWindowBypass(RbacEvaluator rbacEvaluator) {
+        return new com.securityexpert.nexus.ui2.service.security.AdminWindowBypass(rbacEvaluator);
+    }
+
     @Bean
     public SecurityWebMvcConfig securityWebMvcConfig(GateChain gateChain,
-            LocalIdentityResolver localIdentityResolver, LocalRoleTokenResolver localRoleTokenResolver) {
-        return new SecurityWebMvcConfig(gateChain, localIdentityResolver, localRoleTokenResolver);
+            LocalIdentityResolver localIdentityResolver, LocalRoleTokenResolver localRoleTokenResolver,
+            com.securityexpert.nexus.ui2.service.security.AdminWindowBypass adminWindowBypass) {
+        return new SecurityWebMvcConfig(gateChain, localIdentityResolver, localRoleTokenResolver, adminWindowBypass);
     }
 
     /** 13G LIA-3.5: shared by {@link RoleBindingAdminService#revoke} and {@link LocalIdentityAdministration#disable}. */

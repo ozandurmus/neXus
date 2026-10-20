@@ -233,6 +233,7 @@ class AuditRedactionPolicyTest {
             "job_steps.job_id", "job_steps.job_step_id", "job_steps.step_index",
             // jobs
             "jobs.action_class", "jobs.admission_deferrals", "jobs.admission_not_before",
+            "jobs.business_hours_ack_at", "jobs.business_hours_ack_by",
             "jobs.cancel_requested", "jobs.capability_id", "jobs.diagnostic_exit_status",
             "jobs.diagnostic_gate_id", "jobs.diagnostic_gate_revision",
             "jobs.diagnostic_line_count", "jobs.diagnostic_port", "jobs.diagnostic_shape_id",
@@ -242,7 +243,9 @@ class AuditRedactionPolicyTest {
             "jobs.lease_owner_generation", "jobs.lease_worker_id", "jobs.outcome",
             "jobs.precheck_results", "jobs.reconciliation_ref", "jobs.ssh_identity_unverified",
             "jobs.state", "jobs.submitted_at", "jobs.submitted_by_actor_fingerprint",
+            "jobs.submitted_in_business_hours",
             "jobs.target_device_id", "jobs.target_kind", "jobs.target_ref", "jobs.terminal_reason",
+            "jobs.window_bypass_role",
             // lifecycle_catalog
             "lifecycle_catalog.catalog_id", "lifecycle_catalog.end_of_engineering",
             "lifecycle_catalog.end_of_sale", "lifecycle_catalog.end_of_support",

@@ -347,8 +347,13 @@ public class JooqCpFailoverRepository {
             boolean immediate,String vendor,Set<String> expectedMembers,String requestId,long revision,
             String nonce,boolean warningConfirmed,String policy) {
         if (!mutationEnabled) return new Decision("FAILOVER_MUTATION_DISABLED",null);
-        windows.requireOpen();
-        if (scheduledFor != null) windows.requireOpen(scheduledFor);
+        // PO 2026-10-20: an administrator's immediate start is never refused for the window (business-hours
+        // acknowledgement instead); a scheduled start keeps the window at its scheduled time.
+        if (immediate) windows.requireOpenFor(actor);
+        else {
+            windows.requireOpenUnlessAdmin(actor);
+            if (scheduledFor != null) windows.requireOpen(scheduledFor);
+        }
         Set<String> binding=Set.copyOf(expectedMembers);
         return audited.inTransaction(actor,"failover_run_request",dsl -> {
             lockAdmission(dsl);
@@ -422,7 +427,7 @@ public class JooqCpFailoverRepository {
      */
     public Decision requestReadiness(String cluster, String vsId, String actor, String targetDeviceId,
             String vendor) {
-        windows.requireOpen();
+        windows.requireOpenFor(actor);
         return audited.inTransaction(actor, "failover_readiness_request", dsl -> {
             closeOrphanReadiness(dsl, cluster, vsId, vendor);
             Record active = dsl.fetchOne("select run_id from failover_run where cluster_ref={0} "
@@ -442,7 +447,7 @@ public class JooqCpFailoverRepository {
     }
     private void admit(org.jooq.DSLContext dsl, String runId, String targetDeviceId, String actor,
             String vendor, String runKind) {
-        windows.requireOpen();
+        windows.requireOpenFor(actor);
         String jobId = UUID.randomUUID().toString();
         String kind = "palo_alto".equals(vendor)
             ? ("READINESS".equals(runKind) ? "pan_failover_readiness" : "pan_cluster_failover")
@@ -452,6 +457,9 @@ public class JooqCpFailoverRepository {
             + "submitted_by_actor_fingerprint,idempotency_key,action_class,state) "
             + "values({0},{1},{1},{2},'device',{3},{4},{5},'REQUESTED')", jobId, kind, targetDeviceId, actor,
             kind + ":" + runId, actionClass);
+        // The administrator's grant (and, inside business hours, the acknowledgement) is bound to this job row,
+        // in this transaction; the worker rechecks it before every device write (mutationAdmission).
+        com.securityexpert.nexus.ui2.persistence.jobrecords.ManualAdmissionRecord.record(dsl, jobId, actor, windows);
         dsl.execute("update failover_run set job_id={1},started_at=now(),step='QUEUED' where run_id={0}", runId, jobId);
     }
 
@@ -463,7 +471,8 @@ public class JooqCpFailoverRepository {
 
     public String startDue(String id, String targetDeviceId) {
         if (!mutationEnabled) return "FAILOVER_MUTATION_DISABLED";
-        windows.requireOpen();
+        // A scheduled start: always the window, whatever thread calls it.
+        windows.requireOpen(windows.now());
         return audited.inTransaction("system:failover-scheduler", "failover_schedule_start", dsl -> {
             lockAdmission(dsl);
             Record r = dsl.fetchOne("select r.*,a.window_until,a.revoked_at from failover_run r "
@@ -540,6 +549,18 @@ public class JooqCpFailoverRepository {
             id, state, step, outcome, failedCheck, message);
         });
     }
+    /**
+     * PO 2026-10-20, rechecked before every device write: an administrator's manual failover job (window bypass)
+     * that was submitted outside business hours carries no acknowledgement; if business hours have begun since, the
+     * write is refused until an administrator starts it again with the acknowledgement. A window-admitted job
+     * (scheduled start) has no bypass role and is unaffected.
+     */
+    String businessHoursRefusal(DSLContext dsl, String jobId) {
+        Record job = dsl.fetchOne("select window_bypass_role, business_hours_ack_at from jobs where job_id={0}", jobId);
+        if (job == null || job.get("window_bypass_role") == null || job.get("business_hours_ack_at") != null) return null;
+        return windows.insideBusinessHours() ? com.securityexpert.nexus.ui2.platform.ManualAdmission.CONFIRM_CODE : null;
+    }
+
     private static void lockAdmission(DSLContext dsl) {
         dsl.execute("select pg_advisory_xact_lock(136, 1)");
     }
@@ -612,6 +633,8 @@ public class JooqCpFailoverRepository {
                 + "and state='EXECUTING' and not cancel_requested and lease_expires_at>clock_timestamp() "
                 + "and ui2_job_owner_valid(job_id,lease_epoch) for update",jobId,epoch);
             if (owner==null) return "OWNERSHIP_LOST";
+            String businessHours=businessHoursRefusal(dsl,jobId);
+            if (businessHours!=null) return businessHours;
             List<String> members = JooqDeviceRepository.enrolledFailoverMembers(dsl, cluster, vendor);
             if (!Set.copyOf(members).equals(expectedMembers)) return "MEMBER_SET_CHANGED";
             String refusal = validateTarget(dsl, r, members, members.isEmpty()?null:members.get(0));

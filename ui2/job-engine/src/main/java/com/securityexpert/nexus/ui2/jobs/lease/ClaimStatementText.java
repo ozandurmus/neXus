@@ -40,6 +40,7 @@ public final class ClaimStatementText {
                     AND clock_timestamp() < CAST({5} AS timestamptz)
                     AND submitted_at >= CAST({4} AS timestamptz)
                     AND submitted_at < CAST({5} AS timestamptz)
+                  WHEN window_bypass_role IS NOT NULL THEN true
                   ELSE clock_timestamp() < CAST({3} AS timestamptz) END
                   AND capability_id = ANY(string_to_array({2}, ','))
                   AND job_type = ANY(string_to_array({2}, ','))

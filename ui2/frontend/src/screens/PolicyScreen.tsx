@@ -1,4 +1,4 @@
-import { JobButton, useJobWindow } from "../shell/JobWindow";
+import { JobButton, jobWindowUsable, useJobWindow } from "../shell/JobWindow";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Box, Button, Tabs, Tab, Checkbox, Chip, Drawer, IconButton, InputAdornment, Menu, MenuItem, type MenuItemProps, Table, TableBody, TableCell, TableHead, TableRow, Tooltip, FormControl, InputLabel, Select, Stack, TextField, Typography } from "@mui/material";
 import { ScreenRoot, ScreenHeader, EmptyPanel } from "../shell/ScreenLayout";
@@ -172,7 +172,8 @@ function Chevron({ open }: { open: boolean }) {
 /** A menu entry for an action that is only allowed inside the device job window; mirrors JobButton. */
 function JobMenuItem({ disabled, children, ...props }: MenuItemProps) {
   const window = useJobWindow();
-  return <MenuItem {...props} disabled={disabled || !window.open}>{children}{window.label && ` · ${window.label}`}</MenuItem>;
+  const usable = jobWindowUsable(window);
+  return <MenuItem {...props} disabled={disabled || !usable}>{children}{!usable && window.label && ` · ${window.label}`}</MenuItem>;
 }
 /** The per-source / per-domain collection actions behind one compact trigger, so they do not crowd the tree. */
 function CollectMenu({ name, disabled, onCollect }: { name: string; disabled: boolean; onCollect: (mode: PolicyCollectionMode) => void }) {
