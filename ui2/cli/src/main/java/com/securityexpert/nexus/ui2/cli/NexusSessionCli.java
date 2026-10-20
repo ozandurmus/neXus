@@ -77,6 +77,8 @@ final class NexusSessionCli {
         System.out.println("  policy | policy-set <on|off> <cron> <retentionDays> <snapshotDepth>");
         System.out.println("  jobs [state=.. job_type=.. device_id=.. since=.. until=.. q=.. page=.. page_size=..]");
         System.out.println("  jobs-export <dest.csv> [same filters]");
+        System.out.println("  changes [from=.. to=.. kinds=USER,NEXUS_JOB,DEVICE_EVENT vendor=.. device=.. cursor=.. limit=..]");
+        System.out.println("                                                 Operations > Change feed: who changed what, when (24 h by default; masked for aiview)");
         System.out.println("  inventory-collect <deviceId> | configuration-collect <deviceId>");
         System.out.println("  syslog-measure-start                           measure system/config logs on every enrolled Palo Alto firewall");
         System.out.println("  syslog-collect-start [deviceId]                start the incremental system-log collection (one device, or every supported device)");
@@ -177,6 +179,7 @@ final class NexusSessionCli {
                             "backup_retention_days", Integer.parseInt(args[3]), "snapshot_retention_depth", Integer.parseInt(args[4])))));
                 }
                 case "jobs" -> print(call("GET", "/api/v2/jobs" + queryString(args, 1), null));
+                case "changes" -> print(call("GET", "/api/v2/changes/feed" + queryString(args, 1), null));
                 case "jobs-export" -> {
                     require(args, 2, "jobs-export <dest.csv> [filters]");
                     yield saveTo(call("GET", "/api/v2/jobs/export.csv" + queryString(args, 2), null), Path.of(args[1]));

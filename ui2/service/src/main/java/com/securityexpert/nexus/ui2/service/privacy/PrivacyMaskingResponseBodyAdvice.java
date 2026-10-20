@@ -68,6 +68,15 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
             }
             return search.body();
         }
+        if (body instanceof com.securityexpert.nexus.ui2.service.changes.ChangeFeedResponse changes) {
+            // The change feed masks itself (pseudonyms, USR- tokens, log masking rules); masking a pseudonym again
+            // would give a different pseudonym, so the body passes through -- and an unmasked body never reaches aiview.
+            if (Boolean.TRUE.equals(isReplayViewer)) {
+                if (!changes.masked()) throw new IllegalStateException("change feed projection required");
+                if (response != null) response.getHeaders().set(MASKED_HEADER, "true");
+            }
+            return changes.body();
+        }
         if (body instanceof com.securityexpert.nexus.ui2.service.policy.PolicyResponse policy) {
             if (!Boolean.TRUE.equals(isReplayViewer)) return policy.body();
             if (response != null) response.getHeaders().set(MASKED_HEADER, "true");

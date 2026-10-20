@@ -224,6 +224,30 @@ class NexusSessionCliTest {
     }
 
     @Test
+    void changesCallsTheChangeFeedRouteWithTheScreenFilters(@TempDir Path home) throws Exception {
+        java.util.List<String> calls = new java.util.concurrent.CopyOnWriteArrayList<>();
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/", exchange -> {
+            calls.add(exchange.getRequestMethod() + " " + exchange.getRequestURI());
+            byte[] out = "{\"events\":[]}".getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, out.length);
+            exchange.getResponseBody().write(out);
+            exchange.close();
+        });
+        server.start();
+        try {
+            NexusSessionCli cli = new NexusSessionCli(home);
+            cli.saveSession(new NexusSessionCli.Session("http://127.0.0.1:" + server.getAddress().getPort(), "opaque-cookie", "csrf-9"));
+            assertEquals(0, cli.run(new String[] {"changes"}));
+            assertEquals(0, cli.run(new String[] {"changes", "from=2026-10-16T00:00:00Z", "kinds=USER,DEVICE_EVENT", "vendor=palo_alto", "limit=20"}));
+            assertEquals(java.util.List.of("GET /api/v2/changes/feed",
+                    "GET /api/v2/changes/feed?from=2026-10-16T00%3A00%3A00Z&kinds=USER%2CDEVICE_EVENT&vendor=palo_alto&limit=20"), calls);
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
     void unknownCommandsAreNotThisClassS(@TempDir Path home) {
         assertEquals(-1, new NexusSessionCli(home).run(new String[] {"credential-list"}));
     }
