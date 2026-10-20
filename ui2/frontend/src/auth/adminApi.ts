@@ -2036,6 +2036,54 @@ export async function downloadPolicyChanges(filters: PolicyChangeFilters) {
   return response.blob();
 }
 
+// ---- Change feed (Operations > Change feed; mockup 2026-10-17 screen 3, PO 2026-10-20) -------------------------
+export type ChangeKind = "USER" | "NEXUS_JOB" | "DEVICE_EVENT";
+export interface ChangeFeedEvent {
+  readonly key: string;
+  readonly kind: ChangeKind;
+  readonly source: string;
+  /** The ordering instant (ISO). For a DEVICE_LOCAL event this is the device text read as Europe/Istanbul, for ordering only. */
+  readonly time: string;
+  readonly time_basis: "UTC" | "DEVICE_LOCAL";
+  /** The verbatim device-clock text when `time_basis` is DEVICE_LOCAL; null otherwise. */
+  readonly device_time: string | null;
+  readonly vendor: string | null;
+  readonly device_id: string | null;
+  readonly device_name: string | null;
+  readonly actor: string | null;
+  readonly what: string;
+  readonly detail: string | null;
+  readonly tone: "OK" | "WARN" | "BAD" | "NEUTRAL" | "UNKNOWN";
+  readonly diff: readonly { readonly op: "-" | "+" | " "; readonly text: string }[];
+  readonly links: { readonly device: string | null; readonly policy_id: string | null; readonly rule_id: string | null; readonly job_id: string | null; readonly job_type: string | null };
+}
+export interface ChangeFeedCoverage { readonly source: string; readonly kind: ChangeKind; readonly state: string; readonly note: string; readonly events: number }
+export interface ChangeFeedPage {
+  readonly events: readonly ChangeFeedEvent[];
+  readonly next_cursor: string;
+  readonly range_start: string;
+  readonly range_end: string;
+  readonly kinds: readonly ChangeKind[];
+  readonly vendor: string | null;
+  readonly device_id: string | null;
+  readonly masked: boolean;
+  readonly ordering_note: string;
+  readonly coverage: readonly ChangeFeedCoverage[];
+}
+export interface ChangeFeedQuery { from?: string; to?: string; kinds?: readonly ChangeKind[]; vendor?: string; device?: string; cursor?: string; limit?: number }
+export const getChangeFeed = (query: ChangeFeedQuery) => {
+  const params = new URLSearchParams();
+  if (query.from) params.set("from", query.from);
+  if (query.to) params.set("to", query.to);
+  if (query.kinds && query.kinds.length > 0) params.set("kinds", query.kinds.join(","));
+  if (query.vendor) params.set("vendor", query.vendor);
+  if (query.device) params.set("device", query.device);
+  if (query.cursor) params.set("cursor", query.cursor);
+  if (query.limit) params.set("limit", String(query.limit));
+  const text = params.toString();
+  return call<ChangeFeedPage>(`/api/v2/changes/feed${text ? `?${text}` : ""}`, "GET");
+};
+
 // ---- Packet Analysis (PO decision record 2026-10-15) -------------------------------------------------------
 /** What the server says this session may do; the screen renders it and decides nothing itself. */
 export interface PacketAnalysisPermissions { readonly run: boolean; readonly raw_view: boolean; readonly masked: boolean }

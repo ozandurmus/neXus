@@ -132,6 +132,7 @@ describe("the rail (UI product review 2026-10-18, §2.3 / roadmap 1.1)", () => {
     expect(by("Device management")?.href).toBe("?screen=administration&tab=device-management");
     expect(by("Inventory exclusions")?.href).toBe("?screen=administration&tab=inventory-exclusions");
     expect(by("Packets")?.href).toBe("?screen=packet_analysis");
+    expect(by("Change feed")?.href).toBe("?screen=operations&tab=changes");
     expect(by("Sanitizer")?.href).toBe("?screen=sanitizer");
     expect(by("Backups")?.href).toBe("?screen=backups");
     expect(by("Discovery")?.href).toBeUndefined();
