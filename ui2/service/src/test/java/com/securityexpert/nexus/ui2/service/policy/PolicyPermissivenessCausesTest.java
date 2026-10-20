@@ -48,7 +48,7 @@ class PolicyPermissivenessCausesTest {
         objects.put("svc", object("svc", "OBJ-SERVICE-02", "unresolved", "UNRESOLVED", List.of()));
         Map<Rule, String> expected = new LinkedHashMap<>();
         expected.put(rule("dyn", "https", null), "Unresolved: dynamic object");
-        expected.put(rule("role", "https", null), "Unresolved: access role");
+        // An access role is no longer a gap for Check Point (PO 2026-10-20 addendum); see PolicyPermissivenessCheckPointShapesTest.
         expected.put(rule("dag", "https", null), "Unresolved: dynamic address group");
         expected.put(rule("edl", "https", null), "Unresolved: external dynamic list");
         expected.put(rule("fqdn", "https", null), "Unresolved: FQDN object");

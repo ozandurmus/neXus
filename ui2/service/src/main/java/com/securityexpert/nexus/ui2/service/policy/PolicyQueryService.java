@@ -572,24 +572,36 @@ public final class PolicyQueryService {
      * object viewer resolves them, and their members are followed within that inventory. Inventory rows are classified
      * with the same native-type table as the package mapper; a reference absent from both stays UNRESOLVED. Shadowing
      * does not read this map. Without an index (PAN, no repository, inventory unavailable) the snapshot objects are used.
+     * A RESOLVED dictionary object of an address, service or group class that carries neither values nor members (for
+     * example an address range stored before the mapper read ipv4-address-first/-last, or an empty-looking group) takes
+     * the values/members of the same object (same uid) from the inventory when that row has the same viewer class and
+     * is not itself empty; otherwise it is left unchanged. A Check Point service row without collected fields keeps its
+     * protocol class ("protocol: other"), as the package mapper records it.
      */
     static Map<String, PolicyObject> breadthObjects(PolicySnapshot snapshot, PolicyDomainIndex index) {
         if (index == null) return snapshot.objects();
         Map<String, PolicyObject> out = new HashMap<>(snapshot.objects());
         var pending = new ArrayDeque<String>();
-        snapshot.objects().forEach((id, object) -> { if ("UNRESOLVED".equals(object.status())) pending.add(id); });
+        snapshot.objects().forEach((id, object) -> { if ("UNRESOLVED".equals(object.status()) || valueless(object)) pending.add(id); });
         boolean changed = false;
         int visits = 0;
         while (!pending.isEmpty() && visits++ < 200_000) {
             String id = pending.removeFirst();
             PolicyObject current = out.get(id);
-            if (current != null && !"UNRESOLVED".equals(current.status())) continue;
-            var row = current == null ? null : index.inventoryObject(current.name());
+            boolean fill = current != null && valueless(current);
+            if (current != null && !"UNRESOLVED".equals(current.status()) && !fill) continue;
+            var row = current == null || fill ? null : index.inventoryObject(current.name());
             if (row == null) row = index.inventoryObject(id);
             if (row == null) continue;
             String nativeType = String.valueOf(row.get("type"));
             @SuppressWarnings("unchecked") List<String> uids = (List<String>) row.getOrDefault("members", List.of());
-            @SuppressWarnings("unchecked") List<String> values = (List<String>) row.getOrDefault("values", List.of());
+            @SuppressWarnings("unchecked") List<String> rowValues = (List<String>) row.getOrDefault("values", List.of());
+            List<String> values = rowValues;
+            if (values.isEmpty() && nativeType.startsWith("service-") && !nativeType.equals("service-group"))
+                values = List.of("protocol: " + nativeType.substring("service-".length()));
+            if (fill && (!com.securityexpert.nexus.ui2.policy.CpObjectTypes.type(nativeType).equals(current.type())
+                    || !"RESOLVED".equals(com.securityexpert.nexus.ui2.policy.CpObjectTypes.status(nativeType))
+                    || uids.isEmpty() && values.isEmpty())) continue;
             List<String> members = new ArrayList<>();
             for (String uid : uids) {
                 String memberId = ref(snapshot.metadata().id(), "object", uid);
@@ -600,12 +612,16 @@ public final class PolicyQueryService {
                 }
             }
             String type = com.securityexpert.nexus.ui2.policy.CpObjectTypes.type(nativeType);
-            String name = type.equals("any") ? "ANY" : String.valueOf(row.getOrDefault("name", id));
+            String name = fill ? current.name() : type.equals("any") ? "ANY" : String.valueOf(row.getOrDefault("name", id));
             out.put(id, new PolicyObject(id, name, type, members, values,
                 com.securityexpert.nexus.ui2.policy.CpObjectTypes.status(nativeType)));
             changed = true;
         }
         return changed ? Collections.unmodifiableMap(out) : snapshot.objects();
+    }
+    private static final Set<String> FILLABLE = Set.of("address", "group", "service", "service-group");
+    private static boolean valueless(PolicyObject object) {
+        return "RESOLVED".equals(object.status()) && FILLABLE.contains(object.type()) && object.values().isEmpty() && object.members().isEmpty();
     }
     /** CP group members missing from the rulebase dictionary are resolved against the same domain's stored inventory. */
     private PolicyDomainIndex inventoryIndex(PolicySnapshot snapshot) {

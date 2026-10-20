@@ -56,8 +56,9 @@ public final class PolicyHygiene {
                 if (Boolean.FALSE.equals(rule.enabled())) findings.add(finding("disabled", "LOW", "Rule is disabled."));
                 else if (rule.enabled() == null) findings.add(unknown("Enabled state is unknown."));
                 Map<String, Object> broad = PolicyRuleMetrics.permissiveness(rule, breadthObjects, new int[]{PolicyRuleMetrics.RULE_BUDGET}, snapshot.metadata().vendor());
-                if (breadthObjects != snapshot.objects() && joined(rule, snapshot.objects(), breadthObjects)) {
-                    var reasons = new ArrayList<Object>((List<?>) broad.get("reasons")); reasons.add(PolicyRuleMetrics.INVENTORY);
+                var joins = breadthObjects == snapshot.objects() ? Set.<String>of() : joined(rule, snapshot.objects(), breadthObjects);
+                if (!joins.isEmpty()) {
+                    var reasons = new ArrayList<Object>((List<?>) broad.get("reasons")); reasons.addAll(joins);
                     broad = Map.of("level", broad.get("level"), "reasons", List.copyOf(reasons), "score", broad.get("score"));
                 }
                 var time = PolicyRuleMetrics.time(rule, snapshot.objects(), now, snapshot.metadata().vendor(), new int[]{PolicyRuleMetrics.RULE_BUDGET});
@@ -117,8 +118,12 @@ public final class PolicyHygiene {
         }
         return new Result(Collections.unmodifiableMap(results), budget.left[0] < 0);
     }
-    /** True when a selector of this rule reaches an object only the inventory join supplied or changed. */
-    private static boolean joined(Rule rule, Map<String, PolicyObject> snapshotObjects, Map<String, PolicyObject> breadthObjects) {
+    /**
+     * The inventory-join reasons for objects this rule's selectors reach that the join supplied (group members the
+     * dictionary did not carry) or filled (dictionary objects without values); empty when none.
+     */
+    private static Set<String> joined(Rule rule, Map<String, PolicyObject> snapshotObjects, Map<String, PolicyObject> breadthObjects) {
+        var out = new LinkedHashSet<String>();
         var pending = new ArrayDeque<String>();
         for (var cell : List.of(rule.source(), rule.destination(), rule.service(), rule.application())) pending.addAll(cell.refs());
         var seen = new HashSet<String>();
@@ -127,10 +132,12 @@ public final class PolicyHygiene {
             if (!seen.add(id)) continue;
             var object = breadthObjects.get(id);
             if (object == null) continue;
-            if (!object.equals(snapshotObjects.get(id))) return true;
+            var stored = snapshotObjects.get(id);
+            if (!object.equals(stored))
+                out.add(stored == null || "UNRESOLVED".equals(stored.status()) ? PolicyRuleMetrics.INVENTORY : PolicyRuleMetrics.VALUES_INVENTORY);
             pending.addAll(object.members());
         }
-        return false;
+        return out;
     }
     private static Finding finding(String cls, String severity, String evidence) { return new Finding(cls, severity, evidence); }
     private static Finding unknown(String evidence) { return finding("unknown", "LOW", evidence); }
