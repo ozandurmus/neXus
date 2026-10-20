@@ -177,8 +177,8 @@ describe("summary strip, source pills and side panel", () => {
     expect(sentence).not.toHaveTextContent("COMPLETED");
     // the window of the newest lines, device time, as a short range
     expect(sentence).toHaveTextContent("window 08:00–08:59 device time");
-    // what is stored now sits on the same line; the run's per-source outcomes open on demand
-    expect(within(strip).getByTestId("stored-now")).toHaveTextContent("Stored 8 chunks · 320 lines · 32 KiB");
+    // what is stored now is the card's denominator sentence; the run's per-source outcomes open on demand
+    expect(sentence).toHaveTextContent("Completed · 320 lines · 32 KiB in 8 chunks");
     expect(within(strip).queryByText("collected 2")).toBeNull();
     const details = await openRunDetails();
     expect(within(details).getByText("collected 2")).toBeInTheDocument();
@@ -249,14 +249,37 @@ describe("summary strip, source pills and side panel", () => {
     expect(calls.some((u) => u.includes("/spike-data"))).toBe(false);
   });
 
-  it("does not invent what the backend does not have: no error counts, restarts or HCP verdicts", async () => {
-    stub();
+  it("claims only what the data supports: restarts stay UNKNOWN, level counts come from the lines' own tokens, no HCP verdict", async () => {
+    stub({ crashNew: 0 });
     render(<DeviceLogsPanel deviceId={DEVICE} />);
-    await screen.findByRole("region", { name: "Log summary" });
-    expect(screen.queryByText(/restart/i)).toBeNull();
+    const strip = await screen.findByRole("region", { name: "Log summary" });
+    await screen.findAllByTestId("log-line");
+    const restarts = strip.querySelector('[data-kpi="Process restarts"]') as HTMLElement;
+    expect(within(restarts).getByText("UNKNOWN")).toHaveAttribute("title", expect.stringContaining("no cpwd restart line shape"));
+    expect(restarts.querySelector("[data-kpi-figure]")).toBeNull();
+    // three loaded lines, none writes a level: a counted zero, grey, never a guess
+    const levels = strip.querySelector('[data-kpi="Error / warning lines"]') as HTMLElement;
+    expect(within(levels).getByText("0 / 0")).toHaveAttribute("data-kpi-figure");
+    expect(levels).toHaveTextContent("of 3 loaded lines of this run");
+    expect(levels).toHaveTextContent("no previous window loaded");
+    // no level chip appears for levels no line writes
+    expect(screen.queryByRole("group", { name: "Severity" })).toBeNull();
+    // a counted zero of new crash files, grey, no alarm word
+    const crash = strip.querySelector('[data-kpi="New crash / dump files"]') as HTMLElement;
+    expect(within(crash).getByText("0")).toHaveAttribute("data-kpi-figure");
+    expect(within(crash).queryByText("Alarm")).toBeNull();
     expect(screen.queryByText(/verdict/i)).toBeNull();
-    expect(screen.queryByText(/warning/i)).toBeNull();
-    expect(screen.queryByText(/\berrors?\b/i)).toBeNull();
+  });
+
+  it("raises the alarm word on the crash card only for a NEW file, and says UNKNOWN while the check is unreadable", async () => {
+    stub({ crashNew: 2 });
+    render(<DeviceLogsPanel deviceId={DEVICE} />);
+    const strip = await screen.findByRole("region", { name: "Log summary" });
+    const crash = strip.querySelector('[data-kpi="New crash / dump files"]') as HTMLElement;
+    expect(await within(crash).findByText("2")).toHaveAttribute("data-kpi-figure");
+    expect(within(crash).getByText("Alarm").closest("[data-pill]")).toHaveStyle({ backgroundColor: m3.errorContainer });
+    expect(crash).toHaveTextContent("1 present before monitoring");
+    expect(crash).toHaveTextContent("new within 7 days");
   });
 
   it("words every gap kind and formats byte counts", () => {
@@ -408,7 +431,9 @@ describe("filled state, summary first (UI review 2026-10-18, F-8)", () => {
     stub({ summary: panSummary(), job: { state: "COMPLETED" } });
     render(<DeviceLogsPanel deviceId={DEVICE} vendorHint="palo_alto" />);
     const sentence = await screen.findByTestId("last-collection");
-    expect(sentence).toHaveTextContent(/^Last collection2026-10-18 06:13 GMT\+3· .+ ago· Completed· window 00:15–06:11 device time$/);
+    // the KPI card: the clock as the figure, the age beside it, the device-time window, then the state and what is stored
+    expect(sentence).toHaveTextContent(/^Last collection06:13.+ ago.*window 00:15–06:11 device time.*Completed · 13 lines · 9\.5 KiB in 8 chunks$/);
+    expect(within(sentence).getByText("06:13")).toHaveAttribute("data-kpi-figure");
   });
 
   it("says the job state is UNKNOWN when the Jobs list has none, and never invents COMPLETED", async () => {
@@ -591,6 +616,7 @@ const SEVERITY_LINES = [
   "Oct 18 06:11:09 FW-TANGO-04 fwd[4321]: ERROR: synthetic failure text",
   "Oct 18 06:11:10 FW-TANGO-04 kernel: synthetic line with the word error inside a sentence",
   '{"receive_time": "2026/10/18 06:11:12", "severity": "informational", "type": "SYSTEM"}',
+  "[cpd 4321 140000]@FW-TANGO-04[18 Oct 06:11:13] [WARNING] synthetic warning text",
 ].join("\n") + "\n";
 
 describe("the lines are the content (PO 2026-10-20)", () => {
@@ -670,7 +696,7 @@ describe("the lines are the content (PO 2026-10-20)", () => {
       pages: { "c-1": [{ text: SEVERITY_LINES, next: 400, eof: true }] } });
     render(<DeviceLogsPanel deviceId={DEVICE} vendorHint="palo_alto" />);
     const rows = await screen.findAllByTestId("log-line");
-    expect(rows).toHaveLength(4);
+    expect(rows).toHaveLength(5);
     const high = rows[0].querySelector("[data-severity]") as HTMLElement;
     expect(high).toHaveAttribute("data-severity", "high");
     expect(high).toHaveTextContent("high");
@@ -681,8 +707,36 @@ describe("the lines are the content (PO 2026-10-20)", () => {
     // "error" inside a sentence is not a level the line carries; an informational record gets no colour
     expect(rows[2].querySelector("[data-severity]")).toBeNull();
     expect(rows[3].querySelector("[data-severity]")).toBeNull();
-    // no severity chip, column or count anywhere
+    expect(rows[4].querySelector("[data-severity]")).toHaveStyle({ color: m3.warningInk });
+    // no severity column: the word is coloured in place
     expect(screen.queryByText(/^severity$/i)).toBeNull();
+  });
+
+  it("counts error and warning lines from their own tokens on the KPI card and offers level chips only for levels present", async () => {
+    stub({ summary: panSummary(), chunks: [chunk("c-1", "2026-10-18T03:13:03Z", { source_key: "pan_system", log_day: "2026-10-18" })],
+      pages: { "c-1": [{ text: SEVERITY_LINES, next: 400, eof: true }] } });
+    render(<DeviceLogsPanel deviceId={DEVICE} vendorHint="palo_alto" />);
+    await screen.findAllByTestId("log-line");
+    const strip = screen.getByRole("region", { name: "Log summary" });
+    const levels = strip.querySelector('[data-kpi="Error / warning lines"]') as HTMLElement;
+    expect(within(levels).getByText("2 / 1")).toHaveAttribute("data-kpi-figure");
+    expect(levels).toHaveTextContent("of 5 loaded lines of this run");
+    const chips = screen.getByRole("group", { name: "Severity" });
+    expect(within(chips).getAllByRole("button").map((b) => b.textContent)).toEqual(["All", "Error 2", "Warning 1"]);
+    expect(within(chips).getByRole("button", { name: /All/ })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(within(chips).getByRole("button", { name: /Error/ }));
+    expect(screen.getAllByTestId("log-line")).toHaveLength(2);
+    expect(screen.getByText("2 of 5 loaded lines match")).toBeInTheDocument();
+    fireEvent.click(within(chips).getByRole("button", { name: /Warning/ }));
+    const warn = screen.getAllByTestId("log-line");
+    expect(warn).toHaveLength(1);
+    expect(warn[0]).toHaveTextContent("WARNING");
+    // the text filter and the level chip combine
+    fireEvent.change(screen.getByRole("textbox", { name: "Filter lines" }), { target: { value: "no such text" } });
+    expect(screen.getByText("No loaded line matches the filter.")).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("textbox", { name: "Filter lines" }), { target: { value: "" } });
+    fireEvent.click(within(chips).getByRole("button", { name: /All/ }));
+    expect(screen.getAllByTestId("log-line")).toHaveLength(5);
   });
 
   it("marks a gap in the stream where its place is known: before the lines for lost content, after them for a backlog", async () => {
