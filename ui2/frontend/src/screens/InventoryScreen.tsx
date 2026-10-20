@@ -3,7 +3,10 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { urlParam } from "../shell/urlParams";
 import Box from "@mui/material/Box";
 import Chip from "@mui/material/Chip";
+import Drawer from "@mui/material/Drawer";
+import IconButton from "@mui/material/IconButton";
 import Popover from "@mui/material/Popover";
+import Tooltip from "@mui/material/Tooltip";
 import Stack from "@mui/material/Stack";
 import { ManagementTreePanel } from "./ManagementTreePanel";
 import Typography from "@mui/material/Typography";
@@ -19,6 +22,7 @@ import { FilterBar, FilterRow, ListSettingsMenu, contentVersionText, downloadTex
 export { isDeviceLive } from "./DeviceShared";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { useListSearch } from "../shell/listSearch";
+import { usePreferenceFlag } from "../shell/preference";
 import { requestBulkInventoryCollect, requestBulkConfigurationCollect, listConfigurations, getOverview, listDevices, getManagementTree, type ApiError, type DeviceSummary, type ClusterInventory, type ManagementTree, type ManagementTreeNode } from "../auth/adminApi";
 import { deviceNameLabel, enrollmentStateLabel, enrollmentStateTone } from "../shell/deviceCopy";
 import { JobStatusIndicator } from "../shell/JobStatusIndicator";
@@ -282,6 +286,7 @@ export function inAgeBucket(device: DeviceSummary, bucket: string, now: number =
 
 /** The device list's view: flat (default) or nested under each management server (PO, 2026-09-23). Remembered per browser. */
 export type ListView = "flat" | "manager";
+const LIST_COLLAPSED_KEY = "nx.devices.list.collapsed";
 const LIST_VIEW_KEY = "nexus.deviceListView";
 
 export function useListView(): [ListView, (v: ListView) => void] {
@@ -1089,6 +1094,9 @@ export function InventoryScreen() {
   };
   const [sortMode, setSortMode] = useState<"name_asc" | "name_desc" | "vendor">("name_asc");
   const [listView, setListView] = useListView();
+  // The device list folds to a slim strip (PO 2026-10-20), remembered per viewer; while folded, `Devices` opens it over the page.
+  const [listCollapsed, setListCollapsed] = usePreferenceFlag(LIST_COLLAPSED_KEY, false);
+  const [listOverlay, setListOverlay] = useState(false);
 
   const devices = data;
   const total = devices?.length ?? 0;
@@ -1233,38 +1241,25 @@ export function InventoryScreen() {
     </>
   );
 
-  return (
-    <ScreenRoot screenType="object">
-      {objectOpen
-        // An open object gets the room (post-release review 2026-10-18, R13: tab content within ~420 px at 1440 × 900):
-        // the title, its count, the way back to the landing and the five fleet controls share one 40 px row.
-        ? <CompactScreenHeader title="Devices" subtitle={subtitle} actions={actions}
-            back={<M3Button emphasis="text" onClick={closeObject}>← Fleet summary</M3Button>} />
-        : <ScreenHeader title="Devices" subtitle={subtitle} actions={actions} />}
-      {bulkResult && (
-        <Box sx={{ px: 3, pb: 2 }}>
-          <Typography variant="body2" sx={{ color: m3.primary }}>
-            Bulk collect admitted {bulkResult.admitted} of {bulkResult.enrolled_devices} enrolled devices.
-            {bulkResult.refused > 0 && ` (${bulkResult.refused} refused.)`} View Administration &gt; Job Logs for progress.
-          </Typography>
-        </Box>
-      )}
-      <ListDetail
-        list={
-          <Box
-            sx={{
-              display: "flex",
-              flexDirection: "column",
-              gap: 1.25,
-              minHeight: 0,
-              maxHeight: "calc(100vh - 160px)",
-              overflowY: "auto",
-              overflowX: "hidden",
-              position: "sticky",
-              top: 16,
-              pr: 0.5,
-            }}
-          >
+  // The list column: in its grid column, or over the page while the column is folded (the same list, the same handlers).
+  const deviceListColumn = (overlay: boolean) => (
+    <Box
+      data-testid="device-list-column"
+      sx={overlay
+        ? { display: "flex", flexDirection: "column", gap: 1.25, minHeight: 0 }
+        : { display: "flex", flexDirection: "column", gap: 1.25, minHeight: 0, maxHeight: "calc(100vh - 160px)", overflowY: "auto", overflowX: "hidden", position: "sticky", top: 16, pr: 0.5 }}
+    >
+      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "flex-end", mb: -0.5 }}>
+        {overlay
+          ? <IconButton aria-label="Close device list" onClick={() => setListOverlay(false)} size="small" sx={{ borderRadius: "8px" }}><Icon name="close" size={18} /></IconButton>
+          : (
+            <Tooltip title="Hide device list" placement="right">
+              <IconButton aria-label="Hide device list" onClick={() => setListCollapsed(true)} size="small" sx={{ borderRadius: "8px", color: m3.onSurfaceVar }}>
+                <Icon name="chevron-left" size={18} />
+              </IconButton>
+            </Tooltip>
+          )}
+      </Box>
             {(ageFilter || hotfixFilter || versionFilter || modelFilter || changedOnly || diffOnly) && (
               <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1, flexWrap: "wrap" }}>
                 <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>From Overview:</Typography>
@@ -1346,14 +1341,53 @@ export function InventoryScreen() {
                   setSelectedDevice(dev);
                   setSelectedDeviceVs(vsName ?? null);
                   setSelectedCluster(null);
+                  setListOverlay(false);
                 }}
                 onSelectCluster={(ref, members, vsName) => {
                   setSelectedCluster({ ref, members, initialVs: vsName });
                   setSelectedDevice(null);
                   setSelectedDeviceVs(null);
+                  setListOverlay(false);
                 }}
               />
             )}
+    </Box>
+  );
+
+  return (
+    <ScreenRoot screenType="object">
+      {objectOpen
+        // An open object gets the room (post-release review 2026-10-18, R13: tab content within ~420 px at 1440 × 900):
+        // the title, its count, the way back to the landing and the five fleet controls share one 40 px row.
+        ? <CompactScreenHeader title="Devices" subtitle={subtitle} actions={actions}
+            back={<M3Button emphasis="text" onClick={closeObject}>← Fleet summary</M3Button>} />
+        : <ScreenHeader title="Devices" subtitle={subtitle} actions={actions} />}
+      {bulkResult && (
+        <Box sx={{ px: 3, pb: 2 }}>
+          <Typography variant="body2" sx={{ color: m3.primary }}>
+            Bulk collect admitted {bulkResult.admitted} of {bulkResult.enrolled_devices} enrolled devices.
+            {bulkResult.refused > 0 && ` (${bulkResult.refused} refused.)`} View Administration &gt; Job Logs for progress.
+          </Typography>
+        </Box>
+      )}
+      <ListDetail
+        list={deviceListColumn(false)}
+        collapsed={listCollapsed}
+        strip={
+          <Box data-testid="device-list-strip" sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1, position: "sticky", top: 16, width: 40 }}>
+            <Tooltip title="Show device list" placement="right">
+              <IconButton aria-label="Show device list" onClick={() => setListCollapsed(false)} size="small"
+                sx={{ borderRadius: "8px", border: `1px solid ${m3.outlineVar}`, color: m3.primary }}>
+                <Icon name="chevron-right" size={18} />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Open the device list over the page" placement="right">
+              <Box component="button" type="button" aria-label="Devices" onClick={() => setListOverlay(true)}
+                sx={{ all: "unset", cursor: "pointer", writingMode: "vertical-rl", fontSize: 12, fontWeight: 600, letterSpacing: "0.06em", color: m3.onSurfaceVar,
+                  px: "6px", py: 1, borderRadius: "8px", "&:hover": { bgcolor: m3.scHigh, color: m3.onSurface }, "&:focus-visible": { outline: `2px solid ${m3.primary}` } }}>
+                Devices
+              </Box>
+            </Tooltip>
           </Box>
         }
         detail={
@@ -1420,6 +1454,12 @@ export function InventoryScreen() {
           </Box>
         }
       />
+      {listCollapsed && (
+        <Drawer anchor="left" open={listOverlay} onClose={() => setListOverlay(false)}
+          PaperProps={{ role: "dialog", "aria-label": "Device list", sx: { width: 420, maxWidth: "92vw", p: 2, bgcolor: m3.surface } }}>
+          {deviceListColumn(true)}
+        </Drawer>
+      )}
     </ScreenRoot>
   );
 }

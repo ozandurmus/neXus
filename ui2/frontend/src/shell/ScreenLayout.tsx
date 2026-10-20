@@ -66,11 +66,18 @@ export function MetricGrid({ children }: { readonly children: ReactNode }) {
   return <KpiRow>{children}</KpiRow>;
 }
 
-/** The canvas's list-plus-detail split (Inventory, Configuration, Administration). */
-export function ListDetail({ list, detail }: { readonly list: ReactNode; readonly detail: ReactNode }) {
+/**
+ * The canvas's list-plus-detail split (Inventory, Configuration, Administration). `collapsed` folds the list column
+ * to a slim strip (PO 2026-10-20: a list that is always there is tiring) and the detail takes the width; the caller
+ * supplies the strip with its way back to the list.
+ */
+export function ListDetail({ list, detail, collapsed = false, strip }: {
+  readonly list: ReactNode; readonly detail: ReactNode; readonly collapsed?: boolean; readonly strip?: ReactNode;
+}) {
   return (
-    <Box sx={{ flex: 1, minHeight: 0, display: "grid", gridTemplateColumns: "minmax(280px, 352px) minmax(0, 1fr)", gap: 2, alignItems: "start" }}>
-      {list}
+    <Box data-testid="list-detail" data-collapsed={collapsed ? "true" : "false"}
+      sx={{ flex: 1, minHeight: 0, display: "grid", gridTemplateColumns: collapsed ? "40px minmax(0, 1fr)" : "minmax(280px, 352px) minmax(0, 1fr)", gap: 2, alignItems: "start" }}>
+      {collapsed ? strip : list}
       {detail}
     </Box>
   );

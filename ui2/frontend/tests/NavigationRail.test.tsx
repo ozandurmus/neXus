@@ -149,3 +149,63 @@ describe("the rail (UI product review 2026-10-18, §2.3 / roadmap 1.1)", () => {
     expect(screen.queryByRole("button", { name: "Open navigation" })).toBeNull();
   });
 });
+
+describe("the rail folds to icons (PO 2026-10-20)", () => {
+  const KEY = "nx.rail.collapsed";
+  afterEach(() => window.localStorage.removeItem(KEY));
+
+  it("collapses to icons from the wide layout, keeps every destination reachable by name, and expands again", () => {
+    viewport(1440);
+    rail("inventory");
+    const toggle = within(nav()).getByRole("button", { name: "Collapse menu" });
+    expect(toggle).toHaveAttribute("aria-pressed", "false");
+    expect(within(nav()).getByText("Devices")).toBeInTheDocument();
+    fireEvent.click(toggle);
+    // labels and group words gone, the icons named for the hover tooltip and the screen reader, the active item kept
+    expect(within(nav()).queryByText("Devices")).toBeNull();
+    expect(within(nav()).queryByText("SEE")).toBeNull();
+    expect(within(nav()).getByRole("link", { name: "Devices" })).toHaveAttribute("aria-current", "page");
+    expect(within(nav()).getByRole("link", { name: "Administration" })).toBeInTheDocument();
+    expect(within(nav()).getByRole("button", { name: "Tools" })).toBeInTheDocument();
+    expect(current()).toHaveLength(1);
+    // no drawer at this width, folded or not
+    expect(screen.queryByRole("button", { name: "Open navigation" })).toBeNull();
+    const expand = within(nav()).getByRole("button", { name: "Expand menu" });
+    expect(expand).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(expand);
+    expect(within(nav()).getByText("Devices")).toBeInTheDocument();
+    expect(within(nav()).getByText("SEE")).toBeInTheDocument();
+  });
+
+  it("remembers the fold per viewer and reads it back on the next render", () => {
+    viewport(1440);
+    const first = rail("overview");
+    fireEvent.click(within(nav()).getByRole("button", { name: "Collapse menu" }));
+    expect(window.localStorage.getItem(KEY)).toBe("1");
+    first.unmount();
+    rail("overview");
+    expect(within(nav()).queryByText("Overview")).toBeNull();
+    expect(within(nav()).getByRole("button", { name: "Expand menu" })).toBeInTheDocument();
+  });
+
+  it("has no fold control below the drawer width: the drawer behaviour stays", () => {
+    viewport(DRAWER_BELOW_PX - 1);
+    rail("overview");
+    expect(within(nav()).queryByRole("button", { name: /menu$/ })).toBeNull();
+    expect(screen.getByRole("button", { name: "Open navigation" })).toBeInTheDocument();
+  });
+
+  it("renders the wide rail with labels when the browser store is unusable", () => {
+    viewport(1440);
+    const store = Object.getOwnPropertyDescriptor(window, "localStorage")!;
+    Object.defineProperty(window, "localStorage", { configurable: true, get() { throw new Error("blocked"); } });
+    try {
+      rail("overview");
+      expect(within(nav()).getByText("Devices")).toBeInTheDocument();
+      fireEvent.click(within(nav()).getByRole("button", { name: "Collapse menu" }));
+      expect(within(nav()).queryByText("Devices")).toBeNull();
+    } finally {
+      Object.defineProperty(window, "localStorage", store);
+    }
+  });
+});
