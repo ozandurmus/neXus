@@ -43,7 +43,7 @@ class CpFailoverSecurityRouteTest {
                 }
             }
         }
-        assertEquals(12, registered);
+        assertEquals(14, registered);
         for (String path : List.of("/approvals", "/approvals/*/revoke", "/runs")) {
             assertNull(SecurityWebMvcConfig.ACTION_ID_BY_ROUTE.get("POST /api/v2/pan-failover" + path));
         }

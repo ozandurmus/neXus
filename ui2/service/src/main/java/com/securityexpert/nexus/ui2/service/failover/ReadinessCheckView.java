@@ -30,7 +30,7 @@ public final class ReadinessCheckView {
             case 5 -> "ARP"; case 6 -> "Connections"; case 8 -> "Traffic rate";
             case 9 -> "State synchronization"; case 10 -> "Installed policy parity";
             case 11 -> "Critical devices"; case 12 -> "Bond interfaces";
-            case 13 -> "Last failover"; case 14 -> "Routing"; default -> "Check";
+            case 13 -> "Last failover"; case 14 -> "Routing"; case 15 -> "Recovery mode"; default -> "Check";
         };
     }
 
@@ -61,6 +61,7 @@ public final class ReadinessCheckView {
                 case 12 -> "Bond table not recognised";
                 case 13 -> "Last failover time unavailable or invalid";
                 case 14 -> "Routing table not recognised";
+                case 15 -> "Recovery mode not recognised; failover is refused unless both members report Active Up";
                 default -> "Check evidence unavailable";
             };
         }
@@ -96,6 +97,10 @@ public final class ReadinessCheckView {
             case 14 -> (d.path("defaultRoute").isBoolean()
                 ? d.path("defaultRoute").asBoolean() ? "Default route present" : "No default route" : "Default route unknown")
                 +", "+count(d,"routeCount"," routes")+(pass ? "" : "; routing not ready");
+            case 15 -> pass ? "Active Up: the former active returns as standby"
+                : "PRIMARY_UP".equals(d.path("recoveryMode").asText())
+                    ? "Primary Up: the return step could preempt; failover is refused"
+                    : "Recovery mode not Active Up; failover is refused";
             default -> "Check result unavailable";
         };
     }

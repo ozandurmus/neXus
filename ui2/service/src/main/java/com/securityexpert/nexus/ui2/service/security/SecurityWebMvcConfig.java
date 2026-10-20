@@ -111,6 +111,10 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("POST /api/v2/pan-failover/units/*/readiness", ActionRegistry.CP_READINESS_START),
             Map.entry("GET /api/v2/cp-failover/runs", ActionRegistry.CP_FAILOVER_READ),
             Map.entry("GET /api/v2/cp-failover/runs/*", ActionRegistry.CP_FAILOVER_READ),
+            // PO 2026-10-20 item 1: open incidents are read by every failover reader; release is security_admin only.
+            Map.entry("GET /api/v2/cp-failover/incidents", ActionRegistry.CP_FAILOVER_READ),
+            Map.entry("GET /api/v2/pan-failover/incidents", ActionRegistry.CP_FAILOVER_READ),
+            Map.entry("POST /api/v2/cp-failover/runs/*/incident/release", ActionRegistry.CP_FAILOVER_INCIDENT_RELEASE),
             Map.entry("GET /api/v2/pan-failover/units", ActionRegistry.CP_FAILOVER_READ),
             Map.entry("GET /api/v2/pan-failover/units/*", ActionRegistry.CP_FAILOVER_READ),
             Map.entry("GET /api/v2/pan-failover/summary", ActionRegistry.CP_FAILOVER_READ),

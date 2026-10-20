@@ -2,6 +2,7 @@ import { SshHostKeyPanel } from "./SshHostKeyPanel";
 import { canRunReadiness, haReadinessItems, HaReadinessList, type ReadinessProgress } from "./HaReadinessList";
 import { ReadinessCard } from "./ReadinessChecksTable";
 import { CpFailoverPanel } from "./CpFailoverPanel";
+import { FailoverIncidentsPanel } from "./FailoverIncidentsPanel";
 import { useState, useEffect, useRef } from "react";
 import Card from "@mui/material/Card";
 import Box from "@mui/material/Box";
@@ -204,7 +205,16 @@ export function OperationsScreen() {
     }
   };
 
+  const reloadSummary = () => {
+    void listCpFailoverSummary().then(rows => {
+      const byRef: Record<string, CpFailoverSummary[]> = {};
+      for (const row of rows) (byRef[row.cluster_member_ref] ??= []).push(row);
+      setCpRows(byRef);
+    }).catch(() => {});
+  };
   const renderHaPanel = () => <>
+    {/* PO 2026-10-20 item 1: every open incident and estate-wide unresolved send, with its release (security_admin). */}
+    <FailoverIncidentsPanel onReleased={reloadSummary} />
     {clusters === null ? <StatePanel variant="empty" title="Reading the enrolled clusters…" />
       : clusters.length === 0 ? <StatePanel variant="empty" title="No HA pair or cluster enrolled"
         body="Readiness needs enrolled cluster members and a current health read from each one; none is enrolled, so no cluster can be assessed." />

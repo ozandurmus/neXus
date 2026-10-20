@@ -114,9 +114,7 @@ class AuditCoverageCompletenessTest {
                     + "the hash-chained failover_schedule_ledger"),
             Map.entry("failover_schedule_ledger", "V31/V135: append-only hash-chained transition ledger, itself "
                     + "the audit record of failover_schedules"),
-            Map.entry("failover_grant_consumption", "V31/V135: append-only single-use grant ledger"),
-            Map.entry("failover_quarantine", "V136: failover_incident_guard keeps incidents immutable except the "
-                    + "release, whose operator, approver, time and notes the row itself retains"));
+            Map.entry("failover_grant_consumption", "V31/V135: append-only single-use grant ledger"));
 
     static final Set<String> AUDIT_TRIGGER_EXCLUSIONS = union(CONTRACT_EXCLUSIONS,
             AUDITED_BY_NAMED_TRIGGER.keySet(), NOT_MUTATION_BEARING.keySet());

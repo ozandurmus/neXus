@@ -18,6 +18,7 @@ import { approveCpFailover, getCpFailoverRun, listCpFailoverApprovals, listCpFai
   secondApproveCpFailover, startCpFailover, runCpFailoverReadiness,
   type CpFailoverApproval, type CpFailoverRunDetail, type CpFailoverState, type CpFailoverUnit } from "../auth/adminApi";
 import { ReadinessCard, ReadinessChecksTable } from "./ReadinessChecksTable";
+import { FailoverIncidentsPanel } from "./FailoverIncidentsPanel";
 const labels = ["Checking readiness", "Failing over", "Role change confirmed", "Checking traffic and cluster after switch",
   "Returning former active to standby", "Verifying final cluster health", "Failover verified"];
 const activeStates: CpFailoverState[] = ["PLANNED", "PRECHECK", "FAILING_OVER", "SWITCHED", "POSTCHECK", "RETURNING"];
@@ -32,6 +33,14 @@ const errorText = (error: unknown) => {
   return body?.code === "OUTSIDE_JOB_WINDOW" ? body.message ?? "Device jobs are outside the scheduled window." : body?.code ?? "Request failed";
 };
 type Draft = { requestId: string; from: string; until: string; reason: string; confirmedRevision?: number };
+/** Workers write "post_return" after the return step; "final" is the older name. Both are the final post-checks. */
+const FINAL_PHASES: ReadonlyArray<string> = ["post_return", "final"];
+const phaseGroups = [
+  { key: "pre", title: "Pre-checks", phases: ["pre"] },
+  { key: "post", title: "Post-switch checks", phases: ["post"] },
+  { key: "final", title: "Final post-checks", phases: FINAL_PHASES },
+] as const;
+const recoveryLabel = (mode?: string) => mode === "ACTIVE_UP" ? "Active Up" : mode === "PRIMARY_UP" ? "Primary Up" : "Unknown";
 export function FailoverRun({ run, unit }: { run: CpFailoverRunDetail; unit: CpFailoverUnit }) {
   const stopped = run.state === "STOPPED", step = runStep(run.state, run.step);
   const failed = run.checks.filter(c => c.blocking && ["FAIL", "UNKNOWN"].includes(c.status));
@@ -43,17 +52,18 @@ export function FailoverRun({ run, unit }: { run: CpFailoverRunDetail; unit: CpF
     <Typography variant="caption">Run: {run.runId} · Phase: {run.step}</Typography>
     <Stepper activeStep={step} alternativeLabel>{labels.map((label, index) => <Step key={label} completed={run.state === "DONE" || index < step}>
       <StepLabel error={stopped && index === step}>{label}</StepLabel></Step>)}</Stepper>
-    {(["pre", "post", "final"] as const).map(phase => <Box key={phase}>
-      <Typography variant="subtitle2">{phase === "pre" ? "Pre-checks" : phase === "post" ? "Post-switch checks" : "Final post-checks"}</Typography>
-      {run.checks.some(c => c.phase === phase) ? <ReadinessChecksTable checks={run.checks.filter(c => c.phase === phase)} members={unit.members} />
+    {phaseGroups.map(group => <Box key={group.key}>
+      <Typography variant="subtitle2">{group.title}</Typography>
+      {run.checks.some(c => (group.phases as ReadonlyArray<string>).includes(c.phase))
+        ? <ReadinessChecksTable checks={run.checks.filter(c => (group.phases as ReadonlyArray<string>).includes(c.phase))} members={unit.members} />
         : <Typography variant="body2">Not evaluated</Typography>}
-      {phase !== "pre" && <Typography variant="body2">Session continuity: not evaluated</Typography>}
+      {group.key !== "pre" && <Typography variant="body2">Session continuity: not evaluated</Typography>}
     </Box>)}
     <Typography variant="body2">Last confirmed roles: {roles.length ? roles.map(([id, role]) =>
       `${unit.members?.find(m => m.device_id === id)?.hostname ?? "Member"}: ${role}`).join(" · ") : "Not evaluated"}</Typography>
     {stopped && <><Typography>Failed/unknown check: {failed.map(c => `${c.title} · ${c.status}`).join("; ") || run.failedCheck || "Not evaluated"}</Typography>
       <Typography>Refusal: {run.message || "Unknown"} · Incident reference: {run.incidentRef ?? "Not recorded"}</Typography></>}
-    {run.state === "DONE" && <Typography>Evidence coverage: {run.checks.filter(c => c.blocking && c.status === "PASS").length} / {run.checks.filter(c => c.blocking).length} recorded required results passed. Final post-checks: {run.checks.some(c => c.phase === "final") ? "Recorded" : "Not evaluated"}.</Typography>}
+    {run.state === "DONE" && <Typography>Evidence coverage: {run.checks.filter(c => c.blocking && c.status === "PASS").length} / {run.checks.filter(c => c.blocking).length} recorded required results passed. Final post-checks: {run.checks.some(c => FINAL_PHASES.includes(c.phase)) ? "Recorded" : "Not evaluated"}.</Typography>}
   </Stack>;
 }
 function UnitPanel({ unit, expanded, onExpand, onRefreshUnits }: { unit: CpFailoverUnit; expanded: boolean; onExpand: () => void; onRefreshUnits: () => void }) {
@@ -132,9 +142,10 @@ function UnitPanel({ unit, expanded, onExpand, onRefreshUnits }: { unit: CpFailo
   });
   return <Card sx={{ p: 2, ml: unit.unitId === unit.clusterId ? 0 : 3, bgcolor: m3.scLow }}>
     <M3Button emphasis="text" onClick={onExpand}>{unit.unitId === unit.clusterId ? label : `Virtual System · ${label}`}</M3Button>
-    <Typography variant="body2">{unit.vendor === "palo_alto" ? "Palo Alto" : "Check Point"} · Mode: {unit.mode ?? "UNKNOWN"} · Readiness age: {unit.readinessObservedAt ? relativeAge(unit.readinessObservedAt, new Date()) : "Not evaluated"}</Typography>
+    <Typography variant="body2">{unit.vendor === "palo_alto" ? "Palo Alto" : "Check Point"} · Mode: {unit.mode ?? "UNKNOWN"}{unit.vendor === "palo_alto" ? "" : ` · Recovery mode: ${recoveryLabel(unit.recoveryMode)}`} · Readiness age: {unit.readinessObservedAt ? relativeAge(unit.readinessObservedAt, new Date()) : "Not evaluated"}</Typography>
     {unit.refusalReason && <Typography color="error">{unit.refusalReason}</Typography>}
     {expanded && <Stack spacing={2} sx={{ mt: 1 }}>
+      <FailoverIncidentsPanel clusterId={unit.clusterId} onReleased={() => { onRefreshUnits(); void refresh(); }} />
       {pending && <Typography role="status">Awaiting second approval</Typography>}
       {canOperate && <M3Button deviceJob emphasis="filled" disabled={!idle || Boolean(unit.refusalReason) || Boolean(pending)} onClick={() => {
         if (draft?.confirmedRevision && bound?.approved && (!run || run.approvalId !== bound.approvalId)) { void act(() => start(bound)); return; }

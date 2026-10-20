@@ -860,4 +860,88 @@ public class JooqCpFailoverRepository {
             "insert into failover_check_result(run_id,phase,member_ref,vs_id,check_no,status,derived) "
             + "values({0},{1},{2},{3},{4},{5},{6}::jsonb)", id, phase, member, vsId, no, status, derived));
     }
+
+    /**
+     * One open failover incident, or one stopped run whose possibly sent write is still unresolved (it blocks
+     * every failover admission in the estate). Opaque references only; no device address or name.
+     */
+    public record Incident(String clusterRef, String runId, String vsId, String vendor, String reason,
+            Instant openedAt, List<String> memberIds, List<String> unresolvedDispatchRefs, boolean incidentActive) {
+        /** Unresolved sends of this run refuse every failover admission (UNRESOLVED_DISPATCH), not only this unit's. */
+        public boolean blocksEstate() { return !unresolvedDispatchRefs.isEmpty(); }
+    }
+    public static final String INCIDENT_RELEASED = "RELEASED";
+    public static final String INCIDENT_NOT_FOUND = "INCIDENT_NOT_FOUND";
+    public static final String INCIDENT_RUN_NOT_TERMINAL = "RUN_NOT_TERMINAL";
+    public static final String INCIDENT_RUN_STILL_OWNED = "RUN_STILL_OWNED";
+
+    /** Fleet-fence predicate shared with {@link #admissionDecision}: intents that refuse every admission. */
+    private static final String UNRESOLVED_SENDS = "select i.nonce from failover_dispatch_intent i where i.run_id={0} "
+        + "and i.delivery<>'NOT_SENT' and (i.observation='NOT_OBSERVED' or (i.observation='OUTCOME_UNKNOWN' and exists "
+        + "(select 1 from failover_quarantine q where q.execution_id=i.run_id and q.active))) order by i.nonce";
+
+    /** Active incidents plus terminal runs whose unresolved sends hold the estate-wide fence without an incident. */
+    public List<Incident> openIncidents() {
+        return boundary.inTransaction(dsl -> dsl.fetch("select q.cluster_ref,q.execution_id as run_id,q.reason,"
+                + "q.quarantined_at as opened_at,q.quarantined_member_ids as member_ids,r.vs_id,r.vendor,true as incident_active "
+                + "from failover_quarantine q left join failover_run r on r.run_id=q.execution_id where q.active "
+                + "union all select r.cluster_ref,r.run_id,'UNRESOLVED_DISPATCH',min(i.created_at),r.target_member_ids,"
+                + "r.vs_id,r.vendor,false from failover_dispatch_intent i join failover_run r on r.run_id=i.run_id "
+                + "where i.delivery<>'NOT_SENT' and i.observation='NOT_OBSERVED' and r.state in ('DONE','STOPPED') "
+                + "and not exists(select 1 from failover_quarantine q where q.execution_id=r.run_id and q.active) "
+                + "group by r.run_id order by 4,2")
+            .map(r -> {
+                String run=r.get("run_id",String.class);
+                List<String> members=new java.util.ArrayList<>();
+                try {
+                    for (var member:new com.fasterxml.jackson.databind.ObjectMapper()
+                            .readTree(r.get("member_ids",JSONB.class).data())) members.add(member.asText());
+                } catch (java.io.IOException invalid) { members.clear(); }
+                return new Incident(r.get("cluster_ref",String.class),run,r.get("vs_id",String.class),
+                    r.get("vendor",String.class),r.get("reason",String.class),
+                    r.get("opened_at",java.time.OffsetDateTime.class).toInstant(),List.copyOf(members),
+                    dsl.fetch(UNRESOLVED_SENDS,run).map(n -> n.get(0,String.class)),
+                    Boolean.TRUE.equals(r.get("incident_active",Boolean.class)));
+            }));
+    }
+
+    /**
+     * PO decision 2026-10-20 item 1: release one run's incident and its unresolved sends in one audited
+     * transaction. The actor is the server-side session (security_admin, checked by the caller); the reason
+     * is recorded on the incident (V136 columns: acknowledged_by/at, review_notes; second_approver_id holds
+     * the same single security_admin under the ratified single-admin policy) and in audit_log (V169).
+     * A still possibly sent write of the run is recorded as OUTCOME_UNKNOWN, never as confirmed: the release
+     * attests that its state was established out of band, it does not claim the write's effect.
+     */
+    public String releaseIncident(String runId, String actor, String reason) {
+        if (runId==null || actor==null || actor.isBlank() || reason==null || reason.isBlank())
+            throw new IllegalArgumentException("INCIDENT_RELEASE_INVALID");
+        return audited.inTransaction(actor,"failover_incident_release",runId,dsl -> {
+            if (!dispatchLock(dsl,runId)) return INCIDENT_RUN_STILL_OWNED;
+            lockAdmission(dsl);
+            Record run=dsl.fetchOne("select state,job_id from failover_run where run_id={0} for update",runId);
+            List<String> incidents=dsl.fetch("select cluster_ref from failover_quarantine where execution_id={0} "
+                + "and active order by cluster_ref",runId).map(q -> q.get(0,String.class));
+            if (run!=null && !Set.of("DONE","STOPPED").contains(run.get("state",String.class))) return INCIDENT_RUN_NOT_TERMINAL;
+            if (run!=null && !dsl.fetch("select 1 from jobs where job_id={0} and state in ('CLAIMED','EXECUTING') "
+                    + "and lease_expires_at>clock_timestamp()",run.get("job_id",String.class)).isEmpty())
+                return INCIDENT_RUN_STILL_OWNED;
+            List<String> unresolved=dsl.fetch("select nonce from failover_dispatch_intent where run_id={0} "
+                + "and delivery<>'NOT_SENT' and observation='NOT_OBSERVED' for update",runId).map(n -> n.get(0,String.class));
+            if (incidents.isEmpty() && unresolved.isEmpty()) return INCIDENT_NOT_FOUND;
+            if (!unresolved.isEmpty()) {
+                dsl.execute("update failover_dispatch_intent set observation='OUTCOME_UNKNOWN',"
+                    + "delivery=case when delivery='MAY_HAVE_BEEN_SENT' then 'UNKNOWN' else delivery end "
+                    + "where run_id={0} and delivery<>'NOT_SENT' and observation='NOT_OBSERVED'",runId);
+                dsl.execute("update job_step_attempt set outcome='OUTCOME_UNKNOWN',error_class='OUTCOME_UNCERTAIN',"
+                    + "matched_expectation=false where attempt_id in (select attempt_id from failover_dispatch_intent "
+                    + "where run_id={0} and observation='OUTCOME_UNKNOWN')",runId);
+            }
+            for (String cluster:incidents)
+                if (!Boolean.TRUE.equals(dsl.fetchOne("select ui2_release_failover_incident({0},{1},{2},{3},{4}) as released",
+                        cluster,runId,actor,actor,reason).get("released",Boolean.class)))
+                    throw new IllegalStateException("INCIDENT_RELEASE_FENCE");
+            return INCIDENT_RELEASED;
+        });
+    }
 }
