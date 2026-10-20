@@ -506,10 +506,6 @@ public class FailoverExecutionService {
         return quarantineStore.getActiveQuarantine(clusterRef);
     }
 
-    public boolean acknowledgeQuarantine(String clusterRef, String executionId, String requesterId, String approverId, String reason) {
-        return quarantineStore.acknowledgeQuarantine(clusterRef, executionId, requesterId, approverId, reason);
-    }
-
     /**
      * CF-P0.20 passthrough: lets {@code FailoverScheduleService}'s startup reconciliation engage
      * sticky quarantine on a cluster left in an ambiguous state by a crash, without duplicating

@@ -35,6 +35,17 @@ class ReadinessCheckViewTest {
             assertEquals("PASS",view.get("result"));
         }
     }
+    /** PO decision 2026-10-20 item 2: the "Recovery mode" row the PO picks a pilot unit by. */
+    @Test void recoveryModeRowIsBlockingAndNamesTheObservedMode() throws Exception {
+        var active=row(false,15,"PASS","{\"recoveryMode\":\"ACTIVE_UP\",\"reason\":\"ACTIVE_UP\"}");
+        assertEquals("Recovery mode",active.get("title"));
+        assertEquals(true,active.get("blocking"));
+        assertEquals("Active Up: the former active returns as standby",active.get("summary"));
+        assertEquals("Primary Up: the return step could preempt; failover is refused",
+            row(false,15,"FAIL","{\"recoveryMode\":\"PRIMARY_UP\"}").get("summary"));
+        assertEquals("Recovery mode not recognised; failover is refused unless both members report Active Up",
+            row(false,15,"UNKNOWN","{\"recoveryMode\":\"UNKNOWN\"}").get("summary"));
+    }
     @Test void syncFailureExplainsStatusAndEveryNonzeroCounter() throws Exception {
         for(String state:new String[]{"Off - Full-sync failure","Fullsync in progress"})
             assertEquals("Sync status: "+state,row(false,9,"FAIL","{\"syncStatus\":\""+state+"\"}").get("summary"));

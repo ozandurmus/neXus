@@ -33,6 +33,29 @@ class CpFailoverChecksTest {
         return new CpFailoverChecks.TrafficSample(counters,CpFailoverChecks.TrafficReason.NONE);
     }
 
+    /** PO decision 2026-10-20 item 2: the recovery suffix of the check-1 "Cluster Mode:" line (no new command). */
+    @Test void recoveryModeIsReadFromTheClusterModeLine() {
+        String measured=Fixtures.read("cp/failover_stat_ha.txt");
+        assertEquals(CpFailoverChecks.ACTIVE_UP,CpFailoverChecks.state(measured).recoveryMode());
+        assertEquals(CpFailoverChecks.ACTIVE_UP,CpFailoverChecks.state(ACTIVE).recoveryMode());
+        assertEquals(CpFailoverChecks.PRIMARY_UP,CpFailoverChecks.state(ACTIVE.replace("(Active Up)","(Primary Up)")).recoveryMode());
+        assertEquals(CpFailoverChecks.PRIMARY_UP,CpFailoverChecks.state(measured.replace("(Active Up)","(Primary Up)")).recoveryMode());
+        for (String unrecognised:new String[]{"","(active up)","(Active Up) (Primary Up)"}) {
+            var state=CpFailoverChecks.state(ACTIVE.replace("(Active Up)",unrecognised));
+            assertEquals(CpFailoverChecks.RECOVERY_UNKNOWN,state.recoveryMode(),unrecognised);
+        }
+        // A mode the state parser does not accept never yields a recovery mode.
+        assertEquals(CpFailoverChecks.RECOVERY_UNKNOWN,CpFailoverChecks.state("unsupported").recoveryMode());
+        // The VS context keeps the mode it parsed.
+        var vs=CpFailoverChecks.state(Fixtures.read("cp/failover_stat_vsx_vs.txt"),"12");
+        assertEquals(CpFailoverChecks.ACTIVE_UP,vs.recoveryMode());
+        assertEquals("PASS",CpFailoverChecks.recoveryAssessment(CpFailoverChecks.state(ACTIVE)).status());
+        var primary=CpFailoverChecks.recoveryAssessment(CpFailoverChecks.state(ACTIVE.replace("(Active Up)","(Primary Up)")));
+        assertEquals("FAIL",primary.status());
+        assertEquals(Map.of("recoveryMode","PRIMARY_UP","reason","RETURN_PREEMPTION_POSSIBLE"),primary.derived());
+        assertEquals("UNKNOWN",CpFailoverChecks.recoveryAssessment(CpFailoverChecks.state(ACTIVE.replace(" (Active Up)",""))).status());
+    }
+
     @Test void approvedChecksAndVsContext() {
         check(CpFailoverChecks.corroborated(CpFailoverChecks.state(ACTIVE),CpFailoverChecks.state(STANDBY)));
         check(!CpFailoverChecks.corroborated(CpFailoverChecks.state(ACTIVE),CpFailoverChecks.state(ACTIVE)));

@@ -1803,7 +1803,7 @@ export function getOverview(): Promise<OverviewView> {
 export type CpFailoverState = "PLANNED" | "PRECHECK" | "FAILING_OVER" | "SWITCHED" | "POSTCHECK" | "RETURNING" | "DONE" | "STOPPED";
 export type CpFailoverCheckStatus = "PASS" | "FAIL" | "UNKNOWN" | "WARN";
 export interface ReadinessMember { device_id: string; hostname: string | null; ha_role: string | null }
-export interface CpFailoverUnit { maskedName?: string; maskedMembers?: Array<Omit<ReadinessMember, "hostname"> & { maskedLabel: string }>; masked?: boolean; members?: ReadinessMember[]; unitId: string; clusterId: string; cluster_member_ref: string; vendor?: "check_point" | "palo_alto"; virtual_system?: string; canApprove: boolean; canStart: boolean; canSchedule: boolean; mode?: string; refusalReason?: string | null; readinessObservedAt?: string | null }
+export interface CpFailoverUnit { maskedName?: string; maskedMembers?: Array<Omit<ReadinessMember, "hostname"> & { maskedLabel: string }>; masked?: boolean; members?: ReadinessMember[]; unitId: string; clusterId: string; cluster_member_ref: string; vendor?: "check_point" | "palo_alto"; virtual_system?: string; canApprove: boolean; canStart: boolean; canSchedule: boolean; mode?: string; recoveryMode?: "ACTIVE_UP" | "PRIMARY_UP" | "UNKNOWN"; refusalReason?: string | null; readinessObservedAt?: string | null }
 export interface ReadinessCheck { device_id?: string; checkNo: number; title: string; member: string; result: CpFailoverCheckStatus; summary: string; blocking: boolean }
 export interface CpFailoverSummary extends Pick<CpFailoverUnit, "unitId" | "clusterId" | "cluster_member_ref" | "vendor" | "virtual_system" | "members" | "masked" | "mode" | "refusalReason" | "readinessObservedAt"> {
   activeWindow: boolean; lastRunState: string | null; lastRunOutcome: string | null; lastRunAt: string | null; canRunReadiness: boolean;
@@ -1815,7 +1815,8 @@ export interface CpFailoverRun {
   outcome: string | null; failedCheck: string | null; message: string | null; steps: string[]; kind?: "FAILOVER" | "READINESS";
   mutationPossible?: boolean | null; incidentRef?: string | null; lastConfirmedRoles?: Record<string, string>;
 }
-export interface CpFailoverCheck extends ReadinessCheck { phase: "pre" | "post" | "final"; device_id: string; hostname: string | null; cluster_member_ref: string; checkNo: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14; status: CpFailoverCheckStatus; derived: string; observedAt: string }
+/** Workers write "post_return" for the checks after the return step; "final" is the older name, still accepted. */
+export interface CpFailoverCheck extends ReadinessCheck { phase: "pre" | "post" | "post_return" | "final"; device_id: string; hostname: string | null; cluster_member_ref: string; checkNo: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15; status: CpFailoverCheckStatus; derived: string; observedAt: string }
 export interface CpFailoverRunDetail extends CpFailoverRun { checks: CpFailoverCheck[] }
 
 const failoverPath = (vendor?: string) => vendor === "palo_alto" ? "/api/v2/pan-failover" : "/api/v2/cp-failover";
@@ -1836,6 +1837,17 @@ export const startCpFailover = (unit: CpFailoverUnit, binding: { requestId: stri
 export const runCpFailoverReadiness = (unit: Pick<CpFailoverUnit, "clusterId" | "unitId" | "vendor">) =>
   call<{ runId: string }>(`${failoverPath(unit.vendor)}/units/${encodeURIComponent(unit.unitId)}/readiness`, "POST",
     { clusterId: unit.clusterId, unitId: unit.unitId });
+/** One open failover incident, or a stopped run whose unresolved send blocks every failover in the estate. */
+export interface FailoverIncident {
+  incidentRef: string; clusterId: string; unitId: string; cluster_member_ref: string; maskedName?: string;
+  vendor?: string | null; reason: string; openedAt: string; incidentActive: boolean; blocksEstate: boolean;
+  unresolvedSends: number; members: Array<{ device_id: string }>;
+}
+export interface FailoverIncidents { canRelease: boolean; roleNote: string | null; incidents: FailoverIncident[] }
+export const listFailoverIncidents = () => call<FailoverIncidents>("/api/v2/cp-failover/incidents", "GET");
+/** security_admin only; the server takes the actor from the session, the body carries the reason only. */
+export const releaseFailoverIncident = (incidentRef: string, reason: string) =>
+  call<{ incidentRef: string; status: string }>(`/api/v2/cp-failover/runs/${encodeURIComponent(incidentRef)}/incident/release`, "POST", { reason });
 
 export interface HttpsCertificateView {
   readonly available: boolean;

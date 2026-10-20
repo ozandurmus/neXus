@@ -31,7 +31,15 @@ public final class CpFailoverChecks {
     private static final Pattern POLICY_ROW = Pattern.compile("(?m)^localhost\\s+(\\S+)\\s+(\\d{1,2}[A-Za-z]{3}\\d{4})\\s+(\\d{1,2}:\\d{2}:\\d{2})\\s+:.*$");
     private CpFailoverChecks() {}
 
-    public record State(String mode, Map<String,String> members, String localId, String localRole, String vsId) {
+    /** ClusterXL recovery suffix of the "Cluster Mode:" line: "(Active Up)" or "(Primary Up)"; anything else is UNKNOWN. */
+    public static final String ACTIVE_UP = "ACTIVE_UP", PRIMARY_UP = "PRIMARY_UP", RECOVERY_UNKNOWN = "UNKNOWN";
+    private static final Pattern RECOVERY = Pattern.compile("\\((Active|Primary) Up\\)");
+
+    public record State(String mode, Map<String,String> members, String localId, String localRole, String vsId,
+            String recoveryMode) {
+        public State(String mode, Map<String,String> members, String localId, String localRole, String vsId) {
+            this(mode, members, localId, localRole, vsId, RECOVERY_UNKNOWN);
+        }
         public boolean supportedMode() { return "HA".equals(mode) || "VSLS".equals(mode) && vsId!=null; }
         public boolean pair() { return supportedMode() && members.size()==2 && members.values().stream().filter("ACTIVE"::equals).count()==1
             && members.values().stream().filter("STANDBY"::equals).count()==1 && localId!=null; }
@@ -67,7 +75,7 @@ public final class CpFailoverChecks {
             }
         }
         return roles.size()<2 || local==null?unknown:new State(mode.equals("Virtual System Load Sharing")?"VSLS":"HA",Map.copyOf(roles),local,
-            roles.get(local),null);
+            roles.get(local),null,recoveryMode(label));
     }
     public static boolean corroborated(State a,State b) {
         return a.pair() && b.pair() && "PASS".equals(reciprocal(a,b));
@@ -96,7 +104,30 @@ public final class CpFailoverChecks {
                 return state(null);
         }
         State parsed=state(output);
-        return new State(parsed.mode(),parsed.members(),parsed.localId(),parsed.localRole(),vsId);
+        return new State(parsed.mode(),parsed.members(),parsed.localId(),parsed.localRole(),vsId,parsed.recoveryMode());
+    }
+
+    /**
+     * PO decision 2026-10-20 item 2: the recovery mode printed on the one "Cluster Mode:" line of
+     * {@code cphaprob stat} (gate cp_inventory_cphaprob_stat, the check-1 read). Exactly one "(Active Up)" or
+     * "(Primary Up)" suffix is recognised (case-sensitive, as printed); none, several or anything else is UNKNOWN.
+     */
+    static String recoveryMode(String label) {
+        if (label==null) return RECOVERY_UNKNOWN;
+        Matcher suffix=RECOVERY.matcher(label);
+        if (!suffix.find()) return RECOVERY_UNKNOWN;
+        String mode="Active".equals(suffix.group(1))?ACTIVE_UP:PRIMARY_UP;
+        return suffix.find()?RECOVERY_UNKNOWN:mode;
+    }
+
+    /** Check 15 for one member: PASS only for Active Up; Primary Up FAIL; unrecognised UNKNOWN. */
+    public static Assessment recoveryAssessment(State state) {
+        String mode=state.recoveryMode()==null?RECOVERY_UNKNOWN:state.recoveryMode();
+        return switch (mode) {
+            case ACTIVE_UP -> new Assessment("PASS",Map.of("recoveryMode",ACTIVE_UP,"reason","ACTIVE_UP"));
+            case PRIMARY_UP -> new Assessment("FAIL",Map.of("recoveryMode",PRIMARY_UP,"reason","RETURN_PREEMPTION_POSSIBLE"));
+            default -> new Assessment("UNKNOWN",Map.of("recoveryMode",RECOVERY_UNKNOWN,"reason","RECOVERY_MODE_UNRECOGNIZED"));
+        };
     }
 
     public static Map<String,Object> stateEvidence(State state) {

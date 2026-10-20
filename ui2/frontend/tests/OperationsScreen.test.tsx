@@ -199,7 +199,8 @@ it("nests a VSX unit inside its cluster with a separate readiness action", async
   fireEvent.click(screen.getByRole("button", { name: "Open full detail" }));
   expect(await screen.findByLabelText("Readiness checks")).toBeInTheDocument();
   await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([input]) => String(input).includes("/units?memberDeviceId="))).toBe(true));
-  expect(String(vi.mocked(fetch).mock.calls.find(([input]) => String(input).includes("cp-failover"))?.[0])).toBe("/api/v2/cp-failover/summary");
+  // The estate-wide incident list (PO 2026-10-20) is read beside the summary; the summary itself stays on the cp prefix.
+  expect(String(vi.mocked(fetch).mock.calls.find(([input]) => String(input).includes("cp-failover") && !String(input).endsWith("/incidents"))?.[0])).toBe("/api/v2/cp-failover/summary");
 });
 
 it.each([

@@ -223,7 +223,7 @@ public final class CpFailoverJobExecutor {
             case 5 -> "ARP"; case 6 -> "Connections"; case 8 -> "Traffic rate";
             case 9 -> "State synchronization"; case 10 -> "Installed policy parity";
             case 11 -> "Critical devices"; case 12 -> "Bond interfaces";
-            case 13 -> "Last failover"; case 14 -> "Routing"; default -> "Pre-check";
+            case 13 -> "Last failover"; case 14 -> "Routing"; case 15 -> "Recovery mode"; default -> "Pre-check";
         };
     }
     private Member connect(DeviceSummaryRecord summary) {
@@ -427,6 +427,7 @@ public final class CpFailoverJobExecutor {
             record(phase,member,1,!member.identityVerified && "PASS".equals(stateStatus)?"UNKNOWN":stateStatus,json(evidence));
         }
         if(!states) checkFailed("CLUSTER_STATE_NOT_READY",1,stateStatus);
+        if(before==null) recoveryMode(phase,first,second,a,b);
         double[] rates=before==null?null:trafficWindow(phase,first,second,
             before.a().interfaces(),before.b().interfaces(),before,oldActive);
         var ta=CpFailoverChecks.ipTable(command(first,TABLE));
@@ -515,6 +516,21 @@ public final class CpFailoverJobExecutor {
                 switched?"DOWN":"STANDBY",first,second)) throw new Stop("UNEXPECTED_ROLES",1);
         return new Pair(new Measure(a,ta,ia,arpA,rates[0],policyA.name(),cpstatA.name(),routingA),
             new Measure(b,tb,ib,arpB,rates[1],policyB.name(),cpstatB.name(),routingB));
+    }
+    /** Code of the pre-write refusal when either member's recovery mode is not "(Active Up)" (PO 2026-10-20 item 2). */
+    static final String RECOVERY_MODE_REFUSAL="CLUSTER_RECOVERY_MODE_NOT_ACTIVE_UP";
+    /**
+     * Check 15 "Recovery mode", from the check-1 output already read in this phase (no further command). A FAILOVER
+     * run stops here, before any write, unless both members report Active Up: under Primary Up (or an unrecognised
+     * mode) the UP step could preempt the former active back into ACTIVE. Readiness records the rows and is NOT_READY.
+     */
+    private void recoveryMode(String phase,Member first,Member second,CpFailoverChecks.State a,CpFailoverChecks.State b) {
+        var ra=CpFailoverChecks.recoveryAssessment(a);
+        var rb=CpFailoverChecks.recoveryAssessment(b);
+        record(phase,first,15,ra.status(),json(ra.derived()));
+        record(phase,second,15,rb.status(),json(rb.derived()));
+        if(!"PASS".equals(ra.status()) || !"PASS".equals(rb.status()))
+            checkFailed(RECOVERY_MODE_REFUSAL,15,"FAIL".equals(ra.status()) || "FAIL".equals(rb.status())?"FAIL":"UNKNOWN");
     }
     private CpFailoverChecks.TrafficSample trafficSample(Member member) throws InterruptedException {
         try { return CpFailoverChecks.bytesByInterface(command(member,TRAFFIC)); }
