@@ -44,6 +44,8 @@ const TABS = [
   { label: "Jobs", marker: "All jobs" },
   { label: "Diagnostics", marker: "Diagnostics could not be loaded or access is unavailable." },
   { label: "System health", marker: "System health could not be read" },
+  // The stub answers `{}` for the feed route: the panel's own error state is the marker (never another tab's text).
+  { label: "Change feed", marker: "Could not load the change feed" },
 ];
 
 describe("OperationsScreen tabs", () => {
