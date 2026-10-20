@@ -31,17 +31,20 @@ class FailoverExecutionControllerTest {
         verifyNoInteractions(service);
     }
 
-    @Test void incidentReleaseRequiresTheExactReviewedIncident() {
+    /** PO decision 2026-10-20 item 1: the request-body approver path is refused, whatever the payload. */
+    @Test void genericIncidentReleaseIsRefusedAndNeverReachesTheService() {
         var service=mock(FailoverExecutionService.class);
         var controller=new FailoverExecutionController(service);
         var request=new MockHttpServletRequest();
         request.setAttribute(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE,"synthetic-actor");
-        assertEquals(HttpStatus.BAD_REQUEST,controller.acknowledgeQuarantine("unit-a",
-            new FailoverExecutionController.AcknowledgeQuarantinePayload(null,"synthetic-approver","Reviewed incident"),request).getStatusCode());
+        for (var payload:new FailoverExecutionController.AcknowledgeQuarantinePayload[]{null,
+                new FailoverExecutionController.AcknowledgeQuarantinePayload(null,"synthetic-approver","Reviewed incident"),
+                new FailoverExecutionController.AcknowledgeQuarantinePayload("incident-a","synthetic-approver","Reviewed incident")}) {
+            var response=controller.acknowledgeQuarantine("unit-a",payload,request);
+            assertEquals(HttpStatus.GONE,response.getStatusCode());
+            assertEquals(FailoverExecutionController.GENERIC_INCIDENT_RELEASE_REMOVED,response.getBody().get("code"));
+        }
         verifyNoInteractions(service);
-        var payload=new FailoverExecutionController.AcknowledgeQuarantinePayload("stale-incident","synthetic-approver","Reviewed incident");
-        assertEquals(HttpStatus.CONFLICT,controller.acknowledgeQuarantine("unit-a",payload,request).getStatusCode());
-        verify(service).acknowledgeQuarantine("unit-a","stale-incident","synthetic-actor","synthetic-approver","Reviewed incident");
     }
 
     @Test void genericServiceRefusesManualAndScheduledDispatchEvenWithRegisteredTransport() {

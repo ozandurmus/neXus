@@ -146,6 +146,11 @@ public final class ActionRegistry {
     public static final String CP_READINESS_START = "cp_readiness_start";
     public static final String CP_FAILOVER_START = "cp_failover_start";
     public static final String CP_FAILOVER_READ = "cp_failover_read";
+    /**
+     * PO decision 2026-10-20 (docs/design/PO_DECISION_RECORD_2026_10_20_FAILOVER_PILOT_P0.md item 1): release a
+     * failover incident and its unresolved sends, with a mandatory reason; security_admin only, never aiview.
+     */
+    public static final String CP_FAILOVER_INCIDENT_RELEASE = "cp_failover_incident_release";
 
     /**
      * PO decision record 2026-10-15 §6 (PacketBreaker ported into neXus): create a case, upload captures, request an
@@ -295,6 +300,7 @@ public final class ActionRegistry {
                 java.util.Set.of(RoleToken.OPERATION_ADMIN)));
         register(new ActionDescriptor(CP_FAILOVER_START, true, Optional.of(RoleToken.OPERATION_ADMIN),
                 java.util.Set.of(RoleToken.SECURITY_ADMIN)));
+        register(new ActionDescriptor(CP_FAILOVER_INCIDENT_RELEASE, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(CP_READINESS_START, true, Optional.of(RoleToken.OPERATOR),
                 java.util.Set.of(RoleToken.SECURITY_ADMIN, RoleToken.OPERATION_ADMIN, RoleToken.REPLAY_VIEWER)));
         // Viewers see failover units, windows and runs (read-only); approving and starting stay with their roles.

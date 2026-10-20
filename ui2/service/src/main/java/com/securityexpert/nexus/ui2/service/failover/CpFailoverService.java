@@ -448,6 +448,37 @@ public final class CpFailoverService {
         return devices.findSummary(memberId).flatMap(DeviceSummaryRecord::observedHostname);
     }
 
+    /** One open incident (or estate-wide unresolved send) with the opaque unit ids the screens already use. */
+    public record IncidentView(JooqCpFailoverRepository.Incident incident, String clusterId, String unitId) {}
+    public static final int RELEASE_REASON_MAX = 500;
+
+    /**
+     * Every reader sees open incidents and the role note; only {@link #mayReleaseIncident} may act on them
+     * (PO decision 2026-10-20 item 1).
+     */
+    public List<IncidentView> incidents(String actor) {
+        requireReader(actor);
+        return store.openIncidents().stream().map(i -> new IncidentView(i, opaque(i.clusterRef()),
+            i.vsId()==null ? opaque(i.clusterRef()) : opaque(i.clusterRef()+":"+i.vsId()))).toList();
+    }
+    /** security_admin only (including the root administrator); never operation_admin, operator or aiview. */
+    public boolean mayReleaseIncident(String actor) {
+        return !replayViewer(actor) && allowed(actor, RoleToken.SECURITY_ADMIN);
+    }
+    /**
+     * Release one run's incident and its unresolved sends. The actor is the server-side session, never a
+     * request field; the reason is mandatory and recorded on the incident and in the audit log.
+     */
+    public String releaseIncident(String runId, String reason, String actor) {
+        if (!mayReleaseIncident(actor)) throw new Refusal("WRONG_ROLE");
+        String text=reason==null ? "" : reason.strip();
+        if (text.isEmpty() || text.length()>RELEASE_REASON_MAX) throw new Refusal("RELEASE_REASON_REQUIRED");
+        if (runId==null || runId.isBlank()) throw new Refusal(JooqCpFailoverRepository.INCIDENT_NOT_FOUND);
+        String code=store.releaseIncident(runId,actor,text);
+        if (!JooqCpFailoverRepository.INCIDENT_RELEASED.equals(code)) throw new Refusal(code);
+        return code;
+    }
+
     @org.springframework.scheduling.annotation.Scheduled(cron = JobWindowPolicy.CRON, zone = JobWindowPolicy.ZONE)
     public void startDue() {
         if (!mutationSwitch.enabled()) return;

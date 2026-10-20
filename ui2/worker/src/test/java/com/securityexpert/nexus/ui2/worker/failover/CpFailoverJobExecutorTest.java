@@ -132,7 +132,7 @@ class CpFailoverJobExecutorTest {
         String unknownCommand, failedCommand;
         boolean extraTableRows,reverseActive,observerLocalIndices;
         boolean wrongIdentity,missingIdentity,opposedPeer,sameObserver,swapLocalIdsAfterDown;
-        String reportedMode;
+        String reportedMode, recoverySuffix;
         String peerPolicyTime;
         boolean zeroBaseline,preempt,extraPnote,adminOnNewActive,adminAfterReturn;
         String trafficFaultPhase,trafficFault,cpstatFaultPhase,cpstatFault;
@@ -177,6 +177,7 @@ class CpFailoverJobExecutorTest {
                         .replace("% Active","% TEMP").replace("% Standby","% Active").replace("% TEMP","% Standby");
                     if(literal.endsWith("cphaprob stat'")) {
                         if(reportedMode!=null) output=output.replace("High Availability",reportedMode);
+                        if(recoverySuffix!=null) output=output.replace("(Active Up)",recoverySuffix);
                         if(swapLocalIdsAfterDown && down) output=output.replaceAll("(?m)^1 ","TEMP ").replaceAll("(?m)^2 ","1 ").replaceAll("(?m)^TEMP ","2 ");
                         if(opposedPeer && !((TransportSession)args[0]).sessionId().endsWith("11"))
                             output=output.replace("100% Active","100% Down");
@@ -415,7 +416,7 @@ class CpFailoverJobExecutorTest {
             assertEquals(readiness?"IDENTITY_NOT_RECORDED":"IDENTITY_NOT_VERIFIED",store.stopCode);
             assertEquals(0,script.downCount); assertEquals(0,script.upCount);
             if(readiness) {
-                assertEquals(24,store.checks.size());
+                assertEquals(26,store.checks.size());
                 assertEquals(2,store.checks.stream().filter("pre:1:UNKNOWN"::equals).count());
                 assertTrue(store.checks.contains("pre:14:PASS"));
                 assertTrue(store.derivedValues.stream().anyMatch(d -> d.contains("IDENTITY_NOT_RECORDED")));
@@ -431,6 +432,41 @@ class CpFailoverJobExecutorTest {
             assertEquals("IDENTITY_NOT_VERIFIED",store.stopCode);
             assertTrue(script.commands.isEmpty());
         }
+    }
+    /** PO decision 2026-10-20 item 2: the return step is only safe under "(Active Up)" on both members. */
+    @Test void recoveryModeOtherThanActiveUpIsRefusedBeforeTheFirstWrite() {
+        for(String suffix:List.of("(Primary Up)","")) for(boolean readiness:List.of(false,true)) {
+            Store store=new Store(); store.kind=readiness?"READINESS":"FAILOVER";
+            Script script=new Script(); script.recoverySuffix=suffix;
+            run(store,script);
+            String status=suffix.isEmpty()?"UNKNOWN":"FAIL";
+            String context=suffix+" readiness="+readiness+" checks="+store.checks;
+            assertEquals(2,store.checks.stream().filter(("pre:15:"+status)::equals).count(),context);
+            assertEquals(2,store.checks.stream().filter("pre:1:PASS"::equals).count(),context);
+            assertEquals(0,script.downCount,context); assertEquals(0,script.upCount,context);
+            assertEquals(0,store.prepared,"No dispatch intent may be prepared: "+context);
+            assertFalse(store.incidentRequired,context);
+            assertTrue(store.derivedValues.stream().anyMatch(d -> d.contains("\"recoveryMode\":\""
+                +(suffix.isEmpty()?"UNKNOWN":"PRIMARY_UP")+"\"")),context);
+            if(readiness) {
+                assertEquals(suffix.isEmpty()?"UNKNOWN":"NOT_READY",store.outcome,context);
+                assertEquals(26,store.checks.size(),"Readiness still collects every check: "+context);
+            } else {
+                assertEquals("STOPPED",store.state,context);
+                assertEquals(CpFailoverJobExecutor.RECOVERY_MODE_REFUSAL,store.outcome,context);
+                assertTrue(store.checks.stream().noneMatch(c -> c.startsWith("pre:2:")),"Stops at check 15: "+context);
+            }
+        }
+    }
+    @Test void activeUpOnBothMembersIsRecordedAndAdmitsTheRun() {
+        Store store=new Store(); Script script=new Script();
+        run(store,script);
+        assertEquals("DONE",store.state,store.checks.toString());
+        assertEquals(2,store.checks.stream().filter("pre:15:PASS"::equals).count());
+        assertTrue(store.checks.stream().noneMatch(c -> c.startsWith("post:15:") || c.startsWith("post_return:15:")),
+            "Recovery mode is a pre-write gate only");
+        assertTrue(store.derivedValues.stream().anyMatch(d -> d.contains("\"recoveryMode\":\"ACTIVE_UP\"")));
+        assertEquals(1,script.downCount); assertEquals(1,script.upCount);
     }
     @Test void unsupportedModesAreUnknownAndNeverUnhealthyInReadiness() {
         for(String mode:List.of("Load Sharing Unicast","Virtual System Load Sharing")) {
@@ -489,7 +525,7 @@ class CpFailoverJobExecutorTest {
             run(store,script);
             String context=shape+" banner="+banner+" checks="+store.checks;
             assertEquals(shape.equals("vs0")?"UNKNOWN":"READY",store.outcome,context);
-            assertEquals(24,store.checks.size(),"All readiness checks must be recorded: "+context);
+            assertEquals(26,store.checks.size(),"All readiness checks must be recorded: "+context);
             assertTrue(script.downCount==0 && script.upCount==0,"Readiness must not dispatch writes: "+context);
         }
         Store store=new Store(); store.kind="READINESS"; store.vsId="12";
@@ -783,7 +819,8 @@ class CpFailoverJobExecutorTest {
         Store store=new Store(); Script script=new Script(); script.badPre=true; run(store,script);
         check(store.state.equals("STOPPED") && script.downCount==0 && script.upCount==0);
         check(store.checks.stream().anyMatch(s -> s.equals("pre:2:FAIL")));
-        check(store.checks.size()==4);
+        // Check 1 and check 15 (recovery mode, same read) for both members, then the failed table.
+        check(store.checks.size()==6);
         check(script.commands.size()==4);
     }
     @Test void observerLocalIndicesPassInReadinessIncludingVsContexts() {
@@ -819,7 +856,7 @@ class CpFailoverJobExecutorTest {
             script.unknownCommand="cphaprob -a if";
             run(store,script);
             check("NOT_READY".equals(store.outcome));
-            check(store.checks.size()==24);
+            check(store.checks.size()==26);
             check(store.checks.contains("pre:3:UNKNOWN"));
             check(store.checks.stream().filter(c -> c.equals("pre:14:PASS")).count()==2);
             check(script.connectCount==2 && script.commands.size()==24);
@@ -830,7 +867,7 @@ class CpFailoverJobExecutorTest {
         Store store=new Store(); store.kind="READINESS";
         Script script=new Script(); script.failedCommand="cphaprob tablestat";
         run(store,script);
-        check("UNKNOWN".equals(store.outcome) && store.checks.size()==2);
+        check("UNKNOWN".equals(store.outcome) && store.checks.size()==4);
         check(script.commands.size()==3 && script.downCount==0);
         check("COMMAND_UNAVAILABLE".equals(store.stopCode));
     }
@@ -870,7 +907,7 @@ class CpFailoverJobExecutorTest {
             +"1 (local) 192.0.2.11 0% DOWN\n2          192.0.2.12 100% ACTIVE(!)\nActive PNOTEs: synthetic\n");
         run(store,script);
         check("NOT_READY".equals(store.outcome));
-        check(store.checks.contains("pre:1:FAIL") && store.checks.size()==24);
+        check(store.checks.contains("pre:1:FAIL") && store.checks.size()==26);
         check(store.derivedValues.get(0).contains("\"local_state\":\"DOWN\""));
         check(store.derivedValues.get(0).contains("\"peer_state\":\"ACTIVE(!)\""));
     }
@@ -879,7 +916,7 @@ class CpFailoverJobExecutorTest {
         Store store=new Store(); store.kind="READINESS";
         Script script=new Script(); script.unknownCommand="cphaprob show_failover";
         run(store,script);
-        check("READY".equals(store.outcome) && store.checks.size()==24);
+        check("READY".equals(store.outcome) && store.checks.size()==26);
     }
     @Test void readinessCompletesWithoutWriteAndWriteGateRefuses() {
         Store store=new Store(); store.kind="READINESS"; Script script=new Script(); run(store,script);

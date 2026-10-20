@@ -197,6 +197,12 @@ class AuditRedactionPolicyTest {
             "failover_check_result.phase", "failover_check_result.result_id",
             "failover_check_result.run_id", "failover_check_result.status",
             "failover_check_result.vs_id",
+            // failover_quarantine (V169: the release update is audited)
+            "failover_quarantine.acknowledged_at", "failover_quarantine.acknowledged_by",
+            "failover_quarantine.active", "failover_quarantine.cluster_ref",
+            "failover_quarantine.execution_id", "failover_quarantine.quarantined_at",
+            "failover_quarantine.quarantined_member_ids", "failover_quarantine.reason",
+            "failover_quarantine.second_approver_id",
             // failover_run
             "failover_run.approval_id", "failover_run.cluster_ref", "failover_run.failed_check",
             "failover_run.finished_at", "failover_run.job_id", "failover_run.mutation_possible",
@@ -622,7 +628,7 @@ class AuditRedactionPolicyTest {
             "devices.peer_follow_reason", 2, "devices.recorded_identity_primary", 2,
             "devices.recorded_identity_secondary", 2, "devices.virtual_system_ref", 2,
             "discovery_acknowledgement.reason", 2, "endpoints.address_ref", 2,
-            "failover_approval.reason", 2, "failover_run.message", 2,
+            "failover_approval.reason", 2, "failover_quarantine.review_notes", 2, "failover_run.message", 2,
             "https_endpoint_cert_trust.authorized_by", 2,
             "https_endpoint_cert_trust.fingerprint_sha256", 2,
             "https_endpoint_cert_trust.issuer_cn", 2,

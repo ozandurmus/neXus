@@ -5,7 +5,6 @@ import com.securityexpert.nexus.ui2.jobs.failover.FailoverMutationSwitch;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.securityexpert.nexus.ui2.jobs.failover.execution.FailoverExecutionResult;
 import com.securityexpert.nexus.ui2.service.failover.FailoverExecutionService;
-import com.securityexpert.nexus.ui2.service.security.GateChainInterceptor;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -67,44 +66,25 @@ public class FailoverExecutionController {
             )));
     }
 
+    /** The only release path is the server-side-actor route of the CP failover API (PO decision 2026-10-20 item 1). */
+    public static final String GENERIC_INCIDENT_RELEASE_REMOVED = "GENERIC_INCIDENT_RELEASE_REMOVED";
+
+    /**
+     * Refused unconditionally: this generic route took the approver from the request body. A failover incident
+     * is released only through {@code POST /api/v2/cp-failover/runs/{runId}/incident/release} (security_admin,
+     * actor from the session, mandatory reason). The route also stays absent from the action map (403).
+     */
     @PostMapping("/{clusterRef}/quarantine/acknowledge")
     public ResponseEntity<Map<String, Object>> acknowledgeQuarantine(
         @PathVariable String clusterRef,
         @RequestBody(required = false) AcknowledgeQuarantinePayload payload,
         HttpServletRequest servletRequest
     ) {
-        String actor = actingUser(servletRequest);
-        if (actor == null || actor.isBlank()) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of(
-                "error", "AUTHENTICATION_REQUIRED",
-                "code", "ACTOR_FINGERPRINT_MISSING"
-            ));
-        }
-
-        if (payload == null || payload.executionId() == null || payload.executionId().isBlank() || payload.approverId() == null || payload.reason() == null) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of(
-                "error", "INVALID_PAYLOAD",
-                "code", "MISSING_REQUIRED_FIELDS",
-                "reason", "execution_id, approver_id and reason are required to acknowledge quarantine"
-            ));
-        }
-
-        try {
-            if (!executionService.acknowledgeQuarantine(clusterRef, payload.executionId(), actor, payload.approverId(), payload.reason()))
-                return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("code", "INCIDENT_CAS_MISMATCH"));
-            return ResponseEntity.ok(Map.of(
-                "status", "INCIDENT_RELEASED",
-                "quarantine_active", executionService.isClusterQuarantined(clusterRef),
-                "cluster_id", opaqueClusterId(clusterRef),
-                "acknowledged_by", actor,
-                "approved_by", payload.approverId()
-            ));
-        } catch (IllegalArgumentException ex) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of(
-                "error", "INVALID_ARGUMENT",
-                "reason", ex.getMessage()
-            ));
-        }
+        return ResponseEntity.status(HttpStatus.GONE).body(Map.of(
+            "error", GENERIC_INCIDENT_RELEASE_REMOVED,
+            "code", GENERIC_INCIDENT_RELEASE_REMOVED,
+            "reason", "Release the incident from the failover screen; the approver is never taken from the request"
+        ));
     }
 
     private Map<String, Object> serializeExecutionResult(FailoverExecutionResult res) {
@@ -125,11 +105,6 @@ public class FailoverExecutionController {
         map.put("quarantine_active", res.quarantineActive());
         map.put("summary", res.summary());
         return map;
-    }
-
-    private static String actingUser(HttpServletRequest servletRequest) {
-        if (servletRequest == null) return null;
-        return (String) servletRequest.getAttribute(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE);
     }
 
     private static String opaqueClusterId(String clusterRef) {

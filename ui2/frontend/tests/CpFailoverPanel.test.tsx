@@ -4,10 +4,12 @@ import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
 import { CpFailoverPanel, FailoverRun, runStep } from "../src/screens/CpFailoverPanel";
 import type { CpFailoverRunDetail } from "../src/auth/adminApi";
-const api = vi.hoisted(() => ({ units: vi.fn(), approvals: vi.fn(), runs: vi.fn(), detail: vi.fn(), readiness: vi.fn(), approve: vi.fn(), second: vi.fn(), start: vi.fn() }));
+const api = vi.hoisted(() => ({ units: vi.fn(), approvals: vi.fn(), runs: vi.fn(), detail: vi.fn(), readiness: vi.fn(), approve: vi.fn(), second: vi.fn(), start: vi.fn(),
+  incidents: vi.fn(), release: vi.fn() }));
 vi.mock("../src/auth/adminApi", () => ({ listCpFailoverUnits: api.units, listCpFailoverApprovals: api.approvals,
   listCpFailoverRuns: api.runs, getCpFailoverRun: api.detail, runCpFailoverReadiness: api.readiness,
-  approveCpFailover: api.approve, secondApproveCpFailover: api.second, startCpFailover: api.start }));
+  approveCpFailover: api.approve, secondApproveCpFailover: api.second, startCpFailover: api.start,
+  listFailoverIncidents: api.incidents, releaseFailoverIncident: api.release }));
 const unit = { clusterId: "opaque-cluster", unitId: "opaque-cluster", cluster_member_ref: "CLS-ROMEO-01", vendor: "check_point" as const,
   mode: "HA", readinessObservedAt: "2026-10-06T09:00:00Z", canApprove: true, canStart: true, canSchedule: false, masked: false,
   members: [{ device_id: "opaque-1", hostname: "FW-ROMEO-01", ha_role: "ACTIVE" }, { device_id: "opaque-2", hostname: "FW-ROMEO-02", ha_role: "STANDBY" }] };
@@ -24,6 +26,7 @@ async function warning() {
 beforeEach(() => {
   vi.resetAllMocks(); vi.spyOn(crypto, "randomUUID").mockReturnValue("00000000-0000-4000-8000-000000000001"); sessionStorage.clear(); api.units.mockResolvedValue([unit]); api.approvals.mockResolvedValue([]); api.runs.mockResolvedValue([]);
   api.approve.mockResolvedValue(approval); api.start.mockResolvedValue({ runId: "run-opaque" }); api.detail.mockResolvedValue(run());
+  api.incidents.mockResolvedValue({ canRelease: false, roleNote: null, incidents: [] });
 });
 it.each(["check_point", "palo_alto"] as const)("empty %s lookup has no actions", async vendor => {
   api.units.mockResolvedValue([]); render(<CpFailoverPanel memberDeviceId="opaque-1" vendor={vendor} />);
@@ -33,7 +36,8 @@ it.each([
   ["PLANNED", "PLANNED", 0, "Queued"], ["PRECHECK", "PRECHECK", 0, "Checking readiness"],
   ["FAILING_OVER", "FAILING_OVER", 1, "Failing over"], ["SWITCHED", "SWITCHED", 2, "Role change confirmed"],
   ["POSTCHECK", "POSTCHECK", 3, "Checking traffic and cluster after switch"], ["RETURNING", "RETURNING", 4, "Returning former active to standby"],
-  ["POSTCHECK", "FINAL_POSTCHECK", 5, "Verifying final cluster health"], ["DONE", "DONE", 6, "Failover verified"],
+  ["POSTCHECK", "FINAL_POSTCHECK", 5, "Verifying final cluster health"], ["POSTCHECK", "POST_RETURN", 5, "Verifying final cluster health"],
+  ["DONE", "DONE", 6, "Failover verified"],
 ] as const)("renders server state %s / %s", (state, step, index, label) => {
   expect(runStep(state, step)).toBe(index); render(<FailoverRun unit={unit} run={run({ state, step })} />);
   expect(screen.getByRole("status")).toHaveTextContent(label); expect(screen.getAllByText("Session continuity: not evaluated")).toHaveLength(2);
@@ -87,7 +91,7 @@ it("refresh discovers the same active run without submitting", async () => {
   expect(await screen.findByText(/Run: run-opaque/)).toBeInTheDocument(); expect(api.approve).not.toHaveBeenCalled(); expect(api.start).not.toHaveBeenCalled();
 });
 it("displays all recorded phases and explicit evidence coverage", () => {
-  const checks = ["pre", "post", "final"].map(phase => ({ phase, checkNo: 8, title: "Traffic rate", member: "Member 1", status: "PASS", result: "PASS", summary: "Observed", blocking: true }));
+  const checks = ["pre", "post", "post_return"].map(phase => ({ phase, checkNo: 8, title: "Traffic rate", member: "Member 1", status: "PASS", result: "PASS", summary: "Observed", blocking: true }));
   render(<FailoverRun unit={unit} run={run({ state: "DONE", step: "DONE", checks })} />); expect(screen.getByText(/Evidence coverage:/)).toHaveTextContent("3 / 3"); expect(screen.getByText(/Evidence coverage:/)).toHaveTextContent("Final post-checks: Recorded");
 });
 it("an uncertain HTTP result retries the same revision without another warning", async () => {
@@ -120,4 +124,28 @@ it("a readiness run newer than the listed one refreshes the unit list exactly on
   await waitFor(() => expect(api.units).toHaveBeenCalledTimes(2));
   await new Promise(resolve => setTimeout(resolve, 50));
   expect(api.units).toHaveBeenCalledTimes(2); expect(api.units).toHaveBeenNthCalledWith(2, "opaque-1", "check_point");
+});
+
+// P0-3: workers write phase "post_return"; the panel used to filter "final" and showed the final checks as not evaluated.
+it.each(["post_return", "final"] as const)("final post-checks recorded under phase %s are shown, not reported missing", phase => {
+  const checks = [
+    { phase: "pre", checkNo: 1, title: "Cluster state", member: "Member 1", status: "PASS", result: "PASS", summary: "Active", blocking: true },
+    { phase, checkNo: 9, title: "State synchronization", member: "Member 1", status: "PASS", result: "PASS", summary: "Sync OK after return", blocking: true },
+  ];
+  render(<FailoverRun unit={unit} run={run({ state: "DONE", step: "DONE", checks })} />);
+  expect(screen.getByText("Sync OK after return")).toBeInTheDocument();
+  expect(screen.getAllByText("Not evaluated")).toHaveLength(1);
+  expect(screen.getByText(/Evidence coverage:/)).toHaveTextContent("2 / 2");
+  expect(screen.getByText(/Evidence coverage:/)).toHaveTextContent("Final post-checks: Recorded");
+});
+it("shows the unit's recovery mode and its open incident with the role note", async () => {
+  api.units.mockResolvedValue([{ ...unit, recoveryMode: "PRIMARY_UP", refusalReason: "OPEN_INCIDENT" }]);
+  api.incidents.mockResolvedValue({ canRelease: false, roleNote: "Only a security_admin can release a failover incident.", incidents: [
+    { incidentRef: "run-opaque", clusterId: unit.clusterId, unitId: unit.unitId, cluster_member_ref: "CLS-ROMEO-01", reason: "MUTATION_STOPPED",
+      openedAt: "2026-10-20T10:00:00Z", incidentActive: true, blocksEstate: false, unresolvedSends: 0, members: [] }] });
+  setup();
+  expect(await screen.findByText(/Recovery mode: Primary Up/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "CLS-ROMEO-01" }));
+  expect(await screen.findByText("Only a security_admin can release a failover incident.")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Release incident" })).toBeNull();
 });

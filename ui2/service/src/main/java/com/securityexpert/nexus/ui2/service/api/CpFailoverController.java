@@ -106,7 +106,14 @@ public final class CpFailoverController {
                 "device_id",member.deviceId(),"maskedLabel",names.maskDeviceName(member.observedHostname().orElse("Unknown"),cluster,member.deviceId()),
                 "ha_role",member.observedHaRole().orElse("UNKNOWN"))).toList());
         }
+        String recovery="UNKNOWN";
         if (readiness!=null) try {
+            // PO 2026-10-20 item 2: the unit shows Active Up only when both members reported it (check 15).
+            java.util.List<String> observed=new java.util.ArrayList<>();
+            for (var check:JSON.readTree(readiness.checks())) if (check.path("checkNo").asInt()==15)
+                observed.add(check.path("derived").path("recoveryMode").asText());
+            if (observed.contains("PRIMARY_UP")) recovery="PRIMARY_UP";
+            else if (observed.size()==2 && observed.stream().allMatch("ACTIVE_UP"::equals)) recovery="ACTIVE_UP";
             for (var check:JSON.readTree(readiness.checks())) if (check.path("checkNo").asInt()==1) {
                 var facts=check.path("derived");
                 String observedMode=facts.path("mode").asText();
@@ -127,7 +134,8 @@ public final class CpFailoverController {
                 .get("open",Boolean.class)));
             if (incident) refusal="OPEN_INCIDENT";
         }
-        view.put("mode",mode); view.put("refusalReason",refusal);
+        view.put("mode",mode); view.put("recoveryMode",recovery);
+        view.put("refusalReason",refusal);
         view.put("readinessObservedAt",readiness==null ? null : readiness.observedAt());
     }
     private static ResponseEntity<?> result(java.util.function.Supplier<Object> action) {
@@ -287,5 +295,52 @@ public final class CpFailoverController {
             }).toList());
             return view;
         }).orElseThrow(() -> new CpFailoverService.Refusal("RUN_NOT_FOUND")));
+    }
+    /** Shown to every reader who cannot release (operation_admin, operator, viewer, aiview). */
+    public static final String INCIDENT_ROLE_NOTE = "Only a security_admin can release a failover incident.";
+    /**
+     * Open failover incidents and terminal runs whose unresolved sends block every failover in the estate
+     * (PO decision 2026-10-20 item 1). Opaque references only; names pass through the masking advice.
+     */
+    @GetMapping("/incidents")
+    public ResponseEntity<?> incidents(HttpServletRequest request) {
+        return result(() -> {
+            String actor=actor(request);
+            boolean masked=PrivacyMaskingResponseBodyAdvice.isReplayViewer(request);
+            boolean canRelease=!masked && service.mayReleaseIncident(actor);
+            List<Map<String,Object>> rows=service.incidents(actor).stream().map(v -> {
+                var i=v.incident();
+                Map<String,Object> m=new LinkedHashMap<>();
+                m.put("incidentRef",i.runId()); m.put("clusterId",v.clusterId()); m.put("unitId",v.unitId());
+                m.put("cluster_member_ref",i.clusterRef());
+                if (names!=null) m.put("maskedName",names.maskClusterName(i.clusterRef()));
+                m.put("vendor",i.vendor()); m.put("reason",i.reason()); m.put("openedAt",i.openedAt());
+                m.put("incidentActive",i.incidentActive()); m.put("blocksEstate",i.blocksEstate());
+                m.put("unresolvedSends",i.unresolvedDispatchRefs().size());
+                m.put("members",i.memberIds().stream().map(id -> Map.of("device_id",id)).toList());
+                return m;
+            }).toList();
+            Map<String,Object> body=new LinkedHashMap<>();
+            body.put("canRelease",canRelease);
+            body.put("roleNote",canRelease ? null : INCIDENT_ROLE_NOTE);
+            body.put("incidents",rows);
+            return body;
+        });
+    }
+    /**
+     * Release one run's incident (security_admin, route action cp_failover_incident_release). The body carries
+     * the reason only: the actor is the session (GateChainInterceptor); any other field, such as a caller-named
+     * approver, is refused rather than ignored.
+     */
+    @PostMapping("/runs/{runId}/incident/release")
+    public ResponseEntity<?> releaseIncident(@PathVariable String runId,
+            @RequestBody(required = false) Map<String,Object> body, HttpServletRequest request) {
+        return result(() -> {
+            if (body!=null && !java.util.Set.of("reason").containsAll(body.keySet()))
+                throw new IllegalArgumentException("only a reason may be supplied");
+            Object reason=body==null ? null : body.get("reason");
+            if (reason!=null && !(reason instanceof String)) throw new IllegalArgumentException("reason must be text");
+            return Map.of("incidentRef",runId,"status",service.releaseIncident(runId,(String)reason,actor(request)));
+        });
     }
 }
