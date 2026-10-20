@@ -626,6 +626,78 @@ public final class SystemLogReadService {
         return Read.ok(body);
     }
 
+    // ---------------------------------------------------------------- Spike Detective data (section 8.3, V167)
+
+    private static final com.fasterxml.jackson.databind.ObjectMapper JSON = new com.fasterxml.jackson.databind.ObjectMapper();
+
+    /**
+     * The Spike Detective data directories collected from one device (newest first): device mtime, state, member
+     * classes with counts and sizes, and the archive's retention facts. Name classes only, never a directory or member
+     * name (the clear names exist only inside the encrypted archive); the archives themselves are not served here.
+     * {@code counts} includes the baseline ("present before monitoring") directories, which are not listed.
+     */
+    public Read spikeData(String deviceId) {
+        var gate = deviceGate(deviceId, body -> {
+            body.put("enabled", false);
+            body.put("counts", Map.of());
+            body.put("directories", List.of());
+        });
+        if (gate.isPresent()) return gate.get();
+        int limit = 50;
+        List<Map<String, Object>> directories = new ArrayList<>();
+        var rows = repository.spikeDirectories(deviceId, limit);
+        for (var row : rows) {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("directory_id", row.directoryId());
+            m.put("name_class", row.nameClass());
+            m.put("mtime_epoch", row.mtime());
+            m.put("state", row.state());
+            m.put("member_count", row.memberCount());
+            m.put("fetched_files", row.fetchedFiles());
+            m.put("member_bytes", row.memberBytes());
+            m.put("fetched_bytes", row.fetchedBytes());
+            m.put("member_classes", memberClasses(row.membersJson()));
+            m.put("recorded_at", iso(row.recordedAt()));
+            m.put("expires_at", iso(row.expiresAt()));
+            m.put("pruned", row.prunedAt() != null);
+            m.put("stored_bytes", row.storedBytes());
+            directories.add(m);
+        }
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("device_id", deviceId);
+        body.put("enabled", settings.settings().spikeDataEnabled());
+        body.put("retention_days", settings.settings().spikeDataRetentionDays());
+        body.put("counts", repository.spikeDirectoryCounts(deviceId));
+        body.put("truncated", rows.size() >= limit);
+        body.put("directories", directories);
+        return Read.ok(body);
+    }
+
+    /** The stored per-class summary as a list: {@code type} (file, dir, link, other), {@code class}, counts and bytes. */
+    static List<Map<String, Object>> memberClasses(String membersJson) {
+        List<Map<String, Object>> out = new ArrayList<>();
+        if (membersJson == null) return out;
+        try {
+            var tree = JSON.readTree(membersJson);
+            var fields = tree.fields();
+            while (fields.hasNext()) {
+                var e = fields.next();
+                String key = e.getKey();
+                int colon = key.indexOf(':');
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("type", colon > 0 ? key.substring(0, colon) : "other");
+                m.put("class", colon > 0 ? key.substring(colon + 1) : key);
+                m.put("count", e.getValue().path("count").asLong());
+                m.put("bytes", e.getValue().path("bytes").asLong());
+                m.put("fetched", e.getValue().path("fetched").asLong());
+                out.add(m);
+            }
+        } catch (IOException unreadable) {
+            return List.of();
+        }
+        return out;
+    }
+
     private static String iso(Instant at) {
         return at == null ? null : at.toString();
     }

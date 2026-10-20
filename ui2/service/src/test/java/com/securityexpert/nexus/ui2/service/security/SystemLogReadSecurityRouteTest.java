@@ -28,7 +28,7 @@ import com.securityexpert.nexus.ui2.platform.AuthzOutcome;
 import com.securityexpert.nexus.ui2.platform.RoleToken;
 
 /**
- * The phase B read side of the system-log programme (contract section 14): six GET routes, all one action
+ * The phase B read side of the system-log programme (contract section 14): seven GET routes, all one action
  * ({@code system_log_read}: operator and above, aiview included); the unmasked view is a second action the text route's
  * controller checks, never a route of its own.
  */
@@ -40,7 +40,8 @@ class SystemLogReadSecurityRouteTest {
             "GET " + BASE + "/chunks/chunk-1/text", "text",
             "GET " + BASE + "/gaps", "gaps",
             "GET " + BASE + "/crash-files", "crash-files",
-            "GET " + BASE + "/dev-1/hcp", "hcp");
+            "GET " + BASE + "/dev-1/hcp", "hcp",
+            "GET " + BASE + "/dev-1/spike-data", "spike-data");
 
     @Test
     void theTwoActionsAreRegisteredWithTheirRoles() {
@@ -55,7 +56,7 @@ class SystemLogReadSecurityRouteTest {
     }
 
     @Test
-    void sixGetRoutesMapToSystemLogReadAndNoRouteMapsToTheUnmaskedAction() throws Exception {
+    void sevenGetRoutesMapToSystemLogReadAndNoRouteMapsToTheUnmaskedAction() throws Exception {
         var interceptor = new GateChainInterceptor(null, SecurityWebMvcConfig.ACTION_ID_BY_ROUTE);
         var method = GateChainInterceptor.class.getDeclaredMethod("actionIdFor", String.class, String.class);
         method.setAccessible(true);
@@ -68,7 +69,7 @@ class SystemLogReadSecurityRouteTest {
         assertNull(method.invoke(interceptor, "DELETE", BASE + "/chunks/chunk-1/text"));
         var mapped = SecurityWebMvcConfig.ACTION_ID_BY_ROUTE.entrySet().stream()
                 .filter(e -> ActionRegistry.SYSTEM_LOG_READ.equals(e.getValue())).map(Map.Entry::getKey).sorted().toList();
-        assertEquals(6, mapped.size(), mapped.toString());
+        assertEquals(7, mapped.size(), mapped.toString());
         assertTrue(SecurityWebMvcConfig.ACTION_ID_BY_ROUTE.values().stream()
                 .noneMatch(ActionRegistry.SYSTEM_LOG_READ_UNMASKED::equals));
     }

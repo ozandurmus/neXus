@@ -27,6 +27,7 @@ import com.securityexpert.nexus.ui2.capability.GateResolution;
 import com.securityexpert.nexus.ui2.jobs.JobState;
 import com.securityexpert.nexus.ui2.jobs.lease.JobLeaseRepository;
 import com.securityexpert.nexus.ui2.jobs.stepattempt.JobStepAttemptRepository;
+import com.securityexpert.nexus.ui2.jobs.systemlog.CpSpikeLayoutReview;
 import com.securityexpert.nexus.ui2.jobs.systemlog.CpSyslogRangedRead;
 import com.securityexpert.nexus.ui2.jobs.systemlog.CpSystemLogCollect;
 import com.securityexpert.nexus.ui2.jobs.systemlog.CpSystemLogCollect.Exec;
@@ -58,6 +59,9 @@ import com.securityexpert.nexus.ui2.persistence.diagnostic.CheckPointSystemLogRe
 import com.securityexpert.nexus.ui2.persistence.diagnostic.CheckPointSystemLogRepository.FileRow;
 import com.securityexpert.nexus.ui2.persistence.diagnostic.CheckPointSystemLogRepository.NewCrashEntry;
 import com.securityexpert.nexus.ui2.persistence.diagnostic.CheckPointSystemLogRepository.SnapshotEntry;
+import com.securityexpert.nexus.ui2.persistence.diagnostic.CheckPointSystemLogRepository.SpikeDirectory;
+import com.securityexpert.nexus.ui2.persistence.diagnostic.CheckPointSystemLogRepository.SpikeDirectoryState;
+import com.securityexpert.nexus.ui2.persistence.diagnostic.CheckPointSystemLogRepository.SpikeWrite;
 import com.securityexpert.nexus.ui2.persistence.diagnostic.SystemLogCollectionRepository;
 import com.securityexpert.nexus.ui2.platform.HostnameFingerprint;
 import com.securityexpert.nexus.ui2.platform.JobWindowPolicy;
@@ -98,14 +102,14 @@ import com.securityexpert.nexus.ui2.worker.transport.ssh.PersistedManagementEndp
  *       read is sent. Gaps carry byte counts; a budget leaves {@code BACKLOG} with the exact pending bytes.</li>
  *   <li><b>C3</b> the crash/dump listing: a baseline on the first listing, then new files raise one
  *       {@code device_crash_alert} per process. Content is never read.</li>
+ *   <li>Only while {@code system_log.spike_data_enabled} is on (default off): <b>C4</b> the Spike Detective listing; the
+ *       device's first listing is the baseline ("present before monitoring", never fetched); then, for at most 16 new
+ *       settled data directories (oldest first), <b>C5</b> and one <b>C8</b> per member on the amended fetch list
+ *       (section 8.3, PO 2026-10-20), stored as one neXus-side tar.gz per directory (see {@link #spikeData}).</li>
  *   <li>06:00 window only: <b>C6</b> + <b>C8</b> yesterday's sar text, <b>C7</b> + <b>C8</b> the newest settled HCP
  *       archive (stored as received, 7 days). A sar left {@code BACKLOG} by the device budget is retried in the next
  *       window of the same day.</li>
  * </ol>
- *
- * Spike Detective listings (C4, C5) and spike data fetches are not issued: {@code spike_data_enabled} is off by default
- * and its baseline storage is not built (TODO, section 8.3); when the setting is on, {@code cp_spike_data} is recorded
- * {@code UNSUPPORTED} with reason {@code SPIKE_DATA_NOT_IMPLEMENTED}.
  *
  * <p>Management servers are refused ({@code SYSTEM_LOG_DISABLED_ON_MANAGEMENT}: no MDS gate rows exist, section 2.3);
  * a Gaia Embedded device records {@code UNSUPPORTED} for every source without any device contact. Outcomes are exactly
@@ -253,6 +257,7 @@ public final class CpSystemLogCollectJobExecutor {
                     recordSource(unsupported, family.sourceKey(), runRow("UNSUPPORTED", "GAIA_EMBEDDED", Map.of()), Optional.empty(), List.of());
                 recordCrash(unsupported, runRow("UNSUPPORTED", "GAIA_EMBEDDED", Map.of()),
                         new CheckPointSystemLogRepository.CrashListingWrite(List.of(), List.of(), List.of(), List.of()));
+                if (settings.spikeDataEnabled()) recordSpike(unsupported, runRow("UNSUPPORTED", "GAIA_EMBEDDED", Map.of()), List.of(), List.of());
                 finish(jobId, epoch, JobState.COMPLETED, "SYSTEM_LOG_UNSUPPORTED_PLATFORM");
                 return;
             }
@@ -265,6 +270,7 @@ public final class CpSystemLogCollectJobExecutor {
                     recordSource(failed, family.sourceKey(), runRow("UNKNOWN", "CONNECTION_FAILED", Map.of()), Optional.empty(), List.of());
                 recordCrash(failed, runRow("UNKNOWN", "CONNECTION_FAILED", Map.of()),
                         new CheckPointSystemLogRepository.CrashListingWrite(List.of(), List.of(), List.of(), List.of()));
+                if (settings.spikeDataEnabled()) recordSpike(failed, runRow("UNKNOWN", "CONNECTION_FAILED", Map.of()), List.of(), List.of());
                 finish(jobId, epoch, JobState.FAILED, "partial:CONNECTION_FAILED");
                 return;
             }
@@ -273,13 +279,9 @@ public final class CpSystemLogCollectJobExecutor {
             StatParseResult stat = stat(run, resolved.get());
             incremental(run, stat);
             crashListing(run, resolved.get());
+            // Section 3.2 step 4; off by default (section 8.3). Nothing is sent and no row is written while it is off.
+            if (settings.spikeDataEnabled()) spikeData(run, stat);
             dailyItems(run, resolved.get(), stat);
-            if (settings.spikeDataEnabled()) {
-                // TODO(phase B §8.3): C4/C5 listings, the directory baseline and the spike data fetch. Not built: the
-                // data-directory layout is unmeasured and no baseline table exists. Recorded, never silently skipped.
-                recordSource(run, SOURCE_SPIKE_DATA, runRow("UNSUPPORTED", "SPIKE_DATA_NOT_IMPLEMENTED", Map.of()),
-                        Optional.empty(), List.of());
-            }
             finish(jobId, epoch, run.failures.isEmpty() ? JobState.COMPLETED : JobState.FAILED,
                     run.failures.isEmpty() ? "SYSTEM_LOG_COLLECTED" : "partial:" + run.failures.get(0));
         } catch (Abort abort) {
@@ -760,6 +762,328 @@ public final class CpSystemLogCollectJobExecutor {
         return "UNKNOWN";
     }
 
+    // ================================================================ C4/C5 + C8: Spike Detective data (section 8.3)
+
+    /** Why the directory loop of one run stopped before its candidates ran out. */
+    private enum SpikeStop { NONE, UNKNOWN, STORAGE_REFUSED, DEVICE_BUDGET }
+
+    /** What one processed directory left: its state and the bytes that reached the store. */
+    private record SpikeResult(SpikeDirectoryState state, int fetchedFiles, long receivedBytes, long storedBytes,
+            int skippedMembers, int missingMembers) {
+    }
+
+    /**
+     * Section 3.2 step 4 and section 8.3 (fetch list as amended by the PO on 2026-10-20), only while
+     * {@code spike_data_enabled} is on. C4 once; on the device's first listing every data directory (type {@code d},
+     * link count 2) is stored as {@code BASELINE} ("present before monitoring", never fetched). Later, a directory is new
+     * while its name HMAC has no row and settled when its mtime is at least 10 minutes older than the device clock of
+     * this run's C1. At most 16 new settled directories per run, oldest first: per directory one C5, then one C8 per
+     * member on the fetch list ({@code perf_<word>_<N>.log}, {@code profiling_summary.elg}), at most 16 MiB per
+     * directory (more is {@code TOO_LARGE}, nothing fetched); other members are listed in the summary, never fetched.
+     * The fetched members go into one neXus-side tar.gz per directory, stored encrypted as received (section 12: spike
+     * data is not redacted), one fenced transaction per directory before the next C5 is sent. A listing at its bound
+     * is {@code UNKNOWN} (never processed partially); a name outside the safe form is {@code NAME_REJECTED} and no C5
+     * is sent for it.
+     */
+    private void spikeData(Run run, StatParseResult stat) {
+        long started = clock.millis();
+        int stepBefore = run.step;
+        Map<String, Object> detail = new LinkedHashMap<>();
+        List<SpikeDirectory> listed = new ArrayList<>();
+        Optional<GateResolution.Known> c4 = CpSpikeLayoutReview.listingGate(gates);
+        if (c4.isEmpty() || CpSpikeLayoutReview.directoryGate(gates).isEmpty()) {
+            spikeOutcome(run, "UNKNOWN", "GATE_NOT_KNOWN", detail, started, stepBefore, listed, List.of());
+            return;
+        }
+        if (!stat.hasDeviceClock()) {
+            // Settling needs the device clock of this run's C1; without it C4 is not sent.
+            spikeOutcome(run, "UNKNOWN", "NO_DEVICE_CLOCK", detail, started, stepBefore, listed, List.of());
+            return;
+        }
+        long now = stat.deviceEpoch();
+        ExecResult.Completed c4Output;
+        try {
+            c4Output = execCompleted(run, c4.get(), CpSpikeLayoutReview.LS_SPIKE_COMMAND, CpSpikeLayoutReview.LS_SPIKE_MAX_BYTES);
+        } catch (Unknown unknown) {
+            spikeOutcome(run, "UNKNOWN", "LISTING_" + unknown.code, detail, started, stepBefore, listed, List.of());
+            return;
+        }
+        if (c4Output.output().getBytes(StandardCharsets.UTF_8).length >= CpSpikeLayoutReview.LS_SPIKE_MAX_BYTES) {
+            // Section 8.3: a listing that reaches the 256 KiB bound may be cut; it is never processed partially.
+            spikeOutcome(run, "UNKNOWN", "LISTING_AT_BOUND", detail, started, stepBefore, listed, List.of());
+            return;
+        }
+        CpSpikeLayoutSummary.Listing parent = CpSpikeLayoutSummary.parse(c4Output.output(), c4Output.exitStatus(),
+                CpSpikeLayoutSummary.PARENT);
+        detail.put("ignored_lines", parent.ignoredLines());
+        detail.put("rejected_lines", parent.rejectedLines());
+        if (parent.state() == CpSpikeLayoutSummary.State.UNKNOWN) {
+            spikeOutcome(run, "UNKNOWN", "LISTING_" + parent.reason(), detail, started, stepBefore, listed, List.of());
+            return;
+        }
+        if (parent.state() == CpSpikeLayoutSummary.State.ABSENT) {
+            spikeOutcome(run, "ABSENT", null, detail, started, stepBefore, listed, List.of());
+            return;
+        }
+        List<CpLsListing.Entry> directories = parent.entries().stream().filter(CpSpikeLayoutSummary::dataDirectory).toList();
+        Set<String> printed = new HashSet<>();
+        for (CpLsListing.Entry e : directories) printed.add(e.name());
+        detail.put("listed_entries", parent.entries().size());
+        detail.put("data_directories", directories.size());
+        if (!repository.spikeBaselineTaken(run.deviceId)) {
+            for (CpLsListing.Entry e : directories)
+                listed.add(SpikeDirectory.listed(UUID.randomUUID().toString(), spikeHmac(e.name()), nameClass(e.name()),
+                        e.mtime(), SpikeDirectoryState.BASELINE));
+            detail.put("baseline", true);
+            detail.put("baseline_directories", listed.size());
+            spikeOutcome(run, "NO_NEW_DATA", null, detail, started, stepBefore, listed, List.of());
+            return;
+        }
+        detail.put("baseline", false);
+        Set<String> known = repository.spikeDirectoryHmacs(run.deviceId);
+        List<CpLsListing.Entry> settled = new ArrayList<>();
+        int fresh = 0, unsettled = 0;
+        for (CpLsListing.Entry e : directories) {
+            if (known.contains(spikeHmac(e.name()))) continue;
+            fresh++;
+            if (e.mtime() > now - CpSpikeLayoutReview.SETTLE_SECONDS) unsettled++;
+            else settled.add(e);
+        }
+        // Oldest first, so a backlog drains in the order the device wrote it; ties by name (deterministic).
+        settled.sort(java.util.Comparator.comparingLong(CpLsListing.Entry::mtime).thenComparing(CpLsListing.Entry::name));
+        List<CpLsListing.Entry> candidates = new ArrayList<>();
+        int rejected = 0;
+        for (CpLsListing.Entry e : settled) {
+            if (CpSpikeLayoutReview.safeDirectoryName(e.name())) { candidates.add(e); continue; }
+            rejected++;
+            listed.add(SpikeDirectory.listed(UUID.randomUUID().toString(), spikeHmac(e.name()), nameClass(e.name()),
+                    e.mtime(), SpikeDirectoryState.NAME_REJECTED));
+        }
+        detail.put("new_directories", fresh);
+        detail.put("new_unsettled", unsettled);
+        detail.put("new_settled", settled.size());
+        detail.put("name_rejected", rejected);
+
+        Map<SpikeDirectoryState, Integer> states = new java.util.EnumMap<>(SpikeDirectoryState.class);
+        long received = 0, stored = 0;
+        int fetchedFiles = 0, skippedMembers = 0, missingMembers = 0, processed = 0, index = 0;
+        SpikeStop stop = SpikeStop.NONE;
+        String stopReason = null;
+        for (; index < candidates.size() && processed < CpSystemLogCollect.SPIKE_DIRECTORIES_PER_RUN; index++) {
+            if (volume.freeFraction() < SystemLogArtefactVolume.MIN_FREE_FRACTION) {
+                stop = SpikeStop.STORAGE_REFUSED; stopReason = "ARTEFACT_VOLUME_LOW_SPACE"; break;
+            }
+            if (run.deviceSpent >= config.deviceBudgetBytes()) { stop = SpikeStop.DEVICE_BUDGET; break; }
+            SpikeResult result;
+            try {
+                result = spikeDirectory(run, candidates.get(index), printed);
+            } catch (Unknown unknown) {
+                stop = SpikeStop.UNKNOWN; stopReason = unknown.code; break;
+            }
+            if (result == null) { stop = SpikeStop.DEVICE_BUDGET; break; }
+            processed++;
+            states.merge(result.state(), 1, Integer::sum);
+            received += result.receivedBytes();
+            stored += result.storedBytes();
+            fetchedFiles += result.fetchedFiles();
+            skippedMembers += result.skippedMembers();
+            missingMembers += result.missingMembers();
+        }
+        int pending = candidates.size() - index;
+        detail.put("processed_directories", processed);
+        detail.put("collected_directories", states.getOrDefault(SpikeDirectoryState.COLLECTED, 0));
+        detail.put("too_large_directories", states.getOrDefault(SpikeDirectoryState.TOO_LARGE, 0));
+        detail.put("nothing_to_fetch_directories", states.getOrDefault(SpikeDirectoryState.NOTHING_TO_FETCH, 0));
+        detail.put("absent_directories", states.getOrDefault(SpikeDirectoryState.ABSENT, 0));
+        detail.put("pending_directories", pending);
+        detail.put("fetched_files", fetchedFiles);
+        detail.put("skipped_members", skippedMembers);
+        detail.put("missing_members", missingMembers);
+        detail.put("payload_bytes", received);
+        detail.put("stored_bytes", stored);
+        List<SystemLogCollectionRepository.Gap> gaps = new ArrayList<>();
+        String outcome;
+        if (stop == SpikeStop.UNKNOWN) outcome = "UNKNOWN";
+        else if (stop == SpikeStop.STORAGE_REFUSED) outcome = "STORAGE_REFUSED";
+        else if (pending > 0) {
+            outcome = "BACKLOG";
+            String why = stop == SpikeStop.DEVICE_BUDGET ? "DEVICE_BUDGET" : "DIRECTORY_LIMIT";
+            detail.put("backlog_reason", why);
+            gaps.add(new SystemLogCollectionRepository.Gap("BACKLOG", 0, 0, false, null, now,
+                    detail(Map.of("pending_directories", pending, "reason", why))));
+        } else if (states.getOrDefault(SpikeDirectoryState.COLLECTED, 0) > 0) outcome = "COLLECTED";
+        else if (states.getOrDefault(SpikeDirectoryState.TOO_LARGE, 0) > 0) outcome = "TOO_LARGE";
+        else outcome = "NO_NEW_DATA";
+        spikeOutcome(run, outcome, stopReason, detail, started, stepBefore, listed, gaps);
+    }
+
+    /**
+     * One new, settled data directory: C5, then the C8 fetches of its fetch-list members, then its row (and archive) in
+     * one fenced transaction. Null when its fetch list does not fit the device budget left (the run stops: BACKLOG).
+     */
+    private SpikeResult spikeDirectory(Run run, CpLsListing.Entry directory, Set<String> printed) {
+        String name = directory.name();
+        String hmac = spikeHmac(name);
+        String nameClass = nameClass(name);
+        String command = CpSpikeLayoutReview.directoryCommand(name).orElseThrow(() -> new Unknown("DIRECTORY_COMMAND_NOT_BUILT"));
+        // Resolved again right before the command is sent: a withdrawn sign-off stops the source.
+        GateResolution.Known c5 = CpSpikeLayoutReview.directoryGate(gates).orElseThrow(() -> new Unknown("GATE_NOT_KNOWN"));
+        ExecResult.Completed output;
+        try {
+            output = execCompleted(run, c5, command, CpSpikeLayoutReview.LS_SPIKE_DIR_MAX_BYTES);
+        } catch (Unknown unknown) {
+            throw new Unknown("DIRECTORY_" + unknown.code);
+        }
+        if (output.output().getBytes(StandardCharsets.UTF_8).length >= CpSpikeLayoutReview.LS_SPIKE_DIR_MAX_BYTES)
+            throw new Unknown("DIRECTORY_LISTING_AT_BOUND");
+        CpSpikeLayoutSummary.Listing members = CpSpikeLayoutSummary.parse(output.output(), output.exitStatus(), "c5");
+        if (members.state() == CpSpikeLayoutSummary.State.UNKNOWN) throw new Unknown("DIRECTORY_" + members.reason());
+        if (members.state() == CpSpikeLayoutSummary.State.ABSENT) {
+            storeSpike(run, SpikeDirectory.listed(UUID.randomUUID().toString(), hmac, nameClass, directory.mtime(),
+                    SpikeDirectoryState.ABSENT), Optional.empty(), null);
+            return new SpikeResult(SpikeDirectoryState.ABSENT, 0, 0, 0, 0, 0);
+        }
+        List<CpLsListing.Entry> entries = members.entries();
+        long fileBytes = 0;
+        Set<String> memberNames = new HashSet<>();
+        for (CpLsListing.Entry e : entries) {
+            memberNames.add(e.name());
+            if (e.regularFile()) fileBytes += e.size();
+        }
+        List<CpLsListing.Entry> fetchList = CpSpikeData.fetchList(entries);
+        int skipped = entries.size() - fetchList.size();
+        long listedBytes = fetchList.stream().mapToLong(CpLsListing.Entry::size).sum();
+        if (fetchList.isEmpty() || listedBytes > CpSystemLogCollect.SPIKE_DIRECTORY_MAX_BYTES) {
+            SpikeDirectoryState state = fetchList.isEmpty() ? SpikeDirectoryState.NOTHING_TO_FETCH : SpikeDirectoryState.TOO_LARGE;
+            storeSpike(run, new SpikeDirectory(UUID.randomUUID().toString(), hmac, nameClass, directory.mtime(), state,
+                    entries.size(), 0, fileBytes, 0, CpSpikeData.membersJson(entries, Set.of(), tokens()), null),
+                    Optional.empty(), null);
+            return new SpikeResult(state, 0, 0, 0, skipped, 0);
+        }
+        if (listedBytes > config.deviceBudgetBytes() - run.deviceSpent) return null;
+
+        List<CpSpikeData.Fetched> fetched = new ArrayList<>();
+        long received = 0;
+        int missing = 0;
+        boolean grew = false;
+        for (CpLsListing.Entry member : fetchList) {
+            long bound = CpSystemLogCollect.SPIKE_DIRECTORY_MAX_BYTES - received;
+            ByteArrayOutputStream buffer = new ByteArrayOutputStream((int) Math.min(member.size() + 1, 1 << 20));
+            RangedFetchResult result = spikeFetch(run, printed, name, memberNames, member, bound, buffer);
+            if (result.status() == RangedFetchStatus.FILE_MISSING) { missing++; continue; }
+            if (!result.bytesUsable()) throw new Unknown("FETCH_" + result.status().name());
+            received += result.bytesReceived();
+            if (result.bytesReceived() > bound) { grew = true; break; }
+            byte[] bytes = buffer.toByteArray();
+            if (bytes.length > result.bytesReceived()) bytes = java.util.Arrays.copyOf(bytes, (int) result.bytesReceived());
+            fetched.add(new CpSpikeData.Fetched(member, bytes));
+        }
+        run.deviceSpent += received;
+        if (grew || fetched.isEmpty()) {
+            // Grown past the bound while fetched (TOO_LARGE), or every fetch-list member gone after C5 (ABSENT).
+            SpikeDirectoryState state = grew ? SpikeDirectoryState.TOO_LARGE : SpikeDirectoryState.ABSENT;
+            storeSpike(run, new SpikeDirectory(UUID.randomUUID().toString(), hmac, nameClass, directory.mtime(), state,
+                    entries.size(), 0, fileBytes, 0, CpSpikeData.membersJson(entries, Set.of(), tokens()), null),
+                    Optional.empty(), null);
+            return new SpikeResult(state, 0, received, 0, skipped, missing);
+        }
+        byte[] archive;
+        try {
+            archive = CpSpikeData.archive(name, directory.mtime(), entries, fetched);
+        } catch (IOException | RuntimeException buildFailure) {
+            throw new Unknown("ARCHIVE_BUILD_FAILED");
+        }
+        // Already compressed: stored as built (no second gzip), encrypted under its own data key.
+        ArtefactStore.ArtefactMetadata meta = write(run, archive, false);
+        long fetchedBytes = fetched.stream().mapToLong(f -> f.bytes().length).sum();
+        Set<String> fetchedNames = new HashSet<>();
+        for (CpSpikeData.Fetched f : fetched) fetchedNames.add(f.entry().name());
+        int days = run.settings.spikeDataRetentionDays();
+        String fileId = UUID.randomUUID().toString();
+        FileRow file = new FileRow(fileId, SOURCE_SPIKE_DATA, hmac, null, fetchedBytes, directory.mtime(), "STORED", List.of(),
+                fingerprint.ofContent(SystemLogCollectionRepository.FILE_CONTENT_DOMAIN, archive, 0, archive.length),
+                manifest(run, meta, days), clock.instant().plus(Duration.ofDays(days)));
+        SpikeDirectory row = new SpikeDirectory(UUID.randomUUID().toString(), hmac, nameClass, directory.mtime(),
+                SpikeDirectoryState.COLLECTED, entries.size(), fetched.size(), fileBytes, fetchedBytes,
+                CpSpikeData.membersJson(entries, fetchedNames, tokens()), fileId);
+        boolean kept = storeSpike(run, row, Optional.of(file), meta);
+        return new SpikeResult(SpikeDirectoryState.COLLECTED, fetched.size(), received, kept ? fetchedBytes : 0, skipped, missing);
+    }
+
+    /** One spike C8, ledgered like every device step; refused before any I/O unless the names were listed in this run. */
+    private RangedFetchResult spikeFetch(Run run, Set<String> printed, String directory, Set<String> memberNames,
+            CpLsListing.Entry member, long bound, OutputStream sink) {
+        int step = run.step++;
+        if (!attempts.findByJobAndStep(run.jobId, step).isEmpty()) throw new Abort(JobState.OUTCOME_UNKNOWN, "PRIOR_ATTEMPT_NOT_REPLAYED");
+        String attempt = attempts.insertPreContact(run.jobId, run.epoch, step, CpSystemLogCollect.FETCH_GATE, "read", 1);
+        if (attempt == null || !attempts.markBoundaryCrossed(attempt, run.epoch))
+            throw new Abort(JobState.OUTCOME_UNKNOWN, "PRE_CONTACT_UNCERTAIN");
+        RangedFetchResult result = CpSystemLogCollect.fetchSpikeMember(ssh, run.session, gates, printed, directory,
+                memberNames, member.name(), member.size(), bound, sink);
+        boolean ok = result.bytesUsable() && result.bytesReceived() <= bound;
+        if (!attempts.writeOutcome(attempt, run.epoch, ok ? "MATCHED" : "EXPECTATION_UNMET",
+                ok ? null : "FETCH_" + result.status().name(), ok, result.bytesReceived(), null, null))
+            throw new Abort(JobState.OUTCOME_UNKNOWN, "ATTEMPT_RECORD_FAILED");
+        return result;
+    }
+
+    /** One directory's fenced write; the artefact of a refused or duplicate write is removed. True when it was stored. */
+    private boolean storeSpike(Run run, SpikeDirectory row, Optional<FileRow> file, ArtefactStore.ArtefactMetadata meta) {
+        SpikeWrite written;
+        try {
+            written = repository.recordSpikeDirectory(run.jobId, run.epoch, run.deviceId, row, file);
+        } catch (RuntimeException notRecorded) {
+            if (meta != null) volume.discard(meta.ref());
+            throw notRecorded;
+        }
+        switch (written) {
+            case NOT_RECORDED -> {
+                if (meta != null) volume.discard(meta.ref());
+                throw new Abort(JobState.OUTCOME_UNKNOWN, "SYSTEM_LOG_NOT_RECORDED");
+            }
+            case DUPLICATE -> {
+                if (meta != null) volume.discard(meta.ref());
+                return false;
+            }
+            default -> {
+                return true;
+            }
+        }
+    }
+
+    private void spikeOutcome(Run run, String outcome, String reason, Map<String, Object> detail, long started,
+            int stepBefore, List<SpikeDirectory> listed, List<SystemLogCollectionRepository.Gap> gaps) {
+        run.outcome(outcome, reason);
+        detail.put("reads", run.step - stepBefore);
+        detail.put("duration_ms", Math.max(0, clock.millis() - started));
+        recordSpike(run, runRow(outcome, reason, detail), listed, gaps);
+    }
+
+    private void recordSpike(Run run, SystemLogCollectionRepository.Run row, List<SpikeDirectory> listed,
+            List<SystemLogCollectionRepository.Gap> gaps) {
+        if (!repository.recordSpikeListing(run.jobId, run.epoch, run.deviceId, row, listed, gaps))
+            throw new Abort(JobState.OUTCOME_UNKNOWN, "SYSTEM_LOG_NOT_RECORDED");
+    }
+
+    /** The keyed name identity of a data directory; equal to its archive's {@code system_log_file.remote_name_hmac}. */
+    private String spikeHmac(String directoryName) {
+        return fingerprint.of("cp-file|" + SOURCE_SPIKE_DATA + "|" + directoryName);
+    }
+
+    private String nameClass(String name) {
+        return CpSyslogMeasurementSummary.classify(name, tokens()).clazz();
+    }
+
+    /** Keyed tokens for the name-class vocabulary (only a core-dump-shaped name of an unknown process uses one). */
+    private CpSyslogMeasurementSummary.KeyedTokens tokens() {
+        return new CpSyslogMeasurementSummary.KeyedTokens() {
+            @Override public String inode(long inode) { return "i_unused"; }
+            @Override public String word(String lowerWord) {
+                return fingerprint.of("cp-syslog-word|" + lowerWord).substring(0, 10);
+            }
+        };
+    }
+
     // ================================================================ C6/C7 + C8: daily whole files
 
     private void dailyItems(Run run, Gates g, StatParseResult stat) {
@@ -937,16 +1261,25 @@ public final class CpSystemLogCollectJobExecutor {
 
     /** One gated, ledgered exec read (C1, C3, C6, C7); a timeout, a channel failure or an output over the bound is UNKNOWN. */
     private String exec(Run run, Exec exec, GateResolution.Known gate) {
+        return execCompleted(run, gate, exec.command(), exec.maxBytes()).output();
+    }
+
+    /**
+     * One gated, ledgered exec read of {@code command} under {@code gate}; a timeout, a channel failure or an output over
+     * {@code maxBytes} is {@link Unknown}. The positive output limit also keeps the command and answer out of the
+     * transport's log lines and transcripts.
+     */
+    private ExecResult.Completed execCompleted(Run run, GateResolution.Known gate, String command, int maxBytes) {
         int step = run.step++;
         if (!attempts.findByJobAndStep(run.jobId, step).isEmpty()) throw new Abort(JobState.OUTCOME_UNKNOWN, "PRIOR_ATTEMPT_NOT_REPLAYED");
         String attempt = attempts.insertPreContact(run.jobId, run.epoch, step, gate.gateId(), "read", 1);
         if (attempt == null || !attempts.markBoundaryCrossed(attempt, run.epoch))
             throw new Abort(JobState.OUTCOME_UNKNOWN, "PRE_CONTACT_UNCERTAIN");
-        ExecResult result = ssh.exec(run.session, new ExecSpec(exec.command(), false, 0, exec.maxBytes()),
+        ExecResult result = ssh.exec(run.session, new ExecSpec(command, false, 0, maxBytes),
                 Duration.ofSeconds(gate.timeoutS()));
         String failure = result instanceof ExecResult.Completed completed
                 ? completed.output() == null ? "OUTPUT_UNAVAILABLE"
-                : completed.output().getBytes(StandardCharsets.UTF_8).length > exec.maxBytes() ? "OUTPUT_LIMIT_EXCEEDED" : null
+                : completed.output().getBytes(StandardCharsets.UTF_8).length > maxBytes ? "OUTPUT_LIMIT_EXCEEDED" : null
                 : result instanceof ExecResult.TimedOut ? "TIMEOUT"
                 : result instanceof ExecResult.ChannelFailed failed && "OUTPUT_LIMIT_EXCEEDED".equals(failed.reason())
                         ? "OUTPUT_LIMIT_EXCEEDED" : "CHANNEL_FAILED";
@@ -957,7 +1290,7 @@ public final class CpSystemLogCollectJobExecutor {
             throw new Abort(JobState.OUTCOME_UNKNOWN, "ATTEMPT_RECORD_FAILED");
         if (failure != null) throw new Unknown(failure);
         // A non-zero exit is expected (an unmatched glob, a missing directory): the output is parsed by shape.
-        return ((ExecResult.Completed) result).output();
+        return (ExecResult.Completed) result;
     }
 
     private ArtefactStore.ArtefactMetadata write(Run run, byte[] bytes, boolean gzip) {

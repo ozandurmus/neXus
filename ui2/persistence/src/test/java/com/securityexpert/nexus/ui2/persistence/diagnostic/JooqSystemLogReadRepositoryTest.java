@@ -64,8 +64,10 @@ class JooqSystemLogReadRepositoryTest {
         repository.crashEntries(Optional.empty(), 99999);
         repository.crashAlerts(Optional.of("dev-1"), 99999);
         repository.hcpFiles("dev-1", 99999);
+        repository.spikeDirectories("dev-1", 99999);
+        repository.spikeDirectoryCounts("dev-1");
 
-        assertEquals(7, db.statements.size());
+        assertEquals(9, db.statements.size());
         for (int i = 0; i < db.statements.size(); i++) {
             String sql = db.statements.get(i).toLowerCase();
             assertTrue(sql.startsWith("select ") || sql.startsWith("with "), sql);
@@ -91,10 +93,12 @@ class JooqSystemLogReadRepositoryTest {
         repository.chunks("dev-1", Optional.empty(), Optional.empty(), -3);
         repository.hcpFiles("dev-1", 5000);
         repository.crashAlerts(Optional.empty(), 5000);
+        repository.spikeDirectories("dev-1", 5000);
         assertEquals(1000, last(db.bindings.get(0)));
         assertEquals(1, last(db.bindings.get(1)));
         assertEquals(200, last(db.bindings.get(2)));
         assertEquals(200, last(db.bindings.get(3)));
+        assertEquals(200, last(db.bindings.get(4)));
     }
 
     private static Object last(Object[] bindings) {

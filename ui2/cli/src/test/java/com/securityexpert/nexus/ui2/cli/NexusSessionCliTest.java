@@ -113,6 +113,7 @@ class NexusSessionCliTest {
             assertEquals(0, cli.run(new String[] {"syslog-crash-files"}));
             assertEquals(0, cli.run(new String[] {"syslog-crash-files", "dev-1"}));
             assertEquals(0, cli.run(new String[] {"syslog-hcp", "dev-1"}));
+            assertEquals(0, cli.run(new String[] {"syslog-spike-data", "dev-1"}));
             assertEquals(java.util.List.of(
                     "GET /api/v2/system-logs/dev-1/sources",
                     "GET /api/v2/system-logs/dev-1/chunks",
@@ -121,7 +122,7 @@ class NexusSessionCliTest {
                     "GET /api/v2/system-logs/dev-1/chunks?source=cp_messages&day=2026-10-17",
                     "GET /api/v2/system-logs/gaps", "GET /api/v2/system-logs/gaps?deviceId=dev-1",
                     "GET /api/v2/system-logs/crash-files", "GET /api/v2/system-logs/crash-files?deviceId=dev-1",
-                    "GET /api/v2/system-logs/dev-1/hcp"), calls);
+                    "GET /api/v2/system-logs/dev-1/hcp", "GET /api/v2/system-logs/dev-1/spike-data"), calls);
             calls.clear();
             // identifiers are opaque tokens: a path or query fragment is refused before any call
             assertEquals(2, cli.run(new String[] {"syslog-sources", "dev-1/../../x"}));

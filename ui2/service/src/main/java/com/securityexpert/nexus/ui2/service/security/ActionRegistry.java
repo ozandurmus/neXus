@@ -43,7 +43,7 @@ public final class ActionRegistry {
     public static final String SYSTEM_LOG_MEASURE_START = "system_log_measure_start";
     /** System-log programme phase B (DEVICE_SYSTEM_LOG_PHASE_B_CONTRACT.md section 14): admits the incremental collection job; operation_admin and security_admin, window-gated. */
     public static final String SYSTEM_LOG_COLLECT_START = "system_log_collect_start";
-    /** System-log programme phase B read side (section 14): sources, chunks, masked line text, gaps, crash files, HCP metadata; operator and above, aiview included (always masked). */
+    /** System-log programme phase B read side (section 14): sources, chunks, masked line text, gaps, crash files, HCP and Spike Detective data metadata; operator and above, aiview included (always masked). */
     public static final String SYSTEM_LOG_READ = "system_log_read";
     /** Section 13 Q10: the unmasked (redacted-only) line view inside the product; operation_admin and security_admin, audited per view; never aiview. */
     public static final String SYSTEM_LOG_READ_UNMASKED = "system_log_read_unmasked";

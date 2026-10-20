@@ -3230,6 +3230,42 @@ export interface SystemLogHcp {
   readonly files: readonly SystemLogHcpFile[];
 }
 
+/** One member-name class of a Spike Detective data directory (a class, never a name). */
+export interface SystemLogSpikeMemberClass {
+  readonly type: string;
+  readonly class: string;
+  readonly count: number;
+  readonly bytes: number;
+  readonly fetched: number;
+}
+
+export interface SystemLogSpikeDirectory {
+  readonly directory_id: string;
+  readonly name_class: string;
+  readonly mtime_epoch: number;
+  /** COLLECTED, NOTHING_TO_FETCH, TOO_LARGE, NAME_REJECTED or ABSENT (baseline rows are only counted). */
+  readonly state: string;
+  readonly member_count: number;
+  readonly fetched_files: number;
+  readonly member_bytes: number;
+  readonly fetched_bytes: number;
+  readonly member_classes: readonly SystemLogSpikeMemberClass[];
+  readonly recorded_at: string | null;
+  readonly expires_at: string | null;
+  readonly pruned: boolean;
+  readonly stored_bytes: number | null;
+}
+
+export interface SystemLogSpikeData {
+  readonly device_id: string;
+  readonly enabled: boolean;
+  readonly retention_days?: number;
+  /** Directory rows per state, BASELINE ("present before monitoring") included. */
+  readonly counts: Record<string, number>;
+  readonly truncated?: boolean;
+  readonly directories: readonly SystemLogSpikeDirectory[];
+}
+
 export interface SystemLogTextPage {
   readonly text: string;
   /** What the server did, from its own header: never what the browser asked for. */
@@ -3263,6 +3299,8 @@ export const getSystemLogCrashFiles = (deviceId: string) =>
   call<SystemLogCrashFiles>(`/api/v2/system-logs/crash-files?deviceId=${encodeURIComponent(deviceId)}`, "GET");
 
 export const getSystemLogHcp = (deviceId: string) => call<SystemLogHcp>(`${syslogBase(deviceId)}/hcp`, "GET");
+
+export const getSystemLogSpikeData = (deviceId: string) => call<SystemLogSpikeData>(`${syslogBase(deviceId)}/spike-data`, "GET");
 
 /**
  * One page of a chunk's text. The page is `text/plain` with its paging facts in `X-Syslog-*` headers; a response

@@ -166,6 +166,34 @@ public final class JooqSystemLogReadRepository implements SystemLogReadRepositor
                         instant(r, "pruned_at"), number(r, "ciphertext_bytes"))));
     }
 
+    @Override
+    public List<SpikeDirectoryRow> spikeDirectories(String deviceId, int limit) {
+        int bounded = Math.max(1, Math.min(limit, 200));
+        return transactions.inTransaction(dsl -> dsl.fetch(
+                "select d.directory_id, d.name_class, d.mtime, d.state, d.member_count, d.fetched_files, d.member_bytes, "
+                        + "d.fetched_bytes, d.members::text as members_json, d.job_id, d.recorded_at, f.expires_at, f.pruned_at, "
+                        + "f.ciphertext_bytes from system_log_spike_directory d "
+                        + "left join system_log_file f on f.file_id = d.file_id "
+                        + "where d.device_id = {0} and d.state <> 'BASELINE' "
+                        + "order by d.recorded_at desc, d.directory_id limit {1}", deviceId, bounded)
+                .map(r -> new SpikeDirectoryRow(r.get("directory_id", String.class), r.get("name_class", String.class),
+                        number(r, "mtime"), r.get("state", String.class), r.get("member_count", Integer.class),
+                        r.get("fetched_files", Integer.class), number(r, "member_bytes"), number(r, "fetched_bytes"),
+                        r.get("members_json", String.class), r.get("job_id", String.class), instant(r, "recorded_at"),
+                        instant(r, "expires_at"), instant(r, "pruned_at"), r.get("ciphertext_bytes", Long.class))));
+    }
+
+    @Override
+    public Map<String, Long> spikeDirectoryCounts(String deviceId) {
+        return transactions.inTransaction(dsl -> {
+            Map<String, Long> counts = new LinkedHashMap<>();
+            dsl.fetch("select state, count(*) as n from system_log_spike_directory where device_id = {0} "
+                    + "group by state order by state", deviceId)
+                    .forEach(r -> counts.put(r.get("state", String.class), number(r, "n")));
+            return counts;
+        });
+    }
+
     private static java.time.Instant instant(Record r, String column) {
         OffsetDateTime value = r.get(column, OffsetDateTime.class);
         return value == null ? null : value.toInstant();

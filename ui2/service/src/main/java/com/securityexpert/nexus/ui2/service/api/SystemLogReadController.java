@@ -24,8 +24,8 @@ import com.securityexpert.nexus.ui2.service.systemlog.SystemLogReadService;
 
 /**
  * System-log programme phase B read routes (DEVICE_SYSTEM_LOG_PHASE_B_CONTRACT.md section 14: {@code syslog-sources},
- * {@code syslog-chunks}, {@code syslog-view}, {@code syslog-gaps}, {@code syslog-crash-files}, {@code syslog-hcp}). The
- * routes are {@code system_log_read} (operator and above; aiview included). The text route serves the masked projection
+ * {@code syslog-chunks}, {@code syslog-view}, {@code syslog-gaps}, {@code syslog-crash-files}, {@code syslog-hcp},
+ * {@code syslog-spike-data}). The routes are {@code system_log_read} (operator and above; aiview included). The text route serves the masked projection
  * to everyone unless the caller explicitly asks for {@code unmasked=true} <em>and</em> holds
  * {@code system_log_read_unmasked} (operation_admin, security_admin) <em>and</em> is not a replay viewer (aiview is
  * always masked); an unmasked view writes a ledger row before any byte is decrypted.
@@ -109,6 +109,11 @@ public final class SystemLogReadController {
     @GetMapping("/api/v2/system-logs/{deviceId}/hcp")
     public ResponseEntity<Map<String, Object>> hcp(@PathVariable String deviceId) {
         return json(service.hcp(deviceId));
+    }
+
+    @GetMapping("/api/v2/system-logs/{deviceId}/spike-data")
+    public ResponseEntity<Map<String, Object>> spikeData(@PathVariable String deviceId) {
+        return json(service.spikeData(deviceId));
     }
 
     /** The caller may ask for unmasked text: holds system_log_read_unmasked and is not the aiview persona. */

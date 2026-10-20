@@ -7,9 +7,9 @@ import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 
 import {
-  getSystemLogChunks, getSystemLogCrashFiles, getSystemLogGaps, getSystemLogHcp, getSystemLogSources, getSystemLogText, listJobs,
-  type ApiError, type SystemLogChunk, type SystemLogCrashFiles, type SystemLogGap, type SystemLogHcp, type SystemLogSource,
-  type SystemLogSources,
+  getSystemLogChunks, getSystemLogCrashFiles, getSystemLogGaps, getSystemLogHcp, getSystemLogSources, getSystemLogSpikeData,
+  getSystemLogText, listJobs, type ApiError, type SystemLogChunk, type SystemLogCrashFiles, type SystemLogGap, type SystemLogHcp,
+  type SystemLogSource, type SystemLogSources, type SystemLogSpikeData,
 } from "../auth/adminApi";
 import { EmptyPanel } from "../shell/ScreenLayout";
 import { M3Button, StatusChip } from "../shell/M3Widgets";
@@ -283,7 +283,7 @@ export function DeviceLogsPanel({ deviceId, vendorHint }: { readonly deviceId: s
     emptyState={sub.kind === "stored" ? undefined : <CollectionStateCard state={sub} data={sources.data} latest={latest} onRefresh={refreshAll} />} />;
 }
 
-const SIDE_ID = { gaps: "logs-gaps", crash: "logs-crash", hcp: "logs-hcp" } as const;
+const SIDE_ID = { gaps: "logs-gaps", crash: "logs-crash", hcp: "logs-hcp", spike: "logs-spike" } as const;
 
 function jumpTo(id: string): void {
   document.getElementById(id)?.scrollIntoView?.({ behavior: "smooth", block: "start" });
@@ -369,6 +369,7 @@ function LogsBody({ deviceId, data, latest, onRefresh, emptyState }: {
               Archives are kept encrypted and are not served from this screen. The member listing is not available yet.
             </Typography>
           </SidePanel>
+          {data.sources.some((s) => s.source_key === "cp_spike_data") && <SpikeDataPanel deviceId={deviceId} />}
           {otherSources.length > 0 && (
             <SidePanel title="Other collection">
               <Stack spacing={0.75}>
@@ -385,6 +386,48 @@ function LogsBody({ deviceId, data, latest, onRefresh, emptyState }: {
         </Stack>
       </Box>
     </Stack>
+  );
+}
+
+const SPIKE_STATE_LABELS: Record<string, string> = {
+  COLLECTED: "Collected", NOTHING_TO_FETCH: "Nothing to fetch", TOO_LARGE: "Too large, not fetched",
+  NAME_REJECTED: "Unexpected name, not listed", ABSENT: "Gone before it was read",
+};
+
+/**
+ * Spike Detective data (section 8.3): the directories collected since monitoring began, by name class, device time and
+ * size. Directories present before monitoring are counted only; the archives stay encrypted and are not served here.
+ */
+function SpikeDataPanel({ deviceId }: { readonly deviceId: string }) {
+  const spike = useFetchOnMount<SystemLogSpikeData>(() => getSystemLogSpikeData(deviceId), describe);
+  const baseline = spike.data?.counts.BASELINE ?? 0;
+  return (
+    <SidePanel id={SIDE_ID.spike} title="Spike Detective data">
+      {spike.error ? <Typography variant="body2" color="text.secondary">Spike Detective data unavailable ({spike.error}).</Typography>
+        : !spike.data ? <Typography variant="body2">Loading…</Typography>
+        : spike.data.directories.length === 0 ? <Typography variant="body2" color="text.secondary">No new Spike Detective directory has been collected.</Typography>
+        : <Stack spacing={1}>{spike.data.directories.map((d) => (
+            <Box key={d.directory_id} sx={{ display: "flex", flexDirection: "column", gap: 0.25 }}>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexWrap: "wrap" }}>
+                <StatusChip tone={d.state === "TOO_LARGE" || d.state === "NAME_REJECTED" ? "warn" : "neutral"}
+                  label={SPIKE_STATE_LABELS[d.state] ?? d.state} dense />
+                {d.pruned && <StatusChip tone="neutral" label="Removed by retention" dense />}
+                <Typography variant="caption" color="text.secondary">
+                  <Ts at={epochIso(d.mtime_epoch)} seconds={false} /> · {d.fetched_files} of {d.member_count} files · {formatBytes(d.fetched_bytes)}
+                </Typography>
+              </Box>
+              {d.member_classes.length > 0 && (
+                <Typography variant="caption" color="text.secondary" sx={{ fontFamily: MONO, overflowWrap: "anywhere" }}>
+                  {d.member_classes.map((c) => `${c.class}${c.count > 1 ? ` ×${c.count}` : ""} ${formatBytes(c.bytes)}${c.fetched > 0 ? " (stored)" : ""}`).join(" · ")}
+                </Typography>
+              )}
+            </Box>
+          ))}</Stack>}
+      <Typography variant="caption" color="text.secondary">
+        {baseline > 0 ? `${baseline} director${baseline === 1 ? "y was" : "ies were"} present before monitoring and ${baseline === 1 ? "is" : "are"} not fetched. ` : ""}
+        Names are shown as classes. Archives are kept encrypted{spike.data?.retention_days ? ` for ${spike.data.retention_days} days` : ""} and are not served from this screen.
+      </Typography>
+    </SidePanel>
   );
 }
 

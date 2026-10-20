@@ -96,3 +96,8 @@ The data-directory name pattern (PENDING in §8.3) is now observed as the class 
 
 Next step needs the PO: amend the §8.3 fetch list to `perf_<word>_<N>.log` (the observed class) before enabling, or
 enable as-is (profiling summary only).
+
+**Decided 2026-10-20 (PO: "Sözleşmeyi düzelt, sonra aç").** The §8.3 fetch list is amended to `perf_<word>_<N>.log`
+(`^perf_[a-z]+_[0-9]+\.log$`) and `profiling_summary.elg`, and the observed data-directory name class is recorded; see the
+PO amendment of 2026-10-20 in [DEVICE_SYSTEM_LOG_PHASE_B_CONTRACT.md](DEVICE_SYSTEM_LOG_PHASE_B_CONTRACT.md) §8.3. Enabling
+`system_log.spike_data_enabled` stays a separate `security_admin` act after the deploy.
