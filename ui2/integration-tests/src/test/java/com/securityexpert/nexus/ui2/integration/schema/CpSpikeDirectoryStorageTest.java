@@ -62,7 +62,7 @@ class CpSpikeDirectoryStorageTest {
                 audited(db, "update jobs set state='EXECUTING' where job_id='" + job + "'");
                 assertEquals("0", scalar(db, "select count(*) from pg_trigger t join pg_class c on c.oid = t.tgrelid "
                         + "where c.relname = 'system_log_spike_directory' and not t.tgisinternal"), "not audited by a trigger");
-                assertEquals("t", scalar(db, "select has_table_privilege('ui2_app', 'system_log_spike_directory', 'INSERT')::text"));
+                assertEquals("true", scalar(db, "select has_table_privilege('ui2_app', 'system_log_spike_directory', 'INSERT')::text"));
             }
             var boundary = new JooqTransactionBoundary(DSL.using(fixture.appDataSource(), SQLDialect.POSTGRES));
             var repository = new JooqSystemLogCollectionRepository(boundary);
