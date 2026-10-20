@@ -20,8 +20,9 @@ import { usePreferenceFlag } from "../shell/preference";
 import { RestrictedPanel, StatePanel, Ts, Unknown, isRestricted } from "../shell/States";
 import { useJobWindow } from "../shell/JobWindow";
 import type { Tone } from "../shell/tone";
-import { formatTime } from "../shell/time";
-import { lineDeviceTime, lineSeverity, windowWords } from "./logLineTime";
+import { formatTime, relativeAge } from "../shell/time";
+import { KpiCard } from "../shell/KpiCard";
+import { lineDeviceTime, lineSeverity, windowWords, type LineSeverity } from "./logLineTime";
 import { jobStateWord } from "../shell/presenters";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { MONO, m3 } from "../theme/m3Theme";
@@ -347,14 +348,23 @@ function LogsBody({ deviceId, data, latest, onRefresh, emptyState }: {
   useEffect(() => {
     if (jumpReq && view === VIEW.health) jumpTo(jumpReq.id);
   }, [jumpReq, view]);
+  const levels = useMemo(() => countLevels(vm.text.lines), [vm.text.lines]);
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
   return (
     // One layout for Check Point and Palo Alto (the source set is the only difference). The lines are the content
     // (PO 2026-10-20): one summary line, one attention sentence, then the viewer on its own tab with the room; the
     // gaps, crash files, HCP reports and other collection sit on the Collection health tab and never squeeze it.
     <Stack spacing={1.5} data-testid="device-logs" sx={{ containerType: "inline-size", minWidth: 0, flex: 1, minHeight: 0 }}>
-      <SummaryLine data={data} latest={latest} onRefresh={onRefresh} />
-      <AttentionLine gaps={gaps} crash={crash} onJump={jump} />
+      <LogFacts data={data} latest={latest} crash={crash} levels={levels} loaded={vm.text.lines.length} loading={vm.text.loading} />
+      <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", columnGap: 1.5, rowGap: 0.5 }}>
+        <Box sx={{ flex: "1 1 320px", minWidth: 0 }}><AttentionLine gaps={gaps} crash={crash} onJump={jump} /></Box>
+        <Box sx={{ ml: "auto", display: "flex", alignItems: "center", gap: 0.5 }}>
+          <TextToggle pressed={detailsOpen} expands onClick={() => setDetailsOpen((v) => !v)}>Run details <Icon name={detailsOpen ? "chevron-left" : "chevron-right"} size={14} /></TextToggle>
+          <M3Button emphasis="text" onClick={onRefresh}>Refresh</M3Button>
+        </Box>
+      </Box>
+      {detailsOpen && <RunDetails data={data} />}
       <M3Tabs ariaLabel="Logs view" value={view} onChange={setView} tabs={[
         { label: "Lines", panel: emptyState ?? <LogViewer vm={vm} sources={lineSources} canViewUnmasked={data.can_view_unmasked} maxPageBytes={data.max_page_bytes} gaps={gaps.data?.gaps ?? []} onJump={jump} /> },
         { label: "Collection health", panel: <CollectionHealth deviceId={deviceId} data={data} gaps={gaps} crash={crash} hcp={hcp} otherSources={otherSources} /> },
@@ -546,77 +556,111 @@ function AttentionLine({ gaps, crash, onJump }: {
   );
 }
 
+/** How many loaded lines write an error-class or a warning-class level token of their own (never inferred). */
+export interface LevelCounts { readonly error: number; readonly warning: number }
+
+export function countLevels(lines: readonly string[]): LevelCounts {
+  let error = 0;
+  let warning = 0;
+  for (const line of lines) {
+    const tone = lineSeverity(line)?.tone;
+    if (tone === "bad") error++;
+    else if (tone === "warn") warning++;
+  }
+  return { error, warning };
+}
+
+/** `06:13` of an instant in the display zone, for a KPI figure; the full stamp goes on hover. */
+function clockFigure(at: string | null | undefined): string | null {
+  return at ? formatTime(at, false).slice(11, 16) : null;
+}
+
 /**
- * The first thing an operator needs (UI review 2026-10-18, F-8), on one line (PO 2026-10-20): when the last collection
- * ran and how it ended, the device-time window it covered, and what is stored now. `Run details` opens what the run
- * said per source: the outcome counts and a row per source with its state word, stored lines and last run. Severity is
- * deliberately absent: no parsed severity exists.
+ * The four facts of the mockup "Cihaz logları için dört ekran" (2026-10-17), as the product's KPI row and only as far
+ * as the stored data supports them (coordinator 2026-10-20): the last collection with its device-time window; the
+ * error and warning lines counted from the level tokens the loaded lines themselves write (the previous window is not
+ * loaded, so no comparison is claimed); process restarts, UNKNOWN until the contract documents a cpwd restart line
+ * shape (vendor semantics law: nothing is counted from a guessed text); and the new crash or dump files, red only
+ * when there is one.
  */
-function SummaryLine({ data, latest, onRefresh }: {
-  readonly data: SystemLogSources; readonly latest: LatestCollection | null; readonly onRefresh: () => void;
+function LogFacts({ data, latest, crash, levels, loaded, loading }: {
+  readonly data: SystemLogSources; readonly latest: LatestCollection | null;
+  readonly crash: { readonly data: SystemLogCrashFiles | null; readonly error: string | null };
+  readonly levels: LevelCounts; readonly loaded: number; readonly loading: boolean;
 }) {
-  const [open, setOpen] = useState(false);
   const job = data.last_job;
   const totals = data.sources.reduce((acc, s) => ({ chunks: acc.chunks + s.stored.chunks, bytes: acc.bytes + s.stored.bytes, lines: acc.lines + s.stored.lines }), { chunks: 0, bytes: 0, lines: 0 });
   const window = windowWords(job?.window_from, job?.window_to);
+  const stateWord = latest ? jobStateWord(latest.state) : "job state UNKNOWN";
+  const stored = `${totals.lines.toLocaleString("en-US")} lines · ${formatBytes(totals.bytes)} in ${totals.chunks} chunks`;
+  const newCrash = crash.data?.counts?.NEW ?? null;
+  const before = crash.data?.counts?.PRESENT_BEFORE_MONITORING ?? 0;
+  return (
+    // The product's KPI cards in a row of four that stays four across the object pane (the shared row's 230 px minimum
+    // would fold the fourth card under the others beside the device list at 1440 px).
+    <Box role="region" aria-label="Log summary" sx={{ display: "grid", gap: 1.5, gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))" }}>
+      <Box data-testid="last-collection" sx={{ display: "contents" }}>
+        <KpiCard label="Last collection" value={clockFigure(job?.at)} unit={job?.at ? relativeAge(job.at) : undefined}
+          state={job?.at ? "ok" : "unknown"} reason="No collection time is recorded for the newest run."
+          detail={window ? `window ${window} device time` : "window of the newest lines not known"}
+          sentence={`${stateWord} · ${stored}`} />
+      </Box>
+      <KpiCard label="Error / warning lines" value={loaded > 0 ? `${levels.error} / ${levels.warning}` : null} unit={loaded > 0 ? "error / warning" : undefined}
+        state={loaded > 0 ? "ok" : "unknown"} reason={loading ? "Lines are still loading." : "No line of this run is loaded yet."}
+        detail={loaded > 0 ? `of ${loaded.toLocaleString("en-US")} loaded lines of this run` : undefined}
+        sentence="from the lines' own level tokens · no previous window loaded" />
+      <KpiCard label="Process restarts" value={null} state="unknown" reason="The contract documents no cpwd restart line shape yet, so nothing is counted from a guessed text."
+        sentence="cpwd.elg · line shape not documented; not counted" />
+      <KpiCard label="New crash / dump files" value={crash.error ? null : newCrash} state={crash.error || newCrash === null ? "unknown" : "ok"}
+        reason={crash.error ? `The crash and dump check could not be read (${crash.error}).` : "The crash and dump check has not answered yet."}
+        unit={newCrash !== null && !crash.error ? (newCrash === 1 ? "new file" : "new files") : undefined}
+        badge={newCrash !== null && newCrash > 0 && !crash.error ? <StatusChip tone="bad" label="Alarm" dense /> : undefined}
+        detail={crash.data ? `${before} present before monitoring` : undefined}
+        sentence={crash.data ? `new within ${crash.data.new_window_days} days · by process and size` : "by process and size"} />
+    </Box>
+  );
+}
+
+/** What the run said per source (the outcome counts and a row per source with its state word, stored lines and last run), on demand. */
+function RunDetails({ data }: { readonly data: SystemLogSources }) {
+  const job = data.last_job;
   const outcomes = job ? Object.entries(job.outcomes) : [];
   return (
-    <Box role="region" aria-label="Log summary" sx={{ display: "flex", flexDirection: "column", gap: 1, bgcolor: m3.scLow, border: `1px solid ${m3.outlineVar}`, borderRadius: "10px", px: 2, py: 1 }}>
-      <Box sx={{ display: "flex", alignItems: "center", flexWrap: "wrap", columnGap: 1, rowGap: 0.5 }}>
-        <Typography variant="body2" data-testid="last-collection" sx={{ display: "flex", flexWrap: "wrap", columnGap: 1, alignItems: "baseline" }}>
-          <Box component="span" sx={{ fontWeight: 600 }}>Last collection</Box>
-          {job?.at
-            ? <Ts at={job.at} />
-            : <Unknown reason="No collection time is recorded for the newest run." />}
-          <Box component="span" sx={{ color: m3.onSurfaceVar }} title={latest?.state}>· {latest ? jobStateWord(latest.state) : "job state UNKNOWN"}</Box>
-          <Box component="span" sx={{ color: m3.onSurfaceVar }}>· {window ? `window ${window} device time` : "window of the newest lines not known"}</Box>
-        </Typography>
-        <Typography variant="body2" data-testid="stored-now" sx={{ color: m3.onSurfaceVar }}>
-          · Stored {totals.chunks} chunks · {totals.lines.toLocaleString("en-US")} lines · {formatBytes(totals.bytes)}
-        </Typography>
-        <Box sx={{ ml: "auto", display: "flex", alignItems: "center", gap: 0.5 }}>
-          <TextToggle pressed={open} expands onClick={() => setOpen((v) => !v)}>Run details <Icon name={open ? "chevron-left" : "chevron-right"} size={14} /></TextToggle>
-          <M3Button emphasis="text" onClick={onRefresh}>Refresh</M3Button>
-        </Box>
+    <Box data-testid="run-details" sx={{ display: "flex", flexDirection: "column", gap: 1, bgcolor: m3.scLow, border: `1px solid ${m3.outlineVar}`, borderRadius: "10px", px: 2, py: 1.25 }}>
+      <Box sx={{ display: "inline-flex", alignItems: "center", gap: 0.75, flexWrap: "wrap" }}>
+        <Typography variant="caption" color="text.secondary">Sources in that run</Typography>
+        {outcomes.length > 0
+          // a count is grey; a source that did not end cleanly keeps its state colour and its word
+          ? outcomes.map(([outcome, n]) => (
+              <StatusChip key={outcome} tone={outcome === "COLLECTED" || outcome === "NO_NEW_DATA" ? "neutral" : statusTone(outcome)}
+                label={`${outcome.replace(/_/g, " ").toLowerCase()} ${n}`} dense />))
+          : <Typography variant="body2">UNKNOWN</Typography>}
       </Box>
-      {open && (
-        <Box data-testid="run-details" sx={{ display: "flex", flexDirection: "column", gap: 1, pt: 0.5, borderTop: `1px solid ${m3.outlineVar}` }}>
-          <Box sx={{ display: "inline-flex", alignItems: "center", gap: 0.75, flexWrap: "wrap" }}>
-            <Typography variant="caption" color="text.secondary">Sources in that run</Typography>
-            {outcomes.length > 0
-              // a count is grey; a source that did not end cleanly keeps its state colour and its word
-              ? outcomes.map(([outcome, n]) => (
-                  <StatusChip key={outcome} tone={outcome === "COLLECTED" || outcome === "NO_NEW_DATA" ? "neutral" : statusTone(outcome)}
-                    label={`${outcome.replace(/_/g, " ").toLowerCase()} ${n}`} dense />))
-              : <Typography variant="body2">UNKNOWN</Typography>}
-          </Box>
-          <Box component="table" aria-label="Sources" sx={{ borderCollapse: "collapse", fontSize: 13, "& td, & th": { textAlign: "left", py: 0.375, pr: 2, verticalAlign: "middle", whiteSpace: "nowrap" },
-            "& th": { color: m3.onSurfaceVar, fontWeight: 500, fontSize: 12 } }}>
-            <thead><tr><th>Source</th><th>State</th><th>Stored</th><th>Last run</th><th>Note</th></tr></thead>
-            <tbody>
-              {data.sources.map((s) => (
-                <tr key={s.source_key}>
-                  <td>{sourceLabel(s.source_key)}</td>
-                  <td><StatusChip tone={statusTone(s.status)} label={sourceStatusWord(s.status)} dense /></td>
-                  <td><StatusChip tone="neutral" label={`${s.stored.lines.toLocaleString("en-US")} lines`} dense /> <Box component="span" sx={{ color: m3.onSurfaceVar }}>· {s.stored.chunks} chunks · {formatBytes(s.stored.bytes)}</Box></td>
-                  <td>{s.last_run_at ? <Ts at={s.last_run_at} relative seconds={false} /> : "never run"}</td>
-                  <td>
-                    <Box sx={{ display: "inline-flex", alignItems: "center", gap: 0.75, flexWrap: "wrap", color: m3.onSurfaceVar }}>
-                      {s.fast_rotating && (
-                        <span title={`The device keeps about ${s.retention_horizon_seconds === null ? "an unknown amount" : `${(s.retention_horizon_seconds / 3600).toFixed(1)} h`} of this log, less than the collection interval allows for; gaps are likely.`}>
-                          <StatusChip tone="warn" label="fast rotating" dense />
-                        </span>
-                      )}
-                      {s.pending_bytes > 0 ? `${formatBytes(s.pending_bytes)} still waiting on the device` : ""}
-                      {s.retention_horizon_seconds !== null ? `device keeps about ${(s.retention_horizon_seconds / 3600).toFixed(1)} h` : ""}
-                    </Box>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </Box>
-        </Box>
-      )}
+      <Box component="table" aria-label="Sources" sx={{ borderCollapse: "collapse", fontSize: 13, "& td, & th": { textAlign: "left", py: 0.375, pr: 2, verticalAlign: "middle", whiteSpace: "nowrap" },
+        "& th": { color: m3.onSurfaceVar, fontWeight: 500, fontSize: 12 } }}>
+        <thead><tr><th>Source</th><th>State</th><th>Stored</th><th>Last run</th><th>Note</th></tr></thead>
+        <tbody>
+          {data.sources.map((s) => (
+            <tr key={s.source_key}>
+              <td>{sourceLabel(s.source_key)}</td>
+              <td><StatusChip tone={statusTone(s.status)} label={sourceStatusWord(s.status)} dense /></td>
+              <td><StatusChip tone="neutral" label={`${s.stored.lines.toLocaleString("en-US")} lines`} dense /> <Box component="span" sx={{ color: m3.onSurfaceVar }}>· {s.stored.chunks} chunks · {formatBytes(s.stored.bytes)}</Box></td>
+              <td>{s.last_run_at ? <Ts at={s.last_run_at} relative seconds={false} /> : "never run"}</td>
+              <td>
+                <Box sx={{ display: "inline-flex", alignItems: "center", gap: 0.75, flexWrap: "wrap", color: m3.onSurfaceVar }}>
+                  {s.fast_rotating && (
+                    <span title={`The device keeps about ${s.retention_horizon_seconds === null ? "an unknown amount" : `${(s.retention_horizon_seconds / 3600).toFixed(1)} h`} of this log, less than the collection interval allows for; gaps are likely.`}>
+                      <StatusChip tone="warn" label="fast rotating" dense />
+                    </span>
+                  )}
+                  {s.pending_bytes > 0 ? `${formatBytes(s.pending_bytes)} still waiting on the device` : ""}
+                  {s.retention_horizon_seconds !== null ? `device keeps about ${(s.retention_horizon_seconds / 3600).toFixed(1)} h` : ""}
+                </Box>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </Box>
     </Box>
   );
 }
@@ -643,6 +687,8 @@ function splitLines(text: string): string[] {
   return lines;
 }
 
+export type LevelFilter = "all" | "error" | "warning";
+
 /** Everything the viewer holds: the chosen source, day and run, the filter, the masked/unmasked choice and the loaded page. */
 interface LogViewerModel {
   readonly source: string | null; readonly setSource: (key: string) => void;
@@ -651,6 +697,8 @@ interface LogViewerModel {
   readonly dayChunks: readonly SystemLogChunk[]; readonly chunkId: string | null; readonly setChunkId: (id: string | null) => void;
   readonly chunk: SystemLogChunk | null; readonly chunkIndex: number;
   readonly filter: string; readonly setFilter: (value: string) => void;
+  /** Lines to show by the level they write: every line, or only error-class or warning-class ones. */
+  readonly level: LevelFilter; readonly setLevel: (next: LevelFilter) => void;
   readonly unmasked: boolean; readonly setUnmasked: (on: boolean) => void;
   readonly text: TextState;
   readonly loadPage: (target: SystemLogChunk, offset: number, replace: boolean) => void;
@@ -663,6 +711,7 @@ function useLogViewer(deviceId: string, sources: readonly SystemLogSource[]): Lo
   const [day, setDay] = useState<string | null>(null);
   const [chunkId, setChunkId] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
+  const [level, setLevel] = useState<LevelFilter>("all");
   const [unmasked, setUnmasked] = useState(false);
   const [text, setText] = useState<TextState>(EMPTY_TEXT);
   const requestSeq = useRef(0);
@@ -725,7 +774,7 @@ function useLogViewer(deviceId: string, sources: readonly SystemLogSource[]): Lo
 
   return {
     source, setSource, chunks, chunksError, day, setDay, days, dayChunks, chunkId, setChunkId, chunk,
-    chunkIndex: dayChunks.findIndex((c) => c.chunk_id === chunkId), filter, setFilter, unmasked, setUnmasked, text, loadPage,
+    chunkIndex: dayChunks.findIndex((c) => c.chunk_id === chunkId), filter, setFilter, level, setLevel, unmasked, setUnmasked, text, loadPage,
   };
 }
 
@@ -807,7 +856,7 @@ function LogViewer({ vm, sources, canViewUnmasked, maxPageBytes, gaps, onJump }:
   readonly gaps: readonly SystemLogGap[];
   readonly onJump: (id: string) => void;
 }) {
-  const { source, setSource, chunks, chunksError, day, setDay, days, dayChunks, chunkId, setChunkId, chunk, chunkIndex, filter, setFilter, unmasked, setUnmasked, text, loadPage } = vm;
+  const { source, setSource, chunks, chunksError, day, setDay, days, dayChunks, chunkId, setChunkId, chunk, chunkIndex, filter, setFilter, level, setLevel, unmasked, setUnmasked, text, loadPage } = vm;
   const [wrap, setWrap] = usePreferenceFlag("nx.logs.wrap", true);
   const [fullscreen, setFullscreen] = useState(false);
   const linesRef = useRef<HTMLDivElement>(null);
@@ -830,7 +879,11 @@ function LogViewer({ vm, sources, canViewUnmasked, maxPageBytes, gaps, onJump }:
   }, [fullscreen]);
 
   const needle = filter.trim().toLowerCase();
-  const shown = needle ? text.lines.filter((l) => l.toLowerCase().includes(needle)) : text.lines;
+  const levels = useMemo(() => countLevels(text.lines), [text.lines]);
+  const levelOf = (line: string): LineSeverity["tone"] => lineSeverity(line)?.tone ?? null;
+  const shown = text.lines.filter((l) => (!needle || l.toLowerCase().includes(needle))
+    && (level === "all" || (level === "error" ? levelOf(l) === "bad" : levelOf(l) === "warn")));
+  const filtered = Boolean(needle) || level !== "all";
   const selected = sources.find((s) => s.source_key === source) ?? null;
   // Gaps recorded by the run that stored this chunk, for this source: their place in the stream is known.
   const chunkGaps = chunk ? gaps.filter((g) => g.source_key === source && g.job_id === chunk.job_id) : [];
@@ -881,6 +934,14 @@ function LogViewer({ vm, sources, canViewUnmasked, maxPageBytes, gaps, onJump }:
         </TextField>
         <TextField size="small" label="Filter lines" value={filter} onChange={(e) => setFilter(e.target.value)} sx={{ ...SELECT_SX, minWidth: 160, flex: "1 1 160px" }}
           inputProps={{ "aria-label": "Filter lines" }} />
+        {(levels.error > 0 || levels.warning > 0) && (
+          // Level chips only for the levels the loaded lines write (mockup 2026-10-17: Hepsi / Hata / Uyarı); none are invented.
+          <Box role="group" aria-label="Severity" sx={{ display: "inline-flex", alignItems: "center", gap: 0.5 }}>
+            <TextToggle pressed={level === "all"} onClick={() => setLevel("all")}>All</TextToggle>
+            {levels.error > 0 && <TextToggle pressed={level === "error"} onClick={() => setLevel("error")}>Error <Box component="span" sx={{ color: level === "error" ? "inherit" : m3.criticalInk }}>{levels.error}</Box></TextToggle>}
+            {levels.warning > 0 && <TextToggle pressed={level === "warning"} onClick={() => setLevel("warning")}>Warning <Box component="span" sx={{ color: level === "warning" ? "inherit" : m3.warningInk }}>{levels.warning}</Box></TextToggle>}
+          </Box>
+        )}
         {chunk && text.masked !== null && (text.masked
           ? <StatusChip tone="neutral" label={text.maskRules ? `Masked view · rules ${text.maskRules}` : "Masked view"} dense />
           : <StatusChip tone="warn" label="Unmasked view · recorded on the audit ledger" dense />)}
@@ -931,13 +992,13 @@ function LogViewer({ vm, sources, canViewUnmasked, maxPageBytes, gaps, onJump }:
             ...(fullscreen ? { flex: "1 1 auto", minHeight: 0 } : { height: `calc(100vh - ${top}px - 88px)`, minHeight: 320 }),
           }}>
             {before.map((g) => <GapMarker key={g.gap_id} gap={g} where="before" onJump={onJump} />)}
-            {text.loading && text.lines.length === 0 ? "Loading…" : shown.length === 0 ? (needle ? "No loaded line matches the filter." : "This chunk holds no lines.") :
+            {text.loading && text.lines.length === 0 ? "Loading…" : shown.length === 0 ? (filtered ? "No loaded line matches the filter." : "This chunk holds no lines.") :
               shown.map((line, i) => <RawLine key={`${chunk.chunk_id}:${i}`} line={line} needle={needle} wrap={wrap} />)}
             {after.map((g) => <GapMarker key={g.gap_id} gap={g} where="after" onJump={onJump} />)}
           </Box>
           <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, flexWrap: "wrap", px: 0.5 }}>
             <Typography variant="caption" color="text.secondary">
-              {needle ? `${shown.length} of ${text.lines.length} loaded lines match` : `${text.lines.length.toLocaleString("en-US")} lines loaded`}
+              {filtered ? `${shown.length} of ${text.lines.length} loaded lines match` : `${text.lines.length.toLocaleString("en-US")} lines loaded`}
               {text.capped ? ` (stopped at ${MAX_LOADED_LINES.toLocaleString("en-US")}; filter, or open another chunk)` : ""}
             </Typography>
             {!text.eof && !text.capped && (
