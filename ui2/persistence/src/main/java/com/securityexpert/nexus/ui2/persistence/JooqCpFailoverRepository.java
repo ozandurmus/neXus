@@ -550,10 +550,11 @@ public class JooqCpFailoverRepository {
         });
     }
     /**
-     * PO 2026-10-20, rechecked before every device write: an administrator's manual failover job (window bypass)
-     * that was submitted outside business hours carries no acknowledgement; if business hours have begun since, the
-     * write is refused until an administrator starts it again with the acknowledgement. A window-admitted job
-     * (scheduled start) has no bypass role and is unaffected.
+     * PO 2026-10-20, rechecked before the run's first device write: an administrator's manual failover job (window
+     * bypass) that was submitted outside business hours carries no acknowledgement; if business hours have begun
+     * since, the first write is refused until an administrator starts it again with the acknowledgement. The run's
+     * return write is never refused for business hours ({@code mutationAdmission}). A window-admitted job (scheduled
+     * start) has no bypass role and is unaffected.
      */
     String businessHoursRefusal(DSLContext dsl, String jobId) {
         Record job = dsl.fetchOne("select window_bypass_role, business_hours_ack_at from jobs where job_id={0}", jobId);
@@ -633,8 +634,15 @@ public class JooqCpFailoverRepository {
                 + "and state='EXECUTING' and not cancel_requested and lease_expires_at>clock_timestamp() "
                 + "and ui2_job_owner_valid(job_id,lease_epoch) for update",jobId,epoch);
             if (owner==null) return "OWNERSHIP_LOST";
-            String businessHours=businessHoursRefusal(dsl,jobId);
-            if (businessHours!=null) return businessHours;
+            // The business-hours recheck guards only the run's FIRST device write (Argon review 2026-10-20 P1-1). Once a
+            // write of this run has been prepared, mutation_possible is true (the run guard never lets it fall back) and
+            // the only write left is the run's own return (clusterXL_admin up / PAN functional), which restores the
+            // cluster: business hours beginning between the two writes must never strand the former active member
+            // down. Every other check of this fence still applies to the return write.
+            if (!Boolean.TRUE.equals(r.get("mutation_possible", Boolean.class))) {
+                String businessHours=businessHoursRefusal(dsl,jobId);
+                if (businessHours!=null) return businessHours;
+            }
             List<String> members = JooqDeviceRepository.enrolledFailoverMembers(dsl, cluster, vendor);
             if (!Set.copyOf(members).equals(expectedMembers)) return "MEMBER_SET_CHANGED";
             String refusal = validateTarget(dsl, r, members, members.isEmpty()?null:members.get(0));
@@ -909,10 +917,17 @@ public class JooqCpFailoverRepository {
      * PO decision 2026-10-20 item 1: release one run's incident and its unresolved sends in one audited
      * transaction. The actor is the server-side session (security_admin, checked by the caller); the reason
      * is recorded on the incident (V136 columns: acknowledged_by/at, review_notes; second_approver_id holds
-     * the same single security_admin under the ratified single-admin policy) and in audit_log (V169).
+     * the same single security_admin under the ratified single-admin policy) and in audit_log (V169); for an orphan
+     * unresolved-dispatch fence with no active incident, on the run's job_reconciliation row instead (audited).
      * A still possibly sent write of the run is recorded as OUTCOME_UNKNOWN, never as confirmed: the release
      * attests that its state was established out of band, it does not claim the write's effect.
      */
+    static final String ORPHAN_RELEASE_RECORD = "insert into job_reconciliation(job_id,evidence,recorded_by,reconciled_outcome) "
+        + "select distinct job_id,{1},{2},'RECONCILED_STILL_UNKNOWN' from failover_dispatch_intent "
+        + "where run_id={0} and job_id is not null and observation='OUTCOME_UNKNOWN' "
+        + "on conflict (job_id) do update set evidence=excluded.evidence,recorded_by=excluded.recorded_by,"
+        + "recorded_at=now(),reconciled_outcome=excluded.reconciled_outcome";
+
     public String releaseIncident(String runId, String actor, String reason) {
         if (runId==null || actor==null || actor.isBlank() || reason==null || reason.isBlank())
             throw new IllegalArgumentException("INCIDENT_RELEASE_INVALID");
@@ -936,6 +951,15 @@ public class JooqCpFailoverRepository {
                 dsl.execute("update job_step_attempt set outcome='OUTCOME_UNKNOWN',error_class='OUTCOME_UNCERTAIN',"
                     + "matched_expectation=false where attempt_id in (select attempt_id from failover_dispatch_intent "
                     + "where run_id={0} and observation='OUTCOME_UNKNOWN')",runId);
+            }
+            if (incidents.isEmpty()) {
+                // Argon review 2026-10-20 P2-3: an orphan UNRESOLVED_DISPATCH fence (the run's incident row was already
+                // released, e.g. before V169) has no incident to carry the reason. Record who released it and why on
+                // the run's job (job_reconciliation: audited by trg_audit_job_reconciliation, evidence redacted tier 2),
+                // as RECONCILED_STILL_UNKNOWN -- the release attests the state was established out of band, never the
+                // write's effect. Nothing recorded means nothing released (the transaction rolls back).
+                if (dsl.execute(ORPHAN_RELEASE_RECORD,runId,reason,actor)<1)
+                    throw new IllegalStateException("INCIDENT_RELEASE_REASON_NOT_RECORDED");
             }
             for (String cluster:incidents)
                 if (!Boolean.TRUE.equals(dsl.fetchOne("select ui2_release_failover_incident({0},{1},{2},{3},{4}) as released",

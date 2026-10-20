@@ -4,7 +4,7 @@ import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
 import { OperationsScreen } from "../src/screens/OperationsScreen";
 import { HaReadinessList } from "../src/screens/HaReadinessList";
-import type { CpFailoverSummary, DeviceSummary } from "../src/auth/adminApi";
+import { setBusinessHoursConfirm, type CpFailoverSummary, type DeviceSummary } from "../src/auth/adminApi";
 
 function withTheme(node: React.ReactElement) {
   return <ThemeProvider theme={m3Theme}>{node}</ThemeProvider>;
@@ -374,3 +374,33 @@ it("lets aiview start read-only readiness when the server allows it, and locks t
   expect(screen.queryByRole("button", { name: /^Run pre-checks/ })).toBeNull();
 });
 
+
+// Argon review 2026-10-20 P1-2: the bulk readiness run asks the business-hours question once for its own requests.
+it("a bulk readiness run asks once inside business hours and acknowledges only its own requests", async () => {
+  stubFetch(BULK_MEMBERS, BULK_SUMMARY);
+  const original = vi.mocked(fetch).getMockImplementation()!;
+  vi.mocked(fetch).mockImplementation((input, init) => {
+    const url = String(input);
+    if (!url.endsWith("/readiness")) return original(input, init);
+    const ack = (init?.headers as Record<string, string> | undefined)?.["X-Nexus-Business-Hours-Ack"];
+    if (ack !== "true") return Promise.resolve(new Response(JSON.stringify({ code: "BUSINESS_HOURS_CONFIRM_REQUIRED",
+      message: "Business hours (08:00–20:00 GMT+3). This sends commands to the device. Continue?" }), { status: 409 }));
+    return Promise.resolve(new Response(JSON.stringify({ runId: "run-ready" })));
+  });
+  const ask = vi.fn(() => Promise.resolve(true));
+  const unregister = setBusinessHoursConfirm(ask);
+  try {
+    render(withTheme(<OperationsScreen />));
+    await screen.findByText("2 clusters enrolled");
+    await waitFor(() => expect(screen.getByRole("checkbox", { name: "Select all visible" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select all visible" }));
+    fireEvent.click(screen.getByRole("button", { name: "Run pre-checks (2)" }));
+    await waitFor(() => expect(screen.getAllByRole("status").filter(element => element.textContent === "Completed")).toHaveLength(2));
+    expect(ask).toHaveBeenCalledTimes(1);
+    const acks = vi.mocked(fetch).mock.calls.filter(([input]) => String(input).endsWith("/readiness"))
+      .map(([, init]) => (init?.headers as Record<string, string> | undefined)?.["X-Nexus-Business-Hours-Ack"] ?? null);
+    expect(acks).toEqual([null, "true", null, "true"]);
+  } finally {
+    unregister();
+  }
+});

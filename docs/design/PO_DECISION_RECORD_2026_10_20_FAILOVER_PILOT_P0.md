@@ -45,7 +45,11 @@ that failed before the worker observed its write, before reconciliation ran). Th
 that run's `NOT_OBSERVED` intents to `OUTCOME_UNKNOWN` (and their `job_step_attempt` rows to `OUTCOME_UNKNOWN`), which
 clears the fence. The release records uncertainty; it never marks a write CONFIRMED and never makes it replayable
 (`dispatch` refuses a claimed or observed intent). Such a run is listed with reason `UNRESOLVED_DISPATCH` even when it
-has no active incident.
+has no active incident. Releasing it then has no incident row to carry the reason, so the release records who and why
+on the run's job instead: `job_reconciliation` (`evidence` = reason, `recorded_by` = the session's actor,
+`reconciled_outcome` = `RECONCILED_STILL_UNKNOWN`), audited by `trg_audit_job_reconciliation` with `evidence` redacted
+(tier 2), in the release's own transaction; if no row can be written nothing is released (Argon review 2026-10-20
+P2-3).
 
 ## 2. Return-step safety (P0-2)
 

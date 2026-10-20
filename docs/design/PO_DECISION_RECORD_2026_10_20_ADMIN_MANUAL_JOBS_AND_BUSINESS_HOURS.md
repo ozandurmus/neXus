@@ -47,7 +47,8 @@ business hours): the warning is about the working day, not the window.
 The grant is a thread-local and is never inherited by another thread, so a scheduler, a worker or an asynchronous task
 never sees one. A grant only counts for the actor who holds it (`ManualAdmission.currentFor`): a job submitted for any
 other actor in the same request keeps the window. A check against an explicit time (a scheduled failover's start time,
-`requireOpen(Instant)`) and every `isOpen` read the schedulers use ignore grants.
+`requireOpen(Instant)`), the actor-less `requireOpen()` (it has no actor to match a grant against; Argon review
+2026-10-20 P2-2) and every `isOpen` read the schedulers use ignore grants.
 
 ### 2.2 The acknowledgement
 
@@ -59,8 +60,12 @@ other actor in the same request keeps the window. A check against an explicit ti
   This sends commands to the device. Continue?", "business_hours_start": "08:00", "business_hours_end": "20:00",
   "zone": "Europe/Istanbul", "ack_header": "X-Nexus-Business-Hours-Ack", "ack_parameter": "business_hours_ack"}`.
 - **Screen:** the API client shows the confirm dialog ("Business hours" / the message above / Cancel, Continue) and, on
-  Continue, repeats the same request once with the header. A Continue covers the requests of the next 60 seconds, so a
-  bulk readiness run asks once rather than once per cluster; every job still records its own acknowledgement. Cancel
+  Continue, repeats the same request once with the header. The answer belongs to that one request: nothing is
+  remembered, so the next request asks again (a failover start always asks). The only exception is explicit: the bulk
+  readiness run creates one confirmation scope and passes it to its own readiness requests, so one Continue covers
+  that bulk action's clusters and no other action (Argon review 2026-10-20 P1-2, which replaced a 60-second global
+  remembered answer that also acknowledged unrelated later requests). Every request is still sent first without the
+  header; every job still records its own acknowledgement. Concurrent requests ask one dialog at a time. Cancel
   admits nothing ("Not started: business hours were not confirmed."). The PO's Turkish wording ("Mesai saatindeyiz
   (08:00–20:00). Bu işlem cihaza komut gönderir. Emin misiniz?") is rendered in the product language (English).
 - **CLI:** `--business-hours-ack` anywhere on the command line sends the header for that run; without it the CLI prints
@@ -96,6 +101,15 @@ claim statement, `JooqJobLeaseDao.CLAIM_SQL` = `ClaimStatementText.SQL`). Every 
 job queued for my capabilities", partial index `jobs_window_bypass_requested`) and issues the claim statement only when
 one is: an administrator's job never waits for the next slot, and nothing else is claimed.
 
+**Business hours at claim time (Argon review 2026-10-20 P2-1).** A bypass job submitted outside business hours carries
+no acknowledgement. If it is claimed once business hours have begun (e.g. submitted 07:59, claimed 08:00), it does not
+run: in the same claim transaction it ends `REJECTED` with terminal reason `BUSINESS_HOURS_CONFIRM_REQUIRED` (the
+established claim-check refusal shape, `CLAIMED → REJECTED`), no executor receives it, and the administrator submits it
+again and confirms. Exempt: failover execution jobs (`cp_cluster_failover`, `pan_cluster_failover`), whose run fence
+rechecks before the first device write (2.5) and stops the run through its own lifecycle, and stored-data work
+(Packet Analysis), which sends nothing to a device. A readiness run refused this way is closed by V162
+(`JOB_ENDED_WITHOUT_RESULT`).
+
 ### 2.5 Failover — every other safeguard unchanged
 
 Only the window gate changes. The four places the failover path checked the window behave as follows:
@@ -109,11 +123,16 @@ Only the window gate changes. The four places the failover path checked the wind
 | `JooqJobLeaseDao.claimNext` (worker claim) | window | bypass job: claimable at once, never deferred to the next slot; scheduled start: window |
 | `startDue` (scheduled failover start) | window | window, whatever thread calls it |
 
-**Recheck before each device write.** `JooqCpFailoverRepository.mutationAdmission` — the fence every `clusterXL_admin
-down/up` (Check Point) and suspend/resume (Palo Alto) write passes first, after the ownership check and before the
-dispatch is authorized — now also reads the job row: a bypass job **without** an acknowledgement (it was submitted
-outside business hours) is refused with `BUSINESS_HOURS_CONFIRM_REQUIRED` once business hours have begun, and the run
-stops before the write. An acknowledged job, and a window-admitted (scheduled) job, are unaffected.
+**Recheck before the first device write.** `JooqCpFailoverRepository.mutationAdmission` — the fence every
+`clusterXL_admin down/up` (Check Point) and suspend/resume (Palo Alto) write passes first, after the ownership check and
+before the dispatch is authorized — now also reads the job row: a bypass job **without** an acknowledgement (it was
+submitted outside business hours) is refused with `BUSINESS_HOURS_CONFIRM_REQUIRED` once business hours have begun, and
+the run stops before its first write. **The run's own return write (`up` / functional) is never refused for business
+hours** (Argon review 2026-10-20 P1-1): once a write of the run has been prepared (`failover_run.mutation_possible`,
+which never falls back to false) the return restores the cluster, so business hours beginning between the two writes
+must not strand the former active member down. Every other check of the fence (approval, revocation, approval window,
+ownership, member set, incident, dispatch fences, mutation switch) still applies to the return write. An acknowledged
+job, and a window-admitted (scheduled) job, are unaffected.
 
 Unchanged: four-eyes for `operation_admin` (`OPERATION_ADMIN_TWO_PERSON`), `security_admin` single approval, request
 binding (request id, revision, nonce, warning confirmation, policy, member set), approval window

@@ -19,8 +19,9 @@ class JooqFailoverApprovalTest {
         final Map<String,Object> approval=new LinkedHashMap<>();
         final Map<String,Object> run=new LinkedHashMap<>();
         final DSLContext sql=DSL.using(new MockConnection(this),SQLDialect.POSTGRES);
-        final JooqCpFailoverRepository repository=new JooqCpFailoverRepository(this,true, new com.securityexpert.nexus.ui2.platform.JobWindowPolicy(
-            java.time.Clock.fixed(NOW, java.time.ZoneOffset.UTC), 60));
+        final JooqCpFailoverRepository repository;
+        /** The job row's V168 admission record (null: a window-admitted job). */
+        String bypassRole,ackAt;
         Set<String> members=MEMBERS;
         String consumed,incident,dispatchRef;
         boolean unresolvedDispatch,fleetMutation;
@@ -28,6 +29,10 @@ class JooqFailoverApprovalTest {
         int insertedRuns,insertedJobs,writes;
         Instant clock=NOW;
         Database() {
+            this(new com.securityexpert.nexus.ui2.platform.JobWindowPolicy(java.time.Clock.fixed(NOW, java.time.ZoneOffset.UTC), 60));
+        }
+        Database(com.securityexpert.nexus.ui2.platform.JobWindowPolicy windows) {
+            repository=new JooqCpFailoverRepository(this,true,windows);
             approval.put("approval_id","request-a"); approval.put("request_revision",1L);
             approval.put("cluster_ref","unit-a"); approval.put("vs_id",null);
             approval.put("vendor","check_point"); approval.put("initiated_by","principal-a");
@@ -40,6 +45,7 @@ class JooqFailoverApprovalTest {
             run.put("run_id","run-a"); run.put("run_kind","FAILOVER"); run.put("cluster_ref","unit-a");
             run.put("vs_id",null); run.put("vendor","check_point"); run.put("state","PRECHECK");
             run.put("request_revision",1L); run.put("approval_id","request-a"); run.put("requested_by","principal-a"); run.put("job_id","job-a");
+            run.put("mutation_possible",false);
         }
         @Override public <T> T inTransaction(Function<DSLContext,T> work) { return work.apply(sql); }
         private MockResult[] row(Map<String,Object> values) {
@@ -59,9 +65,12 @@ class JooqFailoverApprovalTest {
             if (query.startsWith("select clock_timestamp")) return row(Map.of("checked_at",clock.atOffset(ZoneOffset.UTC)));
             if (query.startsWith("select window_from")) return row(Map.of("started",true));
             if (query.startsWith("select job_id from jobs")) return owner?row(Map.of("job_id","job-a")):none();
-            // PO 2026-10-20 business-hours recheck: these fixtures' jobs carry no administrator window bypass.
-            if (query.startsWith("select window_bypass_role, business_hours_ack_at from jobs"))
-                return row(Collections.singletonMap("window_bypass_role", null));
+            // PO 2026-10-20 business-hours recheck: by default these fixtures' jobs carry no administrator window bypass.
+            if (query.startsWith("select window_bypass_role, business_hours_ack_at from jobs")) {
+                Map<String,Object> job=new LinkedHashMap<>();
+                job.put("window_bypass_role",bypassRole); job.put("business_hours_ack_at",ackAt);
+                return row(job);
+            }
             if (query.startsWith("select run_id from failover_run"))
                 return query.contains("approval_id") && consumed!=null?row(Map.of("run_id",consumed)):none();
             if (query.startsWith("select resolved.device_id")) {
@@ -70,7 +79,7 @@ class JooqFailoverApprovalTest {
                 var role=DSL.field("role",String.class); var disabled=DSL.field("disabled",Boolean.class);
                 var state=DSL.field("enrollment_state",String.class); var rows=dsl.newResult(id,vendor,role,disabled,state);
                 members.stream().sorted().forEach(m -> rows.add(dsl.newRecord(id,vendor,role,disabled,state)
-                    .values(m,"check_point","gateway",false,"ENROLLED")));
+                    .values(m,(String)run.get("vendor"),"gateway",false,"ENROLLED")));
                 return new MockResult[]{new MockResult(rows.size(),rows)};
             }
             if (query.startsWith("select target_member_ids")) return row(Map.of("unchanged",MEMBERS.equals(members)));

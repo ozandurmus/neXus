@@ -19,7 +19,7 @@ import { SystemHealthPanel } from "./SystemHealthPanel";
 import { ChangeFeedPanel } from "./ChangeFeedPanel";
 import { urlParam, writeUrlParams } from "../shell/urlParams";
 import { useJobWindow } from "../shell/JobWindow";
-import { getJobStats, getCpFailoverRun, listDevices, listCpFailoverSummary, runCpFailoverReadiness, type CpFailoverSummary, type DeviceSummary } from "../auth/adminApi";
+import { getJobStats, getCpFailoverRun, listDevices, listCpFailoverSummary, newBusinessHoursAckScope, runCpFailoverReadiness, type BusinessHoursAckScope, type CpFailoverSummary, type DeviceSummary } from "../auth/adminApi";
 import { deriveClusterTitle } from "./InventoryPanels";
 import { readinessReasonLabel } from "../shell/presenters";
 
@@ -151,13 +151,14 @@ export function OperationsScreen() {
     }
   }, [clusters]);
 
-  const handleRunReadiness = async (row: CpFailoverSummary): Promise<boolean> => {
+  // `scope`: passed only by the bulk run, so that one bulk action asks the business-hours question once (P1-2).
+  const handleRunReadiness = async (row: CpFailoverSummary, scope?: BusinessHoursAckScope): Promise<boolean> => {
     if (!canRunReadiness(row) || runLock.current) return false;
     runLock.current = true;
     setIsRunning(row.unitId);
     setReadinessError(null);
     try {
-      const { runId } = await runCpFailoverReadiness(row);
+      const { runId } = await runCpFailoverReadiness(row, scope);
       let state = "PLANNED";
       for (let attempt = 0; attempt < 40 && !["DONE", "STOPPED"].includes(state); attempt++) {
         if (attempt > 0) await new Promise((resolve) => window.setTimeout(resolve, 3000));
@@ -187,11 +188,13 @@ export function OperationsScreen() {
     batchLock.current = true;
     setBulkRunning(true);
     setReadinessProgress(Object.fromEntries(allowed.map(row => [row.unitId, "Queued"])));
+    // One confirmation for this bulk action's own requests, never for any other action.
+    const scope = newBusinessHoursAckScope();
     try {
       for (let index = 0; index < allowed.length; index++) {
         const row = allowed[index];
         setReadinessProgress(current => ({ ...current, [row.unitId]: "Running" }));
-        const completed = await handleRunReadiness(row);
+        const completed = await handleRunReadiness(row, scope);
         setReadinessProgress(current => ({ ...current, [row.unitId]: completed ? "Completed" : "Failed" }));
         if (!completed) {
           // A timeout may leave a run active; do not submit another unit with uncertain completion.

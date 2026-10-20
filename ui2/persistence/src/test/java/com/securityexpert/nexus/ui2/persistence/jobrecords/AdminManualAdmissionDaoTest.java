@@ -64,6 +64,7 @@ class AdminManualAdmissionDaoTest {
                 sql.add(query.sql());
                 bindings.add(query.bindings());
                 String[][] rows = rowsFor.apply(query.sql());
+                if (rows != null && rows.length == 0) return new MockResult[] { new MockResult(0) }; // no row updated
                 if (rows == null && query.sql().toLowerCase(java.util.Locale.ROOT).startsWith("select")
                         && !query.sql().startsWith("select pg_advisory")) rows = new String[][] {{"none"}};
                 return new MockResult[] { rows == null ? new MockResult(1)
@@ -226,6 +227,8 @@ class AdminManualAdmissionDaoTest {
         var db = new Db(sql -> {
             if (sql.startsWith("select 1 as queued")) return new String[][] {{"queued"}, {"1"}};
             if (sql.startsWith("WITH inventory_claim_lock")) return new String[][] {{"job_id", "lease_epoch"}, {"job-1", "1"}};
+            // The job carries its acknowledgement: the claim-time business-hours refusal updates nothing.
+            if (sql.startsWith("update jobs set state = 'REJECTED'")) return new String[0][];
             return null;
         });
         var claimed = new JooqJobLeaseDao(db.boundary(), outside).claimNext("general-synthetic",
@@ -236,5 +239,69 @@ class AdminManualAdmissionDaoTest {
         assertTrue(JooqJobLeaseDao.CLAIM_SQL.indexOf("WHEN window_bypass_role IS NOT NULL THEN true")
                 < JooqJobLeaseDao.CLAIM_SQL.indexOf("ELSE clock_timestamp() < CAST({3} AS timestamptz) END"),
                 "the regular branch (window end) still governs every other job");
+    }
+
+    private static Db claimingDb() {
+        return new Db(sql -> {
+            if (sql.startsWith("select 1 as queued")) return new String[][] {{"queued"}, {"1"}};
+            if (sql.startsWith("WITH inventory_claim_lock")) return new String[][] {{"job_id", "lease_epoch"}, {"job-1", "7"}};
+            return null; // the refusal update matches the claimed row (one row)
+        });
+    }
+
+    private static int refusal(Db db) {
+        for (int i = 0; i < db.sql.size(); i++)
+            if (db.sql.get(i).startsWith("update jobs set state = 'REJECTED'")) return i;
+        return -1;
+    }
+
+    /**
+     * Argon review 2026-10-20 P2-1: Collect now at 07:59 (no acknowledgement needed then) claimed at 08:05 does not
+     * run: in the claim transaction it ends REJECTED with BUSINESS_HOURS_CONFIRM_REQUIRED and no executor gets it.
+     */
+    @Test void anUnacknowledgedAdminJobClaimedAfterBusinessHoursBeganIsRefusedInsteadOfRun() {
+        var db = claimingDb();
+        var claimed = new JooqJobLeaseDao(db.boundary(), at("2026-10-08T08:05:00")).claimNext("general-synthetic",
+                List.of("cp_inventory_collect", "device_backup_collect"), Duration.ofMinutes(5));
+        assertTrue(claimed.isEmpty(), "the refused job is never handed to an executor");
+        int refused = refusal(db);
+        int claim = db.sql.indexOf(db.sql.stream().filter(s -> s.startsWith("WITH inventory_claim_lock")).findFirst().orElseThrow());
+        assertTrue(refused > claim, "refused after the claim, in the same transaction");
+        assertEquals(List.of("job-1", 7L), Arrays.asList(db.bindings.get(refused)).subList(0, 2));
+        String sql = db.sql.get(refused);
+        assertTrue(sql.contains("terminal_reason = 'BUSINESS_HOURS_CONFIRM_REQUIRED'"));
+        assertTrue(sql.contains("state = 'CLAIMED'") && sql.contains("window_bypass_role is not null")
+                && sql.contains("submitted_in_business_hours is not true") && sql.contains("business_hours_ack_at is null"),
+                "only an unacknowledged administrator job submitted outside business hours");
+        assertEquals("REJECTED", JooqJobLeaseDao.BUSINESS_HOURS_UNACKNOWLEDGED_REFUSAL_SQL
+                .replaceAll("(?s).*set state = '([A-Z_]+)'.*", "$1"), "the established claim-check terminal state");
+    }
+
+    @Test void outsideBusinessHoursTheClaimedAdminJobRunsWithoutAnyRefusalCheck() {
+        for (String local : List.of("2026-10-08T07:59:00", "2026-10-08T20:00:00", "2026-10-08T03:30:00")) {
+            var db = claimingDb();
+            var claimed = new JooqJobLeaseDao(db.boundary(), at(local)).claimNext("general-synthetic",
+                    List.of("cp_inventory_collect"), Duration.ofMinutes(5));
+            assertEquals("job-1", claimed.orElseThrow().jobId(), local);
+            assertEquals(-1, refusal(db), local + ": no acknowledgement is needed outside business hours");
+        }
+    }
+
+    @Test void aFailoverExecutionAndStoredDataWorkAreLeftToTheirOwnFences() {
+        var exempt = String.join(",", JooqJobLeaseDao.BUSINESS_HOURS_CLAIM_EXEMPT);
+        assertTrue(JooqJobLeaseDao.BUSINESS_HOURS_CLAIM_EXEMPT.containsAll(
+                List.of("cp_cluster_failover", "pan_cluster_failover", "packet_analysis_run")));
+        assertFalse(JooqJobLeaseDao.BUSINESS_HOURS_CLAIM_EXEMPT.contains("cp_failover_readiness"),
+                "readiness has no write fence of its own: it is refused at claim like any manual read job");
+        var db = claimingDb();
+        new JooqJobLeaseDao(db.boundary(), at("2026-10-08T08:05:00")).claimNext("general-synthetic",
+                List.of("cp_cluster_failover"), Duration.ofMinutes(5));
+        assertEquals(exempt, db.bindings.get(refusal(db))[2], "the exemption is bound into the refusal statement");
+        assertTrue(JooqJobLeaseDao.BUSINESS_HOURS_UNACKNOWLEDGED_REFUSAL_SQL.contains("capability_id <> all(string_to_array({2}, ','))"));
+        // A stored-data worker (packet analysis) never issues it.
+        var stored = claimingDb();
+        new JooqJobLeaseDao(stored.boundary(), at("2026-10-08T08:05:00")).claimNext("packet-synthetic",
+                List.of("packet_analysis_run"), Duration.ofMinutes(5));
+        assertEquals(-1, refusal(stored));
     }
 }
