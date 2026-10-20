@@ -247,13 +247,21 @@ final class PolicyNormalization {
                     String key = entry.getKey(), value = entry.getValue();
                     if (Set.of("ipv4-address", "ip-netmask", "ip-range", "literal").contains(key)) {
                         var r = PolicyRuleQuery.interval(value); ranges.add(new Range(r[0], r[1]));
-                    } else if (!Set.of("subnet4", "mask-length4", "ip-address-first", "ip-address-last").contains(key)) throw new Unknown("unsupported address representation");
+                    } else if (!Set.of("subnet4", "mask-length4", "ip-address-first", "ip-address-last", "ipv4-address-first", "ipv4-address-last").contains(key))
+                        throw new Unknown("unsupported address representation");
                 }
                 if (fields.containsKey("subnet4") || fields.containsKey("mask-length4")) {
                     var r = PolicyRuleQuery.interval(fields.get("subnet4") + "/" + fields.get("mask-length4")); ranges.add(new Range(r[0], r[1]));
                 }
-                if (fields.containsKey("ip-address-first") || fields.containsKey("ip-address-last")) {
-                    var r = PolicyRuleQuery.interval(fields.get("ip-address-first") + "-" + fields.get("ip-address-last")); ranges.add(new Range(r[0], r[1]));
+                // Check Point object representation (ipv4-address-first/-last); the generic ip-address-* spelling is
+                // accepted too. Both spellings on one object is not a proven single range.
+                boolean range = Set.of("ip-address-first", "ip-address-last", "ipv4-address-first", "ipv4-address-last").stream().anyMatch(fields::containsKey);
+                if (range && fields.containsKey("ipv4-address")) throw new Unknown("ambiguous object values");
+                for (String prefix : List.of("ip-address-", "ipv4-address-")) {
+                    if (!fields.containsKey(prefix + "first") && !fields.containsKey(prefix + "last")) continue;
+                    if (prefix.equals("ipv4-address-") && (fields.containsKey("ip-address-first") || fields.containsKey("ip-address-last")))
+                        throw new Unknown("ambiguous object values");
+                    var r = PolicyRuleQuery.interval(fields.get(prefix + "first") + "-" + fields.get(prefix + "last")); ranges.add(new Range(r[0], r[1]));
                 }
             } catch (IllegalArgumentException invalid) { throw new Unknown("unsupported address representation"); }
             if (ranges.isEmpty()) throw new Unknown("missing address values");

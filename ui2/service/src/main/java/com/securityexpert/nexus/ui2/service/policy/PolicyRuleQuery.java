@@ -167,6 +167,9 @@ final class PolicyRuleQuery {
         for (String value : o.values()) {
             if (value.startsWith("ip-address-first: ")) first = value.substring(18);
             else if (value.startsWith("ip-address-last: ")) last = value.substring(17);
+            // Check Point object representation of an address range.
+            else if (value.startsWith("ipv4-address-first: ")) first = value.substring(20);
+            else if (value.startsWith("ipv4-address-last: ")) last = value.substring(19);
             else if (value.startsWith("subnet4: ")) subnet = value.substring(9);
             else if (value.startsWith("mask-length4: ")) prefix = value.substring(14);
             else if (value.matches("(?:(?:ipv4-address|ip-netmask|ip-range): )?[0-9./ -]+")) {

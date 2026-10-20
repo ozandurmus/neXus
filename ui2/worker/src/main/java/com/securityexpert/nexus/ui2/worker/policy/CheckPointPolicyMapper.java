@@ -187,7 +187,11 @@ public final class CheckPointPolicyMapper {
         List<String> values = new ArrayList<>();
         if (nativeType.startsWith("service-") && !nativeType.equals("service-group"))
             values.add("protocol: " + nativeType.substring("service-".length()));
-        for (String field : List.of("ipv4-address", "ipv6-address", "subnet4", "mask-length4", "subnet6", "mask-length6", "port", "icmp-type", "icmp-code", "ip-address-first", "ip-address-last"))
+        // Address ranges (and multicast address ranges) carry ipv4-address-first/-last and ipv6-address-first/-last in
+        // the Check Point object representation; ip-address-first/-last is the generic request parameter of
+        // add-address-range. Reading only the generic name left every dictionary range without values (2026-10-20).
+        for (String field : List.of("ipv4-address", "ipv6-address", "subnet4", "mask-length4", "subnet6", "mask-length6", "port", "icmp-type", "icmp-code",
+                "ipv4-address-first", "ipv4-address-last", "ipv6-address-first", "ipv6-address-last", "ip-address-first", "ip-address-last"))
             if (node.has(field)) values.add(field + ": " + node.path(field).asText());
         String status = com.securityexpert.nexus.ui2.policy.CpObjectTypes.status(nativeType);
         // Keep the vendor class of an unmodelled object so the remaining gap can be counted by type (no names, no values).

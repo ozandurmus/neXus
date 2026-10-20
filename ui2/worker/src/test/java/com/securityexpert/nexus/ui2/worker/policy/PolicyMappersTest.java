@@ -95,6 +95,33 @@ class PolicyMappersTest {
         assertEquals(List.of("native-type: CpmiSyntheticFuture"), object.apply("odd-1").values());
         assertEquals(List.of("native-type: UNKNOWN"), object.apply("bad-1").values());
     }
+    /**
+     * Check Point represents an address range as ipv4-address-first/-last (and ipv6-address-first/-last); the generic
+     * ip-address-first/-last is only an add-address-range request parameter. A multicast address range has the same
+     * shape. A wildcard object stays unsupported but keeps its vendor class.
+     */
+    @Test void checkpointAddressRangesCarryTheirFirstAndLastAddresses() throws Exception {
+        var page = new ObjectMapper().readTree("""
+            {"uid":"layer-01","name":"Synthetic access","from":1,"to":1,"total":1,
+             "objects-dictionary":[
+               {"uid":"range-1","type":"address-range","name":"Synthetic range","ipv4-address-first":"192.0.2.10","ipv4-address-last":"192.0.2.20"},
+               {"uid":"range-6","type":"address-range","name":"Synthetic range6","ipv6-address-first":"2001:db8::1","ipv6-address-last":"2001:db8::9"},
+               {"uid":"mcast-1","type":"multicast-address-range","name":"Synthetic multicast","ipv4-address-first":"233.252.0.1","ipv4-address-last":"233.252.0.9"},
+               {"uid":"wild-1","type":"wildcard","name":"Synthetic wildcard","ipv4-address":"192.0.2.0","ipv4-mask-wildcard":"0.0.255.0"},
+               {"uid":"accept-01","type":"RulebaseAction","name":"Accept"}],
+             "rulebase":[{"uid":"rule-001","type":"access-rule","rule-number":1,"source":["range-1","range-6"],"destination":["mcast-1","wild-1"],
+               "service":["range-1"],"action":"accept-01"}]}
+            """);
+        var objects = new CheckPointPolicyMapper().map(metadata("CP"), List.of(page)).objects();
+        java.util.function.Function<String, PolicyObject> object = uid -> objects.get(ref("policy-1", "object", uid));
+        assertEquals(List.of("ipv4-address-first: 192.0.2.10", "ipv4-address-last: 192.0.2.20"), object.apply("range-1").values());
+        assertEquals(List.of("ipv6-address-first: 2001:db8::1", "ipv6-address-last: 2001:db8::9"), object.apply("range-6").values());
+        assertEquals("address", object.apply("mcast-1").type()); assertEquals("RESOLVED", object.apply("mcast-1").status());
+        assertEquals(List.of("ipv4-address-first: 233.252.0.1", "ipv4-address-last: 233.252.0.9"), object.apply("mcast-1").values());
+        assertEquals("UNSUPPORTED", object.apply("wild-1").status());
+        assertTrue(object.apply("wild-1").values().contains("native-type: wildcard"));
+    }
+
     @Test void checkpointRejectsMissingPagesAndRetainsRepeatedInlineOccurrences() throws Exception {
         var json = new ObjectMapper().readTree(fixture("check-point.json"));
         var first = (com.fasterxml.jackson.databind.node.ObjectNode) json.get(0);

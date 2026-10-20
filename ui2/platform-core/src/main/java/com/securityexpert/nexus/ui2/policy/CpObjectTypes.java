@@ -19,7 +19,9 @@ public final class CpObjectTypes {
         if (GATEWAY_TYPES.contains(nativeType)) return "gateway";
         return switch (nativeType) {
             case "CpmiAnyObject" -> "any";
-            case "host", "network", "address-range" -> "address";
+            // A multicast address range has the address-range shape (ipv4/ipv6-address-first/-last) over multicast
+            // addresses; it selects those destination addresses like any other range.
+            case "host", "network", "address-range", "multicast-address-range" -> "address";
             case "group", "group-with-exclusion" -> "group";
             case "service-tcp", "service-udp", "service-icmp", "service-icmp6", "service-other", "service-sctp",
                  "service-dce-rpc", "service-rpc" -> "service";

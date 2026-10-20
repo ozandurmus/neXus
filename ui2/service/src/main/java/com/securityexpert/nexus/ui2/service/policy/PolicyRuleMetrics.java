@@ -46,6 +46,8 @@ final class PolicyRuleMetrics {
     static final String BUDGET = "Analysis budget reached";
     static final String NO_BROAD = "No broad selectors in resolved objects";
     static final String INVENTORY = "Group members resolved from the domain object inventory";
+    /** A Check Point dictionary object without values (or an empty group) whose values/members the domain inventory carries. */
+    static final String VALUES_INVENTORY = "Object values resolved from the domain object inventory";
     /**
      * Fixed vocabulary for why a selector cannot be assessed. Each names the cause instead of one generic sentence, so the
      * remaining Unknown verdicts can be counted per cause (no names, no values).
@@ -64,6 +66,12 @@ final class PolicyRuleMetrics {
     static final String CYCLE = "Unresolved: group cycle or depth limit";
     static final String PORT = "Unresolved: unsupported port expression";
     static final String DYNAMIC = "Unresolved: dynamic membership";
+    /** Check Point wildcard object: address plus wildcard mask, possibly non-contiguous, so not an interval. */
+    static final String WILDCARD = "Unresolved: wildcard object";
+    /** PO 2026-10-20 (addendum): a Check Point access role is an identity-based specific selection, 0 points. */
+    static final String ACCESS_ROLE = "Access role (identity-based)";
+    /** PO 2026-10-20 (addendum): a Check Point security zone selection adds 1 point. */
+    static final String ZONE = "Zone-based selection";
     /** PO 2026-10-20: a named Palo Alto predefined App-ID or service is a specific selection, 0 breadth points. */
     static final String PREDEFINED = "Predefined App-ID/service, ports not collected";
     /** PO 2026-10-20: application any adds no point when the service is specific (including application-default). */
@@ -78,7 +86,8 @@ final class PolicyRuleMetrics {
     static {
         var all = new LinkedHashSet<>(List.of(BUDGET, NO_BROAD, INVENTORY, NOT_COLLECTED, APPLICATION_NOT_COLLECTED,
             SERVICE_NOT_COLLECTED, PRECEDENCE, EXCLUSION, UNSUPPORTED, REGION, FQDN, EMPTY_GROUP, NO_VALUES, EMPTY_SELECTOR,
-            CYCLE, PORT, DYNAMIC, PREDEFINED, ANY_APPLICATION_SPECIFIC_SERVICE, "Broad service range", "Service: application default ports"));
+            CYCLE, PORT, DYNAMIC, PREDEFINED, ANY_APPLICATION_SPECIFIC_SERVICE, "Broad service range", "Service: application default ports",
+            VALUES_INVENTORY, WILDCARD, ACCESS_ROLE, ZONE));
         all.addAll(DYNAMIC_BY_TYPE.values());
         FIXED_REASONS = Set.copyOf(all);
     }
@@ -97,6 +106,8 @@ final class PolicyRuleMetrics {
      * but 0 when the service is specific or application-default; each Large CIDR (IPv4 prefix <= 16) or Broad service
      * range (>= 1024 ports) 1 point; 0 Low, 1-3 Medium, >= 4 High. Any unassessable selector makes the verdict Unknown
      * irrespective of the score, and the Unknown names its causes. {@code vendor} "PAN" enables the predefined rule.
+     * Check Point (any vendor but PAN), addendum of the same record: an access role is a specific selection (0 points,
+     * {@link #ACCESS_ROLE}); a security zone adds 1 point once per rule ({@link #ZONE}).
      */
     static Map<String, Object> permissiveness(Rule r, Map<String, PolicyObject> objects, int[] budget, String vendor) {
         boolean pan = "PAN".equals(vendor);
@@ -118,7 +129,7 @@ final class PolicyRuleMetrics {
         int score = 0;
         for (String field : List.of("source", "destination", "service")) if (reasons.contains("Any " + field)) score += 3;
         if (reasons.contains("Any application")) score += 1;
-        score += (int) reasons.stream().filter(s -> s.startsWith("Large ") || s.startsWith("Broad ")).count();
+        score += (int) reasons.stream().filter(s -> s.startsWith("Large ") || s.startsWith("Broad ") || s.equals(ZONE)).count();
         if (known && score == 0 && !reasons.contains(ANY_APPLICATION_SPECIFIC_SERVICE)) reasons.add(NO_BROAD);
         reasons.addAll(gaps);
         return Map.of("level", !known ? "Unknown" : score >= 4 ? "High" : score >= 1 ? "Medium" : "Low", "reasons", List.copyOf(reasons), "score", score);
@@ -132,9 +143,19 @@ final class PolicyRuleMetrics {
         if (!path.add(id) || path.size() > 32) return fail(gaps, CYCLE);
         switch (o.status()) {
             case "RESOLVED" -> { }
-            case "DYNAMIC" -> { return fail(gaps, DYNAMIC_BY_TYPE.getOrDefault(o.type(), DYNAMIC)); }
+            case "DYNAMIC" -> {
+                // PO 2026-10-20 addendum (Check Point): membership stays enforcement-time (shadowing still does not
+                // evaluate it), but for permissiveness an access role is a specific identity selection and a security
+                // zone a zone-wide selection worth 1 point.
+                if (!pan && o.type().equals("access-role")) { reasons.add(ACCESS_ROLE); path.remove(id); return true; }
+                if (!pan && o.type().equals("security-zone")) { reasons.add(ZONE); path.remove(id); return true; }
+                return fail(gaps, DYNAMIC_BY_TYPE.getOrDefault(o.type(), DYNAMIC));
+            }
             case "UNKNOWN" -> { return fail(gaps, PRECEDENCE); }
-            case "UNSUPPORTED" -> { return fail(gaps, o.type().equals("group") ? EXCLUSION : UNSUPPORTED); }
+            case "UNSUPPORTED" -> {
+                if (o.type().equals("group")) return fail(gaps, EXCLUSION);
+                return fail(gaps, o.values().contains("native-type: wildcard") ? WILDCARD : UNSUPPORTED);
+            }
             case "UNRESOLVED" -> {
                 // A Palo Alto rule names an App-ID or service that is not in the collected configuration: a predefined
                 // (vendor content) object. PO 2026-10-20: a specific selection, 0 breadth points ("any" is never this).
