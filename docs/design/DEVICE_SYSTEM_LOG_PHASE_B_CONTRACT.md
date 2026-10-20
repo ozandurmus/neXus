@@ -145,7 +145,7 @@ Whole-file sources are fetched once, when they are complete:
 |---|---|---|---|
 | `cp_sar_daily` | yesterday's `/var/log/sa/sar<DD>` (text, written by the device at 23:53). `/var/log/sa/` holds 59 to 60 files (30 days x binary and text); every file is 100,000 B or more | 06:00 window, once a day | 30 days |
 | `cp_hcp_report` | newest `*.tar.gz` in `/var/log/hcp/last/` (found on 52/53 gateways; usual form `hcp_report_<host>_<dd_mm_yy_HH_MM>.tar.gz` is not verified, §8.1). The device's run time is about 03:00 on 36/52 gateways and elsewhere on the others | 06:00 window, once a day | 7 days (PO) |
-| `cp_spike_data` | files of each new, settled Spike Detective data directory: `perf_cpu_N.log`, `profiling_summary.elg` (the directory contents are **not measured**: gate 3 lists the parent only; off by default until one directory listing has been reviewed, §8.3) | any window, once per directory | 30 days |
+| `cp_spike_data` | files of each new, settled Spike Detective data directory: `perf_<word>_<N>.log` and `profiling_summary.elg` (fetch list as amended by the PO on 2026-10-20 from the one reviewed directory listing, §8.3; off by default, `system_log.spike_data_enabled`) | any window, once per directory | 30 days |
 
 Listing-only sources (metadata, never content):
 
@@ -637,6 +637,58 @@ file is `TOO_LARGE` and is not fetched.
   member-name classes and sizes are recorded in the findings record before `spike_data_enabled` is turned on.
 - `spike_detective.log` and `.csv` are incremental sources (§4).
 
+**PO amendment 2026-10-20 (fetch list and observed name pattern; PO: "Sözleşmeyi düzelt, sonra aç").** Evidence: the one
+review listing of §8.3, run on 2026-10-20 in the 12:00 window on one gateway (masked `FW-UNIFORM-02-M1`) and recorded in
+[SPIKE_DETECTIVE_LAYOUT_REVIEW_2026_10_19.md](SPIKE_DETECTIVE_LAYOUT_REVIEW_2026_10_19.md) §4 (C4 then one C5, status
+`MEASURED`, outcome `REVIEWED`): 71 data directories (type `d`, link count 2) and 6 plain files (link count 1) in the
+parent; the chosen directory holds 2 files and no subdirectory, 10,937 B in total: one `perf_X_NNN.log` (10,851 B; its
+middle word is outside the closed vocabulary, so it is **not** `cpu`) and one `profiling_summary.elg` (86 B). With the
+fetch list as first written only the 86 B summary would have been fetched. The amendment:
+
+1. **Fetch list.** Per new, settled data directory the members fetched are the regular files whose name matches
+   `^perf_[a-z]+_[0-9]+\.log$` or `^profiling_summary\.elg$`. This replaces `perf_cpu_<N>.log` above. Every other member
+   (any other name, a subdirectory, a link) is listed in the directory's member summary and never fetched.
+2. **Data-directory name pattern.** Recorded as observed: the class `X_spike_X_NNN_NNN-NN-NN_NN-NN-NN` (a date-time
+   stamped name; one directory seen, so the class is evidence, not a rule). The enforced rule stays the safe form
+   `^[A-Za-z0-9._-]{1,128}$` (not `.`/`..`); a name outside it is `NAME_REJECTED` and no C5 is sent for it. The collector
+   still takes the entry class (type `d`, link count 2), never a name regex, to find data directories.
+3. **Unchanged.** No new command and no change to C4, C5 or C8 (strings, timeouts, retry, bounds, frequency, session).
+   The 256 KiB C4 bound, the 64 KiB C5 bound, 16 MiB per directory, 16 directories per run, the 10-minute settling rule,
+   the baseline rule and the 30-day retention stay as written. The one reviewed directory (10,937 B) is far inside the
+   16 MiB bound; the bound keeps its §3.4 status. `spike_data_enabled` stays default `false`; switching it on is a
+   separate `security_admin` act after the deploy.
+
+**How the collector applies §8.3 (implementation record, 2026-10-20; `V167__system_log_spike_directory.sql`).**
+
+- Only while `spike_data_enabled` is on, after C3 and before the 06:00 items (§3.2 step 4). C4 runs once per run; it is not
+  sent without the device clock of this run's C1 (`UNKNOWN`, `NO_DEVICE_CLOCK`) or without both C4 and C5 gate rows
+  (`UNKNOWN`, `GATE_NOT_KNOWN`). A C4 output that reaches its bound is `UNKNOWN` (`LISTING_AT_BOUND`), never processed
+  partially; a missing parent is `ABSENT` and does not take the baseline.
+- **Baseline.** The device's first listing of a present parent stores every data directory as `BASELINE` in
+  `system_log_spike_directory`, keyed by the name HMAC (`HMAC-SHA256` under the keyed-fingerprint secret, the same value as
+  the archive's `system_log_file.remote_name_hmac`) with the name's class; the name is never stored in clear. Baseline
+  directories are never fetched. The run is `NO_NEW_DATA` with `baseline: true`.
+- **New and settled.** New = no row for the name HMAC; settled = mtime at least 600 s older than the C1 device clock.
+  Unsettled directories are counted and wait for a later run. Settled directories are taken oldest first; at most 16 get a
+  C5 per run, the rest are `BACKLOG` with the exact `pending_directories` count (run detail and one `BACKLOG` gap row).
+  Spike bytes count against the 64 MiB device budget of §3.4; a directory that does not fit is left for the next run
+  (`BACKLOG`, `DEVICE_BUDGET`).
+- **Per directory**, in its own fenced transaction before the next C5: C5; a C5 output at its bound or unreadable is
+  `UNKNOWN` (the directory stays new and is retried next run); gone = `ABSENT`; no fetch-list member = `NOTHING_TO_FETCH`;
+  fetch-list members over 16 MiB (listed, or grown past the bound while fetched) = `TOO_LARGE`, nothing stored; otherwise one
+  C8 per fetch-list member (120 s, one byte past the remaining bound asked for), the members put into one neXus-side tar.gz
+  (`MANIFEST.json` first: directory name, every member with type, size, mtime, fetched flag and the SHA-256 of the bytes as
+  received; then the fetched members as received), stored as one encrypted `system_log` artefact (not redacted, §12) with a
+  `system_log_file` row of kind `cp_spike_data` (keyed content HMAC, expires after `spike_data_retention_days`, 30) and the
+  directory row `COLLECTED`. The directory row keeps the member summary by class only (`{type:class: {count, bytes,
+  fetched}}`); a decided directory is never listed again.
+- **Outcome per run (§9):** `UNKNOWN` (a failed C4/C5/C8; the directories already stored stay stored) before
+  `STORAGE_REFUSED` (free-space guard, checked before each C5) before `BACKLOG` before `COLLECTED` before `TOO_LARGE` before
+  `NO_NEW_DATA`.
+- **Read side.** `GET /api/v2/system-logs/{deviceId}/spike-data` (`system_log_read`; aiview masked) and
+  `syslog-spike-data <deviceId>`: the non-baseline directories (state, name class, device mtime, member classes and sizes,
+  retention) and the count per state; the device Logs tab shows them once the source has run. Archives are not served.
+
 ## 9. Outcomes and failure semantics
 
 Per source, per run, exactly one of the following:
@@ -930,8 +982,8 @@ The existing `syslog-measure-start` and `syslog-measurements` stay for phase A.
      Europe/Istanbul, with the 30 h mtime rule. A sar left `BACKLOG` by the device budget is retried in the next window
      of the same day (§3.4 "the next window continues"); HCP stays a 06:00-only item.
    - **`TOO_LARGE`** keeps the job `COMPLETED` (it is reported, §9 does not list it as a failure).
-   - **Spike Detective (§3.2 step 4, §8.3) is not built:** no C4/C5 is sent, so the baseline listing does not run yet.
-     With `spike_data_enabled` on, `cp_spike_data` is recorded `UNSUPPORTED` (`SPIKE_DATA_NOT_IMPLEMENTED`).
+   - **Spike Detective (§3.2 step 4, §8.3)** is built as recorded at the end of §8.3 (PO amendment 2026-10-20, V167). It
+     runs only while `spike_data_enabled` is on (default off).
    - **Run duration.** `system_log_run.duration_ms` of an incremental source is the time from its first read sent to its
      last read answered or chunk stored (the stat share excluded); a whole-file source records its fetch time; the crash
      listing records its own duration. A source with no read records 0.

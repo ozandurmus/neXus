@@ -35,6 +35,7 @@ import com.securityexpert.nexus.ui2.capability.GateRow;
 import com.securityexpert.nexus.ui2.jobs.JobState;
 import com.securityexpert.nexus.ui2.jobs.lease.JobLeaseRepository;
 import com.securityexpert.nexus.ui2.jobs.stepattempt.JobStepAttemptRepository;
+import com.securityexpert.nexus.ui2.jobs.systemlog.CpSpikeLayoutReview;
 import com.securityexpert.nexus.ui2.jobs.systemlog.CpSyslogRangedRead;
 import com.securityexpert.nexus.ui2.jobs.systemlog.CpSystemLogCollect;
 import com.securityexpert.nexus.ui2.jobs.transport.ApiTarget;
@@ -60,6 +61,8 @@ import com.securityexpert.nexus.ui2.persistence.device.DeviceRecord;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
 import com.securityexpert.nexus.ui2.persistence.device.EndpointRecord;
 import com.securityexpert.nexus.ui2.persistence.diagnostic.CheckPointSystemLogRepository;
+import com.securityexpert.nexus.ui2.persistence.diagnostic.CheckPointSystemLogRepository.SpikeDirectory;
+import com.securityexpert.nexus.ui2.persistence.diagnostic.CheckPointSystemLogRepository.SpikeDirectoryState;
 import com.securityexpert.nexus.ui2.persistence.diagnostic.SystemLogCollectionRepository;
 import com.securityexpert.nexus.ui2.platform.ArtefactStoreCipher;
 import com.securityexpert.nexus.ui2.platform.DeviceEnrollmentState;
@@ -82,7 +85,7 @@ class CpSystemLogCollectJobExecutorTest {
     private static final String BANNER = "This system is for authorized use only. FW-TANGO-04";
     /** Values that identify hosts, paths or secrets; none may reach a job reason, run detail or gap detail. */
     private static final List<String> RAW = List.of("FW-TANGO-04", "192.0.2.", "synth-cpsuite", "/var/log", "synthetic-pass",
-            "hcp_report_", "fwk.4242");
+            "hcp_report_", "fwk.4242", "fwtango");
     /** Small caps so budgets, splits and rotations are exercised with short synthetic files. */
     private static final PlannerConfig SMALL = new PlannerConfig(256, 1024, 2048, 512, 16, "(\\.[0-9]{1,2})?", ".gz", 9, 1);
 
@@ -109,6 +112,13 @@ class CpSystemLogCollectJobExecutorTest {
         String crashListing = "/var/log/crash/:\ntotal 0\n\n/var/log/dump/usermode/:\ntotal 0\n";
         String saListing = "";
         String hcpListing = "";
+        /** C4 output (null: the directory listing is not scripted and C4 is an unexpected command). */
+        String spikeListing;
+        int spikeExit;
+        ExecResult spikeListingResult;
+        /** C5 output per data-directory name; a name without one answers as a missing directory. */
+        final Map<String, String> spikeDirectories = new LinkedHashMap<>();
+        final List<String> spikeDirectoriesListed = new ArrayList<>();
         final Map<String, byte[]> wholeFiles = new HashMap<>();
         long epoch;
         boolean statFails;
@@ -141,6 +151,18 @@ class CpSystemLogCollectJobExecutorTest {
             if (spec.command().equals(CpSystemLogCollect.LS_CRASH_COMMAND)) return new ExecResult.Completed(BANNER + "\n" + crashListing, 0);
             if (spec.command().equals(CpSystemLogCollect.LS_SA_COMMAND)) return new ExecResult.Completed(saListing, 0);
             if (spec.command().equals(CpSystemLogCollect.LS_HCP_COMMAND)) return new ExecResult.Completed(hcpListing, 0);
+            if (spec.command().equals(CpSpikeLayoutReview.LS_SPIKE_COMMAND) && (spikeListing != null || spikeListingResult != null)) {
+                assertEquals(CpSpikeLayoutReview.LS_SPIKE_MAX_BYTES, spec.outputLimitBytes());
+                return spikeListingResult != null ? spikeListingResult : new ExecResult.Completed(spikeListing, spikeExit);
+            }
+            String c5Prefix = "bash -lc 'ls -lgo --time-style=+%s /var/log/spike_detective/";
+            if (spec.command().startsWith(c5Prefix) && spec.command().endsWith("/'") && spikeListing != null) {
+                assertEquals(CpSpikeLayoutReview.LS_SPIKE_DIR_MAX_BYTES, spec.outputLimitBytes());
+                String name = spec.command().substring(c5Prefix.length(), spec.command().length() - 2);
+                spikeDirectoriesListed.add(name);
+                String listing = spikeDirectories.get(name);
+                return listing == null ? new ExecResult.Completed("", 2) : new ExecResult.Completed(listing, 0);
+            }
             throw new AssertionError("unexpected command");
         }
 
@@ -190,6 +212,7 @@ class CpSystemLogCollectJobExecutorTest {
         final Map<String, CrashEntry> crash = new LinkedHashMap<>();
         final List<CrashAlert> alerts = new ArrayList<>();
         final List<FileRow> files = new ArrayList<>();
+        final Map<String, SpikeDirectory> spike = new LinkedHashMap<>();
         Settings settings = Settings.DEFAULTS;
         boolean fence = true;
 
@@ -250,6 +273,31 @@ class CpSystemLogCollectJobExecutorTest {
             gaps.computeIfAbsent(s, k -> new ArrayList<>()).addAll(g);
             return true;
         }
+
+        @Override public boolean spikeBaselineTaken(String d) {
+            return !spike.isEmpty() || history.stream().anyMatch(h -> h.startsWith("cp_spike_data=")
+                    && !h.endsWith("=UNKNOWN") && !h.endsWith("=ABSENT") && !h.endsWith("=UNSUPPORTED"));
+        }
+
+        @Override public java.util.Set<String> spikeDirectoryHmacs(String d) { return new java.util.HashSet<>(spike.keySet()); }
+
+        @Override public SpikeWrite recordSpikeDirectory(String j, long e, String d, SpikeDirectory row, Optional<FileRow> file) {
+            if (!fence) return SpikeWrite.NOT_RECORDED;
+            if (spike.containsKey(row.nameHmac())) return SpikeWrite.DUPLICATE;
+            file.ifPresent(files::add);
+            spike.put(row.nameHmac(), row);
+            return SpikeWrite.STORED;
+        }
+
+        @Override public boolean recordSpikeListing(String j, long e, String d, Run run, List<SpikeDirectory> listed, List<Gap> g) {
+            if (!fence) return false;
+            runs.put("cp_spike_data", run); history.add("cp_spike_data=" + run.outcome());
+            for (SpikeDirectory row : listed) spike.putIfAbsent(row.nameHmac(), row);
+            gaps.computeIfAbsent("cp_spike_data", k -> new ArrayList<>()).addAll(g);
+            return true;
+        }
+
+        long spikeIn(SpikeDirectoryState state) { return spike.values().stream().filter(r -> r.state() == state).count(); }
 
         String outcome(String source) { return runs.get(source).outcome(); }
 
@@ -312,6 +360,7 @@ class CpSystemLogCollectJobExecutorTest {
         void run() {
             job++;
             device.commands.clear(); device.rangeReads.clear(); device.wholeFetches.clear(); gateIds.clear();
+            device.spikeDirectoriesListed.clear();
             GateRegistryPort gates = key -> rows.stream().filter(r -> r.key().equals(key)).toList();
             Clock clock = new Clock() {
                 @Override public ZoneId getZone() { return ZoneOffset.UTC; }
@@ -352,6 +401,7 @@ class CpSystemLogCollectJobExecutorTest {
             repo.runs.values().forEach(r -> records.add(r.detailJson()));
             repo.gaps.values().forEach(list -> list.forEach(g -> records.add(g.detailJson())));
             repo.cursors.values().forEach(c -> c.familySnapshot().forEach(e -> records.add(e.name())));
+            repo.spike.values().forEach(r -> { records.add(r.nameClass()); records.add(r.membersJson()); });
             for (String record : records) for (String raw : RAW) assertFalse(record.contains(raw), raw + " leaked into " + record);
         }
     }
@@ -1111,18 +1161,377 @@ class CpSystemLogCollectJobExecutorTest {
         assertEquals(true, h.repo.detail("cp_hcp_report").get("not_settled"));
     }
 
-    @Test
-    void spikeDataStaysOffByDefaultAndIsReportedUnsupportedWhenSwitchedOn(@TempDir Path dir) throws Exception {
-        var h = new Harness(dir, "gateway");
-        h.run();
-        assertFalse(h.repo.runs.containsKey("cp_spike_data"));
+    // ================================================================== Spike Detective data (section 8.3, PO 2026-10-20)
+
+    private static final String SPIKE = "/var/log/spike_detective";
+    /** Synthetic data-directory names of the observed class X_spike_X_NNN_NNN-NN-NN_NN-NN-NN; "fwtango" stands for a host. */
+    private static String spikeName(int n) { return String.format("fwtango_spike_alpha_%03d_2026-10-20_10-%02d-00", n, n % 60); }
+
+    private static void spikeOn(Harness h) {
+        h.device.put(MESSAGES, lines("spike", 0, 3), 10);
         h.repo.settings = new SystemLogCollectionRepository.Settings(30, false,
                 SystemLogCollectionRepository.Settings.DEFAULT_DEVICE_CAP_BYTES, 7, 30,
                 SystemLogCollectionRepository.Settings.DEFAULT_SPIKE_DATA_CAP_BYTES, 180, true);
+    }
+
+    /** The C4 output: banner, total line, the data directories (name, mtime) and the two plain files. */
+    private static String spikeParent(Map<String, Long> directories) {
+        StringBuilder out = new StringBuilder(BANNER).append("\ntotal 312\n");
+        for (var d : directories.entrySet()) out.append("drwxr-xr-x 2 4096 ").append(d.getValue()).append(' ').append(d.getKey()).append('\n');
+        out.append("-rw-r--r-- 1 23678 1790000000 spike_detective.csv\n-rw-r--r-- 1 1661 1790000000 spike_detective.log\n");
+        return out.toString();
+    }
+
+    /** One data directory as the review saw it: the perf sample, the profiling summary, plus one other file and a subdirectory. */
+    private static void spikeDirectory(Harness h, String name, byte[] perf, byte[] profiling) {
+        long t = h.device.epoch - 3600;
+        h.device.spikeDirectories.put(name, "total 16\n-rw-r--r-- 1 " + perf.length + " " + t + " perf_fwtango_123.log\n"
+                + "-rw-r--r-- 1 " + profiling.length + " " + t + " profiling_summary.elg\n"
+                + "-rw-r--r-- 1 77 " + t + " notes_fwtango04.txt\n"
+                + "drwxr-xr-x 2 4096 " + t + " extra\n");
+        h.device.wholeFiles.put(SPIKE + "/" + name + "/perf_fwtango_123.log", perf);
+        h.device.wholeFiles.put(SPIKE + "/" + name + "/profiling_summary.elg", profiling);
+        h.device.wholeFiles.put(SPIKE + "/" + name + "/notes_fwtango04.txt", new byte[77]);
+    }
+
+    private static List<String> c4AndC5(Harness h) {
+        return h.device.commands.stream().filter(c -> c.startsWith("bash -lc 'ls -lgo") && c.contains("spike_detective/")).toList();
+    }
+
+    /** The stored archive of one file row, decrypted: tar member name to bytes, in archive order. */
+    private static Map<String, byte[]> archive(Harness h, CheckPointSystemLogRepository.FileRow row) throws IOException {
+        var m = row.manifest();
+        byte[] gz = h.store.retrieve(new ArtefactRef(m.recoveryVolumePath()), m.wrappedDataKey(), false).readAllBytes();
+        assertTrue(TarGzIntegrity.readable(gz, gz.length), "a readable tar.gz");
+        byte[] tar;
+        try (var in = new java.util.zip.GZIPInputStream(new java.io.ByteArrayInputStream(gz))) { tar = in.readAllBytes(); }
+        Map<String, byte[]> out = new LinkedHashMap<>();
+        int at = 0;
+        while (at + 512 <= tar.length) {
+            String name = new String(tar, at, 100, StandardCharsets.US_ASCII).replace("\0", "");
+            if (name.isEmpty()) break;
+            int size = Integer.parseInt(new String(tar, at + 124, 11, StandardCharsets.US_ASCII).trim(), 8);
+            out.put(name, java.util.Arrays.copyOfRange(tar, at + 512, at + 512 + size));
+            at += 512 + (size + 511) / 512 * 512;
+        }
+        return out;
+    }
+
+    @Test
+    void spikeDataStaysOffByDefaultNoListingIsSentAndNoRowIsWritten(@TempDir Path dir) throws Exception {
+        var h = new Harness(dir, "gateway");
+        h.device.put(MESSAGES, lines("spike", 0, 3), 10);
+        h.device.spikeListing = spikeParent(Map.of(spikeName(1), h.device.epoch - 7200));
         h.run();
-        assertEquals("UNSUPPORTED", h.repo.outcome("cp_spike_data"));
-        assertEquals("SPIKE_DATA_NOT_IMPLEMENTED", h.repo.detail("cp_spike_data").get("reason"));
-        assertFalse(h.device.commands.stream().anyMatch(c -> c.contains("spike_detective/'")), "no C4 is sent");
+        assertEquals("COMPLETED", h.finalState, h.finalReason);
+        assertFalse(h.repo.runs.containsKey("cp_spike_data"));
+        assertTrue(c4AndC5(h).isEmpty(), "no C4 or C5 while spike_data_enabled is off (the default)");
+        assertTrue(h.repo.spike.isEmpty());
+        assertFalse(SystemLogCollectionRepository.Settings.DEFAULTS.spikeDataEnabled(), "the default stays off");
+    }
+
+    @Test
+    void theFirstListingIsABaselineStoredAsHmacsAndNothingIsFetched(@TempDir Path dir) throws Exception {
+        var h = new Harness(dir, "gateway");
+        spikeOn(h);
+        Map<String, Long> dirs = new LinkedHashMap<>();
+        for (int i = 1; i <= 3; i++) dirs.put(spikeName(i), h.device.epoch - 86_400L * i);
+        h.device.spikeListing = spikeParent(dirs);
+        for (String name : dirs.keySet()) spikeDirectory(h, name, "perf".getBytes(StandardCharsets.US_ASCII), "p".getBytes(StandardCharsets.US_ASCII));
+        h.run();
+
+        assertEquals("COMPLETED", h.finalState, h.finalReason);
+        assertEquals(List.of(CpSpikeLayoutReview.LS_SPIKE_COMMAND), c4AndC5(h), "C4 only: no C5 on the baseline");
+        assertEquals(List.of(CpSystemLogCollect.STAT_COMMAND, CpSystemLogCollect.LS_CRASH_COMMAND, CpSpikeLayoutReview.LS_SPIKE_COMMAND),
+                h.device.commands, "section 3.2 order: C1, (C2 reads), C3, C4");
+        assertTrue(h.device.wholeFetches.isEmpty(), "a baseline directory is never fetched");
+        assertEquals(3, h.repo.spikeIn(SpikeDirectoryState.BASELINE));
+        assertEquals("NO_NEW_DATA", h.repo.outcome("cp_spike_data"));
+        assertEquals(true, h.repo.detail("cp_spike_data").get("baseline"));
+        assertEquals(3, h.repo.detail("cp_spike_data").get("baseline_directories"));
+        assertEquals(1, h.repo.detail("cp_spike_data").get("ignored_lines"), "the banner line is ignored and counted");
+        for (var row : h.repo.spike.values()) {
+            assertTrue(row.nameHmac().matches("[0-9a-f]{64}"));
+            assertEquals("X_spike_X_NNN_NNN-NN-NN_NN-NN-NN", row.nameClass(), "a class, never the name");
+            assertNull(row.fileId());
+        }
+        assertTrue(h.repo.files.isEmpty());
+        h.assertNoDeviceTextInRecords();
+
+        h.run();
+        assertEquals(List.of(CpSpikeLayoutReview.LS_SPIKE_COMMAND), c4AndC5(h), "the same directories again: not new");
+        assertEquals("NO_NEW_DATA", h.repo.outcome("cp_spike_data"));
+        assertEquals(false, h.repo.detail("cp_spike_data").get("baseline"));
+        assertEquals(0, h.repo.detail("cp_spike_data").get("new_directories"));
+    }
+
+    @Test
+    void aNewSettledDirectoryIsListedAndItsTwoFetchListMembersAreStoredWhileAnUnsettledOneWaits(@TempDir Path dir) throws Exception {
+        var h = new Harness(dir, "gateway");
+        h.config = PlannerConfig.defaults();   // spike bytes count against the 64 MiB device budget (section 3.4)
+        spikeOn(h);
+        Map<String, Long> dirs = new LinkedHashMap<>();
+        dirs.put(spikeName(1), h.device.epoch - 86_400);
+        h.device.spikeListing = spikeParent(dirs);
+        h.run();                                          // baseline
+        assertEquals(1, h.repo.spikeIn(SpikeDirectoryState.BASELINE));
+
+        byte[] perf = "cpu 1 synthetic sample FW-TANGO-04\n".repeat(300).getBytes(StandardCharsets.US_ASCII);
+        byte[] profiling = "synthetic profiling summary\n".getBytes(StandardCharsets.US_ASCII);
+        String settled = spikeName(2), fresh = spikeName(3);
+        dirs.put(settled, h.device.epoch - 3600);
+        dirs.put(fresh, h.device.epoch - 120);               // younger than 10 minutes on the device clock (C1)
+        h.device.spikeListing = spikeParent(dirs);
+        spikeDirectory(h, settled, perf, profiling);
+        spikeDirectory(h, fresh, perf, profiling);
+        h.run();
+
+        assertEquals("COMPLETED", h.finalState, h.finalReason);
+        assertEquals(List.of(CpSpikeLayoutReview.LS_SPIKE_COMMAND,
+                CpSpikeLayoutReview.LS_SPIKE_DIR_TEMPLATE.replace("<dir>", settled)), c4AndC5(h),
+                "one C5, for the settled directory only; byte-identical to the gate template");
+        assertEquals(List.of("cp_spike_data:" + SPIKE + "/" + settled + "/perf_fwtango_123.log:120",
+                "cp_spike_data:" + SPIKE + "/" + settled + "/profiling_summary.elg:120"), h.device.wholeFetches,
+                "one C8 per fetch-list member (120 s); the other file and the subdirectory are not fetched");
+        assertEquals(List.of("cp_syslog_collect_stat", "cp_syslog_collect_ls_crash", "cp_syslog_collect_ls_spike",
+                "cp_syslog_collect_ls_spike_dir", "cp_syslog_collect_fetch", "cp_syslog_collect_fetch"),
+                h.gateIds.stream().filter(g -> !g.equals(CpSyslogRangedRead.GATE_ID)).toList(), "every step ledgered in order");
+        assertEquals("COLLECTED", h.repo.outcome("cp_spike_data"));
+        var detail = h.repo.detail("cp_spike_data");
+        assertEquals(2, detail.get("new_directories"));
+        assertEquals(1, detail.get("new_unsettled"));
+        assertEquals(1, detail.get("collected_directories"));
+        assertEquals(2, detail.get("fetched_files"));
+        assertEquals(2, detail.get("skipped_members"));
+        assertEquals(perf.length + profiling.length, ((Number) detail.get("stored_bytes")).intValue());
+
+        assertEquals(1, h.repo.spikeIn(SpikeDirectoryState.COLLECTED));
+        var row = h.repo.spike.values().stream().filter(r -> r.state() == SpikeDirectoryState.COLLECTED).findFirst().orElseThrow();
+        assertEquals(4, row.memberCount());
+        assertEquals(2, row.fetchedFiles());
+        assertEquals(perf.length + profiling.length, row.fetchedBytes());
+        @SuppressWarnings("unchecked")
+        Map<String, Map<String, Number>> members = JSON.readValue(row.membersJson(), Map.class);
+        assertEquals(java.util.Set.of("file:perf_X_NNN.log", "file:profiling_summary.elg", "file:X_XNN.txt", "dir:X"), members.keySet());
+        assertEquals(1, members.get("file:perf_X_NNN.log").get("fetched").intValue());
+        assertEquals(0, members.get("file:X_XNN.txt").get("fetched").intValue(), "listed, not fetched");
+
+        var file = h.repo.files.stream().filter(f -> f.kind().equals("cp_spike_data")).findFirst().orElseThrow();
+        assertEquals(row.fileId(), file.fileId());
+        assertEquals(row.nameHmac(), file.remoteNameHmac(), "the archive and the directory share one name identity");
+        assertEquals(dirs.get(settled), file.mtime());
+        assertEquals(h.now.plus(Duration.ofDays(30)), file.expiresAt(), "retention 30 days (section 2.1)");
+        assertTrue(file.contentHmac().matches("[0-9a-f]{64}"));
+        Map<String, byte[]> archive = archive(h, file);
+        assertEquals(List.of(CpSpikeData.MANIFEST, "perf_fwtango_123.log", "profiling_summary.elg"), List.copyOf(archive.keySet()));
+        assertArrayEquals(perf, archive.get("perf_fwtango_123.log"), "stored as received (section 12: not redacted)");
+        assertArrayEquals(profiling, archive.get("profiling_summary.elg"));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> manifest = JSON.readValue(archive.get(CpSpikeData.MANIFEST), Map.class);
+        assertEquals(settled, manifest.get("directory"), "the clear name lives only inside the encrypted archive");
+        assertEquals(4, ((List<?>) manifest.get("members")).size());
+        assertEquals(CpSpikeData.sha256(perf), ((Map<?, ?>) ((List<?>) manifest.get("members")).get(0)).get("sha256"));
+        h.assertNoDeviceTextInRecords();
+
+        // Ten minutes later the young directory has settled: it is collected; the collected one is not listed again.
+        h.at(h.now.plus(Duration.ofMinutes(10)));
+        h.run();
+        assertEquals(List.of(CpSpikeLayoutReview.LS_SPIKE_COMMAND, CpSpikeLayoutReview.LS_SPIKE_DIR_TEMPLATE.replace("<dir>", fresh)),
+                c4AndC5(h));
+        assertEquals("COLLECTED", h.repo.outcome("cp_spike_data"));
+        assertEquals(2, h.repo.spikeIn(SpikeDirectoryState.COLLECTED));
+    }
+
+    @Test
+    void aDirectoryNameOutsideTheSafeFormGetsNoC5AndIsCountedAsRejected(@TempDir Path dir) throws Exception {
+        var h = new Harness(dir, "gateway");
+        spikeOn(h);
+        h.device.spikeListing = spikeParent(Map.of());
+        h.run();                                          // baseline of an empty parent
+        String unsafe = "fwtango04 x;touch q";
+        h.device.spikeListing = spikeParent(Map.of(unsafe, h.device.epoch - 3600));
+        h.run();
+        assertEquals(List.of(CpSpikeLayoutReview.LS_SPIKE_COMMAND), c4AndC5(h), "no C5 carries an unsafe name");
+        assertTrue(h.device.spikeDirectoriesListed.isEmpty());
+        assertEquals(1, h.repo.spikeIn(SpikeDirectoryState.NAME_REJECTED));
+        assertEquals("NO_NEW_DATA", h.repo.outcome("cp_spike_data"));
+        assertEquals(1, h.repo.detail("cp_spike_data").get("name_rejected"));
+        h.run();
+        assertEquals(0, h.repo.detail("cp_spike_data").get("new_directories"), "a rejected name is decided once");
+        h.assertNoDeviceTextInRecords();
+    }
+
+    @Test
+    void moreThanSixteenNewSettledDirectoriesLeaveABacklogWithTheExactCount(@TempDir Path dir) throws Exception {
+        var h = new Harness(dir, "gateway");
+        spikeOn(h);
+        h.device.spikeListing = spikeParent(Map.of());
+        h.run();
+        Map<String, Long> dirs = new LinkedHashMap<>();
+        for (int i = 1; i <= 18; i++) {
+            dirs.put(spikeName(i), h.device.epoch - 7200 + i);
+            spikeDirectory(h, spikeName(i), "perf".getBytes(StandardCharsets.US_ASCII), "p".getBytes(StandardCharsets.US_ASCII));
+        }
+        h.device.spikeListing = spikeParent(dirs);
+        h.run();
+        assertEquals("COMPLETED", h.finalState, "BACKLOG is not a failure");
+        assertEquals(16, h.device.spikeDirectoriesListed.size(), "at most 16 C5 per run");
+        assertEquals(List.copyOf(dirs.keySet()).subList(0, 16), h.device.spikeDirectoriesListed, "oldest first");
+        assertEquals("BACKLOG", h.repo.outcome("cp_spike_data"));
+        assertEquals(2, h.repo.detail("cp_spike_data").get("pending_directories"));
+        assertEquals("DIRECTORY_LIMIT", h.repo.detail("cp_spike_data").get("backlog_reason"));
+        var gap = h.repo.gap("cp_spike_data", "BACKLOG");
+        assertTrue(gap.detailJson().contains("\"pending_directories\":2"));
+        assertEquals(16, h.repo.spikeIn(SpikeDirectoryState.COLLECTED));
+
+        h.run();
+        assertEquals(List.copyOf(dirs.keySet()).subList(16, 18), h.device.spikeDirectoriesListed, "the next run continues");
+        assertEquals("COLLECTED", h.repo.outcome("cp_spike_data"));
+        assertEquals(18, h.repo.spikeIn(SpikeDirectoryState.COLLECTED));
+    }
+
+    @Test
+    void spikeBytesCountAgainstTheDeviceBudgetAndWhatDoesNotFitIsBacklog(@TempDir Path dir) throws Exception {
+        var h = new Harness(dir, "gateway");          // SMALL: 2,048 B per device and run
+        spikeOn(h);
+        h.device.spikeListing = spikeParent(Map.of());
+        h.run();
+        String name = spikeName(9);
+        h.device.spikeListing = spikeParent(Map.of(name, h.device.epoch - 3600));
+        spikeDirectory(h, name, new byte[4096], "p".getBytes(StandardCharsets.US_ASCII));
+        h.run();
+        assertEquals("BACKLOG", h.repo.outcome("cp_spike_data"));
+        assertEquals("DEVICE_BUDGET", h.repo.detail("cp_spike_data").get("backlog_reason"));
+        assertEquals(1, h.repo.detail("cp_spike_data").get("pending_directories"));
+        assertTrue(h.device.wholeFetches.isEmpty(), "nothing is fetched beyond the budget");
+        assertTrue(h.repo.spike.values().stream().noneMatch(r -> r.state() != SpikeDirectoryState.BASELINE), "stays new");
+    }
+
+    @Test
+    void aDirectoryWhoseFetchListExceedsSixteenMebibytesIsTooLargeAndNotFetched(@TempDir Path dir) throws Exception {
+        var h = new Harness(dir, "gateway");
+        spikeOn(h);
+        h.device.spikeListing = spikeParent(Map.of());
+        h.run();
+        String name = spikeName(4);
+        h.device.spikeListing = spikeParent(Map.of(name, h.device.epoch - 3600));
+        h.device.spikeDirectories.put(name, "total 1\n-rw-r--r-- 1 " + (16L * 1024 * 1024 + 1) + " " + (h.device.epoch - 3600)
+                + " perf_fwtango_7.log\n");
+        h.run();
+        assertEquals("COMPLETED", h.finalState, "TOO_LARGE is reported, not a failure");
+        assertEquals("TOO_LARGE", h.repo.outcome("cp_spike_data"));
+        assertTrue(h.device.wholeFetches.isEmpty(), "nothing is fetched");
+        assertEquals(1, h.repo.spikeIn(SpikeDirectoryState.TOO_LARGE));
+        assertTrue(h.repo.files.isEmpty());
+        h.run();
+        assertTrue(h.device.spikeDirectoriesListed.isEmpty(), "decided once: no second C5");
+    }
+
+    @Test
+    void aMemberThatGrewPastTheBoundWhileFetchedMakesTheDirectoryTooLargeAndStoresNothing(@TempDir Path dir) throws Exception {
+        var h = new Harness(dir, "gateway");
+        spikeOn(h);
+        h.device.spikeListing = spikeParent(Map.of());
+        h.run();
+        String name = spikeName(5);
+        h.device.spikeListing = spikeParent(Map.of(name, h.device.epoch - 3600));
+        spikeDirectory(h, name, "small".getBytes(StandardCharsets.US_ASCII), "p".getBytes(StandardCharsets.US_ASCII));
+        h.device.wholeFiles.put(SPIKE + "/" + name + "/perf_fwtango_123.log", new byte[16 * 1024 * 1024 + 1]);
+        h.run();
+        assertEquals("TOO_LARGE", h.repo.outcome("cp_spike_data"));
+        assertEquals(1, h.repo.spikeIn(SpikeDirectoryState.TOO_LARGE));
+        assertTrue(h.repo.files.isEmpty());
+    }
+
+    @Test
+    void aListingAtItsBoundOrOverItIsUnknownAndNoDirectoryIsListed(@TempDir Path dir) throws Exception {
+        var h = new Harness(dir, "gateway");
+        spikeOn(h);
+        StringBuilder big = new StringBuilder("total 9\n");
+        int i = 0;
+        while (big.length() < CpSpikeLayoutReview.LS_SPIKE_MAX_BYTES)
+            big.append("drwxr-xr-x 2 4096 ").append(h.device.epoch - 86_400).append(' ').append(spikeName(i++)).append('\n');
+        h.device.spikeListing = big.substring(0, CpSpikeLayoutReview.LS_SPIKE_MAX_BYTES);
+        h.run();
+        assertEquals("UNKNOWN", h.repo.outcome("cp_spike_data"));
+        assertEquals("LISTING_AT_BOUND", h.repo.detail("cp_spike_data").get("reason"));
+        assertTrue(h.repo.spike.isEmpty(), "never processed partially, not even as a baseline");
+        assertEquals("FAILED", h.finalState);
+        assertEquals("partial:LISTING_AT_BOUND", h.finalReason);
+
+        h.device.spikeListing = null;
+        h.device.spikeListingResult = new ExecResult.ChannelFailed("OUTPUT_LIMIT_EXCEEDED");
+        h.run();
+        assertEquals("UNKNOWN", h.repo.outcome("cp_spike_data"));
+        assertEquals("LISTING_OUTPUT_LIMIT_EXCEEDED", h.repo.detail("cp_spike_data").get("reason"));
+        assertTrue(h.repo.spike.isEmpty());
+        h.assertNoDeviceTextInRecords();
+    }
+
+    @Test
+    void aMissingParentIsAbsentAndDoesNotTakeTheBaseline(@TempDir Path dir) throws Exception {
+        var h = new Harness(dir, "gateway");
+        spikeOn(h);
+        h.device.spikeListing = "";
+        h.device.spikeExit = 2;
+        h.run();
+        assertEquals("COMPLETED", h.finalState, h.finalReason);
+        assertEquals("ABSENT", h.repo.outcome("cp_spike_data"));
+        h.device.spikeListing = spikeParent(Map.of(spikeName(1), h.device.epoch - 3600));
+        h.device.spikeExit = 0;
+        h.run();
+        assertEquals(1, h.repo.spikeIn(SpikeDirectoryState.BASELINE), "the first present listing is the baseline");
+        assertTrue(h.device.spikeDirectoriesListed.isEmpty());
+    }
+
+    @Test
+    void aFailedDirectoryListingIsUnknownAndTheDirectoryStaysNewForTheNextRun(@TempDir Path dir) throws Exception {
+        var h = new Harness(dir, "gateway");
+        spikeOn(h);
+        h.device.spikeListing = spikeParent(Map.of());
+        h.run();
+        String name = spikeName(6);
+        h.device.spikeListing = spikeParent(Map.of(name, h.device.epoch - 3600));
+        h.device.spikeDirectories.put(name, "ls: cannot open directory '/var/log/spike_detective/x/': Permission denied\n");
+        h.run();
+        assertEquals("UNKNOWN", h.repo.outcome("cp_spike_data"));
+        assertEquals("DIRECTORY_PERMISSION_DENIED", h.repo.detail("cp_spike_data").get("reason"));
+        assertTrue(h.repo.spike.isEmpty(), "not decided: retried next run");
+        spikeDirectory(h, name, "perf".getBytes(StandardCharsets.US_ASCII), "p".getBytes(StandardCharsets.US_ASCII));
+        h.run();
+        assertEquals("COLLECTED", h.repo.outcome("cp_spike_data"));
+    }
+
+    @Test
+    void aWithdrawnDirectoryGateStopsTheSourceBeforeC4AndTheOtherSourcesStillRun(@TempDir Path dir) throws Exception {
+        var h = new Harness(dir, "gateway");
+        spikeOn(h);
+        h.device.spikeListing = spikeParent(Map.of());
+        h.rows = fixture().stream().filter(r -> !r.gateId().equals("cp_syslog_collect_ls_spike_dir")).toList();
+        h.run();
+        assertEquals("UNKNOWN", h.repo.outcome("cp_spike_data"));
+        assertEquals("GATE_NOT_KNOWN", h.repo.detail("cp_spike_data").get("reason"));
+        assertTrue(c4AndC5(h).isEmpty());
+        assertTrue(h.repo.runs.containsKey("cp_crash_listing"));
+    }
+
+    @Test
+    void theSpikeCommandsAreByteIdenticalToTheirGateRows() {
+        var rows = fixture();
+        var c4 = rows.stream().filter(r -> r.gateId().equals(CpSpikeLayoutReview.LS_SPIKE_GATE)).findFirst().orElseThrow();
+        var c5 = rows.stream().filter(r -> r.gateId().equals(CpSpikeLayoutReview.LS_SPIKE_DIR_GATE)).findFirst().orElseThrow();
+        assertEquals(c4.canonicalCommandKey(), CpSpikeLayoutReview.LS_SPIKE_COMMAND);
+        assertEquals(c5.canonicalCommandKey(), CpSpikeLayoutReview.LS_SPIKE_DIR_TEMPLATE);
+        assertEquals(30, c4.timeoutS());
+        assertEquals(30, c5.timeoutS());
+        assertTrue(CpSystemLogCollect.spikeMemberFetchable("perf_cpu_7.log"));
+        assertTrue(CpSystemLogCollect.spikeMemberFetchable("perf_fwtango_123.log"));
+        assertFalse(CpSystemLogCollect.spikeMemberFetchable("perf_fw2_123.log"), "the middle part is one lowercase word");
+        assertTrue(CpSystemLogCollect.spikeMemberFetchable("profiling_summary.elg"));
+        assertFalse(CpSystemLogCollect.spikeMemberFetchable("perf_X_1.log"), "the amended form: a lowercase word");
+        assertFalse(CpSystemLogCollect.spikeMemberFetchable("perf_cpu_7.log.1"));
+        assertFalse(CpSystemLogCollect.spikeMemberFetchable("../perf_cpu_7.log"));
+        assertFalse(CpSystemLogCollect.spikeMemberFetchable("profiling_summary.elg.gz"));
     }
 
     @Test

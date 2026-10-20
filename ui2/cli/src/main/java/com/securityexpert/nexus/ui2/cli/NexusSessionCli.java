@@ -86,6 +86,7 @@ final class NexusSessionCli {
         System.out.println("  syslog-view <chunkId> [offset=N] [limit=N] [unmasked] [all]   one page (or all pages) of a chunk, masked by default;");
         System.out.println("                                                 unmasked needs system_log_read_unmasked and is on the audit ledger per page");
         System.out.println("  syslog-gaps [deviceId] | syslog-crash-files [deviceId] | syslog-hcp <deviceId>");
+        System.out.println("  syslog-spike-data <deviceId>                   Spike Detective directories: time, member classes, sizes");
         System.out.println("  syslog-measurements [deviceId] [vendor=..] [source=..] [limit=..]   recorded measurement summaries");
         System.out.println("                                                 (Palo Alto and the numeric Check Point summaries)");
         System.out.println("  pa-cases | pa-case <caseId>                    Packet Analysis cases (expiry: 7 days)");
@@ -209,6 +210,10 @@ final class NexusSessionCli {
                 case "syslog-hcp" -> {
                     require(args, 2, "syslog-hcp <deviceId>");
                     yield print(call("GET", SYSLOG + "/" + opaque(args[1]) + "/hcp", null));
+                }
+                case "syslog-spike-data" -> {
+                    require(args, 2, "syslog-spike-data <deviceId>");
+                    yield print(call("GET", SYSLOG + "/" + opaque(args[1]) + "/spike-data", null));
                 }
                 case "pa-cases" -> print(call("GET", PA + "/cases", null));
                 case "pa-case" -> {

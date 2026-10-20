@@ -43,8 +43,9 @@ import com.securityexpert.nexus.ui2.platform.ActionClass;
  *       stops the fetch.</li>
  * </ul>
  *
- * C4 and C5 (Spike Detective listings) are not issued: spike data collection is off by default (§8.3,
- * {@code spike_data_enabled}) and its baseline storage is not built yet.
+ * C4 {@link CpSpikeLayoutReview#LS_SPIKE_GATE} and C5 {@link CpSpikeLayoutReview#LS_SPIKE_DIR_GATE} (Spike Detective
+ * listings) and their C8 member fetches ({@link #fetchSpikeMember}) are issued only while
+ * {@code system_log.spike_data_enabled} is on (§8.3, default off; fetch list as amended by the PO on 2026-10-20).
  */
 public final class CpSystemLogCollect {
     private CpSystemLogCollect() {}
@@ -109,7 +110,60 @@ public final class CpSystemLogCollect {
         }
     }
 
-    /** The whole-file kinds of §8 this executor fetches (spike data is not built, §8.3). */
+    // ---------------------------------------------------------------- §8.3 Spike Detective data (PO amendment 2026-10-20)
+
+    /** The {@code system_log_run} / {@code system_log_file} source key of the spike data. */
+    public static final String SPIKE_SOURCE = "cp_spike_data";
+    /** The parent directory C4 lists; C5 lists one data directory under it. */
+    public static final String SPIKE_PARENT = "/var/log/spike_detective";
+    /**
+     * §8.3 fetch list as amended by the PO on 2026-10-20 (review record SPIKE_DETECTIVE_LAYOUT_REVIEW_2026_10_19.md §4:
+     * the CPU sample is {@code perf_X_NNN.log}, its middle word is not {@code cpu}).
+     */
+    public static final Pattern SPIKE_PERF_MEMBER = Pattern.compile("^perf_[a-z]+_[0-9]+\\.log$");
+    public static final Pattern SPIKE_PROFILING_MEMBER = Pattern.compile("^profiling_summary\\.elg$");
+    /** §3.4 / §10.1 C8: spike data per directory (the sum of the fetched members). Over it = TOO_LARGE, not fetched. */
+    public static final long SPIKE_DIRECTORY_MAX_BYTES = 16L * 1024 * 1024;
+    /** §3.4: new, settled data directories per run; the rest is BACKLOG. */
+    public static final int SPIKE_DIRECTORIES_PER_RUN = 16;
+    /** §10.1 C8: 120 s for a spike member (the shorter of this and the gate row's timeout). */
+    public static final int SPIKE_FETCH_TIMEOUT_S = 120;
+
+    /** True when a data-directory member is on the amended §8.3 fetch list (by name; the caller checks it is a file). */
+    public static boolean spikeMemberFetchable(String memberName) {
+        return memberName != null && (SPIKE_PERF_MEMBER.matcher(memberName).matches()
+                || SPIKE_PROFILING_MEMBER.matcher(memberName).matches());
+    }
+
+    /**
+     * C8 for one spike data member: {@code <SPIKE_PARENT>/<directory>/<member>}. The directory must match the §8.3 safe
+     * form and be one C4 printed in this run ({@code listedDirectories}); the member must be on the amended fetch list
+     * and one C5 printed for that directory in this run ({@code listedMembers}); its listed size must be within
+     * {@code boundBytes} (what is left of the 16 MiB per-directory bound). One byte more than the bound is asked for, so
+     * a member that grew past it is detected, never silently cut. Timeout: the shorter of the gate row's and 120 s.
+     *
+     * @return the transport result, or a refusal ({@code REFUSED} with a {@link FetchRefusal} code) before any I/O
+     */
+    public static RangedFetchResult fetchSpikeMember(DeviceTransport transport, TransportSession session,
+            GateRegistryPort gates, Set<String> listedDirectories, String directory, Set<String> listedMembers,
+            String member, long listedSize, long boundBytes, OutputStream sink) {
+        Objects.requireNonNull(transport, "transport");
+        Optional<GateResolution.Known> gate = fetchGate(gates);
+        if (gate.isEmpty()) return RangedFetchResult.refused(0, FetchRefusal.GATE_NOT_KNOWN.name());
+        if (!CpSpikeLayoutReview.safeDirectoryName(directory) || !spikeMemberFetchable(member))
+            return RangedFetchResult.refused(0, FetchRefusal.NAME_NOT_ALLOWED.name());
+        if (listedDirectories == null || !listedDirectories.contains(directory) || listedMembers == null
+                || !listedMembers.contains(member))
+            return RangedFetchResult.refused(0, FetchRefusal.NAME_NOT_LISTED.name());
+        long bound = Math.min(boundBytes, SPIKE_DIRECTORY_MAX_BYTES);
+        if (listedSize < 0 || bound < 0 || listedSize > bound)
+            return RangedFetchResult.refused(0, FetchRefusal.SIZE_ABOVE_BOUND.name());
+        Duration timeout = Duration.ofSeconds(Math.min(gate.get().timeoutS(), SPIKE_FETCH_TIMEOUT_S));
+        return transport.fetchBounded(session, new RangedFetchSpec(SPIKE_PARENT + "/" + directory + "/" + member, 0, bound + 1),
+                timeout, sink, SPIKE_SOURCE);
+    }
+
+    /** The whole-file kinds of §8.1/§8.2 (spike data is fetched per member, {@link #fetchSpikeMember}). */
     public enum FileKind {
         /** §8.2: yesterday's {@code sar<DD>} text; bound 32 MiB (PROVISIONAL), timeout 120 s. */
         SAR_DAILY("cp_sar_daily", "/var/log/sa", Pattern.compile("sar(0[1-9]|[12][0-9]|3[01])"), 32L * 1024 * 1024, 120),
@@ -199,7 +253,14 @@ public final class CpSystemLogCollect {
         steps.add(new CapabilityStep(StepKind.EXEC, Exec.STAT.shellContext(), Exec.STAT.command(), false, Optional.empty(),
                 Optional.empty(), Optional.empty()));
         steps.add(sftp);
-        for (Exec exec : List.of(Exec.LS_CRASH, Exec.LS_SA, Exec.LS_HCP))
+        steps.add(new CapabilityStep(StepKind.EXEC, Exec.LS_CRASH.shellContext(), Exec.LS_CRASH.command(), false,
+                Optional.empty(), Optional.empty(), Optional.empty()));
+        // §3.2 step 4 (spike data, only while spike_data_enabled is on): C4, then C5 (the template) per directory.
+        steps.add(new CapabilityStep(StepKind.EXEC, CpSpikeLayoutReview.LS_SPIKE_SHELL, CpSpikeLayoutReview.LS_SPIKE_COMMAND,
+                false, Optional.empty(), Optional.empty(), Optional.empty()));
+        steps.add(new CapabilityStep(StepKind.EXEC, CpSpikeLayoutReview.LS_SPIKE_DIR_SHELL,
+                CpSpikeLayoutReview.LS_SPIKE_DIR_TEMPLATE, false, Optional.empty(), Optional.empty(), Optional.empty()));
+        for (Exec exec : List.of(Exec.LS_SA, Exec.LS_HCP))
             steps.add(new CapabilityStep(StepKind.EXEC, exec.shellContext(), exec.command(), false, Optional.empty(),
                     Optional.empty(), Optional.empty()));
         steps.add(sftp);

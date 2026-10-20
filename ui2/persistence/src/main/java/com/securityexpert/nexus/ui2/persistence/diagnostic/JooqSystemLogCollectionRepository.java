@@ -236,20 +236,86 @@ public final class JooqSystemLogCollectionRepository implements CheckPointSystem
             Optional<FileRow> file, List<Gap> gaps) {
         return audited.inTransaction(ACTOR, ACTION, dsl -> {
             if (!insertRun(dsl, jobId, leaseEpoch, deviceId, sourceKey, run)) return false;
-            if (file.isPresent()) {
-                FileRow f = file.get();
-                JooqBackupArtefactManifestRepository.insert(dsl, f.manifest());
-                dsl.execute("insert into system_log_file(file_id, device_id, kind, job_id, remote_name_hmac, name_time, size, "
-                                + "mtime, status, flags, artefact_ref, wrapped_data_key, content_hmac, ciphertext_bytes, expires_at) "
-                                + "values ({0}, {1}, {2}, {3}, {4}, cast({5} as timestamp), {6}, {7}, {8}, cast({9} as text[]), "
-                                + "{10}, {11}, {12}, {13}, {14})",
-                        f.fileId(), deviceId, f.kind(), jobId, f.remoteNameHmac(), f.nameTime(), f.size(), f.mtime(),
-                        f.status(), textArray(f.flags()), f.manifest().artefactId(), f.manifest().wrappedDataKey(), f.contentHmac(),
-                        f.manifest().ciphertextBytes(), java.sql.Timestamp.from(f.expiresAt()));
-            }
+            file.ifPresent(f -> insertFile(dsl, jobId, deviceId, f));
             insertGaps(dsl, deviceId, sourceKey, jobId, gaps);
             return true;
         });
+    }
+
+    // ------------------------------------------------------------------ Spike Detective data (section 8.3, V167)
+
+    @Override
+    public boolean spikeBaselineTaken(String deviceId) {
+        return transactions.inTransaction(dsl -> dsl.fetchExists(dsl.selectOne().from("system_log_run").where(
+                "device_id = {0} and source_key = 'cp_spike_data' and outcome not in ('UNKNOWN', 'ABSENT', 'UNSUPPORTED')",
+                deviceId)) || dsl.fetchExists(dsl.selectOne().from("system_log_spike_directory").where("device_id = {0}", deviceId)));
+    }
+
+    @Override
+    public java.util.Set<String> spikeDirectoryHmacs(String deviceId) {
+        return transactions.inTransaction(dsl -> dsl.fetch("select name_hmac from system_log_spike_directory "
+                + "where device_id = {0}", deviceId).stream().map(r -> r.get("name_hmac", String.class))
+                .collect(Collectors.toCollection(java.util.HashSet::new)));
+    }
+
+    @Override
+    public SpikeWrite recordSpikeDirectory(String jobId, long leaseEpoch, String deviceId, SpikeDirectory directory,
+            Optional<FileRow> file) {
+        return audited.inTransaction(ACTOR, ACTION, dsl -> {
+            if (!fenced(dsl, jobId, leaseEpoch, deviceId)) return SpikeWrite.NOT_RECORDED;
+            if (dsl.fetchExists(dsl.selectOne().from("system_log_spike_directory").where(
+                    "device_id = {0} and name_hmac = {1}", deviceId, directory.nameHmac()))) return SpikeWrite.DUPLICATE;
+            file.ifPresent(f -> insertFile(dsl, jobId, deviceId, f));
+            dsl.execute("insert into system_log_spike_directory(directory_id, device_id, name_hmac, name_class, mtime, state, "
+                            + "member_count, fetched_files, member_bytes, fetched_bytes, members, file_id, job_id) "
+                            + "values ({0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, cast({10} as jsonb), {11}, {12})",
+                    directory.directoryId(), deviceId, directory.nameHmac(), directory.nameClass(), directory.mtime(),
+                    directory.state().name(), directory.memberCount(), directory.fetchedFiles(), directory.memberBytes(),
+                    directory.fetchedBytes(), directory.membersJson(), file.map(FileRow::fileId).orElse(null), jobId);
+            return SpikeWrite.STORED;
+        });
+    }
+
+    @Override
+    public boolean recordSpikeListing(String jobId, long leaseEpoch, String deviceId, Run run, List<SpikeDirectory> listed,
+            List<Gap> gaps) {
+        return audited.inTransaction(ACTOR, ACTION, dsl -> {
+            if (!insertRun(dsl, jobId, leaseEpoch, deviceId, "cp_spike_data", run)) return false;
+            if (!listed.isEmpty()) {
+                // One statement for the whole listing (a baseline can hold thousands of directories, section 8.3).
+                dsl.execute("insert into system_log_spike_directory(directory_id, device_id, name_hmac, name_class, mtime, "
+                                + "state, job_id) select x.directory_id, {0}, x.name_hmac, x.name_class, x.mtime, x.state, {1} "
+                                + "from jsonb_to_recordset(cast({2} as jsonb)) as x(directory_id text, name_hmac text, "
+                                + "name_class text, mtime bigint, state text) "
+                                + "on conflict (device_id, name_hmac) do nothing",
+                        deviceId, jobId, listedJson(listed));
+            }
+            insertGaps(dsl, deviceId, "cp_spike_data", jobId, gaps);
+            return true;
+        });
+    }
+
+    /** The listed directories as a JSON array of {directory_id, name_hmac, name_class, mtime, state}. */
+    static String listedJson(List<SpikeDirectory> listed) {
+        StringBuilder out = new StringBuilder("[");
+        for (SpikeDirectory d : listed) {
+            if (out.length() > 1) out.append(',');
+            out.append("{\"directory_id\":").append(jsonString(d.directoryId())).append(",\"name_hmac\":\"")
+                    .append(d.nameHmac()).append("\",\"name_class\":").append(jsonString(d.nameClass()))
+                    .append(",\"mtime\":").append(d.mtime()).append(",\"state\":\"").append(d.state().name()).append("\"}");
+        }
+        return out.append(']').toString();
+    }
+
+    private static void insertFile(org.jooq.DSLContext dsl, String jobId, String deviceId, FileRow f) {
+        JooqBackupArtefactManifestRepository.insert(dsl, f.manifest());
+        dsl.execute("insert into system_log_file(file_id, device_id, kind, job_id, remote_name_hmac, name_time, size, "
+                        + "mtime, status, flags, artefact_ref, wrapped_data_key, content_hmac, ciphertext_bytes, expires_at) "
+                        + "values ({0}, {1}, {2}, {3}, {4}, cast({5} as timestamp), {6}, {7}, {8}, cast({9} as text[]), "
+                        + "{10}, {11}, {12}, {13}, {14})",
+                f.fileId(), deviceId, f.kind(), jobId, f.remoteNameHmac(), f.nameTime(), f.size(), f.mtime(),
+                f.status(), textArray(f.flags()), f.manifest().artefactId(), f.manifest().wrappedDataKey(), f.contentHmac(),
+                f.manifest().ciphertextBytes(), java.sql.Timestamp.from(f.expiresAt()));
     }
 
     private static boolean fenced(org.jooq.DSLContext dsl, String jobId, long leaseEpoch, String deviceId) {

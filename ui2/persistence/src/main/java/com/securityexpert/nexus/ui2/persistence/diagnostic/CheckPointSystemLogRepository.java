@@ -17,7 +17,9 @@ import com.securityexpert.nexus.ui2.persistence.artefact.BackupArtefactManifestR
  *       advances only in the same transaction that records the chunk row"), so each read is stored before the next is
  *       sent;</li>
  *   <li>the crash/dump listing state and its alerts (section 7);</li>
- *   <li>whole-file fetch rows (section 8).</li>
+ *   <li>whole-file fetch rows (section 8);</li>
+ *   <li>the Spike Detective data-directory state (section 8.3, V167): one row per directory a C4 listing printed, the
+ *       baseline included, keyed by the name HMAC.</li>
  * </ul>
  *
  * No method takes or stores a clear file name, path or log line: names are HMACs, the family snapshot holds base
@@ -146,5 +148,81 @@ public interface CheckPointSystemLogRepository extends SystemLogCollectionReposi
 
     /** The run row of a whole-file source, then the manifest and file row (when fetched) and the gap rows. */
     boolean recordFile(String jobId, long leaseEpoch, String deviceId, String sourceKey, Run run, Optional<FileRow> file,
+            List<Gap> gaps);
+
+    // ---------------------------------------------------------------- Spike Detective data (section 8.3, V167)
+
+    /** The V167 {@code system_log_spike_directory.state} vocabulary. */
+    enum SpikeDirectoryState {
+        /** Listed by the device's first C4 listing: "present before monitoring", never fetched. */
+        BASELINE,
+        /** C5 listed it and every member on the fetch list was fetched and stored (or none was on it). */
+        COLLECTED,
+        /** C5 listed it but no member is on the fetch list: nothing fetched, the member classes are recorded. */
+        NOTHING_TO_FETCH,
+        /** The fetch-list members exceed the 16 MiB per-directory bound (listed, or grown while fetched): not stored. */
+        TOO_LARGE,
+        /** The name is outside the section 8.3 safe form: no C5 is sent for it. */
+        NAME_REJECTED,
+        /** Gone between C4 and C5. */
+        ABSENT
+    }
+
+    Pattern NAME_CLASS = Pattern.compile("[A-Za-z0-9._:+?-]{1,160}");
+
+    /**
+     * One data directory. {@code nameHmac} is the keyed digest of its name (the same value as the
+     * {@code system_log_file.remote_name_hmac} of its stored archive); {@code nameClass} its name class (closed
+     * vocabulary, never the name); {@code membersJson} the per-class member summary (class, count, bytes, fetched
+     * count; never a member name); {@code fileId} the {@code system_log_file} row of a stored archive.
+     */
+    record SpikeDirectory(String directoryId, String nameHmac, String nameClass, long mtime, SpikeDirectoryState state,
+            int memberCount, int fetchedFiles, long memberBytes, long fetchedBytes, String membersJson, String fileId) {
+        public SpikeDirectory {
+            if (nameHmac == null || !HMAC.matcher(nameHmac).matches()) throw new IllegalArgumentException("directory hmac shape");
+            if (nameClass == null || !NAME_CLASS.matcher(nameClass).matches()) throw new IllegalArgumentException("name class shape");
+            if (state == null || mtime < 0 || memberCount < 0 || fetchedFiles < 0 || memberBytes < 0 || fetchedBytes < 0)
+                throw new IllegalArgumentException("directory counters");
+            if (membersJson == null || !membersJson.startsWith("{")) throw new IllegalArgumentException("members shape");
+        }
+
+        /** A listed directory that is decided without a C5 (the baseline, a rejected name). */
+        public static SpikeDirectory listed(String directoryId, String nameHmac, String nameClass, long mtime,
+                SpikeDirectoryState state) {
+            return new SpikeDirectory(directoryId, nameHmac, nameClass, mtime, state, 0, 0, 0, 0, "{}", null);
+        }
+    }
+
+    /** How a directory write ended. */
+    enum SpikeWrite {
+        /** The directory row (and its archive's manifest and file row, when present) is written. */
+        STORED,
+        /** The directory is already recorded for this device: nothing is written; the caller discards its artefact. */
+        DUPLICATE,
+        /** The lease fence refused the write: nothing is written. */
+        NOT_RECORDED
+    }
+
+    /**
+     * True once the device has a recorded Spike Detective listing of a present parent directory (a run row of
+     * {@code cp_spike_data} with an outcome other than UNKNOWN, ABSENT or UNSUPPORTED): later directories are new.
+     */
+    boolean spikeBaselineTaken(String deviceId);
+
+    /** The name HMACs of every directory recorded for the device (baseline included). */
+    java.util.Set<String> spikeDirectoryHmacs(String deviceId);
+
+    /**
+     * One processed directory in its own fenced, audited transaction, before the next directory's C5 is sent: the
+     * archive's manifest and {@code system_log_file} row (when {@code file} is present) and the directory row.
+     */
+    SpikeWrite recordSpikeDirectory(String jobId, long leaseEpoch, String deviceId, SpikeDirectory directory,
+            Optional<FileRow> file);
+
+    /**
+     * The {@code cp_spike_data} run row, then the directories decided without a C5 (the baseline, rejected names; an
+     * already recorded name is left as it is) and the gap rows, in one fenced transaction.
+     */
+    boolean recordSpikeListing(String jobId, long leaseEpoch, String deviceId, Run run, List<SpikeDirectory> listed,
             List<Gap> gaps);
 }

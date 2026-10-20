@@ -526,4 +526,42 @@ class SystemLogReadServiceTest {
         assertFalse(file.containsKey("name"));
         assertNotNull(file.get("expires_at"));
     }
+
+    @Test
+    void spikeDataListsCollectedDirectoriesByClassTimeAndSizeWithoutAnyName() {
+        var at = Instant.parse("2026-10-20T09:10:00Z");
+        String members = "{\"dir:X\":{\"count\":1,\"bytes\":4096,\"fetched\":0},"
+                + "\"file:perf_X_NNN.log\":{\"count\":1,\"bytes\":10851,\"fetched\":1},"
+                + "\"file:profiling_summary.elg\":{\"count\":1,\"bytes\":86,\"fetched\":1}}";
+        when(fx.repository.spikeDirectories(DEVICE, 50)).thenReturn(List.of(new SystemLogReadRepository.SpikeDirectoryRow(
+                "d-1", "X_spike_X_NNN_NNN-NN-NN_NN-NN-NN", 1_790_000_000L, "COLLECTED", 3, 2, 10_937, 10_937, members,
+                "job-1", at, at.plusSeconds(30 * 86400), null, 4_100L)));
+        when(fx.repository.spikeDirectoryCounts(DEVICE)).thenReturn(Map.of("BASELINE", 71L, "COLLECTED", 1L));
+        var read = fx.service().spikeData(DEVICE);
+        assertTrue(read.isOk());
+        assertEquals(Map.of("BASELINE", 71L, "COLLECTED", 1L), read.body().get("counts"));
+        assertEquals(false, read.body().get("enabled"), "the default stays off");
+        assertEquals(30, read.body().get("retention_days"));
+        @SuppressWarnings("unchecked")
+        var directory = ((List<Map<String, Object>>) read.body().get("directories")).get(0);
+        assertEquals("X_spike_X_NNN_NNN-NN-NN_NN-NN-NN", directory.get("name_class"));
+        assertEquals(1_790_000_000L, directory.get("mtime_epoch"));
+        assertEquals(2, directory.get("fetched_files"));
+        @SuppressWarnings("unchecked")
+        var classes = (List<Map<String, Object>>) directory.get("member_classes");
+        assertEquals(3, classes.size());
+        assertEquals(Map.of("type", "file", "class", "perf_X_NNN.log", "count", 1L, "bytes", 10_851L, "fetched", 1L), classes.get(1));
+        assertFalse(directory.containsKey("name"));
+        assertFalse(directory.containsKey("name_hmac"));
+        assertEquals(false, directory.get("pruned"));
+    }
+
+    @Test
+    void spikeDataOfAManagementServerAnswersTheDisabledState() {
+        fx.device("mgmt-1", "management_server", "check_point");
+        var read = fx.service().spikeData("mgmt-1");
+        assertTrue(read.isOk());
+        assertEquals("DISABLED_ON_MANAGEMENT", read.body().get("collection_state"));
+        assertEquals(List.of(), read.body().get("directories"));
+    }
 }

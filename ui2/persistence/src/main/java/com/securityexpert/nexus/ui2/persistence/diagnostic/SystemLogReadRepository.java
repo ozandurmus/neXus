@@ -68,6 +68,16 @@ public interface SystemLogReadRepository {
         }
     }
 
+    /**
+     * One Spike Detective data directory (V167): its name CLASS (never the name), device mtime, state, member counts and
+     * bytes, the per-class member summary ({@code membersJson}: class, count, bytes, fetched count; never a member name)
+     * and, for a stored archive, its retention facts.
+     */
+    record SpikeDirectoryRow(String directoryId, String nameClass, long mtime, String state, int memberCount,
+            int fetchedFiles, long memberBytes, long fetchedBytes, String membersJson, String jobId, Instant recordedAt,
+            Instant expiresAt, Instant prunedAt, Long storedBytes) {
+    }
+
     List<SourceRow> sources(String deviceId);
 
     Optional<LastJob> lastJob(String deviceId);
@@ -91,4 +101,13 @@ public interface SystemLogReadRepository {
 
     /** HCP archives of one device, newest first, at most {@code limit} (bounded to 1..200). */
     List<FileRow> hcpFiles(String deviceId, int limit);
+
+    /**
+     * The Spike Detective directories of one device that are not baseline rows, newest recorded first, at most
+     * {@code limit} (bounded to 1..200).
+     */
+    List<SpikeDirectoryRow> spikeDirectories(String deviceId, int limit);
+
+    /** Directory rows of one device per state ({@code BASELINE} included). */
+    Map<String, Long> spikeDirectoryCounts(String deviceId);
 }

@@ -97,6 +97,17 @@ function stub(setup: Setup = {}) {
     if (url.startsWith(`${BASE}/${DEVICE}/hcp`)) return Promise.resolve(json({ device_id: DEVICE, member_listing: "NOT_AVAILABLE", files: [
       { file_id: "f-1", name_time: "2026-10-17 03:00:12", size: 4_956_000, mtime_epoch: 1790000000, status: "STORED", flags: ["NAME_SHAPE_UNEXPECTED"], collected_at: "2026-10-17T06:00:00Z", expires_at: "2026-10-24T06:00:00Z", pruned: false, stored_bytes: 4_900_000 },
     ] }));
+    if (url.startsWith(`${BASE}/${DEVICE}/spike-data`)) return Promise.resolve(json({ device_id: DEVICE, enabled: true, retention_days: 30,
+      counts: { BASELINE: 71, COLLECTED: 1, TOO_LARGE: 1 }, truncated: false, directories: [
+        { directory_id: "d-1", name_class: "X_spike_X_NNN_NNN-NN-NN_NN-NN-NN", mtime_epoch: 1790000000, state: "COLLECTED", member_count: 2,
+          fetched_files: 2, member_bytes: 10_937, fetched_bytes: 10_937, recorded_at: "2026-10-20T09:10:00Z", expires_at: "2026-11-19T09:10:00Z",
+          pruned: false, stored_bytes: 4_100, member_classes: [
+            { type: "file", class: "perf_X_NNN.log", count: 1, bytes: 10_851, fetched: 1 },
+            { type: "file", class: "profiling_summary.elg", count: 1, bytes: 86, fetched: 1 }] },
+        { directory_id: "d-2", name_class: "X_spike_X_NNN_NNN-NN-NN_NN-NN-NN", mtime_epoch: 1790000100, state: "TOO_LARGE", member_count: 1,
+          fetched_files: 0, member_bytes: 17_000_000, fetched_bytes: 0, recorded_at: "2026-10-20T09:10:00Z", expires_at: null,
+          pruned: false, stored_bytes: null, member_classes: [{ type: "file", class: "perf_X_N.log", count: 1, bytes: 17_000_000, fetched: 0 }] },
+      ] }));
     return Promise.resolve(json({}, 404));
   });
   vi.stubGlobal("fetch", fetch);
@@ -192,6 +203,25 @@ describe("summary strip, source pills and side panel", () => {
     expect(await screen.findByText(/2026-10-17 03:00:12 \(device time\)/)).toBeInTheDocument();
     expect(screen.getByText("Unexpected file name")).toBeInTheDocument();
     expect(screen.getByText(/member listing is not available yet/)).toBeInTheDocument();
+  });
+
+  it("shows Spike Detective data as name classes, device time and sizes only when the source is collected", async () => {
+    const { calls } = stub({ summary: summary({ sources: [...summary().sources, source("cp_spike_data", { cursor: null })] }) });
+    render(<DeviceLogsPanel deviceId={DEVICE} />);
+    expect(await screen.findByText("Spike Detective data")).toBeInTheDocument();
+    expect(await screen.findByText("Collected")).toBeInTheDocument();
+    expect(screen.getByText("Too large, not fetched")).toBeInTheDocument();
+    expect(screen.getByText(/perf_X_NNN\.log 11 KiB \(stored\) · profiling_summary\.elg 86 B \(stored\)/)).toBeInTheDocument();
+    expect(screen.getByText(/71 directories were present before monitoring and are not fetched/)).toBeInTheDocument();
+    expect(calls.some((u) => u === `${BASE}/${DEVICE}/spike-data`)).toBe(true);
+  });
+
+  it("does not ask for Spike Detective data while the source has never run", async () => {
+    const { calls } = stub();
+    render(<DeviceLogsPanel deviceId={DEVICE} />);
+    expect(await screen.findByText("HCP reports")).toBeInTheDocument();
+    expect(screen.queryByText("Spike Detective data")).toBeNull();
+    expect(calls.some((u) => u.includes("/spike-data"))).toBe(false);
   });
 
   it("does not invent what the backend does not have: no error counts, restarts or HCP verdicts", async () => {
