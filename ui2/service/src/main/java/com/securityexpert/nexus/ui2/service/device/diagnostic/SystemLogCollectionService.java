@@ -69,7 +69,7 @@ public final class SystemLogCollectionService {
      * (management servers -- Panorama, MDS -- are never listed; a Gaia Embedded device is admitted and its executor
      * records UNSUPPORTED, so the outcome stays visible).
      */
-    List<DeviceSummaryRecord> targets() {
+    public List<DeviceSummaryRecord> targets() {
         var pan = devices.listReadCollectionTargets("pan_xml_api").stream()
                 .filter(d -> "palo_alto".equals(d.vendorHint()) && "gateway".equals(d.role()));
         var cp = devices.listReadCollectionTargets("ssh_exec").stream()

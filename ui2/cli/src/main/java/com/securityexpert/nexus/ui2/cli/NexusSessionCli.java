@@ -86,6 +86,7 @@ final class NexusSessionCli {
         System.out.println("  syslog-view <chunkId> [offset=N] [limit=N] [unmasked] [all]   one page (or all pages) of a chunk, masked by default;");
         System.out.println("                                                 unmasked needs system_log_read_unmasked and is on the audit ledger per page");
         System.out.println("  syslog-gaps [deviceId] | syslog-crash-files [deviceId] | syslog-hcp <deviceId>");
+        System.out.println("  syslog-health                                  Operations > System health: per device CPU p95 (sar), restarts (cpwd), crash alerts, collection state");
         System.out.println("  syslog-spike-data <deviceId>                   Spike Detective directories: time, member classes, sizes");
         System.out.println("  syslog-settings                                collection settings: retention, caps, the management-server and spike-data switches");
         System.out.println("  syslog-settings-set <key>=<value> ...          security_admin; e.g. spike_data_enabled=true raw_retention_days=45 (audited)");
@@ -209,6 +210,7 @@ final class NexusSessionCli {
                 case "syslog-view" -> syslogView(args);
                 case "syslog-gaps" -> print(call("GET", SYSLOG + "/gaps" + optionalDevice(args), null));
                 case "syslog-crash-files" -> print(call("GET", SYSLOG + "/crash-files" + optionalDevice(args), null));
+                case "syslog-health" -> print(call("GET", SYSLOG + "/health", null));
                 case "syslog-hcp" -> {
                     require(args, 2, "syslog-hcp <deviceId>");
                     yield print(call("GET", SYSLOG + "/" + opaque(args[1]) + "/hcp", null));

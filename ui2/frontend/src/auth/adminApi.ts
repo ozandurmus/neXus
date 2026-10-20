@@ -3303,6 +3303,73 @@ export const getSystemLogHcp = (deviceId: string) => call<SystemLogHcp>(`${syslo
 export const getSystemLogSpikeData = (deviceId: string) => call<SystemLogSpikeData>(`${syslogBase(deviceId)}/spike-data`, "GET");
 
 // ---------------------------------------------------------------------------------------------------------------
+// Operations › System health (`GET /api/v2/system-logs/health`, `syslog-health`; docs/design/SYSTEM_HEALTH_SCREEN_2026_10_20.md).
+// Counters and state words over what the system-log programme already stores; the server computes a snapshot in the
+// background and says so (`computation.state`): COMPUTING until the first snapshot, REFRESHING while a stale one is served.
+// ---------------------------------------------------------------------------------------------------------------
+
+export type HealthFactLevel = "CRITICAL" | "ATTENTION" | "NORMAL" | "UNKNOWN" | "NOT_APPLICABLE";
+export type HealthState = "CRITICAL" | "ATTENTION" | "NORMAL" | "UNKNOWN";
+
+export interface SystemHealthSarDay {
+  readonly day: string;
+  readonly status: "PARSED" | "UNREADABLE" | "CORRUPT" | string;
+  readonly p95_percent: number | null;
+  readonly max_percent: number | null;
+  readonly samples: number | null;
+  readonly cpus: number | null;
+  readonly unparsed_rows: number | null;
+}
+
+export interface SystemHealthDevice {
+  readonly device_id: string;
+  readonly hostname: string | null;
+  readonly vendor_hint: string;
+  readonly role: string;
+  readonly cluster_member_ref: string | null;
+  readonly monitored: boolean;
+  readonly state: HealthState;
+  readonly state_reason: string | null;
+  readonly cpu: {
+    readonly level: HealthFactLevel; readonly reason: string | null; readonly threshold_percent: number;
+    readonly newest_p95_percent: number | null; readonly days_over_threshold: number; readonly longest_run_over_threshold: number;
+    readonly days: readonly SystemHealthSarDay[]; readonly day_basis: string;
+  };
+  readonly memory: { readonly level: "EVIDENCED" | "UNKNOWN" | "NOT_APPLICABLE"; readonly reason: string | null; readonly newest_used_p95_percent: number | null };
+  readonly restarts: {
+    readonly level: HealthFactLevel; readonly reason: string | null; readonly count: number | null; readonly max_in_one_hour: number | null;
+    readonly termination_lines: number | null; readonly busiest_hour: string | null; readonly rule: string;
+  };
+  readonly crash: { readonly level: HealthFactLevel; readonly reason: string | null; readonly new_alerts: number | null; readonly newest_alert_at: string | null };
+  readonly collection: {
+    readonly state: "OK" | "FAILED" | "UNSUPPORTED" | "OFF" | "NEVER"; readonly reason: string | null;
+    readonly last_job_at: string | null; readonly last_job_id: string | null; readonly outcomes: Readonly<Record<string, string>>;
+  };
+  readonly logs_day: string | null;
+}
+
+export interface SystemHealth {
+  readonly computation: { readonly state: "COMPUTING" | "REFRESHING" | "READY"; readonly computed_at: string | null; readonly duration_ms: number | null; readonly snapshot_ttl_seconds: number; readonly store_available: boolean };
+  readonly window_days: number;
+  readonly cpu_p95_threshold_percent: number;
+  readonly time_basis: string;
+  readonly rules: {
+    readonly critical: readonly string[]; readonly attention: readonly string[]; readonly normal: string; readonly unknown: string;
+    readonly state_order: readonly HealthState[]; readonly p95: string;
+    readonly restart_rule: { readonly id: string; readonly status: string; readonly text: string };
+  };
+  readonly kpis: {
+    readonly monitored: { readonly devices: number; readonly by_vendor: Readonly<Record<string, number>>; readonly not_collected_listed: number } | null;
+    readonly crash_alerts: { readonly devices: number; readonly alerts: number; readonly truncated: boolean } | null;
+    readonly cpu_over_threshold: { readonly devices: number; readonly evidenced: number; readonly unknown: number; readonly not_applicable: number; readonly basis: string } | null;
+    readonly collection_not_ok: { readonly devices: number; readonly by_state: Readonly<Record<string, number>> } | null;
+  };
+  readonly devices: readonly SystemHealthDevice[];
+}
+
+export const getSystemHealth = () => call<SystemHealth>("/api/v2/system-logs/health", "GET");
+
+// ---------------------------------------------------------------------------------------------------------------
 // System-log collection settings (contract section 14, `GET/PUT /api/v2/config/system-logs`; Administration › Platform ›
 // System logs). One row: retention, caps and the two switches. `can_write` is the server's own decision about this
 // session; the screen offers edit controls only when it is true and never decides that itself.

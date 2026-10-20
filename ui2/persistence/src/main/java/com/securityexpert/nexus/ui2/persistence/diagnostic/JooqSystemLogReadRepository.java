@@ -79,6 +79,47 @@ public final class JooqSystemLogReadRepository implements SystemLogReadRepositor
     }
 
     @Override
+    public List<FleetRunRow> fleetLastRuns() {
+        return transactions.inTransaction(dsl -> dsl.fetch(
+                "select distinct on (device_id, source_key) device_id, source_key, outcome, job_id, created_at "
+                        + "from system_log_run order by device_id, source_key, created_at desc, run_id")
+                .map(r -> new FleetRunRow(r.get("device_id", String.class), r.get("source_key", String.class),
+                        r.get("outcome", String.class), r.get("job_id", String.class), instant(r, "created_at"))));
+    }
+
+    @Override
+    public List<SarFileRef> sarFileRefs(String deviceId, int limit) {
+        int bounded = Math.max(1, Math.min(limit, 60));
+        return transactions.inTransaction(dsl -> dsl.fetch(
+                "select f.file_id, f.device_id, f.mtime, f.size, f.status, f.collected_at, f.pruned_at, f.artefact_ref, "
+                        + "f.wrapped_data_key, a.recovery_volume_path from system_log_file f "
+                        + "left join backup_artefact a on a.artefact_id = f.artefact_ref "
+                        + "where f.device_id = {0} and f.kind = 'cp_sar_daily' order by f.collected_at desc, f.file_id limit {1}",
+                deviceId, bounded)
+                .map(r -> new SarFileRef(r.get("file_id", String.class), r.get("device_id", String.class), number(r, "mtime"),
+                        number(r, "size"), r.get("status", String.class), instant(r, "collected_at"), instant(r, "pruned_at"),
+                        r.get("artefact_ref", String.class), r.get("recovery_volume_path", String.class),
+                        r.get("wrapped_data_key", byte[].class))));
+    }
+
+    @Override
+    public List<CpwdChunkRef> cpwdChunkRefs(String deviceId, String sinceDay, int limit) {
+        int bounded = Math.max(1, Math.min(limit, 1000));
+        return transactions.inTransaction(dsl -> dsl.fetch(
+                "select c.chunk_id, c.device_id, cast(c.log_day as text) as log_day, c.bytes, c.lines, c.collected_at, "
+                        + "c.pruned_at, c.artefact_ref, c.wrapped_data_key, a.recovery_volume_path from system_log_chunk c "
+                        + "left join backup_artefact a on a.artefact_id = c.artefact_ref "
+                        + "where c.device_id = {0} and c.source_key = 'cp_cpwd_elg' and c.pruned_at is null "
+                        + "and (c.log_day is null or c.log_day >= cast({1} as date)) "
+                        + "order by c.collected_at desc, c.start_offset desc, c.chunk_id limit {2}",
+                deviceId, sinceDay, bounded)
+                .map(r -> new CpwdChunkRef(r.get("chunk_id", String.class), r.get("device_id", String.class),
+                        r.get("log_day", String.class), number(r, "bytes"), number(r, "lines"), instant(r, "collected_at"),
+                        instant(r, "pruned_at"), r.get("artefact_ref", String.class), r.get("recovery_volume_path", String.class),
+                        r.get("wrapped_data_key", byte[].class))));
+    }
+
+    @Override
     public List<ChunkRow> chunks(String deviceId, Optional<String> sourceKey, Optional<String> day, int limit) {
         int bounded = Math.max(1, Math.min(limit, 1000));
         return transactions.inTransaction(dsl -> dsl.fetch(
