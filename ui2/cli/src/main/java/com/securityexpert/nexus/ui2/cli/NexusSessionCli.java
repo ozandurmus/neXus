@@ -87,6 +87,8 @@ final class NexusSessionCli {
         System.out.println("                                                 unmasked needs system_log_read_unmasked and is on the audit ledger per page");
         System.out.println("  syslog-gaps [deviceId] | syslog-crash-files [deviceId] | syslog-hcp <deviceId>");
         System.out.println("  syslog-spike-data <deviceId>                   Spike Detective directories: time, member classes, sizes");
+        System.out.println("  syslog-settings                                collection settings: retention, caps, the management-server and spike-data switches");
+        System.out.println("  syslog-settings-set <key>=<value> ...          security_admin; e.g. spike_data_enabled=true raw_retention_days=45 (audited)");
         System.out.println("  syslog-measurements [deviceId] [vendor=..] [source=..] [limit=..]   recorded measurement summaries");
         System.out.println("                                                 (Palo Alto and the numeric Check Point summaries)");
         System.out.println("  pa-cases | pa-case <caseId>                    Packet Analysis cases (expiry: 7 days)");
@@ -214,6 +216,11 @@ final class NexusSessionCli {
                 case "syslog-spike-data" -> {
                     require(args, 2, "syslog-spike-data <deviceId>");
                     yield print(call("GET", SYSLOG + "/" + opaque(args[1]) + "/spike-data", null));
+                }
+                case "syslog-settings" -> print(call("GET", SYSLOG_SETTINGS, null));
+                case "syslog-settings-set" -> {
+                    require(args, 2, "syslog-settings-set <key>=<value> [<key>=<value> ...]");
+                    yield print(call("PUT", SYSLOG_SETTINGS, json(settingsBody(args))));
                 }
                 case "pa-cases" -> print(call("GET", PA + "/cases", null));
                 case "pa-case" -> {
@@ -621,6 +628,8 @@ final class NexusSessionCli {
     // ---- system logs, phase B read side (DEVICE_SYSTEM_LOG_PHASE_B_CONTRACT.md section 14) ---------------------------------
 
     static final String SYSLOG = "/api/v2/system-logs";
+    /** The settings row (section 14, {@code syslog-settings} / {@code syslog-settings-set}; security_admin). */
+    static final String SYSLOG_SETTINGS = "/api/v2/config/system-logs";
     private static final Pattern OPAQUE_TOKEN = Pattern.compile("[A-Za-z0-9_.:-]{1,128}");
     private static final Pattern DAY = Pattern.compile("[0-9]{4}-[0-9]{2}-[0-9]{2}");
     /** {@code syslog-view ... all} stops after this many pages (256 KiB each at most): a runaway guard, not a limit of the route. */
@@ -688,6 +697,30 @@ final class NexusSessionCli {
         }
         System.err.println("-- stopped after " + SYSLOG_ALL_PAGE_CAP + " pages; continue with offset=" + offset);
         return 0;
+    }
+
+    /**
+     * {@code syslog-settings-set <key>=<value> ...}: every argument is one documented setting. {@code true}/{@code false}
+     * become JSON booleans and a run of digits a JSON number, so the service sees the same types the screen sends; any
+     * other value is sent as a string and refused by the service with the key named. Keys are the service's own
+     * closed list; a key outside it is refused there too, so a misspelt key never silently changes nothing.
+     */
+    static Map<String, Object> settingsBody(String[] args) {
+        Map<String, Object> body = new java.util.LinkedHashMap<>();
+        for (int i = 1; i < args.length; i++) {
+            int eq = args[i].indexOf('=');
+            String key = eq > 0 ? args[i].substring(0, eq) : "";
+            if (!key.matches("[a-z][a-z0-9_]{0,63}")) {
+                throw new UsageException("syslog-settings-set <key>=<value> [<key>=<value> ...], got: " + args[i]);
+            }
+            String value = args[i].substring(eq + 1).strip();
+            Object typed;
+            if ("true".equals(value) || "false".equals(value)) typed = Boolean.valueOf(value);
+            else if (value.matches("[0-9]{1,18}")) typed = Long.valueOf(value);
+            else typed = value;
+            body.put(key, typed);
+        }
+        return body;
     }
 
     /** {@code syslog-measurements [deviceId] [vendor=..] [source=..] [limit=..]}: a bare word is the device id. */

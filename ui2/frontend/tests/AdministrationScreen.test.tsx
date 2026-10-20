@@ -480,7 +480,7 @@ describe("AdministrationScreen Sessions tab", () => {
 
 describe("restricted Administration reads", () => {
   afterEach(() => vi.unstubAllGlobals());
-  it.each(["credentials", "local-identities", "sessions", "roles-permissions", "ldap-settings", "notifications", "audit-logs"])(
+  it.each(["credentials", "local-identities", "sessions", "roles-permissions", "ldap-settings", "notifications", "system-logs", "audit-logs"])(
     "does not mount the restricted %s panel for aiview", async slug => {
       window.history.replaceState(null, "", `/?screen=administration&tab=${slug}`);
       const fetch = vi.fn();
