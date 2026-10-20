@@ -1,29 +1,23 @@
 # NON-AUTHORITATIVE DERIVED SUMMARY — DO NOT USE AS PROJECT-STATE AUTHORITY
 
-## Snapshot (2026-10-16)
-Branch `feature/packet-analysis-ui` merges `feature/packet-analysis-shell` (V154) and the Java `ui2/packet-analysis` engine.
-Step S14 (`packet_analysis_shell` real engine + detail endpoints + CLI parity + React 18 UI) is **AUTOMATED_VALIDATED**; not REAL_ENV_VALIDATED.
-`RealPacketAnalysisEngine` runs in `ui2-worker` producing `report-<jobId>.json`, `findings-v11.json`, and `project.duckdb`.
-`ui2-service` reads `project.duckdb` via read-only DuckDB connections (`409 ANALYSIS_RUNNING` while queued/analyzing) with `aiview` masking and raw-view audit logging.
-Operator screens (`Overview & Verdict`, `Topology`, `Flows & Ladder`, `Timeseries & Quality`, `DNS`) are wired in `ui2/frontend` (`echarts@6.1.0`, `@xyflow/react@12.12.0`).
-Queue's last period build remains NXS-LOCAL-0370; see `CURRENT_STATE.md`.
+## Snapshot (2026-10-20)
+`origin/main` at `f05e7ced`, schema V167. Active build `NXS-LOCAL-0374` (device system logs phase B) is IN_PROGRESS.
+Merged since 2026-10-17: system-log collectors (CP, PAN), masked view `logmask-v3`, settings route, Spike Detective data collection (off by default); Packet Analysis real engine with the first production run fixed; policy completeness (V163), CP hit dates, rule view redesign, permissiveness scoring (PO 2026-10-20); UI design language D1/D2/P2/P3; identity badge bound to the real key comparison (V165); faster failover units read.
+Nothing here is REAL_ENV_VALIDATED. No failover trial has run. `CURRENT_STATE.md` and `project/QUEUE.md` win over this file.
 
 ## What changed this session
-- Wired `RealPacketAnalysisEngine` in `ui2/worker` (`CaseRunner.runCase`) and kept `StubPacketAnalysisEngine` for unit tests.
-- Added `Engine.openReadOnly`, `CaseQueries`, and 16 case detail/topology endpoints in `PacketAnalysisController` with `aiview` masking (`PrivacyMaskingResponseBodyAdvice`), `PACKET_ANALYSIS_RAW_VIEW` enforcement/auditing on `field-diff` and download, and `409 ANALYSIS_RUNNING` conflict guard.
-- Added full CLI parity in `NexusSessionCli` for all new Packet Analysis case reads and `topology-set`.
-- Ported operator-essential Packet Analysis workspace screens into `ui2/frontend` (React 18, `echarts@6.1.0`, `@xyflow/react@12.12.0`, CSP-safe local bundle).
+- State reconciled from the 2026-10-17..20 git log: `CURRENT_STATE.md` hot section, builds `NXS-LOCAL-0371..0374`, `project/java_product_plan.json` review snapshot.
+- Backlog through `tools/delivery/project_queue.py`: `packet_analysis_shell`, `data_sanitizer` -> automated_validated, `ui_effectiveness_review_after_refresh` -> done; five items added (masking residual gaps, CP aiview readiness script client error, PAN object precedence, spike 512 MiB cap, failover pilot preparation).
+- Feature registry: summaries of `java_identity` and `java_platform` updated; it has no row for system logs, Packet Analysis or the policy view and no byte budget left to add one (see risks).
 
 ## Exact next action
-PO / engineering owner review of `feature/packet-analysis-ui` for merge and deployed preview / real-environment validation with multi-point captures.
+Enable and observe system-log collection under the PO's rules (a `security_admin` switches `spike_data_enabled` after the deploy), then close `spike_data_cap_not_enforced_by_pruner` before a device can pass 512 MiB; in parallel finish the failover pilot status document (`failover_pilot_preparation`).
 
 ## Test delta
-- `cd ui2 && ./gradlew test --continue -q -x :integration-tests:test`: 2,199 passed, 0 failed.
-- `cd ui2 && ./gradlew :architecture-tests:test`: 25 passed, 0 failed.
-- `cd ui2/frontend && npx vitest run`: 65 files, 600 passed, 0 failed (12 in `packetAnalysisScreen.test.tsx`).
-- `cd ui2/frontend && npx tsc --noEmit -p .`: PASS (0 errors).
-- `python3 tools/privacy/repository_privacy_check.py` & `python3 -m pytest -q tools/tests/test_live_project_governance.py`: PASS.
+- `jt.sh` (Java `test` minus integration, includes `ProjectPlanReaderTest`): 3,180 tests, 0 failures; frontend vitest 1,073 passed; `tsc --noEmit` clean.
+- Python: `test_live_project_governance`, `test_project_files_budget`, `test_project_queue`, `test_project_plan_render_equivalence` 61 passed; `project_queue.py check` and `build_history_index.py --check` clean; privacy gate PASS.
+- `tests/test_architecture_convergence.py` has 10 failures on a clean `origin/main` too (legacy `utils/` paths); unchanged by this change.
 
 ## New risks / period record
-- Detail views open short-lived read-only DuckDB connections only when case status is not `QUEUED` or `ANALYZING`; concurrent analysis requests return `409 ANALYSIS_RUNNING`.
-- Not yet `REAL_ENV_VALIDATED` on deployed infrastructure.
+- `project/feature_registry.json` is within about 10 bytes of its 70 KiB budget and `backlog.json` within about 80 bytes of 40 KiB: the next feature or item needs a compaction pass first.
+- Builds 0371..0374 are period records written after the fact; no per-build numbering existed for 2026-09-26..10-16.
