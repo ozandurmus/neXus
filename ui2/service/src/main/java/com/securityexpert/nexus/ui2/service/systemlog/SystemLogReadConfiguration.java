@@ -19,6 +19,7 @@ import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord;
 import com.securityexpert.nexus.ui2.persistence.diagnostic.JooqSystemLogCollectionRepository;
 import com.securityexpert.nexus.ui2.persistence.diagnostic.JooqSystemLogReadRepository;
+import com.securityexpert.nexus.ui2.persistence.diagnostic.JooqSystemLogSettingsRepository;
 import com.securityexpert.nexus.ui2.persistence.diagnostic.SystemLogReadRepository;
 import com.securityexpert.nexus.ui2.sanitizer.core.EstateIdentity;
 import com.securityexpert.nexus.ui2.sanitizer.core.KnownNames;
@@ -97,6 +98,12 @@ public class SystemLogReadConfiguration {
             DeviceRepository devices, ArtefactStoreAccess artefacts, LogMasking masking) {
         return new SystemLogReadService(repository, new JooqSystemLogCollectionRepository(transactions), devices,
                 artefacts.storeOrNull(), masking, new JooqBackupArtefactRetrievalRepository(transactions));
+    }
+
+    /** The settings row's read and audited write (section 14, {@code /api/v2/config/system-logs}). */
+    @Bean
+    public SystemLogSettingsService systemLogSettingsService(TransactionBoundary transactions) {
+        return new SystemLogSettingsService(new JooqSystemLogSettingsRepository(transactions));
     }
 
     static Supplier<KnownNames> cached(Supplier<KnownNames> source, Duration ttl) {

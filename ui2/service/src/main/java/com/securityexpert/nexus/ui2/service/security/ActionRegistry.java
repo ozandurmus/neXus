@@ -47,6 +47,10 @@ public final class ActionRegistry {
     public static final String SYSTEM_LOG_READ = "system_log_read";
     /** Section 13 Q10: the unmasked (redacted-only) line view inside the product; operation_admin and security_admin, audited per view; never aiview. */
     public static final String SYSTEM_LOG_READ_UNMASKED = "system_log_read_unmasked";
+    /** Phase B section 14: the system-log collection settings row ({@code GET /api/v2/config/system-logs}); security_admin, never aiview. */
+    public static final String SYSTEM_LOG_SETTINGS_READ = "system_log_settings_read";
+    /** Phase B section 14: writes the settings row ({@code PUT /api/v2/config/system-logs}); security_admin, never aiview. */
+    public static final String SYSTEM_LOG_SETTINGS_WRITE = "system_log_settings_write";
     /** NXS-LOCAL-0165 "Routes": {@code POST /devices/{id}/configuration/collect} -- same gate as {@link #DEVICE_INVENTORY_COLLECT}. */
     public static final String DEVICE_CONFIGURATION_COLLECT = "device_configuration_collect";
     /** NXS-LOCAL-0165 "Routes": {@code GET /devices/{id}/configuration/text} -- the sanitized Check Point view; a gated read, {@code role:onboarding_admin} only (it names section/entry structure of a device's own configuration). */
@@ -228,6 +232,9 @@ public final class ActionRegistry {
                 java.util.Set.of(RoleToken.OPERATION_ADMIN, RoleToken.SECURITY_ADMIN, RoleToken.REPLAY_VIEWER)));
         register(new ActionDescriptor(SYSTEM_LOG_READ_UNMASKED, true, Optional.of(RoleToken.OPERATION_ADMIN),
                 java.util.Set.of(RoleToken.SECURITY_ADMIN)));
+        // Settings read and write are security_admin only (contract section 14), like the notification settings.
+        register(new ActionDescriptor(SYSTEM_LOG_SETTINGS_READ, true, Optional.of(RoleToken.SECURITY_ADMIN)));
+        register(new ActionDescriptor(SYSTEM_LOG_SETTINGS_WRITE, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(DEVICE_CONFIGURATION_COLLECT, true, Optional.of(RoleToken.ONBOARDING_ADMIN)));
         register(new ActionDescriptor(DEVICE_CONFIGURATION_TEXT_READ, true, Optional.of(RoleToken.ONBOARDING_ADMIN)));
         register(new ActionDescriptor(NOTIFICATIONS_READ, true, Optional.empty()));

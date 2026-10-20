@@ -6,7 +6,7 @@ cp-failover credential credentials delete devices deviations diagnostics disable
 enable entries evaluate events export.csv facets history https-certificate import inventory jobs local-identities
 management-tree notifications onboarding overview pan-failover pods policies ports preview project-plan readiness
 relist replace-secret retry revoke role-bindings runs search secrets sessions set-password stats storage strict
-summary system targets text transcript units v2`.split(/\s+/));
+summary system system-logs targets text transcript units v2`.split(/\s+/));
 
 export function sanitizedPath(url: string): string {
   try {

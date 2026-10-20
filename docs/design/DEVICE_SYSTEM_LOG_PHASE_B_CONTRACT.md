@@ -914,6 +914,20 @@ For the PO's acknowledgement (not decided here; each follows from the findings r
 
 The existing `syslog-measure-start` and `syslog-measurements` stay for phase A.
 
+**Settings write path (implementation record, 2026-10-20; PO: "Ayar ekranı/CLI'yi yaz, oradan aç").** `GET /api/v2/config/system-logs`
+answers the `system_log_settings` row (the eight documented keys: `raw_retention_days`, `device_cap_bytes`, `hcp_retention_days`,
+`spike_data_retention_days`, `spike_data_cap_bytes`, `ledger_retention_days`, `include_management_servers`,
+`spike_data_enabled`), `updated_at`/`updated_by`, the bounds per key (the V160 CHECK constraints) and `can_write` (the server's
+own decision for the session). `PUT` takes any subset of the keys, refuses the whole body on an unknown key, a wrong type, a
+value outside the bounds or an empty body (`400 SYSTEM_LOG_SETTINGS_INVALID` with every problem named, `SYSTEM_LOG_SETTINGS_EMPTY`),
+and otherwise replaces the row in one audited transaction (`app.action_id = system_log_settings_write`, `app.actor_fingerprint`
+= the caller; `updated_at = now()`, `updated_by` = the caller). The read is gated by its own action id,
+`system_log_settings_read` (the notification-settings precedent: a read and a write action, both `security_admin`; the roles of
+this table are unchanged). Neither is open to the aiview persona. CLI: `syslog-settings` and
+`syslog-settings-set <key>=<value> ...` (`true`/`false` and digit runs are typed). UI: Administration › Platform › System logs,
+every setting with its explanation, value and last change; edit controls only when `can_write`; turning on
+`spike_data_enabled` or `include_management_servers` passes a confirm step that states what starts at the next job window.
+
 ## 15. Implementation outline (after the PENDING parameters are set from the findings record)
 
 1. Migration:

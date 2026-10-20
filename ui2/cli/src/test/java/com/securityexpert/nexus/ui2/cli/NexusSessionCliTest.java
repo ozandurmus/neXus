@@ -91,9 +91,11 @@ class NexusSessionCliTest {
     @Test
     void systemLogReadCommandsCallTheScreenRoutes(@TempDir Path home) throws Exception {
         java.util.List<String> calls = new java.util.concurrent.CopyOnWriteArrayList<>();
+        java.util.List<String> bodies = new java.util.concurrent.CopyOnWriteArrayList<>();
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         server.createContext("/", exchange -> {
             calls.add(exchange.getRequestMethod() + " " + exchange.getRequestURI());
+            bodies.add(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
             byte[] out = "{}".getBytes(StandardCharsets.UTF_8);
             exchange.sendResponseHeaders(200, out.length);
             exchange.getResponseBody().write(out);
@@ -114,6 +116,8 @@ class NexusSessionCliTest {
             assertEquals(0, cli.run(new String[] {"syslog-crash-files", "dev-1"}));
             assertEquals(0, cli.run(new String[] {"syslog-hcp", "dev-1"}));
             assertEquals(0, cli.run(new String[] {"syslog-spike-data", "dev-1"}));
+            assertEquals(0, cli.run(new String[] {"syslog-settings"}));
+            assertEquals(0, cli.run(new String[] {"syslog-settings-set", "spike_data_enabled=true", "raw_retention_days=45"}));
             assertEquals(java.util.List.of(
                     "GET /api/v2/system-logs/dev-1/sources",
                     "GET /api/v2/system-logs/dev-1/chunks",
@@ -122,13 +126,20 @@ class NexusSessionCliTest {
                     "GET /api/v2/system-logs/dev-1/chunks?source=cp_messages&day=2026-10-17",
                     "GET /api/v2/system-logs/gaps", "GET /api/v2/system-logs/gaps?deviceId=dev-1",
                     "GET /api/v2/system-logs/crash-files", "GET /api/v2/system-logs/crash-files?deviceId=dev-1",
-                    "GET /api/v2/system-logs/dev-1/hcp", "GET /api/v2/system-logs/dev-1/spike-data"), calls);
+                    "GET /api/v2/system-logs/dev-1/hcp", "GET /api/v2/system-logs/dev-1/spike-data",
+                    "GET /api/v2/config/system-logs", "PUT /api/v2/config/system-logs"), calls);
+            // syslog-settings-set sends the screen's PUT body: booleans and whole numbers typed, in the order given.
+            assertEquals("{\"spike_data_enabled\":true,\"raw_retention_days\":45}", bodies.get(bodies.size() - 1));
             calls.clear();
             // identifiers are opaque tokens: a path or query fragment is refused before any call
             assertEquals(2, cli.run(new String[] {"syslog-sources", "dev-1/../../x"}));
             assertEquals(2, cli.run(new String[] {"syslog-gaps", "dev-1&x=1"}));
             assertEquals(2, cli.run(new String[] {"syslog-chunks", "dev-1", "a", "b"}));
             assertEquals(2, cli.run(new String[] {"syslog-sources"}));
+            // a settings write needs at least one key=value; a bare word or an odd key is usage, never a call
+            assertEquals(2, cli.run(new String[] {"syslog-settings-set"}));
+            assertEquals(2, cli.run(new String[] {"syslog-settings-set", "spike_data_enabled"}));
+            assertEquals(2, cli.run(new String[] {"syslog-settings-set", "Spike=true"}));
             assertTrue(calls.isEmpty(), calls.toString());
         } finally {
             server.stop(0);

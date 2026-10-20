@@ -21,6 +21,7 @@ import { AuditLogsPanel } from "./AuditLogsPanel";
 import { JobLogsPanel } from "./JobLogsPanel";
 import { DirectorySettingsPanel } from "../components/settings/DirectorySettingsPanel";
 import { NotificationSettingsPanel } from "../components/settings/NotificationSettingsPanel";
+import { SystemLogSettingsPanel } from "../components/settings/SystemLogSettingsPanel";
 import { SystemStatusPanel } from "./SystemStatusPanel";
 
 interface AdminTabDef {
@@ -70,6 +71,7 @@ const GROUPS: readonly AdminGroupDef[] = [
     tabs: [
       { slug: "system", label: "System", panel: <SystemStatusPanel /> },
       { slug: "notifications", administratorOnly: true, label: "Notifications", panel: <NotificationSettingsPanel /> },
+      { slug: "system-logs", administratorOnly: true, label: "System logs", panel: <SystemLogSettingsPanel /> },
       { slug: "delivery-plan", label: "Delivery plan", panel: <ProjectPlanPanel /> },
     ],
   },

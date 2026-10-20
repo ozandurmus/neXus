@@ -170,6 +170,9 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("GET /api/v2/system-logs/crash-files", ActionRegistry.SYSTEM_LOG_READ),
             Map.entry("GET /api/v2/system-logs/*/hcp", ActionRegistry.SYSTEM_LOG_READ),
             Map.entry("GET /api/v2/system-logs/*/spike-data", ActionRegistry.SYSTEM_LOG_READ),
+            // Phase B settings (section 14): the one row of retention, caps and the two switches; security_admin only.
+            Map.entry("GET /api/v2/config/system-logs", ActionRegistry.SYSTEM_LOG_SETTINGS_READ),
+            Map.entry("PUT /api/v2/config/system-logs", ActionRegistry.SYSTEM_LOG_SETTINGS_WRITE),
             Map.entry("POST /devices/inventory/collect-all", ActionRegistry.DEVICE_INVENTORY_COLLECT),
             Map.entry("GET /clusters/*/inventory", ActionRegistry.DEVICE_READ),
             // NXS-LOCAL-0165 "Routes": same wildcard shapes as the inventory

@@ -3302,6 +3302,44 @@ export const getSystemLogHcp = (deviceId: string) => call<SystemLogHcp>(`${syslo
 
 export const getSystemLogSpikeData = (deviceId: string) => call<SystemLogSpikeData>(`${syslogBase(deviceId)}/spike-data`, "GET");
 
+// ---------------------------------------------------------------------------------------------------------------
+// System-log collection settings (contract section 14, `GET/PUT /api/v2/config/system-logs`; Administration › Platform ›
+// System logs). One row: retention, caps and the two switches. `can_write` is the server's own decision about this
+// session; the screen offers edit controls only when it is true and never decides that itself.
+// ---------------------------------------------------------------------------------------------------------------
+
+export const SYSTEM_LOG_SETTING_KEYS = [
+  "raw_retention_days", "device_cap_bytes", "hcp_retention_days", "spike_data_retention_days", "spike_data_cap_bytes",
+  "ledger_retention_days", "include_management_servers", "spike_data_enabled",
+] as const;
+export type SystemLogSettingKey = (typeof SYSTEM_LOG_SETTING_KEYS)[number];
+
+export interface SystemLogSettingsView {
+  readonly raw_retention_days: number;
+  readonly device_cap_bytes: number;
+  readonly hcp_retention_days: number;
+  readonly spike_data_retention_days: number;
+  readonly spike_data_cap_bytes: number;
+  readonly ledger_retention_days: number;
+  readonly include_management_servers: boolean;
+  readonly spike_data_enabled: boolean;
+  /** When the row was last written (the database clock), or null before any write. */
+  readonly updated_at: string | null;
+  /** Who wrote it last: an actor fingerprint, or the migration that seeded the defaults. */
+  readonly updated_by: string | null;
+  /** Whether this session may change the row (holds the write action and is not the aiview persona). */
+  readonly can_write: boolean;
+  /** The service's own bounds per key, so the form limits what it offers. */
+  readonly bounds: Readonly<Record<SystemLogSettingKey, { readonly type: "integer" | "boolean"; readonly min?: number; readonly max?: number }>>;
+}
+
+/** Any subset of the documented keys; the service merges it over the stored row and refuses the whole body on any problem. */
+export type SystemLogSettingsPatch = Partial<Pick<SystemLogSettingsView, SystemLogSettingKey>>;
+
+export const getSystemLogSettings = () => call<SystemLogSettingsView>("/api/v2/config/system-logs", "GET");
+export const saveSystemLogSettings = (patch: SystemLogSettingsPatch) =>
+  call<SystemLogSettingsView>("/api/v2/config/system-logs", "PUT", patch);
+
 /**
  * One page of a chunk's text. The page is `text/plain` with its paging facts in `X-Syslog-*` headers; a response
  * without them (a proxy that stripped them, a truncated body) is an error, never an empty page that reads as the end.
