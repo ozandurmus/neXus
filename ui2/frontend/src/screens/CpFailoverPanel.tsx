@@ -69,6 +69,8 @@ function UnitPanel({ unit, expanded, onExpand, onRefreshUnits }: { unit: CpFailo
   const [busy, setBusy] = useState(false), [loaded, setLoaded] = useState(false);
   const lock = useRef(false), attempted = useRef<string | null>(null);
   const lastReadiness = useRef<string | null>(null);
+  const shown = useRef(unit.readinessObservedAt);
+  shown.current = unit.readinessObservedAt;
   const remember = (value: Draft) => { sessionStorage.setItem(storageKey, JSON.stringify(value)); setDraft(value); };
   const refresh = useCallback(async () => {
     try {
@@ -79,7 +81,12 @@ function UnitPanel({ unit, expanded, onExpand, onRefreshUnits }: { unit: CpFailo
         readiness ? getCpFailoverRun(readiness.runId, unit.vendor) : null]);
       setApprovals(windows); setRun(detail); setReadinessRun(checks); setLoaded(true);
       if (checks && !activeStates.includes(checks.state) && lastReadiness.current !== checks.runId) {
-        lastReadiness.current = checks.runId; onRefreshUnits();
+        // The unit list was loaded with the latest finished readiness: reload it only when this run is newer than
+        // what the list shows (a run that finished while we watched), not for the run already on screen at mount.
+        const firstSight = lastReadiness.current === null;
+        lastReadiness.current = checks.runId;
+        const seen = checks.checks.map(c => c.observedAt).sort().at(-1);
+        if (!firstSight || (seen && (!shown.current || Date.parse(seen) > Date.parse(shown.current)))) onRefreshUnits();
       }
     } catch (e) { setLoaded(false); setError(errorText(e)); }
   }, [unit.unitId, unit.clusterId, unit.vendor, onRefreshUnits]);

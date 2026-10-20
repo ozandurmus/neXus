@@ -43,6 +43,8 @@ class CpFailoverMaskingTest {
             "check_point", false, null, null, null,
             new JooqCpFailoverRepository.ReadinessStatus(cluster, null, "check_point", "READY", Instant.EPOCH, null,
                 "[{\"memberRef\":\"opaque-1\",\"checkNo\":1,\"status\":\"PASS\",\"derived\":{\"role\":\"ACTIVE\",\"hostname\":\"synthetic-firewall-1\"}}]","COMMAND_UNAVAILABLE"), true)));
+        var listed = service.summary("synthetic-actor").get(0).readiness();
+        when(service.unitReadiness("synthetic-actor", List.of(unit))).thenReturn(java.util.Map.of("opaque-cluster", listed));
         byte[] key = "synthetic-readiness-masking-key-01".getBytes(StandardCharsets.UTF_8);
         var names = new TopologyNamePseudonymizer(key);
         var advice = new PrivacyMaskingResponseBodyAdvice(new SubnetPreservingIpMasker(key), names);

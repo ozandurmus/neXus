@@ -29,6 +29,16 @@ public interface DeviceInventoryRepository {
     /** The newest run for one device, fully reassembled with its contexts, or empty if none was ever recorded. */
     Optional<InventoryRun> findLatestRun(String deviceId);
 
+    /** True when the device has at least one recorded run; reads no child rows. */
+    default boolean hasRun(String deviceId) {
+        return findLatestRun(deviceId).isPresent();
+    }
+
+    /** The newest run's HA facts only (empty when the device has no run), without interfaces, addresses or routes. */
+    default List<InventoryHaFact> findLatestHaFacts(String deviceId) {
+        return findLatestRun(deviceId).stream().flatMap(run -> run.haFacts().stream()).toList();
+    }
+
     /** Stored context identifiers only, without loading addresses, routes or raw topology. */
     default List<String> findLatestContextIds(String deviceId) {
         return findLatestRun(deviceId).stream().flatMap(run -> run.contexts().stream())

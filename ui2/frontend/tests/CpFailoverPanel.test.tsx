@@ -104,3 +104,20 @@ it("an uncertain HTTP result retries the same revision without another warning",
   await waitFor(() => expect(api.start).toHaveBeenCalledTimes(2));
   expect(api.start.mock.calls[1]).toEqual(api.start.mock.calls[0]); expect(api.approve).toHaveBeenCalledTimes(1);
 });
+const finishedReadiness = (observedAt: string, runId = "readiness-opaque") => run({ runId, kind: "READINESS", state: "DONE", step: "DONE", outcome: "READY",
+  checks: [{ phase: "pre", checkNo: 1, title: "Cluster", member: "Member 1", status: "PASS", result: "PASS", summary: "Active", blocking: true, observedAt }] });
+const readinessSummary = { runId: "readiness-opaque", kind: "READINESS", state: "DONE" };
+it("mounting with the latest readiness already on screen loads the unit list once", async () => {
+  api.runs.mockResolvedValue([readinessSummary]); api.detail.mockResolvedValue(finishedReadiness("2026-10-06T08:59:00Z"));
+  render(<ThemeProvider theme={m3Theme}><CpFailoverPanel memberDeviceId="opaque-1" initialUnitId={unit.unitId} /></ThemeProvider>);
+  await waitFor(() => expect(api.detail).toHaveBeenCalled()); await waitFor(() => expect(screen.getByRole("button", { name: "Start failover" })).toBeEnabled());
+  await new Promise(resolve => setTimeout(resolve, 50));
+  expect(api.units).toHaveBeenCalledTimes(1);
+});
+it("a readiness run newer than the listed one refreshes the unit list exactly once", async () => {
+  api.runs.mockResolvedValue([readinessSummary]); api.detail.mockResolvedValue(finishedReadiness("2026-10-06T09:30:00Z"));
+  render(<ThemeProvider theme={m3Theme}><CpFailoverPanel memberDeviceId="opaque-1" initialUnitId={unit.unitId} /></ThemeProvider>);
+  await waitFor(() => expect(api.units).toHaveBeenCalledTimes(2));
+  await new Promise(resolve => setTimeout(resolve, 50));
+  expect(api.units).toHaveBeenCalledTimes(2); expect(api.units).toHaveBeenNthCalledWith(2, "opaque-1", "check_point");
+});

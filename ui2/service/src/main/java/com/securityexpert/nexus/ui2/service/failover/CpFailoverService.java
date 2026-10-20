@@ -118,41 +118,79 @@ public final class CpFailoverService {
         Map<StatusKey, JooqCpFailoverRepository.ReadinessStatus> readiness = store.readinessStatuses().stream()
             .collect(Collectors.toMap(s -> new StatusKey(s.clusterRef(), s.vsId(), s.vendor()), s -> s));
         Map<String, List<DeviceSummaryRecord>> clusters = devices.listAll().stream()
-            .filter(d -> d.clusterMemberRef().isPresent() && ("check_point".equals(d.vendorHint())
-                || "palo_alto".equals(d.vendorHint())))
+            .filter(CpFailoverService::failoverVendor)
             .collect(Collectors.groupingBy(d -> d.clusterMemberRef().orElseThrow()));
         return clusters.entrySet().stream().filter(e -> e.getValue().size() == 2)
-            .flatMap(e -> {
-                List<DeviceSummaryRecord> pair = e.getValue().stream()
-                    .sorted(Comparator.comparing(DeviceSummaryRecord::deviceId)).toList();
-                String vendor = pair.get(0).vendorHint();
-                if (!vendor.equals(pair.get(1).vendorHint()) || pair.stream().anyMatch(m -> {
-                    List<JooqCpFailoverRepository.SummaryMember> rows = facts.get(m.deviceId());
-                    return rows == null || rows.isEmpty() || !rows.get(0).readable()
-                        || rows.get(0).transportKind() == null || !rows.get(0).inventoryPresent()
-                        || ("palo_alto".equals(vendor) && (!"pan_xml_api".equalsIgnoreCase(rows.get(0).transportKind())
-                            || !rows.get(0).panSupported()));
-                })) return java.util.stream.Stream.<Summary>empty();
-                List<String> common = facts.get(pair.get(0).deviceId()).stream()
-                    .map(JooqCpFailoverRepository.SummaryMember::context)
-                    .filter(c -> c != null && !"physical".equals(c) && c.matches("[0-9]{1,10}"))
-                    .filter(c -> facts.get(pair.get(1).deviceId()).stream().anyMatch(r -> c.equals(r.context())))
-                    .distinct().sorted().toList();
-                boolean vsx = "check_point".equals(vendor) && pair.stream().anyMatch(m ->
-                    m.virtualSystems().filter(v -> !v.isBlank()).isPresent() || facts.get(m.deviceId()).stream()
-                        .anyMatch(r -> r.context() != null && !"physical".equals(r.context())));
-                if (vsx && common.isEmpty()) return java.util.stream.Stream.<Summary>empty();
-                List<Unit> units = "palo_alto".equals(vendor)
-                    ? List.of(new Unit(opaque(e.getKey()), opaque(e.getKey()), e.getKey(), null, pair))
-                    : namedUnits(e.getKey(), pair, common);
-                return units.stream().map(u -> {
-                    var status = statuses.get(new StatusKey(e.getKey(), u.vsId(), vendor));
-                    return new Summary(u, vendor, status != null && status.activeWindow(),
-                        status == null ? null : status.state(), status == null ? null : status.outcome(),
-                        status == null ? null : status.scheduledFor(),
-                        readiness.get(new StatusKey(e.getKey(), u.vsId(), vendor)), canRunReadiness);
-                });
-            }).toList();
+            .flatMap(e -> clusterSummaries(e.getKey(), e.getValue(), canRunReadiness, facts, statuses, readiness))
+            .toList();
+    }
+    private static boolean failoverVendor(DeviceSummaryRecord d) {
+        return d.clusterMemberRef().isPresent() && ("check_point".equals(d.vendorHint()) || "palo_alto".equals(d.vendorHint()));
+    }
+    /** One cluster's summary rows from already-read facts; shared by the fleet summary and the one-cluster read. */
+    private static java.util.stream.Stream<Summary> clusterSummaries(String clusterRef, List<DeviceSummaryRecord> members,
+            boolean canRunReadiness, Map<String, List<JooqCpFailoverRepository.SummaryMember>> facts,
+            Map<StatusKey, JooqCpFailoverRepository.SummaryStatus> statuses,
+            Map<StatusKey, JooqCpFailoverRepository.ReadinessStatus> readiness) {
+        List<DeviceSummaryRecord> pair = members.stream()
+            .sorted(Comparator.comparing(DeviceSummaryRecord::deviceId)).toList();
+        String vendor = pair.get(0).vendorHint();
+        if (!vendor.equals(pair.get(1).vendorHint()) || pair.stream().anyMatch(m -> {
+            List<JooqCpFailoverRepository.SummaryMember> rows = facts.get(m.deviceId());
+            return rows == null || rows.isEmpty() || !rows.get(0).readable()
+                || rows.get(0).transportKind() == null || !rows.get(0).inventoryPresent()
+                || ("palo_alto".equals(vendor) && (!"pan_xml_api".equalsIgnoreCase(rows.get(0).transportKind())
+                    || !rows.get(0).panSupported()));
+        })) return java.util.stream.Stream.<Summary>empty();
+        List<String> common = facts.get(pair.get(0).deviceId()).stream()
+            .map(JooqCpFailoverRepository.SummaryMember::context)
+            .filter(c -> c != null && !"physical".equals(c) && c.matches("[0-9]{1,10}"))
+            .filter(c -> facts.get(pair.get(1).deviceId()).stream().anyMatch(r -> c.equals(r.context())))
+            .distinct().sorted().toList();
+        boolean vsx = "check_point".equals(vendor) && pair.stream().anyMatch(m ->
+            m.virtualSystems().filter(v -> !v.isBlank()).isPresent() || facts.get(m.deviceId()).stream()
+                .anyMatch(r -> r.context() != null && !"physical".equals(r.context())));
+        if (vsx && common.isEmpty()) return java.util.stream.Stream.<Summary>empty();
+        List<Unit> units = "palo_alto".equals(vendor)
+            ? List.of(new Unit(opaque(clusterRef), opaque(clusterRef), clusterRef, null, pair))
+            : namedUnits(clusterRef, pair, common);
+        return units.stream().map(u -> {
+            var status = statuses.get(new StatusKey(clusterRef, u.vsId(), vendor));
+            return new Summary(u, vendor, status != null && status.activeWindow(),
+                status == null ? null : status.state(), status == null ? null : status.outcome(),
+                status == null ? null : status.scheduledFor(),
+                readiness.get(new StatusKey(clusterRef, u.vsId(), vendor)), canRunReadiness);
+        });
+    }
+
+    /**
+     * Latest readiness per unit id for units already resolved by a reader-checked lookup of ONE cluster.
+     * Same eligibility and join rules as {@link #summary}, but every store read is restricted to that
+     * cluster's two devices and reference, so cost no longer grows with the fleet or the run history.
+     */
+    public Map<String, JooqCpFailoverRepository.ReadinessStatus> unitReadiness(String actor, List<Unit> units) {
+        requireReader(actor);
+        Map<String, JooqCpFailoverRepository.ReadinessStatus> out = new java.util.HashMap<>();
+        Map<String, List<Unit>> byCluster = new java.util.LinkedHashMap<>();
+        for (Unit u : units) byCluster.computeIfAbsent(u.members().get(0).clusterMemberRef().orElseThrow(),
+            k -> new java.util.ArrayList<>()).add(u);
+        for (var entry : byCluster.entrySet()) {
+            String ref = entry.getKey();
+            List<DeviceSummaryRecord> members = entry.getValue().get(0).members().stream()
+                .filter(CpFailoverService::failoverVendor).toList();
+            if (members.size() != 2) continue;
+            Map<String, List<JooqCpFailoverRepository.SummaryMember>> facts = store.summaryMembers(
+                members.stream().map(DeviceSummaryRecord::deviceId).toList()).stream()
+                .collect(Collectors.groupingBy(JooqCpFailoverRepository.SummaryMember::deviceId));
+            Map<StatusKey, JooqCpFailoverRepository.SummaryStatus> statuses = store.summaryStatuses(ref).stream()
+                .collect(Collectors.toMap(s -> new StatusKey(s.clusterRef(), s.vsId(), s.vendor()), s -> s));
+            Map<StatusKey, JooqCpFailoverRepository.ReadinessStatus> readiness = store.readinessStatuses(ref).stream()
+                .collect(Collectors.toMap(s -> new StatusKey(s.clusterRef(), s.vsId(), s.vendor()), s -> s));
+            clusterSummaries(ref, members, false, facts, statuses, readiness)
+                .filter(s -> s.readiness() != null)
+                .forEach(s -> out.putIfAbsent(s.unit().id(), s.readiness()));
+        }
+        return out;
     }
     public List<ReadinessTarget> readinessTargets() {
         return summaries("system:failover-readiness-scheduler").stream()
@@ -163,8 +201,6 @@ public final class CpFailoverService {
     }
     public List<Unit> unitsForRef(String clusterRef, String actor, String vendor) {
         requireReader(actor);
-        if (clusterRef == null || devices.listAll().stream().noneMatch(d -> d.clusterMemberRef().filter(clusterRef::equals).isPresent()))
-            return lookupUnits(null, actor, vendor);
         return lookupUnits(clusterRef, actor, vendor);
     }
 
@@ -174,17 +210,22 @@ public final class CpFailoverService {
     }
     public List<Unit> unitsForMember(String memberDeviceId, String actor, String vendor) {
         requireReader(actor);
-        String ref = memberDeviceId == null ? null : devices.listAll().stream()
-            .filter(d -> d.deviceId().equals(memberDeviceId)).findFirst()
+        String ref = memberDeviceId == null ? null : devices.findSummary(memberDeviceId)
             .flatMap(DeviceSummaryRecord::clusterMemberRef).orElse(null);
         return lookupUnits(ref, actor, vendor);
     }
 
-    /** Inventory lookups may have no HA unit; admission keeps using strict units(). */
+    /**
+     * Inventory lookups may have no HA unit; admission keeps using strict units(). The caller has
+     * already passed the reader check, and the cluster is addressed by its reference directly, so no
+     * fleet-wide device listing is needed to turn an opaque id back into a reference.
+     */
     private List<Unit> lookupUnits(String clusterRef, String actor, String vendor) {
         try {
             if (clusterRef == null) throw new Refusal("CLUSTER_NOT_FOUND");
-            return units(opaque(clusterRef), actor, vendor);
+            List<DeviceSummaryRecord> members = devices.findMembersByClusterRef(clusterRef);
+            if (members.isEmpty()) throw new Refusal("CLUSTER_NOT_FOUND");
+            return resolveUnits(clusterRef, members, vendor);
         } catch (Refusal refused) {
             if ("CLUSTER_NOT_FOUND".equals(refused.code())
                     || "CLUSTER_NOT_ELIGIBLE".equals(refused.code())) return List.of();
@@ -201,35 +242,39 @@ public final class CpFailoverService {
             .flatMap(Optional::stream).distinct().filter(ref -> opaque(ref).equals(clusterId)).toList();
         if (clusters.size() != 1) throw new Refusal("CLUSTER_NOT_FOUND");
         String cluster=clusters.get(0);
-        List<DeviceSummaryRecord> members=devices.findMembersByClusterRef(cluster);
-        if (members.size()!=2 || members.stream().anyMatch(m -> !vendor.equals(m.vendorHint())
-                || devices.find(m.deviceId()).filter(d -> d.permitsReadCollection()).isEmpty()
-                || devices.findEndpointByDeviceId(m.deviceId()).isEmpty()))
-            throw new Refusal("CLUSTER_NOT_ELIGIBLE");
-        members=members.stream().sorted(Comparator.comparing(DeviceSummaryRecord::deviceId)).toList();
-        List<DeviceSummaryRecord> pair=members;
-        if (pair.stream().anyMatch(m -> inventory.findLatestRun(m.deviceId()).isEmpty()))
+        return resolveUnits(cluster, devices.findMembersByClusterRef(cluster), vendor);
+    }
+    /** Eligibility and unit derivation for one cluster; each member's stored inventory is read in slices, never reassembled. */
+    private List<Unit> resolveUnits(String cluster, List<DeviceSummaryRecord> members, String vendor) {
+        String clusterId = opaque(cluster);
+        if (members.size()!=2) throw new Refusal("CLUSTER_NOT_ELIGIBLE");
+        Map<String, com.securityexpert.nexus.ui2.persistence.device.EndpointRecord> endpoints = new java.util.HashMap<>();
+        for (DeviceSummaryRecord m : members) {
+            if (!vendor.equals(m.vendorHint()) || devices.find(m.deviceId()).filter(d -> d.permitsReadCollection()).isEmpty())
+                throw new Refusal("CLUSTER_NOT_ELIGIBLE");
+            endpoints.put(m.deviceId(), devices.findEndpointByDeviceId(m.deviceId())
+                .orElseThrow(() -> new Refusal("CLUSTER_NOT_ELIGIBLE")));
+        }
+        List<DeviceSummaryRecord> pair=members.stream().sorted(Comparator.comparing(DeviceSummaryRecord::deviceId)).toList();
+        if (pair.stream().anyMatch(m -> !inventory.hasRun(m.deviceId())))
             throw new Refusal("INVENTORY_REQUIRED");
         if ("palo_alto".equals(vendor)) {
-            if (pair.stream().anyMatch(m -> devices.findEndpointByDeviceId(m.deviceId())
-                    .filter(e -> "pan_xml_api".equalsIgnoreCase(e.transportKind())).isEmpty()))
+            if (pair.stream().anyMatch(m -> !"pan_xml_api".equalsIgnoreCase(endpoints.get(m.deviceId()).transportKind())))
                 throw new Refusal("CLUSTER_NOT_ELIGIBLE");
-            boolean supported=pair.stream().allMatch(m -> inventory.findLatestRun(m.deviceId()).stream()
-                .flatMap(r -> r.haFacts().stream())
+            boolean supported=pair.stream().allMatch(m -> inventory.findLatestHaFacts(m.deviceId()).stream()
                 .anyMatch(f -> InventoryHaFact.SOURCE_PAN_HIGH_AVAILABILITY_STATE.equals(f.source())
                     && f.clusterMode().map(mode -> "active-passive".equalsIgnoreCase(mode)).orElse(false)));
             if (!supported) throw new Refusal("UNSUPPORTED_HA_MODE");
             return List.of(new Unit(clusterId,clusterId,cluster,null,pair));
         }
-        List<String> common=inventory.findLatestRun(pair.get(0).deviceId()).stream()
-            .flatMap(r -> r.contexts().stream()).map(c -> c.context())
+        List<String> first=inventory.findLatestContextIds(pair.get(0).deviceId());
+        List<String> second=inventory.findLatestContextIds(pair.get(1).deviceId());
+        List<String> common=first.stream().filter(c -> c != null)
             .filter(c -> !"physical".equals(c) && c.matches("[0-9]{1,10}"))
-            .filter(vs -> inventory.findLatestRun(pair.get(1).deviceId()).stream()
-                .flatMap(r -> r.contexts().stream()).anyMatch(c -> vs.equals(c.context())))
+            .filter(second::contains)
             .distinct().sorted().toList();
-        boolean vsx=pair.stream().anyMatch(m -> m.virtualSystems().filter(v -> !v.isBlank()).isPresent()
-            || inventory.findLatestRun(m.deviceId()).stream().flatMap(r -> r.contexts().stream())
-                .anyMatch(c -> !"physical".equals(c.context())));
+        boolean vsx=pair.stream().anyMatch(m -> m.virtualSystems().filter(v -> !v.isBlank()).isPresent())
+            || first.stream().anyMatch(c -> !"physical".equals(c)) || second.stream().anyMatch(c -> !"physical".equals(c));
         if (vsx && common.isEmpty()) throw new Refusal("VSX_CONTEXT_INCOMPLETE");
         return namedUnits(cluster, pair, common);
     }
