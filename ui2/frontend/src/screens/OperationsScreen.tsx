@@ -14,14 +14,19 @@ import { StatePanel } from "../shell/States";
 import { m3 } from "../theme/m3Theme";
 import { JobLogsPanel, type JobPill } from "./JobLogsPanel";
 import { DiagnosticPanel } from "./DiagnosticPanel";
+import { SystemHealthPanel } from "./SystemHealthPanel";
 import { urlParam, writeUrlParams } from "../shell/urlParams";
 import { useJobWindow } from "../shell/JobWindow";
 import { getJobStats, getCpFailoverRun, listDevices, listCpFailoverSummary, runCpFailoverReadiness, type CpFailoverSummary, type DeviceSummary } from "../auth/adminApi";
 import { deriveClusterTitle } from "./InventoryPanels";
 import { readinessReasonLabel } from "../shell/presenters";
 
-/** The three Operations tabs; Queue and History (roadmap 2.4) are state pills on Jobs, their old routes still land there. */
-const TAB_SLUGS = ["ha", "jobs", "diagnostics"] as const;
+/**
+ * The four Operations tabs; Queue and History (roadmap 2.4) are state pills on Jobs, their old routes still land there.
+ * System health (PO 2026-10-20, mockup screen 2) is a tab here rather than a rail entry: it is fleet-level operational
+ * triage over the same OPERATE question as HA readiness and Jobs, and it adds no screen id of its own.
+ */
+const TAB_SLUGS = ["ha", "jobs", "diagnostics", "health"] as const;
 /**
  * `?tab=<slug>` to a tab index and, for the retired Queue / History routes, the pill that stands for them. A job link
  * that names only `?job=<id>` (roadmap 3.6) lands on Jobs, where the id is opened; the tab slug wins when both are given.
@@ -32,6 +37,7 @@ export function tabFromUrl(slug: string | null, jobId: string | null = null): { 
     case "queue": return { tab: 1, pill: "active" };
     case "history": return { tab: 1, pill: "finished" };
     case "diagnostics": return { tab: 2, pill: null };
+    case "health": return { tab: 3, pill: null };
     case "ha": return { tab: 0, pill: null };
     default: return jobId ? { tab: 1, pill: null } : { tab: 0, pill: null };
   }
@@ -277,6 +283,7 @@ export function OperationsScreen() {
             initialSinceHours={urlParam("since_hours") ? Number(urlParam("since_hours")) : undefined} initialText={urlParam("q") ?? ""}
             pillRequest={pillRequest} /></Box> },
           { label: "Diagnostics", panel: <DiagnosticPanel /> },
+          { label: "System health", panel: <SystemHealthPanel /> },
         ]}
       />
     </ScreenRoot>

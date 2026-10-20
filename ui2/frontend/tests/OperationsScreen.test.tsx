@@ -32,6 +32,7 @@ function stubFetch(devices: unknown[], summary: unknown | null) {
     if (url.includes("/units?")) return json(200, (summary as typeof READY_SUMMARY ?? []).map(row => ({ ...row, canApprove: false, canStart: false, canSchedule: false })));
     if (url.includes("/approvals?") || url.includes("/runs?")) return json(200, []);
     if (url.startsWith("/api/v2/jobs")) return json(200, { items: [], page: 1, page_size: 50, total: 0, states: [], job_types: [], total_24h: 0, completed_24h: 0, failed_24h: 0, running: 0 });
+    if (url === "/api/v2/system-logs/health") return json(503, { code: "SYSTEM_HEALTH_READ_FAILED", message: "The system health read failed." });
     return json(200, {});
   }));
 }
@@ -42,6 +43,7 @@ const TABS = [
   { label: "HA & readiness", marker: "No HA pair or cluster enrolled" },
   { label: "Jobs", marker: "All jobs" },
   { label: "Diagnostics", marker: "Diagnostics could not be loaded or access is unavailable." },
+  { label: "System health", marker: "System health could not be read" },
 ];
 
 describe("OperationsScreen tabs", () => {

@@ -100,6 +100,40 @@ public class SystemLogReadConfiguration {
                 artefacts.storeOrNull(), masking, new JooqBackupArtefactRetrievalRepository(transactions));
     }
 
+    /**
+     * Operations > System health: the fleet counters over the stored sar texts, cpwd chunks, crash alerts and run outcomes
+     * (docs/design/SYSTEM_HEALTH_SCREEN_2026_10_20.md). The threshold is the one documented default unless
+     * {@code ui2.system-health.cpu-p95-threshold-percent} ({@code UI2_SYSTEM_HEALTH_CPU_P95_THRESHOLD_PERCENT}) says otherwise.
+     */
+    @Bean
+    public SystemHealthService systemHealthService(SystemLogReadRepository repository, TransactionBoundary transactions,
+            DeviceRepository devices, ArtefactStoreAccess artefacts,
+            com.securityexpert.nexus.ui2.service.device.diagnostic.SystemLogCollectionService collection,
+            @org.springframework.beans.factory.annotation.Value("${ui2.system-health.cpu-p95-threshold-percent:"
+                    + SystemHealthService.DEFAULT_CPU_P95_THRESHOLD_PERCENT + "}") int thresholdPercent) {
+        return new SystemHealthService(repository, new JooqSystemLogCollectionRepository(transactions), collection::targets, devices,
+                artefacts.storeOrNull(), thresholdPercent);
+    }
+
+    /** Keeps the System health snapshot warm: a first computation shortly after start, then one per snapshot TTL. */
+    @Bean
+    public SystemHealthRefresher systemHealthRefresher(SystemHealthService service) {
+        return new SystemHealthRefresher(service);
+    }
+
+    public static final class SystemHealthRefresher {
+        private final SystemHealthService service;
+
+        SystemHealthRefresher(SystemHealthService service) {
+            this.service = service;
+        }
+
+        @org.springframework.scheduling.annotation.Scheduled(initialDelayString = "PT45S", fixedDelayString = "PT10M")
+        public void refresh() {
+            service.refreshAsync(java.time.Instant.now());
+        }
+    }
+
     /** The settings row's read and audited write (section 14, {@code /api/v2/config/system-logs}). */
     @Bean
     public SystemLogSettingsService systemLogSettingsService(TransactionBoundary transactions) {

@@ -115,6 +115,7 @@ class NexusSessionCliTest {
             assertEquals(0, cli.run(new String[] {"syslog-crash-files"}));
             assertEquals(0, cli.run(new String[] {"syslog-crash-files", "dev-1"}));
             assertEquals(0, cli.run(new String[] {"syslog-hcp", "dev-1"}));
+            assertEquals(0, cli.run(new String[] {"syslog-health"}));
             assertEquals(0, cli.run(new String[] {"syslog-spike-data", "dev-1"}));
             assertEquals(0, cli.run(new String[] {"syslog-settings"}));
             assertEquals(0, cli.run(new String[] {"syslog-settings-set", "spike_data_enabled=true", "raw_retention_days=45"}));
@@ -126,7 +127,7 @@ class NexusSessionCliTest {
                     "GET /api/v2/system-logs/dev-1/chunks?source=cp_messages&day=2026-10-17",
                     "GET /api/v2/system-logs/gaps", "GET /api/v2/system-logs/gaps?deviceId=dev-1",
                     "GET /api/v2/system-logs/crash-files", "GET /api/v2/system-logs/crash-files?deviceId=dev-1",
-                    "GET /api/v2/system-logs/dev-1/hcp", "GET /api/v2/system-logs/dev-1/spike-data",
+                    "GET /api/v2/system-logs/dev-1/hcp", "GET /api/v2/system-logs/health", "GET /api/v2/system-logs/dev-1/spike-data",
                     "GET /api/v2/config/system-logs", "PUT /api/v2/config/system-logs"), calls);
             // syslog-settings-set sends the screen's PUT body: booleans and whole numbers typed, in the order given.
             assertEquals("{\"spike_data_enabled\":true,\"raw_retention_days\":45}", bodies.get(bodies.size() - 1));

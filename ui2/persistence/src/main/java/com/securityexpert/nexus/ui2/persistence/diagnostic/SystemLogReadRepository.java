@@ -78,9 +78,42 @@ public interface SystemLogReadRepository {
             Instant expiresAt, Instant prunedAt, Long storedBytes) {
     }
 
+    /**
+     * The newest run of one (device, source) pair across the fleet (System health, contract section 14 addendum): the
+     * outcome word, the job and when it ran. Index columns only.
+     */
+    record FleetRunRow(String deviceId, String sourceKey, String outcome, String jobId, Instant createdAt) {
+    }
+
+    /**
+     * What the System health computation needs to open one stored {@code cp_sar_daily} text: identity, the device mtime
+     * (the sar day is derived from it: the name holds only a day number and is stored as an HMAC), the integrity status,
+     * and where the encrypted bytes are. Never the name digest.
+     */
+    record SarFileRef(String fileId, String deviceId, long mtime, long size, String status, Instant collectedAt,
+            Instant prunedAt, String artefactId, String artefactRef, byte[] wrappedDataKey) {
+    }
+
+    /** What the System health computation needs to open one stored {@code cp_cpwd_elg} chunk: identity, log day, bytes and the artefact. */
+    record CpwdChunkRef(String chunkId, String deviceId, String logDay, long bytes, long lines, Instant collectedAt,
+            Instant prunedAt, String artefactId, String artefactRef, byte[] wrappedDataKey) {
+    }
+
     List<SourceRow> sources(String deviceId);
 
     Optional<LastJob> lastJob(String deviceId);
+
+    /** One row per (device, source): its newest run, for every device that has ever run. */
+    List<FleetRunRow> fleetLastRuns();
+
+    /** The stored sar texts of one device, newest collected first, at most {@code limit} (bounded to 1..60). */
+    List<SarFileRef> sarFileRefs(String deviceId, int limit);
+
+    /**
+     * The live (not pruned) {@code cp_cpwd_elg} chunks of one device whose log day is {@code sinceDay} or later
+     * ({@code yyyy-MM-dd}), newest first, at most {@code limit} (bounded to 1..1000).
+     */
+    List<CpwdChunkRef> cpwdChunkRefs(String deviceId, String sinceDay, int limit);
 
     /**
      * Chunks of one device, newest first, at most {@code limit} (bounded to 1..1000). {@code sourceKey} and {@code day}

@@ -170,6 +170,8 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("GET /api/v2/system-logs/crash-files", ActionRegistry.SYSTEM_LOG_READ),
             Map.entry("GET /api/v2/system-logs/*/hcp", ActionRegistry.SYSTEM_LOG_READ),
             Map.entry("GET /api/v2/system-logs/*/spike-data", ActionRegistry.SYSTEM_LOG_READ),
+            // Operations > System health (docs/design/SYSTEM_HEALTH_SCREEN_2026_10_20.md): counters over the same tables.
+            Map.entry("GET /api/v2/system-logs/health", ActionRegistry.SYSTEM_LOG_READ),
             // Phase B settings (section 14): the one row of retention, caps and the two switches; security_admin only.
             Map.entry("GET /api/v2/config/system-logs", ActionRegistry.SYSTEM_LOG_SETTINGS_READ),
             Map.entry("PUT /api/v2/config/system-logs", ActionRegistry.SYSTEM_LOG_SETTINGS_WRITE),
