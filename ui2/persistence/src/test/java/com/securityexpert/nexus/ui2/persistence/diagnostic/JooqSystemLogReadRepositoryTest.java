@@ -66,8 +66,9 @@ class JooqSystemLogReadRepositoryTest {
         repository.hcpFiles("dev-1", 99999);
         repository.spikeDirectories("dev-1", 99999);
         repository.spikeDirectoryCounts("dev-1");
+        repository.fleetLastRuns();
 
-        assertEquals(9, db.statements.size());
+        assertEquals(10, db.statements.size());
         for (int i = 0; i < db.statements.size(); i++) {
             String sql = db.statements.get(i).toLowerCase();
             assertTrue(sql.startsWith("select ") || sql.startsWith("with "), sql);
@@ -83,6 +84,36 @@ class JooqSystemLogReadRepositoryTest {
             }
         }
         assertEquals("dev-1", db.bindings.get(0)[0]);
+    }
+
+    /**
+     * The two System health reference reads open stored bytes, so they select the wrapped data key like {@code findChunk};
+     * they are still reads, bind their device, day and limit, and never select a name digest, inode or anchor.
+     */
+    @Test
+    void theSystemHealthReferenceReadsAreBoundReadsWithoutNameDigests() {
+        Capture db = empty();
+        var repository = new JooqSystemLogReadRepository(db);
+        repository.sarFileRefs("dev-1", 5000);
+        repository.cpwdChunkRefs("dev-1", "2026-10-13", -1);
+        assertEquals(2, db.statements.size());
+        for (String sql : db.statements) {
+            String lower = sql.toLowerCase();
+            assertTrue(lower.startsWith("select "), lower);
+            for (String verb : List.of("insert ", "update ", "delete ", "drop ", "alter ", "truncate ")) {
+                assertFalse(lower.contains(verb), verb + " in " + lower);
+            }
+            assertFalse(lower.contains("dev-1") || lower.contains("2026-10-13"), lower);
+            String selected = lower.substring(0, lower.indexOf(" from "));
+            for (String column : List.of("file_name_hmac", "remote_name_hmac", "name_hmac", "inode", "anchor_hmac",
+                    "plaintext_hmac", "content_hmac", "detail")) {
+                assertFalse(selected.contains(column), column + " selected by: " + lower);
+            }
+        }
+        assertEquals("dev-1", db.bindings.get(0)[0]);
+        assertEquals(60, last(db.bindings.get(0)), "sar files are bounded to 30 days x 2");
+        assertEquals("2026-10-13", db.bindings.get(1)[1]);
+        assertEquals(1, last(db.bindings.get(1)));
     }
 
     @Test

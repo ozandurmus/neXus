@@ -115,6 +115,7 @@ export const DRAWER_GROUPS: readonly DrawerGroup[] = [
   { header: "OPERATE", leaves: [
     { label: "Operations", screen: "operations", href: "?screen=operations" },
     { label: "Jobs", href: "?screen=operations&tab=jobs", screen: "operations" },
+    { label: "System health", href: "?screen=operations&tab=health", screen: "operations" },
     { label: "Packets", screen: "packet_analysis", href: "?screen=packet_analysis", requiredPlane: "PacketAnalysis" },
     { label: "Sanitizer", screen: "sanitizer", href: "?screen=sanitizer", requiredPlane: "Sanitizer" },
   ] },

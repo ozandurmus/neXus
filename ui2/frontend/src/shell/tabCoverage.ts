@@ -4,7 +4,7 @@ import type { ScreenId } from "./types";
 // this list with the actual tab definitions; the full E2E suite consumes it.
 export const TAB_COVERAGE: readonly { screen: ScreenId; tabList: string; labels: readonly string[] }[] = [
   { screen: "inventory", tabList: "Lifecycle view", labels: ["Fleet", "Catalog"] },
-  { screen: "operations", tabList: "Operations sections", labels: ["HA & readiness", "Jobs", "Diagnostics"] },
+  { screen: "operations", tabList: "Operations sections", labels: ["HA & readiness", "Jobs", "Diagnostics", "System health"] },
   // SSH trust is a per-device trust setting: Registry, not Access (post-release review 2026-10-18, 2.7); its route slug is unchanged.
   { screen: "administration", tabList: "Registry", labels: ["Device management", "Inventory exclusions", "Credentials", "SSH trust"] },
   { screen: "administration", tabList: "Access", labels: ["Local identities", "Sessions", "Roles & Permissions", "LDAP Settings"] },
