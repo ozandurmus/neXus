@@ -122,6 +122,24 @@ public final class PolicyChangesService {
                 "initialCaptures", initial, "initialCapturesIncluded", request.includeInitial()) : repository.summary(filter(request, cursor), cursor.ceiling()),
             "nextCursor", more && next != null ? encode(cursor, next) : "", "rangeStart", cursor.from().toString(), "rangeEnd", cursor.to().toString()));
     }
+    /**
+     * The newest rule revisions in {@code [from, to)} for the change feed (Operations > Change feed): the repository's
+     * first index batch (at most 500 rows, newest first), projected like {@link #changes}, initial captures left out.
+     * {@code device} narrows to policies targeting that device id (empty for the estate). The caller treats a full
+     * batch as a bound that was hit, not as the whole period.
+     */
+    public List<Map<String, Object>> recent(Instant from, Instant to, String device, boolean masked) {
+        if (!from.isBefore(to)) throw new IllegalArgumentException("Invalid change range");
+        var filter = new Filter(from, to, "", device == null ? "" : device, "", "", false);
+        var rows = new ArrayList<Map<String, Object>>();
+        for (Row row : repository.rows(filter, repository.ceiling(), null)) {
+            if (row.initialCapture()) continue;
+            rows.add(project(row, masked));
+        }
+        return rows;
+    }
+    /** The size of one repository batch: a result of this many rows means the period holds more. */
+    public static final int RECENT_BATCH = 500;
     public void csv(Request request, boolean masked, OutputStream output) throws IOException {
         Cursor cursor = cursor(request); Position scan = null;
         var writer = new BufferedWriter(new OutputStreamWriter(output, StandardCharsets.UTF_8));
