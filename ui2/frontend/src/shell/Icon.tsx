@@ -33,7 +33,10 @@ export type IconName =
   | "close"
   | "external"
   | "chevron-left"
-  | "chevron-right";
+  | "chevron-right"
+  | "expand"
+  | "collapse"
+  | "list";
 
 const common: SVGProps<SVGSVGElement> = {
   viewBox: "0 0 24 24",
@@ -230,6 +233,24 @@ export function Icon({ name, size = 20 }: { readonly name: IconName; readonly si
       return (
         <svg {...props}>
           <path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" />
+        </svg>
+      );
+    case "expand":
+      return (
+        <svg {...props}>
+          <path d="M15 4h5v5M20 4l-6 6M9 20H4v-5M4 20l6-6" />
+        </svg>
+      );
+    case "collapse":
+      return (
+        <svg {...props}>
+          <path d="M20 9h-5V4M15 9l5-5M4 15h5v5M9 15l-5 5" />
+        </svg>
+      );
+    case "list":
+      return (
+        <svg {...props}>
+          <path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01" />
         </svg>
       );
   }
