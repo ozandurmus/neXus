@@ -36,7 +36,9 @@ class CpFailoverServiceTest {
     private static final String CLUSTER="CLS-TEST-01", A="FW-TEST-01", B="FW-TEST-02";
     private static final String CLUSTER_ID=UUID.nameUUIDFromBytes(CLUSTER.getBytes(StandardCharsets.UTF_8)).toString();
     private final DeviceRepository devices=mock(DeviceRepository.class);
-    private final DeviceInventoryRepository inventory=mock(DeviceInventoryRepository.class);
+    // Real default methods: the sliced reads (hasRun, contexts, HA facts) derive from the stubbed findLatestRun.
+    private final DeviceInventoryRepository inventory=mock(DeviceInventoryRepository.class,
+        org.mockito.Mockito.withSettings().defaultAnswer(org.mockito.Mockito.CALLS_REAL_METHODS));
     private final JooqCpFailoverRepository store=mock(JooqCpFailoverRepository.class);
     private final RbacEvaluator rbac=mock(RbacEvaluator.class);
     private final ManagementEndpointSshTrustRepository trust=mock(ManagementEndpointSshTrustRepository.class);
@@ -148,6 +150,7 @@ class CpFailoverServiceTest {
             AuthzOutcome.PERMITTED,Optional.of(RbacEvaluator.ROOT_AUTHORITY),Optional.empty(),Optional.empty()));
         when(devices.listAll()).thenReturn(List.of(summary(A),summary(B)));
         when(devices.findMembersByClusterRef(CLUSTER)).thenReturn(List.of(summary(A),summary(B)));
+        for(String id:List.of(A,B)) when(devices.findSummary(id)).thenReturn(Optional.of(summary(id)));
         for(String id:List.of(A,B)) {
             when(devices.find(id)).thenReturn(Optional.of(new DeviceRecord(id,"gateway","check_point","manual",
                 Instant.EPOCH,false,DeviceEnrollmentState.ENROLLED,false,"credential-ref")));
@@ -177,6 +180,7 @@ class CpFailoverServiceTest {
             Optional.empty(), ref);
         when(devices.listAll()).thenReturn(List.of(member));
         when(devices.findMembersByClusterRef(CLUSTER)).thenReturn(List.of(member));
+        when(devices.findSummary(A)).thenReturn(Optional.of(member));
     }
     @ParameterizedTest
     @ValueSource(strings = {"standalone", "management_server", "ineligible"})
@@ -429,6 +433,7 @@ class CpFailoverServiceTest {
             Optional.empty(),Optional.empty(),Optional.empty(),Optional.empty(),Optional.of(CLUSTER));
         when(devices.listAll()).thenReturn(List.of(panA,panB));
         when(devices.findMembersByClusterRef(CLUSTER)).thenReturn(List.of(panA,panB));
+        when(devices.findSummary(A)).thenReturn(Optional.of(panA));
         for (String id:List.of(A,B)) when(devices.findEndpointByDeviceId(id)).thenReturn(Optional.of(
             new EndpointRecord("endpoint-"+id,id,"pan_xml_api",A.equals(id)?"192.0.2.11":"192.0.2.12",Instant.EPOCH)));
         for (String id:List.of(A,B)) when(inventory.findLatestRun(id)).thenReturn(Optional.of(new InventoryRun(

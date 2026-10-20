@@ -104,6 +104,27 @@ public final class JooqDeviceInventoryRepository implements DeviceInventoryRepos
     }
 
     @Override
+    public boolean hasRun(String deviceId) {
+        return transactionBoundary.inTransaction(dsl -> Boolean.TRUE.equals(dsl.fetchOne(
+                "select exists(select 1 from device_inventory_run where device_id = {0}) as present", deviceId)
+                .get("present", Boolean.class)));
+    }
+
+    @Override
+    public List<InventoryHaFact> findLatestHaFacts(String deviceId) {
+        return transactionBoundary.inTransaction(dsl -> dsl.fetch("""
+                select h.ha_id, h.context, h.role, h.cluster_mode, h.source
+                from device_inventory_ha h
+                where h.run_id = (select run_id from device_inventory_run where device_id = {0}
+                                  order by collected_at desc limit 1)
+                """, deviceId).stream()
+                .map(row -> new InventoryHaFact(row.get("ha_id", String.class), row.get("context", String.class),
+                        row.get("role", String.class), Optional.ofNullable(row.get("cluster_mode", String.class)),
+                        row.get("source", String.class)))
+                .toList());
+    }
+
+    @Override
     public List<String> findLatestContextIds(String deviceId) {
         return transactionBoundary.inTransaction(dsl -> dsl.fetch("""
                 with latest as (

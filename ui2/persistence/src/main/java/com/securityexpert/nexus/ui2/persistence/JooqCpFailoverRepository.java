@@ -114,6 +114,22 @@ public class JooqCpFailoverRepository {
 
     /** Bulk eligibility facts; no device addresses or raw observations leave this projection. */
     public List<SummaryMember> summaryMembers() {
+        return summaryMembers(null);
+    }
+
+    /**
+     * The same facts restricted to the given devices (one cluster's pair); the per-device lateral
+     * subqueries then run for those devices only instead of for the whole fleet.
+     */
+    public List<SummaryMember> summaryMembers(java.util.Collection<String> deviceIds) {
+        StringBuilder filter = new StringBuilder();
+        if (deviceIds != null) {
+            if (deviceIds.isEmpty()) return List.of();
+            filter.append("where d.device_id in (");
+            for (int i = 0; i < deviceIds.size(); i++) filter.append(i == 0 ? "{" : ",{").append(i).append("}");
+            filter.append(") ");
+        }
+        Object[] binds = deviceIds == null ? new Object[0] : deviceIds.toArray();
         return boundary.inTransaction(dsl -> dsl.fetch("select d.device_id, "
             + "(not d.disabled and d.enrollment_state in ('ENROLLED','DEGRADED')) as readable, "
             + "ep.transport_kind, r.run_id is not null as inventory_present, ctx.context, "
@@ -125,7 +141,8 @@ public class JooqCpFailoverRepository {
             + "order by collected_at desc limit 1) r on true "
             + "left join lateral (select distinct context from "
             + "(select context from device_interface where run_id=r.run_id union all "
-            + "select context from device_route where run_id=r.run_id) contexts) ctx on true")
+            + "select context from device_route where run_id=r.run_id) contexts) ctx on true "
+            + filter, binds)
             .map(r -> new SummaryMember(r.get("device_id", String.class),
                 Boolean.TRUE.equals(r.get("readable", Boolean.class)), r.get("transport_kind", String.class),
                 Boolean.TRUE.equals(r.get("inventory_present", Boolean.class)), r.get("context", String.class),
@@ -134,9 +151,16 @@ public class JooqCpFailoverRepository {
 
     /** Latest run and currently valid window per vendor/cluster/VSID in one read. */
     public List<SummaryStatus> summaryStatuses() {
+        return summaryStatuses(null);
+    }
+
+    /** The same read restricted to one cluster reference. */
+    public List<SummaryStatus> summaryStatuses(String clusterRef) {
+        String scope = clusterRef == null ? "" : " where cluster_ref={0}";
+        Object[] binds = clusterRef == null ? new Object[0] : new Object[] {clusterRef};
         return boundary.inTransaction(dsl -> dsl.fetch("with unit_keys as "
-            + "(select vendor,cluster_ref,vs_id from failover_approval union "
-            + "select vendor,cluster_ref,vs_id from failover_run) "
+            + "(select vendor,cluster_ref,vs_id from failover_approval" + scope + " union "
+            + "select vendor,cluster_ref,vs_id from failover_run" + scope + ") "
             + "select k.vendor,k.cluster_ref,k.vs_id, "
             + "exists(select 1 from failover_approval a where a.vendor=k.vendor and a.cluster_ref=k.cluster_ref "
             + "and a.vs_id is not distinct from k.vs_id and a.revoked_at is null "
@@ -147,7 +171,7 @@ public class JooqCpFailoverRepository {
             + "r.state,r.outcome,r.scheduled_for from unit_keys k left join lateral "
             + "(select state,outcome,scheduled_for from failover_run r where r.vendor=k.vendor "
             + "and r.cluster_ref=k.cluster_ref and r.vs_id is not distinct from k.vs_id "
-            + "order by scheduled_for desc limit 1) r on true")
+            + "order by scheduled_for desc limit 1) r on true", binds)
             .map(r -> new SummaryStatus(r.get("cluster_ref", String.class), r.get("vs_id", String.class),
                 r.get("vendor", String.class), Boolean.TRUE.equals(r.get("active_window", Boolean.class)),
                 r.get("state", String.class), r.get("outcome", String.class),
@@ -156,11 +180,19 @@ public class JooqCpFailoverRepository {
     }
 
     public List<ReadinessStatus> readinessStatuses() {
+        return readinessStatuses(null);
+    }
+
+    /** The newest finished readiness run per unit of one cluster reference, with its pre-check rows. */
+    public List<ReadinessStatus> readinessStatuses(String clusterRef) {
+        String scope = clusterRef == null ? "" : " and cluster_ref={0}";
+        Object[] binds = clusterRef == null ? new Object[0] : new Object[] {clusterRef};
         return boundary.inTransaction(dsl -> dsl.fetch("""
             with latest as (
                 select distinct on (vendor,cluster_ref,coalesce(vs_id,''))
                     run_id,cluster_ref,vs_id,vendor,outcome,finished_at,failed_check,message
-                from failover_run where run_kind='READINESS' and state in ('DONE','STOPPED')
+                from failover_run where run_kind='READINESS' and state in ('DONE','STOPPED')""" + scope + """
+
                 order by vendor,cluster_ref,coalesce(vs_id,''),finished_at desc
             ), checks as (
                 select c.run_id,jsonb_agg(jsonb_build_object(
@@ -172,7 +204,7 @@ public class JooqCpFailoverRepository {
             select r.cluster_ref,r.vs_id,r.vendor,r.outcome,r.finished_at,r.failed_check,r.message,
                 coalesce(c.checks,'[]'::jsonb) as checks
             from latest r left join checks c on c.run_id=r.run_id
-            """)
+            """, binds)
             .map(r -> new ReadinessStatus(r.get("cluster_ref", String.class), r.get("vs_id", String.class),
                 r.get("vendor", String.class), r.get("outcome", String.class),
                 Optional.ofNullable(r.get("finished_at", java.time.OffsetDateTime.class))

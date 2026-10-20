@@ -94,8 +94,9 @@ public final class CpFailoverController {
         if (u.vsId()!=null) m.put("virtual_system",u.label());
         return m;
     }
+    /** {@code incidents} memoizes the open-incident lookup per cluster and member pair within one request. */
     private void eligibility(Map<String,Object> view,CpFailoverService.Unit u,
-            JooqCpFailoverRepository.ReadinessStatus readiness) {
+            JooqCpFailoverRepository.ReadinessStatus readiness,Map<String,Boolean> incidents) {
         String refusal=readiness==null ? "INSUFFICIENT_EVIDENCE" : readiness.stopCode();
         String mode="UNKNOWN";
         if (names!=null) {
@@ -116,12 +117,14 @@ public final class CpFailoverController {
         } catch (java.io.IOException invalid) { refusal="INSUFFICIENT_EVIDENCE"; }
         if (readiness!=null && !"READY".equals(readiness.outcome()) && (refusal==null || refusal.isBlank())) refusal="READINESS_NOT_READY";
         if (projections!=null) {
-            boolean incident=projections.inTransaction(db -> db.fetchOne(
+            String incidentKey=u.members().get(0).clusterMemberRef().orElseThrow()+"|"
+                +u.members().get(0).deviceId()+"|"+u.members().get(1).deviceId();
+            boolean incident=incidents.computeIfAbsent(incidentKey,key -> projections.inTransaction(db -> db.fetchOne(
                 "select exists(select 1 from failover_quarantine where active and (cluster_ref={0} "
                     + "or quarantined_member_ids @> jsonb_build_array({1}::text) "
                     + "or quarantined_member_ids @> jsonb_build_array({2}::text))) as open",
                 u.members().get(0).clusterMemberRef().orElseThrow(),u.members().get(0).deviceId(),u.members().get(1).deviceId())
-                .get("open",Boolean.class));
+                .get("open",Boolean.class)));
             if (incident) refusal="OPEN_INCIDENT";
         }
         view.put("mode",mode); view.put("refusalReason",refusal);
@@ -146,23 +149,33 @@ public final class CpFailoverController {
     @GetMapping("/units")
     public ResponseEntity<?> unitsForRef(@RequestParam(required = false) String clusterRef,
             @RequestParam(required = false) String memberDeviceId, HttpServletRequest request) {
-        return result(() -> (memberDeviceId != null ? service.unitsForMember(memberDeviceId,actor(request),vendor(request))
-                : service.unitsForRef(clusterRef,actor(request),vendor(request))).stream()
-            .map(u -> {
+        return result(() -> {
+            String actor = actor(request);
+            List<CpFailoverService.Unit> units = memberDeviceId != null
+                ? service.unitsForMember(memberDeviceId,actor,vendor(request))
+                : service.unitsForRef(clusterRef,actor,vendor(request));
+            if (units.isEmpty()) return List.of();
+            // Permissions and readiness are request-wide facts: read once, not once per unit.
+            boolean canApprove = service.mayApprove(actor), canStart = service.mayStart(actor);
+            boolean masked = PrivacyMaskingResponseBodyAdvice.isReplayViewer(request);
+            String vendor = vendor(request);
+            var readiness = service.unitReadiness(actor,units);
+            Map<String,Boolean> incidents = new java.util.HashMap<>();
+            return units.stream().map(u -> {
                 Map<String,Object> m=unit(u);
-                m.put("vendor",vendor(request));
-                m.put("masked",PrivacyMaskingResponseBodyAdvice.isReplayViewer(request));
-                m.put("canApprove",service.mayApprove(actor(request)));
-                m.put("canStart",service.mayStart(actor(request)));
-                m.put("canSchedule",service.mayStart(actor(request)));
-                var readiness=service.summary(actor(request)).stream().filter(s -> s.unit().id().equals(u.id()))
-                    .map(CpFailoverService.Summary::readiness).filter(java.util.Objects::nonNull).findFirst().orElse(null);
-                eligibility(m,u,readiness);
+                m.put("vendor",vendor);
+                m.put("masked",masked);
+                m.put("canApprove",canApprove);
+                m.put("canStart",canStart);
+                m.put("canSchedule",canStart);
+                eligibility(m,u,readiness.get(u.id()),incidents);
                 return m;
-            }).toList());
+            }).toList();
+        });
     }
     @GetMapping("/summary")
     public ResponseEntity<?> summary(HttpServletRequest request) {
+        Map<String,Boolean> incidents = new java.util.HashMap<>();
         return result(() -> service.summary(actor(request)).stream().map(s -> {
             Map<String,Object> m = unit(s.unit());
             m.put("vendor", s.vendor());
@@ -172,7 +185,7 @@ public final class CpFailoverController {
             m.put("lastRunOutcome", s.lastRunOutcome());
             m.put("lastRunAt", s.lastRunAt());
             m.put("canRunReadiness", s.canRunReadiness());
-            eligibility(m,s.unit(),s.readiness());
+            eligibility(m,s.unit(),s.readiness(),incidents);
             if (s.readiness() != null) {
                 var readiness = s.readiness();
                 try {
