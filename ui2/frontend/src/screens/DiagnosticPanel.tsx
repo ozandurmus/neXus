@@ -121,6 +121,7 @@ export function DiagnosticPanel() {
     } catch (error) {
       const code = (error as ApiError).body?.code;
       setMessage(code === "OUTSIDE_JOB_WINDOW" ? String((error as ApiError).body?.message ?? "Device jobs are outside the scheduled window.")
+        : code === "BUSINESS_HOURS_CONFIRM_REQUIRED" ? String((error as ApiError).body?.message ?? "Not started: business hours were not confirmed.")
         : code === "DIAGNOSTIC_UNAVAILABLE" ? "This read is unavailable for this device."
         : code === "RATE_LIMITED_OR_RUNNING" ? "A command is running or was submitted within the last minute."
         : "Request refused or not confirmed. Retry uses the same request ID.");

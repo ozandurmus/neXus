@@ -151,6 +151,18 @@ class SystemLogCollectionServiceTest {
         verifyNoInteractions(admission);
     }
 
+    /** PO 2026-10-20 leaves system-log collection window-bound for every role: its command frequencies are per window. */
+    @Test
+    void anAdministratorsManualStartOutsideAJobWindowIsStillRefused() {
+        var admission = mock(JobAdmissionService.class);
+        var service = new SystemLogCollectionService(fleet(), admission, window(Instant.parse("2026-10-15T05:10:00Z")));
+        var grant = new com.securityexpert.nexus.ui2.platform.ManualAdmission.Grant("synthetic-admin",
+                com.securityexpert.nexus.ui2.platform.ManualAdmission.SECURITY_ADMIN, true);
+        assertThrows(JobWindowPolicy.OutsideWindow.class, () -> com.securityexpert.nexus.ui2.platform.ManualAdmission.under(grant,
+                () -> service.start(Optional.empty(), "synthetic-admin")));
+        verifyNoInteractions(admission);
+    }
+
     @Test
     void theScheduledTriggerIsNotARegisteredBeanUnlessTheFlagIsTrue() {
         var runner = new ApplicationContextRunner().withUserConfiguration(SchedulerFixture.class);

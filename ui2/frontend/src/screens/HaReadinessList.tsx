@@ -1,4 +1,4 @@
-import { JobButton, useJobWindow } from "../shell/JobWindow";
+import { JobButton, jobWindowUsable, useJobWindow } from "../shell/JobWindow";
 import { ROLE_LOCK_LABEL } from "../shell/actionAccess";
 import { DISABLED_STYLE } from "../shell/disabledStyle";
 import { Presented } from "../shell/PresentedText";
@@ -149,7 +149,7 @@ export function HaReadinessList({ clusters, rows, running, busy, progress, error
   // A row action only when it can run now, for this role and inside the window (post-release review 2026-10-18, R6):
   // forty identical locked buttons say nothing the header button does not already say with its "Next window" suffix.
   const jobWindow = useJobWindow();
-  const hasActions = selectable.length > 0 && jobWindow.open;
+  const hasActions = selectable.length > 0 && jobWindowUsable(jobWindow);
   // "Run readiness check" targets the clusters in view (the base unit of each, not their virtual systems), so narrowing
   // the filters narrows the run. The server decides who may start one (`canRunReadiness`); a role it refuses sees the
   // button locked with the reason instead of no button at all.

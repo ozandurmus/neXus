@@ -287,6 +287,15 @@ it("does not warn when only a minority of evaluations is stale", () => {
   expect(within(row("CLS-ALPHA-01")).getByText("Stale")).toBeInTheDocument();
 });
 
+it("an administrator outside the job window keeps the row actions and an enabled header button (PO 2026-10-20)", () => {
+  render(<JobWindowContext.Provider value={{ open: false, label: "Next window: 18:00", adminBypass: true }}>
+    <HaReadinessList clusters={clusters} rows={rows} running={null} busy={false} progress={{}} error={null} onOpen={vi.fn()} onRun={vi.fn()} onBulkRun={vi.fn()} />
+  </JobWindowContext.Provider>);
+  expect(within(table()).getByRole("columnheader", { name: "Actions" })).toBeVisible();
+  expect(screen.getByTestId("toolbar-run-readiness")).toBeEnabled();
+  expect(screen.getByTestId("toolbar-run-readiness")).not.toHaveTextContent("Next window");
+});
+
 it("keeps the mode on its own line without splitting its words", () => {
   setup({ rows: { "CLS-ALPHA-01": [{ ...rows["CLS-ALPHA-01"][0], mode: "active-passive" }] } });
   const mode = within(row("CLS-ALPHA-01")).getByText("Mode: active-passive");

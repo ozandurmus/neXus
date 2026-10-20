@@ -41,16 +41,18 @@ public final class JooqJobRecordDao implements JobRecordDao {
                             + "returning job_id",
                     jobId, jobType, capabilityId, targetDeviceId, actorFingerprint, Timestamp.from(Instant.now()),
                     idempotencyKey, actionClass);
-            return rows.stream().findFirst().map(r -> r.get("job_id", String.class));
+            var created = rows.stream().findFirst().map(r -> r.get("job_id", String.class));
+            created.ifPresent(id -> ManualAdmissionRecord.record(dsl, id, actorFingerprint, windows));
+            return created;
         });
     }
 
     @Override
     public Optional<String> insertRequestedIfAbsentForRun(String jobId, String idempotencyKey, String capabilityId,
             String targetRunId, String actionClass, String jobType, String actorFingerprint, String actionId) {
-        windows.requireOpen();
+        windows.requireOpenFor(actorFingerprint);
         return auditedTransactionBoundary.inTransaction(actorFingerprint, actionId, dsl -> {
-            windows.requireOpen();
+            windows.requireOpenFor(actorFingerprint);
             org.jooq.Result<Record> rows = dsl.fetch(
                     "insert into jobs(job_id, job_type, capability_id, target_ref, target_kind, "
                             + "submitted_by_actor_fingerprint, submitted_at, idempotency_key, action_class, state) "
@@ -59,7 +61,9 @@ public final class JooqJobRecordDao implements JobRecordDao {
                             + "returning job_id",
                     jobId, jobType, capabilityId, targetRunId, actorFingerprint, Timestamp.from(Instant.now()),
                     idempotencyKey, actionClass);
-            return rows.stream().findFirst().map(r -> r.get("job_id", String.class));
+            var created = rows.stream().findFirst().map(r -> r.get("job_id", String.class));
+            created.ifPresent(id -> ManualAdmissionRecord.record(dsl, id, actorFingerprint, windows));
+            return created;
         });
     }
 
@@ -88,9 +92,9 @@ public final class JooqJobRecordDao implements JobRecordDao {
     @Override
     public DiagnosticAdmission insertDiagnostic(String jobId, String idempotencyKey, String targetDeviceId,
             String port, String actorFingerprint, String actionId) {
-        windows.requireOpen();
+        windows.requireOpenFor(actorFingerprint);
         return auditedTransactionBoundary.inTransaction(actorFingerprint, actionId, dsl -> {
-            windows.requireOpen();
+            windows.requireOpenFor(actorFingerprint);
             Record locked = dsl.fetchOne("select device_id from devices where device_id = {0} for update", targetDeviceId);
             if (locked == null) {
                 return new DiagnosticAdmission("DEVICE_NOT_FOUND", null);
@@ -115,7 +119,7 @@ public final class JooqJobRecordDao implements JobRecordDao {
             if (Boolean.TRUE.equals(recent)) {
                 return new DiagnosticAdmission("RATE_LIMITED", null);
             }
-            windows.requireOpen();
+            windows.requireOpenFor(actorFingerprint);
             Record inserted = dsl.fetchOne("insert into jobs(job_id, job_type, capability_id, target_device_id, target_kind, "
                     + "submitted_by_actor_fingerprint, submitted_at, idempotency_key, action_class, state, diagnostic_port, diagnostic_gate_revision) "
                     + "values ({0}, 'fmg_interface_detail', 'fmg_interface_detail', {1}, 'device', {2}, now(), {3}, "
@@ -124,6 +128,7 @@ public final class JooqJobRecordDao implements JobRecordDao {
             if (inserted == null) {
                 return new DiagnosticAdmission("IDEMPOTENCY_CONFLICT", null);
             }
+            ManualAdmissionRecord.record(dsl, inserted.get("job_id", String.class), actorFingerprint, windows);
             return new DiagnosticAdmission("ADMITTED", inserted.get("job_id", String.class));
         });
     }
@@ -208,9 +213,9 @@ public final class JooqJobRecordDao implements JobRecordDao {
 
     @Override
     public DiagnosticAdmission insertDiagnosticRead(String jobId, String idempotencyKey, String deviceId, String gateId, String command, String actor) {
-        windows.requireOpen();
+        windows.requireOpenFor(actor);
         return auditedTransactionBoundary.inTransaction(actor, "diagnostic_read_submitted", dsl -> {
-            windows.requireOpen();
+            windows.requireOpenFor(actor);
             if (dsl.fetchOne("select device_id from devices where device_id={0} for update", deviceId) == null)
                 return new DiagnosticAdmission("DEVICE_NOT_FOUND", null);
             var prior = dsl.fetchOne("select job_id,target_device_id,diagnostic_gate_id,diagnostic_command,submitted_by_actor_fingerprint from jobs where idempotency_key={0}", idempotencyKey);
@@ -223,11 +228,13 @@ public final class JooqJobRecordDao implements JobRecordDao {
                 + "and capability_id in ('diagnostic_read','fmg_interface_detail') "
                 + "and (state in ('REQUESTED','CLAIMED','EXECUTING') or submitted_at > now()-interval '1 minute')) as busy", deviceId).get("busy", Boolean.class)))
                 return new DiagnosticAdmission("RATE_LIMITED_OR_RUNNING", null);
-            windows.requireOpen();
+            windows.requireOpenFor(actor);
             var inserted = dsl.fetchOne("insert into jobs(job_id,job_type,capability_id,target_device_id,target_kind,submitted_by_actor_fingerprint,"
                 + "submitted_at,idempotency_key,action_class,state,diagnostic_gate_id,diagnostic_command) values ({0},'diagnostic_read','diagnostic_read',{1},'device',"
                 + "{2},now(),{3},'read','REQUESTED',{4},{5}) on conflict(idempotency_key) do nothing returning job_id", jobId,deviceId,actor,idempotencyKey,gateId,command);
-            return inserted == null ? new DiagnosticAdmission("IDEMPOTENCY_CONFLICT", null) : new DiagnosticAdmission("ADMITTED", jobId);
+            if (inserted == null) return new DiagnosticAdmission("IDEMPOTENCY_CONFLICT", null);
+            ManualAdmissionRecord.record(dsl, jobId, actor, windows);
+            return new DiagnosticAdmission("ADMITTED", jobId);
         });
     }
 

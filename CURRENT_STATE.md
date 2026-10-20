@@ -61,7 +61,11 @@ configuration and compliance modules (the worker is still patched at run time),
 and a ship retries when the image build failed only on a base-image layer
 download. Scheduled system-log collection is enabled for the fleet.
 Device polling/admission windows begin at **00:00 / 06:00 / 12:00 / 18:00
-Europe/Istanbul** (default 60-minute windows). Full scheduled fleet backups
+Europe/Istanbul** (default 60-minute windows). Superseded in part (PO
+2026-10-20, [record](docs/design/PO_DECISION_RECORD_2026_10_20_ADMIN_MANUAL_JOBS_AND_BUSINESS_HOURS.md)):
+manual jobs of `security_admin`/`operation_admin` are never held to the windows
+and ask for a confirmation inside business hours (08:00–20:00); operator,
+aiview and every scheduled job keep the windows. Full scheduled fleet backups
 and daily MDS export instead run **once daily at 02:00 Europe/Istanbul**
 (PO 2026-10-10, PR #570; admission 02:00–02:59, no missed-day backlog).
 Backup retention is **7 days** (PO 2026-10-12, supplied in this brief;

@@ -316,7 +316,8 @@ public final class CpFailoverService {
     public JooqCpFailoverRepository.RequestApproval createApprovalRequest(String requestId,String clusterId,
             String unitId,Instant from,Instant until,String reason,String actor,String vendor) {
         String policy=approvalPolicy(actor);
-        windows.requireOpen();
+        // PO 2026-10-20: an approval request sends nothing to a device; an administrator is never refused for the window.
+        windows.requireOpenUnlessAdmin(actor);
         Unit u=unit(clusterId,unitId,actor,vendor);
         if (requestId==null || !requestId.equals(UUID.fromString(requestId).toString())) throw new Refusal("REQUEST_ID_REQUIRED");
         if (from==null || until==null || !until.isAfter(from) || !until.isAfter(Instant.now())
@@ -361,7 +362,9 @@ public final class CpFailoverService {
             String requestId,long revision,String nonce,boolean warningConfirmed) {
         String policy=approvalPolicy(actor);
         if (!mutationSwitch.enabled()) throw new Refusal(FailoverMutationSwitch.DISABLED);
-        windows.requireOpen();
+        // PO 2026-10-20: an administrator's immediate start needs no window, only the business-hours acknowledgement;
+        // a scheduled start keeps the window (checked again at its time by the repository and the scheduler).
+        if (scheduledFor==null) windows.requireOpenFor(actor); else windows.requireOpenUnlessAdmin(actor);
         Unit u=unit(clusterId,unitId,actor,vendor);
         Instant now=Instant.now();
         Instant when=scheduledFor==null ? now : scheduledFor;
@@ -392,7 +395,7 @@ public final class CpFailoverService {
         return submitReadiness(target.clusterId(),target.unitId(),"system:failover-readiness-scheduler",target.vendor());
     }
     private String submitReadiness(String clusterId, String unitId, String actor, String vendor) {
-        windows.requireOpen();
+        windows.requireOpenFor(actor);
         Unit u = unit(clusterId, unitId, actor, vendor);
         if ("check_point".equals(vendor)) for (DeviceSummaryRecord member : u.members()) requireTrusted(member);
         try {

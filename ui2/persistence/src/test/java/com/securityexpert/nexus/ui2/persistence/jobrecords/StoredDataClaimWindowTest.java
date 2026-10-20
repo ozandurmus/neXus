@@ -29,16 +29,22 @@ class StoredDataClaimWindowTest {
         assertEquals(Set.of("packet_analysis_run"), JobWindowPolicy.STORED_DATA_JOB_TYPES);
     }
 
-    @Test void deviceOrMixedClaimSetsOutsideTheWindowNeverReachTheDatabase() {
-        TransactionBoundary noDatabase = new TransactionBoundary() {
-            @Override public <T> T inTransaction(Function<DSLContext, T> work) {
-                throw new AssertionError("an outside-window device claim must not access the database");
-            }
+    /** PO 2026-10-20: outside the window only the read "is an administrator's bypass job queued" runs; with none, no claim. */
+    @Test void deviceOrMixedClaimSetsOutsideTheWindowNeverIssueTheClaimWithoutAQueuedBypassJob() {
+        List<String> queries = new ArrayList<>();
+        var sql = DSL.using(new MockConnection(query -> {
+            queries.add(query.sql());
+            return new MockResult[] { new MockResult(0, DSL.using(SQLDialect.POSTGRES).newResult(DSL.field("queued", Integer.class))) };
+        }), SQLDialect.POSTGRES);
+        TransactionBoundary database = new TransactionBoundary() {
+            @Override public <T> T inTransaction(Function<DSLContext, T> work) { return work.apply(sql); }
         };
-        var dao = new JooqJobLeaseDao(noDatabase, outside);
+        var dao = new JooqJobLeaseDao(database, outside);
         assertTrue(dao.claimNext("general-synthetic", List.of("cp_inventory_collect"), Duration.ofMinutes(10)).isEmpty());
         assertTrue(dao.claimNext("packet_analysis-synthetic", List.of(PacketAnalysisJob.CAPABILITY, "cp_inventory_collect"),
                 Duration.ofMinutes(10)).isEmpty());
+        assertEquals(2, queries.size());
+        assertTrue(queries.stream().allMatch(q -> q.startsWith("select 1 as queued from jobs") && q.contains("window_bypass_role is not null")));
     }
 
     @Test void packetAnalysisClaimsOutsideTheWindowWithTheUnchangedStatement() {

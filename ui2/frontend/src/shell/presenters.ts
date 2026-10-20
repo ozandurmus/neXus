@@ -184,6 +184,7 @@ const REASON_LABELS: Readonly<Record<string, string>> = {
   UNSUPPORTED: "Not supported",
   OPEN_INCIDENT: "Open failover incident",
   OUTSIDE_JOB_WINDOW: "Outside the job window",
+  BUSINESS_HOURS_CONFIRM_REQUIRED: "Not started: business hours were not confirmed",
   INVENTORY_REQUIRED: "Inventory read required",
   CLUSTER_STATE_NOT_READY: "Cluster state not ready",
   CLOCK_UNTRUSTED: "Device clock not trusted",
