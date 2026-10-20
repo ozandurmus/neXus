@@ -13,6 +13,7 @@ import type { ScreenId } from "./types";
 import { NexusMark } from "../brand/NexusMark";
 import { NexusWordmark } from "../brand/NexusWordmark";
 import { useSession } from "../auth/SessionContext";
+import { usePreferenceFlag } from "./preference";
 
 /**
  * The rail is the product principle written down the left edge (UI product review 2026-10-18, §2.3 / roadmap 1.1):
@@ -23,7 +24,9 @@ import { useSession } from "../auth/SessionContext";
  *
  * Width rule: from {@link DRAWER_BELOW_PX} up the rail is persistent with its labels and groups and there is no drawer
  * at all. Below that width the rail shrinks to icons and a `≡` button opens the same list as a temporary drawer -- the
- * old 360 px expanded drawer is gone from the wide layout, where it only repeated the rail.
+ * old 360 px expanded drawer is gone from the wide layout, where it only repeated the rail. From that width the viewer
+ * may also fold the rail to its icons (PO 2026-10-20, `Collapse menu`); the choice is remembered per viewer and the
+ * labels come back on hover. Below the width the drawer behaviour is unchanged.
  */
 export const DRAWER_BELOW_PX = 1100;
 
@@ -136,6 +139,9 @@ export function NavigationRail({ active }: { readonly active: ScreenId }) {
   // jsdom and server rendering have no matchMedia: the wide rail is the default there.
   const wide = useMediaQuery(`(min-width:${DRAWER_BELOW_PX}px)`, { defaultMatches: true, noSsr: true });
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [collapsed, setCollapsed] = usePreferenceFlag("nx.rail.collapsed", false);
+  // Icons without words: the narrow layout, or the wide one folded by the viewer.
+  const iconsOnly = !wide || collapsed;
   const [toolsAnchor, setToolsAnchor] = useState<HTMLElement | null>(null);
   const session = useSession();
   const permissions = session?.permissions;
@@ -165,21 +171,21 @@ export function NavigationRail({ active }: { readonly active: ScreenId }) {
     const on = entryActive(e);
     const shared = {
       "aria-current": on ? ("page" as const) : undefined,
-      sx: { width: wide ? 80 : 48, textDecoration: "none", display: "flex", flexDirection: "column", alignItems: "center", gap: "4px",
+      sx: { width: iconsOnly ? 48 : 80, textDecoration: "none", display: "flex", flexDirection: "column", alignItems: "center", gap: "4px",
         color: on ? m3.onSurface : m3.onSurfaceVar, cursor: "pointer", border: 0, bgcolor: "transparent", p: 0, font: "inherit" },
     } as const;
     const body = (
       <>
-        <Box sx={{ width: wide ? 56 : 40, height: 32, borderRadius: "16px", display: "grid", placeItems: "center",
+        <Box sx={{ width: iconsOnly ? 40 : 56, height: 32, borderRadius: "16px", display: "grid", placeItems: "center",
                    bgcolor: on ? m3.secondaryContainer : "transparent", color: on ? m3.onSecondaryContainer : "inherit" }}>
           <Icon name={e.icon} size={20} />
         </Box>
-        {wide && <Typography sx={{ fontSize: 12, fontWeight: 500, letterSpacing: "0.5px" }}>{e.label}</Typography>}
+        {!iconsOnly && <Typography sx={{ fontSize: 12, fontWeight: 500, letterSpacing: "0.5px" }}>{e.label}</Typography>}
       </>
     );
     if (e.destinations) {
       return (
-        <Tooltip key={e.id} title={wide ? "" : `${e.label}: ${e.destinations.map((d) => d.label).join(" · ")}`} placement="right">
+        <Tooltip key={e.id} title={iconsOnly ? `${e.label}: ${e.destinations.map((d) => d.label).join(" · ")}` : ""} placement="right">
           <Box component="button" type="button" aria-haspopup="menu" aria-expanded={Boolean(toolsAnchor)} aria-label={e.label} onClick={openTools} {...shared}>
             {body}
           </Box>
@@ -187,7 +193,7 @@ export function NavigationRail({ active }: { readonly active: ScreenId }) {
       );
     }
     return (
-      <Tooltip key={e.id} title={wide ? "" : e.label} placement="right">
+      <Tooltip key={e.id} title={iconsOnly ? e.label : ""} placement="right">
         <Box component="a" href={href(e.screen)} {...shared}>{body}</Box>
       </Tooltip>
     );
@@ -197,7 +203,7 @@ export function NavigationRail({ active }: { readonly active: ScreenId }) {
   let lastGroup: RailGroup | null | undefined;
   const items: React.ReactNode[] = [];
   for (const e of entries) {
-    if (wide && e.group && e.group !== lastGroup) {
+    if (!iconsOnly && e.group && e.group !== lastGroup) {
       items.push(<Typography key={`group-${e.group}`} component="div" aria-hidden sx={{ ...GROUP_LABEL, mt: 0.5 }}>{e.group}</Typography>);
     }
     lastGroup = e.group;
@@ -211,12 +217,20 @@ export function NavigationRail({ active }: { readonly active: ScreenId }) {
         aria-label="Primary"
         // The rail stays in view on a long page (sticky, one viewport tall) so Administration, pinned at its bottom edge,
         // is always one click away (R4); a viewport shorter than the list scrolls the rail itself.
-        sx={{ width: wide ? 88 : 56, flex: "none", bgcolor: m3.surface, pt: 2, display: "flex", flexDirection: "column", alignItems: "center", gap: 1.25,
+        sx={{ width: iconsOnly ? 56 : 88, flex: "none", bgcolor: m3.surface, pt: 2, display: "flex", flexDirection: "column", alignItems: "center", gap: 1.25,
               position: "sticky", top: 0, alignSelf: "flex-start", height: "100vh", boxSizing: "border-box", overflowY: "auto", overflowX: "hidden" }}
       >
         <Box sx={{ mb: 1 }}>
-          <NexusMark size={wide ? 44 : 36} />
+          <NexusMark size={iconsOnly ? 36 : 44} />
         </Box>
+        {wide && (
+          <Tooltip title={collapsed ? "Expand menu: show the labels" : "Collapse menu: icons only"} placement="right">
+            <IconButton aria-label={collapsed ? "Expand menu" : "Collapse menu"} aria-pressed={collapsed} onClick={() => setCollapsed(!collapsed)}
+              sx={{ width: 32, height: 32, borderRadius: "8px", border: `1px solid ${m3.outlineVar}`, color: m3.onSurfaceVar, mb: 0.5 }}>
+              <Icon name={collapsed ? "chevron-right" : "chevron-left"} size={18} />
+            </IconButton>
+          </Tooltip>
+        )}
         {!wide && (
           <Tooltip title="Open navigation: every screen and its sections" placement="right">
             <IconButton aria-label="Open navigation" onClick={() => setDrawerOpen(true)}
