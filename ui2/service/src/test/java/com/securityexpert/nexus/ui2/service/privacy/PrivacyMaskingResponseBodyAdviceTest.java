@@ -101,6 +101,24 @@ class PrivacyMaskingResponseBodyAdviceTest {
     }
 
     @Test
+    void passesAMaskedChangeFeedThroughUntouchedAndRefusesAnUnmaskedOneForAiview() {
+        org.springframework.http.server.ServerHttpResponse response = mock(org.springframework.http.server.ServerHttpResponse.class);
+        org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+        when(response.getHeaders()).thenReturn(headers);
+        when(httpRequest.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE)).thenReturn(true);
+        Map<String, Object> body = Map.of("events", List.of(Map.of("device_name", "FW-TANGO-04", "actor", "USR-0123456789")));
+        Object out = advice.beforeBodyWrite(new com.securityexpert.nexus.ui2.service.changes.ChangeFeedResponse(true, body),
+                null, null, null, serverRequest, response);
+        assertThat(out).isSameAs(body);
+        assertThat(headers.getFirst(PrivacyMaskingResponseBodyAdvice.MASKED_HEADER)).isEqualTo("true");
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class, () -> advice.beforeBodyWrite(
+                new com.securityexpert.nexus.ui2.service.changes.ChangeFeedResponse(false, body), null, null, null, serverRequest, response));
+        when(httpRequest.getAttribute(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE)).thenReturn(false);
+        assertThat(advice.beforeBodyWrite(new com.securityexpert.nexus.ui2.service.changes.ChangeFeedResponse(false, body),
+                null, null, null, serverRequest, response)).isSameAs(body);
+    }
+
+    @Test
     void marksAMaskedResponseWithTheMaskedHeaderAndOnlyThat() {
         org.springframework.http.server.ServerHttpResponse masked = mock(org.springframework.http.server.ServerHttpResponse.class);
         org.springframework.http.HttpHeaders maskedHeaders = new org.springframework.http.HttpHeaders();
