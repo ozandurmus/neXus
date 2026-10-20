@@ -1,6 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { JobWindowProvider } from "./shell/JobWindow";
+import { BusinessHoursConfirmProvider } from "./shell/BusinessHoursConfirm";
 import { App } from "./App";
 import { AuthGate } from "./auth/AuthGate";
 import { installTokenStyles } from "./theme/m3Theme";
@@ -19,7 +20,7 @@ if (container) {
   ReactDOM.createRoot(container).render(
     <React.StrictMode>
       <AuthGate>
-        <JobWindowProvider><App /></JobWindowProvider>
+        <JobWindowProvider><BusinessHoursConfirmProvider><App /></BusinessHoursConfirmProvider></JobWindowProvider>
       </AuthGate>
     </React.StrictMode>,
   );

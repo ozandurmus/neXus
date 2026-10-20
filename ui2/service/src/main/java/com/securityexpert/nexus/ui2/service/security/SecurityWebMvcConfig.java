@@ -299,6 +299,7 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
     private final GateChain gateChain;
     private final LocalIdentityResolver localIdentityResolver;
     private final LocalRoleTokenResolver localRoleTokenResolver;
+    private final AdminWindowBypass adminWindowBypass;
 
     public SecurityWebMvcConfig(GateChain gateChain) {
         this(gateChain, null, null);
@@ -306,14 +307,23 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
 
     public SecurityWebMvcConfig(GateChain gateChain, LocalIdentityResolver localIdentityResolver,
             LocalRoleTokenResolver localRoleTokenResolver) {
+        this(gateChain, localIdentityResolver, localRoleTokenResolver, null);
+    }
+
+    /** @param adminWindowBypass PO 2026-10-20: when set, {@link ManualAdmissionInterceptor} runs after the gate chain */
+    public SecurityWebMvcConfig(GateChain gateChain, LocalIdentityResolver localIdentityResolver,
+            LocalRoleTokenResolver localRoleTokenResolver, AdminWindowBypass adminWindowBypass) {
         this.gateChain = gateChain;
         this.localIdentityResolver = localIdentityResolver;
         this.localRoleTokenResolver = localRoleTokenResolver;
+        this.adminWindowBypass = adminWindowBypass;
     }
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(new GateChainInterceptor(gateChain, ACTION_ID_BY_ROUTE, EXPLICITLY_UNGATED_ROUTES,
                 localIdentityResolver, localRoleTokenResolver));
+        // Registration order is execution order: the grant is only ever opened for a request the gate chain passed.
+        if (adminWindowBypass != null) registry.addInterceptor(new ManualAdmissionInterceptor(adminWindowBypass));
     }
 }

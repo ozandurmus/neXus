@@ -41,8 +41,14 @@ final class NexusSessionCli {
     record Session(String baseUrl, String cookie, String csrf) {
     }
 
+    /** PO 2026-10-20: the administrator's acknowledgement of a manual device job inside business hours. */
+    static final String BUSINESS_HOURS_ACK_FLAG = "--business-hours-ack";
+    static final String BUSINESS_HOURS_ACK_HEADER = "X-Nexus-Business-Hours-Ack";
+    static final String BUSINESS_HOURS_CONFIRM_CODE = "BUSINESS_HOURS_CONFIRM_REQUIRED";
+
     private final Path home;
     private final HttpClient client;
+    private boolean businessHoursAck;
 
     NexusSessionCli(Path home) {
         this.home = home;
@@ -60,6 +66,9 @@ final class NexusSessionCli {
     }
 
     static void printUsage() {
+        System.out.println("  --business-hours-ack (any command)             security_admin/operation_admin: confirm a manual device job inside");
+        System.out.println("                                                 business hours (08:00-20:00 GMT+3); without it such a job answers 409 "
+                + BUSINESS_HOURS_CONFIRM_CODE);
         System.out.println("  login <baseUrl> <username> [local|ldap]       (password: NEXUS_CLI_PASSWORD or console)");
         System.out.println("  logout | session");
         System.out.println("  api <GET|POST|PUT> <path> [jsonBody|@file]     the general form: any route the screen calls");
@@ -78,6 +87,8 @@ final class NexusSessionCli {
         System.out.println("  jobs [state=.. job_type=.. device_id=.. since=.. until=.. q=.. page=.. page_size=..]");
         System.out.println("  jobs-export <dest.csv> [same filters]");
         System.out.println("  inventory-collect <deviceId> | configuration-collect <deviceId>");
+        System.out.println("  readiness-run <clusterId> <unitId> [check_point|palo_alto]   HA readiness pre-checks (read-only)");
+        System.out.println("  policy-collect <sourceId> [CHANGED_ONLY|FULL] [domainRef]   policy collection of one management source");
         System.out.println("  syslog-measure-start                           measure system/config logs on every enrolled Palo Alto firewall");
         System.out.println("  syslog-collect-start [deviceId]                start the incremental system-log collection (one device, or every supported device)");
         System.out.println("  syslog-spike-review <deviceId>                 one-off Spike Detective layout review of one Check Point gateway (summary in syslog-measurements)");
@@ -120,7 +131,9 @@ final class NexusSessionCli {
     }
 
     /** @return exit code, or -1 when {@code args[0]} is not one of this class's commands */
-    int run(String[] args) {
+    int run(String[] rawArgs) {
+        String[] args = takeBusinessHoursAck(rawArgs);
+        if (args.length == 0) return -1;
         try {
             return switch (args[0]) {
                 case "login" -> login(args);
@@ -187,6 +200,22 @@ final class NexusSessionCli {
                 case "configuration-collect" -> {
                     require(args, 2, "configuration-collect <deviceId>");
                     yield print(call("POST", "/devices/" + args[1] + "/configuration/collect", "{}"));
+                }
+                case "readiness-run" -> {
+                    require(args, 3, "readiness-run <clusterId> <unitId> [check_point|palo_alto]");
+                    String plane = args.length > 3 && "palo_alto".equals(args[3]) ? "pan-failover" : "cp-failover";
+                    Map<String, Object> body = new LinkedHashMap<>();
+                    body.put("clusterId", id(args[1]));
+                    body.put("unitId", args[2]);
+                    yield print(call("POST", "/api/v2/" + plane + "/units/" + id(args[2]) + "/readiness", json(body)));
+                }
+                case "policy-collect" -> {
+                    require(args, 2, "policy-collect <sourceId> [CHANGED_ONLY|FULL] [domainRef]");
+                    Map<String, Object> body = new LinkedHashMap<>();
+                    body.put("mode", args.length > 2 ? args[2] : "CHANGED_ONLY");
+                    if (args.length > 3) body.put("domainRef", args[3]);
+                    yield print(call("POST", "/api/v2/policy/sources/"
+                            + java.net.URLEncoder.encode(args[1], StandardCharsets.UTF_8) + "/collect", json(body)));
                 }
                 case "syslog-measure-start" -> print(call("POST", "/api/v2/diagnostics/system-log-measurements/start", "{}"));
                 case "syslog-collect-start" -> print(call("POST", "/api/v2/system-logs/collect",
@@ -330,6 +359,20 @@ final class NexusSessionCli {
         }
     }
 
+    /** Removes {@link #BUSINESS_HOURS_ACK_FLAG} wherever it stands and remembers it for every call this run makes. */
+    String[] takeBusinessHoursAck(String[] args) {
+        List<String> rest = new ArrayList<>();
+        for (String arg : args) {
+            if (BUSINESS_HOURS_ACK_FLAG.equals(arg)) businessHoursAck = true;
+            else rest.add(arg);
+        }
+        return rest.toArray(String[]::new);
+    }
+
+    boolean businessHoursAck() {
+        return businessHoursAck;
+    }
+
     // ---- session ----------------------------------------------------------------------------------
 
     private int login(String[] args) throws IOException, InterruptedException {
@@ -430,6 +473,7 @@ final class NexusSessionCli {
                 .header("Accept", "*/*");
         if (!"GET".equals(method)) {
             request.header("X-CSRF-Token", session.csrf()).header("Content-Type", "application/json");
+            if (businessHoursAck) request.header(BUSINESS_HOURS_ACK_HEADER, "true");
             request.method(method, HttpRequest.BodyPublishers.ofString(jsonBody == null ? "" : jsonBody, StandardCharsets.UTF_8));
         } else {
             request.GET();
@@ -611,6 +655,11 @@ final class NexusSessionCli {
         if (response.statusCode() / 100 == 2) {
             System.out.println(body);
             return 0;
+        }
+        if (response.statusCode() == 409 && jsonString(body, "code").filter(BUSINESS_HOURS_CONFIRM_CODE::equals).isPresent()) {
+            System.err.println(BUSINESS_HOURS_CONFIRM_CODE + ": " + jsonString(body, "message").orElse("business hours")
+                    + " Nothing was submitted; repeat the command with " + BUSINESS_HOURS_ACK_FLAG + " to confirm.");
+            return 1;
         }
         System.err.println("HTTP " + response.statusCode() + ": " + body);
         return response.statusCode() == 401 || response.statusCode() == 403 ? 3 : 1;

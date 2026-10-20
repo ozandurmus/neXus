@@ -17,6 +17,7 @@ import com.securityexpert.nexus.ui2.persistence.device.DeviceRecord;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord;
 import com.securityexpert.nexus.ui2.platform.JobWindowPolicy;
+import com.securityexpert.nexus.ui2.platform.ManualAdmission;
 import com.securityexpert.nexus.ui2.service.security.ActionRegistry;
 
 /**
@@ -82,8 +83,17 @@ public final class SystemLogCollectionService {
         return Math.floorMod(deviceId.hashCode(), Math.max(1, Math.min(STAGGER_MINUTES, windowMinutes)));
     }
 
-    /** Manual start ({@code syslog-collect-start [deviceId]}); throws {@link JobWindowPolicy.OutsideWindow} outside a window. */
+    /**
+     * Manual start ({@code syslog-collect-start [deviceId]}); throws {@link JobWindowPolicy.OutsideWindow} outside a window.
+     * For every role, administrators included: the phase B contract (section 3.1, "Manual starts obey the same windows")
+     * sets the approved commands' frequency per job window, which the PO decision of 2026-10-20 did not amend. Hence
+     * no administrator grant applies here ({@link ManualAdmission#withoutGrant}).
+     */
     public StartOutcome start(Optional<String> deviceId, String actor) {
+        return ManualAdmission.withoutGrant(() -> startInsideWindow(deviceId, actor));
+    }
+
+    private StartOutcome startInsideWindow(Optional<String> deviceId, String actor) {
         windows.requireOpen();
         Instant now = windows.now();
         if (deviceId.isPresent()) {

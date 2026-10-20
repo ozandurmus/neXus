@@ -17,6 +17,7 @@ import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord;
 import com.securityexpert.nexus.ui2.persistence.diagnostic.SystemLogMeasurementRepository;
 import com.securityexpert.nexus.ui2.platform.JobWindowPolicy;
+import com.securityexpert.nexus.ui2.platform.ManualAdmission;
 import com.securityexpert.nexus.ui2.service.security.ActionRegistry;
 
 /**
@@ -55,7 +56,12 @@ public final class SystemLogMeasurementService {
                 .filter(d -> "palo_alto".equals(d.vendorHint()) && "gateway".equals(d.role())).toList();
     }
 
+    /** Window-bound for every role, as {@link SystemLogCollectionService#start}: measurement frequency is set per window. */
     public BulkOutcome startAll(String actor) {
+        return ManualAdmission.withoutGrant(() -> startAllInsideWindow(actor));
+    }
+
+    private BulkOutcome startAllInsideWindow(String actor) {
         windows.requireOpen();
         String slot = String.valueOf(windows.slotStart(windows.now()).toEpochSecond());
         int admitted = 0, deduplicated = 0;
@@ -87,7 +93,9 @@ public final class SystemLogMeasurementService {
      * MEASURED review row is refused ({@code SPIKE_LAYOUT_ALREADY_REVIEWED}), so a successful review is never repeated.
      */
     public ReviewOutcome startSpikeLayoutReview(String deviceId, String actor) {
-        windows.requireOpen();
+        // PO 2026-10-20: a one-off review an administrator starts is not held to the window (acknowledgement inside
+        // business hours instead); the slot-keyed idempotency still holds one job per device per slot.
+        windows.requireOpenFor(actor);
         if (deviceId == null || deviceId.isBlank()) return ReviewOutcome.refused("DEVICE_ID_REQUIRED");
         var device = devices.find(deviceId);
         if (device.isEmpty()) return ReviewOutcome.refused("DEVICE_NOT_FOUND");

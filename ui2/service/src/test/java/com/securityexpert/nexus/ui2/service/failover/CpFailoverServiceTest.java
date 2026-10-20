@@ -61,6 +61,115 @@ class CpFailoverServiceTest {
         verifyNoInteractions(store, devices, inventory, trust);
     }
 
+    /** {local Istanbul time, inside the job window, inside business hours} x role x acknowledgement (PO 2026-10-20). */
+    static java.util.stream.Stream<org.junit.jupiter.params.provider.Arguments> adminWindowMatrix() {
+        List<org.junit.jupiter.params.provider.Arguments> rows = new java.util.ArrayList<>();
+        String[][] times = {{"2026-10-08T12:10:00", "true", "true"}, {"2026-10-08T13:00:00", "false", "true"},
+            {"2026-10-08T06:10:00", "true", "false"}, {"2026-10-08T03:30:00", "false", "false"}};
+        for (String role : List.of(com.securityexpert.nexus.ui2.platform.RoleToken.SECURITY_ADMIN,
+                com.securityexpert.nexus.ui2.platform.RoleToken.OPERATION_ADMIN,
+                com.securityexpert.nexus.ui2.platform.RoleToken.OPERATOR,
+                com.securityexpert.nexus.ui2.platform.RoleToken.REPLAY_VIEWER))
+            for (String[] t : times) for (boolean ack : new boolean[] {false, true})
+                rows.add(org.junit.jupiter.params.provider.Arguments.of(role, t[0], Boolean.parseBoolean(t[1]),
+                    Boolean.parseBoolean(t[2]), ack));
+        return rows.stream();
+    }
+    private CpFailoverService serviceAt(String local) {
+        return new CpFailoverService(devices, inventory, store, rbac, trust, new FailoverMutationSwitch(true),
+            new JobWindowPolicy(java.time.Clock.fixed(java.time.LocalDateTime.parse(local).atZone(JobWindowPolicy.ZONE_ID)
+                .toInstant(), JobWindowPolicy.ZONE_ID), 60, new com.securityexpert.nexus.ui2.platform.BusinessHours(
+                    com.securityexpert.nexus.ui2.platform.BusinessHours.DEFAULT_START,
+                    com.securityexpert.nexus.ui2.platform.BusinessHours.DEFAULT_END)));
+    }
+    /** What the request interceptor does: the grant exists only for an actor AdminWindowBypass names. */
+    private <T> T asRequest(String actor, boolean ack, java.util.function.Supplier<T> work) {
+        var role = new com.securityexpert.nexus.ui2.service.security.AdminWindowBypass(rbac).role(actor);
+        return role.isPresent() ? com.securityexpert.nexus.ui2.platform.ManualAdmission.under(
+            new com.securityexpert.nexus.ui2.platform.ManualAdmission.Grant(actor, role.get(), ack), work) : work.get();
+    }
+
+    @ParameterizedTest(name = "readiness {0} at {1} window={2} businessHours={3} ack={4}")
+    @org.junit.jupiter.params.provider.MethodSource("adminWindowMatrix")
+    void readinessRunAdmissionPerRoleWindowBusinessHoursAndAcknowledgement(String role, String local, boolean window,
+            boolean businessHours, boolean ack) {
+        ready("ACTIVE","STANDBY");
+        roles("actor-1", java.util.Set.of(role));
+        when(store.requestReadiness(CLUSTER,null,"actor-1",A,"check_point"))
+            .thenReturn(new JooqCpFailoverRepository.Decision("ADMITTED","run-1",null));
+        var service = serviceAt(local);
+        boolean admin = !role.equals(com.securityexpert.nexus.ui2.platform.RoleToken.OPERATOR)
+            && !role.equals(com.securityexpert.nexus.ui2.platform.RoleToken.REPLAY_VIEWER);
+        java.util.function.Supplier<String> run = () -> service.requestReadiness(CLUSTER_ID, CLUSTER_ID, "actor-1", "check_point");
+        if (admin && businessHours && !ack) {
+            var refusal = assertThrows(com.securityexpert.nexus.ui2.platform.ManualAdmission.BusinessHoursConfirmRequired.class,
+                () -> asRequest("actor-1", ack, run));
+            assertTrue(refusal.getMessage().startsWith("Business hours (08:00"));
+            verifyNoInteractions(store);
+        } else if (admin || window) {
+            assertEquals("run-1", asRequest("actor-1", ack, run));
+        } else {
+            // Operator and aiview keep today's refusal, with or without an acknowledgement header.
+            assertThrows(JobWindowPolicy.OutsideWindow.class, () -> asRequest("actor-1", ack, run));
+            verifyNoInteractions(store);
+        }
+    }
+
+    @ParameterizedTest(name = "failover start {0} at {1} window={2} businessHours={3} ack={4}")
+    @org.junit.jupiter.params.provider.MethodSource("adminWindowMatrix")
+    void failoverStartAdmissionPerRoleWindowBusinessHoursAndAcknowledgement(String role, String local, boolean window,
+            boolean businessHours, boolean ack) {
+        ready("ACTIVE","STANDBY");
+        roles("actor-1", java.util.Set.of(role));
+        when(store.requestBound(eq(CLUSTER),isNull(),any(),eq("actor-1"),eq(A),eq(true),eq("check_point"),
+            eq(java.util.Set.of(A,B)),eq("request-a"),eq(1L),eq("nonce-a"),eq(true),any()))
+            .thenReturn(new JooqCpFailoverRepository.Decision("ADMITTED","run-2",null));
+        var service = serviceAt(local);
+        java.util.function.Supplier<String> start = () -> service.request(CLUSTER_ID, CLUSTER_ID, null, "actor-1",
+            "check_point", "request-a", 1, "nonce-a", true);
+        if (role.equals(com.securityexpert.nexus.ui2.platform.RoleToken.OPERATOR)
+                || role.equals(com.securityexpert.nexus.ui2.platform.RoleToken.REPLAY_VIEWER)) {
+            // Failover stays an administrator's action: the role refusal comes first, at any hour.
+            assertEquals("WRONG_ROLE", assertThrows(CpFailoverService.Refusal.class, () -> asRequest("actor-1", ack, start)).code());
+        } else if (businessHours && !ack) {
+            assertThrows(com.securityexpert.nexus.ui2.platform.ManualAdmission.BusinessHoursConfirmRequired.class,
+                () -> asRequest("actor-1", ack, start));
+            verifyNoInteractions(store);
+        } else {
+            // Every other safeguard (approval binding, nonce, policy, quarantine, members) is the repository's, unchanged.
+            assertEquals("run-2", asRequest("actor-1", ack, start));
+            verify(store).requestBound(eq(CLUSTER),isNull(),any(),eq("actor-1"),eq(A),eq(true),eq("check_point"),
+                eq(java.util.Set.of(A,B)),eq("request-a"),eq(1L),eq("nonce-a"),eq(true),
+                eq(role.equals(com.securityexpert.nexus.ui2.platform.RoleToken.SECURITY_ADMIN)
+                    ? JooqCpFailoverRepository.ADMIN_SINGLE : JooqCpFailoverRepository.TWO_PERSON));
+        }
+    }
+
+    @Test void scheduledReadinessKeepsTheWindowEvenWhileAnAdministratorsGrantIsOpenOnTheThread() {
+        ready("ACTIVE","STANDBY");
+        var outside = serviceAt("2026-10-08T13:00:00");
+        var grant = new com.securityexpert.nexus.ui2.platform.ManualAdmission.Grant("actor-1",
+            com.securityexpert.nexus.ui2.platform.ManualAdmission.SECURITY_ADMIN, true);
+        assertThrows(JobWindowPolicy.OutsideWindow.class, () -> com.securityexpert.nexus.ui2.platform.ManualAdmission.under(grant,
+            () -> outside.requestScheduledReadiness(new CpFailoverService.ReadinessTarget(CLUSTER_ID, CLUSTER_ID, "check_point"))));
+        verifyNoInteractions(store);
+    }
+
+    @Test void anAdministratorsApprovalRequestOutsideTheWindowNeedsNoAcknowledgementAndOperatorsStillCannot() {
+        ready("ACTIVE","STANDBY");
+        roles("principal-b", java.util.Set.of(com.securityexpert.nexus.ui2.platform.RoleToken.OPERATION_ADMIN));
+        String id="1d730385-5706-4625-a0e9-23c2f3fe1863";
+        Instant from=Instant.now(),until=from.plusSeconds(600);
+        var outsideInHours = serviceAt("2026-10-08T13:00:00");
+        asRequest("principal-b", false, () -> outsideInHours.createApprovalRequest(id,CLUSTER_ID,CLUSTER_ID,from,until,
+            "Synthetic request","principal-b","check_point"));
+        verify(store).createRequestApproval(id,CLUSTER,null,CLUSTER_ID,java.util.Set.of(A,B),from,until,
+            "Synthetic request","principal-b","check_point",JooqCpFailoverRepository.TWO_PERSON);
+        // The same request without the administrator's grant (no session role named it) keeps the window refusal.
+        assertThrows(JobWindowPolicy.OutsideWindow.class, () -> outsideInHours.createApprovalRequest(id,CLUSTER_ID,CLUSTER_ID,
+            from,until,"Synthetic request","principal-b","check_point"));
+    }
+
     @Test void disabledSwitchRefusesBothVendorsBeforeAdmissionAndDueDispatch() {
         when(rbac.evaluate(anyString(),any(),any())).thenReturn(new RbacEvaluator.Decision(
             AuthzOutcome.PERMITTED,Optional.of(RbacEvaluator.ROOT_AUTHORITY),Optional.empty(),Optional.empty()));

@@ -59,6 +59,9 @@ class JooqFailoverApprovalTest {
             if (query.startsWith("select clock_timestamp")) return row(Map.of("checked_at",clock.atOffset(ZoneOffset.UTC)));
             if (query.startsWith("select window_from")) return row(Map.of("started",true));
             if (query.startsWith("select job_id from jobs")) return owner?row(Map.of("job_id","job-a")):none();
+            // PO 2026-10-20 business-hours recheck: these fixtures' jobs carry no administrator window bypass.
+            if (query.startsWith("select window_bypass_role, business_hours_ack_at from jobs"))
+                return row(Collections.singletonMap("window_bypass_role", null));
             if (query.startsWith("select run_id from failover_run"))
                 return query.contains("approval_id") && consumed!=null?row(Map.of("run_id",consumed)):none();
             if (query.startsWith("select resolved.device_id")) {

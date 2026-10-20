@@ -109,11 +109,42 @@ function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit, timeoutMs
   });
 }
 
-async function call<T>(path: string, method: "GET" | "POST" | "PUT", body?: unknown): Promise<T> {
+/**
+ * PO decision 2026-10-20: an administrator's manual device job inside business hours answers 409
+ * BUSINESS_HOURS_CONFIRM_REQUIRED and admits nothing. {@link call} then asks the registered confirmation (the
+ * BusinessHoursConfirmProvider dialog) and, on "Continue", repeats the same request once with the acknowledgement
+ * header. A "Continue" covers the requests of the next minute, so a bulk run asks once, not once per cluster.
+ */
+export const BUSINESS_HOURS_CONFIRM_REQUIRED = "BUSINESS_HOURS_CONFIRM_REQUIRED";
+export const BUSINESS_HOURS_ACK_HEADER = "X-Nexus-Business-Hours-Ack";
+export const BUSINESS_HOURS_DEFAULT_MESSAGE = "Business hours (08:00\u201320:00 GMT+3). This sends commands to the device. Continue?";
+const BUSINESS_HOURS_ACK_REMEMBER_MS = 60_000;
+type BusinessHoursConfirm = (message: string) => Promise<boolean>;
+let businessHoursConfirm: BusinessHoursConfirm | null = null;
+let businessHoursPrompt: Promise<boolean> | null = null;
+let businessHoursAckUntil = 0;
+/** Registers the dialog that asks; returns the unregister function. Without one, the 409 is reported as an error. */
+export function setBusinessHoursConfirm(confirm: BusinessHoursConfirm | null): () => void {
+  businessHoursConfirm = confirm;
+  businessHoursAckUntil = 0;
+  return () => { if (businessHoursConfirm === confirm) businessHoursConfirm = null; };
+}
+async function confirmBusinessHours(message: string): Promise<boolean> {
+  if (Date.now() < businessHoursAckUntil) return true;
+  if (!businessHoursConfirm) return false;
+  // Concurrent requests share one dialog.
+  businessHoursPrompt ??= businessHoursConfirm(message).finally(() => { businessHoursPrompt = null; });
+  const confirmed = await businessHoursPrompt;
+  if (confirmed) businessHoursAckUntil = Date.now() + BUSINESS_HOURS_ACK_REMEMBER_MS;
+  return confirmed;
+}
+
+async function call<T>(path: string, method: "GET" | "POST" | "PUT", body?: unknown, businessHoursAck = false): Promise<T> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (method !== "GET") {
     const token = await csrfToken();
     if (token) headers["X-CSRF-Token"] = token;
+    if (businessHoursAck) headers[BUSINESS_HOURS_ACK_HEADER] = "true";
   }
   const response = await fetchWithTimeout(path, {
     method,
@@ -124,7 +155,13 @@ async function call<T>(path: string, method: "GET" | "POST" | "PUT", body?: unkn
   noteMasking(response);
   const parsed = await response.json().catch(() => ({}));
   if (!response.ok) {
-    if (parsed.code === "OUTSIDE_JOB_WINDOW") {
+    if (response.status === 409 && parsed.code === BUSINESS_HOURS_CONFIRM_REQUIRED && method !== "GET" && !businessHoursAck) {
+      if (await confirmBusinessHours(typeof parsed.message === "string" ? parsed.message : BUSINESS_HOURS_DEFAULT_MESSAGE)) {
+        return call<T>(path, method, body, true);
+      }
+      parsed.message = "Not started: business hours were not confirmed.";
+    }
+    if (parsed.code === "OUTSIDE_JOB_WINDOW" || parsed.code === BUSINESS_HOURS_CONFIRM_REQUIRED) {
       parsed.error = parsed.message;
       parsed.reason = parsed.message;
     }

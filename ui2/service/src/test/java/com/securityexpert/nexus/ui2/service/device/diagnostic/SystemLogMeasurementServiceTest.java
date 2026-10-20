@@ -90,6 +90,18 @@ class SystemLogMeasurementServiceTest {
     }
 
     @Test
+    void anAdministratorsMeasurementStartOutsideAJobWindowIsStillRefused() {
+        var admission = mock(JobAdmissionService.class);
+        var service = new SystemLogMeasurementService(mock(DeviceRepository.class), admission,
+                mock(SystemLogMeasurementRepository.class), window(OUTSIDE_WINDOW));
+        var grant = new com.securityexpert.nexus.ui2.platform.ManualAdmission.Grant("synthetic-admin",
+                com.securityexpert.nexus.ui2.platform.ManualAdmission.OPERATION_ADMIN, true);
+        assertThrows(JobWindowPolicy.OutsideWindow.class, () -> com.securityexpert.nexus.ui2.platform.ManualAdmission.under(grant,
+                () -> service.startAll("synthetic-admin")));
+        verifyNoInteractions(admission);
+    }
+
+    @Test
     void theCapabilityIsAdmissibleOnlyWithItsSignedOffGates() {
         var rows = GateRegistryFixtureLoader.loadFromStream(getClass().getClassLoader()
                 .getResourceAsStream("capabilities/gate_registry_fixture.yaml"));
@@ -203,6 +215,27 @@ class SystemLogMeasurementServiceTest {
         assertEquals(new SystemLogMeasurementService.ReviewOutcome("DEDUPLICATED", "job-1", null),
                 service.startSpikeLayoutReview("gw-1", "synthetic-aiview"), "one job per device per window");
         verify(admission, times(2)).submit(anyString(), anyString(), anyString(), anyString(), anyString());
+    }
+
+    /** PO 2026-10-20: the one-off review an administrator starts is not held to the window. */
+    @Test
+    void anAdministratorStartsTheLayoutReviewOutsideAWindowWithTheBusinessHoursAcknowledgement() {
+        var devices = oneDevice("gw-1", "gateway", "check_point");
+        var admission = mock(JobAdmissionService.class);
+        var store = mock(SystemLogMeasurementRepository.class);
+        String slot = String.valueOf(window(OUTSIDE_WINDOW).slotStart(OUTSIDE_WINDOW).toEpochSecond());
+        when(admission.submit(CpSpikeLayoutReview.CAPABILITY, "gw-1", "spike-layout-review:gw-1:" + slot, "synthetic-admin",
+                ActionRegistry.SYSTEM_LOG_MEASURE_START)).thenReturn(new AdmissionResult.Admitted("job-1"));
+        var service = new SystemLogMeasurementService(devices, admission, store, window(OUTSIDE_WINDOW));
+        var ack = new com.securityexpert.nexus.ui2.platform.ManualAdmission.Grant("synthetic-admin",
+                com.securityexpert.nexus.ui2.platform.ManualAdmission.SECURITY_ADMIN, true);
+        assertEquals(new SystemLogMeasurementService.ReviewOutcome("ADMITTED", "job-1", null),
+                com.securityexpert.nexus.ui2.platform.ManualAdmission.under(ack, () -> service.startSpikeLayoutReview("gw-1", "synthetic-admin")));
+        var noAck = new com.securityexpert.nexus.ui2.platform.ManualAdmission.Grant("synthetic-admin",
+                com.securityexpert.nexus.ui2.platform.ManualAdmission.SECURITY_ADMIN, false);
+        assertThrows(com.securityexpert.nexus.ui2.platform.ManualAdmission.BusinessHoursConfirmRequired.class,
+                () -> com.securityexpert.nexus.ui2.platform.ManualAdmission.under(noAck, () -> service.startSpikeLayoutReview("gw-1", "synthetic-admin")));
+        assertThrows(JobWindowPolicy.OutsideWindow.class, () -> service.startSpikeLayoutReview("gw-1", "synthetic-aiview"));
     }
 
     @Test
