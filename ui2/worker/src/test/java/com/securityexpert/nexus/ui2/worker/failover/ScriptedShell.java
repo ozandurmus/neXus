@@ -20,7 +20,7 @@ import com.securityexpert.nexus.ui2.jobs.transport.ShellChannel;
 class ScriptedShell implements ShellChannel {
     static final String PROMPT = "[Expert@FW-TEST-01:0]# ";
     private static final Pattern FRAMED = Pattern.compile(
-            "echo (__NX_[0-9a-f]{32}_BEGIN__); (.*); echo (__NX_[0-9a-f]{32}_END_)\\$\\?__");
+            "echo (__NX_[0-9a-f]{32}_BEGIN__); \\( (.*) \\) (2>/dev/null|2>&1); echo (__NX_[0-9a-f]{32}_END_)\\$\\?__");
 
     /** Raw text the shell prints after the echo for {@code inner}; {@code null} = the command never ends. */
     @FunctionalInterface
@@ -37,6 +37,8 @@ class ScriptedShell implements ShellChannel {
     private final ArrayDeque<Byte> outbound = new ArrayDeque<>();
     final List<String> lines = new ArrayList<>();
     final List<String> inner = new ArrayList<>();
+    final List<String> stderrRules = new ArrayList<>();
+    int interrupts;
     int chunk = Integer.MAX_VALUE;
     boolean closed;
     int closes;
@@ -63,7 +65,8 @@ class ScriptedShell implements ShellChannel {
             return;
         }
         inner.add(framed.group(2));
-        String reply = responder.respond(framed.group(2), framed.group(1), framed.group(3));
+        stderrRules.add(framed.group(3));
+        String reply = responder.respond(framed.group(2), framed.group(1), framed.group(4));
         if (reply != null) emit(reply);
     }
 
@@ -77,6 +80,11 @@ class ScriptedShell implements ShellChannel {
         int n = 0;
         while (n < buffer.length && n < chunk && !outbound.isEmpty()) buffer[n++] = outbound.poll();
         return n;
+    }
+
+    @Override
+    public void interrupt() {
+        interrupts++;
     }
 
     @Override

@@ -2,7 +2,9 @@
 
 Status: **DRAFT (design), literals APPROVED** -- the Product Owner approved L1-L4 (section 5) on 2026-10-22 with "one
 cluster first" ([PO_DECISION_RECORD_2026_10_22_CP_ONE_SHELL_SESSION.md](PO_DECISION_RECORD_2026_10_22_CP_ONE_SHELL_SESSION.md),
-RATIFIED). The framing gate row `cp_failover_shell_framing` is `SIGNED_OFF` (migration `V174`). The path is OFF by default
+RATIFIED). The external review (section 7) amended the framing to L2' (subshell and stderr rule) and added Ctrl-C on a
+timeout; that amendment (A1) needs the PO's confirmation, so the gate row `cp_failover_shell_framing` is seeded `DRAFTED`
+(migration `V175`) until then. The path is OFF by default
 and, when switched on, runs only for allow-listed clusters (section 3.7). Not real-environment validated.
 
 ## 1. Problem
@@ -74,8 +76,11 @@ For each read the worker draws a fresh 128-bit nonce from `SecureRandom` (never 
 line:
 
 ```
-echo __NX_<nonce>_BEGIN__; <read>; echo __NX_<nonce>_END_$?__
+echo __NX_<nonce>_BEGIN__; ( <read> ) 2>/dev/null; echo __NX_<nonce>_END_$?__
 ```
+
+(Amended by the review response, section 7: originally `<read>` without subshell or stderr rule; `2>&1` instead of
+`2>/dev/null` for `cphaprob -a if`. After a failure the member's remaining reads use the exec path, section 7 P0-1.)
 
 * Output = the lines strictly between a line that is exactly `__NX_<nonce>_BEGIN__` and the line that ends with
   `__NX_<nonce>_END_<digits>__`; exit status = those digits (0-255). Text in front of the END marker on its line is the
@@ -168,13 +173,20 @@ invalid value falls back to that default. The pause is chosen per run and taken 
 | L4 | `<read>` in a VS run = `vsenv <VSID> && <cmd>` | `bash -lc 'vsenv <VSID> && <cmd>'` |
 
 No other device command is added; `echo` is a shell built-in and the only new word. The writes are not changed (3.5).
-**Approved by the Product Owner on 2026-10-22** (PO_DECISION_RECORD_2026_10_22_CP_ONE_SHELL_SESSION.md); V174 seeds the
-row `SIGNED_OFF` and the fixture matches.
+**Approved by the Product Owner on 2026-10-22** (PO_DECISION_RECORD_2026_10_22_CP_ONE_SHELL_SESSION.md). The review
+response (section 7) amends two items; this amendment A1 is **pending PO confirmation**, and V175 seeds the row `DRAFTED`
+with the amended key until then (fixture the same):
+
+| # | Amended literal | Why |
+| --- | --- | --- |
+| L2' | `echo __NX_<nonce>_BEGIN__; ( <read> ) 2>/dev/null; echo __NX_<nonce>_END_$?__`, and `... ( <read> ) 2>&1; ...` for `cphaprob -a if` | P1-3: the exec path returned stdout only (stderr separate) except for `cphaprob -a if`, which ran with a PTY (stderr merged). P1-5: the subshell keeps a VS `vsenv`, the directory and variables to the one read, as one exec channel did |
+| L5 | Ctrl-C (one 0x03 byte) once on a read timeout, before the shell is closed | P2-1: stop the timed-out foreground read; a terminal signal, not a device command |
 
 ## 6. Rollout
 
-1. Merge. The switch is off by default, so no run changes. The framing gate row is `SIGNED_OFF` (PO approval
-   2026-10-22, L1-L4).
+1. Merge. The switch is off by default, so no run changes. The PO confirms amendment A1 (L2', L5); the row is then
+   signed off (V175 edited before it ships, or a follow-up migration). Until then an allow-listed run stops with
+   `COMMAND_GATE_UNAVAILABLE` before any connection.
 2. **One pilot cluster** (PO: "önce tek kümede"): on the worker set `NEXUS_CP_FAILOVER_ONE_SHELL=enabled` and
    `NEXUS_CP_FAILOVER_ONE_SHELL_CLUSTERS=<the pilot cluster's cluster_member_ref>` (optionally
    `NEXUS_CP_FAILOVER_COMMAND_PAUSE_MS`), restart the worker, and run one readiness pass on that cluster. Every other
@@ -187,3 +199,21 @@ row `SIGNED_OFF` and the fixture matches.
 5. Then the failover fleet (`*` or the full list), as one configuration change.
 6. Later, separately: inventory, configuration, backup and system-log collection on the same pattern, each with its own
    design and gate review.
+
+## 7. Review response (ARGON_REVIEW_2026_10_22_CP_ONE_SHELL.md)
+
+| Finding | Fix | Tests |
+| --- | --- | --- |
+| P0-1 a failed optional/caught read killed the shared shell for later mandatory reads (or caused OUTCOME_UNCERTAIN after DOWN) | The failed read stays failed (UNKNOWN, never retried: retry rule `none`). The member's **remaining reads fall back to the exec path** (their approved SSH_EXEC literals, byte for byte). No second shell is opened (one open attempt per member per pass; an open failure falls back the same way). Chosen over reopening a shell because the exec path is the proven evidence path and a reopened shell could fail the same way again; the price is one exec login per remaining read of that member, logged as `[CP_FAILOVER_SHELL] ... use exec` (counts only) | `desyncOnACaughtReadFallsBackToExecForTheRemainingReads`, `timeoutOnTheLastFailoverReadAfterDownStillCompletesTheRun`, `shellOpenFailureIsTriedOncePerMemberThenExec` |
+| P1-1 `clean()` deleted CR/backspace | Lines are rendered as a terminal shows them: CR to column 0 and overwrite, backspace left, `ESC[K`/`ESC[0K` erase to end, `ESC[2K` erase line; other escapes and control characters dropped | `carriageReturnAndBackspaceOverwriteAsATerminalShows` |
+| P1-2 first command sent before banner/profile finished; BEGIN after an un-newlined prompt | Before the first command the banner and first prompt are drained: ready after 350 ms of quiet following output (or 10 s at most). No device command is used as the ready marker (a new echo literal would need its own approval); the first prompt repaint plus quiet is the marker. BEGIN is accepted after an un-newlined prompt on the same line (the line ends with the marker and is not the echoed `echo <marker>`) | `bannerAndFirstPromptAreDrainedBeforeTheFirstCommand`, `overwrittenPromptAndUnNewlinedPromptBeforeBeginStillFrame` |
+| P1-3 PTY merges stderr into stdout | L2': `( <read> ) 2>/dev/null` (exec returned stdout only); `2>&1` for `cphaprob -a if`, which ran with a PTY on exec | `stderrIsDroppedExceptForTheReadThatHadAPtyOnExec` |
+| P1-4 write confirmation and resume pre-UP evidence moved to the shell | `waitFor` (the DOWN/UP confirmation polls behind `confirmDispatch`) and the resume's fresh pre-UP state read always use the exec path; a shell failure after DOWN only moves later reads to exec (P0-1) and never blocks the confirmation. A failover run therefore has exec logins for the writes and their polls; readiness has none | `failoverRunKeepsTheWritesOnExecAndReadsOnTheShells`, `oneShellResumeKeepsTheUpOnExecAndReadsInOneShellPerMember` |
+| P1-5 VSX context persistence | Avoided rather than reset: every read runs in its own subshell `( vsenv <VSID> && <cmd> )`, so the login shell's context never changes, as with one exec process per read. `vsenv 0` is not added to non-VS runs: on a non-VSX gateway `vsenv` does not exist (CF-2), and today's exec path does not send it either; whether a *fresh* session lands in a non-zero context is unchanged from the exec path | `vsRunsSendTheVsenvFormInsideTheShell` |
+| P1-6 the pause variable changed exec-path runs | `NEXUS_CP_FAILOVER_COMMAND_PAUSE_MS` now sets only the shell-path pause; exec-path runs always use `UI2_FAILOVER_COMMAND_PAUSE_SECONDS` | `shellPauseNeverChangesAnUnlistedClustersExecPause`, `CpFailoverShellModeTest` |
+| P2-1 hung command on timeout | Ctrl-C (L5) before closing the channel | `deadlineIsTheCommandTimeoutAndClosesTheShell` |
+| P2-2 attempt rows record the SSH_EXEC gate; boundary marked for unsent reads | With the exec fallback every read whose attempt row is written is actually sent (shell or exec), so `markBoundaryCrossed` is true for sent reads only. The attempt row still names the read's own SSH_EXEC gate (the read's approval); the framing gate is checked once per run before any contact and is not written per attempt -- **left as is**, listed for a later audit-model change | -- |
+| P2-3 pause up to 60 s | Shell pause capped at 10,000 ms | `shellPauseDefaultsBoundsAndInvalidValues` |
+| P2-4 interrupt swallowed | An interrupted read restores the interrupt flag; the executor throws `InterruptedException` (run ends `INTERRUPTED`) | `interruptedReadRestoresTheInterruptFlag` |
+| P2-5 missing tests | Added as listed above. Not added: a bond-member read timeout (the scripted fixture selects no bond interface); it follows the same caught-read path as the traffic desync test | -- |
+

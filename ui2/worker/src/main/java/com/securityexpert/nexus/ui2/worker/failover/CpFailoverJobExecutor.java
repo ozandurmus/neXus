@@ -41,14 +41,19 @@ public final class CpFailoverJobExecutor {
     private static final String FAILOVER="cphaprob show_failover", ROUTING="cpstat os -f routing";
     private static final ObjectMapper JSON=new ObjectMapper();
     private static final String DOWN="clusterXL_admin down", UP="clusterXL_admin up";
-    /** The framing gate's command key (CP_FAILOVER_ONE_SHELL_SESSION_2026_10_22.md §5, L2; PO approval 2026-10-22). */
-    static final String SHELL_FRAMING="echo __NX_<NONCE>_BEGIN__; <READ>; echo __NX_<NONCE>_END_$?__";
+    /**
+     * The framing gate's command key (CP_FAILOVER_ONE_SHELL_SESSION_2026_10_22.md §5 L2, amended as L2' by the review
+     * response §7: subshell and stderr rule). DRAFTED until the PO confirms the amendment.
+     */
+    static final String SHELL_FRAMING="echo __NX_<NONCE>_BEGIN__; ( <READ> ) <STDERR>; echo __NX_<NONCE>_END_$?__";
     static final String SHELL_FRAMING_GATE="cp_failover_shell_framing";
     private static final int MAX_OUTPUT_CHARS=262144;
     private static final Duration SHELL_OPEN_TIMEOUT=Duration.ofSeconds(30);
     private final CpFailoverShellMode shellMode;
     /** This run uses the one shell: switch on and its cluster allow-listed (set at the start of every run). */
     private boolean shellRun;
+    /** Write confirmation and resume pre-UP reads keep their exec-path evidence (review P1-4). */
+    private boolean execEvidence;
     private final java.security.SecureRandom nonces=new java.security.SecureRandom();
     private final JooqCpFailoverRepository store;
     private final DeviceRepository devices;
@@ -84,6 +89,8 @@ public final class CpFailoverJobExecutor {
         /** The member's one framed shell for this pass; opened at its first read, never reopened. */
         private FramedShell shell;
         private boolean shellOpened;
+        /** After its shell failed (or could not open), this member's later reads use the exec path (review P0-1). */
+        private boolean shellFallback;
         Member(String id,TransportSession session) { this.id=id; this.session=session; }
         String id() { return id; }
         TransportSession session() { return session; }
@@ -171,7 +178,7 @@ public final class CpFailoverJobExecutor {
         this.readinessFailure=null;
         this.shapes=new ReadinessShapeLog("check_point");
         this.epoch=epoch; this.commandIndex=0; this.polls=0; this.wrote=false; this.dispatch=null;
-        this.shellRun=shellMode.usesShell(run.get().clusterRef());
+        this.shellRun=shellMode.usesShell(run.get().clusterRef()); this.execEvidence=false;
         if(!leases.transitionState(jobId,epoch,JobState.CLAIMED,JobState.EXECUTING,
                 "system:cp-failover-worker","cp_failover_start")) return;
         Member first=null,second=null;
@@ -250,7 +257,7 @@ public final class CpFailoverJobExecutor {
         this.jobId=jobId; this.runId=r.runId(); this.vsId=null; this.readiness=false; this.readinessFailure=null;
         this.shapes=new ReadinessShapeLog("check_point");
         this.epoch=epoch; this.commandIndex=0; this.polls=0; this.wrote=false; this.dispatch=null;
-        this.shellRun=shellMode.usesShell(r.clusterRef());
+        this.shellRun=shellMode.usesShell(r.clusterRef()); this.execEvidence=false;
         if(!leases.transitionState(jobId,epoch,JobState.CLAIMED,JobState.EXECUTING,
                 "system:cp-failover-worker","cp_failover_resume_start")) return;
         Member first=null,second=null;
@@ -276,7 +283,9 @@ public final class CpFailoverJobExecutor {
             if(formerActive==null) throw new Stop("MEMBERSHIP_CHANGED",0);
             Member peer=formerActive==first?second:first;
             state("READING_STATE","READING_STATE",null,null,null);
-            freshState(readState(first),readState(second),first,formerActive);
+            execEvidence=true;
+            try { freshState(readState(first),readState(second),first,formerActive); }
+            finally { execEvidence=false; }
             state("RETURNING","RETURNING",null,null,null);
             command(formerActive,UP);
             if(!waitFor(first,second,peer,"ACTIVE",formerActive,"STANDBY")) throw new Stop("RETURN_TIMEOUT",1);
@@ -464,7 +473,10 @@ public final class CpFailoverJobExecutor {
      * second login); admission, lease and cancellation refusals propagate as they do from {@code exec}.
      */
     private FramedShell shell(Member member) {
-        if(member.shell!=null || member.shellOpened) return member.shell;
+        if(member.shell!=null || member.shellOpened) {
+            if(member.shell==null || member.shell.broken()) { member.shellFallback=true; return null; }
+            return member.shell;
+        }
         member.shellOpened=true;
         try {
             member.shell=new FramedShell(ssh.openShell(member.session(),SHELL_OPEN_TIMEOUT),nonces,nanoTime);
@@ -472,6 +484,9 @@ public final class CpFailoverJobExecutor {
             if(unavailable instanceof com.securityexpert.nexus.ui2.worker.JobCancellationScope.Cancelled) throw unavailable;
             com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(unavailable);
             member.shell=null;
+            member.shellFallback=true;
+            System.getLogger(CpFailoverJobExecutor.class.getName()).log(System.Logger.Level.WARNING,
+                "[CP_FAILOVER_SHELL] shell open failed; the member's reads use exec");
         }
         return member.shell;
     }
@@ -531,12 +546,19 @@ public final class CpFailoverJobExecutor {
         int sessionCommandIndex=++member.sessionCommandIndex;
         long sessionElapsedMs=(System.nanoTime()-member.openedAtNanos)/1_000_000;
         ExecResult result;
-        if(shellRun) {
-            // §3.3: inside the member's login shell the bare gated read, or the vsenv form; never a nested bash -lc.
-            FramedShell shell=shell(member);
+        FramedShell shell=shellRun && !execEvidence && !member.shellFallback?shell(member):null;
+        if(shell!=null) {
+            // §3.3 / §7: inside the member's login shell, in a subshell, the bare gated read or the vsenv form; stderr
+            // dropped as the exec path returned stdout only, merged for the read that ran with a PTY on exec.
             String shellLiteral=vsId==null?readCommand:"vsenv "+vsId+" && "+readCommand;
-            result=shell==null?new ExecResult.ChannelFailed("SHELL_UNAVAILABLE")
-                :shell.run(shellLiteral,Duration.ofSeconds(g.timeoutS()),MAX_OUTPUT_CHARS);
+            result=shell.run(shellLiteral,pty,Duration.ofSeconds(g.timeoutS()),MAX_OUTPUT_CHARS);
+            if(shell.broken()) {
+                // This read stays failed (never retried); the member's remaining reads use the exec path.
+                member.shellFallback=true;
+                System.getLogger(CpFailoverJobExecutor.class.getName()).log(System.Logger.Level.WARNING,
+                    "[CP_FAILOVER_SHELL] shell failed after "+shell.sent()+" commands; remaining reads of the member use exec");
+            }
+            if(Thread.currentThread().isInterrupted()) throw new InterruptedException();
             pty=true;
         } else result=ssh.exec(member.session(),new ExecSpec(literal,pty),Duration.ofSeconds(g.timeoutS()));
         if(!(result instanceof ExecResult.Completed completed) || completed.exitStatus()!=0
@@ -853,6 +875,12 @@ public final class CpFailoverJobExecutor {
         store.check(runId,phase,member.id(),vsId,no,status,derived);
     }
     private boolean waitFor(Member first,Member second,Member active,String activeRole,Member other,
+            String otherRole) throws InterruptedException {
+        execEvidence=true;
+        try { return poll(first,second,active,activeRole,other,otherRole); }
+        finally { execEvidence=false; }
+    }
+    private boolean poll(Member first,Member second,Member active,String activeRole,Member other,
             String otherRole) throws InterruptedException {
         for(;polls<maxPolls;) {
             polls++;

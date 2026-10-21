@@ -9,7 +9,6 @@ import java.time.Duration;
 import org.junit.jupiter.api.Test;
 
 class CpFailoverShellModeTest {
-    private static final Duration LEGACY = Duration.ofSeconds(2);
     private static final String PILOT = "CLS-TEST-01";
 
     @Test
@@ -33,16 +32,13 @@ class CpFailoverShellModeTest {
     }
 
     @Test
-    void pausesKeepTheExecPathUnchangedByDefault() {
-        assertEquals(LEGACY, CpFailoverShellMode.execPause(null, LEGACY));
+    void shellPauseDefaultsBoundsAndInvalidValues() {
         assertEquals(Duration.ofMillis(1000), CpFailoverShellMode.fromValues("enabled", "*", null).shellPause());
         assertEquals(Duration.ofMillis(250), CpFailoverShellMode.fromValues("enabled", "*", "250").shellPause());
-        assertEquals(Duration.ofMillis(1500), CpFailoverShellMode.execPause("1500", LEGACY));
-        assertEquals(Duration.ZERO, CpFailoverShellMode.execPause("0", LEGACY));
-        for (String invalid : new String[]{"-1", "abc", "1.5", "60001", "999999", " "}) {
+        assertEquals(Duration.ZERO, CpFailoverShellMode.fromValues("enabled", "*", "0").shellPause());
+        assertEquals(Duration.ofMillis(10_000), CpFailoverShellMode.fromValues("enabled", "*", "10000").shellPause());
+        for (String invalid : new String[]{"-1", "abc", "1.5", "10001", "60000", "999999", " "})
             assertEquals(Duration.ofMillis(1000), CpFailoverShellMode.fromValues("enabled", "*", invalid).shellPause(), invalid);
-            assertEquals(LEGACY, CpFailoverShellMode.execPause(invalid, LEGACY), invalid);
-        }
     }
 
     @Test

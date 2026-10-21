@@ -244,10 +244,13 @@ class CpFailoverResumeExecutorTest {
         var clock=new AtomicLong();
         var transport=new ShellTransport(script.transport(),clock);
         new CpFailoverJobExecutor(store,devices(List.of(A,B)),leases(),attempts(),transport,
-            gates(),d -> clock.addAndGet(d.toNanos()),Duration.ZERO,
+            CpFailoverOneShellTest.signedOffFraming(gates()),d -> clock.addAndGet(d.toNanos()),Duration.ZERO,
             new FailoverMutationSwitch(true),clock::get,new CpFailoverShellMode(true)).execute("job-r",1);
         assertEquals("DONE",store.state,store.checks.toString()); assertEquals("RETURN_VERIFIED",store.message);
-        assertEquals(List.of(UP_LITERAL),transport.execLiterals);
+        // Review P1-4: the pre-UP fresh state, the UP and its confirmation polls keep their exec evidence.
+        assertEquals(List.of("bash -lc 'cphaprob stat'","bash -lc 'cphaprob stat'",UP_LITERAL),transport.execLiterals.subList(0,3));
+        assertTrue(transport.execLiterals.subList(3,transport.execLiterals.size()).stream()
+            .allMatch("bash -lc 'cphaprob stat'"::equals),transport.execLiterals.toString());
         assertEquals(List.of(UP_LITERAL),script.writes());
         assertEquals(2,transport.shells.size());
         transport.shells.values().forEach(list -> assertEquals(1,list.size()));
