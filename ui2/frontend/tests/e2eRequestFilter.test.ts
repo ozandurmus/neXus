@@ -45,7 +45,7 @@ it.each([
   };
   const path = "/jobs/synthetic-job/transcript";
   const request = {
-    resourceType: () => resourceType, method: () => "GET",
+    resourceType: () => resourceType, method: () => "GET", isNavigationRequest: () => false,
     url: () => `https://192.0.2.1${path}?synthetic=value`,
     failure: () => errorText ? { errorText } : null,
   };
