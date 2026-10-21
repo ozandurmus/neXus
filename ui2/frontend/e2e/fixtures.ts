@@ -1,8 +1,8 @@
-import { test as base, expect, type Page, type Request } from "@playwright/test";
+import { test as base, expect, type Frame, type Page, type Request, type Response } from "@playwright/test";
 import { baseURL } from "./settings.mjs";
 import { hasCanaryToken, isErrorAlert, isAiview, loadErrorText, installReadOnlyGuard } from "./safety";
 import { fullMode, latencyViolation, pathTemplate } from "./latency";
-import { requestViolation } from "./requestPath";
+import { requestViolation, sanitizedPath } from "./requestPath";
 import { existsSync, readFileSync } from "node:fs";
 
 const canaryFile = process.env.NEXUS_E2E_CANARY_FILE;
@@ -12,6 +12,40 @@ if (canaryDigests && [...canaryDigests].some((digest) => !/^[0-9a-f]{64}$/.test(
   throw new Error("Invalid E2E canary digest file");
 }
 if (!canaryDigests) console.info("E2E canary privacy check skipped: digest file is absent");
+
+/**
+ * A fetch/xhr still in flight when its frame loads a new document is cancelled by the browser, but Playwright (1.63,
+ * Chromium, with or without context.route) emits neither "requestfinished" nor "requestfailed" for it. Left in the
+ * pending set it never settles, and every later checkpoint fails with "Screen reads did not finish" although the new
+ * screen has no open read. A navigation response that commits a document (not a redirect) for a frame means that
+ * frame's earlier reads belong to the replaced document, which the browser has cancelled: they are dropped. The new
+ * document's reads start after the commit, so every checkpoint still awaits them. Seen live 2026-10-21: a device's
+ * job-status poll (GET /devices/{id} every 1.75 s while its latest job is not terminal) fired as the walk opened the
+ * next entity. Returns whether anything was dropped.
+ */
+export function dropReplacedDocumentReads(pending: Set<Request>, response: Response): boolean {
+  const navigation = response.request();
+  if (!navigation.isNavigationRequest() || (response.status() >= 300 && response.status() < 400)) return false;
+  const frame = frameOf(navigation);
+  if (!frame) return false;
+  let dropped = false;
+  for (const request of pending) {
+    if (request !== navigation && frameOf(request) === frame) { pending.delete(request); dropped = true; }
+  }
+  return dropped;
+}
+
+/** The open reads by verb, static path words ({id} for the rest) and type: no id, query value or host. */
+export function openReads(pending: Iterable<Request>): string {
+  const reads = [...pending].map(request => `${["GET", "HEAD"].includes(request.method()) ? request.method() : "{method}"} `
+    + `${sanitizedPath(request.url())} ${request.resourceType()}`);
+  return [...new Set(reads)].join(", ") || "none";
+}
+
+function frameOf(request: Request): Frame | null {
+  // Service-worker requests have no frame (and service workers are blocked in this suite).
+  try { return request.frame(); } catch { return null; }
+}
 
 type Safety = { apiTimings: readonly { path: string; elapsedMs: number }[]; checkpoint: () => Promise<void>; expectForbiddenTranscript: (path: string) => void };
 
@@ -64,6 +98,7 @@ export const test = base.extend<{ safety: Safety }>({
       const expectedDenial = response.status() === 403 && response.request().method() === "GET"
         && forbiddenTranscripts.delete(new URL(response.url()).pathname);
       if (relevant(response.request()) && response.status() >= 400 && !expectedDenial) violations.push(requestViolation(response.request().method(), response.url(), response.status()));
+      if (dropReplacedDocumentReads(pending, response)) changedAt = Date.now();
     });
     context.on("page", (page) => page.on("pageerror", () => violations.push("Uncaught page error (content withheld)")));
     await installReadOnlyGuard(context, baseURL(), (message) => violations.push(message));
@@ -79,8 +114,12 @@ export const test = base.extend<{ safety: Safety }>({
     }
     const checkpoint = async () => {
       // Do not pass on a heading rendered before its API data. Wait for the current read batch to settle.
-      await expect.poll(() => pending.size === 0 && Date.now() - changedAt >= 400,
-        { message: "Screen reads did not finish", timeout: 35_000 }).toBe(true);
+      try {
+        await expect.poll(() => pending.size === 0 && Date.now() - changedAt >= 400,
+          { message: "Screen reads did not finish", timeout: 35_000 }).toBe(true);
+      } catch {
+        throw new Error(`Screen reads did not finish (open: ${openReads(pending)})`);
+      }
       expect(violations, "Read-only/session/API/page safety checks").toEqual([]);
       for (const page of context.pages()) if (!page.isClosed()) await visibleSafety(page);
     };
