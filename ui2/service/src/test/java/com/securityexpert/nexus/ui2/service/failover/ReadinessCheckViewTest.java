@@ -35,6 +35,20 @@ class ReadinessCheckViewTest {
             assertEquals("PASS",view.get("result"));
         }
     }
+    /** Pilot 2026-10-21/22: a measured traffic rate stored as a double is shown in human units, never "Count unavailable". */
+    @Test void trafficRateShowsTheMeasuredRateInHumanUnits() throws Exception {
+        Object[][] cases={
+            {"{\"bytesPerSecond\":1.4E9,\"selectedCount\":2,\"reason\":\"NONE\"}","PASS","1.4 GB/s"},
+            {"{\"bytesPerSecond\":400.0}","PASS","400 bytes/s"},
+            {"{\"bytesPerSecond\":1500}","PASS","1.5 KB/s"},
+            {"{\"bytesPerSecond\":2000000.0}","PASS","2 MB/s"},
+            {"{\"bytesPerSecond\":999999.0}","PASS","1 MB/s"},
+            {"{\"bytesPerSecond\":120.0}","FAIL","120 bytes/s, below tolerance"},
+            {"{\"bytesPerSecond\":-1.0}","FAIL","Rate unavailable"},
+            {"{}","PASS","Rate unavailable"},
+        };
+        for(Object[] c:cases) assertEquals(c[2],row(false,8,(String)c[1],(String)c[0]).get("summary"),(String)c[0]);
+    }
     /** PO decision 2026-10-20 item 2: the "Recovery mode" row the PO picks a pilot unit by. */
     @Test void recoveryModeRowIsBlockingAndNamesTheObservedMode() throws Exception {
         var active=row(false,15,"PASS","{\"recoveryMode\":\"ACTIVE_UP\",\"reason\":\"ACTIVE_UP\"}");

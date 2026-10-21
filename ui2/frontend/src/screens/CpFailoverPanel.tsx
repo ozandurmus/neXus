@@ -15,8 +15,8 @@ import FormControlLabel from "@mui/material/FormControlLabel";
 import Typography from "@mui/material/Typography";
 import { M3Button } from "../shell/M3Widgets";
 import { m3 } from "../theme/m3Theme";
-import { relativeAge } from "../shell/time";
-import { clusterModeWord, statusWord } from "../shell/presenters";
+import { DISPLAY_TZ_LABEL, displayInputToIso, isoToDisplayInput, relativeAge } from "../shell/time";
+import { clusterModeWord, requestFailure, statusWord } from "../shell/presenters";
 import { approveCpFailover, approveCpFailoverResume, getCpFailoverRun, listCpFailoverApprovals, listCpFailoverRuns, listCpFailoverUnits,
   resumeCpFailoverReturn, secondApproveCpFailover, startCpFailover, runCpFailoverReadiness,
   type CpFailoverApproval, type CpFailoverResumeState, type CpFailoverRunDetail, type CpFailoverState, type CpFailoverUnit } from "../auth/adminApi";
@@ -30,10 +30,14 @@ export function runStep(state: CpFailoverState, step: string): number {
   if (current === "FINAL_POSTCHECK" || current === "POST_RETURN" || current === "POSTCHECK" && ["FINAL_POSTCHECK", "POST_RETURN", "final"].includes(step)) return 5;
   return ({ PLANNED: 0, PRECHECK: 0, FAILING_OVER: 1, SWITCHED: 2, POSTCHECK: 3, RETURNING: 4, DONE: 6 } as Record<string, number>)[current] ?? 0;
 }
-const errorText = (error: unknown) => {
-  const body = (error as { body?: { code?: string; message?: string } })?.body;
+/** The server's reason for a refused request: its `code`, else its `error` (ACTION_MAPPING_REQUIRED, ACTION_REFUSED ...
+ * bodies carry only `error`), with the HTTP status; never a bare "Request failed". */
+export const errorText = (error: unknown) => {
+  const failure = error as { status?: number; body?: { code?: string; error?: string; message?: string } } | null | undefined;
+  const body = failure?.body;
   if (body?.code === "BUSINESS_HOURS_CONFIRM_REQUIRED") return body.message ?? "Not started: business hours were not confirmed.";
-  return body?.code === "OUTSIDE_JOB_WINDOW" ? body.message ?? "Device jobs are outside the scheduled window." : body?.code ?? "Request failed";
+  if (body?.code === "OUTSIDE_JOB_WINDOW") return body.message ?? "Device jobs are outside the scheduled window.";
+  return requestFailure(failure);
 };
 type Draft = { requestId: string; from: string; until: string; reason: string; confirmedRevision?: number };
 /** Workers write "post_return" after the return step; "final" is the older name. Both are the final post-checks. */
@@ -243,7 +247,7 @@ function UnitPanel({ unit, expanded, onExpand, onRefreshUnits }: { unit: CpFailo
   const idle = loaded && !busy && !active && !(readinessRun && activeStates.includes(readinessRun.state));
   const canOperate = unit.masked !== true && unit.canStart;
   const confirm = () => act(async () => {
-    const request = draft ?? { requestId: crypto.randomUUID(), from: new Date().toISOString(), until: new Date(until).toISOString(), reason: reason.trim() };
+    const request = draft ?? { requestId: crypto.randomUUID(), from: new Date().toISOString(), until: displayInputToIso(until) ?? new Date(until).toISOString(), reason: reason.trim() };
     remember(request);
     const approval = bound ?? await approveCpFailover(unit, request.from, request.until, request.reason, request.requestId);
     if (!approval.requestId || !approval.revision) throw new Error("Missing request revision");
@@ -282,12 +286,12 @@ function UnitPanel({ unit, expanded, onExpand, onRefreshUnits }: { unit: CpFailo
         <Typography>Intended role swap: current active becomes DOWN/suspended; current standby/passive becomes active. The former active is then returned to standby/passive after successful checks.</Typography>
         <Typography>Traffic may be interrupted. The run may stop with one member DOWN. Intervention may be required.</Typography>
         <Typography>OK / Start confirms this request revision and the complete workflow. No later confirmation is required.</Typography>
-        <TextField label="Window ends" type="datetime-local" InputLabelProps={{ shrink: true }} value={draft?.until.slice(0,16) ?? until} disabled={Boolean(draft)} onChange={e => setUntil(e.target.value)} />
+        <TextField label="Window ends" helperText={`Turkey time (${DISPLAY_TZ_LABEL})`} type="datetime-local" InputLabelProps={{ shrink: true }} value={draft ? isoToDisplayInput(draft.until) : until} disabled={Boolean(draft)} onChange={e => setUntil(e.target.value)} />
         <TextField label="Reason" value={draft?.reason ?? reason} disabled={Boolean(draft)} onChange={e => setReason(e.target.value)} />
         {error && <Typography role="alert" color="error">{error}</Typography>}
       </Stack></DialogContent>
       <DialogActions><M3Button emphasis="text" disabled={busy} onClick={() => setDialog(false)}>Cancel</M3Button>
-        <M3Button deviceJob emphasis="filled" disabled={busy || !reason.trim() || (!draft && (!until || Date.parse(until) <= Date.now()))} onClick={() => void confirm()}>OK / Start</M3Button></DialogActions>
+        <M3Button deviceJob emphasis="filled" disabled={busy || !reason.trim() || (!draft && (!displayInputToIso(until) || Date.parse(displayInputToIso(until)!) <= Date.now()))} onClick={() => void confirm()}>OK / Start</M3Button></DialogActions>
     </Dialog>
   </Card>;
 }

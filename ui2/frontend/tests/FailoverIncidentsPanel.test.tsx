@@ -73,3 +73,13 @@ it("renders nothing when there is no incident or the read fails", async () => {
   const second = view(); await waitFor(() => expect(api.incidents).toHaveBeenCalledTimes(2));
   expect(second.container).toBeEmptyDOMElement();
 });
+
+it("a code-less refusal shows the server's error and the HTTP status", async () => {
+  api.incidents.mockResolvedValue({ canRelease: true, roleNote: null, incidents: [incident] });
+  api.release.mockRejectedValue({ status: 403, body: { error: "ACTION_MAPPING_REQUIRED" } });
+  view();
+  fireEvent.click(await screen.findByRole("button", { name: "Release incident" }));
+  fireEvent.change(screen.getByLabelText(/Reason/), { target: { value: "Reviewed" } });
+  fireEvent.click(screen.getByRole("button", { name: "Release" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("ACTION_MAPPING_REQUIRED (HTTP 403)");
+});

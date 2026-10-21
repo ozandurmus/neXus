@@ -369,3 +369,12 @@ export function outcomeLine(run: {
   }
   return parts.filter(Boolean).join(" · ");
 }
+
+/** A refused API request as text: the server's `code`, else its `error`, with the HTTP status: `CODE (HTTP 403)`; the code alone without a status; "Request failed (HTTP 500)" without a code. */
+export function requestFailure(failure: { status?: number; body?: { code?: string; error?: string }; message?: string } | null | undefined): string {
+  const code = failure?.body?.code ?? failure?.body?.error;
+  const status = typeof failure?.status === "number" && failure.status > 0 ? `HTTP ${failure.status}` : null;
+  if (code) return status ? `${code} (${status})` : code;
+  if (status) return `Request failed (${status})`;
+  return failure instanceof Error && failure.message ? failure.message : "Request failed";
+}

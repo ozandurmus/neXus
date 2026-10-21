@@ -81,31 +81,60 @@ def request_drain(target, snapshot):
     return int(generations[0])
 
 
-def barrier(target, generation):
+def barrier_conditions(target, generation):
+    """The drain barrier's conditions as (name, SQL boolean), evaluated on the target's module_runtime_control row."""
     role = ROLES[target]
     # Ownership and exact capability mapping cover current and legacy rows without pod-name guesses.
     filter_sql = ("ui2_job_module(j.capability_id)=" + literal(DEDICATED[target]) if target in DEDICATED else
                   "(ui2_job_module(j.capability_id) in (select module from module_runtime_control where effective_owner='general') or module_runtime_control.owner_instance is null)")
-    sql = ("select (drain_requested and drain_generation=" + str(generation) +
-           " and drain_ack_generation=drain_generation and drain_ack_at is not null "
-           "and (owner_instance is null or owner_heartbeat_at>now()-interval '60 seconds') "
-           "and not exists(select 1 from jobs j where j.state in ('CLAIMED','EXECUTING') and (" + filter_sql + ")) "
-           "and not exists(select 1 from endpoint_admission where " +
-           ("(owner_role='policy' or purpose_class='POLICY')" if target == "policy" else "owner_role=" + literal(role)) +
-           " and state in ('LEASED','QUARANTINED')) "
-           "and not exists(select 1 from runtime_task_lease where owner_role=" + literal(role) +
-           " and state in ('LEASED','QUARANTINED'))) from module_runtime_control where module=" + literal(role))
+    admission_scope = ("(owner_role='policy' or purpose_class='POLICY')" if target == "policy"
+                       else "owner_role=" + literal(role))
+    return (
+        ("drain_ack", "(drain_requested and drain_generation=" + str(generation) +
+         " and drain_ack_generation=drain_generation and drain_ack_at is not null)"),
+        ("owner_live", "(owner_instance is null or owner_heartbeat_at>now()-interval '60 seconds')"),
+        ("busy_jobs", "select count(*) from jobs j where j.state in ('CLAIMED','EXECUTING') and (" + filter_sql + ")"),
+        ("admissions", "select count(*) from endpoint_admission where " + admission_scope +
+         " and state in ('LEASED','QUARANTINED')"),
+        ("task_leases", "select count(*) from runtime_task_lease where owner_role=" + literal(role) +
+         " and state='LEASED'"),
+        ("quarantined_task_leases", "select count(*) from runtime_task_lease where owner_role=" + literal(role) +
+         " and state='QUARANTINED'"),
+    )
+
+
+def barrier(target, generation, why=None):
+    """True when the drain barrier holds. With `why` (a list) a false barrier appends which conditions hold it:
+    flags and counts only, never an instance, endpoint, job or task identity."""
+    role = ROLES[target]
+    conditions = barrier_conditions(target, generation)
+    holds = " and ".join(sql if not sql.startswith("select") else "not exists(" + sql.replace("select count(*)", "select 1", 1) + ")"
+                         for _, sql in conditions)
+    explain = " || ' ' || ".join(literal(name + "=") + " || (" + (sql if not sql.startswith("select") else "(" + sql + ")") + ")::text"
+                                 for name, sql in conditions)
+    rows = " from module_runtime_control where module=" + literal(role)
+    # A second select of counts in the same transaction; its line is never "t"/"f", so the boolean parse is unchanged.
+    sql = "select " + holds + rows + ";select 'barrier ' || " + explain + rows
     result = query("begin;" + audit("quarantine-drain") +
                    "select ui2_release_orphan_quarantines();" + sql + ";commit;")
-    return [line for line in result.splitlines() if line in ("t", "f")] == ["t"]
+    lines = result.splitlines()
+    ready = [line for line in lines if line in ("t", "f")] == ["t"]
+    if why is not None and not ready:
+        why.extend(line for line in lines if line.startswith("barrier "))
+    return ready
 
 
 def wait_drain(target, generation, limit, sleep=time.sleep, clock=time.monotonic):
     deadline = clock() + limit
-    while not barrier(target, generation):
+    while True:
+        why = []
+        if barrier(target, generation, why):
+            return
         if clock() >= deadline:
-            raise Blocked("bounded drain expired; old digest and audited drain retained", continuable=True)
-        print("Module waiting: " + target + "; generation=" + str(generation), flush=True)
+            raise Blocked("bounded drain expired; old digest and audited drain retained"
+                          + ("; " + why[-1] if why else ""), continuable=True)
+        print("Module waiting: " + target + "; generation=" + str(generation) +
+              ("; " + why[-1] if why else "; barrier state unavailable"), flush=True)
         sleep(min(10, max(0, deadline - clock())))
 
 

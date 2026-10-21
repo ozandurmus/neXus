@@ -103,4 +103,18 @@ class FailoverOrphanReleaseReasonTest {
         assertTrue(Arrays.asList(db.bindings.get(release)).contains(REASON));
         assertEquals(-1, db.index("insert into job_reconciliation"));
     }
+
+    /** Pilot 2026-10-21/22 (V175): the release frees the run's quarantined fleet task lease, after the incident. */
+    @Test void theReleaseFreesTheSettledFleetLeaseOfTheRunAfterTheIncidentInTheSameTransaction() {
+        for (boolean active : new boolean[] {true, false}) {
+            var db = new Db();
+            db.activeIncident = active;
+            assertEquals(JooqCpFailoverRepository.INCIDENT_RELEASED, db.repository().releaseIncident("run-a", ADMIN, REASON));
+            int lease = db.index("select ui2_release_settled_failover_leases");
+            int incident = Math.max(db.index("select ui2_release_failover_incident"), db.index("insert into job_reconciliation"));
+            assertTrue(incident >= 0 && lease > incident, "the lease is released once the incident is");
+            assertTrue(Arrays.asList(db.bindings.get(lease)).contains("run-a"));
+            assertTrue(db.sql.get(lease).contains("from failover_resume"), "a resume's job is covered as well");
+        }
+    }
 }
