@@ -417,3 +417,60 @@ def test_split_gate_start_and_publish_are_unique_and_digest_is_immutable(monkeyp
     assert requests[name]["immutable"] is True
     assert json.loads(requests[name]["data"]["request"]) == dict(image=image, commit="a" * 40)
     assert "private detail" not in capsys.readouterr().out
+
+
+def _trivy_retry(tmp_path, fail_times, attempts=3):
+    """Run the shell retry helper of security_scan.sh against a fake `trivy` that fails `fail_times` times."""
+    import subprocess
+    script = (Path(__file__).resolve().parents[2] / "tools/security/security_scan.sh").read_text()
+    helper = script.split("# BEGIN trivy-retry")[1].split("# END trivy-retry")[0]
+    counter = tmp_path / "count"
+    counter.write_text("0")
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    fake = bin_dir / "trivy"
+    fake.write_text(f'#!/bin/sh\nn=$(( $(cat {counter}) + 1 )); echo $n >{counter}\n'
+                    f'if [ $n -le {fail_times} ]; then echo "FATAL TOOMANYREQUESTS secret-image-name" >&2; exit 1; fi\n'
+                    'echo \'{"SchemaVersion": 2}\'\n')
+    fake.chmod(0o755)
+    report = tmp_path / "trivy-image-0.json"
+    result = subprocess.run(
+        ["sh", "-c", helper + f'trivy_try {report} {report}.exit trivy image x'],
+        env={"PATH": f"{bin_dir}:/usr/bin:/bin", "TRIVY_ATTEMPTS": str(attempts), "TRIVY_RETRY_SLEEP": "0"},
+        capture_output=True, text=True, check=True)
+    return result.stdout, int(counter.read_text()), (tmp_path / "trivy-image-0.json.exit").read_text().strip(), report
+
+
+def test_trivy_scan_retries_transient_failure_then_succeeds(tmp_path):
+    out, calls, exit_code, report = _trivy_retry(tmp_path, fail_times=2)
+    assert (calls, exit_code) == (3, "0")
+    assert json.loads(report.read_text()) == {"SchemaVersion": 2}
+    assert out.count("TRIVY_FAILED") == 2 and "class=rate_limit" in out
+    assert "secret-image-name" not in out and not Path(str(report) + ".err").exists()
+
+
+def test_trivy_retry_is_bounded_and_exhaustion_stays_a_scan_error(tmp_path):
+    out, calls, exit_code, report = _trivy_retry(tmp_path, fail_times=99)
+    assert calls == 3 and exit_code == "1"
+    # The recorded failing exit code makes the summary count a scan error: a retry never turns into a pass.
+    reports = tmp_path / "reports"
+    reports.mkdir()
+    (reports / "manifest.json").write_text(json.dumps([dict(tool="trivy", file=report.name, target="x")]))
+    (reports / report.name).write_text(report.read_text())
+    (reports / (report.name + ".exit")).write_text(exit_code)
+    baseline = tmp_path / "baseline.yaml"
+    baseline.write_text('{"accepted":[]}')
+    assert summary.main(["--reports", str(reports), "--baseline", str(baseline), "--output", str(tmp_path / "out")]) == 1
+    assert json.loads((tmp_path / "out/summary.json").read_text())["scan_errors"] == 1
+
+
+def test_trivy_first_try_success_does_not_retry(tmp_path):
+    out, calls, exit_code, _ = _trivy_retry(tmp_path, fail_times=0)
+    assert (calls, exit_code, out) == (1, "0", "")
+
+
+def test_every_trivy_invocation_goes_through_the_retry_helper():
+    text = (Path(__file__).resolve().parents[2] / "tools/security/security_scan.sh").read_text()
+    body = text.split("# END trivy-retry")[1]
+    calls = [l.strip() for l in body.splitlines() if " trivy " in " " + l.strip() + " " and not l.strip().startswith("#")]
+    assert len(calls) == 4 and all(l.startswith("trivy_try ") for l in calls)
