@@ -32,6 +32,10 @@ final class ScriptedPanDeviceTransport implements DeviceTransport {
     private final Map<String, String> haPeerBodyByBaseUrl;
     private final Set<String> connectedBaseUrls = new LinkedHashSet<>();
     private final List<String> commandsIssued = new ArrayList<>();
+    /** The {@code type=version} answer by base URL (PO 2026-10-21: a firewall's identity read); absent -> an empty body. */
+    final Map<String, String> typeVersionBodyByBaseUrl = new java.util.HashMap<>();
+    /** The {@code type=version} requests exactly as sent. */
+    final List<XmlApiSpec> typeVersionSpecs = new ArrayList<>();
 
     ScriptedPanDeviceTransport(Map<String, String> identityBodyByBaseUrl, Map<String, String> haPeerBodyByBaseUrl) {
         this.identityBodyByBaseUrl = identityBodyByBaseUrl;
@@ -66,6 +70,11 @@ final class ScriptedPanDeviceTransport implements DeviceTransport {
         if ("keygen".equals(spec.type())) {
             connectedBaseUrls.add(target.baseUrl());
             return new XmlApiResult.Completed(200, "<response><result><key>FAKE-KEY</key></result></response>");
+        }
+        if ("version".equals(spec.type())) {
+            typeVersionSpecs.add(spec);
+            commandsIssued.add("type=version");
+            return new XmlApiResult.Completed(200, typeVersionBodyByBaseUrl.getOrDefault(target.baseUrl(), ""));
         }
         String command = spec.formParams().get("cmd");
         commandsIssued.add(command);

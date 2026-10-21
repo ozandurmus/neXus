@@ -97,19 +97,25 @@ export function identityTiles(device: DeviceSummary, collectedAt: string | null,
     ...cells,
   ];
   const needsGate = "not collected -- needs its own gated read";
-  // A Palo Alto firewall since PO 2026-10-21: these facts are not collected at all. UNKNOWN (no "Not read yet" -- a
-  // collect would not read them); the reason is said once, in the card's note (platformFactsNote).
+  // A Palo Alto firewall since PO 2026-10-21: show system info is retired, so content versions and uptime are not
+  // collected at all (UNKNOWN, no "Not read yet" -- a collect would not read them; the reason is said once, in the
+  // card's note, platformFactsNote). Serial, model and PAN-OS version come from the type=version read: when the last
+  // run did record it and the answer lacked a field, that field says so; before the first run it is "not read yet".
   const retired = isPaloAlto && Boolean(device.platform_facts_not_collected_reason);
-  if (retired) common[1] = { label: "Model", value: null, absent: "not collected" };
-  const panAbsent = retired ? { absent: "not collected" } : { absent: "not read yet -- run Inventory collect", absentWord: "Not read yet" as const };
+  const typeVersionRead = device.platform_facts_source === "pan_type_version";
+  const panIdentityAbsent = retired && typeVersionRead
+    ? { absent: "not reported by type=version" }
+    : { absent: "not read yet -- run Inventory collect", absentWord: "Not read yet" as const };
+  const panNotCollected = retired ? { absent: "not collected" } : { absent: "not read yet -- run Inventory collect", absentWord: "Not read yet" as const };
+  if (retired) common[1] = { label: "Model", value: device.model || device.platform_family || null, ...panIdentityAbsent };
   return [
     ...common,
-    { label: "Serial number", value: device.serial_number ?? null, ...(isPaloAlto ? panAbsent : { absent: needsGate, absentWord: "Not read yet" as const }), mono: true },
-    { label: "Software version", value: device.software_version, absent: retired ? "not collected" : "not read at first contact" },
+    { label: "Serial number", value: device.serial_number ?? null, ...(isPaloAlto ? panIdentityAbsent : { absent: needsGate, absentWord: "Not read yet" as const }), mono: true },
+    { label: "Software version", value: device.software_version, ...(retired ? panIdentityAbsent : { absent: "not read at first contact" }) },
     isPaloAlto
-      ? { label: "Content versions", value: device.content_versions ? <ContentVersions versions={device.content_versions} /> : null, ...panAbsent }
+      ? { label: "Content versions", value: device.content_versions ? <ContentVersions versions={device.content_versions} /> : null, ...panNotCollected }
       : { label: "Hotfix / Jumbo take", value: device.hotfix_level ?? null, absent: needsGate, absentWord: "Not read yet" },
-    { label: "Uptime", value: device.uptime_text ?? null, ...(isPaloAlto ? panAbsent : { absent: needsGate, absentWord: "Not read yet" as const }) },
+    { label: "Uptime", value: device.uptime_text ?? null, ...(isPaloAlto ? panNotCollected : { absent: needsGate, absentWord: "Not read yet" as const }) },
     haRole,
     { label: isPaloAlto ? "Virtual systems (VSYS)" : "Virtual systems (VSX)", value: vs.length > 0 ? `${vs.length} · ${vs.join(", ")}` : "none" },
     ...tail.slice(0, 2),
@@ -130,14 +136,15 @@ export function identityTiles(device: DeviceSummary, collectedAt: string | null,
 }
 
 /**
- * The one line that says why a Palo Alto firewall's platform facts are UNKNOWN (PO 2026-10-21), or null. Said once, on
- * the grid -- the tiles only say "not collected".
+ * The one line that says why a Palo Alto firewall's content versions, uptime and platform family are UNKNOWN (PO
+ * 2026-10-21), or null. Said once, on the grid -- the tiles only say "not collected". Serial, model and software version
+ * are read with type=version (PO 2026-10-21).
  */
 export function platformFactsNote(device: Pick<DeviceSummary, "vendor_hint" | "platform_facts_not_collected_reason">): string | null {
   if (device.vendor_hint !== "palo_alto" || !device.platform_facts_not_collected_reason) return null;
-  return "Platform facts: not collected for Palo Alto firewalls (PO 2026-10-21). show system info is retired, so model, "
-    + "software version, serial, content versions and uptime are UNKNOWN and the identity check is not evaluable; "
-    + "the device name is the last one recorded and is no longer refreshed.";
+  return "Platform facts: content versions, uptime and platform family are not collected for Palo Alto firewalls (PO 2026-10-21). "
+    + "show system info is retired; serial, model and software version come from the type=version read. "
+    + "The device name is the last one recorded and is no longer refreshed.";
 }
 
 export function IdentityCard({ title, tiles, note }: { readonly title: string; readonly tiles: readonly IdentityTile[]; readonly note?: string | null }) {

@@ -398,24 +398,32 @@ public final class DeviceRegistrationController {
     }
 
     /**
-     * PO 2026-10-21 ({@link PanSystemInfoRetirement}): a Palo Alto firewall's model, software version, serial, content
-     * versions, uptime and platform family came only from show system info, now retired. Until its next inventory run
-     * clears them, values stored by an earlier read would look current -- so the projection withholds them (UNKNOWN)
-     * and says why, once, in {@code platform_facts_not_collected_reason}. The hostname stays: it is the device's
-     * recorded name, no longer refreshed. Every other device carries the key as {@code null}.
+     * PO 2026-10-21 ({@link PanSystemInfoRetirement}, {@code PanTypeVersion}): show system info is retired for a Palo Alto
+     * firewall, so its platform family, content versions, uptime and hotfix are not collected -- they are withheld
+     * (UNKNOWN) and {@code platform_facts_not_collected_reason} says why, once. Its serial, model and PAN-OS version come
+     * from the type=version read and are shown -- except while the stored platform facts still come from the earlier
+     * system-info read ({@code platform_facts_source} {@code pan_show_system_info}): that value would look current until
+     * the next inventory run replaces it with the type=version one, so it is withheld until then. The hostname stays: it
+     * is the device's recorded name (type=version does not return one, so it is not refreshed). Every other device
+     * carries the key as {@code null}.
      */
     static void applyPanSystemInfoRetirement(Map<String, Object> body, String vendor, String role) {
         if (!PanSystemInfoRetirement.appliesTo(vendor, role)) {
             body.put("platform_facts_not_collected_reason", null);
             return;
         }
-        for (String key : new String[] {"model", "software_version", "serial_number", "hotfix_level", "platform_family",
-                "content_versions", "uptime_text"}) {
+        boolean staleSystemInfo = "pan_show_system_info".equals(body.get("platform_facts_source"));
+        java.util.List<String> withheldKeys = new java.util.ArrayList<>(
+                java.util.List.of("hotfix_level", "platform_family", "content_versions", "uptime_text"));
+        if (staleSystemInfo) {
+            withheldKeys.addAll(java.util.List.of("model", "software_version", "serial_number"));
+        }
+        for (String key : withheldKeys) {
             if (body.containsKey(key)) {
                 body.put(key, null);
             }
         }
-        if (body.get("facts") instanceof Map<?, ?> facts) {
+        if (staleSystemInfo && body.get("facts") instanceof Map<?, ?> facts) {
             Map<String, Object> withheld = new LinkedHashMap<>();
             facts.forEach((key, value) -> withheld.put(String.valueOf(key), value));
             withheld.put("model", null);

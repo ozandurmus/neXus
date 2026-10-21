@@ -18,7 +18,16 @@ public final class PanFailoverChecks {
     public static final int SESSION_TOLERANCE_PERCENT = 80;
     public record State(String mode, String role, String peerRole, String localSerial, String peerSerial,
             String peerConnection, String ha1, String ha1Backup, boolean backupConfigured,
-            String ha2, String runningSync, String ha2Backup, boolean ha2BackupConfigured, String runningSyncEnabled) {}
+            String ha2, String runningSync, String ha2Backup, boolean ha2BackupConfigured, String runningSyncEnabled,
+            Versions versions) {}
+    /**
+     * A member's own software and content versions, from its HA state read ({@code local-info/build-rel},
+     * {@code app-version}, {@code threat-version}; PO 2026-10-21, contract amendment 2026-10-21). A field the response
+     * does not carry (or carries twice) is empty: UNKNOWN, never a default.
+     */
+    public record Versions(String software, String app, String threat) {
+        public static final Versions NONE=new Versions("","","");
+    }
     private PanFailoverChecks() {}
 
     static String unknownDerived(int check,String status,boolean fieldFound) {
@@ -87,7 +96,7 @@ public final class PanFailoverChecks {
         } catch (Exception invalid) { return null; }
     }
     public static State parse(String xml) {
-        State unknown=new State("","","","","","","","",false,"","","",false,"");
+        State unknown=new State("","","","","","","","",false,"","","",false,"",Versions.NONE);
         try {
             Element group=child(result(xml),"group");
             if (group==null) return unknown;
@@ -98,7 +107,8 @@ public final class PanFailoverChecks {
                 value(child(peer,"conn-ha1-backup"),"conn-status"),
                 !value(local,"ha1-backup-ipaddr").isEmpty() || child(peer,"conn-ha1-backup")!=null,value(child(peer,"conn-ha2"),"conn-status"),
                 value(group,"running-sync"),value(child(peer,"conn-ha2-backup"),"conn-status"),
-                !value(local,"ha2-backup-ipaddr").isEmpty() || child(peer,"conn-ha2-backup")!=null,value(group,"running-sync-enabled"));
+                !value(local,"ha2-backup-ipaddr").isEmpty() || child(peer,"conn-ha2-backup")!=null,value(group,"running-sync-enabled"),
+                new Versions(text(local,"build-rel"),text(local,"app-version"),text(local,"threat-version")));
         } catch (Exception invalid) { return unknown; }
     }
     public record SessionSync(String status, String derived) {}
@@ -192,11 +202,30 @@ public final class PanFailoverChecks {
     /** Check 6's derived evidence when show session info is switched off (PO 2026-10-21 scope update). */
     public static final String SESSIONS_NOT_COLLECTED_DERIVED=
         "{\"reason\":\"not_collected\",\"detail\":\"show session info retired by PO 2026-10-21\"}";
-    /** Check 7's status since PO 2026-10-21: its only read (show system info) is retired for firewalls. */
-    public static final String VERSION_PARITY_NOT_COLLECTED="UNKNOWN";
-    /** Check 7's derived evidence: the reason, never a value. */
-    public static final String VERSION_PARITY_NOT_COLLECTED_DERIVED=
-        "{\"reason\":\"not_collected\",\"detail\":\"show system info retired by PO 2026-10-21\"}";
+    /**
+     * Check 7, version parity (PO 2026-10-21, contract amendment 2026-10-21): each member's own PAN-OS build and app / threat
+     * content versions, read from that member's HA state ({@code local-info}) -- no new command. Every field must be
+     * present on both members: a missing one is UNKNOWN (blocks), never a guess; all equal is PASS; any present pair that
+     * differs is FAIL. A member's report about its peer ({@code peer-info}) is one-sided and is not used. The evidence
+     * names each field MATCH / MISMATCH / MISSING and never carries a version value.
+     */
+    public static SessionSync versionsEvidence(State a,State b) {
+        String[] names={"software","app","threat"};
+        String[][] values={{a.versions().software(),b.versions().software()},{a.versions().app(),b.versions().app()},
+            {a.versions().threat(),b.versions().threat()}};
+        ObjectNode derived=JsonNodeFactory.instance.objectNode();
+        derived.put("source","ha_state_local_info");
+        boolean missing=false,mismatch=false;
+        for(int i=0;i<names.length;i++) {
+            String first=values[i][0],second=values[i][1];
+            String outcome=first.isEmpty() || second.isEmpty()?"MISSING":first.equals(second)?"MATCH":"MISMATCH";
+            derived.put(names[i],outcome);
+            missing|="MISSING".equals(outcome);
+            mismatch|="MISMATCH".equals(outcome);
+        }
+        return new SessionSync(missing?"UNKNOWN":mismatch?"FAIL":"PASS",derived.toString());
+    }
+    public static String versions(State a,State b) { return versionsEvidence(a,b).status(); }
 
     private static String status(boolean pass, boolean fail) { return pass?"PASS":fail?"FAIL":"UNKNOWN"; }
     private static boolean knownRole(String role) {

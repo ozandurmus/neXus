@@ -143,19 +143,9 @@ public final class ConfirmCapabilityExecutor {
         }
     }
 
-    /** The confirm's refusal for a Palo Alto firewall since PO 2026-10-21 (PanSystemInfoRetirement). */
-    static final String PAN_FIREWALL_CONFIRM_REFUSED = "palo alto firewall enrollment confirm needs the firewall serial from "
-            + "show system info, which the PO retired on 2026-10-21 -- the identity cannot be read, so nothing was sent "
-            + "(see " + com.securityexpert.nexus.ui2.persistence.device.PanSystemInfoRetirement.DECISION_RECORD + ")";
-
     private ConfirmResult confirmPaloAlto(ConfirmRequest request) {
         var target = request.apiTarget()
                 .orElseThrow(() -> new IllegalArgumentException("palo_alto confirm requires an apiTarget"));
-        if (!request.managementServer()) {
-            // Refused before the credential is resolved or a key generated: the serial is the confirm's identity
-            // baseline (EC-5) and the peer-follow token, and no other approved read on this session provides it.
-            return new ConfirmResult.Refused(PAN_FIREWALL_CONFIRM_REFUSED);
-        }
         PanCredentialMaterial credential;
         try {
             credential = panCredentialResolver.resolve(request.credentialRef());
@@ -178,6 +168,12 @@ public final class ConfirmCapabilityExecutor {
         }
         Map<String, String> headers = Map.of("X-PAN-KEY", apiKey.get());
 
+        if (!request.managementServer()) {
+            // A firewall (PO 2026-10-21): show system info is never sent. The serial, model and PAN-OS version come from
+            // the documented XML API request type=version (PanTypeVersion, gate row pan_identity_version).
+            return confirmFirewall(target, headers);
+        }
+
         String identityOutput = xmlApiOutput(target,
                 DeviceFirstContactCommandSet.forStep(Vendor.PALO_ALTO, ContactStepKind.IDENTITY_READ), headers);
         if (identityOutput == null || identityOutput.isBlank() || isXmlError(identityOutput)) {
@@ -197,6 +193,33 @@ public final class ConfirmCapabilityExecutor {
         HaPeerClaim haPeerClaim = paloAltoParser.haPeerClaim(haPeerOutput);
         Optional<String> selfReference = paloAltoParser.selfReferenceForPeer(identityOutput);
         return new ConfirmResult.Completed(presented, facts, haPeerClaim, selfReference);
+    }
+
+    /**
+     * A firewall's confirm: type=version for the serial (the identity baseline, EC-5, and the peer-follow token), model and
+     * PAN-OS version; then the HA state read, unchanged. No serial means no baseline: the confirm fails clearly rather than
+     * record an empty or guessed identity. No hostname is read (type=version does not return one).
+     */
+    private ConfirmResult confirmFirewall(com.securityexpert.nexus.ui2.jobs.transport.ApiTarget target,
+            Map<String, String> headers) {
+        XmlApiResult versionResult = transport.xmlApiCall(target,
+                com.securityexpert.nexus.ui2.worker.inventory.pan.PaloAltoTypeVersionParser.request(headers), READ_TIMEOUT);
+        com.securityexpert.nexus.ui2.worker.inventory.pan.PaloAltoTypeVersionParser.Info version =
+                com.securityexpert.nexus.ui2.worker.inventory.pan.PaloAltoTypeVersionParser
+                        .parse(xmlOutput(versionResult).orElse(""));
+        if (!version.hasSerial()) {
+            return new ConfirmResult.ConnectFailed(version.envelopeOk()
+                    ? "palo alto type=version returned no serial number"
+                    : "palo alto type=version read timed out or failed");
+        }
+        PresentedIdentity presented = new PresentedIdentity(version.serial().get(), Optional.empty());
+
+        String haPeerOutput = xmlApiOutput(target,
+                DeviceFirstContactCommandSet.forStep(Vendor.PALO_ALTO, ContactStepKind.HA_PEER_READ), headers);
+        ObservedFacts facts = withHaRole(
+                new ObservedFacts(Optional.empty(), version.model(), version.swVersion(), Optional.empty()),
+                paloAltoParser.haRole(haPeerOutput));
+        return new ConfirmResult.Completed(presented, facts, paloAltoParser.haPeerClaim(haPeerOutput), version.serial());
     }
 
     private static boolean isXmlError(String xml) {

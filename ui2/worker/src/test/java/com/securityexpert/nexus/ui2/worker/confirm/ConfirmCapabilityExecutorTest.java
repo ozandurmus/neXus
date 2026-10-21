@@ -1,6 +1,7 @@
 package com.securityexpert.nexus.ui2.worker.confirm;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -12,6 +13,7 @@ import org.junit.jupiter.api.Test;
 
 import com.securityexpert.nexus.ui2.jobs.transport.ApiTarget;
 import com.securityexpert.nexus.ui2.jobs.transport.ConnectionTarget;
+import com.securityexpert.nexus.ui2.jobs.transport.XmlApiSpec;
 import com.securityexpert.nexus.ui2.worker.transport.xmlapi.PanCredentialMaterial;
 
 class ConfirmCapabilityExecutorTest {
@@ -43,23 +45,92 @@ class ConfirmCapabilityExecutorTest {
         assertTrue(transport.connectedBaseUrls().isEmpty(), "no key-generation call may be recorded before refusal");
     }
 
+    /** Synthetic type=version serial, built at runtime so no literal looks like a real one. */
+    private static final String FW_SERIAL = "TESTSER" + "0001";
+
+    private static String typeVersionBody(String serial, String model, String version) {
+        return "<response status=\"success\"><result>" + (version == null ? "" : "<sw-version>" + version + "</sw-version>")
+                + "<multi-vsys>off</multi-vsys>" + (model == null ? "" : "<model>" + model + "</model>")
+                + (serial == null ? "" : "<serial>" + serial + "</serial>") + "</result></response>";
+    }
+
     /**
-     * PO 2026-10-21: a Palo Alto firewall's confirm needs the serial from show system info, now retired -- it is
-     * refused clearly before the credential is resolved or any call is made, never a broken or guessed enrollment.
-     * (The PAN tests around it run as a Panorama, which keeps the read under its own gate row.)
+     * PO 2026-10-21: a Palo Alto firewall's confirm reads its serial, model and PAN-OS version with the documented
+     * type=version request -- never show system info (retired for firewalls) -- then the HA state read. No hostname is
+     * read (type=version does not return one).
      */
     @Test
-    void paloAltoFirewallConfirmIsRefusedBeforeAnyContactBecauseShowSystemInfoIsRetired() {
-        ScriptedPanDeviceTransport transport = new ScriptedPanDeviceTransport(
-                Map.of("fw-a-base", identityBody("0001A", "fw-a")), Map.of());
+    void paloAltoFirewallConfirmReadsTypeVersionAndNeverShowSystemInfo() {
+        ScriptedPanDeviceTransport transport = new ScriptedPanDeviceTransport(Map.of(),
+                Map.of("fw-a-base", haPeerBody("0001B", "fw-b-base")));
+        transport.typeVersionBodyByBaseUrl.put("fw-a-base", typeVersionBody(FW_SERIAL, "PA-TESTMODEL", "9.9.9-test"));
         ConfirmCapabilityExecutor executor = new ConfirmCapabilityExecutor(transport, workingPanResolver());
 
         ConfirmResult result = executor.confirm(ConfirmRequest.paloAlto(new ApiTarget("ep-a", "fw-a-base"), CRED));
 
-        ConfirmResult.Refused refused = assertInstanceOf(ConfirmResult.Refused.class, result);
-        assertTrue(refused.reason().contains("show system info"));
-        assertTrue(refused.reason().contains("2026-10-21"));
-        assertTrue(transport.connectedBaseUrls().isEmpty(), "no key generation, no read: nothing is sent");
+        ConfirmResult.Completed completed = assertInstanceOf(ConfirmResult.Completed.class, result);
+        assertEquals(FW_SERIAL, completed.presentedIdentity().primary(), "the identity baseline is the type=version serial");
+        assertEquals(Optional.of(FW_SERIAL), completed.selfReferenceForPeer());
+        assertEquals(Optional.of("PA-TESTMODEL"), completed.facts().model());
+        assertEquals(Optional.of("9.9.9-test"), completed.facts().softwareVersion());
+        assertTrue(completed.facts().hostname().isEmpty(), "type=version carries no hostname: UNKNOWN, never guessed");
+        assertEquals(Optional.of("0001B"), completed.haPeerClaim().peerSelfIdentifier(), "the HA state read is unchanged");
+        assertEquals(java.util.List.of("type=version", "<show><high-availability><state/></high-availability></show>"),
+                transport.commandsIssued(), "type=version, then the HA state; show system info is never sent");
+        XmlApiSpec request = transport.typeVersionSpecs.get(0);
+        assertTrue(request.formParams().isEmpty(), "a form request with no cmd");
+        assertEquals(Map.of("X-PAN-KEY", "FAKE-KEY"), request.headers());
+    }
+
+    /** No serial means no identity baseline: the confirm fails clearly, never records an empty or guessed identity. */
+    @Test
+    void paloAltoFirewallConfirmFailsWhenTypeVersionGivesNoUsableSerial() {
+        for (String body : java.util.Arrays.asList(null, "", "not xml", "<response status=\"error\"/>",
+                typeVersionBody(null, "PA-TESTMODEL", "9.9.9-test"))) {
+            ScriptedPanDeviceTransport transport = new ScriptedPanDeviceTransport(Map.of(), Map.of());
+            if (body != null) {
+                transport.typeVersionBodyByBaseUrl.put("fw-a-base", body);
+            }
+            ConfirmResult result = new ConfirmCapabilityExecutor(transport, workingPanResolver())
+                    .confirm(ConfirmRequest.paloAlto(new ApiTarget("ep-a", "fw-a-base"), CRED));
+            ConfirmResult.ConnectFailed failed = assertInstanceOf(ConfirmResult.ConnectFailed.class, result, String.valueOf(body));
+            assertTrue(failed.reason().contains("type=version"), failed.reason());
+            assertEquals(java.util.List.of("type=version"), transport.commandsIssued(), "nothing is read after a failed identity read");
+        }
+    }
+
+    /** A missing model or version is UNKNOWN on the enrolled facts; the serial is still the baseline. */
+    @Test
+    void paloAltoFirewallConfirmLandsMissingModelAndVersionAsUnknown() {
+        ScriptedPanDeviceTransport transport = new ScriptedPanDeviceTransport(Map.of(), Map.of("fw-a-base", ""));
+        transport.typeVersionBodyByBaseUrl.put("fw-a-base", typeVersionBody(FW_SERIAL, null, null));
+        ConfirmResult.Completed completed = assertInstanceOf(ConfirmResult.Completed.class,
+                new ConfirmCapabilityExecutor(transport, workingPanResolver())
+                        .confirm(ConfirmRequest.paloAlto(new ApiTarget("ep-a", "fw-a-base"), CRED)));
+        assertEquals(FW_SERIAL, completed.presentedIdentity().primary());
+        assertTrue(completed.facts().model().isEmpty() && completed.facts().softwareVersion().isEmpty());
+    }
+
+    @Test
+    void paloAltoFirewallConfirmRefusesBeforeAnyContactOnUnresolvableCredential() {
+        ScriptedPanDeviceTransport transport = new ScriptedPanDeviceTransport(Map.of(), Map.of());
+        ConfirmResult result = new ConfirmCapabilityExecutor(transport, unresolvablePanResolver())
+                .confirm(ConfirmRequest.paloAlto(new ApiTarget("ep-a", "fw-a-base"), CRED));
+        assertInstanceOf(ConfirmResult.CredentialUnresolvable.class, result);
+        assertTrue(transport.connectedBaseUrls().isEmpty());
+    }
+
+    /** A Panorama keeps its own system info identity read (out of the 2026-10-21 scope), never type=version. */
+    @Test
+    void panoramaConfirmStillReadsShowSystemInfo() {
+        ScriptedPanDeviceTransport transport = new ScriptedPanDeviceTransport(
+                Map.of("pano-base", identityBody("0001P", "pano")), Map.of("pano-base", ""));
+        ConfirmResult.Completed completed = assertInstanceOf(ConfirmResult.Completed.class,
+                new ConfirmCapabilityExecutor(transport, workingPanResolver())
+                        .confirm(ConfirmRequest.panorama(new ApiTarget("ep-p", "pano-base"), CRED)));
+        assertEquals("0001P", completed.presentedIdentity().primary());
+        assertTrue(transport.commandsIssued().contains("<show><system><info/></system></show>"));
+        assertFalse(transport.commandsIssued().contains("type=version"));
     }
 
     @Test

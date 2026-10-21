@@ -63,3 +63,31 @@ sent counters while sessions exist, or zero passive receive counters for active 
 fields/entries remain UNKNOWN; present invalid counters fail closed. The existing session-info count read is unchanged.
 The positive-counter PASS requirement is applied conservatively even to an idle pair; zero counters do not prove sync.
 No new command, session, gate row, retry or collection cadence is introduced; raw XML is not persisted.
+
+## 9. Amendment 2026-10-21 -- check 7 (version parity) reads the HA state (PO: "Evet, HA durumundan al")
+
+Decision record: `PO_DECISION_RECORD_2026_10_21_PAN_TYPE_VERSION_AND_CHECK7.md` (RATIFIED). This amends the check 7 row of
+§6 only; every other check, the flow and the approvals are unchanged.
+
+| # | Check | Read (direct firewall XML API) | PASS when |
+| --- | --- | --- | --- |
+| 7 | Version parity | `<show><high-availability><state/></high-availability></show>` (the existing read, issued to each member in every phase; no new command) | each member's own `local-info` `build-rel` (PAN-OS build), `app-version` and `threat-version` are present on both members and equal |
+
+- **Deviation from §6.** §6 read `<show><system><info/></system></show>` (`sw-version`, `app-version`, `threat-version`).
+  The PO retired that read for Palo Alto firewalls on 2026-10-21 (`PO_DECISION_RECORD_2026_10_21_PAN_SHOW_SYSTEM_INFO_RETIRED.md`),
+  and approved the HA state as the source for this check. The three compared values keep their meaning; only their source
+  changes. `local-info/version` is an HA-protocol counter, not the software version, and is not used.
+- **Whose facts.** Each member's own `local-info`, read from that member (the HA-state read is already identity-verified
+  against the recorded serial). `peer-info` is never read for this check: a member's report about its peer is one-sided.
+- **Results.** PASS: all three fields present on both members and equal. FAIL: any present pair differs. UNKNOWN (blocks,
+  as every UNKNOWN): any field missing, repeated or unusable on either member, including beside a mismatch; HA disabled
+  or an unusable response carries no `local-info`, so the check is UNKNOWN. Never a guessed or defaulted value.
+- **Evidence.** Derived values only: `{"source":"ha_state_local_info","software":…,"app":…,"threat":…}` with each field
+  `MATCH`, `MISMATCH` or `MISSING`; no version value is recorded or shown.
+- **Unchanged.** The check still runs as a pre-check, post-check and post-return check, in readiness runs and in
+  executions; a non-PASS result stops an execution before any write. Check 6 (§6) is unchanged by this amendment: while the
+  deployment retires `show session info` (`NEXUS_PAN_FW_SHOW_SESSION_INFO=retired`), check 6 is UNKNOWN with the reason
+  `not_collected` and readiness ends UNKNOWN there.
+- **Evidence limit.** That a given PAN-OS release returns these three `local-info` fields is from the vendor's HA-state
+  response as captured earlier, not yet measured on the estate's PAN-OS 12 members: until measured, a member that omits
+  one reads UNKNOWN, which is the fail-closed outcome.

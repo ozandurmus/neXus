@@ -21,7 +21,7 @@ public record ConfirmRequest(
         Optional<String> modelHint,
         boolean managementServer) {
 
-    /** Pre-2026-10-21 shape: a gateway / firewall confirm. */
+    /** A gateway / firewall confirm (not a Panorama). */
     public ConfirmRequest(Vendor vendor, Optional<ConnectionTarget> connectionTarget, Optional<ApiTarget> apiTarget,
             String credentialRef, String trustRuleRef, Optional<String> modelHint) {
         this(vendor, connectionTarget, apiTarget, credentialRef, trustRuleRef, modelHint, false);
@@ -43,7 +43,7 @@ public record ConfirmRequest(
                 modelHint);
     }
 
-    /** A Palo Alto firewall: refused before any contact since PO 2026-10-21 (its identity read is retired). */
+    /** A Palo Alto firewall: its identity read is the type=version request since PO 2026-10-21 (show system info is retired for it). */
     public static ConfirmRequest paloAlto(ApiTarget target, String credentialRef) {
         return new ConfirmRequest(Vendor.PALO_ALTO, Optional.empty(), Optional.of(target), credentialRef, "", Optional.empty());
     }

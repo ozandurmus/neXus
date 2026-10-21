@@ -96,10 +96,11 @@ public class DeviceCompositionConfiguration {
     private static final List<String> CHECK_POINT_PHYSICAL_READS = List.of(
             "fw getifs", "ip -4 addr show", "ip -4 route show table all", "cphaprob stat", "cphaprob -a if", "vsx stat -v");
 
-    // Mirrors worker.inventory.InventoryReadPlan.PALO_ALTO_BASE_STEPS exactly (14E PF-1). No show system info: retired
-    // for firewalls by the PO on 2026-10-21 (PanSystemInfoRetirement, gate row BLOCKED by V171).
+    // Mirrors worker.inventory.InventoryReadPlan.PALO_ALTO_BASE_STEPS exactly (14E PF-1). The identity read is
+    // type=version (gate row pan_identity_version, V172): show system info is retired for firewalls by the PO on
+    // 2026-10-21 (PanSystemInfoRetirement, gate row BLOCKED by V171).
     private static final List<String> PALO_ALTO_BASE_STEPS = List.of(
-            "<show><high-availability><state/></high-availability></show>",
+            "type=version", "<show><high-availability><state/></high-availability></show>",
             "<show><interface>all</interface></show>", "<show><routing><route/></routing></show>");
 
     // Mirrors worker.configuration.ConfigurationReadPlan.CHECK_POINT_IDENTITY_READS + CP_SHOW_CONFIGURATION (14G CG-1).
@@ -107,10 +108,10 @@ public class DeviceCompositionConfiguration {
             "clish -c 'show hostname'", "clish -c 'show version all'", "clish -c 'cpstat os -f hw_info'",
             "clish -c 'show configuration'");
 
-    // Mirrors worker.configuration.ConfigurationReadPlan's Palo Alto literals (14G CG-4), without show system info
-    // (retired for firewalls by the PO on 2026-10-21).
+    // Mirrors worker.configuration.ConfigurationReadPlan's Palo Alto literals (14G CG-4): the identity refresh is
+    // type=version (V172), not the show system info the PO retired for firewalls on 2026-10-21.
     private static final List<String> PALO_ALTO_CONFIGURATION_READS = List.of(
-            "type=config&action=show&xpath=/config",
+            "type=version", "type=config&action=show&xpath=/config",
             "<show><config><effective-running/></config></show>", "<show><config><merged/></config></show>");
 
     // Mirrors worker.backup.BackupReadPlan's exec/poll literals exactly (14H
@@ -299,7 +300,7 @@ public class DeviceCompositionConfiguration {
         return new CapabilityRegistryLoader(gateRegistryPort).load(spec);
     }
 
-    /** NXS-LOCAL-0164: 14E PF-1's unscoped requests (three since 2026-10-21), each gated (docs/design/PAN_INVENTORY_API_ROUTE_GATE_ENTRIES.md). */
+    /** NXS-LOCAL-0164: 14E PF-1's unscoped requests (type=version replaces show system info since 2026-10-21), each gated (docs/design/PAN_INVENTORY_API_ROUTE_GATE_ENTRIES.md). */
     private static Capability paloAltoInventoryCapability(GateRegistryPort gateRegistryPort) {
         CapabilityStep connect = new CapabilityStep(StepKind.CONNECT, "not_applicable", null, false,
                 Optional.empty(), Optional.empty(), Optional.empty());
@@ -335,7 +336,7 @@ public class DeviceCompositionConfiguration {
         return new CapabilityRegistryLoader(gateRegistryPort).load(spec);
     }
 
-    /** NXS-LOCAL-0165: 14G CG-4's requests (three since 2026-10-21), each gated (docs/design/PAN_CONFIGURATION_API_ROUTE_GATE_ENTRIES.md). */
+    /** NXS-LOCAL-0165: 14G CG-4's requests (type=version replaces show system info since 2026-10-21), each gated (docs/design/PAN_CONFIGURATION_API_ROUTE_GATE_ENTRIES.md). */
     private static Capability paloAltoConfigurationCapability(GateRegistryPort gateRegistryPort) {
         CapabilityStep connect = new CapabilityStep(StepKind.CONNECT, "not_applicable", null, false,
                 Optional.empty(), Optional.empty(), Optional.empty());

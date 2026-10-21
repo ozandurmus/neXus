@@ -586,6 +586,27 @@ gates:
     safe_telemetry_fields: []
     source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_21_PAN_SHOW_SYSTEM_INFO_RETIRED.md (withdrawn; was PO_DECISION_RECORD_2026_10_06_FAILOVER_EXECUTION_ESTATE.md item 7)"
 
+  # PO 2026-10-21 (docs/design/PO_DECISION_RECORD_2026_10_21_PAN_TYPE_VERSION_AND_CHECK7.md, RATIFIED, V172): the
+  # firewall's serial, model and PAN-OS version are read with the documented XML API request type=version, for every
+  # PAN-OS version -- the identity step of the confirm, the inventory and the configuration collect. A form request
+  # (POST /api/, body type=version, key in X-PAN-KEY), not an op command; read-only.
+  - gate_id: pan_identity_version
+    vendor: palo_alto
+    platform_role_scope: pan_firewall
+    shell_context: not_applicable
+    transport_kind: PAN_XML_API
+    canonical_command_key: "type=version"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once per device per confirm, inventory or configuration run"
+    session_reuse_rule: "the one key-generation session per run"
+    unsupported_behavior_ref: "error envelope, non-XML or missing serial -> identity NOT_EVALUABLE (strict posture refuses); a missing model or version field is UNKNOWN"
+    secret_output_risk: "serial and model (sensitive identity; compared locally, masked to aiview)"
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_21_PAN_TYPE_VERSION_AND_CHECK7.md (PO chat 2026-10-21: all PAN-OS versions)"
+
   - gate_id: pan_inventory_show_ha_state
     vendor: palo_alto
     platform_role_scope: pan_firewall

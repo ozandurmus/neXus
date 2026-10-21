@@ -1,6 +1,6 @@
 # PAN-OS 12 command alternatives for four firewall reads
 
-**Status: DRAFT — for Product Owner approval.** This document is research and
+**Status: DRAFT — for Product Owner approval. Update 2026-10-21 (same day): the PO approved GR-1 (§3.1, `type=version`, "Tüm PAN-OS sürümleri") and the HA-state source for failover check 7 (§3.2, "Evet, HA durumundan al"); both are implemented and recorded in `PO_DECISION_RECORD_2026_10_21_PAN_TYPE_VERSION_AND_CHECK7.md`. Everything else below remains DRAFT.** This document is research and
 design only. It approves no command, no gate row, no parser and no contract
 change. Every proposed command below is a *candidate*; nothing here may be
 cited as approval (AGENTS.md, Authority hierarchy item 2; Contract-status

@@ -11,7 +11,6 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -28,13 +27,6 @@ import com.securityexpert.nexus.ui2.worker.transport.xmlapi.PanCredentialMateria
 
 /** Scripted XML API only: no socket, host, or device contact. */
 class PanFailoverJobExecutorTest {
-    /**
-     * PO 2026-10-21: show system info is retired for firewalls, so check 7 (version parity) is UNKNOWN on every run and
-     * an execution stops at CHECK_NOT_READY before any write -- the write path below is unreachable until the PO decides
-     * otherwise (and PAN execution routes stay unmapped by design anyway). Kept, not deleted, for that decision.
-     */
-    private static final String WRITE_PATH_UNREACHABLE =
-        "PAN failover execution stops at check 7 (version parity UNKNOWN) since show system info was retired on 2026-10-21";
     private static final String CLUSTER="CLS-TEST-01", A="FW-TEST-01", B="FW-TEST-02";
     private static final class Script {
         Runnable beforeSend=() -> {};
@@ -43,7 +35,7 @@ class PanFailoverJobExecutorTest {
         String failBeforeStep,failAfterStep,lostReplyStep,runtimeErrorStep;
         boolean notSentTransportFailure;
         int prepared,replies,observations;
-        boolean suspended,functional,stuck,badPre,badPost,badSync,badSessions,lowPostSessions;
+        boolean suspended,functional,stuck,badPre,badPost,badSync,badSessions,badVersion,missingVersion,lowPostSessions;
         final List<String> sentCommands=new ArrayList<>();
         boolean missingFields,preempt,badFinal;
         String evidenceFault;
@@ -82,7 +74,7 @@ class PanFailoverJobExecutorTest {
                             +(badSessions&&!first?"invalid":lowPostSessions&&suspended&&!first?"79":"100")
                             +"</num-active></result></response>");
                     if (command.contains("<system><info/>"))
-                        throw new AssertionError("PO 2026-10-21: show system info is never sent to a firewall");
+                        throw new AssertionError("PO 2026-10-21: show system info is never sent to a firewall; check 7 reads the HA state");
                     String local=first?(functional?"passive":suspended&&!stuck?"suspended":"active")
                         :(suspended&&!stuck?"active":"passive");
                     String peer=first?(suspended&&!stuck?"active":"passive")
@@ -91,6 +83,8 @@ class PanFailoverJobExecutorTest {
                     String ha2=(badFinal && functional || badPre&&!suspended || badPost&&suspended)&&!first?"down":"up";
                     String body="<response status=\"success\"><result><group><mode>Active-Passive</mode>"
                         +"<running-sync>synchronized</running-sync><local-info><state>"+local+"</state>"
+                        +(missingVersion&&!first?"":"<build-rel>10.2.3</build-rel>")+"<app-version>1111-2222</app-version>"
+                        +"<threat-version>"+(badVersion&&!first?"3333-4444":"1111-2222")+"</threat-version>"
                         +"<serial-num>"+(first?"0011":"0022")+"</serial-num></local-info>"
                         +"<peer-info><state>"+peer+"</state><serial-num>"+(first?"0022":"0011")
                         +"</serial-num><conn-status>up</conn-status><conn-ha1><conn-status>up</conn-status>"
@@ -222,7 +216,7 @@ class PanFailoverJobExecutorTest {
         return new Result(state.get(),outcome.get(),checks,derived,failedCheck.get());
     }
     private record Result(String state,String outcome,List<String> checks,List<String> derived,String failedCheck) {}
-    @Disabled(WRITE_PATH_UNREACHABLE) @Test void switchOffAfterClaimStopsWithoutSending() {
+    @Test void switchOffAfterClaimStopsWithoutSending() {
         var enabled=new java.util.concurrent.atomic.AtomicBoolean(true);
         var mutationSwitch=mock(FailoverMutationSwitch.class);
         when(mutationSwitch.enabled()).thenAnswer(inv -> enabled.get());
@@ -235,7 +229,7 @@ class PanFailoverJobExecutorTest {
         assertEquals(0,script.observations);
     }
 
-    @Disabled(WRITE_PATH_UNREACHABLE) @Test void notSentSignalFromStartedTransportRemainsUncertain() {
+    @Test void notSentSignalFromStartedTransportRemainsUncertain() {
         Script script=new Script(); script.runtimeErrorStep="FAILING_OVER"; script.notSentTransportFailure=true;
         Result result=run(script);
         assertEquals("STOPPED",result.state());
@@ -243,7 +237,7 @@ class PanFailoverJobExecutorTest {
         assertTrue(!script.notSent && script.suspendCount==1);
     }
 
-    @Disabled(WRITE_PATH_UNREACHABLE) @Test void everyWriteStopsAtPersistenceAndDeliveryFailuresWithoutReplay() {
+    @Test void everyWriteStopsAtPersistenceAndDeliveryFailuresWithoutReplay() {
         for (String step:List.of("FAILING_OVER","RETURNING")) {
             for (String fault:List.of("before","after","lost","runtime")) {
                 Script script=new Script();
@@ -274,14 +268,14 @@ class PanFailoverJobExecutorTest {
             assertEquals(code,result.outcome()); assertEquals(0,script.callCount);
         }
     }
-    @Disabled(WRITE_PATH_UNREACHABLE) @Test void admissionIsRecheckedAfterReadinessBeforeTheWrite() {
+    @Test void admissionIsRecheckedAfterReadinessBeforeTheWrite() {
         Script script=new Script(); script.writeAdmission="OPEN_INCIDENT";
         Result result=run(script);
         assertEquals("OPEN_INCIDENT",result.outcome());
         assertEquals(0,script.suspendCount); assertEquals(0,script.functionalCount);
         assertTrue(script.callCount>0);
     }
-    @Disabled(WRITE_PATH_UNREACHABLE) @Test void expiryRevocationAndOwnershipBlockDownAndReturn() {
+    @Test void expiryRevocationAndOwnershipBlockDownAndReturn() {
         for (String code:List.of("WINDOW_EXPIRED","APPROVAL_REVOKED","OWNERSHIP_LOST","OPEN_INCIDENT")) {
             Script beforeDown=new Script(); beforeDown.writeAdmission=code;
             assertEquals(code,run(beforeDown).outcome());
@@ -300,13 +294,13 @@ class PanFailoverJobExecutorTest {
             assertTrue(result.derived().stream().noneMatch(value -> value.contains("0011") || value.contains("0022")));
         }
     }
-    @Disabled(WRITE_PATH_UNREACHABLE) @Test void opposedPeerAfterSuspendNeverPermitsReturn() {
+    @Test void opposedPeerAfterSuspendNeverPermitsReturn() {
         Script script=new Script(); script.evidenceFault="post-opposed";
         Result result=run(script);
         assertEquals("STOPPED",result.state());
         assertEquals(1,script.suspendCount); assertEquals(0,script.functionalCount);
     }
-    @Disabled(WRITE_PATH_UNREACHABLE) @Test void missingActivePeerRoleAfterSuspendCompletesWithNotEvaluableMirrorEvidence() {
+    @Test void missingActivePeerRoleAfterSuspendCompletesWithNotEvaluableMirrorEvidence() {
         Script script=new Script(); script.evidenceFault="post-missing";
         Result result=run(script);
         assertEquals("SUCCEEDED",result.outcome());
@@ -318,13 +312,13 @@ class PanFailoverJobExecutorTest {
             && d.contains("\"reciprocal_identity\":\"PASS\"")).count());
         assertEquals(42,result.checks().size(),"Preserve distinct pre/post/post-return check rows");
     }
-    @Disabled(WRITE_PATH_UNREACHABLE) @Test void missingPostPeerRoleNeverRelaxesSerialReciprocity() {
+    @Test void missingPostPeerRoleNeverRelaxesSerialReciprocity() {
         Script script=new Script(); script.evidenceFault="post-missing-opaque";
         Result result=run(script);
         assertEquals("FAILOVER_TIMEOUT",result.outcome());
         assertEquals(1,script.suspendCount); assertEquals(0,script.functionalCount);
     }
-    @Disabled(WRITE_PATH_UNREACHABLE) @Test void missingPeerRoleAfterReturnDoesNotUseTheSuspendedException() {
+    @Test void missingPeerRoleAfterReturnDoesNotUseTheSuspendedException() {
         Script script=new Script(); script.evidenceFault="return-missing";
         Result result=run(script);
         assertEquals("RETURN_TIMEOUT",result.outcome());
@@ -337,20 +331,20 @@ class PanFailoverJobExecutorTest {
         assertTrue(result.checks().contains("pre:2:UNKNOWN"));
         assertTrue(result.derived().stream().anyMatch(value -> value.contains("MISSING_OR_UNRECOGNIZED_ROLE")));
     }
-    @Disabled(WRITE_PATH_UNREACHABLE) @Test void happyPath() {
+    @Test void happyPath() {
         Script script=new Script(); Result result=run(script);
         assertEquals("DONE",result.state());
         assertEquals(1,script.suspendCount); assertEquals(1,script.functionalCount);
         assertTrue(result.checks().contains("post:7:PASS"));
         for(int no=1;no<=7;no++) assertTrue(result.checks().contains("post_return:"+no+":PASS"));
     }
-    @Disabled(WRITE_PATH_UNREACHABLE) @Test void finalHealthFailureStopsAfterBothMutations() {
+    @Test void finalHealthFailureStopsAfterBothMutations() {
         Script script=new Script(); script.badFinal=true; Result result=run(script);
         assertEquals("STOPPED",result.state());
         assertTrue(result.checks().contains("post_return:3:FAIL"));
         assertEquals(1,script.suspendCount); assertEquals(1,script.functionalCount);
     }
-    @Disabled(WRITE_PATH_UNREACHABLE) @Test void unexpectedPreemptionStopsAfterReturn() {
+    @Test void unexpectedPreemptionStopsAfterReturn() {
         Script script=new Script(); script.preempt=true; Result result=run(script);
         assertEquals("STOPPED",result.state()); assertEquals("UNEXPECTED_ROLES",result.outcome());
         assertEquals(1,script.suspendCount); assertEquals(1,script.functionalCount);
@@ -372,12 +366,12 @@ class PanFailoverJobExecutorTest {
         assertEquals(0,script.suspendCount); assertEquals(0,script.functionalCount);
         assertTrue(result.checks().contains("pre:3:FAIL"));
     }
-    @Disabled(WRITE_PATH_UNREACHABLE) @Test void switchTimeoutDoesNotReturn() {
+    @Test void switchTimeoutDoesNotReturn() {
         Script script=new Script(); script.stuck=true; Result result=run(script);
         assertEquals("FAILOVER_TIMEOUT",result.outcome());
         assertEquals(1,script.suspendCount); assertEquals(0,script.functionalCount);
     }
-    @Disabled(WRITE_PATH_UNREACHABLE) @Test void postcheckFailDoesNotReturn() {
+    @Test void postcheckFailDoesNotReturn() {
         Script script=new Script(); script.badPost=true; Result result=run(script);
         assertEquals("STOPPED",result.state());
         assertEquals(1,script.suspendCount); assertEquals(0,script.functionalCount);
@@ -395,16 +389,16 @@ class PanFailoverJobExecutorTest {
         assertEquals(0,script.suspendCount);
     }
     @Test void addedPrecheckFailuresNeverSuspend() {
-        for (int check=5;check<=6;check++) {
+        for (int check=5;check<=7;check++) {
             Script script=new Script();
-            script.badSync=check==5; script.badSessions=check==6;
+            script.badSync=check==5; script.badSessions=check==6; script.badVersion=check==7;
             Result result=run(script);
             assertEquals("STOPPED",result.state());
             assertEquals(0,script.suspendCount);
             assertTrue(result.checks().contains("pre:"+check+":"+(check==6?"UNKNOWN":"FAIL")));
         }
     }
-    @Disabled(WRITE_PATH_UNREACHABLE) @Test void lowSessionCarryStopsBeforeReturn() {
+    @Test void lowSessionCarryStopsBeforeReturn() {
         Script script=new Script(); script.lowPostSessions=true;
         Result result=run(script);
         assertEquals("STOPPED",result.state());
@@ -415,10 +409,7 @@ class PanFailoverJobExecutorTest {
     @Test void readinessNeverWritesAndRejectsWriteCommands() {
         Script script=new Script(); Result result=run(script,true);
         assertEquals("DONE",result.state());
-        // Checks 1-6 pass; check 7 cannot (show system info retired 2026-10-21), so the best readiness is UNKNOWN.
-        assertEquals("UNKNOWN",result.outcome());
-        for(int no=1;no<=6;no++) assertTrue(result.checks().contains("pre:"+no+":PASS"));
-        assertTrue(result.checks().contains("pre:7:UNKNOWN"));
+        assertEquals("READY",result.outcome());
         assertEquals(0,script.suspendCount); assertEquals(0,script.functionalCount);
         assertFalse(PanFailoverJobExecutor.writeAllowed("READINESS",
             "<request><high-availability><state><suspend/></state></high-availability></request>"));
@@ -452,33 +443,46 @@ class PanFailoverJobExecutorTest {
         }
     }
     @Test void readinessRecordsEveryCheckAndFailureOutranksEarlierUnknown() {
-        // An earlier UNKNOWN (the peer role is missing) and a later FAIL (session sync off on the active member).
-        Script script=new Script(); script.evidenceFault="missing"; script.badSync=true;
+        Script script=new Script(); script.missingFields=true; script.badVersion=true;
         Result result=run(script,true);
         assertEquals("NOT_READY",result.outcome());
         assertEquals(14,result.checks().size());
-        assertTrue(result.checks().contains("pre:2:UNKNOWN"));
-        assertEquals(2,result.checks().stream().filter(c -> c.equals("pre:5:FAIL")).count());
-        assertEquals(2,result.checks().stream().filter(c -> c.equals("pre:7:UNKNOWN")).count());
+        assertTrue(result.checks().contains("pre:4:UNKNOWN"));
+        assertEquals(2,result.checks().stream().filter(c -> c.equals("pre:7:FAIL")).count());
         assertEquals(0,script.suspendCount);
         // The execution path still stops on its first non-PASS verdict.
         Result failover=run(script,false);
         assertEquals("STOPPED",failover.state());
         assertEquals("CHECK_NOT_READY",failover.outcome());
-        assertEquals("1",failover.failedCheck());
+        assertEquals("4",failover.failedCheck());
         assertEquals(0,script.suspendCount);
     }
-    /** PO 2026-10-21: no readiness or failover run sends show system info; check 7 is UNKNOWN with the reason. */
-    @Test void showSystemInfoIsNeverSentAndVersionParityIsUnknownWithTheReason() {
+    /** PO 2026-10-21: no run sends show system info; check 7 compares the members' versions from the HA state read. */
+    @Test void showSystemInfoIsNeverSentAndVersionParityComesFromTheHaState() {
         for (boolean readiness:new boolean[]{true,false}) {
             Script script=new Script(); Result result=run(script,readiness);
             assertTrue(script.sentCommands.stream().noneMatch(c -> c.contains("<system><info/>")));
             assertTrue(script.sentCommands.stream().anyMatch(c -> c.contains("<high-availability><state/>")));
-            assertTrue(result.checks().contains("pre:7:UNKNOWN"));
-            assertEquals(2,result.derived().stream().filter(d -> d.contains("\"reason\":\"not_collected\"")
-                && d.contains("2026-10-21")).count());
-            assertEquals(0,script.suspendCount); assertEquals(0,script.functionalCount);
+            assertTrue(result.checks().contains("pre:7:PASS"));
+            assertTrue(result.derived().stream().filter(d -> d.contains("\"source\":\"ha_state_local_info\"")
+                && d.contains("\"software\":\"MATCH\"") && d.contains("\"threat\":\"MATCH\"")).count() >= 2,
+                "both members record the MATCH evidence");
+            // Evidence never carries a version value.
+            assertTrue(result.derived().stream().noneMatch(d -> d.contains("10.2.3") || d.contains("1111-2222")));
         }
+    }
+    /** A differing content version is FAIL and a missing PAN-OS build is UNKNOWN: both stop an execution before any write. */
+    @Test void versionMismatchAndMissingFieldsStopBeforeAnyWrite() {
+        Script mismatch=new Script(); mismatch.badVersion=true; Result failed=run(mismatch);
+        assertEquals("STOPPED",failed.state()); assertEquals("CHECK_NOT_READY",failed.outcome());
+        assertEquals("7",failed.failedCheck()); assertTrue(failed.checks().contains("pre:7:FAIL"));
+        assertTrue(failed.derived().stream().anyMatch(d -> d.contains("\"threat\":\"MISMATCH\"")));
+        assertEquals(0,mismatch.suspendCount); assertEquals(0,mismatch.prepared);
+        Script missing=new Script(); missing.missingVersion=true; Result unknown=run(missing);
+        assertEquals("CHECK_NOT_READY",unknown.outcome()); assertEquals("7",unknown.failedCheck());
+        assertTrue(unknown.checks().contains("pre:7:UNKNOWN"));
+        assertTrue(unknown.derived().stream().anyMatch(d -> d.contains("\"software\":\"MISSING\"")));
+        assertEquals(0,missing.suspendCount); assertEquals(0,missing.prepared);
     }
     /** PO 2026-10-21 scope update: show session info switched off -> never sent; check 6 UNKNOWN with the reason. */
     @Test void showSessionInfoSwitchedOffIsNeverSentAndSessionsCarriedIsUnknown() {
@@ -489,21 +493,16 @@ class PanFailoverJobExecutorTest {
         assertTrue(script.sentCommands.stream().noneMatch(c -> c.contains("<session><info/>")));
         assertTrue(script.sentCommands.stream().anyMatch(c -> c.contains("<state-synchronization/>")));
         assertTrue(result.checks().contains("pre:6:UNKNOWN"));
+        // Check 7 is independent of check 6: with the live manifests' setting, readiness ends UNKNOWN at check 6 only.
+        assertTrue(result.checks().contains("pre:7:PASS"));
+        assertEquals("UNKNOWN",result.outcome());
         assertEquals(2,result.derived().stream().filter(d -> d.contains("show session info retired by PO 2026-10-21")).count());
         assertEquals(0,script.suspendCount);
     }
-    /** Fail-closed: an execution whose checks 1-6 pass still stops at check 7 before any write. */
-    @Test void executionStopsAtVersionParityBeforeAnyWrite() {
-        Script script=new Script(); Result result=run(script);
-        assertEquals("STOPPED",result.state());
-        assertEquals("CHECK_NOT_READY",result.outcome());
-        assertEquals("7",result.failedCheck());
-        assertEquals(0,script.suspendCount); assertEquals(0,script.functionalCount); assertEquals(0,script.prepared);
-    }
     public static void main(String[] args) {
-        var test=new PanFailoverJobExecutorTest(); test.precheckFailNeverWrites();
-        test.addedPrecheckFailuresNeverSuspend();
+        var test=new PanFailoverJobExecutorTest(); test.happyPath(); test.precheckFailNeverWrites();
+        test.switchTimeoutDoesNotReturn(); test.postcheckFailDoesNotReturn(); test.addedPrecheckFailuresNeverSuspend();
+        test.lowSessionCarryStopsBeforeReturn();
         test.readinessNeverWritesAndRejectsWriteCommands();
-        test.executionStopsAtVersionParityBeforeAnyWrite();
     }
 }

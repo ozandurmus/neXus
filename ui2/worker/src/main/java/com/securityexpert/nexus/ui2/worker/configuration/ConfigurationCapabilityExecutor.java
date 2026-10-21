@@ -56,7 +56,7 @@ import com.securityexpert.nexus.ui2.worker.transport.xmlapi.PanCredentialResolve
  * {@code InventoryCapabilityExecutor}'s own {@code cphaprob stat} -- are
  * not deeply parsed here: the identity this movement compares against the
  * recorded baseline is the SSH session's own presented host key (Check
- * Point) or the {@code show system info} serial (Palo Alto), exactly as
+ * Point) or the {@code type=version} serial (Palo Alto firewall), exactly as
  * inventory collection already does.</p>
  */
 public final class ConfigurationCapabilityExecutor {
@@ -364,17 +364,26 @@ public final class ConfigurationCapabilityExecutor {
         }
         Map<String, String> headers = Map.of("X-PAN-KEY", apiKey.get());
 
-        // PO 2026-10-21 (PanSystemInfoRetirement): show system info is never sent to a firewall. Its serial was the
-        // only direct identity evidence here, so the identity check is NOT_EVALUABLE (never a guessed match; the strict
-        // posture refuses), and the Panorama cross-check, keyed by that serial, names no override source.
-        IdentityMismatchEvaluator.Decision decision =
-                IdentityMismatchEvaluator.evaluateWithoutPresentedIdentity(strictRefuseEnabled);
+        // PO 2026-10-21: show system info is never sent to a firewall (PanSystemInfoRetirement). The serial comes from the
+        // documented XML API request type=version instead (PanTypeVersion, gate row pan_identity_version) and feeds the
+        // identity check and the Panorama name-override cross-check. No usable serial: the identity check is
+        // NOT_EVALUABLE (never a guessed match; the strict posture refuses) and the cross-check names no override source.
+        com.securityexpert.nexus.ui2.worker.inventory.pan.PaloAltoTypeVersionParser.Info version =
+                com.securityexpert.nexus.ui2.worker.inventory.pan.PaloAltoTypeVersionParser.parse(
+                        xmlOutput(transport.xmlApiCall(target,
+                                com.securityexpert.nexus.ui2.worker.inventory.pan.PaloAltoTypeVersionParser.request(headers),
+                                IDENTITY_TIMEOUT)).orElse(""));
+        IdentityMismatchEvaluator.Decision decision = version.hasSerial()
+                ? IdentityMismatchEvaluator.evaluate(recordedIdentity,
+                        new PresentedIdentity(version.serial().get(), Optional.empty()), strictRefuseEnabled)
+                : IdentityMismatchEvaluator.evaluateWithoutPresentedIdentity(strictRefuseEnabled);
         if (decision == IdentityMismatchEvaluator.Decision.REFUSE) {
-            return new ConfigurationResult.IdentityMismatchRefused(
-                    com.securityexpert.nexus.ui2.persistence.device.PanSystemInfoRetirement.IDENTITY_NOT_EVALUABLE
-                            + "; strict posture refused the contact");
+            return new ConfigurationResult.IdentityMismatchRefused(version.hasSerial()
+                    ? "presented serial does not match the recorded baseline; strict posture refused the contact"
+                    : com.securityexpert.nexus.ui2.persistence.device.PanSystemInfoRetirement
+                            .IDENTITY_NOT_EVALUABLE_NO_TYPE_VERSION_SERIAL + "; strict posture refused the contact");
         }
-        String serial = "";
+        String serial = version.serial().orElse("");
 
         try {
             List<ConfigurationRunData> runs = new ArrayList<>();

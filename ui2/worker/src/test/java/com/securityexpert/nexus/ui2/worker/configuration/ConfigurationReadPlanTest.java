@@ -1,6 +1,7 @@
 package com.securityexpert.nexus.ui2.worker.configuration;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import java.util.List;
 
@@ -22,5 +23,8 @@ class ConfigurationReadPlanTest {
                 ConfigurationReadPlan.PALO_ALTO_XML_READS);
         assertEquals(java.util.Map.of("type", "config", "action", "show", "xpath", "/config"),
                 ConfigurationReadPlan.PAN_ACTIVE_FORM_PARAMS);
+        // The identity refresh is the type=version request (PO 2026-10-21), not an op command.
+        assertEquals("type=version", ConfigurationReadPlan.PAN_TYPE_VERSION);
+        assertFalse(ConfigurationReadPlan.PALO_ALTO_XML_READS.contains(ConfigurationReadPlan.PAN_TYPE_VERSION));
     }
 }
