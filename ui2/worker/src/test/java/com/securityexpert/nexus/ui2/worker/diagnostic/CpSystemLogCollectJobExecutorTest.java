@@ -1443,6 +1443,46 @@ class CpSystemLogCollectJobExecutorTest {
         assertTrue(h.repo.files.isEmpty());
     }
 
+    /** PO 2026-10-21 (option A): the C4 bound is 1 MiB, as the amended gate row says (was 256 KiB). */
+    @Test
+    void theListingBoundIsOneMebibyteAsTheAmendedGateRowSays() {
+        assertEquals(1_048_576, CpSpikeLayoutReview.LS_SPIKE_MAX_BYTES);
+        assertEquals(65_536, CpSpikeLayoutReview.LS_SPIKE_DIR_MAX_BYTES, "C5 keeps its 64 KiB bound");
+    }
+
+    @Test
+    void aListingOneByteBelowTheOneMebibyteBoundIsProcessedInFull(@TempDir Path dir) throws Exception {
+        var h = new Harness(dir, "gateway");
+        spikeOn(h);
+        int bound = CpSpikeLayoutReview.LS_SPIKE_MAX_BYTES;
+        String stamp = " " + (h.device.epoch - 86_400) + " ";
+        String prefix = "drwxr-xr-x 2 4096";
+        int fixed = prefix.length() + stamp.length() + 1;   // everything on a line except the name
+        StringBuilder out = new StringBuilder();
+        int count = 0;
+        // 100-character names (far beyond the 256 KiB the old bound allowed in total) until two last lines close the gap.
+        while ((bound - 1) - out.length() > 2 * (fixed + 128)) out.append(spikeLine(prefix, stamp, count++, 100));
+        int rest = (bound - 1) - out.length() - 2 * fixed;
+        int first = rest / 2;
+        out.append(spikeLine(prefix, stamp, count++, first)).append(spikeLine(prefix, stamp, count++, rest - first));
+        assertEquals(bound - 1, out.toString().getBytes(StandardCharsets.UTF_8).length);
+        assertTrue(out.length() > 256 * 1024, "this listing would have been UNKNOWN under the old bound");
+        h.device.spikeListing = out.toString();
+        h.run();
+
+        assertEquals("COMPLETED", h.finalState, h.finalReason);
+        assertEquals("NO_NEW_DATA", h.repo.outcome("cp_spike_data"));
+        assertEquals(true, h.repo.detail("cp_spike_data").get("baseline"));
+        assertEquals(count, h.repo.detail("cp_spike_data").get("baseline_directories"));
+        assertEquals(count, h.repo.spikeIn(SpikeDirectoryState.BASELINE), "processed in full, as a baseline");
+        assertNotEquals("LISTING_AT_BOUND", h.repo.detail("cp_spike_data").get("reason"));
+    }
+
+    private static String spikeLine(String prefix, String stamp, int n, int nameLength) {
+        String head = String.format("d%05d", n);
+        return prefix + stamp + head + "x".repeat(nameLength - head.length()) + "\n";
+    }
+
     @Test
     void aListingAtItsBoundOrOverItIsUnknownAndNoDirectoryIsListed(@TempDir Path dir) throws Exception {
         var h = new Harness(dir, "gateway");

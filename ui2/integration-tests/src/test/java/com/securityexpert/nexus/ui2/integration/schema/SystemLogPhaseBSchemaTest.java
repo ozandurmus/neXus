@@ -126,6 +126,15 @@ class SystemLogPhaseBSchemaTest {
                         "select string_agg(v, ',' order by o) from gate_registry, jsonb_array_elements_text(safe_telemetry_fields) "
                                 + "with ordinality as t(v, o) where gate_id='" + id + "'"), id + " telemetry");
             }
+            // V173 (PO 2026-10-21, option A): only the C4 listing bound moved, 256 KiB to 1 MiB; C3, C5 and the rest keep theirs.
+            assertEquals("once per device per job window; max bytes: 1 MiB", scalar(db,
+                    "select max_frequency from gate_registry where gate_id='cp_syslog_collect_ls_spike'"));
+            assertEquals("once per device per job window; max bytes: 256 KiB", scalar(db,
+                    "select max_frequency from gate_registry where gate_id='cp_syslog_collect_ls_crash'"));
+            assertEquals("true", scalar(db, "select max_frequency like '%max bytes: 64 KiB%' from gate_registry "
+                    + "where gate_id='cp_syslog_collect_ls_spike_dir'"));
+            assertEquals("30|none|SIGNED_OFF", scalar(db, "select timeout_s || '|' || retry_rule || '|' || sign_off_state "
+                    + "from gate_registry where gate_id='cp_syslog_collect_ls_spike'"));
             // The five commands that equal an approved measurement row stay byte-identical; only the key is narrowed.
             assertEquals("0", scalar(db, "select count(*) from (select 1 from gate_registry group by vendor, platform_role_scope, "
                     + "shell_context, transport_kind, canonical_command_key having count(*) > 1) d"),
@@ -135,6 +144,27 @@ class SystemLogPhaseBSchemaTest {
                     + "where c.gate_id like '%\\_syslog\\_collect\\_%'"));
             assertEquals("18", scalar(db, "select count(*) from gate_registry where gate_id like '%\\_syslog\\_measure\\_%' "
                     + "and sign_off_state='SIGNED_OFF'"), "the 18 measurement rows are untouched");
+        }
+    }
+
+    @Test
+    void theSpikeListingBoundMigrationIsRepeatableAndTouchesOnlyTheC4Row() throws Exception {
+        try (var resource = getClass().getResourceAsStream("/db/migration/V173__spike_listing_bound_one_mebibyte.sql")) {
+            assertNotNull(resource);
+            String sql = new String(resource.readAllBytes(), StandardCharsets.UTF_8);
+            try (var db = fixture.migrateConnection(); var statement = db.createStatement()) {
+                db.setAutoCommit(false);
+                String before = scalar(db, "select string_agg(gate_id || '=' || max_frequency || '=' || source_document_pointer, ';' "
+                        + "order by gate_id) from gate_registry where gate_id like '%\\_syslog\\_collect\\_%'");
+                statement.execute(sql);
+                statement.execute(sql);
+                assertEquals(before, scalar(db, "select string_agg(gate_id || '=' || max_frequency || '=' || source_document_pointer, ';' "
+                        + "order by gate_id) from gate_registry where gate_id like '%\\_syslog\\_collect\\_%'"),
+                        "already applied: re-running changes nothing, and the pointer is not appended twice");
+                assertEquals("1", scalar(db, "select count(*) from gate_registry where gate_id='cp_syslog_collect_ls_spike' "
+                        + "and source_document_pointer like '%PO_DECISION_RECORD_2026_10_21_SPIKE_LISTING_BOUND.md%'"));
+                db.rollback();
+            }
         }
     }
 

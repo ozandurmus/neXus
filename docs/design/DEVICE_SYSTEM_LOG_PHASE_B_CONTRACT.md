@@ -615,10 +615,10 @@ file is `TOO_LARGE` and is not fetched.
 - **First listing is a baseline.** All directories present in a device's first listing are recorded as
   `present before monitoring` and are **never fetched**. Only directories that appear later are candidates.
 - **Per run.** At most 16 new directories per run (§3.4); the rest is `BACKLOG`.
-- **Listing bound.** The C4 output bound is 256 KiB. The largest measured listing (3,638 lines) is about 189 KB with
-  19-character names and exceeds 256 KiB once names exceed about 39 characters, which cannot be checked (names masked).
-  A listing that reaches the bound is `UNKNOWN` for the source in that run (never processed partially). Raising the
-  bound is a change to an approved row and needs the PO (§13, open items).
+- **Listing bound.** The C4 output bound is **1 MiB** (1,048,576 B; PO amendment 2026-10-21 below; it was 256 KiB). The
+  largest measured listing (3,638 lines) is about 189 KB with 19-character names and exceeds 256 KiB once names exceed
+  about 39 characters, which cannot be checked (names masked). A listing that reaches the bound is `UNKNOWN` for the
+  source in that run (never processed partially); this rule is unchanged by the amendment.
 - **Layout is not measured.** Gate 3 lists only the parent directory. The contents of a data directory
   (`perf_cpu_<N>.log`, `profiling_summary.elg`) are unverified, so fetching spike data is **off by default**
   (`system_log.spike_data_enabled`, default `false`, security_admin). It is switched on after one `cp_syslog_collect_ls_spike_dir`
@@ -657,6 +657,29 @@ fetch list as first written only the 86 B summary would have been fetched. The a
    the baseline rule and the 30-day retention stay as written. The one reviewed directory (10,937 B) is far inside the
    16 MiB bound; the bound keeps its §3.4 status. `spike_data_enabled` stays default `false`; switching it on is a
    separate `security_admin` act after the deploy.
+
+**PO amendment 2026-10-21 (C4 listing bound; PO: "Şimdi A, sonra B").** Decision record:
+[PO_DECISION_RECORD_2026_10_21_SPIKE_LISTING_BOUND.md](PO_DECISION_RECORD_2026_10_21_SPIKE_LISTING_BOUND.md) (RATIFIED);
+proposal: [SPIKE_LISTING_CHUNKING_PROPOSAL.md](SPIKE_LISTING_CHUNKING_PROPOSAL.md) option A. Evidence: one gateway holds
+about 3,631 data directories and every run on it ended `UNKNOWN` (`LISTING_AT_BOUND`) at the 256 KiB bound, so it never took
+a baseline.
+
+1. **Bound.** The C4 `cp_syslog_collect_ls_spike` output bound (§10.1 "Max bytes") is raised from 256 KiB to **1 MiB**
+   (1,048,576 B). Migration `V173__spike_listing_bound_one_mebibyte.sql` updates the row's `max_frequency` text
+   (`... max bytes: 1 MiB`) and its source pointer; the code constant is `CpSpikeLayoutReview.LS_SPIKE_MAX_BYTES`. The
+   bound holds the measured 3,638 entries whatever the names' length (a name is at most 255 bytes, a line at most
+   33 + 255 bytes: 1,047,744 B).
+2. **Unchanged.** The command string, shell context, transport, timeout (30 s), retry (none), frequency (once per device
+   per job window), session rule, the 64 KiB C5 bound and the 256 KiB C3 bound. A listing that reaches the (new) bound is
+   still `UNKNOWN` (`LISTING_AT_BOUND`) and never processed partially. The §3.4, §8.3 and §10.1 text elsewhere that says
+   "256 KiB" for C4 (including item 3 of the amendment of 2026-10-20 above) is superseded for C4 by this item.
+3. **Baseline consequence.** The affected gateway's first successful listing becomes its baseline; directories created
+   while its source was `UNKNOWN` are recorded as `present before monitoring` and never fetched (the existing baseline rule
+   applied late).
+4. **Not decided here.** Option B (newest-first `-t`, a prefix read with a completeness watermark, which would change the
+   "never processed partially" rule for its own row) is approved only as the later durable direction. It stays a DRAFT and
+   needs one real-environment check of `-t` on Gaia and a separate contract amendment before implementation. Growth of the
+   directory count past about 1,048,576 / (33 + name length) entries brings `UNKNOWN` back until B is built.
 
 **How the collector applies §8.3 (implementation record, 2026-10-20; `V167__system_log_spike_directory.sql`).**
 
@@ -729,11 +752,14 @@ protocol's ten gate fields.
 | C1 | `cp_syslog_collect_stat` | `SSH_EXEC` | `bash -lc 'date +%s; stat -c "%n %i %s %Y" /var/log/messages* $FWDIR/log/fwd.elg* $CPDIR/log/cpd.elg* $CPDIR/log/cpwd.elg* $FWDIR/log/fwk.elg* $FWDIR/log/mq_mng.elg* /var/log/spike_detective/spike_detective.log* /var/log/spike_detective/spike_detective.csv*'` | 30 | none | once per device per job window (≤ 4/day) | the run's one existing trusted SSH session; non-interactive bash login shell; sequential | 64 KiB output | an unmatched glob or missing file is a `stat` error line = `ABSENT`, not a failure | file paths may contain host-specific install paths; no content; paths masked in aiview projections | `["deviceEpoch", "name", "inode", "sizeBytes", "mtime"]` | NEW; combines V149 `cp_syslog_measure_stat` (`%i %s %Y`) and V157 `cp_syslog_measure_stat_ext` (`%n`) over the PO's source list, with family globs |
 | C2 | `cp_syslog_collect_read` | SFTP ranged read (C4 `sftp_get` step with a byte range; subsystem on the same SSH session; gate `NOT_APPLICABLE` per C4 §2.3 as amended in §4.3) | no shell command. Read-only SFTP open of `<path>`, read `[<pos>, <pos> + <cap>)`, close. `<pos>`, `<cap>` non-negative integers computed by neXus, `<cap> ≤ 8388672`; `<path>` = an absolute path printed by C1 in the same run, basename in the source's family pattern, directory equal to the family base directory | 60 | none | per source per run, until the per-source (32 MiB) or per-device (64 MiB) budget; only inside the job window | same session (SFTP channel); sequential; never concurrent with another command or transfer | `<cap>` (8 MiB + 64 B anchor) | missing file at read time (rotation race) or a short anchor read = `UNKNOWN` for this source in this run, cursor unchanged, re-planned next run; SFTP unavailable = `UNKNOWN` | raw log lines: user names, addresses, host names, clish command audit lines that can carry `password-hash`/secret values; redacted on write (§12), stored encrypted, masked for aiview | `["startOffset", "bytesRead", "lines", "anchorMatch", "lineSplit"]` | NEW; replaces the phase A L2/L3 `tail`/`head` shape by PO decision of 2026-10-17: the cutting runs in neXus, nothing runs on the device for reading. Needs the C4 amendment in §4.3 |
 | C3 | `cp_syslog_collect_ls_crash` | `SSH_EXEC` | `bash -lc 'ls -lgo --time-style=+%s /var/log/crash/ /var/log/dump/usermode/'` | 30 | none | once per device per job window | same session | 256 KiB | a missing directory is a result (`ABSENT`) | file names may carry process names, addresses (kernel crash directory names) or host names; names stored as HMAC plus the parsed process; masked in aiview | `["fileCount", "sizeBytes", "mtime", "process"]` | NEW; string identical to the approved V157 `cp_syslog_measure_ls_crash` (measurement-only frequency) |
-| C4 | `cp_syslog_collect_ls_spike` | `SSH_EXEC` | `bash -lc 'ls -lgo --time-style=+%s /var/log/spike_detective/'` | 30 | none | once per device per job window | same session | 256 KiB | missing directory = `ABSENT` | names only | `["fileCount", "sizeBytes", "mtime", "namePattern"]` | NEW; string identical to V157 `cp_syslog_measure_ls_spike` |
+| C4 | `cp_syslog_collect_ls_spike` | `SSH_EXEC` | `bash -lc 'ls -lgo --time-style=+%s /var/log/spike_detective/'` | 30 | none | once per device per job window | same session | 1 MiB (amended PO 2026-10-21, was 256 KiB; §8.3) | missing directory = `ABSENT` | names only | `["fileCount", "sizeBytes", "mtime", "namePattern"]` | NEW; string identical to V157 `cp_syslog_measure_ls_spike` |
 | C5 | `cp_syslog_collect_ls_spike_dir` | `SSH_EXEC` | `bash -lc 'ls -lgo --time-style=+%s /var/log/spike_detective/<dir>/'`; `<dir>` = a name printed by C4 in the same run, matching the safe name form of §8.3 (the data-directory name pattern is not measured) | 30 | none | once per new, settled data directory | same session | 64 KiB | missing = `ABSENT` | names only | `["fileCount", "sizeBytes", "mtime"]` | NEW; **conditional**: dropped if M5 gate 3 shows no subdirectories. Gate 3 shows 6,334 subdirectories on 53 gateways, so the condition is not met and C5 stays. Used once on one device in the first rollout to review the layout (§8.3) |
 | C6 | `cp_syslog_collect_ls_sa` | `SSH_EXEC` | `bash -lc 'ls -lgo --time-style=+%s /var/log/sa/'` | 30 | none | once per device per day (06:00 window) | same session | 64 KiB | missing = `ABSENT` | names only | `["fileCount", "sizeBytes", "mtime", "namePattern"]` | NEW; string identical to V157 `cp_syslog_measure_ls_sa` |
 | C7 | `cp_syslog_collect_ls_hcp` | `SSH_EXEC` | `bash -lc 'ls -lgo --time-style=+%s /var/log/hcp/last/'` | 30 | none | once per device per day (06:00 window) | same session | 64 KiB | missing = `ABSENT` | archive names carry the host name; stored as HMAC plus the parsed time; masked | `["fileCount", "sizeBytes", "mtime", "namePattern"]` | NEW; string identical to V157 `cp_syslog_measure_ls_hcp` |
 | C8 | (`sftp_get`; gate `NOT_APPLICABLE` per C4 §2.3) | `sftp_get` subsystem on the same SSH session | fetch one absolute path printed by C4/C5 (spike data), C6 (`sar<DD>`) or C7 (HCP archive) in the same run; no other path | 120 (sar, spike), 300 (HCP) | none | HCP and sar: once per device per day; spike: once per new directory | same session (SFTP channel) | HCP 16 MiB (RESOLVED, §3.4), sar 32 MiB (PROVISIONAL, §3.4), spike 16 MiB per directory (`PENDING`, layout not measured) | SFTP unavailable or path gone = `UNKNOWN`/`ABSENT`; over bound = `TOO_LARGE`, not fetched | HCP archives contain device diagnostics that may include configuration fragments and names: stored encrypted as received, never shown raw to aiview (§12); sar and spike data are counters and process names | `["sizeBytes", "sha256", "kind"]` | NEW; the existing whole-file streaming fetch used by `cp_gateway_backup` |
+
+**Amendment 2026-10-21 (PO).** C4's "Max bytes" is 1 MiB, raised from 256 KiB; nothing else on the C4 row changed. See the PO
+amendment 2026-10-21 in §8.3 and [PO_DECISION_RECORD_2026_10_21_SPIKE_LISTING_BOUND.md](PO_DECISION_RECORD_2026_10_21_SPIKE_LISTING_BOUND.md).
 
 ### 10.2 New — Palo Alto (`palo_alto`, `pan_firewall`, shell `not_applicable`, transport `PAN_XML_API`) — APPROVED (PO 2026-10-17)
 
@@ -893,8 +919,9 @@ For the PO's acknowledgement (not decided here; each follows from the findings r
 
 1. The C5 `<dir>` rule moves from "the measured pattern" to a safe name form (§8.3), because the name pattern could
    not be measured.
-2. The C4 output bound of 256 KiB can be reached by the largest Spike Detective listing (3,638 entries). Reaching it is
-   `UNKNOWN`. Raising the bound would change an approved row (§8.3).
+2. The C4 output bound of 256 KiB could be reached by the largest Spike Detective listing (3,638 entries); reaching it is
+   `UNKNOWN`. **Resolved by the PO on 2026-10-21: the bound is raised to 1 MiB** (amendment in §8.3; V173). Option B is the
+   later durable design and is not yet approved for implementation.
 3. Extra measurement reads: a numeric Check Point measurement summary (findings R1) needs more than the "at most twice
    per device" reads of the M5 rule if it is to give growth rates.
 
