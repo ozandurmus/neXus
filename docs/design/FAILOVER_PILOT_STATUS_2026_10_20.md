@@ -151,7 +151,8 @@ absent from `ACTION_ID_BY_ROUTE`, which `CpFailoverSecurityRouteTest` asserts, s
 - **P1-5 Gate/literal parity.** `cp_failover_down`/`up` are keyed `clusterXL_admin down|up`, but neXus sends
   `bash -lc '…'`, the login-shell wrapper measured for reads on 2026-09-30. Record the wrapper in the gate rows'
   shell/session note. No new command.
-- **P1-6 CLI parity.** There is no failover CLI (readiness, run detail, release).
+- **P1-6 CLI parity.** Done: `failover-*` commands in `ui2/cli` (readiness, summary, units, incidents, runs, approvals,
+  request, approve, start, incident release, resume, resume approve), the same routes as the screen.
 - **P1-7 Traffic tolerance.** The 50 % / 5 s comparison is unmeasured on real traffic. Record the observed
   baseline/post ratio from the pilot before widening use.
 

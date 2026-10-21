@@ -335,4 +335,263 @@ class NexusSessionCliTest {
         assertEquals("{\"reason\":\"say \\\"hi\\\"\",\"enabled\":true,\"n\":3}", NexusSessionCli.json(fields));
         assertEquals(java.util.Optional.of("tok-1"), NexusSessionCli.jsonString("{\"authenticated\":true,\"csrf_token\":\"tok-1\"}", "csrf_token"));
     }
+
+    // ---- failover parity (Pilot status P1-6; contract section 6.3) ----------------------------------------------
+
+    private static final String CLUSTER = "3f2a1b4c-0000-4000-8000-000000000001";
+    private static final String UNIT = "3f2a1b4c-0000-4000-8000-000000000002";
+    private static final String RUN = "3f2a1b4c-0000-4000-8000-000000000003";
+    private static final String REQ = "3f2a1b4c-0000-4000-8000-000000000004";
+    private static final String RESUME = "3f2a1b4c-0000-4000-8000-000000000005";
+
+    /** A server that records {@code METHOD uri csrf=.. ack=.. body} and answers with {@code reply(method uri)}. */
+    private static HttpServer failoverServer(java.util.List<String> calls,
+            java.util.function.Function<String, String[]> reply) throws java.io.IOException {
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/", exchange -> {
+            String key = exchange.getRequestMethod() + " " + exchange.getRequestURI();
+            calls.add(key + " csrf=" + exchange.getRequestHeaders().getFirst("X-CSRF-Token")
+                    + " ack=" + exchange.getRequestHeaders().getFirst("X-Nexus-Business-Hours-Ack") + " "
+                    + new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            String[] answer = reply.apply(key);
+            byte[] out = answer[1].getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(Integer.parseInt(answer[0]), out.length);
+            exchange.getResponseBody().write(out);
+            exchange.close();
+        });
+        server.start();
+        return server;
+    }
+
+    private static NexusSessionCli failoverCli(Path home, HttpServer server) throws java.io.IOException {
+        NexusSessionCli cli = new NexusSessionCli(home);
+        cli.saveSession(new NexusSessionCli.Session("http://127.0.0.1:" + server.getAddress().getPort(), "opaque-cookie", "csrf-9"));
+        return cli;
+    }
+
+    private static final String[] OK = {"200", "{\"ok\":true}"};
+
+    @Test
+    void failoverReadCommandsCallTheScreenRoutes(@TempDir Path home) throws Exception {
+        java.util.List<String> calls = new java.util.concurrent.CopyOnWriteArrayList<>();
+        HttpServer server = failoverServer(calls, key -> OK);
+        try {
+            NexusSessionCli cli = failoverCli(home, server);
+            assertEquals(0, cli.run(new String[] {"failover-summary"}));
+            assertEquals(0, cli.run(new String[] {"failover-summary", "--vendor", "palo_alto"}));
+            assertEquals(0, cli.run(new String[] {"failover-units", "cluster-ref-1"}));
+            assertEquals(0, cli.run(new String[] {"failover-units", "--member", "dev-1", "--vendor", "palo_alto"}));
+            assertEquals(0, cli.run(new String[] {"failover-incidents"}));
+            assertEquals(0, cli.run(new String[] {"failover-runs", CLUSTER, UNIT}));
+            assertEquals(0, cli.run(new String[] {"failover-run", RUN}));
+            assertEquals(0, cli.run(new String[] {"failover-run", RUN, "--vendor", "palo_alto"}));
+            assertEquals(0, cli.run(new String[] {"failover-approvals", CLUSTER, UNIT}));
+            assertEquals(java.util.List.of(
+                    "GET /api/v2/cp-failover/summary csrf=null ack=null ",
+                    "GET /api/v2/pan-failover/summary csrf=null ack=null ",
+                    "GET /api/v2/cp-failover/units?clusterRef=cluster-ref-1 csrf=null ack=null ",
+                    "GET /api/v2/pan-failover/units?memberDeviceId=dev-1 csrf=null ack=null ",
+                    "GET /api/v2/cp-failover/incidents csrf=null ack=null ",
+                    "GET /api/v2/cp-failover/runs?clusterId=" + CLUSTER + "&unitId=" + UNIT + " csrf=null ack=null ",
+                    "GET /api/v2/cp-failover/runs/" + RUN + " csrf=null ack=null ",
+                    "GET /api/v2/pan-failover/runs/" + RUN + " csrf=null ack=null ",
+                    "GET /api/v2/cp-failover/approvals?clusterId=" + CLUSTER + "&unitId=" + UNIT + " csrf=null ack=null "), calls);
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void failoverReadinessIsThePostTheScreenSendsAndCarriesTheAcknowledgement(@TempDir Path home) throws Exception {
+        java.util.List<String> calls = new java.util.concurrent.CopyOnWriteArrayList<>();
+        HttpServer server = failoverServer(calls, key -> OK);
+        try {
+            NexusSessionCli cli = failoverCli(home, server);
+            assertEquals(0, cli.run(new String[] {"failover-readiness", CLUSTER, UNIT}));
+            assertEquals(0, new NexusSessionCli(home).run(new String[] {"failover-readiness", CLUSTER, UNIT, "--vendor", "palo_alto",
+                    "--business-hours-ack"}));
+            String body = "{\"clusterId\":\"" + CLUSTER + "\",\"unitId\":\"" + UNIT + "\"}";
+            assertEquals(java.util.List.of(
+                    "POST /api/v2/cp-failover/units/" + UNIT + "/readiness csrf=csrf-9 ack=null " + body,
+                    "POST /api/v2/pan-failover/units/" + UNIT + "/readiness csrf=csrf-9 ack=true " + body), calls);
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void failoverRequestApprovalPostsTheWindowReasonAndRequestId(@TempDir Path home) throws Exception {
+        java.util.List<String> calls = new java.util.concurrent.CopyOnWriteArrayList<>();
+        HttpServer server = failoverServer(calls, key -> OK);
+        try {
+            NexusSessionCli cli = failoverCli(home, server);
+            assertEquals(0, cli.run(new String[] {"failover-request-approval", CLUSTER, UNIT, "--reason", "planned \"drill\"",
+                    "--from", "2026-10-22T09:00:00Z", "--until", "2026-10-22T10:00:00Z", "--request-id", REQ, "--business-hours-ack"}));
+            assertEquals(0, new NexusSessionCli(home).run(new String[] {"failover-request-approval", CLUSTER, UNIT,
+                    "--reason", "drill", "--until", "2099-01-01T00:00:00Z"}));
+            assertEquals("POST /api/v2/cp-failover/approvals csrf=csrf-9 ack=true {\"clusterId\":\"" + CLUSTER + "\",\"unitId\":\"" + UNIT
+                    + "\",\"windowFrom\":\"2026-10-22T09:00:00Z\",\"windowUntil\":\"2026-10-22T10:00:00Z\","
+                    + "\"reason\":\"planned \\\"drill\\\"\",\"requestId\":\"" + REQ + "\"}", calls.get(0));
+            String generated = calls.get(1);
+            assertTrue(generated.startsWith("POST /api/v2/cp-failover/approvals csrf=csrf-9 ack=null "), generated);
+            assertTrue(generated.matches(".*\"windowFrom\":\"[0-9T:.\\-]+Z\",\"windowUntil\":\"2099-01-01T00:00:00Z\","
+                    + "\"reason\":\"drill\",\"requestId\":\"[0-9a-f\\-]{36}\"\\}"), generated);
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void failoverApproveNamesTheRequestAndItsRevision(@TempDir Path home) throws Exception {
+        java.util.List<String> calls = new java.util.concurrent.CopyOnWriteArrayList<>();
+        HttpServer server = failoverServer(calls, key -> OK);
+        try {
+            NexusSessionCli cli = failoverCli(home, server);
+            assertEquals(0, cli.run(new String[] {"failover-approve", REQ, CLUSTER, UNIT, "3", "--business-hours-ack"}));
+            assertEquals("POST /api/v2/cp-failover/approvals/" + REQ + "/approve csrf=csrf-9 ack=true {\"clusterId\":\"" + CLUSTER
+                    + "\",\"unitId\":\"" + UNIT + "\",\"revision\":3}", calls.get(0));
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void failoverStartReadsTheBindingFromTheApprovalListAndPostsTheRun(@TempDir Path home) throws Exception {
+        java.util.List<String> calls = new java.util.concurrent.CopyOnWriteArrayList<>();
+        String listing = "[{\"approvalId\":\"a-0\",\"reason\":\"has } and { in it\",\"requestId\":\"other\",\"revision\":9,"
+                + "\"executionNonce\":\"nonce-other\"},"
+                + "{\"approvalId\":\"a-1\",\"requestId\":\"" + REQ + "\",\"revision\":2,\"policy\":\"ADMIN_SINGLE\","
+                + "\"executionNonce\":\"nonce-1\"}]";
+        HttpServer server = failoverServer(calls, key -> key.startsWith("GET") ? new String[] {"200", listing}
+                : new String[] {"200", "{\"runId\":\"" + RUN + "\"}"});
+        try {
+            NexusSessionCli cli = failoverCli(home, server);
+            assertEquals(0, cli.run(new String[] {"failover-start", CLUSTER, UNIT, REQ, "--confirm-warning", "--business-hours-ack"}));
+            assertEquals("GET /api/v2/cp-failover/approvals?clusterId=" + CLUSTER + "&unitId=" + UNIT + " csrf=null ack=null ", calls.get(0));
+            assertEquals("POST /api/v2/cp-failover/runs csrf=csrf-9 ack=true {\"clusterId\":\"" + CLUSTER + "\",\"unitId\":\"" + UNIT
+                    + "\",\"scheduledFor\":null,\"requestId\":\"" + REQ + "\",\"revision\":2,\"executionNonce\":\"nonce-1\","
+                    + "\"warningConfirmed\":true}", calls.get(1));
+            // Without the confirmation the body says so and the server refuses; the CLI does not decide for it.
+            calls.clear();
+            assertEquals(0, cli.run(new String[] {"failover-start", CLUSTER, UNIT, REQ}));
+            assertTrue(calls.get(1).endsWith("\"warningConfirmed\":false}"), calls.get(1));
+            // A request that is not in the list (or whose token is hidden from this actor) sends nothing.
+            calls.clear();
+            assertEquals(1, cli.run(new String[] {"failover-start", CLUSTER, UNIT, "unknown-request", "--confirm-warning"}));
+            assertEquals(1, calls.size());
+            assertTrue(calls.get(0).startsWith("GET "), calls.get(0));
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void failoverIncidentReleaseAndResumeCommandsPostTheContractBodies(@TempDir Path home) throws Exception {
+        java.util.List<String> calls = new java.util.concurrent.CopyOnWriteArrayList<>();
+        HttpServer server = failoverServer(calls, key -> OK);
+        try {
+            NexusSessionCli cli = failoverCli(home, server);
+            assertEquals(0, cli.run(new String[] {"failover-incident-release", RUN, "--reason", "member replaced, verified"}));
+            assertEquals(0, cli.run(new String[] {"failover-resume", RUN, "--incident", RUN, "--reason", "peer still active"}));
+            assertEquals(0, new NexusSessionCli(home).run(new String[] {"failover-resume", RUN, "--incident", RUN,
+                    "--reason", "peer still active", "--business-hours-ack"}));
+            assertEquals(0, cli.run(new String[] {"failover-resume-approve", RUN, RESUME}));
+            assertEquals(0, new NexusSessionCli(home).run(new String[] {"--business-hours-ack", "failover-resume-approve", RUN, RESUME}));
+            assertEquals(java.util.List.of(
+                    "POST /api/v2/cp-failover/runs/" + RUN + "/incident/release csrf=csrf-9 ack=null {\"reason\":\"member replaced, verified\"}",
+                    "POST /api/v2/cp-failover/runs/" + RUN + "/resume-return csrf=csrf-9 ack=null {\"expectedIncidentId\":\"" + RUN
+                            + "\",\"reason\":\"peer still active\",\"businessHoursAck\":false}",
+                    "POST /api/v2/cp-failover/runs/" + RUN + "/resume-return csrf=csrf-9 ack=true {\"expectedIncidentId\":\"" + RUN
+                            + "\",\"reason\":\"peer still active\",\"businessHoursAck\":true}",
+                    "POST /api/v2/cp-failover/runs/" + RUN + "/resume-return/approve csrf=csrf-9 ack=null {\"resumeId\":\"" + RESUME
+                            + "\",\"businessHoursAck\":false}",
+                    "POST /api/v2/cp-failover/runs/" + RUN + "/resume-return/approve csrf=csrf-9 ack=true {\"resumeId\":\"" + RESUME
+                            + "\",\"businessHoursAck\":true}"), calls);
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void failoverRefusalsArePrintedAsCodeAndPlainWords(@TempDir Path home) throws Exception {
+        java.util.List<String> calls = new java.util.concurrent.CopyOnWriteArrayList<>();
+        HttpServer server = failoverServer(calls, key -> {
+            if (key.contains("/incident/release")) return new String[] {"403", "{\"code\":\"WRONG_ROLE\"}"};
+            if (key.contains("/resume-return/approve")) return new String[] {"409", "{\"code\":\"SOMETHING_NEW\"}"};
+            if (key.contains("/resume-return")) return new String[] {"409", "{\"code\":\"BUSINESS_HOURS_ACK_REQUIRED\"}"};
+            return new String[] {"409", "{\"code\":\"OPEN_INCIDENT\"}"};
+        });
+        java.io.PrintStream err = System.err;
+        var captured = new java.io.ByteArrayOutputStream();
+        try {
+            NexusSessionCli cli = failoverCli(home, server);
+            System.setErr(new java.io.PrintStream(captured, true, StandardCharsets.UTF_8));
+            assertEquals(1, cli.run(new String[] {"failover-resume", RUN, "--incident", RUN, "--reason", "r"}));
+            String ack = captured.toString(StandardCharsets.UTF_8);
+            assertTrue(ack.startsWith("BUSINESS_HOURS_ACK_REQUIRED: This is inside business hours"), ack);
+            assertTrue(ack.contains("--business-hours-ack"), ack);
+            captured.reset();
+            assertEquals(1, cli.run(new String[] {"failover-readiness", CLUSTER, UNIT}));
+            assertTrue(captured.toString(StandardCharsets.UTF_8).startsWith("OPEN_INCIDENT: An open failover incident blocks this"));
+            captured.reset();
+            assertEquals(3, cli.run(new String[] {"failover-incident-release", RUN, "--reason", "r"}));
+            assertTrue(captured.toString(StandardCharsets.UTF_8).startsWith("WRONG_ROLE: Your role may not do this."));
+            captured.reset();
+            assertEquals(1, cli.run(new String[] {"failover-resume-approve", RUN, RESUME}));
+            assertTrue(captured.toString(StandardCharsets.UTF_8).startsWith("SOMETHING_NEW: The server refused this request."));
+        } finally {
+            System.setErr(err);
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void failoverUsageErrorsExitTwoWithoutACall(@TempDir Path home) throws Exception {
+        java.util.List<String> calls = new java.util.concurrent.CopyOnWriteArrayList<>();
+        HttpServer server = failoverServer(calls, key -> OK);
+        java.io.PrintStream err = System.err;
+        System.setErr(new java.io.PrintStream(new java.io.ByteArrayOutputStream(), true, StandardCharsets.UTF_8));
+        try {
+            NexusSessionCli cli = failoverCli(home, server);
+            String[][] bad = {
+                {"failover-summary", "extra"},
+                {"failover-summary", "--vendor", "other"},
+                {"failover-summary", "--vendor"},
+                {"failover-summary", "--nonsense"},
+                {"failover-units"},
+                {"failover-units", "ref", "--member", "dev-1"},
+                {"failover-units", "bad ref"},
+                {"failover-incidents", "x"},
+                {"failover-runs", CLUSTER},
+                {"failover-run"},
+                {"failover-run", "not an id"},
+                {"failover-approvals", CLUSTER},
+                {"failover-readiness", CLUSTER},
+                {"failover-readiness", CLUSTER, "bad id!"},
+                {"failover-request-approval", CLUSTER, UNIT, "--until", "2099-01-01T00:00:00Z"},
+                {"failover-request-approval", CLUSTER, UNIT, "--reason", "r"},
+                {"failover-request-approval", CLUSTER, UNIT, "--reason", "r", "--until", "tomorrow"},
+                {"failover-request-approval", CLUSTER, UNIT, "--reason", " ", "--until", "2099-01-01T00:00:00Z"},
+                {"failover-approve", REQ, CLUSTER, UNIT},
+                {"failover-approve", REQ, CLUSTER, UNIT, "two"},
+                {"failover-start", CLUSTER, UNIT},
+                {"failover-start", CLUSTER, UNIT, REQ, "--confirm"},
+                {"failover-incident-release", RUN},
+                {"failover-incident-release", "--reason", "r"},
+                {"failover-incident-release", RUN, "--reason"},
+                {"failover-resume", RUN, "--reason", "r"},
+                {"failover-resume", RUN, "--incident", RUN},
+                {"failover-resume", "--incident", RUN, "--reason", "r"},
+                {"failover-resume-approve", RUN},
+                {"failover-resume-approve", RUN, RESUME, "extra"},
+            };
+            for (String[] args : bad) {
+                assertEquals(2, cli.run(args), String.join(" ", args));
+            }
+            assertEquals(java.util.List.of(), calls);
+        } finally {
+            System.setErr(err);
+            server.stop(0);
+        }
+    }
 }
