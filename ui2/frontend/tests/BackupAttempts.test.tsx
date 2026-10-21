@@ -50,7 +50,9 @@ describe("backup attempt transcript entry points", () => {
   it("paginates attempt history without truncating older transcripts", async () => {
     const fetch = stubJobs([attempt("COMPLETED", true)], 26);
     render(<BackupAttempts deviceId="device-synthetic" />);
-    fireEvent.click(await screen.findByRole("button", { name: "Go to page 2" }));
+    // the one pagination footer (post-release review 2026-10-20, N15): the range words and the chevrons
+    expect(await screen.findByText("1–25 of 26 attempts")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Go to next page" }));
     await waitFor(() => expect(fetch.mock.calls.some(([url]) => String(url).includes("page=2"))).toBe(true));
   });
 

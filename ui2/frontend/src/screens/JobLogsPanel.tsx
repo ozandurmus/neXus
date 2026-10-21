@@ -13,10 +13,10 @@ import TextField from "@mui/material/TextField";
 import Button from "@mui/material/Button";
 import Paper from "@mui/material/Paper";
 import IconButton from "@mui/material/IconButton";
-import Pagination from "@mui/material/Pagination";
 import FormControlLabel from "@mui/material/FormControlLabel";
 import Switch from "@mui/material/Switch";
 import { StatePanel, RestrictedPanel, isRestricted } from "../shell/States";
+import { PaginationFooter } from "../shell/DataTable";
 import { StatusPill } from "../shell/StatusPill";
 import type { Tone } from "../shell/tone";
 import { Presented, Stamp } from "../shell/PresentedText";
@@ -521,34 +521,13 @@ export function JobLogsPanel({
             </Table>
           </TableContainer>
 
-          <Stack direction="row" spacing={2} alignItems="center" justifyContent="space-between" flexWrap="wrap" useFlexGap>
-            <Typography variant="body2" color="text.secondary">
-              {`${(pageNumber - 1) * pageSize + 1}–${Math.min(pageNumber * pageSize, page.total)} of ${page.total} jobs`}
-            </Typography>
-            <Stack direction="row" spacing={2} alignItems="center">
-              <TextField
-                select
-                size="small"
-                label="Per page"
-                value={pageSize}
-                onChange={(e) => { setPageSize(Number(e.target.value)); resetToFirstPage(); }}
-                SelectProps={{ native: true }}
-                InputLabelProps={{ shrink: true }}
-                sx={{ width: 110 }}
-              >
-                {PAGE_SIZES.map((n) => <option key={n} value={n}>{n}</option>)}
-              </TextField>
-              <Pagination
-                count={pageCount}
-                page={Math.min(pageNumber, pageCount)}
-                onChange={(_e, value) => setPageNumber(value)}
-                color="primary"
-                showFirstButton
-                showLastButton
-                size="small"
-              />
-            </Stack>
-          </Stack>
+          {/* The one pagination footer (post-release review 2026-10-20, N15): `1–50 of 137 jobs`, Per page, and first/last
+              beside previous/next because the history runs to hundreds of pages. */}
+          <Box sx={{ display: "flex" }}>
+            <PaginationFooter offset={(Math.min(pageNumber, pageCount) - 1) * pageSize} size={pageSize} total={page.total} noun="jobs" jump
+              onPage={(offset) => setPageNumber(Math.floor(offset / pageSize) + 1)}
+              sizes={PAGE_SIZES} onSize={(n) => { setPageSize(n); resetToFirstPage(); }} />
+          </Box>
         </>
       )}
     </Box>

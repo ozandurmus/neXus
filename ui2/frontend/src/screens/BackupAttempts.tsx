@@ -2,10 +2,10 @@ import { useEffect, useState } from "react";
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
-import Pagination from "@mui/material/Pagination";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import { listJobs, type JobPageView } from "../auth/adminApi";
+import { PaginationFooter } from "../shell/DataTable";
 import { Stamp } from "../shell/PresentedText";
 import { m3 } from "../theme/m3Theme";
 import { attemptWords } from "./backupWords";
@@ -76,8 +76,9 @@ export function BackupAttempts({ deviceId, latestOnly = false, version = 0, coll
     {!latestOnly && !collapsed && collapseTo !== undefined && (
       <Box><Button size="small" onClick={() => { setExpanded(false); setPage(1); }}>Show only the latest {collapseTo}</Button></Box>
     )}
-    {!latestOnly && !collapsed && result.total > pageSize && <Pagination
-      count={Math.ceil(result.total / pageSize)} page={page} onChange={(_, value) => setPage(value)}
-      aria-label="Backup attempts pages" size="small" />}
+    {/* The one pagination footer (post-release review 2026-10-20, N15), as the Backups fleet table has it. */}
+    {!latestOnly && !collapsed && result.total > pageSize && <Box role="navigation" aria-label="Backup attempts pages" sx={{ display: "flex" }}>
+      <PaginationFooter offset={(page - 1) * pageSize} size={pageSize} total={result.total} noun="attempts" onPage={(offset) => setPage(Math.floor(offset / pageSize) + 1)} />
+    </Box>}
   </Stack>;
 }

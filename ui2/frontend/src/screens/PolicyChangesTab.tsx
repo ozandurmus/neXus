@@ -1,7 +1,9 @@
 import { Fragment, useEffect, useRef, useState } from "react";
-import { Box, Button, Chip, FormControlLabel, MenuItem, Stack, Switch, Table, TableBody, TableCell, TableHead, TableRow, TextField, Tooltip, Typography } from "@mui/material";
+import { Box, Button, Chip, FormControlLabel, MenuItem, Skeleton, Stack, Switch, Table, TableBody, TableCell, TableHead, TableRow, TextField, Tooltip, Typography } from "@mui/material";
 import { downloadPolicyChanges, getPolicyChanges, type PolicyChangeFilters, type PolicyChangeRow, type PolicyChangesPage, type PolicyMetadata, type PolicyTarget } from "../auth/adminApi";
 import { m3 } from "../theme/m3Theme";
+import { KpiCard } from "../shell/KpiCard";
+import { StatePanel } from "../shell/States";
 import { Stamp } from "../shell/PresentedText";
 import { DISPLAY_TZ_LABEL, displayInputToIso, formatStamp, isoToDisplayInput } from "../shell/time";
 
@@ -73,17 +75,17 @@ export function PolicyChangesTab({ policies, devices, openRule }: { policies: Po
   return <Box role="tabpanel" aria-label="Changes">
     <Typography variant="body2">Estate-wide stored rule revisions. Default period: last 30 days. Missing actors are UNKNOWN; collection observations do not prove the change time.
       {" "}A policy's first complete collection records every rule as added; these initial captures are not changes and are left out unless included.</Typography>
-    <Stack direction="row" gap={1} flexWrap="wrap" sx={{ my: 2 }}>
-      {/* Loading… while the read is in flight, then the number; UNKNOWN when the read failed. Never a dash. */}
-      {[["Changes in period", data?.summary.total], ["Distinct actors", data?.summary.actors], ["Distinct rules", data?.summary.rules],
-        ...["added", "modified", "removed"].map(type => [type, data?.summary.counts[type]]),
-        ...(hidden === undefined ? [] : [[filters.includeInitial ? "Initial captures (included)" : "Initial captures (not shown)", hidden]])].map(([label, value]) =>
-        <Box key={label} sx={{ bgcolor: m3.scLow, border: `1px solid ${m3.outlineVar}`, borderRadius: 2, px: 2, py: 1 }}>
-          <Typography variant="caption">{label}</Typography>
-          {value !== undefined && value !== null ? <Typography variant="h6">{value}</Typography>
-            : <Typography variant="h6" role="status" sx={{ fontSize: 16, color: m3.neutralInk }}>{error ? "UNKNOWN" : "Loading…"}</Typography>}
-        </Box>)}
-    </Stack>
+    {/* The one KPI card (design language, component 3; post-release review 2026-10-20, L10): a skeleton figure while the
+        read is in flight, the number when it lands, the hatched UNKNOWN word when the read failed. Never a dash, never 0. */}
+    <Box aria-label="Change summary" sx={{ display: "grid", gap: 1.5, gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", my: 2 }}>
+      {([["Changes in period", data?.summary.total], ["Distinct actors", data?.summary.actors], ["Distinct rules", data?.summary.rules],
+        ...["added", "modified", "removed"].map(type => [type, data?.summary.counts[type]] as const),
+        ...(hidden === undefined ? [] : [[filters.includeInitial ? "Initial captures (included)" : "Initial captures (not shown)", hidden] as const])] as ReadonlyArray<readonly [string, number | undefined | null]>).map(([label, value]) =>
+        <KpiCard key={label} label={label} sentence={data ? "in the period" : error ? "the read failed" : "reading the period"}
+          value={value ?? null} state={!data && error ? "unknown" : undefined} reason={!data && error ? "The changes read failed; nothing is counted." : undefined}>
+          {!data && !error ? <Skeleton variant="text" width={64} sx={{ fontSize: 28, lineHeight: "32px" }} aria-hidden /> : undefined}
+        </KpiCard>)}
+    </Box>
     <Box component="form" onSubmit={event => { event.preventDefault(); range.current = null; setFilters({ ...draft }); setCursors([""]); }}>
       <Stack direction="row" gap={1} flexWrap="wrap" alignItems="center" sx={{ mb: 2 }}>
         {/* Display time like the rest of the product (UI review 2026-10-18): typed and shown in GMT+3, sent as the UTC instant. */}
@@ -107,7 +109,9 @@ export function PolicyChangesTab({ policies, devices, openRule }: { policies: Po
         <Button type="submit">Apply change filters</Button><Button disabled={!data || exporting} onClick={() => void exportCsv()}>{exporting ? "Exporting…" : "Export changes CSV"}</Button>
       </Stack>
     </Box>
-    {error && <Box role="alert" sx={{ display: "flex", alignItems: "center", gap: 1, color: m3.criticalInk }}>{error}<Button onClick={() => setRevision(n => n + 1)}>Retry</Button></Box>}
+    {/* The one error state (component 5): a sentence, the next step and Retry; the cards above say UNKNOWN meanwhile. */}
+    {error && <StatePanel variant="error" title={error} body={data ? undefined : "Nothing is listed until the estate-wide read of the period lands; the filters above still apply to the next attempt."}
+      action={<Button variant="outlined" onClick={() => setRevision(n => n + 1)}>Retry</Button>} />}
     {!data && !error && <Typography role="status">{slow ? "Loading changes… the estate-wide read of the period is still running (given up after 20 s)." : "Loading changes…"}</Typography>}
     {data && <Typography variant="caption">
       <Tooltip title={`${data.rangeStart} — ${data.rangeEnd} (UTC reference)`}><span>{formatStamp(data.rangeStart)} — {formatStamp(data.rangeEnd)}</span></Tooltip>

@@ -121,8 +121,26 @@ function AckControl({ node, actions }: { readonly node: ManagementTreeNode; read
   );
 }
 
+/** HA tokens a collector writes when the gateway reported no cluster role; neither is a role (R9). */
+const NOT_A_ROLE = new Set(["", "UNKNOWN", "STANDALONE", "NONE"]);
+
+/**
+ * The HA pill of a gateway row (post-release review 2026-10-20, N14). A member under a cluster shows the role it
+ * reported (`ACTIVE`, `STANDBY`, or `UNKNOWN` when it reported none -- the member says so, the pill repeats it). A
+ * gateway the management server lists in no cluster is `Standalone`: that is the manager's placement, and the hover
+ * says so; `UNKNOWN` is reserved for a gateway that was never read, where the row already says `Not evaluated`.
+ */
+export function gatewayHaWord(node: Pick<ManagementTreeNode, "ha_role" | "last_collection_at">, inCluster: boolean):
+  { readonly kind: "role"; readonly role: string } | { readonly kind: "standalone"; readonly title: string } | null {
+  const role = (node.ha_role ?? "").trim().toUpperCase();
+  if (inCluster) return role ? { kind: "role", role } : null;
+  if (!NOT_A_ROLE.has(role)) return { kind: "role", role };
+  if (!node.last_collection_at) return null;
+  return { kind: "standalone", title: `The management server lists this gateway in no cluster; HA role as the gateway reported it: ${role || "none"}.` };
+}
+
 /** The member's own state, read from the member (never from the management server). */
-function MemberState({ node, actions }: { readonly node: ManagementTreeNode; readonly actions: RowActions }) {
+function MemberState({ node, actions, inCluster = false }: { readonly node: ManagementTreeNode; readonly actions: RowActions; readonly inCluster?: boolean }) {
   // A virtual system is a context of its gateway, never enrolled on its own: nothing to flag.
   if (node.category === "virtual_system") return null;
   // The row type already says "Management / log server" (once, UI review 2026-10-18 P0-5B): no second pill here.
@@ -139,7 +157,10 @@ function MemberState({ node, actions }: { readonly node: ManagementTreeNode; rea
   }
   return (
     <Box component="span" sx={{ display: "inline-flex", alignItems: "center", gap: 0.75, flexWrap: "wrap" }}>
-      {node.category === "device" && (node.ha_role ? <RoleChip role={node.ha_role} dense /> : null)}
+      {node.category === "device" && (() => {
+        const ha = gatewayHaWord(node, inCluster);
+        return ha === null ? null : ha.kind === "role" ? <RoleChip role={ha.role} dense /> : <span title={ha.title}><StatusChip tone="neutral" label="Standalone" dense /></span>;
+      })()}
       {node.last_collection_state === "FAILED" && <StatusChip tone="bad" label="Last collection failed" dense />}
       {node.last_collection_at
         ? <Typography component="span" sx={{ fontSize: 11.5, color: m3.onSurfaceVar }}>read <Ts at={node.last_collection_at} relative /></Typography>
@@ -148,9 +169,11 @@ function MemberState({ node, actions }: { readonly node: ManagementTreeNode; rea
   );
 }
 
-function NodeRow({ node, depth, onOpenDevice, onOpenCluster, actions }: {
+function NodeRow({ node, depth, onOpenDevice, onOpenCluster, actions, inCluster = false }: {
   readonly node: ManagementTreeNode;
   readonly depth: number;
+  /** The row is a member listed under a cluster row (its HA role is then the member's own word). */
+  readonly inCluster?: boolean;
   readonly onOpenDevice: (deviceId: string) => void;
   readonly onOpenCluster: (clusterRef: string) => void;
   readonly actions: RowActions;
@@ -176,11 +199,11 @@ function NodeRow({ node, depth, onOpenDevice, onOpenCluster, actions }: {
         <Typography sx={{ fontSize: 12, color: m3.onSurfaceVar }}>
           {rowType(node)}
         </Typography>
-        <Box>{isCluster ? <Typography sx={{ fontSize: 12, color: m3.onSurfaceVar }}>{node.children.length} member{node.children.length === 1 ? "" : "s"}</Typography> : <MemberState node={node} actions={actions} />}</Box>
+        <Box>{isCluster ? <Typography sx={{ fontSize: 12, color: m3.onSurfaceVar }}>{node.children.length} member{node.children.length === 1 ? "" : "s"}</Typography> : <MemberState node={node} actions={actions} inCluster={inCluster} />}</Box>
       </Box>
       {node.category !== "cluster" && node.children.length > 0 && node.children.every((k) => k.category === "virtual_system") ? (
         <VirtualSystemsLine owner={name} names={node.children.map(nameOf)} depth={depth + 1} />
-      ) : node.children.map((k, i) => <NodeRow key={`${nameOf(k)}-${i}`} node={k} depth={depth + 1} onOpenDevice={onOpenDevice} onOpenCluster={onOpenCluster} actions={actions} />)}
+      ) : node.children.map((k, i) => <NodeRow key={`${nameOf(k)}-${i}`} node={k} depth={depth + 1} inCluster={isCluster} onOpenDevice={onOpenDevice} onOpenCluster={onOpenCluster} actions={actions} />)}
     </>
   );
 }

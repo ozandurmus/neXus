@@ -23,7 +23,7 @@ import type { Tone } from "../shell/tone";
 import { formatTime, relativeAge } from "../shell/time";
 import { KpiCard } from "../shell/KpiCard";
 import { lineDeviceTime, lineSeverity, windowWords, type LineSeverity } from "./logLineTime";
-import { jobStateWord } from "../shell/presenters";
+import { jobStateWord, statusWord } from "../shell/presenters";
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { MONO, m3 } from "../theme/m3Theme";
 
@@ -928,7 +928,7 @@ function LogViewer({ vm, sources, canViewUnmasked, maxPageBytes, gaps, onJump }:
           onChange={(e) => setChunkId(e.target.value || null)} disabled={dayChunks.length === 0}>
           {dayChunks.length === 0 ? <option value="">No chunks</option> : dayChunks.map((c, i) => (
             <option key={c.chunk_id} value={c.chunk_id}>
-              {`${i + 1} of ${dayChunks.length} · ${clock(c.collected_at)} · ${c.lines.toLocaleString("en-US")} lines · ${formatBytes(c.bytes)}${c.outcome ? ` · ${c.outcome}` : ""}${c.pruned ? " · removed" : ""}`}
+              {`${i + 1} of ${dayChunks.length} · ${clock(c.collected_at)} · ${c.lines.toLocaleString("en-US")} lines · ${formatBytes(c.bytes)}${c.outcome ? ` · ${statusWord(c.outcome)}` : ""}${c.pruned ? " · removed" : ""}`}
             </option>
           ))}
         </TextField>

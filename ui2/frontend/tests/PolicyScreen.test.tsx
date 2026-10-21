@@ -90,8 +90,8 @@ it("renders only a 200-rule page from a 5000-rule policy and requests the next p
   const fetch = mockFetch(large); mount(); await navigate();
   const table = await screen.findByRole("region", { name: "Policy rulebase" });
   expect(table.querySelectorAll("[data-policy-rule]").length).toBeLessThanOrEqual(24);
-  expect(screen.getByText("Page 1 of 25 · 5000 rules")).toBeInTheDocument();
-  fireEvent.click(screen.getByText("Next"));
+  expect(screen.getByText("1–200 of 5,000 rules")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Go to next page" }));
   await waitFor(() => expect(fetch.mock.calls.some(([url]) => url.includes("page=1"))).toBe(true));
 });
 it("scrolls the content pane as the single scroll container and renders the rule rows under it", async () => {
@@ -263,6 +263,11 @@ it("summarizes every stored container until one is opened, using only loaded dat
   expect(screen.queryByRole("status", { name: /policy snapshot|collected policy/i })).toBeNull();
   expect(within(summary).getByText("3 stored containers from 2 sources. Open one to browse its rules; nothing is collected from here.")).toBeInTheDocument();
   expect(within(summary).getAllByRole("columnheader").map(cell => cell.textContent)).toEqual(["Container", "Source", "Policies", "Rules", "Assigned gateways", "Last collected", ""]);
+  // Fixed layout with whole header words (post-release review 2026-10-20, N7): `POLICIES` and `RULES` never wrap mid-word.
+  const containerTable = within(summary).getByRole("table", { name: "Stored policy containers" });
+  expect(containerTable).toHaveStyle({ tableLayout: "fixed" });
+  expect(containerTable.querySelectorAll("colgroup col")).toHaveLength(7);
+  within(summary).getAllByRole("columnheader").forEach(cell => expect(getComputedStyle(cell).whiteSpace).toBe("nowrap"));
   const rows = within(summary).getAllByRole("row").slice(1);
   expect(rows).toHaveLength(3);
   expect(rows[0]).toHaveTextContent("DOM-TANGO-01MGR-BRAVO-01Panorama11FW-TANGO-04");
@@ -434,7 +439,7 @@ it("preserves masked policy dates and numeric counts in the rendered view", asyn
   mockFetch({ ...page, metadata: { ...metadata, collectedAt: "2026-10-02T03:50:21Z" }, total: 122 });
   mount(); await navigate();
   expect(await screen.findByText(/^Collected 2 Oct 2026, 06:50/)).toBeInTheDocument();
-  expect(screen.getByText("Page 1 of 1 · 122 rules")).toBeInTheDocument();
+  expect(screen.getByText("1–122 of 122 rules")).toBeInTheDocument();
 });
 it("ends an empty rule response with an explicit failure", async () => {
   const fetch = mockFetch();

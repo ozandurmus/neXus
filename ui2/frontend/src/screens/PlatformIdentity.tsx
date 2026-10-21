@@ -5,7 +5,8 @@ import Link from "@mui/material/Link";
 import Typography from "@mui/material/Typography";
 
 import { RoleChip, Ts, Unknown } from "../shell/States";
-import { vendorLabel } from "../shell/presenters";
+import { statusWord, vendorLabel } from "../shell/presenters";
+import { enrollmentStateLabel } from "../shell/deviceCopy";
 import { MONO, m3 } from "../theme/m3Theme";
 import type { DeviceSummary } from "../auth/adminApi";
 import { ContentVersions, PLATFORM_IDENTITY_GRID_ID, ReferenceCell, knownHaRole, vsListOf } from "./DeviceShared";
@@ -53,7 +54,8 @@ export function identityTiles(device: DeviceSummary, collectedAt: string | null,
   ];
   const tail: IdentityTile[] = [
     { label: "Management address", value: device.management_ip ?? null, absent: "not recorded", mono: true },
-    { label: "Enrollment", value: device.enrollment_state || null, absent: "not recorded" },
+    // The Registry's word for the state (post-release review 2026-10-20, L4): `Enrolled`, never the raw `ENROLLED` token.
+    { label: "Enrollment", value: device.enrollment_state ? statusWord(enrollmentStateLabel(device.enrollment_state)) : null, absent: "not recorded" },
     ...(configurationRead ? [{ label: "Last configuration read", value: collectedAt ? <Ts at={collectedAt} /> : null, absent: "never", absentWord: "Not read yet" } satisfies IdentityTile] : []),
   ];
   // The Lifecycle and Reference cells of the grid (UI review 2026-10-18, F-9): they used to be a loose line and the Identity tab.

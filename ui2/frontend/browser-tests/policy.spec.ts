@@ -68,9 +68,9 @@ test("policy local: 54 containers, three tabs, rule table with inline details, r
     const region = page.getByRole("region", { name: "Policy rulebase" });
     expect(await region.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
     // One scroll container: the content pane scrolls, the rule toolbar and the column headers stick to its top.
-    await expect(rules.getByRole("columnheader", { name: "Name" })).toHaveCSS("position", "sticky");
+    await expect(rules.getByRole("columnheader", { name: "Rule" })).toHaveCSS("position", "sticky");
     expect(await region.evaluate(node => getComputedStyle(node).overflowY)).toBe("visible");
-    await expect(page.getByRole("button", { name: "Next", exact: true })).toBeInViewport();
+    await expect(page.getByRole("button", { name: "Go to next page", exact: true })).toBeInViewport();
     expect(await page.locator("body").innerText()).not.toMatch(/[a-f0-9]{32}/i);
   }
   const row = page.getByRole("row", { name: "Rule 1: RULE-BRAVO-12" });

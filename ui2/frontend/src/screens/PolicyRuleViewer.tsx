@@ -3,6 +3,7 @@ import { Box, Button, Checkbox, Chip, Stack, Table, TableBody, TableCell, TableH
 import { relativeAge, formatTime, formatStamp } from "../shell/time";
 import { VendorBadge } from "../shell/States";
 import { m3 } from "../theme/m3Theme";
+import { UNKNOWN_HATCH } from "../theme/tokens";
 import { getPolicyHistory, type PolicyCell, type PolicyMetadata, type PolicyObject, type PolicyPage, type PolicyRevision, type PolicyRule, type PolicySchedule, type PolicySection } from "../auth/adminApi";
 
 export function reportPolicyLoadError(scope: "snapshots" | "rules" | "object" | "history" | "inventory" | "usage", error: unknown) {
@@ -150,18 +151,26 @@ const chipBase = { display: "inline-flex", alignItems: "center", gap: "4px", hei
   font: "inherit", fontSize: 11.5, lineHeight: 1, maxWidth: "100%", minWidth: 0, whiteSpace: "nowrap", cursor: "pointer", textAlign: "left",
   "&:hover": { borderColor: m3.primary, color: m3.primary }, "&:focus-visible": { outline: `2px solid ${m3.primary}`, outlineOffset: 1 } } as const;
 const chipLabel = { overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 } as const;
+/**
+ * A chip that may take two lines (post-release review 2026-10-20, N4): the name wraps inside the cell and is clamped
+ * after the second line, so `GRP-DELTA-ENGINEERING-HOSTS` is read whole where the row has the room (one chip in the
+ * cell) instead of being cut at eight characters. The full name stays on hover either way.
+ */
+const chipTwoLine = { height: "auto", minHeight: 20, py: "3px", whiteSpace: "normal", alignItems: "flex-start", lineHeight: 1.15 } as const;
+const chipLabelTwoLine = { ...chipLabel, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflowWrap: "anywhere" } as const;
 function objectTitle(object: PolicyObject | undefined, kind: ObjectKind) {
   const members = object?.members?.length ?? 0, values = object?.values ?? [];
   const resolved = values.length ? ` · ${values.slice(0, 8).join(", ")}${values.length > 8 ? ` +${values.length - 8} more` : ""}` : kind === "group" && !members ? " · members in the object view" : "";
   return `${OBJECT_KIND_WORDS[kind]}${members ? ` · ${members} members` : ""}${resolved}${object && object.status !== "RESOLVED" ? ` · ${object.status}` : ""} · Open object`;
 }
-export function ObjectChip({ id, objects, openObject, maxWidth }: { id: string; objects: Map<string, PolicyObject>; openObject: (id: string) => void; maxWidth?: number }) {
+export function ObjectChip({ id, objects, openObject, maxWidth, lines = 1 }: { id: string; objects: Map<string, PolicyObject>; openObject: (id: string) => void; maxWidth?: number; lines?: 1 | 2 }) {
   const object = objects.get(id), kind = objectKind(object);
   const members = object?.members?.length ?? 0;
-  return <Box component="button" type="button" data-object-kind={kind} title={objectTitle(object, kind)} onClick={() => openObject(id)}
-    sx={{ ...chipBase, maxWidth: maxWidth ?? "100%", ...(kind === "any" ? { borderStyle: "dashed", fontStyle: "italic", color: m3.onSurfaceVar } : {}), ...(kind === "unresolved" ? { borderStyle: "dashed", color: m3.neutralInk } : {}) }}>
-    <Box component="span" sx={{ color: kind === "any" ? m3.onSurfaceVar : m3.primary, display: "inline-flex" }}><ObjectGlyph kind={kind} /></Box>
-    <Box component="span" sx={chipLabel}>{object?.name ?? "Unresolved object"}</Box>
+  const name = object?.name ?? "Unresolved object";
+  return <Box component="button" type="button" data-object-kind={kind} title={`${name} · ${objectTitle(object, kind)}`} onClick={() => openObject(id)}
+    sx={{ ...chipBase, ...(lines === 2 ? chipTwoLine : {}), maxWidth: maxWidth ?? "100%", ...(kind === "any" ? { borderStyle: "dashed", fontStyle: "italic", color: m3.onSurfaceVar } : {}), ...(kind === "unresolved" ? { borderStyle: "dashed", color: m3.neutralInk } : {}) }}>
+    <Box component="span" sx={{ color: kind === "any" ? m3.onSurfaceVar : m3.primary, display: "inline-flex", ...(lines === 2 ? { mt: "1px" } : {}) }}><ObjectGlyph kind={kind} /></Box>
+    <Box component="span" sx={lines === 2 ? chipLabelTwoLine : chipLabel}>{name}</Box>
     {members > 0 && <Box component="span" sx={{ color: m3.onSurfaceVar, fontVariantNumeric: "tabular-nums" }}>{members}</Box>}
   </Box>;
 }
@@ -177,8 +186,10 @@ function CompactCell({ cell, objects, openObject, onMore }: { cell: PolicyCell; 
   const names = cell.refs.map(id => objects.get(id)?.name ?? "Unresolved object");
   const rest = cell.refs.length - INLINE_CHIPS;
   const line = { display: "flex", alignItems: "center", gap: "4px", minWidth: 0 } as const;
+  // One chip in the cell: it may use the row's second line for its name (N4); two chips: one line each, `+N` on the second.
+  const lines = cell.refs.length === 1 ? 2 : 1;
   return <Box title={`${cell.negated ? "NOT " : ""}${names.slice(0, 50).join(", ")}${names.length > 50 ? ", …" : ""}`} sx={{ display: "grid", gap: "3px", minWidth: 0 }}>
-    <Box sx={line}>{cell.negated && <NotTag />}<ObjectChip id={cell.refs[0]} objects={objects} openObject={openObject} /></Box>
+    <Box sx={{ ...line, alignItems: lines === 2 ? "flex-start" : "center" }}>{cell.negated && <NotTag />}<ObjectChip id={cell.refs[0]} objects={objects} openObject={openObject} lines={lines} /></Box>
     {cell.refs.length > 1 && <Box sx={line}>
       <ObjectChip id={cell.refs[1]} objects={objects} openObject={openObject} />
       {rest > 0 && <Box component="button" type="button" aria-label={`${rest} more objects`} title={`${rest} more · open the rule details`} onClick={onMore}
@@ -320,7 +331,8 @@ export function RuleMetrics({ rule, openRuleId, openHygiene, now = new Date() }:
 export const RULE_ROW_HEIGHT = 56;
 const SECTION_ROW_HEIGHT = 36, DETAIL_ESTIMATE = 560, OVERSCAN = 160, VIEWPORT_FALLBACK = 600;
 const hygieneOrder = ["conflict", "shadowed", "broad", "unused", "expired", "disabled", "unknown"];
-const hygieneLabels: Record<string, string> = { conflict: "Conflict", shadowed: "Shadowed", broad: "Broad", unused: "Unused", expired: "Expired", disabled: "Disabled", unknown: "Unknown" };
+/** The `unknown` class is not a finding but the analysis saying it could not decide: the flag names its subject (N5). */
+const hygieneLabels: Record<string, string> = { conflict: "Conflict", shadowed: "Shadowed", broad: "Broad", unused: "Unused", expired: "Expired", disabled: "Disabled", unknown: "Hygiene UNKNOWN" };
 const severityRank: Record<string, number> = { HIGH: 3, MEDIUM: 2, LOW: 1 };
 export interface HygieneBadge { key: string; label: string; severity: "HIGH" | "MEDIUM" | "LOW" | "UNKNOWN"; tip: string }
 /** Badges come only from the stored hygiene findings and the rule's own enabled/schedule state; nothing is inferred. */
@@ -342,17 +354,20 @@ export function hygieneBadges(rule: PolicyRule): HygieneBadge[] {
 }
 function Badge({ badge, onOpen }: { badge: HygieneBadge; onOpen?: (findingClass: string) => void }) {
   const [bg, fg] = badge.severity === "HIGH" ? [m3.errorContainer, m3.onErrorContainer] : badge.severity === "MEDIUM" ? [m3.warningContainer, m3.onWarningContainer]
-    : badge.severity === "LOW" ? [m3.sc, m3.onSurface] : ["transparent", m3.neutralInk];
-  const title = `${badge.severity === "UNKNOWN" ? "UNKNOWN because" : `${badge.severity} ·`} ${badge.tip}${onOpen ? " · Open in Hygiene" : ""}`;
+    : badge.severity === "LOW" ? [m3.sc, m3.onSurface] : [m3.scLow, m3.neutralInk];
+  const unknown = badge.severity === "UNKNOWN";
+  const title = `${unknown ? "UNKNOWN because" : `${badge.severity} ·`} ${badge.tip}${onOpen ? " · Open in Hygiene" : ""}`;
   return <Box component={onOpen ? "button" : "span"} type={onOpen ? "button" : undefined} onClick={onOpen ? () => onOpen(badge.key) : undefined} title={title} data-hygiene={badge.key}
     sx={{ display: "inline-flex", alignItems: "center", height: 20, px: 0.75, borderRadius: "6px", fontSize: 11, fontWeight: 600, lineHeight: 1, flex: "none", font: "inherit",
-      bgcolor: bg, color: fg, border: `1px solid ${badge.severity === "UNKNOWN" ? m3.outline : "transparent"}`, cursor: onOpen ? "pointer" : undefined,
+      bgcolor: bg, color: fg, border: `1px solid ${unknown ? m3.outline : "transparent"}`, cursor: onOpen ? "pointer" : undefined,
+      // The product's UNKNOWN hatch (design language, status pill): a flag that makes no claim is not drawn like a finding.
+      ...(unknown ? { backgroundImage: UNKNOWN_HATCH } : {}),
       "&:hover": onOpen ? { borderColor: m3.primary } : undefined, "&:focus-visible": { outline: `2px solid ${m3.primary}` } }}>{badge.label}</Box>;
 }
 function StateTag({ label, title }: { label: string; title?: string }) {
   return <Box component="span" title={title} sx={{ display: "inline-flex", alignItems: "center", height: 16, px: 0.5, borderRadius: "4px", fontSize: 10, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", bgcolor: m3.scHigh, color: m3.onSurfaceVar, flex: "none" }}>{label}</Box>;
 }
-type Column = { key: string; label: string; width: number | string; cell: (rule: PolicyRule, api: { open: () => void }) => React.ReactNode };
+type Column = { key: string; label: string; /** The header word when the full label cannot fit the column; the label stays the accessible name. */ short?: string; width: number | string; cell: (rule: PolicyRule, api: { open: () => void }) => React.ReactNode };
 function MeasuredRow({ id, onHeight, children }: { id: string; onHeight: (id: string, height: number) => void; children: React.ReactNode }) {
   const ref = useRef<HTMLTableRowElement>(null);
   useLayoutEffect(() => {
@@ -367,6 +382,10 @@ function MeasuredRow({ id, onHeight, children }: { id: string; onHeight: (id: st
   return <TableRow ref={ref} data-policy-rule-detail>{children}</TableRow>;
 }
 const line2 = { fontSize: 11, color: m3.onSurfaceVar, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" } as const;
+/** A second line that may wrap once more (a reason sentence, N4): two lines, clamped, never cut mid-sentence on one line. */
+const line2Wrap = { ...line2, whiteSpace: "normal", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", lineHeight: 1.2 } as const;
+/** The token the masked view (AIView) writes in place of a value it withholds (`PolicyPrivacy`); never a real comment. */
+const WITHHELD = "Withheld in AIView";
 /**
  * The rulebase as a table of rules: one fixed-height, two-line row per rule (number + name as the anchor, FROM → TO ·
  * SERVICES · ACTION as the reading order, objects as named chips), section groups as collapsible header rows, and an
@@ -378,27 +397,32 @@ export function PolicyRuleTable({ sections, collapsed, scrollTop, viewportHeight
   selected: Set<string>; onSelect: (id: string) => void; openRuleId?: (id: string) => void; openHygiene?: (findingClass: string) => void; headerSelect?: React.ReactNode; now?: Date;
 }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [showEmpty, setShowEmpty] = useState(false);
   const [heights, setHeights] = useState<Record<string, number>>({});
   const onHeight = useCallback((id: string, height: number) => setHeights(current => current[id] === height ? current : { ...current, [id]: height }), []);
   const toggleRule = (key: string) => setExpanded(current => { const next = new Set(current); next.has(key) ? next.delete(key) : next.add(key); return next; });
   const showApplication = metadata.vendor === "PAN" || sections.some(section => section.rules.some(rule => rule.application.refs.length > 0));
   const cell = (key: "source" | "destination" | "service" | "application") => (rule: PolicyRule, api: { open: () => void }) => <CompactCell cell={rule[key]} objects={objects} openObject={openObject} onMore={api.open} />;
+  // Widths at 1440 (N4): the object columns get the room, the action and the number give it up; a short header word where
+  // the full one cannot fit (`Apps`, `Permissive`), the full word as the column's accessible name and on hover.
   const columns: Column[] = [
-    { key: "name", label: "Rule", width: showApplication ? "13%" : "15%", cell: rule => <Box sx={{ minWidth: 0 }}>
+    { key: "name", label: "Rule", width: showApplication ? "12%" : "14%", cell: rule => <Box sx={{ minWidth: 0 }}>
       <Box component="span" title={rule.name || undefined} sx={{ fontWeight: 600, fontSize: 12.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block", textDecoration: rule.enabled === false ? "line-through" : undefined, textDecorationColor: m3.outline }}>{rule.name || rule.uuid.slice(0, 8) || "Unnamed rule"}</Box>
       <Box sx={{ ...line2, display: "flex", alignItems: "center", gap: 0.5 }}>
         {rule.enabled === false && <StateTag label="Disabled" title="Rule is disabled on the source" />}
         {rule.enabled === null && <StateTag label="Enabled UNKNOWN" title="The source did not report whether the rule is enabled" />}
         {rule.identityFallback && <StateTag label="Name identity" title="Identified by name only; the source did not keep a stable identifier" />}
-        <Box component="span" title={rule.comment || undefined} sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontStyle: rule.comment ? undefined : "italic" }}>{rule.comment || "No comment"}</Box>
+        {rule.comment === WITHHELD
+          ? <StateTag label="Comment withheld" title="The masked view (AIView) withholds rule comments; the comment exists on the source." />
+          : <Box component="span" title={rule.comment || undefined} sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontStyle: rule.comment ? undefined : "italic" }}>{rule.comment || "No comment"}</Box>}
       </Box>
     </Box> },
-    { key: "source", label: "Source", width: showApplication ? "13%" : "15%", cell: cell("source") },
-    { key: "destination", label: "Destination", width: showApplication ? "13%" : "15%", cell: cell("destination") },
-    { key: "service", label: "Service", width: showApplication ? "9%" : "11%", cell: cell("service") },
-    ...(showApplication ? [{ key: "application", label: "Application", width: "9%", cell: cell("application") } as Column] : []),
-    { key: "action", label: "Action", width: "8%", cell: rule => <ActionWord action={rule.action} size={12.5} /> },
-    { key: "usage", label: "Usage", width: "12%", cell: rule => {
+    { key: "source", label: "Source", width: showApplication ? "14%" : "16%", cell: cell("source") },
+    { key: "destination", label: "Destination", width: showApplication ? "14%" : "16%", cell: cell("destination") },
+    { key: "service", label: "Service", width: showApplication ? "10%" : "12%", cell: cell("service") },
+    ...(showApplication ? [{ key: "application", label: "Application", short: "Apps", width: "9%", cell: cell("application") } as Column] : []),
+    { key: "action", label: "Action", width: "6%", cell: rule => <ActionWord action={rule.action} size={12.5} /> },
+    { key: "usage", label: "Usage", width: showApplication ? "11%" : "12%", cell: rule => {
       const usage = usageWords(rule, now);
       const tone = usage.state === "stale" ? m3.warningInk : usage.state === "recent" ? m3.onSurface : m3.neutralInk;
       return <Box title={usage.detail} data-usage-state={usage.state} sx={{ minWidth: 0 }}>
@@ -408,18 +432,18 @@ export function PolicyRuleTable({ sections, collapsed, scrollTop, viewportHeight
           {usage.state === "recent" || usage.state === "stale" ? `last ${usage.lastHit}` : usage.state === "never" ? "Never hit" : usage.state === "partial" ? "last hit UNKNOWN" : usage.lastHit}</Box>
       </Box>;
     } },
-    { key: "permissiveness", label: "Permissiveness", width: showApplication ? "11%" : "12%", cell: rule => {
+    { key: "permissiveness", label: "Permissiveness", short: "Permissive", width: "12%", cell: rule => {
       const words = permissivenessWords(rule);
       return <Box title={`${words.word}: ${words.reasons.join("; ")}`} data-permissiveness={words.level} sx={{ minWidth: 0 }}>
         <Box component="span" sx={{ display: "block", fontWeight: 700, fontSize: 12.5, color: permissivenessColor(words.level) }}>{words.word}</Box>
-        <Box component="span" sx={line2}>{words.reasons.join(" · ")}</Box>
+        <Box component="span" sx={line2Wrap}>{words.reasons.join(" · ")}</Box>
       </Box>;
     } },
     { key: "hygiene", label: "Flags", width: "12%", cell: rule => {
       const badges = hygieneBadges(rule).filter(badge => badge.key !== "disabled" || rule.enabled !== false);
       return <Box title={badges.map(badge => badge.label).join(", ") || undefined} sx={{ display: "flex", flexWrap: "wrap", gap: "4px", alignItems: "center", alignContent: "flex-start", maxHeight: 44, overflow: "hidden" }}>
         {badges.map(badge => <Badge key={badge.key} badge={badge} onOpen={openHygiene} />)}
-        {!rule.hygiene && <Box component="span" title="Hygiene analysis is not available for this rule" sx={{ ...muted, fontSize: 11, fontWeight: 600, color: m3.neutralInk, whiteSpace: "normal", lineHeight: 1.2 }}>{badges.length ? "analysis UNKNOWN" : "UNKNOWN"}</Box>}
+        {!rule.hygiene && <Box component="span" title="Hygiene analysis is not available for this rule" sx={{ ...muted, fontSize: 11, fontWeight: 600, color: m3.neutralInk, whiteSpace: "normal", lineHeight: 1.2 }}>{badges.length ? "analysis UNKNOWN" : "Hygiene UNKNOWN"}</Box>}
         {rule.hygiene && !badges.length && <Box component="span" sx={muted}>No findings</Box>}
       </Box>;
     } },
@@ -443,8 +467,20 @@ export function PolicyRuleTable({ sections, collapsed, scrollTop, viewportHeight
     const next = all[all.indexOf(event.currentTarget) + (event.key === "ArrowDown" ? 1 : -1)];
     if (next) { event.preventDefault(); next.focus(); }
   };
-  const emptySections = sections.filter(section => section.total === 0).length;
-  if (emptySections) append(() => <TableRow key="empty-sections" sx={{ height: SECTION_ROW_HEIGHT }}><TableCell colSpan={span} sx={{ py: 0, color: m3.onSurfaceVar, fontSize: 12 }}>{emptySections} empty sections</TableCell></TableRow>, SECTION_ROW_HEIGHT);
+  const emptySections = sections.filter(section => section.total === 0);
+  if (emptySections.length) append(() => <TableRow key="empty-sections" data-policy-empty-sections sx={{ height: SECTION_ROW_HEIGHT }}>
+    <TableCell colSpan={span} sx={{ py: 0, bgcolor: m3.sc, borderBottom: `1px solid ${m3.outlineVar}` }}>
+      <Stack direction="row" alignItems="center" gap={1}>
+        <Button size="small" aria-expanded={showEmpty} onClick={() => setShowEmpty(v => !v)} sx={{ textTransform: "none", fontWeight: 600, color: m3.onSurfaceVar, fontSize: 12, gap: 0.75 }}>
+          <Box component="span" aria-hidden sx={{ fontSize: 11 }}>{showEmpty ? "▾" : "▸"}</Box><Box component="span">{emptySections.length === 1 ? "1 empty section" : `${emptySections.length} empty sections`}</Box>
+        </Button>
+        <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>{showEmpty ? "Sections with no rule in this policy" : "Show"}</Typography>
+      </Stack>
+    </TableCell>
+  </TableRow>, SECTION_ROW_HEIGHT);
+  if (showEmpty) for (const section of emptySections) append(() => <TableRow key={section.id} data-policy-section data-empty-section sx={{ height: SECTION_ROW_HEIGHT }}>
+    <TableCell colSpan={span} sx={{ py: 0, pl: 4, color: m3.onSurfaceVar, fontSize: 12.5, borderBottom: `1px solid ${m3.outlineVar}` }}>{sectionLabel(metadata, section)} · 0 rules</TableCell>
+  </TableRow>, SECTION_ROW_HEIGHT);
   for (const section of sections.filter(section => section.total !== 0)) {
     append(() => <TableRow key={section.id} data-policy-section sx={{ height: SECTION_ROW_HEIGHT }}>
       <TableCell colSpan={span} sx={{ py: 0, bgcolor: m3.sc, borderBottom: `1px solid ${m3.outlineVar}`, borderTop: `1px solid ${m3.outlineVar}` }}>
@@ -487,11 +523,11 @@ export function PolicyRuleTable({ sections, collapsed, scrollTop, viewportHeight
   }
   const spacer = (height: number, name: string) => <TableRow key={name} aria-hidden><TableCell colSpan={span} sx={{ height, p: 0, border: 0 }} /></TableRow>;
   return <Table stickyHeader size="small" aria-label="Policy rules" sx={{ tableLayout: "fixed", width: "100%" }}>
-    <colgroup><col style={{ width: 40 }} /><col style={{ width: 52 }} />{columns.map(column => <col key={column.key} style={{ width: column.width }} />)}</colgroup>
+    <colgroup><col style={{ width: 40 }} /><col style={{ width: 46 }} />{columns.map(column => <col key={column.key} style={{ width: column.width }} />)}</colgroup>
     <TableHead><TableRow sx={{ "& > th": { top: stickyTop, bgcolor: m3.scLow, color: m3.onSurfaceVar, fontSize: 10.5, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", py: 0.75, px: 1,
       whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", zIndex: 3, borderBottom: `1px solid ${m3.outlineVar}` }, "& > th:first-of-type": { px: 0.5, textOverflow: "clip" } }}>
       <TableCell padding="checkbox">{headerSelect}</TableCell><TableCell>#</TableCell>
-      {columns.map(column => <TableCell key={column.key} title={column.label} sx={column.key === "destination" ? { pl: "18px !important" } : undefined}>{column.label}</TableCell>)}
+      {columns.map(column => <TableCell key={column.key} title={column.label} aria-label={column.short ? column.label : undefined} sx={column.key === "destination" ? { pl: "18px !important" } : undefined}>{column.short ?? column.label}</TableCell>)}
     </TableRow></TableHead>
     <TableBody>{top > 0 && spacer(top, "spacer-top")}{rows}{bottom > 0 && spacer(bottom, "spacer-bottom")}</TableBody>
   </Table>;

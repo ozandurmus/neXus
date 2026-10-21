@@ -34,6 +34,8 @@ export type IconName =
   | "external"
   | "chevron-left"
   | "chevron-right"
+  | "first-page"
+  | "last-page"
   | "expand"
   | "collapse"
   | "list";
@@ -227,6 +229,18 @@ export function Icon({ name, size = 20 }: { readonly name: IconName; readonly si
       return (
         <svg {...props}>
           <path d="M9 5l7 7-7 7" />
+        </svg>
+      );
+    case "first-page":
+      return (
+        <svg {...props}>
+          <path d="M17 5l-7 7 7 7M7 5v14" />
+        </svg>
+      );
+    case "last-page":
+      return (
+        <svg {...props}>
+          <path d="M7 5l7 7-7 7M17 5v14" />
         </svg>
       );
     case "external":

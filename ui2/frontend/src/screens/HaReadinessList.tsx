@@ -2,7 +2,7 @@ import { JobButton, jobWindowUsable, useJobWindow } from "../shell/JobWindow";
 import { ROLE_LOCK_LABEL } from "../shell/actionAccess";
 import { DISABLED_STYLE } from "../shell/disabledStyle";
 import { Presented } from "../shell/PresentedText";
-import { readinessReasonLabel } from "../shell/presenters";
+import { jobOutcomeWord, readinessReasonLabel } from "../shell/presenters";
 import Dialog from "@mui/material/Dialog";
 import DialogActions from "@mui/material/DialogActions";
 import DialogContent from "@mui/material/DialogContent";
@@ -115,6 +115,12 @@ function primaryReason(row?: CpFailoverSummary) {
     : row?.readiness?.status === "READY" ? "No blocking conditions observed" : "Readiness has not been established");
 }
 
+/** The primary reason in words: the reason label, and a bare outcome token (`READY`) as the outcome word (`Ready`). */
+export function primaryReasonWord(row?: CpFailoverSummary) {
+  const label = readinessReasonLabel(primaryReason(row));
+  return jobOutcomeWord(label) ?? label;
+}
+
 /** Presentation only: status, permissions and masked names remain server-owned. */
 export function HaReadinessList({ clusters, rows, running, busy, progress, error, onOpen, onRun, onBulkRun }: {
   clusters: readonly Cluster[]; rows: Record<string, CpFailoverSummary[]>; running: string | null;
@@ -217,7 +223,9 @@ export function HaReadinessList({ clusters, rows, running, busy, progress, error
         <TableCell title={`Roles observed: ${rolesAt ? formatStamp(rolesAt) : "Not observed"}`}>
           Active: {roleNames(["active"])} <span aria-hidden>↔</span> Standby: {roleNames(["standby", "passive"])}
         </TableCell>
-        <TableCell><Presented label={readinessReasonLabel(primaryReason(row))} raw={primaryReason(row)} /></TableCell>
+        {/* The label map on the reason too (post-release review 2026-10-20, L1): a bare outcome token (`READY`) reads `Ready`, as
+            the pill does; a check name or a sentence passes through as before. */}
+        <TableCell><Presented label={primaryReasonWord(row)} raw={primaryReason(row)} /></TableCell>
         <TableCell>{at ? <>
           <Box component="time" dateTime={at} title={`${formatStamp(at)} · ${at}`}>{relativeAge(at, now)}</Box>
           {(evaluationAgeMs(at, now) ?? 0) > READINESS_STALE_AFTER_MS && <Tooltip title="Evaluated more than 24 h ago; the status may no longer hold">

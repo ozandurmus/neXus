@@ -10,6 +10,7 @@ import { m3 } from "../theme/m3Theme";
 import { cancelJob, listPolicies, getPolicyCollectionStatus, type PolicyCollectionMode, type PolicyCollectionStatus, listPolicySources, collectPolicies, type PolicyCollectionSource, getPolicy, getPolicyObject, type PolicyTarget, type PolicyMetadata, type PolicyObject, type PolicyRule, type PolicyCell, type PolicyPage, getPolicyRule, type PolicyRuleDetail } from "../auth/adminApi";
 
 import { PolicyRuleTable, RuleDetailPanel, RuleHistory, scheduleLabel, sectionLabel, reportPolicyLoadError } from "./PolicyRuleViewer";
+import { PaginationFooter } from "../shell/DataTable";
 
 /**
  * Usage presets over the existing hit filter and query grammar (frontend only): `unused90` and `inactive` are the server's
@@ -250,15 +251,22 @@ export function policyHeadline(input: { readonly catalog: readonly PolicyMetadat
   const age = stamps.length ? relativeAge(new Date(Math.max(...stamps)).toISOString(), input.now) : "UNKNOWN";
   return `${plural(containers.length, "container")} · ${plural(input.sources, "source")} · ${rules} rules · collected ${age}`;
 }
+/** The container table's columns and their share of the width at 1440; the two count columns keep their whole header. */
+const CONTAINER_COLUMNS: ReadonlyArray<readonly [string, string]> = [
+  ["Container", "22%"], ["Source", "18%"], ["Policies", "9%"], ["Rules", "9%"], ["Assigned gateways", "22%"], ["Last collected", "12%"], ["", "8%"],
+];
 function ContainerSummaryTable({ rows, sourceCount, now, open }: { rows: ContainerSummary[]; sourceCount: number; now: Date; open: (row: ContainerSummary) => void }) {
   return <Box component="section" aria-label="Stored policy containers">
     <Typography variant="body2" sx={{ color: m3.onSurfaceVar, mb: 1 }}>
       {plural(rows.length, "stored container")} from {plural(sourceCount, "source")}. Open one to browse its rules; nothing is collected from here.
     </Typography>
     <Box sx={{ overflowX: "auto" }}>
-      <Table size="small" aria-label="Stored policy containers" sx={{ "& td, & th": { px: 1, py: 0.75, overflowWrap: "anywhere" } }}>
+      {/* Fixed layout with whole header words (post-release review 2026-10-20, N7): `POLICIES` and `RULES` no longer wrap
+          mid-word; a long container or gateway value wraps inside its own cell instead of squeezing the count columns. */}
+      <Table size="small" aria-label="Stored policy containers" sx={{ tableLayout: "fixed", minWidth: 760, "& td, & th": { px: 1, py: 0.75, overflowWrap: "anywhere" }, "& th": { whiteSpace: "nowrap" } }}>
+        <colgroup>{CONTAINER_COLUMNS.map(([, width], index) => <col key={index} style={{ width }} />)}</colgroup>
         <TableHead><TableRow>
-          {["Container", "Source", "Policies", "Rules", "Assigned gateways", "Last collected", ""].map((label, index) => <TableCell key={index} scope="col">{label}</TableCell>)}
+          {CONTAINER_COLUMNS.map(([label], index) => <TableCell key={index} scope="col">{label}</TableCell>)}
         </TableRow></TableHead>
         <TableBody>
           {rows.map(row => {
@@ -768,11 +776,8 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
                 {selectedRules.size > 0 && <Typography variant="caption">{selectedRules.size} selected</Typography>}
                 {query && <>{(query.match(/[a-z.]+\s*=\s*(?:'(?:\\.|[^'])*'|true|false)/gi) ?? [query]).map((filter, index) => <Chip key={index} size="small" label={filter} title={query} sx={{ maxWidth: 500 }} />)}<Button size="small" onClick={() => setSearch("")}>Clear</Button></>}
                 <Button size="small" onClick={() => { drawerRequest.current++; setDrawer({ history: true }); }}>Policy history</Button>
-                <Stack direction="row" spacing={1} alignItems="center" sx={{ ml: "auto" }}>
-                  <Button size="small" disabled={page === 0} onClick={() => setPage(n => n - 1)}>Previous</Button>
-                  <Typography variant="caption">Page {page + 1} of {Math.max(1, Math.ceil(data.total / RULE_PAGE_SIZE))} · {data.total} rules</Typography>
-                  <Button size="small" disabled={(page + 1) * RULE_PAGE_SIZE >= data.total} onClick={() => setPage(n => n + 1)}>Next</Button>
-                </Stack>
+                {/* The one pagination footer (post-release review 2026-10-20, N15): `1–200 of 870 rules`, the same buttons every table has. */}
+                <PaginationFooter offset={page * RULE_PAGE_SIZE} size={RULE_PAGE_SIZE} total={data.total} noun="rules" onPage={offset => setPage(Math.floor(offset / RULE_PAGE_SIZE))} />
               </Stack>
               {/* Not a scroll container itself: sticky headers need the pane to be the nearest scrolling ancestor. */}
               <Box role="region" aria-label="Policy rulebase" ref={rulebase} sx={{ flexShrink: 0, minWidth: 0 }}>

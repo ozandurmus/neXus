@@ -52,6 +52,11 @@ export interface DataPage {
   readonly onSize?: (size: number) => void;
   /** Rows on the page as the caller counted them; only needed with an unknown total. */
   readonly shown?: number;
+  /**
+   * First- and last-page buttons beside the previous/next pair, for a long server-paged history (Jobs: hundreds of
+   * pages); only with a known total. The footer stays the one footer -- the range words and the chevrons do not change.
+   */
+  readonly jump?: boolean;
 }
 
 export interface DataTableProps<T> {
@@ -146,7 +151,7 @@ export function DataTable<T>({ ariaLabel, columns, rows, rowKey, actions, page, 
  * for the same buttons); a `Per page` select only where the screen offers sizes. With an unknown total it reads
  * `51–100` and `hasMore` decides the next button. Nothing is drawn when there is nothing to page.
  */
-export function PaginationFooter({ offset, size, total, onPage, noun, hasMore, sizes, onSize, shown }: DataPage) {
+export function PaginationFooter({ offset, size, total, onPage, noun, hasMore, sizes, onSize, shown, jump = false }: DataPage) {
   const known = total !== null && total !== undefined;
   const count = known ? total : offset + (shown ?? size);
   const first = count === 0 ? 0 : offset + 1;
@@ -155,6 +160,7 @@ export function PaginationFooter({ offset, size, total, onPage, noun, hasMore, s
     ? `${first}\u2013${last} of ${total.toLocaleString("en-US")}${noun ? ` ${noun}` : ""}`
     : `${first}\u2013${last}${noun ? ` ${noun}` : ""}`;
   const nextDisabled = known ? offset + size >= total : !hasMore;
+  const lastOffset = known && total > 0 ? Math.floor((total - 1) / size) * size : 0;
   return (
     <Box data-testid="pagination-footer" sx={{ display: "flex", alignItems: "center", gap: 0.5, ml: "auto" }}>
       {sizes && sizes.length > 1 && onSize ? (
@@ -167,12 +173,22 @@ export function PaginationFooter({ offset, size, total, onPage, noun, hasMore, s
         </Box>
       ) : null}
       <Typography component="span" data-page-range sx={{ ...TYPE.label, color: m3.onSurfaceVar, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{text}</Typography>
+      {jump && known ? (
+        <IconButton size="small" aria-label="Go to first page" disabled={offset <= 0} onClick={() => onPage(0)} sx={{ color: m3.onSurfaceVar }}>
+          <Icon name="first-page" size={16} />
+        </IconButton>
+      ) : null}
       <IconButton size="small" aria-label="Go to previous page" disabled={offset <= 0} onClick={() => onPage(Math.max(0, offset - size))} sx={{ color: m3.onSurfaceVar }}>
         <Icon name="chevron-left" size={16} />
       </IconButton>
       <IconButton size="small" aria-label="Go to next page" disabled={nextDisabled} onClick={() => onPage(offset + size)} sx={{ color: m3.onSurfaceVar }}>
         <Icon name="chevron-right" size={16} />
       </IconButton>
+      {jump && known ? (
+        <IconButton size="small" aria-label="Go to last page" disabled={nextDisabled} onClick={() => onPage(lastOffset)} sx={{ color: m3.onSurfaceVar }}>
+          <Icon name="last-page" size={16} />
+        </IconButton>
+      ) : null}
     </Box>
   );
 }

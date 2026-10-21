@@ -254,7 +254,9 @@ function ManagedDevicesPanel({ members, selected, onSelect }: {
   const deployment = (m: GridMemberView) => m.services.find((s) => s.service === "DEPLOYMENT")?.status ?? null;
   // The Deployment column only when some device reports one (R17): a column of dashes says nothing and cost the header its room.
   const hasDeployment = members.some((m) => deployment(m) !== null);
-  const widths = hasDeployment ? ["20%", "14%", "12%", "14%", "14%", "14%", "12%"] : ["22%", "16%", "13%", "16%", "16%", "17%"];
+  // Widths at 1440 (post-release review 2026-10-20, N12): the header words stay whole, the address and version columns
+  // are mono and clip with the full value on hover, DEPLOYMENT keeps 110 px.
+  const widths = hasDeployment ? ["19%", "15%", "11%", "14%", "16%", "13%", "12%"] : ["22%", "17%", "12%", "16%", "17%", "16%"];
   const selectedMember = members.find(m => m.virtual_system === selected);
   const shown = selectedMember ? [selectedMember] : members;
   return (
@@ -269,7 +271,7 @@ function ManagedDevicesPanel({ members, selected, onSelect }: {
       <TableContainer>
         {/* Fixed column widths at 1440 (UI review 2026-10-18, P2-1B / roadmap 3.4): a long value clips inside its own cell
             with the full text on hover, instead of pushing the Deployment column out of the card. */}
-        <Table size="small" data-managed-devices sx={{ tableLayout: "fixed", "& td, & th": { overflow: "hidden", textOverflow: "ellipsis" }, "& th": { whiteSpace: "normal", lineHeight: 1.3 } }}>
+        <Table size="small" data-managed-devices sx={{ tableLayout: "fixed", minWidth: 900, "& td, & th": { overflow: "hidden", textOverflow: "ellipsis", px: 1 }, "& th": { whiteSpace: "nowrap" } }}>
           <colgroup>
             {widths.map((width, i) => <col key={i} style={{ width }} />)}
           </colgroup>
@@ -290,12 +292,12 @@ function ManagedDevicesPanel({ members, selected, onSelect }: {
                 <TableCell sx={{ fontWeight: 600, whiteSpace: "nowrap" }}>
                   <Button onClick={() => onSelect?.(m.virtual_system)}>{m.virtual_system}</Button>
                 </TableCell>
-                <TableCell title={m.address ?? undefined}>{m.address ?? "UNKNOWN"}</TableCell>
-                <TableCell title={m.platform ?? undefined}>{m.platform ?? "\u2014"}</TableCell>
-                <TableCell title={m.hardware_type ?? undefined}>{m.hardware_type ?? "\u2014"}</TableCell>
-                <TableCell sx={{ whiteSpace: "nowrap" }} title={m.hypervisor ?? undefined}>{m.hypervisor ?? "\u2014"}</TableCell>
-                <TableCell>{m.node_status ? <StatusChip tone={managementTone(m.node_status)} label={managementWord(m.node_status)} dense /> : "\u2014"}</TableCell>
-                {hasDeployment && <TableCell>{deployment(m) ?? "\u2014"}</TableCell>}
+                <TableCell sx={{ whiteSpace: "nowrap", fontFamily: MONO, fontSize: 12.5 }} title={m.address ?? undefined}>{m.address ?? "UNKNOWN"}</TableCell>
+                <TableCell sx={{ whiteSpace: "nowrap" }} title={m.platform ?? undefined}>{m.platform ?? "\u2014"}</TableCell>
+                <TableCell sx={{ whiteSpace: "nowrap" }} title={m.hardware_type ?? undefined}>{m.hardware_type ?? "\u2014"}</TableCell>
+                <TableCell sx={{ whiteSpace: "nowrap", fontFamily: MONO, fontSize: 12.5 }} title={m.hypervisor ?? undefined}>{m.hypervisor ?? "\u2014"}</TableCell>
+                <TableCell sx={{ whiteSpace: "nowrap" }}>{m.node_status ? <StatusChip tone={managementTone(m.node_status)} label={managementWord(m.node_status)} dense /> : "\u2014"}</TableCell>
+                {hasDeployment && <TableCell sx={{ whiteSpace: "nowrap" }} title={deployment(m) ?? undefined}>{deployment(m) ? statusWord(deployment(m)) : "\u2014"}</TableCell>}
               </TableRow>
             ))}
           </TableBody>
@@ -2064,6 +2066,28 @@ export function HeaderPillLink({ href, onClick, title, children }: {
   return <Box component="a" href={href} title={title} sx={sx}>{children}</Box>;
 }
 
+/**
+ * Why a device has no configuration plane in neXus although its vendor has one: a management server's per-vendor read
+ * set is not measured or gated (`ConfigurationCollectService`, 14I MS-2) -- only a Check Point management server runs
+ * Gaia and gets the same gated read as a gateway. Null when a configuration read can exist for the device.
+ */
+export function configurationNotApplicable(device: { readonly role?: string; readonly vendor_hint: string }): string | undefined {
+  if (device.role !== "management_server" || device.vendor_hint === "check_point") return undefined;
+  return `neXus has no gated configuration read for a ${vendorDisplayName(device.vendor_hint)} management server; its configuration plane is the devices it manages (14I MS-2).`;
+}
+
+/**
+ * The configuration half of the header read ages: the stored read's time when the configuration route answered, `Not
+ * applicable` for a management server whose vendor has no gated configuration read even when the screen offers no
+ * configuration tab for it (Radware), and no claim at all when the route was not asked or did not answer.
+ */
+export function headerConfigRead(read: { readonly collected_at: string | null } | null | undefined, notApplicable: string | undefined):
+  { readonly at: string | null; readonly notApplicable?: string } | undefined {
+  if (read && read.collected_at) return { at: read.collected_at };
+  if (notApplicable) return { at: null, notApplicable };
+  return read ? { at: read.collected_at } : undefined;
+}
+
 /** A configuration read this much older than the platform read is flagged amber (UI review 2026-10-18, P1-1B). */
 const CONFIG_STALE_AFTER_MS = 24 * 3_600_000;
 
@@ -2081,10 +2105,20 @@ export function oldestRead(times: ReadonlyArray<string | null | undefined>): str
  * the full stamps stay in the Platform identity grid. With `members` (a cluster, post-release review 2026-10-18, R13)
  * the headline is the oldest member's read and the hover lists every member.
  */
-export function HeaderReadAges({ platformAt, config, members }: {
+export function HeaderReadAges({ platformAt, inventoryAt, config, members }: {
   readonly platformAt: string | null | undefined;
-  /** Omitted when the vendor has no configuration read, or the read could not be fetched (no claim is made then). */
-  readonly config?: { readonly at: string | null };
+  /**
+   * The newest inventory read (post-release review 2026-10-20, manager headers): a management server or HTTPS appliance
+   * has no separate platform-facts read -- its model, version and managed estate come from the inventory read -- so
+   * that read's age is the headline when `platformAt` is absent. Omitted on a cluster (members carry their own).
+   */
+  readonly inventoryAt?: string | null;
+  /**
+   * Omitted when the vendor has no configuration read, or the read could not be fetched (no claim is made then).
+   * `notApplicable` names why this device has no configuration plane in neXus (a management server whose per-vendor
+   * read set is not gated, 14I MS-2): the word is then `Not applicable`, never `Not read yet`.
+   */
+  readonly config?: { readonly at: string | null; readonly notApplicable?: string };
   readonly members?: readonly MemberReadAges[];
 }) {
   const perMember = (pick: (m: MemberReadAges) => string | null | undefined) =>
@@ -2098,13 +2132,17 @@ export function HeaderReadAges({ platformAt, config, members }: {
       sx={{ color: m3.onSurfaceVar, display: "flex", alignItems: "center", columnGap: 1, rowGap: 0.5, flexWrap: "wrap" }}>
       {platformAt
         ? <Tooltip title={stamp(platformAt, (m) => m.platformAt)}><span>Platform read {relativeAge(platformAt)}</span></Tooltip>
-        : <Tooltip title={members && members.length > 0 ? `Not every member has a platform read${perMember((m) => m.platformAt)}` : ""}><span>Platform not read yet</span></Tooltip>}
+        : inventoryAt
+          ? <Tooltip title={`${formatStamp(inventoryAt)} · the inventory read that produced the model, version and managed estate; this device has no separate platform-facts read`}><span>Inventory read {relativeAge(inventoryAt)}</span></Tooltip>
+          : <Tooltip title={members && members.length > 0 ? `Not every member has a platform read${perMember((m) => m.platformAt)}` : ""}><span>Platform not read yet</span></Tooltip>}
       {config && <Box component="span" aria-hidden sx={{ color: m3.outline }}>·</Box>}
       {config && (config.at
         ? configBehind
           ? <Tooltip title={stamp(config.at, (m) => m.configAt)}><span><StatusChip tone="warn" label={`Config read ${relativeAge(config.at)}`} dense /></span></Tooltip>
           : <Tooltip title={stamp(config.at, (m) => m.configAt)}><span>Config read {relativeAge(config.at)}</span></Tooltip>
-        : <Tooltip title={members && members.length > 0 ? `Not every member has a configuration read${perMember((m) => m.configAt)}` : ""}><span>Config not read yet</span></Tooltip>)}
+        : config.notApplicable
+          ? <Tooltip title={config.notApplicable}><span>Config · Not applicable</span></Tooltip>
+          : <Tooltip title={members && members.length > 0 ? `Not every member has a configuration read${perMember((m) => m.configAt)}` : ""}><span>Config not read yet</span></Tooltip>)}
     </Typography>
   );
 }
@@ -2418,7 +2456,8 @@ export function DeviceInventoryPanels({
         }
         action={<CollectNowButton deviceId={device.device_id} onCollected={refresh} enrollmentState={device.enrollment_state} />}
         readAges={<HeaderReadAges platformAt={device.platform_facts_observed_at}
-          config={configuration && configReadFetch.data ? { at: configReadFetch.data.collected_at } : undefined} />}
+          inventoryAt={deviceInventory?.collected_at ?? device.inventory_collected_at ?? null}
+          config={headerConfigRead(configuration ? configReadFetch.data : null, configurationNotApplicable(device))} />}
         state={<HeaderStateRow facts={stateFacts} trailing={<CertificateStatePill view={certificateFetch.data} />} />}
         link={(() => {
           const link = policyLink(device, policyHref);
@@ -2678,8 +2717,11 @@ export function ClusterDetailPanels({
       >
         {/* The two member cards as one compact row (R13: tab content within ~420 px): name, job state, role, model ·
             version and the VSYS list on one line each; the full per-member facts are the Cluster members tab. */}
-        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" }, gap: 1.5 }}>
+        {/* `minmax(0, 1fr)` tracks (post-release review 2026-10-20, N1): a card's content shrinks inside its own column and
+            never pushes the second card past the header's edge, whatever the VSYS list's length. */}
+        <Box sx={{ display: "grid", gridTemplateColumns: { xs: "minmax(0, 1fr)", sm: "repeat(2, minmax(0, 1fr))" }, gap: 1.5, minWidth: 0 }}>
           {orderedMembers.map((m) => {
+            const vsysNames = isPaloAlto && m.virtual_systems ? m.virtual_systems.split(/,\s*/).filter(Boolean) : [];
             return (
               <Box
                 key={m.device_id}
@@ -2697,6 +2739,7 @@ export function ClusterDetailPanels({
                   rowGap: 0.25,
                   flexWrap: "wrap",
                   minHeight: 34,
+                  minWidth: 0,
                 }}
               >
                 <Typography variant="body2" sx={{ fontWeight: 700, color: m3.onSurface, whiteSpace: "nowrap" }}>
@@ -2712,14 +2755,12 @@ export function ClusterDetailPanels({
                 <Typography variant="caption" color="text.secondary" sx={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
                   {m.model ?? "Unknown model"} · {m.software_version ?? "Unknown version"}
                 </Typography>
-                {isPaloAlto && m.virtual_systems && (
-                  <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: "nowrap" }}>
-                    VSYS: {m.virtual_systems.split(/,\s*/).filter(Boolean).map((name, index) => (
-                      <Box component="span" key={name}>
-                        {index > 0 ? ", " : ""}
-                        <Box component="span" sx={name === scopedName ? { fontWeight: 700, color: m3.onSurface } : undefined}>{name}</Box>
-                      </Box>
-                    ))}
+                {vsysNames.length > 0 && (
+                  // The count, with the selected virtual system named; the whole list stays on hover (N1).
+                  <Typography variant="caption" color="text.secondary" data-member-vsys title={`VSYS: ${vsysNames.join(", ")}`}
+                    sx={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>
+                    {vsysNames.length === 1 ? "1 virtual system" : `${vsysNames.length} virtual systems`}
+                    {scopedName && vsysNames.includes(scopedName) && <> · <Box component="span" sx={{ fontWeight: 700, color: m3.onSurface }}>{scopedName}</Box></>}
                   </Typography>
                 )}
               </Box>
