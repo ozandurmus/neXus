@@ -4000,12 +4000,12 @@ gates:
     sign_off_state: "SIGNED_OFF"
     timeout_s: 30
     retry_rule: "none"
-    max_frequency: "once per device per job window; max bytes: 256 KiB"
+    max_frequency: "once per device per job window; max bytes: 1 MiB"
     session_reuse_rule: "same session"
     unsupported_behavior_ref: "missing directory = ABSENT"
     secret_output_risk: "names only"
     safe_telemetry_fields: ["fileCount", "sizeBytes", "mtime", "namePattern"]
-    source_document_pointer: "docs/design/DEVICE_SYSTEM_LOG_PHASE_B_CONTRACT.md §10.1 (C4); PO approval 2026-10-17 (docs/design/PO_DECISION_RECORD_2026_10_17_SYSTEM_LOG_PHASE_B.md, Q2: all 13 commands APPROVED as written)"
+    source_document_pointer: "docs/design/DEVICE_SYSTEM_LOG_PHASE_B_CONTRACT.md §10.1 (C4); PO approval 2026-10-17 (docs/design/PO_DECISION_RECORD_2026_10_17_SYSTEM_LOG_PHASE_B.md, Q2: all 13 commands APPROVED as written); output bound raised 256 KiB to 1 MiB by PO 2026-10-21 (docs/design/PO_DECISION_RECORD_2026_10_21_SPIKE_LISTING_BOUND.md, option A)"
 
   - gate_id: "cp_syslog_collect_ls_spike_dir"
     vendor: "check_point"
