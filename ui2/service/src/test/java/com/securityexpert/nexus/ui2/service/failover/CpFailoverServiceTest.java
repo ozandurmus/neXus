@@ -424,6 +424,10 @@ class CpFailoverServiceTest {
             if (sql.startsWith("select run_id")) return new org.jooq.tools.jdbc.MockResult[]{
                 new org.jooq.tools.jdbc.MockResult(0, org.jooq.impl.DSL.using(org.jooq.SQLDialect.POSTGRES)
                     .newResult(org.jooq.impl.DSL.field("run_id", String.class)))};
+            // V170: no resumed return is in flight on this unit.
+            if (sql.startsWith("select 1 from failover_resume")) return new org.jooq.tools.jdbc.MockResult[]{
+                new org.jooq.tools.jdbc.MockResult(0, org.jooq.impl.DSL.using(org.jooq.SQLDialect.POSTGRES)
+                    .newResult(org.jooq.impl.DSL.field("one", Integer.class)))};
             writes.add(sql);
             if (sql.startsWith("insert into failover_run")) {
                 assertTrue(sql.contains("'READINESS'"));

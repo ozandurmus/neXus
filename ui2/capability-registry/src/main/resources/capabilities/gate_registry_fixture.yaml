@@ -169,7 +169,7 @@ gates:
     sign_off_state: SIGNED_OFF
     timeout_s: 30
     retry_rule: none
-    max_frequency: "once pre and twice in each post-switch and post-return phase per member; shared budget of 21 polls every 3 s across DOWN and UP per run"
+    max_frequency: "once pre and twice in each post-switch and post-return phase per member; shared budget of 21 polls every 3 s across DOWN and UP per run; a resumed return adds one read per member before UP and at most 20 polls every 3 s after UP"
     session_reuse_rule: "one session per device per run"
     unsupported_behavior_ref: "a standalone gateway reporting no cluster is a result, not an error"
     secret_output_risk: none
@@ -2609,7 +2609,7 @@ gates:
     timeout_s: 30
     retry_rule: none
     max_frequency: "once on former active per run"
-    session_reuse_rule: "one SSH session per member per run; commands serial"
+    session_reuse_rule: "one SSH session per member per run, and one new session per member for its single resumed return; commands serial"
     unsupported_behavior_ref: UNKNOWN
     secret_output_risk: none
     safe_telemetry_fields: []

@@ -92,6 +92,8 @@ class JooqFailoverApprovalTest {
             if (query.startsWith("select 1 from failover_dispatch_intent"))
                 return unresolvedDispatch?row(Map.of("unresolved",1)):none();
             if (query.startsWith("select 1 from failover_run")) return fleetMutation?row(Map.of("active",1)):none();
+            // V170: no resumed return holds the fleet fence in these fixtures.
+            if (query.startsWith("select 1 from failover_resume")) return none();
             if (query.startsWith("insert into failover_run")) { insertedRuns++; consumed=(String)ctx.bindings()[0]; }
             else if (query.startsWith("insert into jobs")) insertedJobs++;
             else if (query.startsWith("update failover_approval set approved_by")) approval.put("approved_by",ctx.bindings()[0]);

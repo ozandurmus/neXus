@@ -151,6 +151,12 @@ public final class ActionRegistry {
      * failover incident and its unresolved sends, with a mandatory reason; security_admin only, never aiview.
      */
     public static final String CP_FAILOVER_INCIDENT_RELEASE = "cp_failover_incident_release";
+    /**
+     * CP_FAILOVER_MEMBER_RECOVERY_CONTRACT.md (RATIFIED 2026-10-20) §5.1/§6.4: resume the return step of a stopped
+     * failover run and its second approval. security_admin alone; operation_admin with a second, distinct
+     * administrator's approval (enforced by the service); never operator, viewer or aiview.
+     */
+    public static final String CP_FAILOVER_RESUME_RETURN = "cp_failover_resume_return";
 
     /**
      * PO decision record 2026-10-15 §6 (PacketBreaker ported into neXus): create a case, upload captures, request an
@@ -301,6 +307,8 @@ public final class ActionRegistry {
         register(new ActionDescriptor(CP_FAILOVER_START, true, Optional.of(RoleToken.OPERATION_ADMIN),
                 java.util.Set.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(CP_FAILOVER_INCIDENT_RELEASE, true, Optional.of(RoleToken.SECURITY_ADMIN)));
+        register(new ActionDescriptor(CP_FAILOVER_RESUME_RETURN, true, Optional.of(RoleToken.SECURITY_ADMIN),
+                java.util.Set.of(RoleToken.OPERATION_ADMIN)));
         register(new ActionDescriptor(CP_READINESS_START, true, Optional.of(RoleToken.OPERATOR),
                 java.util.Set.of(RoleToken.SECURITY_ADMIN, RoleToken.OPERATION_ADMIN, RoleToken.REPLAY_VIEWER)));
         // Viewers see failover units, windows and runs (read-only); approving and starting stay with their roles.
