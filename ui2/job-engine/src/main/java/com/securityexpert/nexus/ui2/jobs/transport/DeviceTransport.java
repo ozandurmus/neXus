@@ -48,6 +48,16 @@ public interface DeviceTransport {
     }
 
     /**
+     * One raw interactive shell channel (PTY) on {@code session}, for a caller that frames its own commands (Check Point
+     * failover: one shell per member per pass, docs/design/CP_FAILOVER_ONE_SHELL_SESSION_2026_10_22.md). Unlike
+     * {@link #execInteractive}, nothing is cached on the session: every call opens a new channel and the caller owns
+     * and closes it. Default: not implemented.
+     */
+    default ShellChannel openShell(TransportSession session, Duration timeout) {
+        throw new TransportNotImplementedException("shell_channel");
+    }
+
+    /**
      * The interactive shell's prompt changed on purpose (a FortiGate {@code execute ha manage} hop to another cluster unit,
      * and back): send an empty line, read until quiet and learn the new prompt. Returns whether a prompt was learned.
      * Default: not supported.

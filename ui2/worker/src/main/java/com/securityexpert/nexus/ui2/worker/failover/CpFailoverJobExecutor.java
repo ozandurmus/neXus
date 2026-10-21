@@ -41,6 +41,13 @@ public final class CpFailoverJobExecutor {
     private static final String FAILOVER="cphaprob show_failover", ROUTING="cpstat os -f routing";
     private static final ObjectMapper JSON=new ObjectMapper();
     private static final String DOWN="clusterXL_admin down", UP="clusterXL_admin up";
+    /** The framing gate's command key (CP_FAILOVER_ONE_SHELL_SESSION_2026_10_22.md §5, L2); DRAFTED until PO sign-off. */
+    static final String SHELL_FRAMING="echo __NX_<NONCE>_BEGIN__; <READ>; echo __NX_<NONCE>_END_$?__";
+    static final String SHELL_FRAMING_GATE="cp_failover_shell_framing";
+    private static final int MAX_OUTPUT_CHARS=262144;
+    private static final Duration SHELL_OPEN_TIMEOUT=Duration.ofSeconds(30);
+    private final CpFailoverShellMode shellMode;
+    private final java.security.SecureRandom nonces=new java.security.SecureRandom();
     private final JooqCpFailoverRepository store;
     private final DeviceRepository devices;
     private final JobLeaseRepository leases;
@@ -72,6 +79,9 @@ public final class CpFailoverJobExecutor {
         private final long openedAtNanos=System.nanoTime();
         private int sessionCommandIndex;
         private String localId;
+        /** The member's one framed shell for this pass; opened at its first read, never reopened. */
+        private FramedShell shell;
+        private boolean shellOpened;
         Member(String id,TransportSession session) { this.id=id; this.session=session; }
         String id() { return id; }
         TransportSession session() { return session; }
@@ -125,6 +135,20 @@ public final class CpFailoverJobExecutor {
             JobLeaseRepository leases, JobStepAttemptRepository attempts,DeviceTransport ssh,
             GateRegistryPort gates,Pause pause,Duration commandPause,FailoverMutationSwitch mutationSwitch,
             java.util.function.LongSupplier nanoTime) {
+        this(store,devices,leases,attempts,ssh,gates,pause,commandPause,mutationSwitch,nanoTime,CpFailoverShellMode.OFF);
+    }
+    /** Worker wiring: the one-shell switch (CP_FAILOVER_ONE_SHELL_SESSION_2026_10_22.md §3.7). */
+    public CpFailoverJobExecutor(JooqCpFailoverRepository store, DeviceRepository devices,
+            JobLeaseRepository leases, JobStepAttemptRepository attempts,DeviceTransport ssh,
+            GateRegistryPort gates,Pause pause,Duration commandPause,FailoverMutationSwitch mutationSwitch,
+            CpFailoverShellMode shellMode) {
+        this(store,devices,leases,attempts,ssh,gates,pause,commandPause,mutationSwitch,System::nanoTime,shellMode);
+    }
+    CpFailoverJobExecutor(JooqCpFailoverRepository store, DeviceRepository devices,
+            JobLeaseRepository leases, JobStepAttemptRepository attempts,DeviceTransport ssh,
+            GateRegistryPort gates,Pause pause,Duration commandPause,FailoverMutationSwitch mutationSwitch,
+            java.util.function.LongSupplier nanoTime,CpFailoverShellMode shellMode) {
+        this.shellMode=java.util.Objects.requireNonNull(shellMode);
         this.nanoTime=nanoTime;
         this.mutationSwitch=java.util.Objects.requireNonNull(mutationSwitch);
         this.store=store; this.devices=devices; this.leases=leases; this.attempts=attempts;
@@ -164,6 +188,7 @@ public final class CpFailoverJobExecutor {
             if(!attempts.findByJobAndStep(jobId,0).isEmpty()) throw new Stop("PRIOR_ATTEMPT_NOT_REPLAYED",0);
             for(String command:List.of(STAT,TABLE,IF,ARP,TRAFFIC,SYNC,POLICY,PNOTES,BONDS,FAILOVER,ROUTING)) gate(command);
             if (!readiness) { gate(CPSTAT_POLICY); gate(DOWN); gate(UP); }
+            if (shellMode.oneShell()) gateShellFraming();
             first=connect(members.get(0)); second=connect(members.get(1));
             if(first.session().presentedIdentity().equals(second.session().presentedIdentity()))
                 throw new Stop("OBSERVERS_NOT_DISTINCT",0);
@@ -205,6 +230,7 @@ public final class CpFailoverJobExecutor {
             if (readiness) finishReadiness("COLLECTION_FAILED",0,"UNKNOWN");
             else stop(wrote?"OUTCOME_UNCERTAIN":"PRECHECK_UNAVAILABLE",0);
         } finally {
+            closeShell(first); closeShell(second);
             if(first!=null) ssh.disconnect(first.session());
             if(second!=null) ssh.disconnect(second.session());
         }
@@ -236,6 +262,7 @@ public final class CpFailoverJobExecutor {
             if(!attempts.findByJobAndStep(jobId,0).isEmpty()) throw new Stop("PRIOR_ATTEMPT_NOT_REPLAYED",0);
             for(String command:List.of(STAT,TABLE,IF,ARP,TRAFFIC,SYNC,POLICY,CPSTAT_POLICY,PNOTES,BONDS,FAILOVER,ROUTING)) gate(command);
             gate(UP);
+            if (shellMode.oneShell()) gateShellFraming();
             // The baseline is the run's own stored pre rows; without it nothing is sent.
             Pair before=storedBaseline(members.get(0).deviceId(),members.get(1).deviceId());
             first=connect(members.get(0)); second=connect(members.get(1));
@@ -265,6 +292,7 @@ public final class CpFailoverJobExecutor {
             com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(unexpected);
             stop(wrote?"OUTCOME_UNCERTAIN":"PRECHECK_UNAVAILABLE",0);
         } finally {
+            closeShell(first); closeShell(second);
             if(first!=null) ssh.disconnect(first.session());
             if(second!=null) ssh.disconnect(second.session());
         }
@@ -420,6 +448,32 @@ public final class CpFailoverJobExecutor {
         if(!expected.equals(known.gateId())) throw new Stop("COMMAND_GATE_MISMATCH",0);
         return known;
     }
+    /** With the one-shell switch on, the framing literal must itself be a signed-off read gate before any contact. */
+    private void gateShellFraming() {
+        var resolution=GateResolver.resolve(new CanonicalCommandKey("check_point","cp_gaia_gateway","expert",
+            "SSH_INTERACTIVE",SHELL_FRAMING),java.util.Optional.of(ActionClass.CLASS_0_READ),gates);
+        if(!(resolution instanceof GateResolution.Known known) || !SHELL_FRAMING_GATE.equals(known.gateId()))
+            throw new Stop("COMMAND_GATE_UNAVAILABLE",0);
+    }
+    /**
+     * The member's one shell channel for this pass, opened at its first read. A failed open is never retried (no
+     * second login); admission, lease and cancellation refusals propagate as they do from {@code exec}.
+     */
+    private FramedShell shell(Member member) {
+        if(member.shell!=null || member.shellOpened) return member.shell;
+        member.shellOpened=true;
+        try {
+            member.shell=new FramedShell(ssh.openShell(member.session(),SHELL_OPEN_TIMEOUT),nonces,nanoTime);
+        } catch(RuntimeException unavailable) {
+            if(unavailable instanceof com.securityexpert.nexus.ui2.worker.JobCancellationScope.Cancelled) throw unavailable;
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(unavailable);
+            member.shell=null;
+        }
+        return member.shell;
+    }
+    private static void closeShell(Member member) {
+        if(member!=null && member.shell!=null) member.shell.close();
+    }
     static boolean writeAllowed(String kind,String command) {
         return !"READINESS".equals(kind) || !(DOWN.equals(command) || UP.equals(command));
     }
@@ -471,7 +525,15 @@ public final class CpFailoverJobExecutor {
         boolean pty=IF.equals(command);
         int sessionCommandIndex=++member.sessionCommandIndex;
         long sessionElapsedMs=(System.nanoTime()-member.openedAtNanos)/1_000_000;
-        ExecResult result=ssh.exec(member.session(),new ExecSpec(literal,pty),Duration.ofSeconds(g.timeoutS()));
+        ExecResult result;
+        if(shellMode.oneShell()) {
+            // §3.3: inside the member's login shell the bare gated read, or the vsenv form; never a nested bash -lc.
+            FramedShell shell=shell(member);
+            String shellLiteral=vsId==null?readCommand:"vsenv "+vsId+" && "+readCommand;
+            result=shell==null?new ExecResult.ChannelFailed("SHELL_UNAVAILABLE")
+                :shell.run(shellLiteral,Duration.ofSeconds(g.timeoutS()),MAX_OUTPUT_CHARS);
+            pty=true;
+        } else result=ssh.exec(member.session(),new ExecSpec(literal,pty),Duration.ofSeconds(g.timeoutS()));
         if(!(result instanceof ExecResult.Completed completed) || completed.exitStatus()!=0
                 || commandUnavailable(completed.output())) {
             attempts.writeOutcome(attempt,epoch,"FAILED","COMMAND_UNAVAILABLE",false,null,null,null);
