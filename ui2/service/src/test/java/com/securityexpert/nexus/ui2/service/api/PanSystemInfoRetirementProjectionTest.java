@@ -122,6 +122,29 @@ class PanSystemInfoRetirementProjectionTest {
     }
 
     @Test
+    void anInventoryRunSkippedByTheBelowTwelveSwitchNamesTheApplicableReason() {
+        for (String[] c : new String[][] {{"pan_os_12_or_later", "Not collected: PAN-OS 12 or later (PO 2026-10-21)"},
+                {"pan_os_version_unknown", "Not collected: PAN-OS version unknown"}}) {
+            var run = new com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryRun("run-1", "device-fixture", "job-1",
+                    Instant.parse("2026-10-21T06:00:00Z"), 1, java.util.List.of(), java.util.List.of(), Optional.empty(),
+                    java.util.List.of(), null, java.util.List.of("pan_show_interface_all", c[0]));
+            Map<String, Object> body = new LinkedHashMap<>();
+            InventoryController.putNotCollected(body, Optional.of(run));
+            assertEquals(c[1], body.get("not_collected_reason"));
+        }
+    }
+
+    @Test
+    void readinessCheckSixNamesPanOsTwelveOrUnknownVersionWhenTheReadWasSkipped() throws Exception {
+        for (String detail : new String[] {"PAN-OS 12 or later (PO 2026-10-21)", "PAN-OS version unknown"}) {
+            Map<String, Object> row = ReadinessCheckView.fields("palo_alto", 6, "Member 1", "UNKNOWN",
+                    new ObjectMapper().readTree("{\"reason\":\"not_collected\",\"detail\":\"" + detail + "\"}"),
+                    Instant.parse("2026-10-21T06:00:00Z"));
+            assertTrue(row.values().stream().anyMatch(v -> String.valueOf(v).contains("Not collected: " + detail)), row.toString());
+        }
+    }
+
+    @Test
     void readinessCheckSixSaysWhyItIsUnknownWhenSessionInfoIsSwitchedOff() throws Exception {
         Map<String, Object> row = ReadinessCheckView.fields("palo_alto", 6, "Member 1", "UNKNOWN",
                 new ObjectMapper().readTree("{\"reason\":\"not_collected\",\"detail\":\"show session info retired by PO 2026-10-21\"}"),

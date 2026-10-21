@@ -39,6 +39,7 @@ class PanFailoverJobExecutorTest {
         final List<String> sentCommands=new ArrayList<>();
         boolean missingFields,preempt,badFinal;
         String evidenceFault;
+        String relA="10.2.3",relB="10.2.3";
         int suspendCount,functionalCount,callCount;
         DeviceTransport transport() {
             return (DeviceTransport) Proxy.newProxyInstance(DeviceTransport.class.getClassLoader(),
@@ -83,7 +84,7 @@ class PanFailoverJobExecutorTest {
                     String ha2=(badFinal && functional || badPre&&!suspended || badPost&&suspended)&&!first?"down":"up";
                     String body="<response status=\"success\"><result><group><mode>Active-Passive</mode>"
                         +"<running-sync>synchronized</running-sync><local-info><state>"+local+"</state>"
-                        +(missingVersion&&!first?"":"<build-rel>10.2.3</build-rel>")+"<app-version>1111-2222</app-version>"
+                        +(missingVersion&&!first?"":"<build-rel>"+(first?relA:relB)+"</build-rel>")+"<app-version>1111-2222</app-version>"
                         +"<threat-version>"+(badVersion&&!first?"3333-4444":"1111-2222")+"</threat-version>"
                         +"<serial-num>"+(first?"0011":"0022")+"</serial-num></local-info>"
                         +"<peer-info><state>"+peer+"</state><serial-num>"+(first?"0022":"0011")
@@ -497,6 +498,46 @@ class PanFailoverJobExecutorTest {
         assertTrue(result.checks().contains("pre:7:PASS"));
         assertEquals("UNKNOWN",result.outcome());
         assertEquals(2,result.derived().stream().filter(d -> d.contains("show session info retired by PO 2026-10-21")).count());
+        assertEquals(0,script.suspendCount);
+    }
+    private static final String SESSION_VAR=com.securityexpert.nexus.ui2.jobs.pan.PanFirewallCommandSwitches.SHOW_SESSION_INFO_VARIABLE;
+    private Result belowTwelve(Script script) {
+        return run(script,true,new FailoverMutationSwitch(false),
+            com.securityexpert.nexus.ui2.jobs.pan.PanFirewallCommandSwitches.from(java.util.Map.of(SESSION_VAR,"below_12")));
+    }
+    private static long sessionReads(Script script) {
+        return script.sentCommands.stream().filter(c -> c.contains("<session><info/>")).count();
+    }
+    /** PO 2026-10-21 ("cihaz panos 12 degilse bu kontrol calissin"): both members below 12 -> check 6 evaluated. */
+    @Test void belowTwelveSendsSessionInfoOnBothMembersAndEvaluatesCheckSix() {
+        Script script=new Script(); script.relA="11.1.4-h7"; script.relB="11.1.4-h7";
+        Result result=belowTwelve(script);
+        assertEquals(2,sessionReads(script));
+        assertTrue(result.checks().contains("pre:6:PASS"),result.checks().toString());
+        assertTrue(result.derived().stream().noneMatch(d -> d.contains("not_collected")));
+    }
+    @Test void belowTwelveSkipsSessionInfoOnPanOsTwelveAndSaysWhy() {
+        Script script=new Script(); script.relA="12.1.2"; script.relB="12.1.2";
+        Result result=belowTwelve(script);
+        assertEquals(0,sessionReads(script));
+        assertTrue(result.checks().contains("pre:6:UNKNOWN"));
+        assertEquals(2,result.derived().stream().filter(d -> d.contains("PAN-OS 12 or later (PO 2026-10-21)")).count());
+    }
+    @Test void belowTwelveSkipsSessionInfoWhenTheVersionIsUnknown() {
+        Script script=new Script(); script.relA="not-a-version"; script.relB="not-a-version";
+        Result result=belowTwelve(script);
+        assertEquals(0,sessionReads(script));
+        assertTrue(result.checks().contains("pre:6:UNKNOWN"));
+        assertEquals(2,result.derived().stream().filter(d -> d.contains("PAN-OS version unknown")).count());
+    }
+    /** One member below 12 and one on 12: only the first is read; check 6 stays UNKNOWN. */
+    @Test void belowTwelveMixedMembersReadOnlyTheOldOneAndCheckSixStaysUnknown() {
+        Script script=new Script(); script.relA="10.2.9"; script.relB="12.1.2";
+        Result result=belowTwelve(script);
+        assertEquals(1,sessionReads(script));
+        assertTrue(result.checks().contains("pre:6:UNKNOWN"));
+        assertEquals(1,result.derived().stream().filter(d -> d.contains("\"detail\":\"PAN-OS 12 or later (PO 2026-10-21)\"")).count());
+        assertEquals(1,result.derived().stream().filter(d -> d.contains("peer member: PAN-OS 12 or later")).count());
         assertEquals(0,script.suspendCount);
     }
     public static void main(String[] args) {

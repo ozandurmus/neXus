@@ -529,14 +529,20 @@ public final class InventoryCapabilityExecutor {
         }
 
         String haStateOutput = xmlApiOutput(target, InventoryReadPlan.PAN_SHOW_HA_STATE, headers);
-        // PO 2026-10-21 scope update: show interface all may be switched off (NEXUS_PAN_FW_SHOW_INTERFACE_ALL=retired).
-        // Then it is never sent; the run records it as not collected, so the interfaces read UNKNOWN, never "none".
+        // PO 2026-10-21 scope update: show interface all may be switched off (NEXUS_PAN_FW_SHOW_INTERFACE_ALL=retired) or
+        // limited to PAN-OS below 12 (below_12, decided from the type=version read of THIS run; unknown = not sent).
+        // When not sent, the run records it as not collected (plus the reason token), so the interfaces read UNKNOWN.
         List<String> notCollected = new ArrayList<>();
         String interfaceOutput = null;
-        if (panSwitches.showInterfaceAll()) {
+        var interfaceDecision = com.securityexpert.nexus.ui2.jobs.pan.PanFirewallCommandSwitches.decide(
+                panSwitches.showInterfaceAll(), version.swVersion().orElse(null));
+        if (interfaceDecision.send()) {
             interfaceOutput = xmlApiOutput(target, InventoryReadPlan.PAN_SHOW_INTERFACE_ALL, headers);
         } else {
             notCollected.add(com.securityexpert.nexus.ui2.jobs.pan.PanFirewallCommandSwitches.TOKEN_SHOW_INTERFACE_ALL);
+            if (interfaceDecision.token() != null) {
+                notCollected.add(interfaceDecision.token());
+            }
         }
         String routeOutput = xmlApiOutput(target, InventoryReadPlan.PAN_SHOW_ROUTING_ROUTE, headers);
 
@@ -596,8 +602,8 @@ public final class InventoryCapabilityExecutor {
         if (contexts.stream().allMatch(c -> c.interfaces().isEmpty() && c.routes().isEmpty())) {
             return new InventoryResult.ConnectFailed(notCollected.isEmpty()
                     ? "no_interfaces_or_routes_discovered: device returned no interface or route data"
-                    : "no_routes_discovered: device returned no route data and show interface all is switched off ("
-                            + com.securityexpert.nexus.ui2.jobs.pan.PanFirewallCommandSwitches.REASON + ")");
+                    : "no_routes_discovered: device returned no route data and show interface all was not sent ("
+                            + interfaceDecision.reason() + ")");
         }
 
         PaloAltoHaStateParser.HaState haState = PaloAltoHaStateParser.parse(haStateOutput);

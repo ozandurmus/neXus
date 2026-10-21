@@ -104,8 +104,12 @@ public final class InventoryController {
     static void putNotCollected(Map<String, Object> body, Optional<InventoryRun> run) {
         List<String> notCollected = run.map(InventoryRun::notCollected).orElse(List.of());
         body.put("not_collected", notCollected);
-        body.put("not_collected_reason", notCollected.isEmpty() ? null
-                : com.securityexpert.nexus.ui2.persistence.device.PanSystemInfoRetirement.REASON);
+        // The reason follows the extra token the worker recorded (PAN-OS 12 or later / version unknown); none = retired.
+        String reason = notCollected.isEmpty() ? null
+                : notCollected.contains("pan_os_12_or_later") ? "Not collected: PAN-OS 12 or later (PO 2026-10-21)"
+                : notCollected.contains("pan_os_version_unknown") ? "Not collected: PAN-OS version unknown"
+                : com.securityexpert.nexus.ui2.persistence.device.PanSystemInfoRetirement.REASON;
+        body.put("not_collected_reason", reason);
     }
 
     private static Map<String, Object> toGridSummaryBody(InfobloxGridSummary s) {
