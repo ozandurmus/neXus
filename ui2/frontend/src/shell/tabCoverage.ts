@@ -16,6 +16,8 @@ export const TAB_COVERAGE: readonly { screen: ScreenId; tabList: string; labels:
   // The Logs tab's own two views (PO 2026-10-20): the line viewer with the room, and the collection health panels beside it.
   { screen: "inventory", tabList: "Logs view", labels: ["Lines", "Collection health"] },
   { screen: "inventory", tabList: "Configuration sections", labels: ["Sections", "Configuration", "Details"] },
+  // A Packet Analysis case's own views (shown once a case is opened); Device events is mockup 2026-10-17 screen 4.
+  { screen: "packet_analysis", tabList: "Investigation views", labels: ["Overview & Verdict", "Topology", "Flows & Ladder", "Timeseries & Quality", "DNS", "UDP / Media", "Device events"] },
   { screen: "inventory", tabList: "Configuration detail", labels: ["Sections", "Changes", "Overrides", "XML Configuration", "Sanitized text", "Alignment"] },
 ];
 export const BACKUP_SECTIONS = ["Backup-capable", "Targets", "Targets without archive"] as const;

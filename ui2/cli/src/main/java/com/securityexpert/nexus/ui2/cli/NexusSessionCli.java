@@ -120,6 +120,8 @@ final class NexusSessionCli {
         System.out.println("  pa-topology-save <caseId> <jsonBody|@file>");
         System.out.println("  pa-findings <caseId> [k=v...] | pa-events <caseId> [k=v...] | pa-dns <caseId> [k=v...]");
         System.out.println("  pa-correlation <caseId>                        neXus inventory & policy correlation");
+        System.out.println("  pa-device-events <caseId> [finding=<id>] [window_seconds=<5..600>]");
+        System.out.println("                                                 stored system-log facts of the path firewalls around a finding (default +-30 s; masked for aiview)");
         System.out.println("  pa-field-diff <caseId> [k=v...]                security_admin; ledgered");
         System.out.println("  pa-export-findings <caseId> [dest.json]");
         System.out.println("  pa-export <caseId> <html|json|csv|xlsx> <dest>  security_admin; ledgered (raw addresses)");
@@ -306,6 +308,7 @@ final class NexusSessionCli {
                 case "pa-events" -> packetCaseRead(args, "/events");
                 case "pa-dns" -> packetCaseRead(args, "/dns");
                 case "pa-correlation" -> packetCaseRead(args, "/correlation");
+                case "pa-device-events" -> packetCaseRead(args, "/device-events");
                 case "pa-field-diff" -> packetCaseRead(args, "/field-diff");
                 case "pa-export-findings" -> {
                     require(args, 2, "pa-export-findings <caseId> [dest.json]");

@@ -58,7 +58,9 @@ for (const label of ["Fleet", "Catalog"]) {
     }
   });
 }
-for (const { screen, tabList, labels } of TAB_COVERAGE.filter(row => row.screen !== "inventory")) {
+// Inventory detail tabs need a stored entity and Packet Analysis case views an opened case (opened by a row click, an
+// action this suite never takes): both are reached through nestedTabs from their own entry, not from the screen URL.
+for (const { screen, tabList, labels } of TAB_COVERAGE.filter(row => row.screen !== "inventory" && row.screen !== "packet_analysis")) {
   for (const label of labels) {
     test(`full: ${screen} / ${label}`, async ({ page, safety }) => {
       await visit(page, `screen=${screen}`, SCREEN_HEADINGS[screen]);

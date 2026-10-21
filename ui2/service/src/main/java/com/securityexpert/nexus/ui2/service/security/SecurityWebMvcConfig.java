@@ -59,6 +59,9 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("GET /api/v2/packet-analysis/cases/*/reference/template", ActionRegistry.PACKET_ANALYSIS_READ),
             Map.entry("POST /api/v2/packet-analysis/cases/*/compare", ActionRegistry.PACKET_ANALYSIS_READ),
             Map.entry("GET /api/v2/packet-analysis/cases/*/correlation", ActionRegistry.PACKET_ANALYSIS_READ),
+            // Device events (mockup 2026-10-17 screen 4): gated like the case read; the
+            // stored-log facts also need system_log_read (checked in the controller, NOT_PERMITTED rows otherwise).
+            Map.entry("GET /api/v2/packet-analysis/cases/*/device-events", ActionRegistry.PACKET_ANALYSIS_READ),
             Map.entry("PUT /api/v2/packet-analysis/cases/*/topology", ActionRegistry.PACKET_ANALYSIS_RUN),
             Map.entry("GET /api/v2/packet-analysis/runs/*", ActionRegistry.PACKET_ANALYSIS_READ),
             Map.entry("GET /api/v2/packet-analysis/runs/*/report", ActionRegistry.PACKET_ANALYSIS_READ),

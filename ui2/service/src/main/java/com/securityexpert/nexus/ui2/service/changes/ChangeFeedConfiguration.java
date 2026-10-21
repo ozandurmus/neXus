@@ -1,6 +1,7 @@
 package com.securityexpert.nexus.ui2.service.changes;
 
 import java.util.List;
+import java.util.function.Supplier;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -23,17 +24,26 @@ public class ChangeFeedConfiguration {
             ArtefactStoreAccess artefacts, DeviceRepository devices, TopologyNamePseudonymizer names, LogMasking masking) {
         ChunkTextReader reader = new ChunkTextReader(artefacts.storeOrNull());
         return new ChangeFeedService(new JooqChangeFeedRepository(transactions), policy, reader,
-                () -> new DefaultProjection(false, inventory(devices), names, null, null),
-                () -> {
-                    LogMasking.Session session = null;
-                    RuntimeException failure = null;
-                    try {
-                        session = masking.session();
-                    } catch (RuntimeException e) {
-                        failure = e; // fail closed: the text sources say UNAVAILABLE, nothing raw is shown
-                    }
-                    return new DefaultProjection(true, inventory(devices), names, session, failure);
-                });
+                plainProjection(devices, names), maskedProjection(devices, names, masking));
+    }
+
+    /** The plain per-request projection: inventory names as they are. Shared with Packet Analysis > Device events. */
+    public static Supplier<DefaultProjection> plainProjection(DeviceRepository devices, TopologyNamePseudonymizer names) {
+        return () -> new DefaultProjection(false, inventory(devices), names, null, null);
+    }
+
+    /** The aiview per-request projection: pseudonyms and one masking session; fails closed when the session cannot be built. */
+    public static Supplier<DefaultProjection> maskedProjection(DeviceRepository devices, TopologyNamePseudonymizer names, LogMasking masking) {
+        return () -> {
+            LogMasking.Session session = null;
+            RuntimeException failure = null;
+            try {
+                session = masking.session();
+            } catch (RuntimeException e) {
+                failure = e; // fail closed: the text sources say UNAVAILABLE, nothing raw is shown
+            }
+            return new DefaultProjection(true, inventory(devices), names, session, failure);
+        };
     }
 
     private static List<DeviceSummaryRecord> inventory(DeviceRepository devices) {

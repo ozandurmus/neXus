@@ -20,7 +20,7 @@ vi.mock("../src/auth/adminApi", async importOriginal => ({
   getPacketCaseDiagnosis: vi.fn(), getPacketCaseCharts: vi.fn(), getPacketCaseLadder: vi.fn(),
   getPacketCaseWaterfall: vi.fn(), getPacketCaseTimeseries: vi.fn(), getPacketCaseTopologyOverlay: vi.fn(),
   getPacketCaseTopologyInspect: vi.fn(), getPacketCaseFindings: vi.fn(), getPacketCaseEvents: vi.fn(),
-  getPacketCaseDns: vi.fn(), getPacketCaseFieldDiff: vi.fn(), savePacketCaseTopology: vi.fn(),
+  getPacketCaseDns: vi.fn(), getPacketCaseFieldDiff: vi.fn(), savePacketCaseTopology: vi.fn(), getPacketCaseDeviceEvents: vi.fn(),
 }));
 
 const CASE = "11111111-2222-4333-8444-555555555555";
@@ -759,6 +759,25 @@ describe("Packet Analysis screen", () => {
     fireEvent.click(screen.getByRole("tab", { name: "DNS" }));
     const dnsCard = await screen.findByLabelText("DNS analysis");
     expect(within(dnsCard).getByText(/api\.example\.invalid · 198\.51\.100\.53/)).toBeInTheDocument();
+  });
+
+  it("opens Device events as an investigation view and reads the stored log facts of the case", async () => {
+    vi.mocked(api.getPacketCaseState).mockResolvedValue(syntheticWorkspaceState());
+    vi.mocked(api.getPacketCaseDeviceEvents).mockResolvedValue({
+      case_id: CASE, masked: false, window_seconds: 30, findings: [], hop: null, notes: ["Finding times are the capture clock (UTC)."],
+      finding: { id: "f1", type: "impactful_loss", severity: "high", confidence: "supported", hop: "forward:p1:p2", hop_label: "FW-TANGO-04 ingress → egress",
+        direction: "forward", start: "2023-11-14T22:13:20Z", end: null, figures: { event_count: 1, max_recovery_ms: null, p95_ms: null, max_ms: null, loss_percent: 0.5 } },
+      window: { from: "2023-11-14T22:12:50Z", to: "2023-11-14T22:13:50Z", start: "2023-11-14T22:13:20Z", half_seconds: 30 },
+      devices: [],
+    });
+    themed();
+    fireEvent.click(await screen.findByRole("button", { name: "Synthetic loss case" }));
+    await screen.findByLabelText("Case investigation workspace");
+    const views = screen.getByRole("tablist", { name: "Investigation views" });
+    fireEvent.click(within(views).getByRole("tab", { name: "Device events" }));
+    expect(await screen.findByLabelText("Finding sheet")).toBeInTheDocument();
+    expect(api.getPacketCaseDeviceEvents).toHaveBeenCalledWith(CASE, { finding: undefined, window_seconds: undefined });
+    expect(within(views).getByRole("tab", { name: "Device events" })).toHaveAttribute("aria-selected", "true");
   });
 
   it("renders neXus hop and policy correlation with evidence chips, candidate lists on AMBIGUOUS, and explicit separation of capture vs configured state", async () => {

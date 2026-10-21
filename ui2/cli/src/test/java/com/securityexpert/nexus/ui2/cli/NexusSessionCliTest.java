@@ -295,6 +295,32 @@ class NexusSessionCliTest {
     }
 
     @Test
+    void paDeviceEventsCallsTheCaseDeviceEventsRouteWithTheFindingAndWindow(@TempDir Path home) throws Exception {
+        java.util.List<String> calls = new java.util.concurrent.CopyOnWriteArrayList<>();
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/", exchange -> {
+            calls.add(exchange.getRequestMethod() + " " + exchange.getRequestURI());
+            byte[] out = "{\"devices\":[]}".getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, out.length);
+            exchange.getResponseBody().write(out);
+            exchange.close();
+        });
+        server.start();
+        try {
+            NexusSessionCli cli = new NexusSessionCli(home);
+            cli.saveSession(new NexusSessionCli.Session("http://127.0.0.1:" + server.getAddress().getPort(), "opaque-cookie", "csrf-9"));
+            String caseId = "11111111-2222-4333-8444-555555555555";
+            assertEquals(0, cli.run(new String[] {"pa-device-events", caseId}));
+            assertEquals(0, cli.run(new String[] {"pa-device-events", caseId, "finding=forward:p1:p2:impactful_loss", "window_seconds=120"}));
+            assertEquals(java.util.List.of("GET /api/v2/packet-analysis/cases/" + caseId + "/device-events",
+                    "GET /api/v2/packet-analysis/cases/" + caseId + "/device-events?finding=forward%3Ap1%3Ap2%3Aimpactful_loss&window_seconds=120"),
+                    calls);
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
     void unknownCommandsAreNotThisClassS(@TempDir Path home) {
         assertEquals(-1, new NexusSessionCli(home).run(new String[] {"credential-list"}));
     }
