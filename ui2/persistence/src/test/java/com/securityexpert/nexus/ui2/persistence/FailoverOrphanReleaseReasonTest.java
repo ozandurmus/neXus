@@ -104,7 +104,7 @@ class FailoverOrphanReleaseReasonTest {
         assertEquals(-1, db.index("insert into job_reconciliation"));
     }
 
-    /** Pilot 2026-10-21/22 (V175): the release frees the run's quarantined fleet task lease, after the incident. */
+    /** Pilot 2026-10-21/22 (V174): the release frees the run's quarantined fleet task lease, after the incident. */
     @Test void theReleaseFreesTheSettledFleetLeaseOfTheRunAfterTheIncidentInTheSameTransaction() {
         for (boolean active : new boolean[] {true, false}) {
             var db = new Db();

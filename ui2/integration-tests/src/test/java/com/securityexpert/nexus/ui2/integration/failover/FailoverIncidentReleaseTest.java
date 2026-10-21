@@ -148,7 +148,7 @@ class FailoverIncidentReleaseTest {
     }
 
     /**
-     * Pilot 2026-10-21/22 (V175): the run stopped after a confirmed DOWN, its job went OUTCOME_UNKNOWN and the fleet
+     * Pilot 2026-10-21/22 (V174): the run stopped after a confirmed DOWN, its job went OUTCOME_UNKNOWN and the fleet
      * task lease bound to it expired into QUARANTINED while its worker stayed alive. The incident release now releases
      * that lease in the same audited transaction; before the release nothing does.
      */
@@ -180,7 +180,7 @@ class FailoverIncidentReleaseTest {
         }
     }
 
-    /** V175: an incident released by another path never leaves the lease blocking a drain; the sweep releases it. */
+    /** V174: an incident released by another path never leaves the lease blocking a drain; the sweep releases it. */
     @Test void theDrainSweepReleasesASettledLeaseAndKeepsOneWhoseSendIsUnresolved() throws Exception {
         try (var fixture = Ui2PostgresFixture.createAndMigrate("failover_sweep_task_lease")) {
             var repo = repository(fixture); var members = pair(fixture, "unit-dispatch");
