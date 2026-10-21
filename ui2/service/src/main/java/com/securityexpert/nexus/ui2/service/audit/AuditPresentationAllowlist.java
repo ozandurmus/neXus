@@ -120,6 +120,13 @@ public final class AuditPresentationAllowlist {
             Map.entry("failover_quarantine", Set.of(
                     "acknowledged_at", "acknowledged_by", "active", "cluster_ref", "execution_id",
                     "quarantined_at", "quarantined_member_ids", "reason", "second_approver_id")),
+            Map.entry("failover_resume", Set.of(
+                    "approval_ack_at", "approval_ack_by", "approval_nonce", "approved_at", "approved_by",
+                    "approved_in_business_hours", "business_hours_ack_at", "business_hours_ack_by", "cluster_ref",
+                    "expected_incident_id", "expires_at", "failed_check", "finished_at", "former_active_ref",
+                    "initiated_by", "job_id", "member_set_revision", "mutation_possible", "outcome", "peer_ref",
+                    "policy", "requested_at", "requested_in_business_hours", "resume_id", "run_id", "started_at",
+                    "state", "step", "target_member_ids", "vendor")),
             Map.entry("failover_run", Set.of(
                     "approval_id", "cluster_ref", "failed_check", "finished_at", "job_id",
                     "mutation_possible", "outcome", "request_revision", "requested_by", "run_id",

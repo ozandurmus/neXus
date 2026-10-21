@@ -118,6 +118,8 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("GET /api/v2/cp-failover/incidents", ActionRegistry.CP_FAILOVER_READ),
             Map.entry("GET /api/v2/pan-failover/incidents", ActionRegistry.CP_FAILOVER_READ),
             Map.entry("POST /api/v2/cp-failover/runs/*/incident/release", ActionRegistry.CP_FAILOVER_INCIDENT_RELEASE),
+            Map.entry("POST /api/v2/cp-failover/runs/*/resume-return", ActionRegistry.CP_FAILOVER_RESUME_RETURN),
+            Map.entry("POST /api/v2/cp-failover/runs/*/resume-return/approve", ActionRegistry.CP_FAILOVER_RESUME_RETURN),
             Map.entry("GET /api/v2/pan-failover/units", ActionRegistry.CP_FAILOVER_READ),
             Map.entry("GET /api/v2/pan-failover/units/*", ActionRegistry.CP_FAILOVER_READ),
             Map.entry("GET /api/v2/pan-failover/summary", ActionRegistry.CP_FAILOVER_READ),

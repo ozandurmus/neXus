@@ -5,11 +5,12 @@ import { m3Theme } from "../src/theme/m3Theme";
 import { CpFailoverPanel, FailoverRun, runStep } from "../src/screens/CpFailoverPanel";
 import type { CpFailoverRunDetail } from "../src/auth/adminApi";
 const api = vi.hoisted(() => ({ units: vi.fn(), approvals: vi.fn(), runs: vi.fn(), detail: vi.fn(), readiness: vi.fn(), approve: vi.fn(), second: vi.fn(), start: vi.fn(),
-  incidents: vi.fn(), release: vi.fn() }));
+  incidents: vi.fn(), release: vi.fn(), resume: vi.fn(), approveResume: vi.fn() }));
 vi.mock("../src/auth/adminApi", () => ({ listCpFailoverUnits: api.units, listCpFailoverApprovals: api.approvals,
   listCpFailoverRuns: api.runs, getCpFailoverRun: api.detail, runCpFailoverReadiness: api.readiness,
   approveCpFailover: api.approve, secondApproveCpFailover: api.second, startCpFailover: api.start,
-  listFailoverIncidents: api.incidents, releaseFailoverIncident: api.release }));
+  listFailoverIncidents: api.incidents, releaseFailoverIncident: api.release,
+  resumeCpFailoverReturn: api.resume, approveCpFailoverResume: api.approveResume }));
 const unit = { clusterId: "opaque-cluster", unitId: "opaque-cluster", cluster_member_ref: "CLS-ROMEO-01", vendor: "check_point" as const,
   mode: "HA", readinessObservedAt: "2026-10-06T09:00:00Z", canApprove: true, canStart: true, canSchedule: false, masked: false,
   members: [{ device_id: "opaque-1", hostname: "FW-ROMEO-01", ha_role: "ACTIVE" }, { device_id: "opaque-2", hostname: "FW-ROMEO-02", ha_role: "STANDBY" }] };
@@ -148,4 +149,16 @@ it("shows the unit's recovery mode and its open incident with the role note", as
   fireEvent.click(screen.getByRole("button", { name: "CLS-ROMEO-01" }));
   expect(await screen.findByText("Only a security_admin can release a failover incident.")).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Release incident" })).toBeNull();
+});
+it("a stopped run with a confirmed DOWN offers Resume return step on the unit panel, which requests it once", async () => {
+  api.runs.mockResolvedValue([{ runId: "run-opaque", kind: "FAILOVER", state: "STOPPED" }]);
+  api.detail.mockResolvedValue(run({ state: "STOPPED", step: "POSTCHECK", mutationPossible: true, incidentRef: "run-opaque",
+    message: "TRAFFIC_BELOW_TOLERANCE", kind: "FAILOVER", resume: { eligible: true, refusal: null, canResume: true,
+      businessHoursInside: false, businessHours: "08:00–20:00", formerActiveRef: "opaque-1" } }));
+  api.resume.mockResolvedValue({ runId: "run-opaque", resumeId: "resume-opaque", state: "QUEUED" });
+  setup(); fireEvent.click(await screen.findByRole("button", { name: "CLS-ROMEO-01" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Resume return step" }));
+  fireEvent.change(screen.getByLabelText("Reason"), { target: { value: "Return the former active" } });
+  fireEvent.click(screen.getAllByRole("button", { name: "Resume return step" }).at(-1)!);
+  await waitFor(() => expect(api.resume).toHaveBeenCalledWith("run-opaque", "run-opaque", "Return the former active", false));
 });

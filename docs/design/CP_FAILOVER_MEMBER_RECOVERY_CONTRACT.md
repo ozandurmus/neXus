@@ -391,3 +391,40 @@ member's state.
 - The exemption should apply only when **no** intent was ever sent.
 - This resume needs that incident to exist: precondition §2.1 row 6 refuses without it.
 - Fix it in the P0 lane, with a PostgreSQL test.
+
+## 10. Implementation record (lane/cloud-failover-resume, 2026-10-21)
+
+Appended by the implementing lane; the ratified text above is unchanged. Automated validation only
+(`IMPLEMENTED → AUTOMATED_VALIDATED` at most); nothing here is real-environment validated.
+
+| Area | Where |
+| --- | --- |
+| Migration | `V170__failover_resume_return_step.sql`: append-only `failover_resume` (one row per run, `UNIQUE(run_id)`), audit trigger + redaction of `reason`/`message`, fleet fence both ways (`uq_failover_resume_fleet`, `failover_run_resume_fence`), `UNIQUE(run_id,step)` of the dispatch intents narrowed to `delivery<>'NOT_SENT'`, resume closed when its job ends, and the two Q2/Q2b gate-row field amendments (command string unchanged). |
+| Store | `JooqCpFailoverRepository`: `resumeEligibility`, `requestResume`, `approveResume`, `resumeAdmission`, `prepareResumeDispatch`, `dispatchResume`, `resumeState`, `resumeCommand`, `preBaseline`; reconciliation and incident release are resume-aware. |
+| Worker | `CpFailoverJobExecutor.resume`: same executor, job type `cp_cluster_failover` (idempotency key `cp_failover_resume:<resumeId>`). |
+| Service / API | `CpFailoverService.resumeReturn` / `approveResume`; action `cp_failover_resume_return` (security_admin, operation_admin); run detail carries a `resume` block. |
+| UI | `ResumeReturn` in `CpFailoverPanel` (button, confirm text of §6.2, stepper, plain-word codes). |
+
+Choices where the contract left the mechanics open, or the code base forced a shape:
+
+1. **Approve route.** The gate chain resolves exactly one wildcard path segment per route, so the second approval is
+   `POST /api/v2/cp-failover/runs/{runId}/resume-return/approve` with `resumeId` in the body (not a second path
+   variable). Both routes are unmapped under `/api/v2/pan-failover` (403).
+2. **Business hours** (PO decision 2026-10-20 as refined by the orchestrator on 2026-10-21). The resume request carries
+   its own acknowledgement (`businessHoursAck` in the body, so a remembered header from another confirmation never
+   counts); a second approval made inside business hours carries the approver's own. Both are stored on the request.
+   The resumed `clusterXL_admin up` is the run's return write: it is never refused because the clock entered business
+   hours after admission; the worker rechecks only the stored record (row 11).
+3. **Baseline.** Policy names and interface names never left the original run's memory (raw-evidence law), so the
+   post-return comparison uses the run's stored pre rows: the former active's traffic rate, route count/default route,
+   monitored-interface and traffic-selection counts, and both members' policy install times per source (`fw stat`,
+   `cpstat`) compared as a set (any reinstall is `POLICY_NOT_MATCHED`). A missing baseline refuses before contact
+   (`RESUME_BASELINE_UNAVAILABLE`).
+4. **Row 9 identities.** "Unchanged since the run" is `recorded_identity_recorded_at` not later than the run's start,
+   plus the worker's presented-identity check on both fresh sessions.
+5. **Expiry.** 30 minutes from creation to the worker start; an expired request is spent (row 5, single use).
+6. **Additional codes**, all fail closed before any write: `RUN_ALREADY_ACTIVE` (a readiness run on the unit),
+   `TRUSTED_HOST_KEY_REQUIRED` (service pre-check, so the single resume is not spent on an untrusted key),
+   `RESUME_BASELINE_UNAVAILABLE`, `RESUME_NOT_FOUND`, `RESUME_NOT_PENDING`, `WRONG_POLICY`, `RESUME_TERMINAL`,
+   `RESUME_WRITE_NOT_BOUND`, `OWNERSHIP_LOST`.
+7. **Not built:** the failover CLI (§6.3, P1 follow-up).
