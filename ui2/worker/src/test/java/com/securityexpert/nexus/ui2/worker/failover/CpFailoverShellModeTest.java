@@ -10,30 +10,45 @@ import org.junit.jupiter.api.Test;
 
 class CpFailoverShellModeTest {
     private static final Duration LEGACY = Duration.ofSeconds(2);
+    private static final String PILOT = "CLS-TEST-01";
 
     @Test
-    void onlyTheExactValueEnabledTurnsTheShellOn() {
-        assertTrue(CpFailoverShellMode.fromValue("enabled").oneShell());
-        assertTrue(CpFailoverShellMode.fromValue(" enabled ").oneShell());
+    void offUnlessExactlyEnabled() {
         for (String value : new String[]{null, "", "true", "ENABLED", "on", "1", "disabled"})
-            assertFalse(CpFailoverShellMode.fromValue(value).oneShell(), String.valueOf(value));
-        assertFalse(CpFailoverShellMode.OFF.oneShell());
+            assertFalse(CpFailoverShellMode.fromValues(value, "*", null).usesShell(PILOT), String.valueOf(value));
+        assertTrue(CpFailoverShellMode.fromValues(" enabled ", "*", null).usesShell(PILOT));
+        assertFalse(CpFailoverShellMode.OFF.usesShell(PILOT));
     }
 
     @Test
-    void pauseDefaultsKeepTheExecPathUnchanged() {
-        assertEquals(LEGACY, CpFailoverShellMode.OFF.commandPause(null, LEGACY));
-        assertEquals(Duration.ofMillis(1000), new CpFailoverShellMode(true).commandPause(null, LEGACY));
+    void enabledRunsOnlyListedClusters() {
+        assertFalse(CpFailoverShellMode.fromValues("enabled", null, null).usesShell(PILOT), "unset list = none");
+        assertFalse(CpFailoverShellMode.fromValues("enabled", " , ", null).usesShell(PILOT), "empty list = none");
+        assertFalse(CpFailoverShellMode.fromValues("enabled", "CLS-TEST-02", null).usesShell(PILOT));
+        assertFalse(CpFailoverShellMode.fromValues("enabled", "cls-test-01", null).usesShell(PILOT), "refs are opaque");
+        assertTrue(CpFailoverShellMode.fromValues("enabled", "CLS-TEST-02, CLS-TEST-01", null).usesShell(PILOT));
+        assertFalse(CpFailoverShellMode.fromValues("enabled", PILOT, null).usesShell(null));
+        var all = CpFailoverShellMode.fromValues("enabled", "*", null);
+        assertTrue(all.usesShell(PILOT) && all.usesShell("CLS-TEST-02"));
     }
 
     @Test
-    void explicitPauseAppliesToBothPathsAndInvalidValuesFallBack() {
-        assertEquals(Duration.ofMillis(250), new CpFailoverShellMode(true).commandPause("250", LEGACY));
-        assertEquals(Duration.ZERO, new CpFailoverShellMode(true).commandPause("0", LEGACY));
-        assertEquals(Duration.ofMillis(1500), CpFailoverShellMode.OFF.commandPause("1500", LEGACY));
+    void pausesKeepTheExecPathUnchangedByDefault() {
+        assertEquals(LEGACY, CpFailoverShellMode.execPause(null, LEGACY));
+        assertEquals(Duration.ofMillis(1000), CpFailoverShellMode.fromValues("enabled", "*", null).shellPause());
+        assertEquals(Duration.ofMillis(250), CpFailoverShellMode.fromValues("enabled", "*", "250").shellPause());
+        assertEquals(Duration.ofMillis(1500), CpFailoverShellMode.execPause("1500", LEGACY));
+        assertEquals(Duration.ZERO, CpFailoverShellMode.execPause("0", LEGACY));
         for (String invalid : new String[]{"-1", "abc", "1.5", "60001", "999999", " "}) {
-            assertEquals(Duration.ofMillis(1000), new CpFailoverShellMode(true).commandPause(invalid, LEGACY), invalid);
-            assertEquals(LEGACY, CpFailoverShellMode.OFF.commandPause(invalid, LEGACY), invalid);
+            assertEquals(Duration.ofMillis(1000), CpFailoverShellMode.fromValues("enabled", "*", invalid).shellPause(), invalid);
+            assertEquals(LEGACY, CpFailoverShellMode.execPause(invalid, LEGACY), invalid);
         }
+    }
+
+    @Test
+    void logFormNeverNamesClusters() {
+        String text = CpFailoverShellMode.fromValues("enabled", "CLS-TEST-02,CLS-TEST-01", null).toString();
+        assertFalse(text.contains("CLS-TEST"), text);
+        assertTrue(text.contains("listedClusters=2"), text);
     }
 }

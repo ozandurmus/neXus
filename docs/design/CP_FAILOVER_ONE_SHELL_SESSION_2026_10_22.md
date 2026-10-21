@@ -1,9 +1,9 @@
 # Check Point failover: one shell per member per pass (2026-10-22)
 
-Status: **DRAFT** -- implemented behind a worker switch that is OFF by default
-(`NEXUS_CP_FAILOVER_ONE_SHELL`), with its one new framing literal registered as a `DRAFTED` gate row
-(`cp_failover_shell_framing`, migration `V174`). Nothing in this document is in effect on a device until the
-Product Owner approves the literals in section 5 and the gate row is signed off.
+Status: **DRAFT (design), literals APPROVED** -- the Product Owner approved L1-L4 (section 5) on 2026-10-22 with "one
+cluster first" ([PO_DECISION_RECORD_2026_10_22_CP_ONE_SHELL_SESSION.md](PO_DECISION_RECORD_2026_10_22_CP_ONE_SHELL_SESSION.md),
+RATIFIED). The framing gate row `cp_failover_shell_framing` is `SIGNED_OFF` (migration `V174`). The path is OFF by default
+and, when switched on, runs only for allow-listed clusters (section 3.7). Not real-environment validated.
 
 ## 1. Problem
 
@@ -124,18 +124,21 @@ former active member; UP alone in a resume).
 ### 3.6 Pause
 
 `NEXUS_CP_FAILOVER_COMMAND_PAUSE_MS` (0-60000) sets the pause between consecutive Check Point failover commands. When
-unset: 1000 ms with the shell switch on (design default); with the switch off the existing
-`UI2_FAILOVER_COMMAND_PAUSE_SECONDS` (default 2 s) is kept, so switch-off behaviour is unchanged. An invalid value falls
-back to that default. The pause is the existing executor pause, before every command after the first.
+unset: 1000 ms for a run on the shell path (design default); a run on the exec path (switch off, or its cluster not
+allow-listed) keeps the existing `UI2_FAILOVER_COMMAND_PAUSE_SECONDS` (default 2 s), so its behaviour is unchanged. An
+invalid value falls back to that default. The pause is chosen per run and taken before every command after the first.
 
 ### 3.7 Switch and gate
 
-* `NEXUS_CP_FAILOVER_ONE_SHELL=enabled` turns the shell path on for every Check Point readiness, execution and resume
-  run of that worker (restart needed). Any other value or unset: the exec path, byte for byte as before.
-* With the switch on, each run first resolves the framing gate `cp_failover_shell_framing` (transport
-  `SSH_INTERACTIVE`, CLASS 0 read). While the row is `DRAFTED` the resolution is UNKNOWN and the run ends with
-  `COMMAND_GATE_UNAVAILABLE` (readiness UNKNOWN) **before any connection**. The read gates themselves are resolved
-  exactly as today; their command keys are unchanged.
+* A Check Point readiness (including scheduled readiness), execution or resume run uses the shell path only when
+  `NEXUS_CP_FAILOVER_ONE_SHELL=enabled` **and** the run's cluster ref (`cluster_member_ref`) is listed in
+  `NEXUS_CP_FAILOVER_ONE_SHELL_CLUSTERS` (comma-separated, exact opaque match; `*` = every cluster; empty or unset =
+  none). Both are read at worker start (restart needed). Every other run: the exec path, byte for byte as before. The
+  worker logs only counts (switch, `*` or the number of listed clusters), never the refs.
+* A shell-path run first resolves the framing gate `cp_failover_shell_framing` (transport `SSH_INTERACTIVE`, CLASS 0
+  read). If the row is not `SIGNED_OFF` the resolution is UNKNOWN and the run ends with `COMMAND_GATE_UNAVAILABLE`
+  (readiness UNKNOWN) **before any connection**. The read gates themselves are resolved exactly as today; their command
+  keys are unchanged.
 
 ## 4. Tests
 
@@ -144,14 +147,16 @@ back to that default. The pause is the existing executor pause, before every com
   no reuse after a failure, a fresh `SecureRandom` nonce per command, a multi-line literal never sent.
 * `CpFailoverOneShellTest` (executor with the scripted shell transport): one shell channel per member per readiness pass
   and `exec` never called; the same check rows as the exec path; a framing failure gives UNKNOWN and no second shell;
-  the configured pause between commands; a DRAFTED framing gate stops before any connection; switch off sends the exact
+  the configured shell pause between commands; an unsigned framing gate stops before any connection; the cluster
+  allow-list (off, enabled + not listed = exec, enabled + listed = shell, `*`) for readiness and execution; switch off sends the exact
   old `bash -lc` literals over exec and never opens a shell; a failover run keeps DOWN/UP on exec; a VS run sends the
   `vsenv 12 && <cmd>` form.
 * `CpFailoverResumeExecutorTest.oneShellResumeKeepsTheUpOnExecAndReadsInOneShellPerMember`: the resume step reads in
-  one shell per member and sends its UP over exec only.
+  one shell per member and sends its UP over exec only;
+  enabled with the cluster not listed, it stays on exec.
 * `CompositeDeviceTransportTest` (existing) proves the new default port method is routed by the composite.
 * Not covered by automated tests: the JSch shell channel against a real Gaia gateway (rollout step 3).
-* `CpFailoverShellModeTest`: switch and pause parsing, defaults, invalid values.
+* `CpFailoverShellModeTest`: switch, cluster list and pause parsing, defaults, invalid values, log form without refs.
 
 ## 5. Literals that need Product Owner approval
 
@@ -163,15 +168,22 @@ back to that default. The pause is the existing executor pause, before every com
 | L4 | `<read>` in a VS run = `vsenv <VSID> && <cmd>` | `bash -lc 'vsenv <VSID> && <cmd>'` |
 
 No other device command is added; `echo` is a shell built-in and the only new word. The writes are not changed (3.5).
-Approval is recorded by a migration that sets `cp_failover_shell_framing` to `SIGNED_OFF` and the fixture row to match.
+**Approved by the Product Owner on 2026-10-22** (PO_DECISION_RECORD_2026_10_22_CP_ONE_SHELL_SESSION.md); V174 seeds the
+row `SIGNED_OFF` and the fixture matches.
 
 ## 6. Rollout
 
-1. Merge with the switch OFF and the gate row DRAFTED (no behaviour change).
-2. Product Owner approves L1-L4 (or rejects; then nothing changes). A follow-up migration signs the gate row off.
-3. On one worker, set `NEXUS_CP_FAILOVER_ONE_SHELL=enabled` (optionally `NEXUS_CP_FAILOVER_COMMAND_PAUSE_MS`), restart,
-   run one readiness pass on one pilot cluster, and read that cluster's audit log for the run's time window: counts
-   only -- expected one "Log In" per member per pass. Compare the check rows with the previous exec-path pass of the
-   same cluster (statuses only).
+1. Merge. The switch is off by default, so no run changes. The framing gate row is `SIGNED_OFF` (PO approval
+   2026-10-22, L1-L4).
+2. **One pilot cluster** (PO: "önce tek kümede"): on the worker set `NEXUS_CP_FAILOVER_ONE_SHELL=enabled` and
+   `NEXUS_CP_FAILOVER_ONE_SHELL_CLUSTERS=<the pilot cluster's cluster_member_ref>` (optionally
+   `NEXUS_CP_FAILOVER_COMMAND_PAUSE_MS`), restart the worker, and run one readiness pass on that cluster. Every other
+   cluster stays on the exec path.
+3. The Product Owner reads the pilot cluster's audit log for the run's time window: counts only -- expected one
+   "Log In" per member per pass. Compare the run's check rows with the previous exec-path pass of the same cluster
+   (statuses only).
 4. If the count is not one per member, record the measured count here; the mechanism in 2.1 is then decided by that
-   measurement, not assumed. Switch off to return to the exec path at once.
+   measurement, not assumed. Remove the cluster from the list (or switch off) to return to the exec path at once.
+5. Then the failover fleet (`*` or the full list), as one configuration change.
+6. Later, separately: inventory, configuration, backup and system-log collection on the same pattern, each with its own
+   design and gate review.

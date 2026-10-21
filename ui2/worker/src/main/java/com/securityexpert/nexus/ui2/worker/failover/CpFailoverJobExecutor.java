@@ -41,12 +41,14 @@ public final class CpFailoverJobExecutor {
     private static final String FAILOVER="cphaprob show_failover", ROUTING="cpstat os -f routing";
     private static final ObjectMapper JSON=new ObjectMapper();
     private static final String DOWN="clusterXL_admin down", UP="clusterXL_admin up";
-    /** The framing gate's command key (CP_FAILOVER_ONE_SHELL_SESSION_2026_10_22.md §5, L2); DRAFTED until PO sign-off. */
+    /** The framing gate's command key (CP_FAILOVER_ONE_SHELL_SESSION_2026_10_22.md §5, L2; PO approval 2026-10-22). */
     static final String SHELL_FRAMING="echo __NX_<NONCE>_BEGIN__; <READ>; echo __NX_<NONCE>_END_$?__";
     static final String SHELL_FRAMING_GATE="cp_failover_shell_framing";
     private static final int MAX_OUTPUT_CHARS=262144;
     private static final Duration SHELL_OPEN_TIMEOUT=Duration.ofSeconds(30);
     private final CpFailoverShellMode shellMode;
+    /** This run uses the one shell: switch on and its cluster allow-listed (set at the start of every run). */
+    private boolean shellRun;
     private final java.security.SecureRandom nonces=new java.security.SecureRandom();
     private final JooqCpFailoverRepository store;
     private final DeviceRepository devices;
@@ -169,6 +171,7 @@ public final class CpFailoverJobExecutor {
         this.readinessFailure=null;
         this.shapes=new ReadinessShapeLog("check_point");
         this.epoch=epoch; this.commandIndex=0; this.polls=0; this.wrote=false; this.dispatch=null;
+        this.shellRun=shellMode.usesShell(run.get().clusterRef());
         if(!leases.transitionState(jobId,epoch,JobState.CLAIMED,JobState.EXECUTING,
                 "system:cp-failover-worker","cp_failover_start")) return;
         Member first=null,second=null;
@@ -188,7 +191,7 @@ public final class CpFailoverJobExecutor {
             if(!attempts.findByJobAndStep(jobId,0).isEmpty()) throw new Stop("PRIOR_ATTEMPT_NOT_REPLAYED",0);
             for(String command:List.of(STAT,TABLE,IF,ARP,TRAFFIC,SYNC,POLICY,PNOTES,BONDS,FAILOVER,ROUTING)) gate(command);
             if (!readiness) { gate(CPSTAT_POLICY); gate(DOWN); gate(UP); }
-            if (shellMode.oneShell()) gateShellFraming();
+            if (shellRun) gateShellFraming();
             first=connect(members.get(0)); second=connect(members.get(1));
             if(first.session().presentedIdentity().equals(second.session().presentedIdentity()))
                 throw new Stop("OBSERVERS_NOT_DISTINCT",0);
@@ -247,6 +250,7 @@ public final class CpFailoverJobExecutor {
         this.jobId=jobId; this.runId=r.runId(); this.vsId=null; this.readiness=false; this.readinessFailure=null;
         this.shapes=new ReadinessShapeLog("check_point");
         this.epoch=epoch; this.commandIndex=0; this.polls=0; this.wrote=false; this.dispatch=null;
+        this.shellRun=shellMode.usesShell(r.clusterRef());
         if(!leases.transitionState(jobId,epoch,JobState.CLAIMED,JobState.EXECUTING,
                 "system:cp-failover-worker","cp_failover_resume_start")) return;
         Member first=null,second=null;
@@ -262,7 +266,7 @@ public final class CpFailoverJobExecutor {
             if(!attempts.findByJobAndStep(jobId,0).isEmpty()) throw new Stop("PRIOR_ATTEMPT_NOT_REPLAYED",0);
             for(String command:List.of(STAT,TABLE,IF,ARP,TRAFFIC,SYNC,POLICY,CPSTAT_POLICY,PNOTES,BONDS,FAILOVER,ROUTING)) gate(command);
             gate(UP);
-            if (shellMode.oneShell()) gateShellFraming();
+            if (shellRun) gateShellFraming();
             // The baseline is the run's own stored pre rows; without it nothing is sent.
             Pair before=storedBaseline(members.get(0).deviceId(),members.get(1).deviceId());
             first=connect(members.get(0)); second=connect(members.get(1));
@@ -489,7 +493,8 @@ public final class CpFailoverJobExecutor {
             throws InterruptedException {
         String readCommand=BOND_MEMBERS.equals(command)?bondCommand(bond,observedBonds):command;
         var g=gate(command);
-        if (commandIndex > 0 && !commandPause.isZero()) pause.sleep(commandPause);
+        Duration between=shellRun?shellMode.shellPause():commandPause;
+        if (commandIndex > 0 && !between.isZero()) pause.sleep(between);
         if(vsId!=null && !vsId.matches("[0-9]{1,10}")) throw new Stop("VSID_INVALID",0);
         if (DOWN.equals(command) || UP.equals(command)) {
             if (!mutationSwitch.enabled()) throw new Stop(FailoverMutationSwitch.DISABLED,0);
@@ -526,7 +531,7 @@ public final class CpFailoverJobExecutor {
         int sessionCommandIndex=++member.sessionCommandIndex;
         long sessionElapsedMs=(System.nanoTime()-member.openedAtNanos)/1_000_000;
         ExecResult result;
-        if(shellMode.oneShell()) {
+        if(shellRun) {
             // §3.3: inside the member's login shell the bare gated read, or the vsenv form; never a nested bash -lc.
             FramedShell shell=shell(member);
             String shellLiteral=vsId==null?readCommand:"vsenv "+vsId+" && "+readCommand;

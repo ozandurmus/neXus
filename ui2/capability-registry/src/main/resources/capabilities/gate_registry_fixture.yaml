@@ -4311,7 +4311,7 @@ gates:
     transport_kind: "SSH_INTERACTIVE"
     canonical_command_key: "echo __NX_<NONCE>_BEGIN__; <READ>; echo __NX_<NONCE>_END_$?__"
     action_class: "read"
-    sign_off_state: "DRAFTED"
+    sign_off_state: "SIGNED_OFF"
     timeout_s: 30
     retry_rule: "none"
     max_frequency: "once per approved cp_failover read of a readiness, execution or resume run, wrapping that read; <NONCE> = 32 lowercase hex characters from SecureRandom, new per command; <READ> = the read's own gated command without the bash -lc wrapper, or vsenv <VSID> && <command> in a VS run"
@@ -4319,4 +4319,4 @@ gates:
     unsupported_behavior_ref: "no BEGIN or END sentinel within the read's timeout, output over 262144 characters, preamble over 64 KiB, END before BEGIN or a second BEGIN = that check UNKNOWN; the shell is closed and not reused in the run"
     secret_output_risk: "none added: the sentinels carry only the random nonce and the exit status"
     safe_telemetry_fields: []
-    source_document_pointer: "docs/design/CP_FAILOVER_ONE_SHELL_SESSION_2026_10_22.md §3, §5 (DRAFT; pending PO approval of L1-L4)"
+    source_document_pointer: "docs/design/CP_FAILOVER_ONE_SHELL_SESSION_2026_10_22.md §3, §5; PO approval 2026-10-22 (docs/design/PO_DECISION_RECORD_2026_10_22_CP_ONE_SHELL_SESSION.md, L1-L4 APPROVED as written; one cluster first)"
