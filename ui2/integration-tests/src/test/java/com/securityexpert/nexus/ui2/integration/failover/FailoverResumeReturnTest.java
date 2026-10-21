@@ -351,15 +351,18 @@ class FailoverResumeReturnTest {
         }
     }
 
+    // 10:00 Europe/Istanbul: inside business hours (PO decision 2026-10-20). Every business-hours test names its own
+    // instant; none reads the wall clock, and the other tests in this class run with JobWindowTestPolicy.PERMISSIVE,
+    // whose business hours no real instant is inside.
+    private static final String DAYTIME = "2026-10-20T07:00:00Z";
+    // 23:30 Europe/Istanbul: outside business hours.
+    private static final String NIGHT = "2026-10-20T20:30:00Z";
+
     @Test void insideBusinessHoursTheResumeRequestCarriesItsOwnAcknowledgement() throws Exception {
         try (var fixture = Ui2PostgresFixture.createAndMigrate("failover_resume_business_hours")) {
             var repo = repository(fixture); var members = pair(fixture, "unit-resume");
             var e = stoppedAfterConfirmedDown(fixture, repo, "unit-resume", members, false);
-            // 10:00 Europe/Istanbul: inside business hours (PO decision 2026-10-20).
-            var daytime = new JooqCpFailoverRepository(new JooqTransactionBoundary(
-                DSL.using(fixture.appDataSource(), SQLDialect.POSTGRES)), true,
-                new com.securityexpert.nexus.ui2.platform.JobWindowPolicy(
-                    java.time.Clock.fixed(Instant.parse("2026-10-20T07:00:00Z"), java.time.ZoneOffset.UTC), 60));
+            var daytime = repositoryAt(fixture, DAYTIME);
             assertEquals(JooqCpFailoverRepository.BUSINESS_HOURS_ACK_REQUIRED, daytime.requestResume(e.run(), ADMIN,
                 "security_admin", JooqCpFailoverRepository.ADMIN_SINGLE, REASON, e.run(), false).code());
             assertEquals(0L, count(fixture, "failover_resume"), "Nothing is spent by a missing acknowledgement");
@@ -373,6 +376,62 @@ class FailoverResumeReturnTest {
             // A request inside business hours without its acknowledgement cannot be stored at all.
             assertThrows(RuntimeException.class, () -> mutate(fixture, dsl -> dsl.execute(
                 "update failover_resume set business_hours_ack_by=null,business_hours_ack_at=null where resume_id={0}", resume.id())));
+        }
+    }
+
+    @Test void insideBusinessHoursTheSecondApprovalNeedsItsOwnAcknowledgementToo() throws Exception {
+        try (var fixture = Ui2PostgresFixture.createAndMigrate("failover_resume_business_hours_two_person")) {
+            var repo = repository(fixture); var members = pair(fixture, "unit-resume");
+            var e = stoppedAfterConfirmedDown(fixture, repo, "unit-resume", members, false);
+            var daytime = repositoryAt(fixture, DAYTIME);
+            assertEquals(JooqCpFailoverRepository.BUSINESS_HOURS_ACK_REQUIRED, daytime.requestResume(e.run(), OP_A,
+                "operation_admin", JooqCpFailoverRepository.TWO_PERSON, REASON, e.run(), false).code());
+            assertEquals(0L, count(fixture, "failover_resume"));
+            var pending = daytime.requestResume(e.run(), OP_A, "operation_admin", JooqCpFailoverRepository.TWO_PERSON,
+                REASON, e.run(), true);
+            assertEquals(JooqCpFailoverRepository.RESUME_PENDING, pending.code());
+            // The initiator's acknowledgement is not the approver's.
+            assertEquals(JooqCpFailoverRepository.BUSINESS_HOURS_ACK_REQUIRED, daytime.approveResume(e.run(), pending.runId(),
+                OP_B, "operation_admin", false).code());
+            assertNull(daytime.resumeForRun(e.run()).orElseThrow().jobId(), "A refused approval admits no job");
+            assertEquals(JooqCpFailoverRepository.RESUME_ADMITTED, daytime.approveResume(e.run(), pending.runId(), OP_B,
+                "operation_admin", true).code());
+            var resume = daytime.resumeForRun(e.run()).orElseThrow();
+            assertTrue(resume.requestedInBusinessHours()); assertNotNull(resume.jobId());
+            assertEquals(true, mutate(fixture, dsl -> dsl.fetchOne("select submitted_in_business_hours from jobs where job_id={0}",
+                resume.jobId()).get(0, Boolean.class)));
+        }
+    }
+
+    @Test void outsideBusinessHoursNoAcknowledgementIsNeededAndNoneIsRecorded() throws Exception {
+        // The edges of [08:00, 20:00) Europe/Istanbul, on the policy the tests below use.
+        assertFalse(JobWindowTestPolicy.at("2026-10-20T04:59:59Z").insideBusinessHours());
+        assertTrue(JobWindowTestPolicy.at("2026-10-20T05:00:00Z").insideBusinessHours());
+        assertTrue(JobWindowTestPolicy.at("2026-10-20T16:59:59Z").insideBusinessHours());
+        assertFalse(JobWindowTestPolicy.at("2026-10-20T17:00:00Z").insideBusinessHours());
+        assertFalse(JobWindowTestPolicy.PERMISSIVE.insideBusinessHours(), "the default test policy is never inside");
+        try (var fixture = Ui2PostgresFixture.createAndMigrate("failover_resume_outside_hours")) {
+            var repo = repository(fixture); var members = pair(fixture, "unit-resume");
+            var e = stoppedAfterConfirmedDown(fixture, repo, "unit-resume", members, false);
+            var night = repositoryAt(fixture, NIGHT);
+            String pending = night.requestResume(e.run(), OP_A, "operation_admin", JooqCpFailoverRepository.TWO_PERSON,
+                REASON, e.run(), false).runId();
+            assertNotNull(pending);
+            assertEquals(JooqCpFailoverRepository.RESUME_ADMITTED, night.approveResume(e.run(), pending, OP_B,
+                "operation_admin", false).code());
+            var resume = night.resumeForRun(e.run()).orElseThrow();
+            assertFalse(resume.requestedInBusinessHours()); assertFalse(resume.businessHoursAcknowledged());
+            assertEquals(false, mutate(fixture, dsl -> dsl.fetchOne("select submitted_in_business_hours from jobs where job_id={0}",
+                resume.jobId()).get(0, Boolean.class)));
+        }
+        try (var fixture = Ui2PostgresFixture.createAndMigrate("failover_resume_outside_hours_single")) {
+            var repo = repository(fixture); var members = pair(fixture, "unit-resume");
+            var e = stoppedAfterConfirmedDown(fixture, repo, "unit-resume", members, false);
+            // An acknowledgement offered outside business hours is not recorded: there was nothing to acknowledge.
+            assertEquals(JooqCpFailoverRepository.RESUME_ADMITTED, repositoryAt(fixture, NIGHT).requestResume(e.run(), ADMIN,
+                "security_admin", JooqCpFailoverRepository.ADMIN_SINGLE, REASON, e.run(), true).code());
+            var resume = repo.resumeForRun(e.run()).orElseThrow();
+            assertFalse(resume.requestedInBusinessHours()); assertFalse(resume.businessHoursAcknowledged());
         }
     }
 
@@ -446,6 +505,11 @@ class FailoverResumeReturnTest {
     private static JooqCpFailoverRepository repository(Ui2PostgresFixture fixture) {
         return new JooqCpFailoverRepository(new JooqTransactionBoundary(
             DSL.using(fixture.appDataSource(), SQLDialect.POSTGRES)), true, JobWindowTestPolicy.PERMISSIVE);
+    }
+    /** The repository as it behaves at a fixed instant, with the production business hours (08:00-20:00 Istanbul). */
+    private static JooqCpFailoverRepository repositoryAt(Ui2PostgresFixture fixture, String utcInstant) {
+        return new JooqCpFailoverRepository(new JooqTransactionBoundary(
+            DSL.using(fixture.appDataSource(), SQLDialect.POSTGRES)), true, JobWindowTestPolicy.at(utcInstant));
     }
     private static <T> T mutate(Ui2PostgresFixture fixture, Function<DSLContext, T> work) {
         return new AuditedTransactionBoundary(new JooqTransactionBoundary(
