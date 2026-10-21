@@ -384,12 +384,19 @@ public final class Ui2WorkerMain {
         java.util.List<WorkerClaimLoop> claimLoops = new java.util.ArrayList<>();
         var failoverRecovery = new com.securityexpert.nexus.ui2.persistence.JooqCpFailoverRepository(transactionBoundary);
         failoverRecovery.reconcileDispatches();
+        // CP failover one shell per member per pass (docs/design/CP_FAILOVER_ONE_SHELL_SESSION_2026_10_22.md): off by default.
+        var cpShellMode = com.securityexpert.nexus.ui2.worker.failover.CpFailoverShellMode.fromEnvironment();
+        Duration cpCommandPause = cpShellMode.commandPause(
+                System.getenv(com.securityexpert.nexus.ui2.worker.failover.CpFailoverShellMode.PAUSE),
+                Duration.ofSeconds(Long.parseLong(System.getenv().getOrDefault("UI2_FAILOVER_COMMAND_PAUSE_SECONDS", "2"))));
+        System.getLogger(Ui2WorkerMain.class.getName()).log(System.Logger.Level.INFO,
+                "[CP_FAILOVER] oneShell=" + cpShellMode.oneShell() + " commandPauseMs=" + cpCommandPause.toMillis());
         for (int i = 0; i < 10; i++) {
             var cpFailoverExecutor = new com.securityexpert.nexus.ui2.worker.failover.CpFailoverJobExecutor(
                     new com.securityexpert.nexus.ui2.persistence.JooqCpFailoverRepository(transactionBoundary),
                     deviceRepository, leaseRepository, attemptRepository, strictFailoverSsh, gateRegistry,
-                    d -> Thread.sleep(d.toMillis()), Duration.ofSeconds(Long.parseLong(
-                        System.getenv().getOrDefault("UI2_FAILOVER_COMMAND_PAUSE_SECONDS", "2"))));
+                    d -> Thread.sleep(d.toMillis()), cpCommandPause,
+                    com.securityexpert.nexus.ui2.jobs.failover.FailoverMutationSwitch.fromEnvironment(), cpShellMode);
             var panFailoverExecutor = new com.securityexpert.nexus.ui2.worker.failover.PanFailoverJobExecutor(
                     new com.securityexpert.nexus.ui2.persistence.JooqCpFailoverRepository(transactionBoundary),
                     deviceRepository, leaseRepository, attemptRepository, panTransport, panCredentialResolver, gateRegistry,

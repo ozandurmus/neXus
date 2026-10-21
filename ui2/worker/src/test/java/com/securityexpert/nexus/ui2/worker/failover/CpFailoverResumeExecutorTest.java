@@ -238,6 +238,22 @@ class CpFailoverResumeExecutorTest {
             d -> nanos.addAndGet(d.toNanos()),Duration.ZERO,mutationSwitch,nanos::get).execute("job-r",1);
     }
 
+    /** CP_FAILOVER_ONE_SHELL_SESSION_2026_10_22.md §3.5: on the one-shell path the resume reads use one shell per member; UP stays on exec. */
+    @Test void oneShellResumeKeepsTheUpOnExecAndReadsInOneShellPerMember() {
+        Store store=new Store(); Script script=new Script();
+        var clock=new AtomicLong();
+        var transport=new ShellTransport(script.transport(),clock);
+        new CpFailoverJobExecutor(store,devices(List.of(A,B)),leases(),attempts(),transport,
+            CpFailoverOneShellTest.signedOffFraming(gates()),d -> clock.addAndGet(d.toNanos()),Duration.ZERO,
+            new FailoverMutationSwitch(true),clock::get,new CpFailoverShellMode(true)).execute("job-r",1);
+        assertEquals("DONE",store.state,store.checks.toString()); assertEquals("RETURN_VERIFIED",store.message);
+        assertEquals(List.of(UP_LITERAL),transport.execLiterals);
+        assertEquals(List.of(UP_LITERAL),script.writes());
+        assertEquals(2,transport.shells.size());
+        transport.shells.values().forEach(list -> assertEquals(1,list.size()));
+        transport.shells.values().forEach(list -> assertEquals("cphaprob stat",list.get(0).inner.get(0)));
+        assertEquals(2,script.disconnectCount);
+    }
     @Test void returnStepSendsTheRunsOwnUpOnceToTheFormerActiveThenVerifiesAgainstTheBaseline() {
         Store store=new Store(); Script script=new Script();
         run(store,script);

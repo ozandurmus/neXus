@@ -421,6 +421,81 @@ public final class SshExecTransport implements DeviceTransport {
         }
     }
 
+    /**
+     * One raw PTY shell channel on the trusted session (docs/design/CP_FAILOVER_ONE_SHELL_SESSION_2026_10_22.md):
+     * {@code vt100}, 4096 columns x 10000 rows as {@link InteractiveShellSession}. No banner drain, no prompt learning:
+     * the caller frames every command. Admission and cancellation are checked here and before every line sent. Nothing
+     * from the device is logged; failures carry only the exception class.
+     */
+    @Override
+    public com.securityexpert.nexus.ui2.jobs.transport.ShellChannel openShell(TransportSession session, Duration timeout) {
+        checkAdmission(session);
+        com.securityexpert.nexus.ui2.worker.JobCancellationScope.check();
+        if (!(session instanceof SshTransportSession sshSession)) {
+            throw new IllegalArgumentException("not an ssh_exec session");
+        }
+        com.jcraft.jsch.ChannelShell channel = null;
+        try {
+            channel = (com.jcraft.jsch.ChannelShell) sshSession.jschSession().openChannel("shell");
+            channel.setPty(true);
+            channel.setPtyType("vt100");
+            channel.setPtySize(4096, 10000, 0, 0);
+            InputStream in = channel.getInputStream();
+            java.io.OutputStream out = channel.getOutputStream();
+            channel.connect((int) Math.max(1000, timeout.toMillis()));
+            LOG.log(System.Logger.Level.INFO, "[SSH_SHELL] opened session={0}", session.sessionId());
+            return new SshShellChannel(session, channel, in, out);
+        } catch (JSchException | IOException e) {
+            if (channel != null) channel.disconnect();
+            LOG.log(System.Logger.Level.WARNING, "[SSH_SHELL] open failed: {0}", e.getClass().getSimpleName());
+            throw new IllegalStateException("SHELL_OPEN_FAILED");
+        }
+    }
+
+    private static final class SshShellChannel implements com.securityexpert.nexus.ui2.jobs.transport.ShellChannel {
+        private final TransportSession session;
+        private final com.jcraft.jsch.ChannelShell channel;
+        private final InputStream in;
+        private final java.io.OutputStream out;
+
+        SshShellChannel(TransportSession session, com.jcraft.jsch.ChannelShell channel, InputStream in,
+                java.io.OutputStream out) {
+            this.session = session; this.channel = channel; this.in = in; this.out = out;
+        }
+
+        @Override
+        public void sendLine(String line) throws IOException {
+            if (line == null || line.indexOf('\n') >= 0 || line.indexOf('\r') >= 0)
+                throw new IllegalArgumentException("SHELL_LINE_INVALID");
+            checkAdmission(session);
+            com.securityexpert.nexus.ui2.worker.JobCancellationScope.check();
+            if (!channel.isConnected()) throw new IOException("SHELL_CLOSED");
+            out.write((line + "\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            out.flush();
+        }
+
+        @Override
+        public int read(byte[] buffer, Duration wait) throws IOException {
+            long deadline = System.nanoTime() + Math.max(0, wait.toNanos());
+            while (true) {
+                if (in.available() > 0) return in.read(buffer, 0, Math.min(buffer.length, in.available()));
+                if (channel.isClosed() || !channel.isConnected()) return -1;
+                if (System.nanoTime() >= deadline) return 0;
+                try {
+                    Thread.sleep(10);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    throw new java.io.InterruptedIOException("SHELL_READ_INTERRUPTED");
+                }
+            }
+        }
+
+        @Override
+        public void close() {
+            channel.disconnect();
+        }
+    }
+
     @Override
     public boolean resyncPrompt(TransportSession session, Duration quiet) {
         checkAdmission(session);

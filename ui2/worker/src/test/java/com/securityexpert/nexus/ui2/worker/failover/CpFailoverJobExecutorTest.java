@@ -31,7 +31,7 @@ import com.securityexpert.nexus.ui2.platform.DeviceEnrollmentState;
 class CpFailoverJobExecutorTest {
     private static final String CLUSTER="CLS-TEST-01", A="FW-TEST-01", B="FW-TEST-02";
     private static void check(boolean value) { if(!value) throw new AssertionError(); }
-    private static final class Store extends JooqCpFailoverRepository {
+    static final class Store extends JooqCpFailoverRepository {
         String state="PLANNED",outcome,stopCode; boolean valid=true; final List<String> checks=new ArrayList<>();
         final List<String> derivedValues=new ArrayList<>();
         String vsId,kind="FAILOVER";
@@ -124,7 +124,7 @@ class CpFailoverJobExecutorTest {
         }
     }
 
-    private static final class Script {
+    static final class Script {
         String lostReplyStep, runtimeErrorStep;
         boolean notSentTransportFailure;
         boolean down,up,stuck,badPre,badPost,badSync,badPolicy,changedPolicyPost;
@@ -299,7 +299,7 @@ class CpFailoverJobExecutorTest {
         return new DeviceSummaryRecord(id,"gateway","check_point",DeviceEnrollmentState.ENROLLED,
             Optional.empty(),Optional.empty(),Optional.empty(),Optional.empty(),Optional.of(CLUSTER));
     }
-    private static DeviceRepository devices() {
+    static DeviceRepository devices() {
         return devices(true);
     }
     private static DeviceRepository devices(boolean recordedIdentity) {
@@ -317,14 +317,14 @@ class CpFailoverJobExecutorTest {
                 default -> throw new AssertionError(method.getName());
             });
     }
-    private static JobLeaseRepository leases() {
+    static JobLeaseRepository leases() {
         return (JobLeaseRepository)Proxy.newProxyInstance(JobLeaseRepository.class.getClassLoader(),
             new Class<?>[]{JobLeaseRepository.class},(proxy,method,args) -> {
                 if(method.getName().equals("transitionState")) return true;
                 throw new AssertionError(method.getName());
             });
     }
-    private static JobStepAttemptRepository attempts() {
+    static JobStepAttemptRepository attempts() {
         AtomicInteger id=new AtomicInteger();
         return (JobStepAttemptRepository)Proxy.newProxyInstance(JobStepAttemptRepository.class.getClassLoader(),
             new Class<?>[]{JobStepAttemptRepository.class},(proxy,method,args) -> switch(method.getName()) {
@@ -334,7 +334,7 @@ class CpFailoverJobExecutorTest {
                 default -> throw new AssertionError(method.getName());
             });
     }
-    private static GateRegistryPort gates() {
+    static GateRegistryPort gates() {
         var rows=GateRegistryFixtureLoader.loadFromStream(CpFailoverJobExecutorTest.class
             .getResourceAsStream("/capabilities/gate_registry_fixture.yaml"));
         return key -> rows.stream().filter(row -> row.key().equals(key)).toList();
