@@ -386,11 +386,11 @@ public final class Ui2WorkerMain {
         failoverRecovery.reconcileDispatches();
         // CP failover one shell per member per pass (docs/design/CP_FAILOVER_ONE_SHELL_SESSION_2026_10_22.md): off by default.
         var cpShellMode = com.securityexpert.nexus.ui2.worker.failover.CpFailoverShellMode.fromEnvironment();
-        Duration cpCommandPause = cpShellMode.commandPause(
+        Duration cpCommandPause = com.securityexpert.nexus.ui2.worker.failover.CpFailoverShellMode.execPause(
                 System.getenv(com.securityexpert.nexus.ui2.worker.failover.CpFailoverShellMode.PAUSE),
                 Duration.ofSeconds(Long.parseLong(System.getenv().getOrDefault("UI2_FAILOVER_COMMAND_PAUSE_SECONDS", "2"))));
         System.getLogger(Ui2WorkerMain.class.getName()).log(System.Logger.Level.INFO,
-                "[CP_FAILOVER] oneShell=" + cpShellMode.oneShell() + " commandPauseMs=" + cpCommandPause.toMillis());
+                "[CP_FAILOVER] " + cpShellMode.toString() + " execPauseMs=" + cpCommandPause.toMillis());
         for (int i = 0; i < 10; i++) {
             var cpFailoverExecutor = new com.securityexpert.nexus.ui2.worker.failover.CpFailoverJobExecutor(
                     new com.securityexpert.nexus.ui2.persistence.JooqCpFailoverRepository(transactionBoundary),

@@ -244,7 +244,7 @@ class CpFailoverResumeExecutorTest {
         var clock=new AtomicLong();
         var transport=new ShellTransport(script.transport(),clock);
         new CpFailoverJobExecutor(store,devices(List.of(A,B)),leases(),attempts(),transport,
-            CpFailoverOneShellTest.signedOffFraming(gates()),d -> clock.addAndGet(d.toNanos()),Duration.ZERO,
+            gates(),d -> clock.addAndGet(d.toNanos()),Duration.ZERO,
             new FailoverMutationSwitch(true),clock::get,new CpFailoverShellMode(true)).execute("job-r",1);
         assertEquals("DONE",store.state,store.checks.toString()); assertEquals("RETURN_VERIFIED",store.message);
         assertEquals(List.of(UP_LITERAL),transport.execLiterals);
@@ -253,6 +253,16 @@ class CpFailoverResumeExecutorTest {
         transport.shells.values().forEach(list -> assertEquals(1,list.size()));
         transport.shells.values().forEach(list -> assertEquals("cphaprob stat",list.get(0).inner.get(0)));
         assertEquals(2,script.disconnectCount);
+        // Enabled but the cluster not allow-listed: the resume stays on the exec path.
+        Store other=new Store(); Script exec=new Script();
+        var execTransport=new ShellTransport(exec.transport(),clock);
+        new CpFailoverJobExecutor(other,devices(List.of(A,B)),leases(),attempts(),execTransport,gates(),
+            d -> clock.addAndGet(d.toNanos()),Duration.ZERO,new FailoverMutationSwitch(true),clock::get,
+            CpFailoverShellMode.fromValues("enabled","CLS-OTHER-02",null)).execute("job-r",1);
+        assertEquals("DONE",other.state,other.checks.toString());
+        assertTrue(execTransport.shells.isEmpty());
+        assertEquals(exec.commands,execTransport.execLiterals);
+        assertTrue(execTransport.execLiterals.contains(UP_LITERAL));
     }
     @Test void returnStepSendsTheRunsOwnUpOnceToTheFormerActiveThenVerifiesAgainstTheBaseline() {
         Store store=new Store(); Script script=new Script();

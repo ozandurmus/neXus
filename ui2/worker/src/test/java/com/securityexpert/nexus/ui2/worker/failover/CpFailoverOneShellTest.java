@@ -24,15 +24,23 @@ import com.securityexpert.nexus.ui2.jobs.transport.*;
  */
 class CpFailoverOneShellTest {
 
-    /** The fixture's DRAFTED framing row, as a later sign-off migration would make it. */
+    private static final String CLUSTER = "CLS-TEST-01";
+
+    /** The fixture as V174 seeds it (framing row SIGNED_OFF by the PO approval of 2026-10-22). */
     static GateRegistryPort signedOffFraming() {
-        return signedOffFraming(CpFailoverJobExecutorTest.gates());
+        return CpFailoverJobExecutorTest.gates();
     }
 
     static GateRegistryPort signedOffFraming(GateRegistryPort fixture) {
+        return fixture;
+    }
+
+    /** The fixture with the framing row in another sign-off state. */
+    static GateRegistryPort framingAs(SignOffState state) {
+        GateRegistryPort fixture = CpFailoverJobExecutorTest.gates();
         return key -> fixture.findByCanonicalKey(key).stream().map(row -> !CpFailoverJobExecutor.SHELL_FRAMING_GATE.equals(row.gateId())
                 ? row : new GateRow(row.gateId(), row.vendor(), row.platformRoleScope(), row.shellContext(), row.transportKind(),
-                        row.canonicalCommandKey(), row.actionClass(), SignOffState.SIGNED_OFF, row.timeoutS(), row.retryRule(),
+                        row.canonicalCommandKey(), row.actionClass(), state, row.timeoutS(), row.retryRule(),
                         row.maxFrequency(), row.sessionReuseRule(), row.unsupportedBehaviorRef(), row.secretOutputRisk(),
                         row.safeTelemetryFields(), row.sourceDocumentPointer())).toList();
     }
@@ -41,6 +49,13 @@ class CpFailoverOneShellTest {
             List<Duration> pauses) {}
 
     private static Run run(String kind, boolean oneShell, GateRegistryPort gates, Duration commandPause,
+            java.util.function.Consumer<ShellTransport> setup) {
+        // Same pause on both paths, so the two paths are comparable run for run.
+        return run(kind, oneShell ? new CpFailoverShellMode(true, java.util.Set.of(CpFailoverShellMode.ALL), commandPause)
+                : CpFailoverShellMode.OFF, gates, commandPause, setup);
+    }
+
+    private static Run run(String kind, CpFailoverShellMode mode, GateRegistryPort gates, Duration commandPause,
             java.util.function.Consumer<ShellTransport> setup) {
         var store = new CpFailoverJobExecutorTest.Store();
         store.kind = kind;
@@ -52,7 +67,7 @@ class CpFailoverOneShellTest {
         new CpFailoverJobExecutor(store, CpFailoverJobExecutorTest.devices(), CpFailoverJobExecutorTest.leases(),
                 CpFailoverJobExecutorTest.attempts(), transport, gates, d -> { pauses.add(d); clock.addAndGet(d.toNanos()); },
                 commandPause, new FailoverMutationSwitch(!"READINESS".equals(kind)), clock::get,
-                new CpFailoverShellMode(oneShell)).execute("job-1", 1);
+                mode).execute("job-1", 1);
         return new Run(store, script, transport, pauses);
     }
 
@@ -129,16 +144,27 @@ class CpFailoverOneShellTest {
 
     @Test
     void configuredPauseRunsBetweenEveryTwoCommands() {
-        var run = run("READINESS", true, signedOffFraming(), Duration.ofMillis(1000), t -> {});
+        var mode = new CpFailoverShellMode(true, java.util.Set.of(CLUSTER), Duration.ofMillis(750));
+        var run = run("READINESS", mode, signedOffFraming(), Duration.ofSeconds(2), t -> {});
         assertEquals("READY", run.store().outcome);
-        long commandPauses = run.pauses().stream().filter(Duration.ofMillis(1000)::equals).count();
+        assertTrue(run.pauses().stream().noneMatch(Duration.ofSeconds(2)::equals), "The exec pause is not used on the shell");
+        long commandPauses = run.pauses().stream().filter(Duration.ofMillis(750)::equals).count();
         assertEquals(run.transport().sent() - 1, commandPauses, run.pauses().toString());
         assertEquals(1, run.pauses().stream().filter(Duration.ofSeconds(5)::equals).count(), "Traffic window unchanged");
     }
 
     @Test
-    void draftedFramingGateStopsBeforeAnyConnection() {
-        var run = run("READINESS", true, CpFailoverJobExecutorTest.gates(), Duration.ZERO, t -> {});
+    void fixtureFramingRowIsSignedOffAsV174SeedsIt() {
+        var rows = signedOffFraming().findByCanonicalKey(new com.securityexpert.nexus.ui2.capability.CanonicalCommandKey(
+                "check_point", "cp_gaia_gateway", "expert", "SSH_INTERACTIVE", CpFailoverJobExecutor.SHELL_FRAMING));
+        assertEquals(1, rows.size());
+        assertEquals(SignOffState.SIGNED_OFF, rows.get(0).signOffState());
+        assertEquals(CpFailoverJobExecutor.SHELL_FRAMING_GATE, rows.get(0).gateId());
+    }
+
+    @Test
+    void unsignedFramingGateStopsBeforeAnyConnection() {
+        var run = run("READINESS", true, framingAs(SignOffState.DRAFTED), Duration.ZERO, t -> {});
         assertEquals("UNKNOWN", run.store().outcome);
         assertEquals("COMMAND_GATE_UNAVAILABLE", run.store().stopCode);
         assertEquals(0, run.script().connectCount);
@@ -159,6 +185,34 @@ class CpFailoverOneShellTest {
         assertEquals(script.commands, off.transport().execLiterals);
         assertTrue(off.transport().execLiterals.stream().allMatch(c -> c.startsWith("bash -lc '")));
         assertEquals(store.checks, off.store().checks);
+    }
+
+    /** PO 2026-10-22 "one cluster first": switch AND allow-list; {@code *} = all clusters. */
+    @Test
+    void clusterAllowListDecidesThePathPerRun() {
+        record Case(String name, CpFailoverShellMode mode, boolean shell) {}
+        for (var c : List.of(
+                new Case("off", CpFailoverShellMode.fromValues(null, CLUSTER, null), false),
+                new Case("off-but-listed", CpFailoverShellMode.fromValues("disabled", CLUSTER, null), false),
+                new Case("enabled-unset-list", CpFailoverShellMode.fromValues("enabled", null, null), false),
+                new Case("enabled-not-listed", CpFailoverShellMode.fromValues("enabled", "CLS-OTHER-02", null), false),
+                new Case("enabled-listed", CpFailoverShellMode.fromValues("enabled", "CLS-OTHER-02, " + CLUSTER, null), true),
+                new Case("enabled-all", CpFailoverShellMode.fromValues("enabled", "*", null), true))) {
+            for (String kind : List.of("READINESS", "FAILOVER")) {
+                var run = run(kind, c.mode(), signedOffFraming(), Duration.ZERO, t -> {});
+                String context = c.name() + " " + kind + " " + run.store().checks;
+                assertEquals("READINESS".equals(kind) ? "READY" : "SUCCEEDED", run.store().outcome, context);
+                assertEquals(c.shell() ? 2 : 0, run.transport().shells.size(), context);
+                if (c.shell()) {
+                    assertEquals("READINESS".equals(kind) ? List.of()
+                            : List.of("bash -lc 'clusterXL_admin down'", "bash -lc 'clusterXL_admin up'"),
+                            run.transport().execLiterals, context);
+                } else {
+                    assertTrue(run.transport().execLiterals.size() > 20, context);
+                    assertTrue(run.transport().execLiterals.stream().allMatch(l -> l.startsWith("bash -lc '")), context);
+                }
+            }
+        }
     }
 
     @Test
