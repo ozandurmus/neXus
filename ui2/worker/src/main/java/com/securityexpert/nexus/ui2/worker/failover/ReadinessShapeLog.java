@@ -35,6 +35,13 @@ final class ReadinessShapeLog {
         LOG.log(System.Logger.Level.INFO,"[READINESS_SHAPE] vendor="+vendor+" bannerStripped=true");
     }
 
+    /** Reason and line count only: nothing from the device output may enter this log. */
+    String logBondParse(CpFailoverChecks.BondParseReason reason,int lineCount) {
+        String message="[READINESS_SHAPE] vendor="+vendor+" check=8 bondParseReason="+reason.name()+" lineCount="+lineCount;
+        LOG.log(System.Logger.Level.INFO,message);
+        return message;
+    }
+
     void capture(int check,String output) {
         if (logged.contains(check)) return;
         String shape="palo_alto".equals(vendor)?check==4?PanFailoverChecks.configurationSyncShape(output):xmlShape(output,check==5):textShape(output);

@@ -526,7 +526,7 @@ public final class CpFailoverJobExecutor {
             case CPSTAT_POLICY -> !"UNKNOWN".equals(CpFailoverChecks.cpstatPolicy(output).status());
             case PNOTES -> !"UNKNOWN".equals(CpFailoverChecks.pnotes(output).status());
             case BONDS -> !"UNKNOWN".equals(CpFailoverChecks.bonds(output));
-            case BOND_MEMBERS -> output.startsWith("Bond name:");
+            case BOND_MEMBERS -> output.lines().anyMatch(l -> l.strip().toLowerCase(java.util.Locale.ROOT).startsWith("bond name"));
             case FAILOVER -> CpFailoverChecks.lastFailover(output,Instant.now()).lastFailoverAt()!=null;
             case ROUTING -> CpFailoverChecks.routing(output)!=null;
             default -> false;
@@ -703,8 +703,10 @@ public final class CpFailoverJobExecutor {
     private double[] trafficWindow(String phase,Member first,Member second,
             CpFailoverChecks.Interfaces ia,CpFailoverChecks.Interfaces ib,Pair before,Member oldActive)
             throws InterruptedException {
-        var bondsA=bondMembership(phase,first,ia.trafficNames());
-        var bondsB=bondMembership(phase,second,ib.trafficNames());
+        var membershipA=bondMembership(phase,first,ia.trafficNames());
+        var membershipB=bondMembership(phase,second,ib.trafficNames());
+        var bondsA=membershipA.members();
+        var bondsB=membershipB.members();
         var preA=trafficSample(first);
         long startA=nanoTime.getAsLong();
         var preB=trafficSample(second);
@@ -729,13 +731,23 @@ public final class CpFailoverJobExecutor {
             status="UNKNOWN";
             derivedA.put("reason","TRAFFIC_SCOPE_CHANGED"); derivedB.put("reason","TRAFFIC_SCOPE_CHANGED");
         }
+        bondParseEvidence(derivedA,measurementA,membershipA);
+        bondParseEvidence(derivedB,measurementB,membershipB);
         record(phase,first,8,status,json(derivedA));
         record(phase,second,8,status,json(derivedB));
         if(scopeChanged) checkFailed("TRAFFIC_SCOPE_CHANGED",8,"UNKNOWN");
         if(!"PASS".equals(status)) checkFailed("TRAFFIC_BELOW_TOLERANCE",8,status);
         return new double[]{rateA,rateB};
     }
-    private Map<String,Set<String>> bondMembership(String phase,Member member,Set<String> selected)
+    private record BondMembership(Map<String,Set<String>> members,Map<String,CpFailoverChecks.BondParseReason> reasons) {}
+    /** A missing membership explains an overlap result; only enum names enter the evidence. */
+    private static void bondParseEvidence(Map<String,Object> derived,CpFailoverChecks.TrafficMeasurement measurement,
+            BondMembership membership) {
+        if(measurement.reason()!=CpFailoverChecks.TrafficReason.BOND_PHYSICAL_OVERLAP || membership.reasons().isEmpty()) return;
+        derived.put("bondParseReason",membership.reasons().values().stream().map(Enum::name).distinct().sorted()
+            .collect(java.util.stream.Collectors.joining(",")));
+    }
+    private BondMembership bondMembership(String phase,Member member,Set<String> selected)
             throws InterruptedException {
         String summary=command(member,BONDS);
         String status=CpFailoverChecks.bonds(summary);
@@ -744,16 +756,20 @@ public final class CpFailoverJobExecutor {
         if(!"PASS".equals(status)) checkFailed("BOND_NOT_READY",12,status);
         var observed=CpFailoverChecks.bondCounts(summary);
         Map<String,Set<String>> membership=new java.util.HashMap<>();
-        for(String bond:observed.keySet().stream().filter(selected::contains).sorted().toList()) {
+        Map<String,CpFailoverChecks.BondParseReason> reasons=new java.util.TreeMap<>();
+        for(String bond:selected.stream().filter(n -> n.startsWith("bond")).sorted().toList()) {
+            if(!observed.containsKey(bond)) { reasons.put(bond,CpFailoverChecks.BondParseReason.NOT_IN_SUMMARY); continue; }
             try {
                 String output=command(member,BOND_MEMBERS,bond,observed);
-                var slaves=CpFailoverChecks.bondSlaves(output,bond,observed.get(bond));
-                if(!slaves.isEmpty()) membership.put(bond,slaves);
+                var parsed=CpFailoverChecks.parseBondSlaves(output,bond,observed.get(bond));
+                if(parsed.reason()==CpFailoverChecks.BondParseReason.NONE) membership.put(bond,parsed.slaves());
+                else { reasons.put(bond,parsed.reason()); shapes.logBondParse(parsed.reason(),parsed.lineCount()); }
             } catch(Stop unavailable) {
                 if(!Set.of("COMMAND_UNAVAILABLE","OUTPUT_UNAVAILABLE").contains(unavailable.code)) throw unavailable;
+                reasons.put(bond,CpFailoverChecks.BondParseReason.COMMAND_UNAVAILABLE);
             }
         }
-        return Map.copyOf(membership);
+        return new BondMembership(Map.copyOf(membership),Map.copyOf(reasons));
     }
     private void checkFailed(String code,int check,String status) {
         if (!readiness) throw new Stop(code,check,status);

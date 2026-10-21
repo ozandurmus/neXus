@@ -482,38 +482,66 @@ public final class CpFailoverChecks {
         return Map.copyOf(names);
     }
 
+    /** Why a membership read produced no slave set; the name alone is logged, never any device text. */
+    public enum BondParseReason {
+        NONE, NO_TABLE, BOND_NAME_MISMATCH, COUNT_MISMATCH, BAD_SLAVE_NAME, DUPLICATE_SLAVE,
+        COMMAND_UNAVAILABLE, NOT_IN_SUMMARY
+    }
+    public record BondParse(Set<String> slaves,BondParseReason reason,int lineCount) {
+        public BondParse { slaves=Set.copyOf(slaves); }
+    }
+    private static final Pattern SLAVE_HEADER=Pattern.compile("(?i)^slave[ \\t]+name[ \\t]*\\|[ \\t]*status[ \\t]*\\|[ \\t]*link[ \\t]*\\|?$");
+    private static final Pattern SLAVE_NAME=Pattern.compile("[A-Za-z][A-Za-z0-9_-]{0,63}");
+
     /** Require a complete, unambiguous table before proving non-membership. */
     public static Set<String> bondSlaves(String output,String bond,int expectedCount) {
-        if(output==null || expectedCount<=0) return Set.of();
-        Set<String> fields=new HashSet<>(),slaves=new HashSet<>();
-        boolean table=false;
+        return parseBondSlaves(output,bond,expectedCount).slaves();
+    }
+
+    /**
+     * Vendor releases add header fields (hash policy, balancing mode) and footer legends, so unknown header
+     * keys and trailing text are ignored. Membership is only proven by the bond's own name, a slave table whose
+     * names look like interfaces, no duplicates, and a row count equal to the configured count.
+     */
+    public static BondParse parseBondSlaves(String output,String bond,int expectedCount) {
+        int lines=output==null?0:(int)output.lines().count();
+        if(output==null || expectedCount<=0 || bond==null) return new BondParse(Set.of(),BondParseReason.NO_TABLE,lines);
+        // A VLAN sub-interface of a bond is reported under its parent bond's detail.
+        String parent=bond.contains(".")?bond.substring(0,bond.indexOf('.')):bond;
+        boolean table=false,named=false,mismatch=false;
+        Integer configured=null;
+        Set<String> slaves=new java.util.LinkedHashSet<>();
         for(String raw:output.split("\\R")) {
             String line=raw.strip();
-            if(line.isEmpty() || line.matches("[-+]+")) continue;
-            if(!table && line.matches("Slave name\\s*\\|\\s*Status\\s*\\|\\s*Link")) { table=true; continue; }
+            if(line.isEmpty() || line.matches("[-+=| \\t]+")) continue;
+            if(!table && SLAVE_HEADER.matcher(line).matches()) { table=true; continue; }
             if(!table) {
-                String[] pair=line.split(":",2);
-                if(pair.length!=2 || !fields.add(pair[0])) return Set.of();
-                String value=pair[1].strip();
-                boolean valid=switch(pair[0]) {
-                    case "Bond name" -> value.equals(bond);
-                    case "Bond mode" -> Set.of("High Availability","Load Sharing").contains(value);
-                    case "Bond status" -> Set.of("UP","UP!","DOWN").contains(value);
-                    case "Configured slave interfaces" -> value.equals(Integer.toString(expectedCount));
-                    case "In use slave interfaces", "Required slave interfaces" -> value.matches("[0-9]+");
-                    default -> false;
-                };
-                if(!valid) return Set.of();
-            } else {
-                String[] columns=line.split("\\|",-1);
-                if(columns.length!=3) return Set.of();
-                String slave=columns[0].strip();
-                if(!slave.matches("[A-Za-z][A-Za-z0-9_-]{0,63}") || slave.startsWith("bond")
-                        || !Set.of("Active","Backup","Not Available").contains(columns[1].strip())
-                        || !Set.of("Yes","No").contains(columns[2].strip()) || !slaves.add(slave)) return Set.of();
+                int colon=line.indexOf(':');
+                if(colon<0) continue;
+                String key=line.substring(0,colon).strip().replaceAll("\\s+"," ").toLowerCase(java.util.Locale.ROOT);
+                String value=line.substring(colon+1).strip();
+                if(key.equals("bond name")) {
+                    named=true;
+                    if(!value.equals(bond) && !value.equals(parent)) mismatch=true;
+                } else if(key.equals("configured slave interfaces") && value.matches("[0-9]{1,6}")) {
+                    configured=Integer.parseInt(value);
+                }
+                continue;
             }
+            if(line.regionMatches(true,0,"Legend",0,6)) break;
+            // After the table, text without a column separator is footer text.
+            if(!line.contains("|")) continue;
+            String[] columns=line.split("\\|",-1);
+            String slave=columns[0].strip();
+            if(columns.length<3 || !SLAVE_NAME.matcher(slave).matches() || slave.startsWith("bond"))
+                return new BondParse(Set.of(),BondParseReason.BAD_SLAVE_NAME,lines);
+            if(!slaves.add(slave)) return new BondParse(Set.of(),BondParseReason.DUPLICATE_SLAVE,lines);
         }
-        return table && fields.size()==6 && slaves.size()==expectedCount?Set.copyOf(slaves):Set.of();
+        if(!table) return new BondParse(Set.of(),BondParseReason.NO_TABLE,lines);
+        if(!named || mismatch) return new BondParse(Set.of(),BondParseReason.BOND_NAME_MISMATCH,lines);
+        if(slaves.size()!=expectedCount || configured!=null && configured!=slaves.size())
+            return new BondParse(Set.of(),BondParseReason.COUNT_MISMATCH,lines);
+        return new BondParse(slaves,BondParseReason.NONE,lines);
     }
 
     public record Failover(String status,String lastFailoverAt) {}
