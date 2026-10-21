@@ -1,5 +1,5 @@
 -- V174 -- failover pilot follow-up (2026-10-21/22): a quarantined fleet failover task lease bound to a settled run
--- must never block a module drain. V174 is reserved by another branch; deploy V174 before V174.
+-- must never block a module drain.
 --
 -- What happened: a CP failover run STOPPED with mutation_possible; its job went OUTCOME_UNKNOWN, so the worker kept the
 -- 'fleet.failover.execution' task lease (EndpointRuntime.close releases it only when the outcome is certain) and the
