@@ -44,8 +44,12 @@ class CpFailoverSecurityRouteTest {
             }
         }
         assertEquals(14, registered);
-        for (String path : List.of("/approvals", "/approvals/*/revoke", "/runs")) {
-            assertNull(SecurityWebMvcConfig.ACTION_ID_BY_ROUTE.get("POST /api/v2/pan-failover" + path));
+        // PO 2026-10-22: PAN writes open with the Check Point actions.
+        for (String path : List.of("/approvals", "/approvals/*/approve", "/approvals/*/revoke", "/runs",
+                "/runs/*/incident/release")) {
+            assertEquals(SecurityWebMvcConfig.ACTION_ID_BY_ROUTE.get("POST /api/v2/cp-failover" + path),
+                SecurityWebMvcConfig.ACTION_ID_BY_ROUTE.get("POST /api/v2/pan-failover" + path), path);
+            assertNotNull(SecurityWebMvcConfig.ACTION_ID_BY_ROUTE.get("POST /api/v2/pan-failover" + path), path);
         }
     }
 
@@ -88,7 +92,7 @@ class CpFailoverSecurityRouteTest {
                         .header("X-CSRF-Token", "synthetic-csrf").header("Origin", "https://example.invalid")
                         .contentType("application/json").content("{\"clusterId\":\"opaque-cluster\",\"unitId\":\"opaque-unit\"}"))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.error").value("ACTION_MAPPING_REQUIRED"));
+                .andExpect(jsonPath("$.error").value("ACTION_REFUSED"));
         verifyNoMoreInteractions(service);
     }
     @Test

@@ -63,10 +63,12 @@ class CpFailoverIncidentRouteTest {
             .header("Origin", "https://example.invalid").contentType("application/json").content(body);
     }
 
-    @Test void releaseRouteIsSecurityAdminOnlyAndNeverUnderThePanPrefix() {
+    @Test void releaseRouteIsSecurityAdminOnlyUnderBothPrefixes() {
         assertEquals(ActionRegistry.CP_FAILOVER_INCIDENT_RELEASE,
             SecurityWebMvcConfig.ACTION_ID_BY_ROUTE.get("POST /api/v2/cp-failover/runs/*/incident/release"));
-        assertNull(SecurityWebMvcConfig.ACTION_ID_BY_ROUTE.get("POST /api/v2/pan-failover/runs/*/incident/release"));
+        // PO 2026-10-22: PAN failover writes opened; the release is keyed by run id and is the same action.
+        assertEquals(ActionRegistry.CP_FAILOVER_INCIDENT_RELEASE,
+            SecurityWebMvcConfig.ACTION_ID_BY_ROUTE.get("POST /api/v2/pan-failover/runs/*/incident/release"));
         assertNull(SecurityWebMvcConfig.ACTION_ID_BY_ROUTE.get("POST /api/v2/failover/*/quarantine/acknowledge"));
         var action = new ActionRegistry().find(ActionRegistry.CP_FAILOVER_INCIDENT_RELEASE).orElseThrow();
         assertEquals(Set.of(RoleToken.SECURITY_ADMIN), action.requiredRoleTokens());
@@ -99,8 +101,6 @@ class CpFailoverIncidentRouteTest {
             verifyNoInteractions(f.service(), f.generic());
         }
         var admin = fixture(Set.of(RoleToken.SECURITY_ADMIN));
-        admin.mvc().perform(write("/api/v2/pan-failover/runs/run-a/incident/release", "{\"reason\":\"r\"}"))
-            .andExpect(status().isForbidden()).andExpect(jsonPath("$.error").value("ACTION_MAPPING_REQUIRED"));
         admin.mvc().perform(write("/api/v2/failover/unit-a/quarantine/acknowledge",
                 "{\"execution_id\":\"run-a\",\"approver_id\":\"synthetic-other\",\"reason\":\"r\"}"))
             .andExpect(status().isForbidden());

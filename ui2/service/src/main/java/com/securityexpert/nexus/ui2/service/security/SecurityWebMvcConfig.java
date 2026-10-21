@@ -126,6 +126,13 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("GET /api/v2/pan-failover/runs", ActionRegistry.CP_FAILOVER_READ),
             Map.entry("GET /api/v2/pan-failover/runs/*", ActionRegistry.CP_FAILOVER_READ),
             Map.entry("GET /api/v2/pan-failover/approvals", ActionRegistry.CP_FAILOVER_READ),
+            // PO 2026-10-22: PAN failover writes opened for the gartest pilot (same actions and roles as Check Point).
+            // The resume-return step stays Check Point only: the PAN executor has no resume path.
+            Map.entry("POST /api/v2/pan-failover/approvals", ActionRegistry.CP_FAILOVER_APPROVE),
+            Map.entry("POST /api/v2/pan-failover/approvals/*/approve", ActionRegistry.CP_FAILOVER_APPROVE),
+            Map.entry("POST /api/v2/pan-failover/approvals/*/revoke", ActionRegistry.CP_FAILOVER_APPROVE),
+            Map.entry("POST /api/v2/pan-failover/runs", ActionRegistry.CP_FAILOVER_START),
+            Map.entry("POST /api/v2/pan-failover/runs/*/incident/release", ActionRegistry.CP_FAILOVER_INCIDENT_RELEASE),
             Map.entry("POST /role-bindings/selections", ActionRegistry.ROLE_BINDING_CREATE),
             Map.entry("GET /role-bindings", ActionRegistry.ROLE_BINDING_CREATE),
             Map.entry("POST /role-bindings", ActionRegistry.ROLE_BINDING_CREATE),
