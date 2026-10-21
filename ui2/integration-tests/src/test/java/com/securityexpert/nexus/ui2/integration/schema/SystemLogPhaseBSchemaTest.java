@@ -131,8 +131,8 @@ class SystemLogPhaseBSchemaTest {
                     "select max_frequency from gate_registry where gate_id='cp_syslog_collect_ls_spike'"));
             assertEquals("once per device per job window; max bytes: 256 KiB", scalar(db,
                     "select max_frequency from gate_registry where gate_id='cp_syslog_collect_ls_crash'"));
-            assertEquals("true", scalar(db, "select max_frequency like '%max bytes: 64 KiB%' from gate_registry "
-                    + "where gate_id='cp_syslog_collect_ls_spike_dir'"));
+            assertEquals("1", scalar(db, "select count(*) from gate_registry where max_frequency like '%max bytes: 64 KiB%' and "
+                    + "gate_id='cp_syslog_collect_ls_spike_dir'"));
             assertEquals("30|none|SIGNED_OFF", scalar(db, "select timeout_s || '|' || retry_rule || '|' || sign_off_state "
                     + "from gate_registry where gate_id='cp_syslog_collect_ls_spike'"));
             // The five commands that equal an approved measurement row stay byte-identical; only the key is narrowed.
