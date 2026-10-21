@@ -130,6 +130,21 @@ def test_failover_mutation_is_enabled_live_and_disabled_in_preview(monkeypatch, 
         assert entries == [{"name": "NEXUS_FAILOVER_MUTATION_ENABLED", "value": expected}]
 
 
+@pytest.mark.parametrize("filename,container_name", [
+    ("52-worker-deployment.yaml", "worker"),
+    ("57-policy-deployment.yaml", "policy"),
+])
+def test_pan_firewall_reads_are_switched_off_until_the_pan_os_12_defect_is_clarified(filename, container_name):
+    """PO 2026-10-21: show interface all and show session info are not sent to PAN firewalls for now
+    (PanFirewallCommandSwitches; "retired" = not sent). Removing the entries sends them again."""
+    deployment = next(doc for doc in load_documents((MANIFEST_DIR / filename).read_text())
+                      if doc["kind"] == "Deployment")
+    container = next(c for c in deployment["spec"]["template"]["spec"]["containers"] if c["name"] == container_name)
+    env = {e["name"]: e.get("value") for e in container["env"]}
+    assert env.get("NEXUS_PAN_FW_SHOW_INTERFACE_ALL") == "retired"
+    assert env.get("NEXUS_PAN_FW_SHOW_SESSION_INFO") == "retired"
+
+
 def test_scheduled_system_log_collection_is_enabled_for_the_fleet_in_the_service_only(monkeypatch):
     """PO decision 2026-10-18: SystemLogCollectionScheduler is a Spring bean of the service process, so only the service
     deployment carries the switch; the code default stays off and a preview candidate never schedules (scheduling off)."""

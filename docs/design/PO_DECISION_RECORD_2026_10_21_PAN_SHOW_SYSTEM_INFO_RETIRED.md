@@ -90,3 +90,12 @@ others. Until then:
 Re-enabling the command would need a new migration back to `SIGNED_OFF`, and the steps and branches restored. The
 withdrawn row, the disabled write-path tests in `PanFailoverJobExecutorTest` and this record mark what that would
 involve.
+
+## Addendum 2026-10-21 (PO, same day): two more reads off for now
+
+The PO chose not to run a test read and asked that the PAN-OS 12 reads be "commented out for a short while"
+until the defect is clarified. The worker and policy deployments therefore set `NEXUS_PAN_FW_SHOW_INTERFACE_ALL`
+and `NEXUS_PAN_FW_SHOW_SESSION_INFO` to `retired` (guarded by `test_ui2_deployment_manifests.py`). Interfaces and
+failover check 6 read UNKNOWN with the reason. Removing the two entries (and restarting) sends them again. The PO also
+approved, in the same form: `type=version` as the identity/model/version read for all PAN-OS versions, and failover
+check 7 taking versions from the HA state read (contract amendment to follow with the implementation).
