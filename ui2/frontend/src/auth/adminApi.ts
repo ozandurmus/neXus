@@ -3130,6 +3130,52 @@ export const getPacketCaseState = (caseId: string) =>
   call<PacketCaseWorkspaceState>(`${PA}/cases/${encodeURIComponent(caseId)}/state`, "GET");
 export const getPacketCaseCorrelation = (caseId: string) =>
   call<PacketNexusCorrelation>(`${PA}/cases/${encodeURIComponent(caseId)}/correlation`, "GET");
+
+/** Packet Analysis > case > Device events (GET .../device-events): stored system-log facts of the path firewalls around one finding. */
+export type PacketDeviceEventsResult = "CLEAN" | "EVENTS" | "NOT_COLLECTED" | "NOT_PERMITTED" | "UNKNOWN";
+export interface PacketDeviceEventsFindingChoice {
+  readonly id: string; readonly type: string | null; readonly severity: string | null; readonly hop: string | null;
+  readonly hop_label: string | null; readonly start: string | null;
+}
+export interface PacketDeviceEventsFinding extends PacketDeviceEventsFindingChoice {
+  readonly confidence: string | null; readonly direction: string | null; readonly end: string | null;
+  readonly figures: {
+    readonly event_count: number | null; readonly max_recovery_ms: number | null; readonly p95_ms: number | null;
+    readonly max_ms: number | null; readonly loss_percent: number | null;
+  };
+}
+export interface PacketDeviceEvent {
+  readonly kind: "CPWD_LINE" | "CRASH_ALERT" | "GAP" | string;
+  readonly source: string; readonly time: string | null; readonly time_basis: string; readonly device_time: string | null; readonly text: string;
+}
+export interface PacketDeviceEventsSource {
+  readonly source_key: string; readonly last_outcome: string | null; readonly last_run_at: string | null;
+  readonly chunks_overlapping: number; readonly lines_in_overlapping_chunks: number; readonly chunks_without_line_time: number;
+}
+export interface PacketDeviceEventsRow {
+  readonly label: string; readonly kind: string | null; readonly on_hop: boolean;
+  readonly points: readonly { readonly id: string; readonly label: string; readonly side: string | null; readonly on_hop: boolean }[];
+  readonly link: {
+    readonly state: "LINKED" | "NOT_LINKED"; readonly reason: string | null; readonly device_id: string | null; readonly device_name: string | null;
+    readonly vendor: string | null; readonly correlation_status: string | null;
+  };
+  readonly result: PacketDeviceEventsResult; readonly result_reason: string | null; readonly event_count: number | null;
+  readonly events: readonly PacketDeviceEvent[]; readonly sources: readonly PacketDeviceEventsSource[]; readonly coverage: "COVERED" | "NONE";
+}
+export interface PacketDeviceEventsView {
+  readonly case_id: string; readonly masked: boolean; readonly window_seconds: number;
+  readonly findings: readonly PacketDeviceEventsFindingChoice[];
+  readonly finding: PacketDeviceEventsFinding | null;
+  readonly hop: {
+    readonly id: string; readonly label: string | null; readonly point_a: string | null; readonly point_b: string | null;
+    readonly direction: string | null; readonly location: string | null; readonly reason: string | null;
+  } | null;
+  readonly window: { readonly from: string; readonly to: string; readonly start: string; readonly half_seconds: number } | null;
+  readonly devices: readonly PacketDeviceEventsRow[];
+  readonly notes: readonly string[];
+}
+export const getPacketCaseDeviceEvents = (caseId: string, params: { finding?: string; window_seconds?: number } = {}) =>
+  call<PacketDeviceEventsView>(`${PA}/cases/${encodeURIComponent(caseId)}/device-events${paQuery(params)}`, "GET");
 export const getPacketCaseFlows = (caseId: string, params: {
   offset?: number; limit?: number; search?: string; filter?: string; sort?: string; start?: number | null; end?: number | null;
 } = {}) => call<PacketFlowPage>(`${PA}/cases/${encodeURIComponent(caseId)}/flows${paQuery(params)}`, "GET");

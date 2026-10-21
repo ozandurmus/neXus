@@ -77,6 +77,15 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
             }
             return changes.body();
         }
+        if (body instanceof com.securityexpert.nexus.ui2.service.packetanalysis.PacketDeviceEventsResponse deviceEvents) {
+            // Packet Analysis > Device events masks itself the same way (device pseudonyms, label pseudonyms, log masking
+            // rules on cpwd text); the body passes through and an unmasked body never reaches aiview.
+            if (Boolean.TRUE.equals(isReplayViewer)) {
+                if (!deviceEvents.masked()) throw new IllegalStateException("device events projection required");
+                if (response != null) response.getHeaders().set(MASKED_HEADER, "true");
+            }
+            return deviceEvents.body();
+        }
         if (body instanceof com.securityexpert.nexus.ui2.service.policy.PolicyResponse policy) {
             if (!Boolean.TRUE.equals(isReplayViewer)) return policy.body();
             if (response != null) response.getHeaders().set(MASKED_HEADER, "true");

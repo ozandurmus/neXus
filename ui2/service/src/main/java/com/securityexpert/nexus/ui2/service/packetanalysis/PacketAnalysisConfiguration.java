@@ -7,10 +7,17 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import com.securityexpert.nexus.ui2.persistence.TransactionBoundary;
+import com.securityexpert.nexus.ui2.persistence.changes.JooqChangeFeedRepository;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.DeviceInventoryRepository;
+import com.securityexpert.nexus.ui2.persistence.diagnostic.SystemLogReadRepository;
 import com.securityexpert.nexus.ui2.persistence.packetanalysis.PacketAnalysisRepository;
+import com.securityexpert.nexus.ui2.service.boot.DeviceCompositionConfiguration.ArtefactStoreAccess;
+import com.securityexpert.nexus.ui2.service.changes.ChangeFeedConfiguration;
+import com.securityexpert.nexus.ui2.service.changes.ChunkTextReader;
 import com.securityexpert.nexus.ui2.service.policy.PolicyQueryService;
+import com.securityexpert.nexus.ui2.service.privacy.TopologyNamePseudonymizer;
+import com.securityexpert.nexus.ui2.service.systemlog.LogMasking;
 
 /**
  * Packet Analysis composition (decision record 2026-10-15 §5): the analysis volume root and its two limits are
@@ -46,5 +53,20 @@ public class PacketAnalysisConfiguration {
                 deviceRepository,
                 deviceInventoryRepository,
                 policyQueryService);
+    }
+
+    /**
+     * Packet Analysis > case > Device events (mockup 2026-10-17 screen 4): the stored report,
+     * topology and correlation of a case beside the system-log index and the stored cpwd chunk text, read through the
+     * same chunk reader and projections as Operations > Change feed.
+     */
+    @Bean
+    public PacketDeviceEventsService packetDeviceEventsService(PacketAnalysisRepository packetAnalysisRepository,
+            PacketCaptureStore packetCaptureStore, SystemLogReadRepository systemLogReadRepository, TransactionBoundary transactions,
+            ArtefactStoreAccess artefacts, DeviceRepository deviceRepository, TopologyNamePseudonymizer names, LogMasking masking) {
+        return new PacketDeviceEventsService(packetAnalysisRepository, PacketCaseFacts.onVolume(packetCaptureStore.root()),
+                systemLogReadRepository, new JooqChangeFeedRepository(transactions), new ChunkTextReader(artefacts.storeOrNull()),
+                deviceRepository, names, ChangeFeedConfiguration.plainProjection(deviceRepository, names),
+                ChangeFeedConfiguration.maskedProjection(deviceRepository, names, masking));
     }
 }

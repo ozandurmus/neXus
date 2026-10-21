@@ -171,6 +171,7 @@ class PacketAnalysisApiTest {
                 Map.entry("GET " + BASE + "/cases/*/reference/template", ActionRegistry.PACKET_ANALYSIS_READ),
                 Map.entry("POST " + BASE + "/cases/*/compare", ActionRegistry.PACKET_ANALYSIS_READ),
                 Map.entry("GET " + BASE + "/cases/*/correlation", ActionRegistry.PACKET_ANALYSIS_READ),
+                Map.entry("GET " + BASE + "/cases/*/device-events", ActionRegistry.PACKET_ANALYSIS_READ),
                 Map.entry("PUT " + BASE + "/cases/*/topology", ActionRegistry.PACKET_ANALYSIS_RUN),
                 Map.entry("GET " + BASE + "/runs/*", ActionRegistry.PACKET_ANALYSIS_READ),
                 Map.entry("GET " + BASE + "/runs/*/report", ActionRegistry.PACKET_ANALYSIS_READ),

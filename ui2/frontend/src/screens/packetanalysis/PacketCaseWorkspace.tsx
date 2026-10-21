@@ -3,8 +3,6 @@ import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Card from "@mui/material/Card";
 import Stack from "@mui/material/Stack";
-import Tab from "@mui/material/Tab";
-import Tabs from "@mui/material/Tabs";
 import Typography from "@mui/material/Typography";
 import {
   getPacketCaseCorrelation,
@@ -23,7 +21,8 @@ import {
   type PacketTimeseriesView,
   type PacketTopology,
 } from "../../auth/adminApi";
-import { M3Button, StatusChip } from "../../shell/M3Widgets";
+import { M3Button, M3Tabs, StatusChip } from "../../shell/M3Widgets";
+import { StatePanel } from "../../shell/States";
 import { m3 } from "../../theme/m3Theme";
 import { HeatmapChart, paTime } from "./PacketCharts";
 import { PacketDnsTab, PacketFlowsTab } from "./PacketFlowsTab";
@@ -45,9 +44,12 @@ import {
   SessionsSection,
   UdpMediaSection,
 } from "./PacketEvidenceSections";
+import { PacketDeviceEventsTab } from "./PacketDeviceEventsTab";
 import { PacketTopologyTab } from "./PacketTopologyTab";
 
-export type WorkspaceTab = "overview" | "topology" | "flows" | "timeseries" | "dns" | "udp";
+export type WorkspaceTab = "overview" | "topology" | "flows" | "timeseries" | "dns" | "udp" | "device_events";
+/** The order of the "Investigation views" tabs below (labels registered in shell/tabCoverage.ts). */
+export const WORKSPACE_TABS: readonly WorkspaceTab[] = ["overview", "topology", "flows", "timeseries", "dns", "udp", "device_events"];
 
 function OverviewSection({
   title,
@@ -208,190 +210,212 @@ export function PacketCaseWorkspace({
     }
   };
 
+  const tabIndex = Math.max(0, WORKSPACE_TABS.indexOf(tab));
+
   return (
     <Box aria-label="Case investigation workspace" sx={{ mt: 2 }}>
-      <Card sx={{ p: 1.5, mb: 2, boxShadow: "none", border: `1px solid ${m3.outlineVar}` }}>
-        <Stack direction="row" spacing={2} alignItems="center" justifyContent="space-between" sx={{ flexWrap: "wrap", gap: 1 }}>
-          <Tabs
-            value={tab}
-            onChange={(_, v: WorkspaceTab) => setTab(v)}
-            aria-label="Investigation views"
-          >
-            <Tab value="overview" label="Overview & Verdict" />
-            <Tab value="topology" label="Topology" />
-            <Tab value="flows" label="Flows & Ladder" />
-            <Tab value="timeseries" label="Timeseries & Quality" />
-            <Tab value="dns" label="DNS" />
-            <Tab value="udp" label="UDP / Media" />
-          </Tabs>
-          {report && <ExportActions caseId={caseId} canRawView={Boolean(permissions?.raw_view)} onError={onError} range={range} />}
-          {range && (
-            <Stack direction="row" spacing={1} alignItems="center">
-              <StatusChip
-                tone="attn"
-                label={`Interval: ${paTime(range[0])} — ${paTime(range[1])}`}
-                dense
-              />
-              <M3Button emphasis="outlined" onClick={() => setRange(null)}>
-                Reset range
-              </M3Button>
-            </Stack>
-          )}
-        </Stack>
-      </Card>
-
-      {tab === "overview" && (
-        <Stack spacing={2}>
-          {report ? (
-            <>
-              <InvestigationResultCard
-                report={report}
-                topology={topology}
-                onEvidence={setEvidence}
-              />
-              <PathHealthStrip
-                report={report}
-                topology={topology}
-                onInspectPoint={(pointId) => {
-                  setInspectPoint(pointId);
-                  setTab("topology");
-                }}
-                onSelectSegment={(_segment: PacketSegment) => {
-                  // Handled in Hop-by-hop table below
-                }}
-              />
-              <RankedFindingsAndSegments
-                caseId={caseId}
-                report={report}
-                topology={topology}
-                findings={visibleFindings}
-                range={range}
-                onEvidence={setEvidence}
-              />
-              <OverviewSection title="Timeline" defaultExpanded>
-                <IncidentSection report={report} range={range} onEvidence={setEvidence} />
-              </OverviewSection>
-              <OverviewSection title="Cycles, hold and release, host path">
-                <CyclesSection
-                  caseId={caseId}
-                  report={report}
-                  topology={topology}
-                  canRawView={Boolean(permissions?.raw_view)}
-                  range={range}
-                  onEvidence={setEvidence}
+      {(report || range) && (
+        <Card sx={{ p: 1.5, mb: 2, boxShadow: "none", border: `1px solid ${m3.outlineVar}` }}>
+          <Stack direction="row" spacing={2} alignItems="center" justifyContent="flex-end" sx={{ flexWrap: "wrap", gap: 1 }}>
+            {report && <ExportActions caseId={caseId} canRawView={Boolean(permissions?.raw_view)} onError={onError} range={range} />}
+            {range && (
+              <Stack direction="row" spacing={1} alignItems="center">
+                <StatusChip
+                  tone="attn"
+                  label={`Interval: ${paTime(range[0])} — ${paTime(range[1])}`}
+                  dense
                 />
-              </OverviewSection>
-              <OverviewSection title="Evidence quality" defaultExpanded>
-                <Stack spacing={2}>
+                <M3Button emphasis="outlined" onClick={() => setRange(null)}>
+                  Reset range
+                </M3Button>
+              </Stack>
+            )}
+          </Stack>
+        </Card>
+      )}
+
+      <M3Tabs
+        ariaLabel="Investigation views"
+        value={tabIndex}
+        onChange={(next) => setTab(WORKSPACE_TABS[next] ?? "overview")}
+        tabs={[
+          {
+            label: "Overview & Verdict",
+            panel: (
+              <Stack spacing={2}>
+                {report ? (
+                  <>
+                    <InvestigationResultCard
+                      report={report}
+                      topology={topology}
+                      onEvidence={setEvidence}
+                    />
+                    <PathHealthStrip
+                      report={report}
+                      topology={topology}
+                      onInspectPoint={(pointId) => {
+                        setInspectPoint(pointId);
+                        setTab("topology");
+                      }}
+                      onSelectSegment={(_segment: PacketSegment) => {
+                        // Handled in Hop-by-hop table below
+                      }}
+                    />
+                    <RankedFindingsAndSegments
+                      caseId={caseId}
+                      report={report}
+                      topology={topology}
+                      findings={visibleFindings}
+                      range={range}
+                      onEvidence={setEvidence}
+                    />
+                    <OverviewSection title="Timeline" defaultExpanded>
+                      <IncidentSection report={report} range={range} onEvidence={setEvidence} />
+                    </OverviewSection>
+                    <OverviewSection title="Cycles, hold and release, host path">
+                      <CyclesSection
+                        caseId={caseId}
+                        report={report}
+                        topology={topology}
+                        canRawView={Boolean(permissions?.raw_view)}
+                        range={range}
+                        onEvidence={setEvidence}
+                      />
+                    </OverviewSection>
+                    <OverviewSection title="Evidence quality" defaultExpanded>
+                      <Stack spacing={2}>
+                        <CaptureQualitySection
+                          captures={workspace.captures}
+                          report={report}
+                          topology={topology}
+                          onEvidence={setEvidence}
+                        />
+                        <CaptureNotesSection report={report} />
+                      </Stack>
+                    </OverviewSection>
+                    <OverviewSection title="Protocol, translation and onset details">
+                      <ProtocolDiagnosticsSection report={report} topology={topology} onEvidence={setEvidence} />
+                    </OverviewSection>
+                    <OverviewSection title="Session and microburst details">
+                      <Stack spacing={2}>
+                        <SessionsSection caseId={caseId} report={report} onEvidence={setEvidence} />
+                        <MicroburstsSection report={report} onEvidence={setEvidence} />
+                      </Stack>
+                    </OverviewSection>
+                    <OverviewSection title="Reference and run comparison">
+                      <ReferenceCompareSection caseId={caseId} />
+                    </OverviewSection>
+                  </>
+                ) : (
+                  <Card sx={{ p: 2, boxShadow: "none", border: `1px solid ${m3.outlineVar}` }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                      One path. Multiple perspectives.
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
+                      Attach the captures, connect their capture points in Topology, then analyze the same traffic across the path.
+                    </Typography>
+                  </Card>
+                )}
+              </Stack>
+            ),
+          },
+          {
+            label: "Topology",
+            panel: (
+              <PacketTopologyTab
+                caseId={caseId}
+                topology={topology}
+                captures={workspace.captures}
+                report={report}
+                correlation={correlation}
+                range={range}
+                canEdit={Boolean(permissions?.run)}
+                initialInspectPoint={inspectPoint}
+                onTopologyChange={setTopology}
+                onSaveTopology={handleSaveTopology}
+                onSelectFlow={(flow) => {
+                  setSelectedFlow(flow);
+                  setTab("flows");
+                }}
+                onEvidence={setEvidence}
+                onError={onError}
+              />
+            ),
+          },
+          {
+            label: "Flows & Ladder",
+            panel: (
+              <PacketFlowsTab
+                caseId={caseId}
+                topology={topology}
+                correlation={correlation}
+                range={range}
+                canRawView={Boolean(permissions?.raw_view)}
+                selectedFlow={selectedFlow}
+                onSelectFlow={setSelectedFlow}
+                onRangeChange={setRange}
+                onEvidence={setEvidence}
+              />
+            ),
+          },
+          {
+            label: "Timeseries & Quality",
+            panel: (
+              <Stack spacing={2}>
+                {report && timeseries && (
+                  <Card sx={{ p: 2, boxShadow: "none", border: `1px solid ${m3.outlineVar}` }} aria-label="Timeseries heatmap">
+                    <HeatmapChart
+                      data={timeseries}
+                      report={report}
+                      selectedRange={range}
+                      onSelect={setRange}
+                    />
+                  </Card>
+                )}
+                {report && (
                   <CaptureQualitySection
                     captures={workspace.captures}
                     report={report}
                     topology={topology}
                     onEvidence={setEvidence}
                   />
-                  <CaptureNotesSection report={report} />
-                </Stack>
-              </OverviewSection>
-              <OverviewSection title="Protocol, translation and onset details">
-                <ProtocolDiagnosticsSection report={report} topology={topology} onEvidence={setEvidence} />
-              </OverviewSection>
-              <OverviewSection title="Session and microburst details">
-                <Stack spacing={2}>
-                  <SessionsSection caseId={caseId} report={report} onEvidence={setEvidence} />
-                  <MicroburstsSection report={report} onEvidence={setEvidence} />
-                </Stack>
-              </OverviewSection>
-              <OverviewSection title="Reference and run comparison">
-                <ReferenceCompareSection caseId={caseId} />
-              </OverviewSection>
-            </>
-          ) : (
-            <Card sx={{ p: 2, boxShadow: "none", border: `1px solid ${m3.outlineVar}` }}>
-              <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                One path. Multiple perspectives.
-              </Typography>
-              <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
-                Attach the captures, connect their capture points in Topology, then analyze the same traffic across the path.
-              </Typography>
-            </Card>
-          )}
-        </Stack>
-      )}
-
-      {tab === "topology" && (
-        <PacketTopologyTab
-          caseId={caseId}
-          topology={topology}
-          captures={workspace.captures}
-          report={report}
-          correlation={correlation}
-          range={range}
-          canEdit={Boolean(permissions?.run)}
-          initialInspectPoint={inspectPoint}
-          onTopologyChange={setTopology}
-          onSaveTopology={handleSaveTopology}
-          onSelectFlow={(flow) => {
-            setSelectedFlow(flow);
-            setTab("flows");
-          }}
-          onEvidence={setEvidence}
-          onError={onError}
-        />
-      )}
-
-      {tab === "flows" && (
-        <PacketFlowsTab
-          caseId={caseId}
-          topology={topology}
-          correlation={correlation}
-          range={range}
-          canRawView={Boolean(permissions?.raw_view)}
-          selectedFlow={selectedFlow}
-          onSelectFlow={setSelectedFlow}
-          onRangeChange={setRange}
-          onEvidence={setEvidence}
-        />
-      )}
-
-      {tab === "timeseries" && (
-        <Stack spacing={2}>
-          {report && timeseries && (
-            <Card sx={{ p: 2, boxShadow: "none", border: `1px solid ${m3.outlineVar}` }} aria-label="Timeseries heatmap">
-              <HeatmapChart
-                data={timeseries}
-                report={report}
-                selectedRange={range}
-                onSelect={setRange}
+                )}
+                {report && <CaptureNotesSection report={report} />}
+              </Stack>
+            ),
+          },
+          {
+            label: "DNS",
+            panel: (
+              <PacketDnsTab
+                caseId={caseId}
+                range={range}
+                onEvidence={setEvidence}
               />
-            </Card>
-          )}
-          {report && (
-            <CaptureQualitySection
-              captures={workspace.captures}
-              report={report}
-              topology={topology}
-              onEvidence={setEvidence}
-            />
-          )}
-          {report && <CaptureNotesSection report={report} />}
-        </Stack>
-      )}
-
-      {tab === "dns" && (
-        <PacketDnsTab
-          caseId={caseId}
-          range={range}
-          onEvidence={setEvidence}
-        />
-      )}
-
-      {tab === "udp" && (
-        report ? (
-          <UdpMediaSection report={report} onEvidence={setEvidence} />
-        ) : (
-          <Alert severity="info">Run the analysis to see UDP request/response, SIP and RTP evidence.</Alert>
-        )
-      )}
+            ),
+          },
+          {
+            label: "UDP / Media",
+            panel: (
+              report ? (
+                <UdpMediaSection report={report} onEvidence={setEvidence} />
+              ) : (
+                <Alert severity="info">Run the analysis to see UDP request/response, SIP and RTP evidence.</Alert>
+              )
+            ),
+          },
+          {
+            label: "Device events",
+            // Mockup 2026-10-17 screen 4: the stored system-log facts of the path firewalls around one finding.
+            panel: report ? (
+              <PacketDeviceEventsTab caseId={caseId} />
+            ) : (
+              <StatePanel variant="not_evaluated" announce="status" title="Run the analysis to see device events"
+                body="Device events are read around a finding's start time; a case without a completed analysis has no finding yet." />
+            ),
+          },
+        ]}
+      />
 
       {evidence && (
         <FrameEvidenceModal
