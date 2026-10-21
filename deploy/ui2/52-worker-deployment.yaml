@@ -60,6 +60,12 @@ spec:
             # PO 2026-10-08: failover mutation enabled; set to "false" to disable writes (restart required)
             - name: NEXUS_FAILOVER_MUTATION_ENABLED
               value: "true"
+            # PO 2026-10-21: PAN-OS 12 reads switched off until the defect is clarified ("retired" = not sent;
+            # remove or set "enabled" to send again; restart required). PanFirewallCommandSwitches.
+            - name: NEXUS_PAN_FW_SHOW_INTERFACE_ALL
+              value: "retired"
+            - name: NEXUS_PAN_FW_SHOW_SESSION_INFO
+              value: "retired"
             - name: JAVA_TOOL_OPTIONS
               value: -Dui2.worker.claim-policy-fallback=true
             # BK-11: the distinct backup credential (Admin > Credentials: Backup-User-LDAP), never the collection credential.
