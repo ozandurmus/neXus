@@ -19,3 +19,12 @@ it("keeps not reported for a cluster member without an HA role", () => {
   expect(tile?.value).toBeNull();
   expect(tile?.absent).toBe("not reported");
 });
+
+// Post-release review 2026-10-20 (L4): the Enrollment cell says the Registry's word, not the raw token.
+it("words the enrollment state as the Registry does", () => {
+  const word = (state: string) => identityTiles(device({ enrollment_state: state }), null).find(({ label }) => label === "Enrollment")?.value;
+  expect(word("ENROLLED")).toBe("Enrolled");
+  expect(word("DRAFT")).toBe("Registered, not confirmed");
+  expect(word("SUSPENDED")).toBe("Suspended");
+  expect(identityTiles(device({ enrollment_state: "" }), null).find(({ label }) => label === "Enrollment")?.value).toBeNull();
+});

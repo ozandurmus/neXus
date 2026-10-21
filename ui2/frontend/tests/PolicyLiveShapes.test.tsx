@@ -46,8 +46,8 @@ it("renders the masked live policy page, rule details and empty history without 
   const group = within(rulebase).getByRole("button", { name: /Device-group post-rules/ });
   expect(group).toHaveAttribute("aria-expanded", "true"); expect(group).toHaveTextContent("866");
   expect(within(rulebase).getByText("5 empty sections")).toBeInTheDocument();
-  expect(within(rulebase).getByText("Application", { selector: "th" })).toBeInTheDocument();
-  expect(screen.getByText("Page 1 of 5 · 866 rules")).toBeInTheDocument();
+  expect(within(rulebase).getByRole("columnheader", { name: "Application" })).toHaveTextContent("Apps");
+  expect(screen.getByText("1–200 of 866 rules")).toBeInTheDocument();
   expect(container.textContent).not.toMatch(/could not be loaded/i);
   const row = getByAria(rulebase, `Rule ${rule.number}: ${rule.name}`);
   expect(row.tagName).toBe("TR");

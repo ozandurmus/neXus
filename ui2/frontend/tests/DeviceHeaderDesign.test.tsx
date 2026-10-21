@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@mui/material/styles";
 
 import { m3Theme, m3 } from "../src/theme/m3Theme";
-import { DeviceInventoryPanels, ClusterDetailPanels, ClusterLogsPanel, HeaderReadAges, identityBadge, IDENTITY_VERIFIED_BASIS, oldestRead, platformPillLabel, policyLink } from "../src/screens/InventoryPanels";
+import { DeviceInventoryPanels, ClusterDetailPanels, ClusterLogsPanel, HeaderReadAges, headerConfigRead, configurationNotApplicable, identityBadge, IDENTITY_VERIFIED_BASIS, oldestRead, platformPillLabel, policyLink } from "../src/screens/InventoryPanels";
 import { DeviceConfigurationDetail, identityTiles } from "../src/screens/ConfigurationDetail";
 import { identitySummaryLine } from "../src/screens/PlatformIdentity";
 import type { DeviceSummary, IdentityCheckView } from "../src/auth/adminApi";
@@ -101,6 +101,58 @@ describe("read ages in the header", () => {
   it("words a platform that was never read and a configuration that was never read", () => {
     mount(<HeaderReadAges platformAt={null} config={{ at: null }} />);
     expect(screen.getByTestId("header-read-ages")).toHaveTextContent("Platform not read yet·Config not read yet");
+  });
+
+  // Post-release review 2026-10-20: a manager's read ages come from the reads it really has.
+  it("heads a management server with its inventory read when it has no platform-facts read, and Not applicable for a configuration plane it has not got", async () => {
+    const d = device({ device_id: "fmg-1", hostname: "FM-SYNTH-01", vendor_hint: "fortinet", role: "management_server", model: "FMG-VM64", inventory_collected_at: ago(22 * H), platform_facts_observed_at: null });
+    stub({ ...base(d), [`/devices/${d.device_id}/inventory`]: () => json({ device_id: d.device_id, collected_at: ago(22 * H), contexts: [] }),
+      "/devices/fmg-1/configuration": () => json({ ...configuration(null), device_id: "fmg-1", vendor: "fortinet" }) });
+    mount(<DeviceInventoryPanels device={d} configuration={<p>configuration tab</p>} />);
+    const ages = await screen.findByTestId("header-read-ages");
+    await waitFor(() => expect(ages).toHaveTextContent("Inventory read 22 h ago·Config · Not applicable"));
+    expect(ages).not.toHaveTextContent("not read yet");
+    fireEvent.mouseOver(within(ages).getByText("Config · Not applicable"));
+    expect(await screen.findByText(/no gated configuration read for a Fortinet management server/)).toBeInTheDocument();
+  });
+
+  it("keeps Not read yet for a gateway whose configuration plane exists but was never read, and the platform words when nothing was read at all", () => {
+    const { unmount } = mount(<HeaderReadAges platformAt={null} inventoryAt={ago(3 * H)} config={{ at: null }} />);
+    expect(screen.getByTestId("header-read-ages")).toHaveTextContent("Inventory read 3 h ago·Config not read yet");
+    unmount();
+    mount(<HeaderReadAges platformAt={ago(H)} inventoryAt={ago(3 * H)} config={{ at: null, notApplicable: "reason" }} />);
+    // a platform-facts read outranks the inventory read; Not applicable only where the caller named why
+    expect(screen.getByTestId("header-read-ages")).toHaveTextContent("Platform read 1 h ago·Config · Not applicable");
+  });
+
+  it("heads a Radware manager with its inventory read and Not applicable although the screen offers it no configuration tab", async () => {
+    const d = device({ device_id: "rdw-1", hostname: "RW-SYNTH-MC", vendor_hint: "radware", role: "management_server", model: "Cyber Controller", platform_facts_observed_at: null });
+    const fetchMock = stub({ ...base(d), "/devices/rdw-1/inventory": () => json({ device_id: "rdw-1", collected_at: ago(5 * H), contexts: [] }) });
+    mount(<DeviceInventoryPanels device={d} />);
+    const ages = await screen.findByTestId("header-read-ages");
+    await waitFor(() => expect(ages).toHaveTextContent("Inventory read 5 h ago·Config · Not applicable"));
+    expect(ages).not.toHaveTextContent("not read yet");
+    // no configuration route was asked for it: the words come from the inventory route and the vendor fact alone
+    expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/configuration"))).toBe(false);
+  });
+
+  it("keeps a Check Point management server on its own configuration read (it runs Gaia and has the gated read)", async () => {
+    const d = device({ device_id: "mds-1", hostname: "MDS-SYNTH-01", role: "management_server", platform_facts_observed_at: ago(2 * H) });
+    expect(configurationNotApplicable(d)).toBeUndefined();
+    stub({ ...base(d), "/devices/mds-1/configuration": () => json({ ...configuration(null), device_id: "mds-1" }) });
+    mount(withGrid(d));
+    const ages = await screen.findByTestId("header-read-ages");
+    await waitFor(() => expect(ages).toHaveTextContent("Platform read 2 h ago·Config not read yet"));
+  });
+
+  it("derives the configuration half from the read it has: a stored time wins, then Not applicable, then no claim", () => {
+    expect(headerConfigRead({ collected_at: "2026-10-20T03:00:00Z" }, "reason")).toEqual({ at: "2026-10-20T03:00:00Z" });
+    expect(headerConfigRead({ collected_at: null }, "reason")).toEqual({ at: null, notApplicable: "reason" });
+    expect(headerConfigRead(null, "reason")).toEqual({ at: null, notApplicable: "reason" });
+    expect(headerConfigRead({ collected_at: null }, undefined)).toEqual({ at: null });
+    expect(headerConfigRead(null, undefined)).toBeUndefined();
+    expect(configurationNotApplicable({ role: "management_server", vendor_hint: "palo_alto" })).toMatch(/Palo Alto management server/);
+    expect(configurationNotApplicable({ role: "gateway", vendor_hint: "palo_alto" })).toBeUndefined();
   });
 
   it("shows no configuration age for a vendor with no configuration read", async () => {

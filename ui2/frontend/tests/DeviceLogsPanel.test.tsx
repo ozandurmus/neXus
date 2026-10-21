@@ -527,6 +527,11 @@ describe("filled state, summary first (UI review 2026-10-18, F-8)", () => {
     expect(sentence).toHaveTextContent("Day 2026-10-17 · run 2 of 2 · 12:00 · 3 lines · 100 B");
     const run = screen.getByRole("combobox", { name: "Run" });
     expect(within(run).getByRole("option", { name: /^1 of 2 · 09:00 · 3 lines · 100 B/ })).toBeInTheDocument();
+    // the run's outcome through the label map (post-release review 2026-10-20, L3): `Collected`, never `COLLECTED`
+    within(run).getAllByRole("option").forEach((option) => {
+      expect(option.textContent).toMatch(/ · Collected$/);
+      expect(option.textContent).not.toContain("COLLECTED");
+    });
   });
 
   it("shows the masked pill beside the line filter", async () => {

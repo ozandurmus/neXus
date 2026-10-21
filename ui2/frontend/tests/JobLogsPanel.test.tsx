@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { JobLogsPanel, localInputToIso } from "../src/screens/JobLogsPanel";
 import { jobTypeLabel } from "../src/jobs/jobTypeLabel";
@@ -71,18 +71,27 @@ it("keeps job and device UUIDs in the expandable details", async () => {
 });
 
 describe("history, filters, pages and export (PO P0, 2026-09-22)", () => {
-  it("pages the whole history on the server and shows numbered pages", async () => {
+  // The one pagination footer (post-release review 2026-10-20, N15): range words, Per page, previous/next and first/last.
+  it("pages the whole history on the server through the one pagination footer", async () => {
     const calls = stubApi({ items: [{ job_id: "job-9", target_device_id: "opaque-001", job_type: "inventory", state: "FAILED" }], page: 1, page_size: 50, total: 137 });
 
     render(<JobLogsPanel />);
 
     await waitFor(() => expect(screen.getByText("1–50 of 137 jobs")).toBeInTheDocument());
     expect(calls.some((c) => c === "/api/v2/jobs?page=1&page_size=50")).toBe(true);
-    // 137 rows at 50 per page = 3 numbered pages
-    expect(screen.getByRole("button", { name: "Go to page 3" })).toBeInTheDocument();
+    const footer = screen.getByTestId("pagination-footer");
+    expect(within(footer).getByRole("button", { name: "Go to first page" })).toBeDisabled();
+    expect(within(footer).getByRole("button", { name: "Go to previous page" })).toBeDisabled();
 
-    fireEvent.click(screen.getByRole("button", { name: "Go to page 3" }));
+    // 137 rows at 50 per page: the last page is page 3
+    fireEvent.click(within(footer).getByRole("button", { name: "Go to last page" }));
     await waitFor(() => expect(calls.some((c) => c === "/api/v2/jobs?page=3&page_size=50")).toBe(true));
+    fireEvent.click(within(footer).getByRole("button", { name: "Go to first page" }));
+    fireEvent.click(within(footer).getByRole("button", { name: "Go to next page" }));
+    await waitFor(() => expect(calls.some((c) => c === "/api/v2/jobs?page=2&page_size=50")).toBe(true));
+
+    fireEvent.change(within(footer).getByRole("combobox", { name: "Rows per page" }), { target: { value: "100" } });
+    await waitFor(() => expect(calls.some((c) => c === "/api/v2/jobs?page=1&page_size=100")).toBe(true));
   });
 
   it("sends the state filter to the server and returns to page one", async () => {

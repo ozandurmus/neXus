@@ -25,15 +25,24 @@ describe("counters say Loading… then a number or UNKNOWN, never a dash (UI rev
     rangeStart: "2026-09-09T12:00:00Z", rangeEnd: "2026-10-09T12:00:00Z",
   };
 
-  it("Policy Changes: Loading… while the read is in flight, then the numbers", async () => {
+  // Post-release review 2026-10-20 (L10, N2): the one KPI card, a skeleton figure while the read is in flight -- no
+  // `Loading…` word standing in for a number, no UNKNOWN before the read failed, never a dash or 0.
+  it("Policy Changes: a skeleton figure in each KPI card while the read is in flight, then the numbers", async () => {
     let release!: (value: Response) => void;
     vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>((resolve) => { release = resolve; })));
-    render(themed(<PolicyChangesTab policies={[]} devices={[]} openRule={vi.fn()} />));
-    expect(screen.getAllByText("Loading…").length).toBeGreaterThanOrEqual(6);
+    const { container } = render(themed(<PolicyChangesTab policies={[]} devices={[]} openRule={vi.fn()} />));
+    const cards = container.querySelectorAll("[data-kpi]");
+    expect(cards.length).toBeGreaterThanOrEqual(6);
+    cards.forEach((card) => expect(card.querySelector(".MuiSkeleton-root")).not.toBeNull());
+    expect(screen.getAllByText("reading the period")).toHaveLength(cards.length);
+    expect(container.querySelector("[data-kpi-word]")).toBeNull();
+    expect(screen.queryByText("Loading…")).toBeNull();
     expect(screen.queryByText("—")).toBeNull();
+    expect(screen.getByRole("status")).toHaveTextContent("Loading changes…");
     release(json(page));
-    await waitFor(() => expect(screen.queryByText("Loading…")).toBeNull());
-    expect(screen.getByText("Changes in period").parentElement).toHaveTextContent("2");
+    await waitFor(() => expect(container.querySelector(".MuiSkeleton-root")).toBeNull());
+    expect(container.querySelector('[data-kpi="Changes in period"] [data-kpi-figure]')).toHaveTextContent("2");
+    expect(screen.queryByText("reading the period")).toBeNull();
   });
 
   it("Policy Changes: UNKNOWN when the read failed", async () => {

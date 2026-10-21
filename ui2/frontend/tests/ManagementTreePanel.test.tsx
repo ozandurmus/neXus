@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import type { ManagementTree, ManagementTreeNode } from "../src/auth/adminApi";
-import { ManagementTreePanel, notImported } from "../src/screens/ManagementTreePanel";
+import { ManagementTreePanel, gatewayHaWord, notImported } from "../src/screens/ManagementTreePanel";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -70,4 +70,24 @@ it("offers select-to-import and Not an issue with a reason on a gateway not in n
 
 it("counts only unacknowledged gateways as not imported", () => {
   expect(notImported(tree.domains)).toBe(1);
+});
+
+// Post-release review 2026-10-20 (N14): the HA pill of a gateway the manager lists in no cluster.
+it("words a read standalone gateway as Standalone, keeps a member's own UNKNOWN, and makes no claim about an unread gateway", async () => {
+  const read = { last_collection_at: "2026-10-20T15:00:00Z" };
+  expect(gatewayHaWord({ ha_role: "UNKNOWN", ...read }, false)).toMatchObject({ kind: "standalone", title: expect.stringContaining("lists this gateway in no cluster") });
+  expect(gatewayHaWord({ ha_role: null, ...read }, false)).toMatchObject({ kind: "standalone" });
+  expect(gatewayHaWord({ ha_role: "ACTIVE", ...read }, false)).toEqual({ kind: "role", role: "ACTIVE" });
+  expect(gatewayHaWord({ ha_role: "UNKNOWN", ...read }, true)).toEqual({ kind: "role", role: "UNKNOWN" });
+  expect(gatewayHaWord({ ha_role: "UNKNOWN", last_collection_at: null }, false)).toBeNull();
+  const withStandalone: ManagementTree = { ...tree, domains: [{ domain: "DOM-TANGO-04", nodes: [
+    ...tree.domains[0].nodes,
+    { ...member("FW-YANKEE-01", "dev-9", "UNKNOWN"), kind: "STANDALONE_PRODUCT_GATEWAY", model: "29000 Appliances" },
+  ] }] };
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(withStandalone))));
+  render(<ManagementTreePanel deviceId="mds-1" onOpenDevice={vi.fn()} onOpenCluster={vi.fn()} />);
+  await waitFor(() => expect(screen.getByText("FW-YANKEE-01")).toBeTruthy());
+  expect(screen.getByText("Standalone").closest("span[title]")).toHaveAttribute("title", expect.stringContaining("UNKNOWN"));
+  expect(document.querySelector('[data-role="UNKNOWN"]')).toBeNull();
+  expect(screen.getByText("ACTIVE")).toBeTruthy();
 });

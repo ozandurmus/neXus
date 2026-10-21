@@ -116,6 +116,27 @@ describe("Managed estate is a tab under the device header", () => {
     expect(screen.getByText("Down").closest("[data-pill]")).toHaveStyle({ backgroundColor: m3.warningContainer });
   });
 
+  // Post-release review 2026-10-20 (N12): the Blue Coat MC table no longer clips its header words; long values clip in
+  // their own cell, machine values in mono with the full value on hover, the deployment state in the label map.
+  it("keeps the Blue Coat MC headers whole and clips a long address or version inside its own cell", async () => {
+    const members = [{ virtual_system: "SG-SYNTH-01", address: "198.51.100.123", platform: "ProxySG", hardware_type: "SG-S400-30", hypervisor: "SGOS 7.4.15.1 Proxy Edition", node_status: "FULLY_MANAGED",
+      services: [{ service: "DEPLOYMENT", status: "INSTALLED" }], grid_master: false, master_candidate: false, ha_enabled: false }];
+    vi.stubGlobal("fetch", vi.fn(() => json({ device_id: "x", collected_at: "2026-10-18T03:00:00Z", contexts: [], grid_members: members, job: null })));
+    render(<ThemeProvider theme={m3Theme}><DeviceInventoryPanels device={manager("bluecoat")} /></ThemeProvider>);
+    await screen.findByRole("button", { name: "SG-SYNTH-01" });
+    const table = document.querySelector("table[data-managed-devices]") as HTMLTableElement;
+    expect(table.querySelectorAll("colgroup col")).toHaveLength(7);
+    within(table).getAllByRole("columnheader").forEach((th) => expect(getComputedStyle(th).whiteSpace).toBe("nowrap"));
+    const address = within(table).getByText("198.51.100.123");
+    expect(address).toHaveAttribute("title", "198.51.100.123");
+    expect(getComputedStyle(address).whiteSpace).toBe("nowrap");
+    expect(getComputedStyle(address).fontFamily).toMatch(/mono/i);
+    expect(within(table).getByText("SGOS 7.4.15.1 Proxy Edition")).toHaveAttribute("title", "SGOS 7.4.15.1 Proxy Edition");
+    expect(within(table).getByText("Installed")).toHaveAttribute("title", "INSTALLED");
+    expect(within(table).queryByText("INSTALLED")).toBeNull();
+    expect(screen.getByText("Fully managed")).toBeInTheDocument();
+  });
+
   it("gives a gateway no Managed estate tab", async () => {
     vi.stubGlobal("fetch", vi.fn(() => json({ device_id: "x", contexts: [] })));
     render(<ThemeProvider theme={m3Theme}><DeviceInventoryPanels device={manager("check_point", { role: "gateway" })} /></ThemeProvider>);

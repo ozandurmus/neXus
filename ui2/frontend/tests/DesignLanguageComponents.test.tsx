@@ -155,6 +155,21 @@ describe("data table", () => {
     fireEvent.change(screen.getByRole("combobox", { name: "Rows per page" }), { target: { value: "100" } });
     expect(onSize).toHaveBeenCalledWith(100);
   });
+
+  // Post-release review 2026-10-20 (N15): the Jobs history runs to hundreds of pages; first/last join the same footer.
+  it("adds first- and last-page buttons only where the caller asks and the total is known", () => {
+    const onPage = vi.fn();
+    const { unmount } = wrap(<PaginationFooter offset={100} size={50} total={22_917} noun="jobs" jump onPage={onPage} />);
+    expect(screen.getByText("101–150 of 22,917 jobs")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Go to last page" }));
+    expect(onPage).toHaveBeenLastCalledWith(22_900);
+    fireEvent.click(screen.getByRole("button", { name: "Go to first page" }));
+    expect(onPage).toHaveBeenLastCalledWith(0);
+    unmount();
+    wrap(<><PaginationFooter offset={0} size={50} total={131} onPage={() => {}} /><PaginationFooter offset={0} size={50} total={null} hasMore jump onPage={() => {}} /></>);
+    expect(screen.queryByRole("button", { name: "Go to last page" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Go to first page" })).toBeNull();
+  });
 });
 
 describe("state card", () => {

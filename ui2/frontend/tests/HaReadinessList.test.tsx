@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import type { CpFailoverSummary, DeviceSummary } from "../src/auth/adminApi";
-import { HaReadinessList } from "../src/screens/HaReadinessList";
+import { HaReadinessList, primaryReasonWord } from "../src/screens/HaReadinessList";
 import { JobWindowContext } from "../src/shell/JobWindow";
 const at = "2026-10-02T09:00:00Z";
 const cluster = (title: string, vendor = "check_point") => ({ ref: title, title, members: [
@@ -315,4 +315,17 @@ it("shows no row action and no Actions column outside the job window; the header
   // the legend is one line: the four counts and the rule sit in the same row
   const rule = document.querySelector("[data-readiness-rule]")!;
   expect(rule.parentElement).toContainElement(screen.getByLabelText("Readiness summary"));
+});
+
+// Post-release review 2026-10-20 (L1): the primary reason goes through the label map; a bare outcome token reads as the pill.
+it("words a bare READY reason as Ready and keeps check names and sentences as they came", () => {
+  const ready = summary("CLS-ALPHA-01", "READY");
+  expect(primaryReasonWord({ ...ready, refusalReason: "READY" })).toBe("Ready");
+  expect(primaryReasonWord({ ...ready, refusalReason: "NOT_READY" })).toBe("Not ready");
+  expect(primaryReasonWord(ready)).toBe("No blocking conditions observed");
+  expect(primaryReasonWord(summary("CLS-BRAVO-02", "NOT_READY"))).toBe("Installed policy parity");
+  setup({ rows: { "CLS-ALPHA-01": [{ ...ready, refusalReason: "READY" }] } });
+  const cells = within(within(table()).getByRole("row", { name: /CLS-ALPHA-01/ })).getAllByRole("cell");
+  expect(cells.some((cell) => cell.textContent === "Ready")).toBe(true);
+  expect(within(table()).queryByText("READY")).toBeNull();
 });

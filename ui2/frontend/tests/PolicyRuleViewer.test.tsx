@@ -82,7 +82,7 @@ it("renders rule rows as chips with +N, negation, a Disabled word, expired and u
   expect(row).toHaveAttribute("aria-expanded", "false");
   expect(within(row).getByText("NOT")).toBeInTheDocument();
   // The disabled word sits next to the name; the flags column keeps the other findings and does not repeat it.
-  expect(column(row, "name")).toHaveTextContent("Disabled"); expect(column(row, "name")).toHaveTextContent("Withheld in AIView");
+  expect(column(row, "name")).toHaveTextContent("Disabled"); expect(column(row, "name")).toHaveTextContent("Comment withheld");
   expect(column(row, "hygiene")).toHaveTextContent("Expired"); expect(column(row, "hygiene")).not.toHaveTextContent("Disabled");
   const chips = within(column(row, "source")).getAllByRole("button");
   expect(chips.map(chip => chip.textContent)).toEqual(["OBJ-ADDRESS-00", "OBJ-ADDRESS-01", "+4"]);
@@ -154,11 +154,11 @@ it("badges hygiene only from stored findings and rule state, and says UNKNOWN wh
     findings: [{ findingClass: "shadowed", severity: "MEDIUM", evidence: "Earlier rule covers this match." }, { findingClass: "broad", severity: "HIGH", evidence: "Any source." },
       { findingClass: "broad", severity: "MEDIUM", evidence: "Any service." }, { findingClass: "unknown", severity: "LOW", evidence: "Hit counts not collected." }] };
   const analysed: PolicyRule = { ...rule, enabled: true, timeStatus: "always", hygiene };
-  expect(hygieneBadges(analysed).map(b => [b.label, b.severity])).toEqual([["Shadowed", "MEDIUM"], ["Broad", "HIGH"], ["Unknown", "UNKNOWN"]]);
+  expect(hygieneBadges(analysed).map(b => [b.label, b.severity])).toEqual([["Shadowed", "MEDIUM"], ["Broad", "HIGH"], ["Hygiene UNKNOWN", "UNKNOWN"]]);
   expect(hygieneBadges({ ...analysed, hygiene: { ...hygiene, findings: [] }, expiring: true })).toEqual([expect.objectContaining({ label: "Expiring" })]);
   mount(ruleTable({ sections: [{ ...section, total: 3, rules: [analysed, { ...analysed, id: "clean", number: 2, hygiene: { ...hygiene, findings: [] } }, { ...analysed, id: "none", number: 3, hygiene: undefined }] }] }));
   const [first, clean, none] = [1, 2, 3].map(n => column(screen.getByRole("row", { name: new RegExp(`^Rule ${n}:`) }), "hygiene"));
-  expect(first).toHaveTextContent("ShadowedBroadUnknown");
+  expect(first).toHaveTextContent("ShadowedBroadHygiene UNKNOWN");
   expect(first.querySelector('[data-hygiene="broad"]')).toHaveAttribute("title", "HIGH · Any source.; Any service.");
   expect(first.querySelector('[data-hygiene="unknown"]')).toHaveAttribute("title", "UNKNOWN because Hit counts not collected.");
   expect(clean).toHaveTextContent("No findings");
@@ -168,7 +168,9 @@ it("badges hygiene only from stored findings and rule state, and says UNKNOWN wh
 it("shows the application column only for vendors or pages that carry applications", () => {
   const { unmount } = mount(ruleTable());
   expect(screen.queryByRole("columnheader", { name: "Application" })).toBeNull();
-  expect(screen.getAllByRole("columnheader").map(h => h.textContent)).toEqual(["", "#", "Rule", "Source", "Destination", "Service", "Action", "Usage", "Permissiveness", "Flags"]);
+  expect(screen.getAllByRole("columnheader").map(h => h.textContent)).toEqual(["", "#", "Rule", "Source", "Destination", "Service", "Action", "Usage", "Permissive", "Flags"]);
+  // The short header word keeps the full word as the column's accessible name and on hover (post-release review 2026-10-20, N4).
+  expect(screen.getByRole("columnheader", { name: "Permissiveness" })).toHaveAttribute("title", "Permissiveness");
   unmount();
   mount(ruleTable({ metadata: { ...metadata, vendor: "PAN" }, headerSelect: <input type="checkbox" aria-label="Select all" /> }));
   expect(screen.getByRole("columnheader", { name: "Application" })).toBeInTheDocument();
@@ -271,4 +273,39 @@ it("shows hit timestamps with relative last-hit and absolute title plus the full
   expect(await screen.findByRole("tooltip")).toHaveTextContent(lastHit);
   const [schedule] = within(details).getAllByText("Weekdays 08:00–17:00 · UTC");
   expect(schedule).toBeVisible();
+});
+
+// Post-release review 2026-10-20 (N4, N5, N6, L16): room for object names, flags with a subject, a withheld comment as a token.
+it("gives a lone object chip two lines with its full name on hover, and keeps two chips on one line each", () => {
+  const long = new Map([["g1", { id: "g1", name: "GRP-DELTA-ENGINEERING-HOSTS", type: "group", status: "RESOLVED", members: ["a", "b"] }], ["h1", { id: "h1", name: "ADDR-PAPA-01", type: "host", status: "RESOLVED" }]]);
+  const lone = { ...rule, id: "lone", number: 1, source: { refs: ["g1"], negated: false }, destination: { refs: ["g1", "h1"], negated: false } };
+  mount(ruleTable({ sections: [{ ...section, rules: [lone] }], objects: long }));
+  const row = screen.getByRole("row", { name: /^Rule 1:/ });
+  const [source] = within(column(row, "source")).getAllByRole("button");
+  expect(source).toHaveAttribute("title", expect.stringMatching(/^GRP-DELTA-ENGINEERING-HOSTS · Group · 2 members/));
+  expect(getComputedStyle(source).whiteSpace).toBe("normal");
+  const [first, second] = within(column(row, "destination")).getAllByRole("button");
+  expect(getComputedStyle(first).whiteSpace).toBe("nowrap");
+  expect(second).toHaveAttribute("title", expect.stringMatching(/^ADDR-PAPA-01 · Host/));
+});
+it("names the subject of the UNKNOWN flag and hatches it, and shows a withheld comment as a masked token", () => {
+  const hygiene: PolicyHygieneAssessment = { shadowStatus: "UNKNOWN", shadowReason: "analysis budget", coveringRuleId: null, timeStatus: "always", expiring: false, counterWindow: "90 d", hitSource: "mds", hitsCollectedAt: null,
+    permissiveness: { level: "Low", reasons: [] }, findings: [{ findingClass: "unknown", severity: "LOW", evidence: "Hit counts not collected." }] };
+  mount(ruleTable({ sections: [{ ...section, rules: [{ ...rule, enabled: true, timeStatus: "always", hygiene }] }], openHygiene: vi.fn() }));
+  const row = screen.getByRole("row", { name: /^Rule 1:/ });
+  const flag = within(column(row, "hygiene")).getByRole("button", { name: "Hygiene UNKNOWN" });
+  expect(flag).toHaveAttribute("title", "UNKNOWN because Hit counts not collected. · Open in Hygiene");
+  expect(getComputedStyle(flag).backgroundImage).toContain("repeating-linear-gradient");
+  expect(within(column(row, "name")).getByText("Comment withheld")).toHaveAttribute("title", expect.stringContaining("masked view"));
+  expect(column(row, "name").textContent).not.toContain("Withheld in AIView");
+});
+it("folds the empty sections into one group row that opens to name them", () => {
+  const sections = [section, { ...section, id: "s-empty-1", name: "OBJ-SECTION-02", total: 0, rules: [] }, { ...section, id: "s-empty-2", name: "OBJ-SECTION-03", total: 0, rules: [] }];
+  const { container } = mount(ruleTable({ sections }));
+  const group = screen.getByRole("button", { name: /2 empty sections/ });
+  expect(group).toHaveAttribute("aria-expanded", "false");
+  expect(container.querySelectorAll("[data-empty-section]")).toHaveLength(0);
+  fireEvent.click(group);
+  expect(group).toHaveAttribute("aria-expanded", "true");
+  expect([...container.querySelectorAll("[data-empty-section]")].map(el => el.textContent)).toEqual(["OBJ-SECTION-02 · 0 rules", "OBJ-SECTION-03 · 0 rules"]);
 });

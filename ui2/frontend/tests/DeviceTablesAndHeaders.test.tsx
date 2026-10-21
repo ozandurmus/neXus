@@ -289,8 +289,11 @@ describe("P0-3B: a selected virtual system scopes the pane", () => {
     render(as(adminPlanes, <ClusterDetailPanels clusterRef="CLS-SYNTH-PA" members={pan} initialVs="vsys2" />));
     await screen.findByRole("heading", { name: "CLS-SYNTH-PA › vsys2" });
     const card = document.querySelector('[data-member-card="p1"]') as HTMLElement;
+    // The card names the count and the selected virtual system; the whole list stays on hover (post-release review 2026-10-20, N1).
     expect(within(card).getByText("vsys2")).toHaveStyle({ fontWeight: "700" });
-    expect(within(card).getByText("vsys1")).not.toHaveStyle({ fontWeight: "700" });
+    expect(within(card).queryByText("vsys1")).toBeNull();
+    expect(card.querySelector("[data-member-vsys]")).toHaveTextContent("2 virtual systems · vsys2");
+    expect(card.querySelector("[data-member-vsys]")).toHaveAttribute("title", "VSYS: vsys1, vsys2");
   });
 
   it("heads a standalone device's virtual system `device › VSYS` and scopes its tabs too", async () => {
