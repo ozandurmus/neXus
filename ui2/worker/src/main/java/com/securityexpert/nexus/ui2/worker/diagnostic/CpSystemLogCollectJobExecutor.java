@@ -809,7 +809,7 @@ public final class CpSystemLogCollectJobExecutor {
             return;
         }
         if (c4Output.output().getBytes(StandardCharsets.UTF_8).length >= CpSpikeLayoutReview.LS_SPIKE_MAX_BYTES) {
-            // Section 8.3: a listing that reaches the 256 KiB bound may be cut; it is never processed partially.
+            // Section 8.3: a listing that reaches the 1 MiB bound (LS_SPIKE_MAX_BYTES) may be cut; it is never processed partially.
             spikeOutcome(run, "UNKNOWN", "LISTING_AT_BOUND", detail, started, stepBefore, listed, List.of());
             return;
         }

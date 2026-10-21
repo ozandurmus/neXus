@@ -1,9 +1,12 @@
 # Spike Detective listing: getting past the 256 KiB C4 bound — proposal
 
-**Status: DRAFT — for Product Owner approval. Not implementation authority.** Nothing here changes a gate row,
-a migration or the collector. It amends nothing in
-[DEVICE_SYSTEM_LOG_PHASE_B_CONTRACT.md](DEVICE_SYSTEM_LOG_PHASE_B_CONTRACT.md) (APPROVED, PO 2026-10-17) until the PO
-picks an option in §6 and the contract is amended to match.
+**Status: option A APPROVED by the PO on 2026-10-21 ("Şimdi A, sonra B"); option B remains DRAFT (approved as the later
+direction, needs a real-environment check of `-t` on Gaia before any implementation); option C not wanted.** The decision
+is recorded in [PO_DECISION_RECORD_2026_10_21_SPIKE_LISTING_BOUND.md](PO_DECISION_RECORD_2026_10_21_SPIKE_LISTING_BOUND.md)
+(RATIFIED). Option A is implemented by migration `V173__spike_listing_bound_one_mebibyte.sql` and a dated amendment of
+[DEVICE_SYSTEM_LOG_PHASE_B_CONTRACT.md](DEVICE_SYSTEM_LOG_PHASE_B_CONTRACT.md) (§8.3, §10.1). **Nothing in §4.2 (option B)
+or §4.3 (option C) is implementation authority.** The text below is the proposal as written for the decision; the options
+are kept as written.
 
 ## Summary
 
@@ -84,7 +87,7 @@ real line is about `33 + L` bytes for a name of `L` bytes.
 
 ## 4. Options
 
-### 4.1 Option A — raise the C4 output bound to 1 MiB (same command)
+### 4.1 Option A — raise the C4 output bound to 1 MiB (same command) — APPROVED (PO 2026-10-21)
 
 **Change.** On the C4 row, only `Max bytes` changes: 256 KiB → 1 MiB. Every other field and the processing rule
 ("at bound = `UNKNOWN`, never partial") stay as they are.
@@ -121,7 +124,7 @@ gateway). Gateways with small listings produce exactly the bytes they produce to
 rollout, while the source was `UNKNOWN`, is then recorded as `present before monitoring` and never fetched. This is
 the existing baseline rule applied late, and nothing is fetched by mistake.
 
-### 4.2 Option B — newest-first listing, prefix processed with a completeness watermark (recommended long-term)
+### 4.2 Option B — newest-first listing, prefix processed with a completeness watermark (recommended long-term) — DRAFT (direction approved 2026-10-21; real-environment `-t` check required first)
 
 **Change.** Add a new gate row, or replace C4, with `-t` added. neXus reads at most the bound and processes the
 **prefix** under the rule below instead of discarding it.
@@ -171,7 +174,7 @@ top, so its size stops mattering; (8) unsupported behaviour: as in the row; (10)
 - It changes the "never processed partially" semantics of §8.3 for this row. That is a contract amendment, not only a
   gate change.
 
-### 4.3 Option C — SFTP directory read (`opendir`/`readdir`) on the existing session (not recommended)
+### 4.3 Option C — SFTP directory read (`opendir`/`readdir`) on the existing session (not recommended; not wanted)
 
 | # | gate_id | Transport | canonical_command_key | timeout_s | retry | max_frequency | session_reuse_rule | Max bytes | unsupported_behavior_ref | secret_output_risk | safe_telemetry_fields | Relation to approved |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -210,6 +213,11 @@ rules if B is chosen; and add a findings-record entry for the review run (B) or 
 byte count (A), recorded as a count and size class only.
 
 ## 6. Questions for the PO
+
+**Answered 2026-10-21 ("Şimdi A, sonra B"):** question 1 (A) is approved as asked, with nothing else on the row changed. Question 2 (B) is
+approved as the later durable direction only: the C4t string and the §8.3 rule change are not yet approved for
+implementation, and need the real-environment check of question 3 first. Questions 3 to 5 are not answered here; question 4's
+baseline consequence of A is recorded in the decision record as the existing rule applied late.
 
 1. **A:** Raise the C4 output bound from 256 KiB to 1 MiB, with nothing else on the row changed? (Yes / No / a
    different bound.)

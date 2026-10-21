@@ -235,7 +235,7 @@ class CpSpikeLayoutReviewJobExecutorTest {
                 "C4 exactly as approved, then ONE C5 with the name C4 printed; nothing else");
         assertEquals(List.of(CpSpikeLayoutReview.LS_SPIKE_GATE, CpSpikeLayoutReview.LS_SPIKE_DIR_GATE), h.gateIds,
                 "both reads are ledgered under their own V160 gate");
-        assertEquals(List.of(256 * 1024, 64 * 1024), h.device.limits, "bounded, transcript-free execs (section 10.1 max bytes)");
+        assertEquals(List.of(1024 * 1024, 64 * 1024), h.device.limits, "bounded, transcript-free execs (section 10.1 max bytes)");
         assertEquals(List.of(Duration.ofSeconds(30), Duration.ofSeconds(30)), h.device.timeouts, "the gate rows' timeouts");
         assertEquals(1, h.device.connects);
         assertEquals(1, h.device.disconnects);
@@ -383,7 +383,7 @@ class CpSpikeLayoutReviewJobExecutorTest {
     @Test
     void aFailedParentListingIsUnknownAndNoDirectoryIsListed() throws Exception {
         for (ExecResult failed : List.of(new ExecResult.TimedOut(), new ExecResult.ChannelFailed("OUTPUT_LIMIT_EXCEEDED"),
-                new ExecResult.ChannelFailed("synthetic"), new ExecResult.Completed("x".repeat(256 * 1024 + 1), 0))) {
+                new ExecResult.ChannelFailed("synthetic"), new ExecResult.Completed("x".repeat(1024 * 1024 + 1), 0))) {
             var h = new Harness();
             h.device.answer = command -> failed;
             h.run();
