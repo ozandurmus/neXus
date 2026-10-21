@@ -647,6 +647,18 @@ class CpFailoverChecksTest {
         }
         assertEquals("UNKNOWN",CpFailoverChecks.pnotes("unrecognized",true).status());
     }
+    @Test void adminDownWithTheBuiltInProblemNotificationIsTheIntentionalPair() {
+        // Pilot 2026-10-21 (R81.20): after clusterXL_admin down, cphaprob -ia list reports both devices in problem state.
+        String output="Device Name: Problem Notification\nCurrent state: problem\n\nDevice Name: admin_down\nCurrent state: problem\n";
+        var expected=CpFailoverChecks.pnotes(output,true);
+        assertEquals("PASS",expected.status());
+        assertEquals(java.util.List.of("Problem Notification","ADMIN_DOWN"),expected.names());
+        assertEquals("FAIL",CpFailoverChecks.pnotes(output).status(),"never on a member neXus did not put down");
+        assertEquals("FAIL",CpFailoverChecks.pnotes("Device Name: Problem Notification\nCurrent state: problem\n",true).status(),
+            "Problem Notification alone is not the intentional state");
+        assertEquals("FAIL",CpFailoverChecks.pnotes(output+"Device Name: fwd\nCurrent state: problem\n",true).status());
+        assertEquals("FAIL",CpFailoverChecks.pnotes(output+"Device Name: Interface Active Check\nCurrent state: problem\n",true).status());
+    }
     @Test void cpstatUsesExistingParserAndPolicyRules() {
         String output="Policy name: Sample_Policy\nInstall time: 2026-10-06 12:00:00\n";
         var a=CpFailoverChecks.cpstatPolicy(output);

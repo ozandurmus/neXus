@@ -438,7 +438,13 @@ public final class CpFailoverChecks {
             if(value.equals("admin_down")) value="ADMIN_DOWN";
             names.add(BUILTIN_PNOTES.contains(value)?value:"CUSTOM_PNOTE_"+(names.size()+1));
         }
-        if(!names.isEmpty()) return new Pnotes(expectedAdminDown && names.equals(List.of("ADMIN_DOWN"))?"PASS":"FAIL",List.copyOf(names));
+        // clusterXL_admin down on R81.x leaves admin_down AND the built-in "Problem Notification" device in problem
+        // state (pilot 2026-10-21): on the member neXus itself put down, exactly that pair is expected.
+        boolean intentional=expectedAdminDown && names.contains("ADMIN_DOWN")
+            && names.stream().allMatch(n -> n.equals("ADMIN_DOWN") || n.equals("Problem Notification"))
+            && names.stream().filter("ADMIN_DOWN"::equals).count()==1
+            && names.stream().filter("Problem Notification"::equals).count()<=1;
+        if(!names.isEmpty()) return new Pnotes(intentional?"PASS":"FAIL",List.copyOf(names));
         return new Pnotes(output.strip().equals("There are no pnotes in problem state")?"PASS":"UNKNOWN",List.of());
     }
 
