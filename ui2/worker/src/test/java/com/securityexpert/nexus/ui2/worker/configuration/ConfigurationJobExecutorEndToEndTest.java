@@ -2,6 +2,7 @@ package com.securityexpert.nexus.ui2.worker.configuration;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.InputStream;
@@ -147,10 +148,8 @@ class ConfigurationJobExecutorEndToEndTest {
                 + "</config></result></response>";
         String mergedOutput = "<response><result><config><devices><entry name=\"localhost.localdomain\"/></devices>"
                 + "</config></result></response>";
-        Map<String, String> outputByOpCmd = Map.of(
-                ConfigurationReadPlan.PAN_SHOW_SYSTEM_INFO,
-                "<response><result><system><serial>0011223344</serial></system></result></response>",
-                ConfigurationReadPlan.PAN_MERGED, mergedOutput);
+        // No show system info is scripted: retired for firewalls by the PO on 2026-10-21 -- sending it would throw.
+        Map<String, String> outputByOpCmd = Map.of(ConfigurationReadPlan.PAN_MERGED, mergedOutput);
         ScriptedPaloAltoConfigTransport transport = new ScriptedPaloAltoConfigTransport(outputByOpCmd, activeOutput,
                 () -> new GeneratedPanConfigInputStream(localOverrideCount, otherSourceCount));
 
@@ -179,6 +178,8 @@ class ConfigurationJobExecutorEndToEndTest {
         JobOutcome outcome = executor.execute(JOB_ID, LEASE_EPOCH, DEVICE_ID, request, false);
 
         assertTrue(outcome instanceof JobOutcome.Completed, "expected Completed, got " + outcome);
+        assertFalse(transport.sentOpCmds.contains("<show><system><info/></system></show>"),
+                "PO 2026-10-21: a firewall's configuration collect never sends show system info");
         assertTrue(configurationRepository.recordRunCalled);
         assertEquals(3, configurationRepository.recordedRuns.size(), "active, effective_running and merged");
         assertTrue(configurationRepository.recordedRuns.stream().allMatch(r -> r.jobId().equals(JOB_ID)),

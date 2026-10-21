@@ -1,6 +1,7 @@
 package com.securityexpert.nexus.ui2.worker.failover;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
@@ -109,10 +110,10 @@ class PanFailoverChecksTest {
         assertEquals("PASS",PanFailoverChecks.carried(100L,80L));
         assertEquals("FAIL",PanFailoverChecks.carried(101L,80L));
         assertEquals("UNKNOWN",PanFailoverChecks.carried(null,80L));
-        String version=result("<system><sw-version>1</sw-version><app-version>2</app-version><threat-version>3</threat-version></system>");
-        assertEquals("PASS",PanFailoverChecks.versions(version,version));
-        assertEquals("FAIL",PanFailoverChecks.versions(version,version.replace("<threat-version>3", "<threat-version>4")));
-        assertEquals("UNKNOWN",PanFailoverChecks.versions(version,result("<system/>")));
+        // Check 7 (version parity): show system info retired for firewalls by the PO on 2026-10-21 -- UNKNOWN with the reason.
+        assertEquals("UNKNOWN",PanFailoverChecks.VERSION_PARITY_NOT_COLLECTED);
+        assertTrue(PanFailoverChecks.VERSION_PARITY_NOT_COLLECTED_DERIVED.contains("not_collected"));
+        assertTrue(PanFailoverChecks.VERSION_PARITY_NOT_COLLECTED_DERIVED.contains("2026-10-21"));
     }
     @Test void unknownReasonsNameExistingLookupPathsWithoutGuessingFields() {
         String[] paths={"group/running-sync","enabled and messages/entry/{enable,sent,recv,desc}","num-active or active-sessions"};

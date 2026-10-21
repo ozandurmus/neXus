@@ -32,4 +32,11 @@ public sealed interface ConfirmResult {
     /** Connect itself failed (host-key rejection, timeout, authentication) -- never a mismatch, never a fact. */
     record ConnectFailed(String reason) implements ConfirmResult {
     }
+
+    /**
+     * Refused before any contact because the confirm cannot be done by policy (PO 2026-10-21: a Palo Alto firewall's
+     * identity read, show system info, is retired) -- nothing was sent, never a mismatch, never a fact.
+     */
+    record Refused(String reason) implements ConfirmResult {
+    }
 }

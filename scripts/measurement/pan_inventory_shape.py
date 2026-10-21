@@ -57,8 +57,10 @@ def main():
     print("### keygen ok, key_len=", len(key))
     reads={"R-4 show interface all":"<show><interface>all</interface></show>",
            "R-5 show routing route":"<show><routing><route></route></routing></show>",
-           "R-3 show system info":"<show><system><info></info></system></show>",
            "HA state":"<show><high-availability><state></state></high-availability></show>"}
+    # PO 2026-10-21: show system info is never sent to a firewall (docs/design/PO_DECISION_RECORD_2026_10_21_PAN_SHOW_SYSTEM_INFO_RETIRED.md);
+    # a Panorama keeps it.
+    if a.panorama: reads["R-3 show system info"]="<show><system><info></info></system></show>"
     for name,cmd in reads.items():
         body={"type":"op","cmd":cmd,"key":key}
         try: describe(name, post(a.base, body, ctx))

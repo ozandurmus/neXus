@@ -601,9 +601,12 @@ public final class WorkerClaimLoop {
             }
 
             Optional<String> modelHint = modelOrPlatform(job.targetDeviceId());
+            // A Panorama is confirmed over the same capability as a firewall, but only a Panorama may still be sent
+            // show system info (PO 2026-10-21): the role travels with the request.
+            boolean managementServer = "management_server".equals(device.role());
             ConfirmRequest primaryRequest = buildRequest(job.capabilityId(), endpoint.endpointId(), endpoint.addressRef(),
-                    device.credentialReferenceId(), modelHint);
-            var peerRequestFactory = peerRequestFactoryFor(job.capabilityId(), device.credentialReferenceId());
+                    device.credentialReferenceId(), modelHint, managementServer);
+            var peerRequestFactory = peerRequestFactoryFor(job.capabilityId(), device.credentialReferenceId(), managementServer);
 
             confirmJobExecutor.execute(claimed.jobId(), claimed.leaseEpoch(), job.targetDeviceId(), primaryRequest,
                     peerRequestFactory, false);
@@ -680,7 +683,8 @@ public final class WorkerClaimLoop {
                 + capabilityId);
     }
 
-    private PeerFollowResolver.ConfirmRequestFactory peerRequestFactoryFor(String capabilityId, String credentialRef) {
+    private PeerFollowResolver.ConfirmRequestFactory peerRequestFactoryFor(String capabilityId, String credentialRef,
+            boolean managementServer) {
         if (ConfirmCapabilityIds.DEVICE_CONFIRM_CHECK_POINT.equals(capabilityId)) {
             return managementAddress -> {
                 String trustRuleRef = com.securityexpert.nexus.ui2.worker.transport.ssh.PersistedManagementEndpointTrustResolver.scopeRef(
@@ -690,11 +694,12 @@ public final class WorkerClaimLoop {
                         credentialRef, trustRuleRef);
             };
         }
-        return managementAddress -> buildRequest(capabilityId, "peer", managementAddress, credentialRef, Optional.empty());
+        return managementAddress -> buildRequest(capabilityId, "peer", managementAddress, credentialRef, Optional.empty(),
+                managementServer);
     }
 
     private ConfirmRequest buildRequest(String capabilityId, String endpointId, String addressRef,
-            String credentialRef, Optional<String> modelHint) {
+            String credentialRef, Optional<String> modelHint, boolean managementServer) {
         if (ConfirmCapabilityIds.DEVICE_CONFIRM_CHECK_POINT.equals(capabilityId)) {
             String trustRuleRef = com.securityexpert.nexus.ui2.worker.transport.ssh.PersistedManagementEndpointTrustResolver.scopeRef(
                     hostOf(addressRef), portOf(addressRef));
@@ -702,7 +707,8 @@ public final class WorkerClaimLoop {
                     credentialRef, trustRuleRef, modelHint);
         }
         if (ConfirmCapabilityIds.DEVICE_CONFIRM_PALO_ALTO.equals(capabilityId)) {
-            return ConfirmRequest.paloAlto(new ApiTarget(endpointId, addressRef), credentialRef);
+            return managementServer ? ConfirmRequest.panorama(new ApiTarget(endpointId, addressRef), credentialRef)
+                    : ConfirmRequest.paloAlto(new ApiTarget(endpointId, addressRef), credentialRef);
         }
         throw new IllegalStateException("claimed job for a capability the worker does not recognize: " + capabilityId);
     }

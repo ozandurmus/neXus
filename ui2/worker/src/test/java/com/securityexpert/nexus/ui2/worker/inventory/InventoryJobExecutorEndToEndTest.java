@@ -1,6 +1,7 @@
 package com.securityexpert.nexus.ui2.worker.inventory;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
@@ -413,9 +414,8 @@ class InventoryJobExecutorEndToEndTest {
                 + "<entry><destination>203.0.113.0/24</destination><nexthop>0.0.0.0</nexthop>"
                 + "<interface>ethernet1/3</interface><virtual-router>VR-DMZ</virtual-router><flags>A C</flags></entry>"
                 + "</result></response>";
+        // No show system info is scripted: retired for firewalls by the PO on 2026-10-21 -- sending it would throw.
         Map<String, String> outputByCmd = Map.of(
-                InventoryReadPlan.PAN_SHOW_SYSTEM_INFO, "<response><result><system><hostname>fw-a</hostname><serial>0011223344</serial>"
-                        + "<model>PA-3440</model><sw-version>11.1.10-h7</sw-version></system></result></response>",
                 InventoryReadPlan.PAN_SHOW_HA_STATE, "<response><result><enabled>no</enabled></result></response>",
                 InventoryReadPlan.PAN_SHOW_INTERFACE_ALL, interfaceXml,
                 InventoryReadPlan.PAN_SHOW_ROUTING_ROUTE, routeXml);
@@ -431,8 +431,9 @@ class InventoryJobExecutorEndToEndTest {
 
         InventoryCapabilityExecutor capabilityExecutor = new InventoryCapabilityExecutor(transport, ref ->
                 new com.securityexpert.nexus.ui2.worker.transport.xmlapi.PanCredentialMaterial("user", "pw".toCharArray()));
+        java.util.List<com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFacts> recordedFacts = new java.util.ArrayList<>();
         InventoryJobExecutor executor = new InventoryJobExecutor(leaseRepo, attemptRepo, devicePort, deviceRepository,
-                inventoryRepository, capabilityExecutor);
+                inventoryRepository, capabilityExecutor, recordingPlatformFacts(recordedFacts));
 
         InventoryRequest request = InventoryRequest.paloAlto(new ApiTarget("ep-2", "https://fw.example"), "cred-2");
 
@@ -440,11 +441,24 @@ class InventoryJobExecutorEndToEndTest {
 
         assertTrue(outcome instanceof JobOutcome.Completed, "expected Completed, got " + outcome);
         assertTrue(inventoryRepository.recordRunCalled);
+        assertFalse(transport.sentCmds.contains("<show><system><info/></system></show>"),
+                "PO 2026-10-21: a firewall's inventory never sends show system info");
+        assertTrue(transport.sentCmds.containsAll(java.util.List.of(InventoryReadPlan.PAN_SHOW_HA_STATE,
+                InventoryReadPlan.PAN_SHOW_INTERFACE_ALL, InventoryReadPlan.PAN_SHOW_ROUTING_ROUTE)),
+                "HA state, interfaces and routes are still collected");
 
         InventoryRun run = inventoryRepository.lastRecordedRun;
         assertEquals(3, run.contexts().size(), "physical (no hw ports in this scripted response) + vsys 1 + vsys 2");
-        assertEquals(java.util.List.of("fw-a|PA-3440|11.1.10-h7"), deviceRepository.observedFactRefreshes,
-                "PO 2026-09-25: the read's hostname, model and version refresh the device row every time");
+        assertEquals(1, run.haFacts().size(), "the HA state is still collected");
+        assertTrue(deviceRepository.observedFactRefreshes.isEmpty(),
+                "PO 2026-10-21: no hostname / model / version is read, so none is refreshed");
+        assertEquals(java.util.List.of(DEVICE_ID), deviceRepository.observedFactClears,
+                "the previous run's model and version are cleared, never left standing as current");
+        assertEquals(1, recordedFacts.size(), "the retired-command record replaces the previous platform facts");
+        var facts = recordedFacts.get(0);
+        assertEquals(com.securityexpert.nexus.ui2.persistence.device.PanSystemInfoRetirement.SOURCE_READ, facts.sourceRead());
+        assertTrue(facts.serialNumber().isEmpty() && facts.uptimeText().isEmpty() && facts.contentVersions().isEmpty()
+                && facts.platformFamily().isEmpty(), "serial, uptime, content versions and family are UNKNOWN, never 0");
 
         InventoryContext physical = contextNamed(run, InventoryContext.PHYSICAL);
         assertTrue(physical.interfaces().isEmpty(), "no <hw> block in this scripted response");
@@ -464,6 +478,90 @@ class InventoryJobExecutorEndToEndTest {
         assertTrue(vsys2.routes().stream().anyMatch(r -> r.routeTable().equals(Optional.of("default"))),
                 "the default virtual router's route spans into vsys2 too (PM-3)");
         assertTrue(vsys2.routes().stream().anyMatch(r -> r.routeTable().equals(Optional.of("VR-DMZ"))));
+    }
+
+    /** PO 2026-10-21 scope update: show interface all switched off -> never sent; interfaces UNKNOWN, routes and HA still read. */
+    @Test
+    void paloAltoFirewallWithShowInterfaceAllSwitchedOffRecordsItAsNotCollected() {
+        String routeXml = "<response><result>"
+                + "<entry><destination>0.0.0.0/0</destination><nexthop>192.0.2.254</nexthop>"
+                + "<interface>ethernet1/1</interface><virtual-router>default</virtual-router><flags>A S</flags></entry>"
+                + "</result></response>";
+        ScriptedPaloAltoInventoryTransport transport = new ScriptedPaloAltoInventoryTransport(Map.of(
+                InventoryReadPlan.PAN_SHOW_HA_STATE, "<response><result><enabled>no</enabled></result></response>",
+                InventoryReadPlan.PAN_SHOW_ROUTING_ROUTE, routeXml));
+        InventoryJobExecutorFakes.FakeDeviceInventoryRepository inventoryRepository =
+                new InventoryJobExecutorFakes.FakeDeviceInventoryRepository();
+        InventoryCapabilityExecutor capabilityExecutor = new InventoryCapabilityExecutor(transport, ref ->
+                new com.securityexpert.nexus.ui2.worker.transport.xmlapi.PanCredentialMaterial("user", "pw".toCharArray()),
+                com.securityexpert.nexus.ui2.jobs.pan.PanFirewallCommandSwitches.from(Map.of(
+                        com.securityexpert.nexus.ui2.jobs.pan.PanFirewallCommandSwitches.SHOW_INTERFACE_ALL_VARIABLE, "retired")));
+        InventoryJobExecutor executor = new InventoryJobExecutor(
+                new InventoryJobExecutorFakes.FakeLeaseRepository(JOB_ID, LEASE_EPOCH, JobState.CLAIMED),
+                new InventoryJobExecutorFakes.FakeStepAttemptRepository(), new InventoryJobExecutorFakes.FakeDeviceEnrollmentReadPort(),
+                new InventoryJobExecutorFakes.FakeDeviceRepository(), inventoryRepository, capabilityExecutor);
+
+        JobOutcome outcome = executor.execute(JOB_ID, LEASE_EPOCH, DEVICE_ID,
+                InventoryRequest.paloAlto(new ApiTarget("ep-2", "https://fw.example"), "cred-2"), false);
+
+        assertTrue(outcome instanceof JobOutcome.Completed, "expected Completed, got " + outcome);
+        assertFalse(transport.sentCmds.contains(InventoryReadPlan.PAN_SHOW_INTERFACE_ALL), "switched off: never sent");
+        InventoryRun run = inventoryRepository.lastRecordedRun;
+        assertEquals(java.util.List.of("pan_show_interface_all"), run.notCollected());
+        assertEquals(1, run.contexts().stream().mapToInt(c -> c.routes().size()).sum(), "routes are still read");
+        assertEquals(1, run.haFacts().size(), "HA state is still read");
+    }
+
+    /** PO 2026-10-21, strict posture: no presented identity -> refused after the key exchange, before any read. */
+    @Test
+    void paloAltoFirewallUnderTheStrictPostureIsRefusedBecauseItsIdentityIsNotEvaluable() {
+        ScriptedPaloAltoInventoryTransport transport = new ScriptedPaloAltoInventoryTransport(Map.of());
+        InventoryJobExecutorFakes.FakeLeaseRepository leaseRepo =
+                new InventoryJobExecutorFakes.FakeLeaseRepository(JOB_ID, LEASE_EPOCH, JobState.CLAIMED);
+        InventoryJobExecutorFakes.FakeDeviceInventoryRepository inventoryRepository =
+                new InventoryJobExecutorFakes.FakeDeviceInventoryRepository();
+        InventoryCapabilityExecutor capabilityExecutor = new InventoryCapabilityExecutor(transport, ref ->
+                new com.securityexpert.nexus.ui2.worker.transport.xmlapi.PanCredentialMaterial("user", "pw".toCharArray()));
+        InventoryJobExecutor executor = new InventoryJobExecutor(leaseRepo, new InventoryJobExecutorFakes.FakeStepAttemptRepository(),
+                new InventoryJobExecutorFakes.FakeDeviceEnrollmentReadPort(), new InventoryJobExecutorFakes.FakeDeviceRepository(),
+                inventoryRepository, capabilityExecutor);
+
+        JobOutcome outcome = executor.execute(JOB_ID, LEASE_EPOCH, DEVICE_ID,
+                InventoryRequest.paloAlto(new ApiTarget("ep-2", "https://fw.example"), "cred-2"), true);
+
+        assertTrue(outcome instanceof JobOutcome.Failed failed && failed.terminalReason().contains("NOT_EVALUABLE"),
+                "expected a NOT_EVALUABLE refusal, got " + outcome);
+        assertTrue(transport.sentCmds.isEmpty(), "nothing but the key exchange was sent");
+        assertFalse(inventoryRepository.recordRunCalled);
+    }
+
+    /** A baseline is recorded, but nothing presented can be compared: never a guessed MATCH, never a mismatch. */
+    @Test
+    void paloAltoFirewallIdentityIsNotEvaluableNeverAGuessedMatch() {
+        assertEquals(com.securityexpert.nexus.ui2.worker.confirm.IdentityMismatchEvaluator.Decision.NOT_EVALUABLE,
+                com.securityexpert.nexus.ui2.worker.confirm.IdentityMismatchEvaluator.evaluateWithoutPresentedIdentity(false));
+        assertEquals(com.securityexpert.nexus.ui2.worker.confirm.IdentityMismatchEvaluator.Decision.REFUSE,
+                com.securityexpert.nexus.ui2.worker.confirm.IdentityMismatchEvaluator.evaluateWithoutPresentedIdentity(true));
+    }
+
+    private static com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFactsRepository recordingPlatformFacts(
+            java.util.List<com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFacts> recorded) {
+        return new com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFactsRepository() {
+            @Override
+            public void record(com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFacts facts) {
+                recorded.add(facts);
+            }
+
+            @Override
+            public Optional<com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFacts> find(String deviceId) {
+                return Optional.empty();
+            }
+
+            @Override
+            public Map<String, com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFacts> findAll() {
+                return Map.of();
+            }
+        };
     }
 
     private static InventoryContext contextNamed(InventoryRun run, String context) {

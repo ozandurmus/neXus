@@ -18,7 +18,14 @@ public record ConfirmRequest(
         Optional<ApiTarget> apiTarget,
         String credentialRef,
         String trustRuleRef,
-        Optional<String> modelHint) {
+        Optional<String> modelHint,
+        boolean managementServer) {
+
+    /** Pre-2026-10-21 shape: a gateway / firewall confirm. */
+    public ConfirmRequest(Vendor vendor, Optional<ConnectionTarget> connectionTarget, Optional<ApiTarget> apiTarget,
+            String credentialRef, String trustRuleRef, Optional<String> modelHint) {
+        this(vendor, connectionTarget, apiTarget, credentialRef, trustRuleRef, modelHint, false);
+    }
 
     public static ConfirmRequest checkPoint(ConnectionTarget target, String credentialRef, String trustRuleRef) {
         return checkPoint(target, credentialRef, trustRuleRef, Optional.empty());
@@ -36,7 +43,14 @@ public record ConfirmRequest(
                 modelHint);
     }
 
+    /** A Palo Alto firewall: refused before any contact since PO 2026-10-21 (its identity read is retired). */
     public static ConfirmRequest paloAlto(ApiTarget target, String credentialRef) {
         return new ConfirmRequest(Vendor.PALO_ALTO, Optional.empty(), Optional.of(target), credentialRef, "", Optional.empty());
+    }
+
+    /** A Panorama: keeps the system info identity read under its own gate row (out of the 2026-10-21 scope). */
+    public static ConfirmRequest panorama(ApiTarget target, String credentialRef) {
+        return new ConfirmRequest(Vendor.PALO_ALTO, Optional.empty(), Optional.of(target), credentialRef, "", Optional.empty(),
+                true);
     }
 }

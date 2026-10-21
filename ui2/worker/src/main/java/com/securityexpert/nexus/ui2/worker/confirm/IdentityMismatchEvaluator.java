@@ -27,7 +27,20 @@ public final class IdentityMismatchEvaluator {
         /** EC-6/EC-7: connects anyway, surfaced as a visible warning, audited, continues to ENROLLED. */
         WARN_AND_CONTINUE,
         /** EC-8: the strict-refuse posture is on -- this contact's outcome is a refusal, never a silent continue. */
-        REFUSE
+        REFUSE,
+        /**
+         * No presented identity exists to compare (PO 2026-10-21: a Palo Alto firewall's serial came only from the
+         * retired {@code show system info}). Never a match and never a mismatch -- the contact continues, unverified.
+         */
+        NOT_EVALUABLE
+    }
+
+    /**
+     * The contact presents no identity at all, so nothing can be compared: NOT_EVALUABLE, or REFUSE under the
+     * strict posture (fail closed: strict means a contact whose identity is not proven is not made). Never MATCH.
+     */
+    public static Decision evaluateWithoutPresentedIdentity(boolean strictRefuseEnabled) {
+        return strictRefuseEnabled ? Decision.REFUSE : Decision.NOT_EVALUABLE;
     }
 
     public static Decision evaluate(Optional<PresentedIdentity> recordedIdentity, PresentedIdentity presentedIdentity,

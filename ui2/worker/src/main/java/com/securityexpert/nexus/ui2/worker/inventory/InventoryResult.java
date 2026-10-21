@@ -25,15 +25,23 @@ public sealed interface InventoryResult {
     }
 
     /** {@code haFacts} (migration V17): every {@link InventoryHaFact} the contact produced, across every context. */
+    /** {@code notCollected}: read-kind tokens deliberately not sent (a Palo Alto firewall read switched off, PO 2026-10-21). */
     record Completed(List<InventoryContext> contexts, List<InventoryHaFact> haFacts, Optional<String> virtualSystems,
-            Optional<PlatformFactsRead> platformFacts, ObservedIdentity observedIdentity) implements InventoryResult {
+            Optional<PlatformFactsRead> platformFacts, ObservedIdentity observedIdentity, List<String> notCollected)
+            implements InventoryResult {
 
         public Completed {
+            notCollected = notCollected == null ? List.of() : List.copyOf(notCollected);
             contexts = contexts == null ? List.of() : List.copyOf(contexts);
             haFacts = haFacts == null ? List.of() : List.copyOf(haFacts);
             virtualSystems = virtualSystems == null ? Optional.empty() : virtualSystems;
             platformFacts = platformFacts == null ? Optional.empty() : platformFacts;
             observedIdentity = observedIdentity == null ? ObservedIdentity.NONE : observedIdentity;
+        }
+
+        public Completed(List<InventoryContext> contexts, List<InventoryHaFact> haFacts, Optional<String> virtualSystems,
+                Optional<PlatformFactsRead> platformFacts, ObservedIdentity observedIdentity) {
+            this(contexts, haFacts, virtualSystems, platformFacts, observedIdentity, List.of());
         }
 
         public Completed(List<InventoryContext> contexts, List<InventoryHaFact> haFacts, Optional<String> virtualSystems,
