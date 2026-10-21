@@ -59,6 +59,7 @@ class CpFailoverUnitsReadPathTest {
     private final ObjectMapper json = new ObjectMapper().findAndRegisterModules()
         .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
     private MockMvc mvc;
+    private MockMvc namedMvc;
 
     private DeviceSummaryRecord member(String id, String vendor, String cluster, String vsNames) {
         return new DeviceSummaryRecord(id, "gateway", vendor, DeviceEnrollmentState.ENROLLED, Optional.of("host-" + id),
@@ -134,6 +135,10 @@ class CpFailoverUnitsReadPathTest {
             new JobWindowPolicy(java.time.Clock.fixed(Instant.parse("2026-10-08T09:10:00Z"), JobWindowPolicy.ZONE_ID), 60));
         mvc = MockMvcBuilders.standaloneSetup(new CpFailoverController(service))
             .setMessageConverters(new MappingJackson2HttpMessageConverter(json)).build();
+        namedMvc = MockMvcBuilders.standaloneSetup(new CpFailoverController(service, null,
+                new com.securityexpert.nexus.ui2.service.privacy.TopologyNamePseudonymizer(
+                    "k".repeat(32).getBytes(java.nio.charset.StandardCharsets.UTF_8))))
+            .setMessageConverters(new MappingJackson2HttpMessageConverter(json)).build();
         clearInvocations(devices, inventory, store, rbac);
     }
 
@@ -175,6 +180,20 @@ class CpFailoverUnitsReadPathTest {
             && units.get(0).path("canSchedule").asBoolean());
         JsonNode summary = read("cp-failover", "summary");
         for (JsonNode unit : units) assertSameAsSummary(unit, summary);
+    }
+
+    @Test
+    void pseudonymsAreSentOnlyToTheMaskedView() throws Exception {
+        // PO 2026-10-21: the failover tab showed pseudonyms (CLS-<WORD>-NN) to security_admin.
+        String path = "/api/v2/cp-failover/units";
+        for (boolean masked : new boolean[] {false, true}) {
+            var request = get(path).servletPath(path).requestAttr(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE, ACTOR)
+                .requestAttr(GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE, masked).param("memberDeviceId", VSX + "-a");
+            JsonNode unit = json.readTree(namedMvc.perform(request).andExpect(status().isOk()).andReturn()
+                .getResponse().getContentAsString()).get(0);
+            assertEquals(masked, unit.has("maskedName"), "maskedName only when masked=" + masked);
+            assertEquals(masked, unit.has("maskedMembers"), "maskedMembers only when masked=" + masked);
+        }
     }
 
     @Test
