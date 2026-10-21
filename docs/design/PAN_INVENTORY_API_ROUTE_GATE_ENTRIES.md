@@ -2,6 +2,8 @@
 
 > **Amendment 2026-10-21 (PO).** Entry 1 (`show system info`) is withdrawn for firewalls: gate row `pan_inventory_show_system_info` is BLOCKED (V171) and no path sends it. `show interface all` can be switched off with `NEXUS_PAN_FW_SHOW_INTERFACE_ALL=retired`. See `PO_DECISION_RECORD_2026_10_21_PAN_SHOW_SYSTEM_INFO_RETIRED.md`.
 
+> **Amendment 2026-10-21, later the same day (PO, "Tüm PAN-OS sürümleri").** The inventory's step 1 for firewalls is `type=version` (entry 1's place): serial, model and PAN-OS version; content versions, uptime and family stay not collected. See `PO_DECISION_RECORD_2026_10_21_PAN_TYPE_VERSION_AND_CHECK7.md` (RATIFIED) and gate row `pan_identity_version` (V172).
+
 ## Status
 
 **APPROVED — PRODUCT OWNER, 2026-09-14; COMMANDS RUN BY THE PRODUCT OWNER ON

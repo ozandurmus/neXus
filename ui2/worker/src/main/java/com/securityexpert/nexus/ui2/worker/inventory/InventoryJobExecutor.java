@@ -161,6 +161,23 @@ public final class InventoryJobExecutor {
                     ACTION_FAILED, reasonWithTime);
             return new JobOutcome.Failed("inventory_run_write_failed: " + recordFailed.getMessage());
         }
+        // PO 2026-10-21: a Palo Alto firewall's model and version no longer come from show system info. A run that could not
+        // read them (type=version unusable, or its answer lacked the field) clears the previous values so the screen,
+        // lifecycle and compliance say UNKNOWN instead of showing them as current. Done before the refresh below, which
+        // then writes whatever this run did read.
+        completed.platformFacts().ifPresent(read -> {
+            boolean stale = read.systemInfoRetired() || read.typeVersion()
+                    && (completed.observedIdentity().model().isEmpty() || completed.observedIdentity().softwareVersion().isEmpty());
+            if (stale) {
+                try {
+                    deviceRepository.clearObservedPlatformFacts(targetDeviceId, ACTOR, "inventory_pan_system_info_retired");
+                } catch (RuntimeException clearFailed) {
+                    com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(clearFailed);
+                    LOG.log(System.Logger.Level.WARNING, "[OBSERVED_FACTS_CLEAR_FAILED] Inventory job {0}: {1}", jobId,
+                            clearFailed.getClass().getSimpleName());
+                }
+            }
+        });
         // PO 2026-09-25: the device row's observed hostname / model / version follow this read whenever they differ.
         if (!completed.observedIdentity().isEmpty()) {
             try {
@@ -176,17 +193,6 @@ public final class InventoryJobExecutor {
         }
         // Platform identity facts (V46): the run is the record; a facts write that fails is logged, never fails the job.
         completed.platformFacts().ifPresent(read -> {
-            if (read.systemInfoRetired()) {
-                // PO 2026-10-21: a Palo Alto firewall's model and version are no longer read -- clear the previous run's
-                // values so the screen, lifecycle and compliance say UNKNOWN instead of showing them as current.
-                try {
-                    deviceRepository.clearObservedPlatformFacts(targetDeviceId, ACTOR, "inventory_pan_system_info_retired");
-                } catch (RuntimeException clearFailed) {
-                    com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(clearFailed);
-                    LOG.log(System.Logger.Level.WARNING, "[OBSERVED_FACTS_CLEAR_FAILED] Inventory job {0}: {1}", jobId,
-                            clearFailed.getClass().getSimpleName());
-                }
-            }
             try {
                 platformFactsRepository.record(read.forDevice(targetDeviceId));
             } catch (RuntimeException factsFailed) {

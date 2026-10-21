@@ -290,7 +290,7 @@ public final class PanFailoverJobExecutor {
         if (fieldCheck!=0) fieldsFound.merge(fieldCheck,PanFailoverChecks.fieldFound(fieldCheck,completed.body()),
             (a,b) -> a && b);
         if (STATE.equals(command)) {
-            for (int check=1;check<=4;check++) shapes.capture(check,completed.body());
+            for (int check:new int[]{1,2,3,4,7}) shapes.capture(check,completed.body());
         } else {
             int check=SESSION_SYNC.equals(command)?5:SESSIONS.equals(command)?6:0;
             if (check!=0) shapes.capture(check,completed.body());
@@ -318,9 +318,10 @@ public final class PanFailoverJobExecutor {
         boolean sessionsRead=panSwitches.showSessionInfo();
         Long sessionsA=sessionsRead?PanFailoverChecks.sessions(call(first,SESSIONS)):null;
         Long sessionsB=sessionsRead?PanFailoverChecks.sessions(call(second,SESSIONS)):null;
-        // Check 7 (version parity) read show system info, retired for firewalls by the PO on 2026-10-21: UNKNOWN with
-        // that reason, never a guess -- and, like every non-PASS check, it stops an execution before any write.
-        String versions=PanFailoverChecks.VERSION_PARITY_NOT_COLLECTED;
+        // Check 7 (version parity): each member's own versions from the HA state it already returned this phase (PO
+        // 2026-10-21; no new command, show system info stays retired). Missing fields are UNKNOWN.
+        var versionParity=PanFailoverChecks.versionsEvidence(a,b);
+        String versions=versionParity.status();
         Long active=oldActive==null?("active".equals(a.role())?sessionsA:sessionsB)
             :(oldActive==first?sessionsB:sessionsA);
         String carried=sessionsA==null || sessionsB==null?"UNKNOWN"
@@ -340,7 +341,7 @@ public final class PanFailoverJobExecutor {
             if (no==4) reason=configurationSync.derived();
             if (no==5) reason=sessionSync.derived();
             if (no==6 && !"UNKNOWN".equals(statuses[i])) reason="{\"count\":"+sessionsA+"}";
-            if (no==7) reason=PanFailoverChecks.VERSION_PARITY_NOT_COLLECTED_DERIVED;
+            if (no==7) reason=versionParity.derived();
             if (no==6 && !sessionsRead) reason=PanFailoverChecks.SESSIONS_NOT_COLLECTED_DERIVED;
             String derived=no==1?PanFailoverChecks.stateEvidence(a,b,switchMirroredRoles):reason;
             store.check(runId,phase,first.id(),null,no,statuses[i],derived);

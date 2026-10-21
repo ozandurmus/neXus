@@ -168,11 +168,18 @@ public final class InventoryReadPlan {
     public static final String PAN_SHOW_ROUTING_ROUTE = "<show><routing><route/></routing></show>";
 
     /**
-     * A firewall's reads, 14E PF-1's order without the identity refresh: HA state, interfaces, routes. Each once,
-     * unscoped (PF-2). {@code show system info} was the first step until the PO retired it for firewalls on 2026-10-21.
+     * PO 2026-10-21 ({@code PanTypeVersion}): the firewall's identity read, the documented XML API request type
+     * {@code type=version} (gate row pan_identity_version), for every PAN-OS version. It is a form request, not a
+     * {@code cmd}: {@code POST /api/}, body {@code type=version}, key in the {@code X-PAN-KEY} header.
+     */
+    public static final String PAN_TYPE_VERSION = "type=version";
+
+    /**
+     * A firewall's reads, 14E PF-1's order: the identity read ({@code type=version} since PO 2026-10-21, in place of
+     * the retired {@code show system info}), then HA state, interfaces, routes. Each once, unscoped (PF-2).
      */
     public static final List<String> PALO_ALTO_BASE_STEPS =
-            List.of(PAN_SHOW_HA_STATE, PAN_SHOW_INTERFACE_ALL, PAN_SHOW_ROUTING_ROUTE);
+            List.of(PAN_TYPE_VERSION, PAN_SHOW_HA_STATE, PAN_SHOW_INTERFACE_ALL, PAN_SHOW_ROUTING_ROUTE);
 
     /** A Panorama's inventory reads (V83 gate rows, Panorama scope): system info, then HA state. Out of the 2026-10-21 scope. */
     public static final List<String> PANORAMA_STEPS = List.of(PAN_SHOW_SYSTEM_INFO, PAN_SHOW_HA_STATE);

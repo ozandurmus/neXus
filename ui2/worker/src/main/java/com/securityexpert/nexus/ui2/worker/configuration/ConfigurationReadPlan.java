@@ -41,8 +41,11 @@ public final class ConfigurationReadPlan {
 
     // -- Palo Alto (CG-4) ------------------------------------------------------
 
-    // show system info was the identity refresh here until PO 2026-10-21 retired it for firewalls (PanSystemInfoRetirement):
-    // a firewall's configuration collect sends none, and its identity check is NOT_EVALUABLE.
+    /**
+     * The identity refresh: the documented XML API request type=version (PO 2026-10-21, gate row pan_identity_version),
+     * in place of the show system info the PO retired for firewalls the same day (PanSystemInfoRetirement).
+     */
+    public static final String PAN_TYPE_VERSION = "type=version";
     public static final String PAN_EFFECTIVE_RUNNING = "<show><config><effective-running/></config></show>";
     public static final String PAN_MERGED = "<show><config><merged/></config></show>";
 
@@ -50,6 +53,6 @@ public final class ConfigurationReadPlan {
     public static final Map<String, String> PAN_ACTIVE_FORM_PARAMS =
             Map.of("type", "config", "action", "show", "xpath", "/config");
 
-    /** CG-4's exact order (no identity refresh since 2026-10-21): active, effective-running, merged. */
+    /** CG-4's order after the identity refresh ({@link #PAN_TYPE_VERSION}): active, effective-running, merged. */
     public static final List<String> PALO_ALTO_XML_READS = List.of(PAN_EFFECTIVE_RUNNING, PAN_MERGED);
 }

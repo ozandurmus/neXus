@@ -1,7 +1,8 @@
 # pan_inventory_collect -- the Palo Alto half of inventory collection
-# (PO_DECISION_RECORD_2026_09_14E PF-1..PF-3, gate consequence). The three
-# xml_api_call steps below are PF-1's unscoped request set without the
-# identity refresh (retired for firewalls 2026-10-21) --
+# (PO_DECISION_RECORD_2026_09_14E PF-1..PF-3, gate consequence). The four
+# xml_api_call steps below are PF-1's unscoped request set; the identity
+# refresh is the type=version request (PO 2026-10-21, in place of the retired
+# show system info) --
 # worker.inventory.InventoryReadPlan.PALO_ALTO_BASE_STEPS, in order --
 # gated per docs/design/PAN_INVENTORY_API_ROUTE_GATE_ENTRIES.md entries
 # 1-4, so C4 execution eligibility is computed from real gate resolution
@@ -37,7 +38,11 @@ transport:
 steps:
   - kind: connect
   # No show system info step: retired for firewalls by the PO on 2026-10-21 (gate row BLOCKED, V171;
-  # docs/design/PO_DECISION_RECORD_2026_10_21_PAN_SHOW_SYSTEM_INFO_RETIRED.md).
+  # docs/design/PO_DECISION_RECORD_2026_10_21_PAN_SHOW_SYSTEM_INFO_RETIRED.md). Its place is the documented XML API
+  # request type=version (V172, docs/design/PO_DECISION_RECORD_2026_10_21_PAN_TYPE_VERSION_AND_CHECK7.md).
+  - kind: xml_api_call
+    send: "type=version"
+    gate_reference: pan_identity_version
   - kind: xml_api_call
     send: "<show><high-availability><state/></high-availability></show>"
     gate_reference: pan_inventory_show_ha_state

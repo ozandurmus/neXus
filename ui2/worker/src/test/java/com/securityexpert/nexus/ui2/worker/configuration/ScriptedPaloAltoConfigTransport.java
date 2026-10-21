@@ -36,6 +36,10 @@ final class ScriptedPaloAltoConfigTransport implements DeviceTransport {
     private final Map<String, String> outputByOpCmd;
     /** Every op-type {@code cmd} this transport was asked to send, in order. */
     final java.util.List<String> sentOpCmds = new java.util.ArrayList<>();
+    /** The {@code type=version} requests (PO 2026-10-21: the firewall identity refresh), exactly as sent. */
+    final java.util.List<XmlApiSpec> sentTypeVersionSpecs = new java.util.ArrayList<>();
+    /** The scripted {@code type=version} answer; the default is an error envelope (an unusable answer). */
+    String typeVersionOutput = "<response status=\"error\" code=\"13\"><msg>not scripted</msg></response>";
     private final String activeFormOutput;
     private final java.util.function.Supplier<InputStream> effectiveRunningStreamSupplier;
 
@@ -65,6 +69,10 @@ final class ScriptedPaloAltoConfigTransport implements DeviceTransport {
     public XmlApiResult xmlApiCall(ApiTarget target, XmlApiSpec spec, Duration timeout) {
         if ("keygen".equals(spec.type())) {
             return new XmlApiResult.Completed(200, "<response><result><key>" + API_KEY + "</key></result></response>");
+        }
+        if ("version".equals(spec.type())) {
+            sentTypeVersionSpecs.add(spec);
+            return new XmlApiResult.Completed(200, typeVersionOutput);
         }
         if ("config".equals(spec.type())) {
             return new XmlApiResult.Completed(200, activeFormOutput);

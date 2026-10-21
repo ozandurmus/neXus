@@ -14,6 +14,7 @@ import com.securityexpert.nexus.ui2.jobs.JobState;
 import com.securityexpert.nexus.ui2.jobs.executor.JobOutcome;
 import com.securityexpert.nexus.ui2.jobs.transport.ApiTarget;
 import com.securityexpert.nexus.ui2.jobs.transport.ConnectionTarget;
+import com.securityexpert.nexus.ui2.jobs.transport.XmlApiSpec;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryAddress;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryContext;
 import com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryInterface;
@@ -31,6 +32,21 @@ class InventoryJobExecutorEndToEndTest {
     private static final String JOB_ID = "job-inventory-1";
     private static final long LEASE_EPOCH = 4L;
     private static final String DEVICE_ID = "device-enrolled-1";
+    /** Synthetic type=version values (PO 2026-10-21); built at runtime so no literal looks like a real serial. */
+    private static final String TV_SERIAL = "TESTSER" + "0001";
+    private static final String TV_MODEL = "PA-" + "TESTMODEL";
+    private static final String TV_VERSION = "9." + "9." + "9-test";
+
+    private static String typeVersionXml() {
+        return typeVersionXml(TV_SERIAL, TV_MODEL, TV_VERSION);
+    }
+
+    private static String typeVersionXml(String serial, String model, String version) {
+        return "<response status=\"success\"><result>"
+                + (version == null ? "" : "<sw-version>" + version + "</sw-version>") + "<multi-vsys>off</multi-vsys>"
+                + (model == null ? "" : "<model>" + model + "</model>")
+                + (serial == null ? "" : "<serial>" + serial + "</serial>") + "</result></response>";
+    }
 
     @Test
     void checkPointVsxHostWithTwoVsidsRecordsOneRunWithThreeContexts() {
@@ -415,7 +431,9 @@ class InventoryJobExecutorEndToEndTest {
                 + "<interface>ethernet1/3</interface><virtual-router>VR-DMZ</virtual-router><flags>A C</flags></entry>"
                 + "</result></response>";
         // No show system info is scripted: retired for firewalls by the PO on 2026-10-21 -- sending it would throw.
+        // The identity read is type=version (PO 2026-10-21): serial, model and PAN-OS version, synthetic values.
         Map<String, String> outputByCmd = Map.of(
+                InventoryReadPlan.PAN_TYPE_VERSION, typeVersionXml(),
                 InventoryReadPlan.PAN_SHOW_HA_STATE, "<response><result><enabled>no</enabled></result></response>",
                 InventoryReadPlan.PAN_SHOW_INTERFACE_ALL, interfaceXml,
                 InventoryReadPlan.PAN_SHOW_ROUTING_ROUTE, routeXml);
@@ -443,22 +461,29 @@ class InventoryJobExecutorEndToEndTest {
         assertTrue(inventoryRepository.recordRunCalled);
         assertFalse(transport.sentCmds.contains("<show><system><info/></system></show>"),
                 "PO 2026-10-21: a firewall's inventory never sends show system info");
-        assertTrue(transport.sentCmds.containsAll(java.util.List.of(InventoryReadPlan.PAN_SHOW_HA_STATE,
-                InventoryReadPlan.PAN_SHOW_INTERFACE_ALL, InventoryReadPlan.PAN_SHOW_ROUTING_ROUTE)),
-                "HA state, interfaces and routes are still collected");
+        assertTrue(transport.sentCmds.containsAll(java.util.List.of(InventoryReadPlan.PAN_TYPE_VERSION,
+                InventoryReadPlan.PAN_SHOW_HA_STATE, InventoryReadPlan.PAN_SHOW_INTERFACE_ALL,
+                InventoryReadPlan.PAN_SHOW_ROUTING_ROUTE)),
+                "type=version, HA state, interfaces and routes are collected");
+        assertEquals(InventoryReadPlan.PAN_TYPE_VERSION, transport.sentCmds.get(0), "the identity read comes first");
+        // The request is the documented form request: type=version, no cmd, the key in the header only.
+        XmlApiSpec versionRequest = transport.sentSpecs.get(0);
+        assertEquals("version", versionRequest.type());
+        assertTrue(versionRequest.formParams().isEmpty(), "no cmd and no other form field");
+        assertEquals(Map.of("X-PAN-KEY", "test-api-key"), versionRequest.headers());
 
         InventoryRun run = inventoryRepository.lastRecordedRun;
         assertEquals(3, run.contexts().size(), "physical (no hw ports in this scripted response) + vsys 1 + vsys 2");
         assertEquals(1, run.haFacts().size(), "the HA state is still collected");
-        assertTrue(deviceRepository.observedFactRefreshes.isEmpty(),
-                "PO 2026-10-21: no hostname / model / version is read, so none is refreshed");
-        assertEquals(java.util.List.of(DEVICE_ID), deviceRepository.observedFactClears,
-                "the previous run's model and version are cleared, never left standing as current");
-        assertEquals(1, recordedFacts.size(), "the retired-command record replaces the previous platform facts");
+        assertEquals(java.util.List.of("|" + TV_MODEL + "|" + TV_VERSION), deviceRepository.observedFactRefreshes,
+                "model and PAN-OS version come from type=version; type=version carries no hostname, so none is refreshed");
+        assertTrue(deviceRepository.observedFactClears.isEmpty(), "both fields were read, so nothing stale is cleared");
+        assertEquals(1, recordedFacts.size());
         var facts = recordedFacts.get(0);
-        assertEquals(com.securityexpert.nexus.ui2.persistence.device.PanSystemInfoRetirement.SOURCE_READ, facts.sourceRead());
-        assertTrue(facts.serialNumber().isEmpty() && facts.uptimeText().isEmpty() && facts.contentVersions().isEmpty()
-                && facts.platformFamily().isEmpty(), "serial, uptime, content versions and family are UNKNOWN, never 0");
+        assertEquals(com.securityexpert.nexus.ui2.persistence.device.PanTypeVersion.SOURCE_READ, facts.sourceRead());
+        assertEquals(Optional.of(TV_SERIAL), facts.serialNumber());
+        assertTrue(facts.uptimeText().isEmpty() && facts.contentVersions().isEmpty() && facts.platformFamily().isEmpty()
+                && facts.hotfixLevel().isEmpty(), "uptime, content versions and family are not in type=version: UNKNOWN, never 0");
 
         InventoryContext physical = contextNamed(run, InventoryContext.PHYSICAL);
         assertTrue(physical.interfaces().isEmpty(), "no <hw> block in this scripted response");
@@ -488,6 +513,7 @@ class InventoryJobExecutorEndToEndTest {
                 + "<interface>ethernet1/1</interface><virtual-router>default</virtual-router><flags>A S</flags></entry>"
                 + "</result></response>";
         ScriptedPaloAltoInventoryTransport transport = new ScriptedPaloAltoInventoryTransport(Map.of(
+                InventoryReadPlan.PAN_TYPE_VERSION, typeVersionXml(),
                 InventoryReadPlan.PAN_SHOW_HA_STATE, "<response><result><enabled>no</enabled></result></response>",
                 InventoryReadPlan.PAN_SHOW_ROUTING_ROUTE, routeXml));
         InventoryJobExecutorFakes.FakeDeviceInventoryRepository inventoryRepository =
@@ -512,36 +538,119 @@ class InventoryJobExecutorEndToEndTest {
         assertEquals(1, run.haFacts().size(), "HA state is still read");
     }
 
-    /** PO 2026-10-21, strict posture: no presented identity -> refused after the key exchange, before any read. */
-    @Test
-    void paloAltoFirewallUnderTheStrictPostureIsRefusedBecauseItsIdentityIsNotEvaluable() {
-        ScriptedPaloAltoInventoryTransport transport = new ScriptedPaloAltoInventoryTransport(Map.of());
-        InventoryJobExecutorFakes.FakeLeaseRepository leaseRepo =
-                new InventoryJobExecutorFakes.FakeLeaseRepository(JOB_ID, LEASE_EPOCH, JobState.CLAIMED);
-        InventoryJobExecutorFakes.FakeDeviceInventoryRepository inventoryRepository =
-                new InventoryJobExecutorFakes.FakeDeviceInventoryRepository();
-        InventoryCapabilityExecutor capabilityExecutor = new InventoryCapabilityExecutor(transport, ref ->
-                new com.securityexpert.nexus.ui2.worker.transport.xmlapi.PanCredentialMaterial("user", "pw".toCharArray()));
-        InventoryJobExecutor executor = new InventoryJobExecutor(leaseRepo, new InventoryJobExecutorFakes.FakeStepAttemptRepository(),
-                new InventoryJobExecutorFakes.FakeDeviceEnrollmentReadPort(), new InventoryJobExecutorFakes.FakeDeviceRepository(),
-                inventoryRepository, capabilityExecutor);
-
-        JobOutcome outcome = executor.execute(JOB_ID, LEASE_EPOCH, DEVICE_ID,
-                InventoryRequest.paloAlto(new ApiTarget("ep-2", "https://fw.example"), "cred-2"), true);
-
-        assertTrue(outcome instanceof JobOutcome.Failed failed && failed.terminalReason().contains("NOT_EVALUABLE"),
-                "expected a NOT_EVALUABLE refusal, got " + outcome);
-        assertTrue(transport.sentCmds.isEmpty(), "nothing but the key exchange was sent");
-        assertFalse(inventoryRepository.recordRunCalled);
+    /** One firewall inventory run against a scripted type=version answer; returns the pieces a test asserts on. */
+    private record PanRun(JobOutcome outcome, ScriptedPaloAltoInventoryTransport transport,
+            InventoryJobExecutorFakes.FakeDeviceRepository deviceRepository,
+            InventoryJobExecutorFakes.FakeDeviceInventoryRepository inventoryRepository,
+            java.util.List<com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFacts> facts) {
     }
 
-    /** A baseline is recorded, but nothing presented can be compared: never a guessed MATCH, never a mismatch. */
+    private static PanRun panRun(String typeVersionAnswer, Optional<String> recordedSerial, boolean strict) {
+        String routeXml = "<response><result>"
+                + "<entry><destination>0.0.0.0/0</destination><nexthop>192.0.2.254</nexthop>"
+                + "<interface>ethernet1/1</interface><virtual-router>default</virtual-router><flags>A S</flags></entry>"
+                + "</result></response>";
+        Map<String, String> script = new java.util.HashMap<>(Map.of(
+                InventoryReadPlan.PAN_SHOW_HA_STATE, "<response><result><enabled>no</enabled></result></response>",
+                InventoryReadPlan.PAN_SHOW_INTERFACE_ALL, "<response><result><ifnet><entry><name>ethernet1/1</name>"
+                        + "<ip>192.0.2.1/24</ip><vsys>1</vsys><fwd>vr:default</fwd><state>up</state></entry></ifnet></result></response>",
+                InventoryReadPlan.PAN_SHOW_ROUTING_ROUTE, routeXml));
+        if (typeVersionAnswer != null) {
+            script.put(InventoryReadPlan.PAN_TYPE_VERSION, typeVersionAnswer);
+        }
+        ScriptedPaloAltoInventoryTransport transport = new ScriptedPaloAltoInventoryTransport(script);
+        InventoryJobExecutorFakes.FakeDeviceInventoryRepository inventoryRepository =
+                new InventoryJobExecutorFakes.FakeDeviceInventoryRepository();
+        InventoryJobExecutorFakes.FakeDeviceRepository deviceRepository = new InventoryJobExecutorFakes.FakeDeviceRepository();
+        recordedSerial.ifPresent(serial -> deviceRepository.confirmFacts = Optional.of(
+                new com.securityexpert.nexus.ui2.persistence.device.DeviceConfirmFacts(Optional.empty(), Optional.empty(),
+                        Optional.empty(), Optional.empty(), Optional.of(serial), Optional.empty(),
+                        com.securityexpert.nexus.ui2.persistence.device.DeviceConfirmFacts.IDENTITY_MISMATCH_NONE,
+                        Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
+                        com.securityexpert.nexus.ui2.persistence.device.DeviceConfirmFacts.PEER_FOLLOW_CORROBORATED,
+                        Optional.empty())));
+        java.util.List<com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFacts> facts = new java.util.ArrayList<>();
+        InventoryCapabilityExecutor capabilityExecutor = new InventoryCapabilityExecutor(transport, ref ->
+                new com.securityexpert.nexus.ui2.worker.transport.xmlapi.PanCredentialMaterial("user", "pw".toCharArray()));
+        InventoryJobExecutor executor = new InventoryJobExecutor(
+                new InventoryJobExecutorFakes.FakeLeaseRepository(JOB_ID, LEASE_EPOCH, JobState.CLAIMED),
+                new InventoryJobExecutorFakes.FakeStepAttemptRepository(), new InventoryJobExecutorFakes.FakeDeviceEnrollmentReadPort(),
+                deviceRepository, inventoryRepository, capabilityExecutor, recordingPlatformFacts(facts));
+        JobOutcome outcome = executor.execute(JOB_ID, LEASE_EPOCH, DEVICE_ID,
+                InventoryRequest.paloAlto(new ApiTarget("ep-2", "https://fw.example"), "cred-2"), strict);
+        return new PanRun(outcome, transport, deviceRepository, inventoryRepository, facts);
+    }
+
+    /** PO 2026-10-21: the type=version serial is compared exactly with the recorded baseline -- a match completes. */
     @Test
-    void paloAltoFirewallIdentityIsNotEvaluableNeverAGuessedMatch() {
-        assertEquals(com.securityexpert.nexus.ui2.worker.confirm.IdentityMismatchEvaluator.Decision.NOT_EVALUABLE,
-                com.securityexpert.nexus.ui2.worker.confirm.IdentityMismatchEvaluator.evaluateWithoutPresentedIdentity(false));
-        assertEquals(com.securityexpert.nexus.ui2.worker.confirm.IdentityMismatchEvaluator.Decision.REFUSE,
-                com.securityexpert.nexus.ui2.worker.confirm.IdentityMismatchEvaluator.evaluateWithoutPresentedIdentity(true));
+    void paloAltoFirewallWithAMatchingSerialCompletesUnderTheStrictPosture() {
+        PanRun run = panRun(typeVersionXml(), Optional.of(TV_SERIAL), true);
+        assertTrue(run.outcome() instanceof JobOutcome.Completed, "expected Completed, got " + run.outcome());
+        assertEquals(Optional.of(TV_SERIAL), run.facts().get(0).serialNumber());
+    }
+
+    /** A different serial is a mismatch: refused under the strict posture before any further read, a warning otherwise. */
+    @Test
+    void paloAltoFirewallWithADifferentSerialIsRefusedUnderTheStrictPostureAndWarnsOtherwise() {
+        PanRun strict = panRun(typeVersionXml(), Optional.of("OTHER" + "SER0002"), true);
+        assertTrue(strict.outcome() instanceof JobOutcome.Failed failed && failed.terminalReason().contains("does not match"),
+                "expected a mismatch refusal, got " + strict.outcome());
+        assertEquals(java.util.List.of(InventoryReadPlan.PAN_TYPE_VERSION), strict.transport().sentCmds,
+                "nothing but type=version was sent");
+        assertFalse(strict.inventoryRepository().recordRunCalled);
+        PanRun warn = panRun(typeVersionXml(), Optional.of("OTHER" + "SER0002"), false);
+        assertTrue(warn.outcome() instanceof JobOutcome.Completed, "the default posture warns and continues: " + warn.outcome());
+    }
+
+    /**
+     * An unusable type=version answer (error envelope) is never a guessed identity: NOT_EVALUABLE. The strict posture
+     * refuses before any read; the default posture continues and records the empty "not collected" record, which
+     * clears the previous model and version.
+     */
+    @Test
+    void paloAltoFirewallWithAnUnusableTypeVersionAnswerIsNotEvaluable() {
+        PanRun strict = panRun(null, Optional.of(TV_SERIAL), true);
+        assertTrue(strict.outcome() instanceof JobOutcome.Failed failed && failed.terminalReason().contains("NOT_EVALUABLE"),
+                "expected a NOT_EVALUABLE refusal, got " + strict.outcome());
+        assertEquals(java.util.List.of(InventoryReadPlan.PAN_TYPE_VERSION), strict.transport().sentCmds);
+        assertFalse(strict.inventoryRepository().recordRunCalled);
+
+        PanRun lenient = panRun("not xml at all", Optional.of(TV_SERIAL), false);
+        assertTrue(lenient.outcome() instanceof JobOutcome.Completed, "expected Completed, got " + lenient.outcome());
+        assertTrue(lenient.deviceRepository().observedFactRefreshes.isEmpty(), "no guessed model or version");
+        assertEquals(java.util.List.of(DEVICE_ID), lenient.deviceRepository().observedFactClears,
+                "the previous model and version are cleared, never left standing as current");
+        var facts = lenient.facts().get(0);
+        assertEquals(com.securityexpert.nexus.ui2.persistence.device.PanSystemInfoRetirement.SOURCE_READ, facts.sourceRead());
+        assertTrue(facts.serialNumber().isEmpty(), "UNKNOWN, never a stale or guessed serial");
+    }
+
+    /** A field the answer does not carry is UNKNOWN: the others are kept, and the stale model/version are cleared first. */
+    @Test
+    void paloAltoFirewallWithAMissingModelKeepsTheSerialAndClearsTheStaleFacts() {
+        PanRun run = panRun(typeVersionXml(TV_SERIAL, null, TV_VERSION), Optional.empty(), false);
+        assertTrue(run.outcome() instanceof JobOutcome.Completed, "expected Completed, got " + run.outcome());
+        assertEquals(java.util.List.of(DEVICE_ID), run.deviceRepository().observedFactClears,
+                "the old model could otherwise stay as current");
+        assertEquals(java.util.List.of("||" + TV_VERSION), run.deviceRepository().observedFactRefreshes,
+                "only the version this run did read is written");
+        assertEquals(Optional.of(TV_SERIAL), run.facts().get(0).serialNumber());
+        assertEquals(com.securityexpert.nexus.ui2.persistence.device.PanTypeVersion.SOURCE_READ, run.facts().get(0).sourceRead());
+
+        PanRun noSerial = panRun(typeVersionXml(null, TV_MODEL, TV_VERSION), Optional.of(TV_SERIAL), false);
+        assertTrue(noSerial.outcome() instanceof JobOutcome.Completed, "default posture continues: " + noSerial.outcome());
+        assertTrue(noSerial.facts().get(0).serialNumber().isEmpty(), "no serial in the answer: the serial is UNKNOWN");
+        assertEquals(com.securityexpert.nexus.ui2.persistence.device.PanTypeVersion.SOURCE_READ, noSerial.facts().get(0).sourceRead());
+        PanRun noSerialStrict = panRun(typeVersionXml(null, TV_MODEL, TV_VERSION), Optional.empty(), true);
+        assertTrue(noSerialStrict.outcome() instanceof JobOutcome.Failed failed && failed.terminalReason().contains("NOT_EVALUABLE"),
+                "no serial to compare: strict refuses, never a guessed match");
+    }
+
+    /** First contact (no baseline recorded) is not a mismatch: the run completes with the serial. */
+    @Test
+    void paloAltoFirewallWithNoBaselineCompletesUnderTheStrictPosture() {
+        PanRun run = panRun(typeVersionXml(), Optional.empty(), true);
+        assertTrue(run.outcome() instanceof JobOutcome.Completed, "expected Completed, got " + run.outcome());
     }
 
     private static com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFactsRepository recordingPlatformFacts(

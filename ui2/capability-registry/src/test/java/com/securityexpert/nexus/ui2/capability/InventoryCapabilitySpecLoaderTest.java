@@ -61,7 +61,7 @@ class InventoryCapabilitySpecLoaderTest {
         assertEquals("pan_inventory_collect", spec.capabilityId());
         assertEquals(MaturityState.CAP_VALIDATED, spec.maturityState());
         assertEquals(TransportKind.PAN_XML_API, spec.transportKind());
-        assertEquals(5, spec.allSteps().size(), "connect + PF-1's three requests (no show system info since 2026-10-21) + disconnect");
+        assertEquals(6, spec.allSteps().size(), "connect + PF-1's four requests (type=version replaces show system info since 2026-10-21) + disconnect");
 
         Capability capability = new CapabilityRegistryLoader(realFixtureGateRegistry()).load(spec);
         assertTrue(capability.executionEligible(), "every PF-1 request literal has a SIGNED_OFF gate row");

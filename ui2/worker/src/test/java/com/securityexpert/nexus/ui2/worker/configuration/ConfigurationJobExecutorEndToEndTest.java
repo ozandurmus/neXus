@@ -50,6 +50,86 @@ class ConfigurationJobExecutorEndToEndTest {
     private static final String JOB_ID = "job-configuration-1";
     private static final long LEASE_EPOCH = 7L;
     private static final String DEVICE_ID = "device-enrolled-cfg-1";
+    /** A synthetic type=version serial, built at runtime so no literal looks like a real one. */
+    private static final String TV_SERIAL = "TESTSER" + "0001";
+
+    private static String typeVersionXml(String serial) {
+        return "<response status=\"success\"><result><sw-version>9.9.9-test</sw-version><multi-vsys>off</multi-vsys>"
+                + "<model>PA-TESTMODEL</model>" + (serial == null ? "" : "<serial>" + serial + "</serial>")
+                + "</result></response>";
+    }
+
+    /** One firewall configuration collect against a scripted type=version answer and an optional recorded baseline. */
+    private JobOutcome panCollect(Path tempDir, String typeVersionAnswer, java.util.Optional<String> recordedSerial,
+            boolean strict, ScriptedPaloAltoConfigTransport[] transportOut, List<String> crossCheckSerials)
+            throws Exception {
+        String xml = "<response><result><config><devices><entry name=\"localhost.localdomain\"/></devices></config></result></response>";
+        ScriptedPaloAltoConfigTransport transport = new ScriptedPaloAltoConfigTransport(
+                Map.of(ConfigurationReadPlan.PAN_MERGED, xml), xml, () -> new GeneratedPanConfigInputStream(2, 1));
+        if (typeVersionAnswer != null) {
+            transport.typeVersionOutput = typeVersionAnswer;
+        }
+        transportOut[0] = transport;
+        ConfigurationJobExecutorFakes.FakeDeviceRepository deviceRepository =
+                new ConfigurationJobExecutorFakes.FakeDeviceRepository();
+        recordedSerial.ifPresent(serial -> deviceRepository.confirmFacts = java.util.Optional.of(
+                new com.securityexpert.nexus.ui2.persistence.device.DeviceConfirmFacts(java.util.Optional.empty(),
+                        java.util.Optional.empty(), java.util.Optional.empty(), java.util.Optional.empty(),
+                        java.util.Optional.of(serial), java.util.Optional.empty(),
+                        com.securityexpert.nexus.ui2.persistence.device.DeviceConfirmFacts.IDENTITY_MISMATCH_NONE,
+                        java.util.Optional.empty(), java.util.Optional.empty(), java.util.Optional.empty(),
+                        java.util.Optional.empty(),
+                        com.securityexpert.nexus.ui2.persistence.device.DeviceConfirmFacts.PEER_FOLLOW_CORROBORATED,
+                        java.util.Optional.empty())));
+        ConfigurationCapabilityExecutor capabilityExecutor = new ConfigurationCapabilityExecutor(transport,
+                ref -> new PanCredentialMaterial("user", "pw".toCharArray()), newArtefactStore(tempDir),
+                (serial, overrides) -> {
+                    crossCheckSerials.add(serial);
+                    return overrides;
+                });
+        ConfigurationJobExecutor executor = new ConfigurationJobExecutor(
+                new ConfigurationJobExecutorFakes.FakeLeaseRepository(JOB_ID, LEASE_EPOCH, JobState.CLAIMED),
+                new ConfigurationJobExecutorFakes.FakeStepAttemptRepository(),
+                new ConfigurationJobExecutorFakes.FakeDeviceEnrollmentReadPort(), deviceRepository,
+                new ConfigurationJobExecutorFakes.FakeDeviceConfigurationRepository(),
+                new ConfigurationJobExecutorFakes.FakeConfigurationNotificationRepository(), capabilityExecutor,
+                new RecordingManifestRepository(), testFingerprint(), tempDir.toString());
+        return executor.execute(JOB_ID, LEASE_EPOCH, DEVICE_ID,
+                ConfigurationRequest.paloAlto(new ApiTarget("ep-2", "https://fw.example"), "cred-2"), strict);
+    }
+
+    /** PO 2026-10-21: the type=version serial is compared with the baseline; no usable serial is NOT_EVALUABLE, never a match. */
+    @Test
+    void paloAltoIdentityComesFromTypeVersionAndNoSerialIsNotEvaluable(@TempDir Path tempDir) throws Exception {
+        ScriptedPaloAltoConfigTransport[] transport = new ScriptedPaloAltoConfigTransport[1];
+        List<String> crossCheck = new java.util.ArrayList<>();
+        // A matching serial completes even under the strict posture.
+        assertTrue(panCollect(tempDir, typeVersionXml(TV_SERIAL), java.util.Optional.of(TV_SERIAL), true, transport, crossCheck)
+                instanceof JobOutcome.Completed);
+        assertEquals(List.of(TV_SERIAL), crossCheck);
+        // A different serial is refused under the strict posture (before any configuration read) ...
+        JobOutcome mismatch = panCollect(tempDir, typeVersionXml(TV_SERIAL), java.util.Optional.of("OTHER" + "SER0002"), true,
+                transport, new java.util.ArrayList<>());
+        assertTrue(mismatch instanceof JobOutcome.Failed failed && failed.terminalReason().contains("does not match"),
+                "expected a mismatch refusal, got " + mismatch);
+        assertEquals(1, transport[0].sentTypeVersionSpecs.size());
+        assertTrue(transport[0].sentOpCmds.isEmpty(), "refused before any configuration read");
+        // ... and a warning otherwise.
+        assertTrue(panCollect(tempDir, typeVersionXml(TV_SERIAL), java.util.Optional.of("OTHER" + "SER0002"), false, transport,
+                new java.util.ArrayList<>()) instanceof JobOutcome.Completed);
+        // An unusable answer: the strict posture refuses with the NOT_EVALUABLE reason; the default posture continues and
+        // the cross-check gets no serial (it names no override source).
+        for (String unusable : java.util.Arrays.asList(null, "not xml", typeVersionXml(null))) {
+            JobOutcome refused = panCollect(tempDir, unusable, java.util.Optional.of(TV_SERIAL), true, transport,
+                    new java.util.ArrayList<>());
+            assertTrue(refused instanceof JobOutcome.Failed failed && failed.terminalReason().contains("NOT_EVALUABLE"),
+                    "expected a NOT_EVALUABLE refusal, got " + refused);
+            List<String> serials = new java.util.ArrayList<>();
+            assertTrue(panCollect(tempDir, unusable, java.util.Optional.of(TV_SERIAL), false, transport, serials)
+                    instanceof JobOutcome.Completed);
+            assertEquals(List.of(""), serials);
+        }
+    }
 
     private static ArtefactStore newArtefactStore(Path tempDir) {
         String base64Key = Base64.getEncoder().encodeToString(new byte[32]);
@@ -149,9 +229,12 @@ class ConfigurationJobExecutorEndToEndTest {
         String mergedOutput = "<response><result><config><devices><entry name=\"localhost.localdomain\"/></devices>"
                 + "</config></result></response>";
         // No show system info is scripted: retired for firewalls by the PO on 2026-10-21 -- sending it would throw.
+        // The identity refresh is type=version (same day): the serial feeds the Panorama cross-check.
         Map<String, String> outputByOpCmd = Map.of(ConfigurationReadPlan.PAN_MERGED, mergedOutput);
         ScriptedPaloAltoConfigTransport transport = new ScriptedPaloAltoConfigTransport(outputByOpCmd, activeOutput,
                 () -> new GeneratedPanConfigInputStream(localOverrideCount, otherSourceCount));
+        transport.typeVersionOutput = typeVersionXml(TV_SERIAL);
+        List<String> crossCheckSerials = new java.util.ArrayList<>();
 
         ConfigurationJobExecutorFakes.FakeLeaseRepository leaseRepo =
                 new ConfigurationJobExecutorFakes.FakeLeaseRepository(JOB_ID, LEASE_EPOCH, JobState.CLAIMED);
@@ -168,7 +251,10 @@ class ConfigurationJobExecutorEndToEndTest {
         ArtefactStore artefactStore = newArtefactStore(tempDir);
 
         ConfigurationCapabilityExecutor capabilityExecutor = new ConfigurationCapabilityExecutor(transport,
-                ref -> new PanCredentialMaterial("user", "pw".toCharArray()), artefactStore, PanoramaCrossCheckPort.NONE);
+                ref -> new PanCredentialMaterial("user", "pw".toCharArray()), artefactStore, (serial, overrides) -> {
+                    crossCheckSerials.add(serial);
+                    return overrides;
+                });
         ConfigurationJobExecutor executor = new ConfigurationJobExecutor(leaseRepo, attemptRepo, devicePort,
                 deviceRepository, configurationRepository, notificationRepository, capabilityExecutor,
                 new RecordingManifestRepository(), testFingerprint(), tempDir.toString());
@@ -180,6 +266,10 @@ class ConfigurationJobExecutorEndToEndTest {
         assertTrue(outcome instanceof JobOutcome.Completed, "expected Completed, got " + outcome);
         assertFalse(transport.sentOpCmds.contains("<show><system><info/></system></show>"),
                 "PO 2026-10-21: a firewall's configuration collect never sends show system info");
+        assertEquals(1, transport.sentTypeVersionSpecs.size(), "one identity refresh, as the first read");
+        assertEquals("version", transport.sentTypeVersionSpecs.get(0).type());
+        assertTrue(transport.sentTypeVersionSpecs.get(0).formParams().isEmpty(), "type=version carries no cmd");
+        assertEquals(List.of(TV_SERIAL), crossCheckSerials, "the type=version serial keys the Panorama cross-check");
         assertTrue(configurationRepository.recordRunCalled);
         assertEquals(3, configurationRepository.recordedRuns.size(), "active, effective_running and merged");
         assertTrue(configurationRepository.recordedRuns.stream().allMatch(r -> r.jobId().equals(JOB_ID)),

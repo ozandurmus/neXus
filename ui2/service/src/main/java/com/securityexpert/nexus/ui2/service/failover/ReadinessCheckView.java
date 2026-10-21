@@ -47,7 +47,9 @@ public final class ReadinessCheckView {
                     ? "Not collected: show session info retired by PO 2026-10-21"
                     : "Session count missing or not recognised: /response/result/num-active or active-sessions";
                 case 7 -> "not_collected".equals(d.path("reason").asText())
-                    ? "Not collected: show system info retired by PO 2026-10-21" : "Version fields missing or not recognised";
+                    // A row recorded between the system info retirement and the HA-state version check (2026-10-21).
+                    ? "Not collected: show system info retired by PO 2026-10-21 (this check now reads the HA state)"
+                    : "Version fields missing from the HA state read: " + versionFields(d,"MISSING");
                 default -> "Check evidence unavailable";
             };
             return switch(no) {
@@ -75,7 +77,8 @@ public final class ReadinessCheckView {
             case 4 -> pass ? "Running configuration synchronized on both members" : "Configuration not synchronized";
             case 5 -> sessionSyncSummary(status,d);
             case 6 -> count(d,"count"," active sessions")+(pass ? "" : ", below carry tolerance");
-            case 7 -> pass ? "Software and content versions match on both members" : "Software or content versions differ";
+            case 7 -> pass ? "Software and content versions match on both members"
+                : "Software or content versions differ: " + versionFields(d,"MISMATCH");
             default -> "Check result unavailable";
         };
         return switch(no) {
@@ -106,6 +109,14 @@ public final class ReadinessCheckView {
                     : "Recovery mode not Active Up; failover is refused";
             default -> "Check result unavailable";
         };
+    }
+
+    /** Check 7's evidence names each field MATCH / MISMATCH / MISSING (never a version value): the names with this outcome. */
+    private static String versionFields(JsonNode d,String outcome) {
+        var names=new java.util.ArrayList<String>();
+        for(String field:new String[]{"software","app","threat"})
+            if(outcome.equals(d.path(field).asText())) names.add("software".equals(field)?"PAN-OS":field+" content");
+        return names.isEmpty()?"field not recognised":String.join(", ",names);
     }
 
     private static String sessionSyncSummary(String status,JsonNode d) {

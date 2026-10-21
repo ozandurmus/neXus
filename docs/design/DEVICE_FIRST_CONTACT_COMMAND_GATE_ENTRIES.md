@@ -2,6 +2,8 @@
 
 > **Amendment 2026-10-21 (PO).** Entry 3 (Palo Alto identity read, `show system info`) is now sent to a Panorama only. A firewall's enrollment confirm is refused before any contact. See `PO_DECISION_RECORD_2026_10_21_PAN_SHOW_SYSTEM_INFO_RETIRED.md`.
 
+> **Amendment 2026-10-21, later the same day (PO, "Tüm PAN-OS sürümleri").** A firewall's enrollment confirm is read again, with the documented XML API request `type=version` (`POST /api/`, body `type=version`, key in `X-PAN-KEY`, no `cmd`) for the serial, model and PAN-OS version, then entry 4 unchanged; a Panorama keeps entry 3. `type=version` is a form request, so it is not one of the closed command literals above and `DeviceFirstContactCommandSet` is unchanged; this note is its gate record. The earlier line about a refusal before any contact no longer holds. See `PO_DECISION_RECORD_2026_10_21_PAN_TYPE_VERSION_AND_CHECK7.md` (RATIFIED) and gate row `pan_identity_version` (V172).
+
 ## Status
 
 **APPROVED — PRODUCT OWNER, 2026-09-14, FOR PURPOSE AND CLASS; COMMAND FORMS

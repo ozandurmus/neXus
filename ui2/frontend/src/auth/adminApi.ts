@@ -721,8 +721,9 @@ export interface DeviceSummary {
   /** Which read produced the platform facts (read-kind token; amendment A-2026-09-23). */
   readonly platform_facts_source?: string | null;
   /**
-   * Set only for a Palo Alto firewall (PO 2026-10-21): show system info is retired, so model, software version, serial,
-   * content versions and uptime are withheld (UNKNOWN) and this says why, once. Null for every other device.
+   * Set only for a Palo Alto firewall (PO 2026-10-21): show system info is retired, so content versions, uptime and
+   * platform family are withheld (UNKNOWN) and this says why, once. Serial, model and software version come from the
+   * type=version read (`platform_facts_source` is `pan_type_version`). Null for every other device.
    */
   readonly platform_facts_not_collected_reason?: string | null;
   /** Installed policy (V60), read every evening at 23:00 Europe/Istanbul: name (Check Point), time parsed and as reported, read time. */
