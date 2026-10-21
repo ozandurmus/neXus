@@ -37,7 +37,7 @@ import com.securityexpert.nexus.ui2.worker.transport.ssh.PersistedManagementEndp
  *
  * <ol>
  *   <li><b>C4</b> {@link CpSpikeLayoutReview#LS_SPIKE_COMMAND}, exactly as approved (timeout from its gate row, no
- *       retry, 256 KiB bound).</li>
+ *       retry, 1 MiB bound).</li>
  *   <li><b>C5</b> for ONE directory only: the newest data directory (type {@code d}, link count 2) C4 printed in this
  *       run whose mtime is at least 10 minutes older than the clock, and only when its name matches the §8.3 safe form
  *       (otherwise no C5 is sent and the outcome is {@code NAME_REJECTED}). Timeout from its gate row, no retry,

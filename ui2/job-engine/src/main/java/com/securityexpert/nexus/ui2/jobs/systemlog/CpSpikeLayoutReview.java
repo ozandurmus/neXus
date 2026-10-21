@@ -56,8 +56,12 @@ public final class CpSpikeLayoutReview {
     /** §8.3: the data-directory name pattern is not measured, so only this safe character form is ever listed. */
     public static final Pattern SAFE_DIR_NAME = Pattern.compile("^[A-Za-z0-9._-]{1,128}$");
 
-    /** §10.1 "Max bytes": the transport stops there and the listing is UNKNOWN (never processed partially). */
-    public static final int LS_SPIKE_MAX_BYTES = 256 * 1024;
+    /**
+     * §10.1 "Max bytes" of C4: the transport stops there and the listing is UNKNOWN (never processed partially).
+     * 1 MiB since the PO amendment of 2026-10-21 (PO_DECISION_RECORD_2026_10_21_SPIKE_LISTING_BOUND.md, option A; was 256 KiB):
+     * 3,638 entries of at most 33 + 255 bytes each is 1,047,744 bytes, below this bound.
+     */
+    public static final int LS_SPIKE_MAX_BYTES = 1024 * 1024;
     public static final int LS_SPIKE_DIR_MAX_BYTES = 64 * 1024;
     /** §8.3: a data directory is settled when its mtime is at least this much older than the clock. */
     public static final long SETTLE_SECONDS = 600;

@@ -15,6 +15,7 @@ MIGRATIONS = ROOT / "ui2/service/src/main/resources/db/migration"
 V160 = MIGRATIONS / "V160__system_log_phase_b.sql"
 FIXTURE = ROOT / "ui2/capability-registry/src/main/resources/capabilities/gate_registry_fixture.yaml"
 NOTIFICATION = ROOT / "docs/design/NOTIFICATION_ROUTING_CONTRACT.md"
+V173 = MIGRATIONS / "V173__spike_listing_bound_one_mebibyte.sql"
 
 # Rows whose command text equals an approved measurement row: C4 section 3.3 step 6 forbids two rows with one key, so the
 # key is narrowed by shell_context while the command text stays byte-identical.
@@ -23,6 +24,7 @@ NARROWED_SHELL = {
     "cp_syslog_collect_ls_sa": "expert_collect", "cp_syslog_collect_ls_hcp": "expert_collect",
     "pan_syslog_collect_job_get": "not_applicable_collect",
 }
+SPIKE_LISTING_GATE = "cp_syslog_collect_ls_spike"  # C4: its output bound was raised by V173 (PO 2026-10-21, option A)
 SFTP = {"cp_syslog_collect_read", "cp_syslog_collect_fetch"}  # C2 and C8: SFTP steps, no shell command
 TABLES = ["system_log_cursor", "system_log_chunk", "system_log_gap", "system_log_file", "device_crash_entry",
           "device_crash_alert", "system_log_run"]
@@ -112,7 +114,12 @@ def test_migration_inserts_the_same_rows_with_the_same_command_text():
         assert head in sql, gate
         for field in ("max_frequency", "session_reuse_rule", "unsupported_behavior_ref", "secret_output_risk",
                       "source_document_pointer"):
-            assert _sql_literal(row[field]) in sql, f"{gate}.{field}"
+            value = row[field]
+            if gate == SPIKE_LISTING_GATE and field == "max_frequency":
+                value = value.replace("1 MiB", "256 KiB")  # V173 raised the bound; V160 keeps the 2026-10-17 text
+            if gate == SPIKE_LISTING_GATE and field == "source_document_pointer":
+                value = value.split("; output bound raised")[0]
+            assert _sql_literal(value) in sql, f"{gate}.{field}"
     assert "set_config('app.actor_fingerprint'" in sql and "set_config('app.action_id'" in sql
 
 
@@ -160,3 +167,23 @@ def test_the_frozen_notification_contract_carries_the_device_crash_file_amendmen
     for needle in ("device_crash_file", "Device crash and dump files", "device_crash_alert", "V160",
                    "PO_DECISION_RECORD_2026_10_17_SYSTEM_LOG_PHASE_B.md", "ROTATED_AWAY", "security_scan"):
         assert needle in amendment, needle
+
+
+def test_v173_raises_only_the_c4_output_bound_to_one_mebibyte_and_the_fixture_agrees():
+    sql = V173.read_text(encoding="utf-8")
+    fixture = {r["gate_id"]: r for r in _fixture_rows()}
+    row = fixture[SPIKE_LISTING_GATE]
+    assert row["max_frequency"] == "once per device per job window; max bytes: 1 MiB"
+    assert row["canonical_command_key"] == "bash -lc 'ls -lgo --time-style=+%s /var/log/spike_detective/'"
+    assert row["timeout_s"] == 30 and row["retry_rule"] == "none" and row["sign_off_state"] == "SIGNED_OFF"
+    assert _sql_literal(row["max_frequency"]) in sql
+    assert "max_frequency = 'once per device per job window; max bytes: 256 KiB'" in sql  # only the 256 KiB row is touched
+    assert sql.count("UPDATE gate_registry") == 1 and "INSERT" not in sql and "DELETE" not in sql
+    assert "WHERE gate_id = 'cp_syslog_collect_ls_spike'" in sql
+    for forbidden in ("canonical_command_key =", "timeout_s =", "retry_rule =", "sign_off_state ="):
+        assert forbidden not in sql, forbidden
+    assert "set_config('app.actor_fingerprint', 'migration:V173" in sql and "set_config('app.action_id'" in sql
+    assert "PO_DECISION_RECORD_2026_10_21_SPIKE_LISTING_BOUND.md" in sql and "PO_DECISION_RECORD_2026_10_21_SPIKE_LISTING_BOUND.md" in row["source_document_pointer"]
+    # The other C4-family rows keep their bounds.
+    assert fixture["cp_syslog_collect_ls_crash"]["max_frequency"].endswith("max bytes: 256 KiB")
+    assert "max bytes: 64 KiB" in fixture["cp_syslog_collect_ls_spike_dir"]["max_frequency"]
