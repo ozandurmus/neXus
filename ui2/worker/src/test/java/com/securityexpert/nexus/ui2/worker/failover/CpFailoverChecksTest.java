@@ -2,6 +2,7 @@ package com.securityexpert.nexus.ui2.worker.failover;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Map;
 import java.util.Set;
@@ -500,12 +501,72 @@ class CpFailoverChecksTest {
         for(String eol:java.util.List.of("\n","\r\n"))
             assertEquals(Set.of("eth7","eth8"),CpFailoverChecks.bondSlaves(detail.replace("\n",eol),"bond1",2));
         for(String bad:java.util.List.of(detail.replace("bond1","bond2"),detail.replace("eth8","eth7"),
-                detail.substring(0,detail.indexOf("eth8")),detail+"unexpected\n",
+                detail.substring(0,detail.indexOf("eth8")),
                 detail.replace("Configured slave interfaces: 2","Configured slave interfaces: 3")))
             assertEquals(Set.of(),CpFailoverChecks.bondSlaves(bad,"bond1",2));
         assertEquals(java.util.Map.of("bond1",2),CpFailoverChecks.bondCounts(Fixtures.read("cp/failover_bonds.txt")));
         assertEquals(java.util.Map.of(),CpFailoverChecks.bondCounts(
             Fixtures.read("cp/failover_bonds.txt").replace("bond1 ","bond1;bad ")));
+    }
+    private static String bondDetail(String extraHeader,String mode,String header,String footer) {
+        return "Bond name:      bond1\nBond mode:      "+mode+"\nBond status:    UP\n"+extraHeader
+            +"Configured slave interfaces: 2\nIn use slave interfaces:     2\nRequired slave interfaces:   1\n\n"
+            +header+"\n----------------+-------------+-------\neth7            | Active      | Yes\neth8            | Active      | Yes\n"
+            +footer;
+    }
+    @Test void bondMembershipToleratesVendorVariants() {
+        String legend="\nLegend:\n-------\nUP! - Bond interface state is UP, yet attention is required\n";
+        var variants=java.util.List.of(
+            bondDetail("Bond Xmit Hash Policy: layer3+4\nBalancing mode: 802.3ad Layer3+4 Load Balancing\n","Load Sharing","Slave name | Status | Link",""),
+            bondDetail("","802.3ad","Slave name      | Status          | Link",legend),
+            bondDetail("","Round Robin","slave name|status|link",""),
+            bondDetail("","XOR","SLAVE   NAME  |  STATUS  |  LINK  |","\nNote: something unexpected\n"+legend),
+            bondDetail("Some Future Field: value\n","Active-Backup","Slave name | Status | Link",legend).replace("\n","\r\n"));
+        for(String variant:variants) {
+            var parsed=CpFailoverChecks.parseBondSlaves(variant,"bond1",2);
+            assertEquals(Set.of("eth7","eth8"),parsed.slaves(),variant);
+            assertEquals(CpFailoverChecks.BondParseReason.NONE,parsed.reason());
+        }
+        // A VLAN sub-interface is described under its parent bond.
+        assertEquals(Set.of("eth7","eth8"),CpFailoverChecks.bondSlaves(variants.get(0),"bond1.3843",2));
+        // No configured-count line: only the summary count is checked.
+        assertEquals(Set.of("eth7","eth8"),CpFailoverChecks.bondSlaves(
+            variants.get(0).replace("Configured slave interfaces: 2\n",""),"bond1",2));
+    }
+    @Test void bondMembershipStillRefusesUnparseableOutputWithReason() {
+        String good=bondDetail("","Load Sharing","Slave name | Status | Link","");
+        record Case(String output,String bond,int count,CpFailoverChecks.BondParseReason reason) {}
+        for(var c:java.util.List.of(
+                new Case(null,"bond1",2,CpFailoverChecks.BondParseReason.NO_TABLE),
+                new Case("invalid","bond1",2,CpFailoverChecks.BondParseReason.NO_TABLE),
+                new Case(good.replace("Slave name | Status | Link","Interface | State"),"bond1",2,CpFailoverChecks.BondParseReason.NO_TABLE),
+                new Case(good,"bond2",2,CpFailoverChecks.BondParseReason.BOND_NAME_MISMATCH),
+                new Case(good.replace("Bond name:      bond1\n",""),"bond1",2,CpFailoverChecks.BondParseReason.BOND_NAME_MISMATCH),
+                new Case(good,"bond1",3,CpFailoverChecks.BondParseReason.COUNT_MISMATCH),
+                new Case(good.replace("Configured slave interfaces: 2","Configured slave interfaces: 3"),"bond1",2,CpFailoverChecks.BondParseReason.COUNT_MISMATCH),
+                new Case(good.replace("eth8","bad name!"),"bond1",2,CpFailoverChecks.BondParseReason.BAD_SLAVE_NAME),
+                new Case(good.replace("eth8","bond2"),"bond1",2,CpFailoverChecks.BondParseReason.BAD_SLAVE_NAME),
+                new Case(good.replace("eth8","eth7"),"bond1",2,CpFailoverChecks.BondParseReason.DUPLICATE_SLAVE))) {
+            var parsed=CpFailoverChecks.parseBondSlaves(c.output(),c.bond(),c.count());
+            assertEquals(Set.of(),parsed.slaves(),String.valueOf(c));
+            assertEquals(c.reason(),parsed.reason(),String.valueOf(c));
+            assertEquals(c.output()==null?0:(int)c.output().lines().count(),parsed.lineCount());
+        }
+    }
+    @Test void bondParseLogCarriesOnlyReasonAndLineCount() {
+        String message=new ReadinessShapeLog("check_point").logBondParse(CpFailoverChecks.BondParseReason.NO_TABLE,12);
+        assertEquals("[READINESS_SHAPE] vendor=check_point check=8 bondParseReason=NO_TABLE lineCount=12",message);
+    }
+    @Test void parsedBondMembersNoLongerYieldPhysicalOverlap() {
+        String before=DEV_A.replace("eth0:","bond1:").replace("eth1:","eth7:");
+        String after=DEV_B.replace("eth0:","bond1:").replace("eth1:","eth7:");
+        var selected=Set.of("bond1","eth7");
+        String detail=bondDetail("Bond Xmit Hash Policy: layer3+4\n","802.3ad","Slave name | Status | Link","\nLegend:\n-------\n");
+        var parsed=CpFailoverChecks.parseBondSlaves(detail,"bond1",2);
+        var measured=CpFailoverChecks.trafficBytesPerSecond(CpFailoverChecks.bytesByInterface(before),
+            CpFailoverChecks.bytesByInterface(after),selected,5_000_000_000L,java.util.Map.of("bond1",parsed.slaves()));
+        assertEquals(CpFailoverChecks.TrafficReason.NONE,measured.reason());
+        assertTrue(measured.bytesPerSecond()>=0);
     }
     @Test void provenSlaveIsDroppedAndIndependentInterfaceIsSummed() {
         var before=CpFailoverChecks.bytesByInterface(DEV_A.replace("eth0:","bond1:").replace("eth1:","eth7:"));

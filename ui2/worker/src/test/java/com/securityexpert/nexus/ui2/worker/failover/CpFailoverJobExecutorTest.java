@@ -711,7 +711,9 @@ class CpFailoverJobExecutorTest {
                 recorded++;
                 assertEquals(reason,evidence.get("reason").asText());
                 assertEquals(-1.0,evidence.get("bytesPerSecond").asDouble());
-                assertEquals(6,evidence.size());
+                boolean overlap=reason.equals("BOND_PHYSICAL_OVERLAP");
+                assertEquals(overlap?7:6,evidence.size());
+                if(overlap) assertEquals("NO_TABLE",evidence.get("bondParseReason").asText());
                 assertTrue(evidence.has("selectedCount") && evidence.has("presentBeforeCount") && evidence.has("presentAfterCount"));
                 assertFalse(derived.contains("eth0") || derived.contains("bond1"));
             }
@@ -760,6 +762,10 @@ class CpFailoverJobExecutorTest {
             for(String evidence:store.derivedValues) {
                 assertFalse(evidence.contains("eth7") || evidence.contains("eth8") || evidence.contains(bond));
                 if(evidence.contains("bytesPerSecond")) {
+                    String expectedReason=switch(relation) {
+                        case "invalid" -> "COUNT_MISMATCH"; case "unavailable" -> "COMMAND_UNAVAILABLE";
+                        case "unknown" -> "NOT_IN_SUMMARY"; default -> null; };
+                    if(expectedReason!=null) assertTrue(evidence.contains("\"bondParseReason\":\""+expectedReason+"\""),evidence);
                     if(evidence.contains("BOND_PHYSICAL_OVERLAP")) assertTrue(evidence.contains("\"selectedCount\":2"));
                     else assertTrue(evidence.contains("\"selectedCount\":"+(relation.equals("independent")?2:1)));
                 }
