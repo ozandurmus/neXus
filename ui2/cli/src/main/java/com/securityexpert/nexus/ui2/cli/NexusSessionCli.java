@@ -132,6 +132,7 @@ final class NexusSessionCli {
         System.out.println("  pa-compare <caseId> [--reference <file.json>] [--against <analysis-export.json>]");
         System.out.println("  pa-download <captureId> <destPath>             security_admin; ledgered");
         System.out.println("  pa-delete <caseId>");
+        FailoverCli.printUsage();
         SanitizerCli.printUsage();
     }
 
@@ -341,7 +342,10 @@ final class NexusSessionCli {
                     require(args, 2, "pa-delete <caseId>");
                     yield print(call("DELETE", PA + "/cases/" + id(args[1]), null));
                 }
-                default -> new SanitizerCli(this).run(args);
+                default -> {
+                    int failover = new FailoverCli(this).run(args);
+                    yield failover != -1 ? failover : new SanitizerCli(this).run(args);
+                }
             };
         } catch (IllegalArgumentException e) {
             System.err.println(e.getMessage().startsWith("usage: ") ? e.getMessage() : "usage: " + e.getMessage());
@@ -658,7 +662,7 @@ final class NexusSessionCli {
         return 0;
     }
 
-    private static int print(HttpResponse<byte[]> response) {
+    static int print(HttpResponse<byte[]> response) {
         String body = new String(response.body(), StandardCharsets.UTF_8);
         if (response.statusCode() / 100 == 2) {
             System.out.println(body);

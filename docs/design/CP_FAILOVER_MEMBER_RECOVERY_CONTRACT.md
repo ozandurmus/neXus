@@ -283,9 +283,15 @@ Proposed schema (implementation detail, Q3):
 
 ### 6.3 CLI
 
-There is no failover CLI today (P1-6). The CLI-parity rule makes `nexus failover resume <runId> --incident <id>
---reason <text> [--business-hours-ack]` a P1 follow-up. It would call the same server routes with the same checks,
-and print the same refusal codes.
+The failover CLI exists (P1-6, `ui2/cli` `FailoverCli`). It calls the same routes with the stored session cookie and
+CSRF token and prints the server's refusal code in plain words; it holds no check of its own.
+
+- `failover-resume <runId> --incident <id> --reason <text> [--business-hours-ack]`: `POST /runs/{runId}/resume-return`
+  (the acknowledgement travels in the body field `businessHoursAck`, as the route reads it).
+- `failover-resume-approve <runId> <resumeId> [--business-hours-ack]`: `POST /runs/{runId}/resume-return/approve`.
+- `failover-incident-release <runId> --reason <text>`: `POST /runs/{runId}/incident/release`.
+- Reads and the other writes: `failover-summary`, `-units`, `-incidents`, `-runs`, `-run`, `-approvals`,
+  `-readiness`, `-request-approval`, `-approve`, `-start`.
 
 ### 6.4 Routes
 
@@ -433,7 +439,7 @@ Choices where the contract left the mechanics open, or the code base forced a sh
    `TRUSTED_HOST_KEY_REQUIRED` (service pre-check, so the single resume is not spent on an untrusted key),
    `RESUME_BASELINE_UNAVAILABLE`, `RESUME_NOT_FOUND`, `RESUME_NOT_PENDING`, `WRONG_POLICY`, `RESUME_TERMINAL`,
    `RESUME_WRITE_NOT_BOUND`, `OWNERSHIP_LOST`.
-7. **Not built:** the failover CLI (§6.3, P1 follow-up).
+7. **CLI:** built (§6.3, P1-6).
 8. **Review fixes (Argon 2026-10-21, `ARGON_REVIEW_2026_10_21_FAILOVER_RESUME.md`).** P2-1: the run view's eligibility
    and the second approval check both members' trusted host keys, as the request does (`TRUSTED_HOST_KEY_REQUIRED`,
    `TRUST_NOT_EVALUABLE`, `ENDPOINT_MISSING`), so a revoked key never admits the single-use job. P2-2: the send
