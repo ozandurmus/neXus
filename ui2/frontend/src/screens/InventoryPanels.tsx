@@ -74,7 +74,7 @@ import { DeviationChip, ValidationChip, deviationState } from "./backupWords";
 import { DeviceLogsPanel } from "./DeviceLogsPanel";
 import { CpFailoverPanel } from "./CpFailoverPanel";
 import { CertificateStatePill, HttpsCertificateCard } from "./HttpsCertificatePanel";
-import { IdentityCard, identityTiles } from "./PlatformIdentity";
+import { IdentityCard, identityTiles, platformFactsNote } from "./PlatformIdentity";
 import {
   HeaderStateRow, READINESS_VENDORS, backupFact, backupsHref, clusterCompareFact, clusterComplianceFact, clusterConfigChangedFact, complianceFact,
   configChangedFact, readinessFact, useMemberHeaderReads,
@@ -1951,6 +1951,15 @@ export function platformPillLabel(device: Pick<DeviceSummary, "vendor_hint" | "m
   return parts.length > 0 ? parts.join(" · ") : null;
 }
 
+/**
+ * PO 2026-10-21 scope update: when the last run did not send `show interface all` (switched off for Palo Alto
+ * firewalls), the interfaces are UNKNOWN with the reason -- never an empty table that reads as "no interfaces".
+ */
+export function interfacesNotCollected(inventory: Pick<DeviceInventory, "not_collected" | "not_collected_reason"> | null | undefined): string | null {
+  if (!inventory?.not_collected?.includes("pan_show_interface_all")) return null;
+  return `UNKNOWN -- interfaces not collected: show interface all is switched off for Palo Alto firewalls. ${inventory.not_collected_reason ?? "Not collected (command retired by PO 2026-10-21)"}.`;
+}
+
 /** The vendors whose policy the Policy screen collects (its sources are MDS and Panorama). */
 const POLICY_VENDORS: ReadonlySet<string> = new Set(["check_point", "palo_alto"]);
 
@@ -2451,6 +2460,9 @@ export function DeviceInventoryPanels({
               );
             })()}
             {platformPillLabel(device) && <StatusChip tone="neutral" label={platformPillLabel(device)!} dense />}
+            {!platformPillLabel(device) && platformFactsNote(device) && (
+              <StatusChip tone="neutral" label="Platform facts: not collected (PO 2026-10-21)" title={platformFactsNote(device)!} dense />
+            )}
             {!singleDeviceHasNoNetworkEvidence && <StatusChip tone="neutral" label={interfaceRouteLabel(headerCounts, device.vendor_hint)} dense />}
           </>
         }
@@ -2480,7 +2492,9 @@ export function DeviceInventoryPanels({
           }] : []),
           ...(!singleDeviceHasNoNetworkEvidence ? [{
             label: "Interfaces",
-            panel: isCluster
+            panel: !isCluster && interfacesNotCollected(deviceInventory)
+              ? <EmptyPanel title="Interfaces" body={interfacesNotCollected(deviceInventory)!} />
+              : isCluster
               ? <ClusterInterfacesPanel contexts={clusterInventory?.contexts ?? []} members={clusterInventory ? orderMembers(clusterInventory.members) : undefined} virtualSystems={clusterInventory?.virtual_systems} activeContext={activeContext} onSelectContext={setActiveContext} isPaloAlto={isPaloAlto} />
               : <InterfacesPanel contexts={deviceInventory?.contexts ?? []} virtualSystems={deviceInventory?.virtual_systems ?? device.virtual_systems} activeContext={activeContext} onSelectContext={setActiveContext} isPaloAlto={isPaloAlto} groupByContext={isFortinet} member={device} headerHaRole={device.ha_role} />,
           }, {
@@ -2514,7 +2528,7 @@ export function DeviceInventoryPanels({
             // Roadmap 2.6: the audit grid (with reference and lifecycle), the certificate block and what the badge rests on, in one place.
             panel: (
               <Stack spacing={1.5}>
-                <IdentityCard title={deviceNameLabel(device.hostname)} tiles={identityTiles(device, configRead?.collected_at ?? null, { configurationRead: Boolean(configuration) })} />
+                <IdentityCard title={deviceNameLabel(device.hostname)} tiles={identityTiles(device, configRead?.collected_at ?? null, { configurationRead: Boolean(configuration) })} note={platformFactsNote(device)} />
                 <HttpsCertificateCard deviceId={device.device_id} data={certificateFetch.data}
                   error={certificateFetch.error} refresh={certificateFetch.refresh} manager={device.role === "management_server"} />
                 <IdentityBasisCard device={device} />

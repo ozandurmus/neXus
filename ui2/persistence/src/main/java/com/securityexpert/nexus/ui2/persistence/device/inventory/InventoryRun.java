@@ -18,8 +18,12 @@ import java.util.Optional;
  */
 public record InventoryRun(String runId, String deviceId, String jobId, Instant collectedAt, int contextCount,
         List<InventoryContext> contexts, List<InventoryHaFact> haFacts, Optional<String> virtualSystems,
-        List<GridMember> gridMembers, InfobloxGridSummary gridSummary) {
+        List<GridMember> gridMembers, InfobloxGridSummary gridSummary, List<String> notCollected) {
 
+    /**
+     * @param notCollected read-kind tokens of reads this run deliberately did not send (PO 2026-10-21: a Palo Alto
+     *     firewall read switched off -- e.g. {@code pan_show_interface_all}); what they provide is UNKNOWN, never empty
+     */
     public InventoryRun {
         Objects.requireNonNull(runId, "runId");
         Objects.requireNonNull(deviceId, "deviceId");
@@ -29,6 +33,14 @@ public record InventoryRun(String runId, String deviceId, String jobId, Instant 
         haFacts = haFacts == null ? List.of() : List.copyOf(haFacts);
         virtualSystems = virtualSystems == null ? Optional.empty() : virtualSystems;
         gridMembers = gridMembers == null ? List.of() : List.copyOf(gridMembers);
+        notCollected = notCollected == null ? List.of() : List.copyOf(notCollected);
+    }
+
+    public InventoryRun(String runId, String deviceId, String jobId, Instant collectedAt, int contextCount,
+            List<InventoryContext> contexts, List<InventoryHaFact> haFacts, Optional<String> virtualSystems,
+            List<GridMember> gridMembers, InfobloxGridSummary gridSummary) {
+        this(runId, deviceId, jobId, collectedAt, contextCount, contexts, haFacts, virtualSystems, gridMembers, gridSummary,
+                List.of());
     }
 
     public InventoryRun(String runId, String deviceId, String jobId, Instant collectedAt, int contextCount,

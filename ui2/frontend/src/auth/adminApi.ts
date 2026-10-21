@@ -720,6 +720,11 @@ export interface DeviceSummary {
   readonly platform_facts_observed_at?: string | null;
   /** Which read produced the platform facts (read-kind token; amendment A-2026-09-23). */
   readonly platform_facts_source?: string | null;
+  /**
+   * Set only for a Palo Alto firewall (PO 2026-10-21): show system info is retired, so model, software version, serial,
+   * content versions and uptime are withheld (UNKNOWN) and this says why, once. Null for every other device.
+   */
+  readonly platform_facts_not_collected_reason?: string | null;
   /** Installed policy (V60), read every evening at 23:00 Europe/Istanbul: name (Check Point), time parsed and as reported, read time. */
   readonly policy_name?: string | null;
   readonly policy_installed_at?: string | null;
@@ -895,6 +900,12 @@ export interface DeviceInventory {
   readonly virtual_systems?: readonly string[] | string | null;
   readonly grid_members?: readonly GridMemberView[];
   readonly grid_summary?: GridSummaryView | null;
+  /**
+   * Reads this run deliberately did not send (PO 2026-10-21: a Palo Alto firewall read switched off), as read-kind
+   * tokens -- e.g. `pan_show_interface_all`. What they provide is UNKNOWN, never "none".
+   */
+  readonly not_collected?: readonly string[];
+  readonly not_collected_reason?: string | null;
 }
 
 export interface GridSummaryView {

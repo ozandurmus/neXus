@@ -1,6 +1,7 @@
 package com.securityexpert.nexus.ui2.worker.inventory;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.List;
@@ -65,8 +66,8 @@ class InventoryReadPlanTest {
 
     @Test
     void paloAltoBaseStepsEqualSection3Literally() {
+        // PO 2026-10-21: show system info is no longer a firewall step (retired); a Panorama keeps it.
         assertEquals(List.of(
-                "<show><system><info/></system></show>",
                 "<show><high-availability><state/></high-availability></show>",
                 "<show><interface>all</interface></show>",
                 "<show><routing><route/></routing></show>"),
@@ -80,9 +81,12 @@ class InventoryReadPlanTest {
         assertEquals(3, InventoryReadPlan.checkPointVsidSteps("2").size());
     }
 
-    /** 14E PF-2: the {@code &vsys=<id>} form is dropped -- exactly PF-1's four unscoped requests remain. */
+    /** 14E PF-2: the {@code &vsys=<id>} form is dropped; since 2026-10-21 three unscoped requests remain (no system info). */
     @Test
-    void paloAltoClosedSetHasExactlyFourUnscopedRequestsNoVsysForm() {
-        assertEquals(4, InventoryReadPlan.PALO_ALTO_BASE_STEPS.size());
+    void paloAltoClosedSetHasExactlyThreeUnscopedRequestsNoVsysFormNoSystemInfo() {
+        assertEquals(3, InventoryReadPlan.PALO_ALTO_BASE_STEPS.size());
+        assertFalse(InventoryReadPlan.PALO_ALTO_BASE_STEPS.contains("<show><system><info/></system></show>"));
+        assertEquals(List.of("<show><system><info/></system></show>", "<show><high-availability><state/></high-availability></show>"),
+                InventoryReadPlan.PANORAMA_STEPS, "a Panorama keeps its own system info read (out of the 2026-10-21 scope)");
     }
 }

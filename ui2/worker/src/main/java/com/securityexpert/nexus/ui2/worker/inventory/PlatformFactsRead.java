@@ -42,7 +42,22 @@ public record PlatformFactsRead(
         return value == null || value.isBlank() ? Optional.empty() : Optional.of(value.strip());
     }
 
-    /** From the Palo Alto {@code show system info} read: serial, family, content versions, uptime. */
+    /**
+     * A Palo Alto firewall's run since PO 2026-10-21: {@code show system info} is retired, so serial, family, content
+     * versions and uptime are not collected. Recorded anyway (source {@code pan_show_system_info_retired}) so the
+     * previous run's values are replaced by UNKNOWN, never left standing as current.
+     */
+    public static PlatformFactsRead paloAltoFirewallNotCollected() {
+        return new PlatformFactsRead(Optional.empty(), Optional.empty(), Optional.empty(), Map.of(), Optional.empty(),
+                com.securityexpert.nexus.ui2.persistence.device.PanSystemInfoRetirement.SOURCE_READ);
+    }
+
+    /** True when this read is the retired-command record: nothing was read, on purpose. */
+    public boolean systemInfoRetired() {
+        return com.securityexpert.nexus.ui2.persistence.device.PanSystemInfoRetirement.SOURCE_READ.equals(sourceRead);
+    }
+
+    /** From the Palo Alto {@code show system info} read (a Panorama only, since 2026-10-21): serial, family, content versions, uptime. */
     public static PlatformFactsRead paloAlto(com.securityexpert.nexus.ui2.worker.inventory.pan.PaloAltoSystemInfoParser.SystemInfo info) {
         return new PlatformFactsRead(nonBlank(info.serial()), Optional.empty(), info.family(), info.contentVersions(),
                 info.uptime(), "pan_show_system_info");

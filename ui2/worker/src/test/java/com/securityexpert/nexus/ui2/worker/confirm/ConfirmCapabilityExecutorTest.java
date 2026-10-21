@@ -37,10 +37,29 @@ class ConfirmCapabilityExecutorTest {
         ScriptedPanDeviceTransport transport = new ScriptedPanDeviceTransport(Map.of(), Map.of());
         ConfirmCapabilityExecutor executor = new ConfirmCapabilityExecutor(transport, unresolvablePanResolver());
 
-        ConfirmResult result = executor.confirm(ConfirmRequest.paloAlto(new ApiTarget("ep-a", "fw-a-base"), CRED));
+        ConfirmResult result = executor.confirm(ConfirmRequest.panorama(new ApiTarget("ep-a", "fw-a-base"), CRED));
 
         assertInstanceOf(ConfirmResult.CredentialUnresolvable.class, result);
         assertTrue(transport.connectedBaseUrls().isEmpty(), "no key-generation call may be recorded before refusal");
+    }
+
+    /**
+     * PO 2026-10-21: a Palo Alto firewall's confirm needs the serial from show system info, now retired -- it is
+     * refused clearly before the credential is resolved or any call is made, never a broken or guessed enrollment.
+     * (The PAN tests around it run as a Panorama, which keeps the read under its own gate row.)
+     */
+    @Test
+    void paloAltoFirewallConfirmIsRefusedBeforeAnyContactBecauseShowSystemInfoIsRetired() {
+        ScriptedPanDeviceTransport transport = new ScriptedPanDeviceTransport(
+                Map.of("fw-a-base", identityBody("0001A", "fw-a")), Map.of());
+        ConfirmCapabilityExecutor executor = new ConfirmCapabilityExecutor(transport, workingPanResolver());
+
+        ConfirmResult result = executor.confirm(ConfirmRequest.paloAlto(new ApiTarget("ep-a", "fw-a-base"), CRED));
+
+        ConfirmResult.Refused refused = assertInstanceOf(ConfirmResult.Refused.class, result);
+        assertTrue(refused.reason().contains("show system info"));
+        assertTrue(refused.reason().contains("2026-10-21"));
+        assertTrue(transport.connectedBaseUrls().isEmpty(), "no key generation, no read: nothing is sent");
     }
 
     @Test
@@ -181,12 +200,12 @@ class ConfirmCapabilityExecutorTest {
         ConfirmCapabilityExecutor executor = new ConfirmCapabilityExecutor(transport, workingPanResolver());
         PeerFollowResolver resolver = new PeerFollowResolver(executor);
         ConfirmResult.Completed first = assertInstanceOf(ConfirmResult.Completed.class,
-                executor.confirm(ConfirmRequest.paloAlto(new ApiTarget("ep-a", "fw-a-base"), CRED)));
+                executor.confirm(ConfirmRequest.panorama(new ApiTarget("ep-a", "fw-a-base"), CRED)));
 
         AtomicReference<String> dialedAddress = new AtomicReference<>();
         resolver.resolve(first, address -> {
             dialedAddress.set(address);
-            return ConfirmRequest.paloAlto(new ApiTarget("ep-peer", address), CRED);
+            return ConfirmRequest.panorama(new ApiTarget("ep-peer", address), CRED);
         });
 
         // The resolver never derives, guesses or substitutes a different address (e.g. a cluster

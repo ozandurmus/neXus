@@ -42,12 +42,16 @@ final class ScriptedPaloAltoInventoryTransport implements DeviceTransport {
         throw new UnsupportedOperationException("not used by this test");
     }
 
+    /** Every op-type {@code cmd} this transport was asked to send, in order. */
+    final java.util.List<String> sentCmds = new java.util.ArrayList<>();
+
     @Override
     public XmlApiResult xmlApiCall(ApiTarget target, XmlApiSpec spec, Duration timeout) {
         if ("keygen".equals(spec.type())) {
             return new XmlApiResult.Completed(200, "<response><result><key>" + API_KEY + "</key></result></response>");
         }
         String cmd = spec.formParams().get("cmd");
+        sentCmds.add(cmd);
         String output = outputByCmd.get(cmd);
         if (output == null) {
             throw new IllegalStateException("cmd outside this test's scripted set: " + cmd);

@@ -142,6 +142,14 @@ final class InventoryJobExecutorFakes {
         Optional<DeviceConfirmFacts> confirmFacts = Optional.empty();
         /** PO 2026-09-25: every completed read refreshes the observed facts; "hostname|model|version" per call. */
         final java.util.List<String> observedFactRefreshes = new java.util.ArrayList<>();
+        /** PO 2026-10-21: device ids whose observed model / version were cleared (show system info retired). */
+        final java.util.List<String> observedFactClears = new java.util.ArrayList<>();
+
+        @Override
+        public boolean clearObservedPlatformFacts(String deviceId, String actorFingerprint, String actionId) {
+            observedFactClears.add(deviceId);
+            return true;
+        }
 
         @Override
         public boolean refreshObservedFacts(String deviceId, Optional<String> hostname, Optional<String> model,

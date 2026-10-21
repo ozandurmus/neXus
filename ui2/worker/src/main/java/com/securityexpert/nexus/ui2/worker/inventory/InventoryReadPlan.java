@@ -32,7 +32,7 @@ import java.util.regex.Pattern;
  * bare per that decision; per-VSID reads run last, one VSID at a time,
  * VS0 never re-entered.</p>
  *
- * <p><b>Palo Alto (14E PF-1..PF-3, PM-1..PM-4).</b> The four
+ * <p><b>Palo Alto (14E PF-1..PF-3, PM-1..PM-4).</b> The three
  * {@link #PALO_ALTO_BASE_STEPS} XML API calls run unscoped -- {@code show
  * interface all}/{@code show routing route} already return every vsys's
  * own entries in one response, so {@code worker.inventory.pan}'s parsers
@@ -155,6 +155,11 @@ public final class InventoryReadPlan {
 
     // -- Palo Alto -----------------------------------------------------------
 
+    /**
+     * PO 2026-10-21 ({@code PanSystemInfoRetirement}): sent to a Panorama only (gate row pan_panorama_show_system_info),
+     * never to a firewall -- the firewall row pan_inventory_show_system_info is BLOCKED (V171) and this literal is not
+     * in {@link #PALO_ALTO_BASE_STEPS} any more.
+     */
     public static final String PAN_SHOW_SYSTEM_INFO = "<show><system><info/></system></show>";
     /** The job list; the latest finished commit is the policy install time (V60, gate entry #2). Not a base step: optional. */
     public static final String PAN_SHOW_JOBS_ALL = "<show><jobs><all/></jobs></show>";
@@ -162,7 +167,13 @@ public final class InventoryReadPlan {
     public static final String PAN_SHOW_INTERFACE_ALL = "<show><interface>all</interface></show>";
     public static final String PAN_SHOW_ROUTING_ROUTE = "<show><routing><route/></routing></show>";
 
-    /** 14E PF-1's exact order: identity refresh, HA state, interfaces, routes. Each once, unscoped (PF-2). */
+    /**
+     * A firewall's reads, 14E PF-1's order without the identity refresh: HA state, interfaces, routes. Each once,
+     * unscoped (PF-2). {@code show system info} was the first step until the PO retired it for firewalls on 2026-10-21.
+     */
     public static final List<String> PALO_ALTO_BASE_STEPS =
-            List.of(PAN_SHOW_SYSTEM_INFO, PAN_SHOW_HA_STATE, PAN_SHOW_INTERFACE_ALL, PAN_SHOW_ROUTING_ROUTE);
+            List.of(PAN_SHOW_HA_STATE, PAN_SHOW_INTERFACE_ALL, PAN_SHOW_ROUTING_ROUTE);
+
+    /** A Panorama's inventory reads (V83 gate rows, Panorama scope): system info, then HA state. Out of the 2026-10-21 scope. */
+    public static final List<String> PANORAMA_STEPS = List.of(PAN_SHOW_SYSTEM_INFO, PAN_SHOW_HA_STATE);
 }

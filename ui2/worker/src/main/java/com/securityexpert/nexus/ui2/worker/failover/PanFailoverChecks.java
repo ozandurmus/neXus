@@ -189,15 +189,15 @@ public final class PanFailoverChecks {
         if (before==null || after==null) return "UNKNOWN";
         return after>=Math.ceil(before*SESSION_TOLERANCE_PERCENT/100.0)?"PASS":"FAIL";
     }
-    public static String versions(String first,String second) {
-        Element a=child(result(first),"system"),b=child(result(second),"system");
-        boolean mismatch=false;
-        for (String field:new String[]{"sw-version","app-version","threat-version"}) {
-            if (text(a,field).isEmpty() || text(b,field).isEmpty()) return "UNKNOWN";
-            if (!text(a,field).equals(text(b,field))) mismatch=true;
-        }
-        return mismatch?"FAIL":"PASS";
-    }
+    /** Check 6's derived evidence when show session info is switched off (PO 2026-10-21 scope update). */
+    public static final String SESSIONS_NOT_COLLECTED_DERIVED=
+        "{\"reason\":\"not_collected\",\"detail\":\"show session info retired by PO 2026-10-21\"}";
+    /** Check 7's status since PO 2026-10-21: its only read (show system info) is retired for firewalls. */
+    public static final String VERSION_PARITY_NOT_COLLECTED="UNKNOWN";
+    /** Check 7's derived evidence: the reason, never a value. */
+    public static final String VERSION_PARITY_NOT_COLLECTED_DERIVED=
+        "{\"reason\":\"not_collected\",\"detail\":\"show system info retired by PO 2026-10-21\"}";
+
     private static String status(boolean pass, boolean fail) { return pass?"PASS":fail?"FAIL":"UNKNOWN"; }
     private static boolean knownRole(String role) {
         return "active".equals(role) || "passive".equals(role) || "suspended".equals(role);

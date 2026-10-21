@@ -98,10 +98,18 @@ public final class InventoryCapabilityExecutor {
 
     private final DeviceTransport transport;
     private final PanCredentialResolver panCredentialResolver;
+    private final com.securityexpert.nexus.ui2.jobs.pan.PanFirewallCommandSwitches panSwitches;
 
+    /** The Palo Alto firewall read switches come from the worker's environment (default: every switchable read on). */
     public InventoryCapabilityExecutor(DeviceTransport transport, PanCredentialResolver panCredentialResolver) {
+        this(transport, panCredentialResolver, com.securityexpert.nexus.ui2.jobs.pan.PanFirewallCommandSwitches.fromEnvironment());
+    }
+
+    public InventoryCapabilityExecutor(DeviceTransport transport, PanCredentialResolver panCredentialResolver,
+            com.securityexpert.nexus.ui2.jobs.pan.PanFirewallCommandSwitches panSwitches) {
         this.transport = Objects.requireNonNull(transport, "transport");
         this.panCredentialResolver = panCredentialResolver;
+        this.panSwitches = Objects.requireNonNull(panSwitches, "panSwitches");
     }
 
     public InventoryResult collect(InventoryRequest request, Optional<PresentedIdentity> recordedIdentity,
@@ -471,28 +479,53 @@ public final class InventoryCapabilityExecutor {
         }
         Map<String, String> headers = Map.of("X-PAN-KEY", apiKey.get());
 
-        String identityOutput = xmlApiOutput(target, InventoryReadPlan.PAN_SHOW_SYSTEM_INFO, headers);
-        if (identityOutput == null || identityOutput.isBlank() || isXmlError(identityOutput)) {
-            return new InventoryResult.ConnectFailed("palo alto show system info failed");
-        }
-        PaloAltoSystemInfoParser.SystemInfo sysInfo = PaloAltoSystemInfoParser.parse(identityOutput);
-        String serial = sysInfo.serial();
-        if (serial == null || serial.isBlank()) {
-            return new InventoryResult.ConnectFailed("palo alto show system info returned empty serial");
-        }
-        PresentedIdentity presented = new PresentedIdentity(serial, Optional.empty());
-        IdentityMismatchEvaluator.Decision decision =
-                IdentityMismatchEvaluator.evaluate(recordedIdentity, presented, strictRefuseEnabled);
-        if (decision == IdentityMismatchEvaluator.Decision.REFUSE) {
-            return new InventoryResult.IdentityMismatchRefused(
-                    "presented serial does not match the recorded baseline; strict posture refused the contact");
-        }
-
-        String haStateOutput = xmlApiOutput(target, InventoryReadPlan.PAN_SHOW_HA_STATE, headers);
         if (request.managementServer()) {
+            // A Panorama keeps its own system info read (gate row pan_panorama_show_system_info): out of the
+            // PO 2026-10-21 scope, which retired the read for firewalls only.
+            String identityOutput = xmlApiOutput(target, InventoryReadPlan.PAN_SHOW_SYSTEM_INFO, headers);
+            if (identityOutput == null || identityOutput.isBlank() || isXmlError(identityOutput)) {
+                return new InventoryResult.ConnectFailed("palo alto show system info failed");
+            }
+            PaloAltoSystemInfoParser.SystemInfo sysInfo = PaloAltoSystemInfoParser.parse(identityOutput);
+            String serial = sysInfo.serial();
+            if (serial == null || serial.isBlank()) {
+                return new InventoryResult.ConnectFailed("palo alto show system info returned empty serial");
+            }
+            PresentedIdentity presented = new PresentedIdentity(serial, Optional.empty());
+            IdentityMismatchEvaluator.Decision decision =
+                    IdentityMismatchEvaluator.evaluate(recordedIdentity, presented, strictRefuseEnabled);
+            if (decision == IdentityMismatchEvaluator.Decision.REFUSE) {
+                return new InventoryResult.IdentityMismatchRefused(
+                        "presented serial does not match the recorded baseline; strict posture refused the contact");
+            }
+            String haStateOutput = xmlApiOutput(target, InventoryReadPlan.PAN_SHOW_HA_STATE, headers);
             return panoramaInventory(identityOutput, sysInfo, haStateOutput);
         }
-        String interfaceOutput = xmlApiOutput(target, InventoryReadPlan.PAN_SHOW_INTERFACE_ALL, headers);
+
+        // A firewall (PO 2026-10-21, PanSystemInfoRetirement): show system info is never sent. Its serial was the only
+        // direct identity evidence, so the identity check is NOT_EVALUABLE -- never a guessed match; the strict
+        // posture refuses the contact instead. Model, version, serial, content versions and uptime are not collected.
+        IdentityMismatchEvaluator.Decision decision =
+                IdentityMismatchEvaluator.evaluateWithoutPresentedIdentity(strictRefuseEnabled);
+        if (decision == IdentityMismatchEvaluator.Decision.REFUSE) {
+            return new InventoryResult.IdentityMismatchRefused(
+                    com.securityexpert.nexus.ui2.persistence.device.PanSystemInfoRetirement.IDENTITY_NOT_EVALUABLE
+                            + "; strict posture refused the contact");
+        }
+        LOG.log(System.Logger.Level.INFO, "[PAN_IDENTITY_NOT_EVALUABLE] baseline_recorded={0}: {1}",
+                recordedIdentity.isPresent(),
+                com.securityexpert.nexus.ui2.persistence.device.PanSystemInfoRetirement.IDENTITY_NOT_EVALUABLE);
+
+        String haStateOutput = xmlApiOutput(target, InventoryReadPlan.PAN_SHOW_HA_STATE, headers);
+        // PO 2026-10-21 scope update: show interface all may be switched off (NEXUS_PAN_FW_SHOW_INTERFACE_ALL=retired).
+        // Then it is never sent; the run records it as not collected, so the interfaces read UNKNOWN, never "none".
+        List<String> notCollected = new ArrayList<>();
+        String interfaceOutput = null;
+        if (panSwitches.showInterfaceAll()) {
+            interfaceOutput = xmlApiOutput(target, InventoryReadPlan.PAN_SHOW_INTERFACE_ALL, headers);
+        } else {
+            notCollected.add(com.securityexpert.nexus.ui2.jobs.pan.PanFirewallCommandSwitches.TOKEN_SHOW_INTERFACE_ALL);
+        }
         String routeOutput = xmlApiOutput(target, InventoryReadPlan.PAN_SHOW_ROUTING_ROUTE, headers);
 
         PaloAltoInterfaceParseResult parsedInterfaces = PaloAltoInterfaceParser.parse(interfaceOutput);
@@ -549,7 +582,10 @@ public final class InventoryCapabilityExecutor {
         }
 
         if (contexts.stream().allMatch(c -> c.interfaces().isEmpty() && c.routes().isEmpty())) {
-            return new InventoryResult.ConnectFailed("no_interfaces_or_routes_discovered: device returned no interface or route data");
+            return new InventoryResult.ConnectFailed(notCollected.isEmpty()
+                    ? "no_interfaces_or_routes_discovered: device returned no interface or route data"
+                    : "no_routes_discovered: device returned no route data and show interface all is switched off ("
+                            + com.securityexpert.nexus.ui2.jobs.pan.PanFirewallCommandSwitches.REASON + ")");
         }
 
         PaloAltoHaStateParser.HaState haState = PaloAltoHaStateParser.parse(haStateOutput);
@@ -580,9 +616,10 @@ public final class InventoryCapabilityExecutor {
         }
         String virtualSystemsString = panVsNames.isEmpty() ? null : String.join(", ", panVsNames);
 
+        // No observed hostname / model / version: their only source was show system info (retired 2026-10-21).
         return new InventoryResult.Completed(contexts, haFacts, Optional.ofNullable(virtualSystemsString),
-                Optional.of(PlatformFactsRead.paloAlto(sysInfo).withPolicyInstall(panPolicyInstall(target, headers))),
-                new InventoryResult.ObservedIdentity(sysInfo.hostname(), sysInfo.model(), sysInfo.swVersion()));
+                Optional.of(PlatformFactsRead.paloAltoFirewallNotCollected().withPolicyInstall(panPolicyInstall(target, headers))),
+                InventoryResult.ObservedIdentity.NONE, notCollected);
     }
 
     private static final java.util.regex.Pattern PAN_TAG = java.util.regex.Pattern.compile("<(ip-address|netmask|default-gateway|ipv6-address|ipv6-default-gateway)>\\s*([^<]*?)\\s*</\\1>");

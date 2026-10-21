@@ -35,7 +35,11 @@ public enum DeviceFirstContactCommandSet {
     CP_HA_PEER_READ(Vendor.CHECK_POINT, ContactStepKind.HA_PEER_READ,
             List.of("cphaprob stat")),
 
-    /** Gate entry 3: EC-11's identity read, Palo Alto over {@code xml_api_call} ({@code type=op}). */
+    /**
+     * Gate entry 3: EC-11's identity read, Palo Alto over {@code xml_api_call} ({@code type=op}). A Panorama only since
+     * PO 2026-10-21 (gate row pan_panorama_show_system_info): a firewall's confirm is refused before any contact and
+     * never sends it ({@code PanSystemInfoRetirement}).
+     */
     PAN_IDENTITY_READ(Vendor.PALO_ALTO, ContactStepKind.IDENTITY_READ,
             List.of("<show><system><info/></system></show>")),
 

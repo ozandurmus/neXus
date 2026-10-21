@@ -1,5 +1,7 @@
 # Palo Alto inventory — API route gate entries
 
+> **Amendment 2026-10-21 (PO).** Entry 1 (`show system info`) is withdrawn for firewalls: gate row `pan_inventory_show_system_info` is BLOCKED (V171) and no path sends it. `show interface all` can be switched off with `NEXUS_PAN_FW_SHOW_INTERFACE_ALL=retired`. See `PO_DECISION_RECORD_2026_10_21_PAN_SHOW_SYSTEM_INFO_RETIRED.md`.
+
 ## Status
 
 **APPROVED — PRODUCT OWNER, 2026-09-14; COMMANDS RUN BY THE PRODUCT OWNER ON

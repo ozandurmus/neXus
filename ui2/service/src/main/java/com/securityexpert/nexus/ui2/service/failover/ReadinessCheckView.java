@@ -43,8 +43,11 @@ public final class ReadinessCheckView {
                 case 3 -> "HA link state not recognised";
                 case 4 -> "Configuration sync field missing or not recognised";
                 case 5 -> sessionSyncSummary(status,d);
-                case 6 -> "Session count missing or not recognised: /response/result/num-active or active-sessions";
-                case 7 -> "Version fields missing or not recognised";
+                case 6 -> "not_collected".equals(d.path("reason").asText())
+                    ? "Not collected: show session info retired by PO 2026-10-21"
+                    : "Session count missing or not recognised: /response/result/num-active or active-sessions";
+                case 7 -> "not_collected".equals(d.path("reason").asText())
+                    ? "Not collected: show system info retired by PO 2026-10-21" : "Version fields missing or not recognised";
                 default -> "Check evidence unavailable";
             };
             return switch(no) {

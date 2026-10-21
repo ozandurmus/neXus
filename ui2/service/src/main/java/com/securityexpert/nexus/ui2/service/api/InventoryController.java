@@ -93,7 +93,19 @@ public final class InventoryController {
         // the same pseudonym the Devices tree shows, and the VIP under "address" so it is masked as an address.
         body.put("grid_members", run.map(r -> r.gridMembers().stream().map(InventoryController::toGridMemberBody).toList()).orElse(List.of()));
         body.put("grid_summary", run.map(InventoryRun::gridSummary).map(InventoryController::toGridSummaryBody).orElse(null));
+        putNotCollected(body, run);
         return ResponseEntity.ok(body);
+    }
+
+    /**
+     * PO 2026-10-21 scope update: reads this run deliberately did not send (a Palo Alto firewall read switched off), as
+     * read-kind tokens, and the one reason -- so the screen says UNKNOWN ("retired by PO"), never "no interfaces".
+     */
+    static void putNotCollected(Map<String, Object> body, Optional<InventoryRun> run) {
+        List<String> notCollected = run.map(InventoryRun::notCollected).orElse(List.of());
+        body.put("not_collected", notCollected);
+        body.put("not_collected_reason", notCollected.isEmpty() ? null
+                : com.securityexpert.nexus.ui2.persistence.device.PanSystemInfoRetirement.REASON);
     }
 
     private static Map<String, Object> toGridSummaryBody(InfobloxGridSummary s) {

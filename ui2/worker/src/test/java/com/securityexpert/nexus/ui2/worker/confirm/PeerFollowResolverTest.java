@@ -40,14 +40,14 @@ class PeerFollowResolverTest {
         PeerFollowResolver resolver = new PeerFollowResolver(executor);
 
         ConfirmResult firstResult =
-                executor.confirm(ConfirmRequest.paloAlto(new ApiTarget("ep-a", "fw-a-base"), CRED));
+                executor.confirm(ConfirmRequest.panorama(new ApiTarget("ep-a", "fw-a-base"), CRED));
         ConfirmResult.Completed firstCompleted = assertInstanceOf(ConfirmResult.Completed.class, firstResult);
         assertTrue(firstCompleted.haPeerClaim().isMember());
         assertEquals("0001B", firstCompleted.haPeerClaim().peerSelfIdentifier().orElseThrow());
         assertEquals("0001A", firstCompleted.selfReferenceForPeer().orElseThrow());
 
         PeerFollowOutcome outcome = resolver.resolve(firstCompleted,
-                address -> ConfirmRequest.paloAlto(new ApiTarget("ep-peer", address), CRED));
+                address -> ConfirmRequest.panorama(new ApiTarget("ep-peer", address), CRED));
 
         PeerFollowOutcome.Corroborated corroborated = assertInstanceOf(PeerFollowOutcome.Corroborated.class, outcome);
         assertEquals("0001A|0001B", corroborated.unitId());
@@ -72,10 +72,10 @@ class PeerFollowResolverTest {
         PeerFollowResolver resolver = new PeerFollowResolver(executor);
 
         ConfirmResult.Completed firstCompleted = assertInstanceOf(ConfirmResult.Completed.class,
-                executor.confirm(ConfirmRequest.paloAlto(new ApiTarget("ep-a", "fw-a-base"), CRED)));
+                executor.confirm(ConfirmRequest.panorama(new ApiTarget("ep-a", "fw-a-base"), CRED)));
 
         PeerFollowOutcome outcome = resolver.resolve(firstCompleted,
-                address -> ConfirmRequest.paloAlto(new ApiTarget("ep-peer", address), CRED));
+                address -> ConfirmRequest.panorama(new ApiTarget("ep-peer", address), CRED));
 
         PeerFollowOutcome.NotConfirmed notConfirmed = assertInstanceOf(PeerFollowOutcome.NotConfirmed.class, outcome);
         assertEquals(PeerFollowOutcome.Reason.ONE_SIDED_CLAIM, notConfirmed.reason());

@@ -211,6 +211,7 @@ public final class ConfirmJobExecutor {
         return switch (result) {
             case ConfirmResult.CredentialUnresolvable unresolvable -> "credential_unresolvable: " + unresolvable.reason();
             case ConfirmResult.ConnectFailed connectFailed -> "connect_failed: " + connectFailed.reason();
+            case ConfirmResult.Refused refused -> "refused: " + refused.reason();
             case ConfirmResult.Completed ignored -> throw new IllegalStateException("unreachable: Completed is not a failure");
         };
     }

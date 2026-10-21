@@ -1,7 +1,8 @@
 # pan_configuration_collect -- the Palo Alto half of configuration
 # collection (PO_DECISION_RECORD_2026_09_14G CG-4, gate consequence). The
-# four xml_api_call steps below are CG-4's exact request set, in order
-# (identity refresh, active, effective-running, merged), gated per
+# three xml_api_call steps below are CG-4's request set, in order
+# (active, effective-running, merged; the identity refresh was retired for
+# firewalls by the PO on 2026-10-21), gated per
 # docs/design/PAN_CONFIGURATION_API_ROUTE_GATE_ENTRIES.md entries 1-4,
 # mirroring pan_inventory_collect.yaml's own shape exactly.
 #
@@ -24,10 +25,8 @@ transport:
   trust_rule_ref: utils.pan_xml_api_trust
 steps:
   - kind: connect
-  - kind: xml_api_call
-    send: "<show><system><info/></system></show>"
-    # Shares gate_id pan_inventory_show_system_info (identical canonical key) -- see gate_registry_fixture.yaml's own note.
-    gate_reference: pan_inventory_show_system_info
+  # No show system info step (it shared gate_id pan_inventory_show_system_info): retired for firewalls by the PO
+  # on 2026-10-21 (gate row BLOCKED, V171).
   - kind: xml_api_call
     send: "type=config&action=show&xpath=/config"
     gate_reference: pan_configuration_active
