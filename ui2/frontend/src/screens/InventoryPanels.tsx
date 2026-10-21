@@ -2461,7 +2461,7 @@ export function DeviceInventoryPanels({
             })()}
             {platformPillLabel(device) && <StatusChip tone="neutral" label={platformPillLabel(device)!} dense />}
             {!platformPillLabel(device) && platformFactsNote(device) && (
-              <StatusChip tone="neutral" label="Platform facts: not collected (PO 2026-10-21)" title={platformFactsNote(device)!} dense />
+              <StatusChip tone="neutral" label="Model and version: not read yet" title={platformFactsNote(device)!} dense />
             )}
             {!singleDeviceHasNoNetworkEvidence && <StatusChip tone="neutral" label={interfaceRouteLabel(headerCounts, device.vendor_hint)} dense />}
           </>

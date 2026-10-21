@@ -99,3 +99,5 @@ and `NEXUS_PAN_FW_SHOW_SESSION_INFO` to `retired` (guarded by `test_ui2_deployme
 failover check 6 read UNKNOWN with the reason. Removing the two entries (and restarting) sends them again. The PO also
 approved, in the same form: `type=version` as the identity/model/version read for all PAN-OS versions, and failover
 check 7 taking versions from the HA state read (contract amendment to follow with the implementation).
+
+Implemented and recorded in `PO_DECISION_RECORD_2026_10_21_PAN_TYPE_VERSION_AND_CHECK7.md` (V172, `FAILOVER_EXECUTION_PAN_CONTRACT.md` §9): serial, model and PAN-OS version are read again for firewalls with `type=version`, which makes the identity check evaluable and firewall enrollment possible again, and check 7 is no longer UNKNOWN. Sections 2 and 3 above describe the state between the retirement and that change; where they differ, the newer record governs. Content versions, uptime, platform family and the hostname as reported stay not collected.

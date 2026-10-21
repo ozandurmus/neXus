@@ -37,8 +37,10 @@ public enum DeviceFirstContactCommandSet {
 
     /**
      * Gate entry 3: EC-11's identity read, Palo Alto over {@code xml_api_call} ({@code type=op}). A Panorama only since
-     * PO 2026-10-21 (gate row pan_panorama_show_system_info): a firewall's confirm is refused before any contact and
-     * never sends it ({@code PanSystemInfoRetirement}).
+     * PO 2026-10-21 (gate row pan_panorama_show_system_info): a firewall's confirm never sends it
+     * ({@code PanSystemInfoRetirement}) and reads the serial, model and PAN-OS version with the documented
+     * {@code type=version} request instead ({@code PanTypeVersion}, gate row pan_identity_version; a form request with
+     * no {@code cmd}, so it is not one of this enum's command literals -- see the gate document's 2026-10-21 amendment).
      */
     PAN_IDENTITY_READ(Vendor.PALO_ALTO, ContactStepKind.IDENTITY_READ,
             List.of("<show><system><info/></system></show>")),

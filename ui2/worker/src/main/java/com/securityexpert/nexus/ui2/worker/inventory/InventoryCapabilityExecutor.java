@@ -37,6 +37,7 @@ import com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointIpRouteParser;
 import com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointVsidCompositeOutputSplitter;
 import com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointVsxStatParser;
 import com.securityexpert.nexus.ui2.worker.inventory.pan.PaloAltoSystemInfoParser;
+import com.securityexpert.nexus.ui2.worker.inventory.pan.PaloAltoTypeVersionParser;
 import com.securityexpert.nexus.ui2.worker.inventory.pan.PaloAltoHaStateParser;
 import com.securityexpert.nexus.ui2.worker.inventory.pan.PaloAltoInterfaceParseResult;
 import com.securityexpert.nexus.ui2.worker.inventory.pan.PaloAltoInterfaceParser;
@@ -502,19 +503,30 @@ public final class InventoryCapabilityExecutor {
             return panoramaInventory(identityOutput, sysInfo, haStateOutput);
         }
 
-        // A firewall (PO 2026-10-21, PanSystemInfoRetirement): show system info is never sent. Its serial was the only
-        // direct identity evidence, so the identity check is NOT_EVALUABLE -- never a guessed match; the strict
-        // posture refuses the contact instead. Model, version, serial, content versions and uptime are not collected.
-        IdentityMismatchEvaluator.Decision decision =
-                IdentityMismatchEvaluator.evaluateWithoutPresentedIdentity(strictRefuseEnabled);
+        // A firewall (PO 2026-10-21): show system info is never sent (PanSystemInfoRetirement). The serial, model and
+        // PAN-OS version come from the documented XML API request type=version, for every PAN-OS version
+        // (PanTypeVersion). The identity check compares that serial with the recorded baseline; when the read gave no
+        // usable serial the check is NOT_EVALUABLE -- never a guessed match, and the strict posture refuses instead.
+        PaloAltoTypeVersionParser.Info version = PaloAltoTypeVersionParser.parse(typeVersionOutput(target, headers));
+        LOG.log(System.Logger.Level.INFO,
+                "[PAN_TYPE_VERSION] envelope_ok={0} serial={1} model={2} sw_version={3} multi_vsys={4}",
+                version.envelopeOk(), version.hasSerial(), version.model().isPresent(), version.swVersion().isPresent(),
+                version.multiVsys().orElse("unknown"));
+        IdentityMismatchEvaluator.Decision decision = version.hasSerial()
+                ? IdentityMismatchEvaluator.evaluate(recordedIdentity,
+                        new PresentedIdentity(version.serial().get(), Optional.empty()), strictRefuseEnabled)
+                : IdentityMismatchEvaluator.evaluateWithoutPresentedIdentity(strictRefuseEnabled);
         if (decision == IdentityMismatchEvaluator.Decision.REFUSE) {
-            return new InventoryResult.IdentityMismatchRefused(
-                    com.securityexpert.nexus.ui2.persistence.device.PanSystemInfoRetirement.IDENTITY_NOT_EVALUABLE
-                            + "; strict posture refused the contact");
+            return new InventoryResult.IdentityMismatchRefused(version.hasSerial()
+                    ? "presented serial does not match the recorded baseline; strict posture refused the contact"
+                    : com.securityexpert.nexus.ui2.persistence.device.PanSystemInfoRetirement
+                            .IDENTITY_NOT_EVALUABLE_NO_TYPE_VERSION_SERIAL + "; strict posture refused the contact");
         }
-        LOG.log(System.Logger.Level.INFO, "[PAN_IDENTITY_NOT_EVALUABLE] baseline_recorded={0}: {1}",
-                recordedIdentity.isPresent(),
-                com.securityexpert.nexus.ui2.persistence.device.PanSystemInfoRetirement.IDENTITY_NOT_EVALUABLE);
+        if (decision == IdentityMismatchEvaluator.Decision.NOT_EVALUABLE) {
+            LOG.log(System.Logger.Level.INFO, "[PAN_IDENTITY_NOT_EVALUABLE] baseline_recorded={0}: {1}",
+                    recordedIdentity.isPresent(), com.securityexpert.nexus.ui2.persistence.device.PanSystemInfoRetirement
+                            .IDENTITY_NOT_EVALUABLE_NO_TYPE_VERSION_SERIAL);
+        }
 
         String haStateOutput = xmlApiOutput(target, InventoryReadPlan.PAN_SHOW_HA_STATE, headers);
         // PO 2026-10-21 scope update: show interface all may be switched off (NEXUS_PAN_FW_SHOW_INTERFACE_ALL=retired).
@@ -616,10 +628,15 @@ public final class InventoryCapabilityExecutor {
         }
         String virtualSystemsString = panVsNames.isEmpty() ? null : String.join(", ", panVsNames);
 
-        // No observed hostname / model / version: their only source was show system info (retired 2026-10-21).
+        // Serial, model and PAN-OS version are the type=version fields. The hostname is not in that response, so none is
+        // observed (the last recorded one stays); content versions, uptime and family stay not collected (show system
+        // info is retired). An unusable answer records the empty "not collected" record, which clears the old values.
+        PlatformFactsRead platformFacts = version.envelopeOk()
+                ? PlatformFactsRead.paloAltoFirewallTypeVersion(version)
+                : PlatformFactsRead.paloAltoFirewallNotCollected();
         return new InventoryResult.Completed(contexts, haFacts, Optional.ofNullable(virtualSystemsString),
-                Optional.of(PlatformFactsRead.paloAltoFirewallNotCollected().withPolicyInstall(panPolicyInstall(target, headers))),
-                InventoryResult.ObservedIdentity.NONE, notCollected);
+                Optional.of(platformFacts.withPolicyInstall(panPolicyInstall(target, headers))),
+                new InventoryResult.ObservedIdentity(Optional.empty(), version.model(), version.swVersion()), notCollected);
     }
 
     private static final java.util.regex.Pattern PAN_TAG = java.util.regex.Pattern.compile("<(ip-address|netmask|default-gateway|ipv6-address|ipv6-default-gateway)>\\s*([^<]*?)\\s*</\\1>");
@@ -1334,6 +1351,12 @@ public final class InventoryCapabilityExecutor {
             com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
             return com.securityexpert.nexus.ui2.worker.inventory.policy.PolicyInstallRead.NONE;
         }
+    }
+
+    /** The firewall identity read: {@code POST /api/}, body {@code type=version}, same key, timeout and bounds as every read. */
+    private String typeVersionOutput(ApiTarget target, Map<String, String> headers) {
+        XmlApiResult result = transport.xmlApiCall(target, PaloAltoTypeVersionParser.request(headers), READ_TIMEOUT);
+        return xmlOutput(result).orElse("");
     }
 
     private String xmlApiOutput(ApiTarget target, String cmd, Map<String, String> headers) {

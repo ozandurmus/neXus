@@ -66,8 +66,10 @@ class InventoryReadPlanTest {
 
     @Test
     void paloAltoBaseStepsEqualSection3Literally() {
-        // PO 2026-10-21: show system info is no longer a firewall step (retired); a Panorama keeps it.
+        // PO 2026-10-21: show system info is no longer a firewall step (retired; a Panorama keeps it); the identity
+        // read is the documented type=version request (gate row pan_identity_version), first as before.
         assertEquals(List.of(
+                "type=version",
                 "<show><high-availability><state/></high-availability></show>",
                 "<show><interface>all</interface></show>",
                 "<show><routing><route/></routing></show>"),
@@ -81,11 +83,12 @@ class InventoryReadPlanTest {
         assertEquals(3, InventoryReadPlan.checkPointVsidSteps("2").size());
     }
 
-    /** 14E PF-2: the {@code &vsys=<id>} form is dropped; since 2026-10-21 three unscoped requests remain (no system info). */
+    /** 14E PF-2: the {@code &vsys=<id>} form is dropped; since 2026-10-21 four unscoped requests remain (type=version, no system info). */
     @Test
-    void paloAltoClosedSetHasExactlyThreeUnscopedRequestsNoVsysFormNoSystemInfo() {
-        assertEquals(3, InventoryReadPlan.PALO_ALTO_BASE_STEPS.size());
+    void paloAltoClosedSetHasExactlyFourUnscopedRequestsNoVsysFormNoSystemInfo() {
+        assertEquals(4, InventoryReadPlan.PALO_ALTO_BASE_STEPS.size());
         assertFalse(InventoryReadPlan.PALO_ALTO_BASE_STEPS.contains("<show><system><info/></system></show>"));
+        assertEquals("type=version", InventoryReadPlan.PALO_ALTO_BASE_STEPS.get(0));
         assertEquals(List.of("<show><system><info/></system></show>", "<show><high-availability><state/></high-availability></show>"),
                 InventoryReadPlan.PANORAMA_STEPS, "a Panorama keeps its own system info read (out of the 2026-10-21 scope)");
     }

@@ -110,10 +110,51 @@ class PanFailoverChecksTest {
         assertEquals("PASS",PanFailoverChecks.carried(100L,80L));
         assertEquals("FAIL",PanFailoverChecks.carried(101L,80L));
         assertEquals("UNKNOWN",PanFailoverChecks.carried(null,80L));
-        // Check 7 (version parity): show system info retired for firewalls by the PO on 2026-10-21 -- UNKNOWN with the reason.
-        assertEquals("UNKNOWN",PanFailoverChecks.VERSION_PARITY_NOT_COLLECTED);
-        assertTrue(PanFailoverChecks.VERSION_PARITY_NOT_COLLECTED_DERIVED.contains("not_collected"));
-        assertTrue(PanFailoverChecks.VERSION_PARITY_NOT_COLLECTED_DERIVED.contains("2026-10-21"));
+    }
+    private static String haXml(String build,String app,String threat) {
+        return "<response status=\"success\"><result><group><mode>Active-Passive</mode><local-info><state>active</state>"
+            +(build==null?"":"<build-rel>"+build+"</build-rel>")+(app==null?"":"<app-version>"+app+"</app-version>")
+            +(threat==null?"":"<threat-version>"+threat+"</threat-version>")
+            +"<serial-num>0011</serial-num></local-info><peer-info><state>passive</state>"
+            +"<build-rel>9.9.9</build-rel><app-version>0000-0000</app-version><threat-version>0000-0000</threat-version>"
+            +"<serial-num>0022</serial-num></peer-info></group></result></response>";
+    }
+    /** Check 7 (PO 2026-10-21): each member's own local-info versions from the HA state read; no new command. */
+    @Test void versionParityFromTheHaStateMatchMismatchAndMissing() {
+        var a=PanFailoverChecks.parse(haXml("10.2.3","1111-2222","3333-4444"));
+        assertEquals(new PanFailoverChecks.Versions("10.2.3","1111-2222","3333-4444"),a.versions());
+        var same=PanFailoverChecks.parse(haXml("10.2.3","1111-2222","3333-4444"));
+        var match=PanFailoverChecks.versionsEvidence(a,same);
+        assertEquals("PASS",match.status());
+        assertEquals("{\"source\":\"ha_state_local_info\",\"software\":\"MATCH\",\"app\":\"MATCH\",\"threat\":\"MATCH\"}",match.derived());
+        // Any present pair that differs is FAIL (software build, app content or threat content), and the peer-info block
+        // -- a member's report about its peer -- is never read.
+        for(String[] other:new String[][]{{"10.2.4","1111-2222","3333-4444"},{"10.2.3","1111-2223","3333-4444"},
+                {"10.2.3","1111-2222","3333-4445"}}) {
+            var b=PanFailoverChecks.parse(haXml(other[0],other[1],other[2]));
+            assertEquals("FAIL",PanFailoverChecks.versionsEvidence(a,b).status());
+            assertEquals("FAIL",PanFailoverChecks.versions(a,b));
+        }
+        // A missing field on either member is UNKNOWN (blocks), never a guess -- even beside a mismatch.
+        for(String[] other:new String[][]{{null,"1111-2222","3333-4444"},{"10.2.3",null,"3333-4444"},{"10.2.3","1111-2222",null}}) {
+            var b=PanFailoverChecks.parse(haXml(other[0],other[1],other[2]));
+            assertEquals("UNKNOWN",PanFailoverChecks.versionsEvidence(a,b).status());
+            assertEquals("UNKNOWN",PanFailoverChecks.versionsEvidence(b,a).status());
+        }
+        var mixed=PanFailoverChecks.versionsEvidence(a,PanFailoverChecks.parse(haXml(null,"1111-2222","9999")));
+        assertEquals("UNKNOWN",mixed.status());
+        assertTrue(mixed.derived().contains("\"software\":\"MISSING\"") && mixed.derived().contains("\"threat\":\"MISMATCH\""));
+        // An error envelope, an unusable body, or HA disabled (no local-info) carries no versions at all.
+        for(String body:new String[]{"<response status=\"error\"/>","","not xml","<response status=\"success\"><result><group/></result></response>"}) {
+            var none=PanFailoverChecks.parse(body);
+            assertEquals(PanFailoverChecks.Versions.NONE,none.versions());
+            assertEquals("UNKNOWN",PanFailoverChecks.versionsEvidence(a,none).status());
+        }
+        // A repeated field is ambiguous, so it is missing (the same rule every HA-state field follows).
+        var twice=PanFailoverChecks.parse(haXml("10.2.3","1111-2222","3333-4444").replace("<build-rel>10.2.3</build-rel>",
+            "<build-rel>10.2.3</build-rel><build-rel>10.2.3</build-rel>"));
+        assertEquals("",twice.versions().software());
+        assertEquals("UNKNOWN",PanFailoverChecks.versionsEvidence(a,twice).status());
     }
     @Test void unknownReasonsNameExistingLookupPathsWithoutGuessingFields() {
         String[] paths={"group/running-sync","enabled and messages/entry/{enable,sent,recv,desc}","num-active or active-sessions"};

@@ -43,13 +43,29 @@ public record PlatformFactsRead(
     }
 
     /**
-     * A Palo Alto firewall's run since PO 2026-10-21: {@code show system info} is retired, so serial, family, content
-     * versions and uptime are not collected. Recorded anyway (source {@code pan_show_system_info_retired}) so the
+     * A Palo Alto firewall's run whose {@code type=version} answer was unusable (or never obtained): {@code show system
+     * info} is retired, so serial, family, content versions and uptime are not collected. Recorded anyway (source {@code pan_show_system_info_retired}) so the
      * previous run's values are replaced by UNKNOWN, never left standing as current.
      */
     public static PlatformFactsRead paloAltoFirewallNotCollected() {
         return new PlatformFactsRead(Optional.empty(), Optional.empty(), Optional.empty(), Map.of(), Optional.empty(),
                 com.securityexpert.nexus.ui2.persistence.device.PanSystemInfoRetirement.SOURCE_READ);
+    }
+
+    /**
+     * A Palo Alto firewall's run since PO 2026-10-21 ({@code PanTypeVersion}): the serial from the documented
+     * {@code type=version} request, source {@code pan_type_version}. Family, content versions, uptime and hotfix are not
+     * in that response and stay empty (UNKNOWN); model and PAN-OS version travel as the observed identity.
+     */
+    public static PlatformFactsRead paloAltoFirewallTypeVersion(
+            com.securityexpert.nexus.ui2.worker.inventory.pan.PaloAltoTypeVersionParser.Info info) {
+        return new PlatformFactsRead(info.serial(), Optional.empty(), Optional.empty(), Map.of(), Optional.empty(),
+                com.securityexpert.nexus.ui2.persistence.device.PanTypeVersion.SOURCE_READ);
+    }
+
+    /** True when this read came from the firewall type=version request. */
+    public boolean typeVersion() {
+        return com.securityexpert.nexus.ui2.persistence.device.PanTypeVersion.SOURCE_READ.equals(sourceRead);
     }
 
     /** True when this read is the retired-command record: nothing was read, on purpose. */

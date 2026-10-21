@@ -10,6 +10,10 @@ package com.securityexpert.nexus.ui2.persistence.device;
  * the hostname as reported) are not collected for a firewall any more: they are UNKNOWN with {@link #REASON}, never a
  * stale value presented as current, never 0. Direct-evidence identity that rested on the serial is NOT_EVALUABLE.</p>
  *
+ * <p>Amended the same day ({@link PanTypeVersion}, PO: type=version for all PAN-OS versions): serial, model and PAN-OS
+ * version are read again, from the documented type=version request. Content versions, uptime, platform family and the
+ * hostname as reported stay not collected, because type=version does not return them.</p>
+ *
  * <p>One place for the literal, the gate id, the read token and the reason, so worker and service say the same.</p>
  */
 public final class PanSystemInfoRetirement {
@@ -28,6 +32,12 @@ public final class PanSystemInfoRetirement {
     /** The identity check's reason when the serial was the only direct evidence. */
     public static final String IDENTITY_NOT_EVALUABLE =
             "identity NOT_EVALUABLE: the firewall serial came only from show system info, retired by PO 2026-10-21";
+    /**
+     * Since the same day's {@link PanTypeVersion} decision the serial comes from type=version again. The identity check is
+     * NOT_EVALUABLE only when that read returned no usable serial (an error envelope, a non-XML answer, a missing field).
+     */
+    public static final String IDENTITY_NOT_EVALUABLE_NO_TYPE_VERSION_SERIAL =
+            "identity NOT_EVALUABLE: type=version returned no usable serial";
 
     private PanSystemInfoRetirement() {
     }
