@@ -11,7 +11,8 @@ import java.util.stream.Collectors;
  * exactly {@code enabled} AND the run's cluster ref is listed in {@value #CLUSTERS} (comma-separated cluster refs;
  * {@code *} = every cluster; empty or unset = none). Read once at worker start.
  *
- * @param shellPause the pause between commands of a run on the shell path
+ * @param shellPause the pause between commands of a run on the shell path ({@value #PAUSE}, 0..10000 ms, default
+ *     1000); it never changes the exec path's pause ({@code UI2_FAILOVER_COMMAND_PAUSE_SECONDS}, review P1-6)
  */
 public record CpFailoverShellMode(boolean oneShell, Set<String> clusters, Duration shellPause) {
     public static final String SWITCH = "NEXUS_CP_FAILOVER_ONE_SHELL";
@@ -21,7 +22,8 @@ public record CpFailoverShellMode(boolean oneShell, Set<String> clusters, Durati
     /** Design default pause between checks on the one shell. */
     public static final Duration SHELL_DEFAULT_PAUSE = Duration.ofMillis(1000);
     public static final CpFailoverShellMode OFF = new CpFailoverShellMode(false, Set.of(), SHELL_DEFAULT_PAUSE);
-    static final long MAX_PAUSE_MS = 60_000;
+    /** Review P2-3: a pass with the longest pause stays far inside the gateway's idle and session windows. */
+    static final long MAX_PAUSE_MS = 10_000;
 
     public CpFailoverShellMode {
         clusters = clusters == null ? Set.of() : Set.copyOf(clusters);
@@ -49,17 +51,8 @@ public record CpFailoverShellMode(boolean oneShell, Set<String> clusters, Durati
         return oneShell && (clusters.contains(ALL) || clusterRef != null && clusters.contains(clusterRef));
     }
 
-    /**
-     * The exec path's pause: {@value #PAUSE} when it is a whole number of milliseconds in 0..60000, otherwise the
-     * existing {@code legacyPause} ({@code UI2_FAILOVER_COMMAND_PAUSE_SECONDS}), so the exec path is unchanged unless
-     * the operator sets it.
-     */
-    public static Duration execPause(String pauseMs, Duration legacyPause) {
-        return pause(pauseMs, legacyPause);
-    }
-
     static Duration pause(String pauseMs, Duration fallback) {
-        if (pauseMs == null || !pauseMs.strip().matches("[0-9]{1,5}")) return fallback;
+        if (pauseMs == null || !pauseMs.strip().matches("[0-9]{1,6}")) return fallback;
         long millis = Long.parseLong(pauseMs.strip());
         return millis > MAX_PAUSE_MS ? fallback : Duration.ofMillis(millis);
     }

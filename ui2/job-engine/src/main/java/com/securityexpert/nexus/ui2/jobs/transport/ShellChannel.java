@@ -23,6 +23,13 @@ public interface ShellChannel extends AutoCloseable {
      */
     int read(byte[] buffer, Duration wait) throws IOException;
 
+    /**
+     * Sends Ctrl-C (one 0x03 byte, the terminal interrupt character) to stop the foreground command before the caller
+     * gives up on it. A terminal signal, not a device command. Default: nothing.
+     */
+    default void interrupt() throws IOException {
+    }
+
     /** Closes the channel; the device's shell ends. Idempotent, never throws. */
     @Override
     void close();

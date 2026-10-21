@@ -17,6 +17,10 @@ final class ShellTransport implements DeviceTransport {
     final Map<String, List<ScriptedShell>> shells = new LinkedHashMap<>();
     String hangOn, desyncOn;
     String hangMember = "192.0.2.11";
+    /** Further hang condition (session id, inner command), e.g. only after the DOWN write. */
+    java.util.function.BiPredicate<String, String> hangIf = (session, inner) -> false;
+    boolean openFails;
+    final Map<String, Integer> openAttempts = new LinkedHashMap<>();
 
     ShellTransport(DeviceTransport base, AtomicLong clock) {
         this.base = base;
@@ -33,9 +37,12 @@ final class ShellTransport implements DeviceTransport {
     }
 
     @Override public ShellChannel openShell(TransportSession session, Duration timeout) {
+        openAttempts.merge(session.sessionId(), 1, Integer::sum);
+        if (openFails) throw new IllegalStateException("SHELL_OPEN_FAILED");
         boolean[] desynced = {false};
         var shell = new ScriptedShell(clock, (inner, begin, end) -> {
             if (session.sessionId().equals(hangMember) && inner.endsWith(String.valueOf(hangOn))) return begin + "\r\n";
+            if (hangIf.test(session.sessionId(), inner)) return begin + "\r\n";
             if (session.sessionId().equals(hangMember) && inner.endsWith(String.valueOf(desyncOn)) && !desynced[0]) {
                 desynced[0] = true;
                 return end + "0__\r\n";

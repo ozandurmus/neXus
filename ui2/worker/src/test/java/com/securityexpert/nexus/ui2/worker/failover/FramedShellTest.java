@@ -40,7 +40,8 @@ class FramedShellTest {
         assertEquals(java.util.List.of("cphaprob stat"), scripted.inner);
         assertFalse(shell.broken());
         assertTrue(scripted.lines.get(0).matches(
-                "echo __NX_[0-9a-f]{32}_BEGIN__; cphaprob stat; echo __NX_[0-9a-f]{32}_END_\\$\\?__"));
+                "echo __NX_[0-9a-f]{32}_BEGIN__; \\( cphaprob stat \\) 2>/dev/null; echo __NX_[0-9a-f]{32}_END_\\$\\?__"),
+                scripted.lines.get(0));
     }
 
     @Test
@@ -90,6 +91,7 @@ class FramedShellTest {
         assertTrue(clock.get() < Duration.ofSeconds(6).toNanos());
         assertTrue(shell.broken());
         assertEquals(1, scripted.closes);
+        assertEquals(1, scripted.interrupts, "Ctrl-C before the close (review P2-1)");
     }
 
     @Test
@@ -151,8 +153,14 @@ class FramedShellTest {
         assertTrue(scripted.lines.isEmpty());
         assertFalse(shell.broken());
         scripted.closed = true;
-        assertEquals("SHELL_SEND_FAILED", ((ExecResult.ChannelFailed) shell.run("cphaprob stat", TIMEOUT, BOUND)).reason());
+        assertEquals("SHELL_CLOSED", ((ExecResult.ChannelFailed) shell.run("cphaprob stat", TIMEOUT, BOUND)).reason());
         assertTrue(shell.broken());
+        // Closed after the shell was ready: the send fails.
+        var later = answering("ok\n", 0);
+        var ready = shell(later);
+        ready.run("fw stat", TIMEOUT, BOUND);
+        later.closed = true;
+        assertEquals("SHELL_SEND_FAILED", ((ExecResult.ChannelFailed) ready.run("fw stat", TIMEOUT, BOUND)).reason());
     }
 
     @Test
@@ -167,5 +175,84 @@ class FramedShellTest {
         assertThrows(IllegalStateException.class, () -> shell.run("cphaprob stat", TIMEOUT, BOUND));
         assertTrue(shell.broken());
         assertEquals(1, refusing.closes);
+    }
+
+    // ---- Review response (ARGON_REVIEW_2026_10_22_CP_ONE_SHELL.md) ----
+
+    @Test
+    void carriageReturnAndBackspaceOverwriteAsATerminalShows() {
+        assertEquals("table-row", FramedShell.clean("spinner\rtable-row\r"));
+        assertEquals("XYcdef", FramedShell.clean("abcdef\rXY"));
+        assertEquals("XY", FramedShell.clean("abcdef\rXY\u001B[K"));
+        assertEquals("new", FramedShell.clean("old text\u001B[2Knew"));
+        assertEquals("abd", FramedShell.clean("abc\bd"));
+        assertEquals("a\tb", FramedShell.clean("a\tb\u0007\r"));
+        assertEquals("__NX_x_BEGIN__", FramedShell.clean("[Expert@FW-TEST-01:0]# \r\u001B[K__NX_x_BEGIN__\r"));
+    }
+
+    @Test
+    void overwrittenPromptAndUnNewlinedPromptBeforeBeginStillFrame() {
+        for (String before : java.util.List.of("prompt-redraw-text-longer-than-nothing\r\u001B[K", ScriptedShell.PROMPT)) {
+            var scripted = new ScriptedShell(clock, (inner, begin, end) -> before + begin + "\r\nok\r\n" + end + "0__\r\n");
+            var completed = assertInstanceOf(ExecResult.Completed.class, shell(scripted).run("fw stat", TIMEOUT, BOUND), before);
+            assertEquals("ok\n", completed.output());
+        }
+        assertTrue(FramedShell.isBegin("[Expert@FW-TEST-01:0]# __NX_x_BEGIN__", "__NX_x_BEGIN__"));
+        assertFalse(FramedShell.isBegin("# echo __NX_x_BEGIN__", "__NX_x_BEGIN__"), "a cut-off echo is not BEGIN");
+        assertFalse(FramedShell.isBegin("echo __NX_x_BEGIN__; ( fw stat ) 2>/dev/null; echo __NX_x_END_$?__", "__NX_x_BEGIN__"));
+    }
+
+    @Test
+    void bannerAndFirstPromptAreDrainedBeforeTheFirstCommand() {
+        var scripted = answering("ok\n", 0);
+        var shell = shell(scripted);
+        shell.run("fw stat", TIMEOUT, BOUND);
+        assertTrue(clock.get() >= FramedShell.READY_QUIET.toNanos(), "waits for quiet after the banner and prompt");
+        long afterFirst = clock.get();
+        shell.run("fw stat", TIMEOUT, BOUND);
+        assertEquals(afterFirst, clock.get(), "only the first command waits for the shell to be ready");
+        var silent = new ScriptedShell(clock, (inner, begin, end) -> ScriptedShell.framed(begin, end, "ok\n", 0)) {
+            { while (read(new byte[8192], Duration.ZERO) > 0) { } }
+        };
+        long start = clock.get();
+        assertInstanceOf(ExecResult.Completed.class, shell(silent).run("fw stat", TIMEOUT, BOUND));
+        assertTrue(clock.get() - start >= FramedShell.READY_MAX.toNanos(), "a silent shell is tried after READY_MAX");
+    }
+
+    @Test
+    void stderrIsDroppedExceptForTheReadThatHadAPtyOnExec() {
+        var scripted = answering("ok\n", 0);
+        var shell = shell(scripted);
+        shell.run("cphaprob stat", false, TIMEOUT, BOUND);
+        shell.run("cphaprob -a if", true, TIMEOUT, BOUND);
+        assertEquals(java.util.List.of("2>/dev/null", "2>&1"), scripted.stderrRules);
+        assertEquals(java.util.List.of("cphaprob stat", "cphaprob -a if"), scripted.inner);
+    }
+
+    @Test
+    void interruptedReadRestoresTheInterruptFlag() {
+        var interrupting = new ScriptedShell(clock, (inner, begin, end) -> null) {
+            boolean sentOnce;
+            @Override public void sendLine(String line) throws java.io.IOException { super.sendLine(line); sentOnce = true; }
+            @Override public int read(byte[] buffer, Duration wait) {
+                if (sentOnce) throw new java.io.UncheckedIOException(new java.io.InterruptedIOException("synthetic"));
+                return super.read(buffer, wait);
+            }
+        };
+        var shell = new FramedShell(new InterruptOnRead(interrupting), new SecureRandom(), clock::get);
+        var failed = assertInstanceOf(ExecResult.ChannelFailed.class, shell.run("fw stat", TIMEOUT, BOUND));
+        assertEquals("INTERRUPTED", failed.reason());
+        assertTrue(Thread.interrupted(), "interrupt flag restored (and cleared here)");
+        assertTrue(shell.broken());
+    }
+
+    /** Turns the scripted shell's unchecked marker into the InterruptedIOException a real channel throws. */
+    private record InterruptOnRead(ScriptedShell delegate) implements com.securityexpert.nexus.ui2.jobs.transport.ShellChannel {
+        @Override public void sendLine(String line) throws java.io.IOException { delegate.sendLine(line); }
+        @Override public int read(byte[] buffer, Duration wait) throws java.io.IOException {
+            try { return delegate.read(buffer, wait); }
+            catch (java.io.UncheckedIOException wrapped) { throw wrapped.getCause(); }
+        }
+        @Override public void close() { delegate.close(); }
     }
 }

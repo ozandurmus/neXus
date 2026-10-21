@@ -475,6 +475,13 @@ public final class SshExecTransport implements DeviceTransport {
         }
 
         @Override
+        public void interrupt() throws IOException {
+            if (!channel.isConnected()) return;
+            out.write(3);
+            out.flush();
+        }
+
+        @Override
         public int read(byte[] buffer, Duration wait) throws IOException {
             long deadline = System.nanoTime() + Math.max(0, wait.toNanos());
             while (true) {
