@@ -208,6 +208,11 @@ class JooqCpFailoverRepositoryTest {
             statements.add(sql);
             bindings.add(query.bindings());
             if (sql.startsWith("update failover_run r set state='STOPPED'")) return new MockResult[] {new MockResult(orphansClosed)};
+            // V170: no resumed return is in flight on this unit.
+            if (sql.startsWith("select 1 from failover_resume")) {
+                var records = DSL.using(SQLDialect.POSTGRES);
+                return new MockResult[] {new MockResult(0, records.newResult(DSL.field("one", Integer.class)))};
+            }
             if (sql.startsWith("select run_id from failover_run")) {
                 var records = DSL.using(SQLDialect.POSTGRES);
                 var runId = DSL.field("run_id", String.class);

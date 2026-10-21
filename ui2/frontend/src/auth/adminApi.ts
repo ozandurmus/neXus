@@ -1814,6 +1814,16 @@ export interface CpFailoverRun {
   runId: string; approvalId: string; scheduledFor: string; state: CpFailoverState; step: string;
   outcome: string | null; failedCheck: string | null; message: string | null; steps: string[]; kind?: "FAILOVER" | "READINESS";
   mutationPossible?: boolean | null; incidentRef?: string | null; lastConfirmedRoles?: Record<string, string>;
+  /** Check Point FAILOVER runs only: "Resume return step" (CP_FAILOVER_MEMBER_RECOVERY_CONTRACT.md §6). */
+  resume?: CpFailoverResume;
+}
+export type CpFailoverResumeState = "PENDING_APPROVAL" | "QUEUED" | "READING_STATE" | "RETURNING" | "POST_RETURN" | "DONE" | "STOPPED";
+/** The server's resume verdict for a stopped run and, once requested, the resume's own state. Opaque member refs only. */
+export interface CpFailoverResume {
+  eligible: boolean; refusal: string | null; canResume: boolean; businessHoursInside: boolean; businessHours: string;
+  resumeId?: string; state?: CpFailoverResumeState; step?: string; outcome?: string | null; failedCheck?: string | null;
+  message?: string | null; policy?: "ADMIN_SINGLE" | "OPERATION_ADMIN_TWO_PERSON"; requestedAt?: string; expiresAt?: string;
+  businessHoursAcknowledged?: boolean; approved?: boolean; formerActiveRef?: string; peerRef?: string; canApprove?: boolean;
 }
 /** Workers write "post_return" for the checks after the return step; "final" is the older name, still accepted. */
 export interface CpFailoverCheck extends ReadinessCheck { phase: "pre" | "post" | "post_return" | "final"; device_id: string; hostname: string | null; cluster_member_ref: string; checkNo: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15; status: CpFailoverCheckStatus; derived: string; observedAt: string }
@@ -1837,6 +1847,14 @@ export const startCpFailover = (unit: CpFailoverUnit, binding: { requestId: stri
 export const runCpFailoverReadiness = (unit: Pick<CpFailoverUnit, "clusterId" | "unitId" | "vendor">) =>
   call<{ runId: string }>(`${failoverPath(unit.vendor)}/units/${encodeURIComponent(unit.unitId)}/readiness`, "POST",
     { clusterId: unit.clusterId, unitId: unit.unitId });
+/** Request "Resume return step" for a stopped Check Point run; the actor is the session, never the body. */
+export const resumeCpFailoverReturn = (runId: string, expectedIncidentId: string, reason: string, businessHoursAck: boolean) =>
+  call<{ runId: string; resumeId: string; state: "QUEUED" | "PENDING_APPROVAL" }>(`/api/v2/cp-failover/runs/${encodeURIComponent(runId)}/resume-return`,
+    "POST", { expectedIncidentId, reason, businessHoursAck });
+/** A second, distinct administrator approves a pending two-person resume. */
+export const approveCpFailoverResume = (runId: string, resumeId: string, businessHoursAck: boolean) =>
+  call<{ runId: string; resumeId: string; state: "QUEUED" }>(`/api/v2/cp-failover/runs/${encodeURIComponent(runId)}/resume-return/approve`,
+    "POST", { resumeId, businessHoursAck });
 /** One open failover incident, or a stopped run whose unresolved send blocks every failover in the estate. */
 export interface FailoverIncident {
   incidentRef: string; clusterId: string; unitId: string; cluster_member_ref: string; maskedName?: string;

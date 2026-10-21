@@ -479,6 +479,73 @@ public final class CpFailoverService {
         return code;
     }
 
+    // ---- Resume the return step (docs/design/CP_FAILOVER_MEMBER_RECOVERY_CONTRACT.md, RATIFIED 2026-10-20) ----
+
+    /** security_admin or operation_admin (root administrator included), never a replay viewer (contract §5.1). */
+    public boolean mayResume(String actor) { return mayApprove(actor); }
+    /** The manual-admission role the resume's job is recorded under (V168 window_bypass_role). */
+    private String resumeRole(String actor) {
+        if (replayViewer(actor)) throw new Refusal("WRONG_ROLE");
+        if (allowed(actor,RoleToken.SECURITY_ADMIN)) return com.securityexpert.nexus.ui2.platform.ManualAdmission.SECURITY_ADMIN;
+        if (allowed(actor,RoleToken.OPERATION_ADMIN)) return com.securityexpert.nexus.ui2.platform.ManualAdmission.OPERATION_ADMIN;
+        throw new Refusal("WRONG_ROLE");
+    }
+    /** Contract §6.1: the server's §2.1 verdict for a stopped run (rows 2–10); null when a resume may be requested. */
+    public String resumeEligibility(String runId, String actor) {
+        requireReader(actor);
+        if (!mutationSwitch.enabled()) return FailoverMutationSwitch.DISABLED;
+        return store.resumeEligibility(runId);
+    }
+    public Optional<String> resumeFormerActive(String runId, String actor) {
+        requireReader(actor);
+        return store.resumeFormerActive(runId);
+    }
+    public Optional<JooqCpFailoverRepository.Resume> resumeOf(String runId, String actor) {
+        requireReader(actor);
+        return store.resumeForRun(runId);
+    }
+    /** Whether the business-hours acknowledgement is needed now (PO decision 2026-10-20; shown 08:00–20:00 only). */
+    public boolean insideBusinessHours() { return windows.insideBusinessHours(); }
+    public String businessHoursLabel() { return windows.businessHours().label(); }
+
+    /**
+     * Contract §2.1 / §5: request the resume of a stopped run's return step. The actor is the session; the reason is
+     * mandatory; inside business hours the request carries its own acknowledgement. A security_admin's request is
+     * admitted at once; an operation_admin's waits for a second, distinct administrator ({@code PENDING_APPROVAL}).
+     */
+    public JooqCpFailoverRepository.Decision resumeReturn(String runId, String expectedIncidentId, String reason,
+            boolean businessHoursAck, String actor) {
+        String role=resumeRole(actor);
+        String policy=com.securityexpert.nexus.ui2.platform.ManualAdmission.SECURITY_ADMIN.equals(role)
+            ? JooqCpFailoverRepository.ADMIN_SINGLE : JooqCpFailoverRepository.TWO_PERSON;
+        if (!mutationSwitch.enabled()) throw new Refusal(FailoverMutationSwitch.DISABLED);
+        String text=reason==null ? "" : reason.strip();
+        if (text.isEmpty() || text.length()>JooqCpFailoverRepository.RESUME_REASON_MAX) throw new Refusal("REASON_REQUIRED");
+        if (runId==null || runId.isBlank()) throw new Refusal("RESUME_RUN_NOT_ELIGIBLE");
+        if (expectedIncidentId==null || expectedIncidentId.isBlank()) throw new Refusal("INCIDENT_MISMATCH");
+        String refusal=store.resumeEligibility(runId);
+        if (refusal!=null) throw new Refusal(refusal);
+        if (!expectedIncidentId.equals(runId)) throw new Refusal("INCIDENT_MISMATCH");
+        // The single-use resume is not spent on a member whose host key is not trusted (the worker refuses it anyway).
+        var run=store.detail(runId).map(JooqCpFailoverRepository.Detail::run).orElseThrow(() -> new Refusal("RESUME_RUN_NOT_ELIGIBLE"));
+        for (DeviceSummaryRecord member:devices.findMembersByClusterRef(run.clusterRef())) requireTrusted(member);
+        var decision=store.requestResume(runId,actor,role,policy,text,expectedIncidentId,businessHoursAck);
+        if (!JooqCpFailoverRepository.RESUME_ADMITTED.equals(decision.code())
+                && !JooqCpFailoverRepository.RESUME_PENDING.equals(decision.code())) throw new Refusal(decision.code());
+        return decision;
+    }
+
+    /** Contract §5.1: the second administrator's approval; never the initiator (SELF_APPROVAL). */
+    public JooqCpFailoverRepository.Decision approveResume(String runId, String resumeId, boolean businessHoursAck,
+            String actor) {
+        String role=resumeRole(actor);
+        if (!mutationSwitch.enabled()) throw new Refusal(FailoverMutationSwitch.DISABLED);
+        if (runId==null || resumeId==null || resumeId.isBlank()) throw new Refusal("RESUME_NOT_FOUND");
+        var decision=store.approveResume(runId,resumeId,actor,role,businessHoursAck);
+        if (!JooqCpFailoverRepository.RESUME_ADMITTED.equals(decision.code())) throw new Refusal(decision.code());
+        return decision;
+    }
+
     @org.springframework.scheduling.annotation.Scheduled(cron = JobWindowPolicy.CRON, zone = JobWindowPolicy.ZONE)
     public void startDue() {
         if (!mutationSwitch.enabled()) return;

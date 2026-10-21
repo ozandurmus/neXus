@@ -269,6 +269,8 @@ public final class CpFailoverController {
                 view.put("incidentRef",incident==null ? null : incident.get("execution_id",String.class));
                 return null;
             });
+            if ("check_point".equals(d.run().vendor()) && "FAILOVER".equals(d.run().kind()))
+                view.put("resume",resumeView(d.run(),request));
             view.put("sessionContinuity","NOT_EVALUATED");
             view.put("lastConfirmedRoles",d.checks().stream().filter(c -> c.checkNo()==1 && "PASS".equals(c.status()))
                 .collect(java.util.stream.Collectors.toMap(JooqCpFailoverRepository.Check::memberRef,c -> {
@@ -295,6 +297,80 @@ public final class CpFailoverController {
             }).toList());
             return view;
         }).orElseThrow(() -> new CpFailoverService.Refusal("RUN_NOT_FOUND")));
+    }
+    /**
+     * Contract §6.1: the resume block of a Check Point FAILOVER run. Every reader sees the state and the server's
+     * eligibility verdict; only security_admin/operation_admin outside the masked view get {@code canResume} and
+     * {@code canApprove}. Opaque member references only.
+     */
+    private Map<String,Object> resumeView(JooqCpFailoverRepository.Run run, HttpServletRequest request) {
+        String actor=actor(request);
+        boolean may=!PrivacyMaskingResponseBodyAdvice.isReplayViewer(request) && service.mayResume(actor);
+        String refusal="STOPPED".equals(run.state()) ? service.resumeEligibility(run.id(),actor) : "RESUME_RUN_NOT_ELIGIBLE";
+        Map<String,Object> view=new LinkedHashMap<>();
+        view.put("eligible",refusal==null);
+        view.put("refusal",refusal);
+        view.put("canResume",may && refusal==null);
+        view.put("businessHoursInside",service.insideBusinessHours());
+        view.put("businessHours",service.businessHoursLabel());
+        if (refusal==null) service.resumeFormerActive(run.id(),actor).ifPresent(member -> view.put("formerActiveRef",member));
+        service.resumeOf(run.id(),actor).ifPresent(s -> {
+            view.put("resumeId",s.id()); view.put("state",s.state()); view.put("step",s.step());
+            view.put("outcome",s.outcome()); view.put("failedCheck",s.failedCheck()); view.put("message",s.message());
+            view.put("policy",s.policy()); view.put("requestedAt",s.requestedAt()); view.put("expiresAt",s.expiresAt());
+            view.put("businessHoursAcknowledged",s.businessHoursAcknowledged());
+            view.put("approved",s.approvedBy()!=null);
+            view.put("formerActiveRef",s.formerActiveRef()); view.put("peerRef",s.peerRef());
+            view.put("canApprove",may && JooqCpFailoverRepository.TWO_PERSON.equals(s.policy())
+                && JooqCpFailoverRepository.RESUME_PENDING.equals(s.state()) && !s.initiatedBy().equals(actor)
+                && s.expiresAt().isAfter(Instant.now()));
+        });
+        return view;
+    }
+    private static final java.util.Set<String> RESUME_FIELDS = java.util.Set.of("expectedIncidentId","reason","businessHoursAck");
+    private static final java.util.Set<String> RESUME_APPROVE_FIELDS = java.util.Set.of("resumeId","businessHoursAck");
+    private static String text(Map<String,Object> body, String field) {
+        Object value=body==null ? null : body.get(field);
+        if (value!=null && !(value instanceof String)) throw new IllegalArgumentException(field+" must be text");
+        return (String)value;
+    }
+    private static boolean flag(Map<String,Object> body, String field) {
+        Object value=body==null ? null : body.get(field);
+        if (value!=null && !(value instanceof Boolean)) throw new IllegalArgumentException(field+" must be a boolean");
+        return Boolean.TRUE.equals(value);
+    }
+    /**
+     * Contract §6.4: request "Resume return step" for a stopped Check Point run (route action
+     * cp_failover_resume_return). The actor is the session; any field beyond the expected incident, the reason and the
+     * business-hours acknowledgement (for example an actor or approver) is refused, not ignored.
+     */
+    @PostMapping("/runs/{runId}/resume-return")
+    public ResponseEntity<?> resumeReturn(@PathVariable String runId,
+            @RequestBody(required = false) Map<String,Object> body, HttpServletRequest request) {
+        return result(() -> {
+            if (body!=null && !RESUME_FIELDS.containsAll(body.keySet())) throw new IllegalArgumentException("unexpected field");
+            if (!"check_point".equals(vendor(request))) throw new CpFailoverService.Refusal("RESUME_RUN_NOT_ELIGIBLE");
+            var decision=service.resumeReturn(runId,text(body,"expectedIncidentId"),text(body,"reason"),
+                flag(body,"businessHoursAck"),actor(request));
+            Map<String,Object> view=new LinkedHashMap<>();
+            view.put("runId",runId); view.put("resumeId",decision.runId());
+            view.put("state",JooqCpFailoverRepository.RESUME_ADMITTED.equals(decision.code()) ? "QUEUED" : decision.code());
+            return view;
+        });
+    }
+    /**
+     * Contract §5.1: the second administrator approves a pending two-person resume. The resume is named in the body
+     * (the gate chain resolves one wildcard path segment per route).
+     */
+    @PostMapping("/runs/{runId}/resume-return/approve")
+    public ResponseEntity<?> approveResume(@PathVariable String runId,
+            @RequestBody(required = false) Map<String,Object> body, HttpServletRequest request) {
+        return result(() -> {
+            if (body!=null && !RESUME_APPROVE_FIELDS.containsAll(body.keySet())) throw new IllegalArgumentException("unexpected field");
+            if (!"check_point".equals(vendor(request))) throw new CpFailoverService.Refusal("RESUME_RUN_NOT_ELIGIBLE");
+            var decision=service.approveResume(runId,text(body,"resumeId"),flag(body,"businessHoursAck"),actor(request));
+            return Map.of("runId",runId,"resumeId",decision.runId(),"state","QUEUED");
+        });
     }
     /** Shown to every reader who cannot release (operation_admin, operator, viewer, aiview). */
     public static final String INCIDENT_ROLE_NOTE = "Only a security_admin can release a failover incident.";

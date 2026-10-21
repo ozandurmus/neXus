@@ -59,6 +59,11 @@ public final class CpFailoverJobExecutor {
     private boolean readiness;
     private Stop readinessFailure;
     private ReadinessShapeLog shapes;
+    /** Set while this job is the resumed return step of a stopped run (CP_FAILOVER_MEMBER_RECOVERY_CONTRACT.md). */
+    private JooqCpFailoverRepository.Resume resume;
+    private int maxPolls=MAX_POLLS;
+    /** Contract §4.1 / gate Q2b: a resumed return polls at most 20 times, every 3 s, after its UP. */
+    static final int RESUME_MAX_POLLS=20;
 
     private static final class Member {
         private final String id;
@@ -71,9 +76,20 @@ public final class CpFailoverJobExecutor {
         String id() { return id; }
         TransportSession session() { return session; }
     }
+    /**
+     * One member's baseline. A resumed return compares with the stopped run's stored pre rows ({@code stored}): the
+     * measured rate, route facts, monitored-interface and traffic-selection counts and policy install times. Policy
+     * names and interface names never left the original run's memory, so they are null there.
+     */
     private record Measure(CpFailoverChecks.State state, Set<String> table,
             CpFailoverChecks.Interfaces interfaces, int arp, double traffic,
-            String policyName, String cpstatPolicyName, CpFailoverChecks.Routing routing) {}
+            String policyName, String cpstatPolicyName, CpFailoverChecks.Routing routing,
+            boolean stored, int upCount, int selectedCount, List<String> fwInstalled, List<String> cpstatInstalled) {
+        Measure(CpFailoverChecks.State state, Set<String> table, CpFailoverChecks.Interfaces interfaces, int arp,
+                double traffic, String policyName, String cpstatPolicyName, CpFailoverChecks.Routing routing) {
+            this(state,table,interfaces,arp,traffic,policyName,cpstatPolicyName,routing,false,-1,-1,List.of(),List.of());
+        }
+    }
     private record Pair(Measure a, Measure b) {
         Measure forMember(Member member,Member first) { return member==first?a:b; }
     }
@@ -116,8 +132,11 @@ public final class CpFailoverJobExecutor {
     }
 
     public void execute(String jobId,long epoch) {
+        this.resume=null; this.maxPolls=MAX_POLLS;
         var run=store.runByJob(jobId);
         if(run.isEmpty()) {
+            var resumed=store.resumeByJob(jobId);
+            if(resumed.isPresent()) { resume(jobId,epoch,resumed.get()); return; }
             leases.transitionState(jobId,epoch,JobState.CLAIMED,JobState.FAILED,"system:cp-failover-worker",
                 "cp_failover_missing_run","RUN_NOT_FOUND"); return;
         }
@@ -164,7 +183,7 @@ public final class CpFailoverJobExecutor {
             state("SWITCHED","SWITCHED",null,null,null);
             state("POSTCHECK","POSTCHECK",null,null,null);
             checks("post",first,second,before,formerActive);
-            if(polls>=MAX_POLLS) throw new Stop("POLL_BUDGET_EXHAUSTED",1);
+            if(polls>=maxPolls) throw new Stop("POLL_BUDGET_EXHAUSTED",1);
             state("RETURNING","RETURNING",null,null,null);
             command(formerActive,UP);
             if(!waitFor(first,second,formerStandby,"ACTIVE",formerActive,"STANDBY"))
@@ -190,18 +209,133 @@ public final class CpFailoverJobExecutor {
             if(second!=null) ssh.disconnect(second.session());
         }
     }
+    /**
+     * Resume the return step of a stopped run (CP_FAILOVER_MEMBER_RECOVERY_CONTRACT.md, RATIFIED 2026-10-20): admission
+     * (§2.1, rechecked), one new trusted session per member, one fresh {@code cphaprob stat} per member (§2.2), the
+     * run's own {@code clusterXL_admin up} once to the member this run downed (§3), the return confirmation in at most
+     * 20 polls every 3 s (§4.1) and the post-return battery under the run's id against its pre baseline (§4.2). Any
+     * refusal before the write sends nothing; nothing is ever retried; the incident is never released here.
+     */
+    private void resume(String jobId,long epoch,JooqCpFailoverRepository.Resume r) {
+        this.resume=r; this.maxPolls=RESUME_MAX_POLLS;
+        this.jobId=jobId; this.runId=r.runId(); this.vsId=null; this.readiness=false; this.readinessFailure=null;
+        this.shapes=new ReadinessShapeLog("check_point");
+        this.epoch=epoch; this.commandIndex=0; this.polls=0; this.wrote=false; this.dispatch=null;
+        if(!leases.transitionState(jobId,epoch,JobState.CLAIMED,JobState.EXECUTING,
+                "system:cp-failover-worker","cp_failover_resume_start")) return;
+        Member first=null,second=null;
+        try {
+            if (!mutationSwitch.enabled()) throw new Stop(FailoverMutationSwitch.DISABLED,0);
+            List<DeviceSummaryRecord> members=devices.findMembersByClusterRef(r.clusterRef());
+            if(members.size()!=2 || members.get(0).deviceId().equals(members.get(1).deviceId())
+                    || members.stream().anyMatch(m -> !"check_point".equals(m.vendorHint()))
+                    || !members.stream().map(DeviceSummaryRecord::deviceId).collect(java.util.stream.Collectors.toSet())
+                        .equals(Set.copyOf(r.targetMembers())))
+                throw new Stop("MEMBERSHIP_CHANGED",0);
+            requireResumeAdmission(true);
+            if(!attempts.findByJobAndStep(jobId,0).isEmpty()) throw new Stop("PRIOR_ATTEMPT_NOT_REPLAYED",0);
+            for(String command:List.of(STAT,TABLE,IF,ARP,TRAFFIC,SYNC,POLICY,CPSTAT_POLICY,PNOTES,BONDS,FAILOVER,ROUTING)) gate(command);
+            gate(UP);
+            // The baseline is the run's own stored pre rows; without it nothing is sent.
+            Pair before=storedBaseline(members.get(0).deviceId(),members.get(1).deviceId());
+            first=connect(members.get(0)); second=connect(members.get(1));
+            if(first.session().presentedIdentity().equals(second.session().presentedIdentity()))
+                throw new Stop("OBSERVERS_NOT_DISTINCT",0);
+            Member formerActive=first.id().equals(r.formerActiveRef())?first:second.id().equals(r.formerActiveRef())?second:null;
+            if(formerActive==null) throw new Stop("MEMBERSHIP_CHANGED",0);
+            Member peer=formerActive==first?second:first;
+            state("READING_STATE","READING_STATE",null,null,null);
+            freshState(readState(first),readState(second),first,formerActive);
+            state("RETURNING","RETURNING",null,null,null);
+            command(formerActive,UP);
+            if(!waitFor(first,second,peer,"ACTIVE",formerActive,"STANDBY")) throw new Stop("RETURN_TIMEOUT",1);
+            confirmDispatch();
+            state("POST_RETURN","POST_RETURN",null,null,null);
+            checks("post_return",first,second,before,formerActive);
+            state("DONE","DONE","SUCCEEDED",null,"RETURN_VERIFIED");
+        } catch (JooqCpFailoverRepository.NotSent notSent) {
+            stop("MUTATION_DISABLED_BEFORE_SEND",0);
+        } catch (Stop stopped) {
+            stop(stopped.code,stopped.check);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            stop("INTERRUPTED",0);
+        } catch (RuntimeException unexpected) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(unexpected);
+            stop(wrote?"OUTCOME_UNCERTAIN":"PRECHECK_UNAVAILABLE",0);
+        } finally {
+            if(first!=null) ssh.disconnect(first.session());
+            if(second!=null) ssh.disconnect(second.session());
+        }
+    }
+    private void requireResumeAdmission(boolean atStart) {
+        if (!mutationSwitch.enabled()) throw new Stop(FailoverMutationSwitch.DISABLED,0);
+        String decision=store.resumeAdmission(resume.id(),jobId,epoch,atStart);
+        if (!"ADMITTED".equals(decision)) throw new Stop(decision==null?"ADMISSION_UNAVAILABLE":decision,0);
+    }
+    /**
+     * Contract §2.2, before UP: the two fresh maps must be recognised classic-HA maps and reciprocal; the run's former
+     * standby ACTIVE and its former active DOWN on both observers; both members in Active Up recovery mode.
+     */
+    private static void freshState(CpFailoverChecks.State a,CpFailoverChecks.State b,Member first,Member formerActive) {
+        if(!"HA".equals(a.mode()) || !"HA".equals(b.mode()) || a.members().size()!=2 || b.members().size()!=2
+                || !"PASS".equals(CpFailoverChecks.reciprocal(a,b))) throw new Stop("RESUME_STATE_UNKNOWN",1,"UNKNOWN");
+        var downed=formerActive==first?a:b;
+        var peer=formerActive==first?b:a;
+        if(!"ACTIVE".equals(peer.localRole())) throw new Stop("RESUME_PEER_NOT_ACTIVE",1);
+        if(!"DOWN".equals(downed.localRole())) throw new Stop("RESUME_MEMBER_NOT_DOWN",1);
+        if(!CpFailoverChecks.ACTIVE_UP.equals(a.recoveryMode()) || !CpFailoverChecks.ACTIVE_UP.equals(b.recoveryMode()))
+            throw new Stop("RETURN_PREEMPTION_POSSIBLE",15);
+    }
+    /** The stopped run's pre baseline per member, from its stored check rows (contract §4.2); refuses when incomplete. */
+    private Pair storedBaseline(String firstId,String secondId) {
+        Map<String,Map<Integer,com.fasterxml.jackson.databind.JsonNode>> rows=new java.util.HashMap<>();
+        try {
+            for(var check:store.preBaseline(runId))
+                rows.computeIfAbsent(check.memberRef(),k -> new java.util.HashMap<>())
+                    .put(check.checkNo(),JSON.readTree(check.derived()));
+        } catch(JsonProcessingException invalid) { throw new Stop("RESUME_BASELINE_UNAVAILABLE",0); }
+        return new Pair(storedMeasure(rows.get(firstId)),storedMeasure(rows.get(secondId)));
+    }
+    private static Measure storedMeasure(Map<Integer,com.fasterxml.jackson.databind.JsonNode> rows) {
+        if(rows==null || !rows.keySet().containsAll(List.of(3,8,10,14))) throw new Stop("RESUME_BASELINE_UNAVAILABLE",0);
+        var traffic=rows.get(8); var routing=rows.get(14); var up=rows.get(3); var policy=rows.get(10);
+        if(!traffic.path("bytesPerSecond").isNumber() || traffic.path("bytesPerSecond").asDouble()<0
+                || !traffic.path("selectedCount").isInt() || !up.path("up").isInt()
+                || !routing.path("routeCount").isInt() || !routing.path("defaultRoute").isBoolean())
+            throw new Stop("RESUME_BASELINE_UNAVAILABLE",0);
+        return new Measure(null,Set.of(),null,-1,traffic.path("bytesPerSecond").asDouble(),null,null,
+            new CpFailoverChecks.Routing(routing.path("routeCount").asInt(),routing.path("defaultRoute").asBoolean()),
+            true,up.path("up").asInt(),traffic.path("selectedCount").asInt(),
+            installTimes(policy.path("fwStat")),installTimes(policy.path("cpstat")));
+    }
+    private static List<String> installTimes(com.fasterxml.jackson.databind.JsonNode parity) {
+        if(!parity.path("firstInstalledAt").isTextual() || !parity.path("secondInstalledAt").isTextual()) return List.of();
+        return java.util.stream.Stream.of(parity.path("firstInstalledAt").asText(),parity.path("secondInstalledAt").asText())
+            .sorted().toList();
+    }
+
     private void requireMutationAdmission(boolean possibleSend) {
+        if (resume!=null) { requireResumeAdmission(false); return; }
         if (!mutationSwitch.enabled()) throw new Stop(FailoverMutationSwitch.DISABLED,0);
         String decision=store.mutationAdmission(runId,requestCluster,requestVs,"check_point",requestMembers,possibleSend,jobId,epoch);
         if (!"ADMITTED".equals(decision)) throw new Stop(decision==null?"ADMISSION_UNAVAILABLE":decision,0);
     }
 
     private void state(String state,String step,String outcome,String check,String message) {
+        if (resume!=null) {
+            if (!store.resumeState(resume.id(),epoch,state,step,outcome,check,message)) throw new Stop("DISPATCH_OWNER_LOST",0);
+            return;
+        }
         if (readiness) store.state(runId,state,step,outcome,check,message);
         else if (!store.workerState(runId,epoch,state,step,outcome,check,message))
             throw new Stop("DISPATCH_OWNER_LOST",0);
     }
     private void stop(String code,int check) {
+        if (resume!=null) {
+            store.resumeState(resume.id(),epoch,"STOPPED","STOPPED",code,check==0?null:String.valueOf(check),code);
+            return;
+        }
         store.workerState(runId,epoch,"STOPPED","STOPPED",code,check==0?null:String.valueOf(check),code);
     }
     private void confirmDispatch() {
@@ -305,17 +439,22 @@ public final class CpFailoverJobExecutor {
         if (DOWN.equals(command) || UP.equals(command)) {
             if (!mutationSwitch.enabled()) throw new Stop(FailoverMutationSwitch.DISABLED,0);
             requireMutationAdmission(false);
-            dispatch=store.prepareDispatch(runId,epoch,commandIndex++,member.id(),g.gateId(),g.actionClass().id());
+            if (resume!=null && (!UP.equals(command) || !resume.formerActiveRef().equals(member.id())))
+                throw new Stop("RESUME_WRITE_NOT_BOUND",0);
+            dispatch=resume!=null
+                ?store.prepareResumeDispatch(resume.id(),epoch,commandIndex++,member.id(),g.gateId(),g.actionClass().id())
+                :store.prepareDispatch(runId,epoch,commandIndex++,member.id(),g.gateId(),g.actionClass().id());
             wrote=true;
             String literal=vsId==null?"bash -lc '"+command+"'":"bash -lc 'vsenv "+vsId+" && "+command+"'";
-            boolean replied=store.dispatch(dispatch,() -> {
+            java.util.function.Supplier<Boolean> send=() -> {
                 if (!mutationSwitch.enabled()) throw new JooqCpFailoverRepository.NotSent();
                 try {
                     ExecResult result=ssh.exec(member.session(),new ExecSpec(literal,false),Duration.ofSeconds(g.timeoutS()));
                     return result instanceof ExecResult.Completed c && c.exitStatus()==0
                         && c.output()!=null && c.output().length()<=262144 && !commandUnavailable(c.output());
                 } catch (RuntimeException uncertain) { return false; }
-            });
+            };
+            boolean replied=resume!=null?store.dispatchResume(dispatch,send):store.dispatch(dispatch,send);
             if (!replied) throw new Stop("OUTCOME_UNCERTAIN",0);
             return "";
         }
@@ -323,7 +462,7 @@ public final class CpFailoverJobExecutor {
         String attempt=attempts.insertPreContact(jobId,epoch,commandIndex++,g.gateId(),g.actionClass().id(),1);
         if(attempt==null) throw new Stop("PRE_CONTACT_RECORD_FAILED",0);
         if(!attempts.markBoundaryCrossed(attempt,epoch)) throw new Stop("PRE_CONTACT_UNCERTAIN",0);
-        store.command(runId,g.gateId());
+        if (resume!=null) store.resumeCommand(resume.id(),g.gateId()); else store.command(runId,g.gateId());
         // Measured 2026-09-30: on the fleet's gateways a plain exec of 'cphaprob stat' exits 0 with no output -- the
         // exec shell lacks the Check Point environment. Inventory already falls back to a login shell; every CP command
         // here (reads and clusterXL_admin alike) runs in one, as the vsenv-wrapped VS form always did.
@@ -428,7 +567,8 @@ public final class CpFailoverJobExecutor {
         }
         if(!states) checkFailed("CLUSTER_STATE_NOT_READY",1,stateStatus);
         if(before==null) recoveryMode(phase,first,second,a,b);
-        double[] rates=before==null?null:trafficWindow(phase,first,second,
+        boolean stored=before!=null && before.a().stored();
+        double[] rates=before==null || stored?null:trafficWindow(phase,first,second,
             before.a().interfaces(),before.b().interfaces(),before,oldActive);
         var ta=CpFailoverChecks.ipTable(command(first,TABLE));
         var tb=CpFailoverChecks.ipTable(command(second,TABLE));
@@ -448,11 +588,15 @@ public final class CpFailoverJobExecutor {
         record(phase,second,3,ib.healthy()?"PASS":ib.ccpPresent()?"FAIL":"UNKNOWN",json(Map.of("up",ib.names().size(),"required",ib.required())));
         if(!ia.healthy() || !ib.healthy()) checkFailed("INTERFACE_NOT_READY",3,
             !ia.ccpPresent() || !ib.ccpPresent() ? "UNKNOWN" : "FAIL");
-        if(before!=null && (!ia.trafficNames().equals(before.a().interfaces().trafficNames())
-                || !ib.trafficNames().equals(before.b().interfaces().trafficNames()))) {
+        // A resumed return has the baseline's monitored-interface counts, not its interface names (never stored).
+        if(before!=null && (stored
+                ? ia.names().size()!=before.a().upCount() || ib.names().size()!=before.b().upCount()
+                : !ia.trafficNames().equals(before.a().interfaces().trafficNames())
+                    || !ib.trafficNames().equals(before.b().interfaces().trafficNames()))) {
             for(Member member:List.of(first,second)) record(phase,member,8,"UNKNOWN","{\"reason\":\"TRAFFIC_SCOPE_CHANGED\"}");
             checkFailed("TRAFFIC_SCOPE_CHANGED",8,"UNKNOWN");
         }
+        if(stored) rates=trafficWindow(phase,first,second,ia,ib,before,oldActive);
         int arpA=CpFailoverChecks.arpCount(command(first,ARP));
         int arpB=CpFailoverChecks.arpCount(command(second,ARP));
         Member active=before==null?("ACTIVE".equals(a.localRole())?first:second):(oldActive==first?second:first);
@@ -477,9 +621,11 @@ public final class CpFailoverJobExecutor {
         var cpstatB=readiness?policyB:CpFailoverChecks.cpstatPolicy(command(second,CPSTAT_POLICY));
         var cpstatParity=CpFailoverChecks.policyParity(cpstatA,cpstatB,
             before==null?null:before.a().cpstatPolicyName(),before==null?null:before.b().cpstatPolicyName());
-        String policyStatus="FAIL".equals(parity.status()) || "FAIL".equals(cpstatParity.status())?"FAIL"
-            :"PASS".equals(parity.status()) && "PASS".equals(cpstatParity.status())?"PASS":"UNKNOWN";
+        String installed=stored?installContinuity(before.a(),policyA,policyB,cpstatA,cpstatB):"PASS";
+        String policyStatus="FAIL".equals(parity.status()) || "FAIL".equals(cpstatParity.status()) || "FAIL".equals(installed)?"FAIL"
+            :"PASS".equals(parity.status()) && "PASS".equals(cpstatParity.status()) && "PASS".equals(installed)?"PASS":"UNKNOWN";
         String policyEvidence=readiness?json(Map.of("fwStat",parity.derived()))
+            :stored?json(Map.of("fwStat",parity.derived(),"cpstat",cpstatParity.derived(),"installContinuity",installed))
             :json(Map.of("fwStat",parity.derived(),"cpstat",cpstatParity.derived()));
         record(phase,first,10,policyStatus,policyEvidence);
         record(phase,second,10,policyStatus,policyEvidence);
@@ -516,6 +662,20 @@ public final class CpFailoverJobExecutor {
                 switched?"DOWN":"STANDBY",first,second)) throw new Stop("UNEXPECTED_ROLES",1);
         return new Pair(new Measure(a,ta,ia,arpA,rates[0],policyA.name(),cpstatA.name(),routingA),
             new Measure(b,tb,ib,arpB,rates[1],policyB.name(),cpstatB.name(),routingB));
+    }
+    /**
+     * Policy continuity of a resumed return against the stopped run's baseline: the policy names never left that run's
+     * memory, but its stored rows carry both members' install times per source. The same install times now (as a set,
+     * per source) mean no policy was installed since; any other time is a change; missing evidence is UNKNOWN.
+     */
+    private static String installContinuity(Measure baseline,CpFailoverChecks.Policy fwA,CpFailoverChecks.Policy fwB,
+            CpFailoverChecks.Policy cpA,CpFailoverChecks.Policy cpB) {
+        String fw=sameInstall(baseline.fwInstalled(),fwA,fwB), cp=sameInstall(baseline.cpstatInstalled(),cpA,cpB);
+        return "FAIL".equals(fw) || "FAIL".equals(cp)?"FAIL":"PASS".equals(fw) && "PASS".equals(cp)?"PASS":"UNKNOWN";
+    }
+    private static String sameInstall(List<String> baseline,CpFailoverChecks.Policy a,CpFailoverChecks.Policy b) {
+        if(baseline.size()!=2 || a.installedAt()==null || b.installedAt()==null) return "UNKNOWN";
+        return baseline.equals(java.util.stream.Stream.of(a.installedAt(),b.installedAt()).sorted().toList())?"PASS":"FAIL";
     }
     /** Code of the pre-write refusal when either member's recovery mode is not "(Active Up)" (PO 2026-10-20 item 2). */
     static final String RECOVERY_MODE_REFUSAL="CLUSTER_RECOVERY_MODE_NOT_ACTIVE_UP";
@@ -559,8 +719,18 @@ public final class CpFailoverJobExecutor {
         double baseline=before==null?(oldActive==first?rateA:rateB):before.forMember(oldActive,first).traffic();
         double current=before==null?baseline:oldActive==first?rateB:rateA;
         String status=rateA<0 || rateB<0?"UNKNOWN":CpFailoverChecks.trafficStatus(baseline,current);
-        record(phase,first,8,status,json(measurementA.derived(elapsedA)));
-        record(phase,second,8,status,json(measurementB.derived(elapsedB)));
+        var derivedA=new java.util.HashMap<String,Object>(measurementA.derived(elapsedA));
+        var derivedB=new java.util.HashMap<String,Object>(measurementB.derived(elapsedB));
+        // A resumed return measures the interfaces it reads now: the selection must count as in the stored baseline.
+        boolean scopeChanged=before!=null && before.a().stored()
+            && (measurementA.selectedCount()!=before.a().selectedCount() || measurementB.selectedCount()!=before.b().selectedCount());
+        if(scopeChanged) {
+            status="UNKNOWN";
+            derivedA.put("reason","TRAFFIC_SCOPE_CHANGED"); derivedB.put("reason","TRAFFIC_SCOPE_CHANGED");
+        }
+        record(phase,first,8,status,json(derivedA));
+        record(phase,second,8,status,json(derivedB));
+        if(scopeChanged) checkFailed("TRAFFIC_SCOPE_CHANGED",8,"UNKNOWN");
         if(!"PASS".equals(status)) checkFailed("TRAFFIC_BELOW_TOLERANCE",8,status);
         return new double[]{rateA,rateB};
     }
@@ -600,14 +770,14 @@ public final class CpFailoverJobExecutor {
     }
     private boolean waitFor(Member first,Member second,Member active,String activeRole,Member other,
             String otherRole) throws InterruptedException {
-        for(;polls<MAX_POLLS;) {
+        for(;polls<maxPolls;) {
             polls++;
             var a=readState(first);
             var b=readState(second);
             if(roles(a,b,active,activeRole,other,otherRole,first,second)) return true;
             if("STANDBY".equals(otherRole) && ("ACTIVE".equals((other==first?a:b).localRole())
                     || "STANDBY".equals((active==first?a:b).localRole()))) throw new Stop("UNEXPECTED_ROLES",1);
-            if(polls<MAX_POLLS) pause.sleep(POLL_INTERVAL);
+            if(polls<maxPolls) pause.sleep(POLL_INTERVAL);
         }
         return false;
     }
