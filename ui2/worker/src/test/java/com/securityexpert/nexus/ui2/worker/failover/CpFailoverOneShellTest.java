@@ -29,7 +29,7 @@ class CpFailoverOneShellTest {
     private static final String EXEC_STAT = "bash -lc 'cphaprob stat'";
     private static final List<String> WRITES = List.of("bash -lc 'clusterXL_admin down'", "bash -lc 'clusterXL_admin up'");
 
-    /** The fixture's framing row (V175 seeds it DRAFTED pending amendment A1) as the PO confirmation signs it off. */
+    /** The fixture's framing row (V175 seeds it SIGNED_OFF: the PO confirmed amendment A1 on 2026-10-22). */
     static GateRegistryPort signedOffFraming() {
         return signedOffFraming(CpFailoverJobExecutorTest.gates());
     }
@@ -213,11 +213,11 @@ class CpFailoverOneShellTest {
     }
 
     @Test
-    void fixtureFramingRowIsTheAmendedLiteralDraftedAsV175SeedsIt() {
+    void fixtureFramingRowIsTheAmendedLiteralSignedOffAsV175SeedsIt() {
         var rows = CpFailoverJobExecutorTest.gates().findByCanonicalKey(new com.securityexpert.nexus.ui2.capability.CanonicalCommandKey(
                 "check_point", "cp_gaia_gateway", "expert", "SSH_INTERACTIVE", CpFailoverJobExecutor.SHELL_FRAMING));
         assertEquals(1, rows.size());
-        assertEquals(SignOffState.DRAFTED, rows.get(0).signOffState());
+        assertEquals(SignOffState.SIGNED_OFF, rows.get(0).signOffState());
         assertEquals(CpFailoverJobExecutor.SHELL_FRAMING_GATE, rows.get(0).gateId());
     }
 
