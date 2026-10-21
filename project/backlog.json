@@ -22,7 +22,7 @@
     {
       "id": "deploy1_evidence_egress_policy",
       "category": "Security",
-      "title": "DEPLOY.1 â€” Evidence Egress & Sharing Policy",
+      "title": "DEPLOY.1 — Evidence Egress & Sharing Policy",
       "status": "planned",
       "priority": "P0",
       "target": "DEPLOY.1",
@@ -70,7 +70,7 @@
       "title": "Private Replay -- agent-operated privacy-filtered test...",
       "status": "in_progress",
       "priority": "P0",
-      "target": "docs/design/PRIVATE_REPLAY_ARCHITECTURE.md",
+      "target": "PRIVATE_REPLAY_ARCHITECTURE.md",
       "note": "see docs/history/backlog/private_replay_agent_operated_test_environment.md"
     },
     {
@@ -151,7 +151,7 @@
       "title": "PAN active/active is not excluded as a failover unit",
       "status": "planned",
       "priority": "P1",
-      "target": "docs/design/PAN_ACTIVE_ACTIVE_FAILOVER_UNIT_GAP_2026_09_12.md; blocked on open decision op_aa_vsls_scop...",
+      "target": "PAN_ACTIVE_ACTIVE_FAILOVER_UNIT_GAP_2026_09_12.md; decision op_aa_vsls_scope",
       "note": ""
     },
     {
@@ -178,7 +178,7 @@
       "title": "LDAP TLS trust store cannot be given a PIN or format",
       "status": "planned",
       "priority": "P1",
-      "target": "docs/design/LDAP_TLS_TRUST_STORE_PIN_GAP_2026_09_12.m...",
+      "target": "LDAP_TLS_TRUST_STORE_PIN_GAP_2026_09_12.md",
       "note": ""
     },
     {
@@ -346,10 +346,10 @@
     {
       "id": "pan_collection_contract_from_measurement",
       "category": "collection",
-      "title": "Write the Palo Alto collection contract from the...",
+      "title": "Write PAN collection contract from the measurement run",
       "status": "planned",
       "priority": "P1",
-      "target": "docs/design/PAN_COLLECTION_MEASUREMENT_BRIEF_2026_09_13.m...",
+      "target": "PAN_COLLECTION_MEASUREMENT_BRIEF_2026_09_13.md",
       "note": ""
     },
     {
@@ -421,7 +421,7 @@
       "title": "WAF (FortiWeb): decide scope, then measurement record",
       "status": "planned",
       "priority": "P3",
-      "target": "docs/reference/WAF_FORTIWEB_EXTERNAL_SOURCE_SURVEY_2026_09_15.md; blocked on AUTH-PLACEMENT (13D section 3...",
+      "target": "WAF_FORTIWEB_EXTERNAL_SOURCE_SURVEY_2026_09_15.md; blocked on AUTH-PLACEMENT",
       "note": ""
     },
     {
@@ -502,7 +502,7 @@
       "title": "Failover plan implementation landed; integration gate",
       "status": "in_progress",
       "priority": "P1",
-      "target": "docs/design/PO_DECISION_RECORD_2026_10_06_FAILOVER_EXECUTION_ESTATE.m...",
+      "target": "PO_DECISION_RECORD_2026_10_06_FAILOVER_EXECUTION_ESTATE.md",
       "note": ""
     },
     {
@@ -535,10 +535,10 @@
     {
       "id": "backup_plane_separate_service",
       "category": "backup",
-      "title": "Deliver the backup plane as the independent service the...",
+      "title": "Backup plane as own service; re-run the security review",
       "status": "planned",
       "priority": "P1",
-      "target": "docs/design/ASTRA_BACKUP_ENGINE_ARCHITECTURE_REVIEW.md; PO decision 2026-09-20 relay NXS-LOCAL-0347 seq...",
+      "target": "ASTRA_BACKUP_ENGINE_ARCHITECTURE_REVIEW.md; PO 2026-09-20",
       "note": ""
     },
     {
@@ -601,7 +601,7 @@
       "title": "Apply the inventory and configuration design language",
       "status": "planned",
       "priority": "P1",
-      "target": "docs/design/UI2_INVENTORY_AND_CONFIGURATION_DESIGN_LANGUAGE.md (DRAFT, needs freeze with D-UI1 and D-UI2 answered...",
+      "target": "UI2_INVENTORY_AND_CONFIGURATION_DESIGN_LANGUAGE.md (DRAFT)",
       "note": ""
     },
     {
@@ -781,7 +781,7 @@
       "title": "Module runtime landed; policy/configuration/compliance...",
       "status": "in_progress",
       "priority": "P1",
-      "target": "docs/design/MODULE_POD_RUNTIME_CONTRACT.md",
+      "target": "MODULE_POD_RUNTIME_CONTRACT.md",
       "note": ""
     },
     {
@@ -817,7 +817,7 @@
       "title": "Separate the legacy Python product from the neXus...",
       "status": "planned",
       "priority": "P1",
-      "target": "docs/design/LEGACY_PYTHON_SEPARATION_PLAN.md",
+      "target": "LEGACY_PYTHON_SEPARATION_PLAN.md",
       "note": ""
     },
     {
@@ -898,7 +898,7 @@
       "title": "HOST-A rebuilt 2026-09-25: PO browser acceptance under...",
       "status": "in_progress",
       "priority": "P0",
-      "target": "docs/design/HOST_A_REBUILD_RUNBOOK.md section 5",
+      "target": "HOST_A_REBUILD_RUNBOOK.md section 5",
       "note": ""
     },
     {
@@ -907,7 +907,7 @@
       "title": "Fleet backups enabled: daily 02:00 Istanbul",
       "status": "in_progress",
       "priority": "P1",
-      "target": "docs/design/INCIDENT_2026_10_10_BACKUP_FREQUENCY_DISK_FULL.m...",
+      "target": "INCIDENT_2026_10_10_BACKUP_FREQUENCY_DISK_FULL.md",
       "note": ""
     },
     {
@@ -925,7 +925,7 @@
       "title": "Measure DefensePro backup through the Cyber Controller",
       "status": "planned",
       "priority": "P1",
-      "target": "RADWARE_CYBER_CONTROLLER_BACKUP_API_GATE_ENTRIES.md MEASURE FIRST...",
+      "target": "RADWARE_CYBER_CONTROLLER_BACKUP_API_GATE_ENTRIES.md MEASURE FIRST 3",
       "note": ""
     },
     {
@@ -1006,7 +1006,7 @@
       "title": "Cyber Controller SFTP push to HOST-A fails after the...",
       "status": "in_progress",
       "priority": "P0",
-      "target": "docs/design/HOST_A_REBUILD_RUNBOOK.md",
+      "target": "HOST_A_REBUILD_RUNBOOK.md",
       "note": ""
     },
     {
@@ -1015,25 +1015,25 @@
       "title": "Infoblox: make the grid member list meaningful",
       "status": "planned",
       "priority": "P2",
-      "target": "docs/design/VENDOR_BACKUP_CONTRACTS_2026_09_22.m...",
+      "target": "VENDOR_BACKUP_CONTRACTS_2026_09_22.md",
       "note": ""
     },
     {
       "id": "https_inventory_collect_radware",
       "category": "collection",
-      "title": "Radware Collect: https_inventory_collect for the Cyber...",
+      "title": "Radware Collect: Cyber Controller and DefensePro inventory",
       "status": "in_progress",
       "priority": "P1",
-      "target": "docs/design/RADWARE_CYBER_CONTROLLER_BACKUP_API_GATE_ENTRIES.m...",
+      "target": "RADWARE_CYBER_CONTROLLER_BACKUP_API_GATE_ENTRIES.md",
       "note": ""
     },
     {
       "id": "https_configuration_collect",
       "category": "collection",
-      "title": "Configuration reads for HTTPS vendors, separate from...",
+      "title": "Configuration reads for HTTPS vendors, apart from backup",
       "status": "planned",
       "priority": "P1",
-      "target": "docs/design/VENDOR_BACKUP_CONTRACTS_2026_09_22.m...",
+      "target": "VENDOR_BACKUP_CONTRACTS_2026_09_22.md",
       "note": ""
     },
     {
@@ -1042,16 +1042,16 @@
       "title": "Check Point management server Collect took 243 s: vsx stat",
       "status": "in_progress",
       "priority": "P1",
-      "target": "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/inventory/InventoryCapabilityExecutor.jav...",
+      "target": "InventoryCapabilityExecutor.java (ui2 worker)",
       "note": ""
     },
     {
       "id": "cp_spark_backup_settings_sftp",
       "category": "collection",
-      "title": "Quantum Spark (Gaia Embedded) backup: 'backup settings",
+      "title": "Quantum Spark backup over SFTP to a HOST-A receiver",
       "status": "planned",
       "priority": "P1",
-      "target": "docs/design/VENDOR_BACKUP_CONTRACTS_2026_09_22.m...",
+      "target": "VENDOR_BACKUP_CONTRACTS_2026_09_22.md",
       "note": ""
     },
     {
@@ -1087,7 +1087,7 @@
       "title": "FortiManager physical link state: diagnose hardware info...",
       "status": "in_progress",
       "priority": "P2",
-      "target": "docs/design/FORTINET_CONTRACT.md",
+      "target": "FORTINET_CONTRACT.md",
       "note": ""
     },
     {
@@ -1165,10 +1165,10 @@
     {
       "id": "cp_policy_chunked_hits_acceptance",
       "category": "engineering",
-      "title": "CP chunked policy and hits landed; real-environment...",
+      "title": "CP chunked policy and hits: real-env acceptance pending",
       "status": "in_progress",
       "priority": "P2",
-      "target": "docs/design/PO_DECISION_RECORD_2026_10_02_CP_POLICY_PARALLEL_SESSIONS.m...",
+      "target": "PO_DECISION_RECORD_2026_10_02_CP_POLICY_PARALLEL_SESSIONS.md",
       "note": ""
     },
     {
@@ -1177,7 +1177,7 @@
       "title": "Policy hygiene and V144 lifecycle catalog landed",
       "status": "in_progress",
       "priority": "P1",
-      "target": "docs/design/PO_DECISION_RECORD_2026_10_09_NSPM_WAVE1.m...",
+      "target": "PO_DECISION_RECORD_2026_10_09_NSPM_WAVE1.md",
       "note": ""
     },
     {
@@ -1201,7 +1201,7 @@
     {
       "id": "manifest_drift_service_worker_configuration_policy",
       "category": "ui2",
-      "title": "Release applies the committed manifest of service/configuration/compliance/policy; worker still image+fallback patch only",
+      "title": "Worker still image+fallback patched; others use manifests",
       "status": "in_progress",
       "priority": "P1",
       "target": "tools/delivery/module_deploy.py (SYNCED_MANIFESTS)",
@@ -1213,7 +1213,7 @@
       "title": "Masking residual gaps after logmask-v3 (see note)",
       "status": "planned",
       "priority": "P1",
-      "target": "docs/design/DEVICE_SYSTEM_LOG_PHASE_B_CONTRACT.md",
+      "target": "DEVICE_SYSTEM_LOG_PHASE_B_CONTRACT.md",
       "note": ""
     },
     {
@@ -1231,7 +1231,7 @@
       "title": "PAN object precedence for permissiveness",
       "status": "planned",
       "priority": "P2",
-      "target": "docs/design/PO_DECISION_RECORD_2026_10_20_POLICY_PERMISSIVENESS_SCORING.md",
+      "target": "PO_DECISION_RECORD_2026_10_20_POLICY_PERMISSIVENESS_SCORING.md",
       "note": ""
     },
     {
@@ -1240,7 +1240,7 @@
       "title": "512 MiB spike data cap not enforced by the pruner",
       "status": "planned",
       "priority": "P1",
-      "target": "docs/design/DEVICE_SYSTEM_LOG_PHASE_B_CONTRACT.md",
+      "target": "DEVICE_SYSTEM_LOG_PHASE_B_CONTRACT.md",
       "note": ""
     },
     {
@@ -1249,7 +1249,7 @@
       "title": "Failover pilot preparation (status doc lane)",
       "status": "in_progress",
       "priority": "P1",
-      "target": "docs/design/FAILOVER_EXECUTION_PLAN.md",
+      "target": "FAILOVER_EXECUTION_PLAN.md",
       "note": ""
     }
   ]
