@@ -254,7 +254,8 @@ public final class CpFailoverJobExecutor {
             checks("post_return",first,second,before,formerActive);
             state("DONE","DONE","SUCCEEDED",null,"RETURN_VERIFIED");
         } catch (JooqCpFailoverRepository.NotSent notSent) {
-            stop("MUTATION_DISABLED_BEFORE_SEND",0);
+            // The send transaction already stopped the resume with this code and recorded the intent NOT_SENT.
+            stop(notSent.code(),0);
         } catch (Stop stopped) {
             stop(stopped.code,stopped.check);
         } catch (InterruptedException interrupted) {

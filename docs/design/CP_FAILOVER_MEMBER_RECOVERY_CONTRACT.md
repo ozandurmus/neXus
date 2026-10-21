@@ -423,8 +423,21 @@ Choices where the contract left the mechanics open, or the code base forced a sh
 4. **Row 9 identities.** "Unchanged since the run" is `recorded_identity_recorded_at` not later than the run's start,
    plus the worker's presented-identity check on both fresh sessions.
 5. **Expiry.** 30 minutes from creation to the worker start; an expired request is spent (row 5, single use).
+   Expiry is its own terminal state `EXPIRED` (outcome `RESUME_REQUEST_EXPIRED`), reachable only from a request that
+   never started (`PENDING_APPROVAL`, or `QUEUED` with no start) once `expires_at` has passed (V170 guard). A pending
+   request is expired on every read and admission path (run view, eligibility, request, approval) and by a bounded
+   sweep in the worker's 30 s reconciler; an admitted one by its worker at start, which also ends its job. Row 5 then
+   reports `RESUME_REQUEST_EXPIRED` instead of `RESUME_ALREADY_USED`; the run view stops polling (Argon review
+   2026-10-21 P1-1).
 6. **Additional codes**, all fail closed before any write: `RUN_ALREADY_ACTIVE` (a readiness run on the unit),
    `TRUSTED_HOST_KEY_REQUIRED` (service pre-check, so the single resume is not spent on an untrusted key),
    `RESUME_BASELINE_UNAVAILABLE`, `RESUME_NOT_FOUND`, `RESUME_NOT_PENDING`, `WRONG_POLICY`, `RESUME_TERMINAL`,
    `RESUME_WRITE_NOT_BOUND`, `OWNERSHIP_LOST`.
 7. **Not built:** the failover CLI (§6.3, P1 follow-up).
+8. **Review fixes (Argon 2026-10-21, `ARGON_REVIEW_2026_10_21_FAILOVER_RESUME.md`).** P2-1: the run view's eligibility
+   and the second approval check both members' trusted host keys, as the request does (`TRUSTED_HOST_KEY_REQUIRED`,
+   `TRUST_NOT_EVALUABLE`, `ENDPOINT_MISSING`), so a revoked key never admits the single-use job. P2-2: the send
+   transaction rechecks the resume's state and bound member and the full rows 2–9 (`boundRefusal`) before the
+   transport; a refusal there records the intent and attempt `NOT_SENT`, stops the resume with that code and fails its
+   job, never `OUTCOME_UNKNOWN`. Row order: when a resume's own UP may have been sent, rows 4 and 5 both hold and the
+   verdict is row 4's `RESUME_RETURN_ALREADY_ATTEMPTED` (table order; the more specific, safety-relevant fact).

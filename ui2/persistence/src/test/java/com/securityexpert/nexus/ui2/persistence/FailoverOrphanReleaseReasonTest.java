@@ -49,6 +49,8 @@ class FailoverOrphanReleaseReasonTest {
                 else if (q.startsWith("select cluster_ref from failover_quarantine"))
                     rows = activeIncident ? new String[][] {{"cluster_ref"}, {"unit-a"}} : new String[][] {{"cluster_ref"}};
                 else if (q.startsWith("select 1 from jobs")) rows = new String[][] {{"one"}};
+                // V170: no resume of this run is in flight (a resume in flight keeps the incident).
+                else if (q.startsWith("select 1 from failover_resume")) rows = new String[][] {{"one"}};
                 else if (q.startsWith("select nonce from failover_dispatch_intent"))
                     rows = new String[][] {{"nonce"}, {"nonce-a"}};
                 else if (q.startsWith("select ui2_release_failover_incident"))

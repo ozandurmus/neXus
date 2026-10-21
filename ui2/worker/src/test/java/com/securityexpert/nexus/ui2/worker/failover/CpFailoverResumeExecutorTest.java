@@ -46,6 +46,8 @@ class CpFailoverResumeExecutorTest {
         int admissionCalls, prepared, replies, observations;
         String state="QUEUED", outcome, message;
         boolean notSent, baseline=true;
+        /** A §2.1 refusal found by the send transaction itself (Argon review 2026-10-21 P2-2): nothing is sent. */
+        String refusedInSend;
         Runnable beforeSend=() -> {};
         final List<Boolean> admissionAtStart=new ArrayList<>();
         Store() { super(new TransactionBoundary() {
@@ -90,6 +92,8 @@ class CpFailoverResumeExecutorTest {
         }
         @Override public boolean dispatchResume(Dispatch intent,java.util.function.Supplier<Boolean> send) {
             beforeSend.run();
+            // The real store has already stopped the resume; here the worker's own stop must carry the same code.
+            if (refusedInSend!=null) { notSent=true; throw new NotSent(refusedInSend); }
             boolean result;
             try { result=send.get(); }
             catch (NotSent cancelled) { notSent=true; state="STOPPED"; outcome="MUTATION_DISABLED_BEFORE_SEND"; throw cancelled; }
@@ -316,6 +320,17 @@ class CpFailoverResumeExecutorTest {
         run(store,script,mutationSwitch,List.of(A,B));
         assertTrue(store.notSent); assertEquals("MUTATION_DISABLED_BEFORE_SEND",store.outcome);
         assertEquals(0,script.upCount);
+    }
+
+    @Test void aRefusalInTheSendTransactionStopsWithItsCodeAsNotSent() {
+        for (String code:List.of("OPEN_INCIDENT","MEMBERSHIP_CHANGED","UNRESOLVED_DISPATCH","INCIDENT_NOT_OPEN")) {
+            Store store=new Store(); store.refusedInSend=code; Script script=new Script();
+            run(store,script);
+            assertTrue(store.notSent,code); assertEquals("STOPPED",store.state,code);
+            assertEquals(code,store.outcome,"the stop names the refusal, never OUTCOME_UNCERTAIN");
+            assertEquals(0,script.upCount,code); assertEquals(1,store.prepared,code); assertEquals(0,store.observations,code);
+            assertTrue(store.checks.isEmpty(),code);
+        }
     }
 
     @Test void aLostReplyIsUncertainAndNeverResent() {

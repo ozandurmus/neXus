@@ -16,9 +16,14 @@ import org.jooq.JSONB;
 
 /** Audited storage and atomic job admission for one Check Point failover unit. */
 public class JooqCpFailoverRepository {
-    /** Only emitted by the switch check before invoking any transport. */
+    /**
+     * Proof that the write never left neXus: the switch check before invoking any transport, or (resume only) a
+     * pre-send refusal inside the send transaction ({@link #dispatchResume}); {@link #code()} is the stop code.
+     */
     public static final class NotSent extends RuntimeException {
-        public NotSent() { super("MUTATION_DISABLED_BEFORE_SEND"); }
+        public NotSent() { this("MUTATION_DISABLED_BEFORE_SEND"); }
+        public NotSent(String code) { super(code); }
+        public String code() { return getMessage(); }
     }
 
     private enum SendResult { NOT_SENT, REPLIED, NO_REPLY }
@@ -997,6 +1002,14 @@ public class JooqCpFailoverRepository {
     /** An admitted resume that has not ended: it holds the fleet fence (V170 uq_failover_resume_fleet). */
     public static final Set<String> RESUME_ACTIVE_STATES = Set.of("QUEUED","READING_STATE","RETURNING","POST_RETURN");
     private static final String RESUME_ACTIVE_SQL = "('QUEUED','READING_STATE','RETURNING','POST_RETURN')";
+    /** Contract §2.1 row 12: a request that never started and outlived its 30 minutes (V170 state EXPIRED). */
+    public static final String RESUME_EXPIRED = "EXPIRED";
+    /** A resume that has ended; nothing more is sent for it and it is never reopened (V170 guard). */
+    public static final Set<String> RESUME_TERMINAL_STATES = Set.of("DONE","STOPPED",RESUME_EXPIRED);
+    public static final String RESUME_REQUEST_EXPIRED = "RESUME_REQUEST_EXPIRED";
+    /** At most this many due requests are expired per sweep transaction (the run being read is always included). */
+    static final int RESUME_EXPIRY_BATCH = 100;
+    private static final String RESUME_ACTOR_EXPIRY = "system:failover-resume-expiry";
 
     /** One resume request; opaque references only. */
     public record Resume(String id, String runId, String clusterRef, String formerActiveRef, String peerRef,
@@ -1005,7 +1018,7 @@ public class JooqCpFailoverRepository {
             boolean businessHoursAcknowledged, String approvedBy, String jobId, String state, String step,
             String outcome, String failedCheck, String message, boolean mutationPossible, Instant finishedAt) {
         public boolean active() { return RESUME_ACTIVE_STATES.contains(state); }
-        public boolean terminal() { return "DONE".equals(state) || "STOPPED".equals(state); }
+        public boolean terminal() { return RESUME_TERMINAL_STATES.contains(state); }
     }
     private static Resume resume(Record r) {
         return new Resume(r.get("resume_id",String.class),r.get("run_id",String.class),r.get("cluster_ref",String.class),
@@ -1028,9 +1041,34 @@ public class JooqCpFailoverRepository {
         return boundary.inTransaction(dsl -> dsl.fetch(RESUME_SELECT+"where s.job_id={0}",jobId)
             .stream().findFirst().map(JooqCpFailoverRepository::resume));
     }
+    /** The run's resume as it stands now: a due, never-started request is expired first (contract §2.1 row 12). */
     public Optional<Resume> resumeForRun(String runId) {
-        return boundary.inTransaction(dsl -> dsl.fetch(RESUME_SELECT+"where s.run_id={0}",runId)
-            .stream().findFirst().map(JooqCpFailoverRepository::resume));
+        return audited.inTransaction(RESUME_ACTOR_EXPIRY,"failover_resume_expiry",runId,dsl -> {
+            expireDue(dsl,runId);
+            return dsl.fetch(RESUME_SELECT+"where s.run_id={0}",runId).stream().findFirst().map(JooqCpFailoverRepository::resume);
+        });
+    }
+
+    private static final String RESUME_DUE_SQL = "state='PENDING_APPROVAL' and expires_at<=clock_timestamp()";
+
+    /**
+     * Contract §2.1 row 12 / §10 item 5: a two-person request still awaiting its second approval when its 30 minutes
+     * pass becomes EXPIRED (outcome {@code RESUME_REQUEST_EXPIRED}), so no reader ever sees it as awaiting approval and
+     * it is spent (row 5). Bounded: the given run's request (null: none in particular) plus at most
+     * {@link #RESUME_EXPIRY_BATCH} other due requests, oldest first. Takes advisory lock 136 only when something is due.
+     * A QUEUED request that outlived its 30 minutes is expired by its worker at start ({@link #resumeAdmission}).
+     */
+    private static int expireDue(DSLContext dsl, String runId) {
+        if (dsl.fetch("select 1 from failover_resume where "+RESUME_DUE_SQL+" limit 1").isEmpty()) return 0;
+        lockAdmission(dsl);
+        return dsl.execute("update failover_resume set state='EXPIRED',outcome={2},message={2},finished_at=clock_timestamp() "
+            + "where "+RESUME_DUE_SQL+" and (run_id={0} or resume_id in (select resume_id from failover_resume where "
+            + RESUME_DUE_SQL+" order by expires_at,resume_id limit {1}))",runId,RESUME_EXPIRY_BATCH,RESUME_REQUEST_EXPIRED);
+    }
+
+    /** Bounded periodic sweep (worker reconciler, every 30 s): expire every due request awaiting its second approval. */
+    public int expireResumeRequests() {
+        return audited.inTransaction(RESUME_ACTOR_EXPIRY,"failover_resume_expiry",dsl -> expireDue(dsl,null));
     }
 
     /** The run's resume target, or the first §2.1 refusal (rows 2–9). */
@@ -1065,9 +1103,11 @@ public class JooqCpFailoverRepository {
             + "from failover_dispatch_intent where run_id={0} and step='RETURNING' and job_id is distinct from {1}",runId,ownJob);
         if (returning.get("sent",Integer.class)>0 || returning.get("total",Integer.class)>1)
             return ResumeTarget.refused("RESUME_RETURN_ALREADY_ATTEMPTED");
-        // Row 5: single use, in any state.
-        if (!dsl.fetch("select 1 from failover_resume where run_id={0} and resume_id is distinct from {1}",runId,ownResume).isEmpty())
-            return ResumeTarget.refused("RESUME_ALREADY_USED");
+        // Row 5: single use, in any state; an expired request is spent too and says so (§10 item 5).
+        List<String> earlier=dsl.fetch("select state from failover_resume where run_id={0} and resume_id is distinct from {1}",
+            runId,ownResume).map(x -> x.get(0,String.class));
+        if (!earlier.isEmpty())
+            return ResumeTarget.refused(earlier.contains(RESUME_EXPIRED)?RESUME_REQUEST_EXPIRED:"RESUME_ALREADY_USED");
         // Row 6: the run's own incident is open and is the one the caller saw.
         if (dsl.fetch("select 1 from failover_quarantine where execution_id={0} and cluster_ref={1} and active",runId,cluster).isEmpty())
             return ResumeTarget.refused("INCIDENT_NOT_OPEN");
@@ -1107,10 +1147,16 @@ public class JooqCpFailoverRepository {
         return downed.size()==1 ? Optional.of(downed.get(0)) : Optional.empty();
     }
 
-    /** Read-only §2.1 evaluation (rows 2–10) for the run view's {@code resumeEligible}; null when eligible. */
+    /**
+     * §2.1 evaluation (rows 2–10) for the run view's {@code resumeEligible}; null when eligible. Its only write is the
+     * expiry of this run's due request (row 12), so an expired request reads RESUME_REQUEST_EXPIRED, never as pending.
+     */
     public String resumeEligibility(String runId) {
         if (!mutationEnabled) return "FAILOVER_MUTATION_DISABLED";
-        return boundary.inTransaction(dsl -> resumeTarget(dsl,runId,null,null,null).refusal());
+        return audited.inTransaction(RESUME_ACTOR_EXPIRY,"failover_resume_expiry",runId,dsl -> {
+            expireDue(dsl,runId);
+            return resumeTarget(dsl,runId,null,null,null).refusal();
+        });
     }
 
     /** Same columns ManualAdmissionRecord writes (V168): the job is an administrator's manual job, claimable at once. */
@@ -1142,6 +1188,7 @@ public class JooqCpFailoverRepository {
         if (!mutationEnabled) return new Decision("FAILOVER_MUTATION_DISABLED",null);
         return audited.inTransaction(actor,"failover_resume_request",runId,dsl -> {
             lockAdmission(dsl);
+            expireDue(dsl,runId);
             ResumeTarget target=resumeTarget(dsl,runId,null,null,expectedIncident);
             if (target.refusal()!=null) return new Decision(target.refusal(),null);
             boolean inside=windows.insideBusinessHours();
@@ -1174,13 +1221,14 @@ public class JooqCpFailoverRepository {
             if (s==null) return new Decision("RESUME_NOT_FOUND",null);
             Resume resume=resume(s);
             if (!TWO_PERSON.equals(resume.policy())) return new Decision("WRONG_POLICY",null);
+            // Row 12: a due request is expired here (whoever asks), and an expired one says so, not "not pending".
+            if (RESUME_PENDING.equals(resume.state()) && expired(dsl,resumeId)) {
+                requireOne(expire(dsl,resumeId));
+                return new Decision(RESUME_REQUEST_EXPIRED,null);
+            }
+            if (RESUME_EXPIRED.equals(resume.state())) return new Decision(RESUME_REQUEST_EXPIRED,null);
             if (!RESUME_PENDING.equals(resume.state())) return new Decision("RESUME_NOT_PENDING",null);
             if (actor.equals(resume.initiatedBy())) return new Decision("SELF_APPROVAL",null);
-            if (expired(dsl,resumeId)) {
-                requireOne(dsl.execute("update failover_resume set state='STOPPED',outcome='RESUME_REQUEST_EXPIRED',"
-                    + "message='RESUME_REQUEST_EXPIRED',finished_at=clock_timestamp() where resume_id={0}",resumeId));
-                return new Decision("RESUME_REQUEST_EXPIRED",null);
-            }
             String refusal=boundRefusal(dsl,resume,null);
             if (refusal!=null) return new Decision(refusal,null);
             boolean inside=windows.insideBusinessHours();
@@ -1207,6 +1255,11 @@ public class JooqCpFailoverRepository {
     private static boolean expired(DSLContext dsl, String resumeId) {
         return Boolean.TRUE.equals(dsl.fetchOne("select clock_timestamp()>=expires_at as expired from failover_resume "
             + "where resume_id={0}",resumeId).get("expired",Boolean.class));
+    }
+    /** The one transition to EXPIRED of a request that never started (V170 guard: PENDING_APPROVAL or unstarted QUEUED). */
+    private static int expire(DSLContext dsl, String resumeId) {
+        return dsl.execute("update failover_resume set state='EXPIRED',outcome={1},message={1},finished_at=clock_timestamp() "
+            + "where resume_id={0} and state in ('PENDING_APPROVAL','QUEUED') and started_at is null",resumeId,RESUME_REQUEST_EXPIRED);
     }
 
     /** §2.1 rows 2–9 against the request's own binding (members, member-set revision, former active, incident). */
@@ -1246,7 +1299,13 @@ public class JooqCpFailoverRepository {
             if (resume.requestedInBusinessHours() && !resume.businessHoursAcknowledged()
                     || Boolean.TRUE.equals(s.get("approved_in_business_hours",Boolean.class)) && s.get("approval_ack_at")==null)
                 return BUSINESS_HOURS_ACK_REQUIRED;
-            if (atStart && expired(dsl,resumeId)) return "RESUME_REQUEST_EXPIRED";
+            if (atStart && expired(dsl,resumeId)) {
+                // Row 12 at worker start: the request is EXPIRED (spent) and its job ends here, before any contact.
+                requireOne(expire(dsl,resumeId));
+                requireOne(dsl.execute("update jobs set state='FAILED',outcome={1},terminal_reason={1},finished_at=now() "
+                    + "where job_id={0} and lease_epoch={2}",jobId,RESUME_REQUEST_EXPIRED,epoch));
+                return RESUME_REQUEST_EXPIRED;
+            }
             String refusal=boundRefusal(dsl,resume,jobId);
             if (refusal!=null) return refusal;
             if (atStart) dsl.execute("update failover_resume set started_at=clock_timestamp() where resume_id={0} "
@@ -1288,7 +1347,7 @@ public class JooqCpFailoverRepository {
             if (!dispatchLock(dsl,runId)) return false;
             lockAdmission(dsl);
             Record s=dsl.fetchOne("select job_id,mutation_possible,step from failover_resume where resume_id={0} "
-                + "and state not in ('DONE','STOPPED','PENDING_APPROVAL') for update",resumeId);
+                + "and state not in ('DONE','STOPPED','EXPIRED','PENDING_APPROVAL') for update",resumeId);
             if (s==null || !owns(dsl,s.get("job_id",String.class),epoch)) return false;
             String job=s.get("job_id",String.class);
             if ("STOPPED".equals(state) && Boolean.TRUE.equals(s.get("mutation_possible",Boolean.class))
@@ -1319,7 +1378,7 @@ public class JooqCpFailoverRepository {
             + "where job_id={0} and observation='OUTCOME_UNKNOWN')",job);
         dsl.execute("update failover_resume set state='STOPPED',outcome='OUTCOME_UNKNOWN',message={1},"
             + "failed_check=coalesce({2},failed_check),finished_at=clock_timestamp() "
-            + "where job_id={0} and state not in ('DONE','STOPPED')",job,reason,failedCheck);
+            + "where job_id={0} and state not in ('DONE','STOPPED','EXPIRED')",job,reason,failedCheck);
         requireOne(dsl.execute("update jobs set state='OUTCOME_UNKNOWN',outcome='OUTCOME_UNKNOWN',"
             + "terminal_reason={1},finished_at=now() where job_id={0}",job,reason));
     }
@@ -1360,7 +1419,13 @@ public class JooqCpFailoverRepository {
         });
     }
 
-    /** The resume's single send: the same consume-once claim and reply recording as {@link #dispatch}, fenced on the resume. */
+    /**
+     * The resume's single send: the same consume-once claim and reply recording as {@link #dispatch}, fenced on the
+     * resume. Immediately before the send, still owning the claimed intent, it rechecks the resume's state and bound
+     * member and the full §2.1 rows 2–9 against the request's binding ({@link #boundRefusal}); a refusal there ends the
+     * resume with that code and records the intent NOT_SENT (the transport was never invoked), then throws
+     * {@link NotSent} carrying the code. No advisory admission lock is held across the transport itself.
+     */
     public boolean dispatchResume(Dispatch intent, java.util.function.Supplier<Boolean> send) {
         if (!mutationEnabled || intent==null) throw new IllegalStateException("DISPATCH_REFUSED");
         boolean claimed=audited.inTransaction("system:failover-worker","failover_dispatch_claim",intent.runId(),dsl -> {
@@ -1370,33 +1435,25 @@ public class JooqCpFailoverRepository {
                 + "and observation='NOT_OBSERVED'",intent.nonce(),intent.runId(),intent.jobId(),intent.epoch())==1;
         });
         if (!claimed) return false;
+        String[] refused={null};
         SendResult result=audited.inTransaction("system:failover-worker","failover_dispatch_reply",intent.runId(),dsl -> {
             if (!dispatchLock(dsl,intent.runId())) return SendResult.NO_REPLY;
             Record row=dsl.fetchOne("select * from failover_dispatch_intent where nonce={0} and run_id={1} "
                 + "and job_id={2} and lease_epoch={3} and delivery='MAY_HAVE_BEEN_SENT' "
                 + "and observation='NOT_OBSERVED' and dispatch_claimed for update",intent.nonce(),intent.runId(),intent.jobId(),intent.epoch());
             if (row==null || !owns(dsl,intent.jobId(),intent.epoch())) return SendResult.NO_REPLY;
-            // Recheck the resume, its committed owner, the membership and the run's incident immediately before the send.
-            Record s=dsl.fetchOne(RESUME_SELECT+"join jobs j on j.job_id=s.job_id where s.job_id={0} and s.state='RETURNING' "
-                + "and j.lease_worker_id={1} and j.lease_owner_generation={2}",intent.jobId(),row.get("owner_instance"),
-                row.get("owner_generation"));
-            if (s==null || !row.get("member_ref").equals(s.get("former_active_ref"))) return SendResult.NO_REPLY;
-            List<String> members=JooqDeviceRepository.enrolledFailoverMembers(dsl,s.get("cluster_ref",String.class),"check_point");
-            if (members.size()!=2 || !Set.copyOf(members).equals(Set.of(s.get("m0",String.class),s.get("m1",String.class)))
-                    || dsl.fetch("select 1 from failover_quarantine where execution_id={0} and active",intent.runId()).isEmpty())
-                return SendResult.NO_REPLY;
+            // Recheck the resume, its committed owner, the bound member and §2.1 rows 2–9 immediately before the send.
+            String refusal=resumeSendRefusal(dsl,intent,row);
+            if (refusal!=null) {
+                notSentResume(dsl,intent,row,refusal);
+                refused[0]=refusal;
+                return SendResult.NOT_SENT;
+            }
             boolean replied;
             try { replied=Boolean.TRUE.equals(send.get()); }
             catch (NotSent notSent) {
-                lockAdmission(dsl);
-                requireOne(dsl.execute("update failover_dispatch_intent set delivery='NOT_SENT' where nonce={0}",intent.nonce()));
-                requireOne(dsl.execute("update job_step_attempt set outcome='NOT_SENT',matched_expectation=false,"
-                    + "error_class='MUTATION_DISABLED_BEFORE_SEND',mutation_boundary_crossed=false,sent_at=null "
-                    + "where attempt_id={0}",row.get("attempt_id")));
-                requireOne(dsl.execute("update failover_resume set state='STOPPED',outcome='MUTATION_DISABLED_BEFORE_SEND',"
-                    + "message='MUTATION_DISABLED_BEFORE_SEND',finished_at=clock_timestamp() where job_id={0}",intent.jobId()));
-                requireOne(dsl.execute("update jobs set state='FAILED',outcome='MUTATION_DISABLED_BEFORE_SEND',"
-                    + "terminal_reason='MUTATION_DISABLED_BEFORE_SEND',finished_at=now() where job_id={0}",intent.jobId()));
+                notSentResume(dsl,intent,row,notSent.code());
+                refused[0]=notSent.code();
                 return SendResult.NOT_SENT;
             }
             catch (RuntimeException uncertain) { replied=false; }
@@ -1408,7 +1465,35 @@ public class JooqCpFailoverRepository {
             if (!replied) unknownResume(dsl,intent.jobId(),"DELIVERY_UNCERTAIN",null);
             return replied?SendResult.REPLIED:SendResult.NO_REPLY;
         });
-        if (result==SendResult.NOT_SENT) throw new NotSent();
+        // Propagate only after the terminal state and the NOT_SENT intent have committed together.
+        if (result==SendResult.NOT_SENT) throw new NotSent(refused[0]);
         return result==SendResult.REPLIED;
+    }
+
+    /** The pre-send recheck of {@link #dispatchResume}, in the send transaction; null when the single UP may go. */
+    private static String resumeSendRefusal(DSLContext dsl, Dispatch intent, Record row) {
+        Record s=dsl.fetchOne(RESUME_SELECT+"join jobs j on j.job_id=s.job_id where s.job_id={0} and s.state='RETURNING' "
+            + "and j.lease_worker_id={1} and j.lease_owner_generation={2}",intent.jobId(),row.get("owner_instance"),
+            row.get("owner_generation"));
+        if (s==null) return "DISPATCH_OWNER_LOST";
+        Resume resume=resume(s);
+        if (!resume.formerActiveRef().equals(row.get("member_ref",String.class))
+                || !"cp_failover_up".equals(row.get("gate_id",String.class))) return "RESUME_WRITE_NOT_BOUND";
+        return boundRefusal(dsl,resume,intent.jobId());
+    }
+
+    /**
+     * The write never left neXus: the intent and its attempt are NOT_SENT, the resume stops with {@code code} and its
+     * job fails, in the send transaction (the run's incident stays open; nothing is retried).
+     */
+    private static void notSentResume(DSLContext dsl, Dispatch intent, Record row, String code) {
+        lockAdmission(dsl);
+        requireOne(dsl.execute("update failover_dispatch_intent set delivery='NOT_SENT' where nonce={0}",intent.nonce()));
+        requireOne(dsl.execute("update job_step_attempt set outcome='NOT_SENT',matched_expectation=false,"
+            + "error_class={1},mutation_boundary_crossed=false,sent_at=null where attempt_id={0}",row.get("attempt_id"),code));
+        requireOne(dsl.execute("update failover_resume set state='STOPPED',outcome={1},message={1},"
+            + "finished_at=clock_timestamp() where job_id={0} and state not in ('DONE','STOPPED','EXPIRED')",intent.jobId(),code));
+        requireOne(dsl.execute("update jobs set state='FAILED',outcome={1},terminal_reason={1},finished_at=now() "
+            + "where job_id={0} and lease_epoch={2}",intent.jobId(),code,intent.epoch()));
     }
 }

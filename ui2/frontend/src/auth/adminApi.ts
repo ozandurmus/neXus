@@ -1829,7 +1829,8 @@ export interface CpFailoverRun {
   /** Check Point FAILOVER runs only: "Resume return step" (CP_FAILOVER_MEMBER_RECOVERY_CONTRACT.md §6). */
   resume?: CpFailoverResume;
 }
-export type CpFailoverResumeState = "PENDING_APPROVAL" | "QUEUED" | "READING_STATE" | "RETURNING" | "POST_RETURN" | "DONE" | "STOPPED";
+/** EXPIRED: a request that never started and outlived its 30 minutes (contract §2.1 row 12); terminal, spent. */
+export type CpFailoverResumeState = "PENDING_APPROVAL" | "QUEUED" | "READING_STATE" | "RETURNING" | "POST_RETURN" | "DONE" | "STOPPED" | "EXPIRED";
 /** The server's resume verdict for a stopped run and, once requested, the resume's own state. Opaque member refs only. */
 export interface CpFailoverResume {
   eligible: boolean; refusal: string | null; canResume: boolean; businessHoursInside: boolean; businessHours: string;
