@@ -15,7 +15,8 @@ import com.securityexpert.nexus.ui2.sanitizer.core.NameMapper;
 import com.securityexpert.nexus.ui2.sanitizer.core.PublicSuffixes;
 
 /**
- * The heuristic free-text pass of the masked system-log view (PO decision 2026-10-19, rule set {@code logmask-v3}):
+ * The heuristic free-text pass of the masked system-log view (PO decision 2026-10-19, rule set {@code logmask-v3};
+ * the host-context rules 2026-10-21, {@code logmask-v4}):
  * the last pass over a line, after the serial, JSON identity-field, text and estate-dictionary passes. It masks
  * identity-shaped tokens in free text that are neither a known estate identity nor behind a keyed field -- the Palo
  * Alto {@code opaque} message, Check Point clish, cpd and elg text. Over-masking is accepted, under-masking is not, so
@@ -30,7 +31,21 @@ import com.securityexpert.nexus.ui2.sanitizer.core.PublicSuffixes;
  *       the trigger ({@link #STOPWORDS}: {@code admin login ok}, {@code user is locked}, daemon names as in
  *       {@code restarted by cpwd}) is not a name;</li>
  *   <li><b>elg header host</b>: {@code [proc pid tid]@HOST[DD Mon HH:MM:SS]} (the cpd/cpwd/fwd elg header, findings
- *       record 2026-10-17 section 3.3), whose host the text rules miss, becomes the {@code h-} host label token;</li>
+ *       record 2026-10-17 section 3.3), whose host the text rules miss, becomes the {@code h-} host label token; so
+ *       does the host of the sar header {@code Linux <kernel> (HOST)} (section 4.1);</li>
+ *   <li><b>host context</b> ({@code logmask-v4}): the single word right after a host keyword -- {@code host},
+ *       {@code hostname}, {@code device}, {@code gateway}, {@code peer}, {@code node}, {@code member} (also
+ *       {@code cluster member}, a {@code -name}/{@code _name} spelling, and {@code =} or {@code :} between) -- or
+ *       after {@code from} / {@code to} becomes the {@code h-} host label token, even a plain word with no digit,
+ *       hyphen or dot ({@code peer berlinfw}, {@code sync from berlinfw}). A word that continues as a dotted name
+ *       ({@code to fw.corp.lan}, {@code to R81.20}) is left to the FQDN and version rules; a serial-shaped word to the
+ *       serial rule. A name seen after a host keyword (not after {@code from}/{@code to}) is remembered for the rest
+ *       of the session, and its bare mentions in later text are masked too. The words that follow these keywords in
+ *       ordinary log text are kept ({@link #HOST_CONTEXT_WORDS}, {@link #STOPWORDS}: {@code host key},
+ *       {@code peer is down}, {@code from the}, {@code failed to connect}, {@code changed from active to standby},
+ *       daemon and product names such as {@code from cpwd}, {@code to Panorama}); so are interface names
+ *       ({@code device eth1}), protocol words ({@code to https}), month and day names, and numbers (a name starts with
+ *       a letter);</li>
  *   <li><b>FQDN-shaped</b> tokens -- two or more dot-separated labels of which at least two carry a letter and the
  *       last carries a letter and is at least two characters long -- get the {@code h-} label token for every label
  *       except the public suffix (the text rules only mask names under a public suffix, so {@code fw01.corp} and
@@ -61,9 +76,11 @@ import com.securityexpert.nexus.ui2.sanitizer.core.PublicSuffixes;
  *       wrote ({@code h-}, {@code SN-}, {@code USR-}, {@code ID-}, {@code FW-TANGO-04}).</li>
  * </ul>
  *
- * <p>Not guaranteed: a single plain word with no digit and no hyphen ({@code berlinfw}) that is not a known name, not
- * in a host context and not after a principal trigger cannot be told from an ordinary word and stays. Nothing is
- * logged; only counts per category are kept.</p>
+ * <p>Not guaranteed: a single plain word with no digit and no hyphen ({@code berlinfw}) that is not a known name,
+ * not right after a host keyword or {@code from}/{@code to}, not learned earlier in the session and not after a
+ * principal trigger cannot be told from an ordinary word and stays ({@code sync with berlinfw}, {@code berlinfw is
+ * down}); so does a host whose name is itself one of the kept words ({@code peer standby}), or is shorter than three
+ * characters. Nothing is logged; only counts per category are kept.</p>
  */
 final class FreeTextIdentityRules {
 
@@ -72,6 +89,7 @@ final class FreeTextIdentityRules {
     static final String HOST = "heuristic_hostname";
     static final String FQDN = "heuristic_fqdn";
     static final String SERIAL = "heuristic_serial";
+    static final String HOST_CONTEXT = "heuristic_host_context";
 
     /** File-name extensions (and systemd unit kinds) that make a dotted token a file name, not a host name. */
     static final Set<String> EXTENSIONS = Set.of("log", "elg", "txt", "csv", "json", "xml", "conf", "cfg", "ini", "gz",
@@ -97,6 +115,59 @@ final class FreeTextIdentityRules {
             // daemon names ("restarted by cpwd"): processes, not principals
             + "cpwd cpd fwd fwm cpm fwk confd clish expert watchdog sshd httpd ntpd snmpd syslogd cron crond "
             + "systemd init mgmtsrvr devsrvr useridd sslmgr authd ").strip().split(" "));
+
+    /**
+     * Words that follow a host keyword or {@code from}/{@code to} in ordinary log text and are not a host name: kept
+     * readable by the host-context rule (in addition to {@link #STOPWORDS}). Over-masking is accepted, so a word not
+     * listed here is masked after such a keyword.
+     */
+    static final Set<String> HOST_CONTEXT_WORDS = Set.copyOf(java.util.Arrays.asList((""
+            // articles, pronouns, determiners, prepositions, conjunctions
+            + "the a an this that these those it its they them their there here his her him she he we us our you your "
+            + "me my any all some each every none other others another both either neither which what who whom whose "
+            + "where when why how whether if then than so such same own only also just still yet even ever never nor "
+            + "but as by into off onto out over per since through till until up upon about above across after against "
+            + "along among around before behind below beneath beside between beyond during except inside near outside "
+            + "past toward towards under unlike within without again more less most least many much few several "
+            // verbs after "to" (infinitives), and their common forms
+            + "be been being am are were do done get got make made take see let keep go come run start stop restart "
+            + "reload open close read write load save send receive accept reject drop allow deny block pass forward "
+            + "route create delete remove add update fetch find resolve bind listen connect disconnect reconnect "
+            + "establish register unregister initialize initialise install uninstall upgrade downgrade apply push pull "
+            + "sync synchronize synchronise retrieve verify validate check handle reach contact kill lock unlock enable "
+            + "disable modify configure set reset clear use perform complete obtain acquire release generate export "
+            + "import upload download copy move rename respond reply notify report parse allocate free attach detach "
+            + "mount unmount execute launch call invoke compare compute calculate convert encode decode encrypt decrypt "
+            + "sign authenticate authorize authorise logon wait retry try fail succeed continue proceed exit quit abort "
+            + "finish begin end show print display collect gather monitor track scan probe ping test measure poll "
+            + "return switch fall failover transition become remain stay join leave enter send sent received "
+            + "connected disconnected sending receiving connecting forwarding forwarded switched moved "
+            // states, levels and ordinary nouns
+            + "active standby backup primary secondary master slave passive ready down dead lost problem failure "
+            + "error errors warning warnings info notice debug critical alert emergency enabled disabled off true false "
+            + "null init initializing initial pending stopped started starting stopping idle busy online offline "
+            + "available unavailable reachable unreachable timeout key keys file files disk memory queue buffer socket "
+            + "sockets port ports servers clients network networks interfaces database db tables lists object objects "
+            + "state status level type value address addresses ip ipv4 ipv6 mac route routes routing gateway gateways "
+            + "hosts node nodes member members peers cluster clusters device devices vsx vs vsys domain domains zone "
+            + "zones service services connection connections tunnel tunnels link links traffic packet packets message "
+            + "messages event events response responses data record records entry entries item items update updates "
+            + "version versions license licenses certificate certificates cert certs sic ca crl ocsp mgmt panorama "
+            + "cloud wildfire globalprotect portal ldap radius tacacs kerberos saml ntp dns dhcp snmp syslog smtp sftp "
+            + "ftp scp ssh telnet tcp udp icmp gre internet external internal inside outside loopback self itself "
+            + "everyone nobody someone something nothing anything everything admins root new old next previous last "
+            + "first second third current standard normal max min maximum minimum total web gui cli api xml json rest "
+            + "file-system disk-space cpu ram swap core kernel-space userspace slot slots blade blades chassis module "
+            + "modules sensor sensors fan fans power supply temperature "
+            // identity-field and attribute words ("device serial=", "peer address:")
+            + "serial sn number model id uuid ip vlan family platform hardware software firmware count info "
+            + "information details summary statistics stats priority weight mtu speed duplex description label "
+            // Check Point and Palo Alto daemon and component names
+            + "fwk fwm fwd cpd cpm cpwd vpnd iked routed pdpd pepd rad sxl cphaprob cpha ted rtmd mpdaemon "
+            + "smartcenter smartconsole sms mds cma ikemgr keymgr varrcvr satd rasmgr logrcvr devsrvr mgmtsrvr "
+            + "useridd sslmgr authd ntpd "
+            // Palo Alto subtype enum words ("ha peer general" must not teach "general")
+            + "general auth userid vpn lacp iot telemetry ").strip().split("\\s+")));
 
     static final Pattern VERSION = Pattern.compile("(?i)(?:r|v|ver|version)?\\d+(?:\\.\\d+)+(?:[-._]?[a-z]{0,4}\\d*)*");
     static final Pattern PROTOCOL_PART = Pattern.compile(
@@ -133,6 +204,16 @@ final class FreeTextIdentityRules {
             + "(?:by|for|from|of)\\s+(?:(?:invalid|illegal|unknown|local|remote)\\s+)?(?:user|admin|administrator|account)\\s+[\"']?" + NAME);
     private static final Pattern P_BARE = Pattern.compile("(?i)" + BH + "(?:user|admin|administrator)\\s+" + NAME);
     private static final Pattern P_BY = Pattern.compile("(?i)" + BH + "by\\s+" + NAME);
+    /** A single host word after a keyword: a letter first; not the start of a dotted name. */
+    private static final String HOST_WORD = "([A-Za-z][A-Za-z0-9_-]{0,62})(?![A-Za-z0-9_-]|\\.[A-Za-z0-9])";
+    private static final Pattern P_HOST_KEYWORD = Pattern.compile("(?i)" + BH
+            + "(?:host(?:[-_ ]?name)?|device(?:[-_ ]?name)?|gateway(?:[-_ ]?name)?|peer(?:[-_ ]?name)?"
+            + "|node(?:[-_ ]?name)?|(?:cluster[-_ ])?member(?:[-_ ]?name)?)"
+            + "(?:\\s*[=:]\\s*|\\s+)[\"'‘’`(\\[]?" + HOST_WORD);
+    private static final Pattern P_FROM_TO = Pattern.compile("(?i)" + BH + "(?:from|to)\\s+[\"'‘’`(\\[]?" + HOST_WORD);
+    private static final Pattern SAR_HOST = Pattern.compile("^Linux \\S+ \\(([A-Za-z0-9][A-Za-z0-9_-]{0,62})\\)");
+    /** At most this many host names are remembered per session. */
+    static final int MAX_LEARNED = 10_000;
     private static final Pattern ELG_HOST = Pattern.compile("\\]@([A-Za-z0-9][A-Za-z0-9._-]{0,252})(?=\\[)");
     private static final Pattern ENUM_FIELD = Pattern.compile("\"@?([A-Za-z0-9_-]{2,32})\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"");
     private static final Pattern SEQ_BEFORE = Pattern.compile("(?i)(?:^|[^A-Za-z0-9])(?:seq(?:no|num|uence)?(?:[ _-]?(?:no|num|number|id))?)"
@@ -147,6 +228,8 @@ final class FreeTextIdentityRules {
     private final NameMapper names;
     private final IdentityTokens tokens;
     private final PublicSuffixes suffixes = PublicSuffixes.get();
+    /** Host names (lower case) seen after a host keyword in this session; their bare mentions follow. */
+    private final Set<String> learned = new java.util.HashSet<>();
 
     FreeTextIdentityRules(NameMapper names, IdentityTokens tokens) {
         this.names = names;
@@ -160,6 +243,7 @@ final class FreeTextIdentityRules {
         principals(line, edits);
         elgHosts(line, edits);
         List<int[]> enumSpans = enumSpans(line);
+        hostContexts(line, edits, enumSpans);
         tokens(line, edits, enumSpans);
         if (edits.isEmpty()) return line;
         edits.sort(Comparator.comparingInt(Edit::start));
@@ -222,6 +306,72 @@ final class FreeTextIdentityRules {
         }
     }
 
+    // ---------------------------------------------------------------- host contexts
+
+    private void hostContexts(String line, List<Edit> edits, List<int[]> enumSpans) {
+        String lower = line.toLowerCase(Locale.ROOT);
+        if (line.startsWith("Linux ")) {
+            Matcher m = SAR_HOST.matcher(line);
+            if (m.find()) hostWord(line, m.start(1), m.end(1), true, edits);
+        }
+        if (lower.contains("host") || lower.contains("device") || lower.contains("gateway") || lower.contains("peer")
+                || lower.contains("node") || lower.contains("member")) {
+            hostKeyword(line, P_HOST_KEYWORD, true, edits, enumSpans);
+        }
+        if (lower.contains("from") || lower.contains("to")) hostKeyword(line, P_FROM_TO, false, edits, enumSpans);
+    }
+
+    /** Each match; a kept word may itself be a keyword ({@code peer gateway X}), so the search resumes at the word. */
+    private void hostKeyword(String line, Pattern pattern, boolean learn, List<Edit> edits, List<int[]> enumSpans) {
+        Matcher m = pattern.matcher(line);
+        int from = 0;
+        while (from < line.length() && m.find(from)) {
+            from = m.start(1);
+            if (inSpans(enumSpans, m.start(1))) continue;
+            if (hostWord(line, m.start(1), m.end(1), learn, edits)) from = m.end(1);
+        }
+    }
+
+    /** Masks the word as a host unless it is a kept word or another rule's shape; true when masked. */
+    private boolean hostWord(String line, int start, int end, boolean learn, List<Edit> edits) {
+        int[] t = trim(line, start, end, "_-");
+        if (t[1] - t[0] < 3) return false;
+        String word = line.substring(t[0], t[1]);
+        String lower = word.toLowerCase(Locale.ROOT);
+        if (lower.equals("localhost") || STOPWORDS.contains(lower) || HOST_CONTEXT_WORDS.contains(lower)
+                || DATE_WORDS.contains(lower) || written(word) || EXTENSIONS.contains(lower)) return false;
+        if (INTERFACE.matcher(word).matches() || PROTOCOL_PART.matcher(word).matches() || VERSION.matcher(word).matches()) {
+            return false;
+        }
+        if (word.indexOf('-') >= 0 && allowlisted(word)) return false;
+        if (serialShaped(word)) return false;
+        if (keyed(line, t[1])) return false;
+        int before = edits.size();
+        add(edits, new Edit(t[0], t[1], names.label(word), HOST_CONTEXT, t[0], t[1]));
+        if (edits.size() == before) return false;
+        if (learn && learned.size() < MAX_LEARNED) learned.add(lower);
+        return true;
+    }
+
+    /** The word is a key ({@code device serial=V}): an {@code =} follows it. */
+    private static boolean keyed(String line, int end) {
+        int k = end;
+        while (k < line.length() && line.charAt(k) == ' ') k++;
+        return k < line.length() && line.charAt(k) == '=';
+    }
+
+    /** The serial rule's mixed shape (8 or more letters and digits, at least 6 digits): left to that rule. */
+    private static boolean serialShaped(String word) {
+        if (word.length() < 8) return false;
+        int digits = 0;
+        for (int k = 0; k < word.length(); k++) {
+            char c = word.charAt(k);
+            if (c >= '0' && c <= '9') digits++;
+            else if (!Character.isLetter(c)) return false;
+        }
+        return digits >= 6;
+    }
+
     // ---------------------------------------------------------------- token shapes
 
     private static List<int[]> enumSpans(String line) {
@@ -254,6 +404,10 @@ final class FreeTextIdentityRules {
         int[] t = trim(line, start, end, "._-");
         if (t[0] >= t[1]) return;
         String run = line.substring(t[0], t[1]);
+        if (learnedName(run) && !isJsonKey(line, t[0], t[1]) && !inSpans(enumSpans, t[0])) {
+            add(edits, new Edit(t[0], t[1], names.label(run), HOST_CONTEXT, t[0], t[1]));
+            return;
+        }
         if (run.indexOf('_') >= 0 && run.indexOf('.') < 0 && underscoreHost(run) && !isJsonKey(line, t[0], t[1])
                 && !inSpans(enumSpans, t[0])) {
             add(edits, new Edit(t[0], t[1], names.label(run), HOST, t[0], t[1]));
@@ -334,6 +488,10 @@ final class FreeTextIdentityRules {
         if (t[0] >= t[1]) return;
         String p = line.substring(t[0], t[1]);
         if (written(p)) return;
+        if (learnedName(p) && !isJsonKey(line, t[0], t[1]) && !inSpans(enumSpans, t[0])) {
+            add(edits, new Edit(t[0], t[1], names.label(p), HOST_CONTEXT, t[0], t[1]));
+            return;
+        }
         Matcher inner = WRITTEN_TOKEN.matcher(p);
         if (inner.find()) {
             // Around a token an earlier pass wrote, each remaining fragment is checked on its own.
@@ -445,6 +603,11 @@ final class FreeTextIdentityRules {
     }
 
     // ---------------------------------------------------------------- helpers
+
+    /** A name this session learned after a host keyword. */
+    private boolean learnedName(String token) {
+        return !learned.isEmpty() && learned.contains(token.toLowerCase(Locale.ROOT));
+    }
 
     /** Adds the edit unless it overlaps an accepted edit or its guard (earlier rules win). */
     private static void add(List<Edit> edits, Edit edit) {

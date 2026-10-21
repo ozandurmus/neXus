@@ -98,7 +98,7 @@ public final class Sanitizer {
         try {
             try (OutputStream out = new BufferedOutputStream(openPrivateOutput(output), 1 << 16)) {
                 if (d.type() == FileType.XLSX) {
-                    return XlsxFormat.process(input, out, rewriter, learner, sanitize ? counts : null);
+                    return XlsxFormat.process(input, out, rewriter, learner, sanitize ? counts : null, sanitize);
                 }
                 try (InputStream in = new BufferedInputStream(Files.newInputStream(input), 1 << 16)) {
                     return switch (d.type()) {

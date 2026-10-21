@@ -66,7 +66,8 @@ import com.securityexpert.nexus.ui2.service.privacy.EstateDictionarySource;
  *       {@code . _ : -}-delimited part of one) equal to an identity value the service knows is replaced by its masked
  *       form. It holds only keyed digests and the masked forms;</li>
  *   <li>the <b>heuristic free-text pass</b> ({@link FreeTextIdentityRules}, 2026-10-19): FQDN-shaped, hostname-shaped
- *       and serial-like tokens and principal mentions in free text, with a short documented allowlist.</li>
+ *       and serial-like tokens, principal mentions and (since {@code logmask-v4}) the word after a host keyword or
+ *       {@code from}/{@code to} in free text, with a short documented allowlist.</li>
  * </ol>
  * <p>If the dictionary cannot be built and no earlier one is cached, {@link #session()} throws
  * {@link MaskingUnavailableException}: a masked page is refused rather than served with one pass missing.</p>
@@ -80,9 +81,14 @@ public final class LogMasking {
     /**
      * The masking rule set this class applies: {@code logmask-v1} the Data Sanitizer text rules (2026-10-17),
      * {@code logmask-v2} plus the serial and JSON identity-field rules and the estate dictionary (2026-10-18),
-     * {@code logmask-v3} plus the heuristic free-text pass (2026-10-19). Returned with every masked page.
+     * {@code logmask-v3} plus the heuristic free-text pass (2026-10-19), {@code logmask-v4} plus the host-context rules
+     * of that pass (the word after a host keyword or {@code from}/{@code to}, the sar header host, the host of an HCP
+     * report file name; 2026-10-21). Returned with every masked page ({@code X-Syslog-Mask-Rules}).
      */
-    public static final String RULE_SET = "logmask-v3";
+    public static final String RULE_SET = "logmask-v4";
+
+    /** {@code hcp_report_<host>_<dd>_<mm>_<yy>_<HH>_<MM>}: prefix, host, time parts. */
+    private static final Pattern HCP_REPORT = Pattern.compile("(?i)(hcp_report_)(.+?)((?:_\\d{1,4}){5})");
 
     private static final java.util.Set<String> EXTENSIONS = java.util.Set.of("tar", "gz", "tgz", "zip", "txt", "log", "csv",
             "elg", "json", "pcap", "pcapng", "bz2", "xz");
@@ -259,6 +265,8 @@ public final class LogMasking {
          * character for them, so an address or host name inside {@code capture_192.0.2.9.pcap} is not delimited
          * in the whole name), and a token that is an inventory device name is replaced by its pseudonym, as in
          * {@code hcp_report_<host>_<time>.tar.gz}; the estate dictionary and the heuristic pass follow on each token.
+         * In that HCP report shape ({@code hcp_report_} + host + five numeric time parts, findings record 2026-10-17
+         * section 8) the host part is masked whatever it looks like, a plain word included ({@code logmask-v4}).
          * Extensions are kept.
          */
         public String maskFileName(String name) {
@@ -267,6 +275,14 @@ public final class LogMasking {
             }
             int stemEnd = stemEnd(name);
             String masked = name.substring(0, stemEnd);
+            Matcher hcp = HCP_REPORT.matcher(masked);
+            if (hcp.matches()) {
+                String host = hcp.group(2);
+                String generic = maskToken(host);
+                if (!generic.equals(host)) return hcp.group(1) + generic + hcp.group(3) + name.substring(stemEnd);
+                counts.add(TextSanitizer.HOSTNAME);
+                return hcp.group(1) + mappers.names().label(host) + hcp.group(3) + name.substring(stemEnd);
+            }
             StringBuilder out = new StringBuilder(masked.length() + 16);
             int start = 0;
             while (start <= masked.length()) {
@@ -275,7 +291,7 @@ public final class LogMasking {
                     end = masked.length();
                 }
                 String token = masked.substring(start, end);
-                out.append(heuristics.apply(estate.replace(pseudonymOrSelf(text.sanitize(token)), counts), counts));
+                out.append(maskToken(token));
                 if (end < masked.length()) {
                     out.append('_');
                 }
@@ -306,6 +322,11 @@ public final class LogMasking {
                 end = dot;
                 first = false;
             }
+        }
+
+        /** One file-name token through the text rules, the inventory names, the estate dictionary and the heuristics. */
+        private String maskToken(String token) {
+            return heuristics.apply(estate.replace(pseudonymOrSelf(text.sanitize(token)), counts), counts);
         }
 
         /** Replacement counts per category since this session began (counts only, never content). */

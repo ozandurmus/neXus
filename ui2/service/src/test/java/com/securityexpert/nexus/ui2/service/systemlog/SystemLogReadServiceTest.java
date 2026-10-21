@@ -127,6 +127,25 @@ class SystemLogReadServiceTest {
     }
 
     @Test
+    void aPlainHostWordAfterAHostKeywordIsMaskedWhileTheUnmaskedViewIsTheStoredText() throws Exception {
+        String peer = syntheticWord(9, 41);
+        String source = syntheticWord(9, 42);
+        String stored = "Oct 17 10:00:00 2026 h-0000000000 cpd[12]: HA peer " + peer + " is down\n"
+                + "{\"opaque\":\"sync from " + source + " failed; " + peer + " standby\"}\r\n";
+        fx.chunk(CHUNK, bytes(stored));
+
+        var masked = fx.service().text(masked(CHUNK, 0, 0));
+        String shown = text(masked);
+        assertFalse(shown.contains(peer) || shown.contains(source), "a plain host word is in the masked page (value withheld)");
+        assertTrue(shown.contains(" is down\n") && shown.contains(" standby\"}\r\n"), "the text and line ends around it stay");
+        assertEquals("logmask-v4", masked.page().maskRuleSet(), "the page names the new rule set");
+
+        var unmasked = fx.service().text(unmasked(CHUNK, 0, 0, true));
+        assertTrue(unmasked.isOk());
+        assertArrayEquals(bytes(stored), unmasked.page().text(), "the unmasked view is the stored text, byte for byte");
+    }
+
+    @Test
     void aMaskedPageIsRefusedWhenTheIdentityDictionaryCannotBeRead() throws Exception {
         fx.chunk(CHUNK, bytes("drop src 192.0.2.17\n"));
         fx.masking = new LogMasking(SystemLogReadFixture.PRIVACY_KEY, () -> com.securityexpert.nexus.ui2.sanitizer.core.KnownNames.NONE,
