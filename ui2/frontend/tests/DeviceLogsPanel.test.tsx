@@ -302,10 +302,10 @@ describe("line viewer", () => {
   });
 
   it("names the masking rule set the server applied on the Masked view chip", async () => {
-    stub({ maskRules: "logmask-v3" });
+    stub({ maskRules: "logmask-v4" });
     render(<DeviceLogsPanel deviceId={DEVICE} />);
     expect(await screen.findAllByTestId("log-line")).toHaveLength(3);
-    expect(screen.getByText("Masked view · rules logmask-v3")).toBeInTheDocument();
+    expect(screen.getByText("Masked view · rules logmask-v4")).toBeInTheDocument();
   });
 
   it("filters the loaded lines and reports how many match", async () => {

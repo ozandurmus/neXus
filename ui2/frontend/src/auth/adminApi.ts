@@ -3450,7 +3450,7 @@ export interface SystemLogTextPage {
   readonly next_offset: number;
   readonly eof: boolean;
   readonly lines: number;
-  /** The masking rule set a masked page went through (`X-Syslog-Mask-Rules`, e.g. `logmask-v3`); null when unmasked or not sent. */
+  /** The masking rule set a masked page went through (`X-Syslog-Mask-Rules`, e.g. `logmask-v4`); null when unmasked or not sent. */
   readonly mask_rules: string | null;
 }
 

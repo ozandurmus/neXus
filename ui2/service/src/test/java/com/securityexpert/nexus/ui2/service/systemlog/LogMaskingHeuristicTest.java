@@ -239,7 +239,7 @@ class LogMaskingHeuristicTest {
         String once = s.maskLine("peer " + letters(4, 23) + "-fw-" + digits(2, 24) + " by " + letters(6, 25) + " unit "
                 + digits(11, 26));
         assertEquals(once, session().maskLine(once), "written tokens are never masked again");
-        assertEquals("logmask-v3", s.ruleSet());
+        assertEquals("logmask-v4", s.ruleSet());
         assertEquals(LogMasking.RULE_SET, s.ruleSet());
     }
 

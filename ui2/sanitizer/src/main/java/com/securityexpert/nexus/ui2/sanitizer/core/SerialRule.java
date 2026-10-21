@@ -32,9 +32,14 @@ public final class SerialRule {
     /** {@code serial=V}, {@code serial: V}, {@code Serial Number = "V"}: the value must carry a digit. */
     private static final Pattern TEXT = Pattern.compile(
             "(?i)(?<![A-Za-z0-9_])" + SERIAL_NAMES + "\\s*[=:]\\s*([\"']?)([A-Za-z0-9][A-Za-z0-9._/:-]*)");
-    /** A JSON key or column header naming a serial (also {@code S/N} and the Turkish {@code seri no}). */
+    /**
+     * A JSON key or column header naming a serial, any case and spacing: {@code serial}, {@code Serial Number},
+     * {@code serial_no.}, {@code serialNo}, {@code Serial #}, {@code SN}, {@code S/N}, {@code S.N.}, the Turkish
+     * {@code seri no} / {@code Seri Numarası}; one trailing {@code . : #} is allowed.
+     */
     private static final Pattern HEADER = Pattern.compile(
-            "(?iu)@?(?:serial(?:[-_ ]?(?:number|num|no|nr))?|sn|s/n|seri(?:[-_ ]?(?:no|numaras[ıi]))?)");
+            "(?iu)@?(?:serial(?:[-_\\s]*(?:number|num|no|nr|#))?|s\\s*/\\s*n|s\\.?\\s*n|seri(?:[-_\\s]*(?:no|nr|numaras[ıi]))?)"
+                    + "\\s*[.:#]?");
     private static final Pattern TOKEN = Pattern.compile("SN-[0-9A-F]{10}");
     private static final Pattern HAS_DIGIT = Pattern.compile(".*[0-9].*");
 

@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Path;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.Collections;
@@ -36,6 +37,7 @@ import org.apache.commons.compress.archivers.zip.ZipArchiveEntry;
 import org.apache.poi.openxml4j.util.ZipSecureFile;
 
 import com.securityexpert.nexus.ui2.sanitizer.core.HostHeaders;
+import com.securityexpert.nexus.ui2.sanitizer.core.SerialRule;
 
 /**
  * XLSX, part by part as streams (DATA_SANITIZER_CONTRACT.md §1 "CSV / XLSX: cell by cell with the text rules; sheet
@@ -49,6 +51,16 @@ import com.securityexpert.nexus.ui2.sanitizer.core.HostHeaders;
  *
  * <p>A header cell such as {@code hostname} or {@code device} (first row of a sheet) marks its column: bare
  * single-word values below it, shared or inline, are host names.</p>
+ *
+ * <p><b>Serial columns (2026-10-21).</b> A header cell that names a serial ({@link SerialRule#isSerialKey}:
+ * {@code serial}, {@code Serial Number}, {@code serial_no}, {@code SN}, {@code S/N}, {@code seri no} ...) marks its
+ * column: every value below it -- shared, inline, a formula's cached result, and a number or a date, which the text
+ * rules never see -- becomes the inventory's one-way {@code SN-} token ({@link Value#serialContext()}). A number or
+ * date cell cannot hold a token, so when sanitizing it is rewritten as an inline-string cell
+ * ({@code t="inlineStr"}, {@code <is><t>}) or, when it has a formula, as a formula with a string result
+ * ({@code t="str"}); its style, formula and every other attribute are kept, so the workbook stays valid. Boolean and
+ * error cells stay. A revert leaves the {@code SN-} tokens and the string cells as they are (the vault has no serial
+ * kind, like the inventory screens).</p>
  */
 public final class XlsxFormat {
 
@@ -94,6 +106,17 @@ public final class XlsxFormat {
     public static long process(Path input, OutputStream out, ValueRewriter rewriter,
             java.util.function.Consumer<String> learner,
             com.securityexpert.nexus.ui2.sanitizer.core.Counts counts) throws IOException {
+        return process(input, out, rewriter, learner, counts, counts != null);
+    }
+
+    /**
+     * @param sanitizing true on the sanitize side: number and date cells under a serial header are rewritten as
+     *                   string cells so they can carry their {@code SN-} token; the revert side never changes a
+     *                   cell's type
+     */
+    public static long process(Path input, OutputStream out, ValueRewriter rewriter,
+            java.util.function.Consumer<String> learner,
+            com.securityexpert.nexus.ui2.sanitizer.core.Counts counts, boolean sanitizing) throws IOException {
         try (ZipSecureFile zip = new ZipSecureFile(input.toFile())) {
             List<ZipArchiveEntry> allEntries = Collections.list(zip.getEntries());
             if (allEntries.size() > MAX_ZIP_ENTRIES) {
@@ -110,7 +133,9 @@ public final class XlsxFormat {
             }
             Map<String, Set<Integer>> hostColumns = new HashMap<>();
             BitSet hostShared = new BitSet();
-            headerAnalysis(zip, byName, sst, sheets, hostColumns, hostShared, learner);
+            Map<String, Set<Integer>> serialColumns = new HashMap<>();
+            BitSet serialShared = new BitSet();
+            headerAnalysis(zip, byName, sst, sheets, hostColumns, hostShared, serialColumns, serialShared, learner);
 
             long[] seen = {0};
             long[] totalUncompressed = {0};
@@ -140,11 +165,13 @@ public final class XlsxFormat {
                     } else if (isVml) {
                         rewritePart(in, zipOut, new GenericPolicy(), rewriter, seen);
                     } else if (type == null || NEVER_REWRITTEN_SUFFIXES.stream().noneMatch(type::endsWith)) {
-                        PartPolicy policy = name.equals(sst) ? new SharedStringsPolicy(hostShared)
-                                : sheets.contains(name) ? new SheetPolicy(hostColumns.getOrDefault(name, Set.of()))
+                        Set<Integer> serialCols = serialColumns.getOrDefault(name, Set.of());
+                        PartPolicy policy = name.equals(sst) ? new SharedStringsPolicy(hostShared, serialShared)
+                                : sheets.contains(name) ? new SheetPolicy(hostColumns.getOrDefault(name, Set.of()), serialCols)
                                 : name.equals("/xl/workbook.xml") ? new WorkbookPolicy()
                                 : new GenericPolicy();
-                        rewritePart(in, zipOut, policy, rewriter, seen);
+                        boolean convert = sanitizing && sheets.contains(name) && !serialCols.isEmpty();
+                        rewritePart(in, zipOut, policy, rewriter, seen, convert ? serialCols : null);
                     } else {
                         in.transferTo(zipOut);
                     }
@@ -194,10 +221,11 @@ public final class XlsxFormat {
 
     /**
      * Pass A: every sheet's first-row cells; pass B: the shared strings those cells point at; pass C: the shared
-     * string indexes used below a host-like header.
+     * string indexes used below a host-like or a serial-like header; pass D: the host values, learned.
      */
     private static void headerAnalysis(ZipSecureFile zip, Map<String, ZipArchiveEntry> byName, String sst,
             List<String> sheets, Map<String, Set<Integer>> hostColumns, BitSet hostShared,
+            Map<String, Set<Integer>> serialColumns, BitSet serialShared,
             java.util.function.Consumer<String> learner) throws IOException, XMLStreamException {
         Map<String, Map<Integer, Object>> headers = new HashMap<>();
         Set<Integer> wanted = new HashSet<>();
@@ -207,6 +235,7 @@ public final class XlsxFormat {
             Map<Integer, Object> header = new HashMap<>();
             try (InputStream in = zip.getInputStream(e)) {
                 XMLEventReader r = inputs().createXMLEventReader(in);
+                CellCursor cursor = new CellCursor();
                 int col = -1;
                 String type = null;
                 StringBuilder text = null;
@@ -215,9 +244,11 @@ public final class XlsxFormat {
                     XMLEvent ev = r.nextEvent();
                     if (ev.isStartElement()) {
                         String local = ev.asStartElement().getName().getLocalPart();
-                        if (local.equals("row")) inRow = true;
-                        else if (local.equals("c") && inRow) {
-                            col = column(attr(ev.asStartElement(), "r"));
+                        if (local.equals("row")) {
+                            inRow = true;
+                            cursor.row();
+                        } else if (local.equals("c") && inRow) {
+                            col = cursor.cell(attr(ev.asStartElement(), "r"));
                             type = attr(ev.asStartElement(), "t");
                         } else if ((local.equals("v") || local.equals("t")) && col >= 0) {
                             text = new StringBuilder();
@@ -236,7 +267,7 @@ public final class XlsxFormat {
                                     // not a shared-string index
                                 }
                             } else {
-                                header.put(col, text.toString());
+                                header.merge(col, text.toString(), (a, b) -> a instanceof String sa ? sa + b : b);
                             }
                             text = null;
                         } else if (local.equals("row")) {
@@ -274,17 +305,23 @@ public final class XlsxFormat {
         }
         for (String sheet : sheets) {
             Set<Integer> cols = new HashSet<>();
+            Set<Integer> serials = new HashSet<>();
             headers.getOrDefault(sheet, Map.of()).forEach((col, value) -> {
                 String text = value instanceof Integer i ? shared.get(i) : (String) value;
-                if (HostHeaders.isHostHeader(text)) cols.add(col);
+                // A serial header wins: its column is masked as serials, never learned as host names.
+                if (SerialRule.isSerialKey(text)) serials.add(col);
+                else if (HostHeaders.isHostHeader(text)) cols.add(col);
             });
-            if (cols.isEmpty()) continue;
-            hostColumns.put(sheet, cols);
+            if (cols.isEmpty() && serials.isEmpty()) continue;
+            if (!cols.isEmpty()) hostColumns.put(sheet, cols);
+            if (!serials.isEmpty()) serialColumns.put(sheet, serials);
             ZipArchiveEntry e = byName.get(sheet);
             try (InputStream in = zip.getInputStream(e)) {
                 XMLEventReader r = inputs().createXMLEventReader(in);
+                CellCursor cursor = new CellCursor();
                 int rows = 0;
                 boolean hostCell = false;
+                boolean serialCell = false;
                 boolean sharedCell = false;
                 boolean inlineCell = false;
                 StringBuilder text = null;
@@ -294,12 +331,16 @@ public final class XlsxFormat {
                     if (ev.isStartElement()) {
                         StartElement s = ev.asStartElement();
                         String local = s.getName().getLocalPart();
-                        if (local.equals("row")) rows++;
-                        else if (local.equals("c")) {
-                            hostCell = rows > 1 && cols.contains(column(attr(s, "r")));
+                        if (local.equals("row")) {
+                            rows++;
+                            cursor.row();
+                        } else if (local.equals("c")) {
+                            int col = cursor.cell(attr(s, "r"));
+                            hostCell = rows > 1 && cols.contains(col);
+                            serialCell = rows > 1 && serials.contains(col);
                             sharedCell = "s".equals(attr(s, "t"));
                             inlineCell = "inlineStr".equals(attr(s, "t"));
-                        } else if (local.equals("v") && hostCell && sharedCell) text = new StringBuilder();
+                        } else if (local.equals("v") && (hostCell || serialCell) && sharedCell) text = new StringBuilder();
                         else if (local.equals("t") && hostCell && inlineCell) inline = new StringBuilder();
                     } else if (ev.isCharacters() && text != null) {
                         text.append(ev.asCharacters().getData());
@@ -307,7 +348,9 @@ public final class XlsxFormat {
                         inline.append(ev.asCharacters().getData());
                     } else if (ev.isEndElement() && ev.asEndElement().getName().getLocalPart().equals("v") && text != null) {
                         try {
-                            hostShared.set(Integer.parseInt(text.toString().strip()));
+                            int index = Integer.parseInt(text.toString().strip());
+                            if (serialCell) serialShared.set(index);
+                            else hostShared.set(index);
                         } catch (NumberFormatException ignored) {
                             // not an index
                         }
@@ -332,7 +375,7 @@ public final class XlsxFormat {
                         String local = ev.asStartElement().getName().getLocalPart();
                         if (local.equals("si")) {
                             index++;
-                            text = hostShared.get(index) ? new StringBuilder() : null;
+                            text = hostShared.get(index) && !serialShared.get(index) ? new StringBuilder() : null;
                         } else if (local.equals("t")) inT = true;
                     } else if (ev.isCharacters() && inT && text != null) {
                         text.append(ev.asCharacters().getData());
@@ -343,6 +386,24 @@ public final class XlsxFormat {
                     }
                 }
             }
+        }
+    }
+
+    /**
+     * The zero-based column of each cell of a row: its {@code r} reference, or, when a writer omits {@code r}
+     * (optional in SpreadsheetML), the column after the previous cell.
+     */
+    static final class CellCursor {
+        private int column = -1;
+
+        void row() {
+            column = -1;
+        }
+
+        int cell(String ref) {
+            int c = column(ref);
+            column = c >= 0 ? c : column + 1;
+            return column;
         }
     }
 
@@ -373,6 +434,11 @@ public final class XlsxFormat {
         abstract TextMode text(List<String> stack);
 
         boolean hostContext(List<String> stack) {
+            return false;
+        }
+
+        /** True when this text node is a whole value under a serial header: it becomes its {@code SN-} token. */
+        boolean serialContext(List<String> stack) {
             return false;
         }
 
@@ -427,10 +493,12 @@ public final class XlsxFormat {
 
     private static final class SharedStringsPolicy extends PartPolicy {
         private final BitSet host;
+        private final BitSet serial;
         private int index = -1;
 
-        SharedStringsPolicy(BitSet host) {
+        SharedStringsPolicy(BitSet host, BitSet serial) {
             this.host = host;
+            this.serial = serial;
         }
 
         @Override
@@ -447,24 +515,35 @@ public final class XlsxFormat {
         boolean hostContext(List<String> stack) {
             return index >= 0 && host.get(index);
         }
+
+        @Override
+        boolean serialContext(List<String> stack) {
+            return index >= 0 && serial.get(index);
+        }
     }
 
     private static final class SheetPolicy extends PartPolicy {
         private final Set<Integer> hostColumns;
+        private final Set<Integer> serialColumns;
+        private final CellCursor cursor = new CellCursor();
         private int rows;
         private int column = -1;
         private String type;
 
-        SheetPolicy(Set<Integer> hostColumns) {
+        SheetPolicy(Set<Integer> hostColumns, Set<Integer> serialColumns) {
             this.hostColumns = hostColumns;
+            this.serialColumns = serialColumns;
         }
 
         @Override
         void start(StartElement element, List<String> stack) {
             String local = element.getName().getLocalPart();
-            if (local.equals("row")) rows++;
+            if (local.equals("row")) {
+                rows++;
+                cursor.row();
+            }
             if (local.equals("c")) {
-                column = column(attr(element, "r"));
+                column = cursor.cell(attr(element, "r"));
                 type = attr(element, "t");
             }
         }
@@ -488,6 +567,14 @@ public final class XlsxFormat {
             return rows > 1 && hostColumns.contains(column);
         }
 
+        /** A string value of a cell below a serial header: an inline string or a formula's string result. */
+        @Override
+        boolean serialContext(List<String> stack) {
+            if (rows <= 1 || !serialColumns.contains(column) || !stack.contains("c") || stack.isEmpty()) return false;
+            String local = stack.get(stack.size() - 1);
+            return (local.equals("t") && "inlineStr".equals(type)) || (local.equals("v") && "str".equals(type));
+        }
+
         @Override
         Set<String> attributes(StartElement element) {
             return element.getName().getLocalPart().equals("hyperlink") ? Set.of("display", "location", "tooltip") : Set.of();
@@ -504,7 +591,14 @@ public final class XlsxFormat {
 
     private static void rewritePart(InputStream in, OutputStream out, PartPolicy policy, ValueRewriter rewriter,
             long[] seen) throws IOException, XMLStreamException {
+        rewritePart(in, out, policy, rewriter, seen, null);
+    }
+
+    /** @param serialCells the serial columns whose number and date cells become string cells first; null: none */
+    private static void rewritePart(InputStream in, OutputStream out, PartPolicy policy, ValueRewriter rewriter,
+            long[] seen, Set<Integer> serialCells) throws IOException, XMLStreamException {
         XMLEventReader reader = inputs().createXMLEventReader(in);
+        if (serialCells != null) reader = new SerialCells(reader, serialCells);
         XMLEventWriter writer = XMLOutputFactory.newFactory().createXMLEventWriter(new NonClosingStream(out), "UTF-8");
         XMLEventFactory events = XMLEventFactory.newFactory();
         List<String> stack = new ArrayList<>();
@@ -543,7 +637,7 @@ public final class XlsxFormat {
                     items.add(new Item(e, null));
                 } else if (mode == TextMode.PLAIN) {
                     items.add(new Item(null, new Slot(null, null, null, null, mode, batch.size())));
-                    batch.add(new Value(c.getData(), policy.hostContext(stack)));
+                    batch.add(new Value(c.getData(), policy.hostContext(stack), policy.serialContext(stack)));
                     chars += c.getData().length();
                     seen[0]++;
                 } else {
@@ -617,6 +711,166 @@ public final class XlsxFormat {
         }
         items.clear();
         batch.clear();
+    }
+
+    /**
+     * A sheet's events with every number or date cell below a serial header turned into a string cell, so the
+     * rules can give it its {@code SN-} token: {@code <c r s><v>N</v></c>} becomes
+     * {@code <c r s t="inlineStr"><is><t>N</t></is></c>}, and a formula cell {@code <c><f>..</f><v>N</v></c>} becomes
+     * {@code <c t="str"><f>..</f><v>N</v></c>}. Every other attribute and child ({@code extLst}) is kept; a cell
+     * without a value, a shared or inline string, a boolean and an error cell pass unchanged. One cell is buffered
+     * at a time.
+     */
+    private static final class SerialCells implements XMLEventReader {
+        private static final Set<String> CONVERTED_TYPES = Set.of("n", "d");
+        private final XMLEventReader in;
+        private final Set<Integer> columns;
+        private final XMLEventFactory events = XMLEventFactory.newFactory();
+        private final ArrayDeque<XMLEvent> queue = new ArrayDeque<>();
+        private final CellCursor cursor = new CellCursor();
+        private int rows;
+
+        SerialCells(XMLEventReader in, Set<Integer> columns) {
+            this.in = in;
+            this.columns = columns;
+        }
+
+        @Override
+        public boolean hasNext() {
+            return !queue.isEmpty() || in.hasNext();
+        }
+
+        @Override
+        public XMLEvent nextEvent() throws XMLStreamException {
+            if (queue.isEmpty()) fill();
+            return queue.poll();
+        }
+
+        @Override
+        public Object next() {
+            try {
+                return nextEvent();
+            } catch (XMLStreamException e) {
+                throw new IllegalStateException(e);
+            }
+        }
+
+        @Override
+        public XMLEvent peek() throws XMLStreamException {
+            if (queue.isEmpty() && in.hasNext()) fill();
+            return queue.peek();
+        }
+
+        @Override
+        public String getElementText() {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public XMLEvent nextTag() {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public Object getProperty(String name) {
+            return in.getProperty(name);
+        }
+
+        @Override
+        public void close() throws XMLStreamException {
+            in.close();
+        }
+
+        private void fill() throws XMLStreamException {
+            XMLEvent e = in.nextEvent();
+            if (!e.isStartElement()) {
+                queue.add(e);
+                return;
+            }
+            StartElement s = e.asStartElement();
+            String local = s.getName().getLocalPart();
+            if (local.equals("row")) {
+                rows++;
+                cursor.row();
+            }
+            if (!local.equals("c")) {
+                queue.add(e);
+                return;
+            }
+            int column = cursor.cell(attr(s, "r"));
+            String type = attr(s, "t");
+            if (rows <= 1 || !columns.contains(column) || !(type == null || CONVERTED_TYPES.contains(type))) {
+                queue.add(e);
+                return;
+            }
+            // Buffer the cell: its formula, its value and any other child, up to its end tag.
+            List<XMLEvent> formula = new ArrayList<>();
+            List<XMLEvent> other = new ArrayList<>();
+            List<XMLEvent> all = new ArrayList<>();
+            all.add(e);
+            StringBuilder value = null;
+            String child = null;
+            int depth = 0;
+            XMLEvent end = null;
+            while (in.hasNext()) {
+                XMLEvent ev = in.nextEvent();
+                all.add(ev);
+                if (ev.isStartElement()) {
+                    depth++;
+                    if (depth == 1) child = ev.asStartElement().getName().getLocalPart();
+                    if (depth == 1 && child.equals("v")) {
+                        value = new StringBuilder();
+                        continue;
+                    }
+                } else if (ev.isEndElement()) {
+                    if (depth == 0) {
+                        end = ev;
+                        break;
+                    }
+                    depth--;
+                    if (depth == 0 && "v".equals(child)) {
+                        child = null;
+                        continue;
+                    }
+                } else if (ev.isCharacters() && depth == 1 && "v".equals(child)) {
+                    value.append(ev.asCharacters().getData());
+                    continue;
+                } else if (depth == 0) {
+                    continue; // whitespace between children
+                }
+                if ("f".equals(child)) formula.add(ev);
+                else if (child != null && !child.equals("v")) other.add(ev);
+                if (depth == 0 && ev.isEndElement()) child = null;
+            }
+            if (end == null || value == null || value.toString().isBlank()) {
+                queue.addAll(all); // nothing to mask (or a truncated part: the writer reports it)
+                return;
+            }
+            String ns = s.getName().getNamespaceURI();
+            String prefix = s.getName().getPrefix();
+            List<Attribute> attributes = new ArrayList<>();
+            for (Iterator<Attribute> it = s.getAttributes(); it.hasNext(); ) {
+                Attribute a = it.next();
+                if (!(a.getName().getLocalPart().equals("t") && a.getName().getNamespaceURI().isEmpty())) attributes.add(a);
+            }
+            boolean hasFormula = !formula.isEmpty();
+            attributes.add(events.createAttribute("t", hasFormula ? "str" : "inlineStr"));
+            queue.add(events.createStartElement(s.getName(), attributes.iterator(), s.getNamespaces()));
+            if (hasFormula) {
+                queue.addAll(formula);
+                queue.add(events.createStartElement(new QName(ns, "v", prefix), Collections.emptyIterator(), Collections.emptyIterator()));
+                queue.add(events.createCharacters(value.toString()));
+                queue.add(events.createEndElement(new QName(ns, "v", prefix), Collections.emptyIterator()));
+            } else {
+                queue.add(events.createStartElement(new QName(ns, "is", prefix), Collections.emptyIterator(), Collections.emptyIterator()));
+                queue.add(events.createStartElement(new QName(ns, "t", prefix), Collections.emptyIterator(), Collections.emptyIterator()));
+                queue.add(events.createCharacters(value.toString()));
+                queue.add(events.createEndElement(new QName(ns, "t", prefix), Collections.emptyIterator()));
+                queue.add(events.createEndElement(new QName(ns, "is", prefix), Collections.emptyIterator()));
+            }
+            queue.addAll(other);
+            queue.add(end);
+        }
     }
 
     private static String attr(StartElement element, String name) {
