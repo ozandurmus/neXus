@@ -89,7 +89,7 @@ public final class ReadinessCheckView {
                 : "Interface counts unavailable";
             case 5 -> count(d,"count"," ARP entries");
             case 6 -> connectionSummary(pass,d);
-            case 8 -> count(d,"bytesPerSecond"," bytes/s")+(pass ? "" : ", below tolerance");
+            case 8 -> rate(d.path("bytesPerSecond"))+(pass || !measuredRate(d.path("bytesPerSecond")) ? "" : ", below tolerance");
             case 9 -> (pass ? d.path("baselineRecorded").asBoolean(false) ? "Sync OK, baseline recorded"
                 : d.has("baselineAt") ? "Sync OK, no lost-counter increase"
                     +(d.path("counterReset").asBoolean(false) ? "; counter reset, baseline recorded" : "")
@@ -219,6 +219,21 @@ public final class ReadinessCheckView {
         return ("OK".equals(state) ? "Sync OK but " : "")+String.join("; ",reasons);
     }
 
+    /** Pilot 2026-10-21/22: the worker stores the rate as a double (1.4E9), which the integral count read as unavailable. */
+    private static boolean measuredRate(JsonNode value) {
+        return value.isNumber() && Double.isFinite(value.asDouble()) && value.asDouble()>=0;
+    }
+    /** A measured byte rate in decimal units: "400 bytes/s", "1.4 GB/s"; a negative (-1, not measured) rate is unavailable. */
+    static String rate(JsonNode value) {
+        if(!measuredRate(value)) return "Rate unavailable";
+        double rate=value.asDouble();
+        if(rate<1000) return Math.round(rate)+" bytes/s";
+        String[] units={"KB/s","MB/s","GB/s","TB/s"};
+        int unit=-1;
+        while(rate>=1000 && unit<units.length-1) { rate/=1000; unit++; }
+        if(Math.round(rate*10)>=10000 && unit<units.length-1) { rate/=1000; unit++; }
+        return String.format(Locale.ROOT,"%.1f %s",rate,units[unit]).replace(".0 "," ");
+    }
     private static String count(JsonNode d,String key,String suffix) {
         return d.path(key).isIntegralNumber() ? d.path(key).asLong()+suffix : "Count unavailable";
     }

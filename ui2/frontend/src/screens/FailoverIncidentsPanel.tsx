@@ -9,10 +9,11 @@ import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { M3Button } from "../shell/M3Widgets";
 import { m3 } from "../theme/m3Theme";
+import { requestFailure } from "../shell/presenters";
 import { listFailoverIncidents, releaseFailoverIncident, type FailoverIncident, type FailoverIncidents } from "../auth/adminApi";
 
 export const RELEASE_REASON_MAX = 500;
-const errorCode = (error: unknown) => (error as { body?: { code?: string } })?.body?.code ?? "Request failed";
+const errorCode = (error: unknown) => requestFailure(error as Parameters<typeof requestFailure>[0]);
 
 /**
  * Open failover incidents and estate-wide unresolved sends (PO decision 2026-10-20 item 1). Every reader sees

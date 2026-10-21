@@ -150,3 +150,15 @@ describe("packet analysis states and cluster modes in words", () => {
     ["High Availability", "High Availability"], ["something-new", "something-new"], [null, "UNKNOWN"], ["UNKNOWN", "UNKNOWN"],
   ])("cluster mode %s reads %s", (raw, word) => expect(clusterModeWord(raw)).toBe(word));
 });
+
+describe("requestFailure", () => {
+  it("prefers code, then error, adds the HTTP status, and never hides the status", async () => {
+    const { requestFailure } = await import("../src/shell/presenters");
+    expect(requestFailure({ status: 403, body: { error: "ACTION_REFUSED" } })).toBe("ACTION_REFUSED (HTTP 403)");
+    expect(requestFailure({ status: 409, body: { code: "RUN_STILL_OWNED", error: "x" } })).toBe("RUN_STILL_OWNED (HTTP 409)");
+    expect(requestFailure({ body: { code: "RUN_STILL_OWNED" } })).toBe("RUN_STILL_OWNED");
+    expect(requestFailure({ status: 0, body: { error: "NETWORK" } })).toBe("NETWORK");
+    expect(requestFailure({ status: 502, body: {} })).toBe("Request failed (HTTP 502)");
+    expect(requestFailure(undefined)).toBe("Request failed");
+  });
+});

@@ -162,3 +162,30 @@ it("a stopped run with a confirmed DOWN offers Resume return step on the unit pa
   fireEvent.click(screen.getAllByRole("button", { name: "Resume return step" }).at(-1)!);
   await waitFor(() => expect(api.resume).toHaveBeenCalledWith("run-opaque", "run-opaque", "Return the former active", false));
 });
+it("the window end is typed and shown in Turkey time and sent as the UTC instant", async () => {
+  await open(); await warning();
+  fireEvent.change(screen.getByLabelText(/Reason/), { target: { value: "Pilot" } });
+  fireEvent.click(screen.getByRole("button", { name: "OK / Start" }));
+  await waitFor(() => expect(api.approve).toHaveBeenCalledTimes(1));
+  expect(api.approve.mock.calls[0][2]).toBe("2099-10-06T09:00:00.000Z");
+});
+it("a remembered draft shows its window end in Turkey time, not its UTC digits", async () => {
+  sessionStorage.setItem("failover-request:check_point:opaque-cluster", JSON.stringify({ requestId: "00000000-0000-4000-8000-000000000009",
+    from: "2099-10-06T08:00:00.000Z", until: "2099-10-06T09:30:00.000Z", reason: "Pilot" }));
+  await open(); fireEvent.click(screen.getByRole("button", { name: "Start failover" }));
+  expect(screen.getByLabelText("Window ends")).toHaveValue("2099-10-06T12:30");
+  expect(screen.getByText("Turkey time (GMT+3)")).toBeInTheDocument();
+});
+it.each([
+  [{ status: 403, body: { error: "ACTION_MAPPING_REQUIRED" } }, "ACTION_MAPPING_REQUIRED (HTTP 403)"],
+  [{ status: 403, body: { error: "ACTION_REFUSED" } }, "ACTION_REFUSED (HTTP 403)"],
+  [{ status: 409, body: { code: "OPEN_INCIDENT", error: "ignored" } }, "OPEN_INCIDENT (HTTP 409)"],
+  [{ status: 500, body: {} }, "Request failed (HTTP 500)"],
+])("a refused start names the server's reason and HTTP status (%#)", async (failure, text) => {
+  api.approve.mockRejectedValue(failure);
+  await open(); await warning();
+  fireEvent.change(screen.getByLabelText(/Reason/), { target: { value: "Pilot" } });
+  fireEvent.click(screen.getByRole("button", { name: "OK / Start" }));
+  expect((await screen.findAllByText(text)).length).toBeGreaterThan(0);
+  expect(screen.queryByText("Request failed")).toBeNull();
+});

@@ -206,3 +206,36 @@ def test_drain_release_database_failure_propagates(monkeypatch):
     monkeypatch.setattr(deploy, "query", unavailable)
     with pytest.raises(deploy.Blocked, match="database unavailable"):
         deploy.barrier("policy", 7)
+
+
+def test_a_false_barrier_reports_which_condition_holds_it_with_counts_only(monkeypatch):
+    # Pilot 2026-10-21/22: a quarantined fleet task lease held the general drain with no visible reason.
+    queries = []
+    output = ("BEGIN\nsystem:release\nmodule_release\nquarantine-drain\n0\nf\n"
+              "barrier drain_ack=true owner_live=true busy_jobs=0 admissions=0 task_leases=0 quarantined_task_leases=1\nCOMMIT")
+    monkeypatch.setattr(deploy, "query", lambda sql: queries.append(sql) or output)
+    why = []
+    assert deploy.barrier("worker", 8, why) is False
+    assert why == ["barrier drain_ack=true owner_live=true busy_jobs=0 admissions=0 task_leases=0 quarantined_task_leases=1"]
+    sql = queries[-1]
+    explain = sql[sql.index("select 'barrier '"):]
+    for name in ("drain_ack=", "owner_live=", "busy_jobs=", "admissions=", "task_leases=", "quarantined_task_leases="):
+        assert "'" + name + "'" in explain
+    assert "count(*)" in explain and "owner_instance ||" not in explain and "task_key" not in explain
+    assert explain.index("from module_runtime_control where module='general'") > 0
+    # The diagnostic line is never mistaken for the barrier boolean.
+    monkeypatch.setattr(deploy, "query", lambda sql: output.replace("\nf\n", "\nt\n"))
+    why = []
+    assert deploy.barrier("worker", 8, why) is True and why == []
+
+
+def test_the_drain_wait_prints_and_keeps_the_reason(monkeypatch, capsys):
+    reason = "barrier drain_ack=true owner_live=true busy_jobs=2 admissions=0 task_leases=0 quarantined_task_leases=0"
+    monkeypatch.setattr(deploy, "barrier", lambda target, generation, why=None: why.append(reason) or False)
+    now = [0]
+    def sleep(seconds):
+        now[0] += seconds
+    with pytest.raises(deploy.Blocked, match="busy_jobs=2") as blocked:
+        deploy.wait_drain("worker", 3, 20, sleep=sleep, clock=lambda: now[0])
+    assert blocked.value.continuable
+    assert "Module waiting: worker; generation=3; " + reason in capsys.readouterr().out

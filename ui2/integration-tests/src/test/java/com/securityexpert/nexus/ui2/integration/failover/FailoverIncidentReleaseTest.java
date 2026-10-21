@@ -147,6 +147,72 @@ class FailoverIncidentReleaseTest {
         }
     }
 
+    /**
+     * Pilot 2026-10-21/22 (V175): the run stopped after a confirmed DOWN, its job went OUTCOME_UNKNOWN and the fleet
+     * task lease bound to it expired into QUARANTINED while its worker stayed alive. The incident release now releases
+     * that lease in the same audited transaction; before the release nothing does.
+     */
+    @Test void theIncidentReleaseReleasesTheQuarantinedFleetLeaseOfTheRunsJob() throws Exception {
+        try (var fixture = Ui2PostgresFixture.createAndMigrate("failover_release_task_lease")) {
+            var repo = repository(fixture); var members = pair(fixture, "unit-dispatch");
+            var e = executing(fixture, repo, "unit-dispatch", members);
+            quarantinedFleetLease(fixture, e);
+            var down = repo.prepareDispatch(e.run(), e.epoch(), 0, e.member(), "cp_failover_down", "operational-state-change");
+            assertTrue(repo.dispatch(down, () -> true));
+            assertTrue(repo.confirmDispatch(down));
+            assertEquals(0L, sweep(fixture), "A live run keeps its lease");
+            mutate(fixture, dsl -> dsl.execute("update jobs set state='OUTCOME_UNKNOWN',outcome='OUTCOME_UNKNOWN',"
+                + "finished_at=now() where job_id={0}", e.job()));
+            assertEquals("STOPPED", repo.detail(e.run()).orElseThrow().run().state());
+            assertEquals(1L, count(fixture, "failover_quarantine where active and execution_id='" + e.run() + "'"));
+            assertEquals(0L, sweep(fixture), "An active incident keeps the lease although the job is terminal");
+            assertEquals(1L, count(fixture, "runtime_task_lease where state='QUARANTINED'"));
+
+            assertEquals(JooqCpFailoverRepository.INCIDENT_RELEASED, repo.releaseIncident(e.run(), ADMIN, REASON));
+            assertEquals(0L, count(fixture, "runtime_task_lease"), "The release frees the drain barrier");
+            var audit = mutate(fixture, dsl -> dsl.fetchOne("select actor_fingerprint,correlation_run_id,row_pk,"
+                + "before_state->>'reason' as reason from audit_log where table_name='runtime_task_lease' "
+                + "and action_id='QUARANTINE_RELEASED_RUN_SETTLED'"));
+            assertEquals(ADMIN, audit.get("actor_fingerprint", String.class));
+            assertEquals(e.run(), audit.get("correlation_run_id", String.class));
+            assertEquals("fleet.failover.execution", audit.get("row_pk", String.class));
+            assertEquals("QUARANTINE_RELEASED_RUN_SETTLED", audit.get("reason", String.class));
+        }
+    }
+
+    /** V175: an incident released by another path never leaves the lease blocking a drain; the sweep releases it. */
+    @Test void theDrainSweepReleasesASettledLeaseAndKeepsOneWhoseSendIsUnresolved() throws Exception {
+        try (var fixture = Ui2PostgresFixture.createAndMigrate("failover_sweep_task_lease")) {
+            var repo = repository(fixture); var members = pair(fixture, "unit-dispatch");
+            var e = executing(fixture, repo, "unit-dispatch", members);
+            quarantinedFleetLease(fixture, e);
+            var down = repo.prepareDispatch(e.run(), e.epoch(), 0, e.member(), "cp_failover_down", "operational-state-change");
+            assertTrue(repo.dispatch(down, () -> true));
+            mutate(fixture, dsl -> dsl.execute("update jobs set state='OUTCOME_UNKNOWN',outcome='OUTCOME_UNKNOWN',"
+                + "finished_at=now() where job_id={0}", e.job()));
+            mutate(fixture, dsl -> dsl.fetch("select ui2_release_failover_incident({0},{1},{2},{3},{4})",
+                "unit-dispatch", e.run(), ADMIN, ADMIN, REASON));
+            assertEquals(0L, sweep(fixture), "A sent, never observed write keeps the fence");
+            assertEquals(JooqCpFailoverRepository.INCIDENT_RELEASED, repo.releaseIncident(e.run(), ADMIN, REASON));
+            assertEquals(0L, count(fixture, "runtime_task_lease"));
+
+            var second = pair(fixture, "unit-second");
+            var f = executing(fixture, repo, "unit-second", second);
+            quarantinedFleetLease(fixture, f);
+            var other = repo.prepareDispatch(f.run(), f.epoch(), 0, f.member(), "cp_failover_down", "operational-state-change");
+            assertTrue(repo.dispatch(other, () -> true));
+            assertTrue(repo.confirmDispatch(other));
+            mutate(fixture, dsl -> dsl.execute("update jobs set state='OUTCOME_UNKNOWN',outcome='OUTCOME_UNKNOWN',"
+                + "finished_at=now() where job_id={0}", f.job()));
+            mutate(fixture, dsl -> dsl.fetch("select ui2_release_failover_incident({0},{1},{2},{3},{4})",
+                "unit-second", f.run(), ADMIN, ADMIN, REASON));
+            assertEquals(1L, sweep(fixture));
+            assertEquals(0L, count(fixture, "runtime_task_lease"));
+            assertEquals(1L, count(fixture, "audit_log where table_name='runtime_task_lease' "
+                + "and action_id='QUARANTINE_RELEASED_RUN_SETTLED' and actor_fingerprint='system:release'"));
+        }
+    }
+
     @Test void recoveryModeCheckFifteenIsStorable() throws Exception {
         try (var fixture = Ui2PostgresFixture.createAndMigrate("failover_check_fifteen")) {
             var repo = repository(fixture); var members = pair(fixture, "unit-dispatch");
@@ -169,6 +235,19 @@ class FailoverIncidentReleaseTest {
         assertTrue(leases.transitionState(job.jobId(), job.leaseEpoch(), "CLAIMED", "EXECUTING", Ui2Rows.ACTOR, "synthetic_start"));
         assertTrue(repo.workerState(decision.runId(), job.leaseEpoch(), "FAILING_OVER", "FAILING_OVER", null, null, null));
         return new Execution(decision.runId(), job.jobId(), job.leaseEpoch(), members.iterator().next());
+    }
+    /** The pilot's lease: bound to the run's job, expired into QUARANTINED, its owner instance still alive. */
+    private static void quarantinedFleetLease(Ui2PostgresFixture fixture, Execution e) {
+        mutate(fixture, dsl -> dsl.execute("insert into runtime_task_lease(task_key,owner_role,owner_instance,owner_generation,"
+            + "token,epoch,state,heartbeat_at,expires_at,bound_job_id,bound_job_epoch) values('fleet.failover.execution',"
+            + "'general','general-synthetic',1,'synthetic-token',1,'QUARANTINED',now()-interval '61 seconds',"
+            + "now()-interval '1 second',{0},{1})", e.job(), e.epoch()));
+    }
+    /** The drain barrier's own reconciliation (tools/delivery/module_deploy.py), as the release operator. */
+    private static long sweep(Ui2PostgresFixture fixture) {
+        return new AuditedTransactionBoundary(new JooqTransactionBoundary(DSL.using(fixture.appDataSource(), SQLDialect.POSTGRES)))
+            .inTransaction("system:release", "module_release", dsl -> dsl.fetchOne(
+                "select ui2_release_orphan_quarantines()").get(0, Long.class));
     }
     private static long count(Ui2PostgresFixture fixture, String tableAndFilter) {
         return mutate(fixture, dsl -> dsl.fetchOne("select count(*) from " + tableAndFilter).get(0, Long.class));
