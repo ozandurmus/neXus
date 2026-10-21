@@ -101,7 +101,9 @@ public final class CpFailoverController {
         String refusal=readiness==null ? "INSUFFICIENT_EVIDENCE"
             : "READY".equals(readiness.outcome()) ? null : readiness.stopCode();
         String mode="UNKNOWN";
-        if (names!=null) {
+        // Pseudonyms only for the masked (replay viewer) view; an operator sees the real cluster and member names
+        // (PO 2026-10-21: the failover tab showed pseudonyms to security_admin).
+        if (names!=null && Boolean.TRUE.equals(view.get("masked"))) {
             String cluster=u.members().get(0).clusterMemberRef().orElseThrow();
             view.put("maskedName",u.vsId()==null ? names.maskClusterName(cluster) : names.maskVirtualSystem(u.label(),cluster));
             view.put("maskedMembers",u.members().stream().map(member -> Map.of(
@@ -391,7 +393,7 @@ public final class CpFailoverController {
                 Map<String,Object> m=new LinkedHashMap<>();
                 m.put("incidentRef",i.runId()); m.put("clusterId",v.clusterId()); m.put("unitId",v.unitId());
                 m.put("cluster_member_ref",i.clusterRef());
-                if (names!=null) m.put("maskedName",names.maskClusterName(i.clusterRef()));
+                if (names!=null && masked) m.put("maskedName",names.maskClusterName(i.clusterRef()));
                 m.put("vendor",i.vendor()); m.put("reason",i.reason()); m.put("openedAt",i.openedAt());
                 m.put("incidentActive",i.incidentActive()); m.put("blocksEstate",i.blocksEstate());
                 m.put("unresolvedSends",i.unresolvedDispatchRefs().size());
