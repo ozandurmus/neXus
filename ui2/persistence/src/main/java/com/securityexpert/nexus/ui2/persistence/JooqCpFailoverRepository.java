@@ -944,7 +944,7 @@ public class JooqCpFailoverRepository {
         + "on conflict (job_id) do update set evidence=excluded.evidence,recorded_by=excluded.recorded_by,"
         + "recorded_at=now(),reconciled_outcome=excluded.reconciled_outcome";
 
-    /** V175: the settled fleet failover task leases bound to the run's job or its resume's job. */
+    /** V174: the settled fleet failover task leases bound to the run's job or its resume's job. */
     static final String RELEASE_SETTLED_LEASES = "select ui2_release_settled_failover_leases(bound.job_id) from "
         + "(select job_id from failover_run where run_id={0} union select job_id from failover_resume where run_id={0}) bound "
         + "where bound.job_id is not null";
@@ -992,7 +992,7 @@ public class JooqCpFailoverRepository {
                         cluster,runId,actor,actor,reason).get("released",Boolean.class)))
                     throw new IllegalStateException("INCIDENT_RELEASE_FENCE");
             // Pilot 2026-10-21/22: the stopped run's job kept its quarantined fleet task lease after the release and
-            // its live worker blocked every module drain. Release it here, audited with this session's actor (V175),
+            // its live worker blocked every module drain. Release it here, audited with this session's actor (V174),
             // once nothing about the run or its resume still needs the fence (ui2_failover_lease_settled).
             dsl.execute(RELEASE_SETTLED_LEASES,runId);
             return INCIDENT_RELEASED;
