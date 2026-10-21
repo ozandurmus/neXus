@@ -538,6 +538,60 @@ class InventoryJobExecutorEndToEndTest {
         assertEquals(1, run.haFacts().size(), "HA state is still read");
     }
 
+    /** PO 2026-10-21: below_12 -- the interface read is decided from the sw-version of the type=version read in this run. */
+    private record BelowTwelveRun(ScriptedPaloAltoInventoryTransport transport, InventoryRun run) {
+    }
+
+    private BelowTwelveRun belowTwelveRun(String swVersion) {
+        String routeXml = "<response><result>"
+                + "<entry><destination>0.0.0.0/0</destination><nexthop>192.0.2.254</nexthop>"
+                + "<interface>ethernet1/1</interface><virtual-router>default</virtual-router><flags>A S</flags></entry>"
+                + "</result></response>";
+        ScriptedPaloAltoInventoryTransport transport = new ScriptedPaloAltoInventoryTransport(Map.of(
+                InventoryReadPlan.PAN_TYPE_VERSION, typeVersionXml(TV_SERIAL, TV_MODEL, swVersion),
+                InventoryReadPlan.PAN_SHOW_HA_STATE, "<response><result><enabled>no</enabled></result></response>",
+                InventoryReadPlan.PAN_SHOW_INTERFACE_ALL, "<response><result><ifnet><entry><name>ethernet1/1</name>"
+                        + "<ip>192.0.2.1/24</ip><vsys>1</vsys><fwd>vr:default</fwd><state>up</state></entry></ifnet></result></response>",
+                InventoryReadPlan.PAN_SHOW_ROUTING_ROUTE, routeXml));
+        InventoryJobExecutorFakes.FakeDeviceInventoryRepository inventoryRepository =
+                new InventoryJobExecutorFakes.FakeDeviceInventoryRepository();
+        InventoryCapabilityExecutor capabilityExecutor = new InventoryCapabilityExecutor(transport, ref ->
+                new com.securityexpert.nexus.ui2.worker.transport.xmlapi.PanCredentialMaterial("user", "pw".toCharArray()),
+                com.securityexpert.nexus.ui2.jobs.pan.PanFirewallCommandSwitches.from(Map.of(
+                        com.securityexpert.nexus.ui2.jobs.pan.PanFirewallCommandSwitches.SHOW_INTERFACE_ALL_VARIABLE, "below_12")));
+        InventoryJobExecutor executor = new InventoryJobExecutor(
+                new InventoryJobExecutorFakes.FakeLeaseRepository(JOB_ID, LEASE_EPOCH, JobState.CLAIMED),
+                new InventoryJobExecutorFakes.FakeStepAttemptRepository(), new InventoryJobExecutorFakes.FakeDeviceEnrollmentReadPort(),
+                new InventoryJobExecutorFakes.FakeDeviceRepository(), inventoryRepository, capabilityExecutor);
+        JobOutcome outcome = executor.execute(JOB_ID, LEASE_EPOCH, DEVICE_ID,
+                InventoryRequest.paloAlto(new ApiTarget("ep-2", "https://fw.example"), "cred-2"), false);
+        assertTrue(outcome instanceof JobOutcome.Completed, "expected Completed, got " + outcome);
+        return new BelowTwelveRun(transport, inventoryRepository.lastRecordedRun);
+    }
+
+    @Test
+    void below12SendsShowInterfaceAllOnPanOsBelowTwelve() {
+        for (String v : new String[] {"10.2.9", "11.1.4-h7"}) {
+            BelowTwelveRun r = belowTwelveRun(v);
+            assertTrue(r.transport().sentCmds.contains(InventoryReadPlan.PAN_SHOW_INTERFACE_ALL), v);
+            assertEquals(java.util.List.of(), r.run().notCollected(), v);
+        }
+    }
+
+    @Test
+    void below12SkipsShowInterfaceAllOnPanOsTwelveAndRecordsTheReason() {
+        BelowTwelveRun r = belowTwelveRun("12.1.2");
+        assertFalse(r.transport().sentCmds.contains(InventoryReadPlan.PAN_SHOW_INTERFACE_ALL));
+        assertEquals(java.util.List.of("pan_show_interface_all", "pan_os_12_or_later"), r.run().notCollected());
+    }
+
+    @Test
+    void below12SkipsShowInterfaceAllWhenThePanOsVersionIsUnknown() {
+        BelowTwelveRun r = belowTwelveRun(null);
+        assertFalse(r.transport().sentCmds.contains(InventoryReadPlan.PAN_SHOW_INTERFACE_ALL));
+        assertEquals(java.util.List.of("pan_show_interface_all", "pan_os_version_unknown"), r.run().notCollected());
+    }
+
     /** One firewall inventory run against a scripted type=version answer; returns the pieces a test asserts on. */
     private record PanRun(JobOutcome outcome, ScriptedPaloAltoInventoryTransport transport,
             InventoryJobExecutorFakes.FakeDeviceRepository deviceRepository,

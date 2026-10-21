@@ -134,15 +134,16 @@ def test_failover_mutation_is_enabled_live_and_disabled_in_preview(monkeypatch, 
     ("52-worker-deployment.yaml", "worker"),
     ("57-policy-deployment.yaml", "policy"),
 ])
-def test_pan_firewall_reads_are_switched_off_until_the_pan_os_12_defect_is_clarified(filename, container_name):
-    """PO 2026-10-21: show interface all and show session info are not sent to PAN firewalls for now
-    (PanFirewallCommandSwitches; "retired" = not sent). Removing the entries sends them again."""
+def test_pan_firewall_reads_run_only_below_pan_os_12_until_the_defect_is_clarified(filename, container_name):
+    """PO 2026-10-21 ("cihaz panos 12 degilse bu kontrol calissin"): show interface all and show session info are sent
+    only to PAN firewalls whose PAN-OS version, seen in the same job, is known and below 12 (PanFirewallCommandSwitches:
+    "below_12"; "retired" = never sent). Removing the entries sends them always."""
     deployment = next(doc for doc in load_documents((MANIFEST_DIR / filename).read_text())
                       if doc["kind"] == "Deployment")
     container = next(c for c in deployment["spec"]["template"]["spec"]["containers"] if c["name"] == container_name)
     env = {e["name"]: e.get("value") for e in container["env"]}
-    assert env.get("NEXUS_PAN_FW_SHOW_INTERFACE_ALL") == "retired"
-    assert env.get("NEXUS_PAN_FW_SHOW_SESSION_INFO") == "retired"
+    assert env.get("NEXUS_PAN_FW_SHOW_INTERFACE_ALL") == "below_12"
+    assert env.get("NEXUS_PAN_FW_SHOW_SESSION_INFO") == "below_12"
 
 
 def test_scheduled_system_log_collection_is_enabled_for_the_fleet_in_the_service_only(monkeypatch):

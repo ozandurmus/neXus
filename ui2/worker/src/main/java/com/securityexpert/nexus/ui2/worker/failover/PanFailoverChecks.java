@@ -200,8 +200,11 @@ public final class PanFailoverChecks {
         return after>=Math.ceil(before*SESSION_TOLERANCE_PERCENT/100.0)?"PASS":"FAIL";
     }
     /** Check 6's derived evidence when show session info is switched off (PO 2026-10-21 scope update). */
-    public static final String SESSIONS_NOT_COLLECTED_DERIVED=
-        "{\"reason\":\"not_collected\",\"detail\":\"show session info retired by PO 2026-10-21\"}";
+    public static final String SESSIONS_NOT_COLLECTED_DERIVED=sessionsNotCollected("show session info retired by PO 2026-10-21");
+    /** The same evidence for a read not sent for another reason (PAN-OS 12 or later, version unknown); detail is fixed text. */
+    public static String sessionsNotCollected(String detail) {
+        return "{\"reason\":\"not_collected\",\"detail\":\""+detail+"\"}";
+    }
     /**
      * Check 7, version parity (PO 2026-10-21, contract amendment 2026-10-21): each member's own PAN-OS build and app / threat
      * content versions, read from that member's HA state ({@code local-info}) -- no new command. Every field must be

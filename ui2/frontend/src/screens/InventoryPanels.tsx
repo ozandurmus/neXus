@@ -1952,12 +1952,13 @@ export function platformPillLabel(device: Pick<DeviceSummary, "vendor_hint" | "m
 }
 
 /**
- * PO 2026-10-21 scope update: when the last run did not send `show interface all` (switched off for Palo Alto
- * firewalls), the interfaces are UNKNOWN with the reason -- never an empty table that reads as "no interfaces".
+ * PO 2026-10-21 scope update: when the last run did not send `show interface all` (switched off, or limited to PAN-OS
+ * below 12 and this firewall is on 12 or later or its version was unknown), the interfaces are UNKNOWN with the reason
+ * the API gives -- never an empty table that reads as "no interfaces".
  */
 export function interfacesNotCollected(inventory: Pick<DeviceInventory, "not_collected" | "not_collected_reason"> | null | undefined): string | null {
   if (!inventory?.not_collected?.includes("pan_show_interface_all")) return null;
-  return `UNKNOWN -- interfaces not collected: show interface all is switched off for Palo Alto firewalls. ${inventory.not_collected_reason ?? "Not collected (command retired by PO 2026-10-21)"}.`;
+  return `UNKNOWN -- interfaces not collected: show interface all was not sent to this firewall. ${inventory.not_collected_reason ?? "Not collected (command retired by PO 2026-10-21)"}.`;
 }
 
 /** The vendors whose policy the Policy screen collects (its sources are MDS and Panorama). */

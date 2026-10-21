@@ -73,6 +73,12 @@ describe("Palo Alto firewall reads switched off (PO 2026-10-21 scope update)", (
     const text = interfacesNotCollected({ not_collected: ["pan_show_interface_all"], not_collected_reason: "Not collected (command retired by PO 2026-10-21)" });
     expect(text).toContain("UNKNOWN");
     expect(text).toContain("retired by PO 2026-10-21");
+    for (const reason of ["Not collected: PAN-OS 12 or later (PO 2026-10-21)", "Not collected: PAN-OS version unknown"]) {
+      const skipped = interfacesNotCollected({ not_collected: ["pan_show_interface_all", "pan_os_12_or_later"], not_collected_reason: reason });
+      expect(skipped).toContain("UNKNOWN");
+      expect(skipped).toContain(reason);
+      expect(skipped).not.toContain("retired");
+    }
     expect(interfacesNotCollected({ not_collected: [], not_collected_reason: null })).toBeNull();
     expect(interfacesNotCollected(null)).toBeNull();
   });

@@ -44,7 +44,7 @@ public final class ReadinessCheckView {
                 case 4 -> "Configuration sync field missing or not recognised";
                 case 5 -> sessionSyncSummary(status,d);
                 case 6 -> "not_collected".equals(d.path("reason").asText())
-                    ? "Not collected: show session info retired by PO 2026-10-21"
+                    ? "Not collected: " + d.path("detail").asText("show session info retired by PO 2026-10-21")
                     : "Session count missing or not recognised: /response/result/num-active or active-sessions";
                 case 7 -> "not_collected".equals(d.path("reason").asText())
                     // A row recorded between the system info retirement and the HA-state version check (2026-10-21).

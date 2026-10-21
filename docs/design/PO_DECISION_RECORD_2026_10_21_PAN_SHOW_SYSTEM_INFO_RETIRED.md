@@ -101,3 +101,25 @@ approved, in the same form: `type=version` as the identity/model/version read fo
 check 7 taking versions from the HA state read (contract amendment to follow with the implementation).
 
 Implemented and recorded in `PO_DECISION_RECORD_2026_10_21_PAN_TYPE_VERSION_AND_CHECK7.md` (V172, `FAILOVER_EXECUTION_PAN_CONTRACT.md` §9): serial, model and PAN-OS version are read again for firewalls with `type=version`, which makes the identity check evaluable and firewall enrollment possible again, and check 7 is no longer UNKNOWN. Sections 2 and 3 above describe the state between the retirement and that change; where they differ, the newer record governs. Content versions, uptime, platform family and the hostname as reported stay not collected.
+
+## Addendum 2026-10-21 (PO, late): the two reads run again on firewalls below PAN-OS 12
+
+The PO, on the same day: "cihaz panos 12 değilse bu kontrol çalışsın" (run this check when the device is not on
+PAN-OS 12). The defect that retired the two reads concerns PAN-OS 12 and later, so both switched reads
+(`show interface all` and `show session info`) are sent again to firewalls that are below PAN-OS 12.
+
+- New switch value `below_12` (alias `pre12`) in `PanFirewallCommandSwitches`; `retired` (never sent) and
+  `enabled` / unset (always sent) are unchanged. The worker and policy deployments set both variables to `below_12`
+  (guarded by `test_ui2_deployment_manifests.py`).
+- Rule: the read is sent only when the device's PAN-OS major version, observed IN THE SAME JOB, is known and below 12
+  (`PanOsVersion.major`: the leading number of "11.1.4-h7", "10.2.9", "12.1.2"). **An unknown or unparseable version
+  is treated like 12 or later: the read is not sent.** No stored version is consulted and no new device command is sent.
+- Version source: inventory uses the `sw-version` of the `type=version` read made earlier in the same run. Failover
+  decides per member from that member's own HA-state `local-info/build-rel` read in the same phase. Check 6 is
+  evaluated only when both members' reads were sent; if either was skipped, check 6 is UNKNOWN (the evidence names each
+  member's reason).
+- Reasons shown to the operator: "Not collected: PAN-OS 12 or later (PO 2026-10-21)" and "Not collected: PAN-OS
+  version unknown". An inventory run that skips the read still records `pan_show_interface_all` in
+  `device_inventory_run.not_collected`, plus one extra token (`pan_os_12_or_later` or `pan_os_version_unknown`) that
+  the API turns into `not_collected_reason`. Sections 2 and 3 above describe the retired state; this addendum governs
+  where they differ.
