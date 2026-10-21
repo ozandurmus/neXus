@@ -97,7 +97,9 @@ public final class CpFailoverController {
     /** {@code incidents} memoizes the open-incident lookup per cluster and member pair within one request. */
     private void eligibility(Map<String,Object> view,CpFailoverService.Unit u,
             JooqCpFailoverRepository.ReadinessStatus readiness,Map<String,Boolean> incidents) {
-        String refusal=readiness==null ? "INSUFFICIENT_EVIDENCE" : readiness.stopCode();
+        // A READY run stores its outcome as the run message ("READY"): that is not a stop code, so it never refuses.
+        String refusal=readiness==null ? "INSUFFICIENT_EVIDENCE"
+            : "READY".equals(readiness.outcome()) ? null : readiness.stopCode();
         String mode="UNKNOWN";
         if (names!=null) {
             String cluster=u.members().get(0).clusterMemberRef().orElseThrow();
