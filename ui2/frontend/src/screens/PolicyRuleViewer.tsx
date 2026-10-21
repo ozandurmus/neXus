@@ -6,6 +6,7 @@ import { m3 } from "../theme/m3Theme";
 import { UNKNOWN_HATCH } from "../theme/tokens";
 import { getPolicyHistory, type PolicyCell, type PolicyMetadata, type PolicyObject, type PolicyPage, type PolicyRevision, type PolicyRule, type PolicySchedule, type PolicySection } from "../auth/adminApi";
 import { statusWord } from "../shell/presenters";
+import { firewallLabels, firewallSerialTitle, withFirewallNames } from "./policyFirewalls";
 
 export function reportPolicyLoadError(scope: "snapshots" | "rules" | "object" | "history" | "inventory" | "usage", error: unknown) {
   // Record categories only: error messages and API bodies may contain sensitive identities.
@@ -218,9 +219,9 @@ const fieldLabels: Record<string, string> = { "source-user": "Source user", cate
   "translated-destination": "Translated destination", "translated-destination-port": "Translated port", "destination-dns-rewrite": "DNS rewrite",
   "translated-destination-dynamic": "Dynamic translated destination", "translated-destination-dynamic-port": "Dynamic translated port",
   "destination-dynamic-distribution": "Distribution", "translated-service": "Translated service", "auto-generated": "Auto-generated" };
-function Extra({ name, values, objects, openObject }: { name: string; values: string[]; objects: Map<string, PolicyObject>; openObject: (id: string) => void }) {
+function Extra({ name, values, objects, openObject, title }: { name: string; values: string[]; objects: Map<string, PolicyObject>; openObject: (id: string) => void; title?: string }) {
   const [expanded, setExpanded] = useState(false);
-  return <Box component="li" sx={{ fontSize: 12, overflowWrap: "anywhere", display: "flex", gap: 1, alignItems: "baseline", flexWrap: "wrap" }}>
+  return <Box component="li" title={title} sx={{ fontSize: 12, overflowWrap: "anywhere", display: "flex", gap: 1, alignItems: "baseline", flexWrap: "wrap" }}>
     <Box component="span" sx={{ color: m3.onSurfaceVar, minWidth: 120 }}>{fieldLabels[name] ?? name}</Box>
     <Box component="span" sx={{ display: "inline-flex", flexWrap: "wrap", gap: "4px", alignItems: "center" }}>
       {(expanded ? values : values.slice(0, 6)).map((v, i) => objects.has(v)
@@ -268,7 +269,9 @@ export function RuleFields({ rule, objects, openObject }: { rule: PolicyRule; ob
         <Box component="ul" sx={{ listStyle: "none", m: 0, p: 0, display: "grid", gap: 0.5 }}>
           <Box component="li" sx={{ fontSize: 12, display: "flex", gap: 1 }}><Box component="span" sx={{ color: m3.onSurfaceVar, minWidth: 120 }}>UID on device</Box><Box component="span" sx={{ overflowWrap: "anywhere" }}>{rule.uuid || "—"}</Box></Box>
           <Box component="li" sx={{ fontSize: 12, display: "flex", gap: 1 }}><Box component="span" sx={{ color: m3.onSurfaceVar, minWidth: 120 }}>Log/track</Box><Box component="span">{rule.log || "—"}</Box></Box>
-          {Object.entries(rule.extras).filter(([key]) => !["source-user", "category"].includes(key) && !hidden.has(key)).map(([key, values]) => <Extra key={key} name={key} values={values} objects={objects} openObject={openObject} />)}
+          {Object.entries(rule.extras).filter(([key]) => !["source-user", "category"].includes(key) && !hidden.has(key)).map(([key, values]) => key === "target-selectors"
+            ? <Extra key={key} name={key} values={firewallLabels(values, rule.targetDevices)} title={firewallSerialTitle(rule.targetDevices)} objects={objects} openObject={openObject} />
+            : <Extra key={key} name={key} values={values} objects={objects} openObject={openObject} />)}
           {(rule.schedules ?? []).map((s, i) => <Box component="li" key={i} sx={{ fontSize: 12, display: "flex", gap: 1 }}><Box component="span" sx={{ color: m3.onSurfaceVar, minWidth: 120 }}>Schedule</Box><Box component="span">{scheduleLabel(s)}</Box></Box>)}
         </Box>
       </Box>
@@ -559,7 +562,7 @@ export function RuleHistory({ policy, rule = "" }: { policy: string; rule?: stri
     <Table size="small" aria-label="Rule revisions"><TableHead><TableRow>{["Revision", "Changed on", "Collected on", "Changed by"].map(s => <TableCell key={s}>{s}</TableCell>)}</TableRow></TableHead>
       <TableBody>{revisions.map(r => <TableRow key={r.revision}><TableCell><Box component="details"><Box component="summary" sx={{ cursor: "pointer" }}>#{r.revision} · {r.changeType}{r.identityFallback ? " · name fallback" : ""}</Box>
         <Box component="dl">{r.changes.map((change, i) => <Box key={i}><Typography component="dt" variant="caption" fontWeight={700}>{change.field === "number" ? "Moved position" : change.field}</Typography>
-          <Typography component="dd" variant="caption" sx={{ m: 0, overflowWrap: "anywhere" }}>{valueText(change.before)} → {valueText(change.after)}</Typography></Box>)}</Box>
+          <Typography component="dd" variant="caption" sx={{ m: 0, overflowWrap: "anywhere" }}>{valueText(withFirewallNames(change.before, r.targetDevices))} → {valueText(withFirewallNames(change.after, r.targetDevices))}</Typography></Box>)}</Box>
       </Box></TableCell><TableCell>{r.changedOn ?? "—"}</TableCell><TableCell>{r.collectedAt}</TableCell><TableCell>{r.changedBy ?? "—"}</TableCell></TableRow>)}</TableBody>
     </Table><Stack direction="row"><Button disabled={page === 0} onClick={() => setPage(p => p - 1)}>Previous revisions</Button><Button disabled={revisions.length < 200} onClick={() => setPage(p => p + 1)}>Next revisions</Button></Stack>
   </Box>;

@@ -1918,7 +1918,10 @@ export function setHttpsCertificateStrict(deviceId: string, strict: boolean): Pr
   return call(`/devices/${encodeURIComponent(deviceId)}/https-certificate/strict`, "PUT", { strict });
 }
 
-export interface PolicyTarget { deviceId: string; name: string; context: string; syncStatus: string }
+/** Secondary field: the recorded serial of an enrolled Palo Alto firewall shown by its hostname. */
+export interface PolicyTarget { deviceId: string; name: string; context: string; syncStatus: string; serial?: string }
+/** A Panorama target selector (a firewall serial) resolved against the inventory; `name` is the hostname when enrolled. */
+export interface PolicyFirewallRef { serial: string; deviceId: string; name: string; enrolled: boolean }
 export interface PolicyMetadata {
   id: string; sourceId: string; sourceName: string; vendor: string; containerId: string;
   containerName: string; name: string; collectedAt: string; artefactRef: string; targets: PolicyTarget[]; ruleCount?: number;
@@ -1932,6 +1935,7 @@ export interface PolicyRevision {
   revision: number; ruleId: string; identityFallback: boolean; changeType: "added" | "removed" | "modified";
   collectedAt: string; changedOn: string | null; changedBy: string | null;
   changes: { field: string; before: unknown; after: unknown }[];
+  targetDevices?: PolicyFirewallRef[];
 }
 export const getPolicyHistory = (id: string, rule = "", page = 0) => call<{ revisions: PolicyRevision[]; page: number }>(
   `/api/v2/policy/policies/${encodeURIComponent(id)}/history?rule=${encodeURIComponent(rule)}&page=${page}`, "GET");
@@ -1970,6 +1974,8 @@ export interface PolicyRule {
   id: string; uuid: string; number: number; name: string; enabled: boolean | null;
   source: PolicyCell; destination: PolicyCell; service: PolicyCell; application: PolicyCell;
   action: string; log: string; comment: string; extras: Record<string, string[]>;
+  /** The firewalls named by the rule's target selectors, resolved server side. */
+  targetDevices?: PolicyFirewallRef[];
   hitCounts?: PolicyHitCounts | null;
   hygiene?: PolicyHygieneAssessment;
   identityFallback?: boolean; timeStatus?: string; schedules?: PolicySchedule[]; expiring?: boolean;
@@ -2111,6 +2117,7 @@ export interface PolicyChangeRow {
   changedBy: string; changeType: string; changedFields: string[]; changes: { field: string; before: unknown; after: unknown }[];
   /** The collection that recorded the revision (UTC ISO); groups the list. */
   collectedAt?: string; initialCapture?: boolean;
+  targetDevices?: PolicyFirewallRef[];
 }
 export interface PolicyChangesPage {
   rows: PolicyChangeRow[]; summary: { total: number; actors: number; rules: number; counts: Record<string, number>; initialCaptures?: number; initialCapturesIncluded?: boolean };

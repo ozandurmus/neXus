@@ -46,11 +46,14 @@ public final class PolicyQueryService {
     private volatile com.securityexpert.nexus.ui2.persistence.device.DeviceRepository devices;
     private volatile Map<String, String> sourceHostnames;
     private volatile java.time.Instant sourceHostnamesAt;
+    /** Firewalls Panorama names by serial, shown by hostname (PO 2026-10-22); absent in unit tests that set no inventory. */
+    private volatile PolicyFirewallNames firewalls;
 
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     public void setDeviceRepository(com.securityexpert.nexus.ui2.persistence.device.DeviceRepository devices) {
         this.devices = devices;
         this.sourceHostnamesAt = null;
+        this.firewalls = devices == null ? null : new PolicyFirewallNames(devices);
     }
 
     private Map<String, String> sourceHostnames() {
@@ -69,9 +72,24 @@ public final class PolicyQueryService {
     private Metadata canonical(Metadata metadata, Map<String, String> hostnames) {
         if (hostnames == null || metadata.sourceId() == null) return metadata;
         String name = PolicySources.displayName(Optional.ofNullable(hostnames.get(metadata.sourceId())));
-        return name.equals(metadata.sourceName()) ? metadata : new Metadata(metadata.id(), metadata.sourceId(), name,
+        var targets = firewallTargets(metadata);
+        return name.equals(metadata.sourceName()) && targets == metadata.targets() ? metadata : new Metadata(metadata.id(), metadata.sourceId(), name,
             metadata.vendor(), metadata.containerId(), metadata.containerName(), metadata.name(), metadata.collectedAt(),
-            metadata.artefactRef(), metadata.targets());
+            metadata.artefactRef(), targets);
+    }
+
+    /** A PAN policy's firewall targets named by hostname, not by the serial Panorama lists them under. */
+    private List<Target> firewallTargets(Metadata metadata) {
+        var names = firewalls;
+        if (names == null || !"PAN".equals(metadata.vendor())) return metadata.targets();
+        boolean changed = false;
+        var out = new ArrayList<Target>();
+        for (var target : metadata.targets()) {
+            String name = names.targetName(target.deviceId(), target.name());
+            changed |= !name.equals(target.name());
+            out.add(name.equals(target.name()) ? target : new Target(target.deviceId(), name, target.context(), target.syncStatus()));
+        }
+        return changed ? List.copyOf(out) : metadata.targets();
     }
 
     /** Independent type gaps remain visible even when there are no policy packages. */
@@ -247,12 +265,13 @@ public final class PolicyQueryService {
         var rows = new ArrayList<Map<String, Object>>();
         for (var snapshot : index.snapshots) {
             var metadata = snapshot.metadata();
+            var targets = firewallTargets(metadata);
             if (!policy.isEmpty() && !metadata.id().equals(policy)) continue;
-            boolean all = metadata.targets().stream().anyMatch(t -> t.name().equals("ALL"));
+            boolean all = targets.stream().anyMatch(t -> t.name().equals("ALL"));
             var seen = new HashSet<String>();
             for (var gateway : gateways) {
                 var matchingLinks = links.stream().filter(l -> (!l.uid().isEmpty() && l.uid().equals(gateway.uid())) || (!l.name().isEmpty() && l.name().equals(gateway.name()))).toList();
-                var target = metadata.targets().stream().filter(t -> (!t.name().isEmpty() && t.name().equals(gateway.name()))
+                var target = targets.stream().filter(t -> (!t.name().isEmpty() && t.name().equals(gateway.name()))
                     || matchingLinks.stream().anyMatch(l -> l.deviceId().equals(t.deviceId()))).findFirst();
                 var observed = gateway.policyInstallations().stream().filter(i -> i.policyName().equals(metadata.name())).toList();
                 var installationStates = observed.stream().map(com.securityexpert.nexus.ui2.policy.CpObjectInventory.Installation::installed).distinct().toList();
@@ -270,7 +289,7 @@ public final class PolicyQueryService {
                 row.put("installed", installationStates.size() == 1 ? installationStates.get(0) : null);
                 rows.add(row); target.ifPresent(t -> seen.add(t.deviceId()));
             }
-            for (var target : metadata.targets()) {
+            for (var target : targets) {
                 if (seen.contains(target.deviceId()) && !target.name().equals("ALL")) continue;
                 if (target.name().equals("ALL") && rows.stream().anyMatch(r -> r.get("policyId").equals(metadata.id()) && Boolean.TRUE.equals(r.get("allTargets")))) continue;
                 var row = new LinkedHashMap<String, Object>();
@@ -279,7 +298,7 @@ public final class PolicyQueryService {
                 row.put("targeted", true); row.put("allTargets", target.name().equals("ALL")); row.put("installed", null);
                 rows.add(row);
             }
-            if (metadata.targets().isEmpty() && rows.stream().noneMatch(r -> r.get("policyId").equals(metadata.id()))) {
+            if (targets.isEmpty() && rows.stream().noneMatch(r -> r.get("policyId").equals(metadata.id()))) {
                 var row = new LinkedHashMap<String, Object>();
                 row.put("policyId", metadata.id()); row.put("policyName", metadata.name()); row.put("id", metadata.id());
                 row.put("name", ""); row.put("deviceId", ""); row.put("targeted", null); row.put("allTargets", false); row.put("installed", null); rows.add(row);
@@ -429,7 +448,12 @@ public final class PolicyQueryService {
         try { return mapper.readValue(json, type); }
         catch (Exception e) { throw new IllegalStateException("Stored policy is invalid"); }
     }
-    public Map<String, Object> metadata(Metadata metadata) { return map(metadata); }
+    public Map<String, Object> metadata(Metadata metadata) {
+        var view = map(metadata);
+        // The recorded serial is the operators' secondary field beside the hostname.
+        if (firewalls != null && "PAN".equals(metadata.vendor())) view.put("targets", firewalls.targets(metadata.vendor(), view.get("targets")));
+        return view;
+    }
     @SuppressWarnings("unchecked")
     private Map<String, Object> map(Object value) { return mapper.convertValue(value, Map.class); }
 
@@ -451,6 +475,9 @@ public final class PolicyQueryService {
         rule.put("timeStatus", assessment.timeStatus()); rule.put("expiring", assessment.expiring());
         rule.put("schedules", PolicyRuleMetrics.time(r, snapshot.objects(), java.time.Instant.now(), snapshot.metadata().vendor()).schedules().stream().map(this::map).toList());
         rule.put("permissiveness", assessment.permissiveness());
+        // PAN target selectors are firewall serials; each carries the enrolled firewall's hostname when one matches exactly.
+        var selectors = firewalls == null ? List.<Map<String, Object>>of() : firewalls.ruleSelectors(r.extras());
+        if (!selectors.isEmpty()) rule.put("targetDevices", selectors);
         return rule;
     }
     public Optional<PolicyResponse> rule(PolicySnapshot snapshot, String id, int days) {
@@ -558,7 +585,16 @@ public final class PolicyQueryService {
     }
     public PolicyResponse history(String policy, String rule, int page) {
         return new PolicyResponse(Map.of("revisions", repository.history(policy, rule, page).stream()
-                .map(json -> read(json, Map.class)).toList(), "page", page));
+                .map(json -> withTargetDevices(read(json, Map.class))).toList(), "page", page));
+    }
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> withTargetDevices(Map<String, Object> revision) {
+        if (firewalls == null) return revision;
+        var selectors = firewalls.changeSelectors(revision.get("changes"));
+        if (selectors.isEmpty()) return revision;
+        var out = new LinkedHashMap<>(revision);
+        out.put("targetDevices", selectors);
+        return out;
     }
     public PolicyResponse object(PolicySnapshot snapshot, String id) {
         return object(snapshot, id, inventoryIndex(snapshot));

@@ -2,6 +2,7 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import { Box, Button, Chip, FormControlLabel, MenuItem, Skeleton, Stack, Switch, Table, TableBody, TableCell, TableHead, TableRow, TextField, Tooltip, Typography } from "@mui/material";
 import { downloadPolicyChanges, getPolicyChanges, type PolicyChangeFilters, type PolicyChangeRow, type PolicyChangesPage, type PolicyMetadata, type PolicyTarget } from "../auth/adminApi";
 import { m3 } from "../theme/m3Theme";
+import { withFirewallNames } from "./policyFirewalls";
 import { KpiCard } from "../shell/KpiCard";
 import { StatePanel } from "../shell/States";
 import { Stamp } from "../shell/PresentedText";
@@ -135,7 +136,7 @@ export function PolicyChangesTab({ policies, devices, openRule }: { policies: Po
         </TableRow>
         {open(group) && group.rows.map(row => <TableRow key={row.revision}>
           <TableCell><Stamp at={row.changedOn} />{row.observedAtCollection && <Typography variant="caption" display="block">Observed at collection</Typography>}</TableCell>
-          <TableCell>{row.policyName}<Typography variant="caption" display="block">{row.targets.map(t => t.name).join(", ") || "Unassigned"}</Typography></TableCell>
+          <TableCell>{row.policyName}<Typography variant="caption" display="block" title={row.targets.filter(t => t.serial).map(t => `${t.name}: ${t.serial}`).join("\n") || undefined}>{row.targets.map(t => t.name).join(", ") || "Unassigned"}</Typography></TableCell>
           <TableCell><Button onClick={() => openRule(row.policyId, row.ruleId)}>{row.number ?? "?"} · {row.name || "Unnamed rule"}</Button>
             {row.currentSnapshotLabel && <Typography variant="caption" display="block">Current snapshot label; historical label unavailable</Typography>}
             {row.changeType === "removed" && <Typography variant="caption" display="block">Removed; current rule details may be unavailable</Typography>}</TableCell>
@@ -145,8 +146,8 @@ export function PolicyChangesTab({ policies, devices, openRule }: { policies: Po
           <TableCell>{row.changedBy || "UNKNOWN (observed by collection)"}</TableCell>
           <TableCell><Box component="details"><Box component="summary" sx={{ cursor: "pointer" }}>{row.changedFields.join(", ") || "No field details"}</Box>
             {row.changes.map((change, index) => <Stack key={index} gap={0.5} sx={{ my: 1 }}><Typography variant="caption">{change.field}</Typography>
-              <Chip size="small" variant="outlined" label={`Before: ${JSON.stringify(change.before) ?? "UNKNOWN"}`} sx={{ maxWidth: 480, height: "auto", "& .MuiChip-label": { whiteSpace: "normal", overflowWrap: "anywhere" } }} />
-              <Chip size="small" label={`After: ${JSON.stringify(change.after) ?? "UNKNOWN"}`} sx={{ maxWidth: 480, height: "auto", "& .MuiChip-label": { whiteSpace: "normal", overflowWrap: "anywhere" } }} />
+              <Chip size="small" variant="outlined" label={`Before: ${JSON.stringify(withFirewallNames(change.before, row.targetDevices)) ?? "UNKNOWN"}`} sx={{ maxWidth: 480, height: "auto", "& .MuiChip-label": { whiteSpace: "normal", overflowWrap: "anywhere" } }} />
+              <Chip size="small" label={`After: ${JSON.stringify(withFirewallNames(change.after, row.targetDevices)) ?? "UNKNOWN"}`} sx={{ maxWidth: 480, height: "auto", "& .MuiChip-label": { whiteSpace: "normal", overflowWrap: "anywhere" } }} />
             </Stack>)}</Box></TableCell>
         </TableRow>)}
       </Fragment>)}</TableBody>

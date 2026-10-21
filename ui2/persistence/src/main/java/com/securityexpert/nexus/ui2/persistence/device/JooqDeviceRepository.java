@@ -418,6 +418,18 @@ public final class JooqDeviceRepository implements DeviceRepository {
     }
 
     @Override
+    public List<PanSerial> listPanSerials() {
+        return transactionBoundary.inTransaction(dsl -> dsl.fetch(
+                "select d.device_id, coalesce(nullif(btrim(d.recorded_identity_primary), ''), nullif(btrim(f.serial_number), '')) as serial "
+                + "from devices d left join device_platform_facts f on f.device_id = d.device_id "
+                + "where d.vendor_hint = 'palo_alto' and d.role = 'gateway' and d.enrollment_state <> 'DRAFT' "
+                + "order by d.created_at asc, d.device_id").stream()
+                .filter(r -> r.get("serial", String.class) != null)
+                .map(r -> new PanSerial(r.get("serial", String.class), r.get("device_id", String.class)))
+                .toList());
+    }
+
+    @Override
     public List<DeviceSummaryRecord> listAll() {
         return transactionBoundary.inTransaction(dsl -> dsl.fetch(DEVICE_SUMMARY_QUERY)
                 .stream()
