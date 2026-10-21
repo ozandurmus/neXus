@@ -2,9 +2,8 @@
 -- The PO approved L1-L4 on 2026-10-22 (docs/design/PO_DECISION_RECORD_2026_10_22_CP_ONE_SHELL_SESSION.md, RATIFIED:
 -- "Onaylıyorum, önce tek kümede"). The external review (docs/design/ARGON_REVIEW_2026_10_22_CP_ONE_SHELL.md, P1-3/P1-5)
 -- amended the framing to L2': each read runs in a subshell with an explicit stderr rule, so its context and stderr behave as
--- on one exec channel. The amended literal is registered DRAFTED until the PO confirms amendment A1 of that record; a later
--- migration (or this one, before it ships) then signs it off. While DRAFTED, a run on an allow-listed cluster stops with
--- COMMAND_GATE_UNAVAILABLE before any connection; every other run never reads this row.
+-- on one exec channel, plus L5 (one Ctrl-C on a read timeout). The PO confirmed amendment A1 on 2026-10-22
+-- ("Onaylıyorum"), so the row is seeded SIGNED_OFF. Only runs on an allow-listed cluster with the switch enabled read it.
 -- The approved read gates are not changed: each read is still resolved by its own SSH_EXEC row and command key; the
 -- clusterXL_admin writes stay on SSH_EXEC. Renumbered from V174 (taken by V174__failover_settled_task_lease_release.sql).
 -- Seed data only; re-running is a no-op (ON CONFLICT DO NOTHING).
@@ -17,7 +16,7 @@ INSERT INTO gate_registry (gate_id, vendor, platform_role_scope, shell_context, 
     source_document_pointer)
 VALUES
     ('cp_failover_shell_framing', 'check_point', 'cp_gaia_gateway', 'expert', 'SSH_INTERACTIVE',
-     'echo __NX_<NONCE>_BEGIN__; ( <READ> ) <STDERR>; echo __NX_<NONCE>_END_$?__', 'read', 'DRAFTED', 30, 'none',
+     'echo __NX_<NONCE>_BEGIN__; ( <READ> ) <STDERR>; echo __NX_<NONCE>_END_$?__', 'read', 'SIGNED_OFF', 30, 'none',
      'once per approved cp_failover read of a readiness, execution or resume run on an allow-listed cluster, wrapping that read; <NONCE> = 32 lowercase hex characters from SecureRandom, new per command; <READ> = the read''s own gated command without the bash -lc wrapper, or vsenv <VSID> && <command> in a VS run; <STDERR> = 2>/dev/null, or 2>&1 for cphaprob -a if (the read that ran with a PTY on exec); Ctrl-C (0x03) once on a read timeout before the shell is closed',
      'the run''s one trusted SSH session per member; one PTY shell channel (vt100, 4096x10000) per member per run, opened at its first read after the banner and first prompt are drained; commands serial with the configured shell pause; never reopened: after a failure the member''s remaining reads use their SSH_EXEC form; write confirmation polls, the resume pre-UP reads and the clusterXL_admin writes always use SSH_EXEC',
      'no BEGIN or END sentinel within the read''s timeout, output over 262144 characters, preamble over 64 KiB, END before BEGIN or a second BEGIN = that check UNKNOWN (never retried); the shell is closed',

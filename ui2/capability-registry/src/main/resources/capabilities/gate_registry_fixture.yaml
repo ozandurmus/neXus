@@ -4311,7 +4311,7 @@ gates:
     transport_kind: "SSH_INTERACTIVE"
     canonical_command_key: "echo __NX_<NONCE>_BEGIN__; ( <READ> ) <STDERR>; echo __NX_<NONCE>_END_$?__"
     action_class: "read"
-    sign_off_state: "DRAFTED"
+    sign_off_state: "SIGNED_OFF"
     timeout_s: 30
     retry_rule: "none"
     max_frequency: "once per approved cp_failover read of a readiness, execution or resume run on an allow-listed cluster, wrapping that read; <NONCE> = 32 lowercase hex characters from SecureRandom, new per command; <READ> = the read's own gated command without the bash -lc wrapper, or vsenv <VSID> && <command> in a VS run; <STDERR> = 2>/dev/null, or 2>&1 for cphaprob -a if (the read that ran with a PTY on exec); Ctrl-C (0x03) once on a read timeout before the shell is closed"
