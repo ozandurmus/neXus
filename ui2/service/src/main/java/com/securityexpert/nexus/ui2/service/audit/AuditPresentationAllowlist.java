@@ -89,7 +89,7 @@ public final class AuditPresentationAllowlist {
             Map.entry("device_inventory_ha", Set.of(
                     "cluster_mode", "ha_id", "role", "run_id", "source")),
             Map.entry("device_inventory_run", Set.of(
-                    "collected_at", "context_count", "created_at", "device_id", "job_id", "run_id")),
+                    "collected_at", "context_count", "created_at", "device_id", "job_id", "not_collected", "run_id")),
             Map.entry("device_onboarding", Set.of(
                     "completed_at", "device_id", "skipped", "source", "started_at", "state", "step",
                     "step_job_id", "updated_at")),
