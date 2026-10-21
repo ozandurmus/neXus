@@ -1,20 +1,20 @@
 # Project queue (generated — do not edit; run: py tools/delivery/project_queue.py render)
-Build: NXS-LOCAL-0374 · Track: PCP.x · Generated: 2026-10-20T18:44:57Z
+Build: NXS-LOCAL-0374 · Track: PCP.x · Generated: 2026-10-21T08:09:33Z
 
 ## Now
 - NXS-LOCAL-0374 — System logs phase B: collectors, masked view, settings route, Spike Detective data (in_progress)
 ## Next
 - overview_acceptance_and_member_specific_tuning — Overview acceptance under aiview, and per-member settings not counted as drift (38 of 39 clusters show DIFF today) (planned)
 ## Open backlog (P1 first, then P2, then P3; in_progress before planned)
-- P0/in_progress cyber_controller_known_hosts_after_hosta_rebuild — Cyber Controller SFTP push to HOST-A fails after the... (target: docs/design/HOST_A_REBUILD_RUNBOOK.md)
-- P0/in_progress hosta_rebuild_real_env_acceptance — HOST-A rebuilt 2026-09-25: PO browser acceptance under... (target: docs/design/HOST_A_REBUILD_RUNBOOK.md se)
+- P0/in_progress cyber_controller_known_hosts_after_hosta_rebuild — Cyber Controller SFTP push to HOST-A fails after the... (target: HOST_A_REBUILD_RUNBOOK.md)
+- P0/in_progress hosta_rebuild_real_env_acceptance — HOST-A rebuilt 2026-09-25: PO browser acceptance under... (target: HOST_A_REBUILD_RUNBOOK.md section 5)
 - P0/in_progress pan_serial_representation_identity_evidence_closure — PAN HA runtime peer-serial representation mismatch on... (target: Pre-CLASS-2 (OP.0b/OP.2), independent of)
 - P0/in_progress pan_tls_trust_rejects_corporate_ca — Palo Alto discovery cannot reach a Panorama fronted by a.. (target: PanXmlApiTransport certificate verificat)
-- P0/in_progress private_replay_agent_operated_test_environment — Private Replay -- agent-operated privacy-filtered test... (target: docs/design/PRIVATE_REPLAY_ARCHITECTURE.)
+- P0/in_progress private_replay_agent_operated_test_environment — Private Replay -- agent-operated privacy-filtered test... (target: PRIVATE_REPLAY_ARCHITECTURE.md)
 - P0/in_progress recovery_offhost_key_custody — Off-host recovery artifacts and encryption-key custody (target: DEPLOY.1; blocks reliance on RB.3b recov)
 - P0/planned aiview_masking_manufactures_names_from_any_string — The AIView pseudonymizer turns any non-blank string into.. (target: TopologyNamePseudonymizer.computeDeviceN)
 - P0/planned cluster_membership_lost_at_enrollment — Cluster membership is known at discovery but does not... (target: enrollment/confirm path writing...)
-- P0/planned deploy1_evidence_egress_policy — DEPLOY.1 â€” Evidence Egress & Sharing Policy (target: DEPLOY.1)
+- P0/planned deploy1_evidence_egress_policy — DEPLOY.1 — Evidence Egress & Sharing Policy (target: DEPLOY.1)
 - P0/planned discovery_lateral_join_drops_cluster_members — Device display falls back to the management IP for every.. (target: JooqDeviceRepository DEVICE_SELECT later)
 - P0/planned job_failure_reason_is_never_recorded — A FAILED job records no reason: outcome, terminal_reason.. (target: jobs.outcome/terminal_reason/finished_at)
 - P0/planned ui2_microservices_deployment_split — Split K3s deployment into true independent microservices (target: )
@@ -25,8 +25,8 @@ Build: NXS-LOCAL-0374 · Track: PCP.x · Generated: 2026-10-20T18:44:57Z
 - P1/in_progress credential_profiles — Credential profile / enterprise vault abstraction
 - P1/in_progress failover_p0_closure_set — Failover plan implementation landed; integration gate
 - P1/in_progress failover_pilot_preparation — Failover pilot preparation (status doc lane)
-- P1/in_progress https_inventory_collect_radware — Radware Collect: https_inventory_collect for the Cyber...
-- P1/in_progress manifest_drift_service_worker_configuration_policy — Release applies the committed manifest of service/configur
+- P1/in_progress https_inventory_collect_radware — Radware Collect: Cyber Controller and DefensePro inventory
+- P1/in_progress manifest_drift_service_worker_configuration_policy — Worker still image+fallback patched; others use manifests
 - P1/in_progress module_per_pod_split — Module runtime landed; policy/configuration/compliance...
 - P1/in_progress nspm_wave1_acceptance — Policy hygiene and V144 lifecycle catalog landed
 - P1/in_progress scheduled_fleet_backup_enable_decision — Fleet backups enabled: daily 02:00 Istanbul
