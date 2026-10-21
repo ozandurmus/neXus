@@ -152,7 +152,8 @@ class AuditRedactionPolicyTest {
             // device_inventory_run
             "device_inventory_run.collected_at", "device_inventory_run.context_count",
             "device_inventory_run.created_at", "device_inventory_run.device_id",
-            "device_inventory_run.job_id", "device_inventory_run.run_id",
+            "device_inventory_run.job_id", "device_inventory_run.not_collected", // V171: read-kind tokens only
+            "device_inventory_run.run_id",
             // device_onboarding
             "device_onboarding.completed_at", "device_onboarding.device_id",
             "device_onboarding.skipped", "device_onboarding.source", "device_onboarding.started_at",
