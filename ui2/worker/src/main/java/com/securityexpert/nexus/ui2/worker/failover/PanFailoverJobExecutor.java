@@ -33,7 +33,6 @@ public final class PanFailoverJobExecutor {
     private static final String STATE="<show><high-availability><state/></high-availability></show>";
     private static final String SESSION_SYNC="<show><high-availability><state-synchronization/></high-availability></show>";
     private static final String SESSIONS="<show><session><info/></session></show>";
-    private static final String SYSTEM="<show><system><info/></system></show>";
     private static final String SUSPEND="<request><high-availability><state><suspend/></state></high-availability></request>";
     private static final String FUNCTIONAL="<request><high-availability><state><functional/></state></high-availability></request>";
     private static final Pattern SUCCESS=Pattern.compile("status\\s*=\\s*[\"']success[\"']");
@@ -66,6 +65,7 @@ public final class PanFailoverJobExecutor {
     private String switchMirroredRoles;
     private ReadinessShapeLog shapes;
     private final Map<Integer,Boolean> fieldsFound=new java.util.HashMap<>();
+    private final com.securityexpert.nexus.ui2.jobs.pan.PanFirewallCommandSwitches panSwitches;
 
     public PanFailoverJobExecutor(JooqCpFailoverRepository store,DeviceRepository devices,
             JobLeaseRepository leases,JobStepAttemptRepository attempts,DeviceTransport transport,
@@ -87,6 +87,15 @@ public final class PanFailoverJobExecutor {
             JobLeaseRepository leases,JobStepAttemptRepository attempts,DeviceTransport transport,
             PanCredentialResolver credentials,GateRegistryPort gates,Pause pause,Duration commandPause,
             FailoverMutationSwitch mutationSwitch) {
+        this(store,devices,leases,attempts,transport,credentials,gates,pause,commandPause,mutationSwitch,
+            com.securityexpert.nexus.ui2.jobs.pan.PanFirewallCommandSwitches.fromEnvironment());
+    }
+    /** {@code panSwitches}: PO 2026-10-21 scope update -- show session info may be switched off (check 6 then UNKNOWN). */
+    public PanFailoverJobExecutor(JooqCpFailoverRepository store,DeviceRepository devices,
+            JobLeaseRepository leases,JobStepAttemptRepository attempts,DeviceTransport transport,
+            PanCredentialResolver credentials,GateRegistryPort gates,Pause pause,Duration commandPause,
+            FailoverMutationSwitch mutationSwitch,com.securityexpert.nexus.ui2.jobs.pan.PanFirewallCommandSwitches panSwitches) {
+        this.panSwitches=java.util.Objects.requireNonNull(panSwitches);
         this.mutationSwitch=java.util.Objects.requireNonNull(mutationSwitch);
         this.store=store; this.devices=devices; this.leases=leases; this.attempts=attempts;
         this.transport=transport; this.credentials=credentials; this.gates=gates; this.pause=pause;
@@ -122,7 +131,8 @@ public final class PanFailoverJobExecutor {
                 requireMutationAdmission(false);
             }
             if (!attempts.findByJobAndStep(jobId,0).isEmpty()) throw new Stop("PRIOR_ATTEMPT_NOT_REPLAYED",0);
-            for (String command:List.of(STATE,SESSION_SYNC,SESSIONS,SYSTEM)) gate(command);
+            for (String command:List.of(STATE,SESSION_SYNC)) gate(command);
+            if (panSwitches.showSessionInfo()) gate(SESSIONS);
             if (!readiness) { gate(SUSPEND); gate(FUNCTIONAL); }
             Peer first=peer(members.get(0)),second=peer(members.get(1));
             state("PRECHECK","PRECHECK",null,null,null);
@@ -225,7 +235,6 @@ public final class PanFailoverJobExecutor {
         String expected=STATE.equals(command)?"pan_inventory_show_ha_state"
             :SESSION_SYNC.equals(command)?"pan_failover_session_sync"
             :SESSIONS.equals(command)?"pan_failover_session_info"
-            :SYSTEM.equals(command)?"pan_inventory_show_system_info"
             :SUSPEND.equals(command)?"pan_failover_suspend"
             :FUNCTIONAL.equals(command)?"pan_failover_functional":null;
         if (expected==null) throw new Stop("COMMAND_NOT_APPROVED",0);
@@ -240,7 +249,7 @@ public final class PanFailoverJobExecutor {
         return !READINESS_KIND.equals(kind) || !(SUSPEND.equals(command) || FUNCTIONAL.equals(command));
     }
     private static boolean isRead(String command) {
-        return STATE.equals(command) || SESSION_SYNC.equals(command) || SESSIONS.equals(command) || SYSTEM.equals(command);
+        return STATE.equals(command) || SESSION_SYNC.equals(command) || SESSIONS.equals(command);
     }
     private String call(Peer peer,String command) throws InterruptedException {
         var g=gate(command);
@@ -283,7 +292,7 @@ public final class PanFailoverJobExecutor {
         if (STATE.equals(command)) {
             for (int check=1;check<=4;check++) shapes.capture(check,completed.body());
         } else {
-            int check=SESSION_SYNC.equals(command)?5:SESSIONS.equals(command)?6:SYSTEM.equals(command)?7:0;
+            int check=SESSION_SYNC.equals(command)?5:SESSIONS.equals(command)?6:0;
             if (check!=0) shapes.capture(check,completed.body());
         }
         return completed.body();
@@ -304,9 +313,14 @@ public final class PanFailoverJobExecutor {
                 oldActive==second?returnedRole:"active",switched);
         String syncA=call(first,SESSION_SYNC);
         String syncB=call(second,SESSION_SYNC);
-        Long sessionsA=PanFailoverChecks.sessions(call(first,SESSIONS));
-        Long sessionsB=PanFailoverChecks.sessions(call(second,SESSIONS));
-        String versions=PanFailoverChecks.versions(call(first,SYSTEM),call(second,SYSTEM));
+        // PO 2026-10-21 scope update: show session info may be switched off (NEXUS_PAN_FW_SHOW_SESSION_INFO=retired) --
+        // then it is never sent and check 6 (sessions carried) is UNKNOWN with the retired reason.
+        boolean sessionsRead=panSwitches.showSessionInfo();
+        Long sessionsA=sessionsRead?PanFailoverChecks.sessions(call(first,SESSIONS)):null;
+        Long sessionsB=sessionsRead?PanFailoverChecks.sessions(call(second,SESSIONS)):null;
+        // Check 7 (version parity) read show system info, retired for firewalls by the PO on 2026-10-21: UNKNOWN with
+        // that reason, never a guess -- and, like every non-PASS check, it stops an execution before any write.
+        String versions=PanFailoverChecks.VERSION_PARITY_NOT_COLLECTED;
         Long active=oldActive==null?("active".equals(a.role())?sessionsA:sessionsB)
             :(oldActive==first?sessionsB:sessionsA);
         String carried=sessionsA==null || sessionsB==null?"UNKNOWN"
@@ -326,9 +340,12 @@ public final class PanFailoverJobExecutor {
             if (no==4) reason=configurationSync.derived();
             if (no==5) reason=sessionSync.derived();
             if (no==6 && !"UNKNOWN".equals(statuses[i])) reason="{\"count\":"+sessionsA+"}";
+            if (no==7) reason=PanFailoverChecks.VERSION_PARITY_NOT_COLLECTED_DERIVED;
+            if (no==6 && !sessionsRead) reason=PanFailoverChecks.SESSIONS_NOT_COLLECTED_DERIVED;
             String derived=no==1?PanFailoverChecks.stateEvidence(a,b,switchMirroredRoles):reason;
             store.check(runId,phase,first.id(),null,no,statuses[i],derived);
             if (no==6 && !"UNKNOWN".equals(statuses[i])) reason="{\"count\":"+sessionsB+"}";
+            if (no==6 && !sessionsRead) reason=PanFailoverChecks.SESSIONS_NOT_COLLECTED_DERIVED;
             derived=no==1?PanFailoverChecks.stateEvidence(b,a,switchMirroredRoles):reason;
             store.check(runId,phase,second.id(),null,no,statuses[i],derived);
         }

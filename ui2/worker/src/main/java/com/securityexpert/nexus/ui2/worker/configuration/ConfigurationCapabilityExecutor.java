@@ -67,7 +67,6 @@ public final class ConfigurationCapabilityExecutor {
     private static final java.time.Duration PAN_EFFECTIVE_RUNNING_TIMEOUT = java.time.Duration.ofSeconds(120);
     private static final java.time.Duration PAN_OTHER_TIMEOUT = java.time.Duration.ofSeconds(60);
     private static final Pattern API_KEY = Pattern.compile("<key>([^<]+)</key>");
-    private static final Pattern SERIAL_TAG = Pattern.compile("(?is)<serial>\\s*([^<]+?)\\s*</serial>");
 
     private final DeviceTransport transport;
     private final PanCredentialResolver panCredentialResolver;
@@ -365,15 +364,17 @@ public final class ConfigurationCapabilityExecutor {
         }
         Map<String, String> headers = Map.of("X-PAN-KEY", apiKey.get());
 
-        String identityOutput = xmlApiOutput(target, ConfigurationReadPlan.PAN_SHOW_SYSTEM_INFO, headers, IDENTITY_TIMEOUT);
-        String serial = firstMatch(SERIAL_TAG, identityOutput).orElse("");
-        PresentedIdentity presented = new PresentedIdentity(serial, Optional.empty());
+        // PO 2026-10-21 (PanSystemInfoRetirement): show system info is never sent to a firewall. Its serial was the
+        // only direct identity evidence here, so the identity check is NOT_EVALUABLE (never a guessed match; the strict
+        // posture refuses), and the Panorama cross-check, keyed by that serial, names no override source.
         IdentityMismatchEvaluator.Decision decision =
-                IdentityMismatchEvaluator.evaluate(recordedIdentity, presented, strictRefuseEnabled);
+                IdentityMismatchEvaluator.evaluateWithoutPresentedIdentity(strictRefuseEnabled);
         if (decision == IdentityMismatchEvaluator.Decision.REFUSE) {
             return new ConfigurationResult.IdentityMismatchRefused(
-                    "presented serial does not match the recorded baseline; strict posture refused the contact");
+                    com.securityexpert.nexus.ui2.persistence.device.PanSystemInfoRetirement.IDENTITY_NOT_EVALUABLE
+                            + "; strict posture refused the contact");
         }
+        String serial = "";
 
         try {
             List<ConfigurationRunData> runs = new ArrayList<>();

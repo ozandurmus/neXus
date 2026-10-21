@@ -97,14 +97,19 @@ export function identityTiles(device: DeviceSummary, collectedAt: string | null,
     ...cells,
   ];
   const needsGate = "not collected -- needs its own gated read";
+  // A Palo Alto firewall since PO 2026-10-21: these facts are not collected at all. UNKNOWN (no "Not read yet" -- a
+  // collect would not read them); the reason is said once, in the card's note (platformFactsNote).
+  const retired = isPaloAlto && Boolean(device.platform_facts_not_collected_reason);
+  if (retired) common[1] = { label: "Model", value: null, absent: "not collected" };
+  const panAbsent = retired ? { absent: "not collected" } : { absent: "not read yet -- run Inventory collect", absentWord: "Not read yet" as const };
   return [
     ...common,
-    { label: "Serial number", value: device.serial_number ?? null, absent: isPaloAlto ? "not read yet -- run Inventory collect" : needsGate, absentWord: "Not read yet", mono: true },
-    { label: "Software version", value: device.software_version, absent: "not read at first contact" },
+    { label: "Serial number", value: device.serial_number ?? null, ...(isPaloAlto ? panAbsent : { absent: needsGate, absentWord: "Not read yet" as const }), mono: true },
+    { label: "Software version", value: device.software_version, absent: retired ? "not collected" : "not read at first contact" },
     isPaloAlto
-      ? { label: "Content versions", value: device.content_versions ? <ContentVersions versions={device.content_versions} /> : null, absent: "not read yet -- run Inventory collect", absentWord: "Not read yet" }
+      ? { label: "Content versions", value: device.content_versions ? <ContentVersions versions={device.content_versions} /> : null, ...panAbsent }
       : { label: "Hotfix / Jumbo take", value: device.hotfix_level ?? null, absent: needsGate, absentWord: "Not read yet" },
-    { label: "Uptime", value: device.uptime_text ?? null, absent: isPaloAlto ? "not read yet -- run Inventory collect" : needsGate, absentWord: "Not read yet" },
+    { label: "Uptime", value: device.uptime_text ?? null, ...(isPaloAlto ? panAbsent : { absent: needsGate, absentWord: "Not read yet" as const }) },
     haRole,
     { label: isPaloAlto ? "Virtual systems (VSYS)" : "Virtual systems (VSX)", value: vs.length > 0 ? `${vs.length} · ${vs.join(", ")}` : "none" },
     ...tail.slice(0, 2),
@@ -124,7 +129,18 @@ export function identityTiles(device: DeviceSummary, collectedAt: string | null,
   ];
 }
 
-export function IdentityCard({ title, tiles }: { readonly title: string; readonly tiles: readonly IdentityTile[] }) {
+/**
+ * The one line that says why a Palo Alto firewall's platform facts are UNKNOWN (PO 2026-10-21), or null. Said once, on
+ * the grid -- the tiles only say "not collected".
+ */
+export function platformFactsNote(device: Pick<DeviceSummary, "vendor_hint" | "platform_facts_not_collected_reason">): string | null {
+  if (device.vendor_hint !== "palo_alto" || !device.platform_facts_not_collected_reason) return null;
+  return "Platform facts: not collected for Palo Alto firewalls (PO 2026-10-21). show system info is retired, so model, "
+    + "software version, serial, content versions and uptime are UNKNOWN and the identity check is not evaluable; "
+    + "the device name is the last one recorded and is no longer refreshed.";
+}
+
+export function IdentityCard({ title, tiles, note }: { readonly title: string; readonly tiles: readonly IdentityTile[]; readonly note?: string | null }) {
   return (
     <Card id={PLATFORM_IDENTITY_GRID_ID} sx={{ p: 2, ...CARD, scrollMarginTop: 16 }}>
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", mb: 1.5 }}>
@@ -134,6 +150,9 @@ export function IdentityCard({ title, tiles }: { readonly title: string; readonl
         </Box>
         <Typography variant="caption" color="text.secondary">What an audit asks for first</Typography>
       </Box>
+      {note ? (
+        <Typography data-testid="platform-facts-note" variant="body2" sx={{ color: m3.onSurfaceVar, mb: 1.5 }}>{note}</Typography>
+      ) : null}
       <Box sx={{ display: "grid", gap: 1.5, gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))" }}>
         {tiles.map((tile) => (
           <Box key={tile.label} sx={{ p: 1.5, borderRadius: "8px", border: `1px solid ${m3.outlineVar}`, bgcolor: m3.scLow }}>

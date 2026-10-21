@@ -38,7 +38,7 @@ import {
   toCsv,
   vsListOf,
 } from "./DeviceShared";
-import { IdentityCard, PlatformIdentitySummary, identityTiles } from "./PlatformIdentity";
+import { IdentityCard, PlatformIdentitySummary, identityTiles, platformFactsNote } from "./PlatformIdentity";
 export { identityTiles } from "./PlatformIdentity";
 import {
   filterProjection,
@@ -308,7 +308,7 @@ export function DeviceConfigurationDetail({ device, embedded = false }: { readon
         </Typography>
       </Box>
       {/* The grid lives on the Identity tab (roadmap 2.6); the device tab strip shows it as one line that leads there. */}
-      {embedded ? <PlatformIdentitySummary device={device} /> : <IdentityCard title={device.hostname ?? device.device_id} tiles={identityTiles(device, collectedAt)} />}
+      {embedded ? <PlatformIdentitySummary device={device} /> : <IdentityCard title={device.hostname ?? device.device_id} tiles={identityTiles(device, collectedAt)} note={platformFactsNote(device)} />}
       {error && <EmptyPanel title="Configuration unavailable" body={error} />}
       {!error && loading && <EmptyPanel title="Configuration" body="Reading the device's configuration…" />}
       {!error && !loading && !projection && textForbidden && (

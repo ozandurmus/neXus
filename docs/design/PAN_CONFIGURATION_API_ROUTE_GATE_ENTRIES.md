@@ -1,5 +1,7 @@
 # Palo Alto configuration collection — API route gate entries
 
+> **Amendment 2026-10-21 (PO).** Entry 1 (`show system info`) is withdrawn: the configuration collect no longer sends it, and the firewall identity check is NOT_EVALUABLE. See `PO_DECISION_RECORD_2026_10_21_PAN_SHOW_SYSTEM_INFO_RETIRED.md`.
+
 ## Status
 
 **APPROVED — PRODUCT OWNER, 2026-09-14; CALLS RUN BY THE PRODUCT OWNER ON

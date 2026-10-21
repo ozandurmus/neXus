@@ -566,6 +566,9 @@ gates:
     source_document_pointer: "docs/design/CP_INVENTORY_COMMAND_GATE_ENTRIES.md entry 20 (2026-09-21 amendment)"
 
   # NXS-LOCAL-0164: 14E PF-1 requests. docs/design/PAN_INVENTORY_API_ROUTE_GATE_ENTRIES.md.
+  # Withdrawn 2026-10-21 (V171): the PO retired show system info for Palo Alto firewalls entirely. BLOCKED, so it
+  # resolves UNKNOWN for every executor; kept, not deleted, as the record of what was sent before. The Panorama row
+  # pan_panorama_show_system_info (platform_role_scope panorama) is out of scope and stays SIGNED_OFF.
   - gate_id: pan_inventory_show_system_info
     vendor: palo_alto
     platform_role_scope: pan_firewall
@@ -573,15 +576,15 @@ gates:
     transport_kind: PAN_XML_API
     canonical_command_key: "<show><system><info/></system></show>"
     action_class: read
-    sign_off_state: SIGNED_OFF
+    sign_off_state: BLOCKED
     timeout_s: 30
     retry_rule: none
-    max_frequency: "once pre, once post-switch and once post-return per member per failover run; once per readiness run"
+    max_frequency: "never -- retired by the PO 2026-10-21"
     session_reuse_rule: "the one key-generation session per run"
     unsupported_behavior_ref: "non-XML or error envelope is a result, not an error"
     secret_output_risk: none
     safe_telemetry_fields: []
-    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_06_FAILOVER_EXECUTION_ESTATE.md item 7; approved PR9 phases"
+    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_21_PAN_SHOW_SYSTEM_INFO_RETIRED.md (withdrawn; was PO_DECISION_RECORD_2026_10_06_FAILOVER_EXECUTION_ESTATE.md item 7)"
 
   - gate_id: pan_inventory_show_ha_state
     vendor: palo_alto
@@ -720,6 +723,7 @@ gates:
     source_document_pointer: "docs/design/CP_CONFIGURATION_COMMAND_GATE_ENTRIES.md entry 4"
 
   # NXS-LOCAL-0165: 14G CG-4 Palo Alto configuration reads. docs/design/PAN_CONFIGURATION_API_ROUTE_GATE_ENTRIES.md.
+  # (Since 2026-10-21 entry 1 is retired with that row -- the configuration collect sends no show system info.)
   # entry 1 (show system info) is not its own row here: its canonical key is
   # byte-identical to pan_inventory_show_system_info above (same vendor,
   # platform_role_scope, shell_context, transport_kind, literal) -- C4 §3.2's

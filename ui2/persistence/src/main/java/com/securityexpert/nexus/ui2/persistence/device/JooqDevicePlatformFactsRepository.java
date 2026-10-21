@@ -29,7 +29,9 @@ public final class JooqDevicePlatformFactsRepository implements DevicePlatformFa
 
     @Override
     public void record(DevicePlatformFacts facts) {
-        if (facts.isEmpty()) {
+        // An empty read records nothing -- except a Palo Alto firewall's retired-command record (PO 2026-10-21), which
+        // must replace the previous run's values so none of them is left standing as current.
+        if (facts.isEmpty() && !PanSystemInfoRetirement.SOURCE_READ.equals(facts.sourceRead())) {
             return;
         }
         String versions = toJson(facts.contentVersions());

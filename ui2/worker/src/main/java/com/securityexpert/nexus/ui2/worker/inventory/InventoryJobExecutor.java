@@ -3,6 +3,7 @@ package com.securityexpert.nexus.ui2.worker.inventory;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -145,7 +146,8 @@ public final class InventoryJobExecutor {
         }
 
         InventoryRun run = new InventoryRun(UUID.randomUUID().toString(), targetDeviceId, jobId, Instant.now(),
-                completed.contexts().size(), completed.contexts(), completed.haFacts(), completed.virtualSystems());
+                completed.contexts().size(), completed.contexts(), completed.haFacts(), completed.virtualSystems(), List.of(),
+                null, completed.notCollected());
         try {
             deviceInventoryRepository.recordRun(run, ACTOR, ACTION_COMPLETED);
         } catch (RuntimeException recordFailed) {
@@ -174,6 +176,17 @@ public final class InventoryJobExecutor {
         }
         // Platform identity facts (V46): the run is the record; a facts write that fails is logged, never fails the job.
         completed.platformFacts().ifPresent(read -> {
+            if (read.systemInfoRetired()) {
+                // PO 2026-10-21: a Palo Alto firewall's model and version are no longer read -- clear the previous run's
+                // values so the screen, lifecycle and compliance say UNKNOWN instead of showing them as current.
+                try {
+                    deviceRepository.clearObservedPlatformFacts(targetDeviceId, ACTOR, "inventory_pan_system_info_retired");
+                } catch (RuntimeException clearFailed) {
+                    com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(clearFailed);
+                    LOG.log(System.Logger.Level.WARNING, "[OBSERVED_FACTS_CLEAR_FAILED] Inventory job {0}: {1}", jobId,
+                            clearFailed.getClass().getSimpleName());
+                }
+            }
             try {
                 platformFactsRepository.record(read.forDevice(targetDeviceId));
             } catch (RuntimeException factsFailed) {

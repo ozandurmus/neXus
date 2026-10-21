@@ -36,10 +36,11 @@ public final class JooqDeviceInventoryRepository implements DeviceInventoryRepos
     @Override
     public void recordRun(InventoryRun run, String actorFingerprint, String actionId) {
         auditedTransactionBoundary.inTransaction(actorFingerprint, actionId, dsl -> {
-            dsl.execute("insert into device_inventory_run(run_id, device_id, job_id, collected_at, context_count, virtual_systems) "
-                    + "values ({0}, {1}, {2}, {3}, {4}, {5})",
+            dsl.execute("insert into device_inventory_run(run_id, device_id, job_id, collected_at, context_count, virtual_systems, "
+                    + "not_collected) values ({0}, {1}, {2}, {3}, {4}, {5}, {6})",
                     run.runId(), run.deviceId(), run.jobId(), Timestamp.from(run.collectedAt()), run.contextCount(),
-                    run.virtualSystems().orElse(null));
+                    run.virtualSystems().orElse(null),
+                    run.notCollected().isEmpty() ? null : String.join(",", run.notCollected()));
 
             for (GridMember m : run.gridMembers()) {
                 dsl.execute("insert into grid_member(member_id, run_id, host_name, vip_address, platform, hardware_type, hypervisor, "
@@ -97,7 +98,7 @@ public final class JooqDeviceInventoryRepository implements DeviceInventoryRepos
     @Override
     public Optional<InventoryRun> findLatestRun(String deviceId) {
         return transactionBoundary.inTransaction(dsl -> {
-            Result<Record> runRows = dsl.fetch("select run_id, device_id, job_id, collected_at, context_count, virtual_systems "
+            Result<Record> runRows = dsl.fetch("select run_id, device_id, job_id, collected_at, context_count, virtual_systems, not_collected "
                     + "from device_inventory_run where device_id = {0} order by collected_at desc limit 1", deviceId);
             return runRows.stream().findFirst().map(row -> assemble(dsl, row));
         });
@@ -163,7 +164,7 @@ public final class JooqDeviceInventoryRepository implements DeviceInventoryRepos
         return transactionBoundary.inTransaction(dsl -> {
             List<InventoryRun> result = new ArrayList<>();
             for (String deviceId : deviceIds) {
-                Result<Record> runRows = dsl.fetch("select run_id, device_id, job_id, collected_at, context_count, virtual_systems "
+                Result<Record> runRows = dsl.fetch("select run_id, device_id, job_id, collected_at, context_count, virtual_systems, not_collected "
                         + "from device_inventory_run where device_id = {0} order by collected_at desc limit 1",
                         deviceId);
                 runRows.stream().findFirst().map(row -> assemble(dsl, row)).ifPresent(result::add);
@@ -260,7 +261,16 @@ public final class JooqDeviceInventoryRepository implements DeviceInventoryRepos
 
         return new InventoryRun(runId, runRow.get("device_id", String.class), runRow.get("job_id", String.class),
                 runRow.get("collected_at", Timestamp.class).toInstant(), runRow.get("context_count", Integer.class),
-                contexts, haFacts, virtualSystems, gridMembers, summary);
+                contexts, haFacts, virtualSystems, gridMembers, summary, notCollected(runRow));
+    }
+
+    /** {@code device_inventory_run.not_collected} (V171): comma-separated read-kind tokens, absent on older rows. */
+    private static List<String> notCollected(Record runRow) {
+        String packed = runRow.field("not_collected") != null ? runRow.get("not_collected", String.class) : null;
+        if (packed == null || packed.isBlank()) {
+            return List.of();
+        }
+        return java.util.Arrays.stream(packed.split(",")).map(String::strip).filter(t -> !t.isEmpty()).toList();
     }
 
     /** {@code DNS=WORKING,DHCP=INACTIVE} back to pairs; malformed items skipped. */

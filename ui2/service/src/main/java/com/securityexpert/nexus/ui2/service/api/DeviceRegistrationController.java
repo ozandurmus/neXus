@@ -21,6 +21,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceConfirmFacts;
 import com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFacts;
 import com.securityexpert.nexus.ui2.persistence.device.DevicePlatformFactsRepository;
+import com.securityexpert.nexus.ui2.persistence.device.PanSystemInfoRetirement;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRecord;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceSummaryRecord;
 import com.securityexpert.nexus.ui2.persistence.device.DeviceRepository.BackupDisposition;
@@ -299,6 +300,7 @@ public final class DeviceRegistrationController {
         Map<String, Object> body = toDetailBody(found.device(), found.facts(), found.job(),
                 platformFacts.flatMap(DevicePlatformFacts::platformFamily));
         putPlatformFacts(body, platformFacts);
+        applyPanSystemInfoRetirement(body, found.device().vendorHint(), found.device().role());
         putPolicyInstall(body, policyInstallRepository.find(deviceId));
         body.put("identity_check", toIdentityCheckBody(identityCheckRepository.find(deviceId)
                 .orElse(com.securityexpert.nexus.ui2.persistence.device.DeviceIdentityCheck.none(deviceId))));
@@ -319,6 +321,7 @@ public final class DeviceRegistrationController {
                     Map<String, Object> body = toSummaryBody(summary,
                             Optional.ofNullable(platformFacts.get(summary.deviceId())).flatMap(DevicePlatformFacts::platformFamily));
                     putPlatformFacts(body, Optional.ofNullable(platformFacts.get(summary.deviceId())));
+                    applyPanSystemInfoRetirement(body, summary.vendorHint(), summary.role());
                     putPolicyInstall(body, Optional.ofNullable(policies.get(summary.deviceId())));
                     java.time.Instant inv = inventoryAt.get(summary.deviceId());
                     body.put("inventory_collected_at", inv == null ? null : inv.toString());
@@ -392,6 +395,34 @@ public final class DeviceRegistrationController {
         // Amendment A-2026-09-23 (PLATFORM_IDENTITY_FACTS_CONTRACT §2): which read produced these facts -- a read-kind
         // token such as cp_show_asset_system_cpinfo_hotfixes_uptime, never device output.
         body.put("platform_facts_source", facts.map(DevicePlatformFacts::sourceRead).orElse(null));
+    }
+
+    /**
+     * PO 2026-10-21 ({@link PanSystemInfoRetirement}): a Palo Alto firewall's model, software version, serial, content
+     * versions, uptime and platform family came only from show system info, now retired. Until its next inventory run
+     * clears them, values stored by an earlier read would look current -- so the projection withholds them (UNKNOWN)
+     * and says why, once, in {@code platform_facts_not_collected_reason}. The hostname stays: it is the device's
+     * recorded name, no longer refreshed. Every other device carries the key as {@code null}.
+     */
+    static void applyPanSystemInfoRetirement(Map<String, Object> body, String vendor, String role) {
+        if (!PanSystemInfoRetirement.appliesTo(vendor, role)) {
+            body.put("platform_facts_not_collected_reason", null);
+            return;
+        }
+        for (String key : new String[] {"model", "software_version", "serial_number", "hotfix_level", "platform_family",
+                "content_versions", "uptime_text"}) {
+            if (body.containsKey(key)) {
+                body.put(key, null);
+            }
+        }
+        if (body.get("facts") instanceof Map<?, ?> facts) {
+            Map<String, Object> withheld = new LinkedHashMap<>();
+            facts.forEach((key, value) -> withheld.put(String.valueOf(key), value));
+            withheld.put("model", null);
+            withheld.put("software_version", null);
+            body.put("facts", withheld);
+        }
+        body.put("platform_facts_not_collected_reason", PanSystemInfoRetirement.REASON);
     }
 
     private static Map<String, Object> toSummaryBody(DeviceSummaryRecord summary, Optional<String> platform) {

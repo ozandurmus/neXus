@@ -143,9 +143,19 @@ public final class ConfirmCapabilityExecutor {
         }
     }
 
+    /** The confirm's refusal for a Palo Alto firewall since PO 2026-10-21 (PanSystemInfoRetirement). */
+    static final String PAN_FIREWALL_CONFIRM_REFUSED = "palo alto firewall enrollment confirm needs the firewall serial from "
+            + "show system info, which the PO retired on 2026-10-21 -- the identity cannot be read, so nothing was sent "
+            + "(see " + com.securityexpert.nexus.ui2.persistence.device.PanSystemInfoRetirement.DECISION_RECORD + ")";
+
     private ConfirmResult confirmPaloAlto(ConfirmRequest request) {
         var target = request.apiTarget()
                 .orElseThrow(() -> new IllegalArgumentException("palo_alto confirm requires an apiTarget"));
+        if (!request.managementServer()) {
+            // Refused before the credential is resolved or a key generated: the serial is the confirm's identity
+            // baseline (EC-5) and the peer-follow token, and no other approved read on this session provides it.
+            return new ConfirmResult.Refused(PAN_FIREWALL_CONFIRM_REFUSED);
+        }
         PanCredentialMaterial credential;
         try {
             credential = panCredentialResolver.resolve(request.credentialRef());

@@ -166,6 +166,14 @@ public final class JooqDeviceRepository implements DeviceRepository {
     }
 
     @Override
+    public boolean clearObservedPlatformFacts(String deviceId, String actorFingerprint, String actionId) {
+        return auditedTransactionBoundary.inTransaction(actorFingerprint, actionId, (DSLContext dsl) -> dsl.execute(
+                "update devices set observed_model = null, observed_software_version = null "
+                        + "where device_id = {0} and (observed_model is not null or observed_software_version is not null)",
+                deviceId)) == 1;
+    }
+
+    @Override
     public String registerDraft(DeviceDraft draft, String actorFingerprint, String actionId) {
         return auditedTransactionBoundary.inTransaction(actorFingerprint, actionId, (DSLContext dsl) -> {
             Timestamp now = Timestamp.from(Instant.now());

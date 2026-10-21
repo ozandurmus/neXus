@@ -1,5 +1,7 @@
 # Device first contact — command gate entries
 
+> **Amendment 2026-10-21 (PO).** Entry 3 (Palo Alto identity read, `show system info`) is now sent to a Panorama only. A firewall's enrollment confirm is refused before any contact. See `PO_DECISION_RECORD_2026_10_21_PAN_SHOW_SYSTEM_INFO_RETIRED.md`.
+
 ## Status
 
 **APPROVED — PRODUCT OWNER, 2026-09-14, FOR PURPOSE AND CLASS; COMMAND FORMS

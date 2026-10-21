@@ -44,8 +44,8 @@ public final class ConfigurationCapabilities {
 
     public static Capability paloAlto(GateRegistryPort gateRegistry) {
         CapabilityStep connect = connectStep();
-        List<CapabilityStep> requests = List.of(xmlApiCallStep(ConfigurationReadPlan.PAN_SHOW_SYSTEM_INFO),
-                xmlApiCallStep("type=config&action=show&xpath=/config"),
+        // No show system info step: retired for firewalls by the PO on 2026-10-21 (gate row BLOCKED, V171).
+        List<CapabilityStep> requests = List.of(xmlApiCallStep("type=config&action=show&xpath=/config"),
                 xmlApiCallStep(ConfigurationReadPlan.PAN_EFFECTIVE_RUNNING),
                 xmlApiCallStep(ConfigurationReadPlan.PAN_MERGED));
         CapabilitySpec spec = new CapabilitySpec(ConfigurationCapabilityIds.PAN_CONFIGURATION_COLLECT, "palo_alto",

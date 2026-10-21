@@ -32,8 +32,10 @@ final class ScriptedPaloAltoConfigTransport implements DeviceTransport {
 
     private static final String API_KEY = "test-api-key";
 
-    /** {@code cmd} (op-type) -> scripted response body; system info and merged. */
+    /** {@code cmd} (op-type) -> scripted response body; merged (system info is retired for firewalls, 2026-10-21). */
     private final Map<String, String> outputByOpCmd;
+    /** Every op-type {@code cmd} this transport was asked to send, in order. */
+    final java.util.List<String> sentOpCmds = new java.util.ArrayList<>();
     private final String activeFormOutput;
     private final java.util.function.Supplier<InputStream> effectiveRunningStreamSupplier;
 
@@ -68,6 +70,7 @@ final class ScriptedPaloAltoConfigTransport implements DeviceTransport {
             return new XmlApiResult.Completed(200, activeFormOutput);
         }
         String cmd = spec.formParams().get("cmd");
+        sentOpCmds.add(cmd);
         String output = outputByOpCmd.get(cmd);
         if (output == null) {
             throw new IllegalStateException("cmd outside this test's scripted set: " + cmd);

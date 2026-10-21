@@ -123,6 +123,17 @@ public interface DeviceRepository {
         return false;
     }
 
+    /**
+     * PO 2026-10-21 ({@link PanSystemInfoRetirement}): a Palo Alto firewall's model and software version came only from
+     * {@code show system info}, now retired -- a run that could not read them clears them rather than leave the previous
+     * value standing as current. The hostname is kept as the device's recorded name (it names the device everywhere;
+     * the screen says it is no longer refreshed); the identity baseline (recorded_identity_*) is untouched.
+     * True when the row changed.
+     */
+    default boolean clearObservedPlatformFacts(String deviceId, String actorFingerprint, String actionId) {
+        return false;
+    }
+
     /** GET /devices (DeviceSummary rows), newest first -- every device, its vendor and its observed facts. */
     List<DeviceSummaryRecord> listAll();
 
