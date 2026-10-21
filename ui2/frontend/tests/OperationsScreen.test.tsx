@@ -129,7 +129,7 @@ describe("OperationsScreen tabs", () => {
     await screen.findByText("1 clusters enrolled");
     expect(screen.getByRole("table", { name: "HA clusters" })).toBeInTheDocument();
     expect(screen.getByText(/Active: FW-ROMEO-01-M1/)).toHaveTextContent("Standby: FW-ROMEO-01-M2");
-    expect(screen.getAllByText("Unknown").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("UNKNOWN").length).toBeGreaterThan(0);
   });
 
   it("preselects the cluster named in ?cluster_ref= (a link from another screen)", async () => {
@@ -150,7 +150,7 @@ describe("OperationsScreen tabs", () => {
     await screen.findByText("1 clusters enrolled · 0 readiness records · 0 not supported");
     expect(screen.getByText("ready of 1 clusters")).toBeInTheDocument();
     expect(screen.getByText("0 not ready · 1 unknown")).toBeInTheDocument();
-    expect(screen.getAllByText("Unknown").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("UNKNOWN").length).toBeGreaterThan(0);
   });
 
   it("links the Failed jobs KPI card to the Jobs table with its Failed pill pressed (roadmap 2.4)", async () => {
@@ -346,7 +346,7 @@ it("summarizes the same cluster readiness counts in the KPI and chips without do
   const card = screen.getByText("Readiness checks", { selector: "p" }).closest("[data-kpi]") as HTMLElement;
   expect(card.querySelector("[data-kpi-figure]")).toHaveTextContent(/^1$/);
   expect(within(card).getByText("ready of 4 clusters")).toBeInTheDocument();
-  for (const name of ["Ready", "Not ready", "Unknown", "Not supported"]) expect(screen.getByRole("button", { name: `${name}: 1 clusters` })).toBeInTheDocument();
+  for (const name of ["Ready", "Not ready", "UNKNOWN", "Not supported"]) expect(screen.getByRole("button", { name: `${name}: 1 clusters` })).toBeInTheDocument();
   expect(screen.queryByText("NOT EVALUATED")).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "Ready: 1 clusters" }));
   expect(screen.getByText("1 not ready · 1 unknown")).toBeInTheDocument();

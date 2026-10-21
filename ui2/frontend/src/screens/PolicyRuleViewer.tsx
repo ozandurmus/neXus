@@ -5,6 +5,7 @@ import { VendorBadge } from "../shell/States";
 import { m3 } from "../theme/m3Theme";
 import { UNKNOWN_HATCH } from "../theme/tokens";
 import { getPolicyHistory, type PolicyCell, type PolicyMetadata, type PolicyObject, type PolicyPage, type PolicyRevision, type PolicyRule, type PolicySchedule, type PolicySection } from "../auth/adminApi";
+import { statusWord } from "../shell/presenters";
 
 export function reportPolicyLoadError(scope: "snapshots" | "rules" | "object" | "history" | "inventory" | "usage", error: unknown) {
   // Record categories only: error messages and API bodies may contain sensitive identities.
@@ -161,7 +162,7 @@ const chipLabelTwoLine = { ...chipLabel, display: "-webkit-box", WebkitLineClamp
 function objectTitle(object: PolicyObject | undefined, kind: ObjectKind) {
   const members = object?.members?.length ?? 0, values = object?.values ?? [];
   const resolved = values.length ? ` · ${values.slice(0, 8).join(", ")}${values.length > 8 ? ` +${values.length - 8} more` : ""}` : kind === "group" && !members ? " · members in the object view" : "";
-  return `${OBJECT_KIND_WORDS[kind]}${members ? ` · ${members} members` : ""}${resolved}${object && object.status !== "RESOLVED" ? ` · ${object.status}` : ""} · Open object`;
+  return `${OBJECT_KIND_WORDS[kind]}${members ? ` · ${members} members` : ""}${resolved}${object && object.status !== "RESOLVED" ? ` · ${statusWord(object.status)}` : ""} · Open object`;
 }
 export function ObjectChip({ id, objects, openObject, maxWidth, lines = 1 }: { id: string; objects: Map<string, PolicyObject>; openObject: (id: string) => void; maxWidth?: number; lines?: 1 | 2 }) {
   const object = objects.get(id), kind = objectKind(object);

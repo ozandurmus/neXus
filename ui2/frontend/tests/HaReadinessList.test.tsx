@@ -53,7 +53,7 @@ it("uses full width, compact rows and cluster counts, sorting not ready, unknown
   const layout = table().closest(".ha-readiness-full-width")!;
   expect(layout).toHaveStyle({ width: "100%", minWidth: "0" });
   expect(getComputedStyle(layout).maxWidth).toBe("");
-  for (const name of ["Ready", "Not ready", "Unknown", "Not supported"]) expect(screen.getByRole("button", { name: `${name}: 1 clusters` })).toHaveAttribute("aria-pressed", "false");
+  for (const name of ["Ready", "Not ready", "UNKNOWN", "Not supported"]) expect(screen.getByRole("button", { name: `${name}: 1 clusters` })).toHaveAttribute("aria-pressed", "false");
   expect(within(table()).getAllByRole("row").slice(1).map(e => e.getAttribute("aria-label"))).toEqual(["CLS-BRAVO-02", "CLS-CHARLIE-03", "CLS-ALPHA-01"]);
   expect(row("CLS-ALPHA-01")).toHaveStyle({ height: "48px" });
   expect(within(table()).getAllByRole("columnheader")).toHaveLength(7);
@@ -68,7 +68,7 @@ it("keeps the complete status label visible", () => {
 });
 it("combines summary filters with cluster/member search and vendor filter", () => {
   setup();
-  for (const [label, name] of [["Ready", "CLS-ALPHA-01"], ["Not ready", "CLS-BRAVO-02"], ["Unknown", "CLS-CHARLIE-03"]]) {
+  for (const [label, name] of [["Ready", "CLS-ALPHA-01"], ["Not ready", "CLS-BRAVO-02"], ["UNKNOWN", "CLS-CHARLIE-03"]]) {
     const tile = screen.getByRole("button", { name: `${label}: 1 clusters` });
     fireEvent.click(tile);
     expect(tile).toHaveAttribute("aria-pressed", "true");
@@ -95,7 +95,7 @@ it("collapses unsupported vendors with no run actions and opens them via their f
 });
 it("keeps an unobserved vendor unknown", () => {
   setup({ clusters: [cluster("CLS-ECHO-05", "")] });
-  expect(screen.getByRole("button", { name: "Unknown: 1 clusters" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "UNKNOWN: 1 clusters" })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Not supported: 0 clusters" })).toBeInTheDocument();
 });
 it("collapses nested VS rows, selects only visible units, and opens independent inline details", () => {
@@ -214,11 +214,11 @@ it("shows the stored login-environment stop reason for unknown base and virtual 
 it.each([["UNSUPPORTED_MODE", "Cluster mode not supported"], ["IDENTITY_NOT_RECORDED", "Device identity not recorded"], ["OPEN_INCIDENT", "Open failover incident"]])("shows the failover refusal %s in words, the code on hover, with mode", (refusalReason, words) => {
   setup({ rows: { ...rows, "CLS-ALPHA-01": [{ ...rows["CLS-ALPHA-01"][0], refusalReason, mode: "HA" }] } });
   expect(within(row("CLS-ALPHA-01")).getByText(words)).toHaveAttribute("data-raw", refusalReason);
-  expect(within(row("CLS-ALPHA-01")).getByText("Mode: HA")).toBeInTheDocument();
+  expect(within(row("CLS-ALPHA-01")).getByText("Mode: High availability")).toBeInTheDocument();
 });
 it("writes the Unknown-versus-Not-ready rule on screen and drops a mode line that says nothing", () => {
   setup({ rows: { ...rows, "CLS-ALPHA-01": [{ ...rows["CLS-ALPHA-01"][0], mode: "UNKNOWN" }] } });
-  expect(document.querySelector("[data-readiness-rule]")).toHaveTextContent(/Not ready: a pre-check found a blocking condition · Unknown: readiness could not be established/);
+  expect(document.querySelector("[data-readiness-rule]")).toHaveTextContent(/Not ready: a pre-check found a blocking condition · UNKNOWN: readiness could not be established/);
   expect(within(row("CLS-ALPHA-01")).queryByText(/^Mode:/)).toBeNull();
 });
 it("puts Run readiness check on the toolbar and the staleness notice, asking once before a multi-cluster run", () => {
@@ -298,7 +298,7 @@ it("an administrator outside the job window keeps the row actions and an enabled
 
 it("keeps the mode on its own line without splitting its words", () => {
   setup({ rows: { "CLS-ALPHA-01": [{ ...rows["CLS-ALPHA-01"][0], mode: "active-passive" }] } });
-  const mode = within(row("CLS-ALPHA-01")).getByText("Mode: active-passive");
+  const mode = within(row("CLS-ALPHA-01")).getByText("Mode: Active/passive");
   expect(mode.tagName).toBe("DIV");
   expect(mode).toHaveStyle({ whiteSpace: "nowrap" });
 });

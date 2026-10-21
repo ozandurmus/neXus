@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   actorLabel, artefactClassLabel, completedReasonOutcome, formatClock, jobStateWord, jobTypeLabel, outcomeLine, presentRaw,
-  readinessReasonLabel, vendorLabel,
+  readinessReasonLabel, statusWord, clusterModeWord, vendorLabel,
 } from "../src/shell/presenters";
 import { resultWords } from "../src/screens/JobLogsPanel";
 import { displayInputToIso, formatStamp, isoToDisplayInput } from "../src/shell/time";
@@ -138,4 +138,15 @@ describe("RESULT words and actors (post-release review 2026-10-18, 2.4 / R8)", (
     expect(actorLabel("ACTOR-01")).toEqual({ label: "ACTOR-01", raw: null, known: false });
     expect(actorLabel("")).toEqual({ label: "UNKNOWN", raw: null, known: false });
   });
+});
+
+describe("packet analysis states and cluster modes in words", () => {
+  it.each([
+    ["ANALYZED", "Analyzed"], ["ANALYZING", "Analyzing"], ["FAILED", "Failed"], ["QUEUED", "Queued"], ["NO_MATCH", "No match"],
+    ["NOT_EVALUABLE", "Not evaluable"], ["STALE_POLICY", "Stale policy"], ["CLOCK CORRECTED", "Clock corrected"], ["UNKNOWN", "UNKNOWN"],
+  ])("%s reads %s", (raw, word) => expect(statusWord(raw)).toBe(word));
+  it.each([
+    ["HA", "High availability"], ["LOAD_SHARING", "Load sharing"], ["VSLS", "Virtual system load sharing"], ["active-passive", "Active/passive"],
+    ["High Availability", "High Availability"], ["something-new", "something-new"], [null, "UNKNOWN"], ["UNKNOWN", "UNKNOWN"],
+  ])("cluster mode %s reads %s", (raw, word) => expect(clusterModeWord(raw)).toBe(word));
 });

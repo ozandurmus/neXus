@@ -20,6 +20,7 @@ import {
   type PacketTopology,
 } from "../../auth/adminApi";
 import { M3Button, StatusChip } from "../../shell/M3Widgets";
+import { statusWord } from "../../shell/presenters";
 import type { Tone } from "../../shell/tone";
 import { m3, MONO } from "../../theme/m3Theme";
 import { CoverageChart, paNum, paTime } from "./PacketCharts";
@@ -632,7 +633,7 @@ export function CaptureQualitySection({
           <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
             Capture coverage
           </Typography>
-          <StatusChip tone="ok" label="CLOCK CORRECTED" dense />
+          <StatusChip tone="ok" label={statusWord("CLOCK CORRECTED")} dense />
         </Stack>
         <CoverageChart captures={captures} report={report} />
         {!!report.limitations?.length && (

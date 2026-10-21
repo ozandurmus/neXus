@@ -32,7 +32,7 @@ it("renders partial ranges and implicit default deny", async () => {
   ] }), { status: 200 })));
   render(<PolicyLookupTab policies={[policy]} policy="p1" selectPolicy={vi.fn()} openRule={vi.fn()} />);
   fill(); fireEvent.click(screen.getByRole("button", { name: "Look up policy intent" }));
-  expect(await screen.findByText("PARTIAL")).toBeInTheDocument(); expect(screen.getByText("implicit default deny")).toBeInTheDocument();
+  expect(await screen.findByText("Partial")).toBeInTheDocument(); expect(screen.getByText("implicit default deny")).toBeInTheDocument();
   expect(screen.getByText(/192.0.2.0-192.0.2.7/)).toBeInTheDocument();
 });
 it("reports rate limits, retries and never fabricates a result on failures", async () => {

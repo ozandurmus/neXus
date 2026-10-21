@@ -33,6 +33,7 @@ import {
 import { ScreenHeader, ScreenRoot } from "../shell/ScreenLayout";
 import { M3Button, StatusChip } from "../shell/M3Widgets";
 import { ROLE_REFUSAL } from "../shell/actionAccess";
+import { statusWord } from "../shell/presenters";
 import type { Tone } from "../shell/tone";
 import { m3, MONO } from "../theme/m3Theme";
 import { PacketCaseWorkspace } from "./packetanalysis/PacketCaseWorkspace";
@@ -182,7 +183,7 @@ export function PacketAnalysisScreen() {
         <Card sx={{ p: 2, boxShadow: "none", border: `1px solid ${m3.outlineVar}` }} aria-label="Case detail">
           <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: "wrap", gap: 1 }}>
             <Typography variant="h6">{detail.title}</Typography>
-            <StatusChip tone={STATE_TONE[detail.state] ?? "neutral"} label={detail.state} />
+            <StatusChip tone={STATE_TONE[detail.state] ?? "neutral"} label={statusWord(detail.state)} />
             <Typography variant="body2">Expires {day(detail.expires_at)}</Typography>
             {detail.payload_zeroing && <StatusChip tone="neutral" label="Payload zeroing requested" dense />}
           </Stack>
@@ -223,7 +224,7 @@ export function PacketAnalysisScreen() {
             <TableCell>State</TableCell><TableCell>Requested</TableCell><TableCell>Finished</TableCell><TableCell>Verdict</TableCell><TableCell />
           </TableRow></TableHead><TableBody>
             {detail.runs.map(r => <TableRow key={r.job_id}>
-              <TableCell><StatusChip tone={STATE_TONE[r.state] ?? "neutral"} label={r.state} dense />{r.failure_reason && <Typography variant="caption" display="block">{r.failure_reason}</Typography>}{packetFailureText(r.failure_reason) && <Typography variant="caption" display="block" color="text.secondary">{packetFailureText(r.failure_reason)}</Typography>}</TableCell>
+              <TableCell><StatusChip tone={STATE_TONE[r.state] ?? "neutral"} label={statusWord(r.state)} dense />{r.failure_reason && <Typography variant="caption" display="block">{r.failure_reason}</Typography>}{packetFailureText(r.failure_reason) && <Typography variant="caption" display="block" color="text.secondary">{packetFailureText(r.failure_reason)}</Typography>}</TableCell>
               <TableCell>{time(r.requested_at)}</TableCell><TableCell>{time(r.finished_at)}</TableCell>
               <TableCell>{r.summary?.verdict ?? "—"}{packetWindowText(r.summary?.analysis_window) && <Typography variant="caption" display="block" color="text.secondary">{packetWindowText(r.summary?.analysis_window)}</Typography>}</TableCell>
               <TableCell>{r.state === "COMPLETED" && <M3Button emphasis="text" onClick={() => void showReport(r.job_id)}>View result</M3Button>}</TableCell>
@@ -278,7 +279,7 @@ function CaseTable({ cases, selected, onSelect }: { readonly cases: readonly Pac
       {cases.map(c => <TableRow key={c.case_id} hover selected={c.case_id === selected} onClick={() => onSelect(c.case_id)} sx={{ cursor: "pointer" }}>
         <TableCell><Box component="button" type="button" onClick={() => onSelect(c.case_id)}
           sx={{ all: "unset", cursor: "pointer", color: m3.primary, fontWeight: 500 }}>{c.title}</Box></TableCell>
-        <TableCell><StatusChip tone={STATE_TONE[c.state] ?? "neutral"} label={c.state} dense /></TableCell>
+        <TableCell><StatusChip tone={STATE_TONE[c.state] ?? "neutral"} label={statusWord(c.state)} dense /></TableCell>
         <TableCell>{c.capture_count}</TableCell><TableCell>{packetBytes(c.total_bytes)}</TableCell>
         <TableCell>{day(c.created_at)}</TableCell><TableCell>{day(c.expires_at)}</TableCell>
       </TableRow>)}

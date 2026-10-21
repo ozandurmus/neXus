@@ -33,6 +33,7 @@ import {
   type PacketWaterfallView,
 } from "../../auth/adminApi";
 import { M3Button, StatusChip } from "../../shell/M3Widgets";
+import { statusWord } from "../../shell/presenters";
 import { m3, MONO } from "../../theme/m3Theme";
 import { LadderChart, PacketChart, paNum, paTime } from "./PacketCharts";
 import { correlationStatusTone } from "./PacketTopologyTab";
@@ -94,7 +95,7 @@ export function PacketFlowsTab({
             <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
               Conversations
             </Typography>
-            <StatusChip tone="neutral" label={paNum(flows.total, " TOTAL", 0)} dense />
+            <StatusChip tone="neutral" label={paNum(flows.total, " total", 0)} dense />
           </Stack>
           <Stack direction="row" spacing={1.5} alignItems="center" sx={{ flexWrap: "wrap", gap: 1 }}>
             <TextField
@@ -173,7 +174,7 @@ export function PacketFlowsTab({
                         <Stack direction="row" spacing={0.5} alignItems="center" sx={{ mt: 0.5, flexWrap: "wrap", gap: 0.5 }}>
                           <StatusChip
                             tone={correlationStatusTone(flowCorr.status)}
-                            label={`neXus: ${flowCorr.status}`}
+                            label={`neXus: ${statusWord(flowCorr.status)}`}
                             dense
                           />
                           {flowCorr.status === "MATCH" && (
@@ -318,12 +319,12 @@ function FlowNexusCorrelationPanel({
           neXus policy & path correlation
         </Typography>
         <Stack direction="row" spacing={0.75} alignItems="center" sx={{ flexWrap: "wrap", gap: 0.75 }}>
-          <StatusChip tone={correlationStatusTone(fl.status)} label={fl.status} dense />
+          <StatusChip tone={correlationStatusTone(fl.status)} label={statusWord(fl.status)} dense />
           {fl.evidence.map((ev) => (
             <StatusChip key={ev} tone="mem" label={ev} dense />
           ))}
-          {fl.policy_stale && <StatusChip tone="bad" label="STALE_POLICY" dense />}
-          {fl.policy_incomplete && <StatusChip tone="bad" label="INCOMPLETE_POLICY" dense />}
+          {fl.policy_stale && <StatusChip tone="bad" label={statusWord("STALE_POLICY")} dense />}
+          {fl.policy_incomplete && <StatusChip tone="bad" label={statusWord("INCOMPLETE_POLICY")} dense />}
         </Stack>
       </Stack>
       <Typography variant="body2" sx={{ color: m3.onSurfaceVar, mb: 1.5 }}>

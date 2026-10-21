@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { Box, Button, Chip, MenuItem, Stack, TextField, Typography } from "@mui/material";
 import { DISABLED_STYLE } from "../shell/disabledStyle";
+import { statusWord } from "../shell/presenters";
 import { lookupPolicy, type PolicyMetadata, type PolicyLookupQuery, type PolicyLookupResult, type PolicyLookupDecision } from "../auth/adminApi";
 
 export function PolicyLookupTab({ policies, policy, selectPolicy, openRule }: {
@@ -66,7 +67,7 @@ export function PolicyLookupTab({ policies, policy, selectPolicy, openRule }: {
 }
 function Decision({ decision, openRule }: { decision: PolicyLookupDecision; openRule: (id: string) => void }) {
   return <Box>
-    <Chip label={decision.verdict} color={decision.verdict === "ALLOWED" ? "success" : decision.verdict === "DENIED" ? "error" : "warning"} />
+    <Chip label={statusWord(decision.verdict)} color={decision.verdict === "ALLOWED" ? "success" : decision.verdict === "DENIED" ? "error" : "warning"} />
     <Typography variant="body2">{decision.lookupReason}</Typography>
     {decision.decidingRule && <Box>
       <Typography variant="caption">{decision.verdict === "UNKNOWN" ? "First proven match after uncertainty (not a verdict)" : "Deciding rule"}</Typography>

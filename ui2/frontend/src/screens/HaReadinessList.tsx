@@ -2,7 +2,7 @@ import { JobButton, jobWindowUsable, useJobWindow } from "../shell/JobWindow";
 import { ROLE_LOCK_LABEL } from "../shell/actionAccess";
 import { DISABLED_STYLE } from "../shell/disabledStyle";
 import { Presented } from "../shell/PresentedText";
-import { jobOutcomeWord, readinessReasonLabel } from "../shell/presenters";
+import { clusterModeWord, jobOutcomeWord, readinessReasonLabel, statusWord } from "../shell/presenters";
 import Dialog from "@mui/material/Dialog";
 import DialogActions from "@mui/material/DialogActions";
 import DialogContent from "@mui/material/DialogContent";
@@ -37,7 +37,7 @@ export type ReadinessProgress = Record<string, "Queued" | "Running" | "Completed
 const statuses: Record<Status, { label: string; icon: IconName; bg: string; ink: string; order: number }> = {
   READY: { label: "Ready", icon: "check-circle", bg: m3.successContainer, ink: m3.onSuccessContainer, order: 2 },
   NOT_READY: { label: "Not ready", icon: "x-circle", bg: m3.errorContainer, ink: m3.onErrorContainer, order: 0 },
-  UNKNOWN: { label: "Unknown", icon: "info", bg: m3.scHigh, ink: m3.onSurfaceVar, order: 1 },
+  UNKNOWN: { label: statusWord("UNKNOWN"), icon: "info", bg: m3.scHigh, ink: m3.onSurfaceVar, order: 1 },
   UNSUPPORTED: { label: "Not supported", icon: "lock", bg: m3.scLow, ink: m3.onSurfaceVar, order: 3 },
 };
 
@@ -107,7 +107,7 @@ export function canRunReadiness(row?: CpFailoverSummary) {
 }
 
 /** The one-line rule that tells the three non-ready words apart (UI review 2026-10-18, F-12). */
-export const READINESS_RULE = "Not ready: a pre-check found a blocking condition · Unknown: readiness could not be established (no result, or not enough evidence) · neither is Ready.";
+export const READINESS_RULE = "Not ready: a pre-check found a blocking condition · UNKNOWN: readiness could not be established (no result, or not enough evidence) · neither is Ready.";
 
 function primaryReason(row?: CpFailoverSummary) {
   if (!row) return "INSUFFICIENT_EVIDENCE";
@@ -218,7 +218,7 @@ export function HaReadinessList({ clusters, rows, running, busy, progress, error
           <Box component="span" sx={{ fontWeight: 600, mr: 1 }}>{title}</Box><VendorBadge vendor={vendor} />
           {/* The mode line only when it adds information: "Mode: UNKNOWN" next to a known role says nothing. */}
           {row?.mode && row.mode !== "UNKNOWN" && <Typography variant="caption" component="div" title={`Mode: ${row.mode}`}
-            sx={{ whiteSpace: "nowrap", overflowWrap: "normal", overflow: "hidden", textOverflow: "ellipsis" }}>Mode: {row.mode}</Typography>}
+            sx={{ whiteSpace: "nowrap", overflowWrap: "normal", overflow: "hidden", textOverflow: "ellipsis" }}>Mode: {clusterModeWord(row.mode)}</Typography>}
         </TableCell>
         <TableCell title={`Roles observed: ${rolesAt ? formatStamp(rolesAt) : "Not observed"}`}>
           Active: {roleNames(["active"])} <span aria-hidden>↔</span> Standby: {roleNames(["standby", "passive"])}

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Box, Button, Chip, Drawer, MenuItem, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Tooltip, Typography } from "@mui/material";
 import { getPolicyObjects, getPolicyUsage, getPolicyInstallations, type PolicyInventoryObject, type PolicyMetadata, type PolicyObjectPage, type PolicyInstallationPage, type PolicyUsage } from "../auth/adminApi";
 import { scheduleLabel, reportPolicyLoadError } from "./PolicyRuleViewer";
+import { statusWord } from "../shell/presenters";
 
 const objectTypes = ["host", "network", "range", "group", "service", "service-group", "time", "access-role", "dynamic", "dns-domain", "zone"];
 const hygieneFilters = { "": "All objects", unused: "Unused", duplicates: "Duplicates", empty: "Empty groups", single: "Single-member groups" };
@@ -71,7 +72,7 @@ export function PolicyDomainTab({ tab, metadata, policies }: { tab: "Objects" | 
     {error ? <Typography role="alert">{error} <Button onClick={() => setRetry(r => r + 1)}>Retry</Button></Typography>
       : !data ? <Typography role="status">Loading {tab.toLowerCase()}…</Typography> : <>
         {!data.types.length && <Typography role="status">Object inventory not collected for this domain. Objects are listed from the stored policy.</Typography>}
-        {data.types.filter(t => t.status !== "RESOLVED").map(t => <Chip key={t.type} size="small" color="warning" label={`${t.type}: ${t.status}`} sx={{ mr: 1, mb: 1 }} />)}
+        {data.types.filter(t => t.status !== "RESOLVED").map(t => <Chip key={t.type} size="small" color="warning" label={`${t.type}: ${statusWord(t.status)}`} sx={{ mr: 1, mb: 1 }} />)}
         {tab === "Objects" && <Typography variant="caption" display="block">Unused comes only from the management unused-object report. Where used counts references in collected rules and groups; when that evidence is incomplete it shows UNKNOWN or a lower bound (hover for reasons).</Typography>}
         {"objects" in data && !!data.usageGaps?.length && <Box role="note" aria-label="Where-used evidence gaps" sx={{ mt: 1 }}>
           <Typography variant="caption" display="block">Where-used evidence is incomplete for this domain:</Typography>

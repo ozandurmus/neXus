@@ -7,6 +7,7 @@ import Typography from "@mui/material/Typography";
 import { useSession } from "../auth/SessionContext";
 import { acceptSshHostKey, getSshHostKeyView, rejectSshHostKey, setSshTrustMode, type SshHostKeyView } from "../auth/adminApi";
 import { M3Button } from "../shell/M3Widgets";
+import { statusWord } from "../shell/presenters";
 
 export function SshHostKeyPanel({ deviceId, settings = false }: { deviceId?: string; settings?: boolean }) {
   const session = useSession();
@@ -49,7 +50,7 @@ export function SshHostKeyPanel({ deviceId, settings = false }: { deviceId?: str
     </Box>}
     {observations.map(o => <Alert key={o.observation_id} severity={o.status === "ACCEPTED" ? "info" : "warning"}>
       <Typography fontWeight="bold">SSH host key changed for {o.hostname}</Typography>
-      <Typography>{o.status}{o.strict_refusal ? " — Strict refusal for this device until resolved." : ""}</Typography>
+      <Typography>{statusWord(o.status)}{o.strict_refusal ? " — Strict refusal for this device until resolved." : ""}</Typography>
       {o.ssh_identity_unverified && <Typography>Evidence collected under an unverified identity. Accepting a key does not verify past collections.</Typography>}
       <Typography sx={{ overflowWrap: "anywhere" }}>Presented ({o.key_algorithm}): {o.presented_fingerprint}</Typography>
       <Typography>Expected fingerprint prefix: {o.expected_fingerprint_prefix}</Typography>

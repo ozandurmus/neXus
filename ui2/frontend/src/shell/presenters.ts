@@ -288,6 +288,25 @@ export function statusWord(raw: string | null | undefined): string {
   return words[0].charAt(0).toUpperCase() + words[0].slice(1) + (words.length > 1 ? ` ${words.slice(1).join(" ")}` : "");
 }
 
+/** Cluster mode as the inventory and failover reads record it, in plain words; the raw value belongs on hover. */
+const CLUSTER_MODE_WORDS: Readonly<Record<string, string>> = {
+  HA: "High availability", HIGH_AVAILABILITY: "High availability", LOAD_SHARING: "Load sharing", VSLS: "Virtual system load sharing",
+  ACTIVE_PASSIVE: "Active/passive", ACTIVE_ACTIVE: "Active/active", VRRP: "VRRP",
+};
+
+/**
+ * A cluster mode in plain words (`HA` becomes "High availability", `active-passive` becomes "Active/passive"). A mode
+ * this map does not know passes through as it came (the server may already have written a sentence); an absent mode is
+ * UNKNOWN, never a guess.
+ */
+export function clusterModeWord(raw: string | null | undefined): string {
+  const value = (raw ?? "").trim();
+  if (!value) return "UNKNOWN";
+  if (value === "UNKNOWN") return value;
+  if (!/^[A-Za-z]+(?:[_-][A-Za-z]+)*$/.test(value)) return value; // already a sentence (spaces)
+  return CLUSTER_MODE_WORDS[value.toUpperCase().replace(/-/g, "_")] ?? value;
+}
+
 const STATE_WORDS: Readonly<Record<string, string>> = {
   COMPLETED: "Completed", SUCCEEDED: "Completed", FAILED: "Failed", CANCELLED: "Cancelled", REJECTED: "Rejected",
   REQUESTED: "Queued", CLAIMED: "Claimed", EXECUTING: "Running", OUTCOME_UNKNOWN: "Outcome UNKNOWN", RECONCILED: "Outcome UNKNOWN",
