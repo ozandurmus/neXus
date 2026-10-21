@@ -110,8 +110,9 @@ class CpFailoverUnitsReadPathTest {
             checks(VSX + "-a", "HA"), null));
         readiness.add(new JooqCpFailoverRepository.ReadinessStatus(PLAIN, null, "check_point", "NOT_READY", at, "State",
             checks(PLAIN + "-a", "VSLS"), "UNSUPPORTED_MODE"));
+        // Live READY runs carry the message "READY" (2026-10-21: it was read as a refusal and disabled Start failover).
         readiness.add(new JooqCpFailoverRepository.ReadinessStatus(PAN, null, "palo_alto", "READY", at, null,
-            checks(PAN + "-a", "active-passive"), null));
+            checks(PAN + "-a", "active-passive"), "READY"));
         readiness.add(new JooqCpFailoverRepository.ReadinessStatus(BROKEN, null, "check_point", "READY", at, null,
             checks(BROKEN + "-a", "HA"), null));
         statuses.add(new JooqCpFailoverRepository.SummaryStatus(VSX, "13", "check_point", true, "DONE", "PASS", at));
@@ -188,6 +189,7 @@ class CpFailoverUnitsReadPathTest {
         assertEquals(1, pan.size());
         assertEquals("palo_alto", pan.get(0).path("vendor").asText());
         assertEquals("active-passive", pan.get(0).path("mode").asText());
+        assertTrue(pan.get(0).path("refusalReason").isNull(), "a READY run's message is not a refusal");
         assertSameAsSummary(pan.get(0), read("pan-failover", "summary"));
     }
 
