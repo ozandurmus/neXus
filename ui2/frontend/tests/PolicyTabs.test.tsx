@@ -92,7 +92,7 @@ it.each(["Objects", "Installation"] as const)("shows %s empty and incomplete evi
   mount(<PolicyDomainTab tab={tab} metadata={metadata} policies={[metadata]} />);
   expect(screen.getByRole("status")).toHaveTextContent(`Loading ${tab.toLowerCase()}`);
   expect(await screen.findByText(`No matching ${tab.toLowerCase()}.`)).toBeInTheDocument();
-  expect(screen.getByText("unused-objects: COLLECTION_FAILED")).toBeInTheDocument();
+  expect(screen.getByText("unused-objects: Collection failed")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
 });
 
@@ -183,7 +183,7 @@ it("keeps Lookup inputs and results when switching to Changes and Offline analys
   fireEvent.change(screen.getByLabelText(/^Source\s*\*?$/), { target: { value: lookup.query.querySource } });
   fireEvent.change(screen.getByLabelText(/^Destination\s*\*?$/), { target: { value: lookup.query.queryDestination } });
   fireEvent.click(screen.getByRole("button", { name: "Look up policy intent" }));
-  expect(await screen.findByLabelText("Lookup result 1")).toHaveTextContent("DENIED");
+  expect(await screen.findByLabelText("Lookup result 1")).toHaveTextContent("Denied");
   fireEvent.click(screen.getByRole("tab", { name: "Changes" }));
   expect(await screen.findByText("No rule changes match these filters.")).toBeVisible();
   expect(screen.getByLabelText("Lookup result 1")).not.toBeVisible();

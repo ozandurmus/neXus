@@ -16,6 +16,7 @@ import Typography from "@mui/material/Typography";
 import { M3Button } from "../shell/M3Widgets";
 import { m3 } from "../theme/m3Theme";
 import { relativeAge } from "../shell/time";
+import { clusterModeWord, statusWord } from "../shell/presenters";
 import { approveCpFailover, approveCpFailoverResume, getCpFailoverRun, listCpFailoverApprovals, listCpFailoverRuns, listCpFailoverUnits,
   resumeCpFailoverReturn, secondApproveCpFailover, startCpFailover, runCpFailoverReadiness,
   type CpFailoverApproval, type CpFailoverResumeState, type CpFailoverRunDetail, type CpFailoverState, type CpFailoverUnit } from "../auth/adminApi";
@@ -63,7 +64,7 @@ export function FailoverRun({ run, unit }: { run: CpFailoverRunDetail; unit: CpF
     </Box>)}
     <Typography variant="body2">Last confirmed roles: {roles.length ? roles.map(([id, role]) =>
       `${unit.members?.find(m => m.device_id === id)?.hostname ?? "Member"}: ${role}`).join(" · ") : "Not evaluated"}</Typography>
-    {stopped && <><Typography>Failed/unknown check: {failed.map(c => `${c.title} · ${c.status}`).join("; ") || run.failedCheck || "Not evaluated"}</Typography>
+    {stopped && <><Typography>Failed/unknown check: {failed.map(c => `${c.title} · ${statusWord(c.status)}`).join("; ") || run.failedCheck || "Not evaluated"}</Typography>
       <Typography>Refusal: {run.message || "Unknown"} · Incident reference: {run.incidentRef ?? "Not recorded"}</Typography></>}
     {run.state === "DONE" && <Typography>Evidence coverage: {run.checks.filter(c => c.blocking && c.status === "PASS").length} / {run.checks.filter(c => c.blocking).length} recorded required results passed. Final post-checks: {run.checks.some(c => FINAL_PHASES.includes(c.phase)) ? "Recorded" : "Not evaluated"}.</Typography>}
   </Stack>;
@@ -251,7 +252,7 @@ function UnitPanel({ unit, expanded, onExpand, onRefreshUnits }: { unit: CpFailo
   });
   return <Card sx={{ p: 2, ml: unit.unitId === unit.clusterId ? 0 : 3, bgcolor: m3.scLow }}>
     <M3Button emphasis="text" onClick={onExpand}>{unit.unitId === unit.clusterId ? label : `Virtual System · ${label}`}</M3Button>
-    <Typography variant="body2">{unit.vendor === "palo_alto" ? "Palo Alto" : "Check Point"} · Mode: {unit.mode ?? "UNKNOWN"}{unit.vendor === "palo_alto" ? "" : ` · Recovery mode: ${recoveryLabel(unit.recoveryMode)}`} · Readiness age: {unit.readinessObservedAt ? relativeAge(unit.readinessObservedAt, new Date()) : "Not evaluated"}</Typography>
+    <Typography variant="body2">{unit.vendor === "palo_alto" ? "Palo Alto" : "Check Point"} · Mode: <span title={unit.mode ?? undefined}>{clusterModeWord(unit.mode)}</span>{unit.vendor === "palo_alto" ? "" : ` · Recovery mode: ${recoveryLabel(unit.recoveryMode)}`} · Readiness age: {unit.readinessObservedAt ? relativeAge(unit.readinessObservedAt, new Date()) : "Not evaluated"}</Typography>
     {unit.refusalReason && <Typography color="error">{unit.refusalReason}</Typography>}
     {expanded && <Stack spacing={2} sx={{ mt: 1 }}>
       <FailoverIncidentsPanel clusterId={unit.clusterId} onReleased={() => { onRefreshUnits(); void refresh(); }} />

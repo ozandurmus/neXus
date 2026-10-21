@@ -23,7 +23,7 @@ import { M3Button } from "../../shell/M3Widgets";
 import { RestrictedPanel, StatePanel, isRestricted } from "../../shell/States";
 import { PillRow, StatusPill } from "../../shell/StatusPill";
 import { DISPLAY_TZ_LABEL, formatUtc } from "../../shell/time";
-import { vendorLabel } from "../../shell/presenters";
+import { statusWord, vendorLabel } from "../../shell/presenters";
 import { m3, MONO } from "../../theme/m3Theme";
 import { TYPE, type StateRole } from "../../theme/tokens";
 
@@ -188,8 +188,8 @@ function FindingSheet({ view }: { readonly view: PacketDeviceEventsView }) {
   const f = view.finding!;
   const w = view.window!;
   const items: readonly [string, string][] = [
-    ["Finding", f.type ?? "UNKNOWN"],
-    ["Severity", f.severity ?? "UNKNOWN"],
+    ["Finding", statusWord(f.type)],
+    ["Severity", statusWord(f.severity)],
     ["Hop", f.hop_label ?? f.hop ?? "UNKNOWN"],
     ["Start", stamp(f.start)],
     ["p95 delay", figure(f.figures.p95_ms, " ms")],

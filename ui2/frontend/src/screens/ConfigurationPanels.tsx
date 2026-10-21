@@ -30,6 +30,7 @@ import {
 import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { InventoryEntityHeader } from "./InventoryPanels";
 import { FORTIGATE_SECTIONS } from "./configurationProjection";
+import { statusWord } from "../shell/presenters";
 
 const POLL_INTERVAL_MS = 1750;
 
@@ -448,14 +449,14 @@ function DeviationPanel({
     return (
       <EmptyPanel
         title="Changed"
-        body={`The canonical hash differs from the previous run${deviation ? ` (summary status: ${deviation.status})` : ""}, but no per-section recount was recorded.`}
+        body={`The canonical hash differs from the previous run${deviation ? ` (summary status: ${statusWord(deviation.status)})` : ""}, but no per-section recount was recorded.`}
       />
     );
   }
   return (
     <Stack spacing={1}>
       <Typography variant="body2" color="text.secondary">
-        {deviation.entries.length} section{deviation.entries.length === 1 ? "" : "s"} differ from the previous run (summary status: {deviation.status}).
+        {deviation.entries.length} section{deviation.entries.length === 1 ? "" : "s"} differ from the previous run (summary status: {statusWord(deviation.status)}).
       </Typography>
       <Box sx={{ bgcolor: m3.scLowest, border: "1px solid", borderColor: m3.outlineVar, borderRadius: "12px", overflow: "hidden" }}>
         <Table size="small">
@@ -473,7 +474,7 @@ function DeviationPanel({
               <TableRow key={`${e.context}-${e.section}-${i}`} hover>
                 <TableCell><StatusChip tone="neutral" label={e.context === "physical" ? "Physical" : e.context} dense /></TableCell>
                 <TableCell sx={{ fontFamily: "monospace" }}>{e.section}</TableCell>
-                <TableCell><StatusChip tone="warn" label={e.kind} dense /></TableCell>
+                <TableCell><StatusChip tone="warn" label={statusWord(e.kind)} dense /></TableCell>
                 <TableCell align="right" sx={{ fontVariantNumeric: "tabular-nums" }}>{e.old_count ?? "none"}</TableCell>
                 <TableCell align="right" sx={{ fontVariantNumeric: "tabular-nums" }}>{e.new_count ?? "none"}</TableCell>
               </TableRow>

@@ -238,7 +238,7 @@ describe("Packet Analysis screen", () => {
     const table = await screen.findByRole("table", { name: "Packet analysis cases" });
     expect(within(table).getByText("Synthetic loss case")).toBeInTheDocument();
     expect(within(table).getByText("2026-10-22")).toBeInTheDocument();
-    expect(within(table).getByText("ANALYZED")).toBeInTheDocument();
+    expect(within(table).getByText("Analyzed")).toBeInTheDocument();
     expect(screen.getByText(/at most 2.0 GB per capture/)).toBeInTheDocument();
     expect(screen.queryByText(/still being ported/)).toBeNull();
     expect(screen.queryByRole("alert")).toBeNull();
@@ -257,6 +257,10 @@ describe("Packet Analysis screen", () => {
     themed();
     fireEvent.click(await screen.findByText("Synthetic loss case"));
     expect(await screen.findByText("ANALYSIS_MEMORY_LIMIT")).toBeInTheDocument();
+    // run and case states go through the label map: sentence case, never the raw upper-case token
+    expect(screen.getAllByText("Failed").length).toBeGreaterThan(0);
+    expect(screen.queryByText("FAILED")).toBeNull();
+    expect(screen.queryByText("ANALYZED")).toBeNull();
     expect(screen.getByText(/Narrow the analysis window/)).toBeInTheDocument();
     expect(screen.getByText(/Analysed window: 2023-11-14T22:13:20Z \+ 60 s, reason: budget/)).toBeInTheDocument();
   });
@@ -975,7 +979,7 @@ describe("Packet Analysis screen", () => {
     expect(within(corrCard).getByText(/The capture proves observed frames/)).toBeInTheDocument();
 
     const hop1 = within(corrCard).getByLabelText("Hop correlation p1");
-    expect(within(hop1).getByText("MATCH")).toBeInTheDocument();
+    expect(within(hop1).getByText("Match")).toBeInTheDocument();
     expect(within(hop1).getByText("mac_equality")).toBeInTheDocument();
     expect(within(hop1).getByText("interface_subnet_equality")).toBeInTheDocument();
     expect(within(within(hop1).getByLabelText("Capture proves p1")).getByText(/00:1b:17:00:01:11/)).toBeInTheDocument();
@@ -983,7 +987,7 @@ describe("Packet Analysis screen", () => {
     expect(within(within(hop1).getByLabelText("Configured inventory says p1")).getByText("trust")).toBeInTheDocument();
 
     const hop2 = within(corrCard).getByLabelText("Hop correlation p2");
-    expect(within(hop2).getByText("AMBIGUOUS")).toBeInTheDocument();
+    expect(within(hop2).getByText("Ambiguous")).toBeInTheDocument();
     expect(within(hop2).getByText(/FW-TANGO-04 · ethernet1\/2 · Zone: untrust/)).toBeInTheDocument();
     expect(within(hop2).getByText(/FW-JULIET-06 · ethernet1\/2 · Zone: untrust-peer/)).toBeInTheDocument();
 
@@ -994,7 +998,7 @@ describe("Packet Analysis screen", () => {
 
     fireEvent.click(screen.getByRole("tab", { name: "Flows & Ladder" }));
     const convTable = await screen.findByRole("table", { name: "Conversations table" });
-    expect(within(convTable).getByText("neXus: MATCH")).toBeInTheDocument();
+    expect(within(convTable).getByText("neXus: Match")).toBeInTheDocument();
     fireEvent.click(within(convTable).getByText('["tcp","192.0.2.10",50000,"198.51.100.20",443]'));
 
     const flowCorrCard = await screen.findByLabelText("Flow neXus correlation");

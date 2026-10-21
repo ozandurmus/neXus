@@ -33,6 +33,7 @@ import {
   type PacketTopologyPoint,
 } from "../../auth/adminApi";
 import { M3Button, StatusChip } from "../../shell/M3Widgets";
+import { statusWord } from "../../shell/presenters";
 import { m3, MONO } from "../../theme/m3Theme";
 import type { Tone } from "../../shell/tone";
 import { paNum, reverseTuple } from "./PacketCharts";
@@ -664,7 +665,7 @@ function NexusCorrelationCard({
         <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: "wrap", gap: 1 }}>
           <StatusChip
             tone={correlation.inventory_status === "AVAILABLE" ? "ok" : "warn"}
-            label={`Inventory: ${correlation.inventory_status}`}
+            label={`Inventory: ${statusWord(correlation.inventory_status)}`}
             dense
           />
           <StatusChip
@@ -709,7 +710,7 @@ function NexusCorrelationCard({
                 {hop.point_label} ({hop.point_id} · {hop.side})
               </Typography>
               <Stack direction="row" spacing={0.75} alignItems="center" sx={{ flexWrap: "wrap", gap: 0.75 }}>
-                <StatusChip tone={correlationStatusTone(hop.status)} label={hop.status} dense />
+                <StatusChip tone={correlationStatusTone(hop.status)} label={statusWord(hop.status)} dense />
                 {hop.evidence.map((ev) => (
                   <StatusChip key={ev} tone="mem" label={ev} dense />
                 ))}
@@ -809,12 +810,12 @@ function NexusCorrelationCard({
                     {fl.tuple}
                   </Box>
                   <Stack direction="row" spacing={0.75} alignItems="center" sx={{ flexWrap: "wrap", gap: 0.75 }}>
-                    <StatusChip tone={correlationStatusTone(fl.status)} label={fl.status} dense />
+                    <StatusChip tone={correlationStatusTone(fl.status)} label={statusWord(fl.status)} dense />
                     {fl.evidence.map((ev) => (
                       <StatusChip key={ev} tone="mem" label={ev} dense />
                     ))}
-                    {fl.policy_stale && <StatusChip tone="bad" label="STALE_POLICY" dense />}
-                    {fl.policy_incomplete && <StatusChip tone="bad" label="INCOMPLETE_POLICY" dense />}
+                    {fl.policy_stale && <StatusChip tone="bad" label={statusWord("STALE_POLICY")} dense />}
+                    {fl.policy_incomplete && <StatusChip tone="bad" label={statusWord("INCOMPLETE_POLICY")} dense />}
                   </Stack>
                 </Stack>
 

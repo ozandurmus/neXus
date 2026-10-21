@@ -19,7 +19,7 @@ import Typography from "@mui/material/Typography";
 import { EmptyPanel } from "../shell/ScreenLayout";
 import { ObjectHeader } from "../shell/ObjectHeader";
 import { PaginationFooter } from "../shell/DataTable";
-import { statusWord } from "../shell/presenters";
+import { clusterModeWord, statusWord } from "../shell/presenters";
 import type { Tone } from "../shell/tone";
 import { M3Button, M3Tabs, StatusChip } from "../shell/M3Widgets";
 import { PLANE_COLLECT, PLANE_OPERATIONS, ROLE_REFUSAL, useRoleAllows } from "../shell/actionAccess";
@@ -195,7 +195,7 @@ export function GridMembersPanel({ members, summary }: { readonly members: reado
                       : <Typography variant="caption" color="text.secondary">single node</Typography>}
                   </TableCell>
                   <TableCell sx={{ whiteSpace: "nowrap" }}>
-                    <StatusChip tone={m.node_status === "WORKING" ? "ok" : m.node_status ? "warn" : "neutral"} label={m.node_status ?? "unknown"} dense />
+                    <StatusChip tone={m.node_status === "WORKING" ? "ok" : m.node_status ? "warn" : "neutral"} label={m.node_status ? statusWord(m.node_status) : "unknown"} dense />
                     {m.replication && (
                       <Typography variant="caption" color="text.secondary" sx={{ ml: 0.5 }}>replication {m.replication}</Typography>
                     )}
@@ -469,7 +469,7 @@ function ContextHaBadge({ context, headerRole, scoped = false }: { readonly cont
   // the role. The "HA role:" line stays only for a selected virtual system, or when it differs from the header's; when the
   // role is the same, only what is new (the cluster mode) remains, without the repeated role.
   if (!scoped && (headerRole ?? "").trim().toUpperCase() === ha.role.trim().toUpperCase()) {
-    return ha.cluster_mode ? <Typography variant="body2" color="text.secondary">Cluster mode: {ha.cluster_mode}</Typography> : null;
+    return ha.cluster_mode ? <Typography variant="body2" color="text.secondary">Cluster mode: {clusterModeWord(ha.cluster_mode)}</Typography> : null;
   }
   return (
     <Stack direction="row" spacing={1} alignItems="center">
@@ -477,7 +477,7 @@ function ContextHaBadge({ context, headerRole, scoped = false }: { readonly cont
       <RoleChip role={ha.role} dense />
       {ha.cluster_mode && (
         <Typography variant="body2" color="text.secondary">
-          {ha.cluster_mode}
+          {clusterModeWord(ha.cluster_mode)}
         </Typography>
       )}
     </Stack>

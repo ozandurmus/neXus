@@ -31,6 +31,7 @@ import { PolicyChangesTab } from "./PolicyChangesTab";
 import { PolicyHygieneTab } from "./PolicyHygieneTab";
 import { PolicyDomainTab } from "./PolicyDomainTabs";
 import { PolicyContainerPrompt } from "./PolicyContainerPrompt";
+import { statusWord } from "../shell/presenters";
 
 // The policy page API returns a fixed 200 rules per page (PolicyQueryService.page); the client does not choose it.
 const RULE_PAGE_SIZE = 200;
@@ -815,7 +816,7 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
 function ObjectDetail({ object }: { object: PolicyObject }) {
   return <Box sx={{ pl: 1, borderLeft: `1px solid ${m3.outlineVar}` }}>
     <Typography variant="subtitle2">{object.name ?? "Unresolved object"}</Typography>
-    <Typography variant="caption">{object.type} · {object.status}</Typography>
+    <Typography variant="caption">{object.type} · {statusWord(object.status)}</Typography>
     {object.schedule && <Typography variant="body2">{scheduleLabel(object.schedule)}</Typography>}
     {(object.values ?? []).map((value, i) => <Typography key={i} variant="body2">{value}</Typography>)}
     {(object.children ?? []).map((child, i) => <Box component="details" key={`${child.id}-${i}`} sx={{ my: 1 }}>

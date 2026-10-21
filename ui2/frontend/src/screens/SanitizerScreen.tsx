@@ -30,6 +30,7 @@ import { ScreenHeader, ScreenRoot } from "../shell/ScreenLayout";
 import { M3Button, StatusChip } from "../shell/M3Widgets";
 import type { Tone } from "../shell/tone";
 import { m3, MONO } from "../theme/m3Theme";
+import { statusWord } from "../shell/presenters";
 
 /** Byte counts as an operator reads them (files run to 2 GB). */
 export function sanitizerBytes(bytes: number | null | undefined): string {
@@ -231,7 +232,7 @@ export function OutcomeView({ outcome, downloaded, onDownload }: {
     <Card sx={{ p: 2, boxShadow: "none", border: `1px solid ${m3.outlineVar}` }} aria-label="Sanitizer result">
       <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: "wrap", gap: 1 }}>
         <Typography variant="h6">{outcome.mode === "sanitize" ? "Sanitize job" : "Revert job"}</Typography>
-        <StatusChip tone={STATE_TONE[outcome.state]} label={outcome.state} />
+        <StatusChip tone={STATE_TONE[outcome.state]} label={statusWord(outcome.state)} />
         {outcome.fileType && <StatusChip tone="neutral" label={outcome.fileType.toUpperCase()} dense />}
         <Typography variant="caption" sx={{ fontFamily: MONO }}>{outcome.id}</Typography>
       </Stack>
