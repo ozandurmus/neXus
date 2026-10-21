@@ -135,15 +135,115 @@ class FailoverResumeReturnTest {
             var e = stoppedAfterConfirmedDown(fixture, repo, "unit-resume", members, false);
             String resumeId = repo.requestResume(e.run(), OP_A, "operation_admin", JooqCpFailoverRepository.TWO_PERSON,
                 REASON, e.run(), false).runId();
-            try (var admin = fixture.adminConnection(); var statement = admin.createStatement()) {
-                // Age the request past its 30 minutes; the append-only guard is bypassed for this setup step only.
-                statement.execute("set session_replication_role = replica");
-                statement.execute("update failover_resume set requested_at=clock_timestamp()-interval '31 minutes',"
-                    + "expires_at=clock_timestamp()-interval '1 minute' where resume_id='" + resumeId + "'");
-            }
+            age(fixture, resumeId);
             assertEquals("RESUME_REQUEST_EXPIRED", repo.approveResume(e.run(), resumeId, OP_B, "operation_admin", false).code());
-            assertEquals("STOPPED", repo.resumeForRun(e.run()).orElseThrow().state());
-            assertEquals("RESUME_ALREADY_USED", requestAdmin(repo, e.run(), e.run()).code(), "An expired resume is spent");
+            var expired = repo.resumeForRun(e.run()).orElseThrow();
+            assertEquals("EXPIRED", expired.state()); assertEquals("RESUME_REQUEST_EXPIRED", expired.outcome());
+            assertNull(expired.jobId()); assertNotNull(expired.finishedAt());
+            // Spent (contract §2.1 row 5, §10 item 5), and it says why.
+            assertEquals("RESUME_REQUEST_EXPIRED", requestAdmin(repo, e.run(), e.run()).code(), "An expired resume is spent");
+            assertEquals("RESUME_REQUEST_EXPIRED", repo.resumeEligibility(e.run()));
+            assertEquals("RESUME_REQUEST_EXPIRED", repo.approveResume(e.run(), resumeId, OP_B, "operation_admin", false).code());
+            assertEquals(1L, count(fixture, "failover_resume"));
+        }
+    }
+
+    /** Argon review 2026-10-21 P1-1: nobody approves; every read, and the periodic sweep, end the request as EXPIRED. */
+    @Test void anUnapprovedRequestPastItsThirtyMinutesIsExpiredByEveryReadAndByTheSweep() throws Exception {
+        try (var fixture = Ui2PostgresFixture.createAndMigrate("failover_resume_expiry_read")) {
+            var repo = repository(fixture); var members = pair(fixture, "unit-resume"); var others = pair(fixture, "unit-other");
+            var e = stoppedAfterConfirmedDown(fixture, repo, "unit-resume", members, false);
+            String resumeId = repo.requestResume(e.run(), OP_A, "operation_admin", JooqCpFailoverRepository.TWO_PERSON,
+                REASON, e.run(), false).runId();
+            assertEquals("RESUME_ALREADY_USED", repo.resumeEligibility(e.run()), "an unexpired pending request is in use");
+            assertEquals(0, repo.expireResumeRequests(), "nothing is due yet");
+            // The guard refuses an early expiry.
+            var early = assertThrows(org.jooq.exception.DataAccessException.class, () -> mutate(fixture, dsl -> dsl.execute(
+                "update failover_resume set state='EXPIRED',outcome='RESUME_REQUEST_EXPIRED',finished_at=clock_timestamp() "
+                    + "where resume_id={0}", resumeId)));
+            assertTrue(String.valueOf(early.getMessage()).contains("RESUME_NOT_EXPIRED"), early.getMessage());
+            age(fixture, resumeId);
+            // The run view's first read after the 30 minutes: EXPIRED, never "awaiting approval" or "already used".
+            var view = repo.resumeForRun(e.run()).orElseThrow();
+            assertEquals("EXPIRED", view.state()); assertEquals("RESUME_REQUEST_EXPIRED", view.outcome());
+            assertTrue(view.terminal());
+            assertEquals("RESUME_REQUEST_EXPIRED", repo.resumeEligibility(e.run()));
+            assertEquals(1L, count(fixture, "audit_log where table_name='failover_resume' and action_id='failover_resume_expiry'"));
+            // Terminal: never reopened.
+            assertThrows(RuntimeException.class, () -> mutate(fixture, dsl -> dsl.execute(
+                "update failover_resume set state='PENDING_APPROVAL',outcome=null,finished_at=null where resume_id={0}", resumeId)));
+            // The sweep alone expires another unit's due request (no read of that run).
+            var o = stoppedAfterConfirmedDown(fixture, repo, "unit-other", others, false);
+            String other = repo.requestResume(o.run(), OP_A, "operation_admin", JooqCpFailoverRepository.TWO_PERSON,
+                REASON, o.run(), false).runId();
+            age(fixture, other);
+            assertEquals(1, repo.expireResumeRequests());
+            assertEquals("EXPIRED", mutate(fixture, dsl -> dsl.fetchOne("select state from failover_resume where resume_id={0}",
+                other).get(0, String.class)));
+            assertEquals(0, repo.expireResumeRequests());
+        }
+    }
+
+    /** Row 12 at worker start: an admitted request that outlived its 30 minutes before any worker took it. */
+    @Test void aQueuedRequestThatOutlivedItsThirtyMinutesExpiresAtWorkerStartAndFreesTheFence() throws Exception {
+        try (var fixture = Ui2PostgresFixture.createAndMigrate("failover_resume_expiry_start")) {
+            var repo = repository(fixture); var members = pair(fixture, "unit-resume"); var others = pair(fixture, "unit-other");
+            var e = stoppedAfterConfirmedDown(fixture, repo, "unit-resume", members, false);
+            assertEquals(JooqCpFailoverRepository.RESUME_ADMITTED, requestAdmin(repo, e.run(), e.run()).code());
+            var resume = repo.resumeForRun(e.run()).orElseThrow();
+            age(fixture, resume.id());
+            assertEquals("QUEUED", repo.resumeForRun(e.run()).orElseThrow().state(), "an admitted request is not swept");
+            var w = claim(fixture, resume.jobId());
+            assertEquals("RESUME_REQUEST_EXPIRED", repo.resumeAdmission(resume.id(), w.job(), w.epoch(), true));
+            var expired = repo.resumeForRun(e.run()).orElseThrow();
+            assertEquals("EXPIRED", expired.state()); assertNotNull(expired.finishedAt());
+            assertEquals("FAILED", mutate(fixture, dsl -> dsl.fetchOne("select state from jobs where job_id={0}",
+                w.job()).get(0, String.class)));
+            assertFalse(repo.resumeState(resume.id(), w.epoch(), "STOPPED", "STOPPED", "RESUME_REQUEST_EXPIRED", null,
+                "RESUME_REQUEST_EXPIRED"), "an expired resume is terminal");
+            assertEquals(0L, count(fixture, "failover_dispatch_intent where job_id='" + w.job() + "'"));
+            assertEquals("RESUME_REQUEST_EXPIRED", repo.resumeEligibility(e.run()));
+            assertEquals("ADMITTED", request(repo, "unit-other", others).code(), "the fleet fence is free again");
+        }
+    }
+
+    /** Argon review 2026-10-21 P2-2: a refusal found in the send transaction proves the UP was never sent. */
+    @Test void aPreSendRefusalInTheSendTransactionRecordsNotSentAndStopsTheResume() throws Exception {
+        try (var fixture = Ui2PostgresFixture.createAndMigrate("failover_resume_presend")) {
+            var repo = repository(fixture); var members = pair(fixture, "unit-resume");
+            var e = stoppedAfterConfirmedDown(fixture, repo, "unit-resume", members, false);
+            assertEquals(JooqCpFailoverRepository.RESUME_ADMITTED, requestAdmin(repo, e.run(), e.run()).code());
+            var resume = repo.resumeForRun(e.run()).orElseThrow();
+            var w = claim(fixture, resume.jobId());
+            assertEquals("ADMITTED", repo.resumeAdmission(resume.id(), w.job(), w.epoch(), true));
+            assertTrue(repo.resumeState(resume.id(), w.epoch(), "RETURNING", "RETURNING", null, null, null));
+            var up = repo.prepareResumeDispatch(resume.id(), w.epoch(), 2, resume.formerActiveRef(), "cp_failover_up",
+                "operational-state-change");
+            // Between the intent and the send another incident covers the former active (§2.1 row 7).
+            mutate(fixture, dsl -> dsl.execute("insert into failover_quarantine(cluster_ref,execution_id,reason,quarantined_member_ids) "
+                + "values('unit-elsewhere','synthetic-other-run','MUTATION_STOPPED',jsonb_build_array({0}::text))", resume.formerActiveRef()));
+            var refused = assertThrows(JooqCpFailoverRepository.NotSent.class,
+                () -> repo.dispatchResume(up, () -> { fail("the transport is never invoked after a refusal"); return true; }));
+            assertEquals("OPEN_INCIDENT", refused.code());
+            var intent = mutate(fixture, dsl -> dsl.fetchOne("select delivery,observation,attempt_id from failover_dispatch_intent "
+                + "where nonce={0}", up.nonce()));
+            assertEquals("NOT_SENT", intent.get("delivery", String.class));
+            assertEquals("NOT_OBSERVED", intent.get("observation", String.class));
+            var attempt = mutate(fixture, dsl -> dsl.fetchOne("select outcome,error_class,mutation_boundary_crossed from job_step_attempt "
+                + "where attempt_id={0}", intent.get("attempt_id", String.class)));
+            assertEquals("NOT_SENT", attempt.get("outcome", String.class));
+            assertEquals("OPEN_INCIDENT", attempt.get("error_class", String.class));
+            assertEquals(false, attempt.get("mutation_boundary_crossed", Boolean.class));
+            var stopped = repo.resumeForRun(e.run()).orElseThrow();
+            assertEquals("STOPPED", stopped.state()); assertEquals("OPEN_INCIDENT", stopped.outcome());
+            assertEquals("FAILED", mutate(fixture, dsl -> dsl.fetchOne("select state from jobs where job_id={0}",
+                w.job()).get(0, String.class)));
+            // No uncertainty is recorded: nothing holds the estate-wide UNRESOLVED_DISPATCH fence for this run.
+            assertTrue(repo.openIncidents().stream().filter(i -> i.runId().equals(e.run()))
+                .allMatch(i -> i.unresolvedDispatchRefs().isEmpty()));
+            assertFalse(repo.dispatchResume(up, () -> { fail("never resent"); return true; }));
+            assertEquals("RESUME_ALREADY_USED", repo.resumeEligibility(e.run()));
+            assertEquals(1L, count(fixture, "failover_quarantine where active and execution_id='" + e.run() + "'"));
         }
     }
 
@@ -229,7 +329,9 @@ class FailoverResumeReturnTest {
                     w.job()).get(0, String.class)));
                 assertEquals(1L, count(fixture, "failover_quarantine where active and execution_id='" + e.run() + "'"));
                 assertEquals("STOPPED", repo.detail(e.run()).orElseThrow().run().state());
-                assertEquals("RESUME_ALREADY_USED", repo.resumeEligibility(e.run()));
+                // Contract §2.1 rows 4 and 5 both hold here; row 4 is evaluated first and is the more specific fact:
+                // the resume's own UP may have been sent, which is what sends recovery out of band (§1, §4.3).
+                assertEquals("RESUME_RETURN_ALREADY_ATTEMPTED", repo.resumeEligibility(e.run()));
             }
         }
     }
@@ -275,6 +377,24 @@ class FailoverResumeReturnTest {
     }
 
     // ---- fixtures ----
+
+    /**
+     * Age a request past its 30 minutes. The append-only guard is disabled for this setup step only, by the table
+     * owner on the fixture's own database (as ReadinessOrphanCloseTest does for its job trigger).
+     */
+    private static void age(Ui2PostgresFixture fixture, String resumeId) throws Exception {
+        try (var db = fixture.migrateConnection()) {
+            db.setAutoCommit(false);
+            Ui2Rows.setAuditContext(db, Ui2Rows.ACTOR, "synthetic_resume_age");
+            try (var statement = db.createStatement()) {
+                statement.execute("alter table failover_resume disable trigger failover_resume_guard");
+                statement.execute("update failover_resume set requested_at=clock_timestamp()-interval '31 minutes',"
+                    + "expires_at=clock_timestamp()-interval '1 minute' where resume_id='" + resumeId + "'");
+                statement.execute("alter table failover_resume enable trigger failover_resume_guard");
+            }
+            db.commit();
+        }
+    }
 
     /** A FAILOVER run that confirmed DOWN and stopped before UP; {@code upNotSent}: its UP intent was proven NOT_SENT. */
     private static Execution stoppedAfterConfirmedDown(Ui2PostgresFixture fixture, JooqCpFailoverRepository repo,

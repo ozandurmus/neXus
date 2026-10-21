@@ -141,6 +141,28 @@ class CpFailoverResumeServiceTest {
         }
     }
 
+    /** Argon review 2026-10-21 P2-1: the run view and the second approval check host-key trust like the request. */
+    @Test void eligibilityAndTheSecondApprovalRequireTrustedHostKeysOnBothMembers() {
+        var service = service(true);
+        roles("synthetic-viewer", Set.of(RoleToken.VIEWER)); roles("synthetic-op-b", Set.of(RoleToken.OPERATION_ADMIN));
+        when(store.resumeEligibility(RUN)).thenReturn(null);
+        stoppedRun(true);
+        assertNull(service.resumeEligibility(RUN, "synthetic-viewer"));
+        stoppedRun(false);
+        assertEquals("TRUSTED_HOST_KEY_REQUIRED", service.resumeEligibility(RUN, "synthetic-viewer"),
+            "the run view does not offer a resume the request would refuse");
+        assertEquals("TRUSTED_HOST_KEY_REQUIRED", refusal(() -> service.approveResume(RUN, "resume-a", false, "synthetic-op-b")));
+        verify(store, never()).approveResume(any(), any(), any(), any(), anyBoolean());
+        // The store's own refusal still comes first, and trust that cannot be evaluated is not trusted.
+        when(store.resumeEligibility(RUN)).thenReturn("RESUME_REQUEST_EXPIRED");
+        assertEquals("RESUME_REQUEST_EXPIRED", service.resumeEligibility(RUN, "synthetic-viewer"));
+        when(store.resumeEligibility(RUN)).thenReturn(null);
+        when(trust.findActiveAlgorithms(anyString(), anyInt())).thenThrow(new IllegalStateException("synthetic outage"));
+        assertEquals("TRUST_NOT_EVALUABLE", service.resumeEligibility(RUN, "synthetic-viewer"));
+        assertEquals("TRUST_NOT_EVALUABLE", refusal(() -> service.approveResume(RUN, "resume-a", false, "synthetic-op-b")));
+        verify(store, never()).approveResume(any(), any(), any(), any(), anyBoolean());
+    }
+
     @Test void businessHoursAreEightToTwentyEuropeIstanbulStartInclusiveEndExclusive() {
         // 07:59 and 20:00 need no acknowledgement; 08:00 and 19:59 do (PO decision 2026-10-20).
         for (var at : List.of(new Object[]{"2026-10-20T04:59:00Z", false}, new Object[]{"2026-10-20T05:00:00Z", true},

@@ -71,6 +71,12 @@ export function FailoverRun({ run, unit }: { run: CpFailoverRunDetail; unit: CpF
 /** "Resume return step" (docs/design/CP_FAILOVER_MEMBER_RECOVERY_CONTRACT.md §6): stepper of the resumed return. */
 const resumeLabels = ["Reading cluster state", "Returning former active to standby", "Verifying final cluster health", "Return verified"];
 export const resumeActiveStates: CpFailoverResumeState[] = ["QUEUED", "READING_STATE", "RETURNING", "POST_RETURN"];
+/**
+ * Poll while a resume runs or awaits its second approval; never once it has ended (DONE, STOPPED, EXPIRED). The server
+ * turns a PENDING_APPROVAL request past its 30 minutes into EXPIRED on every read, so polling a stale request ends.
+ */
+export const resumePolls = (state?: CpFailoverResumeState) =>
+  Boolean(state && (resumeActiveStates.includes(state) || state === "PENDING_APPROVAL"));
 export function resumeStep(state: CpFailoverResumeState, step?: string): number {
   const current = state === "STOPPED" ? step : state;
   return ({ QUEUED: 0, READING_STATE: 0, RETURNING: 1, POST_RETURN: 2, DONE: 3 } as Record<string, number>)[current ?? ""] ?? 0;
@@ -90,6 +96,8 @@ const resumeWords: Record<string, string> = {
   MEMBERSHIP_CHANGED: "Resume is not available: the cluster members or their recorded identities changed since the run.",
   FAILOVER_MUTATION_DISABLED: "Resume is not available: failover writes are switched off.",
   TRUSTED_HOST_KEY_REQUIRED: "Resume is not available: a member's host key is not trusted.",
+  TRUST_NOT_EVALUABLE: "Resume is not available: a member's host-key trust could not be checked.",
+  ENDPOINT_MISSING: "Resume is not available: a member has no management endpoint.",
   REASON_REQUIRED: "A reason is required.",
   BUSINESS_HOURS_ACK_REQUIRED: "Business hours: tick the acknowledgement to continue.",
   RESUME_REQUEST_EXPIRED: "The resume request expired (30 minutes after it was made). Nothing was sent.",
@@ -136,12 +144,13 @@ export function ResumeReturn({ run, unit, onChanged }: { run: CpFailoverRunDetai
     <Typography variant="subtitle2">Resume return step</Typography>
     {resume.state ? <>
       <Typography role="status">{resume.state === "PENDING_APPROVAL" ? "Resume awaiting second approval"
+        : resume.state === "EXPIRED" ? resumeText("RESUME_REQUEST_EXPIRED")
         : resume.state === "DONE" ? "Return verified" : resume.state === "STOPPED" ? `Resume stopped: ${resumeText(resume.message ?? resume.outcome)}`
         : resumeLabels[step]}</Typography>
-      {resume.state !== "PENDING_APPROVAL" && <Stepper activeStep={step} alternativeLabel>{resumeLabels.map((text, index) =>
+      {resume.state !== "PENDING_APPROVAL" && resume.state !== "EXPIRED" && <Stepper activeStep={step} alternativeLabel>{resumeLabels.map((text, index) =>
         <Step key={text} completed={resume.state === "DONE" || index < step}><StepLabel error={resume.state === "STOPPED" && index === step}>{text}</StepLabel></Step>)}</Stepper>}
       {resume.state === "DONE" && <Typography variant="body2">The incident stays open until a security_admin releases it.</Typography>}
-      {resume.state === "STOPPED" && <Typography variant="body2">Nothing more is sent. The incident stays open; recovery continues out of band.</Typography>}
+      {(resume.state === "STOPPED" || resume.state === "EXPIRED") && <Typography variant="body2">Nothing more is sent. The incident stays open; recovery continues out of band.</Typography>}
       {operable && resume.canApprove && resume.state === "PENDING_APPROVAL" && <M3Button deviceJob emphasis="filled" disabled={busy}
         onClick={() => { setAck(false); setError(null); setDialog("approve"); }}>Approve resume</M3Button>}
     </> : operable && resume.canResume
@@ -204,7 +213,7 @@ function UnitPanel({ unit, expanded, onExpand, onRefreshUnits }: { unit: CpFailo
   const pending = approvals.find(a => !a.revokedAt && Date.parse(a.windowUntil) > Date.now() && a.policy === "OPERATION_ADMIN_TWO_PERSON" && !a.approved);
   const bound = approvals.find(a => a.requestId === draft?.requestId && !a.revokedAt && Date.parse(a.windowUntil) > Date.now());
   const active = Boolean(run && activeStates.includes(run.state));
-  const resuming = Boolean(run?.resume?.state && [...resumeActiveStates, "PENDING_APPROVAL"].includes(run.resume.state));
+  const resuming = resumePolls(run?.resume?.state);
   const readinessActive = Boolean(readinessRun && activeStates.includes(readinessRun.state));
   useEffect(() => {
     if (!expanded || (!active && !pending && !readinessActive && !resuming)) return;

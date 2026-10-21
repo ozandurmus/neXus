@@ -473,6 +473,13 @@ public final class Ui2WorkerMain {
             try {
                 moduleRuntime.runTask(role, instance, "JobReconciler.reconcileOnce", () -> {
                     failoverRecovery.reconcileDispatches();
+                    // A two-person resume request left unapproved past its 30 minutes becomes EXPIRED (bounded sweep);
+                    // a sweep failure never holds back the job reconciler.
+                    try { failoverRecovery.expireResumeRequests(); }
+                    catch (RuntimeException sweep) {
+                        System.getLogger(Ui2WorkerMain.class.getName())
+                                .log(System.Logger.Level.WARNING, "Resume expiry sweep error: " + sweep.getMessage());
+                    }
                     reconciler.reconcileOnce();
                 });
             } catch (Throwable t) {

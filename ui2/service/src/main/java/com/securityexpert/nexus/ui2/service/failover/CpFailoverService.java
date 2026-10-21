@@ -490,11 +490,26 @@ public final class CpFailoverService {
         if (allowed(actor,RoleToken.OPERATION_ADMIN)) return com.securityexpert.nexus.ui2.platform.ManualAdmission.OPERATION_ADMIN;
         throw new Refusal("WRONG_ROLE");
     }
-    /** Contract §6.1: the server's §2.1 verdict for a stopped run (rows 2–10); null when a resume may be requested. */
+    /**
+     * Contract §6.1: the server's §2.1 verdict for a stopped run (rows 2–10, and row 9's trusted host key on both
+     * members, as the request path checks it); null when a resume may be requested.
+     */
     public String resumeEligibility(String runId, String actor) {
         requireReader(actor);
         if (!mutationSwitch.enabled()) return FailoverMutationSwitch.DISABLED;
-        return store.resumeEligibility(runId);
+        String refusal=store.resumeEligibility(runId);
+        if (refusal!=null) return refusal;
+        try { requireResumeMembersTrusted(runId); }
+        catch (Refusal refused) { return refused.code(); }
+        return null;
+    }
+    /**
+     * Row 9 / AGENTS.md "Production SSH requires trusted host keys": both members of the run's unit. Checked before a
+     * request and before a second approval, so the single-use resume is never admitted toward an untrusted key.
+     */
+    private void requireResumeMembersTrusted(String runId) {
+        var run=store.detail(runId).map(JooqCpFailoverRepository.Detail::run).orElseThrow(() -> new Refusal("RESUME_RUN_NOT_ELIGIBLE"));
+        for (DeviceSummaryRecord member:devices.findMembersByClusterRef(run.clusterRef())) requireTrusted(member);
     }
     public Optional<String> resumeFormerActive(String runId, String actor) {
         requireReader(actor);
@@ -527,8 +542,7 @@ public final class CpFailoverService {
         if (refusal!=null) throw new Refusal(refusal);
         if (!expectedIncidentId.equals(runId)) throw new Refusal("INCIDENT_MISMATCH");
         // The single-use resume is not spent on a member whose host key is not trusted (the worker refuses it anyway).
-        var run=store.detail(runId).map(JooqCpFailoverRepository.Detail::run).orElseThrow(() -> new Refusal("RESUME_RUN_NOT_ELIGIBLE"));
-        for (DeviceSummaryRecord member:devices.findMembersByClusterRef(run.clusterRef())) requireTrusted(member);
+        requireResumeMembersTrusted(runId);
         var decision=store.requestResume(runId,actor,role,policy,text,expectedIncidentId,businessHoursAck);
         if (!JooqCpFailoverRepository.RESUME_ADMITTED.equals(decision.code())
                 && !JooqCpFailoverRepository.RESUME_PENDING.equals(decision.code())) throw new Refusal(decision.code());
@@ -541,6 +555,8 @@ public final class CpFailoverService {
         String role=resumeRole(actor);
         if (!mutationSwitch.enabled()) throw new Refusal(FailoverMutationSwitch.DISABLED);
         if (runId==null || resumeId==null || resumeId.isBlank()) throw new Refusal("RESUME_NOT_FOUND");
+        // A key revoked while the request waited: refused before the approval admits the single-use job.
+        requireResumeMembersTrusted(runId);
         var decision=store.approveResume(runId,resumeId,actor,role,businessHoursAck);
         if (!JooqCpFailoverRepository.RESUME_ADMITTED.equals(decision.code())) throw new Refusal(decision.code());
         return decision;

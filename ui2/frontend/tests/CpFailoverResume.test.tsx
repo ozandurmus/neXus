@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
-import { ResumeReturn, resumeStep } from "../src/screens/CpFailoverPanel";
+import { ResumeReturn, resumePolls, resumeStep } from "../src/screens/CpFailoverPanel";
 import type { CpFailoverResume, CpFailoverRunDetail } from "../src/auth/adminApi";
 
 /** "Resume return step" on the failover panel (docs/design/CP_FAILOVER_MEMBER_RECOVERY_CONTRACT.md §6). */
@@ -111,6 +111,24 @@ it("a stopped resume names its stop in plain words and offers nothing more", () 
   expect(screen.getByRole("status")).toHaveTextContent("the former active is no longer down");
   expect(screen.getByText(/The incident stays open; recovery continues out of band/)).toBeInTheDocument();
   expect(screen.queryByRole("button")).toBeNull();
+});
+
+it("an expired two-person request is shown as expired, offers nothing and is not polled (Argon P1-1)", () => {
+  show(run({ ...eligible, eligible: false, canResume: false, refusal: "RESUME_REQUEST_EXPIRED", resumeId: "resume-opaque",
+    state: "EXPIRED", step: "PENDING_APPROVAL", policy: "OPERATION_ADMIN_TWO_PERSON", canApprove: false,
+    outcome: "RESUME_REQUEST_EXPIRED", message: "RESUME_REQUEST_EXPIRED" }));
+  expect(screen.getByRole("status")).toHaveTextContent("The resume request expired (30 minutes after it was made). Nothing was sent.");
+  expect(screen.queryByText("Resume awaiting second approval")).toBeNull();
+  expect(screen.queryByText("Reading cluster state")).toBeNull();
+  expect(screen.getByText(/The incident stays open; recovery continues out of band/)).toBeInTheDocument();
+  expect(screen.queryByRole("button")).toBeNull();
+});
+
+it.each([
+  ["PENDING_APPROVAL", true], ["QUEUED", true], ["READING_STATE", true], ["RETURNING", true], ["POST_RETURN", true],
+  ["DONE", false], ["STOPPED", false], ["EXPIRED", false], [undefined, false],
+] as const)("polls the run view for a resume in state %s: %s", (state, polls) => {
+  expect(resumePolls(state)).toBe(polls);
 });
 
 it("shows nothing for a run that is not a stopped failover run", () => {

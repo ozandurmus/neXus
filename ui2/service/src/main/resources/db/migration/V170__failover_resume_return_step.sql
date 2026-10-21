@@ -10,6 +10,10 @@
 --      block the resume and "may have been sent" stays at most one per run and step.
 --   4. A resume whose job ends without the worker closing it is stopped in the same transaction.
 --   5. The two PO-approved gate-row field amendments (contract §8 Q2, Q2b), no other field changed.
+--   6. Expiry (contract §2.1 row 12, §10 item 5) is a terminal state of its own: EXPIRED, outcome
+--      RESUME_REQUEST_EXPIRED, reachable only from a request that never started (PENDING_APPROVAL, or QUEUED with no
+--      started_at) once expires_at has passed. The repository applies it on every read and admission path and a
+--      bounded periodic sweep; an EXPIRED request is spent like any other (single use, row 5).
 -- Deploy after V169. Dry-run in BEGIN/ROLLBACK on the live database before rollout.
 
 CREATE TABLE failover_resume (
@@ -38,7 +42,7 @@ CREATE TABLE failover_resume (
     approval_ack_at TIMESTAMPTZ,
     job_id TEXT UNIQUE REFERENCES jobs(job_id),
     state TEXT NOT NULL CHECK (state IN ('PENDING_APPROVAL', 'QUEUED', 'READING_STATE', 'RETURNING',
-        'POST_RETURN', 'DONE', 'STOPPED')),
+        'POST_RETURN', 'DONE', 'STOPPED', 'EXPIRED')),
     step TEXT NOT NULL,
     outcome TEXT,
     failed_check TEXT,
@@ -59,8 +63,9 @@ CREATE TABLE failover_resume (
     CHECK ((approval_ack_by IS NULL) = (approval_ack_at IS NULL)),
     CHECK (approved_in_business_hours IS NULL OR policy = 'OPERATION_ADMIN_TWO_PERSON'),
     CHECK (NOT coalesce(approved_in_business_hours, false) OR approval_ack_by = approved_by),
-    CHECK (state IN ('PENDING_APPROVAL', 'STOPPED') OR (approved_by IS NOT NULL AND job_id IS NOT NULL)),
-    CHECK ((state IN ('DONE', 'STOPPED')) = (finished_at IS NOT NULL))
+    CHECK (state IN ('PENDING_APPROVAL', 'STOPPED', 'EXPIRED') OR (approved_by IS NOT NULL AND job_id IS NOT NULL)),
+    CHECK ((state IN ('DONE', 'STOPPED', 'EXPIRED')) = (finished_at IS NOT NULL)),
+    CHECK (state <> 'EXPIRED' OR (outcome = 'RESUME_REQUEST_EXPIRED' AND started_at IS NULL))
 );
 -- The fleet fence: at most one admitted, non-terminal resume anywhere (a pending request reserves nothing).
 CREATE UNIQUE INDEX uq_failover_resume_fleet ON failover_resume ((1))
@@ -88,7 +93,12 @@ BEGIN
   END IF;
  END IF;
  IF TG_OP = 'UPDATE' THEN
-  IF OLD.state IN ('DONE', 'STOPPED') THEN RAISE EXCEPTION 'RESUME_TERMINAL'; END IF;
+  IF OLD.state IN ('DONE', 'STOPPED', 'EXPIRED') THEN RAISE EXCEPTION 'RESUME_TERMINAL'; END IF;
+  -- Expiry only ends a request that never started, and only once its 30 minutes have passed.
+  IF NEW.state = 'EXPIRED' AND (OLD.state NOT IN ('PENDING_APPROVAL', 'QUEUED') OR OLD.started_at IS NOT NULL
+      OR clock_timestamp() < OLD.expires_at) THEN
+   RAISE EXCEPTION 'RESUME_NOT_EXPIRED';
+  END IF;
   IF ROW(NEW.resume_id, NEW.run_id, NEW.cluster_ref, NEW.vendor, NEW.former_active_ref, NEW.peer_ref,
          NEW.target_member_ids, NEW.member_set_revision, NEW.expected_incident_id, NEW.policy, NEW.initiated_by,
          NEW.reason, NEW.requested_at, NEW.expires_at, NEW.requested_in_business_hours, NEW.business_hours_ack_by,
@@ -147,7 +157,7 @@ BEGIN
   PERFORM pg_advisory_xact_lock(136, 1);
   UPDATE failover_resume SET state = 'STOPPED', outcome = NEW.state, message = 'RESUME_JOB_ENDED',
       finished_at = clock_timestamp()
-   WHERE job_id = NEW.job_id AND state NOT IN ('DONE', 'STOPPED');
+   WHERE job_id = NEW.job_id AND state NOT IN ('DONE', 'STOPPED', 'EXPIRED');
  END IF;
  RETURN NEW;
 END;
