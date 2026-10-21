@@ -152,6 +152,20 @@ public interface DeviceRepository {
         return out;
     }
 
+    /** An enrolled Palo Alto firewall and the serial neXus recorded for it. */
+    record PanSerial(String serial, String deviceId) {
+    }
+
+    /**
+     * Enrolled Palo Alto firewalls with their recorded serial -- the exact relation the Policy screen uses to show a
+     * firewall by hostname where Panorama names it by serial. The serial is the identity baseline
+     * ({@code recorded_identity_primary}), else the platform-facts serial; a device that carries neither is absent.
+     * Never a heuristic: callers match the whole value or not at all.
+     */
+    default List<PanSerial> listPanSerials() {
+        return List.of();
+    }
+
     /** Read-eligible devices whose first endpoint uses the requested transport. */
     default List<DeviceSummaryRecord> listReadCollectionTargets(String transport) {
         return listAll().stream().filter(d -> find(d.deviceId()).filter(DeviceRecord::permitsReadCollection).isPresent()

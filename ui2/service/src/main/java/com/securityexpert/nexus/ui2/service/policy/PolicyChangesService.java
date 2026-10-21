@@ -20,6 +20,12 @@ public final class PolicyChangesService {
     private final ObjectMapper mapper;
     private final TopologyNamePseudonymizer names;
     private final SubnetPreservingIpMasker ips;
+    /** Firewalls Panorama names by serial, shown by hostname (PO 2026-10-22); absent in unit tests that set no inventory. */
+    private volatile PolicyFirewallNames firewalls;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setDeviceRepository(com.securityexpert.nexus.ui2.persistence.device.DeviceRepository devices) {
+        this.firewalls = devices == null ? null : new PolicyFirewallNames(devices);
+    }
     @org.springframework.beans.factory.annotation.Autowired
     public PolicyChangesService(TransactionBoundary transactions, ObjectMapper mapper, TopologyNamePseudonymizer names, SubnetPreservingIpMasker ips) {
         this.repository = new PolicyChangeRepository(transactions); this.mapper = mapper; this.names = names; this.ips = ips;
@@ -82,12 +88,19 @@ public final class PolicyChangesService {
             List<Map<String, Object>> changes = mapper.readValue(row.changes(), new TypeReference<>() {});
             var out = new LinkedHashMap<String, Object>();
             out.put("revision", String.valueOf(row.revision())); out.put("policyId", row.policy()); out.put("policyName", metadata.getOrDefault("name", "UNKNOWN"));
-            out.put("targets", metadata.getOrDefault("targets", List.of())); out.put("ruleId", row.ruleId());
+            var firewalls = this.firewalls;
+            out.put("targets", firewalls == null ? metadata.getOrDefault("targets", List.of())
+                : firewalls.targets(String.valueOf(metadata.get("vendor")), metadata.getOrDefault("targets", List.of())));
+            out.put("ruleId", row.ruleId());
             out.put("currentSnapshotLabel", row.currentLabel()); out.put("number", row.number()); out.put("name", row.name() == null ? "UNKNOWN" : row.name());
             out.put("changedOn", row.time()); out.put("observedAtCollection", row.observed()); out.put("changeType", row.changeType());
             out.put("collectedAt", row.collectedAt()); out.put("initialCapture", row.initialCapture());
             out.put("changedBy", row.actor() == null || row.actor().isBlank() ? UNKNOWN_ACTOR : row.actor());
             out.put("changes", changes); out.put("changedFields", changes.stream().map(c -> c.get("field")).toList());
+            if (firewalls != null) {
+                var selectors = firewalls.changeSelectors(changes);
+                if (!selectors.isEmpty()) out.put("targetDevices", selectors);
+            }
             return masked ? (Map<String, Object>) PolicyPrivacy.mask(out, "", names, ips) : out;
         } catch (IOException invalid) { throw new IllegalStateException("Stored policy history is invalid"); }
     }

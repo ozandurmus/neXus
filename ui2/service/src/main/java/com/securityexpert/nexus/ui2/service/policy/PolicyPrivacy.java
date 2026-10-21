@@ -50,7 +50,9 @@ public final class PolicyPrivacy {
                 String field = String.valueOf(k);
                 if (Set.of("time", "schedule", "install-on", "vpn", "content", "inline-layer", "translated-source", "translated-destination", "translated-service", "translated-source-fallback", "translated-destination-dynamic").contains(field)) out.put(field, mask(v, "refs", names, ips));
                 else if (field.equals("last-modified")) out.put(field, mask(v, "changedOn", names, ips));
-                else if (Set.of("from", "to", "source-user", "category", "tag", "last-modifier", "layer-name", "target-selectors", "log-setting", "profile-setting/group", "profile-setting/profiles/virus", "profile-setting/profiles/spyware", "profile-setting/profiles/vulnerability", "profile-setting/profiles/url-filtering", "profile-setting/profiles/file-blocking", "profile-setting/profiles/wildfire-analysis").contains(field))
+                // PAN target selectors are firewall serials: the keyed serial token, the same one targetDevices carries.
+                else if (field.equals("target-selectors")) out.put(field, mask(v, "serial", names, ips));
+                else if (Set.of("from", "to", "source-user", "category", "tag", "last-modifier", "layer-name", "log-setting", "profile-setting/group", "profile-setting/profiles/virus", "profile-setting/profiles/spyware", "profile-setting/profiles/vulnerability", "profile-setting/profiles/url-filtering", "profile-setting/profiles/file-blocking", "profile-setting/profiles/wildfire-analysis").contains(field))
                     out.put(field, mask(v, field, names, ips));
                 else if (field.equals("rule-type")) out.put(field, mask(v, "ruleType", names, ips));
                 else out.put(field, List.of("Withheld in AIView"));
@@ -90,6 +92,8 @@ public final class PolicyPrivacy {
         if (key.equals("resolution")) return text.equals("DOMAIN_INVENTORY") ? text : "UNKNOWN";
         if (key.equals("memberStatus")) return Set.of("RESOLVED", "UNKNOWN").contains(text) ? text : "UNKNOWN";
         if (key.equals("memberId")) return names.maskPolicyName("member", text);
+        // A firewall serial (PAN target selector, secondary field beside a hostname): never the value, never a hostname.
+        if (key.equals("serial")) return names.maskSerial(text);
         if (key.equals("dimension")) return Set.of("source", "destination", "service").contains(text) ? text : "UNKNOWN";
         if (key.equals("observedSource") || key.equals("observedDestination"))
             return text.matches("[0-9.]+(?:/[0-9]{1,2})?") ? ips.maskText(text) : "Withheld in AIView";
