@@ -526,6 +526,15 @@
     },
     {
       "tool": "gitleaks",
+      "rule": "generic-api-key",
+      "location": "ui2/service/src/test/java/com/securityexpert/nexus/ui2/service/device/configuration/BackupDeviationServiceTest.java",
+      "commit": "838b2fe0476eeb2d7c503e8e56f7513ea98e6c81",
+      "reason": "One history finding: a synthetic all-digit HMAC test key literal in the backup-deviation masking test, introduced by this commit and since replaced by a runtime-built key. Gitleaks scans history, so the commit-scoped acceptance stays; no working-tree path exemption and no .gitleaks.toml change. Orchestrator, deploy gate 2026-10-23.",
+      "owner": "PO",
+      "review_date": "2026-12-31"
+    },
+    {
+      "tool": "gitleaks",
       "rule": "private-key",
       "location": "ui2/worker/src/test/java/com/securityexpert/nexus/ui2/worker/systemlog/redaction/LogRedactorTest.java",
       "reason": "Synthetic secret-shaped test line used to prove log redaction/masking; no operational credential. Exact path and rule only in .gitleaks.toml (system-log phase B, PO mandate 2026-10-15).",

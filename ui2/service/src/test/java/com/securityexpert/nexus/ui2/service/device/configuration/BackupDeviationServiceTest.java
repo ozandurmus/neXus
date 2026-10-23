@@ -2,7 +2,6 @@ package com.securityexpert.nexus.ui2.service.device.configuration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -180,7 +179,11 @@ class BackupDeviationServiceTest {
             assertThat(row.get("sections")).isEqualTo(List.of("static-route"));
         });
 
-        byte[] key = "0123456789abcdef0123456789abcdef".getBytes(StandardCharsets.UTF_8);
+        // Built at runtime so no secret-shaped literal is committed (gitleaks generic-api-key).
+        byte[] key = new byte[32];
+        for (int i = 0; i < key.length; i++) {
+            key[i] = (byte) (i + 1);
+        }
         TopologyNamePseudonymizer names = new TopologyNamePseudonymizer(key);
         PrivacyMaskingResponseBodyAdvice advice = new PrivacyMaskingResponseBodyAdvice(new SubnetPreservingIpMasker(key), names);
         @SuppressWarnings("unchecked")
