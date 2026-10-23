@@ -622,6 +622,13 @@ public class DeviceCompositionConfiguration {
     }
 
     @Bean
+    public com.securityexpert.nexus.ui2.service.device.configuration.BackupDeviationService backupDeviationService(
+            DeviceConfigurationRepository deviceConfigurationRepository, DeviceRepository deviceRepository) {
+        return new com.securityexpert.nexus.ui2.service.device.configuration.BackupDeviationService(
+                deviceConfigurationRepository, deviceRepository::listAll, java.time.Clock.systemUTC());
+    }
+
+    @Bean
     public ConfigurationCollectService configurationCollectService(DeviceRepository deviceRepository,
             JobAdmissionService jobAdmissionService) {
         return new ConfigurationCollectService(deviceRepository, jobAdmissionService);

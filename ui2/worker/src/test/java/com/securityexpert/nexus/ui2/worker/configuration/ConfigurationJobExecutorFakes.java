@@ -233,6 +233,17 @@ final class ConfigurationJobExecutorFakes {
         public ConfigurationRunView findRunView(String deviceId) {
             throw new UnsupportedOperationException("not used by this test");
         }
+
+        @Override
+        public List<com.securityexpert.nexus.ui2.persistence.device.configuration.ConfigurationRunHead> findPrimaryRunHeadsSince(
+                java.time.Instant since) {
+            throw new UnsupportedOperationException("not used by this test");
+        }
+
+        @Override
+        public Map<String, String> findDevicesWithPrimaryRun() {
+            throw new UnsupportedOperationException("not used by this test");
+        }
     }
 
     static final class FakeConfigurationNotificationRepository implements ConfigurationNotificationRepository {

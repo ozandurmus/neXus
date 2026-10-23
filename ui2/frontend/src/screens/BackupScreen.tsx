@@ -1,9 +1,10 @@
 import { useGate } from "../shell/JobWindow";
 import { BackupAttempts } from "./BackupAttempts";
 import { DeviationChip, ValidationChip, deviationState } from "./backupWords";
+import { BackupDeviationCard, MajorDeviationList, majorDeviceIds } from "./BackupDeviationCard";
 import { bytesTitle, formatBytes } from "../shell/bytes";
 import { urlParam } from "../shell/urlParams";
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Card from "@mui/material/Card";
@@ -119,6 +120,15 @@ export function toFleetRows(artefacts: readonly BackupArtefact[], nameByDeviceId
 }
 
 /**
+ * A device with an active major configuration deviation (GET /api/v2/backups/deviations) shows the existing
+ * `MAJOR DEVIATION` word in the fleet table instead of its archive's byte state; every other row is unchanged.
+ */
+export function withMajorDeviations(rows: readonly BackupDeviceItem[], deviations: BackupDeviations | null): BackupDeviceItem[] {
+  const major = majorDeviceIds(deviations);
+  return major.size === 0 ? [...rows] : rows.map((row) => (major.has(row.deviceId) ? { ...row, deviationState: "MAJOR DEVIATION" } : row));
+}
+
+/**
  * The one-line headline under the title (UI review 2026-10-18 §4.3): `123 of 130 targets with a stored backup · 02:00
  * daily · 7 without archive · retention 7 d`, from the store counts and the policy the screen already reads; a part
  * not read is UNKNOWN, never 0.
@@ -188,6 +198,7 @@ export function BackupScreen() {
 
   const [policy, setPolicy] = useState<BackupPolicy | null>(null);
   const [deviations, setDeviations] = useState<BackupDeviations | null>(null);
+  const fleetRows = useMemo(() => withMajorDeviations(devices, deviations), [devices, deviations]);
   const [fleetOpen, setFleetOpen] = useState(false);
   const [fleetReason, setFleetReason] = useState("");
   const [fleetBusy, setFleetBusy] = useState(false);
@@ -551,19 +562,16 @@ export function BackupScreen() {
         </Card>
         <MetricCard title="Retention policy" value={policy ? `${policy.backup_retention_days} days` : null} state={policy ? "ok" : "unknown"}
           note={policy ? retentionNote(policy) : "Policy unavailable"} />
-        {/* Zero deviations found and zero comparisons run look identical and mean opposite things. */}
-        <MetricCard title="Active major deviations"
-          value={deviations && deviations.total_deviations_checked > 0 ? deviations.active_major_deviations.length : null}
-          state={deviations && deviations.total_deviations_checked > 0 ? "ok" : "unknown"}
-          reason="No comparison has run, so no deviation can be claimed or ruled out"
-          note={deviations ? `${deviations.total_deviations_checked} comparison${deviations.total_deviations_checked === 1 ? "" : "s"} run` : "Deviation state unavailable"} />
+        {/* Zero deviations found and zero comparisons run look identical and mean opposite things: UNKNOWN until a device is compared. */}
+        <BackupDeviationCard deviations={deviations} />
       </MetricGrid>
+      <MajorDeviationList deviations={deviations} />
 
       {/* One table per device (UI review 2026-09-23): target switch, latest archive, validation, deviation, latest attempt, every action in the row menu. */}
       <BackupFleetTable
         version={targetsVersion}
         onTargetChanged={() => setTargetsVersion((v) => v + 1)}
-        fleet={devices}
+        fleet={fleetRows}
         fleetLoaded={listLoaded}
         fleetError={listError}
         baselines={baselines}

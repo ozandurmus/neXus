@@ -340,13 +340,7 @@ public final class BackupController {
         return ResponseEntity.ok(body);
     }
 
-    @GetMapping("/api/v2/backups/deviations")
-    public ResponseEntity<Map<String, Object>> listDeviations() {
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("active_major_deviations", List.of());
-        body.put("total_deviations_checked", 0);
-        return ResponseEntity.ok(body);
-    }
+    // GET /api/v2/backups/deviations moved to BackupDeviationController (2026-10-23): it reads configuration runs.
 
     private static String actingUser(HttpServletRequest servletRequest) {
         if (servletRequest == null) {

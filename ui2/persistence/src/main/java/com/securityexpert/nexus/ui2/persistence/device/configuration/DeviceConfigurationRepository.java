@@ -28,4 +28,13 @@ public interface DeviceConfigurationRepository {
 
     /** The full detail view for one device: its primary run plus every supplementary run recorded alongside it. */
     ConfigurationRunView findRunView(String deviceId);
+
+    /**
+     * Every primary run collected at or after {@code since}, fleet-wide, oldest first, each with its deviation
+     * summary when it has one -- never text, index or overrides (Backups deviation read, 2026-10-23).
+     */
+    List<ConfigurationRunHead> findPrimaryRunHeadsSince(java.time.Instant since);
+
+    /** Device id to the vendor of its newest primary run, for every device with at least one primary run. */
+    java.util.Map<String, String> findDevicesWithPrimaryRun();
 }

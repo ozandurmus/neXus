@@ -159,6 +159,61 @@ public final class JooqDeviceConfigurationRepository implements DeviceConfigurat
         });
     }
 
+    @Override
+    public List<ConfigurationRunHead> findPrimaryRunHeadsSince(java.time.Instant since) {
+        Objects.requireNonNull(since, "since");
+        // Three bounded queries for the whole window (a week is ~1,300 runs on HOST-A, 2026-10-23), never the text.
+        return transactionBoundary.inTransaction(dsl -> {
+            Timestamp from = Timestamp.from(since);
+            Result<Record> heads = dsl.fetch("select run_id, device_id, vendor, read_kind, collected_at, change_state "
+                    + "from device_configuration_run where is_primary = true and collected_at >= {0} "
+                    + "order by collected_at, run_id", from);
+            if (heads.isEmpty()) {
+                return List.<ConfigurationRunHead>of();
+            }
+            java.util.Map<String, ConfigurationDeviationSummary.Status> statusByRun = new java.util.HashMap<>();
+            java.util.Map<String, List<ConfigurationDeviationEntry>> entriesByRun = new java.util.HashMap<>();
+            for (Record row : dsl.fetch("select s.run_id, s.status, e.context, e.section, e.source, e.kind, e.old_count, "
+                    + "e.new_count from configuration_run_deviation_summary s "
+                    + "join device_configuration_run r on r.run_id = s.run_id "
+                    + "left join configuration_run_deviation_entry e on e.summary_id = s.summary_id "
+                    + "where r.is_primary = true and r.collected_at >= {0}", from)) {
+                String runId = row.get("run_id", String.class);
+                statusByRun.put(runId, ConfigurationDeviationSummary.Status.valueOf(row.get("status", String.class)));
+                List<ConfigurationDeviationEntry> entries = entriesByRun.computeIfAbsent(runId, k -> new ArrayList<>());
+                String kind = row.get("kind", String.class);
+                if (kind != null) {
+                    entries.add(new ConfigurationDeviationEntry(row.get("context", String.class),
+                            row.get("section", String.class), Optional.ofNullable(row.get("source", String.class)),
+                            ConfigurationDeviationEntry.DeviationKind.valueOf(kind),
+                            row.get("old_count", Integer.class), row.get("new_count", Integer.class)));
+                }
+            }
+            List<ConfigurationRunHead> result = new ArrayList<>(heads.size());
+            for (Record r : heads) {
+                String runId = r.get("run_id", String.class);
+                Optional<ConfigurationDeviationSummary> summary = Optional.ofNullable(statusByRun.get(runId))
+                        .map(status -> new ConfigurationDeviationSummary(status, entriesByRun.getOrDefault(runId, List.of())));
+                result.add(new ConfigurationRunHead(runId, r.get("device_id", String.class), r.get("vendor", String.class),
+                        r.get("read_kind", String.class), r.get("collected_at", Timestamp.class).toInstant(),
+                        r.get("change_state", String.class), summary));
+            }
+            return List.copyOf(result);
+        });
+    }
+
+    @Override
+    public java.util.Map<String, String> findDevicesWithPrimaryRun() {
+        return transactionBoundary.inTransaction(dsl -> {
+            java.util.Map<String, String> result = new java.util.LinkedHashMap<>();
+            for (Record row : dsl.fetch("select distinct on (device_id) device_id, vendor from device_configuration_run "
+                    + "where is_primary = true order by device_id, collected_at desc")) {
+                result.put(row.get("device_id", String.class), row.get("vendor", String.class));
+            }
+            return java.util.Collections.unmodifiableMap(result);
+        });
+    }
+
     private static Optional<ConfigurationRun> findLatestPrimary(DSLContext dsl, String deviceId) {
         Result<Record> runRows = dsl.fetch("select run_id from device_configuration_run "
                 + "where device_id = {0} and is_primary = true order by collected_at desc limit 1", deviceId);

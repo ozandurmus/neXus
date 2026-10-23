@@ -176,8 +176,10 @@ public final class ConfigurationJobExecutor {
                 // empty list is a legitimate empty predecessor; null would mean absent, but
                 // ConfigurationRun cannot hold null (AC-5 -- IndexDeviationComputer treats
                 // null as not-computable; a non-null empty list is computable).
-                deviationSummary = Optional.of(
-                        IndexDeviationComputer.compute(previous.get().index(), data.index()));
+                // V176: Check Point also compares the previous run's sanitized lines (still on that newest run)
+                // with this run's, so a same-count edit is a MODIFIED section rather than an empty summary.
+                deviationSummary = Optional.of(IndexDeviationComputer.compute(previous.get().index(), data.index(),
+                        previous.get().sanitizedText(), data.sanitizedText(), vendor));
             }
 
             String runId = UUID.randomUUID().toString();

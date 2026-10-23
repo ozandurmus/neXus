@@ -31,6 +31,7 @@ import { useFetchOnMount } from "../shell/useFetchOnMount";
 import { InventoryEntityHeader } from "./InventoryPanels";
 import { FORTIGATE_SECTIONS } from "./configurationProjection";
 import { statusWord } from "../shell/presenters";
+import { categoryWord } from "./BackupDeviationCard";
 
 const POLL_INTERVAL_MS = 1750;
 
@@ -258,7 +259,10 @@ export function DeviceConfigurationPanels({
   hostname,
   vendorHint,
   onCollected,
+  initialTab,
 }: {
+  /** A tab label to open first (the Backups screen's major-deviation links open "Changes"). */
+  readonly initialTab?: string;
   readonly deviceId: string;
   /** The same name the list shows, so list and detail never name one device two ways. */
   readonly hostname?: string | null;
@@ -350,6 +354,7 @@ export function DeviceConfigurationPanels({
 
       <M3Tabs
         ariaLabel="Configuration detail"
+        initial={initialTab === "Changes" ? 1 : 0}
         tabs={[
           {
             label: "Sections",
@@ -465,6 +470,7 @@ function DeviationPanel({
               <TableCell sx={{ fontWeight: 600 }}>Context</TableCell>
               <TableCell sx={{ fontWeight: 600 }}>Section</TableCell>
               <TableCell sx={{ fontWeight: 600 }}>Change</TableCell>
+              <TableCell sx={{ fontWeight: 600 }}>Backups</TableCell>
               <TableCell sx={{ fontWeight: 600 }} align="right">Previous</TableCell>
               <TableCell sx={{ fontWeight: 600 }} align="right">Now</TableCell>
             </TableRow>
@@ -475,6 +481,8 @@ function DeviationPanel({
                 <TableCell><StatusChip tone="neutral" label={e.context === "physical" ? "Physical" : e.context} dense /></TableCell>
                 <TableCell sx={{ fontFamily: "monospace" }}>{e.section}</TableCell>
                 <TableCell><StatusChip tone="warn" label={statusWord(e.kind)} dense /></TableCell>
+                {/* The Backups screen's "Active major deviations" counts this section (2026-10-23); a minor change says so. */}
+                <TableCell>{e.category ? <StatusChip tone="bad" label={`Major · ${categoryWord(e.category)}`} dense /> : <Typography variant="caption" color="text.secondary">Minor</Typography>}</TableCell>
                 <TableCell align="right" sx={{ fontVariantNumeric: "tabular-nums" }}>{e.old_count ?? "none"}</TableCell>
                 <TableCell align="right" sx={{ fontVariantNumeric: "tabular-nums" }}>{e.new_count ?? "none"}</TableCell>
               </TableRow>

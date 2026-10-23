@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { urlParam } from "../shell/urlParams";
 import Box from "@mui/material/Box";
 import Card from "@mui/material/Card";
 import InputBase from "@mui/material/InputBase";
@@ -292,6 +293,9 @@ export function DeviceConfigurationDetail({ device, embedded = false }: { readon
     return next;
   });
 
+  // Backups "Active major deviations" links here with `config_tab=changes` (2026-10-23): open Details > Changes.
+  const [openChanges] = useState(() => urlParam("config_tab") === "changes" && urlParam("device_id") === device.device_id);
+
   const configurationTab = (
     <Stack spacing={2}>
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 1 }}>
@@ -351,9 +355,10 @@ export function DeviceConfigurationDetail({ device, embedded = false }: { readon
     return (
       <M3Tabs
         ariaLabel="Configuration sections"
+        initial={openChanges ? 1 : 0}
         tabs={[
           { label: "Sections", panel: configurationTab },
-          { label: "Details", panel: <DeviceConfigurationPanels deviceId={device.device_id} hostname={device.hostname} vendorHint={device.vendor_hint} onCollected={refresh} /> },
+          { label: "Details", panel: <DeviceConfigurationPanels deviceId={device.device_id} hostname={device.hostname} vendorHint={device.vendor_hint} onCollected={refresh} initialTab={openChanges ? "Changes" : undefined} /> },
         ]}
       />
     );
@@ -370,9 +375,10 @@ export function DeviceConfigurationDetail({ device, embedded = false }: { readon
       />
       <M3Tabs
         ariaLabel="Configuration sections"
+        initial={openChanges ? 1 : 0}
         tabs={[
           { label: "Configuration", panel: configurationTab },
-          { label: "Details", panel: <DeviceConfigurationPanels deviceId={device.device_id} hostname={device.hostname} vendorHint={device.vendor_hint} onCollected={refresh} /> },
+          { label: "Details", panel: <DeviceConfigurationPanels deviceId={device.device_id} hostname={device.hostname} vendorHint={device.vendor_hint} onCollected={refresh} initialTab={openChanges ? "Changes" : undefined} /> },
         ]}
       />
     </Stack>
