@@ -507,36 +507,50 @@ class CpFailoverJobExecutorTest {
     }
     // ---- VSX chassis step (docs/design/VSX_CHASSIS_FAILOVER_UNIT_2026_10_23.md) ----
     private static final String VSX_NAMES="VS-TEST-APP (VSID 12)";
-    /** The fixture plus the proposed VS0 read rows of the design §3, signed off for this test only. */
-    private static GateRegistryPort chassisGatesApproved() {
-        var rows=new ArrayList<>(GateRegistryFixtureLoader.loadFromStream(CpFailoverJobExecutorTest.class
-            .getResourceAsStream("/capabilities/gate_registry_fixture.yaml")));
-        var template=rows.stream().filter(r -> r.gateId().equals("cp_failover_tablestat")).findFirst().orElseThrow();
-        Map<String,String> proposed=Map.of("cp_failover_tablestat_vsenv0","cphaprob tablestat",
-            "cp_failover_arp_vsenv0","arp -an","cp_failover_traffic_vsenv0","cat /proc/net/dev",
-            "cp_failover_syncstat_vsenv0","cphaprob syncstat","cp_failover_fw_stat_vsenv0","fw stat",
-            "cp_failover_pnotes_vsenv0","cphaprob -ia list","cp_failover_bonds_vsenv0","cphaprob show_bond",
-            "cp_failover_bond_members_vsenv0","cphaprob show_bond <BOND>",
-            "cp_failover_last_event_vsenv0","cphaprob show_failover","cp_failover_routing_vsenv0","cpstat os -f routing");
-        proposed.forEach((id,command) -> rows.add(new com.securityexpert.nexus.ui2.capability.GateRow(id,template.vendor(),
-            template.platformRoleScope(),template.shellContext(),template.transportKind(),"bash -lc 'vsenv 0 && "+command+"'",
-            template.actionClass(),template.signOffState(),template.timeoutS(),template.retryRule(),template.maxFrequency(),
-            template.sessionReuseRule(),template.unsupportedBehaviorRef(),template.secretOutputRisk(),
-            template.safeTelemetryFields(),"test only: proposed VS0 row")));
+    /** The fixture without one VS0 readiness row: a chassis run must refuse before any contact. */
+    private static GateRegistryPort gatesWithout(String gateId) {
+        var rows=GateRegistryFixtureLoader.loadFromStream(CpFailoverJobExecutorTest.class
+            .getResourceAsStream("/capabilities/gate_registry_fixture.yaml")).stream()
+            .filter(row -> !row.gateId().equals(gateId)).toList();
         return key -> rows.stream().filter(row -> row.key().equals(key)).toList();
+    }
+    /** PO 2026-10-23 ("Onaylıyorum"): every chassis readiness read resolves to its own signed-off VS0 row (V177). */
+    @Test void everyVs0ChassisReadResolvesToItsSignedOffRow() {
+        var gates=gates();
+        Map<String,String> reads=new java.util.LinkedHashMap<>();
+        for(String read:List.of("cphaprob stat","cphaprob -a if","cphaprob tablestat","arp -an","cat /proc/net/dev",
+                "cphaprob syncstat","fw stat","cphaprob -ia list","cphaprob show_bond","cphaprob show_bond <BOND>",
+                "cphaprob show_failover","cpstat os -f routing","cpstat -f policy fw"))
+            reads.put(read,CpFailoverJobExecutor.chassisGateId(read));
+        reads.forEach((read,gateId) -> {
+            var resolution=com.securityexpert.nexus.ui2.capability.GateResolver.resolve(
+                new com.securityexpert.nexus.ui2.capability.CanonicalCommandKey("check_point","cp_gaia_gateway","expert",
+                    "SSH_EXEC","bash -lc 'vsenv 0 && "+read+"'"),
+                Optional.of(com.securityexpert.nexus.ui2.platform.ActionClass.CLASS_0_READ),gates);
+            assertTrue(resolution instanceof com.securityexpert.nexus.ui2.capability.GateResolution.Known known
+                && known.gateId().equals(gateId),read+" -> "+resolution);
+        });
+        // No chassis write row: the chassis failover stays refused until the PO decides its exact literal (§10).
+        for(String write:List.of("clusterXL_admin down","clusterXL_admin up"))
+            assertFalse(com.securityexpert.nexus.ui2.capability.GateResolver.resolve(
+                new com.securityexpert.nexus.ui2.capability.CanonicalCommandKey("check_point","cp_gaia_gateway","expert",
+                    "SSH_EXEC","bash -lc 'vsenv 0 && "+write+"'"),
+                Optional.of(com.securityexpert.nexus.ui2.platform.ActionClass.CLASS_2_OPERATIONAL_STATE_CHANGE),gates)
+                instanceof com.securityexpert.nexus.ui2.capability.GateResolution.Known,write);
     }
     private static void run(Store store,Script script,DeviceRepository devices,GateRegistryPort gates) {
         var nanos=new java.util.concurrent.atomic.AtomicLong();
         new CpFailoverJobExecutor(store,devices,leases(),attempts(),script.transport(),gates,d -> nanos.addAndGet(d.toNanos()),
             Duration.ZERO,new FailoverMutationSwitch(!"READINESS".equals(store.kind)),nanos::get).execute("job-1",1);
     }
-    @Test void vsxChassisReadinessWaitsForItsVs0GateRowsWithoutAnyContact() {
+    @Test void vsxChassisReadinessRefusesWithoutContactWhenAVs0GateRowIsMissing() {
         for(boolean byContext:List.of(false,true)) {
             Store store=new Store(); store.kind="READINESS";
             if(byContext) store.contexts=List.of(new JooqCpFailoverRepository.SummaryMember(A,true,"ssh_exec",true,"physical",false),
                 new JooqCpFailoverRepository.SummaryMember(A,true,"ssh_exec",true,"12",false));
             Script script=new Script();
-            run(store,script,byContext?devices():devices(true,VSX_NAMES),gates());
+            run(store,script,byContext?devices():devices(true,VSX_NAMES),
+                gatesWithout(byContext?"cp_failover_bond_members_vsenv0":"cp_failover_routing_vsenv0"));
             assertEquals("UNKNOWN",store.outcome);
             assertEquals(CpFailoverJobExecutor.CHASSIS_COMMANDS_NOT_APPROVED,store.stopCode);
             assertEquals(0,script.connectCount);
@@ -554,7 +568,7 @@ class CpFailoverJobExecutorTest {
         Script script=new Script();
         script.measured=Map.of("cphaprob stat",Fixtures.read("cp/failover_stat_vsx_chassis.txt"));
         script.prefix="Context is set to Virtual Device VSX-SYNTHETIC (ID 0).\n";
-        run(store,script,devices(true,VSX_NAMES),chassisGatesApproved());
+        run(store,script,devices(true,VSX_NAMES),gates());
         assertEquals("READY",store.outcome,store.stopCode);
         assertFalse(script.commands.isEmpty());
         assertTrue(script.commands.stream().allMatch(c -> c.startsWith("bash -lc 'vsenv 0 && ")),"every chassis read runs in VS0");
@@ -577,7 +591,7 @@ class CpFailoverJobExecutorTest {
     @Test void vsxChassisFailoverIsRefusedBeforeAdmissionOrContact() {
         Store store=new Store();
         Script script=new Script();
-        run(store,script,devices(true,VSX_NAMES),chassisGatesApproved());
+        run(store,script,devices(true,VSX_NAMES),gates());
         assertEquals("STOPPED",store.state);
         assertEquals(CpFailoverJobExecutor.CHASSIS_FAILOVER_NOT_APPROVED,store.outcome);
         assertEquals(0,store.admissionCount);
