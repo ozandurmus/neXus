@@ -63,6 +63,28 @@ public final class FakeDeviceConfigurationRepository implements DeviceConfigurat
         return new ConfigurationRunView(deviceId, primary, List.copyOf(latestSupplementaryByReadKind.values()));
     }
 
+    @Override
+    public List<com.securityexpert.nexus.ui2.persistence.device.configuration.ConfigurationRunHead> findPrimaryRunHeadsSince(
+            java.time.Instant since) {
+        return runsByDeviceId.values().stream().flatMap(List::stream)
+                .filter(ConfigurationRun::primary)
+                .filter(run -> !run.collectedAt().isBefore(since))
+                .sorted(Comparator.comparing(ConfigurationRun::collectedAt))
+                .map(run -> new com.securityexpert.nexus.ui2.persistence.device.configuration.ConfigurationRunHead(
+                        run.runId(), run.deviceId(), run.vendor(), run.readKind(), run.collectedAt(), run.changeState(),
+                        run.deviationSummary()))
+                .toList();
+    }
+
+    @Override
+    public Map<String, String> findDevicesWithPrimaryRun() {
+        Map<String, String> result = new LinkedHashMap<>();
+        for (String deviceId : runsByDeviceId.keySet()) {
+            latestPrimary(deviceId).ifPresent(run -> result.put(deviceId, run.vendor()));
+        }
+        return result;
+    }
+
     private Optional<ConfigurationRun> latestPrimary(String deviceId) {
         return runsFor(deviceId).stream()
                 .filter(ConfigurationRun::primary)

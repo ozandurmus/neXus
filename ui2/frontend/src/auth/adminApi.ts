@@ -359,9 +359,35 @@ export function getBackupPolicy(): Promise<BackupPolicy> {
   return call("/api/v2/backups/policies", "GET");
 }
 
+/** One (device, major category) row of GET /api/v2/backups/deviations (docs/design/BACKUP_MAJOR_DEVIATIONS_2026_10_23.md). */
+export interface BackupMajorDeviation {
+  readonly device_id: string;
+  /** Masked for the replay viewer by the server, like every device name. */
+  readonly hostname: string | null;
+  readonly cluster_member_ref?: string | null;
+  readonly vendor: string;
+  /** interfaces | routing | access_rules | nat | admin_access | high_availability */
+  readonly category: string;
+  readonly changed_at: string;
+  /** Comparisons in the window that touched this category. */
+  readonly count: number;
+  readonly sections: readonly string[];
+}
+
 export interface BackupDeviations {
-  readonly active_major_deviations: readonly unknown[];
+  readonly active_major_deviations: readonly BackupMajorDeviation[];
+  /** Devices with at least one valid comparison in the window. */
   readonly total_deviations_checked: number;
+  /** Devices with any primary configuration run; the "of M" of "N of M devices compared". */
+  readonly devices_known?: number;
+  readonly window_days?: number;
+  readonly evaluated_at?: string;
+  readonly not_compared?: Readonly<Record<string, number>>;
+  readonly major_devices?: number;
+  readonly minor_devices?: number;
+  readonly unchanged_devices?: number;
+  readonly devices?: readonly { readonly device_id: string; readonly vendor: string; readonly deviation: "MAJOR" | "MINOR" | "NONE"; readonly last_compared_at: string; readonly categories: readonly string[] }[];
+  readonly coverage?: Readonly<Record<string, string>>;
 }
 
 export function getBackupDeviations(): Promise<BackupDeviations> {
@@ -1232,6 +1258,8 @@ export interface ConfigurationDeviationEntry {
   readonly kind: string;
   readonly old_count: number | null;
   readonly new_count: number | null;
+  /** The Backups screen's major category for this section; null when the change is minor (2026-10-23). */
+  readonly category?: string | null;
 }
 
 export interface ConfigurationDeviationSummary {

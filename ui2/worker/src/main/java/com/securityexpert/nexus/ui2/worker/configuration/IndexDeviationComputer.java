@@ -87,6 +87,64 @@ public final class IndexDeviationComputer {
     }
 
     /**
+     * {@link #compute(List, List)}, plus -- for Check Point -- one {@link DeviationKind#MODIFIED} entry per section
+     * that kept its entry count while its sanitized {@code set} lines changed (V176; docs/design/
+     * BACKUP_MAJOR_DEVIATIONS_2026_10_23.md). A count-only summary cannot see an interface address or next-hop edit;
+     * this can. Both texts are the stored sanitized texts (secret-bearing lines already withheld on both sides), so a
+     * withheld line's change stays invisible. Without both texts, or for any other vendor, the result is exactly
+     * {@link #compute(List, List)}. Only section names and counts leave this method, never a line.
+     */
+    public static ConfigurationDeviationSummary compute(List<ConfigurationIndexEntry> oldIndex,
+            List<ConfigurationIndexEntry> newIndex, Optional<String> oldSanitizedText, Optional<String> newSanitizedText,
+            String vendor) {
+        ConfigurationDeviationSummary counted = compute(oldIndex, newIndex);
+        if (counted.status() != ConfigurationDeviationSummary.Status.COMPUTED || !"check_point".equals(vendor)
+                || oldSanitizedText.isEmpty() || newSanitizedText.isEmpty()) {
+            return counted;
+        }
+        Map<String, Map<String, Integer>> oldLines = checkPointLinesBySection(oldSanitizedText.get());
+        Map<String, Map<String, Integer>> newLines = checkPointLinesBySection(newSanitizedText.get());
+        Map<SectionKey, Integer> oldCounts = aggregate(oldIndex);
+        Map<SectionKey, Integer> newCounts = aggregate(newIndex);
+        List<ConfigurationDeviationEntry> entries = new ArrayList<>(counted.entries());
+        for (Map.Entry<SectionKey, Integer> oldEntry : oldCounts.entrySet()) {
+            SectionKey key = oldEntry.getKey();
+            if (!oldEntry.getValue().equals(newCounts.get(key))) {
+                continue; // ADDED / REMOVED / RECOUNTED already say it
+            }
+            Map<String, Integer> before = oldLines.getOrDefault(key.section(), Map.of());
+            Map<String, Integer> after = newLines.getOrDefault(key.section(), Map.of());
+            if (!before.equals(after)) {
+                entries.add(new ConfigurationDeviationEntry(key.context(), key.section(), key.source(),
+                        DeviationKind.MODIFIED, oldEntry.getValue(), oldEntry.getValue()));
+            }
+        }
+        return new ConfigurationDeviationSummary(ConfigurationDeviationSummary.Status.COMPUTED, entries);
+    }
+
+    /**
+     * Section (the same one/two-token rule as the index) to a multiset of its sanitized {@code set} lines. An
+     * interface's {@code comments} line is left out: an edited description is not a configuration change that the
+     * Backups screen should call major.
+     */
+    static Map<String, Map<String, Integer>> checkPointLinesBySection(String sanitizedText) {
+        Map<String, Map<String, Integer>> bySection = new LinkedHashMap<>();
+        for (String raw : sanitizedText.split("\\R")) {
+            String line = raw.strip();
+            if (!line.startsWith("set ")) {
+                continue;
+            }
+            String[] tokens = line.split("\\s+");
+            if (tokens.length >= 4 && "interface".equals(tokens[1]) && "comments".equals(tokens[3])) {
+                continue;
+            }
+            String section = com.securityexpert.nexus.ui2.worker.configuration.cp.CheckPointGaiaConfigParser.sectionOf(line);
+            bySection.computeIfAbsent(section, k -> new java.util.HashMap<>()).merge(line, 1, Integer::sum);
+        }
+        return bySection;
+    }
+
+    /**
      * Aggregates entry counts by {@code (context, section, source)}.
      */
     private static Map<SectionKey, Integer> aggregate(List<ConfigurationIndexEntry> index) {

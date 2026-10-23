@@ -126,7 +126,7 @@ describe("the Backups screen (UI review 2026-09-23)", () => {
     expect(await screen.findByText("Not scheduled")).toBeInTheDocument();
     const card = screen.getByText("Active major deviations").closest("[data-kpi]")!;
     expect(card.textContent).toContain("UNKNOWN");
-    expect(card.textContent).toContain("0 comparisons run");
+    expect(card.textContent).toContain("0 devices compared · last 7 days");
   });
 
   it("filters to targets without an archive", async () => {
