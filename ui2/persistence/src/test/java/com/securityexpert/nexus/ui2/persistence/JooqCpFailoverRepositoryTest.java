@@ -177,6 +177,8 @@ class JooqCpFailoverRepositoryTest {
             String sql = query.sql();
             if (sql.startsWith("SET LOCAL")) return new MockResult[] {new MockResult(0)};
             if (sql.startsWith("update failover_run r set state='STOPPED'")) return new MockResult[] {new MockResult(0)};
+            // Readiness admission is decided under the failover admission lock (VSX step fence).
+            if (sql.startsWith("select pg_advisory_xact_lock(136, 1)")) return new MockResult[] {new MockResult(0)};
             assertTrue(sql.startsWith("select run_id from failover_run"), "No admission writes for an active unit");
             assertTrue(sql.contains("cluster_ref=?"));
             assertTrue(sql.contains("vs_id is not distinct from ?"));
@@ -205,8 +207,14 @@ class JooqCpFailoverRepositoryTest {
         final DSLContext dsl = DSL.using(new MockConnection(query -> {
             String sql = query.sql();
             if (sql.startsWith("SET LOCAL")) return new MockResult[] {new MockResult(0)};
+            if (sql.startsWith("select pg_advisory_xact_lock(136, 1)")) return new MockResult[] {new MockResult(0)};
             statements.add(sql);
             bindings.add(query.bindings());
+            // VSX step fence: no other step (chassis / VS) of this cluster has an open failover run.
+            if (sql.startsWith("select 1 from failover_run where cluster_ref")) {
+                var records = DSL.using(SQLDialect.POSTGRES);
+                return new MockResult[] {new MockResult(0, records.newResult(DSL.field("one", Integer.class)))};
+            }
             if (sql.startsWith("update failover_run r set state='STOPPED'")) return new MockResult[] {new MockResult(orphansClosed)};
             // V170: no resumed return is in flight on this unit.
             if (sql.startsWith("select 1 from failover_resume")) {

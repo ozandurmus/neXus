@@ -38,6 +38,10 @@ class CpFailoverJobExecutorTest {
         boolean incidentRequired, notSent;
         Runnable beforeSend=() -> {};
         Optional<Check> previous=Optional.empty();
+        /** Stored inventory contexts per member; a context other than "physical" is VSX evidence. */
+        List<SummaryMember> contexts=List.of();
+        final List<String> checkVsIds=new ArrayList<>();
+        @Override public List<SummaryMember> summaryMembers(java.util.Collection<String> ids) { return contexts; }
         @Override public Optional<Check> previousReadinessSync(String run,String member,String vs) {
             CpFailoverJobExecutorTest.check(java.util.Objects.equals(vsId,vs));
             return previous;
@@ -91,6 +95,7 @@ class CpFailoverJobExecutorTest {
         @Override public void command(String id,String gateId) {}
         @Override public void check(String id,String phase,String member,String vs,int no,String status,String derived) {
             checks.add(phase+":"+no+":"+status);
+            checkVsIds.add(String.valueOf(vs));
             derivedValues.add(derived);
         }
     }
@@ -212,8 +217,8 @@ class CpFailoverJobExecutorTest {
                     String member=((TransportSession)args[0]).sessionId();
                     String literal=((ExecSpec)args[1]).command();
                     commands.add(literal);
-                    String cmd=literal.startsWith("bash -lc 'vsenv 12 && ")
-                        ?literal.substring("bash -lc 'vsenv 12 && ".length(),literal.length()-1)
+                    var wrapped=java.util.regex.Pattern.compile("bash -lc 'vsenv (?:12|0) && (.*)'").matcher(literal);
+                    String cmd=wrapped.matches()?wrapped.group(1)
                         :literal.startsWith("bash -lc '")?literal.substring("bash -lc '".length(),literal.length()-1):literal;
                     if (cmd.equals(failedCommand)) return new ExecResult.Completed("",1);
                     if (cmd.equals(unknownCommand)) return new ExecResult.Completed("unrecognized synthetic output",0);
@@ -295,6 +300,12 @@ class CpFailoverJobExecutorTest {
                 });
         }
     }
+    private static DeviceSummaryRecord summary(String id,String virtualSystems) {
+        if(virtualSystems!=null) return new DeviceSummaryRecord(id,"gateway","check_point",DeviceEnrollmentState.ENROLLED,
+            Optional.empty(),Optional.empty(),Optional.empty(),Optional.empty(),Optional.of(CLUSTER),
+            Optional.empty(),Optional.empty(),Optional.empty(),Optional.of(virtualSystems));
+        return summary(id);
+    }
     private static DeviceSummaryRecord summary(String id) {
         return new DeviceSummaryRecord(id,"gateway","check_point",DeviceEnrollmentState.ENROLLED,
             Optional.empty(),Optional.empty(),Optional.empty(),Optional.empty(),Optional.of(CLUSTER));
@@ -303,9 +314,13 @@ class CpFailoverJobExecutorTest {
         return devices(true);
     }
     private static DeviceRepository devices(boolean recordedIdentity) {
+        return devices(recordedIdentity,null);
+    }
+    /** {@code virtualSystems}: the members' virtual-system names (a VSX cluster), or null for a plain cluster. */
+    static DeviceRepository devices(boolean recordedIdentity,String virtualSystems) {
         return (DeviceRepository)Proxy.newProxyInstance(DeviceRepository.class.getClassLoader(),
             new Class<?>[]{DeviceRepository.class},(proxy,method,args) -> switch(method.getName()) {
-                case "findMembersByClusterRef" -> List.of(summary(A),summary(B));
+                case "findMembersByClusterRef" -> List.of(summary(A,virtualSystems),summary(B,virtualSystems));
                 case "find" -> Optional.of(new DeviceRecord((String)args[0],"gateway","check_point","manual",
                     Instant.EPOCH,false,DeviceEnrollmentState.ENROLLED,false,"credential-ref"));
                 case "findEndpointByDeviceId" -> Optional.of(new EndpointRecord("endpoint-ref",(String)args[0],"ssh_exec",
@@ -489,6 +504,94 @@ class CpFailoverJobExecutorTest {
             assertEquals(0,script.downCount); assertEquals(0,script.upCount);
             assertTrue(script.commands.stream().allMatch(c -> c.startsWith("bash -lc 'vsenv 12 && ")));
         }
+    }
+    // ---- VSX chassis step (docs/design/VSX_CHASSIS_FAILOVER_UNIT_2026_10_23.md) ----
+    private static final String VSX_NAMES="VS-TEST-APP (VSID 12)";
+    /** The fixture plus the proposed VS0 read rows of the design §3, signed off for this test only. */
+    private static GateRegistryPort chassisGatesApproved() {
+        var rows=new ArrayList<>(GateRegistryFixtureLoader.loadFromStream(CpFailoverJobExecutorTest.class
+            .getResourceAsStream("/capabilities/gate_registry_fixture.yaml")));
+        var template=rows.stream().filter(r -> r.gateId().equals("cp_failover_tablestat")).findFirst().orElseThrow();
+        Map<String,String> proposed=Map.of("cp_failover_tablestat_vsenv0","cphaprob tablestat",
+            "cp_failover_arp_vsenv0","arp -an","cp_failover_traffic_vsenv0","cat /proc/net/dev",
+            "cp_failover_syncstat_vsenv0","cphaprob syncstat","cp_failover_fw_stat_vsenv0","fw stat",
+            "cp_failover_pnotes_vsenv0","cphaprob -ia list","cp_failover_bonds_vsenv0","cphaprob show_bond",
+            "cp_failover_bond_members_vsenv0","cphaprob show_bond <BOND>",
+            "cp_failover_last_event_vsenv0","cphaprob show_failover","cp_failover_routing_vsenv0","cpstat os -f routing");
+        proposed.forEach((id,command) -> rows.add(new com.securityexpert.nexus.ui2.capability.GateRow(id,template.vendor(),
+            template.platformRoleScope(),template.shellContext(),template.transportKind(),"bash -lc 'vsenv 0 && "+command+"'",
+            template.actionClass(),template.signOffState(),template.timeoutS(),template.retryRule(),template.maxFrequency(),
+            template.sessionReuseRule(),template.unsupportedBehaviorRef(),template.secretOutputRisk(),
+            template.safeTelemetryFields(),"test only: proposed VS0 row")));
+        return key -> rows.stream().filter(row -> row.key().equals(key)).toList();
+    }
+    private static void run(Store store,Script script,DeviceRepository devices,GateRegistryPort gates) {
+        var nanos=new java.util.concurrent.atomic.AtomicLong();
+        new CpFailoverJobExecutor(store,devices,leases(),attempts(),script.transport(),gates,d -> nanos.addAndGet(d.toNanos()),
+            Duration.ZERO,new FailoverMutationSwitch(!"READINESS".equals(store.kind)),nanos::get).execute("job-1",1);
+    }
+    @Test void vsxChassisReadinessWaitsForItsVs0GateRowsWithoutAnyContact() {
+        for(boolean byContext:List.of(false,true)) {
+            Store store=new Store(); store.kind="READINESS";
+            if(byContext) store.contexts=List.of(new JooqCpFailoverRepository.SummaryMember(A,true,"ssh_exec",true,"physical",false),
+                new JooqCpFailoverRepository.SummaryMember(A,true,"ssh_exec",true,"12",false));
+            Script script=new Script();
+            run(store,script,byContext?devices():devices(true,VSX_NAMES),gates());
+            assertEquals("UNKNOWN",store.outcome);
+            assertEquals(CpFailoverJobExecutor.CHASSIS_COMMANDS_NOT_APPROVED,store.stopCode);
+            assertEquals(0,script.connectCount);
+            assertTrue(script.commands.isEmpty());
+            assertTrue(store.checks.isEmpty());
+        }
+    }
+    @Test void vsxChassisReadinessReadsOnlyVs0WithTheChassisBattery() {
+        Store plainStore=new Store(); plainStore.kind="READINESS";
+        Script plain=new Script();
+        run(plainStore,plain);
+        assertEquals("READY",plainStore.outcome);
+        assertTrue(plain.commands.stream().noneMatch(c -> c.contains("vsenv")),"a plain cluster keeps the bare login-shell form");
+        Store store=new Store(); store.kind="READINESS";
+        Script script=new Script();
+        script.measured=Map.of("cphaprob stat",Fixtures.read("cp/failover_stat_vsx_chassis.txt"));
+        script.prefix="Context is set to Virtual Device VSX-SYNTHETIC (ID 0).\n";
+        run(store,script,devices(true,VSX_NAMES),chassisGatesApproved());
+        assertEquals("READY",store.outcome,store.stopCode);
+        assertFalse(script.commands.isEmpty());
+        assertTrue(script.commands.stream().allMatch(c -> c.startsWith("bash -lc 'vsenv 0 && ")),"every chassis read runs in VS0");
+        assertTrue(script.commands.stream().noneMatch(c -> c.matches(".*vsenv [1-9][0-9]*.*")),"no per-VS read (CP-08) on the chassis");
+        assertTrue(store.checkVsIds.stream().allMatch("null"::equals),"chassis rows are stored under the unit without a VSID");
+        // The same battery as a plain ClusterXL unit: the chassis checks, in VS0.
+        assertEquals(plainStore.checks.stream().map(c -> c.split(":")[1]).distinct().toList(),
+            store.checks.stream().map(c -> c.split(":")[1]).distinct().toList());
+        assertEquals(0,script.downCount); assertEquals(0,script.upCount);
+    }
+    @Test void vsxChassisStateRejectsAnotherContextAndIgnoresTheVsTable() {
+        String output=Fixtures.read("cp/failover_stat_vsx_chassis.txt");
+        var chassis=CpFailoverChecks.chassisState(output);
+        assertTrue(chassis.supportedMode());
+        assertEquals("ACTIVE",chassis.localRole());
+        assertEquals(2,chassis.members().size());
+        assertFalse(CpFailoverChecks.chassisState("Context is set to Virtual Device VS-SYNTHETIC (ID 12).\n"+output).supportedMode());
+        assertTrue(CpFailoverChecks.chassisState("Context is set to Virtual Device VSX-SYNTHETIC (ID 0).\n"+output).supportedMode());
+    }
+    @Test void vsxChassisFailoverIsRefusedBeforeAdmissionOrContact() {
+        Store store=new Store();
+        Script script=new Script();
+        run(store,script,devices(true,VSX_NAMES),chassisGatesApproved());
+        assertEquals("STOPPED",store.state);
+        assertEquals(CpFailoverJobExecutor.CHASSIS_FAILOVER_NOT_APPROVED,store.outcome);
+        assertEquals(0,store.admissionCount);
+        assertEquals(0,script.connectCount);
+        assertEquals(0,script.downCount); assertEquals(0,script.upCount);
+    }
+    @Test void vsUnitOfAVsxClusterKeepsItsOwnContext() {
+        Store store=new Store(); store.vsId="12"; store.kind="READINESS";
+        Script script=new Script(); script.reportedMode="Virtual System Load Sharing";
+        script.prefix="Context is set to Virtual Device VS-SYNTHETIC (ID 12).\n";
+        run(store,script,devices(true,VSX_NAMES),gates());
+        assertEquals("READY",store.outcome);
+        assertTrue(script.commands.stream().allMatch(c -> c.startsWith("bash -lc 'vsenv 12 && ")));
+        assertTrue(store.checkVsIds.stream().allMatch("12"::equals));
     }
     @Test void localIdsCannotRebindToTheOtherSessionAfterSwitch() {
         Store store=new Store(); Script script=new Script(); script.swapLocalIdsAfterDown=true;

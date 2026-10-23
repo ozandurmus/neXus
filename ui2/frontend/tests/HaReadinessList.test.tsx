@@ -53,7 +53,7 @@ it("uses full width, compact rows and cluster counts, sorting not ready, unknown
   const layout = table().closest(".ha-readiness-full-width")!;
   expect(layout).toHaveStyle({ width: "100%", minWidth: "0" });
   expect(getComputedStyle(layout).maxWidth).toBe("");
-  for (const name of ["Ready", "Not ready", "UNKNOWN", "Not supported"]) expect(screen.getByRole("button", { name: `${name}: 1 clusters` })).toHaveAttribute("aria-pressed", "false");
+  for (const name of ["Ready", "Not ready", "UNKNOWN", "Not supported"]) expect(screen.getByRole("button", { name: `${name}: 1 units` })).toHaveAttribute("aria-pressed", "false");
   expect(within(table()).getAllByRole("row").slice(1).map(e => e.getAttribute("aria-label"))).toEqual(["CLS-BRAVO-02", "CLS-CHARLIE-03", "CLS-ALPHA-01"]);
   expect(row("CLS-ALPHA-01")).toHaveStyle({ height: "48px" });
   expect(within(table()).getAllByRole("columnheader")).toHaveLength(7);
@@ -69,7 +69,7 @@ it("keeps the complete status label visible", () => {
 it("combines summary filters with cluster/member search and vendor filter", () => {
   setup();
   for (const [label, name] of [["Ready", "CLS-ALPHA-01"], ["Not ready", "CLS-BRAVO-02"], ["UNKNOWN", "CLS-CHARLIE-03"]]) {
-    const tile = screen.getByRole("button", { name: `${label}: 1 clusters` });
+    const tile = screen.getByRole("button", { name: `${label}: 1 units` });
     fireEvent.click(tile);
     expect(tile).toHaveAttribute("aria-pressed", "true");
     expect(within(table()).getAllByRole("row")).toHaveLength(2);
@@ -89,14 +89,14 @@ it("collapses unsupported vendors with no run actions and opens them via their f
   expect(group).not.toHaveAttribute("open");
   expect(within(group).queryByRole("button", { name: "Run pre-checks" })).toBeNull();
   expect(within(group).getByText(/Readiness pre-checks are not supported/)).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Not supported: 1 clusters" }));
+  fireEvent.click(screen.getByRole("button", { name: "Not supported: 1 units" }));
   expect(group).toHaveAttribute("open");
   expect(within(group).getByText("CLS-DELTA-04")).toBeInTheDocument();
 });
 it("keeps an unobserved vendor unknown", () => {
   setup({ clusters: [cluster("CLS-ECHO-05", "")] });
-  expect(screen.getByRole("button", { name: "UNKNOWN: 1 clusters" })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Not supported: 0 clusters" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "UNKNOWN: 1 units" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Not supported: 0 units" })).toBeInTheDocument();
 });
 it("collapses nested VS rows, selects only visible units, and opens independent inline details", () => {
   const vs = { ...summary("CLS-ALPHA-01", "NOT_READY"), unitId: "opaque-vs", virtual_system: "VS-ALPHA-07", members: clusters[0].members.map((member, index) => ({ ...member, ha_role: index ? "active" : "standby" })) };
@@ -117,7 +117,7 @@ it("collapses nested VS rows, selects only visible units, and opens independent 
   expect(onOpen).not.toHaveBeenCalled();
   fireEvent.click(within(screen.getByRole("region", { name: "Checks for Virtual System VS-ALPHA-07" })).getByRole("button", { name: "Open full detail" }));
   expect(onOpen).toHaveBeenCalledWith("CLS-ALPHA-01", "opaque-vs");
-  expect(screen.getByRole("button", { name: "Ready: 1 clusters" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Ready: 1 units" })).toBeInTheDocument();
 });
 it("shows relative time and hover-only absolute and roles-observed times", () => {
   vi.useFakeTimers(); vi.setSystemTime(new Date("2026-10-02T09:35:00Z")); setup();
@@ -149,7 +149,7 @@ it("selects and deselects only filtered visible authorized rows, retaining other
   const selectAll = screen.getByRole("checkbox", { name: "Select all visible" });
   fireEvent.click(screen.getByRole("checkbox", { name: "Select CLS-ALPHA-01" }));
   expect(selectAll).toHaveAttribute("data-indeterminate", "true");
-  fireEvent.click(screen.getByRole("button", { name: "Not ready: 1 clusters" }));
+  fireEvent.click(screen.getByRole("button", { name: "Not ready: 1 units" }));
   fireEvent.click(selectAll);
   expect(selectAll).toBeChecked();
   expect(screen.getByRole("button", { name: "Run pre-checks (2)" })).toBeInTheDocument();
@@ -261,7 +261,7 @@ it("flags a stale evaluation per row and warns above the list, without changing 
   expect(within(row("CLS-ALPHA-01")).getByText("Stale")).toBeInTheDocument();
   expect(within(row("CLS-ALPHA-01")).getByText("8 d ago")).toBeInTheDocument();
   expect(within(row("CLS-ALPHA-01")).getByText("Ready")).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Ready: 1 clusters" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Ready: 1 units" })).toBeInTheDocument();
 });
 
 it("shows no staleness signal when evaluations are recent", () => {
@@ -328,4 +328,40 @@ it("words a bare READY reason as Ready and keeps check names and sentences as th
   const cells = within(within(table()).getByRole("row", { name: /CLS-ALPHA-01/ })).getAllByRole("cell");
   expect(cells.some((cell) => cell.textContent === "Ready")).toBe(true);
   expect(within(table()).queryByText("READY")).toBeNull();
+});
+it("gives the VSX parent row the chassis unit's own status, reason, age, checkbox and run button, and counts every unit", () => {
+  const chassis: CpFailoverSummary = { ...summary("CLS-ALPHA-01", "NOT_READY"), unitKind: "VSX_CHASSIS",
+    refusalReason: "VSX_CHASSIS_COMMANDS_NOT_APPROVED", readiness: { status: "UNKNOWN", observedAt: at, failedCheck: "", stopCode: "VSX_CHASSIS_COMMANDS_NOT_APPROVED", checks: [] } };
+  const vs: CpFailoverSummary = { ...summary("CLS-ALPHA-01", "READY"), unitId: "opaque-vs-13", unitKind: "VIRTUAL_SYSTEM", virtual_system: "VS-ALPHA-13" };
+  const vs2: CpFailoverSummary = { ...summary("CLS-ALPHA-01", "READY"), unitId: "opaque-vs-35", unitKind: "VIRTUAL_SYSTEM", virtual_system: "VS-ALPHA-35" };
+  const { onRun, onBulkRun } = setup({ rows: { ...rows, "CLS-ALPHA-01": [chassis, vs, vs2] } });
+  const parent = row("CLS-ALPHA-01");
+  expect(within(parent).getByText("UNKNOWN")).toBeInTheDocument();
+  expect(within(parent).getByText("VSX chassis")).toBeInTheDocument();
+  expect(within(parent).getByText("VSX chassis reads await command approval")).toBeInTheDocument();
+  expect(within(parent).queryByText("Not evaluated")).toBeNull();
+  expect(within(parent).getByRole("checkbox", { name: "Select CLS-ALPHA-01" })).toBeEnabled();
+  fireEvent.click(within(parent).getByRole("button", { name: "Run pre-checks" }));
+  expect(onRun).toHaveBeenCalledWith(chassis);
+  // The chassis and each VS are separate units in the chips: Ready = 2 VSs, UNKNOWN = the chassis and CLS-CHARLIE-03.
+  expect(screen.getByRole("button", { name: "Ready: 2 units" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "UNKNOWN: 2 units" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Not ready: 1 units" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Virtual systems in CLS-ALPHA-01" }));
+  for (const name of ["VS-ALPHA-13", "VS-ALPHA-35"]) {
+    const nested = row(`Virtual System ${name}`);
+    expect(within(nested).getByText("Ready")).toBeInTheDocument();
+    expect(within(nested).getByRole("checkbox", { name: `Select Virtual System ${name}` })).toBeEnabled();
+  }
+  fireEvent.click(within(row("Virtual System VS-ALPHA-35")).getByRole("button", { name: "Run pre-checks" }));
+  expect(onRun).toHaveBeenLastCalledWith(vs2);
+  fireEvent.click(screen.getByRole("checkbox", { name: "Select CLS-ALPHA-01" }));
+  fireEvent.click(screen.getByRole("checkbox", { name: "Select Virtual System VS-ALPHA-13" }));
+  fireEvent.click(screen.getByRole("button", { name: "Run pre-checks (2)" }));
+  expect(onBulkRun).toHaveBeenCalledWith([chassis, vs]);
+});
+it("says in the chip tooltip that the chassis and each Virtual System count separately", async () => {
+  setup();
+  fireEvent.mouseOver(screen.getByRole("button", { name: "Ready: 1 units" }));
+  expect(await screen.findByRole("tooltip")).toHaveTextContent("each VSX chassis and each of its Virtual Systems count separately");
 });

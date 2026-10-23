@@ -27,7 +27,21 @@ import com.securityexpert.nexus.ui2.service.security.RbacEvaluator;
 /** Server-owned approval and admission decisions; HTTP never supplies a command or device target. */
 @Service
 public final class CpFailoverService {
-    public record Unit(String id, String clusterId, String label, String vsId, List<DeviceSummaryRecord> members) {}
+    /**
+     * One failover unit. {@code vsxChassis}: the chassis step of a VSX cluster (vsId null, id == clusterId, the identity a
+     * plain ClusterXL unit has), listed before that cluster's VS units (docs/design/VSX_CHASSIS_FAILOVER_UNIT_2026_10_23.md).
+     */
+    public record Unit(String id, String clusterId, String label, String vsId, List<DeviceSummaryRecord> members,
+            boolean vsxChassis) {
+        public Unit(String id, String clusterId, String label, String vsId, List<DeviceSummaryRecord> members) {
+            this(id, clusterId, label, vsId, members, false);
+        }
+    }
+    /**
+     * FROZEN FAILOVER_EXECUTION_CP_CONTRACT.md §10: the VSX chassis is not failed over by this feature. Its readiness is
+     * evaluated; approvals and runs for it are refused until the PO amends §10 and approves the exact VS0 write.
+     */
+    public static final String CHASSIS_FAILOVER_NOT_APPROVED = "VSX_CHASSIS_FAILOVER_NOT_APPROVED";
     public record Summary(Unit unit, String vendor, boolean activeWindow, String lastRunState,
             String lastRunOutcome, Instant lastRunAt, JooqCpFailoverRepository.ReadinessStatus readiness,
             boolean canRunReadiness) {}
@@ -291,8 +305,11 @@ public final class CpFailoverService {
         List<String> remaining=vsNames.stream().filter(name -> !namesByVs.containsValue(name)).toList();
         if (unnamed.size()==remaining.size())
             for (int i=0;i<unnamed.size();i++) namesByVs.put(unnamed.get(i),remaining.get(i));
-        if (!common.isEmpty()) return common.stream().map(vs -> new Unit(opaque(cluster+":"+vs), clusterId,
-            namesByVs.getOrDefault(vs,vs), vs, pair)).toList();
+        // VSX: the chassis step first (CP-01..CP-07 in VS0), then each VS step (its own context, CP-08), each its own unit.
+        if (!common.isEmpty()) return java.util.stream.Stream.concat(
+            java.util.stream.Stream.of(new Unit(clusterId, clusterId, cluster, null, pair, true)),
+            common.stream().map(vs -> new Unit(opaque(cluster+":"+vs), clusterId,
+                namesByVs.getOrDefault(vs,vs), vs, pair))).toList();
         return List.of(new Unit(clusterId, clusterId, cluster, null, pair));
     }
     private Unit unit(String clusterId, String unitId, String actor) {
@@ -319,6 +336,7 @@ public final class CpFailoverService {
         // PO 2026-10-20: an approval request sends nothing to a device; an administrator is never refused for the window.
         windows.requireOpenUnlessAdmin(actor);
         Unit u=unit(clusterId,unitId,actor,vendor);
+        if (u.vsxChassis()) throw new Refusal(CHASSIS_FAILOVER_NOT_APPROVED);
         if (requestId==null || !requestId.equals(UUID.fromString(requestId).toString())) throw new Refusal("REQUEST_ID_REQUIRED");
         if (from==null || until==null || !until.isAfter(from) || !until.isAfter(Instant.now())
                 || reason==null || reason.isBlank() || reason.length()>500) throw new Refusal("INVALID_WINDOW");
@@ -331,6 +349,7 @@ public final class CpFailoverService {
             String clusterId,String unitId,String actor,String vendor) {
         approvalPolicy(actor);
         Unit u=unit(clusterId,unitId,actor,vendor);
+        if (u.vsxChassis()) throw new Refusal(CHASSIS_FAILOVER_NOT_APPROVED);
         var request=store.requestApproval(requestId).orElseThrow(() -> new Refusal("REQUEST_NOT_FOUND"));
         if (!u.id().equals(request.unitRef()) || !u.members().get(0).clusterMemberRef().orElseThrow()
                 .equals(request.approval().clusterRef())) throw new Refusal("REQUEST_CHANGED");
@@ -366,6 +385,7 @@ public final class CpFailoverService {
         // a scheduled start keeps the window (checked again at its time by the repository and the scheduler).
         if (scheduledFor==null) windows.requireOpenFor(actor); else windows.requireOpenUnlessAdmin(actor);
         Unit u=unit(clusterId,unitId,actor,vendor);
+        if (u.vsxChassis()) throw new Refusal(CHASSIS_FAILOVER_NOT_APPROVED);
         Instant now=Instant.now();
         Instant when=scheduledFor==null ? now : scheduledFor;
         // A completed or in-flight request is replayed by the repository without another job.

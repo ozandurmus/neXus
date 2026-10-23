@@ -16,7 +16,7 @@ import Typography from "@mui/material/Typography";
 import { M3Button } from "../shell/M3Widgets";
 import { m3 } from "../theme/m3Theme";
 import { DISPLAY_TZ_LABEL, displayInputToIso, isoToDisplayInput, relativeAge } from "../shell/time";
-import { clusterModeWord, requestFailure, statusWord } from "../shell/presenters";
+import { clusterModeWord, readinessReasonLabel, requestFailure, statusWord } from "../shell/presenters";
 import { approveCpFailover, approveCpFailoverResume, getCpFailoverRun, listCpFailoverApprovals, listCpFailoverRuns, listCpFailoverUnits,
   resumeCpFailoverReturn, secondApproveCpFailover, startCpFailover, runCpFailoverReadiness,
   type CpFailoverApproval, type CpFailoverResumeState, type CpFailoverRunDetail, type CpFailoverState, type CpFailoverUnit } from "../auth/adminApi";
@@ -246,6 +246,8 @@ function UnitPanel({ unit, expanded, onExpand, onRefreshUnits }: { unit: CpFailo
   }, [expanded, bound, draft, loaded, active, run, unit.masked, unit.canStart]);
   const idle = loaded && !busy && !active && !(readinessRun && activeStates.includes(readinessRun.state));
   const canOperate = unit.masked !== true && unit.canStart;
+  // The VSX chassis is its own unit with its own pre-checks, but the server never fails it over (failoverRefusal).
+  const failoverOffered = canOperate && !unit.failoverRefusal;
   const confirm = () => act(async () => {
     const request = draft ?? { requestId: crypto.randomUUID(), from: new Date().toISOString(), until: displayInputToIso(until) ?? new Date(until).toISOString(), reason: reason.trim() };
     remember(request);
@@ -254,14 +256,16 @@ function UnitPanel({ unit, expanded, onExpand, onRefreshUnits }: { unit: CpFailo
     remember({ ...request, confirmedRevision: approval.revision });
     if (approval.approved) { attempted.current = approval.requestId; await start(approval); }
   });
-  return <Card sx={{ p: 2, ml: unit.unitId === unit.clusterId ? 0 : 3, bgcolor: m3.scLow }}>
-    <M3Button emphasis="text" onClick={onExpand}>{unit.unitId === unit.clusterId ? label : `Virtual System · ${label}`}</M3Button>
+  return <Card data-unit-kind={unit.unitKind ?? (unit.unitId === unit.clusterId ? "CLUSTER" : "VIRTUAL_SYSTEM")} sx={{ p: 2, ml: unit.unitId === unit.clusterId ? 0 : 3, bgcolor: m3.scLow }}>
+    <M3Button emphasis="text" onClick={onExpand}>{unit.unitKind === "VSX_CHASSIS" ? `VSX chassis · ${label}` : unit.unitId === unit.clusterId ? label : `Virtual System · ${label}`}</M3Button>
     <Typography variant="body2">{unit.vendor === "palo_alto" ? "Palo Alto" : "Check Point"} · Mode: <span title={unit.mode ?? undefined}>{clusterModeWord(unit.mode)}</span>{unit.vendor === "palo_alto" ? "" : ` · Recovery mode: ${recoveryLabel(unit.recoveryMode)}`} · Readiness age: {unit.readinessObservedAt ? relativeAge(unit.readinessObservedAt, new Date()) : "Not evaluated"}</Typography>
     {unit.refusalReason && <Typography color="error">{unit.refusalReason}</Typography>}
+    {unit.failoverRefusal && <Typography variant="body2" data-failover-refusal title={unit.failoverRefusal}>
+      {readinessReasonLabel(unit.failoverRefusal)}: its pre-checks run here; each Virtual System below is failed over on its own.</Typography>}
     {expanded && <Stack spacing={2} sx={{ mt: 1 }}>
       <FailoverIncidentsPanel clusterId={unit.clusterId} onReleased={() => { onRefreshUnits(); void refresh(); }} />
       {pending && <Typography role="status">Awaiting second approval</Typography>}
-      {canOperate && <M3Button deviceJob emphasis="filled" disabled={!idle || Boolean(unit.refusalReason) || Boolean(pending)} onClick={() => {
+      {failoverOffered && <M3Button deviceJob emphasis="filled" disabled={!idle || Boolean(unit.refusalReason) || Boolean(pending)} onClick={() => {
         if (draft?.confirmedRevision && bound?.approved && (!run || run.approvalId !== bound.approvalId)) { void act(() => start(bound)); return; }
         if (draft && (run?.approvalId === draft.requestId || Date.parse(draft.until) <= Date.now()
           || approvals.some(a => a.requestId === draft.requestId && a.revokedAt))) {
@@ -269,7 +273,7 @@ function UnitPanel({ unit, expanded, onExpand, onRefreshUnits }: { unit: CpFailo
         }
         setDialog(true);
       }}>Start failover</M3Button>}
-      {unit.masked !== true && unit.canApprove && pending?.canApprove && <M3Button emphasis="outlined" disabled={!idle}
+      {unit.masked !== true && unit.canApprove && !unit.failoverRefusal && pending?.canApprove && <M3Button emphasis="outlined" disabled={!idle}
         onClick={() => void act(() => secondApproveCpFailover(unit, pending.requestId!, pending.revision!))}>Approve request revision {pending.revision}</M3Button>}
       <ReadinessCard checks={readinessRun?.checks.filter(c => c.phase === "pre") ?? []} members={unit.members} cluster={label}
         vendor={unit.vendor} status={readinessRun?.outcome} stopCode={readinessRun?.message}
@@ -295,17 +299,22 @@ function UnitPanel({ unit, expanded, onExpand, onRefreshUnits }: { unit: CpFailo
     </Dialog>
   </Card>;
 }
+/** The cluster (or VSX chassis) unit first, then its Virtual Systems in the server's order. */
+export function orderUnits(units: CpFailoverUnit[]): CpFailoverUnit[] {
+  const base = (unit: CpFailoverUnit) => unit.unitKind === "VSX_CHASSIS" || unit.unitId === unit.clusterId ? 0 : 1;
+  return units.map((unit, index) => ({ unit, index })).sort((a, b) => base(a.unit) - base(b.unit) || a.index - b.index).map(entry => entry.unit);
+}
 export function CpFailoverPanel({ memberDeviceId, vendor = "check_point", initialUnitId }: { memberDeviceId: string; vendor?: "check_point" | "palo_alto"; initialUnitId?: string | null }) {
   const [units, setUnits] = useState<CpFailoverUnit[]>([]), [selected, setSelected] = useState<string | null>(initialUnitId ?? null);
   const [error, setError] = useState<string | null>(null);
   const refreshUnits = useCallback(() => {
-    void listCpFailoverUnits(memberDeviceId,vendor).then(value => setUnits(value.map(unit => ({ ...unit, members: unit.maskedMembers?.map(member => ({ ...member, hostname: member.maskedLabel })) ?? unit.members }))))
+    void listCpFailoverUnits(memberDeviceId,vendor).then(value => setUnits(orderUnits(value).map(unit => ({ ...unit, members: unit.maskedMembers?.map(member => ({ ...member, hostname: member.maskedLabel })) ?? unit.members }))))
       .catch(e => setError(errorText(e)));
   }, [memberDeviceId,vendor]);
   useEffect(() => {
     let disposed = false;
     setUnits([]); setError(null); setSelected(initialUnitId ?? null);
-    listCpFailoverUnits(memberDeviceId, vendor).then(value => { if (!disposed) setUnits(value.map(unit => ({ ...unit, members: unit.maskedMembers?.map(member => ({ ...member, hostname: member.maskedLabel })) ?? unit.members }))); }).catch(e => { if (!disposed) setError(errorText(e)); });
+    listCpFailoverUnits(memberDeviceId, vendor).then(value => { if (!disposed) setUnits(orderUnits(value).map(unit => ({ ...unit, members: unit.maskedMembers?.map(member => ({ ...member, hostname: member.maskedLabel })) ?? unit.members }))); }).catch(e => { if (!disposed) setError(errorText(e)); });
     return () => { disposed = true; };
   }, [memberDeviceId, vendor, initialUnitId]);
   return <Stack spacing={1} aria-label={`${vendor === "palo_alto" ? "Palo Alto" : "Check Point"} failover`}>

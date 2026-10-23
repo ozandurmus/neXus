@@ -92,6 +92,9 @@ public final class CpFailoverController {
                 return view;
             }).toList());
         if (u.vsId()!=null) m.put("virtual_system",u.label());
+        // The chassis and every VS of a VSX cluster are separate units; the chassis is never offered a failover (§10).
+        m.put("unitKind",u.vsxChassis() ? "VSX_CHASSIS" : u.vsId()!=null ? "VIRTUAL_SYSTEM" : "CLUSTER");
+        if (u.vsxChassis()) m.put("failoverRefusal",CpFailoverService.CHASSIS_FAILOVER_NOT_APPROVED);
         return m;
     }
     /** {@code incidents} memoizes the open-incident lookup per cluster and member pair within one request. */
@@ -177,6 +180,8 @@ public final class CpFailoverController {
                 Map<String,Object> m=unit(u);
                 m.put("vendor",vendor);
                 m.put("masked",masked);
+                // Role facts; a unit the server never fails over says so in failoverRefusal (the VSX chassis), and every
+                // approval or start for it is refused server-side whatever these flags say.
                 m.put("canApprove",canApprove);
                 m.put("canStart",canStart);
                 m.put("canSchedule",canStart);

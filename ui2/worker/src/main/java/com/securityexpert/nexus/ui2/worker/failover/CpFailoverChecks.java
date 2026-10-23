@@ -108,6 +108,24 @@ public final class CpFailoverChecks {
     }
 
     /**
+     * The chassis state of a VSX member, read in context VS0 (docs/design/VSX_CHASSIS_FAILOVER_UNIT_2026_10_23.md): any
+     * context marker must name VS0, the cluster table is the chassis state, and the per-VS table that follows it is not
+     * parsed (a VS state is its own unit's read). The state carries context "0", so the VSLS label every VSX context
+     * reports is accepted on the chassis as on a VS (FAILOVER_EXECUTION_CP_CONTRACT.md §14).
+     */
+    public static State chassisState(String output) {
+        if(output!=null) {
+            Matcher context=Pattern.compile("(?im)^(?:Virtual System[ \t]+([^\r\n]+)|Context is set to Virtual Device [^\r\n]+ \\(ID ([^()]+)\\)\\.)[ \t]*$").matcher(output);
+            while(context.find()) {
+                String observed=context.group(1)!=null?context.group(1).strip():context.group(2);
+                if(!"0".equals(observed)) return state(null);
+            }
+        }
+        State parsed=state(output);
+        return new State(parsed.mode(),parsed.members(),parsed.localId(),parsed.localRole(),"0",parsed.recoveryMode());
+    }
+
+    /**
      * PO decision 2026-10-20 item 2: the recovery mode printed on the one "Cluster Mode:" line of
      * {@code cphaprob stat} (gate cp_inventory_cphaprob_stat, the check-1 read). Exactly one "(Active Up)" or
      * "(Primary Up)" suffix is recognised (case-sensitive, as printed); none, several or anything else is UNKNOWN.

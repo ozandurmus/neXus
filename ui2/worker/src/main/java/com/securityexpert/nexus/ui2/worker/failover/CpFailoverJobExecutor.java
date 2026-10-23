@@ -66,6 +66,16 @@ public final class CpFailoverJobExecutor {
     private final java.util.function.LongSupplier nanoTime;
     private int polls;
     private String jobId,runId,vsId;
+    /**
+     * This readiness run is the chassis step of a VSX cluster (docs/design/VSX_CHASSIS_FAILOVER_UNIT_2026_10_23.md): the
+     * unit has no VSID, but a member carries virtual systems, so every read runs in context VS0 through
+     * {@code bash -lc 'vsenv 0 && <read>'} (CF-2: the landing context of a VSX host is never assumed).
+     */
+    private boolean chassis;
+    /** Stop code of a chassis read whose VS0 gate row is not signed off: nothing is sent. */
+    static final String CHASSIS_COMMANDS_NOT_APPROVED="VSX_CHASSIS_COMMANDS_NOT_APPROVED";
+    /** Stop code of a chassis FAILOVER run: FROZEN FAILOVER_EXECUTION_CP_CONTRACT.md §10 does not fail the chassis over. */
+    static final String CHASSIS_FAILOVER_NOT_APPROVED="VSX_CHASSIS_FAILOVER_NOT_APPROVED";
     private long epoch;
     private int commandIndex;
     private boolean wrote;
@@ -173,7 +183,7 @@ public final class CpFailoverJobExecutor {
             leases.transitionState(jobId,epoch,JobState.CLAIMED,JobState.FAILED,"system:cp-failover-worker",
                 "cp_failover_missing_run","RUN_NOT_FOUND"); return;
         }
-        this.jobId=jobId; this.runId=run.get().id(); this.vsId=run.get().vsId();
+        this.jobId=jobId; this.runId=run.get().id(); this.vsId=run.get().vsId(); this.chassis=false;
         this.readiness="READINESS".equals(run.get().kind());
         this.readinessFailure=null;
         this.shapes=new ReadinessShapeLog("check_point");
@@ -189,6 +199,12 @@ public final class CpFailoverJobExecutor {
             if(members.size()!=2 || members.get(0).deviceId().equals(members.get(1).deviceId())
                     || members.stream().anyMatch(m -> !"check_point".equals(m.vendorHint())))
                 throw new Stop("CLUSTER_NOT_ELIGIBLE",0);
+            if (vsId==null && vsxEvidence(members)) {
+                chassis=true;
+                // The framing row names the bare read and the vsenv <VSID> form only; the chassis reads use SSH_EXEC.
+                shellRun=false;
+                if (!readiness) throw new Stop(CHASSIS_FAILOVER_NOT_APPROVED,0);
+            }
             if (!readiness) {
                 requestCluster=run.get().clusterRef(); requestVs=run.get().vsId();
                 requestMembers=members.stream().map(DeviceSummaryRecord::deviceId)
@@ -197,6 +213,8 @@ public final class CpFailoverJobExecutor {
             }
             if(!attempts.findByJobAndStep(jobId,0).isEmpty()) throw new Stop("PRIOR_ATTEMPT_NOT_REPLAYED",0);
             for(String command:List.of(STAT,TABLE,IF,ARP,TRAFFIC,SYNC,POLICY,PNOTES,BONDS,FAILOVER,ROUTING)) gate(command);
+            // A chassis run resolves every read before its first contact, the bond-member read included.
+            if (chassis) gate(BOND_MEMBERS);
             if (!readiness) { gate(CPSTAT_POLICY); gate(DOWN); gate(UP); }
             if (shellRun) gateShellFraming();
             first=connect(members.get(0)); second=connect(members.get(1));
@@ -254,7 +272,7 @@ public final class CpFailoverJobExecutor {
      */
     private void resume(String jobId,long epoch,JooqCpFailoverRepository.Resume r) {
         this.resume=r; this.maxPolls=RESUME_MAX_POLLS;
-        this.jobId=jobId; this.runId=r.runId(); this.vsId=null; this.readiness=false; this.readinessFailure=null;
+        this.jobId=jobId; this.runId=r.runId(); this.vsId=null; this.chassis=false; this.readiness=false; this.readinessFailure=null;
         this.shapes=new ReadinessShapeLog("check_point");
         this.epoch=epoch; this.commandIndex=0; this.polls=0; this.wrote=false; this.dispatch=null;
         this.shellRun=shellMode.usesShell(r.clusterRef()); this.execEvidence=false;
@@ -435,12 +453,14 @@ public final class CpFailoverJobExecutor {
         if (write && !mutationSwitch.enabled()) throw new Stop(FailoverMutationSwitch.DISABLED,0);
         if(!writeAllowed(readiness ? "READINESS" : "FAILOVER", command))
             throw new Stop("READINESS_WRITE_REFUSED",0);
-        String key=vsId==null?(CPSTAT_POLICY.equals(command)?"bash -lc '"+command+"'":command):"bash -lc 'vsenv <VSID> && "+command+"'";
+        String key=chassis?"bash -lc 'vsenv 0 && "+command+"'"
+            :vsId==null?(CPSTAT_POLICY.equals(command)?"bash -lc '"+command+"'":command):"bash -lc 'vsenv <VSID> && "+command+"'";
         var resolution=GateResolver.resolve(new CanonicalCommandKey("check_point","cp_gaia_gateway",
             "expert","SSH_EXEC",key),java.util.Optional.of(write
                 ?ActionClass.CLASS_2_OPERATIONAL_STATE_CHANGE:ActionClass.CLASS_0_READ),gates);
-        if(!(resolution instanceof GateResolution.Known known)) throw new Stop("COMMAND_GATE_UNAVAILABLE",0);
-        String expected=switch(command) {
+        if(!(resolution instanceof GateResolution.Known known))
+            throw new Stop(chassis?CHASSIS_COMMANDS_NOT_APPROVED:"COMMAND_GATE_UNAVAILABLE",0);
+        String expected=chassis?chassisGateId(command):switch(command) {
             case STAT -> vsId==null?"cp_inventory_cphaprob_stat":"cp_inventory_vsid_cphaprob_stat";
             case IF -> vsId==null?"cp_inventory_cphaprob_a_if":"cp_inventory_vsid_cphaprob_a_if";
             case TABLE -> "cp_failover_tablestat";
@@ -461,6 +481,41 @@ public final class CpFailoverJobExecutor {
         if(!expected.equals(known.gateId())) throw new Stop("COMMAND_GATE_MISMATCH",0);
         return known;
     }
+    /**
+     * The VS0 gate ids of the chassis step (VSX_CHASSIS_FAILOVER_UNIT_2026_10_23.md §3): the two inventory VS0 rows for
+     * the state and interface reads, a {@code _vsenv0} row for every other read. Only the inventory rows exist today.
+     */
+    static String chassisGateId(String command) {
+        return switch(command) {
+            case STAT -> "cp_inventory_cphaprob_stat_vsenv0";
+            case IF -> "cp_inventory_cphaprob_a_if_vsenv0";
+            case TABLE -> "cp_failover_tablestat_vsenv0";
+            case ARP -> "cp_failover_arp_vsenv0";
+            case TRAFFIC -> "cp_failover_traffic_vsenv0";
+            case SYNC -> "cp_failover_syncstat_vsenv0";
+            case POLICY -> "cp_failover_fw_stat_vsenv0";
+            case CPSTAT_POLICY -> "cp_policy_install_cpstat_vsenv0";
+            case PNOTES -> "cp_failover_pnotes_vsenv0";
+            case BONDS -> "cp_failover_bonds_vsenv0";
+            case BOND_MEMBERS -> "cp_failover_bond_members_vsenv0";
+            case FAILOVER -> "cp_failover_last_event_vsenv0";
+            case ROUTING -> "cp_failover_routing_vsenv0";
+            case DOWN -> "cp_failover_down_vsenv0";
+            case UP -> "cp_failover_up_vsenv0";
+            default -> throw new Stop("COMMAND_NOT_APPROVED",0);
+        };
+    }
+    /**
+     * VSX evidence for a unit without a VSID, the rule CpFailoverService uses to create the chassis unit: a member's
+     * virtual-system names, or a stored inventory context other than {@code physical}, on either member.
+     */
+    private boolean vsxEvidence(List<DeviceSummaryRecord> members) {
+        if(members.stream().anyMatch(m -> m.virtualSystems().filter(v -> !v.isBlank()).isPresent())) return true;
+        return store.summaryMembers(members.stream().map(DeviceSummaryRecord::deviceId).toList()).stream()
+            .anyMatch(r -> r.context()!=null && !"physical".equals(r.context()));
+    }
+    /** The vsenv context of every read: the VSID of a VS run, 0 for the chassis step of a VSX cluster, none otherwise. */
+    private String context() { return chassis?"0":vsId; }
     /** With the one-shell switch on, the framing literal must itself be a signed-off read gate before any contact. */
     private void gateShellFraming() {
         var resolution=GateResolver.resolve(new CanonicalCommandKey("check_point","cp_gaia_gateway","expert",
@@ -520,7 +575,7 @@ public final class CpFailoverJobExecutor {
                 ?store.prepareResumeDispatch(resume.id(),epoch,commandIndex++,member.id(),g.gateId(),g.actionClass().id())
                 :store.prepareDispatch(runId,epoch,commandIndex++,member.id(),g.gateId(),g.actionClass().id());
             wrote=true;
-            String literal=vsId==null?"bash -lc '"+command+"'":"bash -lc 'vsenv "+vsId+" && "+command+"'";
+            String literal=context()==null?"bash -lc '"+command+"'":"bash -lc 'vsenv "+context()+" && "+command+"'";
             java.util.function.Supplier<Boolean> send=() -> {
                 if (!mutationSwitch.enabled()) throw new JooqCpFailoverRepository.NotSent();
                 try {
@@ -541,7 +596,7 @@ public final class CpFailoverJobExecutor {
         // Measured 2026-09-30: on the fleet's gateways a plain exec of 'cphaprob stat' exits 0 with no output -- the
         // exec shell lacks the Check Point environment. Inventory already falls back to a login shell; every CP command
         // here (reads and clusterXL_admin alike) runs in one, as the vsenv-wrapped VS form always did.
-        String literal=vsId==null?"bash -lc '"+readCommand+"'":"bash -lc 'vsenv "+vsId+" && "+readCommand+"'";
+        String literal=context()==null?"bash -lc '"+readCommand+"'":"bash -lc 'vsenv "+context()+" && "+readCommand+"'";
         boolean pty=IF.equals(command);
         int sessionCommandIndex=++member.sessionCommandIndex;
         long sessionElapsedMs=(System.nanoTime()-member.openedAtNanos)/1_000_000;
@@ -550,7 +605,7 @@ public final class CpFailoverJobExecutor {
         if(shell!=null) {
             // §3.3 / §7: inside the member's login shell, in a subshell, the bare gated read or the vsenv form; stderr
             // dropped as the exec path returned stdout only, merged for the read that ran with a PTY on exec.
-            String shellLiteral=vsId==null?readCommand:"vsenv "+vsId+" && "+readCommand;
+            String shellLiteral=context()==null?readCommand:"vsenv "+context()+" && "+readCommand;
             result=shell.run(shellLiteral,pty,Duration.ofSeconds(g.timeoutS()),MAX_OUTPUT_CHARS);
             if(shell.broken()) {
                 // This read stays failed (never retried); the member's remaining reads use the exec path.
@@ -577,7 +632,7 @@ public final class CpFailoverJobExecutor {
             default -> 0;
         };
         if (check!=0) shapes.capture(check,completed.output(),pty,sessionCommandIndex,sessionElapsedMs);
-        return check==0 && !BOND_MEMBERS.equals(command)?completed.output():normalizeRead(command,completed.output(),vsId,shapes);
+        return check==0 && !BOND_MEMBERS.equals(command)?completed.output():normalizeRead(command,completed.output(),context(),shapes);
     }
     static boolean commandUnavailable(String output) {
         if(output==null) return false;
@@ -637,7 +692,8 @@ public final class CpFailoverJobExecutor {
         return assessment.status();
     }
     private CpFailoverChecks.State readState(Member member) throws InterruptedException {
-        var state=CpFailoverChecks.state(command(member,STAT),vsId);
+        String output=command(member,STAT);
+        var state=chassis?CpFailoverChecks.chassisState(output):CpFailoverChecks.state(output,vsId);
         if(member.localId!=null && !member.localId.equals(state.localId())) return CpFailoverChecks.state(null);
         if(state.localId()!=null) member.localId=state.localId();
         return state;
