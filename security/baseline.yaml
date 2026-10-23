@@ -461,6 +461,54 @@
       "review_date": "2026-10-31"
     },
     {
+      "tool": "trivy",
+      "rule": "CVE-2026-114406",
+      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: ca-certificates",
+      "reason": "Red Hat UBI9 openjdk-21-runtime base (service image and the packet-analysis image built from it, same repository): no fixed package is published yet; the build cannot reach the UBI package repos to update it. Time-boxed by the PO decision 2026-10-23 ('accept until 2026-10-31 and remove the eMudhra roots'); remove when Red Hat rebuilds the base image. CVE-2026-114406 (CRITICAL): ca-certificates 2025.2.80_v9.0.305-91.el9 still trusts the eMudhra (emSign) roots that signed weak intermediates. Exposure: device connections use pinned certificates; PAN and LDAP do not use the system CA list; the SMTP and HTTP clients are only theoretically reachable (AC:H, UI:R). Mitigation: the emSign roots are to be blocklisted in the image trust store (lane/cve-accept-emudhra; its image build is still being validated).",
+      "owner": "PO",
+      "review_date": "2026-10-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "CVE-2026-114406",
+      "location": "ui2/Containerfile runtime image: ca-certificates",
+      "reason": "Red Hat UBI9 openjdk-21-runtime base (service image and the packet-analysis image built from it, same repository): no fixed package is published yet; the build cannot reach the UBI package repos to update it. Time-boxed by the PO decision 2026-10-23 ('accept until 2026-10-31 and remove the eMudhra roots'); remove when Red Hat rebuilds the base image. CVE-2026-114406 (CRITICAL): ca-certificates 2025.2.80_v9.0.305-91.el9 still trusts the eMudhra (emSign) roots that signed weak intermediates. Exposure: device connections use pinned certificates; PAN and LDAP do not use the system CA list; the SMTP and HTTP clients are only theoretically reachable (AC:H, UI:R). Mitigation: the emSign roots are to be blocklisted in the image trust store (lane/cve-accept-emudhra; its image build is still being validated).",
+      "owner": "PO",
+      "review_date": "2026-10-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "CVE-2026-114406",
+      "location": "ui2/Containerfile.packet-analysis runtime image: ca-certificates",
+      "reason": "Red Hat UBI9 openjdk-21-runtime base (service image and the packet-analysis image built from it, same repository): no fixed package is published yet; the build cannot reach the UBI package repos to update it. Time-boxed by the PO decision 2026-10-23 ('accept until 2026-10-31 and remove the eMudhra roots'); remove when Red Hat rebuilds the base image. CVE-2026-114406 (CRITICAL): ca-certificates 2025.2.80_v9.0.305-91.el9 still trusts the eMudhra (emSign) roots that signed weak intermediates. Exposure: device connections use pinned certificates; PAN and LDAP do not use the system CA list; the SMTP and HTTP clients are only theoretically reachable (AC:H, UI:R). Mitigation: the emSign roots are to be blocklisted in the image trust store (lane/cve-accept-emudhra; its image build is still being validated).",
+      "owner": "PO",
+      "review_date": "2026-10-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "CVE-2026-91415",
+      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: java-21-openjdk-headless",
+      "reason": "Red Hat UBI9 openjdk-21-runtime base (service image and the packet-analysis image built from it, same repository): no fixed package is published yet; the build cannot reach the UBI package repos to update it. Time-boxed by the PO decision 2026-10-23 ('accept until 2026-10-31 and remove the eMudhra roots'); remove when Red Hat rebuilds the base image. CVE-2026-91415 (HIGH): java-21-openjdk-headless 1:21.0.12.1.1-1.2.el9, Java 2D font rendering flaw. Exposure: no AWT, image, PDF or POI autoSize rendering path was found in the service or the workers, so font rendering is not reachable.",
+      "owner": "PO",
+      "review_date": "2026-10-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "CVE-2026-91415",
+      "location": "ui2/Containerfile runtime image: java-21-openjdk-headless",
+      "reason": "Red Hat UBI9 openjdk-21-runtime base (service image and the packet-analysis image built from it, same repository): no fixed package is published yet; the build cannot reach the UBI package repos to update it. Time-boxed by the PO decision 2026-10-23 ('accept until 2026-10-31 and remove the eMudhra roots'); remove when Red Hat rebuilds the base image. CVE-2026-91415 (HIGH): java-21-openjdk-headless 1:21.0.12.1.1-1.2.el9, Java 2D font rendering flaw. Exposure: no AWT, image, PDF or POI autoSize rendering path was found in the service or the workers, so font rendering is not reachable.",
+      "owner": "PO",
+      "review_date": "2026-10-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "CVE-2026-91415",
+      "location": "ui2/Containerfile.packet-analysis runtime image: java-21-openjdk-headless",
+      "reason": "Red Hat UBI9 openjdk-21-runtime base (service image and the packet-analysis image built from it, same repository): no fixed package is published yet; the build cannot reach the UBI package repos to update it. Time-boxed by the PO decision 2026-10-23 ('accept until 2026-10-31 and remove the eMudhra roots'); remove when Red Hat rebuilds the base image. CVE-2026-91415 (HIGH): java-21-openjdk-headless 1:21.0.12.1.1-1.2.el9, Java 2D font rendering flaw. Exposure: no AWT, image, PDF or POI autoSize rendering path was found in the service or the workers, so font rendering is not reachable.",
+      "owner": "PO",
+      "review_date": "2026-10-31"
+    },
+    {
       "tool": "gitleaks",
       "rule": "generic-api-key",
       "location": "ui2/service/src/test/java/com/securityexpert/nexus/ui2/service/systemlog/LogMaskingTest.java",
