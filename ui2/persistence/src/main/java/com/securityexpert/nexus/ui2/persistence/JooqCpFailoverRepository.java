@@ -383,6 +383,10 @@ public class JooqCpFailoverRepository {
                 + "and vs_id is not distinct from {1} and vendor={2} and state not in ('DONE','STOPPED') limit 1",
                 cluster, vsId, vendor);
             if (active != null) return new Decision("RUN_ALREADY_ACTIVE", null);
+            if (immediate) {
+                String step = stepConflict(dsl, cluster, vsId, vendor, null, true);
+                if (step != null) return new Decision(step, null);
+            }
             List<String> members = JooqDeviceRepository.enrolledFailoverMembers(dsl, cluster, vendor);
             if (members.size()!=2 || !members.contains(targetDeviceId)) return new Decision("CLUSTER_NOT_ELIGIBLE", null);
             if (!Set.copyOf(members).equals(binding))
@@ -434,11 +438,15 @@ public class JooqCpFailoverRepository {
             String vendor) {
         windows.requireOpenFor(actor);
         return audited.inTransaction(actor, "failover_readiness_request", dsl -> {
+            // The step fence below is decided under the same lock as a failover's admission.
+            lockAdmission(dsl);
             closeOrphanReadiness(dsl, cluster, vsId, vendor);
             Record active = dsl.fetchOne("select run_id from failover_run where cluster_ref={0} "
                 + "and vs_id is not distinct from {1} and vendor={2} and state not in ('DONE','STOPPED') limit 1",
                 cluster, vsId, vendor);
             if (active != null) return new Decision("RUN_ALREADY_ACTIVE", null);
+            String step = stepConflict(dsl, cluster, vsId, vendor, null, false);
+            if (step != null) return new Decision(step, null);
             // A resumed return on this unit uses its members' sessions: no readiness battery alongside it.
             if (!dsl.fetch("select 1 from failover_resume where cluster_ref={0} and state in " + RESUME_ACTIVE_SQL,
                     cluster).isEmpty()) return new Decision("RUN_ALREADY_ACTIVE", null);
@@ -500,7 +508,9 @@ public class JooqCpFailoverRepository {
                 return code;
             }
             List<String> members = JooqDeviceRepository.enrolledFailoverMembers(dsl, r.get("cluster_ref", String.class), r.get("vendor", String.class));
-            String refusal = validateTarget(dsl, r, members, targetDeviceId);
+            String refusal = stepConflict(dsl, r.get("cluster_ref", String.class), r.get("vs_id", String.class),
+                r.get("vendor", String.class), id, true);
+            if (refusal == null) refusal = validateTarget(dsl, r, members, targetDeviceId);
             if (refusal != null) {
                 dsl.execute("update failover_run set state='STOPPED',outcome={1},message={1},finished_at=now() where run_id={0}", id, refusal);
                 return refusal;
@@ -568,6 +578,27 @@ public class JooqCpFailoverRepository {
         Record job = dsl.fetchOne("select window_bypass_role, business_hours_ack_at from jobs where job_id={0}", jobId);
         if (job == null || job.get("window_bypass_role") == null || job.get("business_hours_ack_at") != null) return null;
         return windows.insideBusinessHours() ? com.securityexpert.nexus.ui2.platform.ManualAdmission.CONFIRM_CODE : null;
+    }
+
+    /** Readiness of the VSX chassis refused while a VS step of the same cluster has an open failover run. */
+    public static final String VS_RUN_ACTIVE = "VS_RUN_ACTIVE";
+    /** A VS step refused while the chassis step of the same cluster has an open run. */
+    public static final String CHASSIS_RUN_ACTIVE = "CHASSIS_RUN_ACTIVE";
+
+    /**
+     * VSX: the chassis step (vs_id null) and the VS steps (vs_id set) of one cluster never overlap a failover
+     * (docs/design/VSX_CHASSIS_FAILOVER_UNIT_2026_10_23.md §4). A readiness request conflicts with an open FAILOVER run
+     * of the other step (PLANNED included, as a unit's own open run refuses its readiness); a failover start conflicts
+     * with any open run of the other step. On a plain cluster there is no other step, so this never refuses. Called
+     * under {@link #lockAdmission}.
+     */
+    static String stepConflict(DSLContext dsl, String cluster, String vsId, String vendor, String runId,
+            boolean failover) {
+        boolean conflict = !dsl.fetch("select 1 from failover_run where cluster_ref={0} and vendor={1} "
+            + "and (vs_id is null) <> ({2}::text is null) and state not in ('DONE','STOPPED') "
+            + "and run_id is distinct from {3} and ({4}::boolean or run_kind='FAILOVER') limit 1",
+            cluster, vendor, vsId, runId, failover).isEmpty();
+        return !conflict ? null : vsId == null ? VS_RUN_ACTIVE : CHASSIS_RUN_ACTIVE;
     }
 
     private static void lockAdmission(DSLContext dsl) {

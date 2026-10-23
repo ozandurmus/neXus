@@ -276,6 +276,8 @@ class CpFailoverServiceTest {
         assertEquals(1,units.size());
         assertEquals(CLUSTER_ID,units.get(0).id());
         assertEquals(CLUSTER,units.get(0).label());
+        assertNull(units.get(0).vsId());
+        assertFalse(units.get(0).vsxChassis(),"a plain ClusterXL unit is not a VSX chassis");
         assertTrue(service.mayApprove("actor-1"));
         assertTrue(service.mayStart("actor-1"));
         assertEquals(List.of(),service.unitsForRef("unknown","actor-1"));
@@ -355,18 +357,84 @@ class CpFailoverServiceTest {
         when(inventory.findLatestRun(A)).thenReturn(Optional.of(runWithVs(A, "13", "35")));
         when(inventory.findLatestRun(B)).thenReturn(Optional.of(runWithVs(B, "13", "35")));
         var units=service.units(CLUSTER_ID,"actor-1");
-        assertEquals(List.of("VS-TEST-APP (VSID 13)", "35"), units.stream().map(CpFailoverService.Unit::label).toList());
-        assertEquals(List.of("13", "35"), units.stream().map(CpFailoverService.Unit::vsId).toList());
+        // The chassis step first (its own unit, the plain-cluster identity), then each VS step.
+        assertEquals(List.of(CLUSTER, "VS-TEST-APP (VSID 13)", "35"), units.stream().map(CpFailoverService.Unit::label).toList());
+        assertEquals(java.util.Arrays.asList(null, "13", "35"), units.stream().map(CpFailoverService.Unit::vsId).toList());
+        assertEquals(List.of(true, false, false), units.stream().map(CpFailoverService.Unit::vsxChassis).toList());
+        assertEquals(CLUSTER_ID, units.get(0).id());
         assertTrue(units.stream().allMatch(u -> CLUSTER_ID.equals(u.clusterId())));
         when(devices.findMembersByClusterRef(CLUSTER)).thenReturn(List.of(
             summaryWithVs(A, "VS-TEST-APP, VS-TEST-DB"), summaryWithVs(B, "VS-TEST-APP, VS-TEST-DB")));
-        assertEquals(List.of("VS-TEST-APP", "VS-TEST-DB"),
+        assertEquals(List.of(CLUSTER, "VS-TEST-APP", "VS-TEST-DB"),
             service.units(CLUSTER_ID,"actor-1").stream().map(CpFailoverService.Unit::label).toList());
         when(devices.findMembersByClusterRef(CLUSTER)).thenReturn(List.of(
             summaryWithVs(A, "VS-TEST-DB (VSID 35), VS-TEST-APP"),
             summaryWithVs(B, "VS-TEST-DB (VSID 35), VS-TEST-APP")));
-        assertEquals(List.of("VS-TEST-APP", "VS-TEST-DB (VSID 35)"),
+        assertEquals(List.of(CLUSTER, "VS-TEST-APP", "VS-TEST-DB (VSID 35)"),
             service.units(CLUSTER_ID,"actor-1").stream().map(CpFailoverService.Unit::label).toList());
+    }
+    private void vsx() {
+        ready("ACTIVE","STANDBY");
+        when(devices.findMembersByClusterRef(CLUSTER)).thenReturn(List.of(
+            summaryWithVs(A, "VS-TEST-APP (VSID 13)"), summaryWithVs(B, "VS-TEST-APP (VSID 13)")));
+        when(devices.listAll()).thenReturn(List.of(summaryWithVs(A, "VS-TEST-APP (VSID 13)"), summaryWithVs(B, "VS-TEST-APP (VSID 13)")));
+        when(inventory.findLatestRun(A)).thenReturn(Optional.of(runWithVs(A, "13")));
+        when(inventory.findLatestRun(B)).thenReturn(Optional.of(runWithVs(B, "13")));
+    }
+    @Test void vsxChassisFailoverIsRefusedButItsReadinessIsAdmittedUnderTheClusterIdentity() {
+        vsx();
+        String request=UUID.randomUUID().toString();
+        Instant from=Instant.now(), until=from.plusSeconds(600);
+        assertEquals(CpFailoverService.CHASSIS_FAILOVER_NOT_APPROVED, assertThrows(CpFailoverService.Refusal.class,
+            () -> service.createApprovalRequest(request,CLUSTER_ID,CLUSTER_ID,from,until,"Synthetic","actor-1","check_point")).code());
+        assertEquals(CpFailoverService.CHASSIS_FAILOVER_NOT_APPROVED, assertThrows(CpFailoverService.Refusal.class,
+            () -> service.secondApproval(request,1,CLUSTER_ID,CLUSTER_ID,"actor-1","check_point")).code());
+        assertEquals(CpFailoverService.CHASSIS_FAILOVER_NOT_APPROVED, assertThrows(CpFailoverService.Refusal.class,
+            () -> service.request(CLUSTER_ID,CLUSTER_ID,null,"actor-1","check_point",request,1,"nonce",true)).code());
+        verify(store,never()).createRequestApproval(any(),any(),any(),any(),any(),any(),any(),any(),any(),any(),any());
+        verify(store,never()).requestBound(any(),any(),any(),any(),any(),anyBoolean(),any(),any(),any(),anyLong(),any(),anyBoolean(),any());
+        when(store.requestReadiness(CLUSTER,null,"actor-1",A,"check_point"))
+            .thenReturn(new JooqCpFailoverRepository.Decision("ADMITTED","run-chassis",null));
+        assertEquals("run-chassis",service.requestReadiness(CLUSTER_ID,CLUSTER_ID,"actor-1","check_point"));
+        // The VS step keeps its own unit and is never refused for the chassis rule.
+        String vsUnit=UUID.nameUUIDFromBytes((CLUSTER+":13").getBytes(StandardCharsets.UTF_8)).toString();
+        when(store.requestReadiness(CLUSTER,"13","actor-1",A,"check_point"))
+            .thenReturn(new JooqCpFailoverRepository.Decision("ADMITTED","run-vs",null));
+        assertEquals("run-vs",service.requestReadiness(CLUSTER_ID,vsUnit,"actor-1","check_point"));
+        when(store.requestBound(eq(CLUSTER),eq("13"),any(),eq("actor-1"),eq(A),eq(true),eq("check_point"),
+            eq(java.util.Set.of(A,B)),eq("request-a"),eq(1L),eq("nonce-a"),eq(true),any()))
+            .thenReturn(new JooqCpFailoverRepository.Decision("ADMITTED","run-vs-failover",null));
+        assertEquals("run-vs-failover",service.request(CLUSTER_ID,vsUnit,null,"actor-1","check_point","request-a",1,"nonce-a",true));
+    }
+    @Test void stepFenceRefusalsFromTheRepositoryReachTheCaller() {
+        vsx();
+        when(store.requestReadiness(CLUSTER,null,"actor-1",A,"check_point"))
+            .thenReturn(new JooqCpFailoverRepository.Decision(JooqCpFailoverRepository.VS_RUN_ACTIVE,null));
+        assertEquals(JooqCpFailoverRepository.VS_RUN_ACTIVE, assertThrows(CpFailoverService.Refusal.class,
+            () -> service.requestReadiness(CLUSTER_ID,CLUSTER_ID,"actor-1","check_point")).code());
+        String vsUnit=UUID.nameUUIDFromBytes((CLUSTER+":13").getBytes(StandardCharsets.UTF_8)).toString();
+        when(store.requestBound(eq(CLUSTER),eq("13"),any(),eq("actor-1"),eq(A),eq(true),eq("check_point"),
+            eq(java.util.Set.of(A,B)),eq("request-a"),eq(1L),eq("nonce-a"),eq(true),any()))
+            .thenReturn(new JooqCpFailoverRepository.Decision(JooqCpFailoverRepository.CHASSIS_RUN_ACTIVE,null));
+        assertEquals(JooqCpFailoverRepository.CHASSIS_RUN_ACTIVE, assertThrows(CpFailoverService.Refusal.class,
+            () -> service.request(CLUSTER_ID,vsUnit,null,"actor-1","check_point","request-a",1,"nonce-a",true)).code());
+    }
+    @Test void vsxChassisIsAScheduledReadinessTargetAndAnApiUnitWithoutFailoverActions() throws Exception {
+        vsx();
+        assertEquals(List.of(CLUSTER_ID, UUID.nameUUIDFromBytes((CLUSTER+":13").getBytes(StandardCharsets.UTF_8)).toString()),
+            service.units(CLUSTER_ID,"actor-1").stream().map(CpFailoverService.Unit::id).toList());
+        var mvc = MockMvcBuilders.standaloneSetup(new CpFailoverController(service)).build();
+        String path = "/api/v2/cp-failover/units";
+        mvc.perform(get(path).servletPath(path).param("clusterRef", CLUSTER)
+                .requestAttr(GateChainInterceptor.ACTOR_FINGERPRINT_ATTRIBUTE, "actor-1"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$[0].unitId").value(CLUSTER_ID))
+            .andExpect(jsonPath("$[0].unitKind").value("VSX_CHASSIS"))
+            .andExpect(jsonPath("$[0].failoverRefusal").value(CpFailoverService.CHASSIS_FAILOVER_NOT_APPROVED))
+            .andExpect(jsonPath("$[0].virtual_system").doesNotExist())
+            .andExpect(jsonPath("$[1].unitKind").value("VIRTUAL_SYSTEM"))
+            .andExpect(jsonPath("$[1].canStart").value(true))
+            .andExpect(jsonPath("$[1].failoverRefusal").doesNotExist());
     }
     private static DeviceSummaryRecord summaryWithVs(String id,String vsNames) {
         return new DeviceSummaryRecord(id,"gateway","check_point",DeviceEnrollmentState.ENROLLED,
@@ -424,6 +492,10 @@ class CpFailoverServiceTest {
             if (sql.startsWith("select run_id")) return new org.jooq.tools.jdbc.MockResult[]{
                 new org.jooq.tools.jdbc.MockResult(0, org.jooq.impl.DSL.using(org.jooq.SQLDialect.POSTGRES)
                     .newResult(org.jooq.impl.DSL.field("run_id", String.class)))};
+            // No other step of the cluster (VSX chassis / VS) has an open failover run.
+            if (sql.startsWith("select 1 from failover_run where cluster_ref")) return new org.jooq.tools.jdbc.MockResult[]{
+                new org.jooq.tools.jdbc.MockResult(0, org.jooq.impl.DSL.using(org.jooq.SQLDialect.POSTGRES)
+                    .newResult(org.jooq.impl.DSL.field("one", Integer.class)))};
             // V170: no resumed return is in flight on this unit.
             if (sql.startsWith("select 1 from failover_resume")) return new org.jooq.tools.jdbc.MockResult[]{
                 new org.jooq.tools.jdbc.MockResult(0, org.jooq.impl.DSL.using(org.jooq.SQLDialect.POSTGRES)
@@ -591,7 +663,10 @@ class CpFailoverServiceTest {
             new JooqCpFailoverRepository.SummaryStatus("CLS-TEST-VSX","13","check_point",true,"DONE","PASS",runAt),
             new JooqCpFailoverRepository.SummaryStatus("CLS-TEST-PAN",null,"palo_alto",false,"STOPPED","FAILED",runAt)));
         var rows = service.summary("actor-1");
-        assertEquals(3, rows.size());
+        // Plain cluster, the VSX chassis, its VS 13 and the PAN pair: four units.
+        assertEquals(4, rows.size());
+        String vsxId = UUID.nameUUIDFromBytes("CLS-TEST-VSX".getBytes(StandardCharsets.UTF_8)).toString();
+        assertTrue(rows.stream().anyMatch(r -> r.unit().id().equals(vsxId) && r.unit().vsId() == null && r.unit().vsxChassis()));
         assertTrue(rows.stream().anyMatch(r -> r.unit().clusterId().equals(CLUSTER_ID)
             && !r.activeWindow() && r.lastRunAt() == null));
         assertTrue(rows.stream().anyMatch(r -> "13".equals(r.unit().vsId()) && r.activeWindow()

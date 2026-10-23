@@ -193,6 +193,10 @@ const REASON_LABELS: Readonly<Record<string, string>> = {
   RELATIONSHIP_INCONSISTENT: "Relationship inconsistent",
   PREFLIGHT_BLOCKING_CONDITIONS_PRESENT: "Pre-flight found blocking conditions",
   VSX_CONTEXT_INCOMPLETE: "Virtual system context incomplete",
+  VSX_CHASSIS_COMMANDS_NOT_APPROVED: "VSX chassis reads await command approval",
+  VSX_CHASSIS_FAILOVER_NOT_APPROVED: "VSX chassis failover is not enabled",
+  VS_RUN_ACTIVE: "A virtual system failover is open on this cluster",
+  CHASSIS_RUN_ACTIVE: "A chassis run is open on this cluster",
   WRONG_ROLE: "Member holds the wrong role",
 };
 

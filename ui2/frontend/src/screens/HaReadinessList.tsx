@@ -66,6 +66,18 @@ export function haReadinessItems(clusters: readonly Cluster[], rows: Record<stri
   });
 }
 
+/**
+ * Every failover unit behind the shared items, for the list's chips: a plain cluster, a VSX chassis and each of its
+ * Virtual Systems count once each (the chassis and every VS are evaluated separately; PO 2026-10-23). A cluster without a
+ * unit counts once with the cluster's own word. The Overview KPI keeps counting clusters through `readinessCounts`.
+ */
+export function readinessUnits(items: ReturnType<typeof haReadinessItems>) {
+  return items.flatMap(item => [{ item, status: item.status },
+    ...(item.status === "UNSUPPORTED" ? [] : item.units.filter(unit => unit.unitId !== unit.clusterId)
+      .map(unit => ({ item, status: (unit.readiness?.status ?? "UNKNOWN") as Status })))]);
+}
+export const UNIT_COUNT_NOTE = "Counts failover units: each cluster, each VSX chassis and each of its Virtual Systems count separately";
+
 /** The enrolled clusters from the device list (cluster reference -> members); the grouping the Operations screen and the Overview share. */
 export function groupClusters(devices: readonly DeviceSummary[]): Cluster[] {
   const byRef = new Map<string, DeviceSummary[]>();
@@ -142,9 +154,11 @@ export function HaReadinessList({ clusters, rows, running, busy, progress, error
     return () => window.clearInterval(timer);
   }, []);
   const items = haReadinessItems(clusters, rows);
+  const unitsByStatus = readinessUnits(items);
   const query = search.trim().toLowerCase();
-  const visible = items.filter(({ cluster, units, vendor, status }) => (!filter || status === filter)
-    && (!vendorFilter || vendor === vendorFilter)
+  // A chip filters the clusters that hold a unit with its word (the chassis or any of its Virtual Systems).
+  const visible = items.filter(item => (!filter || unitsByStatus.some(unit => unit.item === item && unit.status === filter)))
+    .filter(({ cluster, units, vendor }) => (!vendorFilter || vendor === vendorFilter)
     && [cluster.title, ...cluster.members.map(m => m.hostname ?? ""), ...units.map(row => row.virtual_system ?? "")]
       .some(name => name.toLowerCase().includes(query)))
     .sort((a, b) => statuses[a.status].order - statuses[b.status].order || a.cluster.title.localeCompare(b.cluster.title));
@@ -217,6 +231,8 @@ export function HaReadinessList({ clusters, rows, running, busy, progress, error
             onClick={event => { event.stopPropagation(); setOpenVs(current => toggle(current, cluster.ref)); }}><span aria-hidden>{openVs.has(cluster.ref) ? "▾" : "▸"}</span></IconButton>}
           <Box component="span" sx={{ fontWeight: 600, mr: 1 }}>{title}</Box><VendorBadge vendor={vendor} />
           {/* The mode line only when it adds information: "Mode: UNKNOWN" next to a known role says nothing. */}
+          {!nested && row?.unitKind === "VSX_CHASSIS" && <Typography variant="caption" component="div" data-vsx-chassis
+            title="The chassis is its own unit: its status, pre-checks and selection are the chassis step; each Virtual System below has its own">VSX chassis</Typography>}
           {row?.mode && row.mode !== "UNKNOWN" && <Typography variant="caption" component="div" title={`Mode: ${row.mode}`}
             sx={{ whiteSpace: "nowrap", overflowWrap: "normal", overflow: "hidden", textOverflow: "ellipsis" }}>Mode: {clusterModeWord(row.mode)}</Typography>}
         </TableCell>
@@ -265,11 +281,11 @@ export function HaReadinessList({ clusters, rows, running, busy, progress, error
     <Box aria-label="Readiness summary" sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
       {(Object.keys(statuses) as Status[]).map(status => {
         const s = statuses[status];
-        const matches = items.filter(item => item.status === status);
+        const matches = unitsByStatus.filter(unit => unit.status === status);
         const vendors = new Map<string, number>();
-        matches.forEach(item => { const name = vendorDisplayName(item.vendor); vendors.set(name, (vendors.get(name) ?? 0) + 1); });
-        return <Tooltip key={status} title={[...vendors].map(([name, count]) => `${name} ${count}`).join(" · ") || "No clusters"}>
-          <Button size="small" aria-label={`${s.label}: ${matches.length} clusters`} aria-pressed={filter === status}
+        matches.forEach(({ item }) => { const name = vendorDisplayName(item.vendor); vendors.set(name, (vendors.get(name) ?? 0) + 1); });
+        return <Tooltip key={status} title={`${UNIT_COUNT_NOTE}. ${[...vendors].map(([name, count]) => `${name} ${count}`).join(" · ") || "No units"}`}>
+          <Button size="small" aria-label={`${s.label}: ${matches.length} units`} aria-pressed={filter === status}
             onClick={() => setFilter(filter === status ? null : status)}
             // Zero is neutral, never green (or red): a status word with no cluster behind it carries no status colour.
             sx={{ bgcolor: matches.length === 0 ? m3.scHigh : s.bg, color: matches.length === 0 ? m3.onSurfaceVar : s.ink,

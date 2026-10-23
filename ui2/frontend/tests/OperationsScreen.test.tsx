@@ -346,9 +346,11 @@ it("summarizes the same cluster readiness counts in the KPI and chips without do
   const card = screen.getByText("Readiness checks", { selector: "p" }).closest("[data-kpi]") as HTMLElement;
   expect(card.querySelector("[data-kpi-figure]")).toHaveTextContent(/^1$/);
   expect(within(card).getByText("ready of 4 clusters")).toBeInTheDocument();
-  for (const name of ["Ready", "Not ready", "UNKNOWN", "Not supported"]) expect(screen.getByRole("button", { name: `${name}: 1 clusters` })).toBeInTheDocument();
+  // The KPI counts clusters; the list's chips count units: the ready cluster's own unit and its ready Virtual System.
+  expect(screen.getByRole("button", { name: "Ready: 2 units" })).toBeInTheDocument();
+  for (const name of ["Not ready", "UNKNOWN", "Not supported"]) expect(screen.getByRole("button", { name: `${name}: 1 units` })).toBeInTheDocument();
   expect(screen.queryByText("NOT EVALUATED")).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "Ready: 1 clusters" }));
+  fireEvent.click(screen.getByRole("button", { name: "Ready: 2 units" }));
   expect(screen.getByText("1 not ready · 1 unknown")).toBeInTheDocument();
 });
 

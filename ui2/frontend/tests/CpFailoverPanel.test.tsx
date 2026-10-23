@@ -189,3 +189,22 @@ it.each([
   expect((await screen.findAllByText(text)).length).toBeGreaterThan(0);
   expect(screen.queryByText("Request failed")).toBeNull();
 });
+it("lists the VSX chassis unit first with its own pre-checks and no failover action, then each Virtual System", async () => {
+  const chassis = { ...unit, unitKind: "VSX_CHASSIS" as const, failoverRefusal: "VSX_CHASSIS_FAILOVER_NOT_APPROVED", refusalReason: "VSX_CHASSIS_COMMANDS_NOT_APPROVED" };
+  const vs = { ...unit, unitId: "opaque-vs-13", unitKind: "VIRTUAL_SYSTEM" as const, virtual_system: "VS-ROMEO-13" };
+  api.units.mockResolvedValue([vs, chassis]);
+  api.readiness.mockResolvedValue({ runId: "run-chassis" });
+  setup();
+  const first = await screen.findByRole("button", { name: "VSX chassis · CLS-ROMEO-01" });
+  const second = screen.getByRole("button", { name: "Virtual System · VS-ROMEO-13" });
+  expect(first.compareDocumentPosition(second) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  fireEvent.click(first);
+  await waitFor(() => expect(screen.getByRole("button", { name: "Run pre-checks" })).toBeEnabled());
+  expect(screen.queryByRole("button", { name: "Start failover" })).toBeNull();
+  expect(screen.getByText(/VSX chassis failover is not enabled/)).toHaveAttribute("title", "VSX_CHASSIS_FAILOVER_NOT_APPROVED");
+  fireEvent.click(screen.getByRole("button", { name: "Run pre-checks" }));
+  await waitFor(() => expect(api.readiness).toHaveBeenCalledWith(expect.objectContaining({ unitId: "opaque-cluster" })));
+  fireEvent.click(first);
+  fireEvent.click(second);
+  await waitFor(() => expect(screen.getByRole("button", { name: "Start failover" })).toBeEnabled());
+});

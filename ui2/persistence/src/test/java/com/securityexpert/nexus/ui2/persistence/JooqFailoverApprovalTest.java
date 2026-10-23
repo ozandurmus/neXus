@@ -91,6 +91,8 @@ class JooqFailoverApprovalTest {
             }
             if (query.startsWith("select 1 from failover_dispatch_intent"))
                 return unresolvedDispatch?row(Map.of("unresolved",1)):none();
+            // VSX step fence (chassis vs VS of one cluster): no other step is open in these scenarios.
+            if (query.startsWith("select 1 from failover_run where cluster_ref")) return none();
             if (query.startsWith("select 1 from failover_run")) return fleetMutation?row(Map.of("active",1)):none();
             // V170: no resumed return holds the fleet fence in these fixtures.
             if (query.startsWith("select 1 from failover_resume")) return none();

@@ -168,10 +168,19 @@ class CpFailoverUnitsReadPathTest {
 
     @Test
     void vsxMemberLookupMatchesTheFleetSummaryUnitForUnit() throws Exception {
-        JsonNode units = read("cp-failover", "units?memberDeviceId=" + VSX + "-a");
-        assertEquals(2, units.size());
+        JsonNode all = read("cp-failover", "units?memberDeviceId=" + VSX + "-a");
+        // The chassis unit first (no readiness yet, no failover actions), then the two VS units.
+        assertEquals(3, all.size());
+        JsonNode chassis = all.get(0);
+        assertEquals("VSX_CHASSIS", chassis.path("unitKind").asText());
+        assertEquals(chassis.path("clusterId").asText(), chassis.path("unitId").asText());
+        assertFalse(chassis.has("virtual_system"));
+        assertEquals("INSUFFICIENT_EVIDENCE", chassis.path("refusalReason").asText());
+        assertEquals(CpFailoverService.CHASSIS_FAILOVER_NOT_APPROVED, chassis.path("failoverRefusal").asText());
+        List<JsonNode> units = List.of(all.get(1), all.get(2));
         assertEquals(List.of("VS-TEST-APP (VSID 13)", "VS-TEST-DB (VSID 35)"),
             List.of(units.get(0).path("virtual_system").asText(), units.get(1).path("virtual_system").asText()));
+        assertEquals("VIRTUAL_SYSTEM", units.get(0).path("unitKind").asText());
         assertEquals("HA", units.get(0).path("mode").asText());
         assertEquals("2026-10-19T12:00:00Z", units.get(0).path("readinessObservedAt").asText());
         assertEquals("INSUFFICIENT_EVIDENCE", units.get(1).path("refusalReason").asText());
@@ -179,7 +188,7 @@ class CpFailoverUnitsReadPathTest {
         assertTrue(units.get(0).path("canApprove").asBoolean() && units.get(0).path("canStart").asBoolean()
             && units.get(0).path("canSchedule").asBoolean());
         JsonNode summary = read("cp-failover", "summary");
-        for (JsonNode unit : units) assertSameAsSummary(unit, summary);
+        for (JsonNode unit : all) assertSameAsSummary(unit, summary);
     }
 
     @Test

@@ -1855,9 +1855,13 @@ export function getOverview(): Promise<OverviewView> {
 export type CpFailoverState = "PLANNED" | "PRECHECK" | "FAILING_OVER" | "SWITCHED" | "POSTCHECK" | "RETURNING" | "DONE" | "STOPPED";
 export type CpFailoverCheckStatus = "PASS" | "FAIL" | "UNKNOWN" | "WARN";
 export interface ReadinessMember { device_id: string; hostname: string | null; ha_role: string | null }
-export interface CpFailoverUnit { maskedName?: string; maskedMembers?: Array<Omit<ReadinessMember, "hostname"> & { maskedLabel: string }>; masked?: boolean; members?: ReadinessMember[]; unitId: string; clusterId: string; cluster_member_ref: string; vendor?: "check_point" | "palo_alto"; virtual_system?: string; canApprove: boolean; canStart: boolean; canSchedule: boolean; mode?: string; recoveryMode?: "ACTIVE_UP" | "PRIMARY_UP" | "UNKNOWN"; refusalReason?: string | null; readinessObservedAt?: string | null }
+export interface CpFailoverUnit { maskedName?: string; maskedMembers?: Array<Omit<ReadinessMember, "hostname"> & { maskedLabel: string }>; masked?: boolean; members?: ReadinessMember[]; unitId: string; clusterId: string; cluster_member_ref: string; vendor?: "check_point" | "palo_alto"; virtual_system?: string;
+  /** VSX: the chassis and each Virtual System are separate units; the chassis is listed first (VSX_CHASSIS_FAILOVER_UNIT_2026_10_23.md). */
+  unitKind?: "CLUSTER" | "VSX_CHASSIS" | "VIRTUAL_SYSTEM";
+  /** Set when the server never fails this unit over (the VSX chassis); approvals and starts are refused with this code. */
+  failoverRefusal?: string | null; canApprove: boolean; canStart: boolean; canSchedule: boolean; mode?: string; recoveryMode?: "ACTIVE_UP" | "PRIMARY_UP" | "UNKNOWN"; refusalReason?: string | null; readinessObservedAt?: string | null }
 export interface ReadinessCheck { device_id?: string; checkNo: number; title: string; member: string; result: CpFailoverCheckStatus; summary: string; blocking: boolean }
-export interface CpFailoverSummary extends Pick<CpFailoverUnit, "unitId" | "clusterId" | "cluster_member_ref" | "vendor" | "virtual_system" | "members" | "masked" | "mode" | "refusalReason" | "readinessObservedAt"> {
+export interface CpFailoverSummary extends Pick<CpFailoverUnit, "unitId" | "clusterId" | "cluster_member_ref" | "vendor" | "virtual_system" | "members" | "masked" | "mode" | "refusalReason" | "readinessObservedAt" | "unitKind" | "failoverRefusal"> {
   activeWindow: boolean; lastRunState: string | null; lastRunOutcome: string | null; lastRunAt: string | null; canRunReadiness: boolean;
   readiness: { status: "READY" | "NOT_READY" | "UNKNOWN"; observedAt: string; failedCheck: string; stopCode?: string; checks: Array<ReadinessCheck & { status: CpFailoverCheckStatus; derived: Record<string, unknown> }> } | null;
 }
