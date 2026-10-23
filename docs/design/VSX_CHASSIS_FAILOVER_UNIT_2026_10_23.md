@@ -1,9 +1,10 @@
 # VSX chassis failover unit
 
-**Status:** DRAFT -- engineering findings and design for the chassis step of a Check Point VSX cluster
-(lane `lane/vsx-chassis-unit`, 2026-10-23). It approves no device command. The chassis readiness reads and
-the chassis failover writes listed in §4 wait for the Product Owner's exact-command approval. §5 lists a
-contradiction with a FROZEN contract that the Product Owner has to resolve.
+**Status:** DRAFT design, with its command questions RATIFIED by
+[PO_DECISION_RECORD_2026_10_23_VSX_CHASSIS_READINESS.md](PO_DECISION_RECORD_2026_10_23_VSX_CHASSIS_READINESS.md) (2026-10-23).
+The VS0 readiness reads of §3 are approved as written ("Onaylıyorum") and seeded SIGNED_OFF by V177, so chassis readiness
+runs on a device. The chassis failover stays refused ("Önce readiness, sonra karar"). Its write literal and the §10
+amendment are a later decision. §3 and §5 below record the state before that decision.
 
 ## 1. The PO direction this implements
 
@@ -70,7 +71,7 @@ member per run, serial): `cp_failover_tablestat_vsenv0`, `cp_failover_arp_vsenv0
 in the table above. The two inventory VS0 rows also need their `max_frequency` amended to cover the failover
 readiness reads, in the same way `cp_inventory_cphaprob_stat` was amended for the plain form. The expected gate
 ids are fixed in `CpFailoverJobExecutor.chassisGateId`. A migration only has to seed them once they are approved.
-This lane adds no migration; V177 was reserved for it and is not used.
+V177 (`V177__vsx_chassis_readiness_gates.sql`) seeds them after the PO approval of 2026-10-23.
 
 ## 4. Design
 

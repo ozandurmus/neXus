@@ -331,7 +331,7 @@ gates:
     sign_off_state: SIGNED_OFF
     timeout_s: 30
     retry_rule: none
-    max_frequency: "once per device per run"
+    max_frequency: "once per device per run; failover readiness of a VSX chassis (PO 2026-10-23): once per member per readiness run, in that run's one SSH session per member"
     session_reuse_rule: "one session per device per run"
     unsupported_behavior_ref: "a standalone gateway reporting no cluster is a result, not an error"
     secret_output_risk: none
@@ -348,7 +348,7 @@ gates:
     sign_off_state: SIGNED_OFF
     timeout_s: 30
     retry_rule: none
-    max_frequency: "once per device per run"
+    max_frequency: "once per device per run; failover readiness of a VSX chassis (PO 2026-10-23): once per member per readiness run, in that run's one SSH session per member"
     session_reuse_rule: "one session per device per run"
     unsupported_behavior_ref: "no cluster virtual interfaces is a result, not an error"
     secret_output_risk: none
@@ -3013,6 +3013,196 @@ gates:
     secret_output_risk: none
     safe_telemetry_fields: [routeCount, defaultRoute]
     source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_06_FAILOVER_EXECUTION_ESTATE.md item 7; approved PR9 phases"
+
+  # VSX chassis step, VS0 context (PO decision 2026-10-23, docs/design/PO_DECISION_RECORD_2026_10_23_VSX_CHASSIS_READINESS.md,
+  # RATIFIED; seeded by V177). Readiness of the chassis unit only; cp_policy_install_cpstat_vsenv0 is the execution-only
+  # read and stays unused while the chassis failover is refused (VSX_CHASSIS_FAILOVER_NOT_APPROVED).
+  - gate_id: cp_failover_tablestat_vsenv0
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "bash -lc 'vsenv 0 && cphaprob tablestat'"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once per member per readiness run of a VSX chassis; failover-run use waits for the PO's chassis failover decision"
+    session_reuse_rule: "one SSH session per member per run; commands serial; SSH_EXEC only (the one-shell framing does not name the vsenv 0 form)"
+    unsupported_behavior_ref: "UNKNOWN"
+    secret_output_risk: "none"
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_23_VSX_CHASSIS_READINESS.md (RATIFIED); docs/design/VSX_CHASSIS_FAILOVER_UNIT_2026_10_23.md section 3"
+
+  - gate_id: cp_failover_arp_vsenv0
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "bash -lc 'vsenv 0 && arp -an'"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once per member per readiness run of a VSX chassis; failover-run use waits for the PO's chassis failover decision"
+    session_reuse_rule: "one SSH session per member per run; commands serial; SSH_EXEC only (the one-shell framing does not name the vsenv 0 form)"
+    unsupported_behavior_ref: "UNKNOWN"
+    secret_output_risk: "none"
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_23_VSX_CHASSIS_READINESS.md (RATIFIED); docs/design/VSX_CHASSIS_FAILOVER_UNIT_2026_10_23.md section 3"
+
+  - gate_id: cp_failover_traffic_vsenv0
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "bash -lc 'vsenv 0 && cat /proc/net/dev'"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "two samples 5 s apart per member per readiness run of a VSX chassis; failover-run use waits for the PO's chassis failover decision"
+    session_reuse_rule: "one SSH session per member per run; commands serial; SSH_EXEC only (the one-shell framing does not name the vsenv 0 form)"
+    unsupported_behavior_ref: "UNKNOWN"
+    secret_output_risk: "none"
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_23_VSX_CHASSIS_READINESS.md (RATIFIED); docs/design/VSX_CHASSIS_FAILOVER_UNIT_2026_10_23.md section 3"
+
+  - gate_id: cp_failover_syncstat_vsenv0
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "bash -lc 'vsenv 0 && cphaprob syncstat'"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once per member per readiness run of a VSX chassis; failover-run use waits for the PO's chassis failover decision"
+    session_reuse_rule: "one SSH session per member per run; commands serial; SSH_EXEC only (the one-shell framing does not name the vsenv 0 form)"
+    unsupported_behavior_ref: "UNKNOWN"
+    secret_output_risk: "none"
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_23_VSX_CHASSIS_READINESS.md (RATIFIED); docs/design/VSX_CHASSIS_FAILOVER_UNIT_2026_10_23.md section 3"
+
+  - gate_id: cp_failover_fw_stat_vsenv0
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "bash -lc 'vsenv 0 && fw stat'"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once per member per readiness run of a VSX chassis; failover-run use waits for the PO's chassis failover decision"
+    session_reuse_rule: "one SSH session per member per run; commands serial; SSH_EXEC only (the one-shell framing does not name the vsenv 0 form)"
+    unsupported_behavior_ref: "UNKNOWN"
+    secret_output_risk: "none"
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_23_VSX_CHASSIS_READINESS.md (RATIFIED); docs/design/VSX_CHASSIS_FAILOVER_UNIT_2026_10_23.md section 3"
+
+  - gate_id: cp_failover_pnotes_vsenv0
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "bash -lc 'vsenv 0 && cphaprob -ia list'"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once per member per readiness run of a VSX chassis; failover-run use waits for the PO's chassis failover decision"
+    session_reuse_rule: "one SSH session per member per run; commands serial; SSH_EXEC only (the one-shell framing does not name the vsenv 0 form)"
+    unsupported_behavior_ref: "UNKNOWN"
+    secret_output_risk: "none"
+    safe_telemetry_fields: [pnotes]
+    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_23_VSX_CHASSIS_READINESS.md (RATIFIED); docs/design/VSX_CHASSIS_FAILOVER_UNIT_2026_10_23.md section 3"
+
+  - gate_id: cp_failover_bonds_vsenv0
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "bash -lc 'vsenv 0 && cphaprob show_bond'"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once per member per readiness run of a VSX chassis; failover-run use waits for the PO's chassis failover decision"
+    session_reuse_rule: "one SSH session per member per run; commands serial; SSH_EXEC only (the one-shell framing does not name the vsenv 0 form)"
+    unsupported_behavior_ref: "UNKNOWN"
+    secret_output_risk: "none"
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_23_VSX_CHASSIS_READINESS.md (RATIFIED); docs/design/VSX_CHASSIS_FAILOVER_UNIT_2026_10_23.md section 3"
+
+  - gate_id: cp_failover_bond_members_vsenv0
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "bash -lc 'vsenv 0 && cphaprob show_bond <BOND>'"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once per selected bond per member per readiness run of a VSX chassis; failover-run use waits for the PO's chassis failover decision"
+    session_reuse_rule: "one SSH session per member per run; commands serial; SSH_EXEC only (the one-shell framing does not name the vsenv 0 form)"
+    unsupported_behavior_ref: "UNKNOWN"
+    secret_output_risk: "none"
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_23_VSX_CHASSIS_READINESS.md (RATIFIED); docs/design/VSX_CHASSIS_FAILOVER_UNIT_2026_10_23.md section 3"
+
+  - gate_id: cp_failover_last_event_vsenv0
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "bash -lc 'vsenv 0 && cphaprob show_failover'"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once per member per readiness run of a VSX chassis; failover-run use waits for the PO's chassis failover decision"
+    session_reuse_rule: "one SSH session per member per run; commands serial; SSH_EXEC only (the one-shell framing does not name the vsenv 0 form)"
+    unsupported_behavior_ref: "UNKNOWN"
+    secret_output_risk: "none"
+    safe_telemetry_fields: [lastFailoverAt, assumedTimeZone]
+    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_23_VSX_CHASSIS_READINESS.md (RATIFIED); docs/design/VSX_CHASSIS_FAILOVER_UNIT_2026_10_23.md section 3"
+
+  - gate_id: cp_failover_routing_vsenv0
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "bash -lc 'vsenv 0 && cpstat os -f routing'"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once per member per readiness run of a VSX chassis; failover-run use waits for the PO's chassis failover decision"
+    session_reuse_rule: "one SSH session per member per run; commands serial; SSH_EXEC only (the one-shell framing does not name the vsenv 0 form)"
+    unsupported_behavior_ref: "UNKNOWN"
+    secret_output_risk: "none"
+    safe_telemetry_fields: [routeCount, defaultRoute]
+    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_23_VSX_CHASSIS_READINESS.md (RATIFIED); docs/design/VSX_CHASSIS_FAILOVER_UNIT_2026_10_23.md section 3"
+
+  - gate_id: cp_policy_install_cpstat_vsenv0
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "bash -lc 'vsenv 0 && cpstat -f policy fw'"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once pre, once post-switch and once post-return per member per failover run of a VSX chassis; unused while chassis failover is refused (VSX_CHASSIS_FAILOVER_NOT_APPROVED)"
+    session_reuse_rule: "one SSH session per member per run; commands serial; SSH_EXEC only (the one-shell framing does not name the vsenv 0 form)"
+    unsupported_behavior_ref: "missing policy or install time -> UNKNOWN; blocks failover"
+    secret_output_risk: "policy identities stay in memory; only equality, presence and install-time skew are projected"
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_23_VSX_CHASSIS_READINESS.md (RATIFIED); docs/design/VSX_CHASSIS_FAILOVER_UNIT_2026_10_23.md section 3"
 
   - gate_id: "cp_policy_packages"
     vendor: "check_point"
