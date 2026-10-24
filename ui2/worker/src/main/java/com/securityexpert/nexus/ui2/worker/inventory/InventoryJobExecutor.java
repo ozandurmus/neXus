@@ -124,7 +124,7 @@ public final class InventoryJobExecutor {
                 .flatMap(facts -> facts.recordedIdentityPrimary()
                         .map(primary -> new PresentedIdentity(primary, facts.recordedIdentitySecondary())));
 
-        InventoryResult result = inventoryExecutor.collect(request, recordedIdentity, strictRefuseEnabled);
+        InventoryResult result = inventoryExecutor.collect(request, recordedIdentity, strictRefuseEnabled, targetDeviceId);
 
         com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.checkPublication();
         String outcomeToken = result instanceof InventoryResult.Completed ? "MATCHED" : "EXPECTATION_UNMET";

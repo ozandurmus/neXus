@@ -151,6 +151,20 @@ class ReadinessCheckViewTest {
         assertEquals("Session count missing or not recognised: /response/result/num-active or active-sessions",
             row(true,6,"UNKNOWN","{}").get("summary"));
     }
+    /** PO 2026-10-24: on PAN-OS 12 or later check 6 reads show session meter; the view names that source. */
+    @Test void panSessionMeterCountNamesItsSourceAndBelow12StaysAsItWas() throws Exception {
+        assertEquals("100 active sessions (source: session meter)",
+            row(true,6,"PASS","{\"count\":100,\"source\":\"session meter\"}").get("summary"));
+        assertEquals("70 active sessions, below carry tolerance (source: session meter)",
+            row(true,6,"FAIL","{\"count\":70,\"source\":\"session meter\"}").get("summary"));
+        assertEquals("100 active sessions",row(true,6,"PASS","{\"count\":100}").get("summary"));
+        assertEquals("Session count missing or not recognised (session meter): /response/result/entry/current",
+            row(true,6,"UNKNOWN","{\"reason\":\"field not found\",\"source\":\"session meter\"}").get("summary"));
+        assertEquals("Session counts not comparable: read with show session meter and show session info",
+            row(true,6,"UNKNOWN","{\"reason\":\"mixed_sources\",\"source\":\"session meter\",\"other_source\":\"session info\"}")
+                .get("summary"));
+        assertEquals(true,row(true,6,"UNKNOWN","{\"reason\":\"mixed_sources\"}").get("blocking"));
+    }
     @Test void panSessionSyncDisplaysOnlySafeEvidence() throws Exception {
         String facts="{\"active\":{\"enabled\":false,\"messages\":{\"session setup\":{\"enable\":true,\"sent\":1234,\"recv\":0}}},"
             +"\"passive\":{\"enabled\":false},\"missing\":[\"SYNTHETIC-PRIVATE-NAME\"],"

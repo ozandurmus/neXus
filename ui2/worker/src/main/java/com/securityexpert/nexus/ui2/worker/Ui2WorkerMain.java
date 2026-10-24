@@ -212,17 +212,21 @@ public final class Ui2WorkerMain {
                 deviceEnrollmentReadPort, deviceRepository, checkPointConfirmExecutor,
                 new PeerFollowResolver(checkPointConfirmExecutor)).withPlatformFacts(platformFactsRepository);
 
+        ArtefactStore artefactStore =
+                new FileArtefactStore(artefactStoreRoot, ArtefactStoreCipher.fromBase64Key(artefactStoreKeyBase64));
         DeviceInventoryRepository deviceInventoryRepository = new JooqDeviceInventoryRepository(transactionBoundary);
-        InventoryCapabilityExecutor inventoryCapabilityExecutor =
-                new InventoryCapabilityExecutor(compositeTransport, panCredentialResolver);
+        // PO 2026-10-24: a PAN-OS 12 firewall's interfaces come from its newest stored effective-running configuration.
+        InventoryCapabilityExecutor inventoryCapabilityExecutor = new InventoryCapabilityExecutor(compositeTransport,
+                panCredentialResolver, com.securityexpert.nexus.ui2.jobs.pan.PanFirewallCommandSwitches.fromEnvironment(),
+                com.securityexpert.nexus.ui2.worker.inventory.PanConfiguredInterfaceSource.stored(
+                        new com.securityexpert.nexus.ui2.persistence.device.configuration.LatestEffectiveRunningReader(
+                                transactionBoundary), artefactStore));
         InventoryJobExecutor inventoryJobExecutor = new InventoryJobExecutor(leaseRepository, attemptRepository,
                 deviceEnrollmentReadPort, deviceRepository, deviceInventoryRepository, inventoryCapabilityExecutor,
                 platformFactsRepository)
                 .withPolicyInstallRepository(
                         new com.securityexpert.nexus.ui2.persistence.device.JooqDevicePolicyInstallRepository(transactionBoundary));
 
-        ArtefactStore artefactStore =
-                new FileArtefactStore(artefactStoreRoot, ArtefactStoreCipher.fromBase64Key(artefactStoreKeyBase64));
         DeviceConfigurationRepository deviceConfigurationRepository =
                 new JooqDeviceConfigurationRepository(transactionBoundary);
         BackupArtefactManifestRepository backupArtefactManifestRepository =

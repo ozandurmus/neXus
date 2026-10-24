@@ -16,8 +16,12 @@ import com.securityexpert.nexus.ui2.persistence.device.PanSystemInfoRetirement;
  * Values (any case, stripped): {@value #RETIRED} (also {@code false} or {@code off}) = {@link Mode#NEVER}, the read is
  * never sent; {@value #BELOW_12} (also {@code pre12}) = {@link Mode#BELOW_12}, the read is sent only when the device's
  * PAN-OS major version, observed in the same job, is known and below 12 (PO 2026-10-21, "cihaz panos 12 degilse bu
- * kontrol calissin"); anything else, including unset, = {@link Mode#ALWAYS}. A read that is not sent reports what it
- * provided as UNKNOWN with the reason {@link Decision#reason()} says.</p>
+ * kontrol calissin"); {@value #REPLACE_12} (also {@code replace12}) = {@link Mode#REPLACE_12}, the read is sent below
+ * PAN-OS 12 exactly as under {@link Mode#BELOW_12}, and on PAN-OS 12 or later its replacement is used instead
+ * ({@link Decision#REPLACE}; PO 2026-10-24, docs/design/PO_DECISION_RECORD_2026_10_24_PAN_OS12_REPLACEMENT_READS.md:
+ * {@code show session info} -> {@code show session meter}, {@code show interface all} -> interfaces derived from the
+ * stored effective-running configuration); anything else, including unset, = {@link Mode#ALWAYS}. A read that is not
+ * sent reports what it provided as UNKNOWN with the reason {@link Decision#reason()} says.</p>
  *
  * <p>{@code show counter interface all} and the per-interface reads ({@code show interface ha1-a / ha1-b /
  * management}) are named in the same PO scope. neXus sends neither, because no gate row or code path exists for
@@ -26,14 +30,16 @@ import com.securityexpert.nexus.ui2.persistence.device.PanSystemInfoRetirement;
 public record PanFirewallCommandSwitches(Mode showInterfaceAll, Mode showSessionInfo) {
 
     /** How one read is switched. */
-    public enum Mode { ALWAYS, NEVER, BELOW_12 }
+    public enum Mode { ALWAYS, NEVER, BELOW_12, REPLACE_12 }
 
     /** What a switch decides for one read of one device: send it, or the reason it is not sent. */
     public enum Decision {
         SEND(null, null),
         SKIP_RETIRED(null, "command retired by PO 2026-10-21"),
         SKIP_PAN_OS_12("pan_os_12_or_later", "PAN-OS 12 or later (PO 2026-10-21)"),
-        SKIP_VERSION_UNKNOWN("pan_os_version_unknown", "PAN-OS version unknown");
+        SKIP_VERSION_UNKNOWN("pan_os_version_unknown", "PAN-OS version unknown"),
+        /** PAN-OS 12 or later under {@link Mode#REPLACE_12}: the read is not sent, its replacement is used (PO 2026-10-24). */
+        REPLACE("pan_os_12_or_later", "PAN-OS 12 or later (PO 2026-10-21)");
 
         private final String token;
         private final String detail;
@@ -43,8 +49,14 @@ public record PanFirewallCommandSwitches(Mode showInterfaceAll, Mode showSession
             this.detail = detail;
         }
 
+        /** True when the original read is sent. */
         public boolean send() {
             return this == SEND;
+        }
+
+        /** True when the original read is not sent and its PAN-OS 12 replacement is used instead. */
+        public boolean replace() {
+            return this == REPLACE;
         }
 
         /** Extra token recorded beside the read token on an inventory run; null for SEND and SKIP_RETIRED. */
@@ -69,6 +81,8 @@ public record PanFirewallCommandSwitches(Mode showInterfaceAll, Mode showSession
     public static final String SHOW_SESSION_INFO_VARIABLE = "NEXUS_PAN_FW_SHOW_SESSION_INFO";
     public static final String RETIRED = "retired";
     public static final String BELOW_12 = "below_12";
+    /** PO 2026-10-24: below 12 the read as today, 12 or later its replacement. */
+    public static final String REPLACE_12 = "replace_12";
     public static final String REASON = PanSystemInfoRetirement.REASON;
     /** The first PAN-OS major version the reported defect affects. */
     public static final int DEFECT_MAJOR = 12;
@@ -103,6 +117,9 @@ public record PanFirewallCommandSwitches(Mode showInterfaceAll, Mode showSession
         if (BELOW_12.equals(v) || "pre12".equals(v)) {
             return Mode.BELOW_12;
         }
+        if (REPLACE_12.equals(v) || "replace12".equals(v)) {
+            return Mode.REPLACE_12;
+        }
         return Mode.ALWAYS;
     }
 
@@ -113,7 +130,8 @@ public record PanFirewallCommandSwitches(Mode showInterfaceAll, Mode showSession
 
     /**
      * Decides one read for one device. {@code panOsVersion} is the PAN-OS version string observed in the SAME job (never
-     * a stored value); null, blank or unparseable is unknown, and unknown is never sent under {@link Mode#BELOW_12}.
+     * a stored value); null, blank or unparseable is unknown, and unknown is never sent under {@link Mode#BELOW_12} or
+     * {@link Mode#REPLACE_12} (neither the read nor its replacement: UNKNOWN, never a guessed version).
      */
     public static Decision decide(Mode mode, String panOsVersion) {
         switch (mode) {
@@ -126,7 +144,10 @@ public record PanFirewallCommandSwitches(Mode showInterfaceAll, Mode showSession
                 if (major.isEmpty()) {
                     return Decision.SKIP_VERSION_UNKNOWN;
                 }
-                return major.getAsInt() < DEFECT_MAJOR ? Decision.SEND : Decision.SKIP_PAN_OS_12;
+                if (major.getAsInt() < DEFECT_MAJOR) {
+                    return Decision.SEND;
+                }
+                return mode == Mode.REPLACE_12 ? Decision.REPLACE : Decision.SKIP_PAN_OS_12;
         }
     }
 }

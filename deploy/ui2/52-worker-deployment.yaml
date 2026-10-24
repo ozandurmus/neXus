@@ -60,13 +60,14 @@ spec:
             # PO 2026-10-08: failover mutation enabled; set to "false" to disable writes (restart required)
             - name: NEXUS_FAILOVER_MUTATION_ENABLED
               value: "true"
-            # PO 2026-10-21: PAN-OS 12 reads run only on firewalls below PAN-OS 12 ("below_12": sent when the PAN-OS
-            # version seen in the same job is known and < 12; "retired" = never sent; "enabled" = always sent;
-            # restart required). PanFirewallCommandSwitches.
+            # PO 2026-10-24: PAN-OS 12 reads are replaced on PAN-OS 12+ ("replace_12": below 12 the read as before;
+            # 12+ show session meter for failover check 6 and interfaces from the stored configuration; version
+            # unknown = neither). "below_12" = 12+ not collected; "retired" = never sent; "enabled" = always sent;
+            # restart required. PanFirewallCommandSwitches.
             - name: NEXUS_PAN_FW_SHOW_INTERFACE_ALL
-              value: "below_12"
+              value: "replace_12"
             - name: NEXUS_PAN_FW_SHOW_SESSION_INFO
-              value: "below_12"
+              value: "replace_12"
             - name: JAVA_TOOL_OPTIONS
               value: -Dui2.worker.claim-policy-fallback=true
             # BK-11: the distinct backup credential (Admin > Credentials: Backup-User-LDAP), never the collection credential.

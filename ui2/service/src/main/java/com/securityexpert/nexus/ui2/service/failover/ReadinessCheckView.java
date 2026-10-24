@@ -51,6 +51,12 @@ public final class ReadinessCheckView {
                 case 5 -> sessionSyncSummary(status,d);
                 case 6 -> "not_collected".equals(d.path("reason").asText())
                     ? "Not collected: " + d.path("detail").asText("show session info retired by PO 2026-10-21")
+                    // PO 2026-10-24: counts from show session info and show session meter are never compared.
+                    : "mixed_sources".equals(d.path("reason").asText())
+                    ? "Session counts not comparable: read with " + sessionSource(d.path("source").asText())
+                        + " and " + sessionSource(d.path("other_source").asText())
+                    : "session meter".equals(d.path("source").asText())
+                    ? "Session count missing or not recognised (session meter): /response/result/entry/current"
                     : "Session count missing or not recognised: /response/result/num-active or active-sessions";
                 case 7 -> "not_collected".equals(d.path("reason").asText())
                     // A row recorded between the system info retirement and the HA-state version check (2026-10-21).
@@ -82,7 +88,9 @@ public final class ReadinessCheckView {
             case 3 -> pass ? "Required HA links up on both members" : "An HA link is down";
             case 4 -> pass ? "Running configuration synchronized on both members" : "Configuration not synchronized";
             case 5 -> sessionSyncSummary(status,d);
-            case 6 -> count(d,"count"," active sessions")+(pass ? "" : ", below carry tolerance");
+            case 6 -> count(d,"count"," active sessions")+(pass ? "" : ", below carry tolerance")
+                // PO 2026-10-24: on PAN-OS 12 or later the count is the sum of show session meter's current sessions.
+                +("session meter".equals(d.path("source").asText()) ? " (source: session meter)" : "");
             case 7 -> pass ? "Software and content versions match on both members"
                 : "Software or content versions differ: " + versionFields(d,"MISMATCH");
             default -> "Check result unavailable";
@@ -239,6 +247,9 @@ public final class ReadinessCheckView {
         while(rate>=1000 && unit<units.length-1) { rate/=1000; unit++; }
         if(Math.round(rate*10)>=10000 && unit<units.length-1) { rate/=1000; unit++; }
         return String.format(Locale.ROOT,"%.1f %s",rate,units[unit]).replace(".0 "," ");
+    }
+    private static String sessionSource(String source) {
+        return "session meter".equals(source) ? "show session meter" : "show session info";
     }
     private static String count(JsonNode d,String key,String suffix) {
         return d.path(key).isIntegralNumber() ? d.path(key).asLong()+suffix : "Count unavailable";

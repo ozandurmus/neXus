@@ -134,6 +134,27 @@ class PanSystemInfoRetirementProjectionTest {
         }
     }
 
+    /** PO 2026-10-24 (replace_12): interfaces derived from configuration say so; no stored configuration says why. */
+    @Test
+    void anInventoryRunWithConfiguredInterfacesNamesTheSourceAndAMissingConfigurationNamesTheReason() {
+        String[][] cases = {
+            {"pan_interfaces_from_configuration", "configuration", "Configured (from configuration): show interface all is not"
+                    + " sent on PAN-OS 12 or later (PO 2026-10-24); link state not observed except HA ports (from the HA state)"},
+            {"pan_interfaces_configuration_missing", null, "Not collected: PAN-OS 12 or later, and no stored configuration to"
+                    + " derive the interfaces from (run a configuration collection)"},
+            {"pan_interfaces_configuration_unreadable", null,
+                    "Not collected: PAN-OS 12 or later, and the stored configuration could not be read"}};
+        for (String[] c : cases) {
+            var run = new com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryRun("run-1", "device-fixture", "job-1",
+                    Instant.parse("2026-10-24T06:00:00Z"), 1, java.util.List.of(), java.util.List.of(), Optional.empty(),
+                    java.util.List.of(), null, java.util.List.of("pan_show_interface_all", "pan_os_12_or_later", c[0]));
+            Map<String, Object> body = new LinkedHashMap<>();
+            InventoryController.putNotCollected(body, Optional.of(run));
+            assertEquals(c[1], body.get("interfaces_source"), c[0]);
+            assertEquals(c[2], body.get("not_collected_reason"), c[0]);
+        }
+    }
+
     @Test
     void readinessCheckSixNamesPanOsTwelveOrUnknownVersionWhenTheReadWasSkipped() throws Exception {
         for (String detail : new String[] {"PAN-OS 12 or later (PO 2026-10-21)", "PAN-OS version unknown"}) {

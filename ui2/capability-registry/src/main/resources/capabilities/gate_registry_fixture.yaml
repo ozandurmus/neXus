@@ -2487,6 +2487,23 @@ gates:
     safe_telemetry_fields: []
     source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_06_FAILOVER_EXECUTION_ESTATE.md item 7; approved PR9 phases"
 
+  - gate_id: pan_failover_session_meter
+    vendor: palo_alto
+    platform_role_scope: pan_firewall
+    shell_context: not_applicable
+    transport_kind: PAN_XML_API
+    canonical_command_key: "<show><session><meter/></session></show>"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "PAN-OS 12 or later only (replace_12): once pre, once post-switch and once post-return per member per failover run; once per readiness run"
+    session_reuse_rule: "one key per peer per run"
+    unsupported_behavior_ref: "error envelope, no entry or an entry without a numeric current -> check 6 UNKNOWN (blocks); never a guessed count"
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_24_PAN_OS12_REPLACEMENT_READS.md (PO chat 2026-10-24: PAN-OS 12 replacement reads)"
+
   - gate_id: pan_failover_suspend
     vendor: palo_alto
     platform_role_scope: pan_firewall

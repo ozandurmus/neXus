@@ -60,6 +60,35 @@ class PanFirewallCommandSwitchesTest {
         assertEquals(Decision.SKIP_RETIRED, PanFirewallCommandSwitches.decide(Mode.NEVER, "10.2.9"));
     }
 
+    /** PO 2026-10-24: replace_12 sends the read below 12 and its replacement on 12 or later; unknown is neither. */
+    @Test
+    void replace12SendsBelowTwelveAndReplacesOnTwelveOrLater() {
+        for (String v : new String[] {"replace_12", " REPLACE_12 ", "replace12"}) {
+            var s = PanFirewallCommandSwitches.from(Map.of(PanFirewallCommandSwitches.SHOW_INTERFACE_ALL_VARIABLE, v,
+                    PanFirewallCommandSwitches.SHOW_SESSION_INFO_VARIABLE, v));
+            assertEquals(Mode.REPLACE_12, s.showInterfaceAll(), v);
+            assertEquals(Mode.REPLACE_12, s.showSessionInfo(), v);
+        }
+        assertTrue(PanFirewallCommandSwitches.mayRead(Mode.REPLACE_12));
+        assertEquals(Decision.SEND, PanFirewallCommandSwitches.decide(Mode.REPLACE_12, "11.1.4-h7"));
+        assertEquals(Decision.SEND, PanFirewallCommandSwitches.decide(Mode.REPLACE_12, "10.2.9"));
+        for (String twelve : new String[] {"12.1.2", "12.0.0", "13.0.0"}) {
+            Decision d = PanFirewallCommandSwitches.decide(Mode.REPLACE_12, twelve);
+            assertEquals(Decision.REPLACE, d, twelve);
+            assertTrue(d.replace());
+            assertFalse(d.send(), "the original read is not sent");
+        }
+        for (String unknown : new String[] {null, "", "abc"}) {
+            Decision d = PanFirewallCommandSwitches.decide(Mode.REPLACE_12, unknown);
+            assertEquals(Decision.SKIP_VERSION_UNKNOWN, d, String.valueOf(unknown));
+            assertFalse(d.replace());
+        }
+        // below_12 is unchanged: 12 or later is still not collected, never replaced.
+        assertEquals(Decision.SKIP_PAN_OS_12, PanFirewallCommandSwitches.decide(Mode.BELOW_12, "12.1.2"));
+        assertEquals("pan_os_12_or_later", Decision.REPLACE.token());
+        assertEquals("replace_12", PanFirewallCommandSwitches.REPLACE_12);
+    }
+
     @Test
     void reasonsAreStable() {
         assertEquals("Not collected: PAN-OS 12 or later (PO 2026-10-21)", Decision.SKIP_PAN_OS_12.reason());
