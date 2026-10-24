@@ -131,3 +131,16 @@ VS units.
    what `clusterXL_admin down` in VS0 does to every VS on that member (all VSs leaving the member). Both need official
    documentation and PO approval of the exact literal before any write gate row exists.
 3. **The VS0 read rows of §3** (ten new rows and two frequency amendments), each approved as written.
+
+## Amendment 2026-10-24: check 8 (traffic rate) on the chassis
+
+Live evidence from the first chassis readiness run: every check passed except check 8, which was UNKNOWN with
+reason NO_TRAFFIC_INTERFACES (selectedCount 0) on both members. In VS0 only management and sync interfaces exist
+(management is excluded from traffic measurement); data traffic flows inside the Virtual Systems, whose own units
+already measure it. That UNKNOWN blocked readiness for every VSX chassis.
+
+Decision: when the chassis step selects no traffic interface on either member, check 8 is recorded as
+NOT_EVALUATED with reason TRAFFIC_MEASURED_PER_VIRTUAL_SYSTEM, is excluded from the readiness verdict (like
+checks 5, 6 and 13) and is shown as "Measured per Virtual System" (non-blocking, info). If VS0 does have traffic
+interfaces, check 8 measures and gates as before. A plain cluster and a VS unit are unchanged: NO_TRAFFIC_INTERFACES
+stays UNKNOWN and blocking. No schema change (NOT_EVALUATED is already an allowed check status, V139).

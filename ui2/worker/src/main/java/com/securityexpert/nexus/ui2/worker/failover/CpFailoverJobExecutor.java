@@ -845,6 +845,8 @@ public final class CpFailoverJobExecutor {
             return CpFailoverChecks.bytesByInterface(null);
         }
     }
+    /** Reason of a VSX chassis check 8 with no traffic interface in VS0: traffic is measured by each Virtual System's unit. */
+    static final String TRAFFIC_PER_VIRTUAL_SYSTEM="TRAFFIC_MEASURED_PER_VIRTUAL_SYSTEM";
     private double[] trafficWindow(String phase,Member first,Member second,
             CpFailoverChecks.Interfaces ia,CpFailoverChecks.Interfaces ib,Pair before,Member oldActive)
             throws InterruptedException {
@@ -866,9 +868,19 @@ public final class CpFailoverJobExecutor {
         double rateA=measurementA.bytesPerSecond(),rateB=measurementB.bytesPerSecond();
         double baseline=before==null?(oldActive==first?rateA:rateB):before.forMember(oldActive,first).traffic();
         double current=before==null?baseline:oldActive==first?rateB:rateA;
-        String status=rateA<0 || rateB<0?"UNKNOWN":CpFailoverChecks.trafficStatus(baseline,current);
         var derivedA=new java.util.HashMap<String,Object>(measurementA.derived(elapsedA));
         var derivedB=new java.util.HashMap<String,Object>(measurementB.derived(elapsedB));
+        // VSX chassis (VS0): management/sync only, so no traffic interface is selected on either member. The data
+        // traffic flows inside the Virtual Systems, whose own units measure it: not applicable here, never blocking
+        // (design doc 2026-10-24 note). Any other selection, or any other reason, measures and fails as before.
+        if(chassis && measurementA.reason()==CpFailoverChecks.TrafficReason.NO_TRAFFIC_INTERFACES
+                && measurementB.reason()==CpFailoverChecks.TrafficReason.NO_TRAFFIC_INTERFACES) {
+            derivedA.put("reason",TRAFFIC_PER_VIRTUAL_SYSTEM); derivedB.put("reason",TRAFFIC_PER_VIRTUAL_SYSTEM);
+            record(phase,first,8,"NOT_EVALUATED",json(derivedA));
+            record(phase,second,8,"NOT_EVALUATED",json(derivedB));
+            return new double[]{rateA,rateB};
+        }
+        String status=rateA<0 || rateB<0?"UNKNOWN":CpFailoverChecks.trafficStatus(baseline,current);
         // A resumed return measures the interfaces it reads now: the selection must count as in the stored baseline.
         boolean scopeChanged=before!=null && before.a().stored()
             && (measurementA.selectedCount()!=before.a().selectedCount() || measurementB.selectedCount()!=before.b().selectedCount());
@@ -923,8 +935,13 @@ public final class CpFailoverJobExecutor {
         try { return JSON.writeValueAsString(value); }
         catch(JsonProcessingException invalid) { throw new IllegalStateException("Derived projection unavailable"); }
     }
+    private static String reasonOf(String derived) {
+        try { return JSON.readTree(derived).path("reason").asText(); }
+        catch(JsonProcessingException invalid) { return ""; }
+    }
     private void record(String phase,Member member,int no,String status,String derived) {
         if (readiness && no!=5 && no!=6 && no!=13 && !"PASS".equals(status)
+                && !(no==8 && "NOT_EVALUATED".equals(status) && TRAFFIC_PER_VIRTUAL_SYSTEM.equals(reasonOf(derived)))
                 && (readinessFailure==null || !"FAIL".equals(readinessFailure.status) && "FAIL".equals(status)))
             readinessFailure=new Stop("CHECK_NOT_READY",no,status);
         shapes.logUnknown(no,status);
