@@ -39,6 +39,10 @@ const words: Record<string, string> = {
   MUTATION_DISABLED_BEFORE_SEND: "Failover writes were switched off before the send. Nothing was sent.",
   BUSINESS_HOURS_CONFIRM_REQUIRED: "Business hours were not confirmed. Nothing was sent.",
   WRONG_ROLE: "Only a security_admin or operation_admin can sync the configuration.",
+  UNRESOLVED_DISPATCH: "A failover write on this unit has an unresolved outcome.",
+  NOT_SENT_BEFORE_CONTACT: "Stopped before the device was contacted. Nothing was sent.",
+  JOB_ENDED_WITHOUT_RESULT: "The job ended before the write. Nothing was sent.",
+  FOLLOW_UP_UNAVAILABLE: "the re-run could not be started",
   CONFIG_SYNC_NOT_SUPPORTED: "Configuration sync is offered for Palo Alto HA pairs only.",
 };
 export const configSyncText = (code?: string | null) => code ? words[code] ?? code : "";
@@ -53,52 +57,79 @@ export function PanConfigSyncAction({ unit, members, onDone, pollMs = 3000 }: {
   const facts = unit.configSync;
   const [dialog, setDialog] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [record, setRecord] = useState<PanConfigSyncRecord | null>(null);
+  // Argon P2-1: a sync already open when the page loads is shown and followed; a new unit starts clean.
+  const [record, setRecord] = useState<PanConfigSyncRecord | null>(open(facts?.latest?.state) ? facts!.latest! : null);
   const [readiness, setReadiness] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const lock = useRef(false), alive = useRef(true);
-  useEffect(() => () => { alive.current = false; }, []);
-  if (unit.vendor !== "palo_alto" || !facts || (!facts.canRun && !record)) return null;
+  const lock = useRef(false), alive = useRef(true), following = useRef<string | null>(null);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+  const latestOpen = open(facts?.latest?.state) ? facts!.latest! : null;
+  const shownUnit = useRef(unit.unitId);
+  useEffect(() => {
+    // Another unit: start clean. The same unit: adopt a sync opened elsewhere (another tab, the CLI) and follow it;
+    // a result already on screen stays when the refreshed facts no longer carry an open sync.
+    if (shownUnit.current !== unit.unitId) { shownUnit.current = unit.unitId; setRecord(latestOpen); setReadiness(null); setError(null); }
+    else if (latestOpen) setRecord(current => current?.syncId === latestOpen.syncId ? current : latestOpen);
+    if (latestOpen) void follow(latestOpen);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unit.unitId, latestOpen?.syncId]);
   const roster = members ?? unit.members ?? [];
   const name = (id: string | null | undefined, fallback: string) => roster.find(m => m.device_id === id)?.hostname ?? fallback;
-  const source = name(facts.sourceRef, "the active member"), target = name(facts.targetRef, "the passive member");
+  const source = name(facts?.sourceRef, "the active member"), target = name(facts?.targetRef, "the passive member");
   const wait = () => new Promise(resolve => window.setTimeout(resolve, pollMs));
-  const follow = async (first: PanConfigSyncRecord) => {
-    let current = first;
-    for (let i = 0; i < 100 && open(current.state) && alive.current; i++) {
-      await wait();
-      current = await getPanConfigSync(current.syncId);
-      if (alive.current) setRecord(current);
-    }
-    if (current.readinessRunId) {
-      setReadiness("Re-running the pre-checks");
-      for (let i = 0; i < 60 && alive.current; i++) {
-        const run = await getCpFailoverRun(current.readinessRunId, "palo_alto");
-        if (run.state === "DONE" || run.state === "STOPPED") {
-          const sync = run.checks.filter(c => c.checkNo === 4 && c.phase === "pre").map(c => c.status);
-          const verdict = sync.length && sync.every(s => s === "PASS") ? "Configuration sync passes"
-            : sync.includes("FAIL") ? "Configuration sync still fails" : "Configuration sync is unknown";
-          if (alive.current) setReadiness(`Pre-checks finished: ${verdict}.`);
-          break;
-        }
+  /** Polls until the sync and its readiness re-run end; a failed read is retried, never reported as a failed request. */
+  async function follow(first: PanConfigSyncRecord) {
+    if (following.current === first.syncId) return;
+    following.current = first.syncId;
+    let current = first, misses = 0;
+    try {
+      for (let i = 0; i < 100 && open(current.state) && alive.current && misses < 5; i++) {
         await wait();
+        try { current = await getPanConfigSync(current.syncId); misses = 0; if (alive.current) setRecord(current); }
+        catch { misses++; }
       }
-    } else if (current.readinessRefusal) {
-      setReadiness(`The pre-checks were not re-run (${configSyncText(current.readinessRefusal)}). Run the pre-checks.`);
+      if (open(current.state)) {
+        if (alive.current) setReadiness("The sync status could not be read just now; it is shown again when the page is refreshed.");
+        return;
+      }
+      if (current.readinessRunId) {
+        if (alive.current) setReadiness("Re-running the pre-checks");
+        for (let i = 0, failed = 0; i < 60 && alive.current && failed < 5; i++) {
+          try {
+            const run = await getCpFailoverRun(current.readinessRunId, "palo_alto");
+            failed = 0;
+            if (run.state === "DONE" || run.state === "STOPPED") {
+              const sync = run.checks.filter(c => c.checkNo === 4 && c.phase === "pre").map(c => c.status);
+              const verdict = sync.length && sync.every(s => s === "PASS") ? "Configuration sync passes"
+                : sync.includes("FAIL") ? "Configuration sync still fails" : "Configuration sync is unknown";
+              if (alive.current) setReadiness(`Pre-checks finished: ${verdict}.`);
+              break;
+            }
+          } catch { failed++; }
+          await wait();
+        }
+      } else if (current.readinessRefusal && alive.current) {
+        setReadiness(`The pre-checks were not re-run (${configSyncText(current.readinessRefusal)}). Run the pre-checks.`);
+      }
+    } finally {
+      following.current = null;
+      if (alive.current) onDone?.();
     }
-    if (alive.current) onDone?.();
-  };
+  }
+  if (unit.vendor !== "palo_alto" || !facts || (!facts.canRun && !record)) return null;
   const submit = async () => {
     if (lock.current || !facts.sourceRef || !facts.targetRef) return;
     lock.current = true; setBusy(true); setError(null);
+    let created: PanConfigSyncRecord | null = null;
     try {
-      const created = await requestPanConfigSync(unit, facts.sourceRef, facts.targetRef);
+      created = await requestPanConfigSync(unit, facts.sourceRef, facts.targetRef);
       setDialog(false); setRecord(created); setReadiness(null);
-      await follow(created);
     } catch (e) {
       const body = (e as { body?: { code?: string; message?: string } })?.body;
-      setError(body?.code === "BUSINESS_HOURS_CONFIRM_REQUIRED" ? configSyncText(body.code) : body?.code ? configSyncText(body.code) : "Request failed");
+      setError(body?.code ? configSyncText(body.code) : "Request failed");
     } finally { lock.current = false; setBusy(false); }
+    // The request was accepted: from here on only its progress is followed (Argon P2-1).
+    if (created) await follow(created);
   };
   const running = open(record?.state);
   return <Box data-config-sync sx={{ mt: 0.5 }} onClick={event => event.stopPropagation()}>

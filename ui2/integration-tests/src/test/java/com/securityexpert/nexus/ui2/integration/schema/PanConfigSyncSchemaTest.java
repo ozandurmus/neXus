@@ -43,6 +43,13 @@ class PanConfigSyncSchemaTest {
                 assertEquals("1", scalar(db, "select count(*) from pg_trigger where tgname='pan_config_sync_guard'"));
                 assertEquals("1", scalar(db, "select count(*) from pg_trigger where tgname='pan_config_sync_job_end'"));
                 assertEquals("1", scalar(db, "select count(*) from pg_indexes where indexname='uq_pan_config_sync_open'"));
+                // Argon P0-1: the per-endpoint purpose exists; the settled release is part of the sweep.
+                assertTrue(scalar(db, "select pg_get_constraintdef(oid) from pg_constraint "
+                    + "where conname='endpoint_admission_purpose_class_check'").contains("CONFIGURATION_WRITE"));
+                assertTrue(scalar(db, "select prosrc from pg_proc where proname='ui2_release_orphan_quarantines'")
+                    .contains("ui2_release_settled_config_sync_leases"));
+                assertTrue(scalar(db, "select prosrc from pg_proc where proname='ui2_release_orphan_quarantines'")
+                    .contains("ui2_release_settled_failover_leases(NULL)"));
             }
             try (var resource = getClass().getResourceAsStream("/db/migration/V178__pan_config_sync_remediation.sql")) {
                 assertNotNull(resource);

@@ -251,7 +251,21 @@ public final class WorkerClaimLoop {
         if (endpointAdmission == null) return null; // Offline claim-loop fixtures use no real transport.
         var job = jobRecordDao.find(claim.jobId()).orElseThrow();
         String capability = job.capabilityId();
-        String purpose = capability.contains("policy") ? "POLICY"
+        String purpose = purposeOf(capability);
+        return com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.open(
+            new com.securityexpert.nexus.ui2.persistence.runtime.EndpointAdmissionRepository.Owner(
+                claim.jobId(), claim.leaseEpoch(), null, 0, workerId.startsWith("policy-") ? "policy" : "general",
+                workerId, moduleRuntime.generation(claim.jobId(), claim.leaseEpoch()), purpose, capability.equals("cp_policy_collect")));
+    }
+
+    /**
+     * The endpoint-admission purpose of a job type. The PAN config sync is a per-endpoint configuration write, never
+     * FAILOVER_EXECUTION: it must not take the estate-wide 'fleet.failover.execution' task lease, which an uncertain
+     * outcome would leave quarantined (Argon review 2026-10-24 P0-1; PAN_CONFIG_SYNC_REMEDIATION_2026_10_24.md §5).
+     */
+    public static String purposeOf(String capability) {
+        if (com.securityexpert.nexus.ui2.persistence.JooqPanConfigSyncRepository.JOB_TYPE.equals(capability)) return "CONFIGURATION_WRITE";
+        return capability.contains("policy") ? "POLICY"
             : capability.contains("backup") || capability.equals("cp_gaia_snapshot") ? "BACKUP"
             : capability.contains("configuration") ? "CONFIGURATION"
             : capability.contains("discovery") ? "DISCOVERY"
@@ -259,14 +273,10 @@ public final class WorkerClaimLoop {
             : capability.contains("readiness") ? "FAILOVER_READINESS"
             : capability.contains("failover") ? "FAILOVER_EXECUTION"
             : capability.equals("diagnostic_read") || capability.equals("fmg_interface_detail")
-                || capability.equals(com.securityexpert.nexus.ui2.jobs.diagnostic.PanSyslogMeasure.CAPABILITY)
-                || capability.equals(com.securityexpert.nexus.ui2.jobs.diagnostic.PanSystemLogCollect.CAPABILITY)
-                || capability.equals(com.securityexpert.nexus.ui2.jobs.systemlog.CpSystemLogCollect.CAPABILITY)
-                || capability.equals(com.securityexpert.nexus.ui2.jobs.systemlog.CpSpikeLayoutReview.CAPABILITY) ? "DIAGNOSTIC" : "INVENTORY";
-        return com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.open(
-            new com.securityexpert.nexus.ui2.persistence.runtime.EndpointAdmissionRepository.Owner(
-                claim.jobId(), claim.leaseEpoch(), null, 0, workerId.startsWith("policy-") ? "policy" : "general",
-                workerId, moduleRuntime.generation(claim.jobId(), claim.leaseEpoch()), purpose, capability.equals("cp_policy_collect")));
+            || capability.equals(com.securityexpert.nexus.ui2.jobs.diagnostic.PanSyslogMeasure.CAPABILITY)
+            || capability.equals(com.securityexpert.nexus.ui2.jobs.diagnostic.PanSystemLogCollect.CAPABILITY)
+            || capability.equals(com.securityexpert.nexus.ui2.jobs.systemlog.CpSystemLogCollect.CAPABILITY)
+            || capability.equals(com.securityexpert.nexus.ui2.jobs.systemlog.CpSpikeLayoutReview.CAPABILITY) ? "DIAGNOSTIC" : "INVENTORY";
     }
 
     private static final System.Logger LOGGER = System.getLogger(WorkerClaimLoop.class.getName());

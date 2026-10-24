@@ -8,6 +8,15 @@
 --   4. pan_config_sync: one audited record per request (opaque references only, no device output), with a guard that
 --      keeps bindings and terminal states immutable, and at most one open record per cluster.
 --   5. A config-sync job that ends without the worker closing its record closes it in the same transaction.
+--   6. Argon review 2026-10-24 P0-1 (docs/design/ARGON_REVIEW_2026_10_24_PAN_CONFIG_SYNC.md): the job never takes the
+--      estate-wide 'fleet.failover.execution' task lease. Its endpoint leases use their own purpose CONFIGURATION_WRITE
+--      (per endpoint, never estate-wide); cluster mutual exclusion is advisory lock 136 plus the pan_config_sync,
+--      failover_run, failover_resume and failover_dispatch_intent checks in the repository. A QUARANTINED (or expired)
+--      CONFIGURATION_WRITE endpoint lease whose job and record have ended is released, audited, by the sweep every
+--      admission, heartbeat and drain barrier already runs, so an uncertain outcome never holds a lease that blocks a
+--      module drain (the 2026-10-22 incident, V174).
+--   7. P1-3: mutation_possible falls back to false only for a write proven never sent (the switch off, or a refusal of
+--      the transport before contact), together with that terminal outcome.
 -- Re-running is a no-op for the seed data (ON CONFLICT DO NOTHING, guarded update); DDL uses IF NOT EXISTS or
 -- drop-then-create so the dry run can execute the file twice inside one rolled-back transaction.
 SELECT set_config('app.actor_fingerprint', 'migration:V178_pan_config_sync_remediation', true);
@@ -108,7 +117,8 @@ BEGIN
     ROW(OLD.sync_id, OLD.cluster_ref, OLD.vendor, OLD.source_member_ref, OLD.target_member_ref,
         OLD.member_set_revision, OLD.readiness_run_id, OLD.initiated_by, OLD.initiator_role, OLD.requested_at,
         OLD.requested_in_business_hours, OLD.business_hours_ack_at, OLD.job_id)
-    OR (OLD.mutation_possible AND NOT NEW.mutation_possible)
+    OR (OLD.mutation_possible AND NOT NEW.mutation_possible AND NOT (OLD.state = 'SYNCING' AND NEW.state = 'STOPPED'
+        AND NEW.device_status IS NULL AND NEW.outcome IN ('MUTATION_DISABLED_BEFORE_SEND', 'NOT_SENT_BEFORE_CONTACT')))
     OR (OLD.started_at IS NOT NULL AND NEW.started_at IS DISTINCT FROM OLD.started_at)
     OR (OLD.device_status IS NOT NULL AND NEW.device_status IS DISTINCT FROM OLD.device_status) THEN
   RAISE EXCEPTION 'CONFIG_SYNC_HISTORY_IMMUTABLE';
@@ -121,13 +131,18 @@ CREATE TRIGGER pan_config_sync_guard BEFORE INSERT OR UPDATE OR DELETE ON pan_co
  FOR EACH ROW EXECUTE FUNCTION ui2_pan_config_sync_guard();
 
 -- A config-sync job that ends (failed, cancelled, rejected, outcome unknown, reconciled) closes its open record in the
--- same transaction: OUTCOME_UNKNOWN once its write was prepared, JOB_ENDED_WITHOUT_RESULT before that.
+-- same transaction. The device's recorded reply always wins (Argon P0-2: a cancel after the send never hides or
+-- rewrites it): success -> DONE / CONFIG_SYNC_REQUESTED, error -> DEVICE_REPORTED_ERROR; otherwise OUTCOME_UNKNOWN once
+-- the write was prepared, JOB_ENDED_WITHOUT_RESULT before that.
 CREATE OR REPLACE FUNCTION ui2_pan_config_sync_job_end() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
  IF NEW.state IN ('COMPLETED', 'FAILED', 'REJECTED', 'CANCELLED', 'OUTCOME_UNKNOWN', 'RECONCILED')
     AND NEW.state IS DISTINCT FROM OLD.state THEN
-  UPDATE pan_config_sync SET state = 'STOPPED',
-      outcome = CASE WHEN mutation_possible THEN 'OUTCOME_UNKNOWN' ELSE 'JOB_ENDED_WITHOUT_RESULT' END,
+  UPDATE pan_config_sync SET
+      state = CASE WHEN device_status = 'success' THEN 'DONE' ELSE 'STOPPED' END,
+      outcome = CASE WHEN device_status = 'success' THEN 'CONFIG_SYNC_REQUESTED'
+          WHEN device_status = 'error' THEN 'DEVICE_REPORTED_ERROR'
+          WHEN mutation_possible THEN 'OUTCOME_UNKNOWN' ELSE 'JOB_ENDED_WITHOUT_RESULT' END,
       finished_at = clock_timestamp()
    WHERE job_id = NEW.job_id AND state NOT IN ('DONE', 'STOPPED');
  END IF;
@@ -137,3 +152,107 @@ $$;
 DROP TRIGGER IF EXISTS pan_config_sync_job_end ON jobs;
 CREATE TRIGGER pan_config_sync_job_end AFTER UPDATE OF state ON jobs
  FOR EACH ROW EXECUTE FUNCTION ui2_pan_config_sync_job_end();
+
+-- 6. The CONFIGURATION_WRITE endpoint purpose (V128's list plus one value).
+ALTER TABLE endpoint_admission DROP CONSTRAINT IF EXISTS endpoint_admission_purpose_class_check;
+ALTER TABLE endpoint_admission ADD CONSTRAINT endpoint_admission_purpose_class_check CHECK (purpose_class IN
+    ('ENROLLMENT','INVENTORY','DISCOVERY','POLICY','BACKUP','CONFIGURATION','DIAGNOSTIC','FAILOVER_READINESS',
+     'FAILOVER_EXECUTION','CONFIGURATION_WRITE'));
+
+-- Settled: the config-sync job and its record have ended; nothing about it needs its endpoint any more. An uncertain
+-- outcome is recorded on the record, its attempt and its job; it opens no incident and holds no fence (design section 4).
+CREATE OR REPLACE FUNCTION ui2_config_sync_lease_settled(settled_job TEXT) RETURNS BOOLEAN
+LANGUAGE SQL STABLE AS $$
+ SELECT settled_job IS NOT NULL
+ AND EXISTS (SELECT 1 FROM jobs j WHERE j.job_id=settled_job AND j.capability_id='pan_failover_config_sync'
+   AND j.state NOT IN ('REQUESTED','CLAIMED','EXECUTING'))
+ AND EXISTS (SELECT 1 FROM pan_config_sync s WHERE s.job_id=settled_job AND s.state IN ('DONE','STOPPED'))
+$$;
+
+-- V174's audit trigger plus one accepted release reason, for CONFIGURATION_WRITE endpoint leases only.
+CREATE OR REPLACE FUNCTION ui2_audit_quarantine_release() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public AS $$
+DECLARE
+ actor TEXT := current_setting('app.actor_fingerprint',true);
+ reason TEXT := current_setting('app.action_id',true);
+BEGIN
+ IF reason IS NOT DISTINCT FROM 'QUARANTINE_RELEASED_RUN_SETTLED' AND TG_TABLE_NAME='runtime_task_lease'
+    AND to_jsonb(OLD)->>'task_key'='fleet.failover.execution' THEN
+  IF actor IS NULL OR btrim(actor)='' THEN
+   RAISE EXCEPTION 'quarantine_release_audit_context_missing';
+  END IF;
+ ELSIF reason IS NOT DISTINCT FROM 'QUARANTINE_RELEASED_SYNC_SETTLED' AND TG_TABLE_NAME='endpoint_admission'
+    AND to_jsonb(OLD)->>'purpose_class'='CONFIGURATION_WRITE' THEN
+  IF actor IS NULL OR btrim(actor)='' THEN
+   RAISE EXCEPTION 'quarantine_release_audit_context_missing';
+  END IF;
+ ELSE
+  IF actor IS NULL OR actor NOT IN ('system:worker','system:release') THEN
+   RAISE EXCEPTION 'quarantine_release_audit_context_missing';
+  END IF;
+  IF reason IS DISTINCT FROM 'QUARANTINE_RELEASED_OWNER_GONE' THEN
+   reason := 'QUARANTINE_RELEASED_TRANSPORT_CLOSED';
+  END IF;
+ END IF;
+ INSERT INTO public.audit_log(table_name,row_pk,operation,actor_fingerprint,action_id,before_state,correlation_run_id)
+ VALUES (TG_TABLE_NAME,to_jsonb(OLD)->>TG_ARGV[0],'DELETE',actor,reason,
+   jsonb_build_object('state','QUARANTINED','owner_role',OLD.owner_role,'reason',reason),
+   current_setting('app.correlation_run_id',true));
+ RETURN OLD;
+END;
+$$;
+REVOKE ALL ON FUNCTION ui2_audit_quarantine_release() FROM PUBLIC;
+
+-- Release the settled CONFIGURATION_WRITE endpoint leases. An expired LEASED row is quarantined first so that every
+-- release goes through the audit trigger.
+CREATE OR REPLACE FUNCTION ui2_release_settled_config_sync_leases() RETURNS INTEGER
+LANGUAGE plpgsql AS $$
+DECLARE released INTEGER; previous_action TEXT;
+BEGIN
+ UPDATE endpoint_admission SET state='QUARANTINED'
+  WHERE purpose_class='CONFIGURATION_WRITE' AND state='LEASED' AND expires_at<=now()
+  AND ui2_config_sync_lease_settled(job_id);
+ previous_action := current_setting('app.action_id',true);
+ PERFORM set_config('app.action_id','QUARANTINE_RELEASED_SYNC_SETTLED',true);
+ DELETE FROM endpoint_admission
+  WHERE purpose_class='CONFIGURATION_WRITE' AND state='QUARANTINED' AND ui2_config_sync_lease_settled(job_id);
+ GET DIAGNOSTICS released = ROW_COUNT;
+ PERFORM set_config('app.action_id',coalesce(previous_action,''),true);
+ RETURN released;
+END;
+$$;
+
+-- V174's sweep, unchanged, plus the settled config-sync release after it.
+CREATE OR REPLACE FUNCTION ui2_release_orphan_quarantines() RETURNS INTEGER
+LANGUAGE plpgsql AS $$
+DECLARE released INTEGER; tasks INTEGER; previous_action TEXT;
+BEGIN
+ -- Same ordering as task/claim admission: ownership first, endpoint capacity second.
+ PERFORM pg_advisory_xact_lock(294611);
+ PERFORM pg_advisory_xact_lock(294612);
+ UPDATE endpoint_admission SET state='QUARANTINED' WHERE state='LEASED' AND expires_at<=now();
+ UPDATE runtime_task_lease SET state='QUARANTINED' WHERE state='LEASED' AND expires_at<=now();
+ previous_action := current_setting('app.action_id',true);
+ PERFORM set_config('app.action_id','QUARANTINE_RELEASED_OWNER_GONE',true);
+ -- Evaluate both tables before deleting either: a recent task heartbeat protects endpoints too.
+ WITH endpoints AS MATERIALIZED (
+  SELECT request_id FROM endpoint_admission
+   WHERE state='QUARANTINED' AND ui2_quarantine_owner_gone(owner_instance)
+ ), task_rows AS MATERIALIZED (
+  SELECT task_key FROM runtime_task_lease
+   WHERE state='QUARANTINED' AND ui2_quarantine_owner_gone(owner_instance)
+ ), deleted_endpoints AS (
+  DELETE FROM endpoint_admission WHERE request_id IN (SELECT request_id FROM endpoints) RETURNING request_id
+ ), deleted_tasks AS (
+  DELETE FROM runtime_task_lease WHERE task_key IN (SELECT task_key FROM task_rows) RETURNING task_key
+ ) SELECT (SELECT count(*) FROM deleted_endpoints),(SELECT count(*) FROM deleted_tasks) INTO released,tasks;
+ PERFORM set_config('app.action_id',coalesce(previous_action,''),true);
+ tasks := tasks + ui2_release_settled_failover_leases(NULL);
+ released := released + ui2_release_settled_config_sync_leases();
+ RETURN released+tasks;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION ui2_config_sync_lease_settled(TEXT) FROM PUBLIC;
+REVOKE ALL ON FUNCTION ui2_release_settled_config_sync_leases() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION ui2_config_sync_lease_settled(TEXT),ui2_release_settled_config_sync_leases() TO ui2_app;

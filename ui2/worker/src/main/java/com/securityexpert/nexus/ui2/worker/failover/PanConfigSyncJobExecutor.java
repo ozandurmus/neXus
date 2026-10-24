@@ -38,7 +38,6 @@ public final class PanConfigSyncJobExecutor {
     static final String STATE = "<show><high-availability><state/></high-availability></show>";
     static final String SYNC = GateRow.PAN_CONFIG_SYNC_COMMAND;
     private static final String READ_GATE = "pan_inventory_show_ha_state";
-    private static final Pattern SUCCESS = Pattern.compile("status\\s*=\\s*[\"']success[\"']");
     private static final Pattern KEY = Pattern.compile("<key>\\s*([^<\\s]+)\\s*</key>");
     /** The reply's root element only: {@code <response status="success|error">}, optionally after an XML declaration. */
     private static final Pattern STATUS = Pattern.compile("\\A\\s*(?:<\\?xml[^>]{0,200}\\?>\\s*)?<response\\s+status\\s*=\\s*[\"'](success|error)[\"']");
@@ -90,6 +89,7 @@ public final class PanConfigSyncJobExecutor {
         var sync = found.get();
         if (!leases.transitionState(jobId, epoch, JobState.CLAIMED, JobState.EXECUTING, ACTOR, "pan_config_sync_start")) return;
         boolean read = false;
+        Write write;
         try {
             if (!mutationSwitch.enabled()) throw new Stop(FailoverMutationSwitch.DISABLED);
             String admitted = store.admission(sync.id(), jobId, epoch);
@@ -123,45 +123,100 @@ public final class PanConfigSyncJobExecutor {
             // The switch, once more, immediately before the transport: a refusal here never reached the device.
             if (!mutationSwitch.enabled()) {
                 store.recordReply(sync.id(), jobId, epoch, prepared.attemptId(), null, "NOT_SENT");
-                throw new Stop("MUTATION_DISABLED_BEFORE_SEND");
+                throw new Stop(JooqPanConfigSyncRepository.MUTATION_DISABLED_BEFORE_SEND);
             }
-            String status = send(source, writeGate);
-            store.recordReply(sync.id(), jobId, epoch, prepared.attemptId(), status,
-                status == null ? "OUTCOME_UNKNOWN" : "success".equals(status) ? "MATCHED" : "FAILED");
-            try { pause.sleep(settle); }
-            catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); }
-            end(sync.id(), jobId, epoch, status == null ? JooqPanConfigSyncRepository.OUTCOME_UNKNOWN
-                : "success".equals(status) ? JooqPanConfigSyncRepository.REQUESTED : JooqPanConfigSyncRepository.DEVICE_REPORTED_ERROR,
-                true);
+            write = new Write(source, writeGate, prepared.attemptId());
         } catch (Stop stopped) {
-            end(sync.id(), jobId, epoch, stopped.code, read);
+            endBeforeSend(sync.id(), jobId, epoch, stopped.code, read);
+            return;
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
-            end(sync.id(), jobId, epoch, "INTERRUPTED", read);
+            endBeforeSend(sync.id(), jobId, epoch, "INTERRUPTED", read);
+            return;
         } catch (RuntimeException unexpected) {
             com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(unexpected);
-            end(sync.id(), jobId, epoch, "PRECHECK_UNAVAILABLE", read);
+            endBeforeSend(sync.id(), jobId, epoch, "PRECHECK_UNAVAILABLE", read);
+            return;
         }
+        // Argon P0-3: from here on the write may have left neXus. Nothing below is inside the pre-send handling, and
+        // no failure below can replace the write's outcome with a pre-send code.
+        afterSend(sync.id(), jobId, epoch, write);
+    }
+
+    private record Write(Peer source, GateResolution.Known gate, String attemptId) {}
+
+    /** A stop before the write: the record and the job end with the code; readiness re-runs only after a fresh read. */
+    private void endBeforeSend(String syncId, String jobId, long epoch, String code, boolean read) {
+        boolean ended = false;
+        try { ended = store.finish(syncId, jobId, epoch, code); }
+        catch (RuntimeException unavailable) { log("finish", unavailable); }
+        if (!ended) failJob(jobId, epoch, JobState.FAILED, code);
+        if (read && !JooqPanConfigSyncRepository.NOT_SENT.contains(code)) followUp(syncId);
     }
 
     /**
-     * Ends the record and its job together; when the record could not be ended (already terminal, or its job lost the
-     * lease) the job alone is failed, fenced by its epoch, so it never stays EXECUTING.
+     * The single send and everything after it. The reply is recorded as soon as it is known; the record and the job
+     * end with it; then readiness re-runs. A cancel request, a lost lease or a failing step here never hides or
+     * rewrites the recorded reply (Argon P0-2): the repository binds these writes to the job's epoch only, and the V178
+     * job-end trigger closes a record from its recorded reply when the job ends some other way.
      */
-    private void end(String syncId, String jobId, long epoch, String outcome, boolean followUp) {
-        if (!store.finish(syncId, jobId, epoch, outcome, followUp))
-            leases.transitionState(jobId, epoch, JobState.EXECUTING, JobState.FAILED, ACTOR, "pan_config_sync_end", outcome);
+    private void afterSend(String syncId, String jobId, long epoch, Write write) {
+        String status = null;
+        boolean notSent = false;
+        try {
+            var result = transport.xmlApiCall(write.source().target(), new XmlApiSpec("POST", "op", "", "direct_firewall",
+                Map.of("cmd", SYNC), Map.of("X-PAN-KEY", write.source().key())), Duration.ofSeconds(write.gate().timeoutS()));
+            status = deviceStatus(result);
+        } catch (com.securityexpert.nexus.ui2.worker.JobCancellationScope.Cancelled
+                | com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.AdmissionWait
+                | com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.LeaseLost preContact) {
+            // Argon P1-3: PanXmlApiTransport raises these before the request is sent (the cancellation check and the
+            // endpoint lease come first); a lease lost after the send surfaces as a failed reply, which stays uncertain.
+            notSent = true;
+        } catch (RuntimeException uncertain) {
+            status = null;
+        }
+        String outcome = notSent ? JooqPanConfigSyncRepository.NOT_SENT_BEFORE_CONTACT
+            : status == null ? JooqPanConfigSyncRepository.OUTCOME_UNKNOWN
+            : "success".equals(status) ? JooqPanConfigSyncRepository.REQUESTED : JooqPanConfigSyncRepository.DEVICE_REPORTED_ERROR;
+        try {
+            store.recordReply(syncId, jobId, epoch, write.attemptId(), status,
+                notSent ? "NOT_SENT" : status == null ? "OUTCOME_UNKNOWN" : "success".equals(status) ? "MATCHED" : "FAILED");
+        } catch (RuntimeException unavailable) { log("reply", unavailable); }
+        if (!notSent) {
+            try { pause.sleep(settle); }
+            catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); }
+        }
+        // One retry for a database failure; false means the record or the job had already ended (nothing to retry).
+        Boolean ended = null;
+        for (int attempt = 0; attempt < 2 && ended == null; attempt++) {
+            try { ended = store.finish(syncId, jobId, epoch, outcome); }
+            catch (RuntimeException unavailable) { log("finish", unavailable); }
+        }
+        if (!Boolean.TRUE.equals(ended)) failJob(jobId, epoch, notSent || JooqPanConfigSyncRepository.DEVICE_REPORTED_ERROR.equals(outcome) ? JobState.FAILED
+            : JooqPanConfigSyncRepository.REQUESTED.equals(outcome) ? JobState.COMPLETED : JobState.OUTCOME_UNKNOWN, outcome);
+        if (!notSent) followUp(syncId);
     }
 
-    /** The single write to the active member; returns {@code success}, {@code error} or null (outcome unknown). */
-    private String send(Peer source, GateResolution.Known gate) {
-        try {
-            var result = transport.xmlApiCall(source.target(), new XmlApiSpec("POST", "op", "", "direct_firewall",
-                Map.of("cmd", SYNC), Map.of("X-PAN-KEY", source.key())), Duration.ofSeconds(gate.timeoutS()));
-            return deviceStatus(result);
-        } catch (RuntimeException uncertain) {
-            return null;
+    /** The job alone, fenced by its epoch, when its record could not be ended with it (never left EXECUTING). */
+    private void failJob(String jobId, long epoch, JobState state, String reason) {
+        try { leases.transitionState(jobId, epoch, JobState.EXECUTING, state, ACTOR, "pan_config_sync_end", reason); }
+        catch (RuntimeException unavailable) { log("job", unavailable); }
+    }
+
+    /** The readiness re-run (design §4); a failure here is kept on the record as its follow-up refusal, never its outcome. */
+    private void followUp(String syncId) {
+        try { store.followUp(syncId); }
+        catch (RuntimeException unavailable) {
+            log("follow-up", unavailable);
+            try { store.followUpFailed(syncId, "FOLLOW_UP_UNAVAILABLE"); }
+            catch (RuntimeException again) { log("follow-up", again); }
         }
+    }
+
+    private static void log(String step, RuntimeException failure) {
+        System.getLogger(PanConfigSyncJobExecutor.class.getName()).log(System.Logger.Level.WARNING,
+            "[PAN_CONFIG_SYNC] " + step + " not recorded: " + failure.getClass().getSimpleName());
     }
 
     /** Design §4: the root status of an HTTP 200 reply of bounded size; anything else is unknown. */
@@ -199,9 +254,11 @@ public final class PanConfigSyncJobExecutor {
         var target = new ApiTarget(endpoint.endpointId(), endpoint.addressRef());
         var result = transport.xmlApiCall(target, new XmlApiSpec("POST", "keygen", "", "",
             Map.of("user", credential.username(), "password", new String(credential.password())), Map.of()), Duration.ofSeconds(30));
-        String body = result instanceof XmlApiResult.Completed c && c.httpStatus() == 200 && c.body() != null ? c.body() : "";
+        // Argon P2-2: a bounded body whose root element is <response status="success">, then the key.
+        String body = result instanceof XmlApiResult.Completed c && c.httpStatus() == 200 && c.body() != null
+            && c.body().length() <= MAX_BODY ? c.body() : "";
         var match = KEY.matcher(body);
-        if (!SUCCESS.matcher(body).find() || !match.find()) throw new Stop("AUTH_UNAVAILABLE");
+        if (!"success".equals(deviceStatus(result)) || !match.find()) throw new Stop("AUTH_UNAVAILABLE");
         return new Peer(summary.deviceId(), target, match.group(1), identity);
     }
 
@@ -214,9 +271,7 @@ public final class PanConfigSyncJobExecutor {
         if (!attempts.markBoundaryCrossed(attempt, epoch)) throw new Stop("PRE_CONTACT_UNCERTAIN");
         var result = transport.xmlApiCall(peer.target(), new XmlApiSpec("POST", "op", "", "direct_firewall",
             Map.of("cmd", STATE), Map.of("X-PAN-KEY", peer.key())), Duration.ofSeconds(gate.timeoutS()));
-        if (!(result instanceof XmlApiResult.Completed completed) || completed.httpStatus() != 200
-                || completed.body() == null || completed.body().length() > MAX_BODY
-                || !SUCCESS.matcher(completed.body()).find()) {
+        if (!(result instanceof XmlApiResult.Completed completed) || !"success".equals(deviceStatus(result))) {
             attempts.writeOutcome(attempt, epoch, "FAILED", "COMMAND_UNAVAILABLE", false, null, null, null);
             throw new Stop("COMMAND_UNAVAILABLE");
         }

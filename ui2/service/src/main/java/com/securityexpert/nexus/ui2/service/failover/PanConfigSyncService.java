@@ -78,12 +78,25 @@ public final class PanConfigSyncService {
         return store.latest(unit.members().get(0).clusterMemberRef().orElseThrow());
     }
 
+    /** Argon P1-2: an open run or resume, or an unresolved failover write, on the unit (null when none). */
+    public String busy(CpFailoverService.Unit unit) {
+        return store.unitBusy(unit.members().get(0).clusterMemberRef().orElseThrow(), unit.members().get(0).deviceId(),
+            unit.members().get(1).deviceId());
+    }
+
     /**
      * The unit's config-sync view from facts the screen already read (the newest readiness, the unit refusal). Pure: no
      * store read besides {@code latest}, which the caller passes. Null for a Check Point unit or a virtual system.
      */
     public View view(CpFailoverService.Unit unit, String vendor, JooqCpFailoverRepository.ReadinessStatus readiness,
             String unitRefusal, boolean masked, boolean mayRun, Optional<JooqPanConfigSyncRepository.ConfigSync> latest) {
+        return view(unit, vendor, readiness, unitRefusal, () -> null, masked, mayRun, latest);
+    }
+
+    /** {@code busy}: {@link #busy} for the unit; read only when check 4 failed (the summary stays one read per unit). */
+    public View view(CpFailoverService.Unit unit, String vendor, JooqCpFailoverRepository.ReadinessStatus readiness,
+            String unitRefusal, java.util.function.Supplier<String> busy, boolean masked, boolean mayRun,
+            Optional<JooqPanConfigSyncRepository.ConfigSync> latest) {
         if (!"palo_alto".equals(vendor) || unit.vsId() != null) return null;
         boolean failed = false;
         Map<String, String> roles = new LinkedHashMap<>();
@@ -91,20 +104,25 @@ public final class PanConfigSyncService {
             for (var check : JSON.readTree(readiness.checks())) {
                 int no = check.path("checkNo").asInt();
                 if (no == 4 && "FAIL".equals(check.path("status").asText())) failed = true;
-                if (no == 1) roles.put(check.path("memberRef").asText(), check.path("derived").path("role").asText());
+                // Argon P1-1: a role counts only from a check 1 row that passed.
+                if (no == 1 && "PASS".equals(check.path("status").asText()))
+                    roles.put(check.path("memberRef").asText(), check.path("derived").path("role").asText());
             }
         } catch (java.io.IOException invalid) { failed = false; }
         List<String> ids = unit.members().stream().map(DeviceSummaryRecord::deviceId).toList();
         String source = ids.stream().filter(id -> "active".equals(roles.get(id))).findFirst().orElse(null);
         String target = ids.stream().filter(id -> "passive".equals(roles.get(id))).findFirst().orElse(null);
         var open = latest.filter(JooqPanConfigSyncRepository.ConfigSync::open);
-        String refusal = !failed ? "CONFIG_SYNC_NOT_FAILED"
-            : !mutationSwitch.enabled() ? FailoverMutationSwitch.DISABLED
-            : open.isPresent() ? "CONFIG_SYNC_ALREADY_ACTIVE"
-            : "OPEN_INCIDENT".equals(unitRefusal) ? "OPEN_INCIDENT"
-            : readiness.observedAt() == null || readiness.observedAt().isBefore(
-                Instant.now().minus(JooqPanConfigSyncRepository.READINESS_MAX_AGE)) ? "READINESS_NOT_FRESH"
-            : source == null || target == null || source.equals(target) ? "ROLES_CHANGED" : null;
+        String refusal;
+        if (!failed) refusal = "CONFIG_SYNC_NOT_FAILED";
+        else if (!mutationSwitch.enabled()) refusal = FailoverMutationSwitch.DISABLED;
+        else if (open.isPresent()) refusal = "CONFIG_SYNC_ALREADY_ACTIVE";
+        else if ((refusal = busy.get()) != null) { /* RUN_ALREADY_ACTIVE or UNRESOLVED_DISPATCH */ }
+        else if ("OPEN_INCIDENT".equals(unitRefusal)) refusal = "OPEN_INCIDENT";
+        else if (readiness.observedAt() == null
+                || readiness.observedAt().isBefore(Instant.now().minus(JooqPanConfigSyncRepository.READINESS_MAX_AGE)))
+            refusal = "READINESS_NOT_FRESH";
+        else if (source == null || target == null || source.equals(target)) refusal = "ROLES_CHANGED";
         return new View(failed, failed && mayRun && !masked, refusal, source, target,
             readiness == null ? null : readiness.observedAt(), latest.orElse(null));
     }

@@ -102,3 +102,30 @@ it("the HA readiness list offers it under the failed Configuration sync row of a
   fireEvent.click(screen.getByRole("button", { name: "Checks for CLS-BRAVO-02" }));
   expect(screen.queryByRole("button", { name: "Sync configuration to passive" })).toBeNull();
 });
+
+it("a failed status read after the request was accepted is retried, never reported as a failed request", async () => {
+  api.request.mockResolvedValue(record("QUEUED"));
+  api.get.mockRejectedValueOnce({ status: 0, body: { error: "TIMEOUT" } })
+    .mockResolvedValue(record("STOPPED", { outcome: "OUTCOME_UNKNOWN", mutationPossible: true, readinessRunId: "run-opaque" }));
+  api.run.mockResolvedValue({ runId: "run-opaque", state: "DONE", checks: [{ checkNo: 4, phase: "pre", status: "FAIL" }] });
+  const done = vi.fn();
+  render(<PanConfigSyncAction unit={unit()} onDone={done} pollMs={0} />);
+  fireEvent.click(screen.getByRole("button", { name: "Sync configuration to passive" }));
+  fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Sync configuration" }));
+  await waitFor(() => expect(done).toHaveBeenCalled());
+  expect(screen.queryByText("Request failed")).toBeNull();
+  expect(screen.getByText("The sync command's outcome is uncertain. It is not resent.")).toBeInTheDocument();
+  expect(screen.getByText("Pre-checks finished: Configuration sync still fails.")).toBeInTheDocument();
+});
+
+it("a sync already open when the page loads is shown and followed to its end", async () => {
+  api.get.mockResolvedValue(record("DONE", { outcome: "CONFIG_SYNC_REQUESTED", deviceStatus: "success", mutationPossible: true,
+    readinessRunId: null, readinessRefusal: "RUN_ALREADY_ACTIVE" }));
+  const done = vi.fn();
+  render(<PanConfigSyncAction unit={unit({ latest: record("SYNCING", { mutationPossible: true }) })} onDone={done} pollMs={0} />);
+  expect(screen.getByText("Sending the sync command to the active member")).toBeInTheDocument();
+  await waitFor(() => expect(done).toHaveBeenCalled());
+  expect(api.request).not.toHaveBeenCalled();
+  expect(screen.getByText("The active member accepted the sync command.")).toBeInTheDocument();
+  expect(screen.getByText(/The pre-checks were not re-run \(Another run is in progress on this unit\.\)/)).toBeInTheDocument();
+});
