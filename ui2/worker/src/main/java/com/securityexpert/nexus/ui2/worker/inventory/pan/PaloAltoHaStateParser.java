@@ -43,6 +43,48 @@ public final class PaloAltoHaStateParser {
         return new HaState(role, firstMatch(MODE, output), localSerial, peerSerial);
     }
 
+    private static final Pattern PEER_INFO = Pattern.compile("(?is)<peer-info>(.*?)</peer-info>");
+
+    /**
+     * PO 2026-10-24: the HA connection status of each HA link ({@code ha1}, {@code ha1-backup}, {@code ha2},
+     * {@code ha2-backup}) from the same show high-availability state inventory already reads -- {@code
+     * peer-info/conn-<link>/conn-status}, the fields failover check 3 reads. Only {@code up} and {@code down} are kept; a
+     * link the response does not report (or reports twice) is absent: UNKNOWN, never inferred.
+     */
+    public static java.util.Map<String, String> linkStates(String output) {
+        java.util.Map<String, String> states = new java.util.LinkedHashMap<>();
+        if (output == null || output.isBlank()) {
+            return states;
+        }
+        Matcher peer = PEER_INFO.matcher(output);
+        if (!peer.find()) {
+            return states;
+        }
+        String peerInfo = peer.group(1);
+        if (peer.find()) {
+            return states;
+        }
+        for (String link : new String[] {"ha1", "ha1-backup", "ha2", "ha2-backup"}) {
+            Matcher block = Pattern.compile("(?is)<conn-" + Pattern.quote(link) + ">(.*?)</conn-" + Pattern.quote(link) + ">")
+                    .matcher(peerInfo);
+            if (!block.find()) {
+                continue;
+            }
+            String body = block.group(1);
+            if (block.find()) {
+                continue;
+            }
+            Matcher status = Pattern.compile("(?is)<conn-status>\\s*([^<]*?)\\s*</conn-status>").matcher(body);
+            if (status.find()) {
+                String value = status.group(1).strip().toLowerCase(Locale.ROOT);
+                if (!status.find() && ("up".equals(value) || "down".equals(value))) {
+                    states.put(link, value);
+                }
+            }
+        }
+        return states;
+    }
+
     private static Optional<String> firstMatch(Pattern pattern, String text) {
         Matcher matcher = pattern.matcher(text);
         return matcher.find() && !matcher.group(1).isBlank() ? Optional.of(matcher.group(1)) : Optional.empty();

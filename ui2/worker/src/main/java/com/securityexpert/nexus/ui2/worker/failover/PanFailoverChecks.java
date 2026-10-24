@@ -191,6 +191,80 @@ public final class PanFailoverChecks {
             return current!=null && current.equals(legacy)?current:null;
         return child(r,"num-active")!=null?current:legacy;
     }
+    /** Check 6's evidence source labels (derived JSON {@code source}; the readiness view shows them). */
+    public static final String SOURCE_SESSION_INFO="session info";
+    public static final String SOURCE_SESSION_METER="session meter";
+    /** Where the meter parser looks, for the UNKNOWN evidence. */
+    public static final String SESSION_METER_PATH="/response/result/entry/current (show session meter)";
+
+    /**
+     * Check 6 on PAN-OS 12 or later (PO 2026-10-24, GR-7): the device's current session count from
+     * {@code <show><session><meter/></session></show>}, summed over every entry of the response.
+     *
+     * <p>Expected shape. Palo Alto documents the CLI form only ("show session meter": per vsys, Maximum per dataplane,
+     * Current, Throttled; PAN-OS CLI quick start, vsys cheat sheet) and publishes no XML field reference, so the
+     * element names are UNVERIFIED until the first masked shape measurement. The XML API renders such a table as
+     * {@code <response status="success"><result><entry><vsys>1</vsys><maximum>0</maximum><current>N</current>
+     * <throttled>0</throttled></entry>...</result></response>}, one {@code entry} per vsys (per vsys and dataplane on
+     * multi-dataplane models); a single wrapping element between {@code result} and the entries is also accepted.</p>
+     *
+     * <p>Rules (fail closed): every entry must carry exactly one {@code current} whose text is a non-negative integer;
+     * an entry without a {@code vsys} (or dataplane) leaf is still counted (tolerated); two entries naming the same
+     * vsys and dataplane are ambiguous. Zero entries, an error envelope, any entry without a usable {@code current},
+     * an ambiguous pair or an overflow is null -- UNKNOWN, never a guessed or partial count.</p>
+     */
+    public static Long sessionMeter(String xml) {
+        java.util.List<Element> entries=meterEntries(result(xml));
+        if (entries.isEmpty()) return null;
+        long sum=0;
+        java.util.Set<String> seen=new java.util.HashSet<>();
+        for (Element entry:entries) {
+            Element current=child(entry,"current");
+            if (current==null) return null;
+            Long value=count(current.getTextContent().strip());
+            if (value==null) return null;
+            String vsys=text(entry,"vsys"),dataplane=text(entry,"dp")+text(entry,"dataplane");
+            if ((!vsys.isEmpty() || !dataplane.isEmpty()) && !seen.add(vsys+"|"+dataplane)) return null;
+            try { sum=Math.addExact(sum,value); } catch (ArithmeticException overflow) { return null; }
+        }
+        return sum;
+    }
+    /** True when the meter response carries at least one entry with a {@code current} element (for the UNKNOWN reason). */
+    static boolean sessionMeterFieldFound(String xml) {
+        return meterEntries(result(xml)).stream().anyMatch(entry -> child(entry,"current")!=null);
+    }
+    private static java.util.List<Element> meterEntries(Element result) {
+        if (result==null) return java.util.List.of();
+        java.util.List<Element> direct=children(result,"entry");
+        if (!direct.isEmpty()) return direct;
+        java.util.List<Element> containers=new java.util.ArrayList<>();
+        for (Node n=result.getFirstChild(); n!=null; n=n.getNextSibling()) if (n instanceof Element e) containers.add(e);
+        return containers.size()==1?children(containers.get(0),"entry"):java.util.List.of();
+    }
+    private static java.util.List<Element> children(Element parent,String name) {
+        java.util.List<Element> found=new java.util.ArrayList<>();
+        for (Node n=parent.getFirstChild(); n!=null; n=n.getNextSibling())
+            if (n instanceof Element e && name.equals(e.getTagName())) found.add(e);
+        return found;
+    }
+    /** Check 6's UNKNOWN evidence when a member was read with show session meter and gave no usable count. */
+    public static String sessionMeterUnknown(boolean fieldFound) {
+        return "{\"reason\":\""+(fieldFound?"unrecognised field value":"field not found")
+            +"\",\"looked_for\":\""+SESSION_METER_PATH+"\",\"source\":\""+SOURCE_SESSION_METER+"\"}";
+    }
+    /**
+     * Check 6's evidence for a member's count. A show session meter count names its source; a show session info count
+     * keeps the evidence it has always had ({@code {"count":N}}, PAN-OS below 12 unchanged), which the view reads as
+     * session info.
+     */
+    public static String sessionsCounted(Long count,String source) {
+        return SOURCE_SESSION_METER.equals(source)
+            ?"{\"count\":"+count+",\"source\":\""+source+"\"}":"{\"count\":"+count+"}";
+    }
+    /** Check 6 is UNKNOWN when the two members' counts (or the two phases') came from different reads: not comparable. */
+    public static String sessionsMixedSources(String own,String other) {
+        return "{\"reason\":\"mixed_sources\",\"source\":\""+own+"\",\"other_source\":\""+other+"\"}";
+    }
     private static Long count(String value) {
         try { return value.matches("[0-9]+")?Long.parseLong(value):null; }
         catch(NumberFormatException invalid) { return null; }

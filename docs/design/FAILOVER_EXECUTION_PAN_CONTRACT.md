@@ -91,3 +91,23 @@ Decision record: `PO_DECISION_RECORD_2026_10_21_PAN_TYPE_VERSION_AND_CHECK7.md` 
 - **Evidence limit.** That a given PAN-OS release returns these three `local-info` fields is from the vendor's HA-state
   response as captured earlier, not yet measured on the estate's PAN-OS 12 members: until measured, a member that omits
   one reads UNKNOWN, which is the fail-closed outcome.
+
+## 10. Amendment 2026-10-24 -- check 6 (sessions carried) on PAN-OS 12 or later reads show session meter
+
+Decision record: `PO_DECISION_RECORD_2026_10_24_PAN_OS12_REPLACEMENT_READS.md` (RATIFIED). This amends the read of the
+check 6 row of §6 for members on PAN-OS 12 or later only; the PASS rule, the other checks, the flow and the approvals are
+unchanged.
+
+| # | Check | Read (direct firewall XML API) | PASS when |
+| --- | --- | --- | --- |
+| 6 | Sessions carried | below PAN-OS 12: `<show><session><info/></session></show>` (unchanged); PAN-OS 12 or later: `<show><session><meter/></session></show>` (gate row `pan_failover_session_meter`, V179) | unchanged: pre: recorded on both; post: the new active's count at least 80 % of the pre-check active's |
+
+- **Count on 12+.** The sum of `current` over every `entry` of the meter response; any unusable shape is UNKNOWN (blocks),
+  never a guessed or partial count (record §3).
+- **Which read.** Decided per member and phase from that member's own HA-state `local-info/build-rel` in the same phase,
+  under the worker setting `replace_12`. An unknown version sends neither read (UNKNOWN).
+- **Never mixed.** Counts from the two reads are not compared: different reads on the two members, or between the pre
+  phase and a later phase, make check 6 UNKNOWN (`mixed_sources`).
+- **Evidence.** `{"count":N,"source":"session meter"}` on 12+; below 12 `{"count":N}` as before.
+- **Evidence limit.** The meter's XML element names and its equivalence to the device's active-session count are
+  unmeasured on the estate (alternatives document §3.6, M5); a member whose answer does not parse reads UNKNOWN.

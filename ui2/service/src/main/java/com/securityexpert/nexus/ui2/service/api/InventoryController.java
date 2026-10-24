@@ -101,11 +101,24 @@ public final class InventoryController {
      * PO 2026-10-21 scope update: reads this run deliberately did not send (a Palo Alto firewall read switched off), as
      * read-kind tokens, and the one reason -- so the screen says UNKNOWN ("retired by PO"), never "no interfaces".
      */
+    /** Inventory run token: this run's interfaces were derived from the stored configuration (PO 2026-10-24). */
+    static final String INTERFACES_FROM_CONFIGURATION = "pan_interfaces_from_configuration";
+
     static void putNotCollected(Map<String, Object> body, Optional<InventoryRun> run) {
         List<String> notCollected = run.map(InventoryRun::notCollected).orElse(List.of());
         body.put("not_collected", notCollected);
         // The reason follows the extra token the worker recorded (PAN-OS 12 or later / version unknown); none = retired.
+        // PO 2026-10-24 (replace_12): on PAN-OS 12 or later the interfaces come from the stored configuration instead.
+        boolean fromConfiguration = notCollected.contains(INTERFACES_FROM_CONFIGURATION);
+        body.put("interfaces_source", fromConfiguration ? "configuration" : null);
         String reason = notCollected.isEmpty() ? null
+                : fromConfiguration ? "Configured (from configuration): show interface all is not sent on PAN-OS 12 or later"
+                        + " (PO 2026-10-24); link state not observed except HA ports (from the HA state)"
+                : notCollected.contains("pan_interfaces_configuration_missing")
+                ? "Not collected: PAN-OS 12 or later, and no stored configuration to derive the interfaces from (run a"
+                        + " configuration collection)"
+                : notCollected.contains("pan_interfaces_configuration_unreadable")
+                ? "Not collected: PAN-OS 12 or later, and the stored configuration could not be read"
                 : notCollected.contains("pan_os_12_or_later") ? "Not collected: PAN-OS 12 or later (PO 2026-10-21)"
                 : notCollected.contains("pan_os_version_unknown") ? "Not collected: PAN-OS version unknown"
                 : com.securityexpert.nexus.ui2.persistence.device.PanSystemInfoRetirement.REASON;

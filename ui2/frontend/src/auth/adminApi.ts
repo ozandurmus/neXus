@@ -933,6 +933,11 @@ export interface DeviceInventory {
    */
   readonly not_collected?: readonly string[];
   readonly not_collected_reason?: string | null;
+  /**
+   * PO 2026-10-24 (replace_12): `configuration` when this run's interfaces were derived from the stored configuration
+   * (PAN-OS 12 or later): configured, not observed -- link state UNKNOWN except HA ports. Null otherwise.
+   */
+  readonly interfaces_source?: "configuration" | null;
 }
 
 export interface GridSummaryView {

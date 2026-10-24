@@ -100,6 +100,12 @@ public final class InventoryCapabilityExecutor {
     private final DeviceTransport transport;
     private final PanCredentialResolver panCredentialResolver;
     private final com.securityexpert.nexus.ui2.jobs.pan.PanFirewallCommandSwitches panSwitches;
+    private final PanConfiguredInterfaceSource configuredInterfaces;
+
+    /** Inventory run tokens (device_inventory_run.not_collected) for interfaces derived from configuration (PO 2026-10-24). */
+    public static final String TOKEN_INTERFACES_FROM_CONFIGURATION = "pan_interfaces_from_configuration";
+    public static final String TOKEN_INTERFACES_CONFIGURATION_MISSING = "pan_interfaces_configuration_missing";
+    public static final String TOKEN_INTERFACES_CONFIGURATION_UNREADABLE = "pan_interfaces_configuration_unreadable";
 
     /** The Palo Alto firewall read switches come from the worker's environment (default: every switchable read on). */
     public InventoryCapabilityExecutor(DeviceTransport transport, PanCredentialResolver panCredentialResolver) {
@@ -108,16 +114,30 @@ public final class InventoryCapabilityExecutor {
 
     public InventoryCapabilityExecutor(DeviceTransport transport, PanCredentialResolver panCredentialResolver,
             com.securityexpert.nexus.ui2.jobs.pan.PanFirewallCommandSwitches panSwitches) {
+        this(transport, panCredentialResolver, panSwitches, PanConfiguredInterfaceSource.NONE);
+    }
+
+    /** {@code configuredInterfaces}: PO 2026-10-24 -- the stored configuration a PAN-OS 12 firewall's interfaces come from. */
+    public InventoryCapabilityExecutor(DeviceTransport transport, PanCredentialResolver panCredentialResolver,
+            com.securityexpert.nexus.ui2.jobs.pan.PanFirewallCommandSwitches panSwitches,
+            PanConfiguredInterfaceSource configuredInterfaces) {
         this.transport = Objects.requireNonNull(transport, "transport");
         this.panCredentialResolver = panCredentialResolver;
         this.panSwitches = Objects.requireNonNull(panSwitches, "panSwitches");
+        this.configuredInterfaces = Objects.requireNonNull(configuredInterfaces, "configuredInterfaces");
     }
 
     public InventoryResult collect(InventoryRequest request, Optional<PresentedIdentity> recordedIdentity,
             boolean strictRefuseEnabled) {
+        return collect(request, recordedIdentity, strictRefuseEnabled, null);
+    }
+
+    /** {@code deviceId}: whose stored configuration a PAN-OS 12 firewall's interfaces may be derived from (null: none). */
+    public InventoryResult collect(InventoryRequest request, Optional<PresentedIdentity> recordedIdentity,
+            boolean strictRefuseEnabled, String deviceId) {
         return switch (request.vendor()) {
             case CHECK_POINT -> collectCheckPoint(request, recordedIdentity, strictRefuseEnabled);
-            case PALO_ALTO -> collectPaloAlto(request, recordedIdentity, strictRefuseEnabled);
+            case PALO_ALTO -> collectPaloAlto(request, recordedIdentity, strictRefuseEnabled, deviceId);
         };
     }
 
@@ -455,7 +475,7 @@ public final class InventoryCapabilityExecutor {
     }
 
     private InventoryResult collectPaloAlto(InventoryRequest request, Optional<PresentedIdentity> recordedIdentity,
-            boolean strictRefuseEnabled) {
+            boolean strictRefuseEnabled, String deviceId) {
         ApiTarget target = request.apiTarget()
                 .orElseThrow(() -> new IllegalArgumentException("palo_alto inventory requires an apiTarget"));
         PanCredentialMaterial credential;
@@ -532,8 +552,11 @@ public final class InventoryCapabilityExecutor {
         // PO 2026-10-21 scope update: show interface all may be switched off (NEXUS_PAN_FW_SHOW_INTERFACE_ALL=retired) or
         // limited to PAN-OS below 12 (below_12, decided from the type=version read of THIS run; unknown = not sent).
         // When not sent, the run records it as not collected (plus the reason token), so the interfaces read UNKNOWN.
+        // PO 2026-10-24 (replace_12): on PAN-OS 12 or later the interfaces are derived from the stored effective-running
+        // configuration instead (no device command): configured, link state UNKNOWN except HA ports (HA state read).
         List<String> notCollected = new ArrayList<>();
         String interfaceOutput = null;
+        PaloAltoInterfaceParseResult configured = null;
         var interfaceDecision = com.securityexpert.nexus.ui2.jobs.pan.PanFirewallCommandSwitches.decide(
                 panSwitches.showInterfaceAll(), version.swVersion().orElse(null));
         if (interfaceDecision.send()) {
@@ -543,10 +566,16 @@ public final class InventoryCapabilityExecutor {
             if (interfaceDecision.token() != null) {
                 notCollected.add(interfaceDecision.token());
             }
+            if (interfaceDecision.replace()) {
+                ConfiguredInterfaces derived = configuredInterfaces(deviceId, haStateOutput);
+                notCollected.add(derived.token());
+                configured = derived.interfaces();
+            }
         }
         String routeOutput = xmlApiOutput(target, InventoryReadPlan.PAN_SHOW_ROUTING_ROUTE, headers);
 
-        PaloAltoInterfaceParseResult parsedInterfaces = PaloAltoInterfaceParser.parse(interfaceOutput);
+        PaloAltoInterfaceParseResult parsedInterfaces = configured != null ? configured
+                : PaloAltoInterfaceParser.parse(interfaceOutput);
         Map<String, List<ParsedRoute>> routesByVirtualRouter = PaloAltoRouteParser.parse(routeOutput);
 
         // PM-3: a virtual router maps to a vsys through its own interfaces' `fwd` (this
@@ -600,7 +629,7 @@ public final class InventoryCapabilityExecutor {
         }
 
         if (contexts.stream().allMatch(c -> c.interfaces().isEmpty() && c.routes().isEmpty())) {
-            return new InventoryResult.ConnectFailed(notCollected.isEmpty()
+            return new InventoryResult.ConnectFailed(notCollected.isEmpty() || configured != null
                     ? "no_interfaces_or_routes_discovered: device returned no interface or route data"
                     : "no_routes_discovered: device returned no route data and show interface all was not sent ("
                             + interfaceDecision.reason() + ")");
@@ -643,6 +672,83 @@ public final class InventoryCapabilityExecutor {
         return new InventoryResult.Completed(contexts, haFacts, Optional.ofNullable(virtualSystemsString),
                 Optional.of(platformFacts.withPolicyInstall(panPolicyInstall(target, headers))),
                 new InventoryResult.ObservedIdentity(Optional.empty(), version.model(), version.swVersion()), notCollected);
+    }
+
+    /** The configured interfaces (null when none could be derived) and the run token naming the outcome. */
+    private record ConfiguredInterfaces(PaloAltoInterfaceParseResult interfaces, String token) {
+    }
+
+    /**
+     * PO 2026-10-24: interfaces from the device's newest stored effective-running configuration, with each configured HA
+     * port's state taken from this run's HA state read (peer-info conn-status). No stored configuration, or one that
+     * cannot be read, leaves the interfaces UNKNOWN with the reason (never "no interfaces").
+     */
+    private ConfiguredInterfaces configuredInterfaces(String deviceId, String haStateOutput) {
+        Optional<java.io.InputStream> stream;
+        try {
+            stream = deviceId == null ? Optional.empty() : configuredInterfaces.openLatestEffectiveRunning(deviceId);
+        } catch (java.io.IOException | RuntimeException unreadable) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(unreadable);
+            LOG.log(System.Logger.Level.WARNING, "[PAN_CONFIGURED_INTERFACES] stored configuration unreadable: {0}",
+                    unreadable.getClass().getSimpleName());
+            return new ConfiguredInterfaces(null, TOKEN_INTERFACES_CONFIGURATION_UNREADABLE);
+        }
+        if (stream.isEmpty()) {
+            LOG.log(System.Logger.Level.INFO, "[PAN_CONFIGURED_INTERFACES] no stored effective-running configuration");
+            return new ConfiguredInterfaces(null, TOKEN_INTERFACES_CONFIGURATION_MISSING);
+        }
+        Optional<com.securityexpert.nexus.ui2.worker.inventory.pan.PaloAltoConfiguredInterfaceParser.Configured> parsed;
+        try (java.io.InputStream in = stream.get()) {
+            parsed = com.securityexpert.nexus.ui2.worker.inventory.pan.PaloAltoConfiguredInterfaceParser.parse(in);
+        } catch (java.io.IOException | RuntimeException unreadable) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(unreadable);
+            parsed = Optional.empty();
+        }
+        if (parsed.isEmpty()) {
+            LOG.log(System.Logger.Level.WARNING, "[PAN_CONFIGURED_INTERFACES] stored configuration not in the expected shape");
+            return new ConfiguredInterfaces(null, TOKEN_INTERFACES_CONFIGURATION_UNREADABLE);
+        }
+        var result = parsed.get();
+        PaloAltoInterfaceParseResult withHa = withHaLinkStates(result.interfaces(), result.haPortByLink(),
+                PaloAltoHaStateParser.linkStates(haStateOutput));
+        // safe telemetry: counts only, never a name or an address
+        LOG.log(System.Logger.Level.INFO,
+                "[PAN_CONFIGURED_INTERFACES] ports={0} logical={1} ha_ports={2} addresses_not_literal={3} ambiguous={4}",
+                withHa.physicalPorts().size(), withHa.interfacesByVsys().values().stream().mapToInt(List::size).sum(),
+                result.haPortByLink().size(), result.addressesNotLiteral(), result.ambiguousAttributions());
+        return new ConfiguredInterfaces(withHa, TOKEN_INTERFACES_FROM_CONFIGURATION);
+    }
+
+    /** Sets the state of each configured HA port from the HA link's connection status; every other state stays unknown. */
+    static PaloAltoInterfaceParseResult withHaLinkStates(PaloAltoInterfaceParseResult parsed, Map<String, String> haPortByLink,
+            Map<String, String> linkStates) {
+        Map<String, String> stateByPort = new LinkedHashMap<>();
+        java.util.Set<String> conflicting = new java.util.HashSet<>();
+        haPortByLink.forEach((link, port) -> {
+            String state = linkStates.get(link);
+            if (state == null) {
+                return;
+            }
+            String previous = stateByPort.putIfAbsent(port, state);
+            if (previous != null && !previous.equals(state)) {
+                conflicting.add(port);
+            }
+        });
+        conflicting.forEach(stateByPort::remove);
+        if (stateByPort.isEmpty()) {
+            return parsed;
+        }
+        java.util.function.UnaryOperator<ParsedInterface> apply = iface -> {
+            String state = stateByPort.get(iface.name());
+            return state == null ? iface : new ParsedInterface(iface.name(), iface.parent(), iface.kind(),
+                    "up".equals(state) ? InventoryInterface.STATE_UP : InventoryInterface.STATE_DOWN,
+                    iface.addresses(), iface.vlanId());
+        };
+        Map<String, List<ParsedInterface>> byVsys = new LinkedHashMap<>();
+        parsed.interfacesByVsys().forEach((vsys, list) -> byVsys.put(vsys, list.stream().map(apply).toList()));
+        return new PaloAltoInterfaceParseResult(byVsys, parsed.physicalPorts().stream().map(apply).toList(),
+                parsed.interfaceNameToVsys(), parsed.interfaceNameToVirtualRouter(), parsed.interfaceNameToZone(),
+                parsed.portNameToMac());
     }
 
     private static final java.util.regex.Pattern PAN_TAG = java.util.regex.Pattern.compile("<(ip-address|netmask|default-gateway|ipv6-address|ipv6-default-gateway)>\\s*([^<]*?)\\s*</\\1>");

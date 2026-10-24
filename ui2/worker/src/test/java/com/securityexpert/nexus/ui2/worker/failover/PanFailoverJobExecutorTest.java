@@ -40,6 +40,8 @@ class PanFailoverJobExecutorTest {
         boolean missingFields,preempt,badFinal;
         String evidenceFault;
         String relA="10.2.3",relB="10.2.3";
+        /** PO 2026-10-24: the synthetic show session meter answer -- "ok" (two vsys entries), "malformed", "empty". */
+        String meter="ok";
         int suspendCount,functionalCount,callCount;
         DeviceTransport transport() {
             return (DeviceTransport) Proxy.newProxyInstance(DeviceTransport.class.getClassLoader(),
@@ -74,6 +76,17 @@ class PanFailoverJobExecutorTest {
                         return new XmlApiResult.Completed(200,"<response status=\"success\"><result><num-active>"
                             +(badSessions&&!first?"invalid":lowPostSessions&&suspended&&!first?"79":"100")
                             +"</num-active></result></response>");
+                    if (command.contains("<session><meter/>")) {
+                        if ("malformed".equals(meter)) return new XmlApiResult.Completed(200,"<response status=\"success\">"
+                            +"<result><entry><vsys>1</vsys><current>many</current></entry></result></response>");
+                        if ("empty".equals(meter))
+                            return new XmlApiResult.Completed(200,"<response status=\"success\"><result/></response>");
+                        boolean low=lowPostSessions&&suspended&&!first;
+                        return new XmlApiResult.Completed(200,"<response status=\"success\"><result>"
+                            +"<entry><vsys>1</vsys><maximum>0</maximum><current>"+(low?"50":"60")+"</current><throttled>0</throttled></entry>"
+                            +"<entry><vsys>2</vsys><maximum>0</maximum><current>"+(low?"29":"40")+"</current><throttled>0</throttled></entry>"
+                            +"</result></response>");
+                    }
                     if (command.contains("<system><info/>"))
                         throw new AssertionError("PO 2026-10-21: show system info is never sent to a firewall; check 7 reads the HA state");
                     String local=first?(functional?"passive":suspended&&!stuck?"suspended":"active")
@@ -539,6 +552,75 @@ class PanFailoverJobExecutorTest {
         assertEquals(1,result.derived().stream().filter(d -> d.contains("\"detail\":\"PAN-OS 12 or later (PO 2026-10-21)\"")).count());
         assertEquals(1,result.derived().stream().filter(d -> d.contains("peer member: PAN-OS 12 or later")).count());
         assertEquals(0,script.suspendCount);
+    }
+    // ---- PO 2026-10-24 (replace_12): show session meter replaces show session info on PAN-OS 12 or later ----
+    private static com.securityexpert.nexus.ui2.jobs.pan.PanFirewallCommandSwitches replace12() {
+        return com.securityexpert.nexus.ui2.jobs.pan.PanFirewallCommandSwitches.from(java.util.Map.of(SESSION_VAR,"replace_12"));
+    }
+    private static long meterReads(Script script) {
+        return script.sentCommands.stream().filter(c -> c.equals("<show><session><meter/></session></show>")).count();
+    }
+    @Test void replaceTwelveReadsTheSessionMeterOnPanOsTwelveAndEvaluatesCheckSixOnTheSum() {
+        Script script=new Script(); script.relA="12.1.2"; script.relB="12.1.2";
+        Result result=run(script,true,new FailoverMutationSwitch(false),replace12());
+        assertEquals(0,sessionReads(script));
+        assertEquals(2,meterReads(script));
+        assertTrue(result.checks().contains("pre:6:PASS"),result.checks().toString());
+        assertEquals("READY",result.outcome());
+        assertEquals(2,result.derived().stream().filter(d -> d.equals("{\"count\":100,\"source\":\"session meter\"}")).count());
+    }
+    /** The 80 % carry rule is unchanged on the summed meter counts: 79 of 100 after the switch stops before the return. */
+    @Test void replaceTwelveKeepsTheCarryRuleOnTheMeterCounts() {
+        Script script=new Script(); script.relA="12.1.2"; script.relB="12.1.2"; script.lowPostSessions=true;
+        Result result=run(script,false,new FailoverMutationSwitch(true),replace12());
+        assertEquals("STOPPED",result.state());
+        assertTrue(result.checks().contains("post:6:FAIL"),result.checks().toString());
+        assertEquals(1,script.suspendCount); assertEquals(0,script.functionalCount);
+        assertEquals(0,sessionReads(script));
+        assertTrue(result.derived().contains("{\"count\":79,\"source\":\"session meter\"}"));
+        Script healthy=new Script(); healthy.relA="12.1.2"; healthy.relB="12.1.2";
+        Result done=run(healthy,false,new FailoverMutationSwitch(true),replace12());
+        assertEquals("DONE",done.state(),done.checks().toString());
+        assertTrue(done.checks().contains("post:6:PASS") && done.checks().contains("post_return:6:PASS"));
+    }
+    /** Below 12 replace_12 behaves exactly as below_12: show session info, the same evidence, no meter. */
+    @Test void replaceTwelveLeavesFirewallsBelowTwelveExactlyAsToday() {
+        Script replaced=new Script(); replaced.relA="11.1.4-h7"; replaced.relB="11.1.4-h7";
+        Result result=run(replaced,true,new FailoverMutationSwitch(false),replace12());
+        Script below=new Script(); below.relA="11.1.4-h7"; below.relB="11.1.4-h7";
+        Result today=belowTwelve(below);
+        assertEquals(0,meterReads(replaced));
+        assertEquals(today.checks(),result.checks());
+        assertEquals(today.derived(),result.derived());
+        assertEquals(below.sentCommands,replaced.sentCommands);
+        assertTrue(result.derived().contains("{\"count\":100}"));
+    }
+    @Test void replaceTwelveNeverComparesCountsFromTwoDifferentReads() {
+        Script script=new Script(); script.relA="10.2.9"; script.relB="12.1.2";
+        Result result=run(script,true,new FailoverMutationSwitch(false),replace12());
+        assertEquals(1,sessionReads(script)); assertEquals(1,meterReads(script));
+        assertTrue(result.checks().contains("pre:6:UNKNOWN"));
+        assertEquals(2,result.derived().stream().filter(d -> d.contains("\"reason\":\"mixed_sources\"")).count());
+        // Members on different PAN-OS majors also fail version parity (check 7), which outranks the UNKNOWN.
+        assertTrue(result.checks().contains("pre:7:FAIL"));
+        assertEquals("NOT_READY",result.outcome());
+    }
+    @Test void replaceTwelveSendsNeitherReadWhenTheVersionIsUnknown() {
+        Script script=new Script(); script.relA="not-a-version"; script.relB="not-a-version";
+        Result result=run(script,true,new FailoverMutationSwitch(false),replace12());
+        assertEquals(0,sessionReads(script)); assertEquals(0,meterReads(script));
+        assertTrue(result.checks().contains("pre:6:UNKNOWN"));
+        assertEquals(2,result.derived().stream().filter(d -> d.contains("PAN-OS version unknown")).count());
+    }
+    @Test void anUnusableMeterAnswerIsUnknownNeverAGuessedCount() {
+        for (String shape:new String[]{"malformed","empty"}) {
+            Script script=new Script(); script.relA="12.1.2"; script.relB="12.1.2"; script.meter=shape;
+            Result result=run(script,true,new FailoverMutationSwitch(false),replace12());
+            assertTrue(result.checks().contains("pre:6:UNKNOWN"),shape);
+            assertEquals(2,result.derived().stream().filter(d -> d.contains("\"source\":\"session meter\"")
+                && d.contains("show session meter")).count(),shape+" "+result.derived());
+            assertEquals("UNKNOWN",result.outcome());
+        }
     }
     public static void main(String[] args) {
         var test=new PanFailoverJobExecutorTest(); test.happyPath(); test.precheckFailNeverWrites();

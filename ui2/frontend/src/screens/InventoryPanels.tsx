@@ -1956,9 +1956,26 @@ export function platformPillLabel(device: Pick<DeviceSummary, "vendor_hint" | "m
  * below 12 and this firewall is on 12 or later or its version was unknown), the interfaces are UNKNOWN with the reason
  * the API gives -- never an empty table that reads as "no interfaces".
  */
-export function interfacesNotCollected(inventory: Pick<DeviceInventory, "not_collected" | "not_collected_reason"> | null | undefined): string | null {
+export function interfacesNotCollected(inventory: Pick<DeviceInventory, "not_collected" | "not_collected_reason" | "interfaces_source"> | null | undefined): string | null {
   if (!inventory?.not_collected?.includes("pan_show_interface_all")) return null;
+  if (interfacesFromConfiguration(inventory)) return null;
   return `UNKNOWN -- interfaces not collected: show interface all was not sent to this firewall. ${inventory.not_collected_reason ?? "Not collected (command retired by PO 2026-10-21)"}.`;
+}
+
+/** PO 2026-10-24 (replace_12): this run's interfaces were derived from the stored configuration (PAN-OS 12 or later). */
+export function interfacesFromConfiguration(inventory: Pick<DeviceInventory, "not_collected" | "interfaces_source"> | null | undefined): boolean {
+  return inventory?.interfaces_source === "configuration" || Boolean(inventory?.not_collected?.includes("pan_interfaces_from_configuration"));
+}
+
+/**
+ * The line shown above an Interfaces table derived from configuration: what the rows are (configured, not observed) and
+ * what stays UNKNOWN. Null when the interfaces were read from the device.
+ */
+export function interfacesSourceNote(inventory: Pick<DeviceInventory, "not_collected" | "interfaces_source"> | null | undefined): string | null {
+  if (!interfacesFromConfiguration(inventory)) return null;
+  return "Source: configured (from configuration). show interface all is not sent on PAN-OS 12 or later (PO 2026-10-24); "
+    + "names, static addresses, zones, virtual systems and virtual routers come from the stored effective-running configuration. "
+    + "Link state is UNKNOWN (not observed) except HA ports, whose state comes from the HA state read; MAC and DHCP addresses are not collected.";
 }
 
 /** The vendors whose policy the Policy screen collects (its sources are MDS and Panorama). */
@@ -2497,7 +2514,14 @@ export function DeviceInventoryPanels({
               ? <EmptyPanel title="Interfaces" body={interfacesNotCollected(deviceInventory)!} />
               : isCluster
               ? <ClusterInterfacesPanel contexts={clusterInventory?.contexts ?? []} members={clusterInventory ? orderMembers(clusterInventory.members) : undefined} virtualSystems={clusterInventory?.virtual_systems} activeContext={activeContext} onSelectContext={setActiveContext} isPaloAlto={isPaloAlto} />
-              : <InterfacesPanel contexts={deviceInventory?.contexts ?? []} virtualSystems={deviceInventory?.virtual_systems ?? device.virtual_systems} activeContext={activeContext} onSelectContext={setActiveContext} isPaloAlto={isPaloAlto} groupByContext={isFortinet} member={device} headerHaRole={device.ha_role} />,
+              : <>
+                  {interfacesSourceNote(deviceInventory) && (
+                    <Typography variant="body2" role="note" aria-label="Interfaces source" sx={{ color: m3.onSurfaceVar, mb: 1.5 }}>
+                      {interfacesSourceNote(deviceInventory)}
+                    </Typography>
+                  )}
+                  <InterfacesPanel contexts={deviceInventory?.contexts ?? []} virtualSystems={deviceInventory?.virtual_systems ?? device.virtual_systems} activeContext={activeContext} onSelectContext={setActiveContext} isPaloAlto={isPaloAlto} groupByContext={isFortinet} member={device} headerHaRole={device.ha_role} />
+                </>,
           }, {
             label: "Routing",
             panel: isCluster

@@ -33,6 +33,8 @@ public final class PanFailoverJobExecutor {
     private static final String STATE="<show><high-availability><state/></high-availability></show>";
     private static final String SESSION_SYNC="<show><high-availability><state-synchronization/></high-availability></show>";
     private static final String SESSIONS="<show><session><info/></session></show>";
+    /** PO 2026-10-24 (GR-7, gate row pan_failover_session_meter): check 6's read on PAN-OS 12 or later under replace_12. */
+    private static final String SESSION_METER="<show><session><meter/></session></show>";
     private static final String SUSPEND="<request><high-availability><state><suspend/></state></high-availability></request>";
     private static final String FUNCTIONAL="<request><high-availability><state><functional/></state></high-availability></request>";
     private static final Pattern SUCCESS=Pattern.compile("status\\s*=\\s*[\"']success[\"']");
@@ -66,6 +68,8 @@ public final class PanFailoverJobExecutor {
     private ReadinessShapeLog shapes;
     private final Map<Integer,Boolean> fieldsFound=new java.util.HashMap<>();
     private final com.securityexpert.nexus.ui2.jobs.pan.PanFirewallCommandSwitches panSwitches;
+    /** The read the pre-phase active count came from; a later phase compared against it must use the same read. */
+    private String beforeSessionSource;
 
     public PanFailoverJobExecutor(JooqCpFailoverRepository store,DeviceRepository devices,
             JobLeaseRepository leases,JobStepAttemptRepository attempts,DeviceTransport transport,
@@ -114,6 +118,7 @@ public final class PanFailoverJobExecutor {
         this.switchMirroredRoles=null;
         this.shapes=new ReadinessShapeLog("palo_alto");
         this.fieldsFound.clear();
+        this.beforeSessionSource=null;
         this.commandIndex=0; this.wrote=false; this.dispatch=null;
         if (!leases.transitionState(jobId,epoch,JobState.CLAIMED,JobState.EXECUTING,
                 "system:pan-failover-worker","pan_failover_start")) return;
@@ -133,6 +138,8 @@ public final class PanFailoverJobExecutor {
             if (!attempts.findByJobAndStep(jobId,0).isEmpty()) throw new Stop("PRIOR_ATTEMPT_NOT_REPLAYED",0);
             for (String command:List.of(STATE,SESSION_SYNC)) gate(command);
             if (com.securityexpert.nexus.ui2.jobs.pan.PanFirewallCommandSwitches.mayRead(panSwitches.showSessionInfo())) gate(SESSIONS);
+            if (panSwitches.showSessionInfo()==com.securityexpert.nexus.ui2.jobs.pan.PanFirewallCommandSwitches.Mode.REPLACE_12)
+                gate(SESSION_METER);
             if (!readiness) { gate(SUSPEND); gate(FUNCTIONAL); }
             Peer first=peer(members.get(0)),second=peer(members.get(1));
             state("PRECHECK","PRECHECK",null,null,null);
@@ -235,6 +242,7 @@ public final class PanFailoverJobExecutor {
         String expected=STATE.equals(command)?"pan_inventory_show_ha_state"
             :SESSION_SYNC.equals(command)?"pan_failover_session_sync"
             :SESSIONS.equals(command)?"pan_failover_session_info"
+            :SESSION_METER.equals(command)?"pan_failover_session_meter"
             :SUSPEND.equals(command)?"pan_failover_suspend"
             :FUNCTIONAL.equals(command)?"pan_failover_functional":null;
         if (expected==null) throw new Stop("COMMAND_NOT_APPROVED",0);
@@ -249,7 +257,8 @@ public final class PanFailoverJobExecutor {
         return !READINESS_KIND.equals(kind) || !(SUSPEND.equals(command) || FUNCTIONAL.equals(command));
     }
     private static boolean isRead(String command) {
-        return STATE.equals(command) || SESSION_SYNC.equals(command) || SESSIONS.equals(command);
+        return STATE.equals(command) || SESSION_SYNC.equals(command) || SESSIONS.equals(command)
+            || SESSION_METER.equals(command);
     }
     private String call(Peer peer,String command) throws InterruptedException {
         var g=gate(command);
@@ -286,13 +295,14 @@ public final class PanFailoverJobExecutor {
         }
         if (!attempts.writeOutcome(attempt,epoch,"MATCHED",null,true,null,null,null))
             throw new Stop("ATTEMPT_RECORD_FAILED",0);
-        int fieldCheck=STATE.equals(command)?4:SESSION_SYNC.equals(command)?5:SESSIONS.equals(command)?6:0;
-        if (fieldCheck!=0) fieldsFound.merge(fieldCheck,PanFailoverChecks.fieldFound(fieldCheck,completed.body()),
-            (a,b) -> a && b);
+        boolean meter=SESSION_METER.equals(command);
+        int fieldCheck=STATE.equals(command)?4:SESSION_SYNC.equals(command)?5:SESSIONS.equals(command)||meter?6:0;
+        if (fieldCheck!=0) fieldsFound.merge(fieldCheck,meter?PanFailoverChecks.sessionMeterFieldFound(completed.body())
+            :PanFailoverChecks.fieldFound(fieldCheck,completed.body()),(a,b) -> a && b);
         if (STATE.equals(command)) {
             for (int check:new int[]{1,2,3,4,7}) shapes.capture(check,completed.body());
         } else {
-            int check=SESSION_SYNC.equals(command)?5:SESSIONS.equals(command)?6:0;
+            int check=SESSION_SYNC.equals(command)?5:SESSIONS.equals(command)||meter?6:0;
             if (check!=0) shapes.capture(check,completed.body());
         }
         return completed.body();
@@ -317,21 +327,35 @@ public final class PanFailoverJobExecutor {
         // limited to PAN-OS below 12 (below_12). Below_12 is decided per member from that member's own HA-state
         // build-rel read this phase (no stored version, no new command); unknown = not sent. A member whose read is not
         // sent leaves check 6 (sessions carried) UNKNOWN with the reason.
+        // PO 2026-10-24 (replace_12): below 12 exactly as below_12; on 12 or later the member is read with show session
+        // meter instead (its entries' current counts summed), and the same 80 % rule applies. Counts from two different
+        // reads (members, or the pre phase and this one) are not comparable: check 6 is then UNKNOWN.
         var decisionA=com.securityexpert.nexus.ui2.jobs.pan.PanFirewallCommandSwitches.decide(
             panSwitches.showSessionInfo(),a.versions().software());
         var decisionB=com.securityexpert.nexus.ui2.jobs.pan.PanFirewallCommandSwitches.decide(
             panSwitches.showSessionInfo(),b.versions().software());
-        Long sessionsA=decisionA.send()?PanFailoverChecks.sessions(call(first,SESSIONS)):null;
-        Long sessionsB=decisionB.send()?PanFailoverChecks.sessions(call(second,SESSIONS)):null;
+        Long sessionsA=sessionCount(first,decisionA);
+        Long sessionsB=sessionCount(second,decisionB);
+        String sourceA=sessionSource(decisionA),sourceB=sessionSource(decisionB);
         String notCollectedA=notCollectedEvidence(decisionA,decisionB);
         String notCollectedB=notCollectedEvidence(decisionB,decisionA);
+        boolean bothRead=notCollectedA==null && notCollectedB==null;
+        String mixedA=null,mixedB=null;
+        if (bothRead && !sourceA.equals(sourceB)) {
+            mixedA=PanFailoverChecks.sessionsMixedSources(sourceA,sourceB);
+            mixedB=PanFailoverChecks.sessionsMixedSources(sourceB,sourceA);
+        } else if (bothRead && oldActive!=null && beforeSessionSource!=null && !beforeSessionSource.equals(sourceA)) {
+            mixedA=PanFailoverChecks.sessionsMixedSources(sourceA,beforeSessionSource);
+            mixedB=mixedA;
+        }
+        if (oldActive==null) beforeSessionSource=bothRead && sourceA.equals(sourceB)?sourceA:null;
         // Check 7 (version parity): each member's own versions from the HA state it already returned this phase (PO
         // 2026-10-21; no new command, show system info stays retired). Missing fields are UNKNOWN.
         var versionParity=PanFailoverChecks.versionsEvidence(a,b);
         String versions=versionParity.status();
         Long active=oldActive==null?("active".equals(a.role())?sessionsA:sessionsB)
             :(oldActive==first?sessionsB:sessionsA);
-        String carried=sessionsA==null || sessionsB==null?"UNKNOWN"
+        String carried=sessionsA==null || sessionsB==null || mixedA!=null?"UNKNOWN"
             :oldActive==null?"PASS":PanFailoverChecks.carried(before,active);
         var sessionSync="active".equals(a.role())?PanFailoverChecks.sessionSyncEvidence(syncA,syncB)
             :"active".equals(b.role())?PanFailoverChecks.sessionSyncEvidence(syncB,syncA)
@@ -347,12 +371,16 @@ public final class PanFailoverJobExecutor {
             if (no==3) reason=links.derived();
             if (no==4) reason=configurationSync.derived();
             if (no==5) reason=sessionSync.derived();
-            if (no==6 && !"UNKNOWN".equals(statuses[i])) reason="{\"count\":"+sessionsA+"}";
+            if (no==6 && "UNKNOWN".equals(statuses[i]) && (decisionA.replace() || decisionB.replace()))
+                reason=PanFailoverChecks.sessionMeterUnknown(fieldsFound.getOrDefault(no,false));
+            if (no==6 && !"UNKNOWN".equals(statuses[i])) reason=PanFailoverChecks.sessionsCounted(sessionsA,sourceA);
             if (no==7) reason=versionParity.derived();
+            if (no==6 && mixedA!=null) reason=mixedA;
             if (no==6 && notCollectedA!=null) reason=notCollectedA;
             String derived=no==1?PanFailoverChecks.stateEvidence(a,b,switchMirroredRoles):reason;
             store.check(runId,phase,first.id(),null,no,statuses[i],derived);
-            if (no==6 && !"UNKNOWN".equals(statuses[i])) reason="{\"count\":"+sessionsB+"}";
+            if (no==6 && !"UNKNOWN".equals(statuses[i])) reason=PanFailoverChecks.sessionsCounted(sessionsB,sourceB);
+            if (no==6 && mixedB!=null) reason=mixedB;
             if (no==6 && notCollectedB!=null) reason=notCollectedB;
             derived=no==1?PanFailoverChecks.stateEvidence(b,a,switchMirroredRoles):reason;
             store.check(runId,phase,second.id(),null,no,statuses[i],derived);
@@ -364,14 +392,24 @@ public final class PanFailoverJobExecutor {
         }
         return active;
     }
+    /** Check 6's count for one member: show session info when sent, show session meter when replaced, else none. */
+    private Long sessionCount(Peer peer,com.securityexpert.nexus.ui2.jobs.pan.PanFirewallCommandSwitches.Decision decision)
+            throws InterruptedException {
+        if (decision.send()) return PanFailoverChecks.sessions(call(peer,SESSIONS));
+        if (decision.replace()) return PanFailoverChecks.sessionMeter(call(peer,SESSION_METER));
+        return null;
+    }
+    private static String sessionSource(com.securityexpert.nexus.ui2.jobs.pan.PanFirewallCommandSwitches.Decision decision) {
+        return decision.replace()?PanFailoverChecks.SOURCE_SESSION_METER:PanFailoverChecks.SOURCE_SESSION_INFO;
+    }
     /** Check 6 evidence for one member's row when either member's session read was not sent; null when both were sent. */
     private static String notCollectedEvidence(
             com.securityexpert.nexus.ui2.jobs.pan.PanFirewallCommandSwitches.Decision own,
             com.securityexpert.nexus.ui2.jobs.pan.PanFirewallCommandSwitches.Decision peer) {
         if (own==com.securityexpert.nexus.ui2.jobs.pan.PanFirewallCommandSwitches.Decision.SKIP_RETIRED)
             return PanFailoverChecks.SESSIONS_NOT_COLLECTED_DERIVED;
-        if (!own.send()) return PanFailoverChecks.sessionsNotCollected(own.detail());
-        if (!peer.send()) return PanFailoverChecks.sessionsNotCollected("peer member: "+peer.detail());
+        if (!own.send() && !own.replace()) return PanFailoverChecks.sessionsNotCollected(own.detail());
+        if (!peer.send() && !peer.replace()) return PanFailoverChecks.sessionsNotCollected("peer member: "+peer.detail());
         return null;
     }
     private boolean waitFor(Peer first,Peer second,Peer active,String activeRole,Peer other,String otherRole)

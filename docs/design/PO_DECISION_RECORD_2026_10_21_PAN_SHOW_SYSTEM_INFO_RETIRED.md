@@ -123,3 +123,10 @@ PAN-OS 12). The defect that retired the two reads concerns PAN-OS 12 and later, 
   `device_inventory_run.not_collected`, plus one extra token (`pan_os_12_or_later` or `pan_os_version_unknown`) that
   the API turns into `not_collected_reason`. Sections 2 and 3 above describe the retired state; this addendum governs
   where they differ.
+
+## Addendum 2026-10-24 (PO): replacements on PAN-OS 12 or later
+
+The PO asked that the defective reads be replaced for PAN-OS 12. The new switch value `replace_12` keeps everything below
+12 as above and, on 12 or later, reads failover check 6 with `show session meter` and derives the inventory interfaces from
+the stored effective-running configuration. Recorded in `PO_DECISION_RECORD_2026_10_24_PAN_OS12_REPLACEMENT_READS.md`,
+which governs where it differs from this record.
