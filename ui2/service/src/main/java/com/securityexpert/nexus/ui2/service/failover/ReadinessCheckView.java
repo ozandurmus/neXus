@@ -15,8 +15,11 @@ public final class ReadinessCheckView {
 
     public static Map<String,Object> fields(String vendor,int no,String member,String status,JsonNode d,Instant observedAt) {
         boolean pan="palo_alto".equals(vendor);
+        // A VSX chassis has no traffic interface in VS0: each Virtual System's unit measures its own traffic.
+        boolean perVirtualSystem=!pan && no==8 && "NOT_EVALUATED".equals(status)
+            && "TRAFFIC_MEASURED_PER_VIRTUAL_SYSTEM".equals(d.path("reason").asText());
         return Map.of("title",title(pan,no),"member",member,"result",status,
-            "blocking",pan || (no!=5 && no!=13),"summary",summary(pan,no,status,d,observedAt));
+            "blocking",pan || (no!=5 && no!=13 && !perVirtualSystem),"summary",summary(pan,no,status,d,observedAt));
     }
 
     private static String title(boolean pan,int no) {
@@ -36,6 +39,9 @@ public final class ReadinessCheckView {
 
     private static String summary(boolean pan,int no,String status,JsonNode d,Instant observedAt) {
         boolean pass="PASS".equals(status);
+        if (!pan && no==8 && "NOT_EVALUATED".equals(status)
+                && "TRAFFIC_MEASURED_PER_VIRTUAL_SYSTEM".equals(d.path("reason").asText()))
+            return "Measured per Virtual System";
         if ("UNKNOWN".equals(status)) {
             if (pan) return switch(no) {
                 case 1 -> "HA mode or roles not recognised";

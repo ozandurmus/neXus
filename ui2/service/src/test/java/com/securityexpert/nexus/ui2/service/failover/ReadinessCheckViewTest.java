@@ -49,6 +49,14 @@ class ReadinessCheckViewTest {
         };
         for(Object[] c:cases) assertEquals(c[2],row(false,8,(String)c[1],(String)c[0]).get("summary"),(String)c[0]);
     }
+    /** VSX chassis (2026-10-24): check 8 is not applicable in VS0 and never blocks; a plain cluster stays blocking. */
+    @Test void chassisTrafficIsMeasuredPerVirtualSystemAndNonBlocking() throws Exception {
+        String derived="{\"reason\":\"TRAFFIC_MEASURED_PER_VIRTUAL_SYSTEM\",\"selectedCount\":0}";
+        var view=row(false,8,"NOT_EVALUATED",derived);
+        assertEquals("Measured per Virtual System",view.get("summary"));
+        assertEquals(false,view.get("blocking"));
+        assertEquals(true,row(false,8,"UNKNOWN","{\"reason\":\"NO_TRAFFIC_INTERFACES\",\"selectedCount\":0}").get("blocking"));
+    }
     /** PO decision 2026-10-20 item 2: the "Recovery mode" row the PO picks a pilot unit by. */
     @Test void recoveryModeRowIsBlockingAndNamesTheObservedMode() throws Exception {
         var active=row(false,15,"PASS","{\"recoveryMode\":\"ACTIVE_UP\",\"reason\":\"ACTIVE_UP\"}");

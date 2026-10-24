@@ -579,6 +579,39 @@ class CpFailoverJobExecutorTest {
             store.checks.stream().map(c -> c.split(":")[1]).distinct().toList());
         assertEquals(0,script.downCount); assertEquals(0,script.upCount);
     }
+    /** Live 2026-10-24: VS0 of a VSX chassis has management/sync interfaces only; traffic is measured per Virtual System. */
+    @Test void vsxChassisTrafficIsNotApplicableAndNonBlockingWhenVs0HasNoTrafficInterfaces() throws Exception {
+        String interfaces="CCP mode: Automatic\nRequired interfaces: 2\nMgmt UP non sync\nSync UP sync\n";
+        Store store=new Store(); store.kind="READINESS";
+        Script script=new Script();
+        script.measured=Map.of("cphaprob stat",Fixtures.read("cp/failover_stat_vsx_chassis.txt"),"cphaprob -a if",interfaces);
+        script.prefix="Context is set to Virtual Device VSX-SYNTHETIC (ID 0).\n";
+        run(store,script,devices(true,VSX_NAMES),gates());
+        assertEquals("READY",store.outcome,store.stopCode);
+        assertEquals(2,store.checks.stream().filter("pre:8:NOT_EVALUATED"::equals).count());
+        var json=new com.fasterxml.jackson.databind.ObjectMapper();
+        int recorded=0;
+        for(String derived:store.derivedValues) {
+            var evidence=json.readTree(derived);
+            if(!evidence.has("selectedCount")) continue;
+            recorded++;
+            assertEquals("TRAFFIC_MEASURED_PER_VIRTUAL_SYSTEM",evidence.get("reason").asText());
+            assertEquals(0,evidence.get("selectedCount").asInt());
+        }
+        assertEquals(2,recorded);
+    }
+    /** A plain cluster with no traffic interface keeps NO_TRAFFIC_INTERFACES: UNKNOWN and blocking. */
+    @Test void plainClusterWithoutTrafficInterfacesStaysUnknownAndBlocking() throws Exception {
+        String interfaces="CCP mode: Automatic\nRequired interfaces: 2\nMgmt UP non sync\nSync UP sync\n";
+        Store store=new Store(); store.kind="READINESS";
+        Script script=new Script();
+        script.measured=Map.of("cphaprob -a if",interfaces);
+        run(store,script);
+        assertEquals(2,store.checks.stream().filter("pre:8:UNKNOWN"::equals).count());
+        assertFalse(store.checks.contains("pre:8:NOT_EVALUATED"));
+        assertEquals("UNKNOWN",store.outcome);
+        assertTrue(store.derivedValues.stream().anyMatch(d -> d.contains("NO_TRAFFIC_INTERFACES")));
+    }
     @Test void vsxChassisStateRejectsAnotherContextAndIgnoresTheVsTable() {
         String output=Fixtures.read("cp/failover_stat_vsx_chassis.txt");
         var chassis=CpFailoverChecks.chassisState(output);
