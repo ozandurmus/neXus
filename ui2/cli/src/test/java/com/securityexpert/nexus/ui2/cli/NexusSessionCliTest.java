@@ -513,6 +513,34 @@ class NexusSessionCliTest {
     }
 
     @Test
+    void failoverConfigSyncPostsThePaloAltoRouteWithTheTwoMembersAndReadsItsStatus(@TempDir Path home) throws Exception {
+        java.util.List<String> calls = new java.util.concurrent.CopyOnWriteArrayList<>();
+        String source = "member-" + "active", target = "member-" + "passive";
+        HttpServer server = failoverServer(calls, key -> key.contains("/config-sync") && key.startsWith("POST")
+                ? new String[] {"409", "{\"code\":\"READINESS_NOT_FRESH\"}"} : OK);
+        java.io.PrintStream err = System.err;
+        var captured = new java.io.ByteArrayOutputStream();
+        try {
+            NexusSessionCli cli = failoverCli(home, server);
+            System.setErr(new java.io.PrintStream(captured, true, StandardCharsets.UTF_8));
+            assertEquals(1, new NexusSessionCli(home).run(new String[] {"--business-hours-ack", "failover-config-sync", CLUSTER, UNIT,
+                    "--source", source, "--target", target}));
+            assertEquals("POST /api/v2/pan-failover/units/" + UNIT + "/config-sync csrf=csrf-9 ack=true {\"clusterId\":\"" + CLUSTER
+                    + "\",\"sourceDeviceId\":\"" + source + "\",\"targetDeviceId\":\"" + target + "\"}", calls.get(0));
+            assertTrue(captured.toString(StandardCharsets.UTF_8).startsWith("READINESS_NOT_FRESH: The latest readiness is older"));
+            assertEquals(0, cli.run(new String[] {"failover-config-sync-status", RUN}));
+            assertEquals("GET /api/v2/pan-failover/config-syncs/" + RUN + " csrf=null ack=null ", calls.get(1));
+            // Both members are required; nothing is sent without them.
+            calls.clear();
+            assertEquals(2, cli.run(new String[] {"failover-config-sync", CLUSTER, UNIT, "--source", source}));
+            assertTrue(calls.isEmpty());
+        } finally {
+            System.setErr(err);
+            server.stop(0);
+        }
+    }
+
+    @Test
     void failoverRefusalsArePrintedAsCodeAndPlainWords(@TempDir Path home) throws Exception {
         java.util.List<String> calls = new java.util.concurrent.CopyOnWriteArrayList<>();
         HttpServer server = failoverServer(calls, key -> {

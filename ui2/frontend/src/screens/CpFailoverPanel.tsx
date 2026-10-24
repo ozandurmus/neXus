@@ -22,6 +22,7 @@ import { approveCpFailover, approveCpFailoverResume, getCpFailoverRun, listCpFai
   type CpFailoverApproval, type CpFailoverResumeState, type CpFailoverRunDetail, type CpFailoverState, type CpFailoverUnit } from "../auth/adminApi";
 import { ReadinessCard, ReadinessChecksTable } from "./ReadinessChecksTable";
 import { FailoverIncidentsPanel } from "./FailoverIncidentsPanel";
+import { PanConfigSyncAction } from "./PanConfigSyncAction";
 const labels = ["Checking readiness", "Failing over", "Role change confirmed", "Checking traffic and cluster after switch",
   "Returning former active to standby", "Verifying final cluster health", "Failover verified"];
 const activeStates: CpFailoverState[] = ["PLANNED", "PRECHECK", "FAILING_OVER", "SWITCHED", "POSTCHECK", "RETURNING"];
@@ -279,7 +280,9 @@ function UnitPanel({ unit, expanded, onExpand, onRefreshUnits }: { unit: CpFailo
         vendor={unit.vendor} status={readinessRun?.outcome} stopCode={readinessRun?.message}
         observedAt={readinessRun?.checks.map(c => c.observedAt).sort().at(-1)} masked={unit.masked === true}
         running={Boolean(readinessRun && activeStates.includes(readinessRun.state))} disabled={!idle} canRun={canOperate}
-        onRun={() => void act(() => runCpFailoverReadiness(unit))} />
+        onRun={() => void act(() => runCpFailoverReadiness(unit))}
+        rowAction={checkNo => checkNo === 4 && unit.vendor === "palo_alto"
+          ? <PanConfigSyncAction unit={unit} onDone={() => { onRefreshUnits(); void refresh(); }} /> : null} />
       {run && <FailoverRun run={run} unit={unit} />}
       {run && <ResumeReturn run={run} unit={unit} onChanged={() => { onRefreshUnits(); void refresh(); }} />}
       {error && <Typography role="alert" color="error">{error}</Typography>}

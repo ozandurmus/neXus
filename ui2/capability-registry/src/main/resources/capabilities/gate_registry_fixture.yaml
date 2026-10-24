@@ -617,7 +617,7 @@ gates:
     sign_off_state: SIGNED_OFF
     timeout_s: 30
     retry_rule: none
-    max_frequency: "once pre, once post-switch and twice post-return per peer; additionally every 3 s for at most 60 s per transition"
+    max_frequency: "once pre, once post-switch and twice post-return per peer; additionally every 3 s for at most 60 s per transition; config sync (PO 2026-10-24): once per member per config-sync job, immediately before its one write"
     session_reuse_rule: "the one key-generation session per run"
     unsupported_behavior_ref: "HA disabled means no peer, a result, not an error"
     secret_output_risk: none
@@ -2520,6 +2520,23 @@ gates:
     secret_output_risk: none
     safe_telemetry_fields: []
     source_document_pointer: "docs/design/FAILOVER_EXECUTION_PAN_CONTRACT.md §4"
+
+  - gate_id: pan_failover_config_sync
+    vendor: palo_alto
+    platform_role_scope: pan_firewall
+    shell_context: not_applicable
+    transport_kind: PAN_XML_API
+    canonical_command_key: "<request><high-availability><sync-to-remote><running-config/></sync-to-remote></high-availability></request>"
+    action_class: configuration-write
+    sign_off_state: SIGNED_OFF
+    timeout_s: 60
+    retry_rule: none
+    max_frequency: "once per config-sync job, on the member that is active in the job's own fresh HA-state read, only while readiness check 4 is FAIL"
+    session_reuse_rule: "one key per member per job"
+    unsupported_behavior_ref: "status other than success or error, no reply or an oversized body = OUTCOME_UNKNOWN (never resent)"
+    secret_output_risk: none
+    safe_telemetry_fields: [deviceStatus]
+    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_24_PAN_CONFIG_SYNC.md (RATIFIED); docs/design/PAN_CONFIG_SYNC_REMEDIATION_2026_10_24.md section 2"
 
   - gate_id: cp_failover_arp
     vendor: check_point

@@ -315,6 +315,10 @@ public final class CpFailoverService {
     private Unit unit(String clusterId, String unitId, String actor) {
         return unit(clusterId,unitId,actor,"check_point");
     }
+    /** The reader-checked unit of one cluster (the config-sync request resolves its unit the same way). */
+    public Unit unitFor(String clusterId, String unitId, String actor, String vendor) {
+        return unit(clusterId,unitId,actor,vendor);
+    }
     private Unit unit(String clusterId, String unitId, String actor, String vendor) {
         return units(clusterId,actor,vendor).stream().filter(u -> u.id().equals(unitId)).findFirst()
             .orElseThrow(() -> new Refusal("UNIT_NOT_FOUND"));

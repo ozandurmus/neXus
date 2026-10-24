@@ -73,8 +73,19 @@ public record GateRow(
                         && "<request><high-availability><state><suspend/></state></high-availability></request>".equals(canonicalCommandKey))
                     || ("pan_failover_functional".equals(gateId)
                         && "<request><high-availability><state><functional/></state></high-availability></request>".equals(canonicalCommandKey))))
-                || actionClass == ActionClass.CLASS_3_CONFIGURATION_WRITE
+                || actionClass == ActionClass.CLASS_3_CONFIGURATION_WRITE && !isPanConfigSync()
                 || actionClass == ActionClass.CLASS_4_POLICY_DEPLOYMENT);
         return isSignedOff && isHighClass;
+    }
+
+    /** The exact PAN config-sync form (PO_DECISION_RECORD_2026_10_24_PAN_CONFIG_SYNC.md, RATIFIED); nothing near it. */
+    public static final String PAN_CONFIG_SYNC_GATE = "pan_failover_config_sync";
+    public static final String PAN_CONFIG_SYNC_COMMAND =
+            "<request><high-availability><sync-to-remote><running-config/></sync-to-remote></high-availability></request>";
+
+    private boolean isPanConfigSync() {
+        return "palo_alto".equals(vendor) && "pan_firewall".equals(platformRoleScope)
+                && "not_applicable".equals(shellContext) && "PAN_XML_API".equals(transportKind)
+                && PAN_CONFIG_SYNC_GATE.equals(gateId) && PAN_CONFIG_SYNC_COMMAND.equals(canonicalCommandKey);
     }
 }

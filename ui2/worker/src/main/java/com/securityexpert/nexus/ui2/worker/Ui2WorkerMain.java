@@ -411,6 +411,9 @@ public final class Ui2WorkerMain {
                     .withFortiManagerDiagnostic(diagnosticJobExecutor)
                     .withCpFailover(cpFailoverExecutor)
                     .withPanFailover(panFailoverExecutor)
+                    .withPanConfigSync(new com.securityexpert.nexus.ui2.worker.failover.PanConfigSyncJobExecutor(
+                        new com.securityexpert.nexus.ui2.persistence.JooqPanConfigSyncRepository(transactionBoundary),
+                        deviceRepository, leaseRepository, attemptRepository, panTransport, panCredentialResolver, gateRegistry))
                     .withDiagnosticReads(genericDiagnosticExecutor)
                     .withPanSyslogMeasure(panSyslogMeasureExecutor)
                     .withPanSystemLogCollect(panSystemLogCollectExecutor)

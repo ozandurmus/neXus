@@ -221,6 +221,11 @@ class JooqCpFailoverRepositoryTest {
                 var records = DSL.using(SQLDialect.POSTGRES);
                 return new MockResult[] {new MockResult(0, records.newResult(DSL.field("one", Integer.class)))};
             }
+            // V178: no open config sync on this unit.
+            if (sql.startsWith("select 1 from pan_config_sync")) {
+                var records = DSL.using(SQLDialect.POSTGRES);
+                return new MockResult[] {new MockResult(0, records.newResult(DSL.field("one", Integer.class)))};
+            }
             if (sql.startsWith("select run_id from failover_run")) {
                 var records = DSL.using(SQLDialect.POSTGRES);
                 var runId = DSL.field("run_id", String.class);

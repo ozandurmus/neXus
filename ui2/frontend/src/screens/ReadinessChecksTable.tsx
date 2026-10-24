@@ -10,7 +10,7 @@ import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import Typography from "@mui/material/Typography";
 import Button from "@mui/material/Button";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Icon } from "../shell/Icon";
 import type { ReadinessCheck, ReadinessMember } from "../auth/adminApi";
 import { M3Button } from "../shell/M3Widgets";
@@ -28,7 +28,9 @@ function checkRows(checks: ReadinessCheck[], labels: ReadinessMember[] = []) {
   });
 }
 
-export function ReadinessChecksTable({ checks, members = [], compact = false }: { checks: ReadinessCheck[]; members?: ReadinessMember[]; compact?: boolean }) {
+/** `rowAction`: an action the server offers for one check row (the PAN config sync on check 4), rendered under its title. */
+export function ReadinessChecksTable({ checks, members = [], compact = false, rowAction }: { checks: ReadinessCheck[]; members?: ReadinessMember[]; compact?: boolean;
+  rowAction?: (checkNo: number, failed: boolean) => ReactNode }) {
   // Order presentation by observed role; retain opaque device IDs for check matching.
   const ordered = [...members].sort((a, b) => Number(a.ha_role?.toLowerCase() !== "active") - Number(b.ha_role?.toLowerCase() !== "active"));
   const memberOrder = [0, 1].map(index => members.length ? members.indexOf(ordered[index]) : index);
@@ -50,6 +52,7 @@ export function ReadinessChecksTable({ checks, members = [], compact = false }: 
             <Typography variant="body2">{row.title}</Typography>
             {!row.blocking && <Chip size="small" label="info" sx={{ height: 20, bgcolor: m3.sc, color: m3.onSurfaceVar }} />}
           </Stack>
+          {rowAction?.(row.no, row.failed)}
         </TableCell>
         {memberOrder.map((memberIndex, index) => <TableCell key={index} sx={{ py: compact ? 0.5 : 1.5, whiteSpace: "normal", overflowWrap: "anywhere" }}><CheckMessage text={row.members[memberIndex]?.summary ?? "Not collected"} /></TableCell>)}
       </TableRow>;
@@ -80,10 +83,10 @@ export function readinessStopReason(stopCode?: string | null) {
   return stopCode === "COMMAND_UNAVAILABLE" ? readinessReasonLabel(stopCode) : null;
 }
 
-export function ReadinessCard({ checks, members, status, cluster, vendor, observedAt, masked = false, running = false, disabled = false, canRun, onRun, error, stopCode }: {
+export function ReadinessCard({ checks, members, status, cluster, vendor, observedAt, masked = false, running = false, disabled = false, canRun, onRun, error, stopCode, rowAction }: {
   checks: ReadinessCheck[]; members?: ReadinessMember[]; status?: string | null; cluster: string;
   vendor?: string; observedAt?: string | null; masked?: boolean; running?: boolean; disabled?: boolean; canRun: boolean;
-  onRun: () => void; error?: string | null; stopCode?: string | null;
+  onRun: () => void; error?: string | null; stopCode?: string | null; rowAction?: (checkNo: number, failed: boolean) => ReactNode;
 }) {
   const rows = checkRows(checks, members);
   const blocking = rows.filter(row => row.failed).length;
@@ -116,7 +119,7 @@ export function ReadinessCard({ checks, members, status, cluster, vendor, observ
     </Box>
     {!running && readinessStopReason(stopCode) && <Typography variant="body2" sx={{ mb: 1 }}>{readinessStopReason(stopCode)}</Typography>}
     {error && <Typography role="alert" variant="body2" sx={{ color: m3.criticalInk, mb: 1 }}>{error}</Typography>}
-    <TableContainer><ReadinessChecksTable checks={checks} members={members} /></TableContainer>
+    <TableContainer><ReadinessChecksTable checks={checks} members={members} rowAction={rowAction} /></TableContainer>
     {!checks.length && <Typography variant="body2" sx={{ color: m3.onSurfaceVar, py: 2 }}>No observations yet</Typography>}
     <Typography variant="caption" sx={{ display: "block", color: m3.onSurfaceVar, mt: 2 }}>Failover runs re-check everything at start.</Typography>
   </Card>;

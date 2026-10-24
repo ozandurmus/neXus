@@ -204,6 +204,15 @@ class AuditRedactionPolicyTest {
             "failover_quarantine.execution_id", "failover_quarantine.quarantined_at",
             "failover_quarantine.quarantined_member_ids", "failover_quarantine.reason",
             "failover_quarantine.second_approver_id",
+            // pan_config_sync (V178)
+            "pan_config_sync.business_hours_ack_at", "pan_config_sync.cluster_ref", "pan_config_sync.device_status",
+            "pan_config_sync.finished_at", "pan_config_sync.followup_readiness_run_id",
+            "pan_config_sync.followup_refusal", "pan_config_sync.initiated_by", "pan_config_sync.initiator_role",
+            "pan_config_sync.job_id", "pan_config_sync.member_set_revision", "pan_config_sync.mutation_possible",
+            "pan_config_sync.outcome", "pan_config_sync.readiness_run_id", "pan_config_sync.requested_at",
+            "pan_config_sync.requested_in_business_hours", "pan_config_sync.source_member_ref",
+            "pan_config_sync.started_at", "pan_config_sync.state", "pan_config_sync.sync_id",
+            "pan_config_sync.target_member_ref", "pan_config_sync.vendor",
             // failover_resume (V170)
             "failover_resume.approval_ack_at", "failover_resume.approval_ack_by",
             "failover_resume.approval_nonce", "failover_resume.approved_at", "failover_resume.approved_by",
