@@ -279,7 +279,7 @@ public final class CpFailoverController {
     private void putConfigSync(Map<String,Object> view,CpFailoverService.Unit unit,String vendor,
             JooqCpFailoverRepository.ReadinessStatus readiness,boolean masked,String actor) {
         if (configSync==null || !"palo_alto".equals(vendor) || unit.vsId()!=null) return;
-        var facts=configSync.view(unit,vendor,readiness,(String)view.get("refusalReason"),masked,
+        var facts=configSync.view(unit,vendor,readiness,(String)view.get("refusalReason"),() -> configSync.busy(unit),masked,
             !masked && configSync.mayRun(actor),configSync.latest(unit));
         if (facts!=null) view.put("configSync",configSyncView(facts));
     }

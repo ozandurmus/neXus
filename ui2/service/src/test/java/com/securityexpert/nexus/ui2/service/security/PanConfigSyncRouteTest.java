@@ -111,6 +111,18 @@ class PanConfigSyncRouteTest {
         verifyNoInteractions(admin.sync());
     }
 
+    @Test void aMissingOrWrongCsrfTokenOrAMissingOriginIsRefusedBeforeTheService() throws Exception {
+        var f = fixture(Set.of(RoleToken.SECURITY_ADMIN));
+        var cookie = new Cookie("ui2_session", COOKIE);
+        f.mvc().perform(post(PATH).servletPath(PATH).cookie(cookie).header("Origin", "https://example.invalid")
+            .contentType("application/json").content(BODY)).andExpect(status().isUnauthorized());
+        f.mvc().perform(post(PATH).servletPath(PATH).cookie(cookie).header("X-CSRF-Token", "synthetic-other")
+            .header("Origin", "https://example.invalid").contentType("application/json").content(BODY)).andExpect(status().isUnauthorized());
+        f.mvc().perform(post(PATH).servletPath(PATH).cookie(cookie).header("X-CSRF-Token", CSRF)
+            .contentType("application/json").content(BODY)).andExpect(status().isUnauthorized());
+        verifyNoInteractions(f.sync());
+    }
+
     @Test void theMaskedViewIsRefusedEvenWithAnAdministratorRole() throws Exception {
         var f = fixture(Set.of(RoleToken.SECURITY_ADMIN, RoleToken.REPLAY_VIEWER));
         f.mvc().perform(write(PATH, BODY)).andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("WRONG_ROLE"));

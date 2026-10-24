@@ -40,9 +40,10 @@ class PanConfigSyncServiceTest {
     }
     private static final CpFailoverService.Unit UNIT = new CpFailoverService.Unit("unit-a", "cluster-a", CLUSTER, null,
         List.of(member(A), member(B)));
-    private static String checks(String sync, String roleA, String roleB) {
-        return "[{\"memberRef\":\"" + A + "\",\"checkNo\":1,\"status\":\"PASS\",\"derived\":{\"role\":\"" + roleA + "\"}},"
-            + "{\"memberRef\":\"" + B + "\",\"checkNo\":1,\"status\":\"PASS\",\"derived\":{\"role\":\"" + roleB + "\"}},"
+    private static String checks(String sync, String roleA, String roleB) { return checks(sync, roleA, roleB, "PASS"); }
+    private static String checks(String sync, String roleA, String roleB, String check1) {
+        return "[{\"memberRef\":\"" + A + "\",\"checkNo\":1,\"status\":\"" + check1 + "\",\"derived\":{\"role\":\"" + roleA + "\"}},"
+            + "{\"memberRef\":\"" + B + "\",\"checkNo\":1,\"status\":\"" + check1 + "\",\"derived\":{\"role\":\"" + roleB + "\"}},"
             + "{\"memberRef\":\"" + A + "\",\"checkNo\":4,\"status\":\"" + sync + "\",\"derived\":{}},"
             + "{\"memberRef\":\"" + B + "\",\"checkNo\":4,\"status\":\"" + sync + "\",\"derived\":{}}]";
     }
@@ -101,6 +102,25 @@ class PanConfigSyncServiceTest {
         var off = service(mock(JooqPanConfigSyncRepository.class), mock(CpFailoverService.class), Set.of(RoleToken.SECURITY_ADMIN), false);
         assertEquals(FailoverMutationSwitch.DISABLED, off.view(UNIT, "palo_alto", readiness("FAIL", now, "active", "passive"), null,
             false, true, Optional.empty()).refusal());
+    }
+
+    @Test void rolesCountOnlyFromAPassedCheckOneAndABusyUnitIsRefused() {
+        var s = service(mock(JooqPanConfigSyncRepository.class), mock(CpFailoverService.class), Set.of(RoleToken.SECURITY_ADMIN), true);
+        Instant now = Instant.now();
+        for (String check1 : java.util.List.of("FAIL", "UNKNOWN")) {
+            var r = new JooqCpFailoverRepository.ReadinessStatus(CLUSTER, null, "palo_alto", "NOT_READY", now, "Mode and roles",
+                checks("FAIL", "active", "passive", check1));
+            var view = s.view(UNIT, "palo_alto", r, null, false, true, Optional.empty());
+            assertEquals("ROLES_CHANGED", view.refusal(), check1);
+            assertNull(view.sourceRef()); assertNull(view.targetRef());
+        }
+        for (String busy : java.util.List.of("RUN_ALREADY_ACTIVE", "UNRESOLVED_DISPATCH")) {
+            assertEquals(busy, s.view(UNIT, "palo_alto", readiness("FAIL", now, "active", "passive"), null, () -> busy, false, true,
+                Optional.empty()).refusal());
+        }
+        // The busy read is skipped when check 4 did not fail.
+        assertEquals("CONFIG_SYNC_NOT_FAILED", s.view(UNIT, "palo_alto", readiness("PASS", now, "active", "passive"), null,
+            () -> { throw new AssertionError("not read"); }, false, true, Optional.empty()).refusal());
     }
 
     @Test void onlyAnAdministratorOutsideTheMaskedViewMayRequestAndCheckPointNever() {

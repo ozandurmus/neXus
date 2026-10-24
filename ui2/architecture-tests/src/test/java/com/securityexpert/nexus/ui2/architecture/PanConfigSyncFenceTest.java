@@ -33,13 +33,31 @@ class PanConfigSyncFenceTest {
         assertTrue(calls(PanConfigSyncJobExecutor.class, "gate", FailoverMutationSwitch.class, "enabled"));
         assertTrue(calls(PanConfigSyncJobExecutor.class, "execute", JooqPanConfigSyncRepository.class, "admission"));
         assertTrue(calls(PanConfigSyncJobExecutor.class, "execute", JooqPanConfigSyncRepository.class, "prepareSend"));
-        assertTrue(calls(PanConfigSyncJobExecutor.class, "execute", PanConfigSyncJobExecutor.class, "send"));
-        // The write itself is sent from exactly one method, and only execute calls it.
+        assertTrue(calls(PanConfigSyncJobExecutor.class, "execute", PanConfigSyncJobExecutor.class, "afterSend"));
+        // The write and its bookkeeping live in afterSend, reached from execute only after prepareSend admitted it
+        // (Argon P0-3: outside the pre-send handling).
         long senders = classes.get(PanConfigSyncJobExecutor.class).getMethods().stream()
-            .filter(m -> m.getMethodCallsFromSelf().stream().anyMatch(call -> call.getTarget().getName().equals("send")
+            .filter(m -> m.getMethodCallsFromSelf().stream().anyMatch(call -> call.getTarget().getName().equals("afterSend")
                 && call.getTarget().getOwner().getName().equals(PanConfigSyncJobExecutor.class.getName())))
             .count();
         assertEquals(1, senders);
+        assertTrue(calls(PanConfigSyncJobExecutor.class, "afterSend", JooqPanConfigSyncRepository.class, "recordReply"));
+        assertTrue(calls(PanConfigSyncJobExecutor.class, "afterSend", JooqPanConfigSyncRepository.class, "finish"));
+    }
+
+    /** Argon P0-1: a per-endpoint configuration-write purpose, never the estate-wide failover singleton. */
+    @Test void theConfigSyncNeverTakesTheFleetFailoverLease() {
+        assertEquals("CONFIGURATION_WRITE", com.securityexpert.nexus.ui2.worker.confirm.WorkerClaimLoop.purposeOf(
+            JooqPanConfigSyncRepository.JOB_TYPE));
+        assertEquals("FAILOVER_EXECUTION", com.securityexpert.nexus.ui2.worker.confirm.WorkerClaimLoop.purposeOf("pan_cluster_failover"));
+        assertEquals("FAILOVER_READINESS", com.securityexpert.nexus.ui2.worker.confirm.WorkerClaimLoop.purposeOf("pan_failover_readiness"));
+        assertEquals("CONFIGURATION", com.securityexpert.nexus.ui2.worker.confirm.WorkerClaimLoop.purposeOf("pan_configuration_collect"));
+        // acquireFleet is a no-op for this purpose: no repository is installed here, so any fleet acquisition would fail.
+        var owner = new com.securityexpert.nexus.ui2.persistence.runtime.EndpointAdmissionRepository.Owner("job-" + 1, 1, null, 0,
+            "general", "general-" + "synthetic", 1, "CONFIGURATION_WRITE", false);
+        var scope = com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.open(owner);
+        try { assertDoesNotThrow(scope::acquireFleet); }
+        finally { com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.attach(null); }
     }
 
     @Test void aDisabledWorkerRefusesTheWriteGateEvenWhenCalledDirectly() throws Exception {

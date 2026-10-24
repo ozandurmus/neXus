@@ -35,6 +35,12 @@ public class JooqPanConfigSyncRepository {
     public static final String DEVICE_REPORTED_ERROR = "DEVICE_REPORTED_ERROR";
     public static final String OUTCOME_UNKNOWN = "OUTCOME_UNKNOWN";
     public static final String EXPIRED = "CONFIG_SYNC_REQUEST_EXPIRED";
+    /** P1-3: the write's attempt was committed but the switch was off, or the transport refused before any contact. */
+    public static final String MUTATION_DISABLED_BEFORE_SEND = "MUTATION_DISABLED_BEFORE_SEND";
+    public static final String NOT_SENT_BEFORE_CONTACT = "NOT_SENT_BEFORE_CONTACT";
+    public static final Set<String> NOT_SENT = Set.of(MUTATION_DISABLED_BEFORE_SEND, NOT_SENT_BEFORE_CONTACT);
+    /** The follow-up readiness of an administrator's admitted sync acknowledged by the job itself (Argon P0-3). */
+    public static final String FOLLOW_UP_ACTOR = "system:pan-config-sync-followup";
     private static final String WORKER = "system:failover-worker";
 
     /** One request and its end; opaque references only. */
@@ -97,21 +103,41 @@ public class JooqPanConfigSyncRepository {
 
     /**
      * Design §3.1 R7, R11, R12 (and W3 in the job): the cluster's two enrolled Palo Alto members are the bound pair; no
-     * open run of the unit; no other open config sync; no open incident on the cluster or a member. Lock 136 held.
+     * open run or resume of the unit; no other open config sync; no open incident and no unresolved failover write on
+     * the cluster or a member (Argon P1-2). Lock 136 held.
      */
     private static String unitRefusal(DSLContext dsl, String cluster, String source, String target, String ownSync) {
         List<String> members = JooqDeviceRepository.enrolledFailoverMembers(dsl, cluster, "palo_alto");
         if (members.size() != 2 || !Set.copyOf(members).equals(Set.of(source, target))) return "MEMBER_SET_CHANGED";
-        if (!dsl.fetch("select 1 from failover_run where cluster_ref={0} and state not in ('DONE','STOPPED') limit 1",
-                cluster).isEmpty()) return "RUN_ALREADY_ACTIVE";
-        if (!dsl.fetch("select 1 from pan_config_sync where cluster_ref={0} and state in "
-                + JooqCpFailoverRepository.CONFIG_SYNC_OPEN_SQL + " and sync_id is distinct from {1} limit 1",
-                cluster, ownSync).isEmpty()) return "CONFIG_SYNC_ALREADY_ACTIVE";
+        String busy = busy(dsl, cluster, source, target, ownSync);
+        if (busy != null) return busy;
         if (!dsl.fetch("select 1 from failover_quarantine where active and (cluster_ref={0} "
                 + "or quarantined_member_ids @> jsonb_build_array({1}::text) "
                 + "or quarantined_member_ids @> jsonb_build_array({2}::text)) limit 1", cluster, source, target).isEmpty())
             return "OPEN_INCIDENT";
         return null;
+    }
+
+    /** Open run, resume or other sync of the unit, or an unresolved failover write on it; null when none. */
+    private static String busy(DSLContext dsl, String cluster, String source, String target, String ownSync) {
+        if (!dsl.fetch("select 1 from failover_run where cluster_ref={0} and state not in ('DONE','STOPPED') limit 1",
+                cluster).isEmpty()) return "RUN_ALREADY_ACTIVE";
+        if (!dsl.fetch("select 1 from failover_resume where cluster_ref={0} and state in "
+                + "('PENDING_APPROVAL','QUEUED','READING_STATE','RETURNING','POST_RETURN') limit 1", cluster).isEmpty())
+            return "RUN_ALREADY_ACTIVE";
+        if (!dsl.fetch("select 1 from failover_dispatch_intent i join failover_run r on r.run_id=i.run_id "
+                + "where i.delivery<>'NOT_SENT' and i.observation='NOT_OBSERVED' "
+                + "and (r.cluster_ref={0} or i.member_ref in ({1},{2})) limit 1", cluster, source, target).isEmpty())
+            return "UNRESOLVED_DISPATCH";
+        if (!dsl.fetch("select 1 from pan_config_sync where cluster_ref={0} and state in "
+                + JooqCpFailoverRepository.CONFIG_SYNC_OPEN_SQL + " and sync_id is distinct from {1} limit 1",
+                cluster, ownSync).isEmpty()) return "CONFIG_SYNC_ALREADY_ACTIVE";
+        return null;
+    }
+
+    /** For the screens (Argon P1-2): what would refuse a request on this unit now, besides the readiness evidence. */
+    public String unitBusy(String cluster, String source, String target) {
+        return boundary.inTransaction(dsl -> busy(dsl, cluster, source, target, null));
     }
 
     /** The unit's newest finished readiness run and what it recorded for checks 1 (roles) and 4 (configuration sync). */
@@ -121,10 +147,11 @@ public class JooqPanConfigSyncRepository {
         + "select l.run_id, l.finished_at>clock_timestamp()-make_interval(secs => {3}) as fresh, "
         + "exists(select 1 from failover_check_result c where c.run_id=l.run_id and c.phase='pre' and c.check_no=4 "
         + "and c.status='FAIL') as sync_failed, "
+        // Argon P1-1: a role counts only from a check 1 row that PASSED (mode, reciprocal identity and roles).
         + "(select c.derived->>'role' from failover_check_result c where c.run_id=l.run_id and c.phase='pre' "
-        + "and c.check_no=1 and c.member_ref={1} order by c.observed_at desc,c.result_id desc limit 1) as source_role, "
+        + "and c.check_no=1 and c.status='PASS' and c.member_ref={1} order by c.observed_at desc,c.result_id desc limit 1) as source_role, "
         + "(select c.derived->>'role' from failover_check_result c where c.run_id=l.run_id and c.phase='pre' "
-        + "and c.check_no=1 and c.member_ref={2} order by c.observed_at desc,c.result_id desc limit 1) as target_role "
+        + "and c.check_no=1 and c.status='PASS' and c.member_ref={2} order by c.observed_at desc,c.result_id desc limit 1) as target_role "
         + "from latest l";
 
     /**
@@ -160,15 +187,18 @@ public class JooqPanConfigSyncRepository {
             // The grant (role, business hours, acknowledgement) is bound to the job row in this transaction; the worker
             // rechecks business hours before the write (design §3.2 W4).
             ManualAdmissionRecord.record(dsl, jobId, actor, windows);
-            Record job = dsl.fetchOne("select coalesce(submitted_in_business_hours,false) as inside,business_hours_ack_at "
+            Record job = dsl.fetchOne("select coalesce(submitted_in_business_hours,false) as inside "
                 + "from jobs where job_id={0}", jobId);
+            // Argon P1-4: the administrator's acknowledgement is kept on the record whenever it was given, also just
+            // before 08:00 (the job row records it only inside business hours), so the write is not refused at 08:00.
+            OffsetDateTime acknowledged = grant.get().acknowledged() ? OffsetDateTime.now(java.time.ZoneOffset.UTC) : null;
             JooqCpFailoverRepository.requireOne(dsl.execute("insert into pan_config_sync(sync_id,cluster_ref,"
                 + "source_member_ref,target_member_ref,member_set_revision,readiness_run_id,initiated_by,initiator_role,"
                 + "requested_in_business_hours,business_hours_ack_at,job_id,state) "
                 + "values({0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10},'QUEUED')",
                 syncId, cluster, source, target, JooqCpFailoverRepository.memberSetRevision(Set.of(source, target)),
                 evidence.get("run_id", String.class), actor, grant.get().role(), job.get("inside", Boolean.class),
-                job.get("business_hours_ack_at", OffsetDateTime.class), jobId));
+                acknowledged, jobId));
             return new JooqCpFailoverRepository.Decision(ADMITTED, syncId);
         });
     }
@@ -187,7 +217,17 @@ public class JooqPanConfigSyncRepository {
         if (jobId == null || !jobId.equals(sync.jobId()) || !jobOwned(dsl, jobId, epoch)) return "OWNERSHIP_LOST";
         String unit = unitRefusal(dsl, sync.clusterRef(), sync.sourceRef(), sync.targetRef(), sync.id());
         if (unit != null) return unit;
-        return failover.businessHoursRefusal(dsl, jobId);
+        // Design §3.2 W4 against the record's own acknowledgement (Argon P1-4), not the job row's.
+        return windows.insideBusinessHours() && !sync.businessHoursAcknowledged() ? ManualAdmission.CONFIRM_CODE : null;
+    }
+
+    /**
+     * After the write (Argon P0-2): the job still runs under this epoch. Neither a cancel request nor the lease clock
+     * can hide or rewrite the outcome of a write that may have left neXus.
+     */
+    private static boolean jobHeld(DSLContext dsl, String jobId, long epoch) {
+        return !dsl.fetch("select job_id from jobs where job_id={0} and lease_epoch={1} and state='EXECUTING'",
+            jobId, epoch).isEmpty();
     }
 
     /**
@@ -249,60 +289,84 @@ public class JooqPanConfigSyncRepository {
      */
     public boolean recordReply(String syncId, String jobId, long epoch, String attemptId, String deviceStatus,
             String attemptOutcome) {
+        // Argon P0-2: recorded whatever the job's cancel flag or lease says; only the attempt's own job and epoch bind it.
         return audited.inTransaction(WORKER, "pan_config_sync_reply", syncId, dsl -> {
-            if (!jobOwned(dsl, jobId, epoch)) return false;
             boolean notSent = "NOT_SENT".equals(attemptOutcome);
-            JooqCpFailoverRepository.requireOne(dsl.execute("update job_step_attempt set outcome={1},"
+            int attempts = dsl.execute("update job_step_attempt set outcome={1},"
                 + "matched_expectation={2},error_class={3},mutation_boundary_crossed=case when {4} then false "
                 + "else mutation_boundary_crossed end,sent_at=case when {4} then null else sent_at end "
-                + "where attempt_id={0} and job_id={5}", attemptId, attemptOutcome, "success".equals(deviceStatus),
-                "success".equals(deviceStatus) ? null : notSent ? "MUTATION_DISABLED_BEFORE_SEND"
-                    : deviceStatus == null ? "DELIVERY_UNCERTAIN" : "DEVICE_REPORTED_ERROR", notSent, jobId));
-            if (deviceStatus != null) JooqCpFailoverRepository.requireOne(dsl.execute(
-                "update pan_config_sync set device_status={1} where sync_id={0} and state='SYNCING' "
-                + "and device_status is null", syncId, deviceStatus));
+                + "where attempt_id={0} and job_id={5} and lease_epoch={6} and outcome is null", attemptId, attemptOutcome,
+                "success".equals(deviceStatus), "success".equals(deviceStatus) ? null : notSent ? "NOT_SENT"
+                    : deviceStatus == null ? "DELIVERY_UNCERTAIN" : "DEVICE_REPORTED_ERROR", notSent, jobId, epoch);
+            int record = deviceStatus == null ? 0 : dsl.execute("update pan_config_sync set device_status={1} "
+                + "where sync_id={0} and job_id={2} and state='SYNCING' and device_status is null", syncId, deviceStatus, jobId);
+            return attempts == 1 && (deviceStatus == null || record == 1);
+        });
+    }
+
+    /**
+     * Ends the record and its job in one audited transaction (design §4): DONE / COMPLETED for a recorded device
+     * success, OUTCOME_UNKNOWN for a write that may have been sent without a usable reply, STOPPED / FAILED otherwise.
+     * A not-sent outcome ({@link #NOT_SENT}) also clears {@code mutation_possible}. Argon P0-2: bound to the job's epoch
+     * while it is EXECUTING, not to its cancel flag. Returns false when the record or the job had already ended.
+     */
+    public boolean finish(String syncId, String jobId, long epoch, String outcome) {
+        return audited.inTransaction(WORKER, "pan_config_sync_end", syncId, dsl -> {
+            JooqCpFailoverRepository.lockAdmission(dsl);
+            Record r = dsl.fetchOne("select * from pan_config_sync where sync_id={0} and job_id={1} "
+                + "and state in " + JooqCpFailoverRepository.CONFIG_SYNC_OPEN_SQL + " for update", syncId, jobId);
+            if (r == null || !jobHeld(dsl, jobId, epoch)) return false;
+            ConfigSync sync = sync(r);
+            boolean notSent = NOT_SENT.contains(outcome) && "SYNCING".equals(sync.state()) && sync.deviceStatus() == null;
+            boolean done = REQUESTED.equals(outcome) && "success".equals(sync.deviceStatus());
+            // A write that may have left neXus ends either as the device's recorded answer or as OUTCOME_UNKNOWN.
+            String recordOutcome;
+            if (done) recordOutcome = REQUESTED;
+            else if (notSent || !sync.mutationPossible()) recordOutcome = outcome;
+            else if (DEVICE_REPORTED_ERROR.equals(outcome) && "error".equals(sync.deviceStatus())) recordOutcome = DEVICE_REPORTED_ERROR;
+            else recordOutcome = OUTCOME_UNKNOWN;
+            String jobState = done ? "COMPLETED" : OUTCOME_UNKNOWN.equals(recordOutcome) ? "OUTCOME_UNKNOWN" : "FAILED";
+            JooqCpFailoverRepository.requireOne(dsl.execute("update pan_config_sync set state={1},outcome={2},"
+                + "mutation_possible=case when {3} then false else mutation_possible end,"
+                + "finished_at=clock_timestamp() where sync_id={0}", syncId, done ? "DONE" : "STOPPED", recordOutcome, notSent));
+            JooqCpFailoverRepository.requireOne(dsl.execute("update jobs set state={1},outcome={1},terminal_reason={2},"
+                + "finished_at=now() where job_id={0} and lease_epoch={3}", jobId, jobState, recordOutcome, epoch));
             return true;
         });
     }
 
     /**
-     * Ends the record and its job in one audited transaction (design §4): DONE / COMPLETED for a device success,
-     * OUTCOME_UNKNOWN for an uncertain write, STOPPED / FAILED otherwise. With {@code followUp} the unit's readiness
-     * re-run is admitted in the same transaction, after the record has ended (readiness refuses an open sync), in the
-     * initiator's name under the initiator's grant: the recorded role, and the recorded business-hours acknowledgement.
-     * A re-run that cannot be admitted keeps its refusal code on the record. Returns false when the job lost its lease.
+     * Design §4 (Argon P0-3): the unit's readiness re-run, after the record has ended and in a transaction of its own,
+     * so nothing here can roll back or rewrite the outcome. It is the initiator's run, under the initiator's grant (the
+     * recorded role), and it is never refused for business hours: inside them it carries the initiator's
+     * acknowledgement when the request had one, else the follow-up's own ({@link #FOLLOW_UP_ACTOR}). Returns the
+     * readiness run id, or null with the refusal kept on the record.
      */
-    public boolean finish(String syncId, String jobId, long epoch, String outcome, boolean followUp) {
-        return audited.inTransaction(WORKER, "pan_config_sync_end", syncId, dsl -> {
+    public String followUp(String syncId) {
+        return audited.inTransaction(WORKER, "pan_config_sync_followup", syncId, dsl -> {
             JooqCpFailoverRepository.lockAdmission(dsl);
-            Record r = dsl.fetchOne("select * from pan_config_sync where sync_id={0} and job_id={1} "
-                + "and state in " + JooqCpFailoverRepository.CONFIG_SYNC_OPEN_SQL + " for update", syncId, jobId);
-            if (r == null || !jobOwned(dsl, jobId, epoch)) return false;
+            Record r = dsl.fetchOne("select * from pan_config_sync where sync_id={0} for update", syncId);
+            if (r == null) return null;
             ConfigSync sync = sync(r);
-            boolean done = REQUESTED.equals(outcome) && "success".equals(sync.deviceStatus());
-            String recordOutcome = REQUESTED.equals(outcome) && !done ? OUTCOME_UNKNOWN : outcome;
-            String jobState = done ? "COMPLETED" : OUTCOME_UNKNOWN.equals(recordOutcome) ? "OUTCOME_UNKNOWN" : "FAILED";
-            JooqCpFailoverRepository.requireOne(dsl.execute("update pan_config_sync set state={1},outcome={2},"
-                + "finished_at=clock_timestamp() where sync_id={0}", syncId, done ? "DONE" : "STOPPED", recordOutcome));
-            JooqCpFailoverRepository.requireOne(dsl.execute("update jobs set state={1},outcome={1},terminal_reason={2},"
-                + "finished_at=now() where job_id={0} and lease_epoch={3}", jobId, jobState, recordOutcome, epoch));
-            if (!followUp) return true;
-            String refusal;
-            String runId = null;
-            boolean inside = windows.insideBusinessHours();
-            if (inside && !sync.businessHoursAcknowledged()) {
-                refusal = ManualAdmission.CONFIRM_CODE;
-            } else {
-                var grant = new ManualAdmission.Grant(sync.initiatedBy(), sync.initiatorRole(), sync.businessHoursAcknowledged());
-                String member = sync.sourceRef().compareTo(sync.targetRef()) < 0 ? sync.sourceRef() : sync.targetRef();
-                var decision = ManualAdmission.under(grant, () ->
-                    failover.readinessIn(dsl, sync.clusterRef(), null, sync.initiatedBy(), member, "palo_alto"));
-                refusal = ADMITTED.equals(decision.code()) ? null : decision.code();
-                runId = decision.runId();
-            }
+            if (sync.open() || sync.followupReadinessRunId() != null || sync.followupRefusal() != null) return null;
+            var grant = new ManualAdmission.Grant(sync.initiatedBy(), sync.initiatorRole(), true);
+            String member = sync.sourceRef().compareTo(sync.targetRef()) < 0 ? sync.sourceRef() : sync.targetRef();
+            var decision = ManualAdmission.under(grant, () ->
+                failover.readinessIn(dsl, sync.clusterRef(), null, sync.initiatedBy(), member, "palo_alto"));
+            String runId = ADMITTED.equals(decision.code()) ? decision.runId() : null;
+            if (runId != null && !sync.businessHoursAcknowledged()) dsl.execute("update jobs set business_hours_ack_by={1} "
+                + "where job_id=(select job_id from failover_run where run_id={0}) and business_hours_ack_by is not null",
+                runId, FOLLOW_UP_ACTOR);
             JooqCpFailoverRepository.requireOne(dsl.execute("update pan_config_sync set followup_readiness_run_id={1},"
-                + "followup_refusal={2} where sync_id={0}", syncId, runId, refusal));
-            return true;
+                + "followup_refusal={2} where sync_id={0}", syncId, runId, runId == null ? decision.code() : null));
+            return runId;
         });
+    }
+
+    /** A follow-up that failed for another reason keeps that code on the ended record (never the outcome). */
+    public void followUpFailed(String syncId, String code) {
+        audited.inTransaction(WORKER, "pan_config_sync_followup", syncId, dsl -> dsl.execute(
+            "update pan_config_sync set followup_refusal={1} where sync_id={0} and state in ('DONE','STOPPED') "
+            + "and followup_readiness_run_id is null and followup_refusal is null", syncId, code));
     }
 }

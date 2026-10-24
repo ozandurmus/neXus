@@ -149,51 +149,110 @@ class JooqPanConfigSyncRepositoryTest {
         }
     }
 
-    @Test void theEndReRunsReadinessUnderTheInitiatorsGrantAfterTheRecordEnded() {
+    @Test void theEndBindsToTheJobsEpochOnlyNeverItsCancelFlag() {
         var db = new Database();
         var repository = new JooqPanConfigSyncRepository(db, true, windows(OUTSIDE));
-        assertTrue(repository.finish("sync-1", "job-1", 1, JooqPanConfigSyncRepository.REQUESTED, true));
+        assertTrue(repository.recordReply("sync-1", "job-1", 1, "attempt-write", "success", "MATCHED"));
+        assertTrue(repository.finish("sync-1", "job-1", 1, JooqPanConfigSyncRepository.REQUESTED));
+        // Argon P0-2: after the send, neither a cancel request nor the lease clock decides whether the outcome is kept.
+        for (String sql : db.statements) assertFalse(sql.contains("cancel_requested"), sql);
+        assertTrue(db.statements.stream().anyMatch(sql -> sql.startsWith("select job_id from jobs")
+            && sql.contains("state='EXECUTING'") && !sql.contains("lease_expires_at")));
         int ended = indexOf(db, "update pan_config_sync set state");
-        assertArrayEquals(new Object[]{"DONE", JooqPanConfigSyncRepository.REQUESTED, "sync-1"}, db.bindings.get(ended));
-        int job = indexOf(db, "update jobs set state");
-        assertEquals("COMPLETED", db.bindings.get(job)[0]);
+        assertArrayEquals(new Object[]{"DONE", JooqPanConfigSyncRepository.REQUESTED, false, "sync-1"}, db.bindings.get(ended));
+        assertEquals("COMPLETED", db.bindings.get(indexOf(db, "update jobs set state"))[0]);
+        // The end and the readiness re-run are separate transactions: no readiness admission inside the end.
+        assertFalse(db.ran("insert into failover_run"));
+    }
+
+    @Test void aWriteThatMayHaveBeenSentEndsAsItsRecordedReplyOrUnknownAndANotSentOneClearsTheFlag() {
+        var unconfirmed = new Database();
+        unconfirmed.sync.put("device_status", null);
+        assertTrue(new JooqPanConfigSyncRepository(unconfirmed, true, windows(OUTSIDE)).finish("sync-1", "job-1", 1,
+            JooqPanConfigSyncRepository.REQUESTED));
+        assertArrayEquals(new Object[]{"STOPPED", "OUTCOME_UNKNOWN", false, "sync-1"},
+            unconfirmed.bindings.get(indexOf(unconfirmed, "update pan_config_sync set state")));
+        assertEquals("OUTCOME_UNKNOWN", unconfirmed.bindings.get(indexOf(unconfirmed, "update jobs set state"))[0]);
+        // A pre-send code can never land on a write that may have been sent.
+        var sent = new Database();
+        sent.sync.put("device_status", null);
+        new JooqPanConfigSyncRepository(sent, true, windows(OUTSIDE)).finish("sync-1", "job-1", 1, "PRECHECK_UNAVAILABLE");
+        assertEquals("OUTCOME_UNKNOWN", sent.bindings.get(indexOf(sent, "update pan_config_sync set state"))[1]);
+        var error = new Database();
+        error.sync.put("device_status", "error");
+        new JooqPanConfigSyncRepository(error, true, windows(OUTSIDE)).finish("sync-1", "job-1", 1,
+            JooqPanConfigSyncRepository.DEVICE_REPORTED_ERROR);
+        assertArrayEquals(new Object[]{"STOPPED", "DEVICE_REPORTED_ERROR", false, "sync-1"},
+            error.bindings.get(indexOf(error, "update pan_config_sync set state")));
+        assertEquals("FAILED", error.bindings.get(indexOf(error, "update jobs set state"))[0]);
+        // Proven not sent: the flag falls back with the terminal outcome (the V178 guard allows exactly this).
+        var notSent = new Database();
+        notSent.sync.put("device_status", null);
+        new JooqPanConfigSyncRepository(notSent, true, windows(OUTSIDE)).finish("sync-1", "job-1", 1,
+            JooqPanConfigSyncRepository.NOT_SENT_BEFORE_CONTACT);
+        assertArrayEquals(new Object[]{"STOPPED", JooqPanConfigSyncRepository.NOT_SENT_BEFORE_CONTACT, true, "sync-1"},
+            notSent.bindings.get(indexOf(notSent, "update pan_config_sync set state")));
+    }
+
+    @Test void theReRunIsTheInitiatorsAndIsNeverRefusedForBusinessHours() {
+        // Inside business hours, a request made just before 08:00 without an acknowledgement: the re-run is admitted
+        // and its acknowledgement is the follow-up's own (Argon P0-3).
+        var db = new Database();
+        db.sync = Database.syncRow(null, false);
+        db.sync.put("state", "DONE");
+        var repository = new JooqPanConfigSyncRepository(db, true, windows(INSIDE));
+        assertNotNull(repository.followUp("sync-1"));
         int run = indexOf(db, "insert into failover_run");
-        assertTrue(run > ended && run > job, "readiness is admitted after the record has ended");
         assertTrue(db.statements.get(run).contains("'READINESS'"));
         assertEquals(ACTOR, db.bindings.get(run)[3], "the re-run is the initiator's");
-        int readinessJob = indexOf(db, "insert into jobs");
-        assertEquals("pan_failover_readiness", db.bindings.get(readinessJob)[1]);
+        assertEquals("pan_failover_readiness", db.bindings.get(indexOf(db, "insert into jobs"))[1]);
         assertEquals(ManualAdmission.OPERATION_ADMIN, db.bindings.get(indexOf(db, "update jobs set window_bypass_role"))[0]);
+        int ack = indexOf(db, "update jobs set business_hours_ack_by");
+        assertEquals(JooqPanConfigSyncRepository.FOLLOW_UP_ACTOR, db.bindings.get(ack)[0]);
         int followUp = indexOf(db, "update pan_config_sync set followup_readiness_run_id");
         assertEquals(db.bindings.get(run)[0], db.bindings.get(followUp)[0]);
         assertNull(db.bindings.get(followUp)[1]);
         assertTrue(ManualAdmission.current().isEmpty(), "the grant does not outlive the re-run");
-    }
-
-    @Test void insideBusinessHoursAnUnacknowledgedRequestGetsNoReRunAndAnUncertainWriteEndsUnknown() {
-        var db = new Database();
-        var repository = new JooqPanConfigSyncRepository(db, true, windows(INSIDE));
-        db.sync = Database.syncRow(null, false);
-        db.sync.put("device_status", null);
-        assertTrue(repository.finish("sync-1", "job-1", 1, JooqPanConfigSyncRepository.OUTCOME_UNKNOWN, true));
-        assertEquals("STOPPED", db.bindings.get(indexOf(db, "update pan_config_sync set state"))[0]);
-        assertEquals("OUTCOME_UNKNOWN", db.bindings.get(indexOf(db, "update jobs set state"))[0]);
-        assertFalse(db.ran("insert into failover_run"));
-        assertEquals(ManualAdmission.CONFIRM_CODE, db.bindings.get(indexOf(db, "update pan_config_sync set followup"))[1]);
-        // Acknowledged inside business hours: the re-run is admitted with that acknowledgement.
+        // With the initiator's acknowledgement the re-run keeps it (no follow-up actor).
         var acked = new Database();
         acked.sync = Database.syncRow(OffsetDateTime.now(ZoneOffset.UTC), true);
-        assertTrue(new JooqPanConfigSyncRepository(acked, true, windows(INSIDE)).finish("sync-1", "job-1", 1,
-            JooqPanConfigSyncRepository.REQUESTED, true));
-        assertTrue(acked.ran("insert into failover_run"));
-        // A claimed success without the recorded device status is never DONE.
-        var unconfirmed = new Database();
-        unconfirmed.sync.put("device_status", null);
-        assertTrue(new JooqPanConfigSyncRepository(unconfirmed, true, windows(OUTSIDE)).finish("sync-1", "job-1", 1,
-            JooqPanConfigSyncRepository.REQUESTED, false));
-        assertArrayEquals(new Object[]{"STOPPED", "OUTCOME_UNKNOWN", "sync-1"},
-            unconfirmed.bindings.get(indexOf(unconfirmed, "update pan_config_sync set state")));
-        assertFalse(unconfirmed.ran("insert into failover_run"));
+        acked.sync.put("state", "STOPPED");
+        assertNotNull(new JooqPanConfigSyncRepository(acked, true, windows(INSIDE)).followUp("sync-1"));
+        assertFalse(acked.ran("update jobs set business_hours_ack_by"));
+        // An open record, or one already followed up, gets no re-run.
+        var open = new Database();
+        assertNull(new JooqPanConfigSyncRepository(open, true, windows(OUTSIDE)).followUp("sync-1"));
+        assertFalse(open.ran("insert into failover_run"));
+    }
+
+    @Test void anAcknowledgementGivenJustBeforeEightIsKeptAndTheWriteIsNotRefusedAtEight() {
+        var db = new Database();
+        var repository = new JooqPanConfigSyncRepository(db, true, windows(OUTSIDE));
+        asAdmin(true, () -> repository.request(CLUSTER, SOURCE, TARGET, ACTOR));
+        Object[] insert = db.bindings.get(indexOf(db, "insert into pan_config_sync"));
+        assertNotNull(insert[9], "business_hours_ack_at comes from the grant (Argon P1-4)");
+        // At 08:00 the record's own acknowledgement admits the write; without one it is refused.
+        var acked = new Database();
+        acked.sync = Database.syncRow(OffsetDateTime.now(ZoneOffset.UTC), false);
+        acked.sync.put("state", "READING_STATE"); acked.sync.put("device_status", null); acked.sync.put("mutation_possible", false);
+        assertEquals("ADMITTED", new JooqPanConfigSyncRepository(acked, true, windows(INSIDE)).prepareSend("sync-1", "job-1", 1, 2,
+            SOURCE, "pan_failover_config_sync", "configuration-write").code());
+        var unacked = new Database();
+        unacked.sync.put("state", "READING_STATE"); unacked.sync.put("device_status", null); unacked.sync.put("mutation_possible", false);
+        assertEquals(ManualAdmission.CONFIRM_CODE, new JooqPanConfigSyncRepository(unacked, true, windows(INSIDE)).prepareSend(
+            "sync-1", "job-1", 1, 2, SOURCE, "pan_failover_config_sync", "configuration-write").code());
+        assertFalse(unacked.ran("insert into job_step_attempt"));
+    }
+
+    @Test void theUnitFenceCoversRunsResumesUnresolvedWritesAndPassedRolesOnly() {
+        var db = new Database();
+        var repository = new JooqPanConfigSyncRepository(db, true, windows(OUTSIDE));
+        asAdmin(false, () -> repository.request(CLUSTER, SOURCE, TARGET, ACTOR));
+        assertTrue(db.ran("select 1 from failover_resume where cluster_ref"));
+        String dispatch = db.statements.get(indexOf(db, "select 1 from failover_dispatch_intent"));
+        assertTrue(dispatch.contains("i.delivery<>'NOT_SENT'") && dispatch.contains("i.observation='NOT_OBSERVED'"));
+        String evidence = db.statements.get(indexOf(db, "with latest as"));
+        assertEquals(2, evidence.split("c.check_no=1 and c.status='PASS'", -1).length - 1, "both roles from PASSED check 1 rows");
     }
 
     private static int indexOf(Database db, String prefix) {

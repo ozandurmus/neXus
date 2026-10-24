@@ -42,6 +42,8 @@ class PanConfigSyncJobExecutorTest {
         String reply = "<response status=\"success\"><result>synthetic</result></response>";
         int replyStatus = 200;
         boolean replyThrows;
+        RuntimeException preContact;
+        String identityFault;
         Runnable afterPrepare = () -> {};
         final List<String> calls = new ArrayList<>();
         int syncs;
@@ -61,6 +63,7 @@ class PanConfigSyncJobExecutorTest {
                     if (PanConfigSyncJobExecutor.SYNC.equals(cmd)) {
                         calls.add("sync:" + member); syncs++;
                         assertEquals("op", spec.type());
+                        if (preContact != null) throw preContact;
                         if (replyThrows) throw new IllegalStateException("SYNTHETIC_TRANSPORT_FAILURE");
                         return new XmlApiResult.Completed(replyStatus, reply);
                     }
@@ -69,10 +72,14 @@ class PanConfigSyncJobExecutorTest {
                     boolean source = SOURCE.equals(member);
                     String local = source ? sourceRole : targetRole, peer = source ? targetRole : sourceRole;
                     String other = source ? TARGET : SOURCE;
+                    // "own": the member reports a serial that is not its recorded identity; "peer": the target names
+                    // a peer serial that is not the source's (no reciprocal pairing).
+                    String own = "own".equals(identityFault) && !source ? serial(member) + "9" : serial(member);
+                    String peerSerial = "peer".equals(identityFault) && !source ? serial(other) + "9" : serial(other);
                     return new XmlApiResult.Completed(200, "<response status=\"success\"><result><group><mode>Active-Passive</mode>"
                         + "<running-sync>" + runningSync + "</running-sync><running-sync-enabled>yes</running-sync-enabled>"
-                        + "<local-info><state>" + local + "</state><serial-num>" + serial(member) + "</serial-num></local-info>"
-                        + "<peer-info><state>" + peer + "</state><serial-num>" + serial(other) + "</serial-num>"
+                        + "<local-info><state>" + local + "</state><serial-num>" + own + "</serial-num></local-info>"
+                        + "<peer-info><state>" + peer + "</state><serial-num>" + peerSerial + "</serial-num>"
                         + "<conn-status>up</conn-status></peer-info></group></result></response>");
                 });
         }
@@ -119,7 +126,8 @@ class PanConfigSyncJobExecutorTest {
 
     private record Result(JooqPanConfigSyncRepository store, Script script, JobLeaseRepository leases) {}
 
-    private static Result run(Script script, FailoverMutationSwitch mutationSwitch, String admission) {
+    private static JooqPanConfigSyncRepository mockStore(Script script) { return mockStore(script, "ADMITTED"); }
+    private static JooqPanConfigSyncRepository mockStore(Script script, String admission) {
         var store = mock(JooqPanConfigSyncRepository.class);
         when(store.byJob(JOB)).thenReturn(Optional.of(record()));
         when(store.admission(SYNC_ID, JOB, 1L)).thenReturn(admission);
@@ -128,12 +136,20 @@ class PanConfigSyncJobExecutorTest {
             return new JooqPanConfigSyncRepository.Prepared("ADMITTED", "attempt-write");
         });
         when(store.recordReply(anyString(), anyString(), anyLong(), anyString(), nullable(String.class), anyString())).thenReturn(true);
-        when(store.finish(anyString(), anyString(), anyLong(), anyString(), anyBoolean())).thenReturn(true);
+        when(store.finish(anyString(), anyString(), anyLong(), anyString())).thenReturn(true);
+        return store;
+    }
+    private static JobLeaseRepository execute(JooqPanConfigSyncRepository store, Script script, FailoverMutationSwitch mutationSwitch) {
         var leases = mock(JobLeaseRepository.class);
         when(leases.transitionState(anyString(), anyLong(), any(), any(), anyString(), anyString())).thenReturn(true);
         new PanConfigSyncJobExecutor(store, devices(), leases, attempts(), script.transport(),
             ref -> new PanCredentialMaterial("synthetic-user", "synthetic-password".toCharArray()), gates(), d -> {},
             Duration.ZERO, mutationSwitch).execute(JOB, 1);
+        return leases;
+    }
+    private static Result run(Script script, FailoverMutationSwitch mutationSwitch, String admission) {
+        var store = mockStore(script, admission);
+        var leases = execute(store, script, mutationSwitch);
         return new Result(store, script, leases);
     }
     private static Result run(Script script) { return run(script, new FailoverMutationSwitch(true), "ADMITTED"); }
@@ -144,7 +160,8 @@ class PanConfigSyncJobExecutorTest {
             result.script().calls);
         verify(result.store()).prepareSend(SYNC_ID, JOB, 1L, 2, SOURCE, "pan_failover_config_sync", "configuration-write");
         verify(result.store()).recordReply(SYNC_ID, JOB, 1L, "attempt-write", "success", "MATCHED");
-        verify(result.store()).finish(SYNC_ID, JOB, 1L, JooqPanConfigSyncRepository.REQUESTED, true);
+        verify(result.store()).finish(SYNC_ID, JOB, 1L, JooqPanConfigSyncRepository.REQUESTED);
+        verify(result.store()).followUp(SYNC_ID);
     }
 
     @Test void refusesWhenTheRolesFlippedAndSendsNothing() {
@@ -154,10 +171,13 @@ class PanConfigSyncJobExecutorTest {
             assertEquals(0, script.syncs, String.join("/", roles));
             verify(result.store(), never()).prepareSend(anyString(), anyString(), anyLong(), anyInt(), anyString(), anyString(), anyString());
             verify(result.store()).finish(eq(SYNC_ID), eq(JOB), eq(1L), argThat(code -> "ROLES_CHANGED".equals(code)
-                || "HA_STATE_UNKNOWN".equals(code)), eq(true));
+                || "HA_STATE_UNKNOWN".equals(code)));
+            verify(result.store()).followUp(SYNC_ID);
         }
         var script = new Script(); script.sourceRole = "passive"; script.targetRole = "active";
-        verify(run(script).store()).finish(SYNC_ID, JOB, 1L, "ROLES_CHANGED", true);
+        var flipped = run(script);
+        verify(flipped.store()).finish(SYNC_ID, JOB, 1L, "ROLES_CHANGED");
+        verify(flipped.store()).followUp(SYNC_ID);
     }
 
     @Test void refusesWhenTheMutationSwitchIsOffBeforeAnyContact() {
@@ -165,7 +185,8 @@ class PanConfigSyncJobExecutorTest {
         var result = run(script, new FailoverMutationSwitch(false), "ADMITTED");
         assertTrue(script.calls.isEmpty());
         verify(result.store(), never()).admission(anyString(), anyString(), anyLong());
-        verify(result.store()).finish(SYNC_ID, JOB, 1L, FailoverMutationSwitch.DISABLED, false);
+        verify(result.store()).finish(SYNC_ID, JOB, 1L, FailoverMutationSwitch.DISABLED);
+        verify(result.store(), never()).followUp(anyString());
     }
 
     @Test void aSwitchTurnedOffAfterThePreparationRecordsNotSentAndSendsNothing() {
@@ -176,7 +197,9 @@ class PanConfigSyncJobExecutorTest {
         var result = run(script, mutationSwitch, "ADMITTED");
         assertEquals(0, script.syncs);
         verify(result.store()).recordReply(SYNC_ID, JOB, 1L, "attempt-write", null, "NOT_SENT");
-        verify(result.store()).finish(SYNC_ID, JOB, 1L, "MUTATION_DISABLED_BEFORE_SEND", true);
+        verify(result.store()).finish(SYNC_ID, JOB, 1L, "MUTATION_DISABLED_BEFORE_SEND");
+        // Nothing was sent, so nothing changed: no readiness re-run (Argon P1-3).
+        verify(result.store(), never()).followUp(anyString());
     }
 
     @Test void anAdmissionRefusalEndsTheRecordWithItsCodeBeforeContact() {
@@ -185,7 +208,8 @@ class PanConfigSyncJobExecutorTest {
             var script = new Script();
             var result = run(script, new FailoverMutationSwitch(true), code);
             assertTrue(script.calls.isEmpty(), code);
-            verify(result.store()).finish(SYNC_ID, JOB, 1L, code, false);
+            verify(result.store()).finish(SYNC_ID, JOB, 1L, code);
+            verify(result.store(), never()).followUp(anyString());
         }
     }
 
@@ -195,7 +219,8 @@ class PanConfigSyncJobExecutorTest {
             var script = new Script(); script.runningSync = sync[0];
             var result = run(script);
             assertEquals(0, script.syncs, sync[1]);
-            verify(result.store()).finish(SYNC_ID, JOB, 1L, sync[1], true);
+            verify(result.store()).finish(SYNC_ID, JOB, 1L, sync[1]);
+            verify(result.store()).followUp(SYNC_ID);
         }
     }
 
@@ -204,7 +229,8 @@ class PanConfigSyncJobExecutorTest {
         var result = run(error);
         assertEquals(1, error.syncs);
         verify(result.store()).recordReply(SYNC_ID, JOB, 1L, "attempt-write", "error", "FAILED");
-        verify(result.store()).finish(SYNC_ID, JOB, 1L, JooqPanConfigSyncRepository.DEVICE_REPORTED_ERROR, true);
+        verify(result.store()).finish(SYNC_ID, JOB, 1L, JooqPanConfigSyncRepository.DEVICE_REPORTED_ERROR);
+        verify(result.store()).followUp(SYNC_ID);
         var lost = new Script(); lost.replyStatus = 504;
         var thrown = new Script(); thrown.replyThrows = true;
         var garbled = new Script(); garbled.reply = "<html>status=\"success\"</html>";
@@ -212,8 +238,75 @@ class PanConfigSyncJobExecutorTest {
             var outcome = run(uncertain);
             assertEquals(1, uncertain.syncs);
             verify(outcome.store()).recordReply(SYNC_ID, JOB, 1L, "attempt-write", null, "OUTCOME_UNKNOWN");
-            verify(outcome.store()).finish(SYNC_ID, JOB, 1L, JooqPanConfigSyncRepository.OUTCOME_UNKNOWN, true);
+            verify(outcome.store()).finish(SYNC_ID, JOB, 1L, JooqPanConfigSyncRepository.OUTCOME_UNKNOWN);
+            verify(outcome.store()).followUp(SYNC_ID);
         }
+    }
+
+    @Test void anIdentityOrPairingMismatchInTheFreshReadSendsNothing() {
+        var own = new Script(); own.identityFault = "own";
+        var ownResult = run(own);
+        assertEquals(0, own.syncs);
+        verify(ownResult.store()).finish(SYNC_ID, JOB, 1L, "IDENTITY_NOT_VERIFIED");
+        verify(ownResult.store(), never()).followUp(anyString());
+        var peer = new Script(); peer.identityFault = "peer";
+        var peerResult = run(peer);
+        assertEquals(0, peer.syncs);
+        verify(peerResult.store(), never()).prepareSend(anyString(), anyString(), anyLong(), anyInt(), anyString(), anyString(), anyString());
+        verify(peerResult.store()).finish(eq(SYNC_ID), eq(JOB), eq(1L), argThat(code -> "ROLES_CHANGED".equals(code)
+            || "HA_STATE_UNKNOWN".equals(code)));
+    }
+
+    @Test void aCancelOrLeaseRefusalBeforeContactIsRecordedNotSentAndNoReRun() {
+        for (RuntimeException refusal : List.<RuntimeException>of(new com.securityexpert.nexus.ui2.worker.JobCancellationScope.Cancelled(),
+                new com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.AdmissionWait(),
+                new com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.LeaseLost())) {
+            var script = new Script(); script.preContact = refusal;
+            var result = run(script);
+            verify(result.store()).recordReply(SYNC_ID, JOB, 1L, "attempt-write", null, "NOT_SENT");
+            verify(result.store()).finish(SYNC_ID, JOB, 1L, JooqPanConfigSyncRepository.NOT_SENT_BEFORE_CONTACT);
+            verify(result.store(), never()).followUp(anyString());
+        }
+    }
+
+    @Test void nothingAfterTheSendCanReplaceItsOutcomeWithAPreSendCode() {
+        // The re-run fails: the outcome stays, the failure is kept as the follow-up refusal.
+        var store = mockStore(new Script());
+        doThrow(new IllegalStateException("SYNTHETIC_DB_FAILURE")).when(store).followUp(SYNC_ID);
+        var script = new Script();
+        execute(store, script, new FailoverMutationSwitch(true));
+        verify(store).finish(SYNC_ID, JOB, 1L, JooqPanConfigSyncRepository.REQUESTED);
+        verify(store, never()).finish(anyString(), anyString(), anyLong(), eq("PRECHECK_UNAVAILABLE"));
+        verify(store).followUpFailed(SYNC_ID, "FOLLOW_UP_UNAVAILABLE");
+        // The end fails once: it is retried with the same outcome, never a pre-send code.
+        var flaky = mockStore(new Script());
+        when(flaky.finish(SYNC_ID, JOB, 1L, JooqPanConfigSyncRepository.REQUESTED))
+            .thenThrow(new IllegalStateException("SYNTHETIC_DB_FAILURE")).thenReturn(true);
+        execute(flaky, new Script(), new FailoverMutationSwitch(true));
+        verify(flaky, times(2)).finish(SYNC_ID, JOB, 1L, JooqPanConfigSyncRepository.REQUESTED);
+        verify(flaky, never()).finish(anyString(), anyString(), anyLong(), eq("PRECHECK_UNAVAILABLE"));
+        // A reply that cannot be recorded still ends the record with the reply's outcome.
+        var noReply = mockStore(new Script());
+        when(noReply.recordReply(anyString(), anyString(), anyLong(), anyString(), nullable(String.class), anyString()))
+            .thenThrow(new IllegalStateException("SYNTHETIC_DB_FAILURE"));
+        execute(noReply, new Script(), new FailoverMutationSwitch(true));
+        verify(noReply).finish(SYNC_ID, JOB, 1L, JooqPanConfigSyncRepository.REQUESTED);
+    }
+
+    @Test void aJobThatCouldNotBeEndedWithItsRecordIsNeverLeftExecutingAndAnUncertainWriteStaysUnknown() {
+        var lost = new Script(); lost.replyStatus = 504;
+        var store = mockStore(lost);
+        when(store.finish(anyString(), anyString(), anyLong(), anyString())).thenReturn(false);
+        var leases = execute(store, lost, new FailoverMutationSwitch(true));
+        verify(leases).transitionState(eq(JOB), eq(1L), eq(com.securityexpert.nexus.ui2.jobs.JobState.EXECUTING),
+            eq(com.securityexpert.nexus.ui2.jobs.JobState.OUTCOME_UNKNOWN), anyString(), anyString(),
+            eq(JooqPanConfigSyncRepository.OUTCOME_UNKNOWN));
+        var refused = new Script(); refused.sourceRole = "passive"; refused.targetRole = "active";
+        var refusedStore = mockStore(refused);
+        when(refusedStore.finish(anyString(), anyString(), anyLong(), anyString())).thenReturn(false);
+        var refusedLeases = execute(refusedStore, refused, new FailoverMutationSwitch(true));
+        verify(refusedLeases).transitionState(eq(JOB), eq(1L), eq(com.securityexpert.nexus.ui2.jobs.JobState.EXECUTING),
+            eq(com.securityexpert.nexus.ui2.jobs.JobState.FAILED), anyString(), anyString(), eq("ROLES_CHANGED"));
     }
 
     @Test void deviceStatusReadsTheRootElementOnly() {
