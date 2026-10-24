@@ -57,6 +57,13 @@ class ReadinessCheckViewTest {
         assertEquals(false,view.get("blocking"));
         assertEquals(true,row(false,8,"UNKNOWN","{\"reason\":\"NO_TRAFFIC_INTERFACES\",\"selectedCount\":0}").get("blocking"));
     }
+    @Test void panConfigSyncDisabledOnTheDeviceIsNamed() throws Exception {
+        String off="{\"first\":{\"running-sync\":\"not synchronized\",\"running-sync-enabled\":\"no\"},"
+            + "\"second\":{\"running-sync\":\"not synchronized\",\"running-sync-enabled\":\"no\"},\"missing\":[],\"unrecognised\":[]}";
+        assertTrue(String.valueOf(row(true,4,"UNKNOWN",off).get("summary")).startsWith("Config sync is disabled on this HA pair"));
+        assertEquals("Configuration sync field missing or not recognised",
+            row(true,4,"UNKNOWN","{\"missing\":[\"first.running-sync\"],\"unrecognised\":[]}").get("summary"));
+    }
     /** PO decision 2026-10-20 item 2: the "Recovery mode" row the PO picks a pilot unit by. */
     @Test void recoveryModeRowIsBlockingAndNamesTheObservedMode() throws Exception {
         var active=row(false,15,"PASS","{\"recoveryMode\":\"ACTIVE_UP\",\"reason\":\"ACTIVE_UP\"}");
