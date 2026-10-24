@@ -225,7 +225,7 @@ export function OperationsScreen() {
         progress={readinessProgress} error={readinessError}
         onOpen={(ref, unitId) => { setSelectedCluster(ref); setExpandedUnit(unitId); }}
         onRun={row => { if (!batchLock.current) void handleRunReadiness(row); }}
-        onBulkRun={units => { void handleBulkReadiness(units); }} />}
+        onBulkRun={units => { void handleBulkReadiness(units); }} onChanged={reloadSummary} />}
     <Drawer anchor="right" open={selectedCluster !== null} onClose={() => setSelectedCluster(null)}
       PaperProps={{ role: "dialog", "aria-modal": true, "aria-label": "HA readiness detail", sx: { width: "min(100vw, 1000px)", p: 2, bgcolor: m3.scLowest } }}>
       {selectedCluster && <>

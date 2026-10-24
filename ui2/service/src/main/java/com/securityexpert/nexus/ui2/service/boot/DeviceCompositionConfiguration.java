@@ -132,6 +132,13 @@ public class DeviceCompositionConfiguration {
         return new com.securityexpert.nexus.ui2.persistence.JooqCpFailoverRepository(transactionBoundary);
     }
 
+    /** PAN HA configuration sync records (V178; docs/design/PAN_CONFIG_SYNC_REMEDIATION_2026_10_24.md). */
+    @Bean
+    public com.securityexpert.nexus.ui2.persistence.JooqPanConfigSyncRepository panConfigSyncRepository(
+            TransactionBoundary transactionBoundary) {
+        return new com.securityexpert.nexus.ui2.persistence.JooqPanConfigSyncRepository(transactionBoundary);
+    }
+
     /** Device IDs and their hostnames for the masking layer, so two devices never share a pseudonym (F-1, 2026-10-18). */
     @Bean
     public com.securityexpert.nexus.ui2.service.privacy.MaskingDeviceDirectory maskingDeviceDirectory(

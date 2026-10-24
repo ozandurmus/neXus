@@ -1859,9 +1859,22 @@ export interface CpFailoverUnit { maskedName?: string; maskedMembers?: Array<Omi
   /** VSX: the chassis and each Virtual System are separate units; the chassis is listed first (VSX_CHASSIS_FAILOVER_UNIT_2026_10_23.md). */
   unitKind?: "CLUSTER" | "VSX_CHASSIS" | "VIRTUAL_SYSTEM";
   /** Set when the server never fails this unit over (the VSX chassis); approvals and starts are refused with this code. */
-  failoverRefusal?: string | null; canApprove: boolean; canStart: boolean; canSchedule: boolean; mode?: string; recoveryMode?: "ACTIVE_UP" | "PRIMARY_UP" | "UNKNOWN"; refusalReason?: string | null; readinessObservedAt?: string | null }
+  failoverRefusal?: string | null; canApprove: boolean; canStart: boolean; canSchedule: boolean; mode?: string; recoveryMode?: "ACTIVE_UP" | "PRIMARY_UP" | "UNKNOWN"; refusalReason?: string | null; readinessObservedAt?: string | null;
+  /** Palo Alto units only: the server's config-sync facts (PAN_CONFIG_SYNC_REMEDIATION_2026_10_24.md §6). */
+  configSync?: PanConfigSyncFacts }
+export type PanConfigSyncState = "QUEUED" | "READING_STATE" | "SYNCING" | "DONE" | "STOPPED";
+/** One configuration sync request and its end; opaque member ids only. */
+export interface PanConfigSyncRecord { syncId: string; state: PanConfigSyncState; outcome: string | null; deviceStatus: "success" | "error" | null;
+  sourceRef: string; targetRef: string; requestedAt: string; startedAt: string | null; finishedAt: string | null; mutationPossible: boolean;
+  readinessRunId: string | null; readinessRefusal: string | null }
+/**
+ * `offered`: the newest readiness recorded check 4 (Configuration sync) FAIL. `canRun`: the server offers this session the
+ * button. `refusal`: why the server would refuse now (the button is then disabled with it). The UI decides nothing itself.
+ */
+export interface PanConfigSyncFacts { offered: boolean; canRun: boolean; refusal: string | null; sourceRef: string | null; targetRef: string | null;
+  readinessObservedAt: string | null; latest: PanConfigSyncRecord | null }
 export interface ReadinessCheck { device_id?: string; checkNo: number; title: string; member: string; result: CpFailoverCheckStatus; summary: string; blocking: boolean }
-export interface CpFailoverSummary extends Pick<CpFailoverUnit, "unitId" | "clusterId" | "cluster_member_ref" | "vendor" | "virtual_system" | "members" | "masked" | "mode" | "refusalReason" | "readinessObservedAt" | "unitKind" | "failoverRefusal"> {
+export interface CpFailoverSummary extends Pick<CpFailoverUnit, "unitId" | "clusterId" | "cluster_member_ref" | "vendor" | "virtual_system" | "members" | "masked" | "mode" | "refusalReason" | "readinessObservedAt" | "unitKind" | "failoverRefusal" | "configSync"> {
   activeWindow: boolean; lastRunState: string | null; lastRunOutcome: string | null; lastRunAt: string | null; canRunReadiness: boolean;
   readiness: { status: "READY" | "NOT_READY" | "UNKNOWN"; observedAt: string; failedCheck: string; stopCode?: string; checks: Array<ReadinessCheck & { status: CpFailoverCheckStatus; derived: Record<string, unknown> }> } | null;
 }
@@ -1913,6 +1926,12 @@ export const resumeCpFailoverReturn = (runId: string, expectedIncidentId: string
 export const approveCpFailoverResume = (runId: string, resumeId: string, businessHoursAck: boolean) =>
   call<{ runId: string; resumeId: string; state: "QUEUED" }>(`/api/v2/cp-failover/runs/${encodeURIComponent(runId)}/resume-return/approve`,
     "POST", { resumeId, businessHoursAck });
+/** Palo Alto only: sync the running configuration from the named active member to the named passive one. */
+export const requestPanConfigSync = (unit: Pick<CpFailoverUnit, "clusterId" | "unitId">, sourceDeviceId: string, targetDeviceId: string) =>
+  call<PanConfigSyncRecord>(`/api/v2/pan-failover/units/${encodeURIComponent(unit.unitId)}/config-sync`, "POST",
+    { clusterId: unit.clusterId, sourceDeviceId, targetDeviceId });
+export const getPanConfigSync = (syncId: string) =>
+  call<PanConfigSyncRecord>(`/api/v2/pan-failover/config-syncs/${encodeURIComponent(syncId)}`, "GET");
 /** One open failover incident, or a stopped run whose unresolved send blocks every failover in the estate. */
 export interface FailoverIncident {
   incidentRef: string; clusterId: string; unitId: string; cluster_member_ref: string; maskedName?: string;

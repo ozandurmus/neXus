@@ -133,6 +133,11 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("POST /api/v2/pan-failover/approvals/*/revoke", ActionRegistry.CP_FAILOVER_APPROVE),
             Map.entry("POST /api/v2/pan-failover/runs", ActionRegistry.CP_FAILOVER_START),
             Map.entry("POST /api/v2/pan-failover/runs/*/incident/release", ActionRegistry.CP_FAILOVER_INCIDENT_RELEASE),
+            // PO 2026-10-24 (PO_DECISION_RECORD_2026_10_24_PAN_CONFIG_SYNC.md): Palo Alto only; the Check Point prefix stays unmapped.
+            Map.entry("POST /api/v2/pan-failover/units/*/config-sync", ActionRegistry.PAN_FAILOVER_CONFIG_SYNC),
+            Map.entry("GET /api/v2/pan-failover/config-syncs/*", ActionRegistry.CP_FAILOVER_READ),
+            // Every failover GET is mapped under both prefixes; the Check Point one answers CONFIG_SYNC_NOT_SUPPORTED.
+            Map.entry("GET /api/v2/cp-failover/config-syncs/*", ActionRegistry.CP_FAILOVER_READ),
             Map.entry("POST /role-bindings/selections", ActionRegistry.ROLE_BINDING_CREATE),
             Map.entry("GET /role-bindings", ActionRegistry.ROLE_BINDING_CREATE),
             Map.entry("POST /role-bindings", ActionRegistry.ROLE_BINDING_CREATE),

@@ -132,6 +132,13 @@ public final class AuditPresentationAllowlist {
                     "mutation_possible", "outcome", "request_revision", "requested_by", "run_id",
                     "run_kind", "scheduled_for", "started_at", "state", "step", "target_member_ids",
                     "vendor", "vs_id")),
+            // pan_config_sync (V178): opaque references, codes, booleans and timestamps only; no free text.
+            Map.entry("pan_config_sync", Set.of(
+                    "business_hours_ack_at", "cluster_ref", "device_status", "finished_at",
+                    "followup_readiness_run_id", "followup_refusal", "initiated_by", "initiator_role", "job_id",
+                    "member_set_revision", "mutation_possible", "outcome", "readiness_run_id", "requested_at",
+                    "requested_in_business_hours", "source_member_ref", "started_at", "state", "sync_id",
+                    "target_member_ref", "vendor")),
             Map.entry("gate_registry", Set.of(
                     "action_class", "canonical_command_key", "created_at", "gate_id",
                     "max_frequency", "platform_role_scope", "retry_rule", "safe_telemetry_fields",

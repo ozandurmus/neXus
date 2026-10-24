@@ -42,6 +42,7 @@ public final class WorkerClaimLoop {
     private static final List<String> ALL_CAPABILITY_IDS = List.of(
             "cp_policy_collect", "pan_policy_collect",
             "cp_cluster_failover", "pan_cluster_failover", "cp_failover_readiness", "pan_failover_readiness",
+            com.securityexpert.nexus.ui2.persistence.JooqPanConfigSyncRepository.JOB_TYPE,
             com.securityexpert.nexus.ui2.jobs.diagnostic.DiagnosticRead.CAPABILITY,
             com.securityexpert.nexus.ui2.jobs.diagnostic.PanSyslogMeasure.CAPABILITY,
             com.securityexpert.nexus.ui2.jobs.diagnostic.PanSystemLogCollect.CAPABILITY,
@@ -115,6 +116,11 @@ public final class WorkerClaimLoop {
     private com.securityexpert.nexus.ui2.worker.failover.CpFailoverJobExecutor cpFailoverExecutor;
     public WorkerClaimLoop withCpFailover(com.securityexpert.nexus.ui2.worker.failover.CpFailoverJobExecutor executor) {
         this.cpFailoverExecutor=executor; return this;
+    }
+    private com.securityexpert.nexus.ui2.worker.failover.PanConfigSyncJobExecutor panConfigSyncExecutor;
+    /** PAN HA configuration sync (docs/design/PAN_CONFIG_SYNC_REMEDIATION_2026_10_24.md). */
+    public WorkerClaimLoop withPanConfigSync(com.securityexpert.nexus.ui2.worker.failover.PanConfigSyncJobExecutor executor) {
+        this.panConfigSyncExecutor=executor; return this;
     }
     private com.securityexpert.nexus.ui2.worker.failover.PanFailoverJobExecutor panFailoverExecutor;
     public WorkerClaimLoop withPanFailover(com.securityexpert.nexus.ui2.worker.failover.PanFailoverJobExecutor executor) {
@@ -454,6 +460,13 @@ public final class WorkerClaimLoop {
                         com.securityexpert.nexus.ui2.jobs.JobState.REJECTED,"system:worker",
                         "pan_failover_claim_check","EXECUTOR_UNAVAILABLE");
                 } else panFailoverExecutor.execute(claimed.jobId(),claimed.leaseEpoch());
+                return true;
+            }
+            if (com.securityexpert.nexus.ui2.persistence.JooqPanConfigSyncRepository.JOB_TYPE.equals(job.capabilityId())) {
+                if (panConfigSyncExecutor == null) leaseRepository.transitionState(claimed.jobId(),claimed.leaseEpoch(),
+                    com.securityexpert.nexus.ui2.jobs.JobState.CLAIMED,com.securityexpert.nexus.ui2.jobs.JobState.REJECTED,
+                    "system:worker","pan_config_sync_claim_check","EXECUTOR_UNAVAILABLE");
+                else panConfigSyncExecutor.execute(claimed.jobId(),claimed.leaseEpoch());
                 return true;
             }
             if ("pan_failover_readiness".equals(job.capabilityId())) {

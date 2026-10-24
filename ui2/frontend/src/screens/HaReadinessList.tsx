@@ -30,6 +30,7 @@ import { StatePanel, VendorBadge, vendorDisplayName } from "../shell/States";
 import { formatStamp, relativeAge } from "../shell/time";
 import { m3 } from "../theme/m3Theme";
 import { ReadinessChecksTable, readinessStopReason } from "./ReadinessChecksTable";
+import { PanConfigSyncAction } from "./PanConfigSyncAction";
 
 type Cluster = { ref: string; title: string; members: DeviceSummary[] };
 type Status = "READY" | "NOT_READY" | "UNKNOWN" | "UNSUPPORTED";
@@ -134,11 +135,13 @@ export function primaryReasonWord(row?: CpFailoverSummary) {
 }
 
 /** Presentation only: status, permissions and masked names remain server-owned. */
-export function HaReadinessList({ clusters, rows, running, busy, progress, error, onOpen, onRun, onBulkRun }: {
+export function HaReadinessList({ clusters, rows, running, busy, progress, error, onOpen, onRun, onBulkRun, onChanged }: {
   clusters: readonly Cluster[]; rows: Record<string, CpFailoverSummary[]>; running: string | null;
   busy: boolean; progress: ReadinessProgress; error: string | null;
   onOpen: (ref: string, unitId: string | null) => void; onRun: (row: CpFailoverSummary) => void;
   onBulkRun: (rows: CpFailoverSummary[]) => void;
+  /** After a server-offered row action (the PAN config sync) has finished: reload the summary. */
+  onChanged?: () => void;
 }) {
   const [filter, setFilter] = useState<Status | null>(null);
   const [search, setSearch] = useState("");
@@ -258,7 +261,9 @@ export function HaReadinessList({ clusters, rows, running, busy, progress, error
       </TableRow>
       {isExpanded && <TableRow><TableCell colSpan={hasActions ? 7 : 6} sx={{ bgcolor: m3.scLow, p: 1.5 }}>
         <Box id={`checks-${encodeURIComponent(key)}`} role="region" aria-label={`Checks for ${title}`}>
-          {row?.readiness?.checks.length ? <ReadinessChecksTable checks={row.readiness.checks} members={row.members?.length ? row.members : cluster.members} compact />
+          {row?.readiness?.checks.length ? <ReadinessChecksTable checks={row.readiness.checks} members={row.members?.length ? row.members : cluster.members} compact
+            rowAction={checkNo => checkNo === 4 && row.vendor === "palo_alto"
+              ? <PanConfigSyncAction unit={row} members={row.members?.length ? row.members : cluster.members} onDone={onChanged} /> : null} />
             : <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>No observations yet</Typography>}
           <Button size="small" onClick={() => onOpen(cluster.ref, row?.unitId ?? null)}>Open full detail</Button>
         </Box>

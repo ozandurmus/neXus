@@ -77,7 +77,16 @@ final class FailoverCli {
             Map.entry("RESUME_TERMINAL", "That resume has finished."),
             Map.entry("RESUME_DOWN_NOT_CONFIRMED", "The member's DOWN state was not confirmed, so the return step cannot resume."),
             Map.entry("RESUME_RETURN_ALREADY_ATTEMPTED", "The return step was already attempted for this run; it is never sent twice."),
-            Map.entry("RESUME_WRITE_NOT_BOUND", "The return step is not bound to a member; nothing was sent."));
+            Map.entry("RESUME_WRITE_NOT_BOUND", "The return step is not bound to a member; nothing was sent."),
+            Map.entry("CONFIG_SYNC_NOT_SUPPORTED", "Configuration sync is offered for Palo Alto HA pairs only."),
+            Map.entry("CONFIG_SYNC_NOT_FAILED", "The latest readiness did not record Configuration sync as FAIL; nothing was sent."),
+            Map.entry("READINESS_REQUIRED", "Run the readiness check first; nothing was sent."),
+            Map.entry("READINESS_NOT_FRESH", "The latest readiness is older than 60 minutes; run the readiness check again first."),
+            Map.entry("ROLES_CHANGED", "The source is not the active member or the target is not the passive one; nothing was sent."),
+            Map.entry("MEMBER_SET_CHANGED", "The cluster members are not the source and target named; nothing was sent."),
+            Map.entry("CONFIG_SYNC_ALREADY_ACTIVE", "A configuration sync is already in progress for this unit."),
+            Map.entry("CONFIG_SYNC_NOT_FOUND", "No such configuration sync."),
+            Map.entry("FAILOVER_MUTATION_DISABLED", "Failover writes are switched off on this server; nothing was sent."));
 
     private final NexusSessionCli cli;
 
@@ -99,6 +108,10 @@ final class FailoverCli {
         System.out.println("  failover-incident-release <runId> --reason <text>            security_admin: release a run's incident");
         System.out.println("  failover-resume <runId> --incident <incidentId> --reason <text>   ask to resume the return step (Check Point)");
         System.out.println("  failover-resume-approve <runId> <resumeId>                   second administrator approves a pending resume");
+        System.out.println("  failover-config-sync <clusterId> <unitId> --source <activeDeviceId> --target <passiveDeviceId>");
+        System.out.println("                                                 Palo Alto: sync the running config from the active to the passive");
+        System.out.println("                                                 (only while readiness check 4 is FAIL; readiness re-runs afterwards)");
+        System.out.println("  failover-config-sync-status <syncId>                         the sync's state, outcome and readiness re-run");
         System.out.println("                                                 every write also accepts --business-hours-ack; refusals print their code in words");
     }
 
@@ -171,6 +184,19 @@ final class FailoverCli {
                 body.put("resumeId", opaque(p.positional.get(1)));
                 body.put("businessHoursAck", cli.businessHoursAck());
                 yield write("POST", CP + "/runs/" + enc(opaque(p.positional.get(0))) + "/resume-return/approve", NexusSessionCli.json(body));
+            }
+            case "failover-config-sync" -> {
+                String usage = "failover-config-sync <clusterId> <unitId> --source <activeDeviceId> --target <passiveDeviceId>";
+                Parsed p = parse(args, usage, 2, Set.of("--source", "--target"), Set.of());
+                Map<String, Object> body = new LinkedHashMap<>();
+                body.put("clusterId", opaque(p.positional.get(0)));
+                body.put("sourceDeviceId", opaque(requiredText(p, "--source", usage)));
+                body.put("targetDeviceId", opaque(requiredText(p, "--target", usage)));
+                yield write("POST", PAN + "/units/" + enc(opaque(p.positional.get(1))) + "/config-sync", NexusSessionCli.json(body));
+            }
+            case "failover-config-sync-status" -> {
+                Parsed p = parse(args, "failover-config-sync-status <syncId>", 1, Set.of(), Set.of());
+                yield read(PAN + "/config-syncs/" + enc(opaque(p.positional.get(0))));
             }
             default -> -1;
         };

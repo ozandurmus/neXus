@@ -69,6 +69,7 @@ const CONFIRM_VENDORS: Readonly<Record<string, string>> = {
 const JOB_TYPE_LABELS: Readonly<Record<string, string>> = {
   cp_failover_readiness: "Check Point readiness check",
   pan_failover_readiness: "Palo Alto readiness check",
+  pan_failover_config_sync: "Palo Alto HA configuration sync",
   cp_failover_start: "Check Point failover",
   pan_failover_start: "Palo Alto failover",
   cp_system_log_collect: "Check Point log collection",

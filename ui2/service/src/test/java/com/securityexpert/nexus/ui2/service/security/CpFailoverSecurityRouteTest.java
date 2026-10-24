@@ -43,7 +43,7 @@ class CpFailoverSecurityRouteTest {
                 }
             }
         }
-        assertEquals(14, registered);
+        assertEquals(16, registered);
         // PO 2026-10-22: PAN writes open with the Check Point actions.
         for (String path : List.of("/approvals", "/approvals/*/approve", "/approvals/*/revoke", "/runs",
                 "/runs/*/incident/release")) {

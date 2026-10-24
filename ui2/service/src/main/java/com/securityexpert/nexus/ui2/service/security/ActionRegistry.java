@@ -157,6 +157,12 @@ public final class ActionRegistry {
      * administrator's approval (enforced by the service); never operator, viewer or aiview.
      */
     public static final String CP_FAILOVER_RESUME_RETURN = "cp_failover_resume_return";
+    /**
+     * PO_DECISION_RECORD_2026_10_24_PAN_CONFIG_SYNC.md (RATIFIED): sync the running configuration from the active Palo
+     * Alto member to the passive while readiness check 4 is FAIL. security_admin or operation_admin; never operator,
+     * viewer or aiview (the service also refuses a replay viewer holding an admin role).
+     */
+    public static final String PAN_FAILOVER_CONFIG_SYNC = "pan_failover_config_sync";
 
     /**
      * PO decision record 2026-10-15 §6 (PacketBreaker ported into neXus): create a case, upload captures, request an
@@ -308,6 +314,8 @@ public final class ActionRegistry {
                 java.util.Set.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(CP_FAILOVER_INCIDENT_RELEASE, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         register(new ActionDescriptor(CP_FAILOVER_RESUME_RETURN, true, Optional.of(RoleToken.SECURITY_ADMIN),
+                java.util.Set.of(RoleToken.OPERATION_ADMIN)));
+        register(new ActionDescriptor(PAN_FAILOVER_CONFIG_SYNC, true, Optional.of(RoleToken.SECURITY_ADMIN),
                 java.util.Set.of(RoleToken.OPERATION_ADMIN)));
         register(new ActionDescriptor(CP_READINESS_START, true, Optional.of(RoleToken.OPERATOR),
                 java.util.Set.of(RoleToken.SECURITY_ADMIN, RoleToken.OPERATION_ADMIN, RoleToken.REPLAY_VIEWER)));

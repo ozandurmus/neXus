@@ -440,23 +440,38 @@ public class JooqCpFailoverRepository {
         return audited.inTransaction(actor, "failover_readiness_request", dsl -> {
             // The step fence below is decided under the same lock as a failover's admission.
             lockAdmission(dsl);
-            closeOrphanReadiness(dsl, cluster, vsId, vendor);
-            Record active = dsl.fetchOne("select run_id from failover_run where cluster_ref={0} "
-                + "and vs_id is not distinct from {1} and vendor={2} and state not in ('DONE','STOPPED') limit 1",
-                cluster, vsId, vendor);
-            if (active != null) return new Decision("RUN_ALREADY_ACTIVE", null);
-            String step = stepConflict(dsl, cluster, vsId, vendor, null, false);
-            if (step != null) return new Decision(step, null);
-            // A resumed return on this unit uses its members' sessions: no readiness battery alongside it.
-            if (!dsl.fetch("select 1 from failover_resume where cluster_ref={0} and state in " + RESUME_ACTIVE_SQL,
-                    cluster).isEmpty()) return new Decision("RUN_ALREADY_ACTIVE", null);
-            String id = UUID.randomUUID().toString();
-            dsl.execute("insert into failover_run(run_id,cluster_ref,vs_id,approval_id,requested_by,scheduled_for,state,step,vendor,run_kind) "
-                + "values({0},{1},{2},null,{3},now(),'PLANNED','PLANNED',{4},'READINESS')", id, cluster, vsId, actor, vendor);
-            admit(dsl, id, targetDeviceId, actor, vendor, "READINESS");
-            return new Decision("ADMITTED", id);
+            return readinessIn(dsl, cluster, vsId, actor, targetDeviceId, vendor);
         });
     }
+
+    /**
+     * Readiness admission in the caller's transaction (advisory lock 136 held). Shared by {@link #requestReadiness} and
+     * the config-sync job's own readiness re-run ({@link JooqPanConfigSyncRepository}), which is admitted in the same
+     * transaction that ends its record.
+     */
+    Decision readinessIn(DSLContext dsl, String cluster, String vsId, String actor, String targetDeviceId, String vendor) {
+        closeOrphanReadiness(dsl, cluster, vsId, vendor);
+        Record active = dsl.fetchOne("select run_id from failover_run where cluster_ref={0} "
+            + "and vs_id is not distinct from {1} and vendor={2} and state not in ('DONE','STOPPED') limit 1",
+            cluster, vsId, vendor);
+        if (active != null) return new Decision("RUN_ALREADY_ACTIVE", null);
+        String step = stepConflict(dsl, cluster, vsId, vendor, null, false);
+        if (step != null) return new Decision(step, null);
+        // A resumed return on this unit uses its members' sessions: no readiness battery alongside it.
+        if (!dsl.fetch("select 1 from failover_resume where cluster_ref={0} and state in " + RESUME_ACTIVE_SQL,
+                cluster).isEmpty()) return new Decision("RUN_ALREADY_ACTIVE", null);
+        // V178: neither alongside an open config sync of the unit (its job re-runs readiness when it ends).
+        if (!dsl.fetch("select 1 from pan_config_sync where cluster_ref={0} and state in " + CONFIG_SYNC_OPEN_SQL,
+                cluster).isEmpty()) return new Decision("RUN_ALREADY_ACTIVE", null);
+        String id = UUID.randomUUID().toString();
+        dsl.execute("insert into failover_run(run_id,cluster_ref,vs_id,approval_id,requested_by,scheduled_for,state,step,vendor,run_kind) "
+            + "values({0},{1},{2},null,{3},now(),'PLANNED','PLANNED',{4},'READINESS')", id, cluster, vsId, actor, vendor);
+        admit(dsl, id, targetDeviceId, actor, vendor, "READINESS");
+        return new Decision("ADMITTED", id);
+    }
+
+    /** V178: a config-sync record that has not ended (it holds its unit like an open run). */
+    static final String CONFIG_SYNC_OPEN_SQL = "('QUEUED','READING_STATE','SYNCING')";
 
     private void admit(org.jooq.DSLContext dsl, String runId, String targetDeviceId, String actor, String vendor) {
         admit(dsl, runId, targetDeviceId, actor, vendor, "FAILOVER");
@@ -601,7 +616,7 @@ public class JooqCpFailoverRepository {
         return !conflict ? null : vsId == null ? VS_RUN_ACTIVE : CHASSIS_RUN_ACTIVE;
     }
 
-    private static void lockAdmission(DSLContext dsl) {
+    static void lockAdmission(DSLContext dsl) {
         dsl.execute("select pg_advisory_xact_lock(136, 1)");
     }
 
@@ -630,6 +645,9 @@ public class JooqCpFailoverRepository {
         // V170: a resumed return in flight holds the same fleet fence as a run.
         if (!dsl.fetch("select 1 from failover_resume where state in " + RESUME_ACTIVE_SQL).isEmpty())
             return new Decision("FLEET_MUTATION_ACTIVE", null);
+        // V178: no failover on a unit whose config sync is open (its write and the failover's would interleave).
+        if (!dsl.fetch("select 1 from pan_config_sync where cluster_ref={0} and state in " + CONFIG_SYNC_OPEN_SQL,
+                cluster).isEmpty()) return new Decision("CONFIG_SYNC_ACTIVE", null);
         return null;
     }
 
@@ -722,7 +740,7 @@ public class JooqCpFailoverRepository {
     }
 
     /** Strict owner check: legacy null module generations never authorize a mutation. */
-    private static boolean owns(DSLContext dsl, String job, long epoch) {
+    static boolean owns(DSLContext dsl, String job, long epoch) {
         return !dsl.fetch("select j.job_id from jobs j join module_runtime_control m "
             + "on m.module=ui2_job_module(j.capability_id) join module_runtime_control r on r.module=m.effective_owner "
             + "where j.job_id={0} and j.lease_epoch={1} and j.state='EXECUTING' and not j.cancel_requested "
@@ -768,7 +786,7 @@ public class JooqCpFailoverRepository {
         });
     }
 
-    private static void requireOne(int rows) {
+    static void requireOne(int rows) {
         if (rows!=1) throw new IllegalStateException("FAILOVER_PERSISTENCE_FENCE");
     }
 

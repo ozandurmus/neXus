@@ -27,12 +27,19 @@ public final class CpFailoverController {
     private final CpFailoverService service;
     private final com.securityexpert.nexus.ui2.persistence.TransactionBoundary projections;
     private final com.securityexpert.nexus.ui2.service.privacy.TopologyNamePseudonymizer names;
-    public CpFailoverController(CpFailoverService service) { this(service,null,null); }
-    @org.springframework.beans.factory.annotation.Autowired
+    private final com.securityexpert.nexus.ui2.service.failover.PanConfigSyncService configSync;
+    public CpFailoverController(CpFailoverService service) { this(service,null,null,null); }
     public CpFailoverController(CpFailoverService service,
             com.securityexpert.nexus.ui2.persistence.TransactionBoundary projections,
             com.securityexpert.nexus.ui2.service.privacy.TopologyNamePseudonymizer names) {
-        this.service=service; this.projections=projections; this.names=names;
+        this(service,projections,names,null);
+    }
+    @org.springframework.beans.factory.annotation.Autowired
+    public CpFailoverController(CpFailoverService service,
+            com.securityexpert.nexus.ui2.persistence.TransactionBoundary projections,
+            com.securityexpert.nexus.ui2.service.privacy.TopologyNamePseudonymizer names,
+            com.securityexpert.nexus.ui2.service.failover.PanConfigSyncService configSync) {
+        this.service=service; this.projections=projections; this.names=names; this.configSync=configSync;
     }
     private Map<String,Object> approvalView(JooqCpFailoverRepository.Approval a,HttpServletRequest request) {
         Map<String,Object> view=approval(a);
@@ -186,6 +193,7 @@ public final class CpFailoverController {
                 m.put("canStart",canStart);
                 m.put("canSchedule",canStart);
                 eligibility(m,u,readiness.get(u.id()),incidents);
+                putConfigSync(m,u,vendor,readiness.get(u.id()),masked,actor);
                 return m;
             }).toList();
         });
@@ -203,6 +211,7 @@ public final class CpFailoverController {
             m.put("lastRunAt", s.lastRunAt());
             m.put("canRunReadiness", s.canRunReadiness());
             eligibility(m,s.unit(),s.readiness(),incidents);
+            putConfigSync(m,s.unit(),s.vendor(),s.readiness(),PrivacyMaskingResponseBodyAdvice.isReplayViewer(request),actor(request));
             if (s.readiness() != null) {
                 var readiness = s.readiness();
                 try {
@@ -261,6 +270,62 @@ public final class CpFailoverController {
         return result(() -> {
             if (!unitId.equals(body.unitId())) throw new IllegalArgumentException("unit mismatch");
             return Map.of("runId", service.requestReadiness(body.clusterId(), unitId, actor(request), vendor(request)));
+        });
+    }
+    /**
+     * PAN_CONFIG_SYNC_REMEDIATION_2026_10_24.md §6: the unit's config-sync facts. Palo Alto units only; the server decides
+     * whether the button is offered ({@code canRun}) and why it would refuse ({@code refusal}).
+     */
+    private void putConfigSync(Map<String,Object> view,CpFailoverService.Unit unit,String vendor,
+            JooqCpFailoverRepository.ReadinessStatus readiness,boolean masked,String actor) {
+        if (configSync==null || !"palo_alto".equals(vendor) || unit.vsId()!=null) return;
+        var facts=configSync.view(unit,vendor,readiness,(String)view.get("refusalReason"),masked,
+            !masked && configSync.mayRun(actor),configSync.latest(unit));
+        if (facts!=null) view.put("configSync",configSyncView(facts));
+    }
+    private static Map<String,Object> configSyncView(com.securityexpert.nexus.ui2.service.failover.PanConfigSyncService.View v) {
+        Map<String,Object> m=new LinkedHashMap<>();
+        m.put("offered",v.offered()); m.put("canRun",v.canRun()); m.put("refusal",v.refusal());
+        m.put("sourceRef",v.sourceRef()); m.put("targetRef",v.targetRef());
+        m.put("readinessObservedAt",v.readinessObservedAt());
+        m.put("latest",v.latest()==null ? null : syncRecord(v.latest()));
+        return m;
+    }
+    private static Map<String,Object> syncRecord(com.securityexpert.nexus.ui2.persistence.JooqPanConfigSyncRepository.ConfigSync s) {
+        Map<String,Object> m=new LinkedHashMap<>();
+        m.put("syncId",s.id()); m.put("state",s.state()); m.put("outcome",s.outcome());
+        m.put("deviceStatus",s.deviceStatus()); m.put("sourceRef",s.sourceRef()); m.put("targetRef",s.targetRef());
+        m.put("requestedAt",s.requestedAt()); m.put("startedAt",s.startedAt()); m.put("finishedAt",s.finishedAt());
+        m.put("mutationPossible",s.mutationPossible());
+        m.put("readinessRunId",s.followupReadinessRunId()); m.put("readinessRefusal",s.followupRefusal());
+        return m;
+    }
+    private static final java.util.Set<String> CONFIG_SYNC_FIELDS = java.util.Set.of("clusterId","sourceDeviceId","targetDeviceId");
+    /**
+     * PO decision 2026-10-24 (PAN_CONFIG_SYNC_REMEDIATION_2026_10_24.md §3.1): sync the running configuration from the
+     * active member to the passive. The body names only the unit's cluster and the two members the caller saw; any
+     * other field is refused. Palo Alto only: the Check Point prefix is unmapped at the gate chain and refused here too.
+     */
+    @PostMapping("/units/{unitId}/config-sync")
+    public ResponseEntity<?> requestConfigSync(@PathVariable String unitId,
+            @RequestBody(required = false) Map<String,Object> body, HttpServletRequest request) {
+        return result(() -> {
+            if (!"palo_alto".equals(vendor(request)) || configSync==null)
+                throw new CpFailoverService.Refusal(com.securityexpert.nexus.ui2.service.failover.PanConfigSyncService.NOT_SUPPORTED);
+            if (PrivacyMaskingResponseBodyAdvice.isReplayViewer(request)) throw new CpFailoverService.Refusal("WRONG_ROLE");
+            if (body==null || !CONFIG_SYNC_FIELDS.equals(body.keySet())) throw new IllegalArgumentException("unexpected field");
+            String clusterId=text(body,"clusterId"), source=text(body,"sourceDeviceId"), target=text(body,"targetDeviceId");
+            if (clusterId==null || source==null || target==null) throw new IllegalArgumentException("missing field");
+            return syncRecord(configSync.request(clusterId,unitId,source,target,actor(request),vendor(request)));
+        });
+    }
+    @GetMapping("/config-syncs/{syncId}")
+    public ResponseEntity<?> configSyncStatus(@PathVariable String syncId,HttpServletRequest request) {
+        return result(() -> {
+            if (!"palo_alto".equals(vendor(request)) || configSync==null)
+                throw new CpFailoverService.Refusal(com.securityexpert.nexus.ui2.service.failover.PanConfigSyncService.NOT_SUPPORTED);
+            return configSync.find(syncId,actor(request)).map(CpFailoverController::syncRecord)
+                .orElseThrow(() -> new CpFailoverService.Refusal("CONFIG_SYNC_NOT_FOUND"));
         });
     }
     @GetMapping("/runs")
