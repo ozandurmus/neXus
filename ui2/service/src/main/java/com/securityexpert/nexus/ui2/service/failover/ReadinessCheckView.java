@@ -47,7 +47,11 @@ public final class ReadinessCheckView {
                 case 1 -> "HA mode or roles not recognised";
                 case 2 -> "Peer relationship could not be verified";
                 case 3 -> "HA link state not recognised";
-                case 4 -> "Configuration sync field missing or not recognised";
+                // Live 2026-10-24: running-sync-enabled "no" means the HA pair has config sync switched off on the device.
+                case 4 -> "no".equals(d.path("first").path("running-sync-enabled").asText())
+                        || "no".equals(d.path("second").path("running-sync-enabled").asText())
+                    ? "Config sync is disabled on this HA pair (enable it under Device > High Availability > General)"
+                    : "Configuration sync field missing or not recognised";
                 case 5 -> sessionSyncSummary(status,d);
                 case 6 -> "not_collected".equals(d.path("reason").asText())
                     ? "Not collected: " + d.path("detail").asText("show session info retired by PO 2026-10-21")
