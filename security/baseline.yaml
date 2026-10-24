@@ -494,6 +494,14 @@
     },
     {
       "tool": "trivy",
+      "rule": "CVE-2026-91403",
+      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: java-21-openjdk-headless",
+      "reason": "Red Hat UBI9 openjdk-21-runtime base (service image and the packet-analysis image built from it, same repository): no fixed package is published yet; the build cannot reach the UBI package repos to update it. Time-boxed by the PO decision 2026-10-24 ('Evet, kabul et ve gönder': accept until 2026-10-31); remove when Red Hat rebuilds the base image. CVE-2026-91403 (CRITICAL, Red Hat CVSS 6.8 AV:N/AC:H/PR:N/UI:R): java-21-openjdk-headless 1:21.0.12.1.1-1.2.el9, JSSE (TLS) flaw from the October 2026 Oracle CPU. Exposure: neXus uses JSSE for device HTTPS/XML API and LDAP clients; the running pods carry the same package, so blocking the deploy does not reduce exposure. Remove as soon as Red Hat publishes the fixed package; checked daily.",
+      "owner": "PO",
+      "review_date": "2026-10-31"
+    },
+    {
+      "tool": "trivy",
       "rule": "CVE-2026-91415",
       "location": "ui2/Containerfile runtime image: java-21-openjdk-headless",
       "reason": "Red Hat UBI9 openjdk-21-runtime base (service image and the packet-analysis image built from it, same repository): no fixed package is published yet; the build cannot reach the UBI package repos to update it. Time-boxed by the PO decision 2026-10-23 ('accept until 2026-10-31 and remove the eMudhra roots'); remove when Red Hat rebuilds the base image. CVE-2026-91415 (HIGH): java-21-openjdk-headless 1:21.0.12.1.1-1.2.el9, Java 2D font rendering flaw. Exposure: no AWT, image, PDF or POI autoSize rendering path was found in the service or the workers, so font rendering is not reachable.",
