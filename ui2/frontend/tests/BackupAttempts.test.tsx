@@ -35,8 +35,10 @@ describe("backup attempt transcript entry points", () => {
     render(<BackupAttempts deviceId="device-synthetic" />);
     await screen.findByText("Completed");
     expect(screen.queryAllByRole("button", { name: "Transcript" })).toHaveLength(allowed ? 2 : 0);
+    expect(screen.queryAllByRole("button", { name: "Download" })).toHaveLength(allowed ? 2 : 0);
     const failure = screen.getByText("Failed · Synthetic collection failure").parentElement!;
     expect(within(failure).queryByRole("button", { name: "Transcript" }) !== null).toBe(allowed);
+    expect(within(failure).queryByRole("button", { name: "Download" }) !== null).toBe(allowed);
   });
 
   it("opens the existing viewer using the exact failed job id", async () => {
@@ -45,6 +47,23 @@ describe("backup attempt transcript entry points", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Transcript" }));
     expect(await screen.findByText("Synthetic transcript")).toBeInTheDocument();
     expect(fetch).toHaveBeenCalledWith("/jobs/job-synthetic-FAILED/transcript", expect.anything());
+  });
+
+  it("downloads the failed attempt's own transcript as a text file named for that job, without opening the viewer", async () => {
+    const fetch = stubJobs([attempt("COMPLETED", true), attempt("FAILED", true)]);
+    const names: string[] = [];
+    Object.defineProperty(URL, "createObjectURL", { configurable: true, value: vi.fn(() => "blob:transcript") });
+    Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: vi.fn() });
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) { names.push(this.download); });
+    render(<BackupAttempts deviceId="device-synthetic" />);
+    const failure = (await screen.findByText("Failed · Synthetic collection failure")).parentElement!;
+    fireEvent.click(within(failure).getByRole("button", { name: "Download" }));
+    // 08:00Z is 11:00 in Turkey; the short id is the first eight characters of the job id.
+    await waitFor(() => expect(names).toEqual(["backup-20261002-1100-job-synt.txt"]));
+    expect(fetch).toHaveBeenCalledWith("/jobs/job-synthetic-FAILED/transcript", expect.anything());
+    expect(fetch).not.toHaveBeenCalledWith("/jobs/job-synthetic-COMPLETED/transcript", expect.anything());
+    expect(screen.queryByLabelText("Search transcript")).toBeNull();
+    vi.restoreAllMocks();
   });
 
   it("paginates attempt history without truncating older transcripts", async () => {
@@ -65,12 +84,14 @@ describe("backup attempt transcript entry points", () => {
     const word = state === "FAILED" ? "Failed · Synthetic collection failure" : "Completed";
     await within(row).findByText(word);
     expect(within(row).queryAllByRole("button", { name: "Transcript" })).toHaveLength(allowed ? 1 : 0);
+    expect(within(row).queryAllByRole("button", { name: "Download" })).toHaveLength(allowed ? 1 : 0);
     // The row actions live in the row's menu (UI review 2026-10-18, F-4); History is always reachable, even without an archive.
     fireEvent.click(within(row).getByRole("button", { name: "Actions for FW-TANGO-04" }));
     fireEvent.click(await screen.findByRole("menuitem", { name: "History" }));
     const dialog = await screen.findByRole("dialog");
     await within(dialog).findByText(word);
     expect(within(dialog).queryAllByRole("button", { name: "Transcript" })).toHaveLength(allowed ? 1 : 0);
+    expect(within(dialog).queryAllByRole("button", { name: "Download" })).toHaveLength(allowed ? 1 : 0);
   });
 
   it.each([true, false])("Inventory uses the server affordance (%s) for both outcomes", async (allowed) => {

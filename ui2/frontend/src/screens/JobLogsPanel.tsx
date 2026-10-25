@@ -481,7 +481,7 @@ export function JobLogsPanel({
                       <TableCell sx={{ fontFamily: MONO }}>
                         <Stamp at={job.submitted_at} />
                       </TableCell>
-                      {transcriptColumn && <TableCell><JobTranscriptDrawer jobId={job.job_id} hasTranscript={isBackupJob && job.has_transcript} /></TableCell>}
+                      {transcriptColumn && <TableCell><JobTranscriptDrawer jobId={job.job_id} jobType={job.job_type} submittedAt={job.submitted_at} hasTranscript={isBackupJob && job.has_transcript} /></TableCell>}
                       {page.canCancel && <TableCell>
                         {["REQUESTED", "CLAIMED", "EXECUTING"].includes(job.state) && <Button size="small"
                           disabled={cancelling.includes(job.job_id)} onClick={event => {
