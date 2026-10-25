@@ -29,7 +29,10 @@ final class SecurityScanSummary {
                 if (!path.getFileName().toString().endsWith(".json")) continue;
                 if (Files.isSymbolicLink(path) || Files.size(path) > 64_000) throw new IOException("invalid security summary");
                 JsonNode root = JSON.readTree(path.toFile());
-                exactKeys(root, Set.of("schema_version", "generated_at", "counts", "scan_errors", "blocking", "passed"));
+                Set<String> rootKeys = new java.util.HashSet<>(
+                        Set.of("schema_version", "generated_at", "counts", "scan_errors", "blocking", "passed"));
+                if (root.has("accepted_review")) rootKeys.add("accepted_review");
+                exactKeys(root, rootKeys);
                 if (number(root, "schema_version") != 1 || !root.path("passed").isBoolean()) {
                     throw new IOException("invalid security summary schema");
                 }
@@ -54,11 +57,34 @@ final class SecurityScanSummary {
                         for (int i = 0; i < COUNTS.size(); i++) line.append(' ').append(COUNTS.get(i)).append('=').append(values.get(i));
                     }
                 }
+                if (root.has("accepted_review")) appendReview(line, root.path("accepted_review"));
                 lines.add(line.toString());
                 if (at.isAfter(newest)) newest = at;
             }
         }
         return new NotificationMailRouter.Batch(lines, 0, newest, Map.of());
+    }
+
+    /** Accepted-findings review: counts plus CVE ids and package names only; every field is shape-checked. */
+    private static void appendReview(StringBuilder line, JsonNode review) throws IOException {
+        exactKeys(review, Set.of("fix_available", "due_soon", "past_review", "not_reported", "attention", "items"));
+        if (!review.path("attention").isBoolean() || !review.path("items").isArray() || review.path("items").size() > 50) {
+            throw new IOException("invalid security review");
+        }
+        line.append("; accepted-review attention=").append(review.path("attention").asBoolean());
+        for (String count : List.of("fix_available", "due_soon", "past_review", "not_reported")) {
+            line.append(' ').append(count).append('=').append(number(review, count));
+        }
+        for (JsonNode item : review.path("items")) {
+            exactKeys(item, Set.of("id", "package", "status"));
+            String id = item.path("id").asText(), pkg = item.path("package").asText(), status = item.path("status").asText();
+            if (!id.matches("[A-Za-z0-9._-]{1,40}") || !pkg.matches("[A-Za-z0-9._+/@-]{0,80}")
+                    || !List.of("fix_available", "due_soon", "past_review").contains(status)) {
+                throw new IOException("invalid security review item");
+            }
+            line.append("; ").append(status).append(' ').append(id);
+            if (!pkg.isEmpty()) line.append(' ').append(pkg);
+        }
     }
 
     private static int number(JsonNode node, String key) throws IOException {

@@ -81,3 +81,13 @@ Summary trend compares the latest same-mode run from yesterday; ship runs never 
 findings are counted separately. All unaccepted HIGH/CRITICAL (and unknown severity) findings block the gate,
 including yesterday's still-untriaged findings. Scanner errors suppress false `fixed` counts and block the gate.
 The first run treats every unaccepted finding as new. The summary never includes snippets, secret values or paths.
+
+### Accepted findings review
+
+`summary.json` (and the counts-only notification file) carries an `accepted_review` section: per CVE/package, whether
+the scanner now reports a FixedVersion (or status `fixed`) for an accepted Trivy finding (`fix_available`), acceptances
+whose review date is within 3 days (`due_soon`) or past (`past_review`), and acceptances no scanned image reports any
+more (`not_reported`, cleanup only). `attention` is true when any of the first three is non-zero; the notification
+line then names the CVE ids and package names. It never changes `passed`/`blocking`: a past-review acceptance already
+blocks the gate because expired records stop suppressing the finding (the review date is inclusive in both places).
+`history/` is deliberately still scanned: no scanner skips it, so excluding it from Trivy alone would be a new convention.

@@ -1,5 +1,5 @@
 """Offline security pipeline checks: synthetic reports, rendered manifests and fake Jobs only."""
-from datetime import date
+from datetime import date, timedelta
 import json
 from pathlib import Path
 import sys
@@ -55,6 +55,101 @@ def test_baseline_expiry_commit_and_exact_location(tmp_path):
     assert summary.summarize([f], [], entries)["passed"]
     f["location"] += ".other"
     assert not summary.summarize([f], [], entries)["passed"]
+
+
+def trivy_report(*vulns):
+    return {"SchemaVersion": 2, "Results": [{"Target": "base", "Vulnerabilities": list(vulns)}]}
+
+
+def vuln(cve, pkg, **extra):
+    return dict(VulnerabilityID=cve, PkgName=pkg, Severity="HIGH", **extra)
+
+
+def acceptance(rule, location, review_date, tool="trivy"):
+    return dict(tool=tool, rule=rule, location=location, reason="Synthetic", owner="reviewer", review_date=review_date)
+
+
+def test_trivy_projection_keeps_only_a_fix_flag_never_the_version():
+    rows = summary.project("trivy", trivy_report(
+        vuln("CVE-2026-00001", "a", FixedVersion="9.9.9"), vuln("CVE-2026-00002", "b", Status="fixed"),
+        vuln("CVE-2026-00003", "c", Status="affected"), vuln("CVE-2026-00004", "d")), "img")
+    assert [r.get("fix_available", False) for r in rows] == [True, True, False, False]
+    assert "9.9.9" not in json.dumps(rows)
+    # Same CVE/package reported twice: the fix flag survives deduplication whichever row wins.
+    dup = [summary.finding("trivy", "CVE-2026-00001", "img: a", "HIGH"),
+           summary.finding("trivy", "CVE-2026-00001", "img: a", "MEDIUM", fix_available=True)]
+    assert summary.summarize(dup, [], [])["counts"]["trivy"]["HIGH"]["new"] == 1
+
+
+TODAY = date(2026, 10, 25)
+
+
+def test_accepted_review_flags_fix_due_soon_and_past_review_with_ids_only():
+    loc = "reg/img: java-21-openjdk-headless"
+    current = [summary.finding("trivy", "CVE-FIXED", loc, "HIGH", fix_available=True),
+               summary.finding("trivy", "CVE-SOON", "reg/img: libbrotli", "HIGH"),
+               summary.finding("trivy", "CVE-QUIET", "reg/img: expat", "HIGH")]
+    acceptances = [acceptance("CVE-FIXED", loc, "2026-12-31"),
+                   acceptance("CVE-FIXED", "other/img: java-21-openjdk-headless", "2026-12-31"),
+                   acceptance("CVE-SOON", "reg/img: libbrotli", "2026-10-28"),
+                   acceptance("CVE-QUIET", "reg/img: expat", "2026-10-29"),
+                   acceptance("CVE-LATE", "reg/img: gnutls", "2026-10-24"),
+                   acceptance("CVE-GONE", "reg/img: zlib", "2026-12-31")]
+    review = summary.accepted_review(current, acceptances, TODAY)
+    assert (review["fix_available"], review["due_soon"], review["past_review"], review["not_reported"]) == (1, 1, 1, 2)
+    assert review["attention"] is True
+    # One entry per CVE/package, not per image location; ids and package names only.
+    assert review["items"] == [
+        dict(id="CVE-FIXED", package="java-21-openjdk-headless", status="fix_available"),
+        dict(id="CVE-LATE", package="gnutls", status="past_review"),
+        dict(id="CVE-SOON", package="libbrotli", status="due_soon")]
+    assert "reg/img" not in json.dumps(review)
+
+
+def test_accepted_review_window_boundaries_and_quiet_state():
+    loc = "reg/img: expat"
+    current = [summary.finding("trivy", "CVE-X", loc, "HIGH")]
+    def review_for(day):
+        return summary.accepted_review(current, [acceptance("CVE-X", loc, day)], TODAY)
+    assert review_for("2026-10-25")["due_soon"] == 1 and review_for("2026-10-25")["past_review"] == 0
+    assert review_for("2026-10-28")["due_soon"] == 1
+    assert review_for("2026-10-29")["attention"] is False
+    assert review_for("2026-10-24")["past_review"] == 1
+    quiet = review_for("2026-12-31")
+    assert quiet["attention"] is False and quiet["items"] == []
+    # Non-trivy acceptances are date-checked by rule id only; a location (file path) never leaks.
+    semgrep = summary.accepted_review([], [acceptance("weak-ssl", "src/Secret.java:9", "2026-10-26", "semgrep")], TODAY)
+    assert semgrep["due_soon"] == 1 and "Secret" not in json.dumps(semgrep)
+
+
+def test_accepted_review_never_fails_the_gate_but_past_review_still_does(tmp_path):
+    reports, output = tmp_path / "reports", tmp_path / "output"
+    reports.mkdir()
+    (reports / "manifest.json").write_text(json.dumps([dict(tool="trivy", file="trivy-fs.json", target="reg/img")]))
+    (reports / "trivy-fs.json").write_text(json.dumps(trivy_report(vuln("CVE-2026-00001", "pkg", FixedVersion="2"))))
+    (reports / "trivy-fs.json.exit").write_text("0")
+    baseline = tmp_path / "baseline.yaml"
+    soon = (date.today() + timedelta(days=1)).isoformat()
+    baseline.write_text(json.dumps(dict(accepted=[acceptance("CVE-2026-00001", "reg/img: pkg", soon)])))
+    args = ["--reports", str(reports), "--baseline", str(baseline), "--output", str(output)]
+    assert summary.main(args) == 0
+    result = json.loads((output / "summary.json").read_text())
+    assert result["passed"] is True and result["blocking"] == 0
+    assert result["accepted_review"]["attention"] is True
+    assert result["accepted_review"]["fix_available"] == 1 and result["accepted_review"]["due_soon"] == 1
+    assert "2" not in {i["id"] for i in result["accepted_review"]["items"]}
+    # Past review: the existing expiry rule stops suppressing the finding, so the gate blocks, as before.
+    late = (date.today() - timedelta(days=1)).isoformat()
+    baseline.write_text(json.dumps(dict(accepted=[acceptance("CVE-2026-00001", "reg/img: pkg", late)])))
+    assert summary.main(args) == 1
+    result = json.loads((output / "summary.json").read_text())
+    assert result["blocking"] == 1 and result["accepted_review"]["past_review"] == 1
+
+
+def test_gate_summary_validation_ignores_accepted_review():
+    result = summary.summarize([], [], [])
+    result["accepted_review"] = dict(attention=True, items=[])
+    assert "accepted_review" not in host.safe_summary(json.dumps(result))
 
 
 def test_projection_discards_snippets_and_deduplicates_tree_history():
@@ -195,7 +290,7 @@ def test_finalize_retention_sbom_and_counts_only_notification(tmp_path, monkeypa
         assert not expired.exists()
         notification = next((root / "notifications").glob("*.json"))
         assert notification.stat().st_mode & 0o777 == 0o640
-        assert set(json.loads(notification.read_text())) == {"schema_version", "generated_at", "counts", "scan_errors", "blocking", "passed"}
+        assert set(json.loads(notification.read_text())) == {"schema_version", "generated_at", "counts", "scan_errors", "blocking", "passed", "accepted_review"}
         assert json.loads(capsys.readouterr().out)["passed"] is True
         # A missing SBOM invalidates an otherwise clean scan.
         (work / "sbom-0.json").unlink()
