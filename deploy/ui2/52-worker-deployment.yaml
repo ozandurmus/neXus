@@ -68,6 +68,21 @@ spec:
               value: "replace_12"
             - name: NEXUS_PAN_FW_SHOW_SESSION_INFO
               value: "replace_12"
+            # PO 2026-10-22 one-shell pilot (docs/design/CP_FAILOVER_ONE_SHELL_SESSION_2026_10_22.md): per-cluster allow-list below;
+            # a cluster not listed stays on the exec path. Restart required.
+            - name: NEXUS_CP_FAILOVER_ONE_SHELL
+              value: "enabled"
+            # Allow-list of cluster refs, never a literal here: it comes from the hand-made ConfigMap ui2-failover-pilot
+            # (deploy/ui2/README-failover-pilot.md). Missing ConfigMap or key = no clusters.
+            - name: NEXUS_CP_FAILOVER_ONE_SHELL_CLUSTERS
+              valueFrom:
+                configMapKeyRef:
+                  name: ui2-failover-pilot
+                  key: one_shell_clusters
+                  optional: true
+            # PO 2026-10-25: fewer Gaia audit log-ins per backup (was the code default 10 seconds).
+            - name: UI2_BACKUP_POLL_INTERVAL_SECONDS
+              value: "30"
             - name: JAVA_TOOL_OPTIONS
               value: -Dui2.worker.claim-policy-fallback=true
             # BK-11: the distinct backup credential (Admin > Credentials: Backup-User-LDAP), never the collection credential.

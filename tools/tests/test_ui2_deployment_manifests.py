@@ -147,6 +147,41 @@ def test_pan_firewall_reads_are_replaced_on_pan_os_12_and_unchanged_below(filena
     assert env.get("NEXUS_PAN_FW_SHOW_SESSION_INFO") == "replace_12"
 
 
+def _container_env(filename, container_name):
+    deployment = next(doc for doc in load_documents((MANIFEST_DIR / filename).read_text())
+                      if doc["kind"] == "Deployment")
+    container = next(c for c in deployment["spec"]["template"]["spec"]["containers"] if c["name"] == container_name)
+    return {e["name"]: e for e in container["env"]}
+
+
+@pytest.mark.parametrize("filename,container_name", [
+    ("52-worker-deployment.yaml", "worker"),
+    ("57-policy-deployment.yaml", "policy"),
+])
+def test_one_shell_pilot_switch_is_in_the_manifest_and_the_cluster_list_is_never_a_literal(filename, container_name):
+    """PO 2026-10-22 one-shell pilot: the switch is a literal; the cluster allow-list holds real cluster refs, so it
+    comes from the hand-made ConfigMap ui2-failover-pilot (optional: missing = no clusters), never from the repo."""
+    env = _container_env(filename, container_name)
+    assert env["NEXUS_CP_FAILOVER_ONE_SHELL"] == {"name": "NEXUS_CP_FAILOVER_ONE_SHELL", "value": "enabled"}
+    clusters = env["NEXUS_CP_FAILOVER_ONE_SHELL_CLUSTERS"]
+    assert "value" not in clusters
+    assert clusters["valueFrom"] == {"configMapKeyRef": {
+        "name": "ui2-failover-pilot", "key": "one_shell_clusters", "optional": True}}
+
+
+def test_the_failover_pilot_configmap_is_not_committed():
+    for path in _manifest_files():
+        for doc in load_documents(path.read_text()):
+            assert not (doc["kind"] == "ConfigMap" and doc["metadata"]["name"] == "ui2-failover-pilot"), path.name
+
+
+def test_backup_polling_is_every_30_seconds_in_the_worker():
+    """PO 2026-10-25: fewer Gaia audit log-ins per backup (code default 10). UI2_MDS_EXPORT_* is deliberately
+    untouched (MDS backup stays disabled by PO decision)."""
+    env = _container_env("52-worker-deployment.yaml", "worker")
+    assert env["UI2_BACKUP_POLL_INTERVAL_SECONDS"] == {"name": "UI2_BACKUP_POLL_INTERVAL_SECONDS", "value": "30"}
+
+
 def test_scheduled_system_log_collection_is_enabled_for_the_fleet_in_the_service_only(monkeypatch):
     """PO decision 2026-10-18: SystemLogCollectionScheduler is a Spring bean of the service process, so only the service
     deployment carries the switch; the code default stays off and a preview candidate never schedules (scheduling off)."""

@@ -191,6 +191,8 @@ with the amended key until then (fixture the same):
    `NEXUS_CP_FAILOVER_ONE_SHELL_CLUSTERS=<the pilot cluster's cluster_member_ref>` (optionally
    `NEXUS_CP_FAILOVER_COMMAND_PAUSE_MS`), restart the worker, and run one readiness pass on that cluster. Every other
    cluster stays on the exec path.
+   Manifest form (2026-10-25): `NEXUS_CP_FAILOVER_ONE_SHELL=enabled` is in the worker and policy manifests; the cluster
+   list comes from the hand-made ConfigMap `ui2-failover-pilot` (see `deploy/ui2/README-failover-pilot.md`).
 3. The Product Owner reads the pilot cluster's audit log for the run's time window: counts only -- expected one
    "Log In" per member per pass. Compare the run's check rows with the previous exec-path pass of the same cluster
    (statuses only).

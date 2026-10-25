@@ -57,6 +57,18 @@ spec:
           value: "replace_12"
         - name: NEXUS_PAN_FW_SHOW_SESSION_INFO
           value: "replace_12"
+        # PO 2026-10-22 one-shell pilot (docs/design/CP_FAILOVER_ONE_SHELL_SESSION_2026_10_22.md): per-cluster allow-list below;
+        # a cluster not listed stays on the exec path. Restart required.
+        - name: NEXUS_CP_FAILOVER_ONE_SHELL
+          value: "enabled"
+        # Allow-list of cluster refs, never a literal here: it comes from the hand-made ConfigMap ui2-failover-pilot
+        # (deploy/ui2/README-failover-pilot.md). Missing ConfigMap or key = no clusters.
+        - name: NEXUS_CP_FAILOVER_ONE_SHELL_CLUSTERS
+          valueFrom:
+            configMapKeyRef:
+              name: ui2-failover-pilot
+              key: one_shell_clusters
+              optional: true
         - name: UI2_DB_HOST
           valueFrom:
             configMapKeyRef:
