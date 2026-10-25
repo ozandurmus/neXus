@@ -115,7 +115,7 @@ function FailureDetails({ reason, allowed, job }: { reason: string; allowed: boo
     <Box component="summary" sx={{ cursor: "pointer", color: m3.primary, fontSize: 12 }}>Details</Box>
     {job && <CollectionProgress job={job} />}
     <Typography component="pre" variant="caption" sx={{ whiteSpace: "pre-wrap", m: 0 }}>{reason}</Typography>
-    {job && <JobTranscriptDrawer jobId={job.jobId} hasTranscript={job.hasTranscript === true} title="Policy collection transcript" />}
+    {job && <JobTranscriptDrawer jobId={job.jobId} jobType="policy-collection" submittedAt={job.startedAt ?? job.collectedAt} hasTranscript={job.hasTranscript === true} title="Policy collection transcript" />}
   </Box> : null;
 }
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
@@ -159,7 +159,7 @@ function CollectionDetails({ job, partial, allowed, domainName }: { job: PolicyC
       </>}
       {partial && <Typography variant="caption" display="block">Unit failure codes: {codes.join(", ")}</Typography>}
       {partial && allowed && <><CollectionProgress job={job} />
-        <JobTranscriptDrawer jobId={job.jobId} hasTranscript={job.hasTranscript === true} title="Policy collection transcript" /></>}
+        <JobTranscriptDrawer jobId={job.jobId} jobType="policy-collection" submittedAt={job.startedAt ?? job.collectedAt} hasTranscript={job.hasTranscript === true} title="Policy collection transcript" /></>}
     </Box>
   </Box>;
 }

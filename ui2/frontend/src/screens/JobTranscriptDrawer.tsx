@@ -9,16 +9,32 @@ import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { m3 } from "../theme/m3Theme";
 import { getJobTranscript, type ApiError, type JobTranscriptEntry } from "../auth/adminApi";
+import { downloadJobTranscript, saveTranscriptFile, transcriptErrorCode, type TranscriptSource } from "./transcriptDownload";
 
-export function transcriptAsText(entries: readonly JobTranscriptEntry[]): string {
-  return entries.map((entry) => `${entry.at} (+${entry.elapsedMs} ms) [${entry.channel.toUpperCase()}] ${entry.kind}\n${entry.text}`).join("\n\n");
-}
+export { transcriptAsText } from "./transcriptDownload";
 
-export function JobTranscriptDrawer({ jobId, hasTranscript, title = "Backup transcript" }: { readonly jobId: string; readonly hasTranscript: boolean; readonly title?: string }) {
+/**
+ * The transcript actions of one job: `Transcript` opens the right-hand panel, `Download` saves the same transcript as
+ * a text file without opening it, and the panel header offers the same Download for what it shows. Each instance
+ * belongs to one row: the job id, type and submission instant are captured as props and read at click time, so a
+ * download is always this row's transcript, whatever panel was opened or closed before (PO 2026-10-25).
+ */
+export function JobTranscriptDrawer({ jobId, jobType, submittedAt, hasTranscript, title = "Backup transcript" }: {
+  readonly jobId: string;
+  /** The job type as the server names it; the download's file name prefix. */
+  readonly jobType?: string;
+  /** The job's submission instant (ISO); the download's file name stamp, in Turkey time. */
+  readonly submittedAt?: string;
+  readonly hasTranscript: boolean;
+  readonly title?: string;
+}) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [entries, setEntries] = useState<JobTranscriptEntry[] | null>(null);
   const [error, setError] = useState("");
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState("");
+  const source = useMemo<TranscriptSource>(() => ({ jobId, jobType, at: submittedAt }), [jobId, jobType, submittedAt]);
 
   useEffect(() => {
     if (!open) return;
@@ -26,12 +42,7 @@ export function JobTranscriptDrawer({ jobId, hasTranscript, title = "Backup tran
     setEntries(null);
     setError("");
     getJobTranscript(jobId).then((value) => { if (active) setEntries(value); })
-      .catch((failure: ApiError | undefined) => {
-        const code = failure?.body?.error;
-        const known = ["TRANSCRIPT_DECRYPT_FAILED", "TRANSCRIPT_PARSE_FAILED", "TRANSCRIPT_MISSING", "TRANSCRIPT_STORE_UNAVAILABLE"];
-        if (active) setError(`Transcript could not be loaded (${typeof code === "string" && known.includes(code)
-          ? code : failure?.status === 403 ? "TRANSCRIPT_FORBIDDEN" : "TRANSCRIPT_LOAD_FAILED"}).`);
-      });
+      .catch((failure: ApiError | undefined) => { if (active) setError(`Transcript could not be loaded (${transcriptErrorCode(failure)}).`); });
     return () => { active = false; };
   }, [open, jobId]);
 
@@ -39,18 +50,29 @@ export function JobTranscriptDrawer({ jobId, hasTranscript, title = "Backup tran
     `${entry.at} ${entry.channel} ${entry.kind} ${entry.text}`.toLowerCase().includes(query.toLowerCase())), [entries, query]);
   if (!hasTranscript) return null;
 
+  const downloadFresh = async () => {
+    setDownloading(true);
+    setDownloadError("");
+    try {
+      await downloadJobTranscript(source);
+    } catch (failure) {
+      setDownloadError(`Transcript could not be downloaded (${transcriptErrorCode(failure as ApiError | undefined)}).`);
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   return <>
     <Button size="small" onClick={(event) => { event.stopPropagation(); setOpen(true); }}>Transcript</Button>
+    <Button size="small" disabled={downloading} title="Save this job's transcript as a text file"
+      onClick={(event) => { event.stopPropagation(); void downloadFresh(); }}>{downloading ? "Downloading…" : "Download"}</Button>
+    {downloadError && <Typography component="span" variant="caption" role="alert" sx={{ color: m3.criticalInk }}>{downloadError}</Typography>}
     <Drawer anchor="right" open={open} onClose={() => setOpen(false)} PaperProps={{ sx: { width: "min(100vw, 900px)", height: "100vh", bgcolor: m3.scLowest, color: m3.onSurface } }}>
       <Stack sx={{ height: "100%", p: 2, gap: 1.5 }}>
         <Stack direction="row" alignItems="center" spacing={1}>
           <Typography variant="h6" sx={{ flexGrow: 1 }}>{title}</Typography>
           <TextField size="small" label="Search transcript" value={query} onChange={(e) => setQuery(e.target.value)} />
-          <Button disabled={!entries} onClick={() => {
-            const link = document.createElement("a");
-            link.href = URL.createObjectURL(new Blob([transcriptAsText(entries ?? [])], { type: "text/plain;charset=utf-8" }));
-            link.download = `backup-transcript-${jobId}.txt`; link.click(); URL.revokeObjectURL(link.href);
-          }}>Download (.txt)</Button>
+          <Button disabled={!entries} title="Save this transcript as a text file" onClick={() => { if (entries) saveTranscriptFile(source, entries); }}>Download</Button>
           <Button onClick={() => setOpen(false)}>Close</Button>
         </Stack>
         <Box sx={{ overflow: "auto", flex: 1, fontFamily: "monospace", fontSize: 13, whiteSpace: "pre-wrap" }}>

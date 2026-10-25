@@ -66,7 +66,7 @@ export function BackupAttempts({ deviceId, latestOnly = false, version = 0, coll
             <Box component="summary" sx={{ cursor: "pointer" }}>Details</Box>
             <Box sx={{ fontFamily: "monospace", fontSize: 12, wordBreak: "break-word", maxWidth: 560 }}>{words.detail}</Box>
           </Box>}
-          <JobTranscriptDrawer jobId={job.job_id} hasTranscript={job.has_transcript} />
+          <JobTranscriptDrawer jobId={job.job_id} jobType={job.job_type} submittedAt={job.submitted_at} hasTranscript={job.has_transcript} />
         </Stack>
       </Box>;
     })}

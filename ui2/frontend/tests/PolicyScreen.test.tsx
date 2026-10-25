@@ -506,11 +506,15 @@ it("shows a human failure and relative time once with admin-only details and tra
   fireEvent.click(screen.getByText("Details"));
   expect(within(disclosure).getByText(reason)).toBeInTheDocument();
   expect(within(disclosure).getByRole("button", { name: "Transcript" })).toBeInTheDocument();
+  // The Download beside it reads this job's transcript through the same admin-gated path (PO 2026-10-25).
+  fireEvent.click(within(disclosure).getByRole("button", { name: "Download" }));
+  await waitFor(() => expect(fetch).toHaveBeenCalledWith("/jobs/job-1/transcript", expect.anything()));
   view.unmount(); respond(false); mount();
   await screen.findByText(/Last collection failed/);
   expect(screen.queryByText("Details")).toBeNull();
   expect(screen.queryByText(reason)).toBeNull();
   expect(screen.queryByRole("button", { name: "Transcript" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Download" })).toBeNull();
 });
 it("refreshes opened navigation and the selected rulebase automatically after polling ends", async () => {
   let completed = false;
@@ -794,6 +798,7 @@ it("folds an MDS card's domains and failure codes into one status line plus Deta
   expect(within(disclosure).getByText("Unit failure codes: INVALID_OR_INCOMPLETE_RESPONSE, TIMEOUT")).toBeInTheDocument();
   expect(within(disclosure).getByText(/^Collection progress:/)).toBeInTheDocument();
   expect(within(disclosure).getByRole("button", { name: "Transcript" })).toBeInTheDocument();
+  expect(within(disclosure).getByRole("button", { name: "Download" })).toBeInTheDocument();
 });
 
 it("uses successful activity and a strict twice-timeout boundary, never elapsed runtime, to warn", () => {

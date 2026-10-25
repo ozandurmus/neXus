@@ -1481,6 +1481,8 @@ export interface JobTranscriptEntry {
   readonly at: string;
   readonly elapsedMs: number;
   readonly channel: "ssh" | "https" | "scp" | "sftp" | "backup" | "job";
+  /** Session the entry belongs to when the server names one (several device sessions in one job); absent today. */
+  readonly sessionId?: string;
   readonly kind: string;
   readonly text: string;
 }

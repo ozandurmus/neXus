@@ -115,6 +115,33 @@ describe("RESULT words and the transcript column (P1-4B)", () => {
     const table = await screen.findByRole("table", { name: "Job logs" });
     expect(within(table).getByRole("columnheader", { name: "Transcript" })).toBeInTheDocument();
     expect(within(table).getByRole("button", { name: "Transcript" })).toBeInTheDocument();
+    expect(within(table).getByRole("button", { name: "Download" })).toBeInTheDocument();
+  });
+
+  it("downloads that row's transcript as a text file named for its job type, time and id (PO 2026-10-25)", async () => {
+    const calls = stub([{ ...JOBS[3], has_transcript: true }]);
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      calls.push(url);
+      if (url === "/jobs/job-failed/transcript") return Promise.resolve(new Response(JSON.stringify([{ seq: 1, at: "2026-10-18T02:00:05Z", elapsedMs: 5, channel: "ssh", kind: "response", text: "synthetic output" }])));
+      if (url.startsWith("/api/v2/jobs/stats")) return Promise.resolve(new Response(JSON.stringify({ total: 1, total_24h: 1, completed_24h: 0, failed_24h: 1, running: 0, by_state: BY_STATE })));
+      if (url.startsWith("/api/v2/jobs/facets")) return Promise.resolve(new Response(JSON.stringify({ states: ["FAILED"], job_types: ["cp_gateway_backup"] })));
+      if (url.startsWith("/api/v2/jobs")) return Promise.resolve(new Response(JSON.stringify({ items: [{ ...JOBS[3], has_transcript: true }], page: 1, page_size: 50, total: 1 })));
+      return Promise.resolve(new Response("{}", { status: 404 }));
+    });
+    const names: string[] = [];
+    Object.defineProperty(URL, "createObjectURL", { configurable: true, value: vi.fn(() => "blob:transcript") });
+    Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: vi.fn() });
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) { names.push(this.download); });
+    render(<JobLogsPanel />);
+    const table = await screen.findByRole("table", { name: "Job logs" });
+    fireEvent.click(within(table).getByRole("button", { name: "Download" }));
+    // 02:00Z on 2026-10-18 is 05:00 in Turkey.
+    await waitFor(() => expect(names).toEqual(["cp-gateway-backup-20261018-0500-job-fail.txt"]));
+    expect(calls).toContain("/jobs/job-failed/transcript");
+    // The click stays on the download: the row did not expand into its detail.
+    expect(table.querySelector("[data-job-detail]")).toBeNull();
+    vi.restoreAllMocks();
   });
 });
 
