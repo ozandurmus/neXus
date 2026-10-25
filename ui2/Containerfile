@@ -89,6 +89,25 @@ RUN if ls /tmp/corp-ca/*.pem >/dev/null 2>&1; then \
     fi \
  && rm -rf /tmp/corp-ca
 
+# CVE-2026-114406: the base still trusts the eMudhra (emSign) roots that signed
+# weak intermediates (PO decision 2026-10-23). Blocklist every emSign root in the
+# system trust store so neither OpenSSL nor Java (cacerts is generated from
+# ca-trust) trusts it, then fail the build if any emSign label is still trusted.
+# Remove this step when Red Hat ships a ca-certificates without those roots.
+RUN mkdir -p /etc/pki/ca-trust/source/blocklist \
+ && trust dump --filter=ca-anchors > /tmp/ca-anchors.p11 \
+ && awk '/^\[p11-kit-object-v1\]/{lab=0; t=0; d=0} /^label: /{lab=(tolower($0) ~ /^label: "emsign/)} /^trusted: true/{t=1} /^x-distrusted: true/{d=1} /^-----BEGIN CERTIFICATE-----/{pem=(lab && t && !d); if(pem){n++; f=sprintf("/etc/pki/ca-trust/source/blocklist/emsign-%02d.pem",n)}} pem{print > f} /^-----END CERTIFICATE-----/{if(pem) close(f); pem=0}' \
+      /tmp/ca-anchors.p11 \
+ && rm -f /tmp/ca-anchors.p11 \
+ && update-ca-trust extract \
+ && test "$(grep -c 'BEGIN CERTIFICATE' /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem)" -gt 50 \
+ && ! grep -qi '^# emsign' /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem \
+ && test "$(trust list --filter=ca-anchors | grep -c '^pkcs11:')" -gt 50 \
+ && test -z "$(trust list --filter=ca-anchors | grep -i emsign)" \
+ && test "$(trust list --filter=blocklist | grep -ci emsign)" -ge 1 \
+ && test "$(keytool -list -keystore /etc/pki/java/cacerts -storepass changeit | grep -c trustedCertEntry)" -gt 50 \
+ && test -z "$(keytool -list -keystore /etc/pki/java/cacerts -storepass changeit | grep -i emsign)"
+
 COPY --from=build /build/service-boot.jar /app/service.jar
 # nexus-cli: the screen's actions from a shell inside the pod (cli_parity_for_every_ui_action).
 #   kubectl -n ui2 exec -it deploy/ui2-service -- /app/nexus-cli login http://localhost:8080 <user>
