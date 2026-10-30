@@ -266,6 +266,12 @@ class BackupJobExecutorEndToEndTest {
 
         Harness(ScriptedBackupTransport transport, ArtefactStore artefactStore, Duration pollInterval,
                 Duration runDeadline, Path recoveryVolume) {
+            this(transport, artefactStore, pollInterval, runDeadline, recoveryVolume, false);
+        }
+
+        /** {@code withSnapshotExecutor}: composes the Gaia snapshot executor over the same transport and store, as the worker does. */
+        Harness(ScriptedBackupTransport transport, ArtefactStore artefactStore, Duration pollInterval,
+                Duration runDeadline, Path recoveryVolume, boolean withSnapshotExecutor) {
             this.transport = transport;
             this.leaseRepo = new BackupJobExecutorFakes.FakeLeaseRepository(JOB_ID, LEASE_EPOCH, JobState.CLAIMED);
             this.attemptRepo = new BackupJobExecutorFakes.FakeStepAttemptRepository();
@@ -276,8 +282,13 @@ class BackupJobExecutorEndToEndTest {
             this.eligibilityRepo = new BackupJobExecutorFakes.FakeBackupEndpointEligibilityRepository();
             BackupCapabilityExecutor capabilityExecutor =
                     new BackupCapabilityExecutor(transport, artefactStore, 1L, pollInterval, runDeadline, ledger);
-            this.executor = new BackupJobExecutor(leaseRepo, attemptRepo, enrollmentPort, deviceRepo,
-                    capabilityExecutor, manifestRepo, eligibilityRepo, testFingerprint(), recoveryVolume.toString());
+            this.executor = withSnapshotExecutor
+                    ? new BackupJobExecutor(leaseRepo, attemptRepo, enrollmentPort, deviceRepo, capabilityExecutor,
+                            new com.securityexpert.nexus.ui2.worker.backup.cp.CheckPointSnapshotExecutor(transport,
+                                    artefactStore, 1L, pollInterval, runDeadline),
+                            null, null, manifestRepo, eligibilityRepo, testFingerprint(), recoveryVolume.toString())
+                    : new BackupJobExecutor(leaseRepo, attemptRepo, enrollmentPort, deviceRepo,
+                            capabilityExecutor, manifestRepo, eligibilityRepo, testFingerprint(), recoveryVolume.toString());
         }
     }
 
@@ -327,6 +338,8 @@ class BackupJobExecutorEndToEndTest {
         assertEquals(1, harness.manifestRepo.recorded.size());
         assertEquals("backup", harness.manifestRepo.recorded.get(0).artefactClass());
         assertEquals("first", harness.manifestRepo.recorded.get(0).deviationState().orElseThrow());
+        assertEquals("standard", harness.manifestRepo.recorded.get(0).backupType(),
+                "an add backup local archive is a standard backup: the age rule prunes it, not the snapshot depth");
         assertTrue(harness.transport.commandsIssued.contains(BackupReadPlan.deleteBackupCommand(ARCHIVE_NAME)));
         assertFalse(harness.eligibilityRepo.isIneligible(DEVICE_ID));
         assertTrue(harness.transport.disconnectCalled);
@@ -447,5 +460,29 @@ class BackupJobExecutorEndToEndTest {
         assertFalse(issued.contains(BackupReadPlan.deleteBackupCommand(vanished)), "a name no longer listed is closed without a delete");
         assertEquals(java.util.Map.of(stale, true, vanished, true, ARCHIVE_NAME, true), harness.ledger.deletedByName,
                 "the stale and vanished names are closed; this run's own archive is recorded and closed after its delete");
+    }
+
+    /**
+     * A Gaia snapshot run records backup_type snapshot, so the retention pruner's depth rule (Backups screen: "Gaia
+     * snapshots: newest N kept per gateway") applies to it. Before the fix every snapshot was recorded with the column
+     * default standard and only the age rule could ever reach it.
+     */
+    @Test
+    void aGaiaSnapshotRunIsRecordedAsASnapshot(@TempDir Path tempDir) throws Exception {
+        ScriptedBackupTransport transport = new ScriptedBackupTransport();
+        transport.execOutputs.put(BackupReadPlan.CP_SHOW_DISKSPACE, "Free disk space on /var/log: 50000 MB\n");
+        transport.execOutputs.put(BackupReadPlan.CP_SHOW_SNAPSHOT_STATUS, "Snapshot completed successfully\n");
+        transport.fetchedContent = "snapshot-image-bytes";
+
+        Harness harness = new Harness(transport, newArtefactStore(tempDir), Duration.ofMillis(5), Duration.ofSeconds(5),
+                tempDir, true);
+        JobOutcome outcome = harness.executor.execute(JOB_ID, LEASE_EPOCH, DEVICE_ID, request(),
+                com.securityexpert.nexus.ui2.jobs.admission.BackupCapabilityIds.CP_GAIA_SNAPSHOT);
+
+        assertTrue(outcome instanceof JobOutcome.Completed, "expected Completed, got " + outcome);
+        assertFalse(transport.commandsIssued.contains(BackupReadPlan.CP_ADD_BACKUP_LOCAL), "a snapshot run never takes a Gaia backup");
+        assertEquals(1, harness.manifestRepo.recorded.size());
+        assertEquals("backup", harness.manifestRepo.recorded.get(0).artefactClass());
+        assertEquals("snapshot", harness.manifestRepo.recorded.get(0).backupType());
     }
 }

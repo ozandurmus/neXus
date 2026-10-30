@@ -254,6 +254,10 @@ public final class BackupJobExecutor {
                 .filter("gaia_embedded"::equals).isPresent()
                 || com.securityexpert.nexus.ui2.jobs.admission.CheckPointSparkModelHint.isKnownSparkModel(model));
         BackupResult result;
+        // The V30 backup_type the manifest records: only a Gaia snapshot run is a snapshot. The retention pruner keys on
+        // it (newest N snapshots per device by the policy's depth, standard backups by age), so a snapshot recorded as
+        // standard would escape the depth rule shown on the Backups screen.
+        String backupType = BackupArtefactManifestRecord.BACKUP_TYPE_STANDARD;
         Optional<BackupResult> viaCyberController = Optional.empty();
         if (com.securityexpert.nexus.ui2.jobs.admission.BackupCapabilityIds.HTTPS_VENDOR_BACKUP.equals(capabilityId)
                 && "radware".equals(vendor) && httpsVendorExecutor != null) {
@@ -333,6 +337,7 @@ public final class BackupJobExecutor {
         } else if ((com.securityexpert.nexus.ui2.jobs.admission.BackupCapabilityIds.CP_GAIA_SNAPSHOT.equals(capabilityId)
                 || request.connectionTarget().endpointId().contains("snapshot") || jobId.contains("snap")) && snapshotExecutor != null) {
             result = snapshotExecutor.collectSnapshot(request, targetDeviceId, jobId);
+            backupType = BackupArtefactManifestRecord.BACKUP_TYPE_SNAPSHOT;
         } else {
             result = backupExecutor.collect(request, targetDeviceId, jobId);
             if (result instanceof BackupResult.SubmitRefused refused
@@ -356,16 +361,17 @@ public final class BackupJobExecutor {
         }
 
         if (result instanceof BackupResult.Completed completed) {
-            return handleCompleted(jobId, leaseEpoch, targetDeviceId, completed, confirmFacts);
+            return handleCompleted(jobId, leaseEpoch, targetDeviceId, completed, confirmFacts, backupType);
         }
 
         if (result instanceof BackupResult.CleanupFailed cleanupFailed) {
-            return handleCleanupFailed(jobId, leaseEpoch, targetDeviceId, cleanupFailed, confirmFacts);
+            return handleCleanupFailed(jobId, leaseEpoch, targetDeviceId, cleanupFailed, confirmFacts, backupType);
         }
 
         if (result instanceof BackupResult.Partial partial) {
             String deviationState = deviationStateAgainstPrevious(targetDeviceId, partial.artefact().plaintextSha256());
-            Optional<String> recorded = recordManifest(partial.artefact(), targetDeviceId, confirmFacts, deviationState, Optional.empty());
+            Optional<String> recorded = recordManifest(partial.artefact(), targetDeviceId, confirmFacts, deviationState,
+                    Optional.empty(), backupType);
             if (recorded.isPresent() && contentListing != null) {
                 contentListing.list(recorded.get(), partial.artefact().ref(), partial.artefact().wrappedDataKey());
             }
@@ -387,10 +393,10 @@ public final class BackupJobExecutor {
     }
 
     private JobOutcome handleCompleted(String jobId, long leaseEpoch, String deviceId, BackupResult.Completed completed,
-            Optional<DeviceConfirmFacts> confirmFacts) {
+            Optional<DeviceConfirmFacts> confirmFacts, String backupType) {
         String deviationState = deviationStateAgainstPrevious(deviceId, completed.artefact().plaintextSha256());
         Optional<String> recorded = recordManifest(completed.artefact(), deviceId, confirmFacts, deviationState,
-                completed.observedSoftwareVersion());
+                completed.observedSoftwareVersion(), backupType);
         if (recorded.isEmpty()) {
             // AC-3 / C7 section 3.3: an unresolvable Check Point software version refuses the store with zero rows.
             // "Zero rows" must also mean zero bytes: the archive was already streamed onto the recovery
@@ -419,14 +425,14 @@ public final class BackupJobExecutor {
     }
 
     private JobOutcome handleCleanupFailed(String jobId, long leaseEpoch, String deviceId,
-            BackupResult.CleanupFailed cleanupFailed, Optional<DeviceConfirmFacts> confirmFacts) {
+            BackupResult.CleanupFailed cleanupFailed, Optional<DeviceConfirmFacts> confirmFacts, String backupType) {
         // The archive was fetched, verified and stored before the delete
         // failed -- the backup itself succeeded, so its manifest row is
         // still recorded (best-effort: an unresolvable software version
         // still refuses the store here exactly as it would on the happy
         // path, and the run still fails for cleanup_failed either way).
         String deviationState = deviationStateAgainstPrevious(deviceId, cleanupFailed.artefact().plaintextSha256());
-        recordManifest(cleanupFailed.artefact(), deviceId, confirmFacts, deviationState, Optional.empty());
+        recordManifest(cleanupFailed.artefact(), deviceId, confirmFacts, deviationState, Optional.empty(), backupType);
 
         eligibilityRepository.markIneligible(deviceId, cleanupFailed.reason(), ACTOR, ACTION_INELIGIBILITY_MARKED);
 
@@ -447,7 +453,8 @@ public final class BackupJobExecutor {
 
     /** @return the recorded manifest's opaque artefact id, empty when the store was refused (C7 section 3.3). */
     private Optional<String> recordManifest(ArtefactStore.ArtefactMetadata artefact, String deviceId,
-            Optional<DeviceConfirmFacts> confirmFacts, String deviationState, Optional<String> resultSoftwareVersion) {
+            Optional<DeviceConfirmFacts> confirmFacts, String deviationState, Optional<String> resultSoftwareVersion,
+            String backupType) {
         String vendor = deviceRepository.find(deviceId).map(com.securityexpert.nexus.ui2.persistence.device.DeviceRecord::vendorHint).orElse(VENDOR);
         Optional<String> virtualSystemRef = confirmFacts.flatMap(DeviceConfirmFacts::virtualSystemRef);
         // C7 section 3.3 refuses a manifest without a software version. Measured live (2026-09-22): two
@@ -467,7 +474,7 @@ public final class BackupJobExecutor {
                     artefact.plaintextSha256(), artefact.plaintextBytes(), artefact.ciphertextSha256(),
                     artefact.ciphertextBytes(), artefact.keyId(), artefact.wrappedDataKey(),
                     ArtefactValidation.reachedWithoutRestore(BACKUP_VALIDATION_LEVEL), BACKUP_RETENTION_TIER,
-                    Optional.empty(), artefact.ref().value(), Optional.of(deviationState));
+                    Optional.empty(), artefact.ref().value(), Optional.of(deviationState), backupType);
             manifestRepository.record(manifest, ACTOR, ACTION_MANIFEST_RECORDED);
 
             // Retention is not run here. The worker's hourly RetentionPruningService.prune reads the backup_policy row

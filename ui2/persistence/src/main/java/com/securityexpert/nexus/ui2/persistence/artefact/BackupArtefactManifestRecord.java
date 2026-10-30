@@ -14,6 +14,11 @@ import java.util.Optional;
  * never runs and zero rows are ever written for it. {@code palo_alto}
  * carries no such requirement -- its {@code softwareVersion} may be empty,
  * which persists as {@code NULL}.</p>
+ *
+ * <p>{@code backupType} is the {@code backup_artefact.backup_type} column (V30): {@code snapshot} for a Gaia snapshot
+ * image, {@code standard} for everything else. The retention pruner keys on it -- a snapshot is kept by the policy's
+ * snapshot depth (newest N per device), a standard backup by its age -- so a snapshot recorded as {@code standard}
+ * would silently escape the depth rule. The 18-component constructor records {@code standard}.</p>
  */
 public record BackupArtefactManifestRecord(
         String artefactId,
@@ -33,7 +38,8 @@ public record BackupArtefactManifestRecord(
         String retentionTier,
         Optional<Instant> expiresAt,
         String recoveryVolumePath,
-        Optional<String> deviationState) {
+        Optional<String> deviationState,
+        String backupType) {
 
     public static final String VENDOR_CHECK_POINT = "check_point";
     public static final String VENDOR_PALO_ALTO = "palo_alto";
@@ -42,6 +48,21 @@ public record BackupArtefactManifestRecord(
     public static final String DEVIATION_UNCHANGED = "unchanged";
     public static final String DEVIATION_CHANGED = "changed";
     public static final String DEVIATION_FIRST = "first";
+
+    /** The V30 {@code backup_type} vocabulary (the column's check constraint). */
+    public static final String BACKUP_TYPE_STANDARD = "standard";
+    public static final String BACKUP_TYPE_SNAPSHOT = "snapshot";
+
+    /** Every artefact that is not a Gaia snapshot: records {@link #BACKUP_TYPE_STANDARD}. */
+    public BackupArtefactManifestRecord(String artefactId, String deviceId, Optional<String> virtualSystemRef,
+            String artefactClass, String vendor, Optional<String> softwareVersion, String hostnameFingerprint,
+            String plaintextSha256, long plaintextBytes, String ciphertextSha256, long ciphertextBytes, String keyId,
+            byte[] wrappedDataKey, ArtefactValidation validation, String retentionTier, Optional<Instant> expiresAt,
+            String recoveryVolumePath, Optional<String> deviationState) {
+        this(artefactId, deviceId, virtualSystemRef, artefactClass, vendor, softwareVersion, hostnameFingerprint,
+                plaintextSha256, plaintextBytes, ciphertextSha256, ciphertextBytes, keyId, wrappedDataKey, validation,
+                retentionTier, expiresAt, recoveryVolumePath, deviationState, BACKUP_TYPE_STANDARD);
+    }
 
     public BackupArtefactManifestRecord {
         Objects.requireNonNull(artefactId, "artefactId");
@@ -60,6 +81,13 @@ public record BackupArtefactManifestRecord(
         Objects.requireNonNull(expiresAt, "expiresAt");
         Objects.requireNonNull(recoveryVolumePath, "recoveryVolumePath");
         Objects.requireNonNull(deviationState, "deviationState");
+        Objects.requireNonNull(backupType, "backupType");
+        if (!BACKUP_TYPE_STANDARD.equals(backupType) && !BACKUP_TYPE_SNAPSHOT.equals(backupType)) {
+            throw new IllegalArgumentException("backupType must be standard or snapshot");
+        }
+        if (BACKUP_TYPE_SNAPSHOT.equals(backupType) && !ArtefactClass.BACKUP.equals(artefactClass)) {
+            throw new IllegalArgumentException("only a backup-class artefact can be a snapshot");
+        }
 
         // C7 section 3.3: refused before any byte is written -- this
         // constructor is the earliest possible point, and throwing here

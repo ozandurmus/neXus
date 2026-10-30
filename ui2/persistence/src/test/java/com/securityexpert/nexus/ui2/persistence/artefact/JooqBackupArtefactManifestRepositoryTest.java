@@ -128,4 +128,46 @@ class JooqBackupArtefactManifestRepositoryTest {
         BackupArtefactManifestRecord record = sampleRecord("palo_alto", Optional.empty());
         assertEquals(Optional.empty(), record.softwareVersion());
     }
+
+    /** The retention pruner keys on backup_type: a Gaia snapshot must reach the column as snapshot, never the default. */
+    @Test
+    void aSnapshotManifestWritesItsBackupTypeAndEveryOtherRecordWritesStandard() {
+        List<Object[]> insertBindings = new ArrayList<>();
+        MockDataProvider provider = ctx -> {
+            if (ctx.sql().contains("insert into backup_artefact(")) {
+                assertTrue(ctx.sql().contains("backup_type"), "the insert names the backup_type column");
+                insertBindings.add(ctx.bindings());
+            }
+            return new MockResult[] { new MockResult(1, null) };
+        };
+        JooqBackupArtefactManifestRepository repository = new JooqBackupArtefactManifestRepository(
+                new JooqTransactionBoundary(DSL.using(new MockConnection(provider), SQLDialect.POSTGRES)));
+        BackupArtefactManifestRecord standard = sampleRecord("check_point", Optional.of("R81.20"));
+        BackupArtefactManifestRecord snapshot = new BackupArtefactManifestRecord("artefact-2", "device-1", Optional.empty(),
+                ArtefactClass.BACKUP, "check_point", Optional.of("R81.20"), "a".repeat(64), "plain-sha", 100L,
+                "cipher-sha", 132L, "v1", new byte[] { 1, 2, 3 }, ArtefactValidation.reachedWithoutRestore("V1"),
+                "standard", Optional.empty(), "/app/artefact-store", Optional.empty(),
+                BackupArtefactManifestRecord.BACKUP_TYPE_SNAPSHOT);
+
+        repository.record(standard, "system:worker", "backup_artefact_recorded");
+        repository.record(snapshot, "system:worker", "backup_artefact_recorded");
+
+        assertEquals("standard", standard.backupType(), "the 18-component constructor records standard");
+        assertEquals(2, insertBindings.size());
+        assertEquals("standard", insertBindings.get(0)[insertBindings.get(0).length - 1]);
+        assertEquals("snapshot", insertBindings.get(1)[insertBindings.get(1).length - 1]);
+    }
+
+    @Test
+    void aBackupTypeOutsideTheV30VocabularyOrASnapshotOfAnotherClassIsRefused() {
+        assertThrows(IllegalArgumentException.class, () -> new BackupArtefactManifestRecord("artefact-3", "device-1",
+                Optional.empty(), ArtefactClass.BACKUP, "check_point", Optional.of("R81.20"), "a".repeat(64), "plain-sha",
+                100L, "cipher-sha", 132L, "v1", new byte[] { 1 }, ArtefactValidation.reachedWithoutRestore("V1"),
+                "standard", Optional.empty(), "/app/artefact-store", Optional.empty(), "weekly"));
+        assertThrows(IllegalArgumentException.class, () -> new BackupArtefactManifestRecord("artefact-4", "device-1",
+                Optional.empty(), ArtefactClass.CONFIGURATION, "check_point", Optional.of("R81.20"), "a".repeat(64),
+                "plain-sha", 100L, "cipher-sha", 132L, "v1", new byte[] { 1 }, ArtefactValidation.reachedWithoutRestore("V1"),
+                "standard", Optional.empty(), "/app/artefact-store", Optional.empty(),
+                BackupArtefactManifestRecord.BACKUP_TYPE_SNAPSHOT));
+    }
 }
