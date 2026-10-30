@@ -92,14 +92,15 @@ RUN curl -fsSL --retry 5 -o /tmp/wireshark.tar.xz \
  && /opt/wireshark/bin/tshark --version | head -1 | grep -E "^TShark \(Wireshark\) ${WIRESHARK_VERSION}([ .]|$)"
 
 # The only two shared libraries tshark needs that the runtime base does not
-# carry, as the vault's own signed RPMs (so the image's package database --
+# carry, as Rocky's own signed RPMs (c-ares from the 9.7 vault; libbrotli 1.0.9-10.el9_8.1 from
+# the current 9.8 tree, the CVE-2026-111497 fix, not yet in a vault) (so the image's package database --
 # and with it every image scan and SBOM -- lists them with their versions).
 RUN mkdir -p /tmp/pa-rpms && cd /tmp/pa-rpms \
  && curl -fsSL --retry 5 -O https://dl.rockylinux.org/vault/rocky/9.7/BaseOS/x86_64/os/Packages/c/c-ares-1.19.1-2.el9_4.x86_64.rpm \
- && curl -fsSL --retry 5 -O https://dl.rockylinux.org/vault/rocky/9.7/BaseOS/x86_64/os/Packages/l/libbrotli-1.0.9-9.el9_7.x86_64.rpm \
+ && curl -fsSL --retry 5 -O https://dl.rockylinux.org/pub/rocky/9/BaseOS/x86_64/os/Packages/l/libbrotli-1.0.9-10.el9_8.1.x86_64.rpm \
  && printf '%s\n' \
       '64b71af9ade1d43a38a5de98aa46c9f25750b48becdf12397184497e4e4fb532  c-ares-1.19.1-2.el9_4.x86_64.rpm' \
-      'ad9f9d5fe07e9944dbfc6d28b9955c9b220f1887fb46bf45bbedb179373659c6  libbrotli-1.0.9-9.el9_7.x86_64.rpm' \
+      'ce72c3ec1513fe852bb654ab141f4014286e09a0ab09c7dd7d79805af1f42200  libbrotli-1.0.9-10.el9_8.1.x86_64.rpm' \
     | sha256sum -c - \
  && rpm --import /etc/pki/rpm-gpg/RPM-GPG-KEY-Rocky-9 && rpm -K ./*.rpm
 

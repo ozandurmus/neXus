@@ -40,8 +40,8 @@ manifest of digest `sha256:45af2087…aa55d`, tag `1.24-3.1790283193`) plus two 
    `wireshark-4.6.9.tar.xz` verified against SHA-256
    `d062d416a1ab3a49975aafe3a671c882dde0562ccd71b078808ceb59d465fc0f` (from the signed `SIGNATURES-4.6.9.txt`);
    CMake/Ninja build of **tshark only**, installed stripped to `/opt/wireshark` (RPATH `/opt/wireshark/lib64`,
-   headers/pkgconfig/man removed); `c-ares-1.19.1-2.el9_4` (SHA-256 `64b71af9…b532`) and `libbrotli-1.0.9-9.el9_7`
-   (SHA-256 `ad9f9d5f…36c6`) fetched from the vault, checksum- and signature-checked.
+   headers/pkgconfig/man removed); `c-ares-1.19.1-2.el9_4` (SHA-256 `64b71af9…b532`) and `libbrotli-1.0.9-10.el9_8.1` (CVE-2026-111497 fix)
+   (SHA-256 `ce72c3ec…2200`) fetched from the Rocky vault (c-ares) and the current 9.8 tree (libbrotli), checksum- and signature-checked.
 2. Final stage — `FROM ${SERVICE_IMAGE}`: the main image just built from the same commit, **by digest** (the stage
    refuses anything but `registry.kube-system.svc.cluster.local/nexus-ui2-service@sha256:…`). Installs the two RPMs
    into the package database, copies `/opt/wireshark`, links `/usr/local/bin/tshark` (the engine's `TsharkRunner.find`
