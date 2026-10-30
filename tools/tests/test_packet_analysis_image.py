@@ -71,7 +71,7 @@ def test_every_download_is_pinned_and_nothing_moves():
     assert 'sha256sum -c -' in text and "${WIRESHARK_SHA256}" in text
     # Each RPM fetched by URL has its SHA-256 next to it, and is signature checked.
     rpms = re.findall(r"/Packages/./([A-Za-z0-9_.+-]+\.rpm)", text)
-    assert sorted(rpms) == ["c-ares-1.19.1-2.el9_4.x86_64.rpm", "libbrotli-1.0.9-9.el9_7.x86_64.rpm"]
+    assert sorted(rpms) == ["c-ares-1.19.1-2.el9_4.x86_64.rpm", "libbrotli-1.0.9-10.el9_8.1.x86_64.rpm"]
     for rpm in rpms:
         assert re.search(r"'[a-f0-9]{64}  " + re.escape(rpm) + "'", text)
     assert "rpm -K" in text
