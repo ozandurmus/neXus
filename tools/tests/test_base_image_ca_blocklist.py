@@ -1,4 +1,7 @@
-"""eMudhra (emSign) trust-store blocklist and the time-boxed base-image CVE acceptances (PO decision 2026-10-23)."""
+"""eMudhra (emSign) trust-store blocklist and the time-boxed base-image CVE acceptances.
+
+PO decision 2026-10-23, extended by PO_DECISION_RECORD_2026_10_30_BASE_IMAGE_REFRESH.md.
+"""
 from datetime import date
 from pathlib import Path
 import re
@@ -12,11 +15,12 @@ ROOT = Path(__file__).resolve().parents[2]
 CONTAINERFILES = (ROOT / "ui2/Containerfile", ROOT / "ui2/Containerfile.packet-analysis")
 BUNDLE = "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem"
 BLOCKLIST = "/etc/pki/ca-trust/source/blocklist"
-EXPIRY = date(2026, 10, 31)
+EXPIRY = date(2026, 11, 14)
 ACCEPTED = {
-    "CVE-2026-114406": "ca-certificates",
     "CVE-2026-91415": "java-21-openjdk-headless",
 }
+# The 2026-10-22 runtime base ships the fixed ca-certificates: the acceptance is gone, the blocklist step stays.
+RESOLVED = ("CVE-2026-114406",)
 
 
 def runtime_stage(path):
@@ -78,7 +82,7 @@ def test_awk_extracts_only_emsign_certificates_from_the_trust_dump(path, tmp_pat
     assert not any(x in "".join(out.values()) for x in ("AAAA", "CCCC", "FFFF", "p11-kit", "label"))
 
 
-def test_baseline_pins_the_two_base_image_findings_until_2026_10_31():
+def test_baseline_pins_the_base_image_findings_until_2026_11_14():
     entries = yaml.safe_load((ROOT / "security/baseline.yaml").read_text())["accepted"]
     for rule, package in ACCEPTED.items():
         rows = [e for e in entries if e["rule"] == rule]
@@ -89,9 +93,9 @@ def test_baseline_pins_the_two_base_image_findings_until_2026_10_31():
         }
         for e in rows:
             assert e["tool"] == "trivy" and e["owner"] == "PO"
-            assert date.fromisoformat(e["review_date"]) == EXPIRY, "time-boxed: expires 2026-10-31, never later"
+            assert date.fromisoformat(e["review_date"]) == EXPIRY, "time-boxed: expires 2026-11-14, never later"
             assert "PO decision 2026-10-23" in e["reason"] and "no fixed package" in e["reason"]
-    ca = next(e for e in entries if e["rule"] == "CVE-2026-114406")
-    assert "blocklisted" in ca["reason"] and "pinned certificates" in ca["reason"]
+            assert "PO decision 2026-10-30" in e["reason"]
+    assert not {e["rule"] for e in entries} & set(RESOLVED), "a finding the base no longer reports stays removed"
     fonts = next(e for e in entries if e["rule"] == "CVE-2026-91415")
     assert "AWT" in fonts["reason"]

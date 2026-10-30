@@ -35,38 +35,6 @@
     },
     {
       "tool": "trivy",
-      "rule": "CVE-2026-84782",
-      "location": "ui2/Containerfile runtime image: openssl-libs",
-      "reason": "No fix released; re-evaluated daily (PO-provided scan baseline, 2026-09-30).",
-      "owner": "PO",
-      "review_date": "2026-12-31"
-    },
-    {
-      "tool": "trivy",
-      "rule": "CVE-2026-54876",
-      "location": "ui2/Containerfile runtime image: openssl-libs",
-      "reason": "No fix released; re-evaluated daily (PO-provided scan baseline, 2026-09-30).",
-      "owner": "PO",
-      "review_date": "2026-12-31"
-    },
-    {
-      "tool": "trivy",
-      "rule": "CVE-2026-86145",
-      "location": "ui2/Containerfile runtime image: pcre2/pcre2-syntax",
-      "reason": "No fix released; re-evaluated daily (PO-provided scan baseline, 2026-09-30).",
-      "owner": "PO",
-      "review_date": "2026-12-31"
-    },
-    {
-      "tool": "trivy",
-      "rule": "CVE-2026-89161",
-      "location": "ui2/Containerfile runtime image: pcre2/pcre2-syntax",
-      "reason": "No fix released; re-evaluated daily (PO-provided scan baseline, 2026-09-30).",
-      "owner": "PO",
-      "review_date": "2026-12-31"
-    },
-    {
-      "tool": "trivy",
       "rule": "CVE-2026-53613",
       "location": "ui2/Containerfile runtime image: util-linux libs",
       "reason": "No fix released; re-evaluated daily (PO-provided scan baseline, 2026-09-30).",
@@ -264,241 +232,121 @@
       "tool": "trivy",
       "rule": "CVE-2026-88647",
       "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: gnutls",
-      "reason": "Red Hat UBI9 openjdk-21-runtime base OS library, published 2026-10-09; the build cannot reach the UBI package repos to update it. The service is a JVM process: TLS is Java JSSE, so gnutls is not on the request path. Remove when Red Hat rebuilds the base image (backlog ubi9_base_image_refresh). PO 2026-10-09.",
+      "reason": "Red Hat UBI9 openjdk-21-runtime base OS library, published 2026-10-09; the build cannot reach the UBI package repos to update it. The service is a JVM process: TLS is Java JSSE, so gnutls is not on the request path. Remove when Red Hat rebuilds the base image (backlog ubi9_base_image_refresh). PO 2026-10-09. Extended 14 days by the PO decision 2026-10-30 ('Yenile + kalanlara 14 gün'); still no fixed package.",
       "owner": "PO",
-      "review_date": "2026-10-31"
+      "review_date": "2026-11-14"
     },
     {
       "tool": "trivy",
       "rule": "CVE-2026-88648",
       "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: gnutls",
-      "reason": "Red Hat UBI9 openjdk-21-runtime base OS library, published 2026-10-09; the build cannot reach the UBI package repos to update it. The service is a JVM process: TLS is Java JSSE, so gnutls is not on the request path. Remove when Red Hat rebuilds the base image (backlog ubi9_base_image_refresh). PO 2026-10-09.",
+      "reason": "Red Hat UBI9 openjdk-21-runtime base OS library, published 2026-10-09; the build cannot reach the UBI package repos to update it. The service is a JVM process: TLS is Java JSSE, so gnutls is not on the request path. Remove when Red Hat rebuilds the base image (backlog ubi9_base_image_refresh). PO 2026-10-09. Extended 14 days by the PO decision 2026-10-30 ('Yenile + kalanlara 14 gün'); still no fixed package.",
       "owner": "PO",
-      "review_date": "2026-10-31"
-    },
-    {
-      "tool": "trivy",
-      "rule": "CVE-2026-66046",
-      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: expat",
-      "reason": "Red Hat UBI9 openjdk-21-runtime base: the newest published digest (2026-10-01) still ships this package; the build cannot reach the UBI package repos to update it. The service is a JVM process: TLS is Java JSSE and XML is the JDK parser, so this OS library is not on the request path. Remove when Red Hat rebuilds the base image.",
-      "owner": "PO",
-      "review_date": "2026-10-31"
+      "review_date": "2026-11-14"
     },
     {
       "tool": "trivy",
       "rule": "CVE-2026-76641",
       "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: expat",
-      "reason": "Red Hat UBI9 openjdk-21-runtime base: the newest published digest (2026-10-01) still ships this package; the build cannot reach the UBI package repos to update it. The service is a JVM process: TLS is Java JSSE and XML is the JDK parser, so this OS library is not on the request path. Remove when Red Hat rebuilds the base image.",
+      "reason": "Red Hat UBI9 openjdk-21-runtime base: the newest published digest (2026-10-01) still ships this package; the build cannot reach the UBI package repos to update it. The service is a JVM process: TLS is Java JSSE and XML is the JDK parser, so this OS library is not on the request path. Remove when Red Hat rebuilds the base image. Extended 14 days by the PO decision 2026-10-30 ('Yenile + kalanlara 14 gün'); still no fixed package.",
       "owner": "PO",
-      "review_date": "2026-10-31"
-    },
-    {
-      "tool": "trivy",
-      "rule": "CVE-2026-93990",
-      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: expat",
-      "reason": "Red Hat UBI9 openjdk-21-runtime base: the newest published digest (2026-10-01) still ships this package; the build cannot reach the UBI package repos to update it. The service is a JVM process: TLS is Java JSSE and XML is the JDK parser, so this OS library is not on the request path. Remove when Red Hat rebuilds the base image.",
-      "owner": "PO",
-      "review_date": "2026-10-31"
+      "review_date": "2026-11-14"
     },
     {
       "tool": "trivy",
       "rule": "CVE-2026-53613",
       "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: libblkid",
-      "reason": "Red Hat UBI9 openjdk-21-runtime base: the newest published digest (2026-10-01) still ships this package; the build cannot reach the UBI package repos to update it. The service is a JVM process: TLS is Java JSSE and XML is the JDK parser, so this OS library is not on the request path. Remove when Red Hat rebuilds the base image.",
+      "reason": "Red Hat UBI9 openjdk-21-runtime base: the newest published digest (2026-10-01) still ships this package; the build cannot reach the UBI package repos to update it. The service is a JVM process: TLS is Java JSSE and XML is the JDK parser, so this OS library is not on the request path. Remove when Red Hat rebuilds the base image. Extended 14 days by the PO decision 2026-10-30 ('Yenile + kalanlara 14 gün'); still no fixed package.",
       "owner": "PO",
-      "review_date": "2026-10-31"
+      "review_date": "2026-11-14"
     },
     {
       "tool": "trivy",
       "rule": "CVE-2026-53613",
       "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: libmount",
-      "reason": "Red Hat UBI9 openjdk-21-runtime base: the newest published digest (2026-10-01) still ships this package; the build cannot reach the UBI package repos to update it. The service is a JVM process: TLS is Java JSSE and XML is the JDK parser, so this OS library is not on the request path. Remove when Red Hat rebuilds the base image.",
+      "reason": "Red Hat UBI9 openjdk-21-runtime base: the newest published digest (2026-10-01) still ships this package; the build cannot reach the UBI package repos to update it. The service is a JVM process: TLS is Java JSSE and XML is the JDK parser, so this OS library is not on the request path. Remove when Red Hat rebuilds the base image. Extended 14 days by the PO decision 2026-10-30 ('Yenile + kalanlara 14 gün'); still no fixed package.",
       "owner": "PO",
-      "review_date": "2026-10-31"
+      "review_date": "2026-11-14"
     },
     {
       "tool": "trivy",
       "rule": "CVE-2026-53613",
       "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: libsmartcols",
-      "reason": "Red Hat UBI9 openjdk-21-runtime base: the newest published digest (2026-10-01) still ships this package; the build cannot reach the UBI package repos to update it. The service is a JVM process: TLS is Java JSSE and XML is the JDK parser, so this OS library is not on the request path. Remove when Red Hat rebuilds the base image.",
+      "reason": "Red Hat UBI9 openjdk-21-runtime base: the newest published digest (2026-10-01) still ships this package; the build cannot reach the UBI package repos to update it. The service is a JVM process: TLS is Java JSSE and XML is the JDK parser, so this OS library is not on the request path. Remove when Red Hat rebuilds the base image. Extended 14 days by the PO decision 2026-10-30 ('Yenile + kalanlara 14 gün'); still no fixed package.",
       "owner": "PO",
-      "review_date": "2026-10-31"
+      "review_date": "2026-11-14"
     },
     {
       "tool": "trivy",
       "rule": "CVE-2026-53613",
       "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: libuuid",
-      "reason": "Red Hat UBI9 openjdk-21-runtime base: the newest published digest (2026-10-01) still ships this package; the build cannot reach the UBI package repos to update it. The service is a JVM process: TLS is Java JSSE and XML is the JDK parser, so this OS library is not on the request path. Remove when Red Hat rebuilds the base image.",
+      "reason": "Red Hat UBI9 openjdk-21-runtime base: the newest published digest (2026-10-01) still ships this package; the build cannot reach the UBI package repos to update it. The service is a JVM process: TLS is Java JSSE and XML is the JDK parser, so this OS library is not on the request path. Remove when Red Hat rebuilds the base image. Extended 14 days by the PO decision 2026-10-30 ('Yenile + kalanlara 14 gün'); still no fixed package.",
       "owner": "PO",
-      "review_date": "2026-10-31"
-    },
-    {
-      "tool": "trivy",
-      "rule": "CVE-2026-54876",
-      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: openssl-libs",
-      "reason": "Red Hat UBI9 openjdk-21-runtime base: the newest published digest (2026-10-01) still ships this package; the build cannot reach the UBI package repos to update it. The service is a JVM process: TLS is Java JSSE and XML is the JDK parser, so this OS library is not on the request path. Remove when Red Hat rebuilds the base image.",
-      "owner": "PO",
-      "review_date": "2026-10-31"
+      "review_date": "2026-11-14"
     },
     {
       "tool": "trivy",
       "rule": "CVE-2026-75804",
       "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: openssl-libs",
-      "reason": "Red Hat UBI9 openjdk-21-runtime base: the newest published digest (2026-10-01) still ships this package; the build cannot reach the UBI package repos to update it. The service is a JVM process: TLS is Java JSSE and XML is the JDK parser, so this OS library is not on the request path. Remove when Red Hat rebuilds the base image.",
+      "reason": "Red Hat UBI9 openjdk-21-runtime base: the newest published digest (2026-10-01) still ships this package; the build cannot reach the UBI package repos to update it. The service is a JVM process: TLS is Java JSSE and XML is the JDK parser, so this OS library is not on the request path. Remove when Red Hat rebuilds the base image. Extended 14 days by the PO decision 2026-10-30 ('Yenile + kalanlara 14 gün'); still no fixed package.",
       "owner": "PO",
-      "review_date": "2026-10-31"
-    },
-    {
-      "tool": "trivy",
-      "rule": "CVE-2026-84782",
-      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: openssl-libs",
-      "reason": "Red Hat UBI9 openjdk-21-runtime base: the newest published digest (2026-10-01) still ships this package; the build cannot reach the UBI package repos to update it. The service is a JVM process: TLS is Java JSSE and XML is the JDK parser, so this OS library is not on the request path. Remove when Red Hat rebuilds the base image.",
-      "owner": "PO",
-      "review_date": "2026-10-31"
-    },
-    {
-      "tool": "trivy",
-      "rule": "CVE-2026-103111",
-      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: pcre2",
-      "reason": "Red Hat UBI9 openjdk-21-runtime base: the newest published digest (2026-10-01) still ships this package; the build cannot reach the UBI package repos to update it. The service is a JVM process: TLS is Java JSSE and XML is the JDK parser, so this OS library is not on the request path. Remove when Red Hat rebuilds the base image.",
-      "owner": "PO",
-      "review_date": "2026-10-31"
-    },
-    {
-      "tool": "trivy",
-      "rule": "CVE-2026-86145",
-      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: pcre2",
-      "reason": "Red Hat UBI9 openjdk-21-runtime base: the newest published digest (2026-10-01) still ships this package; the build cannot reach the UBI package repos to update it. The service is a JVM process: TLS is Java JSSE and XML is the JDK parser, so this OS library is not on the request path. Remove when Red Hat rebuilds the base image.",
-      "owner": "PO",
-      "review_date": "2026-10-31"
-    },
-    {
-      "tool": "trivy",
-      "rule": "CVE-2026-89161",
-      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: pcre2",
-      "reason": "Red Hat UBI9 openjdk-21-runtime base: the newest published digest (2026-10-01) still ships this package; the build cannot reach the UBI package repos to update it. The service is a JVM process: TLS is Java JSSE and XML is the JDK parser, so this OS library is not on the request path. Remove when Red Hat rebuilds the base image.",
-      "owner": "PO",
-      "review_date": "2026-10-31"
-    },
-    {
-      "tool": "trivy",
-      "rule": "CVE-2026-103111",
-      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: pcre2-syntax",
-      "reason": "Red Hat UBI9 openjdk-21-runtime base: the newest published digest (2026-10-01) still ships this package; the build cannot reach the UBI package repos to update it. The service is a JVM process: TLS is Java JSSE and XML is the JDK parser, so this OS library is not on the request path. Remove when Red Hat rebuilds the base image.",
-      "owner": "PO",
-      "review_date": "2026-10-31"
-    },
-    {
-      "tool": "trivy",
-      "rule": "CVE-2026-86145",
-      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: pcre2-syntax",
-      "reason": "Red Hat UBI9 openjdk-21-runtime base: the newest published digest (2026-10-01) still ships this package; the build cannot reach the UBI package repos to update it. The service is a JVM process: TLS is Java JSSE and XML is the JDK parser, so this OS library is not on the request path. Remove when Red Hat rebuilds the base image.",
-      "owner": "PO",
-      "review_date": "2026-10-31"
-    },
-    {
-      "tool": "trivy",
-      "rule": "CVE-2026-89161",
-      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: pcre2-syntax",
-      "reason": "Red Hat UBI9 openjdk-21-runtime base: the newest published digest (2026-10-01) still ships this package; the build cannot reach the UBI package repos to update it. The service is a JVM process: TLS is Java JSSE and XML is the JDK parser, so this OS library is not on the request path. Remove when Red Hat rebuilds the base image.",
-      "owner": "PO",
-      "review_date": "2026-10-31"
-    },
-    {
-      "tool": "trivy",
-      "rule": "CVE-2026-77214",
-      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: expat",
-      "reason": "Red Hat UBI9 openjdk-21-runtime base: the newest published digest (2026-10-01) still ships this package; the build cannot reach the UBI package repos to update it. The service is a JVM process: TLS is Java JSSE and XML is the JDK parser, so this OS library is not on the request path. Remove when Red Hat rebuilds the base image. PO 2026-10-08",
-      "owner": "PO",
-      "review_date": "2026-10-31"
+      "review_date": "2026-11-14"
     },
     {
       "tool": "trivy",
       "rule": "CVE-2026-53615",
       "location": "ui2/Containerfile runtime image: util-linux libs",
-      "reason": "util-linux libraries in the Red Hat UBI9 openjdk-21-runtime base: no fixed package is published yet; the 2026-10-12 base digest (PR #584) still ships it, and the build cannot reach the UBI package repos to update it. The service is a JVM process (TLS via JSSE, XML via the JDK parser), so these OS libraries are not on the request path. Accepted alongside CVE-2026-53613 under the PO's 2026-10-15 delegation; remove when Red Hat rebuilds the base image.",
+      "reason": "util-linux libraries in the Red Hat UBI9 openjdk-21-runtime base: no fixed package is published yet; the 2026-10-12 base digest (PR #584) still ships it, and the build cannot reach the UBI package repos to update it. The service is a JVM process (TLS via JSSE, XML via the JDK parser), so these OS libraries are not on the request path. Accepted alongside CVE-2026-53613 under the PO's 2026-10-15 delegation; remove when Red Hat rebuilds the base image. Extended 14 days by the PO decision 2026-10-30 ('Yenile + kalanlara 14 gün'); still no fixed package.",
       "owner": "PO",
-      "review_date": "2026-10-31"
+      "review_date": "2026-11-14"
     },
     {
       "tool": "trivy",
       "rule": "CVE-2026-53615",
       "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: libblkid",
-      "reason": "util-linux libraries in the Red Hat UBI9 openjdk-21-runtime base: no fixed package is published yet; the 2026-10-12 base digest (PR #584) still ships it, and the build cannot reach the UBI package repos to update it. The service is a JVM process (TLS via JSSE, XML via the JDK parser), so these OS libraries are not on the request path. Accepted alongside CVE-2026-53613 under the PO's 2026-10-15 delegation; remove when Red Hat rebuilds the base image.",
+      "reason": "util-linux libraries in the Red Hat UBI9 openjdk-21-runtime base: no fixed package is published yet; the 2026-10-12 base digest (PR #584) still ships it, and the build cannot reach the UBI package repos to update it. The service is a JVM process (TLS via JSSE, XML via the JDK parser), so these OS libraries are not on the request path. Accepted alongside CVE-2026-53613 under the PO's 2026-10-15 delegation; remove when Red Hat rebuilds the base image. Extended 14 days by the PO decision 2026-10-30 ('Yenile + kalanlara 14 gün'); still no fixed package.",
       "owner": "PO",
-      "review_date": "2026-10-31"
+      "review_date": "2026-11-14"
     },
     {
       "tool": "trivy",
       "rule": "CVE-2026-53615",
       "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: libmount",
-      "reason": "util-linux libraries in the Red Hat UBI9 openjdk-21-runtime base: no fixed package is published yet; the 2026-10-12 base digest (PR #584) still ships it, and the build cannot reach the UBI package repos to update it. The service is a JVM process (TLS via JSSE, XML via the JDK parser), so these OS libraries are not on the request path. Accepted alongside CVE-2026-53613 under the PO's 2026-10-15 delegation; remove when Red Hat rebuilds the base image.",
+      "reason": "util-linux libraries in the Red Hat UBI9 openjdk-21-runtime base: no fixed package is published yet; the 2026-10-12 base digest (PR #584) still ships it, and the build cannot reach the UBI package repos to update it. The service is a JVM process (TLS via JSSE, XML via the JDK parser), so these OS libraries are not on the request path. Accepted alongside CVE-2026-53613 under the PO's 2026-10-15 delegation; remove when Red Hat rebuilds the base image. Extended 14 days by the PO decision 2026-10-30 ('Yenile + kalanlara 14 gün'); still no fixed package.",
       "owner": "PO",
-      "review_date": "2026-10-31"
+      "review_date": "2026-11-14"
     },
     {
       "tool": "trivy",
       "rule": "CVE-2026-53615",
       "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: libsmartcols",
-      "reason": "util-linux libraries in the Red Hat UBI9 openjdk-21-runtime base: no fixed package is published yet; the 2026-10-12 base digest (PR #584) still ships it, and the build cannot reach the UBI package repos to update it. The service is a JVM process (TLS via JSSE, XML via the JDK parser), so these OS libraries are not on the request path. Accepted alongside CVE-2026-53613 under the PO's 2026-10-15 delegation; remove when Red Hat rebuilds the base image.",
+      "reason": "util-linux libraries in the Red Hat UBI9 openjdk-21-runtime base: no fixed package is published yet; the 2026-10-12 base digest (PR #584) still ships it, and the build cannot reach the UBI package repos to update it. The service is a JVM process (TLS via JSSE, XML via the JDK parser), so these OS libraries are not on the request path. Accepted alongside CVE-2026-53613 under the PO's 2026-10-15 delegation; remove when Red Hat rebuilds the base image. Extended 14 days by the PO decision 2026-10-30 ('Yenile + kalanlara 14 gün'); still no fixed package.",
       "owner": "PO",
-      "review_date": "2026-10-31"
+      "review_date": "2026-11-14"
     },
     {
       "tool": "trivy",
       "rule": "CVE-2026-53615",
       "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: libuuid",
-      "reason": "util-linux libraries in the Red Hat UBI9 openjdk-21-runtime base: no fixed package is published yet; the 2026-10-12 base digest (PR #584) still ships it, and the build cannot reach the UBI package repos to update it. The service is a JVM process (TLS via JSSE, XML via the JDK parser), so these OS libraries are not on the request path. Accepted alongside CVE-2026-53613 under the PO's 2026-10-15 delegation; remove when Red Hat rebuilds the base image.",
+      "reason": "util-linux libraries in the Red Hat UBI9 openjdk-21-runtime base: no fixed package is published yet; the 2026-10-12 base digest (PR #584) still ships it, and the build cannot reach the UBI package repos to update it. The service is a JVM process (TLS via JSSE, XML via the JDK parser), so these OS libraries are not on the request path. Accepted alongside CVE-2026-53613 under the PO's 2026-10-15 delegation; remove when Red Hat rebuilds the base image. Extended 14 days by the PO decision 2026-10-30 ('Yenile + kalanlara 14 gün'); still no fixed package.",
       "owner": "PO",
-      "review_date": "2026-10-31"
-    },
-    {
-      "tool": "trivy",
-      "rule": "CVE-2026-69184",
-      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: c-ares",
-      "reason": "c-ares in the Packet Analysis engine image (the pinned Rocky 9.7 c-ares-1.19.1-2.el9_4 runtime package tshark 4.6.9 links): no fixed package is published for EL9 yet (BaseOS and the 9.7 vault carry only 1.19.1-2). c-ares is tshark's DNS resolver and every tshark run in the engine passes -n (no name resolution) on offline capture files, so the resolver is not on the execution path. Accepted under the PO's 2026-10-15 delegation, the same way as CVE-2026-53613/53615; remove when Rocky ships a fixed c-ares.",
-      "owner": "PO",
-      "review_date": "2026-10-31"
-    },
-    {
-      "tool": "trivy",
-      "rule": "CVE-2026-114406",
-      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: ca-certificates",
-      "reason": "Red Hat UBI9 openjdk-21-runtime base (service image and the packet-analysis image built from it, same repository): no fixed package is published yet; the build cannot reach the UBI package repos to update it. Time-boxed by the PO decision 2026-10-23 ('accept until 2026-10-31 and remove the eMudhra roots'); remove when Red Hat rebuilds the base image. CVE-2026-114406 (CRITICAL): ca-certificates 2025.2.80_v9.0.305-91.el9 still trusts the eMudhra (emSign) roots that signed weak intermediates. Exposure: device connections use pinned certificates; PAN and LDAP do not use the system CA list; the SMTP and HTTP clients are only theoretically reachable (AC:H, UI:R). Mitigation: the emSign roots are to be blocklisted in the image trust store (lane/cve-accept-emudhra; its image build is still being validated).",
-      "owner": "PO",
-      "review_date": "2026-10-31"
-    },
-    {
-      "tool": "trivy",
-      "rule": "CVE-2026-114406",
-      "location": "ui2/Containerfile runtime image: ca-certificates",
-      "reason": "Red Hat UBI9 openjdk-21-runtime base (service image and the packet-analysis image built from it, same repository): no fixed package is published yet; the build cannot reach the UBI package repos to update it. Time-boxed by the PO decision 2026-10-23 ('accept until 2026-10-31 and remove the eMudhra roots'); remove when Red Hat rebuilds the base image. CVE-2026-114406 (CRITICAL): ca-certificates 2025.2.80_v9.0.305-91.el9 still trusts the eMudhra (emSign) roots that signed weak intermediates. Exposure: device connections use pinned certificates; PAN and LDAP do not use the system CA list; the SMTP and HTTP clients are only theoretically reachable (AC:H, UI:R). Mitigation: the emSign roots are to be blocklisted in the image trust store (lane/cve-accept-emudhra; its image build is still being validated).",
-      "owner": "PO",
-      "review_date": "2026-10-31"
-    },
-    {
-      "tool": "trivy",
-      "rule": "CVE-2026-114406",
-      "location": "ui2/Containerfile.packet-analysis runtime image: ca-certificates",
-      "reason": "Red Hat UBI9 openjdk-21-runtime base (service image and the packet-analysis image built from it, same repository): no fixed package is published yet; the build cannot reach the UBI package repos to update it. Time-boxed by the PO decision 2026-10-23 ('accept until 2026-10-31 and remove the eMudhra roots'); remove when Red Hat rebuilds the base image. CVE-2026-114406 (CRITICAL): ca-certificates 2025.2.80_v9.0.305-91.el9 still trusts the eMudhra (emSign) roots that signed weak intermediates. Exposure: device connections use pinned certificates; PAN and LDAP do not use the system CA list; the SMTP and HTTP clients are only theoretically reachable (AC:H, UI:R). Mitigation: the emSign roots are to be blocklisted in the image trust store (lane/cve-accept-emudhra; its image build is still being validated).",
-      "owner": "PO",
-      "review_date": "2026-10-31"
+      "review_date": "2026-11-14"
     },
     {
       "tool": "trivy",
       "rule": "CVE-2026-91415",
       "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: java-21-openjdk-headless",
-      "reason": "Red Hat UBI9 openjdk-21-runtime base (service image and the packet-analysis image built from it, same repository): no fixed package is published yet; the build cannot reach the UBI package repos to update it. Time-boxed by the PO decision 2026-10-23 ('accept until 2026-10-31 and remove the eMudhra roots'); remove when Red Hat rebuilds the base image. CVE-2026-91415 (HIGH): java-21-openjdk-headless 1:21.0.12.1.1-1.2.el9, Java 2D font rendering flaw. Exposure: no AWT, image, PDF or POI autoSize rendering path was found in the service or the workers, so font rendering is not reachable.",
+      "reason": "Red Hat UBI9 openjdk-21-runtime base (service image and the packet-analysis image built from it, same repository): no fixed package is published yet; the build cannot reach the UBI package repos to update it. Time-boxed by the PO decision 2026-10-23 ('accept until 2026-10-31 and remove the eMudhra roots'); remove when Red Hat rebuilds the base image. CVE-2026-91415 (HIGH): java-21-openjdk-headless 1:21.0.12.1.1-1.2.el9, Java 2D font rendering flaw. Exposure: no AWT, image, PDF or POI autoSize rendering path was found in the service or the workers, so font rendering is not reachable. Extended 14 days by the PO decision 2026-10-30 ('Yenile + kalanlara 14 gün'); still no fixed package.",
       "owner": "PO",
-      "review_date": "2026-10-31"
+      "review_date": "2026-11-14"
     },
     {
       "tool": "trivy",
       "rule": "CVE-2026-91403",
       "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: java-21-openjdk-headless",
-      "reason": "Red Hat UBI9 openjdk-21-runtime base (service image and the packet-analysis image built from it, same repository): no fixed package is published yet; the build cannot reach the UBI package repos to update it. Time-boxed by the PO decision 2026-10-24 ('Evet, kabul et ve gönder': accept until 2026-10-31); remove when Red Hat rebuilds the base image. CVE-2026-91403 (CRITICAL, Red Hat CVSS 6.8 AV:N/AC:H/PR:N/UI:R): java-21-openjdk-headless 1:21.0.12.1.1-1.2.el9, JSSE (TLS) flaw from the October 2026 Oracle CPU. Exposure: neXus uses JSSE for device HTTPS/XML API and LDAP clients; the running pods carry the same package, so blocking the deploy does not reduce exposure. Remove as soon as Red Hat publishes the fixed package; checked daily.",
+      "reason": "Red Hat UBI9 openjdk-21-runtime base (service image and the packet-analysis image built from it, same repository): no fixed package is published yet; the build cannot reach the UBI package repos to update it. Time-boxed by the PO decision 2026-10-24 ('Evet, kabul et ve gönder': accept until 2026-10-31); remove when Red Hat rebuilds the base image. CVE-2026-91403 (CRITICAL, Red Hat CVSS 6.8 AV:N/AC:H/PR:N/UI:R): java-21-openjdk-headless 1:21.0.12.1.1-1.2.el9, JSSE (TLS) flaw from the October 2026 Oracle CPU. Exposure: neXus uses JSSE for device HTTPS/XML API and LDAP clients; the running pods carry the same package, so blocking the deploy does not reduce exposure. Remove as soon as Red Hat publishes the fixed package; checked daily. Extended 14 days by the PO decision 2026-10-30 ('Yenile + kalanlara 14 gün'); still no fixed package.",
       "owner": "PO",
-      "review_date": "2026-10-31"
+      "review_date": "2026-11-14"
     },
     {
       "tool": "trivy",
@@ -510,27 +358,19 @@
     },
     {
       "tool": "trivy",
-      "rule": "CVE-2026-115895",
-      "location": "history/tools/render-harness/bun.lock: happy-dom",
-      "reason": "history/ is the frozen archive of a retired render harness: its bun.lock is never built, installed or shipped in any image. happy-dom is a test-only DOM library there. Time-boxed under the PO decision 2026-10-24 (accept until 2026-10-31); follow-up: exclude history/ from the trivy fs scan or delete the archived lockfile.",
-      "owner": "PO",
-      "review_date": "2026-10-31"
-    },
-    {
-      "tool": "trivy",
       "rule": "CVE-2026-91415",
       "location": "ui2/Containerfile runtime image: java-21-openjdk-headless",
-      "reason": "Red Hat UBI9 openjdk-21-runtime base (service image and the packet-analysis image built from it, same repository): no fixed package is published yet; the build cannot reach the UBI package repos to update it. Time-boxed by the PO decision 2026-10-23 ('accept until 2026-10-31 and remove the eMudhra roots'); remove when Red Hat rebuilds the base image. CVE-2026-91415 (HIGH): java-21-openjdk-headless 1:21.0.12.1.1-1.2.el9, Java 2D font rendering flaw. Exposure: no AWT, image, PDF or POI autoSize rendering path was found in the service or the workers, so font rendering is not reachable.",
+      "reason": "Red Hat UBI9 openjdk-21-runtime base (service image and the packet-analysis image built from it, same repository): no fixed package is published yet; the build cannot reach the UBI package repos to update it. Time-boxed by the PO decision 2026-10-23 ('accept until 2026-10-31 and remove the eMudhra roots'); remove when Red Hat rebuilds the base image. CVE-2026-91415 (HIGH): java-21-openjdk-headless 1:21.0.12.1.1-1.2.el9, Java 2D font rendering flaw. Exposure: no AWT, image, PDF or POI autoSize rendering path was found in the service or the workers, so font rendering is not reachable. Extended 14 days by the PO decision 2026-10-30 ('Yenile + kalanlara 14 gün'); still no fixed package.",
       "owner": "PO",
-      "review_date": "2026-10-31"
+      "review_date": "2026-11-14"
     },
     {
       "tool": "trivy",
       "rule": "CVE-2026-91415",
       "location": "ui2/Containerfile.packet-analysis runtime image: java-21-openjdk-headless",
-      "reason": "Red Hat UBI9 openjdk-21-runtime base (service image and the packet-analysis image built from it, same repository): no fixed package is published yet; the build cannot reach the UBI package repos to update it. Time-boxed by the PO decision 2026-10-23 ('accept until 2026-10-31 and remove the eMudhra roots'); remove when Red Hat rebuilds the base image. CVE-2026-91415 (HIGH): java-21-openjdk-headless 1:21.0.12.1.1-1.2.el9, Java 2D font rendering flaw. Exposure: no AWT, image, PDF or POI autoSize rendering path was found in the service or the workers, so font rendering is not reachable.",
+      "reason": "Red Hat UBI9 openjdk-21-runtime base (service image and the packet-analysis image built from it, same repository): no fixed package is published yet; the build cannot reach the UBI package repos to update it. Time-boxed by the PO decision 2026-10-23 ('accept until 2026-10-31 and remove the eMudhra roots'); remove when Red Hat rebuilds the base image. CVE-2026-91415 (HIGH): java-21-openjdk-headless 1:21.0.12.1.1-1.2.el9, Java 2D font rendering flaw. Exposure: no AWT, image, PDF or POI autoSize rendering path was found in the service or the workers, so font rendering is not reachable. Extended 14 days by the PO decision 2026-10-30 ('Yenile + kalanlara 14 gün'); still no fixed package.",
       "owner": "PO",
-      "review_date": "2026-10-31"
+      "review_date": "2026-11-14"
     },
     {
       "tool": "gitleaks",
