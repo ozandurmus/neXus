@@ -350,14 +350,6 @@
     },
     {
       "tool": "trivy",
-      "rule": "CVE-2026-111497",
-      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: libbrotli",
-      "reason": "Red Hat UBI9 openjdk-21-runtime base (service and packet-analysis images, same repository): libbrotli 1.0.9-9.el9_7 Brotli decoder overflow; published after 2026-10-23, no rebuilt base image yet. Exposure: the JVM does not use the system libbrotli; no neXus code path decodes Brotli through it. Time-boxed under the PO decision 2026-10-24 to unblock deploys for UBI9 base findings without a rebuilt base (accept until 2026-10-31); remove when Red Hat rebuilds the base.",
-      "owner": "PO",
-      "review_date": "2026-10-31"
-    },
-    {
-      "tool": "trivy",
       "rule": "CVE-2026-91415",
       "location": "ui2/Containerfile runtime image: java-21-openjdk-headless",
       "reason": "Red Hat UBI9 openjdk-21-runtime base (service image and the packet-analysis image built from it, same repository): no fixed package is published yet; the build cannot reach the UBI package repos to update it. Time-boxed by the PO decision 2026-10-23 ('accept until 2026-10-31 and remove the eMudhra roots'); remove when Red Hat rebuilds the base image. CVE-2026-91415 (HIGH): java-21-openjdk-headless 1:21.0.12.1.1-1.2.el9, Java 2D font rendering flaw. Exposure: no AWT, image, PDF or POI autoSize rendering path was found in the service or the workers, so font rendering is not reachable. Extended 14 days by the PO decision 2026-10-30 ('Yenile + kalanlara 14 gün'); still no fixed package.",
