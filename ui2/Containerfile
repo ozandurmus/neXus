@@ -65,7 +65,9 @@ RUN ./gradlew --no-daemon --console=plain -PfrontendPrebuilt=true :service:bootJ
 # ---------------------------------------------------------------------------
 # Stage 2 — runtime
 # ---------------------------------------------------------------------------
-FROM registry.access.redhat.com/ubi9/openjdk-21-runtime@sha256:856ee6542b8fdf09a065fd5439309fc3f3c821fb8efac48aa6191c93635dd907
+# Tag 1.24-3.1792711374 (built 2026-10-22), the newest published digest on 2026-10-30
+# (PO_DECISION_RECORD_2026_10_30_BASE_IMAGE_REFRESH.md).
+FROM registry.access.redhat.com/ubi9/openjdk-21-runtime@sha256:b924b5d15de9585902c58eea76d0c1d6120921844cbc9e79683103e01b0200fd
 
 # Ownership is by group 0, never by a uid: the uid this process runs as is
 # assigned at admission time and is not knowable here (§3.3). Group 0 is the
