@@ -374,8 +374,36 @@ export interface BackupMajorDeviation {
   readonly sections: readonly string[];
 }
 
+/**
+ * One device's open backup size anomaly (V180, PO decision 2026-10-30, docs/design/BACKUP_SIZE_ANOMALY_RETENTION.md):
+ * the newest anomalous backup against the median of the last 3 good ones. While it is open, retention keeps the
+ * device's last good backup whatever its age and only the newest anomalous copy.
+ */
+export interface BackupSizeAnomaly {
+  readonly device_id: string;
+  /** Masked for the replay viewer by the server, like every device name. */
+  readonly hostname: string | null;
+  readonly cluster_member_ref?: string | null;
+  readonly deviation_id: string;
+  readonly artefact_id: string;
+  readonly last_good_artefact_id: string;
+  /** growth | shrink */
+  readonly direction: string;
+  readonly plaintext_bytes: number;
+  readonly median_bytes: number;
+  readonly ratio: number;
+  readonly summary: string;
+  readonly detected_at: string;
+  /** Anomalous copies recorded since the anomaly opened (older ones are pruned). */
+  readonly open_copies: number;
+}
+
 export interface BackupDeviations {
   readonly active_major_deviations: readonly BackupMajorDeviation[];
+  readonly size_anomalies?: readonly BackupSizeAnomaly[];
+  /** security_admin only; the replay viewer never. */
+  readonly can_accept_size?: boolean;
+  readonly size_role_note?: string | null;
   /** Devices with at least one valid comparison in the window. */
   readonly total_deviations_checked: number;
   /** Devices with any primary configuration run; the "of M" of "N of M devices compared". */
@@ -392,6 +420,11 @@ export interface BackupDeviations {
 
 export function getBackupDeviations(): Promise<BackupDeviations> {
   return call("/api/v2/backups/deviations", "GET");
+}
+
+/** security_admin: accept a device's new backup size; the server takes the actor from the session, the body is the reason. */
+export function acceptBackupSize(deviceId: string, reason: string): Promise<{ device_id: string; resolved: number; status: string }> {
+  return call(`/api/v2/backups/deviations/size-anomalies/${encodeURIComponent(deviceId)}/accept`, "POST", { reason });
 }
 
 /** BK-12 manual backup (14K BW-4): posts to the collect route with a required reason. */

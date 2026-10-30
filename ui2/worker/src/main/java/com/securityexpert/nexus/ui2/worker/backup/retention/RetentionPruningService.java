@@ -18,6 +18,9 @@ import java.util.UUID;
  *   <li>A configuration archive is pruned once older than the policy's {@code configuration_retention_days}
  *       (V164, default 30).</li>
  *   <li>A device's last archive (of the class being pruned) and its baseline are always kept.</li>
+ *   <li>Backup size anomaly (V180, PO decision 2026-10-30): while a device has an unresolved size anomaly its last
+ *       good backup and its newest anomalous copy are kept whatever their age, and its older anomalous copies are
+ *       pruned even inside the age window (counted in {@code backupsPruned}).</li>
  *   <li>A removal is a {@code removed} row in {@code artefact_retention_ledger}; the {@code backup_artefact} row stays.
  *       {@code expires_at} plays no part.</li>
  * </ul>
@@ -57,6 +60,14 @@ public final class RetentionPruningService {
     public interface RetentionStorePort {
         List<ArtefactRecord> findExpiredStandardBackups(int days);
         List<ArtefactRecord> findExpiredSnapshots(int depth);
+
+        /**
+         * V180: a device's unresolved size-anomalous copies other than its newest, whatever their age; the default
+         * (none) keeps stores that predate V180 working.
+         */
+        default List<ArtefactRecord> findSupersededSizeAnomalies() {
+            return List.of();
+        }
 
         /** Configuration archives older than {@code days}; the default (none) keeps stores that predate V164 working. */
         default List<ArtefactRecord> findExpiredConfigurationArchives(int days) {
@@ -125,7 +136,21 @@ public final class RetentionPruningService {
         long bytesReclaimed = 0;
         List<String> prunedIds = new ArrayList<>();
 
-        // 1. Standard daily backups older than retention window
+        // 0. Older copies of an unresolved size anomaly: identical bad copies have no recovery value (PO 2026-10-30).
+        // Run before the age rule, which reads its list afterwards and so never offers a copy removed here.
+        for (ArtefactRecord rec : storePort.findSupersededSizeAnomalies()) {
+            if (storePort.isSoleRemainingBackupForDevice(rec.deviceId(), rec.artefactId())) {
+                continue;
+            }
+            if (storePort.deleteArtefact(rec)) {
+                bytesReclaimed += rec.ciphertextBytes();
+                storePort.recordTombstone(UUID.randomUUID().toString(), rec.artefactId(), rec.retentionTier());
+                backupsPruned++;
+                prunedIds.add(rec.artefactId());
+            }
+        }
+
+        // 1. Standard daily backups older than retention window (never a pinned last good or the newest anomaly)
         List<ArtefactRecord> expiredBackups = storePort.findExpiredStandardBackups(policy.backupRetentionDays());
         for (ArtefactRecord rec : expiredBackups) {
             // Last-backup protection: Never prune the last valid recovery point for a device

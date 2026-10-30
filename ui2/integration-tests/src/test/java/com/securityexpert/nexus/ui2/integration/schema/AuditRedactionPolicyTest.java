@@ -78,6 +78,12 @@ class AuditRedactionPolicyTest {
             // backup_artefact_retrieval
             "backup_artefact_retrieval.actor_fingerprint", "backup_artefact_retrieval.artefact_id",
             "backup_artefact_retrieval.retrieval_id", "backup_artefact_retrieval.retrieved_at",
+            // backup_deviation_record (V180: size anomalies and their resolution)
+            "backup_deviation_record.artefact_id", "backup_deviation_record.detected_at",
+            "backup_deviation_record.details", "backup_deviation_record.deviation_class",
+            "backup_deviation_record.deviation_id", "backup_deviation_record.device_id",
+            "backup_deviation_record.previous_artefact_id", "backup_deviation_record.resolved_at",
+            "backup_deviation_record.resolved_by", "backup_deviation_record.summary",
             // backup_baseline
             "backup_baseline.artefact_id", "backup_baseline.device_id", "backup_baseline.set_at",
             // backup_endpoint_ineligibility
@@ -624,12 +630,13 @@ class AuditRedactionPolicyTest {
         }
     }
 
-    /** Every declared redaction and its tier: V5 (contract §3), V17, V91, V97, V144, V153, V154, V156. */
+    /** Every declared redaction and its tier: V5 (contract §3), V17, V91, V97, V144, V153, V154, V156, V180. */
     private static final java.util.Map<String, Integer> DECLARED_REDACTIONS = declaredRedactions(
             "backup_artefact.hostname_fingerprint", 2, "backup_artefact.recovery_volume_path", 2,
             "backup_artefact.virtual_system_ref", 2, "backup_artefact.wrapped_data_key", 1,
             "backup_artefact_deletion_request.reason", 2,
             "backup_artefact_retrieval.destination_path", 2, "backup_artefact_retrieval.reason", 2,
+            "backup_deviation_record.resolution_reason", 2,
             "backup_endpoint_ineligibility.reason", 2, "configuration_notification.override_paths",
             2, "configuration_notification.summary", 2, "configuration_run_deviation_entry.context",
             2, "credential_references.backend_pointer", 2, "credentials.display_name", 2,

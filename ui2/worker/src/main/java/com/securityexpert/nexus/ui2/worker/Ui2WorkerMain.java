@@ -279,6 +279,9 @@ public final class Ui2WorkerMain {
                 paloAltoBackupExecutor, deviationEngine, backupArtefactManifestRepository,
                 backupEndpointEligibilityRepository, hostnameFingerprint, artefactStoreRoot.toString(), contentListing);
         backupJobExecutor.withPlatformFacts(platformFactsRepository);
+        // V180: backup size anomaly at ingest; retention keeps the last good backup until a security_admin accepts it.
+        backupJobExecutor.withSizeAnomalyCheck(
+                new com.securityexpert.nexus.ui2.persistence.artefact.JooqBackupSizeAnomalyRepository(transactionBoundary));
         // V64: vendors backed up over HTTPS (Infoblox, Radware) -- credentials resolved like the PAN API password.
         var httpsCertificateTrust = new com.securityexpert.nexus.ui2.persistence.https.HttpsCertificateTrustRepository(transactionBoundary);
         com.securityexpert.nexus.ui2.worker.backup.https.HttpsVendorExecutor httpsVendorExecutor =

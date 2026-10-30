@@ -53,8 +53,34 @@ public final class JooqRetentionQueries {
     public List<Candidate> expiredStandardBackups(int days) {
         return transactionBoundary.inTransaction(dsl -> dsl.fetch(COLUMNS
                 + "from backup_artefact a where a.artefact_class = 'backup' and coalesce(a.backup_type, 'standard') = 'standard' "
-                + "and a.created_at < now() - ({0} || ' days')::interval" + NOT_REMOVED + NOT_BASELINE
+                + "and a.created_at < now() - ({0} || ' days')::interval" + NOT_REMOVED + NOT_BASELINE + NOT_SIZE_ANOMALY_KEPT
                 + " order by a.created_at", String.valueOf(days)).map(JooqRetentionQueries::toCandidate));
+    }
+
+    /**
+     * V180 (PO decision 2026-10-30): while a device has an unresolved size anomaly, its last good backup (the row's
+     * {@code previous_artefact_id}) and its newest anomalous copy are kept whatever their age. The pin is derived from
+     * the unresolved rows, so resolving them ("accept new size") is the one and only release.
+     */
+    static final String NOT_SIZE_ANOMALY_KEPT = " and not " + JooqBackupSizeAnomalyRepository.isPinnedLastGood("a")
+            + " and not (" + JooqBackupSizeAnomalyRepository.isOpenAnomaly("a")
+            + " and not exists (select 1 from backup_artefact n where n.device_id = a.device_id "
+            + "and n.artefact_class = 'backup' and (n.created_at, n.artefact_id) > (a.created_at, a.artefact_id)"
+            + andNotRemoved("n") + " and " + JooqBackupSizeAnomalyRepository.isOpenAnomaly("n") + "))";
+
+    /**
+     * V180 (PO decision 2026-10-30, "seven bad copies give us nothing"): a device's unresolved anomalous copies other
+     * than its newest one, whatever their age. Never the baseline and never a pinned last good backup.
+     */
+    public List<Candidate> supersededSizeAnomalies() {
+        return transactionBoundary.inTransaction(dsl -> dsl.fetch(COLUMNS
+                + "from backup_artefact a where a.artefact_class = 'backup' and coalesce(a.backup_type, 'standard') = 'standard' "
+                + "and " + JooqBackupSizeAnomalyRepository.isOpenAnomaly("a")
+                + " and exists (select 1 from backup_artefact n where n.device_id = a.device_id "
+                + "and n.artefact_class = 'backup' and (n.created_at, n.artefact_id) > (a.created_at, a.artefact_id)"
+                + andNotRemoved("n") + " and " + JooqBackupSizeAnomalyRepository.isOpenAnomaly("n") + ")"
+                + NOT_REMOVED + NOT_BASELINE + " and not " + JooqBackupSizeAnomalyRepository.isPinnedLastGood("a")
+                + " order by a.created_at, a.artefact_id").map(JooqRetentionQueries::toCandidate));
     }
 
     /**

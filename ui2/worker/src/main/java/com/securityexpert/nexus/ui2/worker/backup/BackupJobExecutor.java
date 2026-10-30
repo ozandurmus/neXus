@@ -107,6 +107,14 @@ public final class BackupJobExecutor {
         return this;
     }
 
+    /** V180 size anomaly check at ingest (PO decision 2026-10-30); unset (tests, the CLI), nothing is checked. */
+    private com.securityexpert.nexus.ui2.persistence.artefact.JooqBackupSizeAnomalyRepository sizeAnomalies;
+
+    public BackupJobExecutor withSizeAnomalyCheck(com.securityexpert.nexus.ui2.persistence.artefact.JooqBackupSizeAnomalyRepository repository) {
+        this.sizeAnomalies = Objects.requireNonNull(repository, "repository");
+        return this;
+    }
+
     /** V61: the Check Point MDS export; unset, a cp_mds_export job fails closed (never falls back to the Gaia backup). */
     public BackupJobExecutor withMdsExportExecutor(com.securityexpert.nexus.ui2.worker.backup.cp.MdsExportExecutor executor) {
         this.mdsExportExecutor = executor;
@@ -476,6 +484,7 @@ public final class BackupJobExecutor {
                     ArtefactValidation.reachedWithoutRestore(BACKUP_VALIDATION_LEVEL), BACKUP_RETENTION_TIER,
                     Optional.empty(), artefact.ref().value(), Optional.of(deviationState), backupType);
             manifestRepository.record(manifest, ACTOR, ACTION_MANIFEST_RECORDED);
+            checkSizeAnomaly(artefactId);
 
             // Retention is not run here. The worker's hourly RetentionPruningService.prune reads the backup_policy row
             // (PO decision 2026-10-18; C7 contract Amendment A-2); a fixed in-line horizon here could ignore that row.
@@ -483,6 +492,27 @@ public final class BackupJobExecutor {
         } catch (IllegalStateException versionUnresolvable) {
             com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(versionUnresolvable);
             return Optional.empty();
+        }
+    }
+
+    /**
+     * V180: records a size anomaly against the device's normal backup size (PO decision 2026-10-30). Best effort: the
+     * backup is already verified and on record, so a failed check is logged and never fails the job.
+     */
+    private void checkSizeAnomaly(String artefactId) {
+        if (sizeAnomalies == null) {
+            return;
+        }
+        try {
+            sizeAnomalies.inspect(artefactId, ACTOR).ifPresent(detected -> {
+                LOG.warning("[BACKUP] size anomaly recorded (" + detected.verdict().direction().wire() + ", ratio "
+                        + String.format(java.util.Locale.ROOT, "%.1f", detected.verdict().ratio())
+                        + "); the last good backup is kept until a security_admin accepts the new size");
+                JobTranscriptScope.add("job", "note", detected.verdict().summary());
+            });
+        } catch (RuntimeException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
+            LOG.warning("[BACKUP] size anomaly check failed: " + e.getClass().getSimpleName());
         }
     }
 

@@ -83,6 +83,8 @@ final class NexusSessionCli {
         System.out.println("  backup-compare <olderArtefactId> <newerArtefactId>");
         System.out.println("  backup-baseline <deviceId> <artefactId|clear>");
         System.out.println("  backup-target <deviceId> on|off");
+        System.out.println("  backup-deviations                              major deviations and open backup size anomalies");
+        System.out.println("  backup-size-accept <deviceId> <reason>         security_admin: accept a new backup size (releases the last-good pin)");
         System.out.println("  policy | policy-set <on|off> <cron> <retentionDays> <snapshotDepth>");
         System.out.println("  jobs [state=.. job_type=.. device_id=.. since=.. until=.. q=.. page=.. page_size=..]");
         System.out.println("  jobs-export <dest.csv> [same filters]");
@@ -186,6 +188,14 @@ final class NexusSessionCli {
                 case "backup-target" -> {
                     require(args, 3, "backup-target <deviceId> on|off");
                     yield print(call("PUT", "/devices/" + args[1] + "/backup-target", json(Map.of("enabled", "on".equals(args[2])))));
+                }
+                case "backup-deviations" -> print(call("GET", "/api/v2/backups/deviations", null));
+                case "backup-size-accept" -> {
+                    // V180 / PO decision 2026-10-30: the Backups card's "Accept new size"; the actor is the session.
+                    require(args, 3, "backup-size-accept <deviceId> <reason>");
+                    yield print(call("POST", "/api/v2/backups/deviations/size-anomalies/"
+                            + java.net.URLEncoder.encode(args[1], java.nio.charset.StandardCharsets.UTF_8) + "/accept",
+                            json(Map.of("reason", args[2]))));
                 }
                 case "policy" -> print(call("GET", "/api/v2/backups/policies", null));
                 case "policy-set" -> {

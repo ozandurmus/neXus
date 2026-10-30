@@ -268,6 +268,8 @@ class GateChainInterceptorSecurityTest {
                 java.util.Map.entry("GET /devices/" + d + "/backups", ActionRegistry.DEVICE_BACKUP_READ),
                 java.util.Map.entry("PUT /devices/" + d + "/backup-target", ActionRegistry.DEVICE_BACKUP_TARGET_SET),
                 java.util.Map.entry("PUT /devices/" + d + "/backup-baseline", ActionRegistry.DEVICE_BACKUP_BASELINE_SET),
+                java.util.Map.entry("POST /api/v2/backups/deviations/size-anomalies/" + d + "/accept",
+                        ActionRegistry.BACKUP_SIZE_ANOMALY_ACCEPT),
                 java.util.Map.entry("GET /api/v2/backups/policies", ActionRegistry.DEVICE_BACKUP_READ),
                 java.util.Map.entry("PUT /api/v2/backups/policies", ActionRegistry.DEVICE_BACKUP_POLICY_SET),
                 java.util.Map.entry("GET /api/v2/jobs", ActionRegistry.JOB_LOG_READ),
