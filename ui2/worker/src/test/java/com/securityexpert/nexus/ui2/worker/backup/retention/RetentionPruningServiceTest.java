@@ -248,4 +248,82 @@ class RetentionPruningServiceTest {
         assertEquals(0, summary.configurationsPruned());
         assertTrue(store.tombstones.isEmpty());
     }
+
+    /** V180 / PO 2026-10-30: older copies of an open size anomaly go first, even inside the age window. */
+    @Test
+    void supersededSizeAnomalyCopiesArePrunedBeforeTheAgeRuleAndCountAsBackups() {
+        List<String> order = new ArrayList<>();
+        RetentionPruningService.RetentionStorePort stubStore = new RetentionPruningService.RetentionStorePort() {
+            @Override
+            public List<RetentionPruningService.ArtefactRecord> findSupersededSizeAnomalies() {
+                order.add("superseded-read");
+                return List.of(
+                        new RetentionPruningService.ArtefactRecord("bad-1", "dev-1", "bad-1.enc", 29L, "standard", "standard"),
+                        new RetentionPruningService.ArtefactRecord("bad-2", "dev-1", "bad-2.enc", 29L, "standard", "standard"));
+            }
+
+            @Override
+            public List<RetentionPruningService.ArtefactRecord> findExpiredStandardBackups(int days) {
+                order.add("age-read");
+                return List.of();
+            }
+
+            @Override
+            public List<RetentionPruningService.ArtefactRecord> findExpiredSnapshots(int depth) {
+                return List.of();
+            }
+
+            @Override
+            public boolean deleteArtefact(RetentionPruningService.ArtefactRecord record) {
+                return true;
+            }
+
+            @Override
+            public void recordTombstone(String ledgerId, String artefactId, String retentionTier) {
+                order.add("removed:" + artefactId);
+            }
+        };
+
+        RetentionPruningService.PruningSummary summary = new RetentionPruningService(stubStore)
+                .prune(new RetentionPruningService.PruningPolicy(7, 4));
+
+        assertEquals(List.of("superseded-read", "removed:bad-1", "removed:bad-2", "age-read"), order,
+                "the age rule reads after the superseded copies are gone, so none is offered twice");
+        assertEquals(2, summary.backupsPruned());
+        assertEquals(58L, summary.bytesReclaimed());
+    }
+
+    @Test
+    void aSupersededCopyThatIsTheDevicesSoleBackupIsKept() {
+        List<String> removed = new ArrayList<>();
+        RetentionPruningService.RetentionStorePort stubStore = new RetentionPruningService.RetentionStorePort() {
+            @Override
+            public List<RetentionPruningService.ArtefactRecord> findSupersededSizeAnomalies() {
+                return List.of(new RetentionPruningService.ArtefactRecord("bad-1", "dev-1", "bad-1.enc", 29L, "standard", "standard"));
+            }
+
+            @Override
+            public List<RetentionPruningService.ArtefactRecord> findExpiredStandardBackups(int days) {
+                return List.of();
+            }
+
+            @Override
+            public List<RetentionPruningService.ArtefactRecord> findExpiredSnapshots(int depth) {
+                return List.of();
+            }
+
+            @Override
+            public boolean isSoleRemainingBackupForDevice(String deviceId, String artefactId) {
+                return true;
+            }
+
+            @Override
+            public void recordTombstone(String ledgerId, String artefactId, String retentionTier) {
+                removed.add(artefactId);
+            }
+        };
+
+        assertEquals(0, new RetentionPruningService(stubStore).prune(new RetentionPruningService.PruningPolicy(7, 4)).backupsPruned());
+        assertTrue(removed.isEmpty());
+    }
 }

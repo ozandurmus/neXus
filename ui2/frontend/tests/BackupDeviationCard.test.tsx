@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { BackupDeviations } from "../src/auth/adminApi";
@@ -105,5 +105,67 @@ describe("the configuration Changes tab (2026-10-23)", () => {
     expect(await screen.findByText("Major · Routing")).toBeInTheDocument();
     expect(screen.getByText("Minor")).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Changes" })).toHaveAttribute("aria-selected", "true");
+  });
+});
+
+// V180 / PO decision 2026-10-30 (docs/design/BACKUP_SIZE_ANOMALY_RETENTION.md): masked pseudonyms, sizes and ratio only.
+const GIB = 1024 ** 3;
+const withSize: BackupDeviations = {
+  ...deviations,
+  active_major_deviations: [],
+  size_anomalies: [{
+    device_id: "d9", hostname: "FW-JULIET-06-M1", deviation_id: "dv-1", artefact_id: "a-bad", last_good_artefact_id: "a-good",
+    direction: "growth", plaintext_bytes: 29 * GIB, median_bytes: GIB, ratio: 29, summary: "Backup size anomaly: grew 29.0x",
+    detected_at: "2026-10-30T02:00:00Z", open_copies: 7,
+  }],
+  can_accept_size: true,
+  size_role_note: null,
+};
+
+describe("backup size anomalies on the major deviations card (2026-10-30)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("counts a device with an open size anomaly, even with no configuration comparison", () => {
+    render(<BackupDeviationCard deviations={{ ...withSize, total_deviations_checked: 0 }} />);
+    const card = screen.getByText("Active major deviations").closest("[data-kpi]")!;
+    expect(card.querySelector("[data-kpi-figure]")?.textContent).toBe("1");
+    expect(card.textContent).not.toContain("UNKNOWN");
+  });
+
+  it("shows sizes, ratio and copies, and accepts the new size with the reason only", async () => {
+    const calls: { url: string; method?: string; body?: string }[] = [];
+    vi.stubGlobal("fetch", vi.fn((url: string, init?: RequestInit) => {
+      calls.push({ url, method: init?.method, body: init?.body as string | undefined });
+      return Promise.resolve(new Response(JSON.stringify({ device_id: "d9", resolved: 7, status: "ACCEPTED" }), { status: 200 }));
+    }));
+    const onChanged = vi.fn();
+    render(<MajorDeviationList deviations={withSize} onChanged={onChanged} />);
+    const list = document.getElementById("major-deviations")!;
+    expect(list.textContent).toContain("FW-JULIET-06-M1");
+    expect(list.textContent).toContain("Grew 29.0x");
+    expect(list.textContent).toContain("1.0 GB → 29.0 GB");
+    expect(list.textContent).toContain("7 anomalous backups (only the newest kept)");
+    expect(list.textContent).not.toContain("Major configuration changes");
+
+    fireEvent.click(screen.getByRole("button", { name: "Accept new size" }));
+    const accept = screen.getByRole("button", { name: "Accept" });
+    expect(accept).toBeDisabled();
+    fireEvent.change(screen.getByLabelText(/Reason/), { target: { value: "local logs are kept on purpose" } });
+    fireEvent.click(accept);
+    await waitFor(() => expect(onChanged).toHaveBeenCalled());
+    const post = calls.find((c) => c.method === "POST")!;
+    expect(post.url).toBe("/api/v2/backups/deviations/size-anomalies/d9/accept");
+    expect(JSON.parse(post.body!)).toEqual({ reason: "local logs are kept on purpose" });
+  });
+
+  it("offers no action without the role and says who can accept", () => {
+    render(<MajorDeviationList deviations={{ ...withSize, can_accept_size: false, size_role_note: "Only a security_admin can accept a new backup size." }} />);
+    expect(screen.queryByRole("button", { name: "Accept new size" })).toBeNull();
+    expect(screen.getByText("Only a security_admin can accept a new backup size.")).toBeInTheDocument();
+  });
+
+  it("marks the fleet row of a device with a size anomaly", () => {
+    const rows = [{ deviceId: "d9", deviationState: "CHANGED" }] as unknown as BackupDeviceItem[];
+    expect(withMajorDeviations(rows, withSize).map((r) => r.deviationState)).toEqual(["MAJOR DEVIATION"]);
   });
 });

@@ -116,6 +116,11 @@ public final class ActionRegistry {
     public static final String DEVICE_BACKUP_ORPHAN_DELETE = "device_backup_orphan_delete";
     /** V44: {@code PUT /devices/{id}/backup-baseline} -- {@code role:backup_admin}, audited. */
     public static final String DEVICE_BACKUP_BASELINE_SET = "device_backup_baseline_set";
+    /**
+     * V180 / PO decision 2026-10-30 (docs/design/BACKUP_SIZE_ANOMALY_RETENTION.md): accept a device's new backup size,
+     * which resolves its open size anomaly and releases the last-good pin; mandatory reason; security_admin only, audited.
+     */
+    public static final String BACKUP_SIZE_ANOMALY_ACCEPT = "backup_size_anomaly_accept";
 
     /**
      * WORKER.md (movement NXS-LOCAL-0174): {@code GET /project-plan} -- any
@@ -291,6 +296,7 @@ public final class ActionRegistry {
         register(new ActionDescriptor(DEVICE_BACKUP_POLICY_SET, true, Optional.of(RoleToken.BACKUP_ADMIN)));
         register(new ActionDescriptor(DEVICE_BACKUP_ORPHAN_DELETE, true, Optional.of(RoleToken.BACKUP_ADMIN)));
         register(new ActionDescriptor(DEVICE_BACKUP_BASELINE_SET, true, Optional.of(RoleToken.BACKUP_ADMIN)));
+        register(new ActionDescriptor(BACKUP_SIZE_ANOMALY_ACCEPT, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         // WORKER.md: same open-to-any-authenticated-session gate as DEVICE_READ.
         register(new ActionDescriptor(PROJECT_PLAN_READ, true, Optional.empty()));
         register(new ActionDescriptor(RBAC_ROLE_READ, true, Optional.of(RoleToken.SECURITY_ADMIN)));

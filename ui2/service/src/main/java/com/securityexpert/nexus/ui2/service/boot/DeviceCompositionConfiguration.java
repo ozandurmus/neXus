@@ -635,6 +635,16 @@ public class DeviceCompositionConfiguration {
                 deviceConfigurationRepository, deviceRepository::listAll, java.time.Clock.systemUTC());
     }
 
+    /** V180 (PO decision 2026-10-30): open backup size anomalies on the deviations card and "accept new size". */
+    @Bean
+    public com.securityexpert.nexus.ui2.service.device.configuration.BackupSizeAnomalyService backupSizeAnomalyService(
+            TransactionBoundary transactionBoundary, DeviceRepository deviceRepository,
+            com.securityexpert.nexus.ui2.service.security.RbacEvaluator rbacEvaluator) {
+        return new com.securityexpert.nexus.ui2.service.device.configuration.BackupSizeAnomalyService(
+                new com.securityexpert.nexus.ui2.persistence.artefact.JooqBackupSizeAnomalyRepository(transactionBoundary),
+                deviceRepository::listAll, rbacEvaluator);
+    }
+
     @Bean
     public ConfigurationCollectService configurationCollectService(DeviceRepository deviceRepository,
             JobAdmissionService jobAdmissionService) {

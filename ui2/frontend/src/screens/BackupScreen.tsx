@@ -565,7 +565,8 @@ export function BackupScreen() {
         {/* Zero deviations found and zero comparisons run look identical and mean opposite things: UNKNOWN until a device is compared. */}
         <BackupDeviationCard deviations={deviations} />
       </MetricGrid>
-      <MajorDeviationList deviations={deviations} />
+      <MajorDeviationList deviations={deviations}
+        onChanged={() => { getBackupDeviations().then(setDeviations).catch(() => setDeviations(null)); }} />
 
       {/* One table per device (UI review 2026-09-23): target switch, latest archive, validation, deviation, latest attempt, every action in the row menu. */}
       <BackupFleetTable

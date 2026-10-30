@@ -298,6 +298,7 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("PUT /api/v2/backups/policies", ActionRegistry.DEVICE_BACKUP_POLICY_SET),
             Map.entry("PUT /devices/*/backup-baseline", ActionRegistry.DEVICE_BACKUP_BASELINE_SET),
             Map.entry("GET /api/v2/backups/deviations", ActionRegistry.DEVICE_BACKUP_READ),
+            Map.entry("POST /api/v2/backups/deviations/size-anomalies/*/accept", ActionRegistry.BACKUP_SIZE_ANOMALY_ACCEPT),
             // WORKER.md (movement NXS-LOCAL-0174): body-only, no path variable,
             // same shape as /notifications' own route.
             Map.entry("GET /project-plan", ActionRegistry.PROJECT_PLAN_READ));

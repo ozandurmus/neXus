@@ -81,7 +81,6 @@ class AuditCoverageCompletenessTest {
     static final Map<String, String> NOT_MUTATION_BEARING = Map.ofEntries(
             Map.entry("discovery_run", "V14: discovery result rows carry device identities; the jobs row is audited"),
             Map.entry("discovery_candidate", "V14: discovery result rows carry device identities; the jobs row is audited"),
-            Map.entry("backup_deviation_record", "V30: derived comparison of two backup artefacts"),
             Map.entry("backup_artefact_content_listing", "V41: derived cache; backup_artefact is the audited record"),
             Map.entry("backup_artefact_entry", "V41: derived cache; backup_artefact is the audited record"),
             Map.entry("cp_device_archive", "V45: product bookkeeping of device-side files; the jobs row is audited"),

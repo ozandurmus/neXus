@@ -48,6 +48,10 @@ public final class AuditPresentationAllowlist {
                     "actor_fingerprint", "artefact_id", "retrieval_id", "retrieved_at")),
             Map.entry("backup_baseline", Set.of(
                     "artefact_id", "device_id", "set_at")),
+            // V180: size anomalies (sizes and a ratio only); resolution_reason is operator free text, redacted.
+            Map.entry("backup_deviation_record", Set.of(
+                    "artefact_id", "detected_at", "details", "deviation_class", "deviation_id", "device_id",
+                    "previous_artefact_id", "resolved_at", "resolved_by", "summary")),
             Map.entry("backup_endpoint_ineligibility", Set.of(
                     "device_id", "marked_at")),
             Map.entry("backup_policy", Set.of(

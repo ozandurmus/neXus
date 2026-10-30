@@ -40,6 +40,11 @@ public final class JooqRetentionStorePort implements RetentionPruningService.Ret
     }
 
     @Override
+    public List<RetentionPruningService.ArtefactRecord> findSupersededSizeAnomalies() {
+        return queries.supersededSizeAnomalies().stream().map(JooqRetentionStorePort::toRecord).toList();
+    }
+
+    @Override
     public List<RetentionPruningService.ArtefactRecord> findExpiredConfigurationArchives(int days) {
         return queries.expiredConfigurationArchives(days).stream().map(JooqRetentionStorePort::toRecord).toList();
     }

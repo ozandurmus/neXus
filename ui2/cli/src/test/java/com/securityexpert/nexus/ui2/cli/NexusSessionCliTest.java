@@ -53,6 +53,39 @@ class NexusSessionCliTest {
         }
     }
 
+    /** V180 / PO 2026-10-30: "Accept new size" has CLI parity -- the card's route, the reason only, the CSRF token. */
+    @Test
+    void backupSizeAcceptPostsTheCardsRouteWithTheReasonOnly(@TempDir Path home) throws Exception {
+        AtomicReference<String> request = new AtomicReference<>();
+        AtomicReference<String> csrf = new AtomicReference<>();
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/", exchange -> {
+            csrf.set(exchange.getRequestHeaders().getFirst("X-CSRF-Token"));
+            request.set(exchange.getRequestMethod() + " " + exchange.getRequestURI() + " "
+                    + new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            byte[] out = "{\"status\":\"ACCEPTED\",\"resolved\":2}".getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, out.length);
+            exchange.getResponseBody().write(out);
+            exchange.close();
+        });
+        server.start();
+        try {
+            NexusSessionCli cli = new NexusSessionCli(home);
+            cli.saveSession(new NexusSessionCli.Session("http://127.0.0.1:" + server.getAddress().getPort(), "opaque-cookie", "csrf-9"));
+
+            assertEquals(0, cli.run(new String[] {"backup-size-accept", "dev-00000001", "local logs are now part of the backup"}));
+
+            assertEquals("POST /api/v2/backups/deviations/size-anomalies/dev-00000001/accept "
+                    + "{\"reason\":\"local logs are now part of the backup\"}", request.get());
+            assertEquals("csrf-9", csrf.get());
+
+            assertEquals(0, cli.run(new String[] {"backup-deviations"}));
+            assertTrue(request.get().startsWith("GET /api/v2/backups/deviations "), request.get());
+        } finally {
+            server.stop(0);
+        }
+    }
+
     /** PO 2026-10-20: the CLI's acknowledgement is the same header the screen sends after its confirm dialog. */
     @Test
     void businessHoursAcknowledgementFlagSendsTheHeaderAndTheRefusalIsPrintedPlainly(@TempDir Path home) throws Exception {
