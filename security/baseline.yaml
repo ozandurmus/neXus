@@ -412,6 +412,22 @@
       "reason": "Synthetic masking key and cipher key in the system-log read test fixture (literal '-test-key' and an all-zero key); no operational credential. Exact path and rule only in .gitleaks.toml (system-log phase B, PO mandate 2026-10-15).",
       "owner": "PO",
       "review_date": "2026-12-31"
+    },
+    {
+      "tool": "trivy",
+      "rule": "CVE-2026-119373",
+      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: sqlite-libs",
+      "reason": "sqlite-libs in the Red Hat UBI9 openjdk-21-runtime base (service image and the packet-analysis image built from it, same repository): published 2026-10-31, no fixed package yet; the build cannot reach the UBI package repos to update it. CVE-2026-119373 (HIGH, CVSS 7.8 AV:L/UI:R) is a heap overflow in the FTS5 extension. Exposure: neXus code does not use the system SQLite (no sqlite dependency in any lockfile; the JVM services never load libsqlite3); the library is only there for the image's rpm tooling, which is not run at runtime. Accepted by the PO decision 2026-10-31 ('Uygula'); remove when Red Hat rebuilds the base image.",
+      "owner": "PO",
+      "review_date": "2026-11-14"
+    },
+    {
+      "tool": "trivy",
+      "rule": "CVE-2026-119586",
+      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: sqlite-libs",
+      "reason": "sqlite-libs in the Red Hat UBI9 openjdk-21-runtime base (service image and the packet-analysis image built from it, same repository): published 2026-10-31, no fixed package yet; the build cannot reach the UBI package repos to update it. CVE-2026-119586 (HIGH): Red Hat has not published details yet; reported alongside CVE-2026-119373 (FTS5 heap overflow). Exposure: neXus code does not use the system SQLite (no sqlite dependency in any lockfile; the JVM services never load libsqlite3); the library is only there for the image's rpm tooling, which is not run at runtime. Accepted by the PO decision 2026-10-31 ('Uygula'); remove when Red Hat rebuilds the base image.",
+      "owner": "PO",
+      "review_date": "2026-11-14"
     }
   ]
 }
