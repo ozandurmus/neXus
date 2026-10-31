@@ -25,3 +25,18 @@ Notes: `$FWDIR` needs an Expert shell, so every literal uses the `bash -lc` logi
 `| tail -20` pipe stays inside the `bash -lc` literal, as `cp_syslog_measure_hcp_listing` already does. They use the diagnostic
 output mask and size cap; no write, no new capability. The aiview mask hides integers of 6 or more digits, so exact byte sizes
 in the `ls -la` listing may not be readable; `du -sh` is the size evidence.
+
+## Addendum 2026-10-31 -- follow the log directory symlink (V182)
+
+The first run (2026-10-31 00:03) showed that `$FWDIR/log` on the gateway is a
+symlink: `du -sh $FWDIR/log` returned 0 and `ls -la $FWDIR/log | tail -20`
+listed only the link. The PO approved in chat ("Komutlar onayli") the same two
+commands with a trailing slash, which makes both follow the link:
+
+| gate_id | Command |
+|---|---|
+| `cp_localdiag_du_fwdir_log_dir` | `du -sh $FWDIR/log/` |
+| `cp_localdiag_ls_fwdir_log_dir` | `ls -la $FWDIR/log/ \| tail -20` |
+
+Same class, context, masking and frequency as the V181 rows. `du` gets a 60 s
+timeout because the directory holds several hundred GB.

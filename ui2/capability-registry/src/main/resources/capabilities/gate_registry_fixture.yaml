@@ -4630,3 +4630,38 @@ gates:
     secret_output_risk: "output may carry host names, addresses and file names; in-memory masked projection only (hostnames and IPs masked by the diagnostic output mask); no raw retention; output size cap as for every diagnostic_read"
     safe_telemetry_fields: []
     source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_30_LOCAL_LOG_DIAGNOSTICS.md (PO chat approval 2026-10-30)"
+
+  # Local firewall log directory diagnostics (PO chat approval 2026-10-31), V182.
+  - gate_id: "cp_localdiag_du_fwdir_log_dir"
+    vendor: "check_point"
+    platform_role_scope: "cp_gaia_gateway"
+    shell_context: "expert"
+    transport_kind: "SSH_EXEC"
+    canonical_command_key: "bash -lc 'du -sh $FWDIR/log/'"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 60
+    retry_rule: "none"
+    max_frequency: "on PO request for one gateway keeping large local firewall logs: at most once per device per job, never polled"
+    session_reuse_rule: "one existing trusted SSH session; non-interactive bash login shell (so $FWDIR resolves); no retry"
+    unsupported_behavior_ref: "a missing file or directory is a result (command error text), not an error"
+    secret_output_risk: "output may carry host names, addresses and file names; in-memory masked projection only (hostnames and IPs masked by the diagnostic output mask); no raw retention; output size cap as for every diagnostic_read"
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_30_LOCAL_LOG_DIAGNOSTICS.md addendum (PO chat approval 2026-10-31)"
+
+  - gate_id: "cp_localdiag_ls_fwdir_log_dir"
+    vendor: "check_point"
+    platform_role_scope: "cp_gaia_gateway"
+    shell_context: "expert"
+    transport_kind: "SSH_EXEC"
+    canonical_command_key: "bash -lc 'ls -la $FWDIR/log/ | tail -20'"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 30
+    retry_rule: "none"
+    max_frequency: "on PO request for one gateway keeping large local firewall logs: at most once per device per job, never polled"
+    session_reuse_rule: "one existing trusted SSH session; non-interactive bash login shell (so $FWDIR resolves); no retry"
+    unsupported_behavior_ref: "a missing file or directory is a result (command error text), not an error"
+    secret_output_risk: "output may carry host names, addresses and file names; in-memory masked projection only (hostnames and IPs masked by the diagnostic output mask); no raw retention; output size cap as for every diagnostic_read"
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_30_LOCAL_LOG_DIAGNOSTICS.md addendum (PO chat approval 2026-10-31)"
