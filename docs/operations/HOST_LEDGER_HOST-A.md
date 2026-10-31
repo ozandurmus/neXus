@@ -301,3 +301,51 @@ the build tool's distribution, which is ignored by the repository and must stay
 so.
 
 ---
+
+## Entry 5 — kernel 7.0.0-42 and the containerd AppArmor override, 2026-10-31
+
+**Why.** Kernel security update (USN-8887-1 fixes; RHEL estate patched the same
+week). PO approved a weekend window. Running kernel was 7.0.0-34; 7.0.0-38 was
+installed but never booted.
+
+**Backup first.** `pg_dump -Fc` of `ui2` (6.7 GB, 977 TOC entries), globals,
+all Kubernetes objects, and a cold archive of the k3s server state (`db`,
+`token`, `tls`, `manifests`, `/etc/rancher`) in
+`/var/backups/nexus-prekernel-20261031` (root, 0700), copied to the PO's
+workstation with matching SHA-256.
+
+**What broke.** On 7.0.0-42 `ui2-db-0` crash-looped: the startup process logged
+`could not signal for checkpoint: Permission denied` at the end of recovery and
+the liveness probe restarted it every time. auditd (not dmesg) held the cause:
+3,136 AppArmor `operation="signal"` denials under `cri-containerd.apparmor.d`,
+only while 7.0.0-42 was up. The kernel labels container tasks
+`cri-containerd.apparmor.d//&unconfined`, and containerd's generated rule
+`signal (send,receive) peer=cri-containerd.apparmor.d` no longer matches.
+Likely source: 7.0.0-39..42 changelog item "apparmor: fix unconfined user
+namespace restriction forced stack" (7.0.0-42 also adds `bpf` to `CONFIG_LSM`).
+Rolled back with a one-time `grub-reboot` to 7.0.0-34; Postgres recovered in
+seconds (3 buffers redone). Outage 11:26–11:43 local.
+
+**Fix (PO choice: own profile until Ubuntu fixes it).**
+`deploy/hosta/apparmor/cri-containerd.apparmor.d` installed in `/etc/apparmor.d/`.
+It is containerd v2.3.4's default template rendered as on this host, plus the
+same signal and ptrace rules for the stacked peer. containerd loads its default
+profile only when no profile of that name is loaded, and `apparmor.service`
+loads this file before k3s, so every CRI container uses it without manifest
+changes. Loaded live on 7.0.0-34 (no new denials), then booted 7.0.0-42: DB ready
+in 10 s, postgres label `cri-containerd.apparmor.d//&unconfined (enforce)`, zero
+container denials, all pods Ready, schema 181, site 200, no claim denials.
+
+**End state.** `GRUB_DEFAULT="Advanced options for Ubuntu>Ubuntu, with Linux
+7.0.0-42-generic"` (original `/etc/default/grub` kept in the backup directory).
+7.0.0-34 and 7.0.0-38 stay installed as fallbacks.
+
+**Revert when Ubuntu restores the old labelling.** Delete
+`/etc/apparmor.d/cri-containerd.apparmor.d`, restart k3s (containerd regenerates
+its own profile), confirm no `operation="signal"` denials in
+`/var/log/audit/audit.log`.
+
+**Lessons.** `systemctl stop k3s` leaves containers running; run
+`/usr/local/bin/k3s-killall.sh` before any reboot so Postgres shuts down cleanly.
+Look for AppArmor denials in the audit log on this host, not dmesg. Test a new
+kernel with a one-time `grub-reboot` while the default stays on the known-good one.
