@@ -428,6 +428,14 @@
       "reason": "sqlite-libs in the Red Hat UBI9 openjdk-21-runtime base (service image and the packet-analysis image built from it, same repository): published 2026-10-31, no fixed package yet; the build cannot reach the UBI package repos to update it. CVE-2026-119586 (HIGH): Red Hat has not published details yet; reported alongside CVE-2026-119373 (FTS5 heap overflow). Exposure: neXus code does not use the system SQLite (no sqlite dependency in any lockfile; the JVM services never load libsqlite3); the library is only there for the image's rpm tooling, which is not run at runtime. Accepted by the PO decision 2026-10-31 ('Uygula'); remove when Red Hat rebuilds the base image.",
       "owner": "PO",
       "review_date": "2026-11-14"
+    },
+    {
+      "tool": "trivy",
+      "rule": "CVE-2026-120194",
+      "location": "registry.kube-system.svc.cluster.local/nexus-ui2-service: json-glib",
+      "reason": "json-glib 1.6.6 in the Red Hat UBI9 openjdk-21-runtime base (service image and the packet-analysis image built from it, same repository): published 2026-11-01, no fixed upstream release or RHEL package yet; the build cannot reach the UBI package repos to update it. CVE-2026-120194 (HIGH, Red Hat Important, CVSS 7.5 AV:N/A:H): json_path_query() loops forever on a negative-step JSONPath slice. Exposure: neXus is a JVM process and parses JSON with Java libraries; in both images the only package that requires json-glib is librhsm (package-manager subscription support), which is not run at runtime, so no untrusted JSONPath reaches it. Accepted by the PO decision 2026-11-02 ('ok yapalım'); remove when Red Hat rebuilds the base image.",
+      "owner": "PO",
+      "review_date": "2026-11-14"
     }
   ]
 }
