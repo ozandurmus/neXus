@@ -20,6 +20,7 @@ import TableCell from "@mui/material/TableCell";
 import TableContainer from "@mui/material/TableContainer";
 import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
+import TableSortLabel from "@mui/material/TableSortLabel";
 import IconButton from "@mui/material/IconButton";
 import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
@@ -54,6 +55,7 @@ import {
 } from "../auth/adminApi";
 import { ScreenHeader, MetricGrid, MetricCard, ScreenRoot } from "../shell/ScreenLayout";
 import { backupFleetCounts, isBackupFleetRow, retentionNote, type BackupFleetCounts } from "./backupCounts";
+import { compareBySize, largeBackupFlag, largeBackupTitle, nextSizeSort, vendorMedianSizes, type SizeSort } from "./backupSize";
 import { M3Button, StatusChip } from "../shell/M3Widgets";
 import { PLANE_OPERATIONS, ROLE_LOCK_LABEL, ROLE_REFUSAL, useRoleAllows } from "../shell/actionAccess";
 import { Icon } from "../shell/Icon";
@@ -980,7 +982,8 @@ export function BackupScreen() {
 }
 
 
-type Show = "all" | "targets" | "without_archive";
+/** The show chips; `large` (Product Owner, 2026-11-02) is the rows whose latest archive is unusually large for its vendor. */
+type Show = "all" | "targets" | "without_archive" | "large";
 
 /** The fleet table pages at this many rows (UI review 2026-10-18, F-4: 131 targets were one scrolling block). */
 export const BACKUP_PAGE_SIZE = 50;
@@ -1034,8 +1037,8 @@ const HIDDEN = { position: "absolute", width: 1, height: 1, overflow: "hidden", 
 const ONE_LINE = { whiteSpace: "nowrap" } as const;
 /** The fleet table's columns and their share of the width (R3): percentages, so the table fills the card at 1440 and scrolls below 1100. */
 export const FLEET_COLUMNS: ReadonlyArray<readonly [string, string]> = [
-  ["Device", "16%"], ["Model · version", "13%"], ["Cluster", "10%"], ["Target", "9%"], ["Latest archive", "9%"], ["Size", "7%"],
-  ["Validation", "10%"], ["Deviation", "10%"], ["Latest attempt", "13%"], ["Actions", "3%"],
+  ["Device", "16%"], ["Model · version", "13%"], ["Cluster", "10%"], ["Target", "9%"], ["Latest archive", "9%"], ["Size", "9%"],
+  ["Validation", "10%"], ["Deviation", "10%"], ["Latest attempt", "11%"], ["Actions", "3%"],
 ];
 
 /**
@@ -1045,7 +1048,10 @@ export const FLEET_COLUMNS: ReadonlyArray<readonly [string, string]> = [
  * with its newest archive, or "No archive". Nothing is inferred from inventory: the archive columns come from the
  * artefact store only. Every row action (Backup Now, MDS export and Snapshot where the vendor has them, History,
  * Contents, Compare, Download, and Delete for a removed device) sits in the row's ⋮ menu, a refused one disabled with
- * its suffix, so a row stays one line and the table pages at {@link BACKUP_PAGE_SIZE}.
+ * its suffix, so a row stays one line and the table pages at {@link BACKUP_PAGE_SIZE}. Product Owner, 2026-11-02: the
+ * Size header sorts the whole filtered set (largest first, then smallest first, then back to hostname order), and an
+ * archive unusually large for its vendor carries a "Large" marker with its own show chip -- a 28 GB backup on page 2
+ * was invisible.
  */
 function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetError, baselines, busyDeviceId, comparisonRun,
   onBackupNow, onHistory, onContents, onCompare, onDownload, onDeleteOrphan }: {
@@ -1073,8 +1079,9 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
   // `q` carries a filter from other screens (the cluster context strip); `artefact=none` from the Overview tile.
   const [search, setSearch] = useState(() => urlParam("q") ?? "");
   const [show, setShow] = useState<Show>(() => (urlParam("artefact") === "none" ? "without_archive" : "all"));
+  const [sizeSort, setSizeSort] = useState<SizeSort>("none");
   const [page, setPage] = useState(0);
-  useEffect(() => { setPage(0); }, [search, show]);
+  useEffect(() => { setPage(0); }, [search, show, sizeSort]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1115,14 +1122,21 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
   ];
   const targetCount = counts.targets;
   const withoutArchive = counts.targetsWithoutArchive;
+  // Each device's latest archive against its vendor's median (backupSize.ts): the whole store listing, not the page.
+  const medians = vendorMedianSizes(fleet);
+  const largeById = new Map(fleet.flatMap((f) => { const flag = largeBackupFlag(f, medians); return flag ? [[f.deviceId, flag] as const] : []; }));
   const q = search.trim().toLowerCase();
-  const shown = rows.filter(({ summary, item }) => {
+  // The "Large backups" chip shows the largest first unless the header was clicked; the other chips keep hostname order.
+  const sizeOrder: SizeSort = sizeSort !== "none" ? sizeSort : show === "large" ? "desc" : "none";
+  const shown = rows.filter(({ summary, item, id }) => {
     if (show === "targets" && !summary?.backup_target) return false;
     if (show === "without_archive" && (!summary?.backup_target || item !== null)) return false;
+    if (show === "large" && !largeById.has(id)) return false;
     if (!q) return true;
     return [summary?.hostname, summary?.model, summary?.cluster_member_ref, summary?.software_version, item?.name, summary?.device_id ?? item?.deviceId]
       .some((f) => (f ?? "").toLowerCase().includes(q));
   }).sort((a, b) => (a.summary?.hostname ?? a.item?.name ?? "").localeCompare(b.summary?.hostname ?? b.item?.name ?? ""));
+  if (sizeOrder !== "none") shown.sort((a, b) => compareBySize(a.item?.sizeBytes ?? null, b.item?.sizeBytes ?? null, sizeOrder));
 
   const pageCount = Math.max(1, Math.ceil(shown.length / BACKUP_PAGE_SIZE));
   const safePage = Math.min(page, pageCount - 1);
@@ -1150,6 +1164,8 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
             : `Every enrolled device (${counts.enrolled}) can be backed up`)}
           {chip("targets", "Targets", targetCount)}
           {chip("without_archive", "Targets without archive", withoutArchive)}
+          {chip("large", "Large backups", largeById.size,
+            "Devices whose latest archive is at least 10x their vendor's fleet median and at least 1 GiB; largest first")}
           <TextField size="small" placeholder="Filter devices, clusters, models…" value={search} onChange={(e) => setSearch(e.target.value)}
             inputProps={{ "aria-label": "Filter the backup fleet" }} />
         </Stack>
@@ -1184,7 +1200,12 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
                 <TableCell>Cluster</TableCell>
                 <TableCell align="center">Target</TableCell>
                 <TableCell>Latest archive</TableCell>
-                <TableCell align="right">Size</TableCell>
+                <TableCell align="right" sortDirection={sizeSort === "none" ? false : sizeSort}>
+                  <TableSortLabel active={sizeSort !== "none"} direction={sizeSort === "none" ? "desc" : sizeSort} onClick={() => setSizeSort(nextSizeSort(sizeSort))}
+                    title={sizeSort === "none" ? "Sort by latest archive size, largest first" : sizeSort === "desc" ? "Largest first · click for smallest first" : "Smallest first · click for hostname order"}>
+                    Size
+                  </TableSortLabel>
+                </TableCell>
                 <TableCell>Validation</TableCell>
                 <TableCell>Deviation</TableCell>
                 <TableCell>Latest attempt</TableCell>
@@ -1197,6 +1218,7 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
                 const vendor = summary?.vendor_hint ?? item?.vendor;
                 const busy = busyDeviceId === id;
                 const target = Boolean(summary?.backup_target);
+                const large = largeById.get(id) ?? null;
                 const modelVersion = summary
                   ? [(summary.model ?? "UNKNOWN").replace(/^Check Point\s+/, ""), summary.software_version].filter(Boolean).join(" · ") : "UNKNOWN";
                 return (
@@ -1231,7 +1253,14 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
                         : target ? <StatusChip tone="warn" label="No archive" dense />
                         : <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>No archive</Typography>}
                     </TableCell>
-                    <TableCell align="right" sx={{ fontSize: 12.5 }} title={item ? bytesTitle(item.sizeBytes) : undefined}>{item ? formatBytes(item.sizeBytes) : ""}</TableCell>
+                    <TableCell align="right" sx={{ fontSize: 12.5 }} title={item ? bytesTitle(item.sizeBytes) : undefined}>
+                      {item ? (
+                        <Box component="span" sx={{ display: "inline-flex", alignItems: "center", justifyContent: "flex-end", gap: 0.75, maxWidth: "100%" }}>
+                          {large ? <StatusChip tone="warn" label="Large" dense title={largeBackupTitle(large)} /> : null}
+                          <Box component="span">{formatBytes(item.sizeBytes)}</Box>
+                        </Box>
+                      ) : ""}
+                    </TableCell>
                     <TableCell>{item ? <ValidationChip level={item.validationLevel} withLevel /> : null}</TableCell>
                     <TableCell>{item ? <DeviationChip state={item.deviationState} comparisonRun={comparisonRun} /> : null}</TableCell>
                     <TableCell sx={{ fontSize: 12.5 }}><BackupAttempts deviceId={id} latestOnly version={version} /></TableCell>

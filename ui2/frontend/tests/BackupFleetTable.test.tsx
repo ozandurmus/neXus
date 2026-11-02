@@ -151,6 +151,82 @@ describe("pagination at 50", () => {
   });
 });
 
+describe("Size column sort and the large-backup marker (Product Owner, 2026-11-02)", () => {
+  const MB = 1024 * 1024;
+  // 131 Check Point targets: 120 with a ~0.2 GB archive, 11 without one, device 77 with a 28 GB archive on page 2 in hostname order.
+  const estate = Array.from({ length: 131 }, (_, i) => device(i + 1));
+  const archives = Array.from({ length: 120 }, (_, i) => artefact(i + 1, { size_bytes: (160 + (i % 7)) * MB }));
+  archives[76] = artefact(77, { size_bytes: 28_537 * MB });
+  // the Device cell's hostname (the vendor badge's letters sit beside it in the same cell)
+  const names = () => screen.getAllByRole("row").slice(1).map((r) => within(r).getByText(/^FW-SYNTH-\d{3}$/).textContent);
+  const sizeHeader = () => screen.getByRole("button", { name: "Size" });
+
+  it("sorts the whole filtered set by size, largest first, then smallest first with no-archive rows last, then back to hostname order", async () => {
+    stub(estate, archives);
+    render(as(adminPlanes, <BackupScreen />));
+    await screen.findByText("FW-SYNTH-001");
+    expect(screen.queryByText("FW-SYNTH-077")).toBeNull();
+    fireEvent.click(sizeHeader());
+    expect(names()[0]).toBe("FW-SYNTH-077");
+    expect(within(screen.getAllByRole("row")[1]).getByText("28537.0 MB")).toBeInTheDocument();
+    expect(screen.getByText("1–50 of 131")).toBeInTheDocument();
+    expect(sizeHeader().closest("th")).toHaveAttribute("aria-sort", "descending");
+    fireEvent.click(sizeHeader());
+    expect(sizeHeader().closest("th")).toHaveAttribute("aria-sort", "ascending");
+    // smallest first: the 160 MB archives lead ...
+    expect(within(screen.getAllByRole("row")[1]).getByText("160.0 MB")).toBeInTheDocument();
+    // ... and the eleven rows without an archive sit at the very end, after the 28 GB one
+    fireEvent.click(screen.getByRole("button", { name: "Go to next page" }));
+    fireEvent.click(screen.getByRole("button", { name: "Go to next page" }));
+    expect(screen.getByText("101–131 of 131")).toBeInTheDocument();
+    const last = names();
+    expect(last.slice(-11)).toEqual(Array.from({ length: 11 }, (_, i) => `FW-SYNTH-${121 + i}`));
+    expect(last[last.length - 12]).toBe("FW-SYNTH-077");
+    fireEvent.click(sizeHeader());
+    expect(sizeHeader().closest("th")).not.toHaveAttribute("aria-sort");
+    expect(screen.getByText("1–50 of 131")).toBeInTheDocument();
+    expect(names()[0]).toBe("FW-SYNTH-001");
+  });
+
+  it("returns to the first page when the sort changes", async () => {
+    stub(estate, archives);
+    render(as(adminPlanes, <BackupScreen />));
+    await screen.findByText("FW-SYNTH-001");
+    fireEvent.click(screen.getByRole("button", { name: "Go to next page" }));
+    expect(screen.getByText("51–100 of 131")).toBeInTheDocument();
+    fireEvent.click(sizeHeader());
+    expect(screen.getByText("1–50 of 131")).toBeInTheDocument();
+  });
+
+  it("marks the archive that is 10x its vendor's median and at least 1 GiB, says why on hover, and counts it on the Large backups chip", async () => {
+    stub(estate, archives);
+    render(as(adminPlanes, <BackupScreen />));
+    await screen.findByText("FW-SYNTH-001");
+    expect(screen.getByText("Large backups · 1")).toBeInTheDocument();
+    expect(screen.queryByText("Large")).toBeNull();
+    fireEvent.click(screen.getByText("Large backups · 1"));
+    expect(screen.getByText("1–1 of 1")).toBeInTheDocument();
+    const row = screen.getByText("FW-SYNTH-077").closest("tr")!;
+    const marker = within(row).getByText("Large").closest("[data-pill]") as HTMLElement;
+    expect(marker).toHaveStyle({ backgroundColor: TONE_COLORS.warn.bg });
+    expect(marker.closest("td")).toHaveAttribute("title", "29,923,213,312 bytes");
+    // a Check Point median of 163 MB (120 archives of 160..166 MB) against 28,537 MB
+    expect(within(row).getByText("28537.0 MB")).toBeInTheDocument();
+    fireEvent.mouseOver(within(row).getByText("Large"));
+    expect(await screen.findByRole("tooltip")).toHaveTextContent("175.1x the Check Point fleet median (163.0 MB)");
+  });
+
+  it("shows the Large backups chip at 0 and flags nothing when every archive is ordinary", async () => {
+    stub([device(1), device(2), device(3)], [artefact(1), artefact(2), artefact(3)]);
+    render(as(adminPlanes, <BackupScreen />));
+    await screen.findByText("FW-SYNTH-001");
+    expect(screen.getByText("Large backups · 0")).toBeInTheDocument();
+    expect(screen.queryByText("Large")).toBeNull();
+    fireEvent.click(screen.getByText("Large backups · 0"));
+    expect(screen.getByText("No device matches the filter.")).toBeInTheDocument();
+  });
+});
+
 describe("the target toggle, the deviation pill and the KPI cards", () => {
   it("is a switch for a role that can change it and a read-only pill for one that cannot", async () => {
     stub([device(1), device(2, { backup_target: false })], []);
