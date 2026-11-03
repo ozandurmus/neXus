@@ -70,7 +70,10 @@ class PolicyHitCountsTest {
         var counts = PolicyHitCounts.aggregate(snapshot(List.of(rule())), List.of(a, b)).sections().get(0).rules().get(0).hitCounts();
         assertEquals(5L, counts.hits()); assertEquals("1970-01-01T00:03:20Z", counts.lastHit());
         assertEquals(2, counts.firewalls().size()); assertEquals("device", counts.source());
+        assertEquals("UNKNOWN", counts.level());
         assertEquals("1970-01-01T00:00:01Z", counts.firewalls().get(0).createdAt());
+        var none = PolicyHitCounts.aggregate(snapshot(List.of(rule())), List.of(pan(first, "0", "0"), pan(second, "0", "0"))).sections().get(0).rules().get(0).hitCounts();
+        assertEquals(0L, none.hits()); assertEquals("zero", none.level());
         var partial = PolicyHitCounts.aggregate(snapshot(List.of(rule())), List.of(a)).sections().get(0).rules().get(0).hitCounts();
         assertNull(partial.hits()); assertNull(partial.lastHit()); assertEquals(1, partial.firewalls().size());
         assertNull(PolicyHitCounts.aggregate(snapshot(List.of(rule(), rule())), List.of(a, b)).sections().get(0).rules().get(0).hitCounts());

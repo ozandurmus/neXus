@@ -101,7 +101,7 @@ final class PolicyHitCounts {
                 String first = complete ? earliest(breakdown.stream().map(FirewallHits::firstHit).toList()) : null;
                 String last = complete && breakdown.stream().allMatch(h -> h.hits() == 0 || h.lastHit() != null) ? latest(breakdown.stream().map(FirewallHits::lastHit).toList()) : null;
                 return r.withHitCounts(new HitCounts(hits, first, last, "device", latest(breakdown.stream()
-                        .map(FirewallHits::collectedAt).toList()), null, breakdown));
+                        .map(FirewallHits::collectedAt).toList()), null, breakdown).withLevel());
             }).toList())).toList();
         return new PolicySnapshot(snapshot.metadata(), sections, snapshot.objects(), snapshot.failures());
     }
