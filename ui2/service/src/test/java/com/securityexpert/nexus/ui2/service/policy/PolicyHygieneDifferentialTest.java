@@ -106,7 +106,7 @@ class PolicyHygieneDifferentialTest {
      * former one. Elsewhere REDUNDANT and CONFLICT are compared as covered, because the stand-in action differs.
      */
     @Test void everyLayerOfAnInlineLayerPolicyAnswersWhatThatLayerAloneAnswered() {
-        int compared = 0, resumed = 0, formerlyUnproven = 0, coveredByApplyLayer = 0, inline = 0, ruleReasonOnly = 0, releasedInline = 0;
+        int compared = 0, resumed = 0, formerlyUnproven = 0, coveredByApplyLayer = 0, inline = 0, ruleReasonOnly = 0, releasedInline = 0, passedOver = 0;
         for (long seed = 0; seed < 2500; seed++) {
             var snapshot = SyntheticPolicies.inline(seed + 300_000, 5 + (int) (seed % 70));
             if (seed % 2 == 1) snapshot = SyntheticPolicies.policyTargets(snapshot);
@@ -128,6 +128,20 @@ class PolicyHygieneDifferentialTest {
                     for (var rule : section.rules()) {
                         var want = expected.get(rule.id()); var got = actual.get(rule.id());
                         String context = "seed " + seed + " layer " + entry.getKey() + " rule " + rule.id();
+                        if (PartialPriorOracle.UNPROVEN.equals(want.shadowReason()) && !PartialPriorOracle.UNPROVEN.equals(got.shadowReason())) {
+                            // Selector pass-over: every placement-undecided prior fails to contain a selector, so the rule
+                            // is decided without them -- clean (confirmed by brute force in every world) or blocked by a
+                            // partial prior, never covered.
+                            assertNull(got.coveringRuleId(), context);
+                            if (PartialPriorOracle.UNSUPPORTED.equals(got.shadowReason())) assertEquals("UNKNOWN", got.shadowStatus(), context);
+                            else {
+                                assertEquals("NOT_SHADOWED", got.shadowStatus(), context); assertNull(got.shadowReason(), context);
+                                PartialPriorOracle.assertNoCover(universe, rule.id(), context);
+                                PartialPriorOracle.assertReleaseIsSafe(universe, rule.id(), context);
+                            }
+                            passedOver++; compared++;
+                            continue;
+                        }
                         if (PartialPriorOracle.UNSUPPORTED.equals(want.shadowReason()) && !PartialPriorOracle.UNSUPPORTED.equals(got.shadowReason())) {
                             // Released by partial priors: clean, and the brute-force check must confirm it.
                             assertEquals("NOT_SHADOWED", got.shadowStatus(), context);
@@ -172,7 +186,7 @@ class PolicyHygieneDifferentialTest {
             compared + " compared, " + inline + " inline, " + resumed + " resumed, " + formerlyUnproven + " formerly unproven, " + coveredByApplyLayer + " covered by Apply Layer");
         System.out.println("INLINE LAYERS " + compared + " compared, " + inline + " inline, " + resumed + " resumed parent, "
             + formerlyUnproven + " formerly unproven, " + coveredByApplyLayer + " covered by Apply Layer, " + ruleReasonOnly + " rule-reason order only, "
-            + releasedInline + " released by partial priors");
+            + releasedInline + " released by partial priors, " + passedOver + " unproven decided by selector pass-over");
     }
     private static final Set<String> SCOPE_REASONS = Set.of("earlier sections not analysed", "earlier rule has unsupported constraints",
         "zone or install-on coverage is unproven", "analysis budget", "snapshot collection incomplete");

@@ -198,7 +198,8 @@ class PolicyHygieneZoneSupersetTest {
         }
         for (String change : List.of(UNPROVEN + " -> COVERED", UNPROVEN + " -> RELEASED", UNPROVEN + " -> OTHER_UNKNOWN", UNPROVEN + " kept",
                 RULE_TYPE + " -> COVERED", RULE_TYPE + " kept"))
-            // Releases also need every partial prior disjoint, which the messy generator rarely allows (158 at these seeds).
+            // Releases also need every partial prior disjoint, which the messy generator rarely allows (158 at these seeds
+            // before the selector pass-over, 398 with it).
             assertTrue(changes.getOrDefault(change, 0) >= (change.endsWith("RELEASED") ? 100 : 200), change + " in " + changes);
         System.out.println("ZONE SUPERSETS " + pans + " PAN snapshots, " + rules + " rules: " + changes);
     }
