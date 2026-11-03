@@ -2,7 +2,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
-import { PolicyRuleTable, RuleDetailPanel, RuleHistory, RuleMetrics, RULE_ROW_HEIGHT, actionWord, containerLabel, documentationEntries, hygieneBadges, objectKind, permissivenessWords, scheduleLabel, sectionLabel, usageWords } from "../src/screens/PolicyRuleViewer";
+import { PolicyRuleTable, RuleDetailPanel, RuleHistory, RuleMetrics, RULE_ROW_HEIGHT, REASON_GROUPS, actionWord, containerLabel, documentationEntries, hygieneBadges, objectKind, permissivenessWords, scheduleLabel, sectionLabel, snapshotFreshness, unknownReasonGroup, unknownReasons, usageWords } from "../src/screens/PolicyRuleViewer";
 import type { PolicyHygieneAssessment, PolicyMetadata, PolicyObject, PolicyRule, PolicySchedule, PolicySection } from "../src/auth/adminApi";
 
 const metadata: PolicyMetadata = { id: "policy-1", name: "OBJ-POLICY-01", sourceId: "source-1", sourceName: "MGR-BRAVO-01", vendor: "CP", containerId: "domain-1", containerName: "DOM-TANGO-01", collectedAt: "2026-10-02T00:00:00Z", artefactRef: "artifact-1", targets: [] };
@@ -31,7 +31,13 @@ it("words usage honestly: UNKNOWN when missing, Not collected when null, Never a
   const base = { hits: 12, firstHit: null, lastHit: "2026-10-16T12:00:00Z", source: "device" as const, collectedAt: "2026-10-19T00:00:00Z", firewalls: [] };
   expect(usageWords({}, now)).toMatchObject({ hits: "UNKNOWN", lastHit: "UNKNOWN", state: "unknown" });
   expect(usageWords({ hitCounts: null }, now)).toMatchObject({ hits: "Not collected", lastHit: "Not collected", state: "not-collected" });
-  expect(usageWords({ hitCounts: { ...base, hits: 0, lastHit: null } }, now)).toMatchObject({ hits: "0", lastHit: "Never", state: "never" });
+  // Zero hits is "none recorded", not "never": the counters' window is unknown unless the analysis says otherwise.
+  const none = usageWords({ hitCounts: { ...base, hits: 0, lastHit: null } }, now);
+  expect(none).toMatchObject({ hits: "0", lastHit: "None recorded", state: "never", window: "Counter window unknown" });
+  expect(none.detail).toContain("Counter window unknown"); expect(none.detail).not.toMatch(/never matched/i);
+  const windowed = usageWords({ hitCounts: { ...base, hits: 0, lastHit: null, level: "zero" }, hygiene: { counterWindow: "Counter window unknown; first hit is not a counter start." } as PolicyHygieneAssessment }, now);
+  expect(windowed.window).toBe("Counter window unknown; first hit is not a counter start"); expect(windowed.detail).toContain("level zero");
+  expect(usageWords({ hitCounts: { ...base, level: "UNKNOWN" } }, now).detail).not.toContain("level");
   expect(usageWords({ hitCounts: { ...base, lastHit: null } }, now)).toMatchObject({ hits: "12", lastHit: "UNKNOWN", state: "partial" });
   expect(usageWords({ hitCounts: { ...base, hits: null, lastHit: null } }, now)).toMatchObject({ hits: "UNKNOWN", lastHit: "UNKNOWN", state: "partial" });
   expect(usageWords({ hitCounts: { ...base, hits: 1234567 } }, now)).toMatchObject({ hits: "1,234,567", lastHit: "3 d ago", state: "recent" });
@@ -122,7 +128,8 @@ it("shows Never and Not collected in the row and links flags to the Hygiene tab"
   const uncollected: PolicyRule = { ...rule, id: "uncollected", number: 2, enabled: null, hitCounts: null, permissiveness: undefined, source: { refs: ["0"], negated: false } };
   mount(ruleTable({ openHygiene, sections: [{ ...section, total: 2, rules: [never, uncollected] }], objects: new Map<string, PolicyObject>([...objects, ["0", { id: "0", name: "GRP-ALPHA-01", type: "address-group", status: "RESOLVED", members: ["1", "2", "3"] }]]) }));
   const first = screen.getByRole("row", { name: "Rule 1: OBJ-RULE-01" }), second = screen.getByRole("row", { name: "Rule 2: OBJ-RULE-01" });
-  expect(column(first, "hits")).toHaveTextContent("0 hits"); expect(column(first, "lastHit")).toHaveTextContent("Never hit");
+  expect(column(first, "hits")).toHaveTextContent("0 hits"); expect(column(first, "lastHit")).toHaveTextContent("No hits recorded");
+  expect(usageBox(first)).toHaveAttribute("title", expect.stringContaining("90 d"));
   expect(usageBox(first)).toHaveAttribute("data-usage-state", "never");
   expect(column(first, "permissiveness")).toHaveTextContent("UNKNOWN"); expect(column(first, "permissiveness")).toHaveTextContent("Incomplete objects; assessment requires analysis");
   fireEvent.click(within(column(first, "hygiene")).getByRole("button", { name: "Unused" })); expect(openHygiene).toHaveBeenCalledWith("unused");
@@ -310,6 +317,65 @@ it("folds the empty sections into one group row that opens to name them", () => 
   expect([...container.querySelectorAll("[data-empty-section]")].map(el => el.textContent)).toEqual(["OBJ-SECTION-02 · 0 rules", "OBJ-SECTION-03 · 0 rules"]);
 });
 
+it("judges snapshot freshness against the refresh schedule: fresh within a day, stale past it, old past a week, unknown without a time", () => {
+  const now = new Date("2026-10-30T12:00:00Z");
+  expect(snapshotFreshness("2026-10-30T06:00:00Z", now)).toMatchObject({ state: "fresh", label: "Collected 6 h ago (30 Oct 2026, 09:00 GMT+3)" });
+  expect(snapshotFreshness("2026-10-29T11:59:00Z", now).state).toBe("stale");
+  expect(snapshotFreshness("2026-10-29T12:30:00Z", now).state).toBe("fresh");
+  const old = snapshotFreshness("2026-10-01T12:00:00Z", now);
+  expect(old).toMatchObject({ state: "old", label: "Collected 29 d ago (1 Oct 2026, 15:00 GMT+3)" });
+  expect(old.reason).toMatch(/^Snapshot is 29 days old: the scheduled refresh \(every 6 h at 00, 06, 12 and 18 GMT\+3; full collection daily at 00:00\) has not updated it\./);
+  expect(snapshotFreshness("2026-10-25T12:00:00Z", now).state).toBe("stale");
+  expect(snapshotFreshness("2026-10-23T11:00:00Z", now).state).toBe("old");
+  expect(snapshotFreshness("", now)).toMatchObject({ state: "unknown", label: "Collection time unknown", ageHours: null });
+  expect(snapshotFreshness(undefined, now).state).toBe("unknown");
+});
+it("groups the analysis' not-provable vocabulary into plain words", () => {
+  const key = (reason: string | null) => unknownReasonGroup(reason).key;
+  expect(key("user or category constraint")).toBe("identity");
+  expect(key("access-role objects cannot be resolved")).toBe("identity");
+  expect(key("zone or install-on coverage is unproven")).toBe("zone");
+  expect(key("unresolved install-on selector")).toBe("install-on");
+  expect(key("earlier sections not analysed")).toBe("layers");
+  expect(key("analysis budget")).toBe("budget");
+  expect(key("unresolved object")).toBe("objects");
+  expect(key("earlier rule has unsupported constraints")).toBe("constraints");
+  expect(key("Hit counts were not collected or are invalid.")).toBe("hits");
+  expect(key("something new")).toBe("other"); expect(key(null)).toBe("other");
+  expect(unknownReasonGroup("analysis budget")).toMatchObject({ label: "Analysis limit reached" });
+  expect(REASON_GROUPS.every(group => group.label && group.explain)).toBe(true);
+  const assessment: PolicyHygieneAssessment = { shadowStatus: "UNKNOWN", shadowReason: "analysis budget", coveringRuleId: null, timeStatus: "always", expiring: false, counterWindow: "90 d", hitSource: "mds", hitsCollectedAt: null,
+    permissiveness: { level: "Low", reasons: [] }, findings: [{ findingClass: "unknown", severity: "LOW", evidence: "Hit counts not collected." }, { findingClass: "broad", severity: "HIGH", evidence: "Any source." }] };
+  expect(unknownReasons(assessment)).toEqual(["analysis budget", "Hit counts not collected."]);
+  expect(unknownReasons({ ...assessment, shadowStatus: "NOT_SHADOWED", findings: [] })).toEqual([]);
+  expect(unknownReasons({ ...assessment, shadowReason: null, findings: [] })).toEqual(["reason not recorded"]);
+  expect(unknownReasons(undefined)).toEqual([]);
+});
+it("says in words why a rule's shadowing is not provable and never paints an undecided zero green", () => {
+  const hygiene: PolicyHygieneAssessment = { shadowStatus: "UNKNOWN", shadowReason: "user or category constraint", coveringRuleId: null, timeStatus: "always", expiring: false,
+    counterWindow: "Counter window unknown", hitSource: "mds", hitsCollectedAt: null, permissiveness: { level: "Low", reasons: [] }, findings: [] };
+  mount(<RuleMetrics rule={{ ...rule, hygiene }} />);
+  expect(screen.getByText("UNKNOWN because user or category constraint")).toBeInTheDocument();
+  const group = screen.getByText(/^Not provable · Identity or dynamic objects:/);
+  expect(group).toHaveAttribute("data-reason-group", "identity");
+  expect(group).toHaveTextContent("An evidence limit, not a rule problem.");
+  expect(screen.getByText("none proven; shadowing not analysed")).toBeInTheDocument();
+  // The undecided zero takes the same neutral ink as the UNKNOWN shadow word beside it, not the green of a proven clean rule.
+  const card = document.querySelector<HTMLElement>('[data-shadow-status="UNKNOWN"]')!;
+  expect(getComputedStyle(within(card).getByText("0", { exact: true })).color).toBe(getComputedStyle(within(card).getByText("UNKNOWN", { exact: true })).color);
+  mount(<RuleMetrics rule={{ ...rule, id: "clean", hygiene: { ...hygiene, shadowStatus: "NOT_SHADOWED", shadowReason: null } }} />);
+  const clean = document.querySelector<HTMLElement>('[data-shadow-status="NOT_SHADOWED"]')!;
+  expect(getComputedStyle(within(clean).getByText("0", { exact: true })).color).not.toBe(getComputedStyle(within(card).getByText("0", { exact: true })).color);
+  expect(within(clean).queryByText(/none proven/)).toBeNull();
+});
+it("does not claim 'No findings' for a rule whose shadowing was not analysed", () => {
+  const hygiene: PolicyHygieneAssessment = { shadowStatus: "UNKNOWN", shadowReason: "earlier sections not analysed", coveringRuleId: null, timeStatus: "always", expiring: false,
+    counterWindow: "90 d", hitSource: "mds", hitsCollectedAt: null, permissiveness: { level: "Low", reasons: [] }, findings: [] };
+  mount(ruleTable({ sections: [{ ...section, rules: [{ ...rule, enabled: true, timeStatus: "always", hygiene }] }] }));
+  const flags = column(screen.getByRole("row", { name: /^Rule 1:/ }), "hygiene");
+  expect(flags).toHaveTextContent("No findings · shadowing not provable");
+  expect(within(flags).getByText(/No findings/)).toHaveAttribute("title", "Shadowing not provable: earlier sections not analysed");
+});
 it("draws no header for a section whose rules are on other pages", () => {
   const other: PolicySection = { ...section, id: "section-2", name: "OBJ-SECTION-02", rules: [], total: 100 };
   const { container } = mount(ruleTable({ sections: [section, other] }));

@@ -4,7 +4,7 @@ import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
 import { RuleFields } from "../src/screens/PolicyRuleViewer";
 import { PolicyChangesTab } from "../src/screens/PolicyChangesTab";
-import { firewallLabel, firewallLabels, firewallSecondary, withFirewallNames } from "../src/screens/policyFirewalls";
+import { firewallLabel, firewallLabels, firewallSecondary, syncStatusWords, withFirewallNames } from "../src/screens/policyFirewalls";
 import type { PolicyChangesPage, PolicyFirewallRef, PolicyRule } from "../src/auth/adminApi";
 
 // Serial-shaped values are built at runtime so no literal trips the secret and privacy gates.
@@ -17,6 +17,19 @@ const rule: PolicyRule = { id: "rule-1", uuid: "uuid-1", name: "RULE-BRAVO-01", 
   action: "allow", comment: "", log: "Log", extras: { "target-selectors": [enrolled.serial, stranger.serial] }, targetDevices: [enrolled, stranger] };
 afterEach(() => { vi.unstubAllGlobals(); });
 
+it("words a target's sync state: Panorama claims as claims, a Check Point UNKNOWN as not reported, any other UNKNOWN as UNKNOWN", () => {
+  expect(syncStatusWords("PAN", "IN_SYNC")).toMatchObject({ word: "In sync", tone: "good", reported: true });
+  expect(syncStatusWords("PAN", "OUT_OF_SYNC")).toMatchObject({ word: "Out of sync", tone: "warn", reported: true });
+  const cp = syncStatusWords("CP", "UNKNOWN");
+  expect(cp).toMatchObject({ word: "Sync not reported by Check Point", tone: "neutral", reported: false });
+  expect(cp.reason).toContain("not a fault of the target");
+  expect(syncStatusWords("CP", "")).toMatchObject({ word: "Sync not reported by Check Point", reported: false });
+  expect(syncStatusWords("PAN", "UNKNOWN")).toMatchObject({ word: "Sync UNKNOWN", tone: "neutral", reported: false });
+  expect(syncStatusWords("PAN", undefined)).toMatchObject({ word: "Sync UNKNOWN", reported: false });
+  // A Check Point target that does carry a claim keeps it; a new token passes through as words, never as a guess.
+  expect(syncStatusWords("CP", "IN_SYNC")).toMatchObject({ word: "In sync", reported: true });
+  expect(syncStatusWords("PAN", "PENDING_COMMIT")).toMatchObject({ word: "Pending commit", tone: "neutral", reported: true });
+});
 it("labels an enrolled firewall by hostname with the serial as secondary text, and a stranger as not enrolled", () => {
   expect(firewallLabel(enrolled)).toBe("FW-TANGO-04");
   expect(firewallSecondary(enrolled)).toBe(`Serial ${enrolled.serial}`);

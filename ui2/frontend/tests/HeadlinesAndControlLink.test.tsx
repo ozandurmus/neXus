@@ -34,8 +34,10 @@ describe("headline lines (review 4.3): number · noun · denominator · age, UNK
       collectedAt, artefactRef: "", targets: [], ruleCount,
     } as unknown as PolicyMetadata);
     const catalog = [policy("a", "c1", 869, "2026-10-18T06:00:00Z"), policy("b", "c2", 91, "2026-10-18T05:00:00Z"), policy("c", "c2", 10, "2026-10-18T04:00:00Z")];
-    expect(policyHeadline({ catalog, sources: 2, loading: false, now })).toBe("2 containers · 2 sources · 970 rules · collected 4 h ago");
-    expect(policyHeadline({ catalog: [catalog[0], policy("d", "c3", undefined, "")], sources: 1, loading: false, now })).toBe("2 containers · 1 source · UNKNOWN rules · collected 4 h ago");
+    expect(policyHeadline({ catalog, sources: 2, loading: false, now })).toBe("2 containers · 2 sources · 970 rules · newest snapshot 4 h ago");
+    expect(policyHeadline({ catalog: [catalog[0], policy("d", "c3", undefined, "")], sources: 1, loading: false, now })).toBe("2 containers · 1 source · UNKNOWN rules · newest snapshot 4 h ago");
+    // The newest snapshot alone would hide the stale ones: the oldest is named once it is more than a day behind.
+    expect(policyHeadline({ catalog: [...catalog, policy("e", "c4", 5, "2026-09-19T06:00:00Z")], sources: 2, loading: false, now })).toBe("3 containers · 2 sources · 975 rules · newest snapshot 4 h ago · oldest 29 d ago");
     expect(policyHeadline({ catalog: [], sources: 0, loading: true, now })).toBe("Reading stored policy snapshots…");
     expect(policyHeadline({ catalog: [], sources: 0, loading: false, now })).toBe("0 containers · 0 sources · 0 rules · collected UNKNOWN");
   });

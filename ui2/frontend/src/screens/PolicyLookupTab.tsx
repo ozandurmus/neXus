@@ -3,6 +3,7 @@ import { Box, Button, Chip, MenuItem, Stack, TextField, Typography } from "@mui/
 import { DISABLED_STYLE } from "../shell/disabledStyle";
 import { statusWord } from "../shell/presenters";
 import { lookupPolicy, type PolicyMetadata, type PolicyLookupQuery, type PolicyLookupResult, type PolicyLookupDecision } from "../auth/adminApi";
+import { SnapshotFreshnessChip } from "./PolicyRuleViewer";
 
 export function PolicyLookupTab({ policies, policy, selectPolicy, openRule }: {
   policies: PolicyMetadata[]; policy: string; selectPolicy: (id: string) => void; openRule: (policy: string, rule: string) => void;
@@ -55,7 +56,11 @@ export function PolicyLookupTab({ policies, policy, selectPolicy, openRule }: {
     {recent.length > 0 && <Typography variant="h6">Recent lookups (this session)</Typography>}
     {recent.map((result, i) => <Box key={i} aria-label={`Lookup result ${i + 1}`} sx={{ border: 1, borderColor: "divider", borderRadius: 2, p: 2, my: 2 }}>
       <Typography variant="body2">{result.query.querySource} → {result.query.queryDestination} · {result.query.queryService}</Typography>
-      <Typography variant="caption">Snapshot {result.policyId} · Collected {result.collectedAt}</Typography>
+      {/* The answer is only as current as the snapshot it was read from: the policy by name and the collection age with its freshness state. */}
+      <Stack direction="row" gap={1} alignItems="center" flexWrap="wrap" sx={{ my: 0.5 }}>
+        <Typography variant="caption">Snapshot: {policies.find(p => p.id === result.policyId)?.name ?? result.policyId}</Typography>
+        <SnapshotFreshnessChip at={result.collectedAt} now={new Date()} />
+      </Stack>
       <Decision decision={result} openRule={rule => openRule(result.policyId, rule)} />
       {result.parts.map((part, n) => <Box key={n} sx={{ mt: 1, pl: 2 }}>
         <Typography variant="body2">{part.querySource} → {part.queryDestination}</Typography>

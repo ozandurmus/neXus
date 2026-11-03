@@ -57,7 +57,7 @@ it("renders masked management navigation, assignments, section collapse, negatio
   const table = await screen.findByRole("region", { name: "Policy rulebase" });
   expect(screen.getAllByText("MGR-BRAVO-01").length).toBeGreaterThan(0);
   expect(screen.getAllByText("FW-TANGO-04").length).toBeGreaterThan(0);
-  expect(screen.getByLabelText("UNKNOWN")).toBeInTheDocument();
+  expect(screen.getByLabelText("Sync UNKNOWN")).toBeInTheDocument();
   expect(screen.queryByText(/FW-TANGO-04.*VS-ROMEO-01/)).toBeNull();
   expect(within(table).getByText("NOT")).toBeInTheDocument();
   expect(within(table).getByText("Disabled")).toBeInTheDocument();
@@ -438,8 +438,57 @@ it("reports catalog read failure explicitly without inventing zero containers", 
 it("preserves masked policy dates and numeric counts in the rendered view", async () => {
   mockFetch({ ...page, metadata: { ...metadata, collectedAt: "2026-10-02T03:50:21Z" }, total: 122 });
   mount(); await navigate();
-  expect(await screen.findByText(/^Collected 2 Oct 2026, 06:50/)).toBeInTheDocument();
+  expect(await screen.findByText(/^Collected \d+ d ago \(2 Oct 2026, 06:50 GMT\+3\)$/)).toBeInTheDocument();
   expect(screen.getByText("1–122 of 122 rules")).toBeInTheDocument();
+});
+it("keeps the snapshot age and its warning visible on every tab, stronger past a week", async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true, now: new Date("2026-10-30T12:00:00Z") });
+  mockFetch({ ...page, metadata: { ...metadata, collectedAt: "2026-10-01T12:00:00Z" } });
+  mount(); await navigate();
+  const header = await screen.findByRole("region", { name: "Snapshot" });
+  expect(header.querySelector("[data-freshness]")).toHaveAttribute("data-freshness", "old");
+  expect(within(header).getByText("Collected 29 d ago (1 Oct 2026, 15:00 GMT+3)")).toBeInTheDocument();
+  expect(within(header).getByRole("status")).toHaveTextContent(/^Snapshot is 29 days old: the scheduled refresh .* has not updated it\./);
+  // The same line stays above the Hygiene tab: its coverage numbers are read against the same age.
+  fireEvent.click(screen.getByRole("tab", { name: "Hygiene" }));
+  expect(screen.getByRole("region", { name: "Snapshot" })).toBeVisible();
+  expect(within(screen.getByRole("region", { name: "Snapshot" })).getByRole("status")).toHaveTextContent("29 days old");
+});
+it.each([
+  ["2026-10-30T11:00:00Z", "fresh", false, "Default"],
+  ["2026-10-29T06:00:00Z", "stale", true, "Warning"],
+  ["2026-10-20T06:00:00Z", "old", true, "Error"],
+])("colours the snapshot chip by age (%s → %s)", async (collectedAt, state, warned, colour) => {
+  vi.useFakeTimers({ shouldAdvanceTime: true, now: new Date("2026-10-30T12:00:00Z") });
+  mockFetch({ ...page, metadata: { ...metadata, collectedAt } });
+  mount(); await navigate();
+  const header = await screen.findByRole("region", { name: "Snapshot" });
+  await waitFor(() => expect(header.querySelector("[data-freshness]")).toHaveAttribute("data-freshness", state));
+  expect(within(header).queryByRole("status") !== null).toBe(warned);
+  expect(header.querySelector(".MuiChip-root")!.className).toContain(`MuiChip-color${colour}`);
+});
+it("reads a Check Point target's missing sync state as not reported, and a Panorama sync claim as the claim", async () => {
+  mockFetch({ ...page, metadata: { ...metadata, vendor: "CP", targets: [{ deviceId: "device-1", name: "FW-TANGO-04", context: "VS-ROMEO-01", syncStatus: "UNKNOWN" }] } });
+  const { unmount } = mount(); await navigate();
+  const dot = await screen.findByLabelText("Sync not reported by Check Point");
+  expect(dot.closest("[data-sync]")).toHaveAttribute("data-sync", "not-reported");
+  expect(screen.queryByLabelText("Sync UNKNOWN")).toBeNull();
+  unmount(); vi.unstubAllGlobals();
+  mockFetch({ ...page, metadata: { ...metadata, targets: [{ deviceId: "device-1", name: "FW-TANGO-04", context: "", syncStatus: "IN_SYNC" }, { deviceId: "device-2", name: "FW-TANGO-05", context: "", syncStatus: "OUT_OF_SYNC" }] } });
+  mount(); await navigate();
+  expect((await screen.findByLabelText("In sync")).closest("[data-sync]")).toHaveAttribute("data-sync", "good");
+  expect(screen.getByLabelText("Out of sync").closest("[data-sync]")).toHaveAttribute("data-sync", "warn");
+});
+it("inks the container table's last-collected age by freshness", async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true, now: new Date("2026-10-30T12:00:00Z") });
+  const stale = { ...metadata, id: "policy-2", containerId: "container-2", containerName: "DOM-TANGO-02", collectedAt: "2026-10-28T12:00:00Z" };
+  vi.stubGlobal("fetch", vi.fn(async (input: string) => new Response(JSON.stringify(input === "/api/v2/policy/sources"
+    ? { canCollect: false, sources: [{ sourceId: "source-1", sourceName: "MGR-BRAVO-01", vendor: "PAN" }] } : { policies: [metadata, stale], devices: [] }), { status: 200 })));
+  mount();
+  const rows = within(await screen.findByRole("region", { name: "Stored policy containers" })).getAllByRole("row");
+  expect(rows[1].querySelector("[data-freshness]")).toHaveAttribute("data-freshness", "old");
+  expect(rows[2].querySelector("[data-freshness]")).toHaveAttribute("data-freshness", "stale");
+  expect(rows[2].querySelector("[data-freshness]")).toHaveTextContent("2 d ago");
 });
 it("ends an empty rule response with an explicit failure", async () => {
   const fetch = mockFetch();
@@ -731,7 +780,8 @@ it("selects all matching rules across API pages and clears the active query chip
 it("maps each source job and formats collection time in the display timezone", () => {
   const now = new Date("2026-10-02T08:06:00Z");
   const job = { jobId: "job-latest", state: "COMPLETED", reason: "", step: 8, total: 8, collectedAt: "2026-10-02T06:06:00Z" };
-  expect(collectedLabel(job.collectedAt, now)).toBe("Collected 2 Oct 2026, 09:06 · 2 h ago");
+  expect(collectedLabel(job.collectedAt, now)).toBe("Collected 2 h ago (2 Oct 2026, 09:06 GMT+3)");
+  expect(collectedLabel("not-a-time", now)).toBe("Collection time unknown");
   expect(sourceStatusLabel(job, now)).toBe("Collected · 2 h ago");
   expect(collectionOutcome({ ...job, state: "RUNNING" })).toBe("RUNNING");
   expect(sourceStatusLabel({ ...job, outcome: "PARTIAL", reason: "PARTIAL_SNAPSHOT access: TIMEOUT" }, now)).toMatch(/^Completed with gaps \(unit count unknown\) · 2 h ago/);

@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { afterEach, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
-import { PolicyHygieneTab } from "../src/screens/PolicyHygieneTab";
+import { PolicyHygieneTab, hygieneCoverage, hygieneReasonBreakdown } from "../src/screens/PolicyHygieneTab";
 import { RuleMetrics } from "../src/screens/PolicyRuleViewer";
 import type { PolicyHygieneAssessment, PolicyHygienePage, PolicyRuleDetail } from "../src/auth/adminApi";
 const hygiene: PolicyHygieneAssessment = { shadowStatus: "CONFLICT", shadowReason: null, coveringRuleId: "r1",
@@ -42,8 +42,65 @@ it("renders explicit unknown, budget, pagination and empty states", async () => 
   vi.stubGlobal("fetch", fetcher); mount(<PolicyHygieneTab openObject={vi.fn()} policy="p1" openRule={vi.fn()} />);
   expect(await screen.findByText("UNKNOWN because analysis budget")).toBeInTheDocument();
   expect(screen.getByText(/UNKNOWN because Hit counts/)).toBeInTheDocument();
+  // The budget is an explicit, visible state of the whole analysis, not a sentence under the chips.
+  const coverage = screen.getByRole("region", { name: "Analysis coverage" });
+  expect(coverage).toHaveAttribute("data-budget-reached", "true");
+  expect(within(coverage).getByText("Analysis limit reached", { selector: ".MuiChip-label" })).toBeInTheDocument();
+  expect(within(coverage).getByRole("status")).toHaveTextContent("a limit of the analysis, not a finding");
   fireEvent.click(screen.getByRole("button", { name: "Next hygiene page" }));
   expect(await screen.findByText("No hygiene findings match these filters.")).toBeInTheDocument();
+});
+it("computes coverage honestly: proven only against a known rule total, never against a filtered page", () => {
+  const counts = { shadowed: 3, conflict: 1, disabled: 2, unused: 7, expired: 0, broad: 9, unknown: 845 };
+  expect(hygieneCoverage(counts, 871)).toMatchObject({ unknown: 845, proven: 26, denominator: 871, sentence: "Analysed: 26 proven · 845 not provable (of 871 rules)" });
+  expect(hygieneCoverage(counts, undefined)).toMatchObject({ unknown: 845, proven: null, denominator: null, sentence: "Analysed: proven count UNKNOWN · 845 not provable (rule total not recorded)" });
+  expect(hygieneCoverage({ shadowed: 1 }, 871)).toMatchObject({ unknown: null, proven: null, sentence: "Analysed: UNKNOWN (the not-provable count was not returned)" });
+  expect(hygieneCoverage({ unknown: 900 }, 871).proven).toBe(0);
+  expect(hygieneCoverage(undefined, 871).proven).toBeNull();
+});
+it("groups the not-provable reasons of the rows it sees in plain words, counting each rule once per group", () => {
+  const row = (ruleId: string, shadowReason: string | null, shadowStatus: PolicyHygieneAssessment["shadowStatus"] = "UNKNOWN", unknownEvidence?: string) => ({
+    ...page.rows[0], ruleId, hygiene: { ...hygiene, coveringRuleId: null, shadowStatus, shadowReason },
+    findings: unknownEvidence ? [{ findingClass: "unknown", severity: "LOW" as const, evidence: unknownEvidence }] : [] });
+  const breakdown = hygieneReasonBreakdown([
+    row("r1", "user or category constraint"), row("r2", "access-role object unresolved", "UNKNOWN", "user objects not resolvable"),
+    row("r3", "unresolved install-on selector"), row("r4", "analysis budget", "UNKNOWN", "Hit counts were not collected or are invalid."),
+    row("r5", null, "NOT_SHADOWED"), row("r6", "zone or install-on coverage is unproven"),
+  ]);
+  expect(breakdown.map(entry => [entry.group.key, entry.rules])).toEqual([["identity", 2], ["install-on", 1], ["budget", 1], ["hits", 1], ["zone", 1]]);
+  expect(breakdown[0].reasons).toEqual(["user or category constraint", "access-role object unresolved", "user objects not resolvable"]);
+  expect(hygieneReasonBreakdown([row("r5", null, "NOT_SHADOWED")])).toEqual([]);
+});
+it("shows analysed coverage, the plain-words reason breakdown and what it covers instead of a bare unknown count", async () => {
+  const rows = [
+    { ...page.rows[0], ruleId: "r1", number: 1, name: "RULE-ALPHA-01", hygiene: { ...hygiene, coveringRuleId: null, shadowStatus: "UNKNOWN" as const, shadowReason: "user or category constraint" }, findings: [] },
+    { ...page.rows[0], ruleId: "r2", number: 2, name: "RULE-BRAVO-02", hygiene: { ...hygiene, coveringRuleId: null, shadowStatus: "UNKNOWN" as const, shadowReason: "unresolved install-on selector" }, findings: [] },
+    { ...page.rows[0], ruleId: "r3", number: 3, name: "RULE-CHARLIE-03", hygiene: { ...hygiene, coveringRuleId: null, shadowStatus: "NOT_SHADOWED" as const, shadowReason: null }, findings: [] },
+  ];
+  vi.stubGlobal("fetch", vi.fn(async () => response({ ...page, rows, total: 3, counts: { ...page.counts, unknown: 845 } })));
+  mount(<PolicyHygieneTab openObject={vi.fn()} policy="p1" openRule={vi.fn()} ruleCount={871} />);
+  const coverage = await screen.findByRole("region", { name: "Analysis coverage" });
+  expect(within(coverage).getByText("Analysed: 26 proven · 845 not provable (of 871 rules)")).toBeInTheDocument();
+  expect(coverage).not.toHaveAttribute("data-budget-reached");
+  expect(within(coverage).getByText(/^Why not provable · from all 3 matching rules · 2 of them not provable/)).toBeInTheDocument();
+  const reasons = within(coverage).getByRole("list", { name: "Not provable reasons" });
+  const items = within(reasons).getAllByRole("listitem");
+  expect(items.map(item => item.getAttribute("data-reason-group"))).toEqual(["identity", "install-on"]);
+  expect(items[0]).toHaveTextContent(/^1Identity or dynamic objects/); expect(items[0]).toHaveTextContent("not a rule problem");
+  expect(items[1]).toHaveAttribute("title", "unresolved install-on selector");
+  // The class chip and the row say "not provable" in words beside the UNKNOWN, with the group under the raw reason.
+  expect(screen.getByText("not provable (UNKNOWN): 845")).toBeInTheDocument();
+  expect(screen.getByText("Identity or dynamic objects", { selector: "[data-reason-group]" })).toBeInTheDocument();
+  expect(screen.getByText("Not shadowed (proven)")).toBeInTheDocument();
+  expect(screen.getAllByText(/Collected: 2026-10-09 15:00 GMT\+3$/).length).toBe(3);
+});
+it("says the proven count is UNKNOWN without a rule total, and tells where the reasons are when none is on the page", async () => {
+  vi.stubGlobal("fetch", vi.fn(async () => response({ ...page, total: 250, counts: { ...page.counts, unknown: 12 } })));
+  mount(<PolicyHygieneTab openObject={vi.fn()} policy="p1" openRule={vi.fn()} />);
+  const coverage = await screen.findByRole("region", { name: "Analysis coverage" });
+  expect(within(coverage).getByText("Analysed: proven count UNKNOWN · 12 not provable (rule total not recorded)")).toBeInTheDocument();
+  expect(within(coverage).queryByRole("list", { name: "Not provable reasons" })).toBeNull();
+  expect(within(coverage).getByText(/No not-provable rule is on this page; filter by "not provable" to see why the 12 could not be decided\./)).toBeInTheDocument();
 });
 it("handles failed reads and retries and requests masked CSV with active filters", async () => {
   const fetcher = vi.fn().mockResolvedValueOnce(new Response("{}", { status: 500 })).mockImplementation(async (url: string) => url.includes(".csv") ? new Response("Rule,Class\nRULE-BRAVO-02,conflict") : response(page));

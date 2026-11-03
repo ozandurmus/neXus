@@ -4,12 +4,14 @@ import { Box, Button, Tabs, Tab, Checkbox, Chip, Drawer, IconButton, InputAdornm
 import { ScreenRoot, ScreenHeader, EmptyPanel } from "../shell/ScreenLayout";
 import { Ts, VendorBadge } from "../shell/States";
 import { Icon } from "../shell/Icon";
-import { relativeAge, DISPLAY_TZ } from "../shell/time";
+import { relativeAge } from "../shell/time";
 import { JobTranscriptDrawer } from "./JobTranscriptDrawer";
 import { m3 } from "../theme/m3Theme";
 import { cancelJob, listPolicies, getPolicyCollectionStatus, type PolicyCollectionMode, type PolicyCollectionStatus, listPolicySources, collectPolicies, type PolicyCollectionSource, getPolicy, getPolicyObject, type PolicyTarget, type PolicyMetadata, type PolicyObject, type PolicyRule, type PolicyCell, type PolicyPage, getPolicyRule, type PolicyRuleDetail } from "../auth/adminApi";
 
-import { PolicyRuleTable, RuleDetailPanel, RuleHistory, scheduleLabel, sectionLabel, reportPolicyLoadError } from "./PolicyRuleViewer";
+import { PolicyRuleTable, RuleDetailPanel, RuleHistory, SnapshotFreshnessChip, freshnessColor, scheduleLabel, sectionLabel, snapshotFreshness, reportPolicyLoadError } from "./PolicyRuleViewer";
+import { syncStatusWords } from "./policyFirewalls";
+export { collectedLabel, snapshotFreshness } from "./PolicyRuleViewer";
 import { PaginationFooter } from "../shell/DataTable";
 
 /**
@@ -55,13 +57,6 @@ export function collectionOutcome(job: PolicyCollectionStatus) {
   if ((job.gapUnits ?? 0) > 0 || job.outcome === "PARTIAL" || job.reason?.startsWith("PARTIAL_SNAPSHOT")) return "PARTIAL";
   if (job.state === "COMPLETED") return "COMPLETED";
   return "UNKNOWN";
-}
-export function collectedLabel(at: string, now: Date) {
-  const date = new Date(at);
-  if (!Number.isFinite(date.getTime())) return "Collection time unknown";
-  const day = new Intl.DateTimeFormat("en-GB", { timeZone: DISPLAY_TZ, day: "numeric", month: "short", year: "numeric" }).format(date);
-  const time = new Intl.DateTimeFormat("en-GB", { timeZone: DISPLAY_TZ, hour: "2-digit", minute: "2-digit", hour12: false }).format(date);
-  return `Collected ${day}, ${time} · ${relativeAge(at, now)}`;
 }
 export function sourceStatusLabel(job: PolicyCollectionStatus, now: Date) {
   const age = relativeAge(job.collectedAt, now);
@@ -240,17 +235,21 @@ export const POLICY_TAB_GROUPS: ReadonlyArray<{ readonly group: string; readonly
 ];
 
 /**
- * The one-line headline under the title (review §4.3): `59 containers · 2 sources · 69,000 rules · collected 4 h ago`,
- * from the catalog the screen already loads. The rule total is UNKNOWN while any stored policy has no recorded count;
- * the age is UNKNOWN when nothing carries a collection time. Nothing here is invented.
+ * The one-line headline under the title (review §4.3): `59 containers · 2 sources · 69,000 rules · newest snapshot 4 h
+ * ago · oldest 29 d ago`, from the catalog the screen already loads. The rule total is UNKNOWN while any stored policy
+ * has no recorded count; the age is UNKNOWN when nothing carries a collection time. The newest snapshot's age alone
+ * would hide the stale ones, so the oldest is named whenever it is more than a day behind. Nothing here is invented.
  */
 export function policyHeadline(input: { readonly catalog: readonly PolicyMetadata[]; readonly sources: number; readonly loading: boolean; readonly now: Date }): string {
   if (input.loading && input.catalog.length === 0) return "Reading stored policy snapshots…";
   const containers = summarizeContainers(input.catalog);
   const rules = input.catalog.every(p => p.ruleCount !== undefined) ? input.catalog.reduce((sum, p) => sum + p.ruleCount!, 0).toLocaleString("en-US") : "UNKNOWN";
   const stamps = input.catalog.map(p => Date.parse(p.collectedAt)).filter(Number.isFinite);
-  const age = stamps.length ? relativeAge(new Date(Math.max(...stamps)).toISOString(), input.now) : "UNKNOWN";
-  return `${plural(containers.length, "container")} · ${plural(input.sources, "source")} · ${rules} rules · collected ${age}`;
+  if (!stamps.length) return `${plural(containers.length, "container")} · ${plural(input.sources, "source")} · ${rules} rules · collected UNKNOWN`;
+  const newest = Math.max(...stamps), oldest = Math.min(...stamps);
+  const age = relativeAge(new Date(newest).toISOString(), input.now);
+  const spread = newest - oldest > 86_400_000 ? ` · oldest ${relativeAge(new Date(oldest).toISOString(), input.now)}` : "";
+  return `${plural(containers.length, "container")} · ${plural(input.sources, "source")} · ${rules} rules · newest snapshot ${age}${spread}`;
 }
 /** The container table's columns and their share of the width at 1440; the two count columns keep their whole header. */
 const CONTAINER_COLUMNS: ReadonlyArray<readonly [string, string]> = [
@@ -272,6 +271,7 @@ function ContainerSummaryTable({ rows, sourceCount, now, open }: { rows: Contain
         <TableBody>
           {rows.map(row => {
             const name = displayName(row.containerName, "Policy container");
+            const fresh = snapshotFreshness(row.collectedAt, now);
             return <TableRow key={row.key} hover>
               <TableCell scope="row">{name}</TableCell>
               <TableCell>{displayName(row.sourceName, "Management server")}<Typography variant="caption" display="block" sx={{ color: m3.onSurfaceVar }}>{vendorLabel(row.vendor)}</Typography></TableCell>
@@ -279,7 +279,10 @@ function ContainerSummaryTable({ rows, sourceCount, now, open }: { rows: Contain
               <TableCell>{row.rules ?? "UNKNOWN"}</TableCell>
               <TableCell>{row.gateways.length === 0 ? "Unassigned"
                 : <Tooltip title={row.gateways.join(", ")}><span>{row.gateways.slice(0, GATEWAYS_SHOWN).join(", ")}{row.gateways.length > GATEWAYS_SHOWN ? ` +${row.gateways.length - GATEWAYS_SHOWN} more` : ""}</span></Tooltip>}</TableCell>
-              <TableCell title={row.collectedAt}>{row.collectedAt ? relativeAge(row.collectedAt, now) : "UNKNOWN"}</TableCell>
+              {/* The age in freshness ink: a snapshot the refresh has not touched for a day, or a week, is visible before it is opened. */}
+              <TableCell title={row.collectedAt ? `${row.collectedAt} · ${fresh.reason}` : undefined}>
+                <Box component="span" data-freshness={fresh.state} sx={{ color: freshnessColor(fresh.state), fontWeight: fresh.state === "old" ? 600 : undefined }}>
+                  {row.collectedAt ? relativeAge(row.collectedAt, now) : "UNKNOWN"}</Box></TableCell>
               <TableCell align="right"><Button size="small" aria-label={`Open ${name}`} onClick={() => open(row)}>Open</Button></TableCell>
             </TableRow>;
           })}
@@ -494,6 +497,11 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
     reveal(first); setSelected(first.id); setPage(0); setCollapsed(new Set());
   };
   const selectedMetadata = catalog.find(policy => policy.id === selected);
+  // The header reads the rules page's metadata when it has landed (it is the newer read) and the catalog's meanwhile.
+  const headerMetadata = selected ? (data?.metadata.id === selected ? data.metadata : selectedMetadata) : undefined;
+  const headerFreshness = headerMetadata ? snapshotFreshness(headerMetadata.collectedAt, now) : null;
+  // The hygiene coverage denominator: the catalog's recorded rule count, else the unfiltered rules total; never a filtered page total.
+  const selectedRuleCount = selectedMetadata?.ruleCount ?? (data && data.metadata.id === selected && !query && !usage ? data.total : undefined);
   const [linkedDomain] = useState(() => {
     const params = new URLSearchParams(window.location.search);
     const sourceId = params.get("source_id"), containerId = params.get("container_id");
@@ -700,6 +708,25 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
             </Select>
           </FormControl>
         </Stack>
+        {/* The snapshot line sits above the tabs so every tab (Hygiene, Lookup, Changes) is read against the same age and
+            the same targets: when it was collected, how stale that is, and which gateways the package is meant for. */}
+        {headerMetadata && <Stack component="section" aria-label="Snapshot" direction="row" flexWrap="wrap" gap={1} alignItems="center" sx={{ mb: 2 }}>
+          {data?.policyKind === "LOCAL_FIREWALL" && <Chip size="small" label="local firewall policy" />}
+          <SnapshotFreshnessChip at={headerMetadata.collectedAt} now={now} sentence={false} />
+          <Typography variant="body2">Assigned to:</Typography>
+          {headerMetadata.targets.length === 0 ? <Chip size="small" label="Unassigned" /> : headerMetadata.targets.map(t => {
+            const sync = syncStatusWords(headerMetadata.vendor, t.syncStatus);
+            return <Tooltip key={t.deviceId} title={`${t.context ? `${t.context} · ` : ""}${sync.word} · ${sync.reason}${t.serial ? ` · Serial ${t.serial}` : ""}`}>
+              <Chip size="small" variant="outlined" data-sync={sync.reported ? sync.tone : "not-reported"} label={<Stack direction="row" gap={0.75} alignItems="center"><span>{displayName(t.name, "Device")}</span>
+                {/* A filled dot is a claim the management server made; a hollow one marks that no claim was made (CP). */}
+                <Box component="span" aria-label={sync.word} sx={{ width: 6, height: 6, borderRadius: "50%", boxSizing: "border-box",
+                  bgcolor: !sync.reported ? "transparent" : sync.tone === "good" ? m3.success : sync.tone === "warn" ? m3.warning : m3.outline, border: sync.reported ? undefined : `1px solid ${m3.outline}` }} /></Stack>} /></Tooltip>;
+          })}
+          <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>{data?.policyKind === "LOCAL_FIREWALL" ? "Stored local configuration; runtime enforcement is not inferred." : "Management intent; installation and runtime enforcement are not inferred."}</Typography>
+          {/* The warning sentence takes its own full line under the chips so it reads as one statement, not as another chip. */}
+          {headerFreshness && (headerFreshness.state === "stale" || headerFreshness.state === "old")
+            && <Typography role="status" variant="caption" sx={{ width: "100%", color: freshnessColor(headerFreshness.state), fontWeight: 500 }}>{headerFreshness.reason}</Typography>}
+        </Stack>}
         {collectionStatus && <Typography role="status" sx={{ mb: 1 }}>{collectionStatus}</Typography>}
         {/* Grouped tab bar (roadmap 2.5): the group word sits above the first tab of its group behind a hairline; the
             accessible name of every tab stays its own label. */}
@@ -723,7 +750,7 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
         {tab === "Changes" && <PolicyChangesTab key={revision} policies={catalog} devices={targets} openRule={(policy, rule) => void openRuleId(rule, 90, policy)} />}
         {tab === "Offline analysis" && <PolicyOfflineTab key={selected} policy={selected} openRule={id => void openRuleId(id, 90)} />}
         {tab === "Hygiene" && (selected || loadingTree || error
-          ? <PolicyHygieneTab key={`${selected}:${revision}:${hygieneClass}`} policy={selected} initialClass={hygieneClass} openRule={(id, days) => void openRuleId(id, days)} openObject={openObject} />
+          ? <PolicyHygieneTab key={`${selected}:${revision}:${hygieneClass}`} policy={selected} ruleCount={selectedRuleCount} initialClass={hygieneClass} openRule={(id, days) => void openRuleId(id, days)} openObject={openObject} />
           : <PolicyContainerPrompt tab="Hygiene" now={now} open={openContainer}
             rows={summaries.map(row => ({ ...row, containerName: displayName(row.containerName, "Policy container"), sourceName: displayName(row.sourceName, "Management server") }))} />)}
         <Box role="tabpanel" aria-label="Rules" hidden={tab !== "Rules"} sx={{ display: tab === "Rules" ? "contents" : "none" }}>
@@ -743,19 +770,10 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
               <Typography variant="body2">{treeTerm ? "Clear the search to list every stored container." : device ? "This device has no stored policy snapshot." : "Sources are listed, but nothing has been collected from them yet."}</Typography>
             </Box>)}
             {selected && !data && !error && <Typography role="status">Loading rules…</Typography>}
-            {data && <>
-              {!!data.failures?.length && <Box><Chip color="warning" label={data.failures.every(isUnknownPart) ? "Complete · some parts unknown" : "Partial snapshot · incomplete"} />
+            {data && !!data.failures?.length && <Box><Chip color="warning" label={data.failures.every(isUnknownPart) ? "Complete · some parts unknown" : "Partial snapshot · incomplete"} />
                 {data.failures.map(f => isUnknownPart(f)
                   ? <Box key={f.layerRef} role="status"><Typography variant="body2">{UNKNOWN_PART_SENTENCE}</Typography></Box>
                   : <Box key={f.layerRef} role="alert"><Typography variant="body2">{f.layerName || f.layerRef}{f.offset !== undefined ? ` · offset ${f.offset}` : ""}: {failureSentence(f.reason)}</Typography><FailureDetails reason={f.reason} allowed={canCollect} /></Box>)}</Box>}
-              <Stack direction="row" flexWrap="wrap" gap={1} alignItems="center" sx={{ mb: 1 }}>
-                {data.policyKind === "LOCAL_FIREWALL" && <Chip size="small" label="local firewall policy" />}
-                <Chip size="small" title={data.metadata.collectedAt} label={collectedLabel(data.metadata.collectedAt, now)} />
-                <Typography variant="body2">Assigned to:</Typography>
-                {data.metadata.targets.length === 0 ? <Chip size="small" label="Unassigned" /> : data.metadata.targets.map(t => <Tooltip key={t.deviceId} title={`${t.context ? `${t.context} · ` : ""}${t.syncStatus}${t.serial ? ` · Serial ${t.serial}` : ""}`}><Chip size="small" variant="outlined" label={<Stack direction="row" gap={0.75} alignItems="center"><span>{displayName(t.name, "Device")}</span><Box component="span" aria-label={t.syncStatus} sx={{ width: 6, height: 6, borderRadius: "50%", bgcolor: t.syncStatus === "IN_SYNC" ? m3.success : t.syncStatus === "OUT_OF_SYNC" ? m3.warning : m3.outline }} /></Stack>} /></Tooltip>)}
-                <Typography variant="caption" sx={{ color: m3.onSurfaceVar }}>{data.policyKind === "LOCAL_FIREWALL" ? "Stored local configuration; runtime enforcement is not inferred." : "Management intent; installation and runtime enforcement are not inferred."}</Typography>
-              </Stack>
-            </>}
             {selected && <Stack direction="row" flexWrap="wrap" gap={1} alignItems="flex-start">
               <TextField select label="Usage filter" size="small" value={usage} sx={{ minWidth: 200, flex: "none" }} onChange={e => { setUsage(e.target.value as UsagePreset); setPage(0); }}>
                 <MenuItem value="">All usage evidence</MenuItem><MenuItem value="unused90">Unused 90 d</MenuItem><MenuItem value="inactive">Unused N days</MenuItem>
