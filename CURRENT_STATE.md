@@ -34,7 +34,7 @@ no real-environment acceptance. Authority:
 Same period, one line each (detail in `project/build_history.json`):
 
 - `NXS-LOCAL-0373` AUTOMATED_VALIDATED — policy completeness (V163), CP hit dates, Policy Changes speed, rule view redesign, permissiveness scoring ([decision](docs/design/PO_DECISION_RECORD_2026_10_20_POLICY_PERMISSIVENESS_SCORING.md)).
-- `NXS-LOCAL-0372` AUTOMATED_VALIDATED — UI design language and Fable D1/D2/P2/P3 ([doc](docs/design/UI_DESIGN_LANGUAGE.md)).
+- `NXS-LOCAL-0372` AUTOMATED_VALIDATED — UI design language and the 2026-10-18 product review items D1/D2/P2/P3 ([doc](docs/design/UI_DESIGN_LANGUAGE.md)).
 - `NXS-LOCAL-0371` AUTOMATED_VALIDATED — Packet Analysis real engine, first production run fixed ([decision](docs/design/PO_DECISION_RECORD_2026_10_15_PACKETBREAKER_PORTED_INTO_NEXUS.md)).
 - `NXS-LOCAL-0370` — last build before the September–October period record; the interval between it and 0371 has no per-build record.
 

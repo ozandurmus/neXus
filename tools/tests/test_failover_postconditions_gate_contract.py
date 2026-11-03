@@ -7,6 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 MIGRATION = ROOT / "ui2/service/src/main/resources/db/migration/V139__failover_postconditions.sql"
 FIXTURE = ROOT / "ui2/capability-registry/src/main/resources/capabilities/gate_registry_fixture.yaml"
+MIGRATIONS = ROOT / "ui2/service/src/main/resources/db/migration"
 WORKER = ROOT / "ui2/worker/src/main/java/com/securityexpert/nexus/ui2/worker/failover"
 
 
@@ -21,6 +22,39 @@ def rows():
     return result
 
 
+#: Gates whose V139 phase/frequency amendment was later withdrawn by a ratified
+#: PO decision: gate id -> the migration that blocks the row. The fixture then
+#: carries the withdrawal values, so the V139 field match does not apply; the
+#: test instead pins that the row is BLOCKED and the named migration retires it.
+RETIRED_AFTER_V139 = {
+    "pan_inventory_show_system_info": "V171__pan_firewall_command_retirement.sql",
+}
+
+
+def later_appended_text(gate, field):
+    """Text that migrations after V139 append to `field` of `gate`.
+
+    Gate-registry migrations are append-only and the fixture mirrors the
+    fully migrated registry, so a later ratified amendment (for example V170's
+    resumed-return allowance on cp_inventory_cphaprob_stat) extends the V139
+    value without replacing it. Only `field = field || '...'` statements
+    scoped to exactly this gate count; V139's own value must still be a
+    verbatim prefix of the fixture value.
+    """
+    appended = ""
+    pattern = re.compile(
+        r"UPDATE gate_registry SET " + re.escape(field) + r" = " + re.escape(field)
+        + r"\s*\|\|\s*'((?:''|[^'])*)'\s*WHERE gate_id = '" + re.escape(gate) + "'",
+        re.S,
+    )
+    for path in sorted(MIGRATIONS.glob("V*__*.sql"), key=lambda p: int(p.name[1:].split("__")[0])):
+        if int(path.name[1:].split("__")[0]) <= 139:
+            continue
+        for match in pattern.finditer(path.read_text()):
+            appended += match.group(1).replace("''", "'")
+    return appended
+
+
 class FailoverPostconditionsGateContractTest(unittest.TestCase):
     def test_every_amended_field_matches_fixture_without_new_commands(self):
         sql = MIGRATION.read_text()
@@ -32,8 +66,19 @@ class FailoverPostconditionsGateContractTest(unittest.TestCase):
             fields = dict(re.findall(r"(\w+) = '((?:''|[^'])*)'", assignments))
             for gate in re.findall(r"'([^']+)'", ids):
                 amended.add(gate)
+                if gate in RETIRED_AFTER_V139:
+                    retiring = (MIGRATIONS / RETIRED_AFTER_V139[gate]).read_text()
+                    self.assertIn(f"WHERE gate_id = '{gate}'", retiring)
+                    self.assertIn("sign_off_state = 'BLOCKED'", retiring)
+                    self.assertEqual(fixture[gate]["sign_off_state"], "BLOCKED", gate)
                 for field, value in fields.items():
-                    self.assertEqual(json.loads(fixture[gate][field]), value.replace("''", "'"), (gate, field))
+                    if gate in RETIRED_AFTER_V139:
+                        continue
+                    self.assertEqual(
+                        json.loads(fixture[gate][field]),
+                        value.replace("''", "'") + later_appended_text(gate, field),
+                        (gate, field),
+                    )
                 self.assertEqual(fixture[gate]["timeout_s"], "30")
                 self.assertEqual(fixture[gate]["retry_rule"].strip("\"'"), "none")
         self.assertTrue({"cp_failover_traffic", "cp_failover_traffic_vsid", "cp_policy_install_cpstat",
