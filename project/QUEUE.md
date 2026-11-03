@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py tools/delivery/project_queue.py render)
-Build: NXS-LOCAL-0374 · Track: PCP.x · Generated: 2026-11-03T07:05:28Z
+Build: NXS-LOCAL-0374 · Track: PCP.x · Generated: 2026-11-03T16:54:19Z
 
 ## Now
 - NXS-LOCAL-0374 — System logs phase B: collectors, masked view, settings route, Spike Detective data (in_progress)
@@ -39,6 +39,7 @@ Build: NXS-LOCAL-0374 · Track: PCP.x · Generated: 2026-11-03T07:05:28Z
 - P1/planned aiview_masking_leak_audit
 - P1/planned asa_fortinet_cluster_view
 - P1/planned asa_fortinet_configuration_plane
+- P1/planned audit_tier2_redaction_unsalted_sha256
 - P1/planned backup_plane_separate_service
 - P1/planned c7_c2_contract_shape_guard
 - P1/planned cluster_diff_member_specific_tuning
@@ -66,6 +67,7 @@ Build: NXS-LOCAL-0374 · Track: PCP.x · Generated: 2026-11-03T07:05:28Z
 - P1/planned masking_residual_gaps_system_log_and_sanitizer
 - P1/planned pan_active_active_not_excluded_as_failover_unit
 - P1/planned pan_collection_contract_from_measurement
+- P1/planned path_analysis_a0_freeze
 - P1/planned platform_identity_facts_on_configuration
 - P1/planned radware_defensepro_getcfg_measurement
 - P1/planned relay_id_reuse_when_record_uncommitted
@@ -105,6 +107,7 @@ Build: NXS-LOCAL-0374 · Track: PCP.x · Generated: 2026-11-03T07:05:28Z
 - P2/planned antigravity_provider_adapter
 - P2/planned auth_radius_mechanism
 - P2/planned auth_tacacs_mechanism
+- P2/planned authz_decisions_retention
 - P2/planned backup_remaining_vendors
 - P2/planned cp_aiview_readiness_script_client_error
 - P2/planned cp_backup_sftp_fetch_failed_on_cluster_member
@@ -126,6 +129,7 @@ Build: NXS-LOCAL-0374 · Track: PCP.x · Generated: 2026-11-03T07:05:28Z
 - P2/planned pan_ha_serial_identity_hardening
 - P2/planned pan_keygen_no_usable_key_under_load
 - P2/planned pan_object_precedence_for_permissiveness
+- P2/planned policy_read_offload_pod
 - P2/planned privacy_baseline_tests_not_idempotent_runtime_trust_material
 - P2/planned project_plan_crypto_placeholder_sentinel_lost
 - P2/planned radware_cc_identity_and_defensepro_reads
@@ -142,6 +146,7 @@ Build: NXS-LOCAL-0374 · Track: PCP.x · Generated: 2026-11-03T07:05:28Z
 - P3/planned old_export_copies_disposal
 - P3/planned pytest_xdist_privacy_scan_scratch_file_race
 - P3/planned run_build_sets_configuration_image
+- P3/planned ship_tree_bound_security_scan
 - P3/planned ui2_select_all
 - P3/planned waf_fortiweb_capability_scope_and_measurement
 - P3/planned workbench_borrow_from_agent_orchestration_tools
