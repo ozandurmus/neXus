@@ -108,6 +108,7 @@
     "cp_aiview_readiness_script_client_error": "agent_operations",
     "pan_object_precedence_for_permissiveness": "java_feature",
     "spike_data_cap_not_enforced_by_pruner": "java_debt",
+    "diagnostic_mask_overreach": "java_debt",
     "failover_pilot_preparation": "java_feature",
     "manifest_drift_service_worker_configuration_policy": "agent_operations",
     "data_sanitizer": "java_feature",
