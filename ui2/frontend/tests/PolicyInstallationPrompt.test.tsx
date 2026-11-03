@@ -43,6 +43,9 @@ it("prompts for a container and lists every stored container with its installati
   expect(within(rows[0]).getByText("FW-SYNTH-01, FW-SYNTH-02")).toBeInTheDocument();
   expect(within(rows[1]).getByText("Unassigned")).toBeInTheDocument();
   expect(screen.getByText("2 stored containers.")).toBeInTheDocument();
+  // Last collected is inked by age like the Rules tab's container table: the 2026-10-05 collection is weeks old, never read as current.
+  expect(rows[0].querySelector("[data-freshness]")).toHaveAttribute("data-freshness", "old");
+  expect(getComputedStyle(rows[0].querySelector("[data-freshness]")!).fontWeight).toBe("600");
 });
 
 it("opens a container from the list into that container's installation table, in the same tab", async () => {

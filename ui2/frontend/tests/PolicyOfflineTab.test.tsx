@@ -82,6 +82,22 @@ it("invalid mapping stays disabled and failed uploads never show a fabricated re
   fireEvent.click(screen.getByLabelText(/I confirm the mapping/)); fireEvent.click(screen.getByRole("button", { name: "Upload and analyze" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("CSV_ROW_LIMIT"); expect(screen.queryByText("Sample summary")).not.toBeInTheDocument();
 });
+it("reads the bulkhead's 503 POLICY_BUSY as a wait on upload and on the stored list, never as a rejected CSV", async () => {
+  const busy = { status: 503, body: { error: "POLICY_BUSY" } };
+  vi.mocked(listOfflineAnalyses).mockResolvedValue({ analyses: [], canManage: true });
+  vi.mocked(uploadOfflineAnalysis).mockRejectedValue(busy);
+  const view = render(<PolicyOfflineTab policy="p1" openRule={vi.fn()} />);
+  const input = await screen.findByLabelText("SIEM CSV file");
+  fireEvent.change(input, { target: { files: [file("src,dst,dstport,proto\n192.0.2.8,198.51.100.8,443,tcp\n")] } });
+  await waitFor(() => expect(screen.getByLabelText(/I confirm the mapping/)).toBeEnabled());
+  fireEvent.click(screen.getByLabelText(/I confirm the mapping/)); fireEvent.click(screen.getByRole("button", { name: "Upload and analyze" }));
+  const alert = await screen.findByRole("alert");
+  expect(alert).toHaveTextContent("Policy analysis is busy; retry in a few seconds."); expect(alert).not.toHaveTextContent(/rejected/);
+  view.unmount();
+  vi.mocked(listOfflineAnalyses).mockRejectedValue(busy);
+  render(<PolicyOfflineTab policy="p1" openRule={vi.fn()} />);
+  expect(await screen.findByRole("alert")).toHaveTextContent("Policy analysis is busy; retry in a few seconds.");
+});
 it("viewer gets a disabled dropzone that says Role: not permitted and counts the stored analyses (UI review 2026-10-18, P0-4B)", async () => {
   render(<PolicyOfflineTab policy="p1" openRule={vi.fn()} />);
   const zone = await screen.findByRole("group", { name: "SIEM CSV upload" });

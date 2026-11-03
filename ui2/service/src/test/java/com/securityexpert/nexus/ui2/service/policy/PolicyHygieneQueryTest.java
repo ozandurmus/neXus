@@ -28,6 +28,45 @@ class PolicyHygieneQueryTest {
         assertEquals(0, query.hygiene(snapshot, 0, "shadowed", "HIGH", 90).body().get("total"));
         assertEquals(0, ((List<?>) query.hygiene(snapshot, Integer.MAX_VALUE, "", "", 90).body().get("rows")).size());
     }
+    @Test void defaultViewListsFindingsOnlyAndCoverageSplitsShadowFromHitCountersPolicyWide() throws Exception {
+        // r1 resolves cleanly (NOT_SHADOWED, not broad) and has no hit counters: its only result is "unknown".
+        // r2 is any/any allow: a broad finding plus the same missing counters. Neither has a shadow.
+        var base = PolicyHygieneTest.rule("r1", "host", "port", "allow", true);
+        var clean = new Rule(base.id(), base.uuid(), 1, base.name(), true, base.source(), PolicyHygieneTest.cell("host"), base.service(), base.application(), base.action(), base.log(), "", base.extras());
+        var broad = PolicyHygieneTest.rule("r2", "any", "any", "allow", true);
+        var snapshot = PolicyHygieneTest.snapshot(List.of(clean, broad), PolicyHygieneTest.objects());
+        var page = mapper.valueToTree(query.hygiene(snapshot, 0, "", "", 90).body());
+        assertEquals(1, page.path("total").asInt(), "a rule whose only result is unknown is not a finding in the default view");
+        assertEquals("r2", page.path("rows").get(0).path("ruleId").asText());
+        assertEquals(2, page.path("counts").path("unknown").asInt(), "the unknown chip still counts every such rule");
+        assertEquals(2, mapper.valueToTree(query.hygiene(snapshot, 0, "unknown", "", 90).body()).path("total").asInt());
+        assertEquals(2, mapper.valueToTree(query.hygiene(snapshot, 0, "", "LOW", 90).body()).path("counts").path("unknown").asInt());
+        assertEquals(1, mapper.valueToTree(query.hygiene(snapshot, 0, "", "HIGH", 90).body()).path("total").asInt(), "r2's any/any accept is a HIGH broad finding");
+        assertEquals(0, mapper.valueToTree(query.hygiene(snapshot, 0, "", "LOW", 90).body()).path("total").asInt(), "a severity filter alone never admits unknown-only rows");
+        var coverage = page.path("coverage");
+        assertEquals(2, coverage.path("rules").asInt());
+        assertEquals(2, coverage.path("shadowProven").asInt(), "missing hit counters never make a decided shadow result unproven");
+        assertEquals(0, coverage.path("shadowUnknown").asInt());
+        assertEquals(0, coverage.path("hitsCollected").asInt()); assertEquals(2, coverage.path("hitsMissing").asInt());
+        var reasons = page.path("unknownReasons");
+        assertEquals(1, reasons.size());
+        assertEquals("Hit counts were not collected or are invalid.", reasons.get(0).path("evidence").asText());
+        assertEquals(2, reasons.get(0).path("rules").asInt());
+        // With counters stored the hit coverage flips and the reason list empties, the shadow coverage unchanged.
+        var counted = PolicyHygieneTest.snapshot(List.of(clean.withHitCounts(new HitCounts(3L, null, PolicyHygieneTest.NOW.minusSeconds(3600).toString(), "mds", PolicyHygieneTest.NOW.toString(), "low", List.of())),
+            broad.withHitCounts(new HitCounts(0L, null, null, "mds", PolicyHygieneTest.NOW.toString(), "zero", List.of()))), PolicyHygieneTest.objects());
+        var countedPage = mapper.valueToTree(query.hygiene(counted, 0, "", "", 90).body());
+        assertEquals(2, countedPage.path("coverage").path("hitsCollected").asInt()); assertEquals(0, countedPage.path("coverage").path("hitsMissing").asInt());
+        assertEquals(2, countedPage.path("coverage").path("shadowProven").asInt());
+        assertEquals(0, countedPage.path("unknownReasons").size());
+        // The AIView projection keeps the numbers and the fixed evidence text; a foreign reason string is withheld.
+        var masked = mapper.valueToTree(PolicyPrivacy.mask(query.hygiene(snapshot, 0, "", "", 90).body(), "", names, ips));
+        assertEquals(2, masked.path("coverage").path("shadowProven").asInt()); assertEquals(2, masked.path("coverage").path("hitsMissing").asInt());
+        assertEquals("Hit counts were not collected or are invalid.", masked.path("unknownReasons").get(0).path("evidence").asText());
+        assertEquals(2, masked.path("unknownReasons").get(0).path("rules").asInt());
+        var foreign = mapper.valueToTree(PolicyPrivacy.mask(Map.of("unknownReasons", List.of(Map.of("evidence", "Synthetic private 192.0.2.8", "rules", 1))), "", names, ips));
+        assertEquals("Evidence withheld in AIView.", foreign.path("unknownReasons").get(0).path("evidence").asText());
+    }
     @Test void cachedSnapshotReplacementAndThresholdChangesInvalidateResults() {
         var r = PolicyHygieneTest.rule("r1", "host", "port", "allow", true);
         var first = PolicyHygieneTest.snapshot(List.of(r), PolicyHygieneTest.objects());

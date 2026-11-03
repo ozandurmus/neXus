@@ -4,6 +4,7 @@ import { deleteOfflineAnalysis, getOfflineAnalysis, listOfflineAnalyses, uploadO
 import { detectMapping, fields, parsePreview, required, type CsvField } from "./offlineCsv";
 import { PLANE_ADMIN, ROLE_LOCK_LABEL, useRoleAllows } from "../shell/actionAccess";
 import { plural } from "../shell/plural";
+import { isPolicyBusy, policyFailureText, POLICY_BUSY_MESSAGE } from "./PolicyRuleViewer";
 
 const labels: Record<CsvField, string> = { source: "Source IP", destination: "Destination IP", port: "Destination port", protocol: "Protocol",
   time: "Time", action: "Action", sourceZone: "Source zone", destinationZone: "Destination zone", rule: "SIEM rule ID/name", count: "Count" };
@@ -29,7 +30,7 @@ export function PolicyOfflineTab({ policy, openRule }: { policy: string; openRul
     let active = true; setLoading(true); setCanManage(false); setError("");
     if (!policy) { setLoading(false); return; }
     listOfflineAnalyses(policy, page).then(data => { if (active) { setAnalyses(data.analyses); setCanManage(data.canManage); } })
-      .catch(() => { if (active) setError("Stored analyses could not be loaded."); }).finally(() => { if (active) setLoading(false); });
+      .catch(failure => { if (active) setError(policyFailureText(failure, "Stored analyses could not be loaded.")); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [policy, page, refresh]);
   const selectFile = async (selected?: File) => {
@@ -45,7 +46,7 @@ export function PolicyOfflineTab({ policy, openRule }: { policy: string; openRul
   const show = async (id: string) => {
     const request = ++resultRequest.current; setError(""); setResult(null);
     try { const data = await getOfflineAnalysis(id); if (mounted.current && resultRequest.current === request) { setResult(data); setRulePage(0); } }
-    catch { if (mounted.current && resultRequest.current === request) setError("Analysis could not be loaded."); }
+    catch (failure) { if (mounted.current && resultRequest.current === request) setError(policyFailureText(failure, "Analysis could not be loaded.")); }
   };
   const submit = async () => {
     if (!file || !confirmed || inFlight.current) return;
@@ -56,7 +57,8 @@ export function PolicyOfflineTab({ policy, openRule }: { policy: string; openRul
     } catch (failure) {
       if (mounted.current) {
         const code = (failure as { status?: number }).status;
-        setError(code === 403 ? "Administrator permission is required." : code === 429 ? "Another analysis is running. Retry shortly."
+        // The bulkhead's wait is not a rejected CSV: the file and mapping are fine, the server is busy.
+        setError(isPolicyBusy(failure) ? POLICY_BUSY_MESSAGE : code === 403 ? "Administrator permission is required." : code === 429 ? "Another analysis is running. Retry shortly."
           : code === 0 ? "The request timed out. Refresh the stored list before retrying; the server may have completed the analysis."
           : `Upload rejected. ${(failure as { body?: { error?: string } }).body?.error ?? "Check the CSV and column mapping."}`);
       }
@@ -66,7 +68,7 @@ export function PolicyOfflineTab({ policy, openRule }: { policy: string; openRul
     if (!result || inFlight.current) return;
     inFlight.current = true; setBusy(true); setError("");
     try { await deleteOfflineAnalysis(result.id); if (mounted.current) { setResult(null); setRefresh(r => r + 1); } }
-    catch { if (mounted.current) setError("Analysis could not be deleted."); }
+    catch (failure) { if (mounted.current) setError(policyFailureText(failure, "Analysis could not be deleted.")); }
     finally { inFlight.current = false; if (mounted.current) setBusy(false); }
   };
   const exportCsv = () => {

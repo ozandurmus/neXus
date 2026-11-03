@@ -1,12 +1,17 @@
 import { useEffect, useState } from "react";
 import { Box, Button, Chip, Drawer, MenuItem, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Tooltip, Typography } from "@mui/material";
 import { getPolicyObjects, getPolicyUsage, getPolicyInstallations, type PolicyInventoryObject, type PolicyMetadata, type PolicyObjectPage, type PolicyInstallationPage, type PolicyUsage } from "../auth/adminApi";
-import { scheduleLabel, reportPolicyLoadError } from "./PolicyRuleViewer";
+import { scheduleLabel, reportPolicyLoadError, policyFailureText } from "./PolicyRuleViewer";
 import { statusWord } from "../shell/presenters";
 
 const objectTypes = ["host", "network", "range", "group", "service", "service-group", "time", "access-role", "dynamic", "dns-domain", "zone"];
 const hygieneFilters = { "": "All objects", unused: "Unused", duplicates: "Duplicates", empty: "Empty groups", single: "Single-member groups" };
 const truth = (value: boolean | null) => value == null ? "UNKNOWN" : value ? "Yes" : "No";
+/** Why a reported-installed cell is UNKNOWN: Check Point makes no installation claim the product can prove; elsewhere the server reported none. */
+export function installedUnknownReason(vendor: string | null | undefined) {
+  return vendor === "CP" ? "Installation state not reported by Check Point; this is not a fault of the target. Targets are package intent."
+    : "The management server did not report whether this package is installed on the target.";
+}
 type UsageEvidence = Pick<PolicyInventoryObject, "ruleCount" | "groupCount" | "usageComplete" | "usageReasons">;
 /** A count is only exact when the server proved it; a missing flag fails closed to UNKNOWN / lower bound. */
 export function whereUsedLabel(usage: UsageEvidence) {
@@ -28,7 +33,7 @@ export function PolicyDomainTab({ tab, metadata, policies }: { tab: "Objects" | 
   const [type, setType] = useState(""), [hygiene, setHygiene] = useState(""), [policy, setPolicy] = useState("");
   const [data, setData] = useState<PolicyObjectPage | PolicyInstallationPage | null>(null);
   const [error, setError] = useState(""), [retry, setRetry] = useState(0);
-  const [uid, setUid] = useState(""), [usagePage, setUsagePage] = useState(0), [usage, setUsage] = useState<PolicyUsage | null>(null), [usageError, setUsageError] = useState(false);
+  const [uid, setUid] = useState(""), [usagePage, setUsagePage] = useState(0), [usage, setUsage] = useState<PolicyUsage | null>(null), [usageError, setUsageError] = useState("");
   useEffect(() => {
     const timer = window.setTimeout(() => { setQuery(search); setPage(0); }, 250);
     return () => window.clearTimeout(timer);
@@ -40,16 +45,16 @@ export function PolicyDomainTab({ tab, metadata, policies }: { tab: "Objects" | 
     request.then(result => {
       if (!result || !("objects" in result ? Array.isArray(result.objects) : Array.isArray(result.installations)) || !Array.isArray(result.types)) throw new Error("Invalid object response");
       if (active) setData(result);
-    }).catch(failure => { if (active) { reportPolicyLoadError("inventory", failure); setError(`${tab} could not be loaded.`); } });
+    }).catch(failure => { if (active) { reportPolicyLoadError("inventory", failure); setError(policyFailureText(failure, `${tab} could not be loaded.`)); } });
     return () => { active = false; };
   }, [tab, metadata.sourceId, metadata.containerId, page, query, type, hygiene, policy, retry]);
   useEffect(() => {
     if (!uid) return;
-    let active = true; setUsage(null); setUsageError(false);
+    let active = true; setUsage(null); setUsageError("");
     getPolicyUsage(metadata.sourceId, metadata.containerId, uid, usagePage).then(result => {
       if (!Array.isArray(result.rules) || !Array.isArray(result.groups)) throw new Error("Invalid object response");
       if (active) setUsage(result);
-    }).catch(failure => { if (active) { reportPolicyLoadError("usage", failure); setUsageError(true); } });
+    }).catch(failure => { if (active) { reportPolicyLoadError("usage", failure); setUsageError(policyFailureText(failure, "Object usage could not be loaded.")); } });
     return () => { active = false; };
   }, [metadata.sourceId, metadata.containerId, uid, usagePage]);
   const duplicates = data && "objects" in data ? [...new Set(data.objects.map(o => o.duplicateId).filter(Boolean))] : [];
@@ -97,7 +102,9 @@ export function PolicyDomainTab({ tab, metadata, policies }: { tab: "Objects" | 
           </TableRow>) : data.installations.map(row => <TableRow key={`${row.policyId}:${row.id}`}>
             <TableCell>{row.policyName}</TableCell><TableCell>{row.deviceId ? <Button size="small" href={`/?screen=inventory&device_id=${encodeURIComponent(row.deviceId)}`}>{row.name}</Button>
               : row.allTargets && !row.name ? "ALL" : row.name || "No observed target"}</TableCell>
-            <TableCell>{row.allTargets ? "ALL" : truth(row.targeted)}</TableCell><TableCell>{truth(row.installed)}</TableCell>
+            <TableCell>{row.allTargets ? "ALL" : truth(row.targeted)}</TableCell>
+            {/* A bare UNKNOWN reads as a fault; the hover says whose silence it is, as the header's sync dot does. */}
+            <TableCell>{row.installed == null ? <Tooltip describeChild title={installedUnknownReason(metadata.vendor)}><span>UNKNOWN</span></Tooltip> : truth(row.installed)}</TableCell>
           </TableRow>)}</TableBody>
         </Table></Box>
         {data.total === 0 && <Typography role="status" sx={{ py: 2 }}>No matching {tab.toLowerCase()}.</Typography>}
@@ -106,7 +113,7 @@ export function PolicyDomainTab({ tab, metadata, policies }: { tab: "Objects" | 
     <Drawer anchor="right" open={!!uid} onClose={() => setUid("")}>
       <Box role="dialog" aria-label="Object usage" sx={{ width: { xs: "90vw", sm: 640 }, p: 3 }}>
         <Button onClick={() => setUid("")}>Close</Button>
-        {usageError ? <Typography role="alert">Object usage could not be loaded.</Typography> : !usage ? <Typography role="status">Loading usage…</Typography> : <>
+        {usageError ? <Typography role="alert">{usageError}</Typography> : !usage ? <Typography role="status">Loading usage…</Typography> : <>
           <Typography variant="h6">{usage.object.name}</Typography>
           <Typography variant="caption">Includes rule references through groups. Group references are direct memberships.</Typography>
           <Typography role="status" sx={{ mt: 1 }}>Where used: {whereUsedLabel(usage)}</Typography>

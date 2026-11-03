@@ -601,21 +601,49 @@ public final class PolicyQueryService {
         }
         return Optional.empty();
     }
+    /** The {@code unknown} evidence {@link PolicyHygiene} gives a rule whose hit counters were not stored at all (a collection gap, not an analysis limit). */
+    static final Set<String> HITS_MISSING_EVIDENCE = Set.of("Hit counts were not collected or are invalid.", "Hit counts are missing for a target.");
+    private static boolean unknownFinding(PolicyHygiene.Finding f) { return f.findingClass().equals("unknown"); }
+    /**
+     * The hygiene page plus the policy-wide coverage the page cannot show: how many rules the shadow analysis decided
+     * and how many carry hit counters (two separate questions -- missing counters never make a proven shadow result
+     * "not proven"), and the not-provable reasons counted over every rule, not the 200 on the page. The default view
+     * (no class filter) lists only rules with a finding; a rule whose only result is "unknown" is a coverage gap, not
+     * a finding, and is listed under the {@code unknown} class. Everything added here is numbers or fixed evidence
+     * strings, so the AIView projection passes it unchanged.
+     */
     public PolicyResponse hygiene(PolicySnapshot snapshot, int page, String cls, String severity, int days) {
         var analysis = analysis(snapshot, days);
         Map<String, Integer> counts = new TreeMap<>(); PolicyHygiene.CLASSES.forEach(c -> counts.put(c, 0));
+        Map<String, Integer> reasons = new LinkedHashMap<>();
+        int rules = 0, shadowProven = 0, hitsCollected = 0;
         List<Map<String, Object>> rows = new ArrayList<>();
         for (var section : snapshot.sections()) for (var rule : section.rules()) {
             var assessment = analysis.rules().get(rule.id());
+            rules++;
+            if (!"UNKNOWN".equals(assessment.shadowStatus())) shadowProven++;
+            if (assessment.findings().stream().noneMatch(f -> unknownFinding(f) && HITS_MISSING_EVIDENCE.contains(f.evidence()))) hitsCollected++;
+            assessment.findings().stream().filter(PolicyQueryService::unknownFinding).map(PolicyHygiene.Finding::evidence).distinct()
+                .forEach(e -> reasons.merge(e, 1, Integer::sum));
             assessment.findings().stream().map(PolicyHygiene.Finding::findingClass).distinct().forEach(c -> counts.merge(c, 1, Integer::sum));
             var findings = assessment.findings().stream().filter(f -> cls.isEmpty() || f.findingClass().equals(cls))
                 .filter(f -> severity.isEmpty() || f.severity().equals(severity)).toList();
             if (findings.isEmpty()) continue;
+            if (cls.isEmpty() && findings.stream().allMatch(PolicyQueryService::unknownFinding)) continue;
             rows.add(Map.of("ruleId", rule.id(), "number", rule.number(), "name", rule.name(), "sectionId", section.id(),
                 "findings", findings.stream().map(this::map).toList(), "hygiene", map(assessment)));
         }
-        return new PolicyResponse(Map.of("rows", rows.stream().skip((long) page * 200).limit(200).toList(), "total", rows.size(),
-            "page", page, "pageSize", 200, "counts", counts, "budgetReached", analysis.budgetReached(), "days", days));
+        Map<String, Object> coverage = new LinkedHashMap<>();
+        coverage.put("rules", rules); coverage.put("shadowProven", shadowProven); coverage.put("shadowUnknown", rules - shadowProven);
+        coverage.put("hitsCollected", hitsCollected); coverage.put("hitsMissing", rules - hitsCollected);
+        List<Map<String, Object>> unknownReasons = reasons.entrySet().stream()
+            .sorted(Map.Entry.<String, Integer>comparingByValue().reversed().thenComparing(Map.Entry.comparingByKey()))
+            .map(e -> Map.<String, Object>of("evidence", e.getKey(), "rules", e.getValue())).toList();
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("rows", rows.stream().skip((long) page * 200).limit(200).toList()); body.put("total", rows.size());
+        body.put("page", page); body.put("pageSize", 200); body.put("counts", counts); body.put("budgetReached", analysis.budgetReached()); body.put("days", days);
+        body.put("coverage", coverage); body.put("unknownReasons", unknownReasons);
+        return new PolicyResponse(body);
     }
     public byte[] hygieneCsv(PolicySnapshot snapshot, String cls, String severity, int days, boolean masked) {
         var analysis = analysis(snapshot, days);
@@ -650,9 +678,8 @@ public final class PolicyQueryService {
         var predicate = PolicyRuleQuery.compile(query, searchable.objects(), java.time.Instant.now(), snapshot.metadata().vendor());
         Set<String> matches = searchable.sections().stream().flatMap(s -> s.rules().stream()).filter(predicate)
                 .map(Rule::id).collect(java.util.stream.Collectors.toSet());
-        var now = java.time.Instant.now();
         List<Rule> matching = snapshot.sections().stream().flatMap(s -> s.rules().stream()).filter(r -> matches.contains(r.id()))
-            .filter(r -> hitMatches(r, hitFilter, days, now)).toList();
+            .filter(r -> hitMatches(r, hitFilter, days)).toList();
         Set<String> ids = new HashSet<>();
         matching.stream().skip((long) page * 200).limit(200).forEach(r -> ids.add(r.id()));
         List<Map<String, Object>> sections = new ArrayList<>();
@@ -679,14 +706,22 @@ public final class PolicyQueryService {
         body.put("page", page); body.put("pageSize", 200); body.put("total", matching.size());
         return new PolicyResponse(body);
     }
-    static boolean hitMatches(Rule rule, String filter, int days, java.time.Instant now) {
+    /**
+     * The usage presets of the rules page. "Unused N days" is judged at the counters' collection time, exactly as
+     * {@link PolicyHygiene} judges the {@code unused} finding: a rule hit the day before a month-old collection was in
+     * use when the evidence was taken, and the wall clock since then is snapshot age, not silence. Counters without a
+     * readable collection time cannot anchor the window and never match (fail-closed).
+     */
+    static boolean hitMatches(Rule rule, String filter, int days) {
         if (filter.isEmpty()) return true;
         var hits = rule.hitCounts();
         if (hits == null) return false;
         if (Long.valueOf(0).equals(hits.hits()) && hits.firstHit() == null && hits.lastHit() == null) return true;
         if (filter.equals("never") || hits.lastHit() == null) return false;
-        try { return !java.time.Instant.parse(hits.lastHit()).isAfter(now.minus(java.time.Duration.ofDays(days))); }
-        catch (RuntimeException invalid) { return false; }
+        try {
+            var collected = java.time.Instant.parse(hits.collectedAt());
+            return !java.time.Instant.parse(hits.lastHit()).isAfter(collected.minus(java.time.Duration.ofDays(days)));
+        } catch (RuntimeException invalid) { return false; }
     }
     public PolicyResponse history(String policy, String rule, int page) {
         return new PolicyResponse(Map.of("revisions", repository.history(policy, rule, page).stream()

@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { afterEach, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
-import { PolicyDomainTab, whereUsedLabel } from "../src/screens/PolicyDomainTabs";
+import { PolicyDomainTab, installedUnknownReason, whereUsedLabel } from "../src/screens/PolicyDomainTabs";
 import type { PolicyInventoryObject, PolicyMetadata, PolicyObjectPage } from "../src/auth/adminApi";
 
 const metadata: PolicyMetadata = { id: "p1", name: "POL-ALPHA-01", sourceId: "src1", sourceName: "MGR-BRAVO-01", vendor: "PAN",
@@ -28,6 +28,22 @@ it("labels a count exact only when the server proved it", () => {
   expect(whereUsedLabel({ ruleCount: 2, groupCount: 0, usageComplete: false })).toBe("at least 2 rules · 0 groups");
 });
 
+it("reads the bulkhead's 503 POLICY_BUSY as a wait, not as a failed inventory read", async () => {
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ error: "POLICY_BUSY" }), { status: 503, headers: { "Retry-After": "5" } })));
+  mount();
+  expect(await screen.findByRole("alert")).toHaveTextContent("Policy analysis is busy; retry in a few seconds.");
+  expect(screen.getByRole("alert")).not.toHaveTextContent("could not be loaded");
+});
+it("explains an installed UNKNOWN on hover instead of a bare word, by vendor", async () => {
+  expect(installedUnknownReason("CP")).toMatch(/not reported by Check Point/); expect(installedUnknownReason("PAN")).toMatch(/did not report/);
+  const installations = { installations: [{ id: "g1", policyId: "p1", policyName: "POL-ALPHA-01", name: "FW-TANGO-04", deviceId: "d1", allTargets: false, targeted: true, installed: null }], types: [], total: 1, page: 0, pageSize: 200 };
+  vi.stubGlobal("fetch", vi.fn(async () => response(installations)));
+  render(<ThemeProvider theme={m3Theme}><PolicyDomainTab tab="Installation" metadata={{ ...metadata, vendor: "CP" }} policies={[metadata]} /></ThemeProvider>);
+  const table = await screen.findByRole("table", { name: "Policy installation" });
+  const unknown = within(table).getByText("UNKNOWN");
+  fireEvent.mouseOver(unknown);
+  expect(await screen.findByRole("tooltip")).toHaveTextContent("Installation state not reported by Check Point");
+});
 it("never shows an unproven zero and keeps hygiene and where-used consistent", async () => {
   vi.stubGlobal("fetch", vi.fn(async () => response(page)));
   mount();

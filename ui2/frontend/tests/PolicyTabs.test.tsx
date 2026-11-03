@@ -39,7 +39,7 @@ it("opens all three tabs, retains Rules and sends hit filters alongside the exis
   const tabs = within(screen.getByRole("tablist", { name: "Policy tabs" })).getAllByRole("tab");
   expect(tabs.map(t => t.getAttribute("aria-label"))).toEqual(["Rules", "Objects", "Installation", "Hygiene", "Changes", "Lookup", "Offline analysis"]);
   expect(tabs.map(t => t.getAttribute("data-tab-group"))).toEqual(["Browse", "Browse", "Browse", "Judge", "Trace", "Ask", "Ask"]);
-  fireEvent.mouseDown(screen.getByLabelText("Usage filter")); fireEvent.click(await screen.findByRole("option", { name: "Never hit" }));
+  fireEvent.mouseDown(screen.getByLabelText("Usage filter")); fireEvent.click(await screen.findByRole("option", { name: "No hits recorded (0 hits)" }));
   await waitFor(() => expect(request.mock.calls.some(([url]) => url.includes("hitFilter=never"))).toBe(true));
   fireEvent.mouseDown(screen.getByLabelText("Usage filter")); fireEvent.click(await screen.findByRole("option", { name: "Unused 90 d" }));
   await waitFor(() => expect(request.mock.calls.some(([url]) => url.includes("hitFilter=inactive&days=90"))).toBe(true));

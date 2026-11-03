@@ -9,7 +9,7 @@ import { JobTranscriptDrawer } from "./JobTranscriptDrawer";
 import { m3 } from "../theme/m3Theme";
 import { cancelJob, listPolicies, getPolicyCollectionStatus, type PolicyCollectionMode, type PolicyCollectionStatus, listPolicySources, collectPolicies, type PolicyCollectionSource, getPolicy, getPolicyObject, type PolicyTarget, type PolicyMetadata, type PolicyObject, type PolicyRule, type PolicyCell, type PolicyPage, getPolicyRule, type PolicyRuleDetail } from "../auth/adminApi";
 
-import { PolicyRuleTable, RuleDetailPanel, RuleHistory, SnapshotFreshnessChip, freshnessColor, scheduleLabel, sectionLabel, snapshotFreshness, reportPolicyLoadError } from "./PolicyRuleViewer";
+import { PolicyRuleTable, RuleDetailPanel, RuleHistory, SnapshotFreshnessChip, freshnessColor, scheduleLabel, sectionLabel, snapshotFreshness, reportPolicyLoadError, policyFailureText, type FreshnessState } from "./PolicyRuleViewer";
 import { syncStatusWords } from "./policyFirewalls";
 export { collectedLabel, snapshotFreshness } from "./PolicyRuleViewer";
 import { PaginationFooter } from "../shell/DataTable";
@@ -251,6 +251,21 @@ export function policyHeadline(input: { readonly catalog: readonly PolicyMetadat
   const spread = newest - oldest > 86_400_000 ? ` · oldest ${relativeAge(new Date(oldest).toISOString(), input.now)}` : "";
   return `${plural(containers.length, "container")} · ${plural(input.sources, "source")} · ${rules} rules · newest snapshot ${age}${spread}`;
 }
+/** The oldest collection time among the policies given (ISO), or undefined when none carries one: a container is as fresh as its stalest package. */
+export function oldestCollectedAt(policies: readonly Pick<PolicyMetadata, "collectedAt">[]): string | undefined {
+  const stamps = policies.map(p => Date.parse(p.collectedAt)).filter(Number.isFinite);
+  return stamps.length ? new Date(Math.min(...stamps)).toISOString() : undefined;
+}
+/**
+ * The tree's snapshot dot, coloured by the snapshot's age against the refresh schedule (green within a day, amber past
+ * it, red past a week, grey without a collection time) instead of a fixed green that read "current" on a month-old
+ * snapshot. The accessible name carries the state; the hover carries the collected sentence.
+ */
+export function snapshotDot(collectedAt: string | null | undefined, now: Date): { color: string; state: FreshnessState; label: string; title: string } {
+  const fresh = snapshotFreshness(collectedAt, now);
+  const word = fresh.state === "fresh" ? "current" : fresh.state === "stale" ? "older than a day" : fresh.state === "old" ? "older than a week" : "age unknown";
+  return { color: freshnessColor(fresh.state) ?? m3.success, state: fresh.state, label: `Stored snapshot · ${word}`, title: fresh.label };
+}
 /** The container table's columns and their share of the width at 1440; the two count columns keep their whole header. */
 const CONTAINER_COLUMNS: ReadonlyArray<readonly [string, string]> = [
   ["Container", "22%"], ["Source", "18%"], ["Policies", "9%"], ["Rules", "9%"], ["Assigned gateways", "22%"], ["Last collected", "12%"], ["", "8%"],
@@ -375,7 +390,7 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
         // Preserve a terminal poll over a stale projection of the SAME job only.
         return [{ ...(previous?.jobId === job.jobId && !isRunning(previous) && isRunning(job) ? previous : job), sourceId: source.sourceId }];
       }));
-    }).catch(error => { if (active) { setErrorCode(reportPolicyLoadError("snapshots", error)); setError("Policy snapshots could not be loaded."); } })
+    }).catch(error => { if (active) { setErrorCode(reportPolicyLoadError("snapshots", error)); setError(policyFailureText(error, "Policy snapshots could not be loaded.")); } })
       .finally(() => { if (active) setLoadingTree(false); });
     return () => { active = false; };
   }, [preview, revision]);
@@ -393,7 +408,7 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
       if (!result?.metadata || !Array.isArray(result.sections)) throw new Error("Empty policy response");
       if (active) setData(result);
     })
-      .catch(error => { if (active) { setErrorCode(reportPolicyLoadError("rules", error)); setError("Policy rules could not be loaded."); } });
+      .catch(error => { if (active) { setErrorCode(reportPolicyLoadError("rules", error)); setError(policyFailureText(error, "Policy rules could not be loaded.")); } });
     return () => { active = false; };
   }, [selected, page, query, revision, usage, hitDays]);
   useEffect(() => () => { drawerRequest.current++; }, []);
@@ -453,7 +468,7 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
       if (!result?.object) throw new Error("Invalid object response");
       if (request === drawerRequest.current) setDrawer({ object: result.object });
     }
-    catch (error) { if (request === drawerRequest.current) setDrawer({ error: "Object details could not be loaded.", errorCode: reportPolicyLoadError("object", error) }); }
+    catch (error) { if (request === drawerRequest.current) setDrawer({ error: policyFailureText(error, "Object details could not be loaded."), errorCode: reportPolicyLoadError("object", error) }); }
   };
   const [lookupRule, setLookupRule] = useState<{ policy: string; rule: string } | null>(null);
   const openRuleId = async (id: string, days = 90, policy = selected) => {
@@ -461,7 +476,7 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
     try {
       const detail = await getPolicyRule(policy, id, days);
       if (request === drawerRequest.current) setDrawer({ rule: detail.rule, detail });
-    } catch { if (request === drawerRequest.current) setDrawer({ error: "Rule details could not be loaded." }); }
+    } catch (error) { if (request === drawerRequest.current) setDrawer({ error: policyFailureText(error, "Rule details could not be loaded.") }); }
   };
   useEffect(() => {
     if (lookupRule && selected === lookupRule.policy) {
@@ -500,8 +515,6 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
   // The header reads the rules page's metadata when it has landed (it is the newer read) and the catalog's meanwhile.
   const headerMetadata = selected ? (data?.metadata.id === selected ? data.metadata : selectedMetadata) : undefined;
   const headerFreshness = headerMetadata ? snapshotFreshness(headerMetadata.collectedAt, now) : null;
-  // The hygiene coverage denominator: the catalog's recorded rule count, else the unfiltered rules total; never a filtered page total.
-  const selectedRuleCount = selectedMetadata?.ruleCount ?? (data && data.metadata.id === selected && !query && !usage ? data.total : undefined);
   const [linkedDomain] = useState(() => {
     const params = new URLSearchParams(window.location.search);
     const sourceId = params.get("source_id"), containerId = params.get("container_id");
@@ -666,25 +679,27 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
               const key = JSON.stringify([source.sourceId, container.containerId]);
               const children = policies.filter(p => p.containerId === container.containerId);
               const count = children.every(p => p.ruleCount !== undefined) ? children.reduce((sum, p) => sum + p.ruleCount!, 0) : undefined;
+              // The container's dot takes the age of its oldest policy snapshot: one stale package is enough to warn.
+              const containerDot = snapshotDot(oldestCollectedAt(children), now);
               return <Box key={key} role="group" aria-label="Policy container" sx={{ pl: 1, mt: 0.5, borderLeft: `1px solid ${m3.outlineVar}` }}>
                 <Stack direction="row" alignItems="center">
                   {selection(children, displayName(container.containerName, "Policy container"))}
                   <Button aria-label={displayName(container.containerName, "Policy container")} aria-expanded={expandedContainers.has(key) || !!term} onClick={() => expandContainer(key)} sx={{ textTransform: "none", textAlign: "left", justifyContent: "flex-start", minWidth: 0 }}>
                     <Chevron open={expandedContainers.has(key) || !!term} />
-                    <Box component="span" aria-label="Stored snapshot" sx={{ width: 6, height: 6, borderRadius: "50%", bgcolor: m3.success, mr: 1, flexShrink: 0 }} />
+                    <Box component="span" aria-label={containerDot.label} title={containerDot.title} data-freshness={containerDot.state} sx={{ width: 6, height: 6, borderRadius: "50%", bgcolor: containerDot.color, mr: 1, flexShrink: 0 }} />
                     {displayName(container.containerName, "Policy container")}
                   </Button>
                   {source.vendor === "CP" && collectMenu(source.sourceId, displayName(container.containerName, "Policy container"), container.containerId)}
                 </Stack>
                 <Typography variant="caption" display="block" sx={{ pl: 4 }}>{children.length} policies · {count ?? "UNKNOWN"} rules</Typography>
-                {(expandedContainers.has(key) || !!term) && children.filter(p => !term || sourceMatches || matches(container.containerName) || matches(p.name)).map(policy =>
+                {(expandedContainers.has(key) || !!term) && children.filter(p => !term || sourceMatches || matches(container.containerName) || matches(p.name)).map(policy => { const dot = snapshotDot(policy.collectedAt, now); return (
                   <Box key={policy.id} sx={{ pl: 1 }}><Stack direction="row" alignItems="center">
                     {selection([policy], displayName(policy.name, "Policy"))}
                     <Button fullWidth aria-label={`Policy ${displayName(policy.name, "Policy")}`} variant="text"
                       aria-pressed={selected === policy.id} aria-current={selected === policy.id ? "page" : undefined} sx={{ justifyContent: "flex-start", textTransform: "none", bgcolor: selected === policy.id ? m3.scHigh : undefined, boxShadow: "none", minWidth: 0 }}
                       onClick={() => { setSelected(policy.id); setPage(0); setCollapsed(new Set()); }}>
-                      <Box component="span" aria-label="Stored snapshot" sx={{ width: 6, height: 6, borderRadius: "50%", bgcolor: m3.success, mr: 1, flexShrink: 0 }} />{displayName(policy.name, "Policy")}</Button>
-                  </Stack><Typography variant="caption" sx={{ pl: 4 }}>{policy.ruleCount ?? (data?.metadata.id === policy.id ? data.total : "UNKNOWN")} rules</Typography></Box>)}
+                      <Box component="span" aria-label={dot.label} title={dot.title} data-freshness={dot.state} sx={{ width: 6, height: 6, borderRadius: "50%", bgcolor: dot.color, mr: 1, flexShrink: 0 }} />{displayName(policy.name, "Policy")}</Button>
+                  </Stack><Typography variant="caption" sx={{ pl: 4 }}>{policy.ruleCount ?? (data?.metadata.id === policy.id ? data.total : "UNKNOWN")} rules</Typography></Box>); })}
               </Box>;
             })}
           </Box>;
@@ -750,7 +765,7 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
         {tab === "Changes" && <PolicyChangesTab key={revision} policies={catalog} devices={targets} openRule={(policy, rule) => void openRuleId(rule, 90, policy)} />}
         {tab === "Offline analysis" && <PolicyOfflineTab key={selected} policy={selected} openRule={id => void openRuleId(id, 90)} />}
         {tab === "Hygiene" && (selected || loadingTree || error
-          ? <PolicyHygieneTab key={`${selected}:${revision}:${hygieneClass}`} policy={selected} ruleCount={selectedRuleCount} initialClass={hygieneClass} openRule={(id, days) => void openRuleId(id, days)} openObject={openObject} />
+          ? <PolicyHygieneTab key={`${selected}:${revision}:${hygieneClass}`} policy={selected} initialClass={hygieneClass} openRule={(id, days) => void openRuleId(id, days)} openObject={openObject} />
           : <PolicyContainerPrompt tab="Hygiene" now={now} open={openContainer}
             rows={summaries.map(row => ({ ...row, containerName: displayName(row.containerName, "Policy container"), sourceName: displayName(row.sourceName, "Management server") }))} />)}
         <Box role="tabpanel" aria-label="Rules" hidden={tab !== "Rules"} sx={{ display: tab === "Rules" ? "contents" : "none" }}>
@@ -777,7 +792,8 @@ export function PolicyScreen({ preview = false }: { preview?: boolean }) {
             {selected && <Stack direction="row" flexWrap="wrap" gap={1} alignItems="flex-start">
               <TextField select label="Usage filter" size="small" value={usage} sx={{ minWidth: 200, flex: "none" }} onChange={e => { setUsage(e.target.value as UsagePreset); setPage(0); }}>
                 <MenuItem value="">All usage evidence</MenuItem><MenuItem value="unused90">Unused 90 d</MenuItem><MenuItem value="inactive">Unused N days</MenuItem>
-                <MenuItem value="never">Never hit</MenuItem><MenuItem value="recent30">Hit in last 30 d</MenuItem>
+                {/* The same words as the table cell: zero counted hits say nothing about before the counters' window, so never "never". */}
+                <MenuItem value="never">No hits recorded (0 hits)</MenuItem><MenuItem value="recent30">Hit in last 30 d</MenuItem>
               </TextField>
               {usage === "inactive" && <TextField label="Days without hits" type="number" size="small" value={hitDays} inputProps={{ min: 1, max: 36500 }} sx={{ width: 150, flex: "none" }}
                 onChange={e => { const n = Number(e.target.value); if (Number.isInteger(n) && n >= 1 && n <= 36500) { setHitDays(n); setPage(0); } }} />}

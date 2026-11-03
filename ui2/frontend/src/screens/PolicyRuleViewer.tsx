@@ -8,10 +8,22 @@ import { getPolicyHistory, type PolicyCell, type PolicyHygieneAssessment, type P
 import { statusWord } from "../shell/presenters";
 import { firewallLabels, firewallSerialTitle, withFirewallNames } from "./policyFirewalls";
 
+/**
+ * The policy bulkhead answers `503 {"error":"POLICY_BUSY"}` (Retry-After: 5) when every analysis slot is taken. It is a
+ * wait, never bad input, a rejected upload or a broken snapshot: every Policy tab says so in the same words.
+ */
+export const POLICY_BUSY_MESSAGE = "Policy analysis is busy; retry in a few seconds.";
+export function isPolicyBusy(error: unknown): boolean {
+  const failure = error as { status?: unknown; body?: { error?: unknown } } | null;
+  return failure?.body?.error === "POLICY_BUSY";
+}
+/** The busy sentence when the failure is the bulkhead, else the caller's own sentence. */
+export function policyFailureText(error: unknown, fallback: string) { return isPolicyBusy(error) ? POLICY_BUSY_MESSAGE : fallback; }
 export function reportPolicyLoadError(scope: "snapshots" | "rules" | "object" | "history" | "inventory" | "usage", error: unknown) {
   // Record categories only: error messages and API bodies may contain sensitive identities.
   const failure = error as { status?: unknown; body?: { error?: unknown } } | null;
   const code = failure?.body?.error === "TIMEOUT" ? "TIMEOUT"
+    : isPolicyBusy(error) ? "POLICY_BUSY"
     : typeof failure?.status === "number" && Number.isInteger(failure.status) && failure.status >= 100 && failure.status <= 599 ? `HTTP_${failure.status}`
     : error instanceof SyntaxError ? "INVALID_JSON"
     : error instanceof Error && ["Empty policy response", "Invalid history response", "Invalid object response"].includes(error.message) ? "INVALID_RESPONSE_SHAPE"
@@ -128,7 +140,11 @@ export function usageWords(rule: Pick<PolicyRule, "hitCounts" | "hygiene">, now:
   if (!counts.lastHit) return { hits, lastHit: "UNKNOWN", detail: `${counts.hits == null ? "Hit count not reported by the source" : "Last-hit time not reported by the source"}. ${provenance}`, state: "partial", window };
   const last = Date.parse(counts.lastHit);
   if (!Number.isFinite(last)) return { hits, lastHit: "UNKNOWN", detail: `Last-hit time unreadable (${counts.lastHit}). ${provenance}`, state: "partial", window };
-  const days = (now.getTime() - last) / 86_400_000;
+  // Stale is judged at the counters' collection time, as the hygiene `unused` finding and the usage presets are: a hit
+  // the day before a month-old collection was in use when the evidence was taken. The relative age shown stays wall-clock.
+  const collected = Date.parse(counts.collectedAt ?? "");
+  const anchor = Number.isFinite(collected) ? collected : now.getTime();
+  const days = (anchor - last) / 86_400_000;
   return { hits, lastHit: relativeAge(counts.lastHit, now), detail: `Last hit ${formatStamp(counts.lastHit)} · ${counts.lastHit}. ${provenance}`, state: days > staleDays ? "stale" : "recent", window };
 }
 
@@ -145,13 +161,19 @@ export const REASON_GROUPS: readonly ReasonGroup[] = [
   { key: "layers", label: "Layer structure", explain: "Earlier sections or inline layers were not analysed, so what precedes this rule is not proven." },
   { key: "budget", label: "Analysis limit reached", explain: "The analysis stopped at its budget before reaching this rule; the remaining rules were not compared." },
   { key: "objects", label: "Unresolved objects", explain: "An object the rule uses could not be resolved in the stored snapshot." },
-  { key: "constraints", label: "Unsupported rule constraints", explain: "An earlier rule uses a constraint the comparison does not model (for example a time or negated match)." },
+  // The cascade: one earlier rule the comparison cannot model makes every later rule of its layer unprovable. The label
+  // names the earlier rule as the subject, so nobody hunts for a constraint on a plain IPv4 rule that has none.
+  { key: "earlier", label: "Earlier rule in this layer not provable", explain: "An earlier rule in the same layer could not be modelled (for example an identity, negated or time-bound match), so whether it covers this rule cannot be proven. Not a problem with this rule itself; which earlier rule is not yet recorded." },
+  { key: "constraints", label: "Unsupported rule constraints", explain: "The rule uses a constraint the comparison does not model (for example a time or negated match)." },
   { key: "hits", label: "Hit counters not collected", explain: "Usage findings need hit counters; none are stored for this rule. A full refresh (incl. hit counts) collects them." },
   { key: "other", label: "Other evidence gap", explain: "The analysis gave a reason this screen does not group; the raw reason is shown beside it." },
 ];
 const reasonGroup = (key: string) => REASON_GROUPS.find(group => group.key === key)!;
 export function unknownReasonGroup(reason: string | null | undefined): ReasonGroup {
   const text = (reason ?? "").toLowerCase();
+  if (/earlier rule/.test(text)) return reasonGroup("earlier");
+  // Before the install-on test: "Hit counts are missing for a target." is a counter gap, not a target.
+  if (/hit count|counter/.test(text)) return reasonGroup("hits");
   if (/user|identity|access.?role|category|dynamic/.test(text)) return reasonGroup("identity");
   if (/zone/.test(text)) return reasonGroup("zone");
   if (/install.?on|target/.test(text)) return reasonGroup("install-on");
@@ -159,7 +181,6 @@ export function unknownReasonGroup(reason: string | null | undefined): ReasonGro
   if (/budget|limit/.test(text)) return reasonGroup("budget");
   if (/unresolved|object/.test(text)) return reasonGroup("objects");
   if (/unsupported|constraint/.test(text)) return reasonGroup("constraints");
-  if (/hit count|counter/.test(text)) return reasonGroup("hits");
   return reasonGroup("other");
 }
 /** Every reason a rule's analysis could not decide: the shadow reason when shadowing is UNKNOWN plus each `unknown` finding. */
@@ -403,7 +424,8 @@ export function RuleMetrics({ rule, openRuleId, openHygiene, now = new Date() }:
         <Box><Typography variant="caption" color="text.secondary">Violations</Typography><Typography sx={{ ...big, color: rule.hygiene ? (violations.length ? m3.warningInk : rule.hygiene.shadowStatus === "UNKNOWN" ? m3.neutralInk : m3.goodInk) : m3.neutralInk }}>{rule.hygiene ? String(violations.length) : "UNKNOWN"}</Typography>
           {rule.hygiene && !violations.length && rule.hygiene.shadowStatus === "UNKNOWN" && <Typography variant="caption" display="block" sx={{ color: m3.onSurfaceVar }}>none proven; shadowing not analysed</Typography>}</Box>
       </Stack>
-      {findings.map((f, i) => <Typography key={i} variant="caption" display="block" sx={{ mt: 0.5 }}>{f.findingClass === "unknown" ? "UNKNOWN because" : `${f.severity} · ${f.findingClass}:`} {f.evidence}</Typography>)}
+      {/* The shadow reason is already the card's own "UNKNOWN because" line; the `Shadowing: …` finding would only repeat it. */}
+      {findings.filter(f => !(f.findingClass === "unknown" && f.evidence.startsWith("Shadowing: "))).map((f, i) => <Typography key={i} variant="caption" display="block" sx={{ mt: 0.5 }}>{f.findingClass === "unknown" ? "UNKNOWN because" : `${f.severity} · ${f.findingClass}:`} {f.evidence}</Typography>)}
       {!rule.hygiene && <Typography variant="caption" display="block" sx={{ mt: 0.5 }}>Stored hygiene findings; UNKNOWN entries are evidence gaps</Typography>}
       {openHygiene && <Button size="small" sx={{ mt: 0.5, p: 0, minWidth: 0 }} onClick={() => openHygiene(violations[0]?.findingClass ?? "")}>Open in Hygiene</Button>}
     </Box></Tooltip>
@@ -421,16 +443,20 @@ export function RuleMetrics({ rule, openRuleId, openHygiene, now = new Date() }:
  * ------------------------------------------------------------------------------------------------------------------ */
 export const RULE_ROW_HEIGHT = 56;
 const SECTION_ROW_HEIGHT = 36, DETAIL_ESTIMATE = 560, OVERSCAN = 160, VIEWPORT_FALLBACK = 600;
-const hygieneOrder = ["conflict", "shadowed", "broad", "unused", "expired", "disabled", "unknown"];
-/** The `unknown` class is not a finding but the analysis saying it could not decide: the flag names its subject (N5). */
-const hygieneLabels: Record<string, string> = { conflict: "Conflict", shadowed: "Shadowed", broad: "Broad", unused: "Unused", expired: "Expired", disabled: "Disabled", unknown: "Hygiene UNKNOWN" };
+const hygieneOrder = ["conflict", "shadowed", "broad", "unused", "expired", "disabled"];
+const hygieneLabels: Record<string, string> = { conflict: "Conflict", shadowed: "Shadowed", broad: "Broad", unused: "Unused", expired: "Expired", disabled: "Disabled" };
 const severityRank: Record<string, number> = { HIGH: 3, MEDIUM: 2, LOW: 1 };
 export interface HygieneBadge { key: string; label: string; severity: "HIGH" | "MEDIUM" | "LOW" | "UNKNOWN"; tip: string }
-/** Badges come only from the stored hygiene findings and the rule's own enabled/schedule state; nothing is inferred. */
+/**
+ * Badges come only from the stored hygiene findings and the rule's own enabled/schedule state; nothing is inferred. The
+ * `unknown` class is the analysis saying it could not decide, not a finding: it is not a badge (it would sit on nearly
+ * every row and drown the real flags) -- the Flags cell says it in muted words instead, see {@link unknownFlagWords}.
+ */
 export function hygieneBadges(rule: PolicyRule): HygieneBadge[] {
   const byClass = new Map<string, HygieneBadge>();
   for (const finding of rule.hygiene?.findings ?? []) {
-    const known = finding.findingClass === "unknown" ? "UNKNOWN" : finding.severity;
+    if (finding.findingClass === "unknown") continue;
+    const known = finding.severity;
     const current = byClass.get(finding.findingClass);
     if (!current) byClass.set(finding.findingClass, { key: finding.findingClass, label: hygieneLabels[finding.findingClass] ?? finding.findingClass, severity: known, tip: finding.evidence });
     else byClass.set(finding.findingClass, { ...current, severity: (severityRank[known] ?? 0) > (severityRank[current.severity] ?? 0) ? known : current.severity, tip: `${current.tip}; ${finding.evidence}` });
@@ -442,6 +468,18 @@ export function hygieneBadges(rule: PolicyRule): HygieneBadge[] {
     byClass.set("expired", { key: "expired", label: "Expiring", severity: current?.severity ?? "LOW", tip: current?.tip ?? "Stored schedule expires within 14 days." });
   }
   return [...byClass.values()].sort((a, b) => (hygieneOrder.indexOf(a.key) + 99) % 99 - (hygieneOrder.indexOf(b.key) + 99) % 99);
+}
+/**
+ * The muted words under (or instead of) the badges saying what the analysis could not decide: shadowing when its
+ * status is UNKNOWN, usage when only the hit-counter evidence is missing. Null when everything was decided -- only
+ * then is a bare "No findings" a claim the evidence supports. The raw reasons go on hover.
+ */
+export function unknownFlagWords(hygiene: PolicyHygieneAssessment | undefined): { text: string; title: string } | null {
+  if (!hygiene) return null;
+  const gaps = hygiene.findings.filter(f => f.findingClass === "unknown" && !f.evidence.startsWith("Shadowing: ")).map(f => f.evidence);
+  if (hygiene.shadowStatus === "UNKNOWN") return { text: "shadowing not provable", title: [`Shadowing not provable: ${hygiene.shadowReason ?? "reason not recorded"}`, ...gaps].join(" · ") };
+  if (gaps.length) return { text: "usage not provable", title: gaps.join(" · ") };
+  return null;
 }
 function Badge({ badge, onOpen }: { badge: HygieneBadge; onOpen?: (findingClass: string) => void }) {
   const [bg, fg] = badge.severity === "HIGH" ? [m3.errorContainer, m3.onErrorContainer] : badge.severity === "MEDIUM" ? [m3.warningContainer, m3.onWarningContainer]
@@ -532,12 +570,13 @@ export function PolicyRuleTable({ sections, collapsed, scrollTop, viewportHeight
     } },
     { key: "hygiene", label: "Flags", width: "12%", cell: rule => {
       const badges = hygieneBadges(rule).filter(badge => badge.key !== "disabled" || rule.enabled !== false);
+      const gap = unknownFlagWords(rule.hygiene);
       return <Box title={badges.map(badge => badge.label).join(", ") || undefined} sx={{ display: "flex", flexWrap: "wrap", gap: "4px", alignItems: "center", alignContent: "flex-start", maxHeight: 44, overflow: "hidden" }}>
         {badges.map(badge => <Badge key={badge.key} badge={badge} onOpen={openHygiene} />)}
         {!rule.hygiene && <Box component="span" title="Hygiene analysis is not available for this rule" sx={{ ...muted, fontSize: 11, fontWeight: 600, color: m3.neutralInk, whiteSpace: "normal", lineHeight: 1.2 }}>{badges.length ? "analysis UNKNOWN" : "Hygiene UNKNOWN"}</Box>}
-        {/* "No findings" is a claim; it is only made when the shadow analysis decided. Otherwise the cell says what was not analysed. */}
-        {rule.hygiene && !badges.length && <Box component="span" sx={{ ...muted, whiteSpace: "normal", lineHeight: 1.2 }} title={rule.hygiene.shadowStatus === "UNKNOWN" ? `Shadowing not provable: ${rule.hygiene.shadowReason ?? "reason not recorded"}` : undefined}>
-          {rule.hygiene.shadowStatus === "UNKNOWN" ? "No findings · shadowing not provable" : "No findings"}</Box>}
+        {/* "No findings" is a claim; it is only made when the analysis decided. Otherwise the cell says, in muted words beside the real flags, what was not decided. */}
+        {rule.hygiene && (!badges.length || gap) && <Box component="span" data-hygiene-gap={gap ? "true" : undefined} sx={{ ...muted, fontSize: 11, whiteSpace: "normal", lineHeight: 1.2 }} title={gap?.title}>
+          {badges.length ? gap!.text : gap ? `No findings · ${gap.text}` : "No findings"}</Box>}
       </Box>;
     } },
   ];
@@ -644,7 +683,7 @@ export function RuleHistory({ policy, rule = "" }: { policy: string; rule?: stri
     getPolicyHistory(policy, rule, page).then(result => {
       if (!Array.isArray(result.revisions)) throw new Error("Invalid history response");
       if (active) { setRevisions(result.revisions); setStatus(result.revisions.length ? "" : "No recorded changes."); }
-    }).catch(error => { if (active) { setErrorCode(reportPolicyLoadError("history", error)); setStatus("Rule history could not be loaded."); } });
+    }).catch(error => { if (active) { setErrorCode(reportPolicyLoadError("history", error)); setStatus(policyFailureText(error, "Rule history could not be loaded.")); } });
     return () => { active = false; };
   }, [policy, rule, page]);
   return <Box><Typography variant="caption">History starts with stored collections. Incomplete collections and ambiguous repeated identities are excluded.</Typography>
@@ -672,8 +711,9 @@ export function RuleDetailPanel({ rule, section, metadata, objects, openObject, 
     </Stack>
     <Typography variant="caption" display="block" sx={{ color: m3.onSurfaceVar, mt: 0.5 }}>{metadata.sourceName} · {containerLabel(metadata, section, rule)} · Section: {sectionLabel(metadata, section)} · Domain: {metadata.containerName} · Tags: {rule.extras.tag?.join(", ") || "—"}</Typography>
     <Box sx={{ display: "grid", gridTemplateColumns: { xs: "minmax(0, 1fr)", sm: "130px minmax(0, 1fr)" }, gap: 2, mt: inline ? 1.5 : 2 }}>
+      {/* Overview already holds the hygiene card (shadowing and violations); separate views for them only repeated it. */}
       <Stack component="nav" aria-label="Rule detail navigation" alignItems="stretch">
-        {["Overview", "Rule history", "Objects", "Shadowing", "Violations"].map(label => <Button key={label} aria-pressed={tab === label} onClick={() => setTab(label)} sx={{ justifyContent: "flex-start", textTransform: "none", bgcolor: tab === label ? m3.scHigh : undefined }}>{label}</Button>)}
+        {["Overview", "Rule history", "Objects"].map(label => <Button key={label} aria-pressed={tab === label} onClick={() => setTab(label)} sx={{ justifyContent: "flex-start", textTransform: "none", bgcolor: tab === label ? m3.scHigh : undefined }}>{label}</Button>)}
       </Stack><Box sx={{ minWidth: 0 }}>
         {tab === "Overview" && <Box sx={{ display: "grid", gap: 1.5 }}>
           <RuleFields rule={rule} objects={objects} openObject={openObject} />
@@ -689,7 +729,6 @@ export function RuleDetailPanel({ rule, section, metadata, objects, openObject, 
           </Box>}
           <Box><Typography variant="caption" display="block" sx={{ color: m3.onSurfaceVar }}>UUID: {rule.uuid || "—"}</Typography><Typography variant="caption" display="block" sx={{ color: m3.onSurfaceVar }}>Enabled: {rule.enabled === null ? "UNKNOWN" : String(rule.enabled)}</Typography></Box>
         </Box>}
-        {(tab === "Shadowing" || tab === "Violations") && <RuleMetrics rule={rule} openRuleId={openRuleId} openHygiene={openHygiene} now={now} />}
         {tab === "Rule history" && <RuleHistory policy={metadata.id} rule={rule.id} />}
         {tab === "Objects" && <Box sx={{ display: "grid", gap: 1.5 }}>
           {cells.filter(([, cell]) => cell.refs.length).map(([label, cell]) => <Box key={label}><Typography component="span" sx={cardTitle}>{label}{cell.negated ? " · negated" : ""}</Typography>
