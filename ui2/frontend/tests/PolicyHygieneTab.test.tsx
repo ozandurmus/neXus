@@ -145,6 +145,22 @@ it("warns about missing hit counters as their own line, prints a shadow reason o
   expect(chips[0]).toMatch(/^conflict/); expect(chips[chips.length - 1]).toMatch(/^not provable \(UNKNOWN\)/);
   expect(screen.getByText(/rules whose only result is not provable are under/)).toBeInTheDocument();
 });
+it("names each blocked rule's blocker and lists the biggest blockers policy-wide, jumping to the rule", async () => {
+  const blocked = { ...hygiene, coveringRuleId: null, shadowStatus: "UNKNOWN" as const, shadowReason: "earlier rule has unsupported constraints", blockingRuleId: "r12", blockingRuleNumber: 12 };
+  vi.stubGlobal("fetch", vi.fn(async () => response({ ...page, rows: [{ ...page.rows[0], hygiene: blocked, findings: [{ findingClass: "unknown", severity: "LOW", evidence: "Shadowing: earlier rule has unsupported constraints." }] }],
+    counts: { ...page.counts, unknown: 400 }, coverage: { rules: 500, shadowProven: 100, shadowUnknown: 400, hitsCollected: 500, hitsMissing: 0 },
+    unknownReasons: [{ evidence: "Shadowing: earlier rule has unsupported constraints.", rules: 400 }],
+    blockers: { distinct: 7, top: [{ ruleId: "r12", number: 12, blocks: 340 }, { ruleId: "r3", number: 3, blocks: 1 }] } })));
+  const openRule = vi.fn();
+  mount(<PolicyHygieneTab openObject={vi.fn()} policy="p1" openRule={openRule} initialClass="unknown" />);
+  const coverage = await screen.findByRole("region", { name: "Analysis coverage" });
+  expect(within(coverage).getByText(/^7 earlier rules keep other rules from being proven\. Biggest blockers:/)).toBeInTheDocument();
+  fireEvent.click(within(coverage).getByRole("button", { name: "rule #12 blocks 340 rules," }));
+  expect(openRule).toHaveBeenLastCalledWith("r12", 90);
+  expect(within(coverage).getByRole("button", { name: "rule #3 blocks 1 rule" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Blocked by rule #12" }));
+  expect(openRule).toHaveBeenLastCalledWith("r12", 90);
+});
 it("reads the bulkhead's 503 POLICY_BUSY as a wait, not as a failed read", async () => {
   vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({ error: "POLICY_BUSY" }), { status: 503, headers: { "Retry-After": "5" } })).mockImplementation(async () => response(page)));
   mount(<PolicyHygieneTab openObject={vi.fn()} policy="p1" openRule={vi.fn()} />);

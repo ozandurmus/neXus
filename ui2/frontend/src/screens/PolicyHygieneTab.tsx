@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Box, Button, Chip, MenuItem, Stack, Table, TableBody, TableCell, TableHead, TableRow, TextField, Typography } from "@mui/material";
 import { downloadPolicyHygiene, getPolicyHygiene, getPolicyRule, type PolicyHygieneCoverage, type PolicyHygienePage, type PolicyRuleDetail } from "../auth/adminApi";
-import { RuleFields, policyFailureText, unknownReasonGroup, unknownReasons, type ReasonGroup } from "./PolicyRuleViewer";
+import { RuleFields, blockedByLabel, policyFailureText, unknownReasonGroup, unknownReasons, type ReasonGroup } from "./PolicyRuleViewer";
 import { formatStamp } from "../shell/time";
 import { m3 } from "../theme/m3Theme";
 
@@ -126,6 +126,14 @@ export function PolicyHygieneTab({ policy, openRule, openObject, initialClass = 
           </Box>)}
         </Box>
       </>}
+      {data?.blockers && data.blockers.top.length > 0 && <Box data-blockers="true" sx={{ mt: 1 }}>
+        <Typography variant="caption" display="block" sx={{ color: m3.onSurfaceVar }}>
+          {n(data.blockers.distinct)} earlier {data.blockers.distinct === 1 ? "rule keeps" : "rules keep"} other rules from being proven. Biggest blockers:</Typography>
+        <Stack direction="row" gap={0.5} flexWrap="wrap" alignItems="center" aria-label="Biggest blockers">
+          {data.blockers.top.map((b, i) => <Button key={b.ruleId} size="small" sx={{ textTransform: "none", p: 0.25, minWidth: 0 }} onClick={() => openRule(b.ruleId, days)}>
+            {`rule #${b.number} blocks ${n(b.blocks)} ${b.blocks === 1 ? "rule" : "rules"}${i < data.blockers!.top.length - 1 ? "," : ""}`}</Button>)}
+        </Stack>
+      </Box>}
       {data && breakdown.length === 0 && unknownTotal > 0 && <Typography variant="caption" display="block" sx={{ mt: 1, color: m3.onSurfaceVar }}>
         No not-provable rule is on this page; filter by "not provable" to see why the {n(unknownTotal)} could not be decided.</Typography>}
     </Box>}
@@ -162,6 +170,7 @@ export function PolicyHygieneTab({ policy, openRule, openObject, initialClass = 
           : row.hygiene.shadowStatus === "UNKNOWN" ? <>
             <Typography variant="body2">UNKNOWN because {row.hygiene.shadowReason ?? "reason not recorded"}</Typography>
             <Typography variant="caption" data-reason-group={unknownReasonGroup(row.hygiene.shadowReason).key} sx={{ color: m3.onSurfaceVar }}>{unknownReasonGroup(row.hygiene.shadowReason).label}</Typography>
+            {row.hygiene.blockingRuleId && <Box><Button size="small" sx={{ textTransform: "none", p: 0, minWidth: 0 }} onClick={() => openRule(row.hygiene.blockingRuleId!, days)}>{blockedByLabel(row.hygiene.blockingRuleNumber)}</Button></Box>}
           </> : row.hygiene.shadowStatus === "NOT_SHADOWED" ? "Not shadowed (proven)" : "No full shadow proven"}</TableCell>
       </TableRow>)}</TableBody>
     </Table></Box>}

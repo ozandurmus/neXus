@@ -44,6 +44,17 @@ it("previews at most 20 rows, handles quoting/BOM, and rejects mapping-unsafe he
   expect(() => parsePreview("src,src\nx,y", true)).toThrow(); expect(() => parsePreview('a,b\n"bad', true)).toThrow();
   expect(parsePreview('a,b\nx,y\n"partial', false).rows).toEqual([["x", "y"]]);
 });
+it("says which snapshot the sample was evaluated against, with its freshness, and UNKNOWN when it was not recorded", async () => {
+  vi.mocked(getOfflineAnalysis).mockResolvedValue({ ...result, collectedAt: "2026-10-08T12:00:00Z" });
+  const { unmount } = render(<PolicyOfflineTab policy="p1" openRule={vi.fn()} />); await chooseAnalysis();
+  const line = document.querySelector<HTMLElement>("[data-evaluated-snapshot]")!;
+  expect(line).toHaveTextContent(/^Evaluated against snapshot collected 2026-10-08/);
+  expect(line.querySelector("[data-freshness]")).not.toBeNull();
+  unmount();
+  vi.mocked(getOfflineAnalysis).mockResolvedValue({ ...result, collectedAt: undefined });
+  render(<PolicyOfflineTab policy="p1" openRule={vi.fn()} />); await chooseAnalysis();
+  expect(document.querySelector("[data-evaluated-snapshot]")).toHaveTextContent("Evaluated against snapshot collected UNKNOWN");
+});
 it("viewer sees stored masked results, uncertainty and export but no upload or delete", async () => {
   const openRule = vi.fn(); render(<PolicyOfflineTab policy="p1" openRule={openRule} />); await chooseAnalysis();
   expect(screen.queryByLabelText("SIEM CSV file")).not.toBeInTheDocument(); expect(screen.queryByRole("button", { name: "Delete stored analysis" })).not.toBeInTheDocument();

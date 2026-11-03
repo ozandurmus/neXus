@@ -398,6 +398,16 @@ it("says in words why a rule's shadowing is not provable and never paints an und
   expect(getComputedStyle(within(clean).getByText("0", { exact: true })).color).not.toBe(getComputedStyle(within(card).getByText("0", { exact: true })).color);
   expect(within(clean).queryByText(/none proven/)).toBeNull();
 });
+it("names the earlier rule that blocks the proof and jumps to it", () => {
+  const hygiene: PolicyHygieneAssessment = { shadowStatus: "UNKNOWN", shadowReason: "earlier rule has unsupported constraints", coveringRuleId: null, blockingRuleId: "rule-12", blockingRuleNumber: 12,
+    timeStatus: "always", expiring: false, counterWindow: "90 d", hitSource: "mds", hitsCollectedAt: null, permissiveness: { level: "Low", reasons: [] }, findings: [] };
+  const open = vi.fn();
+  mount(<RuleMetrics rule={{ ...rule, hygiene }} openRuleId={open} />);
+  fireEvent.click(screen.getByRole("button", { name: "Blocked by rule #12" }));
+  expect(open).toHaveBeenCalledWith("rule-12");
+  mount(<RuleMetrics rule={{ ...rule, id: "no-blocker", hygiene: { ...hygiene, blockingRuleId: null, blockingRuleNumber: null } }} openRuleId={open} />);
+  expect(screen.getAllByText(/Blocked by/)).toHaveLength(1);
+});
 it("does not claim 'No findings' for a rule whose shadowing was not analysed", () => {
   const hygiene: PolicyHygieneAssessment = { shadowStatus: "UNKNOWN", shadowReason: "earlier sections not analysed", coveringRuleId: null, timeStatus: "always", expiring: false,
     counterWindow: "90 d", hitSource: "mds", hitsCollectedAt: null, permissiveness: { level: "Low", reasons: [] }, findings: [] };
