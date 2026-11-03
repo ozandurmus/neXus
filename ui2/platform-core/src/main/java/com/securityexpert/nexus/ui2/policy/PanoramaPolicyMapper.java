@@ -143,10 +143,7 @@ public final class PanoramaPolicyMapper {
             }
             if (extras.containsKey("schedule")) extras.put("schedule", extras.get("schedule").stream()
                     .map(name -> object(meta, "schedule", name, definitions, objects, 0)).toList());
-            // Device serials in target selectors are evidence values, never used as enrolled-device identifiers.
-            List<String> targetSelectors = PolicyXml.selectRelative(entry, "target/devices/entry").stream()
-                    .map(e -> e.getAttribute("name")).toList();
-            if (!targetSelectors.isEmpty()) extras.put("target-selectors", targetSelectors);
+            targets(entry, extras);
             // PAN-OS config XML omits default values: a rule entry with no <disabled> leaf is enabled ("no" is the
             // schema default). Only an explicit value other than yes/no stays unknown.
             String disabled = PolicyXml.firstRelativeText(entry, "disabled").orElse("no").trim();
@@ -222,9 +219,7 @@ public final class PanoramaPolicyMapper {
                 putText(extras, "translated-destination-dynamic-port", entry, "dynamic-destination-translation/translated-port");
                 putText(extras, "destination-dynamic-distribution", entry, "dynamic-destination-translation/distribution");
             }
-            List<String> targetSelectors = PolicyXml.selectRelative(entry, "target/devices/entry").stream()
-                    .map(e -> e.getAttribute("name")).toList();
-            if (!targetSelectors.isEmpty()) extras.put("target-selectors", targetSelectors);
+            targets(entry, extras);
             String disabled = PolicyXml.firstRelativeText(entry, "disabled").orElse("no").trim();
             String uuid = entry.getAttribute("uuid");
             String action = !sourceType.isEmpty() && (destination || dynamicDestination) ? "source-and-destination-nat"
@@ -272,6 +267,68 @@ public final class PanoramaPolicyMapper {
         }
         sections.add(new Section(id, phase.equals("pre-rulebase") ? PolicySnapshot.PAN_PRE_DEFAULT : PolicySnapshot.PAN_POST_DEFAULT,
                 source, null, rules));
+    }
+    /**
+     * The Panorama target of a security or NAT rule, recorded so that no rule whose target is not fully represented
+     * can ever look untargeted. Semantics (PATH_ANALYSIS_VENDOR_SEMANTICS.md 4d): with no firewall selected the rule
+     * goes to every firewall of the device group; selected devices and tags restrict it; negate inverts the selection,
+     * and negate with nothing selected reaches no firewall. The XML element names are not established by the vendor
+     * documentation, so only the device-entry shape the repository already parsed is given a meaning:
+     * <ul>
+     * <li>{@code target-selectors}: the {@code devices/entry} names (firewall serials; evidence values, never used as
+     * enrolled-device identifiers), unchanged.</li>
+     * <li>{@code target-vsys}: one {@code <device entry name>/<vsys entry name>} per vsys entry under a device, so a
+     * device restricted to some of its virtual systems is distinguishable from the whole device.</li>
+     * <li>{@code target-tags}: the members of {@code tags}.</li>
+     * <li>{@code target-unrecognized}: the relative path of every other element found under {@code target} (an empty
+     * {@code tags} or {@code vsys}, an unknown child), so an unexpected shape is never read as "no target".</li>
+     * </ul>
+     * {@code negate} is stored by the caller as {@code target/negate}. Shadowing and lookup treat every one of these
+     * keys as an unsupported rule constraint (fail-closed); they are presence evidence, not a placement.
+     */
+    private static void targets(Element entry, Map<String, List<String>> extras) {
+        List<String> selectors = new ArrayList<>(), vsys = new ArrayList<>(), tags = new ArrayList<>(), unrecognized = new ArrayList<>();
+        for (Element target : PolicyXml.selectRelative(entry, "target")) {
+            for (Element child : children(target)) {
+                switch (child.getTagName()) {
+                    case "negate" -> { }
+                    case "devices" -> {
+                        for (Element device : children(child)) {
+                            if (!device.getTagName().equals("entry")) { unrecognized.add("devices/" + device.getTagName()); continue; }
+                            String name = device.getAttribute("name");
+                            selectors.add(name);
+                            for (Element part : children(device)) {
+                                if (!part.getTagName().equals("vsys")) { unrecognized.add("devices/entry/" + part.getTagName()); continue; }
+                                boolean any = false;
+                                for (Element context : children(part)) {
+                                    if (context.getTagName().equals("entry")) { vsys.add(name + "/" + context.getAttribute("name")); any = true; }
+                                    else unrecognized.add("devices/entry/vsys/" + context.getTagName());
+                                }
+                                if (!any) unrecognized.add("devices/entry/vsys");
+                            }
+                        }
+                    }
+                    case "tags" -> {
+                        var parts = children(child);
+                        List<String> names = parts.stream().filter(e -> e.getTagName().equals("member")).map(Element::getTextContent).toList();
+                        // A tags element without members (or with anything else in it) is a shape nobody parsed.
+                        if (names.isEmpty() || names.size() != parts.size()) unrecognized.add("tags");
+                        tags.addAll(names);
+                    }
+                    default -> unrecognized.add(child.getTagName());
+                }
+            }
+        }
+        if (!selectors.isEmpty()) extras.put("target-selectors", List.copyOf(selectors));
+        if (!vsys.isEmpty()) extras.put("target-vsys", List.copyOf(vsys));
+        if (!tags.isEmpty()) extras.put("target-tags", List.copyOf(tags));
+        if (!unrecognized.isEmpty()) extras.put("target-unrecognized", List.copyOf(new LinkedHashSet<>(unrecognized)));
+    }
+    private static List<Element> children(Element parent) {
+        List<Element> out = new ArrayList<>();
+        for (var child = parent.getFirstChild(); child != null; child = child.getNextSibling())
+            if (child instanceof Element element) out.add(element);
+        return out;
     }
     private static String firstChildName(Element entry, String path) {
         for (Element parent : PolicyXml.selectRelative(entry, path))
