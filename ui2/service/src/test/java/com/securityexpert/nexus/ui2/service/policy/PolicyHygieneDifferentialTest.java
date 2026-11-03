@@ -85,8 +85,10 @@ class PolicyHygieneDifferentialTest {
      * Each layer of a well-formed inline-layer policy -- the ordered layer and every inline layer -- is analysed exactly as
      * the former analysis analyses that layer's sections alone (no parent link) with each "Apply Layer" rule made a
      * terminal rule: child rules never meet parent rules, the parent resumes after its inline layers with its own earlier
-     * rules, and a resolved "Apply Layer" rule covers later parent rules. REDUNDANT and CONFLICT are compared as covered
-     * (the stand-in action differs); the covering rule and the reason must be identical.
+     * rules, and a resolved "Apply Layer" rule covers later parent rules. The covering rule and the reason must be
+     * identical. A rule covered by an Apply Layer rule must be REDUNDANT with the inline-layer evidence (or the same-action
+     * evidence when both apply the same inline layer); between two rules that apply no layer the status is exactly the
+     * former one. Elsewhere REDUNDANT and CONFLICT are compared as covered, because the stand-in action differs.
      */
     @Test void everyLayerOfAnInlineLayerPolicyAnswersWhatThatLayerAloneAnswered() {
         int compared = 0, resumed = 0, formerlyUnproven = 0, coveredByApplyLayer = 0, inline = 0, ruleReasonOnly = 0;
@@ -123,7 +125,20 @@ class PolicyHygieneDifferentialTest {
                         if (afterInline) resumed++;
                         if (afterInline && "earlier sections not analysed".equals(former.get(rule.id()).shadowReason())
                                 && !"earlier sections not analysed".equals(got.shadowReason())) formerlyUnproven++;
-                        if (got.coveringRuleId() != null && applyLayer.contains(got.coveringRuleId())) coveredByApplyLayer++;
+                        var shadow = got.findings().stream().filter(f -> Set.of("shadowed", "conflict").contains(f.findingClass())).toList();
+                        if (got.coveringRuleId() != null && applyLayer.contains(got.coveringRuleId())) {
+                            // Covered by an Apply Layer rule: never reached, never a conflict (the inline layer's verdict is unknown).
+                            coveredByApplyLayer++;
+                            assertEquals("REDUNDANT", got.shadowStatus(), context);
+                            boolean sameLayer = applyLayer.contains(rule.id()) && rule.extras().get("inline-layer")
+                                .equals(snapshot.sections().stream().flatMap(s -> s.rules().stream()).filter(r -> r.id().equals(got.coveringRuleId())).findFirst().orElseThrow().extras().get("inline-layer"));
+                            assertEquals(List.of(new PolicyHygiene.Finding("shadowed", "MEDIUM", sameLayer
+                                ? "Earlier enabled rule fully covers this match with the same action." : PolicyHygiene.INLINE_LAYER_COVER)), shadow, context);
+                        } else if (got.coveringRuleId() != null && !applyLayer.contains(rule.id())) {
+                            // Neither rule applies a layer: the stand-in changed nothing, so the verdict is exactly the former one.
+                            assertEquals(want.shadowStatus(), got.shadowStatus(), context);
+                            assertTrue(shadow.stream().noneMatch(f -> f.evidence().equals(PolicyHygiene.INLINE_LAYER_COVER)), context);
+                        }
                     }
                     if (!section.rules().isEmpty() && applyLayer.contains(section.rules().get(section.rules().size() - 1).id())) afterInline = true;
                 }
