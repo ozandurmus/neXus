@@ -67,8 +67,13 @@ public record PolicySnapshot(Metadata metadata, List<Section> sections, Map<Stri
     /** Stored Check Point snapshots predate the page merge and keep no logical section ref: join adjacent same-named CP fragments. */
     public PolicySnapshot withPageSplitsMerged() {
         if (metadata == null || !"CP".equals(metadata.vendor())) return this;
-        List<Section> merged = mergeAdjacent(sections, s -> s.source());
-        return merged.size() == sections.size() ? this : new PolicySnapshot(metadata, merged, objects, failures);
+        // The access and NAT rulebases are independent and ordered only within themselves; the collector can interleave
+        // their pages (access page, NAT, next access page). Keep each rulebase's own order, list NAT after access, then
+        // join the page splits (2026-11-03: 5,761 access rules were cut off from their own section's first page).
+        List<Section> ordered = new java.util.ArrayList<>(sections.stream().filter(s -> !"CP NAT rulebase".equals(s.source())).toList());
+        ordered.addAll(sections.stream().filter(s -> "CP NAT rulebase".equals(s.source())).toList());
+        List<Section> merged = mergeAdjacent(ordered, s -> s.source());
+        return merged.size() == sections.size() && ordered.equals(sections) ? this : new PolicySnapshot(metadata, merged, objects, failures);
     }
     /**
      * Stored snapshots carry hit levels only where Check Point supplied them (zero|low|medium|high; the thresholds are the

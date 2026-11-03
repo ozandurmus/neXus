@@ -68,6 +68,20 @@ class PolicyHygieneCheckPointScopeTest {
         assertEquals("NOT_SHADOWED", at(snapshot, "r3").shadowStatus());
     }
 
+    @Test void aSectionPagedAroundTheNatRulebaseIsJoinedOnReadAndKeepsItsScope() {
+        // The same access section's next page arrives after the NAT rulebase; the read-time transform joins it.
+        var stored = cpSnapshot(cpSection("s1", null, cp("r1", 1, "Accept", "net", "targets")),
+            new Section("nat", "OBJ-NAT-01", "CP NAT rulebase", null, List.of(cp("n1", 1, "Accept", "host", "targets"))),
+            cpSection("s1-page-2", null, cp("r2", 2, "Accept", "host", "targets"), cp("r3", 3, "Drop", "any", "targets")));
+        var snapshot = stored.withPageSplitsMerged();
+        assertEquals(List.of("s1", "nat"), snapshot.sections().stream().map(Section::id).toList());
+        assertEquals(List.of("r1", "r2", "r3"), snapshot.sections().get(0).rules().stream().map(Rule::id).toList());
+        assertCovered(snapshot, "r2", "REDUNDANT", "r1");
+        assertEquals("NOT_SHADOWED", at(snapshot, "r3").shadowStatus());
+        assertUnknown(snapshot, "n1", "unsupported rulebase");
+        assertSame(snapshot, snapshot.withPageSplitsMerged());
+    }
+
     // ---- install-on as an opaque placement token ----
 
     @Test void rulesInstalledOnTheSameGlobalTargetObjectCanCoverEachOther() {
