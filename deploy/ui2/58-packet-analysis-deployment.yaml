@@ -68,6 +68,10 @@ spec:
         - worker
         - packet_analysis
         env:
+        # Development mode (PO 2026-11-03): the job window spans the whole 6-hour slot, so manual jobs are never
+        # refused as OUTSIDE_JOB_WINDOW. Remove (default 60) when scheduled operation resumes.
+        - name: UI2_JOB_WINDOW_MINUTES
+          value: "360"
         - name: UI2_DB_HOST
           valueFrom:
             configMapKeyRef:
