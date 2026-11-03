@@ -31,6 +31,16 @@ it("submits a lookup, shows uncertainty and first proven match, links rules and 
   expect(fetcher).toHaveBeenCalledWith("/api/v2/policy/policies/p1/lookup", expect.objectContaining({ method: "POST", body: JSON.stringify({ source: "192.0.2.8", destination: "198.51.100.8", service: "tcp/443" }) }));
   fireEvent.click(screen.getByRole("button", { name: "Look up policy intent" })); await screen.findByLabelText("Lookup result 2");
 });
+it("reads the bulkhead's 503 POLICY_BUSY as a wait, never as bad inputs", async () => {
+  vi.stubGlobal("fetch", vi.fn(async (url: string) => url === "/session/status" ? new Response("{}", { status: 200 })
+    : new Response(JSON.stringify({ error: "POLICY_BUSY" }), { status: 503, headers: { "Retry-After": "5" } })));
+  render(<PolicyLookupTab policies={[policy]} policy="p1" selectPolicy={vi.fn()} openRule={vi.fn()} />);
+  fill(); fireEvent.click(screen.getByRole("button", { name: "Look up policy intent" }));
+  const alert = await screen.findByRole("alert");
+  expect(alert).toHaveTextContent("Policy analysis is busy; retry in a few seconds.");
+  expect(alert).not.toHaveTextContent(/inputs/);
+  expect(screen.queryByLabelText("Lookup result 1")).not.toBeInTheDocument();
+});
 it("renders partial ranges and implicit default deny", async () => {
   vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ ...result, verdict: "PARTIAL", lookupReason: "partial query coverage", decidingRule: null, undecidableRules: [], parts: [
     { querySource: "192.0.2.0-192.0.2.7", queryDestination: "198.51.100.8", verdict: "DENIED", lookupReason: "implicit default deny", decidingRule: null, undecidableRules: [] },

@@ -3,6 +3,7 @@ import { Box, Button, Chip, FormControlLabel, MenuItem, Skeleton, Stack, Switch,
 import { downloadPolicyChanges, getPolicyChanges, type PolicyChangeFilters, type PolicyChangeRow, type PolicyChangesPage, type PolicyMetadata, type PolicyTarget } from "../auth/adminApi";
 import { m3 } from "../theme/m3Theme";
 import { withFirewallNames } from "./policyFirewalls";
+import { isPolicyBusy, POLICY_BUSY_MESSAGE } from "./PolicyRuleViewer";
 import { KpiCard } from "../shell/KpiCard";
 import { StatePanel } from "../shell/States";
 import { Stamp } from "../shell/PresentedText";
@@ -52,7 +53,7 @@ export function PolicyChangesTab({ policies, devices, openRule }: { policies: Po
       if (active) { range.current = { from: result.rangeStart, to: result.rangeEnd }; setData(result); }
     }).catch((failure: { status?: number; name?: string }) => {
       const timedOut = failure?.status === 0 || failure?.name === "AbortError";
-      if (active) setError(timedOut ? "Could not load changes · the read timed out after 20 s" : "Could not load changes");
+      if (active) setError(isPolicyBusy(failure) ? POLICY_BUSY_MESSAGE : timedOut ? "Could not load changes · the read timed out after 20 s" : "Could not load changes");
     }).finally(() => { window.clearTimeout(slowTimer); if (active) setSlow(false); });
     return () => { active = false; window.clearTimeout(slowTimer); };
   }, [filters, cursor, revision]);

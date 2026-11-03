@@ -3,7 +3,7 @@ import { Box, Button, Chip, MenuItem, Stack, TextField, Typography } from "@mui/
 import { DISABLED_STYLE } from "../shell/disabledStyle";
 import { statusWord } from "../shell/presenters";
 import { lookupPolicy, type PolicyMetadata, type PolicyLookupQuery, type PolicyLookupResult, type PolicyLookupDecision } from "../auth/adminApi";
-import { SnapshotFreshnessChip } from "./PolicyRuleViewer";
+import { SnapshotFreshnessChip, isPolicyBusy, POLICY_BUSY_MESSAGE } from "./PolicyRuleViewer";
 
 export function PolicyLookupTab({ policies, policy, selectPolicy, openRule }: {
   policies: PolicyMetadata[]; policy: string; selectPolicy: (id: string) => void; openRule: (policy: string, rule: string) => void;
@@ -20,7 +20,9 @@ export function PolicyLookupTab({ policies, policy, selectPolicy, openRule }: {
           || !Array.isArray(result.undecidableRules) || !result.query) throw new Error("Invalid lookup result");
       setRecent(previous => [result, ...previous].slice(0, 10));
     } catch (failure) {
-      setError((failure as { status?: number }).status === 429 ? "Lookup limit reached. Retry after one minute."
+      // The bulkhead's wait is never the inputs' fault: it says retry, not "check the inputs".
+      setError(isPolicyBusy(failure) ? POLICY_BUSY_MESSAGE
+        : (failure as { status?: number }).status === 429 ? "Lookup limit reached. Retry after one minute."
         : "Lookup could not be completed. Check the inputs and try again.");
     } finally { inFlight.current = false; setBusy(false); }
   };

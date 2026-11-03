@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { afterEach, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
-import { PolicyScreen, collectionOutcome, progress, csvCell, collectedLabel, sourceStatusLabel, collectionStalled, runningLabel, collectionSummaryLine, usageRequest } from "../src/screens/PolicyScreen";
+import { PolicyScreen, collectionOutcome, progress, csvCell, collectedLabel, sourceStatusLabel, collectionStalled, runningLabel, collectionSummaryLine, usageRequest, oldestCollectedAt, snapshotDot } from "../src/screens/PolicyScreen";
 import { PolicyRuleTable, RULE_ROW_HEIGHT } from "../src/screens/PolicyRuleViewer";
 import { loadErrorText } from "../e2e/safety";
 import { expandByText, findButtonByText, findByAria, getFieldByLabel } from "./fastQueries";
@@ -478,6 +478,41 @@ it("reads a Check Point target's missing sync state as not reported, and a Panor
   mount(); await navigate();
   expect((await screen.findByLabelText("In sync")).closest("[data-sync]")).toHaveAttribute("data-sync", "good");
   expect(screen.getByLabelText("Out of sync").closest("[data-sync]")).toHaveAttribute("data-sync", "warn");
+});
+it("colours the tree's snapshot dots by age: a container as its stalest package, a policy as its own snapshot", async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true, now: new Date("2026-10-30T12:00:00Z") });
+  const fresh = { ...metadata, id: "policy-2", name: "OBJ-POLICY-02", collectedAt: "2026-10-30T06:00:00Z" };
+  vi.stubGlobal("fetch", vi.fn(async (input: string) => new Response(JSON.stringify(input === "/api/v2/policy/sources"
+    ? { canCollect: false, sources: [{ sourceId: "source-1", sourceName: "MGR-BRAVO-01", vendor: "PAN" }] } : { policies: [metadata, fresh], devices: [] }), { status: 200 })));
+  mount();
+  const tree = await screen.findByRole("navigation", { name: "Management policies" });
+  const containerDot = (await within(tree).findByRole("button", { name: metadata.containerName })).querySelector("[data-freshness]")!;
+  expect(containerDot).toHaveAttribute("data-freshness", "old");
+  expect(containerDot).toHaveAttribute("aria-label", "Stored snapshot · older than a week");
+  fireEvent.click(within(tree).getByRole("button", { name: metadata.containerName }));
+  const dots = (await within(tree).findAllByRole("button", { name: /^Policy / })).map(button => button.querySelector("[data-freshness]")!);
+  expect(dots.map(dot => dot.getAttribute("data-freshness"))).toEqual(["old", "fresh"]);
+  expect(dots[1]).toHaveAttribute("aria-label", "Stored snapshot · current");
+  expect(getComputedStyle(dots[0]).backgroundColor).not.toBe(getComputedStyle(dots[1]).backgroundColor);
+  expect(within(tree).queryByLabelText("Stored snapshot")).toBeNull();
+  // The helpers behind the dots: the oldest stamp wins, an unreadable one is "age unknown".
+  expect(oldestCollectedAt([metadata, fresh])).toBe("2026-10-01T12:00:00.000Z"); expect(oldestCollectedAt([{ collectedAt: "" }])).toBeUndefined();
+  expect(snapshotDot(undefined, new Date())).toMatchObject({ state: "unknown", label: "Stored snapshot · age unknown" });
+  expect(snapshotDot("2026-10-29T06:00:00Z", new Date("2026-10-30T12:00:00Z"))).toMatchObject({ state: "stale", label: "Stored snapshot · older than a day" });
+});
+it("reads the bulkhead's 503 POLICY_BUSY as a wait on the catalog and on the rules read", async () => {
+  const busy = () => new Response(JSON.stringify({ error: "POLICY_BUSY" }), { status: 503, headers: { "Retry-After": "5" } });
+  vi.stubGlobal("fetch", vi.fn(async (input: string) => input === "/api/v2/policy/sources" ? busy() : new Response("{}", { status: 200 })));
+  const view = mount();
+  const failed = await screen.findByText("Policy analysis is busy; retry in a few seconds.");
+  expect(failed.closest("[data-error-code]")).toHaveAttribute("data-error-code", "POLICY_BUSY");
+  view.unmount(); vi.unstubAllGlobals();
+  const fetch = mockFetch();
+  fetch.mockImplementation(async (input: string) => input.includes("/policies/") ? busy()
+    : new Response(JSON.stringify(treeBody(input) ?? { sources: [{ sourceId: metadata.sourceId, sourceName: metadata.sourceName, vendor: metadata.vendor }], canCollect: false }), { status: 200, headers: { "X-Nexus-Masked": "true" } }));
+  mount(); await navigate();
+  expect(await screen.findByText("Policy analysis is busy; retry in a few seconds.")).toBeInTheDocument();
+  expect(screen.queryByText("Policy rules could not be loaded.")).toBeNull();
 });
 it("inks the container table's last-collected age by freshness", async () => {
   vi.useFakeTimers({ shouldAdvanceTime: true, now: new Date("2026-10-30T12:00:00Z") });

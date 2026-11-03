@@ -5,6 +5,7 @@ import { plural } from "../shell/plural";
 import { relativeAge } from "../shell/time";
 import { m3 } from "../theme/m3Theme";
 import type { ContainerSummary } from "./PolicyScreen";
+import { freshnessColor, snapshotFreshness } from "./PolicyRuleViewer";
 
 const GATEWAYS_SHOWN = 3;
 
@@ -43,7 +44,7 @@ export function PolicyContainerPrompt({ tab, rows, now, open }: {
             {["Container", "Source", "Policies", installation ? "Installed on (targets)" : "Rules", "Last collected", ""].map((label, index) => <TableCell key={index} scope="col">{label}</TableCell>)}
           </TableRow></TableHead>
           <TableBody>
-            {rows.map(row => (
+            {rows.map(row => { const freshness = snapshotFreshness(row.collectedAt, now); const ink = freshnessColor(freshness.state); return (
               <TableRow key={row.key} hover>
                 <TableCell scope="row">{row.containerName}</TableCell>
                 <TableCell>{row.sourceName}</TableCell>
@@ -52,10 +53,12 @@ export function PolicyContainerPrompt({ tab, rows, now, open }: {
                   ? row.gateways.length === 0 ? "Unassigned"
                     : <Tooltip title={row.gateways.join(", ")}><span>{row.gateways.slice(0, GATEWAYS_SHOWN).join(", ")}{row.gateways.length > GATEWAYS_SHOWN ? ` +${row.gateways.length - GATEWAYS_SHOWN} more` : ""}</span></Tooltip>
                   : row.rules ?? "UNKNOWN"}</TableCell>
-                <TableCell title={row.collectedAt}>{row.collectedAt ? relativeAge(row.collectedAt, now) : "UNKNOWN"}</TableCell>
+                {/* Inked by age like the container table on the Rules tab: a month-old collection is not read as current. */}
+                <TableCell title={row.collectedAt} data-freshness={freshness.state} sx={{ color: ink, fontWeight: ink ? 600 : undefined }}>
+                  {row.collectedAt ? relativeAge(row.collectedAt, now) : "UNKNOWN"}</TableCell>
                 <TableCell align="right"><Button size="small" aria-label={`Open ${row.containerName}`} onClick={() => open(row)}>Open</Button></TableCell>
               </TableRow>
-            ))}
+            ); })}
           </TableBody>
         </Table>
       </Box>

@@ -89,6 +89,12 @@ it("applies combined filters, resets pagination and pins the first page period",
   expect(fetcher.mock.calls.at(-1)?.[0]).toContain("from=2026-10-01T06%3A30%3A00.000Z");
   expect(screen.getByText("Previous changes page")).toBeDisabled();
 });
+it("reads the bulkhead's 503 POLICY_BUSY as a wait, not as a failed or timed-out read", async () => {
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ error: "POLICY_BUSY" }), { status: 503, headers: { "Retry-After": "5" } })));
+  mount();
+  expect(await screen.findByRole("alert")).toHaveTextContent("Policy analysis is busy; retry in a few seconds.");
+  expect(screen.getByRole("alert")).not.toHaveTextContent(/Could not load/);
+});
 it("reports read/export failures, retries and exports all matching pages with the active period", async () => {
   const fetcher = vi.fn().mockResolvedValueOnce(new Response("{}", { status: 500 })).mockImplementation(async (url: string) => url.includes(".csv") ? new Response("Time,Rule\n2026-10-09,RULE-BRAVO-02") : response(page));
   vi.stubGlobal("fetch", fetcher); mount();

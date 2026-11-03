@@ -2046,9 +2046,15 @@ export interface PolicyHygieneAssessment {
   findings: PolicyHygieneFinding[]; permissiveness: NonNullable<PolicyRule["permissiveness"]>;
   timeStatus: string; expiring: boolean; counterWindow: string; hitSource: string; hitsCollectedAt: string | null;
 }
+/** Policy-wide analysis coverage, two separate questions: what the shadow analysis decided, and which rules carry hit counters at all. */
+export interface PolicyHygieneCoverage { rules: number; shadowProven: number; shadowUnknown: number; hitsCollected: number; hitsMissing: number }
 export interface PolicyHygienePage {
   rows: { ruleId: string; number: number; name: string; sectionId: string; findings: PolicyHygieneFinding[]; hygiene: PolicyHygieneAssessment }[];
   counts: Record<string, number>; total: number; page: number; pageSize: number; budgetReached: boolean; days: number;
+  /** Absent from an older service; the tab then says the coverage is UNKNOWN rather than deriving it from a page. */
+  coverage?: PolicyHygieneCoverage;
+  /** Every `unknown` evidence string counted over the whole policy (rules carrying it), most frequent first. */
+  unknownReasons?: { evidence: string; rules: number }[];
 }
 export interface PolicyRuleDetail { metadata: PolicyMetadata; rule: PolicyRule; section: PolicySection; objects: PolicyObject[] }
 const hygieneParams = (findingClass: string, severity: string, days: number) => new URLSearchParams({ findingClass, severity, days: String(days) });
@@ -2058,7 +2064,8 @@ export const getPolicyRule = (id: string, rule: string, days = 90) =>
   call<PolicyRuleDetail>(`/api/v2/policy/policies/${encodeURIComponent(id)}/rules?ruleId=${encodeURIComponent(rule)}&days=${days}`, "GET");
 export async function downloadPolicyHygiene(id: string, findingClass: string, severity: string, days: number) {
   const response = await fetch(`/api/v2/policy/policies/${encodeURIComponent(id)}/hygiene.csv?${hygieneParams(findingClass, severity, days)}`, { credentials: "include" });
-  if (!response.ok) throw new Error("Hygiene export failed");
+  // The same error shape as `call`, so the bulkhead's 503 POLICY_BUSY reads as a wait on the export too.
+  if (!response.ok) throw { status: response.status, body: await response.json().catch(() => ({ error: "Hygiene export failed" })) } satisfies ApiError;
   return response.blob();
 }
 export interface PolicyRule {

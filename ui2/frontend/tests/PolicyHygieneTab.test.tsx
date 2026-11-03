@@ -50,13 +50,21 @@ it("renders explicit unknown, budget, pagination and empty states", async () => 
   fireEvent.click(screen.getByRole("button", { name: "Next hygiene page" }));
   expect(await screen.findByText("No hygiene findings match these filters.")).toBeInTheDocument();
 });
-it("computes coverage honestly: proven only against a known rule total, never against a filtered page", () => {
-  const counts = { shadowed: 3, conflict: 1, disabled: 2, unused: 7, expired: 0, broad: 9, unknown: 845 };
-  expect(hygieneCoverage(counts, 871)).toMatchObject({ unknown: 845, proven: 26, denominator: 871, sentence: "Analysed: 26 proven · 845 not provable (of 871 rules)" });
-  expect(hygieneCoverage(counts, undefined)).toMatchObject({ unknown: 845, proven: null, denominator: null, sentence: "Analysed: proven count UNKNOWN · 845 not provable (rule total not recorded)" });
-  expect(hygieneCoverage({ shadowed: 1 }, 871)).toMatchObject({ unknown: null, proven: null, sentence: "Analysed: UNKNOWN (the not-provable count was not returned)" });
-  expect(hygieneCoverage({ unknown: 900 }, 871).proven).toBe(0);
-  expect(hygieneCoverage(undefined, 871).proven).toBeNull();
+it("splits coverage into the shadow question and the hit-counter question, policy-wide, never derived from a page or the class chips", () => {
+  // Every shadow result decided, no hit counters stored: all rules proven on the first line, none stored on the second -- never "0 proven".
+  const noCounters = hygieneCoverage({ rules: 871, shadowProven: 871, shadowUnknown: 0, hitsCollected: 0, hitsMissing: 871 });
+  expect(noCounters.sentence).toBe("Shadow analysis: 871 proven · 0 not provable (of 871 rules)");
+  expect(noCounters.hitsSentence).toBe("Hit counters: 0 stored · 871 not collected");
+  expect(noCounters.shadow).toEqual({ proven: 871, unknown: 0, rules: 871 }); expect(noCounters.hits).toEqual({ collected: 0, missing: 871, rules: 871 });
+  const mixed = hygieneCoverage({ rules: 105710, shadowProven: 3049, shadowUnknown: 102661, hitsCollected: 71200, hitsMissing: 34510 });
+  expect(mixed.sentence).toBe("Shadow analysis: 3,049 proven · 102,661 not provable (of 105,710 rules)");
+  expect(mixed.hitsSentence).toBe("Hit counters: 71,200 stored · 34,510 not collected");
+  expect(mixed.basis).toContain("separate question");
+  // No coverage from the service (older build), or a malformed one: UNKNOWN, not a number computed from the chips.
+  for (const absent of [undefined, { rules: 871, shadowProven: -1, shadowUnknown: 0, hitsCollected: 0, hitsMissing: 0 }, { rules: 871 } as never]) {
+    const coverage = hygieneCoverage(absent);
+    expect(coverage).toMatchObject({ shadow: null, hits: null, sentence: "Shadow analysis: coverage UNKNOWN (not returned by the service)", hitsSentence: "Hit counters: coverage UNKNOWN" });
+  }
 });
 it("groups the not-provable reasons of the rows it sees in plain words, counting each rule once per group", () => {
   const row = (ruleId: string, shadowReason: string | null, shadowStatus: PolicyHygieneAssessment["shadowStatus"] = "UNKNOWN", unknownEvidence?: string) => ({
@@ -70,6 +78,17 @@ it("groups the not-provable reasons of the rows it sees in plain words, counting
   expect(breakdown.map(entry => [entry.group.key, entry.rules])).toEqual([["identity", 2], ["install-on", 1], ["budget", 1], ["hits", 1], ["zone", 1]]);
   expect(breakdown[0].reasons).toEqual(["user or category constraint", "access-role object unresolved", "user objects not resolvable"]);
   expect(hygieneReasonBreakdown([row("r5", null, "NOT_SHADOWED")])).toEqual([]);
+  // The policy-wide counts win over the page: one entry per evidence string, the `Shadowing:` wrapper removed, rules summed per group.
+  const policyWide = hygieneReasonBreakdown([row("r1", "user or category constraint")], [
+    { evidence: "Shadowing: earlier rule has unsupported constraints.", rules: 30680 }, { evidence: "Shadowing: unresolved object.", rules: 14921 },
+    { evidence: "Hit counts were not collected or are invalid.", rules: 34510 }, { evidence: "Hit counts are missing for a target.", rules: 12 },
+    { evidence: "Shadowing: zone or install-on coverage is unproven.", rules: 14844 }, { evidence: 7, rules: "x" } as never,
+  ]);
+  expect(policyWide.map(entry => [entry.group.key, entry.rules])).toEqual([["hits", 34522], ["earlier", 30680], ["objects", 14921], ["zone", 14844]]);
+  expect(policyWide[1].group.label).toBe("Earlier rule in this layer not provable");
+  expect(policyWide[1].reasons).toEqual(["earlier rule has unsupported constraints"]);
+  expect(policyWide[0].reasons).toEqual(["Hit counts were not collected or are invalid", "Hit counts are missing for a target"]);
+  expect(hygieneReasonBreakdown([row("r1", "user or category constraint")], [])).toEqual([]);
 });
 it("shows analysed coverage, the plain-words reason breakdown and what it covers instead of a bare unknown count", async () => {
   const rows = [
@@ -77,30 +96,61 @@ it("shows analysed coverage, the plain-words reason breakdown and what it covers
     { ...page.rows[0], ruleId: "r2", number: 2, name: "RULE-BRAVO-02", hygiene: { ...hygiene, coveringRuleId: null, shadowStatus: "UNKNOWN" as const, shadowReason: "unresolved install-on selector" }, findings: [] },
     { ...page.rows[0], ruleId: "r3", number: 3, name: "RULE-CHARLIE-03", hygiene: { ...hygiene, coveringRuleId: null, shadowStatus: "NOT_SHADOWED" as const, shadowReason: null }, findings: [] },
   ];
-  vi.stubGlobal("fetch", vi.fn(async () => response({ ...page, rows, total: 3, counts: { ...page.counts, unknown: 845 } })));
-  mount(<PolicyHygieneTab openObject={vi.fn()} policy="p1" openRule={vi.fn()} ruleCount={871} />);
+  vi.stubGlobal("fetch", vi.fn(async () => response({ ...page, rows, total: 3, counts: { ...page.counts, unknown: 845 },
+    coverage: { rules: 871, shadowProven: 26, shadowUnknown: 845, hitsCollected: 871, hitsMissing: 0 },
+    unknownReasons: [{ evidence: "Shadowing: user or category constraint.", rules: 800 }, { evidence: "Shadowing: unresolved install-on selector.", rules: 45 }] })));
+  mount(<PolicyHygieneTab openObject={vi.fn()} policy="p1" openRule={vi.fn()} />);
   const coverage = await screen.findByRole("region", { name: "Analysis coverage" });
-  expect(within(coverage).getByText("Analysed: 26 proven · 845 not provable (of 871 rules)")).toBeInTheDocument();
+  expect(within(coverage).getByText("Shadow analysis: 26 proven · 845 not provable (of 871 rules)")).toBeInTheDocument();
+  expect(within(coverage).getByText("Hit counters: 871 stored · 0 not collected")).toHaveAttribute("data-hits-coverage", "true");
   expect(coverage).not.toHaveAttribute("data-budget-reached");
-  expect(within(coverage).getByText(/^Why not provable · from all 3 matching rules · 2 of them not provable/)).toBeInTheDocument();
+  // The reasons are the whole policy's, not the three rows on this page.
+  expect(within(coverage).getByText(/^Why not provable · across the whole policy/)).toBeInTheDocument();
   const reasons = within(coverage).getByRole("list", { name: "Not provable reasons" });
   const items = within(reasons).getAllByRole("listitem");
   expect(items.map(item => item.getAttribute("data-reason-group"))).toEqual(["identity", "install-on"]);
-  expect(items[0]).toHaveTextContent(/^1Identity or dynamic objects/); expect(items[0]).toHaveTextContent("not a rule problem");
-  expect(items[1]).toHaveAttribute("title", "unresolved install-on selector");
+  expect(items[0]).toHaveTextContent(/^800Identity or dynamic objects/); expect(items[0]).toHaveTextContent("not a rule problem");
+  expect(items[1]).toHaveTextContent(/^45Install-on/); expect(items[1]).toHaveAttribute("title", "unresolved install-on selector");
   // The class chip and the row say "not provable" in words beside the UNKNOWN, with the group under the raw reason.
   expect(screen.getByText("not provable (UNKNOWN): 845")).toBeInTheDocument();
   expect(screen.getByText("Identity or dynamic objects", { selector: "[data-reason-group]" })).toBeInTheDocument();
   expect(screen.getByText("Not shadowed (proven)")).toBeInTheDocument();
   expect(screen.getAllByText(/Collected: 2026-10-09 15:00 GMT\+3$/).length).toBe(3);
 });
-it("says the proven count is UNKNOWN without a rule total, and tells where the reasons are when none is on the page", async () => {
+it("says the coverage is UNKNOWN when the service did not return it, and tells where the reasons are when none is on the page", async () => {
   vi.stubGlobal("fetch", vi.fn(async () => response({ ...page, total: 250, counts: { ...page.counts, unknown: 12 } })));
   mount(<PolicyHygieneTab openObject={vi.fn()} policy="p1" openRule={vi.fn()} />);
   const coverage = await screen.findByRole("region", { name: "Analysis coverage" });
-  expect(within(coverage).getByText("Analysed: proven count UNKNOWN · 12 not provable (rule total not recorded)")).toBeInTheDocument();
+  expect(within(coverage).getByText("Shadow analysis: coverage UNKNOWN (not returned by the service)")).toBeInTheDocument();
+  expect(within(coverage).getByText("Hit counters: coverage UNKNOWN")).toHaveAttribute("data-hits-coverage", "unknown");
   expect(within(coverage).queryByRole("list", { name: "Not provable reasons" })).toBeNull();
   expect(within(coverage).getByText(/No not-provable rule is on this page; filter by "not provable" to see why the 12 could not be decided\./)).toBeInTheDocument();
+});
+it("warns about missing hit counters as their own line, prints a shadow reason once per row, and lists the proven classes before the coverage chip", async () => {
+  const shadowUnknown = { ...hygiene, coveringRuleId: null, shadowStatus: "UNKNOWN" as const, shadowReason: "earlier rule has unsupported constraints" };
+  vi.stubGlobal("fetch", vi.fn(async () => response({ ...page, rows: [{ ...page.rows[0], hygiene: shadowUnknown,
+    findings: [{ findingClass: "unknown", severity: "LOW", evidence: "Shadowing: earlier rule has unsupported constraints." }, { findingClass: "unknown", severity: "LOW", evidence: "Hit counts were not collected or are invalid." }, { findingClass: "broad", severity: "MEDIUM", evidence: "Broad selectors are present; see permissiveness reasons." }] }],
+    counts: { ...page.counts, unknown: 1, broad: 1 }, coverage: { rules: 1, shadowProven: 0, shadowUnknown: 1, hitsCollected: 0, hitsMissing: 1 },
+    unknownReasons: [{ evidence: "Shadowing: earlier rule has unsupported constraints.", rules: 1 }, { evidence: "Hit counts were not collected or are invalid.", rules: 1 }] })));
+  mount(<PolicyHygieneTab openObject={vi.fn()} policy="p1" openRule={vi.fn()} />);
+  const coverage = await screen.findByRole("region", { name: "Analysis coverage" });
+  expect(within(coverage).getByText(/^Hit counters: 0 stored · 1 not collected · a full refresh/)).toBeInTheDocument();
+  expect(within(coverage).getByText("Earlier rule in this layer not provable")).toBeInTheDocument();
+  // The row: the shadow reason sits in the Shadow comparison column only; the hit-counter gap stays in Findings.
+  expect(screen.getAllByText(/earlier rule has unsupported constraints/)).toHaveLength(1);
+  expect(screen.getByText("UNKNOWN because earlier rule has unsupported constraints")).toBeInTheDocument();
+  expect(screen.getByText(/UNKNOWN because Hit counts were not collected/)).toBeInTheDocument();
+  expect(screen.getByText("Earlier rule in this layer not provable", { selector: "[data-reason-group]" })).toBeInTheDocument();
+  const chips = screen.getAllByRole("button", { name: /^(conflict|shadowed|broad|unused|expired|disabled|not provable \(UNKNOWN\)): / }).map(chip => chip.textContent);
+  expect(chips[0]).toMatch(/^conflict/); expect(chips[chips.length - 1]).toMatch(/^not provable \(UNKNOWN\)/);
+  expect(screen.getByText(/rules whose only result is not provable are under/)).toBeInTheDocument();
+});
+it("reads the bulkhead's 503 POLICY_BUSY as a wait, not as a failed read", async () => {
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({ error: "POLICY_BUSY" }), { status: 503, headers: { "Retry-After": "5" } })).mockImplementation(async () => response(page)));
+  mount(<PolicyHygieneTab openObject={vi.fn()} policy="p1" openRule={vi.fn()} />);
+  expect(await screen.findByRole("alert")).toHaveTextContent("Policy analysis is busy; retry in a few seconds.");
+  expect(screen.getByRole("alert")).not.toHaveTextContent("could not be loaded");
+  fireEvent.click(screen.getByText("Retry hygiene")); await screen.findByText("conflict: 1");
 });
 it("handles failed reads and retries and requests masked CSV with active filters", async () => {
   const fetcher = vi.fn().mockResolvedValueOnce(new Response("{}", { status: 500 })).mockImplementation(async (url: string) => url.includes(".csv") ? new Response("Rule,Class\nRULE-BRAVO-02,conflict") : response(page));

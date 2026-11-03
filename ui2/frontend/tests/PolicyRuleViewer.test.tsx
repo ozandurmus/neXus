@@ -2,7 +2,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@mui/material/styles";
 import { m3Theme } from "../src/theme/m3Theme";
-import { PolicyRuleTable, RuleDetailPanel, RuleHistory, RuleMetrics, RULE_ROW_HEIGHT, REASON_GROUPS, actionWord, containerLabel, documentationEntries, hygieneBadges, objectKind, permissivenessWords, scheduleLabel, sectionLabel, snapshotFreshness, unknownReasonGroup, unknownReasons, usageWords } from "../src/screens/PolicyRuleViewer";
+import { PolicyRuleTable, RuleDetailPanel, RuleHistory, RuleMetrics, RULE_ROW_HEIGHT, REASON_GROUPS, POLICY_BUSY_MESSAGE, actionWord, containerLabel, documentationEntries, hygieneBadges, isPolicyBusy, objectKind, permissivenessWords, policyFailureText, reportPolicyLoadError, scheduleLabel, sectionLabel, snapshotFreshness, unknownFlagWords, unknownReasonGroup, unknownReasons, usageWords } from "../src/screens/PolicyRuleViewer";
 import type { PolicyHygieneAssessment, PolicyMetadata, PolicyObject, PolicyRule, PolicySchedule, PolicySection } from "../src/auth/adminApi";
 
 const metadata: PolicyMetadata = { id: "policy-1", name: "OBJ-POLICY-01", sourceId: "source-1", sourceName: "MGR-BRAVO-01", vendor: "CP", containerId: "domain-1", containerName: "DOM-TANGO-01", collectedAt: "2026-10-02T00:00:00Z", artefactRef: "artifact-1", targets: [] };
@@ -44,6 +44,25 @@ it("words usage honestly: UNKNOWN when missing, Not collected when null, Never a
   const stale = usageWords({ hitCounts: { ...base, lastHit: "2026-05-01T00:00:00Z", source: "mds" } }, now);
   expect(stale.state).toBe("stale"); expect(stale.detail).toContain("2026-05-01T00:00:00Z"); expect(stale.detail).toContain("Management server counters");
   expect(usageWords({ hitCounts: { ...base, lastHit: "not-a-time" } }, now)).toMatchObject({ lastHit: "UNKNOWN", state: "partial" });
+});
+it("judges stale usage at the counters' collection time, as the hygiene unused finding does, while the age shown stays wall-clock", () => {
+  const now = new Date("2026-10-30T12:00:00Z");
+  // Collected 29 days ago; last hit 65 days before that collection: 94 days on the wall clock, 65 at collection time.
+  const counts = { hits: 12, firstHit: null, lastHit: "2026-07-28T12:00:00Z", source: "mds" as const, collectedAt: "2026-10-01T12:00:00Z", firewalls: [] };
+  const words = usageWords({ hitCounts: counts }, now);
+  expect(words.state).toBe("recent"); expect(words.lastHit).toBe("94 d ago");
+  expect(usageWords({ hitCounts: counts }, now, 60).state).toBe("stale");
+  // Without a readable collection time the wall clock is the only anchor left.
+  expect(usageWords({ hitCounts: { ...counts, collectedAt: "not-a-time" } }, now).state).toBe("stale");
+});
+it("reads the bulkhead's POLICY_BUSY as a wait on every load path and records it as its own category", () => {
+  const busy = { status: 503, body: { error: "POLICY_BUSY" } };
+  expect(isPolicyBusy(busy)).toBe(true); expect(isPolicyBusy({ status: 503, body: { error: "Withheld in AIView" } })).toBe(false); expect(isPolicyBusy(new Error("x"))).toBe(false);
+  expect(policyFailureText(busy, "Rules could not be loaded.")).toBe(POLICY_BUSY_MESSAGE);
+  expect(policyFailureText({ status: 500, body: {} }, "Rules could not be loaded.")).toBe("Rules could not be loaded.");
+  const debug = vi.spyOn(console, "debug").mockImplementation(() => {});
+  expect(reportPolicyLoadError("rules", busy)).toBe("POLICY_BUSY");
+  expect(debug).toHaveBeenCalledWith("policy-load", "rules", "POLICY_BUSY");
 });
 it("words permissiveness with reasons and never a dash, reads object kinds and action words, and finds documentation fields", () => {
   expect(permissivenessWords({})).toEqual({ level: "Unknown", word: "UNKNOWN", reasons: ["Not assessed in this snapshot"], known: false });
@@ -161,13 +180,17 @@ it("badges hygiene only from stored findings and rule state, and says UNKNOWN wh
     findings: [{ findingClass: "shadowed", severity: "MEDIUM", evidence: "Earlier rule covers this match." }, { findingClass: "broad", severity: "HIGH", evidence: "Any source." },
       { findingClass: "broad", severity: "MEDIUM", evidence: "Any service." }, { findingClass: "unknown", severity: "LOW", evidence: "Hit counts not collected." }] };
   const analysed: PolicyRule = { ...rule, enabled: true, timeStatus: "always", hygiene };
-  expect(hygieneBadges(analysed).map(b => [b.label, b.severity])).toEqual([["Shadowed", "MEDIUM"], ["Broad", "HIGH"], ["Hygiene UNKNOWN", "UNKNOWN"]]);
+  // The `unknown` class is not a finding: never a badge (it would sit on nearly every row); the cell says it in muted words.
+  expect(hygieneBadges(analysed).map(b => [b.label, b.severity])).toEqual([["Shadowed", "MEDIUM"], ["Broad", "HIGH"]]);
+  expect(unknownFlagWords(hygiene)).toEqual({ text: "usage not provable", title: "Hit counts not collected." });
+  expect(unknownFlagWords({ ...hygiene, findings: [] })).toBeNull(); expect(unknownFlagWords(undefined)).toBeNull();
   expect(hygieneBadges({ ...analysed, hygiene: { ...hygiene, findings: [] }, expiring: true })).toEqual([expect.objectContaining({ label: "Expiring" })]);
   mount(ruleTable({ sections: [{ ...section, total: 3, rules: [analysed, { ...analysed, id: "clean", number: 2, hygiene: { ...hygiene, findings: [] } }, { ...analysed, id: "none", number: 3, hygiene: undefined }] }] }));
   const [first, clean, none] = [1, 2, 3].map(n => column(screen.getByRole("row", { name: new RegExp(`^Rule ${n}:`) }), "hygiene"));
-  expect(first).toHaveTextContent("ShadowedBroadHygiene UNKNOWN");
+  expect(first).toHaveTextContent("ShadowedBroadusage not provable");
   expect(first.querySelector('[data-hygiene="broad"]')).toHaveAttribute("title", "HIGH · Any source.; Any service.");
-  expect(first.querySelector('[data-hygiene="unknown"]')).toHaveAttribute("title", "UNKNOWN because Hit counts not collected.");
+  expect(first.querySelector('[data-hygiene="unknown"]')).toBeNull();
+  expect(first.querySelector("[data-hygiene-gap]")).toHaveAttribute("title", "Hit counts not collected.");
   expect(clean).toHaveTextContent("No findings");
   expect(none).toHaveTextContent("UNKNOWN");
   expect(none.textContent).not.toMatch(/No findings/);
@@ -201,7 +224,9 @@ it("keeps detail nav on the page and exposes object and revision views", async (
   const openObject = vi.fn();
   mount(<RuleDetailPanel rule={rule} section={section} metadata={metadata} objects={objects} openObject={openObject} />);
   expect(screen.getByText(/Domain: DOM-TANGO-01/)).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Shadowing" })).toBeEnabled();
+  // Shadowing and violations are the Overview's hygiene card; separate views only repeated it.
+  expect(screen.getAllByRole("button", { name: /^(Overview|Rule history|Objects|Shadowing|Violations)$/ }).map(b => b.textContent)).toEqual(["Overview", "Rule history", "Objects"]);
+  expect(document.querySelector('[aria-label="Rule metrics"] [data-shadow-status]')).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Objects" }));
   fireEvent.click(screen.getByRole("button", { name: "OBJ-ADDRESS-05" })); expect(openObject).toHaveBeenCalledWith("5");
   fireEvent.click(screen.getByRole("button", { name: "Rule history" }));
@@ -295,14 +320,14 @@ it("gives a lone object chip two lines with its full name on hover, and keeps tw
   expect(getComputedStyle(first).whiteSpace).toBe("nowrap");
   expect(second).toHaveAttribute("title", expect.stringMatching(/^ADDR-PAPA-01 · Host/));
 });
-it("names the subject of the UNKNOWN flag and hatches it, and shows a withheld comment as a masked token", () => {
+it("says in muted words what was not decided instead of a Hygiene UNKNOWN pill, and shows a withheld comment as a masked token", () => {
   const hygiene: PolicyHygieneAssessment = { shadowStatus: "UNKNOWN", shadowReason: "analysis budget", coveringRuleId: null, timeStatus: "always", expiring: false, counterWindow: "90 d", hitSource: "mds", hitsCollectedAt: null,
-    permissiveness: { level: "Low", reasons: [] }, findings: [{ findingClass: "unknown", severity: "LOW", evidence: "Hit counts not collected." }] };
+    permissiveness: { level: "Low", reasons: [] }, findings: [{ findingClass: "unknown", severity: "LOW", evidence: "Shadowing: analysis budget." }, { findingClass: "unknown", severity: "LOW", evidence: "Hit counts not collected." }] };
   mount(ruleTable({ sections: [{ ...section, rules: [{ ...rule, enabled: true, timeStatus: "always", hygiene }] }], openHygiene: vi.fn() }));
   const row = screen.getByRole("row", { name: /^Rule 1:/ });
-  const flag = within(column(row, "hygiene")).getByRole("button", { name: "Hygiene UNKNOWN" });
-  expect(flag).toHaveAttribute("title", "UNKNOWN because Hit counts not collected. · Open in Hygiene");
-  expect(getComputedStyle(flag).backgroundImage).toContain("repeating-linear-gradient");
+  expect(within(column(row, "hygiene")).queryByRole("button")).toBeNull();
+  const words = within(column(row, "hygiene")).getByText("No findings · shadowing not provable");
+  expect(words).toHaveAttribute("title", "Shadowing not provable: analysis budget · Hit counts not collected.");
   expect(within(column(row, "name")).getByText("Comment withheld")).toHaveAttribute("title", expect.stringContaining("masked view"));
   expect(column(row, "name").textContent).not.toContain("Withheld in AIView");
 });
@@ -339,8 +364,13 @@ it("groups the analysis' not-provable vocabulary into plain words", () => {
   expect(key("earlier sections not analysed")).toBe("layers");
   expect(key("analysis budget")).toBe("budget");
   expect(key("unresolved object")).toBe("objects");
-  expect(key("earlier rule has unsupported constraints")).toBe("constraints");
-  expect(key("Hit counts were not collected or are invalid.")).toBe("hits");
+  // The cascade names the earlier rule as its subject, never this rule's constraints.
+  expect(key("earlier rule has unsupported constraints")).toBe("earlier");
+  expect(key("Shadowing: earlier rule has unsupported constraints.")).toBe("earlier");
+  expect(unknownReasonGroup("earlier rule has unsupported constraints").label).toBe("Earlier rule in this layer not provable");
+  expect(unknownReasonGroup("earlier rule has unsupported constraints").explain).toContain("Not a problem with this rule itself");
+  expect(key("unsupported rule constraint")).toBe("constraints");
+  expect(key("Hit counts were not collected or are invalid.")).toBe("hits"); expect(key("Hit counts are missing for a target.")).toBe("hits");
   expect(key("something new")).toBe("other"); expect(key(null)).toBe("other");
   expect(unknownReasonGroup("analysis budget")).toMatchObject({ label: "Analysis limit reached" });
   expect(REASON_GROUPS.every(group => group.label && group.explain)).toBe(true);

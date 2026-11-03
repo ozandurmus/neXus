@@ -108,14 +108,30 @@ class PolicyDomainIndexTest {
     @Test void hitFiltersUseKnownEvidenceAndExactDayBoundary() {
         var now = Instant.parse("2026-10-05T00:00:00Z");
         var rule = snapshot(List.of()).sections().get(0).rules().get(0);
-        assertFalse(PolicyQueryService.hitMatches(rule, "never", 90, now));
-        assertTrue(PolicyQueryService.hitMatches(rule.withHitCounts(new HitCounts(0L, null, null, "mds", now.toString(), "zero", List.of())), "never", 90, now));
+        assertFalse(PolicyQueryService.hitMatches(rule, "never", 90));
+        assertTrue(PolicyQueryService.hitMatches(rule.withHitCounts(new HitCounts(0L, null, null, "mds", now.toString(), "zero", List.of())), "never", 90));
         var boundary = rule.withHitCounts(new HitCounts(7L, "2026-01-01T00:00:00Z", now.minusSeconds(30 * 86400).toString(), "mds", now.toString(), "low", List.of()));
-        assertTrue(PolicyQueryService.hitMatches(boundary, "inactive", 30, now));
-        assertFalse(PolicyQueryService.hitMatches(boundary, "never", 30, now));
-        assertFalse(PolicyQueryService.hitMatches(boundary, "inactive", 31, now));
-        assertTrue(PolicyQueryService.hitMatches(rule.withHitCounts(new HitCounts(null, null, now.minusSeconds(30 * 86400).toString(), "mds", now.toString(), null, List.of())), "inactive", 30, now));
-        assertFalse(PolicyQueryService.hitMatches(rule.withHitCounts(new HitCounts(null, null, null, "mds", now.toString(), null, List.of())), "never", 30, now));
-        assertFalse(PolicyQueryService.hitMatches(rule.withHitCounts(new HitCounts(0L, null, "invalid", "mds", now.toString(), null, List.of())), "inactive", 30, now));
+        assertTrue(PolicyQueryService.hitMatches(boundary, "inactive", 30));
+        assertFalse(PolicyQueryService.hitMatches(boundary, "never", 30));
+        assertFalse(PolicyQueryService.hitMatches(boundary, "inactive", 31));
+        assertTrue(PolicyQueryService.hitMatches(rule.withHitCounts(new HitCounts(null, null, now.minusSeconds(30 * 86400).toString(), "mds", now.toString(), null, List.of())), "inactive", 30));
+        assertFalse(PolicyQueryService.hitMatches(rule.withHitCounts(new HitCounts(null, null, null, "mds", now.toString(), null, List.of())), "never", 30));
+        assertFalse(PolicyQueryService.hitMatches(rule.withHitCounts(new HitCounts(0L, null, "invalid", "mds", now.toString(), null, List.of())), "inactive", 30));
+    }
+    @Test void unusedWindowIsAnchoredAtCounterCollectionLikeTheHygieneFinding() {
+        var now = Instant.parse("2026-10-30T00:00:00Z");
+        var rule = snapshot(List.of()).sections().get(0).rules().get(0);
+        // Collected 29 days ago; last hit 65 days before that collection: 94 days on the wall clock, 65 at collection time.
+        Instant collected = now.minusSeconds(29L * 86400), last = collected.minusSeconds(65L * 86400);
+        var stale = rule.withHitCounts(new HitCounts(7L, "2026-01-01T00:00:00Z", last.toString(), "mds", collected.toString(), "low", List.of()));
+        assertFalse(PolicyQueryService.hitMatches(stale, "inactive", 90), "65 days before collection is not 90 days unused");
+        assertTrue(PolicyQueryService.hitMatches(stale, "inactive", 65));
+        assertFalse(PolicyQueryService.hitMatches(stale, "inactive", 66));
+        // A hit the hour before collection is in use whatever the snapshot's age.
+        var fresh = rule.withHitCounts(new HitCounts(7L, null, collected.minusSeconds(3600).toString(), "mds", collected.toString(), "low", List.of()));
+        assertFalse(PolicyQueryService.hitMatches(fresh, "inactive", 1));
+        // No readable collection time: the window has no anchor and the preset never matches.
+        var unanchored = rule.withHitCounts(new HitCounts(7L, null, last.toString(), "mds", "not-a-time", "low", List.of()));
+        assertFalse(PolicyQueryService.hitMatches(unanchored, "inactive", 90));
     }
 }
