@@ -1260,42 +1260,6 @@
       "priority": "P2",
       "target": "",
       "note": ""
-    },
-    {
-      "id": "audit_tier2_redaction_unsalted_sha256",
-      "category": "security",
-      "title": "Audit tier-2 redaction uses unsalted sha256; IP values recoverable by enumeration",
-      "status": "planned",
-      "priority": "P1",
-      "target": "",
-      "note": ""
-    },
-    {
-      "id": "authz_decisions_retention",
-      "category": "security",
-      "title": "authz_decisions has no retention; define and enforce one",
-      "status": "planned",
-      "priority": "P2",
-      "target": "",
-      "note": ""
-    },
-    {
-      "id": "path_analysis_a0_freeze",
-      "category": "ui2",
-      "title": "Path analysis A0: PO review and freeze of PATH_ANALYSIS_VENDOR_SEMANTICS.md (CP access vs NAT order still UNKNOWN)",
-      "status": "planned",
-      "priority": "P1",
-      "target": "PATH_ANALYSIS_VENDOR_SEMANTICS.md",
-      "note": ""
-    },
-    {
-      "id": "ci_validation_red_and_scope_unmapped",
-      "category": "delivery",
-      "title": "CI validation red on every PR since >=2026-10-25; regression scope blocks unmapped ui2 paths (policy etc.)",
-      "status": "planned",
-      "priority": "P0",
-      "target": "",
-      "note": ""
     }
   ]
 }
