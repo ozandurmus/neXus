@@ -68,8 +68,9 @@ public final class PolicyHygiene {
     /** {@code workLimit} caps the whole snapshot's shadowing work, {@code ruleLimit} each rule's own. */
     static Result analyze(PolicySnapshot snapshot, int days, Instant now, int workLimit, int ruleLimit, Map<String, PolicyObject> breadthObjects) {
         if (days < 1 || days > 36500 || workLimit < 0 || ruleLimit < 0) throw new IllegalArgumentException("Invalid hygiene limits");
-        Budget budget = new Budget(workLimit);
+        Budget budget = new Budget(workLimit), side = budget.side();
         var resolver = new Resolver(snapshot.objects(), budget);
+        var sideResolver = new Resolver(snapshot.objects(), side);
         Map<String, Assessment> results = new LinkedHashMap<>();
         // One Earlier per evaluation scope; a Check Point parent layer's Earlier resumes after its inline layers.
         var scope = new EvaluationScope<Earlier>(snapshot.metadata(), () -> new Earlier(snapshot.objects()));
@@ -136,14 +137,23 @@ public final class PolicyHygiene {
                                 status.equals("CONFLICT") ? "Earlier enabled rule fully covers this match with a different action."
                                     : inlineCover ? INLINE_LAYER_COVER : "Earlier enabled rule fully covers this match with the same action."));
                         } else if (earlier.unproven(match, budget)) reason = "zone or install-on coverage is unproven";
+                        // Only where the former analysis said "earlier rule has unsupported constraints" for want of a full
+                        // match: every partial prior must be proven disjoint, or that reason stands.
+                        else if (reason == null && earlier.partialOverlap(match, side)) reason = "earlier rule has unsupported constraints";
                         if (covering == null && reason != null) status = "UNKNOWN";
                     }
                 } catch (Unknown limit) { status = "UNKNOWN"; reason = limit.getMessage(); budgetReached = true; }
                 // A rule that ran out of budget still constrains later rules: a resolved match stays a coverage
-                // candidate and an unresolved one counts as an earlier unknown -- never silently dropped (fail-closed).
+                // candidate, an unresolved one a partial prior or, when nothing of it may be relied on, an earlier
+                // unknown -- never silently dropped (fail-closed).
                 if (!Boolean.FALSE.equals(rule.enabled())) {
                     if (match != null && match.problem() == null) earlier.add(match);
-                    else earlier.unknown = true;
+                    else {
+                        Partial partial = null;
+                        if (match != null) try { partial = partial(snapshot, section, rule, sideResolver); } catch (Unknown limit) { partial = null; }
+                        if (partial != null) earlier.add(partial);
+                        else earlier.unknown = true;
+                    }
                 }
                 if (status.equals("NOT_SHADOWED") && !snapshot.failures().isEmpty()) {
                     status = "UNKNOWN"; reason = "snapshot collection incomplete";
@@ -172,6 +182,10 @@ public final class PolicyHygiene {
      * placements only, so each (rule key, earlier key) pair is evaluated once and the answer remembered.</li>
      * <li>A candidate whose selector bounds cannot contain the rule's is rejected before the range walk.</li>
      * </ul>
+     * The one deliberate difference from that scan: an earlier rule without a full match no longer makes every later
+     * rule UNKNOWN "earlier rule has unsupported constraints" when it is a {@link Partial} prior proven disjoint from
+     * the later rule. Partial priors never cover (no REDUNDANT or CONFLICT from them) and are consulted only where the
+     * scan would have given that very reason, so every other verdict stays the scan's.
      */
     private static final class Earlier {
         private record Key(Set<String> from, Set<String> to, Set<String> installOn) {}
@@ -194,8 +208,17 @@ public final class PolicyHygiene {
         private final List<Bucket> keys = new ArrayList<>();
         private final Map<Key, int[]> overlap = new HashMap<>();
         private int count;
-        /** An enabled earlier rule of this scope had no resolved match, so no later rule can be proven clean. */
+        /** An enabled earlier rule of this scope had no resolved match and no partial prior, so no later rule can be proven clean. */
         boolean unknown;
+        /** Distinct partial priors in rule order (equal resolved dimensions answer every disjointness test alike). */
+        private final List<Partial> partials = new ArrayList<>();
+        private final Set<List<Object>> partialSeen = new HashSet<>();
+        /** Each partial prior's placement-key number; placements are disjoint or not per (prior key, rule key), once. */
+        private final Map<Map<String, Set<String>>, Integer> partialKeys = new HashMap<>();
+        private int[] partialKey = new int[8];
+        private final Map<Map<String, Set<String>>, byte[][]> placementMemo = new HashMap<>();
+        /** Per later-rule dimensions: partial priors proven disjoint so far, and whether one was not; the answer only grows. */
+        private final Map<List<Object>, int[]> partialState = new HashMap<>();
         Earlier(Map<String, PolicyObject> objects) { this.objects = objects; }
         private static Key key(Match m) { return new Key(m.placements().get("from"), m.placements().get("to"), m.placements().get("install-on")); }
         void add(Match match) {
@@ -223,6 +246,35 @@ public final class PolicyHygiene {
                 }
             }
             return best;
+        }
+        void add(Partial partial) {
+            if (!partialSeen.add(Arrays.asList(partial.selectors(), partial.placements()))) return;
+            int n = partials.size();
+            if (n == partialKey.length) partialKey = Arrays.copyOf(partialKey, n * 2);
+            partialKey[n] = partialKeys.computeIfAbsent(partial.placements(), k -> partialKeys.size());
+            partials.add(partial);
+        }
+        /**
+         * True unless every partial prior of this scope is proven {@code disjoint} from the match. The work is spent from
+         * {@code side} (the rule's own window, a separate pool); running out of it is "not proven", never a budget verdict.
+         */
+        boolean partialOverlap(Match match, Budget side) {
+            if (partials.isEmpty()) return false;
+            var state = partialState.computeIfAbsent(List.of(match.selectors(), match.placements()), k -> new int[2]);
+            // 0 = not yet evaluated, 1 = placements disjoint, 2 = not disjoint; one entry per partial placement key.
+            var memo = placementMemo.computeIfAbsent(match.placements(), k -> new byte[1][0]);
+            if (memo[0].length < partialKeys.size()) memo[0] = Arrays.copyOf(memo[0], Math.max(partialKeys.size(), 2 * memo[0].length));
+            byte[] placed = memo[0];
+            try {
+                while (state[1] == 0 && state[0] < partials.size()) {
+                    side.spend();
+                    var prior = partials.get(state[0]); int key = partialKey[state[0]];
+                    if (placed[key] == 0) placed[key] = (byte) (PolicyNormalization.disjoint(prior.placements(), match.placements(), objects) ? 1 : 2);
+                    if (placed[key] == 2 && !disjoint(prior, match, side)) state[1] = 1;
+                    else state[0]++;
+                }
+            } catch (Unknown limit) { return true; }
+            return state[1] == 1;
         }
         /** True once any earlier key overlaps this rule's key without being compatible with it; the answer only grows. */
         boolean unproven(Match match, Budget budget) {
