@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py tools/delivery/project_queue.py render)
-Build: NXS-LOCAL-0374 · Track: PCP.x · Generated: 2026-10-21T08:09:33Z
+Build: NXS-LOCAL-0374 · Track: PCP.x · Generated: 2026-11-03T07:05:28Z
 
 ## Now
 - NXS-LOCAL-0374 — System logs phase B: collectors, masked view, settings route, Spike Detective data (in_progress)
@@ -112,6 +112,7 @@ Build: NXS-LOCAL-0374 · Track: PCP.x · Generated: 2026-10-21T08:09:33Z
 - P2/planned cp_vsx_config_collected_without_vs_context
 - P2/planned deploy_manifest_tests_eight_failures
 - P2/planned device_admin_accounts_and_privileges
+- P2/planned diagnostic_mask_overreach
 - P2/planned failover_phase_d_has_no_build_record
 - P2/planned gov_orch_turn_counter_blind_to_codex_stream
 - P2/planned hosta_export_include_build_namespace
