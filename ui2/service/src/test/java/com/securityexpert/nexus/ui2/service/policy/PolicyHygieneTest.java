@@ -149,13 +149,16 @@ class PolicyHygieneTest {
         assertEquals("NOT_SHADOWED", assessment(snapshot, "r3").shadowStatus());
         assertNull(assessment(snapshot, "r3").coveringRuleId());
     }
-    @Test void checkPointInlineLayerStaysSeparateAndReturningParentIsUnproven() {
+    @Test void checkPointChildLayerWhoseParentAppliesNoInlineLayerAndTheReturningParentAreUnproven() {
+        // r1 carries no inline-layer reference, so the child section's layer identity is not established
+        // (inline layers proper are covered by PolicyHygieneCheckPointScopeTest).
         var snapshot = sections("CP", cpSection("s1", null, cpRule("r1", "Accept")),
             cpSection("inline", "r1", cpRule("r2", "Accept")), cpSection("s3", null, cpRule("r3", "Accept")));
-        assertEquals("NOT_SHADOWED", assessment(snapshot, "r2").shadowStatus());
-        assertNull(assessment(snapshot, "r2").coveringRuleId());
-        assertEquals("UNKNOWN", assessment(snapshot, "r3").shadowStatus());
-        assertEquals("earlier sections not analysed", assessment(snapshot, "r3").shadowReason());
+        for (String id : List.of("r2", "r3")) {
+            assertEquals("UNKNOWN", assessment(snapshot, id).shadowStatus());
+            assertEquals("earlier sections not analysed", assessment(snapshot, id).shadowReason());
+            assertNull(assessment(snapshot, id).coveringRuleId());
+        }
     }
     @Test void checkPointUnprovenSectionOrderStaysUnknownForEveryLaterRule() {
         var snapshot = sections("CP", cpSection("s1", null, cpRule("r2", "Accept")),

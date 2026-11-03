@@ -18,6 +18,43 @@ final class SyntheticPolicies {
         var random = new Random(seed);
         String vendor = random.nextInt(50) == 0 ? "OTHER" : random.nextBoolean() ? "PAN" : "CP";
         boolean cp = vendor.equals("CP");
+        var pool = pool(random, cp);
+        var objects = pool.objects(); var addresses = pool.addresses(); var serviceRefs = pool.services();
+
+        String id = "p" + seed;
+        var metadata = new Metadata(id, "src-" + seed, "MGR-BRAVO-01", vendor, "ctr-" + seed, "DOM-TANGO-01", "POL-ALPHA-01",
+            "2026-10-09T12:00:00Z", "a1", List.of());
+        List<Section> sections = new ArrayList<>();
+        int sectionCount = 1 + random.nextInt(3), next = 0, number = 0;
+        var phases = List.of("pre-rulebase", "rulebase", "post-rulebase");
+        int phase = 0; String layer = "LAYER-ALPHA";
+        for (int s = 0; s < sectionCount; s++) {
+            int rulesHere = s == sectionCount - 1 ? size - next : random.nextInt(size - next + 1);
+            if (random.nextInt(6) == 0) layer = "LAYER-" + (char) ('A' + random.nextInt(3));
+            if (random.nextInt(6) == 0) number = 0;
+            List<Rule> rules = new ArrayList<>();
+            for (int r = 0; r < rulesHere; r++) {
+                number += 1 + random.nextInt(2);
+                rules.add(rule(random, "r" + next++, number, cp, addresses, serviceRefs, layer));
+            }
+            if (cp) {
+                String source = random.nextInt(15) == 0 ? "CP NAT rulebase" : "CP access layer";
+                String parent = random.nextInt(15) == 0 ? "r0" : null;
+                sections.add(new Section("sec-" + s, "OBJ-SECTION-" + s, source, parent, rules));
+            } else {
+                if (random.nextInt(5) != 0) phase = Math.min(2, phase + random.nextInt(2)); else phase = random.nextInt(3);
+                String source = random.nextInt(4) == 0 ? "Shared" : "DG-TANGO-04";
+                String name = random.nextInt(15) == 0 ? PAN_PRE_NAT : "OBJ-SECTION-" + s;
+                String sectionId = random.nextInt(20) == 0 ? "bogus-" + s : ref(id, source, phases.get(phase));
+                sections.add(new Section(sectionId, name, source, null, rules));
+            }
+        }
+        List<CollectionFailure> failures = random.nextInt(20) == 0 ? List.of(new CollectionFailure("sec-0", "TIMEOUT")) : List.of();
+        return new PolicySnapshot(metadata, sections, objects, failures);
+    }
+    record Pool(Map<String, PolicyObject> objects, List<String> addresses, List<String> services) {}
+    /** The seeded object dictionary and selector pools; draws from {@code random} in a fixed order. */
+    private static Pool pool(Random random, boolean cp) {
         Map<String, PolicyObject> objects = new LinkedHashMap<>();
         objects.put("any", object("any", "any"));
         int hosts = 4 + random.nextInt(8), nets = 2 + random.nextInt(4), services = 3 + random.nextInt(5);
@@ -61,37 +98,97 @@ final class SyntheticPolicies {
         objects.keySet().stream().filter(k -> k.matches("[hng][0-9]+")).forEach(addresses::add);
         List<String> serviceRefs = new ArrayList<>(List.of("any", "sg", "unres"));
         objects.keySet().stream().filter(k -> k.matches("s[0-9]+")).forEach(serviceRefs::add);
+        return new Pool(objects, addresses, serviceRefs);
+    }
 
-        String id = "p" + seed;
-        var metadata = new Metadata(id, "src-" + seed, "MGR-BRAVO-01", vendor, "ctr-" + seed, "DOM-TANGO-01", "POL-ALPHA-01",
+    /**
+     * The snapshot without the two shapes the opaque install-on token and layer-identity scoping changed: install-on
+     * references to non-RESOLVED objects point at an object absent from the dictionary instead (UNKNOWN "unresolved
+     * install-on selector" before and after), and sections lose their parent-rule link (no inline layers).
+     */
+    static PolicySnapshot legacyComparable(PolicySnapshot snapshot) {
+        var objects = snapshot.objects();
+        List<Section> sections = new ArrayList<>();
+        for (Section section : snapshot.sections()) {
+            List<Rule> rules = new ArrayList<>();
+            for (Rule rule : section.rules()) {
+                var installOn = rule.extras().get("install-on");
+                if (installOn == null || installOn.stream().allMatch(id -> objects.get(id) == null || objects.get(id).status().equals("RESOLVED"))) { rules.add(rule); continue; }
+                rules.add(withExtras(rule, rule.action(), Map.of("install-on", installOn.stream()
+                    .map(id -> objects.get(id) == null || objects.get(id).status().equals("RESOLVED") ? id : "gw-absent").toList())));
+            }
+            sections.add(new Section(section.id(), section.name(), section.source(), null, rules));
+        }
+        return new PolicySnapshot(snapshot.metadata(), sections, objects, snapshot.failures());
+    }
+    /** The snapshot with its non-RESOLVED install-on target replaced by the vendor's "Policy Targets" shape (native type Global, stored UNSUPPORTED). */
+    static PolicySnapshot policyTargets(PolicySnapshot snapshot) {
+        var objects = new LinkedHashMap<>(snapshot.objects());
+        objects.put("gw-unres", new PolicyObject("gw-unres", "Policy Targets", "unresolved", List.of(), List.of("native-type: Global"), "UNSUPPORTED"));
+        return new PolicySnapshot(snapshot.metadata(), snapshot.sections(), objects, snapshot.failures());
+    }
+    /**
+     * The snapshot as the former analysis would see an opaque install-on token: every non-RESOLVED object an install-on
+     * cell references becomes a RESOLVED, non-atomic target group under the same opaque id. Only install-on cells reference
+     * these objects in the generators, so selectors, schedules and permissiveness are untouched.
+     */
+    static PolicySnapshot resolvedTargets(PolicySnapshot snapshot) {
+        var objects = new LinkedHashMap<>(snapshot.objects());
+        for (Section section : snapshot.sections()) for (Rule rule : section.rules())
+            for (String id : rule.extras().getOrDefault("install-on", List.of())) {
+                var o = objects.get(id);
+                if (o != null && !o.status().equals("RESOLVED"))
+                    objects.put(id, new PolicyObject(id, o.name(), "group", List.of("gw-c"), List.of(), "RESOLVED"));
+            }
+        return new PolicySnapshot(snapshot.metadata(), snapshot.sections(), objects, snapshot.failures());
+    }
+    static Rule withExtras(Rule rule, String action, Map<String, List<String>> extras) {
+        var merged = new HashMap<>(rule.extras()); merged.putAll(extras);
+        merged.keySet().removeIf(key -> merged.get(key) == null);
+        return new Rule(rule.id(), rule.uuid(), rule.number(), rule.name(), rule.enabled(), rule.source(), rule.destination(), rule.service(),
+            rule.application(), action, rule.log(), rule.comment(), merged, rule.hitCounts());
+    }
+
+    /**
+     * A well-formed Check Point policy with inline layers, shaped as CheckPointPolicyMapper stores one: an "Apply Layer"
+     * rule (one inline-layer reference) ends its section, the inline layer's sections follow with that rule as parent
+     * (nested up to two deep, sometimes empty, sometimes split into several sections), then the parent layer resumes in a
+     * new section. Rule numbers increase within each layer and each layer has one label. Same messy rules as
+     * {@link #random}.
+     */
+    static PolicySnapshot inline(long seed, int size) {
+        var random = new Random(seed);
+        var pool = pool(random, true);
+        String id = "inline-" + seed;
+        var metadata = new Metadata(id, "src-" + seed, "MGR-BRAVO-01", "CP", "ctr-" + seed, "DOM-TANGO-01", "POL-ALPHA-01",
             "2026-10-09T12:00:00Z", "a1", List.of());
         List<Section> sections = new ArrayList<>();
-        int sectionCount = 1 + random.nextInt(3), next = 0, number = 0;
-        var phases = List.of("pre-rulebase", "rulebase", "post-rulebase");
-        int phase = 0; String layer = "LAYER-ALPHA";
-        for (int s = 0; s < sectionCount; s++) {
-            int rulesHere = s == sectionCount - 1 ? size - next : random.nextInt(size - next + 1);
-            if (random.nextInt(6) == 0) layer = "LAYER-" + (char) ('A' + random.nextInt(3));
-            if (random.nextInt(6) == 0) number = 0;
-            List<Rule> rules = new ArrayList<>();
-            for (int r = 0; r < rulesHere; r++) {
-                number += 1 + random.nextInt(2);
-                rules.add(rule(random, "r" + next++, number, cp, addresses, serviceRefs, layer));
-            }
-            if (cp) {
-                String source = random.nextInt(15) == 0 ? "CP NAT rulebase" : "CP access layer";
-                String parent = random.nextInt(15) == 0 ? "r0" : null;
-                sections.add(new Section("sec-" + s, "OBJ-SECTION-" + s, source, parent, rules));
-            } else {
-                if (random.nextInt(5) != 0) phase = Math.min(2, phase + random.nextInt(2)); else phase = random.nextInt(3);
-                String source = random.nextInt(4) == 0 ? "Shared" : "DG-TANGO-04";
-                String name = random.nextInt(15) == 0 ? PAN_PRE_NAT : "OBJ-SECTION-" + s;
-                String sectionId = random.nextInt(20) == 0 ? "bogus-" + s : ref(id, source, phases.get(phase));
-                sections.add(new Section(sectionId, name, source, null, rules));
+        inlineLayer(random, pool, sections, null, "LAYER-ALPHA", size, 0, new int[3]);
+        return new PolicySnapshot(metadata, sections, pool.objects());
+    }
+    private static void inlineLayer(Random random, Pool pool, List<Section> out, String parent, String label, int size, int depth, int[] counters) {
+        int number = 0, emitted = out.size(); List<Rule> pending = new ArrayList<>();
+        for (int r = 0; r < size; r++) {
+            if (!pending.isEmpty() && random.nextInt(8) == 0) flushInline(out, parent, pending, counters);
+            number += 1 + random.nextInt(2);
+            String ruleId = "r" + counters[0]++;
+            Rule rule = rule(random, ruleId, number, true, pool.addresses(), pool.services(), label);
+            boolean apply = depth < 2 && random.nextInt(6) == 0;
+            // A shared inline layer reference now and then, so two parents can apply the same layer.
+            if (apply) rule = withExtras(rule, "Apply Layer", Map.of("inline-layer", List.of(random.nextInt(4) == 0 ? "il-shared" : "il-" + ruleId)));
+            pending.add(rule);
+            if (apply) {
+                flushInline(out, parent, pending, counters);
+                inlineLayer(random, pool, out, ruleId, "LAYER-INLINE-" + counters[2]++, random.nextInt(1 + size / 2), depth + 1, counters);
             }
         }
-        List<CollectionFailure> failures = random.nextInt(20) == 0 ? List.of(new CollectionFailure("sec-0", "TIMEOUT")) : List.of();
-        return new PolicySnapshot(metadata, sections, objects, failures);
+        flushInline(out, parent, pending, counters);
+        if (out.size() == emitted) out.add(new Section("sec-" + counters[1]++, "Inline layer unavailable", "CP access layer", parent, List.of()));
+    }
+    private static void flushInline(List<Section> out, String parent, List<Rule> pending, int[] counters) {
+        if (pending.isEmpty()) return;
+        out.add(new Section("sec-" + counters[1]++, "OBJ-SECTION-" + counters[1], "CP access layer", parent, List.copyOf(pending)));
+        pending.clear();
     }
     private static Rule rule(Random random, String id, int number, boolean cp, List<String> addresses, List<String> services, String layer) {
         Boolean enabled = random.nextInt(12) == 0 ? Boolean.FALSE : random.nextInt(25) == 0 ? null : Boolean.TRUE;

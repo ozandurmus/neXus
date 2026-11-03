@@ -11,7 +11,10 @@ import java.util.*;
  * Frozen copy of the shadowing algorithm as it stood before the per-rule budget and placement index (origin/main,
  * 2026-11-03), kept only as the reference for {@link PolicyHygieneDifferentialTest}. Do not change it to follow the
  * production code: it is the oracle the production code is compared against. The coverage predicates are copied too;
- * normalization and selector resolution are shared and unchanged.
+ * selector resolution and {@link CpLayers} are shared and unchanged. The section scope and rule normalization are
+ * frozen copies as of origin/fix/policy-shadow-budget-1103 (before install-on became an opaque placement token and
+ * Check Point inline layers were scoped by layer identity), so the differential test proves that snapshots without
+ * non-RESOLVED install-on objects and without inline layers keep exactly their former results.
  */
 final class LegacyPolicyHygiene {
     private LegacyPolicyHygiene() {}
@@ -32,7 +35,7 @@ final class LegacyPolicyHygiene {
         Budget budget = new Budget(workLimit);
         var resolver = new Resolver(snapshot.objects(), budget);
         Map<String, Assessment> results = new LinkedHashMap<>();
-        var scope = new EvaluationScope(snapshot.metadata());
+        var scope = new LegacyScope(snapshot.metadata());
         List<Match> earlier = new ArrayList<>();
         boolean earlierUnknown = false;
         for (Section section : snapshot.sections()) {
@@ -78,7 +81,7 @@ final class LegacyPolicyHygiene {
                 }
                 try {
                     budget.spend();
-                    Match match = normalize(snapshot, section, rule, resolver);
+                    Match match = legacyNormalize(snapshot, section, rule, resolver);
                     budget.spend();
                     reason = match.problem();
                     if (scope.unproven) reason = "earlier sections not analysed";
@@ -206,5 +209,101 @@ final class LegacyPolicyHygiene {
             }
         }
         return true;
+    }
+
+    /** Frozen section scope: section-identity joins; returning to a layer after any other layer is unproven. */
+    static final class LegacyScope {
+        private final Metadata metadata;
+        private final Set<Integer> layersSeen = new HashSet<>();
+        private final CpLayers cpLayers = new CpLayers();
+        private int previousLayer = -1;
+        private final Set<String> sectionIds = new HashSet<>();
+        private Section previous;
+        private int lastPhase = -1;
+        private boolean orderKnown = true;
+        boolean unproven;
+        LegacyScope(Metadata metadata) { this.metadata = metadata; }
+        boolean advance(Section section) {
+            boolean joined = false;
+            if (metadata.vendor().equals("CP") && "CP access layer".equals(section.source())) {
+                try {
+                    int layer = cpLayers.advance(section, new Budget(Integer.MAX_VALUE));
+                    joined = previous != null && "CP access layer".equals(previous.source()) && previousLayer == layer;
+                    if (!joined) unproven = layersSeen.contains(layer);
+                    layersSeen.add(layer);
+                    if (!sectionIds.add(section.id())) unproven = true;
+                    previousLayer = layer;
+                } catch (Unknown unknown) {
+                    unproven = true;
+                }
+            } else if (metadata.vendor().equals("PAN")) {
+                int phase = panPhase(section);
+                boolean ordered = phase >= 0 && phase >= lastPhase && sectionIds.add(section.id());
+                joined = previous != null && orderKnown && ordered;
+                if (previous != null && !joined) unproven = true;
+                orderKnown &= ordered;
+                lastPhase = phase;
+            } else {
+                unproven = previous != null;
+            }
+            previous = section;
+            return joined && !unproven;
+        }
+        int panPhase(Section section) {
+            if (section.parentRuleId() != null || metadata.id() == null || metadata.id().isBlank()
+                    || metadata.sourceId() == null || metadata.sourceId().isBlank()
+                    || metadata.containerId() == null || metadata.containerId().isBlank()
+                    || section.source() == null || section.source().isBlank()) return -1;
+            var phases = List.of("pre-rulebase", "rulebase", "post-rulebase");
+            for (int i = 0; i < phases.size(); i++)
+                if (ref(metadata.id(), section.source(), phases.get(i)).equals(section.id())) return i;
+            return -1;
+        }
+    }
+
+    /** Frozen rule normalization (shadowing mode): install-on must be RESOLVED, "Apply Layer" is non-terminal. */
+    static Match legacyNormalize(PolicySnapshot snapshot, Section section, Rule rule, Resolver resolver) {
+        try {
+            if (!Set.of("CP", "PAN").contains(snapshot.metadata().vendor()) || PolicySnapshot.outsideSecurityEvaluation(snapshot.metadata(), section))
+                throw new Unknown("unsupported rulebase");
+            List<Selector> cells = List.of(resolver.cell(rule.source(), "address"), resolver.cell(rule.destination(), "address"),
+                resolver.cell(rule.service(), "service"), snapshot.metadata().vendor().equals("CP") && rule.application().refs().isEmpty()
+                    && !rule.application().negated() ? new Selector(true, Map.of()) : resolver.cell(rule.application(), "application"));
+            if (snapshot.metadata().vendor().equals("PAN") && (rule.extras().getOrDefault("from", List.of()).isEmpty()
+                    || rule.extras().getOrDefault("to", List.of()).isEmpty())) throw new Unknown("zone evidence not collected");
+            if (snapshot.metadata().vendor().equals("CP") && rule.extras().getOrDefault("install-on", List.of()).isEmpty())
+                throw new Unknown("install-on evidence not collected");
+            if (rule.enabled() == null) throw new Unknown("enabled state is unknown");
+            if (!Set.of("Accept", "Drop", "Reject", "allow", "deny", "drop", "reset-client", "reset-server", "reset-both").contains(rule.action()))
+                throw new Unknown("non-terminal or unknown action");
+            for (var entry : rule.extras().entrySet()) {
+                String key = entry.getKey(); var values = entry.getValue();
+                if (Set.of("time", "schedule", "vpn", "content").contains(key)) {
+                    for (String id : values) {
+                        resolver.budget.spend(); var object = snapshot.objects().get(id);
+                        if (object == null || !object.status().equals("RESOLVED") || !object.type().equals("any")) throw new Unknown("time or content constraint");
+                    }
+                } else if (Set.of("source-user", "category").contains(key) && !values.equals(List.of("any"))) throw new Unknown("user or category constraint");
+                else if (key.equals("rule-type") && !values.equals(List.of("universal"))) throw new Unknown("zone rule type constraint");
+                else if (key.equals("install-on")) {
+                    for (String id : values) {
+                        resolver.budget.spend(); var object = snapshot.objects().get(id);
+                        if (object == null || !object.status().equals("RESOLVED")) throw new Unknown("unresolved install-on selector");
+                    }
+                } else if (!Set.of("from", "to", "install-on", "source-user", "category", "rule-type", "tag", "layer-name", "last-modified", "last-modifier", "log-setting").contains(key)
+                        && !key.startsWith("track-") && !key.startsWith("profile-setting/")) throw new Unknown("unsupported rule constraint");
+            }
+            if (snapshot.metadata().vendor().equals("CP") && !rule.extras().containsKey("time")) throw new Unknown("time evidence not collected");
+            Map<String, Set<String>> placements = new HashMap<>();
+            for (String key : List.of("from", "to", "install-on")) {
+                Set<String> values = new HashSet<>();
+                for (String value : rule.extras().getOrDefault(key, List.of())) { resolver.budget.spend(); values.add(value); }
+                placements.put(key, Set.copyOf(values));
+            }
+            return new Match(rule, cells, placements, null);
+        } catch (Unknown problem) {
+            if (problem.getMessage().equals("analysis budget")) throw problem;
+            return new Match(rule, List.of(), Map.of(), problem.getMessage());
+        }
     }
 }
