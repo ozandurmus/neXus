@@ -69,11 +69,17 @@ public final class PolicyHygiene {
     static Result analyze(PolicySnapshot snapshot, int days, Instant now, int workLimit, int ruleLimit, Map<String, PolicyObject> breadthObjects) {
         if (days < 1 || days > 36500 || workLimit < 0 || ruleLimit < 0) throw new IllegalArgumentException("Invalid hygiene limits");
         Budget budget = new Budget(workLimit), side = budget.side();
+        // Covering Palo Alto intrazone/interzone rules is work of its own pool (same total, same per-rule window): it only
+        // ever turns a "zone rule type constraint" UNKNOWN into REDUNDANT/CONFLICT, so running out of it leaves that
+        // reason and never takes budget from another rule's verdict or from a partial prior.
+        Budget typedBudget = new Budget(workLimit);
         var resolver = new Resolver(snapshot.objects(), budget);
         var sideResolver = new Resolver(snapshot.objects(), side);
+        var typedResolver = new Resolver(snapshot.objects(), typedBudget);
+        boolean pan = snapshot.metadata().vendor().equals("PAN");
         Map<String, Assessment> results = new LinkedHashMap<>();
         // One Earlier per evaluation scope; a Check Point parent layer's Earlier resumes after its inline layers.
-        var scope = new EvaluationScope<Earlier>(snapshot.metadata(), () -> new Earlier(snapshot.objects()));
+        var scope = new EvaluationScope<Earlier>(snapshot.metadata(), () -> new Earlier(snapshot.objects(), pan));
         boolean budgetReached = false;
         for (Section section : snapshot.sections()) {
             if (PolicySnapshot.outsideSecurityEvaluation(snapshot.metadata(), section)) {
@@ -128,21 +134,18 @@ public final class PolicyHygiene {
                         if (earlier.unknown) reason = "earlier rule has unsupported constraints";
                         Match prior = earlier.cover(match, budget);
                         if (prior != null) {
-                            covering = prior.rule().id();
-                            boolean same = sameAction(prior.rule(), rule);
-                            // An earlier Apply Layer rule makes this rule unreachable, but its inline layer's verdict is not
-                            // analysed: never reached (REDUNDANT), never an action conflict.
-                            boolean inlineCover = !same && applyLayer(prior.rule());
-                            status = same || inlineCover ? "REDUNDANT" : "CONFLICT";
-                            reason = null;
-                            findings.add(finding(status.equals("CONFLICT") ? "conflict" : "shadowed", status.equals("CONFLICT") ? "HIGH" : "MEDIUM",
-                                status.equals("CONFLICT") ? "Earlier enabled rule fully covers this match with a different action."
-                                    : inlineCover ? INLINE_LAYER_COVER : "Earlier enabled rule fully covers this match with the same action."));
+                            covering = prior.rule().id(); status = covered(prior.rule(), rule, findings); reason = null;
                         } else if (earlier.unproven(match, budget)) reason = "zone or install-on coverage is unproven";
                         // Only where the former analysis said "earlier rule has unsupported constraints" for want of a full
                         // match: every partial prior must be proven disjoint, or that reason stands.
                         else if (reason == null && earlier.partialOverlap(match, side)) reason = "earlier rule has unsupported constraints";
                         if (covering == null && reason != null) status = "UNKNOWN";
+                    } else if (reason.equals(ZONE_RULE_TYPE) && earlier.zoneSupersets) {
+                        // A Palo Alto intrazone or interzone rule stays UNKNOWN for its rule type unless an earlier universal
+                        // rule provably covers every zone pair it matches (PolicyNormalization.zonesCover). It is never an
+                        // earlier rule itself, so it remains a partial prior below exactly as before.
+                        Match prior = typedCover(snapshot, section, rule, earlier, typedBudget, typedResolver, ruleLimit);
+                        if (prior != null) { covering = prior.rule().id(); status = covered(prior.rule(), rule, findings); reason = null; }
                     }
                 } catch (Unknown limit) { status = "UNKNOWN"; reason = limit.getMessage(); budgetReached = true; }
                 // A rule that ran out of budget still constrains later rules: a resolved match stays a coverage
@@ -184,18 +187,28 @@ public final class PolicyHygiene {
      * placements only, so each (rule key, earlier key) pair is evaluated once and the answer remembered.</li>
      * <li>A candidate whose selector bounds cannot contain the rule's is rejected before the range walk.</li>
      * </ul>
-     * The one deliberate difference from that scan: an earlier rule without a full match no longer makes every later
-     * rule UNKNOWN "earlier rule has unsupported constraints" when it is a {@link Partial} prior proven disjoint from
-     * the later rule. Partial priors never cover (no REDUNDANT or CONFLICT from them) and are consulted only where the
-     * scan would have given that very reason, so every other verdict stays the scan's.
+     * The deliberate differences from that scan:
+     * <ul>
+     * <li>An earlier rule without a full match no longer makes every later rule UNKNOWN "earlier rule has unsupported
+     * constraints" when it is a {@link Partial} prior proven disjoint from the later rule. Partial priors never cover (no
+     * REDUNDANT or CONFLICT from them) and are consulted only where the scan would have given that very reason.</li>
+     * <li>Palo Alto zone supersets ({@link #zoneSupersets}): an earlier universal rule with the same install-on whose
+     * from- and to-zones hold the later rule's ({@link PolicyNormalization#zonesCover}) is a coverage candidate too, and
+     * no longer makes the rule "zone or install-on coverage is unproven"; only an overlapping prior whose zones do not
+     * hold the rule's still does. The compatible (former) candidates are searched first and win when one covers, so
+     * every rule the scan covered keeps its covering rule; superset candidates are consulted only where the scan said
+     * "zone or install-on coverage is unproven". The same candidates may cover a later intrazone or interzone rule,
+     * which otherwise stays "zone rule type constraint". Install-on stays exact equality.</li>
+     * </ul>
+     * Every other verdict stays the scan's.
      */
     private static final class Earlier {
         private record Key(Set<String> from, Set<String> to, Set<String> installOn) {}
         /** Candidates in rule order; their bounds are packed {@link #WIDTH} longs each so the scan stays in one array. */
         private static final class Bucket {
-            final Match first; final List<Match> matches = new ArrayList<>(); final Set<List<Selector>> seen = new HashSet<>(); boolean closed;
+            final Key key; final Match first; final List<Match> matches = new ArrayList<>(); final Set<List<Selector>> seen = new HashSet<>(); boolean closed;
             int[] orders = new int[8]; long[] bounds = new long[8 * WIDTH];
-            Bucket(Match first) { this.first = first; }
+            Bucket(Key key, Match first) { this.key = key; this.first = first; }
             void add(int order, Match match) {
                 int n = matches.size();
                 if (n == orders.length) { orders = Arrays.copyOf(orders, n * 2); bounds = Arrays.copyOf(bounds, n * 2 * WIDTH); }
@@ -209,6 +222,43 @@ public final class PolicyHygiene {
         private final Map<Key, Bucket> buckets = new HashMap<>();
         private final List<Bucket> keys = new ArrayList<>();
         private final Map<Key, int[]> overlap = new HashMap<>();
+        /** Palo Alto only: zone supersets cover. Check Point placements stay exact (install-on is never a superset). */
+        final boolean zoneSupersets;
+        /**
+         * Per install-on key, an inverted zone index of the buckets, each side (from, to) on its own: a lone any, a set
+         * mixing any with names (or empty) by the exact set, otherwise under every zone it names. Every bucket whose
+         * zones on one side can hold a set lies in at most two of these lists ({@link Side#holders}).
+         */
+        private static final class Side {
+            final List<Bucket> any = new ArrayList<>();
+            final Map<String, List<Bucket>> byZone = new HashMap<>();
+            final Map<Set<String>, List<Bucket>> bySet = new HashMap<>();
+            void add(Set<String> zones, Bucket bucket) {
+                if (zones.equals(ANY)) any.add(bucket);
+                else if (zones.isEmpty() || zones.contains("any")) bySet.computeIfAbsent(zones, k -> new ArrayList<>()).add(bucket);
+                else for (String zone : zones) byZone.computeIfAbsent(zone, k -> new ArrayList<>()).add(bucket);
+            }
+            /** Lists holding every bucket whose zones on this side may hold {@code inner} (PolicyNormalization.zoneSuperset), and others. */
+            List<List<Bucket>> holders(Set<String> inner) {
+                if (inner.equals(ANY)) return List.of(any);
+                if (inner.isEmpty() || inner.contains("any")) return List.of(any, bySet.computeIfAbsent(inner, k -> new ArrayList<>()));
+                List<Bucket> fewest = null;
+                for (String zone : inner) {
+                    var list = byZone.computeIfAbsent(zone, k -> new ArrayList<>());
+                    if (fewest == null || list.size() < fewest.size()) fewest = list;
+                }
+                return List.of(any, fewest);
+            }
+        }
+        private static final class Targets { final Side from = new Side(), to = new Side(); }
+        private final Map<Set<String>, Targets> byInstallOn = new HashMap<>();
+        private record Lookup(Key key, boolean intrazone) {}
+        /** One rule key's superset search: the index lists it reads (chosen once, the side with fewer entries), how far each was read, and the hits. */
+        private static final class Supersets {
+            final List<List<Bucket>> lists; final int[] next; final List<Bucket> buckets = new ArrayList<>();
+            Supersets(List<List<Bucket>> lists) { this.lists = lists; this.next = new int[lists.size()]; }
+        }
+        private final Map<Lookup, Supersets> supersets = new HashMap<>();
         private int count;
         /** An enabled earlier rule of this scope had no resolved match and no partial prior, so no later rule can be proven clean. */
         boolean unknown;
@@ -221,33 +271,83 @@ public final class PolicyHygiene {
         private final Map<Map<String, Set<String>>, byte[][]> placementMemo = new HashMap<>();
         /** Per later-rule dimensions: partial priors proven disjoint so far, and whether one was not; the answer only grows. */
         private final Map<List<Object>, int[]> partialState = new HashMap<>();
-        Earlier(Map<String, PolicyObject> objects) { this.objects = objects; }
+        Earlier(Map<String, PolicyObject> objects, boolean zoneSupersets) { this.objects = objects; this.zoneSupersets = zoneSupersets; }
         private static Key key(Match m) { return new Key(m.placements().get("from"), m.placements().get("to"), m.placements().get("install-on")); }
         void add(Match match) {
-            var bucket = buckets.computeIfAbsent(key(match), k -> { var b = new Bucket(match); keys.add(b); return b; });
+            var bucket = buckets.computeIfAbsent(key(match), k -> {
+                var b = new Bucket(k, match); keys.add(b);
+                if (zoneSupersets) { var targets = byInstallOn.computeIfAbsent(k.installOn(), t -> new Targets()); targets.from.add(k.from(), b); targets.to.add(k.to(), b); }
+                return b;
+            });
             int order = count++;
             if (bucket.closed || !bucket.seen.add(match.selectors())) return;
             bucket.add(order, match);
             bucket.closed = match.selectors().stream().allMatch(Selector::any);
         }
+        /**
+         * The covering earlier rule, or null. A universal rule is looked up under its compatible keys first (the former
+         * index); only when none of those covers, and only for Palo Alto, the buckets whose zones cover the rule's are
+         * searched as well. An intrazone or interzone rule ({@link PolicyNormalization#typed}) is searched in the zone
+         * superset buckets only. Either search takes the earliest covering prior it finds.
+         */
         Match cover(Match match, Budget budget) {
-            var key = key(match); Match best = null; int bestOrder = Integer.MAX_VALUE;
-            long[] inner = bounds(match.selectors());
+            var key = key(match); long[] inner = bounds(match.selectors());
+            String type = PolicyNormalization.ruleType(match.rule());
+            Match[] best = {null}; int[] bestOrder = {Integer.MAX_VALUE};
             var lookups = new LinkedHashSet<Key>();
-            for (var from : List.of(key.from(), ANY)) for (var to : List.of(key.to(), ANY)) lookups.add(new Key(from, to, key.installOn()));
-            for (Key lookup : lookups) {
-                var bucket = buckets.get(lookup);
-                if (bucket == null) continue;
-                int[] orders = bucket.orders; long[] outer = bucket.bounds;
-                for (int j = 0, n = bucket.matches.size(); j < n && orders[j] < bestOrder; j++) {
+            if (type.equals("universal")) {
+                for (var from : List.of(key.from(), ANY)) for (var to : List.of(key.to(), ANY)) lookups.add(new Key(from, to, key.installOn()));
+                for (Key lookup : lookups) {
+                    var bucket = buckets.get(lookup);
+                    if (bucket != null) earliest(bucket, match, inner, best, bestOrder, budget);
+                }
+            } else if (!Set.of("intrazone", "interzone").contains(type)) return null;
+            if (best[0] != null || !zoneSupersets) return best[0];
+            for (Bucket bucket : supersets(key, type.equals("intrazone"), budget))
+                if (!lookups.contains(bucket.key)) earliest(bucket, match, inner, best, bestOrder, budget);
+            return best[0];
+        }
+        /** The bucket's first prior before {@code bestOrder} that contains all four selectors becomes the best. */
+        private static void earliest(Bucket bucket, Match match, long[] inner, Match[] best, int[] bestOrder, Budget budget) {
+            int[] orders = bucket.orders; long[] outer = bucket.bounds;
+            for (int j = 0, n = bucket.matches.size(); j < n && orders[j] < bestOrder[0]; j++) {
+                budget.spend();
+                if (!bounded(outer, j * WIDTH, inner)) continue;
+                var prior = bucket.matches.get(j); boolean covers = true;
+                for (int i = 0; i < 4 && covers; i++) covers = contains(prior.selectors().get(i), match.selectors().get(i), budget);
+                if (covers) { best[0] = prior; bestOrder[0] = orders[j]; return; }
+            }
+        }
+        /**
+         * The buckets of this install-on key whose zones cover the rule key's. Candidates come from the zone index of one
+         * side only -- whichever lists were shorter when the key was first looked up -- and each is tested once, one
+         * budget unit each, and remembered; the hits only grow as buckets are added.
+         */
+        private List<Bucket> supersets(Key key, boolean intrazone, Budget budget) {
+            var targets = byInstallOn.get(key.installOn());
+            if (targets == null) return List.of();
+            var state = supersets.computeIfAbsent(new Lookup(key, intrazone), k -> {
+                var from = targets.from.holders(key.from()); var to = targets.to.holders(intrazone ? key.from() : key.to());
+                return new Supersets(size(from) <= size(to) ? from : to);
+            });
+            for (int i = 0; i < state.lists.size(); i++) {
+                var list = state.lists.get(i);
+                while (state.next[i] < list.size()) {
                     budget.spend();
-                    if (!bounded(outer, j * WIDTH, inner)) continue;
-                    var prior = bucket.matches.get(j); boolean covers = true;
-                    for (int i = 0; i < 4 && covers; i++) covers = contains(prior.selectors().get(i), match.selectors().get(i), budget);
-                    if (covers) { best = prior; bestOrder = orders[j]; break; }
+                    var bucket = list.get(state.next[i]);
+                    if (PolicyNormalization.zonesCover(bucket.key.from(), bucket.key.to(), key.from(), key.to(), intrazone)) state.buckets.add(bucket);
+                    state.next[i]++;
                 }
             }
-            return best;
+            return state.buckets;
+        }
+        private static int size(List<List<Bucket>> lists) { int n = 0; for (var list : lists) n += list.size(); return n; }
+        /** The earlier key can cover this rule's key: compatible, or (Palo Alto) the same install-on and covering zones. */
+        private boolean placementCovers(Match prior, Match match) {
+            if (compatible(prior, match)) return true;
+            if (!zoneSupersets || !prior.placements().get("install-on").equals(match.placements().get("install-on"))) return false;
+            return PolicyNormalization.zonesCover(prior.placements().get("from"), prior.placements().get("to"),
+                match.placements().get("from"), match.placements().get("to"), false);
         }
         void add(Partial partial) {
             if (!partialSeen.add(Arrays.asList(partial.selectors(), partial.placements()))) return;
@@ -278,13 +378,17 @@ public final class PolicyHygiene {
             } catch (Unknown limit) { return true; }
             return state[1] == 1;
         }
-        /** True once any earlier key overlaps this rule's key without being compatible with it; the answer only grows. */
+        /**
+         * True once any earlier key overlaps this rule's key without being able to cover it ({@link #placementCovers});
+         * the answer only grows. Such a prior's zones (or install-on) hold some but not all of the rule's, so whether
+         * it bears on the rule is not proven either way and the rule stays UNKNOWN.
+         */
         boolean unproven(Match match, Budget budget) {
             var state = overlap.computeIfAbsent(key(match), k -> new int[2]);
             while (state[1] == 0 && state[0] < keys.size()) {
                 budget.spend();
                 var prior = keys.get(state[0]).first;
-                if (!disjoint(prior, match, objects) && !compatible(prior, match)) state[1] = 1;
+                if (!disjoint(prior, match, objects) && !placementCovers(prior, match)) state[1] = 1;
                 state[0]++;
             }
             return state[1] == 1;
@@ -330,6 +434,27 @@ public final class PolicyHygiene {
             pending.addAll(object.members());
         }
         return out;
+    }
+    static final String ZONE_RULE_TYPE = "zone rule type constraint";
+    /** The verdict for a rule fully covered by {@code prior}, adding its finding. */
+    private static String covered(Rule prior, Rule rule, List<Finding> findings) {
+        boolean same = sameAction(prior, rule);
+        // An earlier Apply Layer rule makes this rule unreachable, but its inline layer's verdict is not
+        // analysed: never reached (REDUNDANT), never an action conflict.
+        boolean inlineCover = !same && applyLayer(prior);
+        String status = same || inlineCover ? "REDUNDANT" : "CONFLICT";
+        findings.add(finding(status.equals("CONFLICT") ? "conflict" : "shadowed", status.equals("CONFLICT") ? "HIGH" : "MEDIUM",
+            status.equals("CONFLICT") ? "Earlier enabled rule fully covers this match with a different action."
+                : inlineCover ? INLINE_LAYER_COVER : "Earlier enabled rule fully covers this match with the same action."));
+        return status;
+    }
+    /** The earlier universal rule covering an intrazone/interzone rule, or null (not resolvable, not covered, or out of its budget). */
+    private static Match typedCover(PolicySnapshot snapshot, Section section, Rule rule, Earlier earlier, Budget typedBudget, Resolver typedResolver, int ruleLimit) {
+        try {
+            typedBudget.rule(ruleLimit);
+            var typed = PolicyNormalization.typed(snapshot, section, rule, typedResolver);
+            return typed == null ? null : earlier.cover(typed, typedBudget);
+        } catch (Unknown limit) { return null; }
     }
     private static Finding finding(String cls, String severity, String evidence) { return new Finding(cls, severity, evidence); }
     private static Finding unknown(String evidence) { return finding("unknown", "LOW", evidence); }
