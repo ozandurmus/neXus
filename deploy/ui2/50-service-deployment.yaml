@@ -65,6 +65,11 @@ spec:
             # process only; the code default (application.yml) stays "false". Set to "false" to stop it (restart required).
             - name: UI2_SYSTEM_LOG_SCHEDULED_COLLECTION_ENABLED
               value: "true"
+            # Development mode (PO 2026-11-03, "keşif politika vs vs bunları askıya alabiliriz, bir süre geliştirme moduna
+            # geçebiliriz"): every @Scheduled task of this process is off (SchedulingConfiguration). Manual jobs still run.
+            # Set to "true" (restart required) to resume discovery, inventory, configuration, readiness and backup schedules.
+            - name: UI2_SCHEDULING_ENABLED
+              value: "false"
             # BK-11: the distinct backup credential (Admin > Credentials: Backup-User-LDAP), never the collection credential.
             - name: UI2_CP_BACKUP_CREDENTIAL_REF
               value: "a5c22471-26af-4cb1-a13e-090311c88c96"
