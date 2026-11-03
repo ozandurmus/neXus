@@ -206,10 +206,17 @@ def _repo_text_files(exclude_history: bool = True):
                 yield Path(dirpath) / name
 
 
+# External consultation records are stored byte-for-byte (AGENTS.md, external model consultation law); a reviewer's
+# own SESSION headings inside them are quoted output, not a second session template.
+_UNALTERED_CONSULTATION = re.compile(r"\A<!-- [A-Za-z]+ consultation [^\n]*; unaltered output -->")
+
+
 def test_exactly_one_session_start_and_session_close_heading_outside_history():
     start_hits, close_hits = [], []
     for path in _repo_text_files():
         text = path.read_text(encoding="utf-8", errors="ignore")
+        if _UNALTERED_CONSULTATION.match(text):
+            continue
         if _SESSION_START_HEADING.search(text):
             start_hits.append(path)
         if _SESSION_CLOSE_HEADING.search(text):
