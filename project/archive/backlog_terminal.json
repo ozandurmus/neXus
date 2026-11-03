@@ -1536,6 +1536,24 @@
       "priority": "P1",
       "target": "",
       "note": ""
+    },
+    {
+      "id": "ship_tree_bound_security_scan",
+      "category": "delivery",
+      "title": "Ship: bind the security source scan to the git tree so it can start during preview (~50 s)",
+      "status": "deferred",
+      "priority": "P3",
+      "target": "",
+      "note": ""
+    },
+    {
+      "id": "policy_read_offload_pod",
+      "category": "ui2",
+      "title": "Policy read/analysis offload to a policy_query pod (needs contract amendment; measure after read-path cache first)",
+      "status": "deferred",
+      "priority": "P2",
+      "target": "PATH_ANALYSIS_DESIGN.md",
+      "note": ""
     }
   ]
 }
