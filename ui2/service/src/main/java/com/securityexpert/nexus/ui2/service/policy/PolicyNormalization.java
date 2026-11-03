@@ -394,9 +394,27 @@ final class PolicyNormalization {
      * zone names is not interpreted: it is within only itself or a lone any, and holds only itself. Equal sets are always
      * within each other.
      */
-    static boolean zoneSuperset(Set<String> outer, Set<String> inner) {
+    static boolean zoneSuperset(Set<String> outer, Set<String> inner) { return Boolean.TRUE.equals(zoneHolds(outer, inner)); }
+    /**
+     * Whether {@code outer} holds every zone of {@code inner}: TRUE, FALSE, or {@code null} when that cannot be decided.
+     * FALSE only between two sets of zone names where {@code inner} names a zone {@code outer} does not: a rule names
+     * only zones that exist, so the later rule matches traffic in that zone the earlier rule does not. Undecided: a set
+     * mixing any with names (or empty), and a lone any against names -- the zones of the virtual system are not
+     * collected, so a list of names may well be every zone.
+     */
+    static Boolean zoneHolds(Set<String> outer, Set<String> inner) {
         if (outer.equals(ANY_ZONE) || outer.equals(inner)) return true;
-        return !outer.contains("any") && !inner.contains("any") && !inner.isEmpty() && outer.containsAll(inner);
+        if (outer.isEmpty() || inner.isEmpty() || outer.contains("any") || inner.contains("any")) return null;
+        return outer.containsAll(inner);
+    }
+    /**
+     * An earlier universal rule with zones {@code from} x {@code to} provably cannot cover a later universal rule: on
+     * from or on to the later rule names a zone the earlier one does not ({@link #zoneHolds} FALSE). With the
+     * engine's single-rule cover (NOT_SHADOWED = no single earlier rule fully covers) such a prior is simply no
+     * candidate, like a partially overlapping address or service.
+     */
+    static boolean zonesCannotCover(Set<String> from, Set<String> to, Set<String> laterFrom, Set<String> laterTo) {
+        return Boolean.FALSE.equals(zoneHolds(from, laterFrom)) || Boolean.FALSE.equals(zoneHolds(to, laterTo));
     }
     private static final Set<String> ANY_ZONE = Set.of("any");
     /** The Palo Alto rule type of a stored rule; an absent rule-type is the vendor default, universal. */

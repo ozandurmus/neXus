@@ -39,7 +39,8 @@ class PolicyHygieneScaleTest {
      * Palo Alto zone supersets with many distinct zone keys: the same 10,000 rules over one to three of 30 zones per side
      * (one rule in ten any), so most rules have hundreds of earlier keys and many superset buckets to search.
      * Measured on a laptop JVM, 2026-11-03 (seed 7/13): exact-key index 0.29 s (9,978 rules unproven, 22 not shadowed);
-     * with zone supersets 1.0 s (9,037 unproven, 963 not shadowed), no "analysis budget". The bound is the same as above.
+     * with zone supersets, where a prior whose zones provably do not hold the rule's is no candidate, 0.7 s (1,937
+     * unproven, 8,063 not shadowed), no "analysis budget". The bound is the same as above.
      */
     @Test void tenThousandPanRulesOverManyZoneKeysFinishWithoutBudget() {
         var base = SyntheticPolicies.large("PAN", 10_000, 7); var random = new Random(13);

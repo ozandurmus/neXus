@@ -9,8 +9,9 @@ import java.util.*;
 
 /**
  * Palo Alto zone superset coverage (PolicyNormalization.zonesCover): an earlier universal rule whose from- and to-zones
- * hold a later rule's zone pairs may cover it; an overlap that does not hold them stays "zone or install-on coverage is
- * unproven"; disjoint zones prove nothing overlaps. Rule types per the PAN-OS 11.1 admin guide (Components of a Security
+ * hold a later rule's zone pairs may cover it; one whose zones provably do not hold them cannot cover it (single-rule
+ * cover) and is passed over; "zone or install-on coverage is unproven" stays where the zone relation cannot be decided
+ * (any mixed with names, a lone any against names, unequal install-on); disjoint zones prove nothing overlaps. Rule types per the PAN-OS 11.1 admin guide (Components of a Security
  * Policy Rule): universal = from x to, intrazone = within each source zone, interzone = between zones only. Synthetic
  * fixtures: documentation addresses and masked zone names only.
  */
@@ -63,24 +64,35 @@ class PolicyHygieneZoneSupersetTest {
         assertClean(snapshot, "r2");
         assertOracle(snapshot);
     }
-    @Test void overlapThatIsNoSupersetStaysUnproven() {
-        // B, C against A, B: overlap on B, C outside.
-        assertReason(pan(zoned("r1", "any", "allow", List.of(A, B), List.of(C)), zoned("r2", "host", "allow", List.of(B, C), List.of(C))), "r2", UNPROVEN);
+    @Test void overlapThatIsProvablyNoSupersetCannotCover() {
+        // B, C against A, B: overlap on B, but C traffic is outside the earlier rule, so it cannot cover.
+        assertCleanAndSafe(pan(zoned("r1", "any", "deny", List.of(A, B), List.of(C)), zoned("r2", "host", "allow", List.of(B, C), List.of(C))), "r2");
         // The later rule's zones hold the earlier one's, not the reverse.
-        assertReason(pan(zoned("r1", "any", "allow", List.of(A), List.of(C)), zoned("r2", "host", "allow", List.of(A, B), List.of(C))), "r2", UNPROVEN);
+        assertCleanAndSafe(pan(zoned("r1", "any", "deny", List.of(A), List.of(C)), zoned("r2", "host", "allow", List.of(A, B), List.of(C))), "r2");
         // Superset on from, overlap only on to.
-        assertReason(pan(zoned("r1", "any", "allow", List.of(A, B), List.of(C, D)), zoned("r2", "host", "allow", List.of(A), List.of(D, E))), "r2", UNPROVEN);
+        assertCleanAndSafe(pan(zoned("r1", "any", "deny", List.of(A, B), List.of(C, D)), zoned("r2", "host", "allow", List.of(A), List.of(D, E))), "r2");
+        // The former analysis called each of these unproven.
+        assertEquals(UNPROVEN, LegacyPolicyHygiene.analyze(pan(zoned("r1", "any", "deny", List.of(A, B), List.of(C)),
+            zoned("r2", "host", "allow", List.of(B, C), List.of(C))), 90, PolicyHygieneTest.NOW, Integer.MAX_VALUE).rules().get("r2").shadowReason());
         // An earlier overlapping prior that is no superset (r1) does not stop a later superset prior (r2) from covering.
         assertCovered(pan(zoned("r1", "any", "deny", List.of(B, C), List.of(C)), zoned("r2", "any", "allow", List.of(A, B, C), List.of(C)),
             zoned("r3", "host", "allow", List.of(A, B), List.of(C))), "r3", "r2", "REDUNDANT");
-        // A superset prior that does not cover (r2: host does not hold net) leaves the overlap with r1 unproven.
-        assertReason(pan(zoned("r1", "any", "deny", List.of(B, C), List.of(C)), zoned("r2", "host", "allow", List.of(A, B), List.of(C)),
+        // Neither the superset prior r2 (host does not hold net) nor r1 (A is outside B, C) covers r3.
+        assertCleanAndSafe(pan(zoned("r1", "any", "deny", List.of(B, C), List.of(C)), zoned("r2", "host", "allow", List.of(A, B), List.of(C)),
+            zoned("r3", "net", "allow", List.of(A, B), List.of(C))), "r3");
+        // A provably non-covering prior does not hide an undecidable one: a mixed any set still leaves it unproven.
+        assertReason(pan(zoned("r1", "any", "deny", List.of(B, C), List.of(C)), zoned("r2", "any", "deny", List.of("any", B), List.of(C)),
             zoned("r3", "net", "allow", List.of(A, B), List.of(C))), "r3", UNPROVEN);
+    }
+    static void assertCleanAndSafe(PolicySnapshot snapshot, String id) {
+        assertClean(snapshot, id);
+        assertOracle(snapshot);
+        PartialPriorOracle.assertNoCover(new PartialPriorOracle.Universe(snapshot), id, id);
     }
     @Test void anyHoldsEveryZoneAndOnlyAnyHoldsAny() {
         // An earlier any (already the former behaviour) together with a new superset on the other side.
         assertCovered(pan(zoned("r1", "any", "allow", List.of("any"), List.of(C, D)), zoned("r2", "host", "allow", List.of(A, B), List.of(C))), "r2", "r1", "REDUNDANT");
-        // A later any is not held by named zones, however many.
+        // A later any against named zones, however many, cannot be decided (the zones of the virtual system are not collected).
         assertReason(pan(zoned("r1", "any", "allow", List.of(A, B, C, D, E), List.of(C)), zoned("r2", "host", "allow", List.of("any"), List.of(C))), "r2", UNPROVEN);
         // A set mixing any with names is not interpreted: it holds only itself, and only a lone any (or itself) holds it.
         assertReason(pan(zoned("r1", "any", "allow", List.of("any", C), List.of(C)), zoned("r2", "host", "allow", List.of(A), List.of(C))), "r2", UNPROVEN);
@@ -186,8 +198,8 @@ class PolicyHygieneZoneSupersetTest {
         }
         for (String change : List.of(UNPROVEN + " -> COVERED", UNPROVEN + " -> RELEASED", UNPROVEN + " -> OTHER_UNKNOWN", UNPROVEN + " kept",
                 RULE_TYPE + " -> COVERED", RULE_TYPE + " kept"))
-            // Releases also need every partial prior disjoint, which the messy generator rarely allows (51 at these seeds).
-            assertTrue(changes.getOrDefault(change, 0) >= (change.endsWith("RELEASED") ? 25 : 200), change + " in " + changes);
+            // Releases also need every partial prior disjoint, which the messy generator rarely allows (158 at these seeds).
+            assertTrue(changes.getOrDefault(change, 0) >= (change.endsWith("RELEASED") ? 100 : 200), change + " in " + changes);
         System.out.println("ZONE SUPERSETS " + pans + " PAN snapshots, " + rules + " rules: " + changes);
     }
     private static final List<String> ZONES = List.of(A, B, C, D, E);
