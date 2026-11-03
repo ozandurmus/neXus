@@ -111,7 +111,7 @@ public final class PolicyLookup {
     }
     private static Evaluation entries(PolicySnapshot snapshot, Budget budget) {
         var resolver = new Resolver(snapshot.objects(), budget); List<Entry> entries = new ArrayList<>();
-        var scope = new EvaluationScope(snapshot.metadata()); Set<String> sectionIds = new HashSet<>();
+        var scope = new EvaluationScope<Object>(snapshot.metadata(), () -> null); Set<String> sectionIds = new HashSet<>();
         Set<String> ruleIds = new HashSet<>(); var cpLayers = new CpLayers();
         Set<Integer> layers = new LinkedHashSet<>();
         Set<String> inlineParents = new HashSet<>();

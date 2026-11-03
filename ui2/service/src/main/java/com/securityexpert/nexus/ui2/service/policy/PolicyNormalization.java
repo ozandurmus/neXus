@@ -62,42 +62,88 @@ final class PolicyNormalization {
             return index;
         }
     }
-    static final class EvaluationScope {
+    /**
+     * Which earlier rules a section's rules are compared with. {@link #advance} returns the comparison state the section
+     * continues: the previous section's state where the stored order is proven to continue it, a fresh state where a new
+     * evaluation scope starts. {@link #unproven} marks a section whose place in the evaluation order is not proven.
+     * <p>Check Point access rules are scoped by layer identity, not by section identity (PATH_ANALYSIS_VENDOR_SEMANTICS.md
+     * 2b, 2c): sections only divide a layer visually, and an inline layer is an independent sub-policy entered only through
+     * its parent "Apply Layer" rule, after which no later rule of the parent layer is matched. An inline layer's sections
+     * get a state of their own; when the inline layer ends, the parent layer's state resumes. Layer identity rests on the
+     * mapper's opaque links -- the child section names as parent the last rule of the section just before it, and that
+     * rule carries an inline-layer reference -- plus {@link CpLayers}' label and strictly increasing rule-number checks
+     * (enforcement order inside a layer stays the stored order only where the numbers increase). Anything else -- a
+     * broken parent link, a layer seen again after it closed, label or number anomalies -- is unproven, as before.
+     */
+    static final class EvaluationScope<S> {
+        private static final class Frame<S> {
+            final int layer; final S state; boolean unproven;
+            Frame(int layer, S state) { this.layer = layer; this.state = state; }
+        }
         private final Metadata metadata;
+        private final java.util.function.Supplier<S> fresh;
         private final Set<Integer> layersSeen = new HashSet<>();
         private final CpLayers cpLayers = new CpLayers();
-        private int previousLayer = -1;
+        /** Open Check Point layers, innermost first: one ordered layer and the inline layers entered from it. */
+        private final Deque<Frame<S>> open = new ArrayDeque<>();
         private final Set<String> sectionIds = new HashSet<>();
         private Section previous;
+        private S current;
         private int lastPhase = -1;
         private boolean orderKnown = true;
         boolean unproven;
-        EvaluationScope(Metadata metadata) { this.metadata = metadata; }
-        boolean advance(Section section) {
-            boolean joined = false;
-            if (metadata.vendor().equals("CP") && "CP access layer".equals(section.source())) {
-                try {
-                    int layer = cpLayers.advance(section, new Budget(Integer.MAX_VALUE));
-                    joined = previous != null && "CP access layer".equals(previous.source()) && previousLayer == layer;
-                    if (!joined) unproven = layersSeen.contains(layer);
-                    layersSeen.add(layer);
-                    if (!sectionIds.add(section.id())) unproven = true;
-                    previousLayer = layer;
-                } catch (Unknown unknown) {
-                    unproven = true;
+        EvaluationScope(Metadata metadata, java.util.function.Supplier<S> fresh) { this.metadata = metadata; this.fresh = fresh; }
+        S advance(Section section) {
+            S state;
+            if (metadata.vendor().equals("CP") && "CP access layer".equals(section.source())) state = checkPoint(section);
+            else {
+                boolean joined = false;
+                if (metadata.vendor().equals("PAN")) {
+                    int phase = panPhase(section);
+                    boolean ordered = phase >= 0 && phase >= lastPhase && sectionIds.add(section.id());
+                    joined = previous != null && orderKnown && ordered;
+                    if (previous != null && !joined) unproven = true;
+                    orderKnown &= ordered;
+                    lastPhase = phase;
+                } else {
+                    unproven = previous != null;
                 }
-            } else if (metadata.vendor().equals("PAN")) {
-                int phase = panPhase(section);
-                boolean ordered = phase >= 0 && phase >= lastPhase && sectionIds.add(section.id());
-                joined = previous != null && orderKnown && ordered;
-                if (previous != null && !joined) unproven = true;
-                orderKnown &= ordered;
-                lastPhase = phase;
-            } else {
-                unproven = previous != null;
+                open.clear();
+                state = joined && !unproven && current != null ? current : fresh.get();
             }
-            previous = section;
-            return joined && !unproven;
+            previous = section; current = state;
+            return state;
+        }
+        private S checkPoint(Section section) {
+            int layer;
+            try { layer = cpLayers.advance(section, new Budget(Integer.MAX_VALUE)); }
+            catch (Unknown unknown) { open.clear(); unproven = true; return fresh.get(); }
+            Frame<S> frame = null;
+            for (var candidate : open) if (candidate.layer == layer) { frame = candidate; break; }
+            if (frame != null) {
+                // The same layer continues, or resumes after the inline layers entered from it ended.
+                while (open.peek() != frame) open.pop();
+            } else {
+                boolean entered = section.parentRuleId() != null && entersInlineLayer(section.parentRuleId());
+                boolean seen = !layersSeen.add(layer);
+                if (seen || section.parentRuleId() != null && !entered) {
+                    sectionIds.add(section.id());
+                    open.clear(); unproven = true; return fresh.get();
+                }
+                // A new ordered layer replaces the open chain; an inline layer opens on top of its parent's layer.
+                if (!entered) open.clear();
+                frame = new Frame<>(layer, fresh.get());
+                open.push(frame);
+            }
+            if (!sectionIds.add(section.id())) frame.unproven = true;
+            unproven = frame.unproven;
+            return frame.state;
+        }
+        /** The previous section ends with the named parent rule, and that rule applies an inline layer. */
+        private boolean entersInlineLayer(String parentRuleId) {
+            if (previous == null || !"CP access layer".equals(previous.source()) || previous.rules().isEmpty()) return false;
+            Rule last = previous.rules().get(previous.rules().size() - 1);
+            return parentRuleId.equals(last.id()) && !last.extras().getOrDefault("inline-layer", List.of()).isEmpty();
         }
         int panPhase(Section section) {
             if (section.parentRuleId() != null || metadata.id() == null || metadata.id().isBlank()
@@ -126,12 +172,15 @@ final class PolicyNormalization {
             if (snapshot.metadata().vendor().equals("CP") && rule.extras().getOrDefault("install-on", List.of()).isEmpty())
                 throw new Unknown("install-on evidence not collected");
             if (rule.enabled() == null) throw new Unknown("enabled state is unknown");
-            if (!(lookup && snapshot.metadata().vendor().equals("CP") && rule.action().equals("Apply Layer"))
-                    && !Set.of("Accept", "Drop", "Reject", "allow", "deny", "drop", "reset-client", "reset-server", "reset-both").contains(rule.action()))
+            // A matched "Apply Layer" rule ends matching in its layer (PATH_ANALYSIS_VENDOR_SEMANTICS.md 2b), so for shadowing
+            // it is a terminal rule of the parent layer; it must name exactly one inline layer. The lookup descends into it.
+            boolean applyLayer = snapshot.metadata().vendor().equals("CP") && rule.action().equals("Apply Layer")
+                && (lookup || rule.extras().getOrDefault("inline-layer", List.of()).size() == 1);
+            if (!applyLayer && !Set.of("Accept", "Drop", "Reject", "allow", "deny", "drop", "reset-client", "reset-server", "reset-both").contains(rule.action()))
                 throw new Unknown("non-terminal or unknown action");
             for (var entry : rule.extras().entrySet()) {
                 String key = entry.getKey(); var values = entry.getValue();
-                if (lookup && key.equals("inline-layer") && rule.action().equals("Apply Layer")) continue;
+                if (applyLayer && key.equals("inline-layer")) continue;
                 if (Set.of("time", "schedule", "vpn", "content").contains(key)) {
                     for (String id : values) {
                         resolver.budget.spend(); var object = snapshot.objects().get(id);
@@ -142,7 +191,12 @@ final class PolicyNormalization {
                 else if (key.equals("install-on")) {
                     for (String id : values) {
                         resolver.budget.spend(); var object = snapshot.objects().get(id);
-                        if (object == null || !object.status().equals("RESOLVED")) throw new Unknown("unresolved install-on selector");
+                        // Shadowing reads install-on only as a placement key: its opaque object references, compared by exact
+                        // set equality, never by meaning. A stored reference of any status (e.g. "Policy Targets", native type
+                        // Global, stored UNSUPPORTED) names the same target set as the same reference on another rule. The
+                        // lookup binds install-on to a queried target and still needs the resolved object.
+                        if (object == null || !(object.status().equals("RESOLVED") || !lookup && OPAQUE_PLACEMENTS.contains(object.status())))
+                            throw new Unknown("unresolved install-on selector");
                     }
                 } else if (!Set.of("from", "to", "install-on", "source-user", "category", "rule-type", "tag", "layer-name", "last-modified", "last-modifier", "log-setting").contains(key)
                         && !key.startsWith("track-") && !key.startsWith("profile-setting/")) throw new Unknown("unsupported rule constraint");
@@ -160,14 +214,19 @@ final class PolicyNormalization {
             return new Match(rule, List.of(), Map.of(), problem.getMessage());
         }
     }
+    /** Install-on object statuses shadowing accepts as opaque placement tokens (see {@link #normalize}). */
+    static final Set<String> OPAQUE_PLACEMENTS = Set.of("UNSUPPORTED", "UNRESOLVED");
     static boolean disjoint(Match a, Match b, Map<String, PolicyObject> objects) {
         for (String key : List.of("from", "to", "install-on")) {
             var left = a.placements().get(key); var right = b.placements().get(key);
             if (left.isEmpty() || right.isEmpty()) continue;
             if (key.equals("install-on")) {
-                // Resolved group membership and wildcard targets are not distinct atomic placements.
-                if (java.util.stream.Stream.concat(left.stream(), right.stream()).anyMatch(id ->
-                        objects.get(id).type().equals("any") || !objects.get(id).members().isEmpty())) continue;
+                // Resolved group membership, wildcard targets and opaque (unresolved or unsupported) targets are not
+                // distinct atomic placements: "Policy Targets" may well include a gateway another rule names.
+                if (java.util.stream.Stream.concat(left.stream(), right.stream()).anyMatch(id -> {
+                        var o = objects.get(id);
+                        return o == null || !o.status().equals("RESOLVED") || o.type().equals("any") || !o.members().isEmpty();
+                    })) continue;
             } else if (left.contains("any") || right.contains("any")) continue;
             if (Collections.disjoint(left, right)) return true;
         }

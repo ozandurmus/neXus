@@ -10,7 +10,11 @@ import java.util.*;
  * The indexed, per-rule-budgeted shadowing must answer exactly what the former linear scan answered wherever the former
  * scan did not run out of budget, over seeded random snapshots (zones, install-on, negation, groups, ranges, disabled
  * and unknown-enabled rules, both vendors, scope breaks and collection failures). Under deliberately tight budgets it
- * may only degrade towards UNKNOWN, never towards a cleaner verdict.
+ * may only degrade towards UNKNOWN, never towards a cleaner verdict. These snapshots carry no non-RESOLVED install-on
+ * object and no inline layer ({@link SyntheticPolicies#legacyComparable}), so they also prove those changes left every
+ * other snapshot's results exactly as they were. The two changes have their own oracles below: an opaque install-on
+ * reference answers what a resolved, non-atomic target under the same id answered, and every layer of an inline-layer
+ * policy answers what the former analysis answers for that layer alone with its "Apply Layer" rules made terminal.
  */
 class PolicyHygieneDifferentialTest {
     static final Instant NOW = PolicyHygieneTest.NOW;
@@ -19,7 +23,7 @@ class PolicyHygieneDifferentialTest {
     @Test void productionBudgetsMatchTheLegacyScanOnEveryRule() {
         Map<String, Integer> seen = new TreeMap<>(); int rules = 0;
         for (long seed = 0; seed < SNAPSHOTS + LARGE; seed++) {
-            var snapshot = SyntheticPolicies.random(seed, seed < SNAPSHOTS ? 1 + (int) (seed % 60) : 150 + (int) (seed % 150));
+            var snapshot = SyntheticPolicies.legacyComparable(SyntheticPolicies.random(seed, seed < SNAPSHOTS ? 1 + (int) (seed % 60) : 150 + (int) (seed % 150)));
             var reference = LegacyPolicyHygiene.analyze(snapshot, 90, NOW, Integer.MAX_VALUE);
             var legacyDefault = LegacyPolicyHygiene.analyze(snapshot, 90, NOW, 250_000);
             var actual = PolicyHygiene.analyze(snapshot, 90, NOW, PolicyHygiene.TOTAL_WORK);
@@ -44,15 +48,105 @@ class PolicyHygieneDifferentialTest {
         assertTrue(seen.getOrDefault("CP UNKNOWN / zone or install-on coverage is unproven", 0) >= 20, seen.toString());
         assertTrue(seen.getOrDefault("CP UNKNOWN / install-on evidence not collected", 0) > 0, seen.toString());
         assertTrue(seen.getOrDefault("PAN UNKNOWN / zone evidence not collected", 0) > 0, seen.toString());
+        assertTrue(seen.getOrDefault("CP UNKNOWN / unresolved install-on selector", 0) > 0, seen.toString());
         assertTrue(rules > 140_000, "rules compared: " + rules);
         System.out.println("DIFFERENTIAL " + (SNAPSHOTS + LARGE) + " snapshots, " + rules + " rules: " + seen);
     }
+
+    /**
+     * An UNRESOLVED or UNSUPPORTED ("Policy Targets", native type Global) install-on reference is only an opaque placement
+     * token: the result is exactly the former result for a RESOLVED target group under the same id -- equal sets compare,
+     * unequal ones are never disjoint -- and nothing else about the snapshot changes.
+     */
+    @Test void opaqueInstallOnAnswersWhatAResolvedNonAtomicTargetAnswered() {
+        int opaque = 0, proven = 0, formerlyUnresolved = 0;
+        for (long seed = 0; seed < 3000; seed++) {
+            var flat = SyntheticPolicies.random(seed + 200_000, 5 + (int) (seed % 80));
+            // Inline layers are covered by their own oracle; drop the parent links so only the install-on change is in play.
+            flat = new PolicySnapshot(flat.metadata(), flat.sections().stream().map(s -> new PolicySnapshot.Section(s.id(), s.name(), s.source(), null, s.rules())).toList(),
+                flat.objects(), flat.failures());
+            if (seed % 2 == 1) flat = SyntheticPolicies.policyTargets(flat);
+            var actual = PolicyHygiene.analyze(flat, 90, NOW, PolicyHygiene.TOTAL_WORK).rules();
+            var expected = LegacyPolicyHygiene.analyze(SyntheticPolicies.resolvedTargets(flat), 90, NOW, Integer.MAX_VALUE).rules();
+            var former = LegacyPolicyHygiene.analyze(flat, 90, NOW, Integer.MAX_VALUE).rules();
+            assertEquals(expected, actual, "seed " + seed);
+            for (var section : flat.sections()) for (var rule : section.rules()) {
+                if (!rule.extras().getOrDefault("install-on", List.of()).contains("gw-unres")) continue;
+                opaque++;
+                if (!actual.get(rule.id()).shadowStatus().equals("UNKNOWN")) proven++;
+                if ("unresolved install-on selector".equals(former.get(rule.id()).shadowReason())) formerlyUnresolved++;
+            }
+        }
+        assertTrue(opaque > 2000 && proven > 100 && formerlyUnresolved > 500, opaque + " opaque, " + proven + " proven, " + formerlyUnresolved + " formerly unresolved");
+        System.out.println("OPAQUE INSTALL-ON " + opaque + " rules, " + proven + " proven, " + formerlyUnresolved + " formerly unresolved");
+    }
+
+    /**
+     * Each layer of a well-formed inline-layer policy -- the ordered layer and every inline layer -- is analysed exactly as
+     * the former analysis analyses that layer's sections alone (no parent link) with each "Apply Layer" rule made a
+     * terminal rule: child rules never meet parent rules, the parent resumes after its inline layers with its own earlier
+     * rules, and a resolved "Apply Layer" rule covers later parent rules. REDUNDANT and CONFLICT are compared as covered
+     * (the stand-in action differs); the covering rule and the reason must be identical.
+     */
+    @Test void everyLayerOfAnInlineLayerPolicyAnswersWhatThatLayerAloneAnswered() {
+        int compared = 0, resumed = 0, formerlyUnproven = 0, coveredByApplyLayer = 0, inline = 0, ruleReasonOnly = 0;
+        for (long seed = 0; seed < 2500; seed++) {
+            var snapshot = SyntheticPolicies.inline(seed + 300_000, 5 + (int) (seed % 70));
+            if (seed % 2 == 1) snapshot = SyntheticPolicies.policyTargets(snapshot);
+            var actual = PolicyHygiene.analyze(snapshot, 90, NOW, PolicyHygiene.TOTAL_WORK).rules();
+            var former = LegacyPolicyHygiene.analyze(snapshot, 90, NOW, Integer.MAX_VALUE).rules();
+            Map<String, List<PolicySnapshot.Section>> layers = new LinkedHashMap<>();
+            for (var section : snapshot.sections()) layers.computeIfAbsent(String.valueOf(section.parentRuleId()), k -> new ArrayList<>()).add(section);
+            Set<String> applyLayer = new HashSet<>();
+            for (var section : snapshot.sections()) for (var rule : section.rules()) if (rule.extras().containsKey("inline-layer")) applyLayer.add(rule.id());
+            for (var entry : layers.entrySet()) {
+                List<PolicySnapshot.Section> alone = new ArrayList<>();
+                for (var section : entry.getValue()) alone.add(new PolicySnapshot.Section(section.id(), section.name(), section.source(), null,
+                    section.rules().stream().map(r -> r.extras().containsKey("inline-layer") ? terminal(r) : r).toList()));
+                var standalone = SyntheticPolicies.resolvedTargets(new PolicySnapshot(snapshot.metadata(), alone, snapshot.objects()));
+                var expected = LegacyPolicyHygiene.analyze(standalone, 90, NOW, Integer.MAX_VALUE).rules();
+                boolean afterInline = false;
+                for (var section : entry.getValue()) {
+                    for (var rule : section.rules()) {
+                        var want = expected.get(rule.id()); var got = actual.get(rule.id());
+                        String context = "seed " + seed + " layer " + entry.getKey() + " rule " + rule.id();
+                        assertEquals(covered(want.shadowStatus()), covered(got.shadowStatus()), context);
+                        // Rule extras are an immutable map whose iteration order depends on its key set, so dropping the
+                        // inline-layer key for the stand-in may surface a different one of the rule's own failing
+                        // constraints first. Either way the rule has no match; scope reasons must still be identical.
+                        if (applyLayer.contains(rule.id()) && want.shadowReason() != null && got.shadowReason() != null
+                                && !SCOPE_REASONS.contains(want.shadowReason()) && !SCOPE_REASONS.contains(got.shadowReason())) ruleReasonOnly++;
+                        else assertEquals(want.shadowReason(), got.shadowReason(), context);
+                        assertEquals(want.coveringRuleId(), got.coveringRuleId(), context);
+                        compared++;
+                        if (!entry.getKey().equals("null")) inline++;
+                        if (afterInline) resumed++;
+                        if (afterInline && "earlier sections not analysed".equals(former.get(rule.id()).shadowReason())
+                                && !"earlier sections not analysed".equals(got.shadowReason())) formerlyUnproven++;
+                        if (got.coveringRuleId() != null && applyLayer.contains(got.coveringRuleId())) coveredByApplyLayer++;
+                    }
+                    if (!section.rules().isEmpty() && applyLayer.contains(section.rules().get(section.rules().size() - 1).id())) afterInline = true;
+                }
+            }
+        }
+        assertTrue(compared > 50_000 && inline > 10_000 && resumed > 10_000 && formerlyUnproven > 5_000 && coveredByApplyLayer > 200,
+            compared + " compared, " + inline + " inline, " + resumed + " resumed, " + formerlyUnproven + " formerly unproven, " + coveredByApplyLayer + " covered by Apply Layer");
+        System.out.println("INLINE LAYERS " + compared + " compared, " + inline + " inline, " + resumed + " resumed parent, "
+            + formerlyUnproven + " formerly unproven, " + coveredByApplyLayer + " covered by Apply Layer, " + ruleReasonOnly + " rule-reason order only");
+    }
+    private static final Set<String> SCOPE_REASONS = Set.of("earlier sections not analysed", "earlier rule has unsupported constraints",
+        "zone or install-on coverage is unproven", "analysis budget", "snapshot collection incomplete");
+    private static PolicySnapshot.Rule terminal(PolicySnapshot.Rule rule) {
+        var extras = new HashMap<String, List<String>>(); extras.put("inline-layer", null);
+        return SyntheticPolicies.withExtras(rule, "Reject", extras);
+    }
+    private static String covered(String status) { return Set.of("REDUNDANT", "CONFLICT").contains(status) ? "COVERED" : status; }
 
     @Test void legacyCascadeAndNewIndexAgreeWhereverTheLegacyBudgetHeld() {
         var random = new Random(11);
         int compared = 0, legacyBudget = 0;
         for (long seed = 0; seed < 1500; seed++) {
-            var snapshot = SyntheticPolicies.random(seed + 50_000, 20 + (int) (seed % 120));
+            var snapshot = SyntheticPolicies.legacyComparable(SyntheticPolicies.random(seed + 50_000, 20 + (int) (seed % 120)));
             int limit = random.nextInt(4000);
             var legacy = LegacyPolicyHygiene.analyze(snapshot, 90, NOW, limit);
             var actual = PolicyHygiene.analyze(snapshot, 90, NOW, PolicyHygiene.TOTAL_WORK);
@@ -69,7 +163,7 @@ class PolicyHygieneDifferentialTest {
         var random = new Random(23);
         int budgetRules = 0, laterDefinite = 0;
         for (long seed = 0; seed < 2500; seed++) {
-            var snapshot = SyntheticPolicies.random(seed + 90_000, 10 + (int) (seed % 90));
+            var snapshot = SyntheticPolicies.legacyComparable(SyntheticPolicies.random(seed + 90_000, 10 + (int) (seed % 90)));
             var reference = LegacyPolicyHygiene.analyze(snapshot, 90, NOW, Integer.MAX_VALUE).rules();
             int total = random.nextInt(4) == 0 ? random.nextInt(3000) : Integer.MAX_VALUE, rule = 1 + random.nextInt(120);
             var actual = PolicyHygiene.analyze(snapshot, 90, NOW, total, rule, snapshot.objects());

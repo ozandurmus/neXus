@@ -65,9 +65,9 @@ public final class PolicyHygiene {
         Budget budget = new Budget(workLimit);
         var resolver = new Resolver(snapshot.objects(), budget);
         Map<String, Assessment> results = new LinkedHashMap<>();
-        var scope = new EvaluationScope(snapshot.metadata());
-        var earlier = new Earlier(snapshot.objects());
-        boolean earlierUnknown = false, budgetReached = false;
+        // One Earlier per evaluation scope; a Check Point parent layer's Earlier resumes after its inline layers.
+        var scope = new EvaluationScope<Earlier>(snapshot.metadata(), () -> new Earlier(snapshot.objects()));
+        boolean budgetReached = false;
         for (Section section : snapshot.sections()) {
             if (PolicySnapshot.panNonSecurity(snapshot.metadata(), section)) {
                 // Palo Alto NAT and default-rule sections are stored, not analysed: no shadowing, permissiveness or
@@ -80,10 +80,7 @@ public final class PolicyHygiene {
                 }
                 continue;
             }
-            if (!scope.advance(section)) {
-                earlier.clear();
-                earlierUnknown = false;
-            }
+            Earlier earlier = scope.advance(section);
             for (Rule rule : section.rules()) {
                 List<Finding> findings = new ArrayList<>();
                 String status = "UNKNOWN", reason = "analysis budget", covering = null;
@@ -119,11 +116,11 @@ public final class PolicyHygiene {
                     if (scope.unproven) reason = "earlier sections not analysed";
                     if (reason == null) {
                         status = "NOT_SHADOWED";
-                        if (earlierUnknown) reason = "earlier rule has unsupported constraints";
+                        if (earlier.unknown) reason = "earlier rule has unsupported constraints";
                         Match prior = earlier.cover(match, budget);
                         if (prior != null) {
                             covering = prior.rule().id();
-                            status = prior.rule().action().equals(rule.action()) ? "REDUNDANT" : "CONFLICT";
+                            status = sameAction(prior.rule(), rule) ? "REDUNDANT" : "CONFLICT";
                             reason = null;
                             findings.add(finding(status.equals("CONFLICT") ? "conflict" : "shadowed", status.equals("CONFLICT") ? "HIGH" : "MEDIUM",
                                 status.equals("CONFLICT") ? "Earlier enabled rule fully covers this match with a different action."
@@ -136,7 +133,7 @@ public final class PolicyHygiene {
                 // candidate and an unresolved one counts as an earlier unknown -- never silently dropped (fail-closed).
                 if (!Boolean.FALSE.equals(rule.enabled())) {
                     if (match != null && match.problem() == null) earlier.add(match);
-                    else earlierUnknown = true;
+                    else earlier.unknown = true;
                 }
                 if (status.equals("NOT_SHADOWED") && !snapshot.failures().isEmpty()) {
                     status = "UNKNOWN"; reason = "snapshot collection incomplete";
@@ -187,8 +184,9 @@ public final class PolicyHygiene {
         private final List<Bucket> keys = new ArrayList<>();
         private final Map<Key, int[]> overlap = new HashMap<>();
         private int count;
+        /** An enabled earlier rule of this scope had no resolved match, so no later rule can be proven clean. */
+        boolean unknown;
         Earlier(Map<String, PolicyObject> objects) { this.objects = objects; }
-        void clear() { buckets.clear(); keys.clear(); overlap.clear(); }
         private static Key key(Match m) { return new Key(m.placements().get("from"), m.placements().get("to"), m.placements().get("install-on")); }
         void add(Match match) {
             var bucket = buckets.computeIfAbsent(key(match), k -> { var b = new Bucket(match); keys.add(b); return b; });
@@ -272,6 +270,14 @@ public final class PolicyHygiene {
     private static Finding finding(String cls, String severity, String evidence) { return new Finding(cls, severity, evidence); }
     private static Finding unknown(String evidence) { return finding("unknown", "LOW", evidence); }
     private static boolean accepting(String action) { return Set.of("Accept", "allow").contains(action); }
+    /**
+     * Same action for REDUNDANT versus CONFLICT. Two Check Point "Apply Layer" rules act alike only when they apply the
+     * same inline layer (same opaque reference); other rules carry no inline-layer reference, so this is action equality.
+     */
+    private static boolean sameAction(Rule covering, Rule covered) {
+        return covering.action().equals(covered.action())
+            && covering.extras().getOrDefault("inline-layer", List.of()).equals(covered.extras().getOrDefault("inline-layer", List.of()));
+    }
     private static String unused(PolicySnapshot snapshot, Rule rule, int days, List<Finding> findings) {
         var h = rule.hitCounts(); String window = "Counter window unknown; first hit is not a counter start.";
         if (h == null || h.hits() == null || h.hits() < 0 || parse(h.collectedAt()) == null) {
