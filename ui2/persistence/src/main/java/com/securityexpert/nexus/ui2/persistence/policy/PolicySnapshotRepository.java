@@ -27,6 +27,29 @@ public final class PolicySnapshotRepository {
         return transactions.inTransaction(db -> db.fetch("select snapshot::text as snapshot from policy_snapshot where policy_id = {0}", id)
                 .stream().findFirst().map(row -> row.get("snapshot", String.class)));
     }
+    /**
+     * A stored snapshot with the immutable version of the row it was read from. {@link #save} replaces a row only with a
+     * strictly newer collected_at, so (collected_at, stored size) changes whenever the content does; the version is
+     * built in UTC so it does not depend on the connection's time zone.
+     */
+    public record Versioned(String version, String snapshotJson) {}
+    private static final String VERSION = "to_char(collected_at at time zone 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US') "
+        + "|| '|' || pg_column_size(snapshot)::text";
+    /** The row's version without reading the snapshot document (the size comes from the TOAST pointer). */
+    public Optional<String> version(String id) {
+        return transactions.inTransaction(db -> db.fetch("select " + VERSION + " as version from policy_snapshot where policy_id = {0}", id)
+                .stream().findFirst().map(row -> row.get("version", String.class)));
+    }
+    /** The snapshot and its version read in one statement, so the pair is consistent even while the row is replaced. */
+    public Optional<Versioned> findVersioned(String id) {
+        return transactions.inTransaction(db -> db.fetch("select " + VERSION + " as version, snapshot::text as snapshot "
+                + "from policy_snapshot where policy_id = {0}", id)
+                .stream().findFirst().map(row -> new Versioned(row.get("version", String.class), row.get("snapshot", String.class))));
+    }
+    /** Existence only; never reads or parses the snapshot document. */
+    public boolean exists(String id) {
+        return transactions.inTransaction(db -> !db.fetch("select 1 from policy_snapshot where policy_id = {0}", id).isEmpty());
+    }
     public List<String> inventories(String source, String domain) {
         var result = new java.util.ArrayList<String>();
         streamInventories(source, domain, reader -> {

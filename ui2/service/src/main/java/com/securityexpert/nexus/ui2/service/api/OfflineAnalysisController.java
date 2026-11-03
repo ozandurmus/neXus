@@ -23,8 +23,13 @@ public final class OfflineAnalysisController {
     private final RbacEvaluator rbac;
     private final ObjectMapper json = new ObjectMapper();
     private final Semaphore uploads = new Semaphore(1);
+    private final PolicyBulkhead heavy;
     public OfflineAnalysisController(PolicyQueryService policies, OfflineAnalysisService analyses, RbacEvaluator rbac) {
-        this.policies = policies; this.analyses = analyses; this.rbac = rbac;
+        this(policies, analyses, rbac, new PolicyBulkhead());
+    }
+    @org.springframework.beans.factory.annotation.Autowired
+    public OfflineAnalysisController(PolicyQueryService policies, OfflineAnalysisService analyses, RbacEvaluator rbac, PolicyBulkhead heavy) {
+        this.policies = policies; this.analyses = analyses; this.rbac = rbac; this.heavy = heavy;
     }
     @GetMapping("/api/v2/policy/policies/{id}/offline-analyses")
     public ResponseEntity<?> list(@PathVariable String id, @RequestParam(defaultValue = "0") int page, HttpServletRequest request) {
@@ -44,6 +49,8 @@ public final class OfflineAnalysisController {
     public ResponseEntity<?> upload(@PathVariable String id, HttpServletRequest request) {
         if (!canManage(request)) return error(403, "ADMIN_REQUIRED");
         if (!uploads.tryAcquire()) return error(429, "ANALYSIS_BUSY: retry after the current upload completes");
+        var permit = heavy.tryEnter();
+        if (permit == null) { uploads.release(); return PolicyBulkhead.busy(); }
         try {
             var snapshot = policies.find(id); if (snapshot.isEmpty()) return error(404, "POLICY_NOT_FOUND");
             var upload = new FileUpload(); upload.setSizeMax(OfflineCsv.MAX_BYTES + 65536); upload.setFileSizeMax(OfflineCsv.MAX_BYTES);
@@ -83,7 +90,7 @@ public final class OfflineAnalysisController {
         } catch (IOException invalid) {
             // Multipart exceptions may contain filenames or raw data: never echo or log them.
             return error(400, "CSV_UPLOAD_INVALID: UTF-8 CSV only, maximum 100 MB, valid multipart required");
-        } finally { uploads.release(); }
+        } finally { permit.close(); uploads.release(); }
     }
     private boolean canManage(HttpServletRequest request) {
         String actor = actor(request);

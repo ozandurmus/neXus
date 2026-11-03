@@ -43,7 +43,8 @@ class LocalFirewallPolicyServiceTest {
                 && sql.contains("l.event = 'removed'")));
         assertThrows(IllegalStateException.class, () -> new LocalFirewallPolicyService(tx, new ArtefactStoreAccess(null)).snapshots());
         when(store.retrieve(any(), any(), anyBoolean())).thenThrow(new IOException("synthetic unavailable artifact"));
-        assertThrows(IllegalStateException.class, service::snapshots);
+        // A fresh service: the first one now (correctly) answers the unchanged artefact from its parse cache.
+        assertThrows(IllegalStateException.class, new LocalFirewallPolicyService(tx, new ArtefactStoreAccess(store))::snapshots);
         when(rows.isEmpty()).thenReturn(true);
         when(rows.iterator()).thenAnswer(call -> Collections.<org.jooq.Record>emptyIterator());
         assertTrue(new LocalFirewallPolicyService(tx, new ArtefactStoreAccess(null)).snapshots().isEmpty());
