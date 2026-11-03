@@ -87,7 +87,10 @@ lastbuild=$(kubectl -n ui2-build get pods --no-headers --sort-by=.metadata.creat
 nohup bash ~/run_build.sh > /tmp/nexus_build.log 2>&1 &
 start=$(date +%s)
 while true; do
-  sleep 15; t=$(( $(date +%s) - start ))
+  # Check for the end state every 5 s (was one 15 s sleep: up to 15 s of a finished deploy went unnoticed); the status
+  # line below is still printed once per 15 s.
+  for _ in 1 2 3; do sleep 5; grep -q '^Done\.' /tmp/nexus_build.log && break; done
+  t=$(( $(date +%s) - start ))
   b=$(kubectl -n ui2-build get pods --no-headers --sort-by=.metadata.creationTimestamp 2>/dev/null | grep -E '^ui2-image-build-' | tail -1)
   bname=$(echo "$b" | awk '{print $1}'); bstate=$(echo "$b" | awk '{print $3}')
   [ "$bname" = "$lastbuild" ] && bstate="(waiting for the new build pod)"

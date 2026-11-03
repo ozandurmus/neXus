@@ -73,49 +73,69 @@ kubectl -n ui2-build create configmap ui2-build-config --from-literal=image_tag=
 kubectl -n ui2-build delete job ui2-image-build --ignore-not-found
 timing build_context "$phase_start"
 image_start=$SECONDS
-kubectl apply -f ~/build-job-proxy.yaml
-# Start from the same immutable context while the service image is building.
+# The runner image is built from the same immutable context, concurrently with the service image.
 e2e_start=$SECONDS
 python3 "$REPO/tools/e2e/hosta_e2e_image.py" start --commit "$COMMIT_SHA"
 
-echo "Waiting for build pod to be scheduled..."
-for i in {1..30}; do
-  POD=$(kubectl -n ui2-build get pod -l job-name=ui2-image-build -o jsonpath="{.items[0].metadata.name}" 2>/dev/null || true)
-  if [ -n "$POD" ]; then
-    break
+# A passing preview of an IDENTICAL git tree already built and tested this service image. Production adds only
+# project/deploy_info.json (the deployed commit), so re-stamp that one layer instead of rebuilding everything
+# (tools/delivery/hosta_restamp_image.py, ui2/Containerfile.restamp). Any problem -- no record, stale, the registry
+# lost the digest, the Job failed -- leaves REUSED_IMAGE empty and the normal full build below runs. The security gate
+# scans whichever digest results. NEXUS_REUSE_PREVIEW_IMAGE=0 disables the reuse.
+REUSED_IMAGE=""
+if [ "${NEXUS_REUSE_PREVIEW_IMAGE:-1}" = 1 ]; then
+  REUSED_IMAGE="$(python3 "$REPO/tools/delivery/hosta_restamp_image.py" build --commit "$COMMIT_SHA" 2>/dev/null)" || REUSED_IMAGE=""
+  if ! printf '%s' "$REUSED_IMAGE" | grep -Eq '^registry\.kube-system\.svc\.cluster\.local/nexus-ui2-service@sha256:[a-f0-9]{64}$'; then
+    REUSED_IMAGE=""
   fi
-  sleep 1
-done
+fi
+if [ -n "$REUSED_IMAGE" ]; then
+  IMAGE_DIGEST="${REUSED_IMAGE##*@}"
+  echo "Reusing the preview-verified image of this tree (re-stamped with deploy_info.json)"
+  timing image_build "$image_start"
+  echo "Digest is $IMAGE_DIGEST"
+else
+  kubectl apply -f ~/build-job-proxy.yaml
 
-echo "Streaming build logs from pod $POD..."
-kubectl -n ui2-build logs -f "$POD" || true
+  echo "Waiting for build pod to be scheduled..."
+  for i in {1..30}; do
+    POD=$(kubectl -n ui2-build get pod -l job-name=ui2-image-build -o jsonpath="{.items[0].metadata.name}" 2>/dev/null || true)
+    if [ -n "$POD" ]; then
+      break
+    fi
+    sleep 1
+  done
 
-echo "Checking build job completion status..."
-# The log stream can end before the job does (a dropped stream, or a retried pod after a transient
-# base-image pull timeout -- backoffLimit 2). Wait for the job itself: complete, or failed for good.
-for i in $(seq 1 180); do
-  if kubectl -n ui2-build get job ui2-image-build -o jsonpath='{.status.conditions[?(@.type=="Complete")].status}' 2>/dev/null | grep -q True; then
-    break
-  fi
-  if kubectl -n ui2-build get job ui2-image-build -o jsonpath='{.status.conditions[?(@.type=="Failed")].status}' 2>/dev/null | grep -q True; then
-    echo "Build job failed after its retries. Last pod:"
-    kubectl -n ui2-build logs "$(kubectl -n ui2-build get pod -l job-name=ui2-image-build -o name | tail -1)" --tail=5 || true
+  echo "Streaming build logs from pod $POD..."
+  kubectl -n ui2-build logs -f "$POD" || true
+
+  echo "Checking build job completion status..."
+  # The log stream can end before the job does (a dropped stream, or a retried pod after a transient
+  # base-image pull timeout -- backoffLimit 2). Wait for the job itself: complete, or failed for good.
+  for i in $(seq 1 180); do
+    if kubectl -n ui2-build get job ui2-image-build -o jsonpath='{.status.conditions[?(@.type=="Complete")].status}' 2>/dev/null | grep -q True; then
+      break
+    fi
+    if kubectl -n ui2-build get job ui2-image-build -o jsonpath='{.status.conditions[?(@.type=="Failed")].status}' 2>/dev/null | grep -q True; then
+      echo "Build job failed after its retries. Last pod:"
+      kubectl -n ui2-build logs "$(kubectl -n ui2-build get pod -l job-name=ui2-image-build -o name | tail -1)" --tail=5 || true
+      exit 1
+    fi
+    sleep 10
+  done
+  if ! kubectl -n ui2-build get job ui2-image-build -o jsonpath='{.status.conditions[?(@.type=="Complete")].status}' | grep -q True; then
+    echo "Build job did not finish within 30 minutes."
     exit 1
   fi
-  sleep 10
-done
-if ! kubectl -n ui2-build get job ui2-image-build -o jsonpath='{.status.conditions[?(@.type=="Complete")].status}' | grep -q True; then
-  echo "Build job did not finish within 30 minutes."
-  exit 1
-fi
 
-timing image_build "$image_start"
-echo "Starting loader again to read digest..."
-kubectl delete pod ui2-build-context-loader -n ui2-build --ignore-not-found --force --grace-period=0 || true
-kubectl apply -f deploy/ui2-image-build/20-context-loader.yaml
-kubectl wait --for=condition=Ready pod/ui2-build-context-loader -n ui2-build --timeout=60s
-IMAGE_DIGEST="$(kubectl -n ui2-build exec ui2-build-context-loader -- cat /workspace/image-digest.txt)"
-echo "Digest is $IMAGE_DIGEST"
+  timing image_build "$image_start"
+  echo "Starting loader again to read digest..."
+  kubectl delete pod ui2-build-context-loader -n ui2-build --ignore-not-found --force --grace-period=0 || true
+  kubectl apply -f deploy/ui2-image-build/20-context-loader.yaml
+  kubectl wait --for=condition=Ready pod/ui2-build-context-loader -n ui2-build --timeout=60s
+  IMAGE_DIGEST="$(kubectl -n ui2-build exec ui2-build-context-loader -- cat /workspace/image-digest.txt)"
+  echo "Digest is $IMAGE_DIGEST"
+fi
 
 # The Packet Analysis engine image (docs/design/PACKET_ANALYSIS_ENGINE_IMAGE.md): the main image just built, by
 # digest, plus tshark -- so tshark never enters the main image. Same registry repository, tag <commit12>-pa; scanned

@@ -141,6 +141,7 @@ def test_ship_test_modes_and_pr_results(tmp_path, monkeypatch, full, integration
 
     monkeypatch.setattr(sa, "_git", git)
     monkeypatch.setattr(sa, "_preview_e2e", lambda *_: None)
+    monkeypatch.setattr(sa, "_wait_for_checks", lambda url: None)
     monkeypatch.setattr(sa, "_deploy", lambda *_: None)
     monkeypatch.setattr(sa.subprocess, "run", run)
     result = sa.cmd_ship(_args(task=None, branch="feature/synthetic", notes=None, title=None, full=full))

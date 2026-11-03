@@ -666,6 +666,7 @@ def test_ship_gate_before_push_pr_merge_and_deploy(tmp_path, monkeypatch, mode):
     monkeypatch.setattr(sa, "_git", git)
     monkeypatch.setattr(sa.subprocess, "run", run)
     monkeypatch.setattr(sa, "_preview_e2e", gate)
+    monkeypatch.setattr(sa, "_wait_for_checks", lambda url: events.append(("checks",)))
     monkeypatch.setattr(sa, "_deploy", lambda *args: events.append(("deploy",)))
     args = argparse.Namespace(task=None, branch="feature/synthetic", title=None, notes=None,
                               preview_e2e=mode == "force", no_preview_e2e="synthetic exercise" if mode == "skip" else None)

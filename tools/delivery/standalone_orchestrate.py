@@ -26,6 +26,10 @@ Usage:
   standalone_orchestrate.py clean  --task <slug>      (after merge: removes the worktree and the lane branch)
   standalone_orchestrate.py ship   [--task <slug>]    (fast-forward main to the lane if given, privacy gate, push origin +
                                                        hosta, deploy with retry, sync ui2-configuration, clean the task)
+    Ship speed (2026-11-03): the merge waits for GitHub's checks (`--skip-checks REASON` is the emergency bypass); a branch
+    whose every changed path is documentation/project-state text takes a docs-only fast path (privacy gate + gitleaks,
+    PR, checks, merge; no preview, image build or deploy; `--no-fast-path`/`--full` opt out); `--early-pr` pushes and
+    opens the PR before the preview so the checks run during it.
 """
 from __future__ import annotations
 
@@ -35,6 +39,7 @@ import fcntl
 import json
 import os
 import re
+import shutil
 import signal
 import subprocess
 import tempfile
@@ -394,6 +399,182 @@ def _deploy(skip_security: str | None = None) -> None:
     print(json.dumps({"deploy": "ok", "summary": [t[:160] for t in tail], "configuration": r.stdout.strip()}))
 
 
+# --- Docs-only fast path (PO 2026-11-03) -------------------------------------------------------------------------
+# A branch whose every changed path is documentation or project-state text has no runtime effect: the preview
+# (isolated candidate build + e2e), the image build and the production deploy exercise nothing it can change.
+# The classification is deliberately closed and conservative: anything not named here -- ui2/, tools/, scripts/,
+# deploy/, utils/, tests, migrations, configuration, workflows, history/, relay/ -- sends the ship down the full path.
+DOCS_ROOT_SUFFIXES = (".md",)                    # top-level files only (AGENTS.md, CURRENT_STATE.md, AI_HANDOVER.md, ...)
+DOCS_TREE_EXTENSIONS = {                         # prefix -> extensions that are text/media for people, never executed
+    "docs/": (".md", ".txt", ".csv", ".png", ".svg"),
+    "project/": (".md", ".json"),
+    "roles/": (".md",),
+    ".github/": (".md",),                        # agent instructions and prompts only; workflows are .yml and stay full
+}
+# Excluded even though they sit under an allowed prefix: the image build copies the mockups, and deploy_info.json is
+# generated per deploy (it is gitignored; listing it here keeps a forced add from sneaking through).
+DOCS_EXCLUDED = ("docs/design/ui2_mockups/", "project/deploy_info.json")
+# project/*.json files the runtime image bakes in (ui2/Containerfile): merging them without a deploy leaves the
+# running Project Plan panel on the previous snapshot until the next code deploy. Reported, not blocked.
+IMAGE_BAKED_PROJECT_FILES = ("project/roadmap.json", "project/feature_registry.json", "project/backlog.json",
+                             "project/build_history.json", "project/java_product_plan.json")
+IMAGE_BAKED_PROJECT_PREFIXES = ("project/archive/",)
+FASTPATH_MAX_FILES = 400
+CHECKS_TIMEOUT_S = 15 * 60
+CHECKS_POLL_S = 15
+CHECKS_EMPTY_GRACE_S = 120
+CHECKS_TRANSIENT_ERRORS = 4
+FAILING_CONCLUSIONS = {"FAILURE", "CANCELLED", "TIMED_OUT", "ACTION_REQUIRED", "STARTUP_FAILURE", "STALE"}
+PASSING_CONCLUSIONS = {"SUCCESS", "NEUTRAL", "SKIPPED"}
+
+
+def is_docs_path(path: str) -> bool:
+    """True when `path` (repository-relative, as git prints it) is documentation or state text only."""
+    if not path or path.startswith("/") or "\\" in path or any(part in ("", ".", "..") for part in path.split("/")):
+        return False
+    if path.startswith(DOCS_EXCLUDED):
+        return False
+    if "/" not in path:
+        return path.endswith(DOCS_ROOT_SUFFIXES)
+    for prefix, extensions in DOCS_TREE_EXTENSIONS.items():
+        if path.startswith(prefix):
+            return path.lower().endswith(extensions)
+    return False
+
+
+def classify_changed_paths(raw_diff_z: str) -> tuple[bool, list[str], list[str]]:
+    """Classify `git diff --raw -z --no-renames` output: (docs_only, offending paths, all paths).
+
+    Renames are split into delete+add by --no-renames, so both sides are checked. A symbolic link, a submodule or an
+    executable file is never documentation, whatever its name: only regular 0644 files (or a deletion of one) pass."""
+    fields = raw_diff_z.split("\0")
+    if fields and fields[-1] == "":
+        fields.pop()
+    if len(fields) % 2 or not fields:
+        return False, ["<unparseable diff>"], []
+    paths, offenders = [], []
+    for index in range(0, len(fields), 2):
+        parts = fields[index].lstrip(":").split()
+        path = fields[index + 1]
+        paths.append(path)
+        regular = len(parts) >= 5 and all(mode in ("100644", "000000") for mode in parts[:2])
+        if not regular or not is_docs_path(path):
+            offenders.append(path)
+    if len(paths) > FASTPATH_MAX_FILES:
+        offenders.append("<more than %d files>" % FASTPATH_MAX_FILES)
+    return not offenders, offenders, paths
+
+
+def _docs_only_change(branch: str) -> tuple[bool, list[str], list[str]]:
+    raw = subprocess.run(["git", "diff", "--raw", "-z", "--no-renames", "origin/main", branch],
+                         cwd=str(REPO_ROOT), capture_output=True, text=True, timeout=120)
+    if raw.returncode != 0:
+        return False, ["<git diff failed>"], []
+    return classify_changed_paths(raw.stdout)
+
+
+def _gitleaks_added_content(branch: str) -> str:
+    """Secret scan of what the branch adds, with the repository's own gitleaks configuration.
+
+    Returns 'pass', 'unavailable' (binary not installed here) or raises SystemExit on a finding or a scanner error.
+    The privacy gate (credential-shaped literals, identities) has already passed; this is the same scanner the
+    production security gate runs at deploy, so a docs-only merge cannot carry a finding that blocks the next deploy."""
+    if shutil.which("gitleaks") is None:
+        return "unavailable"
+    result = subprocess.run(["gitleaks", "git", "--redact=100", "--no-banner", "--config", ".gitleaks.toml",
+                             "--log-opts=origin/main.." + branch, "."],
+                            cwd=str(REPO_ROOT), capture_output=True, text=True, timeout=600)
+    if result.returncode != 0:
+        raise SystemExit("gitleaks reported a finding or failed on the docs-only branch; nothing pushed "
+                         "(run it locally to see the location)")
+    return "pass"
+
+
+def _check_verdict(rollup: list[dict]) -> tuple[str, list[str], list[str]]:
+    """Reduce a statusCheckRollup to ('pass'|'fail'|'pending'|'none', failed names, pending names).
+
+    Skipped and neutral checks do not count as passing evidence and do not block; at least one check must have
+    succeeded. Anything unrecognised is treated as pending, never as success."""
+    failed, pending, succeeded = [], [], 0
+    for item in rollup:
+        name = str(item.get("name") or item.get("context") or "unnamed")
+        if "state" in item and "status" not in item:                    # StatusContext
+            state = str(item.get("state") or "").upper()
+            if state == "SUCCESS":
+                succeeded += 1
+            elif state in ("FAILURE", "ERROR"):
+                failed.append(name)
+            else:
+                pending.append(name)
+            continue
+        status = str(item.get("status") or "").upper()                    # CheckRun
+        conclusion = str(item.get("conclusion") or "").upper()
+        if status != "COMPLETED":
+            pending.append(name)
+        elif conclusion in FAILING_CONCLUSIONS:
+            failed.append(name)
+        elif conclusion == "SUCCESS":
+            succeeded += 1
+        elif conclusion not in PASSING_CONCLUSIONS:
+            pending.append(name)
+    if failed:
+        return "fail", failed, pending
+    if pending:
+        return "pending", failed, pending
+    return ("pass" if succeeded else "none"), failed, pending
+
+
+def _wait_for_checks(url: str, timeout: float = CHECKS_TIMEOUT_S, poll: float = CHECKS_POLL_S,
+                     empty_grace: float = CHECKS_EMPTY_GRACE_S, sleep=None, clock=None) -> None:
+    """Block until every non-skipped GitHub check on the pull request has succeeded; stop the ship otherwise.
+
+    Before this gate (2026-11-03) `gh pr merge` ran four seconds after the PR was opened and never waited for the
+    `validate` job. Fails closed: a failing check, no check appearing within the grace period, a timeout, or a gh
+    that keeps erroring all stop the ship with the pull request left open for a human to look at."""
+    sleep = sleep or time.sleep
+    clock = clock or time.monotonic
+    started = clock()
+    errors = 0
+    last = None
+    while True:
+        view = subprocess.run(["gh", "pr", "view", url, "--json", "statusCheckRollup", "-q", ".statusCheckRollup"],
+                              cwd=str(REPO_ROOT), capture_output=True, text=True, timeout=120)
+        rollup = None
+        if view.returncode == 0:
+            try:
+                rollup = json.loads(view.stdout.strip() or "[]")
+                if not isinstance(rollup, list):
+                    rollup = None
+            except ValueError:
+                rollup = None
+        if rollup is None:
+            errors += 1
+            if errors >= CHECKS_TRANSIENT_ERRORS:
+                raise SystemExit("could not read the pull request checks (" + url + "); not merged")
+        else:
+            errors = 0
+            verdict, failed, pending = _check_verdict(rollup)
+            if verdict == "pass":
+                print(json.dumps({"checks": "pass", "pr": url, "waited_s": round(clock() - started)}), flush=True)
+                return
+            if verdict == "fail":
+                raise SystemExit("pull request checks failed (" + url + "): " + ", ".join(sorted(failed))[:300]
+                                 + "; not merged")
+            if verdict == "none" and rollup:
+                raise SystemExit("every pull request check was skipped (" + url + "); not merged")
+            if verdict == "none" and clock() - started >= empty_grace:
+                raise SystemExit("no pull request check appeared within " + str(int(empty_grace))
+                                 + " s (" + url + "); not merged")
+            state = (verdict, tuple(sorted(pending)))
+            if state != last:
+                print(json.dumps({"checks": "waiting", "pending": sorted(pending)[:8]}), flush=True)
+                last = state
+        if clock() - started >= timeout:
+            raise SystemExit("pull request checks still pending after " + str(int(timeout)) + " s (" + url
+                             + "); not merged")
+        sleep(poll)
+
+
 def _pr_body(branch: str, commits: str, notes: str) -> str:
     return ("## What changed\n" + commits + "\n\n## Checks before merge\n"
             "- Java: `:service:test :worker:test :architecture-tests:test` (reviewer, locally)\n"
@@ -410,15 +591,22 @@ def _preview_e2e(repo: Path, commit: str) -> None:
     try:
         # The gate also works before its first merge: main may not contain the wrapper yet.
         wrapper = _git("show", commit + ":tools/e2e/hosta_preview_e2e.sh", cwd=repo)
-        result = subprocess.run(["bash", "-s", "--", "--repo", str(repo), "--commit", commit],
-                                input=wrapper, capture_output=True, text=True, timeout=7200)
+        argv = ["bash", "-s", "--", "--repo", str(repo), "--commit", commit]
+        # The tree hash lets the host record which images this preview built and verified, so the production deploy
+        # of an identical tree can reuse them (run_build.sh -> hosta_restamp_image.py). A wrapper from before that
+        # change does not know the flag; it is only passed to a wrapper that does.
+        tree = _git("rev-parse", commit + "^{tree}", cwd=repo, check=False)
+        if "--tree" in wrapper and re.fullmatch(r"[0-9a-f]{40}", tree or ""):
+            argv += ["--tree", tree]
+        result = subprocess.run(argv, input=wrapper, capture_output=True, text=True, timeout=7200)
         # The wrapper returns timings, masked API diagnostics and a derived verdict.
         for line in result.stdout.splitlines():
             if (re.fullmatch(r"TIMING preview_[a-z_]+ [0-9.]+", line)
+                    or re.fullmatch(r"PREVIEW IMAGES: tree=[0-9a-f]{40} service=sha256:[0-9a-f]{64} e2e=sha256:[0-9a-f]{64}", line)
                     or line.startswith(("PREVIEW STEP: ", "PREVIEW E2E: FAIL"))):
                 print(line, flush=True)
         if result.returncode != 0 or "PREVIEW E2E: PASS" not in result.stdout.splitlines():
-            raise SystemExit("preview e2e failed; stopped before PR creation/merge")
+            raise SystemExit("preview e2e failed; stopped before PR merge")
         print("PREVIEW E2E: PASS", flush=True)
     finally:
         print(f"TIMING preview_total {time.monotonic() - start:.3f}", flush=True)
@@ -455,6 +643,11 @@ def _ship(args: argparse.Namespace) -> int:
         if not skip_preview.strip() or len(skip_preview) > 200 or any(ord(c) < 32 for c in skip_preview):
             raise SystemExit("--no-preview-e2e requires a nonempty, single-line reason (maximum 200 characters)")
         print("PREVIEW E2E SKIPPED: " + skip_preview, flush=True)
+    skip_checks = getattr(args, "skip_checks", None)
+    if skip_checks is not None:
+        if not skip_checks.strip() or len(skip_checks) > 200 or any(ord(c) < 32 for c in skip_checks):
+            raise SystemExit("--skip-checks requires a nonempty, single-line reason (maximum 200 characters)")
+        print("EMERGENCY: PULL REQUEST CHECKS NOT AWAITED: " + skip_checks, flush=True)
     if skip_security is not None:
         if not skip_security.strip() or len(skip_security) > 200 or any(ord(c) < 32 for c in skip_security):
             raise SystemExit("--skip-security requires a nonempty, single-line reason (maximum 200 characters)")
@@ -498,22 +691,65 @@ def _ship(args: argparse.Namespace) -> int:
                        capture_output=True)
     if gate.returncode != 0 or "Gate:                 PASS" not in gate.stdout:
         raise SystemExit("privacy gate did not pass on the shipped branch; nothing pushed")
-    # Structural/template/worker changes need the same gate as frontend changes.
-    if skip_preview is None:
-        _preview_e2e(wt if args.task else REPO_ROOT, _git("rev-parse", branch))
-    _git("push", "-q", "--force-with-lease", "origin", branch + ":" + branch)
-    commits = _git("log", "--format=- %s", "origin/main.." + branch)
-    title = args.title or _git("log", "-1", "--format=%s", branch)
-    pr = subprocess.run(["gh", "pr", "create", "--base", "main", "--head", branch, "--title", title,
-                         "--body", _pr_body(branch, commits, args.notes or "")],
-                        cwd=str(REPO_ROOT), capture_output=True, text=True)
-    url = pr.stdout.strip().splitlines()[-1] if pr.returncode == 0 else ""
+    fast_path = False
+    if not getattr(args, "full", False) and not getattr(args, "no_fast_path", False):
+        docs_only, offenders, paths = _docs_only_change(branch)
+        if docs_only:
+            fast_path = True
+            secret_scan = _gitleaks_added_content(branch)
+            print(json.dumps({
+                "fast_path": "docs_only", "files": len(paths), "privacy_gate": "pass", "gitleaks": secret_scan,
+                "preview": "skipped", "image_build": "skipped", "deploy": "skipped",
+                "not_deployed_until_next_code_deploy": sorted(
+                    p for p in paths if p in IMAGE_BAKED_PROJECT_FILES or p.startswith(IMAGE_BAKED_PROJECT_PREFIXES))[:10],
+            }), flush=True)
+        else:
+            print(json.dumps({"fast_path": "not_applicable", "first_paths": offenders[:3]}), flush=True)
+    run_preview = skip_preview is None and not fast_path
+    candidate_repo = wt if args.task else REPO_ROOT
+
+    def open_pull_request() -> str:
+        _git("push", "-q", "--force-with-lease", "origin", branch + ":" + branch)
+        commits = _git("log", "--format=- %s", "origin/main.." + branch)
+        title = args.title or _git("log", "-1", "--format=%s", branch)
+        body = _pr_body(branch, commits, args.notes or "")
+        if fast_path:
+            body += ("\nDocs-only change (every changed path is documentation or project-state text): the isolated "
+                     "preview, the image build and the production deploy were skipped by design; the privacy gate and "
+                     "the GitHub checks gate the merge.\n")
+        pr = subprocess.run(["gh", "pr", "create", "--base", "main", "--head", branch, "--title", title,
+                             "--body", body], cwd=str(REPO_ROOT), capture_output=True, text=True)
+        found = pr.stdout.strip().splitlines()[-1] if pr.returncode == 0 else ""
+        if not found:
+            existing = subprocess.run(["gh", "pr", "view", branch, "--json", "url", "-q", ".url"],
+                                      cwd=str(REPO_ROOT), capture_output=True, text=True)
+            found = existing.stdout.strip()
+        if not found:
+            raise SystemExit("could not open the pull request: " + (pr.stderr.strip()[-300:] or "unknown"))
+        return found
+
+    # Default order (unchanged): the isolated preview passes BEFORE anything is pushed or a pull request exists.
+    # --early-pr (opt-in) pushes and opens the pull request first, so GitHub's `validate` check (about 95 s) runs while
+    # the preview does; a failed preview then closes the pull request and deletes the pushed branch.
+    early_pr = bool(getattr(args, "early_pr", False)) and run_preview
+    url = open_pull_request() if early_pr else ""
+    if run_preview:
+        try:
+            # Structural/template/worker changes need the same gate as frontend changes.
+            _preview_e2e(candidate_repo, _git("rev-parse", branch))
+        except SystemExit:
+            if early_pr:
+                subprocess.run(["gh", "pr", "close", url, "--comment",
+                                "Closed by the ship: the isolated preview e2e did not pass."],
+                               cwd=str(REPO_ROOT), capture_output=True, text=True)
+                subprocess.run(["git", "push", "-q", "origin", "--delete", branch], cwd=str(REPO_ROOT),
+                               capture_output=True)
+            raise
     if not url:
-        existing = subprocess.run(["gh", "pr", "view", branch, "--json", "url", "-q", ".url"],
-                                  cwd=str(REPO_ROOT), capture_output=True, text=True)
-        url = existing.stdout.strip()
-    if not url:
-        raise SystemExit("could not open the pull request: " + (pr.stderr.strip()[-300:] or "unknown"))
+        url = open_pull_request()
+    # Merge only after GitHub's own checks have passed (2026-11-03: the merge used to run 4 s after PR creation).
+    if skip_checks is None:
+        _wait_for_checks(url)
     # No --delete-branch: gh would delete the local branch a lane worktree still has checked out.
     merge = subprocess.run(["gh", "pr", "merge", url, "--rebase"],
                            cwd=str(REPO_ROOT), capture_output=True, text=True)
@@ -524,6 +760,15 @@ def _ship(args: argparse.Namespace) -> int:
     _git("merge", "-q", "--ff-only", "origin/main")
     _git("push", "-q", "hosta", "main")
     print(json.dumps({"pr": url, "merged": _git("rev-parse", "--short", "HEAD")}))
+    if fast_path:
+        print(json.dumps({"fast_path": "docs_only", "deployed": False, "pr": url}), flush=True)
+        subprocess.run(["gh", "pr", "comment", url, "--body",
+                        "Merged on the docs-only fast path: no preview, image build or deploy ran."],
+                       cwd=str(REPO_ROOT), capture_output=True, text=True)
+        if args.task and Path(r["worktree"]).exists():
+            args.force = True
+            cmd_clean(args)
+        return 0
     _deploy(skip_security)
     # The in-cluster e2e screen suite after every deploy (PO 2026-09-27); a failure is reported, not rolled back.
     e2e = subprocess.run(["bash", "tools/e2e/hosta_e2e.sh", "--full" if getattr(args, "full", False) else "--quick"], cwd=str(REPO_ROOT), capture_output=True, text=True)
@@ -574,6 +819,13 @@ def main(argv: list[str] | None = None) -> int:
     sh.add_argument("--branch", help="ship a local branch (a reviewer hotfix) through a pull request")
     sh.add_argument("--title")
     sh.add_argument("--full", action="store_true", help="run every-tab/latency E2E and real PostgreSQL integration tests")
+    sh.add_argument("--skip-checks", metavar="REASON",
+                    help="emergency: merge without waiting for GitHub's checks; a reason is mandatory and printed")
+    sh.add_argument("--early-pr", action="store_true",
+                    help="push and open the pull request before the preview so GitHub's checks run during it "
+                         "(default: nothing is pushed until the preview has passed)")
+    sh.add_argument("--no-fast-path", action="store_true",
+                    help="never take the docs-only fast path (preview, image build and deploy always run)")
     sh.add_argument("--notes", help="extra lines for the PR body (live validation, measurements)")
     sh.add_argument("--skip-security", metavar="REASON", help="emergency bypass; a reason is mandatory and printed")
     preview = sh.add_mutually_exclusive_group()
