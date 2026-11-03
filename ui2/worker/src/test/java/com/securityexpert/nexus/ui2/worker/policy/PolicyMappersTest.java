@@ -175,4 +175,50 @@ class PolicyMappersTest {
         assertEquals("one-time", snapshot.objects().get(rules.get(1).extras().get("schedule").get(0)).schedule().kind());
     }
 
+    private com.fasterxml.jackson.databind.JsonNode accessPage(int from, int to, int total, String... nodes) throws Exception {
+        return new ObjectMapper().readTree("{\"uid\":\"layer-p\",\"name\":\"Synthetic layer\",\"from\":" + from + ",\"to\":" + to + ",\"total\":" + total
+                + ",\"rulebase\":[" + String.join(",", nodes) + "]}");
+    }
+    private static String sec(String uid, String name, String... rules) {
+        return "{\"type\":\"access-section\",\"uid\":\"" + uid + "\",\"name\":\"" + name + "\",\"rulebase\":[" + String.join(",", rules) + "]}";
+    }
+    private static String rule(String uid, String extra) {
+        return "{\"type\":\"access-rule\",\"uid\":\"" + uid + "\",\"name\":\"" + uid + "\"" + extra + "}";
+    }
+    @Test void checkpointJoinsASectionThatSpansApiPagesButKeepsDistinctOnesApart() throws Exception {
+        var pages = List.of(
+                accessPage(1, 3, 6, sec("s-a", "Alpha", rule("r1", ""), rule("r2", "")), sec("s-b", "Beta", rule("r3", ""))),
+                accessPage(4, 6, 6, sec("s-b", "Beta", rule("r4", ""), rule("r5", "")), sec("s-a2", "Alpha", rule("r6", ""))));
+        var snapshot = new CheckPointPolicyMapper().map(metadata("CP"), pages);
+        assertEquals(List.of("Alpha", "Beta", "Alpha"), snapshot.sections().stream().map(Section::name).toList());
+        assertEquals(List.of("r3", "r4", "r5"), snapshot.sections().get(1).rules().stream().map(Rule::uuid).toList());
+        var split = snapshot.sections().get(1);
+        assertEquals(ref(ref(ref("policy-1", "layer-p", ""), "s-b"), "r3"), split.id());
+        assertEquals(ref(ref(ref("policy-1", "layer-p", ""), "s-b"), "r3"), split.rules().get(0).id());
+        assertEquals(ref(ref(ref("policy-1", "layer-p", ""), "s-b"), "r4"), split.rules().get(1).id());
+    }
+    @Test void checkpointDoesNotJoinAnInlineLayerWithItsParentOrAcrossParents() throws Exception {
+        var inlinePage = new ObjectMapper().readTree("{\"uid\":\"layer-i\",\"name\":\"Synthetic inline\",\"from\":1,\"to\":1,\"total\":1,\"rulebase\":[" + rule("i1", "") + "]}");
+        var parent = accessPage(1, 2, 2, sec("s-a", "Synthetic layer", rule("r1", ""), rule("r2", ",\"inline-layer\":\"layer-i\"")));
+        var snapshot = new CheckPointPolicyMapper().map(metadata("CP"), List.of(parent, inlinePage));
+        assertEquals(2, snapshot.sections().size());
+        assertNull(snapshot.sections().get(0).parentRuleId()); assertNotNull(snapshot.sections().get(1).parentRuleId());
+        assertEquals("Synthetic layer", snapshot.sections().get(0).name()); assertEquals("Synthetic inline", snapshot.sections().get(1).name());
+    }
+    @Test void mergeAdjacentJoinsOnlyNeighboursWithTheSameKeyNameSourceAndParent() {
+        Rule r1 = new Rule("a", "a", 1, "", true, new Cell(List.of(), false), new Cell(List.of(), false), new Cell(List.of(), false), new Cell(List.of(), false), "", "", "", Map.of());
+        Rule r2 = new Rule("b", "b", 2, "", true, new Cell(List.of(), false), new Cell(List.of(), false), new Cell(List.of(), false), new Cell(List.of(), false), "", "", "", Map.of());
+        var s1 = new Section("s1", "N", "CP access layer", null, List.of(r1));
+        var s2 = new Section("s2", "N", "CP access layer", null, List.of(r2));
+        var other = new Section("o", "M", "CP access layer", null, List.of());
+        var merged = PolicySnapshot.mergeAdjacent(List.of(s1, s2), s -> "k");
+        assertEquals(1, merged.size()); assertEquals("s1", merged.get(0).id()); assertEquals(List.of(r1, r2), merged.get(0).rules());
+        assertEquals(3, PolicySnapshot.mergeAdjacent(List.of(s1, other, s2), s -> "k").size());
+        assertEquals(2, PolicySnapshot.mergeAdjacent(List.of(s1, s2), s -> null).size());
+        assertEquals(2, PolicySnapshot.mergeAdjacent(List.of(s1, new Section("s3", "N", "CP access layer", "p", List.of(r2))), s -> "k").size());
+        var snapshot = new PolicySnapshot(metadata("CP"), List.of(s1, s2, other), Map.of());
+        assertEquals(List.of("s1", "o"), snapshot.withPageSplitsMerged().sections().stream().map(Section::id).toList());
+        var pan = new PolicySnapshot(metadata("PAN"), List.of(s1, s2), Map.of());
+        assertSame(pan, pan.withPageSplitsMerged());
+    }
 }

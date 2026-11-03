@@ -485,7 +485,8 @@ export function PolicyRuleTable({ sections, collapsed, scrollTop, viewportHeight
   if (showEmpty) for (const section of emptySections) append(() => <TableRow key={section.id} data-policy-section data-empty-section sx={{ height: SECTION_ROW_HEIGHT }}>
     <TableCell colSpan={span} sx={{ py: 0, pl: 4, color: m3.onSurfaceVar, fontSize: 12.5, borderBottom: `1px solid ${m3.outlineVar}` }}>{sectionLabel(metadata, section)} · 0 rules</TableCell>
   </TableRow>, SECTION_ROW_HEIGHT);
-  for (const section of sections.filter(section => section.total !== 0)) {
+  // A section whose rules sit on other pages (or are filtered out) has nothing to show here; its header would only repeat.
+  for (const section of sections.filter(section => section.total !== 0 && section.rules.length > 0)) {
     append(() => <TableRow key={section.id} data-policy-section sx={{ height: SECTION_ROW_HEIGHT }}>
       <TableCell colSpan={span} sx={{ py: 0, bgcolor: m3.sc, borderBottom: `1px solid ${m3.outlineVar}`, borderTop: `1px solid ${m3.outlineVar}` }}>
         <Stack direction="row" alignItems="center" gap={1}>

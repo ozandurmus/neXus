@@ -39,25 +39,27 @@ public final class CheckPointPolicyMapper {
                 throw new IllegalArgumentException("Incomplete policy pages");
         }
         List<Section> sections = new ArrayList<>();
+        Map<Section, String> keys = new IdentityHashMap<>();
         for (String layer : layers.keySet()) if (!inline.contains(layer))
-            layer(metadata, layer, null, layers, dictionary, objects, sections, new HashSet<>());
+            layer(metadata, layer, null, layers, dictionary, objects, sections, keys, new HashSet<>());
         if (!layers.isEmpty() && sections.isEmpty()) throw new IllegalArgumentException("Cyclic inline layers");
         for (JsonNode page : natPages) nat(metadata, page.path("rulebase"), ref(metadata.id(), "nat"),
-                "NAT", dictionary, objects, sections, 0);
-        return new PolicySnapshot(metadata, sections, objects);
+                "NAT", dictionary, objects, sections, keys, 0);
+        // A section that spans several API pages is repeated on each page; join those fragments (ids and rule ids stay as mapped).
+        return new PolicySnapshot(metadata, PolicySnapshot.mergeAdjacent(sections, keys::get), objects);
     }
     private void nat(Metadata meta, JsonNode nodes, String section, String name, Map<String, JsonNode> dict,
-            Map<String, PolicyObject> objects, List<Section> sections, int depth) {
+            Map<String, PolicyObject> objects, List<Section> sections, Map<Section, String> keys, int depth) {
         if (depth > 32 || !nodes.isArray()) throw new IllegalArgumentException("Invalid NAT rulebase");
         List<Rule> rules = new ArrayList<>();
         for (JsonNode node : nodes) {
             if (node.path("type").asText().equals("nat-section")) {
                 if (!rules.isEmpty()) {
-                    sections.add(new Section(ref(section, rules.get(0).uuid()), name, "CP NAT rulebase", null, rules));
+                    add(sections, keys, section, new Section(ref(section, rules.get(0).uuid()), name, "CP NAT rulebase", null, rules));
                     rules.clear();
                 }
                 nat(meta, node.path("rulebase"), ref(section, node.path("uid").asText()), node.path("name").asText("NAT section"),
-                        dict, objects, sections, depth + 1);
+                        dict, objects, sections, keys, depth + 1);
                 continue;
             }
             String uid = node.path("uid").asText();
@@ -73,8 +75,8 @@ public final class CheckPointPolicyMapper {
                     cell(meta, node, "original-service", dict, objects), new Cell(List.of(), false),
                     node.path("method").asText("UNKNOWN"), "UNKNOWN", node.path("comments").asText(""), extras));
         }
-        if (!rules.isEmpty()) sections.add(new Section(ref(section, rules.get(0).uuid()), name, "CP NAT rulebase", null, rules));
-        if (nodes.isEmpty()) sections.add(new Section(section, name, "CP NAT rulebase", null, List.of()));
+        if (!rules.isEmpty()) add(sections, keys, section, new Section(ref(section, rules.get(0).uuid()), name, "CP NAT rulebase", null, rules));
+        if (nodes.isEmpty()) add(sections, keys, section, new Section(section, name, "CP NAT rulebase", null, List.of()));
     }
     private static void inlineLayers(JsonNode nodes, Set<String> inline, int depth) {
         if (depth > 32) throw new IllegalArgumentException("Policy nesting limit exceeded");
@@ -84,26 +86,26 @@ public final class CheckPointPolicyMapper {
         }
     }
     private void layer(Metadata meta, String uid, String parent, Map<String, List<JsonNode>> layers,
-            Map<String, JsonNode> dict, Map<String, PolicyObject> objects, List<Section> sections, Set<String> path) {
+            Map<String, JsonNode> dict, Map<String, PolicyObject> objects, List<Section> sections, Map<Section, String> keys, Set<String> path) {
         if (!path.add(uid) || path.size() > 32) throw new IllegalArgumentException("Cyclic or excessive inline layers");
         if (!layers.containsKey(uid)) {
             sections.add(new Section(ref(meta.id(), uid, parent == null ? "" : parent), "Inline layer unavailable", "CP access layer", parent, List.of()));
         } else for (JsonNode page : layers.get(uid)) {
             walk(meta, page.path("rulebase"), ref(meta.id(), uid, parent == null ? "" : parent),
-                    page.path("name").asText("Access layer"), page.path("name").asText("Access layer"), parent, layers, dict, objects, sections, path, 0);
+                    page.path("name").asText("Access layer"), page.path("name").asText("Access layer"), parent, layers, dict, objects, sections, keys, path, 0);
         }
         path.remove(uid);
     }
     private void walk(Metadata meta, JsonNode nodes, String section, String name, String layerName, String parent,
             Map<String, List<JsonNode>> layers, Map<String, JsonNode> dict, Map<String, PolicyObject> objects,
-            List<Section> sections, Set<String> path, int depth) {
+            List<Section> sections, Map<Section, String> keys, Set<String> path, int depth) {
         if (depth > 32) throw new IllegalArgumentException("Policy nesting limit exceeded");
         List<Rule> pending = new ArrayList<>();
         for (JsonNode node : nodes) {
             if (node.path("type").asText().equals("access-section")) {
-                flush(sections, section, name, parent, pending);
+                flush(sections, keys, section, name, parent, pending);
                 walk(meta, node.path("rulebase"), ref(section, node.path("uid").asText()), node.path("name").asText("Section"),
-                        layerName, parent, layers, dict, objects, sections, path, depth + 1);
+                        layerName, parent, layers, dict, objects, sections, keys, path, depth + 1);
                 continue;
             }
             if (!node.path("type").asText().equals("access-rule")) throw new IllegalArgumentException("Unsupported access rule entry");
@@ -129,12 +131,12 @@ public final class CheckPointPolicyMapper {
                     cell(meta, node, "service", dict, objects), new Cell(List.of(), false),
                     resolve(node.path("action"), dict), resolve(node.path("track").path("type"), dict), node.path("comments").asText(""), extras, PolicyHitCounts.checkPoint(node.path("hits"), meta.collectedAt())));
             if (node.has("inline-layer")) {
-                flush(sections, section, name, parent, pending);
-                layer(meta, CheckPointPolicyCollector.inlineUid(node.path("inline-layer")), ruleId, layers, dict, objects, sections, path);
+                flush(sections, keys, section, name, parent, pending);
+                layer(meta, CheckPointPolicyCollector.inlineUid(node.path("inline-layer")), ruleId, layers, dict, objects, sections, keys, path);
             }
         }
-        flush(sections, section, name, parent, pending);
-        if (nodes.isEmpty()) sections.add(new Section(section, name, "CP access layer", parent, List.of()));
+        flush(sections, keys, section, name, parent, pending);
+        if (nodes.isEmpty()) add(sections, keys, section, new Section(section, name, "CP access layer", parent, List.of()));
     }
     /**
      * A rule's vendor modification time as a UTC instant, so the change report can date the revision instead of
@@ -158,9 +160,13 @@ public final class CheckPointPolicyMapper {
         try { return com.securityexpert.nexus.ui2.policy.PolicySchedule.date(iso); }
         catch (RuntimeException invalid) { return null; /* Unsupported metadata remains absent. */ }
     }
-    private static void flush(List<Section> sections, String id, String name, String parent, List<Rule> pending) {
+    private static void add(List<Section> sections, Map<Section, String> keys, String logicalRef, Section section) {
+        sections.add(section);
+        keys.put(section, logicalRef);
+    }
+    private static void flush(List<Section> sections, Map<Section, String> keys, String id, String name, String parent, List<Rule> pending) {
         if (pending.isEmpty()) return;
-        sections.add(new Section(ref(id, pending.get(0).uuid().isEmpty() ? pending.get(0).id() : pending.get(0).uuid()), name, "CP access layer", parent, pending));
+        add(sections, keys, id, new Section(ref(id, pending.get(0).uuid().isEmpty() ? pending.get(0).id() : pending.get(0).uuid()), name, "CP access layer", parent, pending));
         pending.clear();
     }
     private Cell cell(Metadata meta, JsonNode rule, String field, Map<String, JsonNode> dict, Map<String, PolicyObject> objects) {

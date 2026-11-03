@@ -43,6 +43,33 @@ public record PolicySnapshot(Metadata metadata, List<Section> sections, Map<Stri
         sections = List.copyOf(sections);
         objects = Map.copyOf(objects);
     }
+    /**
+     * Joins adjacent sections that carry the same non-null key, name, source and parent into the first one (its id, the
+     * rules concatenated in order). Check Point repeats an enclosing section on every API page it spans; non-adjacent
+     * sections, and sections without a key, are never joined.
+     */
+    public static List<Section> mergeAdjacent(List<Section> sections, java.util.function.Function<Section, String> key) {
+        List<Section> merged = new java.util.ArrayList<>();
+        String last = null;
+        for (Section section : sections) {
+            String current = key.apply(section);
+            Section previous = merged.isEmpty() ? null : merged.get(merged.size() - 1);
+            if (current != null && current.equals(last) && previous.name().equals(section.name())
+                    && previous.source().equals(section.source()) && java.util.Objects.equals(previous.parentRuleId(), section.parentRuleId())) {
+                List<Rule> rules = new java.util.ArrayList<>(previous.rules());
+                rules.addAll(section.rules());
+                merged.set(merged.size() - 1, new Section(previous.id(), previous.name(), previous.source(), previous.parentRuleId(), rules));
+            } else merged.add(section);
+            last = current;
+        }
+        return merged;
+    }
+    /** Stored Check Point snapshots predate the page merge and keep no logical section ref: join adjacent same-named CP fragments. */
+    public PolicySnapshot withPageSplitsMerged() {
+        if (metadata == null || !"CP".equals(metadata.vendor())) return this;
+        List<Section> merged = mergeAdjacent(sections, s -> s.source());
+        return merged.size() == sections.size() ? this : new PolicySnapshot(metadata, merged, objects, failures);
+    }
     public record Metadata(String id, String sourceId, String sourceName, String vendor,
             String containerId, String containerName, String name, String collectedAt,
             String artefactRef, List<Target> targets) {
