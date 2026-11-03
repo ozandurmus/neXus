@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Box, Button, Checkbox, Chip, Stack, Table, TableBody, TableCell, TableHead, TableRow, Tooltip, Typography } from "@mui/material";
-import { relativeAge, formatTime, formatStamp } from "../shell/time";
+import { relativeAge, formatTime, formatStamp, DISPLAY_TZ, DISPLAY_TZ_LABEL } from "../shell/time";
 import { VendorBadge } from "../shell/States";
 import { m3 } from "../theme/m3Theme";
 import { UNKNOWN_HATCH } from "../theme/tokens";
-import { getPolicyHistory, type PolicyCell, type PolicyMetadata, type PolicyObject, type PolicyPage, type PolicyRevision, type PolicyRule, type PolicySchedule, type PolicySection } from "../auth/adminApi";
+import { getPolicyHistory, type PolicyCell, type PolicyHygieneAssessment, type PolicyMetadata, type PolicyObject, type PolicyPage, type PolicyRevision, type PolicyRule, type PolicySchedule, type PolicySection } from "../auth/adminApi";
 import { statusWord } from "../shell/presenters";
 import { firewallLabels, firewallSerialTitle, withFirewallNames } from "./policyFirewalls";
 
@@ -70,21 +70,103 @@ export function actionWord(action: string) {
 function actionColor(action: string) { const tone = actionTone(action); return tone === "allow" ? m3.goodInk : tone === "deny" ? m3.error : m3.onSurfaceVar; }
 function actionGlyph(action: string) { return allowAction.test(action) ? "✓" : /reject|reset/i.test(action) ? "⊘" : /^(deny|drop|block)$/i.test(action) ? "✕" : natAction.test(action) ? "⇄" : "?"; }
 
+/* ---------------------------------------------------------------------------------------------------------------------
+ * Freshness. A stored snapshot is only as good as its age: the label says when it was collected, the state says
+ * whether the scheduled refresh has kept it current. The thresholds are the product's own schedule (full collection
+ * daily at 00:00, refresh every 6 h at 00/06/12/18 GMT+3): older than a day means the refresh did not run; older
+ * than a week means nothing on the screen should be read as "now".
+ * ------------------------------------------------------------------------------------------------------------------ */
+export type FreshnessState = "fresh" | "stale" | "old" | "unknown";
+export const STALE_AFTER_HOURS = 24, OLD_AFTER_DAYS = 7;
+const REFRESH_SCHEDULE = "the scheduled refresh (every 6 h at 00, 06, 12 and 18 GMT+3; full collection daily at 00:00)";
+export interface SnapshotFreshness { state: FreshnessState; /** `Collected 29 d ago (2 Oct 2026, 09:06 GMT+3)`. */ label: string; /** One sentence saying what the age means for the numbers on screen. */ reason: string; ageHours: number | null }
+/** `Collected 2 h ago (2 Oct 2026, 09:06 GMT+3)`: the age first, because that is what decides trust; the date for the record. */
+export function collectedLabel(at: string | null | undefined, now: Date) {
+  const date = new Date(at ?? "");
+  if (!at || !Number.isFinite(date.getTime())) return "Collection time unknown";
+  const day = new Intl.DateTimeFormat("en-GB", { timeZone: DISPLAY_TZ, day: "numeric", month: "short", year: "numeric" }).format(date);
+  const time = new Intl.DateTimeFormat("en-GB", { timeZone: DISPLAY_TZ, hour: "2-digit", minute: "2-digit", hour12: false }).format(date);
+  return `Collected ${relativeAge(at, now)} (${day}, ${time} ${DISPLAY_TZ_LABEL})`;
+}
+export function snapshotFreshness(at: string | null | undefined, now: Date): SnapshotFreshness {
+  const stamp = Date.parse(at ?? "");
+  if (!at || !Number.isFinite(stamp)) return { state: "unknown", label: collectedLabel(at, now), ageHours: null, reason: "The stored snapshot carries no collection time, so its age cannot be judged." };
+  const ageHours = Math.max(0, (now.getTime() - stamp) / 3_600_000);
+  const label = collectedLabel(at, now);
+  if (ageHours > OLD_AFTER_DAYS * 24) return { state: "old", label, ageHours, reason: `Snapshot is ${Math.floor(ageHours / 24)} days old: ${REFRESH_SCHEDULE} has not updated it. Rules, hit counts and hygiene describe the policy as it was then, not now.` };
+  if (ageHours > STALE_AFTER_HOURS) return { state: "stale", label, ageHours, reason: `Snapshot is older than 24 h: ${REFRESH_SCHEDULE} has not updated it since. Everything shown describes the policy at collection time.` };
+  return { state: "fresh", label, ageHours, reason: `Collected within the last 24 h; ${REFRESH_SCHEDULE} keeps it current.` };
+}
+export function freshnessColor(state: FreshnessState) { return state === "old" ? m3.error : state === "stale" ? m3.warningInk : state === "unknown" ? m3.neutralInk : undefined; }
+/** The freshness chip plus, when the snapshot is stale, the visible sentence saying so; the exact UTC stamp on hover. */
+export function SnapshotFreshnessChip({ at, now, sentence = true }: { at: string | null | undefined; now: Date; sentence?: boolean }) {
+  const fresh = snapshotFreshness(at, now);
+  const warn = fresh.state === "stale" || fresh.state === "old";
+  return <Box data-freshness={fresh.state} sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 1, minWidth: 0 }}>
+    <Tooltip title={fresh.reason}><Chip size="small" title={at ?? undefined} label={fresh.label} variant={warn ? "filled" : "outlined"}
+      color={fresh.state === "old" ? "error" : fresh.state === "stale" ? "warning" : "default"} sx={{ fontWeight: warn ? 600 : undefined }} /></Tooltip>
+    {warn && sentence && <Typography role="status" variant="caption" sx={{ color: freshnessColor(fresh.state), fontWeight: 500 }}>{fresh.reason}</Typography>}
+  </Box>;
+}
+
 export type UsageState = "unknown" | "not-collected" | "never" | "partial" | "stale" | "recent";
-export interface UsageWords { hits: string; lastHit: string; detail: string; state: UsageState }
-/** The usage words of one rule. `hitCounts` missing is UNKNOWN; `null` is "Not collected"; 0 hits is "Never"; a count without a time is partial. */
-export function usageWords(rule: Pick<PolicyRule, "hitCounts">, now: Date = new Date(), staleDays = 90): UsageWords {
+export interface UsageWords { hits: string; lastHit: string; detail: string; state: UsageState; /** What the counters cover, as the analysis recorded it; "Counter window unknown" when it did not. */ window: string }
+export const COUNTER_WINDOW_UNKNOWN = "Counter window unknown";
+/**
+ * The usage words of one rule. `hitCounts` missing is UNKNOWN; `null` is "Not collected"; 0 hits is "None recorded" (never
+ * "never": the counters' window is unknown unless the analysis says otherwise); a count without a time is partial.
+ */
+export function usageWords(rule: Pick<PolicyRule, "hitCounts" | "hygiene">, now: Date = new Date(), staleDays = 90): UsageWords {
   const counts = rule.hitCounts;
-  if (counts === undefined) return { hits: "UNKNOWN", lastHit: "UNKNOWN", detail: "Hit evidence is missing from this snapshot.", state: "unknown" };
-  if (counts === null) return { hits: "Not collected", lastHit: "Not collected", detail: "No hit counts are stored for this rule. A full refresh (incl. hit counts) collects them.", state: "not-collected" };
-  const provenance = `${counts.source === "mds" ? "Management server counters" : "Firewall counters"} · collected ${formatStamp(counts.collectedAt)}`;
-  if (counts.hits === 0 && !counts.lastHit) return { hits: "0", lastHit: "Never", detail: `Never matched within the counter window. ${provenance}`, state: "never" };
+  const window = (rule.hygiene?.counterWindow || COUNTER_WINDOW_UNKNOWN).replace(/\.\s*$/, "");
+  if (counts === undefined) return { hits: "UNKNOWN", lastHit: "UNKNOWN", detail: "Hit evidence is missing from this snapshot.", state: "unknown", window };
+  if (counts === null) return { hits: "Not collected", lastHit: "Not collected", detail: "No hit counts are stored for this rule. A full refresh (incl. hit counts) collects them.", state: "not-collected", window };
+  const level = counts.level && counts.level !== "UNKNOWN" ? ` · level ${counts.level}` : "";
+  const provenance = `${counts.source === "mds" ? "Management server counters" : "Firewall counters"}${level} · collected ${formatStamp(counts.collectedAt)} · ${window}.`;
+  if (counts.hits === 0 && !counts.lastHit) return { hits: "0", lastHit: "None recorded", detail: `No hits recorded in the counters; whether the rule was ever matched before the window is not proven. ${provenance}`, state: "never", window };
   const hits = counts.hits == null ? "UNKNOWN" : counts.hits.toLocaleString("en-US");
-  if (!counts.lastHit) return { hits, lastHit: "UNKNOWN", detail: `${counts.hits == null ? "Hit count not reported by the source" : "Last-hit time not reported by the source"}. ${provenance}`, state: "partial" };
+  if (!counts.lastHit) return { hits, lastHit: "UNKNOWN", detail: `${counts.hits == null ? "Hit count not reported by the source" : "Last-hit time not reported by the source"}. ${provenance}`, state: "partial", window };
   const last = Date.parse(counts.lastHit);
-  if (!Number.isFinite(last)) return { hits, lastHit: "UNKNOWN", detail: `Last-hit time unreadable (${counts.lastHit}). ${provenance}`, state: "partial" };
+  if (!Number.isFinite(last)) return { hits, lastHit: "UNKNOWN", detail: `Last-hit time unreadable (${counts.lastHit}). ${provenance}`, state: "partial", window };
   const days = (now.getTime() - last) / 86_400_000;
-  return { hits, lastHit: relativeAge(counts.lastHit, now), detail: `Last hit ${formatStamp(counts.lastHit)} · ${counts.lastHit}. ${provenance}`, state: days > staleDays ? "stale" : "recent" };
+  return { hits, lastHit: relativeAge(counts.lastHit, now), detail: `Last hit ${formatStamp(counts.lastHit)} · ${counts.lastHit}. ${provenance}`, state: days > staleDays ? "stale" : "recent", window };
+}
+
+/* ---------------------------------------------------------------------------------------------------------------------
+ * Not-provable reasons. The analysis answers UNKNOWN with one of a fixed vocabulary; the operator needs the plain
+ * group (identity objects, install-on target, layer structure, analysis limit ...) and whether it is an evidence limit
+ * or something to fix. The raw reason stays beside the group.
+ * ------------------------------------------------------------------------------------------------------------------ */
+export interface ReasonGroup { key: string; label: string; explain: string }
+export const REASON_GROUPS: readonly ReasonGroup[] = [
+  { key: "identity", label: "Identity or dynamic objects", explain: "Access-role, user, category or dynamic matches depend on identity data the stored policy does not hold. An evidence limit, not a rule problem." },
+  { key: "zone", label: "Zone coverage unproven", explain: "The rule's zones or install-on scope could not be proven against the earlier rules' coverage." },
+  { key: "install-on", label: "Install-on target not resolved", explain: "The rule's install-on selector names a target the inventory could not resolve, so which gateways it applies to is not proven." },
+  { key: "layers", label: "Layer structure", explain: "Earlier sections or inline layers were not analysed, so what precedes this rule is not proven." },
+  { key: "budget", label: "Analysis limit reached", explain: "The analysis stopped at its budget before reaching this rule; the remaining rules were not compared." },
+  { key: "objects", label: "Unresolved objects", explain: "An object the rule uses could not be resolved in the stored snapshot." },
+  { key: "constraints", label: "Unsupported rule constraints", explain: "An earlier rule uses a constraint the comparison does not model (for example a time or negated match)." },
+  { key: "hits", label: "Hit counters not collected", explain: "Usage findings need hit counters; none are stored for this rule. A full refresh (incl. hit counts) collects them." },
+  { key: "other", label: "Other evidence gap", explain: "The analysis gave a reason this screen does not group; the raw reason is shown beside it." },
+];
+const reasonGroup = (key: string) => REASON_GROUPS.find(group => group.key === key)!;
+export function unknownReasonGroup(reason: string | null | undefined): ReasonGroup {
+  const text = (reason ?? "").toLowerCase();
+  if (/user|identity|access.?role|category|dynamic/.test(text)) return reasonGroup("identity");
+  if (/zone/.test(text)) return reasonGroup("zone");
+  if (/install.?on|target/.test(text)) return reasonGroup("install-on");
+  if (/section|layer/.test(text)) return reasonGroup("layers");
+  if (/budget|limit/.test(text)) return reasonGroup("budget");
+  if (/unresolved|object/.test(text)) return reasonGroup("objects");
+  if (/unsupported|constraint/.test(text)) return reasonGroup("constraints");
+  if (/hit count|counter/.test(text)) return reasonGroup("hits");
+  return reasonGroup("other");
+}
+/** Every reason a rule's analysis could not decide: the shadow reason when shadowing is UNKNOWN plus each `unknown` finding. */
+export function unknownReasons(hygiene: PolicyHygieneAssessment | undefined): string[] {
+  if (!hygiene) return [];
+  const reasons = hygiene.shadowStatus === "UNKNOWN" ? [hygiene.shadowReason || "reason not recorded"] : [];
+  return [...reasons, ...hygiene.findings.filter(f => f.findingClass === "unknown").map(f => f.evidence)];
 }
 
 export type PermissivenessLevel = "High" | "Medium" | "Low" | "Unknown";
@@ -308,13 +390,18 @@ export function RuleMetrics({ rule, openRuleId, openHygiene, now = new Date() }:
       <Typography variant="caption" display="block" sx={{ color: m3.onSurfaceVar, my: 0.5 }}>{permissive.known ? "Why this level" : "UNKNOWN because"}{rule.permissiveness?.score !== undefined ? ` · score ${rule.permissiveness.score}` : ""}</Typography>
       <ReasonChips reasons={permissive.reasons} tone={permissive.level === "High" ? "bad" : permissive.level === "Medium" ? "warn" : "neutral"} />
     </Box></Tooltip>
-    <Tooltip title={rule.hygiene?.shadowReason ?? "Stored-snapshot analysis"}><Box sx={cardSx}>
+    <Tooltip title={rule.hygiene?.shadowReason ?? "Stored-snapshot analysis"}><Box sx={cardSx} data-shadow-status={rule.hygiene?.shadowStatus ?? "UNKNOWN"}>
       <Typography component="span" sx={cardTitle}>Hygiene</Typography>
       <Stack direction="row" gap={2} flexWrap="wrap" alignItems="flex-start">
         <Box><Typography variant="caption" color="text.secondary">Shadowed</Typography><Typography sx={{ ...big, color: rule.hygiene?.shadowStatus === "CONFLICT" ? m3.error : rule.hygiene?.shadowStatus === "REDUNDANT" ? m3.warningInk : rule.hygiene?.shadowStatus === "NOT_SHADOWED" ? m3.goodInk : m3.neutralInk }}>{rule.hygiene?.shadowStatus ?? "UNKNOWN"}</Typography>
           {(!rule.hygiene || rule.hygiene.shadowStatus === "UNKNOWN") && <Typography variant="caption" display="block">UNKNOWN because {rule.hygiene?.shadowReason ?? "analysis not available"}</Typography>}
+          {/* The plain-words group of the reason (identity objects, install-on target, analysis limit ...) and whether it is an evidence limit. */}
+          {rule.hygiene?.shadowStatus === "UNKNOWN" && <Typography variant="caption" display="block" data-reason-group={unknownReasonGroup(rule.hygiene.shadowReason).key} sx={{ color: m3.onSurfaceVar }}>
+            Not provable · {unknownReasonGroup(rule.hygiene.shadowReason).label}: {unknownReasonGroup(rule.hygiene.shadowReason).explain}</Typography>}
           {rule.hygiene?.coveringRuleId && openRuleId && <Button size="small" sx={{ p: 0, minWidth: 0 }} onClick={() => openRuleId(rule.hygiene!.coveringRuleId!)}>Covering rule</Button>}</Box>
-        <Box><Typography variant="caption" color="text.secondary">Violations</Typography><Typography sx={{ ...big, color: rule.hygiene ? (violations.length ? m3.warningInk : m3.goodInk) : m3.neutralInk }}>{rule.hygiene ? String(violations.length) : "UNKNOWN"}</Typography></Box>
+        {/* A zero is green only when the analysis decided; with shadowing UNKNOWN the zero is "none proven", in neutral ink. */}
+        <Box><Typography variant="caption" color="text.secondary">Violations</Typography><Typography sx={{ ...big, color: rule.hygiene ? (violations.length ? m3.warningInk : rule.hygiene.shadowStatus === "UNKNOWN" ? m3.neutralInk : m3.goodInk) : m3.neutralInk }}>{rule.hygiene ? String(violations.length) : "UNKNOWN"}</Typography>
+          {rule.hygiene && !violations.length && rule.hygiene.shadowStatus === "UNKNOWN" && <Typography variant="caption" display="block" sx={{ color: m3.onSurfaceVar }}>none proven; shadowing not analysed</Typography>}</Box>
       </Stack>
       {findings.map((f, i) => <Typography key={i} variant="caption" display="block" sx={{ mt: 0.5 }}>{f.findingClass === "unknown" ? "UNKNOWN because" : `${f.severity} · ${f.findingClass}:`} {f.evidence}</Typography>)}
       {!rule.hygiene && <Typography variant="caption" display="block" sx={{ mt: 0.5 }}>Stored hygiene findings; UNKNOWN entries are evidence gaps</Typography>}
@@ -433,7 +520,7 @@ export function PolicyRuleTable({ sections, collapsed, scrollTop, viewportHeight
         <Box component="span" data-field="hits" sx={{ display: "block", fontSize: 12.5, fontWeight: usage.state === "unknown" || usage.state === "not-collected" ? 600 : 500, fontVariantNumeric: "tabular-nums", color: usage.state === "unknown" || usage.state === "not-collected" ? m3.neutralInk : undefined, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {usage.hits}{usage.state === "never" || usage.state === "recent" || usage.state === "stale" || (usage.state === "partial" && usage.hits !== "UNKNOWN") ? " hits" : ""}</Box>
         <Box component="span" data-field="lastHit" sx={{ ...line2, color: tone, fontWeight: usage.state === "never" ? 600 : 400 }}>
-          {usage.state === "recent" || usage.state === "stale" ? `last ${usage.lastHit}` : usage.state === "never" ? "Never hit" : usage.state === "partial" ? "last hit UNKNOWN" : usage.lastHit}</Box>
+          {usage.state === "recent" || usage.state === "stale" ? `last ${usage.lastHit}` : usage.state === "never" ? "No hits recorded" : usage.state === "partial" ? "last hit UNKNOWN" : usage.lastHit}</Box>
       </Box>;
     } },
     { key: "permissiveness", label: "Permissiveness", short: "Permissive", width: "12%", cell: rule => {
@@ -448,7 +535,9 @@ export function PolicyRuleTable({ sections, collapsed, scrollTop, viewportHeight
       return <Box title={badges.map(badge => badge.label).join(", ") || undefined} sx={{ display: "flex", flexWrap: "wrap", gap: "4px", alignItems: "center", alignContent: "flex-start", maxHeight: 44, overflow: "hidden" }}>
         {badges.map(badge => <Badge key={badge.key} badge={badge} onOpen={openHygiene} />)}
         {!rule.hygiene && <Box component="span" title="Hygiene analysis is not available for this rule" sx={{ ...muted, fontSize: 11, fontWeight: 600, color: m3.neutralInk, whiteSpace: "normal", lineHeight: 1.2 }}>{badges.length ? "analysis UNKNOWN" : "Hygiene UNKNOWN"}</Box>}
-        {rule.hygiene && !badges.length && <Box component="span" sx={muted}>No findings</Box>}
+        {/* "No findings" is a claim; it is only made when the shadow analysis decided. Otherwise the cell says what was not analysed. */}
+        {rule.hygiene && !badges.length && <Box component="span" sx={{ ...muted, whiteSpace: "normal", lineHeight: 1.2 }} title={rule.hygiene.shadowStatus === "UNKNOWN" ? `Shadowing not provable: ${rule.hygiene.shadowReason ?? "reason not recorded"}` : undefined}>
+          {rule.hygiene.shadowStatus === "UNKNOWN" ? "No findings · shadowing not provable" : "No findings"}</Box>}
       </Box>;
     } },
   ];
@@ -589,7 +678,7 @@ export function RuleDetailPanel({ rule, section, metadata, objects, openObject, 
         {tab === "Overview" && <Box sx={{ display: "grid", gap: 1.5 }}>
           <RuleFields rule={rule} objects={objects} openObject={openObject} />
           <RuleMetrics rule={rule} openRuleId={openRuleId} openHygiene={openHygiene} now={now} />
-          {!!rule.hitCounts?.firewalls.length && <Box sx={{ overflowX: "auto" }}><Typography variant="body2">Hits: {rule.hitCounts.hits ?? "UNKNOWN"} · First hit: {rule.hitCounts.firstHit ?? "—"} · Source: {rule.hitCounts.source} · Collected: {rule.hitCounts.collectedAt}</Typography>
+          {!!rule.hitCounts?.firewalls.length && <Box sx={{ overflowX: "auto" }}><Typography variant="body2">Hits: {rule.hitCounts.hits ?? "UNKNOWN"} · First hit: {rule.hitCounts.firstHit ? formatStamp(rule.hitCounts.firstHit) : "not reported"} · Source: {rule.hitCounts.source} · Collected: {formatStamp(rule.hitCounts.collectedAt)} · {usageWords(rule, now).window}</Typography>
             {<Table size="small" aria-label="Per-firewall hit counts"><TableHead><TableRow>
               {["Firewall", "Context", "Hits", "First hit", "Last hit", "Created", "Modified", "Collected"].map(label => <TableCell key={label}>{label}</TableCell>)}
             </TableRow></TableHead><TableBody>{rule.hitCounts.firewalls.map(member => <TableRow key={`${member.deviceId}:${member.context}`}>
