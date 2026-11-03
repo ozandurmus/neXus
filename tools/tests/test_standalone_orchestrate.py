@@ -2,6 +2,7 @@
 import json
 import subprocess
 import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -196,8 +197,10 @@ def test_ship_waits_for_other_process(tmp_path, monkeypatch, capsys, timeout):
         shipped.append(args.task)
         return 0
 
-    monkeypatch.setattr(sa.time, "monotonic", lambda: clock[0])
-    monkeypatch.setattr(sa.time, "sleep", sleep)
+    # Replace the module's `time` name, never attributes of the real time module: subprocess
+    # polls with time.sleep() while reaping the holder (on Linux the child is often not yet
+    # reaped), and a globally patched sleep would re-enter this fake from inside communicate().
+    monkeypatch.setattr(sa, "time", types.SimpleNamespace(monotonic=lambda: clock[0], sleep=sleep))
     monkeypatch.setattr(sa, "_ship", ship)
     try:
         assert holder.stdout.readline().strip() == "ready"

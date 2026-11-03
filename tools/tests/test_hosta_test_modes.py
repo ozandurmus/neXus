@@ -210,8 +210,10 @@ def test_runner_ca_import_skips_duplicates_and_validates_store(tmp_path, synthet
         bundle.write_text("-----BEGIN CERTIFICATE-----\ninvalid\n-----END CERTIFICATE-----\n")
     # Execute the real setup under its set -e/ERR trap, without reaching Gradle.
     setup = (ROOT / "tools/delivery/integration_runner.sh").read_text().split("export JAVA_TOOL_OPTIONS=", 1)[0]
-    setup = setup.replace("cd /workspace/ui2", f'cd "{tmp_path}"')
-    setup = setup.replace("/tmp/", f"{tmp_path}/").replace("/run/corp-ca", str(bundles))
+    # Redirect /tmp/ first: pytest's tmp_path itself lives under /tmp/ on Linux, so a later
+    # /tmp/ replacement would also rewrite the paths inserted for cd and the CA bundles.
+    setup = setup.replace("/tmp/", f"{tmp_path}/")
+    setup = setup.replace("cd /workspace/ui2", f'cd "{tmp_path}"').replace("/run/corp-ca", str(bundles))
     setup += ":\n"  # Keep bash from exec-optimizing the final command past the ERR trap.
     env = {**os.environ, "JAVA_HOME": str(java_home), "GRADLE_USER_HOME": str(tmp_path / "gradle")}
     result = subprocess.run(["bash", "-c", setup], env=env, capture_output=True, text=True, timeout=60)
