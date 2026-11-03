@@ -102,6 +102,9 @@ final class PolicyNormalization {
         boolean unproven;
         EvaluationScope(Metadata metadata, java.util.function.Supplier<S> fresh) { this.metadata = metadata; this.fresh = fresh; }
         S advance(Section section) {
+            // A section without rules evaluates nothing and carries no layer label, so it neither continues nor breaks the
+            // scope (2026-11-03: empty CP sections made about 7,200 later rules read "earlier sections not analysed").
+            if (section.rules().isEmpty()) { if (current == null) current = fresh.get(); return current; }
             S state;
             if (metadata.vendor().equals("CP") && "CP access layer".equals(section.source())) state = checkPoint(section);
             else {
