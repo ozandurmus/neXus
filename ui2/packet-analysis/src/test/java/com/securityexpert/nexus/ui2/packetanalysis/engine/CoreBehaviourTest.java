@@ -32,6 +32,7 @@ class CoreBehaviourTest {
     private JsonNode run(String fixture, java.util.function.Consumer<ObjectNode> topology, String sql) throws Exception {
         JsonNode f = Fixtures.load(fixture);
         Path project = Fixtures.project(f, dir, fixture + System.nanoTime() + ".duckdb");
+        TsharkStub.install(project, dir);
         if (sql != null) {
             try (var c = Engine.open(project, 1); Statement st = c.createStatement()) {
                 st.execute(sql);

@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.securityexpert.nexus.ui2.packetanalysis.engine.Db;
 import com.securityexpert.nexus.ui2.packetanalysis.engine.Engine;
 import com.securityexpert.nexus.ui2.packetanalysis.engine.Topology;
+import com.securityexpert.nexus.ui2.packetanalysis.engine.TsharkStub;
 import com.securityexpert.nexus.ui2.packetanalysis.engine.report.PyJsonWriter;
 import java.io.InputStream;
 import java.nio.file.Path;
@@ -26,6 +27,7 @@ import java.util.zip.GZIPInputStream;
  */
 final class ExpertReportFixtures {
     private static final ObjectMapper JSON = new ObjectMapper();
+    private static final int INSERT_CHUNK = 100;
 
     private ExpertReportFixtures() {
     }
@@ -61,6 +63,7 @@ final class ExpertReportFixtures {
                 }
                 String marks = String.join(",", Collections.nCopies(types.size(), "?"));
                 try (PreparedStatement ps = c.prepareStatement("INSERT INTO \"" + t.getKey() + "\" VALUES (" + marks + ")")) {
+                    int pending = 0;
                     for (JsonNode row : t.getValue().get("rows")) {
                         for (int i = 0; i < types.size(); i++) {
                             JsonNode v = row.get(i);
@@ -78,11 +81,22 @@ final class ExpertReportFixtures {
                             }
                         }
                         ps.addBatch();
+                        // Chunked like Db.execMany: the DuckDB JDBC driver keeps a native result per batched
+                        // execution until the statement closes (~256 KiB each at threads > 1), so one batch of
+                        // thousands of single-row inserts exhausts a small memory limit (7 GiB CI runner).
+                        if (++pending == INSERT_CHUNK) {
+                            ps.executeBatch();
+                            ps.clearBatch();
+                            pending = 0;
+                        }
                     }
-                    ps.executeBatch();
+                    if (pending > 0) {
+                        ps.executeBatch();
+                    }
                 }
             }
         }
+        TsharkStub.install(db, dir);
         try (Db engineDb = new Db(Engine.open(db, threads))) {
             Engine.analyze(engineDb, Topology.parse(fixture.get("topology")), null);
             engineDb.exec("INSERT OR REPLACE INTO settings VALUES ('topology', ?)",
