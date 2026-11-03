@@ -70,6 +70,22 @@ public record PolicySnapshot(Metadata metadata, List<Section> sections, Map<Stri
         List<Section> merged = mergeAdjacent(sections, s -> s.source());
         return merged.size() == sections.size() ? this : new PolicySnapshot(metadata, merged, objects, failures);
     }
+    /**
+     * Stored snapshots carry hit levels only where Check Point supplied them (zero|low|medium|high; the thresholds are the
+     * vendor's and are not in this repository); Palo Alto device counters carry none. A missing level becomes an explicit
+     * UNKNOWN, except that a complete device total of exactly zero with no recorded last hit is "zero".
+     * Low, medium and high are never derived.
+     */
+    public PolicySnapshot withHitLevels() {
+        boolean[] changed = {false};
+        List<Section> out = sections.stream().map(s -> new Section(s.id(), s.name(), s.source(), s.parentRuleId(), s.rules().stream().map(r -> {
+            HitCounts counts = r.hitCounts() == null ? null : r.hitCounts().withLevel();
+            if (counts == r.hitCounts()) return r;
+            changed[0] = true;
+            return r.withHitCounts(counts);
+        }).toList())).toList();
+        return changed[0] ? new PolicySnapshot(metadata, out, objects, failures) : this;
+    }
     public record Metadata(String id, String sourceId, String sourceName, String vendor,
             String containerId, String containerName, String name, String collectedAt,
             String artefactRef, List<Target> targets) {
@@ -97,6 +113,13 @@ public record PolicySnapshot(Metadata metadata, List<Section> sections, Map<Stri
     public record HitCounts(Long hits, String firstHit, String lastHit, String source, String collectedAt,
             String level, List<FirewallHits> firewalls) {
         public HitCounts { firewalls = firewalls == null ? List.of() : List.copyOf(firewalls); }
+        public static final String LEVEL_UNKNOWN = "UNKNOWN";
+        /** Fills a missing level only; a vendor-supplied level is returned as is. */
+        public HitCounts withLevel() {
+            if (level != null) return this;
+            String derived = "device".equals(source) && hits != null && hits == 0 && lastHit == null ? "zero" : LEVEL_UNKNOWN;
+            return new HitCounts(hits, firstHit, lastHit, source, collectedAt, derived, firewalls);
+        }
     }
     public record FirewallHits(String deviceId, String context, Long hits, String firstHit, String lastHit,
             String createdAt, String modifiedAt, String collectedAt) {}
