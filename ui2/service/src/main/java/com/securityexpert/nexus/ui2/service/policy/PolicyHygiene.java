@@ -21,12 +21,18 @@ public final class PolicyHygiene {
         "unsupported port expression", "invalid port range", "missing service values", "earlier rule has unsupported constraints",
         "zone or install-on coverage is unproven", "zone evidence not collected", "install-on evidence not collected", "snapshot collection incomplete",
         "earlier sections not analysed", "multiple ordered layers not evaluated");
+    /**
+     * Evidence for a rule fully covered by an earlier Check Point "Apply Layer" rule: the rule is never reached, but the
+     * inline layer's own verdict is not analysed, so the actions are not comparable and this is never a CONFLICT.
+     */
+    public static final String INLINE_LAYER_COVER = "An earlier Apply Layer rule sends all of this match into its inline layer; this rule is never reached.";
     /** Every fixed finding evidence string; "Shadowing: <reason>." is derived from {@link #REASONS}. */
     public static final Set<String> EVIDENCE = Set.of(
         "Rule is disabled.", "Enabled state is unknown.", "Stored schedule has expired.", "Stored schedule expires within 14 days.",
         "Schedule evidence is incomplete.", "Permissiveness cannot be established from resolved selectors.",
         "Accept rule matches any source, destination, service and application.", "Broad selectors are present; see permissiveness reasons.",
         "Earlier enabled rule fully covers this match with a different action.", "Earlier enabled rule fully covers this match with the same action.",
+        PolicyHygiene.INLINE_LAYER_COVER,
         "Hit counts were not collected or are invalid.", "Hit counts are missing for a target.", "Last-hit timestamp is invalid.",
         "Zero-hit counter window is shorter than the threshold.", "Zero hits contradict a recorded last hit.",
         "Zero collected hits; counter reset/window is unknown.", "Last-hit time was not collected.",
@@ -120,11 +126,15 @@ public final class PolicyHygiene {
                         Match prior = earlier.cover(match, budget);
                         if (prior != null) {
                             covering = prior.rule().id();
-                            status = sameAction(prior.rule(), rule) ? "REDUNDANT" : "CONFLICT";
+                            boolean same = sameAction(prior.rule(), rule);
+                            // An earlier Apply Layer rule makes this rule unreachable, but its inline layer's verdict is not
+                            // analysed: never reached (REDUNDANT), never an action conflict.
+                            boolean inlineCover = !same && applyLayer(prior.rule());
+                            status = same || inlineCover ? "REDUNDANT" : "CONFLICT";
                             reason = null;
                             findings.add(finding(status.equals("CONFLICT") ? "conflict" : "shadowed", status.equals("CONFLICT") ? "HIGH" : "MEDIUM",
                                 status.equals("CONFLICT") ? "Earlier enabled rule fully covers this match with a different action."
-                                    : "Earlier enabled rule fully covers this match with the same action."));
+                                    : inlineCover ? INLINE_LAYER_COVER : "Earlier enabled rule fully covers this match with the same action."));
                         } else if (earlier.unproven(match, budget)) reason = "zone or install-on coverage is unproven";
                         if (covering == null && reason != null) status = "UNKNOWN";
                     }
@@ -274,6 +284,10 @@ public final class PolicyHygiene {
      * Same action for REDUNDANT versus CONFLICT. Two Check Point "Apply Layer" rules act alike only when they apply the
      * same inline layer (same opaque reference); other rules carry no inline-layer reference, so this is action equality.
      */
+    /** A resolved coverage candidate with action "Apply Layer" is a Check Point rule naming exactly one inline layer. */
+    private static boolean applyLayer(Rule rule) {
+        return rule.action().equals("Apply Layer") && rule.extras().getOrDefault("inline-layer", List.of()).size() == 1;
+    }
     private static boolean sameAction(Rule covering, Rule covered) {
         return covering.action().equals(covered.action())
             && covering.extras().getOrDefault("inline-layer", List.of()).equals(covered.extras().getOrDefault("inline-layer", List.of()));

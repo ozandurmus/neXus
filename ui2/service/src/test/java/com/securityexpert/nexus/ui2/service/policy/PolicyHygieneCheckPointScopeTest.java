@@ -43,6 +43,13 @@ class PolicyHygieneCheckPointScopeTest {
         assertEquals(covering, result.coveringRuleId(), id);
         assertNull(result.shadowReason(), id);
     }
+    /** Covered by an earlier Apply Layer rule: never reached (REDUNDANT, shadowed MEDIUM), never an action conflict. */
+    static void assertInlineCover(PolicySnapshot snapshot, String id, String covering) {
+        assertCovered(snapshot, id, "REDUNDANT", covering);
+        var shadow = at(snapshot, id).findings().stream().filter(f -> Set.of("shadowed", "conflict").contains(f.findingClass())).toList();
+        assertEquals(List.of(new PolicyHygiene.Finding("shadowed", "MEDIUM", PolicyHygiene.INLINE_LAYER_COVER)), shadow, id);
+        assertTrue(PolicyHygiene.EVIDENCE.contains(PolicyHygiene.INLINE_LAYER_COVER));
+    }
     static void assertUnknown(PolicySnapshot snapshot, String id, String reason) {
         var result = at(snapshot, id);
         assertEquals("UNKNOWN", result.shadowStatus(), id + " " + result);
@@ -123,7 +130,7 @@ class PolicyHygieneCheckPointScopeTest {
         assertCovered(snapshot, "c2", "CONFLICT", "c1");
         // The parent resumes with its own earlier rules: r1 still covers r3; r2 covers r4; the child's "any" never leaks.
         assertCovered(snapshot, "r3", "REDUNDANT", "r1");
-        assertCovered(snapshot, "r4", "CONFLICT", "r2");
+        assertInlineCover(snapshot, "r4", "r2");
         assertEquals("NOT_SHADOWED", at(snapshot, "r5").shadowStatus());
         assertNull(at(snapshot, "r5").shadowReason());
     }
@@ -131,6 +138,7 @@ class PolicyHygieneCheckPointScopeTest {
         var snapshot = cpSnapshot(
             cpSection("s1", null, cp("r1", 1, "Accept", "any", "any"), applyLayer("r2", 2, "net", "il-1")),
             cpSection("inline", "r2", inLayer(cp("c1", 1, "Drop", "host", "any"), "LAYER-INLINE")));
+        // An Apply Layer rule covered by an earlier Accept rule is an ordinary action difference (its layer is never entered).
         assertCovered(snapshot, "r2", "CONFLICT", "r1");
         assertEquals("NOT_SHADOWED", at(snapshot, "c1").shadowStatus());
         assertNull(at(snapshot, "c1").coveringRuleId());
@@ -145,24 +153,29 @@ class PolicyHygieneCheckPointScopeTest {
         assertCovered(snapshot, "g2", "REDUNDANT", "g1");
         // c3 continues the child layer after the grandchild ended: c1 covers it (the grandchild's g1 never leaks).
         assertCovered(snapshot, "c3", "REDUNDANT", "c1");
-        assertCovered(snapshot, "r2", "CONFLICT", "r1");
+        assertInlineCover(snapshot, "r2", "r1");
         // Child layer ending right after a grandchild: the parent resumes past both.
         var direct = cpSnapshot(
             cpSection("s1", null, applyLayer("r1", 1, "net", "il-1")),
             cpSection("child", "r1", inLayer(applyLayer("c1", 1, "any", "il-2"), "LAYER-INLINE")),
             cpSection("grandchild", "c1", inLayer(cp("g1", 1, "Accept", "any", "any"), "LAYER-NESTED")),
             cpSection("s2", null, cp("r2", 2, "Drop", "host", "any"), cp("r3", 3, "Drop", "any", "any")));
-        assertCovered(direct, "r2", "CONFLICT", "r1");
+        assertInlineCover(direct, "r2", "r1");
         assertEquals("NOT_SHADOWED", at(direct, "r3").shadowStatus());
     }
-    @Test void applyLayerRulesAreRedundantOnlyWhenTheyApplyTheSameInlineLayer() {
+    @Test void aLaterApplyLayerRuleCoveredByAnEarlierOneIsRedundantWithEvidenceByInlineLayer() {
         for (String second : List.of("il-1", "il-2")) {
             var snapshot = cpSnapshot(
                 cpSection("s1", null, applyLayer("r1", 1, "net", "il-1")),
                 cpSection("inline-1", "r1", inLayer(cp("c1", 1, "Accept", "any", "any"), "LAYER-INLINE")),
                 cpSection("s2", null, applyLayer("r2", 2, "host", second)),
                 cpSection("inline-2", "r2", inLayer(cp("c2", 1, "Accept", "any", "any"), "LAYER-INLINE-2")));
-            assertCovered(snapshot, "r2", second.equals("il-1") ? "REDUNDANT" : "CONFLICT", "r1");
+            if (second.equals("il-2")) assertInlineCover(snapshot, "r2", "r1");
+            else {
+                assertCovered(snapshot, "r2", "REDUNDANT", "r1");
+                assertTrue(at(snapshot, "r2").findings().contains(new PolicyHygiene.Finding("shadowed", "MEDIUM",
+                    "Earlier enabled rule fully covers this match with the same action.")));
+            }
         }
     }
     @Test void aDisabledOrUnresolvedApplyLayerRuleDoesNotCoverLaterParentRules() {
@@ -195,7 +208,7 @@ class PolicyHygieneCheckPointScopeTest {
         var reentered = cpSnapshot(cpSection("s1", null, applyLayer("r1", 1, "net", "il-1")), cpSection("inline", "r1", child),
             cpSection("s2", null, cp("r2", 2, "Accept", "host", "any")),
             cpSection("inline-again", "r1", inLayer(cp("c2", 2, "Accept", "host", "any"), "LAYER-INLINE")));
-        assertCovered(reentered, "r2", "CONFLICT", "r1");
+        assertInlineCover(reentered, "r2", "r1");
         assertUnknown(reentered, "c2", "earlier sections not analysed");
         // Rule numbers of the resumed parent do not increase: stored order is not proven enforcement order.
         var renumbered = cpSnapshot(cpSection("s1", null, cp("r1", 1, "Accept", "host", "any"), applyLayer("r2", 2, "net", "il-1")),
