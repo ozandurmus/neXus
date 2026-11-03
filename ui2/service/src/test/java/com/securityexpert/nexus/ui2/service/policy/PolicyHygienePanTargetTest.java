@@ -45,13 +45,19 @@ class PolicyHygienePanTargetTest {
         var result = byName(map(""));
         assertEquals("REDUNDANT", result.get("Synthetic narrow").shadowStatus());
     }
+    @Test void negateNoWithoutAnySelectionIsUntargeted() {
+        // Panorama stores <negate>no</negate> on rules whose target selects nothing: the rule is added to every firewall.
+        var result = byName(map("<target><negate>no</negate></target>"));
+        assertEquals("NOT_SHADOWED", result.get("Synthetic broad").shadowStatus());
+        assertEquals("REDUNDANT", result.get("Synthetic narrow").shadowStatus());
+    }
     @Test void everyTargetShapeIsRejectedAndNeverCovers() {
         for (String target : List.of(
                 "<target><tags><member>TAG-ALPHA-01</member></tags></target>",
                 "<target><devices><entry name='SYNTHETIC-SERIAL-01'><vsys><entry name='vsys2'/></vsys></entry></devices></target>",
                 "<target><devices><entry name='SYNTHETIC-SERIAL-01'/></devices></target>",
                 "<target><negate>yes</negate></target>",
-                "<target><negate>no</negate></target>",
+                "<target><devices><entry name='SYNTHETIC-SERIAL-01'/></devices><negate>no</negate></target>",
                 "<target><tags/></target>",
                 "<target><unexpected/></target>")) {
             var snapshot = map(target);
