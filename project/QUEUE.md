@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py tools/delivery/project_queue.py render)
-Build: NXS-LOCAL-0374 · Track: PCP.x · Generated: 2026-11-03T18:34:09Z
+Build: NXS-LOCAL-0374 · Track: PCP.x · Generated: 2026-11-03T07:05:28Z
 
 ## Now
 - NXS-LOCAL-0374 — System logs phase B: collectors, masked view, settings route, Spike Detective data (in_progress)
@@ -13,7 +13,6 @@ Build: NXS-LOCAL-0374 · Track: PCP.x · Generated: 2026-11-03T18:34:09Z
 - P0/in_progress private_replay_agent_operated_test_environment — Private Replay -- agent-operated privacy-filtered test... (target: PRIVATE_REPLAY_ARCHITECTURE.md)
 - P0/in_progress recovery_offhost_key_custody — Off-host recovery artifacts and encryption-key custody (target: DEPLOY.1; blocks reliance on RB.3b recov)
 - P0/planned aiview_masking_manufactures_names_from_any_string — The AIView pseudonymizer turns any non-blank string into.. (target: TopologyNamePseudonymizer.computeDeviceN)
-- P0/planned ci_validation_red_and_scope_unmapped — CI validation red on every PR since >=2026-10-25; regressi (target: )
 - P0/planned cluster_membership_lost_at_enrollment — Cluster membership is known at discovery but does not... (target: enrollment/confirm path writing...)
 - P0/planned deploy1_evidence_egress_policy — DEPLOY.1 — Evidence Egress & Sharing Policy (target: DEPLOY.1)
 - P0/planned discovery_lateral_join_drops_cluster_members — Device display falls back to the management IP for every.. (target: JooqDeviceRepository DEVICE_SELECT later)
@@ -40,7 +39,6 @@ Build: NXS-LOCAL-0374 · Track: PCP.x · Generated: 2026-11-03T18:34:09Z
 - P1/planned aiview_masking_leak_audit
 - P1/planned asa_fortinet_cluster_view
 - P1/planned asa_fortinet_configuration_plane
-- P1/planned audit_tier2_redaction_unsalted_sha256
 - P1/planned backup_plane_separate_service
 - P1/planned c7_c2_contract_shape_guard
 - P1/planned cluster_diff_member_specific_tuning
@@ -68,7 +66,6 @@ Build: NXS-LOCAL-0374 · Track: PCP.x · Generated: 2026-11-03T18:34:09Z
 - P1/planned masking_residual_gaps_system_log_and_sanitizer
 - P1/planned pan_active_active_not_excluded_as_failover_unit
 - P1/planned pan_collection_contract_from_measurement
-- P1/planned path_analysis_a0_freeze
 - P1/planned platform_identity_facts_on_configuration
 - P1/planned radware_defensepro_getcfg_measurement
 - P1/planned relay_id_reuse_when_record_uncommitted
@@ -108,7 +105,6 @@ Build: NXS-LOCAL-0374 · Track: PCP.x · Generated: 2026-11-03T18:34:09Z
 - P2/planned antigravity_provider_adapter
 - P2/planned auth_radius_mechanism
 - P2/planned auth_tacacs_mechanism
-- P2/planned authz_decisions_retention
 - P2/planned backup_remaining_vendors
 - P2/planned cp_aiview_readiness_script_client_error
 - P2/planned cp_backup_sftp_fetch_failed_on_cluster_member
@@ -169,11 +165,9 @@ Build: NXS-LOCAL-0374 · Track: PCP.x · Generated: 2026-11-03T18:34:09Z
 - P2 inventory_exclusions_management_ui
 - P2 passive_ti_enrichment
 - P2 per_vendor_worker_split
-- P2 policy_read_offload_pod
 - P2 policy_rule_hygiene_and_path_placement_brief
 - P2 snmpv3_fast_telemetry_plane
 - P3 BK-CP-STATUS-EMPTY
-- P3 ship_tree_bound_security_scan
 - P4 pan_ha_peer_ipv6_pairing
 ## Open decisions
 - op_track_id — Track id: keep OP.x as a dedicated OPERATE track, or fold into 1.x after
