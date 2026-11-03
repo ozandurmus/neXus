@@ -458,16 +458,42 @@ public final class PolicyQueryService {
     @SuppressWarnings("unchecked")
     private Map<String, Object> map(Object value) { return mapper.convertValue(value, Map.class); }
 
-    private record CachedHygiene(PolicySnapshot snapshot, int days, java.time.Instant at, PolicyHygiene.Result result) {}
+    private record CachedHygiene(PolicySnapshot snapshot, int days, java.time.Instant at, java.util.concurrent.CompletableFuture<PolicyHygiene.Result> result) {}
     private final Map<String, CachedHygiene> hygieneCache = new LinkedHashMap<>(8, 0.75f, true);
-    synchronized PolicyHygiene.Result analysis(PolicySnapshot snapshot, int days) {
-        var now = java.time.Instant.now();
-        var cached = hygieneCache.get(snapshot.metadata().id());
-        if (cached != null && cached.days() == days && cached.at().plusSeconds(30).isAfter(now) && cached.snapshot().equals(snapshot)) return cached.result();
-        var result = PolicyHygiene.analyze(snapshot, days, now, 250_000, breadthObjects(snapshot, inventoryIndex(snapshot)));
-        hygieneCache.put(snapshot.metadata().id(), new CachedHygiene(snapshot, days, now, result));
-        if (hygieneCache.size() > 4) hygieneCache.remove(hygieneCache.keySet().iterator().next());
-        return result;
+    /** At most two analyses run at once (each is single-threaded and CPU bound; the service pod has 4 CPUs). */
+    private final java.util.concurrent.Semaphore hygieneSlots = new java.util.concurrent.Semaphore(2, true);
+    /**
+     * Single flight per snapshot: the first request for a snapshot (and threshold) computes, concurrent requests for the
+     * same one wait for that result, and other snapshots compute independently. The cache lock only guards the 4-entry
+     * map, never the computation. A finished result is reused for 30 seconds; a failed one is dropped and rethrown.
+     */
+    PolicyHygiene.Result analysis(PolicySnapshot snapshot, int days) {
+        var now = java.time.Instant.now(); String id = snapshot.metadata().id();
+        CachedHygiene entry; boolean compute = false;
+        synchronized (hygieneCache) {
+            entry = hygieneCache.get(id);
+            if (entry == null || entry.days() != days || entry.result().isDone() && !entry.at().plusSeconds(30).isAfter(now)
+                    || entry.snapshot() != snapshot && !entry.snapshot().equals(snapshot)) {
+                entry = new CachedHygiene(snapshot, days, now, new java.util.concurrent.CompletableFuture<>()); compute = true;
+                hygieneCache.put(id, entry);
+                if (hygieneCache.size() > 4) hygieneCache.remove(hygieneCache.keySet().iterator().next());
+            }
+        }
+        if (compute) {
+            hygieneSlots.acquireUninterruptibly();
+            try {
+                entry.result().complete(PolicyHygiene.analyze(snapshot, days, now, PolicyHygiene.TOTAL_WORK, breadthObjects(snapshot, inventoryIndex(snapshot))));
+            } catch (RuntimeException | Error failed) {
+                entry.result().completeExceptionally(failed);
+                synchronized (hygieneCache) { hygieneCache.remove(id, entry); }
+            } finally { hygieneSlots.release(); }
+        }
+        try { return entry.result().join(); }
+        catch (java.util.concurrent.CompletionException failed) {
+            if (failed.getCause() instanceof RuntimeException cause) throw cause;
+            if (failed.getCause() instanceof Error cause) throw cause;
+            throw failed;
+        }
     }
     private Map<String, Object> ruleView(Rule r, PolicySnapshot snapshot, PolicyHygiene.Result analysis) {
         var rule = map(r); rule.put("identityFallback", r.uuid().isEmpty());

@@ -13,10 +13,16 @@ final class PolicyNormalization {
     static final class Unknown extends RuntimeException {
         Unknown(String reason) { super(reason, null, false, false); }
     }
+    /**
+     * Work counter: one unit per resolution, range or comparison step. {@code left} is the shared total; {@link #rule}
+     * opens a per-rule window so one expensive rule exhausts only itself, never every later rule.
+     */
     static final class Budget {
         final int[] left;
+        private int window = Integer.MAX_VALUE;
         Budget(int limit) { left = new int[]{limit}; }
-        void spend() { if (--left[0] < 0) throw new Unknown("analysis budget"); }
+        void rule(int limit) { window = limit; }
+        void spend() { if (--left[0] < 0 | --window < 0) throw new Unknown("analysis budget"); }
     }
     /** Section IDs hash the layer UID recursively; the UID cannot be recovered from a snapshot. */
     static final class CpLayers {

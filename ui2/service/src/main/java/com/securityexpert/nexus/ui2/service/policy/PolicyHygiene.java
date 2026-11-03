@@ -36,6 +36,16 @@ public final class PolicyHygiene {
             List<Finding> findings, Map<String, Object> permissiveness, String timeStatus, boolean expiring,
             String counterWindow, String hitSource, String hitsCollectedAt) {}
     public record Result(Map<String, Assessment> rules, boolean budgetReached) {}
+    /**
+     * Shadowing work limits in {@link Budget} units (one object resolution, range step or candidate comparison each).
+     * A rule gets {@link #RULE_WORK} units of its own: a rule that exhausts them is UNKNOWN "analysis budget" alone and
+     * later rules keep going. The snapshot stops at {@link #TOTAL_WORK}. Measured on a laptop JVM (2026-11-03) a unit
+     * costs about 7 ns when candidate comparisons dominate and 20-25 ns when range walks or object resolution do, so the
+     * cap bounds shadowing to roughly 1.5-5 CPU seconds whatever the input, and RULE_WORK one rule to 7-25 ms. A fully
+     * resolvable policy reaches the cap only beyond about 20,000 rules sharing one placement key (every rule then
+     * compared with every earlier rule of that key); PolicyHygieneScaleTest pins the 10,000-rule runtime.
+     */
+    public static final int RULE_WORK = 1_000_000, TOTAL_WORK = 200_000_000;
     public static Result analyze(PolicySnapshot snapshot, int days, Instant now, int workLimit) {
         return analyze(snapshot, days, now, workLimit, snapshot.objects());
     }
@@ -47,13 +57,17 @@ public final class PolicyHygiene {
      * shadowing budget can no longer turn them into "Analysis budget reached".
      */
     public static Result analyze(PolicySnapshot snapshot, int days, Instant now, int workLimit, Map<String, PolicyObject> breadthObjects) {
-        if (days < 1 || days > 36500 || workLimit < 0) throw new IllegalArgumentException("Invalid hygiene limits");
+        return analyze(snapshot, days, now, workLimit, RULE_WORK, breadthObjects);
+    }
+    /** {@code workLimit} caps the whole snapshot's shadowing work, {@code ruleLimit} each rule's own. */
+    static Result analyze(PolicySnapshot snapshot, int days, Instant now, int workLimit, int ruleLimit, Map<String, PolicyObject> breadthObjects) {
+        if (days < 1 || days > 36500 || workLimit < 0 || ruleLimit < 0) throw new IllegalArgumentException("Invalid hygiene limits");
         Budget budget = new Budget(workLimit);
         var resolver = new Resolver(snapshot.objects(), budget);
         Map<String, Assessment> results = new LinkedHashMap<>();
         var scope = new EvaluationScope(snapshot.metadata());
-        List<Match> earlier = new ArrayList<>();
-        boolean earlierUnknown = false;
+        var earlier = new Earlier(snapshot.objects());
+        boolean earlierUnknown = false, budgetReached = false;
         for (Section section : snapshot.sections()) {
             if (PolicySnapshot.panNonSecurity(snapshot.metadata(), section)) {
                 // Palo Alto NAT and default-rule sections are stored, not analysed: no shadowing, permissiveness or
@@ -95,37 +109,35 @@ public final class PolicyHygiene {
                         ? "Accept rule matches any source, destination, service and application."
                         : "Broad selectors are present; see permissiveness reasons."));
                 }
+                Match match = null;
                 try {
+                    budget.rule(ruleLimit);
                     budget.spend();
-                    Match match = normalize(snapshot, section, rule, resolver);
+                    match = normalize(snapshot, section, rule, resolver);
                     budget.spend();
                     reason = match.problem();
                     if (scope.unproven) reason = "earlier sections not analysed";
                     if (reason == null) {
                         status = "NOT_SHADOWED";
                         if (earlierUnknown) reason = "earlier rule has unsupported constraints";
-                        for (Match prior : earlier) {
-                            budget.spend();
-                            if (disjoint(prior, match, snapshot.objects())) continue;
-                            if (!compatible(prior, match)) { reason = "zone or install-on coverage is unproven"; continue; }
-                            boolean covers = true;
-                            for (int i = 0; i < 4 && covers; i++) covers = contains(prior.selectors().get(i), match.selectors().get(i), budget);
-                            if (!covers) continue;
+                        Match prior = earlier.cover(match, budget);
+                        if (prior != null) {
                             covering = prior.rule().id();
                             status = prior.rule().action().equals(rule.action()) ? "REDUNDANT" : "CONFLICT";
                             reason = null;
                             findings.add(finding(status.equals("CONFLICT") ? "conflict" : "shadowed", status.equals("CONFLICT") ? "HIGH" : "MEDIUM",
                                 status.equals("CONFLICT") ? "Earlier enabled rule fully covers this match with a different action."
                                     : "Earlier enabled rule fully covers this match with the same action."));
-                            break;
-                        }
+                        } else if (earlier.unproven(match, budget)) reason = "zone or install-on coverage is unproven";
                         if (covering == null && reason != null) status = "UNKNOWN";
                     }
-                    if (!Boolean.FALSE.equals(rule.enabled())) {
-                        if (match.problem() == null) earlier.add(match);
-                        else earlierUnknown = true;
-                    }
-                } catch (Unknown limit) { status = "UNKNOWN"; reason = limit.getMessage(); }
+                } catch (Unknown limit) { status = "UNKNOWN"; reason = limit.getMessage(); budgetReached = true; }
+                // A rule that ran out of budget still constrains later rules: a resolved match stays a coverage
+                // candidate and an unresolved one counts as an earlier unknown -- never silently dropped (fail-closed).
+                if (!Boolean.FALSE.equals(rule.enabled())) {
+                    if (match != null && match.problem() == null) earlier.add(match);
+                    else earlierUnknown = true;
+                }
                 if (status.equals("NOT_SHADOWED") && !snapshot.failures().isEmpty()) {
                     status = "UNKNOWN"; reason = "snapshot collection incomplete";
                 }
@@ -136,7 +148,105 @@ public final class PolicyHygiene {
                     window, hits == null ? "UNKNOWN" : hits.source(), hits == null ? null : hits.collectedAt()));
             }
         }
-        return new Result(Collections.unmodifiableMap(results), budget.left[0] < 0);
+        return new Result(Collections.unmodifiableMap(results), budgetReached);
+    }
+    /**
+     * The enabled, fully resolved earlier rules of one evaluation scope, indexed so a rule does real work only against
+     * candidates that can change its result. It answers exactly what the former scan over every earlier rule answered
+     * (that scan is kept in the test sources as LegacyPolicyHygiene and compared by PolicyHygieneDifferentialTest):
+     * <ul>
+     * <li>Only {@code compatible} priors can cover, and compatibility is exact equality of the placement key except an
+     * earlier zone of exactly {@code any}, so the up to four keys (zone or any) x (zone or any) x the same install-on
+     * are looked up directly. A compatible prior is never {@code disjoint}, so that test is not repeated.</li>
+     * <li>The covering rule is the earliest compatible prior containing all four selectors. Within one key a prior
+     * whose selectors equal an earlier one's, or any prior after one whose four selectors are all any, can never be
+     * that earliest prior and is not kept as a candidate.</li>
+     * <li>"Zone or install-on coverage is unproven" needs one overlapping, incompatible prior. Both predicates read the
+     * placements only, so each (rule key, earlier key) pair is evaluated once and the answer remembered.</li>
+     * <li>A candidate whose selector bounds cannot contain the rule's is rejected before the range walk.</li>
+     * </ul>
+     */
+    private static final class Earlier {
+        private record Key(Set<String> from, Set<String> to, Set<String> installOn) {}
+        /** Candidates in rule order; their bounds are packed {@link #WIDTH} longs each so the scan stays in one array. */
+        private static final class Bucket {
+            final Match first; final List<Match> matches = new ArrayList<>(); final Set<List<Selector>> seen = new HashSet<>(); boolean closed;
+            int[] orders = new int[8]; long[] bounds = new long[8 * WIDTH];
+            Bucket(Match first) { this.first = first; }
+            void add(int order, Match match) {
+                int n = matches.size();
+                if (n == orders.length) { orders = Arrays.copyOf(orders, n * 2); bounds = Arrays.copyOf(bounds, n * 2 * WIDTH); }
+                orders[n] = order; System.arraycopy(bounds(match.selectors()), 0, bounds, n * WIDTH, WIDTH); matches.add(match);
+            }
+        }
+        private static final List<String> FAMILIES = List.of("ipv4", "tcp", "udp");
+        private static final int WIDTH = 4 * 3 * 2;
+        private static final Set<String> ANY = Set.of("any");
+        private final Map<String, PolicyObject> objects;
+        private final Map<Key, Bucket> buckets = new HashMap<>();
+        private final List<Bucket> keys = new ArrayList<>();
+        private final Map<Key, int[]> overlap = new HashMap<>();
+        private int count;
+        Earlier(Map<String, PolicyObject> objects) { this.objects = objects; }
+        void clear() { buckets.clear(); keys.clear(); overlap.clear(); }
+        private static Key key(Match m) { return new Key(m.placements().get("from"), m.placements().get("to"), m.placements().get("install-on")); }
+        void add(Match match) {
+            var bucket = buckets.computeIfAbsent(key(match), k -> { var b = new Bucket(match); keys.add(b); return b; });
+            int order = count++;
+            if (bucket.closed || !bucket.seen.add(match.selectors())) return;
+            bucket.add(order, match);
+            bucket.closed = match.selectors().stream().allMatch(Selector::any);
+        }
+        Match cover(Match match, Budget budget) {
+            var key = key(match); Match best = null; int bestOrder = Integer.MAX_VALUE;
+            long[] inner = bounds(match.selectors());
+            var lookups = new LinkedHashSet<Key>();
+            for (var from : List.of(key.from(), ANY)) for (var to : List.of(key.to(), ANY)) lookups.add(new Key(from, to, key.installOn()));
+            for (Key lookup : lookups) {
+                var bucket = buckets.get(lookup);
+                if (bucket == null) continue;
+                int[] orders = bucket.orders; long[] outer = bucket.bounds;
+                for (int j = 0, n = bucket.matches.size(); j < n && orders[j] < bestOrder; j++) {
+                    budget.spend();
+                    if (!bounded(outer, j * WIDTH, inner)) continue;
+                    var prior = bucket.matches.get(j); boolean covers = true;
+                    for (int i = 0; i < 4 && covers; i++) covers = contains(prior.selectors().get(i), match.selectors().get(i), budget);
+                    if (covers) { best = prior; bestOrder = orders[j]; break; }
+                }
+            }
+            return best;
+        }
+        /** True once any earlier key overlaps this rule's key without being compatible with it; the answer only grows. */
+        boolean unproven(Match match, Budget budget) {
+            var state = overlap.computeIfAbsent(key(match), k -> new int[2]);
+            while (state[1] == 0 && state[0] < keys.size()) {
+                budget.spend();
+                var prior = keys.get(state[0]).first;
+                if (!disjoint(prior, match, objects) && !compatible(prior, match)) state[1] = 1;
+                state[0]++;
+            }
+            return state[1] == 1;
+        }
+        /**
+         * Per selector and range family the lowest start and highest end of the merged (sorted) ranges; [MIN, MAX] for
+         * any and [MAX, MIN] for an absent family. Outer [lo, hi] holding inner [lo, hi] for every slot is then a
+         * necessary condition for {@code contains}: any holds everything, nothing but any holds any, an absent outer
+         * family holds no present inner one, and an absent inner family is held by everything. Other families are
+         * not summarised, which only lets more candidates through to the exact range walk.
+         */
+        private static long[] bounds(List<Selector> selectors) {
+            long[] out = new long[WIDTH]; int at = 0;
+            for (Selector s : selectors) for (String family : FAMILIES) {
+                var ranges = s.ranges().get(family); boolean absent = ranges == null || ranges.isEmpty();
+                out[at++] = s.any() ? Long.MIN_VALUE : absent ? Long.MAX_VALUE : ranges.get(0).start();
+                out[at++] = s.any() ? Long.MAX_VALUE : absent ? Long.MIN_VALUE : ranges.get(ranges.size() - 1).end();
+            }
+            return out;
+        }
+        private static boolean bounded(long[] outer, int at, long[] inner) {
+            for (int k = 0; k < WIDTH; k += 2) if (outer[at + k] > inner[k] || outer[at + k + 1] < inner[k + 1]) return false;
+            return true;
+        }
     }
     /**
      * The inventory-join reasons for objects this rule's selectors reach that the join supplied (group members the

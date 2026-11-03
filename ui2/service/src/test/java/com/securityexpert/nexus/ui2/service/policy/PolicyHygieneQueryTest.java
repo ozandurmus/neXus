@@ -36,6 +36,30 @@ class PolicyHygieneQueryTest {
         var replaced = PolicyHygieneTest.snapshot(List.of(r, PolicyHygieneTest.rule("r2", "host", "port", "allow", true)), first.objects());
         assertEquals(2, query.analysis(replaced, 90).rules().size());
     }
+    @Test void concurrentRequestsShareOneAnalysisAndOtherSnapshotsAreNotBlocked() throws Exception {
+        var large = SyntheticPolicies.large("CP", 12_000, 7);
+        var small = PolicyHygieneTest.snapshot(List.of(PolicyHygieneTest.rule("r1", "host", "port", "allow", true)), PolicyHygieneTest.objects());
+        var pool = java.util.concurrent.Executors.newFixedThreadPool(4);
+        try {
+            var start = new java.util.concurrent.CountDownLatch(1);
+            List<java.util.concurrent.Future<PolicyHygiene.Result>> same = new ArrayList<>();
+            for (int i = 0; i < 3; i++) same.add(pool.submit(() -> { start.await(); return query.analysis(large, 90); }));
+            start.countDown();
+            Thread.sleep(150);
+            // The large snapshot is still being analysed; the small one is answered without waiting for it.
+            long begun = System.nanoTime();
+            var other = query.analysis(small, 90);
+            long waited = (System.nanoTime() - begun) / 1_000_000;
+            assertTrue(same.stream().noneMatch(java.util.concurrent.Future::isDone), "large analysis finished before the probe");
+            assertTrue(waited < 500, "small snapshot waited " + waited + " ms");
+            assertEquals("NOT_SHADOWED", other.rules().get("r1").shadowStatus());
+            // Single flight: every concurrent caller of the large snapshot receives the one computed result.
+            var first = same.get(0).get(60, java.util.concurrent.TimeUnit.SECONDS);
+            for (var future : same) assertSame(first, future.get(60, java.util.concurrent.TimeUnit.SECONDS));
+            assertSame(first, query.analysis(large, 90));
+            assertEquals(12_000, first.rules().size());
+        } finally { pool.shutdownNow(); }
+    }
     @Test void aiviewMasksListRuleAndCsvAndRetainsSafeEvidence() throws Exception {
         var original = PolicyHygieneTest.rule("r1", "host", "port", "allow", true);
         var r = new Rule(original.id(), original.uuid(), 1, "Synthetic confidential rule 192.0.2.8", true, original.source(), original.destination(), original.service(), original.application(),
