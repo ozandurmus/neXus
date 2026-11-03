@@ -72,8 +72,11 @@ class PolicyHygieneTest {
         var first = rule("r1", "missing", "port", "allow", true); var second = rule("r2", "host", "port", "allow", true);
         assertEquals("UNKNOWN", analyze(List.of(first, second), objects()).rules().get("r2").shadowStatus());
         first = edit(rule("r1", "host", "port", "allow", true), cell("host"), Map.of("from", List.of("ZONE-ALPHA-01", "ZONE-BRAVO-01")));
-        // Overlapping zones that do not hold the later rule's (BRAVO, CHARLIE) stay unproven.
+        // Overlapping zones that provably do not hold the later rule's (CHARLIE is not in ALPHA, BRAVO): no single cover.
         second = edit(second, cell("host"), Map.of("from", List.of("ZONE-BRAVO-01", "ZONE-CHARLIE-01")));
+        assertEquals("NOT_SHADOWED", analyze(List.of(first, second), objects()).rules().get("r2").shadowStatus());
+        // A lone any against names cannot be decided (the virtual system's zones are not collected): unproven.
+        second = edit(second, cell("host"), Map.of("from", List.of("any")));
         assertEquals("zone or install-on coverage is unproven", analyze(List.of(first, second), objects()).rules().get("r2").shadowReason());
         // Palo Alto zone superset: ALPHA, BRAVO holds BRAVO (PolicyHygieneZoneSupersetTest has the rest).
         second = edit(second, cell("host"), Map.of("from", List.of("ZONE-BRAVO-01")));

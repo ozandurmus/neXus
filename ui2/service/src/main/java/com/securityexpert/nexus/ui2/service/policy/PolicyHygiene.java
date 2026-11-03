@@ -194,8 +194,11 @@ public final class PolicyHygiene {
      * REDUNDANT or CONFLICT from them) and are consulted only where the scan would have given that very reason.</li>
      * <li>Palo Alto zone supersets ({@link #zoneSupersets}): an earlier universal rule with the same install-on whose
      * from- and to-zones hold the later rule's ({@link PolicyNormalization#zonesCover}) is a coverage candidate too, and
-     * no longer makes the rule "zone or install-on coverage is unproven"; only an overlapping prior whose zones do not
-     * hold the rule's still does. The compatible (former) candidates are searched first and win when one covers, so
+     * no longer makes the rule "zone or install-on coverage is unproven". An overlapping prior with the same install-on
+     * whose zones provably do not hold the rule's ({@link PolicyNormalization#zonesCannotCover}) cannot cover it and is
+     * passed over, as a partially overlapping address or service is; "unproven" remains only where the relation cannot
+     * be decided (any mixed with names, a lone any against names, unequal install-on). The compatible (former)
+     * candidates are searched first and win when one covers, so
      * every rule the scan covered keeps its covering rule; superset candidates are consulted only where the scan said
      * "zone or install-on coverage is unproven". The same candidates may cover a later intrazone or interzone rule,
      * which otherwise stays "zone rule type constraint". Install-on stays exact equality.</li>
@@ -259,6 +262,14 @@ public final class PolicyHygiene {
             Supersets(List<List<Bucket>> lists) { this.lists = lists; this.next = new int[lists.size()]; }
         }
         private final Map<Lookup, Supersets> supersets = new HashMap<>();
+        /**
+         * For {@link #unproven} of a rule whose zones are names only: per install-on key, every bucket, and the buckets
+         * with a set mixing any with names (or empty) on from or to -- with the same install-on, only those can be
+         * undecided against such a rule. Per rule key: how far each list was read, and whether an undecided prior was met.
+         */
+        private final Map<Set<String>, List<Bucket>> byTarget = new LinkedHashMap<>(), mixedByTarget = new HashMap<>();
+        private static final class Named { final Map<Set<String>, int[]> read = new HashMap<>(); boolean found; }
+        private final Map<Key, Named> named = new HashMap<>();
         private int count;
         /** An enabled earlier rule of this scope had no resolved match and no partial prior, so no later rule can be proven clean. */
         boolean unknown;
@@ -276,7 +287,11 @@ public final class PolicyHygiene {
         void add(Match match) {
             var bucket = buckets.computeIfAbsent(key(match), k -> {
                 var b = new Bucket(k, match); keys.add(b);
-                if (zoneSupersets) { var targets = byInstallOn.computeIfAbsent(k.installOn(), t -> new Targets()); targets.from.add(k.from(), b); targets.to.add(k.to(), b); }
+                if (zoneSupersets) {
+                    var targets = byInstallOn.computeIfAbsent(k.installOn(), t -> new Targets()); targets.from.add(k.from(), b); targets.to.add(k.to(), b);
+                    byTarget.computeIfAbsent(k.installOn(), t -> new ArrayList<>()).add(b);
+                    if (mixed(k.from()) || mixed(k.to())) mixedByTarget.computeIfAbsent(k.installOn(), t -> new ArrayList<>()).add(b);
+                }
                 return b;
             });
             int order = count++;
@@ -342,12 +357,17 @@ public final class PolicyHygiene {
             return state.buckets;
         }
         private static int size(List<List<Bucket>> lists) { int n = 0; for (var list : lists) n += list.size(); return n; }
-        /** The earlier key can cover this rule's key: compatible, or (Palo Alto) the same install-on and covering zones. */
-        private boolean placementCovers(Match prior, Match match) {
+        /**
+         * The earlier key's bearing on this rule's key is decided: it can cover (compatible, or Palo Alto with the same
+         * install-on and covering zones; the cover search then compares the selectors), or it provably cannot (Palo Alto,
+         * same install-on, a zone of the rule the prior does not name). Otherwise it is undecided.
+         */
+        private boolean placementDecided(Match prior, Match match) {
             if (compatible(prior, match)) return true;
             if (!zoneSupersets || !prior.placements().get("install-on").equals(match.placements().get("install-on"))) return false;
-            return PolicyNormalization.zonesCover(prior.placements().get("from"), prior.placements().get("to"),
-                match.placements().get("from"), match.placements().get("to"), false);
+            var from = prior.placements().get("from"); var to = prior.placements().get("to");
+            var laterFrom = match.placements().get("from"); var laterTo = match.placements().get("to");
+            return PolicyNormalization.zonesCover(from, to, laterFrom, laterTo, false) || PolicyNormalization.zonesCannotCover(from, to, laterFrom, laterTo);
         }
         void add(Partial partial) {
             if (!partialSeen.add(Arrays.asList(partial.selectors(), partial.placements()))) return;
@@ -379,20 +399,45 @@ public final class PolicyHygiene {
             return state[1] == 1;
         }
         /**
-         * True once any earlier key overlaps this rule's key without being able to cover it ({@link #placementCovers});
-         * the answer only grows. Such a prior's zones (or install-on) hold some but not all of the rule's, so whether
-         * it bears on the rule is not proven either way and the rule stays UNKNOWN.
+         * True once any earlier key overlaps this rule's key while whether it can cover the rule is undecided
+         * ({@link #placementDecided}); the answer only grows. Such a prior (unequal install-on, or zones that cannot be
+         * compared) might cover the rule, so the rule stays UNKNOWN.
          */
         boolean unproven(Match match, Budget budget) {
-            var state = overlap.computeIfAbsent(key(match), k -> new int[2]);
+            var key = key(match);
+            if (zoneSupersets && names(key.from()) && names(key.to())) return unprovenNamed(match, key, budget);
+            var state = overlap.computeIfAbsent(key, k -> new int[2]);
             while (state[1] == 0 && state[0] < keys.size()) {
                 budget.spend();
                 var prior = keys.get(state[0]).first;
-                if (!disjoint(prior, match, objects) && !placementCovers(prior, match)) state[1] = 1;
+                if (!disjoint(prior, match, objects) && !placementDecided(prior, match)) state[1] = 1;
                 state[0]++;
             }
             return state[1] == 1;
         }
+        /**
+         * {@link #unproven} for a rule whose from- and to-zones are names only. A prior with the same install-on whose zones
+         * are names or a lone any on both sides is always decided against it ({@link PolicyNormalization#zoneHolds}), so
+         * only the mixed buckets of its own install-on and every bucket of another install-on are read: the same answer as
+         * the full scan, without walking every earlier key.
+         */
+        private boolean unprovenNamed(Match match, Key key, Budget budget) {
+            var state = named.computeIfAbsent(key, k -> new Named());
+            for (var entry : byTarget.entrySet()) {
+                if (state.found) break;
+                var list = entry.getKey().equals(key.installOn()) ? mixedByTarget.getOrDefault(entry.getKey(), List.of()) : entry.getValue();
+                int[] read = state.read.computeIfAbsent(entry.getKey(), t -> new int[1]);
+                while (!state.found && read[0] < list.size()) {
+                    budget.spend();
+                    var prior = list.get(read[0]).first;
+                    if (!disjoint(prior, match, objects) && !placementDecided(prior, match)) state.found = true;
+                    read[0]++;
+                }
+            }
+            return state.found;
+        }
+        private static boolean names(Set<String> zones) { return !zones.isEmpty() && !zones.contains("any"); }
+        private static boolean mixed(Set<String> zones) { return zones.isEmpty() || zones.contains("any") && zones.size() > 1; }
         /**
          * Per selector and range family the lowest start and highest end of the merged (sorted) ranges; [MIN, MAX] for
          * any and [MAX, MIN] for an absent family. Outer [lo, hi] holding inner [lo, hi] for every slot is then a

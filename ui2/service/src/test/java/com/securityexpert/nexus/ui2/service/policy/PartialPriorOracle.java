@@ -110,6 +110,13 @@ final class PartialPriorOracle {
             }
             return out;
         }
+        /** The earlier rules of the rule's scope that are enabled or possibly enabled, resolved or not. */
+        List<Rule> earlierRules(String ruleId) {
+            List<Rule> out = new ArrayList<>();
+            for (var rule : rules.values())
+                if (order.get(rule.id()) < order.get(ruleId) && scope.get(rule.id()).equals(scope.get(ruleId)) && !Boolean.FALSE.equals(rule.enabled())) out.add(rule);
+            return out;
+        }
         /** Every packet the later rule matches, the prior matches too: per dimension, zones as (from, to) pairs. */
         boolean covers(Rule prior, Rule later) {
             var a = coverDimensions(prior); var b = coverDimensions(later);
@@ -121,6 +128,10 @@ final class PartialPriorOracle {
         }
         private List<BitSet> coverDimensions(Rule rule) {
             var app = rule.application(); boolean cp = snapshot.metadata().vendor().equals("CP");
+            // A field of unknown meaning may widen the match: the whole universe (as the disjointness oracle does).
+            for (String key : rule.extras().keySet())
+                if (!known(key, rule, cp)) return List.of(full(ADDRESS_SIZE), full(ADDRESS_SIZE), full(SERVICE_SIZE), full(APPLICATION_SIZE),
+                    full(zones.size() * zones.size()), full(targets.size()));
             return List.of(cell(rule.source(), "address"), cell(rule.destination(), "address"), cell(rule.service(), "service"),
                 cp && app.refs().isEmpty() && !app.negated() ? full(APPLICATION_SIZE) : cell(app, "application"),
                 pairs(rule), targets(rule.extras().get("install-on")));
@@ -242,10 +253,13 @@ final class PartialPriorOracle {
         boolean same = prior.action().equals(later.action());
         assertEquals(same ? "REDUNDANT" : "CONFLICT", status, context);
     }
-    /** No earlier fully resolved rule of the scope covers the rule by brute force. */
+    /**
+     * No single earlier rule of the scope (enabled or possibly enabled, resolved or not; whatever the oracle cannot
+     * interpret is the whole universe) covers the rule by brute force.
+     */
     static void assertNoCover(Universe universe, String ruleId, String context) {
         var later = universe.rules.get(ruleId);
-        for (var prior : universe.resolvedPriors(ruleId))
+        for (var prior : universe.earlierRules(ruleId))
             assertFalse(universe.covers(prior, later), context + ": NOT_SHADOWED rule is covered by " + prior.id() + " by brute force");
     }
     /** Which way a zone-superset change went, for the tests' counters; null when the rule is unchanged. */
@@ -314,6 +328,7 @@ final class PartialPriorOracle {
         boolean incomplete = !universe.snapshot.failures().isEmpty();
         assertEquals(released(expected, incomplete), got, context);
         assertReleaseIsSafe(universe, ruleId, context);
+        assertNoCover(universe, ruleId, context);
         return true;
     }
     static PolicyHygiene.Assessment released(PolicyHygiene.Assessment a, boolean incomplete) { return released(a, incomplete, UNSUPPORTED); }
