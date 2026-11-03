@@ -19,3 +19,10 @@ tasks.register("printRuntimeClasspath") {
     dependsOn("classes")
     doLast { println(runtime.asPath) }
 }
+
+// The frozen reference fixtures were exported on a machine in Turkey: their "local" time labels read +03:00
+// (Headlines uses the JVM default zone when the topology names none). Pin the zone of the test JVM so the
+// parity tests do not depend on the host: a UTC CI runner otherwise renders +00:00 and every such section differs.
+tasks.withType<Test>().configureEach {
+    systemProperty("user.timezone", "Europe/Istanbul")
+}
