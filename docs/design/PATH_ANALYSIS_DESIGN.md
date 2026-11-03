@@ -1,7 +1,8 @@
 # Path analysis and topology — merged design
 
 Status: DRAFT — DO NOT FREEZE. Merge of two independent designs and their cross-reviews, 2026-11-03.
-Not implementation authority until A0 (vendor semantics) is frozen and the PO decisions in §8 are recorded.
+Not implementation authority until A0 (vendor semantics) is frozen. PO decisions D-1 to D-9 are recorded in
+`PO_DECISION_RECORD_2026_11_03_PATH_ANALYSIS_PHASE_A.md` (RATIFIED 2026-11-03); where that record and this document differ, the record wins.
 
 Inputs (all unaltered, in this directory):
 - `PATH_ANALYSIS_ARCHITECTURE_BRIEF.md` — the brief.
@@ -46,14 +47,17 @@ out-of-sync fallback (correction to F§4.4). A Panorama-managed firewall marked 
 
 ## 3. Data model
 
-Adopt F§1.1 relational model (`topology_snapshot`, `topology_node`, `topology_segment`, `topology_attachment`,
-`topology_conflict`, `topology_link_override`, `path_query_audit`) with these changes:
+Hybrid storage (decision D-1). The graph (nodes, segments, attachments) is built in memory from inventory and is not
+stored. Persisted: `topology_snapshot` header (opaque id, build time, input fingerprints, counts), `topology_conflict`,
+`topology_link_override`. No `path_query_audit` table: each query writes one masked row to `authz_decisions` (D-2).
+A NULL in any new column means `UNKNOWN`. Device deletion removes or orphan-marks every new row that references the
+device; the migration states which. Further changes from F§1.1:
 - Routes stay in `device_route` and are not copied. Additive columns on `device_route`: `is_active`, `is_ecmp`,
   `metric`, `next_hop_kind` (`IP | CONNECTED | DISCARD | NEXT_VR`). On `device_interface`: `routing_context`,
   `evidence_grade` (`RUNTIME | CONFIG_DERIVED`). (A§1.2, migration number = next free, ≥ V184.)
 - `policy_target_binding(device_id, context, policy_id, install_on_ref)` populated at policy collection, where
   `install_on_ref = PolicySnapshot.ref(meta.id(), "object", target_uid)`; corroborated by `cpstat -f policy fw`.
-- Override record from A§1.2: `link_kind`, optional `assumed_subnet`, mandatory `rationale` (masked for aiview).
+- Override record from A§1.2: `link_kind`, optional `assumed_subnet`, mandatory reason code plus optional note (note hidden from aiview, D-8).
 - No JSONB graph blob (it cannot be redacted per field and is re-captured by the audit trigger). A small manifest
   of opaque run/policy ids only.
 - Every new address- or name-bearing column registered in `audit_redaction_policy` (tier 2).
@@ -132,16 +136,18 @@ B/C hooks: F§4.6 / A§1.5 (`HopSemantics` strategy per node kind).
 
 Total ≈ 37 engineer-days. A1 is a hard precondition of A4. Status stays `AUTOMATED_VALIDATED` until A6.
 
-## 8. PO decisions required
+## 8. PO decisions (recorded)
 
-| # | Decision | Recommendation |
-|---|---|---|
-| D-1 | Persist derived topology (relational, opaque ids + segment prefixes) and the new route/interface columns; values masked for aiview and redacted in audit | Approve |
-| D-2 | Path results: do not store; store only masked query + verdict in the audit trail | Approve for A; result history is Phase D |
-| D-3 | aiview may enter path queries using masked values, resolved server-side in memory per snapshot (structure becomes queryable for aiview, raw values never shown) | Approve |
-| D-4 | Offer an "up to the edge" mode (`ALLOWED_TO_EDGE`) for paths that leave known topology | Approve, clearly labelled |
-| D-5 | PAN `application-default` rules: match on the application's default ports with an "App-ID assumed" caveat (hop cannot be plain `ALLOWED`) vs. always `UNKNOWN` | Match with caveat |
-| D-6 | CP gateway topology / anti-spoofing / security-zone resolution from the already-gated `show-gateways-and-servers` (parse-scope extension) | Defer to after first results |
-| D-7 | New read-only device commands: PAN advanced-routing route read (A1), and the A6 validation matchers; each needs exact-command approval | Approve in principle; exact commands brought one by one |
-| D-8 | RBAC: raw view `security_admin` (optionally `operation_admin`), everyone else masked; overrides `security_admin` only; no new collection rights for aiview | Approve |
-| D-9 | Phase B LB vendor (F5 assumed; Radware already in inventory) and Phase C APIC read-only account | PO input |
+All nine are decided in `PO_DECISION_RECORD_2026_11_03_PATH_ANALYSIS_PHASE_A.md`. Summary:
+
+| # | Decision |
+|---|---|
+| D-1 | Hybrid: graph in memory; persist overrides, conflicts, snapshot header, new route/interface columns, `policy_target_binding` |
+| D-2 | No result storage; masked query + verdict to `authz_decisions` |
+| D-3 | aiview masked-value queries with five conditions (masked-only input, per-snapshot in-memory map, ambiguous refused, no side effects, uniform refusals); fallback is picking from masked lists |
+| D-4 | `ALLOWED_TO_EDGE`, clearly labelled |
+| D-5 | `application-default` matched on default ports with an "App-ID assumed" caveat |
+| D-6 | Deferred until first results; rules needing it resolve to `UNKNOWN` |
+| D-7 | Approved in principle; each exact command needs its own approval |
+| D-8 | Today's rule: only aiview masked; `topology_override_write` and `topology_rebuild` security_admin only, never aiview; no new aiview collection rights |
+| D-9 | Open until Phase B is planned |
