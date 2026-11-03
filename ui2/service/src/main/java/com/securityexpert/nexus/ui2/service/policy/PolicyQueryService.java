@@ -444,7 +444,7 @@ public final class PolicyQueryService {
             return metadata == s.metadata() ? s : new PolicySnapshot(metadata, s.sections(), s.objects(), s.failures());
         });
     }
-    private PolicySnapshot readSnapshot(String json) { return read(json, PolicySnapshot.class).withPageSplitsMerged(); }
+    private PolicySnapshot readSnapshot(String json) { return read(json, PolicySnapshot.class).withPageSplitsMerged().withHitLevels(); }
     private <T> T read(String json, Class<T> type) {
         try { return mapper.readValue(json, type); }
         catch (Exception e) { throw new IllegalStateException("Stored policy is invalid"); }

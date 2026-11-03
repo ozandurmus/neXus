@@ -11,6 +11,26 @@ public final class PolicyHygiene {
     private PolicyHygiene() {}
     public static final Set<String> CLASSES = Set.of("shadowed", "conflict", "disabled", "unused", "expired", "broad", "unknown");
     public static final Set<String> SEVERITIES = Set.of("HIGH", "MEDIUM", "LOW");
+    /** Every shadow reason this class (and PolicyNormalization) can emit; PolicyPrivacy projects these unchanged, so a new reason must be added here. */
+    public static final Set<String> REASONS = Set.of(
+        "analysis budget", "unsupported rulebase", "negated selector", "missing selector", "enabled state is unknown",
+        "non-terminal or unknown action", "time or content constraint", "user or category constraint", "zone rule type constraint",
+        "unresolved install-on selector", "unsupported rule constraint", "time evidence not collected", "unresolved object",
+        "group cycle or depth limit", "empty or dynamic group", "dynamic or unsupported object type", "unsupported address representation",
+        "missing address values", "unsupported object members", "ambiguous object values", "unsupported service constraint",
+        "unsupported port expression", "invalid port range", "missing service values", "earlier rule has unsupported constraints",
+        "zone or install-on coverage is unproven", "zone evidence not collected", "install-on evidence not collected", "snapshot collection incomplete",
+        "earlier sections not analysed", "multiple ordered layers not evaluated");
+    /** Every fixed finding evidence string; "Shadowing: <reason>." is derived from {@link #REASONS}. */
+    public static final Set<String> EVIDENCE = Set.of(
+        "Rule is disabled.", "Enabled state is unknown.", "Stored schedule has expired.", "Stored schedule expires within 14 days.",
+        "Schedule evidence is incomplete.", "Permissiveness cannot be established from resolved selectors.",
+        "Accept rule matches any source, destination, service and application.", "Broad selectors are present; see permissiveness reasons.",
+        "Earlier enabled rule fully covers this match with a different action.", "Earlier enabled rule fully covers this match with the same action.",
+        "Hit counts were not collected or are invalid.", "Hit counts are missing for a target.", "Last-hit timestamp is invalid.",
+        "Zero-hit counter window is shorter than the threshold.", "Zero hits contradict a recorded last hit.",
+        "Zero collected hits; counter reset/window is unknown.", "Last-hit time was not collected.",
+        "Last hit predates the threshold at counter collection time.");
     public record Finding(String findingClass, String severity, String evidence) {}
     public record Assessment(String shadowStatus, String shadowReason, String coveringRuleId,
             List<Finding> findings, Map<String, Object> permissiveness, String timeStatus, boolean expiring,

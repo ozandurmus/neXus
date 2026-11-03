@@ -16,23 +16,8 @@ public final class PolicyPrivacy {
             "application", "application-filter", "external-list", "region", "dynamic-user-group", "profile-group",
             "source-nat", "destination-nat", "source-and-destination-nat", "no-nat",
             "MATCH", "MISMATCH", "IN_SYNC", "OUT_OF_SYNC", "PENDING", "Accept", "Drop", "Reject", "allow", "deny", "drop", "reject", "reset-client", "reset-server", "reset-both", "Apply Layer", "Log", "None", "Alert");
-    private static final Set<String> HYGIENE_REASONS = Set.of(
-        "analysis budget", "unsupported rulebase", "negated selector", "missing selector", "enabled state is unknown",
-        "non-terminal or unknown action", "time or content constraint", "user or category constraint", "zone rule type constraint",
-        "unresolved install-on selector", "unsupported rule constraint", "time evidence not collected", "unresolved object",
-        "group cycle or depth limit", "empty or dynamic group", "dynamic or unsupported object type", "unsupported address representation",
-        "missing address values", "unsupported object members", "ambiguous object values", "unsupported service constraint",
-        "unsupported port expression", "invalid port range", "missing service values", "earlier rule has unsupported constraints",
-        "zone or install-on coverage is unproven", "zone evidence not collected", "install-on evidence not collected", "snapshot collection incomplete");
-    private static final Set<String> HYGIENE_EVIDENCE = Set.of(
-        "Rule is disabled.", "Enabled state is unknown.", "Stored schedule has expired.", "Stored schedule expires within 14 days.",
-        "Schedule evidence is incomplete.", "Permissiveness cannot be established from resolved selectors.",
-        "Accept rule matches any source, destination, service and application.", "Broad selectors are present; see permissiveness reasons.",
-        "Earlier enabled rule fully covers this match with a different action.", "Earlier enabled rule fully covers this match with the same action.",
-        "Hit counts were not collected or are invalid.", "Hit counts are missing for a target.", "Last-hit timestamp is invalid.",
-        "Zero-hit counter window is shorter than the threshold.", "Zero hits contradict a recorded last hit.",
-        "Zero collected hits; counter reset/window is unknown.", "Last-hit time was not collected.",
-        "Last hit predates the threshold at counter collection time.");
+    private static final Set<String> HYGIENE_REASONS = PolicyHygiene.REASONS;
+    private static final Set<String> HYGIENE_EVIDENCE = PolicyHygiene.EVIDENCE;
     public static Object mask(Object value, String key, TopologyNamePseudonymizer names, SubnetPreservingIpMasker ips) {
         if (value == null || value instanceof Boolean || value instanceof Number) return value;
         if (key.equals("changes") && value instanceof List<?> changes) return changes.stream().map(change -> {
