@@ -86,3 +86,12 @@ the named provenance fixture corrections run their fixed targeted Java,
 architecture, and frontend checks. Manual `workflow_dispatch` remains the
 full-regression path. An unmapped path or failed selector blocks visibly;
 it neither skips validation nor launches a full suite by surprise.
+
+## 8. 2026-11-03 successor amendment
+
+**FROZEN — PRODUCT OWNER DIRECTIVE, 2026-11-03.** Supersedes the last sentence of section 7 ("An unmapped path or failed
+selector blocks visibly"). An unmapped path now runs `full-regression`, as section 3 originally required; only an empty
+change list still classifies as `blocked`. Reason: from 2026-10-25 every pull request touching an unmapped product path
+(policy, management, scripts, project queue files) was `scope-blocked`, and no validation run on record had succeeded,
+which stayed invisible while merges did not wait for checks. PO directive (chat, verbatim): "Buna sebep olan kural neyse
+düzeltelim gelistirmeni yap gec" ("whatever rule causes this, let us fix it; do your development and move on").

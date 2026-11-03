@@ -119,7 +119,7 @@ def classify(paths: list[str]) -> str:
                     or component_for_path(path) is not None
                     or path.startswith(tuple(LDAP_PREFIXES))
                     or path.startswith("docs/") or path.endswith(".md"))
-        return "full" if all(known(path) for path in paths) else "blocked"
+        return "full"
     if all(path.startswith("docs/") or path.endswith(".md") for path in paths):
         return "skip"
     ldap = all(path in DELIVERY_FILES for path in paths) or (
@@ -134,7 +134,9 @@ def classify(paths: list[str]) -> str:
         for path in paths
     ):
         return "+".join(sorted(components))
-    return "blocked"
+    # PO amendment 2026-11-03 (PO_DECISION_RECORD_2026_09_15C section 8): a path no closed selection maps runs the full
+    # suite instead of blocking the pull request; only an empty change list still blocks.
+    return "full"
 
 
 def main() -> None:
