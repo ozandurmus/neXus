@@ -420,7 +420,8 @@ IMAGE_BAKED_PROJECT_FILES = ("project/roadmap.json", "project/feature_registry.j
                              "project/build_history.json", "project/java_product_plan.json")
 IMAGE_BAKED_PROJECT_PREFIXES = ("project/archive/",)
 FASTPATH_MAX_FILES = 400
-CHECKS_TIMEOUT_S = 15 * 60
+# A full-regression check runs longer than 15 min (PR 705, 2026-11-03); NEXUS_CHECKS_TIMEOUT_S overrides.
+CHECKS_TIMEOUT_S = int(os.environ.get("NEXUS_CHECKS_TIMEOUT_S", str(45 * 60)))
 CHECKS_POLL_S = 15
 CHECKS_EMPTY_GRACE_S = 120
 CHECKS_TRANSIENT_ERRORS = 4
