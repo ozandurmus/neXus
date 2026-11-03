@@ -40,3 +40,19 @@ commands with a trailing slash, which makes both follow the link:
 
 Same class, context, masking and frequency as the V181 rows. `du` gets a 60 s
 timeout because the directory holds several hundred GB.
+
+## Addendum 2026-11-03 -- numeric output the mask leaves readable (V183)
+
+The V182 run (2026-11-02 12:04) followed the symlink but stayed unreadable: the
+diagnostic output mask replaced the `du -sh` size ("289G"-style) and the month
+abbreviations, and `ls -la` sorts by name, so its tail was not the newest
+files. The PO approved in chat ("devam") two replacements that print plain
+numbers:
+
+| gate_id | Command |
+|---|---|
+| `cp_localdiag_du_fwdir_log_gib` | `du -s --block-size=1073741824 $FWDIR/log/` (size in GiB, bare integer) |
+| `cp_localdiag_ls_fwdir_log_newest` | `ls -lt --time-style=+%Y-%m-%d $FWDIR/log/ \| head -20` (newest first, ISO dates) |
+
+Same class, context, masking and frequency as the V181/V182 rows. The mask
+over-reach itself is a separate backlog item.

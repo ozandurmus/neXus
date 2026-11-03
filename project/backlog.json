@@ -1251,6 +1251,15 @@
       "priority": "P1",
       "target": "FAILOVER_EXECUTION_PLAN.md",
       "note": ""
+    },
+    {
+      "id": "diagnostic_mask_overreach",
+      "category": "diagnostics",
+      "title": "Diagnostic output mask hides sizes (289G), month abbreviations and ordinary words as SN- tokens; masked CP local-log output was unreadable (2026-10-31, 2026-11-02)",
+      "status": "planned",
+      "priority": "P2",
+      "target": "",
+      "note": ""
     }
   ]
 }
