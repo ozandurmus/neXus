@@ -19,6 +19,12 @@ it("submits a lookup, shows uncertainty and first proven match, links rules and 
   fill(); fireEvent.click(screen.getByRole("button", { name: "Look up policy intent" }));
   const card = await screen.findByLabelText("Lookup result 1");
   expect(within(card).getByText("UNKNOWN")).toBeInTheDocument();
+  // The answer names the snapshot it was read from by policy name, with the collection age and its freshness state; never a raw id or ISO stamp.
+  expect(within(card).getByText("Snapshot: POL-ALPHA")).toBeInTheDocument();
+  expect(within(card).getByText(/^Collected \d+ d ago \(9 Oct 2026, 15:00 GMT\+3\)$/)).toBeInTheDocument();
+  expect(card.querySelector("[data-freshness]")).toHaveAttribute("data-freshness", "old");
+  expect(within(card).getByRole("status")).toHaveTextContent(/days old/);
+  expect(card.textContent).not.toContain("2026-10-09T12:00:00Z");
   expect(within(card).getByText(/UNKNOWN: rule 1 could match/)).toHaveTextContent("negated selector");
   expect(within(card).getByText(/First proven match after uncertainty/)).toBeInTheDocument();
   fireEvent.click(within(card).getByRole("button", { name: "2 · RULE-BRAVO" })); expect(openRule).toHaveBeenCalledWith("p1", "r2");
