@@ -64,6 +64,7 @@ final class PartialPriorOracle {
             Map<Object, Integer> tokens = new IdentityHashMap<>(); int n = 0;
             for (var section : snapshot.sections()) {
                 if (PolicySnapshot.outsideSecurityEvaluation(snapshot.metadata(), section)) continue;
+                if (section.rules().isEmpty()) continue;
                 Object token = walk.advance(section);
                 int id = tokens.computeIfAbsent(token, k -> tokens.size());
                 for (var rule : section.rules()) { rules.put(rule.id(), rule); scope.put(rule.id(), id); order.put(rule.id(), n++); sections.put(rule.id(), section); }
