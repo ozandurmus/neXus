@@ -177,7 +177,7 @@ public final class PolicyQueryService {
         var cached = domainCache.get(key);
         if (cached != null && cached.revision().equals(revision)) return cached.index();
         var index = new PolicyDomainIndex(consume -> inventoryChunks(source, domain, consume),
-            repository.domainSnapshots(source, domain).stream().map(json -> read(json, PolicySnapshot.class)).toList());
+            repository.domainSnapshots(source, domain).stream().map(json -> readSnapshot(json)).toList());
         domainCache.put(key, new CachedDomain(revision, index));
         if (domainCache.size() > 32) domainCache.remove(domainCache.keySet().iterator().next());
         return index;
@@ -310,7 +310,7 @@ public final class PolicyQueryService {
     }
 
     public Optional<PolicyResponse> domainHits(String source, String domain, int page) {
-        var snapshots = repository.domainSnapshots(source, domain).stream().map(json -> read(json, PolicySnapshot.class)).toList();
+        var snapshots = repository.domainSnapshots(source, domain).stream().map(json -> readSnapshot(json)).toList();
         if (snapshots.isEmpty()) return Optional.empty();
         List<Map<String, Object>> hits = new ArrayList<>();
         for (var snapshot : snapshots) for (var section : snapshot.sections()) for (var rule : section.rules()) {
@@ -436,7 +436,7 @@ public final class PolicyQueryService {
     }
 
     public Optional<PolicySnapshot> find(String id) {
-        var stored = repository.find(id).map(json -> read(json, PolicySnapshot.class));
+        var stored = repository.find(id).map(json -> readSnapshot(json));
         var found = stored.isPresent() || local == null ? stored : local.snapshots().stream().filter(s -> s.metadata().id().equals(id)).findFirst();
         var hostnames = found.isPresent() ? sourceHostnames() : null;
         return hostnames == null ? found : found.map(s -> {
@@ -444,6 +444,7 @@ public final class PolicyQueryService {
             return metadata == s.metadata() ? s : new PolicySnapshot(metadata, s.sections(), s.objects(), s.failures());
         });
     }
+    private PolicySnapshot readSnapshot(String json) { return read(json, PolicySnapshot.class).withPageSplitsMerged(); }
     private <T> T read(String json, Class<T> type) {
         try { return mapper.readValue(json, type); }
         catch (Exception e) { throw new IllegalStateException("Stored policy is invalid"); }

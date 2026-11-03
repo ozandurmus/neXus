@@ -309,3 +309,10 @@ it("folds the empty sections into one group row that opens to name them", () => 
   expect(group).toHaveAttribute("aria-expanded", "true");
   expect([...container.querySelectorAll("[data-empty-section]")].map(el => el.textContent)).toEqual(["OBJ-SECTION-02 · 0 rules", "OBJ-SECTION-03 · 0 rules"]);
 });
+
+it("draws no header for a section whose rules are on other pages", () => {
+  const other: PolicySection = { ...section, id: "section-2", name: "OBJ-SECTION-02", rules: [], total: 100 };
+  const { container } = mount(ruleTable({ sections: [section, other] }));
+  expect(container.querySelectorAll("[data-policy-section]")).toHaveLength(1);
+  expect(screen.queryByText(/OBJ-SECTION-02/)).toBeNull();
+});
