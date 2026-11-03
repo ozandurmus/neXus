@@ -169,6 +169,19 @@ final class PolicyNormalization {
         return normalize(snapshot, section, rule, resolver, false);
     }
     static Match normalize(PolicySnapshot snapshot, Section section, Rule rule, Resolver resolver, boolean lookup) {
+        return normalize(snapshot, section, rule, resolver, lookup, false);
+    }
+    /**
+     * The full match of a Palo Alto intrazone or interzone rule whose only obstacle to {@link #normalize} is that rule
+     * type, or {@code null}. Only {@code PolicyHygiene} reads it, and only as a rule an earlier universal rule may cover
+     * (see {@link #zonesCover}); it is never an earlier rule, a lookup match or a partial prior.
+     */
+    static Match typed(PolicySnapshot snapshot, Section section, Rule rule, Resolver resolver) {
+        if (!snapshot.metadata().vendor().equals("PAN")) return null;
+        var match = normalize(snapshot, section, rule, resolver, false, true);
+        return match.problem() == null ? match : null;
+    }
+    private static Match normalize(PolicySnapshot snapshot, Section section, Rule rule, Resolver resolver, boolean lookup, boolean ruleTypes) {
         try {
             if (!Set.of("CP", "PAN").contains(snapshot.metadata().vendor()) || PolicySnapshot.outsideSecurityEvaluation(snapshot.metadata(), section))
                 throw new Unknown("unsupported rulebase");
@@ -195,7 +208,8 @@ final class PolicyNormalization {
                         if (object == null || !object.status().equals("RESOLVED") || !object.type().equals("any")) throw new Unknown("time or content constraint");
                     }
                 } else if (Set.of("source-user", "category").contains(key) && !values.equals(List.of("any"))) throw new Unknown("user or category constraint");
-                else if (key.equals("rule-type") && !values.equals(List.of("universal"))) throw new Unknown("zone rule type constraint");
+                else if (key.equals("rule-type") && !values.equals(List.of("universal"))
+                        && !(ruleTypes && (values.equals(List.of("intrazone")) || values.equals(List.of("interzone"))))) throw new Unknown("zone rule type constraint");
                 else if (key.equals("install-on")) {
                     for (String id : values) {
                         resolver.budget.spend(); var object = snapshot.objects().get(id);
@@ -351,6 +365,44 @@ final class PolicyNormalization {
             if (!a.equals(b)) return false;
         }
         return true;
+    }
+    /**
+     * Palo Alto zone coverage: every (source zone, destination zone) pair the later rule can match is matched by an
+     * earlier universal rule with zones {@code from} x {@code to}. Rule types per the PAN-OS 11.1 admin guide,
+     * "Components of a Security Policy Rule", Rule Type
+     * (https://docs.paloaltonetworks.com/pan-os/11-1/pan-os-admin/policy/security-policy/components-of-a-security-policy-rule):
+     * a universal rule (the default) matches "all matching interzone and intrazone traffic in the specified source and
+     * destination zones" -- the vendor's own example: source zones A, B and destination zones A, B match traffic within A,
+     * within B, and A to B and B to A, so its zone match is from x to. An intrazone rule matches traffic within each listed
+     * source zone only, and no destination zone can be set for it: pairs (z, z), z in from. An interzone rule matches
+     * traffic between the listed source and destination zones, not within one: from x to without (z, z). Hence:
+     * <ul>
+     * <li>universal or interzone later rule: covered when later.from is within {@code from} and later.to within
+     * {@code to} (for interzone this is sufficient, not necessary);</li>
+     * <li>intrazone later rule: covered when later.from is within both {@code from} and {@code to}; its stored to-zones
+     * are not read.</li>
+     * </ul>
+     * Only universal rules are earlier rules here; an intrazone or interzone earlier rule never covers (not proven).
+     * {@link #zoneSuperset} decides "within".
+     */
+    static boolean zonesCover(Set<String> from, Set<String> to, Set<String> laterFrom, Set<String> laterTo, boolean intrazone) {
+        return zoneSuperset(from, laterFrom) && zoneSuperset(to, intrazone ? laterFrom : laterTo);
+    }
+    /**
+     * Every zone of {@code inner} is a zone of {@code outer}, comparing opaque zone names exactly. {@code any} alone is
+     * every zone, as {@link #compatible} has always read it (an earlier zone of exactly any). A set that mixes any with
+     * zone names is not interpreted: it is within only itself or a lone any, and holds only itself. Equal sets are always
+     * within each other.
+     */
+    static boolean zoneSuperset(Set<String> outer, Set<String> inner) {
+        if (outer.equals(ANY_ZONE) || outer.equals(inner)) return true;
+        return !outer.contains("any") && !inner.contains("any") && !inner.isEmpty() && outer.containsAll(inner);
+    }
+    private static final Set<String> ANY_ZONE = Set.of("any");
+    /** The Palo Alto rule type of a stored rule; an absent rule-type is the vendor default, universal. */
+    static String ruleType(Rule rule) {
+        var values = rule.extras().get("rule-type");
+        return values == null || values.equals(List.of("universal")) ? "universal" : values.size() == 1 ? values.get(0) : "unknown";
     }
     static boolean contains(Selector a, Selector b, Budget budget) {
         if (a.any()) return true;

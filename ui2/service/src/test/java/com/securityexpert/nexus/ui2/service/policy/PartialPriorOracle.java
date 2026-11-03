@@ -18,10 +18,18 @@ import java.util.*;
  * matches the whole universe in every dimension. Narrowing constraints (time, schedule, VPN, content, user, category)
  * are ignored, which only enlarges the earlier rule's match. The oracle is therefore never more willing to call two
  * rules disjoint than the real policy is.
+ * <p>Palo Alto zone supersets: a rule that leaves "zone or install-on coverage is unproven" (or, for an intrazone or
+ * interzone rule, "zone rule type constraint") for REDUNDANT or CONFLICT must be covered, by brute force, by the rule
+ * named as covering: every dimension of the later rule, with the zones read as the set of (from, to) pairs its rule type
+ * matches, lies inside the covering rule's. One that becomes NOT_SHADOWED must be covered by no earlier fully resolved
+ * rule of its scope and share no packet with any unresolved one. Zone pairs follow the PAN-OS rule types: universal
+ * from x to, intrazone (z, z) for z in from, interzone from x to without (z, z); any is every zone, including one no
+ * rule names.
  */
 final class PartialPriorOracle {
     private PartialPriorOracle() {}
     static final String UNSUPPORTED = "earlier rule has unsupported constraints";
+    static final String UNPROVEN = "zone or install-on coverage is unproven", RULE_TYPE = "zone rule type constraint";
     private static final List<long[]> BLOCKS = List.of(new long[]{ip("192.0.2.0"), ip("192.0.2.255")},
         new long[]{ip("198.51.100.0"), ip("198.51.100.255")}, new long[]{ip("203.0.113.0"), ip("203.0.113.255")});
     private static final long OUTSIDE = ip("10.0.0.1");
@@ -90,6 +98,44 @@ final class PartialPriorOracle {
                 cp && app.refs().isEmpty() && !app.negated() ? full(APPLICATION_SIZE) : cell(app, "application"),
                 universal ? zones(rule.extras().get("from")) : full(zones.size()), universal ? zones(rule.extras().get("to")) : full(zones.size()),
                 targets(rule.extras().get("install-on")));
+        }
+        /** The earlier rules of the rule's scope, enabled, with a full match: the only rules that may cover it. */
+        List<Rule> resolvedPriors(String ruleId) {
+            var resolver = new PolicyNormalization.Resolver(snapshot.objects(), new PolicyNormalization.Budget(Integer.MAX_VALUE));
+            List<Rule> out = new ArrayList<>();
+            for (var rule : rules.values()) {
+                if (order.get(rule.id()) >= order.get(ruleId) || !scope.get(rule.id()).equals(scope.get(ruleId))) continue;
+                if (!Boolean.TRUE.equals(rule.enabled())) continue;
+                if (PolicyNormalization.normalize(snapshot, sections.get(rule.id()), rule, resolver).problem() == null) out.add(rule);
+            }
+            return out;
+        }
+        /** Every packet the later rule matches, the prior matches too: per dimension, zones as (from, to) pairs. */
+        boolean covers(Rule prior, Rule later) {
+            var a = coverDimensions(prior); var b = coverDimensions(later);
+            for (int d = 0; d < a.size(); d++) {
+                var outside = (BitSet) b.get(d).clone(); outside.andNot(a.get(d));
+                if (!outside.isEmpty()) return false;
+            }
+            return true;
+        }
+        private List<BitSet> coverDimensions(Rule rule) {
+            var app = rule.application(); boolean cp = snapshot.metadata().vendor().equals("CP");
+            return List.of(cell(rule.source(), "address"), cell(rule.destination(), "address"), cell(rule.service(), "service"),
+                cp && app.refs().isEmpty() && !app.negated() ? full(APPLICATION_SIZE) : cell(app, "application"),
+                pairs(rule), targets(rule.extras().get("install-on")));
+        }
+        private BitSet pairs(Rule rule) {
+            int n = zones.size(); var out = new BitSet(n * n);
+            var type = rule.extras().getOrDefault("rule-type", List.of("universal"));
+            BitSet from = zones(rule.extras().get("from")), to = zones(rule.extras().get("to"));
+            for (int s = 0; s < n; s++) for (int d = 0; d < n; d++) {
+                boolean match = type.equals(List.of("universal")) ? from.get(s) && to.get(d)
+                    : type.equals(List.of("intrazone")) ? s == d && from.get(s)
+                    : type.equals(List.of("interzone")) ? s != d && from.get(s) && to.get(d) : true;
+                if (match) out.set(s * n + d);
+            }
+            return out;
         }
         private static boolean known(String key, Rule rule, boolean cp) {
             return Set.of("time", "schedule", "vpn", "content", "source-user", "category", "from", "to", "install-on", "rule-type",
@@ -186,6 +232,65 @@ final class PartialPriorOracle {
         long out = 0; for (String part : dotted.trim().split("\\.")) out = out * 256 + Integer.parseInt(part); return out;
     }
 
+    /** The covering rule is an earlier, enabled, fully resolved rule of the scope that covers the rule by brute force, with the right verdict. */
+    static void assertCoverIsSafe(Universe universe, String ruleId, String coveringId, String status, String context) {
+        var later = universe.rules.get(ruleId); var prior = universe.rules.get(coveringId);
+        assertNotNull(prior, context);
+        assertTrue(universe.resolvedPriors(ruleId).contains(prior), context + ": covering rule " + coveringId + " is no earlier resolved rule of the scope");
+        assertEquals(List.of("universal"), prior.extras().getOrDefault("rule-type", List.of("universal")), context);
+        assertTrue(universe.covers(prior, later), context + ": " + coveringId + " does not cover " + ruleId + " by brute force");
+        boolean same = prior.action().equals(later.action());
+        assertEquals(same ? "REDUNDANT" : "CONFLICT", status, context);
+    }
+    /** No earlier fully resolved rule of the scope covers the rule by brute force. */
+    static void assertNoCover(Universe universe, String ruleId, String context) {
+        var later = universe.rules.get(ruleId);
+        for (var prior : universe.resolvedPriors(ruleId))
+            assertFalse(universe.covers(prior, later), context + ": NOT_SHADOWED rule is covered by " + prior.id() + " by brute force");
+    }
+    /** Which way a zone-superset change went, for the tests' counters; null when the rule is unchanged. */
+    enum ZoneChange { COVERED, RELEASED, OTHER_UNKNOWN }
+    /**
+     * A rule the former analysis left "zone or install-on coverage is unproven" (or, Palo Alto, "zone rule type
+     * constraint") may now be: covered (REDUNDANT/CONFLICT, confirmed by {@link #assertCoverIsSafe}); for the unproven
+     * reason also released (NOT_SHADOWED or "snapshot collection incomplete", confirmed by {@link #assertNoCover} and
+     * {@link #assertReleaseIsSafe}) or UNKNOWN "earlier rule has unsupported constraints". Everything else of the
+     * assessment is exactly the former one.
+     */
+    static ZoneChange assertZoneChangeIsSafe(Universe universe, PolicyHygiene.Assessment expected, PolicyHygiene.Assessment got, String ruleId, String context) {
+        String reason = expected.shadowReason();
+        if (got.coveringRuleId() != null) {
+            assertEquals(withCover(expected, got.shadowStatus(), got.coveringRuleId()), got, context);
+            assertCoverIsSafe(universe, ruleId, got.coveringRuleId(), got.shadowStatus(), context);
+            return ZoneChange.COVERED;
+        }
+        assertEquals(UNPROVEN, reason, context + ": a rule type constraint may only become covered");
+        if (UNSUPPORTED.equals(got.shadowReason())) {
+            assertEquals(replaced(expected, "UNKNOWN", UNSUPPORTED, null, new PolicyHygiene.Finding("unknown", "LOW", "Shadowing: " + UNSUPPORTED + ".")), got, context);
+            return ZoneChange.OTHER_UNKNOWN;
+        }
+        boolean incomplete = !universe.snapshot.failures().isEmpty();
+        assertEquals(released(expected, incomplete, UNPROVEN), got, context);
+        assertNoCover(universe, ruleId, context);
+        assertReleaseIsSafe(universe, ruleId, context);
+        return ZoneChange.RELEASED;
+    }
+    private static PolicyHygiene.Assessment withCover(PolicyHygiene.Assessment a, String status, String covering) {
+        var finding = status.equals("CONFLICT") ? new PolicyHygiene.Finding("conflict", "HIGH", "Earlier enabled rule fully covers this match with a different action.")
+            : new PolicyHygiene.Finding("shadowed", "MEDIUM", "Earlier enabled rule fully covers this match with the same action.");
+        return replaced(a, status, null, covering, finding);
+    }
+    /** The assessment with its "Shadowing: reason." finding replaced in place (or removed when {@code finding} is null). */
+    private static PolicyHygiene.Assessment replaced(PolicyHygiene.Assessment a, String status, String reason, String covering, PolicyHygiene.Finding finding) {
+        var findings = new ArrayList<PolicyHygiene.Finding>();
+        for (var f : a.findings()) {
+            if (!f.evidence().equals("Shadowing: " + a.shadowReason() + ".")) findings.add(f);
+            else if (finding != null) findings.add(finding);
+        }
+        return new PolicyHygiene.Assessment(status, reason, covering, List.copyOf(findings), a.permissiveness(), a.timeStatus(), a.expiring(),
+            a.counterWindow(), a.hitSource(), a.hitsCollectedAt());
+    }
+
     /** Asserts the brute-force condition (b) for a released rule. */
     static void assertReleaseIsSafe(Universe universe, String ruleId, String context) {
         var later = universe.rules.get(ruleId);
@@ -203,16 +308,19 @@ final class PartialPriorOracle {
      * Returns true when the rule was released.
      */
     static boolean assertSameOrSafelyReleased(Universe universe, PolicyHygiene.Assessment expected, PolicyHygiene.Assessment got, String ruleId, String context) {
+        boolean zone = UNPROVEN.equals(expected.shadowReason()) || RULE_TYPE.equals(expected.shadowReason()) && universe.snapshot.metadata().vendor().equals("PAN");
+        if (zone && !got.equals(expected)) { assertZoneChangeIsSafe(universe, expected, got, ruleId, context); return false; }
         if (!UNSUPPORTED.equals(expected.shadowReason()) || got.equals(expected)) { assertEquals(expected, got, context); return false; }
         boolean incomplete = !universe.snapshot.failures().isEmpty();
         assertEquals(released(expected, incomplete), got, context);
         assertReleaseIsSafe(universe, ruleId, context);
         return true;
     }
-    static PolicyHygiene.Assessment released(PolicyHygiene.Assessment a, boolean incomplete) {
+    static PolicyHygiene.Assessment released(PolicyHygiene.Assessment a, boolean incomplete) { return released(a, incomplete, UNSUPPORTED); }
+    static PolicyHygiene.Assessment released(PolicyHygiene.Assessment a, boolean incomplete, String reason) {
         var findings = new ArrayList<PolicyHygiene.Finding>();
         for (var f : a.findings()) {
-            if (!f.evidence().equals("Shadowing: " + UNSUPPORTED + ".")) findings.add(f);
+            if (!f.evidence().equals("Shadowing: " + reason + ".")) findings.add(f);
             else if (incomplete) findings.add(new PolicyHygiene.Finding("unknown", "LOW", "Shadowing: snapshot collection incomplete."));
         }
         return new PolicyHygiene.Assessment(incomplete ? "UNKNOWN" : "NOT_SHADOWED", incomplete ? "snapshot collection incomplete" : null, null,
