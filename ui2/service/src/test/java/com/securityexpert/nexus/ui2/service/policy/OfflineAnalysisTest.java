@@ -52,9 +52,13 @@ class OfflineAnalysisTest {
         assertEquals("LOW", rules(result).get(1).get("severity"));
     }
     @Test void exactNarrowingCoversEveryAttributedFlowAndDoesNotPersistRawRows() throws Exception {
-        var result = analyze(pan(rule("r1", "any", "any", "allow", true)), HEADER
+        var evaluated = pan(rule("r1", "any", "any", "allow", true));
+        var result = analyze(evaluated, HEADER
             + "192.0.2.8,198.51.100.8,443,tcp\n192.0.2.9,198.51.100.9,444,tcp\n192.0.2.8,198.51.100.8,53,udp\n");
         var narrow = (Map<?, ?>) rules(result).get(0).get("narrowing");
+        // The result names the snapshot it was evaluated against, as the stored collection time; the viewer shows its age.
+        assertNotNull(evaluated.metadata().collectedAt());
+        assertEquals(evaluated.metadata().collectedAt(), result.get("collectedAt"));
         assertEquals(100, narrow.get("coveragePercent")); assertEquals(3L, narrow.get("coveredFlows"));
         assertEquals(List.of("192.0.2.8/31"), narrow.get("observedSource")); assertEquals(List.of("198.51.100.8/31"), narrow.get("observedDestination"));
         assertEquals(List.of("tcp/443-444", "udp/53"), narrow.get("observedService"));

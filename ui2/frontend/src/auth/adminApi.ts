@@ -2043,6 +2043,8 @@ export interface PolicyHitCounts {
 export interface PolicyHygieneFinding { findingClass: string; severity: "HIGH" | "MEDIUM" | "LOW"; evidence: string }
 export interface PolicyHygieneAssessment {
   shadowStatus: "UNKNOWN" | "NOT_SHADOWED" | "REDUNDANT" | "CONFLICT"; shadowReason: string | null; coveringRuleId: string | null;
+  /** For "earlier rule has unsupported constraints": the earliest earlier rule that kept this one from being proven, with its number. Absent from an older service. */
+  blockingRuleId?: string | null; blockingRuleNumber?: number | null;
   findings: PolicyHygieneFinding[]; permissiveness: NonNullable<PolicyRule["permissiveness"]>;
   timeStatus: string; expiring: boolean; counterWindow: string; hitSource: string; hitsCollectedAt: string | null;
 }
@@ -2055,6 +2057,8 @@ export interface PolicyHygienePage {
   coverage?: PolicyHygieneCoverage;
   /** Every `unknown` evidence string counted over the whole policy (rules carrying it), most frequent first. */
   unknownReasons?: { evidence: string; rules: number }[];
+  /** Policy-wide: how many distinct earlier rules keep others from being proven, and the five that block the most (ids, numbers, counts). Absent from an older service. */
+  blockers?: { distinct: number; top: { ruleId: string; number: number; blocks: number }[] };
 }
 export interface PolicyRuleDetail { metadata: PolicyMetadata; rule: PolicyRule; section: PolicySection; objects: PolicyObject[] }
 const hygieneParams = (findingClass: string, severity: string, days: number) => new URLSearchParams({ findingClass, severity, days: String(days) });
@@ -2180,6 +2184,8 @@ export interface OfflineRule {
     observedService?: string[]; coveragePercent?: number; coveredFlows?: number; caution?: string };
 }
 export interface OfflineAnalysisResult extends OfflineAnalysisSummary {
+  /** Collection time of the stored policy snapshot the sample was evaluated against; absent from an analysis stored before it was recorded. */
+  collectedAt?: string | null;
   flowCount: number; attributedFlows: number; invalidRows: number; agreementCount: number; disagreementCount: number;
   comparisonUnknownCount: number; comparisonEnabled: boolean; comparisonNote: string; attributionNote: string; limitations: string; caution: string;
   parseStats: { statReason: string; count: number }[]; unknownStats: { statReason: string; count: number }[];

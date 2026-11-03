@@ -137,7 +137,7 @@ class PolicyHygieneZoneSupersetTest {
         var snapshot = pan(zoned("r1", "net", "allow", List.of(A), List.of(A), "intrazone"), zoned("r2", "host", "allow", List.of(A), List.of(A)));
         assertReason(snapshot, "r1", RULE_TYPE);
         assertNotEquals("REDUNDANT", at(snapshot, "r2").shadowStatus());
-        assertEquals(LegacyPolicyHygiene.analyze(snapshot, 90, PolicyHygieneTest.NOW, Integer.MAX_VALUE).rules().get("r2"), at(snapshot, "r2"));
+        assertEquals(LegacyPolicyHygiene.analyze(snapshot, 90, PolicyHygieneTest.NOW, Integer.MAX_VALUE).rules().get("r2"), PartialPriorOracle.withoutBlocker(at(snapshot, "r2")));
         // An earlier interzone rule does not cover a later interzone rule either.
         snapshot = pan(zoned("r1", "net", "allow", List.of(A, B), List.of(C), "interzone"), zoned("r2", "host", "allow", List.of(A), List.of(C), "interzone"));
         assertReason(snapshot, "r2", RULE_TYPE);

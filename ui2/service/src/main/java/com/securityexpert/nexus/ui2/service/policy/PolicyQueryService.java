@@ -618,9 +618,14 @@ public final class PolicyQueryService {
         Map<String, Integer> reasons = new LinkedHashMap<>();
         int rules = 0, shadowProven = 0, hitsCollected = 0;
         List<Map<String, Object>> rows = new ArrayList<>();
+        Map<String, int[]> blocked = new HashMap<>(); Map<String, Integer> blockerNumbers = new HashMap<>();
         for (var section : snapshot.sections()) for (var rule : section.rules()) {
             var assessment = analysis.rules().get(rule.id());
             rules++;
+            if (assessment.blockingRuleId() != null) {
+                blocked.computeIfAbsent(assessment.blockingRuleId(), k -> new int[1])[0]++;
+                blockerNumbers.putIfAbsent(assessment.blockingRuleId(), assessment.blockingRuleNumber());
+            }
             if (!"UNKNOWN".equals(assessment.shadowStatus())) shadowProven++;
             if (assessment.findings().stream().noneMatch(f -> unknownFinding(f) && HITS_MISSING_EVIDENCE.contains(f.evidence()))) hitsCollected++;
             assessment.findings().stream().filter(PolicyQueryService::unknownFinding).map(PolicyHygiene.Finding::evidence).distinct()
@@ -643,7 +648,17 @@ public final class PolicyQueryService {
         body.put("rows", rows.stream().skip((long) page * 200).limit(200).toList()); body.put("total", rows.size());
         body.put("page", page); body.put("pageSize", 200); body.put("counts", counts); body.put("budgetReached", analysis.budgetReached()); body.put("days", days);
         body.put("coverage", coverage); body.put("unknownReasons", unknownReasons);
+        body.put("blockers", blockers(blocked, blockerNumbers));
         return new PolicyResponse(body);
+    }
+    /** How many rules each earlier rule keeps from being proven ("earlier rule has unsupported constraints"): the distinct count and the five biggest, ids, rule numbers and counts only. */
+    static final int TOP_BLOCKERS = 5;
+    private static Map<String, Object> blockers(Map<String, int[]> blocked, Map<String, Integer> numbers) {
+        List<Map<String, Object>> top = blocked.entrySet().stream()
+            .sorted(Comparator.<Map.Entry<String, int[]>>comparingInt(e -> -e.getValue()[0])
+                .thenComparing(e -> numbers.getOrDefault(e.getKey(), Integer.MAX_VALUE)).thenComparing(Map.Entry::getKey))
+            .limit(TOP_BLOCKERS).map(e -> Map.<String, Object>of("ruleId", e.getKey(), "number", numbers.getOrDefault(e.getKey(), 0), "blocks", e.getValue()[0])).toList();
+        return Map.of("distinct", blocked.size(), "top", top);
     }
     public byte[] hygieneCsv(PolicySnapshot snapshot, String cls, String severity, int days, boolean masked) {
         var analysis = analysis(snapshot, days);

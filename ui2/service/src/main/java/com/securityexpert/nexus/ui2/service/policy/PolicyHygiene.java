@@ -9,6 +9,8 @@ import java.util.*;
 /** Pure stored-evidence analysis over proven, ordered evaluation scopes. */
 public final class PolicyHygiene {
     private PolicyHygiene() {}
+    /** The reason of a rule that an earlier, not fully resolved rule keeps from being proven; {@link Assessment#blockingRuleId} names that rule. */
+    static final String EARLIER_UNSUPPORTED = "earlier rule has unsupported constraints";
     public static final Set<String> CLASSES = Set.of("shadowed", "conflict", "disabled", "unused", "expired", "broad", "unknown");
     public static final Set<String> SEVERITIES = Set.of("HIGH", "MEDIUM", "LOW");
     /** Every shadow reason this class (and PolicyNormalization) can emit; PolicyPrivacy projects these unchanged, so a new reason must be added here. */
@@ -18,7 +20,7 @@ public final class PolicyHygiene {
         "unresolved install-on selector", "unsupported rule constraint", "time evidence not collected", "unresolved object",
         "group cycle or depth limit", "empty or dynamic group", "dynamic or unsupported object type", "unsupported address representation",
         "missing address values", "unsupported object members", "ambiguous object values", "unsupported service constraint",
-        "unsupported port expression", "invalid port range", "missing service values", "earlier rule has unsupported constraints",
+        "unsupported port expression", "invalid port range", "missing service values", EARLIER_UNSUPPORTED,
         "zone or install-on coverage is unproven", "zone evidence not collected", "install-on evidence not collected", "snapshot collection incomplete",
         "earlier sections not analysed", "multiple ordered layers not evaluated");
     /**
@@ -40,7 +42,13 @@ public final class PolicyHygiene {
     public record Finding(String findingClass, String severity, String evidence) {}
     public record Assessment(String shadowStatus, String shadowReason, String coveringRuleId,
             List<Finding> findings, Map<String, Object> permissiveness, String timeStatus, boolean expiring,
-            String counterWindow, String hitSource, String hitsCollectedAt) {}
+            String counterWindow, String hitSource, String hitsCollectedAt, String blockingRuleId, Integer blockingRuleNumber) {
+        /** An assessment no earlier rule blocks (the form every verdict-only caller and test oracle uses). */
+        public Assessment(String shadowStatus, String shadowReason, String coveringRuleId, List<Finding> findings,
+                Map<String, Object> permissiveness, String timeStatus, boolean expiring, String counterWindow, String hitSource, String hitsCollectedAt) {
+            this(shadowStatus, shadowReason, coveringRuleId, findings, permissiveness, timeStatus, expiring, counterWindow, hitSource, hitsCollectedAt, null, null);
+        }
+    }
     public record Result(Map<String, Assessment> rules, boolean budgetReached) {}
     /**
      * Shadowing work limits in {@link Budget} units (one object resolution, range step or candidate comparison each).
@@ -91,7 +99,7 @@ public final class PolicyHygiene {
                     List<Finding> findings = Boolean.FALSE.equals(rule.enabled()) ? List.of(finding("disabled", "LOW", "Rule is disabled.")) : List.of();
                     results.put(rule.id(), new Assessment("UNKNOWN", "unsupported rulebase", null, findings,
                         Map.of("level", "Unknown", "reasons", List.of(), "score", 0), "unknown", false,
-                        "Counter window unknown.", "UNKNOWN", null));
+                        "Counter window unknown.", "UNKNOWN", null, null, null));
                 }
                 continue;
             }
@@ -99,6 +107,7 @@ public final class PolicyHygiene {
             for (Rule rule : section.rules()) {
                 List<Finding> findings = new ArrayList<>();
                 String status = "UNKNOWN", reason = "analysis budget", covering = null;
+                Rule blocker = null;
                 if (Boolean.FALSE.equals(rule.enabled())) findings.add(finding("disabled", "LOW", "Rule is disabled."));
                 else if (rule.enabled() == null) findings.add(unknown("Enabled state is unknown."));
                 Map<String, Object> broad = PolicyRuleMetrics.permissiveness(rule, breadthObjects, new int[]{PolicyRuleMetrics.RULE_BUDGET}, snapshot.metadata().vendor());
@@ -131,14 +140,14 @@ public final class PolicyHygiene {
                     if (scope.unproven) reason = "earlier sections not analysed";
                     if (reason == null) {
                         status = "NOT_SHADOWED";
-                        if (earlier.unknown) reason = "earlier rule has unsupported constraints";
+                        if (earlier.unknown) { reason = EARLIER_UNSUPPORTED; blocker = earlier.unknownRule; }
                         Match prior = earlier.cover(match, budget);
                         if (prior != null) {
                             covering = prior.rule().id(); status = covered(prior.rule(), rule, findings); reason = null;
                         } else if (earlier.unproven(match, budget)) reason = "zone or install-on coverage is unproven";
                         // Only where the former analysis said "earlier rule has unsupported constraints" for want of a full
                         // match: every partial prior must be proven disjoint, or that reason stands.
-                        else if (reason == null && earlier.partialOverlap(match, side)) reason = "earlier rule has unsupported constraints";
+                        else if (reason == null && earlier.partialOverlap(match, side)) { reason = EARLIER_UNSUPPORTED; blocker = earlier.partialBlocker(match); }
                         if (covering == null && reason != null) status = "UNKNOWN";
                     } else if (reason.equals(ZONE_RULE_TYPE) && earlier.zoneSupersets) {
                         // A Palo Alto intrazone or interzone rule stays UNKNOWN for its rule type unless an earlier universal
@@ -157,7 +166,7 @@ public final class PolicyHygiene {
                         Partial partial = null;
                         if (match != null) try { partial = partial(snapshot, section, rule, sideResolver); } catch (Unknown limit) { partial = null; }
                         if (partial != null) earlier.add(partial);
-                        else earlier.unknown = true;
+                        else { earlier.unknown = true; if (earlier.unknownRule == null) earlier.unknownRule = rule; }
                     }
                 }
                 if (status.equals("NOT_SHADOWED") && !snapshot.failures().isEmpty()) {
@@ -166,8 +175,11 @@ public final class PolicyHygiene {
                 if (status.equals("UNKNOWN")) findings.add(unknown("Shadowing: " + reason + "."));
                 String window = unused(snapshot, rule, days, findings);
                 var hits = rule.hitCounts();
+                // Named only where the final verdict is that very reason (a coverage, "unproven" or budget verdict supersedes it).
+                boolean blocked = status.equals("UNKNOWN") && EARLIER_UNSUPPORTED.equals(reason) && blocker != null;
                 results.put(rule.id(), new Assessment(status, reason, covering, List.copyOf(findings), broad, timeStatus, expiring,
-                    window, hits == null ? "UNKNOWN" : hits.source(), hits == null ? null : hits.collectedAt()));
+                    window, hits == null ? "UNKNOWN" : hits.source(), hits == null ? null : hits.collectedAt(),
+                    blocked ? blocker.id() : null, blocked ? blocker.number() : null));
             }
         }
         return new Result(Collections.unmodifiableMap(results), budgetReached);
@@ -273,6 +285,8 @@ public final class PolicyHygiene {
         private int count;
         /** An enabled earlier rule of this scope had no resolved match and no partial prior, so no later rule can be proven clean. */
         boolean unknown;
+        /** The first such rule in rule order: with {@link #unknown} set it keeps every later rule of the scope from being proven. */
+        Rule unknownRule;
         /** Distinct partial priors in rule order (equal resolved dimensions answer every disjointness test alike). */
         private final List<Partial> partials = new ArrayList<>();
         private final Set<List<Object>> partialSeen = new HashSet<>();
@@ -397,6 +411,14 @@ public final class PolicyHygiene {
                 }
             } catch (Unknown limit) { return true; }
             return state[1] == 1;
+        }
+        /**
+         * The earliest partial prior (rule order) that {@link #partialOverlap} could not prove disjoint from the match:
+         * the scan stops at the first one, or at the one it ran out of work on. Call only after it returned true.
+         */
+        Rule partialBlocker(Match match) {
+            var state = partialState.get(List.of(match.selectors(), match.placements()));
+            return state == null || state[0] >= partials.size() ? null : partials.get(state[0]).rule();
         }
         /**
          * True once any earlier key overlaps this rule's key while whether it can cover the rule is undecided

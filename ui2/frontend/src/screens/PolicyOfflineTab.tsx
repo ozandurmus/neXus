@@ -4,7 +4,8 @@ import { deleteOfflineAnalysis, getOfflineAnalysis, listOfflineAnalyses, uploadO
 import { detectMapping, fields, parsePreview, required, type CsvField } from "./offlineCsv";
 import { PLANE_ADMIN, ROLE_LOCK_LABEL, useRoleAllows } from "../shell/actionAccess";
 import { plural } from "../shell/plural";
-import { isPolicyBusy, policyFailureText, POLICY_BUSY_MESSAGE } from "./PolicyRuleViewer";
+import { SnapshotFreshnessChip, isPolicyBusy, policyFailureText, POLICY_BUSY_MESSAGE } from "./PolicyRuleViewer";
+import { formatStamp } from "../shell/time";
 
 const labels: Record<CsvField, string> = { source: "Source IP", destination: "Destination IP", port: "Destination port", protocol: "Protocol",
   time: "Time", action: "Action", sourceZone: "Source zone", destinationZone: "Destination zone", rule: "SIEM rule ID/name", count: "Count" };
@@ -129,6 +130,11 @@ export function PolicyOfflineTab({ policy, openRule }: { policy: string; openRul
     {result && <>
       <Typography variant="h6">Sample summary</Typography>
       <Typography>{result.rowCount} rows · {result.invalidRows} invalid rows · {result.flowCount} valid sample flows · {result.attributedFlows} attributed flows</Typography>
+      {/* The stored snapshot the sample was matched against: its age bounds how far the attribution can be trusted. */}
+      <Stack direction="row" gap={1} flexWrap="wrap" alignItems="center" data-evaluated-snapshot="true">
+        <Typography>Evaluated against snapshot collected {result.collectedAt ? formatStamp(result.collectedAt) : "UNKNOWN"}</Typography>
+        <SnapshotFreshnessChip at={result.collectedAt} now={new Date()} />
+      </Stack>
       <Typography>Period {result.periodStart || "UNKNOWN"} – {result.periodEnd || "UNKNOWN"} · Uploaded {result.createdAt} · {result.uploader}</Typography>
       <Typography variant="body2">{result.attributionNote}</Typography><Typography variant="body2">{result.limitations}</Typography>
       {result.comparisonEnabled && <><Typography>SIEM rule agreement: {result.agreementCount} · Disagreement: {result.disagreementCount} · UNKNOWN: {result.comparisonUnknownCount}</Typography><Typography>{result.comparisonNote}</Typography></>}

@@ -183,6 +183,8 @@ export function unknownReasonGroup(reason: string | null | undefined): ReasonGro
   if (/unsupported|constraint/.test(text)) return reasonGroup("constraints");
   return reasonGroup("other");
 }
+/** "Blocked by rule #12": the earlier rule that kept this one from being proven (a rule number, or the plain words when the number is unknown). */
+export const blockedByLabel = (number: number | null | undefined) => number == null ? "Blocked by an earlier rule" : `Blocked by rule #${number}`;
 /** Every reason a rule's analysis could not decide: the shadow reason when shadowing is UNKNOWN plus each `unknown` finding. */
 export function unknownReasons(hygiene: PolicyHygieneAssessment | undefined): string[] {
   if (!hygiene) return [];
@@ -419,6 +421,9 @@ export function RuleMetrics({ rule, openRuleId, openHygiene, now = new Date() }:
           {/* The plain-words group of the reason (identity objects, install-on target, analysis limit ...) and whether it is an evidence limit. */}
           {rule.hygiene?.shadowStatus === "UNKNOWN" && <Typography variant="caption" display="block" data-reason-group={unknownReasonGroup(rule.hygiene.shadowReason).key} sx={{ color: m3.onSurfaceVar }}>
             Not provable · {unknownReasonGroup(rule.hygiene.shadowReason).label}: {unknownReasonGroup(rule.hygiene.shadowReason).explain}</Typography>}
+          {rule.hygiene?.shadowStatus === "UNKNOWN" && rule.hygiene.blockingRuleId && (openRuleId
+            ? <Button size="small" sx={{ p: 0, minWidth: 0, textTransform: "none" }} onClick={() => openRuleId(rule.hygiene!.blockingRuleId!)}>{blockedByLabel(rule.hygiene.blockingRuleNumber)}</Button>
+            : <Typography variant="caption" display="block">{blockedByLabel(rule.hygiene.blockingRuleNumber)}</Typography>)}
           {rule.hygiene?.coveringRuleId && openRuleId && <Button size="small" sx={{ p: 0, minWidth: 0 }} onClick={() => openRuleId(rule.hygiene!.coveringRuleId!)}>Covering rule</Button>}</Box>
         {/* A zero is green only when the analysis decided; with shadowing UNKNOWN the zero is "none proven", in neutral ink. */}
         <Box><Typography variant="caption" color="text.secondary">Violations</Typography><Typography sx={{ ...big, color: rule.hygiene ? (violations.length ? m3.warningInk : rule.hygiene.shadowStatus === "UNKNOWN" ? m3.neutralInk : m3.goodInk) : m3.neutralInk }}>{rule.hygiene ? String(violations.length) : "UNKNOWN"}</Typography>

@@ -271,7 +271,8 @@ final class PartialPriorOracle {
      * {@link #assertReleaseIsSafe}) or UNKNOWN "earlier rule has unsupported constraints". Everything else of the
      * assessment is exactly the former one.
      */
-    static ZoneChange assertZoneChangeIsSafe(Universe universe, PolicyHygiene.Assessment expected, PolicyHygiene.Assessment got, String ruleId, String context) {
+    static ZoneChange assertZoneChangeIsSafe(Universe universe, PolicyHygiene.Assessment expected, PolicyHygiene.Assessment gotWithBlocker, String ruleId, String context) {
+        var got = verdictOnly(universe, gotWithBlocker, ruleId, context);
         String reason = expected.shadowReason();
         if (got.coveringRuleId() != null) {
             assertEquals(withCover(expected, got.shadowStatus(), got.coveringRuleId()), got, context);
@@ -315,15 +316,39 @@ final class PartialPriorOracle {
     }
 
     /**
+     * The assessment without the blocker the former analysis did not have, after checking it: present exactly where the rule
+     * is UNKNOWN "earlier rule has unsupported constraints", and then an earlier enabled rule of the same scope. Every verdict
+     * comparison above and below then runs on the unchanged verdict fields.
+     */
+    static PolicyHygiene.Assessment verdictOnly(Universe universe, PolicyHygiene.Assessment got, String ruleId, String context) {
+        boolean blocked = "UNKNOWN".equals(got.shadowStatus()) && UNSUPPORTED.equals(got.shadowReason());
+        if (got.blockingRuleId() == null) {
+            assertNull(got.blockingRuleNumber(), context);
+            assertFalse(blocked, context + ": \"" + UNSUPPORTED + "\" without a named blocker");
+        } else {
+            assertTrue(blocked, context + ": a blocker is named only for \"" + UNSUPPORTED + "\"");
+            var blocker = universe.earlierRules(ruleId).stream().filter(r -> r.id().equals(got.blockingRuleId())).findFirst();
+            assertTrue(blocker.isPresent(), context + ": blocker " + got.blockingRuleId() + " is not an earlier enabled rule of the scope");
+            assertEquals(blocker.get().number(), got.blockingRuleNumber(), context);
+        }
+        return withoutBlocker(got);
+    }
+    /** The verdict fields only: what the former analysis (which named no blocker) can be compared with. */
+    static PolicyHygiene.Assessment withoutBlocker(PolicyHygiene.Assessment got) {
+        return new PolicyHygiene.Assessment(got.shadowStatus(), got.shadowReason(), got.coveringRuleId(), got.findings(), got.permissiveness(), got.timeStatus(),
+            got.expiring(), got.counterWindow(), got.hitSource(), got.hitsCollectedAt());
+    }
+    /**
      * Compares one rule's new assessment with the former one: (a) anything but "earlier rule has unsupported
      * constraints" must be identical; (b) where that reason is gone, the rule is exactly the former assessment released
      * (NOT_SHADOWED, or UNKNOWN "snapshot collection incomplete" when the snapshot has collection failures) and the
      * brute-force check confirms it shares no packet with any unresolved earlier rule of its scope.
      * Returns true when the rule was released.
      */
-    static boolean assertSameOrSafelyReleased(Universe universe, PolicyHygiene.Assessment expected, PolicyHygiene.Assessment got, String ruleId, String context) {
+    static boolean assertSameOrSafelyReleased(Universe universe, PolicyHygiene.Assessment expected, PolicyHygiene.Assessment gotWithBlocker, String ruleId, String context) {
+        var got = verdictOnly(universe, gotWithBlocker, ruleId, context);
         boolean zone = UNPROVEN.equals(expected.shadowReason()) || RULE_TYPE.equals(expected.shadowReason()) && universe.snapshot.metadata().vendor().equals("PAN");
-        if (zone && !got.equals(expected)) { assertZoneChangeIsSafe(universe, expected, got, ruleId, context); return false; }
+        if (zone && !got.equals(expected)) { assertZoneChangeIsSafe(universe, expected, gotWithBlocker, ruleId, context); return false; }
         if (!UNSUPPORTED.equals(expected.shadowReason()) || got.equals(expected)) { assertEquals(expected, got, context); return false; }
         boolean incomplete = !universe.snapshot.failures().isEmpty();
         assertEquals(released(expected, incomplete), got, context);
