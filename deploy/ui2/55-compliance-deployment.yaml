@@ -35,6 +35,10 @@ spec:
           image: registry.kube-system.svc.cluster.local/nexus-ui2-service@sha256:966cf85b73bc107cc4331f9967f98dfad864e0035d96ea97aa4848fd7deeb136
           args: ["worker", "compliance"]
           env:
+            # Development mode (PO 2026-11-03): the job window spans the whole 6-hour slot, so manual jobs are never
+            # refused as OUTSIDE_JOB_WINDOW. Remove (default 60) when scheduled operation resumes.
+            - name: UI2_JOB_WINDOW_MINUTES
+              value: "360"
             - name: NEXUS_COMPLIANCE_PORT
               value: "8085"
           ports:
