@@ -49,8 +49,28 @@ public class DiscoveryRefreshScheduler {
         }
     }
 
+    /** Failure reason for a run whose job ended (cancelled, rejected, failed) before the run itself finished. */
+    static final String JOB_ENDED_REASON = "failure_reason_class:job ended before the run finished";
+
+    /**
+     * Closes discovery runs whose job is already terminal. Such a run would otherwise stay REQUESTED or RUNNING forever
+     * and the not-exists guard below would skip its manager in every later window (2026-10-21: five runs whose jobs
+     * were cancelled for a skipped window stopped discovery and policy refresh for thirteen days).
+     *
+     * @return the number of runs closed
+     */
+    int closeRunsWithEndedJobs() {
+        return tx.inTransaction(dsl -> dsl.execute("update discovery_run r set state = 'FAILED', finished_at = now(), "
+                + "outcome_summary = jsonb_build_object({0}::text, 1) where r.finished_at is null and exists ("
+                + "select 1 from jobs j where j.job_id = r.job_id "
+                + "and j.state in ('COMPLETED', 'FAILED', 'REJECTED', 'CANCELLED', 'RECONCILED') "
+                + "and coalesce(j.finished_at, j.submitted_at) < now() - interval '15 minutes')", JOB_ENDED_REASON));
+    }
+
     /** @return the number of runs admitted */
     public int refreshAll() {
+        int closed = closeRunsWithEndedJobs();
+        if (closed > 0) LOG.warning("[DISCOVERY_REFRESH] closed " + closed + " run(s) whose job had already ended");
         List<Record> targets = tx.inTransaction(dsl -> dsl.fetch(
                 "select distinct on (r.vendor, r.management_address) r.vendor, r.management_address, r.credential_reference_id, "
                         + "(latest.state = 'FAILED' and latest.outcome_summary @> "
