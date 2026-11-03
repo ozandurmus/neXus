@@ -15,13 +15,17 @@ import java.util.*;
  * other snapshot's results exactly as they were. The two changes have their own oracles below: an opaque install-on
  * reference answers what a resolved, non-atomic target under the same id answered, and every layer of an inline-layer
  * policy answers what the former analysis answers for that layer alone with its "Apply Layer" rules made terminal.
+ * <p>Partial priors: wherever the former analysis gave anything but "earlier rule has unsupported constraints", every
+ * comparison here demands the identical result; where it gave that reason, the rule may only be released (NOT_SHADOWED,
+ * or "snapshot collection incomplete" when collection failed), and then {@link PartialPriorOracle} must confirm by brute
+ * force that it shares no packet with any unresolved earlier rule of its scope.
  */
 class PolicyHygieneDifferentialTest {
     static final Instant NOW = PolicyHygieneTest.NOW;
     static final int SNAPSHOTS = 4000, LARGE = 120;
 
     @Test void productionBudgetsMatchTheLegacyScanOnEveryRule() {
-        Map<String, Integer> seen = new TreeMap<>(); int rules = 0;
+        Map<String, Integer> seen = new TreeMap<>(), released = new TreeMap<>(); int rules = 0;
         for (long seed = 0; seed < SNAPSHOTS + LARGE; seed++) {
             var snapshot = SyntheticPolicies.legacyComparable(SyntheticPolicies.random(seed, seed < SNAPSHOTS ? 1 + (int) (seed % 60) : 150 + (int) (seed % 150)));
             var reference = LegacyPolicyHygiene.analyze(snapshot, 90, NOW, Integer.MAX_VALUE);
@@ -30,15 +34,22 @@ class PolicyHygieneDifferentialTest {
             assertFalse(reference.budgetReached(), "seed " + seed);
             assertFalse(actual.budgetReached(), "seed " + seed);
             assertEquals(reference.rules().keySet(), actual.rules().keySet());
+            var universe = new PartialPriorOracle.Universe(snapshot);
             for (var entry : reference.rules().entrySet()) {
                 var expected = entry.getValue(); var got = actual.rules().get(entry.getKey());
-                assertEquals(expected, got, "seed " + seed + " rule " + entry.getKey());
+                String context = "seed " + seed + " rule " + entry.getKey();
+                boolean release = PartialPriorOracle.assertSameOrSafelyReleased(universe, expected, got, entry.getKey(), context);
                 var legacy = legacyDefault.rules().get(entry.getKey());
-                if (!"analysis budget".equals(legacy.shadowReason())) assertEquals(legacy, got, "seed " + seed + " rule " + entry.getKey());
-                seen.merge(snapshot.metadata().vendor() + " " + expected.shadowStatus() + (expected.shadowReason() == null ? "" : " / " + expected.shadowReason()), 1, Integer::sum);
+                if (!"analysis budget".equals(legacy.shadowReason())) PartialPriorOracle.assertSameOrSafelyReleased(universe, legacy, got, entry.getKey(), context);
+                String vendor = snapshot.metadata().vendor();
+                seen.merge(vendor + " " + expected.shadowStatus() + (expected.shadowReason() == null ? "" : " / " + expected.shadowReason()), 1, Integer::sum);
+                if (PartialPriorOracle.UNSUPPORTED.equals(expected.shadowReason())) released.merge(vendor + (release ? " released" : " kept"), 1, Integer::sum);
                 rules++;
             }
         }
+        // Partial priors must release a real share of the formerly blocked rules for both vendors, and keep others blocked.
+        for (String vendor : List.of("CP", "PAN")) for (String outcome : List.of(" released", " kept"))
+            assertTrue(released.getOrDefault(vendor + outcome, 0) >= 100, vendor + outcome + " in " + released);
         // The generator must actually reach every verdict the index can change, for both vendors.
         for (String vendor : List.of("CP", "PAN")) for (String verdict : List.of("NOT_SHADOWED", "REDUNDANT", "CONFLICT",
                 "UNKNOWN / earlier rule has unsupported constraints", "UNKNOWN / earlier sections not analysed", "UNKNOWN / negated selector",
@@ -51,6 +62,7 @@ class PolicyHygieneDifferentialTest {
         assertTrue(seen.getOrDefault("CP UNKNOWN / unresolved install-on selector", 0) > 0, seen.toString());
         assertTrue(rules > 140_000, "rules compared: " + rules);
         System.out.println("DIFFERENTIAL " + (SNAPSHOTS + LARGE) + " snapshots, " + rules + " rules: " + seen);
+        System.out.println("PARTIAL PRIORS formerly 'earlier rule has unsupported constraints': " + released);
     }
 
     /**
@@ -69,7 +81,10 @@ class PolicyHygieneDifferentialTest {
             var actual = PolicyHygiene.analyze(flat, 90, NOW, PolicyHygiene.TOTAL_WORK).rules();
             var expected = LegacyPolicyHygiene.analyze(SyntheticPolicies.resolvedTargets(flat), 90, NOW, Integer.MAX_VALUE).rules();
             var former = LegacyPolicyHygiene.analyze(flat, 90, NOW, Integer.MAX_VALUE).rules();
-            assertEquals(expected, actual, "seed " + seed);
+            assertEquals(expected.keySet(), actual.keySet(), "seed " + seed);
+            var universe = new PartialPriorOracle.Universe(flat);
+            for (var entry : expected.entrySet())
+                PartialPriorOracle.assertSameOrSafelyReleased(universe, entry.getValue(), actual.get(entry.getKey()), entry.getKey(), "seed " + seed + " rule " + entry.getKey());
             for (var section : flat.sections()) for (var rule : section.rules()) {
                 if (!rule.extras().getOrDefault("install-on", List.of()).contains("gw-unres")) continue;
                 opaque++;
@@ -91,12 +106,13 @@ class PolicyHygieneDifferentialTest {
      * former one. Elsewhere REDUNDANT and CONFLICT are compared as covered, because the stand-in action differs.
      */
     @Test void everyLayerOfAnInlineLayerPolicyAnswersWhatThatLayerAloneAnswered() {
-        int compared = 0, resumed = 0, formerlyUnproven = 0, coveredByApplyLayer = 0, inline = 0, ruleReasonOnly = 0;
+        int compared = 0, resumed = 0, formerlyUnproven = 0, coveredByApplyLayer = 0, inline = 0, ruleReasonOnly = 0, releasedInline = 0;
         for (long seed = 0; seed < 2500; seed++) {
             var snapshot = SyntheticPolicies.inline(seed + 300_000, 5 + (int) (seed % 70));
             if (seed % 2 == 1) snapshot = SyntheticPolicies.policyTargets(snapshot);
             var actual = PolicyHygiene.analyze(snapshot, 90, NOW, PolicyHygiene.TOTAL_WORK).rules();
             var former = LegacyPolicyHygiene.analyze(snapshot, 90, NOW, Integer.MAX_VALUE).rules();
+            var universe = new PartialPriorOracle.Universe(snapshot);
             Map<String, List<PolicySnapshot.Section>> layers = new LinkedHashMap<>();
             for (var section : snapshot.sections()) layers.computeIfAbsent(String.valueOf(section.parentRuleId()), k -> new ArrayList<>()).add(section);
             Set<String> applyLayer = new HashSet<>();
@@ -112,6 +128,14 @@ class PolicyHygieneDifferentialTest {
                     for (var rule : section.rules()) {
                         var want = expected.get(rule.id()); var got = actual.get(rule.id());
                         String context = "seed " + seed + " layer " + entry.getKey() + " rule " + rule.id();
+                        if (PartialPriorOracle.UNSUPPORTED.equals(want.shadowReason()) && !PartialPriorOracle.UNSUPPORTED.equals(got.shadowReason())) {
+                            // Released by partial priors: clean, and the brute-force check must confirm it.
+                            assertEquals("NOT_SHADOWED", got.shadowStatus(), context);
+                            assertNull(got.shadowReason(), context); assertNull(got.coveringRuleId(), context);
+                            PartialPriorOracle.assertReleaseIsSafe(universe, rule.id(), context);
+                            releasedInline++; compared++;
+                            continue;
+                        }
                         assertEquals(covered(want.shadowStatus()), covered(got.shadowStatus()), context);
                         // Rule extras are an immutable map whose iteration order depends on its key set, so dropping the
                         // inline-layer key for the stand-in may surface a different one of the rule's own failing
@@ -144,10 +168,11 @@ class PolicyHygieneDifferentialTest {
                 }
             }
         }
-        assertTrue(compared > 50_000 && inline > 10_000 && resumed > 10_000 && formerlyUnproven > 5_000 && coveredByApplyLayer > 200,
+        assertTrue(compared > 50_000 && inline > 10_000 && resumed > 10_000 && formerlyUnproven > 5_000 && coveredByApplyLayer > 200 && releasedInline > 200,
             compared + " compared, " + inline + " inline, " + resumed + " resumed, " + formerlyUnproven + " formerly unproven, " + coveredByApplyLayer + " covered by Apply Layer");
         System.out.println("INLINE LAYERS " + compared + " compared, " + inline + " inline, " + resumed + " resumed parent, "
-            + formerlyUnproven + " formerly unproven, " + coveredByApplyLayer + " covered by Apply Layer, " + ruleReasonOnly + " rule-reason order only");
+            + formerlyUnproven + " formerly unproven, " + coveredByApplyLayer + " covered by Apply Layer, " + ruleReasonOnly + " rule-reason order only, "
+            + releasedInline + " released by partial priors");
     }
     private static final Set<String> SCOPE_REASONS = Set.of("earlier sections not analysed", "earlier rule has unsupported constraints",
         "zone or install-on coverage is unproven", "analysis budget", "snapshot collection incomplete");
@@ -165,9 +190,11 @@ class PolicyHygieneDifferentialTest {
             int limit = random.nextInt(4000);
             var legacy = LegacyPolicyHygiene.analyze(snapshot, 90, NOW, limit);
             var actual = PolicyHygiene.analyze(snapshot, 90, NOW, PolicyHygiene.TOTAL_WORK);
+            var universe = new PartialPriorOracle.Universe(snapshot);
             for (var entry : legacy.rules().entrySet()) {
                 if ("analysis budget".equals(entry.getValue().shadowReason())) { legacyBudget++; continue; }
-                assertEquals(entry.getValue(), actual.rules().get(entry.getKey()), "seed " + seed + " limit " + limit + " rule " + entry.getKey());
+                PartialPriorOracle.assertSameOrSafelyReleased(universe, entry.getValue(), actual.rules().get(entry.getKey()), entry.getKey(),
+                    "seed " + seed + " limit " + limit + " rule " + entry.getKey());
                 compared++;
             }
         }
@@ -179,7 +206,9 @@ class PolicyHygieneDifferentialTest {
         int budgetRules = 0, laterDefinite = 0;
         for (long seed = 0; seed < 2500; seed++) {
             var snapshot = SyntheticPolicies.legacyComparable(SyntheticPolicies.random(seed + 90_000, 10 + (int) (seed % 90)));
-            var reference = LegacyPolicyHygiene.analyze(snapshot, 90, NOW, Integer.MAX_VALUE).rules();
+            // The reference is the unlimited production analysis (itself compared with the legacy scan above): budgets
+            // may only push a rule towards UNKNOWN, partial priors included.
+            var reference = PolicyHygiene.analyze(snapshot, 90, NOW, Integer.MAX_VALUE, Integer.MAX_VALUE, snapshot.objects()).rules();
             int total = random.nextInt(4) == 0 ? random.nextInt(3000) : Integer.MAX_VALUE, rule = 1 + random.nextInt(120);
             var actual = PolicyHygiene.analyze(snapshot, 90, NOW, total, rule, snapshot.objects());
             boolean afterBudget = false;

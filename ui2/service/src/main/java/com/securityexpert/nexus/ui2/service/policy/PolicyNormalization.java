@@ -19,10 +19,18 @@ final class PolicyNormalization {
      */
     static final class Budget {
         final int[] left;
-        private int window = Integer.MAX_VALUE;
-        Budget(int limit) { left = new int[]{limit}; }
-        void rule(int limit) { window = limit; }
-        void spend() { if (--left[0] < 0 | --window < 0) throw new Unknown("analysis budget"); }
+        private final int[] window, sideLeft;
+        Budget(int limit) { this(new int[]{limit}, new int[]{Integer.MAX_VALUE}, new int[]{limit}); }
+        private Budget(int[] left, int[] window, int[] sideLeft) { this.left = left; this.window = window; this.sideLeft = sideLeft; }
+        void rule(int limit) { window[0] = limit; }
+        void spend() { if (--left[0] < 0 | --window[0] < 0) throw new Unknown("analysis budget"); }
+        /**
+         * The same per-rule window over a separate snapshot-wide pool of the same size, for partial-prior work (resolving
+         * what an unresolvable rule's selectors do resolve, and the later disjointness checks). That work only ever turns
+         * an "earlier rule has unsupported constraints" UNKNOWN into NOT_SHADOWED, so it must never take budget another
+         * rule's verdict needed: running out of it leaves the rule exactly as before (still UNKNOWN for that reason).
+         */
+        Budget side() { return new Budget(sideLeft, window, sideLeft); }
     }
     /** Section IDs hash the layer UID recursively; the UID cannot be recovered from a snapshot. */
     static final class CpLayers {
@@ -216,9 +224,112 @@ final class PolicyNormalization {
     }
     /** Install-on object statuses shadowing accepts as opaque placement tokens (see {@link #normalize}). */
     static final Set<String> OPAQUE_PLACEMENTS = Set.of("UNSUPPORTED", "UNRESOLVED");
-    static boolean disjoint(Match a, Match b, Map<String, PolicyObject> objects) {
+    /**
+     * An enabled (or possibly enabled) rule without a full match, kept as what did resolve: a {@code null} selector is a
+     * dimension that did not resolve, an empty placement set a placement that is not known. A partial prior never covers
+     * anything; it only lets a later rule be proven NOT_SHADOWED when one of its resolved dimensions is disjoint from
+     * the later rule's ({@link #disjoint(Partial, Match, Budget)}, {@link #disjoint(Map, Map, Map)}).
+     */
+    record Partial(Rule rule, List<Selector> selectors, Map<String, Set<String>> placements) {}
+    /** Constraints that are one more condition a packet must also meet: they can only narrow the rule's match. */
+    private static final Set<String> NARROWING = Set.of("time", "schedule", "vpn", "content", "source-user", "category");
+    /** Fields that say what happens after a match (logging, tagging, security profiles, provenance), never what matches. */
+    private static final Set<String> INERT = Set.of("tag", "layer-name", "last-modified", "last-modifier", "log-setting");
+    /**
+     * The partial prior of a rule {@link #normalize} could not fully resolve, or {@code null} when nothing of it may be
+     * relied on (the rule then stays an earlier unknown, as before). Fail-closed by construction:
+     * <ul>
+     * <li>Each selector is resolved on its own with the same resolver; a negated, empty, unresolved, dynamic or otherwise
+     * unsupported cell is unresolved, exactly as {@link Resolver#cell} decides for a full match.</li>
+     * <li>A non-selector constraint -- time, schedule, VPN, content, user, URL category -- is one more condition a packet
+     * must also meet before the rule matches. Whatever its value, resolved or not, it can only restrict the match, never
+     * widen it, so whatever the rule matches still lies inside its resolved selectors and a dimension disjoint from a
+     * later rule still proves that no packet matches both. The same holds for an unknown or non-terminal action and an
+     * unknown enabled state: they change what the rule does with a match or whether it is active, not what it matches.</li>
+     * <li>A field whose meaning is not known (anything {@link #normalize} calls an "unsupported rule constraint", e.g. a
+     * target negation) might widen or invert the match, so such a rule is no partial prior at all.</li>
+     * <li>A Palo Alto zone rule type other than universal changes how the from/to zones apply, so those zones are not
+     * used; missing zone or install-on evidence is an unknown placement. A Check Point rule whose time column was not
+     * collected is an incompletely collected rule record and is not used. Rules outside the security rulebase are not
+     * used.</li>
+     * </ul>
+     */
+    static Partial partial(PolicySnapshot snapshot, Section section, Rule rule, Resolver resolver) {
+        String vendor = snapshot.metadata().vendor();
+        if (!Set.of("CP", "PAN").contains(vendor) || PolicySnapshot.outsideSecurityEvaluation(snapshot.metadata(), section)) return null;
+        boolean cp = vendor.equals("CP"), zones = true;
+        if (cp && !rule.extras().containsKey("time")) return null;
+        for (var entry : rule.extras().entrySet()) {
+            String key = entry.getKey();
+            resolver.budget.spend();
+            if (NARROWING.contains(key) || INERT.contains(key) || Set.of("from", "to", "install-on").contains(key)
+                    || key.startsWith("track-") || key.startsWith("profile-setting/")) continue;
+            if (key.equals("rule-type")) { zones &= entry.getValue().equals(List.of("universal")); continue; }
+            // The inline layer an "Apply Layer" rule hands its match to; it is no condition on the match itself.
+            if (key.equals("inline-layer") && cp && rule.action().equals("Apply Layer")) continue;
+            return null;
+        }
+        var cells = List.of(rule.source(), rule.destination(), rule.service(), rule.application());
+        var families = List.of("address", "address", "service", "application");
+        Selector[] selectors = new Selector[4]; boolean resolved = false;
+        for (int i = 0; i < 4; i++) {
+            var cell = cells.get(i);
+            try {
+                selectors[i] = i == 3 && cp && cell.refs().isEmpty() && !cell.negated() ? new Selector(true, Map.of()) : resolver.cell(cell, families.get(i));
+                resolved |= !selectors[i].any();
+            } catch (Unknown unresolved) {
+                if (unresolved.getMessage().equals("analysis budget")) throw unresolved;
+            }
+        }
+        Map<String, Set<String>> placements = new HashMap<>();
         for (String key : List.of("from", "to", "install-on")) {
-            var left = a.placements().get(key); var right = b.placements().get(key);
+            Set<String> values = new HashSet<>();
+            if (zones || key.equals("install-on"))
+                for (String value : rule.extras().getOrDefault(key, List.of())) { resolver.budget.spend(); values.add(value); }
+            placements.put(key, Set.copyOf(values));
+            resolved |= !values.isEmpty();
+        }
+        // Nothing that could ever prove disjointness resolved: the same as an earlier unknown, and cheaper.
+        return resolved ? new Partial(rule, Collections.unmodifiableList(Arrays.asList(selectors)), Map.copyOf(placements)) : null;
+    }
+    /**
+     * One resolved selector of the prior is disjoint from the same selector of the match. Together with disjoint
+     * placements ({@link #disjoint(Map, Map, Map)}, tested and remembered separately by the caller) this is the whole
+     * test that no packet can match both: a match is a product of its dimensions, so one empty intersection empties the
+     * whole. An unresolved dimension proves nothing.
+     */
+    static boolean disjoint(Partial prior, Match match, Budget budget) {
+        for (int i = 0; i < 4; i++) {
+            var selector = prior.selectors().get(i);
+            if (selector != null && disjoint(selector, match.selectors().get(i), budget)) return true;
+        }
+        return false;
+    }
+    /**
+     * Two resolved selectors share no value: neither is any, and no range of one family overlaps a range of the same
+     * family in the other (ranges are merged and sorted by {@link Resolver#union}). Families never overlap each other:
+     * a TCP port is no UDP port, and resolved addresses are IPv4 ranges only.
+     */
+    static boolean disjoint(Selector a, Selector b, Budget budget) {
+        if (a.any() || b.any()) return false;
+        for (var entry : a.ranges().entrySet()) {
+            var mine = entry.getValue(); var theirs = b.ranges().getOrDefault(entry.getKey(), List.of());
+            for (int i = 0, j = 0; i < mine.size() && j < theirs.size(); ) {
+                budget.spend();
+                Range x = mine.get(i), y = theirs.get(j);
+                if (x.end() < y.start()) i++;
+                else if (y.end() < x.start()) j++;
+                else return false;
+            }
+        }
+        return true;
+    }
+    static boolean disjoint(Match a, Match b, Map<String, PolicyObject> objects) {
+        return disjoint(a.placements(), b.placements(), objects);
+    }
+    static boolean disjoint(Map<String, Set<String>> a, Map<String, Set<String>> b, Map<String, PolicyObject> objects) {
+        for (String key : List.of("from", "to", "install-on")) {
+            var left = a.get(key); var right = b.get(key);
             if (left.isEmpty() || right.isEmpty()) continue;
             if (key.equals("install-on")) {
                 // Resolved group membership, wildcard targets and opaque (unresolved or unsupported) targets are not
