@@ -435,16 +435,91 @@ public final class PolicyQueryService {
         return new PolicyResponse(body);
     }
 
+    /**
+     * One policy for the viewer. The same instance is returned for as long as the stored row (or local artefact) and the
+     * source naming are unchanged, so callers and {@link #analysis} can tell "same policy" by identity.
+     */
     public Optional<PolicySnapshot> find(String id) {
-        var stored = repository.find(id).map(json -> readSnapshot(json));
+        var stored = storedSnapshot(id);
         var found = stored.isPresent() || local == null ? stored : local.snapshots().stream().filter(s -> s.metadata().id().equals(id)).findFirst();
         var hostnames = found.isPresent() ? sourceHostnames() : null;
-        return hostnames == null ? found : found.map(s -> {
-            var metadata = canonical(s.metadata(), hostnames);
-            return metadata == s.metadata() ? s : new PolicySnapshot(metadata, s.sections(), s.objects(), s.failures());
-        });
+        return hostnames == null ? found : found.map(s -> withCanonicalSource(id, s, hostnames));
     }
-    private PolicySnapshot readSnapshot(String json) { return read(json, PolicySnapshot.class).withPageSplitsMerged().withHitLevels(); }
+    /** Existence only; never reads or parses the snapshot document (history needs no more than this). */
+    public boolean exists(String id) {
+        return repository.exists(id) || local != null && local.snapshots().stream().anyMatch(s -> s.metadata().id().equals(id));
+    }
+
+    /** A source-named view of the cached snapshot, itself kept so repeated requests receive the same instance. */
+    private record Canonical(java.lang.ref.WeakReference<PolicySnapshot> base, PolicySnapshot view) {}
+    private final Map<String, Canonical> canonicalViews = new LinkedHashMap<>(16, 0.75f, true);
+    private PolicySnapshot withCanonicalSource(String id, PolicySnapshot s, Map<String, String> hostnames) {
+        var metadata = canonical(s.metadata(), hostnames);
+        if (metadata == s.metadata()) return s;
+        synchronized (canonicalViews) {
+            var memo = canonicalViews.get(id);
+            if (memo != null && memo.base().get() == s && memo.view().metadata().equals(metadata)) return memo.view();
+            var view = new PolicySnapshot(metadata, s.sections(), s.objects(), s.failures());
+            canonicalViews.put(id, new Canonical(new java.lang.ref.WeakReference<>(s), view));
+            // The views share their sections with the cached parse; entries whose parse was evicted are released here.
+            canonicalViews.values().removeIf(c -> c.base().get() == null);
+            while (canonicalViews.size() > 64) canonicalViews.remove(canonicalViews.keySet().iterator().next());
+            return view;
+        }
+    }
+
+    /** Parse cache for stored snapshots, keyed by policy id and valid for one row version (collected_at and size). */
+    private volatile VersionedWeightedCache<PolicySnapshot> snapshotCache = new VersionedWeightedCache<>(DEFAULT_SNAPSHOT_CACHE_WEIGHT);
+    static final long DEFAULT_SNAPSHOT_CACHE_WEIGHT = 200_000;
+    private final Map<String, java.util.concurrent.CompletableFuture<PolicySnapshot>> snapshotLoads = new java.util.concurrent.ConcurrentHashMap<>();
+    private final java.util.concurrent.atomic.AtomicLong snapshotParses = new java.util.concurrent.atomic.AtomicLong();
+    /**
+     * Total weight (rules plus objects) of parsed snapshots kept for reuse; about 200 000 holds a few large policies.
+     * A single policy heavier than this is parsed on every request and never kept.
+     */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void configureSnapshotCache(@org.springframework.beans.factory.annotation.Value("${ui2.policy.snapshot-cache.max-weight:200000}") long maxWeight) {
+        this.snapshotCache = new VersionedWeightedCache<>(Math.max(1, maxWeight));
+    }
+    /** Number of full snapshot parses so far (cache misses and domain reads), for tests and diagnostics. */
+    long snapshotParseCount() { return snapshotParses.get(); }
+    VersionedWeightedCache<PolicySnapshot> snapshotCache() { return snapshotCache; }
+
+    private Optional<PolicySnapshot> storedSnapshot(String id) {
+        var cache = snapshotCache;
+        var version = repository.version(id);
+        if (version.isEmpty()) { cache.invalidate(id); return Optional.empty(); }
+        var hit = cache.get(id, version.get());
+        if (hit != null) return Optional.of(hit);
+        // Single flight: concurrent first requests for one policy share one read and one parse.
+        var mine = new java.util.concurrent.CompletableFuture<PolicySnapshot>();
+        var running = snapshotLoads.putIfAbsent(id, mine);
+        if (running != null) {
+            try { return Optional.ofNullable(running.join()); }
+            catch (java.util.concurrent.CompletionException failed) {
+                if (failed.getCause() instanceof RuntimeException cause) throw cause;
+                if (failed.getCause() instanceof Error cause) throw cause;
+                throw failed;
+            }
+        }
+        try {
+            var row = repository.findVersioned(id);
+            if (row.isEmpty()) { cache.invalidate(id); mine.complete(null); return Optional.empty(); }
+            var parsed = readSnapshot(row.get().snapshotJson());
+            long weight = parsed.objects().size();
+            for (var section : parsed.sections()) weight += section.rules().size();
+            cache.put(id, row.get().version(), parsed, weight);
+            mine.complete(parsed);
+            return Optional.of(parsed);
+        } catch (RuntimeException | Error failed) {
+            mine.completeExceptionally(failed);
+            throw failed;
+        } finally { snapshotLoads.remove(id, mine); }
+    }
+    private PolicySnapshot readSnapshot(String json) {
+        snapshotParses.incrementAndGet();
+        return read(json, PolicySnapshot.class).withPageSplitsMerged().withHitLevels();
+    }
     private <T> T read(String json, Class<T> type) {
         try { return mapper.readValue(json, type); }
         catch (Exception e) { throw new IllegalStateException("Stored policy is invalid"); }
@@ -466,6 +541,9 @@ public final class PolicyQueryService {
      * Single flight per snapshot: the first request for a snapshot (and threshold) computes, concurrent requests for the
      * same one wait for that result, and other snapshots compute independently. The cache lock only guards the 4-entry
      * map, never the computation. A finished result is reused for 30 seconds; a failed one is dropped and rethrown.
+     * The snapshot's identity is its version: {@link #find} returns the same instance until the stored row (or the source
+     * naming) changes, so a replaced row arrives as a different instance and recomputes, and no whole-snapshot
+     * comparison is needed on the hot path.
      */
     PolicyHygiene.Result analysis(PolicySnapshot snapshot, int days) {
         var now = java.time.Instant.now(); String id = snapshot.metadata().id();
@@ -473,7 +551,7 @@ public final class PolicyQueryService {
         synchronized (hygieneCache) {
             entry = hygieneCache.get(id);
             if (entry == null || entry.days() != days || entry.result().isDone() && !entry.at().plusSeconds(30).isAfter(now)
-                    || entry.snapshot() != snapshot && !entry.snapshot().equals(snapshot)) {
+                    || entry.snapshot() != snapshot) {
                 entry = new CachedHygiene(snapshot, days, now, new java.util.concurrent.CompletableFuture<>()); compute = true;
                 hygieneCache.put(id, entry);
                 if (hygieneCache.size() > 4) hygieneCache.remove(hygieneCache.keySet().iterator().next());

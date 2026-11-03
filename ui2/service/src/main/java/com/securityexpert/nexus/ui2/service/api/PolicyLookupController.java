@@ -24,9 +24,15 @@ public final class PolicyLookupController {
     private final SubnetPreservingIpMasker ips;
     private final Map<String, ArrayDeque<Instant>> requests = new HashMap<>();
     private final ObjectMapper json = new ObjectMapper();
+    private final PolicyBulkhead heavy;
     public PolicyLookupController(PolicyQueryService policies, AuthzDecisionRepository audit,
             TopologyNamePseudonymizer names, SubnetPreservingIpMasker ips) {
-        this.policies = policies; this.audit = audit; this.names = names; this.ips = ips;
+        this(policies, audit, names, ips, new PolicyBulkhead());
+    }
+    @org.springframework.beans.factory.annotation.Autowired
+    public PolicyLookupController(PolicyQueryService policies, AuthzDecisionRepository audit,
+            TopologyNamePseudonymizer names, SubnetPreservingIpMasker ips, PolicyBulkhead heavy) {
+        this.policies = policies; this.audit = audit; this.names = names; this.ips = ips; this.heavy = heavy;
     }
     @PostMapping("/api/v2/policy/policies/{id}/lookup")
     public ResponseEntity<?> lookup(@PathVariable String id, @RequestBody Map<String, Object> body, HttpServletRequest request) {
@@ -43,10 +49,15 @@ public final class PolicyLookupController {
             query = new PolicyLookup.Query((String) body.get("source"), (String) body.get("destination"), (String) body.get("service"),
                 (String) body.get("sourceZone"), (String) body.get("destinationZone"), (String) body.get("target"), (String) body.get("context"));
         } catch (IllegalArgumentException invalid) { return error(HttpStatus.BAD_REQUEST); }
-        var snapshot = policies.find(id);
-        if (snapshot.isEmpty()) return error(HttpStatus.NOT_FOUND);
-        boolean masked = PrivacyMaskingResponseBodyAdvice.isReplayViewer(request);
-        PolicyResponse result = PolicyLookup.evaluate(masked ? searchable(snapshot.get()) : snapshot.get(), query, 250000);
+        PolicyResponse result;
+        var permit = heavy.tryEnter();
+        if (permit == null) return PolicyBulkhead.busy();
+        try {
+            var snapshot = policies.find(id);
+            if (snapshot.isEmpty()) return error(HttpStatus.NOT_FOUND);
+            boolean masked = PrivacyMaskingResponseBodyAdvice.isReplayViewer(request);
+            result = PolicyLookup.evaluate(masked ? searchable(snapshot.get()) : snapshot.get(), query, 250000);
+        } finally { permit.close(); }
         try {
             // Append-only authorization audit includes the completed read's masked context; database supplies time.
             var auditQuery = new HashMap<>(query.view());

@@ -69,6 +69,7 @@ class PolicyApiTest {
                 "Synthetic policy", "2026-10-01T12:00:00Z", "artifact-1", List.of());
         var snapshot = new PolicySnapshot(meta, List.of(), Map.of());
         when(query.find("policy-1")).thenReturn(Optional.of(snapshot));
+        when(query.exists("policy-1")).thenReturn(true);
         when(query.history("policy-1", "", 0)).thenReturn(new PolicyResponse(Map.of("revisions", List.of(), "page", 0)));
         var body = new LinkedHashMap<String, Object>();
         body.put("id", "policy-1"); body.put("sourceId", "manager-1"); body.put("name", "Synthetic policy"); body.put("uuid", "native-synthetic-uuid");
