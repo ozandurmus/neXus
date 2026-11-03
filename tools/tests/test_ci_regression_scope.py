@@ -100,3 +100,11 @@ def test_migration_roots_never_skip_live_gates():
     for path in TOOLING_FILES:
         assert classify([path]) == "full"
         assert classify([path, "unmapped/file.txt"]) == "blocked"
+
+
+def test_design_session_with_backlog_and_consult_script_does_not_block():
+    # 2026-11-03: PR 700 (docs, project queue files, a consultation wrapper) was blocked as unmapped.
+    paths = ["docs/design/PATH_ANALYSIS_DESIGN.md", "project/QUEUE.md", "project/backlog.json", "scripts/consult_fable_design.py"]
+    assert classify(paths) == "full"
+    assert classify(["project/backlog.json", "project/QUEUE.md"]) != "blocked"
+    assert classify(["scripts/unknown_new_script.py"]) == "blocked"
