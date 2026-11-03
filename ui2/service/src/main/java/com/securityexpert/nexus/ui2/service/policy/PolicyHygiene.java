@@ -81,6 +81,10 @@ public final class PolicyHygiene {
         // ever turns a "zone rule type constraint" UNKNOWN into REDUNDANT/CONFLICT, so running out of it leaves that
         // reason and never takes budget from another rule's verdict or from a partial prior.
         Budget typedBudget = new Budget(workLimit);
+        // Passing over placement-undecided priors whose selectors cannot contain the rule's (Earlier#undecidedMayCover)
+        // is work of its own pool too (same total, same per-rule window): it only ever turns "zone or install-on
+        // coverage is unproven" into NOT_SHADOWED, and running out of it leaves that reason.
+        Budget passBudget = new Budget(workLimit);
         var resolver = new Resolver(snapshot.objects(), budget);
         var sideResolver = new Resolver(snapshot.objects(), side);
         var typedResolver = new Resolver(snapshot.objects(), typedBudget);
@@ -132,7 +136,7 @@ public final class PolicyHygiene {
                 }
                 Match match = null;
                 try {
-                    budget.rule(ruleLimit);
+                    budget.rule(ruleLimit); passBudget.rule(ruleLimit);
                     budget.spend();
                     match = normalize(snapshot, section, rule, resolver);
                     budget.spend();
@@ -144,7 +148,7 @@ public final class PolicyHygiene {
                         Match prior = earlier.cover(match, budget);
                         if (prior != null) {
                             covering = prior.rule().id(); status = covered(prior.rule(), rule, findings); reason = null;
-                        } else if (earlier.unproven(match, budget)) reason = "zone or install-on coverage is unproven";
+                        } else if (earlier.unproven(match, budget) && earlier.undecidedMayCover(match, passBudget)) reason = "zone or install-on coverage is unproven";
                         // Only where the former analysis said "earlier rule has unsupported constraints" for want of a full
                         // match: every partial prior must be proven disjoint, or that reason stands.
                         else if (reason == null && earlier.partialOverlap(match, side)) { reason = EARLIER_UNSUPPORTED; blocker = earlier.partialBlocker(match); }
@@ -214,6 +218,13 @@ public final class PolicyHygiene {
      * every rule the scan covered keeps its covering rule; superset candidates are consulted only where the scan said
      * "zone or install-on coverage is unproven". The same candidates may cover a later intrazone or interzone rule,
      * which otherwise stays "zone rule type constraint". Install-on stays exact equality.</li>
+     * <li>Selector pass-over ({@link #undecidedMayCover}): a prior whose placement relation to the rule is undecided
+     * (the reason for "zone or install-on coverage is unproven") but whose selectors do not contain the rule's on at
+     * least one of the four dimensions can never be the single earlier rule that covers it, whatever the placement
+     * turns out to be, so it is passed over. "Unproven" stays only where some undecided prior also contains every
+     * selector; otherwise the rule is decided exactly as if that prior had not been there (NOT_SHADOWED, or the
+     * partial-prior and earlier-unsupported reasons). Both vendors; placements, cover search and every other verdict
+     * are unchanged.</li>
      * </ul>
      * Every other verdict stays the scan's.
      */
@@ -458,6 +469,41 @@ public final class PolicyHygiene {
             }
             return state.found;
         }
+        /**
+         * For a rule {@link #unproven} answered true for: whether some earlier prior whose placement relation to the
+         * rule is undecided ({@link #placementDecided} false, placements not disjoint -- the same test) also contains
+         * all four of the rule's selectors. Both rules are full matches, so every selector is resolved and {@code
+         * contains} is exact: a prior failing it on one dimension leaves a packet of the rule outside the prior (a
+         * match is the product of its dimensions, resolved selectors are never empty), so it cannot cover the rule
+         * in any placement. Bucket deduplication keeps this exact: a dropped prior repeats a kept prior's selectors or
+         * follows a kept all-any prior of its bucket. Work comes from {@code pass}, a pool of its own; running out of
+         * it answers true, the former verdict.
+         */
+        boolean undecidedMayCover(Match match, Budget pass) {
+            try {
+                var state = undecided.computeIfAbsent(key(match), k -> new Undecided());
+                while (state.read < keys.size()) {
+                    pass.spend();
+                    var bucket = keys.get(state.read);
+                    if (!disjoint(bucket.first, match, objects) && !placementDecided(bucket.first, match)) state.buckets.add(bucket);
+                    state.read++;
+                }
+                long[] inner = bounds(match.selectors());
+                for (Bucket bucket : state.buckets) {
+                    for (int j = 0, n = bucket.matches.size(); j < n; j++) {
+                        pass.spend();
+                        if (!bounded(bucket.bounds, j * WIDTH, inner)) continue;
+                        var prior = bucket.matches.get(j); boolean contains = true;
+                        for (int i = 0; i < 4 && contains; i++) contains = PolicyNormalization.contains(prior.selectors().get(i), match.selectors().get(i), pass);
+                        if (contains) return true;
+                    }
+                }
+                return false;
+            } catch (Unknown limit) { return true; }
+        }
+        /** Per rule key: how far the earlier keys were read for {@link #undecidedMayCover}, and the undecided buckets found. */
+        private static final class Undecided { int read; final List<Bucket> buckets = new ArrayList<>(); }
+        private final Map<Key, Undecided> undecided = new HashMap<>();
         private static boolean names(Set<String> zones) { return !zones.isEmpty() && !zones.contains("any"); }
         private static boolean mixed(Set<String> zones) { return zones.isEmpty() || zones.contains("any") && zones.size() > 1; }
         /**

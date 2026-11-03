@@ -40,11 +40,17 @@ final class PartialPriorOracle {
     static final class Universe {
         final PolicySnapshot snapshot;
         final List<String> zones, targets;
-        final Map<String, Rule> rules = new LinkedHashMap<>();
-        final Map<String, Integer> scope = new HashMap<>(), order = new HashMap<>();
-        final Map<String, Section> sections = new HashMap<>();
+        final Map<String, Rule> rules;
+        final Map<String, Integer> scope, order;
+        final Map<String, Section> sections;
+        /** The same snapshot and scopes over other zone and target lists ({@link #pairWorld}). */
+        private Universe(Universe base, List<String> zones, List<String> targets) {
+            snapshot = base.snapshot; rules = base.rules; scope = base.scope; order = base.order; sections = base.sections;
+            this.zones = zones; this.targets = targets;
+        }
         Universe(PolicySnapshot snapshot) {
             this.snapshot = snapshot;
+            rules = new LinkedHashMap<>(); scope = new HashMap<>(); order = new HashMap<>(); sections = new HashMap<>();
             var zoneSet = new TreeSet<>(SyntheticPolicies.ZONES); var targetSet = new TreeSet<String>();
             for (var o : snapshot.objects().values()) if (Set.of("simple-gateway", "gateway", "host").contains(o.type())) targetSet.add(o.id());
             for (var s : snapshot.sections()) for (var r : s.rules()) {
@@ -62,6 +68,30 @@ final class PartialPriorOracle {
                 int id = tokens.computeIfAbsent(token, k -> tokens.size());
                 for (var rule : section.rules()) { rules.put(rule.id(), rule); scope.put(rule.id(), id); order.put(rule.id(), n++); sections.put(rule.id(), section); }
             }
+        }
+        /**
+         * The smallest world two rules can be evaluated in: the zones either of them names (a rule names only zones
+         * that exist, as the engine assumes) and the atomic install-on targets either of them reaches, nothing more;
+         * a lone any (zone or target) is then exactly those. The vsys zones and the gateways behind any are not
+         * collected, so this world may be the real one, and it is the world most favourable to the prior covering the
+         * later rule: the prior's named zones and targets are fixed, while the later rule's any shrinks to them.
+         */
+        Universe pairWorld(Rule prior, Rule later) {
+            var zoneSet = new TreeSet<String>(); var targetSet = new TreeSet<String>();
+            for (Rule r : List.of(prior, later)) {
+                for (String key : List.of("from", "to")) for (String z : r.extras().getOrDefault(key, List.of())) if (!z.equals("any")) zoneSet.add(z);
+                for (String t : r.extras().getOrDefault("install-on", List.of())) reach(t, targetSet, 0);
+            }
+            if (zoneSet.isEmpty()) zoneSet.add("ZONE-OUTSIDE-99");
+            if (targetSet.isEmpty()) targetSet.add("gw-outside-99");
+            return new Universe(this, List.copyOf(zoneSet), List.copyOf(targetSet));
+        }
+        /** The atomic targets {@link #target} marks for an install-on reference (none for one it reads as every target). */
+        private void reach(String id, Set<String> out, int depth) {
+            var o = snapshot.objects().get(id);
+            if (o == null || !"RESOLVED".equals(o.status()) || o.type().equals("any") || depth > 40) return;
+            if (o.members().isEmpty()) out.add(id);
+            else for (String m : o.members()) reach(m, out, depth + 1);
         }
         /** The earlier rules of the rule's scope, enabled or possibly enabled, that have no full match. */
         List<Rule> unresolvedPriors(String ruleId) {
@@ -255,12 +285,19 @@ final class PartialPriorOracle {
     }
     /**
      * No single earlier rule of the scope (enabled or possibly enabled, resolved or not; whatever the oracle cannot
-     * interpret is the whole universe) covers the rule by brute force.
+     * interpret is the whole universe) covers the rule by brute force, in the open universe (any holds a zone and a
+     * target no rule names) nor in the pair's smallest world ({@link Universe#pairWorld}). The engine cannot tell
+     * which world is real, so a NOT_SHADOWED release must hold in every one.
      */
     static void assertNoCover(Universe universe, String ruleId, String context) {
         var later = universe.rules.get(ruleId);
-        for (var prior : universe.earlierRules(ruleId))
+        for (var prior : universe.earlierRules(ruleId)) {
             assertFalse(universe.covers(prior, later), context + ": NOT_SHADOWED rule is covered by " + prior.id() + " by brute force");
+            // Also in the two rules' own smallest world, where an any is only what they name: this is what confirms
+            // that a prior naming zones (or targets) was rightly passed over for a later rule of any.
+            assertFalse(universe.pairWorld(prior, later).covers(prior, later),
+                context + ": NOT_SHADOWED rule is covered by " + prior.id() + " by brute force in their smallest world");
+        }
     }
     /** Which way a zone-superset change went, for the tests' counters; null when the rule is unchanged. */
     enum ZoneChange { COVERED, RELEASED, OTHER_UNKNOWN }
