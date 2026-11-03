@@ -25,6 +25,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 from zoneinfo import ZoneInfo
 
@@ -55,10 +56,68 @@ touch /workspace/.ready
 """
 
 
+# PHASE/STEP name where a failure happened. Two branches of run() execute at the same time (image builds and the
+# database copy); each such branch keeps its own phase/step so a failure is attributed to the branch that raised it.
+# The main thread keeps using the module globals, exactly as before.
+_branch = threading.local()
+
+
+def _where():
+    if getattr(_branch, "active", False):
+        return _branch.phase, _branch.step
+    return PHASE, STEP
+
+
+def _set_step(value):
+    global STEP
+    if getattr(_branch, "active", False):
+        _branch.step = value
+    else:
+        STEP = value
+
+
+def _set_phase(value):
+    global PHASE
+    if getattr(_branch, "active", False):
+        _branch.phase = value
+    else:
+        PHASE = value
+
+
+def run_concurrently(*branches):
+    """Run the callables at the same time; wait for ALL of them; re-raise the first failure in argument order.
+
+    Waiting for every branch (rather than failing fast) keeps teardown simple: no branch is still creating objects in
+    the preview namespace when cleanup() starts. Threads are daemons so an interrupted run can still exit."""
+    results = [None] * len(branches)
+    errors = [None] * len(branches)
+    start_phase, start_step = PHASE, STEP
+
+    def worker(index, branch):
+        _branch.active, _branch.phase, _branch.step = True, start_phase, start_step
+        try:
+            results[index] = branch()
+        except BaseException as error:  # re-raised in the caller, in order
+            errors[index] = error
+        finally:
+            _branch.active = False
+
+    threads = [threading.Thread(target=worker, args=(i, b), daemon=True) for i, b in enumerate(branches)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    for error in errors:
+        if error is not None:
+            raise error
+    return results
+
+
 class PreviewFailure(RuntimeError):
     def __init__(self, reason, exception_class="PreviewFailure"):
         super().__init__("Preview operation failed; details withheld")
-        self.phase, self.step, self.reason = PHASE, STEP, reason
+        self.phase, self.step = _where()
+        self.reason = reason
         self.exception_class = exception_class
 
 
@@ -103,8 +162,7 @@ def private_log():
 
 def overlay_host_inputs(repo):
     """Copy only the approved host-local build inputs into the archived candidate."""
-    global STEP
-    STEP = "overlay host inputs"
+    _set_step("overlay host inputs")
     source = (Path.home() / "nexus").resolve()
     repo = repo.resolve()
     patterns = ("ui2/.ca/*.pem",
@@ -131,8 +189,7 @@ def overlay_host_inputs(repo):
 def prepare_build_context(repo, commit):
     """Mirror run_build.sh's generated metadata without changing the source checkout."""
     overlay_host_inputs(repo)
-    global STEP
-    STEP = "prepare build context"
+    _set_step("prepare build context")
     project = repo / "project"
     project.mkdir(parents=True, exist_ok=True)
     (project / "deploy_info.json").write_text(json.dumps({
@@ -164,8 +221,8 @@ def failure_line(error):
 
 @contextmanager
 def timing(phase):
-    global PHASE
-    previous, PHASE = PHASE, phase
+    previous = _where()[0]
+    _set_phase(phase)
     start = time.monotonic()
     try:
         yield
@@ -177,7 +234,7 @@ def timing(phase):
             "IMAGE_BUILD_FAILED" if phase.startswith("preview_build") else "OTHER")
         raise PreviewFailure(reason, type(error).__name__) from None
     finally:
-        PHASE = previous
+        _set_phase(previous)
         print(f"TIMING {phase} {time.monotonic() - start:.3f}", flush=True)
 
 
@@ -225,16 +282,16 @@ def masked_error(stderr):
 
 
 def k(namespace, *args, input=None, timeout=120):
-    global STEP
     verb = args[0]
     kinds = {"pod", "pods", "job", "jobs", "jobs,pods", "namespace", "secret", "service", "deployment"}
     kind = next((a.split("/")[0] for a in args[1:] if a.split("/")[0] in kinds), "manifest")
     if input is not None and verb == "apply":
         kind = json.loads(input)["kind"]
-    STEP = verb + " " + kind
+    _set_step(verb + " " + kind)
     argv = ["kubectl"] + (["-n", namespace] if namespace is not None else []) + list(args)
     def failed(stderr, reason, exception_class="PreviewFailure"):
-        line = f"PREVIEW STEP: phase={PHASE} step={STEP} reason={reason}:{exception_class} error=" + masked_error(stderr)
+        phase, step = _where()
+        line = f"PREVIEW STEP: phase={phase} step={step} reason={reason}:{exception_class} error=" + masked_error(stderr)
         if LOG is not None:
             LOG.write(line + "\n")
             LOG.flush()
@@ -252,10 +309,9 @@ def k(namespace, *args, input=None, timeout=120):
 def load(repo, name):
     # kubectl already understands the existing YAML; no additional YAML dependency.
     # Parsing must honor the source namespace, not the preview target namespace.
-    global STEP
-    STEP = "load templates"
+    _set_step("load templates")
     stream = k(None, "create", "--dry-run=client", "-f", str(repo / name), "-o", "json")
-    STEP = "load templates"
+    _set_step("load templates")
     decoder, items, offset = json.JSONDecoder(), [], 0
 
     def append(obj):
@@ -544,8 +600,7 @@ def pipe_commands(source, target, timeout=60):
 
 def database_stream(source, target, timeout):
     """Run both ends inside the preview pod; exec carries only control/diagnostics."""
-    global STEP
-    STEP = "copy database"
+    _set_step("copy database")
     script = ("set +x\n(" + source + ") | (" + target + ") >/dev/null\n"
               'status=("${PIPESTATUS[@]}")\n'
               'printf "NEXUS_COPY_STATUS=%s,%s\\n" "${status[0]}" "${status[1]}" >&2\n'
@@ -1034,10 +1089,45 @@ def cleanup(owner):
         raise RuntimeError("Preview teardown incomplete; ship blocked")
 
 
-def run(repo, commit):
+REUSE_RECORD_LIMIT = 20
+
+
+def record_reusable_images(tree, commit, images):
+    """Remember, on this host only, which images a PASSING preview built for this exact tree.
+
+    run_build.sh -> hosta_restamp_image.py looks the record up by the merged commit's tree hash: an identical tree
+    means identical sources, so the production deploy re-stamps the verified service image with its own
+    project/deploy_info.json instead of rebuilding it. Best effort: a missing record only means a normal build."""
+    if not re.fullmatch(r"[0-9a-f]{40}", tree or "") or len(images) != 2:
+        return None
+    digests = [image.rsplit("@", 1)[-1] for image in images]
+    if not all(re.fullmatch(r"sha256:[0-9a-f]{64}", digest) for digest in digests):
+        return None
+    try:
+        directory = Path.home() / ".local/state/nexus-preview" / "reuse"
+        directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+        directory.chmod(0o700)
+        record = directory / (tree + ".json")
+        staged = directory / (tree + ".json.tmp")
+        staged.write_text(json.dumps(dict(tree=tree, commit=commit, service=digests[0], e2e=digests[1],
+                                          created=int(time.time())), sort_keys=True) + "\n")
+        staged.chmod(0o600)
+        os.replace(staged, record)
+        for old in sorted(directory.glob("*.json"), key=lambda path: path.stat().st_mtime,
+                          reverse=True)[REUSE_RECORD_LIMIT:]:
+            old.unlink()
+    except OSError:
+        return None
+    return "PREVIEW IMAGES: tree=%s service=%s e2e=%s" % (tree, digests[0], digests[1])
+
+
+def run(repo, commit, tree=None):
     global NS, PHASE, STEP
     if not re.fullmatch(r"[0-9a-f]{40}", commit):
         raise ValueError("Invalid candidate commit")
+    if tree is not None and not re.fullmatch(r"[0-9a-f]{40}", tree):
+        raise ValueError("Invalid candidate tree")
+    images = None
     previous_ns, owner = NS, secrets.token_hex(6)
     NS = "ui2-preview-" + owner
     PHASE = "preview_setup"
@@ -1054,12 +1144,19 @@ def run(repo, commit):
                 STEP = "policies"
                 for item in policies(workers):
                     create(NS, item)
-            with timing("preview_build"):
-                STEP = "build images"
-                images = build_images(repo, commit, owner)
-            with timing("preview_database"):
-                STEP = "setup database"
-                db_ip = setup_database(repo)
+            # The image builds and the database copy do not depend on each other (measured 2026-11-03: 242 s and
+            # 202 s one after the other); the workloads need both, so they start when both have finished.
+            def build_branch():
+                with timing("preview_build"):
+                    _set_step("build images")
+                    return build_images(repo, commit, owner)
+
+            def database_branch():
+                with timing("preview_database"):
+                    _set_step("setup database")
+                    return setup_database(repo)
+
+            images, db_ip = run_concurrently(build_branch, database_branch)
             with timing("preview_workers"):
                 STEP = "worker services"
                 endpoints = setup_worker_services(workers)
@@ -1093,6 +1190,10 @@ def run(repo, commit):
             cleanup(owner)
     finally:
         NS = previous_ns
+    # Only after a complete pass with a verified teardown.
+    line = record_reusable_images(tree, commit, images) if tree and images else None
+    if line:
+        print(line, flush=True)
     print("PREVIEW E2E: PASS", flush=True)
 
 
@@ -1104,12 +1205,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo", type=Path, required=True)
     parser.add_argument("--commit", required=True)
+    parser.add_argument("--tree", help="git tree hash of the commit; enables the reusable-image record")
     args = parser.parse_args()
     for sig in (signal.SIGTERM, signal.SIGINT):
         signal.signal(sig, interrupted)
     try:
         with private_log():
-            run(args.repo, args.commit)
+            run(args.repo, args.commit, args.tree)
     except (OSError, ValueError, KeyError, TypeError, RuntimeError, subprocess.SubprocessError) as error:
         print(failure_line(error), flush=True)
         sys.exit(1)

@@ -1,0 +1,26 @@
+# Production re-stamp of an already built and tested service image.
+#
+# The service image a passing preview built (tools/e2e/hosta_preview_e2e.py, same ui2/Containerfile, same sources) is
+# byte-for-byte what a production build of an identical git tree would produce, EXCEPT one file: project/deploy_info.json,
+# which names the deployed commit and build time (rollback reads it from the running pod; the UI shows it). This file
+# adds exactly that file on top, so the deploy does not rebuild the whole image.
+#
+# Build context: the repository root as the deploy loaded it (project/deploy_info.json is written by run_build.sh).
+#   --build-arg=SERVICE_IMAGE=registry.kube-system.svc.cluster.local/nexus-ui2-service@sha256:<digest>
+# Owner and mode are those the main Containerfile ends with for that file (FS-1/FS-2: root:root, no group/other write).
+
+ARG SERVICE_IMAGE
+FROM ${SERVICE_IMAGE}
+ARG SERVICE_IMAGE
+USER 0
+# Fail closed on a moving reference: the base must be the service image by digest.
+RUN case "${SERVICE_IMAGE}" in \
+      registry.kube-system.svc.cluster.local/nexus-ui2-service@sha256:*) ;; \
+      *) echo "SERVICE_IMAGE must be the service image by digest" >&2; exit 1 ;; \
+    esac
+COPY project/deploy_info.json /app/project/deploy_info.json
+RUN chown 0:0 /app/project/deploy_info.json \
+ && chmod 0644 /app/project/deploy_info.json \
+ && test "$(grep -c '"commit"' /app/project/deploy_info.json)" = 1
+# FS-6: numeric, the base family's non-root id (as the main image and the analysis image).
+USER 185

@@ -19,6 +19,7 @@ def checkout(tmp_path):
         "tools/delivery/module_deploy.py", "tools/delivery/release_snapshot.py",
         "tools/delivery/release_snapshot.sh", "tools/delivery/rollback.sh",
         "tools/e2e/hosta_e2e_image.py", "tools/delivery/hosta_packet_analysis_image.py",
+        "tools/delivery/hosta_restamp_image.py",
         "tools/security/security_host.py",
         "tools/security/security_manifests.py",
     ):

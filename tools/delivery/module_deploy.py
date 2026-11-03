@@ -8,7 +8,9 @@ import re
 import shlex
 import subprocess
 import sys
+import threading
 import time
+from contextlib import contextmanager
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -23,6 +25,30 @@ POLICY_TYPES = ("cp_policy_collect", "pan_policy_collect")
 NEVER_GENERAL = ("packet_analysis",)
 # Dedicated modules whose drain barrier covers exactly their own job types.
 DEDICATED = {"policy": "policy", "packet-analysis": "packet_analysis"}
+# Targets with NO drain barrier in this tool (not in ROLES): HTTP owners whose requests drain on SIGTERM within the pod
+# grace period. Consecutive ones are rolled out at the same time and share one module e2e afterwards
+# (MODULE_POD_RUNTIME_CONTRACT.md section 3: "Deploy waits ONLY for its module ... unrelated modules retain their digest
+# and continue"). A target with a drain barrier (worker, policy, packet-analysis) is never in this set, and neither is
+# the service, which every module e2e exercises.
+CONCURRENT_SAFE = ("configuration", "compliance")
+# How often the drain barrier and the old-pod exit are re-checked. The barrier itself (drain ack AND zero jobs, permits
+# and task leases) is unchanged; only the wait between looks is shorter (was 10 s and 5 s). Each look is one short
+# read-only transaction.
+DRAIN_POLL_S = 2
+OLD_POD_POLL_S = 2
+_print_lock = threading.Lock()
+
+
+@contextmanager
+def phase(target, name, clock=time.monotonic):
+    """Print `TIMING module_<target>_<name> <seconds>` (hosta_deploy.sh forwards these lines), so a slow module shows
+    which of its steps -- drain wait, replacement, rollout, heartbeat, e2e -- took the time."""
+    started = clock()
+    try:
+        yield
+    finally:
+        with _print_lock:
+            print("TIMING module_%s_%s %d" % (target.replace("-", "_"), name, round(clock() - started)), flush=True)
 
 
 class Blocked(RuntimeError):
@@ -135,7 +161,7 @@ def wait_drain(target, generation, limit, sleep=time.sleep, clock=time.monotonic
                           + ("; " + why[-1] if why else ""), continuable=True)
         print("Module waiting: " + target + "; generation=" + str(generation) +
               ("; " + why[-1] if why else "; barrier state unavailable"), flush=True)
-        sleep(min(10, max(0, deadline - clock())))
+        sleep(min(DRAIN_POLL_S, max(0, deadline - clock())))
 
 
 def clear_drain(target, generation, snapshot):
@@ -343,7 +369,9 @@ def replace_image(target, image, sync_manifest=False):
     run("kubectl", "-n", "ui2", "patch", "deployment/ui2-worker", "--type=strategic", "-p", json.dumps(patch))
 
 
-def replace(target, image, snapshot, limit=14400, commit=None, authorization=None, rollback=False):
+def replace(target, image, snapshot, limit=14400, commit=None, authorization=None, rollback=False, defer_e2e=False):
+    """Replace one module. With `defer_e2e` the module e2e and the result line are left to the caller (a concurrent
+    group runs one e2e after all of its members); the result dict is returned instead."""
     if target == "policy" and query("select (owner_heartbeat_at>now()-interval '60 seconds') from module_runtime_control where module='general'") != "t":
         raise Blocked("compatible general worker bootstrap required before policy cutover")
     fallback = target == "policy" and query("select fallback_enabled from module_runtime_control where module='policy'") == "t"
@@ -360,37 +388,42 @@ def replace(target, image, snapshot, limit=14400, commit=None, authorization=Non
     # A first release (ensure_packet_analysis created the deployment with the candidate image: old is None) has no
     # old owner to drain; draining it would wait for the new pod itself to stop (2026-10-16: drain retained).
     if target in ROLES and not (target == "packet-analysis" and old is None):
-        generation = request_drain(target, snapshot)
-        wait_drain(target, generation, limit)
+        with phase(target, "drain"):
+            generation = request_drain(target, snapshot)
+            wait_drain(target, generation, limit)
     old_pods = json.loads(run("kubectl", "-n", "ui2", "get", "pods", "-l", "app.kubernetes.io/component=" + TARGETS[target], "-o", "json"))
     old_uids = {pod["metadata"]["uid"] for pod in old_pods["items"]}
     try:
-        # A rollback restores the recorded digest only; the committed manifest belongs to the forward release.
-        replace_image(target, image, sync_manifest=(target == "packet-analysis" or target in SYNCED_MANIFESTS)
-                      and old is not None and not rollback)
-        if generation is not None:
-            deadline = time.monotonic() + 900
-            while old_uids:
-                pods = json.loads(run("kubectl", "-n", "ui2", "get", "pods", "-l", "app.kubernetes.io/component=" + TARGETS[target], "-o", "json"))
-                if not old_uids.intersection(pod["metadata"]["uid"] for pod in pods["items"]):
-                    break
-                if time.monotonic() >= deadline:
-                    raise Blocked("old owner did not stop; drain retained")
-                time.sleep(5)
-            # Forget the old instance, retaining the policy fence until a new heartbeat.
+        with phase(target, "replace"):
+            # A rollback restores the recorded digest only; the committed manifest belongs to the forward release.
+            replace_image(target, image, sync_manifest=(target == "packet-analysis" or target in SYNCED_MANIFESTS)
+                          and old is not None and not rollback)
+            if generation is not None:
+                deadline = time.monotonic() + 900
+                while old_uids:
+                    pods = json.loads(run("kubectl", "-n", "ui2", "get", "pods", "-l", "app.kubernetes.io/component=" + TARGETS[target], "-o", "json"))
+                    if not old_uids.intersection(pod["metadata"]["uid"] for pod in pods["items"]):
+                        break
+                    if time.monotonic() >= deadline:
+                        raise Blocked("old owner did not stop; drain retained")
+                    time.sleep(OLD_POD_POLL_S)
+                # Forget the old instance, retaining the policy fence until a new heartbeat.
+                if target == "policy":
+                    query("begin;" + audit(snapshot) + "update module_runtime_control set owner_instance=null,owner_heartbeat_at=null "
+                          "where module='policy' and drain_generation=" + str(generation) + ";commit;")
+                else:
+                    clear_drain(target, generation, snapshot)
+        with phase(target, "rollout"):
             if target == "policy":
-                query("begin;" + audit(snapshot) + "update module_runtime_control set owner_instance=null,owner_heartbeat_at=null "
-                      "where module='policy' and drain_generation=" + str(generation) + ";commit;")
-            else:
-                clear_drain(target, generation, snapshot)
-        if target == "policy":
-            run("kubectl", "-n", "ui2", "scale", "deployment/ui2-policy", "--replicas=1")
-        run("kubectl", "-n", "ui2", "rollout", "status", "deployment/ui2-" + target, "--timeout=600s")
-        if target in ROLES:
-            wait_heartbeat(target)
-        if target == "policy":
-            handover_policy(generation, snapshot, authorization or "snapshot-rollback")
-        module_e2e(commit)
+                run("kubectl", "-n", "ui2", "scale", "deployment/ui2-policy", "--replicas=1")
+            run("kubectl", "-n", "ui2", "rollout", "status", "deployment/ui2-" + target, "--timeout=600s")
+            if target in ROLES:
+                wait_heartbeat(target)
+            if target == "policy":
+                handover_policy(generation, snapshot, authorization or "snapshot-rollback")
+        if not defer_e2e:
+            with phase(target, "e2e"):
+                module_e2e(commit)
     except Blocked:
         if target == "policy":
             # Fence before stopping, then recover fallback only after zero-work evidence.
@@ -399,8 +432,63 @@ def replace(target, image, snapshot, limit=14400, commit=None, authorization=Non
             run("kubectl", "-n", "ui2", "wait", "--for=delete", "pod", "-l", "app.kubernetes.io/component=policy", "--timeout=900s")
             reset_to_general(snapshot, "policy", recovery, authorization or "automatic-rollout-recovery")
         raise
-    print(json.dumps({"module": target, "e2e": "PASS", "old_digest": old.rsplit("@", 1)[1] if old else None,
-                      "new_digest": image.rsplit("@", 1)[1], "ready": True, "drain_generation": generation}), flush=True)
+    result = {"module": target, "e2e": "PASS", "old_digest": old.rsplit("@", 1)[1] if old else None,
+              "new_digest": image.rsplit("@", 1)[1], "ready": True, "drain_generation": generation}
+    if defer_e2e:
+        return result
+    print(json.dumps(result), flush=True)
+
+
+def replace_concurrently(group, image_for, snapshot, limit, commit, authorization, rollback):
+    """Roll out several barrier-free modules at the same time, then run ONE module e2e for the group.
+
+    Every member goes through the same `replace` (its own checks, rollout status and error handling); only the wait is
+    shared. The e2e runs only if every member succeeded. Returns (failed targets, whether a failure stops the release)."""
+    results, errors = {}, {}
+
+    def member(target):
+        try:
+            results[target] = replace(target, image_for(target), snapshot, limit, commit, authorization,
+                                      rollback=rollback, defer_e2e=True)
+        except BaseException as error:  # a thread must never die silently; re-raised below
+            errors[target] = error
+
+    threads = [threading.Thread(target=member, args=(t,), daemon=True) for t in group]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    unexpected = next((errors[t] for t in group if t in errors and not isinstance(errors[t], Blocked)), None)
+    if unexpected is not None:
+        raise unexpected
+    failures = [t for t in group if t in errors]
+    for target in failures:
+        with _print_lock:
+            print(json.dumps({"module": target, "status": "BLOCKED", "reason": str(errors[target])}), flush=True)
+    if failures:
+        return failures, any(not errors[t].continuable for t in failures)
+    try:
+        with phase("group_" + "_".join(group), "e2e"):
+            module_e2e(commit)
+    except Blocked as error:
+        for target in group:
+            print(json.dumps({"module": target, "status": "BLOCKED", "reason": str(error)}), flush=True)
+        return list(group), not error.continuable
+    for target in group:
+        print(json.dumps(results[target]), flush=True)
+    return [], False
+
+
+def rollout_steps(targets, concurrent=True):
+    """The release as ordered steps: each a list of targets rolled out together. Only consecutive CONCURRENT_SAFE
+    targets (no drain barrier) form a multi-target step; every other target keeps its own step, in the given order."""
+    steps = []
+    for target in targets:
+        if concurrent and target in CONCURRENT_SAFE and steps and all(t in CONCURRENT_SAFE for t in steps[-1]):
+            steps[-1].append(target)
+        else:
+            steps.append([target])
+    return steps
 
 
 def rollback_image(manifest, target):
@@ -441,6 +529,8 @@ def main():
                         "tshark); required when packet-analysis is a target, never defaults to --image")
     parser.add_argument("--commit")
     parser.add_argument("--rollback", action="store_true")
+    parser.add_argument("--no-concurrent", dest="concurrent_safe", action="store_false",
+                        help="roll the barrier-free modules (configuration, compliance) one after another")
     parser.add_argument("--allow-newer-schema", action="store_true")
     parser.add_argument("--return-policy-to-general", action="store_true")
     parser.add_argument("--authorization-ref")
@@ -481,17 +571,37 @@ def main():
         if "policy" in targets:
             prepare_policy_public_trust()
         failures = []
-        for target in targets:
+
+        def image_for(target):
+            return (rollback_image(manifest, target) if args.rollback else
+                    args.packet_analysis_image if target == "packet-analysis" else args.image)
+
+        stopped = False
+        for step in rollout_steps(targets, args.concurrent_safe and not args.rollback):
+            if stopped:
+                break
+            if len(step) > 1:
+                # Resolve every image before any member starts (a missing rollback digest must change nothing).
+                try:
+                    [image_for(t) for t in step]
+                except Blocked as error:
+                    failures.extend(step)
+                    print(json.dumps({"module": step[0], "status": "BLOCKED", "reason": str(error)}), flush=True)
+                    break
+                failed, hard = replace_concurrently(step, image_for, directory.name, args.wait_limit, args.commit,
+                                                    args.authorization_ref, args.rollback)
+                failures.extend(failed)
+                stopped = hard
+                continue
+            target = step[0]
             try:
-                image = (rollback_image(manifest, target) if args.rollback else
-                         args.packet_analysis_image if target == "packet-analysis" else args.image)
-                replace(target, image, directory.name, args.wait_limit, args.commit, args.authorization_ref,
+                replace(target, image_for(target), directory.name, args.wait_limit, args.commit, args.authorization_ref,
                         rollback=args.rollback)
             except Blocked as error:
                 failures.append(target)
                 print(json.dumps({"module": target, "status": "BLOCKED", "reason": str(error)}), flush=True)
                 if not error.continuable:
-                    break
+                    stopped = True
         if failures:
             raise SystemExit(5)
     except Blocked as error:
