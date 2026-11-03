@@ -39,7 +39,7 @@ final class LegacyPolicyHygiene {
         List<Match> earlier = new ArrayList<>();
         boolean earlierUnknown = false;
         for (Section section : snapshot.sections()) {
-            if (PolicySnapshot.panNonSecurity(snapshot.metadata(), section)) {
+            if (PolicySnapshot.outsideSecurityEvaluation(snapshot.metadata(), section)) { // 2026-11-03: CP NAT skipped like PAN NAT, in both engines
                 // Palo Alto NAT and default-rule sections are stored, not analysed: no shadowing, permissiveness or
                 // hit-based finding is invented for them, and they do not disturb the security rule ordering.
                 for (Rule rule : section.rules()) {

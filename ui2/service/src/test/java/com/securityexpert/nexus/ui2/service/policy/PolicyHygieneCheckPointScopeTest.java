@@ -57,6 +57,17 @@ class PolicyHygieneCheckPointScopeTest {
         assertNull(result.coveringRuleId(), id);
     }
 
+    // ---- the NAT rulebase is outside the access-layer scope ----
+    @Test void natRulebaseBetweenAccessPagesIsSkippedAndDoesNotBreakTheAccessScope() {
+        // Collection order seen on the estate: access page, NAT rulebase, next access page of the same layer.
+        var snapshot = cpSnapshot(cpSection("s1", null, cp("r1", 1, "Accept", "net", "targets")),
+            new Section("nat", "OBJ-NAT-01", "CP NAT rulebase", null, List.of(cp("n1", 1, "Accept", "host", "targets"))),
+            cpSection("s2", null, cp("r2", 2, "Accept", "host", "targets"), cp("r3", 3, "Drop", "any", "targets")));
+        assertUnknown(snapshot, "n1", "unsupported rulebase");
+        assertCovered(snapshot, "r2", "REDUNDANT", "r1");
+        assertEquals("NOT_SHADOWED", at(snapshot, "r3").shadowStatus());
+    }
+
     // ---- install-on as an opaque placement token ----
 
     @Test void rulesInstalledOnTheSameGlobalTargetObjectCanCoverEachOther() {

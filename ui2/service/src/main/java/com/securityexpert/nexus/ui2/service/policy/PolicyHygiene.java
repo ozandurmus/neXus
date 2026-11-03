@@ -76,9 +76,11 @@ public final class PolicyHygiene {
         var scope = new EvaluationScope<Earlier>(snapshot.metadata(), () -> new Earlier(snapshot.objects()));
         boolean budgetReached = false;
         for (Section section : snapshot.sections()) {
-            if (PolicySnapshot.panNonSecurity(snapshot.metadata(), section)) {
-                // Palo Alto NAT and default-rule sections are stored, not analysed: no shadowing, permissiveness or
-                // hit-based finding is invented for them, and they do not disturb the security rule ordering.
+            if (PolicySnapshot.outsideSecurityEvaluation(snapshot.metadata(), section)) {
+                // Check Point NAT rulebase and Palo Alto NAT/default-rule sections are stored, not analysed: no shadowing,
+                // permissiveness or hit-based finding is invented for them, and they do not disturb the security rule
+                // ordering (lookup and offline analysis skip them the same way). Before 2026-11-03 a CP NAT section broke
+                // the access-layer scope, so 5,494 NAT and 7,156 later access rules read "earlier sections not analysed".
                 for (Rule rule : section.rules()) {
                     List<Finding> findings = Boolean.FALSE.equals(rule.enabled()) ? List.of(finding("disabled", "LOW", "Rule is disabled.")) : List.of();
                     results.put(rule.id(), new Assessment("UNKNOWN", "unsupported rulebase", null, findings,

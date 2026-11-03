@@ -49,7 +49,7 @@ final class PartialPriorOracle {
             var walk = new PolicyNormalization.EvaluationScope<Object>(snapshot.metadata(), Object::new);
             Map<Object, Integer> tokens = new IdentityHashMap<>(); int n = 0;
             for (var section : snapshot.sections()) {
-                if (PolicySnapshot.panNonSecurity(snapshot.metadata(), section)) continue;
+                if (PolicySnapshot.outsideSecurityEvaluation(snapshot.metadata(), section)) continue;
                 Object token = walk.advance(section);
                 int id = tokens.computeIfAbsent(token, k -> tokens.size());
                 for (var rule : section.rules()) { rules.put(rule.id(), rule); scope.put(rule.id(), id); order.put(rule.id(), n++); sections.put(rule.id(), section); }
