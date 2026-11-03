@@ -1280,30 +1280,21 @@
       "note": ""
     },
     {
-      "id": "policy_read_offload_pod",
-      "category": "ui2",
-      "title": "Policy read/analysis offload to a policy_query pod (needs contract amendment; measure after read-path cache first)",
-      "status": "planned",
-      "priority": "P2",
-      "target": "PATH_ANALYSIS_DESIGN.md",
-      "note": ""
-    },
-    {
-      "id": "ship_tree_bound_security_scan",
-      "category": "delivery",
-      "title": "Ship: bind the security source scan to the git tree so it can start during preview (~50 s)",
-      "status": "planned",
-      "priority": "P3",
-      "target": "",
-      "note": ""
-    },
-    {
       "id": "path_analysis_a0_freeze",
       "category": "ui2",
       "title": "Path analysis A0: PO review and freeze of PATH_ANALYSIS_VENDOR_SEMANTICS.md (CP access vs NAT order still UNKNOWN)",
       "status": "planned",
       "priority": "P1",
       "target": "PATH_ANALYSIS_VENDOR_SEMANTICS.md",
+      "note": ""
+    },
+    {
+      "id": "ci_validation_red_and_scope_unmapped",
+      "category": "delivery",
+      "title": "CI validation red on every PR since >=2026-10-25; regression scope blocks unmapped ui2 paths (policy etc.)",
+      "status": "planned",
+      "priority": "P0",
+      "target": "",
       "note": ""
     }
   ]

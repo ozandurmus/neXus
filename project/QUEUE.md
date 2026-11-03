@@ -1,5 +1,5 @@
 # Project queue (generated — do not edit; run: py tools/delivery/project_queue.py render)
-Build: NXS-LOCAL-0374 · Track: PCP.x · Generated: 2026-11-03T16:54:19Z
+Build: NXS-LOCAL-0374 · Track: PCP.x · Generated: 2026-11-03T18:34:09Z
 
 ## Now
 - NXS-LOCAL-0374 — System logs phase B: collectors, masked view, settings route, Spike Detective data (in_progress)
@@ -13,6 +13,7 @@ Build: NXS-LOCAL-0374 · Track: PCP.x · Generated: 2026-11-03T16:54:19Z
 - P0/in_progress private_replay_agent_operated_test_environment — Private Replay -- agent-operated privacy-filtered test... (target: PRIVATE_REPLAY_ARCHITECTURE.md)
 - P0/in_progress recovery_offhost_key_custody — Off-host recovery artifacts and encryption-key custody (target: DEPLOY.1; blocks reliance on RB.3b recov)
 - P0/planned aiview_masking_manufactures_names_from_any_string — The AIView pseudonymizer turns any non-blank string into.. (target: TopologyNamePseudonymizer.computeDeviceN)
+- P0/planned ci_validation_red_and_scope_unmapped — CI validation red on every PR since >=2026-10-25; regressi (target: )
 - P0/planned cluster_membership_lost_at_enrollment — Cluster membership is known at discovery but does not... (target: enrollment/confirm path writing...)
 - P0/planned deploy1_evidence_egress_policy — DEPLOY.1 — Evidence Egress & Sharing Policy (target: DEPLOY.1)
 - P0/planned discovery_lateral_join_drops_cluster_members — Device display falls back to the management IP for every.. (target: JooqDeviceRepository DEVICE_SELECT later)
@@ -129,7 +130,6 @@ Build: NXS-LOCAL-0374 · Track: PCP.x · Generated: 2026-11-03T16:54:19Z
 - P2/planned pan_ha_serial_identity_hardening
 - P2/planned pan_keygen_no_usable_key_under_load
 - P2/planned pan_object_precedence_for_permissiveness
-- P2/planned policy_read_offload_pod
 - P2/planned privacy_baseline_tests_not_idempotent_runtime_trust_material
 - P2/planned project_plan_crypto_placeholder_sentinel_lost
 - P2/planned radware_cc_identity_and_defensepro_reads
@@ -146,7 +146,6 @@ Build: NXS-LOCAL-0374 · Track: PCP.x · Generated: 2026-11-03T16:54:19Z
 - P3/planned old_export_copies_disposal
 - P3/planned pytest_xdist_privacy_scan_scratch_file_race
 - P3/planned run_build_sets_configuration_image
-- P3/planned ship_tree_bound_security_scan
 - P3/planned ui2_select_all
 - P3/planned waf_fortiweb_capability_scope_and_measurement
 - P3/planned workbench_borrow_from_agent_orchestration_tools
@@ -170,9 +169,11 @@ Build: NXS-LOCAL-0374 · Track: PCP.x · Generated: 2026-11-03T16:54:19Z
 - P2 inventory_exclusions_management_ui
 - P2 passive_ti_enrichment
 - P2 per_vendor_worker_split
+- P2 policy_read_offload_pod
 - P2 policy_rule_hygiene_and_path_placement_brief
 - P2 snmpv3_fast_telemetry_plane
 - P3 BK-CP-STATUS-EMPTY
+- P3 ship_tree_bound_security_scan
 - P4 pan_ha_peer_ipv6_pairing
 ## Open decisions
 - op_track_id — Track id: keep OP.x as a dedicated OPERATE track, or fold into 1.x after
