@@ -22,7 +22,23 @@ import com.securityexpert.nexus.ui2.service.pathanalysis.topology.TopologyGraph;
  * {@code /24} networks the masker falls back to for an unregistered host), each masked with the masker's side-effect-free
  * network function. Never persisted, never logged: {@link #toString()} carries counts only.
  *
- * <p>Resolving a masked host: every network whose pseudonym contains the value gives one raw candidate (the masker
+ * <p>Resolving a masked host runs in two steps; the first that yields a raw host decides.</p>
+ * <ol>
+ *   <li>What the topology response showed: the host part the advice renders for each attachment address (computed
+ *   purely from {@code "h/len"}, or the bare-host form for an address written without a length, such as a cluster
+ *   VIP). A value aiview took from {@code GET /api/v2/topology} resolves to the host it was rendered from. The same
+ *   raw address on several attachments (a VIP on both members, one range in two VRFs) is one raw value; which unit or
+ *   VRF is meant is the engine's call. Two different raw hosts shown the same way are {@code AMBIGUOUS_PSEUDONYM}.</li>
+ *   <li>Otherwise any form a response can render (below), for values aiview saw elsewhere or a host offset it picked
+ *   inside a masked network it was shown.</li>
+ * </ol>
+ * <p>Why the order (2026-11-04 17:30 live symptom, 11 of 20 queries refused as ambiguous): the masker keys a pseudonym
+ * network on {@code len - 4} hashed bits, so a short summary the estate routes ({@code /8}, {@code /10}, {@code /12},
+ * {@code /16}) has only 16 to about 3,800 masked networks. Under the any-prefix rule a host aiview saw on a {@code /28}
+ * was also "consistent" with a different raw host under such a summary, although no response renders that host with
+ * that length. {@code PathPseudonymOverlapTest} reproduces it.</p>
+ *
+ * <p>The any-prefix step: every network whose pseudonym contains the value gives one raw candidate (the masker
  * preserves the host offset inside its subnet); subnets registered with the masker are candidates too. A candidate is
  * accepted when the submitted value is one of the forms the response masking can render for that raw host:</p>
  * <ul>
@@ -101,6 +117,14 @@ public final class PathPseudonymMap {
     /** length -> masked network -> raw networks of that length whose pseudonym it is. */
     private final Map<Integer, Map<Long, Set<Long>>> byMaskedNetwork = new HashMap<>();
     private final Map<String, Optional<Ipv4Prefix>> registeredMemo = new ConcurrentHashMap<>();
+    /**
+     * Masked host -> raw hosts, for every attachment address written {@code h/len}: the host part the topology
+     * response shows for it. With an explicit length the masker's answer is a pure function of the text, so this is
+     * computed once per snapshot and cannot drift.
+     */
+    private final Map<Long, Set<Long>> shownPrefixed = new HashMap<>();
+    /** Attachment addresses written without a length (a VIP as the cluster reports it): shown as the bare-host form. */
+    private final Set<Long> shownBare = new TreeSet<>();
     private final int networks;
 
     private PathPseudonymMap(TopologyGraph graph, Masking masking) {
@@ -117,6 +141,25 @@ public final class PathPseudonymMap {
             }
         }
         own.removeIf(p -> p.length() < 4);
+        for (TopologyGraph.Attachment a : graph.attachments()) {
+            if (a.address().isEmpty()) {
+                continue;
+            }
+            String address = a.address().get().strip();
+            Optional<Ipv4Prefix.HostAddress> host = Ipv4Prefix.parseHost(address);
+            if (host.isEmpty()) {
+                continue;
+            }
+            if (host.get().length().isEmpty()) {
+                shownBare.add(host.get().host());
+                continue;
+            }
+            int length = host.get().length().get();
+            Optional<Ipv4Prefix.HostAddress> shown = Optional.ofNullable(masking.maskPrefixed(address))
+                    .flatMap(Ipv4Prefix::parseHost).filter(h -> h.length().filter(len -> len == length).isPresent())
+                    .filter(h -> maskedSpace(h.host()));
+            shown.ifPresent(h -> shownPrefixed.computeIfAbsent(h.host(), k -> new TreeSet<>()).add(host.get().host()));
+        }
         this.snapshotNetworks = List.copyOf(own);
         this.ownNetworks = Set.copyOf(own);
         Set<Ipv4Prefix> all = new LinkedHashSet<>(own);
@@ -172,6 +215,29 @@ public final class PathPseudonymMap {
             return new Refused(RAW_VALUE_REFUSED);
         }
         long value = parsed.get().host();
+        // First what the topology response showed for an attachment; other prefixes only when that yields nothing.
+        Set<Long> shown = new TreeSet<>(shownPrefixed.getOrDefault(value, Set.of()));
+        for (long bare : shownBare) {
+            if (submitted.equals(masking.peek(text(bare)))) {
+                shown.add(bare);
+            }
+        }
+        List<Long> accepted = shown.isEmpty() ? acceptedUnderAnyPrefix(value, submitted) : List.copyOf(shown);
+        if (accepted.size() > 1) {
+            return new Refused(AMBIGUOUS_PSEUDONYM);
+        }
+        if (accepted.isEmpty() || snapshotNetworks.stream().noneMatch(p -> p.contains(accepted.get(0)))) {
+            return new Refused(UNKNOWN_PSEUDONYM);
+        }
+        return new Resolved(text(accepted.get(0)));
+    }
+
+    /** Test access: the raw hosts the any-prefix rule accepts for a masked host (package-private, never logged). */
+    List<Long> acceptedUnderAnyPrefix(String submitted) {
+        return acceptedUnderAnyPrefix(Ipv4Prefix.parseHost(submitted).orElseThrow().host(), submitted);
+    }
+
+    private List<Long> acceptedUnderAnyPrefix(long value, String submitted) {
         // raw host -> lengths of the real prefixes (snapshot networks, registered subnets) it was derived under; a
         // candidate derived only from a fallback /24 has none and can match only the bare-host form.
         Map<Long, Set<Integer>> candidates = new LinkedHashMap<>();
@@ -211,13 +277,7 @@ public final class PathPseudonymMap {
                 accepted.add(candidate.getKey());
             }
         }
-        if (accepted.size() > 1) {
-            return new Refused(AMBIGUOUS_PSEUDONYM);
-        }
-        if (accepted.isEmpty() || snapshotNetworks.stream().noneMatch(p -> p.contains(accepted.get(0)))) {
-            return new Refused(UNKNOWN_PSEUDONYM);
-        }
-        return new Resolved(text(accepted.get(0)));
+        return accepted;
     }
 
     /** Resolves a masked interface label among the interfaces of one unit of this snapshot. */
