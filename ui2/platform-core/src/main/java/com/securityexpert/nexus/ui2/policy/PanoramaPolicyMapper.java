@@ -366,7 +366,9 @@ public final class PanoramaPolicyMapper {
         } else if (definition == null) {
             boolean literal = family.equals("address") && (name.contains(".") || name.contains(":")) && name.matches("[0-9a-fA-F.:/\\-]+");
             boolean defaultService = family.equals("service") && name.equals("application-default");
-            objects.put(id, new PolicyObject(id, name, defaultService ? "service" : literal ? "address" : "unresolved",
+            List<String> predefined = family.equals("service") ? PREDEFINED_SERVICES.get(name) : null;
+            if (predefined != null) objects.put(id, new PolicyObject(id, name, "service", List.of(), predefined, "RESOLVED"));
+            else objects.put(id, new PolicyObject(id, name, defaultService ? "service" : literal ? "address" : "unresolved",
                     List.of(), literal ? List.of(name) : List.of(), literal || defaultService ? "RESOLVED" : "UNRESOLVED"));
         } else {
             var entry = definition.element();
@@ -381,6 +383,14 @@ public final class PanoramaPolicyMapper {
         }
         return id;
     }
+    /**
+     * PAN-OS built-in services, used only when the configuration defines no object of that name (a configured object
+     * always wins). PAN-OS 11.1 "Policy Objects": "two pre-defined services—service-http and service-https— that use TCP
+     * ports 80 and 8080 for HTTP and TCP port 443 for HTTPS." 5,256 rules referenced them unresolved (2026-11-04).
+     */
+    static final Map<String, List<String>> PREDEFINED_SERVICES = Map.of(
+            "service-http", List.of("protocol/tcp/port: 80,8080"),
+            "service-https", List.of("protocol/tcp/port: 443"));
     private static String family(String type) {
         return switch (type) {
             case "address-group" -> "address"; case "service-group" -> "service";
