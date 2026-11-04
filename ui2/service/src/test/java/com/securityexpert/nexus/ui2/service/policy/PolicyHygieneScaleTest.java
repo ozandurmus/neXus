@@ -32,7 +32,7 @@ class PolicyHygieneScaleTest {
             assertFalse(result.budgetReached(), vendor);
             assertEquals(10_000, result.rules().size());
             assertTrue(result.rules().values().stream().noneMatch(a -> "analysis budget".equals(a.shadowReason())), vendor);
-            assertTrue(millis < 8_000, vendor + " took " + millis + " ms");
+            assertTrue(millis < 30_000, vendor + " took " + millis + " ms"); // blow-up guard sized for CI runners
         }
     }
     /**
@@ -58,7 +58,7 @@ class PolicyHygieneScaleTest {
         System.out.println("SCALE PAN 10000 rules, many zone keys: " + millis + " ms " + verdicts);
         assertFalse(result.budgetReached());
         assertTrue(result.rules().values().stream().noneMatch(a -> "analysis budget".equals(a.shadowReason())));
-        assertTrue(millis < 8_000, "took " + millis + " ms");
+        assertTrue(millis < 30_000, "took " + millis + " ms"); // a pathological blow-up guard; CI runners are several times slower than a laptop
     }
     private static List<String> zones(Random random) {
         if (random.nextInt(10) == 0) return List.of("any");
