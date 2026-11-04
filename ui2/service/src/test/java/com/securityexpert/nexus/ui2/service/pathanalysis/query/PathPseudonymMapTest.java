@@ -111,6 +111,13 @@ class PathPseudonymMapTest {
             }
 
             @Override
+            public String maskPrefixed(String hostWithLength) {
+                Ipv4Prefix.HostAddress h = Ipv4Prefix.parseHost(hostWithLength).orElseThrow();
+                return h.length().filter(len -> len == 26).isPresent() && peek(h.hostText()).startsWith("245.")
+                        ? peek(h.hostText()) + "/26" : "[REDACTED_IP]";
+            }
+
+            @Override
             public List<String> registeredSubnets() {
                 return List.of();
             }
