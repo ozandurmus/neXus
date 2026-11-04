@@ -86,8 +86,9 @@ public final class AuditPresentationAllowlist {
                     "canonical_hash", "change_state", "collected_at", "created_at", "device_id",
                     "is_primary", "job_id", "raw_bytes", "raw_hash", "read_kind", "run_id",
                     "vendor", "withheld_line_count")),
+            // V184: evidence_grade is a closed enum; routing_context (a virtual-router name) is redacted.
             Map.entry("device_interface", Set.of(
-                    "interface_id", "kind", "run_id", "state", "vlan_id")),
+                    "evidence_grade", "interface_id", "kind", "run_id", "state", "vlan_id")),
             Map.entry("device_interface_address", Set.of(
                     "address_id", "family", "interface_id", "role")),
             Map.entry("device_inventory_ha", Set.of(
@@ -97,8 +98,9 @@ public final class AuditPresentationAllowlist {
             Map.entry("device_onboarding", Set.of(
                     "completed_at", "device_id", "skipped", "source", "started_at", "state", "step",
                     "step_job_id", "updated_at")),
+            // V184: two booleans, a numeric metric and a closed next-hop kind enum.
             Map.entry("device_route", Set.of(
-                    "protocol", "route_id", "run_id")),
+                    "is_active", "is_ecmp", "metric", "next_hop_kind", "protocol", "route_id", "run_id")),
             Map.entry("device_secret_reference", Set.of(
                     "credential_reference_id", "device_id", "purpose", "set_at",
                     "set_by_actor_fingerprint")),
