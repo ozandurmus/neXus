@@ -36,7 +36,7 @@ not "build collection". No new credential boundary in A.
 | G3 | Local (non-Panorama) PAN mapper maps only security rules: no NAT, no default rules | `PanoramaPolicyMapper.java:127` |
 | G4 | CP `blackhole` stored as a route without a kind; ECMP `nexthop` continuation lines dropped | `CheckPointIpRouteParser.java:60-71` |
 | G5 | VSX cluster-member VS addresses come from `cphaprob -a if` bare, without prefix, recorded as `member` though they are cluster addresses; only the connected route in the same VS can give the prefix | `InventoryCapabilityExecutor.java:846-855,344` |
-| G6 | Per-VS route read is `ip -4 route show` (main table only), physical is `table all` | `InventoryReadPlan.java:104,146` |
+| G6 | Per-VS route read was `ip -4 route show` (main table only), physical is `table all`. CLOSED 2026-11-04: PO approved `bash -lc 'vsenv <VSID> && ip -4 route show table all'` (A6 proposal row 1, V187) | `InventoryReadPlan.checkPointVsidSteps` |
 | G7 | CP install-on binding: `PolicyCollectionRepository.targets` does not read `policy_package_target.target_uid`; `install-on` extras hold `PolicySnapshot.ref(meta.id(),"object",uid)`, not the raw uid; `PolicyLookup` returns `target context unproven` (UNKNOWN) instead of skipping a rule installed on a different gateway | `PolicyCollectionRepository.java:226-232`; `CheckPointPolicyMapper.java`; `PolicySnapshot.java:81-83`; `PolicyLookup.java:203-206` |
 | G8 | PAN NAT and security `target-selectors` / `target/negate` not honoured per device | `PanoramaPolicyMapper.java:183,225-227` |
 | G9 | Masked addresses (`SubnetPreservingIpMasker`) hash each prefix independently: LPM cannot run on masked values; aiview has no way to enter a query | `SubnetPreservingIpMasker.java:172,179` |

@@ -65,12 +65,14 @@ never guessed. Virtual-system contexts get no link-layer address from this read.
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | 21 | `ip -o link show` | each interface's link-layer address for the Inventory interface table (PO 2026-10-15) | CLASS_0_READ | Check Point Gaia, `cp_gaia_gateway`, Expert, `ssh_exec` | 30 s | none | once per device per run | one session per device per run | an interface without a link-layer address is a result, not an error | none | count of link addresses parsed; values persisted per interface (`device_interface.mac_address`), masked to the vendor prefix for aiview |
 | 22 | `bash -lc 'vsenv 0 && ip -o link show'` | entry 21 on a VSX host | CLASS_0_READ | Check Point Gaia, `cp_gaia_gateway`, Expert, `ssh_exec` | 30 s | none | once per device per run | one session per device per run | same as entry 21 | none | same as entry 21 |
+| 23 | `bash -lc 'vsenv <VSID> && ip -4 route show table all'` | per-virtual-system route read of every routing table, not only `main` (path analysis G6; PO approval 2026-11-04, `PATH_ANALYSIS_A6_COMMAND_PROPOSAL.md` row 1, V187); `<VSID>` digits-only; replaces the route half of entry 17 | CLASS_0_READ | Check Point Gaia, `cp_gaia_gateway`, Expert, `ssh_exec` | 30 s | none | once per virtual system per run | one session per device per run, VS0 never re-entered | an empty table is a result, not an error | none | per-VS route counts; no raw output persisted |
+| 24 | `bash -lc 'vsenv <VSID> && fw getifs'` | the interface half of entry 17 as its own call, since entry 23 replaces its route half (V187); issued only for a standalone VSX gateway (a ClusterXL member reads `cphaprob -a if`) | CLASS_0_READ | Check Point Gaia, `cp_gaia_gateway`, Expert, `ssh_exec` | 30 s | none | once per virtual system per run | one session per device per run, VS0 never re-entered | an address-less virtual system is a result, not an error | none | per-VS interface counts; no raw output persisted |
 
 ## Executor order (14D §3)
 
 `vsx stat -v` (entry 6) always runs first, bare, to decide VSX by text
 before any other physical read's form (bare vs. entries 7–11) is chosen;
-the per-virtual-system entries (12–14) run last, one VSID at a time, VS0
+the per-virtual-system entries (12–14, and 23–24 since V187) run last, one VSID at a time, VS0
 never re-entered.
 
 ## Cross-references

@@ -21,8 +21,8 @@ import java.util.regex.Pattern;
  * #checkPointPhysicalCommand} -- {@code bash -lc 'vsenv 0 && <read>'} on a
  * VSX host, bare on a non-VSX gateway (where {@code vsenv} does not
  * exist) -- and the per-virtual-system reads are issued through {@link
- * #checkPointVsidSteps} as three {@code bash -lc 'vsenv <VSID> && ...'}
- * composites, the VSID validated as digits before substitution. The
+ * #checkPointVsidSteps} as four {@code bash -lc 'vsenv <VSID> && ...'}
+ * calls, the VSID validated as digits before substitution. The
  * sourced-profile form is never used (it does not define {@code vsenv},
  * a shell function of the interactive login profile, not a binary).</p>
  *
@@ -101,12 +101,6 @@ public final class InventoryReadPlan {
     public static final List<String> CHECK_POINT_PHYSICAL_READS = List.of(
             CP_FW_GETIFS, CP_IP_ADDR_SHOW_STATE_ONLY, CP_IP_LINK_SHOW, CP_IP_ROUTE_SHOW, CP_CPHAPROB_STAT, CP_CPHAPROB_CLUSTER_IF, CP_VSX_STAT);
 
-    /** Path analysis G6 (PATH_ANALYSIS_DESIGN.md §2): this per-VS read is the main table only, the physical read is
-     * {@code table all}. Changing it is a device-command change: it needs the Product Owner's exact-command approval
-     * (D-7, 2026-09-26 amendment) and a gate row first. Until then path analysis treats a VS's non-main tables as not
-     * collected (UNKNOWN). */
-    private static final String CP_VSID_ADDR_AND_ROUTE_READS = "fw getifs && ip -4 route show";
-
     /**
      * CF-2's login-shell wrapper: {@code bash -lc 'vsenv 0 && <read>'} on a
      * VSX host, the bare literal on a non-VSX gateway.
@@ -121,18 +115,31 @@ public final class InventoryReadPlan {
     }
 
     /**
-     * CF-2's exact per-VSID composite lines, {@code <VSID>} substituted
-     * after digit validation -- one {@code bash -lc} call per line, in
-     * CF-3's per-virtual-system order: addresses+routes, cluster VIPs, HA
-     * state.
+     * The per-VSID reads, {@code <VSID>} substituted after digit validation -- one {@code bash -lc} call per line, in
+     * CF-3's per-virtual-system order: routes, interfaces, cluster VIPs, HA state. Index constants: {@link
+     * #VSID_ROUTES}, {@link #VSID_INTERFACES}, {@link #VSID_CLUSTER_INTERFACES}, {@link #VSID_HA_STATE}.
+     *
+     * <p>Path analysis G6 (PO approval 2026-11-04, {@code PATH_ANALYSIS_A6_COMMAND_PROPOSAL.md} row 1, gate row
+     * {@code cp_inventory_vsid_ip_route_show_table_all}, V187): the route read is the approved literal {@code bash -lc
+     * 'vsenv <VSID> && ip -4 route show table all'} -- every routing table of the virtual system, not only {@code main}.
+     * It replaces the {@code fw getifs && ip -4 route show} composite, so the interface read is its own call (gate row
+     * {@code cp_inventory_vsid_fw_getifs}, the same read the composite already ran) and the two outputs no longer share
+     * a buffer.</p>
      */
     public static List<String> checkPointVsidSteps(String vsid) {
         String validated = requireDigitsOnly(vsid);
         return List.of(
-                vsenvWrap(validated, CP_VSID_ADDR_AND_ROUTE_READS),
+                vsenvWrap(validated, CP_IP_ROUTE_SHOW),
+                vsenvWrap(validated, CP_FW_GETIFS),
                 vsenvWrap(validated, CP_CPHAPROB_CLUSTER_IF),
                 vsenvWrap(validated, CP_CPHAPROB_STAT));
     }
+
+    /** Positions in {@link #checkPointVsidSteps}. */
+    public static final int VSID_ROUTES = 0;
+    public static final int VSID_INTERFACES = 1;
+    public static final int VSID_CLUSTER_INTERFACES = 2;
+    public static final int VSID_HA_STATE = 3;
 
     /** {@code ip -4 addr show}, kept only for its header line's {@code <...,UP,LOWER_UP>} flags
      * (Product Owner correction, 2026-09-21): on a cluster member this is the one read that still

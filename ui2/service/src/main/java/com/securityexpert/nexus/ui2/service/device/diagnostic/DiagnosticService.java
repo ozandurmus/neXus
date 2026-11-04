@@ -55,6 +55,8 @@ public final class DiagnosticService {
             java.util.Map.entry("cp_inventory_vsid_cphaprob_a_if", "Virtual system cluster interfaces"),
             java.util.Map.entry("cp_inventory_vsid_addr_and_route", "Virtual system addresses and routes"),
             java.util.Map.entry("cp_inventory_vsid_fw_getifs_and_route", "Virtual system interfaces and routes"),
+            java.util.Map.entry("cp_inventory_vsid_ip_route_show_table_all", "Virtual system routing tables"),
+            java.util.Map.entry("cp_inventory_vsid_fw_getifs", "Virtual system interfaces"),
             java.util.Map.entry("cp_inventory_vsid_ip_addr_show_state_only", "Virtual system interface state"),
             java.util.Map.entry("cp_inventory_ip_route_show_table_all", "Routing tables"),
             java.util.Map.entry("cp_inventory_ip_addr_show_v4", "IPv4 interface addresses"),

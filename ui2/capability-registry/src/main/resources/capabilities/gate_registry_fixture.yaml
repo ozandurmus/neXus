@@ -473,6 +473,43 @@ gates:
     safe_telemetry_fields: []
     source_document_pointer: "docs/design/CP_INVENTORY_COMMAND_GATE_ENTRIES.md entry 17 (2026-09-21 amendment)"
 
+  # Path analysis G6 (V187): the per-virtual-system route read covers every routing table. PO approval 2026-11-04
+  # ("1-5 onaylı devam") of docs/design/PATH_ANALYSIS_A6_COMMAND_PROPOSAL.md row 1, exactly as written. The old
+  # composite above (entry 17) stays SIGNED_OFF as the record of what ran before; the interface half is its own row.
+  - gate_id: cp_inventory_vsid_ip_route_show_table_all
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "bash -lc 'vsenv <VSID> && ip -4 route show table all'"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once per virtual system per run"
+    session_reuse_rule: "one session per device per run, VS0 never re-entered"
+    unsupported_behavior_ref: "an empty table is a result, not an error"
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/PATH_ANALYSIS_A6_COMMAND_PROPOSAL.md row 1 (PO approval 2026-11-04: \"1-5 onaylı devam\"); docs/design/CP_INVENTORY_COMMAND_GATE_ENTRIES.md entry 23"
+
+  - gate_id: cp_inventory_vsid_fw_getifs
+    vendor: check_point
+    platform_role_scope: cp_gaia_gateway
+    shell_context: expert
+    transport_kind: SSH_EXEC
+    canonical_command_key: "bash -lc 'vsenv <VSID> && fw getifs'"
+    action_class: read
+    sign_off_state: SIGNED_OFF
+    timeout_s: 30
+    retry_rule: none
+    max_frequency: "once per virtual system per run"
+    session_reuse_rule: "one session per device per run, VS0 never re-entered"
+    unsupported_behavior_ref: "an address-less virtual system is a result, not an error"
+    secret_output_risk: none
+    safe_telemetry_fields: []
+    source_document_pointer: "docs/design/CP_INVENTORY_COMMAND_GATE_ENTRIES.md entry 24 (the interface half of entry 17, split out for the G6 route literal; PO approval 2026-11-04 of PATH_ANALYSIS_A6_COMMAND_PROPOSAL.md row 1)"
+
   # cp_vsx_interfaces_identical_to_physical (State column, 2026-09-21 amendment): cphaprob -a if's
   # "Interface Name: Status:" table only lists a "Required interfaces" subset -- "ip -4 addr show"
   # is read a second time, for its header line's up/down flags alone (never its address, which is
