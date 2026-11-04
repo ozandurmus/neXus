@@ -50,6 +50,7 @@ final class LegacyPolicyHygiene {
                 }
                 continue;
             }
+            if (section.rules().isEmpty()) continue; // 2026-11-04: empty sections skipped in both engines
             if (!scope.advance(section)) {
                 earlier.clear();
                 earlierUnknown = false;

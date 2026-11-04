@@ -82,6 +82,14 @@ class PolicyHygieneCheckPointScopeTest {
         assertSame(snapshot, snapshot.withPageSplitsMerged());
     }
 
+    @Test void anEmptySectionNeitherContinuesNorBreaksTheLayerScope() {
+        var snapshot = cpSnapshot(cpSection("s1", null, cp("r1", 1, "Accept", "net", "targets")),
+            new Section("empty", "OBJ-SECTION-02", "CP access layer", null, List.of()),
+            cpSection("s2", null, cp("r2", 2, "Accept", "host", "targets"), cp("r3", 3, "Drop", "any", "targets")));
+        assertCovered(snapshot, "r2", "REDUNDANT", "r1");
+        assertEquals("NOT_SHADOWED", at(snapshot, "r3").shadowStatus());
+    }
+
     // ---- install-on as an opaque placement token ----
 
     @Test void rulesInstalledOnTheSameGlobalTargetObjectCanCoverEachOther() {

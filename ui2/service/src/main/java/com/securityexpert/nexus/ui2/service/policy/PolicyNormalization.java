@@ -102,6 +102,9 @@ final class PolicyNormalization {
         boolean unproven;
         EvaluationScope(Metadata metadata, java.util.function.Supplier<S> fresh) { this.metadata = metadata; this.fresh = fresh; }
         S advance(Section section) {
+            // A section without rules evaluates nothing and carries no layer label, so it neither continues nor breaks the
+            // scope (2026-11-03: empty CP sections made about 7,200 later rules read "earlier sections not analysed").
+            if (section.rules().isEmpty()) { if (current == null) current = fresh.get(); return current; }
             S state;
             if (metadata.vendor().equals("CP") && "CP access layer".equals(section.source())) state = checkPoint(section);
             else {
@@ -221,7 +224,7 @@ final class PolicyNormalization {
                             throw new Unknown("unresolved install-on selector");
                     }
                 } else if (!Set.of("from", "to", "install-on", "source-user", "category", "rule-type", "tag", "layer-name", "last-modified", "last-modifier", "log-setting").contains(key)
-                        && !key.startsWith("track-") && !key.startsWith("profile-setting/")) throw new Unknown("unsupported rule constraint");
+                        && !key.startsWith("track-") && !key.startsWith("profile-setting/") && !untargeted(snapshot, rule, key)) throw new Unknown("unsupported rule constraint");
             }
             if (snapshot.metadata().vendor().equals("CP") && !rule.extras().containsKey("time")) throw new Unknown("time evidence not collected");
             Map<String, Set<String>> placements = new HashMap<>();
@@ -248,6 +251,17 @@ final class PolicyNormalization {
     /** Constraints that are one more condition a packet must also meet: they can only narrow the rule's match. */
     private static final Set<String> NARROWING = Set.of("time", "schedule", "vpn", "content", "source-user", "category");
     /** Fields that say what happens after a match (logging, tagging, security profiles, provenance), never what matches. */
+    /**
+     * A Palo Alto rule whose stored target is only {@code <negate>no</negate>} selects no device, tag or vsys, so it is added
+     * to every firewall of its device group (PATH_ANALYSIS_VENDOR_SEMANTICS.md 4d: "If you do not select firewalls to target,
+     * the rule is added to all of the (unchecked) firewalls in the device group") -- the same as a rule without a target.
+     * 10,600 rules on the estate carry exactly this (2026-11-04); any other target shape stays unsupported.
+     */
+    static boolean untargeted(PolicySnapshot snapshot, Rule rule, String key) {
+        return key.equals("target/negate") && "PAN".equals(snapshot.metadata().vendor()) && rule.extras().get(key).equals(List.of("no"))
+            && TARGET_SHAPES.stream().noneMatch(rule.extras()::containsKey);
+    }
+    private static final Set<String> TARGET_SHAPES = Set.of("target-selectors", "target-tags", "target-vsys", "target-unrecognized");
     private static final Set<String> INERT = Set.of("tag", "layer-name", "last-modified", "last-modifier", "log-setting");
     /**
      * The partial prior of a rule {@link #normalize} could not fully resolve, or {@code null} when nothing of it may be
@@ -277,7 +291,7 @@ final class PolicyNormalization {
             String key = entry.getKey();
             resolver.budget.spend();
             if (NARROWING.contains(key) || INERT.contains(key) || Set.of("from", "to", "install-on").contains(key)
-                    || key.startsWith("track-") || key.startsWith("profile-setting/")) continue;
+                    || key.startsWith("track-") || key.startsWith("profile-setting/") || untargeted(snapshot, rule, key)) continue;
             if (key.equals("rule-type")) { zones &= entry.getValue().equals(List.of("universal")); continue; }
             // The inline layer an "Apply Layer" rule hands its match to; it is no condition on the match itself.
             if (key.equals("inline-layer") && cp && rule.action().equals("Apply Layer")) continue;
