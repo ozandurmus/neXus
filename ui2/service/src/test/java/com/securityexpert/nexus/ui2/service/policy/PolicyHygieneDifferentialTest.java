@@ -203,14 +203,16 @@ class PolicyHygieneDifferentialTest {
      * here). A rule may differ only when application-default is its own service or that of an earlier rule of its scope,
      * and then its new verdict must hold for every assignment of the unknown, per-application default ports
      * ({@link PartialPriorOracle#assertDefaultPortsChangeIsSafe}). Every other rule is identical, blocker included.
+     * Content-provided applications on explicit-service rules have their own test below; here both analyses read them
+     * as before ({@link SyntheticPolicies#unrecognisedApplications}), so only application-default is in play.
      */
     @Test void applicationDefaultChangesOnlyTheRulesItInvolvesAndHoldsInEveryDefaultPortWorld() {
         Map<String, Integer> changed = new TreeMap<>(); int rules = 0, involved = 0, formerlyMissing = 0, formerlyBlocked = 0;
         for (long seed = 0; seed < 3000; seed++) {
             var base = SyntheticPolicies.legacyComparable(SyntheticPolicies.random(seed + 400_000, 2 + (int) (seed % 70)));
             if (!base.metadata().vendor().equals("PAN")) continue;
-            var snapshot = SyntheticPolicies.applicationDefault(base, seed);
-            var unrecognised = SyntheticPolicies.unrecognisedDefault(snapshot);
+            var snapshot = SyntheticPolicies.unrecognisedApplications(SyntheticPolicies.applicationDefault(base, seed));
+            var unrecognised = SyntheticPolicies.unrecognisedApplications(SyntheticPolicies.unrecognisedDefault(snapshot));
             var former = PolicyHygiene.analyze(unrecognised, 90, NOW, PolicyHygiene.TOTAL_WORK).rules();
             var actual = PolicyHygiene.analyze(snapshot, 90, NOW, PolicyHygiene.TOTAL_WORK).rules();
             // The reference is the former treatment: still the legacy scan's answer up to the known, oracle-checked changes.
@@ -238,6 +240,46 @@ class PolicyHygieneDifferentialTest {
             rules + " rules, " + involved + " involved, " + formerlyMissing + " formerly missing service values, " + formerlyBlocked + " formerly blocked");
         System.out.println("APPLICATION-DEFAULT " + rules + " rules, " + involved + " involve it, changed: " + changed
             + "; formerly missing service values " + formerlyMissing + ", formerly earlier-unsupported " + formerlyBlocked);
+    }
+
+    /**
+     * Palo Alto content-provided applications as opaque identities: on seeded snapshots with application-default rules
+     * and, on about half of the other rules, applications the configuration does not define (UNRESOLVED under their own
+     * application reference), every rule is compared with the same analysis of the same snapshot with those references
+     * not recognised on explicit-service rules (the former "unresolved object" treatment). A rule may differ only when
+     * such an application is named by itself or by an earlier rule of its scope; every other rule is identical, blocker
+     * included. A changed verdict must hold in every world: for every overlap of the named applications (one may carry
+     * another's traffic) and every assignment of default ports ({@link PartialPriorOracle#assertContentApplicationChangeIsSafe}).
+     */
+    @Test void contentApplicationsChangeOnlyTheRulesTheyInvolveAndHoldForEveryOverlap() {
+        Map<String, Integer> changed = new TreeMap<>(); int rules = 0, involved = 0, formerlyUnresolved = 0, formerlyBlocked = 0;
+        for (long seed = 0; seed < 3000; seed++) {
+            var base = SyntheticPolicies.legacyComparable(SyntheticPolicies.random(seed + 500_000, 2 + (int) (seed % 70)));
+            if (!base.metadata().vendor().equals("PAN")) continue;
+            var snapshot = SyntheticPolicies.contentApplications(SyntheticPolicies.applicationDefault(base, seed), seed);
+            var reference = PolicyHygiene.analyze(SyntheticPolicies.unrecognisedApplications(snapshot), 90, NOW, PolicyHygiene.TOTAL_WORK).rules();
+            var actual = PolicyHygiene.analyze(snapshot, 90, NOW, PolicyHygiene.TOTAL_WORK).rules();
+            var universe = new PartialPriorOracle.Universe(snapshot);
+            assertEquals(reference.keySet(), actual.keySet());
+            for (var entry : reference.entrySet()) {
+                String id = entry.getKey(), context = "seed " + seed + " rule " + id;
+                if (PartialPriorOracle.involvesContentApplication(universe, id)) involved++;
+                String change = PartialPriorOracle.assertContentApplicationChangeIsSafe(universe, entry.getValue(), actual.get(id), id, context);
+                if (change != null) {
+                    changed.merge(change, 1, Integer::sum);
+                    if ("unresolved object".equals(entry.getValue().shadowReason())) formerlyUnresolved++;
+                    if (PartialPriorOracle.UNSUPPORTED.equals(entry.getValue().shadowReason())) formerlyBlocked++;
+                }
+                rules++;
+            }
+        }
+        System.out.println("CONTENT APPLICATIONS " + rules + " rules, " + involved + " involve one, changed: " + changed
+            + "; formerly unresolved object " + formerlyUnresolved + ", formerly earlier-unsupported " + formerlyBlocked);
+        // The generator must reach every new verdict, and release a real share of the formerly unresolved and blocked rules.
+        for (String verdict : List.of("REDUNDANT", "CONFLICT", "NOT_SHADOWED", "UNKNOWN / " + PartialPriorOracle.OVERLAP, "UNKNOWN / " + PartialPriorOracle.DEFAULT_PORTS))
+            assertTrue(changed.getOrDefault(verdict, 0) >= 20, verdict + " in " + changed);
+        assertTrue(rules > 40_000 && involved > 20_000 && formerlyUnresolved > 2_000 && formerlyBlocked > 500,
+            rules + " rules, " + involved + " involved, " + formerlyUnresolved + " formerly unresolved object, " + formerlyBlocked + " formerly blocked");
     }
 
     @Test void legacyCascadeAndNewIndexAgreeWhereverTheLegacyBudgetHeld() {
