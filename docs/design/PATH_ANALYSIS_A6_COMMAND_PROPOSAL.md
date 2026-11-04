@@ -30,3 +30,8 @@ PO answer (verbatim): "1-5 onaylı devam".
   `gate_registry_fixture.yaml`; `CP_INVENTORY_COMMAND_GATE_ENTRIES.md` entries 23-24. The old composite row stays SIGNED_OFF as
   history. V187 must be dry-run (BEGIN/ROLLBACK) on the live ui2 database before rollout.
 - Rows 2-5 (A6) are not implemented by this change.
+
+Engineer decision 2026-11-04 (under the PO delegation of the same day): the former per-VS composite
+`vsenv N && fw getifs && ip -4 route show` is split into the approved route literal (row 1) and its unchanged
+`fw getifs` part, issued in the same session with the same timeout and frequency. Splitting an already-gated composite
+into its parts is not a command addition (AGENTS.md, parse-scope rule); gate row `cp_inventory_vsid_fw_getifs` records it.
