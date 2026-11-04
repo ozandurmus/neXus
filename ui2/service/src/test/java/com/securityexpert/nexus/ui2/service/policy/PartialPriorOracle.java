@@ -51,6 +51,10 @@ import java.util.*;
  * application every atom: the most favourable to a cover by any earlier named application) and seeded random overlaps,
  * crossed with the default-port worlds above; the witness and widest worlds use the collapsed overlap. Every claim must
  * hold for every overlap assignment.
+ * <p>Check Point access roles in a source cell ({@link Universe#sources}): the role matches the addresses of whichever
+ * identities it selects, any subset of its networks' addresses; networks any or an unreadable role is the whole
+ * universe. A release must share no packet with, and not be covered by, an access-role prior under every identity
+ * selection checked (the widest one decides all of them, by monotonicity; the others are checked as well).
  */
 final class PartialPriorOracle {
     private PartialPriorOracle() {}
@@ -290,12 +294,70 @@ final class PartialPriorOracle {
             var out = new ArrayList<>(worlds); out.add(witness(prior, later)); return out;
         }
         boolean coversInEveryWorld(Rule prior, Rule later) {
-            for (var world : worlds(prior, later)) if (!covers(prior, later, world)) return false;
+            for (var world : worlds(prior, later)) for (var identities : sources(prior)) if (!covers(prior, identities, later, world)) return false;
             return true;
         }
         boolean coversInSomeWorld(Rule prior, Rule later) {
-            for (var world : worlds(prior, later)) if (covers(prior, later, world)) return true;
+            for (var world : worlds(prior, later)) for (var identities : sources(prior)) if (covers(prior, identities, later, world)) return true;
             return false;
+        }
+        /**
+         * Check Point access roles in a source cell: the role matches the addresses of whichever identities it selects,
+         * which may be any subset of its networks' addresses (Resolver#accessRoleBound gives the vendor sources). The
+         * oracle reads the role itself, independently of the production code: the mapper's stored shape (type
+         * access-role, status DYNAMIC, no members, only {@code networks: } values); networks any, an unresolvable
+         * network or any other shape is the whole universe (unbounded). Anything else in the cell is read as usual.
+         * <p>Every source set the rule may match, one per identity selection checked: the cell with every role at its
+         * widest (all of its networks), with no identity selected at all, with each single address of the roles'
+         * networks, every selection exhaustively when the roles' networks add at most {@link #EXHAUSTIVE} addresses to the
+         * cell, and seeded random selections otherwise. Sharing a packet and covering are both monotone in the prior's
+         * source set, so the widest selection alone already decides every subset; the others confirm it directly. A
+         * rule without such a role has one source set, exactly as before.
+         */
+        List<BitSet> sources(Rule rule) {
+            var source = rule.source();
+            BitSet widest = cell(source, "address");
+            if (!snapshot.metadata().vendor().equals("CP") || source.negated() || source.refs().isEmpty()) return List.of(widest);
+            BitSet fixed = new BitSet(ADDRESS_SIZE), roles = new BitSet(ADDRESS_SIZE); boolean role = false;
+            for (String id : source.refs()) {
+                var o = snapshot.objects().get(id);
+                if (o != null && o.type().equals("access-role") && "DYNAMIC".equals(o.status())) { role = true; roles.or(networks(o)); }
+                else fixed.or(object(id, "address", ADDRESS_SIZE, 0));
+            }
+            if (!role) return List.of(widest);
+            var all = (BitSet) fixed.clone(); all.or(roles);
+            var optional = (BitSet) roles.clone(); optional.andNot(fixed);
+            List<BitSet> out = new ArrayList<>(List.of(all, fixed));
+            int[] addresses = optional.stream().toArray();
+            if (addresses.length <= EXHAUSTIVE) {
+                for (int mask = 1; mask < (1 << addresses.length) - 1; mask++) {
+                    var subset = (BitSet) fixed.clone();
+                    for (int b = 0; b < addresses.length; b++) if ((mask >> b & 1) == 1) subset.set(addresses[b]);
+                    out.add(subset);
+                }
+            } else {
+                if (addresses.length <= 256) for (int a : addresses) { var one = (BitSet) fixed.clone(); one.set(a); out.add(one); }
+                var random = new Random(rule.id().hashCode());
+                for (int i = 0; i < 4; i++) {
+                    var subset = (BitSet) fixed.clone();
+                    for (int a : addresses) if (random.nextBoolean()) subset.set(a);
+                    out.add(subset);
+                }
+            }
+            return out;
+        }
+        static final int EXHAUSTIVE = 8;
+        /** The addresses an access role's networks hold, or the whole universe where they give no bound. */
+        private BitSet networks(PolicyObject role) {
+            if (!role.members().isEmpty() || role.values().isEmpty()) return full(ADDRESS_SIZE);
+            var out = new BitSet(ADDRESS_SIZE);
+            for (String value : role.values()) {
+                if (!value.startsWith("networks: ")) return full(ADDRESS_SIZE);
+                String network = value.substring("networks: ".length());
+                if (network.equals("any")) return full(ADDRESS_SIZE);
+                out.or(object(network, "address", ADDRESS_SIZE, 0));
+            }
+            return out;
         }
         /**
          * The smallest world two rules can be evaluated in: the zones either of them names (a rule names only zones
@@ -338,16 +400,21 @@ final class PartialPriorOracle {
          */
         String sharedPacket(Rule prior, Rule later) {
             var world = widest();
-            var a = dimensions(prior, sections.get(prior.id()), world); var b = dimensions(later, sections.get(later.id()), world);
-            List<Integer> witness = new ArrayList<>();
-            for (int d = 0; d < a.size(); d++) {
-                var both = (BitSet) a.get(d).clone(); both.and(b.get(d));
-                if (both.isEmpty()) return null;
-                witness.add(both.nextSetBit(0));
+            var b = dimensions(later, sections.get(later.id()), world, sources(later).get(0));
+            // Every identity selection of an access-role prior (sources), each its own check.
+            for (var identities : sources(prior)) {
+                var a = dimensions(prior, sections.get(prior.id()), world, identities);
+                List<Integer> witness = new ArrayList<>();
+                for (int d = 0; d < a.size(); d++) {
+                    var both = (BitSet) a.get(d).clone(); both.and(b.get(d));
+                    if (both.isEmpty()) { witness = null; break; }
+                    witness.add(both.nextSetBit(0));
+                }
+                if (witness != null) return witness.toString();
             }
-            return witness.toString();
+            return null;
         }
-        private List<BitSet> dimensions(Rule rule, Section section, World world) {
+        private List<BitSet> dimensions(Rule rule, Section section, World world, BitSet source) {
             var meta = snapshot.metadata(); boolean cp = meta.vendor().equals("CP");
             List<BitSet> all = List.of(full(ADDRESS_SIZE), full(ADDRESS_SIZE), full(sa()),
                 full(zones.size()), full(zones.size()), full(targets.size()));
@@ -355,7 +422,7 @@ final class PartialPriorOracle {
             for (String key : rule.extras().keySet())
                 if (!known(key, rule, cp)) return all;
             boolean universal = rule.extras().getOrDefault("rule-type", List.of("universal")).equals(List.of("universal"));
-            return List.of(cell(rule.source(), "address"), cell(rule.destination(), "address"), serviceApplication(rule, world),
+            return List.of(source, cell(rule.destination(), "address"), serviceApplication(rule, world),
                 universal ? zones(rule.extras().get("from")) : full(zones.size()), universal ? zones(rule.extras().get("to")) : full(zones.size()),
                 targets(rule.extras().get("install-on")));
         }
@@ -378,8 +445,8 @@ final class PartialPriorOracle {
             return out;
         }
         /** In this world, every packet the later rule matches, the prior matches too: per dimension, zones as (from, to) pairs. */
-        boolean covers(Rule prior, Rule later, World world) {
-            var a = coverDimensions(prior, world); var b = coverDimensions(later, world);
+        boolean covers(Rule prior, BitSet priorSource, Rule later, World world) {
+            var a = coverDimensions(prior, world, priorSource); var b = coverDimensions(later, world, sources(later).get(0));
             for (int d = 0; d < a.size(); d++) {
                 var outside = (BitSet) b.get(d).clone(); outside.andNot(a.get(d));
                 if (!outside.isEmpty()) return false;
@@ -388,7 +455,7 @@ final class PartialPriorOracle {
         }
         /** Every dimension but the joint (application, port) one holds the later rule's. */
         boolean coversExceptServiceApplication(Rule prior, Rule later) {
-            var world = widest(); var a = coverDimensions(prior, world); var b = coverDimensions(later, world);
+            var world = widest(); var a = coverDimensions(prior, world, sources(prior).get(0)); var b = coverDimensions(later, world, sources(later).get(0));
             for (int d = 0; d < a.size(); d++) {
                 if (d == 2) continue;
                 var outside = (BitSet) b.get(d).clone(); outside.andNot(a.get(d));
@@ -396,13 +463,13 @@ final class PartialPriorOracle {
             }
             return true;
         }
-        private List<BitSet> coverDimensions(Rule rule, World world) {
+        private List<BitSet> coverDimensions(Rule rule, World world, BitSet source) {
             boolean cp = snapshot.metadata().vendor().equals("CP");
             // A field of unknown meaning may widen the match: the whole universe (as the disjointness oracle does).
             for (String key : rule.extras().keySet())
                 if (!known(key, rule, cp)) return List.of(full(ADDRESS_SIZE), full(ADDRESS_SIZE), full(sa()),
                     full(zones.size() * zones.size()), full(targets.size()));
-            return List.of(cell(rule.source(), "address"), cell(rule.destination(), "address"), serviceApplication(rule, world),
+            return List.of(source, cell(rule.destination(), "address"), serviceApplication(rule, world),
                 pairs(rule), targets(rule.extras().get("install-on")));
         }
         private BitSet pairs(Rule rule) {

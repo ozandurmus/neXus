@@ -199,12 +199,39 @@ public final class CheckPointPolicyMapper {
         for (String field : List.of("ipv4-address", "ipv6-address", "subnet4", "mask-length4", "subnet6", "mask-length6", "port", "icmp-type", "icmp-code",
                 "ipv4-address-first", "ipv4-address-last", "ipv6-address-first", "ipv6-address-last", "ip-address-first", "ip-address-last"))
             if (node.has(field)) values.add(field + ": " + node.path(field).asText());
+        if (nativeType.equals("access-role")) values.addAll(accessRoleNetworks(meta, node.path("networks"), dict, objects, depth));
         String status = com.securityexpert.nexus.ui2.policy.CpObjectTypes.status(nativeType);
         // Keep the vendor class of an unmodelled object so the remaining gap can be counted by type (no names, no values).
         if (status.equals("UNSUPPORTED") && type.equals("unresolved"))
             values.add("native-type: " + (nativeType.matches("[A-Za-z][A-Za-z0-9_-]{0,63}") ? nativeType : "UNKNOWN"));
         objects.put(id, new PolicyObject(id, name, type, members, values, status, nativeType.equals("time") ? CheckPointSchedule.parse(node) : null));
         return id;
+    }
+    /**
+     * The networks component of an access role, one {@code networks: <object reference>} value per network, or
+     * {@code networks: any}. Check Point Management API reference, show-access-role reply field "networks"
+     * (https://sc1.checkpoint.com/documents/latest/APIs/index.html#web/show-access-role): "Collection of Network objects
+     * identified by the name or UID that can access the system." The access role stays DYNAMIC (its users, machines and
+     * remote access clients are enforcement-time identity and are neither parsed nor stored); only the network
+     * references are kept, as opaque object references resolved through the same dictionary as every other reference.
+     * The rulebase read already returns it: show-access-rulebase details-level full use-object-dictionary true, whose
+     * objects-dictionary "Level of details in the output corresponds to the number of details for search".
+     * <p>The reply's representation of "any" is not documented and no real-shaped fixture holds one, so every shape is
+     * read fail-closed: the text "any" or an element of type CpmiAnyObject is {@code networks: any}; an element with a
+     * uid (or a uid text) is that object; a missing field, null, an empty list or an element without a uid stores
+     * nothing at all (no bound). Shadowing reads a bound only from values it fully resolves.
+     */
+    private List<String> accessRoleNetworks(Metadata meta, JsonNode networks, Map<String, JsonNode> dict, Map<String, PolicyObject> objects, int depth) {
+        if (networks.isMissingNode() || networks.isNull()) return List.of();
+        List<String> out = new ArrayList<>();
+        Iterable<JsonNode> elements = networks.isArray() ? networks : List.of(networks);
+        for (JsonNode element : elements) {
+            String uid = element.isObject() ? element.path("uid").asText("") : element.isTextual() ? element.asText() : "";
+            if (element.isObject() && element.path("type").asText("").equals("CpmiAnyObject") || element.isTextual() && uid.equals("any")) out.add("networks: any");
+            else if (uid.isEmpty()) return List.of();
+            else out.add("networks: " + object(meta, uid, dict, objects, depth + 1));
+        }
+        return out;
     }
     static final Set<String> DYNAMIC_TYPES = com.securityexpert.nexus.ui2.policy.CpObjectTypes.DYNAMIC_TYPES;
     static final Set<String> GATEWAY_TYPES = com.securityexpert.nexus.ui2.policy.CpObjectTypes.GATEWAY_TYPES;

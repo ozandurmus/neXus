@@ -122,6 +122,54 @@ class PolicyMappersTest {
         assertTrue(object.apply("wild-1").values().contains("native-type: wildcard"));
     }
 
+    /**
+     * An access role's networks component (show-access-role reply field "networks") is kept as opaque object references
+     * (networks: <ref>) or networks: any; users, machines and remote access clients are never parsed or stored. Every
+     * shape the reference does not pin down stores nothing (no bound). Synthetic documentation addresses only.
+     */
+    @Test void checkpointAccessRolesKeepOnlyTheirNetworkReferences() throws Exception {
+        var page = new ObjectMapper().readTree("""
+            {"uid":"layer-01","name":"Synthetic access","from":1,"to":1,"total":1,
+             "objects-dictionary":[
+               {"uid":"host-1","type":"host","name":"Synthetic host","ipv4-address":"192.0.2.10"},
+               {"uid":"net-1","type":"network","name":"Synthetic net","subnet4":"198.51.100.0","mask-length4":24},
+               {"uid":"any-1","type":"CpmiAnyObject","name":"Any"},
+               {"uid":"role-list","type":"access-role","name":"Synthetic role list",
+                "networks":[{"uid":"host-1","name":"Synthetic host","type":"host"},{"uid":"net-1","name":"Synthetic net","type":"network"},
+                            {"uid":"net-absent","name":"Synthetic absent","type":"network"}],
+                "users":[{"uid":"user-1","name":"OBJ-USER-01","type":"CpmiUser"}],"machines":"any","remote-access-clients":"any"},
+               {"uid":"role-any-text","type":"access-role","name":"Synthetic role any","networks":"any","users":"all identified"},
+               {"uid":"role-any-object","type":"access-role","name":"Synthetic role any object","networks":[{"uid":"any-x","name":"Any","type":"CpmiAnyObject"}]},
+               {"uid":"role-any-ref","type":"access-role","name":"Synthetic role any ref","networks":[{"uid":"any-1","name":"Any"}]},
+               {"uid":"role-missing","type":"access-role","name":"Synthetic role missing","users":[{"uid":"user-1","name":"OBJ-USER-01","type":"CpmiUser"}]},
+               {"uid":"role-empty","type":"access-role","name":"Synthetic role empty","networks":[]},
+               {"uid":"role-null","type":"access-role","name":"Synthetic role null","networks":null},
+               {"uid":"role-nouid","type":"access-role","name":"Synthetic role no uid","networks":[{"uid":"net-1"},{"name":"Synthetic net"}]},
+               {"uid":"accept-01","type":"RulebaseAction","name":"Accept"}],
+             "rulebase":[{"uid":"rule-001","type":"access-rule","rule-number":1,"source":["role-list","role-any-text"],"destination":["host-1"],
+               "service":["any-1"],"action":"accept-01","install-on":["any-1"],"time":["any-1"]}]}
+            """);
+        var objects = new CheckPointPolicyMapper().map(metadata("CP"), List.of(page)).objects();
+        java.util.function.Function<String, String> id = uid -> ref("policy-1", "object", uid);
+        java.util.function.Function<String, PolicyObject> object = uid -> objects.get(id.apply(uid));
+        var list = object.apply("role-list");
+        assertEquals("access-role", list.type()); assertEquals("DYNAMIC", list.status()); assertEquals(List.of(), list.members());
+        assertEquals(List.of("networks: " + id.apply("host-1"), "networks: " + id.apply("net-1"), "networks: " + id.apply("net-absent")), list.values());
+        // A referenced network outside the dictionary is the usual UNRESOLVED stub (no values): shadowing then has no bound.
+        assertEquals("UNRESOLVED", object.apply("net-absent").status());
+        assertEquals("RESOLVED", object.apply("net-1").status());
+        assertEquals(List.of("networks: any"), object.apply("role-any-text").values());
+        assertEquals(List.of("networks: any"), object.apply("role-any-object").values());
+        assertEquals(List.of("networks: " + id.apply("any-1")), object.apply("role-any-ref").values());
+        assertEquals("any", object.apply("any-1").type());
+        for (String uid : List.of("role-missing", "role-empty", "role-null", "role-nouid")) {
+            assertEquals(List.of(), object.apply(uid).values(), uid); assertEquals("DYNAMIC", object.apply(uid).status(), uid);
+        }
+        // Identities are not parsed: no user object, no value naming one.
+        assertNull(object.apply("user-1"));
+        assertTrue(objects.values().stream().flatMap(o -> o.values().stream()).noneMatch(v -> v.contains("OBJ-USER-01") || v.contains("identified")));
+        assertTrue(objects.values().stream().noneMatch(o -> o.name().contains("OBJ-USER-01")));
+    }
     @Test void checkpointRejectsMissingPagesAndRetainsRepeatedInlineOccurrences() throws Exception {
         var json = new ObjectMapper().readTree(fixture("check-point.json"));
         var first = (com.fasterxml.jackson.databind.node.ObjectNode) json.get(0);
