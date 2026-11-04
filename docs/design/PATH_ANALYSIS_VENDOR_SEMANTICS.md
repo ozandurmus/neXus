@@ -215,3 +215,13 @@ Palo Alto:
 - PA-KB2 https://knowledgebase.paloaltonetworks.com/KCSArticleDetail?id=kA14u0000008XTLCA2 (PAN-OS 10.2+)
 - PA-AD https://docs.paloaltonetworks.com/pan-os/11-0/pan-os-admin/app-id/application-default
 - PA-CSR https://docs.paloaltonetworks.com/pan-os/11-1/pan-os-admin/policy/security-policy/create-a-security-policy-rule
+
+## Amendment 2026-11-04 — Check Point access-role networks (engineer decision under the PO freeze delegation)
+
+An access role combines users, computers and network locations (R82 Identity Awareness Administration Guide; the
+`show-access-role` reply has a `networks` field, "Collection of Network objects ... that can access the system").
+Shadow analysis uses a role's networks only as an upper bound of its source, and only to prove that a later rule's
+source is disjoint (never to prove cover). With X-Forwarded-For identity detection (not collected), a proxied HTTP
+connection can take its identity from the header, so a role may match some packets from outside its networks; it still
+cannot match every packet of a later rule, which is all a single-rule NOT_SHADOWED verdict claims. Revisit if A6
+evidence contradicts this.
