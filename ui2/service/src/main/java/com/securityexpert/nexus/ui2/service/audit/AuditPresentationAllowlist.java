@@ -295,7 +295,12 @@ public final class AuditPresentationAllowlist {
             // V151: summaries are counts, field names, formats and enum-like values only -- nothing to redact.
             Map.entry("system_log_measurement", Set.of(
                     "device_id", "job_id", "measured_at", "measurement_id", "source", "summary",
-                    "vendor")));
+                    "vendor")),
+            // V186 (path analysis A3): ids, closed vocabularies, actor fingerprints and timestamps; the two ends'
+            // contexts and interface names, the assumed subnet and the free-text note are redacted.
+            Map.entry("topology_link_override", Set.of(
+                    "a_device_id", "action", "b_device_id", "created_at", "created_by", "link_kind", "orphaned_at",
+                    "override_id", "reason_code", "revoked_at", "revoked_by")));
 
     private AuditPresentationAllowlist() {
     }

@@ -113,7 +113,11 @@ class AuditCoverageCompletenessTest {
                     + "the hash-chained failover_schedule_ledger"),
             Map.entry("failover_schedule_ledger", "V31/V135: append-only hash-chained transition ledger, itself "
                     + "the audit record of failover_schedules"),
-            Map.entry("failover_grant_consumption", "V31/V135: append-only single-use grant ledger"));
+            Map.entry("failover_grant_consumption", "V31/V135: append-only single-use grant ledger"),
+            Map.entry("topology_snapshot", "V186: derived header of an in-memory topology rebuild (counts and "
+                    + "fingerprints); the rebuild's authorization is recorded in authz_decisions"),
+            Map.entry("topology_conflict", "V186: derived conflicts of one rebuild, recomputed by the next one; pruned "
+                    + "with their snapshot"));
 
     static final Set<String> AUDIT_TRIGGER_EXCLUSIONS = union(CONTRACT_EXCLUSIONS,
             AUDITED_BY_NAMED_TRIGGER.keySet(), NOT_MUTATION_BEARING.keySet());

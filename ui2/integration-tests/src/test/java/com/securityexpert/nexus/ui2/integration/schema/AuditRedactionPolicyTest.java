@@ -149,6 +149,7 @@ class AuditRedactionPolicyTest {
             // device_interface
             "device_interface.interface_id", "device_interface.kind", "device_interface.run_id",
             "device_interface.state", "device_interface.vlan_id",
+            "device_interface.evidence_grade", // V184: closed enum (routing_context is redacted)
             // device_interface_address
             "device_interface_address.address_id", "device_interface_address.family",
             "device_interface_address.interface_id", "device_interface_address.role",
@@ -167,6 +168,8 @@ class AuditRedactionPolicyTest {
             "device_onboarding.updated_at",
             // device_route
             "device_route.protocol", "device_route.route_id", "device_route.run_id",
+            // V184: two booleans, a numeric metric and a closed next-hop kind
+            "device_route.is_active", "device_route.is_ecmp", "device_route.metric", "device_route.next_hop_kind",
             // device_secret_reference
             "device_secret_reference.credential_reference_id", "device_secret_reference.device_id",
             "device_secret_reference.purpose", "device_secret_reference.set_at",
@@ -449,7 +452,14 @@ class AuditRedactionPolicyTest {
             "system_log_measurement.device_id", "system_log_measurement.job_id",
             "system_log_measurement.measured_at", "system_log_measurement.measurement_id",
             "system_log_measurement.source", "system_log_measurement.summary",
-            "system_log_measurement.vendor");
+            "system_log_measurement.vendor",
+            // topology_link_override (V186): ids, closed vocabularies, actor fingerprints, timestamps
+            "topology_link_override.a_device_id", "topology_link_override.action",
+            "topology_link_override.b_device_id", "topology_link_override.created_at",
+            "topology_link_override.created_by", "topology_link_override.link_kind",
+            "topology_link_override.orphaned_at", "topology_link_override.override_id",
+            "topology_link_override.reason_code", "topology_link_override.revoked_at",
+            "topology_link_override.revoked_by");
 
     /**
      * Column-name fragments that mark a value as secret, credential-bearing or
@@ -702,7 +712,14 @@ class AuditRedactionPolicyTest {
             "system_log_file.wrapped_data_key", 1, "device_crash_entry.name_hmac", 2,
             "device_crash_entry.process", 2, "device_crash_alert.process", 2, "system_log_run.detail", 2,
             // V161: keyed content identities are redacted like the anchors.
-            "system_log_chunk.plaintext_hmac", 2, "system_log_file.content_hmac", 2);
+            "system_log_chunk.plaintext_hmac", 2, "system_log_file.content_hmac", 2,
+            // V184: a device virtual-router name.
+            "device_interface.routing_context", 2,
+            // V186: override ends, assumed subnet and free-text note; the (unaudited) conflict context and network.
+            "topology_link_override.a_context", 2, "topology_link_override.a_interface_name", 2,
+            "topology_link_override.b_context", 2, "topology_link_override.b_interface_name", 2,
+            "topology_link_override.assumed_subnet", 2, "topology_link_override.note", 2,
+            "topology_conflict.context", 2, "topology_conflict.network", 2);
 
     private static java.util.Map<String, Integer> declaredRedactions(Object... pairs) {
         java.util.Map<String, Integer> declared = new java.util.LinkedHashMap<>();
