@@ -126,7 +126,10 @@ name, a CP VSID = `POLICY_CONTEXT_UNPROVEN` (no proven relation to a VS target's
 target listed without a vsys is not equated with `vsys1`; two snapshots naming the same device and context =
 `POLICY_BINDING_AMBIGUOUS`. aiview refusals (raw, unknown, `AMBIGUOUS_PSEUDONYM`) share one answer, 422
 `PSEUDONYM_REFUSED`; the specific code is kept in the `authz_decisions` row only (D-3 conditions 3 and 5 together).
-The 30/min limit is per actor (stricter than per session, as the policy lookup).
+The 30/min limit is per actor (stricter than per session, as the policy lookup). Rule identity follows today's policy RBAC (coordinator
+decision 2026-11-04): without `policy_read` every rule's id, number, name and section are withheld
+(`RULE_WITHHELD_NO_POLICY_READ`, headline without the rule number); verdicts and reasons are unchanged; aiview holds
+`policy_read` and sees them masked.
 
 ## 6. Disagreements and resolutions
 

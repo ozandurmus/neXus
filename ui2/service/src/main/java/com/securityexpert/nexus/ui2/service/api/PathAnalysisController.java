@@ -29,6 +29,7 @@ import com.securityexpert.nexus.ui2.service.policy.PolicyBulkhead;
 import com.securityexpert.nexus.ui2.service.privacy.PrivacyMaskingResponseBodyAdvice;
 import com.securityexpert.nexus.ui2.service.security.ActionRegistry;
 import com.securityexpert.nexus.ui2.service.security.GateChainInterceptor;
+import com.securityexpert.nexus.ui2.service.security.RbacEvaluator;
 
 /**
  * Path analysis stage A5a: {@code POST /api/v2/path-analysis/query} (PATH_ANALYSIS_DESIGN.md §5, §7; PO record
@@ -42,6 +43,12 @@ import com.securityexpert.nexus.ui2.service.security.GateChainInterceptor;
  * three (D-3 condition 5). Every query that reaches the service writes exactly one {@code authz_decisions} row with
  * the masked query and the verdict (D-2); a result whose row cannot be written is not returned (503). Nothing else is
  * stored.</p>
+ *
+ * <p>Rule identity follows today's policy RBAC (coordinator decision 2026-11-04): a caller who does not hold
+ * {@code policy_read} gets the result with every rule's id, number, name and section withheld
+ * ({@code RULE_WITHHELD_NO_POLICY_READ}); verdicts and reasons are unchanged. The replay viewer role is one of the
+ * {@code policy_read} roles and keeps the (masked) rule identity. An authorization check that fails withholds (fail
+ * closed).</p>
  */
 @RestController
 public final class PathAnalysisController {
@@ -55,19 +62,26 @@ public final class PathAnalysisController {
     private final PathQueryService paths;
     private final AuthzDecisionRepository audit;
     private final PolicyBulkhead heavy;
+    private final RbacEvaluator rbac;
+    private final Set<String> policyReadRoles;
     private final Clock clock;
     private final ObjectMapper json = new ObjectMapper();
     private final Map<String, ArrayDeque<Instant>> requests = new HashMap<>();
 
     @Autowired
-    public PathAnalysisController(PathQueryService paths, AuthzDecisionRepository audit, PolicyBulkhead heavy) {
-        this(paths, audit, heavy, Clock.systemUTC());
+    public PathAnalysisController(PathQueryService paths, AuthzDecisionRepository audit, PolicyBulkhead heavy,
+            RbacEvaluator rbac, ActionRegistry actions) {
+        this(paths, audit, heavy, rbac, actions, Clock.systemUTC());
     }
 
-    PathAnalysisController(PathQueryService paths, AuthzDecisionRepository audit, PolicyBulkhead heavy, Clock clock) {
+    PathAnalysisController(PathQueryService paths, AuthzDecisionRepository audit, PolicyBulkhead heavy,
+            RbacEvaluator rbac, ActionRegistry actions, Clock clock) {
         this.paths = paths;
         this.audit = audit;
         this.heavy = heavy;
+        this.rbac = rbac;
+        this.policyReadRoles = actions.find(ActionRegistry.POLICY_READ)
+                .map(com.securityexpert.nexus.ui2.service.security.ActionDescriptor::requiredRoleTokens).orElse(Set.of());
         this.clock = clock;
     }
 
@@ -105,10 +119,22 @@ public final class PathAnalysisController {
         }
         return switch (outcome) {
             case PathQueryService.Computed computed -> ResponseEntity.ok().cacheControl(CacheControl.noStore())
-                    .body(PathResultView.body(computed.result()));
+                    .body(PathResultView.body(computed.result(), mayReadPolicy(user)));
             case PathQueryService.NotBuilt notBuilt -> code(409, "TOPOLOGY_NOT_BUILT");
             case PathQueryService.Refused refused -> code(422, "PSEUDONYM_REFUSED");
         };
+    }
+
+    /** Whether the caller holds {@code policy_read} (the gate of the Policy screen); any failure withholds. */
+    private boolean mayReadPolicy(String user) {
+        if (policyReadRoles.isEmpty()) {
+            return false;
+        }
+        try {
+            return rbac.evaluateAny(user, policyReadRoles, clock.instant()).outcome() == AuthzOutcome.PERMITTED;
+        } catch (RuntimeException failure) {
+            return false;
+        }
     }
 
     /** One append-only {@code authz_decisions} row: masked query, overall verdict, nothing raw (D-2). */
