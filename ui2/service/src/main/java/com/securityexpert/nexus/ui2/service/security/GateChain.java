@@ -198,7 +198,8 @@ public final class GateChain {
                 || ActionRegistry.CP_READINESS_START.equals(actionId)
                 || ActionRegistry.POLICY_COLLECT.equals(actionId)
                 || ActionRegistry.SYSTEM_LOG_MEASURE_START.equals(actionId)
-                || ActionRegistry.POLICY_READ.equals(actionId));
+                || ActionRegistry.POLICY_READ.equals(actionId)
+                || ActionRegistry.PATH_ANALYSIS_READ.equals(actionId));
     }
 
     private static boolean isReadMethod(String method) {
