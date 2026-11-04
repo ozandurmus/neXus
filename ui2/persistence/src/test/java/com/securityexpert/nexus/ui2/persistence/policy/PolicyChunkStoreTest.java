@@ -59,6 +59,16 @@ class PolicyChunkStoreTest {
             }
             return new MockResult[]{new MockResult(rows.size(), rows)};
         } else if (sql.startsWith("insert into cp_policy_object_inventory")) inventories.put((String) args[2], args);
+        else if (sql.startsWith("select object_type, collected_at")) {
+            var rows = create.newResult(new Field<?>[]{DSL.field("object_type", String.class), DSL.field("collected_at", java.time.OffsetDateTime.class),
+                DSL.field("snapshot", String.class), DSL.field("chunk_generation", String.class), DSL.field("chunk_count", Integer.class)});
+            inventories.forEach((type, argsStored) -> {
+                var row = create.newRecord(rows.fields());
+                row.fromArray(type, java.time.OffsetDateTime.parse((String) argsStored[3]), argsStored[4], argsStored[5], argsStored[6]);
+                rows.add(row);
+            });
+            return new MockResult[]{new MockResult(rows.size(), rows)};
+        }
         else if (sql.startsWith("select snapshot::text")) {
             var rows = create.newResult(new Field<?>[]{DSL.field("snapshot", String.class), DSL.field("object_type", String.class),
                 DSL.field("chunk_generation", String.class), DSL.field("chunk_count", Integer.class)});
@@ -126,6 +136,29 @@ class PolicyChunkStoreTest {
             "source-1", "domain-1", "hosts", "2026-10-05T01:00:00Z", old, "synthetic-actor"));
         assertEquals(0, manifestTransactions);
         assertEquals(List.of(old), new PolicySnapshotRepository(tx).inventories("source-1", "domain-1"));
+    }
+    @Test void inventoriesReadBackWithTheirManifestTimeAndAMissingChunkFailsTheReader() throws Exception {
+        String value = "{\"type\":\"hosts\",\"status\":\"RESOLVED\",\"objects\":[" + "{\"uid\":\"opaque-001\"},".repeat(20_000)
+            + "{\"uid\":\"opaque-002\"}]}";
+        var repository = new PolicyCollectionRepository(tx);
+        repository.saveInventory("source-1", "domain-1", "hosts", "2026-11-04T10:00:00Z", value, "synthetic-actor");
+        inventories.put("networks", new Object[]{"source-1", "domain-1", "networks", "2026-11-03T10:00:00Z",
+            "{\"status\":\"RESOLVED\",\"objects\":[]}", null, null});
+        var read = new ArrayList<String>();
+        repository.readInventories("source-1", "domain-1", document -> {
+            try { var out = new java.io.StringWriter(); document.document().transferTo(out);
+                read.add(document.objectType() + "|" + document.collectedAt() + "|" + out.toString().equals(
+                    document.objectType().equals("hosts") ? value : "{\"status\":\"RESOLVED\",\"objects\":[]}")); }
+            catch (java.io.IOException invalid) { throw new AssertionError(invalid); }
+        });
+        assertEquals(List.of("hosts|2026-11-04T10:00:00Z|true", "networks|2026-11-03T10:00:00Z|true"), read);
+        String generation = (String) inventories.get("hosts")[5];
+        assertTrue((Integer) inventories.get("hosts")[6] > 1);
+        chunks.get(generation).remove(1);
+        repository.readInventories("source-1", "domain-1", document -> {
+            if (!document.objectType().equals("hosts")) return;
+            assertThrows(IllegalStateException.class, () -> document.document().transferTo(new java.io.StringWriter()));
+        });
     }
     @Test void oversizeSignalHasAPreciseCodeAndIssuesNoStatement() {
         var repository = new PolicyCollectionRepository(tx);

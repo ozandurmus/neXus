@@ -86,7 +86,7 @@ public final class PolicyLookupController {
         var targets = meta.targets().stream().map(target -> new Target(target.deviceId(), target.name(),
             (String) PolicyPrivacy.mask(target.context(), "context", names, ips), target.syncStatus())).toList();
         return new PolicySnapshot(new Metadata(meta.id(), meta.sourceId(), meta.sourceName(), meta.vendor(), meta.containerId(), meta.containerName(),
-            meta.name(), meta.collectedAt(), meta.artefactRef(), targets), sections, objects, snapshot.failures());
+            meta.name(), meta.collectedAt(), meta.artefactRef(), targets, meta.inventoryProvenance()), sections, objects, snapshot.failures());
     }
     private synchronized boolean admit(String actor, Instant now) {
         Instant cutoff = now.minusSeconds(60);

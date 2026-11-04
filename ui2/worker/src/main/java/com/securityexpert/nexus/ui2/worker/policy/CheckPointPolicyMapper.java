@@ -5,19 +5,77 @@ import com.securityexpert.nexus.ui2.policy.PolicySnapshot;
 import static com.securityexpert.nexus.ui2.policy.PolicySnapshot.*;
 import java.util.*;
 
-/** Offline mapper. Callers supply ordered access-layer pages and dictionaries; no transport or command creation. */
+/**
+ * Offline mapper. Callers supply ordered access-layer pages and dictionaries, and optionally an object-inventory lookup;
+ * no transport or command creation.
+ */
 public final class CheckPointPolicyMapper {
+    /**
+     * An inventory object older than this, relative to the snapshot's own collection time, is not used: the reference stays
+     * UNRESOLVED. The domain inventory is refreshed at most every 24 h (UI2_POLICY_CP_OBJECTS_EVERY=86400); 48 h tolerates
+     * one missed refresh and nothing more (docs/design/POLICY_COLLECTION_COMPLETENESS_PLAN.md, amendment 2026-11-04).
+     */
+    public static final java.time.Duration INVENTORY_MAX_AGE = java.time.Duration.ofHours(48);
+    /** The object fields the mapper keeps as values, from a dictionary object or an inventory object alike. */
+    static final List<String> VALUE_FIELDS = List.of("ipv4-address", "ipv6-address", "subnet4", "mask-length4", "subnet6", "mask-length6",
+        "port", "icmp-type", "icmp-code", "ipv4-address-first", "ipv4-address-last", "ipv6-address-first", "ipv6-address-last",
+        "ip-address-first", "ip-address-last");
+
+    /** Exact-uid object lookup in the policy's own domain inventory (then the MDS Global domain's); null when absent. */
+    public interface InventoryLookup { InventoryObject find(String uid); }
+    /**
+     * One object of a complete stored inventory, as an object node with the dictionary's field names (uid, name, type,
+     * members, {@link #VALUE_FIELDS}); a time object carries the schedule its inventory parse produced from the same reply.
+     */
+    public record InventoryObject(String uid, JsonNode node, com.securityexpert.nexus.ui2.policy.PolicySchedule schedule, java.time.Instant collectedAt) {}
+
+    /** Where an object node comes from: the rulebase dictionary first, then (optionally) the domain inventory. */
+    private static final class Sources {
+        final Map<String, JsonNode> dictionary = new LinkedHashMap<>();
+        final InventoryLookup inventory;
+        final java.time.Instant notBefore;
+        int resolved;
+        java.time.Instant oldest;
+        Sources(InventoryLookup inventory, String collectedAt) {
+            this.inventory = inventory;
+            java.time.Instant at = null;
+            try { at = inventory == null ? null : java.time.Instant.parse(collectedAt); }
+            catch (RuntimeException unparseable) { /* No snapshot time: no inventory age can be judged; fail closed. */ }
+            this.notBefore = at == null ? null : at.minus(INVENTORY_MAX_AGE);
+        }
+        /** Only an inventory object whose uid equals the reference exactly and whose inventory is within the age bound. */
+        InventoryObject inventory(String uid) {
+            if (inventory == null || notBefore == null) return null;
+            InventoryObject found = inventory.find(uid);
+            if (found == null || found.collectedAt() == null || found.node() == null || !uid.equals(found.uid())
+                    || !uid.equals(found.node().path("uid").asText(null)) || found.collectedAt().isBefore(notBefore)) return null;
+            return found;
+        }
+        void used(InventoryObject found) {
+            resolved++;
+            if (oldest == null || found.collectedAt().isBefore(oldest)) oldest = found.collectedAt();
+        }
+    }
+
     public PolicySnapshot map(Metadata metadata, List<JsonNode> pages) {
         return map(metadata, pages, List.of());
     }
     public PolicySnapshot map(Metadata metadata, List<JsonNode> pages, List<JsonNode> natPages) {
-        Map<String, JsonNode> dictionary = new LinkedHashMap<>();
+        return map(metadata, pages, natPages, null);
+    }
+    /**
+     * With an inventory lookup, a reference the objects-dictionary does not carry (a rule cell or a group member at any
+     * depth) is taken from the stored inventory, parsed by the same code path, and counted in the metadata's
+     * {@link InventoryProvenance}. Without one (null) the metadata is unchanged and such references stay UNRESOLVED.
+     */
+    public PolicySnapshot map(Metadata metadata, List<JsonNode> pages, List<JsonNode> natPages, InventoryLookup inventory) {
+        Sources dictionary = new Sources(inventory, metadata.collectedAt());
         for (JsonNode page : java.util.stream.Stream.concat(pages.stream(), natPages.stream()).toList()) for (JsonNode object : page.path("objects-dictionary")) {
             String uid = object.path("uid").asText();
-            if (!uid.isEmpty()) dictionary.put(uid, object);
+            if (!uid.isEmpty()) dictionary.dictionary.put(uid, object);
         }
         Map<String, PolicyObject> objects = new LinkedHashMap<>();
-        for (var entry : dictionary.entrySet()) object(metadata, entry.getKey(), dictionary, objects);
+        for (String uid : List.copyOf(dictionary.dictionary.keySet())) object(metadata, uid, dictionary, objects);
         Map<String, List<JsonNode>> layers = new LinkedHashMap<>();
         Set<String> inline = new HashSet<>();
         for (JsonNode page : pages) {
@@ -45,10 +103,12 @@ public final class CheckPointPolicyMapper {
         if (!layers.isEmpty() && sections.isEmpty()) throw new IllegalArgumentException("Cyclic inline layers");
         for (JsonNode page : natPages) nat(metadata, page.path("rulebase"), ref(metadata.id(), "nat"),
                 "NAT", dictionary, objects, sections, keys, 0);
+        Metadata mapped = inventory == null ? metadata : metadata.withInventoryProvenance(new InventoryProvenance(dictionary.resolved,
+            dictionary.oldest == null ? null : dictionary.oldest.toString()));
         // A section that spans several API pages is repeated on each page; join those fragments (ids and rule ids stay as mapped).
-        return new PolicySnapshot(metadata, PolicySnapshot.mergeAdjacent(sections, keys::get), objects);
+        return new PolicySnapshot(mapped, PolicySnapshot.mergeAdjacent(sections, keys::get), objects);
     }
-    private void nat(Metadata meta, JsonNode nodes, String section, String name, Map<String, JsonNode> dict,
+    private void nat(Metadata meta, JsonNode nodes, String section, String name, Sources dict,
             Map<String, PolicyObject> objects, List<Section> sections, Map<Section, String> keys, int depth) {
         if (depth > 32 || !nodes.isArray()) throw new IllegalArgumentException("Invalid NAT rulebase");
         List<Rule> rules = new ArrayList<>();
@@ -86,7 +146,7 @@ public final class CheckPointPolicyMapper {
         }
     }
     private void layer(Metadata meta, String uid, String parent, Map<String, List<JsonNode>> layers,
-            Map<String, JsonNode> dict, Map<String, PolicyObject> objects, List<Section> sections, Map<Section, String> keys, Set<String> path) {
+            Sources dict, Map<String, PolicyObject> objects, List<Section> sections, Map<Section, String> keys, Set<String> path) {
         if (!path.add(uid) || path.size() > 32) throw new IllegalArgumentException("Cyclic or excessive inline layers");
         if (!layers.containsKey(uid)) {
             sections.add(new Section(ref(meta.id(), uid, parent == null ? "" : parent), "Inline layer unavailable", "CP access layer", parent, List.of()));
@@ -97,7 +157,7 @@ public final class CheckPointPolicyMapper {
         path.remove(uid);
     }
     private void walk(Metadata meta, JsonNode nodes, String section, String name, String layerName, String parent,
-            Map<String, List<JsonNode>> layers, Map<String, JsonNode> dict, Map<String, PolicyObject> objects,
+            Map<String, List<JsonNode>> layers, Sources dict, Map<String, PolicyObject> objects,
             List<Section> sections, Map<Section, String> keys, Set<String> path, int depth) {
         if (depth > 32) throw new IllegalArgumentException("Policy nesting limit exceeded");
         List<Rule> pending = new ArrayList<>();
@@ -169,21 +229,28 @@ public final class CheckPointPolicyMapper {
         add(sections, keys, id, new Section(ref(id, pending.get(0).uuid().isEmpty() ? pending.get(0).id() : pending.get(0).uuid()), name, "CP access layer", parent, pending));
         pending.clear();
     }
-    private Cell cell(Metadata meta, JsonNode rule, String field, Map<String, JsonNode> dict, Map<String, PolicyObject> objects) {
+    private Cell cell(Metadata meta, JsonNode rule, String field, Sources dict, Map<String, PolicyObject> objects) {
         return new Cell(texts(rule.path(field)).stream().map(value -> object(meta, value, dict, objects)).toList(),
                 rule.path(field + "-negate").asBoolean(false));
     }
-    private String object(Metadata meta, String uid, Map<String, JsonNode> dict, Map<String, PolicyObject> objects) {
+    private String object(Metadata meta, String uid, Sources dict, Map<String, PolicyObject> objects) {
         return object(meta, uid, dict, objects, 0);
     }
-    private String object(Metadata meta, String uid, Map<String, JsonNode> dict, Map<String, PolicyObject> objects, int depth) {
+    private String object(Metadata meta, String uid, Sources dict, Map<String, PolicyObject> objects, int depth) {
         String id = ref(meta.id(), "object", uid);
         if (objects.containsKey(id)) return id;
         if (depth > 32) throw new IllegalArgumentException("Policy object nesting limit exceeded");
-        JsonNode node = dict.get(uid);
-        if (node == null) {
+        JsonNode node = dict.dictionary.get(uid);
+        // An inventory object's members are one level deeper; beyond the nesting limit the reference stays UNRESOLVED
+        // instead of failing the whole mapping.
+        InventoryObject inventory = node == null && depth < 32 ? dict.inventory(uid) : null;
+        if (node == null && inventory == null) {
             objects.put(id, new PolicyObject(id, uid, "unresolved", List.of(), List.of(), "UNRESOLVED"));
             return id;
+        }
+        if (inventory != null) {
+            node = inventory.node();
+            dict.used(inventory);
         }
         String nativeType = node.path("type").asText();
         String type = type(nativeType);
@@ -196,15 +263,14 @@ public final class CheckPointPolicyMapper {
         // Address ranges (and multicast address ranges) carry ipv4-address-first/-last and ipv6-address-first/-last in
         // the Check Point object representation; ip-address-first/-last is the generic request parameter of
         // add-address-range. Reading only the generic name left every dictionary range without values (2026-10-20).
-        for (String field : List.of("ipv4-address", "ipv6-address", "subnet4", "mask-length4", "subnet6", "mask-length6", "port", "icmp-type", "icmp-code",
-                "ipv4-address-first", "ipv4-address-last", "ipv6-address-first", "ipv6-address-last", "ip-address-first", "ip-address-last"))
+        for (String field : VALUE_FIELDS)
             if (node.has(field)) values.add(field + ": " + node.path(field).asText());
         if (nativeType.equals("access-role")) values.addAll(accessRoleNetworks(meta, node.path("networks"), dict, objects, depth));
         String status = com.securityexpert.nexus.ui2.policy.CpObjectTypes.status(nativeType);
         // Keep the vendor class of an unmodelled object so the remaining gap can be counted by type (no names, no values).
         if (status.equals("UNSUPPORTED") && type.equals("unresolved"))
             values.add("native-type: " + (nativeType.matches("[A-Za-z][A-Za-z0-9_-]{0,63}") ? nativeType : "UNKNOWN"));
-        objects.put(id, new PolicyObject(id, name, type, members, values, status, nativeType.equals("time") ? CheckPointSchedule.parse(node) : null));
+        objects.put(id, new PolicyObject(id, name, type, members, values, status, nativeType.equals("time") ? (inventory != null ? inventory.schedule() : CheckPointSchedule.parse(node)) : null));
         return id;
     }
     /**
@@ -221,7 +287,7 @@ public final class CheckPointPolicyMapper {
      * uid (or a uid text) is that object; a missing field, null, an empty list or an element without a uid stores
      * nothing at all (no bound). Shadowing reads a bound only from values it fully resolves.
      */
-    private List<String> accessRoleNetworks(Metadata meta, JsonNode networks, Map<String, JsonNode> dict, Map<String, PolicyObject> objects, int depth) {
+    private List<String> accessRoleNetworks(Metadata meta, JsonNode networks, Sources dict, Map<String, PolicyObject> objects, int depth) {
         if (networks.isMissingNode() || networks.isNull()) return List.of();
         List<String> out = new ArrayList<>();
         Iterable<JsonNode> elements = networks.isArray() ? networks : List.of(networks);
@@ -237,9 +303,9 @@ public final class CheckPointPolicyMapper {
     static final Set<String> GATEWAY_TYPES = com.securityexpert.nexus.ui2.policy.CpObjectTypes.GATEWAY_TYPES;
     /** Native dictionary type to the viewer's object class; see {@link com.securityexpert.nexus.ui2.policy.CpObjectTypes}. */
     static String type(String nativeType) { return com.securityexpert.nexus.ui2.policy.CpObjectTypes.type(nativeType); }
-    private static String resolve(JsonNode node, Map<String, JsonNode> dict) {
+    private static String resolve(JsonNode node, Sources dict) {
         if (node.isObject()) return node.path("name").asText("UNKNOWN");
-        return dict.containsKey(node.asText()) ? dict.get(node.asText()).path("name").asText("UNKNOWN") : "UNKNOWN";
+        return dict.dictionary.containsKey(node.asText()) ? dict.dictionary.get(node.asText()).path("name").asText("UNKNOWN") : "UNKNOWN";
     }
     private static List<String> texts(JsonNode node) {
         if (node.isMissingNode() || node.isNull()) return List.of();

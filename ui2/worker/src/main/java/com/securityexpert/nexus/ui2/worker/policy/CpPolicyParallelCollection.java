@@ -41,6 +41,8 @@ final class CpPolicyParallelCollection {
     private final Map<String, Integer> domainOrder = new HashMap<>();
     private final Safety safety;
     private final long checkpointInterval = configuredCheckpointInterval().toNanos();
+    /** Dictionary misses resolved from the stored object inventory; read lazily, once per domain for this run. */
+    private final CpInventoryObjects inventory;
 
     CpPolicyParallelCollection(CheckPointPolicyCollector collector, PolicyCollectionRepository repository,
             int maximum, LongSupplier clock, DiscoveryRun run, PolicyCollectionRepository.Request request,
@@ -48,6 +50,7 @@ final class CpPolicyParallelCollection {
         this.reuse = reuse; this.collector = collector; this.repository = repository; this.clock = clock; this.run = run;
         this.request = request; this.deadline = deadline; this.lease = lease; this.publish = publish; this.domainFailure = domainFailure;
         safety = new Safety(maximum);
+        inventory = CpInventoryObjects.enabled() ? new CpInventoryObjects(repository, request.sourceId()) : null;
         pool = Executors.newFixedThreadPool(maximum, worker -> new Thread(worker, "cp-policy-page"));
         completions = new ExecutorCompletionService<>(pool);
     }
@@ -228,6 +231,7 @@ final class CpPolicyParallelCollection {
 
     private void domains(JsonNode root) {
         completeList(root, "objects");
+        if (inventory != null) inventory.domains(root);
         PolicyCollectionTrace.domains((int) java.util.stream.StreamSupport.stream(root.path("objects").spliterator(), false)
             .filter(d -> request.domainRef().isEmpty() || ref(request.sourceId(), required(d, "uid")).equals(request.domainRef())).count());
         boolean found = request.domainRef().isEmpty();
@@ -384,7 +388,7 @@ final class CpPolicyParallelCollection {
 
     private void enqueueObjects(String domain, String container, String type) {
         if (collector.reuseObjects(request.sourceId(), container, type)) return;
-        if (!CheckPointPolicyCollector.collectObjectsEnabled() || type.equals("gateways-and-servers") && domain.equalsIgnoreCase("Global")) {
+        if (!CheckPointPolicyCollector.collectObjectsEnabled() || type.equals("gateways-and-servers") && CheckPointPolicyCollector.isGlobalDomain(domain)) {
             collector.storeObjects(request.sourceId(), container, type, List.of(), 0, 0,
                 "UNSUPPORTED", "COLLECTION_SKIPPED", deadline, lease);
         } else enqueueObjectPage(domain, container, type, new PackagePages(50, "objects").begin(clock.getAsLong()), 0);
@@ -441,7 +445,8 @@ final class CpPolicyParallelCollection {
         List<JsonNode> natPages = nat.done && nat.failure == null ? List.copyOf(nat.pages.values()) : List.of();
         if (!nat.done || nat.failure != null) failures.add(nat.failure != null ? nat.failure : new CollectionFailure(nat.ref, "COLLECTION_PENDING", "NAT", 0));
         PolicySnapshot snapshot;
-        try { snapshot = snapshot(policy.metadata, access, natPages, failures); }
+        try { snapshot = snapshot(policy.metadata, access, natPages, failures,
+            CheckPointPolicyCollector.lookup(inventory, policy.metadata.containerId())); }
         catch (IllegalArgumentException invalid) {
             if (changed.failure != null) throw invalid;
             changed.done = false;
