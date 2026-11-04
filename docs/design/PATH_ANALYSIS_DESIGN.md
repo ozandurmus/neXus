@@ -1,7 +1,7 @@
 # Path analysis and topology — merged design
 
-Status: DRAFT — DO NOT FREEZE. Merge of two independent designs and their cross-reviews, 2026-11-03.
-Not implementation authority until A0 (vendor semantics) is frozen. PO decisions D-1 to D-9 are recorded in
+Status: FROZEN — 2026-11-04, under the PO freeze delegation (PO_DECISION_RECORD_2026_11_04_DEV_MODE_DELEGATIONS.md).
+Merge of two independent designs and their cross-reviews, 2026-11-03; A0 vendor semantics frozen the same day. PO decisions D-1 to D-9 are recorded in
 `PO_DECISION_RECORD_2026_11_03_PATH_ANALYSIS_PHASE_A.md` (RATIFIED 2026-11-03); where that record and this document differ, the record wins.
 
 Inputs (all unaltered, in this directory):
@@ -79,11 +79,13 @@ evaluated.
 Query, ingress, output contract: F§4.1, F§4.2, F§4.7, plus A's `executive_summary` block. IPv4 only. Source port not
 modelled. Inferred ingress is labelled `INFERRED`.
 
-Per-hop order (every step ASSUMPTION until A0 freezes it from official vendor documentation):
-- **Check Point:** access rulebase matched on the pre-NAT tuple (drop here stops the hop) → NAT first match (manual
-  then automatic as collected; destination translated on the client side by default, the property being shown on the
-  hop as an assumption until collected) → route lookup on the post-DNAT destination → source NAT for the next hop.
-  `security-zone` objects in a rule → `UNKNOWN` until the gateway topology parse (decision D-6) exists. Implied rules →
+Per-hop order (from the frozen A0 record `PATH_ANALYSIS_VENDOR_SEMANTICS.md`; its UNKNOWNs stay UNKNOWN):
+- **Check Point** (A0 §1, frozen 2026-11-04): the order of access-rule matching relative to NAT is not established by
+  official documentation, so a hop with a matching destination NAT is evaluated on BOTH the pre-NAT and the post-NAT
+  tuple; equal verdicts are taken, different verdicts make the hop `UNKNOWN` (`CP_ACCESS_NAT_ORDER_UNKNOWN`). NAT is
+  first match in rulebase position order (manual and automatic rules as collected; no "manual before automatic"
+  assumption). Routing relative to NAT ("translate destination on client side") stays `UNKNOWN` until collected.
+  `security-zone` objects in a rule -> `UNKNOWN` until the gateway topology parse (decision D-6) exists. Implied rules ->
   `CP_IMPLIED_RULES_NOT_MODELED` note.
 - **Palo Alto:** ingress zone → route lookup on the original destination (provisional egress zone) → NAT first match
   (pre → local → post, honouring `target-selectors`/`target/negate`) → second route lookup after DNAT → security on

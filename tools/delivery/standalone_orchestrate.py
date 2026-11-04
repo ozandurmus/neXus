@@ -423,6 +423,8 @@ FASTPATH_MAX_FILES = 400
 # A full-regression check runs longer than 15 min (PR 705, 2026-11-03); NEXUS_CHECKS_TIMEOUT_S overrides.
 CHECKS_TIMEOUT_S = int(os.environ.get("NEXUS_CHECKS_TIMEOUT_S", str(45 * 60)))
 CHECKS_POLL_S = 15
+# Run after the merge instead of gating it (PO_DECISION_RECORD_2026_11_04_DEV_MODE_DELEGATIONS.md).
+POST_MERGE_CHECKS = frozenset({"full-regression", "targeted-regression"})
 CHECKS_EMPTY_GRACE_S = 120
 CHECKS_TRANSIENT_ERRORS = 4
 FAILING_CONCLUSIONS = {"FAILURE", "CANCELLED", "TIMED_OUT", "ACTION_REQUIRED", "STARTUP_FAILURE", "STALE"}
@@ -554,6 +556,10 @@ def _wait_for_checks(url: str, timeout: float = CHECKS_TIMEOUT_S, poll: float = 
                 raise SystemExit("could not read the pull request checks (" + url + "); not merged")
         else:
             errors = 0
+            # PO decision 2026-11-04 (fast merge): the merge waits for validate and the scope routing; the regression
+            # suites keep running on the pull request after the merge and a red result is fixed forward.
+            if os.environ.get("NEXUS_WAIT_FULL_REGRESSION") != "1":
+                rollup = [c for c in rollup if not (isinstance(c, dict) and c.get("name") in POST_MERGE_CHECKS)]
             verdict, failed, pending = _check_verdict(rollup)
             if verdict == "pass":
                 print(json.dumps({"checks": "pass", "pr": url, "waited_s": round(clock() - started)}), flush=True)
