@@ -48,6 +48,13 @@ public final class PathReasons {
 
     // ---- hop reasons the engine adds (A2 reasons are carried as they are) ----------------------------------------
     public static final String POLICY_BINDING_UNPROVEN = "POLICY_BINDING_UNPROVEN";
+    /** More than one stored policy names this unit's device and policy context as a target: none is provably its own. */
+    public static final String POLICY_BINDING_AMBIGUOUS = "POLICY_BINDING_AMBIGUOUS";
+    /**
+     * The unit's topology context has no proven policy context: a Check Point VSID is not the virtual-system reference a
+     * policy target carries (AGENTS.md identity law: no invented equivalence), so the hop is UNKNOWN.
+     */
+    public static final String POLICY_CONTEXT_UNPROVEN = "POLICY_CONTEXT_UNPROVEN";
     public static final String POLICY_SOURCE_FAILED = "POLICY_SOURCE_FAILED";
     public static final String POLICY_EVALUATION_FAILED = "POLICY_EVALUATION_FAILED";
     public static final String STALE_OR_OUT_OF_SYNC_POLICY = "STALE_OR_OUT_OF_SYNC_POLICY";
