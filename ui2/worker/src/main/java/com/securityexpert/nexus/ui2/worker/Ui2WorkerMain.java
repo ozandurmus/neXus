@@ -387,6 +387,11 @@ public final class Ui2WorkerMain {
                 leaseRepository, attemptRepository, deviceRepository, strictFailoverSsh, gateRegistry,
                 new com.securityexpert.nexus.ui2.persistence.diagnostic.JooqSystemLogMeasurementRepository(transactionBoundary),
                 hostnameFingerprint, platformFactsRepository);
+        // Path analysis stage A6: the approved vendor matchers for one computed hop (V188), trusted SSH or the PAN API key.
+        var pathValidationExecutor = new com.securityexpert.nexus.ui2.worker.pathvalidation.PathValidationJobExecutor(
+                leaseRepository, attemptRepository, deviceRepository, deviceInventoryRepository, platformFactsRepository,
+                strictFailoverSsh, panTransport, panCredentialResolver, gateRegistry,
+                new com.securityexpert.nexus.ui2.persistence.pathvalidation.JooqPathValidationRepository(transactionBoundary));
         java.util.concurrent.ExecutorService executor = java.util.concurrent.Executors.newFixedThreadPool(10);
         java.util.List<WorkerClaimLoop> claimLoops = new java.util.ArrayList<>();
         var failoverRecovery = new com.securityexpert.nexus.ui2.persistence.JooqCpFailoverRepository(transactionBoundary);
@@ -426,6 +431,7 @@ public final class Ui2WorkerMain {
                     .withPanSystemLogCollect(panSystemLogCollectExecutor)
                     .withCpSystemLogCollect(cpSystemLogCollectExecutor)
                     .withCpSpikeLayoutReview(cpSpikeLayoutReviewExecutor)
+                    .withPathValidation(pathValidationExecutor)
                     .withPolicyCollection(policyCollectionExecutor)
                     .withRole(role, policyFallback)
                     .withRuntimeAdmission(endpointAdmission, moduleRuntime);
