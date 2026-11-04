@@ -8,6 +8,7 @@ const OverviewScreen = lazy(() => import("./screens/OverviewScreen").then((m) =>
 const InventoryScreen = lazy(() => import("./screens/InventoryScreen").then((m) => ({ default: m.InventoryScreen })));
 const PolicyScreen = lazy(() => import("./screens/PolicyScreen").then(m => ({ default: m.PolicyScreen })));
 const PolicyPreview = lazy(() => import("./screens/PolicyScreen").then(m => ({ default: m.PolicyPreview })));
+const PathAnalysisScreen = lazy(() => import("./screens/PathAnalysisScreen").then((m) => ({ default: m.PathAnalysisScreen })));
 const ConfigurationScreen = lazy(() => import("./screens/ConfigurationScreen").then((m) => ({ default: m.ConfigurationScreen })));
 const ComplianceScreen = lazy(() => import("./screens/ComplianceScreen").then((m) => ({ default: m.ComplianceScreen })));
 const BackupScreen = lazy(() => import("./screens/BackupScreen").then((m) => ({ default: m.BackupScreen })));
@@ -24,6 +25,7 @@ import { CompliancePreview } from "./preview/CompliancePreview";
 import { BackupPreview } from "./preview/BackupPreview";
 import { OperationsPreview } from "./preview/OperationsPreview";
 import { AdministrationPreview } from "./preview/AdministrationPreview";
+import { PathAnalysisPreview } from "./preview/PathAnalysisPreview";
 import { DisplayModeProvider, isWall } from "./shell/displayMode";
 import { isScreenId, type ScreenId } from "./shell/types";
 
@@ -46,6 +48,7 @@ const PRODUCT_SCREENS: Record<ScreenId, ComponentType> = {
   inventory: InventoryScreen,
   configuration: ConfigurationScreen,
   policy: PolicyScreen,
+  path_analysis: PathAnalysisScreen,
   compliance: ComplianceScreen,
   backups: BackupScreen,
   operations: OperationsScreen,
@@ -59,6 +62,7 @@ const PREVIEW_SCREENS: Record<ScreenId, ComponentType> = {
   inventory: InventoryPreview,
   configuration: ConfigurationPreview,
   policy: PolicyPreview,
+  path_analysis: PathAnalysisPreview,
   compliance: CompliancePreview,
   backups: BackupPreview,
   operations: OperationsPreview,

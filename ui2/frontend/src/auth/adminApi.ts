@@ -3734,3 +3734,143 @@ export async function getSystemLogText(chunkId: string, options: { readonly offs
     mask_rules: h("X-Syslog-Mask-Rules"),
   };
 }
+
+// ---- Path analysis (PATH_ANALYSIS_DESIGN.md §5, stage A5a API / A5b screen) ------------------------------------------
+
+/** The query body of `POST /api/v2/path-analysis/query`: IPv4 hosts, tcp or udp, a destination port, an optional ingress hint. */
+export interface PathQueryRequest {
+  readonly src: string;
+  readonly dst: string;
+  readonly protocol: "tcp" | "udp";
+  readonly port: number;
+  readonly ingress_node_id?: string;
+  readonly ingress_interface_name?: string;
+  readonly edge_mode?: boolean;
+}
+
+export interface PathTuple { readonly src: string; readonly dst: string; readonly protocol: string; readonly port: number }
+export interface PathEndpoint {
+  readonly attachment_id: string | null;
+  readonly segment_id: string | null;
+  readonly interface_name: string | null;
+  readonly zone: string | null;
+}
+export interface PathRoute {
+  readonly route_id: string;
+  readonly destination: string;
+  readonly next_hop: string | null;
+  readonly interface_name: string | null;
+  readonly protocol: string;
+  readonly next_hop_kind: string | null;
+  readonly ecmp_branch: boolean;
+}
+export interface PathRule {
+  readonly rule_id: string | null;
+  readonly rule_number: number | null;
+  readonly rule_name: string | null;
+  readonly section_id: string | null;
+  readonly section_name: string | null;
+  readonly action: string | null;
+  readonly lookup_reason?: string;
+  readonly path_reason?: string;
+}
+export interface PathNat {
+  readonly nat_status: string;
+  readonly nat_reason: string;
+  readonly applied: boolean;
+  readonly nat_rules: readonly PathRule[];
+  readonly nat_undecidable_rules: readonly PathRule[];
+}
+export interface PathSecurity {
+  readonly security_verdict: string;
+  readonly security_reason: string;
+  readonly deciding_rule: PathRule | null;
+  readonly undecidable_rules: readonly PathRule[];
+}
+export interface PathHop {
+  readonly hop_index: number;
+  readonly node_id: string;
+  readonly node_kind: string;
+  readonly vendor: string;
+  readonly context: string;
+  readonly routing_context: string | null;
+  readonly device_id: string | null;
+  readonly ingress: PathEndpoint;
+  readonly egress: PathEndpoint;
+  readonly packet_in: PathTuple | null;
+  readonly packet_out: PathTuple | null;
+  readonly route: PathRoute | null;
+  readonly nat: PathNat | null;
+  readonly security: PathSecurity | null;
+  readonly post_nat_security: PathSecurity | null;
+  readonly policy_stale: boolean;
+  readonly policy_collected_at: string | null;
+  readonly own_verdict: string;
+  readonly verdict: string;
+  readonly verdict_reason: string;
+  readonly reasons: readonly string[];
+  readonly caveats: readonly string[];
+  readonly notes: readonly string[];
+  readonly flags: readonly string[];
+}
+export interface PathReturnHop {
+  readonly hop_index: number;
+  readonly node_id: string;
+  readonly src: string;
+  readonly dst: string;
+  readonly reverse_translated: boolean;
+  readonly route: PathRoute | null;
+  readonly egress: PathEndpoint;
+  readonly reasons: readonly string[];
+}
+export interface PathReturnBranch { readonly termination: string; readonly return_status: string; readonly hops: readonly PathReturnHop[] }
+export interface PathReturnPath { readonly return_status: string; readonly return_reason: string; readonly branches: readonly PathReturnBranch[] }
+export interface PathBranch {
+  readonly branch_id: string;
+  readonly verdict: string;
+  readonly verdict_reason: string;
+  readonly termination: string;
+  readonly blocking_hop_index: number | null;
+  readonly caveats: readonly string[];
+  readonly warnings: readonly string[];
+  readonly hops: readonly PathHop[];
+  readonly return_path: PathReturnPath;
+}
+export interface PathHopRef { readonly branch_id: string; readonly hop_index: number }
+export interface PathIngressCandidate { readonly node_id: string; readonly attachment_id: string | null; readonly segment_id: string | null }
+export interface PathResult {
+  readonly status: "COMPUTED";
+  readonly snapshot_id: string;
+  readonly computed_at: string;
+  readonly query: {
+    readonly src: string; readonly dst: string; readonly protocol: string; readonly port: number;
+    readonly ingress_node_id: string | null; readonly ingress_interface_name: string | null; readonly edge_mode: boolean;
+  };
+  readonly verdict: string;
+  readonly verdict_reason: string;
+  readonly plain: boolean;
+  readonly caveats: readonly string[];
+  readonly warnings: readonly string[];
+  readonly ecmp_truncated: boolean;
+  readonly asymmetric: boolean;
+  readonly blocking_hop: PathHopRef | null;
+  readonly ingress: { readonly ingress_mode: string; readonly ingress_status: string; readonly candidates: readonly PathIngressCandidate[] };
+  readonly executive_summary: {
+    readonly headline: string;
+    readonly blocking_hops: readonly PathHopRef[];
+    readonly unknown_hops: readonly PathHopRef[];
+    readonly asymmetry_detected: boolean;
+    readonly ecmp_branch_count: number;
+    readonly ecmp_truncated: boolean;
+    readonly freshness_status: string;
+  };
+  readonly branches: readonly PathBranch[];
+  readonly limitations: string;
+}
+
+/**
+ * One path query. Nothing is stored on the client; the server writes one masked audit row per query (D-2). Refusals keep
+ * `call`'s error shape: 400 `INVALID_REQUEST`, 409 `TOPOLOGY_NOT_BUILT`, 422 `PSEUDONYM_REFUSED`, 429
+ * `PATH_QUERY_RATE_LIMIT`, 503 `POLICY_BUSY` (`error`) or `AUDIT_UNAVAILABLE` (`code`).
+ */
+export const queryPath = (request: PathQueryRequest) => call<PathResult>("/api/v2/path-analysis/query", "POST", request);

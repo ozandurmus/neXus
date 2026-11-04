@@ -62,6 +62,9 @@ export const RAIL_ENTRIES: readonly RailEntry[] = [
   { id: "devices", label: "Devices", icon: "devices", group: "SEE", screen: "inventory", requiredPlane: "Devices" },
   { id: "compliance", label: "Compliance", icon: "compliance", group: "VERIFY", screen: "compliance", requiredPlane: "Compliance" },
   { id: "policy", label: "Policy", icon: "policy", group: "VERIFY", screen: "policy", requiredPlane: "Policy" },
+  // Path analysis (PATH_ANALYSIS_DESIGN.md §5, stage A5b): "can A reach B". The query action follows the inventory read
+  // (open to every signed-in role, masked for aiview), so the entry carries no plane gate.
+  { id: "path", label: "Path", icon: "route", group: "VERIFY", screen: "path_analysis" },
   // The Product Owner's backup requirement asks for a left-hand Backup destination outright; RECOVER is its own verb.
   { id: "backups", label: "Backups", icon: "backup", group: "RECOVER", screen: "backups" },
   { id: "operations", label: "Operations", icon: "operations", group: "OPERATE", screen: "operations" },
@@ -111,6 +114,7 @@ export const DRAWER_GROUPS: readonly DrawerGroup[] = [
   { header: "VERIFY", leaves: [
     { label: "Compliance", screen: "compliance", href: "?screen=compliance", requiredPlane: "Compliance" },
     { label: "Policy", screen: "policy", href: "?screen=policy", requiredPlane: "Policy" },
+    { label: "Path", screen: "path_analysis", href: "?screen=path_analysis" },
   ] },
   { header: "RECOVER", leaves: [
     { label: "Backups", screen: "backups", href: "?screen=backups" },
