@@ -311,3 +311,57 @@ describe("P0-3B: a selected virtual system scopes the pane", () => {
     await waitFor(() => expect(screen.getByText("ethernet1/3")).toBeInTheDocument());
   });
 });
+
+describe("routing table headers order every filtered route, not the page (Product Owner, 2026-11-04)", () => {
+  // 120 routes in a scrambled collection order (7 is coprime with 120), so the default order is not the numeric one;
+  // every sixth route has no next hop.
+  const scrambled = Array.from({ length: 120 }, (_, k) => {
+    const i = ((k * 7) % 120) + 1;
+    return { destination: `10.${i}.0.0/16`, next_hop: i % 6 === 0 ? null : `192.0.2.${i}`, interface: `ethernet1/${i % 20}`, protocol: i % 2 ? "static" : "connected" };
+  });
+  const contexts = [{ context: "physical", vs_name: null, ha: null, interfaces: [], routes: scrambled }] as unknown as InventoryContext[];
+  const rows = () => screen.getAllByRole("row").slice(1);
+  const column = (index: number) => rows().map((row) => within(row).getAllByRole("cell")[index].textContent);
+  const header = (name: string) => screen.getByRole("button", { name });
+  const next = () => fireEvent.click(screen.getByRole("button", { name: "Go to next page" }));
+  const mount = () => render(as(null, <RoutesPanel contexts={contexts} member={{ device_id: "d1", hostname: "FW-SYNTH-01" }} />));
+
+  it("sorts Destination over all 120 routes with numeric collation, continues on page 2, flips, and the third click restores collection order", () => {
+    mount();
+    expect(column(0).slice(0, 3)).toEqual(["10.1.0.0/16", "10.8.0.0/16", "10.15.0.0/16"]);
+    fireEvent.click(header("Destination"));
+    expect(header("Destination").closest("th")).toHaveAttribute("aria-sort", "ascending");
+    expect(column(0)).toEqual(Array.from({ length: 50 }, (_, i) => `10.${i + 1}.0.0/16`));
+    next();
+    expect(screen.getByText("51–100 of 120")).toBeInTheDocument();
+    expect(column(0)).toEqual(Array.from({ length: 50 }, (_, i) => `10.${i + 51}.0.0/16`));
+    fireEvent.click(header("Destination"));
+    expect(header("Destination").closest("th")).toHaveAttribute("aria-sort", "descending");
+    expect(screen.getByText("1–50 of 120")).toBeInTheDocument();
+    expect(column(0).slice(0, 3)).toEqual(["10.120.0.0/16", "10.119.0.0/16", "10.118.0.0/16"]);
+    fireEvent.click(header("Destination"));
+    expect(header("Destination").closest("th")).not.toHaveAttribute("aria-sort");
+    expect(column(0).slice(0, 3)).toEqual(["10.1.0.0/16", "10.8.0.0/16", "10.15.0.0/16"]);
+  });
+
+  it("puts routes without a next hop last in both directions, resets to page 1, and sorts the filtered list", () => {
+    mount();
+    next();
+    expect(screen.getByText("51–100 of 120")).toBeInTheDocument();
+    fireEvent.click(header("Next hop"));
+    expect(screen.getByText("1–50 of 120")).toBeInTheDocument();
+    expect(column(1).slice(0, 2)).toEqual(["192.0.2.1", "192.0.2.2"]);
+    next(); next();
+    expect(screen.getByText("101–120 of 120")).toBeInTheDocument();
+    expect(column(1)).toEqual(Array(20).fill("—"));
+    fireEvent.click(header("Next hop"));
+    expect(column(1).slice(0, 2)).toEqual(["192.0.2.119", "192.0.2.118"]);
+    next(); next();
+    expect(column(1)).toEqual(Array(20).fill("—"));
+    fireEvent.change(screen.getByPlaceholderText("Filter routes..."), { target: { value: "10.11" } });
+    // 10.11, 10.110 .. 10.119: eleven routes, still newest-first by next hop, the one without a next hop (10.114) last
+    expect(screen.getByText("1–11 of 11")).toBeInTheDocument();
+    expect(column(0)[0]).toBe("10.119.0.0/16");
+    expect(column(0)[10]).toBe("10.114.0.0/16");
+  });
+});

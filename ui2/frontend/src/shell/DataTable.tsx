@@ -13,13 +13,15 @@ import { m3 } from "../theme/m3Theme";
 import { DENSITY, LABEL_UPPER, RADIUS, TYPE } from "../theme/tokens";
 import { Icon } from "./Icon";
 import { CapabilityMenu, type CapabilityMenuItem } from "./M3Widgets";
+import { SortHeaderCell, type SortColumn, type SortDirection, type SortKind, type SortValue, type TableSortState } from "./tableSort";
 
 /**
  * The one data table (design language 2026-10-19, component 4): compact density -- 32 px one-line rows, 8 px cell
  * gutters, fixed column widths at 1440 so a long value is cut with an ellipsis and never widens the page, mono for
  * machine values (addresses, serials, hashes, versions, timestamps), a `⋮` menu at the end of a row for its actions,
  * and the pagination footer `1–50 of N`. A cell's full value is on hover when it may be cut. A row never grows past
- * one line: anything longer belongs in the detail.
+ * one line: anything longer belongs in the detail. A column with `sort` and a table with `sort` (the `useTableSort`
+ * state) gets a sortable header; the caller orders the whole list with `sort.apply` before it slices the page.
  */
 export interface DataColumn<T> {
   readonly key: string;
@@ -34,6 +36,19 @@ export interface DataColumn<T> {
   readonly title?: (row: T) => string | undefined;
   /** A column that may wrap onto a second line (a reason sentence); every other cell stays one line. */
   readonly wrap?: boolean;
+  /** What the column orders by (the value the cell renders); with the table's `sort` state the header becomes sortable. */
+  readonly sort?: {
+    readonly value: (row: T) => SortValue;
+    readonly kind?: SortKind;
+    readonly firstDirection?: SortDirection;
+    /** Hover-text words for the two directions (default A to Z / Z to A). */
+    readonly words?: { readonly asc: string; readonly desc: string };
+  };
+}
+
+/** The `SortColumn` list `useTableSort` needs, from the columns that declare a `sort`. */
+export function sortColumnsOf<T>(columns: ReadonlyArray<DataColumn<T>>): SortColumn<T>[] {
+  return columns.flatMap((c) => (c.sort ? [{ key: c.key, value: c.sort.value, kind: c.sort.kind, firstDirection: c.sort.firstDirection }] : []));
 }
 
 export interface DataPage {
@@ -78,11 +93,13 @@ export interface DataTableProps<T> {
   /** A fixed height with its own scroll, for a list that sits above a detail. */
   readonly maxHeight?: number | string;
   readonly testId?: string;
+  /** The table's sort state (`useTableSort(sortColumnsOf(columns))`); headers of columns with a `sort` become sortable. */
+  readonly sort?: TableSortState<T>;
 }
 
 const ONE_LINE = { whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" } as const;
 
-export function DataTable<T>({ ariaLabel, columns, rows, rowKey, actions, page, emptyText = "No rows.", onRowClick, selectedKey, stickyFirst = false, footer, maxHeight, testId }: DataTableProps<T>) {
+export function DataTable<T>({ ariaLabel, columns, rows, rowKey, actions, page, emptyText = "No rows.", onRowClick, selectedKey, stickyFirst = false, footer, maxHeight, testId, sort }: DataTableProps<T>) {
   const d = DENSITY.compact;
   const hasActions = Boolean(actions);
   return (
@@ -98,7 +115,12 @@ export function DataTable<T>({ ariaLabel, columns, rows, rowKey, actions, page, 
           <TableHead>
             <TableRow>
               {columns.map((c) => (
-                <TableCell key={c.key} align={c.align} sx={{ ...LABEL_UPPER, ...ONE_LINE, color: m3.onSurfaceVar, height: d.row }}>{c.header}</TableCell>
+                sort && c.sort ? (
+                  <SortHeaderCell key={c.key} align={c.align} state={sort.header(c.key)} label={typeof c.header === "string" ? c.header : c.key} words={c.sort.words}
+                    sx={{ ...LABEL_UPPER, ...ONE_LINE, color: m3.onSurfaceVar, height: d.row }}>{c.header}</SortHeaderCell>
+                ) : (
+                  <TableCell key={c.key} align={c.align} sx={{ ...LABEL_UPPER, ...ONE_LINE, color: m3.onSurfaceVar, height: d.row }}>{c.header}</TableCell>
+                )
               ))}
               {hasActions ? <TableCell aria-label="Actions" sx={{ height: d.row }} /> : null}
             </TableRow>

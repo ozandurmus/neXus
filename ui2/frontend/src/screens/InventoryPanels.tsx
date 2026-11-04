@@ -19,6 +19,7 @@ import Typography from "@mui/material/Typography";
 import { EmptyPanel } from "../shell/ScreenLayout";
 import { ObjectHeader } from "../shell/ObjectHeader";
 import { PaginationFooter } from "../shell/DataTable";
+import { SortHeaderCell, useTableSort, type SortColumn } from "../shell/tableSort";
 import { clusterModeWord, statusWord } from "../shell/presenters";
 import type { Tone } from "../shell/tone";
 import { M3Button, M3Tabs, StatusChip } from "../shell/M3Widgets";
@@ -637,6 +638,21 @@ const PHYSICAL_GROUP_LABEL = "Physical / VS0";
 /** The routing tables page at this many routes. */
 export const ROUTES_PAGE_SIZE = 50;
 
+type SortableRoute = ClusterRoute & { readonly vsysLabel?: string };
+/**
+ * The routing table's sortable columns (tableSort.tsx), each by what its cell shows: prefixes and addresses with numeric
+ * collation (10.0.2.0/24 before 10.0.10.0/24), a route without a next hop or interface last, and the alignment column
+ * with the shared routes first ascending and the differing ones first descending.
+ */
+const ROUTE_SORT: ReadonlyArray<SortColumn<SortableRoute>> = [
+  { key: "scope", value: (r) => r.vsysLabel ?? "Physical" },
+  { key: "destination", value: (r) => r.destination },
+  { key: "next_hop", value: (r) => r.next_hop },
+  { key: "interface", value: (r) => r.interface },
+  { key: "protocol", value: (r) => r.protocol },
+  { key: "alignment", value: (r) => (r.presence !== "all" || r.differences.length > 0 ? 1 : 0), kind: "number" },
+];
+
 /**
  * A virtual system / VDOM scope in a table cell: the name only (the column header says VSYS), cut with an ellipsis, full
  * text on hover. `full` is for a group header row that spans the table (post-release review 2026-10-18, R18): there the
@@ -971,6 +987,8 @@ function ClusterRoutesTable({
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   useEffect(() => { setPage(0); }, [diffOnly, search, routes.length]);
+  const firstPage = useCallback(() => setPage(0), []);
+  const sort = useTableSort(ROUTE_SORT, { onChange: firstPage });
 
   if (routes.length === 0) {
     return <EmptyPanel title="No routing evidence" body="This context has no collected routes yet." />;
@@ -1002,10 +1020,11 @@ function ClusterRoutesTable({
   members.forEach((m) => memberNameById.set(m.device_id, memberLabel(m, members)));
 
   // 371 routes were one 16,915 px page (UI review 2026-10-18, F-15): the table pages at ROUTES_PAGE_SIZE, the filter
-  // and the differences switch still run over every route and the page counter follows the filtered list.
+  // and the differences switch still run over every route, a header click orders every filtered route, and the page
+  // counter follows the filtered list.
   const pageCount = Math.max(1, Math.ceil(displayedRoutes.length / ROUTES_PAGE_SIZE));
   const safePage = Math.min(page, pageCount - 1);
-  const pageRoutes = displayedRoutes.slice(safePage * ROUTES_PAGE_SIZE, (safePage + 1) * ROUTES_PAGE_SIZE);
+  const pageRoutes = sort.apply(displayedRoutes).slice(safePage * ROUTES_PAGE_SIZE, (safePage + 1) * ROUTES_PAGE_SIZE);
 
   return (
     <Stack spacing={1.5}>
@@ -1098,12 +1117,12 @@ function ClusterRoutesTable({
         <Table size="small">
           <TableHead>
             <TableRow>
-              {showVsysColumn && <TableCell sx={{ fontWeight: 600 }}>{routes.some((r) => r.vsysLabel?.startsWith("VDOM:")) ? "VDOM" : "VSYS"}</TableCell>}
-              <TableCell sx={{ fontWeight: 600 }}>Destination</TableCell>
-              <TableCell sx={{ fontWeight: 600 }}>Next hop</TableCell>
-              <TableCell sx={{ fontWeight: 600 }}>Interface</TableCell>
-              <TableCell sx={{ fontWeight: 600 }}>Protocol</TableCell>
-              {!singleMember && <TableCell sx={{ fontWeight: 600 }}>Same on both members</TableCell>}
+              {showVsysColumn && <SortHeaderCell state={sort.header("scope")} label={routes.some((r) => r.vsysLabel?.startsWith("VDOM:")) ? "VDOM" : "VSYS"} sx={{ fontWeight: 600 }} />}
+              <SortHeaderCell state={sort.header("destination")} label="Destination" sx={{ fontWeight: 600 }} />
+              <SortHeaderCell state={sort.header("next_hop")} label="Next hop" sx={{ fontWeight: 600 }} />
+              <SortHeaderCell state={sort.header("interface")} label="Interface" sx={{ fontWeight: 600 }} />
+              <SortHeaderCell state={sort.header("protocol")} label="Protocol" sx={{ fontWeight: 600 }} />
+              {!singleMember && <SortHeaderCell state={sort.header("alignment")} label="Same on both members" words={{ asc: "shared first", desc: "differences first" }} sx={{ fontWeight: 600 }} />}
             </TableRow>
           </TableHead>
           <TableBody>

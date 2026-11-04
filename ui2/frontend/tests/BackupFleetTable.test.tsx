@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ThemeProvider } from "@mui/material/styles";
 
@@ -284,5 +284,113 @@ describe("fixed column widths (post-release review 2026-10-18, R3 / R11)", () =>
     const locked = screen.getByText("Target · locked").closest("[data-pill]") as HTMLElement;
     expect(locked).toHaveStyle({ backgroundColor: TONE_COLORS.neutral.bg });
     expect(locked).not.toHaveStyle({ backgroundColor: TONE_COLORS.ok.bg });
+  });
+});
+
+describe("every header sorts the whole filtered set, not the page (Product Owner, 2026-11-04)", () => {
+  // 120 targets named without zero padding, so plain text order (FW-TANGO-1, FW-TANGO-10, FW-TANGO-100 ...) differs
+  // from numeric order; every third device standalone; an archive on all but every ninth; an attempt on all but every tenth.
+  const estate = Array.from({ length: 120 }, (_, k) => {
+    const i = k + 1;
+    return device(i, { hostname: `FW-TANGO-${i}`, cluster_member_ref: i % 3 === 0 ? null : `CLS-ROMEO-${i % 7}` });
+  });
+  const archives = estate.flatMap((_, k) => (k % 9 === 8 ? [] : [artefact(k + 1, { collected_at: new Date(Date.UTC(2026, 9, 1) + ((k * 53) % 120) * 3_600_000).toISOString() })]));
+  function stubWithAttempts() {
+    stub(estate, archives);
+    const base = vi.mocked(fetch);
+    const inner = base.getMockImplementation()!;
+    base.mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith("/api/v2/jobs")) {
+        const n = Number(new URLSearchParams(url.slice(url.indexOf("?"))).get("device_id")?.slice(1));
+        if (n % 10 === 0) return json({ items: [], total: 0, page: 1, page_size: 1 });
+        const submitted_at = new Date(Date.UTC(2026, 9, 1) + n * 3_600_000).toISOString();
+        return json({ items: [{ job_id: `job-${n}`, job_type: "backup", target_device_id: `d${n}`, submitted_at, state: "COMPLETED", terminal_reason: "COMPLETED", has_transcript: false }], total: 1, page: 1, page_size: 1 });
+      }
+      return inner(input);
+    });
+  }
+  const rows = () => screen.getAllByRole("row").slice(1);
+  const names = () => rows().map((r) => within(r).getByText(/^FW-TANGO-\d+$/).textContent);
+  const cell = (row: HTMLElement, index: number) => within(row).getAllByRole("cell")[index];
+  const header = (name: string) => screen.getByRole("button", { name });
+  const next = () => fireEvent.click(screen.getByRole("button", { name: "Go to next page" }));
+
+  it("orders Device over all 120 rows with numeric collation, page 2 continues it, descending flips it, the third click restores hostname order", async () => {
+    stubWithAttempts();
+    render(as(adminPlanes, <BackupScreen />));
+    await screen.findByText("FW-TANGO-1");
+    expect(names().slice(0, 3)).toEqual(["FW-TANGO-1", "FW-TANGO-10", "FW-TANGO-100"]);
+    fireEvent.click(header("Device"));
+    expect(header("Device").closest("th")).toHaveAttribute("aria-sort", "ascending");
+    expect(names()).toEqual(Array.from({ length: 50 }, (_, i) => `FW-TANGO-${i + 1}`));
+    next();
+    expect(screen.getByText("51–100 of 120")).toBeInTheDocument();
+    expect(names()).toEqual(Array.from({ length: 50 }, (_, i) => `FW-TANGO-${i + 51}`));
+    fireEvent.click(header("Device"));
+    expect(header("Device").closest("th")).toHaveAttribute("aria-sort", "descending");
+    expect(screen.getByText("1–50 of 120")).toBeInTheDocument();
+    expect(names().slice(0, 3)).toEqual(["FW-TANGO-120", "FW-TANGO-119", "FW-TANGO-118"]);
+    fireEvent.click(header("Device"));
+    expect(header("Device").closest("th")).not.toHaveAttribute("aria-sort");
+    expect(names().slice(0, 3)).toEqual(["FW-TANGO-1", "FW-TANGO-10", "FW-TANGO-100"]);
+  });
+
+  it("puts standalone devices last under Cluster whichever way it points, and ties keep hostname order", async () => {
+    stubWithAttempts();
+    render(as(adminPlanes, <BackupScreen />));
+    await screen.findByText("FW-TANGO-1");
+    fireEvent.click(header("Cluster"));
+    expect(cell(rows()[0], 2)).toHaveTextContent("CLS-ROMEO-0");
+    // the CLS-ROMEO-0 rows (7, 14, 28 ... 112, 119) keep the table's hostname order among themselves
+    expect(names().slice(0, 3)).toEqual(["FW-TANGO-112", "FW-TANGO-119", "FW-TANGO-14"]);
+    next(); next();
+    expect(screen.getByText("101–120 of 120")).toBeInTheDocument();
+    for (const row of rows()) expect(cell(row, 2)).toHaveTextContent("standalone");
+    fireEvent.click(header("Cluster"));
+    expect(cell(rows()[0], 2)).toHaveTextContent("CLS-ROMEO-6");
+    next(); next();
+    for (const row of rows()) expect(cell(row, 2)).toHaveTextContent("standalone");
+  });
+
+  it("orders Latest archive and Latest attempt by time over every row, with rows that have none last", async () => {
+    stubWithAttempts();
+    render(as(adminPlanes, <BackupScreen />));
+    await screen.findByText("FW-TANGO-1");
+    fireEvent.click(header("Latest archive"));
+    // the oldest archive: k with (k * 53) % 120 === 0 and an archive, k = 0 -> FW-TANGO-1
+    expect(names()[0]).toBe("FW-TANGO-1");
+    next(); next();
+    // the 13 devices without an archive (every ninth) close the list
+    expect(rows().slice(-13).every((r) => within(r).getByText("No archive"))).toBe(true);
+    fireEvent.click(header("Latest attempt"));
+    expect(screen.getByText("1–50 of 120")).toBeInTheDocument();
+    next(); next();
+    // oldest attempt first over the 108 devices that have one: rows 101-108 of the list are devices 112-119, then the 12 without
+    await waitFor(() => {
+      expect(names().slice(0, 8)).toEqual(["FW-TANGO-112", "FW-TANGO-113", "FW-TANGO-114", "FW-TANGO-115", "FW-TANGO-116", "FW-TANGO-117", "FW-TANGO-118", "FW-TANGO-119"]);
+    }, { timeout: 4000 });
+    expect(rows().slice(-12).map((r) => within(r).queryByText("No attempt") !== null)).toEqual(Array(12).fill(true));
+    fireEvent.click(header("Latest attempt"));
+    expect(header("Latest attempt").closest("th")).toHaveAttribute("aria-sort", "descending");
+    expect(names().slice(0, 2)).toEqual(["FW-TANGO-119", "FW-TANGO-118"]);
+    next(); next();
+    expect(rows().slice(-12).map((r) => within(r).queryByText("No attempt") !== null)).toEqual(Array(12).fill(true));
+  });
+
+  it("returns to page 1 when any header changes the order, and the Large backups chip still leads with the largest", async () => {
+    stubWithAttempts();
+    render(as(adminPlanes, <BackupScreen />));
+    await screen.findByText("FW-TANGO-1");
+    next();
+    expect(screen.getByText("51–100 of 120")).toBeInTheDocument();
+    fireEvent.click(header("Model · version"));
+    expect(screen.getByText("1–50 of 120")).toBeInTheDocument();
+    next();
+    fireEvent.click(header("Validation"));
+    expect(screen.getByText("1–50 of 120")).toBeInTheDocument();
+    // Size keeps its own first step: largest first, without a chip
+    fireEvent.click(header("Size"));
+    expect(header("Size").closest("th")).toHaveAttribute("aria-sort", "descending");
   });
 });

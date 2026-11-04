@@ -1,5 +1,5 @@
 import { useGate } from "../shell/JobWindow";
-import { BackupAttempts } from "./BackupAttempts";
+import { BackupAttempts, LatestAttemptCell, latestAttemptTime, useLatestBackupAttempts } from "./BackupAttempts";
 import { DeviationChip, ValidationChip, deviationState } from "./backupWords";
 import { BackupDeviationCard, MajorDeviationList, majorDeviceIds } from "./BackupDeviationCard";
 import { bytesTitle, formatBytes } from "../shell/bytes";
@@ -20,7 +20,6 @@ import TableCell from "@mui/material/TableCell";
 import TableContainer from "@mui/material/TableContainer";
 import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
-import TableSortLabel from "@mui/material/TableSortLabel";
 import IconButton from "@mui/material/IconButton";
 import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
@@ -55,7 +54,7 @@ import {
 } from "../auth/adminApi";
 import { ScreenHeader, MetricGrid, MetricCard, ScreenRoot } from "../shell/ScreenLayout";
 import { backupFleetCounts, isBackupFleetRow, retentionNote, type BackupFleetCounts } from "./backupCounts";
-import { compareBySize, largeBackupFlag, largeBackupTitle, nextSizeSort, vendorMedianSizes, type SizeSort } from "./backupSize";
+import { largeBackupFlag, largeBackupTitle, vendorMedianSizes } from "./backupSize";
 import { M3Button, StatusChip } from "../shell/M3Widgets";
 import { PLANE_OPERATIONS, ROLE_LOCK_LABEL, ROLE_REFUSAL, useRoleAllows } from "../shell/actionAccess";
 import { Icon } from "../shell/Icon";
@@ -64,6 +63,7 @@ import { VendorBadge } from "../shell/States";
 import { Stamp } from "../shell/PresentedText";
 import { statusWord, vendorLabel } from "../shell/presenters";
 import { PaginationFooter } from "../shell/DataTable";
+import { SortHeaderCell, sortRows, useTableSort, type SortColumn, type TableSort } from "../shell/tableSort";
 
 
 import { MONO, m3 } from "../theme/m3Theme";
@@ -1041,6 +1041,38 @@ export const FLEET_COLUMNS: ReadonlyArray<readonly [string, string]> = [
   ["Validation", "10%"], ["Deviation", "10%"], ["Latest attempt", "11%"], ["Actions", "3%"],
 ];
 
+/** One fleet row: the enrolled device, the newest archive the store holds for it, and the time of its latest backup attempt once read. */
+interface FleetRow {
+  readonly summary: DeviceSummary | null;
+  readonly item: BackupDeviceItem | null;
+  readonly id: string;
+  readonly attemptAt: string | null;
+}
+
+/** The Model · version cell: the model without its vendor prefix and the software version; UNKNOWN for a device without a summary. */
+function modelVersionText(summary: DeviceSummary | null): string {
+  return summary ? [(summary.model ?? "UNKNOWN").replace(/^Check Point\s+/, ""), summary.software_version].filter(Boolean).join(" · ") : "UNKNOWN";
+}
+
+/**
+ * Every fleet column orders by what its cell shows (tableSort.tsx; Product Owner, 2026-11-04): the whole filtered set,
+ * then the page. A row without an archive has no size, archive time, validation or deviation and sorts last; a
+ * standalone device has no cluster and sorts last; an attempt not yet read sorts last until it is. Size keeps its own
+ * first step, largest first (Product Owner, 2026-11-02).
+ */
+const FLEET_SORT: ReadonlyArray<SortColumn<FleetRow>> = [
+  { key: "device", value: (r) => r.summary?.hostname ?? r.item?.name ?? null },
+  { key: "model", value: (r) => (r.summary && (r.summary.model || r.summary.software_version) ? modelVersionText(r.summary) : null) },
+  { key: "cluster", value: (r) => r.summary?.cluster_member_ref ?? null },
+  { key: "target", value: (r) => (r.summary ? (r.summary.backup_target ? 1 : 0) : null), kind: "number" },
+  { key: "archive", value: (r) => r.item?.lastBackupTime ?? null, kind: "time" },
+  { key: "size", value: (r) => r.item?.sizeBytes ?? null, kind: "number", firstDirection: "desc" },
+  { key: "validation", value: (r) => r.item?.validationLevel ?? null },
+  { key: "deviation", value: (r) => r.item?.deviationState ?? null },
+  { key: "attempt", value: (r) => r.attemptAt, kind: "time" },
+];
+const TIME_WORDS = { asc: "oldest first", desc: "newest first" } as const;
+
 /**
  * Backups (Product Owner, 2026-09-22; merged per the UI review 2026-09-23; one-line rows per the UI review 2026-10-18):
  * the devices the product may back up and what the store holds for each, in one table. Every enrolled gateway is
@@ -1051,7 +1083,7 @@ export const FLEET_COLUMNS: ReadonlyArray<readonly [string, string]> = [
  * its suffix, so a row stays one line and the table pages at {@link BACKUP_PAGE_SIZE}. Product Owner, 2026-11-02: the
  * Size header sorts the whole filtered set (largest first, then smallest first, then back to hostname order), and an
  * archive unusually large for its vendor carries a "Large" marker with its own show chip -- a 28 GB backup on page 2
- * was invisible.
+ * was invisible. Product Owner, 2026-11-04: every other header sorts the same way, over the whole filtered set.
  */
 function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetError, baselines, busyDeviceId, comparisonRun,
   onBackupNow, onHistory, onContents, onCompare, onDownload, onDeleteOrphan }: {
@@ -1079,9 +1111,10 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
   // `q` carries a filter from other screens (the cluster context strip); `artefact=none` from the Overview tile.
   const [search, setSearch] = useState(() => urlParam("q") ?? "");
   const [show, setShow] = useState<Show>(() => (urlParam("artefact") === "none" ? "without_archive" : "all"));
-  const [sizeSort, setSizeSort] = useState<SizeSort>("none");
   const [page, setPage] = useState(0);
-  useEffect(() => { setPage(0); }, [search, show, sizeSort]);
+  useEffect(() => { setPage(0); }, [search, show]);
+  const firstPage = useCallback(() => setPage(0), []);
+  const sort = useTableSort(FLEET_SORT, { onChange: firstPage });
 
   useEffect(() => {
     let cancelled = false;
@@ -1116,9 +1149,12 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
   const summaries = (devices ?? []).filter(isBackupFleetRow);
   const counts = backupFleetCounts(devices ?? [], new Set(byId.keys()));
   const known = new Set(summaries.map((d) => d.device_id));
-  const rows: Array<{ summary: DeviceSummary | null; item: BackupDeviceItem | null; id: string }> = [
-    ...summaries.map((d) => ({ summary: d, item: byId.get(d.device_id) ?? null, id: d.device_id })),
-    ...fleet.filter((f) => !known.has(f.deviceId)).map((f) => ({ summary: null, item: f, id: f.deviceId })),
+  const ids = [...summaries.map((d) => d.device_id), ...fleet.filter((f) => !known.has(f.deviceId)).map((f) => f.deviceId)];
+  // every row's latest attempt, read once for the whole list (the LATEST ATTEMPT cells and their sort)
+  const attempts = useLatestBackupAttempts(ids, version);
+  const rows: FleetRow[] = [
+    ...summaries.map((d) => ({ summary: d, item: byId.get(d.device_id) ?? null, id: d.device_id, attemptAt: latestAttemptTime(attempts.get(d.device_id)) })),
+    ...fleet.filter((f) => !known.has(f.deviceId)).map((f) => ({ summary: null, item: f, id: f.deviceId, attemptAt: latestAttemptTime(attempts.get(f.deviceId)) })),
   ];
   const targetCount = counts.targets;
   const withoutArchive = counts.targetsWithoutArchive;
@@ -1126,9 +1162,9 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
   const medians = vendorMedianSizes(fleet);
   const largeById = new Map(fleet.flatMap((f) => { const flag = largeBackupFlag(f, medians); return flag ? [[f.deviceId, flag] as const] : []; }));
   const q = search.trim().toLowerCase();
-  // The "Large backups" chip shows the largest first unless the header was clicked; the other chips keep hostname order.
-  const sizeOrder: SizeSort = sizeSort !== "none" ? sizeSort : show === "large" ? "desc" : "none";
-  const shown = rows.filter(({ summary, item, id }) => {
+  // The "Large backups" chip shows the largest first unless a header was clicked; the other chips keep hostname order.
+  const order: TableSort | null = sort.sort ?? (show === "large" ? { key: "size", direction: "desc" } : null);
+  const filtered = rows.filter(({ summary, item, id }) => {
     if (show === "targets" && !summary?.backup_target) return false;
     if (show === "without_archive" && (!summary?.backup_target || item !== null)) return false;
     if (show === "large" && !largeById.has(id)) return false;
@@ -1136,7 +1172,8 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
     return [summary?.hostname, summary?.model, summary?.cluster_member_ref, summary?.software_version, item?.name, summary?.device_id ?? item?.deviceId]
       .some((f) => (f ?? "").toLowerCase().includes(q));
   }).sort((a, b) => (a.summary?.hostname ?? a.item?.name ?? "").localeCompare(b.summary?.hostname ?? b.item?.name ?? ""));
-  if (sizeOrder !== "none") shown.sort((a, b) => compareBySize(a.item?.sizeBytes ?? null, b.item?.sizeBytes ?? null, sizeOrder));
+  // the whole filtered set in the chosen order (ties keep hostname order), then the page of it
+  const shown = sortRows(filtered, FLEET_SORT, order);
 
   const pageCount = Math.max(1, Math.ceil(shown.length / BACKUP_PAGE_SIZE));
   const safePage = Math.min(page, pageCount - 1);
@@ -1195,20 +1232,15 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
             </colgroup>
             <TableHead>
               <TableRow>
-                <TableCell>Device</TableCell>
-                <TableCell>Model · version</TableCell>
-                <TableCell>Cluster</TableCell>
-                <TableCell align="center">Target</TableCell>
-                <TableCell>Latest archive</TableCell>
-                <TableCell align="right" sortDirection={sizeSort === "none" ? false : sizeSort}>
-                  <TableSortLabel active={sizeSort !== "none"} direction={sizeSort === "none" ? "desc" : sizeSort} onClick={() => setSizeSort(nextSizeSort(sizeSort))}
-                    title={sizeSort === "none" ? "Sort by latest archive size, largest first" : sizeSort === "desc" ? "Largest first · click for smallest first" : "Smallest first · click for hostname order"}>
-                    Size
-                  </TableSortLabel>
-                </TableCell>
-                <TableCell>Validation</TableCell>
-                <TableCell>Deviation</TableCell>
-                <TableCell>Latest attempt</TableCell>
+                <SortHeaderCell state={sort.header("device")} label="Device" />
+                <SortHeaderCell state={sort.header("model")} label="Model · version" />
+                <SortHeaderCell state={sort.header("cluster")} label="Cluster" />
+                <SortHeaderCell state={sort.header("target")} label="Target" align="center" words={{ asc: "not a target first", desc: "targets first" }} />
+                <SortHeaderCell state={sort.header("archive")} label="Latest archive" words={TIME_WORDS} />
+                <SortHeaderCell state={sort.header("size")} label="Size" align="right" words={{ asc: "smallest first", desc: "largest first" }} />
+                <SortHeaderCell state={sort.header("validation")} label="Validation" />
+                <SortHeaderCell state={sort.header("deviation")} label="Deviation" />
+                <SortHeaderCell state={sort.header("attempt")} label="Latest attempt" words={TIME_WORDS} />
                 <TableCell align="right" sx={{ position: "relative", overflow: "hidden" }}><Box component="span" sx={HIDDEN}>Actions</Box></TableCell>
               </TableRow>
             </TableHead>
@@ -1219,8 +1251,7 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
                 const busy = busyDeviceId === id;
                 const target = Boolean(summary?.backup_target);
                 const large = largeById.get(id) ?? null;
-                const modelVersion = summary
-                  ? [(summary.model ?? "UNKNOWN").replace(/^Check Point\s+/, ""), summary.software_version].filter(Boolean).join(" · ") : "UNKNOWN";
+                const modelVersion = modelVersionText(summary);
                 return (
                   <TableRow key={id} hover>
                     <TableCell>
@@ -1263,7 +1294,7 @@ function BackupFleetTable({ version, onTargetChanged, fleet, fleetLoaded, fleetE
                     </TableCell>
                     <TableCell>{item ? <ValidationChip level={item.validationLevel} withLevel /> : null}</TableCell>
                     <TableCell>{item ? <DeviationChip state={item.deviationState} comparisonRun={comparisonRun} /> : null}</TableCell>
-                    <TableCell sx={{ fontSize: 12.5 }}><BackupAttempts deviceId={id} latestOnly version={version} /></TableCell>
+                    <TableCell sx={{ fontSize: 12.5 }}><LatestAttemptCell latest={attempts.get(id) ?? "loading"} /></TableCell>
                     <TableCell align="right">
                       <RowMenu name={name}>
                         {item || target ? (
