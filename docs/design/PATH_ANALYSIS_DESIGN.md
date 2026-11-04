@@ -42,6 +42,8 @@ not "build collection". No new credential boundary in A.
 | G9 | Masked addresses (`SubnetPreservingIpMasker`) hash each prefix independently: LPM cannot run on masked values; aiview has no way to enter a query | `SubnetPreservingIpMasker.java:172,179` |
 | G10 | PAN Advanced Routing Engine (logical routers) not read by `show routing route`; needs a new gated read (ASSUMPTION for A0) | F§2.2 |
 
+Amendment 2026-11-04 (engineer decision, G5 role): on a VSX cluster member's Virtual System the `cphaprob -a if` addresses are recorded `cluster_virtual`, not `member` (cross-review row 1.8); the topology builder attaches the cluster unit through them, one shared attachment per cluster and VSID, with no schema change, and stored rows change on the next inventory collection.
+
 `LocalFirewallPolicyService` is an offline fallback only when no Panorama exists in the estate; it is not an
 out-of-sync fallback (correction to F§4.4). A Panorama-managed firewall marked out of sync → hop `UNKNOWN`.
 

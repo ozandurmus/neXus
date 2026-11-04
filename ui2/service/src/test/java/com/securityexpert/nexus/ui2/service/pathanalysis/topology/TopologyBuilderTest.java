@@ -230,6 +230,66 @@ class TopologyBuilderTest {
         assertNotEquals(without.fingerprints().overrides(), with.fingerprints().overrides());
     }
 
+    /** G5 (2026-11-04): a VSX cluster member's VS addresses are cluster (virtual) addresses; two members share one VIP attachment. */
+    @Test
+    void twoMembersOfOneClusterAndVsidReportingTheSameVsVipGiveOneSharedAttachmentAndNoConflict() {
+        // The bare cphaprob -a if address is recorded cluster_virtual on both members; the prefix is the VS's connected route.
+        var a = vs("dev-a", Optional.of("cls-ref"), "FW-VSX-01", "ACTIVE", "2",
+                iface("eth1", addr("192.0.2.1", InventoryAddress.ROLE_CLUSTER_VIRTUAL)), connected("192.0.2.0/26", "eth1"));
+        var b = vs("dev-b", Optional.of("cls-ref"), "FW-VSX-02", "STANDBY", "2",
+                iface("eth1", addr("192.0.2.1", InventoryAddress.ROLE_CLUSTER_VIRTUAL)), connected("192.0.2.0/26", "eth1"));
+        TopologyGraph g = build(a, b);
+        var node = g.nodes().stream().filter(n -> n.context().equals("2")).findFirst().orElseThrow();
+        assertEquals(NodeKind.CLUSTER_UNIT, node.kind());
+        assertEquals(Optional.of("dev-a"), node.activeMemberDeviceId());
+        assertEquals(List.of(Optional.of("192.0.2.1/26")), g.attachmentsOf(node.nodeId()).stream()
+                .map(TopologyGraph.Attachment::address).toList(), "one VIP attachment for the unit, not one per member");
+        assertEquals(Set.of(), kinds(g), "no duplicate-address, duplicate-prefix or members-disagree conflict");
+        assertEquals(0, g.counts().conflicts());
+    }
+
+    @Test
+    void theSameVsAddressOnTwoDifferentClustersOrTwoVsidsIsStillADuplicate() {
+        // Two different enrolled clusters, same VSID, same address: two units, never merged by address equality.
+        var a1 = vs("dev-a1", Optional.of("cls-one"), "FW-VSX-01", "ACTIVE", "2",
+                iface("eth1", addr("192.0.2.1", InventoryAddress.ROLE_CLUSTER_VIRTUAL)), connected("192.0.2.0/26", "eth1"));
+        var a2 = vs("dev-a2", Optional.of("cls-one"), "FW-VSX-02", "STANDBY", "2",
+                iface("eth1", addr("192.0.2.1", InventoryAddress.ROLE_CLUSTER_VIRTUAL)), connected("192.0.2.0/26", "eth1"));
+        var b1 = vs("dev-b1", Optional.of("cls-two"), "FW-VSX-03", "ACTIVE", "2",
+                iface("eth1", addr("192.0.2.1", InventoryAddress.ROLE_CLUSTER_VIRTUAL)), connected("192.0.2.0/26", "eth1"));
+        var b2 = vs("dev-b2", Optional.of("cls-two"), "FW-VSX-04", "STANDBY", "2",
+                iface("eth1", addr("192.0.2.1", InventoryAddress.ROLE_CLUSTER_VIRTUAL)), connected("192.0.2.0/26", "eth1"));
+        TopologyGraph differentClusters = build(a1, a2, b1, b2);
+        assertEquals(2, differentClusters.nodes().stream().filter(n -> n.kind() == NodeKind.CLUSTER_UNIT).count());
+        assertTrue(kinds(differentClusters).contains(ConflictKind.DUPLICATE_PRIVATE_PREFIX),
+                "the same private prefix on two clusters stays a conflict");
+
+        // One cluster, same address in two different VSIDs: two nodes, same conflict.
+        var run = new InventoryRun("run-x", "dev-x", "job-x", Instant.parse("2026-11-04T06:00:00Z"), 1, List.of(
+                new InventoryContext("2", List.of(iface("eth1", addr("192.0.2.1", InventoryAddress.ROLE_CLUSTER_VIRTUAL))),
+                        List.of(connected("192.0.2.0/26", "eth1"))),
+                new InventoryContext("3", List.of(iface("eth1", addr("192.0.2.1", InventoryAddress.ROLE_CLUSTER_VIRTUAL))),
+                        List.of(connected("192.0.2.0/26", "eth1")))),
+                List.of(new InventoryHaFact("ha-2", "2", "ACTIVE", Optional.empty(), "cp_cphaprob_stat"),
+                        new InventoryHaFact("ha-3", "3", "ACTIVE", Optional.empty(), "cp_cphaprob_stat")));
+        TopologyGraph twoVsids = build(new TopologyInput.DeviceFacts("dev-x", CP, Optional.of("FW-VSX-05"),
+                Optional.of("cls-three"), Optional.of(run)));
+        assertEquals(2, twoVsids.nodes().stream().filter(n -> n.kind() == NodeKind.CLUSTER_UNIT).count());
+        assertTrue(kinds(twoVsids).contains(ConflictKind.DUPLICATE_PRIVATE_PREFIX));
+    }
+
+    @Test
+    void aClusterMemberVsRowStillRecordedAsMemberIsEvidenceOnlyAndNeverAttaches() {
+        // Rows stored before the G5 role fix (until the next inventory collection) carry member: they do not attach a cluster unit.
+        var a = vs("dev-a", Optional.of("cls-ref"), "FW-VSX-01", "ACTIVE", "2",
+                iface("eth1", addr("192.0.2.1/26", InventoryAddress.ROLE_MEMBER)), connected("192.0.2.0/26", "eth1"));
+        var b = vs("dev-b", Optional.of("cls-ref"), "FW-VSX-02", "STANDBY", "2",
+                iface("eth1", addr("192.0.2.1/26", InventoryAddress.ROLE_MEMBER)), connected("192.0.2.0/26", "eth1"));
+        TopologyGraph g = build(a, b);
+        assertEquals(0, g.attachments().size());
+        assertEquals(Set.of(), kinds(g));
+    }
+
     // ---- helpers ---------------------------------------------------------------------------------------------
 
     private static List<String> ids(TopologyGraph g) {
@@ -281,6 +341,19 @@ class TopologyBuilderTest {
         var run = new InventoryRun("run-" + deviceId, deviceId, "job-" + deviceId, Instant.parse("2026-11-04T06:00:00Z"), 1,
                 List.of(new InventoryContext("physical", interfaces, routes)),
                 List.of(new InventoryHaFact("ha-" + deviceId, "physical", role, Optional.empty(), "cp_cphaprob_stat")));
+        return new TopologyInput.DeviceFacts(deviceId, CP, Optional.of(hostname), clusterRef, Optional.of(run));
+    }
+
+    /** A VSX member whose only collected context is one Virtual System (cluster-member VS shape). */
+    private static TopologyInput.DeviceFacts vs(String deviceId, Optional<String> clusterRef, String hostname, String role,
+            String vsid, Object... parts) {
+        List<InventoryInterface> interfaces = Stream.of(parts).filter(InventoryInterface.class::isInstance)
+                .map(InventoryInterface.class::cast).toList();
+        List<InventoryRoute> routes = Stream.of(parts).filter(InventoryRoute.class::isInstance)
+                .map(InventoryRoute.class::cast).toList();
+        var run = new InventoryRun("run-" + deviceId, deviceId, "job-" + deviceId, Instant.parse("2026-11-04T06:00:00Z"), 1,
+                List.of(new InventoryContext(vsid, interfaces, routes)),
+                List.of(new InventoryHaFact("ha-" + deviceId, vsid, role, Optional.empty(), "cp_cphaprob_stat")));
         return new TopologyInput.DeviceFacts(deviceId, CP, Optional.of(hostname), clusterRef, Optional.of(run));
     }
 }

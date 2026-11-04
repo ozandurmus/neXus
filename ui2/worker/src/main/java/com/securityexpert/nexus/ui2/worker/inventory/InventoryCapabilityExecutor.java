@@ -386,7 +386,8 @@ public final class InventoryCapabilityExecutor {
                     }
                     // V184 (path analysis A1, G5): cphaprob -a if carries no prefix; the same VS's own connected route
                     // (already read in this composite) gives it, only when exactly one connected network on that
-                    // interface contains the address.
+                    // interface contains the address. Its addresses are the VS's cluster (virtual) addresses and are
+                    // recorded as such (G5 role fix, 2026-11-04).
                     vsInterfaces = applyUniqueConnectedRoutePrefixes(
                             toParsedInterfaces(CheckPointClusterVirtualInterfaceParser.parse(clusterIfOutput), statesByName),
                             vsRoutes);
@@ -854,14 +855,17 @@ public final class InventoryCapabilityExecutor {
      * (measured live to return an internal VSX addressing scheme on a cluster member, not the real
      * configured one). That section carries no netmask and no up/down state, so the address is recorded
      * bare and the state {@link InventoryInterface#STATE_UNKNOWN}, same fail-closed treatment as {@code
-     * fw getifs} on a standalone gateway. */
+     * fw getifs} on a standalone gateway. Path analysis G5 (2026-11-04): the section lists the virtual
+     * system's CLUSTER interfaces, so every address here is {@link InventoryAddress#ROLE_CLUSTER_VIRTUAL}
+     * (the parser's own contract), never {@code member}. No member-specific address is read on this path;
+     * a virtual system with no such evidence has none. */
     private static List<ParsedInterface> toParsedInterfaces(List<VirtualInterfaceAddress> clusterInterfaces,
             Map<String, String> interfaceStates) {
         return clusterInterfaces.stream()
                 .map(vip -> new ParsedInterface(vip.interfaceName(), Optional.empty(),
                         CheckPointFwGetifsParser.kindOf(vip.interfaceName()),
                         interfaceStates.getOrDefault(vip.interfaceName(), InventoryInterface.STATE_UNKNOWN),
-                        List.of(new ParsedAddress(vip.address(), InventoryAddress.FAMILY_IPV4, InventoryAddress.ROLE_MEMBER)),
+                        List.of(new ParsedAddress(vip.address(), InventoryAddress.FAMILY_IPV4, InventoryAddress.ROLE_CLUSTER_VIRTUAL)),
                         Optional.empty()))
                 .toList();
     }

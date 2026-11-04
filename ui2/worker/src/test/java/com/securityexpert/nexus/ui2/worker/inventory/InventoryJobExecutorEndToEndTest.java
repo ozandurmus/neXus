@@ -140,7 +140,8 @@ class InventoryJobExecutorEndToEndTest {
         assertEquals(1, vsid2.interfaces().get(0).addresses().size(), "this VS's own cluster-interface address only");
         assertEquals("203.0.113.2", vsid2.interfaces().get(0).addresses().get(0).address(),
                 "V184 (G5): no connected route in this VS contains the address, so it stays bare (UNKNOWN prefix)");
-        assertEquals(InventoryAddress.ROLE_MEMBER, vsid2.interfaces().get(0).addresses().get(0).role());
+        assertEquals(InventoryAddress.ROLE_CLUSTER_VIRTUAL, vsid2.interfaces().get(0).addresses().get(0).role(),
+                "G5 (2026-11-04): a cluster-member VS's cphaprob -a if address is the cluster address, never a member address");
         assertEquals(InventoryInterface.STATE_UP, vsid2.interfaces().get(0).state());
         assertEquals(2, vsid2.routes().size(), "G6: the main default and the vs2pbr default; the local-table row is dropped");
         assertEquals(List.of(Optional.<String>empty(), Optional.of("vs2pbr")),
@@ -150,7 +151,12 @@ class InventoryJobExecutorEndToEndTest {
         assertEquals(1, vsid5.interfaces().get(0).addresses().size(), "this VS's own cluster-interface address only");
         assertEquals("198.51.100.2/29", vsid5.interfaces().get(0).addresses().get(0).address(),
                 "V184 (G5): the prefix comes from this VS's own connected route on the same interface");
-        assertEquals(InventoryAddress.ROLE_MEMBER, vsid5.interfaces().get(0).addresses().get(0).role());
+        assertEquals(InventoryAddress.ROLE_CLUSTER_VIRTUAL, vsid5.interfaces().get(0).addresses().get(0).role());
+        for (InventoryContext vs : List.of(vsid2, vsid5)) {
+            assertTrue(vs.interfaces().stream().flatMap(i -> i.addresses().stream())
+                    .noneMatch(x -> InventoryAddress.ROLE_MEMBER.equals(x.role())),
+                    "no member-specific address evidence on a cluster-member VS, so none is recorded: " + vs.context());
+        }
         assertEquals(InventoryInterface.STATE_UP, vsid5.interfaces().get(0).state(),
                 "no cphaprob status row for this VS -- state still comes through via ip -4 addr show");
         assertEquals(1, vsid5.routes().size());
