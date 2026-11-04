@@ -101,6 +101,10 @@ public final class InventoryReadPlan {
     public static final List<String> CHECK_POINT_PHYSICAL_READS = List.of(
             CP_FW_GETIFS, CP_IP_ADDR_SHOW_STATE_ONLY, CP_IP_LINK_SHOW, CP_IP_ROUTE_SHOW, CP_CPHAPROB_STAT, CP_CPHAPROB_CLUSTER_IF, CP_VSX_STAT);
 
+    /** Path analysis G6 (PATH_ANALYSIS_DESIGN.md §2): this per-VS read is the main table only, the physical read is
+     * {@code table all}. Changing it is a device-command change: it needs the Product Owner's exact-command approval
+     * (D-7, 2026-09-26 amendment) and a gate row first. Until then path analysis treats a VS's non-main tables as not
+     * collected (UNKNOWN). */
     private static final String CP_VSID_ADDR_AND_ROUTE_READS = "fw getifs && ip -4 route show";
 
     /**
