@@ -11,6 +11,11 @@ public final class PolicyHygiene {
     private PolicyHygiene() {}
     /** The reason of a rule that an earlier, not fully resolved rule keeps from being proven; {@link Assessment#blockingRuleId} names that rule. */
     static final String EARLIER_UNSUPPORTED = "earlier rule has unsupported constraints";
+    /**
+     * The reason of a rule that an earlier, fully resolved rule may or may not cover depending on application default
+     * ports, which are not collected (Palo Alto application-default, {@link PolicyNormalization#holds} undecided).
+     */
+    static final String DEFAULT_PORTS_UNKNOWN = "application default ports are unknown";
     public static final Set<String> CLASSES = Set.of("shadowed", "conflict", "disabled", "unused", "expired", "broad", "unknown");
     public static final Set<String> SEVERITIES = Set.of("HIGH", "MEDIUM", "LOW");
     /** Every shadow reason this class (and PolicyNormalization) can emit; PolicyPrivacy projects these unchanged, so a new reason must be added here. */
@@ -20,7 +25,7 @@ public final class PolicyHygiene {
         "unresolved install-on selector", "unsupported rule constraint", "time evidence not collected", "unresolved object",
         "group cycle or depth limit", "empty or dynamic group", "dynamic or unsupported object type", "unsupported address representation",
         "missing address values", "unsupported object members", "ambiguous object values", "unsupported service constraint",
-        "unsupported port expression", "invalid port range", "missing service values", EARLIER_UNSUPPORTED,
+        "unsupported port expression", "invalid port range", "missing service values", EARLIER_UNSUPPORTED, DEFAULT_PORTS_UNKNOWN,
         "zone or install-on coverage is unproven", "zone evidence not collected", "install-on evidence not collected", "snapshot collection incomplete",
         "earlier sections not analysed", "multiple ordered layers not evaluated");
     /**
@@ -85,9 +90,10 @@ public final class PolicyHygiene {
         // is work of its own pool too (same total, same per-rule window): it only ever turns "zone or install-on
         // coverage is unproven" into NOT_SHADOWED, and running out of it leaves that reason.
         Budget passBudget = new Budget(workLimit);
-        var resolver = new Resolver(snapshot.objects(), budget);
-        var sideResolver = new Resolver(snapshot.objects(), side);
-        var typedResolver = new Resolver(snapshot.objects(), typedBudget);
+        // Shadowing resolvers: Palo Alto application-default is an opaque service token (PolicyNormalization.APPLICATION_DEFAULT).
+        var resolver = Resolver.shadowing(snapshot, budget);
+        var sideResolver = Resolver.shadowing(snapshot, side);
+        var typedResolver = Resolver.shadowing(snapshot, typedBudget);
         boolean pan = snapshot.metadata().vendor().equals("PAN");
         Map<String, Assessment> results = new LinkedHashMap<>();
         // One Earlier per evaluation scope; a Check Point parent layer's Earlier resumes after its inline layers.
@@ -149,6 +155,9 @@ public final class PolicyHygiene {
                         if (prior != null) {
                             covering = prior.rule().id(); status = covered(prior.rule(), rule, findings); reason = null;
                         } else if (earlier.unproven(match, budget) && earlier.undecidedMayCover(match, passBudget)) reason = "zone or install-on coverage is unproven";
+                        // An earlier rule that covers this one or not depending on application default ports (not
+                        // collected): neither a cover nor a clean verdict is proven. Never true without application-default.
+                        else if (earlier.defaultPortsMayCover(match, budget)) { reason = DEFAULT_PORTS_UNKNOWN; blocker = null; }
                         // Only where the former analysis said "earlier rule has unsupported constraints" for want of a full
                         // match: every partial prior must be proven disjoint, or that reason stands.
                         else if (reason == null && earlier.partialOverlap(match, side)) { reason = EARLIER_UNSUPPORTED; blocker = earlier.partialBlocker(match); }
@@ -225,6 +234,13 @@ public final class PolicyHygiene {
      * selector; otherwise the rule is decided exactly as if that prior had not been there (NOT_SHADOWED, or the
      * partial-prior and earlier-unsupported reasons). Both vendors; placements, cover search and every other verdict
      * are unchanged.</li>
+     * <li>Palo Alto application-default ({@link PolicyNormalization#APPLICATION_DEFAULT}): a rule whose service is
+     * application-default used to be UNKNOWN "missing service values", and so an earlier unknown or partial prior for
+     * every later rule. It is now a full match whose service is an opaque token and whose applications are opaque
+     * references, compared by {@link PolicyNormalization#holds}: covered by an earlier service any, or by an earlier
+     * application-default rule whose applications contain its own by identity; a pair whose cover depends on the
+     * (not collected) default ports is UNKNOWN {@link #DEFAULT_PORTS_UNKNOWN} ({@link #defaultPortsMayCover}), never
+     * NOT_SHADOWED. Snapshots without the mapper's application-default service answer exactly as before.</li>
      * </ul>
      * Every other verdict stays the scan's.
      */
@@ -242,7 +258,7 @@ public final class PolicyHygiene {
             }
         }
         private static final List<String> FAMILIES = List.of("ipv4", "tcp", "udp");
-        private static final int WIDTH = 4 * 3 * 2;
+        private static final int WIDTH = 4 * 3 * 2, ADDRESS_WIDTH = 2 * 3 * 2;
         private static final Set<String> ANY = Set.of("any");
         private final Map<String, PolicyObject> objects;
         private final Map<Key, Bucket> buckets = new HashMap<>();
@@ -294,6 +310,8 @@ public final class PolicyHygiene {
         private static final class Named { final Map<Set<String>, int[]> read = new HashMap<>(); boolean found; }
         private final Map<Key, Named> named = new HashMap<>();
         private int count;
+        /** A fully resolved rule of this scope has application-default as its service. */
+        private boolean defaults;
         /** An enabled earlier rule of this scope had no resolved match and no partial prior, so no later rule can be proven clean. */
         boolean unknown;
         /** The first such rule in rule order: with {@link #unknown} set it keeps every later rule of the scope from being proven. */
@@ -320,6 +338,7 @@ public final class PolicyHygiene {
                 return b;
             });
             int order = count++;
+            defaults |= match.selectors().get(2).applicationDefault();
             if (bucket.closed || !bucket.seen.add(match.selectors())) return;
             bucket.add(order, match);
             bucket.closed = match.selectors().stream().allMatch(Selector::any);
@@ -353,9 +372,8 @@ public final class PolicyHygiene {
             for (int j = 0, n = bucket.matches.size(); j < n && orders[j] < bestOrder[0]; j++) {
                 budget.spend();
                 if (!bounded(outer, j * WIDTH, inner)) continue;
-                var prior = bucket.matches.get(j); boolean covers = true;
-                for (int i = 0; i < 4 && covers; i++) covers = contains(prior.selectors().get(i), match.selectors().get(i), budget);
-                if (covers) { best[0] = prior; bestOrder[0] = orders[j]; return; }
+                var prior = bucket.matches.get(j);
+                if (Boolean.TRUE.equals(holds(prior.selectors(), match.selectors(), budget))) { best[0] = prior; bestOrder[0] = orders[j]; return; }
             }
         }
         /**
@@ -492,10 +510,10 @@ public final class PolicyHygiene {
                 for (Bucket bucket : state.buckets) {
                     for (int j = 0, n = bucket.matches.size(); j < n; j++) {
                         pass.spend();
-                        if (!bounded(bucket.bounds, j * WIDTH, inner)) continue;
-                        var prior = bucket.matches.get(j); boolean contains = true;
-                        for (int i = 0; i < 4 && contains; i++) contains = PolicyNormalization.contains(prior.selectors().get(i), match.selectors().get(i), pass);
-                        if (contains) return true;
+                        var prior = bucket.matches.get(j);
+                        // Undecided on default ports (holds null) may cover too; then only the address bounds are necessary.
+                        if (!bounded(bucket.bounds, j * WIDTH, inner, defaults(prior, match) ? ADDRESS_WIDTH : WIDTH)) continue;
+                        if (!Boolean.FALSE.equals(holds(prior.selectors(), match.selectors(), pass))) return true;
                     }
                 }
                 return false;
@@ -522,9 +540,37 @@ public final class PolicyHygiene {
             }
             return out;
         }
-        private static boolean bounded(long[] outer, int at, long[] inner) {
-            for (int k = 0; k < WIDTH; k += 2) if (outer[at + k] > inner[k] || outer[at + k + 1] < inner[k + 1]) return false;
+        private static boolean bounded(long[] outer, int at, long[] inner) { return bounded(outer, at, inner, WIDTH); }
+        /** {@link #bounded} over the first {@code width} slots only ({@link #ADDRESS_WIDTH}: source and destination). */
+        private static boolean bounded(long[] outer, int at, long[] inner, int width) {
+            for (int k = 0; k < width; k += 2) if (outer[at + k] > inner[k] || outer[at + k + 1] < inner[k + 1]) return false;
             return true;
+        }
+        private static boolean defaults(Match prior, Match match) {
+            return prior.selectors().get(2).applicationDefault() || match.selectors().get(2).applicationDefault();
+        }
+        /**
+         * For a rule no earlier rule provably covers: whether a coverage candidate ({@link #cover}'s compatible and zone
+         * superset buckets, the same placements) may cover it depending on application default ports
+         * ({@link PolicyNormalization#holds} undecided). Only pairs with application-default on one side can be
+         * undecided, so a scope without application-default rules answers false without any work.
+         */
+        boolean defaultPortsMayCover(Match match, Budget budget) {
+            if (!defaults && !match.selectors().get(2).applicationDefault()) return false;
+            var key = key(match); long[] inner = bounds(match.selectors());
+            var lookups = new LinkedHashSet<Key>();
+            for (var from : List.of(key.from(), ANY)) for (var to : List.of(key.to(), ANY)) lookups.add(new Key(from, to, key.installOn()));
+            List<Bucket> candidates = new ArrayList<>();
+            for (Key lookup : lookups) { var bucket = buckets.get(lookup); if (bucket != null) candidates.add(bucket); }
+            if (zoneSupersets) for (Bucket bucket : supersets(key, false, budget)) if (!lookups.contains(bucket.key)) candidates.add(bucket);
+            for (Bucket bucket : candidates)
+                for (int j = 0, n = bucket.matches.size(); j < n; j++) {
+                    budget.spend();
+                    var prior = bucket.matches.get(j);
+                    if (!defaults(prior, match) || !bounded(bucket.bounds, j * WIDTH, inner, ADDRESS_WIDTH)) continue;
+                    if (holds(prior.selectors(), match.selectors(), budget) == null) return true;
+                }
+            return false;
         }
     }
     /**

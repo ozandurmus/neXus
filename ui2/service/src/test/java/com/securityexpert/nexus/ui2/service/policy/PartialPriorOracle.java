@@ -25,6 +25,23 @@ import java.util.*;
  * rule of its scope and share no packet with any unresolved one. Zone pairs follow the PAN-OS rule types: universal
  * from x to, intrazone (z, z) for z in from, interzone from x to without (z, z); any is every zone, including one no
  * rule names.
+ * <p>Palo Alto application-default: service and application are one joint dimension of (application, port) pairs over
+ * the applications the snapshot names by opaque reference plus one application no rule names. A rule with explicit
+ * service matches its applications x its ports. An application-default rule matches each of its named applications on
+ * that application's default ports, and application any with application-default matches a set of its own; both are
+ * unknown, so they are the variables of a {@link World} (each non-empty, fixed per application). The engine's verdicts
+ * must hold in every world:
+ * <ul>
+ * <li>a covering rule covers in every world ({@link Universe#coversInEveryWorld}): checked in the world where every
+ * default-port set is one port no explicit service names, which refutes every cover that does not hold for all
+ * assignments (each later variable then sits on a fresh point that only the same variable, or an earlier any port of
+ * that application, holds), plus the widest world and seeded random worlds;</li>
+ * <li>a NOT_SHADOWED rule is covered in no world ({@link Universe#coversInSomeWorld}): checked in the pair's witness
+ * world, built to let the earlier rule cover -- its own variables widest, each variable of the later rule one point
+ * inside the earlier rule's match (a shared variable one point, which then holds itself) -- plus the same worlds;</li>
+ * <li>a released rule shares no packet with an unresolved earlier rule in any world: the widest world, since every
+ * rule's match only grows with its variables.</li>
+ * </ul>
  */
 final class PartialPriorOracle {
     private PartialPriorOracle() {}
@@ -34,7 +51,15 @@ final class PartialPriorOracle {
         new long[]{ip("198.51.100.0"), ip("198.51.100.255")}, new long[]{ip("203.0.113.0"), ip("203.0.113.255")});
     private static final long OUTSIDE = ip("10.0.0.1");
     private static final int PORTS = 1101, HIGH_PORT = 65535;
-    private static final int ADDRESS_SIZE = 3 * 256 + 1, SERVICE_SIZE = 2 * (PORTS + 1), APPLICATION_SIZE = 2;
+    private static final int ADDRESS_SIZE = 3 * 256 + 1, SERVICE_SIZE = 2 * (PORTS + 1);
+    /** In an application identity set: application any. */
+    private static final String ANY_APP = "\u0000any", OTHER_APP = "\u0000other";
+
+    /**
+     * One assignment of the unknown default ports: per named application a non-empty port set (indices into the
+     * service universe), and the (application, port) pairs that application any with application-default matches.
+     */
+    record World(Map<String, BitSet> defaults, BitSet anyDefault) {}
 
     /** One snapshot's interpreted universe and scopes. */
     static final class Universe {
@@ -43,10 +68,14 @@ final class PartialPriorOracle {
         final Map<String, Rule> rules;
         final Map<String, Integer> scope, order;
         final Map<String, Section> sections;
+        /** The named applications (opaque references) and, last, one no rule names; a service index no explicit service names. */
+        final List<String> apps; final Map<String, Integer> appIndex = new HashMap<>(); final int fresh;
+        private final List<World> worlds = new ArrayList<>();
         /** The same snapshot and scopes over other zone and target lists ({@link #pairWorld}). */
         private Universe(Universe base, List<String> zones, List<String> targets) {
             snapshot = base.snapshot; rules = base.rules; scope = base.scope; order = base.order; sections = base.sections;
             this.zones = zones; this.targets = targets;
+            apps = base.apps; appIndex.putAll(base.appIndex); fresh = base.fresh; worlds.addAll(base.worlds);
         }
         Universe(PolicySnapshot snapshot) {
             this.snapshot = snapshot;
@@ -69,6 +98,143 @@ final class PartialPriorOracle {
                 int id = tokens.computeIfAbsent(token, k -> tokens.size());
                 for (var rule : section.rules()) { rules.put(rule.id(), rule); scope.put(rule.id(), id); order.put(rule.id(), n++); sections.put(rule.id(), section); }
             }
+            var named = new TreeSet<String>(); var explicit = new BitSet(SERVICE_SIZE);
+            for (var s : snapshot.sections()) for (var r : s.rules()) {
+                var ids = identities(r.application());
+                if (ids != null) for (String a : ids) if (!a.equals(ANY_APP)) named.add(a);
+                var ports = cell(r.service(), "service");
+                if (ports.cardinality() < SERVICE_SIZE) explicit.or(ports);
+            }
+            var list = new ArrayList<>(named); list.add(OTHER_APP); apps = List.copyOf(list);
+            for (int i = 0; i < apps.size(); i++) appIndex.put(apps.get(i), i);
+            fresh = explicit.nextClearBit(0);
+            assertTrue(fresh < SERVICE_SIZE, "the oracle needs a port no explicit service names");
+            worlds.add(freshWorld()); worlds.add(widest());
+            var random = new Random(String.valueOf(snapshot.metadata().id()).hashCode());
+            for (int i = 0; i < 3; i++) worlds.add(randomWorld(random));
+        }
+        private int sa() { return apps.size() * SERVICE_SIZE; }
+        /** Every default-port set is the one port {@link #fresh}; application any's is that port of the unnamed application. */
+        World freshWorld() {
+            Map<String, BitSet> d = new HashMap<>(); var one = new BitSet(); one.set(fresh);
+            for (String a : apps) d.put(a, one);
+            var u = new BitSet(sa()); u.set(appIndex.get(OTHER_APP) * SERVICE_SIZE + fresh);
+            return new World(d, u);
+        }
+        World widest() {
+            Map<String, BitSet> d = new HashMap<>(); for (String a : apps) d.put(a, full(SERVICE_SIZE));
+            return new World(d, full(sa()));
+        }
+        private World randomWorld(Random random) {
+            Map<String, BitSet> d = new HashMap<>();
+            for (String a : apps) d.put(a, nonEmpty(random, SERVICE_SIZE));
+            return new World(d, nonEmpty(random, sa()));
+        }
+        private static BitSet nonEmpty(Random random, int size) {
+            var out = new BitSet(size); int density = 1 + random.nextInt(50);
+            for (int i = 0; i < size; i++) if (random.nextInt(density) == 0) out.set(i);
+            out.set(random.nextInt(size));
+            return out;
+        }
+        /**
+         * The service cell is the mapper's built-in application-default service: the one reference PanoramaPolicyMapper
+         * mints for it, a RESOLVED service object without values or members (the stored shape, PanoramaPolicyMapper).
+         */
+        boolean applicationDefault(Cell service) {
+            var meta = snapshot.metadata();
+            if (!"PAN".equals(meta.vendor()) || meta.id() == null || service.negated() || service.refs().size() != 1) return false;
+            String id = service.refs().get(0); var o = snapshot.objects().get(id);
+            return id.equals(ref(meta.id(), "service", "application-default")) && o != null && "RESOLVED".equals(o.status())
+                && o.type().equals("service") && o.values().isEmpty() && o.members().isEmpty();
+        }
+        /** The opaque applications of a cell ({@link #ANY_APP} for any), or null when they cannot be read as identities. */
+        Set<String> identities(Cell cell) {
+            if (cell.negated() || cell.refs().isEmpty()) return null;
+            Set<String> out = new HashSet<>();
+            for (String id : cell.refs()) if (!identity(id, out, 0)) return null;
+            return out;
+        }
+        private boolean identity(String id, Set<String> out, int depth) {
+            var o = snapshot.objects().get(id);
+            if (o == null || depth > 40) return false;
+            boolean resolved = "RESOLVED".equals(o.status());
+            if (resolved && o.type().equals("any")) { out.add(ANY_APP); return true; }
+            if (resolved && o.type().equals("application-group")) {
+                if (o.members().isEmpty() || !o.values().isEmpty()) return false;
+                for (String m : o.members()) if (!identity(m, out, depth + 1)) return false;
+                return true;
+            }
+            if (o.members().isEmpty() && (resolved && o.type().equals("application") || "UNRESOLVED".equals(o.status()) && o.type().equals("unresolved"))) {
+                out.add(id); return true;
+            }
+            return false;
+        }
+        /** The rule's application-default variables: its applications, or null when its joint dimension does not depend on the world. */
+        private Set<String> variables(Rule rule) {
+            if (!applicationDefault(rule.service())) return null;
+            var ids = identities(rule.application());
+            if (ids == null) return null;
+            return ids.contains(ANY_APP) ? Set.of(ANY_APP) : ids;
+        }
+        /** The joint (application, port) dimension of a rule in a world. */
+        private BitSet serviceApplication(Rule rule, World world) {
+            var app = rule.application(); boolean cp = snapshot.metadata().vendor().equals("CP");
+            if (applicationDefault(rule.service())) {
+                var ids = identities(app);
+                if (ids == null) return full(sa());
+                if (ids.contains(ANY_APP)) return (BitSet) world.anyDefault().clone();
+                var out = new BitSet(sa());
+                for (String a : ids) {
+                    int base = appIndex.get(a) * SERVICE_SIZE; var d = world.defaults().get(a);
+                    for (int p = d.nextSetBit(0); p >= 0; p = d.nextSetBit(p + 1)) out.set(base + p);
+                }
+                return out;
+            }
+            BitSet ports = cell(rule.service(), "service");
+            BitSet applications = cp && app.refs().isEmpty() && !app.negated() ? full(apps.size()) : cell(app, "application");
+            var out = new BitSet(sa());
+            for (int a = applications.nextSetBit(0); a >= 0; a = applications.nextSetBit(a + 1))
+                for (int p = ports.nextSetBit(0); p >= 0; p = ports.nextSetBit(p + 1)) out.set(a * SERVICE_SIZE + p);
+            return out;
+        }
+        /**
+         * The world most favourable to {@code prior} covering {@code later}: variables the later rule does not have are
+         * widest; each one it has is a single point -- inside the prior's match where the prior does not share the
+         * variable, any point where it does (the shared variable then holds itself).
+         */
+        World witness(Rule prior, Rule later) {
+            var mine = variables(later); var theirs = variables(prior); var wide = widest();
+            if (mine == null) return wide;
+            Map<String, BitSet> d = new HashMap<>(wide.defaults()); BitSet u = wide.anyDefault();
+            if (mine.contains(ANY_APP)) {
+                if (theirs != null && theirs.contains(ANY_APP)) u = point(0);
+                else { int x = serviceApplication(prior, wide).nextSetBit(0); u = point(Math.max(x, 0)); }
+            } else {
+                BitSet theirMatch = serviceApplication(prior, wide);
+                for (String a : mine) {
+                    int p = 0;
+                    if (theirs == null || !theirs.contains(a)) {
+                        int base = appIndex.get(a) * SERVICE_SIZE, x = theirMatch.nextSetBit(base);
+                        if (x >= 0 && x < base + SERVICE_SIZE) p = x - base;
+                    }
+                    d.put(a, point(p));
+                }
+            }
+            return new World(d, u);
+        }
+        private static BitSet point(int at) { var b = new BitSet(); b.set(at); return b; }
+        /** Every world the checks use for this pair; one when neither rule depends on default ports. */
+        private List<World> worlds(Rule prior, Rule later) {
+            if (variables(prior) == null && variables(later) == null) return List.of(worlds.get(1));
+            var out = new ArrayList<>(worlds); out.add(witness(prior, later)); return out;
+        }
+        boolean coversInEveryWorld(Rule prior, Rule later) {
+            for (var world : worlds(prior, later)) if (!covers(prior, later, world)) return false;
+            return true;
+        }
+        boolean coversInSomeWorld(Rule prior, Rule later) {
+            for (var world : worlds(prior, later)) if (covers(prior, later, world)) return true;
+            return false;
         }
         /**
          * The smallest world two rules can be evaluated in: the zones either of them names (a rule names only zones
@@ -96,7 +262,7 @@ final class PartialPriorOracle {
         }
         /** The earlier rules of the rule's scope, enabled or possibly enabled, that have no full match. */
         List<Rule> unresolvedPriors(String ruleId) {
-            var resolver = new PolicyNormalization.Resolver(snapshot.objects(), new PolicyNormalization.Budget(Integer.MAX_VALUE));
+            var resolver = PolicyNormalization.Resolver.shadowing(snapshot, new PolicyNormalization.Budget(Integer.MAX_VALUE));
             List<Rule> out = new ArrayList<>();
             for (var rule : rules.values()) {
                 if (order.get(rule.id()) >= order.get(ruleId) || !scope.get(rule.id()).equals(scope.get(ruleId))) continue;
@@ -105,9 +271,13 @@ final class PartialPriorOracle {
             }
             return out;
         }
-        /** A packet (source, destination, service, application, from, to, target) both rules match, or null. */
+        /**
+         * A packet (source, destination, (application, port), from, to, target) both rules match in some world, or null:
+         * the widest world, as every match only grows with its default-port variables.
+         */
         String sharedPacket(Rule prior, Rule later) {
-            var a = dimensions(prior, sections.get(prior.id())); var b = dimensions(later, sections.get(later.id()));
+            var world = widest();
+            var a = dimensions(prior, sections.get(prior.id()), world); var b = dimensions(later, sections.get(later.id()), world);
             List<Integer> witness = new ArrayList<>();
             for (int d = 0; d < a.size(); d++) {
                 var both = (BitSet) a.get(d).clone(); both.and(b.get(d));
@@ -116,23 +286,21 @@ final class PartialPriorOracle {
             }
             return witness.toString();
         }
-        private List<BitSet> dimensions(Rule rule, Section section) {
+        private List<BitSet> dimensions(Rule rule, Section section, World world) {
             var meta = snapshot.metadata(); boolean cp = meta.vendor().equals("CP");
-            List<BitSet> all = List.of(full(ADDRESS_SIZE), full(ADDRESS_SIZE), full(SERVICE_SIZE), full(APPLICATION_SIZE),
+            List<BitSet> all = List.of(full(ADDRESS_SIZE), full(ADDRESS_SIZE), full(sa()),
                 full(zones.size()), full(zones.size()), full(targets.size()));
             if (!Set.of("CP", "PAN").contains(meta.vendor()) || PolicySnapshot.outsideSecurityEvaluation(meta, section)) return all;
             for (String key : rule.extras().keySet())
                 if (!known(key, rule, cp)) return all;
             boolean universal = rule.extras().getOrDefault("rule-type", List.of("universal")).equals(List.of("universal"));
-            var app = rule.application();
-            return List.of(cell(rule.source(), "address"), cell(rule.destination(), "address"), cell(rule.service(), "service"),
-                cp && app.refs().isEmpty() && !app.negated() ? full(APPLICATION_SIZE) : cell(app, "application"),
+            return List.of(cell(rule.source(), "address"), cell(rule.destination(), "address"), serviceApplication(rule, world),
                 universal ? zones(rule.extras().get("from")) : full(zones.size()), universal ? zones(rule.extras().get("to")) : full(zones.size()),
                 targets(rule.extras().get("install-on")));
         }
         /** The earlier rules of the rule's scope, enabled, with a full match: the only rules that may cover it. */
         List<Rule> resolvedPriors(String ruleId) {
-            var resolver = new PolicyNormalization.Resolver(snapshot.objects(), new PolicyNormalization.Budget(Integer.MAX_VALUE));
+            var resolver = PolicyNormalization.Resolver.shadowing(snapshot, new PolicyNormalization.Budget(Integer.MAX_VALUE));
             List<Rule> out = new ArrayList<>();
             for (var rule : rules.values()) {
                 if (order.get(rule.id()) >= order.get(ruleId) || !scope.get(rule.id()).equals(scope.get(ruleId))) continue;
@@ -148,23 +316,32 @@ final class PartialPriorOracle {
                 if (order.get(rule.id()) < order.get(ruleId) && scope.get(rule.id()).equals(scope.get(ruleId)) && !Boolean.FALSE.equals(rule.enabled())) out.add(rule);
             return out;
         }
-        /** Every packet the later rule matches, the prior matches too: per dimension, zones as (from, to) pairs. */
-        boolean covers(Rule prior, Rule later) {
-            var a = coverDimensions(prior); var b = coverDimensions(later);
+        /** In this world, every packet the later rule matches, the prior matches too: per dimension, zones as (from, to) pairs. */
+        boolean covers(Rule prior, Rule later, World world) {
+            var a = coverDimensions(prior, world); var b = coverDimensions(later, world);
             for (int d = 0; d < a.size(); d++) {
                 var outside = (BitSet) b.get(d).clone(); outside.andNot(a.get(d));
                 if (!outside.isEmpty()) return false;
             }
             return true;
         }
-        private List<BitSet> coverDimensions(Rule rule) {
-            var app = rule.application(); boolean cp = snapshot.metadata().vendor().equals("CP");
+        /** Every dimension but the joint (application, port) one holds the later rule's. */
+        boolean coversExceptServiceApplication(Rule prior, Rule later) {
+            var world = widest(); var a = coverDimensions(prior, world); var b = coverDimensions(later, world);
+            for (int d = 0; d < a.size(); d++) {
+                if (d == 2) continue;
+                var outside = (BitSet) b.get(d).clone(); outside.andNot(a.get(d));
+                if (!outside.isEmpty()) return false;
+            }
+            return true;
+        }
+        private List<BitSet> coverDimensions(Rule rule, World world) {
+            boolean cp = snapshot.metadata().vendor().equals("CP");
             // A field of unknown meaning may widen the match: the whole universe (as the disjointness oracle does).
             for (String key : rule.extras().keySet())
-                if (!known(key, rule, cp)) return List.of(full(ADDRESS_SIZE), full(ADDRESS_SIZE), full(SERVICE_SIZE), full(APPLICATION_SIZE),
+                if (!known(key, rule, cp)) return List.of(full(ADDRESS_SIZE), full(ADDRESS_SIZE), full(sa()),
                     full(zones.size() * zones.size()), full(targets.size()));
-            return List.of(cell(rule.source(), "address"), cell(rule.destination(), "address"), cell(rule.service(), "service"),
-                cp && app.refs().isEmpty() && !app.negated() ? full(APPLICATION_SIZE) : cell(app, "application"),
+            return List.of(cell(rule.source(), "address"), cell(rule.destination(), "address"), serviceApplication(rule, world),
                 pairs(rule), targets(rule.extras().get("install-on")));
         }
         private BitSet pairs(Rule rule) {
@@ -186,7 +363,7 @@ final class PartialPriorOracle {
                 || key.equals("inline-layer") && cp && rule.action().equals("Apply Layer");
         }
         private BitSet cell(Cell cell, String family) {
-            int size = family.equals("address") ? ADDRESS_SIZE : family.equals("service") ? SERVICE_SIZE : APPLICATION_SIZE;
+            int size = family.equals("address") ? ADDRESS_SIZE : family.equals("service") ? SERVICE_SIZE : apps.size();
             if (cell.negated() || cell.refs().isEmpty()) return full(size);
             var out = new BitSet(size);
             for (String id : cell.refs()) out.or(object(id, family, size, 0));
@@ -280,7 +457,7 @@ final class PartialPriorOracle {
         assertNotNull(prior, context);
         assertTrue(universe.resolvedPriors(ruleId).contains(prior), context + ": covering rule " + coveringId + " is no earlier resolved rule of the scope");
         assertEquals(List.of("universal"), prior.extras().getOrDefault("rule-type", List.of("universal")), context);
-        assertTrue(universe.covers(prior, later), context + ": " + coveringId + " does not cover " + ruleId + " by brute force");
+        assertTrue(universe.coversInEveryWorld(prior, later), context + ": " + coveringId + " does not cover " + ruleId + " by brute force in every default-port world");
         boolean same = prior.action().equals(later.action());
         assertEquals(same ? "REDUNDANT" : "CONFLICT", status, context);
     }
@@ -293,10 +470,10 @@ final class PartialPriorOracle {
     static void assertNoCover(Universe universe, String ruleId, String context) {
         var later = universe.rules.get(ruleId);
         for (var prior : universe.earlierRules(ruleId)) {
-            assertFalse(universe.covers(prior, later), context + ": NOT_SHADOWED rule is covered by " + prior.id() + " by brute force");
+            assertFalse(universe.coversInSomeWorld(prior, later), context + ": NOT_SHADOWED rule is covered by " + prior.id() + " by brute force");
             // Also in the two rules' own smallest world, where an any is only what they name: this is what confirms
             // that a prior naming zones (or targets) was rightly passed over for a later rule of any.
-            assertFalse(universe.pairWorld(prior, later).covers(prior, later),
+            assertFalse(universe.pairWorld(prior, later).coversInSomeWorld(prior, later),
                 context + ": NOT_SHADOWED rule is covered by " + prior.id() + " by brute force in their smallest world");
         }
     }
@@ -393,6 +570,71 @@ final class PartialPriorOracle {
         assertReleaseIsSafe(universe, ruleId, context);
         assertNoCover(universe, ruleId, context);
         return true;
+    }
+    static final String DEFAULT_PORTS = "application default ports are unknown";
+    /** The rule's service is application-default, or that of an earlier enabled (or possibly enabled) rule of its scope. */
+    static boolean involvesApplicationDefault(Universe universe, String ruleId) {
+        var rule = universe.rules.get(ruleId);
+        if (rule == null) return false; // outside security evaluation (NAT, default rules): not analysed
+        if (universe.applicationDefault(rule.service())) return true;
+        for (var prior : universe.earlierRules(ruleId)) if (universe.applicationDefault(prior.service())) return true;
+        return false;
+    }
+    /**
+     * One rule of a snapshot with application-default rules, against {@code reference}: the same analysis of the same
+     * snapshot with the mapper's application-default service not recognised -- exactly the former treatment, "missing
+     * service values". Identical, or the rule involves application-default ({@link #involvesApplicationDefault}) and its
+     * new verdict holds in every default-port world: a covering rule covers in every world, a NOT_SHADOWED rule is
+     * covered in none and shares no packet with an unresolved earlier rule in any, and "application default ports are
+     * unknown" names a pair that covers in some world. Any other UNKNOWN claims nothing. Everything but the shadowing
+     * verdict and its finding is unchanged. Returns the changed verdict ("status / reason"), or null when unchanged.
+     */
+    static String assertDefaultPortsChangeIsSafe(Universe universe, PolicyHygiene.Assessment reference, PolicyHygiene.Assessment got, String ruleId, String context) {
+        if (got.equals(reference)) return null;
+        assertTrue(involvesApplicationDefault(universe, ruleId), context + ": changed without application-default: " + reference + " -> " + got);
+        var verdict = verdictOnly(universe, got, ruleId, context);
+        assertEquals(List.of(reference.permissiveness(), reference.timeStatus(), reference.expiring(), reference.counterWindow(), String.valueOf(reference.hitSource()),
+            String.valueOf(reference.hitsCollectedAt()), otherFindings(reference)), List.of(got.permissiveness(), got.timeStatus(), got.expiring(), got.counterWindow(),
+            String.valueOf(got.hitSource()), String.valueOf(got.hitsCollectedAt()), otherFindings(got)), context);
+        var shadow = got.findings().stream().filter(f -> !otherFindings(got).contains(f)).toList();
+        String status = verdict.shadowStatus(), reason = verdict.shadowReason();
+        boolean incomplete = !universe.snapshot.failures().isEmpty();
+        switch (status) {
+            case "REDUNDANT", "CONFLICT" -> {
+                assertNull(reason, context);
+                assertCoverIsSafe(universe, ruleId, verdict.coveringRuleId(), status, context);
+                assertEquals(List.of(status.equals("CONFLICT") ? new PolicyHygiene.Finding("conflict", "HIGH", "Earlier enabled rule fully covers this match with a different action.")
+                    : new PolicyHygiene.Finding("shadowed", "MEDIUM", "Earlier enabled rule fully covers this match with the same action.")), shadow, context);
+            }
+            case "NOT_SHADOWED" -> {
+                assertFalse(incomplete, context);
+                assertNull(reason, context); assertNull(verdict.coveringRuleId(), context); assertEquals(List.of(), shadow, context);
+                assertNoCover(universe, ruleId, context); assertReleaseIsSafe(universe, ruleId, context);
+            }
+            default -> {
+                assertEquals("UNKNOWN", status, context); assertNull(verdict.coveringRuleId(), context);
+                assertEquals(List.of(new PolicyHygiene.Finding("unknown", "LOW", "Shadowing: " + reason + ".")), shadow, context);
+                if (reason.equals("snapshot collection incomplete")) {
+                    assertTrue(incomplete, context);
+                    assertNoCover(universe, ruleId, context); assertReleaseIsSafe(universe, ruleId, context);
+                }
+                if (reason.equals(DEFAULT_PORTS)) {
+                    var later = universe.rules.get(ruleId);
+                    // An earlier rule that holds the rule on every other dimension, with application-default on one side,
+                    // and does not cover it in every world. (Whether it covers in some world can depend on two application
+                    // references denoting overlapping traffic, which this oracle's model -- distinct references are
+                    // distinct applications -- does not express; the engine does not assume it.)
+                    assertTrue(universe.resolvedPriors(ruleId).stream().anyMatch(prior -> (universe.applicationDefault(prior.service()) || universe.applicationDefault(later.service()))
+                            && universe.coversExceptServiceApplication(prior, later) && !universe.coversInEveryWorld(prior, later)),
+                        context + ": no earlier rule leaves the cover to default ports");
+                }
+            }
+        }
+        return status + (reason == null ? "" : " / " + reason);
+    }
+    /** The findings that are not the shadowing verdict's own. */
+    private static List<PolicyHygiene.Finding> otherFindings(PolicyHygiene.Assessment a) {
+        return a.findings().stream().filter(f -> !f.evidence().startsWith("Shadowing: ") && !Set.of("shadowed", "conflict").contains(f.findingClass())).toList();
     }
     static PolicyHygiene.Assessment released(PolicyHygiene.Assessment a, boolean incomplete) { return released(a, incomplete, UNSUPPORTED); }
     static PolicyHygiene.Assessment released(PolicyHygiene.Assessment a, boolean incomplete, String reason) {
