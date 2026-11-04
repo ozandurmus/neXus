@@ -119,6 +119,15 @@ Verdict lattice:
 
 B/C hooks: F§4.6 / A§1.5 (`HopSemantics` strategy per node kind).
 
+Amendment 2026-11-04 (engineer decisions under the PO freeze delegation, stage A5a): a path query against no held
+topology answers 409 `TOPOLOGY_NOT_BUILT` and never builds (a build is `topology_rebuild`, security_admin only, and
+persists a header). Hop policy binding: `physical` = policy context `''` for both vendors, a PAN vsys = the same vsys
+name, a CP VSID = `POLICY_CONTEXT_UNPROVEN` (no proven relation to a VS target's virtual-system reference), a PAN
+target listed without a vsys is not equated with `vsys1`; two snapshots naming the same device and context =
+`POLICY_BINDING_AMBIGUOUS`. aiview refusals (raw, unknown, `AMBIGUOUS_PSEUDONYM`) share one answer, 422
+`PSEUDONYM_REFUSED`; the specific code is kept in the `authz_decisions` row only (D-3 conditions 3 and 5 together).
+The 30/min limit is per actor (stricter than per session, as the policy lookup).
+
 ## 6. Disagreements and resolutions
 
 | Topic | Resolution |
