@@ -28,6 +28,12 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("POST /api/v2/lifecycle/catalog/*/delete", ActionRegistry.LIFECYCLE_CATALOG_WRITE),
             Map.entry("POST /api/v2/lifecycle/catalog/import", ActionRegistry.LIFECYCLE_CATALOG_WRITE),
             Map.entry("GET /api/v2/job-window", ActionRegistry.DEVICE_READ),
+            // PO record 2026-11-03 D-8 (path analysis A3): topology read, overrides, rebuild.
+            Map.entry("GET /api/v2/topology", ActionRegistry.TOPOLOGY_READ),
+            Map.entry("GET /api/v2/topology/overrides", ActionRegistry.TOPOLOGY_READ),
+            Map.entry("POST /api/v2/topology/overrides", ActionRegistry.TOPOLOGY_OVERRIDE_WRITE),
+            Map.entry("POST /api/v2/topology/overrides/*/revoke", ActionRegistry.TOPOLOGY_OVERRIDE_WRITE),
+            Map.entry("POST /api/v2/topology/rebuild", ActionRegistry.TOPOLOGY_REBUILD),
             // PO decision record 2026-10-15 §6: Packet Analysis. One id segment per route (single wildcard).
             Map.entry("GET /api/v2/packet-analysis/cases", ActionRegistry.PACKET_ANALYSIS_READ),
             Map.entry("POST /api/v2/packet-analysis/cases", ActionRegistry.PACKET_ANALYSIS_RUN),
