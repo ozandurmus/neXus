@@ -1,5 +1,6 @@
 package com.securityexpert.nexus.ui2.persistence.device.inventory;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -52,4 +53,17 @@ public interface DeviceInventoryRepository {
 
     /** The newest run per device, for every device id in {@code deviceIds} that has at least one recorded run. */
     List<InventoryRun> findLatestRuns(List<String> deviceIds);
+
+    /** Identity of a device's newest run: enough to tell that inventory changed, without any child row. */
+    record RunStamp(String deviceId, String runId, Instant collectedAt) {
+    }
+
+    /**
+     * The newest run's identity per device (devices without a run are absent). The default reassembles every run;
+     * the jOOQ implementation reads the run table only.
+     */
+    default List<RunStamp> findLatestRunStamps(List<String> deviceIds) {
+        return findLatestRuns(deviceIds).stream()
+                .map(run -> new RunStamp(run.deviceId(), run.runId(), run.collectedAt())).toList();
+    }
 }

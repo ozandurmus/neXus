@@ -496,6 +496,19 @@ class PathAnalysisRouteTest {
     }
 
     @Test
+    void aQueryRaisesTheAutomaticRebuildCheckOnlyForANonReplayViewerAndStillAnswers409() throws Exception {
+        var estate = new Estate("chain.json");
+        var signals = new java.util.concurrent.atomic.AtomicInteger();
+        estate.topology.attachRefreshTrigger(signals::incrementAndGet);
+        estate.as(Set.of(RoleToken.REPLAY_VIEWER)).perform(query(HTTPS)).andExpect(status().isConflict());
+        assertEquals(0, signals.get(), "an aiview query has no side effect");
+        estate.as(Set.of(RoleToken.VIEWER)).perform(query(HTTPS)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("TOPOLOGY_NOT_BUILT"));
+        assertEquals(1, signals.get());
+        assertTrue(estate.topology.current().isEmpty(), "the query itself never builds");
+    }
+
+    @Test
     void malformedBodiesAre400AndUnaudited() throws Exception {
         var estate = new Estate("chain.json").built();
         var viewer = estate.as(Set.of(RoleToken.VIEWER));

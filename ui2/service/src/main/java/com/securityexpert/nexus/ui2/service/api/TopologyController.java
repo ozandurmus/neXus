@@ -42,7 +42,10 @@ public final class TopologyController {
     }
 
     @GetMapping("/api/v2/topology")
-    public ResponseEntity<?> read() {
+    public ResponseEntity<?> read(HttpServletRequest request) {
+        if (!PrivacyMaskingResponseBodyAdvice.isReplayViewer(request)) {
+            topology.requestRefreshCheck(); // debounced background system rebuild; this read is answered as held
+        }
         return ok(TopologyView.topology(topology.current(), topology.latestSnapshot()));
     }
 

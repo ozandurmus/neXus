@@ -4,6 +4,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.InvalidKeyException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumSet;
@@ -800,19 +801,31 @@ public final class TopologyBuilder {
         private TopologyGraph.Fingerprints fingerprints(List<TopologyInput.DeviceFacts> devices) {
             List<String> inventory = new ArrayList<>();
             for (TopologyInput.DeviceFacts d : devices) {
-                inventory.add(d.deviceId() + "|" + d.latestRun().map(InventoryRun::runId).orElse("") + "|"
-                        + d.latestRun().map(r -> r.collectedAt().toString()).orElse("") + "|"
-                        + d.clusterMemberRef().map(TopologyBuilder::sha256).orElse(""));
+                inventory.add(inventoryLine(d.deviceId(), d.latestRun().map(InventoryRun::runId),
+                        d.latestRun().map(InventoryRun::collectedAt), d.clusterMemberRef()));
             }
             List<String> overrides = new ArrayList<>();
             for (TopologyLinkOverride o : input.overrides()) {
                 overrides.add(o.overrideId() + "|" + o.revokedAt().map(Object::toString).orElse("") + "|"
                         + o.orphanedAt().map(Object::toString).orElse(""));
             }
-            inventory.sort(null);
             overrides.sort(null);
-            return new TopologyGraph.Fingerprints(sha256(String.join("\n", inventory)), sha256(String.join("\n", overrides)));
+            return new TopologyGraph.Fingerprints(inventoryFingerprint(inventory), sha256(String.join("\n", overrides)));
         }
+    }
+
+    /** One device's contribution to the inventory fingerprint (shared with the cheap change check in the service). */
+    static String inventoryLine(String deviceId, Optional<String> runId, Optional<Instant> collectedAt,
+            Optional<String> clusterMemberRef) {
+        return deviceId + "|" + runId.orElse("") + "|" + collectedAt.map(Instant::toString).orElse("") + "|"
+                + clusterMemberRef.map(TopologyBuilder::sha256).orElse("");
+    }
+
+    /** The inventory fingerprint of a set of {@link #inventoryLine} values (order independent). */
+    static String inventoryFingerprint(List<String> lines) {
+        List<String> sorted = new ArrayList<>(lines);
+        sorted.sort(null);
+        return sha256(String.join("\n", sorted));
     }
 
     static String sha256(String text) {
