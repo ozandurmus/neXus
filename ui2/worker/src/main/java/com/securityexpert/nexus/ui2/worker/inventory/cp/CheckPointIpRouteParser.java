@@ -24,13 +24,55 @@ import com.securityexpert.nexus.ui2.worker.inventory.ParsedRoute;
  * destination-shaped token nor {@code default}/{@code blackhole}/{@code
  * local}/{@code broadcast}) is skipped, never treated as a route and never
  * fatal.
+ *
+ * <p>V184 (path analysis A1, gap G4). A {@code blackhole} row is next-hop kind {@link InventoryRoute#NEXT_HOP_DISCARD}
+ * (it drops matching traffic), never a route that merely lacks a next hop. A {@code via} next hop is {@link
+ * InventoryRoute#NEXT_HOP_IP}; a {@code proto kernel} row without {@code via} is {@link
+ * InventoryRoute#NEXT_HOP_CONNECTED}; any other row's kind is UNKNOWN. {@code metric <n>} is kept as read. Multipath:
+ * A0 §7 records no official Gaia example, so only the unambiguous iproute2 line structure is read -- a head line with
+ * neither {@code via} nor {@code dev}, immediately followed by {@code nexthop via <ip> dev <if>} continuation lines.
+ * Two or more such lines yield one route per next hop, each {@code is_ecmp = true}; a single continuation line yields
+ * its route with ECMP UNKNOWN. A head line that already names a path ({@code via}/{@code dev}) and still has
+ * continuation lines is ambiguous: the head route is kept with ECMP UNKNOWN and the continuation lines are not read.
+ * A single-line row that names its path ({@code via} or {@code dev}) is not multipath ({@code false}); a row naming
+ * no path, a {@code blackhole} row and an orphan continuation line (after a skipped or {@code local}/{@code
+ * broadcast} row) carry no ECMP fact. The ECMP shape still needs a masked real fixture (A0 §7) before real-environment
+ * validation. Interleaved syslog/kernel lines (PR-5) are skipped and do not end a multipath group.</p>
  */
 public final class CheckPointIpRouteParser {
 
     private static final Pattern DESTINATION_TOKEN =
             Pattern.compile("^\\d{1,3}(?:\\.\\d{1,3}){3}(?:/\\d{1,2})?$");
+    private static final Pattern UNSIGNED = Pattern.compile("^\\d{1,10}$");
 
     private CheckPointIpRouteParser() {
+    }
+
+    /** One head line awaiting its possible {@code nexthop} continuation lines. */
+    private static final class Head {
+        final String destination;
+        final Optional<String> nextHop;
+        final Optional<String> interfaceName;
+        final String protocol;
+        final Optional<String> routeTable;
+        final Optional<Long> metric;
+        final boolean blackhole;
+        final List<String[]> nextHops = new ArrayList<>();
+
+        Head(String destination, Optional<String> nextHop, Optional<String> interfaceName, String protocol,
+                Optional<String> routeTable, Optional<Long> metric, boolean blackhole) {
+            this.destination = destination;
+            this.nextHop = nextHop;
+            this.interfaceName = interfaceName;
+            this.protocol = protocol;
+            this.routeTable = routeTable;
+            this.metric = metric;
+            this.blackhole = blackhole;
+        }
+
+        boolean namesPath() {
+            return nextHop.isPresent() || interfaceName.isPresent();
+        }
     }
 
     public static List<ParsedRoute> parse(String output) {
@@ -38,6 +80,7 @@ public final class CheckPointIpRouteParser {
         if (output == null || output.isBlank()) {
             return routes;
         }
+        Head pending = null;
         for (String rawLine : output.split("\\R")) {
             String line = rawLine.trim();
             if (line.isEmpty()) {
@@ -48,12 +91,22 @@ public final class CheckPointIpRouteParser {
                 continue;
             }
             String first = tokens.get(0);
+            if ("nexthop".equals(first)) {
+                if (pending != null) {
+                    pending.nextHops.add(nextHopOf(tokens));
+                }
+                // An orphan continuation line (no head, or a skipped head) is never a route of its own.
+                continue;
+            }
             if ("local".equals(first) || "broadcast".equals(first)) {
+                flush(pending, routes);
+                pending = null;
                 continue;
             }
 
             String destination;
             int nextIndex;
+            boolean blackhole = false;
             if ("default".equals(first)) {
                 destination = "0.0.0.0/0";
                 nextIndex = 1;
@@ -63,6 +116,7 @@ public final class CheckPointIpRouteParser {
                 }
                 destination = tokens.get(1);
                 nextIndex = 2;
+                blackhole = true;
             } else if (DESTINATION_TOKEN.matcher(first).matches()) {
                 destination = first;
                 nextIndex = 1;
@@ -70,6 +124,8 @@ public final class CheckPointIpRouteParser {
                 // PR-5: not a route line at all (e.g. an interleaved syslog/kernel line) -- skip, never fatal.
                 continue;
             }
+            flush(pending, routes);
+            pending = null;
             if (destination.startsWith("127.")) {
                 continue;
             }
@@ -77,6 +133,7 @@ public final class CheckPointIpRouteParser {
             Optional<String> nextHop = Optional.empty();
             Optional<String> interfaceName = Optional.empty();
             Optional<String> routeTable = Optional.empty();
+            Optional<Long> metric = Optional.empty();
             String protocolToken = null;
             for (int i = nextIndex; i < tokens.size(); i++) {
                 switch (tokens.get(i)) {
@@ -100,14 +157,74 @@ public final class CheckPointIpRouteParser {
                             routeTable = Optional.of(tokens.get(++i));
                         }
                     }
+                    case "metric" -> {
+                        if (i + 1 < tokens.size()) {
+                            metric = unsigned(tokens.get(++i));
+                        }
+                    }
                     default -> {
-                        // metric/scope/src and other trailing tokens carry no D-4 column.
+                        // scope/src and other trailing tokens carry no D-4 column.
                     }
                 }
             }
-            routes.add(new ParsedRoute(destination, nextHop, interfaceName, protocolOf(protocolToken), routeTable));
+            pending = new Head(destination, nextHop, interfaceName, protocolOf(protocolToken), routeTable, metric,
+                    blackhole);
         }
+        flush(pending, routes);
         return routes;
+    }
+
+    /** {@code nexthop via <ip> dev <if> weight <w>} to {via, dev}; either may be null. */
+    private static String[] nextHopOf(List<String> tokens) {
+        String via = null;
+        String dev = null;
+        for (int i = 1; i < tokens.size() - 1; i++) {
+            if ("via".equals(tokens.get(i))) {
+                via = tokens.get(++i);
+            } else if ("dev".equals(tokens.get(i))) {
+                dev = tokens.get(++i);
+            }
+        }
+        return new String[] {via, dev};
+    }
+
+    private static void flush(Head head, List<ParsedRoute> routes) {
+        if (head == null) {
+            return;
+        }
+        if (head.blackhole) {
+            routes.add(new ParsedRoute(head.destination, Optional.empty(), Optional.empty(), head.protocol,
+                    head.routeTable, Optional.empty(), Optional.empty(), head.metric,
+                    Optional.of(InventoryRoute.NEXT_HOP_DISCARD)));
+            return;
+        }
+        List<String[]> multipath = head.nextHops.stream().filter(hop -> hop[0] != null || hop[1] != null).toList();
+        if (head.nextHops.isEmpty() || head.namesPath() || multipath.size() != head.nextHops.size()) {
+            Optional<Boolean> ecmp = head.nextHops.isEmpty() && head.namesPath() ? Optional.of(false) : Optional.empty();
+            routes.add(new ParsedRoute(head.destination, head.nextHop, head.interfaceName, head.protocol,
+                    head.routeTable, Optional.empty(), ecmp, head.metric,
+                    kindOf(head.nextHop, head.protocol)));
+            return;
+        }
+        Optional<Boolean> ecmp = multipath.size() >= 2 ? Optional.of(true) : Optional.empty();
+        for (String[] hop : multipath) {
+            Optional<String> via = Optional.ofNullable(hop[0]);
+            routes.add(new ParsedRoute(head.destination, via, Optional.ofNullable(hop[1]), head.protocol,
+                    head.routeTable, Optional.empty(), ecmp, head.metric, kindOf(via, head.protocol)));
+        }
+    }
+
+    private static Optional<String> kindOf(Optional<String> nextHop, String protocol) {
+        if (nextHop.isPresent()) {
+            return Optional.of(InventoryRoute.NEXT_HOP_IP);
+        }
+        return InventoryRoute.PROTOCOL_CONNECTED.equals(protocol)
+                ? Optional.of(InventoryRoute.NEXT_HOP_CONNECTED) : Optional.empty();
+    }
+
+    private static Optional<Long> unsigned(String token) {
+        return UNSIGNED.matcher(token).matches()
+                ? Optional.of(Long.parseLong(token)).filter(m -> m <= 4_294_967_295L) : Optional.empty();
     }
 
     private static final java.util.regex.Pattern NUMERIC_TOKEN = java.util.regex.Pattern.compile("\\d+");
