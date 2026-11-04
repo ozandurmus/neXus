@@ -167,6 +167,51 @@ class PanoramaPolicyCollectorTest {
         assertEquals("/config/shared", sent.get(3).formParams().get("xpath"));
         assertTrue(Arrays.equals(new char[password.length], password));
     }
+    /**
+     * The fetched XML carries every scope a device-group rule may use: /config/shared and each device group read parent
+     * first, ancestors retained until their last descendant is mapped. A three-level lineage (DG-ROOT, DG-MID, DG-LEAF)
+     * with a sibling (DG-SIBLING, read before DG-MID) resolves Shared and ancestor objects for DG-LEAF, never the
+     * sibling's, and a name defined in two lineage scopes is UNKNOWN (the precedence setting is not collected).
+     */
+    @Test void leafRulesResolveSharedAndAncestorObjectsFromTheFetchedLineageOnly() throws Exception {
+        String rule = "<pre-rulebase><security><rules><entry name='RULE-%s' uuid='uuid-%s'><from><member>ZONE-IN</member></from>"
+            + "<to><member>ZONE-OUT</member></to><source>%s</source><destination><member>any</member></destination>"
+            + "<service><member>any</member></service><application><member>any</member></application><action>allow</action>"
+            + "</entry></rules></security></pre-rulebase>";
+        java.util.function.BiFunction<String, String, String> address = (name, value) ->
+            "<entry name='" + name + "'><ip-netmask>" + value + "</ip-netmask></entry>";
+        List<String> replies = new ArrayList<>(List.of(success("<key>synthetic-key</key>"),
+            success("<devicegroups><entry name='DG-ROOT'/><entry name='DG-SIBLING'/><entry name='DG-MID'/><entry name='DG-LEAF'/></devicegroups>"),
+            success("<dg-hierarchy><dg name='DG-ROOT'><dg name='DG-SIBLING'/><dg name='DG-MID'><dg name='DG-LEAF'/></dg></dg></dg-hierarchy>"),
+            success("<shared><address>" + address.apply("OBJ-SHARED-ONLY", "192.0.2.10/32") + "</address></shared>"),
+            success("<entry name='DG-ROOT'><address>" + address.apply("OBJ-ROOT-ONLY", "198.51.100.1/32")
+                + address.apply("OBJ-ROOT-AND-LEAF", "198.51.100.2/32") + "</address>"
+                + String.format(rule, "ROOT", "ROOT", "<member>OBJ-ROOT-ONLY</member>") + "</entry>"),
+            success("<entry name='DG-SIBLING'><address>" + address.apply("OBJ-SIBLING-ONLY", "203.0.113.1/32") + "</address></entry>"),
+            success("<entry name='DG-MID'><address>" + address.apply("OBJ-MID-ONLY", "203.0.113.2/32") + "</address></entry>"),
+            success("<entry name='DG-LEAF'><address>" + address.apply("OBJ-ROOT-AND-LEAF", "203.0.113.12/32") + "</address>"
+                + String.format(rule, "LEAF", "LEAF", "<member>OBJ-SHARED-ONLY</member><member>OBJ-ROOT-ONLY</member><member>OBJ-MID-ONLY</member>"
+                    + "<member>OBJ-ROOT-AND-LEAF</member><member>OBJ-SIBLING-ONLY</member><member>OBJ-NOWHERE</member>") + "</entry>")));
+        List<XmlApiSpec> sent = new ArrayList<>();
+        var snapshots = collector(replies, sent, new char[0]).collect(run, scope, () -> true);
+        assertEquals(8, sent.size(), "no read beyond the approved shared and per-group reads");
+        assertEquals(4, snapshots.size());
+        var leaf = snapshots.stream().filter(s -> s.metadata().containerName().equals("DG-LEAF")).findFirst().orElseThrow();
+        assertTrue(leaf.failures().isEmpty());
+        // Inherited pre-rules: DG-ROOT's rule precedes DG-LEAF's.
+        assertEquals(List.of("RULE-ROOT", "RULE-LEAF"), leaf.sections().stream().flatMap(s -> s.rules().stream()).map(PolicySnapshot.Rule::name).toList());
+        var source = leaf.sections().stream().flatMap(s -> s.rules().stream()).filter(r -> r.name().equals("RULE-LEAF")).findFirst().orElseThrow().source();
+        Map<String, PolicySnapshot.PolicyObject> byName = new LinkedHashMap<>();
+        for (String id : source.refs()) byName.put(leaf.objects().get(id).name(), leaf.objects().get(id));
+        assertEquals(List.of("ip-netmask: 192.0.2.10/32"), byName.get("OBJ-SHARED-ONLY").values());
+        assertEquals(List.of("ip-netmask: 198.51.100.1/32"), byName.get("OBJ-ROOT-ONLY").values());
+        assertEquals(List.of("ip-netmask: 203.0.113.2/32"), byName.get("OBJ-MID-ONLY").values());
+        for (String name : List.of("OBJ-SHARED-ONLY", "OBJ-ROOT-ONLY", "OBJ-MID-ONLY")) assertEquals("RESOLVED", byName.get(name).status(), name);
+        assertEquals("UNKNOWN", byName.get("OBJ-ROOT-AND-LEAF").status());
+        for (String name : List.of("OBJ-SIBLING-ONLY", "OBJ-NOWHERE")) {
+            assertEquals("UNRESOLVED", byName.get(name).status(), name); assertEquals("unresolved", byName.get(name).type(), name);
+        }
+    }
     @Test void failsClosedOnHierarchyMismatchDtdAndGroupLimit() throws Exception {
         var hierarchy = responses(); hierarchy.set(2, success("<dg-hierarchy><dg name='Synthetic child'/></dg-hierarchy>"));
         assertThrows(RuntimeException.class, () -> collector(hierarchy, new ArrayList<>(), new char[0]).collect(run, scope, () -> true));
