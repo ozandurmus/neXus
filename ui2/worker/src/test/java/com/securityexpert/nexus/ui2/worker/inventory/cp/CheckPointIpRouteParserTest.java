@@ -27,17 +27,17 @@ class CheckPointIpRouteParserTest {
 
         assertEquals(List.of(
                 new ParsedRoute("0.0.0.0/0", Optional.of("192.0.2.1"), Optional.of("eth0"),
-                        InventoryRoute.PROTOCOL_STATIC, Optional.empty()),
+                        InventoryRoute.PROTOCOL_STATIC, Optional.empty(), Optional.empty(), Optional.of(false), Optional.of(100L), Optional.of(InventoryRoute.NEXT_HOP_IP)),
                 new ParsedRoute("192.0.2.0/24", Optional.empty(), Optional.of("eth0"),
-                        InventoryRoute.PROTOCOL_CONNECTED, Optional.empty()),
+                        InventoryRoute.PROTOCOL_CONNECTED, Optional.empty(), Optional.empty(), Optional.of(false), Optional.empty(), Optional.of(InventoryRoute.NEXT_HOP_CONNECTED)),
                 new ParsedRoute("198.51.100.0/24", Optional.empty(), Optional.of("eth1"),
-                        InventoryRoute.PROTOCOL_CONNECTED, Optional.empty()),
+                        InventoryRoute.PROTOCOL_CONNECTED, Optional.empty(), Optional.empty(), Optional.of(false), Optional.empty(), Optional.of(InventoryRoute.NEXT_HOP_CONNECTED)),
                 new ParsedRoute("198.51.100.128/25", Optional.of("198.51.100.1"), Optional.of("eth1"),
-                        InventoryRoute.PROTOCOL_STATIC, Optional.empty()),
+                        InventoryRoute.PROTOCOL_STATIC, Optional.empty(), Optional.empty(), Optional.of(false), Optional.empty(), Optional.of(InventoryRoute.NEXT_HOP_IP)),
                 new ParsedRoute("203.0.113.0/25", Optional.of("203.0.113.1"), Optional.of("eth2"),
-                        InventoryRoute.PROTOCOL_STATIC, Optional.empty()),
+                        InventoryRoute.PROTOCOL_STATIC, Optional.empty(), Optional.empty(), Optional.of(false), Optional.empty(), Optional.of(InventoryRoute.NEXT_HOP_IP)),
                 new ParsedRoute("203.0.113.128/25", Optional.of("203.0.113.129"), Optional.of("eth2"),
-                        InventoryRoute.PROTOCOL_STATIC, Optional.empty())),
+                        InventoryRoute.PROTOCOL_STATIC, Optional.empty(), Optional.empty(), Optional.of(false), Optional.empty(), Optional.of(InventoryRoute.NEXT_HOP_IP))),
                 routes, "proto 7 -> static, proto kernel -> connected, table local rows dropped, interleaved "
                         + "syslog/kernel lines skipped without affecting the route count");
     }
@@ -48,12 +48,52 @@ class CheckPointIpRouteParserTest {
 
         assertEquals(List.of(
                 new ParsedRoute("0.0.0.0/0", Optional.of("192.0.2.1"), Optional.of("Mgmt"),
-                        InventoryRoute.PROTOCOL_STATIC, Optional.empty()),
+                        InventoryRoute.PROTOCOL_STATIC, Optional.empty(), Optional.empty(), Optional.of(false), Optional.of(100L), Optional.of(InventoryRoute.NEXT_HOP_IP)),
                 new ParsedRoute("192.0.2.0/24", Optional.empty(), Optional.of("Mgmt"),
-                        InventoryRoute.PROTOCOL_CONNECTED, Optional.empty()),
+                        InventoryRoute.PROTOCOL_CONNECTED, Optional.empty(), Optional.empty(), Optional.of(false), Optional.empty(), Optional.of(InventoryRoute.NEXT_HOP_CONNECTED)),
                 new ParsedRoute("203.0.113.0/24", Optional.empty(), Optional.of("Sync"),
-                        InventoryRoute.PROTOCOL_STATIC, Optional.empty())),
+                        InventoryRoute.PROTOCOL_STATIC, Optional.empty(), Optional.empty(), Optional.of(false), Optional.empty(), Optional.empty())),
                 routes, "'dev X proto 7 scope link' without src is still a route");
+    }
+
+    /**
+     * V184 / G4 (synthetic, A0 §7: no official Gaia multipath example exists): a multipath head line followed by two
+     * nexthop lines is two ECMP routes (an interleaved syslog line does not end the group); a single continuation line
+     * gives its route with ECMP UNKNOWN; a head that already names a path keeps only itself with ECMP UNKNOWN; a
+     * blackhole is DISCARD and never takes continuation lines; continuation lines after a skipped broadcast row are
+     * orphans and never routes; a head naming no path and no continuation carries no ECMP fact and no kind.
+     */
+    @Test
+    void v184MultipathGroupsBlackholesAndAmbiguousShapes() {
+        List<ParsedRoute> routes = CheckPointIpRouteParser.parse(
+                Fixtures.read("cp/ip_route_show_table_all_multipath_synthetic.txt"));
+
+        assertEquals(List.of(
+                new ParsedRoute("0.0.0.0/0", Optional.of("192.0.2.1"), Optional.of("eth0"),
+                        InventoryRoute.PROTOCOL_STATIC, Optional.empty(), Optional.empty(), Optional.of(false), Optional.of(100L), Optional.of(InventoryRoute.NEXT_HOP_IP)),
+                new ParsedRoute("198.51.100.0/24", Optional.of("192.0.2.2"), Optional.of("eth1"),
+                        InventoryRoute.PROTOCOL_STATIC, Optional.empty(), Optional.empty(), Optional.of(true), Optional.of(20L), Optional.of(InventoryRoute.NEXT_HOP_IP)),
+                new ParsedRoute("198.51.100.0/24", Optional.of("192.0.2.3"), Optional.of("eth2"),
+                        InventoryRoute.PROTOCOL_STATIC, Optional.empty(), Optional.empty(), Optional.of(true), Optional.of(20L), Optional.of(InventoryRoute.NEXT_HOP_IP)),
+                new ParsedRoute("203.0.113.0/25", Optional.of("192.0.2.4"), Optional.of("eth1"),
+                        InventoryRoute.PROTOCOL_STATIC, Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.of(InventoryRoute.NEXT_HOP_IP)),
+                new ParsedRoute("203.0.113.128/25", Optional.of("192.0.2.5"), Optional.of("eth1"),
+                        InventoryRoute.PROTOCOL_STATIC, Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.of(InventoryRoute.NEXT_HOP_IP)),
+                new ParsedRoute("198.51.100.128/25", Optional.empty(), Optional.empty(),
+                        InventoryRoute.PROTOCOL_STATIC, Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.of(InventoryRoute.NEXT_HOP_DISCARD)),
+                new ParsedRoute("192.0.2.0/24", Optional.empty(), Optional.of("eth0"),
+                        InventoryRoute.PROTOCOL_CONNECTED, Optional.empty(), Optional.empty(), Optional.of(false), Optional.empty(), Optional.of(InventoryRoute.NEXT_HOP_CONNECTED)),
+                new ParsedRoute("198.51.100.192/26", Optional.empty(), Optional.empty(),
+                        InventoryRoute.PROTOCOL_STATIC, Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty())), routes);
+    }
+
+    @Test
+    void v184BlackholeIsDiscardNotARouteWithoutANextHop() {
+        ParsedRoute blackhole = CheckPointIpRouteParser.parse("blackhole 192.0.2.128/25 proto 7 metric 5\n").get(0);
+        assertEquals("192.0.2.128/25", blackhole.destination());
+        assertEquals(Optional.of(InventoryRoute.NEXT_HOP_DISCARD), blackhole.nextHopKind());
+        assertEquals(Optional.of(5L), blackhole.metric());
+        assertEquals(Optional.empty(), blackhole.ecmp());
     }
 
     @Test
