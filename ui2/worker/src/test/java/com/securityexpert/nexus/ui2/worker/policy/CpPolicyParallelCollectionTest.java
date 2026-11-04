@@ -19,7 +19,7 @@ import com.securityexpert.nexus.ui2.worker.JobCancellationScope;
 import com.securityexpert.nexus.ui2.worker.discovery.cp.MgmtCliCommands;
 import com.securityexpert.nexus.ui2.worker.transcript.*;
 
-@Timeout(15)
+@Timeout(60) // a hang guard; 15 s timed out on the 2-core CI runner (2026-11-04)
 class CpPolicyParallelCollectionTest {
     @org.junit.jupiter.api.BeforeEach void isolateRuleCollection() { System.setProperty("ui2.policy.cp.collect-objects", "false"); }
     @org.junit.jupiter.api.AfterEach void restoreObjectCollection() { System.clearProperty("ui2.policy.cp.collect-objects"); }
