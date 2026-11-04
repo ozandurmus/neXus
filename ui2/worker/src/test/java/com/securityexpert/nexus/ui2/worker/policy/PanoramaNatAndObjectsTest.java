@@ -189,13 +189,14 @@ class PanoramaNatAndObjectsTest {
         assertFalse(json.writeValueAsString(snapshot.metadata()).contains("NAT"));
     }
 
-    @Test void localFirewallProjectionIsNotExtendedByNatOrNewObjectTypes() {
+    /** Path analysis A2 (G3) extends the local projection by its NAT and default sections; the object set stays the original one. */
+    @Test void localFirewallProjectionKeepsItsNatButIsNotExtendedByNewObjectTypes() {
         String xml = "<response status='success'><result><config><shared><external-list><entry name='Synthetic edl'/></external-list></shared>"
                 + "<devices><entry name='localhost.localdomain'><vsys><entry name='vsys1'><rulebase><security><rules>"
                 + "<entry name='Synthetic local' uuid='u1' src='local'><action>allow</action></entry></rules></security>"
                 + "<nat><rules><entry name='Synthetic local nat' uuid='u2'/></rules></nat></rulebase></entry></vsys></entry></devices></config></result></response>";
         var local = mapper.local("device-1", "2026-10-18T12:00:00Z", "artifact-1", xml).get(0);
-        assertEquals(List.of("Local rules"), local.sections().stream().map(Section::name).toList());
+        assertEquals(List.of("Local rules", "Local NAT rules"), local.sections().stream().map(Section::name).toList());
         assertTrue(local.objects().values().stream().noneMatch(o -> o.type().equals("external-list")));
     }
 }
