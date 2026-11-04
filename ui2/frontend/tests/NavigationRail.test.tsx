@@ -21,10 +21,10 @@ function viewport(width: number) {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("the rail (UI product review 2026-10-18, §2.3 / roadmap 1.1)", () => {
-  it("reads Overview · SEE Devices · VERIFY Compliance, Policy · RECOVER Backups · OPERATE Operations, Tools, with Administration last", () => {
+  it("reads Overview · SEE Devices · VERIFY Compliance, Policy, Path · RECOVER Backups · OPERATE Operations, Tools, with Administration last", () => {
     rail("overview");
     expect(RAIL_ENTRIES.map((e) => [e.group, e.label])).toEqual([
-      [null, "Overview"], ["SEE", "Devices"], ["VERIFY", "Compliance"], ["VERIFY", "Policy"], ["RECOVER", "Backups"], ["OPERATE", "Operations"], ["OPERATE", "Tools"],
+      [null, "Overview"], ["SEE", "Devices"], ["VERIFY", "Compliance"], ["VERIFY", "Policy"], ["VERIFY", "Path"], ["RECOVER", "Backups"], ["OPERATE", "Operations"], ["OPERATE", "Tools"],
     ]);
     expect(ADMINISTRATION.label).toBe("Administration");
     const text = nav().textContent ?? "";
@@ -45,7 +45,7 @@ describe("the rail (UI product review 2026-10-18, §2.3 / roadmap 1.1)", () => {
   });
 
   it.each<[ScreenId, string]>([
-    ["overview", "Overview"], ["inventory", "Devices"], ["compliance", "Compliance"], ["policy", "Policy"], ["backups", "Backups"],
+    ["overview", "Overview"], ["inventory", "Devices"], ["compliance", "Compliance"], ["policy", "Policy"], ["path_analysis", "Path"], ["backups", "Backups"],
     ["operations", "Operations"], ["packet_analysis", "Tools"], ["sanitizer", "Tools"], ["administration", "Administration"],
   ])("marks exactly one active item for %s", (screenId, label) => {
     rail(screenId);

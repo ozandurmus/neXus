@@ -16,6 +16,8 @@ const PRODUCT_MARKERS: Record<string, string> = {
   compliance: "checks UNKNOWN · firewalls UNKNOWN · critical failing UNKNOWN · data gaps UNKNOWN",
   operations: "No HA pair or cluster enrolled",
   administration: "Administration",
+  // Path analysis (A5b): nothing is evaluated until a query is sent; the screen never shows a seeded verdict.
+  path_analysis: "No path evaluated yet",
 };
 
 const PREVIEW_MARKERS: Record<string, string> = {
@@ -26,6 +28,7 @@ const PREVIEW_MARKERS: Record<string, string> = {
   backups: "FW-TANGO-04 (PA-5410)",
   operations: "Recent jobs",
   administration: "FW-JULIET-06-M2",
+  path_analysis: "Traffic is PARTIAL: 2 branch(es) disagree",
 };
 
 /** jsdom has no matchMedia; this one says the viewport is narrower than the rail's drawer rule. */
@@ -49,8 +52,8 @@ describe("the UI 2.0 shell navigation", () => {
   it("renders the five-verb rail in order, Administration last", () => {
     render(<App />);
     const rail = screen.getByRole("navigation", { name: "Primary" });
-    expect(DESTINATIONS.map((d) => d.label)).toEqual(["Overview", "Devices", "Compliance", "Policy", "Backups", "Operations", "Packets", "Sanitizer", "Administration"]);
-    for (const label of ["Overview", "Devices", "Compliance", "Policy", "Backups", "Operations", "Tools", "Administration"]) {
+    expect(DESTINATIONS.map((d) => d.label)).toEqual(["Overview", "Devices", "Compliance", "Policy", "Path", "Backups", "Operations", "Packets", "Sanitizer", "Administration"]);
+    for (const label of ["Overview", "Devices", "Compliance", "Policy", "Path", "Backups", "Operations", "Tools", "Administration"]) {
       expect(within(rail).getByText(label)).toBeInTheDocument();
     }
     // Packets and Sanitizer live behind the one Tools entry; the wide rail has no drawer
