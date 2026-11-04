@@ -19,13 +19,26 @@ import com.securityexpert.nexus.ui2.service.policy.HopPolicyEvaluator;
  * {@code snapshot_id}, {@code device_id}, {@code rule_id}, {@code section_id}) pass unchanged so aiview can relate the
  * result to the masked topology. A rule map carries only the fields named here; anything else the rule engine adds is
  * left out (fail closed). Nothing in this body is stored (D-2).
+ *
+ * <p>Rule identity follows today's policy RBAC (coordinator decision 2026-11-04 on the A5a open point): a caller without
+ * {@code policy_read} receives every verdict and reason unchanged, but each rule's id, number, name and section are
+ * withheld and marked {@link #RULE_WITHHELD}, and the executive headline drops its rule number. Callers with
+ * {@code policy_read} (aiview masked) keep them.</p>
  */
 public final class PathResultView {
 
     private PathResultView() {
     }
 
+    /** Marker of a rule whose identity the caller may not see (no {@code policy_read}). */
+    public static final String RULE_WITHHELD = "RULE_WITHHELD_NO_POLICY_READ";
+
+    /** The body with rule identity (a caller holding {@code policy_read}). */
     public static Map<String, Object> body(PathResult r) {
+        return body(r, true);
+    }
+
+    public static Map<String, Object> body(PathResult r, boolean ruleIdentity) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("status", "COMPUTED");
         body.put("snapshot_id", r.topologySnapshotId());
@@ -52,7 +65,7 @@ public final class PathResultView {
         body.put("ingress", ingress);
         var s = r.executiveSummary();
         Map<String, Object> summary = new LinkedHashMap<>();
-        summary.put("headline", s.headline());
+        summary.put("headline", ruleIdentity ? s.headline() : withoutRuleNumber(s.headline()));
         summary.put("blocking_hops", s.blockingHops().stream().map(PathResultView::ref).toList());
         summary.put("unknown_hops", s.unknownHops().stream().map(PathResultView::ref).toList());
         summary.put("asymmetry_detected", s.asymmetryDetected());
@@ -60,7 +73,7 @@ public final class PathResultView {
         summary.put("ecmp_truncated", s.ecmpTruncated());
         summary.put("freshness_status", s.freshnessStatus());
         body.put("executive_summary", summary);
-        body.put("branches", r.branches().stream().map(PathResultView::branch).toList());
+        body.put("branches", r.branches().stream().map(b -> branch(b, ruleIdentity)).toList());
         body.put("limitations", r.limitations());
         return body;
     }
@@ -85,7 +98,12 @@ public final class PathResultView {
         return m;
     }
 
-    private static Map<String, Object> branch(PathResult.Branch b) {
+    /** The engine's headline names a blocking rule only as {@code " by rule <number>"}; that suffix is withheld. */
+    static String withoutRuleNumber(String headline) {
+        return headline == null ? null : headline.replaceAll(" by rule \\S+$", " by a rule (withheld)");
+    }
+
+    private static Map<String, Object> branch(PathResult.Branch b, boolean ruleIdentity) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("branch_id", b.branchId());
         m.put("verdict", b.verdict());
@@ -94,7 +112,7 @@ public final class PathResultView {
         m.put("blocking_hop_index", b.blockingHopIndex().orElse(null));
         m.put("caveats", b.caveats());
         m.put("warnings", b.warnings());
-        m.put("hops", b.hops().stream().map(PathResultView::hop).toList());
+        m.put("hops", b.hops().stream().map(h -> hop(h, ruleIdentity)).toList());
         var ret = b.returnPath();
         Map<String, Object> rp = new LinkedHashMap<>();
         rp.put("return_status", ret.status());
@@ -121,7 +139,7 @@ public final class PathResultView {
         return m;
     }
 
-    private static Map<String, Object> hop(PathResult.Hop h) {
+    private static Map<String, Object> hop(PathResult.Hop h, boolean ruleIdentity) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("hop_index", h.index());
         m.put("node_id", h.nodeId());
@@ -140,12 +158,12 @@ public final class PathResultView {
             x.put("nat_status", n.status());
             x.put("nat_reason", n.reason());
             x.put("applied", n.applied());
-            x.put("nat_rules", rules(n.rules()));
-            x.put("nat_undecidable_rules", rules(n.undecidableRules()));
+            x.put("nat_rules", rules(n.rules(), ruleIdentity));
+            x.put("nat_undecidable_rules", rules(n.undecidableRules(), ruleIdentity));
             return x;
         }).orElse(null));
-        m.put("security", h.security().map(PathResultView::security).orElse(null));
-        m.put("post_nat_security", h.postNatSecurity().map(PathResultView::security).orElse(null));
+        m.put("security", h.security().map(s -> security(s, ruleIdentity)).orElse(null));
+        m.put("post_nat_security", h.postNatSecurity().map(s -> security(s, ruleIdentity)).orElse(null));
         m.put("policy_stale", h.policyStale());
         m.put("policy_collected_at", h.policyCollectedAt().map(Object::toString).orElse(null));
         m.put("own_verdict", h.ownVerdict());
@@ -191,29 +209,33 @@ public final class PathResultView {
         return m;
     }
 
-    private static Map<String, Object> security(PathResult.Security s) {
+    private static Map<String, Object> security(PathResult.Security s, boolean ruleIdentity) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("security_verdict", s.verdict());
         m.put("security_reason", s.reason());
-        m.put("deciding_rule", s.decidingRule().map(PathResultView::rule).orElse(null));
-        m.put("undecidable_rules", rules(s.undecidableRules()));
+        m.put("deciding_rule", s.decidingRule().map(r -> rule(r, ruleIdentity)).orElse(null));
+        m.put("undecidable_rules", rules(s.undecidableRules(), ruleIdentity));
         return m;
     }
 
-    private static List<Map<String, Object>> rules(List<Map<String, Object>> rules) {
+    private static List<Map<String, Object>> rules(List<Map<String, Object>> rules, boolean ruleIdentity) {
         List<Map<String, Object>> out = new ArrayList<>(rules.size());
-        rules.forEach(r -> out.add(rule(r)));
+        rules.forEach(r -> out.add(rule(r, ruleIdentity)));
         return out;
     }
 
     /** Rule identity as the rule engine reports it, renamed onto the advice's rule keys; other fields are dropped. */
-    static Map<String, Object> rule(Map<String, Object> r) {
+    static Map<String, Object> rule(Map<String, Object> r, boolean ruleIdentity) {
         Map<String, Object> m = new LinkedHashMap<>();
-        m.put("rule_id", text(r.get("ruleId")));
-        m.put("rule_number", r.get("number") instanceof Number n ? n : null);
-        m.put("rule_name", text(r.get("name")));
-        m.put("section_id", text(r.get("sectionId")));
-        m.put("section_name", text(r.get("sectionName")));
+        if (ruleIdentity) {
+            m.put("rule_id", text(r.get("ruleId")));
+            m.put("rule_number", r.get("number") instanceof Number n ? n : null);
+            m.put("rule_name", text(r.get("name")));
+            m.put("section_id", text(r.get("sectionId")));
+            m.put("section_name", text(r.get("sectionName")));
+        } else {
+            m.put("rule_identity", RULE_WITHHELD);
+        }
         m.put("action", text(r.get("action")));
         Optional.ofNullable(text(r.get("lookupReason"))).ifPresent(v -> m.put("lookup_reason", v));
         Optional.ofNullable(text(r.get("pathReason"))).ifPresent(v -> m.put("path_reason", v));

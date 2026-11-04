@@ -90,7 +90,7 @@ class PathAnalysisRouteTest {
         final AuthzDecisionRepository audit = mock(AuthzDecisionRepository.class);
         final PolicyBulkhead bulkhead;
         final PathQueryService service;
-        final PathAnalysisController controller;
+        PathAnalysisController controller;
 
         Estate(String estateName) {
             this(estateName, null, new PolicyBulkhead(4, 50));
@@ -115,7 +115,6 @@ class PathAnalysisRouteTest {
             service = new PathQueryService(topology, new PathPolicyBinder(catalog),
                     new PathPseudonymResolver(masking != null ? masking : PathPseudonymMap.over(ips, names)), ips, names,
                     Clock.fixed(NOW, ZoneOffset.UTC));
-            controller = new PathAnalysisController(service, audit, bulkhead);
         }
 
         Estate built() {
@@ -151,6 +150,7 @@ class PathAnalysisRouteTest {
                         Optional.of("test"), Optional.empty(), Optional.empty());
             });
             var gate = new GateChain(sessions, new ActionRegistry(), rbac, mock(AuthzDecisionRepository.class));
+            controller = new PathAnalysisController(service, audit, bulkhead, rbac, new ActionRegistry());
             return MockMvcBuilders.standaloneSetup(controller).setControllerAdvice(advice)
                     .addInterceptors(new GateChainInterceptor(gate, SecurityWebMvcConfig.ACTION_ID_BY_ROUTE)).build();
         }
@@ -229,6 +229,50 @@ class PathAnalysisRouteTest {
         assertEquals(src, masked.get("query").get("src").asText(), "aiview sees its own masked value back");
         assertEquals(dst, masked.get("query").get("dst").asText());
     }
+
+    @Test
+    void ruleIdentityFollowsPolicyReadAndVerdictsDoNot() throws Exception {
+        var estate = new Estate("chain.json").built();
+        String denied = body("198.51.100.20", "203.0.113.200", 22);
+        JsonNode shown = json(ok(estate.as(Set.of(RoleToken.SECURITY_ADMIN)), denied));
+        assertEquals("Traffic is DENIED at hop 2 by rule 2", shown.get("executive_summary").get("headline").asText());
+        assertFalse(shown.findValuesAsText("rule_name").isEmpty());
+        assertEquals(shown.toString(), json(ok(estate.as(Set.of(RoleToken.ONBOARDING_ADMIN)), denied)).toString(),
+                "every policy_read role sees the rules");
+        for (Set<String> roles : List.of(Set.of(RoleToken.VIEWER), Set.of(RoleToken.OPERATOR), Set.of(RoleToken.OPERATION_ADMIN))) {
+            JsonNode withheld = json(ok(estate.as(roles), denied));
+            String text = withheld.toString();
+            for (String key : List.of("\"rule_id\"", "\"rule_number\"", "\"rule_name\"", "\"section_id\"", "\"section_name\"")) {
+                assertFalse(text.contains(key), roles + " " + key);
+            }
+            for (String name : List.of("RULE-r1", "RULE-r2", "RULE-WEB-01", "RULE-DENY-01", "NAT-n1", "NAT-SNAT-01", "OBJ-SECTION-01")) {
+                assertFalse(text.contains(name), roles + " " + name);
+            }
+            assertEquals("Traffic is DENIED at hop 2 by a rule (withheld)",
+                    withheld.get("executive_summary").get("headline").asText(), roles.toString());
+            assertEquals(shown.findValues("rule_id").size(), withheld.findValuesAsText("rule_identity").stream()
+                    .filter(PathResultView_RULE_WITHHELD::equals).count(), "every rule map is marked withheld");
+            // Verdicts, reasons, actions and everything else stay exactly as the policy_read view shows them.
+            for (String key : List.of("verdict", "verdict_reason", "own_verdict", "security_verdict", "security_reason",
+                    "nat_status", "nat_reason", "action", "reasons", "termination", "node_id", "src", "dst")) {
+                assertEquals(shown.findValues(key), withheld.findValues(key), roles + " " + key);
+            }
+        }
+        // aiview holds policy_read: rule identity stays, masked.
+        String src = estate.shown("198.51.100.1/26", "198.51.100.20");
+        String dst = estate.shown("203.0.113.192/26", "203.0.113.200");
+        JsonNode aiview = json(ok(estate.as(Set.of(RoleToken.REPLAY_VIEWER)), body(src, dst, 22)));
+        assertEquals(shown.findValuesAsText("rule_number"), aiview.findValuesAsText("rule_number"));
+        assertEquals(shown.findValuesAsText("rule_id"), aiview.findValuesAsText("rule_id"));
+        assertEquals(shown.findValuesAsText("rule_name").size(), aiview.findValuesAsText("rule_name").size());
+        for (String name : aiview.findValuesAsText("rule_name")) {
+            assertFalse(shown.findValuesAsText("rule_name").contains(name), "masked rule name");
+        }
+        assertFalse(aiview.toString().contains("RULE_WITHHELD_NO_POLICY_READ"));
+    }
+
+    private static final String PathResultView_RULE_WITHHELD =
+            com.securityexpert.nexus.ui2.service.pathanalysis.query.PathResultView.RULE_WITHHELD;
 
     @Test
     void theAiviewBodyCarriesNoRawAddressNameOrRuleIdentity() throws Exception {
