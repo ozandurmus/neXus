@@ -239,3 +239,10 @@ def test_the_drain_wait_prints_and_keeps_the_reason(monkeypatch, capsys):
         deploy.wait_drain("worker", 3, 20, sleep=sleep, clock=lambda: now[0])
     assert blocked.value.continuable
     assert "Module waiting: worker; generation=3; " + reason in capsys.readouterr().out
+
+
+def test_a_quarantine_left_by_an_ended_job_does_not_hold_the_drain():
+    # Stopping the old pod is what releases it (OWNER_GONE); counting it would wait on itself.
+    sql = dict(deploy.barrier_conditions("policy", 7))["admissions"]
+    assert "state='LEASED'" in sql and "state='QUARANTINED'" in sql
+    assert "'COMPLETED','FAILED','CANCELLED'" in sql and "OUTCOME_UNKNOWN" not in sql
