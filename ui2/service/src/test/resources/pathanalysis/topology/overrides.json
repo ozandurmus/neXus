@@ -1,0 +1,23 @@
+{
+  "_comment": "Overrides applied to estate.json for the second golden: a FORCE_LINK that joins the duplicate 192.0.2.64/27 (same network), a FORCE_LINK between two different prefixes (declared tunnel, manual segment), a SUPPRESS_LINK that splits the /31, an endpoint that does not exist, an orphaned override (device deleted) and a revoked one.",
+  "overrides": [
+    {"override_id": "tlo-00000000-0000-4000-8000-000000000001", "action": "FORCE_LINK", "link_kind": "STATIC_L3",
+     "a": ["dev-b02", "physical", "eth4"], "b": ["dev-m09", "vsys1", "ethernet1/1"],
+     "reason_code": "DUPLICATE_PRIVATE_PREFIX_SAME_NETWORK", "note": "synthetic note"},
+    {"override_id": "tlo-00000000-0000-4000-8000-000000000002", "action": "FORCE_LINK", "link_kind": "IPSEC_TUNNEL",
+     "a": ["dev-v03", "physical", "eth0"], "b": ["dev-b02", "physical", "eth3"], "assumed_subnet": "192.0.2.128/30",
+     "reason_code": "TUNNEL"},
+    {"override_id": "tlo-00000000-0000-4000-8000-000000000003", "action": "SUPPRESS_LINK", "link_kind": "STATIC_L3",
+     "a": ["dev-j06", "vsys1", "ethernet1/2"], "b": ["dev-b02", "physical", "eth0"],
+     "reason_code": "SEPARATE_ROUTING_DOMAIN"},
+    {"override_id": "tlo-00000000-0000-4000-8000-000000000004", "action": "FORCE_LINK", "link_kind": "L2_TRUNK",
+     "a": ["dev-v03", "physical", "eth9"], "b": ["dev-b02", "physical", "eth3"],
+     "reason_code": "UNMANAGED_INTERMEDIATE_DEVICE"},
+    {"override_id": "tlo-00000000-0000-4000-8000-000000000005", "action": "FORCE_LINK", "link_kind": "MPLS_WAN",
+     "a": [null, "physical", "eth7"], "b": ["dev-b02", "physical", "eth3"], "reason_code": "OTHER",
+     "orphaned_at": "2026-11-03T12:00:00Z"},
+    {"override_id": "tlo-00000000-0000-4000-8000-000000000006", "action": "FORCE_LINK", "link_kind": "STATIC_L3",
+     "a": ["dev-v03", "physical", "eth0"], "b": ["dev-b02", "physical", "eth4"], "reason_code": "OTHER",
+     "revoked_at": "2026-11-03T13:00:00Z"}
+  ]
+}

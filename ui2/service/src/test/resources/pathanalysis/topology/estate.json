@@ -1,0 +1,100 @@
+{
+  "_comment": "Synthetic estate for the stage A3 golden topology tests. Documentation addresses only (RFC 5737), pseudonym-style hostnames, no real identity. Check Point cluster CLS-ROMEO (FW-TANGO-04 active, FW-TANGO-05 standby, VIP without prefix, one route missing on the standby, a PBR table); Palo Alto HA pair CLS-SIERRA (member addresses, one virtual router); standalone FW-BRAVO-02 on a /31 to the PAN pair; FW-BRAVO-02 and FW-MIKE-09 reuse 192.0.2.64/27 with no route between them; VSX gateway FW-VICTOR-03 with a wrp link in VS 2 and a /26 inside FW-BRAVO-02's /25; FW-MIKE-09 with two virtual routers, an interface without one, and a next hop off every segment; FW-ECHO-11 has no inventory; a FortiGate is not part of the topology.",
+  "devices": [
+    {"device_id": "dev-t04", "vendor": "check_point", "hostname": "FW-TANGO-04", "cluster_member_ref": "cls-ref-romeo",
+     "run": {"run_id": "run-t04", "collected_at": "2026-11-04T06:00:00Z",
+       "ha": [{"context": "physical", "role": "ACTIVE"}],
+       "contexts": [{"context": "physical",
+         "interfaces": [
+           {"name": "eth1", "addresses": [{"address": "192.0.2.2/26", "role": "member"}, {"address": "192.0.2.1", "role": "cluster_virtual"}]},
+           {"name": "eth2", "addresses": [{"address": "198.51.100.34/29", "role": "member"}, {"address": "198.51.100.33/29", "role": "cluster_virtual"}]},
+           {"name": "Sync", "addresses": [{"address": "198.51.100.249/30", "role": "member"}]}],
+         "routes": [
+           {"destination": "192.0.2.0/26", "interface": "eth1", "protocol": "connected", "kind": "CONNECTED"},
+           {"destination": "198.51.100.32/29", "interface": "eth2", "protocol": "connected", "kind": "CONNECTED"},
+           {"destination": "203.0.113.0/25", "next_hop": "192.0.2.10", "interface": "eth1", "protocol": "static", "kind": "IP"},
+           {"destination": "0.0.0.0/0", "next_hop": "192.0.2.62", "interface": "eth1", "protocol": "static", "kind": "IP"},
+           {"destination": "0.0.0.0/0", "next_hop": "198.51.100.38", "interface": "eth2", "protocol": "static", "table": "100", "kind": "IP"}]}]}},
+    {"device_id": "dev-t05", "vendor": "check_point", "hostname": "FW-TANGO-05", "cluster_member_ref": "cls-ref-romeo",
+     "run": {"run_id": "run-t05", "collected_at": "2026-11-04T06:01:00Z",
+       "ha": [{"context": "physical", "role": "STANDBY"}],
+       "contexts": [{"context": "physical",
+         "interfaces": [
+           {"name": "eth1", "addresses": [{"address": "192.0.2.3/26", "role": "member"}, {"address": "192.0.2.1", "role": "cluster_virtual"}]},
+           {"name": "eth2", "addresses": [{"address": "198.51.100.35/29", "role": "member"}, {"address": "198.51.100.33/29", "role": "cluster_virtual"}]},
+           {"name": "Sync", "addresses": [{"address": "198.51.100.250/30", "role": "member"}]}],
+         "routes": [
+           {"destination": "192.0.2.0/26", "interface": "eth1", "protocol": "connected", "kind": "CONNECTED"},
+           {"destination": "198.51.100.32/29", "interface": "eth2", "protocol": "connected", "kind": "CONNECTED"},
+           {"destination": "0.0.0.0/0", "next_hop": "192.0.2.62", "interface": "eth1", "protocol": "static", "kind": "IP"}]}]}},
+    {"device_id": "dev-j06", "vendor": "palo_alto", "hostname": "FW-JULIET-06", "cluster_member_ref": "cls-ref-sierra",
+     "run": {"run_id": "run-j06", "collected_at": "2026-11-04T06:02:00Z",
+       "ha": [{"context": "physical", "role": "ACTIVE"}],
+       "contexts": [{"context": "vsys1",
+         "interfaces": [
+           {"name": "ethernet1/1", "zone": "trust", "routing_context": "vr-default", "addresses": [{"address": "192.0.2.10/26", "role": "member"}]},
+           {"name": "ethernet1/2", "zone": "untrust", "routing_context": "vr-default", "addresses": [{"address": "198.51.100.1/31", "role": "member"}]}],
+         "routes": [
+           {"destination": "192.0.2.0/26", "interface": "ethernet1/1", "protocol": "connected", "table": "vr-default", "active": true, "kind": "CONNECTED"},
+           {"destination": "198.51.100.0/31", "interface": "ethernet1/2", "protocol": "connected", "table": "vr-default", "active": true, "kind": "CONNECTED"},
+           {"destination": "0.0.0.0/0", "next_hop": "198.51.100.0", "interface": "ethernet1/2", "protocol": "static", "table": "vr-default", "active": true, "kind": "IP"},
+           {"destination": "198.51.100.32/29", "next_hop": "192.0.2.1", "interface": "ethernet1/1", "protocol": "static", "table": "vr-default", "active": false, "kind": "IP"}]}]}},
+    {"device_id": "dev-j07", "vendor": "palo_alto", "hostname": "FW-JULIET-07", "cluster_member_ref": "cls-ref-sierra",
+     "run": {"run_id": "run-j07", "collected_at": "2026-11-04T06:03:00Z",
+       "ha": [{"context": "physical", "role": "PASSIVE"}],
+       "contexts": [{"context": "vsys1",
+         "interfaces": [
+           {"name": "ethernet1/1", "zone": "trust", "routing_context": "vr-default", "addresses": [{"address": "192.0.2.10/26", "role": "member"}]},
+           {"name": "ethernet1/2", "zone": "untrust", "routing_context": "vr-default", "addresses": [{"address": "198.51.100.1/31", "role": "member"}]}],
+         "routes": [
+           {"destination": "192.0.2.0/26", "interface": "ethernet1/1", "protocol": "connected", "table": "vr-default", "active": true, "kind": "CONNECTED"},
+           {"destination": "198.51.100.0/31", "interface": "ethernet1/2", "protocol": "connected", "table": "vr-default", "active": true, "kind": "CONNECTED"},
+           {"destination": "0.0.0.0/0", "next_hop": "198.51.100.0", "interface": "ethernet1/2", "protocol": "static", "table": "vr-default", "active": true, "kind": "IP"}]}]}},
+    {"device_id": "dev-b02", "vendor": "check_point", "hostname": "FW-BRAVO-02",
+     "run": {"run_id": "run-b02", "collected_at": "2026-11-04T06:04:00Z",
+       "ha": [{"context": "physical", "role": "STANDALONE"}],
+       "contexts": [{"context": "physical",
+         "interfaces": [
+           {"name": "eth0", "addresses": [{"address": "198.51.100.0/31", "role": "member"}]},
+           {"name": "eth3", "addresses": [{"address": "203.0.113.129/25", "role": "member"}]},
+           {"name": "eth4", "addresses": [{"address": "192.0.2.65/27", "role": "member"}]}],
+         "routes": [
+           {"destination": "198.51.100.0/31", "interface": "eth0", "protocol": "connected", "kind": "CONNECTED"},
+           {"destination": "203.0.113.128/25", "interface": "eth3", "protocol": "connected", "kind": "CONNECTED"},
+           {"destination": "192.0.2.64/27", "interface": "eth4", "protocol": "connected", "kind": "CONNECTED"},
+           {"destination": "192.0.2.0/26", "next_hop": "198.51.100.1", "interface": "eth0", "protocol": "static", "kind": "IP"}]}]}},
+    {"device_id": "dev-v03", "vendor": "check_point", "hostname": "FW-VICTOR-03",
+     "run": {"run_id": "run-v03", "collected_at": "2026-11-04T06:05:00Z",
+       "ha": [{"context": "physical", "role": "STANDALONE"}],
+       "contexts": [
+         {"context": "physical",
+          "interfaces": [
+            {"name": "eth0", "addresses": [{"address": "198.51.100.17/28", "role": "member"}]},
+            {"name": "eth1", "addresses": [{"address": "203.0.113.130/26", "role": "member"}]}],
+          "routes": [
+            {"destination": "198.51.100.16/28", "interface": "eth0", "protocol": "connected", "kind": "CONNECTED"},
+            {"destination": "203.0.113.128/26", "interface": "eth1", "protocol": "connected", "kind": "CONNECTED"}]},
+         {"context": "2",
+          "interfaces": [
+            {"name": "wrp128", "addresses": [{"address": "203.0.113.2/30", "role": "member"}]}],
+          "routes": [
+            {"destination": "203.0.113.0/30", "interface": "wrp128", "protocol": "connected", "kind": "CONNECTED"},
+            {"destination": "0.0.0.0/0", "next_hop": "203.0.113.1", "interface": "wrp128", "protocol": "static", "kind": "IP"}]}]}},
+    {"device_id": "dev-m09", "vendor": "palo_alto", "hostname": "FW-MIKE-09",
+     "run": {"run_id": "run-m09", "collected_at": "2026-11-04T06:06:00Z",
+       "ha": [{"context": "physical", "role": "STANDALONE"}],
+       "contexts": [{"context": "vsys1",
+         "interfaces": [
+           {"name": "ethernet1/1", "zone": "dmz", "routing_context": "vr-a", "addresses": [{"address": "192.0.2.66/27", "role": "member"}]},
+           {"name": "ethernet1/3", "zone": "lab", "addresses": [{"address": "203.0.113.201/29", "role": "member"}]}],
+         "routes": [
+           {"destination": "192.0.2.64/27", "interface": "ethernet1/1", "protocol": "connected", "table": "vr-a", "active": true, "kind": "CONNECTED"},
+           {"destination": "0.0.0.0/0", "next_hop": "198.51.100.40", "protocol": "static", "table": "vr-b", "active": true, "kind": "IP"}]}]}},
+    {"device_id": "dev-e11", "vendor": "check_point", "hostname": "FW-ECHO-11"},
+    {"device_id": "dev-f12", "vendor": "fortinet", "hostname": "FW-FOXTROT-12",
+     "run": {"run_id": "run-f12", "collected_at": "2026-11-04T06:07:00Z",
+       "contexts": [{"context": "physical",
+         "interfaces": [{"name": "port1", "addresses": [{"address": "192.0.2.11/26", "role": "member"}]}], "routes": []}]}}
+  ],
+  "overrides": []
+}

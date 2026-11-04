@@ -1,0 +1,30 @@
+COUNTS devices=8 without_inventory=1 nodes=9 cluster_units=2 clouds=2 segments=9 attachments=13 conflicts=5 overrides_applied=0 overrides_unmatched=0
+NODE CLOUD@192.0.2.0/26 SHARED kind=CLOUD vendor=unknown active=- roles=[] flags=[] routes=0
+NODE CLOUD@203.0.113.0/30 VSX_WARP kind=CLOUD vendor=unknown active=- roles=[] flags=[VSX_WARP_CLOUD] routes=0
+NODE FW-BRAVO-02/physical/main kind=ROUTING_CONTEXT vendor=check_point active=FW-BRAVO-02 roles=[STANDALONE] flags=[] routes=4
+NODE FW-JULIET-06+FW-JULIET-07/vsys1/vr-default kind=CLUSTER_UNIT vendor=palo_alto active=FW-JULIET-06 roles=[ACTIVE, PASSIVE] flags=[] routes=4
+NODE FW-MIKE-09/vsys1/vr-a kind=ROUTING_CONTEXT vendor=palo_alto active=FW-MIKE-09 roles=[STANDALONE] flags=[] routes=1
+NODE FW-MIKE-09/vsys1/vr-b kind=ROUTING_CONTEXT vendor=palo_alto active=FW-MIKE-09 roles=[STANDALONE] flags=[] routes=1
+NODE FW-TANGO-04+FW-TANGO-05/physical/main kind=CLUSTER_UNIT vendor=check_point active=FW-TANGO-04 roles=[ACTIVE, STANDBY] flags=[HA_ROUTE_DRIFT, PBR_PRESENT] routes=4
+NODE FW-VICTOR-03/2/main kind=ROUTING_CONTEXT vendor=check_point active=FW-VICTOR-03 roles=[STANDALONE] flags=[] routes=2
+NODE FW-VICTOR-03/physical/main kind=ROUTING_CONTEXT vendor=check_point active=FW-VICTOR-03 roles=[STANDALONE] flags=[] routes=2
+SEGMENT 192.0.2.0/26 SHARED [CLOUD@192.0.2.0/26 SHARED(uncorroborated), FW-JULIET-06+FW-JULIET-07/vsys1/vr-default:ethernet1/1@192.0.2.10/26, FW-TANGO-04+FW-TANGO-05/physical/main:eth1@192.0.2.1/26]
+SEGMENT 192.0.2.64/27 STUB [FW-BRAVO-02/physical/main:eth4@192.0.2.65/27]
+SEGMENT 192.0.2.64/27 STUB [FW-MIKE-09/vsys1/vr-a:ethernet1/1@192.0.2.66/27]
+SEGMENT 198.51.100.0/31 POINT_TO_POINT [FW-BRAVO-02/physical/main:eth0@198.51.100.0/31, FW-JULIET-06+FW-JULIET-07/vsys1/vr-default:ethernet1/2@198.51.100.1/31]
+SEGMENT 198.51.100.16/28 STUB [FW-VICTOR-03/physical/main:eth0@198.51.100.17/28]
+SEGMENT 198.51.100.32/29 STUB [FW-TANGO-04+FW-TANGO-05/physical/main:eth2@198.51.100.33/29]
+SEGMENT 203.0.113.0/30 VSX_WARP [CLOUD@203.0.113.0/30 VSX_WARP(uncorroborated), FW-VICTOR-03/2/main:wrp128@203.0.113.2/30]
+SEGMENT 203.0.113.128/25 STUB [FW-BRAVO-02/physical/main:eth3@203.0.113.129/25]
+SEGMENT 203.0.113.128/26 STUB [FW-VICTOR-03/physical/main:eth1@203.0.113.130/26]
+EDGE [FW-BRAVO-02/physical/main, FW-JULIET-06+FW-JULIET-07/vsys1/vr-default]
+NEXT_HOP FW-BRAVO-02/physical/main -> FW-JULIET-06+FW-JULIET-07/vsys1/vr-default via 198.51.100.0/31 POINT_TO_POINT routes=1
+NEXT_HOP FW-JULIET-06+FW-JULIET-07/vsys1/vr-default -> FW-BRAVO-02/physical/main via 198.51.100.0/31 POINT_TO_POINT routes=1
+NEXT_HOP FW-TANGO-04+FW-TANGO-05/physical/main -> CLOUD@192.0.2.0/26 SHARED via 192.0.2.0/26 SHARED routes=1
+NEXT_HOP FW-TANGO-04+FW-TANGO-05/physical/main -> FW-JULIET-06+FW-JULIET-07/vsys1/vr-default via 192.0.2.0/26 SHARED routes=1
+NEXT_HOP FW-VICTOR-03/2/main -> CLOUD@203.0.113.0/30 VSX_WARP via 203.0.113.0/30 VSX_WARP routes=1
+CONFLICT DUPLICATE_PRIVATE_PREFIX OPEN device=FW-BRAVO-02 peer=FW-MIKE-09 context=- network=192.0.2.64/27 override=- nodes=[FW-BRAVO-02/physical/main, FW-MIKE-09/vsys1/vr-a]
+CONFLICT HA_ROUTE_DRIFT OPEN device=FW-TANGO-04 peer=FW-TANGO-05 context=physical network=- override=- nodes=[FW-TANGO-04+FW-TANGO-05/physical/main]
+CONFLICT INTERFACE_WITHOUT_CONTEXT OPEN device=FW-MIKE-09 peer=- context=vsys1 network=- override=- nodes=[]
+CONFLICT NEXT_HOP_UNREACHABLE OPEN device=FW-MIKE-09 peer=- context=vsys1 network=- override=- nodes=[FW-MIKE-09/vsys1/vr-b]
+CONFLICT OVERLAPPING_PREFIX OPEN device=FW-BRAVO-02 peer=FW-VICTOR-03 context=- network=203.0.113.128/25 override=- nodes=[FW-BRAVO-02/physical/main, FW-VICTOR-03/physical/main]
