@@ -74,6 +74,10 @@ pairing (Virtual Switch is L2, only a Virtual Router VS is an L3 hop). Duplicate
 Overrides that no longer match are reported, never dropped. Gaia non-main tables → hop flag `PBR_PRESENT`, main table
 evaluated.
 
+Amendment 2026-11-04 (AGENTS.md wins over this section): `HA_ROUTE_DRIFT` is reported as an informational conflict
+only. ClusterXL member differences are `MEMBER_SPECIFIC` unless expected-state evidence proves otherwise (AGENTS.md,
+Check Point), so a peer FIB difference never degrades the unit; routing follows the active member.
+
 ## 5. Path engine
 
 Query, ingress, output contract: F§4.1, F§4.2, F§4.7, plus A's `executive_summary` block. IPv4 only. Source port not
