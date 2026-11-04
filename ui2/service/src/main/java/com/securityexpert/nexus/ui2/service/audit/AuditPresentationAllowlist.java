@@ -219,6 +219,9 @@ public final class AuditPresentationAllowlist {
                     "assignment_id", "computed_at")),
             Map.entry("policy_offline_analysis", Set.of(
                     "analysis_id", "created_at", "policy_id", "uploader")),
+            // V185: opaque identifiers only; context (a virtual-system reference) is redacted.
+            Map.entry("policy_target_binding", Set.of(
+                    "binding_id", "device_id", "install_on_ref", "policy_id")),
             Map.entry("provenance_records", Set.of(
                     "capability_version", "capture_artifact_id", "collected_at",
                     "fingerprint_sha256", "parser_version", "provenance_id", "run_id",

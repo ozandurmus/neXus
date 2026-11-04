@@ -266,8 +266,10 @@ public final class CheckPointPolicyCollector {
                         domainPublish.accept(resumed); snapshots.add(resumed); PolicyCollectionTrace.done(resumed.metadata().id()); continue;
                     }
                     List<CollectionFailure> failures = new ArrayList<>();
-                    List<Target> targets = installationTargets(run, request, domainUid, domainName, policy);
-                    Metadata metadata = new Metadata(ref(request.sourceId(), domainUid, uid), request.sourceId(),
+                    String policyId = ref(request.sourceId(), domainUid, uid);
+                    List<PolicyCollectionRepository.TargetBinding> bindings = new ArrayList<>();
+                    List<Target> targets = installationTargets(run, request, domainUid, domainName, policy, policyId, bindings);
+                    Metadata metadata = new Metadata(policyId, request.sourceId(),
                         "MDS " + request.sourceId(), "CP", container, domainName, name, Instant.now().toString(), "", targets.stream().distinct().toList());
                     PolicyCollectionTrace.unit(metadata.id());
                     String natRef = ref("cp-nat", container, uid);
@@ -303,6 +305,8 @@ public final class CheckPointPolicyCollector {
                     }
                     checkPublication(deadline, lease);
                     domainPublish.accept(snapshot);
+                    // Path analysis A2 (G7): the same installation targets, kept as (device, context, install-on reference).
+                    saveTargetBindings(policyId, bindings);
                     snapshots.add(snapshot);
                     PolicyCollectionTrace.done(metadata.id());
                 }
@@ -979,6 +983,21 @@ public final class CheckPointPolicyCollector {
 
     List<Target> installationTargets(DiscoveryRun run, PolicyCollectionRepository.Request request,
             String domainUid, String domain, JsonNode policy) {
+        return installationTargets(run, request, domainUid, domain, policy, null, null);
+    }
+
+    /** Path analysis A2 (G7): persist the package's installation-target bindings once its snapshot is published. */
+    void saveTargetBindings(String policyId, List<PolicyCollectionRepository.TargetBinding> bindings) {
+        repository.saveTargetBindings(policyId, bindings, com.securityexpert.nexus.ui2.platform.WorkerActor.RESERVED_ACTOR_FINGERPRINT);
+    }
+
+    /**
+     * The package's installation targets; with {@code bindings} also one policy_target_binding (V185) per enrolled device
+     * an installation-target uid denotes, keyed by {@code PolicySnapshot.ref(policyId, "object", uid)} -- the reference the
+     * mapper stores in a rule's install-on for the same uid. "All" and unenrolled targets give no binding (UNKNOWN).
+     */
+    List<Target> installationTargets(DiscoveryRun run, PolicyCollectionRepository.Request request,
+            String domainUid, String domain, JsonNode policy, String policyId, List<PolicyCollectionRepository.TargetBinding> bindings) {
         List<Target> targets = new ArrayList<>();
         JsonNode installation = policy.path("installation-targets");
         if (installation.isTextual() && "all".equals(installation.textValue())) {
@@ -990,7 +1009,11 @@ public final class CheckPointPolicyCollector {
             var enrolled = repository.targets(run.runId(), domain, uid);
             if (enrolled.isEmpty()) targets.add(new Target(ref("cp-install-target", request.sourceId(), domainUid, uid),
                 target.isObject() ? target.path("name").asText("Unresolved installation target") : "Unresolved installation target", "", "UNKNOWN"));
-            else targets.addAll(enrolled);
+            else {
+                targets.addAll(enrolled);
+                if (bindings != null) for (Target device : enrolled)
+                    bindings.add(new PolicyCollectionRepository.TargetBinding(device.deviceId(), device.context(), policyId, ref(policyId, "object", uid)));
+            }
         }
         return targets;
     }

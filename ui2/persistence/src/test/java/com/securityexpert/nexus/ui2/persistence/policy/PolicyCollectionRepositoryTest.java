@@ -282,4 +282,39 @@ class PolicyCollectionRepositoryTest {
         assertFalse(repository.saveDomain(request, "domain-1", "REUSED", true, "{}", "[]", 0, null, "synthetic-actor"));
         assertTrue(sql.stream().noneMatch(q -> q.startsWith("insert into cp_policy_domain_run")));
     }
+
+    /** V185 (path analysis A2 / G7): bindings are written as a difference inside an audited transaction. */
+    @Test void targetBindingsAreWrittenAsADifferenceUnderAnAuditedActor() {
+        List<String> sql = new ArrayList<>();
+        List<Object[]> bindings = new ArrayList<>();
+        var create = DSL.using(SQLDialect.POSTGRES);
+        var repository = new PolicyCollectionRepository(new JooqTransactionBoundary(DSL.using(new MockConnection(context -> {
+            sql.add(context.sql()); bindings.add(context.bindings());
+            if (context.sql().startsWith("select binding_id")) {
+                var fields = new Field<?>[]{DSL.field("binding_id", Long.class), DSL.field("device_id", String.class),
+                    DSL.field("context", String.class), DSL.field("install_on_ref", String.class)};
+                var rows = create.newResult(fields);
+                for (Object[] stored : new Object[][]{{1L, "device-1", "", "ref-a"}, {2L, "device-9", "", "ref-a"}}) {
+                    var row = create.newRecord(fields);
+                    row.set(DSL.field("binding_id", Long.class), (Long) stored[0]); row.set(DSL.field("device_id", String.class), (String) stored[1]);
+                    row.set(DSL.field("context", String.class), (String) stored[2]); row.set(DSL.field("install_on_ref", String.class), (String) stored[3]);
+                    rows.add(row);
+                }
+                return new MockResult[] { new MockResult(rows.size(), rows) };
+            }
+            return new MockResult[] { new MockResult(1, null) };
+        }), SQLDialect.POSTGRES)));
+        repository.saveTargetBindings("policy-1", List.of(new PolicyCollectionRepository.TargetBinding("device-1", "", "policy-1", "ref-a"),
+            new PolicyCollectionRepository.TargetBinding("device-2", "vs-02", "policy-1", "ref-a")), "system:worker");
+        assertTrue(sql.get(0).startsWith("SET LOCAL app.actor_fingerprint") && sql.get(1).contains("policy_collect_target_binding"), sql.toString());
+        assertEquals(1, sql.stream().filter(q -> q.startsWith("delete from policy_target_binding")).count(), "only the vanished row is deleted");
+        int delete = sql.indexOf(sql.stream().filter(q -> q.startsWith("delete from policy_target_binding")).findFirst().orElseThrow());
+        assertEquals(2L, ((Number) bindings.get(delete)[0]).longValue());
+        var inserts = new ArrayList<Object[]>();
+        for (int i = 0; i < sql.size(); i++) if (sql.get(i).startsWith("insert into policy_target_binding")) inserts.add(bindings.get(i));
+        assertEquals(1, inserts.size(), "the unchanged row is not rewritten (no audit row)");
+        assertEquals(List.of("device-2", "vs-02", "policy-1", "ref-a"), Arrays.asList(inserts.get(0)).subList(0, 4));
+        assertThrows(IllegalArgumentException.class, () -> repository.saveTargetBindings("policy-1",
+            List.of(new PolicyCollectionRepository.TargetBinding("device-1", "", "policy-2", "ref-a")), "system:worker"));
+    }
 }

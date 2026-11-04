@@ -283,10 +283,13 @@ final class CpPolicyParallelCollection {
             if (!seen.add(uid)) throw failure();
             var completed = reuse.resumedPackage(container, ref(request.sourceId(), domainUid, uid));
             if (completed != null) { publish.accept(completed); reused.add(completed); PolicyCollectionTrace.done(completed.metadata().id()); continue; }
-            List<Target> targets = collector.installationTargets(run, request, domainUid, domain, node);
-            var metadata = new Metadata(ref(request.sourceId(), domainUid, uid), request.sourceId(), "MDS " + request.sourceId(),
+            String policyId = ref(request.sourceId(), domainUid, uid);
+            List<com.securityexpert.nexus.ui2.persistence.policy.PolicyCollectionRepository.TargetBinding> bindings = new ArrayList<>();
+            List<Target> targets = collector.installationTargets(run, request, domainUid, domain, node, policyId, bindings);
+            var metadata = new Metadata(policyId, request.sourceId(), "MDS " + request.sourceId(),
                 "CP", container, domain, name, Instant.now().toString(), "", targets.stream().distinct().toList());
             Policy policy = new Policy(metadata, domain, NameContext.of(domain, node, items));
+            policy.bindings = List.copyOf(bindings);
             policies.add(policy);
             Map<String, JsonNode> roots = new LinkedHashMap<>();
             for (JsonNode layer : node.path("access-layers")) {
@@ -449,7 +452,10 @@ final class CpPolicyParallelCollection {
         collector.checkPublication(deadline, lease);
         publish.accept(snapshot); policy.latest = snapshot;
         policy.lastCheckpoint = clock.getAsLong();
-        if (complete) PolicyCollectionTrace.done(policy.metadata.id());
+        if (complete) {
+            collector.saveTargetBindings(policy.metadata.id(), policy.bindings);
+            PolicyCollectionTrace.done(policy.metadata.id());
+        }
     }
 
     private void progress(Policy policy) {
@@ -509,6 +515,7 @@ final class CpPolicyParallelCollection {
         Layer nat;
         PolicySnapshot latest;
         Long lastCheckpoint;
+        List<com.securityexpert.nexus.ui2.persistence.policy.PolicyCollectionRepository.TargetBinding> bindings = List.of();
         Policy(Metadata metadata, String domain, NameContext names) { this.metadata = metadata; this.domain = domain; this.names = names; }
     }
     private static final class Layer {
