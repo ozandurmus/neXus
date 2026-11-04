@@ -57,10 +57,12 @@ public final class CheckPointIpRouteParser {
         final Optional<String> routeTable;
         final Optional<Long> metric;
         final boolean blackhole;
+        /** A row of the kernel table is a forwarding entry; {@code linkdown}/{@code dead} makes that UNKNOWN. */
+        final Optional<Boolean> active;
         final List<String[]> nextHops = new ArrayList<>();
 
         Head(String destination, Optional<String> nextHop, Optional<String> interfaceName, String protocol,
-                Optional<String> routeTable, Optional<Long> metric, boolean blackhole) {
+                Optional<String> routeTable, Optional<Long> metric, boolean blackhole, Optional<Boolean> active) {
             this.destination = destination;
             this.nextHop = nextHop;
             this.interfaceName = interfaceName;
@@ -68,6 +70,7 @@ public final class CheckPointIpRouteParser {
             this.routeTable = routeTable;
             this.metric = metric;
             this.blackhole = blackhole;
+            this.active = active;
         }
 
         boolean namesPath() {
@@ -167,8 +170,11 @@ public final class CheckPointIpRouteParser {
                     }
                 }
             }
+            // `ip route show` lists the kernel routing table, whose rows are the forwarding entries (PO-delegated decision
+            // 2026-11-04, PATH_ANALYSIS_DESIGN.md A4 note); a row flagged linkdown or dead is not proven to forward.
+            Optional<Boolean> active = tokens.contains("linkdown") || tokens.contains("dead") ? Optional.empty() : Optional.of(true);
             pending = new Head(destination, nextHop, interfaceName, protocolOf(protocolToken), routeTable, metric,
-                    blackhole);
+                    blackhole, active);
         }
         flush(pending, routes);
         return routes;
@@ -194,7 +200,7 @@ public final class CheckPointIpRouteParser {
         }
         if (head.blackhole) {
             routes.add(new ParsedRoute(head.destination, Optional.empty(), Optional.empty(), head.protocol,
-                    head.routeTable, Optional.empty(), Optional.empty(), head.metric,
+                    head.routeTable, head.active, Optional.empty(), head.metric,
                     Optional.of(InventoryRoute.NEXT_HOP_DISCARD)));
             return;
         }
@@ -202,7 +208,7 @@ public final class CheckPointIpRouteParser {
         if (head.nextHops.isEmpty() || head.namesPath() || multipath.size() != head.nextHops.size()) {
             Optional<Boolean> ecmp = head.nextHops.isEmpty() && head.namesPath() ? Optional.of(false) : Optional.empty();
             routes.add(new ParsedRoute(head.destination, head.nextHop, head.interfaceName, head.protocol,
-                    head.routeTable, Optional.empty(), ecmp, head.metric,
+                    head.routeTable, head.active, ecmp, head.metric,
                     kindOf(head.nextHop, head.protocol)));
             return;
         }
@@ -210,7 +216,7 @@ public final class CheckPointIpRouteParser {
         for (String[] hop : multipath) {
             Optional<String> via = Optional.ofNullable(hop[0]);
             routes.add(new ParsedRoute(head.destination, via, Optional.ofNullable(hop[1]), head.protocol,
-                    head.routeTable, Optional.empty(), ecmp, head.metric, kindOf(via, head.protocol)));
+                    head.routeTable, head.active, ecmp, head.metric, kindOf(via, head.protocol)));
         }
     }
 

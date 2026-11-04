@@ -78,6 +78,13 @@ Amendment 2026-11-04 (AGENTS.md wins over this section): `HA_ROUTE_DRIFT` is rep
 only. ClusterXL member differences are `MEMBER_SPECIFIC` unless expected-state evidence proves otherwise (AGENTS.md,
 Check Point), so a peer FIB difference never degrades the unit; routing follows the active member.
 
+Amendment 2026-11-04 (engineer decision under the PO freeze delegation): a Check Point `ip route show` row is a
+kernel forwarding entry, so it is stored `is_active = true`; a row flagged `linkdown` or `dead` stays NULL (UNKNOWN).
+A4 engine choices recorded: an unproven return walk adds `RETURN_PATH_UNPROVEN` (no forced UNKNOWN); a CP deny stays
+DENIED when routing is uncertain (access does not use routing), a PAN deny does not (its zone came from the route); a
+source segment shared by two firewalls starts one branch at each; one-member clusters, config-derived interfaces and
+`PBR_PRESENT` are caveats.
+
 ## 5. Path engine
 
 Query, ingress, output contract: F§4.1, F§4.2, F§4.7, plus A's `executive_summary` block. IPv4 only. Source port not

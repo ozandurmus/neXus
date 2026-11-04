@@ -27,17 +27,17 @@ class CheckPointIpRouteParserTest {
 
         assertEquals(List.of(
                 new ParsedRoute("0.0.0.0/0", Optional.of("192.0.2.1"), Optional.of("eth0"),
-                        InventoryRoute.PROTOCOL_STATIC, Optional.empty(), Optional.empty(), Optional.of(false), Optional.of(100L), Optional.of(InventoryRoute.NEXT_HOP_IP)),
+                        InventoryRoute.PROTOCOL_STATIC, Optional.empty(), Optional.of(true), Optional.of(false), Optional.of(100L), Optional.of(InventoryRoute.NEXT_HOP_IP)),
                 new ParsedRoute("192.0.2.0/24", Optional.empty(), Optional.of("eth0"),
-                        InventoryRoute.PROTOCOL_CONNECTED, Optional.empty(), Optional.empty(), Optional.of(false), Optional.empty(), Optional.of(InventoryRoute.NEXT_HOP_CONNECTED)),
+                        InventoryRoute.PROTOCOL_CONNECTED, Optional.empty(), Optional.of(true), Optional.of(false), Optional.empty(), Optional.of(InventoryRoute.NEXT_HOP_CONNECTED)),
                 new ParsedRoute("198.51.100.0/24", Optional.empty(), Optional.of("eth1"),
-                        InventoryRoute.PROTOCOL_CONNECTED, Optional.empty(), Optional.empty(), Optional.of(false), Optional.empty(), Optional.of(InventoryRoute.NEXT_HOP_CONNECTED)),
+                        InventoryRoute.PROTOCOL_CONNECTED, Optional.empty(), Optional.of(true), Optional.of(false), Optional.empty(), Optional.of(InventoryRoute.NEXT_HOP_CONNECTED)),
                 new ParsedRoute("198.51.100.128/25", Optional.of("198.51.100.1"), Optional.of("eth1"),
-                        InventoryRoute.PROTOCOL_STATIC, Optional.empty(), Optional.empty(), Optional.of(false), Optional.empty(), Optional.of(InventoryRoute.NEXT_HOP_IP)),
+                        InventoryRoute.PROTOCOL_STATIC, Optional.empty(), Optional.of(true), Optional.of(false), Optional.empty(), Optional.of(InventoryRoute.NEXT_HOP_IP)),
                 new ParsedRoute("203.0.113.0/25", Optional.of("203.0.113.1"), Optional.of("eth2"),
-                        InventoryRoute.PROTOCOL_STATIC, Optional.empty(), Optional.empty(), Optional.of(false), Optional.empty(), Optional.of(InventoryRoute.NEXT_HOP_IP)),
+                        InventoryRoute.PROTOCOL_STATIC, Optional.empty(), Optional.of(true), Optional.of(false), Optional.empty(), Optional.of(InventoryRoute.NEXT_HOP_IP)),
                 new ParsedRoute("203.0.113.128/25", Optional.of("203.0.113.129"), Optional.of("eth2"),
-                        InventoryRoute.PROTOCOL_STATIC, Optional.empty(), Optional.empty(), Optional.of(false), Optional.empty(), Optional.of(InventoryRoute.NEXT_HOP_IP))),
+                        InventoryRoute.PROTOCOL_STATIC, Optional.empty(), Optional.of(true), Optional.of(false), Optional.empty(), Optional.of(InventoryRoute.NEXT_HOP_IP))),
                 routes, "proto 7 -> static, proto kernel -> connected, table local rows dropped, interleaved "
                         + "syslog/kernel lines skipped without affecting the route count");
     }
@@ -48,11 +48,11 @@ class CheckPointIpRouteParserTest {
 
         assertEquals(List.of(
                 new ParsedRoute("0.0.0.0/0", Optional.of("192.0.2.1"), Optional.of("Mgmt"),
-                        InventoryRoute.PROTOCOL_STATIC, Optional.empty(), Optional.empty(), Optional.of(false), Optional.of(100L), Optional.of(InventoryRoute.NEXT_HOP_IP)),
+                        InventoryRoute.PROTOCOL_STATIC, Optional.empty(), Optional.of(true), Optional.of(false), Optional.of(100L), Optional.of(InventoryRoute.NEXT_HOP_IP)),
                 new ParsedRoute("192.0.2.0/24", Optional.empty(), Optional.of("Mgmt"),
-                        InventoryRoute.PROTOCOL_CONNECTED, Optional.empty(), Optional.empty(), Optional.of(false), Optional.empty(), Optional.of(InventoryRoute.NEXT_HOP_CONNECTED)),
+                        InventoryRoute.PROTOCOL_CONNECTED, Optional.empty(), Optional.of(true), Optional.of(false), Optional.empty(), Optional.of(InventoryRoute.NEXT_HOP_CONNECTED)),
                 new ParsedRoute("203.0.113.0/24", Optional.empty(), Optional.of("Sync"),
-                        InventoryRoute.PROTOCOL_STATIC, Optional.empty(), Optional.empty(), Optional.of(false), Optional.empty(), Optional.empty())),
+                        InventoryRoute.PROTOCOL_STATIC, Optional.empty(), Optional.of(true), Optional.of(false), Optional.empty(), Optional.empty())),
                 routes, "'dev X proto 7 scope link' without src is still a route");
     }
 
@@ -70,21 +70,21 @@ class CheckPointIpRouteParserTest {
 
         assertEquals(List.of(
                 new ParsedRoute("0.0.0.0/0", Optional.of("192.0.2.1"), Optional.of("eth0"),
-                        InventoryRoute.PROTOCOL_STATIC, Optional.empty(), Optional.empty(), Optional.of(false), Optional.of(100L), Optional.of(InventoryRoute.NEXT_HOP_IP)),
+                        InventoryRoute.PROTOCOL_STATIC, Optional.empty(), Optional.of(true), Optional.of(false), Optional.of(100L), Optional.of(InventoryRoute.NEXT_HOP_IP)),
                 new ParsedRoute("198.51.100.0/24", Optional.of("192.0.2.2"), Optional.of("eth1"),
-                        InventoryRoute.PROTOCOL_STATIC, Optional.empty(), Optional.empty(), Optional.of(true), Optional.of(20L), Optional.of(InventoryRoute.NEXT_HOP_IP)),
+                        InventoryRoute.PROTOCOL_STATIC, Optional.empty(), Optional.of(true), Optional.of(true), Optional.of(20L), Optional.of(InventoryRoute.NEXT_HOP_IP)),
                 new ParsedRoute("198.51.100.0/24", Optional.of("192.0.2.3"), Optional.of("eth2"),
-                        InventoryRoute.PROTOCOL_STATIC, Optional.empty(), Optional.empty(), Optional.of(true), Optional.of(20L), Optional.of(InventoryRoute.NEXT_HOP_IP)),
+                        InventoryRoute.PROTOCOL_STATIC, Optional.empty(), Optional.of(true), Optional.of(true), Optional.of(20L), Optional.of(InventoryRoute.NEXT_HOP_IP)),
                 new ParsedRoute("203.0.113.0/25", Optional.of("192.0.2.4"), Optional.of("eth1"),
-                        InventoryRoute.PROTOCOL_STATIC, Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.of(InventoryRoute.NEXT_HOP_IP)),
+                        InventoryRoute.PROTOCOL_STATIC, Optional.empty(), Optional.of(true), Optional.empty(), Optional.empty(), Optional.of(InventoryRoute.NEXT_HOP_IP)),
                 new ParsedRoute("203.0.113.128/25", Optional.of("192.0.2.5"), Optional.of("eth1"),
-                        InventoryRoute.PROTOCOL_STATIC, Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.of(InventoryRoute.NEXT_HOP_IP)),
+                        InventoryRoute.PROTOCOL_STATIC, Optional.empty(), Optional.of(true), Optional.empty(), Optional.empty(), Optional.of(InventoryRoute.NEXT_HOP_IP)),
                 new ParsedRoute("198.51.100.128/25", Optional.empty(), Optional.empty(),
-                        InventoryRoute.PROTOCOL_STATIC, Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.of(InventoryRoute.NEXT_HOP_DISCARD)),
+                        InventoryRoute.PROTOCOL_STATIC, Optional.empty(), Optional.of(true), Optional.empty(), Optional.empty(), Optional.of(InventoryRoute.NEXT_HOP_DISCARD)),
                 new ParsedRoute("192.0.2.0/24", Optional.empty(), Optional.of("eth0"),
-                        InventoryRoute.PROTOCOL_CONNECTED, Optional.empty(), Optional.empty(), Optional.of(false), Optional.empty(), Optional.of(InventoryRoute.NEXT_HOP_CONNECTED)),
+                        InventoryRoute.PROTOCOL_CONNECTED, Optional.empty(), Optional.of(true), Optional.of(false), Optional.empty(), Optional.of(InventoryRoute.NEXT_HOP_CONNECTED)),
                 new ParsedRoute("198.51.100.192/26", Optional.empty(), Optional.empty(),
-                        InventoryRoute.PROTOCOL_STATIC, Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty())), routes);
+                        InventoryRoute.PROTOCOL_STATIC, Optional.empty(), Optional.of(true), Optional.empty(), Optional.empty(), Optional.empty())), routes);
     }
 
     @Test
@@ -101,5 +101,18 @@ class CheckPointIpRouteParserTest {
         List<ParsedRoute> routes = CheckPointIpRouteParser.parse("192.0.2.0/24 dev eth0 proto 9 scope link\n");
 
         assertEquals(InventoryRoute.PROTOCOL_UNKNOWN, routes.get(0).protocol());
+    }
+
+    @Test
+    void kernelTableRowsAreActiveUnlessFlaggedLinkdownOrDead() {
+        List<ParsedRoute> routes = CheckPointIpRouteParser.parse(String.join("\n",
+                "default via 192.0.2.1 dev eth0 proto 7",
+                "198.51.100.0/24 dev eth1 proto kernel scope link src 198.51.100.2 linkdown",
+                "203.0.113.0/24 via 192.0.2.9 dev eth0 proto 7 dead",
+                "blackhole 192.0.2.128/25 proto 7"));
+        assertEquals(java.util.Optional.of(true), routes.get(0).active());
+        assertEquals(java.util.Optional.empty(), routes.get(1).active());
+        assertEquals(java.util.Optional.empty(), routes.get(2).active());
+        assertEquals(java.util.Optional.of(true), routes.get(3).active());
     }
 }
