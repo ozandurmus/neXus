@@ -42,6 +42,15 @@ import java.util.*;
  * <li>a released rule shares no packet with an unresolved earlier rule in any world: the widest world, since every
  * rule's match only grows with its variables.</li>
  * </ul>
+ * <p>Opaque applications (application-default applications, and content-provided applications a rule with any other
+ * service names): an application reference is an abstract, fixed, non-empty traffic set, and named applications may
+ * overlap arbitrarily -- one may carry or include another's traffic. The joint dimension's application axis is a set of
+ * traffic atoms, one per named application plus the unnamed one; application any is every atom, and each world also
+ * fixes the atoms of every named application ({@link World#overlap}). The checks use the identity overlap (every
+ * application its own atom: refutes every cover that is not by identity), the collapsed overlap (every named
+ * application every atom: the most favourable to a cover by any earlier named application) and seeded random overlaps,
+ * crossed with the default-port worlds above; the witness and widest worlds use the collapsed overlap. Every claim must
+ * hold for every overlap assignment.
  */
 final class PartialPriorOracle {
     private PartialPriorOracle() {}
@@ -56,10 +65,11 @@ final class PartialPriorOracle {
     private static final String ANY_APP = "\u0000any", OTHER_APP = "\u0000other";
 
     /**
-     * One assignment of the unknown default ports: per named application a non-empty port set (indices into the
-     * service universe), and the (application, port) pairs that application any with application-default matches.
+     * One assignment of the unknowns: per named application a non-empty default-port set (indices into the service
+     * universe); the (atom, port) pairs that application any with application-default matches; and per application
+     * (named, and the unnamed one) its non-empty set of traffic atoms (indices into {@link Universe#apps}).
      */
-    record World(Map<String, BitSet> defaults, BitSet anyDefault) {}
+    record World(Map<String, BitSet> defaults, BitSet anyDefault, Map<String, BitSet> overlap) {}
 
     /** One snapshot's interpreted universe and scopes. */
     static final class Universe {
@@ -109,26 +119,48 @@ final class PartialPriorOracle {
             for (int i = 0; i < apps.size(); i++) appIndex.put(apps.get(i), i);
             fresh = explicit.nextClearBit(0);
             assertTrue(fresh < SERVICE_SIZE, "the oracle needs a port no explicit service names");
-            worlds.add(freshWorld()); worlds.add(widest());
+            var identity = identityOverlap(); var collapsed = collapsedOverlap();
+            var freshPorts = freshWorld(identity); var widePorts = widestPorts(identity);
+            worlds.add(freshPorts); worlds.add(widePorts);
             var random = new Random(String.valueOf(snapshot.metadata().id()).hashCode());
-            for (int i = 0; i < 3; i++) worlds.add(randomWorld(random));
+            List<World> randomPorts = new ArrayList<>();
+            for (int i = 0; i < 3; i++) { randomPorts.add(randomWorld(random, identity)); worlds.add(randomPorts.get(i)); }
+            worlds.add(with(freshPorts, collapsed)); worlds.add(with(widePorts, collapsed));
+            for (int i = 0; i < 3; i++) worlds.add(with(randomPorts.get(i), randomOverlap(random)));
         }
+        /** Every application its own atom. */
+        private Map<String, BitSet> identityOverlap() {
+            Map<String, BitSet> out = new HashMap<>(); for (String a : apps) out.put(a, point(appIndex.get(a))); return out;
+        }
+        /** Every named application every atom (the unnamed application stays its own atom). */
+        private Map<String, BitSet> collapsedOverlap() {
+            Map<String, BitSet> out = new HashMap<>(); for (String a : apps) out.put(a, a.equals(OTHER_APP) ? point(appIndex.get(a)) : full(apps.size()));
+            return out;
+        }
+        private Map<String, BitSet> randomOverlap(Random random) {
+            Map<String, BitSet> out = new HashMap<>();
+            for (String a : apps) out.put(a, a.equals(OTHER_APP) ? point(appIndex.get(a)) : nonEmpty(random, apps.size()));
+            return out;
+        }
+        private static World with(World world, Map<String, BitSet> overlap) { return new World(world.defaults(), world.anyDefault(), overlap); }
         private int sa() { return apps.size() * SERVICE_SIZE; }
         /** Every default-port set is the one port {@link #fresh}; application any's is that port of the unnamed application. */
-        World freshWorld() {
+        World freshWorld(Map<String, BitSet> overlap) {
             Map<String, BitSet> d = new HashMap<>(); var one = new BitSet(); one.set(fresh);
             for (String a : apps) d.put(a, one);
             var u = new BitSet(sa()); u.set(appIndex.get(OTHER_APP) * SERVICE_SIZE + fresh);
-            return new World(d, u);
+            return new World(d, u, overlap);
         }
-        World widest() {
+        private World widestPorts(Map<String, BitSet> overlap) {
             Map<String, BitSet> d = new HashMap<>(); for (String a : apps) d.put(a, full(SERVICE_SIZE));
-            return new World(d, full(sa()));
+            return new World(d, full(sa()), overlap);
         }
-        private World randomWorld(Random random) {
+        /** The world in which every rule's match is largest: widest default ports, collapsed overlap. */
+        World widest() { return widestPorts(collapsedOverlap()); }
+        private World randomWorld(Random random, Map<String, BitSet> overlap) {
             Map<String, BitSet> d = new HashMap<>();
             for (String a : apps) d.put(a, nonEmpty(random, SERVICE_SIZE));
-            return new World(d, nonEmpty(random, sa()));
+            return new World(d, nonEmpty(random, sa()), overlap);
         }
         private static BitSet nonEmpty(Random random, int size) {
             var out = new BitSet(size); int density = 1 + random.nextInt(50);
@@ -176,6 +208,32 @@ final class PartialPriorOracle {
             if (ids == null) return null;
             return ids.contains(ANY_APP) ? Set.of(ANY_APP) : ids;
         }
+        /**
+         * The rule names a content-provided application directly while its service is not application-default: an
+         * UNRESOLVED object of type unresolved, without values or members, in its application cell.
+         */
+        static boolean content(Universe universe, Rule rule) {
+            if (universe.applicationDefault(rule.service())) return false;
+            for (String id : rule.application().refs()) {
+                var o = universe.snapshot.objects().get(id);
+                if (o != null && "UNRESOLVED".equals(o.status()) && o.type().equals("unresolved") && o.members().isEmpty() && o.values().isEmpty()) return true;
+            }
+            return false;
+        }
+        /** The rule's match depends on the overlap of named applications: it names one (without any) on its application axis. */
+        private boolean named(Rule rule) {
+            if (snapshot.metadata().vendor().equals("CP") && rule.application().refs().isEmpty()) return false;
+            var ids = identities(rule.application());
+            return ids != null && !ids.contains(ANY_APP) && !ids.isEmpty();
+        }
+        /** The traffic atoms of an application cell of a rule with explicit service in a world: any, or the union of its applications' atoms. */
+        private BitSet atoms(Cell cell, World world) {
+            var ids = identities(cell);
+            if (ids == null || ids.contains(ANY_APP)) return full(apps.size());
+            var out = new BitSet(apps.size());
+            for (String a : ids) out.or(world.overlap().get(a));
+            return out;
+        }
         /** The joint (application, port) dimension of a rule in a world. */
         private BitSet serviceApplication(Rule rule, World world) {
             var app = rule.application(); boolean cp = snapshot.metadata().vendor().equals("CP");
@@ -185,47 +243,50 @@ final class PartialPriorOracle {
                 if (ids.contains(ANY_APP)) return (BitSet) world.anyDefault().clone();
                 var out = new BitSet(sa());
                 for (String a : ids) {
-                    int base = appIndex.get(a) * SERVICE_SIZE; var d = world.defaults().get(a);
-                    for (int p = d.nextSetBit(0); p >= 0; p = d.nextSetBit(p + 1)) out.set(base + p);
+                    var d = world.defaults().get(a); var atoms = world.overlap().get(a);
+                    for (int x = atoms.nextSetBit(0); x >= 0; x = atoms.nextSetBit(x + 1))
+                        for (int p = d.nextSetBit(0); p >= 0; p = d.nextSetBit(p + 1)) out.set(x * SERVICE_SIZE + p);
                 }
                 return out;
             }
             BitSet ports = cell(rule.service(), "service");
-            BitSet applications = cp && app.refs().isEmpty() && !app.negated() ? full(apps.size()) : cell(app, "application");
+            // A content-provided (or any other opaque) application is its atoms in this world; whatever the oracle cannot
+            // read as identities is every atom.
+            BitSet applications = cp && app.refs().isEmpty() && !app.negated() ? full(apps.size()) : atoms(app, world);
             var out = new BitSet(sa());
             for (int a = applications.nextSetBit(0); a >= 0; a = applications.nextSetBit(a + 1))
                 for (int p = ports.nextSetBit(0); p >= 0; p = ports.nextSetBit(p + 1)) out.set(a * SERVICE_SIZE + p);
             return out;
         }
         /**
-         * The world most favourable to {@code prior} covering {@code later}: variables the later rule does not have are
-         * widest; each one it has is a single point -- inside the prior's match where the prior does not share the
-         * variable, any point where it does (the shared variable then holds itself).
+         * The world most favourable to {@code prior} covering {@code later}: the collapsed overlap (every named application
+         * is every atom, so the prior's named applications hold whatever the later rule names); variables the later rule
+         * does not have, and those both rules share, widest (a shared variable brings the same pairs to both); each other
+         * variable of the later rule a single port at which the prior's match holds every atom, or a single pair inside
+         * the prior's match for application any.
          */
         World witness(Rule prior, Rule later) {
             var mine = variables(later); var theirs = variables(prior); var wide = widest();
             if (mine == null) return wide;
             Map<String, BitSet> d = new HashMap<>(wide.defaults()); BitSet u = wide.anyDefault();
+            BitSet theirMatch = serviceApplication(prior, wide);
             if (mine.contains(ANY_APP)) {
-                if (theirs != null && theirs.contains(ANY_APP)) u = point(0);
-                else { int x = serviceApplication(prior, wide).nextSetBit(0); u = point(Math.max(x, 0)); }
+                if (theirs == null || !theirs.contains(ANY_APP)) { int x = theirMatch.nextSetBit(0); u = point(Math.max(x, 0)); }
             } else {
-                BitSet theirMatch = serviceApplication(prior, wide);
-                for (String a : mine) {
-                    int p = 0;
-                    if (theirs == null || !theirs.contains(a)) {
-                        int base = appIndex.get(a) * SERVICE_SIZE, x = theirMatch.nextSetBit(base);
-                        if (x >= 0 && x < base + SERVICE_SIZE) p = x - base;
-                    }
-                    d.put(a, point(p));
+                int column = 0;
+                for (int p = 0; p < SERVICE_SIZE; p++) {
+                    boolean all = true;
+                    for (int x = 0; x < apps.size() && all; x++) all = theirMatch.get(x * SERVICE_SIZE + p);
+                    if (all) { column = p; break; }
                 }
+                for (String a : mine) if (theirs == null || !theirs.contains(a)) d.put(a, point(column));
             }
-            return new World(d, u);
+            return new World(d, u, wide.overlap());
         }
         private static BitSet point(int at) { var b = new BitSet(); b.set(at); return b; }
-        /** Every world the checks use for this pair; one when neither rule depends on default ports. */
+        /** Every world the checks use for this pair; one when neither rule depends on default ports or on the overlap. */
         private List<World> worlds(Rule prior, Rule later) {
-            if (variables(prior) == null && variables(later) == null) return List.of(worlds.get(1));
+            if (variables(prior) == null && variables(later) == null && !named(prior) && !named(later)) return List.of(worlds.get(1));
             var out = new ArrayList<>(worlds); out.add(witness(prior, later)); return out;
         }
         boolean coversInEveryWorld(Rule prior, Rule later) {
@@ -592,6 +653,42 @@ final class PartialPriorOracle {
     static String assertDefaultPortsChangeIsSafe(Universe universe, PolicyHygiene.Assessment reference, PolicyHygiene.Assessment got, String ruleId, String context) {
         if (got.equals(reference)) return null;
         assertTrue(involvesApplicationDefault(universe, ruleId), context + ": changed without application-default: " + reference + " -> " + got);
+        return assertChangeHoldsInEveryWorld(universe, reference, got, ruleId, context);
+    }
+    static final String OVERLAP = "application overlap is unknown";
+    /**
+     * A rule names a content-provided application directly in its application cell while its service is not
+     * application-default: an UNRESOLVED object of type unresolved, without values or members (the stored shape,
+     * PanoramaPolicyMapper; the oracle does not check the reference itself).
+     */
+    /** The rule names a content-provided application ({@link Universe#content}), or an earlier enabled (or possibly enabled) rule of its scope does. */
+    static boolean involvesContentApplication(Universe universe, String ruleId) {
+        var rule = universe.rules.get(ruleId);
+        if (rule == null) return false; // outside security evaluation (NAT, default rules): not analysed
+        if (Universe.content(universe, rule)) return true;
+        for (var prior : universe.earlierRules(ruleId)) if (Universe.content(universe, prior)) return true;
+        return false;
+    }
+    /**
+     * One rule against {@code reference}, the same analysis with every content-provided application of a rule with
+     * explicit or any service unrecognised (SyntheticPolicies#unrecognisedApplications: the former "unresolved object"
+     * treatment). Identical, or the rule involves a content-provided application ({@link #involvesContentApplication})
+     * and its new verdict holds in every world, for every overlap of the named applications and every assignment of
+     * default ports ({@link #assertChangeHoldsInEveryWorld}). Returns the changed verdict, or null when unchanged.
+     */
+    static String assertContentApplicationChangeIsSafe(Universe universe, PolicyHygiene.Assessment reference, PolicyHygiene.Assessment got, String ruleId, String context) {
+        if (got.equals(reference)) return null;
+        assertTrue(involvesContentApplication(universe, ruleId), context + ": changed without a content-provided application: " + reference + " -> " + got);
+        return assertChangeHoldsInEveryWorld(universe, reference, got, ruleId, context);
+    }
+    /**
+     * A changed verdict holds in every world: a covering rule covers in every world, a NOT_SHADOWED rule is covered in
+     * none and shares no packet with an unresolved earlier rule in any, and "application default ports are unknown" /
+     * "application overlap is unknown" name an earlier resolved rule -- with application-default, respectively an opaque
+     * application without application-default, on one side -- that covers the rule in some world but not in every one.
+     * Any other UNKNOWN claims nothing. Everything but the shadowing verdict and its finding is unchanged.
+     */
+    private static String assertChangeHoldsInEveryWorld(Universe universe, PolicyHygiene.Assessment reference, PolicyHygiene.Assessment got, String ruleId, String context) {
         var verdict = verdictOnly(universe, got, ruleId, context);
         assertEquals(List.of(reference.permissiveness(), reference.timeStatus(), reference.expiring(), reference.counterWindow(), String.valueOf(reference.hitSource()),
             String.valueOf(reference.hitsCollectedAt()), otherFindings(reference)), List.of(got.permissiveness(), got.timeStatus(), got.expiring(), got.counterWindow(),
@@ -618,15 +715,14 @@ final class PartialPriorOracle {
                     assertTrue(incomplete, context);
                     assertNoCover(universe, ruleId, context); assertReleaseIsSafe(universe, ruleId, context);
                 }
-                if (reason.equals(DEFAULT_PORTS)) {
-                    var later = universe.rules.get(ruleId);
-                    // An earlier rule that holds the rule on every other dimension, with application-default on one side,
-                    // and does not cover it in every world. (Whether it covers in some world can depend on two application
-                    // references denoting overlapping traffic, which this oracle's model -- distinct references are
-                    // distinct applications -- does not express; the engine does not assume it.)
-                    assertTrue(universe.resolvedPriors(ruleId).stream().anyMatch(prior -> (universe.applicationDefault(prior.service()) || universe.applicationDefault(later.service()))
-                            && universe.coversExceptServiceApplication(prior, later) && !universe.coversInEveryWorld(prior, later)),
-                        context + ": no earlier rule leaves the cover to default ports");
+                if (reason.equals(DEFAULT_PORTS) || reason.equals(OVERLAP)) {
+                    var later = universe.rules.get(ruleId); boolean ports = reason.equals(DEFAULT_PORTS);
+                    // An earlier rule that covers the rule in some world (some overlap of the named applications, some
+                    // default ports) and not in every one, with application-default on one side for the default-ports
+                    // reason and without it for the overlap reason.
+                    assertTrue(universe.resolvedPriors(ruleId).stream().anyMatch(prior -> (universe.applicationDefault(prior.service()) || universe.applicationDefault(later.service())) == ports
+                            && universe.coversExceptServiceApplication(prior, later) && universe.coversInSomeWorld(prior, later) && !universe.coversInEveryWorld(prior, later)),
+                        context + ": no earlier rule leaves the cover to " + (ports ? "default ports" : "the application overlap"));
                 }
             }
         }

@@ -209,6 +209,73 @@ final class SyntheticPolicies {
         }
         return new PolicySnapshot(snapshot.metadata(), sections, objects, snapshot.failures());
     }
+    /** The service cell is exactly the mapper's application-default reference (as the analysis recognises it). */
+    private static boolean applicationDefaultService(PolicySnapshot snapshot, Rule rule) {
+        return rule.service().refs().equals(List.of(ref(String.valueOf(snapshot.metadata().id()), "service", "application-default")));
+    }
+    /**
+     * A snapshot from {@link #applicationDefault} (Palo Alto) with content-provided applications -- UNRESOLVED, type
+     * unresolved, under their own application reference, as PanoramaPolicyMapper stores a name the configuration does not
+     * define -- named directly by about half of the rules whose service is not application-default: one to three of them,
+     * mixed with any, the application group of two of them, the filter, the custom application, or any alone. Draws from
+     * its own seeded random; everything else is {@code snapshot}. Other vendors are returned unchanged.
+     */
+    static PolicySnapshot contentApplications(PolicySnapshot snapshot, long seed) {
+        if (!snapshot.metadata().vendor().equals("PAN")) return snapshot;
+        var random = new Random(seed * 17 + 3);
+        String id = snapshot.metadata().id();
+        String a = ref(id, "application", APPS.get(0)), b = ref(id, "application", APPS.get(1)), c = ref(id, "application", APPS.get(2));
+        String group = ref(id, "application", "APP-GROUP-01"), filter = ref(id, "application", "APP-FILTER-01");
+        for (String app : List.of(a, b, c, group, filter)) if (!snapshot.objects().containsKey(app)) throw new IllegalArgumentException("not an applicationDefault snapshot");
+        List<List<String>> applications = List.of(List.of(a), List.of(a), List.of(b), List.of(a, b), List.of(a, b), List.of(c), List.of(a, c), List.of(b, c),
+            List.of(a, b, c), List.of("any"), List.of("any"), List.of(a, "any"), List.of(group), List.of(filter), List.of("app"), List.of(a, filter));
+        List<Section> sections = new ArrayList<>();
+        for (Section section : snapshot.sections()) {
+            List<Rule> rules = new ArrayList<>();
+            for (Rule rule : section.rules()) {
+                if (!applicationDefaultService(snapshot, rule) && random.nextBoolean())
+                    rule = new Rule(rule.id(), rule.uuid(), rule.number(), rule.name(), rule.enabled(), rule.source(), rule.destination(), rule.service(),
+                        new Cell(applications.get(random.nextInt(applications.size())), random.nextInt(60) == 0), rule.action(), rule.log(), rule.comment(),
+                        rule.extras(), rule.hitCounts());
+                rules.add(rule);
+            }
+            sections.add(new Section(section.id(), section.name(), section.source(), section.parentRuleId(), rules));
+        }
+        return new PolicySnapshot(snapshot.metadata(), sections, snapshot.objects(), snapshot.failures());
+    }
+    /**
+     * The snapshot as the analysis read it before content-provided applications were opaque identities: in every rule whose
+     * service is not application-default, each content-provided application named directly in the application cell is
+     * replaced by a copy of the same shape under another opaque reference (not the mapper's application reference for its
+     * name), which the analysis does not recognise -- UNKNOWN "unresolved object", exactly as before. Application-default
+     * rules and group members keep the original references, so the application-default treatment is untouched.
+     */
+    static PolicySnapshot unrecognisedApplications(PolicySnapshot snapshot) {
+        String id = String.valueOf(snapshot.metadata().id());
+        var objects = new LinkedHashMap<>(snapshot.objects());
+        List<Section> sections = new ArrayList<>();
+        for (Section section : snapshot.sections()) {
+            List<Rule> rules = new ArrayList<>();
+            for (Rule r : section.rules()) {
+                if (!applicationDefaultService(snapshot, r)) {
+                    List<String> refs = new ArrayList<>();
+                    for (String app : r.application().refs()) {
+                        var o = snapshot.objects().get(app);
+                        if (o != null && o.status().equals("UNRESOLVED") && o.type().equals("unresolved") && app.equals(ref(id, "application", o.name()))) {
+                            String other = "application-unrecognised-" + app;
+                            objects.put(other, new PolicyObject(other, o.name(), o.type(), o.members(), o.values(), o.status()));
+                            refs.add(other);
+                        } else refs.add(app);
+                    }
+                    r = new Rule(r.id(), r.uuid(), r.number(), r.name(), r.enabled(), r.source(), r.destination(), r.service(),
+                        new Cell(refs, r.application().negated()), r.action(), r.log(), r.comment(), r.extras(), r.hitCounts());
+                }
+                rules.add(r);
+            }
+            sections.add(new Section(section.id(), section.name(), section.source(), section.parentRuleId(), rules));
+        }
+        return new PolicySnapshot(snapshot.metadata(), sections, objects, snapshot.failures());
+    }
     static Rule withExtras(Rule rule, String action, Map<String, List<String>> extras) {
         var merged = new HashMap<>(rule.extras()); merged.putAll(extras);
         merged.keySet().removeIf(key -> merged.get(key) == null);

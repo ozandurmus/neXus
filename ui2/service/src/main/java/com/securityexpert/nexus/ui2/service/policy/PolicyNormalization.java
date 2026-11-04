@@ -12,8 +12,9 @@ final class PolicyNormalization {
      * One resolved dimension: {@code any}, merged ranges per family, and opaque {@code tokens}. Tokens are compared by
      * identity only, never interpreted: on the service dimension the single token {@link #APPLICATION_DEFAULT} (Palo Alto
      * {@code application-default}, see {@link Resolver#cell}); on the application dimension the opaque references of the
-     * applications of an application-default rule ({@link Resolver#applications}). A selector with tokens is never
-     * disjoint from anything ({@link #disjoint(Selector, Selector, Budget)}).
+     * applications of an application-default rule ({@link Resolver#applications}), and of the content-provided
+     * applications a Palo Alto rule with any other service names directly ({@link Resolver#contentApplication}). A selector
+     * with tokens is never disjoint from anything ({@link #disjoint(Selector, Selector, Budget)}).
      */
     record Selector(boolean any, Map<String, List<Range>> ranges, Set<String> tokens) {
         Selector { tokens = Set.copyOf(tokens); }
@@ -473,9 +474,15 @@ final class PolicyNormalization {
     /**
      * Whether earlier selectors {@code outer} hold every packet of later selectors {@code inner}: TRUE, FALSE, or
      * {@code null} when the answer depends on default ports that are not collected (Palo Alto application-default,
-     * {@link #APPLICATION_DEFAULT}). Without application-default on either side this is exactly {@link #contains} on all
-     * four dimensions. With it, source and destination must still be contained (else FALSE: no default port puts a
-     * packet of the later rule back inside), and on service and application:
+     * {@link #APPLICATION_DEFAULT}) or on how opaque applications overlap ({@link Resolver#contentApplication}).
+     * Without application-default on either side, source, destination and service must be contained (else FALSE: a
+     * packet of the later rule on the missing address or port lies outside, whatever its application), and then the
+     * applications decide: contained ({@link #contains}: any, or a superset of identities) is TRUE; otherwise, where an
+     * opaque application identity is on either side, undecided ({@code null}) -- a later application, or the later
+     * any, may well carry only traffic of the earlier applications -- and FALSE only between selectors without
+     * identities (exactly the former four-dimension {@link #contains}). With application-default, source and
+     * destination must still be contained (else FALSE: no default port puts a packet of the later rule back inside),
+     * and on service and application:
      * <ul>
      * <li>earlier service any: TRUE when the earlier applications contain the later ones (every port of them);</li>
      * <li>both application-default: TRUE when the earlier application selector contains the later one by identity --
@@ -490,8 +497,9 @@ final class PolicyNormalization {
     static Boolean holds(List<Selector> outer, List<Selector> inner, Budget budget) {
         Selector service = outer.get(2), laterService = inner.get(2), application = outer.get(3), laterApplication = inner.get(3);
         if (!service.applicationDefault() && !laterService.applicationDefault()) {
-            for (int i = 0; i < 4; i++) if (!contains(outer.get(i), inner.get(i), budget)) return false;
-            return true;
+            for (int i = 0; i < 3; i++) if (!contains(outer.get(i), inner.get(i), budget)) return false;
+            if (contains(application, laterApplication, budget)) return true;
+            return application.tokens().isEmpty() && laterApplication.tokens().isEmpty() ? false : null;
         }
         for (int i = 0; i < 2; i++) if (!contains(outer.get(i), inner.get(i), budget)) return false;
         if (service.any()) return contains(application, laterApplication, budget) ? true : null;
@@ -540,7 +548,12 @@ final class PolicyNormalization {
             if (cell.refs().isEmpty()) throw new Unknown("missing selector");
             if (family.equals("service") && applicationDefault(cell)) { budget.spend(); return APPLICATION_DEFAULT_SERVICE; }
             List<Selector> parts = new ArrayList<>();
-            for (String id : cell.refs()) { budget.spend(); parts.add(object(id, family, new HashSet<>())); }
+            for (String id : cell.refs()) {
+                budget.spend();
+                // A content-provided application named directly in the cell is one opaque identity (contentApplication).
+                var o = family.equals("application") ? objects.get(id) : null;
+                parts.add(o != null && contentApplication(id, o) ? new Selector(false, Map.of(), Set.of(id)) : object(id, family, new HashSet<>()));
+            }
             return union(parts);
         }
         Selector object(String id, String family, Set<String> path) {
@@ -596,8 +609,7 @@ final class PolicyNormalization {
             if (memo.containsKey(key)) return memo.get(key);
             var o = objects.get(id);
             if (o == null) throw new Unknown("unresolved object");
-            boolean predefined = o.status().equals("UNRESOLVED") && o.type().equals("unresolved") && o.members().isEmpty() && o.values().isEmpty()
-                && panSnapshot != null && id.equals(ref(panSnapshot, "application", o.name()));
+            boolean predefined = contentApplication(id, o);
             if (!predefined && !o.status().equals("RESOLVED")) throw new Unknown("unresolved object");
             if (!path.add(id) || path.size() > 32) throw new Unknown("group cycle or depth limit");
             Selector result;
@@ -611,6 +623,36 @@ final class PolicyNormalization {
             } else if (o.type().equals("application") && o.members().isEmpty()) result = new Selector(false, Map.of(), Set.of(id));
             else throw new Unknown("dynamic or unsupported object type");
             path.remove(id); memo.put(key, result); return result;
+        }
+        /**
+         * A Palo Alto application a rule names that the collected configuration does not define. PanoramaPolicyMapper
+         * stores such a name as an UNRESOLVED object of type unresolved, without values or members, under its own
+         * application reference {@code ref(snapshot, "application", name)}: no application, application group or
+         * application filter of that name exists in the fetched device group or its ancestors (Shared). The predefined
+         * App-ID applications (for example ssl or web-browsing) come from the firewall's content updates and are never
+         * part of the fetched configuration.
+         * <p>Why such a name is read as an application at all (reasoning, not a quoted vendor statement): PAN-OS checks
+         * the names a security rule references when the configuration is committed, so a rule naming an application
+         * that neither the configuration nor the installed content knows would make the commit fail. A stored rule
+         * naming one that the configuration does not define therefore names an application the content provides, not
+         * an arbitrary unknown object.
+         * <p>Shadowing reads it as an opaque application identity only, compared by its object reference, never by what
+         * its name might mean: the same reference denotes the same (fixed, non-empty) traffic wherever the snapshot
+         * names it, and nothing else is assumed. Two different applications are never assumed to be disjoint, nor one
+         * to exclude or include the other -- one application can carry or include another's traffic (App-ID
+         * dependencies, implicitly allowed applications, an application identified only after its first packets). On
+         * the application dimension ({@link PolicyNormalization#holds}) an earlier any therefore holds everything, an
+         * earlier set of identities holds a later set only when it contains every later identity, and any other pair
+         * is undecided, never "does not cover", so it can only leave the later rule UNKNOWN. Identities are never
+         * disjoint from anything ({@link PolicyNormalization#disjoint(Selector, Selector, Budget)}).
+         * <p>Rules with explicit or any service read only the references directly in their application cell this way
+         * ({@link #cell}); application groups, filters and custom applications keep their former handling there, and an
+         * UNRESOLVED address or service object stays unresolvable. Application-default rules read the same identities
+         * through {@link #applications}.
+         */
+        private boolean contentApplication(String id, PolicyObject o) {
+            return panSnapshot != null && o.status().equals("UNRESOLVED") && o.type().equals("unresolved") && o.members().isEmpty()
+                && o.values().isEmpty() && id.equals(ref(panSnapshot, "application", o.name()));
         }
         Selector union(List<Selector> parts) {
             Map<String, List<Range>> ranges = new TreeMap<>(); boolean any = false;
