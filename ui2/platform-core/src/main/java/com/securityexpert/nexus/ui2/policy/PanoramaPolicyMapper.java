@@ -50,6 +50,23 @@ public final class PanoramaPolicyMapper {
         List<Element> scopes = new ArrayList<>(PolicyXml.selectRelative(root, "shared"));
         for (String name : lineage) scopes.add(groups.get(name));
         if (scopes.isEmpty()) throw new IllegalArgumentException("No management policy scope");
+        /*
+         * Object scope of a device-group snapshot: Shared, then every ancestor from the top down, then the group itself
+         * (scopes above). A sibling's or a descendant's objects are never visible. Panorama "Device Groups"
+         * (https://docs.paloaltonetworks.com/panorama/getting-started/panorama-overview/centrally-manage-firewall-configuration-and-updates-with-panorama/device-groups):
+         * a device-group object is one "only the rules in that device group and its descendant device groups can reference".
+         * Same name in several scopes (https://docs.paloaltonetworks.com/panorama/administration/manage-firewalls/manage-device-groups/manage-precedence-of-inherited-objects):
+         * by default "policy rules in a descendant device group use the object values in that descendant" (put: the
+         * last, most specific scope wins); with "Objects defined in ancestors will take higher precedence" "you can reverse
+         * this order of precedence to push values from the highest ancestor containing the object" (putIfAbsent: Shared
+         * first, then the top ancestor). The approved reads do not carry that setting, so the collector maps both orders
+         * and marks every object they disagree on UNKNOWN (mapUnverifiedPrecedence).
+         * A name defined in none of these scopes stays UNRESOLVED (type "unresolved"). Predefined content that the
+         * approved reads do not return -- App-ID applications, the standard country regions, the built-in external
+         * dynamic lists -- is not given a definition: the documentation names no XML identifiers for the regions or the
+         * built-in lists (it gives display names only), and the App-ID set is content-release data. Only names the
+         * documentation proves are resolved without a definition (see object()).
+         */
         Map<String, Definition> definitions = new LinkedHashMap<>();
         for (Element scope : scopes) {
             for (String type : OBJECT_TYPES) {
