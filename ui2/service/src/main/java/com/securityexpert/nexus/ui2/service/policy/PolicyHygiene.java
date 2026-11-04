@@ -257,6 +257,11 @@ public final class PolicyHygiene {
      * are any or contain its own; a pair that holds every other dimension but not the applications by identity is
      * UNKNOWN {@link #APPLICATION_OVERLAP_UNKNOWN} ({@link #mayCover}), never NOT_SHADOWED. Snapshots without such
      * a reference answer exactly as before.</li>
+     * <li>Check Point access-role sources (PolicyNormalization.Resolver#accessRoleBound): a partial prior whose source
+     * names access roles keeps the union of their networks (and the cell's other addresses) as its source bound, so a
+     * later rule whose source is disjoint from it is no longer kept UNKNOWN by it. The bound only proves disjointness;
+     * an access-role rule still never covers. Snapshots whose access roles carry no networks values (every snapshot
+     * mapped before the mapper read them) answer exactly as before.</li>
      * </ul>
      * Every other verdict stays the scan's.
      */

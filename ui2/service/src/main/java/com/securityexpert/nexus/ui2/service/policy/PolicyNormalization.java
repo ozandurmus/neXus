@@ -304,6 +304,10 @@ final class PolicyNormalization {
      * unknown enabled state: they change what the rule does with a match or whether it is active, not what it matches.</li>
      * <li>A field whose meaning is not known (anything {@link #normalize} calls an "unsupported rule constraint", e.g. a
      * target negation) might widen or invert the match, so such a rule is no partial prior at all.</li>
+     * <li>A Check Point source naming an access role is resolved, where it can be, to an upper bound of what it matches:
+     * the role's networks ({@link Resolver#accessRoleBound}). The identity the role also requires only narrows the match
+     * further, so the bound may prove disjointness and nothing else; a partial prior never covers, so an access-role rule
+     * still covers nothing.</li>
      * <li>A Palo Alto zone rule type other than universal changes how the from/to zones apply, so those zones are not
      * used; missing zone or install-on evidence is an unknown placement. A Check Point rule whose time column was not
      * collected is an incompletely collected rule record and is not used. Rules outside the security rulebase are not
@@ -336,6 +340,13 @@ final class PolicyNormalization {
                 resolved |= !selectors[i].any();
             } catch (Unknown unresolved) {
                 if (unresolved.getMessage().equals("analysis budget")) throw unresolved;
+                // A Check Point source naming an access role: the role's networks bound it (Resolver#accessRoleBound).
+                if (i == 0 && cp) try {
+                    var bound = resolver.accessRoleBound(cell);
+                    if (!bound.any()) { selectors[0] = bound; resolved = true; }
+                } catch (Unknown none) {
+                    if (none.getMessage().equals("analysis budget")) throw none;
+                }
             }
         }
         Map<String, Set<String>> placements = new HashMap<>();
@@ -603,6 +614,57 @@ final class PolicyNormalization {
             List<Selector> parts = new ArrayList<>();
             for (String id : cell.refs()) { budget.spend(); parts.add(application(id, new HashSet<>())); }
             return union(parts);
+        }
+        /**
+         * An upper bound of the source addresses a Check Point source cell naming access roles can match: the union of
+         * each access role's networks and of the cell's other address objects, each resolved exactly as {@link #object}
+         * resolves an address. Only {@link PolicyNormalization#partial} reads it, and only to prove that an earlier
+         * access-role rule cannot cover a later rule (a disjoint source); it is never a full match, a cover or a lookup
+         * selector.
+         * <p>Vendor semantics. The access role's networks (CheckPointPolicyMapper#accessRoleNetworks; Management API
+         * show-access-role "networks": "Collection of Network objects identified by the name or UID that can access the
+         * system", https://sc1.checkpoint.com/documents/latest/APIs/index.html#web/show-access-role) restrict the IP
+         * addresses whose identity the role matches. R82 Identity Awareness Administration Guide
+         * (https://sc1.checkpoint.com/documents/R82/WebAdminGuides/EN/CP_R82_IdentityAwareness_AdminGuide/CP_R82_IdentityAwareness_AdminGuide.pdf):
+         * an access role configures "specified users, computers, and network locations as one object"; pdp roles fetch
+         * -ip calculates "Access Roles that also contain explicitly selected objects in the Networks pane" for the IP
+         * address of an identity; and where an unidentified source is redirected to the Captive Portal (all other rule
+         * fields match), the guide's remedy against matching an address outside the intended ones is to "add a network
+         * restriction to the Access Role". So whatever identities the role selects -- every subset of the networks'
+         * addresses is possible -- its match lies within its networks; that is the whole claim made here.
+         * <p>Residual (stated, not assumed away): with X-Forwarded-For detection on the layer (not collected) a proxied
+         * HTTP connection takes its identity from the header, so the role may also match some packets from a proxy
+         * outside its networks. It still cannot match a packet of the later rule that carries no such header, so it still
+         * cannot cover the later rule, which is all a NOT_SHADOWED verdict claims (no single earlier rule covers it).
+         * <p>Fail-closed: networks any (or any member resolving to any) is no bound; an access role without networks
+         * values, with members, with a value of another kind, or with a network that does not resolve as an address (not
+         * in the dictionary, IPv6, a group with exclusion, ...) is no bound; a negated or empty cell is no bound; the role
+         * must be the mapper's stored shape (type access-role, status DYNAMIC). Destination access roles are not bounded.
+         */
+        Selector accessRoleBound(Cell cell) {
+            if (cell.negated()) throw new Unknown("negated selector");
+            if (cell.refs().isEmpty()) throw new Unknown("missing selector");
+            List<Selector> parts = new ArrayList<>(); boolean role = false;
+            for (String id : cell.refs()) {
+                budget.spend(); var o = objects.get(id);
+                if (o != null && o.type().equals("access-role") && o.status().equals("DYNAMIC")) { role = true; parts.add(accessRole(id, o)); }
+                else parts.add(object(id, "address", new HashSet<>()));
+            }
+            if (!role) throw new Unknown("dynamic or unsupported object type");
+            return union(parts);
+        }
+        private Selector accessRole(String id, PolicyObject o) {
+            budget.spend(); String key = "access-role-networks:" + id;
+            if (memo.containsKey(key)) return memo.get(key);
+            if (!o.members().isEmpty() || o.values().isEmpty()) throw new Unknown("dynamic or unsupported object type");
+            List<Selector> parts = new ArrayList<>();
+            for (String value : o.values()) {
+                budget.spend();
+                if (!value.startsWith("networks: ")) throw new Unknown("dynamic or unsupported object type");
+                String network = value.substring("networks: ".length());
+                parts.add(network.equals("any") ? new Selector(true, Map.of()) : object(network, "address", new HashSet<>()));
+            }
+            var result = union(parts); memo.put(key, result); return result;
         }
         private Selector application(String id, Set<String> path) {
             budget.spend(); String key = "application-reference:" + id;

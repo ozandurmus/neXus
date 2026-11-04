@@ -276,6 +276,59 @@ final class SyntheticPolicies {
         }
         return new PolicySnapshot(snapshot.metadata(), sections, objects, snapshot.failures());
     }
+    /**
+     * A Check Point snapshot with access-role sources, shaped as CheckPointPolicyMapper stores a role (type access-role,
+     * status DYNAMIC, only {@code networks: } values): roles on pool hosts and networks, on a network of the third
+     * documentation block no pool object uses (203.0.113.0/26), on a group, on any (literal and object), on an
+     * unresolved object, on a cyclic group, and without networks. About a third of the rules get a source naming one
+     * role, sometimes with an address or a second role, now and then negated. Draws from its own seeded random; other
+     * vendors are returned unchanged.
+     */
+    static PolicySnapshot accessRoles(PolicySnapshot snapshot, long seed) {
+        if (!snapshot.metadata().vendor().equals("CP")) return snapshot;
+        var random = new Random(seed * 31 + 7);
+        var objects = new LinkedHashMap<>(snapshot.objects());
+        objects.put("far-net", object("far-net", "network", "subnet4: 203.0.113.0", "mask-length4: 26"));
+        objects.put("far-host", object("far-host", "host", "ipv4-address: 203.0.113.200"));
+        Map<String, List<String>> roles = new LinkedHashMap<>();
+        roles.put("role-hosts", List.of("h0", "h1")); roles.put("role-net", List.of("n0")); roles.put("role-mixed", List.of("h2", "n1"));
+        roles.put("role-far", List.of("far-net")); roles.put("role-far-host", List.of("far-host", "far-net")); roles.put("role-group", List.of("g0"));
+        roles.put("role-any", List.of("any")); roles.put("role-any-ref", List.of("far-net", "any")); roles.put("role-unres", List.of("unres"));
+        roles.put("role-cycle", List.of("cycle")); roles.put("role-none", List.of()); roles.put("role-far-unres", List.of("far-net", "unres"));
+        for (var role : roles.entrySet())
+            objects.put(role.getKey(), new PolicyObject(role.getKey(), "OBJ-ROLE-" + role.getKey(), "access-role", List.of(),
+                role.getValue().stream().map(n -> "networks: " + n).toList(), "DYNAMIC"));
+        var names = List.copyOf(roles.keySet());
+        var extra = List.of("far-host", "h3", "n0", "any", "far-net");
+        List<Section> sections = new ArrayList<>();
+        for (Section section : snapshot.sections()) {
+            List<Rule> rules = new ArrayList<>();
+            for (Rule r : section.rules()) {
+                if (random.nextInt(3) == 0) {
+                    // Biased to the far roles so releases (a disjoint pool address later) actually happen.
+                    List<String> refs = new ArrayList<>(List.of(random.nextBoolean() ? pick(random, "role-far", "role-far-host", "role-hosts") : names.get(random.nextInt(names.size()))));
+                    int more = random.nextInt(6);
+                    if (more == 0) refs.add(extra.get(random.nextInt(extra.size())));
+                    else if (more == 1) refs.add(names.get(random.nextInt(names.size())));
+                    r = new Rule(r.id(), r.uuid(), r.number(), r.name(), r.enabled(), new Cell(refs, random.nextInt(30) == 0), r.destination(), r.service(),
+                        r.application(), r.action(), r.log(), r.comment(), r.extras(), r.hitCounts());
+                } else if (random.nextInt(12) == 0) {
+                    // A later rule on the far block: only an access role on that block keeps it from being released.
+                    r = new Rule(r.id(), r.uuid(), r.number(), r.name(), r.enabled(), new Cell(List.of(pick(random, "far-host", "far-net")), false), r.destination(),
+                        r.service(), r.application(), r.action(), r.log(), r.comment(), r.extras(), r.hitCounts());
+                }
+                rules.add(r);
+            }
+            sections.add(new Section(section.id(), section.name(), section.source(), section.parentRuleId(), rules));
+        }
+        return new PolicySnapshot(snapshot.metadata(), sections, objects, snapshot.failures());
+    }
+    /** The snapshot as mapped before the mapper read access-role networks: every access role without values. */
+    static PolicySnapshot withoutNetworks(PolicySnapshot snapshot) {
+        var objects = new LinkedHashMap<>(snapshot.objects());
+        objects.replaceAll((id, o) -> o.type().equals("access-role") ? new PolicyObject(o.id(), o.name(), o.type(), o.members(), List.of(), o.status()) : o);
+        return new PolicySnapshot(snapshot.metadata(), snapshot.sections(), objects, snapshot.failures());
+    }
     static Rule withExtras(Rule rule, String action, Map<String, List<String>> extras) {
         var merged = new HashMap<>(rule.extras()); merged.putAll(extras);
         merged.keySet().removeIf(key -> merged.get(key) == null);
