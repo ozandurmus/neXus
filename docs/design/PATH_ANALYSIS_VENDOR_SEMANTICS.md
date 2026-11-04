@@ -1,6 +1,7 @@
 # Path analysis — vendor semantics (stage A0)
 
-Status: DRAFT — DO NOT FREEZE (A0 research, pending PO review)
+Status: FROZEN — 2026-11-04, under the PO freeze delegation (PO_DECISION_RECORD_2026_11_04_DEV_MODE_DELEGATIONS.md).
+Every claim marked UNKNOWN below stays UNKNOWN; freezing records the cited evidence, it does not decide what the documentation leaves open.
 
 Input to `PATH_ANALYSIS_DESIGN.md` §5/§7. Official vendor documentation only, read 2026-11-03; no device contacted,
 no customer data read. Per the vendor semantics law, what the documents do not establish is `UNKNOWN`. Documentation

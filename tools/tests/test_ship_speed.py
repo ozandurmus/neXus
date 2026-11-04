@@ -795,3 +795,30 @@ def test_skip_checks_needs_a_recorded_reason(monkeypatch, capsys, reason, ok):
         with pytest.raises(SystemExit, match="--skip-checks requires"):
             sa._ship(ship_args(skip_checks=reason))
         assert not events
+
+
+def test_fast_merge_does_not_wait_for_the_regression_suites(monkeypatch, capsys):
+    # PO decision 2026-11-04: full/targeted regression keep running after the merge; validate still gates it.
+    monkeypatch.delenv("NEXUS_WAIT_FULL_REGRESSION", raising=False)
+    clock = Clock()
+    gh_returning(monkeypatch, rollup(run_item("validate"), run_item("full-regression", "IN_PROGRESS", ""),
+                                     run_item("targeted-regression", "IN_PROGRESS", "")))
+    sa._wait_for_checks("u", sleep=clock.sleep, clock=clock)
+    assert clock.now == 0 and '"checks": "pass"' in capsys.readouterr().out
+
+
+def test_fast_merge_still_stops_on_a_red_validate_or_scope_block(monkeypatch):
+    monkeypatch.delenv("NEXUS_WAIT_FULL_REGRESSION", raising=False)
+    clock = Clock()
+    gh_returning(monkeypatch, rollup(run_item("validate"), run_item("scope-blocked", conclusion="FAILURE"),
+                                     run_item("full-regression", "IN_PROGRESS", "")))
+    with pytest.raises(SystemExit, match="checks failed.*scope-blocked"):
+        sa._wait_for_checks("u", sleep=clock.sleep, clock=clock)
+
+
+def test_waiting_for_full_regression_can_be_restored(monkeypatch):
+    monkeypatch.setenv("NEXUS_WAIT_FULL_REGRESSION", "1")
+    clock = Clock()
+    gh_returning(monkeypatch, rollup(run_item("validate"), run_item("full-regression", conclusion="FAILURE")))
+    with pytest.raises(SystemExit, match="full-regression"):
+        sa._wait_for_checks("u", sleep=clock.sleep, clock=clock)
