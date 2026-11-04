@@ -148,6 +148,12 @@ class InventoryJobExecutorEndToEndTest {
         assertEquals(InventoryInterface.STATE_UP, vsid5.interfaces().get(0).state(),
                 "no cphaprob status row for this VS -- state still comes through via ip -4 addr show");
         assertEquals(1, vsid5.routes().size());
+
+        // V184: every Check Point interface is from a runtime read; no virtual-router context is inferred for them.
+        for (InventoryContext context : run.contexts()) {
+            assertTrue(context.interfaces().stream().allMatch(i -> i.evidenceGrade().equals(Optional.of(InventoryInterface.GRADE_RUNTIME))
+                    && i.routingContext().isEmpty()), context.context());
+        }
     }
 
     /** cp_vsx_interfaces_identical_to_physical: a standalone (non-clustered) VSX gateway has no
@@ -503,6 +509,17 @@ class InventoryJobExecutorEndToEndTest {
         assertTrue(vsys2.routes().stream().anyMatch(r -> r.routeTable().equals(Optional.of("default"))),
                 "the default virtual router's route spans into vsys2 too (PM-3)");
         assertTrue(vsys2.routes().stream().anyMatch(r -> r.routeTable().equals(Optional.of("VR-DMZ"))));
+
+        // V184 (G2): the interface's virtual router is persisted and matches its routes' route table; RUNTIME grade.
+        assertEquals(Optional.of("default"), vsys1.interfaces().get(0).routingContext());
+        assertEquals(Optional.of(InventoryInterface.GRADE_RUNTIME), vsys1.interfaces().get(0).evidenceGrade());
+        assertEquals(Optional.of("VR-DMZ"), vsys2.interfaces().stream().filter(i -> i.name().equals("ethernet1/3"))
+                .findFirst().orElseThrow().routingContext());
+        // V184 (G1): the A flag is kept; the scripted response has no legend, so ECMP stays UNKNOWN.
+        assertTrue(vsys2.routes().stream().allMatch(r -> r.active().equals(Optional.of(true)) && r.ecmp().isEmpty()));
+        assertEquals(Optional.of(com.securityexpert.nexus.ui2.persistence.device.inventory.InventoryRoute.NEXT_HOP_CONNECTED),
+                vsys2.routes().stream().filter(r -> r.routeTable().equals(Optional.of("VR-DMZ"))).findFirst().orElseThrow()
+                        .nextHopKind());
     }
 
     /** PO 2026-10-21 scope update: show interface all switched off -> never sent; interfaces UNKNOWN, routes and HA still read. */

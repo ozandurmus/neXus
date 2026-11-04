@@ -117,6 +117,7 @@ public final class PaloAltoConfiguredInterfaceParser {
             }
             return pairs;
         });
+        Set<String> logicalRouterMembers = new HashSet<>();
         Map<String, String> routerOf = attribution(device, counts, "router", e -> {
             List<String[]> pairs = new ArrayList<>();
             Element network = only(device, "network");
@@ -128,6 +129,7 @@ public final class PaloAltoConfiguredInterfaceParser {
             for (Element router : children(only(network, "logical-router"), "entry")) {
                 for (Element vrf : children(only(router, "vrf"), "entry")) {
                     for (Element member : children(only(vrf, "interface"), "member")) {
+                        logicalRouterMembers.add(text(member).strip());
                         pairs.add(new String[] {text(member), router.getAttribute("name")});
                     }
                 }
@@ -213,8 +215,12 @@ public final class PaloAltoConfiguredInterfaceParser {
                         InventoryInterface.STATE_UNKNOWN, List.of(), Optional.empty()));
             }
         }
+        // V184: the routing context is recorded for legacy virtual-router members only; a logical-router member (Advanced
+        // Routing Engine) stays UNKNOWN until a logical-router route read exists (G10, A0 §5a).
+        Map<String, String> routingContext = new LinkedHashMap<>(nameToRouter);
+        routingContext.keySet().removeAll(logicalRouterMembers);
         return new Configured(new PaloAltoInterfaceParseResult(byVsys, physicalPorts, nameToVsys, nameToRouter, nameToZone,
-                Map.of()), haPortByLink, counts[0], counts[1]);
+                Map.of(), routingContext), haPortByLink, counts[0], counts[1]);
     }
 
     private static void place(List<ParsedInterface> logical, Map<String, String> vsysOf, Map<String, String> routerOf,
