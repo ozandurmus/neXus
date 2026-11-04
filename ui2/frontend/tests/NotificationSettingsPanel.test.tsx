@@ -14,7 +14,7 @@ vi.mock("../src/auth/adminApi", () => ({
 
 const types: NotificationRouteView["type"][] = ["admin_event", "login_security", "backup_failure",
   "job_failure", "config_change", "compliance_regression", "device_health", "security_scan",
-  "device_crash_file"];
+  "device_crash_file", "backup_size_anomaly"];
 const settings: NotificationSettingsView = {
   syslog_enabled: false, syslog_host: null, syslog_port: 514, syslog_protocol: "udp", syslog_facility: 16,
   smtp_enabled: true, smtp_host: "relay.example.test", smtp_port: 25, smtp_starttls: false,
@@ -30,7 +30,7 @@ describe("NotificationSettingsPanel", () => {
     api.test.mockReset().mockResolvedValue({ sent: true, detail: "accepted" });
   });
 
-  it("lists nine types with separate recipients and tests the current form values", async () => {
+  it("lists ten types with separate recipients and tests the current form values", async () => {
     render(<NotificationSettingsPanel />);
     for (const type of types) expect(await screen.findByTestId(`route-${type}`)).toBeInTheDocument();
     const row = within(screen.getByTestId("route-admin_event"));

@@ -2,6 +2,7 @@ package com.securityexpert.nexus.ui2.persistence.artefact;
 
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -23,6 +24,14 @@ public final class JooqBackupSizeAnomalyRepository {
 
     public static final String DEVIATION_CLASS = "size_anomaly";
     public static final String ACTION_DETECTED = "backup_size_anomaly_detected";
+    /**
+     * The other two alert kinds share the table and the notification type but are not own-history anomalies (PO
+     * 2026-11-04): they have no last good backup to pin, nothing resolves them, and retention never reads them (every
+     * retention predicate names {@code size_anomaly}), so they cannot change what is kept or pruned.
+     */
+    public static final String CLASS_FLEET_LARGE = "fleet_large";
+    public static final String CLASS_FIREWALL_LOGS = "firewall_logs";
+    public static final String ACTION_FIREWALL_LOGS_DETECTED = "backup_firewall_logs_detected";
 
     /** True for {@code alias}'s artefact while it is an unresolved anomalous copy. */
     static String isOpenAnomaly(String alias) {
@@ -39,6 +48,14 @@ public final class JooqBackupSizeAnomalyRepository {
     /** A recorded anomaly, as the ingest check returns it. */
     public record Detected(String deviationId, String artefactId, String lastGoodArtefactId,
             BackupSizeAnomalyRule.Verdict verdict) {
+    }
+
+    /** A recorded fleet-relative large backup (alert kind b), as the ingest check returns it. */
+    public record DetectedFleetLarge(String deviationId, String artefactId, FleetLargeBackupRule.Verdict verdict) {
+    }
+
+    /** A recorded firewall-logs-in-backup finding (alert kind c), as the content listing hook returns it. */
+    public record DetectedFirewallLogs(String deviationId, String artefactId, FirewallLogsInBackupRule.Verdict verdict) {
     }
 
     /** One device's open anomaly, for the Backups card: the newest unresolved row and how many copies are open. */
@@ -110,6 +127,95 @@ public final class JooqBackupSizeAnomalyRepository {
                     BackupSizeAnomalyRule.SHRINK_PERCENT, BackupSizeAnomalyRule.MIN_CHANGE_BYTES);
             return Optional.of(new Detected(deviationId, artefactId, lastGood, v));
         });
+    }
+
+    /**
+     * Alert kind (b), for one just-recorded artefact: a standard backup that is large against its vendor's fleet (the
+     * Backups screen's "Large" rule, {@link FleetLargeBackupRule}), recorded once per artefact as a
+     * {@value #CLASS_FLEET_LARGE} row. It is skipped when the artefact already has an own-history anomaly (that alert
+     * already says the backup is wrong) and never touches retention. The fleet is each device's latest live backup of
+     * the vendor, as the screen measures it, with this artefact standing for its own device.
+     */
+    public Optional<DetectedFleetLarge> inspectFleet(String artefactId, String actorFingerprint) {
+        Objects.requireNonNull(artefactId, "artefactId");
+        return audited.inTransaction(actorFingerprint, ACTION_DETECTED, dsl -> {
+            var artefact = dsl.fetchOptional("select a.device_id, a.vendor, a.plaintext_bytes from backup_artefact a "
+                    + "where a.artefact_id = {0} and a.artefact_class = 'backup' "
+                    + "and coalesce(a.backup_type, 'standard') = 'standard'" + JooqRetentionQueries.andNotRemoved("a"),
+                    artefactId);
+            if (artefact.isEmpty()) {
+                return Optional.<DetectedFleetLarge>empty();
+            }
+            String deviceId = artefact.get().get("device_id", String.class);
+            String vendor = artefact.get().get("vendor", String.class);
+            long newBytes = artefact.get().get("plaintext_bytes", Long.class);
+            dsl.execute("select pg_advisory_xact_lock(hashtext('backup_size_alert:' || {0}))", artefactId);
+            if (dsl.fetchOptional("select 1 from backup_deviation_record where artefact_id = {0} "
+                    + "and deviation_class in ('size_anomaly', 'fleet_large')", artefactId).isPresent()) {
+                return Optional.<DetectedFleetLarge>empty();
+            }
+            List<Long> sizes = new ArrayList<>(dsl.fetch("select distinct on (a.device_id) a.plaintext_bytes "
+                    + "from backup_artefact a where a.artefact_class = 'backup' and a.vendor = {0} and a.device_id <> {1}"
+                    + JooqRetentionQueries.andNotRemoved("a") + " order by a.device_id, a.created_at desc, a.artefact_id desc",
+                    vendor, deviceId).map(row -> row.get("plaintext_bytes", Long.class)));
+            sizes.add(newBytes);
+            Optional<FleetLargeBackupRule.Verdict> verdict = FleetLargeBackupRule.evaluate(vendor, newBytes, sizes);
+            if (verdict.isEmpty()) {
+                return Optional.<DetectedFleetLarge>empty();
+            }
+            FleetLargeBackupRule.Verdict v = verdict.get();
+            String deviationId = UUID.randomUUID().toString();
+            int inserted = dsl.execute("insert into backup_deviation_record(deviation_id, artefact_id, previous_artefact_id, "
+                    + "device_id, deviation_class, summary, details, detected_at) values ({0}, {1}, null, {2}, 'fleet_large', "
+                    + "{3}, jsonb_build_object('vendor', {4}::text, 'plaintext_bytes', {5}::bigint, "
+                    + "'median_bytes', {6}::bigint, 'ratio', round({7}::numeric, 3), 'fleet_devices', {8}::int, "
+                    + "'median_factor', {9}::int, 'min_bytes', {10}::bigint), clock_timestamp()) on conflict do nothing",
+                    deviationId, artefactId, deviceId, v.summary(), vendor, v.newBytes(), Math.round(v.medianBytes()),
+                    v.ratio(), v.fleetDevices(), FleetLargeBackupRule.MEDIAN_FACTOR, FleetLargeBackupRule.MIN_BYTES);
+            return inserted == 0 ? Optional.<DetectedFleetLarge>empty()
+                    : Optional.of(new DetectedFleetLarge(deviationId, artefactId, v));
+        });
+    }
+
+    /**
+     * Alert kind (c), inside the caller's transaction (the one that stores the artefact's content listing, which must
+     * already carry the audit context): a Check Point standard backup whose listed files under the firewall log
+     * directory total at least {@link FirewallLogsInBackupRule#MIN_BYTES}, recorded once per artefact as a
+     * {@value #CLASS_FIREWALL_LOGS} row. Only sizes are read; no entry path leaves the database. Never touches retention.
+     */
+    static Optional<DetectedFirewallLogs> recordFirewallLogs(org.jooq.DSLContext dsl, String artefactId) {
+        var artefact = dsl.fetchOptional("select a.device_id from backup_artefact a where a.artefact_id = {0} "
+                + "and a.artefact_class = 'backup' and coalesce(a.backup_type, 'standard') = 'standard' "
+                + "and a.vendor = 'check_point'" + JooqRetentionQueries.andNotRemoved("a"), artefactId);
+        if (artefact.isEmpty()) {
+            return Optional.empty();
+        }
+        String deviceId = artefact.get().get("device_id", String.class);
+        dsl.execute("select pg_advisory_xact_lock(hashtext('backup_size_alert:' || {0}))", artefactId);
+        if (dsl.fetchOptional("select 1 from backup_deviation_record where artefact_id = {0} "
+                + "and deviation_class = 'firewall_logs'", artefactId).isPresent()) {
+            return Optional.empty();
+        }
+        var sums = dsl.fetchOne("select coalesce(sum(case when e.entry_path ~ {0} then e.entry_bytes else 0 end), 0)::bigint "
+                + "as log_bytes, coalesce(sum(e.entry_bytes), 0)::bigint as total_bytes from backup_artefact_entry e "
+                + "where e.artefact_id = {1} and e.entry_type = 'file'", FirewallLogsInBackupRule.LOG_PATH_REGEX, artefactId);
+        if (sums == null) {
+            return Optional.empty();
+        }
+        Optional<FirewallLogsInBackupRule.Verdict> verdict = FirewallLogsInBackupRule.evaluate(
+                orZero(sums.get("log_bytes", Long.class)), orZero(sums.get("total_bytes", Long.class)));
+        if (verdict.isEmpty()) {
+            return Optional.empty();
+        }
+        FirewallLogsInBackupRule.Verdict v = verdict.get();
+        String deviationId = UUID.randomUUID().toString();
+        int inserted = dsl.execute("insert into backup_deviation_record(deviation_id, artefact_id, previous_artefact_id, "
+                + "device_id, deviation_class, summary, details, detected_at) values ({0}, {1}, null, {2}, 'firewall_logs', "
+                + "{3}, jsonb_build_object('log_bytes', {4}::bigint, 'total_bytes', {5}::bigint, "
+                + "'percent', round({6}::numeric, 1), 'min_bytes', {7}::bigint), clock_timestamp()) on conflict do nothing",
+                deviationId, artefactId, deviceId, v.summary(), v.logBytes(), v.totalBytes(), v.percent(),
+                FirewallLogsInBackupRule.MIN_BYTES);
+        return inserted == 0 ? Optional.empty() : Optional.of(new DetectedFirewallLogs(deviationId, artefactId, v));
     }
 
     /** One row per device with an unresolved size anomaly, newest first. */

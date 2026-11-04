@@ -91,3 +91,23 @@ Type added to the §2 table:
   Notifications screen row follow.
 - **Data.** `device_crash_alert(alert_id, device_id, process, file_count, newest_mtime, job_id, created_at, notified_at)`,
   unique per (device, job, process), created by V160.
+
+## 8. Amendment 2026-11-04 -- notification type `backup_size_anomaly` (PO request: direct daily alerts on backup size deviations)
+Authority: Product Owner request of 2026-11-04 (a Check Point gateway's backup grew to about 28 GB because local firewall
+logs were swept into it; "any deviation like this must raise an alert directly, on a daily basis"). Nothing else in §1-§7
+changes; the digest, watermark, leader and recipient rules of §4 apply unchanged. Migration `V189__backup_size_anomaly_notification.sql`
+carries the data change and is dry-run before deploy.
+
+| Type key | Title (UI) | Source | Event |
+| --- | --- | --- | --- |
+| `backup_size_anomaly` | Backup size deviation | `backup_deviation_record` classes `size_anomaly`, `fleet_large`, `firewall_logs` | one line per alert row, each raised once per backup artefact: (a) `size_anomaly`, the own-history growth or shrink of `BACKUP_SIZE_ANOMALY_RETENTION.md`; (b) `fleet_large`, a standard backup at least 10x its vendor's fleet median and at least 1 GiB (the Backups screen's "Large" rule); (c) `firewall_logs`, a Check Point standard backup whose stored content listing holds at least 100 MiB under `opt/CPsuite-*/fw1/log/`. |
+
+- **Line.** Time UTC, device name, class, a summary of sizes, a ratio or a percentage, link `/backups`. No file name and no file
+  content is ever read into or printed by an alert.
+- **Watermark.** The route's `watermark_time` against `backup_deviation_record.detected_at`. Backups run once a day, so an alert
+  reaches the recipients on the router's next tick after the deviation is stored: that is the "daily, direct" requirement.
+- **Default.** Unlike V113 and V160, the route is seeded **enabled** (recipients fall back to the global setting); the watermark
+  starts at "now", so nothing historical is sent. With SMTP unconfigured the router sends nothing, as for every type.
+- **Retention is unchanged.** Only `size_anomaly` rows pin a last good backup; `fleet_large` and `firewall_logs` rows pin nothing,
+  are never resolved and are not read by any retention query. A backup that is already a `size_anomaly` raises no `fleet_large` row.
+- **Type set.** The check now allows ten types: the nine of §7 and `backup_size_anomaly`.

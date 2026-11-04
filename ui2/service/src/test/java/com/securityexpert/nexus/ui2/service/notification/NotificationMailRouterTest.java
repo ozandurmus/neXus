@@ -54,6 +54,19 @@ class NotificationMailRouterTest {
             } else if (sql.contains("from device_crash_alert a")) {
                 result = rows(create, new String[] { "alert_id", "process", "file_count", "newest_mtime", "job_id", "created_at", "device_name" },
                         new String[] { "alert-1", "fwk", "2", "1790000000", "job-5", AT, "FW-TANGO-04" });
+            } else if (sql.contains("from backup_deviation_record d")) {
+                // The three alert classes only, newer than the watermark, in time order (nothing else is digested).
+                assertTrue(sql.contains("d.deviation_class in ('size_anomaly', 'fleet_large', 'firewall_logs')"), sql);
+                assertTrue(sql.contains("d.detected_at > cast(? as timestamp)") && sql.contains("order by d.detected_at, d.deviation_id"), sql);
+                result = rows(create, new String[] { "deviation_id", "deviation_class", "summary", "detected_at", "device_name" },
+                        new String[] { "dev-1", "size_anomaly",
+                                "Backup size anomaly: grew 26.0x (1.1 GB -> 28.6 GB, median of the last 3 backups)", AT, "FW-TANGO-04" },
+                        new String[] { "dev-2", "fleet_large",
+                                "Backup size above fleet norm: 101.9x the check_point fleet median (280 MB -> 27.9 GB, median of 13 devices)",
+                                "2026-09-27 10:01:00", "FW-TANGO-05" },
+                        new String[] { "dev-3", "firewall_logs",
+                                "Backup contains 270.0 GiB of firewall logs (44.6% of the archive contents)",
+                                "2026-09-27 10:02:00", "FW-TANGO-06" });
             } else if (sql.contains("compliance_evaluation e")) {
                 result = rows(create, new String[] { "device_id", "evaluated_at", "result", "device_name" },
                         new String[] { "device-a", AT,
@@ -111,6 +124,24 @@ class NotificationMailRouterTest {
                 .state().get("c:device-a:CTRL-1"));
         assertEquals("unreachable", NotificationMailRouter.collect(dsl, "device_health", 10, FROM)
                 .state().get("h:device-a"));
+    }
+
+    @Test
+    void backupSizeAnomalyDigestsTheThreeAlertKindsWithSizesOnlyAndAdvancesTheWatermarkToTheNewestRow() throws Exception {
+        NotificationMailRouter.Batch batch = NotificationMailRouter.collect(fixture(), "backup_size_anomaly", 0,
+                Instant.parse("2026-09-26T00:00:00Z"));
+        assertEquals(3, batch.lines().size());
+        assertTrue(batch.lines().get(0).contains("FW-TANGO-04  size_anomaly: Backup size anomaly: grew 26.0x (1.1 GB -> 28.6 GB")
+                && batch.lines().get(0).endsWith("  /backups"), batch.lines().get(0));
+        assertTrue(batch.lines().get(1).contains("FW-TANGO-05  fleet_large: Backup size above fleet norm: 101.9x"),
+                batch.lines().get(1));
+        assertTrue(batch.lines().get(2).contains("FW-TANGO-06  firewall_logs: Backup contains 270.0 GiB of firewall logs "
+                + "(44.6% of the archive contents)  /backups"), batch.lines().get(2));
+        assertEquals(java.sql.Timestamp.valueOf("2026-09-27 10:02:00").toInstant(), batch.time(),
+                "the watermark is the newest alert row's detected_at");
+        assertEquals(0, batch.audit());
+        assertTrue(NotificationMailRouter.subject("backup_size_anomaly", 3).contains("Backup size deviations"));
+        assertEquals("backup_size_anomaly", NotificationRoute.TYPES.getLast());
     }
 
     @Test
