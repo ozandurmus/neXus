@@ -367,6 +367,7 @@ public final class InventoryCapabilityExecutor {
                 List<ParsedInterface> vsInterfaces;
                 CheckPointVsidCompositeOutputSplitter.Halves halves =
                         CheckPointVsidCompositeOutputSplitter.split(addrAndRouteCombined);
+                List<ParsedRoute> vsRoutes = CheckPointIpRouteParser.parse(halves.routeOutput());
                 if (clusterMember) {
                     // Same measurement as the physical VIP read above: cphaprob -a if only reports
                     // in a real terminal, so the per-VSID read starts on the interactive shell too.
@@ -384,14 +385,19 @@ public final class InventoryCapabilityExecutor {
                             statesByName.put(iface.name(), iface.state());
                         }
                     }
-                    vsInterfaces = toParsedInterfaces(CheckPointClusterVirtualInterfaceParser.parse(clusterIfOutput), statesByName);
+                    // V184 (path analysis A1, G5): cphaprob -a if carries no prefix; the same VS's own connected route
+                    // (already read in this composite) gives it, only when exactly one connected network on that
+                    // interface contains the address.
+                    vsInterfaces = applyUniqueConnectedRoutePrefixes(
+                            toParsedInterfaces(CheckPointClusterVirtualInterfaceParser.parse(clusterIfOutput), statesByName),
+                            vsRoutes);
                 } else {
                     vsInterfaces = CheckPointFwGetifsParser.parse(halves.addrOutput());
                 }
                 String vsHaOutput = execOutput(session, steps.get(2), preferInteractiveShell);
                 contexts.add(new InventoryContext(vsid,
                         withRuntimeGrade(toInventoryInterfaces(vsInterfaces)),
-                        toInventoryRoutes(CheckPointIpRouteParser.parse(halves.routeOutput()))));
+                        toInventoryRoutes(vsRoutes)));
                 String vsidRole = CheckPointHaStateParser.parse(vsHaOutput).role();
                 if ("ACTIVE".equalsIgnoreCase(vsidRole) || "STANDBY".equalsIgnoreCase(vsidRole)) {
                     haFacts.add(new InventoryHaFact(UUID.randomUUID().toString(), vsid, vsidRole, Optional.empty(),
@@ -1112,6 +1118,38 @@ public final class InventoryCapabilityExecutor {
      * prefix from a connected route on that same interface whose network contains the address --
      * real evidence from the same collection pass, never a default. Left bare when no such route
      * exists. */
+    /**
+     * V184 (G5): as {@link #applyConnectedRoutePrefixes}, but strict -- a bare IPv4 address takes a prefix only when
+     * exactly one distinct connected network on the same interface (by exact name) contains it; none, or more than one
+     * (an ambiguous shape), leaves the address bare. The address's role is never changed.
+     */
+    static List<ParsedInterface> applyUniqueConnectedRoutePrefixes(List<ParsedInterface> interfaces, List<ParsedRoute> routes) {
+        List<ParsedInterface> result = new ArrayList<>();
+        for (ParsedInterface iface : interfaces) {
+            List<ParsedAddress> addrs = new ArrayList<>();
+            for (ParsedAddress addr : iface.addresses()) {
+                if (addr.address().contains("/") || !InventoryAddress.FAMILY_IPV4.equals(addr.family())) {
+                    addrs.add(addr);
+                    continue;
+                }
+                List<String> candidates = routes.stream()
+                        .filter(r -> InventoryRoute.PROTOCOL_CONNECTED.equals(r.protocol()))
+                        .filter(r -> r.interfaceName().map(n -> n.equals(iface.name())).orElse(false))
+                        .map(ParsedRoute::destination)
+                        .filter(d -> d.matches("\\d{1,3}(?:\\.\\d{1,3}){3}/\\d{1,2}"))
+                        .filter(d -> ipv4InNetwork(addr.address(), d))
+                        .distinct()
+                        .toList();
+                addrs.add(candidates.size() == 1
+                        ? new ParsedAddress(addr.address() + candidates.get(0).substring(candidates.get(0).indexOf('/')),
+                                addr.family(), addr.role())
+                        : addr);
+            }
+            result.add(new ParsedInterface(iface.name(), iface.parent(), iface.kind(), iface.state(), addrs, iface.vlanId()));
+        }
+        return result;
+    }
+
     static List<ParsedInterface> applyConnectedRoutePrefixes(List<ParsedInterface> interfaces, List<ParsedRoute> routes) {
         List<ParsedInterface> result = new ArrayList<>();
         for (ParsedInterface iface : interfaces) {

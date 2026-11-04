@@ -136,14 +136,16 @@ class InventoryJobExecutorEndToEndTest {
         InventoryContext vsid2 = contextNamed(run, "2");
         assertEquals(1, vsid2.interfaces().size());
         assertEquals(1, vsid2.interfaces().get(0).addresses().size(), "this VS's own cluster-interface address only");
-        assertEquals("203.0.113.2", vsid2.interfaces().get(0).addresses().get(0).address());
+        assertEquals("203.0.113.2", vsid2.interfaces().get(0).addresses().get(0).address(),
+                "V184 (G5): no connected route in this VS contains the address, so it stays bare (UNKNOWN prefix)");
         assertEquals(InventoryAddress.ROLE_MEMBER, vsid2.interfaces().get(0).addresses().get(0).role());
         assertEquals(InventoryInterface.STATE_UP, vsid2.interfaces().get(0).state());
         assertEquals(1, vsid2.routes().size());
 
         InventoryContext vsid5 = contextNamed(run, "5");
         assertEquals(1, vsid5.interfaces().get(0).addresses().size(), "this VS's own cluster-interface address only");
-        assertEquals("198.51.100.2", vsid5.interfaces().get(0).addresses().get(0).address());
+        assertEquals("198.51.100.2/29", vsid5.interfaces().get(0).addresses().get(0).address(),
+                "V184 (G5): the prefix comes from this VS's own connected route on the same interface");
         assertEquals(InventoryAddress.ROLE_MEMBER, vsid5.interfaces().get(0).addresses().get(0).role());
         assertEquals(InventoryInterface.STATE_UP, vsid5.interfaces().get(0).state(),
                 "no cphaprob status row for this VS -- state still comes through via ip -4 addr show");
