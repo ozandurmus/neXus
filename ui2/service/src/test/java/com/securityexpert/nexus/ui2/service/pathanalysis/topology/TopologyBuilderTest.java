@@ -148,6 +148,30 @@ class TopologyBuilderTest {
         assertInstanceOf(TopologyGraph.NextHop.Unreachable.class, g.resolveNextHop(n3, Optional.empty(), "not-an-address"));
     }
 
+    /** G6 (PO approval 2026-11-04): a VS's `table all` read yields non-main rows; the VS node routes on main only and is flagged. */
+    @Test
+    void aVirtualSystemWithNonMainTableRowsIsFlaggedPbrPresentAndRoutesOnMainOnly() {
+        InventoryRoute pbr = new InventoryRoute("r-pbr", "0.0.0.0/0", Optional.of("192.0.2.9"), Optional.of("eth2"), "static",
+                Optional.of("vs2pbr"), Optional.of(true), Optional.empty(), Optional.empty(), Optional.of("IP"));
+        InventoryRoute localTable = new InventoryRoute("r-local", "192.0.2.1/32", Optional.empty(), Optional.of("eth1"),
+                "connected", Optional.of("local"), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
+        var run = new InventoryRun("run-vs", "dev-vs", "job-vs", Instant.parse("2026-11-04T06:00:00Z"), 1, List.of(
+                new InventoryContext("2", List.of(iface("eth1", addr("192.0.2.1/26", "member"))),
+                        List.of(connected("192.0.2.0/26", "eth1"), route("0.0.0.0/0", "192.0.2.62", "eth1"), pbr, localTable)),
+                new InventoryContext("3", List.of(iface("eth1", addr("198.51.100.1/26", "member"))),
+                        List.of(connected("198.51.100.0/26", "eth1")))),
+                List.of(new InventoryHaFact("ha-vs", "2", "ACTIVE", Optional.empty(), "cp_cphaprob_stat"),
+                        new InventoryHaFact("ha-vs3", "3", "ACTIVE", Optional.empty(), "cp_cphaprob_stat")));
+        TopologyGraph g = build(new TopologyInput.DeviceFacts("dev-vs", CP, Optional.of("FW-VSX-01"), Optional.empty(),
+                Optional.of(run)));
+        var vs2 = g.nodes().stream().filter(n -> n.context().equals("2")).findFirst().orElseThrow();
+        var vs3 = g.nodes().stream().filter(n -> n.context().equals("3")).findFirst().orElseThrow();
+        assertTrue(vs2.flags().contains(NodeFlag.PBR_PRESENT));
+        assertFalse(vs3.flags().contains(NodeFlag.PBR_PRESENT));
+        assertEquals(2, vs2.routes().size(), "main table only: the connected route and the default; vs2pbr and local excluded");
+        assertTrue(vs2.routes().stream().allMatch(r -> r.routeTable().isEmpty()));
+    }
+
     @Test
     void panInterfacesFollowTheirVirtualRouterAndConfigDerivedInterfacesAreFlagged() {
         var run = new InventoryRun("run-p", "dev-p", "job-p", Instant.parse("2026-11-04T06:00:00Z"), 1, List.of(

@@ -25,6 +25,11 @@ import com.securityexpert.nexus.ui2.worker.inventory.ParsedRoute;
  * local}/{@code broadcast}) is skipped, never treated as a route and never
  * fatal.
  *
+ * <p>G6 (PO approval 2026-11-04): the same parser reads a virtual system's {@code vsenv <VSID> && ip -4 route show
+ * table all}. A row of the main table carries no {@code table} token (route table empty); a row of any other table keeps
+ * its name or number from {@code table <name>}; {@code table local} rows are never routes. The topology builder reads the
+ * non-main names as {@code PBR_PRESENT}.</p>
+ *
  * <p>V184 (path analysis A1, gap G4). A {@code blackhole} row is next-hop kind {@link InventoryRoute#NEXT_HOP_DISCARD}
  * (it drops matching traffic), never a route that merely lacks a next hop. A {@code via} next hop is {@link
  * InventoryRoute#NEXT_HOP_IP}; a {@code proto kernel} row without {@code via} is {@link
@@ -169,6 +174,11 @@ public final class CheckPointIpRouteParser {
                         // scope/src and other trailing tokens carry no D-4 column.
                     }
                 }
+            }
+            // G6 (per-VS `table all`): the local table holds the host's own addresses, never a forwarding route. Its rows
+            // normally start with `local`/`broadcast` (dropped above); a row naming `table local` any other way is dropped too.
+            if (routeTable.filter("local"::equals).isPresent()) {
+                continue;
             }
             // `ip route show` lists the kernel routing table, whose rows are the forwarding entries (PO-delegated decision
             // 2026-11-04, PATH_ANALYSIS_DESIGN.md A4 note); a row flagged linkdown or dead is not proven to forward.

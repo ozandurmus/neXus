@@ -51,7 +51,8 @@ class InventoryReadPlanTest {
     @Test
     void checkPointVsidStepsEqualCf2Cf3Literally() {
         assertEquals(List.of(
-                "bash -lc 'vsenv 2 && fw getifs && ip -4 route show'",
+                "bash -lc 'vsenv 2 && ip -4 route show table all'",
+                "bash -lc 'vsenv 2 && fw getifs'",
                 "bash -lc 'vsenv 2 && cphaprob -a if'",
                 "bash -lc 'vsenv 2 && cphaprob stat'"),
                 InventoryReadPlan.checkPointVsidSteps("2"));
@@ -77,10 +78,10 @@ class InventoryReadPlanTest {
     }
 
     @Test
-    void checkPointClosedSetHasExactlySevenPhysicalReadsAndThreeVsidComposites() {
+    void checkPointClosedSetHasExactlySevenPhysicalReadsAndFourVsidReads() {
         // Six CF-3 reads plus the V148 link-layer read (PO 2026-10-15, gate entries 21/22).
         assertEquals(7, InventoryReadPlan.CHECK_POINT_PHYSICAL_READS.size());
-        assertEquals(3, InventoryReadPlan.checkPointVsidSteps("2").size());
+        assertEquals(4, InventoryReadPlan.checkPointVsidSteps("2").size());
     }
 
     /** 14E PF-2: the {@code &vsys=<id>} form is dropped; since 2026-10-21 four unscoped requests remain (type=version, no system info). */

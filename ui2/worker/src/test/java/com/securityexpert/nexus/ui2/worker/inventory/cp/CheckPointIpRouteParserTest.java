@@ -115,4 +115,49 @@ class CheckPointIpRouteParserTest {
         assertEquals(java.util.Optional.empty(), routes.get(2).active());
         assertEquals(java.util.Optional.of(true), routes.get(3).active());
     }
+
+    /**
+     * G6: synthetic virtual-system {@code table all} output. Main-table rows carry no table token; rows of other tables
+     * keep their name or number (also multipath and blackhole rows); local/broadcast rows and a stray {@code table
+     * local} row are dropped; an interleaved syslog line is skipped.
+     */
+    @Test
+    void perVirtualSystemTableAllKeepsNonMainTableNamesAndDropsLocalTable() {
+        List<ParsedRoute> routes = CheckPointIpRouteParser.parse(String.join("\n",
+                "default via 192.0.2.1 dev eth1 proto 7 metric 10",
+                "192.0.2.0/24 dev eth1 proto kernel scope link src 192.0.2.5",
+                "default via 198.51.100.1 dev eth2 table vs2pbr proto 7",
+                "203.0.113.0/24 dev eth3 table 100 proto kernel scope link src 203.0.113.5",
+                "Nov  4 10:00:00 gw kernel: something unrelated",
+                "198.51.100.0/24 table 200",
+                "    nexthop via 192.0.2.7 dev eth1 weight 1",
+                "    nexthop via 192.0.2.8 dev eth1 weight 1",
+                "blackhole 10.255.0.0/16 table vs2pbr proto 7",
+                "local 192.0.2.5 dev eth1 table local proto kernel scope host src 192.0.2.5",
+                "broadcast 192.0.2.255 dev eth1 table local proto kernel scope link src 192.0.2.5",
+                "192.0.2.77 dev eth1 table local proto kernel",
+                "    nexthop via 192.0.2.9 dev eth1 weight 1"));
+
+        assertEquals(7, routes.size(), routes.toString());
+        assertEquals(Optional.empty(), routes.get(0).routeTable());
+        assertEquals(Optional.empty(), routes.get(1).routeTable());
+        assertEquals(Optional.of("vs2pbr"), routes.get(2).routeTable());
+        assertEquals("0.0.0.0/0", routes.get(2).destination());
+        assertEquals(Optional.of("198.51.100.1"), routes.get(2).nextHop());
+        assertEquals(Optional.of("100"), routes.get(3).routeTable());
+        assertEquals(Optional.of("200"), routes.get(4).routeTable());
+        assertEquals(Optional.of("200"), routes.get(5).routeTable());
+        assertEquals(Optional.of(true), routes.get(4).ecmp());
+        assertEquals(Optional.of("vs2pbr"), routes.get(6).routeTable());
+        assertEquals(Optional.of(InventoryRoute.NEXT_HOP_DISCARD), routes.get(6).nextHopKind());
+        assertEquals(List.of(), routes.stream().filter(r -> r.routeTable().filter("local"::equals).isPresent()).toList());
+    }
+
+    @Test
+    void perVirtualSystemMainOnlyOutputHasNoTableNames() {
+        List<ParsedRoute> routes = CheckPointIpRouteParser.parse(
+                "default via 192.0.2.1 dev eth1 proto 7\n192.0.2.0/24 dev eth1 proto kernel scope link src 192.0.2.5\n");
+        assertEquals(2, routes.size());
+        assertEquals(List.of(Optional.empty(), Optional.empty()), routes.stream().map(ParsedRoute::routeTable).toList());
+    }
 }

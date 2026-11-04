@@ -34,7 +34,6 @@ import com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointHaStateParser;
 import com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointFwGetifsParser;
 import com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointIpAddrParser;
 import com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointIpRouteParser;
-import com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointVsidCompositeOutputSplitter;
 import com.securityexpert.nexus.ui2.worker.inventory.cp.CheckPointVsxStatParser;
 import com.securityexpert.nexus.ui2.worker.inventory.pan.PaloAltoSystemInfoParser;
 import com.securityexpert.nexus.ui2.worker.inventory.pan.PaloAltoTypeVersionParser;
@@ -60,8 +59,8 @@ import com.securityexpert.nexus.ui2.worker.transport.xmlapi.PanCredentialResolve
  * five physical reads then run through {@link
  * InventoryReadPlan#checkPointPhysicalCommand}, wrapped on a VSX host and
  * bare otherwise (CF-2); per-VSID reads run last, one VSID at a time
- * (VS0 never re-entered), each as the three {@link
- * InventoryReadPlan#checkPointVsidSteps} composites.</p>
+ * (VS0 never re-entered), each as the four {@link
+ * InventoryReadPlan#checkPointVsidSteps} calls.</p>
  *
  * <p>Identity mismatch (13F ID-M1..M4) reuses {@link
  * IdentityMismatchEvaluator} exactly as the confirm does: {@code
@@ -363,15 +362,15 @@ public final class InventoryCapabilityExecutor {
                 // member. A standalone (non-clustered) VSX gateway has no such distinction -- cphaprob
                 // reports no cluster there -- so it keeps using "fw getifs" as measured earlier.
                 List<String> steps = InventoryReadPlan.checkPointVsidSteps(vsid);
-                String addrAndRouteCombined = execOutput(session, steps.get(0), preferInteractiveShell);
+                // G6 (PO approval 2026-11-04): every routing table of the virtual system. Rows of a non-main table keep
+                // their table name (CheckPointIpRouteParser), table local rows are never routes.
+                String vsRouteOutput = execOutput(session, steps.get(InventoryReadPlan.VSID_ROUTES), preferInteractiveShell);
                 List<ParsedInterface> vsInterfaces;
-                CheckPointVsidCompositeOutputSplitter.Halves halves =
-                        CheckPointVsidCompositeOutputSplitter.split(addrAndRouteCombined);
-                List<ParsedRoute> vsRoutes = CheckPointIpRouteParser.parse(halves.routeOutput());
+                List<ParsedRoute> vsRoutes = CheckPointIpRouteParser.parse(vsRouteOutput);
                 if (clusterMember) {
                     // Same measurement as the physical VIP read above: cphaprob -a if only reports
                     // in a real terminal, so the per-VSID read starts on the interactive shell too.
-                    String clusterIfOutput = execOutput(session, steps.get(1), true);
+                    String clusterIfOutput = execOutput(session, steps.get(InventoryReadPlan.VSID_CLUSTER_INTERFACES), true);
                     // cphaprob's own status table only lists a "Required interfaces" subset (Product
                     // Owner measured live, 2026-09-21); "ip -4 addr show" still carries a real
                     // up/down flag for every interface, so it is read a second time here for that
@@ -392,9 +391,12 @@ public final class InventoryCapabilityExecutor {
                             toParsedInterfaces(CheckPointClusterVirtualInterfaceParser.parse(clusterIfOutput), statesByName),
                             vsRoutes);
                 } else {
-                    vsInterfaces = CheckPointFwGetifsParser.parse(halves.addrOutput());
+                    // fw getifs is read only here: on a cluster member its output was never used (the cphaprob read above
+                    // replaces it), so it is not issued there.
+                    vsInterfaces = CheckPointFwGetifsParser.parse(
+                            execOutput(session, steps.get(InventoryReadPlan.VSID_INTERFACES), preferInteractiveShell));
                 }
-                String vsHaOutput = execOutput(session, steps.get(2), preferInteractiveShell);
+                String vsHaOutput = execOutput(session, steps.get(InventoryReadPlan.VSID_HA_STATE), preferInteractiveShell);
                 contexts.add(new InventoryContext(vsid,
                         withRuntimeGrade(toInventoryInterfaces(vsInterfaces)),
                         toInventoryRoutes(vsRoutes)));

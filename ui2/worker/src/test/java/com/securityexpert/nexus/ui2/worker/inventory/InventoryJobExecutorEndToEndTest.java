@@ -60,14 +60,16 @@ class InventoryJobExecutorEndToEndTest {
                         "Virtual cluster interfaces: 1\neth0        192.0.2.1\n"),
                 Map.entry(vsenvZero(InventoryReadPlan.CP_IP_ADDR_SHOW_STATE_ONLY),
                         "1: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 state UP\n    inet 198.51.100.99/24 scope global eth0\n"),
-                Map.entry("bash -lc 'vsenv 2 && fw getifs && ip -4 route show'",
-                        "default via 203.0.113.1 dev eth0 proto 7\n"),
+                Map.entry("bash -lc 'vsenv 2 && ip -4 route show table all'",
+                        "default via 203.0.113.1 dev eth0 proto 7\n"
+                                + "default via 203.0.113.9 dev eth0 table vs2pbr proto 7\n"
+                                + "local 203.0.113.2 dev eth0 table local proto kernel scope host src 203.0.113.2\n"),
                 Map.entry("bash -lc 'vsenv 2 && cphaprob -a if'",
                         "Interface Name:  Status:\neth0        UP\n\nVirtual cluster interfaces: 1\neth0        203.0.113.2\n"),
                 Map.entry("bash -lc 'vsenv 2 && ip -4 addr show'",
                         "1: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 state UP\n    inet 198.51.100.99/24 scope global eth0\n"),
                 Map.entry("bash -lc 'vsenv 2 && cphaprob stat'", "1 (local) 203.0.113.2 100% ACTIVE gw-a\n"),
-                Map.entry("bash -lc 'vsenv 5 && fw getifs && ip -4 route show'",
+                Map.entry("bash -lc 'vsenv 5 && ip -4 route show table all'",
                         "198.51.100.0/29 dev eth0 proto kernel scope link src 198.51.100.2\n"),
                 Map.entry("bash -lc 'vsenv 5 && cphaprob -a if'",
                         "Virtual cluster interfaces: 1\neth0        198.51.100.2\n"),
@@ -140,7 +142,9 @@ class InventoryJobExecutorEndToEndTest {
                 "V184 (G5): no connected route in this VS contains the address, so it stays bare (UNKNOWN prefix)");
         assertEquals(InventoryAddress.ROLE_MEMBER, vsid2.interfaces().get(0).addresses().get(0).role());
         assertEquals(InventoryInterface.STATE_UP, vsid2.interfaces().get(0).state());
-        assertEquals(1, vsid2.routes().size());
+        assertEquals(2, vsid2.routes().size(), "G6: the main default and the vs2pbr default; the local-table row is dropped");
+        assertEquals(List.of(Optional.<String>empty(), Optional.of("vs2pbr")),
+                vsid2.routes().stream().map(r -> r.routeTable()).toList());
 
         InventoryContext vsid5 = contextNamed(run, "5");
         assertEquals(1, vsid5.interfaces().get(0).addresses().size(), "this VS's own cluster-interface address only");
@@ -212,9 +216,9 @@ class InventoryJobExecutorEndToEndTest {
                 Map.entry(vsenvZero(InventoryReadPlan.CP_IP_ROUTE_SHOW), "default via 192.0.2.1 dev eth0 proto 7\n"),
                 Map.entry(vsenvZero(InventoryReadPlan.CP_CPHAPROB_STAT), "Cluster is not enabled\n"),
                 Map.entry(vsenvZeroFaultTolerant(InventoryReadPlan.CP_CPHAPROB_CLUSTER_IF), ""),
-                Map.entry("bash -lc 'vsenv 3 && fw getifs && ip -4 route show'",
-                        "localhost eth1 203.0.113.5 255.255.255.0\n"
-                                + "default via 203.0.113.1 dev eth1 proto 7\n"),
+                Map.entry("bash -lc 'vsenv 3 && fw getifs'", "localhost eth1 203.0.113.5 255.255.255.0\n"),
+                Map.entry("bash -lc 'vsenv 3 && ip -4 route show table all'",
+                        "default via 203.0.113.1 dev eth1 proto 7\n"),
                 Map.entry("bash -lc 'vsenv 3 && cphaprob stat'", "Cluster is not enabled\n"));
 
         ScriptedCheckPointInventoryTransport transport = new ScriptedCheckPointInventoryTransport(outputByCommand);
@@ -259,9 +263,9 @@ class InventoryJobExecutorEndToEndTest {
                 Map.entry(vsenvZero(InventoryReadPlan.CP_IP_ROUTE_SHOW), "default via 192.0.2.1 dev eth0 proto 7\n"),
                 Map.entry(vsenvZero(InventoryReadPlan.CP_CPHAPROB_STAT), "Cluster is not enabled\n"),
                 Map.entry(vsenvZeroFaultTolerant(InventoryReadPlan.CP_CPHAPROB_CLUSTER_IF), ""),
-                Map.entry("bash -lc 'vsenv 3 && fw getifs && ip -4 route show'",
-                        "localhost eth1 203.0.113.5 255.255.255.0\n"
-                                + "default via 203.0.113.1 dev eth1 proto 7\n"),
+                Map.entry("bash -lc 'vsenv 3 && fw getifs'", "localhost eth1 203.0.113.5 255.255.255.0\n"),
+                Map.entry("bash -lc 'vsenv 3 && ip -4 route show table all'",
+                        "default via 203.0.113.1 dev eth1 proto 7\n"),
                 Map.entry("bash -lc 'vsenv 3 && cphaprob stat'", "Cluster is not enabled\n"));
 
         ScriptedCheckPointInventoryTransport transport = new ScriptedCheckPointInventoryTransport(outputByCommand);
@@ -306,9 +310,9 @@ class InventoryJobExecutorEndToEndTest {
                 Map.entry(vsenvZero(InventoryReadPlan.CP_IP_ROUTE_SHOW), "default via 192.0.2.1 dev eth0 proto 7\n"),
                 Map.entry(vsenvZero(InventoryReadPlan.CP_CPHAPROB_STAT), "Cluster is not enabled\n"),
                 Map.entry(vsenvZeroFaultTolerant(InventoryReadPlan.CP_CPHAPROB_CLUSTER_IF), ""),
-                Map.entry("bash -lc 'vsenv 3 && fw getifs && ip -4 route show'",
-                        "localhost eth1 203.0.113.5 255.255.255.0\n"
-                                + "default via 203.0.113.1 dev eth1 proto 7\n"),
+                Map.entry("bash -lc 'vsenv 3 && fw getifs'", "localhost eth1 203.0.113.5 255.255.255.0\n"),
+                Map.entry("bash -lc 'vsenv 3 && ip -4 route show table all'",
+                        "default via 203.0.113.1 dev eth1 proto 7\n"),
                 Map.entry("bash -lc 'vsenv 3 && cphaprob stat'", "Cluster is not enabled\n"));
 
         ScriptedCheckPointInventoryTransport transport = new ScriptedCheckPointInventoryTransport(outputByCommand);

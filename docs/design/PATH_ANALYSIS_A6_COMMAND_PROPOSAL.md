@@ -21,3 +21,12 @@ Check Point access-rule matching has no read-only CLI matcher in the repository'
 comparing neXus verdicts with the PO's knowledge of the sampled flows.
 
 PO answer (verbatim): "1-5 onaylı devam".
+
+## Implementation record
+
+- Row 1 (G6) implemented on `feat/path-g6-vs-table-all-1104`: gate rows `cp_inventory_vsid_ip_route_show_table_all` (the approved
+  literal) and `cp_inventory_vsid_fw_getifs` (the interface half of the old `fw getifs && ip -4 route show` composite, now its
+  own call because the composite cannot carry the approved route literal), seeded by V187 and mirrored in
+  `gate_registry_fixture.yaml`; `CP_INVENTORY_COMMAND_GATE_ENTRIES.md` entries 23-24. The old composite row stays SIGNED_OFF as
+  history. V187 must be dry-run (BEGIN/ROLLBACK) on the live ui2 database before rollout.
+- Rows 2-5 (A6) are not implemented by this change.
