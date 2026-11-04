@@ -74,7 +74,39 @@ public class SubnetPreservingIpMasker {
             return ipOrCidr;
         }
         String trimmed = ipOrCidr.trim();
-        return cache.computeIfAbsent(trimmed, this::computeMaskedIp);
+        return cache.computeIfAbsent(trimmed, value -> computeMaskedIp(value, true));
+    }
+
+    /**
+     * What {@link #mask} would answer for this value now, without any side effect: an already handed-out pseudonym is
+     * returned as it is; otherwise the pseudonym is computed from the subnets registered so far and neither cached nor
+     * registered. Path analysis (PO record 2026-11-03 D-3, condition 4) resolves aiview's masked query values with it,
+     * so a resolution never warms a cache another viewer would see.
+     */
+    public String peek(String ipOrCidr) {
+        if (ipOrCidr == null || ipOrCidr.isBlank()) {
+            return ipOrCidr;
+        }
+        String trimmed = ipOrCidr.trim();
+        String handedOut = cache.get(trimmed);
+        return handedOut != null ? handedOut : computeMaskedIp(trimmed, false);
+    }
+
+    /**
+     * The pseudonym of a network written {@code a.b.c.d/len} with its host bits clear, computed purely: nothing is
+     * cached and the network is not registered. Equals {@link #mask} of the same text (the subnet keyed hash depends only
+     * on the network and its length).
+     */
+    public String maskNetworkWithoutSideEffects(String cidr) {
+        if (cidr == null || cidr.isBlank()) {
+            return cidr;
+        }
+        return computeMaskedIp(cidr.trim(), false);
+    }
+
+    /** The subnets registered so far ({@code a.b.c.d/len}), a copy; reading it changes nothing. */
+    public java.util.List<String> registeredSubnets() {
+        return java.util.List.copyOf(registeredSubnets.keySet());
     }
 
     /**
@@ -95,7 +127,7 @@ public class SubnetPreservingIpMasker {
         return sb.toString();
     }
 
-    private String computeMaskedIp(String trimmed) {
+    private String computeMaskedIp(String trimmed, boolean register) {
         Matcher matcher = IPV4_PATTERN.matcher(trimmed);
         if (!matcher.matches()) {
             return "[REDACTED_IP]";
@@ -117,7 +149,9 @@ public class SubnetPreservingIpMasker {
             if (prefixLen < 0 || prefixLen > 32) {
                 return "[REDACTED_IP]";
             }
-            registerSubnet(trimmed);
+            if (register) {
+                registerSubnet(trimmed);
+            }
         } else {
             prefixLen = 24; // default unless matched by LPM
         }

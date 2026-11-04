@@ -330,6 +330,17 @@ public class TopologyNamePseudonymizer {
 
     private final Map<String, String> policyCache = new ConcurrentHashMap<>();
 
+    /**
+     * The label {@link #maskPolicyName} has already handed out in this process for this value, or empty; never claims a
+     * registry entry and never computes a new label. Path analysis (PO record 2026-11-03 D-3, condition 4) compares
+     * aiview's masked ingress interface with it, so a resolution has no side effect.
+     */
+    public java.util.Optional<String> peekPolicyName(String namespace, String value) {
+        if (namespace == null || value == null || value.isEmpty()) return java.util.Optional.empty();
+        byte[] hash = hmacSha256("POLICY:" + namespace.length() + ":" + namespace + value);
+        return java.util.Optional.ofNullable(policyCache.get("policy:" + java.util.HexFormat.of().formatHex(hash, 0, 16)));
+    }
+
     /** {@code SN-} + 10 hex: the single implementation is {@link IdentityTokens#serial}, shared with the Data Sanitizer. */
     public String maskSerial(String rawSerial) {
         return identityTokens.serial(rawSerial);
