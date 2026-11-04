@@ -205,6 +205,32 @@ public class PolicyCollectionRepository {
             source, domain, type, cutoff.toString()).isEmpty());
     }
 
+    /**
+     * One stored domain/type inventory: the published manifest's collection time and a reader over its full document.
+     * The reader fetches one bounded chunk at a time and throws (POLICY_CHUNK_MISSING / POLICY_CHUNK_INVALID as an
+     * IllegalStateException or IOException) when the chunk set is incomplete; callers must then discard what they read.
+     */
+    public record InventoryDocument(String objectType, java.time.Instant collectedAt, java.io.Reader document) {}
+
+    /**
+     * The newest published inventory of every object type of one domain (the manifest row only ever moves to a strictly
+     * newer collected_at, and only after all its chunks are written). Each reader is closed after {@code consume} returns.
+     */
+    public void readInventories(String source, String domain, java.util.function.Consumer<InventoryDocument> consume) {
+        var rows = tx.inTransaction(db -> db.fetch("select object_type, collected_at, snapshot::text as snapshot, chunk_generation, chunk_count "
+            + "from cp_policy_object_inventory where source_id = {0} and domain_ref = {1} order by object_type", source, domain));
+        for (var row : rows) {
+            String type = row.get("object_type", String.class);
+            String generation = row.get("chunk_generation", String.class);
+            var at = row.get("collected_at", java.time.OffsetDateTime.class);
+            try (var reader = generation == null ? new java.io.StringReader(row.get("snapshot", String.class))
+                    : new PolicyChunkStore(tx).reader(source, domain, type, "INVENTORY",
+                        new PolicyChunkStore.Manifest(generation, row.get("chunk_count", Integer.class)))) {
+                consume.accept(new InventoryDocument(type, at == null ? null : at.toInstant(), reader));
+            } catch (java.io.IOException invalid) { throw new IllegalStateException("POLICY_CHUNK_INVALID"); }
+        }
+    }
+
     /** Metadata is small; object arrays are streamed into immutable bounded chunks. */
     public void saveInventory(String source, String domain, String type, String at, String snapshot, String actor) {
         PolicyChunkStore.requireBounded(PolicyJsonWrite.bytes(at));

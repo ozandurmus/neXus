@@ -96,11 +96,29 @@ public record PolicySnapshot(Metadata metadata, List<Section> sections, Map<Stri
         }).toList())).toList();
         return changed[0] ? new PolicySnapshot(metadata, out, objects, failures) : this;
     }
+    /**
+     * {@code inventoryProvenance} is null when the snapshot was mapped without an object inventory (Palo Alto, snapshots
+     * stored before 2026-11-04, offline fixtures); otherwise it says how its Check Point objects were completed.
+     */
     public record Metadata(String id, String sourceId, String sourceName, String vendor,
             String containerId, String containerName, String name, String collectedAt,
-            String artefactRef, List<Target> targets) {
+            String artefactRef, List<Target> targets, InventoryProvenance inventoryProvenance) {
+        public Metadata(String id, String sourceId, String sourceName, String vendor, String containerId, String containerName,
+                String name, String collectedAt, String artefactRef, List<Target> targets) {
+            this(id, sourceId, sourceName, vendor, containerId, containerName, name, collectedAt, artefactRef, targets, null);
+        }
         public Metadata { targets = List.copyOf(targets); }
+        public Metadata withInventoryProvenance(InventoryProvenance provenance) {
+            return new Metadata(id, sourceId, sourceName, vendor, containerId, containerName, name, collectedAt, artefactRef, targets, provenance);
+        }
     }
+    /**
+     * Check Point objects that the rulebase objects-dictionary did not carry (group members, at any depth) and that were
+     * resolved by exact uid from the stored object inventory of the same management domain, or of the MDS Global domain:
+     * how many snapshot objects came from there, and the oldest inventory collection time used (null when none). The
+     * inventory is a separate, earlier management read than the rulebase, so its age is part of the evidence.
+     */
+    public record InventoryProvenance(int resolvedObjects, String oldestCollectedAt) {}
     /** Enrolled device IDs when matched; otherwise scoped opaque management-target references, never serial-derived joins. */
     public record Target(String deviceId, String name, String context, String syncStatus) {}
     public record Section(String id, String name, String source, String parentRuleId, List<Rule> rules) {

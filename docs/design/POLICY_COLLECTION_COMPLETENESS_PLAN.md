@@ -121,6 +121,25 @@ cihaz ayarını değiştirmiyor; hepsi okuma.
 | Change marker | per-domain `show-last-published-session` (uid + publish-time). An equal signal reuses the previous complete domain run, **in CHANGED_ONLY mode only** | `CpDomainReuse.java:38-86`; `CheckPointPolicyCollector.java:218-233` |
 | Concurrency | up to 4 MDS sessions (`ui2.policy.cp.max-sessions`) | `PO_DECISION_RECORD_2026_10_02_CP_POLICY_PARALLEL_SESSIONS.md:44-48`; `CheckPointPolicyCollector.java:156` |
 
+> **Amendment 2026-11-04 (row "Objects inside package snapshots").** The row above records the state before this
+> change; it is kept as written. The worker now resolves, at mapping time, every reference the rulebase
+> `objects-dictionary` does not carry (rule cells and group members at any depth) from the stored object inventory of
+> the same domain, then from the MDS Global domain's inventory when the run's `show-domains` listing names one (name
+> `Global`, the same recognition the inventory reads already use). No new device command. Rules:
+> exact uid match only; the same parse path as dictionary objects (`CheckPointPolicyMapper.object`, value fields
+> `VALUE_FIELDS`); unlisted native types stay UNSUPPORTED; only an object-type document whose published manifest is a
+> complete listing (`status` RESOLVED), names the same source and domain and reads back through its whole chunk set is
+> used, otherwise none of that type is (fail closed); `unused-objects` is never a source. **Staleness bound:
+> `CheckPointPolicyMapper.INVENTORY_MAX_AGE` = 48 h** relative to the snapshot's own `collectedAt` (the inventory is
+> refreshed at most every 24 h; 48 h tolerates one missed refresh). An older inventory is not used and the reference
+> stays UNRESOLVED. Each snapshot's metadata records `inventoryProvenance` = {`resolvedObjects`, `oldestCollectedAt`};
+> no per-object raw data. The inventory is read lazily per domain on the first dictionary miss, once per run, as a
+> compact projection bounded to `CpInventoryObjects.MAX_RETAINED_OBJECTS` objects across domains (least recently used
+> domain dropped beyond that). Kill switch: `UI2_POLICY_CP_RESOLVE_FROM_INVENTORY=false`. Inventory reads run after the
+> rulebase pages in the same job, so a run maps against the inventory published before it; stored snapshots are not
+> migrated, the next full read of a domain stores resolved snapshots (a CHANGED_ONLY reuse republishes the old ones).
+> Evidence grade unchanged: the inventory is management intent like the dictionary, read at a different time.
+
 ### 2.4 History today
 
 `policy_rule_history` (`V120`, `V122`, `V132`, `V150`) records added/removed/modified rules on every snapshot

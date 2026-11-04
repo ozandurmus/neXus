@@ -211,6 +211,8 @@ public final class CheckPointPolicyCollector {
         try {
             var domains = read(session, MgmtCliCommands.domainList(), -1, deadline, lease);
             completeList(domains, "objects");
+            CpInventoryObjects inventory = CpInventoryObjects.enabled() ? new CpInventoryObjects(repository, request.sourceId()) : null;
+            if (inventory != null) inventory.domains(domains);
             PolicyCollectionTrace.domains((int) java.util.stream.StreamSupport.stream(domains.path("objects").spliterator(), false)
                 .filter(d -> request.domainRef().isEmpty() || ref(request.sourceId(), required(d, "uid")).equals(request.domainRef())).count());
             List<PolicySnapshot> snapshots = new ArrayList<>();
@@ -279,7 +281,7 @@ public final class CheckPointPolicyCollector {
                     NameContext names = NameContext.of(domainName, policy, packages);
                     List<JsonNode> access = access(session, domainName, policy.path("access-layers"), deadline, lease, failures,
                         completed -> {
-                            var checkpoint = snapshot(metadata, completed, List.of(), failures);
+                            var checkpoint = snapshot(metadata, completed, List.of(), failures, lookup(inventory, container));
                             // Validate each layer even when its checkpoint write is throttled.
                             if (nanoTime.getAsLong() - lastCheckpoint[0] < checkpointInterval) return;
                             checkPublication(deadline, lease);
@@ -298,10 +300,10 @@ public final class CheckPointPolicyCollector {
                         failures.add(natFailure(natRef, incomplete, names));
                     }
                     PolicySnapshot snapshot;
-                    try { snapshot = snapshot(metadata, access, nat, failures); }
+                    try { snapshot = snapshot(metadata, access, nat, failures, lookup(inventory, container)); }
                     catch (IllegalArgumentException invalid) {
                         failures.add(new CollectionFailure(natRef, PolicyCollectionTrace.reason(invalid), "NAT", 0));
-                        snapshot = snapshot(metadata, access, List.of(), failures);
+                        snapshot = snapshot(metadata, access, List.of(), failures, lookup(inventory, container));
                     }
                     checkPublication(deadline, lease);
                     domainPublish.accept(snapshot);
@@ -334,12 +336,28 @@ public final class CheckPointPolicyCollector {
     TransportSession openSession(DiscoveryRun run, long deadline, BooleanSupplier lease) { return connect(run, deadline, lease); }
 
     static PolicySnapshot snapshot(Metadata metadata, List<JsonNode> access, List<JsonNode> nat, List<CollectionFailure> failures) {
+        return snapshot(metadata, access, nat, failures, null);
+    }
+
+    /**
+     * As above; with an inventory lookup, references the rulebase dictionary did not carry are resolved from the stored
+     * object inventory of the policy's domain (or the MDS Global domain) and counted in the metadata's provenance.
+     */
+    static PolicySnapshot snapshot(Metadata metadata, List<JsonNode> access, List<JsonNode> nat, List<CollectionFailure> failures,
+            CheckPointPolicyMapper.InventoryLookup inventory) {
         // Refresh the publication timestamp so each completed layer can replace its earlier checkpoint.
         var updated = new Metadata(metadata.id(), metadata.sourceId(), metadata.sourceName(), metadata.vendor(), metadata.containerId(),
             metadata.containerName(), metadata.name(), Instant.now().toString(), metadata.artefactRef(), metadata.targets());
-        var mapped = new CheckPointPolicyMapper().map(updated, access, nat);
-        return new PolicySnapshot(updated, mapped.sections(), mapped.objects(), failures);
+        var mapped = new CheckPointPolicyMapper().map(updated, access, nat, inventory);
+        return new PolicySnapshot(mapped.metadata(), mapped.sections(), mapped.objects(), failures);
     }
+
+    static CheckPointPolicyMapper.InventoryLookup lookup(CpInventoryObjects inventory, String container) {
+        return inventory == null ? null : inventory.forDomain(container);
+    }
+
+    /** The MDS Global domain as the show-domains listing names it; the one recognition used by every inventory decision. */
+    static boolean isGlobalDomain(String domainName) { return domainName != null && domainName.equalsIgnoreCase("Global"); }
 
     /** Assemble the complete listing before collecting any package in this domain. */
     private List<JsonNode> packagePages(TransportSession session, String domain, long deadline, BooleanSupplier lease) {
@@ -395,7 +413,7 @@ public final class CheckPointPolicyCollector {
             long deadline, BooleanSupplier lease) {
         for (String type : CpPolicyGates.OBJECT_TYPES) {
             if (reuseObjects(source, container, type)) continue;
-            if (!collectObjectsEnabled() || type.equals("gateways-and-servers") && domain.equalsIgnoreCase("Global")) {
+            if (!collectObjectsEnabled() || type.equals("gateways-and-servers") && isGlobalDomain(domain)) {
                 storeObjects(source, container, type, List.of(), 0, 0, "UNSUPPORTED", "COLLECTION_SKIPPED", deadline, lease);
                 continue;
             }

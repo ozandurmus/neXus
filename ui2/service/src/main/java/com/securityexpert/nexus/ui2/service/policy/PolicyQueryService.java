@@ -75,7 +75,7 @@ public final class PolicyQueryService {
         var targets = firewallTargets(metadata);
         return name.equals(metadata.sourceName()) && targets == metadata.targets() ? metadata : new Metadata(metadata.id(), metadata.sourceId(), name,
             metadata.vendor(), metadata.containerId(), metadata.containerName(), metadata.name(), metadata.collectedAt(),
-            metadata.artefactRef(), targets);
+            metadata.artefactRef(), targets, metadata.inventoryProvenance());
     }
 
     /** A PAN policy's firewall targets named by hostname, not by the serial Panorama lists them under. */
