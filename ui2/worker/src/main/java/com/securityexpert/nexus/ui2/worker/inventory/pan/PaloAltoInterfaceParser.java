@@ -135,8 +135,10 @@ public final class PaloAltoInterfaceParser {
             }
         }
 
+        // V184: the fwd leaf is only read in its "vr:" (legacy virtual router) form, so every recorded router is a
+        // legacy-engine virtual router: the routing context is that same map.
         return new PaloAltoInterfaceParseResult(byVsys, physicalPorts, interfaceNameToVsys, interfaceNameToVirtualRouter,
-                interfaceNameToZone, portNameToMac);
+                interfaceNameToZone, portNameToMac, interfaceNameToVirtualRouter);
     }
 
     private static List<ParsedAddress> primaryAndSecondaryAddresses(String entryBody) {

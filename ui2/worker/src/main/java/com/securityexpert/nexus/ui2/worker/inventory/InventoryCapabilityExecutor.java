@@ -341,7 +341,7 @@ public final class InventoryCapabilityExecutor {
 
             List<InventoryContext> contexts = new ArrayList<>();
             contexts.add(new InventoryContext(InventoryContext.PHYSICAL,
-                    withMacAddresses(toInventoryInterfaces(applyInterfaceStates(mergeVirtualAddresses(physicalInterfaces, physicalVips), physicalStates)), macByName),
+                    withRuntimeGrade(withMacAddresses(toInventoryInterfaces(applyInterfaceStates(mergeVirtualAddresses(physicalInterfaces, physicalVips), physicalStates)), macByName)),
                     toInventoryRoutes(physicalRoutes)));
 
             CheckPointHaStateParser.HaState haState = CheckPointHaStateParser.parse(haStatOutput);
@@ -390,7 +390,7 @@ public final class InventoryCapabilityExecutor {
                 }
                 String vsHaOutput = execOutput(session, steps.get(2), preferInteractiveShell);
                 contexts.add(new InventoryContext(vsid,
-                        toInventoryInterfaces(vsInterfaces),
+                        withRuntimeGrade(toInventoryInterfaces(vsInterfaces)),
                         toInventoryRoutes(CheckPointIpRouteParser.parse(halves.routeOutput()))));
                 String vsidRole = CheckPointHaStateParser.parse(vsHaOutput).role();
                 if ("ACTIVE".equalsIgnoreCase(vsidRole) || "STANDBY".equalsIgnoreCase(vsidRole)) {
@@ -618,13 +618,17 @@ public final class InventoryCapabilityExecutor {
             }
         }
 
+        // V184 (G2): each interface's legacy virtual router and the grade of the read it came from.
+        String evidenceGrade = configured != null ? InventoryInterface.GRADE_CONFIG_DERIVED : InventoryInterface.GRADE_RUNTIME;
         List<InventoryContext> contexts = new ArrayList<>();
         contexts.add(new InventoryContext(InventoryContext.PHYSICAL,
-                withPanLinkFacts(toInventoryInterfaces(physicalInterfaces), parsedInterfaces),
+                withPanRouting(withPanLinkFacts(toInventoryInterfaces(physicalInterfaces), parsedInterfaces), parsedInterfaces,
+                        evidenceGrade),
                 toInventoryRoutes(routesByContext.getOrDefault(InventoryContext.PHYSICAL, List.of()))));
         for (String vsys : vsysIds) {
             contexts.add(new InventoryContext(vsys,
-                    withPanLinkFacts(toInventoryInterfaces(parsedInterfaces.interfacesByVsys().getOrDefault(vsys, List.of())), parsedInterfaces),
+                    withPanRouting(withPanLinkFacts(toInventoryInterfaces(parsedInterfaces.interfacesByVsys().getOrDefault(vsys, List.of())),
+                            parsedInterfaces), parsedInterfaces, evidenceGrade),
                     toInventoryRoutes(routesByContext.getOrDefault(vsys, List.of()))));
         }
 
@@ -748,7 +752,7 @@ public final class InventoryCapabilityExecutor {
         parsed.interfacesByVsys().forEach((vsys, list) -> byVsys.put(vsys, list.stream().map(apply).toList()));
         return new PaloAltoInterfaceParseResult(byVsys, parsed.physicalPorts().stream().map(apply).toList(),
                 parsed.interfaceNameToVsys(), parsed.interfaceNameToVirtualRouter(), parsed.interfaceNameToZone(),
-                parsed.portNameToMac());
+                parsed.portNameToMac(), parsed.interfaceNameToRoutingContext());
     }
 
     private static final java.util.regex.Pattern PAN_TAG = java.util.regex.Pattern.compile("<(ip-address|netmask|default-gateway|ipv6-address|ipv6-default-gateway)>\\s*([^<]*?)\\s*</\\1>");
@@ -1347,6 +1351,22 @@ public final class InventoryCapabilityExecutor {
         return interfaces.stream()
                 .map(iface -> iface.withLinkFacts(java.util.Optional.ofNullable(parsed.portNameToMac().get(iface.name())),
                         java.util.Optional.ofNullable(parsed.interfaceNameToZone().get(iface.name()))))
+                .toList();
+    }
+
+    /** V184 (G2): a Palo Alto interface's legacy virtual router (by exact vendor interface name) and the read's grade. */
+    static List<InventoryInterface> withPanRouting(List<InventoryInterface> interfaces, PaloAltoInterfaceParseResult parsed,
+            String evidenceGrade) {
+        return interfaces.stream()
+                .map(iface -> iface.withRouting(java.util.Optional.ofNullable(parsed.interfaceNameToRoutingContext().get(iface.name())),
+                        java.util.Optional.of(evidenceGrade)))
+                .toList();
+    }
+
+    /** V184: every interface of a runtime read carries the {@code RUNTIME} grade; no routing context is inferred. */
+    static List<InventoryInterface> withRuntimeGrade(List<InventoryInterface> interfaces) {
+        return interfaces.stream()
+                .map(iface -> iface.withRouting(java.util.Optional.empty(), java.util.Optional.of(InventoryInterface.GRADE_RUNTIME)))
                 .toList();
     }
 

@@ -48,6 +48,8 @@ class PaloAltoInterfaceParserTest {
                 "ethernet1/2.100 forwards through the same virtual router as ethernet1/1 (the spanning case)");
 
         assertEquals("VR-DMZ", result.interfaceNameToVirtualRouter().get("ethernet1/3"));
+        assertEquals(result.interfaceNameToVirtualRouter(), result.interfaceNameToRoutingContext(),
+                "V184: only vr: (legacy engine) routers are read, so each is the interface's routing context");
     }
 
     @Test

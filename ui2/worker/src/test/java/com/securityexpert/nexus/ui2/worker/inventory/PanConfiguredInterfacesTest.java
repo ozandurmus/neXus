@@ -101,6 +101,8 @@ class PanConfiguredInterfacesTest {
         assertEquals("Z-DMZ", interfaces.interfaceNameToZone().get("ethernet1/2.100"));
         assertEquals("default", interfaces.interfaceNameToVirtualRouter().get("ethernet1/1"));
         assertEquals("VR-DMZ", interfaces.interfaceNameToVirtualRouter().get("ethernet1/3"));
+        assertEquals("VR-DMZ", interfaces.interfaceNameToRoutingContext().get("ethernet1/3"),
+                "V184: a legacy virtual-router member's routing context is recorded");
         assertTrue(interfaces.portNameToMac().isEmpty(), "no MAC in configuration");
         for (List<ParsedInterface> list : interfaces.interfacesByVsys().values()) {
             assertTrue(list.stream().allMatch(i -> InventoryInterface.STATE_UNKNOWN.equals(i.state())));
@@ -121,6 +123,8 @@ class PanConfiguredInterfacesTest {
         var interfaces = parsed(single).interfaces();
         assertEquals(List.of("1"), List.copyOf(interfaces.interfacesByVsys().keySet()));
         assertEquals("LR-1", interfaces.interfaceNameToVirtualRouter().get("ethernet1/1"));
+        assertFalse(interfaces.interfaceNameToRoutingContext().containsKey("ethernet1/1"),
+                "V184: a logical-router member's routing context stays UNKNOWN until a logical-router route read exists (G10)");
         assertTrue(parsed(single).haPortByLink().isEmpty(), "no HA configured");
     }
 
@@ -221,6 +225,9 @@ class PanConfiguredInterfacesTest {
         assertEquals(InventoryInterface.STATE_UNKNOWN, e11.state(), "configured, not observed");
         assertEquals(Optional.of("Z-OUT"), e11.zone());
         assertTrue(e11.macAddress().isEmpty());
+        assertEquals(Optional.of(InventoryInterface.GRADE_CONFIG_DERIVED), e11.evidenceGrade(),
+                "V184: interfaces from the stored configuration are CONFIG_DERIVED, never RUNTIME");
+        assertEquals(Optional.of("default"), e11.routingContext());
         InventoryContext vsys2 = context(r.run(), "2");
         assertTrue(vsys2.routes().stream().anyMatch(route -> route.routeTable().equals(Optional.of("VR-DMZ"))),
                 "routes are still attributed to the vsys through the configured virtual router");
