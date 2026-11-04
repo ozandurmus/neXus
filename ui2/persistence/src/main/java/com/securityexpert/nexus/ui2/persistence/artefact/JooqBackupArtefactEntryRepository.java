@@ -7,21 +7,34 @@ import java.util.Optional;
 
 import org.jooq.Query;
 
+import com.securityexpert.nexus.ui2.persistence.AuditedTransactionBoundary;
 import com.securityexpert.nexus.ui2.persistence.TransactionBoundary;
 
 public final class JooqBackupArtefactEntryRepository implements BackupArtefactEntryRepository {
 
+    private static final java.util.logging.Logger LOG =
+            java.util.logging.Logger.getLogger(JooqBackupArtefactEntryRepository.class.getName());
     private static final int BATCH = 500;
 
+    /** The actor of the system-raised firewall-log alert row (the listing runs in the worker and on a manual re-list). */
+    static final String SYSTEM_ACTOR = "system:backup-content-listing";
+
     private final TransactionBoundary transactionBoundary;
+    private final AuditedTransactionBoundary audited;
 
     public JooqBackupArtefactEntryRepository(TransactionBoundary transactionBoundary) {
         this.transactionBoundary = Objects.requireNonNull(transactionBoundary, "transactionBoundary");
+        this.audited = new AuditedTransactionBoundary(transactionBoundary);
     }
 
+    /**
+     * Stores the listing and, in the same transaction, raises the once-per-artefact "firewall logs in backup" alert when
+     * the listed files under the Check Point firewall log directory reach {@link FirewallLogsInBackupRule#MIN_BYTES}.
+     * The alert row is audited (backup_deviation_record has a capture trigger), hence the audited transaction.
+     */
     @Override
     public void recordListed(String artefactId, List<Entry> entries) {
-        transactionBoundary.inTransaction(dsl -> {
+        audited.inTransaction(SYSTEM_ACTOR, JooqBackupSizeAnomalyRepository.ACTION_FIREWALL_LOGS_DETECTED, dsl -> {
             dsl.execute("delete from backup_artefact_entry where artefact_id = {0}", artefactId);
             for (int from = 0; from < entries.size(); from += BATCH) {
                 List<Query> queries = new ArrayList<>();
@@ -38,6 +51,12 @@ public final class JooqBackupArtefactEntryRepository implements BackupArtefactEn
             dsl.execute("insert into backup_artefact_content_listing(artefact_id, state, entry_count, reason, listed_at) "
                     + "values ({0}, 'LISTED', {1}, null, now()) on conflict (artefact_id) do update set state = 'LISTED', "
                     + "entry_count = excluded.entry_count, reason = null, listed_at = now()", artefactId, entries.size());
+            // Best effort inside its own savepoint: the alert must never cost the listing it was derived from.
+            try {
+                dsl.transaction(nested -> JooqBackupSizeAnomalyRepository.recordFirewallLogs(nested.dsl(), artefactId));
+            } catch (RuntimeException e) {
+                LOG.warning("[BACKUP] firewall-log alert check failed: " + e.getClass().getSimpleName());
+            }
             return null;
         });
     }

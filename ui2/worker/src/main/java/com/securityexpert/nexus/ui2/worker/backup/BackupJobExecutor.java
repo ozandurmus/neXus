@@ -496,7 +496,8 @@ public final class BackupJobExecutor {
     }
 
     /**
-     * V180: records a size anomaly against the device's normal backup size (PO decision 2026-10-30). Best effort: the
+     * V180: records a size anomaly against the device's normal backup size (PO decision 2026-10-30), and a
+     * fleet-relative large backup (PO 2026-11-04). Best effort: the
      * backup is already verified and on record, so a failed check is logged and never fails the job.
      */
     private void checkSizeAnomaly(String artefactId) {
@@ -513,6 +514,18 @@ public final class BackupJobExecutor {
         } catch (RuntimeException e) {
             com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
             LOG.warning("[BACKUP] size anomaly check failed: " + e.getClass().getSimpleName());
+        }
+        // PO 2026-11-04: a backup that is large against its vendor's fleet raises its own once-per-artefact alert, even
+        // for a device that has always been large (own history cannot see it). Independent of the check above.
+        try {
+            sizeAnomalies.inspectFleet(artefactId, ACTOR).ifPresent(detected -> {
+                LOG.warning("[BACKUP] large-for-fleet backup recorded (ratio "
+                        + String.format(java.util.Locale.ROOT, "%.1f", detected.verdict().ratio()) + ")");
+                JobTranscriptScope.add("job", "note", detected.verdict().summary());
+            });
+        } catch (RuntimeException e) {
+            com.securityexpert.nexus.ui2.worker.transport.EndpointRuntime.rethrow(e);
+            LOG.warning("[BACKUP] fleet size check failed: " + e.getClass().getSimpleName());
         }
     }
 

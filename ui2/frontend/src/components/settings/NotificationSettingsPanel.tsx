@@ -31,6 +31,7 @@ const TYPES: { type: NotificationRouteView["type"]; title: string; description: 
   { type: "device_health", title: "Device reachability", description: "Unreachable, reachable again and host-key mismatch" },
   { type: "security_scan", title: "Security scans", description: "Daily and weekly security findings: new, fixed and accepted counts" },
   { type: "device_crash_file", title: "Device crash and dump files", description: "New crash or process-dump files on a managed gateway: process, count and time" },
+  { type: "backup_size_anomaly", title: "Backup size deviation", description: "A backup far above its device's own history or its vendor's fleet, or carrying firewall log files: sizes and ratio only" },
 ];
 
 function problemsOf(err: unknown): string {

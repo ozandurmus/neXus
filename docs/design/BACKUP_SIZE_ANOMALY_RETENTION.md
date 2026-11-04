@@ -62,3 +62,13 @@ Decided:
 - No backfill: anomalies are detected for backups ingested after V180. An estate that already lost its good backups
   (all copies bloated) has nothing to pin; its next backups compare against the bloated ones and are not anomalous.
 - Configuration archives and snapshots are not checked.
+
+## Alerts (2026-11-04, migration V189)
+
+The Product Owner asked that any such deviation raise an alert directly. The notification type `backup_size_anomaly`
+(see `NOTIFICATION_ROUTING_CONTRACT.md` §8) digests three kinds of `backup_deviation_record` row, each once per artefact:
+the own-history `size_anomaly` above, `fleet_large` (`FleetLargeBackupRule`, written at ingest beside the own-history check,
+for a device that has always been large) and `firewall_logs` (`FirewallLogsInBackupRule`, written in the transaction that
+stores the artefact's content listing). The two new classes reuse this table rather than a new one: it already has the audit
+trigger, the grants and the `detected_at` watermark column, and every retention predicate names `size_anomaly`, so the new rows
+cannot change what is kept or pruned. They pin nothing and nothing resolves them.

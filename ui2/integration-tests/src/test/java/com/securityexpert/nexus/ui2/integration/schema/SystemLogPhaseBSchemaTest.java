@@ -351,7 +351,8 @@ class SystemLogPhaseBSchemaTest {
                             + "|| spike_data_retention_days || '|' || spike_data_cap_bytes || '|' || ledger_retention_days || '|' "
                             + "|| include_management_servers || '|' || spike_data_enabled from system_log_settings where settings_id='default'"));
             assertEquals("1", scalar(db, "select count(*) from notification_routes where type='device_crash_file' and enabled=false"));
-            assertEquals("9", scalar(db, "select count(*) from notification_routes"));
+            // nine from V100/V113/V160, plus backup_size_anomaly (V189)
+            assertEquals("10", scalar(db, "select count(*) from notification_routes"));
             assertEquals("1", scalar(db, "select count(*) from audit_log where table_name='system_log_settings' and row_pk='default' "
                     + "and operation='INSERT'"));
         }

@@ -20,7 +20,7 @@ final class NotificationMailRouter {
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final String[] TITLES = {"Administration changes", "Sign-in and access", "Backup failures",
             "Other job failures", "Configuration changes", "Compliance regressions", "Device reachability", "Security scans",
-            "Device crash and dump files"};
+            "Device crash and dump files", "Backup size deviations"};
     private static final String ADMIN_ACTIONS = "'local_credential_create', 'local_password_change', "
             + "'local_credential_admin_password_reset', "
             + "'local_credential_enable', 'local_credential_disable', 'role_binding_create', 'role_binding_revoke', "
@@ -149,6 +149,21 @@ final class NotificationMailRouter {
                             + safe(r.get("process", String.class)) + ", newest at device time "
                             + Instant.ofEpochSecond(r.get("newest_mtime", Long.class))
                             + "  /operations/jobs/" + r.get("job_id", String.class));
+                }
+            }
+            case "backup_size_anomaly" -> {
+                // One row per alert (PO 2026-11-04): own-history size_anomaly, fleet_large, firewall_logs. The summary
+                // is generated from sizes, ratios and percentages only; the route watermark is the row's detected_at.
+                rows = dsl.fetch("select d.deviation_id, d.deviation_class, d.summary, d.detected_at, "
+                        + "coalesce(v.observed_hostname, d.device_id) as device_name "
+                        + "from backup_deviation_record d left join devices v on v.device_id = d.device_id "
+                        + "where d.deviation_class in ('size_anomaly', 'fleet_large', 'firewall_logs') "
+                        + "and d.detected_at > {0} order by d.detected_at, d.deviation_id", Timestamp.from(from));
+                for (Record r : rows) {
+                    newestTime = max(newestTime, at(r, "detected_at"));
+                    lines.add(at(r, "detected_at") + "  " + safe(r.get("device_name", String.class)) + "  "
+                            + r.get("deviation_class", String.class) + ": " + safe(r.get("summary", String.class))
+                            + "  /backups");
                 }
             }
             case "compliance_regression" -> {
