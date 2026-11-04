@@ -105,8 +105,9 @@ public final class TopologyFixtures {
             for (JsonNode rt : c.get("routes")) {
                 routes.add(new InventoryRoute("route-" + deviceId + "-" + (seq++), rt.get("destination").asText(),
                         opt(rt, "next_hop"), opt(rt, "interface"), rt.get("protocol").asText(), opt(rt, "table"),
-                        rt.has("active") ? Optional.of(rt.get("active").asBoolean()) : Optional.empty(), Optional.empty(),
-                        Optional.empty(), opt(rt, "kind")));
+                        rt.has("active") ? Optional.of(rt.get("active").asBoolean()) : Optional.empty(),
+                        rt.has("ecmp") ? Optional.of(rt.get("ecmp").asBoolean()) : Optional.empty(),
+                        rt.has("metric") ? Optional.of(rt.get("metric").asLong()) : Optional.empty(), opt(rt, "kind")));
             }
             contexts.add(new InventoryContext(c.get("context").asText(), interfaces, routes));
         }

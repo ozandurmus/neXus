@@ -1,0 +1,236 @@
+== allowed-cp-pan-nat: 198.51.100.20 -> 203.0.113.200 tcp/443
+VERDICT ALLOWED reason=ALL_HOPS_ALLOWED plain=true truncated=false asymmetric=false caveats=[] warnings=[]
+INGRESS INFERRED RESOLVED [FW-TANGO-04/physical/main]
+SUMMARY "Traffic is ALLOWED across 2 hop(s)" blocking=[] unknown=[] branches=1 freshness=CURRENT
+BRANCH b1 ALLOWED reason=ALL_HOPS_ALLOWED termination=DELIVERED blocking=- caveats=[] warnings=[]
+  HOP 1 FW-TANGO-04/physical/main own=ALLOWED path=ALLOWED reason=FIRST_MATCHING_RULE reasons=[FIRST_MATCHING_RULE]
+    in=eth1/- out=eth2/- packet=198.51.100.20>203.0.113.200:443 => 198.51.100.20>203.0.113.10:443
+    route=203.0.113.0/26 via 192.0.2.2 dev eth2 IP nat=TRANSLATED[NAT-n1] rule=RULE-r1 postNatRule=RULE-r1
+    caveats=[] notes=[CP_IMPLIED_RULES_NOT_MODELED, CP_ROUTE_AFTER_NAT_UNKNOWN] flags=[]
+  HOP 2 FW-BRAVO-02/vsys1/vr-main own=ALLOWED path=ALLOWED reason=FIRST_MATCHING_RULE reasons=[FIRST_MATCHING_RULE]
+    in=ethernet1/1/ZONE-TRANSIT out=ethernet1/2/ZONE-DMZ packet=198.51.100.20>203.0.113.10:443 => 203.0.113.1>203.0.113.10:443
+    route=203.0.113.0/26 dev ethernet1/2 CONNECTED nat=TRANSLATED[NAT-SNAT-01] rule=RULE-WEB-01
+    caveats=[] notes=[] flags=[]
+  RETURN SYMMETRIC reason=DELIVERED
+    RBRANCH DELIVERED SYMMETRIC
+      RHOP 1 FW-BRAVO-02/vsys1/vr-main 203.0.113.10>198.51.100.20 un-NAT route=198.51.100.0/24 via 192.0.2.1 reasons=[]
+      RHOP 2 FW-TANGO-04/physical/main 203.0.113.200>198.51.100.20 un-NAT route=198.51.100.0/26 reasons=[]
+
+== denied-at-second-hop: 198.51.100.20 -> 203.0.113.200 tcp/22
+VERDICT DENIED reason=DENIED_AT_HOP plain=false truncated=false asymmetric=false caveats=[] warnings=[]
+INGRESS INFERRED RESOLVED [FW-TANGO-04/physical/main]
+SUMMARY "Traffic is DENIED at hop 2 by rule 2" blocking=[b1:2] unknown=[] branches=1 freshness=CURRENT
+BRANCH b1 DENIED reason=DENIED_AT_HOP termination=BLOCKED blocking=2 caveats=[] warnings=[]
+  HOP 1 FW-TANGO-04/physical/main own=ALLOWED path=ALLOWED reason=FIRST_MATCHING_RULE reasons=[FIRST_MATCHING_RULE]
+    in=eth1/- out=eth2/- packet=198.51.100.20>203.0.113.200:22 => 198.51.100.20>203.0.113.10:22
+    route=203.0.113.0/26 via 192.0.2.2 dev eth2 IP nat=TRANSLATED[NAT-n1] rule=RULE-r1 postNatRule=RULE-r1
+    caveats=[] notes=[CP_IMPLIED_RULES_NOT_MODELED, CP_ROUTE_AFTER_NAT_UNKNOWN] flags=[]
+  HOP 2 FW-BRAVO-02/vsys1/vr-main own=DENIED path=DENIED reason=FIRST_MATCHING_RULE reasons=[FIRST_MATCHING_RULE]
+    in=ethernet1/1/ZONE-TRANSIT out=ethernet1/2/ZONE-DMZ packet=198.51.100.20>203.0.113.10:22 => 203.0.113.1>203.0.113.10:22
+    route=203.0.113.0/26 dev ethernet1/2 CONNECTED nat=TRANSLATED[NAT-SNAT-01] rule=RULE-DENY-01
+    caveats=[] notes=[] flags=[]
+  RETURN NOT_COMPUTED reason=BLOCKED
+
+== unknown-hop-taints-downstream: 198.51.100.20 -> 203.0.113.10 tcp/443
+VERDICT UNKNOWN reason=UNKNOWN_HOP plain=false truncated=false asymmetric=false caveats=[] warnings=[]
+INGRESS INFERRED RESOLVED [FW-TANGO-04/physical/main]
+SUMMARY "Verdict is UNKNOWN (UNKNOWN_HOP)" blocking=[] unknown=[b1:1] branches=1 freshness=CURRENT
+BRANCH b1 UNKNOWN reason=UNKNOWN_HOP termination=DELIVERED blocking=- caveats=[] warnings=[]
+  HOP 1 FW-TANGO-04/physical/main own=UNKNOWN path=UNKNOWN reason=POLICY_BINDING_UNPROVEN reasons=[POLICY_BINDING_UNPROVEN]
+    in=eth1/- out=eth2/- packet=198.51.100.20>203.0.113.10:443 => 198.51.100.20>203.0.113.10:443
+    route=203.0.113.0/26 via 192.0.2.2 dev eth2 IP nat=- rule=-
+    caveats=[] notes=[] flags=[]
+  HOP 2 FW-BRAVO-02/vsys1/vr-main own=ALLOWED path=CONDITIONAL reason=FIRST_MATCHING_RULE reasons=[FIRST_MATCHING_RULE]
+    in=ethernet1/1/ZONE-TRANSIT out=ethernet1/2/ZONE-DMZ packet=198.51.100.20>203.0.113.10:443 => 203.0.113.1>203.0.113.10:443
+    route=203.0.113.0/26 dev ethernet1/2 CONNECTED nat=TRANSLATED[NAT-SNAT-01] rule=RULE-WEB-01
+    caveats=[] notes=[] flags=[]
+  RETURN SYMMETRIC reason=DELIVERED
+    RBRANCH DELIVERED SYMMETRIC
+      RHOP 1 FW-BRAVO-02/vsys1/vr-main 203.0.113.10>198.51.100.20 un-NAT route=198.51.100.0/24 via 192.0.2.1 reasons=[]
+      RHOP 2 FW-TANGO-04/physical/main 203.0.113.10>198.51.100.20 route=198.51.100.0/26 reasons=[]
+
+== unknown-hop-then-deny: 198.51.100.20 -> 203.0.113.10 tcp/22
+VERDICT UNKNOWN reason=DENIED_AFTER_UNKNOWN_HOP plain=false truncated=false asymmetric=false caveats=[] warnings=[]
+INGRESS INFERRED RESOLVED [FW-TANGO-04/physical/main]
+SUMMARY "Verdict is UNKNOWN (DENIED_AFTER_UNKNOWN_HOP)" blocking=[b1:2] unknown=[b1:1] branches=1 freshness=CURRENT
+BRANCH b1 UNKNOWN reason=DENIED_AFTER_UNKNOWN_HOP termination=BLOCKED blocking=2 caveats=[] warnings=[]
+  HOP 1 FW-TANGO-04/physical/main own=UNKNOWN path=UNKNOWN reason=POLICY_BINDING_UNPROVEN reasons=[POLICY_BINDING_UNPROVEN]
+    in=eth1/- out=eth2/- packet=198.51.100.20>203.0.113.10:22 => 198.51.100.20>203.0.113.10:22
+    route=203.0.113.0/26 via 192.0.2.2 dev eth2 IP nat=- rule=-
+    caveats=[] notes=[] flags=[]
+  HOP 2 FW-BRAVO-02/vsys1/vr-main own=DENIED path=CONDITIONAL reason=FIRST_MATCHING_RULE reasons=[FIRST_MATCHING_RULE]
+    in=ethernet1/1/ZONE-TRANSIT out=ethernet1/2/ZONE-DMZ packet=198.51.100.20>203.0.113.10:22 => 203.0.113.1>203.0.113.10:22
+    route=203.0.113.0/26 dev ethernet1/2 CONNECTED nat=TRANSLATED[NAT-SNAT-01] rule=RULE-DENY-01
+    caveats=[] notes=[] flags=[]
+  RETURN NOT_COMPUTED reason=BLOCKED
+
+== pan-dnat-second-lookup: 198.51.100.20 -> 203.0.113.200 tcp/443
+VERDICT ALLOWED reason=ALL_HOPS_ALLOWED plain=true truncated=false asymmetric=false caveats=[] warnings=[]
+INGRESS INFERRED RESOLVED [FW-TANGO-04/physical/main]
+SUMMARY "Traffic is ALLOWED across 2 hop(s)" blocking=[] unknown=[] branches=1 freshness=CURRENT
+BRANCH b1 ALLOWED reason=ALL_HOPS_ALLOWED termination=DELIVERED blocking=- caveats=[] warnings=[]
+  HOP 1 FW-TANGO-04/physical/main own=ALLOWED path=ALLOWED reason=FIRST_MATCHING_RULE reasons=[FIRST_MATCHING_RULE]
+    in=eth1/- out=eth2/- packet=198.51.100.20>203.0.113.200:443 => 198.51.100.20>203.0.113.200:443
+    route=203.0.113.192/26 via 192.0.2.2 dev eth2 IP nat=NO_TRANSLATION[] rule=RULE-r1
+    caveats=[] notes=[CP_IMPLIED_RULES_NOT_MODELED] flags=[]
+  HOP 2 FW-BRAVO-02/vsys1/vr-main own=ALLOWED path=ALLOWED reason=FIRST_MATCHING_RULE reasons=[FIRST_MATCHING_RULE]
+    in=ethernet1/1/ZONE-TRANSIT out=ethernet1/2/ZONE-DMZ packet=198.51.100.20>203.0.113.200:443 => 198.51.100.20>203.0.113.10:443
+    route=203.0.113.0/26 dev ethernet1/2 CONNECTED nat=TRANSLATED[NAT-DNAT-01] rule=RULE-PUBLISH-01
+    caveats=[] notes=[] flags=[]
+  RETURN SYMMETRIC reason=DELIVERED
+    RBRANCH DELIVERED SYMMETRIC
+      RHOP 1 FW-BRAVO-02/vsys1/vr-main 203.0.113.200>198.51.100.20 un-NAT route=198.51.100.0/24 via 192.0.2.1 reasons=[]
+      RHOP 2 FW-TANGO-04/physical/main 203.0.113.200>198.51.100.20 route=198.51.100.0/26 reasons=[]
+
+== exits-known-topology: 198.51.100.20 -> 203.0.113.150 tcp/443
+VERDICT UNKNOWN reason=EXITS_KNOWN_TOPOLOGY plain=false truncated=false asymmetric=false caveats=[] warnings=[]
+INGRESS INFERRED RESOLVED [FW-TANGO-04/physical/main]
+SUMMARY "Verdict is UNKNOWN (EXITS_KNOWN_TOPOLOGY)" blocking=[] unknown=[] branches=1 freshness=CURRENT
+BRANCH b1 UNKNOWN reason=EXITS_KNOWN_TOPOLOGY termination=EXITS_KNOWN_TOPOLOGY blocking=- caveats=[] warnings=[]
+  HOP 1 FW-TANGO-04/physical/main own=ALLOWED path=ALLOWED reason=FIRST_MATCHING_RULE reasons=[FIRST_MATCHING_RULE]
+    in=eth1/- out=eth3/- packet=198.51.100.20>203.0.113.150:443 => 198.51.100.20>203.0.113.150:443
+    route=0.0.0.0/0 via 198.51.100.130 dev eth3 IP nat=NO_TRANSLATION[] rule=RULE-r1
+    caveats=[] notes=[CP_IMPLIED_RULES_NOT_MODELED] flags=[]
+  RETURN NOT_COMPUTED reason=RETURN_NOT_COMPUTED_AT_EDGE
+
+== edge-mode: 198.51.100.20 -> 203.0.113.150 tcp/443 edge
+VERDICT ALLOWED_TO_EDGE reason=EXITS_KNOWN_TOPOLOGY plain=false truncated=false asymmetric=false caveats=[] warnings=[]
+INGRESS INFERRED RESOLVED [FW-TANGO-04/physical/main]
+SUMMARY "Traffic is ALLOWED up to the edge of known topology across 1 hop(s)" blocking=[] unknown=[] branches=1 freshness=CURRENT
+BRANCH b1 ALLOWED_TO_EDGE reason=EXITS_KNOWN_TOPOLOGY termination=EXITS_KNOWN_TOPOLOGY blocking=- caveats=[] warnings=[]
+  HOP 1 FW-TANGO-04/physical/main own=ALLOWED path=ALLOWED reason=FIRST_MATCHING_RULE reasons=[FIRST_MATCHING_RULE]
+    in=eth1/- out=eth3/- packet=198.51.100.20>203.0.113.150:443 => 198.51.100.20>203.0.113.150:443
+    route=0.0.0.0/0 via 198.51.100.130 dev eth3 IP nat=NO_TRANSLATION[] rule=RULE-r1
+    caveats=[] notes=[CP_IMPLIED_RULES_NOT_MODELED] flags=[]
+  RETURN NOT_COMPUTED reason=RETURN_NOT_COMPUTED_AT_EDGE
+
+== discard-route: 198.51.100.20 -> 203.0.113.70 tcp/443
+VERDICT DENIED reason=DENIED_AT_HOP plain=false truncated=false asymmetric=false caveats=[] warnings=[]
+INGRESS INFERRED RESOLVED [FW-TANGO-04/physical/main]
+SUMMARY "Traffic is DENIED at hop 1 by a discard route" blocking=[b1:1] unknown=[] branches=1 freshness=CURRENT
+BRANCH b1 DENIED reason=DENIED_AT_HOP termination=BLOCKED blocking=1 caveats=[] warnings=[]
+  HOP 1 FW-TANGO-04/physical/main own=DENIED path=DENIED reason=ROUTE_DISCARD reasons=[ROUTE_DISCARD]
+    in=eth1/- out=-/- packet=198.51.100.20>203.0.113.70:443 => 198.51.100.20>203.0.113.70:443
+    route=203.0.113.64/26 DISCARD nat=NO_TRANSLATION[] rule=RULE-r1
+    caveats=[] notes=[CP_IMPLIED_RULES_NOT_MODELED] flags=[]
+  RETURN NOT_COMPUTED reason=BLOCKED
+
+== ecmp-partial: 198.51.100.20 -> 203.0.113.10 tcp/443
+VERDICT PARTIAL reason=MIXED_BRANCH_VERDICTS plain=false truncated=false asymmetric=false caveats=[] warnings=[]
+INGRESS INFERRED RESOLVED [FW-TANGO-04/physical/main]
+SUMMARY "Traffic is PARTIAL: 1 of 2 branches allowed" blocking=[b2:2] unknown=[] branches=2 freshness=CURRENT
+BRANCH b1 ALLOWED reason=ALL_HOPS_ALLOWED termination=DELIVERED blocking=- caveats=[] warnings=[]
+  HOP 1 FW-TANGO-04/physical/main own=ALLOWED path=ALLOWED reason=FIRST_MATCHING_RULE reasons=[FIRST_MATCHING_RULE]
+    in=eth1/- out=eth2/- packet=198.51.100.20>203.0.113.10:443 => 198.51.100.20>203.0.113.10:443
+    route=203.0.113.0/26 via 192.0.2.2 dev eth2 IP ecmp nat=NO_TRANSLATION[] rule=RULE-r1
+    caveats=[] notes=[CP_IMPLIED_RULES_NOT_MODELED] flags=[]
+  HOP 2 FW-BRAVO-02/vsys1/vr-main own=ALLOWED path=ALLOWED reason=FIRST_MATCHING_RULE reasons=[FIRST_MATCHING_RULE]
+    in=ethernet1/1/ZONE-TRANSIT out=ethernet1/2/ZONE-DMZ packet=198.51.100.20>203.0.113.10:443 => 198.51.100.20>203.0.113.10:443
+    route=203.0.113.0/26 dev ethernet1/2 CONNECTED nat=NO_TRANSLATION[] rule=RULE-WEB-01
+    caveats=[] notes=[] flags=[]
+  RETURN SYMMETRIC reason=DELIVERED
+    RBRANCH DELIVERED SYMMETRIC
+      RHOP 1 FW-BRAVO-02/vsys1/vr-main 203.0.113.10>198.51.100.20 route=198.51.100.0/24 via 192.0.2.1 reasons=[]
+      RHOP 2 FW-TANGO-04/physical/main 203.0.113.10>198.51.100.20 route=198.51.100.0/26 reasons=[]
+BRANCH b2 DENIED reason=DENIED_AT_HOP termination=BLOCKED blocking=2 caveats=[] warnings=[]
+  HOP 1 FW-TANGO-04/physical/main own=ALLOWED path=ALLOWED reason=FIRST_MATCHING_RULE reasons=[FIRST_MATCHING_RULE]
+    in=eth1/- out=eth2/- packet=198.51.100.20>203.0.113.10:443 => 198.51.100.20>203.0.113.10:443
+    route=203.0.113.0/26 via 192.0.2.3 dev eth2 IP ecmp nat=NO_TRANSLATION[] rule=RULE-r1
+    caveats=[] notes=[CP_IMPLIED_RULES_NOT_MODELED] flags=[]
+  HOP 2 FW-JULIET-06/vsys1/vr-main own=DENIED path=DENIED reason=FIRST_MATCHING_RULE reasons=[FIRST_MATCHING_RULE]
+    in=ethernet1/1/ZONE-TRANSIT out=ethernet1/2/ZONE-DMZ packet=198.51.100.20>203.0.113.10:443 => 198.51.100.20>203.0.113.10:443
+    route=203.0.113.0/26 dev ethernet1/2 CONNECTED nat=NO_TRANSLATION[] rule=RULE-DENY-01
+    caveats=[] notes=[] flags=[]
+  RETURN NOT_COMPUTED reason=BLOCKED
+
+== asymmetric-return: 198.51.100.20 -> 203.0.113.10 tcp/443 from FW-TANGO-04/physical/main:eth1
+VERDICT UNKNOWN reason=ASYMMETRIC_RETURN plain=false truncated=false asymmetric=true caveats=[] warnings=[OUT_OF_STATE_DROP_LIKELY]
+INGRESS GIVEN RESOLVED [FW-TANGO-04/physical/main]
+SUMMARY "Verdict is UNKNOWN (ASYMMETRIC_RETURN)" blocking=[] unknown=[] branches=1 freshness=CURRENT
+BRANCH b1 UNKNOWN reason=ASYMMETRIC_RETURN termination=DELIVERED blocking=- caveats=[] warnings=[OUT_OF_STATE_DROP_LIKELY]
+  HOP 1 FW-TANGO-04/physical/main own=ALLOWED path=ALLOWED reason=FIRST_MATCHING_RULE reasons=[FIRST_MATCHING_RULE]
+    in=eth1/- out=eth2/- packet=198.51.100.20>203.0.113.10:443 => 198.51.100.20>203.0.113.10:443
+    route=203.0.113.0/26 via 192.0.2.2 dev eth2 IP nat=NO_TRANSLATION[] rule=RULE-r1
+    caveats=[] notes=[CP_IMPLIED_RULES_NOT_MODELED] flags=[]
+  HOP 2 FW-BRAVO-02/vsys1/vr-main own=ALLOWED path=ALLOWED reason=FIRST_MATCHING_RULE reasons=[FIRST_MATCHING_RULE]
+    in=ethernet1/1/ZONE-TRANSIT out=ethernet1/2/ZONE-DMZ packet=198.51.100.20>203.0.113.10:443 => 198.51.100.20>203.0.113.10:443
+    route=203.0.113.0/26 dev ethernet1/2 CONNECTED nat=NO_TRANSLATION[] rule=RULE-WEB-01
+    caveats=[] notes=[] flags=[]
+  RETURN ASYMMETRIC reason=DELIVERED
+    RBRANCH DELIVERED ASYMMETRIC
+      RHOP 1 FW-BRAVO-02/vsys1/vr-main 203.0.113.10>198.51.100.20 route=198.51.100.0/26 via 192.0.2.3 reasons=[]
+      RHOP 2 FW-JULIET-06/physical/main 203.0.113.10>198.51.100.20 route=198.51.100.0/26 reasons=[]
+
+== ambiguous-ingress: 198.51.100.20 -> 203.0.113.10 tcp/443
+VERDICT UNKNOWN reason=AMBIGUOUS_INGRESS plain=false truncated=false asymmetric=false caveats=[] warnings=[]
+INGRESS INFERRED AMBIGUOUS_INGRESS [FW-JULIET-06/physical/main, FW-TANGO-04/physical/main]
+SUMMARY "Verdict is UNKNOWN (AMBIGUOUS_INGRESS)" blocking=[] unknown=[] branches=0 freshness=CURRENT
+
+== routing-loop: 198.51.100.20 -> 203.0.113.130 tcp/443 from FW-TANGO-04/physical/main:eth1
+VERDICT UNKNOWN reason=ROUTING_LOOP plain=false truncated=false asymmetric=false caveats=[] warnings=[]
+INGRESS GIVEN RESOLVED [FW-TANGO-04/physical/main]
+SUMMARY "Verdict is UNKNOWN (ROUTING_LOOP)" blocking=[] unknown=[] branches=1 freshness=CURRENT
+BRANCH b1 UNKNOWN reason=ROUTING_LOOP termination=ROUTING_LOOP blocking=- caveats=[] warnings=[]
+  HOP 1 FW-TANGO-04/physical/main own=ALLOWED path=ALLOWED reason=FIRST_MATCHING_RULE reasons=[FIRST_MATCHING_RULE]
+    in=eth1/- out=eth2/- packet=198.51.100.20>203.0.113.130:443 => 198.51.100.20>203.0.113.130:443
+    route=203.0.113.128/26 via 192.0.2.3 dev eth2 IP nat=NO_TRANSLATION[] rule=RULE-r1
+    caveats=[] notes=[CP_IMPLIED_RULES_NOT_MODELED] flags=[]
+  HOP 2 FW-JULIET-06/physical/main own=ALLOWED path=ALLOWED reason=FIRST_MATCHING_RULE reasons=[FIRST_MATCHING_RULE]
+    in=eth2/- out=eth2/- packet=198.51.100.20>203.0.113.130:443 => 198.51.100.20>203.0.113.130:443
+    route=203.0.113.128/26 via 192.0.2.1 dev eth2 IP nat=NO_TRANSLATION[] rule=RULE-r1
+    caveats=[] notes=[CP_IMPLIED_RULES_NOT_MODELED] flags=[]
+  RETURN NOT_COMPUTED reason=ROUTING_LOOP
+
+== ecmp-truncated: 198.51.100.20 -> 203.0.113.150 udp/53 edge
+VERDICT UNKNOWN reason=ECMP_TRUNCATED plain=false truncated=true asymmetric=false caveats=[] warnings=[ECMP_TRUNCATED]
+INGRESS INFERRED RESOLVED [FW-TANGO-04/physical/main]
+SUMMARY "Verdict is UNKNOWN (ECMP_TRUNCATED)" blocking=[] unknown=[] branches=8 freshness=CURRENT
+BRANCH b1 ALLOWED_TO_EDGE reason=EXITS_KNOWN_TOPOLOGY termination=EXITS_KNOWN_TOPOLOGY blocking=- caveats=[] warnings=[]
+  HOP 1 FW-TANGO-04/physical/main own=ALLOWED path=ALLOWED reason=FIRST_MATCHING_RULE reasons=[FIRST_MATCHING_RULE]
+    in=eth1/- out=eth2/- packet=198.51.100.20>203.0.113.150:53 => 198.51.100.20>203.0.113.150:53
+    route=0.0.0.0/0 via 192.0.2.11 dev eth2 IP ecmp nat=NO_TRANSLATION[] rule=RULE-r1
+    caveats=[] notes=[CP_IMPLIED_RULES_NOT_MODELED] flags=[]
+  RETURN NOT_COMPUTED reason=RETURN_NOT_COMPUTED_AT_EDGE
+BRANCH b2 ALLOWED_TO_EDGE reason=EXITS_KNOWN_TOPOLOGY termination=EXITS_KNOWN_TOPOLOGY blocking=- caveats=[] warnings=[]
+  HOP 1 FW-TANGO-04/physical/main own=ALLOWED path=ALLOWED reason=FIRST_MATCHING_RULE reasons=[FIRST_MATCHING_RULE]
+    in=eth1/- out=eth2/- packet=198.51.100.20>203.0.113.150:53 => 198.51.100.20>203.0.113.150:53
+    route=0.0.0.0/0 via 192.0.2.12 dev eth2 IP ecmp nat=NO_TRANSLATION[] rule=RULE-r1
+    caveats=[] notes=[CP_IMPLIED_RULES_NOT_MODELED] flags=[]
+  RETURN NOT_COMPUTED reason=RETURN_NOT_COMPUTED_AT_EDGE
+BRANCH b3 ALLOWED_TO_EDGE reason=EXITS_KNOWN_TOPOLOGY termination=EXITS_KNOWN_TOPOLOGY blocking=- caveats=[] warnings=[]
+  HOP 1 FW-TANGO-04/physical/main own=ALLOWED path=ALLOWED reason=FIRST_MATCHING_RULE reasons=[FIRST_MATCHING_RULE]
+    in=eth1/- out=eth2/- packet=198.51.100.20>203.0.113.150:53 => 198.51.100.20>203.0.113.150:53
+    route=0.0.0.0/0 via 192.0.2.13 dev eth2 IP ecmp nat=NO_TRANSLATION[] rule=RULE-r1
+    caveats=[] notes=[CP_IMPLIED_RULES_NOT_MODELED] flags=[]
+  RETURN NOT_COMPUTED reason=RETURN_NOT_COMPUTED_AT_EDGE
+BRANCH b4 ALLOWED_TO_EDGE reason=EXITS_KNOWN_TOPOLOGY termination=EXITS_KNOWN_TOPOLOGY blocking=- caveats=[] warnings=[]
+  HOP 1 FW-TANGO-04/physical/main own=ALLOWED path=ALLOWED reason=FIRST_MATCHING_RULE reasons=[FIRST_MATCHING_RULE]
+    in=eth1/- out=eth2/- packet=198.51.100.20>203.0.113.150:53 => 198.51.100.20>203.0.113.150:53
+    route=0.0.0.0/0 via 192.0.2.14 dev eth2 IP ecmp nat=NO_TRANSLATION[] rule=RULE-r1
+    caveats=[] notes=[CP_IMPLIED_RULES_NOT_MODELED] flags=[]
+  RETURN NOT_COMPUTED reason=RETURN_NOT_COMPUTED_AT_EDGE
+BRANCH b5 ALLOWED_TO_EDGE reason=EXITS_KNOWN_TOPOLOGY termination=EXITS_KNOWN_TOPOLOGY blocking=- caveats=[] warnings=[]
+  HOP 1 FW-TANGO-04/physical/main own=ALLOWED path=ALLOWED reason=FIRST_MATCHING_RULE reasons=[FIRST_MATCHING_RULE]
+    in=eth1/- out=eth2/- packet=198.51.100.20>203.0.113.150:53 => 198.51.100.20>203.0.113.150:53
+    route=0.0.0.0/0 via 192.0.2.15 dev eth2 IP ecmp nat=NO_TRANSLATION[] rule=RULE-r1
+    caveats=[] notes=[CP_IMPLIED_RULES_NOT_MODELED] flags=[]
+  RETURN NOT_COMPUTED reason=RETURN_NOT_COMPUTED_AT_EDGE
+BRANCH b6 ALLOWED_TO_EDGE reason=EXITS_KNOWN_TOPOLOGY termination=EXITS_KNOWN_TOPOLOGY blocking=- caveats=[] warnings=[]
+  HOP 1 FW-TANGO-04/physical/main own=ALLOWED path=ALLOWED reason=FIRST_MATCHING_RULE reasons=[FIRST_MATCHING_RULE]
+    in=eth1/- out=eth2/- packet=198.51.100.20>203.0.113.150:53 => 198.51.100.20>203.0.113.150:53
+    route=0.0.0.0/0 via 192.0.2.16 dev eth2 IP ecmp nat=NO_TRANSLATION[] rule=RULE-r1
+    caveats=[] notes=[CP_IMPLIED_RULES_NOT_MODELED] flags=[]
+  RETURN NOT_COMPUTED reason=RETURN_NOT_COMPUTED_AT_EDGE
+BRANCH b7 ALLOWED_TO_EDGE reason=EXITS_KNOWN_TOPOLOGY termination=EXITS_KNOWN_TOPOLOGY blocking=- caveats=[] warnings=[]
+  HOP 1 FW-TANGO-04/physical/main own=ALLOWED path=ALLOWED reason=FIRST_MATCHING_RULE reasons=[FIRST_MATCHING_RULE]
+    in=eth1/- out=eth2/- packet=198.51.100.20>203.0.113.150:53 => 198.51.100.20>203.0.113.150:53
+    route=0.0.0.0/0 via 192.0.2.17 dev eth2 IP ecmp nat=NO_TRANSLATION[] rule=RULE-r1
+    caveats=[] notes=[CP_IMPLIED_RULES_NOT_MODELED] flags=[]
+  RETURN NOT_COMPUTED reason=RETURN_NOT_COMPUTED_AT_EDGE
+BRANCH b8 ALLOWED_TO_EDGE reason=EXITS_KNOWN_TOPOLOGY termination=EXITS_KNOWN_TOPOLOGY blocking=- caveats=[] warnings=[]
+  HOP 1 FW-TANGO-04/physical/main own=ALLOWED path=ALLOWED reason=FIRST_MATCHING_RULE reasons=[FIRST_MATCHING_RULE]
+    in=eth1/- out=eth2/- packet=198.51.100.20>203.0.113.150:53 => 198.51.100.20>203.0.113.150:53
+    route=0.0.0.0/0 via 192.0.2.18 dev eth2 IP ecmp nat=NO_TRANSLATION[] rule=RULE-r1
+    caveats=[] notes=[CP_IMPLIED_RULES_NOT_MODELED] flags=[]
+  RETURN NOT_COMPUTED reason=RETURN_NOT_COMPUTED_AT_EDGE
+
