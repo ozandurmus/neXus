@@ -1,12 +1,14 @@
 import { formatBytes } from "../shell/bytes";
 import { vendorLabel } from "../shell/presenters";
+import { compareSortValues, nextTableSort, type SortDirection } from "../shell/tableSort";
 
 /**
  * Archive size on the Backups fleet table (Product Owner, 2026-11-02): a 28,537 MB Check Point backup sat on page 2 of
  * 131 rows and nothing on the screen surfaced it, while a normal Check Point backup is about 0.2 GB. Two things fix
  * that: the Size column sorts the whole filtered set, and a latest archive that is unusually large for its vendor
  * carries a "Large" marker and a filter chip. The rule here is computed client-side from the fleet rows already
- * loaded; nothing is asked of the backend.
+ * loaded; nothing is asked of the backend. Since 2026-11-04 every fleet column sorts through the shared
+ * `tableSort.tsx`; the two helpers below keep the Size column's own words (largest first on the first click) on it.
  */
 
 /** The Size header's three states: the default hostname order, largest first, smallest first. */
@@ -14,7 +16,7 @@ export type SizeSort = "none" | "desc" | "asc";
 
 /** A click on the Size header: default -> largest first -> smallest first -> default. */
 export function nextSizeSort(current: SizeSort): SizeSort {
-  return current === "none" ? "desc" : current === "desc" ? "asc" : "none";
+  return nextTableSort(current === "none" ? null : { key: "size", direction: current }, "size", "desc")?.direction ?? "none";
 }
 
 /**
@@ -22,10 +24,7 @@ export function nextSizeSort(current: SizeSort): SizeSort {
  * column points. Equal sizes keep the caller's order (the sort is stable), so ties stay in hostname order.
  */
 export function compareBySize(a: number | null, b: number | null, direction: Exclude<SizeSort, "none">): number {
-  if (a === null && b === null) return 0;
-  if (a === null) return 1;
-  if (b === null) return -1;
-  return direction === "desc" ? b - a : a - b;
+  return compareSortValues(a, b, "number", direction satisfies SortDirection);
 }
 
 /** A device's latest archive is "large" when it is at least this many times its vendor's median ... */

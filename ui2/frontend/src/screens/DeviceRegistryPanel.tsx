@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 
 import Box from "@mui/material/Box";
 import Checkbox from "@mui/material/Checkbox";
@@ -18,6 +18,7 @@ import Typography from "@mui/material/Typography";
 
 import { EmptyPanel } from "../shell/ScreenLayout";
 import { PaginationFooter } from "../shell/DataTable";
+import { SortHeaderCell, useTableSort, type SortColumn } from "../shell/tableSort";
 import { CapabilityMenu, M3Button, StatusChip } from "../shell/M3Widgets";
 import { ChangeCredentialsDialog } from "../shell/ChangeCredentialsDialog";
 import { RestrictedPanel, StatePanel, VendorBadge, isRestricted } from "../shell/States";
@@ -65,6 +66,14 @@ export function registryMatches(d: DeviceSummary, filter: RegistryFilter, search
 }
 
 const PAGE_SIZES = [25, 50, 100] as const;
+
+/** The registry's sortable columns, each by the value its cell shows; a missing hostname or collection time sorts last. */
+const REGISTRY_SORT: ReadonlyArray<SortColumn<DeviceSummary>> = [
+  { key: "vendor", value: (d) => vendorLabel(d.vendor_hint) },
+  { key: "hostname", value: (d) => d.hostname?.trim() || null },
+  { key: "state", value: (d) => onboardingChip(d.onboarding)?.label ?? enrollmentStateLabel(d.enrollment_state) },
+  { key: "collected", value: (d) => d.inventory_collected_at, kind: "time" },
+];
 
 /** The device/hostname cell: the plain name, or "UNKNOWN hostname" with a chip naming why (review §3). */
 function HostnameCell({ device }: { readonly device: DeviceSummary }) {
@@ -298,17 +307,19 @@ function DeviceRegistryCard({
   const [credentialsFor, setCredentialsFor] = useState<DeviceSummary | null>(null);
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState<number>(50);
+  const firstPage = useCallback(() => setPage(0), []);
+  const sort = useTableSort(REGISTRY_SORT, { onChange: firstPage });
 
   if (devices === null) {
     return <StatePanel variant="empty" title="Device registry" body="Loading…" />;
   }
 
-  // The list the filters leave, then the page of it in view. "Select all" selects what the filters leave, not the whole
-  // registry, so a bulk Delete never reaches a row the reader cannot see.
+  // The list the filters leave, in the chosen order over all of it, then the page of it in view. "Select all" selects
+  // what the filters leave, not the whole registry, so a bulk Delete never reaches a row the reader cannot see.
   const matching = devices.filter((d) => registryMatches(d, filter, search));
   const lastPage = Math.max(0, Math.ceil(matching.length / pageSize) - 1);
   const shownPage = Math.min(page, lastPage);
-  const pageRows = matching.slice(shownPage * pageSize, shownPage * pageSize + pageSize);
+  const pageRows = sort.apply(matching).slice(shownPage * pageSize, shownPage * pageSize + pageSize);
   const matchingSelected = matching.filter((d) => selectedIds.has(d.device_id)).length;
   const isAllSelected = matching.length > 0 && matchingSelected === matching.length;
   const isSomeSelected = matchingSelected > 0 && matchingSelected < matching.length;
@@ -450,10 +461,10 @@ function DeviceRegistryCard({
                     inputProps={{ "aria-label": "Select all devices" }}
                   />
                 </TableCell>
-                <TableCell sx={{ width: 130 }}>VENDOR</TableCell>
-                <TableCell>DEVICE / HOSTNAME</TableCell>
-                <TableCell sx={{ width: 150 }}>ENROLLMENT STATE</TableCell>
-                <TableCell sx={{ width: 170 }}>LAST COLLECTION</TableCell>
+                <SortHeaderCell state={sort.header("vendor")} label="VENDOR" sx={{ width: 130 }} />
+                <SortHeaderCell state={sort.header("hostname")} label="DEVICE / HOSTNAME" />
+                <SortHeaderCell state={sort.header("state")} label="ENROLLMENT STATE" sx={{ width: 150 }} />
+                <SortHeaderCell state={sort.header("collected")} label="LAST COLLECTION" words={{ asc: "oldest first", desc: "newest first" }} sx={{ width: 170 }} />
                 <TableCell sx={{ width: 48 }} align="right">&nbsp;</TableCell>
               </TableRow>
             </TableHead>

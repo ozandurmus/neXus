@@ -112,3 +112,67 @@ describe("Administration device registry (UI review 2026-10-18, F-22)", () => {
     expect(rule).not.toContain("var(--nx-success-container)");
   });
 });
+
+describe("column headers order the whole filtered registry, not the page (Product Owner, 2026-11-04)", () => {
+  // 120 devices in registry order, named without zero padding; every eighth has no hostname, every fifth no collection time
+  const estate = Array.from({ length: 120 }, (_, k) => {
+    const n = k + 1;
+    return device(n, {
+      hostname: n % 8 === 0 ? null : `FW-ALPHA-${n}`,
+      inventory_collected_at: n % 5 === 0 ? null : new Date(Date.UTC(2026, 9, 1) + ((n * 37) % 120) * 3_600_000).toISOString(),
+    });
+  });
+  const rows = () => within(table()).getAllByRole("row").slice(1);
+  const names = () => rows().map((row) => row.textContent?.match(/FW-ALPHA-\d+|UNKNOWN hostname/)?.[0]);
+  const header = (name: string) => within(table()).getByRole("button", { name });
+  const next = () => fireEvent.click(screen.getByRole("button", { name: "Go to next page" }));
+
+  it("sorts DEVICE / HOSTNAME over all 120 rows with numeric collation, continues on page 2, flips, and the third click restores registry order", async () => {
+    mount(estate);
+    await screen.findByText("FW-ALPHA-1");
+    expect(screen.getByText("1–50 of 120")).toBeInTheDocument();
+    expect(names().slice(0, 9)).toEqual(["FW-ALPHA-1", "FW-ALPHA-2", "FW-ALPHA-3", "FW-ALPHA-4", "FW-ALPHA-5", "FW-ALPHA-6", "FW-ALPHA-7", "UNKNOWN hostname", "FW-ALPHA-9"]);
+    fireEvent.click(header("DEVICE / HOSTNAME"));
+    expect(header("DEVICE / HOSTNAME").closest("th")).toHaveAttribute("aria-sort", "ascending");
+    const named = Array.from({ length: 120 }, (_, k) => k + 1).filter((n) => n % 8 !== 0).map((n) => `FW-ALPHA-${n}`);
+    expect(names()).toEqual(named.slice(0, 50));
+    next();
+    expect(screen.getByText("51–100 of 120")).toBeInTheDocument();
+    expect(names()).toEqual(named.slice(50, 100));
+    next();
+    // the five remaining names, then the fifteen rows without a hostname
+    expect(names()).toEqual([...named.slice(100), ...Array(15).fill("UNKNOWN hostname")]);
+    fireEvent.click(header("DEVICE / HOSTNAME"));
+    expect(header("DEVICE / HOSTNAME").closest("th")).toHaveAttribute("aria-sort", "descending");
+    expect(screen.getByText("1–50 of 120")).toBeInTheDocument();
+    expect(names().slice(0, 3)).toEqual(["FW-ALPHA-119", "FW-ALPHA-118", "FW-ALPHA-117"]);
+    next(); next();
+    expect(names().slice(-15)).toEqual(Array(15).fill("UNKNOWN hostname"));
+    fireEvent.click(header("DEVICE / HOSTNAME"));
+    expect(header("DEVICE / HOSTNAME").closest("th")).not.toHaveAttribute("aria-sort");
+    expect(screen.getByText("1–50 of 120")).toBeInTheDocument();
+    expect(names().slice(0, 9)).toEqual(["FW-ALPHA-1", "FW-ALPHA-2", "FW-ALPHA-3", "FW-ALPHA-4", "FW-ALPHA-5", "FW-ALPHA-6", "FW-ALPHA-7", "UNKNOWN hostname", "FW-ALPHA-9"]);
+  });
+
+  it("orders LAST COLLECTION by time with never-collected rows last, and goes back to page 1 on a change", async () => {
+    mount(estate);
+    await screen.findByText("FW-ALPHA-1");
+    next();
+    expect(screen.getByText("51–100 of 120")).toBeInTheDocument();
+    fireEvent.click(header("LAST COLLECTION"));
+    expect(screen.getByText("1–50 of 120")).toBeInTheDocument();
+    // the oldest collection: 37n = 1 (mod 120) -> n = 13
+    expect(names()[0]).toBe("FW-ALPHA-13");
+    next(); next();
+    // the 24 devices without a collection time close the list whichever way the column points
+    expect(rows().slice(-20).every((row) => within(row).getByText("UNKNOWN"))).toBe(true);
+    fireEvent.click(header("LAST COLLECTION"));
+    expect(screen.getByText("1–50 of 120")).toBeInTheDocument();
+    expect(names()[0]).not.toBe("FW-ALPHA-13");
+    next(); next();
+    expect(rows().slice(-20).every((row) => within(row).getByText("UNKNOWN"))).toBe(true);
+    // search still applies before the sort: the ordered list is the filtered one
+    fireEvent.change(screen.getByRole("textbox", { name: "Search registry" }), { target: { value: "FW-ALPHA-11" } });
+    expect(screen.getByText("1–10 of 10")).toBeInTheDocument();
+  });
+});
