@@ -233,6 +233,10 @@ public class DeviceCompositionConfiguration {
                 fortiManagerDiagnosticCapability(gateRegistryPort),
                 confirmCapability(com.securityexpert.nexus.ui2.jobs.diagnostic.DiagnosticRead.CAPABILITY,
                         "diagnostic", "reviewed_read", TransportKind.SSH_EXEC),
+                // Path analysis A6 (V188): placeholder steps like diagnostic_read; the worker resolves each of the five
+                // path_validation_* gates against the live registry before it sends anything.
+                confirmCapability(com.securityexpert.nexus.ui2.jobs.pathvalidation.PathValidation.CAPABILITY,
+                        "path_validation", "reviewed_read", TransportKind.SSH_EXEC),
                 com.securityexpert.nexus.ui2.jobs.diagnostic.PanSyslogMeasure.capability(gateRegistryPort),
                 com.securityexpert.nexus.ui2.jobs.diagnostic.PanSystemLogCollect.capability(gateRegistryPort),
                 com.securityexpert.nexus.ui2.jobs.systemlog.CpSystemLogCollect.capability(gateRegistryPort),

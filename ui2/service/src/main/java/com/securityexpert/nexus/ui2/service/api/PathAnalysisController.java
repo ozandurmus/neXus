@@ -168,7 +168,7 @@ public final class PathAnalysisController {
         }
     }
 
-    private static PathQueryService.Request parse(Map<String, Object> body) {
+    static PathQueryService.Request parse(Map<String, Object> body) {
         if (body == null || !FIELDS.containsAll(body.keySet()) || !body.keySet().containsAll(REQUIRED)) {
             throw new IllegalArgumentException("fields");
         }

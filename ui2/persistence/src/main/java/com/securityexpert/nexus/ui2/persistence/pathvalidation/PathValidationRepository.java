@@ -58,7 +58,7 @@ public interface PathValidationRepository {
 
     /**
      * The worker's outcome, fenced to the job's current lease (state EXECUTING, owner valid); the plan is cleared in the
-     * same statement. {@code false}: nothing was written.
+     * same statement; {@code reasons} are appended to the planner's. {@code false}: nothing was written.
      */
     boolean recordOutcome(String jobId, long leaseEpoch, String result, String checksJson, List<String> reasons);
 
