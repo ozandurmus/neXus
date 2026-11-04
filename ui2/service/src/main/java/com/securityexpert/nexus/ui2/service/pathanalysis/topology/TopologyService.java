@@ -25,8 +25,9 @@ import com.securityexpert.nexus.ui2.service.security.ActionRegistry;
  * Stage A3: holds the current in-memory topology, rebuilds it on request and manages overrides (D-1, D-8).
  *
  * <p>A rebuild is synchronous and bounded: one at a time, refused above fixed input sizes, reads stored inventory
- * only -- it never submits a job and never contacts a device. Reads have no side effects: when no graph is held (for
- * example after a service restart) the read says so instead of building one.</p>
+ * only -- it never submits a job and never contacts a device. A read never builds: when no graph is held (for
+ * example after a service restart) the read says so instead of building one. {@link TopologyAutoRebuild} (startup and
+ * after an inventory change, as the system actor) calls the same {@link #rebuild} under the same lock.</p>
  */
 public final class TopologyService {
 
@@ -101,15 +102,7 @@ public final class TopologyService {
         }
         try {
             long started = System.nanoTime();
-            List<DeviceSummaryRecord> candidates = devices.listAll().stream()
-                    .filter(d -> TopologyInput.VENDOR_CHECK_POINT.equals(d.vendorHint())
-                            || TopologyInput.VENDOR_PALO_ALTO.equals(d.vendorHint()))
-                    .filter(d -> "gateway".equals(d.role()))
-                    .filter(d -> d.enrollmentState() != DeviceEnrollmentState.DRAFT)
-                    .toList();
-            if (candidates.size() > MAX_DEVICES) {
-                throw new Refusal("TOPOLOGY_INPUT_TOO_LARGE", 422);
-            }
+            List<DeviceSummaryRecord> candidates = candidates();
             Map<String, InventoryRun> runs = inventory.findLatestRuns(candidates.stream()
                     .map(DeviceSummaryRecord::deviceId).toList()).stream()
                     .collect(Collectors.toMap(InventoryRun::deviceId, Function.identity(), (a, b) -> a));
@@ -140,6 +133,70 @@ public final class TopologyService {
                     graph.fingerprints(), graph.counts(), stored, millis));
         } finally {
             rebuildLock.unlock();
+        }
+    }
+
+    /** The devices a topology is built from; refused above {@link #MAX_DEVICES}. */
+    private List<DeviceSummaryRecord> candidates() {
+        List<DeviceSummaryRecord> candidates = devices.listAll().stream()
+                .filter(d -> TopologyInput.VENDOR_CHECK_POINT.equals(d.vendorHint())
+                        || TopologyInput.VENDOR_PALO_ALTO.equals(d.vendorHint()))
+                .filter(d -> "gateway".equals(d.role()))
+                .filter(d -> d.enrollmentState() != DeviceEnrollmentState.DRAFT)
+                .toList();
+        if (candidates.size() > MAX_DEVICES) {
+            throw new Refusal("TOPOLOGY_INPUT_TOO_LARGE", 422);
+        }
+        return candidates;
+    }
+
+    /**
+     * The inventory fingerprint the stored inventory would produce right now, computed from run identities only (no
+     * interface, address or route row is read) and equal to {@code graph.fingerprints().inventory()} of a build over
+     * the same inventory. Read only; never contacts a device.
+     */
+    public String liveInventoryFingerprint() {
+        List<DeviceSummaryRecord> candidates = candidates();
+        Map<String, DeviceInventoryRepository.RunStamp> stamps = inventory.findLatestRunStamps(candidates.stream()
+                .map(DeviceSummaryRecord::deviceId).toList()).stream()
+                .collect(Collectors.toMap(DeviceInventoryRepository.RunStamp::deviceId, Function.identity(), (a, b) -> a));
+        List<String> lines = new ArrayList<>();
+        for (DeviceSummaryRecord d : candidates) {
+            var stamp = Optional.ofNullable(stamps.get(d.deviceId()));
+            lines.add(TopologyBuilder.inventoryLine(d.deviceId(), stamp.map(DeviceInventoryRepository.RunStamp::runId),
+                    stamp.map(DeviceInventoryRepository.RunStamp::collectedAt), d.clusterMemberRef()));
+        }
+        return TopologyBuilder.inventoryFingerprint(lines);
+    }
+
+    /**
+     * Receives the "a topology read happened" signal (see {@link #requestRefreshCheck()}). Implemented by the
+     * automatic rebuild; absent in a plain service, where the signal does nothing.
+     */
+    public interface RefreshTrigger {
+        void topologyRead();
+    }
+
+    private volatile RefreshTrigger refreshTrigger;
+
+    /** Wires the automatic rebuild; called once at composition. */
+    public void attachRefreshTrigger(RefreshTrigger trigger) {
+        this.refreshTrigger = trigger;
+    }
+
+    /**
+     * Called by topology and path reads of a non-replay viewer. Never blocks, never throws and never changes what the
+     * caller is answered: the read is served from the held graph, and at most a debounced, single-flight, system
+     * rebuild is started in the background.
+     */
+    public void requestRefreshCheck() {
+        RefreshTrigger trigger = refreshTrigger;
+        if (trigger != null) {
+            try {
+                trigger.topologyRead();
+            } catch (RuntimeException ignored) {
+                // a failed trigger must never fail a read
+            }
         }
     }
 

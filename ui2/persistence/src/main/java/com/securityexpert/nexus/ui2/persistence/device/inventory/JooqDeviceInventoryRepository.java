@@ -177,6 +177,20 @@ public final class JooqDeviceInventoryRepository implements DeviceInventoryRepos
         });
     }
 
+    @Override
+    public List<RunStamp> findLatestRunStamps(List<String> deviceIds) {
+        if (deviceIds.isEmpty()) {
+            return List.of();
+        }
+        return transactionBoundary.inTransaction(dsl -> dsl.fetch(
+                "select distinct on (device_id) device_id, run_id, collected_at from device_inventory_run "
+                        + "where device_id in ({0}) order by device_id, collected_at desc",
+                org.jooq.impl.DSL.list(deviceIds.stream().map(org.jooq.impl.DSL::val).toList())).stream()
+                .map(row -> new RunStamp(row.get("device_id", String.class), row.get("run_id", String.class),
+                        row.get("collected_at", Timestamp.class).toInstant()))
+                .toList());
+    }
+
     private static InventoryRun assemble(DSLContext dsl, Record runRow) {
         String runId = runRow.get("run_id", String.class);
 

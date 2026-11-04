@@ -22,7 +22,9 @@ import com.securityexpert.nexus.ui2.service.privacy.TopologyNamePseudonymizer;
  * <p><b>Topology not built.</b> The query answers {@link NotBuilt} (the API's 409 {@code TOPOLOGY_NOT_BUILT}) instead of
  * building on demand: a build is a {@code topology_rebuild} (security_admin only, D-8) and persists a snapshot header, so
  * a read that triggered one would be both a privilege widening and a side effect (D-3 condition 4). Fail closed and
- * non-blocking.</p>
+ * non-blocking. The one thing a non-replay query does besides answering is raise the debounced background check of
+ * {@code TopologyAutoRebuild} (a system-actor rebuild); the answer is still taken from the graph held at that moment,
+ * and a replay viewer never raises it.</p>
  *
  * <p><b>aiview (D-3).</b> A replay viewer submits masked values only. Source, destination and a hinted ingress interface
  * are resolved through the snapshot's in-memory {@link PathPseudonymMap}; a raw, unknown or ambiguous value is
@@ -87,6 +89,10 @@ public final class PathQueryService {
 
     public Outcome query(Request request, boolean replayViewer) {
         validate(request);
+        if (!replayViewer) {
+            // Debounced, background, system-actor; the answer below still comes from the graph held right now.
+            topology.requestRefreshCheck();
+        }
         Optional<TopologyGraph> held = topology.current();
         if (held.isEmpty()) {
             if (!replayViewer) {

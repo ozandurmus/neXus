@@ -131,6 +131,18 @@ decision 2026-11-04): without `policy_read` every rule's id, number, name and se
 (`RULE_WITHHELD_NO_POLICY_READ`, headline without the rule number); verdicts and reasons are unchanged; aiview holds
 `policy_read` and sees them masked.
 
+Amendment 2026-11-04 (engineer decision under the PO freeze delegation, topology auto rebuild): the held graph is lost on
+restart and only the security_admin rebuild built it, so path queries answered 409 until a person acted. A system actor
+`system:topology-rebuild` (recorded in the snapshot header `built_by`; snapshot rows stay unaudited, V186) now runs the same
+rebuild (same lock, same input-size limits, stored inventory only, no device contact): (1) once after application start,
+in the background, a failure leaving `TOPOLOGY_NOT_BUILT`; (2) after an inventory change. Inventory is persisted by the worker
+only and the service has no commit hook, so a topology read or path query by a non-replay viewer raises a debounced check
+(at most one per minute): if the stored inventory fingerprint (run identities only) differs from the held graph's, or nothing
+is held, and no build or attempt ran in the last 5 minutes, one background rebuild starts; the read is still answered from
+the graph held at that moment. A replay viewer (aiview) never raises the check (D-3 condition 4, D-8). The manual
+`topology_rebuild` and its RBAC are unchanged. Not `@Scheduled` (scheduling is disabled in development mode);
+`ui2.topology.auto-rebuild.enabled=false` turns it off.
+
 ## 6. Disagreements and resolutions
 
 | Topic | Resolution |

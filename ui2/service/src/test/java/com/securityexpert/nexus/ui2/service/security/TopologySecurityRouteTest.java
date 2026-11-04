@@ -253,6 +253,23 @@ class TopologySecurityRouteTest {
     }
 
     @Test
+    void onlyANonReplayReadRaisesTheAutomaticRebuildCheckAndNeverTheRebuildItself() throws Exception {
+        var estate = new Estate();
+        java.util.concurrent.atomic.AtomicInteger signals = new java.util.concurrent.atomic.AtomicInteger();
+        estate.service.attachRefreshTrigger(signals::incrementAndGet);
+
+        var aiview = estate.as(Set.of(RoleToken.VIEWER, RoleToken.REPLAY_VIEWER));
+        aiview.perform(read("/api/v2/topology")).andExpect(status().isOk());
+        assertEquals(0, signals.get(), "an aiview read has no side effect (D-3 condition 4, D-8)");
+
+        var viewer = estate.as(Set.of(RoleToken.VIEWER));
+        viewer.perform(read("/api/v2/topology")).andExpect(status().isOk());
+        assertEquals(1, signals.get());
+        assertTrue(estate.repository.snapshots.isEmpty(), "the read itself never builds");
+        assertTrue(estate.service.current().isEmpty());
+    }
+
+    @Test
     void aiviewReadsTheMaskedProjectionWithStableIdsAndNoNote() throws Exception {
         var estate = new Estate();
         var admin = estate.as(Set.of(RoleToken.SECURITY_ADMIN));
