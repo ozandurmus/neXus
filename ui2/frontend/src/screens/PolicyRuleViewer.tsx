@@ -50,10 +50,13 @@ const PAN_KINDS: Record<string, { phase: "Pre" | "Post"; kind: string }> = {
   "Pre NAT rules": { phase: "Pre", kind: "NAT" }, "Post NAT rules": { phase: "Post", kind: "NAT" },
   "Pre default rules": { phase: "Pre", kind: "default" }, "Post default rules": { phase: "Post", kind: "default" },
 };
+/** Sections of a stored local (non-Panorama) firewall policy: security, NAT and overridden default rules. */
+const LOCAL_KINDS: Record<string, string> = { "Local rules": "", "Local NAT rules": "NAT", "Local default rules": "default" };
 export function containerLabel(metadata: PolicyMetadata, section: PolicySection, rule: PolicyRule) {
   if (metadata.vendor === "CP") return `${section.parentRuleId ? "Inline layer" : "Access layer"}: ${rule.extras["layer-name"]?.[0] ?? section.name}`;
   if (metadata.vendor === "PAN") {
-    if (section.name === "Local rules") return `Local firewall: ${section.source}`;
+    const local = LOCAL_KINDS[section.name];
+    if (local !== undefined) return `Local firewall: ${section.source}${local ? ` (${local})` : ""}`;
     const kind = PAN_KINDS[section.name] ?? { phase: "Pre", kind: "" };
     return `${section.source === "Shared" ? "Shared" : `Device group: ${section.source}`} (${kind.phase}${kind.kind ? ` ${kind.kind}` : ""})`;
   }
