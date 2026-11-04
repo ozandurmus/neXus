@@ -288,6 +288,9 @@ public final class InventoryController {
         body.put("vlan_id", iface.vlanId().orElse(null));
         body.put("mac_address", iface.macAddress().orElse(null));
         body.put("zone", iface.zone().orElse(null));
+        // V184 (path analysis A1): null is UNKNOWN. routing_context is a pseudonym for aiview.
+        body.put("routing_context", iface.routingContext().orElse(null));
+        body.put("evidence_grade", iface.evidenceGrade().orElse(null));
         body.put("addresses", iface.addresses().stream().map(InventoryController::toAddressBody).toList());
         return body;
     }
@@ -299,6 +302,11 @@ public final class InventoryController {
         body.put("interface", route.interfaceName().orElse(null));
         body.put("protocol", route.protocol());
         body.put("table", route.routeTable().orElse(null));
+        // V184 (path analysis A1): null is UNKNOWN, never false / 0 / a default kind.
+        body.put("is_active", route.active().orElse(null));
+        body.put("is_ecmp", route.ecmp().orElse(null));
+        body.put("metric", route.metric().orElse(null));
+        body.put("next_hop_kind", route.nextHopKind().orElse(null));
         return body;
     }
 

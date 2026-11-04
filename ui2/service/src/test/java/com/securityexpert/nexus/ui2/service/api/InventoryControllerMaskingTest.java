@@ -107,6 +107,55 @@ class InventoryControllerMaskingTest {
         }
     }
 
+    /** V184 (path analysis A1): the new name-bearing value is masked for aiview; the new facts pass unchanged. */
+    @Test
+    void routingContextAndRouteTableShareOneVrfPseudonymAndNewRouteFactsPassThrough() throws Exception {
+        String deviceId = "synthetic-pan-a1";
+        String vr = "VR-SYNTH-DMZ";
+        var iface = new InventoryInterface("if-1", "ethernet1/3", Optional.empty(), "physical", "up",
+                List.of(new InventoryAddress("a1", ADDRESSES.get(0), "ipv4", "member")), Optional.empty(),
+                Optional.empty(), Optional.empty(), Optional.of(vr), Optional.of(InventoryInterface.GRADE_RUNTIME));
+        var route = new InventoryRoute("r1", ADDRESSES.get(1), Optional.of(ADDRESSES.get(2)), Optional.of("ethernet1/3"),
+                "static", Optional.of(vr), Optional.of(false), Optional.of(true), Optional.of(200L),
+                Optional.of(InventoryRoute.NEXT_HOP_IP));
+        var unknown = new InventoryRoute("r2", ADDRESSES.get(3), Optional.empty(), Optional.empty(), "static",
+                Optional.empty());
+        var run = new InventoryRun("run-1", deviceId, "job-1", Instant.parse("2026-11-04T00:00:00Z"), 1,
+                List.of(new InventoryContext("1", List.of(iface), List.of(route, unknown))));
+        var query = mock(InventoryQueryService.class);
+        when(query.deviceInventory(deviceId)).thenReturn(new InventoryQueryService.DeviceInventoryOutcome.Found(
+                deviceId, Optional.of(run)));
+        when(query.jobFor(run)).thenReturn(Optional.empty());
+        var controller = new InventoryController(query, mock(InventoryCollectService.class));
+        var mvc = MockMvcBuilders.standaloneSetup(controller).setControllerAdvice(advice).build();
+
+        var masked = mvc.perform(get("/devices/" + deviceId + "/inventory").requestAttr(
+                GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE, true)).andExpect(status().isOk()).andReturn();
+        JsonNode body = JSON.readTree(masked.getResponse().getContentAsString());
+        assertThat(body.toString()).doesNotContain(vr);
+        assertOnlyMaskedIps(body, maskedIps());
+        JsonNode context = body.get("contexts").get(0);
+        String maskedContext = context.get("interfaces").get(0).get("routing_context").asText();
+        assertThat(maskedContext).isNotBlank().isNotEqualTo(vr);
+        assertThat(context.get("routes").get(0).get("table").asText()).isEqualTo(maskedContext);
+        assertThat(context.get("interfaces").get(0).get("evidence_grade").asText()).isEqualTo("RUNTIME");
+        JsonNode maskedRoute = context.get("routes").get(0);
+        assertThat(maskedRoute.get("is_active").asBoolean()).isFalse();
+        assertThat(maskedRoute.get("is_ecmp").asBoolean()).isTrue();
+        assertThat(maskedRoute.get("metric").asLong()).isEqualTo(200L);
+        assertThat(maskedRoute.get("next_hop_kind").asText()).isEqualTo("IP");
+        JsonNode unknownRoute = context.get("routes").get(1);
+        for (String field : List.of("is_active", "is_ecmp", "metric", "next_hop_kind")) {
+            assertThat(unknownRoute.get(field).isNull()).as(field + " UNKNOWN stays null").isTrue();
+        }
+
+        var admin = mvc.perform(get("/devices/" + deviceId + "/inventory").requestAttr(
+                GateChainInterceptor.IS_REPLAY_VIEWER_ATTRIBUTE, false)).andExpect(status().isOk()).andReturn();
+        JsonNode raw = JSON.readTree(admin.getResponse().getContentAsString()).get("contexts").get(0);
+        assertThat(raw.get("interfaces").get(0).get("routing_context").asText()).isEqualTo(vr);
+        assertThat(raw.get("routes").get(0).get("table").asText()).isEqualTo(vr);
+    }
+
     @Test
     void addressListsAndGatewayVariantsAreRecursivelyMaskedWithoutMutatingInput() {
         var body = Map.of("contexts", List.of(Map.of(
