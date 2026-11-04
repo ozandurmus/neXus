@@ -27,9 +27,14 @@ import java.util.Optional;
  *               {@code show interface all} {@code hw/entry/mac}; empty when not reported, never inferred
  * @param zone   the {@code device_interface.zone} column (V148): Palo Alto {@code ifnet/entry/zone};
  *               empty when the interface carries no zone or the vendor has no such field
+ * @param routingContext the {@code device_interface.routing_context} column (V184): the Palo Alto (legacy engine)
+ *               virtual router the interface forwards through; empty when not established (UNKNOWN)
+ * @param evidenceGrade the {@code device_interface.evidence_grade} column (V184): {@link #GRADE_RUNTIME} or
+ *               {@link #GRADE_CONFIG_DERIVED}; empty when not recorded (UNKNOWN)
  */
 public record InventoryInterface(String interfaceId, String name, Optional<String> parent, String kind, String state,
-        List<InventoryAddress> addresses, Optional<Integer> vlanId, Optional<String> macAddress, Optional<String> zone) {
+        List<InventoryAddress> addresses, Optional<Integer> vlanId, Optional<String> macAddress, Optional<String> zone,
+        Optional<String> routingContext, Optional<String> evidenceGrade) {
 
     public static final String KIND_PHYSICAL = "physical";
     public static final String KIND_VLAN = "vlan";
@@ -43,6 +48,11 @@ public record InventoryInterface(String interfaceId, String name, Optional<Strin
     public static final String STATE_DOWN = "down";
     public static final String STATE_UNKNOWN = "unknown";
 
+    /** V184: the interface came from a runtime read of the device. */
+    public static final String GRADE_RUNTIME = "RUNTIME";
+    /** V184: the interface was derived from stored configuration (PAN-OS 12, PO 2026-10-24), not a runtime read. */
+    public static final String GRADE_CONFIG_DERIVED = "CONFIG_DERIVED";
+
     public InventoryInterface {
         Objects.requireNonNull(interfaceId, "interfaceId");
         Objects.requireNonNull(name, "name");
@@ -53,6 +63,16 @@ public record InventoryInterface(String interfaceId, String name, Optional<Strin
         vlanId = vlanId == null ? Optional.empty() : vlanId;
         macAddress = macAddress == null ? Optional.empty() : macAddress;
         zone = zone == null ? Optional.empty() : zone;
+        routingContext = routingContext == null ? Optional.empty()
+                : routingContext.filter(r -> !r.isBlank() && r.length() <= 128);
+        evidenceGrade = evidenceGrade == null ? Optional.empty()
+                : evidenceGrade.filter(g -> GRADE_RUNTIME.equals(g) || GRADE_CONFIG_DERIVED.equals(g));
+    }
+
+    /** Pre-V184 shape: routing context and evidence grade not recorded (UNKNOWN). */
+    public InventoryInterface(String interfaceId, String name, Optional<String> parent, String kind, String state,
+            List<InventoryAddress> addresses, Optional<Integer> vlanId, Optional<String> macAddress, Optional<String> zone) {
+        this(interfaceId, name, parent, kind, state, addresses, vlanId, macAddress, zone, Optional.empty(), Optional.empty());
     }
 
     /** Pre-V148 shape: no link-layer address and no zone recorded. */
@@ -70,6 +90,12 @@ public record InventoryInterface(String interfaceId, String name, Optional<Strin
     /** This interface with the link facts a separate read reported for it (an absent value keeps the current one). */
     public InventoryInterface withLinkFacts(Optional<String> mac, Optional<String> zoneName) {
         return new InventoryInterface(interfaceId, name, parent, kind, state, addresses, vlanId,
-                mac.isPresent() ? mac : macAddress, zoneName.isPresent() ? zoneName : zone);
+                mac.isPresent() ? mac : macAddress, zoneName.isPresent() ? zoneName : zone, routingContext, evidenceGrade);
+    }
+
+    /** V184: this interface with its routing context and evidence grade (an absent value keeps the current one). */
+    public InventoryInterface withRouting(Optional<String> context, Optional<String> grade) {
+        return new InventoryInterface(interfaceId, name, parent, kind, state, addresses, vlanId, macAddress, zone,
+                context.isPresent() ? context : routingContext, grade.isPresent() ? grade : evidenceGrade);
     }
 }

@@ -77,6 +77,11 @@ class JooqDeviceInventoryRepositoryTest {
         assertEquals(1, executedSql.stream().filter(sql -> sql.contains("insert into device_interface(")).count());
         assertTrue(executedSql.stream().anyMatch(sql -> sql.contains("insert into device_interface(") && sql.contains("vlan_id")),
                 "AC-4: the VLAN id column is written");
+        assertTrue(executedSql.stream().anyMatch(sql -> sql.contains("insert into device_interface(")
+                && sql.contains("routing_context") && sql.contains("evidence_grade")), "V184: interface columns are written");
+        assertTrue(executedSql.stream().anyMatch(sql -> sql.contains("insert into device_route(") && sql.contains("is_active")
+                && sql.contains("is_ecmp") && sql.contains("metric") && sql.contains("next_hop_kind")),
+                "V184: route columns are written");
         assertEquals(2, executedSql.stream().filter(sql -> sql.contains("insert into device_interface_address")).count());
         assertEquals(1, executedSql.stream().filter(sql -> sql.contains("insert into device_route")).count());
         assertEquals(1, executedSql.stream().filter(sql -> sql.contains("insert into grid_member(")).count(),
@@ -139,13 +144,18 @@ class JooqDeviceInventoryRepositoryTest {
                 new String[] { "addr-2", "iface-1", "192.0.2.1/24", "ipv4", "cluster_virtual" });
 
         Result<Record> interfaceResult = create.fetchFromStringData(
-                new String[] { "interface_id", "context", "name", "parent", "kind", "state", "vlan_id", "mac_address", "zone" },
-                new String[] { "iface-1", "physical", "eth0", null, "physical", "up", "100", "00:1c:7f:0a:0b:0c", null });
+                new String[] { "interface_id", "context", "name", "parent", "kind", "state", "vlan_id", "mac_address", "zone",
+                        "routing_context", "evidence_grade" },
+                new String[] { "iface-1", "physical", "eth0", null, "physical", "up", "100", "00:1c:7f:0a:0b:0c", null,
+                        "VR-SYNTH-01", "RUNTIME" });
 
         Result<Record> routeResult = create.fetchFromStringData(
                 new String[] { "route_id", "context", "destination", "next_hop", "interface", "protocol",
-                        "route_table" },
-                new String[] { "route-1", "physical", "0.0.0.0/0", "192.0.2.254", "eth0", "default", null });
+                        "route_table", "is_active", "is_ecmp", "metric", "next_hop_kind" },
+                new String[] { "route-1", "physical", "0.0.0.0/0", "192.0.2.254", "eth0", "default", null,
+                        "true", "false", "10", "IP" },
+                new String[] { "route-2", "physical", "198.51.100.0/24", null, null, "static", null,
+                        null, null, null, "DISCARD" });
 
         Result<Record> haResult = create.fetchFromStringData(
                 new String[] { "ha_id", "context", "role", "cluster_mode", "source" },
@@ -186,12 +196,25 @@ class JooqDeviceInventoryRepositoryTest {
         assertEquals(Optional.of(100), context.interfaces().get(0).vlanId(), "AC-4: the VLAN id round-trips");
         assertEquals(Optional.of("00:1c:7f:0a:0b:0c"), context.interfaces().get(0).macAddress(), "V148: the MAC round-trips");
         assertEquals(Optional.empty(), context.interfaces().get(0).zone(), "V148: no zone recorded stays empty");
-        assertEquals(1, context.routes().size());
+        assertEquals(Optional.of("VR-SYNTH-01"), context.interfaces().get(0).routingContext(), "V184: routing context round-trips");
+        assertEquals(Optional.of(InventoryInterface.GRADE_RUNTIME), context.interfaces().get(0).evidenceGrade());
+        assertEquals(2, context.routes().size());
+        InventoryRoute active = context.routes().get(0);
+        assertEquals(Optional.of(true), active.active(), "V184: is_active round-trips");
+        assertEquals(Optional.of(false), active.ecmp());
+        assertEquals(Optional.of(10L), active.metric());
+        assertEquals(Optional.of(InventoryRoute.NEXT_HOP_IP), active.nextHopKind());
+        InventoryRoute discard = context.routes().get(1);
+        assertEquals(Optional.empty(), discard.active(), "V184: NULL stays UNKNOWN, never false");
+        assertEquals(Optional.empty(), discard.ecmp());
+        assertEquals(Optional.empty(), discard.metric());
+        assertEquals(Optional.of(InventoryRoute.NEXT_HOP_DISCARD), discard.nextHopKind());
         assertTrue(run.gridMembers().isEmpty(), "a firewall run carries no grid members");
         assertEquals(2, run.gridSummary().dnsViews());
         assertTrue(run.gridSummary().authZonesAtLeast());
         assertTrue(run.gridSummary().topNetworksJson().contains("192.0.2.0/24"));
         assertEquals("default", context.routes().get(0).protocol());
+        assertEquals("static", context.routes().get(1).protocol());
         assertEquals(1, run.haFacts().size(), "AC-4: the HA fact round-trips");
         InventoryHaFact haFact = run.haFacts().get(0);
         assertEquals("physical", haFact.context());

@@ -66,10 +66,12 @@ public final class JooqDeviceInventoryRepository implements DeviceInventoryRepos
             for (InventoryContext context : run.contexts()) {
                 for (InventoryInterface iface : context.interfaces()) {
                     dsl.execute("insert into device_interface(interface_id, run_id, context, name, parent, kind, "
-                            + "state, vlan_id, mac_address, zone) values ({0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9})",
+                            + "state, vlan_id, mac_address, zone, routing_context, evidence_grade) "
+                            + "values ({0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10}, {11})",
                             iface.interfaceId(), run.runId(), context.context(), iface.name(),
                             iface.parent().orElse(null), iface.kind(), iface.state(), iface.vlanId().orElse(null),
-                            iface.macAddress().orElse(null), iface.zone().orElse(null));
+                            iface.macAddress().orElse(null), iface.zone().orElse(null),
+                            iface.routingContext().orElse(null), iface.evidenceGrade().orElse(null));
                     for (InventoryAddress address : iface.addresses()) {
                         dsl.execute("insert into device_interface_address(address_id, interface_id, address, "
                                 + "family, role) values ({0}, {1}, {2}, {3}, {4})",
@@ -79,10 +81,12 @@ public final class JooqDeviceInventoryRepository implements DeviceInventoryRepos
                 }
                 for (InventoryRoute route : context.routes()) {
                     dsl.execute("insert into device_route(route_id, run_id, context, destination, next_hop, "
-                            + "interface, protocol, route_table) values ({0}, {1}, {2}, {3}, {4}, {5}, {6}, {7})",
+                            + "interface, protocol, route_table, is_active, is_ecmp, metric, next_hop_kind) "
+                            + "values ({0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10}, {11})",
                             route.routeId(), run.runId(), context.context(), route.destination(),
                             route.nextHop().orElse(null), route.interfaceName().orElse(null), route.protocol(),
-                            route.routeTable().orElse(null));
+                            route.routeTable().orElse(null), route.active().orElse(null), route.ecmp().orElse(null),
+                            route.metric().orElse(null), route.nextHopKind().orElse(null));
                 }
             }
             for (InventoryHaFact fact : run.haFacts()) {
@@ -187,8 +191,8 @@ public final class JooqDeviceInventoryRepository implements DeviceInventoryRepos
         }
 
         Map<String, List<InventoryInterface>> interfacesByContext = new LinkedHashMap<>();
-        Result<Record> interfaceRows = dsl.fetch("select interface_id, context, name, parent, kind, state, vlan_id, mac_address, zone "
-                + "from device_interface where run_id = {0}", runId);
+        Result<Record> interfaceRows = dsl.fetch("select interface_id, context, name, parent, kind, state, vlan_id, mac_address, zone, "
+                + "routing_context, evidence_grade from device_interface where run_id = {0}", runId);
         for (Record row : interfaceRows) {
             String interfaceId = row.get("interface_id", String.class);
             interfacesByContext.computeIfAbsent(row.get("context", String.class), key -> new ArrayList<>())
@@ -198,18 +202,21 @@ public final class JooqDeviceInventoryRepository implements DeviceInventoryRepos
                             addressesByInterfaceId.getOrDefault(interfaceId, List.of()),
                             Optional.ofNullable(row.get("vlan_id", Integer.class)),
                             Optional.ofNullable(row.get("mac_address", String.class)),
-                            Optional.ofNullable(row.get("zone", String.class))));
+                            Optional.ofNullable(row.get("zone", String.class)),
+                            optional(row, "routing_context", String.class), optional(row, "evidence_grade", String.class)));
         }
 
         Map<String, List<InventoryRoute>> routesByContext = new LinkedHashMap<>();
         Result<Record> routeRows = dsl.fetch("select route_id, context, destination, next_hop, interface, "
-                + "protocol, route_table from device_route where run_id = {0}", runId);
+                + "protocol, route_table, is_active, is_ecmp, metric, next_hop_kind from device_route where run_id = {0}", runId);
         for (Record row : routeRows) {
             routesByContext.computeIfAbsent(row.get("context", String.class), key -> new ArrayList<>())
                     .add(new InventoryRoute(row.get("route_id", String.class), row.get("destination", String.class),
                             Optional.ofNullable(row.get("next_hop", String.class)),
                             Optional.ofNullable(row.get("interface", String.class)), row.get("protocol", String.class),
-                            Optional.ofNullable(row.get("route_table", String.class))));
+                            Optional.ofNullable(row.get("route_table", String.class)),
+                            optional(row, "is_active", Boolean.class), optional(row, "is_ecmp", Boolean.class),
+                            optional(row, "metric", Long.class), optional(row, "next_hop_kind", String.class)));
         }
 
         List<String> contextLabels = new ArrayList<>(interfacesByContext.keySet());
@@ -262,6 +269,11 @@ public final class JooqDeviceInventoryRepository implements DeviceInventoryRepos
         return new InventoryRun(runId, runRow.get("device_id", String.class), runRow.get("job_id", String.class),
                 runRow.get("collected_at", Timestamp.class).toInstant(), runRow.get("context_count", Integer.class),
                 contexts, haFacts, virtualSystems, gridMembers, summary, notCollected(runRow));
+    }
+
+    /** A V184 column: empty when the value is NULL (UNKNOWN) or the result carries no such field. */
+    private static <T> Optional<T> optional(Record row, String column, Class<T> type) {
+        return row.field(column) == null ? Optional.empty() : Optional.ofNullable(row.get(column, type));
     }
 
     /** {@code device_inventory_run.not_collected} (V171): comma-separated read-kind tokens, absent on older rows. */
