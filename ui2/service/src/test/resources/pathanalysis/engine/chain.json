@@ -1,0 +1,30 @@
+{
+  "_comment": "Synthetic estate for the stage A4 path engine golden tests (documentation addresses only, pseudonym hostnames). Check Point FW-TANGO-04 (client LAN 198.51.100.0/26 on eth1, a /30 transit to Palo Alto FW-BRAVO-02 on eth2, an uplink to an unenrolled router on eth3, a blackhole route) and Palo Alto FW-BRAVO-02 vsys1 / vr-main (transit zone, DMZ 203.0.113.0/26).",
+  "devices": [
+    {"device_id": "dev-t04", "vendor": "check_point", "hostname": "FW-TANGO-04",
+     "run": {"run_id": "run-t04", "collected_at": "2026-11-04T06:00:00Z",
+       "contexts": [{"context": "physical",
+         "interfaces": [
+           {"name": "eth1", "addresses": [{"address": "198.51.100.1/26", "role": "member"}]},
+           {"name": "eth2", "addresses": [{"address": "192.0.2.1/30", "role": "member"}]},
+           {"name": "eth3", "addresses": [{"address": "198.51.100.129/30", "role": "member"}]}],
+         "routes": [
+           {"destination": "198.51.100.0/26", "interface": "eth1", "protocol": "kernel", "kind": "CONNECTED", "active": true},
+           {"destination": "192.0.2.0/30", "interface": "eth2", "protocol": "kernel", "kind": "CONNECTED", "active": true},
+           {"destination": "198.51.100.128/30", "interface": "eth3", "protocol": "kernel", "kind": "CONNECTED", "active": true},
+           {"destination": "203.0.113.0/26", "next_hop": "192.0.2.2", "interface": "eth2", "protocol": "static", "kind": "IP", "active": true},
+           {"destination": "203.0.113.192/26", "next_hop": "192.0.2.2", "interface": "eth2", "protocol": "static", "kind": "IP", "active": true},
+           {"destination": "203.0.113.64/26", "protocol": "static", "kind": "DISCARD", "active": true},
+           {"destination": "0.0.0.0/0", "next_hop": "198.51.100.130", "interface": "eth3", "protocol": "static", "kind": "IP", "active": true}]}]}},
+    {"device_id": "dev-b02", "vendor": "palo_alto", "hostname": "FW-BRAVO-02",
+     "run": {"run_id": "run-b02", "collected_at": "2026-11-04T06:00:00Z",
+       "contexts": [{"context": "vsys1",
+         "interfaces": [
+           {"name": "ethernet1/1", "zone": "ZONE-TRANSIT", "routing_context": "vr-main", "addresses": [{"address": "192.0.2.2/30", "role": "member"}]},
+           {"name": "ethernet1/2", "zone": "ZONE-DMZ", "routing_context": "vr-main", "addresses": [{"address": "203.0.113.1/26", "role": "member"}]}],
+         "routes": [
+           {"destination": "192.0.2.0/30", "interface": "ethernet1/1", "protocol": "connected", "table": "vr-main", "kind": "CONNECTED", "active": true},
+           {"destination": "203.0.113.0/26", "interface": "ethernet1/2", "protocol": "connected", "table": "vr-main", "kind": "CONNECTED", "active": true},
+           {"destination": "198.51.100.0/24", "next_hop": "192.0.2.1", "interface": "ethernet1/1", "protocol": "static", "table": "vr-main", "kind": "IP", "active": true}]}]}}
+  ]
+}

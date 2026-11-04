@@ -1,0 +1,145 @@
+{
+ "_comment": "Synthetic estate, stage A4: Check Point FW-TANGO-04 with ten ECMP default routes into unenrolled routers on one uplink segment (more than the 8-per-hop bound).",
+ "devices": [
+  {
+   "device_id": "dev-t04",
+   "vendor": "check_point",
+   "hostname": "FW-TANGO-04",
+   "run": {
+    "run_id": "run-t04",
+    "collected_at": "2026-11-04T06:00:00Z",
+    "contexts": [
+     {
+      "context": "physical",
+      "interfaces": [
+       {
+        "name": "eth1",
+        "addresses": [
+         {
+          "address": "198.51.100.1/26",
+          "role": "member"
+         }
+        ]
+       },
+       {
+        "name": "eth2",
+        "addresses": [
+         {
+          "address": "192.0.2.1/24",
+          "role": "member"
+         }
+        ]
+       }
+      ],
+      "routes": [
+       {
+        "destination": "198.51.100.0/26",
+        "interface": "eth1",
+        "protocol": "kernel",
+        "kind": "CONNECTED",
+        "active": true
+       },
+       {
+        "destination": "192.0.2.0/24",
+        "interface": "eth2",
+        "protocol": "kernel",
+        "kind": "CONNECTED",
+        "active": true
+       },
+       {
+        "destination": "0.0.0.0/0",
+        "next_hop": "192.0.2.11",
+        "interface": "eth2",
+        "protocol": "static",
+        "kind": "IP",
+        "active": true,
+        "ecmp": true
+       },
+       {
+        "destination": "0.0.0.0/0",
+        "next_hop": "192.0.2.12",
+        "interface": "eth2",
+        "protocol": "static",
+        "kind": "IP",
+        "active": true,
+        "ecmp": true
+       },
+       {
+        "destination": "0.0.0.0/0",
+        "next_hop": "192.0.2.13",
+        "interface": "eth2",
+        "protocol": "static",
+        "kind": "IP",
+        "active": true,
+        "ecmp": true
+       },
+       {
+        "destination": "0.0.0.0/0",
+        "next_hop": "192.0.2.14",
+        "interface": "eth2",
+        "protocol": "static",
+        "kind": "IP",
+        "active": true,
+        "ecmp": true
+       },
+       {
+        "destination": "0.0.0.0/0",
+        "next_hop": "192.0.2.15",
+        "interface": "eth2",
+        "protocol": "static",
+        "kind": "IP",
+        "active": true,
+        "ecmp": true
+       },
+       {
+        "destination": "0.0.0.0/0",
+        "next_hop": "192.0.2.16",
+        "interface": "eth2",
+        "protocol": "static",
+        "kind": "IP",
+        "active": true,
+        "ecmp": true
+       },
+       {
+        "destination": "0.0.0.0/0",
+        "next_hop": "192.0.2.17",
+        "interface": "eth2",
+        "protocol": "static",
+        "kind": "IP",
+        "active": true,
+        "ecmp": true
+       },
+       {
+        "destination": "0.0.0.0/0",
+        "next_hop": "192.0.2.18",
+        "interface": "eth2",
+        "protocol": "static",
+        "kind": "IP",
+        "active": true,
+        "ecmp": true
+       },
+       {
+        "destination": "0.0.0.0/0",
+        "next_hop": "192.0.2.19",
+        "interface": "eth2",
+        "protocol": "static",
+        "kind": "IP",
+        "active": true,
+        "ecmp": true
+       },
+       {
+        "destination": "0.0.0.0/0",
+        "next_hop": "192.0.2.20",
+        "interface": "eth2",
+        "protocol": "static",
+        "kind": "IP",
+        "active": true,
+        "ecmp": true
+       }
+      ]
+     }
+    ]
+   }
+  }
+ ]
+}
