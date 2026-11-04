@@ -24,8 +24,13 @@ public record PolicySnapshot(Metadata metadata, List<Section> sections, Map<Stri
     /** Section names the Panorama mapper gives to rulebases that are not security rules. */
     public static final String PAN_PRE_NAT = "Pre NAT rules", PAN_POST_NAT = "Post NAT rules",
             PAN_PRE_DEFAULT = "Pre default rules", PAN_POST_DEFAULT = "Post default rules";
+    /**
+     * Section names the local (non-Panorama) firewall mapper gives to the NAT and overridden default rules of one
+     * virtual system's stored configuration (path analysis A2, gap G3). Like the Panorama names they are never security.
+     */
+    public static final String PAN_LOCAL_RULES = "Local rules", PAN_LOCAL_NAT = "Local NAT rules", PAN_LOCAL_DEFAULT = "Local default rules";
     private static final java.util.Set<String> PAN_NON_SECURITY_SECTIONS =
-            java.util.Set.of(PAN_PRE_NAT, PAN_POST_NAT, PAN_PRE_DEFAULT, PAN_POST_DEFAULT);
+            java.util.Set.of(PAN_PRE_NAT, PAN_POST_NAT, PAN_PRE_DEFAULT, PAN_POST_DEFAULT, PAN_LOCAL_NAT, PAN_LOCAL_DEFAULT);
     /**
      * True for a Palo Alto NAT or default-rules section. These are stored beside the security sections but are never
      * part of security evaluation (lookup, shadowing, hit joins). Only the vendor-fixed names of PAN sections count;

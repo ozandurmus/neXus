@@ -258,6 +258,8 @@ it("shows Palo Alto NAT and default-rule sections in the same rule table with th
   expect(sectionLabel(meta, named("Post NAT rules", "DOM-TANGO-01"))).toBe("Device-group post-NAT rules");
   expect(containerLabel(meta, named("Pre NAT rules", "Shared"), rule)).toBe("Shared (Pre NAT)");
   expect(containerLabel(meta, named("Post default rules", "DOM-TANGO-01"), rule)).toBe("Device group: DOM-TANGO-01 (Post default)");
+  expect(["Local rules", "Local NAT rules", "Local default rules"].map(name => containerLabel(meta, named(name, "vsys1"), rule)))
+    .toEqual(["Local firewall: vsys1", "Local firewall: vsys1 (NAT)", "Local firewall: vsys1 (default)"]);
   // The CP NAT section keeps its own name; only the fixed PAN names are relabelled.
   expect(sectionLabel(metadata, named("Pre NAT rules", "CP NAT rulebase"))).toBe("Pre NAT rules");
   const natRule = { ...rule, name: "RULE-NAT-01", uuid: "RULE-TANGO-09", action: "source-and-destination-nat",

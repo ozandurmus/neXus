@@ -116,15 +116,22 @@ public final class PanoramaPolicyMapper {
                     definitions.put(family(type) + ":" + entry.getAttribute("name"), new Definition(entry, type, scopeName(scope)));
             Element localScope = (Element) vsys.cloneNode(true);
             // An unmanaged effective-running document can still carry provenance; exclude explicit manager sources.
-            for (Element rules : PolicyXml.selectRelative(localScope, "rulebase/security/rules")) {
-                for (Element rule : new ArrayList<>(PolicyXml.selectRelative(rules, "entry"))) {
-                    String provenance = rule.getAttribute("src");
-                    if (!provenance.isEmpty() && !provenance.equals("local")) rules.removeChild(rule);
+            for (String rulebase : List.of("security", "nat", "default-security-rules")) {
+                for (Element rules : PolicyXml.selectRelative(localScope, "rulebase/" + rulebase + "/rules")) {
+                    for (Element rule : new ArrayList<>(PolicyXml.selectRelative(rules, "entry"))) {
+                        String provenance = rule.getAttribute("src");
+                        if (!provenance.isEmpty() && !provenance.equals("local")) rules.removeChild(rule);
+                    }
                 }
             }
             Map<String, PolicyObject> objects = new LinkedHashMap<>();
             List<Section> sections = new ArrayList<>();
             section(metadata, localScope, "rulebase", definitions, objects, sections);
+            // Path analysis A2 (G3): the NAT rulebase and the overridden default rules of the same stored document, in the
+            // same shape as the Panorama sections and only when present (PATH_ANALYSIS_VENDOR_SEMANTICS.md 4b, 4c). The
+            // firewall level is the only level of an unmanaged firewall, so these overrides are complete for it.
+            natSection(metadata, localScope, "rulebase", definitions, objects, sections);
+            defaultSection(metadata, localScope, "rulebase", sections);
             snapshots.add(new PolicySnapshot(metadata, sections, objects));
         }
         return snapshots;
@@ -158,7 +165,7 @@ public final class PanoramaPolicyMapper {
                     "start=" + unknown(text(entry, "log-start")) + ", end=" + unknown(text(entry, "log-end")),
                     text(entry, "description"), extras));
         }
-        sections.add(new Section(id, phase.equals("pre-rulebase") ? "Pre rules" : phase.equals("post-rulebase") ? "Post rules" : "Local rules", source, null, rules));
+        sections.add(new Section(id, phase.equals("pre-rulebase") ? "Pre rules" : phase.equals("post-rulebase") ? "Post rules" : PolicySnapshot.PAN_LOCAL_RULES, source, null, rules));
     }
 
     /**
@@ -232,8 +239,8 @@ public final class PanoramaPolicyMapper {
                     cell(meta, entry, "service", "service", definitions, objects),
                     new Cell(List.of(), false), action, "", text(entry, "description"), extras));
         }
-        sections.add(new Section(id, phase.equals("pre-rulebase") ? PolicySnapshot.PAN_PRE_NAT : PolicySnapshot.PAN_POST_NAT,
-                source, null, rules));
+        sections.add(new Section(id, phase.equals("pre-rulebase") ? PolicySnapshot.PAN_PRE_NAT
+                : phase.equals("post-rulebase") ? PolicySnapshot.PAN_POST_NAT : PolicySnapshot.PAN_LOCAL_NAT, source, null, rules));
     }
 
     /**
@@ -265,8 +272,8 @@ public final class PanoramaPolicyMapper {
                     "start=" + unknown(text(entry, "log-start")) + ", end=" + unknown(text(entry, "log-end")),
                     text(entry, "description"), extras));
         }
-        sections.add(new Section(id, phase.equals("pre-rulebase") ? PolicySnapshot.PAN_PRE_DEFAULT : PolicySnapshot.PAN_POST_DEFAULT,
-                source, null, rules));
+        sections.add(new Section(id, phase.equals("pre-rulebase") ? PolicySnapshot.PAN_PRE_DEFAULT
+                : phase.equals("post-rulebase") ? PolicySnapshot.PAN_POST_DEFAULT : PolicySnapshot.PAN_LOCAL_DEFAULT, source, null, rules));
     }
     /**
      * The Panorama target of a security or NAT rule, recorded so that no rule whose target is not fully represented
