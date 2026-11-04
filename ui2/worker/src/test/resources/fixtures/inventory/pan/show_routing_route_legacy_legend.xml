@@ -1,0 +1,19 @@
+<response status="success">
+  <result>
+    <flags>A:active, ?:loose, C:connect, H:host, S:static, ~:internal, R:rip, O:ospf, B:bgp</flags>
+    <entry>
+      <destination>198.51.100.0/24</destination>
+      <nexthop>192.0.2.9</nexthop>
+      <metric>20</metric>
+      <flags>?B</flags>
+      <interface>ethernet1/1</interface>
+      <virtual-router>default</virtual-router>
+    </entry>
+    <entry>
+      <destination>203.0.113.0/24</destination>
+      <nexthop>192.0.2.9</nexthop>
+      <interface>ethernet1/1</interface>
+      <virtual-router>default</virtual-router>
+    </entry>
+  </result>
+</response>
