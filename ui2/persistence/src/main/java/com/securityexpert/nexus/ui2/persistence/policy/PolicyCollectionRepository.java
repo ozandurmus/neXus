@@ -231,6 +231,58 @@ public class PolicyCollectionRepository {
                     Objects.requireNonNullElse(r.get("display_name", String.class), ""), Objects.requireNonNullElse(r.get("virtual_system_ref", String.class), ""), "UNKNOWN")));
     }
 
+    /**
+     * One {@code policy_target_binding} row (V185, path analysis A2 / G7): the Check Point package {@code policyId} names
+     * the installation-target object {@code installOnRef} (= {@code PolicySnapshot.ref(policyId, "object", targetUid)}),
+     * and that object denotes the enrolled device {@code deviceId} in {@code context} ('' = no virtual system).
+     * {@code installOnRef == null} is UNKNOWN: it never proves that a rule installed elsewhere skips the device.
+     */
+    public record TargetBinding(String deviceId, String context, String policyId, String installOnRef) {
+        public TargetBinding {
+            Objects.requireNonNull(deviceId, "deviceId"); Objects.requireNonNull(policyId, "policyId");
+            context = Objects.requireNonNullElse(context, "");
+        }
+    }
+
+    /**
+     * Makes the stored bindings of one package equal to {@code bindings} by difference: rows that are new are inserted,
+     * rows that vanished are deleted, unchanged rows are not touched (a repeated collection with the same installation
+     * targets therefore writes no audit row). A binding for another package is never touched. A device that is not
+     * enrolled any more is skipped by the insert (its FK would fail); bindings for it are deleted with the device.
+     */
+    public void saveTargetBindings(String policyId, List<TargetBinding> bindings, String actor) {
+        Objects.requireNonNull(policyId, "policyId");
+        PolicyChunkStore.requireBounded(PolicyJsonWrite.bytes(policyId));
+        Set<List<String>> wanted = new LinkedHashSet<>();
+        for (TargetBinding binding : bindings) {
+            if (!binding.policyId().equals(policyId)) throw new IllegalArgumentException("binding of another package");
+            wanted.add(Arrays.asList(binding.deviceId(), binding.context(), binding.installOnRef()));
+        }
+        new AuditedTransactionBoundary(tx).inTransaction(actor, "policy_collect_target_binding", db -> {
+            Set<List<String>> stored = new LinkedHashSet<>();
+            for (var row : db.fetch("select binding_id, device_id, context, install_on_ref from policy_target_binding "
+                    + "where policy_id = {0} for update", policyId)) {
+                var key = Arrays.asList(row.get("device_id", String.class), row.get("context", String.class), row.get("install_on_ref", String.class));
+                if (!wanted.contains(key) || !stored.add(key))
+                    db.execute("delete from policy_target_binding where binding_id = {0}", row.get("binding_id", Long.class));
+            }
+            for (var key : wanted) {
+                if (stored.contains(key)) continue;
+                db.execute("insert into policy_target_binding(device_id, context, policy_id, install_on_ref) "
+                    + "select {0}, {1}, {2}, {3} where exists (select 1 from devices where device_id = {0}) on conflict do nothing",
+                    key.get(0), key.get(1), policyId, key.get(2));
+            }
+            return null;
+        });
+    }
+
+    /** Every stored binding of one package; the evaluator needs the bindings of all devices to prove a skip. */
+    public List<TargetBinding> targetBindings(String policyId) {
+        return tx.inTransaction(db -> db.fetch("select device_id, context, install_on_ref from policy_target_binding "
+            + "where policy_id = {0} order by binding_id", policyId).map(r -> new TargetBinding(r.get("device_id", String.class),
+                r.get("context", String.class), policyId, r.get("install_on_ref", String.class))));
+    }
+
     /** Exact serial relation established by discovery; unmatched members remain scoped opaque references. */
     public List<Target> panTargets(String runId, String sourceId, String serial, String context, String syncStatus) {
         var matched = tx.inTransaction(db -> db.fetch("select distinct d.device_id, c.display_name from discovery_candidate c "

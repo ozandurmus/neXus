@@ -53,6 +53,31 @@ class CheckPointPolicyCollectorTest {
         }
     }
 
+    /** Path analysis A2 (G7): the enrolled installation targets become policy_target_binding rows keyed by the install-on reference. */
+    @Test void enrolledInstallationTargetsAreSavedAsTargetBindingsInSerialAndParallel() {
+        for (int sessions : List.of(1, 4)) {
+            reset(transport, repository);
+            setup(this::answer);
+            when(repository.targets("run-1", "DOM-TANGO-01", "target-01")).thenReturn(List.of(
+                new PolicySnapshot.Target("device-1", "FW-TANGO-04", "", "UNKNOWN"), new PolicySnapshot.Target("device-2", "FW-TANGO-05", "vs-02", "UNKNOWN")));
+            var snapshots = new CheckPointPolicyCollector(transport, gates, repository, Duration.ofHours(2), sessions).collect(run, request, () -> true);
+            String policyId = snapshots.get(0).metadata().id();
+            String installOn = PolicySnapshot.ref(policyId, "object", "target-01");
+            verify(repository).saveTargetBindings(eq(policyId), eq(List.of(
+                new PolicyCollectionRepository.TargetBinding("device-1", "", policyId, installOn),
+                new PolicyCollectionRepository.TargetBinding("device-2", "vs-02", policyId, installOn))), eq("system:worker"));
+        }
+        for (int sessions : List.of(1, 4)) {
+            reset(transport, repository);
+            setup(command -> command.contains("show-packages")
+                ? ok("{\"from\":1,\"to\":1,\"total\":1,\"packages\":[{\"uid\":\"pkg-01\",\"name\":\"Package\",\"access\":false,\"installation-targets\":\"all\"}]}")
+                : answer(command));
+            var snapshots = new CheckPointPolicyCollector(transport, gates, repository, Duration.ofHours(2), sessions).collect(run, request, () -> true);
+            // "All" proves no device: the package's earlier bindings are replaced by none.
+            verify(repository).saveTargetBindings(eq(snapshots.get(0).metadata().id()), eq(List.of()), eq("system:worker"));
+        }
+    }
+
     @Test void domainScopedLayerIdentityIsUsedInSerialAndParallel() {
         for (int sessions : List.of(1, 4)) {
             reset(transport, repository);
