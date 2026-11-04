@@ -93,9 +93,10 @@ public class SubnetPreservingIpMasker {
     }
 
     /**
-     * The pseudonym of a network written {@code a.b.c.d/len} with its host bits clear, computed purely: nothing is
-     * cached and the network is not registered. Equals {@link #mask} of the same text (the subnet keyed hash depends only
-     * on the network and its length).
+     * The pseudonym of a value written {@code a.b.c.d/len} (a network, or a host with its prefix length as an interface
+     * address is written), computed purely: nothing is cached and the network is not registered. Equals {@link #mask} of
+     * the same text whatever was registered before or after: with an explicit length the subnet keyed hash depends only
+     * on the network and its length, and the host offset is kept.
      */
     public String maskNetworkWithoutSideEffects(String cidr) {
         if (cidr == null || cidr.isBlank()) {
