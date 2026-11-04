@@ -4737,3 +4737,89 @@ gates:
     secret_output_risk: "output may carry host names, addresses and file names; in-memory masked projection only (hostnames and IPs masked by the diagnostic output mask); no raw retention; output size cap as for every diagnostic_read"
     safe_telemetry_fields: []
     source_document_pointer: "docs/design/PO_DECISION_RECORD_2026_10_30_LOCAL_LOG_DIAGNOSTICS.md addendum 2026-11-03 (PO chat approval 2026-11-03)"
+
+  # Path analysis stage A6 (PATH_ANALYSIS_A6_COMMAND_PROPOSAL.md rows 2-5, RATIFIED 2026-11-04), V188: issued only by path_validation.
+  - gate_id: "path_validation_cp_route_get"
+    vendor: "check_point"
+    platform_role_scope: "cp_gaia_gateway"
+    shell_context: "expert"
+    transport_kind: "SSH_EXEC"
+    canonical_command_key: "bash -lc 'ip -4 route get <DST>'"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 30
+    retry_rule: "none"
+    max_frequency: "on a PO-chosen sample only: once per hop per path_validation job, at most four hops per validation request, never polled"
+    session_reuse_rule: "one existing trusted SSH session per job; non-interactive bash login shell; no retry"
+    unsupported_behavior_ref: "an error answer, a missing route line or an unknown route type is NOT_EVALUABLE, never a MISMATCH"
+    secret_output_risk: "output carries addresses and interface names; parsed in memory to a MATCH / MISMATCH / NOT_EVALUABLE comparison only; never stored, transcribed or logged (raw-evidence law)"
+    safe_telemetry_fields: ["result", "reason"]
+    source_document_pointer: "docs/design/PATH_ANALYSIS_A6_COMMAND_PROPOSAL.md row 2 (RATIFIED; PO chat approval 2026-11-04: \"1-5 onaylı devam\")"
+
+  - gate_id: "path_validation_cp_route_get_vsx"
+    vendor: "check_point"
+    platform_role_scope: "cp_gaia_gateway"
+    shell_context: "expert"
+    transport_kind: "SSH_EXEC"
+    canonical_command_key: "bash -lc 'vsenv <VSID> && ip -4 route get <DST>'"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 30
+    retry_rule: "none"
+    max_frequency: "on a PO-chosen sample only: once per hop per path_validation job, at most four hops per validation request, never polled"
+    session_reuse_rule: "one existing trusted SSH session per job; non-interactive bash login shell (so vsenv resolves); no retry"
+    unsupported_behavior_ref: "an error answer, a missing route line or an unknown route type is NOT_EVALUABLE, never a MISMATCH"
+    secret_output_risk: "output carries addresses and interface names; parsed in memory to a MATCH / MISMATCH / NOT_EVALUABLE comparison only; never stored, transcribed or logged (raw-evidence law)"
+    safe_telemetry_fields: ["result", "reason"]
+    source_document_pointer: "docs/design/PATH_ANALYSIS_A6_COMMAND_PROPOSAL.md row 2 (RATIFIED; PO chat approval 2026-11-04: \"1-5 onaylı devam\")"
+
+  - gate_id: "path_validation_pan_fib_lookup"
+    vendor: "palo_alto"
+    platform_role_scope: "pan_firewall"
+    shell_context: "not_applicable"
+    transport_kind: "PAN_XML_API"
+    canonical_command_key: "<test><routing><fib-lookup><virtual-router>VR</virtual-router><ip>DST</ip></fib-lookup></routing></test>"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 30
+    retry_rule: "none"
+    max_frequency: "on a PO-chosen sample only: once per hop per path_validation job, at most four hops per validation request, never polled"
+    session_reuse_rule: "one existing-authentication API key per job; serial per firewall; no retry"
+    unsupported_behavior_ref: "an API error, an unknown answer shape or a missing field is NOT_EVALUABLE, never a MISMATCH"
+    secret_output_risk: "output carries addresses and interface names; parsed in memory to a MATCH / MISMATCH / NOT_EVALUABLE comparison only; never stored, transcribed or logged (raw-evidence law)"
+    safe_telemetry_fields: ["result", "reason"]
+    source_document_pointer: "docs/design/PATH_ANALYSIS_A6_COMMAND_PROPOSAL.md row 3 (RATIFIED; PO chat approval 2026-11-04: \"1-5 onaylı devam\")"
+
+  - gate_id: "path_validation_pan_security_policy_match"
+    vendor: "palo_alto"
+    platform_role_scope: "pan_firewall"
+    shell_context: "not_applicable"
+    transport_kind: "PAN_XML_API"
+    canonical_command_key: "<test><security-policy-match><from>Z1</from><to>Z2</to><source>SRC</source><destination>DST</destination><protocol>6</protocol><destination-port>PORT</destination-port></security-policy-match></test>"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 30
+    retry_rule: "none"
+    max_frequency: "on a PO-chosen sample only: once per hop per path_validation job, at most four hops per validation request, never polled"
+    session_reuse_rule: "one existing-authentication API key per job; serial per firewall; no retry"
+    unsupported_behavior_ref: "an API error, an unknown answer shape or a missing field is NOT_EVALUABLE, never a MISMATCH"
+    secret_output_risk: "output carries addresses, zone and rule names; parsed in memory to a MATCH / MISMATCH / NOT_EVALUABLE comparison only; never stored, transcribed or logged (raw-evidence law)"
+    safe_telemetry_fields: ["result", "reason"]
+    source_document_pointer: "docs/design/PATH_ANALYSIS_A6_COMMAND_PROPOSAL.md row 4 (RATIFIED; PO chat approval 2026-11-04: \"1-5 onaylı devam\")"
+
+  - gate_id: "path_validation_pan_nat_policy_match"
+    vendor: "palo_alto"
+    platform_role_scope: "pan_firewall"
+    shell_context: "not_applicable"
+    transport_kind: "PAN_XML_API"
+    canonical_command_key: "<test><nat-policy-match><from>Z1</from><to>Z2</to><source>SRC</source><destination>DST</destination><protocol>6</protocol><destination-port>PORT</destination-port></nat-policy-match></test>"
+    action_class: "read"
+    sign_off_state: "SIGNED_OFF"
+    timeout_s: 30
+    retry_rule: "none"
+    max_frequency: "on a PO-chosen sample only: once per hop per path_validation job, at most four hops per validation request, never polled"
+    session_reuse_rule: "one existing-authentication API key per job; serial per firewall; no retry"
+    unsupported_behavior_ref: "an API error, an unknown answer shape or a missing field is NOT_EVALUABLE, never a MISMATCH"
+    secret_output_risk: "output carries addresses, zone and rule names; parsed in memory to a MATCH / MISMATCH / NOT_EVALUABLE comparison only; never stored, transcribed or logged (raw-evidence law)"
+    safe_telemetry_fields: ["result", "reason"]
+    source_document_pointer: "docs/design/PATH_ANALYSIS_A6_COMMAND_PROPOSAL.md row 5 (RATIFIED; PO chat approval 2026-11-04: \"1-5 onaylı devam\")"
