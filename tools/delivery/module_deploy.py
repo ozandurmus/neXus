@@ -120,8 +120,11 @@ def barrier_conditions(target, generation):
          " and drain_ack_generation=drain_generation and drain_ack_at is not null)"),
         ("owner_live", "(owner_instance is null or owner_heartbeat_at>now()-interval '60 seconds')"),
         ("busy_jobs", "select count(*) from jobs j where j.state in ('CLAIMED','EXECUTING') and (" + filter_sql + ")"),
+        # A quarantine left by a job that already ended holds no work; stopping the old pod releases it as
+        # OWNER_GONE, so counting it here waits on itself (2026-11-04: a failed policy collection held a deploy).
         ("admissions", "select count(*) from endpoint_admission where " + admission_scope +
-         " and state in ('LEASED','QUARANTINED')"),
+         " and (state='LEASED' or (state='QUARANTINED' and not exists(select 1 from jobs t where t.job_id="
+         "endpoint_admission.job_id and t.state in ('COMPLETED','FAILED','CANCELLED'))))"),
         ("task_leases", "select count(*) from runtime_task_lease where owner_role=" + literal(role) +
          " and state='LEASED'"),
         ("quarantined_task_leases", "select count(*) from runtime_task_lease where owner_role=" + literal(role) +
