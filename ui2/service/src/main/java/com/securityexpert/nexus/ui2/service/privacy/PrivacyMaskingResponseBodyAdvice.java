@@ -245,6 +245,11 @@ public class PrivacyMaskingResponseBodyAdvice implements ResponseBodyAdvice<Obje
                 }
                 case "zone", "source_zone", "destination_zone", "ingress_zone", "egress_zone" ->
                     result.put(key, value instanceof String zone ? topologyPseudonymizer.maskPolicyName("zone", zone) : value);
+                // V184: an interface's virtual router and a route's table name the same routing instance: one "vrf"
+                // pseudonym for both (as the IP search's route_table), so aiview can still relate them and neither
+                // field leaks the raw name.
+                case "routing_context", "table" ->
+                    result.put(key, value instanceof String vrf ? topologyPseudonymizer.maskPolicyName("vrf", vrf) : value);
                 case "interface_name", "ingress_interface_name", "egress_interface_name", "vendor_interface" ->
                     result.put(key, value instanceof String iface ? topologyPseudonymizer.maskPolicyName("interface", iface) : value);
                 case "policy_name", "rule_name", "section_name" ->
