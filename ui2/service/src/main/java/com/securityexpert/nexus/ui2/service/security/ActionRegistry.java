@@ -220,6 +220,15 @@ public final class ActionRegistry {
      * the masked projection. A read-only POST, so an aiview machine session may send it.
      */
     public static final String PATH_ANALYSIS_READ = "path_analysis_read";
+    /**
+     * PATH_ANALYSIS_DESIGN.md §7 A6 (PATH_ANALYSIS_A6_COMMAND_PROPOSAL.md rows 2-5, RATIFIED 2026-11-04):
+     * {@code POST /api/v2/path-analysis/validate} admits CLASS_0 vendor-matcher reads for the hops of a path the server
+     * has just computed, and {@code GET /api/v2/path-analysis/validate/{id}} reads the MATCH / MISMATCH / NOT_EVALUABLE
+     * outcome. security_admin and operation_admin; the replay viewer (aiview) under the CLASS_0 diagnostic allowance (PO
+     * decision 2026-10-04, as {@link #FMG_DIAGNOSTIC_RUN}): masked input only, never a raw value. A read-only POST, so an
+     * aiview machine session may send it.
+     */
+    public static final String PATH_ANALYSIS_VALIDATE = "path_analysis_validate";
 
     public static final String HTTPS_CERTIFICATE_ACCEPT = "https_certificate_accept";
     public static final String HTTPS_CERTIFICATE_STRICT = "https_certificate_strict";
@@ -361,6 +370,9 @@ public final class ActionRegistry {
         register(new ActionDescriptor(TOPOLOGY_REBUILD, true, Optional.of(RoleToken.SECURITY_ADMIN)));
         // D-8 (A5a): the path query follows the inventory read, like the topology read.
         register(new ActionDescriptor(PATH_ANALYSIS_READ, true, Optional.empty()));
+        // A6: CLASS_0 vendor matchers on PO-chosen samples; aiview per the 2026-10-04 CLASS_0 diagnostic allowance.
+        register(new ActionDescriptor(PATH_ANALYSIS_VALIDATE, true, Optional.of(RoleToken.SECURITY_ADMIN),
+                java.util.Set.of(RoleToken.OPERATION_ADMIN, RoleToken.REPLAY_VIEWER)));
         // Class 1: never console-submittable, refused by E3 unconditionally,
         // regardless of role -- exists so E3's unconditional refusal and
         // E3-never-reevaluated-inside-E4 (test 12) are both testable without

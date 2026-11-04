@@ -36,6 +36,9 @@ public final class SecurityWebMvcConfig implements WebMvcConfigurer {
             Map.entry("POST /api/v2/topology/rebuild", ActionRegistry.TOPOLOGY_REBUILD),
             // PO record 2026-11-03 D-2/D-3/D-8 (path analysis A5a): the read-only path query.
             Map.entry("POST /api/v2/path-analysis/query", ActionRegistry.PATH_ANALYSIS_READ),
+            // A6: validation of a just-computed path against the vendors' own read-only matchers.
+            Map.entry("POST /api/v2/path-analysis/validate", ActionRegistry.PATH_ANALYSIS_VALIDATE),
+            Map.entry("GET /api/v2/path-analysis/validate/*", ActionRegistry.PATH_ANALYSIS_VALIDATE),
             // PO decision record 2026-10-15 §6: Packet Analysis. One id segment per route (single wildcard).
             Map.entry("GET /api/v2/packet-analysis/cases", ActionRegistry.PACKET_ANALYSIS_READ),
             Map.entry("POST /api/v2/packet-analysis/cases", ActionRegistry.PACKET_ANALYSIS_RUN),

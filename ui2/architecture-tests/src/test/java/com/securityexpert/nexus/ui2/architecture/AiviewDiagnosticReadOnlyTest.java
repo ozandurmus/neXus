@@ -60,7 +60,9 @@ class AiviewDiagnosticReadOnlyTest {
                 ActionRegistry.FMG_DIAGNOSTIC_RUN, ActionRegistry.SYSTEM_LOG_MEASURE_START, ActionRegistry.SYSTEM_LOG_READ,
                 ActionRegistry.CP_READINESS_START, ActionRegistry.CP_FAILOVER_READ,
                 // Packet Analysis: read, and run (PO decision 2026-10-18)
-                ActionRegistry.PACKET_ANALYSIS_READ, ActionRegistry.PACKET_ANALYSIS_RUN)), held);
+                ActionRegistry.PACKET_ANALYSIS_READ, ActionRegistry.PACKET_ANALYSIS_RUN,
+                // path analysis A6: CLASS_0 vendor matchers under the 2026-10-04 CLASS_0 diagnostic allowance
+                ActionRegistry.PATH_ANALYSIS_VALIDATE)), held);
         assertFalse(all.get(ActionRegistry.PACKET_ANALYSIS_RAW_VIEW).requiredRoleTokens().contains(RoleToken.REPLAY_VIEWER));
         assertFalse(ActionRegistry.PACKET_ANALYSIS_RAW_ROLES.contains(RoleToken.REPLAY_VIEWER));
         assertTrue(ActionRegistry.PACKET_ANALYSIS_RUN_ROLES.contains(RoleToken.REPLAY_VIEWER));

@@ -66,7 +66,7 @@ public final class JooqPathValidationRepository implements PathValidationReposit
     @Override
     public boolean recordOutcome(String jobId, long leaseEpoch, String result, String checksJson, List<String> reasons) {
         return transactions.inTransaction(dsl -> dsl.execute("update path_validation_hop h set result = {1}, plan = null, "
-                + "checks = cast({2} as jsonb), reasons = cast({3} as text[]), evaluated_at = now() "
+                + "checks = cast({2} as jsonb), reasons = h.reasons || cast({3} as text[]), evaluated_at = now() "
                 + "where h.job_id = {0} and h.result = 'PENDING' and exists (select 1 from jobs j where j.job_id = {0} "
                 + "and j.lease_epoch = {4} and j.state = 'EXECUTING' and j.target_device_id = h.device_id "
                 + "and ui2_job_owner_valid(j.job_id, j.lease_epoch))",
