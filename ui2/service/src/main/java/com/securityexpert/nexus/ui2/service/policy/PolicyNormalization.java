@@ -8,7 +8,32 @@ import java.util.*;
 final class PolicyNormalization {
     private PolicyNormalization() {}
     record Range(long start, long end) {}
-    record Selector(boolean any, Map<String, List<Range>> ranges) {}
+    /**
+     * One resolved dimension: {@code any}, merged ranges per family, and opaque {@code tokens}. Tokens are compared by
+     * identity only, never interpreted: on the service dimension the single token {@link #APPLICATION_DEFAULT} (Palo Alto
+     * {@code application-default}, see {@link Resolver#cell}); on the application dimension the opaque references of the
+     * applications of an application-default rule ({@link Resolver#applications}). A selector with tokens is never
+     * disjoint from anything ({@link #disjoint(Selector, Selector, Budget)}).
+     */
+    record Selector(boolean any, Map<String, List<Range>> ranges, Set<String> tokens) {
+        Selector { tokens = Set.copyOf(tokens); }
+        Selector(boolean any, Map<String, List<Range>> ranges) { this(any, ranges, Set.of()); }
+        /** The service dimension of a Palo Alto rule whose service is {@code application-default}. */
+        boolean applicationDefault() { return tokens.contains(APPLICATION_DEFAULT); }
+    }
+    /**
+     * Palo Alto {@code application-default} on the service dimension: an opaque token whose meaning depends on the rule's
+     * application set. PATH_ANALYSIS_VENDOR_SEMANTICS.md section 6 (FROZEN), quoting the vendor (PA-CSR, PAN-OS 11.1):
+     * application-default is used "to ensure that any applications that the rule allows are allowed only on their
+     * standard ports", and (PA-AD) it "prevents security evasion by only allowing applications to run on their standard
+     * ports". The same section leaves UNKNOWN "per-application default ports (not collected); matching before App-ID
+     * identifies the app; interaction with application any". Shadowing therefore relies on identity only: a rule matches
+     * each of its applications on that application's own standard ports -- a fixed but unknown, non-empty port set per
+     * application -- and application any with application-default is a fixed but unknown match of its own, not read as
+     * "every application's standard ports". No port list is invented. The D-5 "App-ID assumed" caveat is a path-analysis
+     * concern ({@code HopPolicyEvaluator}) and is not applied here.
+     */
+    static final String APPLICATION_DEFAULT = "application-default";
     record Match(Rule rule, List<Selector> selectors, Map<String, Set<String>> placements, String problem) {}
     static final class Unknown extends RuntimeException {
         Unknown(String reason) { super(reason, null, false, false); }
@@ -188,9 +213,11 @@ final class PolicyNormalization {
         try {
             if (!Set.of("CP", "PAN").contains(snapshot.metadata().vendor()) || PolicySnapshot.outsideSecurityEvaluation(snapshot.metadata(), section))
                 throw new Unknown("unsupported rulebase");
-            List<Selector> cells = List.of(resolver.cell(rule.source(), "address"), resolver.cell(rule.destination(), "address"),
-                resolver.cell(rule.service(), "service"), snapshot.metadata().vendor().equals("CP") && rule.application().refs().isEmpty()
-                    && !rule.application().negated() ? new Selector(true, Map.of()) : resolver.cell(rule.application(), "application"));
+            Selector source = resolver.cell(rule.source(), "address"), destination = resolver.cell(rule.destination(), "address"),
+                service = resolver.cell(rule.service(), "service");
+            List<Selector> cells = List.of(source, destination, service, snapshot.metadata().vendor().equals("CP") && rule.application().refs().isEmpty()
+                && !rule.application().negated() ? new Selector(true, Map.of()) : service.applicationDefault()
+                    ? resolver.applications(rule.application()) : resolver.cell(rule.application(), "application"));
             if (snapshot.metadata().vendor().equals("PAN") && (rule.extras().getOrDefault("from", List.of()).isEmpty()
                     || rule.extras().getOrDefault("to", List.of()).isEmpty())) throw new Unknown("zone evidence not collected");
             if (snapshot.metadata().vendor().equals("CP") && rule.extras().getOrDefault("install-on", List.of()).isEmpty())
@@ -303,7 +330,8 @@ final class PolicyNormalization {
         for (int i = 0; i < 4; i++) {
             var cell = cells.get(i);
             try {
-                selectors[i] = i == 3 && cp && cell.refs().isEmpty() && !cell.negated() ? new Selector(true, Map.of()) : resolver.cell(cell, families.get(i));
+                selectors[i] = i == 3 && cp && cell.refs().isEmpty() && !cell.negated() ? new Selector(true, Map.of())
+                    : i == 3 && selectors[2] != null && selectors[2].applicationDefault() ? resolver.applications(cell) : resolver.cell(cell, families.get(i));
                 resolved |= !selectors[i].any();
             } catch (Unknown unresolved) {
                 if (unresolved.getMessage().equals("analysis budget")) throw unresolved;
@@ -337,9 +365,15 @@ final class PolicyNormalization {
      * Two resolved selectors share no value: neither is any, and no range of one family overlaps a range of the same
      * family in the other (ranges are merged and sorted by {@link Resolver#union}). Families never overlap each other:
      * a TCP port is no UDP port, and resolved addresses are IPv4 ranges only.
+     * <p>A selector with tokens is never disjoint from anything. Service: application-default against explicit ports is
+     * not disjoint (the default ports are unknown), and application-default against application-default is disjoint
+     * only when the application dimensions are -- which that dimension then proves on its own. Application: opaque
+     * application references are never proven disjoint (two names need not be two disjoint traffic sets; matching before
+     * App-ID identifies the application is UNKNOWN, PATH_ANALYSIS_VENDOR_SEMANTICS.md section 6).
      */
     static boolean disjoint(Selector a, Selector b, Budget budget) {
         if (a.any() || b.any()) return false;
+        if (!a.tokens().isEmpty() || !b.tokens().isEmpty()) return false;
         for (var entry : a.ranges().entrySet()) {
             var mine = entry.getValue(); var theirs = b.ranges().getOrDefault(entry.getKey(), List.of());
             for (int i = 0, j = 0; i < mine.size() && j < theirs.size(); ) {
@@ -436,9 +470,41 @@ final class PolicyNormalization {
         var values = rule.extras().get("rule-type");
         return values == null || values.equals(List.of("universal")) ? "universal" : values.size() == 1 ? values.get(0) : "unknown";
     }
+    /**
+     * Whether earlier selectors {@code outer} hold every packet of later selectors {@code inner}: TRUE, FALSE, or
+     * {@code null} when the answer depends on default ports that are not collected (Palo Alto application-default,
+     * {@link #APPLICATION_DEFAULT}). Without application-default on either side this is exactly {@link #contains} on all
+     * four dimensions. With it, source and destination must still be contained (else FALSE: no default port puts a
+     * packet of the later rule back inside), and on service and application:
+     * <ul>
+     * <li>earlier service any: TRUE when the earlier applications contain the later ones (every port of them);</li>
+     * <li>both application-default: TRUE when the earlier application selector contains the later one by identity --
+     * the same references or a superset of them, or any against any. Each application then brings its own standard ports
+     * to both rules. Earlier application any does not hold later named applications: section 6 leaves the interaction
+     * with application any UNKNOWN, so any with application-default is not read as every application's default ports;</li>
+     * <li>everything else is undecided ({@code null}), never FALSE: explicit ports may or may not hold an application's
+     * default ports, application-default may or may not hold explicit ports, and two application names may denote
+     * overlapping traffic.</li>
+     * </ul>
+     */
+    static Boolean holds(List<Selector> outer, List<Selector> inner, Budget budget) {
+        Selector service = outer.get(2), laterService = inner.get(2), application = outer.get(3), laterApplication = inner.get(3);
+        if (!service.applicationDefault() && !laterService.applicationDefault()) {
+            for (int i = 0; i < 4; i++) if (!contains(outer.get(i), inner.get(i), budget)) return false;
+            return true;
+        }
+        for (int i = 0; i < 2; i++) if (!contains(outer.get(i), inner.get(i), budget)) return false;
+        if (service.any()) return contains(application, laterApplication, budget) ? true : null;
+        if (service.applicationDefault() && laterService.applicationDefault()
+                && (application.any() ? laterApplication.any() : !laterApplication.any() && contains(application, laterApplication, budget))) return true;
+        return null;
+    }
     static boolean contains(Selector a, Selector b, Budget budget) {
         if (a.any()) return true;
         if (b.any()) return false;
+        // Opaque tokens hold only themselves: application-default holds no explicit port and no explicit port holds it;
+        // an application reference set holds its subsets.
+        if (!a.tokens().containsAll(b.tokens())) return false;
         for (var entry : b.ranges().entrySet()) {
             var outer = a.ranges().getOrDefault(entry.getKey(), List.of()); int i = 0;
             for (Range inner : entry.getValue()) {
@@ -449,13 +515,30 @@ final class PolicyNormalization {
         }
         return true;
     }
+    private static final Selector APPLICATION_DEFAULT_SERVICE = new Selector(false, Map.of(), Set.of(APPLICATION_DEFAULT));
     static final class Resolver {
         final Map<String, PolicyObject> objects; final Budget budget;
         final Map<String, Selector> memo = new HashMap<>();
-        Resolver(Map<String, PolicyObject> objects, Budget budget) { this.objects = objects; this.budget = budget; }
+        /** The snapshot id whose mapper references identify application-default and applications; null: not recognised. */
+        private final String panSnapshot;
+        Resolver(Map<String, PolicyObject> objects, Budget budget) { this(objects, budget, null); }
+        private Resolver(Map<String, PolicyObject> objects, Budget budget, String panSnapshot) {
+            this.objects = objects; this.budget = budget; this.panSnapshot = panSnapshot;
+        }
+        /**
+         * The resolver of shadowing ({@code PolicyHygiene}): for a Palo Alto snapshot it also resolves application-default
+         * to its token ({@link #APPLICATION_DEFAULT}) and that rule's applications to opaque references. Lookup, offline
+         * analysis and path analysis keep the plain resolver, for which application-default stays "missing service values".
+         */
+        static Resolver shadowing(PolicySnapshot snapshot, Budget budget) {
+            var metadata = snapshot.metadata();
+            boolean pan = metadata.vendor().equals("PAN") && metadata.id() != null && !metadata.id().isBlank();
+            return new Resolver(snapshot.objects(), budget, pan ? metadata.id() : null);
+        }
         Selector cell(Cell cell, String family) {
             if (cell.negated()) throw new Unknown("negated selector");
             if (cell.refs().isEmpty()) throw new Unknown("missing selector");
+            if (family.equals("service") && applicationDefault(cell)) { budget.spend(); return APPLICATION_DEFAULT_SERVICE; }
             List<Selector> parts = new ArrayList<>();
             for (String id : cell.refs()) { budget.spend(); parts.add(object(id, family, new HashSet<>())); }
             return union(parts);
@@ -481,10 +564,60 @@ final class PolicyNormalization {
             else throw new Unknown("dynamic or unsupported object type");
             path.remove(id); memo.put(key, result); return result;
         }
+        /**
+         * The service cell is exactly the mapper's built-in application-default: the one reference PanoramaPolicyMapper
+         * mints for it (opaque {@code ref(snapshot, "service", "application-default")}, verified, never matched by display
+         * name) to a RESOLVED service object with no values and no members. A cell mixing it with other services is
+         * resolved as before (and fails on it as "missing service values").
+         */
+        private boolean applicationDefault(Cell cell) {
+            if (panSnapshot == null || cell.refs().size() != 1 || !cell.refs().get(0).equals(ref(panSnapshot, "service", "application-default"))) return false;
+            var o = objects.get(cell.refs().get(0));
+            return o != null && o.status().equals("RESOLVED") && o.type().equals("service") && o.values().isEmpty() && o.members().isEmpty();
+        }
+        /**
+         * The application cell of an application-default rule as opaque application references (tokens). Application any
+         * is any; an application group is the union of its members; a stored custom application (type application,
+         * RESOLVED) and an application the mapper has no definition for -- a predefined App-ID application, stored type
+         * unresolved, status UNRESOLVED, under its own application reference {@code ref(snapshot, "application", name)} --
+         * are each one reference. These are compared by identity only (equal references, subsets), never interpreted:
+         * the same reference names the same application in both rules, so it brings the same standard ports to both. An
+         * application filter (dynamic), a missing object or any other shape stays unresolvable, as before.
+         */
+        Selector applications(Cell cell) {
+            if (cell.negated()) throw new Unknown("negated selector");
+            if (cell.refs().isEmpty()) throw new Unknown("missing selector");
+            List<Selector> parts = new ArrayList<>();
+            for (String id : cell.refs()) { budget.spend(); parts.add(application(id, new HashSet<>())); }
+            return union(parts);
+        }
+        private Selector application(String id, Set<String> path) {
+            budget.spend(); String key = "application-reference:" + id;
+            if (memo.containsKey(key)) return memo.get(key);
+            var o = objects.get(id);
+            if (o == null) throw new Unknown("unresolved object");
+            boolean predefined = o.status().equals("UNRESOLVED") && o.type().equals("unresolved") && o.members().isEmpty() && o.values().isEmpty()
+                && panSnapshot != null && id.equals(ref(panSnapshot, "application", o.name()));
+            if (!predefined && !o.status().equals("RESOLVED")) throw new Unknown("unresolved object");
+            if (!path.add(id) || path.size() > 32) throw new Unknown("group cycle or depth limit");
+            Selector result;
+            if (predefined) result = new Selector(false, Map.of(), Set.of(id));
+            else if (o.type().equals("any")) result = new Selector(true, Map.of());
+            else if (o.type().equals("application-group")) {
+                if (o.members().isEmpty() || !o.values().isEmpty()) throw new Unknown("empty or dynamic group");
+                List<Selector> children = new ArrayList<>();
+                for (String member : o.members()) children.add(application(member, path));
+                result = union(children);
+            } else if (o.type().equals("application") && o.members().isEmpty()) result = new Selector(false, Map.of(), Set.of(id));
+            else throw new Unknown("dynamic or unsupported object type");
+            path.remove(id); memo.put(key, result); return result;
+        }
         Selector union(List<Selector> parts) {
             Map<String, List<Range>> ranges = new TreeMap<>(); boolean any = false;
+            Set<String> tokens = new HashSet<>();
             for (Selector part : parts) {
                 any |= part.any();
+                for (String token : part.tokens()) { budget.spend(); tokens.add(token); }
                 for (var entry : part.ranges().entrySet()) for (Range r : entry.getValue()) { budget.spend(); ranges.computeIfAbsent(entry.getKey(), k -> new ArrayList<>()).add(r); }
             }
             Map<String, List<Range>> merged = new TreeMap<>();
@@ -498,7 +631,8 @@ final class PolicyNormalization {
                 }
                 merged.put(key, List.copyOf(out));
             });
-            return new Selector(any, merged);
+            // Any holds every token; a selector that is any carries none, so equal matches stay equal.
+            return new Selector(any, merged, any ? Set.of() : tokens);
         }
         Selector address(PolicyObject o) {
             List<Range> ranges = new ArrayList<>(); Map<String, String> fields = fields(o);

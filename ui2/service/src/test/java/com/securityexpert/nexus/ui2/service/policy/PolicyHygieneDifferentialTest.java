@@ -196,6 +196,50 @@ class PolicyHygieneDifferentialTest {
     }
     private static String covered(String status) { return Set.of("REDUNDANT", "CONFLICT").contains(status) ? "COVERED" : status; }
 
+    /**
+     * Palo Alto application-default as an opaque service token: on seeded snapshots where about a third of the rules use
+     * the mapper's application-default service, every rule is compared with the same analysis of the same snapshot with
+     * that service not recognised (the former "missing service values" treatment, itself checked against the legacy scan
+     * here). A rule may differ only when application-default is its own service or that of an earlier rule of its scope,
+     * and then its new verdict must hold for every assignment of the unknown, per-application default ports
+     * ({@link PartialPriorOracle#assertDefaultPortsChangeIsSafe}). Every other rule is identical, blocker included.
+     */
+    @Test void applicationDefaultChangesOnlyTheRulesItInvolvesAndHoldsInEveryDefaultPortWorld() {
+        Map<String, Integer> changed = new TreeMap<>(); int rules = 0, involved = 0, formerlyMissing = 0, formerlyBlocked = 0;
+        for (long seed = 0; seed < 3000; seed++) {
+            var base = SyntheticPolicies.legacyComparable(SyntheticPolicies.random(seed + 400_000, 2 + (int) (seed % 70)));
+            if (!base.metadata().vendor().equals("PAN")) continue;
+            var snapshot = SyntheticPolicies.applicationDefault(base, seed);
+            var unrecognised = SyntheticPolicies.unrecognisedDefault(snapshot);
+            var former = PolicyHygiene.analyze(unrecognised, 90, NOW, PolicyHygiene.TOTAL_WORK).rules();
+            var actual = PolicyHygiene.analyze(snapshot, 90, NOW, PolicyHygiene.TOTAL_WORK).rules();
+            // The reference is the former treatment: still the legacy scan's answer up to the known, oracle-checked changes.
+            var legacy = LegacyPolicyHygiene.analyze(unrecognised, 90, NOW, Integer.MAX_VALUE).rules();
+            var formerUniverse = new PartialPriorOracle.Universe(unrecognised);
+            var universe = new PartialPriorOracle.Universe(snapshot);
+            assertEquals(former.keySet(), actual.keySet());
+            for (var entry : former.entrySet()) {
+                String id = entry.getKey(), context = "seed " + seed + " rule " + id;
+                PartialPriorOracle.assertSameOrSafelyReleased(formerUniverse, legacy.get(id), entry.getValue(), id, context + " (former)");
+                if (PartialPriorOracle.involvesApplicationDefault(universe, id)) involved++;
+                String change = PartialPriorOracle.assertDefaultPortsChangeIsSafe(universe, entry.getValue(), actual.get(id), id, context);
+                if (change != null) {
+                    changed.merge(change, 1, Integer::sum);
+                    if ("missing service values".equals(entry.getValue().shadowReason())) formerlyMissing++;
+                    if (PartialPriorOracle.UNSUPPORTED.equals(entry.getValue().shadowReason())) formerlyBlocked++;
+                }
+                rules++;
+            }
+        }
+        // The generator must reach every new verdict, and release a real share of the formerly blocked rules.
+        for (String verdict : List.of("REDUNDANT", "CONFLICT", "NOT_SHADOWED", "UNKNOWN / " + PartialPriorOracle.DEFAULT_PORTS))
+            assertTrue(changed.getOrDefault(verdict, 0) >= 20, verdict + " in " + changed);
+        assertTrue(rules > 40_000 && involved > 20_000 && formerlyMissing > 2_000 && formerlyBlocked > 1_000,
+            rules + " rules, " + involved + " involved, " + formerlyMissing + " formerly missing service values, " + formerlyBlocked + " formerly blocked");
+        System.out.println("APPLICATION-DEFAULT " + rules + " rules, " + involved + " involve it, changed: " + changed
+            + "; formerly missing service values " + formerlyMissing + ", formerly earlier-unsupported " + formerlyBlocked);
+    }
+
     @Test void legacyCascadeAndNewIndexAgreeWhereverTheLegacyBudgetHeld() {
         var random = new Random(11);
         int compared = 0, legacyBudget = 0;
