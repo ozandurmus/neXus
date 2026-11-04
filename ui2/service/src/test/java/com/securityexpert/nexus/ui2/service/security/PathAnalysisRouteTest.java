@@ -360,6 +360,14 @@ class PathAnalysisRouteTest {
             }
 
             @Override
+            public String maskPrefixed(String hostWithLength) {
+                String host = hostWithLength.substring(0, hostWithLength.indexOf('/'));
+                int offset = Integer.parseInt(host.substring(host.lastIndexOf('.') + 1));
+                boolean inEither = (host.startsWith("198.51.100.") || host.startsWith("203.0.113.")) && offset < 64;
+                return inEither && hostWithLength.endsWith("/26") ? peek(host) + "/26" : real.maskPrefixed(hostWithLength);
+            }
+
+            @Override
             public List<String> registeredSubnets() {
                 return List.of();
             }

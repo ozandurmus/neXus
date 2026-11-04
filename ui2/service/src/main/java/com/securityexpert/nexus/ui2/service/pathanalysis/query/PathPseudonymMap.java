@@ -2,6 +2,7 @@ package com.securityexpert.nexus.ui2.service.pathanalysis.query;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -23,11 +24,24 @@ import com.securityexpert.nexus.ui2.service.pathanalysis.topology.TopologyGraph;
  *
  * <p>Resolving a masked host: every network whose pseudonym contains the value gives one raw candidate (the masker
  * preserves the host offset inside its subnet); subnets registered with the masker are candidates too. A candidate is
- * accepted only when {@link Masking#peek} -- what the masker hands out for it now, computed without caching -- equals the
- * submitted value. One accepted value inside the snapshot resolves; more than one is {@code AMBIGUOUS_PSEUDONYM}; none,
- * or one outside the snapshot's networks, is {@code UNKNOWN_PSEUDONYM}; a value outside the masked space
- * ({@code 240.0.0.0/4}) is a raw value and {@code RAW_VALUE_REFUSED}. A masked ingress interface name resolves against
- * the hinted unit's interfaces by the label already handed out for each, with the same three outcomes.</p>
+ * accepted when the submitted value is one of the forms the response masking can render for that raw host:</p>
+ * <ul>
+ *   <li>the host part of {@code h/len} for a real prefix containing it -- a snapshot network or a registered subnet --
+ *   which is how the advice renders an interface address written with its length ({@code "address": "h/25"} becomes
+ *   {@code "m/25"}); for a value with a length the masker's answer is a pure function of the text, so this form is
+ *   computed exactly and does not depend on what other responses registered since; or</li>
+ *   <li>{@link Masking#peek} -- what the masker hands out for the bare host now (a pseudonym already handed out, else the
+ *   longest registered prefix), computed without caching.</li>
+ * </ul>
+ * <p>Accepting only the bare-host form (the original rule) refused most hosts of larger segments: the bare form follows
+ * the longest registered prefix (a {@code /32} local route or a {@code /24} inside a {@code /23} registered by another
+ * response) or a pseudonym cached before the segment's prefix was known, while the topology response shows the address
+ * under its own interface prefix.</p>
+ *
+ * <p>One accepted raw value inside the snapshot resolves; more than one is {@code AMBIGUOUS_PSEUDONYM}; none, or one
+ * outside the snapshot's networks, is {@code UNKNOWN_PSEUDONYM}; a value outside the masked space ({@code 240.0.0.0/4})
+ * is a raw value and {@code RAW_VALUE_REFUSED}. A masked ingress interface name resolves against the hinted unit's
+ * interfaces by the label already handed out for each, with the same three outcomes.</p>
  *
  * <p>Resolution has no side effect (D-3 condition 4): no masker cache entry, no subnet registration, no pseudonym
  * registry claim. The only state written is this map's own memo of registered-subnet pseudonyms.</p>
@@ -51,6 +65,12 @@ public final class PathPseudonymMap {
 
         /** The pseudonym of {@code a.b.c.d/len} (host bits clear), computed purely. */
         String maskNetwork(String cidr);
+
+        /**
+         * What the response masking renders for the literal text {@code a.b.c.d/len} (host bits kept), computed purely.
+         * For a value carrying its length the masker's answer depends on the text alone, never on registered state.
+         */
+        String maskPrefixed(String hostWithLength);
 
         /** The subnets registered with the masker so far (a copy). */
         List<String> registeredSubnets();
@@ -76,6 +96,8 @@ public final class PathPseudonymMap {
     private final TopologyGraph graph;
     private final Masking masking;
     private final List<Ipv4Prefix> snapshotNetworks;
+    /** The snapshot's own prefixes: a host under one of them can be rendered as {@code h/len} by a response. */
+    private final Set<Ipv4Prefix> ownNetworks;
     /** length -> masked network -> raw networks of that length whose pseudonym it is. */
     private final Map<Integer, Map<Long, Set<Long>>> byMaskedNetwork = new HashMap<>();
     private final Map<String, Optional<Ipv4Prefix>> registeredMemo = new ConcurrentHashMap<>();
@@ -96,6 +118,7 @@ public final class PathPseudonymMap {
         }
         own.removeIf(p -> p.length() < 4);
         this.snapshotNetworks = List.copyOf(own);
+        this.ownNetworks = Set.copyOf(own);
         Set<Ipv4Prefix> all = new LinkedHashSet<>(own);
         for (Ipv4Prefix p : own) {
             if (all.size() >= MAX_NETWORKS) {
@@ -149,12 +172,21 @@ public final class PathPseudonymMap {
             return new Refused(RAW_VALUE_REFUSED);
         }
         long value = parsed.get().host();
-        Set<Long> candidates = new LinkedHashSet<>();
+        // raw host -> lengths of the real prefixes (snapshot networks, registered subnets) it was derived under; a
+        // candidate derived only from a fallback /24 has none and can match only the bare-host form.
+        Map<Long, Set<Integer>> candidates = new LinkedHashMap<>();
         for (Map.Entry<Integer, Map<Long, Set<Long>>> byLength : byMaskedNetwork.entrySet()) {
-            long mask = mask(byLength.getKey());
+            int length = byLength.getKey();
+            long mask = mask(length);
             Set<Long> raws = byLength.getValue().get(value & mask);
             if (raws != null) {
-                raws.forEach(raw -> candidates.add(raw | (value & ~mask & 0xFFFF_FFFFL)));
+                for (long rawNetwork : raws) {
+                    Set<Integer> lengths = candidates.computeIfAbsent(rawNetwork | (value & ~mask & 0xFFFF_FFFFL),
+                            raw -> new TreeSet<>());
+                    if (ownNetworks.contains(new Ipv4Prefix(rawNetwork, length))) {
+                        lengths.add(length);
+                    }
+                }
             }
         }
         List<String> registered = masking.registeredSubnets();
@@ -169,13 +201,14 @@ public final class PathPseudonymMap {
                     : maskedNetwork(raw.get());
             long mask = mask(raw.get().length());
             if (masked.isPresent() && masked.get().network() == (value & mask)) {
-                candidates.add(raw.get().network() | (value & ~mask & 0xFFFF_FFFFL));
+                candidates.computeIfAbsent(raw.get().network() | (value & ~mask & 0xFFFF_FFFFL), r -> new TreeSet<>())
+                        .add(raw.get().length());
             }
         }
         List<Long> accepted = new ArrayList<>();
-        for (long candidate : candidates) {
-            if (submitted.equals(masking.peek(text(candidate)))) {
-                accepted.add(candidate);
+        for (Map.Entry<Long, Set<Integer>> candidate : candidates.entrySet()) {
+            if (rendersAs(candidate.getKey(), candidate.getValue(), submitted)) {
+                accepted.add(candidate.getKey());
             }
         }
         if (accepted.size() > 1) {
@@ -209,6 +242,18 @@ public final class PathPseudonymMap {
             return new Refused(raw ? RAW_VALUE_REFUSED : UNKNOWN_PSEUDONYM);
         }
         return new Resolved(matched.get(0));
+    }
+
+    /** True when the response masking can render raw host {@code raw} as {@code submitted} (see the class comment). */
+    private boolean rendersAs(long raw, Set<Integer> prefixLengths, String submitted) {
+        String host = text(raw);
+        for (int length : prefixLengths) {
+            String masked = masking.maskPrefixed(host + "/" + length);
+            if (masked != null && masked.equals(submitted + "/" + length)) {
+                return true;
+            }
+        }
+        return submitted.equals(masking.peek(host));
     }
 
     private Optional<Ipv4Prefix> maskedNetwork(Ipv4Prefix raw) {
@@ -245,6 +290,11 @@ public final class PathPseudonymMap {
             @Override
             public String maskNetwork(String cidr) {
                 return ips.maskNetworkWithoutSideEffects(cidr);
+            }
+
+            @Override
+            public String maskPrefixed(String hostWithLength) {
+                return ips.maskNetworkWithoutSideEffects(hostWithLength);
             }
 
             @Override
