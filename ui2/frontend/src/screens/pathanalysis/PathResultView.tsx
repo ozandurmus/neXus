@@ -5,28 +5,40 @@ import Collapse from "@mui/material/Collapse";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 
-import type { PathBranch, PathHop, PathResult, PathReturnHop, PathRoute, PathSecurity, PathTuple } from "../../auth/adminApi";
+import type { PathBranch, PathHop, PathResult, PathReturnHop, PathRoute, PathSecurity, PathTuple, PathValidation } from "../../auth/adminApi";
 import { M3Button } from "../../shell/M3Widgets";
 import { VendorBadge } from "../../shell/States";
 import { PillRow, StatusPill } from "../../shell/StatusPill";
 import { Timestamp } from "../../shell/Timestamp";
 import { MONO, m3 } from "../../theme/m3Theme";
 import { LABEL_UPPER, RADIUS, TYPE } from "../../theme/tokens";
+import { HopDeviceBadge, HopDeviceCheck, PathValidationPanel } from "./PathValidationPanel";
+import { hopValidation, verifiedBranchId, type ValidationHopView } from "./pathValidationWords";
 import { VERDICT_SENTENCE, dependsOn, explain, ruleLabel, ruleWithheld, verdictTone, verdictWord } from "./pathWords";
+import type { PathVerification } from "./usePathValidation";
+
+/** The verification shown beside the hops: the record and the branch it covers. */
+interface DeviceView { readonly validation: PathValidation | null; readonly branchId: string | undefined }
 
 /**
  * The answer to "can A reach B on this port, and if not, where and why" (PATH_ANALYSIS_DESIGN.md §5; Fable design §5):
  * the overall verdict first with the executive summary, then every branch as a hop-by-hop list -- branches side by side
  * when the route splits -- and the return path folded under each branch. Every code the engine wrote is shown with its
  * one-line meaning and never dropped; a hop that is only CONDITIONAL says which earlier UNKNOWN hop it depends on.
+ * With a `verification` (stage A6) the "Verify on devices" action follows the verdict and each hop of the verified
+ * branch carries the device's MATCH / MISMATCH / NOT_EVALUABLE beside the neXus verdict.
  */
-export function PathResultView({ result, now = new Date() }: { readonly result: PathResult; readonly now?: Date }) {
+export function PathResultView({ result, verification, now = new Date() }: { readonly result: PathResult; readonly verification?: PathVerification; readonly now?: Date }) {
   const multi = result.branches.length > 1;
+  const device: DeviceView = verification
+    ? { validation: verification.state.validation, branchId: verifiedBranchId(verification.state.validation, verification.state.branchId, result) }
+    : { validation: null, branchId: undefined };
   return (
     <Stack spacing={2} data-testid="path-result">
       <VerdictCard result={result} now={now} />
+      {verification && <PathValidationPanel result={result} verification={verification} now={now} />}
       <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: multi ? "repeat(auto-fit, minmax(380px, 1fr))" : "minmax(0, 1fr)", alignItems: "start" }}>
-        {result.branches.map((branch) => <BranchColumn key={branch.branch_id} branch={branch} multi={multi} result={result} />)}
+        {result.branches.map((branch) => <BranchColumn key={branch.branch_id} branch={branch} multi={multi} result={result} device={device} />)}
       </Box>
       {result.branches.length === 0 && (
         <Typography variant="body1" sx={{ color: m3.onSurfaceVar }}>No branch was traced: the ingress could not be resolved (see the verdict reason above).</Typography>
@@ -99,7 +111,7 @@ function HopPointer({ label, result, branchId, hopIndex }: { readonly label: str
   );
 }
 
-function BranchColumn({ branch, multi, result }: { readonly branch: PathBranch; readonly multi: boolean; readonly result: PathResult }) {
+function BranchColumn({ branch, multi, result, device }: { readonly branch: PathBranch; readonly multi: boolean; readonly result: PathResult; readonly device: DeviceView }) {
   const notices = [...new Set([...branch.warnings, ...branch.caveats])];
   const ret = branch.return_path;
   const asymmetric = ret.return_status === "ASYMMETRIC";
@@ -121,7 +133,8 @@ function BranchColumn({ branch, multi, result }: { readonly branch: PathBranch; 
       {notices.length > 0 && <CodeList title="Branch notes" codes={notices} tone="attn" testId={`branch-notices-${branch.branch_id}`} />}
       <Stack spacing={1} component="ol" sx={{ listStyle: "none", m: 0, p: 0 }} aria-label={`Hops of branch ${branch.branch_id}`}>
         {branch.hops.map((hop) => (
-          <HopCard key={hop.hop_index} hop={hop} branch={branch} blocking={branch.blocking_hop_index === hop.hop_index} />
+          <HopCard key={hop.hop_index} hop={hop} branch={branch} blocking={branch.blocking_hop_index === hop.hop_index}
+            device={hopValidation(device.validation, device.branchId, branch, hop)} />
         ))}
       </Stack>
       <Typography variant="body2" sx={{ color: m3.onSurfaceVar }}>
@@ -136,13 +149,14 @@ const HOP_VERDICT_SIDE: Record<string, string> = {
   ALLOWED: m3.success, DENIED: m3.error, UNKNOWN: m3.neutralInk, CONDITIONAL: m3.attention,
 };
 
-export function HopCard({ hop, branch, blocking }: { readonly hop: PathHop; readonly branch: PathBranch; readonly blocking: boolean }) {
+export function HopCard({ hop, branch, blocking, device = { kind: "none" } }: { readonly hop: PathHop; readonly branch: PathBranch; readonly blocking: boolean; readonly device?: ValidationHopView }) {
   const upstream = dependsOn(branch, hop);
   const stale = hop.policy_stale || hop.reasons.includes("STALE_OR_OUT_OF_SYNC_POLICY");
   const codes = [...new Set([...hop.reasons.filter((r) => r !== hop.verdict_reason || hop.verdict === "UNKNOWN"), ...hop.caveats, ...hop.notes, ...hop.flags])];
   const sideColor = HOP_VERDICT_SIDE[hop.verdict] ?? m3.outline;
   return (
     <Card component="li" data-testid={`path-hop-${hop.hop_index}`} data-hop-verdict={hop.verdict} data-blocking={blocking ? "true" : undefined}
+      data-device={device.kind === "validated" ? device.hop.result : device.kind === "beyond_cap" ? "NOT_ASKED" : undefined}
       sx={{ border: `1px solid ${blocking ? m3.error : m3.outlineVar}`, borderLeft: `4px solid ${sideColor}`, boxShadow: "none",
             borderRadius: `${RADIUS.card}px`, p: 2, bgcolor: m3.scLowest, display: "flex", flexDirection: "column", gap: 1.25 }}>
       <Stack direction="row" spacing={1.25} alignItems="center" flexWrap="wrap" useFlexGap>
@@ -151,10 +165,11 @@ export function HopCard({ hop, branch, blocking }: { readonly hop: PathHop; read
         </Box>
         <VendorBadge vendor={hop.vendor} />
         <Typography component="h5" sx={{ ...TYPE.section, m: 0, fontFamily: MONO, fontSize: 14, overflowWrap: "anywhere" }}>{hop.node_id}</Typography>
-        <Box sx={{ ml: "auto" }}>
+        <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" useFlexGap sx={{ ml: "auto" }}>
           <StatusPill tone={verdictTone(hop.verdict)} word={verdictWord(hop.verdict)} fact="hop-verdict"
             suffix={hop.verdict === "CONDITIONAL" ? `own: ${verdictWord(hop.own_verdict)}` : blocking ? "blocking hop" : null} />
-        </Box>
+          <HopDeviceBadge view={device} />
+        </Stack>
       </Stack>
       {hop.verdict === "CONDITIONAL" && (
         <Typography variant="body2" data-testid={`hop-${hop.hop_index}-conditional`} sx={{ color: m3.onAttentionContainer, bgcolor: m3.attentionContainer, px: 1, py: 0.5, borderRadius: `${RADIUS.pill}px` }}>
@@ -197,6 +212,7 @@ export function HopCard({ hop, branch, blocking }: { readonly hop: PathHop; read
         {explain(hop.verdict_reason)}
       </Typography>
       {codes.length > 0 && <CodeList codes={codes} tone="neutral" dense testId={`hop-${hop.hop_index}-codes`} />}
+      <HopDeviceCheck view={device} hopIndex={hop.hop_index} />
     </Card>
   );
 }

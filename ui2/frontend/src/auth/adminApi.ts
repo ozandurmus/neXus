@@ -3874,3 +3874,58 @@ export interface PathResult {
  * `PATH_QUERY_RATE_LIMIT`, 503 `POLICY_BUSY` (`error`) or `AUDIT_UNAVAILABLE` (`code`).
  */
 export const queryPath = (request: PathQueryRequest) => call<PathResult>("/api/v2/path-analysis/query", "POST", request);
+
+// ---- Path analysis stage A6: real-environment validation of a computed result ---------------------------------------
+
+/** One vendor matcher's outcome on one hop: enums and a reason code only, never the device's answer. */
+export interface PathValidationCheck {
+  /** `CP_ROUTE`, `PAN_FIB`, `PAN_SECURITY` or `PAN_NAT`. */
+  readonly check: string;
+  readonly result: "MATCH" | "MISMATCH" | "NOT_EVALUABLE" | string;
+  readonly reason: string;
+}
+export interface PathValidationHop {
+  readonly ordinal: number;
+  readonly branch_id: string;
+  readonly hop_index: number;
+  readonly node_id: string;
+  readonly vendor: string;
+  readonly device_id: string | null;
+  readonly job_id: string | null;
+  readonly job_state: string | null;
+  /** `PENDING` while the device job runs; then `MATCH`, `MISMATCH` or `NOT_EVALUABLE`. */
+  readonly result: "PENDING" | "MATCH" | "MISMATCH" | "NOT_EVALUABLE" | string;
+  readonly checks: readonly PathValidationCheck[];
+  readonly reasons: readonly string[];
+  readonly evaluated_at: string | null;
+}
+/**
+ * `POST /api/v2/path-analysis/validate` (202) and `GET /api/v2/path-analysis/validate/{id}`: the recorded state of one
+ * verification. `result` is `MISMATCH` when any hop mismatches, else `PENDING` while any hop waits, else `MATCH` when
+ * any hop matched, else `NOT_EVALUABLE`. Only the first `MAX_HOPS` unit hops of one branch are asked; the rest are
+ * counted in `hops_not_validated`.
+ */
+export interface PathValidation {
+  readonly validation_id: string;
+  readonly submitted_at: string;
+  readonly topology_snapshot_id: string;
+  readonly path_verdict: string;
+  readonly result: "PENDING" | "MATCH" | "MISMATCH" | "NOT_EVALUABLE" | string;
+  readonly hops_not_validated: number;
+  readonly hops: readonly PathValidationHop[];
+  readonly limitations: string;
+}
+
+/** The server's per-request hop cap (`PathValidation.MAX_HOPS`): one job per hop, at most this many. */
+export const PATH_VALIDATION_MAX_HOPS = 4;
+
+/**
+ * Asks the devices of one computed path to confirm it. The body is the path query itself (the server computes the path
+ * again; the browser names no command, device, context, zone or rule) plus the branch to verify when the route splits.
+ * Refusals keep `call`'s error shape: 400 `INVALID_REQUEST`, 403, 404 `BRANCH_NOT_FOUND`, 409 `TOPOLOGY_NOT_BUILT` or
+ * `OUTSIDE_JOB_WINDOW`, 422 `PSEUDONYM_REFUSED`, 429 `PATH_VALIDATION_RATE_LIMIT`, 503 `POLICY_BUSY` or `AUDIT_UNAVAILABLE`.
+ */
+export const validatePath = (request: PathQueryRequest, branchId?: string) =>
+  call<PathValidation>("/api/v2/path-analysis/validate", "POST", branchId ? { ...request, branch_id: branchId } : request);
+export const getPathValidation = (validationId: string) =>
+  call<PathValidation>(`/api/v2/path-analysis/validate/${encodeURIComponent(validationId)}`, "GET");

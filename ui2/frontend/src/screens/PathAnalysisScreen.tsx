@@ -16,6 +16,7 @@ import { m3 } from "../theme/m3Theme";
 import { RADIUS } from "../theme/tokens";
 import { PathResultView } from "./pathanalysis/PathResultView";
 import { classifyPathFailure, pathFormMissing, type PathFailure, type PathFormValues } from "./pathanalysis/pathWords";
+import { usePathValidation } from "./pathanalysis/usePathValidation";
 
 export { PathResultView } from "./pathanalysis/PathResultView";
 export { classifyPathFailure, pathFormMissing } from "./pathanalysis/pathWords";
@@ -27,6 +28,8 @@ export { classifyPathFailure, pathFormMissing } from "./pathanalysis/pathWords";
  * own honest state here -- a topology that was never built, a masked value the server could not resolve, a busy
  * bulkhead, the per-minute limit, a query record that could not be written -- none of them is dressed as an empty
  * result. The browser decides nothing about roles: a masked session is known only from the server's own masking header.
+ * A computed result can be verified on the devices (stage A6, `PathValidationPanel`): the same query goes to
+ * `POST /api/v2/path-analysis/validate`, the record is polled until complete, and each hop shows the device's word.
  */
 
 const EMPTY_FORM: PathFormValues = { src: "", dst: "", protocol: "tcp", port: "443", ingressNode: "", ingressInterface: "", edge: false };
@@ -65,6 +68,8 @@ export function PathAnalysisScreen() {
   const mounted = useRef(true);
   useEffect(() => () => { mounted.current = false; }, []);
   const masked = useMasked();
+  // Stage A6: a verification belongs to one computed result; a new result (or a refusal) resets it.
+  const verification = usePathValidation(result);
 
   const missing = pathFormMissing(values);
   const reason = missing.length ? `Needs ${missing.join(", ")}` : null;
@@ -135,7 +140,7 @@ export function PathAnalysisScreen() {
       </Card>
 
       {failure ? <FailureState failure={failure} retry={() => void run()} /> : null}
-      {!failure && result ? <PathResultView result={result} /> : null}
+      {!failure && result ? <PathResultView result={result} verification={verification} /> : null}
       {!failure && !result && !busy ? (
         <EmptyPanel title="No path evaluated yet"
           body="Enter a source, a destination and a service, then evaluate. The answer is the verdict first, then every unit on the path with its route, NAT, matched rule and reasons; nothing is sent to a device." />

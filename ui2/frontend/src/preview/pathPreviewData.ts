@@ -1,4 +1,4 @@
-import type { PathBranch, PathHop, PathResult } from "../auth/adminApi";
+import type { PathBranch, PathHop, PathResult, PathValidation } from "../auth/adminApi";
 
 /**
  * Synthetic path results for the design preview and the tests. Shaped exactly like the A5a golden
@@ -158,3 +158,29 @@ export const PATH_PARTIAL: PathResult = (() => {
     ],
   };
 })();
+
+/**
+ * Stage A6: a completed verification of PATH_ALLOWED's branch b1 (hop states and reason codes only, as the API returns
+ * them): the Check Point route agrees, the Palo Alto route and rule agree while its NAT match disagrees.
+ */
+export const PATH_VALIDATION_COMPLETE: PathValidation = {
+  validation_id: "pv-00000000-0000-4000-8000-000000000001", submitted_at: "2026-11-04T08:05:00Z", topology_snapshot_id: "SNAPSHOT",
+  path_verdict: "ALLOWED", result: "MISMATCH", hops_not_validated: 0,
+  hops: [
+    { ordinal: 1, branch_id: "b1", hop_index: 1, node_id: "FW-TANGO-04/physical/main", vendor: "check_point", device_id: "dev-t04", job_id: "job-0001", job_state: "COMPLETED",
+      result: "MATCH", checks: [{ check: "CP_ROUTE", result: "MATCH", reason: "SAME_INTERFACE_AND_NEXT_HOP" }], reasons: [], evaluated_at: "2026-11-04T08:05:20Z" },
+    { ordinal: 2, branch_id: "b1", hop_index: 2, node_id: "FW-BRAVO-02/vsys1/vr-main", vendor: "palo_alto", device_id: "dev-b02", job_id: "job-0002", job_state: "COMPLETED",
+      result: "MISMATCH", checks: [
+        { check: "PAN_FIB", result: "MATCH", reason: "CONNECTED_SAME_INTERFACE" },
+        { check: "PAN_SECURITY", result: "MATCH", reason: "SAME_FIRST_MATCH_RULE" },
+        { check: "PAN_NAT", result: "MISMATCH", reason: "NAT_RULE_DIFFERS" },
+      ], reasons: ["NAT_RULE_DIFFERS"], evaluated_at: "2026-11-04T08:05:41Z" },
+  ],
+  limitations: "A MATCH means the device's own read-only matcher agreed with the computed hop for this sample; it proves neither other flows nor observed traffic. NOT_EVALUABLE is never a mismatch.",
+};
+
+/** A verification still waiting: hop 1 answered, hop 2's job is executing. */
+export const PATH_VALIDATION_PENDING: PathValidation = {
+  ...PATH_VALIDATION_COMPLETE, result: "PENDING",
+  hops: [PATH_VALIDATION_COMPLETE.hops[0], { ...PATH_VALIDATION_COMPLETE.hops[1], job_state: "EXECUTING", result: "PENDING", checks: [], reasons: [], evaluated_at: null }],
+};
